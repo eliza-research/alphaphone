@@ -1,5 +1,5 @@
 import {layoutBrowserDialog} from './dialog-layout';
-import {workflowNoticeHistory,savedWorkflowNoticeHistory,compactWorkflowNotices} from './workflow-notices';
+import {workflowNoticeHistory,workflowNoticesDocument,compactWorkflowNotices} from './workflow-notices';
 type Bag=Record<string,any>;
 const terminal=new Set(['ok','fail','skip','cancelled']);
 const object=(value:unknown):value is Bag=>!!value&&typeof value==='object'&&!Array.isArray(value);
@@ -48,21 +48,38 @@ export function openWorkflowHistory(read:()=>Bag,write:(patch:Bag)=>void,isRunni
  const noticeHeading=document.createElement('h3');noticeHeading.textContent='Notification history';
  const noticeDescription=document.createElement('p');noticeDescription.textContent='Download notification text before freeing space. Opened and dismissed text will be removed; compact receipts remain to prevent duplicate notifications. Active notices stay available.';
  const noticeStatus=document.createElement('p');noticeStatus.setAttribute('role','status');noticeStatus.setAttribute('aria-label','Notification history status');
- let noticePlan:ReturnType<typeof workflowNoticeHistory>|undefined;
- try{noticePlan=workflowNoticeHistory();noticeStatus.textContent=`${noticePlan.eligible} opened or dismissed notices can be compacted. ${noticePlan.state.archived?.length||0} compact receipts retained.`;}catch(error){noticeStatus.textContent=error instanceof Error?error.message:'Notification history needs recovery.';}
- const noticeDownload=document.createElement('a');noticeDownload.textContent='Download notification history';noticeDownload.download='alpha-notification-history.json';const noticeUrl=URL.createObjectURL(new Blob([savedWorkflowNoticeHistory()],{type:'application/json'}));noticeDownload.href=noticeUrl;
- const compact=document.createElement('button');compact.textContent='Free notification space';compact.disabled=!noticePlan?.eligible;
+ let noticePlan:Awaited<ReturnType<typeof workflowNoticeHistory>>|undefined;
+ noticeStatus.textContent='Loading notification history…';
+ const noticeUrls:string[]=[];
+ const noticeDownload=document.createElement('a');noticeDownload.textContent='Download notification history';noticeDownload.download='alpha-notification-history.json';noticeDownload.setAttribute('aria-disabled','true');
+ const legacyDownload=document.createElement('a');legacyDownload.textContent='Download older notification history';legacyDownload.download='alpha-notification-history-older.json';legacyDownload.hidden=true;
+ const compact=document.createElement('button');compact.textContent='Free notification space';compact.disabled=true;
+ const offer=(link:HTMLAnchorElement,raw:string)=>{const blob=URL.createObjectURL(new Blob([raw],{type:'application/json'}));noticeUrls.push(blob);link.href=blob;link.removeAttribute('aria-disabled');};
+ const loadNotices=async()=>{
+  try{
+   let failure:unknown;
+   try{noticePlan=await workflowNoticeHistory(noticeAbort.signal);}catch(error){noticeAbort.signal.throwIfAborted();failure=error;}
+   const recovery=noticePlan?.recovery??await workflowNoticesDocument.capture(noticeAbort.signal);
+   noticeAbort.signal.throwIfAborted();
+   offer(noticeDownload,recovery.raw??JSON.stringify({rows:[]}));
+   if(recovery.legacy!==null&&(recovery.legacyChanged||recovery.legacy!==recovery.raw)){offer(legacyDownload,recovery.legacy);legacyDownload.hidden=false;legacyDownload.style.display='inline-block';}
+   if(failure)throw failure;
+   noticeStatus.textContent=`${noticePlan!.eligible} opened or dismissed notices can be compacted. ${noticePlan!.state.archived?.length||0} compact receipts retained.`;
+   compact.disabled=!noticePlan!.eligible;
+  }catch(error){if(!noticeAbort.signal.aborted)noticeStatus.textContent=error instanceof Error?error.message:'Notification history needs recovery.';}
+ };
  let noticeConfirm=false;
  compact.onclick=async()=>{
   if(!noticePlan)return;
   if(!noticeConfirm){noticeConfirm=true;compact.textContent='Confirm free notification space';noticeStatus.textContent='Download notification history first to retain its text. Compact receipts will stay in this browser.';return;}
   compact.disabled=true;
-  try{const count=await compactWorkflowNotices(noticePlan.raw,noticeAbort.signal);noticeStatus.textContent=`Freed space for ${count} notifications. Replay receipts retained.`;}catch(error){noticeStatus.textContent=error instanceof Error?error.message:'Could not save notification history. Reopen to inspect it.';}
+  try{const count=await compactWorkflowNotices(noticePlan.recovery,noticeAbort.signal);noticeStatus.textContent=`Freed space for ${count} notifications. Replay receipts retained.`;}catch(error){noticeStatus.textContent=error instanceof Error?error.message:'Could not save notification history. Reopen to inspect it.';}
  };
  const close=document.createElement('button');close.textContent='Close history';close.onclick=()=>finish();
- for(const item of [download,remove,noticeDownload,compact,close])item.style.cssText='display:inline-block;min-height:44px;box-sizing:border-box;margin:4px;padding:10px;border:1px solid #999;border-radius:10px;color:inherit;background:var(--s2,#eee);font:inherit';
+ for(const item of [download,remove,noticeDownload,legacyDownload,compact,close])item.style.cssText='display:inline-block;min-height:44px;box-sizing:border-box;margin:4px;padding:10px;border:1px solid #999;border-radius:10px;color:inherit;background:var(--s2,#eee);font:inherit';
+ legacyDownload.style.display='none';
  const previous=document.activeElement as HTMLElement|null;const back=(event:Event)=>{event.preventDefault();event.stopImmediatePropagation();finish();};const retire=()=>finish();const hidden=()=>{if(document.hidden)retire();};const events=['pagehide','launcher-home','alpha:device-state','alpha:dev-incoming-call'];
- let closed=false;const finish=()=>{if(closed)return;closed=true;noticeAbort.abort();dialog.close();window.removeEventListener('alpha-back',back,true);for(const event of events)window.removeEventListener(event,retire);document.removeEventListener('visibilitychange',hidden);URL.revokeObjectURL(url);URL.revokeObjectURL(noticeUrl);dialog.remove();if(current===dialog)current=undefined;if(previous?.isConnected)previous.focus();};
+ let closed=false;const finish=()=>{if(closed)return;closed=true;noticeAbort.abort();dialog.close();window.removeEventListener('alpha-back',back,true);for(const event of events)window.removeEventListener(event,retire);document.removeEventListener('visibilitychange',hidden);URL.revokeObjectURL(url);for(const ownedUrl of noticeUrls)URL.revokeObjectURL(ownedUrl);dialog.remove();if(current===dialog)current=undefined;if(previous?.isConnected)previous.focus();};
  dialog.onclose=finish;dialog.oncancel=event=>{event.preventDefault();finish();};
- window.addEventListener('alpha-back',back,true);for(const event of events)window.addEventListener(event,retire);document.addEventListener('visibilitychange',hidden);dialog.append(heading,description,download,remove,status,noticeHeading,noticeDescription,noticeDownload,compact,noticeStatus,close);layoutBrowserDialog(dialog,[close]);document.body.append(dialog);dialog.showModal();heading.tabIndex=-1;heading.focus();
+ window.addEventListener('alpha-back',back,true);for(const event of events)window.addEventListener(event,retire);document.addEventListener('visibilitychange',hidden);dialog.append(heading,description,download,remove,status,noticeHeading,noticeDescription,noticeDownload,legacyDownload,compact,noticeStatus,close);layoutBrowserDialog(dialog,[close]);document.body.append(dialog);dialog.showModal();heading.tabIndex=-1;heading.focus();void loadNotices();
 }

@@ -73,7 +73,11 @@ export class BrowserNotifications extends WebPlugin {
   if(state.appEnabled&&state.channels.calendar){try{calendar=(await this.calendar.listAlerts()).items.map(row=>({id:row.id,revision:row.revision,source:'own',appLabel:'Calendar',title:hidden?'Calendar':row.title,text:hidden?'':row.text,at:row.at,clearable:true,canOpen:!hidden}));calendarStatus='ready';}catch{calendarStatus='unavailable';}}
 
   const external=state.deviceEvents!.filter(row=>this.allowed(state,row)).map(row=>({...this.observe(state,row),...(!applyFocus?{revision:row.revision}:{})}));
-  return {scope:'browser',calendarStatus,items:[...[...own,...calendar,...external,...(state.appEnabled?listWorkflowNotices():[]),...await browserHostedResults.list()].filter(row=>!applyFocus||!focusHoldsNotice(row.at)),...(applyFocus&&state.appEnabled?focusAllowedNotices().filter(row=>!state.dismissed.includes(row.id)).map(row=>({...row,title:hidden?'Messages':row.title,text:hidden?'':row.text,canOpen:!hidden})):[])].sort((a,b)=>b.at-a.at).slice(0,100)};
+  const workflow=state.appEnabled?await listWorkflowNotices():[],hosted=await browserHostedResults.list();
+  // All sources are asynchronous. Apply the current lock state after the last read.
+  const nowHidden=locked();
+  const items=[...[...own,...calendar,...external,...workflow,...hosted].filter(row=>!applyFocus||!focusHoldsNotice(row.at)),...(applyFocus&&state.appEnabled?focusAllowedNotices().filter(row=>!state.dismissed.includes(row.id)).map(row=>({...row,title:hidden?'Messages':row.title,text:hidden?'':row.text,canOpen:!hidden})):[])].sort((a,b)=>b.at-a.at).slice(0,100);
+  return {scope:'browser',calendarStatus,items:nowHidden?items.map(row=>({...row,title:row.appLabel,text:'',canOpen:false})):items};
  }
  private async external(input:Identity,opening:boolean){
   const view=await editStore(key,initial,state=>{
