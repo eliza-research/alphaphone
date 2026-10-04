@@ -1,4 +1,4 @@
-# Replace @REPOSITORY@ and @ANDROID_HOME@ with absolute paths, install under
+# Replace @REPOSITORY@ @ANDROID_HOME@ and @NODE@ with absolute paths, install under
 # ~/.config/systemd/user/, then systemctl --user enable --now alphaphone-cuttlefish.
 # loginctl enable-linger permits startup before desktop login.
 [Unit]
@@ -8,6 +8,7 @@ StartLimitIntervalSec=0
 Type=simple
 Environment=ANDROID_HOME=@ANDROID_HOME@
 Environment=ALPHA_REPOSITORY=@REPOSITORY@
+Environment=ALPHA_NODE=@NODE@
 Environment=PATH=/usr/bin:/bin:/usr/local/bin
 ExecStart=@REPOSITORY@/scripts/cuttlefish/start-development.sh
 Restart=on-failure

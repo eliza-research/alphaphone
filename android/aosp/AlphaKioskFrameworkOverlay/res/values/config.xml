@@ -2,4 +2,6 @@
 <resources>
  <!-- Dedicated Alpha development image: no three-button or IME navigation strip. -->
  <bool name="config_showNavigationBar">false</bool>
+ <!-- Alpha draws its own background; no system wallpaper is visible at boot. -->
+ <bool name="config_checkWallpaperAtBoot">false</bool>
 </resources>

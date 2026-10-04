@@ -128,7 +128,7 @@ ADB retains the existing Cuttlefish transport configuration. This virtual image
 does not establish physical USB authorization behavior. Docker publishes its ADB
 and viewer ports only on `127.0.0.1`; no LAN-wide listener or bootloader-unlock
 operation is configured. The host service runs
-`scripts/cuttlefish/start-development.sh` with ANDROID_HOME and ALPHA_REPOSITORY;
+`scripts/cuttlefish/start-development.sh` with ANDROID_HOME, ALPHA_REPOSITORY and ALPHA_NODE (absolute Node executable);
 it starts the existing container/guest and reconnects ADB after adbd/guest restarts.
 Developer settings are restored automatically. AOSP `userdebug` and the explicit
 image USB `adb` property retain development access.
@@ -137,8 +137,9 @@ Recovery without Android Settings (replace the serial for your approved device):
 
 ```sh
 adb -s 127.0.0.1:6520 shell settings put global alpha_launcher_lock 0
-adb -s 127.0.0.1:6520 shell am force-stop ai.elizaresearch.alphaphone
-adb -s 127.0.0.1:6520 shell am start -n ai.elizaresearch.alphaphone/.MainActivity
+# Reboot applies the recovery switch even when the device owner cannot be force-stopped.
+adb -s 127.0.0.1:6520 reboot
+# Wait for Android to finish booting before installing.
 # Install the same signing identity; package data is retained.
 adb -s 127.0.0.1:6520 install -r artifacts/launcher-debug.apk
 # Re-enroll/reapply after maintenance (idempotent).
