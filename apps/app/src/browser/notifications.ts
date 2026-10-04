@@ -19,6 +19,7 @@ type Identity = {id:string;revision:string;source?:string};
 const key='alpha.browser.notifications.v2';
 const initial=():State=>({revision:revision(),epoch:revision(),enabled:false,paused:false,history:false,accessGranted:true,apps:[],events:[],dismissed:[],appEnabled:true,channels:{reminders:true},...readStore('alpha.browser.notification-policy.v1',()=>({}))});
 const locked=()=>document.hidden||document.documentElement.dataset.devBackground==='true'||!!browserScreenLocked();
+const noticePolicy=(state:State)=>JSON.stringify([state.revision,state.epoch,state.enabled,state.paused,state.accessGranted,state.appEnabled,state.channels,state.apps]);
 function trim(state:State){state.deviceEvents??=[];state.events=state.history&&state.enabled&&state.accessGranted&&!state.paused?state.events.filter(event=>event.at>Date.now()-86400000).slice(-100):[];state.dismissed=state.dismissed.slice(-500);}
 function record(state:State,row:Notice,event:string){trim(state);if(state.history&&row.packageName){state.events.push({id:crypto.randomUUID(),appLabel:row.appLabel,packageName:row.packageName,at:Date.now(),state:event});trim(state);}}
 
@@ -75,6 +76,7 @@ export class BrowserNotifications extends WebPlugin {
   const external=state.deviceEvents!.filter(row=>this.allowed(state,row)).map(row=>({...this.observe(state,row),...(!applyFocus?{revision:row.revision}:{})}));
   const workflow=state.appEnabled?await listWorkflowNotices():[],hosted=await browserHostedResults.list();
   // All sources are asynchronous. Apply the current lock state after the last read.
+  if(noticePolicy(readStore(key,initial))!==noticePolicy(state))throw Error('Notification settings changed. Refresh notifications.');
   const nowHidden=locked();
   const items=[...[...own,...calendar,...external,...workflow,...hosted].filter(row=>!applyFocus||!focusHoldsNotice(row.at)),...(applyFocus&&state.appEnabled?focusAllowedNotices().filter(row=>!state.dismissed.includes(row.id)).map(row=>({...row,title:hidden?'Messages':row.title,text:hidden?'':row.text,canOpen:!hidden})):[])].sort((a,b)=>b.at-a.at).slice(0,100);
   return {scope:'browser',calendarStatus,items:nowHidden?items.map(row=>({...row,title:row.appLabel,text:'',canOpen:false})):items};
