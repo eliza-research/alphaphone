@@ -1,0 +1,28 @@
+import {execFileSync} from 'node:child_process';
+import path from 'node:path';
+const serial=process.env.ANDROID_SERIAL;
+if(!serial)throw Error('Set ANDROID_SERIAL to the exact Cuttlefish endpoint.');
+const adb=path.join(process.env.ANDROID_HOME||'/home/shaw/Android/Sdk','platform-tools/adb');
+const run=(...args)=>execFileSync(adb,['-s',serial,...args],{encoding:'utf8',timeout:30000}).trim();
+const shell=(...args)=>run('shell',...args);
+const pkg='ai.elizaresearch.alphaphone',admin=`${pkg}/.AlphaKioskAdmin`;
+if(shell('getprop','ro.build.type')!=='userdebug'||!shell('getprop','ro.product.model').includes('Cuttlefish'))throw Error('This development enrollment is restricted to a Cuttlefish userdebug image.');
+const owners=shell('dpm','list-owners');
+if(owners&&!owners.includes(pkg))throw Error('A different owner is enrolled. No ownership changes made.');
+const initial=!owners.includes(pkg);
+if(initial)shell('dpm','set-device-owner',admin);
+// Retain the existing development transport. Host/container publishes on loopback only.
+shell('settings','put','global','development_settings_enabled','1');
+shell('settings','put','global','adb_enabled','1');
+shell('settings','put','global','stay_on_while_plugged_in','7');
+shell('settings','put','global','alpha_launcher_lock','1');
+shell('settings','put','secure','user_setup_complete','1');
+shell('settings','put','secure','immersive_mode_confirmations','confirmed');
+shell('settings','put','global','device_provisioned','1');
+for(const permission of ['READ_PHONE_STATE','BLUETOOTH_CONNECT'])shell('pm','grant',pkg,`android.permission.${permission}`);
+if(initial)shell('cmd','alarm','set-timezone',process.env.ALPHA_TIME_ZONE||'America/Los_Angeles');
+shell('cmd','package','set-home-activity',`${pkg}/.MainActivity`);
+shell('input','keyevent','KEYCODE_WAKEUP');
+shell('wm','dismiss-keyguard');
+shell('am','start','-n',`${pkg}/.MainActivity`);
+console.log(JSON.stringify({serial,owner:shell('dpm','list-owners'),home:shell('cmd','role','get-role-holders','android.app.role.HOME'),adb:shell('settings','get','global','adb_enabled'),developer:shell('settings','get','global','development_settings_enabled')},null,2));

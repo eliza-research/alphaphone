@@ -91,3 +91,76 @@ ANDROID_SERIAL=<exact-serial> ALPHA_ANDROID_USER=<user-id> node scripts/verify-a
 The check requires enabled `com.android.deskclock` and its set/show/snooze/dismiss activity handlers. It does not launch an alarm, change permissions, provision a device, or prove ringing. Alpha's shared manifest declares the caller SET_ALARM permission and visibility queries; Clock's own notifications/exact-alarm access remains separately verified on the image. Confirm actual set/fire/snooze/dismiss, permission denial, reboot, time-zone/DST, cancellation and DND/physical audio before claiming alarm MVP completion.
 
 DeskClock is the real AOSP module defined in `packages/apps/DeskClock/Android.bp` and included by the standard handheld product. Pin its source through the selected image manifest; do not substitute an unreviewed downloaded APK.
+
+## Dedicated development kiosk (October 3)
+
+The explicit `--development-kiosk` staging option supersedes the ordinary-app
+policy above **only for the selected development image**. It adds a framework
+resource overlay that removes Android's navigation bar. Alpha's device-owner
+policy uses lock-task mode with external activity launches blocked, no system
+information/shade/Home/Recents features, and persistent Alpha HOME selection.
+Android Settings and the recovery launcher remain installed for ADB maintenance;
+they are not reachable through the locked user interface. Cross-package flows,
+including system document pickers and external provider setup, are also blocked
+until implemented inside Alpha or explicitly added to a future managed policy. Kernel/bootloader and
+ADB access intentionally remain recovery routes, so this is not an anti-tamper
+security boundary against the developer controlling the machine.
+
+After installing the matching launcher APK on the dedicated Cuttlefish userdebug
+image, run `ANDROID_SERIAL=127.0.0.1:6520 node scripts/provision-cuttlefish-kiosk.mjs`.
+This refuses physical/non-userdebug devices and an existing different device owner.
+It enrolls Alpha, enables developer options/ADB, grants the status reader's phone
+and Bluetooth permissions, keeps the plugged-in device awake, suppresses the fullscreen introduction,
+and selects HOME. Enrollment is separate from ordinary
+standalone/launcher APK installation. Ownership/policies survive guest reboot and
+same-signer APK updates; factory-reset images must be enrolled again.
+
+Status indicators come from Android battery/network/radio readings, not the mock
+status template. Alpha Settings provides brightness, media/ring/alarm volume,
+Wi-Fi/Bluetooth switches, saved Wi-Fi network selection when permission is available,
+time zone, and device/development information. Display's Light/Dark choice persists
+and themes the launcher status and control panel. New credentialed Wi-Fi profiles,
+Bluetooth pairing, SIM/APN and specialized permission administration still require
+ADB provisioning in this development build; unavailable values are not simulated.
+The virtual radio readings do not establish physical radio/hardware acceptance.
+
+ADB retains the existing Cuttlefish transport configuration. This virtual image
+does not establish physical USB authorization behavior. Docker publishes its ADB
+and viewer ports only on `127.0.0.1`; no LAN-wide listener or bootloader-unlock
+operation is configured. The host service runs
+`scripts/cuttlefish/start-development.sh` with ANDROID_HOME and ALPHA_REPOSITORY;
+it starts the existing container/guest and reconnects ADB after adbd/guest restarts.
+Developer settings are restored automatically. AOSP `userdebug` and the explicit
+image USB `adb` property retain development access.
+
+Recovery without Android Settings (replace the serial for your approved device):
+
+```sh
+adb -s 127.0.0.1:6520 shell settings put global alpha_launcher_lock 0
+adb -s 127.0.0.1:6520 shell am force-stop ai.elizaresearch.alphaphone
+adb -s 127.0.0.1:6520 shell am start -n ai.elizaresearch.alphaphone/.MainActivity
+# Install the same signing identity; package data is retained.
+adb -s 127.0.0.1:6520 install -r artifacts/launcher-debug.apk
+# Re-enroll/reapply after maintenance (idempotent).
+ANDROID_SERIAL=127.0.0.1:6520 node scripts/provision-cuttlefish-kiosk.mjs
+adb -s 127.0.0.1:6520 reboot
+# For bootloader/fastboot maintenance, when deliberately requested:
+# adb -s 127.0.0.1:6520 reboot bootloader
+```
+
+Do not run bootloader flashing/unlocking as a smoke test. Cuttlefish boot evidence
+is not proof of a physical phone's USB authorization, bootloader policy, OTA or rollback.
+
+For the AOSP presigned importer, the Android debug APK's JNI entries must be
+uncompressed and page-aligned. Prepare it without changing any payload entry:
+
+```sh
+ANDROID_HOME=/path/to/sdk python3 scripts/prepare-aosp-debug-apk.py \
+  --keystore /path/to/existing/debug.keystore
+npm run aosp:stage -- --apk artifacts/launcher-aosp-debug.apk \
+  --development --development-kiosk --output artifacts/aosp/alpha-kiosk
+```
+
+The preparation script requires a debuggable input, compares every non-signature
+entry and both signer certificates, checks 16 KiB ZIP alignment, and writes
+`artifacts/aosp-apk-preparation.json`. It never creates a production signing key.

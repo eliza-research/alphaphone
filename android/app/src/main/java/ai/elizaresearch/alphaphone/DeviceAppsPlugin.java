@@ -23,6 +23,7 @@ public class DeviceAppsPlugin extends Plugin {
   JSObject result = new JSObject(); result.put("apps", apps); call.resolve(result);
  }
  @PluginMethod public void launch(PluginCall call) {
+  if(AlphaKioskAdmin.enabled(getContext())){call.reject("External apps are disabled while launcher lock is enabled");return;}
   String name = call.getString("packageName");
   if (name == null || name.equals(getContext().getPackageName())) { call.reject("Choose an installed app"); return; }
   Intent intent = getContext().getPackageManager().getLaunchIntentForPackage(name);

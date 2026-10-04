@@ -1,5 +1,6 @@
 // Register browser implementations before any runtime module claims plugin identity.
 import './browser/register';
+import {installManagedDevice} from './prototype/managed-device';
 import {bindBrowserSpeechConnection} from './browser/agent-speech';
 import { pauseLiveActivityForMock } from './runtime/mock-admission';
 import { installBrowserDeviceAdapter } from './browser/device-adapter';
@@ -68,6 +69,7 @@ if (!fixture) {
   installNotesDocumentAdapter(Component, VIEWS);
   installPrototypeBrowserAdapter(Component, VIEWS);
   installSettingsAdapter(Component, VIEWS);
+  installManagedDevice(Component);
   if(!isAndroid)installBrowserDeviceAdapter(Component);
   if(!browserDevProfile) installInboxCloudAdapter(Component, VIEWS);
   if(!browserDevProfile) installWorkflowAdapter(Component, VIEWS);

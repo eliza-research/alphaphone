@@ -36,6 +36,7 @@ public final class AlphaDevicePlugin extends Plugin {
  }
  @PluginMethod public void snapshot(PluginCall call) {
   JSObject out=new JSObject();
+  AlphaManagedDevice.snapshot(getContext(),out);
   Intent battery=getContext().registerReceiver(null,new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
   if(battery!=null){
    int level=battery.getIntExtra(BatteryManager.EXTRA_LEVEL,-1),scale=battery.getIntExtra(BatteryManager.EXTRA_SCALE,-1);
@@ -65,6 +66,7 @@ public final class AlphaDevicePlugin extends Plugin {
   grants.put("Location",fine||coarse);out.put("permissions",grants);
   out.put("passwordProvider",PasswordProviderSupport.status(getContext()));call.resolve(out);
  }
+ @PluginMethod public void setManagedSetting(PluginCall call) { AlphaManagedDevice.change(getContext(),call); }
  @PluginMethod public void openPasswordProvider(PluginCall call) {
   String action=call.getString("action","");
   getActivity().runOnUiThread(()->{
@@ -82,6 +84,7 @@ public final class AlphaDevicePlugin extends Plugin {
   });
  }
  @PluginMethod public void openSettings(PluginCall call) {
+  if(AlphaKioskAdmin.enabled(getContext())){call.reject("Use Alpha device controls while launcher lock is enabled");return;}
   String page=call.getString("page","");String action;
   switch(page){
    case "accounts":action=Settings.ACTION_SYNC_SETTINGS;break;

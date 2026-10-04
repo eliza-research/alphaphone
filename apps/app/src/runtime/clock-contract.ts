@@ -132,7 +132,12 @@ export function validateClockOutcome(
 }
 
 export type ClockHandoffResult = ClockResult;
-export function currentClockTimeZone():string{return clockTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);}
+export function currentClockTimeZone(): string {
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // Newer Android ICU/WebView reports the GMT default as an ISO zero offset.
+  // Normalize that known UTC equivalent; unknown zones must still fail closed.
+  return clockTimeZone(zone === "+00:00" || zone === "-00:00" ? "UTC" : zone);
+}
 export function assertClockTimeZone(operation:ClockOperation,observed:string|undefined){if(operation.action==='set'&&(operation.timeZone!==observed||operation.timeZone!==currentClockTimeZone()))throw Error('Phone time zone changed. Review the Clock request again.');}
 export function describeClockHandoff(op:ClockOperation):string{
  return op.action==='set'?`Ask Clock to set ${String(op.hour).padStart(2,'0')}:${String(op.minute).padStart(2,'0')} in ${op.timeZone}${op.label?` named “${op.label}”`:''}. Review the alarm in Clock; Alpha cannot confirm creation or ringing.`:op.action==='show'?'Open Clock’s alarms page.':op.action==='snooze'?`Open Clock so you can choose the intended alarm and snooze it yourself. Select the duration there; ${op.snoozeMinutes} minutes will not be applied automatically. Completion stays unverified.`:'Open Clock so you can choose the intended alarm and dismiss it yourself. Alpha will not dismiss or disable an alarm automatically. Completion stays unverified.';

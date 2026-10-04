@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+ <!-- Dedicated Alpha development image: no three-button or IME navigation strip. -->
+ <bool name="config_showNavigationBar">false</bool>
+</resources>

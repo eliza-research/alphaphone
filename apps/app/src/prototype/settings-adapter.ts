@@ -1,3 +1,4 @@
+import {openManagedDeviceSettings} from './managed-device';
 import {browserDevProfile} from '../browser/dev-profile';
 import { registerPlugin } from '../platform-plugins';
 import { Capacitor } from '@capacitor/core';
@@ -111,19 +112,19 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     const target = connection.session ? connection.name : 'Not connected';
     const runtimeLocation=!connection.session?'Not connected':connection.kind==='resident'?(Capacitor.isNativePlatform()?'On this device':'On this computer · development'):'Remote agent';
     const cloudLabel = account ? `${account.environment} · ${account.userId.slice(0, 8)}` : 'Not signed in';
-    const manage = (page: string) => () => void device.openSettings({ page }).catch(() => api.toast('This Android settings page is unavailable.'));
+    const manage = (page: string) => () => void (facts.kioskEnabled ? openManagedDeviceSettings(page) : device.openSettings({ page })).catch(() => api.toast('This Android settings page is unavailable.'));
     const info = (label: string, val: string): Bag => ({ kInfo: true, label, val, hasVal: true, noAB: true });
-    const nav = (label: string, page: string): Bag => ({ kNav: true, label, lbl: label, chev: true, noAB: true, go: manage(page) });
+    const nav = (label: string, page: string): Bag => ({ kNav: true, label: facts.kioskEnabled ? label.replace(/ in Android|Android /g, '') : label, lbl: facts.kioskEnabled ? label.replace(/ in Android|Android /g, '') : label, chev: true, noAB: true, go: manage(page) });
     const group = (rows: Bag[]) => ({ css: 'background:var(--s2);padding:4px 0', rows });
     const percent = typeof facts.batteryPercent === 'number' ? `${facts.batteryPercent}%` : 'Unavailable';
     const active = (key: string) => typeof facts[key] === 'boolean' ? facts[key] ? 'Active connection' : 'Not active' : 'Unavailable';
     const topValues: Bag = {
-      'Wi-Fi': active('wifiActive'), 'Bluetooth': Capacitor.isNativePlatform()?'Manage in Android':active('bluetoothActive'), 'Mobile data': active('cellularActive'),
+      'Wi-Fi': active('wifiActive'), 'Bluetooth': facts.kioskEnabled?(facts.bluetoothEnabled?'On':'Off'):Capacitor.isNativePlatform()?'Manage in Android':active('bluetoothActive'), 'Mobile data': active('cellularActive'),
       'Accounts': account ? 'Eliza Cloud connected' : 'Not signed in', 'Connections': gmail,
       'Privacy & Enclave': runtimeLocation,
       'Battery': percent, 'Models': target, 'About': facts.appVersion || 'Unavailable',
       'Notifications': typeof delivery.appEnabled !== 'boolean' ? 'Unavailable' : !delivery.appEnabled || !delivery.permissionGranted ? 'App notifications off' : delivery.channels?.some((c:Bag)=>c.blocked||c.groupBlocked) ? 'Some channels blocked' : 'App notifications allowed',
-      'Sound & vibration': Capacitor.isNativePlatform()?'Android settings':'Browser device settings',
+      'Sound & vibration': facts.kioskEnabled?'Device controls':Capacitor.isNativePlatform()?'Android settings':'Browser device settings',
     };
     for (const page of out.stack) {
       if (page.isTop) {
@@ -186,7 +187,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
         ]), group([nav('Android device information', 'about')])];
       } else if (page.title === 'Wi-Fi') {
         page.hasHdrTog = false; page.hdrTog = null;
-        page.hero = { ...page.hero, big: active('wifiActive'), sub: 'Wi-Fi transport · network names stay in Android settings' };
+        page.hero = { ...page.hero, big: active('wifiActive'), sub: facts.kioskEnabled?'Connection and saved networks':'Wi-Fi transport · network names stay in Android settings' };
         page.groups = [group([nav('Manage Wi-Fi networks', 'wifi')])];
       } else if (page.title === 'Bluetooth') {
         page.hasHdrTog = false; page.hdrTog = null;

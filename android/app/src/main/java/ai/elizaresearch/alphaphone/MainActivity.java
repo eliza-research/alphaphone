@@ -53,7 +53,7 @@ public class MainActivity extends BridgeActivity {
   WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
   getBridge().getWebView().getSettings().setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
   AlphaDevicePlugin.applyTextScale(this);
-  // The reference layouts include system-bar space. Draw behind the real bars,
+  // Managed launcher owns the status surface; ordinary apps retain Android bars. Draw behind the real bars,
   // and resize for the IME only; the renderer never draws fake battery/network UI.
   WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
   getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
@@ -63,7 +63,7 @@ public class MainActivity extends BridgeActivity {
    int bottom = insets.isVisible(WindowInsetsCompat.Type.ime())
      ? insets.getInsets(WindowInsetsCompat.Type.ime()).bottom : 0;
    int nextInset = bottom > 0 ? 0 : Math.round(insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom / getResources().getDisplayMetrics().density);
-   topInsetDp = Math.round(insets.getInsets(WindowInsetsCompat.Type.systemBars()).top / getResources().getDisplayMetrics().density);
+   topInsetDp = AlphaKioskAdmin.enabled(this) ? 0 : Math.round(insets.getInsets(WindowInsetsCompat.Type.systemBars()).top / getResources().getDisplayMetrics().density);
    getBridge().getWebView().evaluateJavascript("document.documentElement?.style.setProperty('--native-top-inset','" + topInsetDp + "px')", null);
    if (view.getPaddingBottom() != bottom) view.setPadding(0, 0, 0, bottom);
    if (bottomInsetDp != nextInset) {
@@ -77,7 +77,7 @@ public class MainActivity extends BridgeActivity {
     if (BuildConfig.DEBUG) android.util.Log.d("AlphaNavigation", "Back dispatched");
     // Test and consume renderer navigation in one evaluation. Root Back uses
     // normal Android task behavior in standalone mode; launcher retains HOME.
-    String script = "(() => { if (document.documentElement.dataset.alphaCanGoBack === 'true') { window.dispatchEvent(new Event('alpha-back')); return true; } "
+    String script = "(() => { const modal=document.querySelector('dialog[open]'); if(modal){modal.close();return true;} if (document.documentElement.dataset.alphaCanGoBack === 'true') { window.dispatchEvent(new Event('alpha-back')); return true; } "
      + (BuildConfig.IS_LAUNCHER && !isAssistantSurface() ? "window.dispatchEvent(new Event('launcher-home')); return true;" : "return false;") + " })()";
     getBridge().getWebView().evaluateJavascript(script, handled -> {
      if (BuildConfig.DEBUG) android.util.Log.d("AlphaNavigation", "Back handled by renderer=" + handled);
@@ -86,6 +86,7 @@ public class MainActivity extends BridgeActivity {
    }
   });
  }
+ @Override public void onWindowFocusChanged(boolean focused) { super.onWindowFocusChanged(focused); if(focused) AlphaKioskAdmin.enter(this); }
  @Override public void onNewIntent(Intent intent) {
   super.onNewIntent(intent);
   if (!isAssistantSurface() && Intent.ACTION_MAIN.equals(intent.getAction()) && intent.hasCategory(Intent.CATEGORY_HOME))

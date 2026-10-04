@@ -10,7 +10,7 @@ const get = (key) => {
   return i < 0 ? null : args[i + 1];
 };
 for (let i = 0; i < args.length; i++) {
-  if (args[i] === "--development") continue;
+  if (["--development", "--development-kiosk"].includes(args[i])) continue;
   if (
     !["--apk", "--output", "--descriptor"].includes(args[i]) ||
     !args[i + 1] ||
@@ -22,6 +22,8 @@ for (let i = 0; i < args.length; i++) {
   i++;
 }
 const development = args.includes("--development");
+const kiosk = args.includes("--development-kiosk");
+if(kiosk && !development) throw Error("Kiosk development overlay requires --development");
 const apk = get("--apk");
 if (!apk) throw new Error("Supply --apk PATH to a signed launcher APK.");
 const identity = JSON.parse(fs.readFileSync("app.config.json"));
@@ -87,6 +89,10 @@ execFileSync(
   { stdio: "inherit", env },
 );
 fs.appendFileSync(path.join(output, "product.mk"), clockProductRequirement);
+if(kiosk) {
+ fs.cpSync("android/aosp/AlphaKioskFrameworkOverlay",path.join(output,"AlphaKioskFrameworkOverlay"),{recursive:true});
+ fs.appendFileSync(path.join(output,"product.mk"),"\n# Explicit development kiosk; enroll using scripts/provision-cuttlefish-kiosk.mjs.\nPRODUCT_PACKAGES += AlphaKioskFrameworkOverlay\nPRODUCT_PRODUCT_PROPERTIES += persist.sys.usb.config=adb\n");
+}
 console.log(
   `Add under vendor/${identity.slug.replaceAll("-", "_")} and inherit product.mk from the selected AOSP product. This is staging evidence, not an image boot.`,
 );
