@@ -166,7 +166,9 @@ The preparation script requires a debuggable input, compares every non-signature
 entry and both signer certificates, checks 16 KiB ZIP alignment, and writes
 `artifacts/aosp-apk-preparation.json`. It never creates a production signing key.
 
-Cuttlefish warm reboot on this host has intermittently stalled the virtual audio/vsock
+The enrolled image currently waits about 90 seconds for Android boot-display readiness
+before its timeout releases the launcher, even with the wallpaper check disabled.
+This startup delay remains unresolved. Cuttlefish warm reboot on this host has intermittently stalled the virtual audio/vsock
 services. Use a cold guest restart with existing data if ADB does not return:
 
 ```sh
