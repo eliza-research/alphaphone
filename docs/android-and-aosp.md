@@ -171,7 +171,7 @@ services. Use a cold guest restart with existing data if ADB does not return:
 
 ```sh
 systemctl --user stop alphaphone-cuttlefish.service
-docker exec -e ANDROID_HOST_OUT=/artifacts alphaphone-cuttlefish /artifacts/bin/stop_cvd
+docker restart -t 10 alphaphone-cuttlefish
 systemctl --user start alphaphone-cuttlefish.service
 ```
 
