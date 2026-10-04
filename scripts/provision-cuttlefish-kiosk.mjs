@@ -22,6 +22,7 @@ shell('settings','put','global','device_provisioned','1');
 for(const permission of ['READ_PHONE_STATE','BLUETOOTH_CONNECT'])shell('pm','grant',pkg,`android.permission.${permission}`);
 if(initial)shell('cmd','alarm','set-timezone',process.env.ALPHA_TIME_ZONE||'America/Los_Angeles');
 shell('cmd','package','set-home-activity',`${pkg}/.MainActivity`);
+shell('locksettings','set-disabled','true');
 shell('input','keyevent','KEYCODE_WAKEUP');
 shell('wm','dismiss-keyguard');
 shell('am','start','-n',`${pkg}/.MainActivity`);

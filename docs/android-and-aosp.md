@@ -110,7 +110,7 @@ After installing the matching launcher APK on the dedicated Cuttlefish userdebug
 image, run `ANDROID_SERIAL=127.0.0.1:6520 node scripts/provision-cuttlefish-kiosk.mjs`.
 This refuses physical/non-userdebug devices and an existing different device owner.
 It enrolls Alpha, enables developer options/ADB, grants the status reader's phone
-and Bluetooth permissions, keeps the plugged-in device awake, suppresses the fullscreen introduction,
+and Bluetooth permissions, keeps the plugged-in device awake, disables the development image lock screen, suppresses the fullscreen introduction,
 and selects HOME. Enrollment is separate from ordinary
 standalone/launcher APK installation. Ownership/policies survive guest reboot and
 same-signer APK updates; factory-reset images must be enrolled again.
@@ -165,3 +165,16 @@ npm run aosp:stage -- --apk artifacts/launcher-aosp-debug.apk \
 The preparation script requires a debuggable input, compares every non-signature
 entry and both signer certificates, checks 16 KiB ZIP alignment, and writes
 `artifacts/aosp-apk-preparation.json`. It never creates a production signing key.
+
+Cuttlefish warm reboot on this host has intermittently stalled the virtual audio/vsock
+services. Use a cold guest restart with existing data if ADB does not return:
+
+```sh
+systemctl --user stop alphaphone-cuttlefish.service
+docker exec -e ANDROID_HOST_OUT=/artifacts alphaphone-cuttlefish /artifacts/bin/stop_cvd
+systemctl --user start alphaphone-cuttlefish.service
+```
+
+This does not replace images or request a data wipe. The host service bounds ADB
+queries and reconnects stale transports. Do not infer reliable warm reboot or
+physical-device acceptance from the successful image build and cold boot.

@@ -13,11 +13,16 @@ if ! docker exec "$container" bash -c 'for p in /proc/[0-9]*/stat; do read -r pi
 fi
 # Reconnect after guest reboot/adbd restart without navigating Android Settings.
 while true; do
- "$adb" connect 127.0.0.1:6520 >/dev/null 2>&1 || true
- if [[ $("$adb" -s 127.0.0.1:6520 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') == 1 ]]; then
-  "$adb" -s 127.0.0.1:6520 shell settings put global development_settings_enabled 1
-  "$adb" -s 127.0.0.1:6520 shell settings put global adb_enabled 1
-  if ! "$adb" -s 127.0.0.1:6520 shell dpm list-owners | grep -q ai.elizaresearch.alphaphone; then
+ timeout 15 "$adb" connect 127.0.0.1:6520 >/dev/null 2>&1 || true
+ if ! boot_state=$(timeout 15 "$adb" -s 127.0.0.1:6520 shell getprop sys.boot_completed 2>/dev/null); then
+  timeout 5 "$adb" disconnect 127.0.0.1:6520 >/dev/null 2>&1 || true
+  sleep 10
+  continue
+ fi
+ if [[ ${boot_state//$'\r'/} == 1 ]]; then
+  timeout 15 "$adb" -s 127.0.0.1:6520 shell settings put global development_settings_enabled 1
+  timeout 15 "$adb" -s 127.0.0.1:6520 shell settings put global adb_enabled 1
+  if ! timeout 15 "$adb" -s 127.0.0.1:6520 shell dpm list-owners | grep -q ai.elizaresearch.alphaphone; then
    ANDROID_SERIAL=127.0.0.1:6520 "$ALPHA_NODE" "$ALPHA_REPOSITORY/scripts/provision-cuttlefish-kiosk.mjs"
   fi
  fi
