@@ -14,7 +14,7 @@ supervisor = Path(__file__).with_name('resident-phase.py').resolve()
 results = []
 for name, program, expected, interrupt in [
     ('success', 'print("completed")', True, False),
-    ('failure', 'raise SystemExit(7)', False, False),
+    ('failure', 'print("underlying prepare failure");raise SystemExit(7)', False, False),
     ('timeout', 'import time;time.sleep(300)', False, False),
     ('interrupt', 'import time;time.sleep(300)', False, True),
     ('orphan', 'import subprocess,sys;subprocess.Popen([sys.executable,"-c","import time;time.sleep(300)"])', False, False),
@@ -35,6 +35,10 @@ for name, program, expected, interrupt in [
         state = json.loads((Path(directory) / 'test-results/resident-ci' / (name + '.json')).read_text())
         assert state['passed'] is expected, (name, state)
         assert (child.returncode == 0) is expected, (name, child.returncode)
+        if name == 'failure':
+            assert state['exitCode'] == 7, state
+            assert 'underlying prepare failure' in stderr, stderr
+            assert 'exited with code 7' in stderr, stderr
         if name in ('timeout', 'interrupt', 'orphan'):
             assert state.get('ownedGroupCleanup') == 'graceful', (name, state)
         results.append({'name': name, 'exitCode': child.returncode, 'state': state})

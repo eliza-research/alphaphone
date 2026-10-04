@@ -1,0 +1,38 @@
+name: Resident source preparation
+on:
+  pull_request:
+    paths:
+      - 'upstream.lock.json'
+      - 'vendor/eliza'
+      - 'scripts/prepare-local-agent.mjs'
+      - 'scripts/local-agent-source.mjs'
+      - 'scripts/ci/resident-phase.py'
+      - 'scripts/ci/test-resident-phase.py'
+      - '.github/workflows/resident-prepare.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      RUN_TURBO_CONCURRENCY: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: python3 scripts/ci/test-resident-phase.py
+      - run: python3 scripts/ci/resident-phase.py --name prepare --seconds 3600 npm run agent:prepare
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resident-prepare-evidence
+          path: test-results/resident-ci*
