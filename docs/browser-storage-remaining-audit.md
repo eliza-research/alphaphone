@@ -9,9 +9,8 @@ listed path has reproduced data loss or passed concurrency qualification.
 ## Audit boundary
 
 Inspect direct `localStorage` and `sessionStorage` writes together with delegated
-storage ports. A direct-call count misses the product Notes wrapper, which delegates
-to `plugins/plugin-notes/src/client/notes-store.ts`, and does not establish whether
-readers and writers share the same authority. The domains below remain outside the
+storage ports. A direct-call count does not establish whether readers and
+writers share the same authority. The domains below remain outside the
 canonical browser documents described in [browser storage](browser-storage.md).
 
 Single-value preferences are not automatically equivalent to a multi-record
@@ -23,8 +22,6 @@ retain its exact request identity until authoritative reconciliation.
 
 | Domain and authoritative source | Current mechanism and concrete concern | Required implementation and exit evidence |
 | --- | --- | --- |
-| Browser Notes: `prototype/agent-adapter.ts`, `runtime/notes-store.ts`, upstream `plugin-notes` client store | Browser construction passes `localStorage` to the shared synchronous store. `assertCurrent` compares bytes before a whole-envelope write and reads them back afterward. This detects observed changes but does not make comparison and write one transaction across processes. Android uses the separate secure Notes adapter. | Introduce a reviewed upstream asynchronous browser storage path while preserving collection identity, revisions, deletion tombstones, metadata and operation receipts. Update all UI/actions/readback consumers together. Prove simultaneous edits, stale edits, lost responses, migration and exact recovery across engines. Do not edit the pinned vendor checkout or claim native migration from browser evidence. |
-| Note/audio deletion recovery: `runtime/note-audio-deletions.ts` | Browser pending records contain the reviewed note snapshot, target and audio identity. A separate effects lock coordinates deletion/restoration; localStorage comparison protects the pending map. Notes readback also uses the synchronous Notes envelope. | Migrate the pending map without removing the effects lock. Coordinate with the Notes storage change. Preserve unknown audio outcomes, exact original snapshots and deletion tombstones; prove no duplicate audio removal and no restoration over a newer note. |
 | Connection selection and Cloud environment: `runtime/connection-ui.tsx` | Individual nonsecret preferences remain in renderer storage. Credential storage is separate. Conversation restart choices now have an atomic document implementation described below. | Verify selection/environment winner semantics, cross-tab retirement, and late authentication completions. Browser conversation tests do not establish native persistence or credential acceptance. |
 | Appearance and simulated location: `prototype/settings-adapter.ts`, `browser/location-simulation.ts` | Individual preference values with events/readback. These do not share the multi-record receipt semantics above. | Verify deliberate last-writer-wins behavior, malformed-value handling, cross-tab refresh and pending sensor cancellation. Migrate only if the required invariant needs stronger coordination; avoid adding a redundant writable mirror. |
 
@@ -43,39 +40,14 @@ completion compares an operation ID before a separate localStorage write, and
 initial retention currently lacks readback. Do not present this record as an
 outstanding browser Clock journal or as proof an alarm was created.
 
-## Implementation order
+## Remaining review
 
-1. Add an asynchronous Notes storage contract upstream and migrate every browser
-   reader and writer together. The synchronous editor snapshot may remain for
-   rendering, but it cannot authorize a mutation or deletion readback.
-2. Move audio-deletion recovery with Notes. Preserve the separate effects lock,
-   original note snapshots, unknown audio outcomes and deletion tombstones.
-3. Qualify conversation restart choices in `runtime/conversation-selection.ts` and
-   both history/send consumers. Writes compare the captured owner choice inside
-   the canonical transaction; another owner's entry is retained. Each tab keeps
-   its active chat until retirement, when in-memory choices are cleared. A failed
-   restart-choice save may retain the verified chat for this session with a
-   visible warning. Cache reset does not delete agent conversations or send text.
-   The strengthened implementation passed TypeScript and the owning three-engine cases before consolidation; merged-source qualification is pending. Full-product and native qualification remain separate. Connection selection and
-   Cloud environment preference classification remain separate.
-4. Specify preference winner and refresh semantics, then verify appearance and
-   simulated location against those semantics. Avoid creating redundant mirrors.
-
-## Notes migration boundaries
-
-`prototype/agent-adapter.ts` opens the browser store and uses its `list`, `raw`,
-`replace`, `target`, `assertCurrent` and `execute` paths. Its asynchronous Android
-store is already a separate adapter; preserve that native contract. Browser
-`note-audio-deletions.ts` independently reads the Notes envelope to distinguish
-an original note, a changed note and an exact deletion tombstone. Changing only
-the editor would leave this recovery reader on retired bytes.
-
-Keep collection and note identities, revision hashes, metadata and deletion
-operation IDs unchanged. Preserve the original current, legacy and daily Notes
-inputs for explicit recovery. Cover initialization races, queued editor saves,
-external edits, cancellation around commit, failed acknowledgement and recovery
-before replacing all browser consumers. No pinned vendor edits or writable
-localStorage mirror may stand in for the upstream change.
+Specify winner, refresh and retirement semantics for connection/environment,
+appearance and simulated location preferences, then qualify their callers.
+Conversation choices, Notes and audio-deletion records now have canonical document
+implementations; their contracts and owning suites are in
+[browser storage](browser-storage.md). A domain migration does not establish
+native or physical-device acceptance.
 
 ## Qualification and remaining product gates
 

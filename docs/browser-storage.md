@@ -86,3 +86,27 @@ writer before reload so queued stale reducers cannot recreate the old snapshot.
 Malformed bytes remain available for backup until an explicit successful reset.
 This contract applies to development fixtures, not native application storage.
 The reset ownership browser suite exercises the writer lifecycle. Its results apply only to the tested source and engine.
+
+## Notes and audio deletion
+
+Browser Notes uses upstream `DocumentNotesStore` through the product
+`browser/notes-document.ts` adapter. IndexedDB owns the saved envelope; the
+synchronous editor list is only an optimistic view. Collection IDs, record
+revisions, deletion tombstones and metadata retain their existing format.
+Original v2, v1 and daily bytes remain verbatim in the archive and localStorage.
+Later changes to retired Notes sources stop normal access. Unrelated daily
+receipts do not invalidate Notes. Confirmed reset creates a new empty collection
+without reimporting retained sources or deleting recording bytes.
+
+Audio-deletion pending records use a separate canonical document, and recovery
+reads the same authoritative Notes envelope as the editor. The independent
+`alpha.notes-audio-effects.v1` lock still serializes deletion, restoration and
+reconciliation. Storage transactions alone do not authorize replaying an audio
+effect. Exact backup and confirmed reset are available from Notes; unsaved text
+must be copied or exported before a reset reloads the app.
+
+The owning suites cover independent tabs, stale editors, exact archives,
+malformed recovery, failed writes, lost acknowledgements, deletion receipts,
+retained unknown outcomes and restoration against newer notes. Browser CI runs
+the document/save-failure and audio-recovery suites across its configured
+engines. Android retains the encrypted adapter and requires separate qualification.

@@ -78,7 +78,7 @@ test('Notes rejects invalid text and cancels an empty file selection without cre
     await (await chooser).setFiles(files);
     await expect(page.getByText('No notes yet. Create a note to get started.')).toBeVisible();
     await expect(page.getByRole('button',{name:'Import text note',exact:true})).toBeEnabled();
-    expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('alphaphone:notes:v2')||'{"records":[]}').records.length)).toBe(0);
+    expect(await page.evaluate(async ()=>JSON.parse(((await (await import('/src/browser/notes-document.ts')).browserNotesDocument.read())?.raw??null)||'{"records":[]}').records.length)).toBe(0);
   }
 });
 test('Scheduled digests traps focus, closes on native Back, and restores the triggering control',async({page})=>{
@@ -92,8 +92,8 @@ test('Scheduled digests traps focus, closes on native Back, and restores the tri
   await expect(dialog).toContainText('Choose where your agent runs to set up scheduled digests.');
   await expect(page.locator('.os')).toHaveAttribute('inert','');
   await page.keyboard.press('Shift+Tab');
-  expect(await dialog.evaluate(el=>el.contains(document.activeElement))).toBe(true);
-  await page.evaluate(()=>window.dispatchEvent(new Event('alpha-back',{cancelable:true})));
+  expect(await dialog.evaluate(async el=>el.contains(document.activeElement))).toBe(true);
+  await page.evaluate(async ()=>window.dispatchEvent(new Event('alpha-back',{cancelable:true})));
   await expect(dialog).toHaveCount(0);await expect(trigger).toBeFocused();
   await expect(page.locator('html')).toHaveAttribute('data-active-view','settings');
 });
@@ -111,13 +111,13 @@ test('Display theme survives reload and mock preview does not overwrite it',asyn
   await page.goto('/');await page.getByRole('button',{name:'Settings',exact:true}).click();
   await page.getByRole('button',{name:'Display',exact:true}).click();
   await page.getByRole('button',{name:'Theme: Dark',exact:true}).click();
-  await expect.poll(()=>page.evaluate(()=>localStorage.getItem('alpha.appearance.v1'))).toBe('dark');
+  await expect.poll(()=>page.evaluate(async ()=>localStorage.getItem('alpha.appearance.v1'))).toBe('dark');
   await page.reload();
-  expect(await page.locator('.os').evaluate(el=>getComputedStyle(el).getPropertyValue('--bg').trim())).toBe('#000000');
+  expect(await page.locator('.os').evaluate(async el=>getComputedStyle(el).getPropertyValue('--bg').trim())).toBe('#000000');
   await page.goto('/?mode=mock&theme=light');
-  expect(await page.evaluate(()=>localStorage.getItem('alpha.appearance.v1'))).toBe('dark');
+  expect(await page.evaluate(async ()=>localStorage.getItem('alpha.appearance.v1'))).toBe('dark');
   await page.goto('/');
-  expect(await page.locator('.os').evaluate(el=>getComputedStyle(el).getPropertyValue('--bg').trim())).toBe('#000000');
+  expect(await page.locator('.os').evaluate(async el=>getComputedStyle(el).getPropertyValue('--bg').trim())).toBe('#000000');
 });
 
 test('MVP mock account and privacy journeys exclude Contacts controls', async ({page}) => {

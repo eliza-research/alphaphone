@@ -13,7 +13,10 @@ import { readMapsSelection } from '../maps/agent-context';
 import {isReminderOperation,validateReminderResult} from '../runtime/reminder-contract';
 import { SecureNotesStore, readLegacyDailyNotes } from '../runtime/notes-secure-store';
 import { secureConnectionStore } from '../runtime/native-connection';
-import {NotesStore,NotesCommitUncertain} from '../runtime/notes-store';
+import {NotesCommitUncertain} from '../runtime/notes-store';
+import {openBrowserNotes,browserNotesDocument} from '../browser/notes-document';
+import {openDomainRecovery} from '../browser/domain-recovery';
+import {audioDeletionDocument,withAudioDeletionLock} from '../runtime/note-audio-deletions';
 import {isNotesOperation} from '../runtime/notes-contract';
 import {isCalendarOperation,validateCalendarResult} from '../runtime/calendar-contract';
 import { isMvpView } from "./mvp-features";
@@ -124,7 +127,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     document.documentElement.dataset.notesOpenStage='starting';
     this.notesReady = (async()=>{
       const initial=()=>{document.documentElement.dataset.notesOpenStage='legacy-daily-read';return readLegacyDailyNotes(localStorage);};
-      this.notesStore=isAndroid?await SecureNotesStore.open(secureConnectionStore,localStorage,initial,stage=>{document.documentElement.dataset.notesOpenStage=stage;}):new NotesStore(localStorage,initial);
+      this.notesStore=isAndroid?await SecureNotesStore.open(secureConnectionStore,localStorage,initial,stage=>{document.documentElement.dataset.notesOpenStage=stage;}):await openBrowserNotes();
       if(!this.live)return;
       document.documentElement.dataset.notesStorageState='ready';
       this.notesStorageFailed=false;this.notesRaw=this.notesStore.raw;
@@ -417,6 +420,15 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
   };
   p.api = function (key: string) {
     const api = originalApi.call(this, key);
+    if(key==='notes'&&!isAndroid){
+      api.recoverNotes=()=>{
+        if(this.notesPending){this.toast('Wait for the current Notes save before opening recovery.');return;}
+        alphaClient.cancel();
+        openDomainRecovery({capture:signal=>browserNotesDocument.capture(signal),reset:(expected,signal)=>withAudioDeletionLock(()=>browserNotesDocument.reset(expected,signal))},'notes','Notes recovery','Download saved notes before resetting. Copy or export unsaved text first. Reset clears browser notes after confirmation; recordings and pending audio deletions are retained. Close older Alpha tabs before continuing.');
+      };
+      api.recoverNoteAudio=()=>openDomainRecovery({capture:signal=>audioDeletionDocument.capture(signal),reset:(expected,signal)=>withAudioDeletionLock(()=>audioDeletionDocument.reset(expected,signal))},'audio deletion records','Audio deletion recovery','Download deletion records before resetting. Reset discards pending deletion tracking; it does not delete or restore any note or recording. Close older Alpha tabs before continuing.');
+    }
+
     if(key==='workflows'&&!isAndroid){
       api.localWorkflowReady=()=>{context(this);return this.live&&!alphaClient.getState().pending&&!alphaClient.getState().context.sensitive&&(alphaClient.getState().connection==='ready'||!!connectionController.getSnapshot().session);};
       api.localWorkflowBusy=()=>alphaClient.getState().pending;
@@ -575,6 +587,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
   views.notes.render = function (state: Shell, api: Shell) {
     const out = notesRender({ ...state, record: false }, api);
     out.storageStatus=state.storageStatus;
+    out.browserRecovery=!isAndroid;out.recoverNotes=api.recoverNotes;out.recoverNoteAudio=api.recoverNoteAudio;
     const dictate = async () => {
       try {
         const r = await DailyApps.perform({ action: 'voice' });

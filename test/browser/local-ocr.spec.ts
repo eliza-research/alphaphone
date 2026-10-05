@@ -28,7 +28,7 @@ test('real local OCR recognizes an image without remote model requests',async({p
     return recognizeLocalText(blob,new AbortController().signal);
   });
   expect(result.text).toContain('Alpha Phone local scan');expect(result.text).toContain('Review text before saving.');
-  for(const imported of await page.evaluate(()=>(window as any).ocrScriptImports as string[])){const url=new URL(imported);assets.push(url.pathname);if(url.hostname!=='127.0.0.1')remote.push(url.origin);}
+  for(const imported of await page.evaluate(async ()=>(window as any).ocrScriptImports as string[])){const url=new URL(imported);assets.push(url.pathname);if(url.hostname!=='127.0.0.1')remote.push(url.origin);}
   expect(assets).toContain('/ocr/worker.min.js');expect(assets).toContain('/ocr/eng.traineddata.gz');expect(assets.some(path=>path.includes('lstm.wasm.js'))).toBe(true);expect(remote).toEqual([]);
 });
 
@@ -59,15 +59,15 @@ test('Camera Scan reviews real OCR and commits only corrected text to durable No
     };
   });
   await page.goto('/');await page.getByRole('button',{name:'Camera',exact:true}).click();
-  const video=page.locator('[aria-label^="Viewfinder."] video');await expect.poll(()=>video.evaluate((v:HTMLVideoElement)=>v.readyState)).toBeGreaterThanOrEqual(2);
+  const video=page.locator('[aria-label^="Viewfinder."] video');await expect.poll(()=>video.evaluate(async (v:HTMLVideoElement)=>v.readyState)).toBeGreaterThanOrEqual(2);
   await page.getByRole('button',{name:'Scan mode',exact:true}).click();await page.getByRole('button',{name:'Scan text',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'Review scanned text'});await expect(dialog).toBeVisible();
   const text=dialog.getByRole('textbox',{name:'Scanned text'});await expect(text).toHaveValue(/Alpha local scan/,{timeout:60000});
-  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('alphaphone:notes:v2')||'{"records":[]}').records.filter((n:any)=>n.id.startsWith('scan-')).length)).toBe(0);
+  expect(await page.evaluate(async ()=>JSON.parse(((await (await import('/src/browser/notes-document.ts')).browserNotesDocument.read())?.raw??null)||'{"records":[]}').records.filter((n:any)=>n.id.startsWith('scan-')).length)).toBe(0);
   await text.fill('Reviewed scan title\nCorrected by the user.');await dialog.getByRole('button',{name:'Save to Notes',exact:true}).click();await expect(dialog.getByRole('status',{name:'Scan status'})).toHaveText('Saved to Notes.');
   await page.screenshot({path:info.outputPath('scan-review.png'),animations:'disabled'});
   await dialog.getByRole('button',{name:'Close scan',exact:true}).click();await page.reload();
-  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('alphaphone:notes:v2')!).records.filter((n:any)=>n.id.startsWith('scan-')));
+  const saved=await page.evaluate(async ()=>JSON.parse(((await (await import('/src/browser/notes-document.ts')).browserNotesDocument.read())?.raw??null)!).records.filter((n:any)=>n.id.startsWith('scan-')));
   expect(saved).toHaveLength(1);expect(saved[0].body).toBe('Reviewed scan title\nCorrected by the user.');
 });
 
@@ -80,7 +80,7 @@ test('an unconfirmed Notes save retains reviewed text and cannot duplicate the w
   openScanReview(blob,async()=>{(window as any).scanWrites++;return false;});
  });
  const dialog=page.getByRole('dialog',{name:'Review scanned text'});const field=dialog.getByRole('textbox',{name:'Scanned text'});await expect(field).toBeEnabled({timeout:60000});await field.fill('Keep my corrected draft');await dialog.getByRole('button',{name:'Save to Notes',exact:true}).click();
- await expect(dialog.getByRole('status',{name:'Scan status'})).toContainText('Save unconfirmed');await expect(field).toHaveValue('Keep my corrected draft');await expect(dialog.getByRole('button',{name:'Save unconfirmed',exact:true})).toBeDisabled();expect(await page.evaluate(()=>(window as any).scanWrites)).toBe(1);
+ await expect(dialog.getByRole('status',{name:'Scan status'})).toContainText('Save unconfirmed');await expect(field).toHaveValue('Keep my corrected draft');await expect(dialog.getByRole('button',{name:'Save unconfirmed',exact:true})).toBeDisabled();expect(await page.evaluate(async ()=>(window as any).scanWrites)).toBe(1);
 });
 
 test('closing Scan during model load terminates the worker without late reopening',async({page})=>{
@@ -94,5 +94,5 @@ test('closing Scan during model load terminates the worker without late reopenin
   const canvas=document.createElement('canvas');canvas.width=100;canvas.height=100;const blob=await new Promise<Blob>(resolve=>canvas.toBlob(value=>resolve(value!)));
   openScanReview(blob,async()=>{throw Error('No save expected');});
  });
- await modelRequest;await page.getByRole('dialog').getByRole('button',{name:'Cancel scan',exact:true}).click();release();await expect(page.getByRole('dialog')).toHaveCount(0);expect(await page.evaluate(()=>(window as any).scanTerminated)).toBe(1);
+ await modelRequest;await page.getByRole('dialog').getByRole('button',{name:'Cancel scan',exact:true}).click();release();await expect(page.getByRole('dialog')).toHaveCount(0);expect(await page.evaluate(async ()=>(window as any).scanTerminated)).toBe(1);
 });

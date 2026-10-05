@@ -1988,6 +1988,7 @@
 <sc-if value="{{is.notes}}" hint-placeholder-val="{{false}}">
 <div class="notes-layout" style="display: flex; flex-direction: column; height: 100%; position: relative; padding-top: 44px; box-sizing: border-box">
   <sc-if value="{{notes.audioDeletionUnknown}}"><div role="status" style="padding:8px 24px;font-size:13px">Voice note deletion needs review. No deletion will be repeated.<button class="tap" onClick="{{notes.checkAudioDeletion}}">Check deletion status</button><sc-for list="{{notes.audioDeletionPending}}" as="pending"><div>{{pending.title}} <button class="tap" onClick="{{pending.restore}}">Restore note and recording</button></div></sc-for></div></sc-if>
+  <sc-if value="{{notes.browserRecovery}}"><div style="display:flex;flex-wrap:wrap;gap:8px;padding:0 24px 6px;flex-shrink:0"><button class="tap" style="min-height:44px" onClick="{{notes.recoverNotes}}">Notes recovery</button><sc-if value="{{notes.audioDeletionUnknown}}"><button class="tap" style="min-height:44px" onClick="{{notes.recoverNoteAudio}}">Audio deletion recovery</button></sc-if></div></sc-if>
   <sc-if value="{{notes.storageStatus}}"><div class="notes-storage-status" role="status" aria-live="polite" style="flex-shrink:0;padding:0 24px 6px;font-size:12px;line-height:16px;color:var(--mut);overflow-wrap:anywhere">{{notes.storageStatus}}</div></sc-if>
   <div class="notes-workspace" style="position:relative;display:flex;flex-direction:column;flex:1;min-height:0">
   <sc-if value="{{notes.notSearching}}" hint-placeholder-val="{{true}}">
