@@ -78,6 +78,19 @@ public class VideoInstrumentedTest {
  }
  private void assertMedia(Uri uri)throws Exception{
   try(android.os.ParcelFileDescriptor file=context().getContentResolver().openFileDescriptor(uri,"r")){assertNotNull(file);assertTrue("Finalized MP4 contains actual bytes",file.getStatSize()>1000);}
+  android.media.MediaExtractor extractor=new android.media.MediaExtractor();
+  try{
+   extractor.setDataSource(context(),uri,null);
+   org.json.JSONArray tracks=new org.json.JSONArray();
+   for(int i=0;i<extractor.getTrackCount();i++){
+    android.media.MediaFormat format=extractor.getTrackFormat(i);
+    JSONObject track=new JSONObject();track.put("mime",format.getString(android.media.MediaFormat.KEY_MIME));
+    for(String key:new String[]{android.media.MediaFormat.KEY_WIDTH,android.media.MediaFormat.KEY_HEIGHT,android.media.MediaFormat.KEY_SAMPLE_RATE,android.media.MediaFormat.KEY_CHANNEL_COUNT})if(format.containsKey(key))track.put(key,format.getInteger(key));
+    tracks.put(track);
+   }
+   android.os.Bundle evidence=new android.os.Bundle();evidence.putString("capturedVideoTracks",tracks.toString());
+   InstrumentationRegistry.getInstrumentation().sendStatus(2,evidence);
+  }finally{extractor.release();}
   MediaMetadataRetriever metadata=new MediaMetadataRetriever();
   try{metadata.setDataSource(context(),uri);assertTrue("Actual recording duration",Long.parseLong(metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION))>=1000);assertTrue(Integer.parseInt(metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH))>0);assertTrue(Integer.parseInt(metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT))>0);android.graphics.Bitmap frame=metadata.getFrameAtTime();assertNotNull("Video decodes a real frame",frame);frame.recycle();}finally{metadata.release();}
  }
@@ -103,6 +116,22 @@ public class VideoInstrumentedTest {
    until(savedVideoSelector);eval(savedVideoSelector+".click()");click("Play video");
    until("(()=>{const v=document.querySelector('video[data-alpha-captured-video]');return v&&v.currentTime>0.2&&v.videoWidth>0})()");
    navigate("Home");until("!document.querySelector('video[data-alpha-captured-video]')");
+  }finally{Set<Uri> created=owned();created.removeAll(before);for(Uri uri:created)context().getContentResolver().delete(uri,null,null);}
+ }
+ /** Independent byte-serving oracle: unsupported WebView codecs must not hide range failures. */
+ @Test public void recordedVideoServesExactNonzeroRangeBeforePlayerDecode()throws Exception{
+  permission();Set<Uri> before=owned();
+  try(BoundedActivityScenario<MainActivity>s=BoundedActivityScenario.launch(MainActivity.class)){
+   admitAccount();begin();click("Stop recording");until("document.body.innerText.includes('Video saved to Android Photos.')");
+   Set<Uri> created=owned();created.removeAll(before);assertEquals("One finalized video",1,created.size());Uri uri=created.iterator().next();assertMedia(uri);
+   byte[] prefix;try(java.io.InputStream input=context().getContentResolver().openInputStream(uri)){assertNotNull(input);prefix=input.readNBytes(32);}
+   String key="v:"+ContentUris.parseId(uri);
+   eval("window.__independentVideoRange=null;(async()=>{const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),8000);try{const media=await Capacitor.Plugins.AlphaPhotos.read({id:"+JSONObject.quote(key)+"});const response=await fetch(media.path,{headers:{Range:'bytes=16-31'},signal:abort.signal});const bytes=new Uint8Array(await response.arrayBuffer());window.__independentVideoRange={status:response.status,length:response.headers.get('content-length'),bytes:btoa(String.fromCharCode(...bytes))};}catch(error){window.__independentVideoRange={error:String(error?.name||'Error')};}finally{clearTimeout(timer);}})()");
+   until("window.__independentVideoRange!==null");
+   assertEquals("Range request completed: "+playbackDiagnostics(),"false",eval("!!window.__independentVideoRange.error"));
+   assertEquals("Nonzero partial response","206",eval("window.__independentVideoRange.status"));
+   assertEquals("Exact response length","\"16\"",eval("window.__independentVideoRange.length"));
+   assertArrayEquals("Exact published media bytes",java.util.Arrays.copyOfRange(prefix,16,32),android.util.Base64.decode((String)new org.json.JSONTokener(eval("window.__independentVideoRange.bytes")).nextValue(),android.util.Base64.DEFAULT));
   }finally{Set<Uri> created=owned();created.removeAll(before);for(Uri uri:created)context().getContentResolver().delete(uri,null,null);}
  }
  @Test public void leavingCameraFinalizesInsteadOfRecordingInBackground()throws Exception{

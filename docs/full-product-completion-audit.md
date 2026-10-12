@@ -2104,3 +2104,46 @@ the production bundle audit. Both developer APK variants rebuilt successfully wi
 the updated instrumentation. As before, they omit the resident payload and use
 unqualified speech; strict distribution, real Cloud/Cerebras and physical gates
 remain open. Original runtime inputs were restored by the build wrapper.
+
+
+## October 12: video codec and serving boundary isolated on the current fixture
+
+The rebuilt `developer-apks-video-codec-range` instrumentation preserves the
+original playback assertion and adds an independent recorded-media byte-range
+oracle. It emits only track MIME/dimensions/audio-rate/channel metadata, never
+source URLs, capability tokens or media content. Both variants record H.264
+(`video/avc`) at 1280×720 plus AMR-NB (`audio/3gpp`) at 8 kHz mono. Native metadata
+and decoded-frame checks pass. The independent renderer request through
+AlphaPhotos and its same-origin capability endpoint returns HTTP 206 with exactly
+the expected bytes 16–31 and one 16-byte Content-Length. Leaving Camera finalizes
+recording rather than leaving capture running.
+
+The original renderer playback assertion still fails in both variants with media
+error 4 before positive playback time/width. The provider reports empty AVC
+support. This rules out failure of the independently tested nonzero range as the
+cause of that check, but does not prove every media request/seek/lifecycle path.
+No playback, audio output, pause/seek or restoration acceptance is claimed.
+The campaign has two passing methods and one failing method per variant, with no
+skips, and remains failed overall. Exact receipts are in
+`test-results/full-product-audit/cuttlefish-video-codec-range157/results.json`.
+All six synthetic recordings were removed; a post-run MediaStore video query is
+empty.
+
+Read-only copies of both active `/vendor/etc/media_profiles_V1_0.xml` and
+`media_profiles_vendor.xml` have SHA-256
+`f5b8e7d177169e977c0c1767bac3f328e36587e243a37070453aa800a1ef4219`.
+Both contain 16 AMR-NB profile entries and no AAC profile entries; the copies and
+counts are recorded in `video-codec-platform-profiles.json`. No platform file was
+changed. This makes the remaining AOSP work concrete: qualify the actual camera
+encoder/profile, muxed audio and video tracks, and the chosen playback engine
+together. A newer WebView version alone is insufficient admission. Any maintained
+provider or reviewed native-playback implementation must demonstrate the actual
+recorded format, audible output, pause/seek, background stop, recreation and owned
+media access/revocation on both APK variants and the image. Physical microphone,
+camera and audio acceptance remain separate. Native decoding of a frame is not
+an acceptable substitute for the required user-facing playback flow.
+
+Validation: full `npm run verify` remains 817 passed, zero failed and four TODOs;
+both developer variants rebuilt with the instrumentation changes. The build wrapper
+restored original inputs. These APKs still omit resident payload and carry
+unqualified speech, so this adds no release, Cloud or resident-agent qualification.
