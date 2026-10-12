@@ -2079,3 +2079,28 @@ separate cohorts. Admission rejects malformed nonempty values. The value is an
 observed image discriminator, not proof of verified-boot enforcement, complete
 partition identity or release qualification. The boundary campaign began before
 that addition and is not folded into the older image's historical coverage totals.
+
+
+ResetPolicy's first installed run passed isolated marker persistence but failed
+both variants before cancellation: an exact `By.text("Cancel")` lookup returned
+null. The test now waits for Android's negative-dialog resource and verifies its
+Cancel label case-insensitively before clicking. It does not change the app or
+weaken reset authorization. Rebuilt standalone and launcher artifacts at `d69483bf`
+then pass both methods with no skips: cancellation returns cancelled, preserves the
+selection and real pending-marker state, refuses migration plugins, and the isolated
+marker survives reopening. The owned application/test packages were removed.
+
+Failed and passing receipts are retained respectively under
+`cuttlefish-reset-cancellation157` and `cuttlefish-reset-negative-action157` in
+`test-results/full-product-audit`. Both bind the boot metadata digest and exact APK
+hashes. These checks do not prove destructive system reset, pending-worker deletion,
+credential acceptance or the future separate listener package's reset contract.
+Existing upstream external-controller evidence remains independently source-bound.
+The older coverage snapshot is not regenerated or presented as current exhaustive
+coverage by this addition.
+
+Full source verification passed 817 tests, zero failures and four TODOs, including
+the production bundle audit. Both developer APK variants rebuilt successfully with
+the updated instrumentation. As before, they omit the resident payload and use
+unqualified speech; strict distribution, real Cloud/Cerebras and physical gates
+remain open. Original runtime inputs were restored by the build wrapper.
