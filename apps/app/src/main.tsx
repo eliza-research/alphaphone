@@ -167,22 +167,28 @@ function Phone() {
       size();
     }).catch(() => {});
     const size = () => {
-      const height = window.visualViewport?.height || window.innerHeight;
+      // Android WebView can expand innerWidth/visualViewport to overflowing content
+      // during rotation. Feeding that back into the phone canvas leaves portrait
+      // content at landscape width. The root client box is the fitted WebView;
+      // a smaller visual viewport still supplies the keyboard's usable height.
+      const width = document.documentElement.clientWidth || window.innerWidth;
+      const layoutHeight = document.documentElement.clientHeight || window.innerHeight;
+      const height = Math.min(layoutHeight, window.visualViewport?.height || layoutHeight);
       const coarse = !isAndroid && window.matchMedia('(pointer: coarse)').matches;
-      const desktop = !isAndroid && window.innerWidth > 600 && !coarse;
+      const desktop = !isAndroid && width > 600 && !coarse;
       const banner = testMocksEnabled && mock ? document.querySelector('.mock-mode-banner')?.getBoundingClientRect().bottom || 36 : 0;
       const tools = devSurfacesEnabled && !isAndroid && !mock ? document.querySelector<HTMLElement>('.alpha-dev-tools') : null;
       const toolsInset = tools ? Math.max(56, Math.ceil(tools.getBoundingClientRect().height + (parseFloat(getComputedStyle(tools).bottom) || 0) + 2)) : 0;
       const available = Math.max(1, height - banner - (desktop ? 48 : 0) - toolsInset);
       // Standalone Android uses the available width without magnifying the
       // portrait canvas in landscape. Keep the launcher presentation unchanged.
-      const landscape = !desktop && window.screen.width > window.screen.height && window.innerWidth > window.innerHeight;
+      const landscape = !desktop && window.screen.width > window.screen.height && width > layoutHeight;
       const fluidNative = isAndroid && !launcherPresentation;
-      const scale = desktop ? Math.min(1, available / 915) : landscape ? Math.max(0.1, Math.min(window.innerWidth, window.screen.height) / 412) : fluidNative ? Math.min(1, window.innerWidth / 412) : window.innerWidth / 412;
+      const scale = desktop ? Math.min(1, available / 915) : landscape ? Math.max(0.1, Math.min(width, window.screen.height) / 412) : fluidNative ? Math.min(1, width / 412) : width / 412;
       document.documentElement.style.setProperty('--phone-scale', String(scale));
-      document.documentElement.style.setProperty('--phone-width', landscape ? `calc(100vw / ${scale})` : `${fluidNative ? window.innerWidth / scale : 412}px`);
+      document.documentElement.style.setProperty('--phone-width', landscape ? `calc(100vw / ${scale})` : `${fluidNative ? width / scale : 412}px`);
       document.documentElement.style.setProperty('--phone-height', `${desktop ? 915 : available / scale}px`);
-      document.documentElement.style.setProperty('--phone-left', `${desktop ? (window.innerWidth - 412 * scale) / 2 : 0}px`);
+      document.documentElement.style.setProperty('--phone-left', `${desktop ? (width - 412 * scale) / 2 : 0}px`);
       document.documentElement.style.setProperty('--phone-top', `${banner + (desktop ? 24 : 0)}px`);
       document.documentElement.classList.toggle('browser-desktop', desktop);
       document.documentElement.classList.toggle('alpha-landscape', landscape);

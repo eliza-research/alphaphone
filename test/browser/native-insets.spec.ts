@@ -1,18 +1,18 @@
 import {test,expect} from '@playwright/test';
 
-async function nativeContent(page:any,url:string,insets:{top:number;bottom:number;left:number;right:number},width=412,height=915){
- await page.addInitScript(()=>{
+async function nativeContent(page:any,url:string,insets:{top:number;bottom:number;left:number;right:number},width=412,height=915,launcher=false){
+ await page.addInitScript((launcher)=>{
   localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'}));
   const w=window as any;w.androidBridge={};
   const names=['DailyApps','AlphaBrowser','AlphaConnection','AlphaDevice','AlphaLocalAgent','AlphaHostedResults','AlphaVoiceCloud','AlphaNotifications','ElizaSystem','AlphaCalendar','AlphaNoteDocuments','AlphaNoteAudio','AlphaFiles','AlphaPhotos','DeviceApps','ElizaLocation','AlphaActionJournal'];
   const methods=['addListener','removeListener','surfaceInfo','readPending','readPendingResult','readDelegationCallback','readSecret','secureRead','secureWrite','secureRemove','get','status','getStatus','getState','state','permissionState','permissions','list','listCalendars','listEvents','listReminders','listBookmarks','getBookmarks','bookmarks','settings','getSettings','buildInfo','capabilities','query','read','readJournal','getPending','readSelection'];
   w.Capacitor={Plugins:{},PluginHeaders:names.map(name=>({name,methods:methods.map(name=>({name,rtype:name==='addListener'?'callback':'promise'}))})),nativeCallback:()=> 'fixture-callback',nativePromise:async(_plugin:string,method:string)=>{
    if(method==='surfaceInfo')return {topInset:0,bottomInset:0}; // MainActivity already fits standalone content.
-   if(method==='buildInfo')return {launcher:false};
+   if(method==='buildInfo')return {launcher};
    if(['secureRead','readSecret'].includes(method))return {value:null};
    return {apps:[],events:[],calendars:[],reminders:[],bookmarks:[],results:[],items:[],entries:[],pending:[],capabilities:[],available:false};
   }};
- });
+ },launcher);
  await page.setViewportSize({width,height});
  await page.route('**/__native-insets-fixture',route=>route.fulfill({contentType:'text/html',body:'<!DOCTYPE html><html><body style="margin:0"></body></html>'}));
  await page.goto(new URL('/__native-insets-fixture',url).href);
@@ -79,4 +79,30 @@ test('wide native standalone keeps a usable transcript and touch navigation at n
   await open.tap();
   await expect(frame.locator('[data-screen]')).toHaveAttribute('data-alpha-chat-half','true');
  }finally{await context.close();}
+});
+
+for(const launcher of [false,true])test(`native ${launcher?'launcher':'standalone'} ignores an overflow-expanded viewport after rotation`,async({page},testInfo)=>{
+ const frame=await nativeContent(page,testInfo.project.use.baseURL as string,{top:0,bottom:0,left:0,right:0},412,839,launcher);
+ await page.setViewportSize({width:839,height:412});
+ await page.locator('iframe').evaluate((node:any)=>Object.assign(node.style,{width:'839px',height:'412px'}));
+ await page.setViewportSize({width:412,height:839});
+ await page.locator('iframe').evaluate((node:any)=>Object.assign(node.style,{width:'412px',height:'839px'}));
+ // WebView 124 observed these inflated dimensions while its CSS root stayed 412x839.
+ // Reproduce that measurement mismatch without claiming this browser emulates Android rotation.
+ await frame.locator('html').evaluate(()=>{
+  Object.defineProperty(window,'innerWidth',{configurable:true,value:863});
+  Object.defineProperty(window,'innerHeight',{configurable:true,value:1757});
+  Object.defineProperty(window.visualViewport!,'height',{configurable:true,value:1757});
+  window.dispatchEvent(new Event('resize'));
+ });
+ await expect.poll(()=>frame.locator('.alpha-phone').evaluate(node=>{
+  const box=node.getBoundingClientRect(),root=document.documentElement;
+  return box.width<=root.clientWidth+1&&box.height<=root.clientHeight+1;
+ })).toBe(true);
+ // A real smaller visual viewport must still make room for the keyboard.
+ await frame.locator('html').evaluate(()=>{
+  Object.defineProperty(window.visualViewport!,'height',{configurable:true,value:390});
+  window.visualViewport!.dispatchEvent(new Event('resize'));
+ });
+ await expect.poll(()=>frame.locator('.alpha-phone').evaluate(node=>node.getBoundingClientRect().height)).toBeLessThanOrEqual(391);
 });
