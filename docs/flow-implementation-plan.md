@@ -1,5 +1,12 @@
 > Current renderer supersession: the authoritative fourteen-app prototype replaces the earlier seventeen-route implementation. This plan retains prior implementation history; [current capability status](mvp-current-status.md) is the current source-level gap ledger. Agent sending auto-connects the provisioned development transport; the former Settings-connect control is historical.
 
+> Policy update 2026-10-12: [owner-approved TODOs](owner-approved-mvp-plan-2026-10-12.md)
+> and [active implementation plan](implementation-plan.md) supersede conflicting
+> requirements below. Local agent only; all speech on-device; subscription services;
+> Pixel 10a Android 17; Phone/Contacts/SMS and always-on listening in AOSP MVP only;
+> no Wallet or app-data import/export. Historical implementation evidence is unchanged.
+
+
 # Flow implementation plan and acceptance ledger
 
 Date: 2026-09-29. Target correction: Pixel 10 or similar **phone**, not tablet. The available Pixel 9 emulator profile is a development approximation; it does not establish physical Pixel 10 support or acceptance. Read with `flow-audit-and-prd.md`, `native-capability-research.md`, `agent-integration.md`, and the existing implementation plan. This plan records a source inspection of the expanded app while implementation is underway. It deliberately makes no APK, emulator, provider, or physical-device passing claim. Later test reports should record the exact tested commit/artifact and update evidence without turning planned behavior into results.

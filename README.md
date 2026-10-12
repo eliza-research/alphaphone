@@ -3,8 +3,7 @@
 Independent Android UI on Eliza, using the Alpha Phone prototype as its design
 reference. The current renderer includes native browser, camera,
 calendar, reminders, selected files and local notes. Phone, SMS, Contacts and Wallet
-entry points remain disabled in production; all four are now included in the
-[full-product implementation plan](docs/full-product-completion-audit.md#newly-authorized-implementation-packages). Production Android onboarding signs into an Eliza Cloud account, checks account
+entry points are disabled by the documented MVP profile. Production Android onboarding signs into an Eliza Cloud account, checks account
 credits, then offers microphone and notification setup. The agent runs on the phone;
 Cloud supplies the configured inference and voice services. Phone pairing is retired in production Android. Browser and test-mocks tooling
 retain remote connections for development. Mock mode, prototype
@@ -42,6 +41,19 @@ the required evidence rather than treating a successful APK build as acceptance.
 - [Requirements and open decisions](docs/decisions.md)
 - [Verification gates and evidence](docs/verification.md)
 - [Source/design provenance](docs/sources.md)
+
+## Approved MVP direction — October 12
+
+The [implementation plan](docs/implementation-plan.md) and
+[32 implementation TODOs](docs/owner-approved-mvp-plan-2026-10-12.md) supersede older
+scope wording above. Agent execution is local only; Eliza Cloud provides inference,
+subscription billing, Gmail and shared Maps. All STT/TTS must move to the native
+on-device route. Dictation and interruptible voice assistant are separate controls.
+Always-on listening is required in the Pixel 10a / Android 17 AOSP MVP. Phone,
+Contacts and SMS are AOSP-only; Wallet is removed. Full permitted Photos access and
+reset-only data management are planned. These are requirements, not claims that the
+current Cloud voice/credit UI or other source already implements them.
+See [speech research](docs/local-speech-research-2026-10-12.md) for native candidates.
 
 ## Setup
 
@@ -407,3 +419,5 @@ main-branch pushes repeat only that inexpensive integration check. Full resident
 qualification and Firefox/macOS WebKit runs are explicit dispatches. See
 [CI cost and qualification policy](docs/ci-cost-policy.md) for selection and commands. A successful APK job does not establish full AOSP image or physical
 hardware acceptance. Use revision-bound CI artifacts and test reports to establish what was actually run.
+
+The ongoing [full-product audit](docs/full-product-completion-audit.md) retains exact developer APK/Cuttlefish evidence, remaining failures and the requested Wallet planning package outside MVP. It does not replace the October 12 approved MVP policy or claim release acceptance.

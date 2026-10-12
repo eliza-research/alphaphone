@@ -1,9 +1,24 @@
 # Full product completion audit — October 11, 2026
 
-**The product is not complete.** This audit targets main `f3ccefd3` (PR 393),
+**The product is not complete.** Execution below began at main `f3ccefd3` (PR 393),
 upstream `13c98575987a121decc45b161b0c8a4ee698554e`. The user explicitly added
 Phone, SMS, Contacts and Wallet to the implementation plan on October 11. Their
 existing disabled production entries must stay gated until real capabilities pass.
+
+**Current policy after integrating main `2e5baedc` (PR 427):** the
+[approved October 12 plan](owner-approved-mvp-plan-2026-10-12.md) governs current
+MVP work. Agent orchestration stays on device; Eliza Cloud provides inference,
+subscriptions, Gmail and Maps. Speech must be local in every production entrypoint,
+including signed-out/offline use. P-39 agrees with this thread's explicit choice of
+ongoing automatic sending after start, and additionally requires local dictation
+and barge-in. P-11 measures last input speech sample to first audible response,
+including endpointing, with at least 50 simple-query trials. Pixel 10a/Android 17,
+AOSP-only Phone/Contacts/SMS and AOSP listening are explicit requirements.
+Wallet remains a requested **full-product planning package**, outside the approved
+MVP; it is not enabled or a current MVP release gate. Earlier policy questions and
+measurement proposals in the chronological log are superseded, not newly open.
+The 83 observed native classes remain historical evidence for their exact archived
+APKs; the new policy does not turn old Cloud-speech tests into local-speech acceptance.
 
 **October 12 execution update:** Both developer APK variants build and run on an
 owned API 37 Cuttlefish fixture. HOME acceptance passes 7 methods and restores
@@ -66,14 +81,14 @@ provider response never counts as a real feature pass.
 | Resident preparation toolchain | Host Bun 1.3.14 failed the Cloud package import; the declared Bun 1.4.2 completed all 78 tasks and source verification | Use the declared Bun version (`mise exec bun@1.4.2 -- npm run agent:prepare`). No upstream defect or patch is required by this evidence. |
 | Current packaged resident runtime | Cloud-aware native bridge, staging and workflow-worker chain exist | Qualified embedding host libraries, complete current-pin payload, ABI/library/model hashes, real native process/IPC startup, shutdown/restart and owner isolation. Latest hosted foundation APKs omit the runtime. MVP-08/21/39 |
 | Real Eliza Cloud login and Cerebras route | Production Welcome, account/credit checks, native provider binding exist | Normal browser login/return, one-use exchange, funded account, actual model response through Cloud, serving provider/usage evidence, expiry/revoke/wrong owner/zero credits/replacement during requests. Do not substitute direct-key inference. MVP-34/37 |
-| Voice in both directions | Cloud STT/TTS, recording and conversation flows; separate local engines exist | Ongoing chat auto-send after explicit start is owner-approved (October 12); reconcile Cloud versus local/offline speech, qualify exact speech runtime on both ABIs; real mic/speaker/Bluetooth/audio focus/echo/Stop/background tests. Historical ARM64 local speech acceptance failed; the current x86_64 candidate passes both offline canonical tests, but the combined runtime remains unqualified until ARM64 acceptance. MVP-01/23/24 |
-| Latency | No current device acceptance sample | Cold/warm startup, end-of-speech→first audio, STT, inference TTFT/tokens/sec, TTS first audio, total completion, action/readback, p50/p95 with sample counts, route/model/network and errors. Confirm the six-second target's measurement boundary. MVP-05 |
+| Voice in both directions | Cloud STT/TTS, recording and conversation flows; separate local engines exist | Ongoing chat auto-send after explicit start is owner-approved. Migrate every production speech entrypoint to local native STT/TTS (P-13/P-29/P-39), then qualify exact runtime on both ABIs; real mic/speaker/Bluetooth/audio focus/echo/Stop/background tests. Historical ARM64 local speech acceptance failed; the current x86_64 candidate passes both offline canonical tests, but the combined runtime remains unqualified until ARM64 acceptance. MVP-01/23/24 |
+| Latency | No current device acceptance sample | Cold/warm startup, end-of-speech→first audio, STT, inference TTFT/tokens/sec, TTS first audio, total completion, action/readback, p50/p95 with sample counts, route/model/network and errors. Use P-11: last input speech sample to first audible response, including endpointing and buffering, at least 50 simple-query trials and cold/warm p50/p95. Legacy recording-end helpers do not establish this boundary. MVP-05 |
 | Gmail | Current source has substantially complete provider UI/contracts | Deployed Google token exchange previously returned 401; verify/fix the actual operator configuration, authorize test mailbox, read/draft/attachment/send/revoke and ambiguous outcomes. Exact recipient/content authorization is needed for a real send. MVP-35/36 |
 | Maps | Regional provider integration exists | Select and deploy a production HTTPS gateway/data coverage/license/update path; production currently has no configured route provider. Real GPS, reroute, offline and voice guidance. MVP-31 |
 | Full AOSP delivery | Launcher staging exists; old test-key Cuttlefish image boots | Current-pin image with current APK/runtime/speech and maintained WebView; required system apps/services, roles, permissions and SELinux; reproducible build/boot/upgrade; exact physical SKU/source/kernel/blobs, release signing/AVB/OTA/recovery. MVP-03/40/41/42 |
 | Test infrastructure | Native class registry and campaign runners exist | Current-source native campaign; Cuttlefish admission; remaining secondary-user/process-death/provider-specific campaigns; retain skipped/missing/failed cases and exact artifacts. CI-only constraints should be reviewed against this Linux x86_64 host rather than inherited from an earlier ARM Mac. MVP-13/18/20/47 |
 | Notes capacity/recovery | Ordinary native flows and forced-write draft recovery pass; the 33 MiB editor stress case passes on launcher but repeatedly times out on standalone | Isolate standalone renderer input cost and bounded storage-refusal delivery; preserve existing notes and unsaved text, and rerun the unchanged capacity contract. Do not treat the launcher pass or host byte-limit checks as standalone editor acceptance. |
-| Scope additions | Phone/SMS/Contacts/Wallet are still production-disabled | Implement the four new work packages below; do not enable simulated actions as a shortcut |
+| Scope additions | Phone/SMS/Contacts/Wallet are still production-disabled | Implement Contacts/Phone/SMS only on admitted Alpha AOSP images (P-36). Retain Wallet as full-product planning outside MVP (P-38); no simulated action enablement |
 
 ## Every view and flow
 
@@ -134,16 +149,14 @@ Contacts implementation. Restore/update that campaign only with the real adapter
 ### Implementation order and distribution differences
 
 Build FP-03 Contacts first, then FP-01 Phone and FP-02 SMS against the shared
-selected-person contract. FP-04 provider/sandbox discovery can proceed independently;
-payment enablement waits for its hardware and provider gates. All four need a real
-adapter and a production capability check before enabling their entry points.
+selected-person contract. FP-04 remains outside MVP; its future implementation waits for its provider and hardware gates. Every implemented package needs a real adapter and capability checks before enabling its entry points.
 
 | Package | Standalone Android delivery | Full AOSP delivery | Required negative and recovery evidence |
 | --- | --- | --- | --- |
-| FP-03 Contacts | Optional provider permission; system picker when full access is declined; create/edit/delete in the chosen writable account | Include and configure ContactsProvider and account/sync support; retain user consent and account ownership | Denied/revoked access; read-only account; duplicate/multiple numbers; concurrent edit; deleted person; restart after uncertain write; readback matches reviewed fields |
-| FP-01 Phone | Request default dialer only for supported devices; native Telecom and incoming/in-call services; otherwise truthful system-dialer handoff | Include Telecom, telephony/modem integration and role provisioning; retain emergency dialer and recovery UI | Role loss; no SIM/service; dual-SIM selection; rejected/missed/cancelled calls; lock/background; audio routing; dropped call; call state after process restart |
-| FP-02 SMS/MMS | Request default-SMS role; provider-backed thread identity, drafts and status; unsupported devices use reviewed handoff | Include telephony providers, carrier/APN/MMS configuration and messaging role provisioning | No SIM/network; airplane mode; segmented Unicode; invalid/group recipient; attachment limits; duplicate receive/status callbacks; role loss; reboot with queued/ambiguous send; no automatic duplicate send |
-| FP-04 Wallet | Explicit supported provider or system-wallet handoff; passes separately from payment cards; sandbox provisioning and transaction review | Admit required NFC/HCE/secure-element components, hardware keys and payment-provider eligibility; installing AOSP alone grants none of these | Unsupported hardware/provider; failed provisioning; locked/expired/revoked credential; declined/unknown transaction; duplicate tap; receipt reconciliation; lost device/recovery and key deletion |
+| FP-03 Contacts | Hidden and denied by native/image capability policy; launcher flavor alone is insufficient | Include and configure ContactsProvider and account/sync support; retain user consent and account ownership | Denied/revoked access; read-only account; duplicate/multiple numbers; concurrent edit; deleted person; restart after uncertain write; readback matches reviewed fields |
+| FP-01 Phone | Hidden and denied by native/image capability policy; preserve Android emergency facilities | Include Telecom, telephony/modem integration and role provisioning; retain emergency dialer and recovery UI | Role loss; no SIM/service; dual-SIM selection; rejected/missed/cancelled calls; lock/background; audio routing; dropped call; call state after process restart |
+| FP-02 SMS/MMS | Hidden and denied by native/image capability policy; no SMS role request | Include telephony providers, carrier/APN/MMS configuration and messaging role provisioning | No SIM/network; airplane mode; segmented Unicode; invalid/group recipient; attachment limits; duplicate receive/status callbacks; role loss; reboot with queued/ambiguous send; no automatic duplicate send |
+| FP-04 Wallet (outside MVP) | Future full-product package: explicit supported provider or system-wallet handoff; passes separately from payment cards; sandbox provisioning and transaction review | Admit required NFC/HCE/secure-element components, hardware keys and payment-provider eligibility; installing AOSP alone grants none of these | Unsupported hardware/provider; failed provisioning; locked/expired/revoked credential; declined/unknown transaction; duplicate tap; receipt reconciliation; lost device/recovery and key deletion |
 
 For each package, add renderer contract tests, native integration tests and a
 continuous assistant→review→native action→readback journey. Cuttlefish can test roles,
@@ -1312,3 +1325,14 @@ turn commitment after explicit start and Stop/late-playback handling, rather
 than the superseded manual-send behavior. Latest developer APK build/lint
 and all four artifact checks passed in `developer-apks-document-chooser-focus`;
 no resident payload or release qualification is implied.
+
+### Integration of upstream approved decisions
+
+Main `2e5baedc` (PR 427) was fetched and integrated after preserving the complete
+audit checkpoint `ea7e377b`. Its 32 approved decisions supersede the prior open
+policy questions. No native/runtime code or pinned upstream revision changed in
+that upstream commit. The audit's product fixes, runner changes, exact evidence
+receipts and full-product Wallet planning remain preserved. Its newer local-speech,
+subscription, AOSP-only daily tools, Pixel 10a/Android 17, always-on listening and
+true input-audio-to-output-audio requirements now govern completion. The original
+Cloud speech campaigns remain evidence of existing code, not of the required route.

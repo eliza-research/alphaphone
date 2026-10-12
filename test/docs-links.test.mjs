@@ -79,7 +79,6 @@ test('an upstream-relative script path needs its upstream directory named in the
 // Stale references in documents this check does not yet own. Each entry must still be
 // stale; remove it as soon as the document is corrected.
 const knownStale = new Map([
-  ['docs/implementation-plan.md|scripts/mobile/targets/android.ts', 'upstream packages/app/scripts/mobile has no targets/android.ts at the pin'],
 ]);
 
 test('every scripts/... path in README.md and docs/ exists in this repository or the pinned upstream', () => {

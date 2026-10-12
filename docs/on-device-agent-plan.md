@@ -1,5 +1,12 @@
 # Android-resident agent — October 1, 2026
 
+> Policy update 2026-10-12: [owner-approved TODOs](owner-approved-mvp-plan-2026-10-12.md)
+> and [active implementation plan](implementation-plan.md) supersede conflicting
+> requirements below. Local agent only; all speech on-device; subscription services;
+> Pixel 10a Android 17; Phone/Contacts/SMS and always-on listening in AOSP MVP only;
+> no Wallet or app-data import/export. Historical implementation evidence is unchanged.
+
+
 ## Accepted direction
 
 The user has replaced the Nitro/TEE agent-hosting direction with an agent running on the Android device. This replaces the earlier requirement to host orchestration remotely. Nitro provisioning, enclave measurement, KMS admission and phone pairing are no longer prerequisites for the primary agent path. Production Android admits only the resident agent, with Cloud sign-in for billed inference. Existing remote credentials and history remain preserved; development transports are separate. Existing remote services and evidence are retained; this decision does not authorize shutting them down or migrating accounts destructively.

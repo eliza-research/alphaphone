@@ -1,5 +1,12 @@
 # Android and AOSP build contract
 
+> Policy update 2026-10-12: [owner-approved TODOs](owner-approved-mvp-plan-2026-10-12.md)
+> and [active implementation plan](implementation-plan.md) supersede conflicting
+> requirements below. Local agent only; all speech on-device; subscription services;
+> Pixel 10a Android 17; Phone/Contacts/SMS and always-on listening in AOSP MVP only;
+> no Wallet or app-data import/export. Historical implementation evidence is unchanged.
+
+
 ## Artifact identities
 
 Package: `ai.elizaresearch.alphaphone`. Version source: `app.config.json`, overridden by

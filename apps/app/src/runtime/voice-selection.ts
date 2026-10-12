@@ -4,7 +4,7 @@ import { connectionController } from './connection-ui';
 
 /** Production currently preserves main's Cloud speech policy. Local/manual requests are
  * test-only. Legacy preference storage remains readable for migration, but does not
- * select the production route. The remaining PRD/P-07 route and offline-fallback difference requires a decision; ongoing chat auto-send is approved by the October 12 P-01 update. */
+ * select the production route. This legacy Cloud route must migrate to the mandatory local speech policy P-13/P-29; ongoing chat auto-send is approved by P-39. */
 // Plain constants and function exports only: Node contract tests evaluate this source directly.
 const voiceRouteKey = 'alphaphone:voice-route:v1';
 const speakRepliesKey = 'alphaphone:speak-replies:v1';
