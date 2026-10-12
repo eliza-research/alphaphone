@@ -20,11 +20,31 @@ public final class NotesDocumentInstrumentedTest {
   * the rendered notice as it appears, starting before the action that causes it.
   */
  private void observeReceipt(String text)throws Exception{
-  NotesSecureFixture.evaluate("(()=>{window.__notesReceiptObserver?.disconnect();window.__notesReceiptSeen=false;const text="+JSONObject.quote(text)+",seen=()=>{if([...document.querySelectorAll('[data-alpha-toast] .drop > span')].some(node=>node.textContent===text&&node.getClientRects().length>0)){window.__notesReceiptSeen=true;window.__notesReceiptObserver.disconnect();}};window.__notesReceiptObserver=new MutationObserver(seen);window.__notesReceiptObserver.observe(document.body,{childList:true,subtree:true,characterData:true});seen();})()");
+  NotesSecureFixture.evaluate("""
+   (()=>{window.__notesReceiptObserver?.disconnect();window.__notesReceiptSeen=false;
+    const expected=EXPECTED_RECEIPT;
+    window.__notesReceiptDiagnostics=[];
+    const diagnostic=()=>{
+     const nodes=[...document.querySelectorAll('[data-alpha-toast] .drop > span,[data-alpha-dialog-toast] span')];
+     const category=node=>node.textContent===expected?'expected':node.textContent==='Document operation failed. No completed export or import is confirmed.'?'operation-failed':node.textContent?.startsWith('The provider may have saved')?'unverified':node.textContent==='The selected destination could not be written.'?'write-failed':node.textContent?.startsWith('Document selection cancelled.')?'cancelled':'other';
+     const row={hidden:document.hidden,activeNotes:document.documentElement.dataset.activeView==='notes',nodes:nodes.slice(0,4).map(node=>({category:category(node),trimMatches:node.textContent.trim()===expected,containsExpected:node.textContent.includes(expected),textLength:Math.min(node.textContent.length,512),rect:node.getClientRects().length>0,inert:!!node.closest('[inert]'),dialog:!!node.closest('[data-alpha-dialog-toast]')}))};
+     const rows=window.__notesReceiptDiagnostics;if(rows.length<16&&JSON.stringify(rows.at(-1))!==JSON.stringify(row))rows.push(row);
+    };
+    window.__notesReceiptVisibility=diagnostic;document.addEventListener('visibilitychange',diagnostic);
+    const seen=()=>{diagnostic();if([...document.querySelectorAll('[data-alpha-toast] .drop > span')].some(node=>node.textContent===expected&&node.getClientRects().length>0)){window.__notesReceiptSeen=true;window.__notesReceiptObserver.disconnect();}};
+    window.__notesReceiptObserver=new MutationObserver(seen);window.__notesReceiptObserver.observe(document.body,{childList:true,subtree:true,characterData:true});seen();
+   })()
+   """.replace("EXPECTED_RECEIPT",JSONObject.quote(text)));
   assertEquals("An earlier notice cannot stand in for this receipt","false",NotesSecureFixture.evaluate("window.__notesReceiptSeen===true"));
  }
  private void awaitReceipt()throws Exception{
-  try{until("window.__notesReceiptSeen===true");}finally{NotesSecureFixture.evaluate("window.__notesReceiptObserver?.disconnect();delete window.__notesReceiptObserver;delete window.__notesReceiptSeen");}
+  try{until("window.__notesReceiptSeen===true");}finally{
+   try{
+    android.os.Bundle diagnostic=new android.os.Bundle();
+    diagnostic.putString("stream","Notes receipt categories: "+NotesSecureFixture.evaluate("JSON.stringify(window.__notesReceiptDiagnostics)")+"\n");
+    InstrumentationRegistry.getInstrumentation().sendStatus(2,diagnostic);
+   }finally{NotesSecureFixture.evaluate("window.__notesReceiptObserver?.disconnect();document.removeEventListener('visibilitychange',window.__notesReceiptVisibility);delete window.__notesReceiptObserver;delete window.__notesReceiptSeen;delete window.__notesReceiptVisibility;delete window.__notesReceiptDiagnostics");}
+  }
  }
  private void click(String label)throws Exception{String q="[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')==="+JSONObject.quote(label)+"&&b.getClientRects().length&&!b.disabled)";until(q);NotesSecureFixture.evaluate("("+q+").click()");}
  private void title(String text)throws Exception{NotesSecureFixture.evaluate("(()=>{const e=document.querySelector('input[aria-label=Title]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,"+JSONObject.quote(text)+");e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));})()");until("document.querySelector('input[aria-label=Title]')?.value==="+JSONObject.quote(text.replace("\r\n","\n")));}
@@ -139,8 +159,8 @@ public final class NotesDocumentInstrumentedTest {
   try(java.io.OutputStream out=resolver.openOutputStream(bad,"wt")){assertNotNull(out);out.write(new byte[]{(byte)0xc3,0x28});}
   try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)){
    AppNavigation.liveMode();NotesSecureFixture.evaluate(AppNavigation.request("Notes"));until("window.__alphaTestNavigation?.status==='complete'");String before=NotesSecureFixture.evaluate("JSON.stringify(__notesEnvelope)");
-   click("Import text note");picker.selectDocument(largeName);until("document.body.textContent.includes('limited to 64 KiB')");assertEquals(before,NotesSecureFixture.evaluate("JSON.stringify(__notesEnvelope)"));
-   click("Import text note");picker.selectDocument(badName);until("document.body.textContent.includes('requires UTF-8')");assertEquals(before,NotesSecureFixture.evaluate("JSON.stringify(__notesEnvelope)"));
+   observeReceipt("Text preview is limited to 64 KiB. Open this document in a compatible app.");click("Import text note");picker.selectDocument(largeName);awaitReceipt();assertEquals(before,NotesSecureFixture.evaluate("JSON.stringify(__notesEnvelope)"));
+   observeReceipt("Text preview requires UTF-8. Open this document in a compatible app.");click("Import text note");picker.selectDocument(badName);awaitReceipt();assertEquals(before,NotesSecureFixture.evaluate("JSON.stringify(__notesEnvelope)"));
   }finally{try{resolver.delete(large,null,null);}finally{resolver.delete(bad,null,null);}}
  }
  @Test public void documentProcessRestartPhase()throws Exception{

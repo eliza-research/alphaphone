@@ -1792,3 +1792,51 @@ records 93 observed classes, 61 unobserved, and historical latest cohorts of
 Full verification passes 809 tests with four existing TODOs, including the flag-off
 web build/audit (`verify-notes-document-admission.log`). Prior developer Android
 build evidence remains separate from this host-runner-only change.
+
+
+## October 12: Notes receipt diagnostics and early warning observation
+
+Two fresh developer builds, `developer-apks-notes-receipt-diagnostics` and
+`developer-apks-notes-receipt-observer`, package both debug/release variants and
+instrumentation, with lint and archive checks passing. Both wrappers completed and
+restored the original speech manifest, notices, native libraries and resident assets.
+These remain non-distributable APKs with resident payload omitted and unqualified
+speech candidates. Only instrumentation changed; no product behavior was altered.
+
+The first diagnostic run, `cuttlefish-notes-receipt-diagnostics157`, passes standalone
+export but misses the oversized-file warning. Launcher passes invalid-file refusal
+but reproduces the export-receipt timeout. Its bounded DOM trace records a visible
+notice classified as other, not the expected success text, after returning from the
+picker. Exact owned-export cleanup succeeds. This narrows the observation but does
+not prove which notice replaced the confirmation or whether the native callback
+was delivered. No writes were replayed to obtain a success result.
+
+The invalid-file checks previously inspected body text only after picker return,
+which can outlive a 1.9-second notice. They now arm the existing receipt observer
+before opening the picker and require the exact expected warning with visible
+bounds, while retaining the unchanged Notes-envelope assertion. This improves the
+test's observation window without weakening the outcome. The export observer's
+success predicate is unchanged. Diagnostics use at most 16 structural snapshots,
+four nodes each, fixed message categories and bounded text lengths/match flags;
+they do not retain arbitrary toast text, document names or contents. Instrumentation
+status carries these diagnostics directly into the archived test output.
+
+`cuttlefish-notes-receipt-observer157` passes both ordinary methods on both variants:
+real import/export/cancel/exact bytes/re-import/Activity recreation, and oversized/
+invalid-UTF-8 refusal. Captured warning and export receipts match exactly with visible
+bounds. Process restart is still explicitly skipped on both, so both class cohorts
+are partial. Prior standalone and launcher export timeouts remain unexplained and
+retained; this passing run is not a demonstrated product fix. Other notices of
+81 characters appear around some picker transitions, but length alone does not
+identify their source. Further diagnosis must establish the native result and
+renderer notice ordering rather than guessing from text length.
+
+All four secondary users (27–30) were removed with owner/HOME restored and durable
+cleanupDeferred=false receipts. Full verification after the final change passes
+809 tests with four existing TODOs, including flag-off web build/audit
+(`verify-notes-receipt-observer.log`). No requirement status is promoted to complete.
+
+The refreshed `native-coverage-notes-observer.json` retains 93 observed and 61
+unobserved classes, with latest historical cohorts of 166 passed, 12 failed and
+22 partial. Earlier failed attempts remain in their cohort histories. Report checks
+pass 24 tests (`notes-observer-report-checks.log`).
