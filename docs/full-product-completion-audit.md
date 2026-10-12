@@ -1869,3 +1869,20 @@ same process/container, then verify the loaded secure-camera resources once Andr
 boots. No image-contract, power-gesture, locked-capture, unlock-privacy or physical
 acceptance is claimed. Browser-fixture ADB 6530 is currently unavailable because its
 VM was intentionally stopped to keep one audit VM active.
+
+### Secure-camera fixture boot diagnosis: encrypted data initialization
+
+The same launch session 80931 remains live. Comparing the kernel trace with the
+working browser fixture identifies the wait after `vold cryptfs encryptFstab`,
+first-boot encrypted userdata creation. The older fixture took about 140 seconds
+at this stage; that duration is not a deadline for the new run. A single crosvm
+power-button wake event was accepted but did not change the visible boot state.
+No VM restart or image change was performed.
+
+Although vCPUs wait in KVM and the kernel log remains unchanged, crosvm write I/O
+advanced from 5,779,554,304 to 6,541,533,184, then 7,696,019,456 and 8,447,533,056
+bytes. This is measurable progress during initialization of the 8 GB data partition,
+not evidence of a camera-overlay failure. `secure-camera-boot-io-observation.json`
+records the latest process and I/O observation. Android ADB remains offline and
+boot/resource/gesture acceptance remains unproven. Continue by polling the same
+launch handle and live I/O before considering recovery.
