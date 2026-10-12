@@ -34,6 +34,12 @@ public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
   assertEquals("Exactly one approval notice",1,rows.size());StatusBarNotification row=rows.get(0);
   assertEquals("alpha-workflow-"+id,row.getTag());assertEquals(0,row.getId());return row;
  }
+ private static void awaitTapCancellation(Context context,WorkflowNoticeTaps taps,String id)throws Exception{
+  String token=taps.token(id);assertNotNull(token);Intent launch=context.getPackageManager().getLaunchIntentForPackage(APP);assertNotNull(launch);launch.setAction(WorkflowNoticeTaps.ACTION).setData(android.net.Uri.parse(WorkflowNoticeTaps.PREFIX+token));
+  long end=SystemClock.elapsedRealtime()+10000;PendingIntent existing;
+  do{existing=PendingIntent.getActivity(context,0,launch,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_NO_CREATE);if(existing==null)return;SystemClock.sleep(50);}while(SystemClock.elapsedRealtime()<end);
+  fail("Old PendingIntent remains registered after signed-out withdrawal");
+ }
  @Test public void pendingApprovalNoticeSurvivesProcessDeathAndOpensItsExactApprovalOnce()throws Exception {
   org.junit.Assume.assumeTrue("Explicit isolated process-death campaign","1".equals(InstrumentationRegistry.getArguments().getString("workflowApprovalNoticeProcessDeath")));
   if(WorkflowNoticeOwnerFixture.preparing()){WorkflowNoticeOwnerFixture.prepare();return;}
@@ -139,6 +145,7 @@ public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
    end=SystemClock.elapsedRealtime()+10000;while(!approvals(manager).isEmpty()&&SystemClock.elapsedRealtime()<end)SystemClock.sleep(50);assertTrue("Signed-out startup withdraws OS approval",approvals(manager).isEmpty());
    assertEquals("No credential means no authentication dispatch",authBefore,fixture.verified.get());assertFalse(taps.pending().has("token"));
    assertEquals("suspended",new JSONObject(store.readCredentialSlot(WorkflowNoticeDelivery.APPROVAL_SLOT)).getJSONObject(id).getString("status"));
+   awaitTapCancellation(context,taps,id);
    assertThrows("Old OS tap cannot launch signed-out state",PendingIntent.CanceledException.class,()->original.send());
   }finally{manager.cancel("alpha-workflow-"+id,0);}
  }
@@ -162,7 +169,7 @@ public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
    boolean settled=false;end=SystemClock.elapsedRealtime()+20000;
    do{String raw=store.readCredentialSlot(WorkflowNoticeOwnerFixture.OWNER_SLOT);settled=raw!=null&&new JSONObject(raw).isNull("owner");if(settled&&approvals(manager).isEmpty())break;SystemClock.sleep(50);}while(SystemClock.elapsedRealtime()<end);
    assertTrue("Actual product initializer settles signed-out owner",settled);assertTrue("Product cold startup withdraws persisted approval",approvals(manager).isEmpty());assertFalse(taps.pending().has("token"));
-   assertEquals("suspended",new JSONObject(store.readCredentialSlot(WorkflowNoticeDelivery.APPROVAL_SLOT)).getJSONObject(id).getString("status"));assertThrows(PendingIntent.CanceledException.class,()->original.send());
+   assertEquals("suspended",new JSONObject(store.readCredentialSlot(WorkflowNoticeDelivery.APPROVAL_SLOT)).getJSONObject(id).getString("status"));awaitTapCancellation(context,taps,id);assertThrows(PendingIntent.CanceledException.class,()->original.send());
   }finally{manager.cancel("alpha-workflow-"+id,0);}
  }
 
