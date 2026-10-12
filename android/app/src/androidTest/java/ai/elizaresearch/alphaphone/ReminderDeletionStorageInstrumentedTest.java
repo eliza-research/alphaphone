@@ -39,8 +39,15 @@ public class ReminderDeletionStorageInstrumentedTest {
   WebViewTestDriver.evaluate("window.__connectionResult=null;Promise.resolve(" + expression + ").then(value=>window.__connectionResult={ok:true,value:value??null},()=>window.__connectionResult={ok:false})");
  }
  private JSONObject result() throws Exception {
-  until("window.__connectionResult!==null");
-  return new JSONObject(WebViewTestDriver.evaluate("window.__connectionResult"));
+  // Undefined after document replacement is not a completed bridge result.
+  // Inspect and return one snapshot; never repeat the storage operation.
+  long deadline=SystemClock.elapsedRealtime()+15000;
+  while(SystemClock.elapsedRealtime()<deadline){
+   String snapshot=WebViewTestDriver.evaluate("(()=>{const value=window.__connectionResult;return value&&typeof value==='object'&&typeof value.ok==='boolean'?value:null;})()");
+   if(!"null".equals(snapshot))return new JSONObject(snapshot);
+   SystemClock.sleep(60);
+  }
+  fail("Recovery storage result missing or document changed; operation was not replayed");return null;
  }
  private JSONObject invoke(String method, JSONObject args) throws Exception {
   begin("Capacitor.Plugins.AlphaConnection." + method + "(" + args + ")"); return result();

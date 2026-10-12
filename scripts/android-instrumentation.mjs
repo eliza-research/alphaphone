@@ -13,8 +13,8 @@ import {OfflineNetworkFixture} from './offline-network-fixture.mjs';
  *     [--clock-exclusive] [--home-role]
  *
  * A fresh Cuttlefish guest instead uses --owned-cuttlefish --serial localhost:PORT
- * --image-fingerprint EXACT_FINGERPRINT with registered named classes. --all and
- * secondary-user campaigns remain unavailable on Cuttlefish. Existing system Alpha
+ * --image-fingerprint EXACT_FINGERPRINT with registered named classes. --all
+ * remains unavailable; reviewed secondary-user classes use their own lifecycle. Existing system Alpha
  * packages are refused just like user-installed packages.
  *
  * Variants share one package id and replace each other, so they run one after the
@@ -66,6 +66,11 @@ const RUNNER = "androidx.test.runner.AndroidJUnitRunner";
  */
 export const CLASS_REGISTRY = {
   NoMockProduct: {},
+  ReminderDeletionStorage: { secondaryUser: true, args: { pendingActionStorageFixture: "1" }, note: "fresh encrypted recovery slots; synthetic compare/exchange, recreation and UTF-8 capacity boundaries; exact owned-value cleanup" },
+  CalendarCreationRecovery: { secondaryUser: true, args: { calendarCreationRecovery: "1" }, grant: ["READ_CALENDAR", "WRITE_CALENDAR"], note: "synthetic UUID CalendarProvider records and durable creation-receipt recovery; exact fixture calendar and journal cleanup" },
+  ClockAgentReview: { secondaryUser: true, args: { clockAgentReview: "1" }, note: "native owner approval/replay checks with intercepted Clock intents; no delivered alarm action" },
+  CloudDelegationCallback: { args: { cloudDelegationNative: "1" }, independentMethods: true, note: "synthetic cold/warm Activity callbacks and state-matched clearing; no authorization exchange or real login evidence" },
+  CameraFlow: { args: { cameraPermissionTest: "true" }, independentMethods: true, note: "fresh app data per method; real CameraX and permission recovery on the disposable guest, only newly app-owned captures cleaned; not physical camera acceptance" },
   SelectedDocument: { independentMethods: true, note: "real DocumentsUI and synthetic MediaStore files; documentProcessRestartPhase skips here and requires test-native-restart.mjs document" },
   BrowserStorageFormat: { args: { disposableBrowserStorageFixture: "1" }, note: "fresh app storage required and asserted; real Keystore format roundtrip, no Activity or website; fixture keys and records removed in finally" },
   CalendarAvailability: { grant: ["READ_CALENDAR", "WRITE_CALENDAR"], note: "synthetic UUID local calendars; chosen-source free/busy, civil all-day, revision and bounded-result checks; fixture calendars deleted after each method" },
@@ -295,8 +300,7 @@ export function parseInstrumentationArgs(argv) {
       if(options.offlineSpeech&&!['LocalSpeech','LocalSpeechBridge','VoiceNoteReadAloud','SpeechSentenceCancellation'].includes(short(cls)))throw new Error('--offline-speech is a dedicated local speech campaign');
       if (spec.campaign) throw new Error(`${short(cls)} needs its own campaign: ${spec.campaign}`);
       // These classes assert a disposable secondary Android user, which the runner creates and removes.
-      if (spec.secondaryUser && options.ownedCuttlefish) throw new Error(`${short(cls)} needs the AVD secondary-user lifecycle; Cuttlefish qualification remains separate`);
-      if (spec.secondaryUser && !options.ownedEmulator) throw new Error(`${short(cls)} runs in a disposable secondary Android user; it requires --owned-emulator`);
+      if (spec.secondaryUser && !options.ownedEmulator && !options.ownedCuttlefish) throw new Error(`${short(cls)} runs in a disposable secondary Android user; it requires --owned-emulator or --owned-cuttlefish`);
       if (spec.requires === "--clock-exclusive" && !options.clockExclusive)
         throw new Error(`${short(cls)} changes real alarms; pass --clock-exclusive only on an exclusive, unlocked emulator with no other timers`);
       if (spec.testMocks && !options.testMocks) throw new Error(`${short(cls)} runs only on the --test-mocks variant`);
@@ -344,8 +348,12 @@ export function classIsolationCommands(user) {
  * HOME, foreground switch, and afterwards owner restored, user stopped and removed. `lease` is this
  * run's device lease, which the helper requires.
  */
-export function secondaryUserLifecycle({ serial, lease, avd, adb, env = process.env }) {
+export function secondaryUserLifecycle({ serial, lease, avd, imageFingerprint, adb, env = process.env }) {
   return async ({ name, record, run }) => {
+    if(imageFingerprint){
+      const {withCuttlefishUser}=await import("./cuttlefish-user.mjs");
+      return withCuttlefishUser({serial,deviceLease:lease,expectedFingerprint:imageFingerprint,env,homePackage:env.ALPHA_TEST_HOME_PACKAGE??"com.android.launcher3",name,record,run,execute:args=>adb(args)});
+    }
     const { withIsolatedAndroidUser } = await import("../vendor/eliza/packages/app/scripts/lib/isolated-android-user.mjs");
     return withIsolatedAndroidUser({ serial, deviceLease: lease, env, expectedAvdName: avd, homePackage: env.ALPHA_TEST_HOME_PACKAGE ?? "com.android.launcher3",
       name, record, run, execute: args => adb(args) });
@@ -470,7 +478,7 @@ async function main() {
   // runner cannot install between the admission checks and this run's installs.
   const { acquireDeviceLease, deviceLeaseStateDir } = await import("../vendor/eliza/packages/app/scripts/lib/device-lease.ts");
   const lease = await acquireDeviceLease(`android:${serial}`, { waitMs: 0, ttlMs: Number.MAX_SAFE_INTEGER, stateDir: deviceLeaseStateDir(process.env) });
-  try { process.exitCode = (await runLeased({ options, serial, adb, withSecondaryUser: options.ownedCuttlefish ? undefined : secondaryUserLifecycle({ serial, lease, avd: options.avd, adb }) })).passed ? 0 : 1; } finally { lease.release(); }
+  try { process.exitCode = (await runLeased({ options, serial, adb, withSecondaryUser: secondaryUserLifecycle({ serial, lease, avd: options.avd, imageFingerprint: options.ownedCuttlefish ? options.imageFingerprint : undefined, adb }) })).passed ? 0 : 1; } finally { lease.release(); }
 }
 
 /** Read-only checks; APK installation still refuses all preexisting Alpha packages. */
@@ -596,8 +604,9 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
         if (secondary.length) {
           const lifecycle = { variant, user: null, ownerRestored: false, removed: false };
           secondaryUsers.push(lifecycle);
+          const persistLifecycle = () => fs.writeFileSync(path.join(dir, "secondary-user.json"), JSON.stringify({ serial, imageFingerprint: image?.fingerprint ?? null, ...lifecycle }, null, 2) + "\n");
           try {
-            const report = await withSecondaryUser({ name: `instrumentation-${variant}-${Date.now()}`, record: state => { Object.assign(lifecycle, state, { variant }); },
+            const report = await withSecondaryUser({ name: `instrumentation-${variant}-${Date.now()}`, record: state => { Object.assign(lifecycle, state, { variant }); persistLifecycle(); },
               run: async ({ user }) => {
                 const id = String(user);
                 for (const pkg of [PACKAGE, `${PACKAGE}.test`]) adb(["shell", "cmd", "package", "install-existing", "--user", id, pkg]);
@@ -613,6 +622,7 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
             for (const cls of secondary.filter(cls => !classes.some(row => row.variant === variant && row.class === cls)))
               record(cls, { started: 0, passed: 0, failed: [], ignored: [], status: "missing" }, { user: "secondary", note: `secondary user phase failed: ${error.message}` });
           }
+          persistLifecycle();
           // An unremoved user keeps this run's state on the emulator: stop, and keep the packages for recovery.
           if (!lifecycle.removed) break;
         }

@@ -87,9 +87,12 @@ final class ShareFlowAssertions {
   }
   assertTrue("Select the test-only local recipient through Android's real chooser",chosen);
   byte[] hash=java.security.MessageDigest.getInstance("SHA-256").digest(expected);StringBuilder hex=new StringBuilder();for(byte b:hash)hex.append(String.format(java.util.Locale.ROOT,"%02x",b&255));
-  String marker="SHA-256: "+hex;boolean received=false;deadline=SystemClock.elapsedRealtime()+15000;
+  String marker="SHA-256: "+hex;String receiptState="not observed";boolean received=false;deadline=SystemClock.elapsedRealtime()+15000;
   while(!received&&SystemClock.elapsedRealtime()<deadline){
-   for(var node:nodes()){
+   var visibleNodes=nodes();java.util.ArrayList<String> hashes=new java.util.ArrayList<>();boolean verified=false;
+   for(var observed:visibleNodes){String text=String.valueOf(observed.getText());verified|=text.contains("Read access verified");java.util.regex.Matcher match=java.util.regex.Pattern.compile("SHA-256: ([a-f0-9]{64})").matcher(text);while(match.find())hashes.add(match.group(1));}
+   receiptState="foreground="+(visibleNodes.isEmpty()?"none":visibleNodes.get(0).getPackageName())+", verified="+verified+", hashes="+hashes+", expected="+hex;
+   for(var node:visibleNodes){
     String text=String.valueOf(node.getText());
     if(text.contains("Read access verified")&&text.contains(marker)){
      assertFalse("Recipient must run outside the sender UID",text.contains("Receiver UID: "+android.os.Process.myUid()));received=true;break;
@@ -97,7 +100,7 @@ final class ShareFlowAssertions {
    }
    if(!received)SystemClock.sleep(100);
   }
-  assertTrue("Recipient reads exactly the original bytes through Android's URI grant",received);
+  assertTrue("Recipient reads exactly the original bytes through Android's URI grant; "+receiptState,received);
   InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
   awaitMainForeground();
  }

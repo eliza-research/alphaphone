@@ -17,7 +17,7 @@ AOSP-only Phone/Contacts/SMS and AOSP listening are explicit requirements.
 Wallet remains a requested **full-product planning package**, outside the approved
 MVP; it is not enabled or a current MVP release gate. Earlier policy questions and
 measurement proposals in the chronological log are superseded, not newly open.
-The 83 observed native classes remain historical evidence for their exact archived
+The 88 observed native classes remain historical evidence for their exact archived
 APKs; the new policy does not turn old Cloud-speech tests into local-speech acceptance.
 
 **October 12 execution update:** Both developer APK variants build and run on an
@@ -80,7 +80,7 @@ provider response never counts as a real feature pass.
 | --- | --- | --- |
 | Resident preparation toolchain | Host Bun 1.3.14 failed the Cloud package import; the declared Bun 1.4.2 completed all 78 tasks and source verification | Use the declared Bun version (`mise exec bun@1.4.2 -- npm run agent:prepare`). No upstream defect or patch is required by this evidence. |
 | Current packaged resident runtime | Cloud-aware native bridge, staging and workflow-worker chain exist | Qualified embedding host libraries, complete current-pin payload, ABI/library/model hashes, real native process/IPC startup, shutdown/restart and owner isolation. Latest hosted foundation APKs omit the runtime. MVP-08/21/39 |
-| Real Eliza Cloud login and Cerebras route | Production Welcome, account/credit checks, native provider binding exist | Normal browser login/return, one-use exchange, funded account, actual model response through Cloud, serving provider/usage evidence, expiry/revoke/wrong owner/zero credits/replacement during requests. Do not substitute direct-key inference. MVP-34/37 |
+| Real Eliza Cloud login and Cerebras route | Production Welcome, account/credit checks, native provider binding exist | Normal browser login/return, one-use exchange, active subscription entitlement, actual model response through Cloud, serving provider/usage evidence, expiry/revoke/wrong owner/quota exhaustion/replacement during requests; migrate the current credit checks to P-25 cached subscription authorization without a per-turn billing hop. Do not substitute direct-key inference. MVP-34/37 |
 | Voice in both directions | Cloud STT/TTS, recording and conversation flows; separate local engines exist | Ongoing chat auto-send after explicit start is owner-approved. Migrate every production speech entrypoint to local native STT/TTS (P-13/P-29/P-39), then qualify exact runtime on both ABIs; real mic/speaker/Bluetooth/audio focus/echo/Stop/background tests. Historical ARM64 local speech acceptance failed; the current x86_64 candidate passes both offline canonical tests, but the combined runtime remains unqualified until ARM64 acceptance. MVP-01/23/24 |
 | Latency | No current device acceptance sample | Cold/warm startup, end-of-speech→first audio, STT, inference TTFT/tokens/sec, TTS first audio, total completion, action/readback, p50/p95 with sample counts, route/model/network and errors. Use P-11: last input speech sample to first audible response, including endpointing and buffering, at least 50 simple-query trials and cold/warm p50/p95. Legacy recording-end helpers do not establish this boundary. MVP-05 |
 | Gmail | Current source has substantially complete provider UI/contracts | Deployed Google token exchange previously returned 401; verify/fix the actual operator configuration, authorize test mailbox, read/draft/attachment/send/revoke and ambiguous outcomes. Exact recipient/content authorization is needed for a real send. MVP-35/36 |
@@ -213,9 +213,10 @@ It installs/tests both variants, accounts for skipped/missing/failed classes and
 uses the existing cleanup/HOME restoration logic. This is installed-APK-on-image
 qualification, not a release image build or physical-device acceptance.
 
-`--all` and secondary-user classes are deliberately refused for Cuttlefish until
-its separate lifecycle is qualified; the explicit error prevents a false “all
-passed.” Named ordinary classes and the HOME phase are supported. Credential,
+`--all` remains refused for Cuttlefish. Reviewed secondary-user classes now use
+an explicitly leased lifecycle with owner/HOME restoration and cleanup receipts;
+unproven cleanup preserves the owned user. Named ordinary classes and the HOME
+phase remain supported. Credential,
 clock, process-death and provider campaigns retain their specific prerequisites.
 `node scripts/inventory-native-campaigns.mjs OUTPUT.json` exports every native
 `@Test` class, source hash, registered gates, other campaign references and explicit
@@ -1336,3 +1337,189 @@ receipts and full-product Wallet planning remain preserved. Its newer local-spee
 subscription, AOSP-only daily tools, Pixel 10a/Android 17, always-on listening and
 true input-audio-to-output-audio requirements now govern completion. The original
 Cloud speech campaigns remain evidence of existing code, not of the required route.
+
+The notification-channel fixture now searches bounded nested Settings rows for the
+exact Allow/Show label and requires one switch in that row. It cannot climb through
+a page containing unrelated switches. Both variants previously failed before any
+channel change; the rebuilt rerun must still prove channel importance changes,
+unchanged global app permission, real notification tap and exact fixture cleanup.
+
+`approved-policy-checklist.json` inventories all 109 clauses in the 32 approved
+issue checklists, with exact source lines and source SHA-256. Every clause remains
+explicitly unverified at the requirement level; historical narrow method passes
+are not substituted for the full clause. This extends the original 53-item and
+153-native-class inventories without dropping the new scope.
+
+The nested-row NotificationChannels rerun still fails both variants: the helper
+finds a candidate, but exact native channel importance stays enabled (3). It does
+not establish channel recovery. The next fixture adds only selected switch/row
+resource IDs, checked/desired state and known dialog-button presence; no user text.
+This separates a stale/wrong candidate from a confirmation or dispatch failure.
+
+The legacy timing aggregator is now explicitly insufficient for P-11 regardless
+of count. `sampleCountsSufficient` retains old diagnostic counts; overall
+`sufficient` is false, `qualifyingTrials` is zero, and the CLI exits 2 because v1
+lacks actual last-speech/first-audible samples and device/model/network/thermal
+identity. Old stage sums are renamed as legacy diagnostics. Six focused tests
+pass, including 50 complete legacy records that still cannot qualify. Native
+P-11 instrumentation and a new export format remain required; no timing pass is
+fabricated from these changes.
+
+Full verification after the P-11 diagnostic correction completed with 752 passing
+tests, zero failures and four retained TODOs (`verify-latency-p11.log`). The
+source-stable `developer-apks-notification-switch-state` archive completed both
+variants' debug/release builds and lint. Its resident payload is omitted and
+speech remains an unqualified candidate; the release artifacts are unsigned.
+The exact archive, rather than subsequently edited documentation, identifies the
+next notification fixture's source.
+
+Additional campaign review: CalendarCreationRecovery requires a secondary Android
+user and explicitly rejects user 0; its existing runner only admits owned AVDs,
+so it cannot be routed through the current Cuttlefish campaign unchanged.
+CalendarFlow additionally mutates/restores the device timezone and contains an
+older CSS-to-native touch calculation. SettingsCrashLog's real-crash method needs
+a two-phase crash/readback runner that does not erase app data between phases.
+None of these reviews counts as execution or removes their unobserved status.
+
+The switch-state diagnostic fails in both variants with the same evidence:
+`com.android.settings:id/switchWidget` reports unchecked, but neither it nor the
+bounded labeled row is clickable; native importance remains 3. The helper had
+returned without dispatching an action. It now requires an actionable control
+inside the exact labeled row before accepting checked state. A rebuilt rerun is
+required; native importance, global app permission and recipient assertions remain.
+
+CameraFlow and CloudDelegationCallback are now admitted after reviewing their
+permissions, storage and cleanup. Each method runs with independently reset app
+data. Camera covers CameraX capture, JPEG decoding, sharing/viewer recreation and
+permission denial/settings recovery on the virtual sensor; it removes only images
+newly owned by this fresh installation. Cloud callback tests use random synthetic
+states and codes, validate cold/warm delivery, malformed-link rejection and
+state-matched clearing, and do not exchange authorization or prove real login.
+Their first owned-Cuttlefish execution is pending.
+
+The actionable-control rerun still fails both variants before any channel change:
+both Settings switch candidates are found, but the helper rejects every click
+target. Inspection found a second selector restriction: an intermediate clickable
+frame was required to contain the label itself, although the label may be its
+sibling inside the already-validated unique row. The helper now allows clickable
+ancestors only up to that exact row, without repeating the descendant-label test
+on each intermediate frame. This correction awaits rebuilt evidence. The 22
+focused runner tests passed after Camera/Cloud callback admissions.
+
+`cuttlefish-camera-callback157/results.json` completes both variants: both Cloud
+callback methods pass, and both Camera permission recovery methods pass. The
+Camera capture method fails in both after real JPEG publication/decoding, viewer
+and share assertions, at the selected-photo question image. The dialog reports
+the missing-image fallback. Native read/revision/blob-shape diagnostics are added
+for the synthetic photo before/after sharing; the fixture also declines the
+startup access panel explicitly. Neither cause nor correction is claimed yet.
+The updated native snapshot is `native-coverage-camera-callback.json`: 85 observed
+classes, 68 unobserved; failures remain failures.
+
+The photo diagnostic narrows the failure: native reads succeed, the image is local,
+and both revision fields are identical before/after sharing, but `fetch(data:...)`
+throws TypeError. The app now decodes native inline JPEG/PNG/WebP bytes directly
+into a Blob; browser blob URLs keep their existing fetch path. Revision checks,
+local-only source admission and cancellation remain. Focused tests cover exact
+bytes without a data-URL fetch, malformed/external inputs and cancelled blob reads.
+Device confirmation of the fix is still pending.
+
+Both diagnostic variants confirm successful native reads with unchanged revision
+and mutationRevision, followed by TypeError from inline-image fetch. Declining
+startup access does not remove that failure. Full verification of the direct
+inline-image decoder passes: 755 tests, zero failures, four retained TODOs and
+production bundle audit (`verify-local-photo-image.log`). NotificationChannels
+still fails to find an actionable Settings target in both diagnostic variants;
+no recovery pass is claimed.
+
+Local AOSP Settings source explains the notification selector's premature stop:
+`SettingsMainSwitchBar` extends `MainSwitchBar`, whose constructor makes the bar
+clickable; the inner `frame` contains the label and switch. `performClick()` on
+the Settings bar delegates to its switch. The fixture had accepted the first
+uniquely labeled frame and therefore never reached the clickable bar above it.
+It now keeps climbing within its bounded search until the unique labeled row is
+visible, enabled and clickable, and excludes invisible switch candidates.
+A rebuilt native-channel readback is still required.
+
+`cuttlefish-local-photo-image157/results.json` verifies the complete Camera class
+on standalone: all three methods pass, including the previously failing photo
+question review, draft placement and viewer recreation. Launcher passes both
+permission methods but its capture method stops earlier at the cross-UID share
+recipient receipt. That timeout does not prove a byte mismatch: the helper never
+observed the combined success/hash marker. Launcher therefore has not confirmed
+the image-review fix in this cohort. A fresh run on the completed clickable-bar
+archive preserves this failure and exercises both Camera and NotificationChannels.
+No physical camera or real agent response is implied by these tests.
+
+The clickable-bar run still selects an unchecked control while the exact native
+channel remains enabled; no channel recovery is proven. The next fixture rejects
+a candidate whose checked state disagrees with that channel's native importance,
+and records the bounded matched Settings labels and row class before selection.
+This does not weaken the subsequent native readback or global-permission checks.
+It remains pending rebuilt execution.
+
+The clickable-bar archive repeats the complete Camera pass on standalone and
+the launcher cross-UID receipt timeout. Launcher image-review acceptance remains
+open. Share receipt failures now record only foreground package, presence of the
+known success marker and expected/observed SHA-256 values, without image bytes
+or arbitrary UI text. Rebuilt execution will distinguish missing recipient UI
+from an actual hash mismatch. Both notification variants still fail native
+readback in this cohort; the new native-state candidate guard remains pending.
+
+The native-state diagnostic passes the full notification recovery method on
+standalone. It exposes the false match: a banner-description sentence containing
+“show notifications” was accepted by substring search. The real control is
+`android:id/switch_widget` inside `com.android.settings:id/main_switch_bar`, with
+the exact label “Show notifications”. The fixture now requires an exact matching
+label in addition to visibility, one-switch row, clickability and native-state
+agreement. Launcher and rebuilt exact-label execution remain pending.
+
+`cuttlefish-native-state-share-receipt157/results.json` passes NotificationChannels
+and all three CameraFlow methods in both variants. This confirms the local image
+decoder through selected-photo review and draft/viewer continuation on launcher
+as well as standalone. Previous launcher share-receipt timeouts remain unexplained
+historical failures; the diagnostic rerun does not erase them. Notification native
+importance toggles, unchanged global permission, real recipient tap and exact
+fixture cleanup pass. The stricter exact-label selector still needs its final run.
+The snapshot `native-coverage-photo-notification.json` records 85 observed classes,
+68 unobserved, and latest historical cohorts of 151 passed, 11 failed, 18 partial.
+
+`cuttlefish-secondary-user-lifecycle.json` separately proves creation of disposable
+user 10, unlocked secondary Launcher3, restoration of owner 0 and its HOME role,
+and removal of only that exact test user. Before/after user inventories match.
+This is not package isolation or provider execution: the main runner's secondary
+Cuttlefish guard remains until the lifecycle is integrated and failure cleanup
+receives tests and installed-package evidence. No pinned upstream source changed.
+
+The final exact-label notification campaign passes both variants. The integrated
+secondary-user campaign also passes CalendarCreationRecovery and ClockAgentReview
+on standalone/user 11 and launcher/user 12; both users are removed, owner/HOME
+restored, and package cleanup confirmed (`cuttlefish-secondary-provider157`).
+This adds real provider receipt-loss recovery and intercepted native approval
+coverage, not live-account or alarm-execution acceptance. Five lifecycle tests
+and 22 runner tests pass; the broader native-campaign suite reports 45 passing
+tests. The runner now saves secondary-user identity before installing packages
+into it and persists the final cleanup state, with focused durability assertions.
+
+ReminderDeletionStorage is admitted next after reviewing its fresh-user encrypted
+slots, exact-value compare/exchange cleanup, recreation, and 256 KiB/1 MiB UTF-8
+boundaries. It never reads real credentials or creates reminders. Its device
+execution remains pending. No upstream checkout was changed.
+
+`cuttlefish-secondary-storage157` passes ReminderDeletionStorage on launcher/user
+14. Standalone/user 13 fails before storage acceptance: its strict-not-null waiter
+accepts an undefined JavaScript result, followed by JSON parsing of null. Both
+users are removed and owner/HOME restored; their per-variant lifecycle receipts
+are written to disk. The fixture now reads and validates one result snapshot,
+without replaying the storage operation. A rebuilt rerun is required.
+`native-coverage-secondary-storage.json` records 88 observed classes, 65 unobserved;
+latest historical cohorts are 156 passed, 12 failed, 18 partial. Ninety classes
+are admitted by the runner; admission is not execution or acceptance.
+
+Full verification after secondary-user admission stopped on one obsolete parser
+assertion that required Cuttlefish to reject every secondary-user class. The
+lifecycle/runner tests passed. The contract test now admits reviewed secondary
+classes while retaining ownership, mock-build, unknown-class, clock and physical
+device gates. Because verification stopped, that queued APK build/storage rerun
+did not start. Main PR 426 was fetched during this review; its integration follows
+a saved audit checkpoint, with prior APK evidence kept at its original source.

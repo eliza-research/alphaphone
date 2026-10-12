@@ -1,3 +1,4 @@
+import {readLocalPhotoImage} from './local-photo-image';
 import {readMediaCopyIntent,admitMediaCopyIntent,acknowledgeMediaCopyIntent,mediaCopyIntentDocument,type MediaCopyIntent} from '../runtime/media-copy-intent';
 import {createInlineModal} from '../runtime/inline-modal';
 import {reviewContentQuestion} from '../browser/content-question';
@@ -679,7 +680,7 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
       // Leave the stale viewer so the changed item is neither shown nor shared as it was.
       closeVideo();if(preview?.id===selected.id)preview=undefined;reading='';owner.set({open:null,nativePhotoSelection:null,sheet:null,nativeCaptureRevision:Date.now()});
       void refresh();void loadTrash(owner);void loadCounts(owner);
-    })();},image:async signal=>{const row=await library.read({id:nativeId(selected.id)});signal.throwIfAborted();if(!unchanged(row))throw Error('Photo changed.');if(!/^(blob:|data:image\/)/.test(row.image))throw Error('Choose a local image.');return (await fetch(row.image,{signal})).blob();}});
+    })();},image:async signal=>{const row=await library.read({id:nativeId(selected.id)});signal.throwIfAborted();if(!unchanged(row))throw Error('Photo changed.');return readLocalPhotoImage(row.image,signal);}});
     return true;
   }
   captureQuestion=item=>{

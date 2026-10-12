@@ -20,9 +20,9 @@ for(const root of roots){
   let admission='no-cuttlefish-campaign';
   if(spec){
    if(spec.campaign)gates.push(spec.campaign);
-   else if(spec.secondaryUser)gates.push('Cuttlefish secondary-user lifecycle unqualified');
    else {
     admission='named-class';
+    if(spec.secondaryUser)gates.push('fresh secondary user with cleanup proof');
     if(spec.testMocks||spec.requiresTestMocksBuild||short==='BrowserDownload')gates.push('--test-mocks');
     if(spec.requires)gates.push(spec.requires);
     if(spec.offline)gates.push('--offline-speech (Cuttlefish)');

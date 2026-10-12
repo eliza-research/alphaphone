@@ -1,9 +1,8 @@
 import { browserDevProfile } from '../browser/dev-profile';
 // Full-product scope: docs/full-product-completion-audit.md FP-01 through FP-04.
-// The user included Phone, SMS, Contacts and Wallet on October 11. They stay
-// disabled until their native capabilities, permission/role recovery, recipient
-// review and return-to-HOME flows are implemented and accepted. Wallet also needs
-// the chosen provider/security contract and payment acceptance.
+// October 12 P-36 limits Phone/SMS/Contacts to admitted Alpha AOSP images;
+// native capabilities, roles, recipient review and recovery remain unimplemented.
+// Wallet stays a full-product planning package outside MVP (P-38).
 // Reference definitions, template, assets and saved user data are deliberately retained.
 export const ENABLED_MVP_VIEWS = new Set([
   // "phone", // Pending native calling implementation and acceptance.

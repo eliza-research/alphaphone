@@ -59,11 +59,18 @@ public class CameraFlowInstrumentedTest {
    if(c!=null)while(c.moveToNext())images.add(ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,c.getLong(0)));
   }return images;
  }
+ private void photoObservation(BoundedActivityScenario<MainActivity>s,Uri uri,String stage)throws Exception{
+  // Observe only this fixture's native metadata and local blob shape, never pixels.
+  String id=Long.toString(ContentUris.parseId(uri));
+  eval(s,"window.__cameraReadObservation=null;(async()=>{let value={};try{const row=await Capacitor.Plugins.AlphaPhotos.read({id:"+JSONObject.quote(id)+"});value={read:true,revision:row.revision,mutationRevision:row.mutationRevision,trashed:row.trashed,local:/^(blob:|data:image\\/)/.test(row.image)};try{const b=await(await fetch(row.image)).blob();value.blobBytes=b.size;value.blobType=b.type;}catch(e){value.fetchError=e?.name||'Error';}}catch(e){value.readError=e?.name||'Error';}window.__cameraReadObservation=JSON.stringify(value);})()");
+  until(s,"window.__cameraReadObservation!==null");
+  android.os.Bundle observation=new android.os.Bundle();observation.putString("cameraPhotoRead",stage+":"+eval(s,"window.__cameraReadObservation"));InstrumentationRegistry.getInstrumentation().sendStatus(0,observation);
+ }
  @Test public void photoCapturePublishesReadableImageAndShowsRealViewer()throws Exception{
   InstrumentationRegistry.getInstrumentation().getUiAutomation().grantRuntimePermission(context().getPackageName(),Manifest.permission.CAMERA);
   Set<Uri> before=ownedImages(),created=new HashSet<>();
   try(BoundedActivityScenario<MainActivity>s=BoundedActivityScenario.launch(MainActivity.class)){
-   navigate(s,"Camera");until(s,"document.querySelector('[data-alpha-camera-screen]')");nativePreview(s,true);
+   navigate(s,"Camera");AppNavigation.declineStartupAccess();until(s,"document.querySelector('[data-alpha-camera-screen]')");nativePreview(s,true);
    // Production Ask Alpha reviews an unsaved frame locally; only reviewed text can reach the draft.
    Set<Uri> beforeQuestion=ownedImages();
    click(s,"Ask Alpha about this");
@@ -80,10 +87,12 @@ public class CameraFlowInstrumentedTest {
    until(s,"document.querySelector('button[aria-label=\"Open last photo\"] span')?.style.background.includes('data:image/jpeg;base64,')");
    click(s,"Open last photo");until(s,AppNavigation.selected("Photos"));
    until(s,"document.body.innerText.includes('saved to Android Photos') && [...document.querySelectorAll('[style]')].some(e=>e.style.background.includes('data:image/jpeg;base64,'))");
+   photoObservation(s,uri,"before-share");
    ShareFlowAssertions.opensExactItemAndCancels(()->click(s,"Share photo"),bytes,"image/jpeg");
    until(s,"document.body.innerText.includes('saved to Android Photos')");
    ShareFlowAssertions.receivesInSeparateApp(()->click(s,"Share photo"),bytes);
    until(s,"document.body.innerText.includes('saved to Android Photos')");
+   photoObservation(s,uri,"after-share");
    click(s,"Ask Alpha about this photo");
    until(s,"document.querySelector('dialog[aria-label=\"Ask about selected content\"] img[alt=\"Image for question review\"]')?.naturalWidth>0");
    eval(s,"(()=>{const e=document.querySelector('dialog[aria-label=\"Ask about selected content\"] textarea[aria-label=\"Content excerpt\"]');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,'A captured test frame');e.dispatchEvent(new Event('input',{bubbles:true}));})()");

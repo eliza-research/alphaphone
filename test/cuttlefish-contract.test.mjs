@@ -53,7 +53,9 @@ const args=['--owned-cuttlefish','--image-fingerprint',fingerprint];
 test('Cuttlefish requires explicit image ownership and preserves campaign gates',()=>{
  assert.equal(parseInstrumentationArgs([...args,'--classes','Shell']).ownedCuttlefish,true);
  assert.equal(parseInstrumentationArgs([...args,'--home-role','--variants','launcher','--classes','LauncherHome']).homeRole,true);
- for(const extra of [['--classes','ContactsFlow'],['--classes','ai.elizaresearch.alphaphone.HostedProcessRestartInstrumentedTest','--test-mocks'],['--classes','unknown.SomeTest'],['--all'],['--owned-emulator'],['--avd','some-avd'],['--classes','HostedProcessRestart','--test-mocks'],['--classes','RealClock'],['--classes','BrowserAutofill']])assert.throws(()=>parseInstrumentationArgs([...args,...extra]));
+ for(const extra of [['--classes','ContactsFlow'],['--classes','unknown.SomeTest'],['--all'],['--owned-emulator'],['--avd','some-avd'],['--classes','RealClock'],['--classes','BrowserAutofill']])assert.throws(()=>parseInstrumentationArgs([...args,...extra]));
+ for(const name of ['HostedProcessRestart','ai.elizaresearch.alphaphone.HostedProcessRestartInstrumentedTest']){assert.doesNotThrow(()=>parseInstrumentationArgs([...args,'--classes',name,'--test-mocks']));assert.throws(()=>parseInstrumentationArgs([...args,'--classes',name]),/test-mocks/);}
+ assert.doesNotThrow(()=>parseInstrumentationArgs([...args,'--classes','CalendarCreationRecovery,ClockAgentReview,ReminderDeletionStorage']));
  assert.throws(()=>parseInstrumentationArgs(['--owned-cuttlefish']));
  assert.throws(()=>parseInstrumentationArgs(['--image-fingerprint',fingerprint]));
 });

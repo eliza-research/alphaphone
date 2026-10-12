@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// Aggregate exported per-turn voice timing records (apps/app/src/runtime/voice-timing.ts).
+// Aggregate legacy recording-end diagnostics (apps/app/src/runtime/voice-timing.ts).
+// This v1 format cannot qualify P-11: it has no last-input-speech sample or
+// first-audible-output sample, device/model identity, or thermal/network cohort.
 //
 //   node scripts/aggregate-voice-latency.mjs export-1.json [export-2.json ...] [--warm N>=20] [--cold N>=5] [--out summary.json]
 //
@@ -9,18 +11,19 @@
 //   firstToken          first-token - send
 //   finalReply          final-reply - send
 //   firstAudio          first-audio - send        (only when Speak replies is on)
-//   speechToTokenExcludingReview  recognition + firstToken
-//   speechToAudioExcludingReview  recognition + firstAudio
-// The last two are candidate A-10 measures (end of speech to first response, excluding the
-// commit delay). Ongoing voice acceptance must also include that delay end to end. This script reports them; it does not sign off a target.
-// Exit 0: enough complete audible samples in both cohorts for every observed route.
-// Pooled route statistics are descriptive only. Exit 2: not enough. Exit 1: bad input.
+//   legacyRecognitionPlusFirstToken  recognition + firstToken
+//   legacyRecognitionPlusFirstAudio  recognition + firstAudio
+// These sums are legacy stage diagnostics, never end-to-end speech latency.
+// P-11/A-10 includes endpointing and playback buffering, requires at least 50
+// simple-query trials, and reports device/model/network/thermal identity.
+// Exit 2: insufficient evidence for P-11 (including every legacy v1 export).
+// Exit 1: malformed input. Pooled route statistics remain descriptive only.
 import fs from 'node:fs';
 
 const order = ['recording-end', 'transcript-ready', 'send', 'first-token', 'final-reply', 'first-audio'];
 const routes = new Set(['on-device', 'browser', 'local-agent', 'eliza-cloud', 'paired-agent', 'development-agent', 'manual']);
 
-/** The sample counts the measurement plan requires. Options can raise them, never lower them. */
+/** Historical diagnostic cohort minima, not the approved P-11 trial requirement. */
 export const minimumSamples = Object.freeze({ warm: 20, cold: 5 });
 export function parseArguments(argv) {
   const options = { files: [], warm: minimumSamples.warm, cold: minimumSamples.cold, out: null };
@@ -67,8 +70,8 @@ export function phases(row) {
   const recognition = gap('recording-end', 'transcript-ready'), firstToken = gap('send', 'first-token'), firstAudio = gap('send', 'first-audio');
   return {
     recognition, review: gap('transcript-ready', 'send'), firstToken, finalReply: gap('send', 'final-reply'), firstAudio,
-    speechToTokenExcludingReview: recognition !== undefined && firstToken !== undefined ? recognition + firstToken : undefined,
-    speechToAudioExcludingReview: recognition !== undefined && firstAudio !== undefined ? recognition + firstAudio : undefined,
+    legacyRecognitionPlusFirstToken: recognition !== undefined && firstToken !== undefined ? recognition + firstToken : undefined,
+    legacyRecognitionPlusFirstAudio: recognition !== undefined && firstAudio !== undefined ? recognition + firstAudio : undefined,
   };
 }
 /** A complete sample reached the final reply through every earlier mark. */
@@ -95,15 +98,21 @@ export function aggregate(exports, requested = minimumSamples) {
     return [route, { records: selected.length, complete: selected.filter(complete).length,
       abandoned: selected.filter(row => row.outcome === 'abandoned').length,
       incomplete: selected.filter(row => !row.outcome && !complete(row)).length,
-      cohorts: detail, sufficient: detail.warm.audioSufficient && detail.cold.audioSufficient }];
+      cohorts: detail, sampleCountsSufficient: detail.warm.audioSufficient && detail.cold.audioSufficient }];
   }));
   return {
     format: 'alpha-voice-latency-summary-v1', units: 'ms',
     records: records.length, complete: usable.length, abandoned: records.filter(row => row.outcome === 'abandoned').length, incomplete: records.filter(row => !row.outcome && !complete(row)).length, invalid,
     cohorts, pooledCohortsAreDescriptiveOnly: true, byRoute,
-    sufficient: Object.keys(byRoute).length > 0 && Object.values(byRoute).every(route => route.sufficient),
-    sufficiencyRule: 'At least the required warm and cold complete audible samples for each observed route; sample count is not latency target sign-off.',
-    targetSignOff: 'pending A-10: the measurement boundary and target are not decided; this summary is evidence only',
+    sampleCountsSufficient: Object.keys(byRoute).length > 0 && Object.values(byRoute).every(route => route.sampleCountsSufficient),
+    sufficient: false,
+    qualification: { policy: 'P-11 / A-10', requiredTrials: 50, qualifyingTrials: 0,
+      status: 'unsupported-measurement-boundary',
+      reasons: ['Legacy v1 starts at recording-end, not the last user speech sample.',
+        'The playback callback is not evidence of the first audible output sample.',
+        'Device/model/hash, network and thermal cohort identity is absent.'] },
+    sufficiencyRule: 'sampleCountsSufficient describes historical warm/cold counts only. Legacy v1 exports are insufficient for P-11 regardless of count.',
+    targetSignOff: 'P-11 resolves A-10: last input speech sample to first audible response, including endpointing and buffering, at least 50 trials and cold/warm p50/p95. These legacy diagnostics do not measure that boundary.',
   };
 }
 
@@ -116,10 +125,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   catch (error) { console.error(`Cannot aggregate: ${error.message}`); process.exit(1); }
   const text = JSON.stringify(summary, null, 2);
   if (options.out) fs.writeFileSync(options.out, text + '\n'); else console.log(text);
-  if (!summary.sufficient) {
-    const missing = Object.entries(summary.byRoute).filter(([, value]) => !value.sufficient)
+  if (!summary.sampleCountsSufficient) {
+    const missing = Object.entries(summary.byRoute).filter(([, value]) => !value.sampleCountsSufficient)
       .map(([route, value]) => `${route}: audible warm ${value.cohorts.warm.withAudio}/${options.warm}, cold ${value.cohorts.cold.withAudio}/${options.cold}`);
     console.error(`Insufficient audible samples by route: ${missing.join('; ') || 'no valid records'}.`);
+    process.exit(2);
+  }
+  if (!summary.sufficient) {
+    console.error('Insufficient P-11 audio-boundary evidence: legacy recording-end exports cannot qualify, regardless of sample count.');
     process.exit(2);
   }
 }

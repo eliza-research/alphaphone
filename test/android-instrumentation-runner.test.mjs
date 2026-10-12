@@ -430,9 +430,10 @@ test("classes that assert a secondary user run in a disposable user the runner c
     fs.writeFileSync(path.join(dir, "apk-manifest.json"), JSON.stringify({ ...JSON.parse(fs.readFileSync(path.join(dir, "apk-manifest.json"), "utf8")), testMocks: true }));
     try {
       const options = parseInstrumentationArgs(["--owned-emulator", "--avd", "fixture-avd", "--serial", "emulator-5554", "--test-mocks", "--variants", "standalone", "--classes", classes, "--apk-dir", dir, "--output", path.join(dir, "out")]);
-      let result, error;
-      try { result = await runLeased({ options, serial: "emulator-5554", adb: emulator.adb, timing, withSecondaryUser: lifecycle }); } catch (failure) { error = failure; }
-      return { result, error, commands: emulator.state.commands };
+      let result, error;const observedUsers=[];const receiptFile=path.join(dir,"out/standalone/secondary-user.json");
+      const observedAdb=(args,...rest)=>{if(args.includes("install-existing"))observedUsers.push(JSON.parse(fs.readFileSync(receiptFile,"utf8")).user);return emulator.adb(args,...rest);};
+      try { result = await runLeased({ options, serial: "emulator-5554", adb: observedAdb, timing, withSecondaryUser: lifecycle }); } catch (failure) { error = failure; }
+      return { result, error, commands: emulator.state.commands, observedUsers, savedLifecycle:fs.existsSync(receiptFile)?JSON.parse(fs.readFileSync(receiptFile,"utf8")):null };
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   };
   // The lifecycle the upstream helper provides: a user, the callback, then removal only with cleanup proof.
@@ -445,6 +446,8 @@ test("classes that assert a secondary user run in a disposable user the runner c
   };
   const passed = await run({ lifecycle });
   assert.equal(passed.error, undefined);
+  assert.deepEqual(passed.observedUsers,[10,10],"user identity is durable before packages enter it");
+  assert.equal(passed.savedLifecycle.removed,true);
   assert.equal(passed.result.passed, true, JSON.stringify([passed.result.secondaryUsers, passed.result.classes.map(row => [row.class, row.status, row.note])]));
   assert.deepEqual(passed.result.secondaryUsers, [{ variant: "standalone", user: 10, ownerRestored: true, removed: true }]);
   assert.match(created[0], /^instrumentation-standalone-\d+$/);
@@ -461,6 +464,8 @@ test("classes that assert a secondary user run in a disposable user the runner c
   // A user that is not proven removed fails the run and names the classes that did not run.
   const kept = await run({ lifecycle: async ({ record }) => { record({ user: 11, ownerRestored: false, removed: false }); throw new Error("Owned user cleanup deferred; recover explicitly"); } });
   assert.equal(kept.result.passed, false);
+  assert.equal(kept.savedLifecycle.user,11);assert.equal(kept.savedLifecycle.removed,false);
+  assert.match(kept.savedLifecycle.error,/cleanup deferred/);
   assert.equal(kept.result.secondaryUsers[0].removed, false);
   assert.match(kept.result.secondaryUsers[0].error, /cleanup deferred/);
   assert.ok(kept.result.classes.filter(row => row.user === "secondary").every(row => row.status === "missing" && /secondary user phase failed/.test(row.note)));

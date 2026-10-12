@@ -327,10 +327,10 @@
     "sourceCommit": "f3ccefd382bd40b29b06117c97da366c1e9b75a7",
     "dirtySource": true,
     "report": "docs/full-product-completion-audit.md",
-    "scope": "Historical developer APK campaigns on owned x86_64 API 37 Cuttlefish guests; no resident payload, no release or physical acceptance. The earlier gate and remaining prose is a dated baseline; this update supersedes never-run statements only for the exact observed classes below. Requirement statuses remain unchanged. SettingsNative now passes both variants; NotificationChannels fails switch identification. SelectedDocument passes four ordinary methods per variant with process-restart skipped. CalendarAvailability, CalendarRange and CalendarTruncation now pass both variants.",
-    "observedNativeClasses": 83,
-    "unobservedNativeClasses": 70,
-    "evidenceSnapshot": "test-results/full-product-audit/native-coverage-calendar-reads.json",
+    "scope": "Historical developer APK campaigns on owned x86_64 API 37 Cuttlefish guests; no resident payload, real Cloud login/Cerebras, release-image or physical acceptance. Latest CameraFlow and NotificationChannels campaigns pass both variants; earlier launcher share-receipt timeouts remain unexplained and retained. CloudDelegationCallback passes synthetic callbacks only. SelectedDocument passes four ordinary methods with process-restart skipped. CalendarAvailability, CalendarRange and CalendarTruncation pass both variants. Requirement statuses remain unchanged. CalendarCreationRecovery and intercepted ClockAgentReview pass both variants in isolated secondary users with owner restoration/removal. ReminderDeletionStorage passes launcher; standalone fails in its result waiter before storage acceptance. Durable user receipts are preserved.",
+    "observedNativeClasses": 88,
+    "unobservedNativeClasses": 65,
+    "evidenceSnapshot": "test-results/full-product-audit/native-coverage-secondary-storage.json",
     "exactClassReferences": [
       {
         "id": "AP-01",
