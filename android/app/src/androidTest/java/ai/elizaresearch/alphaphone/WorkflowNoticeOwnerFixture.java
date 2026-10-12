@@ -51,9 +51,10 @@ final class WorkflowNoticeOwnerFixture implements AutoCloseable {
    byte[] bytes=body.toString().getBytes(StandardCharsets.UTF_8);socket.getOutputStream().write(("HTTP/1.1 "+status+" Fixture\r\nContent-Type: application/json\r\nContent-Length: "+bytes.length+"\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));socket.getOutputStream().write(bytes);socket.getOutputStream().flush();
   }catch(Exception error){if(!server.isClosed())failure=error;}},"synthetic-notice-owner");peer.setDaemon(true);peer.start();
  }
- void awaitOwner(boolean signedIn)throws Exception{
+ void awaitOwner(boolean signedIn)throws Exception{awaitOwner(signedIn,1,1);}
+ void awaitOwner(boolean signedIn,int minimumVerified,int minimumAgents)throws Exception{
   AlphaCredentialStore store=new AlphaCredentialStore(context);long end=SystemClock.elapsedRealtime()+20000;
-  do{assertNull("Loopback peer failure",failure);String raw=store.readCredentialSlot(OWNER_SLOT);if(raw!=null){JSONObject owner=new JSONObject(raw).optJSONObject("owner");if(!signedIn&&owner==null)return;if(signedIn&&owner!=null&&identity.getString("origin").equals(owner.optString("origin"))&&identity.getString("ownerId").equals(owner.optString("ownerId"))&&identity.getString("agentId").equals(owner.optString("agentId"))){assertTrue(verified.get()>0);assertTrue(agents.get()>0);return;}}SystemClock.sleep(50);}while(SystemClock.elapsedRealtime()<end);fail("Renderer did not settle expected owner");
+  do{assertNull("Loopback peer failure",failure);String raw=store.readCredentialSlot(OWNER_SLOT);if(raw!=null){JSONObject owner=new JSONObject(raw).optJSONObject("owner");if(!signedIn&&owner==null)return;if(signedIn&&owner!=null&&identity.getString("origin").equals(owner.optString("origin"))&&identity.getString("ownerId").equals(owner.optString("ownerId"))&&identity.getString("agentId").equals(owner.optString("agentId"))&&verified.get()>=minimumVerified&&agents.get()>=minimumAgents){return;}}SystemClock.sleep(50);}while(SystemClock.elapsedRealtime()<end);fail("Renderer did not settle expected owner");
  }
  public void close()throws Exception{server.close();peer.join(6000);assertFalse("Loopback peer stopped",peer.isAlive());assertNull("Loopback peer failure",failure);}
 }

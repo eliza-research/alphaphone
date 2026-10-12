@@ -74,6 +74,7 @@ public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
    long taskEnd=SystemClock.elapsedRealtime()+10000;
    while(!context.getSystemService(ActivityManager.class).getAppTasks().isEmpty()&&SystemClock.elapsedRealtime()<taskEnd)SystemClock.sleep(50);
    assertTrue("Main tasks still active",context.getSystemService(ActivityManager.class).getAppTasks().isEmpty());
+   int verifiedBeforeDeath=fixture.verified.get(),agentsBeforeDeath=fixture.agents.get();
    before.exact();Os.kill(before.pid,OsConstants.SIGKILL);
    long deathEnd=SystemClock.elapsedRealtime()+10000;
    while((Files.exists(Path.of("/proc/"+before.pid))||!WorkflowNoticeProcessDeathInstrumentedTest.mainPids(context).isEmpty())&&SystemClock.elapsedRealtime()<deathEnd)SystemClock.sleep(50);
@@ -88,7 +89,7 @@ public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
    if(Build.VERSION.SDK_INT>=34)options.setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);
    pending.send(context,0,null,null,null,null,options.toBundle());
    WorkflowNoticeProcessDeathInstrumentedTest.Identity after=WorkflowNoticeProcessDeathInstrumentedTest.awaitMain(context);assertTrue(before.pid!=after.pid||!before.start.equals(after.start));
-   fixture.awaitOwner(true);assertTrue("Owner verified again after cold restart",fixture.verified.get()>=2);
+   fixture.awaitOwner(true,verifiedBeforeDeath+1,agentsBeforeDeath+1);
    JSONObject captured=null;long captureEnd=SystemClock.elapsedRealtime()+15000;
    do{captured=taps.pending();if(token.equals(captured.optString("token")))break;SystemClock.sleep(50);}while(SystemClock.elapsedRealtime()<captureEnd);
    assertEquals("Restarted main must capture the original token",token,captured.getString("token"));assertTrue("The posted receipt still confirms the tap",captured.getBoolean("retained"));
