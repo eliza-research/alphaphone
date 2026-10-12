@@ -15,6 +15,20 @@ public final class NotesCapacityFixtureTest {
   JSONObject target=records.getJSONObject(1);if(!target.getString("body").isEmpty())throw new AssertionError("Editor must start small");
   target.put("body","E".repeat(NotesCapacityFixture.EDIT_BYTES));saved.put("currentRaw",body.toString());
   if(saved.toString().getBytes(StandardCharsets.UTF_8).length<=cap)throw new AssertionError("Small edit does not cross real cap");
+  java.nio.file.Path directory=java.nio.file.Files.createTempDirectory("notes-snapshot-");
+  try{
+   try(NotesCapacityFixture.Snapshot snapshot=NotesCapacityFixture.Snapshot.save(directory.toFile(),seeded)){
+    if(!snapshot.matches(seeded)||snapshot.matches(seeded+"x")||snapshot.matches(null)||!seeded.equals(snapshot.exactValue()))throw new AssertionError("Snapshot identity changed");
+   }
+   String unicode="a".repeat(4095)+"😀€";
+   try(NotesCapacityFixture.Snapshot snapshot=NotesCapacityFixture.Snapshot.save(directory.toFile(),unicode)){
+    if(!snapshot.matches(unicode)||!unicode.equals(snapshot.exactValue()))throw new AssertionError("Chunk boundary broke UTF-8");
+    java.nio.file.Path file;try(java.util.stream.Stream<java.nio.file.Path> files=java.nio.file.Files.list(directory)){file=files.findFirst().orElseThrow();}
+    java.nio.file.Files.writeString(file,"changed");boolean rejected=false;try{snapshot.exactValue();}catch(java.io.IOException expected){rejected=true;}
+    if(!rejected)throw new AssertionError("Changed snapshot admitted for CAS");
+   }
+   try(java.util.stream.Stream<java.nio.file.Path> files=java.nio.file.Files.list(directory)){if(files.count()!=0)throw new AssertionError("Private snapshot left behind");}
+  }finally{java.nio.file.Files.delete(directory);}
   System.out.println("PASS bounded Notes capacity fixture");
  }
 }
