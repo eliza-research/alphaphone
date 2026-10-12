@@ -34,7 +34,8 @@ final class WorkflowNoticeOwnerFixture implements AutoCloseable {
    String selection=new JSONObject().put("kind","local").put("origin",origin).toString();
    assertEquals("true",WebViewTestDriver.evaluate("localStorage.setItem('alpha.connection.selection.v1',"+JSONObject.quote(selection)+");localStorage.getItem('alpha.connection.selection.v1')==="+JSONObject.quote(selection)));
    WebViewTestDriver.evaluate("location.reload();true");fixture.awaitOwner(true);
-   assertEquals("true",WebViewTestDriver.evaluate("localStorage.getItem('alpha.connection.selection.v1')==="+JSONObject.quote(selection)));
+   JSONObject restored=new JSONObject((String)new JSONTokener(WebViewTestDriver.evaluate("localStorage.getItem('alpha.connection.selection.v1')")).nextValue());
+   assertEquals(2,restored.length());assertEquals("local",restored.getString("kind"));assertEquals(origin,restored.getString("origin"));
   }
  }
  WorkflowNoticeOwnerFixture(Context context)throws Exception{
