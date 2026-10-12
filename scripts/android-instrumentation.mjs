@@ -56,6 +56,7 @@ const RUNNER = "androidx.test.runner.AndroidJUnitRunner";
  */
 export const CLASS_REGISTRY = {
   NoMockProduct: {},
+  BrowserInstalledResolver: { note: "Real installed generic HTTPS filter visibility only; no external launch or network request" },
   Shell: {},
   StartupReadiness: { args: { startupReadiness: "1" } },
   TextScale: { note: "textScaleProcessRestartPhase is skipped here; run node scripts/test-native-restart.mjs text-scale" },
