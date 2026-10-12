@@ -53,8 +53,7 @@ public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
   long expiresAt=System.currentTimeMillis()+10*60000L;
   try(WorkflowNoticeOwnerFixture fixture=new WorkflowNoticeOwnerFixture(context)){
    JSONObject route=new JSONObject().put("scope","a".repeat(64)).put("origin",fixture.origin).put("ownerId",fixture.identity.getString("ownerId")).put("agentId",fixture.identity.getString("agentId")).put("workflowId","fixture-flow").put("runId",run).put("versionId","fixture-version");
-   Intent initial=context.getPackageManager().getLaunchIntentForPackage(APP);assertNotNull(initial);context.startActivity(initial);
-   WorkflowNoticeProcessDeathInstrumentedTest.Identity before=WorkflowNoticeProcessDeathInstrumentedTest.awaitMain(context);fixture.awaitOwner(true);
+   assertTrue("No main writer during synthetic notice seed",WorkflowNoticeProcessDeathInstrumentedTest.mainPids(context).isEmpty());
    // One OS dispatch only. An unconfirmed post is reconciled from the actual OS notice by the same request, never reposted.
    String publication=delivery.postApproval(taps,id,binding,route,expiresAt,System.currentTimeMillis());
    long publicationEnd=SystemClock.elapsedRealtime()+10000;
@@ -73,6 +72,9 @@ public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
    StatusBarNotification original=notice(manager,id);PendingIntent pending=original.getNotification().contentIntent;assertNotNull(pending);
    assertFalse("Redacted: no route identity in the notice",original.getNotification().extras.toString().contains(run)||original.getNotification().extras.toString().contains("fixture-flow"));
    assertFalse(taps.pending().has("token"));
+   Intent initial=context.getPackageManager().getLaunchIntentForPackage(APP);assertNotNull(initial);context.startActivity(initial);
+   WorkflowNoticeProcessDeathInstrumentedTest.Identity before=WorkflowNoticeProcessDeathInstrumentedTest.awaitMain(context);fixture.awaitOwner(true);
+   assertEquals("Matching restored owner preserves prepared notice",original.getKey(),notice(manager,id).getKey());
    // Remove only this package's tasks before ordinary death, preventing foreground task recovery.
    for(ActivityManager.AppTask task:context.getSystemService(ActivityManager.class).getAppTasks()){
     ActivityManager.RecentTaskInfo info=task.getTaskInfo();assertNotNull(info.baseIntent.getComponent());assertEquals(APP,info.baseIntent.getComponent().getPackageName());task.finishAndRemoveTask();
@@ -129,18 +131,21 @@ public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
   NotificationManager manager=context.getSystemService(NotificationManager.class);WorkflowNoticeTaps taps=WorkflowNoticeTapsFactory.create(context);WorkflowNoticeDelivery delivery=WorkflowNoticeTapsFactory.delivery(context);
   String id="approval-"+(UUID.randomUUID().toString()+UUID.randomUUID()).replace("-","");
   try(WorkflowNoticeOwnerFixture fixture=new WorkflowNoticeOwnerFixture(context)){
-   Intent launch=context.getPackageManager().getLaunchIntentForPackage(APP);assertNotNull(launch);context.startActivity(launch);
-   WorkflowNoticeProcessDeathInstrumentedTest.Identity before=WorkflowNoticeProcessDeathInstrumentedTest.awaitMain(context);fixture.awaitOwner(true);
+   assertTrue("No main writer during synthetic notice seed",WorkflowNoticeProcessDeathInstrumentedTest.mainPids(context).isEmpty());
    JSONObject route=new JSONObject().put("scope","a".repeat(64)).put("origin",fixture.origin).put("ownerId",fixture.identity.getString("ownerId")).put("agentId",fixture.identity.getString("agentId")).put("workflowId","fixture-flow").put("runId","signedout-fixture").put("versionId","fixture-version");
    long expires=System.currentTimeMillis()+600000,end=SystemClock.elapsedRealtime()+10000;String published;
    do{published=delivery.postApproval(taps,id,"b".repeat(64),route,expires,System.currentTimeMillis());if("succeeded".equals(published))break;assertEquals("unknown",published);SystemClock.sleep(50);}while(SystemClock.elapsedRealtime()<end);
    assertEquals("succeeded",published);PendingIntent original=notice(manager,id).getNotification().contentIntent;
-   store.removeCredentialSlot("remote:"+fixture.origin);
+   Intent launch=context.getPackageManager().getLaunchIntentForPackage(APP);assertNotNull(launch);context.startActivity(launch);
+   WorkflowNoticeProcessDeathInstrumentedTest.Identity before=WorkflowNoticeProcessDeathInstrumentedTest.awaitMain(context);fixture.awaitOwner(true);
+   assertEquals("Matching restored owner preserves original tap",original,notice(manager,id).getNotification().contentIntent);
    for(ActivityManager.AppTask task:context.getSystemService(ActivityManager.class).getAppTasks()){assertEquals(APP,task.getTaskInfo().baseIntent.getComponent().getPackageName());task.finishAndRemoveTask();}
    end=SystemClock.elapsedRealtime()+10000;while(!context.getSystemService(ActivityManager.class).getAppTasks().isEmpty()&&SystemClock.elapsedRealtime()<end)SystemClock.sleep(50);assertTrue(context.getSystemService(ActivityManager.class).getAppTasks().isEmpty());
    before.exact();Os.kill(before.pid,OsConstants.SIGKILL);end=SystemClock.elapsedRealtime()+10000;
    while((Files.exists(Path.of("/proc/"+before.pid))||!WorkflowNoticeProcessDeathInstrumentedTest.mainPids(context).isEmpty())&&SystemClock.elapsedRealtime()<end)SystemClock.sleep(50);
    assertFalse(Files.exists(Path.of("/proc/"+before.pid)));assertTrue(WorkflowNoticeProcessDeathInstrumentedTest.mainPids(context).isEmpty());
+   // The exact synthetic credential is removed only after the other writer has died.
+   store.removeCredentialSlot("remote:"+fixture.origin);
    int authBefore=fixture.verified.get();context.startActivity(launch);WorkflowNoticeProcessDeathInstrumentedTest.Identity after=WorkflowNoticeProcessDeathInstrumentedTest.awaitMain(context);assertTrue(before.pid!=after.pid||!before.start.equals(after.start));fixture.awaitOwner(false);
    end=SystemClock.elapsedRealtime()+10000;while(!approvals(manager).isEmpty()&&SystemClock.elapsedRealtime()<end)SystemClock.sleep(50);assertTrue("Signed-out startup withdraws OS approval",approvals(manager).isEmpty());
    assertEquals("No credential means no authentication dispatch",authBefore,fixture.verified.get());assertFalse(taps.pending().has("token"));
