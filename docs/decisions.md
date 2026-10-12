@@ -1,12 +1,12 @@
 # Architecture and product decisions
 
-October 1 architecture change: the user has selected an **Android-resident agent instead of Nitro/TEE hosting**. The [on-device agent plan](on-device-agent-plan.md) supersedes cloud-only and enclave-primary requirements below. Agent execution and model inference are separate: the implemented path uses hosted Cerebras text inference and local orchestration; fully offline language-model operation remains unqualified. Historical evidence is retained. Powered-off-phone execution needs explicit scope reconciliation (open decision A-09).
+October 1 architecture change: the user has selected an **Android-resident agent instead of Nitro/TEE hosting**. The [on-device agent plan](on-device-agent-plan.md) supersedes cloud-only and enclave-primary requirements below. Agent execution and model inference are separate: the implemented path uses hosted Cerebras text inference and local orchestration; fully offline language-model operation remains unqualified. Historical evidence is retained. October 12 policy below resolves powered-off scheduling: schedules run only while the phone is powered on.
 
 ## Accepted foundation decisions
 
 1. Keep Alpha Phone and senior-care independent: separate repository, application ID, renderer, assets and release stream.
 2. Use a pinned Eliza source submodule while upstream consumer exports stabilize. Avoid publishing every workspace package before testing the actual dependency closure.
-3. Package the pinned Eliza runtime with the Capacitor shell and use native authenticated IPC for the resident agent. Browser development runs the real agent on a private local host. Cloud and remote pairing are optional implemented adapters; production Android refuses remote pairing and offers no Cloud agent (see [current status](mvp-current-status.md), Connection choices, and A-16). Connected chat reports the actual protocol outcome; offline and unavailable connections must not simulate a successful send. See [current status](mvp-current-status.md) for the remaining integration and device acceptance.
+3. Package the pinned Eliza runtime with the Capacitor shell and use native authenticated IPC for the resident agent. Browser development runs the real agent on a private local host. Cloud/remote adapters remain historical/development infrastructure only; October 12 policy prohibits every hosted-agent product connection. Connected chat reports the actual protocol outcome; offline and unavailable connections must not simulate a successful send. See [current status](mvp-current-status.md) for the remaining integration and device acceptance.
 4. Use standalone and launcher product flavors with the same Alpha identity. Switching flavor replaces the installed Alpha app. Senior-care has a different identity and can coexist.
 5. Make AOSP installation additive, nonprivileged and certificate/hash verified. Device provisioning chooses default HOME. Keep system recovery paths available.
 6. Preserve the prototype's brand and layout direction while labeling data and agent capabilities honestly. Do not port mocked transfers, account linking or generated success messages.
@@ -17,13 +17,13 @@ October 1 architecture change: the user has selected an **Android-resident agent
 
 Decided by the product owner on 2026-10-07 unless marked as an engineering disposition. Entries use stable `P-` identifiers, separate from the numbered foundation decisions above, so later foundation entries do not renumber them. These record product policy; they are not evidence that any feature is implemented or accepted. Each acceptance gate in [current status](mvp-current-status.md) still applies.
 
-- **P-01** Voice send (product owner): voice does not auto-send, for now. The flow stays record → transcribe → review → the user sends. Consequence: the DoD's six-second hands-free round trip cannot be met with a manual send. Open follow-up A-10 must either measure end-of-speech to first audible response excluding the user's review/send time, or revisit the target. This entry does not choose between them.
+- **P-01** **Superseded by P-39 on October 12:** Voice send (product owner): voice does not auto-send, for now. The flow stays record → transcribe → review → the user sends. Consequence: the DoD's six-second hands-free round trip cannot be met with a manual send. Open follow-up A-10 must either measure end-of-speech to first audible response excluding the user's review/send time, or revisit the target. This entry does not choose between them.
 - **P-02** Email scope (product owner): Gmail/Email is in MVP scope. Telegram and Discord stay deferred unless the owner states otherwise. This resolves the messaging part of A-07; other providers and exact read/write scopes remain open there.
 - **P-03** Cross-app notification mirroring (delegated by the product owner to engineering judgment; engineering disposition): keep the implemented feature. It must stay strictly opt-in and off by default, outside onboarding, limited to user-selected apps, with previews hidden while the device is locked, and clearly disclosed. It is not an MVP acceptance gate. Re-evaluate it before any Play Store distribution because of notification-listener policy.
 - **P-04** Browser sign-ins (product owner): browser tabs keep sign-ins in a persistent browser profile, with an explicit private-tab option that stays ephemeral. This supersedes the earlier per-tab ephemeral profile design. The persistent profile must remain separate from the privileged Capacitor host profile.
 - **P-05** Password manager (product owner): an integrated password manager is in scope. It belongs in elizaOS upstream as a reusable component that Alpha consumes. Proton Pass remains an optional alternative provider. This supersedes "credential handling remains in the third-party provider" as the only path; provider-owned vault and unlock UI still applies when Proton Pass is chosen.
 - **P-06** Note deletion (product owner): deleted notes go to Trash, and Trash empties automatically after 3 days. Implemented for text, checklist, link and voice notes, including approved agent deletions: a voice note's recording is trashed, restored and erased with its Trash entry, and the native 30-day audio sweep remains only a backstop. Undo, Restore, Delete forever and Empty Trash (both confirmed) are available. See [browser storage](browser-storage.md#notes-trash).
-- **P-07** Voice route: Eliza Cloud is the current product default for chat voice, Notes transcription and read-aloud, bound to the signed-in account. Recording alone does not upload audio; transcription and playback name the selected service. The earlier local browser Whisper engine remains an optional implementation, not the default or an automatic fallback.
+- **P-07** **Superseded by P-13/P-29 on October 12:** Voice route: Eliza Cloud is the current product default for chat voice, Notes transcription and read-aloud, bound to the signed-in account. Recording alone does not upload audio; transcription and playback name the selected service. The earlier local browser Whisper engine remains an optional implementation, not the default or an automatic fallback.
 - **P-08** OCR languages (product owner): OCR covers English only for now.
 
 ## October 10 owner product decision
@@ -37,78 +37,134 @@ Decided by the product owner on 2026-10-10. Same rules as the entries above: thi
 
   What this entry does not claim. "Included and flagged" is not legal review. The obligations a flag names (corresponding source for GPL, AGPL and LGPL components, a replaceable library for LGPL, a source offer that extends to network use for AGPL) are stated, not shown to be met. The first statement covers open-source software: the resident runtime payload contains one package under non-commercial terms (`@metamask/sdk`, flagged `non-open-source-terms`; see the dependency audit), which none of the three statements addresses.
 
+## October 12 owner decisions
+
+The owner approved the following choices in chat on 2026-10-12. The matching GitHub
+issues are now implementation TODOs, not unanswered decision requests. The policy
+below controls over older PRD/plan wording and source defaults. Acceptance remains
+open. In particular Wallet is removed from MVP, superseding the October 11 expansion.
+
+- **P-10 — A-09 ([#394](https://github.com/AlphaCompute/alphaphone/issues/394)):** Schedules run only while the phone is powered on; the agent is local. Remove powered-off hosted-loop acceptance. Record missed occurrences once; do not automatically replay overdue effects. Offer an explicit Run now action where useful.
+
+- **P-11 — A-10 ([#395](https://github.com/AlphaCompute/alphaphone/issues/395)):** Voice-assistant latency is the elapsed time from the last user speech audio sample to the first audible response sample. Include end-of-turn detection, final STT, inference, TTS and playback buffering. Do not subtract silence detection or report a sum of selected stages as the end-to-end result. Dictation reports stop-to-editable-text separately; manual user think time is not a voice-assistant benchmark.
+
+- **P-12 — A-02 ([#396](https://github.com/AlphaCompute/alphaphone/issues/396)):** Eliza Cloud is the managed account, inference, subscription and Maps service endpoint. Agent orchestration, state, scheduling and approvals remain on the phone. No Cloud/hosted agent exists as a product connection, upgrade or fallback.
+
+- **P-13 — A-04 ([#397](https://github.com/AlphaCompute/alphaphone/issues/397)):** All speech recognition and synthesis run locally on the device, always. Replace Cloud/paired-host speech policy. Use the Android native bridge to the reviewed Eliza llama.cpp/libelizainference build, extending shared upstream speech support where necessary. Research candidate models on Hugging Face and select by measured device speed and quality, not advertised desktop throughput.
+
+- **P-14 — A-05 ([#398](https://github.com/AlphaCompute/alphaphone/issues/398)):** Use periodic background work and immediate reconciliation at resume/start. Doze delays are honest; a permanent connection solely for mail is not required. Stable event identities prevent duplicate user-visible alerts.
+
+- **P-15 — A-01 ([#399](https://github.com/AlphaCompute/alphaphone/issues/399)):** Target Pixel 10a on Android 17. Ship standalone APK and Alpha AOSP image/launcher; Cuttlefish is the image integration test target. Other Pixels are not alternate promised hardware.
+
+- **P-16 — A-06 ([#400](https://github.com/AlphaCompute/alphaphone/issues/400)):** Alpha Compute controls signing and update authority; Shaw is the accountable release/support/rollback owner. Use managed or hardware-backed release signing, distinct from developer keys.
+
+- **P-17 — A-11 ([#401](https://github.com/AlphaCompute/alphaphone/issues/401)):** Android Clock owns alarms, conditional on a usable integration in the app and AOSP image. Alpha owns reminders. A dispatch receipt may state that Clock opened, not that an alarm was created.
+
+- **P-18 — A-12 ([#402](https://github.com/AlphaCompute/alphaphone/issues/402)):** Passkeys are outside MVP acceptance. Integrated passwords remain in scope. A later release may use the system credential provider after actual browser/image qualification; Alpha is not a new passkey provider now.
+
+- **P-19 — A-13 ([#403](https://github.com/AlphaCompute/alphaphone/issues/403)):** Third-party cookies are allowed in normal browsing. Persistent first-party sign-ins remain. Private tabs remain ephemeral and strict; browser storage stays separate from the privileged app WebView.
+
+- **P-20 — A-14 ([#404](https://github.com/AlphaCompute/alphaphone/issues/404)):** Every eligible login surface in Alpha should support password-manager fill. The isolated Browser is currently the website-login surface; future Alpha-owned login forms must also be covered. This is not blanket trust of arbitrary external browsers and does not expose passwords to the agent.
+
+- **P-21 — A-15 ([#405](https://github.com/AlphaCompute/alphaphone/issues/405)):** Include reading, read/unread, archive, drafts, reply/forward, reviewed send, opening/saving attachments and user-selected outbound attachments. Defer custom label management.
+
+- **P-22 — A-16 ([#406](https://github.com/AlphaCompute/alphaphone/issues/406)):** Only the local resident agent is supported. No hosted agent, dedicated-agent purchase, remote pairing or Cloud-agent fallback is a product option, now or as an advanced setting.
+
+- **P-23 — A-17 ([#407](https://github.com/AlphaCompute/alphaphone/issues/407)):** Use the system secure camera and its AOSP lock-screen gesture. Alpha does not implement its own secure camera; agent/library/account access stays behind unlock.
+
+- **P-24 — A-18 ([#408](https://github.com/AlphaCompute/alphaphone/issues/408)):** Provide full device photo/video library access to the local agent where Android permits and the user grants it, rather than limiting the product to owned captures or picker selections. Handle partial/denied access honestly. Full local access does not imply automatic upload of the entire library.
+
+- **P-25 — A-19 ([#409](https://github.com/AlphaCompute/alphaphone/issues/409)):** No app-data import/export, backup or device-transfer product workflow. Provide a confirmed Reset Alpha data option. Keep Android backup disabled. Ordinary Files opening/saving and Gmail attachments are separate daily-tool operations, not app-data migration.
+
+- **P-26 — A-20 ([#410](https://github.com/AlphaCompute/alphaphone/issues/410)):** Use subscription billing with reasonable rate limits rather than a user-facing credit top-up/per-token meter. Billing checks must not add a billing-service round trip to each assistant turn. Local speech and local tools do not depend on an online billing check.
+
+- **P-27 — A-22 ([#411](https://github.com/AlphaCompute/alphaphone/issues/411)):** Support portrait and landscape, adapting each surface by its purpose. Do not stretch every panel or change sensitive/native UI ownership. Preserve drafts, scroll, selection, task and capture state.
+
+- **P-28 — A-23 ([#412](https://github.com/AlphaCompute/alphaphone/issues/412)):** Maps belongs in Eliza Cloud as a reusable managed service for agents, with full supported search, place, route and navigation control from Alpha’s local agent. The regional development gateway is a prototype adapter, not the production coverage promise. No hosted agent is introduced.
+
+- **P-29 — A-24 ([#413](https://github.com/AlphaCompute/alphaphone/issues/413)):** On-device STT and TTS are mandatory for every production speech entrypoint, including signed-out and offline use. No Cloud speech fallback. A failed local engine must surface recovery and typing, not switch routes.
+
+- **P-30 — A-25 ([#414](https://github.com/AlphaCompute/alphaphone/issues/414)):** Use a short durable Undo window and one review step for events and reminders. Initial engineering value: ten seconds. Delay provider deletion until expiry when possible; never call a recreated invitation a lossless restore. Suspend pending-deletion reminder delivery immediately.
+
+- **P-31 — A-26 ([#415](https://github.com/AlphaCompute/alphaphone/issues/415)):** No Cloud-agent host is admitted. The resident agent uses the local native bridge. Cloud inference, subscription, Gmail and Maps are managed services, not agent hosts.
+
+- **P-32 — A-32 ([#416](https://github.com/AlphaCompute/alphaphone/issues/416)):** Use Android’s shade as the single notification/quick-settings surface if it integrates correctly and matches the product design. Keep workflow history in Alpha; remove the competing imitation shade. Use normal notifications/tiles before custom SystemUI changes.
+
+- **P-33 — A-33 ([#417](https://github.com/AlphaCompute/alphaphone/issues/417)):** A downward swipe on empty launcher Home opens Android’s shade. Preserve top-edge Android behavior and content/conversation scrolling. Standalone follows ordinary app behavior.
+
+- **P-34 — A-34 ([#418](https://github.com/AlphaCompute/alphaphone/issues/418)):** Free, cancelled and declined entries are not busy. Offer owner-selected free/busy-only calendars without exposing details. Tentative/unanswered blocking entries count conservatively; unavailable/stale reads are unknown, never free.
+
+- **P-35 — A-35 ([#419](https://github.com/AlphaCompute/alphaphone/issues/419)):** A reviewed Use in email suggestion may attach items selected in Files or Photos. Context selection is not itself permission to attach. Insert into a draft; final Send is separate.
+
+- **P-36 — A-03 ([#420](https://github.com/AlphaCompute/alphaphone/issues/420)):** Phone, Contacts and SMS are included only in the AOSP fork. Hide and capability-gate them in standalone APKs and other non-AOSP product installs. The launcher flavor alone is not proof of an Alpha image. Wallet is outside MVP.
+
+- **P-37 — A-07 ([#421](https://github.com/AlphaCompute/alphaphone/issues/421)):** Communication providers are Gmail and text messaging. Gmail is available in both product distributions; SMS/MMS is device/SIM based and only exposed on the Alpha AOSP image. Telegram, Discord and additional mail providers stay deferred. Device Calendar/Contacts sources remain separate native permissions.
+
+- **P-38 — A-08 ([#422](https://github.com/AlphaCompute/alphaphone/issues/422)):** Wallet is removed from the MVP plan. No custody, payment, pass-wallet, NFC payment integration or wallet-provider activation is required for MVP. Preserve unrelated user data; do not activate prototype transfers.
+
+- **P-39 — MVP-01 ([#423](https://github.com/AlphaCompute/alphaphone/issues/423)):** Transcribe records locally and on Stop inserts editable text; the user sends it. Voice assistant listens and submits automatically: after a short gap evaluate semantic turn completion with Clef; after a longer gap submit. Resumed speech cancels pending submit or the in-flight response/playback and continues the utterance/conversation. All STT/TTS remains local.
+
+- **P-40 — MVP-52 ([#424](https://github.com/AlphaCompute/alphaphone/issues/424)):** Always-on listening and supported hardware-key invocation are required in the AOSP MVP, not a later milestone. Use a narrowly privileged isolated listener only; the ordinary Alpha app remains nonprivileged. Listening is off until consent, local, visibly indicated and immediately stoppable.
+
+- **P-41 — OWNER-NOTICE ([#425](https://github.com/AlphaCompute/alphaphone/issues/425)):** Withdraw owner-specific approval notices on owner change. Repost quietly when the original owner returns only if the approval remains pending, valid and unexpired. Keep workflow state; revalidate the target and create a fresh tap binding. Apply the same privacy boundary to owner-specific result notices.
+
+## Resolved decision index
+
+| ID | Policy | Implementation | State |
+| --- | --- | --- | --- |
+| A-09 | P-10 | [#394](https://github.com/AlphaCompute/alphaphone/issues/394) | TODO |
+| A-10 | P-11 | [#395](https://github.com/AlphaCompute/alphaphone/issues/395) | TODO |
+| A-02 | P-12 | [#396](https://github.com/AlphaCompute/alphaphone/issues/396) | TODO |
+| A-04 | P-13 | [#397](https://github.com/AlphaCompute/alphaphone/issues/397) | TODO |
+| A-05 | P-14 | [#398](https://github.com/AlphaCompute/alphaphone/issues/398) | TODO |
+| A-01 | P-15 | [#399](https://github.com/AlphaCompute/alphaphone/issues/399) | TODO |
+| A-06 | P-16 | [#400](https://github.com/AlphaCompute/alphaphone/issues/400) | TODO |
+| A-11 | P-17 | [#401](https://github.com/AlphaCompute/alphaphone/issues/401) | TODO |
+| A-12 | P-18 | [#402](https://github.com/AlphaCompute/alphaphone/issues/402) | TODO |
+| A-13 | P-19 | [#403](https://github.com/AlphaCompute/alphaphone/issues/403) | TODO |
+| A-14 | P-20 | [#404](https://github.com/AlphaCompute/alphaphone/issues/404) | TODO |
+| A-15 | P-21 | [#405](https://github.com/AlphaCompute/alphaphone/issues/405) | TODO |
+| A-16 | P-22 | [#406](https://github.com/AlphaCompute/alphaphone/issues/406) | TODO |
+| A-17 | P-23 | [#407](https://github.com/AlphaCompute/alphaphone/issues/407) | TODO |
+| A-18 | P-24 | [#408](https://github.com/AlphaCompute/alphaphone/issues/408) | TODO |
+| A-19 | P-25 | [#409](https://github.com/AlphaCompute/alphaphone/issues/409) | TODO |
+| A-20 | P-26 | [#410](https://github.com/AlphaCompute/alphaphone/issues/410) | TODO |
+| A-22 | P-27 | [#411](https://github.com/AlphaCompute/alphaphone/issues/411) | TODO |
+| A-23 | P-28 | [#412](https://github.com/AlphaCompute/alphaphone/issues/412) | TODO |
+| A-24 | P-29 | [#413](https://github.com/AlphaCompute/alphaphone/issues/413) | TODO |
+| A-25 | P-30 | [#414](https://github.com/AlphaCompute/alphaphone/issues/414) | TODO |
+| A-26 | P-31 | [#415](https://github.com/AlphaCompute/alphaphone/issues/415) | TODO |
+| A-32 | P-32 | [#416](https://github.com/AlphaCompute/alphaphone/issues/416) | TODO |
+| A-33 | P-33 | [#417](https://github.com/AlphaCompute/alphaphone/issues/417) | TODO |
+| A-34 | P-34 | [#418](https://github.com/AlphaCompute/alphaphone/issues/418) | TODO |
+| A-35 | P-35 | [#419](https://github.com/AlphaCompute/alphaphone/issues/419) | TODO |
+| A-03 | P-36 | [#420](https://github.com/AlphaCompute/alphaphone/issues/420) | TODO |
+| A-07 | P-37 | [#421](https://github.com/AlphaCompute/alphaphone/issues/421) | TODO |
+| A-08 | P-38 | [#422](https://github.com/AlphaCompute/alphaphone/issues/422) | TODO |
+| MVP-01 | P-39 | [#423](https://github.com/AlphaCompute/alphaphone/issues/423) | TODO |
+| MVP-52 | P-40 | [#424](https://github.com/AlphaCompute/alphaphone/issues/424) | TODO |
+| OWNER-NOTICE | P-41 | [#425](https://github.com/AlphaCompute/alphaphone/issues/425) | TODO |
+| A-21 | P-09 | Closed: licensed; the owner holds the licence outside the repository (P-09); no licence document, name, number, scope or terms has been seen or recorded | Policy closed |
+
 ## Open decisions
 
-| ID | Decision needed | Proposed accountable role | Blocks / evidence required |
-| --- | --- | --- | --- |
-| A-01 | Exact phone SKU, Android version and distribution | Mobile/release | Full OS image; supported device tree, proprietary artifacts, clean build and hardware matrix |
-| A-02 | Approved managed Alpha endpoint and owner/agent pairing | Runtime/security | Connected chat; correct-account, wrong-origin, revoke/reconnect tests |
-| A-03 | MVP views and native default roles | Product/mobile | Prioritized real modules; permission and emergency/system access matrix |
-| A-04 | Voice provider, processing location, mic and retention policy | Voice/privacy | Real voice; interruption, denied permission and sensitive-data evidence |
-| A-05 | Background notification and reconnect policy | Mobile/runtime | Missed events exactly once across suspend/restart and account changes |
-| A-06 | Signing, update authority and support/rollback owner | Release/security | Signed distribution and OTA; protected keys, recovery drill and explicit operator |
-| A-07 | Initial account providers and read/write scopes (Gmail/Email in scope and Telegram/Discord deferred per P-02) | Integrations/product | Real overview/inbox/calendar data; official consent, revoke and stale-cache handling |
-| A-08 | Wallet deferral or separately funded scope | Product/security | No wallet work until custody/provider/hardware and transaction approval are specified |
-| A-09 | Powered-off scheduling: accept resident missed-occurrence/restart recovery in place of the DoD's hosted loops while the phone is off, or deliver hosted loops that run with the phone powered off | Product/runtime | DoD scheduled-loop criterion; either a written acceptance amendment with restart/missed-occurrence evidence, or two hosted loops completing while the phone is off and delivering once on reconnect |
-| A-10 | Voice latency method under manual send (follow-up to P-01): measure end-of-speech to first audible response excluding the user's review/send time, or revisit the six-second target | Product/voice | Simple-query latency acceptance; agreed measurement boundaries, percentile and sample count |
-
-All open entries require a named owner, chosen approach, evidence and date. Hardware names in upstream issues or the prototype are not a supported-device commitment. Refer to `implementation-plan.md` for dependencies and acceptance tests.
+The 32 reviewed product choices are resolved. Implementation details that still need
+measurement (speech candidate, Clef feasibility, subscription price/quotas, Cloud Maps
+provider coverage) are deliverables in their TODOs; they do not reopen the approved
+local-only agent/speech, subscription, AOSP scope or Wallet exclusion policies.
 
 ## Pending owner decisions
 
-Nothing in this section is decided. Each entry lists the choices engineering can see
-and the evidence behind them; the owner chooses, and the choice is then recorded as a
-new `P-` entry above with its date. Until then the current behavior stated in each entry
-stays in place, and no package may implement an option as if it had been chosen.
-Listing an option is not a recommendation to adopt it.
-
-### Existing open decisions, in review order
-
-| ID | Decision | Options | Evidence and current state |
-| --- | --- | --- | --- |
-| A-09 | Powered-off scheduling | (a) Amend the DoD so resident missed-occurrence and restart recovery replaces execution while the phone is off. (b) Deliver hosted loops that run while the phone is off and deliver exactly once on reconnect. | The resident agent cannot run on a powered-off phone. Hosted digest controls exist (`apps/app/src/runtime/hosted-digests.ts`, `HostedDeliveryWorker.java`), but no two hosted loops have completed while a phone was off. Current behavior: a scheduled time that passes while the host is not running is recorded once as missed and never run later (`test/digest-occurrence-delivery.test.mjs`, `test/browser/journey-d-digests.spec.ts`), and the flag-off Android panel says schedules cannot run while the phone is off. That is what option (a) would accept; it has not been accepted. See the Digests row in [current status](mvp-current-status.md). |
-| A-10 | Voice latency method under manual send (P-01) | (a) Measure end of speech to first audible response, excluding the user's review and send time. (b) Revisit the six-second target. | Voice never auto-sends, so the hands-free six-second round trip cannot be measured as written. No current latency result exists for any route, and the committed speech qualification is failed: on-device speech failed its functional acceptance on arm64-v8a and was not executed on x86_64 (`android/local-speech/qualified-runtime-manifest.json`). No latency sample of the Cloud route, which flag-off builds use, exists either. |
-| A-02 | Managed Alpha endpoint and owner/agent pairing | (a) Eliza Cloud is the managed endpoint for resident inference credits and optional Cloud agents. (b) A separately operated Alpha endpoint. (c) Remote pairing only, with no managed endpoint. | The Android Welcome dialog signs in to Eliza Cloud for credits. Live Cloud and Gmail authorization is open, and the Google code exchange returns 401 ([Cloud findings](cloud-production-validation.md)). |
-| A-04 | Voice provider, processing location, microphone and retention | (a) On-device Whisper and Kokoro only. (b) Add a paired-host speech route. (c) Add a Cloud speech route as an explicit, disclosed opt-in. Retention: (i) keep recordings only with their note, (ii) a bounded retention window. | Current behavior: flag-off builds use Eliza Cloud speech as the default for chat voice, Notes transcription and read-aloud, bound to the signed-in account (P-07; `apps/app/src/runtime/voice-selection.ts` returns the Cloud route whenever test mocks are off), and a signed-out user is told to sign in and nothing is captured. That is none of options (a) to (c) as written: Cloud is the default, not an opt-in. On-device speech is packaged but its functional acceptance failed; whether it is still required is A-24. A paired-host speech route exists in source. Voice-note recordings follow the 3-day notes Trash (P-06). |
-| A-05 | Background notification and reconnect policy | (a) Check for results only on resume and app start. (b) Periodic background work with Doze limits. (c) A persistent connection held by a foreground service. | New-mail notifications are not implemented and wait on this decision. Hosted results use background delivery work. No lock, battery or Doze result exists. |
-| A-01 | Phone SKU, Android version and distribution | (a) Pixel 10. (b) Pixel 11 Pro. (c) Another device with a full device tree and vendor blobs. | No Pixel 10 source lock was found in the pinned OS tree; a Pixel 11 Pro source lock is not real-device qualification ([PRD](prd.md)). The [Android/AOSP guide](android-and-aosp.md) names Cuttlefish as the image validation target and Pixel 10 as the hardware build target; the exact SKU, Android version and device, kernel and vendor inputs are not admitted. Blocks AP-14. |
-| A-06 | Signing, update authority and support/rollback owner | (a) The release owner holds the key in managed or hardware-backed signing. (b) A separate signing service operated for Alpha. | Release builds read `ELIZAOS_*` signing inputs and are unsigned without them. No controlled key, signed update or rollback drill exists. Blocks AP-14. |
-
-A-03 (MVP views and roles), A-07 (other providers and scopes) and A-08 (Wallet) stay open
-in the table above.
-
-### New decision items
-
-A-27 to A-31 are not used as decision IDs: they are step numbers of loop A in the
-[core loop audit](core-loop-audit.md), and the entries added on 2026-10-11 continue from A-32.
-
-| ID | Decision | Options | Evidence and current state |
-| --- | --- | --- | --- |
-| A-11 | Alarm ownership | (a) Keep handing alarms to Android Clock, which owns final creation; Alpha records only that the handoff opened. (b) Alpha owns alarms with exact-alarm scheduling, its own ringing screen and DND handling. (c) An Alpha clock in the AOSP image. | Current behavior is (a): `ClockHandoff.java` opens Android Clock with a reviewed request, and its receipt is a dispatch receipt, not confirmed alarm state. Reminders use Alpha's own notifications (`AlphaReminders.java`). |
-| A-12 | Passkeys | (a) Leave passkeys out of the MVP. (b) Allow WebAuthn in the Alpha browser through the system credential provider where WebView supports it. (c) Make the integrated password manager a passkey provider. | Passkeys are not implemented. P-05 covers passwords only. Option (c) would need new upstream native work. |
-| A-13 | Browser cookie policy | (a) Keep third-party cookies blocked in browser tabs. (b) Allow third-party cookies per site, chosen by the user. (c) Allow them in normal tabs and keep private tabs strict. | `AlphaBrowserPlugin.java` calls `setAcceptThirdPartyCookies(false)` for tabs. P-04 makes first-party sign-ins persistent; some embedded sign-in flows need third-party cookies. |
-| A-14 | Browsers the password manager trusts for website fills | (a) Only the Alpha browser. (b) Also recognized browsers identified by package and signing certificate. | Current behavior is (a). [Password provider setup](password-provider-setup.md) states that no third-party browser is trusted by default and that the Alpha browser is trusted only for its committed top-level HTTPS origin. |
-| A-15 | Gmail attachment and label scope | (a) Read, read state, archive and send without attachments. (b) Add opening and saving attachments and sending files the user chooses. (c) Also add label management. Each option needs a matching OAuth scope set. | Gmail is in scope (P-02), but provider scopes stay open under A-07. Current behavior against a synthetic provider corresponds to (b): Inbox opens a permitted attachment and saves it to Files, refuses a mismatched or oversized one (`inbox-save-attachment.spec.ts`, `inbox-hostile-attachment.spec.ts`), and a send can carry a file the user picks, which the review lists (`journey-f-reviewed-send.spec.ts`). No real mailbox or OAuth scope set has been used. Shared Files/Photos items are not attached automatically. Label management is not implemented. |
-| A-16 | Cloud agent onboarding on Android | (a) Keep Android resident-first, with Cloud agents only as an optional connection. (b) Let the Android Welcome dialog connect an existing Cloud agent or create one. (c) Offer Cloud agents only in the web build. | The production Android Welcome dialog offers only the on-device agent with Cloud credits. The flag-off web build cannot sign in to Eliza Cloud and says so; it offers remote pairing over HTTPS and offline use. Cloud agent selection and dedicated hosting are listed only by the development Cloud fixture in test-mocks builds (`dev-cloud-*.spec.ts`). The completion plan's journey A step "select an existing agent or provision a new one" is therefore unreachable in every flag-off build. The native transport question that follows from this decision is A-26. |
-| A-17 | Lock-screen (secure) camera | (a) No Alpha lock-screen camera; the system camera handles it. (b) An Alpha secure camera activity that shows over the lock screen, keeps captures to the session and never gives the agent access. (c) Integrate with the camera gesture in the AOSP image. | The prototype has a lock-screen camera (renderer `s.secure` state that blocks the agent), but Android has no secure-camera entry. |
-| A-18 | Photos gallery scope | (a) Only media that Alpha captured. (b) The full device gallery with media read permission. (c) Alpha media plus items the user picks with the system photo picker. | Current behavior is (a): Photos uses MediaStore rows owned by this package ([owned media](photos-owned-media.md)). |
-| A-19 | Backup and erase policy | Backup: (a) no backup, with explicit user export only; (b) an encrypted Alpha backup to the user's account; (c) device-to-device transfer for selected data only. Erase: (i) Android Clear storage or uninstall only; (ii) a confirmed in-app erase of all data, including Keystore keys and resident agent state. | The manifest sets `allowBackup="false"`, and `data_extraction_rules.xml` excludes every domain from cloud backup and device transfer, so data does not move to a new phone. Settings offers no erase control: the prototype "Wipe memory" row and its sheet are not rendered, and nothing in the app claims that data was erased. |
-| A-20 | Usage metering | (a) Meter inference against the user's Eliza Cloud credits. (b) A program-provisioned Cerebras key per pilot unit, with no user metering. (c) A key the user supplies. | The Android Welcome dialog checks the Cloud credit balance and offers a top-up. Pilot key provisioning is an external item in [current status](mvp-current-status.md#remaining-external-items). Metering semantics are not defined. |
-| A-22 | Rotation, if a landscape layout is rejected | (a) Ship the responsive landscape layout. (b) Lock both activities to portrait. (c) Allow rotation without a landscape layout. | `app.config.json` leaves orientation unspecified, so the app rotates. A landscape layout exists for Home, the composer and the docked conversation (`test/browser/home-landscape.spec.ts`), and `RotationInstrumentedTest` checks that Home and the composer draft survive rotation. Its one recorded pass is the round 7 emulator run on both flavors ([verification](verification.md#emulator-results-at-6dcdde34-2026-10-10-round-7): class E, developer-override APKs at source `6dcdde34` and pin `40dbe96bd1`); the round 8 run at the current pin did not include it, and no device has run it. A landscape sweep of every other retained view is on main since PR #388 merged (`test/browser/accessibility-sweep.spec.ts`: every control stays on screen; Chromium on a development server, not an emulator or device run). Current behavior is therefore closest to (a) where a landscape test exists and (c) for any view with no landscape test. Option (b) reduces accessibility for users who need landscape, and recent Android releases may ignore orientation locks on large screens. |
-| A-23 | Production Maps provider | (a) Operate the regional gateway described in [regional Maps setup](maps-regional-validation.md) (OpenStreetMap data, self-hosted tiles and routing) on an HTTPS endpoint Alpha owns. (b) License a commercial maps and routing provider. (c) Ship the MVP without in-app routes: hand the address to an installed maps app, or leave Maps unavailable. | No flag-off build has a Maps provider: `VITE_MAPS_BASE_URL` is unset and the emulator gateway exists only in test-mocks builds (`apps/app/src/maps/regional-provider.ts`). Current behavior: an event's address reaches Maps once and the user reads "Connect a Maps provider to search places and plan routes."; no route is produced (`test/browser/journey-core-loops.production.spec.ts`). Journey J04 ends there for every production user. The data licence and attribution duties for (a) are listed in the setup document and have had no legal review. |
-| A-24 | Whether on-device speech is still required | (a) Cloud speech is the only required route; on-device Whisper and Kokoro become optional and their failed acceptance stops gating release. (b) On-device speech stays required on Android alongside Cloud, so its functional acceptance must pass on both ABIs. (c) On-device speech is required only as the offline or signed-out fallback. | P-07 records Eliza Cloud as the current default and flag-off builds select it unconditionally (`apps/app/src/runtime/voice-selection.ts`); a signed-out user gets no voice. The [PRD](prd.md) still says on-device speech remains required on Android. `LocalSpeechInstrumentedTest` failed 1 of 2 on arm64-v8a and never ran on x86_64 (`android/local-speech/qualified-runtime-manifest.json`, `functionalAcceptance.passed: false`), and distribution builds require qualified speech assets today. A runtime candidate rebuilt at the earlier pin `352d7a08` passed the unchanged test 2 of 2 on an arm64 emulator ([verification](verification.md#emulator-results-at-73b973a5-2026-10-10), class E); it is recorded and not admitted, and no candidate has been run at the current pin. The hosted x86_64 job that round 8 added (`android-emulator.yml`, suite `local-speech`) has never been dispatched, and admission is a named reviewer's step that no job performs. Under (a) that build requirement and inventory item MVP-23 would need to be retired; under (b) or (c) MVP-23 stays a release gate. Related: A-04, A-10 and inventory item MVP-01. |
-| A-25 | Recoverability of deleted Calendar events and reminders | (a) Keep deletion irreversible behind one review step. (b) Add an Undo for a short period after deletion. (c) Add a Trash with a retention period, as Notes has (P-06). For reminders: (i) no review before a direct deletion, (ii) the same review step as events. | Current behavior is (a): Calendar asks once before deleting an event in the browser build and on Android (`test/browser/calendar-delete-review.spec.ts`; the Android review belongs to the pinned Calendar plugin), and nothing can be restored afterwards. No Trash, Undo or retention window exists for events or reminders. The PRD's AP-15 asks for resilience and Notes has a 3-day Trash. Options (b) and (c) for events held by Android CalendarProvider would need a stable per-event identity from the upstream Calendar plugin. First recorded in [core loop status](core-loop-status.md), loop B. |
-| A-26 | Cloud agent host admission on Android (follows A-16) | (a) Keep the native transport admitting only `https://api.eliza.app`, so no Android build can reach a dedicated Cloud agent host. (b) If A-16 chooses a Cloud agent on Android, admit the agent hosts Eliza Cloud assigns, identified by a rule the owner approves (a fixed domain suffix, or a host list returned by the signed-in account). | Current behavior is (a): with test mocks off, `ConnectionRoutes.java` rejects every request whose origin is not exactly `https://api.eliza.app` before headers or a body are prepared, and one DELETE (`/api/v1/api-keys/current`) is admitted for sign-out (`test/connection-routes.test.mjs`, JVM-tested; the instrumented class that exercises the installed transport, `ConnectionInstrumentedTest`, runs only in the hosted `recovery-ui` job, which has never been dispatched). A dedicated Cloud agent runtime is refused by the same rule. Nothing changes here unless A-16 is decided as (b). |
-| A-32 | Where Alpha's own notices and the quick-settings tiles live on the AOSP image | (a) In Alpha's panel on Home, opened from the "Notifications" handle, as now. (b) In Android's shade, through a SystemUI change in the image; Alpha's panel is removed. (c) Both. | Current behavior is (a): the top-edge swipe is Android's and Alpha's notifications open only from a visible handle on Home ([gesture zones](gesture-zones.md); `test/browser/notifications-handle.spec.ts`, Chromium). The panel lists Alpha's own notices and, on the launcher flavor, the tiles that open Android's settings pages. On an emulator `NotificationsInstrumentedTest` passed on both flavors opening the panel through the handle ([verification](verification.md#emulator-results-at-2961bd9e-2026-10-11-round-8-merged-with-round-9), class E, developer APKs). No AOSP image exists, so (b) and (c) have no implementation and no SystemUI change has been written. First recorded in [core loop status](core-loop-status.md#gesture-zones-and-the-notifications-panel-round-8). |
-| A-33 | Whether a downward swipe on Alpha Home opens Android's shade, as stock launchers do | (a) No Home swipe; Android's shade opens from the top edge only. (b) A downward swipe on Home expands Android's shade, which needs the `EXPAND_STATUS_BAR` permission on the launcher flavor. | Current behavior is (a): a downward swipe on Home away from the handle does nothing ([gesture zones](gesture-zones.md); `test/browser/notifications-handle.spec.ts`). Round 7 measured the earlier behavior this replaced, two panels told apart by a few pixels ([verification](verification.md#emulator-results-at-6dcdde34-2026-10-10-round-7), "Observed and left open"). The manifest does not request `EXPAND_STATUS_BAR`. First recorded in core loop status, same section as A-32. |
-| A-34 | Calendar availability defaults | Cancelled events and declined invitations: (a) not busy, as now; (b) busy. Calendars the owner holds at free/busy access only: (i) offered for an availability read, as now; (ii) not offered. | Both are engineering defaults on main since PR #388, not an owner choice ([calendar availability](calendar-availability.md)). `CalendarAvailabilityReader.java` reads only the calendars the owner picked and excludes free, cancelled and declined entries. `CalendarAvailabilityInstrumentedTest` (4 tests) passed on both flavors on an emulator in round 8 ([verification](verification.md#emulator-results-at-2961bd9e-2026-10-11-round-8-merged-with-round-9), class E, developer APKs, synthetic provider rows); no synced account, real invitation or device has been read. Inventory item MVP-12. |
-| A-35 | Whether a "Use in email" suggestion may carry selected Files or Photos as attachments | (a) Never: attachments are added only through the composer's own picker, as now. (b) A reviewed suggestion may attach items the owner selected in Files or Photos, listed in the same review. | Current behavior is (a): the review dialog states that selected Files and Photos are not attached, and the insert never prepares or sends anything (`test/browser/use-in-email.spec.ts`, `use-in-email.production.spec.ts`; synthetic mailbox and agent). Related to A-15 (Gmail attachment scope): option (b) would need the attachment scope of A-15 (b). Inventory item MVP-14. |
+No reviewed A-01–A-26/A-32–A-35/MVP-01/MVP-52/owner-notice item remains awaiting
+owner policy. A-21 was already closed under P-09; A-27–A-31 were never decision IDs.
+The [approved backlog](owner-approved-mvp-plan-2026-10-12.md) contains every checklist.
+Earlier questions and evidence remain in Git history and the historical details of
+each issue; no failed or unrun acceptance result becomes a pass through this decision.
 
 ## Closed owner decisions
 
-Decisions that left the pending list above, with the entry that closed them. A closed row
-records the owner's statement and the current behavior; it is not evidence beyond that.
-
-| ID | Decision | Outcome | Evidence and current behavior |
-| --- | --- | --- | --- |
-| A-21 | Denton typeface licence | Closed: licensed; the owner holds the licence outside the repository (P-09). It was not replaced. | `apps/app/public/denton-300.woff2` is a proprietary commercial face marked "All rights reserved". The owner states that Alpha Compute owns the font and that the licence is not in this repository. That statement is what `licenses/font-licenses.json` records (evidence `held-outside-repository`); no licence document, name, number, scope or terms has been seen or recorded. Current behavior: the face is listed in the notices as `LicenseRef-Commercial-Font`, flagged `proprietary-licence-held-outside-repo` and printed as a `LICENCE FLAG` line; the check `unresolved-font-licence` reports it resolved-by-owner-statement in the bundle audit and on each verify-apks row; it blocks nothing. A different font file with no record is still reported as unresolved, by notice and by file hash. Optional follow-up for the owner: a reference to the licence document for the record ([dependency audit](dependency-audit.md#denton-typeface-mvp-43)). |
+A-21 remains licensed by owner statement under P-09, with the licence held outside
+the repository. The 32 October 12 choices are policy-resolved above; their associated
+implementation issues remain open TODOs. Existing P-02–P-06/P-08/P-09 continue where
+not explicitly superseded (reset-only removes data import/export requirements;
+normal-browser third-party cookies are now allowed).

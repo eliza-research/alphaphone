@@ -1,75 +1,144 @@
-# Alpha Phone — implementation plan
+# Alpha Phone implementation plan
 
-October 1 architecture change: the user has selected an **Android-resident agent instead of Nitro/TEE hosting**. The [on-device agent plan](on-device-agent-plan.md) supersedes cloud-only and enclave-primary requirements below. The current implementation runs orchestration locally with an explicitly configured hosted Cerebras model; this is not offline LLM operation. Historical evidence is retained. A powered-off phone cannot execute local schedules; optional remote execution has separate acceptance requirements.
+Updated 2026-10-12 from the owner's answers to all 32 decision issues. This is the
+active implementation plan; conflicting older plans are historical. Approved policy
+is in [decisions](decisions.md#october-12-owner-decisions); every concrete TODO,
+owner area and dependency is in the [32-issue backlog](owner-approved-mvp-plan-2026-10-12.md).
+Approval is not implementation or acceptance. [Verification](verification.md) and
+[current status](mvp-current-status.md) retain source-bound evidence and failures.
 
-September 30 scope update: the [MVP report](mvp-scope-and-gap-report.md) and [completion plan](mvp-completion-plan.md) govern current priority. Earlier cloud-only/local-model statements do not waive the supplied DoD's on-device STT/TTS requirement; offline LLM and external-versus-TEE inference remain explicitly reconciled there.
+## Product contract
 
-This plan starts from the setup foundation in this repository. See [verification gates](verification.md) for required evidence; planned acceptance criteria below are not passing results.
+- Agent execution, history, orchestration, approvals and scheduling are local.
+  No hosted agents, dedicated-agent purchases, pairing or remote fallback.
+  Schedules only run while the phone is powered on; Doze is a separate constraint.
+- Eliza Cloud supplies authenticated text inference, subscription entitlements,
+  Gmail integration and shared Maps APIs. Cloud services do not host the agent.
+- STT/TTS always run on device through the Android bridge to Eliza's native
+  inference/llama.cpp build. Dictation inserts editable text on Stop; voice
+  assistant auto-submits at semantic/long-gap endpoints and supports barge-in.
+- Pixel 10a / Android 17 is the target. Standalone APK and Alpha AOSP image are
+  distinct delivery surfaces; both standalone/launcher packaging variants remain
+  qualified. A launcher APK installed elsewhere is not automatically Alpha AOSP.
+- Phone, Contacts and SMS/MMS appear only on the Alpha AOSP image. Gmail is in both
+  distributions. Wallet is outside MVP. Passkeys, Telegram and Discord are deferred.
+- Always-on listening and supported hardware invocation are **AOSP MVP gates**.
+  Listening remains opt-in, visible and locally processed, with reliable stop.
+- Full permitted photo-library access is available to the local agent. Cloud
+  context selection and reviewed writes/shares remain explicit boundaries.
+- No app-data import/export/backup/transfer feature; provide confirmed local reset.
+  Ordinary Files and mail attachment operations remain daily-tool capabilities.
 
-Per-flow requirements and device acceptance are tracked in
-[flow-implementation-plan.md](flow-implementation-plan.md),
-[mvp-current-status.md](mvp-current-status.md), and
-[verification.md](verification.md). Validate the custom image on Cuttlefish and build for Pixel 10. Physical flashing
-and hardware acceptance remain separate later gates; Pixel 11 is not an alternate target.
+## Dependency order and work packages
 
-Current delivery issues: [retired phone pairing](https://github.com/AlphaCompute/alphaphone/issues/376), [Pixel AOSP](https://github.com/AlphaCompute/alphaphone/issues/377), and [final QA](https://github.com/AlphaCompute/alphaphone/issues/378). The original remote deployment/pairing requirements are superseded. Production Android uses the resident agent; Cloud authentication for inference and connected services remains required.
+Every issue starts TODO, including work whose source already exists but needs
+reconciliation or acceptance. Shared changes are reviewed upstream, then consumed
+by a source pin; never modify the vendor checkout.
 
-## Dependency order
+| Stage / package | Work and issue IDs | Exit evidence |
+| --- | --- | --- |
+| 1 / AP1 resident identity and service boundary | #396 #406 #415: local-only agent, Cloud service identity, remove hosted onboarding/restore | Real owner-bound sign-in, revoke/restart, no hosted-agent routes, preserved history |
+| 1 / AP7 platform and release | #399 #400: Pixel 10a Android 17 input lock, Cuttlefish, release signing/recovery | Four APKs inspected; image boot separately; physical functions, OTA and recovery separately |
+| 2 / AP3 native speech | #397 #413: research, native ABI/JNI, streaming STT/TTS, offline assets | Both ABI executions and physical audio; candidate hashes, quality, speed, no speech egress |
+| 2 / AP2 voice interaction | #423 #395: separate buttons, Clef turn detection feasibility, long-gap submission, cancellation and true audio latency | Dictation never submits; voice conversation auto-submits and correctly interrupts; measured end-to-end p95 |
+| 2 / AP6 service billing and Maps | #410 #412: Cloud subscription/cached quotas and reusable Maps APIs/tools | No billing network hop per turn; real routes with coverage/freshness, local navigation control and rate-limit evidence |
+| 3 / AP5 AOSP daily tools | #420 #421: AOSP capability admission; Contacts, Phone, SMS/MMS; Gmail scopes | Standalone cannot invoke hidden AOSP tools; real provider/role readback and owned carrier endpoints |
+| 3 / AP6 Inbox and sharing | #405 #419: mailbox actions, attachment handling and reviewed cross-app drafts | Authorized real Gmail send/read/attachment, exact bytes, no automatic repeat after unknown outcome |
+| 3 / AP4 Calendar/reminders | #394 #401 #414 #418: powered-on schedules, Clock integration, Undo, availability | Provider readback, ring/snooze/stop, Doze/reboot/missed handling, no false free status |
+| 3 / AP5 Browser/passwords/media | #402 #403 #404 #407 #408: cookies, eligible autofill, system secure camera, full library | Origin/vault isolation, private-session erasure, locked camera, full/partial/revoked gallery tests |
+| 4 / AP2 platform presentation | #411 #416 #417: responsive matrix, one system shade and Home swipe | Reviewed actual image screenshots, gestures/insets/accessibility and rotation continuity |
+| 4 / AP3 AOSP listening | #424: isolated listener ADR, native local speech, consent, indicator, hardware invocation | Physical lock/AOD/background/call/thermal/battery/stop acceptance; required for AOSP MVP |
+| 4 / AP4 notices and reset | #398 #425 #409: background reconciliation, owner-return notices, reset-only | Account-switch/restart exactly-once display; reset cannot resurrect data through workers/callbacks |
+| 4 / scope cleanup | #422: remove Wallet from all current MVP obligations and capabilities | Wallet disabled in UI/deep links/agent/native in both distributions; no payment fixtures in production |
+| 5 / AP8 complete-product acceptance | Parent #381 app completion, #377 AOSP, #378 final QA | Continuous journeys, controlled release and target-user sign-off at exact source/image/config hashes |
 
-`foundation → E1/E2 → AP1 resident startup → AP2 conversation → AP3 lifecycle/voice → AP4 daily overview → AP5 native capabilities → AP6 connectors/workflows → AP7 OS qualification → AP8 pilot`
+Independent preparation can proceed concurrently; these rows are not instructions
+to defer AOSP listening or Cloud Maps out of MVP. Complete prerequisite contracts
+before integrating a consumer. Subscription pricing/quotas and final model/backend
+selection are explicit tasks, with performance evidence before admission.
 
-OS hardware/source discovery starts alongside E1 and can block AP7 independently. Wallet work is explicitly outside the first vertical slice.
+## Voice state and runtime design
 
-## Product work packages
+Use the [speech research/native plan](local-speech-research-2026-10-12.md).
+Keep capture, VAD, STT, semantic turn scoring and PCM playback native; expose text,
+state, timing and control events through the bridge. Reuse Eliza model lifecycle,
+C ABI and cancellation, extending shared support where the current build lacks it.
 
-| Package / owner role | Concrete implementation | Dependency | Tests and completion evidence |
-| --- | --- | --- | --- |
-| AP1 — Mobile/runtime | Start the Android-resident agent through the existing native bridge; authenticate billed Cloud inference using the existing secure credential adapter; preserve local history and explicit recovery | E1, E2; resident runtime and Cloud inference | No production phone pairing; expired/revoked Cloud credentials fail explicitly; restart retains correct local agent/history; no tokens in logcat |
-| AP2 — UI | Split current home into `home`, `assistant`, `apps`, `settings`; implement four conversation sizes, retained draft/scroll, focus return, keyboard insets, explicit loading/empty/error states using prototype assets/tokens | AP1; UI routes agreed | Portrait/landscape, large font, keyboard and Back/Home loops; separate alpha screenshots; no raw prototype state used as data |
-| AP3 — Runtime/voice | Wire speech and streamed replies; explicit stop/cancel, background reconnect, deduped missed messages and visible offline mode; request microphone only at use | AP1–2, E5 | Kill/reopen, radio toggle, sleep/wake, stream cancel, late callbacks and echo tests; type-only path always works |
-| AP4 — App data | Agenda/attention/brief cards with provider provenance, freshness and actionable routing; no data shown until connected; configure which proactive workflows are enabled | AP1, E4; provider choices | Empty/expired/revoked account and stale-cache states; opening card reaches correct source object; audit receipts |
-| AP5 — Native/mobile | Keep real installed-app handoff; add phone/messages/contacts/camera/files/maps through existing native plugins, one capability at a time. Build role setup and denied-permission paths; avoid changing the secure lock screen from the WebView | AP2, native role decision | Real calls/SMS test environment, denied permissions, unavailable handlers, returning HOME. Emergency/system routes remain usable |
-| AP6 — Integrations | Inbox/calendar and workflow list/run history through Google Workspace/personal-assistant/workflow APIs. Add per-account permissions, activity inspection, revoke and cancellation | AP1, E3–4 | Read/write authorization separation, recipient/account confirmation, idempotent result display and no automatic repeat after ambiguous writes |
-| AP7 — OS/release | Pin Pixel 10 SKU/Android release and its device/kernel/vendor inputs; validate the image on Cuttlefish; stage signed Alpha launcher via E6; select HOME/default roles through provisioning; configure Chromium signer and OTA compatibility | E6; approved hardware, signing and resident payload | Linux clean image build, Cuttlefish boot, real phone flash/hardware matrix, signed update and rollback. Stage the admitted resident runtime and local Whisper/Kokoro assets; qualify physical execution separately |
-| AP8 — Product/QA/support | Accessibility/latency/battery soak, privacy review, pilot instrumentation, support escalation and staged rollout/rollback runbook | AP1–7 | Target-user complete-task test; measured reliability and latency budgets; named support owner and rollback drill |
-| AP9 — Future decision | Wallet, secure side-key payment, enclave/attestation claims | Separate provider/custody/security decisions | Hardware-backed evidence and transaction-specific approval before any real transfer; never reuse mock success text |
+Dictation: idle → recording → finalizing → editable draft; Send stays explicit.
+Voice assistant: idle → listening → short-gap decision → submitted → speaking.
+A long gap submits; resumed speech from any pending/submitted/speaking state
+cancels that response generation and continues capture. Stop closes the mic and
+flushes playback. Restore only text/audio the user actually heard, preserve already
+completed action receipts and reject obsolete callbacks. Spoken requests do not
+bypass separate approval of sends, deletes, calls or other external effects.
 
-## First production vertical slice
+Measure last input speech sample→first audible response, including endpointing.
+No account/billing lookup may block local STT/TTS. Use cached signed subscription
+entitlements refreshed asynchronously; Cloud enforces bounded quotas in its existing
+request path, with explicit expired/revoked/limited states and idempotent usage.
+No per-turn balance preflight or automatic top-up. Never cache a perpetual entitlement
+or bypass server enforcement to meet latency.
 
-Use one real test owner and resident agent. Install the standalone APK, sign in for billed Cloud inference, send a typed request, receive a verified result, open an installed app, press HOME on launcher flavor, background while a result arrives, kill/reopen, and recover exactly one result under the same owner. Repeat with wrong account, revoked credentials and no network. Deliver screen recording plus device/agent trace IDs with secrets removed. Only then connect overview cards and additional app views.
+## Responsive-surface matrix
 
-## Prototype-to-code coverage
+Use available width **and height**, keyboard and system insets, large text and focus.
+Keep comfortable reading widths and touch targets; orientation alone is not a layout.
 
-Boot/lock → native launch theme and system lock handoff; home → current home expanded with real data; shade → system capability/notification integration; Phone/Messages/Contacts → native bridges first; Inbox/Calendar → account-scoped APIs; Browser → isolated browser surface; Camera/Photos/Files → Android permissions and content URIs; Maps → navigation provider/handoff; Notes → existing store; Wallet → deferred; Workflows → existing scheduler; Settings → real capability controls. Gesture and hardware-button paths need native verification independently of touch controls.
+| Surface | Adapt | Preserve / do not stretch |
+| --- | --- | --- |
+| Home/library | Reflow app grid and dock; relocate assistant controls when height is short | Icon/tap-target size, app order, scroll and gesture zones; no miniature portrait phone in landscape |
+| Chat/assistant | Widen within a readable maximum, use side-by-side context only when space allows; short screens use full conversation | Draft, caret, selection, scroll anchor, recording and response generation; no duplicate composer |
+| Inbox/Notes/Files/Contacts | Wide list-detail split, narrow single-pane stack; editor keeps readable line length | Unsaved edits and source selection; Contacts only on AOSP |
+| Calendar | More visible time/day columns if readable; keep agenda fallback at large text | Event identity, selected date, recurrence scope and time-zone; no shrunken seven-column layout on short screens |
+| Maps | Map fills available space; move route/turn panel to side in landscape | Route/GPS state, attribution, large guidance controls and local speech; no restarting navigation |
+| Photos/video | Fit or deliberately crop media with explicit controls; move thumbnails/tools | Aspect ratio, selection, zoom and playback; never distort images to fill layout |
+| Camera/scan | Rotate chrome and respect native sensor/capture geometry | Capture session, orientation metadata and preview aspect ratio; no stretched WebView camera simulation |
+| Reviews/settings | Center bounded-width dialogs or use full-height sheets on short screens; scroll content above fixed actions | Readable exact recipients/amounts/files, keyboard access and visible confirm/cancel; no hidden action row |
+| Voice/listening | Compact accessible native/renderer controls with continuous indicator | No stop/start, auto-submit or lost mic indicator due to rotation |
+| System shade/secure camera/Clock/dialer | Use native image/system layouts and verify return/insets | Never replace secure/native surfaces with responsive web replicas; emergency routing stays system-owned |
 
-## Blocking product decisions
+Qualify both APK variants and the image at small portrait/landscape, keyboard open,
+150%+ text, TalkBack, split/window resizing where available and process recreation.
+Visual checks include the system shade and always-on listening lock/AOD indicator.
 
-Assign a product owner and engineering owner to: hardware choice; billed inference configuration; required default roles; voice provider/privacy; MVP view priority; background notification policy; signed update authority; wallet deferral. Record a decision and evidence link before adding scope. Treat the upstream issue estimates as historical planning context only.
+## Shared versus product ownership
 
-## Shared Eliza platform work
+Eliza/fork owns inference C ABI, JNI engine bindings, model loaders, generic voice
+turn/cancellation support, native media/Calendar/notification adapters and reusable
+agent Maps tools. Eliza Cloud owns subscription/quotas and hosted Maps/Gmail services.
+Alpha owns renderer, policy/capability gates, source pins, image admission, UI design
+and per-product acceptance. Cloud Maps/inference are services used by the local agent,
+not permission to move orchestration off the phone.
 
-These changes belong in Eliza once and are consumed through reviewed source pins. Each product owns its adapter configuration and UI. Do not make senior-care consent rules the universal default for all agents.
+The always-on listener gets a separate narrowly privileged package/service and
+reviewed SELinux/IPC boundary; this is the only approved exception to nonprivileged
+Alpha packaging. It must honor mic privacy, locked-user data boundaries, consent,
+revoke, audio focus and crash recovery. Never inherit another product's identity.
 
-| Work package | Existing code to inspect/reuse | Add or change | Dependencies and exit evidence |
-| --- | --- | --- | --- |
-| E1 — Consumer build contract | `packages/app/app.config.ts`, `capacitor.config.ts`, `scripts/mobile/context.ts`, `scripts/mobile/targets/android.ts` | Export a supported app-host composition/bootstrap entrypoint that accepts a renderer and identity; separate default views from transport/native initialization; make release callbacks, authorities, URL schemes, icons, storage namespace and build output agree on the selected identity | Two clean external consumer builds with no relative monorepo path leaks; both APK modes install together across brands; scan APK for canonical-identity leaks |
-| E2 — Agent transport and ownership | `packages/ui/src/android-cloud/android-cloud-auth.ts`, `android-cloud-client.ts`, `packages/app/src/api/auth-pairing-routes.ts`, `packages/ui/src/state/agent-session-recovery.ts` | Extract narrow renderer-safe client interfaces for account sign-in, owner/agent pairing, streaming, reconnect and cancellation. Preserve server-derived ownership; bind credentials to account, agent and origin; expose explicit unavailable/expired/wrong-owner states | E1; real test account pairs on phone, restarts, restores missed messages once; stale response after account switch is discarded; malformed/wrong-origin callback cannot install credentials |
-| E3 — Observation/action boundary | `plugins/plugin-browser`, `plugins/plugin-native-browser-surface`, `packages/ui/src/platform/browser-surface.ts`, `packages/os/browser` | Typed versioned observations, stable target identities, sensitive-region exclusions, overlay geometry/insets, stale-target rejection and declared capabilities; isolate third-party origin from Capacitor privileges. Add product policy hooks before every actuator path, including raw keyboard, JS evaluation, submit and accessibility actions | Browser/security capability spike; malicious page cannot approve its own action; layout shift invalidates old target; child WebView has no privileged app bridge |
-| E4 — Task policy and durable results | `packages/core/src/services/approval.ts`, `plugins/plugin-workflow`, `plugins/plugin-personal-assistant/src/actions/lib/approval-execution.ts`, `packages/agent/src/services/message-interaction-session-store.ts` | Reuse existing stores and approval service, extend with exact proposal/context binding, cancellation epoch, duplicate event rejection, critical-state journal and unknown-outcome receipt. Disable broad/proactive packs per product where incompatible | E2–E3; process death before/during/after a write; no automatic effect replay; tenant/account/task isolation; receipt persistence failure differs from operation failure |
-| E5 — Voice and secrets | `plugins/plugin-native-talkmode`, `packages/ui/src/voice`, `packages/agent/src/services/audio-redaction-service.ts`, `plugins/plugin-native-secure-store`, `packages/app/src/services/steward-credentials.ts` | Explicit mic lifecycle, permission-denied fallback, self-playback rejection, transcription confidence, configurable slow-speaker timeout, secret redaction before remote transport, credential-provider references instead of raw values | Chosen ASR/TTS + product mic policy; interruption/cancel tests with real audio; no passwords/OTP/token values in transcripts, screenshots, model input or logs; voice-off remains off across suspend |
-| E6 — OS product and release contract | `packages/os/scripts/distro-android/stage-launcher-overlay.ts` (added by this setup), `build-aosp.ts`, `brand-config.ts`, `android/hardware-targets.json` | Consume verified launcher overlay in product-specific build orchestration, separate cloud-only from full local-agent payload validators, declare browser signer allowlist and default-role provisioning, add release descriptor linking app SHA/cert/version to OS image SHA | E1 plus selected hardware; Linux AOSP build, Cuttlefish boot, then real-device role/hardware/OTA/rollback evidence. Retain stock recovery access; do not remove other HOME apps implicitly |
+## Verification and completion
 
-### Native launcher API consolidation
+Run `npm run verify`, `npm run android:build:local` and `npm run android:build` as
+appropriate to the documented input chain; inspect standalone/launcher debug and
+release outputs and production capability exclusions. Missing qualified native
+inputs are recorded as blockers, never replaced with relaxed developer artifacts
+and reported as a release pass.
 
-`DeviceApps` keeps the product's bridge identity and build information. Installed-app discovery and launch-intent resolution delegate to upstream `SystemLauncherApps` in `plugins/plugin-native-system`; the host owns the actual Activity handoff. Package visibility remains scoped to launchable activities, without `QUERY_ALL_PACKAGES`. The shared helper filters self, disabled and unexported entries, sorts labels and deduplicates packages. Icons, package-change notifications and work-profile behavior remain separate feature work, not claims made by the current enumeration API.
+Then qualify native emulator/HOME behavior, Cuttlefish full-image boot, real Cloud
+services, Pixel 10a audio/telephony/media/hardware, signing/OTA/recovery and user
+acceptance independently. Preserve failed/unrun evidence. Neither this plan nor
+issue conversion closes a feature. No new account, subscription purchase, real
+message/call/transfer, device flash or production deployment is performed by this
+planning change.
 
-### Shared contract shape
+### Validation of this policy reconciliation
 
-- `RuntimeSession`: owner identity from authentication, agent ID, opaque session ID, connection epoch and capability set. Store tokens only through the platform credential provider.
-- `TaskSession`: owner/account/task identity, lifecycle state, active origin, selected object, observation version, pending proposal, checkpoint and external-operation status.
-- `ActionProposal`: unique ID, exact operation and target, opaque value references, preconditions, observation version, explanation, expiry and required policy. No generic “yes to everything.”
-- `OperationResult`: succeeded, denied, cancelled, retryable-failure, unsupported, or unknown; factual evidence reference; no synthetic success.
-- `Observation`: validated origin/page, current targets/bounds/focus/sensitivity, capture timestamp/version and reliability. Redact before the model boundary.
-- `Receipt`: operation/task identity, observed provider status, exact-decimal/minor-unit amount if applicable, source/evidence, timestamps and separate storage outcome.
+On 2026-10-12, `npm run verify` passed (717 tests: 713 passed, four TODO,
+zero failed; production bundle audit passed). The focused documentation checks
+passed 20/20 and `git diff --check` passed. Existing license flags remain reported
+by verification; this policy change does not resolve artifact licensing.
 
-Keep these contracts host-independent in the existing core/shared contracts layer. Native adapters provide capabilities; product policy reduces them. Do not add a second scheduler, identity provider or general-purpose credential vault.
+Both `npm run android:build:local` and `npm run android:build` were attempted and
+stopped at preflight because the qualified
+`android/local-speech/libs/sherpa-onnx-1.13.8-no-espeak.aar` is missing. Neither
+APK variant was built or qualified in this review. No new emulator, full-image,
+physical-device or real-service acceptance is claimed.

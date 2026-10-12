@@ -85,32 +85,25 @@ test('every capability row labels its evidence class', () => {
 });
 
 
-test('decisions.md lists the pending owner decisions with options and records none of them as decided', () => {
+test('October 12 owner choices map all 32 reviewed issues to open implementation TODOs', () => {
   const decisions = read('docs/decisions.md');
   const pending = section(decisions, 'Pending owner decisions');
-  assert.match(pending, /Nothing in this section is decided\./);
-  const rows = pending.split('\n').filter(line => /^\| A-\d\d \|/.test(line)).map(cells);
-  const ids = rows.map(row => row[0]);
-  // A-21 (Denton typeface licence) was closed by the owner on 2026-10-10 (P-09) and has its own row below.
-  const CLOSED = ['A-21'];
-  for (const id of ['A-09', 'A-10', 'A-02', 'A-04', 'A-05', 'A-01', 'A-06', ...Array.from({ length: 16 }, (_, index) => `A-${index + 11}`)].filter(id => !CLOSED.includes(id))) assert.ok(ids.includes(id), `${id} missing from pending owner decisions`);
-  const closed = section(decisions, 'Closed owner decisions').split('\n').filter(line => /^\| A-\d\d \|/.test(line)).map(cells);
-  assert.deepEqual(closed.map(row => row[0]), CLOSED, 'closed owner decisions');
-  for (const id of CLOSED) assert.ok(!ids.includes(id), `${id} is closed and still listed as pending`);
-  // A closed row names the entry that closed it and does not overstate it: the Denton licence document was not seen.
-  assert.match(closed[0].join(' '), /Closed: licensed; the owner holds the licence outside the repository \(P-09\)/);
-  assert.match(closed[0].join(' '), /no licence document, name, number, scope or terms has been seen or recorded/);
-  assert.match(section(decisions, 'October 10 owner product decision'), /\*\*P-09\*\*[\s\S]*closes A-21 as licensed/);
-  assert.equal(new Set(ids).size, ids.length, 'duplicate pending decision');
-  for (const row of rows) {
-    assert.equal(row.length, 4, `${row[0]}: expected ID, decision, options and evidence`);
-    assert.match(row[2], /\(a\)[\s\S]*\(b\)/, `${row[0]}: needs at least two options`);
-    assert.ok(row[3].length > 40, `${row[0]}: evidence missing`);
-    assert.doesNotMatch(row.join(' '), /\b(?:decided|chosen|approved) by the (?:product )?owner\b|\bowner (?:decided|chose|approved)\b/i, `${row[0]}: records an owner choice`);
+  assert.match(pending, /No reviewed/);
+  assert.equal(pending.split('\n').filter(line => /^\| A-\d\d \|/.test(line)).length, 0);
+  const resolved = table(decisions, 'Resolved decision index');
+  const active = resolved.filter(row => row.State === 'TODO');
+  assert.equal(active.length, 32);
+  const numbers = active.map(row => Number(row.Implementation.match(/#(\d+)/)[1]));
+  assert.deepEqual(numbers, Array.from({ length: 32 }, (_, i) => 394 + i));
+  assert.equal(new Set(active.map(row => row.ID)).size, 32);
+  for (const row of active) {
+    assert.ok(section(decisions, 'October 12 owner decisions').includes(`**${row.Policy} — ${row.ID}`));
+    assert.ok(read('docs/owner-approved-mvp-plan-2026-10-12.md').includes(`## ${row.Implementation.match(/#\d+/)[0]} — ${row.ID}:`));
   }
-  // A pending item must not also appear as an October 7 owner decision.
-  const owner = section(decisions, 'October 7 owner product decisions');
-  for (const id of ids.filter(id => Number(id.slice(2)) > 10)) assert.ok(!owner.includes(id), `${id} appears among owner decisions`);
+  const licence = resolved.find(row => row.ID === 'A-21');
+  assert.equal(licence.State, 'Policy closed');
+  assert.match(licence.Implementation, /no licence document, name, number, scope or terms has been seen or recorded/);
+  assert.match(section(decisions, 'October 10 owner product decision'), /\*\*P-09\*\*[\s\S]*closes A-21 as licensed/);
 });
 
 // The contradictions the October 10 refresh found had three shapes: a ledger naming a retired

@@ -1,177 +1,90 @@
 # Alpha Phone MVP completion plan
 
-This is a plan: the order of work, the journeys that define acceptance and the proposed methods. It is not a status record. What is implemented and what evidence exists is in [current status](mvp-current-status.md); the open work, item by item, is the [remaining-work inventory](mvp-remaining-work-2026-10-09.md); what only the owner can do is in [owner actions](mvp-owner-actions.md).
+Updated 2026-10-12. The [implementation plan](implementation-plan.md) is the active
+work order and the [32 approved TODOs](owner-approved-mvp-plan-2026-10-12.md) are the
+checklists. The [earlier plan](https://github.com/AlphaCompute/alphaphone/blob/f3ccefd382bd40b29b06117c97da366c1e9b75a7/docs/mvp-completion-plan.md)
+preserves historical evidence and superseded requirements. None of the journeys
+below is accepted merely because its policy is now approved.
 
-## Reconciliation with main — 2026-10-10
+## Production surfaces
 
-Every statement below was compared on 2026-10-10 with main `dfacccb3` (upstream pin `40dbe96bd1` in `upstream.lock.json`): product source, the tests in `test/`, and the evidence recorded in [current status](mvp-current-status.md#current-qualification-evidence), [core loop status](core-loop-status.md) and [core loop audit](core-loop-audit.md). Statements that source has overtaken are corrected in place. Each journey and each implementation step now carries a dated "State" note; those notes are the only status in this document, and they describe software and class of evidence, never acceptance.
+Qualify standalone and launcher debug/release APKs with mocks off. Qualify the
+Alpha AOSP image separately; only it exposes Phone, Contacts, SMS and the privileged
+always-on listener. The launcher flavor alone cannot enable image-only features.
+Production has no hosted-agent connection, Cloud speech, wallet or app-data export.
+Developer fixtures do not grant production capabilities.
 
-Evidence that exists for this plan at the current source is source/test only (class S in [current status](mvp-current-status.md#qualification)): `npm run verify` and Playwright runs against the development profile, synthetic providers and a stubbed Android bridge. The one result of another class is a hosted build of non-distributable developer APKs at `dfacccb3` (class B; see Production surfaces below and the [browser review](mvp-browser-review.md#evidence-at-the-current-source)). No distributable build, emulator run, hosted run of the native `resident-android.yml` jobs, AOSP image boot, real account or provider, or physical device result exists at the current source. Nothing in this plan is accepted.
+## A. Boot, authenticate and keep a conversation
 
-Wording that depends on a pending owner decision is left pending and marked where it occurs. This document decides none of them:
+Boot into the real HOME or standalone app, start the resident agent and authenticate
+Eliza Cloud service/subscription access without provisioning an agent. Send a real
+request and verify local process execution, history and streamed answer. Repeat
+network loss, background/restart, token expiry/revoke and account switch. Local
+speech/tools work signed out; Cloud inference availability is explicit. No balance
+or billing-service network preflight is added to each turn.
 
-| Pending | What in this plan waits on it |
-| --- | --- |
-| Voice send and route policy (inventory item MVP-01), with A-04, A-10 and A-24 | Every sentence about voice send, the voice route, whether on-device speech is required, and the latency method: the owner-decision summary below, step 6, journeys A and B, and the performance protocol. P-01 says voice is reviewed and sent by the user; P-07 says Eliza Cloud is the default voice route; the [PRD](prd.md) row AP-06 says local first with Cloud as a disclosed opt-in; and the code sends each new spoken turn of an ongoing Cloud conversation (`test/browser/chat-voice-mode.spec.ts`). These disagree, and no test result resolves a policy disagreement. |
-| A-09 powered-off scheduling | Step 9 and journey D as written (two hosted loops with the phone powered off). |
-| A-02, A-16, A-26, A-20 managed endpoint, Cloud agents on Android, admitted hosts, metering | Step 4, step 14 and journey A step 2. |
-| A-11 alarm ownership | Journey C. |
-| A-12, A-13, A-14 passkeys, third-party cookies, trusted browsers | Step 11 and journey E. |
-| A-07, A-15 Gmail scopes, attachments and labels | Step 12 and journey F. |
-| A-23 production Maps provider | Not a journey of this plan; it blocks J04 of the [flow audit](flow-audit-and-prd.md). |
-| A-25 recoverability of deleted events and reminders | Journey B. |
-| A-01, A-06 phone SKU and signing authority | Steps 2, 14 and 15. |
+## B. Local speech, Notes, Calendar and reminders
 
-## Production surfaces (plan of October 4)
+Use Transcribe: Stop inserts editable text and never submits. Use Voice assistant:
+short-gap semantic/Clef decision and long-gap automatic submit; continuing speech
+cancels pending/in-flight response and playback without duplicate turns. Save and
+read a voice note, create/read/update Calendar and a reminder through reviewed
+operations, test ten-second deletion Undo and Notes three-day Trash. Measure last
+speech sample to first audible response including endpoint delay. Verify local
+speech offline on both ABIs and physical microphone/speaker acceptance separately.
 
-Mock mode, prototype fixtures, the development profile, device controls, simulated apps, the local development agent option and the debug-only native hooks are flag-only: they exist only in builds with `ELIZA_DEV_ALLOW_TEST_MOCKS=1` (`npm run dev`, Playwright, `ELIZA_DEV_ALLOW_TEST_MOCKS=1 npm run build`, `npm run android:build -- --test-mocks`). The production web build is built with the switch off; the production bundle audit (`scripts/audit-production-bundle.mjs`) and the production browser lane (`npm run test:browser:production`) check it. The four distribution APKs are designed to exclude the same surfaces and `scripts/verify-apks.mjs` checks their bytes, and the hosted Android foundation run `38109307871` at main `dfacccb3` assembled four flag-off APKs with `--allow-unpackaged-runtime --skip-instrumentation` and passed its test-mock-free manifest check (step conclusions read through the GitHub API on 2026-10-10; logs and artifacts not inspected). Those APKs use an unqualified speech runtime and no resident runtime, so they are build evidence only and are not distributable. No distributable build exists, and nothing has been installed or run. The [production readiness record](https://github.com/AlphaCompute/alphaphone/blob/51c8157533353a805afd2811f4e3f41b66b7b9fa/docs/production-readiness-2026-10-04.md) is archived: it describes an older source and pin and qualifies nothing at the current head.
+## C. Alarms
 
-## Owner decisions applied to this plan
+Review an alarm handoff and open Android Clock on the actual AOSP image. Confirm
+final alarm state in Clock; observe ring, snooze/dismiss, DND, reboot and time-zone
+behavior. Alpha reports dispatch only unless creation is verified. Clock usability
+and return-to-Alpha are part of acceptance, not assumed from an intent test.
 
-The product owner's decisions are recorded in [decisions](decisions.md#october-7-owner-product-decisions) (P-01 to P-08, 2026-10-07) and [P-09](decisions.md#october-10-owner-product-decision) (2026-10-10). Applied below: Gmail/Email is in MVP scope and Telegram/Discord are deferred (P-02); cross-app notification mirroring stays opt-in, off by default and is not an MVP gate (P-03); browser tabs keep sign-ins with an explicit ephemeral private tab (P-04); an integrated password manager is an elizaOS upstream component with Proton Pass optional (P-05); deleted notes (text, checklist, link and voice, including the voice recording) go to a Trash that empties after 3 days (P-06); OCR is English only for now (P-08); open-source licences are included and flagged and never block a build or a release (P-09).
+## D. Two resident loops with the phone powered on
 
-Voice is pending. P-01 records that voice does not auto-send (record, transcribe, review, then the user sends). P-07 records Eliza Cloud as the current default route for chat voice, Notes transcription and read-aloud; flag-off builds select it unconditionally (`apps/app/src/runtime/voice-selection.ts`), a signed-out user gets no voice, and an ongoing Cloud conversation sends each new spoken turn. An earlier revision of this plan summarized the route as "local preferred, cloud only by disclosed opt-in", which is the PRD's AP-06 wording and not what P-07 or the code says. Which of these is the policy is inventory item MVP-01; until it is decided, read every voice sentence in this plan as pending. Powered-off scheduling (A-09) and the manual-send latency method (A-10) also remain open, with the other [pending owner decisions](decisions.md#pending-owner-decisions).
+Run morning/evening loops from actual permitted sources while the phone is on.
+Verify screen-off/Doze behavior, worker interruption and one user-visible result per
+occurrence. When the phone was off at a scheduled time, record one missed occurrence
+on restart, preserve the prior result and resume future times without overdue writes.
+A deliberate Run now is a new authorized run. No hosted powered-off service is needed.
 
-## Resident agent and browser development
+## E. Browser and password fill
 
-The [architecture](architecture.md) defines product and shared platform ownership.
+Exercise persistent sign-in and allowed third-party cookies in normal isolated tabs,
+ephemeral private tabs and clearing. Save/unlock/fill through the integrated vault
+or optional provider, on each eligible Alpha login surface. Verify wrong-origin,
+redirect/frame, lock/cancel and secret exclusion. Passkeys are not an MVP gate.
 
-Use the [current requirement/evidence matrix](mvp-current-status.md) and [browser implementation review](mvp-browser-review.md) for the active plan. The primary agent is Android-resident, with the same real agent hosted locally for browser development. Nitro admission is not a prerequisite. Production Android offers the resident agent with Eliza Cloud sign-in for inference credits, or local apps without AI; it refuses remote pairing and offers no Cloud agent (A-16 and A-26 are pending). Remote pairing over HTTPS remains in the production web build, and Cloud agent selection exists only in the development Cloud fixture of test-mocks builds. Local scheduling requires honest missed-occurrence/restart recovery, not a claim that a powered-off phone runs code. Hosted Cerebras text inference (Qwen) remains distinct from local orchestration and speech.
+## F. Gmail, AOSP text messaging and notices
 
-Qualification covers notification receipt recovery, speech ownership, local digest/reconnect behavior, redaction and current-source browser/design coverage. APK builds, native execution, physical-device and real-provider acceptance remain separate gates; use source-bound terminal results rather than historical test totals.
+Use real Gmail incremental scopes, read/reply/draft/archive and authorized send with
+exact reviewed attachments. Selected Files/Photos may become attachments only through
+explicit review, then final Send. On AOSP, test Contacts and owned SMS/MMS/call
+endpoints, SIM/role/permission denial and uncertain-send recovery; standalone has no
+entry or agent bypass. System shade notices dedupe on reconciliation, disappear on
+owner change, and valid pending approvals return quietly when their owner returns.
 
-## Applicability of the implementation requirements
+## G. Full library and Cloud Maps
 
-The [accepted Android-resident architecture](on-device-agent-plan.md) supersedes the earlier requirement for Nitro as the primary agent host. Apply steps 3–10 below to the resident runtime and its native authenticated transport; preserve optional Cloud/remote adapters and qualify them separately when used. Step 14's signing and identity requirements still apply to shipped app/runtime artifacts, while Nitro attestation and KMS apply only to an optional enclave deployment. Do not revive enclave hosting as a prerequisite for resident chat.
+Grant full media scope and let the local agent search/inspect the permitted library;
+exercise partial access, downgrade, large catalogs and external changes. Follow an
+actual Calendar address into Eliza Cloud Maps through agent search/place/route tools,
+then start/stop/reroute native navigation with local TTS. Show coverage/freshness and
+outage limits. Physical GPS/navigation is separate from simulated location tests.
 
-The powered-off hosted-loop journey cannot be satisfied by a powered-off resident process. Local durable scheduling with explicit missed-occurrence handling is implemented work, but it is not equivalent evidence; retain the unresolved scope amendment described in the on-device plan (A-09). Both APK distributions, current native tools, signed-image/OTA and physical pilot acceptance remain required. Whether on-device STT/TTS is still required is pending (A-24, with MVP-01): the PRD says it remains required on Android, flag-off builds use Cloud speech, the on-device runtime failed its functional acceptance on arm64-v8a and never ran on x86_64 (`android/local-speech/qualified-runtime-manifest.json`), and a distribution build still requires qualified speech assets. Historical qualification is retained in Git and source-bound test artifacts; it does not establish current completion.
+## H. AOSP listening, presentation and reset
 
-## Scope freeze and deferred code
+Opt in to always-on local listening; verify hardware invocation, visible lock/AOD
+indicator, pause/revoke/mic toggle, reboot-before-unlock, call/audio focus and reliable
+barge-in/stop. Record battery/thermal behavior. Review system shade and every responsive
+surface on the image. Reset Alpha private data with confirmation, including workers,
+listener, credentials and caches; verify no late callback restores erased state.
+No backup/import/export feature or Wallet is part of this journey.
 
-The initial MVP feature profile is implemented in `apps/app/src/prototype/mvp-features.ts`: the Phone, SMS (`messages`), Contacts and Wallet entries are commented out with sources and restoration gates, `DEFERRED_MVP_VIEWS` lists the four views, and `deferredMvpPrompt` recognizes requests to open them or to call, text or pay. The development profile re-enables the four views as fixtures on the development server only. Production/offline and mock render checks cover hidden entry points, direct navigation, `keepStack`, presets and saved-state recovery. Contacts adapter installation and agent route execution are guarded. Original design templates/styles and user data are retained. This is class S evidence; the native role, permission and return-to-HOME behavior of the deferred views has no run.
+## Release acceptance
 
-Complete the remaining profile coverage in remote agent capability discovery and native acceptance. The same profile must govern route registration, home icons, voice/text navigation, suggestions, deep links and (in test-mocks builds only) mock mode. Retain their implementations and the original design reference; do not delete user data or Android's stock dialer/emergency functionality. Disable adapter installation for deferred functions. A hidden icon alone is insufficient.
-
-Telegram and Discord are deferred (P-02). The renderer profile has no Telegram or Discord view to disable; if a connector for either is added, it must come under the same profile. Email is in MVP scope. Mock mode is flag-only (`ELIZA_DEV_ALLOW_TEST_MOCKS=1`): the local-development connection and mock mode remain available for diagnostics in development and test-mocks builds, isolated from effects, and are absent from production builds and all distribution APKs. Advanced photo editing, global/offline navigation, autonomous booking/purchasing and a general workflow IDE are recommended later work; record a disposition before removing their controls. Basic selected files/capture can remain as supporting functions without making an entire media suite the critical path.
-
-Use comments such as `MVP-DEFERRED: <feature>; reason/source; restore only after <acceptance gate>` next to commented registration/import entries. Also document native permissions, background services, scheduled jobs and remote capabilities that must be inactive. Existing saved references to disabled routes should return Home with a clear message. Back, process restore, `keepStack`, direct URLs and agent proposals must not bypass the profile. Do not comment out tests that prove required MVP behavior merely to make the suite green.
-
-## Implementation order and ownership
-
-| Step | Concrete work and owner | Prerequisite | Exit evidence |
-| --- | --- | --- | --- |
-| 1. MVP source reconciliation | Product/engineering: approve feature profile, speech/local-inference distinction (messaging decided October 7), Pixel substitution record and P0/P1 definitions | Supplied docs plus user's answers | Scope table linked to every retained/deferred entry; suggestions and unresolved decisions remain identifiable |
-| 2. Stable target and native test environment | Android/release: identify actual Pixel SKU/image and restore emulator health; retain all failed traces; establish boot/HOME/basic UI smoke before app campaigns | Current APKs and device access | No System UI error blocking tests; actual app ready, permission/role baseline restored after tests; physical device identified separately |
-| 3. Generic session and capability contract | elizaOS agent/client/Cloud owners: publish auth, conversations, actions, workflows, voice and result capabilities; remove tier/URL heuristics through validated deployment config | Step1 | Clean external client uses same typed protocol; wrong origin/owner/audience/capability refused; no embedded provider keys |
-| 4. Real Cloud and remote onboarding | Cloud/mobile: fix expired-session lifecycle and deployed Gmail exchange diagnosis; discover or create owner agent with durable provisioning receipt; expose enrolled-device actions/workflows in Cloud | Step3 and normal service access | One real account through both Cloud and private remote choices; same-owner restart and revocation tests; no duplicate agent after lost provisioning response |
-| 5. Reliable conversation and context | Agent/mobile: durable message admission, stream/cancel, history cursor, selected-view context and reconnect; enabled feature policy in tool discovery | Steps3–4 | Full phone journey with background/network/process interruptions and zero duplicate effects or cross-owner history |
-| 6. Speech engine and latency | Native/runtime: qualify the speech route the voice policy requires (on-device STT/TTS as this plan was written; pending A-24), route capabilities, recording/playback lifecycle, transcript review | Step2; change this requirement only through an explicit DoD amendment | Physical microphone and playback, permission/offline/interruption cases, measured simple-query latency under the method agreed in A-10, and documented engine/model provenance. The send rule, the route (on-device, Cloud or both) and browser-build recognition are pending MVP-01, A-04 and A-24, so this exit is not final |
-| 7. Generic Notes and native CRUD | Agent/native/mobile: stable records/revisions, secure durable draft policy, text/audio association, read/edit/delete actions and exact recovery | Steps3,5 | UI and voice/text create/read/edit/delete, Trash restore and automatic 3-day emptying for text, checklist, link and voice notes (a voice note's recording is trashed, restored and erased with its entry), transcription/save/read-aloud, restart and stale-edit tests on native storage |
-| 8. Calendar, reminders and Clock | Agent/native/mobile: complete direct CRUD or clearly approved handoff, recurring/all-day/account selection, task state and native alarm integration | Steps3,5,7 | Native provider readback; actual reminder delivery; real alarm set/ring/snooze/dismiss; denied access and reboot/time-zone cases |
-| 9. Hosted schedules and result outbox | elizaOS core/workflow/personal-assistant: reusable morning/evening templates, occurrence admission, lease/restart handling, durable outputs and delivery cursors | Steps3–5; server-readable data grants | Two distinct actual loops complete while phone is powered off, survive host interruption, deliver each result once after reconnect |
-| 10. Notification and approval delivery | Native/agent/mobile: own channels, result inbox, scoped tap actions, cancellation/expiry; cross-app collector stays opt-in, off by default and outside MVP acceptance | Steps8–9 | Real permission/channel/locked/background/restart tests; missed push recovered from history; notification clear does not erase task outcome |
-| 11. Browser and password manager | Browser/native/release with elizaOS maintainers: supported Chromium/WebView distribution, isolated surface, persistent sign-in profile plus ephemeral private tab, explicit page assistance, integrated upstream password manager with optional Proton setup/autofill; passkey capability if required | Steps2–5 | Test-owned account login/save/fill/lock/cancel/origin checks on release-signed image; real passkey gate separately recorded |
-| 12. Email | Cloud/mobile: owner scopes, full threads, reviewed provider mutations, durable native pending intent, attachment policy, result recovery | Steps3–5 and grants (scope confirmed October 7) | Real Gmail account reads/drafts/reply/send where authorized; response-loss retains unknown; no automatic duplicate mail; source-account isolation |
-| 13. Upstream consolidation | elizaOS maintainers: land reviewed generic changes, remove product forks after consumer checks, update source pin/lock, preserve licenses | Owning flow checks from Steps3–12 | Public upstream commits/PR evidence; clean clone builds; Alpha client consumes generic APIs without brand/private config leaks |
-| 14. Private deployment and metering | Runtime/release: generic hosted-backend adapter, client-specific deployment config, signed measured release, durable identity/usage events | Qualified runtime, authorized signing/KMS path | Exact deployed source/image identity, auth negative cases, attestation where required, provisioning guide and metering duplicate recovery |
-| 15. Pilot handoff | Product/QA/release: four physical units, independent reproducibility, issue closure, unedited demo and stakeholder session | All required flow exits | Per-unit manifest and paired-agent evidence, at least five-minute video, reviewed P0/P1 list, source/setup/deployment guides and handoff record |
-
-### State of each step on 2026-10-10
-
-"On main" means implemented in source with class S tests only. "Open" names what the step's exit evidence still needs; inventory items are in the [remaining-work inventory](mvp-remaining-work-2026-10-09.md). No step has met its exit evidence.
-
-| Step | On main (class S only) | Open | Items |
-| --- | --- | --- | --- |
-| 1 | Feature profile; decisions P-01 to P-09 recorded; Pixel 10 named as the hardware build target and Cuttlefish for image validation. | Voice policy, A-01, A-09 and the other pending decisions; P0/P1 definitions have no stakeholder agreement. | MVP-01 to 06 |
-| 2 | Instrumentation runner and campaign scripts. | No emulator run at the current source (the last campaign ran `73b973a5` at pin `352d7a08`, mixed results, historical); no physical device identified (A-01). | MVP-18, 20, 47 |
-| 3 | Resident, remote, local and Cloud connections negotiate verified phone actions at enrollment; flag-off Android admits only `https://api.eliza.app` (`ConnectionRoutes.java`, JVM-tested). The interface names under "Upstream implementation contracts" are proposals; most do not exist as types. | A clean external client on the same typed protocol; native guards have not run in an APK. | MVP-04, 08, 37 |
-| 4 | Android Welcome dialog: Cloud sign-in for credits or local apps without AI; Cloud self-revocation on sign-out; production Android refuses remote pairing. | "Discover or create owner agent" is unreachable in every flag-off build (A-16, A-26); the managed endpoint is undecided (A-02); no real Cloud sign-in has run; the Google code exchange returns 401 ([Cloud findings](cloud-production-validation.md)). | MVP-04, 17, 34, 35, 37 |
-| 5 | Typed conversations, selected-source context, Stop with one cancel request, one reconciliation of a dropped response under the same message ID, conversation-bound drafts, restore on connect. | Emulator and device continuity; resident process restart; a real agent after Stop. | MVP-16, 21, 22 |
-| 6 | Cloud speech route in flag-off builds; editable transcript review; owned playback; on-device Whisper/Kokoro packaged but not the flag-off route. | Voice policy (MVP-01, A-24); on-device functional acceptance failed on arm64-v8a and is unverified on x86_64; no latency sample exists (A-10); no real Cloud speech run; physical audio. | MVP-01, 05, 23, 24 |
-| 7 | Notes editing, Trash with 3-day emptying for text, checklist, link and voice notes, agent CRUD through reviewed actions. | Emulator and device runs of storage durability, Trash expiry and the audio backstop. | MVP-15, 25 |
-| 8 | Calendar from Android CalendarProvider (browser-local in the web build), reminders through the shared native engine, reviewed Android Clock handoff. | Provider read-back instrumentation has no run; real ringing; alarm ownership (A-11); deletion recovery (A-25). | MVP-12, 26, 27 |
-| 9 | Local digest schedules; one missed record for a time that passes while the host is not running, never run later. Hosted digest controls exist in source. | Hosted loops that run while the phone is off do not exist; A-09 is undecided; the digest restart check passed once at pin `352d7a08` and has not been repeated at the current pin. | MVP-02, 19, 38 |
-| 10 | Owner-bound notices, receipt recovery, hosted-result notices; cross-app mirroring opt-in and off by default. | Native channel, locked, background and restart runs; new-mail notifications are not implemented (A-05). | MVP-11, 13, 33 |
-| 11 | Isolated native browser, persistent sign-in profile and ephemeral private tab (P-04), integrated password manager with Android Autofill provider (P-05), optional Proton Pass setup. | Sign-in, private-tab, pop-up, app-link and fill instrumentation have no run; passkeys are not implemented (A-12); third-party cookies are blocked (A-13); release-signed device. | MVP-28, 29 |
-| 12 | Inbox with paging, Sent view, reviewed send, archive, Trash and undo, read state, attachments, unknown-outcome handling; all against a synthetic provider. | Real OAuth (401), deployment of the managed Gmail routes, a real mailbox, scopes (A-07, A-15). | MVP-14, 35, 36 |
-| 13 | The pin `40dbe96bd1` equals elizaOS `develop` as recorded in `scripts/ci/upstream-reachability.json` on 2026-10-10; no local source patch remains and the `patches` directory is gone. | Emulator runs of the consumed shared modules at the pin. | MVP-08 to 11 |
-| 14 | Release signing inputs read from `ELIZAOS_*`; `scripts/verify-apks.mjs` records whether a release is distributable, and provisioning, pilot update and AOSP staging refuse one it does not mark distributable (`scripts/release-blockers.mjs`); `android/release-signer.json` says `unset`. | Signing authority (A-06), a distribution build (needs qualified speech assets or a decision under A-24, the staged runtime and the embedding host), metering (A-20). | MVP-39, 40, 42, 43, 45 |
-| 15 | [Pilot runbook](pilot-acceptance-runbook.md) and provisioning scripts. | Everything: four units, a signed build, user acceptance. | MVP-41, 47 to 51 |
-
-Parallelize source review, upstream contracts and physical-device preparation. Serialize edits/builds/device campaigns with one owner. Do not run several heavy emulator/Gradle campaigns on the same host and interpret resource-starvation timeouts as feature evidence. Each new failure must change the next diagnostic action.
-
-## Required end-to-end journeys
-
-### A. Boot, authenticate and keep a conversation
-
-State on 2026-10-10: `test/browser/journey-a-conversation.spec.ts` drives this journey in the browser build with the development profile (class S): the typed conversation, Stop and recovery, and one spoken request with a synthetic microphone (a Web Audio oscillator), the closed Cloud transcription fixture and recorded speech output, in which the transcribed turn is sent to the development agent without a separate send step (the send rule is pending MVP-01). No person's voice, recognition quality or audible playback is shown by it. Step 2 as originally written (choose Cloud, select an existing agent, provision a new one) is unreachable in every flag-off build and is reworded below with the original requirement kept visible; whether Cloud agents exist on Android is A-16. No emulator, real-account or device evidence exists.
-
-1. Cold boot the target device into Alpha HOME. Verify voice-first startup: the first usable screen exposes an accessible talk control, a returning configured user can speak without traversing setup, and first-use, denied-microphone and unavailable-engine states offer clear recovery and typing. Voice-first does not imply automatic microphone capture. Confirm stock recovery/emergency routes remain available.
-2. On a flag-off Android build: from the Welcome dialog, sign in to Eliza Cloud with the intended account for the on-device agent and verify the credit check; separately choose "Use local apps without AI" and verify it reaches Home with no network and persists across restart. Verify that remote pairing and any host other than `https://api.eliza.app` are refused. On the production web build: pair with a private remote host over HTTPS. Local-development mode is a diagnostic path in test-mocks builds only. Pending A-16 and A-26: the step as first written also required selecting an existing Cloud agent, explicit new-agent provisioning and unknown-result recovery on the phone. No flag-off build offers that. Whether it stays part of this journey is the owner's choice under A-16; this rewording neither drops that requirement nor accepts the current behavior in its place.
-3. Type a request, speak another (send rule pending MVP-01), switch Notes/Calendar/Browser and retain the intended conversation. Confirm source context and actual owner/agent identity without showing credentials.
-4. Cancel a stream and a pending action; switch networks; background and kill/restart the app; expire/revoke a token. Recover one result per accepted request and no old-owner output after account change.
-5. On the distribution APK, prove no mock choice or mock entry point exists. Separately, on a test-mocks APK only, enter mock mode and prove no provider/native side effect, then exit and restore a deliberate real/offline selection.
-
-### B. Voice to note to calendar or reminder
-
-State on 2026-10-10: `test/browser/journey-b-voice-note-actions.spec.ts` completes this journey in the browser build with a synthetic microphone, a closed Cloud transcription fixture and synthetic speech output (class S). The 3-day automatic emptying is implemented for all four note kinds; device acceptance of Trash expiry is open. Calendar event deletion has one review step and nothing can be restored afterwards; whether that changes is A-25. The transcription route and the send rule are pending MVP-01.
-
-Record a physical spoken note, review/correct the transcript, save, reopen and read aloud. Edit and delete the exact selected note, confirm it reaches Trash, restore it, and verify automatic emptying after 3 days; exercise full storage and interrupted-save recovery. Ask the agent to create a calendar event, inspect account/time zone/attendees and confirm; read actual provider state, then edit and delete the same event. Repeat via direct UI. Add a reminder/to-do, edit its time, deliver, snooze, complete, reopen/cancel and reboot. Concurrent changes invalidate stale proposals rather than editing another object. Data reads and destructive changes require the intended scope, not a broad cached approval.
-
-### C. Alarms
-
-State on 2026-10-10: the handoff approach below is what main implements (`ClockHandoff.java`; `test/browser/journey-c-alarms.spec.ts`, class S). The receipt is a dispatch receipt, not confirmed alarm state, and with no Clock app Alpha says so and claims nothing. That is option (a) of A-11, which is current behavior and not an owner choice. No ringing has been observed on an emulator or a device.
-
-Recommended first MVP approach: a reviewed Android Clock handoff for set/show/snooze/dismiss, with visible handoff status and actual ringing verification. If Alpha must own the alarm UI, implement exact-alarm authorization, ringing service/UI, sound/vibration and DND semantics instead; treat this as additional explicit work. Either approach must handle no handler, denied access, reboot, DST/time-zone changes, duplicate edits, late delivery and cancellation. Do not claim `setAndAllowWhileIdle` reminder delivery is an alarm-clock guarantee.
-
-### D. Two hosted loops with the phone powered off
-
-State on 2026-10-10: this journey cannot be run as written. Hosted loops that execute while the phone is off do not exist, and a resident agent cannot run on a powered-off phone. What main implements is the resident alternative: a scheduled time that passes while the host is not running is recorded once as missed and never run later, and the flag-off Android panel says schedules cannot run while the phone is off (`test/digest-occurrence-delivery.test.mjs`, `test/browser/journey-d-digests.spec.ts`, `test/browser/journey-core-loops.production.spec.ts`; class S, development scheduler). Accepting that in place of this journey is option (a) of A-09 and has not been accepted. `npm run agent:test-digest-restart` passed once on the host with a synthetic model at the earlier pin `352d7a08`; it has not been repeated at the current pin.
-
-Use parameterized morning/evening digest templates on the selected real hosted agent. Each has owner, selected source grants, IANA zone, local schedule, immutable template version and enabled revision. Collect server-accessible tasks/calendar/email, or clearly identify an authorized synchronized snapshot and its freshness. Phone-only data is unavailable while powered off; no implied continuous upload.
-
-Power the phone completely off before scheduled admission. Verify two distinct server run IDs, scheduled instants, input provenance and persisted terminal outputs while it remains off. Restart a host worker at an admission/execution boundary; duplicates must not create an additional result. Revoke a source, edit/disable a schedule and exercise an overlap/missed time case. Power the phone on, reconnect and display each exact output once, then restart again and verify history/acknowledgements. Native actions that could not execute while off remain waiting/expired; they must never acquire fabricated success receipts.
-
-Proposed scheduler policy: unique owner/workflow/version/occurrence identity; one active occurrence per template unless expressly configured otherwise; no replay of a backlog on reconnect; explicit missed/overlap records; DST gap skipped and repeated local time admitted once at the earlier offset. These are proposed digest semantics. The development scheduler (test-mocks builds only) implements the missed record, an unavailable record for a revoked or expired source, the two DST rules (a skipped local time has no occurrence; a repeated local time runs once at the earlier offset) and settles each occurrence once across clock changes (`test/browser/dev-digest-schedule.spec.ts`); it produces no overlap record. The phone labels a missed, overlap or unavailable record that an agent returns as not run (`test/digest-occurrence-delivery.test.mjs`, synthetic result stream). No resident or hosted scheduler has run any of this on a phone. The digest semantics are intentionally distinct from local reminders, whose rules are in the [reminder contract](calendar-reminder-contract.md): an initially nonexistent civil time is rejected, a future spring gap uses the first valid instant after the gap, an overlapping hour uses the earlier offset once, and there is one unresolved occurrence that a reboot or re-post does not advance. Review before changing existing user schedules.
-
-### E. Browser and provider-backed credentials
-
-State on 2026-10-10: `test/browser/journey-e-browser-credentials.spec.ts` covers the browser-build part with the development password provider (class S). Persistent sign-ins, the private tab, the integrated password manager and its Android Autofill provider are on main; their instrumentation has no recorded run. Passkeys are not implemented (A-12), third-party cookies are blocked in tabs (A-13) and only the Alpha browser is trusted for fills (A-14). No release-signed device exists (A-06).
-
-Navigate, search, switch tabs, use Back/Forward, upload/download a test-owned file and return from an external handoff. Review a selected page excerpt for summarization/read-aloud; navigate during approval and verify rejection of the old target. Malicious page content cannot invoke the privileged native bridge or authorize another action.
-
-Sign into a test-owned site in a normal tab, restart the app and verify the sign-in persists; repeat in a private tab and verify nothing persists after it closes. On each release-signed demo device, set up the integrated password manager and, separately, the optional Proton Pass provider; sign into the real selected provider, enable autofill through Android, create/save/fill a test-owned password, lock/unlock, cancel the picker and disable/re-enable the provider. Verify wrong-origin rejection, iframe boundaries, multi-tab transitions, process death and provider/browser update. Passkey registration/authentication is a separate test only after the provider recognizes the browser identity and the WebView feature is available. Exclude vault pages, credentials, cookies, OTPs and passkey material from agent context and evidence captures. Known sensitive URLs and credential/OTP/recovery patterns in ordinary visible text are rejected before creating a review token or dispatching speech; whole-document, normalized-text, bounds and manual-edit cases are covered by the owning browser/native fixtures. This conservative local heuristic is not a universal detector of arbitrary secrets. Continue release-device qualification of these boundaries. Exercise password-vault, recovery-code and OTP pages with secrets in plain div/article nodes, not only inputs; neither summarization nor read-aloud may transmit them.
-
-### F. Email and reconnect notifications
-
-State on 2026-10-10: `test/browser/journey-f-email-notifications.spec.ts` and `journey-f-reviewed-send.spec.ts` cover this journey against a synthetic provider (class S). No real Google grant exists: the code exchange returns 401 and the managed Gmail routes are not deployed ([Cloud findings](cloud-production-validation.md)). The scope set is undecided (A-07, A-15). New-mail notifications are not implemented (A-05).
-
-Email is MVP. Authorize only required managed scopes, select an account, fetch full thread context and explicitly open permitted attachments. Preserve a local draft independently from provider draft state. Review exact From/To/Cc/Bcc, body and attachments before any send/reply. Use the same durable mutation identity across app recreation; a lost response is unknown, never automatic resend. Test grant revocation, changed draft, incorrect returned provider ID, pagination revision changes and archive/trash/undo. Real external sends require the user's specific recipient/message authorization; use synthetic provider tests until authorized live fixtures are available.
-
-Deliver a hosted result/reminder while backgrounded, tap it after process restart, and reach the exact result/task. Disable the channel and verify the in-app history still receives the result. Distinguish notification seen/dismissed from task completed. Cross-app notification access is opt-in and off by default, outside onboarding, limited to user-selected apps with previews hidden when locked, clearly disclosed, and not an MVP acceptance gate; re-evaluate it before any Play Store distribution. It is not needed to prove server execution while the device is off.
-
-## Upstream implementation contracts
-
-Use existing elizaOS services rather than duplicate schedulers or approval stores. Extract/version these interfaces with external-consumer checks. The names are this plan's proposals. On 2026-10-10 a search of the product source and of the pinned upstream TypeScript found `DeviceOperation`, `NoteRecord` and `CalendarOperation` as identifiers; `RuntimeCapabilities`, `SpeechCapabilities`, `ScheduledOccurrence`, `AgentResult`, `HostedBackend` and `UsageEvent` do not exist under those names in either. The behavior some of them describe exists under other names (for example verified phone-action negotiation at enrollment); that is not the versioned external contract this section asks for.
-
-- `RuntimeCapabilities`: authenticated deployment/agent identity, supported protocol revisions, conversation/device/workflow/voice/result/meter capabilities and explicit unavailable reasons. Trust configured authorities, not arbitrary returned URLs.
-- `DeviceOperation`: owner/session/device enrollment, operation type, target object revision, expiry, review binding and canonical approval identity. Journal local execution before receipt upload; retain unknown outcomes.
-- `NoteRecord` and `CalendarOperation`: stable ID, source/account, revision, typed data and attachment references; generic CRUD actions separated from provider/native adapters.
-- `SpeechCapabilities`: capture/playback versus engine location, language/model/voice support, format/size bounds, cancellation and route provenance. Do not make a provider-specific URL the portable API.
-- `ScheduledOccurrence` and `AgentResult`: stable trigger/run/output IDs, template version, source freshness, terminal status, delivery cursor and acknowledgement. Cloud and remote clients consume the same semantics.
-- `HostedBackend`: provision/status/resume/stop, owner/agent binding, deployed artifact identity, auth and optional attestation capability. Client-specific credentials/endpoints remain deployment configuration.
-- `UsageEvent`: stable event ID, owner/agent/run/request, provider/model, measured units, status and retry identity. Unlimited billing policy does not remove accounting or meter hooks.
-
-Keep constants that enforce resource/security limits explicit and versioned. Move product-specific namespaces into configuration with migration support; do not rename secure-store keys and lose existing credentials. Use the reviewed upstream Android implementations through the product adapters described in [architecture](architecture.md); preserve installed storage identities when changing them. Reuse current reviewed upstream DST fixes rather than maintaining another cron parser. The product carries no local source patch at the current pin: every shared change is consumed from the pinned upstream commit.
-
-## Validation and delivery discipline
-
-Use the [physical pilot acceptance runbook](pilot-acceptance-runbook.md) for per-unit manifests, native/physical journeys, performance samples, signed update recovery and independent handoff. Its initial four-unit table is unexecuted; it supplies the procedure, not passing evidence.
-
-For each implementation change, run the owning full-flow integration tests, `npm run verify`, the Android build (`npm run android:build:local`, which checks inputs, prepares and stages the resident runtime and then runs `npm run android:build`; plain `npm run android:build` stops before Gradle when an input is missing), both standalone/HOME variants, configured/unconfigured artifacts where relevant, and the corresponding native journeys. Preserve immutable APK/test pairs and source hashes. Unit-test counts are not the acceptance criterion. Synthetic transports should cover error races; real service/native/physical journeys must separately prove the production path.
-
-Proposed performance protocol: a fixed set of simple typed/spoken tasks; at least 20 warm and 5 cold observations per target device and route, with raw timings and failure counts. Measure end-of-speech to first audible response, transcription time, model first-token time and playback completion separately. The DoD target is six seconds for a simple Wi-Fi voice round-trip. Under P-01 voice is not auto-sent, so a hands-free round trip cannot meet it as written; A-10 decides whether to exclude the user's review/send time or revisit the target, and the send rule itself is pending MVP-01. This protocol is therefore a proposal, not an agreed method. No latency sample exists for any route or device; timing helpers and an aggregation script exist (`apps/app/src/runtime/voice-timing.ts`, `scripts/aggregate-voice-latency.mjs`) and the entry-point marks they need are `test.todo` cases in `test/voice-entry-timing.test.mjs`. Agree the percentile/statistical acceptance method before signoff. A long successful transcription does not meet the latency target. Do not replace failed physical samples with synthetic audio samples.
-
-Maintain a small agreed P0/P1 list tied to user journeys. Suggested P0: cross-owner data/action, credential exposure, unrecoverable user-data loss or duplicate external effect. Suggested P1: required flow cannot finish, wrong scheduled occurrence, unrecoverable login/session, inaccessible primary control or persistent crash/ANR. These definitions need stakeholder agreement; CI alone cannot close them.
-
-Deliver: source and reviewed upstream references; dependency/license inventory; reproducible app and OS build instructions; provisioning and private-backend guide; model/voice/browser/provider versions; per-device signed artifact manifest; rollback/recovery procedure; exact flow evidence; unedited physical demonstration; four paired units; final issue dispositions and stakeholder review record. Keep credentials, private endpoints, client brand assets and non-public business content out of public upstream releases.
+Use exact app, runtime, model, image and config revisions. Run `npm run verify` and
+the strict Android build chain for both variants. Record APK packaging, emulator
+HOME-role checks, Cuttlefish image boot, real Cloud/provider integrations, Pixel 10a
+physical tests and target-user acceptance separately. Finish controlled signing,
+updates, recovery and support handoff under Shaw. Keep failed/unrun evidence visible.

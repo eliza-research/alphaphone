@@ -1,56 +1,68 @@
 # Alpha Phone — working PRD
 
-Version: 0.3, 2026-10-08 (requirement wording reconciled with the October 1 resident-agent decision and the October 7 owner decisions P-01 to P-08). Version 0.2 was dated 2026-10-01. Derived from the supplied interactive prototype, explicit two-repository request, and the reviewed upstream Alpha issues. Product sign-off is still needed for final scope and hardware. See `sources.md` for provenance. The current MVP scope in `mvp-scope-and-gap-report.md` supersedes the original foundation priorities below; `mvp-browser-review.md` indexes browser implementation and remaining acceptance.
+Version: 0.4, 2026-10-12. Product scope is approved through the owner's 32 answers.
+[Decisions](decisions.md#october-12-owner-decisions) and the
+[implementation plan](implementation-plan.md) supersede older scope/defaults.
+This is a requirements document, not acceptance evidence. [Sources](sources.md)
+retain prototype and upstream provenance.
 
 ## Outcome
 
-A personal agent phone with a distinct Alpha Compute interface: a compact daily overview, installed apps and built-in experiences, and an assistant reachable without losing context. Alpha Phone owns its UI and package identity. Eliza provides agent execution, transport, native capabilities and OS tooling.
-
-The prototype uses white/black surfaces, electric blue `#0000FF`, Fraunces display text, Public Sans body text and compact line icons. Its 412 × 915dp device framing is a design reference, not a hardware support declaration. Preserve source prototype separately from real application code. Never ship mock balances, contacts, messages, attestations or connectivity labels as live state.
+A personal agent phone with an independent Alpha Compute UI, locally resident
+orchestration, local speech and useful native tools. Eliza Cloud supplies managed
+inference, subscription, Gmail and Maps services; it never hosts Alpha's agent.
+Keep prototype styling and identity separate from real data/capability claims.
 
 ## Users and primary journeys
 
-1. Wake/unlock through the actual OS; see current time and genuine actionable information, then open an installed app.
-2. Invoke Alpha by touch/text or a permitted voice entrypoint; expand from compact input to overlay/full conversation without losing the current task.
-3. Pair the device to the correct Alpha agent; recover after network loss, process death and missed background results without duplicate effects.
-4. Connect selected accounts with official authorization and understandable per-capability controls; inspect activity and revoke access.
-5. Use a native phone capability or approve a task; see whether it is pending, completed, denied or uncertain with attributable evidence.
+1. Unlock the actual OS, open Alpha/installed apps and retain task context.
+2. Start the local agent; sign in only for managed services. No hosted-agent pairing.
+3. Dictate into an editable draft, or enter an interruptible local-speech conversation.
+4. Use Gmail in either distribution and Phone/Contacts/SMS only on the AOSP image.
+5. Query the full permitted photo library and control Maps through agent tools.
+6. Inspect and approve effects, recover from interruption and reset local Alpha data.
 
 ## Scope and requirements
 
 | ID | Requirement | Priority / acceptance |
 | --- | --- | --- |
-| AP-01 | Distinct branded home, app grid and assistant entry; independent package/storage identity | P0; branded shell and connection-aware composer are implemented; provider acceptance remains separately tracked |
-| AP-02 | Standalone and HOME APKs from one source; offline shell; stock settings/recovery accessible | P0; inspect final APKs, install both modes, open apps, return HOME repeatedly |
-| AP-03 | Existing Eliza sign-in/pairing with approved Alpha routing adapter, owner-scoped credentials | P0; real-device wrong-owner/origin, expired/reused token and callback tests |
-| AP-04 | Android-resident agent execution with hosted Qwen inference on Cerebras, honest offline state and reconnect/history restoration | P0; orchestration, conversation state, approvals and receipts run on the phone; text inference uses `qwen-3.8-27b` on Cerebras and is disclosed per connection; Cloud and remote agents are optional connections; no duplicate messages or writes after reconnect; no inference-available claim without health evidence |
-| AP-05 | Pill, input, overlay and full assistant modes; keyboard and navigation continuity | P0; draft/scroll state survives resize and Back/Home; no keyboard obstruction |
-| AP-06 | Voice entry and cancellation with explicit mic state and typing fallback | P0; voice never auto-sends: record, transcribe, review, then the user sends (P-01); the browser build gets speech recognition, local first, with any cloud route an explicit disclosed opt-in (P-07); device audio tests; latency method pending (A-10); hardware-side-key remapping gated by platform support |
-| AP-07 | Daily overview with real agenda, attention items and briefs | P1; no placeholder results; loading/empty/stale/error states; authority and timestamps visible |
-| AP-08 | Phone, messages and contacts | Deferred by the current MVP profile. Source retained, app entry/action paths disabled; emergency facilities remain system-owned. |
-| AP-09 | Inbox and calendar | P1; Gmail/Email is in MVP scope and Telegram/Discord are deferred (P-02); reuse Google Workspace/personal-assistant contracts; per-account isolation, consent, write confirmation, exact-once results and revoke |
-| AP-10 | Browser, camera, photos, maps, notes and files | P1; explicit Android permissions, cancellation and unsupported states; native handoff before custom replacements; browser sign-ins persist in a profile separate from the host, with ephemeral private tabs (P-04); integrated elizaOS password manager with Proton Pass optional (P-05); deleted notes go to a Trash that empties after 3 days (P-06); OCR covers English only (P-08) |
-| AP-11 | Workflow library and run history | P1; inspect, start, pause and cancel with bounded permissions and real receipts; not hard-coded prototype playback |
-| AP-12 | Settings: accounts, privacy, connection, voice, theme, text, notifications | P0 foundations / P1 integrations; actual capabilities and Android controls; no simulated switches |
-| AP-13 | Wallet and security/attestation surfaces | Deferred pending provider, key custody, device security, transaction approval and operational decisions; no “attestation passed” without verified evidence |
-| AP-14 | Signed AOSP image and update/rollback path for one selected phone SKU | Release gate; exact source/blob/kernel/signer lock, hardware checklist, recovery test |
-| AP-15 | Accessibility and resilience | P0; readable contrast, large font, TalkBack, touch/keyboard, offline, killed process, rotation and repeated HOME navigation |
-
-The source prototype has 14 app views. Their existence does not authorize claiming every integration in the initial release. The first production vertical slice is shell → pair → agent message → background/resume recovery → native app handoff. Subsequent built-in experiences should be prioritized by real user tasks.
+| AP-01 | Distinct branded Home, library and assistant with independent identity | P0; real navigation, app discovery, one Android shade and launcher Home swipe |
+| AP-02 | Standalone and launcher packaging; Alpha AOSP capability distinct from flavor | P0; four APKs, offline shell, stock settings/recovery and no AOSP-only tools in standalone |
+| AP-03 | Owner-bound Eliza Cloud service sign-in and subscription entitlement | P0; local-only agent, no provisioning/pairing, expiry/revoke/isolation and no per-turn billing network hop |
+| AP-04 | Resident orchestration, state, tool approvals and powered-on scheduling | P0; hosted text inference disclosed, no hosted agent, missed occurrences and no duplicate effects |
+| AP-05 | Compact/full assistant, keyboard, navigation and responsive continuity | P0; drafts, focus, scroll and tasks survive layout and lifecycle changes |
+| AP-06 | Always-local native STT/TTS; separate dictation and voice-assistant modes | P0; Clef semantic/long-gap endpoint, automatic conversation submission, barge-in; true last-input-to-first-audible latency; AOSP always-on listening and hardware invocation included |
+| AP-07 | Daily overview, agenda, attention and resident briefs | P1; actual sources, freshness/empty/error states; phone-powered-on schedules only |
+| AP-08 | Phone, SMS/MMS and Contacts only on Alpha AOSP | P0 AOSP; real native providers/roles, owned carrier endpoints, emergency system access; hidden and capability-gated elsewhere |
+| AP-09 | Gmail, Calendar and reviewed cross-app mail attachments | P1; incremental Gmail scopes, real delivery, availability semantics, durable deletion Undo and source/account isolation |
+| AP-10 | Browser, camera, full permitted Photos, Cloud Maps, Notes and Files | P1; normal third-party cookies allowed, ephemeral private tabs, eligible autofill, native secure camera, agent Maps controls, local speech, Notes three-day Trash; no app-data import/export |
+| AP-11 | Resident workflows, approvals and run history | P1; bounded permissions, durable receipts, missed recovery, owner-return notices and no powered-off execution |
+| AP-12 | Settings, subscriptions, permissions, local voice, system shade and reset | P0; truthful state, responsive controls, no backup/import/export, confirmed private-data reset |
+| AP-13 | Wallet | Deferred: removed from MVP; views, native adapters and agent actions remain disabled in both distributions |
+| AP-14 | Pixel 10a Android 17 image, signing, listening and update/recovery | Release gate; exact input/signer lock; Cuttlefish boot and physical hardware/OTA/user qualification separate; Shaw release owner |
+| AP-15 | Accessibility and resilience across intentional responsive layouts | P0; large text, TalkBack, keyboard, rotation, process death, permission loss, offline and repeated HOME |
 
 ## Explicit limits and decisions
 
-- The agent runs on the Android phone (October 1 decision; see the [on-device agent plan](on-device-agent-plan.md)). Text inference is hosted: Qwen (`qwen-3.8-27b`) on Cerebras, which receives prompts and selected context over TLS. Cloud and remote agents are optional connections. Fully offline language-model operation is not qualified. The prototype's on-device model, enclave and attestation statements are visual fixtures, and the confidentiality claims ladder in [decisions](decisions.md) governs product wording.
-- The October 7 owner decisions P-01 to P-08 in [decisions](decisions.md#october-7-owner-product-decisions) apply to this PRD: no voice auto-send, Gmail/Email in scope, opt-in notification mirroring, persistent browser sign-ins with private tabs, an integrated password manager, a 3-day notes Trash, local browser speech recognition and English OCR. They are policy, not evidence of implementation.
-- Pixel 10 versus Pixel 11 Pro is unresolved. No Pixel 10 source lock was found in the pinned OS tree. Pixel 11 Pro's source lock is not real-device qualification.
-- Android status shade, lock screen, secure wallet gestures, default phone/SMS handling and system-wide assistant invocation are OS/role work, not CSS inside a launcher.
-- No new identity provider; use upstream pairing. No real account credentials in the prototype. No payment processing or custody in this bootstrap.
-- Required decisions are listed, with options and evidence, under [pending owner decisions](decisions.md#pending-owner-decisions), including powered-off scheduling (A-09) and the voice latency method (A-10). None of them is decided by this PRD.
+All 32 choices are resolved as policy; implementation TODOs remain open in the
+[approved backlog](owner-approved-mvp-plan-2026-10-12.md). P-01 and P-07 are superseded:
+manual send applies to dictation, conversation voice submits automatically, and no
+Cloud speech route remains in the product contract. Local speech does not imply an
+offline language model. Hosted inference receives disclosed selected context.
+Full photo access is local permission scope, not bulk Cloud upload authorization.
+
+Passkeys, Telegram, Discord and Wallet are outside MVP. No app-data migration,
+backup or import/export workflow is planned. Ordinary Files and attachment operations
+remain. Secure camera, Clock, shade and emergency facilities remain native/system
+surfaces. Always-on listening is an AOSP MVP gate and never implicitly enabled.
 
 ## Current implemented versus accepted
 
-Implemented source now includes the independent ten-view renderer; Cloud/remote/local-development connection adapters (production Android offers only the on-device agent with Eliza Cloud sign-in and refuses remote pairing); context-aware conversations and reviewed actions; native speech/recording routes; encrypted native Notes and browser-local Notes; Calendar/reminder/Clock adapters; isolated native browser controls; selected files/media and Maps; Gmail drafts and provider adapters; workflow authoring/approvals/durable results; hosted digest controls; and settings/permission readback. The browser review adds fitted desktop presentation, persistent theme, local text import/download, explicit manual recording, modal keyboard/Back handling and reproducible browser/adapter regression checks.
-
-Implementation is not full acceptance. Current limits are summarized in [product status](mvp-current-status.md); detailed historical native/runtime evidence remains in the [archived acceptance ledger](https://github.com/AlphaCompute/alphaphone/blob/5b43638417d3adff649964c8188582ccc22b8390/docs/current-acceptance-ledger.md). Live Cloud/Gmail authorization, the powered-off scheduling decision (A-09), real password-manager and provider integration, speech functional acceptance and latency (A-10), maintained native browser qualification, signed image/device delivery and target-user acceptance remain open. Browser checks do not close those gates. No APK build, emulator run, hosted CI run, real-integration or device result is recorded at the current upstream pin; per-loop evidence is in the [core loop audit](core-loop-audit.md) and what only the owner can do is in [owner actions](mvp-owner-actions.md). The current software state of each requirement is in [PRD requirement status](mvp-current-status.md#prd-requirement-status) and `docs/requirements.json`.
-
-This PRD's requirement is that on-device speech (Whisper recognition and Kokoro synthesis) remains required on Android and that the browser build prefers local recognition; hosted text inference does not waive local speech. Current source differs: P-07 as recorded in [decisions](decisions.md#october-7-owner-product-decisions) makes Eliza Cloud the default voice route, flag-off builds select it unconditionally, and on-device speech has failed its functional acceptance. Which of the two governs is not decided here (pending A-24 and inventory item MVP-01). Pixel 10 or a similar phone is the current engineering target; the supported SKU (A-01) and final device-image qualification remain separate. Telegram and Discord are deferred (P-02), and an offline language-model fallback remains outside the qualified scope.
+The source still contains behavior that differs from this policy, including Cloud
+speech selection, credit-oriented onboarding and deferred Phone/SMS/Contacts. The
+approval itself changes no runtime or qualification record. Use
+[current status](mvp-current-status.md), [requirements.json](requirements.json),
+[verification](verification.md) and each TODO for implementation gaps and evidence.
+APK builds, native emulator/HOME checks, full AOSP boot, real services, physical
+hardware and user acceptance remain distinct. No existing failure is retired by
+changing the prose.

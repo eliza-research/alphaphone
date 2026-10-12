@@ -8,7 +8,7 @@
     "deferred": "Out of the MVP by recorded policy.",
     "blocked": "Cannot progress without an external decision, resource or artifact."
   },
-  "note": "Status is software state, not acceptance. Evidence lists source and test paths that implement or check the requirement; they are not passing results. Each gate names the next evidence class required. Refreshed 2026-10-11 at main 2560eead against upstream pin 13c9857598, with every entry re-read. At that pin there are source and browser test results, developer APK builds without the resident runtime (not distributable) and one partial emulator campaign on those builds (docs/verification.md, Emulator results at 2961bd9e, called round 8 below). Where an entry cites an emulator result it is that campaign or the round 7 campaign at the earlier pin 40dbe96bd1 (Emulator results at 6dcdde34), named as such. Both are class E on developer APKs and neither is evidence for a distributable build or a device. No hosted emulator job has been dispatched and no device result exists (docs/mvp-current-status.md, Current qualification evidence). Round 10 integration adds accessibility, native robustness, approval-notice recovery and strict-build changes after this evidence snapshot. References below to current source failures describe the recorded round 8 APKs; they are not results for the combined source. See the round 10 sections in docs/verification.md.",
+  "note": "Status is software state, not acceptance. Evidence lists source and test paths that implement or check the requirement; they are not passing results. Each gate names the next evidence class required. Refreshed 2026-10-11 at main 2560eead against upstream pin 13c9857598, with every entry re-read. At that pin there are source and browser test results, developer APK builds without the resident runtime (not distributable) and one partial emulator campaign on those builds (docs/verification.md, Emulator results at 2961bd9e, called round 8 below). Where an entry cites an emulator result it is that campaign or the round 7 campaign at the earlier pin 40dbe96bd1 (Emulator results at 6dcdde34), named as such. Both are class E on developer APKs and neither is evidence for a distributable build or a device. No hosted emulator job has been dispatched and no device result exists (docs/mvp-current-status.md, Current qualification evidence). Round 10 integration adds accessibility, native robustness, approval-notice recovery and strict-build changes after this evidence snapshot. References below to current source failures describe the recorded round 8 APKs; they are not results for the combined source. See the round 10 sections in docs/verification.md. Policy reconciled on 2026-10-12 from the owner answers: approval changes scope and next work only, not prior evidence.",
   "requirements": [
     {
       "id": "AP-01",
@@ -59,26 +59,27 @@
     },
     {
       "id": "AP-03",
-      "title": "Existing Eliza sign-in and pairing with an approved Alpha routing adapter and owner-scoped credentials",
+      "title": "Owner-bound managed service sign-in and subscription for a local-only agent",
       "priority": "P0",
       "status": "partial",
       "statusRows": [
         "Connection choices",
         "Local startup and ownership"
       ],
-      "gate": "R and D: real-device wrong-owner and wrong-origin, expired and reused token, and callback tests against the managed endpoint (A-02)",
+      "gate": "S: local-only service onboarding and subscription policy, then R/D authentication and latency",
       "evidence": [
         "apps/app/src/runtime/connection-ui.tsx",
         "apps/app/src/runtime/remote-protocol.ts",
         "apps/app/src/runtime/cloud-protocol.ts",
         "apps/app/src/runtime/native-connection.ts",
-        "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaConnectionPlugin.java"
+        "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaConnectionPlugin.java",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
       ],
-      "remaining": "Production Android pairing is retired by design. Cloud self-revocation on sign-out and the native pairing-route guard have synthetic and JVM coverage only: no live Eliza Cloud revocation and no device run, and the instrumented class for the installed transport (ConnectionInstrumentedTest) runs only in the hosted recovery-ui job, which has never been dispatched. The web build cannot sign in to or revoke Eliza Cloud."
+      "remaining": "MVP-04/MVP-34: remove hosted-agent product paths, migrate credit UI to subscriptions, qualify owner-bound inference without a per-turn billing preflight."
     },
     {
       "id": "AP-04",
-      "title": "Android-resident agent execution with hosted Qwen inference on Cerebras, honest offline state and reconnect/history restoration",
+      "title": "Resident agent execution and powered-on scheduling with disclosed hosted text inference",
       "priority": "P0",
       "status": "partial",
       "statusRows": [
@@ -86,15 +87,16 @@
         "Connection choices",
         "Privacy and outbound context"
       ],
-      "gate": "E then D: resident process restart and reconnect without duplicate messages or writes; no inference-available claim without provider health evidence",
+      "gate": "E then D: resident lifecycle, history, missed occurrences and no duplicate effects",
       "evidence": [
         "apps/app/src/runtime/local-agent.ts",
         "apps/app/src/runtime/local-agent-native-stream.ts",
         "apps/app/src/runtime/alpha-client.ts",
         "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaLocalAgentPlugin.java",
-        "docs/on-device-agent-plan.md"
+        "docs/on-device-agent-plan.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
       ],
-      "remaining": "Emulator and device acceptance of restart, reconnect, Stop and history restoration; the resident process-kill classes run only in the hosted CI lane, which has never been dispatched, and no APK that packages the resident runtime has been built. Cloud agents have no cancel route or older-page history cursor, and the read after Stop matches by text and time because upstream history rows do not expose the client message ID."
+      "remaining": "MVP-21/MVP-38: qualify resident-only execution and cancellation; remove hosted-agent fallback and retain historical data without reconnecting it."
     },
     {
       "id": "AP-05",
@@ -118,13 +120,13 @@
     },
     {
       "id": "AP-06",
-      "title": "Voice entry and cancellation with explicit microphone state and typing fallback",
+      "title": "Always-local native STT/TTS, dictation, interruptible voice assistant and AOSP listening",
       "priority": "P0",
       "status": "partial",
       "statusRows": [
         "Speech and recording (J02)"
       ],
-      "gate": "Owner: voice send and route policy (MVP-01) and whether on-device speech is still required (A-24); then R: Cloud speech with a signed-in account, and D: physical audio, interruption and latency (A-10)",
+      "gate": "S: native speech/turn integration, then E both ABIs and D audio/latency/listening",
       "evidence": [
         "apps/app/src/prototype/voice-adapter.ts",
         "android/local-speech/qualified-runtime-manifest.json",
@@ -133,9 +135,10 @@
         "apps/app/src/runtime/voice-selection.ts",
         "test/browser/chat-voice-mode.spec.ts",
         "test/browser/production-surface.spec.ts",
-        "scripts/test-native-permissions.mjs"
+        "scripts/test-native-permissions.mjs",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
       ],
-      "remaining": "Flag-off builds use Eliza Cloud speech (P-07); no real Cloud transcription has been exercised. The committed on-device speech qualification is failed on arm64-v8a and x86_64 execution is unverified; a candidate runtime passed the unchanged test on an arm64 emulator at an earlier pin and is not admitted, the hosted x86_64 job has never been dispatched, and whether on-device speech is still required is pending (A-24). An ongoing Cloud conversation sends spoken turns without the P-01 review step (MVP-01). The denied- and revoked-microphone campaigns passed on both flavors in the round 7 emulator run at the earlier pin (class E, developer-override APKs) and were not repeated at the current pin."
+      "remaining": "MVP-01/MVP-23/MVP-24/MVP-52: native Eliza llama.cpp/JNI, candidate benchmarks, Clef feasibility, distinct dictation and auto-submit conversation, barge-in and AOSP always-on acceptance are not implemented to the newly approved contract."
     },
     {
       "id": "AP-07",
@@ -163,17 +166,18 @@
     },
     {
       "id": "AP-08",
-      "title": "Phone, messages and contacts",
-      "priority": "deferred",
-      "status": "deferred",
+      "title": "AOSP-only Phone, SMS/MMS and Contacts",
+      "priority": "P0 AOSP",
+      "status": "partial",
       "statusRows": [
         "Phone, SMS, Contacts and Wallet"
       ],
-      "gate": "A recorded scope change, then native role, permission and return-to-HOME acceptance",
+      "gate": "S: AOSP capability gates and providers, then E roles and D real carrier endpoints",
       "evidence": [
-        "apps/app/src/prototype/mvp-features.ts"
+        "apps/app/src/prototype/mvp-features.ts",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
       ],
-      "remaining": "Deferred by the MVP profile; entries and actions are disabled."
+      "remaining": "AOSP-only scope is not implemented: Contacts, Phone and SMS/MMS adapters and reliable role/capability gates; standalone must not expose them."
     },
     {
       "id": "AP-09",
@@ -200,7 +204,7 @@
     },
     {
       "id": "AP-10",
-      "title": "Browser, camera, photos, maps, notes and files",
+      "title": "Browser, full permitted Photos, Cloud Maps, camera, Notes and Files",
       "priority": "P1",
       "status": "partial",
       "statusRows": [
@@ -209,7 +213,7 @@
         "Schedule to travel (J04) and Maps",
         "Notes, Calendar and Reminders"
       ],
-      "gate": "E: the reading and page-question classes on a WebView with isolated-world injection, and BrowserFlow's live-search method; Owner: a production Maps provider (A-23); then R and D",
+      "gate": "S: Cloud Maps, full media and browser-policy integration, then R/E/D journeys",
       "evidence": [
         "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaBrowserPlugin.java",
         "apps/app/src/prototype/camera-adapter.ts",
@@ -218,9 +222,10 @@
         "test/browser/browser-signins.spec.ts",
         "apps/app/src/prototype/scan-document.ts",
         "apps/app/src/maps/regional-provider.ts",
-        "test/browser/journey-core-loops.production.spec.ts"
+        "test/browser/journey-core-loops.production.spec.ts",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
       ],
-      "remaining": "No flag-off build has a Maps provider, so no route can be produced for a production user (A-23). Native Camera has image selection into scan review and the multi-page scan builder; device behaviour is unverified. On an emulator at the current pin (round 8, developer APKs, class E) BrowserSignins, BrowserContinuity, PasswordBrowserFill, CameraScan and FilesTree passed on both flavors; BrowserFlow fails on its live-search method, and the reading and page-question classes cannot run on the available WebView, which has no isolated-world injection (the hosted suite for them has never been dispatched). The sign-in restart, download and Autofill classes passed only in round 7 at the earlier pin."
+      "remaining": "MVP-29/MVP-30/MVP-31: allow normal third-party cookies, eligible autofill, full permitted media, agent-controlled Eliza Cloud Maps and local read-aloud. Remove app-data import/export controls; preserve ordinary file operations."
     },
     {
       "id": "AP-11",
@@ -244,7 +249,7 @@
     },
     {
       "id": "AP-12",
-      "title": "Settings: accounts, privacy, connection, voice, theme, text and notifications",
+      "title": "Settings, subscription, local voice, native shade and confirmed reset",
       "priority": "P0 foundations / P1 integrations",
       "status": "partial",
       "statusRows": [
@@ -252,47 +257,50 @@
         "Privacy and outbound context",
         "Licenses"
       ],
-      "gate": "E: SettingsFlow and the settings campaign at the current pin, then every settings handoff and readback on a distributable APK (SettingsSystemFacts, SettingsNative, SettingsFlow, SettingsRoles, NotificationChannels); then D",
+      "gate": "S: reset/subscription/shade policy, then E/D persistence and recovery",
       "evidence": [
         "apps/app/src/prototype/settings-adapter.ts",
         "android/app/src/androidTest/java/ai/elizaresearch/alphaphone/SettingsFlowInstrumentedTest.java",
         "test/browser/settings-page-accessibility.spec.ts",
         "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaDevicePlugin.java",
         "test/browser/settings-truth.production.spec.ts",
-        "test/shade-tile-facts.test.mjs"
+        "test/shade-tile-facts.test.mjs",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
       ],
-      "remaining": "Tiles and Settings rows show the states Android reports and open the matching Android page, with renderer coverage on the flag-off bundle against a stubbed bridge. On an emulator, developer APKs, class E: SettingsSystemFacts, SettingsRoles and the channels campaign (NotificationChannels) passed at the current pin (round 8); SettingsFlow and the settings campaign (SettingsNative) passed only in round 7 at the earlier pin. No distributable build or device has run them. No update check (A-06) and no erase control (A-19) are offered."
+      "remaining": "MVP-33: implement reset without data resurrection, native shade/tiles, subscription status and local-only voice controls; no app-data migration/export."
     },
     {
       "id": "AP-13",
-      "title": "Wallet and security/attestation surfaces",
+      "title": "Wallet excluded from MVP",
       "priority": "deferred",
       "status": "deferred",
       "statusRows": [
         "Phone, SMS, Contacts and Wallet"
       ],
-      "gate": "Provider, key custody, device security and transaction-approval decisions (A-08) before any work",
+      "gate": "No MVP delivery gate; verify Wallet remains unavailable",
       "evidence": [
         "apps/app/src/prototype/mvp-features.ts",
-        "test/browser/confidentiality-claims.spec.ts"
+        "test/browser/confidentiality-claims.spec.ts",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
       ],
-      "remaining": "Deferred; no attestation claim without verified evidence."
+      "remaining": "Remove Wallet implementation/acceptance work from MVP; keep all production UI/agent/native routes disabled."
     },
     {
       "id": "AP-14",
-      "title": "Signed AOSP image and update/rollback path for one selected phone SKU",
+      "title": "Pixel 10a Android 17 signed AOSP, always-on listener and recovery",
       "priority": "release gate",
       "status": "blocked",
       "statusRows": [
         "Release"
       ],
-      "gate": "I and D: exact source, blob, kernel and signer lock, hardware checklist and recovery test; blocked on hardware (A-01) and signing authority (A-06)",
+      "gate": "I and D: pinned Pixel 10a inputs, signing, listener, hardware and update/recovery",
       "evidence": [
         "scripts/stage-aosp.mjs",
         "docs/android-and-aosp.md",
-        "docs/native-app-distribution.md"
+        "docs/native-app-distribution.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
       ],
-      "remaining": "No selected phone SKU and no controlled release key."
+      "remaining": "MVP-40/MVP-41/MVP-42/MVP-52: qualify exact source/vendor/kernel/signer inputs, AOSP listening, physical functions and OTA/recovery; policy approved, artifacts and acceptance still required."
     },
     {
       "id": "AP-15",

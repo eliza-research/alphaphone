@@ -1,5 +1,12 @@
 # Alpha Phone MVP scope and gap report
 
+> Policy update 2026-10-12: [owner-approved TODOs](owner-approved-mvp-plan-2026-10-12.md)
+> and [active implementation plan](implementation-plan.md) supersede conflicting
+> requirements below. Local agent only; all speech on-device; subscription services;
+> Pixel 10a Android 17; Phone/Contacts/SMS and always-on listening in AOSP MVP only;
+> no Wallet or app-data import/export. Historical implementation evidence is unchanged.
+
+
 October 7 scope decision ([P-02](decisions.md#october-7-owner-product-decisions)): **Email/Gmail is in MVP scope.** This closes the messaging part of the scope question below. Telegram and Discord remain deferred. The software-side Inbox gaps closed by this change are recorded in [current product status](mvp-current-status.md) and the [Inbox provider completion plan](inbox-provider-completion-plan.md). Real Google OAuth, Cloud deployment of the read-state patch and a real mailbox remain acceptance gates.
 
 October 4 production-surface update: mock mode, prototype fixtures, the development profile and the local development endpoint are now development/test surfaces that exist only in builds made with `ELIZA_DEV_ALLOW_TEST_MOCKS=1`. The production web build and all four distribution APKs exclude them; references to mock mode below describe that flag-only surface or historical checkpoints. See the [production readiness record](https://github.com/AlphaCompute/alphaphone/blob/51c8157533353a805afd2811f4e3f41b66b7b9fa/docs/production-readiness-2026-10-04.md).

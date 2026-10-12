@@ -1,5 +1,15 @@
 # Current MVP status
 
+## October 12 approved policy versus current implementation
+
+All 32 decision choices are resolved in the [approved backlog](owner-approved-mvp-plan-2026-10-12.md).
+Older capability observations below describe the source/evidence at their stated
+revisions, not current policy. Cloud speech, credits, optional hosted agents and
+all-four-view deferral are implementation gaps against the new requirements.
+AOSP includes Phone/Contacts/SMS and always-on listening; Wallet is excluded.
+The PRD matrix below is updated for that scope. No historical test result is promoted.
+
+
 The MVP is not complete. This index separates implemented capabilities from
 remaining acceptance work. Source ownership is defined in
 [architecture.md](architecture.md); browser capabilities and their limits are
@@ -107,18 +117,18 @@ Status of each [PRD](prd.md) requirement, mirrored in `docs/requirements.json` a
 | --- | --- | --- | --- |
 | AP-01 | partial | Home and launcher; Design and accessibility | E: LauncherLibrary, which has never run, and the HOME-role phase (SettingsRoles, LauncherHome) on a distributable launcher APK; then D on the selected phone |
 | AP-02 | partial | Home and launcher; Local startup and ownership; Connection choices; Release | B: four distribution APKs build at the current pin and pass scripts/verify-apks.mjs; then E: install both modes, open apps and return HOME repeatedly |
-| AP-03 | partial | Connection choices; Local startup and ownership | R and D: real-device wrong-owner and wrong-origin, expired and reused token, and callback tests against the managed endpoint (A-02) |
-| AP-04 | partial | Chat and retained context; Connection choices; Privacy and outbound context | E then D: resident process restart and reconnect without duplicate messages or writes; no inference-available claim without provider health evidence |
+| AP-03 | partial | Connection choices; Local startup and ownership | S: local-only service onboarding and subscription policy, then R/D authentication and latency |
+| AP-04 | partial | Chat and retained context; Connection choices; Privacy and outbound context | E then D: resident lifecycle, history, missed occurrences and no duplicate effects |
 | AP-05 | partial | Chat and retained context; Design and accessibility | E: soft-keyboard resize, Back and HOME without keyboard obstruction on an installed APK; then D |
-| AP-06 | partial | Speech and recording (J02) | Owner: voice send and route policy (MVP-01) and whether on-device speech is still required (A-24); then R: Cloud speech with a signed-in account, and D: physical audio, interruption and latency (A-10) |
+| AP-06 | partial | Speech and recording (J02) | S: native speech/turn integration, then E both ABIs and D audio/latency/listening |
 | AP-07 | partial | Home and launcher; Digests and schedules | R: real provider agenda and digests with loading, empty, stale and error states; then D |
-| AP-08 | deferred | Phone, SMS, Contacts and Wallet | A recorded scope change, then native role, permission and return-to-HOME acceptance |
+| AP-08 | partial | Phone, SMS, Contacts and Wallet | S: AOSP capability gates and providers, then E roles and D real carrier endpoints |
 | AP-09 | partial | Email/Gmail; Notes, Calendar and Reminders | R: real Google OAuth grant, managed Cloud Gmail routes and a real mailbox; then D: a real synced calendar account on a phone |
-| AP-10 | partial | Browser and passwords; Files, camera, scans and media; Schedule to travel (J04) and Maps; Notes, Calendar and Reminders | E: the reading and page-question classes on a WebView with isolated-world injection, and BrowserFlow's live-search method; Owner: a production Maps provider (A-23); then R and D |
+| AP-10 | partial | Browser and passwords; Files, camera, scans and media; Schedule to travel (J04) and Maps; Notes, Calendar and Reminders | S: Cloud Maps, full media and browser-policy integration, then R/E/D journeys |
 | AP-11 | partial | Typed workflows; Digests and schedules | E then D: interrupted-worker behavior on the resident runtime with real receipts |
-| AP-12 | partial | Settings; Privacy and outbound context; Licenses | E: SettingsFlow and the settings campaign at the current pin, then every settings handoff and readback on a distributable APK (SettingsSystemFacts, SettingsNative, SettingsFlow, SettingsRoles, NotificationChannels); then D |
-| AP-13 | deferred | Phone, SMS, Contacts and Wallet | Provider, key custody, device security and transaction-approval decisions (A-08) before any work |
-| AP-14 | blocked | Release | I and D: exact source, blob, kernel and signer lock, hardware checklist and recovery test; blocked on hardware (A-01) and signing authority (A-06) |
+| AP-12 | partial | Settings; Privacy and outbound context; Licenses | S: reset/subscription/shade policy, then E/D persistence and recovery |
+| AP-13 | deferred | Phone, SMS, Contacts and Wallet | No MVP delivery gate; verify Wallet remains unavailable |
+| AP-14 | blocked | Release | I and D: pinned Pixel 10a inputs, signing, listener, hardware and update/recovery |
 | AP-15 | partial | Design and accessibility; Home and launcher | E: Accessibility, which fails on both flavors at the current source, and Rotation at the current pin; then D: TalkBack, large font, touch and keyboard, offline, killed process, rotation and repeated HOME navigation |
 
 ## Qualification

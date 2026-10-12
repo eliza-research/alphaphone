@@ -37,62 +37,75 @@
       "id": "MVP-01",
       "group": "Product decisions",
       "priority": "P0",
-      "kind": "decision",
+      "kind": "implementation",
       "blocked_on": [
-        "HUMAN: owner decision on voice send and route policy (reconcile P-01, P-07 and PRD AP-06, with pending A-04 and A-24)"
+        "SOFTWARE"
       ],
       "requirements": [
         "AP-06"
       ],
-      "title": "Reconcile voice send and route policy",
-      "current": "Flag-off builds select Eliza Cloud speech unconditionally (apps/app/src/runtime/voice-selection.ts; its own comment says this differs from P-01/P-07 as the PRD states them and needs a decision). decisions.md P-07 names Cloud as the default for chat voice, Notes transcription and read-aloud; P-01 requires record, transcribe, review, then the user sends; an ongoing Cloud conversation sends each new spoken turn (test/browser/chat-voice-mode.spec.ts). The PRD's AP-06 row still says local first with Cloud as a disclosed opt-in, and its closing section says on-device speech remains required on Android. The four manual-entry scenarios are test.todo entries in test/voice-entry-timing.test.mjs, not passing tests.",
-      "remaining": "The owner chooses the authoritative policy for chat, Notes, read-aloud and browser, including whether on-device speech is still required (A-24); then reconcile the PRD, decisions, completion plan, Settings, implementation and tests. Do not silently equate optional local code with a production local route.",
-      "acceptance": "One dated approved policy; all entrypoints and cancellation/consent tests match it; no unsupported latency claim.",
+      "title": "Implement local dictation and interruptible voice assistant",
+      "current": "Historical source/evidence observation (not the approved policy): Flag-off builds select Eliza Cloud speech unconditionally (apps/app/src/runtime/voice-selection.ts; its own comment says this differs from P-01/P-07 as the PRD states them and needs a decision). decisions.md P-07 names Cloud as the default for chat voice, Notes transcription and read-aloud; P-01 requires record, transcribe, review, then the user sends; an ongoing Cloud conversation sends each new spoken turn (test/browser/chat-voice-mode.spec.ts). The PRD's AP-06 row still says local first with Cloud as a disclosed opt-in, and its closing section says on-device speech remains required on Android. The four manual-entry scenarios are test.todo entries in test/voice-entry-timing.test.mjs, not passing tests.",
+      "remaining": "Approved October 12 TODOs #423, #397, #413: Transcribe records locally and on Stop inserts editable text; the user sends it. Voice assistant listens and submits automatically: after a short gap evaluate semantic turn completion with Clef; after a longer gap submit. Resumed speech cancels pending submit or the in-flight response/playback and continues the utterance/conversation. All STT/TTS remains local. All speech recognition and synthesis run locally on the device, always. Replace Cloud/paired-host speech policy. Use the Android native bridge to the reviewed Eliza llama.cpp/libelizainference build, extending shared upstream speech support where necessary. Research candidate models on Hugging Face and select by measured device speed and quality, not advertised desktop throughput. On-device STT and TTS are mandatory for every production speech entrypoint, including signed-out and offline use. No Cloud speech fallback. A failed local engine must surface recovery and typing, not switch routes.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #423, #397, #413. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [],
       "sources": [
         "docs/prd.md",
         "docs/decisions.md",
         "apps/app/src/runtime/voice-selection.ts",
         "apps/app/src/prototype/voice-adapter.ts",
-        "test/voice-entry-timing.test.mjs"
-      ]
+        "test/voice-entry-timing.test.mjs",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        423,
+        397,
+        413
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-02",
       "group": "Product decisions",
       "priority": "P0",
-      "kind": "decision",
+      "kind": "implementation",
       "blocked_on": [
-        "HUMAN: decision A-09"
+        "SOFTWARE"
       ],
       "requirements": [
         "AP-11"
       ],
-      "title": "Resolve powered-off execution A-09",
-      "current": "Resident schedules cannot execute on a powered-off phone, and hosted execution while the phone is off does not exist. A scheduled time that passes while the host is not running is recorded once as missed and never run later, and a missed record never replaces the last brief (test/digest-occurrence-delivery.test.mjs, test/browser/dev-digest-schedule.spec.ts, test/browser/journey-d-digests.spec.ts; development scheduler, class S). The flag-off Android panel says schedules run on the phone and cannot run while it is off (test/browser/journey-core-loops.production.spec.ts).",
-      "remaining": "The owner either formally amends the DoD to resident missed-occurrence recovery or funds two genuinely hosted loops. Under the amendment, the remaining evidence is emulator and device (MVP-38); under hosted loops, the service does not exist.",
-      "acceptance": "Approved amendment and corresponding evidence, or two distinct hosted terminal results while the phone remains powered off and one delivery each on reconnect.",
+      "title": "Qualify powered-on scheduling and missed recovery",
+      "current": "Historical source/evidence observation (not the approved policy): Resident schedules cannot execute on a powered-off phone, and hosted execution while the phone is off does not exist. A scheduled time that passes while the host is not running is recorded once as missed and never run later, and a missed record never replaces the last brief (test/digest-occurrence-delivery.test.mjs, test/browser/dev-digest-schedule.spec.ts, test/browser/journey-d-digests.spec.ts; development scheduler, class S). The flag-off Android panel says schedules run on the phone and cannot run while it is off (test/browser/journey-core-loops.production.spec.ts).",
+      "remaining": "Approved October 12 TODOs #394: Schedules run only while the phone is powered on; the agent is local. Remove powered-off hosted-loop acceptance. Record missed occurrences once; do not automatically replay overdue effects. Offer an explicit Run now action where useful.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #394. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [],
       "sources": [
         "docs/mvp-completion-plan.md",
-        "docs/decisions.md"
-      ]
+        "docs/decisions.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        394
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-03",
       "group": "Product decisions",
       "priority": "P0",
-      "kind": "decision",
+      "kind": "implementation",
       "blocked_on": [
-        "HUMAN: decisions A-01 (exact SKU, Android version, device inputs) and A-06 (signing owner, release key, update and rollback authority)"
+        "SOFTWARE",
+        "HUMAN: controlled service/release operator access or exact device/build artifacts for qualification"
       ],
       "requirements": [
         "AP-14"
       ],
-      "title": "Pin Pixel 10 hardware inputs and release authority",
-      "current": "docs/android-and-aosp.md names Cuttlefish as the image validation target and Pixel 10 as the hardware build target. The exact Pixel 10 SKU, Android version and device, kernel and vendor inputs are not admitted. android/release-signer.json records signerSha256 \"unset\" and no last release, so no release can be marked distributable.",
-      "remaining": "Close A-01/A-06 for Pixel 10: exact SKU/variant, Android version, device tree/blobs/kernel, signing/update custody and recovery/support owner. Keep Cuttlefish evidence separate; do not relabel another Pixel product. Preserve stock recovery and emergency access.",
-      "acceptance": "Named owners and immutable source/device/signer manifest sufficient for reproducible image and rollback work.",
+      "title": "Pin Pixel 10a Android 17 inputs and release authority",
+      "current": "Historical source/evidence observation (not the approved policy): docs/android-and-aosp.md names Cuttlefish as the image validation target and Pixel 10 as the hardware build target. The exact Pixel 10 SKU, Android version and device, kernel and vendor inputs are not admitted. android/release-signer.json records signerSha256 \"unset\" and no last release, so no release can be marked distributable.",
+      "remaining": "Approved October 12 TODOs #399, #400: Target Pixel 10a on Android 17. Ship standalone APK and Alpha AOSP image/launcher; Cuttlefish is the image integration test target. Other Pixels are not alternate promised hardware. Alpha Compute controls signing and update authority; Shaw is the accountable release/support/rollback owner. Use managed or hardware-backed release signing, distinct from developer keys.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #399, #400. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [],
       "sources": [
         "docs/prd.md",
@@ -100,81 +113,118 @@
         "android/release-signer.json",
         "docs/implementation-plan.md",
         "docs/on-device-agent-plan.md",
-        "docs/android-and-aosp.md"
-      ]
+        "docs/android-and-aosp.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        399,
+        400
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-04",
       "group": "Product decisions",
       "priority": "P1",
-      "kind": "decision",
+      "kind": "implementation",
       "blocked_on": [
-        "HUMAN: decisions A-02, A-07, A-15, A-16, A-20 and A-26"
+        "SOFTWARE",
+        "HUMAN: controlled service/release operator access or exact device/build artifacts for qualification"
       ],
       "requirements": [
         "AP-03",
         "AP-04",
         "AP-09"
       ],
-      "title": "Freeze services accounts and billing",
-      "current": "Production Android uses resident execution with Eliza Cloud sign-in and credit checks for billed inference. With test mocks off the native transport admits only https://api.eliza.app (ConnectionRoutes.java, JVM-tested, not run in an APK), so no Android build reaches a Cloud agent host. Direct Cerebras and browser/test-mocks remote transports remain separate development paths. No real Cloud sign-in, credit check or Gmail grant has been exercised; the Google code exchange returns 401 (docs/cloud-production-validation.md).",
-      "remaining": "Close A-02, A-07, A-15, A-16, A-20 and A-26: confirm the billed inference endpoint, pilot account provisioning, Gmail scopes and usage semantics. Document any retained development provider profile separately. Retired phone pairing and hosted-agent enrollment are not production prerequisites.",
-      "acceptance": "Documented supported service matrix; approved non-secret operator provisioning procedure and matching real-service tests.",
+      "title": "Implement managed services and subscription entitlement",
+      "current": "Historical source/evidence observation (not the approved policy): Production Android uses resident execution with Eliza Cloud sign-in and credit checks for billed inference. With test mocks off the native transport admits only https://api.eliza.app (ConnectionRoutes.java, JVM-tested, not run in an APK), so no Android build reaches a Cloud agent host. Direct Cerebras and browser/test-mocks remote transports remain separate development paths. No real Cloud sign-in, credit check or Gmail grant has been exercised; the Google code exchange returns 401 (docs/cloud-production-validation.md).",
+      "remaining": "Approved October 12 TODOs #396, #410, #421: Eliza Cloud is the managed account, inference, subscription and Maps service endpoint. Agent orchestration, state, scheduling and approvals remain on the phone. No Cloud/hosted agent exists as a product connection, upgrade or fallback. Use subscription billing with reasonable rate limits rather than a user-facing credit top-up/per-token meter. Billing checks must not add a billing-service round trip to each assistant turn. Local speech and local tools do not depend on an online billing check. Communication providers are Gmail and text messaging. Gmail is available in both product distributions; SMS/MMS is device/SIM based and only exposed on the Alpha AOSP image. Telegram, Discord and additional mail providers stay deferred. Device Calendar/Contacts sources remain separate native permissions.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #396, #410, #421. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [],
       "sources": [
         "docs/decisions.md",
         "docs/cloud-production-validation.md",
         "docs/implementation-plan.md",
-        "docs/on-device-agent-plan.md"
-      ]
+        "docs/on-device-agent-plan.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        396,
+        410,
+        421
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-05",
       "group": "Product decisions",
       "priority": "P1",
-      "kind": "decision",
+      "kind": "implementation",
       "blocked_on": [
-        "HUMAN: decision A-10, after MVP-01",
+        "SOFTWARE",
         "DEVICE: latency samples on the selected phone"
       ],
       "requirements": [
         "AP-06",
         "AP-15"
       ],
-      "title": "Agree measurable voice latency acceptance",
-      "current": "The six-second target and the manual review requirement are inconsistent. No latency sample exists for any route or device. Timing helpers and an aggregation script exist (apps/app/src/runtime/voice-timing.ts, scripts/aggregate-voice-latency.mjs); the entry-point marks they need are among the test.todo cases in test/voice-entry-timing.test.mjs.",
-      "remaining": "Close A-10 with start/end boundaries, inclusion of review time, cold/warm definitions, percentile, task set and failure accounting. Wire real entrypoint marks rather than only helper-level records.",
-      "acceptance": "At least the agreed sample set per route/device, raw timings and failures retained; no fabricated first-audio mark.",
+      "title": "Measure last-input to first-response audio latency",
+      "current": "Historical source/evidence observation (not the approved policy): The six-second target and the manual review requirement are inconsistent. No latency sample exists for any route or device. Timing helpers and an aggregation script exist (apps/app/src/runtime/voice-timing.ts, scripts/aggregate-voice-latency.mjs); the entry-point marks they need are among the test.todo cases in test/voice-entry-timing.test.mjs.",
+      "remaining": "Approved October 12 TODOs #395: Voice-assistant latency is the elapsed time from the last user speech audio sample to the first audible response sample. Include end-of-turn detection, final STT, inference, TTS and playback buffering. Do not subtract silence detection or report a sum of selected stages as the end-to-end result. Dictation reports stop-to-editable-text separately; manual user think time is not a voice-assistant benchmark.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #395. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-01"
       ],
       "sources": [
         "docs/mvp-completion-plan.md",
         "apps/app/src/runtime/voice-timing.ts",
-        "scripts/aggregate-voice-latency.mjs"
-      ]
+        "scripts/aggregate-voice-latency.mjs",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        395
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-06",
       "group": "Product decisions",
       "priority": "P1",
-      "kind": "decision",
+      "kind": "implementation",
       "blocked_on": [
-        "HUMAN: decisions A-11 to A-19, A-22, A-25, A-32 and A-33"
+        "SOFTWARE"
       ],
       "requirements": [
         "AP-10",
         "AP-12"
       ],
-      "title": "Set remaining optional feature boundaries",
-      "current": "Several design surfaces exceed the frozen MVP. Current behavior for each is stated in decisions.md: alarms are a handoff to Android Clock (A-11), passkeys are not implemented (A-12), third-party cookies are blocked (A-13), only the Alpha browser is trusted for fills (A-14), no secure camera (A-17), Photos shows only Alpha-captured media (A-18), no backup and no in-app erase (A-19), and the app rotates, with a tested landscape layout for Home, the composer and the docked conversation and a browser landscape sweep of the other retained views (A-22). Four further decisions were recorded on 2026-10-10: a production Maps provider (A-23), whether on-device speech is still required (A-24), recoverability of deleted Calendar events and reminders (A-25) and Cloud agent host admission on Android (A-26). Four more were recorded on 2026-10-11, each already present in another document or item: where Alpha's own notices and the quick-settings tiles live on the AOSP image (A-32), whether a downward swipe on Home opens Android's shade (A-33), the two calendar availability defaults (A-34) and attachments in a Use in email suggestion (A-35).",
-      "remaining": "The owner dispositions A-11 through A-19, A-22, A-25, A-32 and A-33. A-23 belongs to MVP-31, A-24 to MVP-01 and MVP-23, A-26 to MVP-04, A-34 to MVP-12 and A-35 to MVP-14. Keep optional features separate from mandatory release gates.",
-      "acceptance": "Each item has a chosen scope or explicit deferral, user-visible unavailable behavior and restoration gate.",
+      "title": "Implement approved feature boundaries",
+      "current": "Historical source/evidence observation (not the approved policy): Several design surfaces exceed the frozen MVP. Current behavior for each is stated in decisions.md: alarms are a handoff to Android Clock (A-11), passkeys are not implemented (A-12), third-party cookies are blocked (A-13), only the Alpha browser is trusted for fills (A-14), no secure camera (A-17), Photos shows only Alpha-captured media (A-18), no backup and no in-app erase (A-19), and the app rotates, with a tested landscape layout for Home, the composer and the docked conversation and a browser landscape sweep of the other retained views (A-22). Four further decisions were recorded on 2026-10-10: a production Maps provider (A-23), whether on-device speech is still required (A-24), recoverability of deleted Calendar events and reminders (A-25) and Cloud agent host admission on Android (A-26). Four more were recorded on 2026-10-11, each already present in another document or item: where Alpha's own notices and the quick-settings tiles live on the AOSP image (A-32), whether a downward swipe on Home opens Android's shade (A-33), the two calendar availability defaults (A-34) and attachments in a Use in email suggestion (A-35).",
+      "remaining": "Approved October 12 TODOs #401, #402, #403, #404, #407, #408, #409, #414, #416, #417, #418, #419, #420, #422: Android Clock owns alarms, conditional on a usable integration in the app and AOSP image. Alpha owns reminders. A dispatch receipt may state that Clock opened, not that an alarm was created. Passkeys are outside MVP acceptance. Integrated passwords remain in scope. A later release may use the system credential provider after actual browser/image qualification; Alpha is not a new passkey provider now. Third-party cookies are allowed in normal browsing. Persistent first-party sign-ins remain. Private tabs remain ephemeral and strict; browser storage stays separate from the privileged app WebView. Every eligible login surface in Alpha should support password-manager fill. The isolated Browser is currently the website-login surface; future Alpha-owned login forms must also be covered. This is not blanket trust of arbitrary external browsers and does not expose passwords to the agent. Use the system secure camera and its AOSP lock-screen gesture. Alpha does not implement its own secure camera; agent/library/account access stays behind unlock. Provide full device photo/video library access to the local agent where Android permits and the user grants it, rather than limiting the product to owned captures or picker selections. Handle partial/denied access honestly. Full local access does not imply automatic upload of the entire library. No app-data import/export, backup or device-transfer product workflow. Provide a confirmed Reset Alpha data option. Keep Android backup disabled. Ordinary Files opening/saving and Gmail attachments are separate daily-tool operations, not app-data migration. Use a short durable Undo window and one review step for events and reminders. Initial engineering value: ten seconds. Delay provider deletion until expiry when possible; never call a recreated invitation a lossless restore. Suspend pending-deletion reminder delivery immediately. Use Android\u2019s shade as the single notification/quick-settings surface if it integrates correctly and matches the product design. Keep workflow history in Alpha; remove the competing imitation shade. Use normal notifications/tiles before custom SystemUI changes. A downward swipe on empty launcher Home opens Android\u2019s shade. Preserve top-edge Android behavior and content/conversation scrolling. Standalone follows ordinary app behavior. Free, cancelled and declined entries are not busy. Offer owner-selected free/busy-only calendars without exposing details. Tentative/unanswered blocking entries count conservatively; unavailable/stale reads are unknown, never free. A reviewed Use in email suggestion may attach items selected in Files or Photos. Context selection is not itself permission to attach. Insert into a draft; final Send is separate. Phone, Contacts and SMS are included only in the AOSP fork. Hide and capability-gate them in standalone APKs and other non-AOSP product installs. The launcher flavor alone is not proof of an Alpha image. Wallet is outside MVP. Wallet is removed from the MVP plan. No custody, payment, pass-wallet, NFC payment integration or wallet-provider activation is required for MVP. Preserve unrelated user data; do not activate prototype transfers.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #401, #402, #403, #404, #407, #408, #409, #414, #416, #417, #418, #419, #420, #422. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [],
       "sources": [
         "docs/decisions.md",
-        "docs/flow-audit-and-prd.md"
-      ]
+        "docs/flow-audit-and-prd.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        401,
+        402,
+        403,
+        404,
+        407,
+        408,
+        409,
+        414,
+        416,
+        417,
+        418,
+        419,
+        420,
+        422
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-07",
@@ -182,8 +232,7 @@
       "priority": "P1",
       "kind": "documentation",
       "blocked_on": [
-        "SOFTWARE: correct the stale patch references named under Remaining",
-        "HUMAN: voice policy decision (MVP-01) before the A-04, A-10 and AP-06 wording is final"
+        "SOFTWARE: correct the stale patch references named under Remaining"
       ],
       "requirements": [
         "AP-01",
@@ -193,9 +242,9 @@
         "AP-07"
       ],
       "title": "Refresh the requirement and evidence ledger",
-      "current": "Refreshed on 2026-10-10 against upstream pin 40dbe96bd1 from source, tests and recorded evidence: docs/mvp-current-status.md, docs/requirements.json, this inventory, the evidence statements in docs/decisions.md, and the false statements in README.md, docs/ci-cost-policy.md and docs/prd.md. docs/mvp-owner-actions.md lists what only the owner can do. test/docs-requirements-consistency.test.mjs and test/docs-inventory-consistency.test.mjs keep the ledgers and the two inventory files in agreement. The entries for MVP-12 to 16, 18, 19, 48 and 53 carry the Current and Remaining text of PR #388 (merged into main on 2026-10-10); their \"Blocked on\" lines were rewritten when the two were merged. docs/mvp-browser-review.md and docs/mvp-completion-plan.md were reconciled on 2026-10-10 against main dfacccb3 (branch claude/r9-status-docs-reconcile), from source, tests, workflow files and recorded evidence. The browser review now opens with a reconciled part (evidence at the current source by class, a table of the statements code has overtaken, a rewritten surface inventory and a dated state note on each feature section) and keeps every October 5 and 6 checkpoint under \"Historical checkpoints\", each heading marked historical and its text unchanged, apart from the October 5 surface table, which the rewritten inventory replaces. The completion plan states that it is a plan and not a status record, corrects the statements source has overtaken (journey A step 2, the build command, the reminder DST rule, the proposed interface names that do not exist as types) and carries a dated state note on every journey and implementation step. Both mark the voice wording as pending MVP-01 and list the other pending decisions their wording waits on. The evidence behind the reconciliation is class S, plus job and step conclusions of hosted runs read through the GitHub API; no emulator, real-integration or device evidence was produced. The round 9 integration (pull request 391) then moved the upstream pin to 13c9857598 and corrected, from source and the GitHub API, the statements it could reach: docs/mvp-current-status.md, docs/mvp-owner-actions.md and docs/requirements.json name the new pin, name the developer APK builds that exist (with their run and commit) and mark what was recorded at 40dbe96bd1; docs/decisions.md A-22 and the rotation row of docs/mvp-owner-actions.md say the landscape sweep of the other views is on main; and docs/browser-dev-parity.md names the chained Android build. The round 8 integration (pull request 392) then corrected the statements round 9 had listed in docs/core-loop-status.md (journey A has a spoken request), docs/verification.md (the pin) and docs/core-loop-audit.md (B-9, B-10, D-17 and the dated no-APK-build statement), and recorded its emulator run in docs/verification.md and the core loop audit. The items of this inventory other than MVP-07, 08, 14, 15 and 19 were not re-read at the new pin: where one says the current pin or names 40dbe96bd1 it describes the refresh at that pin. The ledger refresh of 2026-10-11 (after pull request 392, at main 2560eead) then re-derived every ledger from source, tests and the dated emulator sections of docs/verification.md: docs/core-loop-audit.md (count lines recounted from the rows, the ten rows that rest only on the round 7 run named), docs/mvp-owner-actions.md (merged pull requests and the closed A-21 row removed; the embedding host input, the human half of speech admission and the never-made hosted dispatches added; a last-recorded-result column for every campaign), docs/decisions.md (stale evidence in A-10, A-22, A-24 and A-26 corrected; A-32 to A-35 added as pending), every item of this inventory, every entry of docs/requirements.json with docs/mvp-current-status.md, docs/core-loop-status.md, and the two documents the earlier refreshes had not reached at the current pin, docs/mvp-browser-review.md and docs/mvp-completion-plan.md. It produced documentation and no new evidence of any class.",
-      "remaining": "The voice wording in docs/mvp-browser-review.md, docs/mvp-completion-plan.md and the PRD's AP-06 row is marked pending and cannot be made final until the voice policy is settled (MVP-01, with A-04 and A-10). Stale statements still uncorrected, in documents no refresh has edited: docs/local-agent-voice-validation.md and docs/standalone-paired-asr.md cite files under patches/eliza, and docs/calendar-reminder-contract.md and docs/workflow-run-cancellation.md name patch files (0040-reminders-lifecycle, and 0004 to 0006); the patches directory no longer exists and the product carries no local patch (AGENTS.md also still names patches/eliza). The dated emulator sections of docs/verification.md are written summaries; their result files are not committed, so no ledger statement that cites them can be checked against raw output.",
-      "acceptance": "Every AP and retained F/J journey has current implementation, test class, exact source/artifact, remaining gate and owner; no old failure is called current without reproduction.",
+      "current": "Historical source/evidence observation (not the approved policy): Refreshed on 2026-10-10 against upstream pin 40dbe96bd1 from source, tests and recorded evidence: docs/mvp-current-status.md, docs/requirements.json, this inventory, the evidence statements in docs/decisions.md, and the false statements in README.md, docs/ci-cost-policy.md and docs/prd.md. docs/mvp-owner-actions.md lists what only the owner can do. test/docs-requirements-consistency.test.mjs and test/docs-inventory-consistency.test.mjs keep the ledgers and the two inventory files in agreement. The entries for MVP-12 to 16, 18, 19, 48 and 53 carry the Current and Remaining text of PR #388 (merged into main on 2026-10-10); their \"Blocked on\" lines were rewritten when the two were merged. docs/mvp-browser-review.md and docs/mvp-completion-plan.md were reconciled on 2026-10-10 against main dfacccb3 (branch claude/r9-status-docs-reconcile), from source, tests, workflow files and recorded evidence. The browser review now opens with a reconciled part (evidence at the current source by class, a table of the statements code has overtaken, a rewritten surface inventory and a dated state note on each feature section) and keeps every October 5 and 6 checkpoint under \"Historical checkpoints\", each heading marked historical and its text unchanged, apart from the October 5 surface table, which the rewritten inventory replaces. The completion plan states that it is a plan and not a status record, corrects the statements source has overtaken (journey A step 2, the build command, the reminder DST rule, the proposed interface names that do not exist as types) and carries a dated state note on every journey and implementation step. Both mark the voice wording as pending MVP-01 and list the other pending decisions their wording waits on. The evidence behind the reconciliation is class S, plus job and step conclusions of hosted runs read through the GitHub API; no emulator, real-integration or device evidence was produced. The round 9 integration (pull request 391) then moved the upstream pin to 13c9857598 and corrected, from source and the GitHub API, the statements it could reach: docs/mvp-current-status.md, docs/mvp-owner-actions.md and docs/requirements.json name the new pin, name the developer APK builds that exist (with their run and commit) and mark what was recorded at 40dbe96bd1; docs/decisions.md A-22 and the rotation row of docs/mvp-owner-actions.md say the landscape sweep of the other views is on main; and docs/browser-dev-parity.md names the chained Android build. The round 8 integration (pull request 392) then corrected the statements round 9 had listed in docs/core-loop-status.md (journey A has a spoken request), docs/verification.md (the pin) and docs/core-loop-audit.md (B-9, B-10, D-17 and the dated no-APK-build statement), and recorded its emulator run in docs/verification.md and the core loop audit. The items of this inventory other than MVP-07, 08, 14, 15 and 19 were not re-read at the new pin: where one says the current pin or names 40dbe96bd1 it describes the refresh at that pin. The ledger refresh of 2026-10-11 (after pull request 392, at main 2560eead) then re-derived every ledger from source, tests and the dated emulator sections of docs/verification.md: docs/core-loop-audit.md (count lines recounted from the rows, the ten rows that rest only on the round 7 run named), docs/mvp-owner-actions.md (merged pull requests and the closed A-21 row removed; the embedding host input, the human half of speech admission and the never-made hosted dispatches added; a last-recorded-result column for every campaign), docs/decisions.md (stale evidence in A-10, A-22, A-24 and A-26 corrected; A-32 to A-35 added as pending), every item of this inventory, every entry of docs/requirements.json with docs/mvp-current-status.md, docs/core-loop-status.md, and the two documents the earlier refreshes had not reached at the current pin, docs/mvp-browser-review.md and docs/mvp-completion-plan.md. It produced documentation and no new evidence of any class.",
+      "remaining": "Approved October 12 TODOs #394, #423: Schedules run only while the phone is powered on; the agent is local. Remove powered-off hosted-loop acceptance. Record missed occurrences once; do not automatically replay overdue effects. Offer an explicit Run now action where useful. Transcribe records locally and on Stop inserts editable text; the user sends it. Voice assistant listens and submits automatically: after a short gap evaluate semantic turn completion with Clef; after a longer gap submit. Resumed speech cancels pending submit or the in-flight response/playback and continues the utterance/conversation. All STT/TTS remains local.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #394, #423. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-01"
       ],
@@ -203,8 +252,14 @@
         "docs/mvp-current-status.md",
         "docs/requirements.json",
         "docs/mvp-browser-review.md",
-        "docs/mvp-completion-plan.md"
-      ]
+        "docs/mvp-completion-plan.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        394,
+        423
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-08",
@@ -312,25 +367,30 @@
       "priority": "P1",
       "kind": "implementation",
       "blocked_on": [
+        "SOFTWARE",
         "EMULATOR: the permission prompt and the review inside the WebView have never run (CalendarAvailabilityInstrumentedTest has one developer-APK emulator run, both flavors at 2961bd9e, and none at later source)",
-        "HUMAN: owner confirms the two busy defaults (cancelled and declined events are not busy, and free/busy-level calendars are offered)",
         "DEVICE"
       ],
       "requirements": [
         "AP-09"
       ],
       "title": "Finish foreground Calendar availability",
-      "current": "Software path implemented; the instrumented reader test has one emulator run, nothing else has run on Android. A foreground executor is registered and calendar.availability-read.v1 is negotiated on paired, Cloud and resident connections (not the browser development profile). The owner picks 1 to 16 calendars with none preselected, sees the exact free/busy result and shares it; the same read repeats before sharing and any difference fails with no result. Android reads only the chosen calendars from CalendarProvider with a projection limited to start, end, all-day, availability and status (CalendarAvailabilityReader.java), and the action journal has its own bounded policy for the answer; the browser build reads the in-app calendar. Free events are excluded, all-day events follow the owner's civil day, and a time-zone disagreement, denied permission, stale context or changed calendar fails closed. No title, calendar name or account enters the journal, receipt or chat. A proposal that cannot be reviewed from the current screen is named in chat instead of dropped. Evidence: Node, JVM (SQLite stand-in for CalendarProvider) and browser tests against synthetic agent routes. scripts/test-calendar-regression.mjs (round 8) runs CalendarAvailabilityInstrumentedTest in an owned secondary user with READ_CALENDAR and WRITE_CALENDAR granted; all 4 tests passed on both flavors on an emulator with developer APKs at 2961bd9e (docs/verification.md, class E for those APKs only). Not run on a device, and the prompt and the WebView review have not run anywhere. See calendar availability (docs/calendar-availability.md).",
-      "remaining": "Run the rest of the Android path on an emulator and all of it on a device: the permission prompt (including WebView visibility while it shows), the review inside the WebView, synced and multi-account calendars, a declined invitation and a time-zone change mid-review. Produce and consume one availability receipt with a real agent. Owner to confirm two engineering defaults: cancelled events and declined invitations are not busy, and calendars at free/busy access level are offered. NEEDS upstream: an availability-carrying selected-calendar read in plugin-native-calendar so the Alpha-side reader can be removed, and a journal result bound that fits the 200-interval contract. The notes_search, notes_named, calendar_named and reminder_named reviews stay un-negotiated and fail closed.",
-      "acceptance": "Actual selected-provider result and exact receipt; free events excluded, all-day busy, no unrelated calendars or titles disclosed.",
+      "current": "Historical source/evidence observation (not the approved policy): Software path implemented; the instrumented reader test has one emulator run, nothing else has run on Android. A foreground executor is registered and calendar.availability-read.v1 is negotiated on paired, Cloud and resident connections (not the browser development profile). The owner picks 1 to 16 calendars with none preselected, sees the exact free/busy result and shares it; the same read repeats before sharing and any difference fails with no result. Android reads only the chosen calendars from CalendarProvider with a projection limited to start, end, all-day, availability and status (CalendarAvailabilityReader.java), and the action journal has its own bounded policy for the answer; the browser build reads the in-app calendar. Free events are excluded, all-day events follow the owner's civil day, and a time-zone disagreement, denied permission, stale context or changed calendar fails closed. No title, calendar name or account enters the journal, receipt or chat. A proposal that cannot be reviewed from the current screen is named in chat instead of dropped. Evidence: Node, JVM (SQLite stand-in for CalendarProvider) and browser tests against synthetic agent routes. scripts/test-calendar-regression.mjs (round 8) runs CalendarAvailabilityInstrumentedTest in an owned secondary user with READ_CALENDAR and WRITE_CALENDAR granted; all 4 tests passed on both flavors on an emulator with developer APKs at 2961bd9e (docs/verification.md, class E for those APKs only). Not run on a device, and the prompt and the WebView review have not run anywhere. See calendar availability (docs/calendar-availability.md).",
+      "remaining": "Approved October 12 TODOs #418: Free, cancelled and declined entries are not busy. Offer owner-selected free/busy-only calendars without exposing details. Tentative/unanswered blocking entries count conservatively; unavailable/stale reads are unknown, never free.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #418. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [],
       "sources": [
         "apps/app/src/runtime/device-actions.ts",
         "vendor/eliza/packages/contracts/src/device-reviews.ts",
         "docs/calendar-availability.md",
         "apps/app/src/runtime/calendar-availability.ts",
-        "android/app/src/main/java/ai/elizaresearch/alphaphone/CalendarAvailabilityReader.java"
-      ]
+        "android/app/src/main/java/ai/elizaresearch/alphaphone/CalendarAvailabilityReader.java",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        418
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-13",
@@ -365,24 +425,29 @@
       "priority": "P1",
       "kind": "implementation",
       "blocked_on": [
-        "HUMAN: Gmail grant (MVP-35) and decision A-35 (attachments in a suggestion, related to A-15)",
+        "SOFTWARE",
         "DEVICE"
       ],
       "requirements": [
         "AP-09"
       ],
       "title": "Expose Use in email through the actual assistant UI",
-      "current": "Implemented in the renderer; fixture and stubbed-bridge evidence only. A finished plain agent reply offers Use in email in its message-actions menu while Inbox is the app behind the conversation. A review dialog shows the From account, the exact destination (reply, open draft or new email), the effect and the exact text. The destination is bound by a renderer-only token over the Cloud session, account, open message and its history id, and the draft's identity and content; a stale token, a changed reply or session, a locked phone or another app in front inserts nothing. Draft text is never replaced: an open draft that already has text only offers Add below existing text. Nothing is prepared or dispatched to the provider; sending still goes through the composer and the provider review. Selected Files and Photos are not attached (the documented picker-only policy, stated in the dialog). Evidence, all source and browser tests with synthetic data: test/use-in-email-review.test.mjs, sections 7 to 7c of scripts/test-inbox-attention-flow.mjs and test/browser/use-in-email.spec.ts (development lane, synthetic Cloud client and agent placed in the page), and test/browser/use-in-email.production.spec.ts on the flag-off build. The flag-off spec replaces only the Android bridge: the user opens a synthetic email, asks the agent, the reply streams back over the stubbed native bridge, and the control is driven from the reply's message-actions menu. It covers the review and insert into a reply draft for the selected email, a draft that changed under the open review (refused, then appended after re-review), a Gmail account that changed while the review was open (refused, no draft under either account), a pending send review discarded by an insert so that only the later reviewed request is dispatched, and no action outside Inbox. No resident runtime, model, Eliza Cloud, Google or mail delivery takes part in it. Both specs passed at the round 9 integration commit c0b19147 in hosted runs on 2026-10-11 UTC (pull request 391): the development-lane spec in the Chromium shards and the flag-off spec in the production project.",
-      "remaining": "Acceptance on an installed APK and a device with a real Gmail account and a real agent reply, including TalkBack, system Back and the status-bar inset. The flag-off browser spec stubs the Android bridge, so it is not that acceptance. The action is offered only while Inbox is behind the conversation. Owner decision still open (A-35, related to A-15): whether selected Files or Photos may ever become attachments of a suggestion.",
-      "acceptance": "A user can review and insert a suggestion into the intended draft; edited drafts are not overwritten and no message sends automatically.",
+      "current": "Historical source/evidence observation (not the approved policy): Implemented in the renderer; fixture and stubbed-bridge evidence only. A finished plain agent reply offers Use in email in its message-actions menu while Inbox is the app behind the conversation. A review dialog shows the From account, the exact destination (reply, open draft or new email), the effect and the exact text. The destination is bound by a renderer-only token over the Cloud session, account, open message and its history id, and the draft's identity and content; a stale token, a changed reply or session, a locked phone or another app in front inserts nothing. Draft text is never replaced: an open draft that already has text only offers Add below existing text. Nothing is prepared or dispatched to the provider; sending still goes through the composer and the provider review. Selected Files and Photos are not attached (the documented picker-only policy, stated in the dialog). Evidence, all source and browser tests with synthetic data: test/use-in-email-review.test.mjs, sections 7 to 7c of scripts/test-inbox-attention-flow.mjs and test/browser/use-in-email.spec.ts (development lane, synthetic Cloud client and agent placed in the page), and test/browser/use-in-email.production.spec.ts on the flag-off build. The flag-off spec replaces only the Android bridge: the user opens a synthetic email, asks the agent, the reply streams back over the stubbed native bridge, and the control is driven from the reply's message-actions menu. It covers the review and insert into a reply draft for the selected email, a draft that changed under the open review (refused, then appended after re-review), a Gmail account that changed while the review was open (refused, no draft under either account), a pending send review discarded by an insert so that only the later reviewed request is dispatched, and no action outside Inbox. No resident runtime, model, Eliza Cloud, Google or mail delivery takes part in it. Both specs passed at the round 9 integration commit c0b19147 in hosted runs on 2026-10-11 UTC (pull request 391): the development-lane spec in the Chromium shards and the flag-off spec in the production project.",
+      "remaining": "Approved October 12 TODOs #419: A reviewed Use in email suggestion may attach items selected in Files or Photos. Context selection is not itself permission to attach. Insert into a draft; final Send is separate.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #419. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [],
       "sources": [
         "apps/app/src/prototype/inbox-cloud-adapter.ts",
         "apps/app/src/prototype/agent-adapter.ts",
         "apps/app/src/prototype/use-in-email-review.ts",
         "apps/app/src/prototype/inbox-drafts.ts",
-        "docs/inbox-provider-completion-plan.md"
-      ]
+        "docs/inbox-provider-completion-plan.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        419
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-15",
@@ -449,16 +514,16 @@
       "priority": "P1",
       "kind": "integration",
       "blocked_on": [
-        "HUMAN: decision A-02 (whether remote pairing stays a supported route) and a real private remote host to pair with"
+        "SOFTWARE"
       ],
       "requirements": [
         "AP-03",
         "AP-11"
       ],
       "title": "Qualify retained browser development transports",
-      "current": "HTTPS remote browser transport exists as development infrastructure; direct Cloud sign-in is honestly unavailable for this origin. The development host has a separate credential-reference bridge. Synthetic flag-off coverage (test/browser/connection-boundaries.production.spec.ts): saved mock, staging, Cloud, plain-HTTP local, development and on-device selections open the chooser signed out with no request; refused pairings (wrong role, identity or instance mismatch, expired session, used code, pairing disabled, non-HTTPS address) store nothing and connect nothing; unverified device enrollment grants no phone actions; unconfirmed revocation is reported as unconfirmed.",
-      "remaining": "Record the supported browser development scope. Its account return, storage degradation, revoke and Automations behavior have synthetic flag-off coverage only; no real private remote host has been paired. Keep unsupported Cloud sign-in unavailable unless that route is separately approved and implemented with an admitted origin/server bridge. Do not add browser Cloud login as a production Android MVP prerequisite.",
-      "acceptance": "Flag-off browser can complete only advertised routes; host-only references never leak or masquerade as bearer tokens; account changes fence pending work.",
+      "current": "Historical source/evidence observation (not the approved policy): HTTPS remote browser transport exists as development infrastructure; direct Cloud sign-in is honestly unavailable for this origin. The development host has a separate credential-reference bridge. Synthetic flag-off coverage (test/browser/connection-boundaries.production.spec.ts): saved mock, staging, Cloud, plain-HTTP local, development and on-device selections open the chooser signed out with no request; refused pairings (wrong role, identity or instance mismatch, expired session, used code, pairing disabled, non-HTTPS address) store nothing and connect nothing; unverified device enrollment grants no phone actions; unconfirmed revocation is reported as unconfirmed.",
+      "remaining": "Approved October 12 TODOs #406, #415: Only the local resident agent is supported. No hosted agent, dedicated-agent purchase, remote pairing or Cloud-agent fallback is a product option, now or as an advanced setting. No Cloud-agent host is admitted. The resident agent uses the local native bridge. Cloud inference, subscription, Gmail and Maps are managed services, not agent hosts.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #406, #415. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-04"
       ],
@@ -467,8 +532,14 @@
         "apps/app/src/browser/cloud-connection.ts",
         "apps/app/src/runtime/cloud-protocol.ts",
         "docs/implementation-plan.md",
-        "docs/on-device-agent-plan.md"
-      ]
+        "docs/on-device-agent-plan.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        406,
+        415
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-18",
@@ -476,23 +547,28 @@
       "priority": "P1",
       "kind": "integration",
       "blocked_on": [
-        "EMULATOR: the approval-notice-recovery phase (process death, owner change) and scripts/test-installed-upgrade.mjs have never run on an emulator (the workflow and approval-notice phases have one developer-APK run, 14 of 14 at 9a1ca161)",
-        "HUMAN: owner confirms the engineering default that an owner change withdraws the other owner's pending approval notices and never reposts them"
+        "SOFTWARE",
+        "EMULATOR: the approval-notice-recovery phase (process death, owner change) and scripts/test-installed-upgrade.mjs have never run on an emulator (the workflow and approval-notice phases have one developer-APK run, 14 of 14 at 9a1ca161)"
       ],
       "requirements": [
         "AP-11"
       ],
       "title": "Wire missing native runner phases",
-      "current": "Runner phases wired; the recovery phase is exercised only against a synthetic adb. scripts/test-installed-upgrade.mjs runs WorkflowLegacyReminderUpgradeInstrumentedTest on both distributions after the candidate verify phase and admits the candidate app and instrumentation APK as one verified pair from artifacts/apk-manifest.json before the device is leased. scripts/android-workflow-native.mjs has three phases on both distributions: workflow, approval-notice (both original WorkflowApprovalNoticeInstrumentedTest methods) and, since round 10, approval-notice-recovery: WorkflowApprovalNoticeProcessDeathInstrumentedTest (a pending approval notice while the main process is killed from the WorkflowNoticeProcessRunner helper process: the notice and both ledgers survive unchanged, the tap after restart is captured by the restarted main with the exact approval ID, binding and route, a repeated request posts nothing and rewrites no receipt, a changed binding or expiry is refused) and ownerChangeWithdrawsThePendingApprovalNoticeAndItsTapOpensNothing (the first owner's notice is withdrawn, its retained tap opens nothing, the next owner's notice is untouched, the old approval is never posted again). The owner-change withdrawal is new product code in round 10 (AlphaHostedResults.withdrawOtherOwnerApprovalNotices, called by the renderer when a different owner connects) and an engineering default, not an owner decision; the receipt ledger is the upstream NoticeDelivery module behind WorkflowNoticeDelivery. Both runners re-check before any install that the archived bytes are still the admitted pair; receipts record the candidate hashes, the runner and the failed phase, and a skipped, failed or incomplete campaign exits non-zero. Evidence: test/installed-upgrade-runner.test.mjs, test/native-campaign-evidence.test.mjs (synthetic adb), test/workflow-approval-notice.test.mjs (JVM contract) and test/browser/workflow-notice-taps.spec.ts; one emulator run of the workflow and approval-notice phases with developer APKs at 9a1ca161 (14 of 14). The round 10 Java was compiled with javac, not Gradle, and has never been installed. See docs/verification.md.",
-      "remaining": "Run the approval-notice-recovery phase and scripts/test-installed-upgrade.mjs on an emulator for both variants; neither has run. The process-death case has not run on any Android version: whether the helper process may send the notice's PendingIntent after the main process is gone is an emulator question. The restarted app's renderer is not driven after the tap (no agent in the fixture), so \"opens the exact approval\" is proven up to the captured route, and the authenticated read that follows is browser evidence only. Step notices of another owner are kept by design and answer \"Connect its original agent\". Owner to confirm the withdrawal default: after an owner change the first owner's approval notice is not posted again even if that owner reconnects before the approval expires (the step still waits in Workflows). The baseline pair is hash-pinned only for the duration of a run. In scripts/android-instrumentation.mjs WorkflowApprovalNotice has a registry entry (it runs both OS-posting methods in one process) and WorkflowLegacyReminderUpgrade has none: it runs only through scripts/test-installed-upgrade.mjs.",
-      "acceptance": "Runner executes both classes on both flavors; verifies exact scheduled item/approval across upgrade, process death, account change and notification tap.",
+      "current": "Historical source/evidence observation (not the approved policy): Runner phases wired; the recovery phase is exercised only against a synthetic adb. scripts/test-installed-upgrade.mjs runs WorkflowLegacyReminderUpgradeInstrumentedTest on both distributions after the candidate verify phase and admits the candidate app and instrumentation APK as one verified pair from artifacts/apk-manifest.json before the device is leased. scripts/android-workflow-native.mjs has three phases on both distributions: workflow, approval-notice (both original WorkflowApprovalNoticeInstrumentedTest methods) and, since round 10, approval-notice-recovery: WorkflowApprovalNoticeProcessDeathInstrumentedTest (a pending approval notice while the main process is killed from the WorkflowNoticeProcessRunner helper process: the notice and both ledgers survive unchanged, the tap after restart is captured by the restarted main with the exact approval ID, binding and route, a repeated request posts nothing and rewrites no receipt, a changed binding or expiry is refused) and ownerChangeWithdrawsThePendingApprovalNoticeAndItsTapOpensNothing (the first owner's notice is withdrawn, its retained tap opens nothing, the next owner's notice is untouched, the old approval is never posted again). The owner-change withdrawal is new product code in round 10 (AlphaHostedResults.withdrawOtherOwnerApprovalNotices, called by the renderer when a different owner connects) and an engineering default, not an owner decision; the receipt ledger is the upstream NoticeDelivery module behind WorkflowNoticeDelivery. Both runners re-check before any install that the archived bytes are still the admitted pair; receipts record the candidate hashes, the runner and the failed phase, and a skipped, failed or incomplete campaign exits non-zero. Evidence: test/installed-upgrade-runner.test.mjs, test/native-campaign-evidence.test.mjs (synthetic adb), test/workflow-approval-notice.test.mjs (JVM contract) and test/browser/workflow-notice-taps.spec.ts; one emulator run of the workflow and approval-notice phases with developer APKs at 9a1ca161 (14 of 14). The round 10 Java was compiled with javac, not Gradle, and has never been installed. See docs/verification.md.",
+      "remaining": "Approved October 12 TODOs #425: Withdraw owner-specific approval notices on owner change. Repost quietly when the original owner returns only if the approval remains pending, valid and unexpired. Keep workflow state; revalidate the target and create a fresh tap binding. Apply the same privacy boundary to owner-specific result notices.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #425. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [],
       "sources": [
         "scripts/test-installed-upgrade.mjs",
         "android/app/src/androidTest/java/ai/elizaresearch/alphaphone",
         "scripts/android-workflow-native.mjs",
-        "docs/verification.md"
-      ]
+        "docs/verification.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        425
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-19",
@@ -548,8 +624,8 @@
       "priority": "P0",
       "kind": "acceptance",
       "blocked_on": [
+        "SOFTWARE",
         "CI: dispatch resident-android.yml (jobs native and recovery-ui) on the candidate commit",
-        "HUMAN: owner-only Cerebras key file for the resident instrumentation",
         "DEVICE: reboot, network loss and lock on a phone"
       ],
       "requirements": [
@@ -557,16 +633,22 @@
         "AP-04"
       ],
       "title": "Qualify resident lifecycle and account isolation",
-      "current": "Host and JVM fixtures exercise admission, owner context and credential retirement. They do not prove packaged native execution. The process-kill classes (PrivateResidentSocket, ResidentStreamTransport, ResidentWorkflowCrash) and the credential-slot class (Connection) run only in the two dispatch-only jobs of .github/workflows/resident-android.yml, which refuse to run outside a GitHub-hosted x86_64 runner; the workflow has never been dispatched and no passing run of either job is recorded. ResidentService with real inference needs an arm64 emulator, APKs that package the resident runtime and an owner-only Cerebras key file (scripts/android-resident-instrumentation.mjs); it has never run, and every APK built so far carries no resident runtime.",
-      "remaining": "Run resident start/restart, socket/auth/IPC, overlapping Activity teardown, credential replacement, logout, network loss, reboot, killed worker and pending native receipt recovery.",
-      "acceptance": "No old-owner output/action, duplicate effect or leaked process; current native runtime/process evidence and conversation IDs retained.",
+      "current": "Historical source/evidence observation (not the approved policy): Host and JVM fixtures exercise admission, owner context and credential retirement. They do not prove packaged native execution. The process-kill classes (PrivateResidentSocket, ResidentStreamTransport, ResidentWorkflowCrash) and the credential-slot class (Connection) run only in the two dispatch-only jobs of .github/workflows/resident-android.yml, which refuse to run outside a GitHub-hosted x86_64 runner; the workflow has never been dispatched and no passing run of either job is recorded. ResidentService with real inference needs an arm64 emulator, APKs that package the resident runtime and an owner-only Cerebras key file (scripts/android-resident-instrumentation.mjs); it has never run, and every APK built so far carries no resident runtime.",
+      "remaining": "Approved October 12 TODOs #396, #406: Eliza Cloud is the managed account, inference, subscription and Maps service endpoint. Agent orchestration, state, scheduling and approvals remain on the phone. No Cloud/hosted agent exists as a product connection, upgrade or fallback. Only the local resident agent is supported. No hosted agent, dedicated-agent purchase, remote pairing or Cloud-agent fallback is a product option, now or as an advanced setting.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #396, #406. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-20"
       ],
       "sources": [
         "docs/local-agent-development.md",
-        "docs/pilot-acceptance-runbook.md"
-      ]
+        "docs/pilot-acceptance-runbook.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        396,
+        406
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-22",
@@ -600,23 +682,30 @@
       "priority": "P0",
       "kind": "acceptance",
       "blocked_on": [
-        "HUMAN: decision A-24, then a named reviewer admits the candidate",
+        "SOFTWARE",
         "CI: the local-speech suite of android-emulator.yml on an x86_64 hosted runner",
-        "EMULATOR: the same candidate on arm64-v8a"
+        "EMULATOR: the same candidate on arm64-v8a",
+        "HUMAN: named native artifact reviewer and controlled physical audio qualification"
       ],
       "requirements": [
         "AP-06"
       ],
       "title": "Admit a functionally passing speech runtime",
-      "current": "Committed qualification is failed: android/local-speech/qualified-runtime-manifest.json records functionalAcceptance.passed false (LocalSpeechInstrumentedTest, 1 of 2 failed on arm64-v8a; x86_64 not executed). A candidate rebuilt at the earlier pin 352d7a08 passed the unchanged test 2 of 2 on an arm64 emulator with networking off (docs/verification.md, Emulator results at 73b973a5; class E); it was recorded through requalify-runtime.py and not admitted, and x86_64 was not executed. No candidate at the current pin has run on either ABI. Round 8 added a dispatch-only hosted job (android-emulator.yml, suite local-speech) that builds a candidate and runs the unchanged test on an x86_64 emulator; it has never been dispatched. Admission (requalify-runtime.py admit --reviewer) is a named person's step that no job performs. Flag-off builds do not use on-device speech (P-07), and whether it is still required is pending decision A-24. Every developer APK so far carries a locally built speech runtime that is not the qualified one.",
-      "remaining": "If A-24 keeps on-device speech required: dispatch the hosted local-speech suite on the candidate commit (x86_64), run the same candidate on an owned arm64 emulator with requalify-runtime.py run (the hosted artifact carries the APK pair and candidate.json), and have a named reviewer admit it; scripts/local-speech/README.md has the steps. If A-24 drops the requirement, retire the distribution build's qualified-speech input instead.",
-      "acceptance": "Both ABI reports match the artifact hash/source; manifests updated only from passing evidence; strict build accepts the same bytes.",
+      "current": "Historical source/evidence observation (not the approved policy): Committed qualification is failed: android/local-speech/qualified-runtime-manifest.json records functionalAcceptance.passed false (LocalSpeechInstrumentedTest, 1 of 2 failed on arm64-v8a; x86_64 not executed). A candidate rebuilt at the earlier pin 352d7a08 passed the unchanged test 2 of 2 on an arm64 emulator with networking off (docs/verification.md, Emulator results at 73b973a5; class E); it was recorded through requalify-runtime.py and not admitted, and x86_64 was not executed. No candidate at the current pin has run on either ABI. Round 8 added a dispatch-only hosted job (android-emulator.yml, suite local-speech) that builds a candidate and runs the unchanged test on an x86_64 emulator; it has never been dispatched. Admission (requalify-runtime.py admit --reviewer) is a named person's step that no job performs. Flag-off builds do not use on-device speech (P-07), and whether it is still required is pending decision A-24. Every developer APK so far carries a locally built speech runtime that is not the qualified one.",
+      "remaining": "Approved October 12 TODOs #413, #397: On-device STT and TTS are mandatory for every production speech entrypoint, including signed-out and offline use. No Cloud speech fallback. A failed local engine must surface recovery and typing, not switch routes. All speech recognition and synthesis run locally on the device, always. Replace Cloud/paired-host speech policy. Use the Android native bridge to the reviewed Eliza llama.cpp/libelizainference build, extending shared upstream speech support where necessary. Research candidate models on Hugging Face and select by measured device speed and quality, not advertised desktop throughput.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #413, #397. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [],
       "sources": [
         "android/local-speech/qualified-runtime-manifest.json",
         "android/local-speech/runtime-manifest.json",
-        "scripts/local-speech/README.md"
-      ]
+        "scripts/local-speech/README.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        413,
+        397
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-24",
@@ -624,17 +713,18 @@
       "priority": "P0",
       "kind": "acceptance",
       "blocked_on": [
-        "HUMAN: decisions MVP-01 and A-10",
-        "DEVICE: physical microphone, speaker and Bluetooth campaign"
+        "SOFTWARE",
+        "DEVICE: physical microphone, speaker and Bluetooth campaign",
+        "HUMAN: named native artifact reviewer and controlled physical audio qualification"
       ],
       "requirements": [
         "AP-06",
         "AP-15"
       ],
       "title": "Run physical speech and interruption acceptance",
-      "current": "No current human microphone/speaker/Bluetooth campaign was produced here.",
-      "remaining": "Qualify microphone permission/revoke, silence/long speech, corrections, audio focus, wired/Bluetooth routing, lock/background, cancel during ASR/TTS and stale playback. Test offline local speech if retained by policy.",
-      "acceptance": "Unedited physical audio evidence, no unintended upload or overlapping capture/playback, transcript/output quality and agreed latency samples.",
+      "current": "Historical source/evidence observation (not the approved policy): No current human microphone/speaker/Bluetooth campaign was produced here.",
+      "remaining": "Approved October 12 TODOs #395, #423: Voice-assistant latency is the elapsed time from the last user speech audio sample to the first audible response sample. Include end-of-turn detection, final STT, inference, TTS and playback buffering. Do not subtract silence detection or report a sum of selected stages as the end-to-end result. Dictation reports stop-to-editable-text separately; manual user think time is not a voice-assistant benchmark. Transcribe records locally and on Stop inserts editable text; the user sends it. Voice assistant listens and submits automatically: after a short gap evaluate semantic turn completion with Clef; after a longer gap submit. Resumed speech cancels pending submit or the in-flight response/playback and continues the utterance/conversation. All STT/TTS remains local.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #395, #423. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-01",
         "MVP-05",
@@ -642,8 +732,14 @@
       ],
       "sources": [
         "docs/pilot-acceptance-runbook.md",
-        "docs/combined-voice-roundtrip.md"
-      ]
+        "docs/combined-voice-roundtrip.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        395,
+        423
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-25",
@@ -651,6 +747,7 @@
       "priority": "P1",
       "kind": "acceptance",
       "blocked_on": [
+        "SOFTWARE",
         "EMULATOR: `--classes NotesSecureStorage` at the current pin and its migration method, which has never run, and the rest on the release candidate (NotesTrashBackstop, NotesStorageDurability and the notes restart campaign passed on developer APKs in round 8)",
         "DEVICE"
       ],
@@ -658,17 +755,23 @@
         "AP-10"
       ],
       "title": "Finish Notes and voice-recording lifecycle",
-      "current": "Text, checklist, link and voice notes and transactional recovery exist. In the browser build a saved voice note offers a calendar event draft and created records link back to the note (test/browser/note-calendar-handoff.spec.ts), and a full Trash refuses a deletion without losing data (test/browser/notes-trash-full.spec.ts). In the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime): NotesTrashBackstop (9 of 9) and NotesStorageDurability passed on both flavors, and the notes restart campaign passed 3 of 3 on the launcher flavor and 1 of 1 on standalone; the launcher timeout seen once in round 7 did not recur, which three runs do not prove closed. NotesSecureStorage passed 1 of 2 on both flavors only in the round 7 emulator run at the earlier pin 40dbe96bd1 (docs/verification.md, Emulator results at 6dcdde34; class E, developer-override APKs); its fresh-install migration method is skipped by its gate and has no campaign.",
-      "remaining": "Repeat the native classes and the notes restart campaign on the release candidate, give the NotesSecureStorage migration method a fresh-install campaign, and test creation/edit/search/import/export, native encryption, dictation selection, audio/save failure, summary revision, Trash/restore/expiry and installed-data upgrades there.",
-      "acceptance": "Exact note/audio bytes survive promised transitions; failed writes remain unsaved; no duplicate note after retries or unrelated source disclosure.",
+      "current": "Historical source/evidence observation (not the approved policy): Text, checklist, link and voice notes and transactional recovery exist. In the browser build a saved voice note offers a calendar event draft and created records link back to the note (test/browser/note-calendar-handoff.spec.ts), and a full Trash refuses a deletion without losing data (test/browser/notes-trash-full.spec.ts). In the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime): NotesTrashBackstop (9 of 9) and NotesStorageDurability passed on both flavors, and the notes restart campaign passed 3 of 3 on the launcher flavor and 1 of 1 on standalone; the launcher timeout seen once in round 7 did not recur, which three runs do not prove closed. NotesSecureStorage passed 1 of 2 on both flavors only in the round 7 emulator run at the earlier pin 40dbe96bd1 (docs/verification.md, Emulator results at 6dcdde34; class E, developer-override APKs); its fresh-install migration method is skipped by its gate and has no campaign.",
+      "remaining": "Approved October 12 TODOs #409, #397: No app-data import/export, backup or device-transfer product workflow. Provide a confirmed Reset Alpha data option. Keep Android backup disabled. Ordinary Files opening/saving and Gmail attachments are separate daily-tool operations, not app-data migration. All speech recognition and synthesis run locally on the device, always. Replace Cloud/paired-host speech policy. Use the Android native bridge to the reviewed Eliza llama.cpp/libelizainference build, extending shared upstream speech support where necessary. Research candidate models on Hugging Face and select by measured device speed and quality, not advertised desktop throughput.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #409, #397. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-20",
         "MVP-23"
       ],
       "sources": [
         "docs/pilot-acceptance-runbook.md",
-        "docs/flow-audit-and-prd.md"
-      ]
+        "docs/flow-audit-and-prd.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        409,
+        397
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-26",
@@ -676,6 +779,7 @@
       "priority": "P1",
       "kind": "acceptance",
       "blocked_on": [
+        "SOFTWARE",
         "EMULATOR: the Calendar campaign on the release candidate (it passed on developer APKs in round 8, CalendarCreationRecovery only in round 7)",
         "DEVICE: a real synced calendar account"
       ],
@@ -683,17 +787,23 @@
         "AP-09"
       ],
       "title": "Qualify Calendar CRUD and recurrence",
-      "current": "Native Calendar comes from the pinned upstream plugin plus direct-save options; it compiles at the current pin (hosted and development-machine developer builds). Since round 8 AlphaCalendar.list reads through CalendarRangeReader again, restoring the 2,000-instance bound that the adoption of the shared plugin had dropped. The browser review of an agent calendar change states the calendar and account, the times in the event's zone against the phone's, the all-day state and attendees (test/calendar-agent-review.test.mjs, test/browser/journey-b-voice-note-actions.spec.ts); on Android the second review is the plugin's own dialog, which names the calendar and the time but not the account or attendees. In the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime), through scripts/test-calendar-regression.mjs with fixture rows in the emulator's CalendarProvider: CalendarCrud, both CalendarAgentCrud methods (the reviewed create/read/update/delete and the direct save that reads back all-day, a chosen zone and a recurrence rule), CalendarAvailability, CalendarTruncation, CalendarRange and CalendarFlow passed on both flavors. CalendarCreationRecovery passed only in the round 7 run. No real synced calendar account has been read or written.",
-      "remaining": "Create/read-back/edit/delete in a real selected writable calendar; all-day, cross-midnight, DST, travel zone, recurrence scope, invitations/RSVP, read-only, revoke and lost response. Repeat the Calendar campaign on the release candidate. Decide any unsupported required subflow explicitly.",
-      "acceptance": "Exact provider IDs/revisions and read-back, scoped invitations separately reviewed, no duplicate create after timeout.",
+      "current": "Historical source/evidence observation (not the approved policy): Native Calendar comes from the pinned upstream plugin plus direct-save options; it compiles at the current pin (hosted and development-machine developer builds). Since round 8 AlphaCalendar.list reads through CalendarRangeReader again, restoring the 2,000-instance bound that the adoption of the shared plugin had dropped. The browser review of an agent calendar change states the calendar and account, the times in the event's zone against the phone's, the all-day state and attendees (test/calendar-agent-review.test.mjs, test/browser/journey-b-voice-note-actions.spec.ts); on Android the second review is the plugin's own dialog, which names the calendar and the time but not the account or attendees. In the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime), through scripts/test-calendar-regression.mjs with fixture rows in the emulator's CalendarProvider: CalendarCrud, both CalendarAgentCrud methods (the reviewed create/read/update/delete and the direct save that reads back all-day, a chosen zone and a recurrence rule), CalendarAvailability, CalendarTruncation, CalendarRange and CalendarFlow passed on both flavors. CalendarCreationRecovery passed only in the round 7 run. No real synced calendar account has been read or written.",
+      "remaining": "Approved October 12 TODOs #414, #418: Use a short durable Undo window and one review step for events and reminders. Initial engineering value: ten seconds. Delay provider deletion until expiry when possible; never call a recreated invitation a lossless restore. Suspend pending-deletion reminder delivery immediately. Free, cancelled and declined entries are not busy. Offer owner-selected free/busy-only calendars without exposing details. Tentative/unanswered blocking entries count conservatively; unavailable/stale reads are unknown, never free.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #414, #418. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-12",
         "MVP-20"
       ],
       "sources": [
         "docs/flow-audit-and-prd.md",
-        "apps/app/src/prototype/calendar-adapter.ts"
-      ]
+        "apps/app/src/prototype/calendar-adapter.ts",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        414,
+        418
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-27",
@@ -701,9 +811,9 @@
       "priority": "P1",
       "kind": "acceptance",
       "blocked_on": [
+        "SOFTWARE",
         "EMULATOR: `--classes RealClock --clock-exclusive`, `scripts/test-reminder-one-off.mjs` and `scripts/test-reminder-recovery.mjs` have no run at the current pin (ClockHandoff, ClockRepeatDays and ReminderLifecycle passed on developer APKs in round 8)",
         "CI: ClockAgentReview and ReminderTapProcessDeath in resident-android.yml job recovery-ui",
-        "HUMAN: decision A-11",
         "DEVICE: audible ringing, vibration and Do Not Disturb"
       ],
       "requirements": [
@@ -711,17 +821,23 @@
         "AP-11"
       ],
       "title": "Qualify Reminders and Clock separately",
-      "current": "Reminders have local schedules; Clock is a reviewed Android handoff, not confirmed ringing. On the stubbed Android path one approval sends one handoff, a cancelled review sends nothing, a time-zone change retires the request and a missing Clock app is reported without claiming an alarm (test/browser/journey-core-loops.production.spec.ts). In the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime): ClockHandoff, ClockRepeatDays and ReminderLifecycle passed on both flavors. Only in the round 7 emulator run at the earlier pin 40dbe96bd1 (docs/verification.md, Emulator results at 6dcdde34; class E, developer-override APKs): RealClock passed on both flavors on an API 35 emulator (its fixture is qualified for API 35 only), and the one-off and recovery reminder campaigns passed on both, the second with a real emulator reboot. ClockAgentReview and ReminderTapProcessDeath run only in the hosted recovery-ui job, which has never been dispatched.",
-      "remaining": "Repeat RealClock and the two reminder campaigns at the current pin, then exercise lead None/numeric, snooze/complete/reopen/cancel, recurrence, reboot/timezone, permission/DND/Doze and force-stop. Separately observe Clock set/show/snooze/dismiss and actual ring/vibration on a phone.",
-      "acceptance": "Delivery receipts and exact deep links; no reminder-as-alarm guarantee; actual audible alarm evidence or approved scope change.",
+      "current": "Historical source/evidence observation (not the approved policy): Reminders have local schedules; Clock is a reviewed Android handoff, not confirmed ringing. On the stubbed Android path one approval sends one handoff, a cancelled review sends nothing, a time-zone change retires the request and a missing Clock app is reported without claiming an alarm (test/browser/journey-core-loops.production.spec.ts). In the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime): ClockHandoff, ClockRepeatDays and ReminderLifecycle passed on both flavors. Only in the round 7 emulator run at the earlier pin 40dbe96bd1 (docs/verification.md, Emulator results at 6dcdde34; class E, developer-override APKs): RealClock passed on both flavors on an API 35 emulator (its fixture is qualified for API 35 only), and the one-off and recovery reminder campaigns passed on both, the second with a real emulator reboot. ClockAgentReview and ReminderTapProcessDeath run only in the hosted recovery-ui job, which has never been dispatched.",
+      "remaining": "Approved October 12 TODOs #401, #394: Android Clock owns alarms, conditional on a usable integration in the app and AOSP image. Alpha owns reminders. A dispatch receipt may state that Clock opened, not that an alarm was created. Schedules run only while the phone is powered on; the agent is local. Remove powered-off hosted-loop acceptance. Record missed occurrences once; do not automatically replay overdue effects. Offer an explicit Run now action where useful.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #401, #394. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-06",
         "MVP-20"
       ],
       "sources": [
         "docs/pilot-acceptance-runbook.md",
-        "docs/mvp-completion-plan.md"
-      ]
+        "docs/mvp-completion-plan.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        401,
+        394
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-28",
@@ -754,17 +870,17 @@
       "priority": "P0",
       "kind": "acceptance",
       "blocked_on": [
+        "SOFTWARE",
         "EMULATOR: `--test-mocks --classes BrowserAutofill` at the current pin and the ten-run repeat of `--classes PasswordBrowserFill` (it passed on developer APKs in round 8)",
-        "HUMAN: decision A-06 (release signer), decisions A-12 and A-14, and a Proton Pass test vault with synthetic credentials",
         "DEVICE: release-signed device"
       ],
       "requirements": [
         "AP-10"
       ],
       "title": "Qualify integrated password manager and optional provider",
-      "current": "The pinned shared password module supplies native vault management and app Autofill. Three Android consumer tests passed upstream at 352d7a0855 (upstream pull request 34835). Integrated browser Autofill is unavailable because ordinary WebView lacks native per-field origins; Show and Copy remain available. Alpha's own native save and fill flow failed before save or unlock in the one run recorded at d3dc9977, which is historical. In the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime) PasswordBrowserFill passed 4 of 4 on standalone and 1 of 1 on launcher with synthetic credentials; the tap-geometry failure seen once in round 7 did not recur, which four runs do not prove closed. BrowserAutofill (test-mocks APK) passed on both flavors only in the round 7 emulator run at the earlier pin 40dbe96bd1 (docs/verification.md, Emulator results at 6dcdde34; class E, developer-override APKs). No release signer exists, so nothing can be qualified on a release-signed device.",
-      "remaining": "On release-signed devices test enablement, synthetic credential save/update/fill, biometric unavailable/lock/cancel, exact top-level origin, iframe, app certificate, tab/process switch, disable/re-enable and optional Proton Pass. Before that, repeat BrowserAutofill at the current pin and PasswordBrowserFill ten times, some under host load, as the core loop audit asks.",
-      "acceptance": "No secret in model context/logs; correct-origin fill and wrong-origin refusal recorded. Passkeys remain separate until explicitly scoped and implemented.",
+      "current": "Historical source/evidence observation (not the approved policy): The pinned shared password module supplies native vault management and app Autofill. Three Android consumer tests passed upstream at 352d7a0855 (upstream pull request 34835). Integrated browser Autofill is unavailable because ordinary WebView lacks native per-field origins; Show and Copy remain available. Alpha's own native save and fill flow failed before save or unlock in the one run recorded at d3dc9977, which is historical. In the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime) PasswordBrowserFill passed 4 of 4 on standalone and 1 of 1 on launcher with synthetic credentials; the tap-geometry failure seen once in round 7 did not recur, which four runs do not prove closed. BrowserAutofill (test-mocks APK) passed on both flavors only in the round 7 emulator run at the earlier pin 40dbe96bd1 (docs/verification.md, Emulator results at 6dcdde34; class E, developer-override APKs). No release signer exists, so nothing can be qualified on a release-signed device.",
+      "remaining": "Approved October 12 TODOs #402, #403, #404: Passkeys are outside MVP acceptance. Integrated passwords remain in scope. A later release may use the system credential provider after actual browser/image qualification; Alpha is not a new passkey provider now. Third-party cookies are allowed in normal browsing. Persistent first-party sign-ins remain. Private tabs remain ephemeral and strict; browser storage stays separate from the privileged app WebView. Every eligible login surface in Alpha should support password-manager fill. The isolated Browser is currently the website-login surface; future Alpha-owned login forms must also be covered. This is not blanket trust of arbitrary external browsers and does not expose passwords to the agent.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #402, #403, #404. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-03",
         "MVP-06",
@@ -772,8 +888,15 @@
       ],
       "sources": [
         "docs/password-provider-setup.md",
-        "docs/browser-autofill-integration.md"
-      ]
+        "docs/browser-autofill-integration.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        402,
+        403,
+        404
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-30",
@@ -781,6 +904,7 @@
       "priority": "P1",
       "kind": "acceptance",
       "blocked_on": [
+        "SOFTWARE",
         "EMULATOR: `scripts/test-native-permissions.mjs camera` and the launcher `document` restart have no run at the current pin, and the ten-run repeat of `--classes FilesTree` (CameraScan, FilesTree and the standalone `document` restart passed on developer APKs in round 8)",
         "DEVICE: physical camera, real documents and storage volumes"
       ],
@@ -788,9 +912,9 @@
         "AP-10"
       ],
       "title": "Qualify Files Camera Photos Scan and OCR",
-      "current": "Source implements selected media, browser and native paths, recent and search, and scan and PDF handling. Native Camera offers image selection into scan review and the multi-page scan builder (apps/app/src/prototype/camera-adapter.ts, scan-document.ts). The capture and category selection corrections of MVP-13 are on main (pull request 388). In the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime): CameraScan passed on both flavors, FilesTree passed 4 of 4 on standalone and 1 of 1 on launcher (the standalone failure of round 7 did not recur, which four runs do not prove closed), MailAttachment passed on both, and the document restart campaign passed on standalone (launcher not run). Only in the round 7 emulator run at the earlier pin 40dbe96bd1 (docs/verification.md, Emulator results at 6dcdde34; class E, developer-override APKs): the document restart campaign on the launcher flavor and the camera permission campaign passed. Observed while reading the Files adapter and left as it is: a tap on Back, Refresh or a row while a folder operation is in flight is ignored without feedback.",
-      "remaining": "Run provider URI retention/revoke, native capture/cancel/retake, volume/low-storage, gallery refresh, non-destructive edits, exact share/export, video interruption and English OCR on real documents, on the release candidate and a device. Repeat FilesTree ten times, some under host load, and the camera permission and launcher document campaigns at the current pin.",
-      "acceptance": "Correct MIME/bytes/identity and recoverable failures; no privileged HTML execution or neighboring-image upload. Real OCR task quality documented.",
+      "current": "Historical source/evidence observation (not the approved policy): Source implements selected media, browser and native paths, recent and search, and scan and PDF handling. Native Camera offers image selection into scan review and the multi-page scan builder (apps/app/src/prototype/camera-adapter.ts, scan-document.ts). The capture and category selection corrections of MVP-13 are on main (pull request 388). In the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime): CameraScan passed on both flavors, FilesTree passed 4 of 4 on standalone and 1 of 1 on launcher (the standalone failure of round 7 did not recur, which four runs do not prove closed), MailAttachment passed on both, and the document restart campaign passed on standalone (launcher not run). Only in the round 7 emulator run at the earlier pin 40dbe96bd1 (docs/verification.md, Emulator results at 6dcdde34; class E, developer-override APKs): the document restart campaign on the launcher flavor and the camera permission campaign passed. Observed while reading the Files adapter and left as it is: a tap on Back, Refresh or a row while a folder operation is in flight is ignored without feedback.",
+      "remaining": "Approved October 12 TODOs #407, #408: Use the system secure camera and its AOSP lock-screen gesture. Alpha does not implement its own secure camera; agent/library/account access stays behind unlock. Provide full device photo/video library access to the local agent where Android permits and the user grants it, rather than limiting the product to owned captures or picker selections. Handle partial/denied access honestly. Full local access does not imply automatic upload of the entire library.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #407, #408. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-10",
         "MVP-13",
@@ -798,8 +922,14 @@
       ],
       "sources": [
         "docs/flow-audit-and-prd.md",
-        "docs/photos-owned-media.md"
-      ]
+        "docs/photos-owned-media.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        407,
+        408
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-31",
@@ -807,17 +937,17 @@
       "priority": "P1",
       "kind": "integration",
       "blocked_on": [
-        "HUMAN: decision A-23, then an HTTPS Maps gateway supplied as VITE_MAPS_BASE_URL",
+        "SOFTWARE",
         "EMULATOR: `scripts/maps/test-native-recovery.mjs` and `scripts/maps/test-native-navigation.mjs` against the regional fixture gateway",
         "DEVICE: GPS navigation"
       ],
       "requirements": [
         "AP-10"
       ],
-      "title": "Finish regional Maps deployment and travel acceptance",
-      "current": "No flag-off build has a Maps provider: VITE_MAPS_BASE_URL is unset and the emulator gateway exists only in test-mocks builds (apps/app/src/maps/regional-provider.ts), so a production user reads \"Connect a Maps provider to search places and plan routes.\" and no route is produced. With a synthetic provider, an event's address enters Maps once, several candidates wait for a choice, \"Back to event\" returns to the originating event and the travel-mode buttons expose their state (test/browser/journey-j04-schedule-travel.spec.ts, maps-event-return.spec.ts). The pin includes the reviewed great-circle projection correction (upstream pull request 34650); integrated navigation acceptance remains open, and neither Maps runner (scripts/maps/test-native-recovery.mjs, scripts/maps/test-native-navigation.mjs) has a recorded run.",
-      "remaining": "The owner chooses and licenses a production Maps provider (A-23) and supplies an HTTPS gateway as VITE_MAPS_BASE_URL. Then verify build configuration, location permission and accuracy, reroute and stale result, offline and no route, background navigation and stop behavior, and qualify date-line and high-latitude routes and maneuver ordering.",
-      "acceptance": "J04 event-to-route on selected hardware with explicit origin/route, correct live guidance and truthful regional/offline limits. Date-line progress agrees with the existing geodesic distance calculation and never invents an off-route detour.",
+      "title": "Deliver Eliza Cloud Maps and agent navigation control",
+      "current": "Historical source/evidence observation (not the approved policy): No flag-off build has a Maps provider: VITE_MAPS_BASE_URL is unset and the emulator gateway exists only in test-mocks builds (apps/app/src/maps/regional-provider.ts), so a production user reads \"Connect a Maps provider to search places and plan routes.\" and no route is produced. With a synthetic provider, an event's address enters Maps once, several candidates wait for a choice, \"Back to event\" returns to the originating event and the travel-mode buttons expose their state (test/browser/journey-j04-schedule-travel.spec.ts, maps-event-return.spec.ts). The pin includes the reviewed great-circle projection correction (upstream pull request 34650); integrated navigation acceptance remains open, and neither Maps runner (scripts/maps/test-native-recovery.mjs, scripts/maps/test-native-navigation.mjs) has a recorded run.",
+      "remaining": "Approved October 12 TODOs #412: Maps belongs in Eliza Cloud as a reusable managed service for agents, with full supported search, place, route and navigation control from Alpha\u2019s local agent. The regional development gateway is a prototype adapter, not the production coverage promise. No hosted agent is introduced.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #412. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-04",
         "MVP-20",
@@ -825,9 +955,14 @@
       ],
       "sources": [
         "docs/maps-regional-validation.md",
-        "apps/app/src/prototype/maps-adapter.ts"
+        "apps/app/src/prototype/maps-adapter.ts",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
       ],
-      "upstream_candidate": "https://github.com/elizaOS/eliza/pull/34650"
+      "upstream_candidate": "https://github.com/elizaOS/eliza/pull/34650",
+      "approved_issues": [
+        412
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-32",
@@ -835,9 +970,9 @@
       "priority": "P1",
       "kind": "acceptance",
       "blocked_on": [
+        "SOFTWARE",
         "EMULATOR: `--test-mocks --classes HostedProcessRestart` has no run at the current pin, and the workflow campaign on the release candidate (it passed 14 of 14 on developer APKs in round 8)",
         "CI: ResidentWorkflowCrash and WorkflowNoticeProcessDeath in resident-android.yml",
-        "HUMAN: inference credential for generated-candidate quality",
         "DEVICE"
       ],
       "requirements": [
@@ -845,17 +980,23 @@
         "AP-12"
       ],
       "title": "Qualify workflows approvals and result delivery",
-      "current": "Typed phone workflows are manual-triggered; digest scheduling and Automations have distinct contracts. Unknown outcomes are retained and never replayed; a lost Run or Save request can be resent once by the owner under its original identity (docs/agent-integration.md; test/browser/workflow-interruption-recovery.spec.ts, workflow-outcome-unknown.spec.ts). The phrase filter for calls, messages, payments, contacts and code refuses before generation and the typed catalog bounds the rest. In the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime): WorkflowApprovalNotice passed on both flavors against the shared receipt ledger, and the native workflow campaign (scripts/android-workflow-native.mjs) passed 14 of 14 cases, seven per distribution: four WorkflowPhoneNative methods, WorkflowDraftNative and two approval-notice methods, after one test cleanup assertion was corrected. HostedProcessRestart (test-mocks pair) passed its three phases on both flavors only in the round 7 emulator run at the earlier pin 40dbe96bd1 (docs/verification.md, Emulator results at 6dcdde34; class E, developer-override APKs). The process-death classes run only in hosted CI, which has never been dispatched. These tests use synthetic reads and drafts; no generated candidate from a real model has run.",
-      "remaining": "Exercise generated candidate quality, Use/Save/Run separation, capability denial, approvals, cancellation, worker death, run history, pending effect/receipt gaps and migrated definitions with a real agent and on the release candidate. Repeat HostedProcessRestart at the current pin. Do not advertise scheduled arbitrary workflows from digest support.",
-      "acceptance": "No duplicate external effect or invented receipt; every interrupted run has an explicit disposition and exact history on reconnect.",
+      "current": "Historical source/evidence observation (not the approved policy): Typed phone workflows are manual-triggered; digest scheduling and Automations have distinct contracts. Unknown outcomes are retained and never replayed; a lost Run or Save request can be resent once by the owner under its original identity (docs/agent-integration.md; test/browser/workflow-interruption-recovery.spec.ts, workflow-outcome-unknown.spec.ts). The phrase filter for calls, messages, payments, contacts and code refuses before generation and the typed catalog bounds the rest. In the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime): WorkflowApprovalNotice passed on both flavors against the shared receipt ledger, and the native workflow campaign (scripts/android-workflow-native.mjs) passed 14 of 14 cases, seven per distribution: four WorkflowPhoneNative methods, WorkflowDraftNative and two approval-notice methods, after one test cleanup assertion was corrected. HostedProcessRestart (test-mocks pair) passed its three phases on both flavors only in the round 7 emulator run at the earlier pin 40dbe96bd1 (docs/verification.md, Emulator results at 6dcdde34; class E, developer-override APKs). The process-death classes run only in hosted CI, which has never been dispatched. These tests use synthetic reads and drafts; no generated candidate from a real model has run.",
+      "remaining": "Approved October 12 TODOs #394, #425: Schedules run only while the phone is powered on; the agent is local. Remove powered-off hosted-loop acceptance. Record missed occurrences once; do not automatically replay overdue effects. Offer an explicit Run now action where useful. Withdraw owner-specific approval notices on owner change. Repost quietly when the original owner returns only if the approval remains pending, valid and unexpired. Keep workflow state; revalidate the target and create a fresh tap binding. Apply the same privacy boundary to owner-specific result notices.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #394, #425. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-18",
         "MVP-21"
       ],
       "sources": [
         "apps/app/src/runtime/phone-workflow-authoring.ts",
-        "docs/mvp-current-status.md"
-      ]
+        "docs/mvp-current-status.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        394,
+        425
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-33",
@@ -863,26 +1004,34 @@
       "priority": "P1",
       "kind": "acceptance",
       "blocked_on": [
+        "SOFTWARE",
         "EMULATOR: `--classes SettingsFlow` and `scripts/test-native-permissions.mjs settings`, `notice` and `notice-denied` have no run at the current pin (SettingsSystemFacts, SettingsRoles and `channels` passed on developer APKs in round 8)",
         "CI: ReminderTapProcessDeath and WorkflowNoticeProcessDeath in resident-android.yml job recovery-ui",
-        "HUMAN: decision A-06 for any update check, and decisions A-32 and A-33 for the image",
         "DEVICE"
       ],
       "requirements": [
         "AP-12"
       ],
       "title": "Qualify settings and notification truthfulness",
-      "current": "Tiles and Settings rows read the Wi-Fi, Bluetooth, airplane mode, location, mobile data and Do Not Disturb states Android reports to an ordinary app, hand off to the matching Android page and re-read on return; unreported states are shown as a handoff. Channel and app-notification denial are read back from Android. About shows the packaged version and states that no update check exists. Diagnostics are redacted by construction. Since round 8 Alpha's notifications open only from a handle on Home, and the top-edge swipe is Android's. In the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime): SettingsSystemFacts and Notifications passed on both flavors, SettingsRoles passed in the HOME-role phase, and the channels permission campaign passed on both after its selector was corrected (it had clicked Home's new handle instead of the Settings row). AccessibilityInstrumentedTest, which also covers the gesture zones, failed on both flavors (MVP-48). Only in the round 7 emulator run at the earlier pin 40dbe96bd1 (docs/verification.md, Emulator results at 6dcdde34; class E, developer-override APKs): SettingsFlow and the settings, notice and notice-denied campaigns passed on both. The first emulator campaign confirmed on an API 36 image that the device snapshot matches Android's own settings and follows an airplane-mode change. Physical state, each image's Settings pages and OS delivery on a phone are not established.",
-      "remaining": "Repeat SettingsFlow and the settings, notice and notice-denied campaigns at the current pin, then on the release candidate and a device check each settings destination and readback by hand, channel denial and re-enable, lock and Doze, exact result or reminder tap after process death (hosted CI only), revoke during work and the redacted export. Update availability needs an update authority (A-06) before anything can be shown. Where Alpha's notices live on the AOSP image and whether a Home swipe opens Android's shade are pending decisions A-32 and A-33. Keep mirroring off by default and outside the MVP gate.",
-      "acceptance": "No simulated toggle or success; channel-disabled history still available; wrong-owner/deleted notification target fails safely.",
+      "current": "Historical source/evidence observation (not the approved policy): Tiles and Settings rows read the Wi-Fi, Bluetooth, airplane mode, location, mobile data and Do Not Disturb states Android reports to an ordinary app, hand off to the matching Android page and re-read on return; unreported states are shown as a handoff. Channel and app-notification denial are read back from Android. About shows the packaged version and states that no update check exists. Diagnostics are redacted by construction. Since round 8 Alpha's notifications open only from a handle on Home, and the top-edge swipe is Android's. In the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime): SettingsSystemFacts and Notifications passed on both flavors, SettingsRoles passed in the HOME-role phase, and the channels permission campaign passed on both after its selector was corrected (it had clicked Home's new handle instead of the Settings row). AccessibilityInstrumentedTest, which also covers the gesture zones, failed on both flavors (MVP-48). Only in the round 7 emulator run at the earlier pin 40dbe96bd1 (docs/verification.md, Emulator results at 6dcdde34; class E, developer-override APKs): SettingsFlow and the settings, notice and notice-denied campaigns passed on both. The first emulator campaign confirmed on an API 36 image that the device snapshot matches Android's own settings and follows an airplane-mode change. Physical state, each image's Settings pages and OS delivery on a phone are not established.",
+      "remaining": "Approved October 12 TODOs #409, #410, #416, #417: No app-data import/export, backup or device-transfer product workflow. Provide a confirmed Reset Alpha data option. Keep Android backup disabled. Ordinary Files opening/saving and Gmail attachments are separate daily-tool operations, not app-data migration. Use subscription billing with reasonable rate limits rather than a user-facing credit top-up/per-token meter. Billing checks must not add a billing-service round trip to each assistant turn. Local speech and local tools do not depend on an online billing check. Use Android\u2019s shade as the single notification/quick-settings surface if it integrates correctly and matches the product design. Keep workflow history in Alpha; remove the competing imitation shade. Use normal notifications/tiles before custom SystemUI changes. A downward swipe on empty launcher Home opens Android\u2019s shade. Preserve top-edge Android behavior and content/conversation scrolling. Standalone follows ordinary app behavior.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #409, #410, #416, #417. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-20",
         "MVP-32"
       ],
       "sources": [
         "docs/pilot-acceptance-runbook.md",
-        "apps/app/src/prototype/settings-adapter.ts"
-      ]
+        "apps/app/src/prototype/settings-adapter.ts",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        409,
+        410,
+        416,
+        417
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-34",
@@ -890,7 +1039,7 @@
       "priority": "P0",
       "kind": "deployment",
       "blocked_on": [
-        "HUMAN: a designated Eliza Cloud test account with credits, and a pilot Cerebras key in the owner-only key file (decisions A-02 and A-20)",
+        "SOFTWARE",
         "EMULATOR: `scripts/android-resident-instrumentation.mjs` on an arm64 emulator once the key and a packaged-runtime build (MVP-39) exist",
         "DEVICE"
       ],
@@ -899,17 +1048,23 @@
         "AP-04"
       ],
       "title": "Qualify production Cloud inference and approved provider profiles",
-      "current": "Synthetic transports and historical local inference do not establish the current release service path. No real Eliza Cloud sign-in, credit check, top-up, expiry or revocation has been exercised; renderer coverage is against a stubbed bridge (test/browser/production-surface.spec.ts, connection-boundaries.production.spec.ts). ResidentService with real inference runs through scripts/android-resident-instrumentation.mjs and has never run: it needs the provider key and APKs that package the resident runtime, and no such APK has been built (MVP-39).",
-      "remaining": "Operator provisions approved production Cloud accounts/credits; verify actual Qwen model, provider health, expiry/revoke/wrong owner, credit failure/top-up and account replacement during requests. Qualify direct Cerebras only as a separately retained profile. Keep credentials out of logs and audit artifacts.",
-      "acceptance": "Current source-bound real round trip, correct billing/model identity and controlled recovery; no inference-ready claim from a saved credential alone.",
+      "current": "Historical source/evidence observation (not the approved policy): Synthetic transports and historical local inference do not establish the current release service path. No real Eliza Cloud sign-in, credit check, top-up, expiry or revocation has been exercised; renderer coverage is against a stubbed bridge (test/browser/production-surface.spec.ts, connection-boundaries.production.spec.ts). ResidentService with real inference runs through scripts/android-resident-instrumentation.mjs and has never run: it needs the provider key and APKs that package the resident runtime, and no such APK has been built (MVP-39).",
+      "remaining": "Approved October 12 TODOs #396, #410: Eliza Cloud is the managed account, inference, subscription and Maps service endpoint. Agent orchestration, state, scheduling and approvals remain on the phone. No Cloud/hosted agent exists as a product connection, upgrade or fallback. Use subscription billing with reasonable rate limits rather than a user-facing credit top-up/per-token meter. Billing checks must not add a billing-service round trip to each assistant turn. Local speech and local tools do not depend on an online billing check.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #396, #410. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-04",
         "MVP-21"
       ],
       "sources": [
         "docs/cloud-production-validation.md",
-        "docs/pilot-acceptance-runbook.md"
-      ]
+        "docs/pilot-acceptance-runbook.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        396,
+        410
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-35",
@@ -917,22 +1072,28 @@
       "priority": "P0",
       "kind": "deployment",
       "blocked_on": [
-        "HUMAN: an operator with access to the deployed Eliza Cloud Worker fixes the Google code exchange, then authorizes a designated test Google account under the A-15 scope set"
+        "SOFTWARE"
       ],
       "requirements": [
         "AP-09"
       ],
       "title": "Deploy and authorize Gmail end to end",
-      "current": "The Google code exchange returns 401 (docs/cloud-production-validation.md; the client secret binding is the documented hypothesis), so no real mailbox has been reached. Client and synthetic Gmail routes cover threads, attachments, drafts, send, archive, Trash and undo, and read state. Deployed managed endpoints and real mailbox behavior remain open.",
-      "remaining": "Resolve OAuth exchange/approved redirect, deploy supported route/capability versions, consent least scopes, load threads/attachments, account-switch/revoke, provider drafts and archive/trash/read-state.",
-      "acceptance": "Real selected mailbox read and mutation receipts, correct scope/account isolation and no unsupported controls.",
+      "current": "Historical source/evidence observation (not the approved policy): The Google code exchange returns 401 (docs/cloud-production-validation.md; the client secret binding is the documented hypothesis), so no real mailbox has been reached. Client and synthetic Gmail routes cover threads, attachments, drafts, send, archive, Trash and undo, and read state. Deployed managed endpoints and real mailbox behavior remain open.",
+      "remaining": "Approved October 12 TODOs #421, #405: Communication providers are Gmail and text messaging. Gmail is available in both product distributions; SMS/MMS is device/SIM based and only exposed on the Alpha AOSP image. Telegram, Discord and additional mail providers stay deferred. Device Calendar/Contacts sources remain separate native permissions. Include reading, read/unread, archive, drafts, reply/forward, reviewed send, opening/saving attachments and user-selected outbound attachments. Defer custom label management.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #421, #405. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-04"
       ],
       "sources": [
         "docs/cloud-production-validation.md",
-        "apps/app/src/runtime/cloud-protocol.ts"
-      ]
+        "apps/app/src/runtime/cloud-protocol.ts",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        421,
+        405
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-36",
@@ -940,24 +1101,30 @@
       "priority": "P0",
       "kind": "acceptance",
       "blocked_on": [
-        "HUMAN: Gmail grant (MVP-35), then the owner authorizes one exact recipient and message",
+        "SOFTWARE",
         "EMULATOR: `--classes InboxOperationJournal,MailAttachment` and `scripts/test-native-restart.mjs inbox` on the release candidate (all three passed on developer APKs in round 8)"
       ],
       "requirements": [
         "AP-09"
       ],
       "title": "Qualify email send and ambiguous outcomes",
-      "current": "The client supports reviewed provider-bound sends. Against a synthetic provider the review lists From, To, Cc, Bcc, body and attachments, the dispatched request equals the reviewed one, an edited or moved draft cannot be confirmed, a reply naming another request is refused, a lost response is never resent and a confirmed send removes the retained local copy (test/browser/journey-f-reviewed-send.spec.ts, journey-f-email-notifications.spec.ts, scripts/test-inbox-sent-cleanup.mjs). Fixture sends do not establish external delivery. In the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime) InboxOperationJournal and MailAttachment passed on both flavors and the inbox restart campaign passed on both, including the saved sign-in offer in Inbox after the restart.",
-      "remaining": "After MVP-35 and an explicit authorization for the exact test recipient and message, verify one real send, reply and forward with attachments, the sent receipt and lost-response reconciliation.",
-      "acceptance": "Exactly one authorized delivery; uncertain result never auto-resends; local draft remains distinct from provider draft.",
+      "current": "Historical source/evidence observation (not the approved policy): The client supports reviewed provider-bound sends. Against a synthetic provider the review lists From, To, Cc, Bcc, body and attachments, the dispatched request equals the reviewed one, an edited or moved draft cannot be confirmed, a reply naming another request is refused, a lost response is never resent and a confirmed send removes the retained local copy (test/browser/journey-f-reviewed-send.spec.ts, journey-f-email-notifications.spec.ts, scripts/test-inbox-sent-cleanup.mjs). Fixture sends do not establish external delivery. In the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime) InboxOperationJournal and MailAttachment passed on both flavors and the inbox restart campaign passed on both, including the saved sign-in offer in Inbox after the restart.",
+      "remaining": "Approved October 12 TODOs #405, #419: Include reading, read/unread, archive, drafts, reply/forward, reviewed send, opening/saving attachments and user-selected outbound attachments. Defer custom label management. A reviewed Use in email suggestion may attach items selected in Files or Photos. Context selection is not itself permission to attach. Insert into a draft; final Send is separate.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #405, #419. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-14",
         "MVP-35"
       ],
       "sources": [
         "docs/mvp-completion-plan.md",
-        "apps/app/src/runtime/inbox-operation.ts"
-      ]
+        "apps/app/src/runtime/inbox-operation.ts",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        405,
+        419
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-37",
@@ -965,18 +1132,18 @@
       "priority": "P1",
       "kind": "acceptance",
       "blocked_on": [
+        "SOFTWARE",
         "CI: Connection in resident-android.yml job recovery-ui",
-        "EMULATOR: `--test-mocks --classes ConnectionChooser` at the current pin and the pairing refusal on an installed flag-off APK",
-        "HUMAN: a real Eliza Cloud account for live self-revocation"
+        "EMULATOR: `--test-mocks --classes ConnectionChooser` at the current pin and the pairing refusal on an installed flag-off APK"
       ],
       "requirements": [
         "AP-03",
         "AP-04"
       ],
       "title": "Verify retired phone pairing and retained development boundaries",
-      "current": "PR 379 retires production Android phone pairing and adds a controller guard. Browser and test-mocks transports remain for development; existing credentials/history must be preserved. connectRemote now refuses every caller on production Android and the native transport rejects the pairing route (ConnectionRoutes.java, JVM-tested and compiled; no instrumented test of the guard has run on an installed APK). A stubbed-bridge production-bundle test shows a saved remote, local or Cloud-agent selection is neither paired nor restored, its credential slot is not written or removed, and a Cloud sign-in starts the resident agent instead.",
-      "remaining": "Verify on an installed flag-off APK that Android rejects pairing without network mutation or automatic reconnection, preserves old remote credentials and history, and uses resident execution with Cloud provider authorization. The native route and origin guards are JVM-tested and have not run in an APK; the credential-slot class (Connection) runs only in hosted CI, which has never been dispatched. NoMockProduct passed on both flavors of the flag-off developer APKs in the round 8 emulator run at the current pin (docs/verification.md, Emulator results at 2961bd9e; class E, developer APKs with no packaged resident runtime), and ConnectionChooser passed on the test-mocks pair only in the round 7 emulator run at the earlier pin 40dbe96bd1 (docs/verification.md, Emulator results at 6dcdde34; class E, developer-override APKs). Qualify retained browser and test-mocks transport ownership, expiry, revoke and recovery separately. Real hosted-agent deployment is optional scope, not a phone MVP prerequisite.",
-      "acceptance": "Production Android cannot pair or silently restore a remote primary agent; old data remains intact. Retained development transports cannot bypass owner, expiry or device-action boundaries.",
+      "current": "Historical source/evidence observation (not the approved policy): PR 379 retires production Android phone pairing and adds a controller guard. Browser and test-mocks transports remain for development; existing credentials/history must be preserved. connectRemote now refuses every caller on production Android and the native transport rejects the pairing route (ConnectionRoutes.java, JVM-tested and compiled; no instrumented test of the guard has run on an installed APK). A stubbed-bridge production-bundle test shows a saved remote, local or Cloud-agent selection is neither paired nor restored, its credential slot is not written or removed, and a Cloud sign-in starts the resident agent instead.",
+      "remaining": "Approved October 12 TODOs #406, #415: Only the local resident agent is supported. No hosted agent, dedicated-agent purchase, remote pairing or Cloud-agent fallback is a product option, now or as an advanced setting. No Cloud-agent host is admitted. The resident agent uses the local native bridge. Cloud inference, subscription, Gmail and Maps are managed services, not agent hosts.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #406, #415. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-04",
         "MVP-21"
@@ -985,8 +1152,14 @@
         "docs/pilot-acceptance-runbook.md",
         "apps/app/src/runtime/remote-protocol.ts",
         "docs/implementation-plan.md",
-        "docs/on-device-agent-plan.md"
-      ]
+        "docs/on-device-agent-plan.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        406,
+        415
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-38",
@@ -994,7 +1167,6 @@
       "priority": "P1",
       "kind": "acceptance",
       "blocked_on": [
-        "HUMAN: decision A-09, then the Gmail grant (MVP-35) and an inference credential (MVP-34) for real sources and output",
         "SOFTWARE: rerun `npm run agent:test-digest-restart` at the current pin",
         "EMULATOR: `--test-mocks --classes HostedProcessRestart` at the current pin",
         "CI: WorkflowNoticeProcessDeath in resident-android.yml job recovery-ui",
@@ -1005,9 +1177,9 @@
         "AP-11"
       ],
       "title": "Qualify digests under the approved execution policy",
-      "current": "Local durable scheduling and hosted-result controls exist. The explicit missed record is implemented and tested: one missed occurrence, never run later, never replacing the last brief; morning and evening schedules, DST, overlap, revoke, edit and disable are covered with the development scheduler (test/browser/dev-digest-schedule.spec.ts, journey-d-digests.spec.ts). A resident worker killed at an admission or execution boundary created no duplicate result in two host runs with a synthetic model (npm run agent:test-digest-restart): one at upstream 352d7a08 in round 5 and one at 40dbe96b in round 8. It has not been repeated at the current pin 13c9857598 and is in no automated lane. HostedProcessRestart passed its three phases on both flavors of the test-mocks pair in the round 7 emulator run (class E, developer-override APKs, the earlier pin). A-09 is undecided.",
-      "remaining": "After A-09: for the resident path, rerun the digest restart check at the current pin, repeat HostedProcessRestart on an emulator at the current pin and run the notice process-death class in hosted CI (never dispatched), then real provider sources and a real model on a phone. The hosted path would need a service that does not exist.",
-      "acceptance": "Distinct source-backed terminal outputs and exactly one visible delivery per occurrence, under the approved scope.",
+      "current": "Historical source/evidence observation (not the approved policy): Local durable scheduling and hosted-result controls exist. The explicit missed record is implemented and tested: one missed occurrence, never run later, never replacing the last brief; morning and evening schedules, DST, overlap, revoke, edit and disable are covered with the development scheduler (test/browser/dev-digest-schedule.spec.ts, journey-d-digests.spec.ts). A resident worker killed at an admission or execution boundary created no duplicate result in two host runs with a synthetic model (npm run agent:test-digest-restart): one at upstream 352d7a08 in round 5 and one at 40dbe96b in round 8. It has not been repeated at the current pin 13c9857598 and is in no automated lane. HostedProcessRestart passed its three phases on both flavors of the test-mocks pair in the round 7 emulator run (class E, developer-override APKs, the earlier pin). A-09 is undecided.",
+      "remaining": "Approved October 12 TODOs #394: Schedules run only while the phone is powered on; the agent is local. Remove powered-off hosted-loop acceptance. Record missed occurrences once; do not automatically replay overdue effects. Offer an explicit Run now action where useful.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #394. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-02",
         "MVP-34",
@@ -1017,8 +1189,13 @@
         "docs/mvp-completion-plan.md",
         "apps/app/src/runtime/hosted-digests.ts",
         "docs/implementation-plan.md",
-        "docs/on-device-agent-plan.md"
-      ]
+        "docs/on-device-agent-plan.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        394
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-39",
@@ -1052,15 +1229,16 @@
       "priority": "P0",
       "kind": "release",
       "blocked_on": [
-        "HUMAN: decision A-06, then the release owner creates the key, sets the ELIZAOS_* signing values in the signing service and publishes assetlinks.json on an owned domain"
+        "SOFTWARE",
+        "HUMAN: controlled service/release operator access or exact device/build artifacts for qualification"
       ],
       "requirements": [
         "AP-14"
       ],
       "title": "Produce controlled signed artifacts and verified links",
-      "current": "android/release-signer.json records signerSha256 \"unset\"; every recorded release APK is unsigned. Provisioning, pilot update and AOSP staging refuse a release that verify-apks does not mark distributable (scripts/release-blockers.mjs). The custom scheme callback is not verified HTTPS App Links; android/app/src/main/assetlinks.template.json is a template.",
-      "remaining": "Operator sets release signer/version, protects key custody, publishes approved assetlinks for the real host, enables reviewed manifest filter and verifies installed link association.",
-      "acceptance": "Signed exact APK hashes/certificate/version and working domain verification on both variants; no secrets in the evidence bundle.",
+      "current": "Historical source/evidence observation (not the approved policy): android/release-signer.json records signerSha256 \"unset\"; every recorded release APK is unsigned. Provisioning, pilot update and AOSP staging refuse a release that verify-apks does not mark distributable (scripts/release-blockers.mjs). The custom scheme callback is not verified HTTPS App Links; android/app/src/main/assetlinks.template.json is a template.",
+      "remaining": "Approved October 12 TODOs #400: Alpha Compute controls signing and update authority; Shaw is the accountable release/support/rollback owner. Use managed or hardware-backed release signing, distinct from developer keys.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #400. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-03",
         "MVP-39"
@@ -1068,8 +1246,13 @@
       "sources": [
         "android/release-signer.json",
         "android/app/src/main/assetlinks.template.json",
-        "docs/pilot-acceptance-runbook.md"
-      ]
+        "docs/pilot-acceptance-runbook.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        400
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-41",
@@ -1077,16 +1260,17 @@
       "priority": "P0",
       "kind": "release",
       "blocked_on": [
-        "HUMAN: decision A-01 and a Linux builder with the AOSP source (MVP-03, MVP-40)",
-        "DEVICE: Pixel 10 hardware for the physical build"
+        "SOFTWARE",
+        "DEVICE: Pixel 10 hardware for the physical build",
+        "HUMAN: controlled service/release operator access or exact device/build artifacts for qualification"
       ],
       "requirements": [
         "AP-14"
       ],
       "title": "Build and boot the full AOSP product",
-      "current": "Cuttlefish is the selected virtual image validation target; Pixel 10 is the hardware build target. APK compilation proves neither image build nor boot. Separately owned AOSP work remains outside this review.",
-      "remaining": "On the separate Linux builder, lock Cuttlefish source/tools and matching host package, stage admitted signed Alpha artifacts, build and boot the full image. Separately admit exact Pixel 10 device/kernel/vendor inputs and build its product; no Pixel 10 installer before admission and no relabeled Pixel 11/tegu/grizzly target.",
-      "acceptance": "Cuttlefish build IDs, hashes, source lock and boot evidence cover product placement, signer, HOME, resident startup, authenticated inference, approvals, history and recovery. Pixel 10 has independently verified source/build evidence; physical flashing, hardware and signed recovery acceptance remain separate gates.",
+      "current": "Historical source/evidence observation (not the approved policy): Cuttlefish is the selected virtual image validation target; Pixel 10 is the hardware build target. APK compilation proves neither image build nor boot. Separately owned AOSP work remains outside this review.",
+      "remaining": "Approved October 12 TODOs #399, #424: Target Pixel 10a on Android 17. Ship standalone APK and Alpha AOSP image/launcher; Cuttlefish is the image integration test target. Other Pixels are not alternate promised hardware. Always-on listening and supported hardware-key invocation are required in the AOSP MVP, not a later milestone. Use a narrowly privileged isolated listener only; the ordinary Alpha app remains nonprivileged. Listening is off until consent, local, visibly indicated and immediately stoppable.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #399, #424. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-03",
         "MVP-40"
@@ -1096,8 +1280,14 @@
         "docs/prd.md",
         "docs/implementation-plan.md",
         "docs/on-device-agent-plan.md",
-        "docs/android-and-aosp.md"
-      ]
+        "docs/android-and-aosp.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        399,
+        424
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-42",
@@ -1105,25 +1295,31 @@
       "priority": "P0",
       "kind": "release",
       "blocked_on": [
-        "HUMAN: decision A-06 (rollback design and signed artifacts)",
+        "SOFTWARE",
         "EMULATOR: `scripts/test-installed-upgrade.mjs` from agreed baselines",
-        "DEVICE"
+        "DEVICE",
+        "HUMAN: controlled service/release operator access or exact device/build artifacts for qualification"
       ],
       "requirements": [
         "AP-14",
         "AP-15"
       ],
       "title": "Prove signed upgrade rollback and data preservation",
-      "current": "No signed update or recovery drill exists. scripts/pilot-update.mjs installs a newer versionCode over an existing install and refuses a non-distributable release; rollback is not offered (its header and its result say so, pending A-06). The installed-upgrade runner exists (scripts/test-installed-upgrade.mjs) and has no recorded run at any source.",
-      "remaining": "Upgrade from agreed installed baselines including old mock selection; verify namespaces/Keystore/data migrations, interrupted update, rollback authorization, recovery and support runbook.",
-      "acceptance": "Observed recovery on selected device with preserved promised data and no reopened mock surface or replayed side effect.",
+      "current": "Historical source/evidence observation (not the approved policy): No signed update or recovery drill exists. scripts/pilot-update.mjs installs a newer versionCode over an existing install and refuses a non-distributable release; rollback is not offered (its header and its result say so, pending A-06). The installed-upgrade runner exists (scripts/test-installed-upgrade.mjs) and has no recorded run at any source.",
+      "remaining": "Approved October 12 TODOs #400: Alpha Compute controls signing and update authority; Shaw is the accountable release/support/rollback owner. Use managed or hardware-backed release signing, distinct from developer keys.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #400. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-40",
         "MVP-41"
       ],
       "sources": [
-        "docs/pilot-acceptance-runbook.md"
-      ]
+        "docs/pilot-acceptance-runbook.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        400
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-43",
@@ -1157,7 +1353,7 @@
       "priority": "P0",
       "kind": "acceptance",
       "blocked_on": [
-        "HUMAN: inference credential (MVP-34) for the resident redaction run",
+        "SOFTWARE",
         "EMULATOR: ResidentEgressRedaction through `scripts/android-resident-instrumentation.mjs`",
         "DEVICE"
       ],
@@ -1167,9 +1363,9 @@
         "AP-10"
       ],
       "title": "Requalify privacy and outbound redaction",
-      "current": "Native launches enable upstream secret/PII swapping; host defaults differ. Synthetic filters are not a universal secret detector.",
-      "remaining": "Run source-matched resident redaction on emulator then device; probe browser vault/OTP/recovery content including plain text, selected notes/mail/files, diagnostics and connection changes. Audit actual launch config and outbound boundaries.",
-      "acceptance": "No test secret exits its allowed boundary; approved-context provenance and per-route processing/retention disclosures match execution.",
+      "current": "Historical source/evidence observation (not the approved policy): Native launches enable upstream secret/PII swapping; host defaults differ. Synthetic filters are not a universal secret detector.",
+      "remaining": "Approved October 12 TODOs #408, #424: Provide full device photo/video library access to the local agent where Android permits and the user grants it, rather than limiting the product to owned captures or picker selections. Handle partial/denied access honestly. Full local access does not imply automatic upload of the entire library. Always-on listening and supported hardware-key invocation are required in the AOSP MVP, not a later milestone. Use a narrowly privileged isolated listener only; the ordinary Alpha app remains nonprivileged. Listening is off until consent, local, visibly indicated and immediately stoppable.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #408, #424. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-21",
         "MVP-29",
@@ -1177,8 +1373,14 @@
       ],
       "sources": [
         "docs/pilot-acceptance-runbook.md",
-        "docs/market-research/13-redaction-integration.md"
-      ]
+        "docs/market-research/13-redaction-integration.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        408,
+        424
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-45",
@@ -1274,16 +1476,15 @@
       "blocked_on": [
         "SOFTWARE: what the renderer sweep still does not visit (the launcher presentation of the app views, zoom above 200%, connected states other than a mailbox)",
         "EMULATOR: repeat Accessibility and large-text/rotation coverage after round 10 (Accessibility failed and TextScale passed on both flavors in round 8, and Rotation passed only in round 7)",
-        "HUMAN: decision A-22",
         "DEVICE: TalkBack, Switch Access and physical large text"
       ],
       "requirements": [
         "AP-15"
       ],
       "title": "Complete accessibility and resilience acceptance",
-      "current": "Renderer software pass done in Chromium; on an emulator the instrumented accessibility class fails at the current source; no device campaign is recorded. A dependency-free audit (test/browser/accessibility-audit.ts) checks names, roles, focus, contrast, 24px targets, clipping and tab order over the live, fixture and subview states of every retained view in light and dark, at an emulated 200% text size and in 915x412 landscape, and over the flag-off bundle; a coverage guard fails if a retained view or scrim popup leaves the sweep. Fixed from it: Camera controls in landscape, Maps sheets, the Browser find bar, dark-theme connection buttons, the recovery screen (it scrolls, dismisses orphan dialogs and focuses Reload), ten menus and sheets that left the page in the tab order, an unannounced toast, and clipping at 200% text. Round 8 added growth of the Home cards with their text and tile grids that drop a column when labels stop fitting, driven by the measured text scale. Supported sizes and limits are in renderer accessibility checks (docs/accessibility-renderer-checks.md). Emulator results, class E on developer APKs (verification (docs/verification.md)): in the round 7 run at the earlier pin Accessibility, TextScale and Rotation passed on both flavors. In the round 8 run at the current pin TextScale passed on both, Rotation was not run, and AccessibilityInstrumentedTest failed on both flavors at two different steps. Standalone: at 200% text Home has four rows of apps and at the top of the scroll the last row is drawn under and below the floating composer, so the reading-order check flags it; the row does scroll clear. Launcher: that check passes, and the class then fails where an accessibility click on the notifications handle reaches no page control on that image's WebView (133) through UiAutomation, so that step cannot pass on that image. Round 10 (source and Chromium tests only, no emulator run): Home and the app library end above the floating composer, whose footprint is measured (runtime/dock-clearance.ts), so nothing on Home is drawn under it at 100%, 150% or 200% text in either shell; keyboard focus that lands under the dock is scrolled wholly above it; above 150% text a screen title takes a row of its own instead of an ellipsis (Photos, Camera, Password manager) and the Home calendar title is no longer cut by its clamp; a toast raised under a top-layer dialog is shown and announced in a status region inside that dialog (runtime/toast-layer.ts). The sweep gained bounding-box rules for each (obscured-by-dock, focus-obscured, toast-not-announced, toast-covered), a landscape pass at 200% text and ten provider-connected states against a synthetic mailbox; those states found and fixed an email message field that ran under the pill and a connection status cut off at 200% text. The launcher-flavor Accessibility failure (an accepted accessibility click that never reached the page) was traced by reading Chromium 133 source to a test defect, not a product one: without a screen reader bound WebView serves a reduced accessibility mode in which it drops default actions; the test now binds a stand-in screen reader from the instrumentation APK for that step. That diagnosis and the changed test are compiled, not run.",
-      "remaining": "Device acceptance is entirely open: test every retained primary view, subview and error state with TalkBack, Switch Access, physical large font (WebView text zoom differs from the emulation), keyboard and touch, rotation, gesture navigation, offline, process death and full storage on selected hardware. Emulator: run Accessibility on both flavors at the round 10 source; neither the Home layout change nor the stand-in screen reader step has run on an emulator. Still not swept: the launcher (HOME) presentation of the app views, zoom above 200%, connected states other than a mailbox (calendar, cloud agent, password provider), and an app page's own content, which still scrolls under the composer by design (only Home and the app library end above it). Landscape policy remains owner decision A-22.",
-      "acceptance": "Independent task completion without inaccessible primary controls or persistent crash/ANR on selected hardware.",
+      "current": "Historical source/evidence observation (not the approved policy): Renderer software pass done in Chromium; on an emulator the instrumented accessibility class fails at the current source; no device campaign is recorded. A dependency-free audit (test/browser/accessibility-audit.ts) checks names, roles, focus, contrast, 24px targets, clipping and tab order over the live, fixture and subview states of every retained view in light and dark, at an emulated 200% text size and in 915x412 landscape, and over the flag-off bundle; a coverage guard fails if a retained view or scrim popup leaves the sweep. Fixed from it: Camera controls in landscape, Maps sheets, the Browser find bar, dark-theme connection buttons, the recovery screen (it scrolls, dismisses orphan dialogs and focuses Reload), ten menus and sheets that left the page in the tab order, an unannounced toast, and clipping at 200% text. Round 8 added growth of the Home cards with their text and tile grids that drop a column when labels stop fitting, driven by the measured text scale. Supported sizes and limits are in renderer accessibility checks (docs/accessibility-renderer-checks.md). Emulator results, class E on developer APKs (verification (docs/verification.md)): in the round 7 run at the earlier pin Accessibility, TextScale and Rotation passed on both flavors. In the round 8 run at the current pin TextScale passed on both, Rotation was not run, and AccessibilityInstrumentedTest failed on both flavors at two different steps. Standalone: at 200% text Home has four rows of apps and at the top of the scroll the last row is drawn under and below the floating composer, so the reading-order check flags it; the row does scroll clear. Launcher: that check passes, and the class then fails where an accessibility click on the notifications handle reaches no page control on that image's WebView (133) through UiAutomation, so that step cannot pass on that image. Round 10 (source and Chromium tests only, no emulator run): Home and the app library end above the floating composer, whose footprint is measured (runtime/dock-clearance.ts), so nothing on Home is drawn under it at 100%, 150% or 200% text in either shell; keyboard focus that lands under the dock is scrolled wholly above it; above 150% text a screen title takes a row of its own instead of an ellipsis (Photos, Camera, Password manager) and the Home calendar title is no longer cut by its clamp; a toast raised under a top-layer dialog is shown and announced in a status region inside that dialog (runtime/toast-layer.ts). The sweep gained bounding-box rules for each (obscured-by-dock, focus-obscured, toast-not-announced, toast-covered), a landscape pass at 200% text and ten provider-connected states against a synthetic mailbox; those states found and fixed an email message field that ran under the pill and a connection status cut off at 200% text. The launcher-flavor Accessibility failure (an accepted accessibility click that never reached the page) was traced by reading Chromium 133 source to a test defect, not a product one: without a screen reader bound WebView serves a reduced accessibility mode in which it drops default actions; the test now binds a stand-in screen reader from the instrumentation APK for that step. That diagnosis and the changed test are compiled, not run.",
+      "remaining": "Approved October 12 TODOs #411: Support portrait and landscape, adapting each surface by its purpose. Do not stretch every panel or change sensitive/native UI ownership. Preserve drafts, scroll, selection, task and capture state.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #411. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-06",
         "MVP-20"
@@ -1292,8 +1493,13 @@
         "docs/flow-audit-and-prd.md",
         "docs/pilot-acceptance-runbook.md",
         "docs/accessibility-renderer-checks.md",
-        "test/browser/accessibility-sweep.spec.ts"
-      ]
+        "test/browser/accessibility-sweep.spec.ts",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        411
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-49",
@@ -1301,9 +1507,9 @@
       "priority": "P1",
       "kind": "acceptance",
       "blocked_on": [
+        "SOFTWARE",
         "EMULATOR: J05-2 needs a WebView with isolated-world injection, which no image on the machines used has",
         "CI: the browser-reading suite of android-emulator.yml, which runs J05-2 and has never been dispatched",
-        "HUMAN: Gmail grant (MVP-35), inference credential (MVP-34) and a Maps provider (A-23)",
         "DEVICE: the final device image"
       ],
       "requirements": [
@@ -1313,9 +1519,9 @@
         "AP-11"
       ],
       "title": "Execute all five cross-app journeys",
-      "current": "Each of J01 to J05 has an end-to-end browser journey driven through rendered controls with the development profile and synthetic providers (test/browser/journey-j01, journey-b for J02, journey-j03, journey-j04, journey-j05) and a flag-off assertion (test/browser/journey-core-loops.production.spec.ts); that is class S evidence. docs/core-loop-audit.md classifies every step and, since rounds 7 and 8, counts a native step as evidenced when its instrumentation passed in a recorded emulator run on developer APKs (class E): J01 9 of 9 closable steps evidenced, J02 (loop B) 23 of 23, J03 9 of 9, J04 8 of 8, J05 7 of 8. The open one is J05-2, the native page excerpt, which needs a WebView with isolated-world injection. For a production user J03's attachment half is blocked on the Gmail grant and J04 ends at an honest unavailable state because no Maps provider exists.",
-      "remaining": "Run J05-2 (BrowserPageQuestion) on the hosted browser-reading suite or on an emulator whose WebView has isolated-world injection; repeat at the current pin the steps that rest only on the round 7 run (docs/core-loop-audit.md names them); then run each journey end to end with real selected data on the final device image. Record unsupported subflows rather than substituting a mock.",
-      "acceptance": "Unedited demonstrations and exact receipts/source identities; no automatic send/save or silently changed source.",
+      "current": "Historical source/evidence observation (not the approved policy): Each of J01 to J05 has an end-to-end browser journey driven through rendered controls with the development profile and synthetic providers (test/browser/journey-j01, journey-b for J02, journey-j03, journey-j04, journey-j05) and a flag-off assertion (test/browser/journey-core-loops.production.spec.ts); that is class S evidence. docs/core-loop-audit.md classifies every step and, since rounds 7 and 8, counts a native step as evidenced when its instrumentation passed in a recorded emulator run on developer APKs (class E): J01 9 of 9 closable steps evidenced, J02 (loop B) 23 of 23, J03 9 of 9, J04 8 of 8, J05 7 of 8. The open one is J05-2, the native page excerpt, which needs a WebView with isolated-world injection. For a production user J03's attachment half is blocked on the Gmail grant and J04 ends at an honest unavailable state because no Maps provider exists.",
+      "remaining": "Approved October 12 TODOs #419, #412: A reviewed Use in email suggestion may attach items selected in Files or Photos. Context selection is not itself permission to attach. Insert into a draft; final Send is separate. Maps belongs in Eliza Cloud as a reusable managed service for agents, with full supported search, place, route and navigation control from Alpha\u2019s local agent. The regional development gateway is a prototype adapter, not the production coverage promise. No hosted agent is introduced.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #419, #412. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-24",
         "MVP-25",
@@ -1325,8 +1531,14 @@
         "MVP-35"
       ],
       "sources": [
-        "docs/flow-audit-and-prd.md"
-      ]
+        "docs/flow-audit-and-prd.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        419,
+        412
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-50",
@@ -1386,19 +1598,19 @@
       "priority": "P0",
       "kind": "decision and implementation",
       "blocked_on": [
-        "HUMAN: owner confirms release scope and approves the listener ADR (decisions.md foundation decision 8)",
         "SOFTWARE: implementation after the ADR",
-        "DEVICE: image and device evidence"
+        "DEVICE: image and device evidence",
+        "HUMAN: named native artifact reviewer and controlled physical audio qualification"
       ],
       "requirements": [
         "AP-06",
         "AP-12",
         "AP-14"
       ],
-      "title": "Resolve and implement AOSP listening and hardware invocation",
-      "current": "decisions.md includes an AOSP always-on-listening direction requiring a new ADR; a foreground microphone button or ACTION_ASSIST Activity does not implement it.",
-      "remaining": "Confirm its release scope, approve the narrowly privileged listener architecture that supersedes the nonprivileged rule only where required, then implement consent, mic indicator, stop/revoke, lock/background behavior and supported hardware-key invocation. Do not turn it on implicitly.",
-      "acceptance": "Approved ADR/scope disposition; image/device privacy, battery, audio-focus, screen-lock and reliable stop evidence for each retained entrypoint.",
+      "title": "Deliver AOSP MVP always-on listening and hardware invocation",
+      "current": "Historical source/evidence observation (not the approved policy): decisions.md includes an AOSP always-on-listening direction requiring a new ADR; a foreground microphone button or ACTION_ASSIST Activity does not implement it.",
+      "remaining": "Approved October 12 TODOs #424, #423: Always-on listening and supported hardware-key invocation are required in the AOSP MVP, not a later milestone. Use a narrowly privileged isolated listener only; the ordinary Alpha app remains nonprivileged. Listening is off until consent, local, visibly indicated and immediately stoppable. Transcribe records locally and on Stop inserts editable text; the user sends it. Voice assistant listens and submits automatically: after a short gap evaluate semantic turn completion with Clef; after a longer gap submit. Resumed speech cancels pending submit or the in-flight response/playback and continues the utterance/conversation. All STT/TTS remains local.",
+      "acceptance": "Complete the unchecked implementation and evidence criteria in docs/owner-approved-mvp-plan-2026-10-12.md for #424, #423. No policy approval or historical fixture result establishes current-build acceptance.",
       "depends_on": [
         "MVP-01",
         "MVP-03",
@@ -1407,8 +1619,14 @@
       "sources": [
         "docs/decisions.md",
         "docs/market-research/12-aosp-always-on-listening.md",
-        "docs/pilot-acceptance-runbook.md"
-      ]
+        "docs/pilot-acceptance-runbook.md",
+        "docs/owner-approved-mvp-plan-2026-10-12.md"
+      ],
+      "approved_issues": [
+        424,
+        423
+      ],
+      "policy_date": "2026-10-12"
     },
     {
       "id": "MVP-53",
@@ -1441,5 +1659,10 @@
       ]
     }
   ],
-  "review_record": "https://github.com/AlphaCompute/alphaphone/pull/373"
+  "review_record": "https://github.com/AlphaCompute/alphaphone/pull/373",
+  "policy_reconciliation_2026_10_12": {
+    "source": "Owner answers to all 32 decision issues",
+    "plan": "docs/owner-approved-mvp-plan-2026-10-12.md",
+    "meaning": "Choices resolved; remaining work is implementation/qualification, not new owner scope decisions. Historical current fields retained as observations only."
+  }
 }
