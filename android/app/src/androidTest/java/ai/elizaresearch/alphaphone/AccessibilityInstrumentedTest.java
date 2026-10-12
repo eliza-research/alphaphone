@@ -110,6 +110,18 @@ public final class AccessibilityInstrumentedTest {
   }
   return out.toString();
  }
+ /** UiAutomator 2.3.0 keeps a nonempty rectangle when intersection with a scrollable
+  * ancestor fails. Intersect explicitly so fully clipped descendants do not masquerade as
+  * visible controls; partially visible nodes keep only their painted area. */
+ private static Rect visibleBounds(UiObject2 node,UiDevice device){
+  Rect bounds=node.getVisibleBounds();List<int[]> frames=new ArrayList<>();
+  frames.add(new int[]{0,0,device.getDisplayWidth(),device.getDisplayHeight()});
+  for(UiObject2 parent=node.getParent();parent!=null;parent=parent.getParent())if(parent.isScrollable()){
+   Rect frame=parent.getVisibleBounds();frames.add(new int[]{frame.left,frame.top,frame.right,frame.bottom});
+  }
+  int[] clipped=AccessibilityBounds.clip(new int[]{bounds.left,bounds.top,bounds.right,bounds.bottom},frames);
+  return new Rect(clipped[0],clipped[1],clipped[2],clipped[3]);
+ }
  private static void talkBackOrder(UiDevice device,String surface)throws Exception{
   device.waitForIdle(2000);
   // The WebView publishes a layer's accessibility nodes shortly after the layer appears; read the
@@ -118,17 +130,17 @@ public final class AccessibilityInstrumentedTest {
   for(int attempt=0;attempt<25;attempt++){
    root=device.findObject(By.pkg(BuildConfig.APPLICATION_ID).depth(0));nodes=new ArrayList<>();
    if(root!=null){try{collect(root,nodes);}catch(androidx.test.uiautomator.StaleObjectException changing){nodes.clear();}}
-   boolean clickable=false;try{for(UiObject2 node:nodes)if(node.isClickable()&&!node.getVisibleBounds().isEmpty())clickable=true;}catch(androidx.test.uiautomator.StaleObjectException changing){clickable=false;}
+   boolean clickable=false;try{for(UiObject2 node:nodes)if(node.isClickable()&&!visibleBounds(node,device).isEmpty())clickable=true;}catch(androidx.test.uiautomator.StaleObjectException changing){clickable=false;}
    if(clickable)break;
    SystemClock.sleep(200);
   }
   assertNotNull(surface+": app window has an accessibility tree",root);
   int width=device.getDisplayWidth();
   List<String> problems=new ArrayList<>();
-  UiObject2 previous=null;
+  UiObject2 previous=null;Rect previousBounds=null;
   int actionable=0;
   for(UiObject2 node:nodes){
-   Rect r=node.getVisibleBounds();
+   Rect r=visibleBounds(node,device);
    if(r.isEmpty())continue;
    String label=((node.getText()==null?"":node.getText())+" "+(node.getContentDescription()==null?"":node.getContentDescription())).trim();
    // An empty text field has no text; Android carries its accessible name (aria-label/placeholder) as the hint, which TalkBack reads.
@@ -136,7 +148,7 @@ public final class AccessibilityInstrumentedTest {
    if(node.isClickable()){actionable++;if(label.isEmpty()&&node.getChildren().stream().noneMatch(c->c.getText()!=null&&!c.getText().trim().isEmpty()))problems.add("unlabelled control at "+r.toShortString());}
    if(r.left<0||r.right>width)problems.add("clipped '"+label+"' at "+r.toShortString());
    if(previous!=null){
-    Rect p=previous.getVisibleBounds();
+    Rect p=previousBounds;
     // The next node may start a new column to the right, otherwise it must not read upward.
     if(r.top<p.top-Math.max(p.height(),r.height())/2&&r.left<p.right){
      problems.add("reading order goes up from '"+previous.getText()+"' to '"+label+"'");
@@ -145,7 +157,7 @@ public final class AccessibilityInstrumentedTest {
      System.out.println("ALPHA_ACCESSIBILITY_NEXT "+accessibilityGeometry(label));
     }
    }
-   previous=node;
+   previous=node;previousBounds=r;
   }
   if(!problems.isEmpty())System.out.println("ALPHA_ACCESSIBILITY_HOME_GEOMETRY "+js("(()=>{const rect=e=>{if(!e)return null;const r=e.getBoundingClientRect(),s=getComputedStyle(e);return {x:r.x,y:r.y,width:r.width,height:r.height,overflowX:s.overflowX,overflowY:s.overflowY,scrollTop:e.scrollTop,scrollHeight:e.scrollHeight,clientHeight:e.clientHeight};};const q=s=>document.querySelector(s),css=getComputedStyle(document.documentElement);return JSON.stringify({viewport:{width:innerWidth,height:innerHeight},textScale:css.getPropertyValue('--alpha-text-scale'),dockClearance:css.getPropertyValue('--alpha-dock-clearance'),dockRest:css.getPropertyValue('--alpha-dock-rest'),phoneScale:css.getPropertyValue('--phone-scale'),home:rect(q('[data-alpha-layer=home]')),allApps:rect(q('[data-alpha-home-apps] button[aria-label=\"All apps\"]')),composer:rect(q('[data-alpha-layer=composer]')),pill:rect(q('[data-alpha-layer=pill]')),inputBar:rect(q('[data-alpha-input-bar]'))});})()"));
   assertTrue(surface+": TalkBack reaches actionable controls",actionable>0);
