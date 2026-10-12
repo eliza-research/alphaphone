@@ -100,7 +100,13 @@ public class ReminderLifecycleInstrumentedTest {
    String before=ReminderTestAccess.read(c,once).toString(),beforeDaily=ReminderTestAccess.read(c,daily).toString();
    JSONObject targetBefore=ReminderTestAccess.selected(c,once);
    // Android clears notifications on reboot; simulate that boundary, then restore under a new boot ID.
-   manager().cancel(once,0);manager().cancel(daily,0);assertNull(notification(once));
+   manager().cancel(once,0);manager().cancel(daily,0);
+   // NotificationManager cancellation is queued in system_server; observe the boundary
+   // before simulating the new boot rather than racing its asynchronous removal.
+   long cancelledBy=SystemClock.elapsedRealtime()+5000;
+   while((notification(once)!=null||notification(daily)!=null)&&SystemClock.elapsedRealtime()<cancelledBy)SystemClock.sleep(50);
+   assertNull("One-time notification cleared before simulated reboot",notification(once));
+   assertNull("Daily notification cleared before simulated reboot",notification(daily));
    String boot="test-boot-"+UUID.randomUUID();
    ReminderLifecycleTestAccess.restore(c,boot);
    StatusBarNotification again=notification(once),againDaily=notification(daily);assertNotNull("Posted reminder re-posted after reboot",again);assertNotNull(againDaily);

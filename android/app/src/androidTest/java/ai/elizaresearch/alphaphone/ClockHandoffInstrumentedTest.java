@@ -19,7 +19,7 @@ import static org.junit.Assert.*;
 @RunWith(AndroidJUnit4.class)
 public final class ClockHandoffInstrumentedTest {
  private String js(String s)throws Exception{return WebViewTestDriver.evaluate(s);}
- private void until(String s)throws Exception{for(int i=0;i<180;i++){if("true".equals(js("Boolean("+s+")")))return;SystemClock.sleep(100);}fail("Clock condition: "+s);}
+ private void until(String s)throws Exception{for(int i=0;i<180;i++){if("true".equals(js("Boolean("+s+")")))return;SystemClock.sleep(100);}fail("Clock condition: "+s+"; dialog="+js("document.querySelector('[role=dialog][aria-label=\"Clock alarms\"]')?.textContent"));}
  private void click(String label)throws Exception{String s="[...document.querySelectorAll('button')].find(e=>e.getAttribute('aria-label')==="+JSONObject.quote(label)+"||e.textContent.trim()==="+JSONObject.quote(label)+")";until(s+"&&("+s+").getAttribute('aria-disabled')!=='true'");js("("+s+").click()");}
  @Test public void visibleReviewConstructsFourStandardClockIntentsWithoutDeliveringThem()throws Exception{
   org.junit.Assume.assumeTrue("Explicit intercepted Clock fixture required","1".equals(InstrumentationRegistry.getArguments().getString("clockHandoff")));
@@ -29,7 +29,7 @@ public final class ClockHandoffInstrumentedTest {
   }};
   instrumentation.addMonitor(monitor);
   try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class);ClockHistoryFixture history=new ClockHistoryFixture()){
-   AppNavigation.liveMode();js(AppNavigation.request("Calendar"));until(AppNavigation.selected("Calendar"));click("Clock alarms");
+   AppNavigation.liveMode();js(AppNavigation.request("Calendar"));until(AppNavigation.selected("Calendar"));AppNavigation.declineStartupAccess();click("Clock alarms");
    for(String action:new String[]{"Set alarm","Show alarms","Snooze","Dismiss"}){
     click(action);int before=captured.size();click("Review Clock request");assertEquals(before,captured.size());click("Confirm Clock request");until("document.querySelector('[role=\"dialog\"][aria-label=\"Clock alarms\"]').textContent.includes('Clock request sent')");assertEquals(before+1,captured.size());history.completed(action.equals("Set alarm")?"set":action.equals("Show alarms")?"show":action.equals("Snooze")?"snooze":"dismiss");
    }

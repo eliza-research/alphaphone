@@ -56,7 +56,7 @@ test('the aggregator requires 20 warm and 5 cold complete samples and reports A-
   timing.clearVoiceTiming();
   for (let i = 0; i < 19; i++) turn({recognition: 700 + i, audio: 2000 + i});
   for (let i = 0; i < 5; i++) turn({cold: true, recognition: 4000 + i});
-  turn({speak: false});
+  turn();
   now = 0; timing.beginVoiceTurn({route: 'on-device', cold: false}); timing.abandonVoiceTurn();
   const exported = JSON.parse(timing.exportVoiceTiming());
   const summary = aggregate([exported, exported]);
@@ -65,9 +65,9 @@ test('the aggregator requires 20 warm and 5 cold complete samples and reports A-
   assert.equal(summary.cohorts.warm.samples, 20);
   assert.equal(summary.cohorts.cold.samples, 5);
   assert.equal(summary.sufficient, true);
-  assert.equal(summary.cohorts.warm.withAudio, 19);
+  assert.equal(summary.cohorts.warm.withAudio, 20);
   assert.equal(summary.cohorts.cold.phases.recognition.p50, 4002);
-  assert.equal(summary.cohorts.warm.phases.speechToAudioExcludingReview.n, 19);
+  assert.equal(summary.cohorts.warm.phases.speechToAudioExcludingReview.n, 20);
   assert.equal(summary.cohorts.warm.phases.review.p50, 3000);
   assert.match(summary.targetSignOff, /A-10/);
   assert.equal(percentile([1, 2, 3, 4], 50), 2);
@@ -87,4 +87,45 @@ test('the aggregator requires 20 warm and 5 cold complete samples and reports A-
     fs.writeFileSync(file, '{"format":"other"}');
     assert.throws(() => execFileSync(process.execPath, ['scripts/aggregate-voice-latency.mjs', file], {stdio: 'pipe'}), error => error.status === 1);
   } finally { fs.rmSync(dir, {recursive: true, force: true}); }
+});
+
+
+test('text-only success and pooled routes cannot satisfy audible route qualification', () => {
+  timing.clearVoiceTiming();
+  for (let i = 0; i < 20; i++) turn({speak: i !== 19});
+  for (let i = 0; i < 5; i++) turn({cold: true});
+  const textOnly = JSON.parse(timing.exportVoiceTiming());
+  const missingAudio = aggregate([textOnly]);
+  assert.equal(missingAudio.cohorts.warm.sufficient, true);
+  assert.equal(missingAudio.byRoute['on-device'].cohorts.warm.withAudio, 19);
+  assert.equal(missingAudio.sufficient, false);
+  const allAudio = {...textOnly, records: textOnly.records.map(row => ({...row, marks: {...row.marks, 'first-audio': row.marks['final-reply'] + 200}}))};
+  const split = {...allAudio, records: allAudio.records.map((row, index) => ({...row, route: index % 2 ? 'eliza-cloud' : 'on-device'}))};
+  const mixed = aggregate([split]);
+  assert.equal(mixed.cohorts.warm.audioSufficient, true);
+  assert.equal(mixed.cohorts.cold.audioSufficient, true);
+  assert.equal(mixed.sufficient, false, 'neither route has enough independent samples');
+  assert.equal(mixed.byRoute['eliza-cloud'].cohorts.warm.withAudio, 10);
+  assert.equal(aggregate([allAudio]).sufficient, true);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-route-'));
+  try {
+    const file = path.join(dir, 'export.json');
+    for (const exported of [textOnly, split]) {
+      fs.writeFileSync(file, JSON.stringify(exported));
+      assert.throws(() => execFileSync(process.execPath, ['scripts/aggregate-voice-latency.mjs', file], {stdio: 'pipe'}), error => error.status === 2 && /Insufficient audible samples by route/.test(String(error.stderr)));
+    }
+  } finally { fs.rmSync(dir, {recursive: true, force: true}); }
+});
+
+test('an abandoned-only route stays visible and empty exports never qualify', () => {
+  timing.clearVoiceTiming();
+  for (let i = 0; i < 20; i++) turn();
+  for (let i = 0; i < 5; i++) turn({cold: true});
+  timing.beginVoiceTurn({route: 'eliza-cloud', cold: true}); timing.abandonVoiceTurn();
+  const summary = aggregate([JSON.parse(timing.exportVoiceTiming())]);
+  assert.equal(summary.byRoute['on-device'].sufficient, true);
+  assert.equal(summary.byRoute['eliza-cloud'].abandoned, 1);
+  assert.equal(summary.byRoute['eliza-cloud'].sufficient, false);
+  assert.equal(summary.sufficient, false);
+  assert.equal(aggregate([{format: 'alpha-voice-timing-v1', records: []}]).sufficient, false);
 });

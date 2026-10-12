@@ -45,6 +45,17 @@ final class ShareFlowAssertions {
     if(visible)break;SystemClock.sleep(100);
    }
    assertTrue("System share sheet is actually foreground",visible);
+   // Resumed precedes input focus on API 37. Back during that gap can reach Alpha.
+   boolean focused=false;long focusDeadline=SystemClock.elapsedRealtime()+10000;
+   while(SystemClock.elapsedRealtime()<focusDeadline){
+    try(android.os.ParcelFileDescriptor fd=instrumentation.getUiAutomation().executeShellCommand("dumpsys window");java.io.InputStream input=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){
+     String state=new String(input.readNBytes(2*1024*1024),java.nio.charset.StandardCharsets.UTF_8);
+     focused=state.lines().anyMatch(line->line.contains("mCurrentFocus=")&&line.contains("ChooserActivity"));
+    }
+    if(focused)break;SystemClock.sleep(100);
+   }
+   assertTrue("Actual chooser owns input focus before cancellation",focused);
+   instrumentation.getUiAutomation().waitForIdle(500,5000);
    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
    awaitMainForeground();
   } finally { instrumentation.removeMonitor(monitor); }

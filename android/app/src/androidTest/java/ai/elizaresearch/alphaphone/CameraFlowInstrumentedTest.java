@@ -101,7 +101,7 @@ public class CameraFlowInstrumentedTest {
    navigate(s,"Home");nativePreview(s,false);until(s,"!document.querySelector('[data-alpha-camera-screen]')");
   }finally{created.addAll(ownedImages());created.removeAll(before);for(Uri uri:created)context().getContentResolver().delete(uri,null,null);}
  }
- private void permissionButton(String suffix)throws Exception{
+ void permissionButton(String suffix)throws Exception{
   long end=SystemClock.elapsedRealtime()+15000;
   while(SystemClock.elapsedRealtime()<end){
    AccessibilityNodeInfo root=InstrumentationRegistry.getInstrumentation().getUiAutomation().getRootInActiveWindow();

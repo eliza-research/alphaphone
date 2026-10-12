@@ -43,13 +43,14 @@ public final class BrowserWebFeaturesInstrumentedTest {
  private ServerSocket server,other;
  private ExecutorService workers;
  private String base;
+ private final java.util.concurrent.atomic.AtomicInteger authRequests=new java.util.concurrent.atomic.AtomicInteger();
  private final List<android.net.Uri> savedFiles=new ArrayList<>();
 
  private String host(String script)throws Exception{return WebViewTestDriver.evaluate(script);}
  private void ready(String predicate)throws Exception{for(int i=0;i<200;i++){if("true".equals(host("Boolean("+predicate+")")))return;SystemClock.sleep(100);}fail("Browser control/state missing: "+predicate.substring(0,Math.min(160,predicate.length())));}
  private String button(String label){return "[...document.querySelectorAll('[data-screen] button')].find(e=>e.getAttribute('aria-label')==="+JSONObject.quote(label)+")";}
  private void click(String label)throws Exception{ready(button(label));host("("+button(label)+").click()");}
- private void app(String label)throws Exception{host(AppNavigation.request(label));ready(AppNavigation.selected(label));}
+ private void app(String label)throws Exception{host(AppNavigation.request(label));ready(AppNavigation.selected(label));AppNavigation.declineStartupAccess();}
  private void address(String value)throws Exception{
   if("false".equals(host("!!document.querySelector('input[aria-label=Address]')")))click("Edit address");
   ready("document.querySelector('input[aria-label=Address]')");
@@ -61,12 +62,19 @@ public final class BrowserWebFeaturesInstrumentedTest {
  private void childUntil(String predicate)throws Exception{for(int i=0;i<200;i++){if("true".equals(browser.child("Boolean("+predicate+")")))return;SystemClock.sleep(100);}fail("Child page state missing: "+predicate);}
 
  // ---- Native (non-renderer) dialogs through accessibility --------------------------
- private AccessibilityNodeInfo nativeNode(String text,boolean exact){
+ private AccessibilityNodeInfo nativeNode(String text,boolean exact){return nativeNode(text,exact,false);}
+ private AccessibilityNodeInfo nativeNode(String text,boolean exact,boolean actionable){
   AccessibilityNodeInfo root=InstrumentationRegistry.getInstrumentation().getUiAutomation().getRootInActiveWindow();if(root==null)return null;
   String expected=text.trim().toLowerCase(Locale.ROOT);ArrayDeque<AccessibilityNodeInfo> queue=new ArrayDeque<>();queue.add(root);int visited=0;
   while(!queue.isEmpty()&&visited++<512){AccessibilityNodeInfo node=queue.remove();
    String actual=node.getText()==null?"":node.getText().toString().trim().toLowerCase(Locale.ROOT);
-   if(node.isVisibleToUser()&&(exact?expected.equals(actual):actual.contains(expected)))return node;
+   if(node.isVisibleToUser()&&(exact?expected.equals(actual):actual.contains(expected))){
+    if(!actionable)return node;
+    // The dialog title and positive button can have the same text. Keep looking
+    // when the first matching label has no enabled clickable ancestor.
+    AccessibilityNodeInfo target=node;while(target!=null&&!target.isClickable())target=target.getParent();
+    if(target!=null&&target.isVisibleToUser()&&target.isEnabled())return target;
+   }
    for(int i=0;i<node.getChildCount();i++){AccessibilityNodeInfo child=node.getChild(i);if(child!=null)queue.add(child);}
   }return null;
  }
@@ -78,10 +86,10 @@ public final class BrowserWebFeaturesInstrumentedTest {
    for(int i=0;i<node.getChildCount();i++){AccessibilityNodeInfo child=node.getChild(i);if(child!=null)queue.add(child);}
   }return null;
  }
- private void nativeVisible(String text)throws Exception{for(int i=0;i<150;i++){if(nativeNode(text,false)!=null)return;SystemClock.sleep(100);}fail("Missing native state: "+text);}
+ private void nativeVisible(String text)throws Exception{for(int i=0;i<150;i++){if(nativeNode(text,false)!=null)return;SystemClock.sleep(100);}fail("Missing native state: "+text+"; authRequests="+authRequests.get()+"; nativeAuth="+authState()+"; "+browser.diagnostics()+"; prompt="+host("JSON.stringify({startupAccess:!!document.querySelector('dialog.alpha-startup-permissions[open]'),cancelled:document.body.innerText.includes('Sign-in was cancelled'),insecure:document.body.innerText.includes('password over an insecure connection'),crossSite:document.body.innerText.includes('sign-in prompt from a different site')})"));}
  private void nativeAbsent(String text)throws Exception{SystemClock.sleep(1500);assertNull("Unexpected native prompt: "+text,nativeNode(text,false));}
  private void nativeClick(String text)throws Exception{
-  for(int i=0;i<150;i++){AccessibilityNodeInfo node=nativeNode(text,true);if(node!=null){while(node!=null&&!node.isClickable())node=node.getParent();if(node!=null&&node.refresh()&&node.isVisibleToUser()&&node.isEnabled()&&node.performAction(AccessibilityNodeInfo.ACTION_CLICK))return;}SystemClock.sleep(100);}fail("Native control not clickable: "+text);
+  for(int i=0;i<150;i++){AccessibilityNodeInfo node=nativeNode(text,true,true);if(node!=null){if(node!=null&&node.refresh()&&node.isVisibleToUser()&&node.isEnabled()&&node.performAction(AccessibilityNodeInfo.ACTION_CLICK))return;}SystemClock.sleep(100);}fail("Native control not clickable: "+text);
  }
  private void nativeType(String hint,String value)throws Exception{
   for(int i=0;i<150;i++){AccessibilityNodeInfo node=hinted(hint);if(node!=null){Bundle args=new Bundle();args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,value);if(node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,args))return;}SystemClock.sleep(100);}fail("Native field missing: "+hint);
@@ -96,6 +104,22 @@ public final class BrowserWebFeaturesInstrumentedTest {
   if(error.get()!=null)throw error.get();return result;
  }
  private String pluginString(String name)throws Exception{AtomicReference<String> value=new AtomicReference<>();WebViewTestDriver.withActivity(MainActivity.class,activity->{try{value.set((String)field(plugin(activity),name));}catch(Exception failure){throw new AssertionError(failure);}});return value.get();}
+ // Only structural flags and known error categories; never expose URLs, realms or credentials.
+ private String authState()throws Exception{
+  AtomicReference<String> result=new AtomicReference<>();
+  WebViewTestDriver.withActivity(MainActivity.class,activity->{try{
+   Object owner=plugin(activity);JSONObject state=new JSONObject();
+   state.put("paused",field(owner,"paused"));state.put("destroyed",field(owner,"destroyed"));
+   state.put("presented",field(owner,"presentedId")!=null);state.put("dialog",field(owner,"siteDialog")!=null);
+   JSONArray tabs=new JSONArray();for(Object tab:((Map<?,?>)field(owner,"tabs")).values()){
+    JSONObject item=new JSONObject();String error=(String)field(tab,"error");
+    for(String name:new String[]{"loading","committed","dead","authAttempts","httpStatus"})item.put(name,field(tab,name));
+    item.put("errorPresent",!error.isEmpty());item.put("cancelled",error.contains("Sign-in was cancelled"));
+    item.put("insecure",error.contains("insecure connection"));item.put("timeout",error.contains("taking too long"));
+    item.put("frameShown",((View)field(tab,"frame")).isShown());tabs.put(item);
+   }state.put("tabs",tabs);result.set(state.toString());
+  }catch(Exception failure){throw new AssertionError(failure);}});return result.get();
+ }
  private boolean fullscreenActive()throws Exception{AtomicBoolean active=new AtomicBoolean();WebViewTestDriver.withActivity(MainActivity.class,activity->{try{active.set(field(plugin(activity),"customView")!=null);}catch(Exception failure){throw new AssertionError(failure);}});return active.get();}
  private String persistedDownloads(){return InstrumentationRegistry.getInstrumentation().getTargetContext().getSharedPreferences("alpha-browser-downloads",Context.MODE_PRIVATE).getString("owned","[]");}
 
@@ -144,6 +168,7 @@ public final class BrowserWebFeaturesInstrumentedTest {
     cookieRequests.add(tag+"="+cookie.contains("alpha_dl="+token));
     respond(output,"200 OK","text/plain",("file bytes "+token).getBytes(StandardCharsets.UTF_8),"Content-Disposition: attachment; filename=\"alpha-"+token+".txt\"\r\n");
    }else if(request!=null&&request.startsWith("GET /auth")){
+    authRequests.incrementAndGet();
     if(expectedAuth.equals(auth))respond(output,"200 OK","text/html",("<!doctype html><title>Auth fixture ok</title>Signed in").getBytes(StandardCharsets.UTF_8),"");
     else respond(output,"401 Unauthorized","text/html","<!doctype html><title>Auth required</title>".getBytes(StandardCharsets.UTF_8),"WWW-Authenticate: Basic realm=\"Alpha fixture\"\r\n");
    }else respond(output,"200 OK","text/html",fixturePage().getBytes(StandardCharsets.UTF_8),"");

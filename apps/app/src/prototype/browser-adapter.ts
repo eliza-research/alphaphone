@@ -180,10 +180,21 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
       if (disposed) { if (approvedSignal) throw new Error('Browser closed'); return; }
       if (newTab) shell.vset('browser', { tabs: [...state().tabs, { id, hist: ['newtab'], pos: 0, ...(priv ? {priv: true} : {}) }], cur: id });
       metadata.set(id, { ...metadata.get(id), url: url.href, loading: true, committed: false, error: '' });
-      documentRevisions.set(id, (documentRevisions.get(id) || 0) + 1);
+      const revision = (documentRevisions.get(id) || 0) + 1;
+      documentRevisions.set(id, revision);
       // A background (restored-tab) load must not close a menu or switcher the
       // user opened while its native tab was being created.
       if (!background) shell.vset('browser', { editing: false, tabsOpen: false, menu: false, lib: null, share: false });
+      // Commit the address-editor transition and native selection before a fast
+      // response can request authentication. The periodic geometry pass is too late.
+      if (!background) {
+        await new Promise<void>(resolve => shell.setState({}, resolve));
+        approvedSignal?.throwIfAborted();
+        if (disposed || state()?.cur !== id || documentRevisions.get(id) !== revision) return;
+        await update(true);
+        approvedSignal?.throwIfAborted();
+        if (disposed || state()?.cur !== id || documentRevisions.get(id) !== revision) return;
+      }
       await Browser.navigate({ session, id, url: url.href });
       refresh();
       restoreAttempts.delete(id);
@@ -417,7 +428,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
    * build the page is an element inside the host document, below any modal, and stays shown. */
   const hostModalOpen = (root: { querySelector(selector: string): unknown }, nativeSurface: boolean): boolean => nativeSurface && !!root.querySelector('dialog:modal, .alpha-connection-scrim');
   // host-modal:end
-  const update = () => {
+  const update = (confirmPresentation = false) => {
     if(disposed)return;
     const s=state(), S=shell?.S();
     const element=document.querySelector('[data-native-browser-viewport]') as HTMLElement|null;
@@ -431,13 +442,14 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     saveSession();
     const payload=hidden || !created.has(s?.cur) ? {session,id:null} : {session,id:s.cur,x:rect!.x,y:rect!.y,width:rect!.width,height};
     const next=JSON.stringify(payload);
-    if(next!==lastGeometry){lastGeometry=next;return Browser.present(payload).catch(()=>{lastGeometry='';});}
+    if(confirmPresentation || next!==lastGeometry){lastGeometry=next;return Browser.present(payload).catch((error: unknown)=>{lastGeometry='';if(confirmPresentation)throw error;});}
   };
   const openBrowserView = (event: Event) => shell?.openView((event as CustomEvent<string>).detail);
   window.addEventListener('alpha:browser-open-view', openBrowserView);
   window.addEventListener('alpha:bookmarks-document-changed',refreshBookmarks);
   const timer=window.setInterval(update,100);
   const visibility = () => { lastGeometry=''; update(); if (!document.hidden && shell?.S().view === 'browser') refreshBookmarks(); };
-  window.addEventListener('resize',update);document.addEventListener('visibilitychange',visibility);
-  return ()=>{window.removeEventListener('alpha:bookmarks-document-changed',refreshBookmarks);window.removeEventListener('alpha:browser-open-view',openBrowserView);stopReading();unsubscribeReading();disposed=true;clearInterval(timer);window.removeEventListener('resize',update);document.removeEventListener('visibilitychange',visibility);void resumeListener?.remove();void listener?.remove();void openedListener?.remove();void closedListener?.remove();void noticeListener?.remove();void findListener?.remove();void fullscreenListener?.remove();window.clearTimeout(findTimer);for(const id of created.keys())void Browser.close({session,id}).catch(()=>{});};
+  const resized = () => { void update(); };
+  window.addEventListener('resize',resized);document.addEventListener('visibilitychange',visibility);
+  return ()=>{window.removeEventListener('alpha:bookmarks-document-changed',refreshBookmarks);window.removeEventListener('alpha:browser-open-view',openBrowserView);stopReading();unsubscribeReading();disposed=true;clearInterval(timer);window.removeEventListener('resize',resized);document.removeEventListener('visibilitychange',visibility);void resumeListener?.remove();void listener?.remove();void openedListener?.remove();void closedListener?.remove();void noticeListener?.remove();void findListener?.remove();void fullscreenListener?.remove();window.clearTimeout(findTimer);for(const id of created.keys())void Browser.close({session,id}).catch(()=>{});};
 }

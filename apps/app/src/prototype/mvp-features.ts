@@ -1,19 +1,17 @@
 import { browserDevProfile } from '../browser/dev-profile';
-// Scope decision: docs/mvp-scope-and-gap-report.md; Wallet: docs/implementation-plan.md AP9.
-// Sep 15 notes, paragraph 2283: https://docs.google.com/document/d/1Wgz0wWZh_nvICFzmxPpPa2_H-pvHLAF12FZriMQXf_I/
-// Alpha Phone MVP scope: user-provided September 15 biweekly notes defer
-// calls/SMS/Contacts. Wallet remains outside the supplied core MVP definition.
-// Restore calls/SMS/Contacts only after an approved scope change and native
-// permission, recipient, denied-role and return-to-HOME flow acceptance.
-// Restore Wallet only after AP9 provider/security decisions and payment acceptance.
+// Full-product scope: docs/full-product-completion-audit.md FP-01 through FP-04.
+// The user included Phone, SMS, Contacts and Wallet on October 11. They stay
+// disabled until their native capabilities, permission/role recovery, recipient
+// review and return-to-HOME flows are implemented and accepted. Wallet also needs
+// the chosen provider/security contract and payment acceptance.
 // Reference definitions, template, assets and saved user data are deliberately retained.
 export const ENABLED_MVP_VIEWS = new Set([
-  // "phone", // Deferred: September 15 notes, calls/SMS/Contacts deprioritized.
-  // "messages", // Deferred: SMS UI; this does not defer email/Telegram/Discord.
+  // "phone", // Pending native calling implementation and acceptance.
+  // "messages", // Pending SMS implementation; email/Telegram/Discord have separate scope.
   "inbox", "calendar", "browser", "camera", "photos", "maps", "notes",
-  // "contacts", // Deferred: no directory access or Contacts adapter effects.
+  // "contacts", // Pending Contacts permission and directory implementation.
   "files",
-  // "wallet", // Deferred: not in the authoritative core MVP; no payment flow.
+  // "wallet", // Pending provider/security decisions and real payment flow.
   "workflows", "settings",
 ]);
 export const DEFERRED_MVP_VIEWS = new Set(["phone", "messages", "contacts", "wallet"]);

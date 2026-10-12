@@ -39,14 +39,14 @@
       "priority": "P0",
       "kind": "decision",
       "blocked_on": [
-        "HUMAN: owner decision on voice send and route policy (reconcile P-01, P-07 and PRD AP-06, with pending A-04 and A-24)"
+        "HUMAN: owner decision on remaining voice route/fallback policy (P-07 and PRD AP-06, with pending A-04 and A-24)"
       ],
       "requirements": [
         "AP-06"
       ],
       "title": "Reconcile voice send and route policy",
-      "current": "Flag-off builds select Eliza Cloud speech unconditionally (apps/app/src/runtime/voice-selection.ts; its own comment says this differs from P-01/P-07 as the PRD states them and needs a decision). decisions.md P-07 names Cloud as the default for chat voice, Notes transcription and read-aloud; P-01 requires record, transcribe, review, then the user sends; an ongoing Cloud conversation sends each new spoken turn (test/browser/chat-voice-mode.spec.ts). The PRD's AP-06 row still says local first with Cloud as a disclosed opt-in, and its closing section says on-device speech remains required on Android. The four manual-entry scenarios are test.todo entries in test/voice-entry-timing.test.mjs, not passing tests.",
-      "remaining": "The owner chooses the authoritative policy for chat, Notes, read-aloud and browser, including whether on-device speech is still required (A-24); then reconcile the PRD, decisions, completion plan, Settings, implementation and tests. Do not silently equate optional local code with a production local route.",
+      "current": "The October 12 owner update to P-01 approves ongoing chat voice with automatic sending after explicit start. Notes recording retains review/save. Flag-off builds select Eliza Cloud speech; P-07 names Cloud as default, while the PRD still requires on-device speech and local-first browser recognition. Four entrypoint/timing acceptance scenarios remain test.todo; no real latency acceptance is established.",
+      "remaining": "Resolve route/fallback policy for chat, Notes, read-aloud and browser, including A-24 on required on-device speech. Verify ongoing voice start/Stop, owner binding, cancellation and source-bound timing without restoring the superseded manual-Send requirement.",
       "acceptance": "One dated approved policy; all entrypoints and cancellation/consent tests match it; no unsupported latency claim.",
       "depends_on": [],
       "sources": [

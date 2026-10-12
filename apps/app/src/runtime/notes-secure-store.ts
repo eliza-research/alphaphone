@@ -1,3 +1,4 @@
+import {notesValueFits} from './notes-capacity';
 import { SecureNotesStore as SharedSecureNotesStore, readLegacyDailyNotes as readLegacy, type NotesVault, type NotesOpenStage } from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-secure-store.ts';
 import { NotesDocumentConflict } from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-document-store.ts';
 import { notesStorageKeys, isStorageFull, STORAGE_FULL_CODE, type NoteRecord } from './notes-store';
@@ -16,10 +17,11 @@ export class NotesStorageFull extends NotesDocumentConflict {
  constructor(){super('Notes storage is full. Nothing was written.');}
 }
 /** The shared store turns unexpected port errors into uncertain commits; keep capacity distinct. */
-function capacityAware(vault:NotesVault):NotesVault{
+export function capacityAware(vault:NotesVault):NotesVault{
  return {
   read:key=>vault.read(key),
   async compareExchange(key,expected,value){
+   if((key===SECURE_NOTES_SLOT||key===SECURE_NOTES_DRAFT_SLOT)&&!notesValueFits(value))throw new NotesStorageFull();
    try{return await vault.compareExchange(key,expected,value);}
    catch(error){if(isStorageFull(error))throw new NotesStorageFull();throw error;}
   },
@@ -117,7 +119,7 @@ export const SecureNotesStore = {
    const prior=expected===null?null:input.own&&JSON.stringify(expected)===JSON.stringify(input.own)?input.kept??null:validDraft(expected);
    const merged=prior?mergeNotesDrafts(prior,changes):changes;
    const draft:NotesDraft={version:1,savedAt:Date.now(),base:input.base,reason:input.reason,...merged};
-   if((await vault.compareExchange(SECURE_NOTES_DRAFT_SLOT,expected,draft)).status==='saved')return draft;
+   if((await capacityAware(vault).compareExchange(SECURE_NOTES_DRAFT_SLOT,expected,draft)).status==='saved')return draft;
   }
   throw Error('Notes draft changed in another view');
  },

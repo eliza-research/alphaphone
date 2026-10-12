@@ -39,7 +39,7 @@ export function installFilesTreeAdapter(views:Bag,accept:(module:string,result:N
  if(Capacitor.isNativePlatform())filesIndex.revokeTree();
  let selecting=false,picked=new Set<string>();
  const resetSelection=()=>{selecting=false;picked.clear();};
- let dialog:{entries?:Entry[];kind:'create'|'rename'|'delete'|'move';entry?:Entry;name:string;folder?:Entry;rows?:Entry[];error?:string}|undefined;
+ let dialog:{entries?:Entry[];kind:'create'|'rename'|'delete'|'move';entry?:Entry;name:string;folder?:Entry;rows?:Entry[];cursor?:string;error?:string}|undefined;
  const repaint=()=>{folderContext();api?.set({nativeTreeRevision:++generation});};
  let dialogTrigger:HTMLElement|null=null;
  const dialogModal=createInlineModal(()=>{if(!busy){dialog=undefined;repaint();}},()=>dialogTrigger?.isConnected?dialogTrigger:document.querySelector<HTMLElement>('button[aria-label="View and sort"]'));
@@ -108,7 +108,7 @@ export function installFilesTreeAdapter(views:Bag,accept:(module:string,result:N
   finally{busy=false;repaint();}
  }
  const beginDialog=(kind:'create'|'rename'|'delete'|'move',entry?:Entry,trigger?:EventTarget|null)=>{
-  if(busy)return;dialogTrigger=trigger instanceof HTMLElement?trigger:document.querySelector<HTMLElement>('button[aria-label="View and sort"]');dialog={kind,entry,name:kind==='rename'?entry?.name||'':'',folder:listing?.folder,rows:listing?.entries?.filter(e=>e.directory)};api?.set({menu:false});repaint();
+  if(busy)return;dialogTrigger=trigger instanceof HTMLElement?trigger:document.querySelector<HTMLElement>('button[aria-label="View and sort"]');dialog={kind,entry,name:kind==='rename'?entry?.name||'':'',folder:listing?.folder,rows:listing?.entries?.filter(e=>e.directory),cursor:listing?.cursor};api?.set({menu:false});repaint();
  };
  async function mutation(){
   const request=dialog,folder=listing?.folder;if(!request||!folder||busy)return;
@@ -131,7 +131,23 @@ export function installFilesTreeAdapter(views:Bag,accept:(module:string,result:N
   }catch(error){request.error=error instanceof Error?error.message:'Refresh the folder and try again.';api?.toast(request.error);}
   finally{busy=false;repaint();}
  }
- async function moveFolder(id?:string){if(!dialog||dialog.kind!=='move'||busy)return;busy=true;dialog={...dialog,folder:undefined,rows:[],error:undefined};repaint();try{const value=await tree.list({id});if(value.status==='ready'&&dialog?.kind==='move'){dialog={...dialog,folder:value.folder,rows:value.entries?.filter(e=>e.directory)};}else api?.toast(value.message);}catch{api?.toast('Destination folder unavailable.');}finally{busy=false;repaint();}}
+ async function moveFolder(id?:string,more=false){
+  if(!dialog||dialog.kind!=='move'||busy||more&&!dialog.cursor)return;
+  busy=true;
+  const request:NonNullable<typeof dialog>=dialog=more?{...dialog,error:undefined}:{...dialog,folder:undefined,rows:[],cursor:undefined,error:undefined};
+  repaint();
+  try{
+   const value=await tree.list({id,...(more?{cursor:request.cursor}:{})});
+   if(dialog!==request)return;
+   if(value.status==='revoked'){dialog=undefined;apply(value);return;}
+   if(value.status==='ready'&&value.folder&&(!more||value.folder.id===request.folder?.id)){
+    const rows=more?[...(request.rows||[])]:[],seen=new Set(rows.map(row=>row.id));
+    for(const row of value.entries||[])if(row.directory&&!seen.has(row.id)){rows.push(row);seen.add(row.id);}
+    dialog={...request,folder:value.folder,rows,cursor:value.cursor};
+   }else dialog={...request,folder:undefined,rows:[],cursor:undefined,error:value.message||'Destination changed. Choose the folder again.'};
+  }catch{if(dialog===request)request.error='Destination folder unavailable. Try again.';}
+  finally{busy=false;repaint();}
+ }
  module.render=(state:Bag,currentApi:Bag)=>{
   const FOLDER=currentApi.ic.folder;
   api=currentApi;const out=render(state,currentApi);
@@ -167,7 +183,7 @@ export function installFilesTreeAdapter(views:Bag,accept:(module:string,result:N
    const menu=[sortRow('recent','Newest first'),sortRow('name','Name'),{label:'Refresh folder',go:()=>{currentApi.set({menu:false});void load(folder?.id);}},...(folder?[{label:'Ask Alpha about this folder',go:()=>{currentApi.set({menu:false});askFolder(currentApi);}}]:[]),...(folder?.canCreate?[{label:'New folder',go:()=>beginDialog('create')}]:[]),...(folder?.canRename?[{label:'Rename folder',go:()=>beginDialog('rename',folder)}]:[]),...(folder?.canDelete?[{label:'Delete empty folder',go:()=>beginDialog('delete',folder)}]:[]),{label:'Choose another folder',go:()=>choose()},{label:'Forget folder access',go:async()=>{if(busy)return;busy=true;try{const value=await tree.forget();if(value.status==='forgotten'){clearSelected();selected=undefined;listing=undefined;dialog=undefined;folderContext();filesIndex.revokeTree();currentApi.set({folder:null,open:null,menu:false});}currentApi.toast(value.message);}catch{currentApi.toast('Folder access could not be released. Try again.');}finally{busy=false;repaint();}}}];
    const more=listing?.cursor?[{id:'__more',name:busy?'Loading…':'Load more',sub:status||'More entries are available',d:FOLDER,isFile:false,isFolder:false,selOn:false,selOff:false,rowCss:'',label:'Load more entries',tap:()=>void loadMore()}]:[];
    out.fd={name:folder?.name||'Selected folder',empty:rows.length===0,close,viewIcon:FILE,openMenu:()=>currentApi.set({menu:true}),toggleView:()=>currentApi.set({grid:!state.grid}),viewLabel:state.grid?'Show as list':'Show as grid',sortLabel:sortLabel(mode),sortCss:mode==='name'?'color: var(--acct)':'',toggleSort:()=>{const next:SortMode=mode==='name'?'recent':'name';currentApi.set({sort:next});currentApi.toast(sortLabel(next));},select:()=>{if(busy)return;selecting=true;picked.clear();repaint();},
-    items:[...[...rows].sort((a,b)=>compareFilesEntries(mode)({name:a.name,directory:a.directory,modified:modifiedOf(a)},{name:b.name,directory:b.directory,modified:modifiedOf(b)})).map(e=>({id:e.id,name:e.name,sub:e.directory?'Folder':typeLabel(e.mimeType)+(e.size>=0?` · ${e.size} bytes`:'')+(modifiedOf(e)?' · '+relative(modifiedOf(e)!):''),d:e.directory?FOLDER:FILE,isFile:!e.directory,isFolder:e.directory,selOn:selecting&&picked.has(e.id),selOff:selecting&&!picked.has(e.id),rowCss:'',label:(selecting?(picked.has(e.id)?'Deselect ':'Select '):'Open ')+e.name,tap:()=>{if(busy)return;if(selecting){picked.has(e.id)?picked.delete(e.id):picked.add(e.id);repaint();}else void openEntry(e);}})),...(selecting?[]:more)],menuRows:menu.map(m=>({on:false,...m,d:FOLDER}))};
+    items:[...[...rows].sort((a,b)=>compareFilesEntries(mode)({name:a.name,directory:a.directory,modified:modifiedOf(a)},{name:b.name,directory:b.directory,modified:modifiedOf(b)})).map(e=>({id:e.id,name:e.name,sub:e.directory?'Folder':typeLabel(e.mimeType)+(e.size>=0?` · ${e.size} bytes`:'')+(modifiedOf(e)?' · '+relative(modifiedOf(e)!):''),d:e.directory?FOLDER:FILE,isFile:!e.directory,isFolder:e.directory,selOn:selecting&&picked.has(e.id),selOff:selecting&&!picked.has(e.id),rowCss:'',label:(selecting?(picked.has(e.id)?'Deselect ':'Select '):'Open ')+e.name,tap:()=>{if(busy)return;if(selecting){picked.has(e.id)?picked.delete(e.id):picked.add(e.id);repaint();}else void openEntry(e);}})),...more],menuRows:menu.map(m=>({on:false,...m,d:FOLDER}))};
    out.menuOpen=!!state.menu;out.closeMenu=()=>currentApi.set({menu:false});
   }
   if(selected&&selectedCapability===out.pv?.nativeSelectionId&&out.isPreview&&state.open==='__native_selected_document'){
@@ -175,7 +191,7 @@ export function installFilesTreeAdapter(views:Bag,accept:(module:string,result:N
    out.pv.del=(event:Event)=>selected?.canDelete?beginDialog('delete',selected,event.currentTarget):currentApi.toast('This provider does not support deleting this file.');
    out.pv.startRename=(event:Event)=>selected?.canRename?beginDialog('rename',selected,event.currentTarget):currentApi.toast('This provider does not support renaming this file.');
   }
-  if(dialog){const d=dialog;out.nativeTreeDialog={modalRef:dialogModal.ref,busy,confirmDisabled:busy||(d.kind==='move'&&(!d.folder?.canCreate||d.folder.id===d.entry?.parentId||d.entries?.every(e=>e.parentId===d.folder?.id))),title:d.kind==='delete'?'Permanently delete?':d.kind==='move'?'Move file':d.kind==='rename'?'Rename':'New folder',message:d.error||(d.kind==='delete'?`${d.entries?d.entries.length+' selected items':d.entry?.name}. This cannot be undone. There is no integrated trash. Only empty folders can be deleted here.`:d.kind==='move'?`Destination: ${d.folder?.name||'Choose folder'}`:''),hasName:d.kind==='create'||d.kind==='rename',name:d.name,onName:(e:Event)=>{if(dialog)dialog.name=(e.target as HTMLInputElement).value;repaint();},moving:d.kind==='move',destinations:d.rows?.map(e=>({name:e.name,go:()=>moveFolder(e.id)}))||[],canUp:!!d.folder?.parentId,up:()=>moveFolder(d.folder?.parentId),canRoot:d.kind==='move',root:()=>moveFolder(),confirmLabel:busy?'Working…':d.kind==='delete'?'Delete permanently':d.kind==='move'?'Move here':d.kind==='rename'?'Rename':'Create folder',confirm:mutation,cancel:()=>{if(!busy){dialog=undefined;repaint();}}};}
+  if(dialog){const d=dialog;out.nativeTreeDialog={modalRef:dialogModal.ref,busy,confirmDisabled:busy||(d.kind==='move'&&(!d.folder?.canCreate||d.folder.id===d.entry?.parentId||d.entries?.every(e=>e.parentId===d.folder?.id))),title:d.kind==='delete'?'Permanently delete?':d.kind==='move'?'Move file':d.kind==='rename'?'Rename':'New folder',message:d.error||(d.kind==='delete'?`${d.entries?d.entries.length+' selected items':d.entry?.name}. This cannot be undone. There is no integrated trash. Only empty folders can be deleted here.`:d.kind==='move'?`Destination: ${d.folder?.name||'Choose folder'}`:''),hasName:d.kind==='create'||d.kind==='rename',name:d.name,onName:(e:Event)=>{if(dialog)dialog.name=(e.target as HTMLInputElement).value;repaint();},moving:d.kind==='move',hasMoreDestinations:!!d.cursor,moreDestinations:()=>moveFolder(d.folder?.id,true),destinations:d.rows?.map(e=>({name:e.name,go:()=>moveFolder(e.id)}))||[],canUp:!!d.folder?.parentId,up:()=>moveFolder(d.folder?.parentId),canRoot:d.kind==='move',root:()=>moveFolder(),confirmLabel:busy?'Working…':d.kind==='delete'?'Delete permanently':d.kind==='move'?'Move here':d.kind==='rename'?'Rename':'Create folder',confirm:mutation,cancel:()=>{if(!busy){dialog=undefined;repaint();}}};}
   else out.nativeTreeDialog=null;
   return out;
  };

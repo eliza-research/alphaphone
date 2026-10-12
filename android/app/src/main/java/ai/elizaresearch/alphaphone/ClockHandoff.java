@@ -69,9 +69,9 @@ final class ClockHandoff {
    if(guard!=null&&guard.isKeyguardLocked())return result(action,"failed","Unlock the phone before continuing to Clock");
    if(target.resolveActivity(activity.getPackageManager())==null)return result(action,"unavailable","No installed Clock app handles this action");
    if(timeZone!=null){
-    String requested=android.icu.util.TimeZone.getCanonicalID(timeZone);
+    String requested=timeZone.matches("[+-][0-9]{2}:[0-9]{2}")?timeZone:android.icu.util.TimeZone.getCanonicalID(timeZone);
     String current=android.icu.util.TimeZone.getCanonicalID(java.util.TimeZone.getDefault().getID());
-    if(!"set".equals(action)||requested==null||!requested.equals(current))return result(action,"failed","Phone time zone changed. Review the Clock request again.");
+    if(!"set".equals(action)||!ClockTimeZones.same(requested,current))return result(action,"failed","Phone time zone changed. Review the Clock request again.");
    }
    activity.startActivity(target);
    return result(action,"opened","Clock request sent. Check the Clock app; Alpha cannot confirm an alarm was changed.");

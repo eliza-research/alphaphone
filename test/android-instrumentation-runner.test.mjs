@@ -68,7 +68,7 @@ test("argument policy: short names, campaigns refused with their runner, clock a
   assert.deepEqual(options.variants, ["standalone", "launcher"]);
   assert.equal(parseInstrumentationArgs([]).classes.length, DEFAULT_CLASSES.length);
   assert.equal(parseInstrumentationArgs(["--test-mocks"]).apkDir, "artifacts/test-mocks");
-  for (const name of ["ResidentEgressRedaction", "ReminderTapProcessDeath", "WorkflowNoticeProcessDeath", "NotificationChannels", "VoicePermissionDenied", "VoicePermissionRevoke", "LocalVoiceRecordingLimit"])
+  for (const name of ["ResidentEgressRedaction", "ReminderTapProcessDeath", "WorkflowNoticeProcessDeath", "VoicePermissionDenied", "VoicePermissionRevoke", "LocalVoiceRecordingLimit"])
     assert.throws(() => parseInstrumentationArgs(["--classes", name]), /own campaign/);
   // Classes that assume a test-mocks app build are refused without it instead of reporting "skipped".
   assert.throws(() => parseInstrumentationArgs(["--classes", "ConnectionChooser"]), /test-mocks app build/);
@@ -137,7 +137,12 @@ const javaFiles = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(en
 const testClasses = () => new Map(ROOTS.flatMap(javaFiles).filter(file => /^\s*@(?:org\.junit\.)?Test\b/m.test(fs.readFileSync(file, "utf8")) || /[\s;{}]@(?:org\.junit\.)?Test\b/.test(fs.readFileSync(file, "utf8")))
   .map(file => [path.basename(file, ".java"), file]));
 const registryName = cls => cls.replace(/InstrumentedTest$/, "");
-const gateRead = (source, gate, value) => source.includes(`"${value}".equals(InstrumentationRegistry.getArguments().getString("${gate}")`);
+const gateRead = (source, gate, value) => {
+  if (source.includes(`"${value}".equals(InstrumentationRegistry.getArguments().getString("${gate}")`)) return true;
+  // Some destructive-fixture gates deliberately assert instead of assumption-skipping.
+  const assertions = [...source.matchAll(/assertEquals\(\s*(?:"[^"\n]*"\s*,\s*)?"([^"\n]*)"\s*,\s*InstrumentationRegistry\.getArguments\(\)\.getString\("([^"\n]*)"\)/g)];
+  return assertions.some(([, expected, key]) => expected === value && key === gate);
+};
 
 test("every registered class exists in the app's instrumentation sources and declares the gates the runner passes", () => {
   const roots = ROOTS.map(root => path.join(root, "ai/elizaresearch/alphaphone"));
@@ -146,8 +151,10 @@ test("every registered class exists in the app's instrumentation sources and dec
     assert.equal(found.length, 1, `${name} must be exactly one class in the app instrumentation sources`);
     assert.equal(found[0].includes("testMocks"), spec.testMocks === true, `${name} test-mocks flag must match its source set`);
     const source = fs.readFileSync(found[0], "utf8");
+    // Lifecycle diagnostics are consumed by the scenario helper used by the class.
+    const helper = source.includes("BoundedActivityScenario") ? fs.readFileSync(path.join(roots[0], "BoundedActivityScenario.java"), "utf8") : "";
     for (const [gate, value] of Object.entries(spec.args ?? {}))
-      assert.ok(gateRead(source, gate, value), `${name} does not read gate ${gate}=${value}`);
+      assert.ok(gateRead(source, gate, value) || (gate === "lifecycleDiagnostics" && gateRead(helper, gate, value)), `${name} does not read gate ${gate}=${value}`);
     for (const method of spec.phases ?? []) assert.match(source, new RegExp(`void ${method}\\(`), `${name} has no phase ${method}`);
     if (spec.requiresTestMocksBuild) assert.ok(source.includes("BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS"), `${name} does not assume a test-mocks app build`);
     if (spec.homeRole) {
@@ -231,6 +238,11 @@ function fakeEmulator({ stock = "com.android.launcher3", mode = "pass" } = {}) {
   const adb = args => {
     state.commands.push(args.join(" "));
     const text = args.join(" ");
+    if (text.includes("pm clear")) return "Success\n";
+    if (text === "shell dumpsys webviewupdate" && mode === "provider-unknown") return "Unavailable";
+    if (text === "shell dumpsys webviewupdate") return "Current WebView package (name, version): (com.android.webview, 145.0)\nWebView package dirty: false\n";
+    if (text === "shell pm path com.android.webview") return "package:/system/webview.apk\n";
+    if (text === "shell sha256sum /system/webview.apk") return `${(mode === "provider-changing" && state.commands.some(c=>c.startsWith("install ")) ? "e" : "f").repeat(64)}  /system/webview.apk\n`;
     if (text === "emu avd name") return "fixture-avd\nOK\n";
     if (text.includes("getprop ro.product.cpu.abi")) return "arm64-v8a\n";
     if (text.includes("getprop ro.build.version.sdk")) return "35\n";
@@ -482,4 +494,75 @@ test("a class whose every method is skipped by its gate is recorded as skipped, 
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   const runner = fs.readFileSync("scripts/android-instrumentation.mjs", "utf8");
   assert.match(runner, /row\.status === "passed" \? "passed" : spec\.phases \? "failed" : row\.status/);
+});
+
+test("provider identity is admitted before mutation and rechecked after cleanup", async()=>{
+ const unknown=await homeRun("provider-unknown");
+ assert.match(unknown.error.message,/WebView provider/);
+ assert.deepEqual(stepsOf(unknown.state.commands),[]);
+ const changed=await homeRun("provider-changing");
+ assert.match(changed.error.message,/WebView provider changed/);
+ assert.equal(changed.result,undefined);
+ assert.equal(changed.state.installed.size,0,"Owned APKs cleaned before post-run provider failure");
+});
+
+
+test("independent browser methods all run after fresh app-data reset and retain earlier failure", async () => {
+  const dir=apkDir(), emulator=fakeEmulator(), cls=C("BrowserWebFeatures"), calls=[];
+  try {
+    // Exercise execution here; parser/build admission have separate flag tests.
+    const options=parseInstrumentationArgs(["--owned-emulator","--avd","fixture-avd","--serial","emulator-5554","--variants","standalone","--classes","Shell","--apk-dir",dir,"--output",path.join(dir,"out")]);
+    options.classes=[cls];
+    const adb=args=>{
+      const text=args.join(" ");
+      if(text.includes("pm clear")){calls.push("clear");return "Success\n";}
+      if(text.includes("am instrument")){
+        if(text.includes("-e log true"))return block(cls,"first",1)+block(cls,"first",0)+block(cls,"second",1)+block(cls,"second",0)+done();
+        const method=args[args.indexOf("class")+1].split("#")[1];calls.push(method);
+        return block(cls,method,1)+block(cls,method,method==="first"?-2:0)+done();
+      }
+      return emulator.adb(args);
+    };
+    const result=await runLeased({options,serial:"emulator-5554",adb,timing});
+    assert.deepEqual(calls,["clear","clear","first","clear","second"]);
+    assert.equal(result.passed,false);
+    assert.equal(result.classes[0].passed,1);
+    assert.deepEqual(result.classes[0].failed,["first"]);
+    assert.equal(result.classes[0].listed,2);
+  } finally {fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+
+test("independent method skips remain visible and a later missing method cannot be hidden", async () => {
+  for (const last of ["pass","missing"]) {
+    const dir=apkDir(), emulator=fakeEmulator(), cls=C("SelectedDocument");
+    try {
+      const options=parseInstrumentationArgs(["--owned-emulator","--avd","fixture-avd","--serial","emulator-5554","--variants","standalone","--classes","SelectedDocument","--apk-dir",dir,"--output",path.join(dir,"out")]);
+      const adb=args=>{
+        const text=args.join(" ");
+        if(text.includes("pm clear"))return "Success\n";
+        if(text.includes("am instrument")){
+          if(text.includes("-e log true"))return block(cls,"skip",1)+block(cls,"skip",0)+block(cls,"later",1)+block(cls,"later",0)+done();
+          const method=args[args.indexOf("class")+1].split("#")[1];
+          return method==="skip"?block(cls,method,1)+block(cls,method,-3)+done():last==="pass"?block(cls,method,1)+block(cls,method,0)+done():done();
+        }
+        return emulator.adb(args);
+      };
+      const result=await runLeased({options,serial:"emulator-5554",adb,timing});
+      assert.deepEqual(result.classes[0].ignored,["skip"]);
+      assert.equal(result.classes[0].status,last==="pass"?"passed":"missing");
+      assert.equal(result.classes[0].passed,last==="pass"?1:0);
+    } finally {fs.rmSync(dir,{recursive:true,force:true});}
+  }
+});
+
+
+test("unconfirmed class isolation aborts before instrumentation and cleans owned APKs", async () => {
+  const dir=apkDir(), emulator=fakeEmulator();let invoked=false;
+  try {
+    const options=parseInstrumentationArgs(["--owned-emulator","--avd","fixture-avd","--serial","emulator-5554","--variants","standalone","--classes","SettingsNative","--apk-dir",dir,"--output",path.join(dir,"out")]);
+    const adb=args=>{const command=args.join(" ");if(command.includes("pm clear"))return "Failed\n";if(command.includes("am instrument"))invoked=true;return emulator.adb(args);};
+    await assert.rejects(runLeased({options,serial:"emulator-5554",adb,timing}),/Class app-data reset unconfirmed/);
+    assert.equal(invoked,false);assert.equal(emulator.state.installed.size,0);
+  } finally {fs.rmSync(dir,{recursive:true,force:true});}
 });

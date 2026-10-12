@@ -56,7 +56,9 @@ public class SettingsFlowInstrumentedTest {
   tapBack();
  }
  @Test public void realBatteryAndDeviceInfoRefreshAfterNativeSettingsReturn()throws Exception{
-  assertTrue("Battery fixtures are confined to an emulator",Build.FINGERPRINT.contains("generic")||Build.MODEL.contains("sdk")||Build.HARDWARE.contains("ranchu"));
+  assertTrue("Battery fixtures require an emulator or explicitly admitted owned Cuttlefish",
+   DisposableFixtureAdmission.allows(Build.FINGERPRINT, Build.MODEL, Build.HARDWARE, Build.DEVICE,
+    InstrumentationRegistry.getArguments().getString("ownedCuttlefishFingerprint")));
   Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();
   AtomicReference<String> action=new AtomicReference<>();
   Instrumentation.ActivityMonitor monitor=new Instrumentation.ActivityMonitor(){

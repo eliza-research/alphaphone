@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import {collectClockArtifacts} from './clock-artifacts.mjs';
+import {readWebViewEvidence,assertSameWebView} from './webview-evidence.mjs';
+import {OfflineNetworkFixture} from './offline-network-fixture.mjs';
 /**
  * Install both distribution variants with their instrumentation APKs on an owned,
  * disposable emulator and run a named class list or the whole androidTest suite.
@@ -8,6 +11,11 @@
  *     [--variants standalone,launcher] [--test-mocks] [--apk-dir artifacts] \
  *     [--output test-results/android-instrumentation/<run>] [--timeout-ms 900000] \
  *     [--clock-exclusive] [--home-role]
+ *
+ * A fresh Cuttlefish guest instead uses --owned-cuttlefish --serial localhost:PORT
+ * --image-fingerprint EXACT_FINGERPRINT with registered named classes. --all and
+ * secondary-user campaigns remain unavailable on Cuttlefish. Existing system Alpha
+ * packages are refused just like user-installed packages.
  *
  * Variants share one package id and replace each other, so they run one after the
  * other: install app + test APK, check the installed bytes, run every class in its
@@ -38,6 +46,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { instrumentationClassResults, listedInstrumentationTests, writeInstrumentationRecord } from "./instrumentation-result.mjs";
 
+import { admitCuttlefish, keyguardReadyFromPolicy } from "./cuttlefish-contract.mjs";
+
 export const PACKAGE = "ai.elizaresearch.alphaphone";
 const RUNNER = "androidx.test.runner.AndroidJUnitRunner";
 
@@ -56,6 +66,12 @@ const RUNNER = "androidx.test.runner.AndroidJUnitRunner";
  */
 export const CLASS_REGISTRY = {
   NoMockProduct: {},
+  SelectedDocument: { independentMethods: true, note: "real DocumentsUI and synthetic MediaStore files; documentProcessRestartPhase skips here and requires test-native-restart.mjs document" },
+  BrowserStorageFormat: { args: { disposableBrowserStorageFixture: "1" }, note: "fresh app storage required and asserted; real Keystore format roundtrip, no Activity or website; fixture keys and records removed in finally" },
+  CalendarAvailability: { grant: ["READ_CALENDAR", "WRITE_CALENDAR"], note: "synthetic UUID local calendars; chosen-source free/busy, civil all-day, revision and bounded-result checks; fixture calendars deleted after each method" },
+  CalendarRange: { args: { calendarRange: "1" }, grant: ["READ_CALENDAR", "WRITE_CALENDAR"], note: "synthetic past/future provider events through visible date navigation; exact local calendar cleanup" },
+  CalendarTruncation: { args: { calendarRange: "1" }, grant: ["READ_CALENDAR", "WRITE_CALENDAR"], note: "2002 synthetic provider instances prove truncation cannot claim a free day; exact local calendar cleanup" },
+  CalendarCrud: { args: { calendarCrud: "1" }, note: "explicit synthetic local CalendarProvider records; create/edit/stale-delete and calendar ACL revocation, with fixture-only cleanup" },
   Shell: {},
   StartupReadiness: { args: { startupReadiness: "1" } },
   TextScale: { note: "textScaleProcessRestartPhase is skipped here; run node scripts/test-native-restart.mjs text-scale" },
@@ -73,7 +89,7 @@ export const CLASS_REGISTRY = {
     phases: ["prepareCommittedResultWithLostAck", "resumeAfterProcessDeathRecoversAckOnce", "verifySecondRestartAndCleanup"],
   },
   RealClock: { args: { realClock: "1", clockExclusive: "1" }, requires: "--clock-exclusive", grantOther: { "com.android.deskclock": ["POST_NOTIFICATIONS"] },
-    note: "fixture qualified for API 35 only (it asserts the SDK level); the runner grants AOSP Clock its notification permission, which the class requires for real firing evidence" },
+    note: "API35 or explicitly admitted API37 Cuttlefish fixture (API37 functional qualification pending); the runner grants AOSP Clock its notification permission, which the class requires for real firing evidence" },
   Accessibility: {},
   SettingsSystemFacts: { note: "read-only comparison with this image's settings; not device acceptance of the Settings handoffs" },
   Rotation: {},
@@ -112,7 +128,7 @@ export const CLASS_REGISTRY = {
   // Mock mode and loopback fixtures exist only in a test-mocks app build.
   ConnectionChooser: { requiresTestMocksBuild: true },
   BrowserDialogLifecycle: { requiresTestMocksBuild: true },
-  BrowserWebFeatures: { requiresTestMocksBuild: true },
+  BrowserWebFeatures: { requiresTestMocksBuild: true, independentMethods: true },
   CloudVoice: { requiresTestMocksBuild: true },
   DevelopmentAgent: { requiresTestMocksBuild: true },
   PairedAsr: { requiresTestMocksBuild: true },
@@ -128,16 +144,16 @@ export const CLASS_REGISTRY = {
   PdfViewer: { args: { isolatedPdfNative: "1" } },
   PhotosBatch: { args: { photosBatch: "1" } },
   UiDispatch: { args: { uiDispatch: "1" } },
-  LocalSpeech: { args: { localSpeech: "1" }, note: "needs the packaged on-device speech models; recorded as failing functional acceptance on arm64-v8a" },
-  LocalSpeechBridge: { args: { localSpeechBridge: "1" }, note: "needs the packaged on-device speech models" },
-  VoiceNoteReadAloud: { args: { localSpeech: "1" }, note: "needs the packaged on-device speech models; not audible-speaker evidence" },
+  LocalSpeech: { offline: true, args: { localSpeech: "1" }, note: "needs the packaged on-device speech models; recorded as failing functional acceptance on arm64-v8a" },
+  LocalSpeechBridge: { offline: true, args: { localSpeechBridge: "1" }, note: "needs the packaged on-device speech models" },
+  VoiceNoteReadAloud: { offline: true, args: { localSpeech: "1" }, note: "needs the packaged on-device speech models; not audible-speaker evidence" },
   SpeechSentenceCancellation: { args: { speechSentenceCancellation: "1" }, note: "needs the packaged on-device speech models" },
   // Classes with no opt-in gate and no host, account or permission precondition.
   ActionJournal: {},
   ActivityInstanceSelection: {},
   Assistant: {},
   FilesTreeBatch: {},
-  Flow: {},
+  Flow: { args: { lifecycleDiagnostics: "1" }, note: "structural lifecycle/window diagnostics on failures; no caller text or Intent extras" },
   HostedResultsLifecycle: {},
   LocalAgentProvider: {},
   PhotoEdit: {},
@@ -148,13 +164,14 @@ export const CLASS_REGISTRY = {
   ReminderHeadsUp: { note: "skips unless notifications are enabled for the app and Do Not Disturb is off" },
   ReminderStale: {},
   SettingsFlow: {},
+  SettingsNative: { args: { settingsNative: "1" }, grant: ["ACCESS_COARSE_LOCATION"], note: "fresh app data; fixture asserts precise location denied, grants it, opens real Android account settings and checks return/readback; no account is added" },
   Video: {},
   VoiceWorkerSettlement: {},
   ResidentEgressRedaction: { campaign: "ALPHA_RESIDENT_DISPOSABLE_EMULATOR=1 node scripts/android-resident-instrumentation.mjs <app.apk> <androidTest.apk> (owner-only provider key fixture, ARM64)" },
   ReminderTapProcessDeath: { campaign: "python3 scripts/ci/pending-recovery-ui.py (external process death)" },
   WorkflowNoticeProcessDeath: { campaign: "python3 scripts/ci/pending-recovery-ui.py (external process death)" },
   WorkflowApprovalNoticeProcessDeath: { campaign: "ALPHA_BUILD_ARCHIVE=<archive> node scripts/android-workflow-native.mjs --phase=approval-notice-recovery (kills the main process from the WorkflowNoticeProcessRunner helper process, in an owned secondary user)" },
-  NotificationChannels: { campaign: "node scripts/test-native-permissions.mjs channels APP.apk TEST.apk OUTPUT (permission-restoring runner)" },
+  NotificationChannels: { args: { notificationChannels: "1" }, grant: ["POST_NOTIFICATIONS"], note: "fresh app data; unique synthetic channel toggled in Android Settings, read back and deleted in finally; local notification recipient only" },
   VoicePermissionDenied: { campaign: "node scripts/test-native-permissions.mjs voice APP.apk TEST.apk OUTPUT (RECORD_AUDIO revoked before the app starts)" },
   VoicePermissionRevoke: { campaign: "node scripts/test-native-permissions.mjs voice-revoke APP.apk TEST.apk OUTPUT (RECORD_AUDIO revoked while recording; the process is killed)" },
   LocalVoiceRecordingLimit: { campaign: "node scripts/test-native-permissions.mjs voice-limit APP.apk TEST.apk OUTPUT (RECORD_AUDIO granted before the app starts)" },
@@ -227,7 +244,7 @@ export const qualifiedClass = name => {
 
 export function parseInstrumentationArgs(argv) {
   const options = { classes: null, all: false, variants: ["standalone", "launcher"], testMocks: false, apkDir: null, output: null,
-    serial: null, avd: null, ownedEmulator: false, timeoutMs: 900_000, clockExclusive: false, homeRole: false };
+    serial: null, avd: null, ownedEmulator: false, ownedCuttlefish: false, offlineSpeech: false, imageFingerprint: null, timeoutMs: 900_000, clockExclusive: false, homeRole: false };
   const value = (arg, index) => {
     if (arg.includes("=")) return [arg.slice(arg.indexOf("=") + 1), index];
     if (argv[index + 1] === undefined) throw new Error(`${arg} needs a value`);
@@ -241,6 +258,9 @@ export function parseInstrumentationArgs(argv) {
       case "--all": options.all = true; break;
       case "--test-mocks": options.testMocks = true; break;
       case "--owned-emulator": options.ownedEmulator = true; break;
+      case "--offline-speech": options.offlineSpeech = true; break;
+      case "--owned-cuttlefish": options.ownedCuttlefish = true; break;
+      case "--image-fingerprint": [v, index] = value(arg, index); options.imageFingerprint = v; break;
       case "--clock-exclusive": options.clockExclusive = true; break;
       case "--home-role": options.homeRole = true; break;
       case "--classes": [v, index] = value(arg, index); options.classes = v.split(",").map(s => s.trim()).filter(Boolean); break;
@@ -253,6 +273,12 @@ export function parseInstrumentationArgs(argv) {
       default: throw new Error(`Unknown option ${arg}`);
     }
   }
+  if(options.ownedCuttlefish){
+    if(options.ownedEmulator||options.avd)throw new Error("Choose an owned Cuttlefish guest or an AVD, not both");
+    if(!options.imageFingerprint||/[\r\n]/.test(options.imageFingerprint))throw new Error("Cuttlefish requires --image-fingerprint for the exact image");
+    if(options.all)throw new Error("Cuttlefish uses named classes; secondary-user and credential campaigns need separate qualification");
+  }else if(options.imageFingerprint)throw new Error("--image-fingerprint requires --owned-cuttlefish");
+  if(options.offlineSpeech&&!options.ownedCuttlefish)throw new Error("--offline-speech currently requires an owned Cuttlefish guest");
   if (options.all && options.classes) throw new Error("Choose --classes or --all, not both");
   if (!options.variants.length || options.variants.some(v => !["standalone", "launcher"].includes(v)) || new Set(options.variants).size !== options.variants.length)
     throw new Error("--variants must list standalone and/or launcher once each");
@@ -262,9 +288,14 @@ export function parseInstrumentationArgs(argv) {
     const requested = (options.classes ?? DEFAULT_CLASSES).map(qualifiedClass);
     if (new Set(requested).size !== requested.length) throw new Error("Duplicate class");
     for (const cls of requested) {
+      if (options.ownedCuttlefish && !Object.hasOwn(CLASS_REGISTRY, short(cls)))
+        throw new Error(`${short(cls)} has no reviewed Cuttlefish class contract; use a registered named class`);
       const spec = CLASS_REGISTRY[short(cls)] ?? {};
+      if(options.ownedCuttlefish&&spec.offline&&!options.offlineSpeech)throw new Error(`${short(cls)} requires --offline-speech`);
+      if(options.offlineSpeech&&!['LocalSpeech','LocalSpeechBridge','VoiceNoteReadAloud','SpeechSentenceCancellation'].includes(short(cls)))throw new Error('--offline-speech is a dedicated local speech campaign');
       if (spec.campaign) throw new Error(`${short(cls)} needs its own campaign: ${spec.campaign}`);
       // These classes assert a disposable secondary Android user, which the runner creates and removes.
+      if (spec.secondaryUser && options.ownedCuttlefish) throw new Error(`${short(cls)} needs the AVD secondary-user lifecycle; Cuttlefish qualification remains separate`);
       if (spec.secondaryUser && !options.ownedEmulator) throw new Error(`${short(cls)} runs in a disposable secondary Android user; it requires --owned-emulator`);
       if (spec.requires === "--clock-exclusive" && !options.clockExclusive)
         throw new Error(`${short(cls)} changes real alarms; pass --clock-exclusive only on an exclusive, unlocked emulator with no other timers`);
@@ -278,7 +309,7 @@ export function parseInstrumentationArgs(argv) {
   }
   if (options.homeRole) {
     if (options.all) throw new Error("--home-role runs named classes; it cannot be combined with --all");
-    if (!options.ownedEmulator) throw new Error("--home-role changes the HOME role; it requires --owned-emulator");
+    if (!options.ownedEmulator && !options.ownedCuttlefish) throw new Error("--home-role changes the HOME role; it requires --owned-emulator");
     if (!options.variants.includes("launcher")) throw new Error("--home-role needs the launcher variant");
     if (!options.classes.some(cls => CLASS_REGISTRY[short(cls)]?.homeRole)) throw new Error("--home-role was given but no requested class uses the HOME role (LauncherHome, SettingsRoles)");
   }
@@ -286,9 +317,10 @@ export function parseInstrumentationArgs(argv) {
 }
 
 /** `am instrument` arguments for one class (or one phase method), never through a shell. */
-export function instrumentArgs(cls, { method, log = false, user } = {}) {
+export function instrumentArgs(cls, { method, log = false, user, cuttlefishFingerprint } = {}) {
   const spec = CLASS_REGISTRY[short(cls)] ?? {};
   const extras = Object.entries(spec.args ?? {}).flatMap(([key, val]) => ["-e", key, val]);
+  if (["SettingsFlow", "PasswordBrowserFill", "RealClock"].includes(short(cls)) && cuttlefishFingerprint) extras.push("-e", "ownedCuttlefishFingerprint", cuttlefishFingerprint);
   return ["shell", "am", "instrument", ...(user === undefined ? [] : ["--user", String(user)]), "-w", "-r", ...(log ? ["-e", "log", "true"] : []), ...extras,
     "-e", "class", method ? `${cls}#${method}` : cls, `${PACKAGE}.test/${RUNNER}`];
 }
@@ -417,9 +449,13 @@ function sourceCommit() {
 async function main() {
   const options = parseInstrumentationArgs(process.argv.slice(2));
   const serial = options.serial ?? process.env.ANDROID_SERIAL;
-  if (!options.ownedEmulator) throw new Error("Pass --owned-emulator to confirm the emulator is disposable and owned by this run");
-  if (!/^emulator-\d+$/.test(serial ?? "")) throw new Error("An emulator serial (emulator-NNNN) is required; physical devices are refused");
-  if (!/^[A-Za-z0-9_.-]+$/.test(options.avd ?? "")) throw new Error("--avd <name> of the owned emulator is required");
+  if (!options.ownedEmulator && !options.ownedCuttlefish) throw new Error("Pass --owned-emulator or --owned-cuttlefish for a disposable guest owned by this run");
+  if(options.ownedCuttlefish){
+    if(!/^(?:127\.0\.0\.1|localhost):\d{2,5}$/.test(serial??""))throw new Error("Explicit loopback Cuttlefish serial required");
+  }else{
+    if (!/^emulator-\d+$/.test(serial ?? "")) throw new Error("An emulator serial (emulator-NNNN) is required; physical devices are refused");
+    if (!/^[A-Za-z0-9_.-]+$/.test(options.avd ?? "")) throw new Error("--avd <name> of the owned emulator is required");
+  }
   const { androidEnv } = await import("./toolchain.mjs");
   const env = androidEnv();
   const adbPath = path.join(env.ANDROID_HOME, "platform-tools/adb");
@@ -434,22 +470,39 @@ async function main() {
   // runner cannot install between the admission checks and this run's installs.
   const { acquireDeviceLease, deviceLeaseStateDir } = await import("../vendor/eliza/packages/app/scripts/lib/device-lease.ts");
   const lease = await acquireDeviceLease(`android:${serial}`, { waitMs: 0, ttlMs: Number.MAX_SAFE_INTEGER, stateDir: deviceLeaseStateDir(process.env) });
-  try { process.exitCode = (await runLeased({ options, serial, adb, withSecondaryUser: secondaryUserLifecycle({ serial, lease, avd: options.avd, adb }) })).passed ? 0 : 1; } finally { lease.release(); }
+  try { process.exitCode = (await runLeased({ options, serial, adb, withSecondaryUser: options.ownedCuttlefish ? undefined : secondaryUserLifecycle({ serial, lease, avd: options.avd, adb }) })).passed ? 0 : 1; } finally { lease.release(); }
+}
+
+/** Read-only checks; APK installation still refuses all preexisting Alpha packages. */
+export function admitInstrumentationDevice(options,serial,adb){
+  const prop=name=>adb(["shell","getprop",name]).trim();
+  if(options.ownedCuttlefish){
+    const user=adb(["shell","am","get-current-user"]).trim();
+    if(user!=="0")throw new Error("Fresh Cuttlefish campaigns require unlocked owner user 0");
+    const image=admitCuttlefish(serial,{hardware:prop("ro.hardware"),device:prop("ro.product.device"),
+      bootCompleted:prop("sys.boot_completed"),fingerprint:prop("ro.build.fingerprint"),
+      keyguardReady:keyguardReadyFromPolicy(adb(["shell","dumpsys","window","policy"])),
+      userState:adb(["shell","am","get-started-user-state",user]).trim()},options.imageFingerprint);
+    return {avd:null,image};
+  }
+  const avd=adb(["emu","avd","name"]).split(/\r?\n/)[0].trim();
+  if(avd!==options.avd)throw new Error(`Serial ${serial} runs AVD ${JSON.stringify(avd)}, not ${options.avd}`);
+  if(prop("ro.kernel.qemu")!=="1"&&prop("ro.boot.qemu")!=="1")throw new Error("Not an emulator");
+  if(prop("sys.boot_completed")!=="1")throw new Error("Emulator has not finished booting");
+  return {avd};
 }
 
 /** One leased run. `timing` only shortens the HOME role polling in tests. */
 export async function runLeased({ options, serial, adb, timing = {}, withSecondaryUser }) {
   // Admission before any installation.
-  const avd = adb(["emu", "avd", "name"]).split(/\r?\n/)[0].trim();
-  if (avd !== options.avd) throw new Error(`Serial ${serial} runs AVD ${JSON.stringify(avd)}, not ${options.avd}`);
+  const {avd,image} = admitInstrumentationDevice(options,serial,adb);
   const prop = name => adb(["shell", "getprop", name]).trim();
-  if (prop("ro.kernel.qemu") !== "1" && prop("ro.boot.qemu") !== "1") throw new Error("Not an emulator");
-  if (prop("sys.boot_completed") !== "1") throw new Error("Emulator has not finished booting");
   const packages = adb(["shell", "pm", "list", "packages", "-u", "--user", "all"]).split(/\r?\n/).map(s => s.trim());
   if (packages.some(row => row === `package:${PACKAGE}` || row === `package:${PACKAGE}.test`))
     throw new Error("Alpha Phone or its test package is already installed; use a fresh emulator (never replaced)");
   const apks = options.variants.flatMap(variant => admitApks(options.apkDir, variant, options));
   const home = options.homeRole ? admitHome(adb) : null;
+  const webView = readWebViewEvidence(adb);
   const inSecondaryUser = cls => CLASS_REGISTRY[short(cls)]?.secondaryUser === true;
   if (!options.all && options.classes.some(inSecondaryUser) && typeof withSecondaryUser !== "function") throw new Error("Secondary-user classes need the disposable user lifecycle");
   const secondaryUsers = [];
@@ -461,13 +514,15 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
 
   const classes = [];
   const installed = [];
-  const emulator = { avd, abi: prop("ro.product.cpu.abi"), sdk: prop("ro.build.version.sdk"), serialSha256: createHash("sha256").update(serial).digest("hex") };
+  const emulator = { avd, ...(image ? {kind:"cuttlefish", image} : {}), abi: prop("ro.product.cpu.abi"), sdk: prop("ro.build.version.sdk"), serialSha256: createHash("sha256").update(serial).digest("hex") };
   const fingerprint = (pkg, expected) => {
     const apkPath = /^package:(\/\S+\.apk)$/m.exec(adb(["shell", "pm", "path", pkg]))?.[1];
     const actual = apkPath && adb(["shell", "sha256sum", apkPath]).trim().split(/\s+/)[0];
     if (actual !== expected) throw new Error(`Installed ${pkg} bytes do not match the admitted APK`);
   };
+  let offline;
   try {
+    if(options.offlineSpeech){offline=new OfflineNetworkFixture(adb,timing.network);await offline.enter();}
     for (const variant of options.variants) {
       const [app, test] = apks.filter(apk => apk.variant === variant);
       adb(["install", "-t", app.file], { timeout: 600_000 }); installed.push(PACKAGE);
@@ -485,32 +540,51 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
         const runClass = (cls, { user } = {}) => {
           const spec = CLASS_REGISTRY[short(cls)] ?? {};
           const inUser = user === undefined ? {} : { user: "secondary" };
-          for (const command of classIsolationCommands(user)) adb(command, { allowFailure: true });
+          for (const command of classIsolationCommands(user)) {
+            const reset = adb(command);
+            if (command.includes("clear") && reset.trim() !== "Success") throw new Error("Class app-data reset unconfirmed");
+          }
           for (const permission of spec.grant ?? []) adb(["shell", "pm", "grant", ...(user === undefined ? [] : ["--user", user]), PACKAGE, `android.permission.${permission}`]);
           // A grant to another package the class needs (owned, disposable emulator only): never revoked here.
           for (const [pkg, permissions] of Object.entries(spec.grantOther ?? {})) for (const permission of permissions) adb(["shell", "pm", "grant", pkg, `android.permission.${permission}`], { allowFailure: true });
           // A listing that names no test is retried once and kept: three classes that exist were
           // reported "missing" on a loaded emulator with nothing recorded to say why.
-          let listing = adb(instrumentArgs(cls, { log: true, user }), { allowFailure: true });
+          let listing = adb(instrumentArgs(cls, { log: true, user, cuttlefishFingerprint: image?.fingerprint }), { allowFailure: true });
           let listed = listedInstrumentationTests(listing);
-          if (!listed.length) { listing = adb(instrumentArgs(cls, { log: true, user }), { allowFailure: true }); listed = listedInstrumentationTests(listing); }
+          if (!listed.length) { listing = adb(instrumentArgs(cls, { log: true, user, cuttlefishFingerprint: image?.fingerprint }), { allowFailure: true }); listed = listedInstrumentationTests(listing); }
           if (!listed.length) {
             fs.writeFileSync(path.join(dir, `${short(cls)}-listing.txt`), listing);
             record(cls, { started: 0, passed: 0, failed: [], ignored: [], status: "missing" }, inUser); return;
           }
-          const runs = spec.phases ? spec.phases : [null];
+          const runs = spec.independentMethods ? listed.map(name => {
+            const method = name.startsWith(cls + "#") ? name.slice(cls.length + 1) : "";
+            if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(method)) throw new Error("Invalid independent method listing: " + name);
+            return method;
+          }) : spec.phases ? spec.phases : [null];
           let merged = { started: 0, passed: 0, failed: [], ignored: [], status: "passed" };
           for (const method of runs) {
-            const raw = adb(instrumentArgs(cls, { method, user }), { timeout: options.timeoutMs, allowFailure: true });
+            if (spec.independentMethods) {
+              for (const command of classIsolationCommands(user)) {
+                const reset = adb(command);
+                if (command.includes("clear") && reset.trim() !== "Success") throw new Error("Independent method app-data reset unconfirmed");
+              }
+              for (const permission of spec.grant ?? []) adb(["shell", "pm", "grant", ...(user === undefined ? [] : ["--user", user]), PACKAGE, `android.permission.${permission}`]);
+            }
+            const raw = adb(instrumentArgs(cls, { method, user, cuttlefishFingerprint: image?.fingerprint }), { timeout: options.timeoutMs, allowFailure: true });
             fs.writeFileSync(path.join(dir, `${short(cls)}${method ? `-${method}` : ""}.txt`), raw);
             const row = instrumentationClassResults(raw, [cls]).results.find(entry => entry.class === cls);
+            if(short(cls)==="RealClock"&&(row.status==="passed"||raw.includes("INSTRUMENTATION_RESULT: realClockFixture="))){
+              try{collectClockArtifacts(raw,dir,adb);}catch(error){row.status="failed";row.failed.push("artifact-collection");fs.writeFileSync(path.join(dir,"real-clock-artifact-error.txt"),error.message+"\n");}
+            }
             merged = { started: merged.started + row.started, passed: merged.passed + row.passed,
               failed: [...merged.failed, ...row.failed], ignored: [...merged.ignored, ...row.ignored],
               // A phase that did not run (missing) or only skipped fails the phased class. A class
               // without phases keeps its own status: one whose every method was skipped by its
               // gate is "skipped", as documented, and was recorded as "failed" until round 7.
-              status: merged.status !== "passed" ? merged.status : row.status === "passed" ? "passed" : spec.phases ? "failed" : row.status };
-            if (row.status !== "passed") break; // Later phases depend on earlier ones.
+              status: spec.independentMethods
+                ? [merged.status,row.status].includes("failed") ? "failed" : [merged.status,row.status].includes("missing") ? "missing" : merged.passed + row.passed > 0 ? "passed" : "skipped"
+                : merged.status !== "passed" ? merged.status : row.status === "passed" ? "passed" : spec.phases ? "failed" : row.status };
+            if (row.status !== "passed" && !spec.independentMethods) break; // Later dependent phases require success.
           }
           record(cls, merged, { listed: listed.length, ...inUser, ...(spec.note ? { note: spec.note } : {}) });
         };
@@ -562,6 +636,7 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
       adb(["uninstall", PACKAGE], { allowFailure: true }); installed.splice(installed.indexOf(PACKAGE), 1);
     }
   } finally {
+   try {
     // Always prove the original HOME, also after a failure part-way through the phase.
     if (home && !home.restoration) restoreHome(adb, home, timing);
     if (secondaryUsers.some(row => !row.removed)) {
@@ -578,15 +653,23 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
       // Remove only what this run installed.
       for (const pkg of [...new Set(installed)].reverse()) adb(["uninstall", pkg], { allowFailure: true });
     }
+   } finally {
+    if(offline){
+     try{offline.restore();}
+     finally{fs.writeFileSync(path.join(output,'offline-network.json'),JSON.stringify(offline.receipt,null,2)+'\n');}
+    }
+   }
   }
+  assertSameWebView(webView,readWebViewEvidence(adb));
   const result = writeInstrumentationRecord(path.join(output, "results.json"), {
-    runId, createdAt: new Date().toISOString(), commit, dirty, testMocks: options.testMocks, emulator,
+    runId, createdAt: new Date().toISOString(), commit, dirty, testMocks: options.testMocks, emulator, webView,
     apks: apks.map(({ file, ...apk }) => ({ ...apk, file: path.relative(process.cwd(), path.resolve(file)) })),
     mode: options.all ? "all" : "classes",
     ...(home ? { homeRole: { user: home.user, original: home.original, selected: home.selected, coldHome: home.coldHome, restored: home.restoration.restored, after: home.restoration.after,
       ...(home.error ? { error: home.error } : {}), ...(home.restoration.errors ? { errors: home.restoration.errors } : {}) } } : {}),
     ...(secondaryUsers.length ? { secondaryUsers } : {}),
     classes,
+    ...(offline ? {offlineNetwork:offline.receipt} : {}),
   });
   for (const row of classes) console.log(`${row.status.padEnd(8)} ${row.variant.padEnd(10)} ${short(row.class)}${row.user ? " (secondary user)" : ""}${row.ignored.length ? ` (skipped by assumption: ${row.ignored.join(", ")})` : ""}`);
   console.log(`${result.passed ? "PASSED" : "FAILED"}: ${path.relative(process.cwd(), path.join(output, "results.json"))} (emulator class E evidence only; not device acceptance)`);

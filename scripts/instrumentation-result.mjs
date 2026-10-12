@@ -108,6 +108,7 @@ export function writeInstrumentationRecord(file, record) {
   };
   // A run that created a disposable secondary user passes only with every such user proven removed.
   if (record.secondaryUsers !== undefined) body.passed = body.passed && Array.isArray(record.secondaryUsers) && record.secondaryUsers.every(row => row.removed === true && row.ownerRestored === true);
+  if(record.offlineNetwork!==undefined)body.passed=body.passed&&record.offlineNetwork.offlineObserved===true&&record.offlineNetwork.restored===true;
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify(body, null, 2)}\n`, { flag: 'wx' });
   return body;

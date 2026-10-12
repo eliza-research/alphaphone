@@ -182,7 +182,10 @@ public final class PasswordBrowserFillInstrumentedTest {
  @Test public void webFormsWithoutNativeFieldOriginsAreRefused()throws Exception{
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
   AccessibilityServiceInfo info=automation().getServiceInfo();info.flags|=AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;automation().setServiceInfo(info);
-  assertEquals("Boundary test runs only on an emulator","1",shell("getprop ro.kernel.qemu"));
+  assertTrue("Boundary test needs QEMU or the explicitly admitted Cuttlefish image",
+   "1".equals(shell("getprop ro.kernel.qemu")) || DisposableFixtureAdmission.allowsCuttlefish(
+    android.os.Build.FINGERPRINT, android.os.Build.HARDWARE, android.os.Build.DEVICE,
+    InstrumentationRegistry.getArguments().getString("ownedCuttlefishFingerprint")));
   // Fill admission does not read the vault or require an unlock. Validate native
   // configuration so an initialization failure cannot masquerade as form refusal.
   assertNotNull(ai.eliza.plugins.passwords.PasswordVaultAccess.get(context));

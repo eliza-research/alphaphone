@@ -1,5 +1,10 @@
 # Alpha Phone — implementation plan
 
+October 11 scope update: Phone, SMS, Contacts and Wallet are included in the full-product
+implementation plan at the user’s request. [FP-01–FP-04](full-product-completion-audit.md#newly-authorized-implementation-packages)
+define the work and acceptance gates. This supersedes their earlier deferral below;
+production entries stay disabled until the real capabilities are implemented and tested.
+
 October 1 architecture change: the user has selected an **Android-resident agent instead of Nitro/TEE hosting**. The [on-device agent plan](on-device-agent-plan.md) supersedes cloud-only and enclave-primary requirements below. The current implementation runs orchestration locally with an explicitly configured hosted Cerebras model; this is not offline LLM operation. Historical evidence is retained. A powered-off phone cannot execute local schedules; optional remote execution has separate acceptance requirements.
 
 September 30 scope update: the [MVP report](mvp-scope-and-gap-report.md) and [completion plan](mvp-completion-plan.md) govern current priority. Earlier cloud-only/local-model statements do not waive the supplied DoD's on-device STT/TTS requirement; offline LLM and external-versus-TEE inference remain explicitly reconciled there.
@@ -32,7 +37,7 @@ OS hardware/source discovery starts alongside E1 and can block AP7 independently
 | AP6 — Integrations | Inbox/calendar and workflow list/run history through Google Workspace/personal-assistant/workflow APIs. Add per-account permissions, activity inspection, revoke and cancellation | AP1, E3–4 | Read/write authorization separation, recipient/account confirmation, idempotent result display and no automatic repeat after ambiguous writes |
 | AP7 — OS/release | Pin Pixel 10 SKU/Android release and its device/kernel/vendor inputs; validate the image on Cuttlefish; stage signed Alpha launcher via E6; select HOME/default roles through provisioning; configure Chromium signer and OTA compatibility | E6; approved hardware, signing and resident payload | Linux clean image build, Cuttlefish boot, real phone flash/hardware matrix, signed update and rollback. Stage the admitted resident runtime and local Whisper/Kokoro assets; qualify physical execution separately |
 | AP8 — Product/QA/support | Accessibility/latency/battery soak, privacy review, pilot instrumentation, support escalation and staged rollout/rollback runbook | AP1–7 | Target-user complete-task test; measured reliability and latency budgets; named support owner and rollback drill |
-| AP9 — Future decision | Wallet, secure side-key payment, enclave/attestation claims | Separate provider/custody/security decisions | Hardware-backed evidence and transaction-specific approval before any real transfer; never reuse mock success text |
+| AP9 — Wallet implementation | FP-04 Wallet: provider/custody selection, cards/passes, reviewed transactions, receipts and recovery; hardware payment and attestation only where supported | FP-03 identity selection; provider/custody/security decisions | Hardware-backed evidence and transaction-specific approval before any real transfer; never reuse mock success text |
 
 ## First production vertical slice
 
@@ -40,11 +45,11 @@ Use one real test owner and resident agent. Install the standalone APK, sign in 
 
 ## Prototype-to-code coverage
 
-Boot/lock → native launch theme and system lock handoff; home → current home expanded with real data; shade → system capability/notification integration; Phone/Messages/Contacts → native bridges first; Inbox/Calendar → account-scoped APIs; Browser → isolated browser surface; Camera/Photos/Files → Android permissions and content URIs; Maps → navigation provider/handoff; Notes → existing store; Wallet → deferred; Workflows → existing scheduler; Settings → real capability controls. Gesture and hardware-button paths need native verification independently of touch controls.
+Boot/lock → native launch theme and system lock handoff; home → current home expanded with real data; shade → system capability/notification integration; Phone/Messages/Contacts → native bridges first; Inbox/Calendar → account-scoped APIs; Browser → isolated browser surface; Camera/Photos/Files → Android permissions and content URIs; Maps → navigation provider/handoff; Notes → existing store; Wallet → FP-04 implementation; Workflows → existing scheduler; Settings → real capability controls. Gesture and hardware-button paths need native verification independently of touch controls.
 
 ## Blocking product decisions
 
-Assign a product owner and engineering owner to: hardware choice; billed inference configuration; required default roles; voice provider/privacy; MVP view priority; background notification policy; signed update authority; wallet deferral. Record a decision and evidence link before adding scope. Treat the upstream issue estimates as historical planning context only.
+Assign a product owner and engineering owner to: hardware choice; billed inference configuration; required default roles; voice provider/privacy; MVP view priority; background notification policy; signed update authority; Wallet provider and custody. Record a decision and evidence link before adding scope. Treat the upstream issue estimates as historical planning context only.
 
 ## Shared Eliza platform work
 

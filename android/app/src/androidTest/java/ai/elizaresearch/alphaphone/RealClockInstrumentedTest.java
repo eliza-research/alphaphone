@@ -39,12 +39,27 @@ public final class RealClockInstrumentedTest {
  private void tap(AccessibilityNodeInfo n){for(int i=0;n!=null&&i<6;i++,n=n.getParent())if(n.isClickable()&&n.performAction(AccessibilityNodeInfo.ACTION_CLICK))return;fail("Native control not clickable");}
  private void closeNotificationShade(){
   if(!notificationShadeOpened)return;
-  for(int attempt=0;attempt<3;attempt++){
+  long deadline=SystemClock.elapsedRealtime()+5000,nextBack=0;int backs=0;
+  while(SystemClock.elapsedRealtime()<deadline){
    AccessibilityNodeInfo root=ui.getRootInActiveWindow();
-   if(root!=null&&!"com.android.systemui".contentEquals(root.getPackageName()==null?"":root.getPackageName())){notificationShadeOpened=false;return;}
-   assertTrue("Android accepted Back from the opened notification shade",ui.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK));SystemClock.sleep(200);
+   if(root!=null){
+    boolean shade="com.android.systemui".contentEquals(root.getPackageName()==null?"":root.getPackageName());
+    root.recycle();
+    if(!shade){notificationShadeOpened=false;return;}
+    // A null root is a transition, not another request to navigate Back.
+    if(backs<3&&SystemClock.elapsedRealtime()>=nextBack){
+     assertTrue("Android accepted Back from the opened notification shade",ui.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK));
+     backs++;nextBack=SystemClock.elapsedRealtime()+750;
+    }
+   }
+   SystemClock.sleep(100);
   }
-  AccessibilityNodeInfo root=ui.getRootInActiveWindow();assertNotNull(root);assertFalse("Notification shade closed before returning to Alpha","com.android.systemui".contentEquals(root.getPackageName()==null?"":root.getPackageName()));notificationShadeOpened=false;
+  fail("Notification shade did not settle closed before returning to Alpha");
+ }
+ private void restoredBaseline(List<String> before){
+  long deadline=SystemClock.elapsedRealtime()+5000;AssertionError last=null;
+  do{try{assertEquals("Existing disabled alarm rows preserved",before,baseline());return;}catch(AssertionError transitioning){last=transitioning;}SystemClock.sleep(100);}while(SystemClock.elapsedRealtime()<deadline);
+  throw last;
  }
  private void front()throws Exception{closeNotificationShade();BoundedActivityScenario.main(()->context.startActivity(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)));waitJs("!document.hidden");}
  private void handoff(String action)throws Exception{front();click(action);click("Review Clock request");click("Confirm Clock request");history.completed(action.equals("Show alarms")?"show":action.equals("Snooze")?"snooze":"dismiss");}
@@ -69,10 +84,14 @@ public final class RealClockInstrumentedTest {
  @Test public void realClockSetFireSnoozeDismissAndDelete()throws Exception{
   org.junit.Assume.assumeTrue("Explicit real alarm opt in", "1".equals(InstrumentationRegistry.getArguments().getString("realClock")));
   org.junit.Assume.assumeTrue("Operator confirms exclusive unlocked emulator and no other active timers", "1".equals(InstrumentationRegistry.getArguments().getString("clockExclusive")));
-  assertEquals("Fixture qualified for API35",35,android.os.Build.VERSION.SDK_INT);
+  assertTrue("Real Clock fixture requires API35 or the admitted API37 Cuttlefish image",
+   android.os.Build.VERSION.SDK_INT == 35 || (android.os.Build.VERSION.SDK_INT == 37
+    && DisposableFixtureAdmission.allowsCuttlefish(android.os.Build.FINGERPRINT, android.os.Build.HARDWARE, android.os.Build.DEVICE,
+     InstrumentationRegistry.getArguments().getString("ownedCuttlefishFingerprint"))));
   assertEquals("Installed AOSP Clock required","com.android.deskclock",context.getPackageManager().resolveActivity(new Intent(android.provider.AlarmClock.ACTION_SET_ALARM),0).activityInfo.packageName);
   assertEquals("Clock notification permission required for real firing evidence",android.content.pm.PackageManager.PERMISSION_GRANTED,context.getPackageManager().checkPermission("android.permission.POST_NOTIFICATIONS","com.android.deskclock"));
   output=new File(context.getExternalFilesDir(null),"real-clock-"+label.substring(14));assertTrue(output.mkdirs());
+  android.os.Bundle evidence=new android.os.Bundle();evidence.putString("realClockFixture",output.getAbsolutePath());InstrumentationRegistry.getInstrumentation().addResults(evidence);
   android.accessibilityservice.AccessibilityServiceInfo info=ui.getServiceInfo();int oldFlags=info.flags;info.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;ui.setServiceInfo(info);
   boolean mayExist=false;List<String> before=null;Throwable failed=null;
   try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class);ClockHistoryFixture clockHistory=new ClockHistoryFixture()){
@@ -102,7 +121,7 @@ public final class RealClockInstrumentedTest {
     handoff("Snooze");show();waitNative(n->row()!=null&&nodes(row()).stream().anyMatch(x->id(x,"preemptive_dismiss_button")&&String.valueOf(x.getText()).startsWith("Snoozing until")),15000);assertNotNull(row());record("05-snoozed");
     handoff("Dismiss");show();waitNative(n->row()!=null&&nodes(row()).stream().anyMatch(x->id(x,"onoff")&&!x.isChecked()),15000);assertTrue("Exact fixture is disabled",nodes(row()).stream().anyMatch(n->id(n,"onoff")&&!n.isChecked()));assertNull(context.getSystemService(AlarmManager.class).getNextAlarmClock());record("06-dismissed");
    }catch(Throwable t){failed=t;throw t;}finally{
-    try{if(mayExist){showForCleanup();AccessibilityNodeInfo exact=row();assertNotNull("Fixture cleanup needs exact label",exact);AccessibilityNodeInfo delete=nodes(exact).stream().filter(n->id(n,"delete")&&n.isVisibleToUser()).findFirst().orElse(null);if(delete==null){AccessibilityNodeInfo arrow=nodes(exact).stream().filter(n->id(n,"arrow")).findFirst().orElseThrow(()->new AssertionError("Exact row expansion missing"));tap(arrow);waitNative(n->id(n,"delete"),5000);exact=row();delete=nodes(exact).stream().filter(n->id(n,"delete")&&n.isVisibleToUser()).findFirst().orElseThrow(()->new AssertionError("Exact row delete missing"));}tap(delete);long end=SystemClock.elapsedRealtime()+5000;while(row()!=null&&SystemClock.elapsedRealtime()<end)SystemClock.sleep(100);assertNull("Only synthetic row deleted",row());assertEquals("Existing disabled alarm rows preserved",before,baseline());record("07-cleaned");}
+    try{if(mayExist){showForCleanup();AccessibilityNodeInfo exact=row();assertNotNull("Fixture cleanup needs exact label",exact);AccessibilityNodeInfo delete=nodes(exact).stream().filter(n->id(n,"delete")&&n.isVisibleToUser()).findFirst().orElse(null);if(delete==null){AccessibilityNodeInfo arrow=nodes(exact).stream().filter(n->id(n,"arrow")).findFirst().orElseThrow(()->new AssertionError("Exact row expansion missing"));tap(arrow);waitNative(n->id(n,"delete"),5000);exact=row();delete=nodes(exact).stream().filter(n->id(n,"delete")&&n.isVisibleToUser()).findFirst().orElseThrow(()->new AssertionError("Exact row delete missing"));}tap(delete);long end=SystemClock.elapsedRealtime()+5000;while(row()!=null&&SystemClock.elapsedRealtime()<end)SystemClock.sleep(100);assertNull("Only synthetic row deleted",row());restoredBaseline(before);record("07-cleaned");}
      front();
     }catch(Throwable cleanup){if(failed!=null)failed.addSuppressed(cleanup);else throw cleanup;}
    }

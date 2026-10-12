@@ -39,7 +39,10 @@ public class SelectedDocumentInstrumentedTest {
    if ("true".equals(eval(scenario,"Boolean(" + condition + ")"))) return;
    SystemClock.sleep(100);
   }
-  fail("Document flow condition timed out: " + condition);
+  String state;
+  try {state=eval(scenario,"JSON.stringify({activeView:document.documentElement.dataset.activeView||null,navigationStatus:window.__alphaTestNavigation?.status||null,navigationTarget:window.__alphaTestNavigation?.target||null,hidden:document.hidden,startupModal:!!document.querySelector('dialog.alpha-startup-permissions[open]'),connectionModal:!!document.querySelector('.alpha-connection-scrim'),renamePresent:!!document.querySelector('button[aria-label=Rename]'),screenPresent:!!document.querySelector('[data-screen]')})");}
+  catch(Exception error){state="diagnostic-unavailable:"+error.getClass().getSimpleName();}
+  fail("Document flow condition timed out: " + condition + "; state=" + state);
  }
  private void click(BoundedActivityScenario<MainActivity> scenario, String label) throws Exception {
   String target = "[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')===" + JSONObject.quote(label) + ")";

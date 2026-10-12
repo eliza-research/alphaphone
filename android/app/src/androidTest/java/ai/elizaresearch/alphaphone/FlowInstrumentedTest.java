@@ -52,11 +52,17 @@ public class FlowInstrumentedTest {
   String title="Flow test "+UUID.randomUUID();
   try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)) {
    ready(scenario);
+   AppNavigation.declineStartupAccess();
    Throwable primaryFailure=null;
    try {
     String[] views={"Inbox","Calendar","Browser","Camera","Photos","Maps","Notes","Files","Workflows","Settings"};
     for(String view:views) {
+     boolean cameraPrompt = "Camera".equals(view) && androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getTargetContext().checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED;
      navigate(scenario,view);
+     if(cameraPrompt) {
+      new CameraFlowInstrumentedTest().permissionButton(":id/permission_deny_button");
+      waitFor(scenario,"document.querySelector('[role=alert][aria-label=\"Camera access is off\"]')");
+     }
      assertEquals("Prototype app surface must remain mounted: "+view,"true",eval(scenario,"!!document.querySelector('[data-screen]')"));
     }
     navigate(scenario,"Notes"); label(scenario,"New note");

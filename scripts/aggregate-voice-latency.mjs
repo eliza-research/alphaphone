@@ -5,15 +5,16 @@
 //
 // Phases are measured from marks on one device clock, in milliseconds:
 //   recognition         transcript-ready - recording-end
-//   review              send - transcript-ready   (the user's review and Send; P-01: never automatic)
+//   review              send - transcript-ready   (commit delay; legacy manual samples may include user review)
 //   firstToken          first-token - send
 //   finalReply          final-reply - send
 //   firstAudio          first-audio - send        (only when Speak replies is on)
 //   speechToTokenExcludingReview  recognition + firstToken
 //   speechToAudioExcludingReview  recognition + firstAudio
 // The last two are candidate A-10 measures (end of speech to first response, excluding the
-// user's review and send time). This script reports them; it does not sign off a target.
-// Exit 0: enough complete samples in both cohorts. Exit 2: not enough. Exit 1: bad input.
+// commit delay). Ongoing voice acceptance must also include that delay end to end. This script reports them; it does not sign off a target.
+// Exit 0: enough complete audible samples in both cohorts for every observed route.
+// Pooled route statistics are descriptive only. Exit 2: not enough. Exit 1: bad input.
 import fs from 'node:fs';
 
 const order = ['recording-end', 'transcript-ready', 'send', 'first-token', 'final-reply', 'first-audio'];
@@ -73,19 +74,35 @@ export function phases(row) {
 /** A complete sample reached the final reply through every earlier mark. */
 export const complete = row => !row.outcome && order.slice(0, 5).every(key => row.marks[key] !== undefined);
 
-export function aggregate(exports, requested = minimumSamples) {
-  const required = { warm: Math.max(minimumSamples.warm, requested.warm ?? 0), cold: Math.max(minimumSamples.cold, requested.cold ?? 0) };
-  const { records, invalid } = collectRecords(exports);
+function cohortSummary(records, required) {
   const usable = records.filter(complete), cohorts = {};
   for (const name of ['warm', 'cold']) {
     const rows = usable.filter(row => row.cold === (name === 'cold')), byPhase = {};
     for (const key of Object.keys(phases({ marks: {} }))) byPhase[key] = stats(rows.map(row => phases(row)[key]));
-    cohorts[name] = { samples: rows.length, required: required[name], sufficient: rows.length >= required[name], routes: [...new Set(rows.map(row => row.route))].sort(), withAudio: rows.filter(row => row.marks['first-audio'] !== undefined).length, phases: byPhase };
+    const withAudio = rows.filter(row => row.marks['first-audio'] !== undefined).length;
+    cohorts[name] = { samples: rows.length, required: required[name], sufficient: rows.length >= required[name], routes: [...new Set(rows.map(row => row.route))].sort(), withAudio, audioSufficient: withAudio >= required[name], phases: byPhase };
   }
+  return cohorts;
+}
+
+export function aggregate(exports, requested = minimumSamples) {
+  const required = { warm: Math.max(minimumSamples.warm, requested.warm ?? 0), cold: Math.max(minimumSamples.cold, requested.cold ?? 0) };
+  const { records, invalid } = collectRecords(exports);
+  const usable = records.filter(complete), cohorts = cohortSummary(records, required);
+  // Include abandoned/incomplete-only routes: omitting them would conceal a failing route.
+  const byRoute = Object.fromEntries([...new Set(records.map(row => row.route))].sort().map(route => {
+    const selected = records.filter(row => row.route === route), detail = cohortSummary(selected, required);
+    return [route, { records: selected.length, complete: selected.filter(complete).length,
+      abandoned: selected.filter(row => row.outcome === 'abandoned').length,
+      incomplete: selected.filter(row => !row.outcome && !complete(row)).length,
+      cohorts: detail, sufficient: detail.warm.audioSufficient && detail.cold.audioSufficient }];
+  }));
   return {
     format: 'alpha-voice-latency-summary-v1', units: 'ms',
     records: records.length, complete: usable.length, abandoned: records.filter(row => row.outcome === 'abandoned').length, incomplete: records.filter(row => !row.outcome && !complete(row)).length, invalid,
-    cohorts, sufficient: cohorts.warm.sufficient && cohorts.cold.sufficient,
+    cohorts, pooledCohortsAreDescriptiveOnly: true, byRoute,
+    sufficient: Object.keys(byRoute).length > 0 && Object.values(byRoute).every(route => route.sufficient),
+    sufficiencyRule: 'At least the required warm and cold complete audible samples for each observed route; sample count is not latency target sign-off.',
     targetSignOff: 'pending A-10: the measurement boundary and target are not decided; this summary is evidence only',
   };
 }
@@ -99,5 +116,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   catch (error) { console.error(`Cannot aggregate: ${error.message}`); process.exit(1); }
   const text = JSON.stringify(summary, null, 2);
   if (options.out) fs.writeFileSync(options.out, text + '\n'); else console.log(text);
-  if (!summary.sufficient) { console.error(`Insufficient samples: warm ${summary.cohorts.warm.samples}/${options.warm}, cold ${summary.cohorts.cold.samples}/${options.cold}.`); process.exit(2); }
+  if (!summary.sufficient) {
+    const missing = Object.entries(summary.byRoute).filter(([, value]) => !value.sufficient)
+      .map(([route, value]) => `${route}: audible warm ${value.cohorts.warm.withAudio}/${options.warm}, cold ${value.cohorts.cold.withAudio}/${options.cold}`);
+    console.error(`Insufficient audible samples by route: ${missing.join('; ') || 'no valid records'}.`);
+    process.exit(2);
+  }
 }

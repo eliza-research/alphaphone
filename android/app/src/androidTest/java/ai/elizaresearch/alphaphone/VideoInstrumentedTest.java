@@ -25,7 +25,14 @@ public class VideoInstrumentedTest {
  private void until(String js)throws Exception{
   long end=SystemClock.elapsedRealtime()+30000;
   while(SystemClock.elapsedRealtime()<end){if("true".equals(eval("Boolean("+js+")")))return;SystemClock.sleep(100);}
-  fail("Video condition: "+js+"; screen="+eval("document.body.innerText.slice(-1200)"));
+  fail("Video condition: "+js+"; media="+mediaDiagnostics()+"; screen="+eval("document.body.innerText.slice(-1200)"));
+ }
+ // Structural diagnostics only: no source URL, playback capability token or media bytes.
+ private String mediaDiagnostics()throws Exception{
+  return eval("JSON.stringify((()=>{const v=document.querySelector('video[data-alpha-captured-video]'),p=document.createElement('video');return {lastError:window.__alphaVideoError||null,present:!!v,paused:v?.paused,readyState:v?.readyState,networkState:v?.networkState,width:v?.videoWidth,time:v?.currentTime,mp4:p.canPlayType('video/mp4'),avc:p.canPlayType('video/mp4; codecs=\"avc1.42E01E\"'),vp9:p.canPlayType('video/webm; codecs=\"vp9\"')}})())");
+ }
+ private void observeMediaErrors()throws Exception{
+  eval("(()=>{window.__alphaVideoError=null;document.addEventListener('error',event=>{const v=event.target;if(v instanceof HTMLVideoElement&&v.matches('[data-alpha-captured-video]'))window.__alphaVideoError={code:v.error?.code,readyState:v.readyState,networkState:v.networkState};},true);})()");
  }
  private void click(String label)throws Exception{
   String selector="document.querySelector('button[aria-label='+"+JSONObject.quote(JSONObject.quote(label))+"+']')";
@@ -77,7 +84,7 @@ public class VideoInstrumentedTest {
  @Test public void recordsDurableVideoAndPrototypeControlsDriveRealPlayback()throws Exception{
   permission();Set<Uri> before=owned();
   try(BoundedActivityScenario<MainActivity>s=BoundedActivityScenario.launch(MainActivity.class)){
-   admitAccount();begin();click("Stop recording");until("document.body.innerText.includes('Video saved to Android Photos.')");
+   admitAccount();observeMediaErrors();begin();click("Stop recording");until("document.body.innerText.includes('Video saved to Android Photos.')");
    Set<Uri> created=owned();created.removeAll(before);assertEquals("One finalized video",1,created.size());assertMedia(created.iterator().next());
    click("Open last photo");until(AppNavigation.selected("Photos"));until("document.body.innerText.includes('Captured video')");
    click("Play video");until("(()=>{const v=document.querySelector('video[data-alpha-captured-video]');return v&&!v.paused&&v.currentTime>0.2&&v.videoWidth>0})()");
