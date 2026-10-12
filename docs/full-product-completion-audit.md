@@ -1840,3 +1840,32 @@ The refreshed `native-coverage-notes-observer.json` retains 93 observed and 61
 unobserved classes, with latest historical cohorts of 166 passed, 12 failed and
 22 partial. Earlier failed attempts remain in their cohort histories. Report checks
 pass 24 tests (`notes-observer-report-checks.log`).
+
+## October 12: separate secure-camera image fixture built; boot pending
+
+The reviewed source contract passes again (`secure-camera-source-fixture.json`).
+A separate `artifacts/cuttlefish-secure-camera-fixture` consumes the product's
+`writeSecureCameraOverlay` values, packages them as two fixture-only static runtime
+overlays targeting framework and SystemUI, and rebuilds product, super and
+vbmeta_system. The exact recipe is
+`test-results/full-product-audit/build-secure-camera-fixture.py`; generated resource,
+APK and image hashes are in the fixture receipt. No shared AOSP checkout or previous
+fixture image was modified. The older platform/WebView base remains historical;
+this is not a full current-source AOSP build or a release image. Runtime-overlay
+packaging is a test-fixture adaptation, not proof of production makefile consumption.
+
+AVB test-key trust is retained, flags remain zero, and offline `avbtool verify_image`
+passes the new product and retained system/system_ext hashtrees
+(`secure-camera-avb-verify.log`). Image construction does not prove boot or gesture
+behavior. The existing browser fixture VM was stopped cleanly, retaining its data.
+New owned container `alphaphone-audit-secure-camera-cuttlefish` uses instance 12,
+CID 14 and localhost ADB 6531; personal targets were not touched.
+
+At the recorded observation, launch session 80931 and run_cvd/crosvm are still live,
+ADB is offline, kernel output stops after early module loading and logcat is empty.
+`secure-camera-boot-observation.json` records this pending state. Do not infer a
+terminal failure or restart from this observation timeout. Resume by checking that
+same process/container, then verify the loaded secure-camera resources once Android
+boots. No image-contract, power-gesture, locked-capture, unlock-privacy or physical
+acceptance is claimed. Browser-fixture ADB 6530 is currently unavailable because its
+VM was intentionally stopped to keep one audit VM active.
