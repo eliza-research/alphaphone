@@ -1,0 +1,9 @@
+{
+  "synthetic": true,
+  "purpose": "Foreign-UID media library fixture only; no camera, microphone, or external media input",
+  "file": "synthetic-blue.mp4",
+  "sha256": "a6d434a5c5fa3c689584e704362d5a83fac0d01e72acab720983062223c8e8d5",
+  "video": {"codec": "h264", "width": 16, "height": 16, "durationSeconds": 1},
+  "audio": false,
+  "generation": "ffmpeg -f lavfi -i color=c=blue:s=16x16:r=2 -t 1 -an -c:v libx264 -pix_fmt yuv420p -movflags +faststart synthetic-blue.mp4"
+}
