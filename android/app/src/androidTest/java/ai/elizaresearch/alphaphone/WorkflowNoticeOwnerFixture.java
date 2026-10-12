@@ -25,7 +25,10 @@ final class WorkflowNoticeOwnerFixture implements AutoCloseable {
   String origin="http://127.0.0.1:"+port,token="SYNTHETIC-LOCAL-ONLY-"+UUID.randomUUID();
   JSONObject identity=new JSONObject().put("origin",origin).put("ownerId","fixture-owner-"+UUID.randomUUID()).put("agentId",UUID.randomUUID().toString());
   AlphaCredentialStore store=new AlphaCredentialStore(context);assertNull(store.readCredentialSlot("remote:"+origin));
-  assertTrue(context.getSharedPreferences(PREFS,0).edit().putString("identity",identity.toString()).putString("token",token).commit());
+  String id="approval-"+(UUID.randomUUID().toString()+UUID.randomUUID()).replace("-","");
+  JSONObject route=new JSONObject(identity.toString()).put("scope","a".repeat(64)).put("workflowId","fixture-flow").put("runId","fixture-run-"+UUID.randomUUID()).put("versionId","fixture-version");
+  JSONObject approval=new JSONObject().put("id",id).put("bindingHash","b".repeat(64)).put("route",route).put("expiresAt",System.currentTimeMillis()+600000L);
+  assertTrue(context.getSharedPreferences(PREFS,0).edit().putString("identity",identity.toString()).putString("token",token).putString("approval",approval.toString()).commit());
   try(WorkflowNoticeOwnerFixture fixture=new WorkflowNoticeOwnerFixture(context);BoundedActivityScenario<MainActivity> activity=BoundedActivityScenario.launch(MainActivity.class)){
    AppNavigation.liveMode();long end=SystemClock.elapsedRealtime()+20000;
    while(!"true".equals(WebViewTestDriver.evaluate("Boolean(document.documentElement.dataset.activeView)"))&&SystemClock.elapsedRealtime()<end)SystemClock.sleep(50);
@@ -36,8 +39,30 @@ final class WorkflowNoticeOwnerFixture implements AutoCloseable {
    WebViewTestDriver.evaluate("location.reload();true");fixture.awaitOwner(true);
    JSONObject restored=new JSONObject((String)new JSONTokener(WebViewTestDriver.evaluate("localStorage.getItem('alpha.connection.selection.v1')")).nextValue());
    assertEquals(2,restored.length());assertEquals("local",restored.getString("kind"));assertEquals(origin,restored.getString("origin"));
+   // One real main-process bridge publication. Never race the main owner fence
+   // with a helper-process ledger write, and never retry an unknown publication.
+   WebViewTestDriver.evaluate("window.__fixtureApprovalPost=null;Capacitor.Plugins.AlphaHostedResults.postWorkflowApprovalNotice("+approval+").then(value=>window.__fixtureApprovalPost={value},error=>window.__fixtureApprovalPost={error:String(error)});true");
+   long publicationEnd=SystemClock.elapsedRealtime()+10000;String raw;
+   do{raw=WebViewTestDriver.evaluate("window.__fixtureApprovalPost");if(!"null".equals(raw))break;SystemClock.sleep(50);}while(SystemClock.elapsedRealtime()<publicationEnd);
+   assertNotEquals("Publication callback must settle; no retry","null",raw);
+   JSONObject result=new JSONObject(raw);assertFalse("Main bridge rejected publication: "+result,result.has("error"));assertEquals("succeeded",result.getJSONObject("value").getString("status"));
+   android.service.notification.StatusBarNotification notice=null;
+   for(android.service.notification.StatusBarNotification row:context.getSystemService(android.app.NotificationManager.class).getActiveNotifications())if(("alpha-workflow-"+id).equals(row.getTag())){assertNull(notice);notice=row;}
+   assertNotNull("Original OS publication required",notice);assertNotNull(notice.getNotification().contentIntent);
+   JSONObject publication=new JSONObject().put("key",notice.getKey()).put("postTime",notice.getPostTime()).put("token",WorkflowNoticeTapsFactory.create(context).token(id)).put("receipt",store.readCredentialSlot(WorkflowNoticeDelivery.APPROVAL_SLOT)).put("routes",store.readCredentialSlot(WorkflowNoticeTaps.SLOT));
+   assertTrue(context.getSharedPreferences(PREFS,0).edit().putString("publication",publication.toString()).commit());
+   assertEquals(context.getPackageName(),notice.getNotification().contentIntent.getCreatorPackage());assertEquals(android.os.Process.myUid(),notice.getNotification().contentIntent.getCreatorUid());assertTrue(notice.getNotification().contentIntent.isImmutable());
+   // Read back the actual OS IntentSender record/launch flags without launching it.
+   try(InputStream input=new android.os.ParcelFileDescriptor.AutoCloseInputStream(InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand("dumpsys activity intents "+context.getPackageName()));ByteArrayOutputStream output=new ByteArrayOutputStream()){
+    byte[] buffer=new byte[4096];int count;while((count=input.read(buffer))!=-1){assertTrue("Bounded owned PendingIntent diagnostic",output.size()+count<=65536);output.write(buffer,0,count);}
+    android.os.Bundle evidence=new android.os.Bundle();evidence.putString("workflowOwnerPreparedIntentSender",output.toString("UTF-8"));InstrumentationRegistry.getInstrumentation().addResults(evidence);
+   }
+
+
   }
  }
+ static JSONObject approval(Context context)throws Exception{return new JSONObject(context.getSharedPreferences(PREFS,0).getString("approval","{}"));}
+ static JSONObject publication(Context context)throws Exception{return new JSONObject(context.getSharedPreferences(PREFS,0).getString("publication","{}"));}
  WorkflowNoticeOwnerFixture(Context context)throws Exception{
   org.junit.Assume.assumeTrue("Synthetic restore requires test-mocks build",BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS);
   this.context=context;identity=new JSONObject(context.getSharedPreferences(PREFS,0).getString("identity","{}"));origin=identity.getString("origin");token=context.getSharedPreferences(PREFS,0).getString("token",null);assertNotNull(token);
