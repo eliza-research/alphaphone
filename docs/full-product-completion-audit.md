@@ -1886,3 +1886,38 @@ not evidence of a camera-overlay failure. `secure-camera-boot-io-observation.jso
 records the latest process and I/O observation. Android ADB remains offline and
 boot/resource/gesture acceptance remains unproven. Continue by polling the same
 launch handle and live I/O before considering recovery.
+
+
+## October 12: first secure-camera fixture booted; signature-sidecar fix rebuilding
+
+Launch session 80931 finished successfully. Android reported sys.boot_completed=1
+and orange verified-boot state, as expected for this unlocked test fixture. Offline
+AVB verification remains separate from that unlocked state. The runtime camera
+contract failed because SystemUI's camera gesture package was still empty
+(`secure-camera-image-fixture-error.log`). Detailed PackageManager logs identify a
+concrete fixture packaging defect: both new overlays were rejected during APK v4
+certificate collection after fs-verity measurement was denied. The SDK signer had
+written `.apk.idsig` sidecars into the product tree. The framework resource appeared
+in early static overlay resolution, but PackageManager did not admit the packages;
+that partial loading is not a passing image contract.
+
+`build-secure-camera-fixture-v2.py` rebuilds a separate image without v4 sidecars
+(`--v4-signing-enabled false`), retaining APK v3 signatures, test-key AVB and its
+hashtrees. Original fixture images are unchanged. The new images are also reflinked
+under the existing mounted image directory at `/images/secure-camera-v2`. After a
+clean stop, instance 12 was relaunched from that path with live session 35229.
+Cuttlefish explicitly reported its old disk overlay incompatible with the changed
+base images and discarded that disposable overlay; despite requesting resume, the
+initialized data was not retained. Only this empty owned fixture is affected.
+The replacement is therefore undergoing first-boot data initialization again.
+No signature/SELinux/AVB enforcement was disabled to make the packages load.
+
+While waiting, `summarize-native-evidence.mjs` now checks exclusion receipts beside
+test APKs as well as in their parent archive. Previously it could miss an excluded
+test APK stored flat in a separate archive. CLI regression tests cover flat,
+nested-parent and nested-local exclusions, require no output on rejection, and
+admit the same hashes only after their explicit evidenceUsable flag is true.
+Focused tests pass five checks; full verification passes 810 tests, four existing
+TODOs and the flag-off web audit (`verify-flat-archive-admission.log`). This is a
+host evidence-tool change, so the existing developer APK build receipts remain
+separate. No coverage count or requirement status is promoted by it.

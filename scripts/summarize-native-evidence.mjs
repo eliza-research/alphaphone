@@ -47,8 +47,14 @@ if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.ur
   for(const apk of record.apks||[]){
    if(checked.has(apk.file+'#'+apk.sha256))continue;
    if(createHash('sha256').update(fs.readFileSync(apk.file)).digest('hex')!==apk.sha256)throw Error('Archived APK changed: '+apk.file);
-   const limit=path.join(path.dirname(apk.role==='test'?path.dirname(apk.file):apk.file),'qualification-limit.json');
-   if(fs.existsSync(limit)&&JSON.parse(fs.readFileSync(limit,'utf8')).evidenceUsable===false)throw Error('Archive excluded from evidence: '+limit);
+   // Archives store test APKs either beside the app or under instrumentation/.
+   // Check both the containing directory and the test archive parent: neither
+   // an excluded flat test APK nor an excluded nested archive may enter coverage.
+   const directories=new Set([path.dirname(apk.file),...(apk.role==='test'?[path.dirname(path.dirname(apk.file))]:[])]);
+   for(const directory of directories){
+    const limit=path.join(directory,'qualification-limit.json');
+    if(fs.existsSync(limit)&&JSON.parse(fs.readFileSync(limit,'utf8')).evidenceUsable===false)throw Error('Archive excluded from evidence: '+limit);
+   }
    checked.add(apk.file+'#'+apk.sha256);
   }
   return {file,record};

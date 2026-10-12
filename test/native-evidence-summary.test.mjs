@@ -25,3 +25,30 @@ test('provider identities and historical unknown providers remain separate',()=>
  assert.equal(r.classes[0].cohorts.length,3);
  assert.equal(r.classes[0].cohorts[0].target.webView,null);
 });
+
+
+test('CLI refuses excluded test artifacts in flat and nested archives before writing a report',async()=>{
+ const fs=await import('node:fs'),os=await import('node:os'),path=await import('node:path');
+ const {createHash}=await import('node:crypto'),{spawnSync}=await import('node:child_process');
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'alpha-summary-admission-'));
+ try{
+  for(const layout of ['flat','nested','nested-local']){
+   const dir=path.join(root,layout),appDir=path.join(dir,'app'),testDir=path.join(dir,'test');
+   fs.mkdirSync(appDir,{recursive:true});fs.mkdirSync(path.join(testDir,'instrumentation'),{recursive:true});
+   const app=path.join(appDir,'standalone-debug.apk'),apk=path.join(testDir,...(layout==='flat'?[]:['instrumentation']),'standalone-androidTest.apk');
+   fs.writeFileSync(app,'app fixture');fs.writeFileSync(apk,'test fixture');
+   const receipt=run().record;
+   receipt.apks=receipt.apks.map(row=>{const file=row.role==='app'?app:apk;return {...row,file,sha256:createHash('sha256').update(fs.readFileSync(file)).digest('hex')};});
+   fs.writeFileSync(path.join(dir,'inventory.json'),JSON.stringify(inventory));fs.writeFileSync(path.join(dir,'receipt.json'),JSON.stringify(receipt));
+   const limit=path.join(layout==='nested-local'?path.dirname(apk):testDir,'qualification-limit.json');
+   fs.writeFileSync(limit,JSON.stringify({evidenceUsable:false}));
+   const output=path.join(dir,'report.json');
+   const args=['scripts/summarize-native-evidence.mjs',path.join(dir,'inventory.json'),output,path.join(dir,'receipt.json')];
+   const refused=spawnSync(process.execPath,args,{encoding:'utf8'});
+   assert.notEqual(refused.status,0,layout);assert.match(refused.stderr,/Archive excluded from evidence/);assert.equal(fs.existsSync(output),false);
+   fs.writeFileSync(limit,JSON.stringify({evidenceUsable:true}));
+   const admitted=spawnSync(process.execPath,args,{encoding:'utf8'});
+   assert.equal(admitted.status,0,admitted.stderr);assert.equal(JSON.parse(fs.readFileSync(output)).counts.observedClasses,1);
+  }
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
