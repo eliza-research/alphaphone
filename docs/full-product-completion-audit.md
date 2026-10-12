@@ -23,8 +23,9 @@ APKs; the new policy does not turn old Cloud-speech tests into local-speech acce
 **Latest merged checkpoint:** `73b003a5` includes main through `ca76ac67`
 (PR 432 and PR 426). Source verification: 808 passed, four TODOs. Both developer
 APK variants rebuilt. Encrypted recovery-slot and browser cookie-policy campaigns
-pass both variants. WebView 157 accessibility still fails at the Home assistant
-group, and the old image lacks the secure-camera SystemUI gesture target. These
+pass both variants. WebView 157 accessibility now finds the Home assistant group through Android
+containerTitle, but still fails unlabelled full-screen controls/reading order; the
+old image lacks the secure-camera SystemUI gesture target. These
 findings are preserved separately from upstream's other-device qualification.
 
 **October 12 execution update:** Both developer APK variants build and run on an
@@ -1596,3 +1597,43 @@ retains 89 observed classes and 65 unobserved; exact archived APK hashes and all
 older attempts remain attached. The renderer source inventory is refreshed at
 `interactions-postmerge432.json`: 2,734 overlapping lexical candidates across
 305 source files. Those are review candidates, not unique actions or runtime passes.
+
+
+### Accessibility native-name investigation
+
+`cuttlefish-accessibility-groups-diagnostics157` confirms that the assistant DOM
+container is visible, enabled, not inert and named, with its child buttons present
+in Android's tree. `cuttlefish-accessibility-screenreader157` still fails the old
+text/content-description group lookup after binding the instrumentation-only spoken
+service before Activity launch. A longer wait and screen-reader mode alone do not
+resolve it. Those historical failures remain in the coverage ledger.
+
+Chromium's Android implementation maps named containers to `containerTitle`
+([primary source](https://chromium.googlesource.com/chromium/src/+/HEAD/content/browser/accessibility/browser_accessibility_android.cc),
+`ComputeAndroidNameTo` / `GetAndroidContainerTitle`). The fixture now reads public
+AccessibilityNodeInfo objects, including that API on Android 34+, instead of losing
+it through UiAutomator 2.3's text/description-only interface. Older name mappings
+remain accepted. The same one-group, ancestry, final-region, control-label and
+within-region geometry assertions remain. It keeps the stand-in bound throughout
+traversal and restores both prior secure settings, font size and automation flags.
+No renderer or upstream source changed for this correction.
+
+Both variants in `cuttlefish-accessibility-native-tree157` pass the single final
+group assertion, proving that the earlier missing-group conclusion was a fixture
+compatibility issue on this provider. They still fail Home at 200% on unlabelled
+full-screen clickable nodes and upward traversal. The next investigation must
+identify those exact native nodes and whether assistive technology reaches them;
+there is no geometry/class exception or blanket skip. Later shade/Settings/composer
+checks remain unexecuted in this cohort. Screenshots are retained as
+`accessibility-native-tree-standalone.png` and `accessibility-native-tree-launcher.png`;
+only their exact owned guest files were removed after retrieval. Post-run readback
+shows font scale 1.0 and no enabled accessibility service. APK inputs were restored.
+The initial native-tree build failed a CharSequence conversion at compile time;
+`developer-apks-accessibility-native-tree-fixed` is the completed archive used above.
+
+Full verification of the native-tree correction passes 808 tests with four existing
+TODOs (`verify-accessibility-native-tree.log`); the completed Android build includes
+both debug/release variants, instrumentation, lint and APK audits. These remain
+unqualified developer artifacts without the resident payload. Updated coverage
+`native-coverage-accessibility-native-tree.json` retains 89 observed classes,
+65 unobserved and historical latest cohorts of 160 passed, 12 failed and 18 partial.

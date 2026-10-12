@@ -5,6 +5,7 @@ import static androidx.test.espresso.matcher.ViewMatchers.isRoot;
 import static org.junit.Assert.*;
 
 import android.graphics.Rect;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
 import androidx.test.espresso.accessibility.AccessibilityChecks;
@@ -27,10 +28,10 @@ import org.junit.runner.RunWith;
  * UiAutomator check that every actionable node TalkBack reaches has a label, is not
  * clipped off-screen and appears in reading order. Emulator evidence only.
  *
- * The accessibility click on the handle is performed with a stand-in screen reader bound
+ * Traversal and the accessibility click on the handle use a stand-in screen reader bound
  * (ScreenReaderStandInService). Without one WebView is in its reduced accessibility mode, where it
- * accepts ACTION_CLICK and never delivers it to the page; the round 8 run failed on exactly that,
- * on an image with no TalkBack. Nothing else in this class runs with the stand-in bound.
+ * can omit named groups and accept ACTION_CLICK without delivering it to the page.
+ * Keep the stand-in bound through all tree and gesture checks, restoring prior settings afterward.
  */
 @RunWith(AndroidJUnit4.class)
 public final class AccessibilityInstrumentedTest {
@@ -85,13 +86,26 @@ public final class AccessibilityInstrumentedTest {
  private static void until(String code)throws Exception{for(int i=0;i<200;i++){if("true".equals(js("Boolean("+code+")")))return;SystemClock.sleep(100);}fail("Accessibility flow condition: "+code);}
  private static void open(String view)throws Exception{js(AppNavigation.request(view));until(AppNavigation.selected(view));}
 
+ private static List<AccessibilityNodeInfo> children(AccessibilityNodeInfo node){
+  List<AccessibilityNodeInfo> out=new ArrayList<>();
+  for(int i=0;i<node.getChildCount();i++){AccessibilityNodeInfo child=node.getChild(i);if(child!=null)out.add(child);}
+  return out;
+ }
+ private static Rect screenBounds(AccessibilityNodeInfo node){Rect r=new Rect();node.getBoundsInScreen(r);return r;}
+ /** Chromium maps ARIA container names to Android containerTitle on newer providers.
+  * Read the public native tree, retaining older text/content-description mappings. */
+ private static boolean assistantName(AccessibilityNodeInfo node){
+  return "Assistant controls".contentEquals(node.getText()==null?"":node.getText())
+   ||"Assistant controls".contentEquals(node.getContentDescription()==null?"":node.getContentDescription())
+   ||(android.os.Build.VERSION.SDK_INT>=34&&"Assistant controls".contentEquals(node.getContainerTitle()==null?"":node.getContainerTitle()));
+ }
  /** Actionable or labelled leaf nodes in accessibility-tree (TalkBack linear) order. */
- private static void collect(UiObject2 node,List<UiObject2> out){
-  List<UiObject2> children=node.getChildren();
+ private static void collect(AccessibilityNodeInfo node,List<AccessibilityNodeInfo> out){
+  List<AccessibilityNodeInfo> children=children(node);
   boolean actionable=node.isClickable()||node.isCheckable()||node.isLongClickable();
-  String label=(node.getText()==null?"":node.getText())+(node.getContentDescription()==null?"":node.getContentDescription());
+  String label=(node.getText()==null?"":node.getText())+" "+(node.getContentDescription()==null?"":node.getContentDescription());
   if(actionable||(children.isEmpty()&&!label.trim().isEmpty()))out.add(node);
-  for(UiObject2 child:children)collect(child,out);
+  for(AccessibilityNodeInfo child:children)collect(child,out);
  }
  /** Failure evidence uses raw AX rectangles as well as UiAutomator's visible bounds. The
   * pinned UiAutomator helper retains the original rectangle when intersection is empty. */
@@ -108,6 +122,7 @@ public final class AccessibilityInstrumentedTest {
   for(int depth=0;node!=null&&depth<16;depth++,node=node.getParent()){
    Rect raw=new Rect();node.getBoundsInScreen(raw);
    out.append(" < ").append(node.getClassName()).append(" raw=").append(raw.toShortString())
+    .append(" assistantContainerTitle=").append(android.os.Build.VERSION.SDK_INT>=34&&"Assistant controls".contentEquals(node.getContainerTitle()==null?"":node.getContainerTitle()))
     .append(" scrollable=").append(node.isScrollable()).append(" visible=").append(node.isVisibleToUser());
   }
   return out.toString();
@@ -115,51 +130,52 @@ public final class AccessibilityInstrumentedTest {
  /** UiAutomator 2.3.0 keeps a nonempty rectangle when intersection with a scrollable
   * ancestor fails. Intersect explicitly so fully clipped descendants do not masquerade as
   * visible controls; partially visible nodes keep only their painted area. */
- private static Rect visibleBounds(UiObject2 node,UiDevice device){
-  Rect bounds=node.getVisibleBounds();List<int[]> frames=new ArrayList<>();
+ private static Rect visibleBounds(AccessibilityNodeInfo node,UiDevice device){
+  Rect bounds=screenBounds(node);if(!node.isVisibleToUser())return new Rect();List<int[]> frames=new ArrayList<>();
   frames.add(new int[]{0,0,device.getDisplayWidth(),device.getDisplayHeight()});
-  for(UiObject2 parent=node.getParent();parent!=null;parent=parent.getParent())if(parent.isScrollable()){
-   Rect frame=parent.getVisibleBounds();frames.add(new int[]{frame.left,frame.top,frame.right,frame.bottom});
+  for(AccessibilityNodeInfo parent=node.getParent();parent!=null;parent=parent.getParent())if(parent.isScrollable()){
+   Rect frame=screenBounds(parent);frames.add(new int[]{frame.left,frame.top,frame.right,frame.bottom});
   }
   int[] clipped=AccessibilityBounds.clip(new int[]{bounds.left,bounds.top,bounds.right,bounds.bottom},frames);
   return new Rect(clipped[0],clipped[1],clipped[2],clipped[3]);
  }
  /** A named semantic group, not a geometry/class exception for arbitrary controls. */
- private static boolean assistantGroup(UiObject2 node){
-  for(UiObject2 current=node;current!=null;current=current.getParent())
-   if("Assistant controls".equals(current.getContentDescription())||"Assistant controls".equals(current.getText()))return true;
+ private static boolean assistantGroup(AccessibilityNodeInfo node){
+  for(AccessibilityNodeInfo current=node;current!=null;current=current.getParent())
+   if(assistantName(current))return true;
   return false;
  }
- private static int assistantGroups(UiObject2 node){
-  int count="Assistant controls".equals(node.getContentDescription())||"Assistant controls".equals(node.getText())?1:0;
-  for(UiObject2 child:node.getChildren())count+=assistantGroups(child);
+ private static int assistantGroups(AccessibilityNodeInfo node){
+  int count=assistantName(node)?1:0;
+  for(AccessibilityNodeInfo child:children(node))count+=assistantGroups(child);
   return count;
  }
  private static void talkBackOrder(UiDevice device,String surface)throws Exception{
   device.waitForIdle(2000);
   // The WebView publishes a layer's accessibility nodes shortly after the layer appears; read the
   // tree again until it holds a clickable control (five seconds at most). The checks below are unchanged.
-  UiObject2 root=null;List<UiObject2> nodes=new ArrayList<>();
+  AccessibilityNodeInfo root=null;List<AccessibilityNodeInfo> nodes=new ArrayList<>();
   for(int attempt=0;attempt<25;attempt++){
-   root=device.findObject(By.pkg(BuildConfig.APPLICATION_ID).depth(0));nodes=new ArrayList<>();
-   if(root!=null){try{collect(root,nodes);}catch(androidx.test.uiautomator.StaleObjectException changing){nodes.clear();}}
-   boolean clickable=false;try{for(UiObject2 node:nodes)if(node.isClickable()&&!visibleBounds(node,device).isEmpty())clickable=true;}catch(androidx.test.uiautomator.StaleObjectException changing){clickable=false;}
-   if(clickable)break;
+   root=automation().getRootInActiveWindow();
+   if(root!=null&&!BuildConfig.APPLICATION_ID.contentEquals(root.getPackageName()==null?"":root.getPackageName()))root=null;nodes=new ArrayList<>();
+   if(root!=null){try{if(root.refresh())collect(root,nodes);}catch(IllegalStateException changing){nodes.clear();}}
+   boolean clickable=false;try{for(AccessibilityNodeInfo node:nodes)if(node.isClickable()&&!visibleBounds(node,device).isEmpty())clickable=true;}catch(IllegalStateException changing){clickable=false;}
+   if(clickable&&("Notification shade".equals(surface)||assistantGroups(root)==1))break;
    SystemClock.sleep(200);
   }
   assertNotNull(surface+": app window has an accessibility tree",root);
   int width=device.getDisplayWidth();
   List<String> problems=new ArrayList<>();
-  UiObject2 previous=null;Rect previousBounds=null;
+  AccessibilityNodeInfo previous=null;Rect previousBounds=null;
   int actionable=0;boolean seenAssistant=false,previousAssistant=false;
   assertTrue(surface+": at most one assistant control group",assistantGroups(root)<=1);
-  for(UiObject2 node:nodes){
+  for(AccessibilityNodeInfo node:nodes){
    Rect r=visibleBounds(node,device);
    if(r.isEmpty())continue;
    String label=((node.getText()==null?"":node.getText())+" "+(node.getContentDescription()==null?"":node.getContentDescription())).trim();
    // An empty text field has no text; Android carries its accessible name (aria-label/placeholder) as the hint, which TalkBack reads.
-   if(label.isEmpty()&&"android.widget.EditText".equals(node.getClassName())&&node.getHint()!=null)label=node.getHint().trim();
-   if(node.isClickable()){actionable++;if(label.isEmpty()&&node.getChildren().stream().noneMatch(c->c.getText()!=null&&!c.getText().trim().isEmpty()))problems.add("unlabelled control at "+r.toShortString());}
+   if(label.isEmpty()&&"android.widget.EditText".equals(node.getClassName())&&node.getHintText()!=null)label=node.getHintText().toString().trim();
+   if(node.isClickable()){actionable++;if(label.isEmpty()&&children(node).stream().noneMatch(c->c.getText()!=null&&!c.getText().toString().trim().isEmpty()))problems.add("unlabelled control at "+r.toShortString());}
    if(r.left<0||r.right>width)problems.add("clipped '"+label+"' at "+r.toShortString());
    boolean assistant=assistantGroup(node);
    if(seenAssistant&&!assistant)problems.add("App content follows the assistant control group");
@@ -173,7 +189,7 @@ public final class AccessibilityInstrumentedTest {
     if(r.top<p.top-Math.max(p.height(),r.height())/2&&r.left<p.right){
      problems.add("reading order goes up from '"+previous.getText()+"' to '"+label+"'");
      System.out.println("ALPHA_ACCESSIBILITY_ORDER_BOUNDS previous="+p.toShortString()+" next="+r.toShortString());
-     System.out.println("ALPHA_ACCESSIBILITY_PREVIOUS "+accessibilityGeometry(previous.getText()==null?String.valueOf(previous.getContentDescription()):previous.getText()));
+     System.out.println("ALPHA_ACCESSIBILITY_PREVIOUS "+accessibilityGeometry(previous.getText()==null?String.valueOf(previous.getContentDescription()):previous.getText().toString()));
      System.out.println("ALPHA_ACCESSIBILITY_NEXT "+accessibilityGeometry(label));
     }
    }
@@ -188,6 +204,12 @@ public final class AccessibilityInstrumentedTest {
    try(InputStream capture=new ParcelFileDescriptor.AutoCloseInputStream(automation().executeShellCommand("screencap -p "+screenshot))){
     capture.readAllBytes();System.out.println("ALPHA_ACCESSIBILITY_SCREENSHOT "+surface+" "+screenshot);
    }catch(Exception error){System.out.println("ALPHA_ACCESSIBILITY_SCREENSHOT_ERROR "+error.getClass().getName());}
+  }
+  if(!"Notification shade".equals(surface)&&(!seenAssistant||assistantGroups(root)!=1)){
+   // Only structural metadata from the owned fixture: no text fields, account or message data.
+   System.out.println("ALPHA_ACCESSIBILITY_ASSISTANT_GROUPS surface="+surface+" count="+assistantGroups(root)+" seen="+seenAssistant);
+   System.out.println("ALPHA_ACCESSIBILITY_ASSISTANT_DOM "+js("(()=>{const rows=[...document.querySelectorAll('[aria-label=\"Assistant controls\"]')];return JSON.stringify(rows.map(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return {layer:e.dataset.alphaLayer,role:e.getAttribute('role'),hidden:e.getAttribute('aria-hidden'),inert:e.inert,ancestorHidden:!!e.parentElement?.closest('[inert],[aria-hidden=\"true\"]'),display:s.display,visibility:s.visibility,opacity:s.opacity,bounds:{x:r.x,y:r.y,width:r.width,height:r.height},buttons:[...e.querySelectorAll('button')].map(b=>({label:b.getAttribute('aria-label'),disabled:b.disabled,visible:!!b.getClientRects().length}))};}));})()"));
+   for(AccessibilityNodeInfo node:nodes)if(assistantGroup(node)||"Type".equals(node.getContentDescription())||"Talk".equals(node.getContentDescription())||"Open conversation".equals(node.getContentDescription()))System.out.println("ALPHA_ACCESSIBILITY_ASSISTANT_NODE "+accessibilityGeometry(String.valueOf(node.getContentDescription())));
   }
   if(!"Notification shade".equals(surface))assertTrue(surface+": assistant controls form one final accessible group",seenAssistant&&assistantGroups(root)==1);
   assertTrue(surface+": TalkBack reaches actionable controls",actionable>0);
@@ -226,8 +248,13 @@ public final class AccessibilityInstrumentedTest {
   int previousFlags=configurator.getUiAutomationFlags();
   configurator.setUiAutomationFlags(AUTOMATION_FLAGS);
   String previous=shell("settings get system font_scale");
+  String previousServices=secure("get","enabled_accessibility_services",null),previousEnabled=secure("get","accessibility_enabled",null);
   UiDevice device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
   try{
+   secure("put","enabled_accessibility_services",(previousServices.isEmpty()||"null".equals(previousServices)?"":previousServices+":")+standInComponent());
+   secure("put","accessibility_enabled","1");
+   boolean bound=false;for(int i=0;i<150&&!bound;i++){bound=standInRunning();if(!bound)SystemClock.sleep(100);}
+   assertTrue("The stand-in screen reader is bound and listed to the app (running: "+runningServices()+")",bound);
    shell("settings put system font_scale 2.0");
    try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)){
     AppNavigation.liveMode();
@@ -268,12 +295,6 @@ public final class AccessibilityInstrumentedTest {
     handleNode();
     // The click itself is performed as those services perform it: with a screen reader bound, so
     // that WebView delivers default actions to the page (see ScreenReaderStandInService).
-    String previousServices=secure("get","enabled_accessibility_services",null),previousEnabled=secure("get","accessibility_enabled",null);
-    try{
-     secure("put","enabled_accessibility_services",(previousServices.isEmpty()||"null".equals(previousServices)?"":previousServices+":")+standInComponent());
-     secure("put","accessibility_enabled","1");
-     boolean bound=false;for(int i=0;i<150&&!bound;i++){bound=standInRunning();if(!bound)SystemClock.sleep(100);}
-     assertTrue("The stand-in screen reader is bound and listed to the app (running: "+runningServices()+")",bound);
      // WebView notices the new service on its own timer (it polls with a back-off of up to five
      // seconds) and then rebuilds its tree. Until it has, it still accepts the click and drops
      // it, so the click is repeated once a second while that switch is under way, and only then.
@@ -290,10 +311,6 @@ public final class AccessibilityInstrumentedTest {
      assertTrue("The accessibility click action is accepted again (node: "+target+"; ancestry: "+chain(target)+")",target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));
      assertTrue("A single accessibility click opens the panel once WebView serves a screen reader (node: "+chain(target)+")",shadeOpens(50));
      device.pressBack();until(SHADE_CLOSED);
-    }finally{
-     restoreSecure("enabled_accessibility_services",previousServices);restoreSecure("accessibility_enabled",previousEnabled);
-     for(int i=0;i<100&&standInRunning();i++)SystemClock.sleep(100);
-    }
     // 4. A pull down that starts on the handle opens the panel. On the launcher flavor the handle
     // sits below the status bar inset Android reports, outside the system's top-edge zone.
     device.swipe(handleX,handleY,handleX,handleY+web.height()/3,20);
@@ -304,8 +321,12 @@ public final class AccessibilityInstrumentedTest {
     open("Home");js(AppNavigation.type());until(AppNavigation.composer());talkBackOrder(device,"Composer");
    }
   }finally{
-   shell("settings put system font_scale "+(previous.isEmpty()||"null".equals(previous)?"1.0":previous));
-   configurator.setUiAutomationFlags(previousFlags);
+   try{
+    restoreSecure("enabled_accessibility_services",previousServices);restoreSecure("accessibility_enabled",previousEnabled);
+   }finally{
+    try{shell("settings put system font_scale "+(previous.isEmpty()||"null".equals(previous)?"1.0":previous));}
+    finally{configurator.setUiAutomationFlags(previousFlags);}
+   }
   }
  }
 }

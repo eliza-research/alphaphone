@@ -327,10 +327,10 @@
     "sourceCommit": "f3ccefd382bd40b29b06117c97da366c1e9b75a7",
     "dirtySource": true,
     "report": "docs/full-product-completion-audit.md",
-    "scope": "Historical developer APK campaigns on owned x86_64 API 37 Cuttlefish guests; no resident payload, real Cloud login/Cerebras, release-image or physical acceptance. Latest CameraFlow and NotificationChannels campaigns pass both variants; earlier launcher share-receipt timeouts remain unexplained and retained. CloudDelegationCallback passes synthetic callbacks only. SelectedDocument passes four ordinary methods with process-restart skipped. CalendarAvailability, CalendarRange and CalendarTruncation pass both variants. Requirement statuses remain unchanged. CalendarCreationRecovery and intercepted ClockAgentReview pass both variants in isolated secondary users with owner restoration/removal. After merging main through ca76ac67 at 73b003a5, ReminderDeletionStorage passes both variants with durable owner-restoration/removal receipts. BrowserCookiePolicy passes both methods in both variants using synthetic HTTPS. Accessibility still fails both variants at the Home assistant-group assertion on WebView 157. NotesStorageDurability passes all four methods standalone; launcher passes three and times out awaiting the capacity-refusal renderer state. Current secure-camera source verification passes, but the old image lacks its SystemUI gesture target. No requirement status is upgraded by these partial checks.",
+    "scope": "Historical developer APK campaigns on owned x86_64 API 37 Cuttlefish guests; no resident payload, real Cloud login/Cerebras, release-image or physical acceptance. Latest CameraFlow and NotificationChannels campaigns pass both variants; earlier launcher share-receipt timeouts remain unexplained and retained. CloudDelegationCallback passes synthetic callbacks only. SelectedDocument passes four ordinary methods with process-restart skipped. CalendarAvailability, CalendarRange and CalendarTruncation pass both variants. Requirement statuses remain unchanged. CalendarCreationRecovery and intercepted ClockAgentReview pass both variants in isolated secondary users with owner restoration/removal. After merging main through ca76ac67 at 73b003a5, ReminderDeletionStorage passes both variants with durable owner-restoration/removal receipts. BrowserCookiePolicy passes both methods in both variants using synthetic HTTPS. Accessibility now reads native containerTitle: both variants satisfy the Home assistant-group assertion but fail unlabelled full-screen clickable nodes/reading order on WebView 157; later surfaces are not reached. NotesStorageDurability passes all four methods standalone; launcher passes three and times out awaiting the capacity-refusal renderer state. Current secure-camera source verification passes, but the old image lacks its SystemUI gesture target. No requirement status is upgraded by these partial checks.",
     "observedNativeClasses": 89,
     "unobservedNativeClasses": 65,
-    "evidenceSnapshot": "test-results/full-product-audit/native-coverage-postmerge432.json",
+    "evidenceSnapshot": "test-results/full-product-audit/native-coverage-accessibility-native-tree.json",
     "exactClassReferences": [
       {
         "id": "AP-01",
@@ -468,12 +468,12 @@
               {
                 "variant": "standalone",
                 "status": "failed",
-                "receipt": "test-results/full-product-audit/cuttlefish-merge426-accessibility157/results.json"
+                "receipt": "test-results/full-product-audit/cuttlefish-accessibility-native-tree157/results.json"
               },
               {
                 "variant": "launcher",
                 "status": "failed",
-                "receipt": "test-results/full-product-audit/cuttlefish-merge426-accessibility157/results.json"
+                "receipt": "test-results/full-product-audit/cuttlefish-accessibility-native-tree157/results.json"
               }
             ]
           },

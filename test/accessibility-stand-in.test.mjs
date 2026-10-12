@@ -1,4 +1,4 @@
-// AccessibilityInstrumentedTest performs its accessibility click with a stand-in screen reader
+// AccessibilityInstrumentedTest performs its tree traversal and accessibility click with a stand-in screen reader
 // bound, because WebView drops default actions in the reduced accessibility mode it serves when
 // no screen reader is running (ScreenReaderStandInService). These are source checks only: that
 // the stand-in exists in the instrumentation APK and nowhere else, declares what makes WebView
@@ -34,17 +34,18 @@ test('it declares what WebView reads to choose its accessibility mode, and asks 
   assert.doesNotMatch(config, /flagRequestTouchExplorationMode|canRequestTouchExplorationMode|canPerformGestures|flagRequestFilterKeyEvents/);
 });
 
-test('the test binds it for the click only, does not suspend it, and restores what it changed', () => {
+test('the test binds before traversal, does not suspend it, and restores what it changed', () => {
   const source = read('android/app/src/androidTest/java/ai/elizaresearch/alphaphone/AccessibilityInstrumentedTest.java');
   assert.match(source, /FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES/);
   assert.match(source, /setUiAutomationFlags\(AUTOMATION_FLAGS\)/);
   assert.match(source, /configurator\.setUiAutomationFlags\(previousFlags\)/);
   // No connection without the flag: it would suspend the stand-in for as long as it lasted.
   assert.doesNotMatch(source, /getUiAutomation\(\)/);
-  const step = source.slice(source.indexOf('String previousServices='), source.indexOf('// 4. A pull down'));
+  const step = source.slice(source.indexOf('String previousServices='), source.length);
   assert.match(step, /secure\("put","enabled_accessibility_services"/);
   assert.match(step, /assertTrue\("The stand-in screen reader is bound/);
-  assert.match(step, /finally\{\s*restoreSecure\("enabled_accessibility_services",previousServices\);restoreSecure\("accessibility_enabled",previousEnabled\);/);
+  assert.match(step, /finally\{\s*try\{\s*restoreSecure\("enabled_accessibility_services",previousServices\);restoreSecure\("accessibility_enabled",previousEnabled\);/);
+  assert.ok(step.indexOf('secure("put","enabled_accessibility_services"') < step.indexOf('talkBackOrder(device,"Home")'));
   // The click is still required to open the panel, and once more with a single attempt.
   assert.match(step, /assertTrue\("The accessibility click action opens the panel/);
   assert.match(step, /assertTrue\("A single accessibility click opens the panel/);
