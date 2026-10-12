@@ -171,6 +171,23 @@ and runs each exact method in a fresh secondary user. It retains the fixture if
 package termination or cleanup cannot be proven. These synthetic read/draft tests
 do not establish paired-host workflow execution.
 
+The default workflow campaign profile is `production`: its recovery phase checks
+that a cold signed-out product startup withdraws a previously persisted synthetic
+approval, invalidates its old Android tap, and handles an owner change. It does
+not claim that an unauthenticated renderer restores the previous owner.
+Use a separately archived test-mocks build and
+`--profile=authenticated-fixture` for the two restoration cases. Each case first
+runs a standard-runner preparation in the same disposable user, persisting an
+explicitly synthetic loopback session through the real renderer initializer.
+A separate helper process then serves only the local synthetic identity/agent
+responses while the main process dies and restarts. One case restores the same
+owner and captures the exact native tap route; the other removes that synthetic
+credential and verifies settled signed-out withdrawal. The report names its
+profile and preserves preparation output separately from the helper result.
+Neither profile proves an actual account session, authenticated workflow review,
+or execution of a phone action. A test-mocks preparation skip or failure fails
+the authenticated fixture profile; it never counts as product acceptance.
+
 Native permission, restart, one-off reminder, and recurrence runners share
 `scripts/native-test-fixture.mjs`: AlphaPhone owns the exact archived APK pair
 and SDK configuration; upstream owns the emulator lease, isolated user, strict

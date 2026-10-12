@@ -1,7 +1,9 @@
 /** Archived workflow scenarios; upstream owns leased APK and disposable-user lifecycles.
  * Phases: `workflow` (phone-step reads and drafts), `approval-notice` (phone-step approval
  * notice builders, OS posting, tap route and withdrawal) and `approval-notice-recovery` (a pending
- * approval notice across the death of the app's main process, and across an owner change). Every
+ * signed-out production cold start and owner change). An explicit
+ * --profile=authenticated-fixture uses test-mocks APKs and adds standard-runner preparation
+ * before helper-process owner restoration/missing-credential cold starts. Every
  * case runs on both distributions from one hash-admitted archive pair; any failed, skipped or
  * missing case fails the campaign.
  * `--variant=standalone|launcher` and `--phase=workflow|approval-notice|approval-notice-recovery`
@@ -22,14 +24,16 @@ import {androidEnv} from './toolchain.mjs';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {verifyPinnedUpstream} from './pinned-upstream-source.mjs';
+import {requireInstrumentationSuccess} from './instrumentation-result.mjs';
 const repository=path.resolve(import.meta.dirname,'..');
 verifyPinnedUpstream(repository);
 const {runIsolatedAndroidTest}=await import('../vendor/eliza/packages/app/scripts/lib/isolated-android-test.mjs');
 const {withIsolatedAndroidUser}=await import('../vendor/eliza/packages/app/scripts/lib/isolated-android-user.mjs');
 const {acquireDeviceLease}=await import('../vendor/eliza/packages/app/scripts/lib/device-lease.ts');
-const PHASES=['workflow','approval-notice','approval-notice-recovery'];
+const PHASES=['workflow','approval-notice','approval-notice-recovery','authenticated-notice-recovery'];
 const options=process.argv.slice(2);
-assert.ok(options.every(arg=>/^--(?:variant|phase)=.+$/.test(arg)),'Unknown workflow campaign option');assert.equal(new Set(options.map(arg=>arg.split('=')[0])).size,options.length,'Duplicate workflow campaign option');
+assert.ok(options.every(arg=>/^--(?:variant|phase|profile)=.+$/.test(arg)),'Unknown workflow campaign option');assert.equal(new Set(options.map(arg=>arg.split('=')[0])).size,options.length,'Duplicate workflow campaign option');
+const profile=options.find(arg=>arg.startsWith('--profile='))?.slice(10)??'production';assert.ok(['production','authenticated-fixture'].includes(profile),'Unknown profile');
 const requestedVariant=options.find(arg=>arg.startsWith('--variant='))?.slice(10),requestedPhase=options.find(arg=>arg.startsWith('--phase='))?.slice(8);
 assert.ok(!requestedVariant||['standalone','launcher'].includes(requestedVariant),'Unknown variant');assert.ok(!requestedPhase||PHASES.includes(requestedPhase),'Unknown phase');
 const serial=process.env.ANDROID_SERIAL,avd=process.env.ALPHA_WORKFLOW_TEST_AVD,abi=process.env.ALPHA_WORKFLOW_TEST_ABI;
@@ -44,14 +48,17 @@ const hash=file=>crypto.createHash('sha256').update(fs.readFileSync(file)).diges
 for(const variant of ['standalone','launcher'])for(const kind of ['debug','androidTest']){
  const name=`${variant}-${kind}.apk`;assert.equal(hash(path.join(archive,name)),manifest[name],'Immutable archive hash mismatch');
 }
-const cases=[{class:'WorkflowPhoneNativeInstrumentedTest',method:'privateReadResultSurvivesRecreationButNeverExpandsPassiveHistory',gate:'workflowPhoneNative',grant:true}, {class:'WorkflowPhoneNativeInstrumentedTest',method:'selectedCalendarQueryExcludesOtherAccountsAndRefusesOverflow',gate:'workflowPhoneNative',grant:true}, {class:'WorkflowPhoneNativeInstrumentedTest',method:'morningAndEveningShareOneCalendarSourceWithDistinctWindows',gate:'workflowPhoneNative',grant:true}, {class:'WorkflowPhoneNativeInstrumentedTest',method:'deniedCalendarGrantReturnsNoEvents',gate:'workflowPhoneDenied',grant:false}, {class:'WorkflowDraftNativeInstrumentedTest',method:'encryptedDraftIsAtomicAndSurvivesRecreation',gate:'workflowDraftNative',grant:false},
+const productionCases=[{class:'WorkflowPhoneNativeInstrumentedTest',method:'privateReadResultSurvivesRecreationButNeverExpandsPassiveHistory',gate:'workflowPhoneNative',grant:true}, {class:'WorkflowPhoneNativeInstrumentedTest',method:'selectedCalendarQueryExcludesOtherAccountsAndRefusesOverflow',gate:'workflowPhoneNative',grant:true}, {class:'WorkflowPhoneNativeInstrumentedTest',method:'morningAndEveningShareOneCalendarSourceWithDistinctWindows',gate:'workflowPhoneNative',grant:true}, {class:'WorkflowPhoneNativeInstrumentedTest',method:'deniedCalendarGrantReturnsNoEvents',gate:'workflowPhoneDenied',grant:false}, {class:'WorkflowDraftNativeInstrumentedTest',method:'encryptedDraftIsAtomicAndSurvivesRecreation',gate:'workflowDraftNative',grant:false},
  {class:'WorkflowApprovalNoticeInstrumentedTest',method:'approvalAndStepBuildersAreRedactedAndExpire',gate:'workflowApprovalNotice',grant:false,phase:'approval-notice'},
  // The OS post and tap need the runtime notification permission in the owned secondary user.
  {class:'WorkflowApprovalNoticeInstrumentedTest',method:'approvalNoticeOpensItsRunOnceAndIsWithdrawnOnDecision',gate:'workflowApprovalNotice',grant:false,notifications:true,phase:'approval-notice'},
- // A pending approval notice while the main process dies: the helper-process runner keeps the test alive.
- {class:'WorkflowApprovalNoticeProcessDeathInstrumentedTest',method:'pendingApprovalNoticeSurvivesProcessDeathAndOpensItsExactApprovalOnce',gate:'workflowApprovalNoticeProcessDeath',grant:false,notifications:true,phase:'approval-notice-recovery',runner:'WorkflowNoticeProcessRunner'},
+ // A persisted native notice is withdrawn when the actual flag-off initializer settles signed out.
+ {class:'WorkflowApprovalNoticeProcessDeathInstrumentedTest',method:'productionSignedOutColdStartWithdrawsPersistedSyntheticApproval',gate:'workflowApprovalNoticeProcessDeath',grant:false,notifications:true,phase:'approval-notice-recovery',runner:'WorkflowNoticeProcessRunner'},
  // A pending approval notice while the connected owner changes (synthetic owner IDs; no account).
  {class:'WorkflowApprovalNoticeInstrumentedTest',method:'ownerChangeWithdrawsThePendingApprovalNoticeAndItsTapOpensNothing',gate:'workflowApprovalNotice',grant:false,notifications:true,phase:'approval-notice-recovery'}];
+const authenticatedCases=['pendingApprovalNoticeSurvivesProcessDeathAndOpensItsExactApprovalOnce','definitiveSignedOutColdStartWithdrawsApprovalAndInvalidatesOriginalTap'].map(method=>({class:'WorkflowApprovalNoticeProcessDeathInstrumentedTest',method,gate:'workflowApprovalNoticeProcessDeath',grant:false,notifications:true,phase:'authenticated-notice-recovery',runner:'WorkflowNoticeProcessRunner',prepareOwner:true}));
+const cases=profile==='production'?productionCases:authenticatedCases;
+assert.ok(!requestedPhase||cases.some(test=>(test.phase??'workflow')===requestedPhase),'Phase does not belong to selected profile');
 assert.ok(cases.every(test=>PHASES.includes(test.phase??'workflow')),'Every case belongs to a named phase');
 // The two instrumentation components of the admitted test APK. A case names the one it runs under; the other is declared as additional, so upstream admits exactly this pair for every case.
 const runners=['androidx.test.runner.AndroidJUnitRunner',pkg+'.WorkflowNoticeProcessRunner'];
@@ -69,7 +76,7 @@ const apks=Object.fromEntries(variants.map(variant=>[variant,{appSha256:manifest
 // A selection runs fewer cases; the report always lists the whole campaign, so the rest read not-run.
 const selectedVariants=variants.filter(variant=>!requestedVariant||variant===requestedVariant),selectedCases=cases.filter(test=>!requestedPhase||phaseOf(test)===requestedPhase);
 const selection=requestedVariant||requestedPhase?{variants:selectedVariants,phases:[...new Set(selectedCases.map(phaseOf))]}:null;
-const report={serial,avd,abi,archive,apks,nativeOnly:true,pairedHostTested:false,allWorkflowFlowsAccepted:false,passed:false,...(selection?{selection,selectionPassed:false}:{}),phases:{},results:[]};
+const report={serial,avd,abi,archive,apks,profile,nativeOnly:true,pairedHostTested:false,allWorkflowFlowsAccepted:false,passed:false,...(selection?{selection,selectionPassed:false}:{}),phases:{},results:[]};
 const summarize=()=>{report.phases={};for(const test of cases){const name=phaseOf(test),phase=report.phases[name]??={expected:0,passed:0,cases:[]};for(const variant of variants){const method=test.class+'#'+test.method,row=report.results.find(item=>item.variant===variant&&item.method===method);phase.expected++;if(row?.passed)phase.passed++;phase.cases.push({variant,method,status:row?(row.passed?'passed':'failed'):'not-run'});}}for(const phase of Object.values(report.phases))phase.complete=phase.passed===phase.expected;report.passed=Object.values(report.phases).every(phase=>phase.complete);};
 const persist=()=>{summarize();fs.writeFileSync(path.join(output,'result.json'),JSON.stringify(report,null,2)+'\n');};
 process.once('SIGINT',cancel);process.once('SIGTERM',cancel);
@@ -91,7 +98,12 @@ try{
       // The bytes upstream pins and installs are the manifest pair this report records, checked before any install.
       preflightVariant:({record:pinned})=>{assert.equal(pinned.appSha256,apks[variant].appSha256,'App changed after archive admission');assert.equal(pinned.testSha256,apks[variant].testSha256,'Test APK changed after archive admission');},
       prepareVariant:async()=>{for(const permission of ['READ_CALENDAR','WRITE_CALENDAR']){await call(['shell','pm',test.grant?'grant':'revoke','--user',String(user),pkg,'android.permission.'+permission],cancellation.signal);await call(['shell','pm','clear-permission-flags','--user',String(user),pkg,'android.permission.'+permission,'user-set','user-fixed'],cancellation.signal);}
-       if(test.notifications!==undefined){await call(['shell','pm',test.notifications?'grant':'revoke','--user',String(user),pkg,'android.permission.POST_NOTIFICATIONS'],cancellation.signal);await call(['shell','pm','clear-permission-flags','--user',String(user),pkg,'android.permission.POST_NOTIFICATIONS','user-set','user-fixed'],cancellation.signal);}},
+       if(test.notifications!==undefined){await call(['shell','pm',test.notifications?'grant':'revoke','--user',String(user),pkg,'android.permission.POST_NOTIFICATIONS'],cancellation.signal);await call(['shell','pm','clear-permission-flags','--user',String(user),pkg,'android.permission.POST_NOTIFICATIONS','user-set','user-fixed'],cancellation.signal);}
+       if(test.prepareOwner){
+        const raw=await call(['shell','am','instrument','--user',String(user),'-w','-r','-e','class',pkg+'.'+test.class+'#'+test.method,'-e',test.gate,'1','-e','workflowOwnerPhase','prepare',pkg+'.test/androidx.test.runner.AndroidJUnitRunner'],cancellation.signal);
+        fs.writeFileSync(path.join(directory,'prepare.log'),raw);record.preparation=requireInstrumentationSuccess(raw,[pkg+'.'+test.class]);assert.equal(record.preparation.totalTests,1);assert.deepEqual(record.preparation.cases,[pkg+'.'+test.class+'#'+test.method]);persist();
+        await call(['shell','am','force-stop','--user',String(user),pkg],cancellation.signal);
+       }},
      });
     }catch(error){failure=error;record.error=error.message;}
     let proof;try{proof=JSON.parse(fs.readFileSync(path.join(directory,'verification.json')));}catch{/* Retain the fixture if cleanup is unproven. */}

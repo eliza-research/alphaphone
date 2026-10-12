@@ -34,7 +34,7 @@ function approvalNoticePhase(r){
 }
 // Same full campaign run: the recovery phase, its two runners, gates, grants and report.
 function approvalNoticeRecoveryPhase(r){
- const pkg='ai.elizaresearch.alphaphone',death=pkg+'.WorkflowApprovalNoticeProcessDeathInstrumentedTest#pendingApprovalNoticeSurvivesProcessDeathAndOpensItsExactApprovalOnce',change=approvalClass+'#ownerChangeWithdrawsThePendingApprovalNoticeAndItsTapOpensNothing';
+ const pkg='ai.elizaresearch.alphaphone',death=pkg+'.WorkflowApprovalNoticeProcessDeathInstrumentedTest#productionSignedOutColdStartWithdrawsPersistedSyntheticApproval',change=approvalClass+'#ownerChangeWithdrawsThePendingApprovalNoticeAndItsTapOpensNothing';
  const all=r.commands.filter(a=>a.includes('instrument')).map(a=>a[a.indexOf('class')+1]);
  // Each distribution runs the phase last, process death before the owner change.
  assert.deepEqual(all.slice(7,9),[death,change]);assert.deepEqual(all.slice(16,18),[death,change]);
@@ -75,7 +75,7 @@ test('a skipped or failed recovery case names itself and fails the selection and
  for(const mode of ['skipped','wrong-method','wrong-terminal','summary-only']){
   const r=exercise(mode,'workflow',['--phase=approval-notice-recovery','--variant=launcher']);assert.notEqual(r.code,0,mode);
   assert.equal(r.record.passed,false,mode);assert.equal(r.record.selectionPassed,false,mode);
-  assert.deepEqual([r.record.failure.variant,r.record.failure.phase],['launcher','approval-notice-recovery'],mode);assert.match(r.record.failure.method,/WorkflowApprovalNoticeProcessDeathInstrumentedTest#pendingApprovalNoticeSurvivesProcessDeathAndOpensItsExactApprovalOnce$/,mode);
+  assert.deepEqual([r.record.failure.variant,r.record.failure.phase],['launcher','approval-notice-recovery'],mode);assert.match(r.record.failure.method,/WorkflowApprovalNoticeProcessDeathInstrumentedTest#productionSignedOutColdStartWithdrawsPersistedSyntheticApproval$/,mode);
   // The first failure stops the phase: the owner-change case is not run and reads not-run, never passed.
   assert.equal(r.record.results.length,1,mode);assert.equal(r.commands.filter(a=>a.includes('instrument')&&a.includes('-w')).length>=1,true,mode);
   assert.deepEqual(r.record.phases['approval-notice-recovery'].cases.filter(row=>row.variant==='launcher').map(row=>row.status),['failed','not-run'],mode);
@@ -132,4 +132,15 @@ test('a selected variant and phase run only those cases and never read as the wh
 });
 test('an unknown or repeated selection is refused before the emulator is touched',()=>{
  for(const extra of [['--variant=tablet'],['--phase=notice'],['--phase=workflow','--phase=workflow'],['--all']]){const r=exercise('pass','workflow',extra);assert.notEqual(r.code,0,extra.join(' '));assert.equal(r.commands.length,0,extra.join(' '));assert.equal(r.record,null);}
+});
+
+test('authenticated fixture profile prepares each owner in the same user before helper process execution',()=>{
+ const r=exercise('pass','workflow',['--profile=authenticated-fixture']);assert.equal(r.code,0,r.stderr);assert.equal(r.record.profile,'authenticated-fixture');assert.equal(r.record.results.length,4);assert.equal(r.record.passed,true);assert.equal(r.record.phases.workflow,undefined);
+ const calls=r.commands.filter(a=>a.includes('instrument'));assert.equal(calls.length,8);
+ for(let i=0;i<calls.length;i+=2){const prepare=calls[i],run=calls[i+1];assert.equal(prepare[prepare.indexOf('workflowOwnerPhase')+1],'prepare');assert.equal(prepare[prepare.indexOf('--user')+1],run[run.indexOf('--user')+1]);assert.equal(prepare[prepare.indexOf('class')+1],run[run.indexOf('class')+1]);assert.match(prepare.at(-1),/AndroidJUnitRunner$/);assert.match(run.at(-1),/WorkflowNoticeProcessRunner$/);}
+ assert.ok(r.record.results.every(row=>row.preparation.totalTests===1&&row.passed&&row.userLifecycle.removed));
+});
+for(const mode of ['skipped','wrong-method','timeout'])test(`authenticated preparation ${mode} stops before helper dispatch`,()=>{
+ const r=exercise(mode,'workflow',['--profile=authenticated-fixture','--variant=standalone']);assert.notEqual(r.code,0,mode);assert.equal(r.record.profile,'authenticated-fixture');assert.equal(r.record.passed,false);assert.equal(r.record.results.length,1);
+ const calls=r.commands.filter(a=>a.includes('instrument')&&a.includes('-w'));assert.equal(calls.length,1);assert.equal(calls[0][calls[0].indexOf('workflowOwnerPhase')+1],'prepare');assert.match(calls[0].at(-1),/AndroidJUnitRunner$/);assert.ok(!calls.some(a=>a.at(-1).endsWith('WorkflowNoticeProcessRunner')));assert.equal(r.state.user,'0');assert.equal(r.state.created,false);
 });
