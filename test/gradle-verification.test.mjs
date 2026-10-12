@@ -142,3 +142,8 @@ test('a host-specific archive is inserted in order and only once', () => {
   assert.deepEqual(parseVerificationMetadata(next).components[0].artifacts.map(artifact => artifact.name), ['aapt2-1-linux.jar', 'aapt2-1-osx.jar', 'aapt2-1-windows.jar', 'aapt2-1.pom']);
   assert.throws(() => addArtifact(sample, {group: 'g', name: 'other', version: '1'}, 'x.jar', 'f'.repeat(64), 'origin'), /is not in the metadata/);
 });
+
+test('staged Java-only native patches retain their authenticated dependency descriptors', () => {
+ assert.ok(buildScripts(ROOT).includes('vendor/eliza/plugins/plugin-native-secure-store/android/build.gradle'));
+ assert.ok(!buildScripts(ROOT).some(name=>name.includes('android/elizaos-capacitor-secure-store/')));
+});

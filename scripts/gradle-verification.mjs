@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {canonicalNativeGradleSettings} from './native-gradle-descriptors.mjs';
 /**
  * Gradle dependency verification metadata (android/gradle/verification-metadata.xml).
  *
@@ -135,7 +136,7 @@ export function repositoryProblem(entry) {
  * speech module, Capacitor from node_modules and the plugins from the pinned upstream checkout).
  */
 export function buildScripts(root) {
-  const settings = fs.readFileSync(path.join(root, 'android/settings.gradle'), 'utf8');
+  const settings = canonicalNativeGradleSettings(fs.readFileSync(path.join(root, 'android/settings.gradle'), 'utf8'));
   const directories = new Map();
   for (const include of settings.matchAll(/^\s*include\s+(.+)$/gm))
     for (const name of include[1].matchAll(/['"](:[^'"]+)['"]/g)) directories.set(name[1], name[1].slice(1).replaceAll(':', '/'));
