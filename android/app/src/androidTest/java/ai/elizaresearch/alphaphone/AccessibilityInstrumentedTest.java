@@ -59,18 +59,20 @@ public final class AccessibilityInstrumentedTest {
  private static boolean standInRunning(){return runningServices().contains(ScreenReaderStandInService.class.getName());}
  /** The handle as accessibility services see it: found by its name, then the clickable node that carries it. */
  private static android.view.accessibility.AccessibilityNodeInfo handleNode(){
-  android.view.accessibility.AccessibilityNodeInfo node=null;
-  for(int i=0;i<50&&node==null;i++){
+  android.view.accessibility.AccessibilityNodeInfo target=null;
+  for(int i=0;i<50;i++){
    android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();
-   // The tree is walked: WebView's node provider answers findAccessibilityNodeInfosByText with an
-   // empty list for every query (measured on WebView 133, API 36), so that lookup cannot find a page control.
-   if(root!=null)node=named(root,"Open notifications",0);
-   if(node==null)SystemClock.sleep(100);
+   // Reopening follows a modal tree rebuild. DOM aria-hidden can settle before the AX tree;
+   // refresh the cached nodes and wait for a current actionable handle without clicking it.
+   if(root!=null&&root.refresh()){
+    android.view.accessibility.AccessibilityNodeInfo node=named(root,"Open notifications",0);
+    target=node;while(target!=null&&!target.isClickable())target=target.getParent();
+    if(target!=null&&target.refresh()&&target.isClickable()&&target.isEnabled()&&target.isVisibleToUser())return target;
+   }
+   SystemClock.sleep(100);
   }
-  assertNotNull("The handle is exposed to accessibility services by its name",node);
-  android.view.accessibility.AccessibilityNodeInfo target=node;while(target!=null&&!target.isClickable())target=target.getParent();
-  assertNotNull("The handle is a clickable accessibility node",target);
-  return target;
+  fail("The handle is a current visible enabled clickable accessibility node (last: "+(target==null?"none":chain(target))+")");
+  return null;
  }
  /** For a failure message: the node and its ancestors, with whether each is enabled (WebView drops a click on a disabled node or under one). */
  private static String chain(android.view.accessibility.AccessibilityNodeInfo node){
@@ -257,7 +259,7 @@ public final class AccessibilityInstrumentedTest {
      device.pressBack();until(SHADE_CLOSED);
      // With WebView in that mode one click is enough, every time: no second attempt here.
      target=handleNode();
-     assertTrue("The accessibility click action is accepted again",target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));
+     assertTrue("The accessibility click action is accepted again (node: "+target+"; ancestry: "+chain(target)+")",target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));
      assertTrue("A single accessibility click opens the panel once WebView serves a screen reader (node: "+chain(target)+")",shadeOpens(50));
      device.pressBack();until(SHADE_CLOSED);
     }finally{
