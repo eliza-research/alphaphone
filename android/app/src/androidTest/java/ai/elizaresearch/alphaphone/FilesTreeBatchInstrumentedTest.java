@@ -7,7 +7,6 @@ import android.net.Uri;
 import android.os.SystemClock;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
-import android.view.KeyEvent;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import java.util.*;
@@ -26,6 +25,25 @@ public class FilesTreeBatchInstrumentedTest {
  private void until(String js)throws Exception{long end=SystemClock.elapsedRealtime()+30000;while(SystemClock.elapsedRealtime()<end){if("true".equals(eval("Boolean("+js+")")))return;SystemClock.sleep(150);}fail("Batch condition: "+js+"; status="+eval("JSON.stringify([...document.querySelectorAll('[role=status]')].map(e=>e.textContent.slice(0,200)))"));}
  private String button(String label){return "document.querySelector('button[aria-label='+"+JSONObject.quote(JSONObject.quote(label))+"+']')";}
  private void click(String label)throws Exception{until(button(label)+" && !("+button(label)+").disabled");eval("("+button(label)+").click()");}
+ /** Chooser dispatch precedes its input focus; Back must cancel Android's chooser. */
+ private void chooserForeground()throws Exception{
+  android.app.UiAutomation ui=InstrumentationRegistry.getInstrumentation().getUiAutomation();
+  for(int i=0;i<150;i++){
+   android.view.accessibility.AccessibilityNodeInfo root=ui.getRootInActiveWindow();
+   if(root!=null&&"com.android.intentresolver".contentEquals(root.getPackageName()))return;
+   SystemClock.sleep(100);
+  }
+  fail("System chooser acquired input focus before cancellation");
+ }
+ private void mainForeground()throws Exception{
+  for(int i=0;i<100;i++){
+   java.util.concurrent.atomic.AtomicBoolean focused=new java.util.concurrent.atomic.AtomicBoolean();
+   WebViewTestDriver.withActivity(MainActivity.class,a->focused.set(a.hasWindowFocus()));
+   if(focused.get())return;
+   SystemClock.sleep(100);
+  }
+  fail("System chooser returned to the real main Activity");
+ }
  private int rows()throws Exception{return Integer.parseInt(eval("document.querySelectorAll('[data-alpha-subview=files-folder] button[aria-label^=\"Open file-\"],[data-alpha-subview=files-folder] button[aria-label^=\"Select file-\"],[data-alpha-subview=files-folder] button[aria-label^=\"Deselect file-\"]').length"));}
  private List<String> names(ContentResolver resolver,Uri tree,Uri folder)throws Exception{List<String> values=new ArrayList<>();Uri query=DocumentsContract.buildChildDocumentsUriUsingTree(tree,DocumentsContract.getDocumentId(folder));try(Cursor c=resolver.query(query,new String[]{DocumentsContract.Document.COLUMN_DISPLAY_NAME},null,null,null)){assertNotNull(c);while(c.moveToNext())values.add(c.getString(0));}return values;}
  private Uri child(ContentResolver resolver,Uri tree,Uri folder,String name)throws Exception{Uri query=DocumentsContract.buildChildDocumentsUriUsingTree(tree,DocumentsContract.getDocumentId(folder));try(Cursor c=resolver.query(query,new String[]{DocumentsContract.Document.COLUMN_DOCUMENT_ID,DocumentsContract.Document.COLUMN_DISPLAY_NAME},null,null,null)){assertNotNull(c);while(c.moveToNext())if(name.equals(c.getString(1)))return DocumentsContract.buildDocumentUriUsingTree(tree,c.getString(0));}return null;}
@@ -71,7 +89,7 @@ public class FilesTreeBatchInstrumentedTest {
     assertEquals(Intent.ACTION_SEND_MULTIPLE,send.getAction());ArrayList<Uri> streams=send.getParcelableArrayListExtra(Intent.EXTRA_STREAM);assertNotNull(streams);assertEquals(2,streams.size());
     assertTrue("Recipient gets read access",(send.getFlags()&Intent.FLAG_GRANT_READ_URI_PERMISSION)!=0);assertEquals("Never write access",0,send.getFlags()&Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
     assertEquals(2,send.getClipData().getItemCount());
-    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+    chooserForeground();WebViewTestDriver.pressBack();mainForeground();
     // Confirmed permanent delete of two files with per-item provider confirmation.
     click("Select files");click("Select file-006.txt");click("Select file-007.txt");click("Delete selected");
     until("document.querySelector('[role=dialog]')?.textContent.includes('cannot be undone')");click("Delete permanently");until("!document.querySelector('[role=dialog]')");
