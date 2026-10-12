@@ -38,6 +38,7 @@ import { fontLicenceCheck, fontLicenceLine } from "./font-license-blockers.mjs";
 import { licenceFlagLines, licenceFlagRecords } from "./licence-policy.mjs";
 import { packagedGzipProblems } from "./android-gzip-assets.mjs";
 
+import { preparePatchedNative } from './prepare-patched-native.mjs';
 const USAGE = "Usage: node scripts/verify-apks.mjs [--test-mocks] [--allow-unpackaged-runtime]";
 const args = process.argv.slice(2);
 for (const arg of args)
@@ -230,6 +231,7 @@ fs.writeFileSync(
       mappings,
       instrumentation,
       upstream: JSON.parse(fs.readFileSync("upstream.lock.json")),
+      nativePatches: preparePatchedNative(),
       results,
       runtimePackaging,
     },

@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "baseCommit": "13c98575987a121decc45b161b0c8a4ee698554e",
+  "patches": [
+    {
+      "file": "secure-store-bounded-memory.patch",
+      "sha256": "de7b1337dea5ca91dfcc7a630e9313a891750fa2b4bca9a146ab1d1d554ae80a",
+      "module": "plugins/plugin-native-secure-store/android",
+      "targets": [
+        {
+          "path": "plugins/plugin-native-secure-store/android/src/main/java/ai/eliza/plugins/securestore/nativeonly/JsonCredentialSlots.java",
+          "beforeSha256": "776e98942aa9db5a57cedc0b070e855a2c8dc176341fa9a390c298a1ead9daeb",
+          "afterSha256": "8983ea3d6570ade2340f21c289751af5ab5aa9ae2db1e192e147c71af805d5be"
+        }
+      ]
+    }
+  ]
+}

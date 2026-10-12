@@ -24,8 +24,13 @@ include ':eliza-calendar'
 project(':eliza-calendar').projectDir = new File('../vendor/eliza/plugins/plugin-native-calendar/android')
 include ':eliza-reminders'
 project(':eliza-reminders').projectDir = new File('../vendor/eliza/plugins/plugin-native-reminders/android')
+// Admission authenticates the pin, patch bytes and complete staged source before Gradle compiles it.
+def nativePatchProcess = new ProcessBuilder('node', '../scripts/prepare-patched-native.mjs').directory(settingsDir).redirectError(ProcessBuilder.Redirect.INHERIT).start()
+def nativePatchOutput = nativePatchProcess.inputStream.getText('UTF-8')
+if (nativePatchProcess.waitFor() != 0) throw new GradleException('Native patch admission failed')
+def nativePatchSource = new groovy.json.JsonSlurper().parseText(nativePatchOutput)
 include ':elizaos-capacitor-secure-store'
-project(':elizaos-capacitor-secure-store').projectDir = new File('../vendor/eliza/plugins/plugin-native-secure-store/android')
+project(':elizaos-capacitor-secure-store').projectDir = new File(nativePatchSource.root, 'plugins/plugin-native-secure-store/android')
 include ':eliza-passwords'
 project(':eliza-passwords').projectDir = new File('../vendor/eliza/plugins/plugin-native-passwords/android')
 
