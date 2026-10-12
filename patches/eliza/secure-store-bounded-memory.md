@@ -21,3 +21,21 @@ host adapters; this does not prove Android Keystore or installed-device behavior
 The unpatched source failed at write readback with the same heap. The patched
 capacity test also passed in interpreted JVM mode (`-Xint -Xmx192m`). Native Notes
 capacity and recovery reruns remain required before acceptance.
+
+The corrected installed fixture subsequently reproduced an AndroidKeyStore
+`BufferAllOutputUntilDoFinalStreamer` allocation failure. The follow-up streams
+ciphertext in 16 KiB chunks into the same v1 AES/GCM operation instead of retaining
+a whole-file ciphertext buffer alongside the provider's authenticated-output
+buffer. Output pieces stay internal until `doFinal` verifies the tag, and are
+zeroed on both success and failure. This preserves existing disk bytes, IV/AAD,
+JSON validation, slot limits and atomic-write behavior. Host coverage includes
+24 MiB of additional live memory during a 32 MiB read and middle/tag/truncation/
+trailing-byte tampering across multiple cipher updates. Android proof remains
+required; a host crypto provider does not reproduce AndroidKeyStore exactly.
+
+The Alpha wrapper separately serializes renderer storage operations through
+`call.resolve`, preventing another reader from decrypting while the previous
+32 MiB response is being escaped for Capacitor. Network requests keep their
+parallel worker pool. Queued operations are rejected when the wrapper retires.
+This is not a claim that full-value Capacitor CAS transport has been qualified;
+the installed capacity/recovery campaign must verify the complete route.

@@ -8,7 +8,11 @@ public final class MemoryTest {
   String prefix="{\"currentRaw\":\"{\\\"body\\\":\\\"",suffix="\\\"}\"}";
   String value=prefix+"F".repeat(cap-prefix.length()-suffix.length())+suffix;
   System.out.println("write");store.write("large",value);
+  // Keep a modest resident allocation alive alongside an expected renderer value.
+  // This is still a host cipher provider, not a claim about AndroidKeyStore.
+  byte[] resident=new byte[24*1024*1024];resident[resident.length-1]=73;
   System.out.println("read");if(!value.equals(store.read("large")))throw new AssertionError("Read changed bytes");
+  if(resident[resident.length-1]!=73)throw new AssertionError();resident=null;
   System.out.println("CAS");if(!store.compareExchange("large",value,"{}"))throw new AssertionError("CAS failed");value=null;
   if(!"{}".equals(store.read("large")))throw new AssertionError("CAS not persisted");
   for(String invalid:new String[]{"{broken","{} trailing","[1,2"}){
@@ -23,6 +27,18 @@ public final class MemoryTest {
     out.write(1);out.write(12);out.write(cipher.getIV());out.write(cipher.doFinal(invalid.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
    }
    try{store.read("large");throw new AssertionError("Authenticated invalid JSON accepted");}catch(org.json.JSONException|IllegalArgumentException expected){}
+  }
+  // A valid v1 ciphertext must authenticate as a whole, even after streamed updates.
+  for(int mode=0;mode<4;mode++){
+   store.write("tamper","{\"body\":\""+"F".repeat(40000)+"\"}");
+   java.nio.file.Path path=store.slotFile(store.slotHash("tamper")).getBaseFile().toPath();
+   byte[] bytes=java.nio.file.Files.readAllBytes(path);
+   if(mode==0)bytes[bytes.length-1]^=1;
+   if(mode==1)bytes[17000]^=1;
+   if(mode==2)bytes=java.util.Arrays.copyOf(bytes,bytes.length-1);
+   if(mode==3)bytes=java.util.Arrays.copyOf(bytes,bytes.length+1);
+   java.nio.file.Files.write(path,bytes);
+   try{store.read("tamper");throw new AssertionError("Unauthenticated stream returned: "+mode);}catch(javax.crypto.AEADBadTagException expected){}
   }
   store.write("large","{}");
   if(store.compareExchange("large","wrong","null"))throw new AssertionError("Stale CAS accepted");
