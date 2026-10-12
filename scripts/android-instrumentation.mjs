@@ -68,6 +68,7 @@ export const CLASS_REGISTRY = {
   NoMockProduct: {},
   ReminderDeletionStorage: { secondaryUser: true, args: { pendingActionStorageFixture: "1" }, note: "fresh encrypted recovery slots; synthetic compare/exchange, recreation and UTF-8 capacity boundaries; exact owned-value cleanup" },
   CalendarCreationRecovery: { secondaryUser: true, args: { calendarCreationRecovery: "1" }, grant: ["READ_CALENDAR", "WRITE_CALENDAR"], note: "synthetic UUID CalendarProvider records and durable creation-receipt recovery; exact fixture calendar and journal cleanup" },
+  CalendarAgentCrud: { secondaryUser: true, args: { calendarAgent: "1", calendarOptions: "1" }, grant: ["READ_CALENDAR", "WRITE_CALENDAR"], note: "synthetic local CalendarProvider rows, native owner review, stale revisions and all-day/RRULE readback; ACTION_INSERT intercepted; disposable user cleanup" },
   ClockAgentReview: { secondaryUser: true, args: { clockAgentReview: "1" }, note: "native owner approval/replay checks with intercepted Clock intents; no delivered alarm action" },
   CloudDelegationCallback: { args: { cloudDelegationNative: "1" }, independentMethods: true, note: "synthetic cold/warm Activity callbacks and state-matched clearing; no authorization exchange or real login evidence" },
   CameraFlow: { args: { cameraPermissionTest: "true" }, independentMethods: true, note: "fresh app data per method; real CameraX and permission recovery on the disposable guest, only newly app-owned captures cleaned; not physical camera acceptance" },

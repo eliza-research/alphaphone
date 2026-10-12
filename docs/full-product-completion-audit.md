@@ -17,7 +17,7 @@ AOSP-only Phone/Contacts/SMS and AOSP listening are explicit requirements.
 Wallet remains a requested **full-product planning package**, outside the approved
 MVP; it is not enabled or a current MVP release gate. Earlier policy questions and
 measurement proposals in the chronological log are superseded, not newly open.
-The 89 observed native classes remain historical evidence for their exact archived
+The 90 observed native classes remain historical evidence for their exact archived
 APKs; the new policy does not turn old Cloud-speech tests into local-speech acceptance.
 
 **Latest merged checkpoint:** `73b003a5` includes main through `ca76ac67`
@@ -1637,3 +1637,50 @@ both debug/release variants, instrumentation, lint and APK audits. These remain
 unqualified developer artifacts without the resident payload. Updated coverage
 `native-coverage-accessibility-native-tree.json` retains 89 observed classes,
 65 unobserved and historical latest cohorts of 160 passed, 12 failed and 18 partial.
+
+
+### Exact accessibility nodes and Calendar agent operations
+
+`cuttlefish-accessibility-node-diagnostics157` still fails both variants, with the
+same assertions. Exact-node diagnostics fix the previous empty-label lookup, which
+could select an unrelated ancestor. The unlabelled nodes are a root View and an
+empty TextView spanning the screen; both report clickable=true, focusable=false,
+screenReaderFocusable=false and important=false. Native buttons also report
+important=false on this provider, so filtering that bit would incorrectly omit real
+controls. No such filter, geometry exemption or blanket class skip was added.
+`accessibility-node-diagnostics157-metadata.log` preserves the structural evidence.
+Further work must distinguish inherited/delegated click metadata from actual
+assistive-technology focus targets before changing the traversal oracle.
+
+The reviewed CalendarAgentCrud class is now admitted only inside a disposable
+secondary user for these Cuttlefish runs, with explicit Calendar permissions and
+both fixture gates. `cuttlefish-calendar-agent-crud157` passes all three methods
+in both variants: native reviewed create/read/update/delete, cancelled delete,
+stale-revision rejection, direct all-day and chosen-time-zone/RRULE provider
+readback, duplicate creation identity and invalid recurrence refusal. The Calendar
+editor handoff is intercepted before delivery, including its synthetic attendee;
+no invitation or real-account event is sent. These are provider/native-review
+checks, not a resident LLM planning or external-calendar-sync result.
+
+Standalone user 17 and launcher user 18 are removed, owner/HOME restored, and both
+lifecycle receipts have cleanupDeferred=false. The ownership/admission/runner suite
+passes 35 tests. `native-coverage-calendar-agent-crud.json` now records 90 observed
+native classes and 64 unobserved, with 162 passed, 12 failed and 18 partial latest
+historical cohorts. The inventory has 92 admitted named classes and 62 without an
+admitted Cuttlefish campaign; admission remains distinct from observed execution.
+
+
+Full verification first reports 807 passing tests, one failed microphone-revocation
+runner test, and four existing TODOs (`verify-node-diagnostics-calendar-admission.log`).
+The interruption verifier observed zero test-start records. Inspection found two
+races in the fake ADB fixture: it rewrote shared JSON in place while recording
+polled it, and emitted the test-start event only after recording ended. The fixture
+now replaces state atomically and synchronously emits start before publishing the
+recording marker, then emits only the terminal event after revocation. Neither
+real-device runner nor interruption assertions were relaxed. Both focused revocation
+tests pass (`voice-revoke-fixture-ordering.log`). The full rerun passes 808 tests
+with four existing TODOs (`verify-node-diagnostics-calendar-admission-fixed.log`),
+including microphone revocation. Both developer APK variants built in
+`developer-apks-accessibility-node-diagnostics`; subsequent changes affect only
+host campaign admission, the fake ADB fixture and audit records. No resident or
+release qualification is inferred.

@@ -32,7 +32,7 @@ export function exercise(mode,kind='calendar',extraArguments=[]){
 const args=process.argv.slice(2);if(args[1]==='badging')console.log("package: name='${pkg}"+(args[2].includes('androidTest')?'.test':'')+"'");else console.log('E: manifest\\n  E: instrumentation\\n    A: android:name="androidx.test.runner.AndroidJUnitRunner"\\n    A: android:targetPackage="${pkg}"\\n  E: instrumentation\\n    A: android:name="${pkg}.WorkflowNoticeProcessRunner"\\n    A: android:targetPackage="${pkg}"');
 `,{mode:0o700});
   fs.writeFileSync(adb,`#!/usr/bin/env node
-const fs=require('node:fs'),a=process.argv.slice(4),file=${JSON.stringify(state)},s=JSON.parse(fs.readFileSync(file)),pkg=${JSON.stringify(pkg)},mode=${JSON.stringify(mode)};const save=()=>fs.writeFileSync(file,JSON.stringify(s));fs.appendFileSync(${JSON.stringify(log)},JSON.stringify(a)+'\\n');
+const fs=require('node:fs'),a=process.argv.slice(4),file=${JSON.stringify(state)},s=JSON.parse(fs.readFileSync(file)),pkg=${JSON.stringify(pkg)},mode=${JSON.stringify(mode)};const save=()=>{const temporary=file+"."+process.pid+".tmp";fs.writeFileSync(temporary,JSON.stringify(s));fs.renameSync(temporary,file);};fs.appendFileSync(${JSON.stringify(log)},JSON.stringify(a)+'\\n');
 if(a[0]==='emu')console.log('calendar-fixture\\nOK');
 else if(a.includes('ro.build.version.sdk'))console.log('35');
 else if(a.includes('ro.kernel.qemu'))console.log('1');
@@ -88,11 +88,13 @@ else if(a.includes('instrument')){
  const selector=a[a.indexOf('class')+1],cls=${kind==='workflow'?"selector.split('#')[0]":"pkg+"+JSON.stringify(kind==='camera'?'.CameraFlowInstrumentedTest':'.'+selectedClass)},method=${kind==='workflow'?"selector.split('#')[1]":kind==='agent-class'?"selector.split('#')[1]??'noMethodSelected'":JSON.stringify(selectedMethod)},block=code=>'INSTRUMENTATION_STATUS: class='+cls+'\\nINSTRUMENTATION_STATUS: test='+method+'\\nINSTRUMENTATION_STATUS: numtests=${kind==='recurrence'?2:kind==='availability'?4:1}\\nINSTRUMENTATION_STATUS_CODE: '+code+'\\n';
  if(mode==='timeout'||mode==='stop-failure'){console.log(block(1));console.error('fixture transport');process.exit(1);}
  if(a.includes('voiceRevokePhase')&&a[a.indexOf('voiceRevokePhase')+1]==='record'){
+  // Android reports the test start before the method can publish its recording marker.
+  fs.writeSync(1,block(1));
   s.recording={runId:a[a.indexOf('voiceRevokeRunId')+1],pid:4242,alive:true};save();
   const wait=new Int32Array(new SharedArrayBuffer(4));
   for(let i=0;i<400&&JSON.parse(fs.readFileSync(file)).recording?.alive;i++)Atomics.wait(wait,0,0,50);
-  if(JSON.parse(fs.readFileSync(file)).recording?.alive){console.log(block(1)+block(-2)+'FAILURES!!!\\nINSTRUMENTATION_CODE: -1\\n');process.exit(0);}
-  console.log(block(1)+'INSTRUMENTATION_RESULT: shortMsg=Process crashed.\\nINSTRUMENTATION_CODE: 0\\n');process.exit(0);
+  if(JSON.parse(fs.readFileSync(file)).recording?.alive){console.log(block(-2)+'FAILURES!!!\\nINSTRUMENTATION_CODE: -1\\n');process.exit(0);}
+  fs.writeSync(1,'INSTRUMENTATION_RESULT: shortMsg=Process crashed.\\nINSTRUMENTATION_CODE: 0\\n');process.exit(0);
  }
  const gate=['inboxPhase','notesDocumentPhase','documentPhase','textScalePhase','treePhase','bookmarkPhase'].find(g=>a.includes(g)),phase=gate?a[a.indexOf(gate)+1]:null;
  let output=block(1)+block(0)+'OK (1 test)\\nINSTRUMENTATION_CODE: -1\\n';

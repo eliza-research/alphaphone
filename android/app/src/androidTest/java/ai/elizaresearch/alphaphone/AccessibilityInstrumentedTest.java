@@ -115,6 +115,19 @@ public final class AccessibilityInstrumentedTest {
   for(int i=0;i<node.getChildCount();i++){android.view.accessibility.AccessibilityNodeInfo found=geometryNode(node.getChild(i),label,depth+1);if(found!=null)return found;}
   return null;
  }
+ /** Structural diagnostics for the exact failing node; label lookup is ambiguous for empty names. */
+ private static String exactNodeGeometry(AccessibilityNodeInfo node){
+  StringBuilder out=new StringBuilder();
+  for(int depth=0;node!=null&&depth<16;depth++,node=node.getParent()){
+   Rect r=screenBounds(node);
+   out.append(depth==0?"":" < ").append(node.getClassName()).append(" bounds=").append(r.toShortString())
+    .append(" resource=").append(node.getViewIdResourceName()).append(" children=").append(node.getChildCount())
+    .append(" clickable=").append(node.isClickable()).append(" focusable=").append(node.isFocusable())
+    .append(" screenReaderFocusable=").append(node.isScreenReaderFocusable())
+    .append(" important=").append(node.isImportantForAccessibility()).append(" visible=").append(node.isVisibleToUser());
+  }
+  return out.toString();
+ }
  private static String accessibilityGeometry(String label){
   android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();
   android.view.accessibility.AccessibilityNodeInfo node=geometryNode(root,label,0);
@@ -175,7 +188,7 @@ public final class AccessibilityInstrumentedTest {
    String label=((node.getText()==null?"":node.getText())+" "+(node.getContentDescription()==null?"":node.getContentDescription())).trim();
    // An empty text field has no text; Android carries its accessible name (aria-label/placeholder) as the hint, which TalkBack reads.
    if(label.isEmpty()&&"android.widget.EditText".equals(node.getClassName())&&node.getHintText()!=null)label=node.getHintText().toString().trim();
-   if(node.isClickable()){actionable++;if(label.isEmpty()&&children(node).stream().noneMatch(c->c.getText()!=null&&!c.getText().toString().trim().isEmpty()))problems.add("unlabelled control at "+r.toShortString());}
+   if(node.isClickable()){actionable++;if(label.isEmpty()&&children(node).stream().noneMatch(c->c.getText()!=null&&!c.getText().toString().trim().isEmpty())){problems.add("unlabelled control at "+r.toShortString());System.out.println("ALPHA_ACCESSIBILITY_UNLABELLED_NODE "+exactNodeGeometry(node));}}
    if(r.left<0||r.right>width)problems.add("clipped '"+label+"' at "+r.toShortString());
    boolean assistant=assistantGroup(node);
    if(seenAssistant&&!assistant)problems.add("App content follows the assistant control group");
@@ -189,8 +202,8 @@ public final class AccessibilityInstrumentedTest {
     if(r.top<p.top-Math.max(p.height(),r.height())/2&&r.left<p.right){
      problems.add("reading order goes up from '"+previous.getText()+"' to '"+label+"'");
      System.out.println("ALPHA_ACCESSIBILITY_ORDER_BOUNDS previous="+p.toShortString()+" next="+r.toShortString());
-     System.out.println("ALPHA_ACCESSIBILITY_PREVIOUS "+accessibilityGeometry(previous.getText()==null?String.valueOf(previous.getContentDescription()):previous.getText().toString()));
-     System.out.println("ALPHA_ACCESSIBILITY_NEXT "+accessibilityGeometry(label));
+     System.out.println("ALPHA_ACCESSIBILITY_PREVIOUS "+exactNodeGeometry(previous));
+     System.out.println("ALPHA_ACCESSIBILITY_NEXT "+exactNodeGeometry(node));
     }
    }
    previous=node;previousBounds=r;previousAssistant=assistant;
