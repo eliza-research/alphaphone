@@ -1921,3 +1921,32 @@ Focused tests pass five checks; full verification passes 810 tests, four existin
 TODOs and the flag-off web audit (`verify-flat-archive-admission.log`). This is a
 host evidence-tool change, so the existing developer APK build receipts remain
 separate. No coverage count or requirement status is promoted by it.
+
+## October 12: corrected secure-camera fixture boots and invokes while locked
+
+Launch session 35229 completed. The v2 image reports boot complete and the expected
+Cuttlefish identity. `secure-camera-fixture-v2-boot.json` binds the image hashes,
+installed overlay APK hashes, image-contract result and invocation result. Both
+installed overlay APKs match their rebuilt source artifacts byte for byte. The
+resource check now passes: framework double-power camera is enabled, SystemUI
+resolves Camera2, both secure camera actions resolve SecureCameraActivity, and Alpha
+is not a secure-camera handler. This confirms the v4 sidecar packaging diagnosis.
+The old failed image and its evidence remain preserved.
+
+`test-secure-camera-invocation.py` exercises the standard power-key path on owned
+instance 12, owner user 0. It first verifies an empty lock credential, installs a
+public synthetic fixture PIN, locks the emulator, then sends two power-key presses
+150 ms apart. SecureCameraActivity becomes top-resumed while TrustManager still
+reports deviceLocked=1 and keyguard remains showing. The exact prior lock-disabled
+setting is restored, the fixture PIN is cleared and empty-credential verification
+passes. Camera2 is stopped and the fixture returns to HOME. The receipt is
+`secure-camera-invocation.json`. Initial preflight-only attempts found shell empty-
+argument/exit-code handling differences before installing any PIN; those logs are
+retained separately. The successful run uses a correctly quoted empty credential.
+
+No shutter action, photo access or external side effect occurred. Locked capture,
+prior-photo exclusion, unlock return/privacy and physical power-key/camera behavior
+remain unverified. This historical-platform fixture with two current resource
+values is not a full current-source AOSP image, production overlay-build proof,
+release signing qualification or resident-agent acceptance. Current active audit
+ADB is 6531; the unchanged browser fixture at 6530 remains stopped.
