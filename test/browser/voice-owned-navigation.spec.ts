@@ -78,6 +78,7 @@ for(const retirement of ['stop','account'])test(`late held ASR after ${retiremen
 
 test('idle capture expiry and stale stop callbacks neither upload silence nor end the replacement capture',async({page})=>{
  await setup(page);
+ await expect.poll(()=>page.evaluate(()=>!!(window as any).ownedVoiceNavigation.mediaDriver&&(window as any).cloudNotesVoice.active!==null)).toBe(true);
  const old=await page.evaluate(async()=>{const f=(window as any).ownedVoiceNavigation,c=(window as any).cloudNotesVoice;const recordingId=c.active;await f.mediaDriver.notifyListeners('recordingStopped',{recordingId,durationMs:59000});return recordingId;});
  await expect.poll(()=>page.evaluate(()=>(window as any).cloudNotesVoice.starts)).toBe(2);await expect(voice(page)).toHaveAttribute('data-voice-state','listening');
  await page.evaluate(async recordingId=>{const f=(window as any).ownedVoiceNavigation;await f.mediaDriver.notifyListeners('recordingStopped',{recordingId,durationMs:59000});},old);await page.waitForTimeout(500);
