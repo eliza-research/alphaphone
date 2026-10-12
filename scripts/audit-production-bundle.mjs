@@ -10,6 +10,7 @@ import {fontLicenceFindings, fontLicenceLine} from './font-license-blockers.mjs'
 import {licenceFlagLines} from './licence-policy.mjs';
 
 export const DENYLIST = Object.freeze([
+  'Connect remote agent', 'Agent HTTPS address', 'Development Cloud agent infrastructure', 'Dedicated hosting requires a reviewed setup',
   'alpha:force-render-error', 'alpha:render-error-check', 'Forced render failure',
   'Enter mock mode', 'Try mock mode', 'Exit mock mode', 'mock-mode-banner', 'Mock mode ·',
   '10.0.2.2:2138', 'cloud-staging', 'api-staging.eliza.app',

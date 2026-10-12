@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 // Flag-off production bundle only. Android cases stub the Capacitor bridge in a desktop browser and
-// remote cases are fulfilled by Playwright at https://agent.example.test. Nothing here contacts
+// saved remote selections must never reconnect. Nothing here contacts
 // Eliza Cloud, a deployed agent, an Android device or the native AlphaConnection plugin; those
 // stay real-service and device acceptance.
 
@@ -223,10 +223,8 @@ for (const legacy of legacyWeb) {
     }, { legacy, SELECTION, CLOUD_SERVICE });
     await page.goto('/');
     const chooser = page.locator('.alpha-connection');
-    await expect(chooser.getByText('On-device agent unavailable here', { exact: true })).toBeVisible();
+    await expect(chooser.getByText('Your agent runs locally in the Android app. Remote agents and pairing are unavailable.', { exact: true })).toBeVisible();
     await expect(chooser.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(0);
-    if (legacy.alert) await expect(chooser.getByRole('alert')).toContainText(legacy.alert);
-    if (legacy.status) await expect(chooser.getByRole('status')).toContainText(legacy.status);
     // Nothing is connected, no sign-in is offered or implied and no mock or development surface opens.
     await expect(chooser.getByText(/Connected ·/)).toHaveCount(0);
     await expect(chooser.getByRole('button', { name: 'Disconnect agent', exact: true })).toHaveCount(0);
@@ -235,7 +233,7 @@ for (const legacy of legacyWeb) {
     await expect(page.locator('.mock-mode-banner')).toHaveCount(0);
     expect(new URL(page.url()).search).toBe('');
     expect(await page.evaluate(key => localStorage.getItem(key), CLOUD_SERVICE)).toBeNull();
-    await chooser.getByRole('button', { name: 'Continue offline', exact: true }).click();
+    await chooser.getByRole('button', { name: 'Use local apps without AI', exact: true }).click();
     await expect(chooser).toHaveCount(0);
     expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), SELECTION)).toEqual({ kind: 'offline' });
     await page.reload();
@@ -294,7 +292,7 @@ for (const saved of [
     const chooser = page.locator('.alpha-connection');
     const offline = 'offline' in saved;
     // The offline choice is kept and opens no chooser; every other case requires a choice.
-    if (!offline) await expect(chooser.getByText('On-device agent unavailable here', { exact: true })).toBeVisible();
+    if (!offline) await expect(chooser.getByText('Your agent runs locally in the Android app. Remote agents and pairing are unavailable.', { exact: true })).toBeVisible();
     await expect.poll(async () => Object.keys((await slotRecords(page))!).sort()).toEqual([...KEPT_SLOTS].sort());
     // Remote-agent, device and other slots keep their exact bytes; notes and drafts are untouched.
     const { 'cloud:production': removed, ...kept } = before;
@@ -302,12 +300,12 @@ for (const saved of [
     expect(await slotRecords(page)).toEqual(kept);
     expect(await page.evaluate(keys => Object.fromEntries(keys.map(key => [key, localStorage.getItem(key)])), Object.keys(LOCAL_DATA))).toEqual(LOCAL_DATA);
     expect(await page.evaluate(key => localStorage.getItem(key), CLOUD_SERVICE)).toBeNull();
-    expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), SELECTION)).toEqual(offline ? { kind: 'offline' } : { kind: 'none' });
+    expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), SELECTION)).toEqual(saved.selection);
     await expect(chooser.getByText(/Connected ·/)).toHaveCount(0);
     // A later start changes nothing further, and no request left the page at any point.
     await page.reload();
     if (offline) await expect(chooser).toHaveCount(0);
-    else await expect(chooser.getByText('On-device agent unavailable here', { exact: true })).toBeVisible();
+    else await expect(chooser.getByText('Your agent runs locally in the Android app. Remote agents and pairing are unavailable.', { exact: true })).toBeVisible();
     expect(await slotRecords(page)).toEqual(kept);
     expect(foreign).toEqual([]);
   });
@@ -321,158 +319,13 @@ test('the web build\'s forced sign-out does not create a secret store in a brows
     localStorage.setItem(SELECTION, JSON.stringify({ kind: 'none' })); localStorage.setItem(CLOUD_SERVICE, 'production');
   }, { SELECTION, CLOUD_SERVICE });
   await page.goto('/');
-  await expect(page.locator('.alpha-connection').getByText('On-device agent unavailable here', { exact: true })).toBeVisible();
+  await expect(page.locator('.alpha-connection').getByText('Your agent runs locally in the Android app. Remote agents and pairing are unavailable.', { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(key => localStorage.getItem(key), CLOUD_SERVICE)).toBeNull();
   await page.waitForTimeout(500);
   expect(await slotRecords(page)).toBeNull();
   expect(foreign).toEqual([]);
 });
 
-type RemoteMode = 'ok' | 'wrong-role' | 'identity-mismatch' | 'expired-session' | 'used-code' | 'pairing-disabled' | 'instance-mismatch' | 'enrollment-refused' | 'revoke-refused';
-interface RemoteFixture { mode: RemoteMode; requests: Array<{ method: string; path: string; authorization?: string }>; loggedOut: boolean }
-function serveRemote(page: Page, fixture: RemoteFixture) {
-  return (route: Route) => {
-    const request = route.request(), url = new URL(request.url()), mode = fixture.mode;
-    const cors = { 'access-control-allow-origin': new URL(page.url()).origin, 'access-control-allow-headers': 'accept,content-type,authorization,x-eliza-device-id,x-eliza-device-key,x-eliza-device-capabilities', 'access-control-allow-methods': 'GET,POST' };
-    if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
-    const authorization = request.headers()['authorization'];
-    fixture.requests.push({ method: request.method(), path: url.pathname, authorization });
-    const json = (status: number, value: unknown) => route.fulfill({ status, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify(value) });
-    const body = request.postData() ? JSON.parse(request.postData()!) : undefined;
-    if (url.pathname === '/api/auth/status') return json(200, { required: true, authenticated: false, pairingEnabled: mode !== 'pairing-disabled', instanceId: 'synthetic-instance', bootstrapRequired: false, expiresAt: null });
-    if (url.pathname === '/api/auth/pair') return mode === 'used-code' || body?.code !== 'SYNTH-CODE' ? json(403, {}) : json(200, { token, identityId: owner, instanceId: mode === 'instance-mismatch' ? 'another-instance' : 'synthetic-instance', access: 'owner' });
-    if (authorization !== `Bearer ${token}` || fixture.loggedOut) return json(401, {});
-    if (url.pathname === '/api/auth/me') return json(200, {
-      identity: { id: mode === 'identity-mismatch' ? agent : owner, kind: mode === 'wrong-role' ? 'member' : 'owner', displayName: 'Synthetic owner' },
-      session: { id: token, kind: 'machine', expiresAt: mode === 'expired-session' ? Date.now() - 1000 : Date.now() + 3_600_000 },
-      access: { role: mode === 'wrong-role' ? 'MEMBER' : 'OWNER', mode: 'session' } });
-    if (url.pathname === '/api/agents') return json(200, { agents: [{ id: agent, name: 'Synthetic remote', status: 'running' }] });
-    if (url.pathname === '/api/client-devices/register') return json(200, { installationId: mode === 'enrollment-refused' ? 'not-this-phone' : request.headers()['x-eliza-device-id'], enrollmentId: 'synthetic-enrollment', capabilities: ['notes.query.v1', 'reminders.create.v1'] });
-    if (url.pathname === '/api/client-devices/revoke' || url.pathname === '/api/auth/logout') return mode === 'revoke-refused' ? json(500, {}) : json(200, { ok: true });
-    if (url.pathname === '/api/client-devices/proposals') return json(200, { proposals: [] });
-    if (url.pathname === '/api/conversations') return json(200, { conversations: [] });
-    return json(404, {});
-  };
-}
-async function pair(page: Page, address: string, code: string) {
-  const chooser = page.locator('.alpha-connection');
-  await expect(chooser.getByText('On-device agent unavailable here', { exact: true })).toBeVisible();
-  await chooser.getByText('Remote agent', { exact: true }).click();
-  await chooser.getByLabel('Agent HTTPS address').fill(address);
-  await chooser.getByLabel('Pairing code').fill(code);
-  await chooser.getByRole('button', { name: 'Connect remote agent', exact: true }).click();
-  return chooser;
-}
-const webStorage = (page: Page) => page.evaluate(() => JSON.stringify({ ...localStorage }) + JSON.stringify({ ...sessionStorage }));
-
-const refusals: Array<{ mode: RemoteMode; alert: RegExp; paired: boolean }> = [
-  { mode: 'wrong-role', alert: /did not confirm an owner session for this phone\. Nothing was connected\./, paired: true },
-  { mode: 'identity-mismatch', alert: /did not confirm an owner session for this phone\. Nothing was connected\./, paired: true },
-  { mode: 'expired-session', alert: /saved session for this agent has expired/, paired: true },
-  { mode: 'instance-mismatch', alert: /did not confirm an owner session for this phone\. Nothing was connected\./, paired: true },
-  { mode: 'used-code', alert: /refused this pairing code\. Codes expire and work once/, paired: true },
-  { mode: 'pairing-disabled', alert: /not accepting pairing/, paired: false },
-];
-for (const refusal of refusals) {
-  test(`the web build stays disconnected when the remote agent pairing fails: ${refusal.mode}`, async ({ page }) => {
-    const fixture: RemoteFixture = { mode: refusal.mode, requests: [], loggedOut: false };
-    const foreign = await fenceNetwork(page, serveRemote(page, fixture));
-    await page.goto('/');
-    const chooser = await pair(page, origin, 'SYNTH-CODE');
-    await expect(chooser.getByRole('alert')).toContainText(refusal.alert);
-    // No connected state, no owner-scoped route and no device enrollment follows a refused pairing.
-    await expect(chooser.getByText(/Connected ·/)).toHaveCount(0);
-    await expect(chooser.getByRole('button', { name: 'Disconnect agent', exact: true })).toHaveCount(0);
-    const paths = fixture.requests.map(item => item.path);
-    expect(paths.includes('/api/auth/pair')).toBe(refusal.paired);
-    for (const path of ['/api/agents', '/api/client-devices/register', '/api/client-devices/proposals', '/api/conversations']) expect(paths).not.toContain(path);
-    expect(await webStorage(page)).not.toContain(token);
-    expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).kind, SELECTION)).not.toBe('remote');
-    // Nothing was saved to restore: a restart makes no authenticated request and reconnects nothing.
-    const before = fixture.requests.length;
-    await page.reload();
-    await expect(page.locator('.alpha-connection').getByText('On-device agent unavailable here', { exact: true })).toBeVisible();
-    await expect(page.locator('.alpha-connection').getByText(/Connected ·/)).toHaveCount(0);
-    expect(fixture.requests.slice(before).filter(item => item.authorization)).toEqual([]);
-    expect(foreign).toEqual([]);
-  });
-}
-
-for (const address of ['http://agent.example.test', 'http://127.0.0.1:9', 'https://agent.example.test/api']) {
-  test(`the web build sends nothing to a remote address it cannot use: ${address}`, async ({ page }) => {
-    const fixture: RemoteFixture = { mode: 'ok', requests: [], loggedOut: false };
-    const foreign = await fenceNetwork(page, serveRemote(page, fixture));
-    const local: string[] = [];
-    page.on('request', request => { const url = new URL(request.url()); if (url.port === '9') local.push(request.url()); });
-    await page.goto('/');
-    const chooser = await pair(page, address, 'SYNTH-CODE');
-    await expect(chooser.getByRole('alert')).toContainText('Enter the agent’s HTTPS address without a path');
-    await expect(chooser.getByText(/Connected ·/)).toHaveCount(0);
-    expect(fixture.requests).toEqual([]);
-    expect(local).toEqual([]);
-    expect(foreign).toEqual([]);
-  });
-}
-
-test('the web build keeps chat but no phone actions when device enrollment is not verified', async ({ page }) => {
-  const fixture: RemoteFixture = { mode: 'enrollment-refused', requests: [], loggedOut: false };
-  const foreign = await fenceNetwork(page, serveRemote(page, fixture));
-  await page.goto('/');
-  await pair(page, origin, 'SYNTH-CODE');
-  await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: /Agent connection/ }).click();
-  const chooser = page.locator('.alpha-connection');
-  await expect(chooser.getByText('Connected · Remote agent', { exact: true })).toBeVisible();
-  await expect(chooser.getByText('Chat connected. Phone action enrollment was not confirmed. Reconnect to review its status.', { exact: true })).toBeVisible();
-  // The agent advertised capabilities, but an unverified enrollment grants no device-action surface.
-  await expect(chooser.getByText('Phone action history', { exact: true })).toHaveCount(0);
-  expect(fixture.requests.map(item => item.path)).not.toContain('/api/client-devices/proposals');
-  expect(foreign).toEqual([]);
-});
-
-test('the web build does not claim revocation the remote agent did not confirm', async ({ page }) => {
-  const fixture: RemoteFixture = { mode: 'ok', requests: [], loggedOut: false };
-  const foreign = await fenceNetwork(page, serveRemote(page, fixture));
-  await page.goto('/');
-  await pair(page, origin, 'SYNTH-CODE');
-  await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0);
-  fixture.mode = 'revoke-refused';
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: /Agent connection/ }).click();
-  const chooser = page.locator('.alpha-connection');
-  await chooser.getByRole('button', { name: 'Disconnect agent', exact: true }).click();
-  await expect(chooser.getByText('Agent disconnected on this phone, but the agent did not confirm revocation. Remove this phone from the agent’s paired devices.')).toBeVisible();
-  await expect(chooser.getByText(/access was revoked on the agent/)).toHaveCount(0);
-  // Both revocations were attempted once each; the local credential is gone either way.
-  const paths = fixture.requests.map(item => item.path);
-  expect(paths.filter(path => path === '/api/client-devices/revoke')).toHaveLength(1);
-  expect(paths.filter(path => path === '/api/auth/logout')).toHaveLength(1);
-  const before = fixture.requests.length;
-  await page.reload();
-  await expect(page.locator('.alpha-connection').getByText('On-device agent unavailable here', { exact: true })).toBeVisible();
-  await expect(page.locator('.alpha-connection').getByText(/Connected ·/)).toHaveCount(0);
-  expect(fixture.requests.slice(before).filter(item => item.authorization)).toEqual([]);
-  expect(await webStorage(page)).not.toContain(token);
-  expect(foreign).toEqual([]);
-});
-
-test('the web build drops a remote session the agent no longer accepts and does not reconnect it', async ({ page }) => {
-  const fixture: RemoteFixture = { mode: 'ok', requests: [], loggedOut: false };
-  const foreign = await fenceNetwork(page, serveRemote(page, fixture));
-  await page.goto('/');
-  await pair(page, origin, 'SYNTH-CODE');
-  await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0);
-  // The owner revokes this phone on the agent while the page is closed.
-  fixture.loggedOut = true;
-  await page.reload();
-  const chooser = page.locator('.alpha-connection');
-  await expect(chooser.getByRole('alert')).toContainText('Your session has expired. Sign in or pair again.');
-  await expect(chooser.getByText(/Connected ·/)).toHaveCount(0);
-  // The refused credential was removed: the next start sends no bearer and asks for a pairing code.
-  const before = fixture.requests.length;
-  await page.reload();
-  await expect(chooser.getByRole('alert')).toContainText('Enter the pairing code displayed by your agent.');
-  expect(fixture.requests.slice(before).filter(item => item.authorization)).toEqual([]);
-  expect(foreign).toEqual([]);
-});
+// Production no longer offers remote pairing. Protocol-level wrong-owner, expired-session,
+// revocation and history tests remain in scripts/test-remote-protocol.mjs and
+// scripts/test-connection-history.mjs as explicitly non-product development infrastructure.

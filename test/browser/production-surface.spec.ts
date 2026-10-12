@@ -85,7 +85,7 @@ test('the chooser and Settings offer only production connections', async ({ page
   await page.goto('/?tools=1');
   const chooser = page.locator('.alpha-connection');
   // The browser build explains its real options on first run.
-  await expect(chooser.getByText('On-device agent unavailable here', { exact: true })).toBeVisible();
+  await expect(chooser.getByText('Your agent runs locally in the Android app. Remote agents and pairing are unavailable.', { exact: true })).toBeVisible();
   for (const summary of await chooser.locator('summary').all()) await summary.click();
   const text = await chooser.innerText();
   expect(text).not.toMatch(/mock mode/i);
@@ -94,11 +94,12 @@ test('the chooser and Settings offer only production connections', async ({ page
   expect(text).not.toContain('Development connections');
   await expect(chooser.getByLabel('Environment')).toHaveCount(0);
   await expect(chooser.getByRole('button', { name: 'Start local agent', exact: true })).toHaveCount(0);
-  for (const name of ['Connect remote agent', 'Continue offline', 'Manage Cloud account']) await expect(chooser.getByRole('button', { name, exact: true })).toBeVisible();
+  for (const name of ['Connect remote agent', 'Manage Cloud account']) await expect(chooser.getByRole('button', { name, exact: true })).toHaveCount(0);
+  await expect(chooser.getByRole('button',{name:'Use local apps without AI',exact:true})).toBeVisible();
   // Eliza Cloud refuses credentialed requests from this web origin, so no sign-in that always fails is offered.
   await expect(chooser.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true })).toHaveCount(0);
-  await expect(chooser.getByText(/Eliza Cloud sign-in is available in the Alpha Phone Android app/)).toBeVisible();
-  await chooser.getByRole('button', { name: 'Continue offline', exact: true }).click();
+
+  await chooser.getByRole('button', { name: 'Use local apps without AI', exact: true }).click();
   await expect(chooser).toHaveCount(0);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const settings = page.locator('[data-screen]');
@@ -127,7 +128,7 @@ test('Settings shows the flags and obligations of flagged license entries, and n
   ];
   await page.route('**/licenses/third-party-notices.json', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify(notices) }));
   await page.goto('/?tools=1');
-  await page.locator('.alpha-connection').getByRole('button', { name: 'Continue offline', exact: true }).click();
+  await page.locator('.alpha-connection').getByRole('button', { name: 'Use local apps without AI', exact: true }).click();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const settings = page.locator('[data-screen]');
   await page.getByText('About', { exact: true }).click();
@@ -147,7 +148,7 @@ test('Settings shows the flags and obligations of flagged license entries, and n
 test('Settings keeps the unavailable fallback when the license notices cannot be read', async ({ page }) => {
   await page.route('**/licenses/third-party-notices.json', route => route.fulfill({ status: 404, body: '' }));
   await page.goto('/?tools=1');
-  await page.locator('.alpha-connection').getByRole('button', { name: 'Continue offline', exact: true }).click();
+  await page.locator('.alpha-connection').getByRole('button', { name: 'Use local apps without AI', exact: true }).click();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const settings = page.locator('[data-screen]');
   await page.getByText('About', { exact: true }).click();

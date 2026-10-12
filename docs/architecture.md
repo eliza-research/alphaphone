@@ -88,10 +88,11 @@ Playwright and explicit test-mocks builds, and off for `npm run build`,
 
 The primary agent runs on Android. Local orchestration, durable state and tool
 approvals are separate from model inference: hosted inference requires explicit
-configuration and outbound-context policy. Production Android does not accept remote phone pairing. Cloud sign-in authorizes
+configuration and outbound-context policy. Production builds do not accept remote pairing or hosted-agent provisioning, discovery, adoption or restore. Cloud sign-in authorizes
 billed inference for the resident agent; it does not select a hosted agent. Existing
 remote credentials and history are retained without automatically reconnecting.
-Browser and test-mocks transports remain development infrastructure. Debug host forwarding (the DevelopmentAgent bridge, present only in test-mocks
+Remote browser transports are available only with the explicit test-mocks switch and remain non-product development infrastructure.
+The production AlphaConnection boundary admits exact managed-service origin and path/method pairs for account sign-in, identity, balance, self-revocation and owner Gmail. Dedicated hosts and agent/provisioning paths on the Cloud API origin are refused before network dispatch. Native resident inference remains on its separately admitted provider route; new Maps or billing APIs require explicit service-route review. Debug host forwarding (the DevelopmentAgent bridge, present only in test-mocks
 builds) is development infrastructure, not evidence of a resident runtime or
 production authentication.
 
