@@ -1979,3 +1979,39 @@ fixture-packaged, and the image is unlocked/test-key signed. No full current-sou
 AOSP, release, resident-agent or device acceptance follows. No product source
 changed in this run; existing 810-pass/four-TODO source verification and developer
 APK build evidence remain separate.
+
+
+## October 12: secure-session photo visibility and lockscreen return, partial
+
+The exploratory session-privacy campaign retains four separate attempts and their
+UI hierarchies. The first two expected an Unlock placeholder before any capture in
+a fresh secure session; instead, one swipe closed the mode drawer and the next
+left the preview visible. These assertions failed without showing a prior photo.
+Their single owned media rows and temporary PINs were cleaned up. The failed
+expectation is retained, not relabelled as a passing privacy test.
+
+The diagnostic comparison in `secure-camera-session-privacy-v3` and the follow-up
+`secure-camera-session-privacy-v4` each create two synthetic Camera2 photos in
+separate secure sessions. Both JPEGs are fully decoded by Pillow. A fresh session
+keeps the device locked while the earlier photo remains stored. After a capture
+in the current session, the same left-swipe gesture reaches the filmstrip. Its UI
+hierarchy contains one photo caption matching the current filename timestamp,
+with a distinct earlier timestamp excluded from the observed captions, plus a
+visible, clickable Unlock to Camera placeholder. This is a bounded UI observation,
+not proof that every prior-library access route is sealed.
+
+The v4 run taps that observed placeholder. The next hierarchy is Android's
+`element:lockscreen`, reports Device locked, and TrustManager remains locked. It
+does not expose gallery content. No PIN-entry control was observed in this step;
+credential entry and return after a real UI unlock remain untested. Therefore
+priorPhotoIsolationVerified and unlockReturnVerified remain false in the receipt.
+The receipt binds the script and v2 fixture boot hashes and records the narrower
+current-caption match and lockscreen-return observations separately.
+
+Six synthetic rows across all four attempts were removed by exact recorded ID,
+owner and display name. Every attempt restored the previous lock-disabled setting,
+removed its fixture PIN and verified an empty image store. No personal target or
+media was used. The latest evidence is
+`test-results/full-product-audit/secure-camera-session-privacy-v4/result.json`;
+failed attempts and comparison hierarchies remain alongside it. No product or
+shared AOSP source changed, and no overall camera/privacy requirement is completed.
