@@ -40,7 +40,7 @@ final class NotesCapacityFixture {
    try(Writer writer=new OutputStreamWriter(new DigestOutputStream(sink,actual),StandardCharsets.UTF_8)){writeBounded(writer,value);}
    return bytes==count[0]&&Arrays.equals(digest,actual.digest());
   }
-  String exactValue()throws Exception{String value=Files.readString(file.toPath(),StandardCharsets.UTF_8);if(!matches(value))throw new IOException("Capacity snapshot changed");return value;}
+  String exactValue()throws Exception{String value=new String(Files.readAllBytes(file.toPath()),StandardCharsets.UTF_8);if(!matches(value))throw new IOException("Capacity snapshot changed");return value;}
   public void close()throws IOException{Files.deleteIfExists(file.toPath());}
  }
  private static void writeBounded(Writer writer,String value)throws IOException{
