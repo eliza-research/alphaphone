@@ -61,7 +61,7 @@ public final class NotesStorageDurabilityInstrumentedTest {
  @Test public void fullCollectionShowsNotesStorageIsFullAndKeepsSavedNotes()throws Exception{
   org.junit.Assume.assumeTrue("Explicit disposable Notes qualification","1".equals(InstrumentationRegistry.getArguments().getString("notesStorage")));
   AlphaCredentialStore store=new AlphaCredentialStore(InstrumentationRegistry.getInstrumentation().getTargetContext());
-  String marker="capacity_"+unique(),before=null,seeded=null;Throwable primary=null;String phase="initialize";
+  String marker="capacity_"+unique(),before=null;NotesCapacityFixture.Snapshot seeded=null;boolean seedApplied=false;Throwable primary=null;String phase="initialize";
   try{
    try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)){openNotes();}
    before=store.readCredentialSlot(AlphaCredentialStore.NOTES_RECORDS);
@@ -71,8 +71,9 @@ public final class NotesStorageDurabilityInstrumentedTest {
    phase="construct bounded capacity fixture";
    String proposed=NotesCapacityFixture.collection(before,marker,cap);
    phase="native seed CAS";
-   assertTrue("Seed only the exact disposable collection",store.compareExchangeCredentialSlot(AlphaCredentialStore.NOTES_RECORDS,before,proposed));
-   seeded=proposed;phase="native readback with fixture retained";assertEquals("Exact native fixture readback",seeded,store.readCredentialSlot(AlphaCredentialStore.NOTES_RECORDS));
+   seeded=NotesCapacityFixture.Snapshot.save(InstrumentationRegistry.getInstrumentation().getTargetContext().getCacheDir(),proposed);
+   assertTrue("Seed only the exact disposable collection",store.compareExchangeCredentialSlot(AlphaCredentialStore.NOTES_RECORDS,before,proposed));seedApplied=true;
+   proposed=null;phase="native readback without retained collection";assertTrue("Exact native fixture readback",seeded.matches(store.readCredentialSlot(AlphaCredentialStore.NOTES_RECORDS)));
    phase="open seeded collection in fresh renderer";
    try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)){
     openNotes();click("Open Capacity target "+marker);until("document.querySelector('textarea[aria-label=Note]')","Small editor");
@@ -84,15 +85,15 @@ public final class NotesStorageDurabilityInstrumentedTest {
     until("document.body.textContent.includes('Notes storage is full')","Storage-full message");
     until("[...document.querySelectorAll('button')].some(b=>b.getAttribute('aria-label')==='Recover browser Notes'&&b.getClientRects().length)","Export (Notes recovery) offered");
     until("document.documentElement.dataset.notesDraftState==='saved'","Small encrypted recovery draft settled before closing the renderer");
-    assertEquals("Saved notes are unchanged",seeded,store.readCredentialSlot(AlphaCredentialStore.NOTES_RECORDS));
+    assertTrue("Saved notes are unchanged",seeded.matches(store.readCredentialSlot(AlphaCredentialStore.NOTES_RECORDS)));
     assertEquals("Unsaved small edit remains on screen",JSONObject.quote("E".repeat(NotesCapacityFixture.EDIT_BYTES)),js("document.querySelector('textarea[aria-label=Note]').value"));
    }
   }catch(Exception|Error failure){primary=failure;System.out.println("ALPHA_NOTES_CAPACITY_FAILURE phase="+phase+" heapLimit="+Runtime.getRuntime().maxMemory());throw failure;}finally{
-   if(seeded!=null)try{
-    assertTrue("Restore only the unchanged fixture collection",store.compareExchangeCredentialSlot(AlphaCredentialStore.NOTES_RECORDS,seeded,before));
+   try{if(seedApplied){
+    assertTrue("Restore only the unchanged fixture collection",store.compareExchangeCredentialSlot(AlphaCredentialStore.NOTES_RECORDS,seeded.exactValue(),before));
     String draft=store.readCredentialSlot(AlphaCredentialStore.NOTES_DRAFT);
     if(draft!=null){JSONArray changed=new JSONObject(draft).getJSONArray("records");assertEquals("Only the fixture edit was drafted",1,changed.length());assertEquals(marker,changed.getJSONObject(0).getString("id"));assertTrue("Remove only the exact fixture draft",store.compareExchangeCredentialSlot(AlphaCredentialStore.NOTES_DRAFT,draft,null));}
-   }catch(Exception|Error cleanup){if(primary!=null)primary.addSuppressed(cleanup);else throw cleanup;}
+   }}catch(Exception|Error cleanup){if(primary!=null)primary.addSuppressed(cleanup);else{primary=cleanup;throw cleanup;}}finally{if(seeded!=null)try{seeded.close();}catch(Exception cleanup){if(primary!=null)primary.addSuppressed(cleanup);else throw cleanup;}}
   }
  }
 
