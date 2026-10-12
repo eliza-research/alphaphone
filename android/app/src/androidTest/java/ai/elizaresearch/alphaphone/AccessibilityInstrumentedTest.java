@@ -91,7 +91,26 @@ public final class AccessibilityInstrumentedTest {
   if(actionable||(children.isEmpty()&&!label.trim().isEmpty()))out.add(node);
   for(UiObject2 child:children)collect(child,out);
  }
- private static void talkBackOrder(UiDevice device,String surface){
+ /** Failure evidence uses raw AX rectangles as well as UiAutomator's visible bounds. The
+  * pinned UiAutomator helper retains the original rectangle when intersection is empty. */
+ private static android.view.accessibility.AccessibilityNodeInfo geometryNode(android.view.accessibility.AccessibilityNodeInfo node,String label,int depth){
+  if(node==null||depth>60)return null;
+  if(label.contentEquals(node.getText()==null?"":node.getText())||label.contentEquals(node.getContentDescription()==null?"":node.getContentDescription()))return node;
+  for(int i=0;i<node.getChildCount();i++){android.view.accessibility.AccessibilityNodeInfo found=geometryNode(node.getChild(i),label,depth+1);if(found!=null)return found;}
+  return null;
+ }
+ private static String accessibilityGeometry(String label){
+  android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();
+  android.view.accessibility.AccessibilityNodeInfo node=geometryNode(root,label,0);
+  StringBuilder out=new StringBuilder(label);
+  for(int depth=0;node!=null&&depth<16;depth++,node=node.getParent()){
+   Rect raw=new Rect();node.getBoundsInScreen(raw);
+   out.append(" < ").append(node.getClassName()).append(" raw=").append(raw.toShortString())
+    .append(" scrollable=").append(node.isScrollable()).append(" visible=").append(node.isVisibleToUser());
+  }
+  return out.toString();
+ }
+ private static void talkBackOrder(UiDevice device,String surface)throws Exception{
   device.waitForIdle(2000);
   // The WebView publishes a layer's accessibility nodes shortly after the layer appears; read the
   // tree again until it holds a clickable control (five seconds at most). The checks below are unchanged.
@@ -119,10 +138,16 @@ public final class AccessibilityInstrumentedTest {
    if(previous!=null){
     Rect p=previous.getVisibleBounds();
     // The next node may start a new column to the right, otherwise it must not read upward.
-    if(r.top<p.top-Math.max(p.height(),r.height())/2&&r.left<p.right)problems.add("reading order goes up from '"+previous.getText()+"' to '"+label+"'");
+    if(r.top<p.top-Math.max(p.height(),r.height())/2&&r.left<p.right){
+     problems.add("reading order goes up from '"+previous.getText()+"' to '"+label+"'");
+     System.out.println("ALPHA_ACCESSIBILITY_ORDER_BOUNDS previous="+p.toShortString()+" next="+r.toShortString());
+     System.out.println("ALPHA_ACCESSIBILITY_PREVIOUS "+accessibilityGeometry(previous.getText()==null?String.valueOf(previous.getContentDescription()):previous.getText()));
+     System.out.println("ALPHA_ACCESSIBILITY_NEXT "+accessibilityGeometry(label));
+    }
    }
    previous=node;
   }
+  if(!problems.isEmpty())System.out.println("ALPHA_ACCESSIBILITY_HOME_GEOMETRY "+js("(()=>{const rect=e=>{if(!e)return null;const r=e.getBoundingClientRect(),s=getComputedStyle(e);return {x:r.x,y:r.y,width:r.width,height:r.height,overflowX:s.overflowX,overflowY:s.overflowY,scrollTop:e.scrollTop,scrollHeight:e.scrollHeight,clientHeight:e.clientHeight};};const q=s=>document.querySelector(s),css=getComputedStyle(document.documentElement);return JSON.stringify({viewport:{width:innerWidth,height:innerHeight},textScale:css.getPropertyValue('--alpha-text-scale'),dockClearance:css.getPropertyValue('--alpha-dock-clearance'),dockRest:css.getPropertyValue('--alpha-dock-rest'),phoneScale:css.getPropertyValue('--phone-scale'),home:rect(q('[data-alpha-layer=home]')),allApps:rect(q('[data-alpha-home-apps] button[aria-label=\"All apps\"]')),composer:rect(q('[data-alpha-layer=composer]')),pill:rect(q('[data-alpha-layer=pill]')),inputBar:rect(q('[data-alpha-input-bar]'))});})()"));
   assertTrue(surface+": TalkBack reaches actionable controls",actionable>0);
   assertTrue(surface+" at 200% font: "+problems,problems.isEmpty());
  }
