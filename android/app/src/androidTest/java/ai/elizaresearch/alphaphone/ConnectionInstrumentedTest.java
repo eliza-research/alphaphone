@@ -47,6 +47,22 @@ public class ConnectionInstrumentedTest {
  }
  private void ready() throws Exception { until("window.Capacitor?.Plugins?.AlphaConnection && document.documentElement.dataset.activeView"); }
 
+ @Test public void productionTransportRejectsRemoteCloudAndUnapprovedRoutesBeforeConnecting() throws Exception {
+  org.junit.Assume.assumeTrue("Production transport policy requires flag-off debug APK",BuildConfig.DEBUG&&!BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS);
+  try(BoundedActivityScenario<MainActivity> activity=BoundedActivityScenario.launch(MainActivity.class)) {
+   AppNavigation.liveMode();ready();
+   // No credentials, body, or successful HTTP request. The bridge's bounded diagnostic proves
+   // refusal during URL/route validation, before openConnection or any network dispatch.
+   for(String url:new String[]{"https://remote-fixture.invalid/api/auth/me","https://11111111-1111-4111-8111-111111111111.cloud.eliza.app/api/agents","https://api.eliza.app/api/agents","https://api.eliza.app/api/v1/eliza/unreviewed-service","https://api.eliza.app/api/v1/eliza/google/disconnect"}){
+    JSONObject args=new JSONObject().put("requestId",java.util.UUID.randomUUID().toString()).put("url",url).put("method","GET");
+    WebViewTestDriver.evaluate("window.__connectionPolicy=null;Capacitor.Plugins.AlphaConnection.request("+args+").then(()=>window.__connectionPolicy={ok:true},error=>window.__connectionPolicy={ok:false,code:error.code})");
+    until("window.__connectionPolicy!==null");JSONObject result=new JSONObject(WebViewTestDriver.evaluate("window.__connectionPolicy"));
+    assertFalse("Forbidden product transport route must reject",result.getBoolean("ok"));
+    assertEquals("Refusal precedes connection and dispatch","ALPHA_TRANSPORT:OTHER:VALIDATE:-1:java.lang.IllegalArgumentException",result.getString("code"));
+   }
+  }
+ }
+
  @Test public void reservedNativeSlotsRejectEveryPublicStorageOperation() throws Exception {
   org.junit.Assume.assumeTrue("Owned native credential isolation campaign", "1".equals(InstrumentationRegistry.getArguments().getString("nativeSlotIsolation")));
   assertTrue("Fresh secondary user required",android.os.Process.myUid()/100000>0);
