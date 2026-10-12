@@ -31,7 +31,7 @@ for(const scenario of ['reset','competing-write','abort','unreadable'] as const)
  else if(scenario==='competing-write')expect(result).toMatchObject({refused:true,exact:true,newer:true,writes:1});
  else expect(result).toMatchObject({refused:true,unchanged:true,writes:0});
 });
-test('native recovery backup passes exact UTF-8 bytes to reviewed document export',async({page})=>{
+test('explicit development fixture native recovery backup passes exact UTF-8 bytes to reviewed document export',async({page})=>{
  expect(await page.evaluate(async()=>{
   const {saveNativeRecoveryBackup}=await import('/src/runtime/native-recovery-backup.ts');let input:any;
   const raw=JSON.stringify({saved:' { "text": "🙂 draft" }\n',currentDraft:'Current\nline'});

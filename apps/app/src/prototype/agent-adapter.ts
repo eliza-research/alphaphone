@@ -118,7 +118,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
   const notesDataset=(name:'notesStorageState'|'notesDraftState',value:string)=>{document.documentElement.dataset[name]=value;};
   /** Status for a Notes save that did not complete. `kept` reports a confirmed encrypted draft. */
   function failedNotesStatus(shell:Shell,kept:boolean){
-    if(shell.notesStorageFull){notesDataset('notesStorageState','full');return kept?'Notes storage is full. Unsaved changes are kept in an encrypted draft on this device. Export your notes from Notes recovery, then delete notes you no longer need or empty Trash.':'Notes storage is full. Export your notes from Notes recovery, then delete notes you no longer need or empty Trash. Keep this screen open to preserve unsaved text.';}
+    if(shell.notesStorageFull){notesDataset('notesStorageState','full');return kept?'Notes storage is full. Unsaved changes are kept in an encrypted draft on this device. Delete notes you no longer need or empty Trash.':'Notes storage is full. Delete notes you no longer need or empty Trash. Keep this screen open to preserve unsaved text.';}
     return kept?'Save unconfirmed. Unsaved changes are kept in an encrypted draft on this device; reopen Alpha to resume.':'Save unconfirmed. Keep this screen open to preserve unsaved text.';
   }
   /** Android: keep the attempted edits in the encrypted draft slot after a failed or uncertain commit. */
@@ -147,7 +147,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     if(!draft||!shell.live||!shell.notesStore||shell.notesStorageFailed||shell.notesPending)return;
     const current=shell.notesStore.list,next=applyNotesDraft(current,draft),conflicts=notesDraftConflicts(current,draft);
     // A note edited again since the draft was kept keeps its newer saved text; the draft stays
-    // encrypted on this device for export from Notes recovery instead of overwriting it.
+    // encrypted on this device instead of overwriting it.
     const conflicted=()=>{
       shell.notesDraftConflict=true;notesDataset('notesDraftState','conflict');
       if(shell.live){originalSet.call(shell,'notes',{storageStatus:'Some unsaved changes from an earlier session conflict with newer edits. Your newer notes were kept. Open Notes recovery to download the older changes.'});context(shell);}
@@ -759,7 +759,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       // unavailable storage must never turn this edit into an action receipt.
       this.notesSelectionKey=null;this.notesSelection=null;
       originalSet.call(this,key,{...patch,storageStatus:failedNotesStatus(this,false)});
-      this.toast('Notes storage needs recovery. Copy or export unsaved text before resetting.');context(this);
+      this.toast('Notes storage needs recovery. Unsaved text is kept on this screen; saved drafts are retained in Alpha.');context(this);
       keepNotesDraft(this,patch.list,this.notesStorageFull?'storage-full':this.notesCommitUncertain?'uncertain':'failed');return false;
     }
     try {
@@ -1198,7 +1198,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     const out = notesRender({ ...state, record: false }, api);
     out.storageStatus=state.storageStatus;
     const failed=Boolean((activeShell?.notesStorageFailed&&document.documentElement.dataset.notesStorageState!=='opening')||activeShell?.notesStore?.needsRecovery);
-    // Android offers the same export and reset for a damaged collection, a kept draft or a full store.
+    // A damaged collection, kept draft or full store exposes retention guidance. Development builds also offer fixture recovery tools.
     out.browserRecovery=isAndroid?Boolean(failed||activeShell?.notesDraftUnreadable||activeShell?.notesDraftDeferred||activeShell?.notesDraftConflict):Boolean(failed||state.audioDeletionRecoveryFailed||state.audioDeletionPending?.length);
     out.openBrowserRecovery=()=>{const shell=activeShell;if(!shell||shell.notesPending)return;notesRecovery?.abort();const controller=notesRecovery=new AbortController();if(isAndroid){openNativeNotesRecovery(shell,controller.signal);return;}openDomainRecovery({capture:async signal=>{const draft=JSON.stringify({...JSON.parse(shell.notesStore?.raw||'{}'),records:shell.vget('notes').list});const saved=await browserNotesRecovery.capture(signal);return {...saved,raw:JSON.stringify({saved:saved.raw,draft})};},reset:browserNotesRecovery.reset},'Notes','Browser Notes recovery','Download saved Notes and the current editor draft before resetting. Reset starts an empty collection; it does not delete audio files or resolve pending audio deletion. Close other Alpha tabs before continuing.',controller.signal);};
     out.openAudioRecovery=async()=>{const shell=activeShell;if(!shell)return;notesRecovery?.abort();const controller=notesRecovery=new AbortController();try{const recovery=await audioDeletionRecovery();if(controller.signal.aborted||activeShell!==shell||!shell.live||shell.S().view!=='notes')return;openDomainRecovery(recovery,'note audio deletion history','Note audio deletion recovery','Download unresolved note/audio deletion records before resetting. Reset forgets recovery records, but does not delete or restore Notes or audio. Check uncertain outcomes before repeating any deletion. Close other Alpha tabs before continuing.',controller.signal);}catch{if(!controller.signal.aborted)api.toast('Audio deletion recovery could not be opened.');}};

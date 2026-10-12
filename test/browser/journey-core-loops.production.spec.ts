@@ -414,9 +414,9 @@ test('loops E and J05 in the web build: browsing and page review work, an unconn
   await expect(review.getByRole('textbox', { name: 'Content excerpt' })).toHaveValue(/The ferry leaves at nine from pier four\./);
   await review.getByRole('button', { name: 'Use in conversation', exact: true }).click();
   await button(page, 'Send').click();
-  // No agent is connected: the reviewed draft is kept and the real connection choices open.
+  // No local Android agent is available: preserve the reviewed draft and explain the local-only policy.
   await expect(page.getByRole('status', { name: 'Assistant draft status' })).toHaveText('Not sent. Your message is back in the composer.');
-  await expect(page.locator('.alpha-connection').getByText('On-device agent unavailable here', { exact: true })).toBeVisible();
+  await expect(page.locator('.alpha-connection').getByText('Your agent runs locally in the Android app. Remote agents and pairing are unavailable.', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /^Review summary note/ })).toHaveCount(0);
   await page.locator('.alpha-connection').getByRole('button', { name: 'Close connection settings', exact: true }).click();
   await page.goto('/');
@@ -483,7 +483,7 @@ test('loop J03 in the web build: a chosen document can be reviewed for a questio
   await question.getByRole('button', { name: 'Use in conversation', exact: true }).click();
   await button(page, 'Send').click();
   await expect(page.getByRole('status', { name: 'Assistant draft status' })).toHaveText('Not sent. Your message is back in the composer.');
-  await expect(page.locator('.alpha-connection').getByText('On-device agent unavailable here', { exact: true })).toBeVisible();
+  await expect(page.locator('.alpha-connection').getByText('Your agent runs locally in the Android app. Remote agents and pairing are unavailable.', { exact: true })).toBeVisible();
   await expect(page.getByText('Review summary note', { exact: true })).toHaveCount(0);
   await page.locator('.alpha-connection').getByRole('button', { name: 'Close connection settings', exact: true }).click();
   await page.evaluate(() => window.dispatchEvent(new Event('launcher-home')));

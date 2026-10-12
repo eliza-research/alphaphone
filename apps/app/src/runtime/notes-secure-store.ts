@@ -55,7 +55,7 @@ export function notesDraftChanges(list:NoteRecord[],saved:NoteRecord[]){
 }
 type DraftChanges=Pick<NotesDraft,'records'|'added'|'removed'|'before'>;
 /** Ids whose current saved note changed since the draft was kept and differs from the drafted
- * copy. Those notes keep their newer saved content; the draft is retained for export. */
+ * copy. Those notes keep their newer saved content; the draft is retained in Alpha. */
 export function notesDraftConflicts(list:NoteRecord[],draft:DraftChanges):string[]{
  const drafted=new Map(draft.records.map(n=>[n.id,JSON.stringify(n)])),added=new Set(draft.added),removed=new Set(draft.removed);
  return list.filter(n=>{
@@ -115,7 +115,7 @@ export const SecureNotesStore = {
   for(let attempt=0;attempt<3;attempt++){
    const expected=await vault.read<unknown>(SECURE_NOTES_DRAFT_SLOT);
    // This editor's own draft is replaced, so a reverted edit is not resurrected. Any other kept
-   // draft is merged, never replaced; an invalid one is left for export in Notes recovery.
+   // draft is merged, never replaced; an invalid one is retained without overwriting it.
    const prior=expected===null?null:input.own&&JSON.stringify(expected)===JSON.stringify(input.own)?input.kept??null:validDraft(expected);
    const merged=prior?mergeNotesDrafts(prior,changes):changes;
    const draft:NotesDraft={version:1,savedAt:Date.now(),base:input.base,reason:input.reason,...merged};
@@ -123,7 +123,7 @@ export const SecureNotesStore = {
   }
   throw Error('Notes draft changed in another view');
  },
- /** Remove the exact draft that was reviewed, applied or exported. */
+ /** Remove the exact draft that was reviewed or applied. */
  async clearDraft(vault:NotesVault,expected:NotesDraft):Promise<boolean>{
   return (await vault.compareExchange(SECURE_NOTES_DRAFT_SLOT,expected,null)).status==='saved';
  },

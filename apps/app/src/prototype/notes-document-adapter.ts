@@ -1,3 +1,4 @@
+import {testMocksEnabled} from '../build-flags';
 import { registerPlugin } from '../platform-plugins';
 type Bag=Record<string,any>;
 const documents=registerPlugin<{importText():Promise<{status:string;message:string;text?:string;name?:string}>;exportText(input:{title:string;text:string}):Promise<{status:string;message:string}>}>('AlphaNoteDocuments', {
@@ -5,6 +6,7 @@ const documents=registerPlugin<{importText():Promise<{status:string;message:stri
 });
 /** Explicit user-selected text only; existing Notes persistence owns conflict/readback checks. */
 export function installNotesDocumentAdapter(Component:any,views:Record<string,Bag>){
+ if(!testMocksEnabled)return; // Product Notes has no import/export migration workflow.
  const notes=views.notes,render=notes.render,leave=notes.onLeave;let busy=false,epoch=0;
  // Android delivers a picker result before the app is shown again. A receipt lasts under two
  // seconds, so one issued while the document is hidden can be over before anyone sees it.

@@ -20,6 +20,25 @@ public final class BrowserCookiePolicyInstrumentedTest {
   java.lang.reflect.Method build=AlphaBrowserPlugin.class.getDeclaredMethod("build",String.class,boolean.class,String.class);build.setAccessible(true);
   Object tab=build.invoke(plugin,id,priv,profile);java.lang.reflect.Field web=tab.getClass().getDeclaredField("web");web.setAccessible(true);return (WebView)web.get(tab);
  }
+ /** Exercise the real product popup callback with a controlled committed opener.
+  * The intercepted fixture replaces navigation callbacks, so supply only their
+  * committed/selected state; the product constructs and profiles the child. */
+ private static WebView popup(MainActivity activity,WebView opener)throws Exception{
+  AlphaBrowserPlugin plugin=(AlphaBrowserPlugin)activity.getBridge().getPlugin("AlphaBrowser").getInstance();
+  java.lang.reflect.Field tabs=AlphaBrowserPlugin.class.getDeclaredField("tabs");tabs.setAccessible(true);
+  Object selected=null;String id=null;
+  for(Object tab:((java.util.Map<?,?>)tabs.get(plugin)).values()){
+   java.lang.reflect.Field web=tab.getClass().getDeclaredField("web");web.setAccessible(true);
+   if(web.get(tab)==opener){selected=tab;java.lang.reflect.Field key=tab.getClass().getDeclaredField("id");key.setAccessible(true);id=(String)key.get(tab);break;}
+  }
+  assertNotNull("Owned fixture opener exists",selected);
+  java.lang.reflect.Field committed=selected.getClass().getDeclaredField("committed");committed.setAccessible(true);committed.setBoolean(selected,true);
+  java.lang.reflect.Field presented=AlphaBrowserPlugin.class.getDeclaredField("presentedId");presented.setAccessible(true);presented.set(plugin,id);
+  WebView.WebViewTransport transport=opener.new WebViewTransport();
+  android.os.Message message=android.os.Message.obtain(new android.os.Handler(android.os.Looper.getMainLooper()),()->{});message.obj=transport;
+  assertTrue("Product popup callback accepts a reviewed user gesture",opener.getWebChromeClient().onCreateWindow(opener,false,true,message));
+  assertNotNull("Product supplied the child",transport.getWebView());return transport.getWebView();
+ }
  private static String evaluate(WebView web,String code)throws Exception{
   CountDownLatch done=new CountDownLatch(1);AtomicReference<String> value=new AtomicReference<>();
   BoundedActivityScenario.main(()->web.evaluateJavascript(code,result->{value.set(result);done.countDown();}));
@@ -47,15 +66,16 @@ public final class BrowserCookiePolicyInstrumentedTest {
   org.junit.Assume.assumeTrue("Private tabs require secure scoped deletion",WebViewFeature.isFeatureSupported(WebViewFeature.DELETE_BROWSING_DATA));exercise(true);
  }
  private void exercise(boolean priv)throws Exception{
-  String token=UUID.randomUUID().toString().replace("-","");AtomicReference<WebView> first=new AtomicReference<>(),second=new AtomicReference<>();boolean[] hostPolicy=new boolean[1];
+  String token=UUID.randomUUID().toString().replace("-","");AtomicReference<WebView> first=new AtomicReference<>(),second=new AtomicReference<>(),child=new AtomicReference<>();boolean[] hostPolicy=new boolean[1];
   try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)){
    AppNavigation.liveMode();
    WebViewTestDriver.withActivity(MainActivity.class,activity->{try{
     hostPolicy[0]=CookieManager.getInstance().acceptThirdPartyCookies(activity.getBridge().getWebView());
+    assertFalse("Privileged host refuses third-party cookies",hostPolicy[0]);
     String profile=priv?AlphaBrowserPlugin.PRIVATE_PREFIX+token:AlphaBrowserPlugin.PERSISTENT_PROFILE;
     first.set(build(activity,"cookies_a",priv,profile));second.set(build(activity,"cookies_b",priv,profile));
-    assertEquals("Per-tab policy",!priv,CookieManager.getInstance().acceptThirdPartyCookies(first.get()));
-    assertEquals("Second tab policy",!priv,CookieManager.getInstance().acceptThirdPartyCookies(second.get()));
+    assertEquals("Per-tab policy",!priv,WebViewCompat.getProfile(first.get()).getCookieManager().acceptThirdPartyCookies(first.get()));
+    assertEquals("Second tab policy",!priv,WebViewCompat.getProfile(second.get()).getCookieManager().acceptThirdPartyCookies(second.get()));
     assertEquals(profile,WebViewCompat.getProfile(first.get()).getName());
     assertNotEquals("Browser profile is never privileged host",WebViewCompat.getProfile(activity.getBridge().getWebView()).getName(),profile);
     assertEquals("Host policy unchanged",hostPolicy[0],CookieManager.getInstance().acceptThirdPartyCookies(activity.getBridge().getWebView()));
@@ -66,7 +86,16 @@ public final class BrowserCookiePolicyInstrumentedTest {
    assertEquals("No privileged bridge in iframe","\"undefined\"",evaluate(first.get(),"window.result.bridge"));
    frame(second.get(),token,false);
    assertEquals("Second tab follows same profile policy",String.valueOf(!priv),evaluate(second.get(),"window.result.cookie.includes('alpha_"+token+"=present')"));
+   WebViewTestDriver.withActivity(MainActivity.class,activity->{try{
+    child.set(popup(activity,first.get()));
+    assertEquals("Popup inherits opener profile",WebViewCompat.getProfile(first.get()).getName(),WebViewCompat.getProfile(child.get()).getName());
+    assertEquals("Popup inherits third-party policy",!priv,WebViewCompat.getProfile(child.get()).getCookieManager().acceptThirdPartyCookies(child.get()));
+   }catch(Exception failure){throw new AssertionError(failure);}});
+   frame(child.get(),token,false);
+   assertEquals("Popup iframe follows inherited cookie policy",String.valueOf(!priv),evaluate(child.get(),"window.result.cookie.includes('alpha_"+token+"=present')"));
+   assertEquals("No privileged bridge in popup iframe","\"undefined\"",evaluate(child.get(),"window.result.bridge"));
    WebViewTestDriver.withActivity(MainActivity.class,activity->{
+    assertFalse("Host remains strict after popup",CookieManager.getInstance().acceptThirdPartyCookies(activity.getBridge().getWebView()));
     String hostCookies=WebViewCompat.getProfile(activity.getBridge().getWebView()).getCookieManager().getCookie("https://embed.invalid/");
     assertFalse("No browser cookie leaked into host",hostCookies!=null&&hostCookies.contains("alpha_"+token+"="));
    });

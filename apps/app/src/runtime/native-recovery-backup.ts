@@ -1,8 +1,10 @@
+import {testMocksEnabled} from '../build-flags';
 import {registerPlugin} from '../platform-plugins';
 type Backup={name:string;mimeType:'text/plain';dataBase64:string;sha256:string;reviewed:true};
 type Saver={saveReviewed(input:Backup):Promise<{status:string;message:string}>};
 /** Explicit backup export through the existing Android document picker and byte readback. */
 export async function saveNativeRecoveryBackup(raw:string,name:string,signal:AbortSignal,saver?:Saver){
+ if(!testMocksEnabled)throw Error("App-data backup is unavailable.");
  signal.throwIfAborted();
  const bytes=new TextEncoder().encode(raw);
  if(bytes.length>5*1024*1024||raw.includes('\0')||!name.endsWith('.txt')||name.length>120||/[\\/\x00-\x1f]/.test(name))throw Error('Recovery backup cannot be exported as a text file.');

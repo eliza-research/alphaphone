@@ -26,8 +26,7 @@ final class ConnectionRoutes {
   * build legitimately sends here (sign-in, identity, balance, key self-revocation, the connected
   * services under /api/v1/eliza/) goes to the Cloud API, so the only admitted origin is exactly
   * https://api.eliza.app on the default port. A dedicated Cloud agent runtime
-  * (https://&lt;agent-uuid&gt;.cloud.eliza.app) is refused with every other host; admit it here only
-  * if owner decision A-16 brings Cloud agents to production Android. A paired remote agent's origin
+  * (https://&lt;agent-uuid&gt;.cloud.eliza.app) is always refused in product builds (P-22/P-31). A paired remote agent's origin
   * is refused even when the renderer presents a saved credential for it; the refusal is decided from
   * the URL alone and touches no credential slot.
   * Test-mocks builds keep every origin the URL validation admits (remote, Cloud and development agents).
@@ -35,6 +34,15 @@ final class ConnectionRoutes {
  static boolean admittedOrigin(String scheme,String host,int port,boolean testMocks){
   if(testMocks)return true;
   return "https".equals(scheme)&&"api.eliza.app".equals(host)&&(port==-1||port==443);
+ }
+ /** P-22/P-31: allow current managed APIs; new services need explicit route review. */
+ static boolean managedService(String path,String query,String method,boolean hasBody,boolean testMocks){
+  if(testMocks)return true;
+  if(path==null||path.contains("%")||path.contains("\\")||path.contains("//"))return false;
+  if("DELETE".equals(method))return "/api/v1/api-keys/current".equals(path)&&query==null&&!hasBody;
+  if("POST".equals(method))return query==null&&(java.util.Set.of("/api/auth/cli-session","/api/v1/eliza/google/connect/initiate","/api/v1/eliza/google/disconnect","/api/v1/eliza/google/gmail/inbox-v1/operations").contains(path)||path.matches("/api/v1/eliza/google/gmail/inbox-v1/operations/[A-Za-z0-9_-]{1,160}/dispatch"));
+  if(!"GET".equals(method)||hasBody)return false;
+  return path.matches("/api/auth/cli-session/[0-9a-fA-F-]{36}")||java.util.Set.of("/api/v1/user","/api/v1/credits/balance","/api/v1/eliza/google/accounts","/api/v1/eliza/google/status","/api/v1/eliza/google/gmail/search","/api/v1/eliza/google/gmail/read").contains(path)||path.matches("/api/v1/eliza/google/gmail/inbox-v1/(capabilities|thread|attachment|drafts|draft)")||path.matches("/api/v1/eliza/google/gmail/inbox-v1/operations/[A-Za-z0-9_-]{1,160}");
  }
  /**
   * Cloud self-revocation: the presented sign-in key revokes only itself. Exactly

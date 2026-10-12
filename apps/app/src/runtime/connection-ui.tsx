@@ -77,8 +77,8 @@ const SELECTION = 'alpha.connection.selection.v1';
 const browserDevProfile = devSurfacesEnabled && devProfileQuery;
 /** Production builds offer only the production Cloud environment. */
 const cloudEnvironmentAllowed = (environment: unknown): environment is CloudEnvironment => environment === 'production' || (testMocksEnabled && environment === 'staging');
-/** Production phones run the resident agent; remote pairing and remote restore are retired there. */
-const remotePairingRetired = isAndroid && !testMocksEnabled;
+/** Every product build is local-agent-only; remote infrastructure is development-only. */
+const remotePairingRetired = !testMocksEnabled;
 /** Eliza Cloud admits no request from the production web origin, so no Cloud route is started there. */
 const webCloudUnavailable = () => !testMocksEnabled && !isAndroid && !browserLocalAgentEnabled;
 const CLOUD_SERVICE = 'alpha.connection.cloud-service.v1';
@@ -131,6 +131,7 @@ let personalRecovery:AbortController|null=null;
 function clearPersonalSetup(){personalRecovery?.abort();personalGeneration++;personalSetup=null;update({cloudPersonal:undefined});}
 function personalCurrent(binding:NonNullable<typeof personalSetup>,generation:number){return generation===personalGeneration&&personalSetup===binding&&service?.identity.sessionId===binding.serviceId&&service.identity.credentialId===binding.client.owner.credentialId&&service.identity.environment===binding.client.owner.environment&&service.identity.userId===binding.client.owner.userId&&service.identity.organizationId===binding.client.owner.organizationId;}
 async function inspectPersonal(signal:AbortSignal){
+ if(!testMocksEnabled)throw Error(PAIRING_RETIRED);
  const generation=personalGeneration,serviceId=service?.identity.sessionId;
  if(!serviceId)throw Error('Sign in with Eliza Cloud first.');
  const client=await cloud.personal(signal);signal.throwIfAborted();
@@ -159,6 +160,7 @@ async function personalDispatch(binding:NonNullable<typeof personalSetup>,genera
  await clearPersonalIntent(binding.client.owner,intent);signal.throwIfAborted();throw Error('Cloud account changed before setup was sent.');
 }
 async function personalWork(message:string,action:(binding:NonNullable<typeof personalSetup>,view:PersonalView,signal:AbortSignal)=>Promise<void>){
+ if(!testMocksEnabled){update({error:PAIRING_RETIRED});return;}
  await work(message,async signal=>{
   const binding=personalSetup,view=state.cloudPersonal?.view,generation=personalGeneration;
   if(!binding||!view||!personalCurrent(binding,generation))throw Error('Refresh Cloud status before continuing.');
@@ -228,7 +230,7 @@ function errorMessage(error: unknown): string {
     if (error.code === 'credentials-missing') return 'Sign in with Eliza Cloud to reconnect your account.';
   }
   if (error instanceof DOMException && error.name === 'AbortError') return 'Connection cancelled.';
-  if (error && typeof error === 'object' && 'status' in error && error.status === 401) return 'Your session has expired. Sign in or pair again.';
+  if (error && typeof error === 'object' && 'status' in error && error.status === 401) return testMocksEnabled?'Your session has expired. Sign in or pair again.':'Your session has expired. Sign in again.';
   if (error && typeof error === 'object' && 'status' in error && error.status === 503) return 'The agent is starting or temporarily unavailable. Try again shortly.';
   return error instanceof Error ? error.message : 'The connection could not be completed.';
 }
@@ -401,6 +403,7 @@ async function connectResident(signal: AbortSignal) {
   if(isAndroid && !testMocksEnabled){await restoreSavedHistory(signal);await refreshActionReview(signal);}
 }
 async function connectCloud(agentId: string, signal: AbortSignal, expectedOwner?: string, expectedOrigin?:string, expectedPersonalOwner?:Readonly<PersonalOwner>) {
+  if(!testMocksEnabled)throw Error(PAIRING_RETIRED);
   const client=cloud;
   client.setPhoneTarget(null);
   const identity = await verifyService(cloud, signal); signal.throwIfAborted();
@@ -917,7 +920,7 @@ export const connectionController = {
     const environment = service.identity.environment;
     if (active?.kind === 'cloud' && active.cloud.environment === environment) retire('Sign-in required');
     detachService();
-    update({ error: 'Eliza Cloud sign-in has expired. Sign in again; remote agent pairing is unchanged.' });
+    update({ error: testMocksEnabled?'Eliza Cloud sign-in has expired. Sign in again; remote agent pairing is unchanged.':'Eliza Cloud sign-in has expired. Sign in again to use managed services.' });
     return true;
   },
   open() { update({ open: true, purpose:'agent', error: '' }); },
@@ -967,6 +970,10 @@ export const connectionController = {
         if (stored === null) { try { save({ kind: 'none' }); } catch { /* The chooser explains the choice either way. */ } update({ open: true, message: '' }); return; }
       }
       const saved = selection();
+      if(!testMocksEnabled&&!isAndroid&&!browserLocalAgentEnabled){
+        // Preserve legacy selection and history for recovery; never read credentials or reconnect.
+        update({open:saved?.kind!=='offline',message:'Your agent runs locally in the Android app. Local apps remain available here.'});return;
+      }
       if (isAndroid && !testMocksEnabled) {
         // An explicit "local apps without AI" choice is kept; AI starts only when the user asks.
         // A kept Cloud sign-in is offered as "Retry saved connection" (local read, no network).
@@ -1089,6 +1096,7 @@ export const connectionController = {
     });
   },
   async cloudList(environment: CloudEnvironment) {
+    if(!testMocksEnabled){update({error:PAIRING_RETIRED});return;}
     if (webCloudUnavailable()) { update({ open: true, error: WEB_CLOUD_UNAVAILABLE, message: '' }); return; }
     await work('Loading your agents…', async signal => { cloud = makeCloud(environment);
       if (service && service.identity.environment !== environment) { detachCloudTarget(); detachService(); }
@@ -1129,11 +1137,12 @@ export const connectionController = {
    if(personalCurrent(binding,generation))await publishPersonal(binding,next,intent,generation,signal);
   });},
   async cloudPersonalRecovery(){
+   if(!testMocksEnabled)return;
    const binding=personalSetup,generation=personalGeneration;if(Capacitor.getPlatform()==='android'||!binding||!personalCurrent(binding,generation)||operation)return;
    personalRecovery?.abort();const controller=personalRecovery=new AbortController(),check=()=>{controller.signal.throwIfAborted();if(!personalCurrent(binding,generation))throw Error('Cloud account changed.');};
    try{const domain=await personalIntentDocument(binding.client.owner);check();openDomainRecovery({async capture(signal){check();const value=await domain.capture(signal);check();return value;},async reset(expected,signal){check();await domain.reset(expected,signal);check();}},'Cloud setup intent','Cloud setup intent recovery','Download this account’s exact saved intent before resetting. An uncertain setup may already have started hosting. Check Cloud status first. Reset only clears local recovery; it does not stop hosting, revoke credentials or send another setup request.',controller.signal);}catch{if(!controller.signal.aborted&&personalCurrent(binding,generation))update({error:'Cloud setup recovery could not be opened.'});}
   },
-  async cloudManage(environment:CloudEnvironment){await work('Opening Cloud account…',signal=>openConnectionBrowser(testMocksEnabled&&environment==='staging'?'https://cloud-staging.eliza.app/cloud/agents':'https://cloud.eliza.app/cloud/agents',signal));},
+  async cloudManage(environment:CloudEnvironment){if(!testMocksEnabled){update({error:PAIRING_RETIRED});return;}await work('Opening Cloud account…',signal=>openConnectionBrowser(testMocksEnabled&&environment==='staging'?'https://cloud-staging.eliza.app/cloud/agents':'https://cloud.eliza.app/cloud/agents',signal));},
   async cloudPersonalConnect(){await personalWork('Verifying your personal Cloud agent…',async(binding,_view,signal)=>{
    const generation=personalGeneration,expected=await personalIntent(binding.client.owner,signal),next=await binding.client.inspect(signal);if(!personalCurrent(binding,generation))return;await publishPersonal(binding,next,expected,generation,signal);
    if(next.kind!=='ready'||state.cloudPersonal?.blocked)throw Error('Your personal Cloud agent is not ready.');
@@ -1468,7 +1477,13 @@ export function ConnectionChooser() {
     {snapshot.historyError&&<><p role="status">{snapshot.historyError}</p><button disabled={snapshot.busy} onClick={()=>void connectionController.retrySavedHistory()}>Retry saved conversation</button></>}
     {snapshot.busy&&<button className="alpha-connection-cancel" onClick={()=>connectionController.cancel()}>Cancel</button>}
   </div></div>;
-  const pairingOptions=<>
+  if(browserOnly)return <div className="alpha-connection-scrim"><div className="alpha-connection" role="dialog" aria-modal="true" aria-labelledby="local-only-title" tabIndex={-1} ref={panel}>
+    <header><h1 id="local-only-title">Alpha Phone</h1><button aria-label="Close connection settings" onClick={()=>connectionController.close()}>Close</button></header>
+    <p>Your agent runs locally in the Android app. Remote agents and pairing are unavailable.</p>
+    <p>Local apps remain available here. Saved history is preserved.</p>
+    <button onClick={()=>void connectionController.offline()}>Use local apps without AI</button>
+  </div></div>;
+  const pairingOptions=testMocksEnabled?<>
     <details><summary>Remote agent</summary><form onSubmit={event => { event.preventDefault(); void connectionController.pair('remote', remoteOrigin.current?.value || '', remoteCode.current?.value || ''); if (remoteCode.current) remoteCode.current.value = ''; }}>
       <label>Agent HTTPS address<input ref={remoteOrigin} type="url" autoCapitalize="none" spellCheck={false} placeholder="https://your-agent.example" required disabled={snapshot.busy} /></label>
       <label>Pairing code<input ref={remoteCode} autoComplete="off" autoCapitalize="characters" placeholder="XXXX-XXXX-XXXX" disabled={snapshot.busy} /></label><p>Use the code shown by your agent. Leave it empty to restore this phone’s saved session.</p><button disabled={snapshot.busy}>Connect remote agent</button>
@@ -1477,7 +1492,7 @@ export function ConnectionChooser() {
       <label>Local agent address<input ref={localOrigin} type="url" defaultValue="http://10.0.2.2:2138" autoCapitalize="none" spellCheck={false} required disabled={snapshot.busy} /></label>
       <label>Pairing code<input ref={localCode} autoComplete="off" autoCapitalize="characters" disabled={snapshot.busy} /></label><button disabled={snapshot.busy}>Connect local agent</button>
     </form></details>}
-  </>;
+  </>:null;
   if(browserDevProfile)return <div className="alpha-connection-scrim"><div className="alpha-connection" role="dialog" aria-modal="true" aria-labelledby="connection-title" tabIndex={-1} ref={panel}>
     <header><h1 id="connection-title">Development connections</h1><button aria-label="Close connection settings" disabled={snapshot.busy} onClick={()=>connectionController.close()}><span aria-hidden="true" data-alpha-icon="/icons/lucide/x.svg" style={iconStyle("x")}/></button></header>
     <p>Local profiles exercise agent setup, conversations and history. Edit the reply to test each consumer.</p>
@@ -1522,13 +1537,13 @@ export function ConnectionChooser() {
     <div role="status" aria-live="polite">{snapshot.message}</div>
     {snapshot.error && <p role="alert" className="alpha-connection-error">{snapshot.error}</p>}
     {snapshot.busy && <button className="alpha-connection-cancel" onClick={() => connectionController.cancel()}>{snapshot.cloudPersonal?.view?'Stop waiting':'Cancel'}</button>}
-    <details><summary>Eliza Cloud</summary><p>Connect your personal Eliza. Dedicated hosting requires a reviewed setup before it starts.</p>
+    {testMocksEnabled&&<details><summary>Development Cloud agent infrastructure</summary><p>Connect your personal Eliza. Dedicated hosting requires a reviewed setup before it starts.</p>
       {cloudAccountControls}
       {!browserOnly&&<button disabled={snapshot.busy} onClick={()=>void connectionController.cloudList(env())}>Refresh agent status</button>}
       {snapshot.cloudAccount&&Capacitor.getPlatform()!=='android'&&<button disabled={snapshot.busy} onClick={()=>void connectionController.cloudPersonalRecovery()}>Cloud setup intent recovery</button>}
       {snapshot.cloudPersonal&&<CloudPersonalSetup setup={snapshot.cloudPersonal} busy={snapshot.busy} onAccept={()=>void connectionController.cloudPersonalAccept()} onDecline={()=>connectionController.cloudPersonalDecline()} onPoll={()=>void connectionController.cloudPersonalPoll()} onFinalize={()=>void connectionController.cloudPersonalFinalize()} onConnect={()=>void connectionController.cloudPersonalConnect()}/>}
       <button disabled={snapshot.busy} onClick={()=>void connectionController.cloudManage(env())}>Manage Cloud account</button>
-    </details>
+    </details>}
     {pairingOptions}
     {testMocksEnabled&&<details><summary>Mock mode</summary><p>Explore the prototype with simulated data and actions. No live agent connection is used.</p><button disabled={snapshot.busy} onClick={() => connectionController.mock()}>Enter mock mode</button></details>}
     <button className="alpha-connection-offline" disabled={snapshot.busy} onClick={() => void connectionController.offline()}>Continue offline</button>

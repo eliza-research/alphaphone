@@ -341,8 +341,10 @@ public class AlphaBrowserPlugin extends Plugin {
    if (!WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROCESS) || !WebViewCompat.isMultiProcessEnabled()) throw new IllegalStateException();
    WebSettings settings = t.web.getSettings(); settings.setJavaScriptEnabled(true); settings.setDomStorageEnabled(true); settings.setAllowFileAccess(false); settings.setAllowContentAccess(false); settings.setAllowFileAccessFromFileURLs(false); settings.setAllowUniversalAccessFromFileURLs(false); settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW); settings.setJavaScriptCanOpenWindowsAutomatically(false); settings.setSupportMultipleWindows(true); settings.setSaveFormData(false); settings.setSafeBrowsingEnabled(true); t.web.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
    // P-19: embedded sign-ins may use third-party cookies in normal tabs only.
-   // This per-WebView setting never changes the privileged host cookie policy.
-   CookieManager.getInstance().setAcceptThirdPartyCookies(t.web, !priv);
+   // Apply through the isolated profile and refuse a provider that ignores it.
+   CookieManager tabCookies=WebViewCompat.getProfile(t.web).getCookieManager();
+   tabCookies.setAcceptThirdPartyCookies(t.web, !priv);
+   if(tabCookies.acceptThirdPartyCookies(t.web)!=!priv)throw new IllegalStateException("Browser cookie isolation is unavailable");
    // Passkeys through Android Credential Manager, where this WebView provider supports browser mode.
    if(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_AUTHENTICATION)){try{WebSettingsCompat.setWebAuthenticationSupport(settings,WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER);t.passkeys=WebSettingsCompat.getWebAuthenticationSupport(settings)==WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER;}catch(RuntimeException unsupported){t.passkeys=false;}}
    t.readingWorld=new BrowserReadingWorld(t.web);

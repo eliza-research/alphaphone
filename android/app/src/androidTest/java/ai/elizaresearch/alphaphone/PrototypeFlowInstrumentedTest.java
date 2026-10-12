@@ -66,6 +66,37 @@ public class PrototypeFlowInstrumentedTest {
    }
   }
  }
+ @Test public void walletRoutesAndNativePaymentActionsAreUnavailableInProduction() throws Exception {
+  Assume.assumeFalse("Qualify the packaged production policy",BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS);
+  try(BoundedActivityScenario<MainActivity>s=BoundedActivityScenario.launch(MainActivity.class)){
+   ready(s);
+   String original=new org.json.JSONTokener(eval(s,"location.href")).nextValue().toString();Throwable primary=null;
+   try{
+    eval(s,"setTimeout(()=>location.replace(location.origin+'/?mode=dev&start=wallet'),0);true");
+    waitFor(s,"location.search==='?mode=dev&start=wallet' && document.documentElement.dataset.activeView==='home' && document.querySelector('[data-screen]')",15000);
+    assertEquals("Wallet startup route cannot enable developer fixtures","true",eval(s,"document.documentElement.dataset.connectionMode==='live'"));
+    assertEquals("Wallet has no Home entry","true",eval(s,"!("+button("Wallet")+")"));accessible("Wallet",false);
+    assertEquals("No Wallet payment surface rendered","true",eval(s,"!document.querySelector('[aria-label=\"Pay\"],[aria-label=\"Add card\"]')"));
+    java.util.concurrent.atomic.AtomicInteger launches=new java.util.concurrent.atomic.AtomicInteger();
+    android.app.Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();
+    android.app.Instrumentation.ActivityMonitor monitor=new android.app.Instrumentation.ActivityMonitor(){
+     @Override public android.app.Instrumentation.ActivityResult onStartActivity(android.content.Intent intent){launches.incrementAndGet();return new android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_CANCELED,null);}
+    };
+    instrumentation.addMonitor(monitor);
+    try{
+     eval(s,"window.__walletNativeProbe=null;Promise.all([Capacitor.Plugins.DailyApps.capabilities(),...['wallet','pay','wallet_pay'].map(action=>Capacitor.Plugins.DailyApps.perform({action}))]).then(value=>window.__walletNativeProbe=value)");
+     waitFor(s,"Array.isArray(window.__walletNativeProbe)",10000);
+     assertEquals("No native Wallet or payment capability and every direct invocation refused","true",eval(s,"!window.__walletNativeProbe[0].actions.some(x=>['wallet','pay','wallet_pay'].includes(x.action))&&window.__walletNativeProbe.slice(1).every(x=>x.status==='failed')"));
+     instrumentation.waitForIdleSync();assertEquals("Rejected payment requests start no Android activity",0,launches.get());
+     assertEquals("Native refusal leaves Home visible","\"home\"",eval(s,"document.documentElement.dataset.activeView"));
+    }finally{instrumentation.removeMonitor(monitor);}
+   }catch(Exception|Error failure){primary=failure;throw failure;}finally{
+    try{eval(s,"setTimeout(()=>location.replace("+JSONObject.quote(original)+"),0);true");
+     waitFor(s,"location.href==="+JSONObject.quote(original)+" && document.documentElement.dataset.activeView==='home'",15000);
+    }catch(Exception|Error cleanup){if(primary!=null)primary.addSuppressed(cleanup);else throw cleanup;}
+   }
+  }
+ }
  private boolean accessibleLabel(String label) {
   android.view.accessibility.AccessibilityNodeInfo root=InstrumentationRegistry.getInstrumentation().getUiAutomation().getRootInActiveWindow();
   if(root==null)return false;

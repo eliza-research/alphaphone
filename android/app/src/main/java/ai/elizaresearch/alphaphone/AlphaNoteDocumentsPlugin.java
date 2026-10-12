@@ -24,8 +24,9 @@ public final class AlphaNoteDocumentsPlugin extends Plugin {
   if(closed||!busy.compareAndSet(false,true)){call.resolve(result("unavailable","A document operation is already open."));return;}
   try{startActivityForResult(call,intent,callback);}catch(RuntimeException error){busy.set(false);call.resolve(result("unavailable","Android document selection is unavailable."));}
  }
- @PluginMethod public void importText(PluginCall call){choose(call,new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("text/*").addCategory(Intent.CATEGORY_OPENABLE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),"imported");}
+ @PluginMethod public void importText(PluginCall call){if(!BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS){call.resolve(result("unsupported","Notes import is unavailable."));return;}choose(call,new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("text/*").addCategory(Intent.CATEGORY_OPENABLE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),"imported");}
  @PluginMethod public void exportText(PluginCall call){
+  if(!BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS){call.resolve(result("unsupported","Notes export is unavailable."));return;}
   try{bytes(call.getString("text"));String title=call.getString("title","Note").replaceAll("[\\\\/\\p{Cntrl}]","_");if(title.length()>100)title=title.substring(0,100);if(title.isBlank())title="Note";
    choose(call,new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("text/plain").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,title+".txt").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION),"exported");
   }catch(Exception error){call.resolve(result("too-large","Export requires valid UTF-8 text of at most 64 KiB."));}

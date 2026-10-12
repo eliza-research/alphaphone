@@ -56,7 +56,7 @@ const cases = {
 		runId: "notesDocumentRunId",
 		pid: "notesDocumentPid",
 		restore: "restore",
-		scope: "Real SAF grants, exact document bytes and persisted local notes",
+		scope: "Development fixture only: explicit test-mocks APK required; real SAF grants, exact document bytes and persisted local notes",
 	},
 	document: {
 		testClass: "SelectedDocumentInstrumentedTest",

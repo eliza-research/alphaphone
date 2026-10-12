@@ -1,6 +1,6 @@
 import {test,expect,type Page} from '@playwright/test';
-// Product recovery entry points: damaged browser-owned stores are recoverable from
-// the app that owns them, never only from the development Device controls.
+// Explicit test-mocks recovery fixtures. Production retains damaged bytes and offers
+// guidance without migration/reset controls (reset-only.production.spec.ts).
 async function boot(page:Page,key:string,raw:string){
  await page.addInitScript(([key,raw])=>{localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'}));if(!sessionStorage.getItem('seeded')){localStorage.setItem(key,raw);sessionStorage.setItem('seeded','1');}},[key,raw]);
  await page.goto('/?tools=1');

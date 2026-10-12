@@ -26,6 +26,28 @@ Photos offers full permitted library access to the local agent; resets erase Alp
 private state without implying remote/provider or device-wide media deletion.
 No app-data backup/import/export/transfer feature is planned.
 
+Reset Alpha data uses a native disclosure followed by fresh Android device-credential
+confirmation. The renderer cannot supply reset authority. Before dispatch, Alpha
+persists a device-protected request and retries it before runtime callbacks or upkeep
+on a subsequent launch. Android's own `clearApplicationUserData()` scopes deletion
+to this package/user, force-stops package processes, cancels its jobs/alarms and
+notifications, clears private app data and its UID Keystore namespace. Alpha does
+not enumerate or delete shared media, another app's storage, remote Gmail/Cloud
+data or subscriptions. It does not report a returned request as completed deletion.
+The pending marker covers interruption before dispatch; it is itself app data and
+is not a guarantee of atomic filesystem deletion or recovery from power loss midway
+through Android's clear operation. Installed self-clear acceptance must be observed
+externally on a disposable package/user, since the reset kills its own instrumentation.
+The future separate AOSP listener package requires its own reviewed reset contract
+before that package ships; clearing Alpha cannot clear a different package's state.
+
+Production Notes and vault migration controls are disabled, including their native
+entry points. Damaged-data notices retain saved bytes and drafts without backup or
+per-store reset controls; fitting Notes edits still recover through the existing
+merge path. Explicit test-mocks builds retain migration fixtures. Ordinary Files,
+Gmail attachments and PDF file creation remain available.
+
+
 ## Source boundaries
 
 | Path | Responsibility |
@@ -91,10 +113,11 @@ Playwright and explicit test-mocks builds, and off for `npm run build`,
 
 The primary agent runs on Android. Local orchestration, durable state and tool
 approvals are separate from model inference: hosted inference requires explicit
-configuration and outbound-context policy. Production Android does not accept remote phone pairing. Cloud sign-in authorizes
+configuration and outbound-context policy. Production builds do not accept remote pairing or hosted-agent provisioning, discovery, adoption or restore. Cloud sign-in authorizes
 billed inference for the resident agent; it does not select a hosted agent. Existing
 remote credentials and history are retained without automatically reconnecting.
-Browser and test-mocks transports remain development infrastructure. Debug host forwarding (the DevelopmentAgent bridge, present only in test-mocks
+Remote browser transports are available only with the explicit test-mocks switch and remain non-product development infrastructure.
+The production AlphaConnection boundary admits exact managed-service origin and path/method pairs for account sign-in, identity, balance, self-revocation and owner Gmail. Dedicated hosts and agent/provisioning paths on the Cloud API origin are refused before network dispatch. Native resident inference remains on its separately admitted provider route; new Maps or billing APIs require explicit service-route review. Debug host forwarding (the DevelopmentAgent bridge, present only in test-mocks
 builds) is development infrastructure, not evidence of a resident runtime or
 production authentication.
 

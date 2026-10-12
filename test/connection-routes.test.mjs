@@ -25,5 +25,7 @@ test('the transport applies the origin policy before any connection and never to
  assert.ok(validated>0&&guard>validated,'the origin guard follows URL validation');
  for(const later of ['openConnection()','call.getObject("headers"','call.getString("body")','foregroundLock.wait','ConnectionRoutes.retiredPairing('])
   assert.ok(request.indexOf(later)>guard,`${later} comes after the origin guard`);
+ const service=request.indexOf('if(!ConnectionRoutes.managedService(');
+ assert.ok(service>guard&&service<request.indexOf('openConnection()')&&service<request.indexOf('call.getObject("headers"'),'managed path admission precedes transport/header handling');
  assert.doesNotMatch(request,/storage\(|CredentialSlot|AlphaCredentialStore|secure(Read|Write|Remove)/,'request() has no credential-slot access');
 });

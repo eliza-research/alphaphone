@@ -1,0 +1,34 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {stripTypeScriptTypes} from 'node:module';
+const source=readFileSync(new URL('../apps/app/src/runtime/managed-service-routes.ts',import.meta.url),'utf8');
+const {managedServiceRequest:allowed}=await import('data:text/javascript,'+encodeURIComponent(stripTypeScriptTypes(source)));
+test('managed service admission preserves owned service APIs and refuses agent hosts, paths and mutation variants',()=>{
+ for(const path of ['/api/v1/user','/api/v1/credits/balance','/api/v1/eliza/google/accounts?side=owner','/api/v1/eliza/google/gmail/inbox-v1/thread?grantId=owner'])assert.equal(allowed('https://api.eliza.app'+path,'GET'),true,path);
+ for(const url of ['https://agent.cloud.eliza.app/api/v1/user','https://api.eliza.app.evil.test/api/v1/user','https://api.eliza.app:444/api/v1/user','http://api.eliza.app/api/v1/user','https://owner@api.eliza.app/api/v1/user','https://api.eliza.app/api/v1/user#x'])assert.equal(allowed(url,'GET'),false,url);
+ for(const path of ['/api/auth/pair','/api/agents','/api/conversations','/api/v1/eliza/agents','/api/v1/eliza/personal','/api/v1/eliza/agents/id/api/conversations','/api/v1/%65liza/google/status','/api/v1/eliza/google/status/'])for(const method of ['GET','POST'])assert.equal(allowed('https://api.eliza.app'+path,method),false,path);
+ assert.equal(allowed('https://api.eliza.app/api/v1/user','POST',true),false);
+ assert.equal(allowed('https://api.eliza.app/api/v1/user','GET',true),false);
+ assert.equal(allowed('https://api.eliza.app/api/v1/api-keys/current','DELETE'),true);
+ assert.equal(allowed('https://api.eliza.app/api/v1/api-keys/current?other=owner','DELETE'),false);
+ assert.equal(allowed('https://api.eliza.app/api/v1/eliza/google/gmail/inbox-v1/operations/owner-request/dispatch','POST',true),true);
+});
+
+test('compiled test-mocks transports retain development hosts while flag-off transports reject them before dispatch',async()=>{
+ const {default:vm}=await import('node:vm');
+ const module=readFileSync(new URL('../apps/app/src/runtime/native-connection.ts',import.meta.url),'utf8');
+ const factory=module.slice(module.indexOf('export function createBrowserConnection('),module.indexOf('let browserConnection:'));
+ const transport=module.slice(module.indexOf('export const nativeCloudRequest:'),module.indexOf('export const nativeRemoteRequest:'));
+ for(const testMocksEnabled of [false,true]){
+  const calls=[];
+  const sandbox={testMocksEnabled,devSurfacesEnabled:false,managedServiceRequest:allowed,URL,Headers,AbortController,DOMException,setTimeout,clearTimeout,crypto:globalThis.crypto,webDevelopmentHttp:false,allowedHeaders:new Set(['accept','content-type','authorization']),native:{request:async input=>{calls.push(input.url);return {status:200,data:{}};},cancel:async()=>{}}};
+  vm.runInNewContext(stripTypeScriptTypes((factory+transport).replaceAll('export ',''))+';globalThis.factory=createBrowserConnection;globalThis.request=nativeCloudRequest;',sandbox);
+  const url='https://agent.example.test/api/agents';
+  const native=sandbox.request({url,method:'GET',headers:{},signal:new AbortController().signal,timeoutMs:1000});
+  if(testMocksEnabled)await native;else await assert.rejects(native,/managed Cloud services/);
+  const browser=sandbox.factory({fetch:async input=>{calls.push(input);return new Response('{}',{status:200});}}).request({requestId:'fixture',url,method:'GET',headers:{}});
+  if(testMocksEnabled)await browser;else await assert.rejects(browser,/managed Cloud services/);
+  assert.equal(calls.length,testMocksEnabled?2:0);
+ }
+});

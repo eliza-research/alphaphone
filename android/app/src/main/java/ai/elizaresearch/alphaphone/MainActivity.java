@@ -216,6 +216,7 @@ public class MainActivity extends BridgeActivity {
    startedAsHome = liveTaskHome;
   }
   registerPlugin(SystemPlugin.class);
+  registerPlugin(AlphaResetPlugin.class);
   registerPlugin(DeviceAppsPlugin.class);
   registerPlugin(DailyAppsPlugin.class);
   registerPlugin(AlphaMapsTransportPlugin.class);
@@ -236,7 +237,7 @@ public class MainActivity extends BridgeActivity {
   registerPlugin(AlphaNotificationsPlugin.class);
   registerPlugin(AlphaHostedResultsPlugin.class);
   registerPlugin(ai.eliza.plugins.passwords.PasswordsPlugin.class);
-  registerPlugin(ai.eliza.plugins.passwords.PasswordTransferPlugin.class);
+  if(BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS)registerPlugin(ai.eliza.plugins.passwords.PasswordTransferPlugin.class);
   if (BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS) {
    // Present only in debug builds made with -PELIZA_DEV_ALLOW_TEST_MOCKS=1 (src/testMocks).
    try { registerPlugin(Class.forName("ai.elizaresearch.alphaphone.DevelopmentAgentPlugin").asSubclass(com.getcapacitor.Plugin.class)); }
@@ -252,6 +253,8 @@ public class MainActivity extends BridgeActivity {
   getBridge().addWebViewListener(rendererRecovery);
   WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
   getBridge().getWebView().getSettings().setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+  // The privileged app host never participates in third-party browser sessions.
+  android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(getBridge().getWebView(),false);
   AlphaDevicePlugin.applyTextScale(this);
   // Launcher reference layouts include system-bar space. Standalone and assist
   // content must fit inside the real bars/cutout, including enforced edge-to-edge.

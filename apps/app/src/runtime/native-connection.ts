@@ -1,7 +1,8 @@
+import {managedServiceRequest} from './managed-service-routes';
 import {automationsRouteAllowed} from './automations-route-policy';
 import {BrowserCloudConnection} from '../browser/cloud-connection';
 import {Capacitor} from '@capacitor/core';
-import {devSurfacesEnabled} from '../build-flags';
+import {devSurfacesEnabled,testMocksEnabled} from '../build-flags';
 import { registerPlugin } from '../platform-plugins';
 import type { CloudNativeRequest, CloudCredentialStore, CloudCredential, CloudEnvironment } from './cloud-protocol';
 import type { RemoteRequester, RemoteCredentialStore } from './remote-protocol';
@@ -105,8 +106,8 @@ function webSecrets():BrowserSecretBackend{
 /** Plain-HTTP loopback agents are a test-mocks surface; flag-off bundles accept HTTPS only. */
 const webDevelopmentHttp:boolean=import.meta.env!==undefined&&import.meta.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS==='1';
 const allowedHeaders=new Set(['accept','content-type','authorization','x-eliza-device-id','x-eliza-device-key','x-eliza-device-capabilities','x-eliza-phone-protocol']);
-/** Browser AlphaConnection: HTTPS fetch without redirects or cookies, connection-slot secret storage
- * and a new-tab Cloud sign-in. A remote agent must allow this page's origin with CORS. */
+/** Browser AlphaConnection: managed-service HTTPS without redirects or cookies.
+ * Remote connections are available only in explicitly enabled development builds. */
 export function createBrowserConnection(options:{fetch?:typeof fetch;secrets?:BrowserSecretBackend;open?:(url:string)=>boolean;allowHttp?:boolean}={}):ConnectionPort{
   const requests=new Map<string,AbortController>();
   const doFetch=options.fetch??((input,init)=>fetch(input,init));
@@ -119,6 +120,7 @@ export function createBrowserConnection(options:{fetch?:typeof fetch;secrets?:Br
     async request(input){
       if(typeof input?.requestId!=='string'||!input.requestId||input.requestId.length>256||requests.has(input.requestId))throw new Error('Invalid request');
       let url:URL;try{url=new URL(input.url);}catch{throw new Error('Connection request failed');}
+      if(!testMocksEnabled&&!managedServiceRequest(input.url,input.method,input.body!==undefined))throw new Error('Only managed Cloud services are available.');
       const loopback=['localhost','127.0.0.1','[::1]'].includes(url.hostname);
       if(url.username||url.password||!(url.protocol==='https:'||(allowHttp&&loopback&&url.protocol==='http:')))throw new Error('Connection request failed');
       if(input.method!=='GET'&&input.method!=='POST'&&!automationsRouteAllowed(url.pathname+url.search,input.method))throw new Error('Connection request failed');
@@ -206,6 +208,7 @@ export const remoteCredentialStore:RemoteCredentialStore={
 };
 export const nativeCloudRequest:CloudNativeRequest=async input=>{
   input.signal.throwIfAborted();
+  if(!testMocksEnabled&&!managedServiceRequest(input.url,input.method,input.body!==undefined))throw new Error('Only managed Cloud services are available. Remote agents are unsupported.');
   const requestId=crypto.randomUUID();
   let rejectAbort:(reason:unknown)=>void=()=>{};
   const interrupted=new Promise<never>((_,reject)=>{rejectAbort=reject;});

@@ -10,7 +10,7 @@ export const ENABLED_MVP_VIEWS = new Set([
   "inbox", "calendar", "browser", "camera", "photos", "maps", "notes",
   // "contacts", // Pending Contacts permission and directory implementation.
   "files",
-  // "wallet", // Pending provider/security decisions and real payment flow.
+  // "wallet", // Removed from MVP; full-product planning remains FP-04.
   "workflows", "settings",
 ]);
 export const DEFERRED_MVP_VIEWS = new Set(["phone", "messages", "contacts", "wallet"]);

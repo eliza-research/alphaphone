@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { registerPlugin } from '../platform-plugins';
-import { devSurfacesEnabled } from '../build-flags';
+import { devSurfacesEnabled, testMocksEnabled } from '../build-flags';
 import { browserDevProfile } from '../browser/dev-profile';
 // Flag-off builds resolve this to an inert stub (vite.config.ts disabledModuleSource).
 import { createDevelopmentVault } from './dev-vault';
@@ -49,7 +49,7 @@ function resolveClient(): Promise<PasswordsClient | null> {
 let transfer: PasswordTransferClient | null | undefined;
 function transferClient(): PasswordTransferClient | null {
   if (transfer !== undefined) return transfer;
-  if (!Capacitor.isNativePlatform() || !Capacitor.isPluginAvailable('ElizaPasswordTransfer')) return transfer = null;
+  if (!testMocksEnabled || !Capacitor.isNativePlatform() || !Capacitor.isPluginAvailable('ElizaPasswordTransfer')) return transfer = null;
   return transfer = createTransferClient(registerPlugin<ElizaPasswordTransferPlugin>('ElizaPasswordTransfer'));
 }
 

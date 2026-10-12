@@ -10,7 +10,7 @@ import org.junit.Test;
 import java.util.*;
 import java.nio.charset.StandardCharsets;
 import static org.junit.Assert.*;
-/** Actual SAF open/create flows with unique synthetic documents; no injected picker result. */
+/** Production refusal and preservation; positive SAF migration is an explicit test-mocks fixture only. */
 public final class NotesDocumentInstrumentedTest {
  private void until(String expression)throws Exception{long end=SystemClock.elapsedRealtime()+20000;while(SystemClock.elapsedRealtime()<end){if("true".equals(NotesSecureFixture.evaluate("Boolean("+expression+")")))return;SystemClock.sleep(100);}fail("Notes document flow timed out: "+expression+"; state="+NotesSecureFixture.evaluate("JSON.stringify({view:document.documentElement.dataset.activeView,storage:document.documentElement.dataset.notesStorageState,importDisabled:document.querySelector('button[aria-label=\"Import text note\"]')?.disabled,exportDisabled:document.querySelector('button[aria-label=\"Export text file\"]')?.disabled,cancellationNotice:document.body.textContent.includes('Document selection cancelled.'),observedCancellationNotice:window.__notesCancelNoticeSeen===true,observedReceipt:window.__notesReceiptSeen===true,documentHidden:document.hidden})"));}
  /**
@@ -113,8 +113,24 @@ public final class NotesDocumentInstrumentedTest {
   }
   try(java.io.InputStream in=resolver.openInputStream(uri)){assertNotNull(in);assertArrayEquals("Independent exact provider-granted bytes",text.getBytes(StandardCharsets.UTF_8),in.readAllBytes());}
  }
- @Test public void realPickerImportExportCancelAndRecreation()throws Exception{runFlow(false);}
+ @Test public void realPickerImportExportCancelAndRecreation()throws Exception{if(!BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS){productRefusal();return;}runFlow(false);}
+ private void productRefusal()throws Exception{
+  try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)){
+   AppNavigation.liveMode();NotesSecureFixture.evaluate(AppNavigation.request("Notes"));until("window.__alphaTestNavigation?.status==='complete'");
+   String before=NotesSecureFixture.evaluate("JSON.stringify(__notesEnvelope)");
+   assertEquals("No product import control","false",NotesSecureFixture.evaluate("!!document.querySelector('button[aria-label=\"Import text note\"]')"));
+   android.app.Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();java.util.concurrent.atomic.AtomicInteger outgoing=new java.util.concurrent.atomic.AtomicInteger();
+   android.app.Instrumentation.ActivityMonitor monitor=new android.app.Instrumentation.ActivityMonitor(){@Override public android.app.Instrumentation.ActivityResult onStartActivity(Intent intent){outgoing.incrementAndGet();return new android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_CANCELED,null);}};
+   instrumentation.addMonitor(monitor);
+   try{
+    NotesSecureFixture.evaluate("window.__notesMigrationPolicy=null;Promise.all([Capacitor.Plugins.AlphaNoteDocuments.importText(),Capacitor.Plugins.AlphaNoteDocuments.exportText({text:'synthetic refused text'})]).then(v=>window.__notesMigrationPolicy=v.map(x=>x.status))");
+    until("window.__notesMigrationPolicy!==null");assertEquals("[\"unsupported\",\"unsupported\"]",NotesSecureFixture.evaluate("window.__notesMigrationPolicy"));assertEquals("No document activity launched",0,outgoing.get());
+    assertEquals("Saved Notes unchanged",before,NotesSecureFixture.evaluate("JSON.stringify(__notesEnvelope)"));
+   }finally{instrumentation.removeMonitor(monitor);}
+  }
+ }
  private void runFlow(boolean retainNotes)throws Exception{
+  assertTrue("Positive Notes migration requires explicit test-mocks APK",BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS);
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();ContentResolver resolver=context.getContentResolver();String suffix=retainNotes?InstrumentationRegistry.getArguments().getString("notesDocumentRunId"):UUID.randomUUID().toString(),name="alpha-note-import-"+suffix+".txt",outName="alpha-note-export-"+suffix,text="Synthetic note "+suffix+"\r\nUnicode café 🧪\n";
   SelectedDocumentInstrumentedTest picker=new SelectedDocumentInstrumentedTest();Uri source=picker.fixture(resolver,name,text),output=null;Set<String> created=new HashSet<>();boolean completed=false;Throwable primary=null;long exportStarted=0;SelectedDocumentAccess.restore(context);java.util.Map<?,?> priorSelections=selections();assertTrue("Leave capacity for one temporary picker capability without evicting Files",priorSelections.size()<32);java.io.File exportJournal=new java.io.File(context.getNoBackupFilesDir(),"notes-export-fixture-"+suffix+".json");
   try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)){
@@ -154,6 +170,7 @@ public final class NotesDocumentInstrumentedTest {
   }
  }
  @Test public void oversizedAndInvalidUtf8DoNotCreateNotes()throws Exception{
+  if(!BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS){productRefusal();return;}
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();ContentResolver resolver=context.getContentResolver();SelectedDocumentInstrumentedTest picker=new SelectedDocumentInstrumentedTest();String suffix=UUID.randomUUID().toString(),largeName="alpha-note-large-"+suffix+".txt",badName="alpha-note-invalid-"+suffix+".txt";
   char[] oversized=new char[65537];Arrays.fill(oversized,'x');Uri large=picker.fixture(resolver,largeName,new String(oversized)),bad=picker.fixture(resolver,badName,"");
   try(java.io.OutputStream out=resolver.openOutputStream(bad,"wt")){assertNotNull(out);out.write(new byte[]{(byte)0xc3,0x28});}
@@ -165,6 +182,7 @@ public final class NotesDocumentInstrumentedTest {
  }
  @Test public void documentProcessRestartPhase()throws Exception{
   String phase=InstrumentationRegistry.getArguments().getString("notesDocumentPhase");org.junit.Assume.assumeTrue("Explicit process runner required",phase!=null);
+  assertTrue("Notes import/export restart is a development fixture: use explicit test-mocks APKs",BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS);
   String runId=InstrumentationRegistry.getArguments().getString("notesDocumentRunId");assertNotNull("Explicit process run ID required",runId);assertEquals("Canonical run UUID",UUID.fromString(runId).toString(),runId);
   android.os.Bundle evidence=new android.os.Bundle();evidence.putInt("notesDocumentPid",android.os.Process.myPid());InstrumentationRegistry.getInstrumentation().addResults(evidence);
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();java.io.File file=new java.io.File(context.getNoBackupFilesDir(),"notes-document-restart-"+runId+".json"),exportRecovery=new java.io.File(context.getNoBackupFilesDir(),"notes-export-fixture-"+runId+".json");

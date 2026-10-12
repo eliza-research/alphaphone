@@ -83,7 +83,7 @@ public final class NotesStorageDurabilityInstrumentedTest {
     input("textarea[aria-label=Note]","E".repeat(NotesCapacityFixture.EDIT_BYTES),true);
     until("document.documentElement.dataset.notesStorageState==='full'","Storage-full state");
     until("document.body.textContent.includes('Notes storage is full')","Storage-full message");
-    until("[...document.querySelectorAll('button')].some(b=>b.getAttribute('aria-label')==='Recover browser Notes'&&b.getClientRects().length)","Export (Notes recovery) offered");
+    until("[...document.querySelectorAll('button')].some(b=>b.getAttribute('aria-label')==='Recover browser Notes'&&b.getClientRects().length)","Notes retention guidance offered");
     until("document.documentElement.dataset.notesDraftState==='saved'","Small encrypted recovery draft settled before closing the renderer");
     assertTrue("Saved notes are unchanged",seeded.matches(store.readCredentialSlot(AlphaCredentialStore.NOTES_RECORDS)));
     assertEquals("Unsaved small edit remains on screen",JSONObject.quote("E".repeat(NotesCapacityFixture.EDIT_BYTES)),js("document.querySelector('textarea[aria-label=Note]').value"));
