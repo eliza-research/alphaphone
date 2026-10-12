@@ -60,16 +60,40 @@ public final class NotesStorageDurabilityInstrumentedTest {
 
  @Test public void fullCollectionShowsNotesStorageIsFullAndKeepsSavedNotes()throws Exception{
   org.junit.Assume.assumeTrue("Explicit disposable Notes qualification","1".equals(InstrumentationRegistry.getArguments().getString("notesStorage")));
-  try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)){
-   openNotes();
-   click("New note");until("document.querySelector('textarea[aria-label=Note]')","Editor");
-   until("document.body.textContent.includes('Note text encrypted on this device')","New note settled");String before=NotesSecureFixture.read();
-   // Fill the editor past the 32 MiB collection cap; the native commit refuses it as storage-full.
-   js("(()=>{const e=document.querySelector('textarea[aria-label=Note]');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,'F'.repeat(33*1024*1024));e.dispatchEvent(new Event('input',{bubbles:true}));})()");
-   until("document.documentElement.dataset.notesStorageState==='full'","Storage-full state");
-   until("document.body.textContent.includes('Notes storage is full')","Storage-full message");
-   until("[...document.querySelectorAll('button')].some(b=>b.getAttribute('aria-label')==='Recover browser Notes'&&b.getClientRects().length)","Export (Notes recovery) offered");
-   assertEquals("Saved notes are unchanged",before,NotesSecureFixture.read());
+  AlphaCredentialStore store=new AlphaCredentialStore(InstrumentationRegistry.getInstrumentation().getTargetContext());
+  String marker="capacity_"+unique(),before=null;NotesCapacityFixture.Snapshot seeded=null;boolean seedApplied=false;Throwable primary=null;String phase="initialize";
+  try{
+   try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)){openNotes();}
+   before=store.readCredentialSlot(AlphaCredentialStore.NOTES_RECORDS);
+   assertNotNull("Notes initialized",before);
+   assertNull("Do not replace an unrelated encrypted draft",store.readCredentialSlot(AlphaCredentialStore.NOTES_DRAFT));
+   int cap=AlphaCredentialStore.slotLimit(AlphaCredentialStore.NOTES_RECORDS);assertEquals(32*1024*1024,cap);
+   phase="construct bounded capacity fixture";
+   String proposed=NotesCapacityFixture.collection(before,marker,cap);
+   phase="native seed CAS";
+   seeded=NotesCapacityFixture.Snapshot.save(InstrumentationRegistry.getInstrumentation().getTargetContext().getCacheDir(),proposed);
+   assertTrue("Seed only the exact disposable collection",store.compareExchangeCredentialSlot(AlphaCredentialStore.NOTES_RECORDS,before,proposed));seedApplied=true;
+   proposed=null;phase="native readback without retained collection";assertTrue("Exact native fixture readback",seeded.matches(store.readCredentialSlot(AlphaCredentialStore.NOTES_RECORDS)));
+   phase="open seeded collection in fresh renderer";
+   try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)){
+    openNotes();click("Open Capacity target "+marker);until("document.querySelector('textarea[aria-label=Note]')","Small editor");
+    // A normal-sized edit crosses the genuine collection cap. The old 33 MiB textarea
+    // forced enormous WebView text layout before storage admission could be exercised.
+    phase="small edit and storage-full recovery";
+    input("textarea[aria-label=Note]","E".repeat(NotesCapacityFixture.EDIT_BYTES),true);
+    until("document.documentElement.dataset.notesStorageState==='full'","Storage-full state");
+    until("document.body.textContent.includes('Notes storage is full')","Storage-full message");
+    until("[...document.querySelectorAll('button')].some(b=>b.getAttribute('aria-label')==='Recover browser Notes'&&b.getClientRects().length)","Export (Notes recovery) offered");
+    until("document.documentElement.dataset.notesDraftState==='saved'","Small encrypted recovery draft settled before closing the renderer");
+    assertTrue("Saved notes are unchanged",seeded.matches(store.readCredentialSlot(AlphaCredentialStore.NOTES_RECORDS)));
+    assertEquals("Unsaved small edit remains on screen",JSONObject.quote("E".repeat(NotesCapacityFixture.EDIT_BYTES)),js("document.querySelector('textarea[aria-label=Note]').value"));
+   }
+  }catch(Exception|Error failure){primary=failure;System.out.println("ALPHA_NOTES_CAPACITY_FAILURE phase="+phase+" heapLimit="+Runtime.getRuntime().maxMemory());throw failure;}finally{
+   try{if(seedApplied){
+    assertTrue("Restore only the unchanged fixture collection",store.compareExchangeCredentialSlot(AlphaCredentialStore.NOTES_RECORDS,seeded.exactValue(),before));
+    String draft=store.readCredentialSlot(AlphaCredentialStore.NOTES_DRAFT);
+    if(draft!=null){JSONArray changed=new JSONObject(draft).getJSONArray("records");assertEquals("Only the fixture edit was drafted",1,changed.length());assertEquals(marker,changed.getJSONObject(0).getString("id"));assertTrue("Remove only the exact fixture draft",store.compareExchangeCredentialSlot(AlphaCredentialStore.NOTES_DRAFT,draft,null));}
+   }}catch(Exception|Error cleanup){if(primary!=null)primary.addSuppressed(cleanup);else{primary=cleanup;throw cleanup;}}finally{if(seeded!=null)try{seeded.close();}catch(Exception cleanup){if(primary!=null)primary.addSuppressed(cleanup);else throw cleanup;}}
   }
  }
 

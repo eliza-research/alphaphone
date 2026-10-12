@@ -888,23 +888,23 @@
   </sc-if>
 
   <div class="scr calendar-timeline" role="region" aria-label="Calendar timeline" tabindex="0" onPointerDown="{{calendar.tlDown}}" onPointerUp="{{calendar.tlUp}}" style="flex-grow: 1; overflow-y: auto; touch-action: pan-y; border-top: 1px solid var(--line)">
-    <div style="position: relative; height: 912px; min-height: {{calendar.nativeTimelineHeight}}; margin-bottom: 110px">
+    <div style="position: relative; height: calc(912px * var(--calendar-timeline-scale)); min-height: calc({{calendar.nativeTimelineHeight}} * var(--calendar-timeline-scale)); margin-bottom: 110px">
       <sc-for list="{{calendar.hours}}" as="h">
-        <div style="position: absolute; left: 60px; right: 16px; top: {{h.top}}px; height: 1px; background: var(--line); opacity: .7"></div>
-        <div style="position: absolute; left: 0; width: 50px; text-align: right; top: {{h.lt}}px; font-size: 11px; color: var(--mut)">{{h.label}}</div>
+        <div style="position: absolute; left: 60px; right: 16px; top: calc({{h.top}}px * var(--calendar-timeline-scale)); height: 1px; background: var(--line); opacity: .7"></div>
+        <div style="position: absolute; left: 0; width: 50px; text-align: right; top: calc({{h.lt}}px * var(--calendar-timeline-scale)); font-size: 11px; color: var(--mut)">{{h.label}}</div>
       </sc-for>
       <sc-if value="{{calendar.empty}}">
         <div style="position: absolute; left: 60px; right: 16px; top: 120px; text-align: center; color: var(--mut); font-size: 14px">{{calendar.emptyText}}</div>
       </sc-if>
       <sc-for list="{{calendar.events}}" as="e">
-        <button onClick="{{e.open}}" aria-label="{{e.title}}, {{e.time}}" style="position: absolute; left: {{e.left}}px; width: {{e.w}}px; top: {{e.top}}px; height: {{e.h}}px; border-radius: 14px; padding: 8px 12px 8px 16px; box-sizing: border-box; display: flex; align-items: flex-start; gap: 8px; overflow: hidden; text-align: left; {{e.css}}">
+        <button onClick="{{e.open}}" aria-label="{{e.title}}, {{e.time}}" style="position: absolute; left: {{e.left}}px; width: {{e.w}}px; top: calc({{e.top}}px * var(--calendar-timeline-scale)); height: calc({{e.h}}px * var(--calendar-timeline-scale)); border-radius: 14px; padding: 8px 12px 8px 16px; box-sizing: border-box; display: flex; align-items: flex-start; gap: 8px; overflow: hidden; text-align: left; {{e.css}}">
           <span style="position: absolute; left: 6px; top: 6px; bottom: 6px; width: 3px; border-radius: 2px; background: {{e.stripe}}"></span>
           <span class="calendar-block-text" style="flex-grow: 1; min-width: 0"><span style="display: block; font-size: 14px; font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{e.title}}</span><span style="display: block; font-size: 12px; opacity: .85; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{e.sub}}</span></span>
           <sc-if value="{{e.showTime}}"><span style="font-size: 12px; opacity: .75; white-space: nowrap">{{e.time}}</span></sc-if>
         </button>
       </sc-for>
       <sc-if value="{{calendar.showNow}}">
-        <div style="position: absolute; left: 54px; right: 16px; top: {{calendar.nowTop}}px; height: 2px; background: var(--acct); pointer-events: none">
+        <div style="position: absolute; left: 54px; right: 16px; top: calc({{calendar.nowTop}}px * var(--calendar-timeline-scale)); height: 2px; background: var(--acct); pointer-events: none">
           <span style="position: absolute; left: -4px; top: -4px; width: 10px; height: 10px; border-radius: 5px; background: var(--acct)"></span>
         </div>
       </sc-if>
@@ -4093,7 +4093,7 @@
 
 
 <sc-if value="{{showComposer}}">
-<div data-alpha-layer="composer" aria-hidden="{{dockHidden}}" inert="{{dockHidden}}" style="position: absolute; left: 16px; right: 16px; bottom: {{cmpBottom}}px; z-index: 40">
+<div data-alpha-layer="composer" role="group" aria-label="Assistant controls" aria-hidden="{{dockHidden}}" inert="{{dockHidden}}" style="position: absolute; left: 16px; right: 16px; bottom: {{cmpBottom}}px; z-index: 40">
   <sc-if value="{{messageComposeContext}}"><div style="display:flex;align-items:center;gap:8px;padding:6px 16px;font-size:13px;background:var(--s2);border-radius:14px"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{messageComposeContext}}</span><button class="tap" aria-label="Cancel reply or edit" onClick="{{cancelMessageContext}}" style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center"><svg class="i" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="{{ic.x}}"></path></svg></button></div></sc-if>
   <sc-if value="{{draftStatus}}"><div style="max-height:24dvh;overflow:auto;padding:6px 16px;background:var(--bg);color:var(--fg);border-radius:16px;font-size:12px"><p role="status" aria-label="Assistant draft status" style="margin:0">{{draftStatus}}</p><sc-if value="{{draftConflict}}"><p style="white-space:pre-wrap;max-height:80px;overflow:auto">Saved copy: {{draftSavedText}}</p><button onClick="{{restoreSavedDraft}}" style="min-height:44px;padding:8px">Restore saved draft</button><button onClick="{{keepCurrentDraft}}" style="min-height:44px;padding:8px">Replace saved draft with this text</button></sc-if><sc-if value="{{draftRetry}}"><button onClick="{{retryDraft}}" style="min-height:44px;padding:8px">Retry draft storage</button></sc-if><sc-if value="{{draftRecovery}}"><button onClick="{{recoverDraft}}" style="min-height:44px;padding:8px">Recover assistant draft</button></sc-if></div></sc-if>
 
@@ -4109,7 +4109,7 @@
 
 
 <sc-if value="{{showPill}}">
-<div data-alpha-layer="pill" aria-hidden="{{dockHidden}}" inert="{{dockHidden}}" style="position: absolute; left: 0; right: 0; bottom: 26px; z-index: 40; display: flex; justify-content: center; pointer-events: none">
+<div data-alpha-layer="pill" role="group" aria-label="Assistant controls" aria-hidden="{{dockHidden}}" inert="{{dockHidden}}" style="position: absolute; left: 0; right: 0; bottom: 26px; z-index: 40; display: flex; justify-content: center; pointer-events: none">
   <div class="enter" onPointerDown="{{pillSw.down}}" onPointerMove="{{pillSw.move}}" onPointerUp="{{pillSw.up}}" onPointerCancel="{{pillSw.cancel}}" onLostPointerCapture="{{pillSw.lost}}" style="{{pillDragStyle}}; pointer-events: auto; display: flex; align-items: center; gap: 2px; padding: 5px; border-radius: 30px; background: var(--s2); box-shadow: 0 12px 34px var(--shc); touch-action: none">
     <button aria-label="Open conversation" onClick="{{openSheet}}" style="width: 44px; height: 44px; border-radius: 22px; background: var(--acc); color: #fff; display: flex; align-items: center; justify-content: center; font-family: Denton, Fraunces, Georgia, serif; font-style: italic; font-size: 24px"><span class="alpha-compute-mark" aria-hidden="true"></span></button>
     <button class="ib" aria-label="Type" onClick="{{toInput}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.kbd}}"></path></svg></button>
@@ -4192,7 +4192,8 @@
   <div style="position: absolute; bottom: 58px; left: 34px; right: 34px; display: flex; justify-content: space-between; align-items: center">
     <button aria-label="Talk to {{name}}" onClick="{{startVoice}}" style="width: 58px; height: 58px; border-radius: 29px; background: var(--s2); display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.mic}}"></path></svg></button>
     <button aria-label="Unlock with fingerprint" onClick="{{unlock}}" style="width: 76px; height: 76px; border-radius: 38px; box-shadow: inset 0 0 0 1px var(--line); display: flex; align-items: center; justify-content: center; color: var(--acct)"><svg class="i" viewBox="0 0 24 24" style="width: 34px; height: 34px"><path d="{{ic.fp}}"></path></svg></button>
-    <button aria-label="Camera" onClick="{{lockCamera}}" style="width: 58px; height: 58px; border-radius: 29px; background: var(--s2); display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.camera}}"></path></svg></button>
+    <sc-if value="{{lockCameraOffered}}"><button aria-label="Camera" onClick="{{lockCamera}}" style="width: 58px; height: 58px; border-radius: 29px; background: var(--s2); display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.camera}}"></path></svg></button></sc-if>
+    <sc-if value="{{noLockCamera}}"><div aria-hidden="true" style="width: 58px; height: 58px"></div></sc-if>
   </div>
 </div>
 </sc-if>

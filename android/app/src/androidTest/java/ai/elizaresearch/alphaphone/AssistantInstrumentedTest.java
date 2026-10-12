@@ -19,10 +19,10 @@ import static org.junit.Assert.*;
 public class AssistantInstrumentedTest {
  /** Agent.launchSurface() as the renderer sees it: "true", "false" or "error". */
  private static String launchSurfaceAssistant(Class<? extends MainActivity> type) throws Exception {
-  for (int i = 0; i < 100 && !"true".equals(WebViewTestDriver.evaluate(type,"Boolean(window.Capacitor?.Plugins?.Agent)")); i++) SystemClock.sleep(100);
-  WebViewTestDriver.evaluate(type,"window.__launchSurface=null;Capacitor.Plugins.Agent.launchSurface().then(v=>window.__launchSurface=String(v.assistant===true),()=>window.__launchSurface='error')");
+  for (int i = 0; i < 100 && !"true".equals(WebViewTestDriver.evaluate(type, "Boolean(window.Capacitor?.Plugins?.Agent)")); i++) SystemClock.sleep(100);
+  WebViewTestDriver.evaluate(type, "window.__launchSurface=null;Capacitor.Plugins.Agent.launchSurface().then(v=>window.__launchSurface=String(v.assistant===true),()=>window.__launchSurface='error')");
   for (int i = 0; i < 200; i++) {
-   String raw = WebViewTestDriver.evaluate(type,"window.__launchSurface");
+   String raw = WebViewTestDriver.evaluate(type, "window.__launchSurface");
    if (raw != null && !"null".equals(raw)) return raw.replace("\"", "");
    SystemClock.sleep(50);
   }
@@ -81,6 +81,8 @@ public class AssistantInstrumentedTest {
    assertEquals(1, mainPlugin.get().ownedWorkCount());
    Intent assist = new Intent(context, AlphaAssistActivity.class).setAction(Intent.ACTION_ASSIST);
    try (BoundedActivityScenario<AlphaAssistActivity> scenario = BoundedActivityScenario.launch(assist)) {
+    assertEquals("The active assistant selects its own WebView", "true", launchSurfaceAssistant(AlphaAssistActivity.class));
+    assertEquals("The driver still selects the exact main WebView", "false", launchSurfaceAssistant(MainActivity.class));
     WebViewTestDriver.withActivity(AlphaAssistActivity.class, activity -> {
      AlphaLocalAgentPlugin plugin = (AlphaLocalAgentPlugin) activity.getBridge().getPlugin("Agent").getInstance();
      assertNotSame("Each surface has its own plugin instance", mainPlugin.get(), plugin);

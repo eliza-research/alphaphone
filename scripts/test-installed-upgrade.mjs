@@ -38,7 +38,7 @@ export async function testInstalledUpgrade(kind){
  const currentRunners=[pkg+'.WorkflowNoticeProcessRunner'];
  const cancellation=new AbortController(),cancel=()=>cancellation.abort();
  const call=(...args)=>execFileSync(adb,['-s',serial,...args],{encoding:'utf8',timeout:120000,maxBuffer:16*1024*1024}).trim();
- const host=kind==='calendar'?'com.android.launcher3':'com.google.android.apps.nexuslauncher';
+ const host=process.env.ALPHA_TEST_HOME_PACKAGE??(kind==='calendar'?'com.android.launcher3':'com.google.android.apps.nexuslauncher');
  const testClass=kind==='calendar'?'CalendarUpgradeInstrumentedTest':'ReminderUpgradeInstrumentedTest';
  const testMethod=kind==='calendar'?'baselineToCandidatePreservesCalendarIdentity':'installedUpgradePreservesIdentityAndReceipts';
  const flag=kind==='calendar'?'calendarUpgradePhase':'reminderUpgrade';

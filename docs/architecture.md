@@ -40,8 +40,11 @@ No app-data backup/import/export/transfer feature is planned.
 
 Maps, Files and Notes implementations are copied from authenticated upstream
 source into a generated cache outside the submodule. Gradle includes the shared
-password manager and secure store directly from the reviewed pin. No source
-patch is applied during client, worker or resident-runtime builds. Photo edits, capture publication, the opt-in notification mirror and the delivery-receipt
+password manager directly from the reviewed pin. The secure store uses the explicit
+reviewed patch in `patches/eliza/native-manifest.json`: admission authenticates the pin,
+patch digest, target before/after hashes and complete staged module inventory. Gradle
+compiles the generated copy under `.eliza/patched-native`, never a modified submodule.
+No source patch is applied during client, worker or resident-runtime builds. Photo edits, capture publication, the opt-in notification mirror and the delivery-receipt
 ledger for Alpha's own workflow and approval notices (`NoticeDelivery`, configured by
 `WorkflowNoticeDelivery`) also use shared native modules. Alpha wrappers retain installed storage names, media paths and Android components.
 Browser policy helpers are staged from the same authenticated pin. Gradle writes shared

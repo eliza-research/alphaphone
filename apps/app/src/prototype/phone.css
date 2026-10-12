@@ -284,6 +284,8 @@ html:not(.alpha-landscape) .alpha-phone [data-screen]:not([data-alpha-chat-half=
 /* The app library covers the whole screen in the standalone app, as Home does there: Home is not
  * left showing in a 44px strip above it. */
 .standalone-app [data-alpha-layer="drawer"]{top:0!important}
+/* Keep time geometry aligned as text grows: short events need a whole title line too. */
+.calendar-timeline{--calendar-timeline-scale:max(1,var(--alpha-text-scale,1))}
 /* A short timeline block shows the lines that fit. A line that does not fit wraps into a hidden
  * column instead of being cut through; the block's accessible name still carries title and time. */
 .calendar-block-text{display:flex;flex-direction:column;flex-wrap:wrap;align-self:stretch;min-height:0;overflow:hidden}

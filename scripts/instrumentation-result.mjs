@@ -31,6 +31,10 @@ export function instrumentationClassResults(output, requestedClasses = []) {
   }
   let fields = new Map();
   let active = null;
+  const seen = new Set();
+  const finished = new Set();
+  const ignoredWithoutStart = new Map();
+  const malformedClasses = new Set();
   for (const line of text.split('\n')) {
     const field = /^INSTRUMENTATION_STATUS: ([A-Za-z][A-Za-z0-9_]*)=(.*)$/.exec(line);
     if (field) { if (!fields.has(field[1])) fields.set(field[1], field[2]); continue; }
@@ -43,7 +47,17 @@ export function instrumentationClassResults(output, requestedClasses = []) {
     if (!cls || !classPattern.test(cls) || !method) continue;
     const row = entry(cls);
     const selector = `${cls}#${method}`;
-    if (kind === 'start') { row.started++; active = selector; continue; }
+    if (kind === 'start') {
+      if (seen.has(selector) || finished.has(selector)) malformedClasses.add(cls);
+      if (active !== null) malformedClasses.add(active.split('#')[0]);
+      seen.add(selector); row.started++; active = selector; continue;
+    }
+    if (finished.has(selector)) malformedClasses.add(cls);
+    finished.add(selector);
+    // JUnit @Ignore emits -3 without testStarted; assumptions (-4) require a start.
+    if (kind === 'ignored' && !seen.has(selector))
+      ignoredWithoutStart.set(cls, (ignoredWithoutStart.get(cls) ?? 0) + 1);
+    else if (active !== selector) malformedClasses.add(cls);
     if (kind === 'ok' && active === selector) row.passed++;
     else if (kind === 'ignored' || kind === 'assumption') row.ignored.push(method);
     else row.failed.push(method);
@@ -53,12 +67,12 @@ export function instrumentationClassResults(output, requestedClasses = []) {
   const runFailure = /INSTRUMENTATION_FAILED|Process crashed/.test(text) || terminal.length !== 1 || terminal[0][1] !== '-1';
   const crashedIn = active?.split('#')[0] ?? null;
   const results = [...classes.values()].sort((a, b) => a.class.localeCompare(b.class)).map(row => {
-    const incomplete = row.started !== row.passed + row.failed.length + row.ignored.length;
+    const incomplete = row.started + (ignoredWithoutStart.get(row.class) ?? 0) !== row.passed + row.failed.length + row.ignored.length;
     // Assumption-skipped methods (a test's own declared variant/campaign gate) are
     // listed, never counted as passes; a class with no passing test is not passed.
     let status = 'passed';
-    if (row.started === 0) status = 'missing';
-    else if (row.failed.length || incomplete || crashedIn === row.class || runFailure) status = 'failed';
+    if (row.started === 0 && row.ignored.length === 0) status = 'missing';
+    else if (malformedClasses.has(row.class) || row.failed.length || incomplete || crashedIn === row.class || runFailure) status = 'failed';
     else if (row.passed === 0) status = 'skipped';
     return { ...row, status };
   });

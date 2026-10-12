@@ -1523,3 +1523,12 @@ classes while retaining ownership, mock-build, unknown-class, clock and physical
 device gates. Because verification stopped, that queued APK build/storage rerun
 did not start. Main PR 426 was fetched during this review; its integration follows
 a saved audit checkpoint, with prior APK evidence kept at its original source.
+
+Main `7427d958` (PR 426) is integrated after audit checkpoint `6c88c9d0`. The
+merge retains this audit's tested Files paging/chooser and Photos multi-share
+cleanup, and uses the equivalent upstream exact-Activity WebView driver with
+additional assistant assertions. Upstream adds bounded secure-store staging via
+an authenticated explicit patch, serialized storage bridge replies, native/browser
+accessibility fixes, cookie policy qualification and Calendar large-text geometry.
+These additions do not make this audit's earlier failures pass retroactively.
+Fresh verification/builds are required; `vendor/eliza` remains at the same pin.

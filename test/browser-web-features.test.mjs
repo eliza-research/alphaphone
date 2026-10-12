@@ -100,3 +100,12 @@ test('a page-initiated navigation commits the selected tab autofill session so t
   assert.match(fill, /No password offer for a cross-origin iframe/);
   assert.match(fill, /event\.preventDefault\(\);location\.href=/, 'the synthetic sign-in never submits its fields to the network');
 });
+
+// The executable cross-site iframe contract lives in BrowserCookiePolicyInstrumentedTest.
+test('P-19 changes only child-tab third-party policy after assigning an isolated profile', () => {
+  assert.match(plugin, /WebViewCompat\.setProfile\(t\.web, t\.profile\)/);
+  assert.match(plugin, /setAcceptThirdPartyCookies\(t\.web, !priv\)/);
+  assert.doesNotMatch(plugin, /setAcceptCookie\(/, 'never change the process-wide first-party policy');
+  assert.ok(plugin.indexOf('WebViewCompat.setProfile(t.web, t.profile)') < plugin.indexOf('setAcceptThirdPartyCookies(t.web, !priv)'));
+  assert.match(plugin, /priv \? namespace \+ "_" \+ id : PERSISTENT_PROFILE/);
+});

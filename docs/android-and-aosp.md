@@ -86,7 +86,8 @@ by setup. Pin app certificate and versionCode across APK and OS releases.
 
 ```sh
 npm run aosp:stage -- --apk /absolute/signed-launcher.apk \
-  --descriptor /absolute/reviewed-launcher.json --output /absolute/new-overlay
+  --descriptor /absolute/reviewed-launcher.json --aosp-source /absolute/reviewed-aosp \
+  --output /absolute/new-overlay
 ```
 
 The upstream helper rejects a package/hash/signer mismatch, absent HOME filter,
@@ -153,7 +154,8 @@ and `npm run android:build:local` commands above. Preserve the four APKs, instru
 APKs, lint results, runtime provenance and `artifacts/apk-manifest.json`. Current speech
 functional acceptance is a separate gate; do not bypass APK admission to stage a release.
 
-Use `npm run aosp:stage` with the admitted launcher and reviewed signer descriptor.
+Use `npm run aosp:stage` with the admitted launcher, reviewed signer descriptor and
+explicit `--aosp-source` path to the reviewed source checkout.
 Inherit the generated Alpha product fragment in the pinned Cuttlefish product, build
 the image and use its matching Cuttlefish host package. Verify boot, `/product` package
 placement, signer, HOME routing, resident startup, authenticated inference, native
@@ -279,3 +281,67 @@ ANDROID_SERIAL=<exact-serial> ALPHA_ANDROID_USER=<user-id> node scripts/verify-a
 The check requires enabled `com.android.deskclock` and its set/show/snooze/dismiss activity handlers. It does not launch an alarm, change permissions, provision a device, or prove ringing. Alpha's shared manifest declares the caller SET_ALARM permission and visibility queries; Clock's own notifications/exact-alarm access remains separately verified on the image. Confirm actual set/fire/snooze/dismiss, permission denial, reboot, time-zone/DST, cancellation and DND/physical audio before claiming alarm MVP completion.
 
 DeskClock is the real AOSP module defined in `packages/apps/DeskClock/Android.bp` and included by the standard handheld product. Pin its source through the selected image manifest; do not substitute an unreviewed downloaded APK.
+
+## Read-only Cuttlefish launcher verification
+
+After booting a development image, bind the observation to its independently retained
+staging descriptor and expected build fingerprint:
+
+```sh
+node scripts/verify-cuttlefish-launcher.mjs --serial 127.0.0.1:6520 --user 0 \
+  --descriptor /absolute/staged-overlay/launcher.json \
+  --fingerprint 'exact expected build fingerprint' \
+  --apk-path /product/app/AlphaPhone/AlphaPhone.apk --out /absolute/new-report.json
+```
+
+This makes no device changes. It requires a booted Cuttlefish image, the selected
+foreground unlocked user, enforcing SELinux, exact system APK bytes, Alpha HOME,
+an enabled system recovery HOME, DeskClock handlers and a current WebView provider.
+A data-installed override, wrong image or APK, missing recovery launcher, or a reboot
+or replacement during observation fails. Keep the descriptor from staging rather
+than creating the expected hash from whatever happens to be installed. The reported
+certificate is inherited from that descriptor via identical APK bytes, not a fresh
+signature check. The output file must be new; failures are retained too.
+
+This checks installed image configuration only. It does not qualify resident-agent
+execution, live accounts, alarm ringing, browser security/provider freshness,
+physical hardware, production signing or update/rollback. A pass on an older image
+cannot qualify a newer app revision.
+
+## System secure camera
+
+The approved lockscreen camera is AOSP Camera2, reached through the standard
+SystemUI double-press-power gesture. Alpha does not own a lockscreen camera
+activity. Staging adds `Camera2` and resource overlays selecting
+`com.android.camera2` and enabling the framework gesture. User settings can
+still disable the gesture.
+
+All non-development staging requires `--aosp-source PATH` in addition to the
+existing distributable APK and reviewed descriptor gates. The source verifier
+checks the exact module revisions and selected file hashes in
+`docs/aosp-secure-camera-source.json`, and rejects dirty, untracked or ignored module
+inputs and index flags that can hide tracked edits. Linked module roots in repo shadow workspaces are supported; files
+must remain inside each resolved module. Source revisions and byte checks are
+recorded in the staged `secure-camera/source-evidence.json`. Development
+staging without a source path records `sourceVerified: false` explicitly.
+
+```sh
+node scripts/verify-aosp-secure-camera.mjs --aosp-source /path/to/aosp
+# On a separately authorized booted target, read-only checks:
+ANDROID_SERIAL=explicit-serial ALPHA_ANDROID_USER=10 \
+  ALPHA_EXPECTED_FINGERPRINT='exact/reviewed/image/fingerprint' \
+  node scripts/verify-aosp-secure-camera.mjs
+```
+
+The image check requires enabled system Camera2, both secure intent handlers,
+the effective framework/SystemUI gesture resources, a camera feature and an
+enabled gesture for the selected user. It launches nothing and changes no
+permissions, settings or files. A caller-supplied fingerprint binds the check
+to a target; it does not authenticate that target's build inputs.
+
+The pinned local AOSP source is evidence for the source contract only. Neither
+that check nor staging proves that an image consumed the overlay. The local
+Cuttlefish baseline is not approved Pixel 10a Android 17 device acceptance.
+Locked capture, absence of pre-unlock gallery/account access, return after
+unlock, permission denial and physical gesture behavior require separate
+image/device tests. These remain open acceptance work for issue #407.

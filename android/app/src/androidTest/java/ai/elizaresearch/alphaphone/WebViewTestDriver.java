@@ -65,15 +65,16 @@ final class WebViewTestDriver {
   }
  }
  static String evaluate(String script) throws Exception {
-  return evaluate(MainActivity.class,script,script);
+  return evaluate(MainActivity.class, script, script);
  }
  static String evaluateSensitive(String script) throws Exception {
-  return evaluate(MainActivity.class,script,"private connection input");
+  return evaluate(MainActivity.class, script, "private connection input");
  }
- static String evaluate(Class<? extends MainActivity> type,String script) throws Exception {
-  return evaluate(type,script,script);
+ /** Select the exact requested surface, never a subclass or another live WebView. */
+ static String evaluate(Class<? extends MainActivity> type, String script) throws Exception {
+  return evaluate(type, script, script);
  }
- private static String evaluate(Class<? extends MainActivity> type,String script, String diagnostic) throws Exception {
+ private static String evaluate(Class<? extends MainActivity> type, String script, String diagnostic) throws Exception {
   CountDownLatch done=new CountDownLatch(1);
   AtomicReference<String> answer=new AtomicReference<>();
   AtomicReference<Throwable> error=new AtomicReference<>();
@@ -86,7 +87,7 @@ final class WebViewTestDriver {
      }
      if(target!=null)break;
     }
-    if(target==null)throw new AssertionError("No live Activity of exact type "+type.getName()+" for WebView evaluation");
+    if(target==null)throw new AssertionError("No live exact Activity for WebView evaluation: "+type.getName());
     target.getBridge().getWebView().evaluateJavascript(script,value->{answer.set(value);done.countDown();});
    } catch(Throwable failure) {error.set(failure);done.countDown();}
   });

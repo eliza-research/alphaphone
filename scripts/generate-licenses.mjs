@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {canonicalNativeGradleSettings} from './native-gradle-descriptors.mjs';
 // Generates the third-party notices shipped in the web bundle and in every APK payload.
 //
 //   node scripts/generate-licenses.mjs                    write apps/app/public/licenses/*
@@ -523,7 +524,7 @@ export function parseGradleTree(output) {
 
 /** Fingerprint only Gradle inputs that can change the resolved runtime classpath. */
 export function androidDependencyFingerprint(root) {
-  const settings = read(root, 'android/settings.gradle');
+  const settings = canonicalNativeGradleSettings(read(root, 'android/settings.gradle'));
   const modules = new Map([...settings.matchAll(/project\('(:[^']+)'\)\.projectDir\s*=\s*new File\('([^']+)'\)/g)].map(m => [m[1], path.posix.join('android', m[2])]));
   const files = ['android/variables.gradle', 'android/build.gradle', 'android/app/build.gradle', 'android/local-speech/build.gradle'];
   const app = read(root, 'android/app/build.gradle');
@@ -533,7 +534,7 @@ export function androidDependencyFingerprint(root) {
   const lines = [];
   for (const file of [...new Set(files)].sort()) {
     if (!exists(root, file)) { lines.push(`${file}: missing`); continue; }
-    const relevant = read(root, file).split('\n').map(line => line.trim())
+    const relevant = (file === 'android/settings.gradle' ? settings : read(root, file)).split('\n').map(line => line.trim())
       .filter(line => /^(implementation|api|runtimeOnly)\b/.test(line) || /Version\s*=/.test(line) || /^include\b|projectDir\s*=/.test(line));
     lines.push(`${file}:\n${relevant.join('\n')}`);
   }

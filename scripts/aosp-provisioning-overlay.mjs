@@ -15,8 +15,11 @@ import path from "node:path";
 const component = /^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_$]*)+$/;
 const xml = value => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-/** Find the components a provisioning overlay names in an `aapt dump xmltree` manifest. */
-export function provisioningComponents(xmltree, packageName) {
+/**
+ * Parse the activities, activity-aliases and services of an `aapt dump xmltree`
+ * manifest with their attributes and intent filters. Shared by the staging checks.
+ */
+export function manifestComponents(xmltree) {
   const lines = xmltree.split("\n");
   const elements = [];
   for (let index = 0; index < lines.length; index++) {
@@ -34,7 +37,7 @@ export function provisioningComponents(xmltree, packageName) {
   let current = null, filter = null;
   for (const element of elements) {
     if (["activity", "activity-alias", "service"].includes(element.tag)) {
-      current = { tag: element.tag, depth: element.depth, name: element.attrs.name, exported: element.attrs.exported, permission: element.attrs.permission, filters: [] };
+      current = { tag: element.tag, depth: element.depth, name: element.attrs.name, exported: element.attrs.exported, permission: element.attrs.permission, attrs: element.attrs, filters: [] };
       components.push(current); filter = null;
     } else if (current && element.depth > current.depth) {
       if (element.tag === "intent-filter") { filter = { actions: [], categories: [] }; current.filters.push(filter); }
@@ -42,6 +45,12 @@ export function provisioningComponents(xmltree, packageName) {
       else if (filter && element.tag === "category") filter.categories.push(element.attrs.name);
     } else current = null;
   }
+  return components;
+}
+
+/** Find the components a provisioning overlay names in an `aapt dump xmltree` manifest. */
+export function provisioningComponents(xmltree, packageName) {
+  const components = manifestComponents(xmltree);
   const qualify = name => (name?.startsWith(".") ? packageName + name : name);
   const has = (row, action, categories = []) => row.filters.some(f => f.actions.includes(action) && categories.every(c => f.categories.includes(c)));
   const home = components.filter(row => row.tag !== "service" && has(row, "android.intent.action.MAIN", ["android.intent.category.HOME", "android.intent.category.DEFAULT"]));

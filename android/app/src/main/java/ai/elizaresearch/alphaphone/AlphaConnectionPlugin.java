@@ -57,6 +57,7 @@ public final class AlphaConnectionPlugin extends Plugin {
 
  private static final int RESPONSE_LIMIT = 2 * 1024 * 1024;
  private final ExecutorService workers = Executors.newFixedThreadPool(4);
+ private final SerialStorageTasks storageTasks = new SerialStorageTasks();
  private volatile boolean destroyed;
  private final ConcurrentHashMap<String, Pending> requests = new ConcurrentHashMap<>();
  /** Bridge messages already queued during Activity teardown can arrive after shutdown. */
@@ -64,6 +65,9 @@ public final class AlphaConnectionPlugin extends Plugin {
   if(destroyed){call.reject("Connection closed");return false;}
   try{workers.execute(task);return true;}
   catch(java.util.concurrent.RejectedExecutionException stopped){call.reject("Connection closed");return false;}
+ }
+ private boolean submitStorage(PluginCall call,Runnable task) {
+  return storageTasks.submit(()->{if(destroyed)call.reject("Connection closed");else task.run();},()->call.reject("Connection closed"));
  }
  private static final class Pending {
   volatile boolean cancelled;
@@ -94,7 +98,7 @@ public final class AlphaConnectionPlugin extends Plugin {
   final String name;final long intent;
   try{name=RendererCredentialSlots.requireAllowed(call.getString("slot"));intent=credentialIntent(name);}
   catch(Exception invalid){call.reject("Secure storage write failed");return;}
-  submit(call,() -> {
+  submitStorage(call,() -> {
    try {
     storage(intent).writeCredentialSlot(name,call.getString("value"));
     call.resolve();
@@ -117,14 +121,14 @@ public final class AlphaConnectionPlugin extends Plugin {
   submit(call,()->{try{NotificationAccess.pause(getContext(),true);call.resolve();}catch(Exception failure){call.reject("Notification collection could not be paused");}});
  }
  @PluginMethod public void secureRead(PluginCall call) {
-  submit(call,()->{
+  submitStorage(call,()->{
    try{String value=readCredentialSlot(RendererCredentialSlots.requireAllowed(call.getString("slot")));JSObject result=new JSObject();result.put("value",value==null?JSONObject.NULL:value);call.resolve(result);}
    catch(Exception error){call.reject("Secure storage read failed");}
   });
  }
  /** Compare-and-exchange is scoped to local drafts and pending device actions, never credential slots. */
  @PluginMethod public void secureCompareExchange(PluginCall call) {
-  submit(call,()->{
+  submitStorage(call,()->{
    try {
     String name=RendererCredentialSlots.requireAllowed(call.getString("slot"));
     if(name==null||!(name.startsWith("inbox-drafts:v1:")||name.matches("inbox-operation:v1:[a-f0-9]{64}")||name.matches("workflow-draft:v1:[a-f0-9]{64}")||name.matches("assistant-draft:v1:[a-f0-9]{64}")||name.equals("notes-records:v1:device")||name.equals("reminder-deletions:v1:device")||name.equals("reminder-creations:v1:device")||name.equals("clock-handoff:v1:device")||name.equals("notes-audio-deletions:v1:device")||name.equals("notes-trash:v1:device")||name.equals(AlphaCredentialStore.NOTES_DRAFT)||name.matches("cloud-delegation:v1:[a-f0-9]{64}"))||!call.getData().has("expectedValue")||!call.getData().has("value"))throw new IllegalArgumentException();
@@ -140,7 +144,7 @@ public final class AlphaConnectionPlugin extends Plugin {
   final String name;final long intent;
   try{name=RendererCredentialSlots.requireAllowed(call.getString("slot"));intent=credentialIntent(name);}
   catch(Exception invalid){call.reject("Secure storage removal failed");return;}
-  submit(call,() -> {
+  submitStorage(call,() -> {
    try {
     storage(intent).removeCredentialSlot(name);
     call.resolve();
@@ -327,6 +331,6 @@ public final class AlphaConnectionPlugin extends Plugin {
   destroyed=true;
   for (Pending pending : requests.values()) pending.cancel();
   synchronized(foregroundLock){foregroundLock.notifyAll();}
-  requests.clear();workers.shutdownNow(); super.handleOnDestroy();
+  requests.clear();storageTasks.close();workers.shutdownNow(); super.handleOnDestroy();
  }
 }

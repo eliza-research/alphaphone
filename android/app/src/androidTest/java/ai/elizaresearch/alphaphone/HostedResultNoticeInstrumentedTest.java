@@ -32,6 +32,13 @@ public final class HostedResultNoticeInstrumentedTest {
   synchronized(lock){String raw=store.get().readCredentialSlot(HostedResultNotices.LEDGER);JSONObject ledger=raw==null?new JSONObject():new JSONObject(raw);ledger.remove(key);store.get().writeCredentialSlot(HostedResultNotices.LEDGER,ledger.toString());raw=store.get().readCredentialSlot(HostedResultNotices.PENDING);JSONObject pending=raw==null?new JSONObject():new JSONObject(raw);if(key.equals(pending.optString("key")))store.get().writeCredentialSlot(HostedResultNotices.PENDING,"{}");}
  }
  private StatusBarNotification notice(String key){for(StatusBarNotification n:InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(NotificationManager.class).getActiveNotifications())if(key.equals(n.getTag()))return n;return null;}
+ // NotificationManager.notify queues work in system_server; successful publication does not
+ // imply getActiveNotifications has observed it yet. Poll only visibility, never republish.
+ private StatusBarNotification awaitNotice(String key){
+  long end=SystemClock.elapsedRealtime()+10000;StatusBarNotification posted;
+  do{posted=notice(key);if(posted!=null)return posted;SystemClock.sleep(50);}while(SystemClock.elapsedRealtime()<end);
+  return null;
+ }
  private void run(boolean granted)throws Exception {
   try(BoundedActivityScenario<MainActivity> activity=BoundedActivityScenario.launch(MainActivity.class)){
    AppNavigation.liveMode();
@@ -44,7 +51,7 @@ public final class HostedResultNoticeInstrumentedTest {
     save(slot,new JSONObject().put("ids",new JSONArray().put(run)));save(slot+":"+run,new JSONObject().put("runId",run).put("workflowId",run).put("workflowVersionId","version1").put("output",secret));
     File file=new File(InstrumentationRegistry.getInstrumentation().getTargetContext().getNoBackupFilesDir(),"connection-credentials/"+HostedResultNotices.hash(slot+":"+run));assertFalse(new String(Files.readAllBytes(file.toPath()),StandardCharsets.ISO_8859_1).contains(secret));
     assertEquals(granted?"posted":"denied",call("Capacitor.Plugins.AlphaHostedResults.publishResult("+route+")").getString("phase"));
-    if(granted){StatusBarNotification posted=notice(key);assertNotNull(posted);assertEquals(AlphaHostedResultsPlugin.CHANNEL,posted.getNotification().getChannelId());assertEquals(android.app.Notification.VISIBILITY_PRIVATE,posted.getNotification().visibility);assertFalse(posted.getNotification().extras.toString().contains(owner));assertFalse(posted.getNotification().extras.toString().contains(secret));assertFalse(posted.getNotification().publicVersion.extras.toString().contains(secret));posted.getNotification().contentIntent.send();
+    if(granted){StatusBarNotification posted=awaitNotice(key);assertNotNull("Published notice must become visible in NotificationManager",posted);assertEquals(AlphaHostedResultsPlugin.CHANNEL,posted.getNotification().getChannelId());assertEquals(android.app.Notification.VISIBILITY_PRIVATE,posted.getNotification().visibility);assertFalse(posted.getNotification().extras.toString().contains(owner));assertFalse(posted.getNotification().extras.toString().contains(secret));assertFalse(posted.getNotification().publicVersion.extras.toString().contains(secret));posted.getNotification().contentIntent.send();
      JSONObject tap=null;for(int i=0;i<100;i++){tap=call("Capacitor.Plugins.AlphaHostedResults.pendingResult()");if(key.equals(tap.optString("key")))break;SystemClock.sleep(100);}assertNotNull(tap);assertEquals(key,tap.getString("key"));String token=tap.getString("token");
      activity.recreate();AppNavigation.liveMode();JSONObject restored=call("Capacitor.Plugins.AlphaHostedResults.pendingResult()");assertEquals(token,restored.getString("token"));assertEquals(run,restored.getString("runId"));assertTrue(restored.getBoolean("retained"));
      assertFalse(call("Capacitor.Plugins.AlphaHostedResults.consumeResult({token:"+JSONObject.quote(token)+"})").has("error"));assertEquals("opened",call("Capacitor.Plugins.AlphaHostedResults.publishResult("+route+")").getString("phase"));assertNull(notice(key));

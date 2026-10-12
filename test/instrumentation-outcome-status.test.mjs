@@ -58,3 +58,30 @@ test("the search method still fails on anything but the results page or the prov
   for (const kept of [`assertEquals("Search is requested over HTTPS","https",request.getScheme());`, `assertEquals("Search is requested from the search provider","www.google.com",request.getHost());`, `assertEquals("Search is requested at the provider's search path","/search",request.getPath());`, `assertEquals("The typed words are the query, unchanged",query,request.getQueryParameter("q"));`, `assertEquals("Search provider cannot access app bridge","true",child("typeof Capacitor==='undefined' && typeof androidBridge==='undefined'"));`, `assertEquals("Rejected address cannot create a page","null",child("true"));`])
     assert.ok(method.includes(kept), kept);
 });
+
+test("JUnit ignored tests without a start are reported as skipped, including mixed classes", () => {
+  const cls = C("Shell");
+  const ignored = record(cls, "ignored", -3);
+  const finish = "INSTRUMENTATION_CODE: -1";
+  const only = instrumentationClassResults([...ignored, finish].join("\n"), [cls]).results[0];
+  assert.deepEqual({status: only.status, started: only.started, passed: only.passed, ignored: only.ignored},
+    {status: "skipped", started: 0, passed: 0, ignored: ["ignored"]});
+  const mixed = instrumentationClassResults([...ignored, ...record(cls, "executed", 1), ...record(cls, "executed", 0), finish].join("\n"), [cls]).results[0];
+  assert.equal(mixed.status, "passed");
+  assert.equal(mixed.passed, 1);
+  assert.deepEqual(mixed.ignored, ["ignored"]);
+});
+
+test("duplicate, overlapping or unstarted method results cannot qualify a class", () => {
+  const cls = C("Shell");
+  const completed = [...record(cls, "a", 1), ...record(cls, "a", 0)];
+  for (const malformed of [
+    [...completed, ...completed],
+    [...record(cls, "a", 1), ...record(cls, "b", 1), ...record(cls, "b", 0), ...record(cls, "a", 0)],
+    [...record(cls, "a", -4)],
+    [...record(cls, "a", -3), ...record(cls, "a", -3)],
+  ]) {
+    const parsed = instrumentationClassResults([...malformed, "INSTRUMENTATION_CODE: -1"].join("\n"), [cls]);
+    assert.equal(parsed.results[0].status, "failed");
+  }
+});
