@@ -185,7 +185,7 @@ public final class AccessibilityInstrumentedTest {
    // This owned-emulator diagnostic survives app uninstall so the host can pull and
    // remove its unique file. It does not change the collected assertion or UI state.
    String screenshot="/sdcard/Download/alpha-accessibility-fixture-"+java.util.UUID.randomUUID()+".png";
-   try(InputStream capture=new ParcelFileDescriptor.AutoCloseInputStream(InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand("screencap -p "+screenshot))){
+   try(InputStream capture=new ParcelFileDescriptor.AutoCloseInputStream(automation().executeShellCommand("screencap -p "+screenshot))){
     capture.readAllBytes();System.out.println("ALPHA_ACCESSIBILITY_SCREENSHOT "+surface+" "+screenshot);
    }catch(Exception error){System.out.println("ALPHA_ACCESSIBILITY_SCREENSHOT_ERROR "+error.getClass().getName());}
   }
