@@ -2015,3 +2015,30 @@ media was used. The latest evidence is
 `test-results/full-product-audit/secure-camera-session-privacy-v4/result.json`;
 failed attempts and comparison hierarchies remain alongside it. No product or
 shared AOSP source changed, and no overall camera/privacy requirement is completed.
+
+
+## October 12: refreshed main and remaining secure-camera unlock gap
+
+Merged main through `7bf27cc9` at `344dff84`, retaining the audit's atomic fake-ADB
+state publication and full-product Wallet planning outside MVP. The incoming
+changes enforce exact managed-service routes, remove production hosted-agent
+connections, add native authenticated reset and startup-marker recovery, and
+isolate browser cookie policy. Their checked-in reset and cookie receipts remain
+source-bound upstream evidence, not reruns on this audit's current APKs.
+
+Two further secure-camera attempts (`secure-camera-session-privacy-v5` and `v6`)
+reached the same locked Android screen after the current-session filmstrip's
+Unlock control. A swipe and a subsequent campaign using the observed clickable
+lock control did not expose the expected PIN entry. Both campaigns failed that
+assertion before entering the synthetic credential. Unlock return remains
+unverified; this does not establish a privacy leak or a successful unlock.
+Both receipts bind their scripts and the v2 fixture boot receipt. All four exact
+owned photo rows were deleted and both temporary PINs removed in cleanup. An
+independent post-run check confirmed the empty credential and empty image store.
+The earlier locked-capture evidence remains separate from this failed navigation.
+
+The refreshed strict-build input report still names missing qualified speech,
+reviewed ARM64 embedding-host libraries and release signing. Prepared resident
+sources, worker, staged payload and embedding model exist, but that is not evidence
+of resident execution in an APK. Live Cloud login/Cerebras, end-to-end voice latency,
+physical hardware and full current-source image acceptance remain open.
