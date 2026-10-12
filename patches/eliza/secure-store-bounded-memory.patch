@@ -1,0 +1,58 @@
+--- a/plugins/plugin-native-secure-store/android/src/main/java/ai/eliza/plugins/securestore/nativeonly/JsonCredentialSlots.java
++++ b/plugins/plugin-native-secure-store/android/src/main/java/ai/eliza/plugins/securestore/nativeonly/JsonCredentialSlots.java
+@@ -90,10 +90,9 @@
+       out.getFD().sync(); file.finishWrite(out);
+       out = null;
+       try (InputStream input = file.openRead()) {
+-       byte[] committed = readBounded(input, limit + 64);
+-       if (committed.length != 2 + iv.length + encrypted.length || committed[0] != 1 || committed[1] != iv.length
+-         || !Arrays.equals(iv, Arrays.copyOfRange(committed, 2, 2 + iv.length))
+-         || !Arrays.equals(encrypted, Arrays.copyOfRange(committed, 2 + iv.length, committed.length))) throw new IllegalStateException();
++       if(input.read()!=1||input.read()!=iv.length)throw new IllegalStateException();
++       verifyBytes(input,iv);verifyBytes(input,encrypted);
++       if(input.read()!=-1)throw new IllegalStateException();
+       }
+      } catch (Exception error) { if (out != null) file.failWrite(out); throw error; }
+     }
+@@ -103,6 +102,13 @@
+  public String read(String name) throws Exception {
+   String slot=slotHash(name);int limit=slotLimit(name);
+   synchronized(LOCK) {
++   String value=readAuthenticated(slot,limit);
++   if(value!=null)parseJson(value);
++   return value;
++  }
++ }
++ /** End the ciphertext/plaintext buffer lifetimes before parsing nested JSON strings. */
++ private String readAuthenticated(String slot,int limit)throws Exception {
+    AtomicFile file=slotFile(slot); byte[] stored;
+    try(InputStream input=file.openRead()){stored=readBounded(input,limit+64);}
+    catch(FileNotFoundException missing){if(file.getBaseFile().exists()||new File(file.getBaseFile().getPath()+".bak").exists())throw missing;return null;}
+@@ -111,9 +117,8 @@
+    cipher.init(Cipher.DECRYPT_MODE,key(),new GCMParameterSpec(128,Arrays.copyOfRange(stored,2,14)));
+    cipher.updateAAD(slot.getBytes(StandardCharsets.US_ASCII));
+    byte[] plain=cipher.doFinal(stored,14,stored.length-14);
+-   try{if(plain.length>limit)throw new IllegalArgumentException("Credential slot exceeds byte limit");String value=new String(plain,StandardCharsets.UTF_8);parseJson(value);return value;}
++   try{if(plain.length>limit)throw new IllegalArgumentException("Credential slot exceeds byte limit");return new String(plain,StandardCharsets.UTF_8);}
+    finally{Arrays.fill(plain,(byte)0);}
+-  }
+  }
+  public void remove(String name)throws Exception {
+   synchronized(LOCK){
+@@ -128,6 +133,16 @@
+    return true;
+   }
+  }
++ /** Verify the committed ciphertext without another slot-sized array or slice. */
++ private static void verifyBytes(InputStream input,byte[] expected)throws Exception{
++  byte[] buffer=new byte[8192];int offset=0;
++  while(offset<expected.length){
++   int count=input.read(buffer,0,Math.min(buffer.length,expected.length-offset));
++   if(count<1)throw new IllegalStateException();
++   for(int i=0;i<count;i++)if(buffer[i]!=expected[offset+i])throw new IllegalStateException();
++   offset+=count;
++  }
++ }
+  private static byte[] readBounded(InputStream input, int limit) throws Exception {
+   if (input == null) return new byte[0];
+   ByteArrayOutputStream output = new ByteArrayOutputStream(); byte[] buffer = new byte[8192]; int count;
