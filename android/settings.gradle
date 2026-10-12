@@ -29,6 +29,7 @@ def nativePatchProcess = new ProcessBuilder('node', '../scripts/prepare-patched-
 def nativePatchOutput = nativePatchProcess.inputStream.getText('UTF-8')
 if (nativePatchProcess.waitFor() != 0) throw new GradleException('Native patch admission failed')
 def nativePatchSource = new groovy.json.JsonSlurper().parseText(nativePatchOutput)
+gradle.ext.nativePatchReceipt = new File(nativePatchSource.root, '.source.json')
 include ':elizaos-capacitor-secure-store'
 project(':elizaos-capacitor-secure-store').projectDir = new File(nativePatchSource.root, 'plugins/plugin-native-secure-store/android')
 include ':eliza-passwords'

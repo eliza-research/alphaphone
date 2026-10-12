@@ -34,6 +34,8 @@ export function materializeNativePatches({source,manifest,patchRoot,temporary}){
  verifyModes(temporary,modes);
  return {modules,files:expected,modes};
 }
+export function nativePatchReceipt(prepared){const {root,...receipt}=prepared;return receipt;}
+export function verifyNativePatchReceipt(raw,prepared){let receipt;try{receipt=JSON.parse(raw);}catch{throw Error('Missing or invalid packaged native patch receipt');}if(JSON.stringify(receipt)!==JSON.stringify(nativePatchReceipt(prepared)))throw Error('Packaged native patch receipt mismatch');return receipt;}
 export function preparePatchedNative({root=ROOT}={}){
  root=path.resolve(root);
  const source=upstreamNativeSource(root),patchRoot=path.join(root,'patches/eliza'),manifestBytes=fs.readFileSync(path.join(patchRoot,'native-manifest.json')),manifest=JSON.parse(manifestBytes);

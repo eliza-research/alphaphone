@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {materializeNativePatches} from '../scripts/prepare-patched-native.mjs';
+import {materializeNativePatches,verifyNativePatchReceipt} from '../scripts/prepare-patched-native.mjs';
 import {sha} from '../scripts/upstream-native-source.mjs';
 const module='plugins/plugin-native-test/android',target=module+'/src/main/java/Test.java';
 function fixture(run){const root=fs.mkdtempSync(path.join(os.tmpdir(),'alpha-patch-test-'));try{const before=Buffer.from('old\n'),after=Buffer.from('new\n'),patch=`--- a/${target}\n+++ b/${target}\n@@ -1 +1 @@\n-old\n+new\n`,patchRoot=path.join(root,'patches'),temporary=path.join(root,'stage');fs.mkdirSync(patchRoot);fs.mkdirSync(temporary);fs.writeFileSync(path.join(patchRoot,'test.patch'),patch);const manifest={schema:1,baseCommit:'pin',patches:[{module,file:'test.patch',sha256:sha(patch),targets:[{path:target,beforeSha256:sha(before),afterSha256:sha(after)}]}]};const source={pin:'pin',read:()=>new Map([[target,{bytes:before,mode:'100644',sha256:sha(before)}]])};run({root,manifest,source,patchRoot,temporary});}finally{fs.rmSync(root,{recursive:true,force:true});}}
@@ -17,3 +17,13 @@ for(const [name,mutate,error] of [
  ['undeclared patch target',a=>{const p=a.manifest.patches[0];const text=fs.readFileSync(path.join(a.patchRoot,p.file),'utf8').replaceAll(target,module+'/src/main/java/Other.java');fs.writeFileSync(path.join(a.patchRoot,p.file),text);p.sha256=sha(text);},/headers/],
  ['symlink patch',a=>{fs.renameSync(path.join(a.patchRoot,'test.patch'),path.join(a.root,'real.patch'));fs.symlinkSync(path.join(a.root,'real.patch'),path.join(a.patchRoot,'test.patch'));},/Nonregular/]
 ])test(`admission rejects ${name}`,()=>fixture(a=>{mutate(a);assert.throws(()=>materializeNativePatches(a),error);}));
+
+test('APK receipt rejects missing, old and mismatched source bindings',()=>{
+ const expected={root:'/not-packaged',baseCommit:'pin',manifestSha256:'new',files:{Java:'patched'}};
+ const valid=JSON.stringify({baseCommit:'pin',manifestSha256:'new',files:{Java:'patched'}});
+ assert.deepEqual(verifyNativePatchReceipt(valid,expected).files,{Java:'patched'});
+ assert.throws(()=>verifyNativePatchReceipt('',expected),/Missing/);
+ assert.throws(()=>verifyNativePatchReceipt('{}',expected),/mismatch/);
+ assert.throws(()=>verifyNativePatchReceipt(valid.replace('patched','original'),expected),/mismatch/);
+ assert.throws(()=>verifyNativePatchReceipt(valid.replace('new','old'),expected),/mismatch/);
+});

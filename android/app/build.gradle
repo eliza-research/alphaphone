@@ -140,3 +140,12 @@ def verifyEmbeddingHost = tasks.register('verifyEmbeddingHost', Exec) {
  commandLine args
 }
 tasks.named('preBuild').configure { dependsOn verifyEmbeddingHost }
+
+// The authenticated source receipt travels with every application APK, binding audits to built bytes.
+def nativePatchAssets = layout.buildDirectory.dir('generated/native-patch-assets')
+android.sourceSets.main.assets.srcDir(nativePatchAssets)
+def stageNativePatchReceipt = tasks.register('stageNativePatchReceipt', Copy) {
+ from(gradle.ext.nativePatchReceipt) { rename { 'native-patches.json' } }
+ into(nativePatchAssets)
+}
+tasks.named('preBuild').configure { dependsOn stageNativePatchReceipt }
