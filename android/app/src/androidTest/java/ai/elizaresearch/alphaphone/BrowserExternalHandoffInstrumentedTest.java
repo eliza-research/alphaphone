@@ -77,7 +77,26 @@ public final class BrowserExternalHandoffInstrumentedTest {
     for(String field:new String[]{"session","navigation","url"}){
      Call stale=new Call(session,true);stale.getData().put(field,field.equals("url")?URL+"changed":"stale");plugin.get().openExternalBrowser(stale);stale.await();assertNotNull("Stale "+field+" refused",stale.error);assertNull(outgoing.get());
     }
-    Call accepted=new Call(session,priv);plugin.get().openExternalBrowser(accepted);accepted.await();assertNull(accepted.error);
+    // Diagnose fixture readiness on the same UI turn as the single dispatch.
+    // Never relax production visibility or exact committed-page admission.
+    Call accepted=new Call(session,priv);
+    BoundedActivityScenario.main(()->{try{
+     AlphaBrowserPlugin p=plugin.get();Object t=tab.get();
+     assertEquals("Fixture session still current",session,get(p,"session"));
+     assertEquals("Fixture remains presented","handoff",get(p,"presentedId"));
+     assertFalse("Activity must be resumed",(Boolean)get(p,"paused"));
+     assertFalse("Plugin must be alive",(Boolean)get(p,"destroyed"));
+     assertTrue("Child WebView attached and visible",web.get().isShown());
+     assertEquals("Synthetic native page URL",URL,web.get().getUrl());
+     assertEquals("Committed tab URL",URL,get(t,"url"));
+     assertEquals("Navigation identity",7L,get(t,"navigation"));
+     assertEquals("Committed",true,get(t,"committed"));
+     assertEquals("Finished",false,get(t,"loading"));
+     assertEquals("No page failure","",get(t,"error"));
+     assertTrue("HTTPS page is external to privileged host",BrowserExternalPage.allowed(URL,p.getBridge().getWebView().getUrl()));
+     p.openExternalBrowser(accepted);
+    }catch(Exception failure){throw new AssertionError(failure);}});
+    accepted.await();assertNull(accepted.error);
     Intent chooser=outgoing.getAndSet(null);assertNotNull("Actual chooser dispatch intercepted",chooser);assertEquals(Intent.ACTION_CHOOSER,chooser.getAction());
     Intent target=chooser.getParcelableExtra(Intent.EXTRA_INTENT);assertNotNull(target);assertEquals(Intent.ACTION_VIEW,target.getAction());assertEquals(URL,target.getDataString());assertEquals("fixture.browser",target.getComponent().getPackageName());assertEquals(Collections.singleton(Intent.CATEGORY_BROWSABLE),target.getCategories());assertNull("No cookies, form or page contents",target.getExtras());assertNull(target.getClipData());assertNull(target.getSelector());assertEquals(0,target.getFlags());assertEquals("Duplicate and own/deep-link targets excluded",0,chooser.getParcelableArrayExtra(Intent.EXTRA_INITIAL_INTENTS).length);
     BoundedActivityScenario.main(()->{try{set(plugin.get(),"externalBrowserResolver",(Function<Intent,List<ResolveInfo>>)intent->Collections.emptyList());}catch(Exception failure){throw new AssertionError(failure);}});
