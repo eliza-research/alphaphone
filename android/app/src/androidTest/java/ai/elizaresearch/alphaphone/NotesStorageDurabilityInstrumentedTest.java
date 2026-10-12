@@ -61,20 +61,24 @@ public final class NotesStorageDurabilityInstrumentedTest {
  @Test public void fullCollectionShowsNotesStorageIsFullAndKeepsSavedNotes()throws Exception{
   org.junit.Assume.assumeTrue("Explicit disposable Notes qualification","1".equals(InstrumentationRegistry.getArguments().getString("notesStorage")));
   AlphaCredentialStore store=new AlphaCredentialStore(InstrumentationRegistry.getInstrumentation().getTargetContext());
-  String marker="capacity_"+unique(),before=null,seeded=null;Throwable primary=null;
+  String marker="capacity_"+unique(),before=null,seeded=null;Throwable primary=null;String phase="initialize";
   try{
    try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)){openNotes();}
    before=store.readCredentialSlot(AlphaCredentialStore.NOTES_RECORDS);
    assertNotNull("Notes initialized",before);
    assertNull("Do not replace an unrelated encrypted draft",store.readCredentialSlot(AlphaCredentialStore.NOTES_DRAFT));
    int cap=AlphaCredentialStore.slotLimit(AlphaCredentialStore.NOTES_RECORDS);assertEquals(32*1024*1024,cap);
+   phase="construct bounded capacity fixture";
    String proposed=NotesCapacityFixture.collection(before,marker,cap);
+   phase="native seed CAS";
    assertTrue("Seed only the exact disposable collection",store.compareExchangeCredentialSlot(AlphaCredentialStore.NOTES_RECORDS,before,proposed));
-   seeded=proposed;assertEquals("Exact native fixture readback",seeded,store.readCredentialSlot(AlphaCredentialStore.NOTES_RECORDS));
+   seeded=proposed;phase="native readback with fixture retained";assertEquals("Exact native fixture readback",seeded,store.readCredentialSlot(AlphaCredentialStore.NOTES_RECORDS));
+   phase="open seeded collection in fresh renderer";
    try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)){
     openNotes();click("Open Capacity target "+marker);until("document.querySelector('textarea[aria-label=Note]')","Small editor");
     // A normal-sized edit crosses the genuine collection cap. The old 33 MiB textarea
     // forced enormous WebView text layout before storage admission could be exercised.
+    phase="small edit and storage-full recovery";
     input("textarea[aria-label=Note]","E".repeat(NotesCapacityFixture.EDIT_BYTES),true);
     until("document.documentElement.dataset.notesStorageState==='full'","Storage-full state");
     until("document.body.textContent.includes('Notes storage is full')","Storage-full message");
@@ -83,12 +87,12 @@ public final class NotesStorageDurabilityInstrumentedTest {
     assertEquals("Saved notes are unchanged",seeded,store.readCredentialSlot(AlphaCredentialStore.NOTES_RECORDS));
     assertEquals("Unsaved small edit remains on screen",JSONObject.quote("E".repeat(NotesCapacityFixture.EDIT_BYTES)),js("document.querySelector('textarea[aria-label=Note]').value"));
    }
-  }catch(Exception|AssertionError failure){primary=failure;throw failure;}finally{
+  }catch(Exception|Error failure){primary=failure;System.out.println("ALPHA_NOTES_CAPACITY_FAILURE phase="+phase+" heapLimit="+Runtime.getRuntime().maxMemory());throw failure;}finally{
    if(seeded!=null)try{
     assertTrue("Restore only the unchanged fixture collection",store.compareExchangeCredentialSlot(AlphaCredentialStore.NOTES_RECORDS,seeded,before));
     String draft=store.readCredentialSlot(AlphaCredentialStore.NOTES_DRAFT);
     if(draft!=null){JSONArray changed=new JSONObject(draft).getJSONArray("records");assertEquals("Only the fixture edit was drafted",1,changed.length());assertEquals(marker,changed.getJSONObject(0).getString("id"));assertTrue("Remove only the exact fixture draft",store.compareExchangeCredentialSlot(AlphaCredentialStore.NOTES_DRAFT,draft,null));}
-   }catch(Exception|AssertionError cleanup){if(primary!=null)primary.addSuppressed(cleanup);else throw cleanup;}
+   }catch(Exception|Error cleanup){if(primary!=null)primary.addSuppressed(cleanup);else throw cleanup;}
   }
  }
 
