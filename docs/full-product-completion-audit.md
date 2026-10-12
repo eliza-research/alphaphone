@@ -17,8 +17,15 @@ AOSP-only Phone/Contacts/SMS and AOSP listening are explicit requirements.
 Wallet remains a requested **full-product planning package**, outside the approved
 MVP; it is not enabled or a current MVP release gate. Earlier policy questions and
 measurement proposals in the chronological log are superseded, not newly open.
-The 88 observed native classes remain historical evidence for their exact archived
+The 89 observed native classes remain historical evidence for their exact archived
 APKs; the new policy does not turn old Cloud-speech tests into local-speech acceptance.
+
+**Latest merged checkpoint:** `73b003a5` includes main through `ca76ac67`
+(PR 432 and PR 426). Source verification: 808 passed, four TODOs. Both developer
+APK variants rebuilt. Encrypted recovery-slot and browser cookie-policy campaigns
+pass both variants. WebView 157 accessibility still fails at the Home assistant
+group, and the old image lacks the secure-camera SystemUI gesture target. These
+findings are preserved separately from upstream's other-device qualification.
 
 **October 12 execution update:** Both developer APK variants build and run on an
 owned API 37 Cuttlefish fixture. HOME acceptance passes 7 methods and restores
@@ -30,8 +37,10 @@ cancellation and the password origin boundary also pass on both variants. Real
 Clock now passes create, firing, snooze, dismiss and exact fixture deletion in
 both variants, with all seven stages captured. Physical speaker acceptance remains
 separate from this Cuttlefish alarm/UI evidence.
-The 33 MiB Notes editor case passed once on launcher with WebView145 but times
-out on standalone there and on both variants with WebView157; it remains open.
+Earlier 33 MiB Notes editor attempts timed out on several cohorts. The merged
+capacity fixture now tests a small edit against the genuine 32 MiB encrypted
+collection limit, separating storage refusal from giant-textarea layout; see the
+latest execution receipts below. Arbitrary 33 MiB textarea usability is not proved.
 Both canonical offline speech tests pass on x86_64. Offline transcription/playback,
 note read-aloud and cancellation pass in both variants, with network restoration
 proven. ARM64 is not qualified.
@@ -106,7 +115,7 @@ loading/empty/error states, permissions/revocation, persistence and late callbac
 | Reminders/detail/completed/snooze and Clock | Native local scheduling and reviewed Clock handoff exist. Test actual post/tap/complete, channels denied, cancel/edit before fire, recurrence/DST, reboot/Doze/force-stop. Independently prove Clock ringing/snooze/dismiss; handoff is not alarm completion. |
 | Browser address/tabs/bookmarks/history/downloads/reading/question | Isolated WebView, persistent normal/private profiles, downloads and reviewed context exist. Qualify exact maintained provider, isolated-world injection, live search/provider challenge, uploads/downloads, redirects, stale observations, credential exclusion and real agent summary. Arbitrary booking/purchasing needs a separately reviewed actuator. |
 | Passwords/vault/unlock/fill/generation/export/import | Integrated password manager and transfer are implemented on current main. Run actual native fill, locked vault, wrong origin, repeat/cancel, transfer and secret exclusion; passkeys remain unimplemented and require a provider decision. Third-party providers are separate acceptance paths. |
-| Camera photo/video/scan/review/capture question | Native capture/video and OCR/PDF review exist. Qualify capture/readback, mode/camera/zoom/focus/flash capability, permission denial/revoke, late capture, rotation/background/low storage, OCR uncertainty and selected-capture agent question. Optics and secure lock camera require physical evidence; lock camera is not implemented. |
+| Camera photo/video/scan/review/capture question | Native capture/video and OCR/PDF review exist. Qualify capture/readback, mode/camera/zoom/focus/flash capability, permission denial/revoke, late capture, rotation/background/low storage, OCR uncertainty and selected-capture agent question. Optics and secure lock camera require physical evidence; system secure-camera source and overlay contracts now exist, but the owned image lacks the configured gesture target and locked-camera acceptance remains open. |
 | Photos library/albums/search/viewer/edit/batch/trash/share | Owned media, copy editing, filters, batch actions and recovery exist. Qualify native edit/filter/batch/share, exact bytes, selected-only grants, revoked/deleted URI, large catalogs and video. Production library scope currently covers Alpha captures; broader indexing/person search is a separate capability. |
 | Notes list/search/editor/checklist/recording/transcript/Trash | Encrypted native store, query/edit, recorded audio, import/export and full Trash recovery exist. Qualify migration and full-Trash/permanent-erase interruption on installed APKs, storage failures, linked audio/transcript deletion, cursor dictation, real speech, reviewed rewrite/task creation and restart. Backup/sync is not established. |
 | Files recent/folder/search/selection/preview/rename/move/share | SAF and selected-content handling exist. Add missing instrumented folder-question journey; qualify permissions/persisted grants/cloud-offline URI, collisions/Unicode/large or malicious files, exact bytes, failure/restart and bounded selected context. Busy folder controls currently ignore taps without feedback. |
@@ -1532,3 +1541,58 @@ an authenticated explicit patch, serialized storage bridge replies, native/brows
 accessibility fixes, cookie policy qualification and Calendar large-text geometry.
 These additions do not make this audit's earlier failures pass retroactively.
 Fresh verification/builds are required; `vendor/eliza` remains at the same pin.
+
+
+The actual merge tip is `ca76ac67` (PR 432, including PR 426), recorded by merge
+`73b003a55b0269c58aedda82fe1901d56d6c9252`. The preceding `7427d958`
+reference identifies the included PR 426 ancestor, not the final merged main tip.
+Fresh `npm run verify` passes 808 tests with four existing TODOs
+(`verify-merge426.log`). `npm run android:build -- --allow-unpackaged-runtime`
+completes both debug/release variants, instrumentation, lint and APK audits in
+`developer-apks-merge426`. These remain unsigned developer fixtures with no resident
+payload and an unqualified speech candidate. The archive records its temporary
+candidate manifest/notices patch; the product source fingerprint hashes an empty diff at this
+merge commit. Source inputs and resident assets were restored after the build.
+
+On those APKs, `cuttlefish-merge426-storage157` passes ReminderDeletionStorage in
+both variants. Standalone user 15 and launcher user 16 are removed, owner/HOME
+restored, and durable lifecycle receipts report no deferred cleanup. This supersedes
+the earlier result-waiter failure for this exact source/APK cohort. It proves
+synthetic encrypted-slot capacity/CAS/recreation behavior, not reminder delivery.
+`cuttlefish-merge426-cookies157` passes both BrowserCookiePolicy methods in each
+variant with WebView 157: normal-profile third-party cookie sharing, private blocking,
+host isolation and no privileged iframe bridge. All responses are intercepted
+synthetic HTTPS content; this is not live Eliza Cloud login acceptance.
+
+PR 432 also provides the system secure-camera source/overlay contracts. Read-only
+verification of `/home/shaw/os/.aosp-shadow` passes the reviewed source contract
+(`secure-camera-source-merge432.json`, contract SHA-256
+`9091be889c89692b6176d15864f1a16adb093db687dbb677787afc4971dd0250`).
+The owned Cuttlefish image fails the separate installed-image check
+(`secure-camera-image-merge432.log`): SystemUI's `config_cameraGesturePackage`
+resolves to an empty string rather than Camera2. No image settings were changed.
+This old fixture has not consumed the new overlay; source verification does not
+prove a current-source image, locked capture or physical power-button invocation.
+
+`cuttlefish-merge426-accessibility157` still fails both variants at Home: the native
+accessibility tree does not satisfy the single final Assistant controls group
+assertion. The merged upstream qualification on its other provider/device remains
+separate evidence. Our WebView 157 Cuttlefish result is a retained compatibility
+failure; subsequent shade/Settings/composer checks were not reached. Font-scale and
+accessibility-service restoration stay in the fixture's cleanup path.
+
+
+`cuttlefish-merge426-notes-storage157` passes all four NotesStorageDurability
+methods on standalone. Launcher passes three, but its real collection-capacity
+case times out evaluating the storage-full renderer state after the small edit;
+the already-dispatched operation is not replayed. The native cleanup runs without
+a reported suppressed failure. This is improved standalone storage evidence, not
+both-variant capacity acceptance or a claim that the historical 33 MiB editor is
+usable. The launcher compatibility/performance failure remains open.
+
+The refreshed merged-source inventory has 154 native classes (91 admitted by name,
+63 without an admitted Cuttlefish campaign). `native-coverage-postmerge432.json`
+retains 89 observed classes and 65 unobserved; exact archived APK hashes and all
+older attempts remain attached. The renderer source inventory is refreshed at
+`interactions-postmerge432.json`: 2,734 overlapping lexical candidates across
+305 source files. Those are review candidates, not unique actions or runtime passes.
