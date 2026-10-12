@@ -68,6 +68,7 @@ export const CLASS_REGISTRY = {
   NoMockProduct: {},
   ReminderDeletionStorage: { secondaryUser: true, args: { pendingActionStorageFixture: "1" }, note: "fresh encrypted recovery slots; synthetic compare/exchange, recreation and UTF-8 capacity boundaries; exact owned-value cleanup" },
   CalendarCreationRecovery: { secondaryUser: true, args: { calendarCreationRecovery: "1" }, grant: ["READ_CALENDAR", "WRITE_CALENDAR"], note: "synthetic UUID CalendarProvider records and durable creation-receipt recovery; exact fixture calendar and journal cleanup" },
+  Connection: { secondaryUser: true, args: { nativeSlotIsolation: "1" }, note: "fresh native-slot authority and encrypted draft isolation; two synthetic loopback HTTP methods require test-mocks and skip on flag-off APKs; no live Cloud credentials or login" },
   CalendarAgentCrud: { secondaryUser: true, args: { calendarAgent: "1", calendarOptions: "1" }, grant: ["READ_CALENDAR", "WRITE_CALENDAR"], note: "synthetic local CalendarProvider rows, native owner review, stale revisions and all-day/RRULE readback; ACTION_INSERT intercepted; disposable user cleanup" },
   ClockAgentReview: { secondaryUser: true, args: { clockAgentReview: "1" }, note: "native owner approval/replay checks with intercepted Clock intents; no delivered alarm action" },
   CloudDelegationCallback: { args: { cloudDelegationNative: "1" }, independentMethods: true, note: "synthetic cold/warm Activity callbacks and state-matched clearing; no authorization exchange or real login evidence" },

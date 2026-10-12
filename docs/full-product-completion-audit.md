@@ -17,7 +17,7 @@ AOSP-only Phone/Contacts/SMS and AOSP listening are explicit requirements.
 Wallet remains a requested **full-product planning package**, outside the approved
 MVP; it is not enabled or a current MVP release gate. Earlier policy questions and
 measurement proposals in the chronological log are superseded, not newly open.
-The 90 observed native classes remain historical evidence for their exact archived
+The 91 observed native classes remain historical evidence for their exact archived
 APKs; the new policy does not turn old Cloud-speech tests into local-speech acceptance.
 
 **Latest merged checkpoint:** `73b003a5` includes main through `ca76ac67`
@@ -1684,3 +1684,39 @@ including microphone revocation. Both developer APK variants built in
 `developer-apks-accessibility-node-diagnostics`; subsequent changes affect only
 host campaign admission, the fake ADB fixture and audit records. No resident or
 release qualification is inferred.
+
+
+### Connection storage and synthetic transport acceptance
+
+Connection is now admitted in a disposable secondary user with the explicit native
+slot-isolation gate. `cuttlefish-connection-flagoff157` passes both native storage
+methods on standalone and launcher. Ten reserved namespace fixtures reject renderer
+read, write, compare/exchange and removal without altering native bytes; a permitted
+workflow-draft slot retains public storage access. Encrypted draft persistence,
+stale compare/exchange rejection and Activity recreation pass. Two loopback HTTP
+methods correctly assume-skip on each flag-off APK, so each class cohort is partial.
+
+`developer-apks-connection-mocks` separately archives both test-mocks debug/release
+variants and matching instrumentation at `0a756235`, with the runner-admission diff
+recorded. The build restores the flag-off web bundle and Android assets afterward;
+`web-dist/build-flags.json` reads testMocks=false. Original resident assets, native
+libraries, speech manifest and notices were restored too. The archive is explicitly
+non-distributable, without resident payload, and uses the unqualified speech candidate.
+
+`cuttlefish-connection-mocks157` passes all four methods in both variants. In addition
+to storage isolation, it proves cancellation of a blocked synthetic request,
+redirect rejection before the destination is contacted, capability-header validation,
+authenticated synthetic profile read/write, stale-revision refusal without replay,
+wrong-identity rejection, and rejection of invalid methods/URLs before HTTP delivery.
+All server identities and tokens are generated fixtures on loopback; this is neither
+live Eliza Cloud login nor Cerebras inference. No real account was accessed. Real
+provider acceptance still needs an identified dedicated test account through normal
+sign-in, plus the previously recorded resident-package/ARM64 prerequisites.
+
+Flag-off users 19/20 and test-mocks users 21/22 were removed, owner/HOME restored,
+and all four durable lifecycle receipts have cleanupDeferred=false. The refreshed
+snapshot `native-coverage-connection.json` records 91 observed classes, 63 unobserved,
+and latest historical cohorts of 164 passed, 12 failed and 20 partial. The inventory
+has 93 admitted named classes and 61 without an admitted Cuttlefish campaign.
+Full verification passes 808 tests with four existing TODOs
+(`verify-connection-admission.log`); no requirement status is promoted to complete.
