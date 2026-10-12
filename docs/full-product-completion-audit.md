@@ -2042,3 +2042,14 @@ reviewed ARM64 embedding-host libraries and release signing. Prepared resident
 sources, worker, staged payload and embedding model exist, but that is not evidence
 of resident execution in an APK. Live Cloud login/Cerebras, end-to-end voice latency,
 physical hardware and full current-source image acceptance remain open.
+
+Validation after the merge: `npm run verify` passed 815 tests with zero failures
+and four TODOs, including the flag-off production bundle audit. The strict
+`npm run android:build` stopped at the missing speech AAR. The explicit
+`--allow-unpackaged-runtime` developer build then completed standalone and launcher
+debug/unsigned-release APKs plus instrumentation, archived in
+`test-results/full-product-audit/developer-apks-reset-merge` at source `6875e84b`.
+The wrapper verified source stability and restored the original runtime inputs.
+These APKs omit the resident payload and use unqualified speech; neither a release
+nor installed behavior is qualified by their successful build. Earlier Notes
+migration passes predate the new production prohibition and remain historical.
