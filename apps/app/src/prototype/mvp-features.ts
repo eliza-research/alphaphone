@@ -1,19 +1,15 @@
 import { browserDevProfile } from '../browser/dev-profile';
-// Scope decision: docs/mvp-scope-and-gap-report.md; Wallet: docs/implementation-plan.md AP9.
-// Sep 15 notes, paragraph 2283: https://docs.google.com/document/d/1Wgz0wWZh_nvICFzmxPpPa2_H-pvHLAF12FZriMQXf_I/
-// Alpha Phone MVP scope: user-provided September 15 biweekly notes defer
-// calls/SMS/Contacts. Wallet remains outside the supplied core MVP definition.
-// Restore calls/SMS/Contacts only after an approved scope change and native
-// permission, recipient, denied-role and return-to-HOME flow acceptance.
-// Restore Wallet only after AP9 provider/security decisions and payment acceptance.
-// Reference definitions, template, assets and saved user data are deliberately retained.
+// Approved October 12 scope: docs/implementation-plan.md and issue #422.
+// Wallet is removed from MVP, including AOSP: no payment/provider activation.
+// Phone/SMS/Contacts remain gated pending the separately approved AOSP-only implementation.
+// Reference definitions and saved user data are retained; development fixtures are non-product.
 export const ENABLED_MVP_VIEWS = new Set([
   // "phone", // Deferred: September 15 notes, calls/SMS/Contacts deprioritized.
   // "messages", // Deferred: SMS UI; this does not defer email/Telegram/Discord.
   "inbox", "calendar", "browser", "camera", "photos", "maps", "notes",
   // "contacts", // Deferred: no directory access or Contacts adapter effects.
   "files",
-  // "wallet", // Deferred: not in the authoritative core MVP; no payment flow.
+  // "wallet", // Removed from MVP in both distributions and AOSP; no payment flow.
   "workflows", "settings",
 ]);
 export const DEFERRED_MVP_VIEWS = new Set(["phone", "messages", "contacts", "wallet"]);

@@ -16,7 +16,7 @@ async function server(flag){
  // Vite exposes VITE_* from the process environment when the server starts.
  if(flag)process.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS='1';else delete process.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS;
  // Static SSR fixtures never reload; watching also scans large generated runtime trees.
- try{return await createServer({configFile:false,resolve:{alias:{"@elizaos/contracts/native-notes-query":fileURLToPath(new URL(".eliza/client-features/packages/contracts/src/native-notes-query.ts",root))}},root:root.pathname,logLevel:'silent',appType:'custom',server:{middlewareMode:true,hmr:false,ws:false,watch:null},optimizeDeps:{noDiscovery:true,include:[]}});}
+ try{return await createServer({configFile:false,plugins:[{name:'model-without-dom-renderer',enforce:'pre',resolveId(id){if(id.endsWith('/dc-lite.js'))return '\0policy-test-renderer';},load(id){if(id==='\0policy-test-renderer')return 'export class DCLogic {}';}}],resolve:{alias:{"@elizaos/contracts/native-notes-query":fileURLToPath(new URL(".eliza/client-features/packages/contracts/src/native-notes-query.ts",root))}},root:root.pathname,logLevel:'silent',appType:'custom',server:{middlewareMode:true,hmr:false,ws:false,watch:null},optimizeDeps:{noDiscovery:true,include:[]}});}
  finally{delete process.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS;}
 }
 before(async()=>{servers.on=await server(true);servers.off=await server(false);});
@@ -122,4 +122,26 @@ test('regional Maps accepts loopback HTTP and the emulator gateway only with tes
  assert.deepEqual(releaseNative.fetched,[],'a non-development native build never uses the emulator gateway');
  const https=await regional({testMocks:false,devSurfaces:false,baseUrl:'https://maps.example/'});
  assert.deepEqual(https.fetched,['https://maps.example/capabilities']);
+});
+
+test('production Wallet saved routes and direct open/pay requests cannot enter the prototype payment flow',async()=>{
+ const {Component,ORDER}=await load(false,'prototype/model.js');
+ const {validateDeviceOperation}=await load(false,'runtime/device-actions.ts');
+ const notices=[],changes=[];
+ const savedWallet={cards:[{id:'owned-reference',label:'kept'}],pay:true,stage:'auth'};
+ const shell=Object.create(Component.prototype);
+ shell.props={};shell.state={view:'wallet',stack:['notes','wallet','files'],vs:{wallet:savedWallet},msgs:[],draft:''};
+ shell.toast=message=>notices.push(message);
+ shell.setState=value=>{changes.push(value);Object.assign(shell.state,typeof value==='function'?value(shell.state):value);};
+ shell.later=()=>{throw Error('A payment timer must never start');};
+ assert.equal(shell.S().view,null,'restored Wallet route falls back to Home');
+ assert.deepEqual([...shell.S().stack],['notes','files']);
+ assert.equal(shell.state.vs.wallet,savedWallet,'saved unrelated/user data is not deleted');
+ assert.equal(ORDER.includes('wallet'),false,'Wallet absent from discovery');
+ for(const options of [{},{keepState:true},{keepStack:true}])shell.openView('wallet',{pay:true,stage:'auth'},undefined,options);
+ for(const prompt of ['open wallet','show the wallet','pay rent'])shell.send(prompt);
+ assert.equal(changes.length,0,'no view mutation, simulated payment or queued callback');
+ assert.equal(notices.length,6,'every attempted entry refused');
+ for(const proposal of [{type:'open_view',view:'wallet'},{type:'pay',amount:50},{type:'wallet_pay',card:'owned-reference'}])assert.throws(()=>validateDeviceOperation(proposal),/Unsupported device operation/);
+ assert.equal(validateDeviceOperation({type:'open_view',view:'notes'}).view,'notes','unrelated navigation remains enabled');
 });
