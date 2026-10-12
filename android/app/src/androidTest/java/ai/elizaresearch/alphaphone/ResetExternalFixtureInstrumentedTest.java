@@ -57,8 +57,13 @@ public final class ResetExternalFixtureInstrumentedTest {
    KeyGenerator generator=KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore");generator.init(new KeyGenParameterSpec.Builder(alias,KeyProperties.PURPOSE_ENCRYPT|KeyProperties.PURPOSE_DECRYPT).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build());generator.generateKey();assertTrue(keys().containsAlias(alias));
    assertEquals(JobScheduler.RESULT_SUCCESS,jobs.schedule(new JobInfo.Builder(JOB,new ComponentName(c,"androidx.work.impl.background.systemjob.SystemJobService")).setMinimumLatency(86400000L).build()));
    notices.createNotificationChannel(new NotificationChannel(CHANNEL,"Reset fixture",NotificationManager.IMPORTANCE_LOW));
+   assertTrue("Notification permission must be granted by disposable runner",notices.areNotificationsEnabled());
    notices.notify(NOTICE,new Notification.Builder(c,CHANNEL).setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle(name).setContentText("Synthetic reset sentinel").build());
-   assertTrue("Notification permission must be granted by disposable runner",java.util.Arrays.stream(notices.getActiveNotifications()).anyMatch(n->n.getId()==NOTICE));
+   // NotificationManager publication is asynchronous. Observe the one posted
+   // sentinel without reposting or confusing delayed visibility with denial.
+   long noticeDeadline=android.os.SystemClock.elapsedRealtime()+5000;
+   while(java.util.Arrays.stream(notices.getActiveNotifications()).noneMatch(n->n.getId()==NOTICE)&&android.os.SystemClock.elapsedRealtime()<noticeDeadline)android.os.SystemClock.sleep(100);
+   assertTrue("Posted reset sentinel becomes visible within five seconds",java.util.Arrays.stream(notices.getActiveNotifications()).anyMatch(n->n.getId()==NOTICE));
    ContentValues media=new ContentValues();media.put(MediaStore.Downloads.DISPLAY_NAME,name+".txt");media.put(MediaStore.Downloads.MIME_TYPE,"text/plain");media.put(MediaStore.Downloads.RELATIVE_PATH,"Download/");
    Uri uri=c.getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI,media);assertNotNull(uri);
    try(OutputStream out=c.getContentResolver().openOutputStream(uri)){assertNotNull(out);out.write(bytes(run));}
