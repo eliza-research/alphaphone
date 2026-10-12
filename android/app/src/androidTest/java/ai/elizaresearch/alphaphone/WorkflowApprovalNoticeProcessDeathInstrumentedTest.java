@@ -34,24 +34,6 @@ public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
   assertEquals("Exactly one approval notice",1,rows.size());StatusBarNotification row=rows.get(0);
   assertEquals("alpha-workflow-"+id,row.getTag());assertEquals(0,row.getId());return row;
  }
- /** A fresh-user package/ReminderReceiver broadcast may start main after the runner's
-  * preparation force-stop. Isolate setup once, before any notice exists; the later
-  * post/death/tap assertions retain their own independently measured process identity. */
- private static void isolateMainBeforeSeed(Context context)throws Exception{
-  for(ActivityManager.AppTask task:context.getSystemService(ActivityManager.class).getAppTasks()){
-   assertNotNull(task.getTaskInfo().baseIntent.getComponent());assertEquals(APP,task.getTaskInfo().baseIntent.getComponent().getPackageName());task.finishAndRemoveTask();
-  }
-  long end=SystemClock.elapsedRealtime()+10000;
-  while(!context.getSystemService(ActivityManager.class).getAppTasks().isEmpty()&&SystemClock.elapsedRealtime()<end)SystemClock.sleep(50);
-  assertTrue("No foreground task may restart the setup writer",context.getSystemService(ActivityManager.class).getAppTasks().isEmpty());
-  if(!WorkflowNoticeProcessDeathInstrumentedTest.mainPids(context).isEmpty()){
-   WorkflowNoticeProcessDeathInstrumentedTest.Identity prior=WorkflowNoticeProcessDeathInstrumentedTest.awaitMain(context);prior.exact();Os.kill(prior.pid,OsConstants.SIGKILL);
-   end=SystemClock.elapsedRealtime()+10000;
-   while((Files.exists(Path.of("/proc/"+prior.pid))||!WorkflowNoticeProcessDeathInstrumentedTest.mainPids(context).isEmpty())&&SystemClock.elapsedRealtime()<end)SystemClock.sleep(50);
-   assertFalse("Setup writer did not die",Files.exists(Path.of("/proc/"+prior.pid)));
-  }
-  assertTrue("No main writer during synthetic notice seed",WorkflowNoticeProcessDeathInstrumentedTest.mainPids(context).isEmpty());
- }
  private static void awaitTapCancellation(Context context,WorkflowNoticeTaps taps,String id)throws Exception{
   String token=taps.token(id);assertNotNull(token);Intent launch=context.getPackageManager().getLaunchIntentForPackage(APP);assertNotNull(launch);launch.setAction(WorkflowNoticeTaps.ACTION).setData(android.net.Uri.parse(WorkflowNoticeTaps.PREFIX+token));
   long end=SystemClock.elapsedRealtime()+10000;PendingIntent existing;
@@ -71,7 +53,7 @@ public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
   long expiresAt=System.currentTimeMillis()+10*60000L;
   try(WorkflowNoticeOwnerFixture fixture=new WorkflowNoticeOwnerFixture(context)){
    JSONObject route=new JSONObject().put("scope","a".repeat(64)).put("origin",fixture.origin).put("ownerId",fixture.identity.getString("ownerId")).put("agentId",fixture.identity.getString("agentId")).put("workflowId","fixture-flow").put("runId",run).put("versionId","fixture-version");
-   isolateMainBeforeSeed(context);
+   assertTrue("No main writer during synthetic notice seed",WorkflowNoticeProcessDeathInstrumentedTest.mainPids(context).isEmpty());
    // One OS dispatch only. An unconfirmed post is reconciled from the actual OS notice by the same request, never reposted.
    String publication=delivery.postApproval(taps,id,binding,route,expiresAt,System.currentTimeMillis());
    long publicationEnd=SystemClock.elapsedRealtime()+10000;
@@ -149,7 +131,7 @@ public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
   NotificationManager manager=context.getSystemService(NotificationManager.class);WorkflowNoticeTaps taps=WorkflowNoticeTapsFactory.create(context);WorkflowNoticeDelivery delivery=WorkflowNoticeTapsFactory.delivery(context);
   String id="approval-"+(UUID.randomUUID().toString()+UUID.randomUUID()).replace("-","");
   try(WorkflowNoticeOwnerFixture fixture=new WorkflowNoticeOwnerFixture(context)){
-   isolateMainBeforeSeed(context);
+   assertTrue("No main writer during synthetic notice seed",WorkflowNoticeProcessDeathInstrumentedTest.mainPids(context).isEmpty());
    JSONObject route=new JSONObject().put("scope","a".repeat(64)).put("origin",fixture.origin).put("ownerId",fixture.identity.getString("ownerId")).put("agentId",fixture.identity.getString("agentId")).put("workflowId","fixture-flow").put("runId","signedout-fixture").put("versionId","fixture-version");
    long expires=System.currentTimeMillis()+600000,end=SystemClock.elapsedRealtime()+10000;String published;
    do{published=delivery.postApproval(taps,id,"b".repeat(64),route,expires,System.currentTimeMillis());if("succeeded".equals(published))break;assertEquals("unknown",published);SystemClock.sleep(50);}while(SystemClock.elapsedRealtime()<end);
