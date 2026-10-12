@@ -20,13 +20,17 @@ measurement proposals in the chronological log are superseded, not newly open.
 The 93 observed native classes remain historical evidence for their exact archived
 APKs; the new policy does not turn old Cloud-speech tests into local-speech acceptance.
 
-**Latest merged checkpoint:** `73b003a5` includes main through `ca76ac67`
-(PR 432 and PR 426). Source verification: 808 passed, four TODOs. Both developer
-APK variants rebuilt. Encrypted recovery-slot and browser cookie-policy campaigns
-pass both variants. WebView 157 accessibility now finds the Home assistant group through Android
-containerTitle, but still fails unlabelled full-screen controls/reading order; the
-old image lacks the secure-camera SystemUI gesture target. These
-findings are preserved separately from upstream's other-device qualification.
+**Latest merged checkpoint:** `344dff84` includes main through `7bf27cc9`
+(reset-only data policy, managed-service route admission and browser cookie isolation).
+Subsequent audit commits retain exact developer APK and image-bound receipts below.
+Both variants pass installed production route/migration refusal and reset cancellation;
+destructive reset remains separately qualified by an external controller. The new
+secure-camera fixture passes resource admission and locked capture, but actual UI
+unlock return is unresolved. Video capture/native decode/range serving pass while
+WebView playback fails on the measured H.264/AMR-NB format. Accessibility still fails
+unlabelled full-screen controls/reading order. Full permitted photo-library access
+is required by current policy and is still absent from the app-owned-only bridge.
+These findings remain separate from upstream's other-device qualification.
 
 **October 12 execution update:** Both developer APK variants build and run on an
 owned API 37 Cuttlefish fixture. HOME acceptance passes 7 methods and restores
@@ -108,7 +112,7 @@ loading/empty/error states, permissions/revocation, persistence and late callbac
 
 | Domain and subviews | Current implementation and outstanding acceptance |
 | --- | --- |
-| Boot, Welcome, account, lock, HOME | Cloud-backed resident onboarding exists. Exercise normal login, local-app-only mode, permission setup/denial, owner switch, cold/warm startup, external HOME change, update/data migration and stock recovery. Lock is Android-owned. |
+| Boot, Welcome, account, lock, HOME | Cloud-backed resident onboarding exists. Exercise normal login, local-app-only mode, permission setup/denial, owner switch, cold/warm startup, external HOME change, update preservation, authenticated reset and stock recovery. Lock is Android-owned. |
 | Home, installed apps, favorites, search, ongoing activities | Component/profile-aware library and overview exist. Run LauncherLibrary, actual install/remove/disable, duplicate labels, locked/paused work profile, source freshness, long labels, empty/stale state and return from three native apps. |
 | Assistant pill/input/sheet/full, history, approvals/results | Source includes owned context, streaming, cancellation, approvals and receipts. Qualify current resident execution, cross-view continuity, missing-detail questions, draft/scroll/IME, interrupted streams, account replacement, unknown outcomes and exact-once recovery. |
 | Inbox folders/search/thread/compose/reply/forward/attachment | Provider operations, local encrypted drafts, assistant-to-email and receipt recovery exist. Real OAuth and mailbox/account scope, From/Bcc/reply-all, paging, unsafe content, chosen attachment bytes, send/undo/revoke and lost-response reconciliation remain. |
@@ -116,14 +120,14 @@ loading/empty/error states, permissions/revocation, persistence and late callbac
 | Reminders/detail/completed/snooze and Clock | Native local scheduling and reviewed Clock handoff exist. Test actual post/tap/complete, channels denied, cancel/edit before fire, recurrence/DST, reboot/Doze/force-stop. Independently prove Clock ringing/snooze/dismiss; handoff is not alarm completion. |
 | Browser address/tabs/bookmarks/history/downloads/reading/question | Isolated WebView, persistent normal/private profiles, downloads and reviewed context exist. Qualify exact maintained provider, isolated-world injection, live search/provider challenge, uploads/downloads, redirects, stale observations, credential exclusion and real agent summary. Arbitrary booking/purchasing needs a separately reviewed actuator. |
 | Passwords/vault/unlock/fill/generation/export/import | Integrated password manager and transfer are implemented on current main. Run actual native fill, locked vault, wrong origin, repeat/cancel, transfer and secret exclusion; passkeys remain unimplemented and require a provider decision. Third-party providers are separate acceptance paths. |
-| Camera photo/video/scan/review/capture question | Native capture/video and OCR/PDF review exist. Qualify capture/readback, mode/camera/zoom/focus/flash capability, permission denial/revoke, late capture, rotation/background/low storage, OCR uncertainty and selected-capture agent question. Optics and secure lock camera require physical evidence; system secure-camera source and overlay contracts now exist, but the owned image lacks the configured gesture target and locked-camera acceptance remains open. |
-| Photos library/albums/search/viewer/edit/batch/trash/share | Owned media, copy editing, filters, batch actions and recovery exist. Qualify native edit/filter/batch/share, exact bytes, selected-only grants, revoked/deleted URI, large catalogs and video. Production library scope currently covers Alpha captures; broader indexing/person search is a separate capability. |
-| Notes list/search/editor/checklist/recording/transcript/Trash | Encrypted native store, query/edit, recorded audio, import/export and full Trash recovery exist. Qualify migration and full-Trash/permanent-erase interruption on installed APKs, storage failures, linked audio/transcript deletion, cursor dictation, real speech, reviewed rewrite/task creation and restart. Backup/sync is not established. |
+| Camera photo/video/scan/review/capture question | Native capture/video and OCR/PDF review exist. Qualify capture/readback, mode/camera/zoom/focus/flash capability, permission denial/revoke, late capture, rotation/background/low storage, OCR uncertainty and selected-capture agent question. System secure-camera source/overlay contracts and a historical-platform fixture now pass locked invocation/capture. Unlock return/privacy and physical optics/hardware remain open; the fixture is not a full current-source image. |
+| Photos library/albums/search/viewer/edit/batch/trash/share | Owned media, copy editing, filters, batch actions and recovery exist. Qualify native edit/filter/batch/share, exact bytes, selected-only grants, revoked/deleted URI, large catalogs and video. The bridge still covers only Alpha captures. Approved full permitted-library access is missing: implement full/selected/denied/revoked reads, permission and owner transitions, bounded indexing and stale media handling, with separately reviewed writes/shares. Person search is not implied by library access. |
+| Notes list/search/editor/checklist/recording/transcript/Trash | Encrypted native store, query/edit, recorded audio and Trash recovery exist. Production import/export migration is now disabled by reset-only policy; development fixtures are historical/separate. Qualify full-Trash/permanent-erase interruption, storage failures, linked audio/transcript deletion, cursor dictation, real speech, reviewed rewrite/task creation and restart. No app-data backup/transfer is planned. |
 | Files recent/folder/search/selection/preview/rename/move/share | SAF and selected-content handling exist. Add missing instrumented folder-question journey; qualify permissions/persisted grants/cloud-offline URI, collisions/Unicode/large or malicious files, exact bytes, failure/restart and bounded selected context. Busy folder controls currently ignore taps without feedback. |
 | Maps search/place/saved/route/navigation | Regional source exists, production routing is unconfigured. Qualify real endpoint, coverage, travel modes, location denial/background/revoke, reroute/arrival, offline and audio focus; return to the originating Calendar event. |
 | Workflows library/Describe/editor/review/run/approval/history/digests | Typed authoring, embedded execution and durable receipts exist. Current native worker execution, overlap/duplicate triggers/version/disable/cancel/owner changes, process death and real provider inputs remain. A powered-off resident records missed occurrences; it cannot run hosted loops. |
 | Notifications panel/attention/deep links/settings | Owner-bound result/approval notices, listener selection and recovery exist. Qualify publication, denied permission/channel/DND, cold/warm/killed taps once, deleted/stale/wrong-owner targets, listener filtering/revoke and lock-screen privacy. New-mail background notifications are not implemented. |
-| Settings account/voice/theme/text/privacy/permissions/roles/about/updates | Source controls exist. Exercise every preference across restart and native settings return, actual grant state, diagnostics contents/redaction, exact erase/export scope, identity/updates. Release signing, backup/erase and rollback remain separate gates. |
+| Settings account/voice/theme/text/privacy/permissions/roles/about/updates | Source controls exist. Exercise every preference across restart and native settings return, actual grant state, diagnostics contents/redaction, authenticated local-reset scope, identity/updates. App-data export/backup is excluded; diagnostic export needs redaction. Release signing, destructive reset and rollback remain separate gates. |
 | Phone keypad/recents/voicemail/incoming/in-call | New full-product work package FP-01 below; production currently disabled. |
 | Messages list/thread/new/recipient/attachments | New full-product work package FP-02 below; production currently disabled. |
 | Contacts list/search/detail/create/edit/picker | New full-product work package FP-03 below; production currently disabled. |
@@ -2147,3 +2151,33 @@ Validation: full `npm run verify` remains 817 passed, zero failed and four TODOs
 both developer variants rebuilt with the instrumentation changes. The build wrapper
 restored original inputs. These APKs still omit resident payload and carry
 unqualified speech, so this adds no release, Cloud or resident-agent qualification.
+
+
+## October 12: native recording deadline on both Cuttlefish variants
+
+LocalVoiceRecordingLimit is now admitted through the generic runner only with an
+explicit owned guest, a fresh secondary Android user, the localVoiceRecording=1
+gate and microphone permission granted before launch. The specialized permission
+runner remains available; mid-recording permission revocation still requires its
+own process-death orchestration. No recording test was added to default campaigns.
+
+Both variants pass the existing native deadline test from the exact
+`developer-apks-video-codec-range` archive. A native recorder is started with a
+29,000 ms limit; its event must arrive within 36 seconds without a renderer timer.
+The entire recording is decoded into mono 16 kHz PCM and must contain between
+27 and 30 seconds of samples, with no truncation. This proves the asserted bounds,
+not an exact measured per-run duration: the generic campaign retains the raw test
+result, while the fixture-local JSON is deleted with its user. Users 12 and 13
+were removed and owner restoration confirmed. The receipt is
+`test-results/full-product-audit/cuttlefish-voice-deadline157/results.json`.
+
+This reuses unchanged native APK bytes and qualifies only recording/decode duration
+on the owned x86_64 fixture. It does not qualify ASR accuracy, VAD/semantic endpointing,
+barge-in, physical input/output, the resident agent or Cloud. The required P-11
+last-speech-sample to first-audible-sample campaign still has no qualifying trials.
+No requirement status or historical coverage snapshot is upgraded by this run.
+
+Validation: `npm run verify` passed 818 tests, zero failures and four TODOs,
+including the production bundle audit. Only runner admission, its regression test
+and audit documentation changed; installed tests reuse the already-built and
+hash-admitted standalone/launcher APKs. Release prerequisites remain unresolved.

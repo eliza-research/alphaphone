@@ -185,7 +185,7 @@ export const CLASS_REGISTRY = {
   NotificationChannels: { args: { notificationChannels: "1" }, grant: ["POST_NOTIFICATIONS"], note: "fresh app data; unique synthetic channel toggled in Android Settings, read back and deleted in finally; local notification recipient only" },
   VoicePermissionDenied: { secondaryUser: true, args: { voicePermissionDenied: "1" }, revoke: ["RECORD_AUDIO"], note: "fresh user with microphone revoked; real denial/settings/typing UI with synthetic signed-in transport, no live Cloud or local speech acceptance" },
   VoicePermissionRevoke: { campaign: "node scripts/test-native-permissions.mjs voice-revoke APP.apk TEST.apk OUTPUT (RECORD_AUDIO revoked while recording; the process is killed)" },
-  LocalVoiceRecordingLimit: { campaign: "node scripts/test-native-permissions.mjs voice-limit APP.apk TEST.apk OUTPUT (RECORD_AUDIO granted before the app starts)" },
+  LocalVoiceRecordingLimit: { secondaryUser: true, args: { localVoiceRecording: "1" }, grant: ["RECORD_AUDIO"], note: "native 29-second recorder deadline in a fresh user; full PCM decode must fit 27–30 seconds without truncation; no ASR accuracy, Cloud, audible output or latency claim" },
 };
 
 /**

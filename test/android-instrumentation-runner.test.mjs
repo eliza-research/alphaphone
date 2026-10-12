@@ -68,7 +68,7 @@ test("argument policy: short names, campaigns refused with their runner, clock a
   assert.deepEqual(options.variants, ["standalone", "launcher"]);
   assert.equal(parseInstrumentationArgs([]).classes.length, DEFAULT_CLASSES.length);
   assert.equal(parseInstrumentationArgs(["--test-mocks"]).apkDir, "artifacts/test-mocks");
-  for (const name of ["ResidentEgressRedaction", "ReminderTapProcessDeath", "WorkflowNoticeProcessDeath", "VoicePermissionRevoke", "LocalVoiceRecordingLimit"])
+  for (const name of ["ResidentEgressRedaction", "ReminderTapProcessDeath", "WorkflowNoticeProcessDeath", "VoicePermissionRevoke"])
     assert.throws(() => parseInstrumentationArgs(["--classes", name]), /own campaign/);
   // Classes that assume a test-mocks app build are refused without it instead of reporting "skipped".
   assert.throws(() => parseInstrumentationArgs(["--classes", "ConnectionChooser"]), /test-mocks app build/);
@@ -593,4 +593,19 @@ test("unconfirmed class isolation aborts before instrumentation and cleans owned
     await assert.rejects(runLeased({options,serial:"emulator-5554",adb,timing}),/Class app-data reset unconfirmed/);
     assert.equal(invoked,false);assert.equal(emulator.state.installed.size,0);
   } finally {fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+
+test("native recording deadline requires an owned isolated user and pre-start microphone grant",()=>{
+ const spec=CLASS_REGISTRY.LocalVoiceRecordingLimit;
+ assert.equal(spec.secondaryUser,true);
+ assert.deepEqual(spec.grant,["RECORD_AUDIO"]);
+ assert.deepEqual(spec.args,{localVoiceRecording:"1"});
+ assert.throws(()=>parseInstrumentationArgs(["--classes","LocalVoiceRecordingLimit"]),/owned-emulator or --owned-cuttlefish/);
+ const options=parseInstrumentationArgs(["--owned-cuttlefish","--image-fingerprint","fixture","--classes","LocalVoiceRecordingLimit"]);
+ assert.deepEqual(options.classes,[C("LocalVoiceRecordingLimit")]);
+ const args=instrumentArgs(C("LocalVoiceRecordingLimit"),{user:"10"});
+ assert.equal(args[args.indexOf("localVoiceRecording")+1],"1");
+ assert.equal(args[args.indexOf("--user")+1],"10");
+ assert.ok(!DEFAULT_CLASSES.includes("LocalVoiceRecordingLimit"));
 });
