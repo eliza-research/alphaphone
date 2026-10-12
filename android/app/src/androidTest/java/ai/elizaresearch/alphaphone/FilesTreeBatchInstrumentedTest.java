@@ -90,6 +90,8 @@ public class FilesTreeBatchInstrumentedTest {
     assertTrue("Recipient gets read access",(send.getFlags()&Intent.FLAG_GRANT_READ_URI_PERMISSION)!=0);assertEquals("Never write access",0,send.getFlags()&Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
     assertEquals(2,send.getClipData().getItemCount());
     chooserForeground();WebViewTestDriver.pressBack();mainForeground();
+    // Cancelling sharing preserves the selection; start the next operation explicitly.
+    click("Exit selection");
     // Confirmed permanent delete of two files with per-item provider confirmation.
     click("Select files");click("Select file-006.txt");click("Select file-007.txt");click("Delete selected");
     until("document.querySelector('[role=dialog]')?.textContent.includes('cannot be undone')");click("Delete permanently");until("!document.querySelector('[role=dialog]')");

@@ -50,6 +50,10 @@ public class FlowInstrumentedTest {
  }
  @Test public void allPrototypeAppsAndNotesSurviveRealActivityLifecycle() throws Exception {
   String title="Flow test "+UUID.randomUUID();
+  // This is the granted-camera navigation/lifecycle fixture. The separate permission
+  // campaign proves denial and retry; an unanswered OS prompt would keep recreation paused.
+  androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getUiAutomation().grantRuntimePermission(
+   androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getTargetContext().getPackageName(),android.Manifest.permission.CAMERA);
   try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)) {
    ready(scenario);
    Throwable primaryFailure=null;
