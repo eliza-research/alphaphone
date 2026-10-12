@@ -20,7 +20,23 @@ const sources = [await strip('inbox-provider-controls.ts', 'inboxProviderControl
 const digest = async text => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))), b => b.toString(16).padStart(2, '0')).join('');
 /** Holds every dispatch in flight until `release()`. */
 const hold = remote => { let open; remote.hold = new Promise(resolve => { open = resolve; }); return async () => { remote.hold = null; open(); await tick(); }; };
-const tick = async () => { for (let i = 0; i < 12; i++) await new Promise(resolve => setTimeout(resolve, 0)); };
+// Track real WebCrypto work in this isolated fixture process. A fixed number of
+// timers cannot imply digest completion under thread-pool load. Provider dispatch
+// holds remain independent, so in-flight/unknown-outcome assertions still run.
+const pendingDigests = new Set();
+const realDigest = crypto.subtle.digest.bind(crypto.subtle);
+crypto.subtle.digest = (...args) => {
+  const pending = realDigest(...args);
+  pendingDigests.add(pending);
+  void pending.then(() => pendingDigests.delete(pending), () => pendingDigests.delete(pending));
+  return pending;
+};
+const tick = async () => {
+  for (let i = 0; i < 12; i++) {
+    await new Promise(resolve => setTimeout(resolve, 0));
+    if (pendingDigests.size) await Promise.all([...pendingDigests]);
+  }
+};
 
 /** One "device": slots and the retained copy persist across `boot()` (a reload); the provider is remote. */
 function device() {
@@ -74,7 +90,7 @@ function device() {
     const chips = () => [...drafts.chips((label, pick) => ({label, pick})), ...provider.chips((label, pick) => ({label, pick}))];
     const app = {provider, drafts, labels: () => chips().map(c => c.label), pick: label => chips().find(c => c.label === label).pick(),
       composer: () => drafts.render().c, receipt: () => provider.render().provider,
-      async bind(next = account) { void provider.bind(next); void drafts.bind(next, 'Fixture'); await tick(); },
+      async bind(next = account) { await Promise.all([provider.bind(next), drafts.bind(next, 'Fixture')]); await tick(); },
       async compose(subject, body = 'Body') { assert.equal(drafts.begin(), true); const c = drafts.render().c; c.onTo({target: {value: 'friend@example.invalid'}}); drafts.render().c.addRaw(); drafts.render().c.onSubj({target: {value: subject}}); drafts.render().c.onBody({target: {value: body}}); },
       async save() { drafts.render().c.save(); await tick(); },
       async send() { drafts.render().c.send(); await tick(); },
