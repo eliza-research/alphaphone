@@ -4092,7 +4092,7 @@
 
 
 <sc-if value="{{showComposer}}">
-<div data-alpha-layer="composer" aria-hidden="{{dockHidden}}" inert="{{dockHidden}}" style="position: absolute; left: 16px; right: 16px; bottom: {{cmpBottom}}px; z-index: 40">
+<div data-alpha-layer="composer" role="group" aria-label="Assistant controls" aria-hidden="{{dockHidden}}" inert="{{dockHidden}}" style="position: absolute; left: 16px; right: 16px; bottom: {{cmpBottom}}px; z-index: 40">
   <sc-if value="{{messageComposeContext}}"><div style="display:flex;align-items:center;gap:8px;padding:6px 16px;font-size:13px;background:var(--s2);border-radius:14px"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{messageComposeContext}}</span><button class="tap" aria-label="Cancel reply or edit" onClick="{{cancelMessageContext}}" style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center"><svg class="i" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="{{ic.x}}"></path></svg></button></div></sc-if>
   <sc-if value="{{draftStatus}}"><div style="max-height:24dvh;overflow:auto;padding:6px 16px;background:var(--bg);color:var(--fg);border-radius:16px;font-size:12px"><p role="status" aria-label="Assistant draft status" style="margin:0">{{draftStatus}}</p><sc-if value="{{draftConflict}}"><p style="white-space:pre-wrap;max-height:80px;overflow:auto">Saved copy: {{draftSavedText}}</p><button onClick="{{restoreSavedDraft}}" style="min-height:44px;padding:8px">Restore saved draft</button><button onClick="{{keepCurrentDraft}}" style="min-height:44px;padding:8px">Replace saved draft with this text</button></sc-if><sc-if value="{{draftRetry}}"><button onClick="{{retryDraft}}" style="min-height:44px;padding:8px">Retry draft storage</button></sc-if><sc-if value="{{draftRecovery}}"><button onClick="{{recoverDraft}}" style="min-height:44px;padding:8px">Recover assistant draft</button></sc-if></div></sc-if>
 
@@ -4108,7 +4108,7 @@
 
 
 <sc-if value="{{showPill}}">
-<div data-alpha-layer="pill" aria-hidden="{{dockHidden}}" inert="{{dockHidden}}" style="position: absolute; left: 0; right: 0; bottom: 26px; z-index: 40; display: flex; justify-content: center; pointer-events: none">
+<div data-alpha-layer="pill" role="group" aria-label="Assistant controls" aria-hidden="{{dockHidden}}" inert="{{dockHidden}}" style="position: absolute; left: 0; right: 0; bottom: 26px; z-index: 40; display: flex; justify-content: center; pointer-events: none">
   <div class="enter" onPointerDown="{{pillSw.down}}" onPointerMove="{{pillSw.move}}" onPointerUp="{{pillSw.up}}" onPointerCancel="{{pillSw.cancel}}" onLostPointerCapture="{{pillSw.lost}}" style="{{pillDragStyle}}; pointer-events: auto; display: flex; align-items: center; gap: 2px; padding: 5px; border-radius: 30px; background: var(--s2); box-shadow: 0 12px 34px var(--shc); touch-action: none">
     <button aria-label="Open conversation" onClick="{{openSheet}}" style="width: 44px; height: 44px; border-radius: 22px; background: var(--acc); color: #fff; display: flex; align-items: center; justify-content: center; font-family: Denton, Fraunces, Georgia, serif; font-style: italic; font-size: 24px"><span class="alpha-compute-mark" aria-hidden="true"></span></button>
     <button class="ib" aria-label="Type" onClick="{{toInput}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.kbd}}"></path></svg></button>

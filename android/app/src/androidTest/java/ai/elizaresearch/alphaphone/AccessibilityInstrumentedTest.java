@@ -124,6 +124,17 @@ public final class AccessibilityInstrumentedTest {
   int[] clipped=AccessibilityBounds.clip(new int[]{bounds.left,bounds.top,bounds.right,bounds.bottom},frames);
   return new Rect(clipped[0],clipped[1],clipped[2],clipped[3]);
  }
+ /** A named semantic group, not a geometry/class exception for arbitrary controls. */
+ private static boolean assistantGroup(UiObject2 node){
+  for(UiObject2 current=node;current!=null;current=current.getParent())
+   if("Assistant controls".equals(current.getContentDescription())||"Assistant controls".equals(current.getText()))return true;
+  return false;
+ }
+ private static int assistantGroups(UiObject2 node){
+  int count="Assistant controls".equals(node.getContentDescription())||"Assistant controls".equals(node.getText())?1:0;
+  for(UiObject2 child:node.getChildren())count+=assistantGroups(child);
+  return count;
+ }
  private static void talkBackOrder(UiDevice device,String surface)throws Exception{
   device.waitForIdle(2000);
   // The WebView publishes a layer's accessibility nodes shortly after the layer appears; read the
@@ -140,7 +151,8 @@ public final class AccessibilityInstrumentedTest {
   int width=device.getDisplayWidth();
   List<String> problems=new ArrayList<>();
   UiObject2 previous=null;Rect previousBounds=null;
-  int actionable=0;
+  int actionable=0;boolean seenAssistant=false,previousAssistant=false;
+  assertTrue(surface+": at most one assistant control group",assistantGroups(root)<=1);
   for(UiObject2 node:nodes){
    Rect r=visibleBounds(node,device);
    if(r.isEmpty())continue;
@@ -149,7 +161,13 @@ public final class AccessibilityInstrumentedTest {
    if(label.isEmpty()&&"android.widget.EditText".equals(node.getClassName())&&node.getHint()!=null)label=node.getHint().trim();
    if(node.isClickable()){actionable++;if(label.isEmpty()&&node.getChildren().stream().noneMatch(c->c.getText()!=null&&!c.getText().trim().isEmpty()))problems.add("unlabelled control at "+r.toShortString());}
    if(r.left<0||r.right>width)problems.add("clipped '"+label+"' at "+r.toShortString());
-   if(previous!=null){
+   boolean assistant=assistantGroup(node);
+   if(seenAssistant&&!assistant)problems.add("App content follows the assistant control group");
+   seenAssistant|=assistant;
+   // Main app content is read before the persistent assistant group. That group
+   // floats above the bottom edge, so this semantic transition may move upward.
+   // Check every node and retain geometric order checks within each region.
+   if(previous!=null&&assistant==previousAssistant){
     Rect p=previousBounds;
     // The next node may start a new column to the right, otherwise it must not read upward.
     if(r.top<p.top-Math.max(p.height(),r.height())/2&&r.left<p.right){
@@ -159,7 +177,7 @@ public final class AccessibilityInstrumentedTest {
      System.out.println("ALPHA_ACCESSIBILITY_NEXT "+accessibilityGeometry(label));
     }
    }
-   previous=node;previousBounds=r;
+   previous=node;previousBounds=r;previousAssistant=assistant;
   }
   if(!problems.isEmpty())System.out.println("ALPHA_ACCESSIBILITY_HOME_GEOMETRY "+js("(()=>{const rect=e=>{if(!e)return null;const r=e.getBoundingClientRect(),s=getComputedStyle(e);return {x:r.x,y:r.y,width:r.width,height:r.height,overflowX:s.overflowX,overflowY:s.overflowY,scrollTop:e.scrollTop,scrollHeight:e.scrollHeight,clientHeight:e.clientHeight};};const q=s=>document.querySelector(s),css=getComputedStyle(document.documentElement);return JSON.stringify({viewport:{width:innerWidth,height:innerHeight},textScale:css.getPropertyValue('--alpha-text-scale'),dockClearance:css.getPropertyValue('--alpha-dock-clearance'),dockRest:css.getPropertyValue('--alpha-dock-rest'),phoneScale:css.getPropertyValue('--phone-scale'),home:rect(q('[data-alpha-layer=home]')),allApps:rect(q('[data-alpha-home-apps] button[aria-label=\"All apps\"]')),composer:rect(q('[data-alpha-layer=composer]')),pill:rect(q('[data-alpha-layer=pill]')),inputBar:rect(q('[data-alpha-input-bar]'))});})()"));
   if(!problems.isEmpty()){
@@ -171,6 +189,7 @@ public final class AccessibilityInstrumentedTest {
     capture.readAllBytes();System.out.println("ALPHA_ACCESSIBILITY_SCREENSHOT "+surface+" "+screenshot);
    }catch(Exception error){System.out.println("ALPHA_ACCESSIBILITY_SCREENSHOT_ERROR "+error.getClass().getName());}
   }
+  if(!"Notification shade".equals(surface))assertTrue(surface+": assistant controls form one final accessible group",seenAssistant&&assistantGroups(root)==1);
   assertTrue(surface+": TalkBack reaches actionable controls",actionable>0);
   assertTrue(surface+" at 200% font: "+problems,problems.isEmpty());
  }

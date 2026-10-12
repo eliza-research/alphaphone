@@ -471,6 +471,7 @@ test.describe('keyboard focus and the floating dock', () => {
     await page.addInitScript(offline);
     await page.goto('/');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByRole('group', { name: 'Assistant controls', exact: true })).toHaveCount(1);
     const scroller = page.locator('[data-alpha-app-scroll="settings"]');
     await expect(scroller).toBeVisible();
     if (scale !== 1) await setTextScale(page, scale);
