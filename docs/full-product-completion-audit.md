@@ -17,7 +17,7 @@ AOSP-only Phone/Contacts/SMS and AOSP listening are explicit requirements.
 Wallet remains a requested **full-product planning package**, outside the approved
 MVP; it is not enabled or a current MVP release gate. Earlier policy questions and
 measurement proposals in the chronological log are superseded, not newly open.
-The 91 observed native classes remain historical evidence for their exact archived
+The 92 observed native classes remain historical evidence for their exact archived
 APKs; the new policy does not turn old Cloud-speech tests into local-speech acceptance.
 
 **Latest merged checkpoint:** `73b003a5` includes main through `ca76ac67`
@@ -1720,3 +1720,36 @@ and latest historical cohorts of 164 passed, 12 failed and 20 partial. The inven
 has 93 admitted named classes and 61 without an admitted Cuttlefish campaign.
 Full verification passes 808 tests with four existing TODOs
 (`verify-connection-admission.log`); no requirement status is promoted to complete.
+
+
+## October 12: microphone-denial recovery on Cuttlefish
+
+`VoicePermissionDenied` now has named Cuttlefish admission with its explicit gate,
+a fresh secondary user, and RECORD_AUDIO revoked before launch. The runner clears
+user-set/user-fixed permission flags after revocation, scopes every command to that
+user, and rejects owner/invalid user IDs. The same preconditions are reapplied after
+independent-method resets. Runner tests exercise actual reset/revoke/flag/launch
+ordering and durable cleanup. Mid-recording revocation remains a separate campaign.
+
+`cuttlefish-voice-denial157` passes `deniedMicrophoneShowsSettingsRecoveryAndKeyboard`
+on both standalone and launcher using the existing flag-off
+`developer-apks-accessibility-node-diagnostics` archive. No Android source changed
+for this admission, and no new APK build is claimed. The fixture exercises denied
+microphone guidance, the real Android app-settings round trip, retry availability,
+and keyboard fallback. It checks that microphone permission stays denied and no
+Cloud voice recording file is created. Its intercepted Activity uses a synthetic
+signed-in Cloud transport without network access. This does not qualify real login,
+speech recognition/synthesis, recording recovery after granting permission, or the
+approved signed-out/offline local speech policy.
+
+Users 23/24 were removed with owner/HOME restored; both durable receipts record
+cleanupDeferred=false. `native-coverage-voice-denial.json` now records 92 observed
+classes, 62 unobserved, and latest historical cohorts of 166 passed, 12 failed and
+20 partial. `native-campaigns-voice-denial.json` lists 94 admitted named classes and
+60 without an admitted Cuttlefish campaign. Requirement completion statuses remain
+unchanged. The previous accessibility and Notes-capacity failures remain recorded.
+
+Full `npm run verify` passes 809 tests, zero failures and four existing TODOs
+(`verify-voice-denial-admission.log`), including the flag-off web build/audit. Focused
+report checks pass 24 tests (`voice-denial-report-checks.log`). Android packaging
+remains qualified only to the previously archived developer builds described above.

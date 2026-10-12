@@ -180,7 +180,7 @@ export const CLASS_REGISTRY = {
   WorkflowNoticeProcessDeath: { campaign: "python3 scripts/ci/pending-recovery-ui.py (external process death)" },
   WorkflowApprovalNoticeProcessDeath: { campaign: "ALPHA_BUILD_ARCHIVE=<archive> node scripts/android-workflow-native.mjs --phase=approval-notice-recovery (kills the main process from the WorkflowNoticeProcessRunner helper process, in an owned secondary user)" },
   NotificationChannels: { args: { notificationChannels: "1" }, grant: ["POST_NOTIFICATIONS"], note: "fresh app data; unique synthetic channel toggled in Android Settings, read back and deleted in finally; local notification recipient only" },
-  VoicePermissionDenied: { campaign: "node scripts/test-native-permissions.mjs voice APP.apk TEST.apk OUTPUT (RECORD_AUDIO revoked before the app starts)" },
+  VoicePermissionDenied: { secondaryUser: true, args: { voicePermissionDenied: "1" }, revoke: ["RECORD_AUDIO"], note: "fresh user with microphone revoked; real denial/settings/typing UI with synthetic signed-in transport, no live Cloud or local speech acceptance" },
   VoicePermissionRevoke: { campaign: "node scripts/test-native-permissions.mjs voice-revoke APP.apk TEST.apk OUTPUT (RECORD_AUDIO revoked while recording; the process is killed)" },
   LocalVoiceRecordingLimit: { campaign: "node scripts/test-native-permissions.mjs voice-limit APP.apk TEST.apk OUTPUT (RECORD_AUDIO granted before the app starts)" },
 };
@@ -343,6 +343,20 @@ export function classIsolationCommands(user) {
     ["shell", "cmd", "statusbar", "collapse"],
     ["shell", "pm", "clear", ...(user === undefined ? [] : ["--user", String(user)]), PACKAGE],
   ];
+}
+
+// Denial campaigns must never revoke a permission from the owner or a personal user.
+export function permissionRevocationCommands(spec, user) {
+  if (!spec.revoke?.length) return [];
+  if (!spec.secondaryUser || !/^[1-9][0-9]*$/.test(String(user))) throw new Error("Permission revocation requires a disposable secondary user");
+  return spec.revoke.flatMap(name => {
+    if (!/^[A-Z_]+$/.test(name)) throw new Error("Invalid permission name");
+    const target = ["--user", String(user), PACKAGE, `android.permission.${name}`];
+    return [
+      ["shell", "pm", "revoke", ...target],
+      ["shell", "pm", "clear-permission-flags", ...target, "user-set", "user-fixed"],
+    ];
+  });
 }
 
 /**
@@ -556,6 +570,7 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
             if (command.includes("clear") && reset.trim() !== "Success") throw new Error("Class app-data reset unconfirmed");
           }
           for (const permission of spec.grant ?? []) adb(["shell", "pm", "grant", ...(user === undefined ? [] : ["--user", user]), PACKAGE, `android.permission.${permission}`]);
+          for (const command of permissionRevocationCommands(spec, user)) adb(command);
           // A grant to another package the class needs (owned, disposable emulator only): never revoked here.
           for (const [pkg, permissions] of Object.entries(spec.grantOther ?? {})) for (const permission of permissions) adb(["shell", "pm", "grant", pkg, `android.permission.${permission}`], { allowFailure: true });
           // A listing that names no test is retried once and kept: three classes that exist were
@@ -580,6 +595,7 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
                 if (command.includes("clear") && reset.trim() !== "Success") throw new Error("Independent method app-data reset unconfirmed");
               }
               for (const permission of spec.grant ?? []) adb(["shell", "pm", "grant", ...(user === undefined ? [] : ["--user", user]), PACKAGE, `android.permission.${permission}`]);
+              for (const command of permissionRevocationCommands(spec, user)) adb(command);
             }
             const raw = adb(instrumentArgs(cls, { method, user, cuttlefishFingerprint: image?.fingerprint }), { timeout: options.timeoutMs, allowFailure: true });
             fs.writeFileSync(path.join(dir, `${short(cls)}${method ? `-${method}` : ""}.txt`), raw);

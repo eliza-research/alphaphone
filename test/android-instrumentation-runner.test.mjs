@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { instrumentationClassResults, listedInstrumentationTests, writeInstrumentationRecord } from "../scripts/instrumentation-result.mjs";
-import { admitApks, admitHome, classIsolationCommands, CAMPAIGN_RUNNERS, CLASS_REGISTRY, DEFAULT_CLASSES, instrumentArgs, NOT_RUN_BY_A_RUNNER, parseInstrumentationArgs, PACKAGE, readHome, restoreHome, runLeased, selectAlphaHome } from "../scripts/android-instrumentation.mjs";
+import { admitApks, admitHome, classIsolationCommands, permissionRevocationCommands, CAMPAIGN_RUNNERS, CLASS_REGISTRY, DEFAULT_CLASSES, instrumentArgs, NOT_RUN_BY_A_RUNNER, parseInstrumentationArgs, PACKAGE, readHome, restoreHome, runLeased, selectAlphaHome } from "../scripts/android-instrumentation.mjs";
 import { cases as permissionCases } from "../scripts/test-native-permissions.mjs";
 
 const C = name => `${PACKAGE}.${name}InstrumentedTest`;
@@ -68,7 +68,7 @@ test("argument policy: short names, campaigns refused with their runner, clock a
   assert.deepEqual(options.variants, ["standalone", "launcher"]);
   assert.equal(parseInstrumentationArgs([]).classes.length, DEFAULT_CLASSES.length);
   assert.equal(parseInstrumentationArgs(["--test-mocks"]).apkDir, "artifacts/test-mocks");
-  for (const name of ["ResidentEgressRedaction", "ReminderTapProcessDeath", "WorkflowNoticeProcessDeath", "VoicePermissionDenied", "VoicePermissionRevoke", "LocalVoiceRecordingLimit"])
+  for (const name of ["ResidentEgressRedaction", "ReminderTapProcessDeath", "WorkflowNoticeProcessDeath", "VoicePermissionRevoke", "LocalVoiceRecordingLimit"])
     assert.throws(() => parseInstrumentationArgs(["--classes", name]), /own campaign/);
   // Classes that assume a test-mocks app build are refused without it instead of reporting "skipped".
   assert.throws(() => parseInstrumentationArgs(["--classes", "ConnectionChooser"]), /test-mocks app build/);
@@ -461,6 +461,15 @@ test("classes that assert a secondary user run in a disposable user the runner c
   assert.deepEqual(inUser.filter(command => command.startsWith("shell pm uninstall")), [`shell pm uninstall --user 10 ${PACKAGE}.test`, `shell pm uninstall --user 10 ${PACKAGE}`]);
   // The class that runs in user 0 never receives the user argument.
   assert.ok(passed.commands.filter(command => command.includes("Shell")).every(command => !command.includes("--user 10")));
+  const denied = await run({ lifecycle, classes: "VoicePermissionDenied" });
+  assert.ifError(denied.error);
+  assert.equal(denied.result.passed, true);
+  const reset = denied.commands.indexOf(`shell pm clear --user 10 ${PACKAGE}`);
+  const revoke = denied.commands.indexOf(`shell pm revoke --user 10 ${PACKAGE} android.permission.RECORD_AUDIO`);
+  const flags = denied.commands.indexOf(`shell pm clear-permission-flags --user 10 ${PACKAGE} android.permission.RECORD_AUDIO user-set user-fixed`);
+  const launch = denied.commands.findIndex(command => command.includes("am instrument --user 10") && !command.includes("-e log true"));
+  assert.ok(reset >= 0 && reset < revoke && revoke < flags && flags < launch);
+  assert.equal(denied.savedLifecycle.removed, true);
   // A user that is not proven removed fails the run and names the classes that did not run.
   const kept = await run({ lifecycle: async ({ record }) => { record({ user: 11, ownerRestored: false, removed: false }); throw new Error("Owned user cleanup deferred; recover explicitly"); } });
   assert.equal(kept.result.passed, false);
@@ -473,6 +482,20 @@ test("classes that assert a secondary user run in a disposable user the runner c
   const none = await run({ lifecycle: undefined });
   assert.match(none.error?.message ?? "", /disposable user lifecycle/);
   assert.ok(!none.commands.some(command => command.startsWith("install")));
+});
+
+test("voice denial permission setup is secondary-user scoped and clears refusal flags", () => {
+  const spec = CLASS_REGISTRY.VoicePermissionDenied;
+  assert.throws(() => parseInstrumentationArgs(["--classes", "VoicePermissionDenied"]), /requires --owned-emulator/);
+  const options = parseInstrumentationArgs(["--owned-emulator", "--classes", "VoicePermissionDenied"]);
+  assert.equal(options.classes[0], C("VoicePermissionDenied"));
+  assert.ok(instrumentArgs(C("VoicePermissionDenied"), { user: "10" }).includes("voicePermissionDenied"));
+  for (const user of [undefined, 0, "0", "-1", "all", "10;id"]) assert.throws(() => permissionRevocationCommands(spec, user), /secondary user/);
+  assert.throws(() => permissionRevocationCommands({ ...spec, secondaryUser: false }, 10), /secondary user/);
+  assert.deepEqual(permissionRevocationCommands(spec, 10), [
+    ["shell", "pm", "revoke", "--user", "10", PACKAGE, "android.permission.RECORD_AUDIO"],
+    ["shell", "pm", "clear-permission-flags", "--user", "10", PACKAGE, "android.permission.RECORD_AUDIO", "user-set", "user-fixed"],
+  ]);
 });
 
 test("declared permissions are granted after isolation, and a failed listing is kept", () => {
