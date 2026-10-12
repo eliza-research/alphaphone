@@ -176,6 +176,7 @@ final class PermittedMediaCatalog implements AutoCloseable {
   JSObject row=inspect(key,true);if(!expected.equals(row.getString("mutationRevision")))throw new IllegalStateException("stale");return row;
  }
  JSObject changeFlag(String id,String expected,boolean favorite,boolean desired)throws Exception{
+  if(Build.VERSION.SDK_INT<30)throw new IllegalStateException("Media changes require Android 11 or later");
   JSObject before=mutationSource(id,expected);MediaLibraryKey key=MediaLibraryKey.parse(id);
   if(favorite&&Boolean.TRUE.equals(before.getBoolean("trashed")))throw new IllegalStateException("stale");
   if(Boolean.TRUE.equals(before.getBoolean(favorite?"favorite":"trashed"))==desired){before.put("status","unchanged");return before;}
