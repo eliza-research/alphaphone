@@ -1950,3 +1950,32 @@ remain unverified. This historical-platform fixture with two current resource
 values is not a full current-source AOSP image, production overlay-build proof,
 release signing qualification or resident-agent acceptance. Current active audit
 ADB is 6531; the unchanged browser fixture at 6530 remains stopped.
+
+
+## October 12: one synthetic photo captured while secure keyguard remains locked
+
+`secure-camera-ui-inspection.json` confirms Camera2 exposes a real enabled shutter
+while SecureCameraActivity is resumed above the locked keyguard. The synthetic
+fixture's MediaStore was empty before capture. `test-secure-camera-capture.py`
+uses the observed shutter resource ID/bounds, after the standard double-power
+invocation and a temporary fixture PIN; no arbitrary screen coordinates are used.
+
+`secure-camera-locked-capture.json` records one shutter attempt producing one
+Camera2-owned image, 38,350 bytes, JPEG, 1392×1856. TrustManager reports deviceLocked=1
+before invocation, after invocation and after capture. The trusted ADB test harness
+reads only that new URI and Pillow verifies its JPEG structure and dimensions.
+This privileged harness read is not proof that the locked UI can access the wider
+library. The exact row's identity and owner are rechecked before deletion; an empty
+image store is then confirmed. The fixture PIN is removed, empty-credential
+verification passes, and the previous lock-disabled setting is restored before
+returning HOME. The result is bound to the v2 boot receipt and script hashes.
+An initial host-Python attempt lacked Pillow and stopped before device mutation;
+the successful run uses the bundled dependency runtime.
+
+This is narrow emulator locked-capture evidence. Prior-photo exclusion, secure
+session gallery behavior, unlock return/privacy, real optics and physical power
+buttons remain unverified. The platform base is still historical, the overlays are
+fixture-packaged, and the image is unlocked/test-key signed. No full current-source
+AOSP, release, resident-agent or device acceptance follows. No product source
+changed in this run; existing 810-pass/four-TODO source verification and developer
+APK build evidence remain separate.
