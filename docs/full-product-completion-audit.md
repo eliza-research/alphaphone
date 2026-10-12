@@ -17,7 +17,7 @@ AOSP-only Phone/Contacts/SMS and AOSP listening are explicit requirements.
 Wallet remains a requested **full-product planning package**, outside the approved
 MVP; it is not enabled or a current MVP release gate. Earlier policy questions and
 measurement proposals in the chronological log are superseded, not newly open.
-The 92 observed native classes remain historical evidence for their exact archived
+The 93 observed native classes remain historical evidence for their exact archived
 APKs; the new policy does not turn old Cloud-speech tests into local-speech acceptance.
 
 **Latest merged checkpoint:** `73b003a5` includes main through `ca76ac67`
@@ -1753,3 +1753,42 @@ Full `npm run verify` passes 809 tests, zero failures and four existing TODOs
 (`verify-voice-denial-admission.log`), including the flag-off web build/audit. Focused
 report checks pass 24 tests (`voice-denial-report-checks.log`). Android packaging
 remains qualified only to the previously archived developer builds described above.
+
+
+## October 12: real Notes document picker campaign
+
+`NotesDocument` now runs as a named Cuttlefish class in a fresh secondary user,
+with app-data isolation before each independently listed method. Its UUID text
+fixtures use actual DocumentsUI grants; export checks independently verify name,
+MIME type, byte count, modification time and exact UTF-8 bytes before deleting only
+the selected owned file. This is ordinary document handling, not app-data backup.
+The process-restart method remains an explicit assumption skip: its dedicated
+`test-native-restart.mjs notes` runner currently requires an owned AVD and has not
+been admitted to Cuttlefish. No restart acceptance is inferred from recreation.
+
+`cuttlefish-notes-document157` uses the existing flag-off
+`developer-apks-accessibility-node-diagnostics` archive; no Android source or APK
+changed for this runner admission. Both variants pass oversized-file and invalid
+UTF-8 refusal without creating notes. Launcher also passes import/export, both
+picker cancellations, independent exact exported bytes, re-import creating a new
+note, and Activity recreation. Its class result remains partial due to the restart
+skip. Standalone fails waiting for the visible export receipt
+(`window.__notesReceiptSeen===true`): Notes reports storage ready and the document
+visible, but the observer never records the expected success notice. Cleanup then
+reacquires the exact file through DocumentsUI, verifies its bytes and removes it;
+no suppressed cleanup failure is reported. This is not proof that the original
+native callback or receipt was delivered. Keep the failure open rather than retrying
+an export or relaxing the receipt assertion.
+
+Next diagnosis should capture bounded native result category and renderer receipt
+visibility/epoch transitions around the original operation, without recording note
+contents or replaying the write. Source inspection shows a visibility-delayed
+receipt and a 1.9-second toast, but neither alone establishes the failure's cause.
+Both secondary users (25/26) were removed and owner/HOME restored, with durable
+cleanupDeferred=false receipts. The inventory now admits 95 named classes and
+leaves 59 without a Cuttlefish campaign. `native-coverage-notes-document.json`
+records 93 observed classes, 61 unobserved, and historical latest cohorts of
+166 passed, 13 failed and 21 partial. No requirement status becomes complete.
+Full verification passes 809 tests with four existing TODOs, including the flag-off
+web build/audit (`verify-notes-document-admission.log`). Prior developer Android
+build evidence remains separate from this host-runner-only change.
