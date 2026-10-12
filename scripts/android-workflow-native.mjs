@@ -102,7 +102,8 @@ try{
        if(test.prepareOwner){
         const raw=await call(['shell','am','instrument','--user',String(user),'-w','-r','-e','class',pkg+'.'+test.class+'#'+test.method,'-e',test.gate,'1','-e','workflowOwnerPhase','prepare',pkg+'.test/androidx.test.runner.AndroidJUnitRunner'],cancellation.signal);
         fs.writeFileSync(path.join(directory,'prepare.log'),raw);record.preparation=requireInstrumentationSuccess(raw,[pkg+'.'+test.class]);assert.equal(record.preparation.totalTests,1);assert.deepEqual(record.preparation.cases,[pkg+'.'+test.class+'#'+test.method]);persist();
-        await call(['shell','am','force-stop','--user',String(user),pkg],cancellation.signal);
+        // The prepared OS notice must survive this runner transition; do not force-stop it.
+
        }},
      });
     }catch(error){failure=error;record.error=error.message;}
