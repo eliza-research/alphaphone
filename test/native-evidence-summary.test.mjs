@@ -52,3 +52,12 @@ test('CLI refuses excluded test artifacts in flat and nested archives before wri
   }
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
+
+test('same fingerprint with different boot metadata or historical unknown metadata stays separate',()=>{
+ const withDigest=digest=>run('passed',{emulator:{kind:'cuttlefish',image:{fingerprint:'image-A',vbmetaDigest:digest},abi:'x86_64',sdk:'37'}});
+ const r=summarizeNativeEvidence(inventory,[run(),withDigest('a'.repeat(64)),withDigest('b'.repeat(64)),withDigest('a'.repeat(64))]);
+ assert.equal(r.classes[0].cohorts.length,3);
+ assert.equal(r.classes[0].cohorts[1].attempts.length,2);
+ assert.equal(r.classes[0].cohorts[0].target.vbmetaDigest,null);
+ assert.throws(()=>summarizeNativeEvidence(inventory,[withDigest('malformed')]),/Malformed image digest/);
+});

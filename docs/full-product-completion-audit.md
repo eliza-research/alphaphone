@@ -2053,3 +2053,29 @@ The wrapper verified source stability and restored the original runtime inputs.
 These APKs omit the resident payload and use unqualified speech; neither a release
 nor installed behavior is qualified by their successful build. Earlier Notes
 migration passes predate the new production prohibition and remain historical.
+
+
+## October 12: installed production boundaries after reset-policy merge
+
+The rebuilt flag-off APKs from `developer-apks-reset-merge` were installed on the
+owned secure-camera v2 fixture (`127.0.0.1:6531`). Both variants pass three Connection
+methods, including explicit native validation rejection of dedicated/remote hosts,
+hosted-agent paths and unreviewed Cloud routes before network dispatch. Reserved
+native storage and encrypted draft boundaries also pass. Two development loopback
+HTTP methods skip intentionally. This is not real Cloud authentication/inference.
+
+Both variants pass the two ordinary NotesDocument methods on the new production
+branch: import/export controls and native migration are refused without starting
+DocumentsUI or changing saved Notes. The method names retain historical migration
+wording, so their passes must not be described as working production import/export.
+The development-only restart phase is skipped. Users 10 and 11 were removed and
+owner restoration is recorded in
+`test-results/full-product-audit/cuttlefish-reset-policy-boundaries157/results.json`.
+
+This guest shares a fingerprint with an older fixture but has different image
+bytes. New runner receipts now record the observed `ro.boot.vbmeta.digest`;
+coverage summaries keep differing digests and historical unknown digests in
+separate cohorts. Admission rejects malformed nonempty values. The value is an
+observed image discriminator, not proof of verified-boot enforcement, complete
+partition identity or release qualification. The boundary campaign began before
+that addition and is not folded into the older image's historical coverage totals.

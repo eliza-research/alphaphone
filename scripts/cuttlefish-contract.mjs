@@ -8,6 +8,7 @@ export function admitCuttlefish(serial, properties, expectedFingerprint) {
   if (!expectedFingerprint || /[\r\n]/.test(expectedFingerprint) || properties.fingerprint !== expectedFingerprint) throw Error('Cuttlefish image fingerprint does not match the requested image');
   if(properties.userState!=='RUNNING_UNLOCKED')throw Error('Cuttlefish foreground user must be fully unlocked');
   if(properties.keyguardReady!==true)throw Error('Dismiss the Cuttlefish lock screen before running UI campaigns');
+  if(properties.vbmetaDigest != null && !/^(?:[a-f0-9]{64}|[a-f0-9]{128})$/.test(properties.vbmetaDigest))throw Error('Malformed Cuttlefish vbmeta digest');
   return properties;
 }
 

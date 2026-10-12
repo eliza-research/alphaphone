@@ -91,3 +91,12 @@ test('a visible keyguard is refused before any package mutation',async()=>{
  await assert.rejects(runLeased({options:parseInstrumentationArgs([...args,'--classes','Shell']),serial:'127.0.0.1:6520',adb}),/lock screen/);
  assert.ok(commands.every(a=>a[0]==='shell'&&['getprop','am'].includes(a[1])));
 });
+
+test('admission retains observed boot metadata and rejects malformed values before mutation',()=>{
+ for(const digest of ['a'.repeat(64),'b'.repeat(128)]){
+  const commands=[],delegate=fakeAdb(commands);
+  const adb=args=>args.join(' ')==='shell getprop ro.boot.vbmeta.digest'?digest:delegate(args);
+  assert.equal(admitInstrumentationDevice(parseInstrumentationArgs(args),'127.0.0.1:6520',adb).image.vbmetaDigest,digest);
+ }
+ assert.throws(()=>admitCuttlefish('127.0.0.1:6520',{...properties,vbmetaDigest:'not-a-digest'},fingerprint),/Malformed/);
+});

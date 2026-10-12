@@ -24,7 +24,12 @@ public final class ResetPolicyInstrumentedTest {
    UiDevice device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
    assertTrue("Native disclosure visible",device.wait(Until.hasObject(By.text("Reset Alpha data?")),10000));
    assertTrue("No backup or undo is disclosed",device.hasObject(By.textContains("There is no backup or undo")));
-   device.findObject(By.text("Cancel")).click();
+   // AlertDialog may render button text in capitals; bind the negative action,
+   // then verify its meaning before touching the destructive-review surface.
+   androidx.test.uiautomator.UiObject2 cancel=device.wait(Until.findObject(By.res("android","button2")),10000);
+   assertNotNull("Native negative reset-review action is visible",cancel);
+   assertTrue("Negative action is Cancel", "Cancel".equalsIgnoreCase(cancel.getText()));
+   cancel.click();
    long end=android.os.SystemClock.elapsedRealtime()+10000;
    while(android.os.SystemClock.elapsedRealtime()<end&&!"\"cancelled\"".equals(WebViewTestDriver.evaluate("window.__resetResult?.status")))android.os.SystemClock.sleep(50);
    assertEquals("\"cancelled\"",WebViewTestDriver.evaluate("window.__resetResult?.status"));

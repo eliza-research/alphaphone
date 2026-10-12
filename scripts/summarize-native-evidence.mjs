@@ -18,7 +18,9 @@ export function summarizeNativeEvidence(inventory,runs){
    if(!['standalone','launcher'].includes(observed.variant)||!['passed','failed','missing','skipped'].includes(observed.status)||!Number.isInteger(observed.passed)||observed.passed<0||!Array.isArray(observed.failed)||!Array.isArray(observed.ignored))throw Error('Malformed class result: '+name);
    const apks=r.apks.filter(a=>a.variant===observed.variant);
    if(apks.length!==2||!['app','test'].every(role=>apks.some(a=>a.role===role&&/^[a-f0-9]{64}$/.test(a.sha256||''))))throw Error('Unbound APK pair: '+name);
-   const target={variant:observed.variant,kind:r.emulator?.kind||'avd',image:r.emulator?.image?.fingerprint||r.emulator?.avd,abi:r.emulator?.abi,sdk:r.emulator?.sdk,testMocks:r.testMocks===true,webView:r.webView??null};
+   const vbmetaDigest=r.emulator?.image?.vbmetaDigest??null;
+   if(vbmetaDigest!==null&&!/^(?:[a-f0-9]{64}|[a-f0-9]{128})$/.test(vbmetaDigest))throw Error('Malformed image digest: '+file);
+   const target={variant:observed.variant,kind:r.emulator?.kind||'avd',image:r.emulator?.image?.fingerprint||r.emulator?.avd,vbmetaDigest,abi:r.emulator?.abi,sdk:r.emulator?.sdk,testMocks:r.testMocks===true,webView:r.webView??null};
    if(!target.image||!target.abi||!target.sdk)throw Error('Missing target identity: '+file);
    const key=JSON.stringify(target);let cohort=row.cohorts.find(c=>c.key===key);
    if(!cohort){cohort={key,target,attempts:[]};row.cohorts.push(cohort);}

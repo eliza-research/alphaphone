@@ -510,6 +510,7 @@ export function admitInstrumentationDevice(options,serial,adb){
     if(user!=="0")throw new Error("Fresh Cuttlefish campaigns require unlocked owner user 0");
     const image=admitCuttlefish(serial,{hardware:prop("ro.hardware"),device:prop("ro.product.device"),
       bootCompleted:prop("sys.boot_completed"),fingerprint:prop("ro.build.fingerprint"),
+      vbmetaDigest:prop("ro.boot.vbmeta.digest") || null,
       keyguardReady:keyguardReadyFromPolicy(adb(["shell","dumpsys","window","policy"])),
       userState:adb(["shell","am","get-started-user-state",user]).trim()},options.imageFingerprint);
     return {avd:null,image};
