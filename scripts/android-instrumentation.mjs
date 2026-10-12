@@ -154,7 +154,7 @@ export const CLASS_REGISTRY = {
   ResidentEgressRedaction: { campaign: "ALPHA_RESIDENT_DISPOSABLE_EMULATOR=1 node scripts/android-resident-instrumentation.mjs <app.apk> <androidTest.apk> (owner-only provider key fixture, ARM64)" },
   ReminderTapProcessDeath: { campaign: "python3 scripts/ci/pending-recovery-ui.py (external process death)" },
   WorkflowNoticeProcessDeath: { campaign: "python3 scripts/ci/pending-recovery-ui.py (external process death)" },
-  WorkflowApprovalNoticeProcessDeath: { campaign: "ALPHA_BUILD_ARCHIVE=<archive> node scripts/android-workflow-native.mjs --phase=approval-notice-recovery (kills the main process from the WorkflowNoticeProcessRunner helper process, in an owned secondary user)" },
+  WorkflowApprovalNoticeProcessDeath: { campaign: "ALPHA_BUILD_ARCHIVE=<flag-off archive> node scripts/android-workflow-native.mjs --phase=approval-notice-recovery (production signed-out cold start); use --profile=authenticated-fixture --phase=authenticated-notice-recovery with a test-mocks archive for verified synthetic loopback owner restoration and missing-credential process-death cases" },
   NotificationChannels: { campaign: "node scripts/test-native-permissions.mjs channels APP.apk TEST.apk OUTPUT (permission-restoring runner)" },
   VoicePermissionDenied: { campaign: "node scripts/test-native-permissions.mjs voice APP.apk TEST.apk OUTPUT (RECORD_AUDIO revoked before the app starts)" },
   VoicePermissionRevoke: { campaign: "node scripts/test-native-permissions.mjs voice-revoke APP.apk TEST.apk OUTPUT (RECORD_AUDIO revoked while recording; the process is killed)" },

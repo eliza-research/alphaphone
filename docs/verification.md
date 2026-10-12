@@ -365,7 +365,9 @@ class B or class E evidence, and no fix below has been shown to hold on Android.
 
 ## Round 10 (2026-10-11): approval notices across process death and owner change, not run
 
-Class S only. Nothing in this section ran on an emulator or a device, and no APK was built.
+Historical round-10 source status only. The current production and authenticated-fixture
+profiles described above supersede this original recovery scenario and owner policy.
+Nothing in this historical section ran on an emulator or a device, and no APK was built.
 
 - Product change: when a different owner connects, the renderer asks the native ledger to
   withdraw the approval notices posted for any other owner
