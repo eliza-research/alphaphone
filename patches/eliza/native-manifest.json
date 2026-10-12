@@ -16,13 +16,13 @@
     },
     {
       "file": "system-product-capabilities.patch",
-      "sha256": "dd0a516a1cb5f12381e21d21e43d1cd407287f892a74a07ac1967b370ccdba4e",
+      "sha256": "236388e42cd10e43b78a2b8c2ad8de9673aa495db36dbc70560f459797c744c1",
       "module": "plugins/plugin-native-system/android",
       "targets": [
         {
           "path": "plugins/plugin-native-system/android/src/main/java/ai/eliza/plugins/system/SystemPlugin.kt",
           "beforeSha256": "a7b615e2a44da2b4c4c76c35bbc731707e4b1fcbe276aa4f80f48509794cf9cd",
-          "afterSha256": "eb205ff735d328d3682b06836547db1edbde743abf4138c7350c4c83b33aa31f"
+          "afterSha256": "83032a842b700e1c8494ae8837a740889475ca920a353882fd0329b6bf10c622"
         }
       ]
     }
