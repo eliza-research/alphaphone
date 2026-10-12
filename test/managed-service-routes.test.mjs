@@ -14,3 +14,21 @@ test('managed service admission preserves owned service APIs and refuses agent h
  assert.equal(allowed('https://api.eliza.app/api/v1/api-keys/current?other=owner','DELETE'),false);
  assert.equal(allowed('https://api.eliza.app/api/v1/eliza/google/gmail/inbox-v1/operations/owner-request/dispatch','POST',true),true);
 });
+
+test('compiled test-mocks transports retain development hosts while flag-off transports reject them before dispatch',async()=>{
+ const {default:vm}=await import('node:vm');
+ const module=readFileSync(new URL('../apps/app/src/runtime/native-connection.ts',import.meta.url),'utf8');
+ const factory=module.slice(module.indexOf('export function createBrowserConnection('),module.indexOf('let browserConnection:'));
+ const transport=module.slice(module.indexOf('export const nativeCloudRequest:'),module.indexOf('export const nativeRemoteRequest:'));
+ for(const testMocksEnabled of [false,true]){
+  const calls=[];
+  const sandbox={testMocksEnabled,devSurfacesEnabled:false,managedServiceRequest:allowed,URL,Headers,AbortController,DOMException,setTimeout,clearTimeout,crypto:globalThis.crypto,webDevelopmentHttp:false,allowedHeaders:new Set(['accept','content-type','authorization']),native:{request:async input=>{calls.push(input.url);return {status:200,data:{}};},cancel:async()=>{}}};
+  vm.runInNewContext(stripTypeScriptTypes((factory+transport).replaceAll('export ',''))+';globalThis.factory=createBrowserConnection;globalThis.request=nativeCloudRequest;',sandbox);
+  const url='https://agent.example.test/api/agents';
+  const native=sandbox.request({url,method:'GET',headers:{},signal:new AbortController().signal,timeoutMs:1000});
+  if(testMocksEnabled)await native;else await assert.rejects(native,/managed Cloud services/);
+  const browser=sandbox.factory({fetch:async input=>{calls.push(input);return new Response('{}',{status:200});}}).request({requestId:'fixture',url,method:'GET',headers:{}});
+  if(testMocksEnabled)await browser;else await assert.rejects(browser,/managed Cloud services/);
+  assert.equal(calls.length,testMocksEnabled?2:0);
+ }
+});
