@@ -331,3 +331,13 @@ html:not(.alpha-landscape) .alpha-phone [data-screen]:not([data-alpha-chat-half=
  * it leave the top of the screen: the Files selection count and the Notes Trash heading. */
 .standalone-app [data-alpha-app-header][data-alpha-header-grow]{height:auto!important}
 [data-alpha-subview="notes-trash"]>div:first-child{height:auto!important;min-height:56px}
+
+/* Modal reviews are outside the scaled phone canvas. The software keyboard may
+ * shrink/pan only the visual viewport, leaving 100dvh and the dialog's default
+ * centering rectangle unchanged. Keep actions inside the measured visible area. */
+dialog:is(.alpha-operation-review,.alpha-calendar-editor,.alpha-calendar-meeting,.alpha-calendar-response){
+ inset-block-start:var(--alpha-visible-top,0px);
+ inset-block-end:calc(100% - var(--alpha-visible-top,0px) - var(--alpha-visible-height,100dvh));
+ max-height:calc(var(--alpha-visible-height,100dvh) - 24px);
+ margin-block:auto;
+}

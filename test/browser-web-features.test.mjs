@@ -86,9 +86,10 @@ test('find-in-page clears on navigation and tab change; fullscreen exits with Ba
   assert.match(adapter, /if \(s\.finding\) \{ closeFind\(\); return true; \}/, 'Back closes the find bar first');
 });
 
-test('passkeys use WebView browser mode where supported and are reported where not', () => {
-  assert.match(plugin, /WebSettingsCompat\.setWebAuthenticationSupport\(settings,WebSettingsCompat\.WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER\)/);
-  assert.match(plugin, /Passkeys are not available in this browser on this device\./);
+test('passkeys stay disabled and the native browser offers an honest external remedy', () => {
+  assert.match(plugin, /WebSettingsCompat\.setWebAuthenticationSupport\(settings,WebSettingsCompat\.WEB_AUTHENTICATION_SUPPORT_NONE\)/);
+  assert.doesNotMatch(plugin, /WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER/);
+  assert.match(plugin, /Passkeys are not supported in Alpha Browser\./);
 });
 
 test('a page-initiated navigation commits the selected tab autofill session so the provider can offer Save', () => {

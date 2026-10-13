@@ -156,6 +156,9 @@ public class AlphaBrowserPlugin extends Plugin {
   }
  }); }
 
+ /** Kept separate from dispatch so resolver changes cannot bypass page/owner checks. */
+ private java.util.function.Function<Intent,java.util.List<android.content.pm.ResolveInfo>> externalBrowserResolver =
+  intent->getContext().getPackageManager().queryIntentActivities(intent,android.content.pm.PackageManager.MATCH_DEFAULT_ONLY|android.content.pm.PackageManager.GET_RESOLVED_FILTER);
  private static class Tab { BrowserReadingWorld readingWorld; BrowserDownloads.BlobCapture capture; String findQuery; /** Latest main-frame request or redirect target (any thread). */ volatile String pendingMain; int authAttempts; boolean passkeys; String id, profile, opener, url = "", error = "", finishedUrl = "", lastCommittedUrl = ""; WebView web; FrameLayout frame; TextView message; boolean priv, handedOff, loading, dead, committed, autofillEnabled; int httpStatus, autofillVirtualId=View.NO_ID; long navigation; Runnable timeout; }
  /** Credentials stay in the framework/provider and the remote document. No bridge API
   * reads fields or replaces Chromium's frame-specific webDomain metadata. The only addition
@@ -345,8 +348,11 @@ public class AlphaBrowserPlugin extends Plugin {
    CookieManager tabCookies=WebViewCompat.getProfile(t.web).getCookieManager();
    tabCookies.setAcceptThirdPartyCookies(t.web, !priv);
    if(tabCookies.acceptThirdPartyCookies(t.web)!=!priv)throw new IllegalStateException("Browser cookie isolation is unavailable");
-   // Passkeys through Android Credential Manager, where this WebView provider supports browser mode.
-   if(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_AUTHENTICATION)){try{WebSettingsCompat.setWebAuthenticationSupport(settings,WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER);t.passkeys=WebSettingsCompat.getWebAuthenticationSupport(settings)==WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER;}catch(RuntimeException unsupported){t.passkeys=false;}}
+   // Approved MVP policy: passwords remain enabled; passkeys require separate provider qualification.
+   t.passkeys=false;
+   if(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_AUTHENTICATION))BrowserPasskeys.disable(
+    ()->WebSettingsCompat.setWebAuthenticationSupport(settings,WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_NONE),
+    ()->WebSettingsCompat.getWebAuthenticationSupport(settings),WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_NONE);
    t.readingWorld=new BrowserReadingWorld(t.web);
    t.capture=new BrowserDownloads.BlobCapture(t.web,downloads.captureDirectory());
    t.web.setFindListener((ordinal,count,done)->findResult(t,ordinal,count,done));
@@ -654,7 +660,7 @@ public class AlphaBrowserPlugin extends Plugin {
   android.content.SharedPreferences notices=getContext().getSharedPreferences("alpha-browser-notices",0);
   if(notices.getBoolean("passkeys-unavailable",false))return;
   notices.edit().putBoolean("passkeys-unavailable",true).apply();
-  notice(t,"Passkeys are not available in this browser on this device. Sign in with a password or another method.");
+  notice(t,"Passkeys are not supported in Alpha Browser. Use a password or open the page in another browser from the menu.");
  }
  private void notice(Tab t,String message) { if(tabs.get(t.id)!=t)return; JSObject event=new JSObject(); event.put("session",session); event.put("id",t.id); event.put("message",message); notifyListeners("notice",event); }
  /** target=_blank links and window.open open a new tab in the opener's profile.
@@ -808,6 +814,28 @@ public class AlphaBrowserPlugin extends Plugin {
   Intent send=new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,t.url).putExtra(Intent.EXTRA_SUBJECT,title).putExtra(Intent.EXTRA_TITLE,title);
   for(Tab tab:tabs.values())disableAutofill(tab);
   shareOutstanding=true;try{pageShare.launch(Intent.createChooser(send,"Share page"));}catch(RuntimeException failure){shareOutstanding=false;throw failure;}
+ }); }
+ /** Explicit user handoff of the unchanged visible HTTPS page to an installed browser. */
+ @PluginMethod public void openExternalBrowser(PluginCall call) { getActivity().runOnUiThread(()->{if(closed(call))return;
+  Tab t=tabs.get(call.getString("id"));
+  if(!Objects.equals(session,call.getString("session"))||t==null||t.dead||paused||destroyed||shareOutstanding||pickerOutstanding
+   ||!Objects.equals(presentedId,t.id)||!t.web.isShown()||!t.committed||t.loading||!t.error.isEmpty()
+   ||!Objects.equals(call.getString("navigation"),String.valueOf(t.navigation))||!Objects.equals(call.getString("url"),t.url)||!Objects.equals(t.web.getUrl(),t.url)
+   ||!BrowserExternalPage.allowed(t.url,getBridge().getWebView().getUrl())||(t.priv&&!Boolean.TRUE.equals(call.getBoolean("privateConfirmed")))){call.reject("The visible HTTPS page changed. Review it again before leaving Alpha.");return;}
+  Intent view=new Intent(Intent.ACTION_VIEW,Uri.parse(t.url)).addCategory(Intent.CATEGORY_BROWSABLE);
+  java.util.ArrayList<Intent> candidates=new java.util.ArrayList<>();java.util.HashSet<String> seen=new java.util.HashSet<>();
+  for(android.content.pm.ResolveInfo info:externalBrowserResolver.apply(BrowserExternalResolver.probe())){
+   android.content.pm.ActivityInfo activity=info.activityInfo;
+   if(activity!=null&&activity.applicationInfo!=null&&activity.name!=null&&BrowserExternalPage.eligible(getContext().getPackageName(),activity.packageName,activity.enabled&&activity.applicationInfo.enabled,activity.exported,BrowserExternalResolver.genericHttps(info.filter))){
+    android.content.ComponentName component=new android.content.ComponentName(activity.packageName,activity.name);
+    if(seen.add(component.flattenToString()))candidates.add(new Intent(view).setComponent(component));
+   }
+  }
+  if(candidates.isEmpty()){call.reject("No other installed browser can open this page. Use a password or another sign-in method.");return;}
+  Intent chooser=Intent.createChooser(candidates.remove(0),"Open in another browser");
+  chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS,candidates.toArray(new Intent[0]));
+  for(Tab tab:tabs.values())disableAutofill(tab);
+  try{getActivity().startActivity(chooser);call.resolve();}catch(RuntimeException unavailable){call.reject("The other browser could not be opened. Your page remains in Alpha.");}
  }); }
  @PluginMethod public void downloads(PluginCall call) { getActivity().runOnUiThread(()->{if(closed(call))return;String requested=call.getString("session");if(requested==null||(session!=null&&!Objects.equals(session,requested))){call.reject("Expired browser session");return;}session=requested;for(Tab tab:tabs.values())disableAutofill(tab);downloads.show();call.resolve();}); }
  @PluginMethod public void close(PluginCall call) { getActivity().runOnUiThread(() -> {if(closed(call))return; if (!Objects.equals(session,call.getString("session"))) { call.reject("Expired browser session"); return; } Tab t=tabs.remove(call.getString("id")); if(t!=null) dispose(t); call.resolve(); }); }

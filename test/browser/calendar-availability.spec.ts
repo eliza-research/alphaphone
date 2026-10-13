@@ -156,6 +156,7 @@ for (const mode of ['share', 'all-day', 'free', 'cancel-choice', 'cancel-result'
     if (mode === 'all-day') await expect(result.getByRole('listitem').first()).toContainText('all day');
     // The owner sees times only; titles, notes and places are not read into the review.
     for (const hidden of [...TITLES, 'PRIVATE_BODY', 'PRIVATE_PLACE']) await expect(result).not.toContainText(hidden);
+    await expect(result).toContainText('Read from: In this app · Saved on this device.');
     await expect(result).toContainText('Calendar names, event titles and details stay on this phone.');
     expect((await fixture(page)).receipts).toEqual([]);
 
@@ -206,3 +207,39 @@ for (const mode of ['share', 'all-day', 'free', 'cancel-choice', 'cancel-result'
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 }
+
+// Exercise the actual in-app provider contract as well as the executor: an empty local
+// store is free, but loss of its freshness marker at either bridge read is unknown.
+test('empty browser calendar requires freshness evidence on both reads', async ({ page }) => {
+  await page.goto('/');
+  const outcomes = await page.evaluate(async () => {
+    const { BrowserCalendar } = await import('/src/browser/calendar.ts');
+    const { executeCalendarAvailability } = await import('/src/runtime/calendar-availability.ts');
+    const calendar = new BrowserCalendar(), timeZone = 'America/New_York';
+    const operation = { type: 'calendar_availability' as const, start: '2026-10-13T04:00:00.000Z', end: '2026-10-14T04:00:00.000Z', timeZone };
+    const results = [];
+    for (const missingAt of [0, 1, 2]) {
+      let reads = 0;
+      const provider = {
+        requestWorkflowReadAccess: () => calendar.requestWorkflowReadAccess(),
+        availabilitySources: (input: {timeZone:string}) => calendar.availabilitySources(input),
+        readAvailability: async (input: any) => {
+          const result = await calendar.readAvailability(input);
+          return ++reads === missingAt ? { ...result, freshness: undefined } : result;
+        },
+      };
+      results.push(await executeCalendarAvailability(provider, operation, timeZone, new AbortController().signal, () => {}, {
+        chooseCalendars: async (sources: readonly any[]) => sources.map(source => source.id),
+        confirmResult: async () => true,
+      }, () => timeZone));
+    }
+    return results;
+  });
+  expect(outcomes[0].status).toBe('succeeded');
+  expect(outcomes[0].foregroundResult?.status).toBe('free');
+  for (const outcome of outcomes.slice(1)) {
+    expect(outcome.status).toBe('failed');
+    expect(outcome.foregroundResult).toBeUndefined();
+    expect(outcome.summary).toContain('availability is unknown');
+  }
+});

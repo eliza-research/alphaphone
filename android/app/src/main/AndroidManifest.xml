@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
  <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.INTERNET" />
+ <uses-permission android:name="android.permission.INTERNET" />
  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
  <uses-permission android:name="android.permission.READ_CALENDAR" />
@@ -14,7 +14,7 @@
  <uses-feature android:name="android.hardware.camera" android:required="false" />
  <uses-feature android:name="android.hardware.camera.any" android:required="false" />
  <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
- <!-- MVP-DEFERRED: no Contacts provider access in the shipping MVP profile. -->
+ <!-- Contacts access is requested only by the admitted Alpha image feature. Writes use Android editor review. -->
  <uses-permission android:name="android.permission.READ_CONTACTS" tools:node="remove" />
  <uses-permission android:name="android.permission.WRITE_CONTACTS" tools:node="remove" />
  <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:node="remove" />
@@ -22,6 +22,8 @@
  <!-- minSdk 29 uses scoped storage; the camera plugin requests this only below API 29. -->
  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
  <queries>
+  <intent><action android:name="android.intent.action.INSERT"/><data android:mimeType="vnd.android.cursor.dir/contact"/></intent>
+  <intent><action android:name="android.intent.action.EDIT"/><data android:mimeType="vnd.android.cursor.item/contact"/></intent>
   <!-- Narrow visibility for password-provider setup; no vault or form access. -->
   <package android:name="proton.android.pass"/>
   <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="content" android:mimeType="application/pdf"/></intent><intent><action android:name="android.intent.action.VIEW"/><data android:scheme="content" android:mimeType="image/*"/></intent><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent>

@@ -3454,6 +3454,7 @@ registerView("contacts", {
     };
     var canSave = editing && !!(form.first.trim() || form.last.trim() || form.phone.trim());
     return {
+      nativePrototype: true,
       q: st.q || "", hasQ: !!q, qRaw: (st.q || "").trim(),
       searching: !!st.searching, notSearching: !st.searching,
       openSearch: function () { api.set({ searching: true }); },

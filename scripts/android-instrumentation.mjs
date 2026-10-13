@@ -56,9 +56,11 @@ const RUNNER = "androidx.test.runner.AndroidJUnitRunner";
  */
 export const CLASS_REGISTRY = {
   NoMockProduct: {},
+  BrowserInstalledResolver: { note: "Real installed generic HTTPS filter visibility only; no external launch or network request" },
   Shell: {},
   StartupReadiness: { args: { startupReadiness: "1" } },
   TextScale: { note: "textScaleProcessRestartPhase is skipped here; run node scripts/test-native-restart.mjs text-scale" },
+  BrowserExternalHandoff: { note: "Synthetic committed HTTPS child and resolver fixture; intercepts chooser dispatch, no external page is opened" },
   ResetPolicy: { note: "Non-destructive cancellation, migration refusal and isolated marker checks; not a system reset proof" },
   BrowserCookiePolicy: { note: "Synthetic intercepted HTTPS origins; private method requires scoped WebView deletion support" },
   BrowserSignins: { note: "signinProcessRestartPhase is skipped here; run node scripts/test-native-restart.mjs signin" },
@@ -77,6 +79,8 @@ export const CLASS_REGISTRY = {
   RealClock: { args: { realClock: "1", clockExclusive: "1" }, requires: "--clock-exclusive", grantOther: { "com.android.deskclock": ["POST_NOTIFICATIONS"] },
     note: "fixture qualified for API 35 only (it asserts the SDK level); the runner grants AOSP Clock its notification permission, which the class requires for real firing evidence" },
   Accessibility: {},
+  ContactsCatalog: { note: "Owned disposable-profile ContactsProvider fixture only; no image admission or contacts activity" },
+  ImageCapabilities: { note: "ordinary APK denial only; no AOSP image or real telephony acceptance" },
   SettingsSystemFacts: { note: "read-only comparison with this image's settings; not device acceptance of the Settings handoffs" },
   Rotation: {},
   // Core-loop classes (docs/core-loop-audit.md). Registered so their opt-in gates are passed; none

@@ -154,7 +154,7 @@ export class BrowserCalendar extends WebPlugin {
     const range=calendarRange(data.events.filter(row=>row.calendarId===source.id),{begin:Math.min(begin,civilBegin),end:Math.max(end,civilEnd)});
     const rows=range.events.filter(row=>row.allDay?row.begin<civilEnd&&row.end>civilBegin:row.begin<end&&row.end>begin);
     if(range.truncated||rows.length>200)return {status:'too-many'};
-    return {status:'ready',events:rows.map(row=>({start:new Date(row.begin).toISOString(),end:new Date(row.end).toISOString(),allDay:!!row.allDay,availability:'busy'}))};
+    return {status:'ready',freshness:'local',events:rows.map(row=>({start:new Date(row.begin).toISOString(),end:new Date(row.end).toISOString(),allDay:!!row.allDay,availability:'busy'}))};
   }
   async list(input:{begin:number;end:number}) {const data=await calendarDocument.read(initial);return {status:'ready',calendars:[{...source,...(data.preferences??{visible:true,color:'acc'})}],...calendarRange(data.events,input)};}
   async prepareAgentSource(){const raw=await calendarDocument.readRaw(),data:State=raw===null?await calendarDocument.edit(initial,data=>data):JSON.parse(raw);return {status:'ready',sourceId:'local',sourceRevision:data.sourceRevision};}

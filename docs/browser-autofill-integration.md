@@ -48,4 +48,19 @@ Android's service guidance requires attention to source domain, app identity/cer
 
 The test temporarily selects this debug provider and restores the previous provider in `finally`. It loads example.com over actual validated HTTPS, creates an instrumentation-only form in that child, taps its username field, selects the visible native dataset and checks filled values as booleans. Nothing is submitted to the website. It verifies the host cannot see the form, checks overlay cancellation, reload clears the fixture, failed navigation removes eligibility, and a real cleartext loopback form has no dataset or filled values. This does not use a production JavaScript form-reading API and does not bypass TLS validation.
 
-Run both distribution variants through the root build/test owner. Retain terminal results separately from this source description. Additional acceptance remains: official Proton login/unlock/warning/save/re-fill; cross-origin iframe matching; provider authentication pause/resume; background/recreation; tab-switch stale dataset rejection; TLS-certificate failure; passkeys; physical Pixel compatibility; and explicit AOSP default-provider provisioning if selected. No real provider account or APK installation is part of this change.
+Run both distribution variants through the root build/test owner. Retain terminal results separately from this source description. Additional acceptance remains: official Proton login/unlock/warning/save/re-fill; cross-origin iframe matching; provider authentication pause/resume; background/recreation; tab-switch stale dataset rejection; TLS-certificate failure; physical Pixel compatibility; and explicit AOSP default-provider provisioning if selected. No real provider account or APK installation is part of this change.
+
+## Passkeys outside MVP
+
+The October 12 approved policy (#402) defers passkeys; integrated password save,
+fill, exact-origin binding and unlock requirements remain acceptance gates. Alpha
+Browser disables WebAuthn even when the installed provider supports browser mode.
+Its menu states the limitation and offers an explicit HTTPS-page handoff to
+another installed browser. Private tabs first disclose that the receiving browser
+can retain the address and use its own accounts; Alpha cookies and tab storage
+are not transferred. An absent handler produces an honest refusal.
+
+A future system-credential-provider integration requires separate browser/image
+qualification, including provider failure, passkey creation/use, origin binding
+and private-profile behavior. Alpha is not a passkey provider. This source policy
+and handoff do not establish live passkey or password acceptance.

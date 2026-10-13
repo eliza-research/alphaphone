@@ -27,3 +27,11 @@ test('APK receipt rejects missing, old and mismatched source bindings',()=>{
  assert.throws(()=>verifyNativePatchReceipt(valid.replace('patched','original'),expected),/mismatch/);
  assert.throws(()=>verifyNativePatchReceipt(valid.replace('new','old'),expected),/mismatch/);
 });
+
+for(const extension of ['kt','xml'])test(`admission ${extension==='kt'?'accepts Kotlin':'rejects non-code'} targets`,()=>fixture(args=>{
+ const renamed=target.replace(/java$/,'')+extension,patch=args.manifest.patches[0];
+ const bytes=fs.readFileSync(path.join(args.patchRoot,patch.file),'utf8').replaceAll(target,renamed);fs.writeFileSync(path.join(args.patchRoot,patch.file),bytes);patch.sha256=sha(bytes);patch.targets[0].path=renamed;
+ const read=args.source.read;args.source.read=()=>new Map([[renamed,read().get(target)]]);
+ if(extension==='kt'){const output=materializeNativePatches(args);assert.equal(output.files[renamed],sha('new\n'));}
+ else assert.throws(()=>materializeNativePatches(args),/target\/source mismatch/);
+}));

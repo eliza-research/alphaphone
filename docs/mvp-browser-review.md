@@ -496,7 +496,7 @@ be treated as proof that every deferred plugin route is available.
 
 The remaining work is enumerated in [current status](mvp-current-status.md) and
 the [pilot acceptance runbook](pilot-acceptance-runbook.md): real Gmail grants
-and authorized sends/recovery; password-provider and passkey behavior; licensed
+and authorized sends/recovery; password-provider behavior (passkeys are deferred under #402); licensed
 HTTPS Maps and navigation; native installed-data, permissions, lifecycle and
 interrupted-workflow qualification; physical speech, latency, accessibility,
 battery and pilot journeys; controlled signing, App Links, signed update/rollback;

@@ -1,7 +1,6 @@
 pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
 include ':app', ':capacitor-android', ':eliza-system'
 project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/android/capacitor')
-project(':eliza-system').projectDir = new File('../vendor/eliza/plugins/plugin-native-system/android')
 
 include ':eliza-camera'
 project(':eliza-camera').projectDir = new File('../vendor/eliza/plugins/plugin-native-camera/android')
@@ -30,6 +29,7 @@ def nativePatchOutput = nativePatchProcess.inputStream.getText('UTF-8')
 if (nativePatchProcess.waitFor() != 0) throw new GradleException('Native patch admission failed')
 def nativePatchSource = new groovy.json.JsonSlurper().parseText(nativePatchOutput)
 gradle.ext.nativePatchReceipt = new File(nativePatchSource.root, '.source.json')
+project(':eliza-system').projectDir = new File(nativePatchSource.root, 'plugins/plugin-native-system/android')
 include ':elizaos-capacitor-secure-store'
 project(':elizaos-capacitor-secure-store').projectDir = new File(nativePatchSource.root, 'plugins/plugin-native-secure-store/android')
 include ':eliza-passwords'

@@ -80,7 +80,7 @@ public final class CalendarAvailabilityReaderTest {
   void write(String sql){pending.append(sql);}
   private void flush(){if(pending.length()>0){String sql=pending.toString();pending.setLength(0);sqlite(database,sql);}}
   void calendar(long id,String label,int access){
-   write("INSERT INTO calendars VALUES("+id+",'"+label+"@account.example','com.example','"+label+"_CALENDAR_NAME','"+label+"_CALENDAR_NAME',"+access+",'"+label+"@owner.example');");
+   write("INSERT INTO calendars VALUES("+id+",'"+label+"@account.example','LOCAL','"+label+"_CALENDAR_NAME','"+label+"_CALENDAR_NAME',"+access+",'"+label+"@owner.example');");
   }
   private long nextEvent=1;
   void event(long calendar,String title,long begin,long end,boolean allDay,Integer availability,Integer status,Integer self,boolean deleted){
@@ -246,6 +246,18 @@ public final class CalendarAvailabilityReaderTest {
    // The revision of a calendar with no access cannot be chosen through a forged selection either:
    // it was never offered, and the renderer only sends offered ids (asserted in the renderer tests).
 
+   // Remote caches have no trustworthy sync freshness, even if empty. They remain
+   // offered at free/busy permission, but must fail before querying any instances.
+   Provider remote=new Provider(directory);remote.calendar(1,"LOCAL",700);remote.calendar(2,"REMOTE",100);
+   remote.write("UPDATE calendars SET account_type='com.example' WHERE _id=2;");
+   same(2,CalendarAvailabilityReader.sources(remote).length(),"Remote freebusy source is still offered");
+   rejects(CalendarAvailabilityReader.FreshnessUnknown.class,()->CalendarAvailabilityReader.read(remote,chosen(remote,2),start,end,zone));
+   rejects(CalendarAvailabilityReader.FreshnessUnknown.class,()->CalendarAvailabilityReader.read(remote,chosen(remote,1,2),start,end,zone));
+   same(0,remote.instanceUris.size(),"Unknown remote freshness never reads partial local intervals");
+   rows(CalendarAvailabilityReader.read(remote,chosen(remote,1),start,end,zone));
+   remote.write("UPDATE calendars SET account_type=NULL WHERE _id=2;");
+   rejects(CalendarAvailabilityReader.FreshnessUnknown.class,()->CalendarAvailabilityReader.read(remote,chosen(remote,2),start,end,zone));
+
    // Malformed selections and windows are refused before any provider read.
    JSONArray valid=chosen(provider,1);JSONObject one=valid.getJSONObject(0);String revision=one.getString("revision");
    int before=provider.instanceUris.size();
@@ -283,7 +295,7 @@ public final class CalendarAvailabilityReaderTest {
    full.event(1,"OVER",dayStart+12*HOUR,dayStart+13*HOUR,false,0,1,null,false);
    rejects(CalendarAvailabilityReader.TooMany.class,()->CalendarAvailabilityReader.read(full,chosen(full,1),start,end,zone));
    Provider crowded=new Provider(directory);
-   crowded.write("WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<"+CalendarAvailabilityReader.MAX_SOURCES+") INSERT INTO calendars SELECT i,'a@account.example','com.example','N','N',200,'o@owner.example' FROM n;");
+   crowded.write("WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<"+CalendarAvailabilityReader.MAX_SOURCES+") INSERT INTO calendars SELECT i,'a@account.example','LOCAL','N','N',200,'o@owner.example' FROM n;");
    same(CalendarAvailabilityReader.MAX_SOURCES,CalendarAvailabilityReader.sources(crowded).length(),"Sources at the bound");
    crowded.calendar(1000,"EXTRA",200);
    rejects(CalendarAvailabilityReader.TooMany.class,()->CalendarAvailabilityReader.sources(crowded));

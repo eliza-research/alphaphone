@@ -79,7 +79,11 @@ fixture behavior, not integrated Alpha, biometric or physical-device acceptance.
 
 ### Passkeys
 
-Alpha's browser enables WebView browser-mode WebAuthn where the installed provider supports it.
+Passkeys are outside MVP under the approved #402 policy. Alpha's browser disables
+WebAuthn even where the installed provider supports it. Use a password or the
+explicit Open in another browser action; private tabs ask before handing over
+the address. Alpha does not detect passkey-only pages. Future system-provider
+support requires separate browser/image qualification.
 The integrated password manager does not provide passkeys or store TOTP secrets.
 
 ### Evidence boundary
@@ -117,7 +121,7 @@ Choose password provider opens Android's public provider picker when the verifie
 
 Browser-only builds explain that the browser/OS manages passwords, offer no fake native installation/selection controls, and cannot report Android provider state. Mock mode, which exists only in `ELIZA_DEV_ALLOW_TEST_MOCKS=1` builds, keeps its simulated UI and does not install the live setup adapter. The development sample password provider is likewise flag-only; production builds and distribution APKs show only the real Android provider status.
 
-This is onboarding, not official-provider acceptance. The embedded Alpha browser is distinct from a browser on Proton's recognized-browser list. Preserve any provider warning. Setup does not establish password saving/filling, cross-origin matching, unlock/resume, passkeys or release-signed/physical-device compatibility; those remain the acceptance gates in `browser-autofill-integration.md` and the MVP completion plan. Alpha neither restyles nor bypasses provider-owned vault/security UI.
+This is onboarding, not official-provider acceptance. The embedded Alpha browser is distinct from a browser on Proton's recognized-browser list. Preserve any provider warning. Setup does not establish password saving/filling, cross-origin matching, unlock/resume or release-signed/physical-device compatibility; those remain the password acceptance gates in `browser-autofill-integration.md` and the MVP completion plan. Alpha neither restyles nor bypasses provider-owned vault/security UI.
 
 Primary references:
 

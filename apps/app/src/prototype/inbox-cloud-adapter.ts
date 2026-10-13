@@ -486,6 +486,18 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
     if (!now.ready || now.token !== expected.token) return false;
     return drafts.useSuggestion(text, reply, { token: drafts.suggestionTarget(reply).token, append: expected.append === true && now.append });
   };
+  /** Files uses an account-bound destination without implicitly replying to a hidden message. */
+  view.fileEmailTarget = (): EmailTarget => {
+    const binding=connectionController.getCloudClient(),available=view.emailTarget() as EmailTarget;
+    if(!binding||!available.ready)return available;
+    const target=drafts.suggestionTarget();
+    return {...target,accountId:selected,account:accountLabel()||'Selected Gmail account',token:JSON.stringify([binding.sessionId,selected,target.token])};
+  };
+  view.attachReviewedFile = (file: import('../runtime/inbox-attachment').MailAttachment,token:string):boolean => {
+    const target=view.fileEmailTarget() as EmailTarget;
+    if(!target.ready||target.token!==token)return false;
+    return drafts.attachReviewed(file,drafts.suggestionTarget().token);
+  };
   view.voicePhrase = 'Help me write an email';
   /** Content shared from Notes, Photos or Files becomes a new local draft for review; nothing is sent. */
   function shared(value: Bag): ComposePrefill {

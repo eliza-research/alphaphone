@@ -74,6 +74,7 @@ public final class BrowserCookiePolicyInstrumentedTest {
     assertFalse("Privileged host refuses third-party cookies",hostPolicy[0]);
     String profile=priv?AlphaBrowserPlugin.PRIVATE_PREFIX+token:AlphaBrowserPlugin.PERSISTENT_PROFILE;
     first.set(build(activity,"cookies_a",priv,profile));second.set(build(activity,"cookies_b",priv,profile));
+    if(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_AUTHENTICATION))assertEquals("Passkeys stay disabled in both profiles",WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_NONE,WebSettingsCompat.getWebAuthenticationSupport(first.get().getSettings()));
     assertEquals("Per-tab policy",!priv,WebViewCompat.getProfile(first.get()).getCookieManager().acceptThirdPartyCookies(first.get()));
     assertEquals("Second tab policy",!priv,WebViewCompat.getProfile(second.get()).getCookieManager().acceptThirdPartyCookies(second.get()));
     assertEquals(profile,WebViewCompat.getProfile(first.get()).getName());

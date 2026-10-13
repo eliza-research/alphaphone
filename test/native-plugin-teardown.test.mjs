@@ -243,8 +243,8 @@ test("Capacitor's own permission request, and the shared plugins' requests an ap
   const guardedOverride = (source, method) => new RegExp(`@Override @PluginMethod public void ${method}\\(PluginCall call\\)\\{LateLaunch\\.ask\\(call,\\(\\)->super\\.${method}\\(call\\)\\);\\}`).test(source);
   // Plugin.requestPermissions is a plugin method of every plugin and launches for one that declares permissions.
   const declaring = files.filter(name => /@CapacitorPlugin\([^\n]*\bpermissions\s*=/.test(read(name)));
-  assert.deepEqual(declaring, ["AlphaCalendarPlugin.java", "AlphaHostedResultsPlugin.java", "AlphaVoiceCloudPlugin.java", "DailyAppsPlugin.java"], "the plugins that declare permissions");
-  for (const name of declaring) assert.ok(guardedOverride(read(name), "requestPermissions"), `${name}: requestPermissions is overridden with the guard`);
+  assert.deepEqual(declaring, ["AlphaCalendarPlugin.java", "AlphaContactsPlugin.java", "AlphaHostedResultsPlugin.java", "AlphaSystemPlugin.java", "AlphaVoiceCloudPlugin.java", "DailyAppsPlugin.java"], "the plugins that declare permissions");
+  for (const name of declaring.filter(name=>name!=="AlphaContactsPlugin.java")) assert.ok(guardedOverride(read(name), "requestPermissions"), `${name}: requestPermissions is overridden with the guard`);
 
   // A plugin that extends a shared (vendored) plugin inherits its plugin methods. The shared
   // source is not edited here; the app's subclass overrides each inherited method that launches.
@@ -275,3 +275,20 @@ test("background navigation cannot be started by a call that arrives after its r
   const destroy = maps.slice(maps.indexOf("@Override protected void handleOnDestroy(){"));
   assert.ok(destroy.indexOf("destroyed=true;") > 0 && destroy.indexOf("destroyed=true;") < destroy.indexOf("AlphaNavigationService.activeSession()"), "the flag is set before the active session is read and stopped");
 });
+
+// Kotlin shared plugins are outside the Java scanner above. Inventory every plugin method
+// that directly launches a Capacitor permission/activity request, so new upstream methods
+// cannot silently inherit an unguarded launch through the product wrapper.
+test("shared Kotlin System activity launch methods have guarded product overrides", () => {
+  const source = fs.readFileSync("vendor/eliza/plugins/plugin-native-system/android/src/main/java/ai/eliza/plugins/system/SystemPlugin.kt", "utf8");
+  const inherited = [...source.matchAll(/@PluginMethod\s+(?:open\s+)?fun\s+(\w+)\(call: PluginCall\)\s*\{/g)].filter(match => {
+    const start = match.index + match[0].length - 1; let end = start + 1, depth = 1;
+    for (; depth && end < source.length; end++) { if(source[end] === "{") depth++; else if(source[end] === "}") depth--; }
+    return /(?:requestPermissionForAlias|startActivityForResult)\(/.test(source.slice(start,end));
+  }).map(match=>match[1]).sort();
+  assert.deepEqual(inherited,["requestRole","setFlashlight"]);
+  const wrapper = read("AlphaSystemPlugin.java");
+  for(const method of inherited) assert.ok(wrapper.includes(`@Override @PluginMethod public void ${method}(PluginCall call){LateLaunch.ask(call,()->super.${method}(call));}`),method);
+});
+
+test("Contacts generic permission requests remain image and foreground gated",()=>{const source=read("AlphaContactsPlugin.java");assert.match(source,/public void requestPermissions\(PluginCall call\)\{\s*if\(!foreground\(\)\)/);assert.match(source,/LateLaunch.ask\(call,\(\)->requestPermissionForAlias\("contacts",call,"permissionResult"\)\)/);});

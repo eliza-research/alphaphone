@@ -118,3 +118,28 @@ read cancellation and late account-switch completions with zero provider writes.
 Native encrypted-store execution and physical process-death acceptance for this
 new recovery copy remain separate gates. Large native recovery backups remain
 subject to the reviewed document export size limit.
+
+## Reviewed Files attachments
+
+A supported document selected in Files offers **Use in email**. This opens a
+separate local review naming the selected Gmail account and draft, file name,
+MIME type and byte size. The attachment checkbox starts unchecked; unchecking it
+removes the item from the review. Cancel, Back, Home or backgrounding adds nothing.
+Open Inbox and select an account first; a saved draft must be restored before
+adding to it.
+
+Confirmation rereads the selected capability and verifies its name, type, size
+and SHA-256 against the reviewed copy. Lost access, changed bytes, a changed
+account/draft, duplicate bytes or attachment-policy limits refuse the insertion.
+The copy then uses the existing local draft storage, removal controls and separate
+provider send review. **Save draft locally** preserves the exact attachment bytes
+for restart; later changes to the original file do not replace that saved copy.
+No provider upload or send occurs during this Files review.
+
+This is partial work for #419. It handles one explicitly selected Files item at a
+time, including supported images selected through Files. The assistant's existing
+text suggestion does not implicitly attach its context. Photos-library selections
+remain unavailable here until their native catalog provides a reviewed original-
+byte read bound to its permission and revision; the current display thumbnail is
+not an attachment source. Native selected-grant/process-death and real Gmail
+acceptance remain separate from browser contract tests.
