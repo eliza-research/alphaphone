@@ -73,14 +73,14 @@ for(const scenario of ['two','other-owner','wrong-version','unconfirmed','naviga
      if(method==='status')return {enabled:f.notifications,backgroundEnabled:f.enabled&&f.polling};
      if(method==='setBackgroundPolling'){f.polling=input.enabled;return {backgroundEnabled:f.enabled&&f.polling};}
      if(method==='enable'){f.notifications=true;return {enabled:true};}
-     // The owner-change withdrawal of approval notices: only the connected owner's ID crosses the bridge.
+     // The owner fence includes origin/owner/agent; null suspends notices without deleting them.
      if(method==='withdrawOtherOwnerApprovalNotices'){f.ownerWithdrawals=(f.ownerWithdrawals||[]);f.ownerWithdrawals.push(input);if(w.__ownerWithdrawalFault&&f.ownerWithdrawals.length===1)throw Error('Synthetic withdrawal failure');return {withdrawn:0};}
      return {};
     }
     return {};
    }};
   },'ready');
- // One scenario fails the first owner-change withdrawal, which the next connection change repeats.
+ // One scenario fails the initial suspension; the owner fence must retry before admitting an owner.
  await page.addInitScript(fault=>{(window as any).__ownerWithdrawalFault=fault;},scenario==='reconnect');
 
  await page.goto('/');await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:/Agent connection/}).click();await page.getByRole('button',{name:'Start local agent',exact:true}).click();await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0);
@@ -126,8 +126,8 @@ for(const scenario of ['two','other-owner','wrong-version','unconfirmed','naviga
   await page.evaluate(async()=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');await c.offline();const w=window as any,f=w.deliveryFixture;f.release();f.hold=false;f.owner='next-owner';
    // The toast is transient; record every notice text shown from here on.
    w.__noticeToasts=[];new MutationObserver(()=>{const shown=document.body.innerText.match(/Workflow notification saved\.[^\n]*/)?.[0];if(shown&&!w.__noticeToasts.includes(shown))w.__noticeToasts.push(shown);}).observe(document.body,{subtree:true,childList:true,characterData:true});});
-  // Ending the session alone withdraws nothing: no owner is connected to compare against.
-  expect(await page.evaluate(()=>(window as any).deliveryFixture.ownerWithdrawals)).toEqual([{ownerId:'fixture-owner'}]);
+  // Ending the session suspends owner-bound notices before another owner can connect.
+  expect(await page.evaluate(()=>(window as any).deliveryFixture.ownerWithdrawals)).toEqual([{owner:null},{owner:{origin:'https://device.alpha.invalid',ownerId:'fixture-owner',agentId:'fixture-agent'}},{owner:null}]);
   await page.getByRole('button',{name:/Agent connection/}).click();await page.getByRole('button',{name:'Start local agent',exact:true}).click();await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0);
   expect(await page.evaluate(async()=>(await import('/src/runtime/connection-ui.tsx')).connectionController.getSnapshot().session?.ownerId)).toBe('next-owner');
   // The first owner's retained tap never opens under the next owner, and nothing is consumed.
@@ -144,9 +144,13 @@ for(const scenario of ['two','other-owner','wrong-version','unconfirmed','naviga
   expect(await page.evaluate(()=>(window as any).deliveryFixture.taps.length)).toBe(2);
   expect(await page.evaluate(()=>(window as any).deliveryFixture.consumed?.length||0)).toBe(0);
  }
- // Connecting an owner withdraws the approval notices posted for any other owner, once per owner: the
- // native ledger is asked with exactly the connected owner's ID, and a failed request is repeated.
- await expect.poll(()=>page.evaluate(()=>(window as any).deliveryFixture.ownerWithdrawals||[])).toEqual(scenario==='reconnect'?[{ownerId:'fixture-owner'},{ownerId:'fixture-owner'}]:scenario==='owner-change'?[{ownerId:'fixture-owner'},{ownerId:'next-owner'}]:[{ownerId:'fixture-owner'}]);
+ // Startup and disconnect explicitly suspend notices. Connected transitions carry the complete
+ // authenticated owner binding; the failed startup suspension is retried before owner admission.
+ const bound=(ownerId:string)=>({owner:{origin:'https://device.alpha.invalid',ownerId,agentId:'fixture-agent'}});
+ const expected=[{owner:null},...(scenario==='reconnect'?[{owner:null}]:[]),bound('fixture-owner'),
+  ...(['owner-race','reconnect','owner-change'].includes(scenario)?[{owner:null}]:[]),
+  ...(scenario==='reconnect'?[bound('fixture-owner')]:scenario==='owner-change'?[bound('next-owner')]:[])];
+ await expect.poll(()=>page.evaluate(()=>(window as any).deliveryFixture.ownerWithdrawals||[])).toEqual(expected);
  expect(errors).toEqual([]);
  });
 }
