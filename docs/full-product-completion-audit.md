@@ -54,6 +54,14 @@ current-source release image remain unverified. These APKs omit the resident
 payload and are not distributable. Campaign details below preserve failures,
 skips, exact APK hashes and superseded evidence.
 
+**Production speech routing gap:** `apps/app/src/runtime/voice-selection.ts`
+currently returns Cloud for production; device/manual choices are test-mocks only.
+`voice-adapter.ts` also selects Cloud directly for chat destinations. Native audio
+and isolated local speech test passes do not qualify the production entrypoints.
+Reconcile Notes/dictation and ongoing assistant routing with the approved local-only,
+signed-out/offline contract, retaining explicit microphone start, cancellation,
+transcript review for dictation and separate approval for external actions.
+
 The requested architecture is an **Android-resident Eliza agent with Cerebras
 inference through Eliza Cloud**, packaged both as a standalone Android application
 and in a full AOSP image. A remotely hosted agent, a host-forwarded development
@@ -2181,3 +2189,42 @@ Validation: `npm run verify` passed 818 tests, zero failures and four TODOs,
 including the production bundle audit. Only runner admission, its regression test
 and audit documentation changed; installed tests reuse the already-built and
 hash-admitted standalone/launcher APKs. Release prerequisites remain unresolved.
+
+
+## October 12: saved voice-note lifecycle and production routing failures
+
+NoteAudio now runs only on explicitly owned guests in disposable secondary users,
+with fresh storage per method, pre-start microphone grant and the explicit
+`audioFence=true` fixture gate. The current developer APKs were reused unchanged.
+Both variants execute all seven methods: five pass and two fail, with no skips.
+
+Passing native boundaries include actual local microphone capture retained after
+recording-draft revocation; visible saved-recording playback start and stop on
+leaving; saved audio/transcript across Activity recreation and owned undo; expired
+deletion refusing restore/play; purge refusing a foreign operation/wrong note or
+live asset, then erasing owned audio/transcript idempotently; and retired deletion
+operations refusing to re-delete restored audio after reload. Synthetic WAVs and
+manually supplied transcript text are clearly separate from ASR. Native MediaPlayer
+start is not physical audible-output acceptance.
+
+The offline Notes UI and selected-text dictation methods both fail waiting for
+Record without transcription, before their capture/transcript/cursor assertions.
+Source inspection confirms production `selectVoiceRoute()` returns Cloud while
+only test-mocks may explicitly select device/manual; chat destinations directly
+select Cloud in the adapter. The legacy manual-path tests are retained as failed
+observations, not rewritten into development-only passes. They do not establish
+that the approved local-transcription UI exists or that cursor insertion works.
+The missing production local route must be implemented and its actual updated UI
+qualified, including signed-out operation, permission denial/revoke, cancellation,
+no speech egress, and distinct dictation versus ongoing conversation behavior.
+
+Raw per-method logs, APK hashes and boot metadata are retained under
+`test-results/full-product-audit/cuttlefish-note-audio157/results.json`.
+Users 14 and 15 were removed and the owner restored. Exact fixture cleanup is
+backstopped by removal of those disposable users. No real account or provider
+request was used; current-source release and physical speech remain unqualified.
+
+Validation: full source verification passed 819 tests, zero failures and four TODOs,
+including the production bundle audit. These source checks do not override the
+four installed UI failures across the two variants. Native APK bytes were unchanged
+and reused from the previously built, hash-verified two-variant archive.

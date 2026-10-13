@@ -150,6 +150,7 @@ export const CLASS_REGISTRY = {
   BrowserShare: { args: { browserShareLive: "1" }, note: "opens a public HTTPS page and Android's chooser; the emulator needs network" },
   BrowserUnsupportedReading: { args: { browserUnsupportedReading: "1" }, requiresTestMocksBuild: true, note: "the negative flow: needs a WebView provider WITHOUT isolated-world injection" },
   LargeInboxAttachment: { args: { largeInboxAttachmentNative: "1" } },
+  NoteAudio: { secondaryUser: true, independentMethods: true, args: { audioFence: "true" }, grant: ["RECORD_AUDIO"], note: "synthetic owned voice assets and real local capture; native playback/recreation, manual transcript and cursor insertion, deletion ownership/expiry/purge/late-callback fencing; no Cloud request or ASR accuracy acceptance" },
   NoteAudioMetadataEncrypted: { args: { notesAudioEncryption: "1" } },
   NotesSecureStorage: { args: { notesSecureStorage: "1" }, note: "the fresh-install migration method (notesSecureMigration=1) has no campaign and is skipped" },
   PdfViewer: { args: { isolatedPdfNative: "1" } },
