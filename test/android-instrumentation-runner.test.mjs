@@ -138,6 +138,8 @@ const testClasses = () => new Map(ROOTS.flatMap(javaFiles).filter(file => /^\s*@
   .map(file => [path.basename(file, ".java"), file]));
 const registryName = cls => cls.replace(/InstrumentedTest$/, "");
 const gateRead = (source, gate, value) => {
+  // Java imports and the exact fully qualified registry name call the same API.
+  source = source.replaceAll("androidx.test.platform.app.InstrumentationRegistry", "InstrumentationRegistry");
   if (source.includes(`"${value}".equals(InstrumentationRegistry.getArguments().getString("${gate}")`)) return true;
   // Some destructive-fixture gates deliberately assert instead of assumption-skipping.
   const assertions = [...source.matchAll(/assertEquals\(\s*(?:"[^"\n]*"\s*,\s*)?"([^"\n]*)"\s*,\s*InstrumentationRegistry\.getArguments\(\)\.getString\("([^"\n]*)"\)/g)];

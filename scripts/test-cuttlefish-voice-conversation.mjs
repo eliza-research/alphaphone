@@ -26,6 +26,7 @@ if(!isMainThread){
   const config=JSON.parse(execFileSync('docker',['exec',extra.container,'cat','/root/cuttlefish_assembly/cuttlefish_config.json'],{encoding:'utf8'}));
   const instance=Object.values(config.instances).find(v=>v.webrtc_device_id===extra.device&&String(v.adb_host_port)===port),adb=adbFor(options.serial);
   if(!instance||adb(['shell','getprop','ro.serialno']).trim()!==instance.serial_number||adb(['shell','getprop','ro.build.fingerprint']).trim()!==options.imageFingerprint)throw Error('Guest identities differ');
+  const guestAudioProperties=Object.fromEntries(['period_count','period_size_multiplier','host_latency_ms'].map(key=>[key,adb(['shell','su','0','getprop','ro.hardware.audio.tinyalsa.'+key]).trim()]));
   const ip=Object.values(inspect.NetworkSettings.Networks)[0]?.IPAddress;if(!/^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(ip||''))throw Error('Expected isolated Docker bridge');
   try{await fs.access(options.output);throw Error('Output already exists');}catch(error){if(error.code!=='ENOENT')throw error;}
   const original=await fs.readFile(path.resolve('android/app/src/androidTest/assets/speech-fixture/0.wav')),fixtureSha256=createHash('sha256').update(original).digest('hex');
@@ -45,7 +46,7 @@ if(!isMainThread){
   const worker=new Worker(new URL(import.meta.url),{workerData:{options,lease:{path:lease.path,lease:lease.lease}}});
   workerOutcome=await new Promise((resolve,reject)=>{let message;worker.on('message',value=>{message=value;});worker.on('error',reject);worker.on('exit',code=>code===0&&message?resolve(message):reject(Error('Instrumentation worker exited '+code)));});
   log.kill();await chain;await browser.close();browser=undefined;
-  const result={kind:nativeCapture?'controlled-virtual-native-capture':'controlled-virtual-voice-conversation',physicalMicrophone:false,realInference:false,capturePolling,preparedSpeech,pcmCapture,containerId:inspect.Id,device:extra.device,browserClosed:true,events,...(feederError?{feederError}:{}),...workerOutcome};
+  const result={kind:nativeCapture?'controlled-virtual-native-capture':'controlled-virtual-voice-conversation',physicalMicrophone:false,realInference:false,capturePolling,preparedSpeech,pcmCapture,guestAudioProperties,containerId:inspect.Id,device:extra.device,browserClosed:true,events,...(feederError?{feederError}:{}),...workerOutcome};
   result.passed=!feederError&&workerOutcome.result?.passed===true&&events.length===options.variants.length&&events.every(e=>e.inputStoppedAt);
   // Admission may reject before the worker creates its evidence directory.
   // Preserve that original failure rather than replacing it with ENOENT.
