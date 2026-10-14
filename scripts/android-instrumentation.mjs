@@ -716,7 +716,15 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
     }
    }
   }
-  assertSameWebView(webView,readWebViewEvidence(adb));
+  try { assertSameWebView(webView,readWebViewEvidence(adb)); }
+  catch (error) {
+    // A framework/provider failure must not erase the completed class and cleanup evidence.
+    fs.writeFileSync(path.join(output, "post-run-provider-error.json"), JSON.stringify({
+      passed: false, kind: "post-run-provider-failure", error: String(error.message || error),
+      webView, classes, secondaryUsers, ...(home ? { homeRestoration: home.restoration } : {}),
+    }, null, 2) + "\n");
+    throw error;
+  }
   const result = writeInstrumentationRecord(path.join(output, "results.json"), {
     runId, createdAt: new Date().toISOString(), commit, dirty, testMocks: options.testMocks, emulator, webView,
     apks: apks.map(({ file, ...apk }) => ({ ...apk, file: path.relative(process.cwd(), path.resolve(file)) })),

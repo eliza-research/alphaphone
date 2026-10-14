@@ -305,7 +305,8 @@ async function homeRun(mode, extra = []) {
     let result, error;
     try { result = await runLeased({ options, serial: "emulator-5554", adb: emulator.adb, timing }); } catch (failure) { error = failure; }
     const recovery = path.join(dir, "out/home-role-recovery.json");
-    return { result, error, ...emulator, recovery: fs.existsSync(recovery) ? JSON.parse(fs.readFileSync(recovery, "utf8")) : null };
+    const providerFailure = path.join(dir, "out/post-run-provider-error.json");
+    return { result, error, ...emulator, providerFailure: fs.existsSync(providerFailure) ? JSON.parse(fs.readFileSync(providerFailure, "utf8")) : null, recovery: fs.existsSync(recovery) ? JSON.parse(fs.readFileSync(recovery, "utf8")) : null };
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 const stepsOf = commands => commands.flatMap(command => {
@@ -531,6 +532,12 @@ test("provider identity is admitted before mutation and rechecked after cleanup"
  const changed=await homeRun("provider-changing");
  assert.match(changed.error.message,/WebView provider changed/);
  assert.equal(changed.result,undefined);
+ assert.equal(changed.providerFailure.passed,false);
+ assert.equal(changed.providerFailure.kind,"post-run-provider-failure");
+ assert.match(changed.providerFailure.error,/WebView provider changed/);
+ assert.ok(changed.providerFailure.classes.length>0,"Preserve class evidence even though the campaign is invalid");
+ assert.equal(changed.providerFailure.homeRestoration.restored,true);
+ assert.equal(unknown.providerFailure,null,"Pre-admission failure has no completed evidence");
  assert.equal(changed.state.installed.size,0,"Owned APKs cleaned before post-run provider failure");
 });
 
