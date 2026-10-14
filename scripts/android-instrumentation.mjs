@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {collectConversationAudio} from './conversation-audio-artifacts.mjs';
 import {collectClockArtifacts} from './clock-artifacts.mjs';
 import {readWebViewEvidence,assertSameWebView} from './webview-evidence.mjs';
 import {OfflineNetworkFixture} from './offline-network-fixture.mjs';
@@ -622,6 +623,9 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
             const row = instrumentationClassResults(raw, [cls]).results.find(entry => entry.class === cls);
             if(short(cls)==="RealClock"&&(row.status==="passed"||raw.includes("INSTRUMENTATION_RESULT: realClockFixture="))){
               try{collectClockArtifacts(raw,dir,adb);}catch(error){row.status="failed";row.failed.push("artifact-collection");fs.writeFileSync(path.join(dir,"real-clock-artifact-error.txt"),error.message+"\n");}
+            }
+            if(short(cls)==="LocalConversationUtterance"&&(row.status==="passed"||raw.includes("INSTRUMENTATION_RESULT: conversationAudioFixture="))){
+              try{collectConversationAudio(raw,dir,adb,user);}catch(error){row.status="failed";row.failed.push("audio-artifact-collection");fs.writeFileSync(path.join(dir,"conversation-audio-error.txt"),error.message+"\n");}
             }
             merged = { started: merged.started + row.started, passed: merged.passed + row.passed,
               failed: [...merged.failed, ...row.failed], ignored: [...merged.ignored, ...row.ignored],
