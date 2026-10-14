@@ -2911,3 +2911,44 @@ readback campaign also removed users 44–45. Full
 `verify-native-capture-readback-fixed.log` passes 1,056 tests with zero failures,
 four TODOs, and the 397-file production bundle audit. Strict release/AOSP/physical
 and real service acceptance gates remain open.
+
+## Timestamped capture failures and prepared-engine comparison
+
+`407786ec8` records guest epoch timestamps and capture markers with audio warnings,
+and adds a control that prepares the real local speech engine before fixed capture
+with metrics polling. No production threshold, source fixture, or shared vendor
+code changes. The 29 focused automation tests pass and both developer distributions
+build in `developer-apks-prepared-capture` with the same qualification limits.
+
+The alternating no-polling repeat (`cuttlefish-native-capture-readback-repeat`)
+recognizes the complete sentence on both variants. During each supplied sentence,
+its timestamped log has periodic silence-insertion warnings but no ALSA read errors.
+This further contradicts attributing the earlier truncation simply to polling.
+The following actual UI campaign (`cuttlefish-conversation-timestamped`) again
+fails full-utterance acceptance: standalone stops at 2,755 ms with “after early
+night fall.”; launcher records fragments and its final observed stop is 3,235 ms.
+ALSA read errors begin at approximately 1,992 and 2,670 ms after the corresponding
+capture markers, preceding automatic endpointing. The per-window warning evidence
+is retained in `capture-window-warnings.json`; counts alone cannot identify cause.
+
+`cuttlefish-prepared-native-capture` completes fixed capture, 170 metrics reads,
+one local-ASR readback and cancellation in each variant, without any conversation
+rendering or automatic endpoint decisions. Content still fails: standalone loses
+the final phrase; launcher recognizes phrases in the wrong order. Exact PCM lasts
+8.384/8.512 seconds and has long low-peak tails starting around 4.6/4.5 seconds.
+ALSA read failures start at 4,517/4,307 ms and recur through the remaining recording
+window. Thus preloading the speech engine does not prevent the capture-path failure,
+and failure occurs without conversation rendering or endpoint detection. This
+comparison does not yet establish that preloading causes the guest audio failure;
+a fresh or differently provisioned owned guest and repeat controls are needed.
+The source of the ALSA read error remains unresolved. A single guest CPU snapshot
+showed substantial idle time and is insufficient to establish or exclude transient
+resource pressure. No production tuning is justified by this evidence yet.
+
+All three campaigns collected exact input receipts and removed their disposable
+users. These are historical-image, developer-APK diagnostics with synthetic Cloud
+identity/agent transport, not release, real inference, physical microphone,
+barge-in or P-11 latency acceptance.
+
+`verify-prepared-capture.log` passes 1,056 tests, zero failures, four TODOs and
+the 397-file production bundle audit at the prepared-control implementation.
