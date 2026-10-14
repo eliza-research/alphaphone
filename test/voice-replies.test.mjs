@@ -59,7 +59,7 @@ test('Speak replies is off by default: a voice-originated reply is timed but not
   assert.deepEqual(Object.keys(f.row().marks), ['recording-end', 'transcript-ready', 'send', 'first-token', 'final-reply']);
 });
 
-test('with Speak replies on, the final reply plays once on the selected Cloud route and records first audio', async () => {
+test('with Speak replies on, the final reply plays once on the production local route and records first audio', async () => {
   const f = fixture();
   assert.equal(f.box.setSpeakReplies(true), true);
   const text = f.voiceTurn();
@@ -68,7 +68,7 @@ test('with Speak replies on, the final reply plays once on the selected Cloud ro
   await tick(); assert.equal(f.spoken.length, 0, 'a streaming reply is not spoken');
   f.replace('a1', {text: 'You have two events today.', streaming: false});
   await tick(); await tick();
-  assert.deepEqual(f.spoken, [{text: 'You have two events today.', execution: 'cloud'}]);
+  assert.deepEqual(f.spoken, [{text: 'You have two events today.', execution: 'device'}]);
   assert.ok(f.row().marks['first-audio'] >= f.row().marks['final-reply']);
   // Later updates never replay it.
   f.say({id: 'a2', from: 'agent', text: 'Approve: something', card: {}});

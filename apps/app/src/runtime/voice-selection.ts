@@ -2,9 +2,10 @@ import { testMocksEnabled } from '../build-flags';
 import { browserDevProfile } from '../browser/dev-profile';
 import { connectionController } from './connection-ui';
 
-/** Production currently preserves main's Cloud speech policy. Local/manual requests are
- * test-only. Legacy preference storage remains readable for migration, but does not
- * select the production route. This legacy Cloud route must migrate to the mandatory local speech policy P-13/P-29; ongoing chat auto-send is approved by P-39. */
+/** Production speech uses the on-device route (P-13/P-29). An explicit manual
+ * recording remains available without speech models or an account. Legacy Cloud
+ * preferences are retained for migration but cannot select production speech.
+ * Ongoing conversation has a separate adapter and must obey the same policy. */
 // Plain constants and function exports only: Node contract tests evaluate this source directly.
 const voiceRouteKey = 'alphaphone:voice-route:v1';
 const speakRepliesKey = 'alphaphone:speak-replies:v1';
@@ -27,7 +28,7 @@ const record = (value: unknown): Record<string, unknown> | null => value && type
 
 /** The persisted route. Anything but a complete, disclosed Cloud record reads as on-device. */
 export function voiceRoutePreference(): VoiceRouteChoice {
-  if (!testMocksEnabled) return 'cloud';
+  if (!testMocksEnabled) return 'device';
   const value = record(read(voiceRouteKey));
   return value && value.version === 1 && value.route === 'cloud' && value.disclosed === 'cloud-speech-uses-credits' && Number.isFinite(value.chosenAt) ? 'cloud' : 'device';
 }
@@ -37,6 +38,7 @@ export function voiceRoutePreference(): VoiceRouteChoice {
  * route then stays on-device.
  */
 export function chooseVoiceRoute(route: VoiceRouteChoice, disclosure?: { disclosed: 'cloud-speech-uses-credits' }): boolean {
+  if (!testMocksEnabled && route === 'cloud') return false;
   if (route === 'cloud' && disclosure?.disclosed !== 'cloud-speech-uses-credits') return false;
   return write(voiceRouteKey, route === 'cloud' ? { version: 1, route, disclosed: disclosure!.disclosed, chosenAt: Date.now() } : { version: 1, route: 'device', chosenAt: Date.now() });
 }
@@ -52,8 +54,9 @@ export function cloudVoiceAvailable(): boolean {
   return !browserDevProfile && connectionController.getCloudEnvironment() !== null && connectionController.getCloudClient() !== null;
 }
 
-/** Explicit local/manual routes are available only in test-mocks builds. */
+/** Production never falls back to a network speech provider. Manual recording is explicit. */
 export function selectVoiceRoute(preference: 'default' | 'device' | 'agent' | 'manual' = 'default'): 'device' | 'cloud' | 'agent' | 'manual' {
-  if (testMocksEnabled && (preference === 'device' || preference === 'manual')) return preference;
+  if (preference === 'manual') return 'manual';
+  if (!testMocksEnabled || preference === 'device') return 'device';
   return 'cloud';
 }
