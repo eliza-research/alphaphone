@@ -120,7 +120,7 @@ provider response never counts as a real feature pass.
 | Resident preparation toolchain | Host Bun 1.3.14 failed the Cloud package import; the declared Bun 1.4.2 completed all 78 tasks and source verification | Use the declared Bun version (`mise exec bun@1.4.2 -- npm run agent:prepare`). No upstream defect or patch is required by this evidence. |
 | Current packaged resident runtime | Cloud-aware native bridge, staging and workflow-worker chain exist | Qualified embedding host libraries, complete current-pin payload, ABI/library/model hashes, real native process/IPC startup, shutdown/restart and owner isolation. Latest hosted foundation APKs omit the runtime. MVP-08/21/39 |
 | Real Eliza Cloud login and Cerebras route | Production Welcome, subscription entitlements and native provider binding exist | Normal browser login/return, one-use exchange, active subscription entitlement, actual model response through Cloud, serving provider/usage evidence, expiry/revoke/wrong owner/quota exhaustion/replacement during requests; qualify the newly merged P-25 cached subscription authorization without a per-turn billing hop. Do not substitute direct-key inference. MVP-34/37 |
-| Voice in both directions | Production selector uses local speech for Notes/dictation and message read-aloud; Maps guidance, workflow speech and reviewed agent speech now use the local adapter; ongoing conversation still calls Cloud directly | Ongoing chat auto-send after explicit start is owner-approved. Migrate every production speech entrypoint to local native STT/TTS (P-13/P-29/P-39), then qualify exact runtime on both ABIs; real mic/speaker/Bluetooth/audio focus/echo/Stop/background tests. Historical ARM64 local speech acceptance failed; the current x86_64 candidate passes both offline canonical tests, but the combined runtime remains unqualified until ARM64 acceptance. MVP-01/23/24 |
+| Voice in both directions | Production selector uses local speech for Notes/dictation and message read-aloud; Maps guidance, workflow speech and reviewed agent speech now use the local adapter; ongoing conversation now uses a local speech port; installed continuous conversation and barge-in acceptance remain open | Ongoing chat auto-send after explicit start is owner-approved. Migrate every production speech entrypoint to local native STT/TTS (P-13/P-29/P-39), then qualify exact runtime on both ABIs; real mic/speaker/Bluetooth/audio focus/echo/Stop/background tests. Historical ARM64 local speech acceptance failed; the current x86_64 candidate passes both offline canonical tests, but the combined runtime remains unqualified until ARM64 acceptance. MVP-01/23/24 |
 | Latency | No current device acceptance sample | Cold/warm startup, end-of-speech→first audio, STT, inference TTFT/tokens/sec, TTS first audio, total completion, action/readback, p50/p95 with sample counts, route/model/network and errors. Use P-11: last input speech sample to first audible response, including endpointing and buffering, at least 50 simple-query trials and cold/warm p50/p95. Legacy recording-end helpers do not establish this boundary. MVP-05 |
 | Gmail | Current source has substantially complete provider UI/contracts | Deployed Google token exchange previously returned 401; verify/fix the actual operator configuration, authorize test mailbox, read/draft/attachment/send/revoke and ambiguous outcomes. Exact recipient/content authorization is needed for a real send. MVP-35/36 |
 | Maps | Regional provider integration exists | Select and deploy a production HTTPS gateway/data coverage/license/update path; production currently has no configured route provider. Real GPS, reroute, offline and voice guidance. MVP-31 |
@@ -2448,3 +2448,28 @@ Validation at source `d1d3e1aed`:
   `offline-network.json` confirms offline observation and restored network state.
   These receipts do not qualify ARM64, a current-source full image, physical audio,
   resident agent execution, real login/Cerebras or P-11 latency.
+
+## October 13 ongoing conversation local speech migration
+
+Explicit Start voice conversation now selects the local recorder/transcription
+port and local reply playback. The native recorder receives a 29-second cap to
+fit the current local decoder. Pausing after speech still automatically sends the
+transcript through the existing owner-bound agent turn, and the matching reply
+plays before capture resumes. Missing local models stop the operation; there is no
+production conversation speech fallback to Cloud. The explicit Cartesia development
+branch remains separately gated. Text inference remains the resident agent's service
+responsibility; local speech alone does not establish resident/Cloud connectivity.
+
+Six tests in `test/local-conversation-flow.test.mjs` load the actual renderer and
+authenticated prepared batch-conversation engine with synthetic microphone, local
+ASR/TTS and agent ports. They prove automatic turn submission/local reply routing
+without a Cloud speech account, missing-model refusal, cancellation and owner change
+during transcription, invalid recording-metrics refusal, and waiting for speaker
+cleanup before the next capture. They do not prove microphone quality, installed
+continuous voice, actual agent inference, network egress or physical audio timing.
+
+The current batch engine deliberately keeps the microphone off during playback.
+True barge-in, semantic turn completion and the required P-11 measured latency
+acceptance remain incomplete. Its existing post-playback rearm delay is retained;
+no latency improvement is claimed from synthetic timer tests. The earlier entries
+listing a direct Cloud conversation speech route are historical.

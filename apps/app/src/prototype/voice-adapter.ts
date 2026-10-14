@@ -1,3 +1,4 @@
+import {createLocalConversationVoice} from '../runtime/local-conversation-voice';
 import {developmentCartesiaConversation,developmentCartesiaVoiceEnabled} from '../runtime/development-cartesia-conversation';
 import {BatchVoiceConversation,type BatchVoiceState} from '@elizaos/ui/voice/batch-conversation';
 import {recordingRevision} from './summary-source';
@@ -166,7 +167,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     if(publish){if(chatShell)chatShell.setState({});else refresh();}
   }
   function enter(target?: DictationTarget, preparedLocal?: ReturnType<typeof createOnDeviceVoice>, preference: 'default' | 'device' | 'agent' | 'manual' = 'default', chat?:ChatDestination) {
-    const selected = chat ? 'cloud' : selectVoiceRoute(preference), route = selected === 'cloud' ? 'agent' : selected;
+    const selected = chat ? 'device' : selectVoiceRoute(preference), route = selected === 'cloud' ? 'agent' : selected;
     const previousChat=chatDestination;
     stopLocalSpeechPlayback(); cleanup(true,!chat); chatDestination=chat;reprepare = false; destination = target; saveId = target?.id || crypto.randomUUID(); stage = 'ready'; error = ''; failure = ''; recognized = undefined; draft = ''; selectedRoute = route;
     if(previousChat&&!chat)previousChat.shell.setState({chat:previousChat.chat});
@@ -179,7 +180,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     if (route === 'manual') { cloudMode = false; deviceOnly = true; driver = deviceVoice; }
     if (route === 'device') { cloudMode = false; deviceOnly = true; driver = deviceVoice; if (!onDeviceVoice) error = 'On-device speech is unavailable. Choose another voice service explicitly or use the keyboard.'; }
     if (preparedLocal) { onDeviceReady = true; cloudMode = false; deviceOnly = true; driver = deviceVoice; }
-    else if (onDeviceVoice) {
+    else if (onDeviceVoice && !chat) {
       preparingLocal = true;
       const local = onDeviceVoice, token = generation, controller = new AbortController(); readiness = controller;
       void stopping.then(() => {
@@ -404,7 +405,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
       return original.apply(this,args);
     };
   }
-  async function captureConversationAudio(selected:ReturnType<typeof createCloudVoice>,current:()=>void,input:{signal:AbortSignal;onActivity:(value:{peak:number;rms?:number})=>void;onEnd:(error?:unknown)=>void}){
+  async function captureConversationAudio(selected:ReturnType<typeof createLocalConversationVoice>,current:()=>void,input:{signal:AbortSignal;onActivity:(value:{peak:number;rms?:number})=>void;onEnd:(error?:unknown)=>void}){
     let active=true,recording=false,id:string|undefined,ended:Clip|undefined,problem:unknown,endId:string|undefined,handle:PluginListenerHandle|undefined,poll:ReturnType<typeof setTimeout>|undefined,cancelling:Promise<void>|undefined;
     const check=()=>{input.signal.throwIfAborted();current();};
     const detach=async()=>{if(poll)clearTimeout(poll);poll=undefined;if(handle){const previous=handle;handle=undefined;await previous.remove();}};
@@ -448,16 +449,15 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         const direct=await developmentCartesiaConversation({binding:prepared.binding,assertCurrent:current,onState:phase=>{if(token!==generation)return;conversationState={phase:phase==='connecting'?'starting':['listening','thinking','speaking'].includes(phase)?phase as 'listening'|'thinking'|'speaking':'idle'};refresh();},onPlaybackUnlockChange:()=>{if(token===generation)refresh();},onTranscript:text=>{if(token===generation){conversationLastTranscript=text;refresh();}},onError:failure=>{if(token===generation){error=failure.message;conversationState={phase:'error',error:failure};refresh();}}});
         current();conversationVoice=direct;await direct.start();current();return;
       }
-      const selected=createCloudVoice();driver=selected;cloudMode=true;
+      const selected=createLocalConversationVoice(current);driver=deviceVoice;cloudMode=false;deviceOnly=true;
+      await selected.ready(controller.signal);current();
       const conversation:BatchVoiceConversation<Clip>=new BatchVoiceConversation<Clip>({
         conversationId:prepared.binding.conversationId,assertCurrent:current,
         capture:input=>{current();conversationPrepared={...conversationPrepared!,context:chat.shell.voiceConversationContext(prepared.binding)};current();return captureConversationAudio(selected,current,input);},
         transcribe:async(value,signal)=>{
-          signal.throwIfAborted();current();const request=crypto.randomUUID();requestId=request;
-          let interrupt!:(error:unknown)=>void;const cancelled=new Promise<never>((_,reject)=>interrupt=reject);
-          const abort=()=>{void selected.cancel({requestId:request}).catch(()=>{});interrupt(signal.reason??new DOMException('Transcription cancelled','AbortError'));};signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();
-          try{current();const result=await Promise.race([selected.transcribeRecording({recordingId:value.recordingId,requestId:request}),cancelled]);signal.throwIfAborted();current();conversationLastTranscript=result.text;return result.text;}
-          finally{signal.removeEventListener('abort',abort);if(requestId===request)requestId=undefined;}
+          signal.throwIfAborted();current();
+          const result=await selected.transcribe(value.recordingId,signal);
+          signal.throwIfAborted();current();conversationLastTranscript=result.text;return result.text;
         },
         send:async input=>{input.signal.throwIfAborted();current();const turn={...conversationPrepared!};const result=await chat.shell.sendVoiceTurn({...input,...turn,assertCurrent:current,navigation:navigationContinuation(chat,token,input.turnId)});input.signal.throwIfAborted();current();conversationLastReply=result.text;conversationReviewRequired=result.reviewRequired===true&&!result.awaitingUserInput;return result;},
         speak:async input=>{input.signal.throwIfAborted();current();const pending=selected.speak(input.text,input.signal,()=>{current();input.onStarted();});conversationSpeech=pending;try{await pending;input.signal.throwIfAborted();current();}catch(failure){if((failure as {code?:string})?.code==='speech-cleanup-unconfirmed'){mediaUnconfirmed=failure;stopping=Promise.reject(failure);void stopping.catch(()=>{});}throw failure;}finally{if(conversationSpeech===pending)conversationSpeech=undefined;}},
@@ -495,7 +495,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
   function conversationRecorderView(icons:Bag){
     const token=generation,chat=chatDestination,owned=()=>token===generation&&chatDestination===chat&&chatCurrent();
     const phase=conversationState.phase,live=phase==='listening',seconds=live?(Date.now()-started)/1000:(clip?.durationMs||0)/1000;
-    const messages:Record<string,string>={idle:'Voice conversation stopped.',starting:'Starting voice conversation…',listening:developmentCartesiaVoiceEnabled?'Listening · Cartesia development. Replies use the local agent’s direct Cerebras provider.':'Listening. Pause when finished. Speech is transcribed with Eliza Cloud and sent to this conversation; matching replies play aloud.',transcribing:'Transcribing your speech with Eliza Cloud…',thinking:'Waiting for your agent’s reply…','awaiting-user-input':'Microphone off. Review the Notes request in this conversation. Only the note you explicitly share can be used for the answer.','preparing-speech':'Preparing the matching reply with Eliza Cloud…',speaking:'Alpha is speaking. The microphone is off.',error:error||'Voice stopped. Check history before starting again.'};
+    const messages:Record<string,string>={idle:'Voice conversation stopped.',starting:'Starting voice conversation…',listening:developmentCartesiaVoiceEnabled?'Listening · Cartesia development. Replies use the local agent’s direct Cerebras provider.':'Listening. Pause when finished. Speech is transcribed on this device and sent to this conversation; matching replies play aloud locally.',transcribing:'Transcribing your speech on this device…',thinking:'Waiting for your agent’s reply…','awaiting-user-input':'Microphone off. Review the Notes request in this conversation. Only the note you explicitly share can be used for the answer.','preparing-speech':'Preparing the matching reply on this device…',speaking:'Alpha is speaking. The microphone is off.',error:error||'Voice stopped. Check history before starting again.'};
     const primary=()=>{if(!owned())return;if(mediaUnconfirmed){cancelChat();return;}if(cloudConnectRequired){cleanup();connectionController.openCloudAccount();}else if(!connectionController.getSnapshot().session){cleanup();connectionController.open();}else if(phase==='error'&&!conversationReviewRequired)void beginConversation();else cancelChat();};
     const awaiting=phase==='awaiting-user-input'||conversationReviewRequired;
     const direct=developmentCartesiaVoiceEnabled&&conversationVoice&&'setMicrophoneMuted' in conversationVoice?conversationVoice:undefined;
