@@ -25,8 +25,9 @@ APKs; the new policy does not turn old Cloud-speech tests into local-speech acce
 AOSP image capability admission and Contacts catalog, a separate AOSP listener,
 subscription entitlements, scoped Calendar deletion/Undo and Android's system shade.
 These replace earlier source-absence findings; they do not supply installed-device
-or release acceptance. Phone/SMS adapters remain gated, and the production voice
-selector still forces Cloud despite the approved local-only requirement.
+or release acceptance. Phone/SMS adapters remain gated, and ongoing conversation still hardcodes Cloud despite the approved local-only
+requirement. The shared production selector now uses device speech; see the latest
+local-selection receipts below.
 The audit's native playback helper now waits for confirmed cancel/stop completion;
 five focused tests pass, but installed renderer acceptance is still pending.
 
@@ -66,13 +67,17 @@ current-source release image remain unverified. These APKs omit the resident
 payload and are not distributable. Campaign details below preserve failures,
 skips, exact APK hashes and superseded evidence.
 
-**Production speech routing gap:** `apps/app/src/runtime/voice-selection.ts`
-currently returns Cloud for production; device/manual choices are test-mocks only.
-`voice-adapter.ts` also selects Cloud directly for chat destinations. Native audio
-and isolated local speech test passes do not qualify the production entrypoints.
-Reconcile Notes/dictation and ongoing assistant routing with the approved local-only,
-signed-out/offline contract, retaining explicit microphone start, cancellation,
-transcript review for dictation and separate approval for external actions.
+**Production speech migration is partial:** `apps/app/src/runtime/voice-selection.ts`
+now selects device speech in production regardless of account or legacy Cloud
+preferences, with explicit manual recording retained. Notes dictation/transcription
+and message read-aloud consumers use that selector. Actual Notes Read aloud/Stop
+passes on both x86_64 developer variants with guest networking disabled.
+`voice-adapter.ts` still hardcodes Cloud for ongoing conversation, while
+`maps/navigation-voice.ts`, `browser/workflow-speech.ts` and the reviewed speech
+executor in `prototype/agent-adapter.ts` still call Cloud speech directly. Migrate
+these remaining paths without losing explicit start, automatic conversation turns,
+interruption, ownership, review and cleanup. No current result qualifies complete
+production local voice, ARM64, physical audio or P-11 latency.
 
 The requested architecture is an **Android-resident Eliza agent with Cerebras
 inference through Eliza Cloud**, packaged both as a standalone Android application
@@ -115,7 +120,7 @@ provider response never counts as a real feature pass.
 | Resident preparation toolchain | Host Bun 1.3.14 failed the Cloud package import; the declared Bun 1.4.2 completed all 78 tasks and source verification | Use the declared Bun version (`mise exec bun@1.4.2 -- npm run agent:prepare`). No upstream defect or patch is required by this evidence. |
 | Current packaged resident runtime | Cloud-aware native bridge, staging and workflow-worker chain exist | Qualified embedding host libraries, complete current-pin payload, ABI/library/model hashes, real native process/IPC startup, shutdown/restart and owner isolation. Latest hosted foundation APKs omit the runtime. MVP-08/21/39 |
 | Real Eliza Cloud login and Cerebras route | Production Welcome, subscription entitlements and native provider binding exist | Normal browser login/return, one-use exchange, active subscription entitlement, actual model response through Cloud, serving provider/usage evidence, expiry/revoke/wrong owner/quota exhaustion/replacement during requests; qualify the newly merged P-25 cached subscription authorization without a per-turn billing hop. Do not substitute direct-key inference. MVP-34/37 |
-| Voice in both directions | Cloud STT/TTS, recording and conversation flows; separate local engines exist | Ongoing chat auto-send after explicit start is owner-approved. Migrate every production speech entrypoint to local native STT/TTS (P-13/P-29/P-39), then qualify exact runtime on both ABIs; real mic/speaker/Bluetooth/audio focus/echo/Stop/background tests. Historical ARM64 local speech acceptance failed; the current x86_64 candidate passes both offline canonical tests, but the combined runtime remains unqualified until ARM64 acceptance. MVP-01/23/24 |
+| Voice in both directions | Production selector now uses local speech for Notes/dictation and message read-aloud; ongoing conversation, Maps and workflow/agent speech still call Cloud directly | Ongoing chat auto-send after explicit start is owner-approved. Migrate every production speech entrypoint to local native STT/TTS (P-13/P-29/P-39), then qualify exact runtime on both ABIs; real mic/speaker/Bluetooth/audio focus/echo/Stop/background tests. Historical ARM64 local speech acceptance failed; the current x86_64 candidate passes both offline canonical tests, but the combined runtime remains unqualified until ARM64 acceptance. MVP-01/23/24 |
 | Latency | No current device acceptance sample | Cold/warm startup, end-of-speech→first audio, STT, inference TTFT/tokens/sec, TTS first audio, total completion, action/readback, p50/p95 with sample counts, route/model/network and errors. Use P-11: last input speech sample to first audible response, including endpointing and buffering, at least 50 simple-query trials and cold/warm p50/p95. Legacy recording-end helpers do not establish this boundary. MVP-05 |
 | Gmail | Current source has substantially complete provider UI/contracts | Deployed Google token exchange previously returned 401; verify/fix the actual operator configuration, authorize test mailbox, read/draft/attachment/send/revoke and ambiguous outcomes. Exact recipient/content authorization is needed for a real send. MVP-35/36 |
 | Maps | Regional provider integration exists | Select and deploy a production HTTPS gateway/data coverage/license/update path; production currently has no configured route provider. Real GPS, reroute, offline and voice guidance. MVP-31 |
