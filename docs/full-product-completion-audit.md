@@ -2952,3 +2952,54 @@ barge-in or P-11 latency acceptance.
 
 `verify-prepared-capture.log` passes 1,056 tests, zero failures, four TODOs and
 the 397-file production bundle audit at the prepared-control implementation.
+
+## Fresh-guest comparison preserves the capture failure
+
+The owned cvd-13 guest stopped cleanly with its files preserved. A fresh container,
+`alphaphone-audit-fresh-audio-cuttlefish` (ID
+`57498549cd716712b78a520e3a8ee7b53ab88e4e6cbf776e3378e7f6b41b9a62`),
+boots cvd-14 at `127.0.0.1:6533`, with the same historical secure-camera fixture
+image, two CPUs, 4,096 MiB RAM and fresh 8-GiB ext4 userdata. Its fingerprint remains
+`Alpha/alpha_cf_x86_64_phone/vsoc_x86_64_only:Baklava/CP2A.260605.016/eng.shaw:userdebug/test-keys`.
+Configuration, container identity and launch logs are retained under
+`fresh-audio-guest-*`. Other users' devices/containers were not changed.
+
+The first coordinator attempt stopped before installation; the fresh guest's
+keyguard was still showing. The coordinator then masked its worker failure with
+ENOENT while writing an uncreated evidence directory. `b45ddb44a` preserves such
+worker failures by creating the output directory after worker termination, before
+writing diagnostics. The owned guest was woken and its unsecured keyguard dismissed.
+Twenty-nine focused host tests pass. No product admission checks were bypassed.
+
+`cuttlefish-fresh-prepared-capture-unlocked` completes both control methods with
+170 metrics reads each, but content remains defective. Standalone captures 8.448
+seconds with a low-peak tail from approximately 4.3 seconds; ALSA read errors begin
+4,165 ms after the marker and recur until capture ends. Launcher PCM is 7.872
+seconds and recognition repeats/reorders phrases despite reporting 8,575 ms native
+duration. These controls do not establish complete-input acceptance. The failure
+is not confined to accumulated state in cvd-13.
+
+`cuttlefish-fresh-conversation` fails aggregate UI acceptance. Standalone passes the
+existing beginning/middle/near-end assertions with a 6,391-ms native duration but
+omits the sentence's final word; its retained PCM is 6.208 seconds and ALSA errors
+start around 5,667 ms. Launcher stops at 1,312 ms, retains only 1.216 seconds and
+transcribes `[INAUDIBLE]`. Both use local ASR/TTS and synthetic agent replies, so
+neither proves real inference. The standalone result exposes another inadequate
+acceptance assertion: `quarter` is near the end but is not the final fixture word.
+`9541d82fa` additionally requires `brothel` (admitting singular/plural recognition)
+before calling a turn complete. Both developer distributions rebuild successfully
+in `developer-apks-final-word-capture`. Earlier passes missing that word are not
+complete-utterance evidence. Recorded waveforms and timestamped error analyses
+remain available in the campaign directories. Disposable users were removed and
+owner 0 restored after the completed campaigns.
+
+The rebuilt `cuttlefish-fresh-conversation-final-word` campaign fails both variants
+before the strengthened final-word gate can admit a turn: native durations are
+3,010/3,875 ms and transcripts are only “After early nightfall,” / “after early
+night”. Both exact input receipts were retained, local playback occurred, the
+browser closed and disposable users were removed. The next comparison changes
+owned-guest resource allocation with this same APK/image/input; no lower endpoint
+threshold or weaker content assertion is used. The last full verification remains
+1,056 passes, zero failures and four TODOs at `407786ec8`; subsequent changes are
+host failure-evidence handling (29 focused passes) and the final-word Java
+assertion (compiled and exercised in both distributions).
