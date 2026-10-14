@@ -33,7 +33,7 @@ final class LocalConversationFixture {
   assertFalse("Production renderer required",BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS);
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
   assertEquals(PackageManager.PERMISSION_GRANTED,context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO));
-  InboxFixtureConnection.conversationPlan=true;InboxFixtureConnection.routes.clear();InboxFixtureScope.phase="prepare";InboxFixtureScope.runId=java.util.UUID.randomUUID().toString();ConversationFixtureAgent.routes.clear();ConversationFixtureAgent.sends=0;ConversationFixtureAgent.allowReply=utterance;ConversationFixtureAgent.transcript=null;
+  InboxFixtureScope.phase="prepare";InboxFixtureScope.runId=java.util.UUID.randomUUID().toString();InboxFixtureConnection.conversationPlan=true;InboxFixtureConnection.routes.clear();ConversationFixtureAgent.routes.clear();ConversationFixtureAgent.sends=0;ConversationFixtureAgent.allowReply=utterance;ConversationFixtureAgent.transcript=null;
   androidx.test.runner.MonitoringInstrumentation runner=(androidx.test.runner.MonitoringInstrumentation)InstrumentationRegistry.getInstrumentation();
   runner.interceptActivityUsing(new androidx.test.runner.intercepting.InterceptingActivityFactory(){
    @Override public boolean shouldIntercept(ClassLoader loader,String name,android.content.Intent intent){return name.equals(MainActivity.class.getName());}

@@ -2682,3 +2682,23 @@ protection across surface construction, rejected new recording during drain,
 no premature cancellation acknowledgement, and eventual file/owner cleanup.
 This is controlled native fault evidence on the historical image, not a current
 full-image boot, real microphone, resident agent, Cloud login or Cerebras result.
+
+
+The `cuttlefish-capture-thread-regression` campaign passes the actual native
+29-second recording-limit method on both variants. In NoteAudio, four storage/
+deletion/recreation methods pass per variant; three UI methods fail at selecting
+Notes (`actualNativeCaptureSaveAndDraftRevocationDoNotDeleteSavedAudio`,
+`dictationReplacesSelectionAndKeepsTextNoteAcrossRecreation`, and
+`offlineNotesUiRecordsManualTranscriptAndSavesActualAudio`). The merged production
+sign-in/plan gate no longer accepts the old fixture's signed-out offline selection.
+These six failures are retained, and require an account/plan-bound fixture update;
+they are not reclassified as successful recorder UI tests. Disposable users were
+removed and readback shows only owner 0.
+
+The separate conversation fixture now explicitly enables a closed synthetic
+subscription case: authenticated entitlement GET returns 404, authenticated billing
+limits GET returns a current active Plus snapshot, and the real renderer's plan
+gate must request that snapshot. No real account, grant, payment, subscription
+purchase or provider request occurs. All other requests retain the fixture's
+allowlist. `developer-apks-capture-thread-plan` packages this test-only update at
+`e58cc5bf8`; production capture code remains the verified `22097db0f` code.
