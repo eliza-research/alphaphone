@@ -55,14 +55,17 @@ final class LocalConversationFixture {
    eval("Capacitor.Plugins.AlphaVoiceCloud.addListener('playbackEnded',()=>window.__conversationNative.ended++).then(h=>window.__conversationEndListener=h)");until("window.__conversationEndListener",10000);
    if(captureOnly){
     eval("window.__captureProbe={};Capacitor.Plugins.AlphaVoiceCloud.startRecording({maxDurationMs:29000}).then(value=>window.__captureProbe.id=value.recordingId,error=>window.__captureProbe.error=String(error))");
-    until("window.__captureProbe.id",30000);android.util.Log.i("AlphaVoiceFixture","CAPTURE_READY "+InboxFixtureScope.runId);
+    until("window.__captureProbe.id",30000);
+    boolean pollCapture="1".equals(InstrumentationRegistry.getArguments().getString("capturePolling"));
+    if(pollCapture)eval("window.__captureProbe.peaks=[];window.__captureProbe.started=performance.now();window.__captureProbe.poll=setInterval(()=>Capacitor.Plugins.AlphaVoiceCloud.getRecordingMetrics({recordingId:window.__captureProbe.id}).then(value=>window.__captureProbe.peaks.push({at:Math.round(performance.now()-window.__captureProbe.started),peak:value.peak}),()=>{}),50)");
+    android.util.Log.i("AlphaVoiceFixture","CAPTURE_READY "+InboxFixtureScope.runId);
     SystemClock.sleep(8500);
-    eval("Capacitor.Plugins.AlphaVoiceCloud.stopRecording().then(value=>{window.__captureProbe.durationMs=value.durationMs;return Capacitor.Plugins.ConversationInputEvidence.snapshot({recordingId:value.recordingId});}).then(()=>Capacitor.Plugins.AlphaVoiceCloud.cancelRecording()).then(()=>window.__captureProbe.done=true,error=>window.__captureProbe.error=String(error))");
-    until("window.__captureProbe.done",30000);
+    eval("clearInterval(window.__captureProbe.poll);Capacitor.Plugins.AlphaVoiceCloud.stopRecording().then(value=>{window.__captureProbe.durationMs=value.durationMs;return Capacitor.Plugins.AlphaVoiceCloud.transcribeLocalRecording({recordingId:value.recordingId});}).then(value=>{window.__captureProbe.transcript=value.text;return Capacitor.Plugins.AlphaVoiceCloud.cancelRecording();}).then(()=>window.__captureProbe.done=true,error=>window.__captureProbe.error=String(error))");
+    until("window.__captureProbe.done",180000);
     assertEquals("The native control records the entire input window","true",eval("window.__captureProbe.durationMs>=8000"));
-    assertEquals("No renderer activity polling in the control","0",eval("window.__conversationNative.metrics"));
-    assertEquals("No ASR or inference in the control",0,ConversationFixtureAgent.sends);
-    assertEquals("No ASR in the control","0",eval("window.__conversationNative.asrAttempts"));
+    assertEquals("Capture polling matches the requested control","true",eval(pollCapture?"window.__conversationNative.metrics>100":"window.__conversationNative.metrics===0"));
+    assertEquals("No agent inference in the control",0,ConversationFixtureAgent.sends);
+    assertEquals("Exactly one ASR readback after fixed capture","1",eval("window.__conversationNative.asrAttempts"));
     return;
    }
    click("Talk");until("window.__conversationNative.starts===1",180000);
@@ -85,7 +88,7 @@ final class LocalConversationFixture {
    java.io.File[] captures=context.getCacheDir().listFiles((dir,name)->name.startsWith("alpha-cloud-voice-")&&name.endsWith(".m4a"));
    assertEquals("Cancelled capture is removed",0,captures==null?0:captures.length);
   }finally{
-   if(utterance)try{android.os.Bundle evidence=new android.os.Bundle();evidence.putString("conversationNative",eval("JSON.stringify(window.__conversationNative||{})"));InstrumentationRegistry.getInstrumentation().addResults(evidence);}catch(Exception ignored){}
+   if(utterance)try{android.os.Bundle evidence=new android.os.Bundle();evidence.putString("conversationNative",eval("JSON.stringify(window.__conversationNative||{})"));evidence.putString("captureProbe",eval("JSON.stringify(window.__captureProbe||{})"));InstrumentationRegistry.getInstrumentation().addResults(evidence);}catch(Exception ignored){}
    MainActivity live=activity();if(live!=null)BoundedActivityScenario.main(live::finish);
    ConversationFixtureAgent.allowReply=false;InboxFixtureConnection.conversationPlan=false;runner.useDefaultInterceptingActivityFactory();
   }

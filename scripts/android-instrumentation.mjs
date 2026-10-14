@@ -198,7 +198,8 @@ export const CLASS_REGISTRY = {
   NotificationChannels: { args: { notificationChannels: "1" }, grant: ["POST_NOTIFICATIONS"], note: "fresh app data; unique synthetic channel toggled in Android Settings, read back and deleted in finally; local notification recipient only" },
   VoicePermissionDenied: { secondaryUser: true, args: { voicePermissionDenied: "1" }, revoke: ["RECORD_AUDIO"], note: "fresh user with microphone revoked; signed-out local recording denial/settings/typing UI, no injected Cloud transport or ASR acceptance" },
   VoicePermissionRevoke: { campaign: "node scripts/test-native-permissions.mjs voice-revoke APP.apk TEST.apk OUTPUT (RECORD_AUDIO revoked while recording; the process is killed)" },
-  LocalConversationCapture: { secondaryUser: true, args: { localConversation: "1" }, grant: ["RECORD_AUDIO"], note: "controlled native capture without conversation UI, activity polling or ASR; requires coordinated fixture input; not speech acceptance" },
+  LocalConversationCapturePolling: { secondaryUser: true, args: { localConversation: "1", capturePolling: "1" }, grant: ["RECORD_AUDIO"], note: "fixed native capture with activity polling but no conversation UI; ASR readback after capture, no content acceptance" },
+  LocalConversationCapture: { secondaryUser: true, args: { localConversation: "1" }, grant: ["RECORD_AUDIO"], note: "controlled native capture without conversation UI or activity polling; ASR readback after capture; requires coordinated fixture input; not speech acceptance" },
   LocalConversationUtterance: { secondaryUser: true, args: { localConversation: "1" }, grant: ["RECORD_AUDIO"], note: "requires coordinated owned WebRTC fixture audio; real capture/local ASR/TTS, synthetic identity/history/reply, no real inference acceptance" },
   LocalConversationLifecycle: { secondaryUser: true, args: { localConversation: "1" }, grant: ["RECORD_AUDIO"], note: "production renderer and native local capture Start/Stop with synthetic identity/history; no inference, ASR or full conversation acceptance" },
   LocalVoiceRecordingLimit: { secondaryUser: true, args: { localVoiceRecording: "1" }, grant: ["RECORD_AUDIO"], note: "native 29-second recorder deadline in a fresh user; full PCM decode must fit 27–30 seconds without truncation; no ASR accuracy, Cloud, audible output or latency claim" },
@@ -625,7 +626,7 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
             if(short(cls)==="RealClock"&&(row.status==="passed"||raw.includes("INSTRUMENTATION_RESULT: realClockFixture="))){
               try{collectClockArtifacts(raw,dir,adb);}catch(error){row.status="failed";row.failed.push("artifact-collection");fs.writeFileSync(path.join(dir,"real-clock-artifact-error.txt"),error.message+"\n");}
             }
-            if(["LocalConversationUtterance","LocalConversationCapture"].includes(short(cls))&&(row.status==="passed"||raw.includes("INSTRUMENTATION_RESULT: conversationAudioFixture="))){
+            if(["LocalConversationUtterance","LocalConversationCapture","LocalConversationCapturePolling"].includes(short(cls))&&(row.status==="passed"||raw.includes("INSTRUMENTATION_RESULT: conversationAudioFixture="))){
               try{collectConversationAudio(raw,dir,adb,user);}catch(error){row.status="failed";row.failed.push("audio-artifact-collection");fs.writeFileSync(path.join(dir,"conversation-audio-error.txt"),error.message+"\n");}
             }
             merged = { started: merged.started + row.started, passed: merged.passed + row.passed,
