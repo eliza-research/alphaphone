@@ -2855,3 +2855,59 @@ and scheduling diagnostics as indicated by that evidence.
 Java assertions were compiled and exercised in both variants. Qualified release
 assets, resident runtime, real Cloud/Cerebras and current-source image/physical
 acceptance limits remain unchanged.
+
+## Isolated capture controls and ASR request correction
+
+The latest pull confirms `origin/main` remains incorporated at `8aa3e3e82`.
+`680c43211` adds fixed-window native recording without conversation UI updates,
+endpoint detection or metrics polling. The first two-variant campaign,
+`cuttlefish-native-capture-control`, completes its recording assertions with
+8.512-second standalone and 8.448-second launcher PCM. This is control execution,
+not complete speech-content acceptance: whole-source RMS-envelope correlations
+are only 0.4036 and 0.2849. Raw ALSA input passes do not clear this consumer path.
+
+`e005651a0` adds post-capture local-ASR readback and a separate metrics-polling
+control. In `cuttlefish-native-capture-readback`, the direct test call omitted the
+native request ID and was rejected as `Invalid request` before recognition.
+That is a fixture defect, not recognizer quality evidence. The standalone exact
+captured PCM is nevertheless retained and hash-verified: 8.448 seconds, with
+peak below 0.012 from approximately 2.7 seconds through the end, while the supplied
+sentence continues. Therefore a long input gap can occur without conversation
+polling or automatic endpoint detection. This does not yet identify its cause.
+
+`4beaa2c45` supplies a unique ASR request ID, fails promptly on a reported probe
+error, and retains `AHAL_StreamAlsaMonoPipe` warnings alongside AudioSource,
+AudioRecord and AudioFlinger. A live guest warning reports inserted silence; the
+local AOSP HAL source confirms this warning means a short pipe read is zero-filled.
+Temporal correlation and reproduction are still required before attributing the
+conversation failure to the HAL. Both developer distributions rebuilt in
+`developer-apks-native-capture-readback-fixed`; 29 focused host tests pass. This
+archive remains an unqualified speech candidate without the resident payload,
+not a release, real Cloud/Cerebras test or current-source AOSP image acceptance.
+
+The corrected `cuttlefish-native-capture-readback-fixed` campaign completes both
+control methods and local ASR, with one capture/readback/cancel and no Cloud speech
+or agent send. Content remains partial: standalone “after early night.” and
+launcher “After early nightfall, the yellow lamps would light her.” Exact PCM is
+8.512/8.384 seconds; long low-peak tails begin at about 1.85/4.0 seconds. Its
+retained warning log contains 150 silence-insertion and 113 ALSA-read warnings.
+These are aggregate campaign counts, not per-capture frame-loss measurements.
+
+The following `cuttlefish-native-capture-polling-fixed` campaign also completes
+both controls, with 170 genuine metrics reads per variant and no conversation UI
+updates. Both transcripts now span the whole fixture through its final phrase
+(minor wording differences remain). PCM is 8.512/8.576 seconds. This campaign has
+34 silence-insertion and four ALSA-read warnings. Consequently these sequential
+controls **do not support attributing truncation to metrics polling**. They expose
+variable guest capture behavior; order/state effects are not controlled by a
+single run of each. Repeat alternating controls with timestamped warning evidence
+before changing production endpoint thresholds or assigning a HAL root cause.
+Successful fixed-window readback does not admit full conversational turns, barge-in,
+real inference or microphone-to-audible-output latency.
+
+Both corrected campaigns retain hash-verified AAC/PCM, analysis JSON and cleanup
+receipts: users 46–49 removed, owner restored, browser closed. The failed initial
+readback campaign also removed users 44–45. Full
+`verify-native-capture-readback-fixed.log` passes 1,056 tests with zero failures,
+four TODOs, and the 397-file production bundle audit. Strict release/AOSP/physical
+and real service acceptance gates remain open.
