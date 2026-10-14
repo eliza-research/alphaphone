@@ -59,6 +59,7 @@ final class LocalConversationFixture {
      until("window.__preparedCapture.ready||window.__preparedCapture.error",180000);
      assertEquals("Real local speech engine prepared before capture","true",eval("window.__preparedCapture.ready===true"));
     }
+    if("1".equals(InstrumentationRegistry.getArguments().getString("capturePcm"))){ConversationPcmEvidence.capture(context);return;}
     eval("window.__captureProbe={};Capacitor.Plugins.AlphaVoiceCloud.startRecording({maxDurationMs:29000}).then(value=>window.__captureProbe.id=value.recordingId,error=>window.__captureProbe.error=String(error))");
     until("window.__captureProbe.id",30000);
     boolean pollCapture="1".equals(InstrumentationRegistry.getArguments().getString("capturePolling"));

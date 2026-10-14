@@ -198,6 +198,7 @@ export const CLASS_REGISTRY = {
   NotificationChannels: { args: { notificationChannels: "1" }, grant: ["POST_NOTIFICATIONS"], note: "fresh app data; unique synthetic channel toggled in Android Settings, read back and deleted in finally; local notification recipient only" },
   VoicePermissionDenied: { secondaryUser: true, args: { voicePermissionDenied: "1" }, revoke: ["RECORD_AUDIO"], note: "fresh user with microphone revoked; signed-out local recording denial/settings/typing UI, no injected Cloud transport or ASR acceptance" },
   VoicePermissionRevoke: { campaign: "node scripts/test-native-permissions.mjs voice-revoke APP.apk TEST.apk OUTPUT (RECORD_AUDIO revoked while recording; the process is killed)" },
+  LocalConversationPcmCapture: { secondaryUser: true, args: { localConversation: "1", captureWarmSpeech: "1", capturePcm: "1" }, grant: ["RECORD_AUDIO"], note: "prepared real local engine, foreground AudioRecord PCM control without AAC, endpointing or ASR; exact audio evidence only" },
   LocalConversationPreparedCapture: { secondaryUser: true, args: { localConversation: "1", capturePolling: "1", captureWarmSpeech: "1" }, grant: ["RECORD_AUDIO"], note: "real local engine prepared before fixed capture with metrics; no conversation UI or endpoint detection; post-capture ASR observation only" },
   LocalConversationCapturePolling: { secondaryUser: true, args: { localConversation: "1", capturePolling: "1" }, grant: ["RECORD_AUDIO"], note: "fixed native capture with activity polling but no conversation UI; ASR readback after capture, no content acceptance" },
   LocalConversationCapture: { secondaryUser: true, args: { localConversation: "1" }, grant: ["RECORD_AUDIO"], note: "controlled native capture without conversation UI or activity polling; ASR readback after capture; requires coordinated fixture input; not speech acceptance" },
@@ -627,7 +628,7 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
             if(short(cls)==="RealClock"&&(row.status==="passed"||raw.includes("INSTRUMENTATION_RESULT: realClockFixture="))){
               try{collectClockArtifacts(raw,dir,adb);}catch(error){row.status="failed";row.failed.push("artifact-collection");fs.writeFileSync(path.join(dir,"real-clock-artifact-error.txt"),error.message+"\n");}
             }
-            if(["LocalConversationUtterance","LocalConversationCapture","LocalConversationCapturePolling","LocalConversationPreparedCapture"].includes(short(cls))&&(row.status==="passed"||raw.includes("INSTRUMENTATION_RESULT: conversationAudioFixture="))){
+            if(["LocalConversationUtterance","LocalConversationCapture","LocalConversationCapturePolling","LocalConversationPreparedCapture","LocalConversationPcmCapture"].includes(short(cls))&&(row.status==="passed"||raw.includes("INSTRUMENTATION_RESULT: conversationAudioFixture="))){
               try{collectConversationAudio(raw,dir,adb,user);}catch(error){row.status="failed";row.failed.push("audio-artifact-collection");fs.writeFileSync(path.join(dir,"conversation-audio-error.txt"),error.message+"\n");}
             }
             merged = { started: merged.started + row.started, passed: merged.passed + row.passed,

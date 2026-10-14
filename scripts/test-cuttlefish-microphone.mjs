@@ -9,16 +9,18 @@ import {acquireDeviceLease,deviceLeaseStateDir} from '../vendor/eliza/packages/a
 const options={};
 for(let i=2;i<process.argv.length;i++){
  const key=process.argv[i];if(key==='--owned-cuttlefish'){options.owned=true;continue;}
- if(!['--container','--serial','--device','--image-fingerprint','--output','--capture-rate'].includes(key)||!process.argv[i+1])throw Error('Required: --owned-cuttlefish --container NAME --serial 127.0.0.1:PORT --device cvd-N --image-fingerprint VALUE --output NEW_DIRECTORY');
+ if(!['--container','--serial','--device','--image-fingerprint','--output','--capture-rate','--period-size','--period-count'].includes(key)||!process.argv[i+1])throw Error('Required: --owned-cuttlefish --container NAME --serial 127.0.0.1:PORT --device cvd-N --image-fingerprint VALUE --output NEW_DIRECTORY');
  options[key.slice(2)]=process.argv[++i];
 }
 if(!options.owned||!/^127\.0\.0\.1:\d+$/.test(options.serial||'')||!/^cvd-\d+$/.test(options.device||'')||!/^[-a-zA-Z0-9_.]+$/.test(options.container||'')||options.container.startsWith('-')||!options['image-fingerprint']||!options.output)throw Error('Explicit owned guest identity and new output directory required');
 const captureRate=options['capture-rate']??'48000';if(!['16000','48000'].includes(captureRate))throw Error('Capture rate must be 16000 or 48000');
+const periodSize=options['period-size']??'1024',periodCount=options['period-count']??'4';
+if(!/^[1-9][0-9]*$/.test(periodSize)||Number(periodSize)<64||Number(periodSize)>8192||!['2','3','4','5','6','7','8'].includes(periodCount))throw Error('Period size must be 64–8192 frames and count 2–8');
 const run=promisify(execFile),execute=async(cmd,args,timeout=15000)=>(await run(cmd,args,{timeout,maxBuffer:1024*1024})).stdout;
 const adb=args=>execute('adb',['-s',options.serial,...args],25000);
 const lease=await acquireDeviceLease(`android:${options.serial}`,{waitMs:0,ttlMs:Number.MAX_SAFE_INTEGER,stateDir:deviceLeaseStateDir(process.env)});
 let browser,remote,capture;
-const report={kind:'cuttlefish-virtual-microphone',physicalMicrophone:false,asrVerified:false,captureRate:Number(captureRate),passed:false};
+const report={kind:'cuttlefish-virtual-microphone',physicalMicrophone:false,asrVerified:false,captureRate:Number(captureRate),periodSize:Number(periodSize),periodCount:Number(periodCount),passed:false};
 let outputCreated=false;
 try{
  const [container]=JSON.parse(await execute('docker',['inspect',options.container]));
@@ -37,7 +39,7 @@ try{
  report.containerId=container.Id;report.device=options.device;report.imageFingerprint=fingerprint;report.fixtureSha256=createHash('sha256').update(await fs.readFile(fixture)).digest('hex');
  browser=await openFixtureAudio({address,device:options.device,wav:await fs.readFile(fixture)});
  remote='/data/local/tmp/alpha-audio-probe-'+randomUUID()+'.wav';
- capture=adb(['shell','su','0','tinycap',remote,'-D','0','-d','0','-c','1','-r',captureRate,'-b','16','-T','10']);
+ capture=adb(['shell','su','0','tinycap',remote,'-D','0','-d','0','-c','1','-r',captureRate,'-b','16','-p',periodSize,'-n',periodCount,'-T','10']);
  void capture.catch(()=>{});
  // Start the known waveform after capture admission, over an already-live peer.
  await new Promise(resolve=>setTimeout(resolve,300));
