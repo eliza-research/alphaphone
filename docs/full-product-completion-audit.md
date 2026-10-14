@@ -3041,3 +3041,48 @@ and user-lifecycle instability remain AOSP acceptance gaps in their own right.
 No production source, speech thresholds or APK bytes changed during this resource
 experiment. The prior two-CPU speech failures remain the latest actual voice
 results; more CPU/memory has not been shown to fix or worsen them.
+
+## Separate four-CPU guest and raw capture-rate comparison
+
+A separate fresh container `alphaphone-audit-fourcpu-cuttlefish`, ID
+`b428529540ea9a0b48d6d2b862e1eb8adc0da7b6ad79da105b03644357e12c90`,
+boots cvd-15 at `127.0.0.1:6534` with four CPUs, 8,192 MiB RAM and fresh 8-GiB
+userdata. The historical image, GPU mode, input waveform and
+`developer-apks-final-word-capture` APKs are unchanged. cvd-14 is stopped with its
+files preserved. `fourcpu-fresh-config.json`, `fourcpu-fresh-inspect.json` and launch
+logs bind this experiment. This clean guest successfully creates/removes both
+secondary users without the restarted guest's framework crash.
+
+`cuttlefish-fourcpu-fresh-conversation` still fails both complete-utterance tests.
+Standalone and launcher stop at 3,406/3,442 ms and recognize only “After early
+nightfall,” / “after early night”. Both execute local ASR/TTS/playback, but this
+is truncated speech, not conversational acceptance. Increasing CPU and memory did
+not resolve the reproduced failure. No host build or verification ran during this
+capture comparison. Both users were removed and the browser closed.
+
+The raw-input probe now accepts only explicit 16,000 or 48,000 Hz capture rates,
+verifies the returned rate, and requires both the opening and the whole fixture's
+RMS-envelope correlation to exceed the unchanged 0.85 threshold. This closes the
+previous first-three-seconds-only coverage gap. With the same browser feeder on
+cvd-15, `fourcpu-raw-16k` captures 10.24 seconds and passes with opening/whole
+correlations 0.9483/0.9531. `fourcpu-raw-48k` captures 10.069 seconds and passes at
+0.9049/0.8761. Both retain exact WAV hashes and remove their guest temporary files.
+These direct ALSA results demonstrate complete-input transport at both rates in
+these trials, not Android MediaRecorder or ASR acceptance. They narrow the next
+investigation to the Android consumer/HAL path; changing the app's sample rate or
+silence thresholds is not supported as a fix by these results.
+
+`81f0fbcc8` preserves class and cleanup evidence in a separate failed diagnostic
+record when post-run WebView verification throws; the run still throws and cannot
+be admitted as passed. Focused host tests (29 passes) verify this preservation and
+continued fail-closed behavior. `6cd472254` adds the raw-rate/whole-fixture checks,
+exercised successfully at both rates above. Full verification is recorded in
+`verify-fourcpu-audio-diagnostics.log`; no Android source or APK changed this turn.
+
+The full `verify-fourcpu-audio-diagnostics.log` run finishes with 1,056 passes,
+zero failures, four TODOs and the 397-file production bundle audit. Next evidence
+should compare ALSA period/buffer settings: source `profile_fill_builtin_device_info`
+derives attached-device period size from the HAL buffer and period count, whereas
+these raw trials used tinycap's defaults. Both relevant guest override properties
+are unset. This is a concrete remaining configuration difference, not a proven
+cause or a reason to tune production thresholds.
