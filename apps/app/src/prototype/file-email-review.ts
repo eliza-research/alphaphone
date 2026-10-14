@@ -6,6 +6,7 @@ import type { EmailTarget } from './inbox-cloud-adapter';
 type SelectedFile = MailAttachment & { size: number; sha256: string };
 /** Reads only after an explicit Files action. Selection/context alone never attaches bytes. */
 export function reviewFileEmail(options: {
+ sourceNote?: string;
  read: () => Promise<SelectedFile>; current: () => boolean; target: () => EmailTarget;
  insert: (file: MailAttachment, token: string) => boolean; inserted: () => void;
 }): () => void {
@@ -15,7 +16,7 @@ export function reviewFileEmail(options: {
  const content=document.createElement('div');content.className='note-source-content';
  const title=document.createElement('h2');title.textContent='Use selected file in email';
  const destination=document.createElement('p'),details=document.createElement('p'),policy=document.createElement('p'),status=document.createElement('p');status.setAttribute('role','status');
- policy.textContent='Attach a copy to a local draft only. Review recipients, message and attachments before the separate Send step. Save locally to keep the exact copy for restart.';
+ policy.textContent='Attach a copy to a local draft only. Review recipients, message and attachments before the separate Send step. Save locally to keep the exact copy for restart.'+(options.sourceNote?' '+options.sourceNote:'');
  const label=document.createElement('label'),check=document.createElement('input');check.type='checkbox';check.disabled=true;label.style.cssText='display:flex;align-items:center;gap:8px;min-height:44px';label.append(check,document.createTextNode('Attach this file'));
  const footer=document.createElement('footer'),cancel=document.createElement('button'),confirm=document.createElement('button');cancel.textContent='Cancel';confirm.textContent='Insert attachment into draft';confirm.disabled=true;
  content.append(title,destination,details,label,policy,status);footer.append(cancel,confirm);dialog.append(content,footer);

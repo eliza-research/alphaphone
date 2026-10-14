@@ -114,12 +114,12 @@ async function openInbox(page: Page, options: Options = {}, reload = false) {
   await installProvider(page, options);
   await button(page, 'Inbox').click();
   // A saved operation reopens its review over the list, so either surface proves the mailbox loaded.
-  await expect(button(page, 'Refresh').or(page.getByRole('dialog', {name: 'Review mail operation'}))).toBeVisible();
+  await expect(button(page, 'Refresh inbox').or(page.getByRole('dialog', {name: 'Review mail operation'}))).toBeVisible();
 }
 async function compose(page: Page, subject: string, body: string) {
   await button(page, 'Compose').click();
-  await page.getByPlaceholder('To', {exact: true}).fill('friend@example.invalid');
-  await page.getByPlaceholder('To', {exact: true}).press('Enter');
+  await page.getByRole('textbox', {name: 'To', exact: true}).fill('friend@example.invalid');
+  await page.getByRole('textbox', {name: 'To', exact: true}).press('Enter');
   await expect(button(page, 'Remove friend@example.invalid')).toBeVisible();
   await page.getByRole('textbox', {name: 'Subject', exact: true}).fill(subject);
   await page.getByRole('textbox', {name: 'Message', exact: true}).fill(body);
@@ -139,10 +139,11 @@ test('F-5: the send review shows From, To, Cc, Bcc, subject, body and the attach
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   await openInbox(page);
   await compose(page, 'Timetable for Friday', 'Line one of the reviewed body.\nLine two.');
+  await page.getByRole('button', {name: 'Cc and Bcc', exact: true}).click();
   await page.getByRole('textbox', {name: 'Cc', exact: true}).fill('carol@example.invalid, dave@example.invalid');
   await page.getByRole('textbox', {name: 'Bcc', exact: true}).fill('audit@example.invalid');
   const chooser = page.waitForEvent('filechooser');
-  await button(page, 'Attach one PDF, image or TXT (up to 5 MiB)').click();
+  await button(page, 'Attach file').click();
   await (await chooser).setFiles({name: 'timetable.txt', mimeType: 'text/plain', buffer: bytes});
   await expect(button(page, 'Remove timetable.txt')).toBeVisible();
   expect(await provider(page)).toMatchObject({prepared: [], dispatched: [], sent: []});
@@ -218,8 +219,8 @@ test('F-5: a forward lists the original attachments it will send, and removing o
   await expect(page.getByRole('region', {name: 'Email message'})).toContainText('Body of m1');
   await button(page, 'Forward').click();
   await expect(button(page, 'Remove original-plan.pdf (original)')).toBeVisible();
-  await page.getByPlaceholder('To', {exact: true}).fill('friend@example.invalid');
-  await page.getByPlaceholder('To', {exact: true}).press('Enter');
+  await page.getByRole('textbox', {name: 'To', exact: true}).fill('friend@example.invalid');
+  await page.getByRole('textbox', {name: 'To', exact: true}).press('Enter');
   await button(page, 'Send email').click();
   const review = page.getByRole('dialog', {name: 'Review mail operation'});
   await expect(review.getByRole('button', {name: 'Send this email', exact: true})).toBeVisible();
@@ -568,7 +569,7 @@ test('F-12: a message removed between pages is never duplicated, and Refresh sho
   await expect.poll(async () => (await rows(page)).length).toBe(4);
   const loaded = await rows(page);
   expect(new Set(loaded).size).toBe(loaded.length);
-  await button(page, 'Refresh').click();
+  await button(page, 'Refresh inbox').click();
   await expect.poll(() => rows(page)).toEqual(['m2', 'm3']);
   await button(page, 'Load more').click();
   await expect.poll(() => rows(page)).toEqual(['m2', 'm3', 'm4', 'm5']);

@@ -156,7 +156,10 @@
   },
   "extra": [
     "sliders-horizontal",
-    "external-link"
+    "external-link",
+    "send",
+    "star",
+    "shield-alert"
   ],
   "filled": [
     "heart",

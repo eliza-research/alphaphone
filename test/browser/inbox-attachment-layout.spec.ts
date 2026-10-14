@@ -3,7 +3,7 @@ for(const theme of ['light','dark'])for(const size of [{width:360,height:640},{w
  await page.setViewportSize(size);await page.goto('/?theme='+theme);
  await page.evaluate(async()=>{
   const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');
-  const {secureConnectionStore:s}=await import('/src/runtime/native-connection.ts');
+  const {inboxLocalStore:s}=await import('/src/runtime/inbox-local-store.ts');
   s.read=async()=>null;s.compareExchange=async()=>({status:'saved'});
   const name='Attachment'+'x'.repeat(100)+'.txt',text=Array.from({length:80},(_,i)=>`Line ${i}: <img src=x onerror=alert(1)> `+'content'.repeat(30)).join('\n');
   const message={id:'selected',threadId:'thread',from:'Fixture sender',to:['reader@example.test'],subject:'Selected attachment',snippet:'Review a long attachment',receivedAt:'2026-10-04T12:00:00Z',unread:false};

@@ -45,7 +45,8 @@ try {
  await page.evaluate(async () => {
   const { alphaClient } = await import('/src/runtime/alpha-client.ts');
   const { phoneContextMessage } = await import('/src/runtime/phone-context.ts');
-  window.fixture = { requests: [], delayed: false, aborts: 0, closes: 0, releases: [] };
+  const {connectionController}=await import('/src/runtime/connection-ui.tsx');
+  window.fixture = { requests: [], delayed: false, aborts: 0, closes: 0, releases: [], controller:connectionController };
   alphaClient.attachVerifiedTransport({
    session: { ownerId: 'fixture-owner', agentId: 'fixture-agent', sessionId: 'fixture-session', origin: 'https://fixture.invalid' },
    send: async ({ text, context, signal }) => {
@@ -72,8 +73,8 @@ try {
   await page.evaluate(() => { window.fixture.delayed = true; });
   await send('Wait for ' + mode);
   await page.waitForFunction(async () => (await import('/src/runtime/alpha-client.ts')).alphaClient.getState().pending);
-  await page.evaluate(async mode => {
-   if (mode === 'chooser') (await import('/src/runtime/connection-ui.tsx')).connectionController.open();
+  await page.evaluate(mode => {
+   if (mode === 'chooser') window.fixture.controller.open();
    else if (mode === 'background') { Object.defineProperty(document, 'hidden', { configurable: true, value: true }); document.dispatchEvent(new Event('visibilitychange')); }
    else window.dispatchEvent(new Event('pagehide'));
   }, mode);
@@ -86,9 +87,9 @@ try {
   });
   assert.equal(suspended.state.context.sensitive, true, mode + JSON.stringify(suspended)); assert.equal(suspended.state.session.sessionId, 'fixture-session'); assert.equal(suspended.closes, 0);
   assert.ok(suspended.aborts > 0); assert.equal(suspended.approval, 'proposal-unavailable'); assert.equal(suspended.blocked, 'sensitive');
-  await page.evaluate(async mode => {
+  await page.evaluate(mode => {
    window.fixture.releases.splice(0).forEach(resolve => resolve()); window.fixture.delayed = false;
-   if (mode === 'chooser') (await import('/src/runtime/connection-ui.tsx')).connectionController.close();
+   if (mode === 'chooser') window.fixture.controller.close();
    else if (mode === 'background') { Object.defineProperty(document, 'hidden', { configurable: true, value: false }); document.dispatchEvent(new Event('visibilitychange')); }
    else window.dispatchEvent(new Event('pageshow'));
   }, mode);

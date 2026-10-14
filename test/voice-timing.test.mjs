@@ -70,7 +70,7 @@ test('legacy diagnostic counts never establish P-11 audio-boundary acceptance', 
   assert.equal(summary.cohorts.cold.phases.recognition.p50, 4002);
   assert.equal(summary.cohorts.warm.phases.legacyRecognitionPlusFirstAudio.n, 20);
   assert.equal(summary.cohorts.warm.phases.review.p50, 3000);
-  assert.match(summary.targetSignOff, /A-10/);
+  assert.match(summary.targetSignOff, /Issue #395/);
   assert.equal(percentile([1, 2, 3, 4], 50), 2);
   // The command reports insufficiency with exit code 2.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-latency-'));
@@ -79,7 +79,7 @@ test('legacy diagnostic counts never establish P-11 audio-boundary acceptance', 
     fs.writeFileSync(file, JSON.stringify({...exported, records: exported.records.slice(0, 10)}));
     assert.throws(() => execFileSync(process.execPath, ['scripts/aggregate-voice-latency.mjs', file], {stdio: 'pipe'}), error => error.status === 2);
     fs.writeFileSync(file, JSON.stringify(exported));
-    assert.throws(() => execFileSync(process.execPath, ['scripts/aggregate-voice-latency.mjs', file], {encoding: 'utf8', stdio: 'pipe'}), error => error.status === 2 && /P-11 audio-boundary/.test(error.stderr) && JSON.parse(error.stdout).sampleCountsSufficient === true);
+    assert.throws(() => execFileSync(process.execPath, ['scripts/aggregate-voice-latency.mjs', file], {encoding: 'utf8', stdio: 'pipe'}), error => error.status === 2 && /native audio evidence/.test(error.stderr) && JSON.parse(error.stdout).sampleCountsSufficient === true);
     // The required counts can be raised but never lowered below 20 warm and 5 cold.
     assert.throws(() => execFileSync(process.execPath, ['scripts/aggregate-voice-latency.mjs', file, '--warm', '1'], {stdio: 'pipe'}), error => error.status === 1);
     assert.throws(() => execFileSync(process.execPath, ['scripts/aggregate-voice-latency.mjs', file, '--cold', '30'], {stdio: 'pipe'}), error => error.status === 2);
@@ -113,7 +113,7 @@ test('text-only success and pooled routes cannot satisfy audible route qualifica
     const file = path.join(dir, 'export.json');
     for (const exported of [textOnly, split]) {
       fs.writeFileSync(file, JSON.stringify(exported));
-      assert.throws(() => execFileSync(process.execPath, ['scripts/aggregate-voice-latency.mjs', file], {stdio: 'pipe'}), error => error.status === 2 && /Insufficient audible samples by route/.test(String(error.stderr)));
+      assert.throws(() => execFileSync(process.execPath, ['scripts/aggregate-voice-latency.mjs', file], {stdio: 'pipe'}), error => error.status === 2 && /Insufficient native audio evidence/.test(String(error.stderr)));
     }
   } finally { fs.rmSync(dir, {recursive: true, force: true}); }
 });
@@ -140,9 +140,9 @@ test('50 complete legacy records still lack actual audio sample boundaries and c
   assert.equal(summary.complete,50);
   assert.equal(summary.sampleCountsSufficient,true);
   assert.equal(summary.sufficient,false);
-  assert.equal(summary.qualification.requiredTrials,50);
-  assert.equal(summary.qualification.qualifyingTrials,0);
-  assert.equal(summary.qualification.status,'unsupported-measurement-boundary');
+  assert.equal(summary.native.requiredSuccessfulTrials,50);
+  assert.deepEqual(summary.native.cohorts,[]);
+  assert.equal(summary.native.withinBudget,false);
   assert.equal(summary.cohorts.warm.phases.legacyRecognitionPlusFirstAudio.n,45);
   assert.equal(summary.cohorts.warm.phases.speechToAudioExcludingReview,undefined);
 });

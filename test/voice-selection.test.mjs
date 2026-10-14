@@ -29,7 +29,7 @@ test('production speech stays local regardless of account, legacy preferences or
     assert.equal(v.selectVoiceRoute('manual'),'manual');
     assert.equal(v.voiceRoutePreference(),'device');
     assert.equal(v.chooseVoiceRoute('cloud'),false);
-    assert.equal(v.chooseVoiceRoute('cloud',{disclosed:'cloud-speech-uses-credits'}),false);
+    assert.equal(v.chooseVoiceRoute('cloud',{disclosed:'cloud-speech-uses-plan'}),false);
     assert.equal(v.chooseVoiceRoute('device'),true);
     assert.equal(v.selectVoiceRoute(),'device','legacy preference cannot silently override current production policy');
     assert.match(v.cloudSpeechDisclosure(),/counts toward your plan allowance/);
@@ -38,7 +38,7 @@ test('production speech stays local regardless of account, legacy preferences or
 
 test('legacy preference persistence detects dropped or unavailable storage', () => {
   for(const store of [{getItem:()=>null,setItem(){}},{getItem(){throw Error('blocked');},setItem(){throw Error('blocked');}}]) {
-    const v=load(store);assert.equal(v.chooseVoiceRoute('cloud',{disclosed:'cloud-speech-uses-credits'}),false);assert.equal(v.selectVoiceRoute(),'device');
+    const v=load(store);assert.equal(v.chooseVoiceRoute('cloud',{disclosed:'cloud-speech-uses-plan'}),false);assert.equal(v.selectVoiceRoute(),'device');
   }
 });
 
@@ -56,7 +56,7 @@ test('Speak replies is opt-in, persisted and off for anything but an explicit en
 
 test('a retained disclosed Cloud preference cannot select production network speech after restart', () => {
   const store=storage();
-  store.bytes.set('alphaphone:voice-route:v1', JSON.stringify({version:1,route:'cloud',disclosed:'cloud-speech-uses-credits',chosenAt:1}));
+  store.bytes.set('alphaphone:voice-route:v1', JSON.stringify({version:1,route:'cloud',disclosed:'cloud-speech-uses-plan',chosenAt:1}));
   for(const account of [true,false]) {
     const v=load(store,{account,dev:false});
     assert.equal(v.voiceRoutePreference(),'device');

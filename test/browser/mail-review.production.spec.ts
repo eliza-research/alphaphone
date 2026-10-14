@@ -107,15 +107,16 @@ async function androidWithMailbox(page: Page) {
             const path = new URL(input.url).pathname;
             if (path === '/api/v1/user') return { status: 200, data: { success: true, data: { id: account } } };
             if (path === '/api/v1/subscription/entitlement') return { status: 404, data: {} }; // Deployed Cloud has no subscription entitlement route yet.
-            if (path === '/api/v1/credits/balance') return { status: 200, data: { balance: 5 } };
+            if (path === '/api/v1/billing/limits') return { status: 200, data: { success: true, data: { v2: { subscription: { status: 'available', value: { planKey: 'plus_monthly', state: 'active', currentPeriodEnd: '2099-01-01T00:00:00.000Z' } } } } } };
             // Synthetic managed Gmail behind Eliza Cloud, in the server's own response shapes. The
             // product's CloudProtocol validates every one of these replies.
             const m = f.mail, google = '/api/v1/eliza/google', body = input.body ? JSON.parse(input.body) : null;
             const digest = async (text: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))), b => b.toString(16).padStart(2, '0')).join('');
             const reply = (receipt: unknown, extra: Record<string, unknown> = {}) => ({ status: 200, data: { version: 1, providerExactlyOnce: false, receipt, ...extra } });
-            if (path === google + '/accounts') return { status: 200, data: [{ configured: true, connected: true, reason: 'connected', connectionId: 'grant-1', grantedCapabilities: ['google.gmail.triage'], identity: { email: 'owner@example.invalid' } }] };
+            if (path === google + '/accounts') return { status: 200, data: [{ configured: true, connected: true, reason: 'connected', connectionId: 'grant-1', grantedCapabilities: ['google.gmail.triage','google.gmail.send','google.gmail.drafts','google.gmail.mailbox'], identity: { email: 'owner@example.invalid' } }] };
             if (path === google + '/gmail/inbox-v1/capabilities') return { status: 200, data: { version: 1, from: 'owner@example.invalid', threads: true, send: true, providerDrafts: false, mailboxMutations: true, attachments: true, providerExactlyOnce: false, atomicDraftReplacement: false } };
             if (path === google + '/gmail/search') { m.searches++; return { status: 200, data: { messages: [{ externalId: 'm1', threadId: 't1', subject: 'Harbour schedule', from: 'Synthetic sender', fromEmail: 'sender@example.invalid', to: ['owner@example.invalid'], cc: [], snippet: 'Preview', receivedAt: '2026-10-06T12:00:00Z', isUnread: false }], syncedAt: '2026-10-08T12:00:00Z', nextPageToken: null } }; }
+            if(path===google+'/gmail/read')return {status:200,data:{message:{externalId:'m1',threadId:'t1',subject:'Harbour schedule',from:'Synthetic sender',fromEmail:'sender@example.invalid',to:['owner@example.invalid'],cc:[],snippet:'Preview',receivedAt:'2026-10-06T12:00:00Z',isUnread:false},bodyText:'Owned fixture body',links:[]}};
             if (path === google + '/gmail/inbox-v1/operations' && input.method === 'POST') {
               const p = body.proposal, review = { kind: p.kind, mode: p.mode, from: 'owner@example.invalid', to: p.to, cc: p.cc, bcc: p.bcc, subject: p.subject, bodyText: p.bodyText, attachments: [] };
               const receipt = { requestId: body.requestId, kind: p.kind, state: 'prepared', reviewDigest: await digest(JSON.stringify(review)), providerResult: null, rejectionCode: null };
@@ -162,9 +163,12 @@ test('Android: the send review shows Cc and Bcc, an edit after review is reviewe
   await button(page, 'Inbox').click();
   await expect(button(page, 'Synthetic sender, Harbour schedule')).toBeVisible({ timeout: 30_000 });
   await button(page, 'Compose').click();
-  await page.getByPlaceholder('To', { exact: true }).fill('friend@example.invalid');
-  await page.getByPlaceholder('To', { exact: true }).press('Enter');
-  await page.getByRole('textbox', { name: 'Cc', exact: true }).fill('carol@example.invalid');
+  await page.getByRole('textbox', {name: 'To', exact: true}).fill('friend@example.invalid');
+  await page.getByRole('textbox', {name: 'To', exact: true}).press('Enter');
+  await expect(page.getByRole('textbox', {name: 'Cc', exact: true})).toHaveCount(0);
+  await expect(page.getByRole('textbox', {name: 'Bcc', exact: true})).toHaveCount(0);
+  await page.getByRole('button', {name: 'Cc and Bcc', exact: true}).click();
+  await page.getByRole('textbox', {name: 'Cc', exact: true}).fill('carol@example.invalid');
   await page.getByRole('textbox', { name: 'Bcc', exact: true }).fill('audit@example.invalid');
   await page.getByRole('textbox', { name: 'Subject', exact: true }).fill('Flag-off reviewed send');
   await page.getByRole('textbox', { name: 'Message', exact: true }).fill('First body');

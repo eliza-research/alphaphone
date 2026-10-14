@@ -104,8 +104,8 @@ async function openProviderInbox(page: Page, reload = false) {
 }
 async function compose(page: Page, subject: string, body: string) {
   await button(page, 'Compose').click();
-  await page.getByPlaceholder('To', {exact: true}).fill('friend@example.invalid');
-  await page.getByPlaceholder('To', {exact: true}).press('Enter');
+  await page.getByRole('textbox', {name: 'To', exact: true}).fill('friend@example.invalid');
+  await page.getByRole('textbox', {name: 'To', exact: true}).press('Enter');
   await expect(button(page, 'Remove friend@example.invalid')).toBeVisible();
   await page.getByRole('textbox', {name: 'Subject', exact: true}).fill(subject);
   await page.getByRole('textbox', {name: 'Message', exact: true}).fill(body);

@@ -25,14 +25,16 @@ public final class ListenerControlProvider extends ContentProvider {
   long identity=Binder.clearCallingIdentity();
   try{
    ListenerStore store=new ListenerStore(getContext());
-   if(PAUSE.equals(method)){store.pause(ListenerPolicy.PAUSE_UNTIL_RESUMED);Listener.refresh(getContext());}
+   boolean resetSaved=true;
+   if("reset".equals(method)){resetSaved=store.reset();Listener.refresh(getContext());}
+   else if(PAUSE.equals(method)){store.pause(ListenerPolicy.PAUSE_UNTIL_RESUMED);Listener.refresh(getContext());}
    else if(TURN_OFF.equals(method)){store.setEnabled(false);Listener.refresh(getContext());}
    else if(!STATUS.equals(method))throw new IllegalArgumentException("Unknown method");
    ListenerPolicy.State state=Listener.state(getContext());
    Bundle out=new Bundle();
    out.putString("state",state.name());
    out.putString("label",ListenerStore.storageFailed()?"Listening is off. Settings could not be saved; reopen listener settings.":ListenerPolicy.label(state));
-   out.putBoolean("saved",!ListenerStore.storageFailed());
+   out.putBoolean("saved",resetSaved&&!ListenerStore.storageFailed());
    out.putBoolean("consented",ListenerPolicy.consented(store.consentVersion()));
    out.putBoolean("listening",ListenerPolicy.processesAudio(state));
    out.putBoolean("microphoneOpen",ListenerPolicy.holdsMicrophone(state));

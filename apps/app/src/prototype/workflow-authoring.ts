@@ -24,7 +24,9 @@ export function createWorkflowAuthoring(owner:()=>any,publish:()=>void,onSaved:(
  let describeOn=false,descriptionPrompt='',generated:PhoneSpec|null=null,generatedSession='',generatedBaseline='',generating=false;
  // A refreshed receipt showed the agent has no record of the pending save. Only then may the owner send that exact save again.
  let unreceipted=false,resendReview=false;
- let calendars:Bag[]=[],storage:{slot:string;raw:string|null;failed:boolean;queue:Promise<void>;secure:typeof secure}|null=null;
+ type DraftStorage={slot:string;raw:string|null;failed:boolean;queue:Promise<void>;secure:typeof secure};
+ let calendars:Bag[]=[],storage:DraftStorage|null=null;
+ let retainedDraftState:{storage:DraftStorage;draft:Draft|null}|null=null;
  const toast=(value:string)=>owner()?.toast?.(value);
  const selected=()=>draft?.spec.steps.find(s=>s.id===sheet);
  const locked=()=>busy||!!draft?.pending||!!storage?.failed;
@@ -34,10 +36,17 @@ export function createWorkflowAuthoring(owner:()=>any,publish:()=>void,onSaved:(
  function close(){unreceipted=false;resendReview=false;describeOn=false;descriptionPrompt='';generated=null;generating=false;active=false;generation++;controller?.abort();controller=null;busy=false;sheet=null;review=null;discard=false;calendars=[];publish();}
  async function open(workflow?:RemoteWorkflow){
   if(active||busy)return;const binding=connectionController.getWorkflowClient(),session=connectionController.getSnapshot().session;if(!binding||!session){connectionController.open();return;}
+  if(storage)retainedDraftState={storage,draft};
+  const previousStorage=retainedDraftState?.storage,previousDraft=retainedDraftState?.draft;
   active=true;busy=true;unreceipted=false;resendReview=false;draft=null;catalog=null;storage=null;status='Loading this agent’s workflow capabilities…';const token=++generation;controller=new AbortController();const signal=controller.signal;publish();
   const valid=()=>token===generation&&!signal.aborted&&connectionController.getWorkflowClient()?.sessionId===binding.sessionId&&!document.hidden&&!connectionController.getSnapshot().open;
-  try{const [cap,identity]=await Promise.all([binding.client.phoneCatalog(signal),workflowSha([session.origin,session.ownerId,session.agentId])]);if(!valid())return;catalog=cap;const slot='workflow-draft:v1:'+identity,draftSecure=browserDevProfile&&JSON.parse(localStorage.getItem('alpha.connection.selection.v1')||'null')?.kind==='development'?await browserWorkflowDraftStore(session):secure,saved=await draftSecure.secureRead({slot});if(!valid())return;storage={slot,raw:saved.value,failed:false,queue:Promise.resolve(),secure:draftSecure};
-   if(saved.value!==null){if(new TextEncoder().encode(saved.value).length>100000)throw new Error('Saved draft exceeds the recovery limit');const retained=JSON.parse(saved.value);if(retained.format!==1||retained.identity!==identity||!retained.spec||retained.spec.version!==1||!Array.isArray(retained.spec.steps)||retained.spec.steps.length>32)throw new Error('Saved draft requires recovery');draft=retained;status=draft!.pending?'Save outcome unknown. Refresh its exact receipt; another save is blocked.':`Restored the draft stored ${draftStorageDescription}. Resume it or discard it explicitly.`;}
+  try{const [cap,identity]=await Promise.all([binding.client.phoneCatalog(signal),workflowSha([session.origin,session.ownerId,session.agentId])]);if(!valid())return;catalog=cap;const slot='workflow-draft:v1:'+identity;let unsaved:Draft|null=null,unsavedBase:string|null=null;if(previousStorage?.slot===slot){await previousStorage.queue;if(!valid())return;
+   // Consume the retained state once: every later reopen reads the slot again, so a failed save can always be recovered by close and reopen.
+   if(retainedDraftState?.storage===previousStorage)retainedDraftState=null;if(previousStorage.failed&&previousDraft){unsaved=previousDraft;unsavedBase=previousStorage.raw;}}
+   const draftSecure=browserDevProfile&&JSON.parse(localStorage.getItem('alpha.connection.selection.v1')||'null')?.kind==='development'?await browserWorkflowDraftStore(session):secure,saved=await draftSecure.secureRead({slot});if(!valid())return;storage={slot,raw:saved.value,failed:false,queue:Promise.resolve(),secure:draftSecure};
+   // A failed write leaves the slot at the last confirmed bytes: retry the retained edits there. If another window changed the slot, load its newer draft instead.
+   if(unsaved&&saved.value===unsavedBase&&JSON.stringify(unsaved)!==saved.value){draft=unsaved;status='The latest local draft save failed. Your retained edits are being saved again.';persist();}
+   else if(saved.value!==null){if(new TextEncoder().encode(saved.value).length>100000)throw new Error('Saved draft exceeds the recovery limit');const retained=JSON.parse(saved.value);if(retained.format!==1||retained.identity!==identity||!retained.spec||retained.spec.version!==1||!Array.isArray(retained.spec.steps)||retained.spec.steps.length>32)throw new Error('Saved draft requires recovery');draft=retained;status=draft!.pending?'Save outcome unknown. Refresh its exact receipt; another save is blocked.':unsaved&&JSON.stringify(unsaved)!==saved.value?`Another window changed this draft, so unsaved edits from the failed save were not kept. Restored the newer draft stored ${draftStorageDescription}.`:`Restored the draft stored ${draftStorageDescription}. Resume it or discard it explicitly.`;}
    else{const spec=workflow?normalizePhoneSpec(workflow.phoneSpec):{version:1 as const,name:'New workflow',description:'',trigger:{kind:'manual' as const},steps:[]};draft={format:1,identity,spec,...(workflow?{workflowId:workflow.id,versionId:workflow.versionId}:{})};status='Build a manual workflow. It will be saved paused.';persist();}
   }catch(error){if(valid()){status=error instanceof Error?error.message:'Typed workflow authoring is unavailable on this agent';draft=null;toast(status);}}finally{if(token===generation){busy=false;controller=null;publish();}}
  }
@@ -82,7 +91,7 @@ export function createWorkflowAuthoring(owner:()=>any,publish:()=>void,onSaved:(
   catch(error){if(valid()){unreceipted=false;if(error instanceof WorkflowTypedRejected)await refused();else status='Save outcome unknown. Refresh the exact save receipt. The app will not submit a second workflow.';toast(status);}}
   finally{if(token===generation){busy=false;controller=null;publish();}}
  }
- async function discardDraft(){if(!draft||busy||draft.pending)return;if(!discard){discard=true;status='Tap Discard local draft again to remove only this local draft.';publish();return;}try{await localSaved();const result=await storage!.secure.secureCompareExchange({slot:storage!.slot,expectedValue:storage!.raw,value:null});if(result.status!=='saved')throw new Error('Draft changed elsewhere');draft=null;close();}catch(error){toast((error as Error).message);}}
+ async function discardDraft(){if(!draft||busy||draft.pending)return;if(!discard){discard=true;status='Tap Discard local draft again to remove only this local draft.';publish();return;}try{if(!storage)throw new Error('Resolve local draft storage before discarding');await storage.queue;const result=await storage!.secure.secureCompareExchange({slot:storage!.slot,expectedValue:storage!.raw,value:null});if(result.status!=='saved')throw new Error('Draft changed elsewhere');draft=null;close();}catch(error){toast((error as Error).message);}}
  function cancelGeneration(){if(generating){generation++;controller?.abort();controller=null;busy=false;generating=false;}describeOn=false;generated=null;status='Current draft retained. Nothing was saved on the agent.';publish();}
  async function generateDraft(){
   if(!describeOn||!draft||!catalog||locked())return;

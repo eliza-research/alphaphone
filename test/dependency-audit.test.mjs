@@ -81,7 +81,14 @@ test('a recorded fix cannot regress in the lockfile', () => {
 
 test('npm audit output is normalised to advisory ids and exact dependency paths', () => {
   assert.deepEqual(dependencyPaths(lock, 'node_modules/uuid'), ['@capacitor/cli > xcode > uuid']);
-  assert.deepEqual(dependencyPaths(lock, 'node_modules/source-map-js'), ['@vitejs/plugin-react > vite > postcss > source-map-js', 'vite > postcss > source-map-js']);
+  assert.deepEqual(dependencyPaths(lock, 'node_modules/source-map-js'), [
+    '@vitejs/plugin-react > vite > postcss > source-map-js',
+    'jsdom > @asamuzakjp/dom-selector > css-tree > source-map-js',
+    'jsdom > @bramus/specificity > css-tree > source-map-js',
+    'jsdom > @csstools/css-syntax-patches-for-csstree > css-tree > source-map-js',
+    'jsdom > css-tree > source-map-js',
+    'vite > postcss > source-map-js',
+  ]);
   const advisory = {source: 1, name: 'uuid', title: 't', url: 'https://github.com/advisories/GHSA-w5hq-g745-h8pq', severity: 'moderate', range: '<11.1.1'};
   const report = {vulnerabilities: {
     uuid: {name: 'uuid', severity: 'moderate', isDirect: false, via: [advisory], effects: ['xcode'], range: '<11.1.1', nodes: ['node_modules/uuid'], fixAvailable: {name: '@capacitor/cli', version: '8.4.3', isSemVerMajor: true}},

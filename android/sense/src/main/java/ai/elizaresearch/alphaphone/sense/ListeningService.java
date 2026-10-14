@@ -142,7 +142,10 @@ public final class ListeningService extends Service {
  }
 
  /** Re-evaluates policy and converges the service, notification and microphone on it. */
- private void apply(){
+ private void apply(){ListenerStore.serializeConsent(this::applyUnderConsentLock);}
+
+ /** A reset cannot interleave a LISTENING snapshot with capture/epoch renewal. */
+ private void applyUnderConsentLock(){
   if(destroyed)return;
   Listener.epoch.invalidate();
   main.removeCallbacks(reapply);

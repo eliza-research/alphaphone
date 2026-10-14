@@ -64,4 +64,30 @@ public class NotificationsInstrumentedTest {
    until(AndroidShade.ALPHA_SHADE_ABSENT);
   }finally{if(AndroidShade.isOpen())AndroidShade.collapse();manager.cancel(tag,1);tap.cancel();context.unregisterReceiver(receiver);}
  }
+ /** A canceled target must not be confused with a neighboring live notice in SystemUI. */
+ @Test public void goneTargetNeverDispatchesOrOpensItsNeighbor()throws Exception{
+  Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();NotificationManager manager=context.getSystemService(NotificationManager.class);
+  InstrumentationRegistry.getInstrumentation().getUiAutomation().grantRuntimePermission(context.getPackageName(),android.Manifest.permission.POST_NOTIFICATIONS);
+  ReminderTestAccess.channel(context);String token=java.util.UUID.randomUUID().toString(),tag="gone-target-"+token;
+  String goneAction="alpha.synthetic.gone."+token,liveAction="alpha.synthetic.live."+token,goneTitle="Gone target "+token,liveTitle="Live neighbor "+token;
+  java.util.concurrent.atomic.AtomicInteger gone=new java.util.concurrent.atomic.AtomicInteger(),live=new java.util.concurrent.atomic.AtomicInteger();
+  BroadcastReceiver receiver=new BroadcastReceiver(){@Override public void onReceive(Context ignored,Intent intent){if(goneAction.equals(intent.getAction()))gone.incrementAndGet();if(liveAction.equals(intent.getAction()))live.incrementAndGet();}};
+  IntentFilter filter=new IntentFilter(goneAction);filter.addAction(liveAction);
+  if(android.os.Build.VERSION.SDK_INT>=33)context.registerReceiver(receiver,filter,Context.RECEIVER_NOT_EXPORTED);else context.registerReceiver(receiver,filter);
+  PendingIntent goneTap=PendingIntent.getBroadcast(context,1,new Intent(goneAction).setPackage(context.getPackageName()),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
+  PendingIntent liveTap=PendingIntent.getBroadcast(context,2,new Intent(liveAction).setPackage(context.getPackageName()),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
+  try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)){
+   AppNavigation.liveMode();WebViewTestDriver.evaluate(AppNavigation.request("Home"));until("document.querySelector('[data-screen]')&&!document.querySelector('.alpha-connection-scrim')");AppNavigation.declineStartupAccess();
+   manager.notify(tag,1,new Notification.Builder(context,ReminderTestAccess.CHANNEL).setSmallIcon(android.R.drawable.ic_popup_reminder).setContentTitle(goneTitle).setContentText("Synthetic removed target").setContentIntent(goneTap).setAutoCancel(true).build());
+   manager.notify(tag,2,new Notification.Builder(context,ReminderTestAccess.CHANNEL).setSmallIcon(android.R.drawable.ic_popup_reminder).setContentTitle(liveTitle).setContentText("Synthetic positive control").setContentIntent(liveTap).setAutoCancel(true).build());
+   goneTap.cancel();assertThrows(PendingIntent.CanceledException.class,()->goneTap.send());
+   openShade();AccessibilityNodeInfo stale=AndroidShade.waitText(goneTitle,10000);assertNotNull("The stale row remains visible after its target is canceled",stale);assertTrue(AndroidShade.tap(stale));
+   SystemClock.sleep(500);assertEquals("Canceled target dispatches nothing",0,gone.get());assertEquals("A failed tap must not dispatch its neighbor",0,live.get());assertTrue("The neighbor remains posted",present(manager,tag,2));
+   if(AndroidShade.isOpen())AndroidShade.collapse();openShade();AccessibilityNodeInfo neighbor=AndroidShade.waitText(liveTitle,10000);assertNotNull(neighbor);assertTrue(AndroidShade.tap(neighbor));
+   long end=SystemClock.elapsedRealtime()+10000;while(live.get()==0&&SystemClock.elapsedRealtime()<end)SystemClock.sleep(100);
+   assertEquals("The same SystemUI path still dispatches the live target",1,live.get());assertEquals("No delayed stale dispatch",0,gone.get());
+   if(AndroidShade.isOpen())AndroidShade.collapse();until(AndroidShade.ALPHA_SHADE_ABSENT);
+  }finally{if(AndroidShade.isOpen())AndroidShade.collapse();manager.cancel(tag,1);manager.cancel(tag,2);goneTap.cancel();liveTap.cancel();context.unregisterReceiver(receiver);}
+ }
+
 }

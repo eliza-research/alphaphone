@@ -144,3 +144,25 @@ APK variant was built or qualified in this review. No new emulator, full-image,
 physical-device or real-service acceptance is claimed.
 
 The ongoing [full-product audit](full-product-completion-audit.md) retains exact developer APK/Cuttlefish evidence, remaining failures and the requested Wallet planning package outside MVP. It does not replace the October 12 approved MVP policy or claim release acceptance.
+### Reviewed Photos source attachment (#419; depends on #442 and #456)
+
+The permitted Photos viewer exposes an explicit Email action for PNG, JPEG and WebP
+source files up to 5 MiB. Opening or selecting a photo does not read attachment bytes
+or insert anything. The action uses `AlphaMailAttachments.readPhotoSelected`, not
+`AlphaPhotos.read` (which returns a display thumbnail). The read keeps the volume,
+row identity, selected revision, metadata, profile/access and catalog generation
+current across a bounded stream copy; leaving Photos or pausing the activity cancels
+pending reads. Provider-readable source bytes retain Android privacy redactions;
+this path never requests unredacted location metadata.
+
+The shared Files review displays the actual readable name, MIME and byte count,
+account and draft destination. Its attachment checkbox starts unchecked. Confirming
+rereads and hashes the source, checks the account/draft token, and adds those exact
+bytes only to the local draft. Existing encrypted draft persistence, attachment
+removal and separate provider Send review apply. Videos, unsupported image formats,
+legacy owned-only IDs and browser photo sources do not expose this action.
+
+JVM source-copy fixtures and a controlled browser bridge exercise the rejection and
+review contracts; they do not establish Android permission, MediaStore, native
+lifecycle or live Gmail acceptance. Keep #419 open until the dependency stack is
+integrated and those native/provider checks are completed.

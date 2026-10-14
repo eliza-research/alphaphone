@@ -345,3 +345,16 @@ dialog:is(.alpha-operation-review,.alpha-calendar-editor,.alpha-calendar-meeting
  max-height:calc(var(--alpha-visible-height,100dvh) - 24px);
  margin-block:auto;
 }
+.mail-toolbar-icon{display:block;width:22px;height:22px;flex-shrink:0;background:currentColor;mask-position:center;mask-size:contain;mask-repeat:no-repeat;-webkit-mask-position:center;-webkit-mask-size:contain;-webkit-mask-repeat:no-repeat}
+
+.mail-recipient-row{display:flex;align-items:flex-start;gap:8px;min-height:52px;padding:6px 0;border-bottom:1px solid var(--line)}
+.mail-recipient-label{width:24px;flex-shrink:0;line-height:38px;color:var(--mut);font-size:14px}
+.mail-recipient-addresses{display:flex;flex:1;min-width:0;flex-wrap:wrap;align-items:center;gap:6px}
+
+/* Notes stay readable on wide windows without recreating the focused editor on resize.
+ * Match the title and source controls to the text column; preserve portrait gutters. */
+.note-editor > .note-title-column { width:100%; max-width:768px; align-self:center; box-sizing:border-box; }
+.note-editor > textarea { max-width:720px; align-self:center; }
+.note-editor > .note-source-actions { width:calc(100% - 48px); max-width:720px; align-self:center; box-sizing:border-box; }
+.note-editor > .note-checklist-column { width:100%; max-width:744px; align-self:center; box-sizing:border-box; min-height:0; }
+[data-alpha-subview="notes-voice"] > .note-voice-column { width:100%; max-width:768px; align-self:center; box-sizing:border-box; min-height:0; }

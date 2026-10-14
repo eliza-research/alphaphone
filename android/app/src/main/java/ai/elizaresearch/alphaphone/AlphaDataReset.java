@@ -21,7 +21,8 @@ final class AlphaDataReset {
  }
  /** Never resumes the old runtime, including when Android refuses or the Binder call fails. */
  static void dispatchAndExit(Context context){
-  try{ActivityManager manager=context.getSystemService(ActivityManager.class);if(manager!=null)manager.clearApplicationUserData();}
+  try{if(!AlphaListenerPlugin.resetForData(context))throw new IllegalStateException("Listener reset not acknowledged");
+   ActivityManager manager=context.getSystemService(ActivityManager.class);if(manager!=null)manager.clearApplicationUserData();}
   catch(RuntimeException failure){android.util.Log.w("AlphaReset","Android reset request unavailable; retry on next launch");}
   finally{android.os.Process.killProcess(android.os.Process.myPid());System.exit(0);}
  }

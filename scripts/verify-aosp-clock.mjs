@@ -10,4 +10,4 @@ const adb = path.join(env.ANDROID_HOME, "platform-tools/adb");
 const run = (...args) => execFileSync(adb, ["-s", serial, ...args], {
   encoding: "utf8", env, timeout: 10_000, maxBuffer: 128 * 1024,
 });
-console.log(JSON.stringify(verifyAospClockHandlers(run, process.env.ALPHA_ANDROID_USER), null, 2));
+console.log(JSON.stringify(verifyAospClockHandlers(run, process.env.ALPHA_ANDROID_USER, process.env.ALPHA_EXPECTED_IMAGE_FINGERPRINT), null, 2));

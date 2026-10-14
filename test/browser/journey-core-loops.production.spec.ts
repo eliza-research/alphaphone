@@ -121,7 +121,7 @@ async function android(page: Page, options: { clock?: 'opened' | 'unavailable' |
             if (url.origin !== 'https://api.eliza.app') throw Error('Connection request failed');
             if (url.pathname === '/api/v1/user') return { status: 200, data: { success: true, data: { id } } };
             if (url.pathname === '/api/v1/subscription/entitlement') return { status: 404, data: {} }; // Deployed Cloud has no subscription entitlement route yet.
-            if (url.pathname === '/api/v1/credits/balance') return { status: 200, data: { balance: 5 } };
+            if (url.pathname === '/api/v1/billing/limits') return { status: 200, data: { success: true, data: { v2: { subscription: { status: 'available', value: { planKey: 'plus_monthly', state: 'active', currentPeriodEnd: '2099-01-01T00:00:00.000Z' } } } } } };
             return { status: 404, data: {} };
           }
           return {};
@@ -389,7 +389,7 @@ test('loops D and F in the web build: digests and mail name the missing account 
   await expect(page.getByText('Dinner Friday?', { exact: true })).toHaveCount(0);
   await button(page, 'Compose').click();
   await expect(page.getByText('Connect a Gmail account first.', { exact: true })).toBeVisible();
-  await expect(page.getByPlaceholder('To', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('textbox', {name: 'To', exact: true})).toHaveCount(0);
   await expect(button(page, 'Send email')).toHaveCount(0);
   await expectNoDevelopmentSurface(page);
   expect(foreign).toEqual([]);

@@ -38,14 +38,16 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { isAndroid } from '../native';
 import type { ActionProposal, OperationReceipt, ContextEnvelope, VerifiedSession } from './alpha-client';
 import { CloudProtocol, CloudProtocolError, type CloudAgent, type CloudEnvironment, type CloudPhoneTarget } from './cloud-protocol';
-import { checkEntitlement, clearEntitlementKeyCache, describeSubscription, EntitlementError, EntitlementRefresher, isEntitlementSignInFailure, readServiceLimit, serviceLimitMessage, type SubscriptionView } from './subscription-entitlement';
+import { checkEntitlement, clearEntitlementKeyCache, describeSubscription, EntitlementError, EntitlementRefresher, isEntitlementSignInFailure, CHOOSE_PLAN_LABEL, MANAGE_PLAN_LABEL, planAdmission, readServiceLimit, redeemFailureMessage, redeemSuccessMessage, serviceLimitMessage, SubscriptionRedeemError, type SubscriptionView } from './subscription-entitlement';
 import { RemoteProtocol, RemoteProtocolError } from './remote-protocol';
 import { phoneContextMessage } from './phone-context';
 import { cloudCredentialStore, remoteCredentialStore, nativeCloudRequest, nativeRemoteRequest, openConnectionBrowser, removeStoredCloudCredential, secureConnectionStore } from './native-connection';
 import './connection-ui.css';
 
 type Selection = {kind:'development';profile:DevelopmentProfile;account?:string} | { kind: 'resident' } | { kind: 'offline'; localApps?: true } | { kind: 'none' } | { kind: 'mock' } | { kind: 'remote' | 'local'; origin: string } | { kind: 'cloud'; environment: CloudEnvironment; agentId: string; ownerId?: string };
-export interface CloudServiceSession { environment: CloudEnvironment; userId: string; organizationId?: string; sessionId: string; credentialId: string; email?: string }
+export interface CloudServiceSession { environment: CloudEnvironment; userId: string; organizationId?: string; sessionId: string; credentialId: string; email?: string;
+  /** When this phone's Cloud sign-in key expires (from the CLI login), if Cloud reported it. */
+  expiresAt?: number }
 export interface RestoredMessage { id: string; from: 'user' | 'agent'; text: string }
 export interface ConnectionSnapshot {
   /** Automatic session restoration has completed; null is now a resolved no-session state. */
@@ -53,6 +55,16 @@ export interface ConnectionSnapshot {
   /** Subscription plan state from a verified Cloud entitlement; never a credit balance. */
   residentSubscription?: SubscriptionView | null;
   residentSavedCredential?: boolean;
+  /**
+   * Production plan gate (owner decision, #410). 'needs-plan': signed in without an admissible
+   * plan; the agent is not started and the gate offers Redeem code / Choose a plan. 'offline': a
+   * plan verified recently on this phone keeps local apps available while Cloud is unreachable.
+   */
+  residentGate?: 'needs-plan' | 'offline' | null;
+  /** When the current plan or redeemed grant ends, if Cloud reported it. */
+  planEndsAt?: number | null;
+  /** Outcome of the last subscription code submission. Never contains the code. */
+  redeemNotice?: string; redeemError?: string;
   cloudPersonal?: PersonalSetupState;
   phoneActionsAvailable: boolean; phoneCapabilityReason: string;
   conversations: Array<{ id: string; title: string }>;
@@ -67,7 +79,7 @@ export interface ConnectionSnapshot {
   /** Older messages beyond the restored window remain on the agent. */
   historyPartial?: boolean;
   cloudAccount: CloudServiceSession | null;
-  purpose?:'agent'|'cloud-account';
+  purpose?:'agent'|'cloud-account'|'plan';
   open: boolean; busy: boolean; message: string; error: string;
   kind: 'offline' | 'remote' | 'local' | 'resident' | 'cloud'; name: string;
   session: VerifiedSession | null; agents: CloudAgent[];
@@ -86,6 +98,53 @@ const remotePairingRetired = !testMocksEnabled;
 /** Eliza Cloud admits no request from the production web origin, so no Cloud route is started there. */
 const webCloudUnavailable = () => !testMocksEnabled && !isAndroid && !browserLocalAgentEnabled;
 const CLOUD_SERVICE = 'alpha.connection.cloud-service.v1';
+/**
+ * Subscription gate QA (test-mocks builds only): runs the production sign-in and plan gate
+ * against the chosen Cloud environment, including staging (docs/cloud-subscription-qa.md).
+ */
+const RESIDENT_QA = 'alpha.connection.resident-qa.v1';
+function residentQa(): CloudEnvironment | null {
+  if (!testMocksEnabled) return null;
+  try { const value = localStorage.getItem(RESIDENT_QA); return value === 'production' || value === 'staging' ? value : null; } catch { return null; }
+}
+/** Production Android always runs the sign-in and plan gate; test-mocks builds only in QA mode. */
+function residentGate(): boolean { return (isAndroid && !testMocksEnabled) || residentQa() !== null; }
+function residentEnvironment(): CloudEnvironment { return residentQa() ?? 'production'; }
+/** The on-device agent's Cloud inference binding is production-only (native reads cloud:production). */
+function residentBindable(): boolean { return isAndroid && residentEnvironment() === 'production'; }
+/** Warn this long before this phone's Cloud sign-in key expires (CLI keys last 90 days). */
+export const CLOUD_KEY_EXPIRY_WARNING_MS = 14 * 24 * 60 * 60 * 1000;
+/**
+ * A plan verified on this phone within this window keeps local apps available while Cloud is
+ * unreachable. An engineering bound for offline use, not a billing decision: Cloud still
+ * refuses every AI request without a plan.
+ */
+export const OFFLINE_PLAN_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+const PLAN_ADMISSION = 'alpha.connection.plan-admission.v1';
+type PlanAdmissionRecord = { version: 1; environment: CloudEnvironment; credentialId: string; userId: string; organizationId: string | null; status: 'active' | 'trialing' | 'past_due'; planName: string; verifiedAt: number; endsAt: number | null };
+function readPlanAdmission(): PlanAdmissionRecord | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(PLAN_ADMISSION) || 'null');
+    if (!value || value.version !== 1 || !cloudEnvironmentAllowed(value.environment) || typeof value.credentialId !== 'string' || typeof value.userId !== 'string' || !['active', 'trialing', 'past_due'].includes(value.status) || typeof value.planName !== 'string' || !Number.isFinite(value.verifiedAt)) return null;
+    return { version: 1, environment: value.environment, credentialId: value.credentialId, userId: value.userId, organizationId: typeof value.organizationId === 'string' ? value.organizationId : null, status: value.status, planName: value.planName, verifiedAt: value.verifiedAt, endsAt: Number.isFinite(value.endsAt) ? value.endsAt : null };
+  } catch { return null; }
+}
+function writePlanAdmission(record: PlanAdmissionRecord | null) { try { if (record) localStorage.setItem(PLAN_ADMISSION, JSON.stringify(record)); else localStorage.removeItem(PLAN_ADMISSION); } catch { /* Offline grace is a convenience; the gate still checks Cloud. */ } }
+/** The recent admitting plan this credential holds, or null. */
+function recentPlanAdmission(environment: CloudEnvironment, credentialId: string | undefined, userId?: string): PlanAdmissionRecord | null {
+  const record = readPlanAdmission();
+  if (!record || !credentialId || record.environment !== environment || record.credentialId !== credentialId || (userId !== undefined && record.userId.toLowerCase() !== userId.toLowerCase())) return null;
+  const age = Date.now() - record.verifiedAt;
+  return age >= 0 && age <= OFFLINE_PLAN_GRACE_MS ? record : null;
+}
+/** A Cloud outage or no network: not a refusal of the account or the plan. */
+function cloudUnreachable(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === 'AbortError') return false;
+  if (error instanceof CloudProtocolError) return error.code === 'http' && (error.status === 408 || error.status === 429 || (error.status ?? 0) >= 500);
+  if (error instanceof EntitlementError) return false;
+  return error instanceof Error && /^(Connection request failed|Connection timed out|Request cancelled)$/.test(error.message);
+}
+const OFFLINE_NOTICE = 'Eliza Cloud cannot be reached right now. Local apps and on-device speech keep working with your recent plan; your agent starts when Cloud is reachable again, checked when the network returns or you come back to Alpha Phone.';
 const listeners = new Set<() => void>();
 let developmentPageSuspended = false;
 let state: ConnectionSnapshot = { startupResolved:false, phoneActionsAvailable:false, phoneCapabilityReason:'', actionHistory: [], conversations: [], history: null, cloudAccount: null, open: false, busy: false, message: '', error: '', kind: 'offline', name: 'Offline', session: null, agents: [] };
@@ -120,14 +179,14 @@ function detachService() { stopEntitlementRefresh(); retireReadReplies();for(con
 async function verifyService(client: CloudProtocol, signal: AbortSignal, expected?:{credentialId:string;credentialReference?:string}) {
   const credential = await cloudCredentialStore.read(client.environment); signal.throwIfAborted();
   if(expected&&(credential?.credentialId!==expected.credentialId||credential?.credentialReference!==expected.credentialReference))throw new Error('Cloud account changed. Try again.');
-  if(isAndroid && !testMocksEnabled)update({residentSavedCredential:!!credential?.credentialId});
+  if(residentGate())update({residentSavedCredential:!!credential?.credentialId});
   if (!credential?.credentialId) throw new Error('Cloud credentials are unavailable. Sign in again.');
   const identity = await client.identity(signal); signal.throwIfAborted();
   const current=await cloudCredentialStore.read(client.environment);
   if (current?.credentialId !== credential.credentialId || expected&&current?.credentialReference!==expected.credentialReference) throw new Error('Cloud account changed. Try again.');
   signal.throwIfAborted();
   const same = service?.identity.environment === client.environment && service.identity.userId === identity.userId && service.identity.organizationId === identity.organizationId && service.identity.credentialId === credential.credentialId;
-  const account = { ...identity, credentialId: credential.credentialId, environment: client.environment, sessionId: same ? service!.identity.sessionId : crypto.randomUUID() };
+  const account = { ...identity, credentialId: credential.credentialId, environment: client.environment, sessionId: same ? service!.identity.sessionId : crypto.randomUUID(), ...(Number.isFinite(credential.expiresAt) ? { expiresAt: credential.expiresAt } : {}) };
   localStorage.setItem(CLOUD_SERVICE, client.environment);
   service = { client, identity: account }; update({ cloudAccount: account });
   return identity;
@@ -205,8 +264,8 @@ function retire(name = 'Offline') {
   update({ phoneActionsAvailable:false, phoneCapabilityReason:'', session: null, kind: 'offline', name, conversations: [], history: null, historyError:'', historyPartial:false, replyNotice:'', actionHistory: [] });
   return retirement;
 }
-function persistOffline(localApps = false): string {
-  try { save(localApps ? { kind: 'offline', localApps: true } : { kind: 'offline' }); return ''; }
+function persistOffline(): string {
+  try { save({ kind: 'offline' }); return ''; }
   catch {
     try { localStorage.removeItem(SELECTION); } catch { /* The visible error explains restart uncertainty. */ }
     return 'Offline now, but this preference could not be saved. Check the connection again after restarting the app.';
@@ -348,33 +407,69 @@ async function connectDevelopment(profile:DevelopmentProfile,signal:AbortSignal)
 }
 async function admitCloudResident(signal:AbortSignal):Promise<boolean> {
   stopEntitlementRefresh();
-  update({residentSubscription:{kind:'checking'}});
-  cloud = makeCloud('production');
+  update({residentSubscription:{kind:'checking'},redeemError:''});
+  const environment=residentEnvironment();
+  cloud = makeCloud(environment);
   const client=cloud;
-  const identity=await verifyService(client,signal);
+  const saved=await cloudCredentialStore.read(environment);signal.throwIfAborted();
+  let identity:Awaited<ReturnType<typeof verifyService>>;
+  try{identity=await verifyService(client,signal);}
+  catch(error){
+    signal.throwIfAborted();
+    // Offline or a Cloud outage: a plan verified recently on this phone keeps local apps available.
+    // Nothing is started: the agent's AI and its Cloud binding need Cloud.
+    const recent=cloudUnreachable(error)?recentPlanAdmission(environment,saved?.credentialId):null;
+    if(!recent)throw error;
+    update({residentGate:'offline',residentSubscription:{kind:'unavailable',reason:'outage'},planEndsAt:recent.endsAt,open:true,message:OFFLINE_NOTICE,error:''});
+    return false;
+  }
   const account=service;
   if(!account)throw Error('Cloud account changed. Sign in again.');
-  // One entitlement read at admission; turns never wait on billing. An outage or an unpublished
-  // route leaves the plan "unavailable" and Cloud decides each AI request on its side.
+  // One entitlement read at admission; turns never wait on billing.
   const expected={userId:identity.userId,organizationId:identity.organizationId??null};
   const checked=await checkEntitlement(client.entitlementSource(),expected,signal);
   signal.throwIfAborted();
-  if(service!==account || (await cloudCredentialStore.read('production'))?.credentialId!==account.identity.credentialId)throw Error('Cloud account changed. Sign in again.');
-  update({residentSubscription:checked.view});
-  // Billing state never retires local orchestration or schedules. Cloud enforces AI access
-  // at the service boundary and its refusal is presented by the normal send path.
+  if(service!==account || (await cloudCredentialStore.read(environment))?.credentialId!==account.identity.credentialId)throw Error('Cloud account changed. Sign in again.');
+  let view=checked.view,decision=planAdmission(view);
+  const recent=recentPlanAdmission(environment,account.identity.credentialId,account.identity.userId);
+  // A billing outage after a recent verified plan keeps the agent: Cloud still decides each AI request.
+  if(decision==='unknown'&&view.kind==='unavailable'&&view.reason==='outage'&&recent)decision=recent.status==='past_due'?'admit-with-warning':'admit';
+  // End of the plan window when Cloud reported one: the billing snapshot's period end, a redeemed grant's end, or the last known.
+  const endsAt=view.kind==='active'&&view.source==='billing-limits'&&view.expiresAt>0?view.expiresAt:recent?.endsAt??(state.cloudAccount?.credentialId===account.identity.credentialId?state.planEndsAt??null:null);
+  if(decision==='needs-plan'||decision==='unknown'){
+    // The plan gate: no agent start, no provider binding. Redeem code / Choose a plan / Check again.
+    if(decision==='needs-plan')writePlanAdmission(null);
+    if(active?.kind==='resident'){try{if(isAndroid)await stopLocalAgent();}catch{/* The gate below still applies. */}retire('Plan required');}
+    update({residentSubscription:view,residentGate:'needs-plan',planEndsAt:null,open:true,message:''});
+    return false;
+  }
+  if(view.kind==='active')writePlanAdmission({version:1,environment,credentialId:account.identity.credentialId,userId:account.identity.userId,organizationId:account.identity.organizationId??null,status:view.status,planName:view.planName,verifiedAt:Date.now(),endsAt});
+  update({residentSubscription:view,residentGate:null,planEndsAt:endsAt});
   // An admitted running resident under this same Cloud admission is reused, not stopped and rebound:
   // opening the assistant, or reconnecting one surface, must not retire the other surface's work.
-  await bindResidentCloudProvider(account.identity.credentialId);
-  signal.throwIfAborted();
-  if(service!==account || (await cloudCredentialStore.read('production'))?.credentialId!==account.identity.credentialId)throw Error('Cloud account changed. Sign in again.');
-  // Background refresh only: it updates what the owner sees and never interrupts a turn.
-  // Revocation is enforced by Cloud immediately; the phone reflects it on the next refresh.
-  entitlementRefresher=new EntitlementRefresher({entitlement:checked.entitlement,retry:checked.view.kind==='unavailable'&&checked.view.reason!=='not-published',
+  if(residentBindable()){
+    await bindResidentCloudProvider(account.identity.credentialId);
+    signal.throwIfAborted();
+    if(service!==account || (await cloudCredentialStore.read(environment))?.credentialId!==account.identity.credentialId)throw Error('Cloud account changed. Sign in again.');
+  }
+  // Background refresh: it updates what the owner sees, never interrupts a turn, and applies the
+  // plan gate again when Cloud reports the plan ended. Revocation is enforced by Cloud immediately.
+  entitlementRefresher=new EntitlementRefresher({entitlement:checked.entitlement,fallbackActive:checked.view.kind==='active'&&checked.view.source==='billing-limits',retry:checked.view.kind==='unavailable'&&checked.view.reason!=='not-published',
     check:refreshSignal=>checkEntitlement(client.entitlementSource(),expected,refreshSignal),
-    onView:view=>{if(service===account)update({residentSubscription:view});},
+    onView:next=>{if(service!==account)return;update({residentSubscription:next});
+      const nextDecision=planAdmission(next);
+      if(next.kind==='active')writePlanAdmission({version:1,environment,credentialId:account.identity.credentialId,userId:account.identity.userId,organizationId:account.identity.organizationId??null,status:next.status,planName:next.planName,verifiedAt:Date.now(),endsAt:state.planEndsAt??null});
+      if(nextDecision==='needs-plan')void residentPlanEnded(account,next);},
     onAuthFailure:error=>{if(service===account)void residentRefreshRefused(account,error);}});
   return true;
+}
+/** Cloud reported, on a background refresh, that the plan ended: apply the plan gate. */
+async function residentPlanEnded(account:NonNullable<typeof service>,view:SubscriptionView){
+  stopEntitlementRefresh();writePlanAdmission(null);
+  if(active?.kind==='resident'){try{if(isAndroid)await stopLocalAgent();}catch{/* The gate below still applies. */}}
+  if(service!==account)return;
+  if(active?.kind==='resident')retire('Plan required');
+  update({residentSubscription:view,residentGate:'needs-plan',planEndsAt:null,open:true,purpose:'agent',message:'',error:''});
 }
 
 /**
@@ -385,15 +480,20 @@ async function admitCloudResident(signal:AbortSignal):Promise<boolean> {
 async function residentRefreshRefused(account:NonNullable<typeof service>,error:unknown){
   if(!isEntitlementSignInFailure(error)){update({residentSubscription:{kind:'unavailable',reason:'outage'}});return;}
   stopEntitlementRefresh();
-  try{await stopLocalAgent();}catch{/* The sign-in message below still applies. */}
+  try{if(isAndroid)await stopLocalAgent();}catch{/* The sign-in message below still applies. */}
   if(service!==account)return;
   if(active?.kind==='resident')retire('Sign-in required');
   detachService();
   update({residentSubscription:null,open:true,message:'',error:errorMessage(error)});
 }
 async function connectResident(signal: AbortSignal) {
-  if(isAndroid && !testMocksEnabled && !await admitCloudResident(signal))return;
-  if (!await localAgentPackaged()) throw new Error(remotePairingRetired ? 'The on-device agent is not included in this build. You can use local apps without AI.' : webCloudUnavailable() ? 'The local agent is unavailable here. Connect a remote agent or continue offline.' : 'The local agent is unavailable here. Connect a remote agent, sign in with Eliza Cloud, or continue offline.');
+  if(residentGate()){
+    if(!await admitCloudResident(signal))return;
+    // QA on staging (or in a browser) stops at plan admission: the on-device agent's Cloud
+    // inference binding is production-only, so nothing is started under another environment.
+    if(testMocksEnabled&&!residentBindable()){update({open:true,message:`Plan admitted on ${residentEnvironment()} (subscription gate QA). The on-device agent is not started in this mode.`,error:''});return;}
+  }
+  if (!await localAgentPackaged()) throw new Error(remotePairingRetired ? 'The on-device agent is not included in this build.' : webCloudUnavailable() ? 'The local agent is unavailable here. Connect a remote agent or continue offline.' : 'The local agent is unavailable here. Connect a remote agent, sign in with Eliza Cloud, or continue offline.');
   signal.throwIfAborted();
   const client = new LocalAgentProtocol();
   const { session, name } = await client.connect(signal);
@@ -435,7 +535,7 @@ async function connectResident(signal: AbortSignal) {
   activate({kind:'resident',remote:client,origin:client.origin,actions,workflowProtocol,request:deviceRequest,...(userTextFormatVersion?{userTextFormatVersion}:{})},session,name);
   if(reason)update({phoneCapabilityReason:reason});
   // Browser development keeps its explicit restore flow; Android restores the saved conversation.
-  if(isAndroid && !testMocksEnabled){await restoreSavedHistory(signal);await refreshActionReview(signal);}
+  if(residentGate()){await restoreSavedHistory(signal);await refreshActionReview(signal);}
 }
 async function connectCloud(agentId: string, signal: AbortSignal, expectedOwner?: string, expectedOrigin?:string, expectedPersonalOwner?:Readonly<PersonalOwner>) {
   if(!testMocksEnabled)throw Error(PAIRING_RETIRED);
@@ -521,6 +621,20 @@ function migrateLegacyMock(): boolean {
   try { save({ kind: 'none' }); } catch { /* The open chooser still requires an explicit choice. */ }
   update({ open: true, message: 'This version connects to real agents only. Choose how to connect your agent.' });
   return true;
+}
+/**
+ * Every Alpha Phone signs in to Eliza Cloud and holds a plan. The retired "Use local apps without
+ * AI" choice is migrated to this gate on the next launch: only that preference is replaced, and no
+ * data, history or credential is removed. A signed-out phone shows the sign-in gate.
+ */
+async function startResidentGate(){
+  if(localAppsSelected()){try{save({kind:'none'});}catch{/* The gate below applies either way. */}}
+  await work('Checking your Cloud account…',async signal=>{
+    const credential=await cloudCredentialStore.read(residentEnvironment());
+    signal.throwIfAborted();
+    if(!credential){update({open:true,residentSubscription:null,residentSavedCredential:false,residentGate:null,message:''});return;}
+    await connectResident(signal);
+  });
 }
 function conversationKey(session: VerifiedSession) { return JSON.stringify([session.origin, session.ownerId, session.agentId]); }
 async function ensureSelectedConversation(selected:Active,session:VerifiedSession,signal:AbortSignal,current:()=>void):Promise<string>{
@@ -626,8 +740,8 @@ async function conversationList(selected: Active, signal: AbortSignal) {
 async function restoreConversationHistory(id:string,signal:AbortSignal,automatic:boolean) {
   const selected=active,session=state.session,generation=epoch;
   if(!selected||!session)throw Error('Connect an agent first.');
-  const account=selected.kind==='resident'&&isAndroid&&!testMocksEnabled?service:null;
-  if(selected.kind==='resident'&&isAndroid&&!testMocksEnabled&&!account)throw Error('Cloud account is unavailable.');
+  const account=selected.kind==='resident'&&residentGate()?service:null;
+  if(selected.kind==='resident'&&residentGate()&&!account)throw Error('Cloud account is unavailable.');
   const assertCurrent=()=>{signal.throwIfAborted();if(generation!==epoch||selected!==active||state.session?.sessionId!==session.sessionId||account&&(service!==account||state.cloudAccount?.sessionId!==account.identity.sessionId))throw Error('The agent or account changed.');};
   const assertAccount=async()=>{
     assertCurrent();
@@ -791,8 +905,8 @@ export const connectionController = {
   async pendingActions(context:ContextEnvelope,signal:AbortSignal):Promise<ActionProposal[]> {
     const selected=active,session=state.session,generation=epoch,history=state.history;
     if(!selected?.actions||!session||state.open||state.busy||document.hidden||context.sensitive)return [];
-    const account=selected.kind==='resident'&&isAndroid&&!testMocksEnabled?service:null;
-    if(selected.kind==='resident'&&isAndroid&&!testMocksEnabled&&!account)throw Error('Cloud account is unavailable.');
+    const account=selected.kind==='resident'&&residentGate()?service:null;
+    if(selected.kind==='resident'&&residentGate()&&!account)throw Error('Cloud account is unavailable.');
     const current=()=>{signal.throwIfAborted();if(generation!==epoch||selected!==active||state.session!==session||state.history!==history||state.open||state.busy||document.hidden||account&&(service!==account||state.cloudAccount?.sessionId!==account.identity.sessionId))throw Error('The agent or conversation changed.');};
     const checkAccount=async()=>{current();if(account){const credential=await cloudCredentialStore.read(account.identity.environment);current();if(credential?.credentialId!==account.identity.credentialId||credential.expiresAt!==undefined&&credential.expiresAt<=Date.now())throw Error('Cloud account changed or expired.');}};
     const key=conversationKey(session),choice=await captureConversationChoice(key,signal);
@@ -970,9 +1084,28 @@ export const connectionController = {
     update({open:true,purpose:'cloud-account',message:'',error:''});
     // Production Android: whether a Cloud sign-in is kept on this phone decides if the panel offers
     // "Retry saved connection". A local keystore read; no Cloud request and nothing is restored.
-    if(isAndroid&&!testMocksEnabled&&!state.cloudAccount)void cloudCredentialStore.read('production').then(credential=>{if(state.open&&state.purpose==='cloud-account'&&!state.cloudAccount)update({residentSavedCredential:!!credential?.credentialId});}).catch(()=>{/* Sign-in stays available. */});
+    if(residentGate()&&!state.cloudAccount)void cloudCredentialStore.read(residentEnvironment()).then(credential=>{if(state.open&&state.purpose==='cloud-account'&&!state.cloudAccount)update({residentSavedCredential:!!credential?.credentialId});}).catch(()=>{/* Sign-in stays available. */});
   },
-  close() { if(isAndroid && !testMocksEnabled && !state.session&&!localAppsSelected()){if(state.purpose==='cloud-account'&&!state.busy)update({purpose:'agent',message:'',error:''});return;} if (!state.busy) {if(state.purpose!=='cloud-account')clearPersonalSetup();update({ open: false,purpose:'agent' });} },
+  /** Settings › Eliza Cloud account & plan: the plan panel with Redeem code, Manage plan and Sign out. */
+  openPlan(){ update({open:true,purpose:'plan',message:'',error:'',redeemError:'',redeemNotice:''}); },
+  /** Test-mocks builds only: enter or leave subscription gate QA, then reload into it. */
+  setResidentQa(environment:CloudEnvironment|null){
+    if(!testMocksEnabled||operation)return;
+    try{if(environment)localStorage.setItem(RESIDENT_QA,environment);else localStorage.removeItem(RESIDENT_QA);}catch{update({error:'Subscription gate QA could not be saved.'});return;}
+    location.reload();
+  },
+  /** Plan state for Settings. Null when this build has no plan gate. */
+  residentPlanSettings(){
+    if(!residentGate())return null;
+    const view=state.residentSubscription,account=state.cloudAccount,plan=view&&view.kind!=='checking'?describeSubscription(view):null;
+    const expiresAt=account?.expiresAt??null;
+    if(state.residentGate==='offline'&&!account){const recent=readPlanAdmission();return {signedIn:false,offline:true,account:null,plan:recent?`${recent.planName} · offline`:'Offline',status:recent?.status??null,endsAt:state.planEndsAt??null,keyExpiresAt:null,keyExpiring:false};}
+    return {signedIn:!!account,offline:false,account:account?(account.email||`Account ${account.userId.slice(0,8)}`):null,
+      plan:state.residentGate==='needs-plan'&&view?.kind!=='inactive'?'No active plan':plan?.headline??(account?'Checking plan…':'Not signed in'),
+      status:view?.kind==='active'?view.status:view?.kind==='inactive'?view.status:null,
+      endsAt:state.planEndsAt??null,keyExpiresAt:expiresAt,keyExpiring:expiresAt!==null&&expiresAt-Date.now()<=CLOUD_KEY_EXPIRY_WARNING_MS};
+  },
+  close() { if(residentGate() && !state.session&&state.residentGate!=='offline'){if((state.purpose==='cloud-account'||state.purpose==='plan')&&!state.busy)update({purpose:'agent',message:'',error:'',redeemError:'',redeemNotice:''});return;} if (!state.busy) {if(state.purpose!=='cloud-account'&&state.purpose!=='plan')clearPersonalSetup();update({ open: false,purpose:'agent',redeemError:'',redeemNotice:'' });} },
   cancel() { operation?.abort(new DOMException('Cancelled', 'AbortError')); cloud.cancelLogin(); },
   async initialize() {
     if (startup) return startup;
@@ -1003,6 +1136,8 @@ export const connectionController = {
       // (an offline choice included): the marker and, best effort and unawaited, the stored Cloud key. Only that
       // slot; it is not read. No request is made.
       if (webCloudUnavailable()) { try { localStorage.removeItem(CLOUD_SERVICE); } catch { /* Nothing is restored either way. */ } void removeStoredCloudCredential('production').catch(() => {}); }
+      // Subscription gate QA in a test-mocks build runs the production gate before any development flow.
+      if (residentQa()) { await startResidentGate(); return; }
       if (!testMocksEnabled && migrateLegacyMock()) return;
       if (testMocksEnabled && ((!isAndroid && !browserLocalAgentEnabled) || new URLSearchParams(location.search).get('mode') === 'mock')) return;
       if (!testMocksEnabled && !isAndroid && !browserLocalAgentEnabled) {
@@ -1016,18 +1151,7 @@ export const connectionController = {
         // Preserve legacy selection and history for recovery; never read credentials or reconnect.
         update({open:saved?.kind!=='offline',message:'Your agent runs locally in the Android app. Local apps remain available here.'});return;
       }
-      if (isAndroid && !testMocksEnabled) {
-        // An explicit "local apps without AI" choice is kept; AI starts only when the user asks.
-        // A kept Cloud sign-in is offered as "Retry saved connection" (local read, no network).
-        if (localAppsSelected()) { try { const credential = await cloudCredentialStore.read('production'); update({ residentSavedCredential: !!credential?.credentialId }); } catch { /* Sign-in stays available. */ } return; }
-        await work('Checking your Cloud account…',async signal=>{
-          const credential=await cloudCredentialStore.read('production');
-          signal.throwIfAborted();
-          if(!credential){update({open:true,residentSubscription:null,residentSavedCredential:false,message:''});return;}
-          await connectResident(signal);
-        });
-        return;
-      }
+      if (residentGate()) { await startResidentGate(); return; }
       if (saved?.kind === 'offline') return;
       if (saved?.kind === 'mock') { const url = new URL(location.href); url.searchParams.set('mode', 'mock'); location.replace(url.href); return; }
       await work('Restoring your connection…', async signal => {
@@ -1061,15 +1185,8 @@ export const connectionController = {
   },
   async offline() {
     if (operation) return;
-    if(isAndroid && !testMocksEnabled){
-      await work('Stopping AI while keeping your local apps available…',async()=>{
-        // An unpackaged runtime has nothing to stop; a packaged one must confirm shutdown.
-        if(await localAgentPackaged())await stopLocalAgent();
-        await retire();detachService();
-        const error=persistOffline(true);update({open:Boolean(error),error,message:''});
-      });
-      return;
-    }
+    // Every Alpha Phone signs in to Eliza Cloud and holds a plan: the gate has no local-only bypass.
+    if(residentGate()){update({open:true,error:'Alpha Phone needs an Eliza Cloud account with a plan.',message:''});return;}
     retire(); detachService();
     const error = persistOffline();
     update({ open: Boolean(error), error, message: '' });
@@ -1112,18 +1229,49 @@ export const connectionController = {
   async residentCloudLogin() {
     await work('Opening Eliza Cloud sign-in…',async signal=>{
       // A running process retains its environment; stop it before replacing credentials.
-      await stopLocalAgent(); await retire(); detachService();
-      update({residentSubscription:null}); cloud=makeCloud('production');
+      if(isAndroid)await stopLocalAgent(); await retire(); detachService();
+      update({residentSubscription:null,residentGate:null,redeemError:'',redeemNotice:''}); cloud=makeCloud(residentEnvironment());
       await cloud.login(signal,()=>update({message:'Finish signing in to Eliza Cloud in your browser, then return here.'}));
       await connectResident(signal);
     });
   },
+  /** Opens the hosted plan page in the system browser; the plan is checked again on return. */
   async residentManagePlan() {
-    await work('Opening Eliza Cloud plan settings…',signal=>makeCloud('production').openSubscriptionManagement(signal));
+    await work('Opening Eliza Cloud plans…',async signal=>{await makeCloud(residentEnvironment()).openSubscriptionManagement(signal);update({message:'Choose or manage your plan in Eliza Cloud, then return here. Alpha checks your plan again when you come back.'});});
+  },
+  /**
+   * Redeems a subscription code for the signed-in account, then checks the plan again and admits
+   * the agent when the plan allows. Each submission gets a fresh idempotency key; only a transport
+   * retry inside the protocol reuses it. The code is never stored, logged or echoed.
+   */
+  async residentRedeem(code:string) {
+    if(operation)return;
+    const idempotencyKey=crypto.randomUUID();
+    update({redeemError:'',redeemNotice:''});
+    await work('Redeeming your code…',async signal=>{
+      const account=service;
+      if(!account)throw Error('Sign in with Eliza Cloud first.');
+      let result;
+      try{result=await account.client.redeemSubscriptionCode(code,idempotencyKey,signal);}
+      catch(error){if(error instanceof SubscriptionRedeemError){update({redeemError:redeemFailureMessage(error),message:''});return;}throw error;}
+      if(service!==account)throw Error('Cloud account changed. Sign in again.');
+      if(result.grantEndsAt!==null&&!result.paidPlanTakesPrecedence)update({planEndsAt:result.grantEndsAt});
+      update({redeemNotice:redeemSuccessMessage(result),purpose:'agent'});
+      const endsAt=result.paidPlanTakesPrecedence?null:result.grantEndsAt;
+      await connectResident(signal);
+      if(endsAt!==null){const record=readPlanAdmission();if(record&&record.credentialId===account.identity.credentialId){writePlanAdmission({...record,endsAt});update({planEndsAt:endsAt});}}
+    });
+  },
+  /** Checks the plan again after the owner returns from Eliza Cloud (resume or visibility). */
+  recheckPlanOnReturn() {
+    if(!residentGate()||operation||state.busy)return;
+    // Offline admission started nothing, so returning or reconnecting retries the whole admission.
+    if((state.residentGate==='needs-plan'&&state.cloudAccount)||state.residentGate==='offline'){void connectionController.startLocal();return;}
+    entitlementRefresher?.refreshNow();
   },
   async cloudLogin(environment: CloudEnvironment) {
     const accountOnly=state.purpose==='cloud-account';
-    if(isAndroid && !testMocksEnabled){await connectionController.residentCloudLogin();return;}
+    if(residentGate()){await connectionController.residentCloudLogin();return;}
     if(!testMocksEnabled && !isAndroid && !browserLocalAgentEnabled){update({open:true,error:WEB_CLOUD_UNAVAILABLE,message:''});return;}
     await work('Opening Eliza Cloud sign-in…', async signal => {
       // A login can replace the environment's secure token with a different
@@ -1211,7 +1359,7 @@ export const connectionController = {
   },
   async cloudSignOut() {
     await work('Signing out of Cloud services…', async signal => {
-      if(isAndroid && !testMocksEnabled){stopEntitlementRefresh();await stopLocalAgent();await retire();update({residentSubscription:null});}
+      if(residentGate()){stopEntitlementRefresh();if(isAndroid)await stopLocalAgent();await retire();writePlanAdmission(null);update({residentSubscription:null,residentGate:null,planEndsAt:null,redeemError:'',redeemNotice:''});}
       const previous = service; detachCloudTarget(); detachService();
       localStorage.removeItem(CLOUD_SERVICE);
       if (!active) save({ kind: 'none' });
@@ -1221,7 +1369,7 @@ export const connectionController = {
       let revoked = false;
       if (typeof client.revokeSession === 'function') { try { const result = await client.revokeSession(signal); revoked = result?.supported === true && result.revoked === true; } catch { /* Unconfirmed. A cancelled or failed revocation still removes the local token below. */ } }
       await client.disconnect();
-      update({ agents: [], residentSavedCredential:false, message: revoked ? 'Signed out of Eliza Cloud. This sign-in was revoked.' : 'Signed out of Eliza Cloud on this phone. The sign-in token was removed here; Eliza Cloud did not confirm revoking it.' });
+      update({ agents: [], residentSavedCredential:false, ...(residentGate()?{purpose:'agent' as const}:{}), message: revoked ? 'Signed out of Eliza Cloud. This sign-in was revoked.' : 'Signed out of Eliza Cloud on this phone. The sign-in token was removed here; Eliza Cloud did not confirm revoking it.' });
     });
   },
   async mock() {
@@ -1391,12 +1539,16 @@ export function ConnectionChooser() {
   const [localPackaging,setLocalPackaging]=useState<'checking'|'available'|'unavailable'>('checking');
   useEffect(()=>{if(!snapshot.open||snapshot.purpose==='cloud-account')return;let current=true;setLocalPackaging('checking');void localAgentPackaged().then(available=>{if(current)setLocalPackaging(available?'available':'unavailable');});return()=>{current=false;};},[snapshot.open,snapshot.purpose]);
   const providerKey=useRef<HTMLInputElement>(null);
+  const redeemCode=useRef<HTMLInputElement>(null);
+  const qaEnvironment=useRef<HTMLSelectElement>(null);
   const [confirmRemove,setConfirmRemove]=useState(false);
   const panel = useRef<HTMLDivElement>(null);
   const remoteOrigin = useRef<HTMLInputElement>(null), remoteCode = useRef<HTMLInputElement>(null);
   const localOrigin = useRef<HTMLInputElement>(null), localCode = useRef<HTMLInputElement>(null);
   const environment = useRef<HTMLSelectElement>(null);
   useEffect(() => { void connectionController.initialize(); }, []);
+  // Plan state is checked again when the owner returns (for example from Eliza Cloud's plan page).
+  useEffect(()=>{if(!residentGate())return;const visible=()=>{if(!document.hidden)connectionController.recheckPlanOnReturn();};document.addEventListener('visibilitychange',visible);window.addEventListener('pageshow',visible);window.addEventListener('online',visible);return()=>{document.removeEventListener('visibilitychange',visible);window.removeEventListener('pageshow',visible);window.removeEventListener('online',visible);};},[]);
   useEffect(()=>{
     if(isAndroid)return;
     const changed=(event:StorageEvent)=>{
@@ -1482,41 +1634,57 @@ export function ConnectionChooser() {
   // signed in or connected, a failure is shown as the error it was, and a sign-in Cloud rejected
   // is no longer offered for retry.
   const savedSignInRejected=snapshot.error===errorMessage({status:401});
-  const savedSignInOffered=isAndroid&&!testMocksEnabled&&!snapshot.cloudAccount&&snapshot.residentSavedCredential===true&&!savedSignInRejected;
+  const savedSignInOffered=residentGate()&&!snapshot.cloudAccount&&snapshot.residentSavedCredential===true&&!savedSignInRejected;
   if(snapshot.purpose==='cloud-account')return <div className="alpha-connection-scrim"><div className="alpha-connection" role="dialog" aria-modal="true" aria-labelledby="cloud-account-title" tabIndex={-1} ref={panel}>
     <header><h1 id="cloud-account-title" className="serif">Eliza Cloud</h1><button aria-label="Close Cloud account" disabled={snapshot.busy} onClick={()=>connectionController.close()}><span aria-hidden="true" data-alpha-icon="/icons/lucide/x.svg" style={iconStyle("x")}/></button></header>
     {!snapshot.cloudAccount&&<p>{savedSignInOffered?'Retry your saved connection or sign in again to use connected services such as Gmail.':'Sign in to use connected services such as Gmail.'}</p>}
     {savedSignInOffered&&<div className="alpha-connection-actions"><button disabled={snapshot.busy} onClick={()=>void connectionController.startLocal()}>Retry saved connection</button></div>}
     {cloudAccountControls}
-    {snapshot.message&&<p role="status">{snapshot.message}</p>}{snapshot.error&&<p role="alert" className="alpha-connection-error">{isAndroid&&!testMocksEnabled&&savedSignInRejected?'Your saved Cloud sign-in is no longer valid.':snapshot.error}</p>}
+    {snapshot.message&&<p role="status">{snapshot.message}</p>}{snapshot.error&&<p role="alert" className="alpha-connection-error">{residentGate()&&savedSignInRejected?'Your saved Cloud sign-in is no longer valid.':snapshot.error}</p>}
     {snapshot.busy&&<button className="alpha-connection-cancel" onClick={()=>connectionController.cancel()}>Cancel</button>}
   </div></div>;
 
   const residentKnownAccount=!!snapshot.cloudAccount||!!snapshot.residentSavedCredential;
   const residentSignInRequired=snapshot.residentSavedCredential===false||snapshot.error===errorMessage({status:401});
   const residentRestoring=snapshot.busy&&['Checking your Cloud account…','Starting the local agent…'].includes(snapshot.message);
-  const residentHeading=residentRestoring?'Opening Alpha':residentSignInRequired&&residentKnownAccount?'Sign in to Eliza Cloud':snapshot.cloudAccount?'Your Cloud account':residentKnownAccount?'Reconnect Eliza Cloud':'Welcome to Alpha';
-  const localApps=!snapshot.session&&localAppsSelected();
+  const residentNeedsPlan=snapshot.residentGate==='needs-plan'&&!!snapshot.cloudAccount&&!residentSignInRequired;
+  const residentOffline=snapshot.residentGate==='offline'&&!snapshot.session;
+  const planPanel=snapshot.purpose==='plan';
   // A check that ended without a view (identity or transport failure) is "unavailable", never a stale gate.
   const residentPlanView=snapshot.residentSubscription;
   const residentPlanUnchecked=!residentPlanView||residentPlanView.kind==='checking';
-  const residentPlan=residentPlanUnchecked&&!snapshot.busy?{headline:'Plan status unavailable',detail:'Try again.',manage:false,manageLabel:''}:describeSubscription(residentPlanView);
+  const residentPlanDescribed=residentPlanUnchecked&&!snapshot.busy?{headline:'Plan status unavailable',detail:'Try again.',manage:false,manageLabel:''}:describeSubscription(residentPlanView);
+  const residentPlan=residentNeedsPlan&&residentPlanView?.kind==='unavailable'&&residentPlanView.reason!=='not-published'
+    ?{...residentPlanDescribed,detail:'Eliza Cloud could not confirm a plan for this account right now. Check again, redeem a subscription code or choose a plan. Your data on this phone is kept.'}:residentPlanDescribed;
   const residentPlanRecheck=residentPlanUnchecked||residentPlanView.kind==='inactive';
-  if(isAndroid && !testMocksEnabled)return <div className="alpha-connection-scrim"><div className={'alpha-connection alpha-connection-native'+(residentKnownAccount||residentRestoring?' alpha-connection-resume':'')} role="dialog" aria-modal="true" aria-labelledby="connection-title" aria-busy={residentRestoring||undefined} tabIndex={-1} ref={panel}>
-    <header><h1 id="connection-title" className={residentKnownAccount||residentRestoring?'serif':undefined}>{residentHeading}</h1>{(snapshot.session||localApps)&&<button aria-label="Close connection settings" disabled={snapshot.busy} onClick={()=>connectionController.close()}>×</button>}</header>
-    {!residentRestoring&&!(residentSignInRequired&&residentKnownAccount)&&<p>{snapshot.cloudAccount?'Your agent runs on this phone and uses your Eliza Cloud plan for AI.':residentKnownAccount?'Retry your saved connection or sign in again.':'Your agent runs on this phone. Sign in to Eliza Cloud to use your plan for AI.'}</p>}
+  const keyExpiresAt=snapshot.cloudAccount?.expiresAt;
+  const keyExpiring=keyExpiresAt!==undefined&&keyExpiresAt-Date.now()<=CLOUD_KEY_EXPIRY_WARNING_MS;
+  const day=(at:number)=>new Date(at).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+  const residentHeading=residentRestoring?'Opening Alpha':residentSignInRequired&&residentKnownAccount?'Sign in to Eliza Cloud':residentOffline?'Offline':residentNeedsPlan?(residentPlanView?.kind==='inactive'&&residentPlanView.status==='canceled'?'Your plan has ended':'Choose a plan'):planPanel&&snapshot.cloudAccount?'Eliza Cloud account & plan':snapshot.cloudAccount?'Your Cloud account':residentKnownAccount?'Reconnect Eliza Cloud':'Welcome to Alpha';
+  const redeemForm=<form className="alpha-connection-redeem" aria-label="Redeem a subscription code" onSubmit={event=>{event.preventDefault();const input=redeemCode.current;const value=input?.value||'';if(input)input.value='';void connectionController.residentRedeem(value);}}>
+    <label>Subscription code<input ref={redeemCode} name="subscription-code" autoComplete="off" autoCapitalize="characters" autoCorrect="off" spellCheck={false} maxLength={64} required disabled={snapshot.busy} placeholder="XXXX-XXXX-XXXX-XXXX"/></label>
+    <button disabled={snapshot.busy}>Redeem code</button>
+  </form>;
+  if(residentGate())return <div className="alpha-connection-scrim"><div className={'alpha-connection alpha-connection-native'+(residentKnownAccount||residentRestoring?' alpha-connection-resume':'')} role="dialog" aria-modal="true" aria-labelledby="connection-title" aria-busy={residentRestoring||undefined} tabIndex={-1} ref={panel}>
+    <header><h1 id="connection-title" className={residentKnownAccount||residentRestoring?'serif':undefined}>{residentHeading}</h1>{(snapshot.session||residentOffline)&&<button aria-label="Close connection settings" disabled={snapshot.busy} onClick={()=>connectionController.close()}>×</button>}</header>
+    {!residentRestoring&&!residentOffline&&!residentNeedsPlan&&!(residentSignInRequired&&residentKnownAccount)&&<p>{snapshot.cloudAccount?'Your agent runs on this phone and uses your Eliza Cloud plan for AI.':residentKnownAccount?'Retry your saved connection or sign in again.':'Your agent runs on this phone. Sign in to Eliza Cloud to continue; Alpha Phone needs an account with a plan.'}</p>}
     {snapshot.cloudAccount&&!residentSignInRequired ? <>
-      <section aria-label="Eliza Cloud plan"><p><strong>{residentPlan.headline}</strong></p>{residentPlan.detail&&<p>{residentPlan.detail}</p>}</section>
+      {(planPanel||residentNeedsPlan)&&<p>{snapshot.cloudAccount.email||`Account ${snapshot.cloudAccount.userId}`}</p>}
+      <section aria-label="Eliza Cloud plan"><p><strong>{residentPlan.headline}</strong></p>{residentPlan.detail&&<p>{residentPlan.detail}</p>}{snapshot.planEndsAt&&!residentNeedsPlan?<p>Plan runs until {day(snapshot.planEndsAt)}.</p>:null}</section>
+      {keyExpiring&&<section aria-label="Eliza Cloud sign-in"><p role="status">{keyExpiresAt<=Date.now()?'Your Eliza Cloud sign-in on this phone has expired.':`Your Eliza Cloud sign-in on this phone expires ${day(keyExpiresAt)}.`} Approve this phone again to keep AI available.</p>{!residentRestoring&&<button disabled={snapshot.busy} onClick={()=>void connectionController.residentCloudLogin()}>Approve this phone again</button>}</section>}
+      {(residentNeedsPlan||planPanel)&&!residentRestoring&&redeemForm}
+      {snapshot.redeemError&&<p role="alert" className="alpha-connection-error">{snapshot.redeemError}</p>}
+      {snapshot.redeemNotice&&<p role="status">{snapshot.redeemNotice}</p>}
       {!residentRestoring&&<div className="alpha-connection-actions">
-      {residentPlan.manage&&<button disabled={snapshot.busy} onClick={()=>void connectionController.residentManagePlan()}>{residentPlan.manageLabel}</button>}
-      <button disabled={snapshot.busy} onClick={()=>void connectionController.startLocal()}>{residentPlanRecheck?'Check plan again':'Continue'}</button>
+      {residentNeedsPlan?<button disabled={snapshot.busy} onClick={()=>void connectionController.residentManagePlan()}>{CHOOSE_PLAN_LABEL}</button>:(residentPlan.manage||planPanel)&&<button disabled={snapshot.busy} onClick={()=>void connectionController.residentManagePlan()}>{residentPlan.manage?residentPlan.manageLabel:MANAGE_PLAN_LABEL}</button>}
+      {planPanel&&snapshot.session?<button disabled={snapshot.busy} onClick={()=>connectionController.close()}>Done</button>:<button disabled={snapshot.busy} onClick={()=>void connectionController.startLocal()}>{residentPlanRecheck||residentNeedsPlan?'Check plan again':'Continue'}</button>}
       <button disabled={snapshot.busy} onClick={()=>void connectionController.cloudSignOut()}>Sign out</button>
       </div>}
     </>:!residentRestoring&&<div className={residentKnownAccount?'alpha-connection-actions':undefined}>
-      {snapshot.residentSavedCredential&&!residentSignInRequired&&<button disabled={snapshot.busy} onClick={()=>void connectionController.startLocal()}>Retry saved connection</button>}
-      <button disabled={snapshot.busy} onClick={()=>void connectionController.residentCloudLogin()}>Sign in with Eliza Cloud</button>
+      {residentOffline&&<button disabled={snapshot.busy} onClick={()=>void connectionController.startLocal()}>Try again</button>}
+      {snapshot.residentSavedCredential&&!residentSignInRequired&&!residentOffline&&<button disabled={snapshot.busy} onClick={()=>void connectionController.startLocal()}>Retry saved connection</button>}
+      {!residentOffline&&<button disabled={snapshot.busy} onClick={()=>void connectionController.residentCloudLogin()}>Sign in with Eliza Cloud</button>}
     </div>}
-    {!snapshot.session&&<section><p>{localApps?'Local apps are on without AI. Sign in when you want your agent.':'Notes, Calendar and your other local apps work without an agent. AI stays off until you sign in.'}</p>{!localApps&&<button disabled={snapshot.busy} onClick={()=>void connectionController.offline()}>Use local apps without AI</button>}</section>}
     {conversations}
     {actionReview}
     {snapshot.replyNotice&&<p role="status">{snapshot.replyNotice}</p>}
@@ -1524,6 +1692,7 @@ export function ConnectionChooser() {
     {snapshot.error&&<p role="alert">{snapshot.error===errorMessage({status:401})?'Your saved Cloud sign-in is no longer valid.':snapshot.error}</p>}
     {snapshot.historyError&&<><p role="status">{snapshot.historyError}</p><button disabled={snapshot.busy} onClick={()=>void connectionController.retrySavedHistory()}>Retry saved conversation</button></>}
     {snapshot.busy&&<button className="alpha-connection-cancel" onClick={()=>connectionController.cancel()}>Cancel</button>}
+    {testMocksEnabled&&residentQa()&&<p><button disabled={snapshot.busy} onClick={()=>connectionController.setResidentQa(null)}>Leave subscription gate QA ({residentEnvironment()})</button></p>}
   </div></div>;
   if(browserOnly)return <div className="alpha-connection-scrim"><div className="alpha-connection" role="dialog" aria-modal="true" aria-labelledby="local-only-title" tabIndex={-1} ref={panel}>
     <header><h1 id="local-only-title">Alpha Phone</h1><button aria-label="Close connection settings" onClick={()=>connectionController.close()}>Close</button></header>
@@ -1593,6 +1762,7 @@ export function ConnectionChooser() {
       <button disabled={snapshot.busy} onClick={()=>void connectionController.cloudManage(env())}>Manage Cloud account</button>
     </details>}
     {pairingOptions}
+    {testMocksEnabled&&<details><summary>Subscription gate QA</summary><p>Run the production Eliza Cloud sign-in and plan gate (sign-in, plan check, Redeem code, Choose a plan) against the chosen environment. Staging stops at plan admission; the on-device agent's inference binding is production-only.</p><label>Gate environment<select aria-label="Gate environment" ref={qaEnvironment} defaultValue="staging" disabled={snapshot.busy}><option value="staging">Staging</option><option value="production">Production</option></select></label><button disabled={snapshot.busy} onClick={()=>connectionController.setResidentQa(qaEnvironment.current?.value==='production'?'production':'staging')}>Start subscription gate QA</button></details>}
     {testMocksEnabled&&<details><summary>Mock mode</summary><p>Explore the prototype with simulated data and actions. No live agent connection is used.</p><button disabled={snapshot.busy} onClick={() => connectionController.mock()}>Enter mock mode</button></details>}
     <button className="alpha-connection-offline" disabled={snapshot.busy} onClick={() => void connectionController.offline()}>Continue offline</button>
   </div></div>;

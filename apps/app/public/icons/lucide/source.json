@@ -135,7 +135,9 @@
     "undo-2.mjs": "8d544ea96a0918e9b251f91dd66db00bb84ac4f29d76a30caf46cb8ec9804bd0",
     "at-sign.mjs": "0b7b7b9513ac57429635984b3a55e2a02e5111e1178a27256fe4e2ec2ff0a965",
     "sliders-horizontal.mjs": "773396efe4014671ef0d33372c397297488de8a76230130b531d202617cd35f6",
-    "external-link.mjs": "a881db3513589183fa252f207659095468306b64ed75377c9957d7ccef7ab7c9"
+    "external-link.mjs": "a881db3513589183fa252f207659095468306b64ed75377c9957d7ccef7ab7c9",
+    "send.mjs": "e77b6c685e6e8879dddb8e79c811baf0699f7e15c85b46f72f13b4efd8a953cc",
+    "shield-alert.mjs": "96d4dc44df6634e59b3024147cb02cd3d382931048e3630066333e53546b471c"
   },
   "assets": {
     "inbox.svg": {
@@ -704,6 +706,14 @@
     "external-link.svg": {
       "source": "external-link.mjs",
       "sha256": "abd7cbc215a54ee7dbe74f55d99d896841ce5d5f7004487670ad6011017ac6fb"
+    },
+    "send.svg": {
+      "source": "send.mjs",
+      "sha256": "1b1965fde7ee1b2d01ff0bb65fb3b91c4cfa7c4542340616a5643d5e7926fd00"
+    },
+    "shield-alert.svg": {
+      "source": "shield-alert.mjs",
+      "sha256": "abcb17da79dc7d9135b358a199e37059fda5c222ac82256e744924445b709e98"
     }
   },
   "license": "ISC and upstream Feather MIT where listed",

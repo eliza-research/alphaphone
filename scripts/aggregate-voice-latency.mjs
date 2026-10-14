@@ -19,6 +19,7 @@
 // Exit 2: insufficient evidence for P-11 (including every legacy v1 export).
 // Exit 1: malformed input. Pooled route statistics remain descriptive only.
 import fs from 'node:fs';
+import { aggregateNativeVoice, nativeTimingFormat } from './native-voice-latency.mjs';
 
 const order = ['recording-end', 'transcript-ready', 'send', 'first-token', 'final-reply', 'first-audio'];
 const routes = new Set(['on-device', 'browser', 'local-agent', 'eliza-cloud', 'paired-agent', 'development-agent', 'manual']);
@@ -90,7 +91,8 @@ function cohortSummary(records, required) {
 
 export function aggregate(exports, requested = minimumSamples) {
   const required = { warm: Math.max(minimumSamples.warm, requested.warm ?? 0), cold: Math.max(minimumSamples.cold, requested.cold ?? 0) };
-  const { records, invalid } = collectRecords(exports);
+  const native = aggregateNativeVoice(exports.filter(document => document?.format === nativeTimingFormat), required);
+  const { records, invalid } = collectRecords(exports.filter(document => document?.format !== nativeTimingFormat));
   const usable = records.filter(complete), cohorts = cohortSummary(records, required);
   // Include abandoned/incomplete-only routes: omitting them would conceal a failing route.
   const byRoute = Object.fromEntries([...new Set(records.map(row => row.route))].sort().map(route => {
@@ -105,14 +107,10 @@ export function aggregate(exports, requested = minimumSamples) {
     records: records.length, complete: usable.length, abandoned: records.filter(row => row.outcome === 'abandoned').length, incomplete: records.filter(row => !row.outcome && !complete(row)).length, invalid,
     cohorts, pooledCohortsAreDescriptiveOnly: true, byRoute,
     sampleCountsSufficient: Object.keys(byRoute).length > 0 && Object.values(byRoute).every(route => route.sampleCountsSufficient),
-    sufficient: false,
-    qualification: { policy: 'P-11 / A-10', requiredTrials: 50, qualifyingTrials: 0,
-      status: 'unsupported-measurement-boundary',
-      reasons: ['Legacy v1 starts at recording-end, not the last user speech sample.',
-        'The playback callback is not evidence of the first audible output sample.',
-        'Device/model/hash, network and thermal cohort identity is absent.'] },
+    native, sufficient: native.sufficient,
+    legacyDiagnosticsSufficient: cohorts.warm.sufficient && cohorts.cold.sufficient,
     sufficiencyRule: 'sampleCountsSufficient describes historical warm/cold counts only. Legacy v1 exports are insufficient for P-11 regardless of count.',
-    targetSignOff: 'P-11 resolves A-10: last input speech sample to first audible response, including endpointing and buffering, at least 50 trials and cold/warm p50/p95. These legacy diagnostics do not measure that boundary.',
+    targetSignOff: 'Issue #395 / P-11 resolves A-10: last input speech sample to first audible response, including endpointing and buffering, at least 50 trials and cold/warm p50/p95. These legacy diagnostics do not measure that boundary.',
   };
 }
 
@@ -125,14 +123,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   catch (error) { console.error(`Cannot aggregate: ${error.message}`); process.exit(1); }
   const text = JSON.stringify(summary, null, 2);
   if (options.out) fs.writeFileSync(options.out, text + '\n'); else console.log(text);
-  if (!summary.sampleCountsSufficient) {
-    const missing = Object.entries(summary.byRoute).filter(([, value]) => !value.sampleCountsSufficient)
-      .map(([route, value]) => `${route}: audible warm ${value.cohorts.warm.withAudio}/${options.warm}, cold ${value.cohorts.cold.withAudio}/${options.cold}`);
-    console.error(`Insufficient audible samples by route: ${missing.join('; ') || 'no valid records'}.`);
-    process.exit(2);
-  }
-  if (!summary.sufficient) {
-    console.error('Insufficient P-11 audio-boundary evidence: legacy recording-end exports cannot qualify, regardless of sample count.');
-    process.exit(2);
-  }
+  if (!summary.sufficient) { console.error('Insufficient native audio evidence: require at least 50 successful simple-query trials per source/model/device/environment cohort, including the requested warm/cold minimums. Legacy renderer samples are diagnostic only; inspect native.invalid and native.conflictingTrials for rejected records.'); process.exit(2); }
+  if (!summary.native.withinBudget) { console.error('Native audio evidence failed the latency/reliability check: inspect cold/warm max against the 6000 ms upper budget and failures/cancelled counts in native.cohorts.'); process.exit(3); }
+  console.error('Native timing sample and budget checks passed. Clock provenance, microphone/speaker quality and target-device acceptance still require review.');
 }

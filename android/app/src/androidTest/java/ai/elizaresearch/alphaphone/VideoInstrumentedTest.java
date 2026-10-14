@@ -67,7 +67,7 @@ public class VideoInstrumentedTest {
   // Only its account/runtime boundary is synthetic; Camera/Photos remain native.
   eval("[...document.querySelectorAll('.alpha-connection button')].find(b=>b.textContent.trim()==='Sign in with Eliza Cloud').click()");
   until("!document.querySelector('.alpha-connection-scrim')");
-  assertEquals("Production account admission reached native startup","true",eval("window.__alphaVideoAccount.calls.includes('/api/v1/user')&&window.__alphaVideoAccount.calls.includes('/api/v1/credits/balance')&&window.__alphaVideoAccount.calls.includes('configureCloudProvider')&&window.__alphaVideoAccount.calls.includes('start')"));
+  assertEquals("Production account admission reached native startup","true",eval("window.__alphaVideoAccount.calls.includes('/api/v1/user')&&window.__alphaVideoAccount.calls.includes('/api/v1/billing/limits')&&window.__alphaVideoAccount.calls.includes('configureCloudProvider')&&window.__alphaVideoAccount.calls.includes('start')"));
  }
  private void begin()throws Exception{
   navigate("Camera");until("document.querySelector('[data-alpha-camera-screen]')");

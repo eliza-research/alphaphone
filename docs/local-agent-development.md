@@ -2,7 +2,7 @@
 
 Alpha runs the real Eliza runtime locally in both environments. Android runs a resident process in the app sandbox over authenticated native socket IPC. Browser development runs the pinned source on the Mac through a private Vite bridge. The two environments keep separate profiles, history, credentials and acceptance evidence.
 
-The standalone Android app signs in to an existing Eliza Cloud account, checks account-bound credits, and binds the resident runtime to the supported billed Cloud model (`cerebras/qwen-3.8-27b`). It does not provision a hosted agent. Microphone, notifications and local app access follow account readiness. The agent and local stores remain on the phone; model requests and explicitly shared context use Cloud inference.
+The standalone Android app signs in to an Eliza Cloud account, checks its plan (signed entitlement; [plan gate](eliza-cloud-subscription-entitlement-contract.md)), and binds the resident runtime to the supported billed Cloud model (`cerebras/qwen-3.8-27b`). It does not provision a hosted agent. Microphone, notifications and local app access follow account readiness. The agent and local stores remain on the phone; model requests and explicitly shared context use Cloud inference.
 
 Mac development uses direct Cerebras (`qwen-3.8-27b`) with an existing host credential. This route does not qualify Android billing or permission behavior. Generic product voice uses the selected Eliza Cloud account. Explicitly labelled **Read locally** stays local when offered; the local Whisper/Kokoro setup below is optional development qualification.
 
@@ -166,7 +166,7 @@ The staging command builds the Android mobile agent bundle, runs upstream's host
 
 When an APK build is wanted, `npm run android:build:local` checks the pinned checkout and speech AAR, checks that the reviewed embedding host libraries are staged (it stops there, naming the person who must supply them, when they are not; `npm run android:build:inputs` lists every input), then runs preparation, `agent:build-workflow-worker`, staging, the packaged-runtime notices and the existing build/verification of both standalone and launcher variants. Rerunning it reuses the prepared source and worker artifact only when they verify against the current source stamp; a stale worker artifact is reported, never rebuilt over. The ordinary `android:build` uses whatever payload has already been staged and stops before Gradle, naming the command to run, when the prepared source or (for distribution builds) the staged payload is missing or was staged from a different preparation. Unpackaged developer artifacts never qualify resident acceptance. Signing, speech functionality and overall release acceptance remain separate from a successful packaging check. Preparation, worker build and staging start their children in the prepared checkout without the AI-agent variables Turborepo detects (`AI_AGENT`, `CLAUDECODE` and others, see `TURBO_AGENT_DETECTION_ENV` in `scripts/local-agent-source.mjs`), so Turborepo does not append agent guidance to that checkout's `AGENTS.md`.
 
-In the standalone Android app, use the existing Eliza Cloud account flow. The app checks real account-bound credits before local access setup; top-up opens that account's Cloud page. It binds a credential reference to the supported Cloud model in native encrypted storage and reuses the saved account on restart. No provider key belongs in the renderer or source, and no hosted agent is provisioned. Account/logout changes retire the old binding and runtime; changed provider selections require a new admitted runtime launch.
+In the standalone Android app, use the existing Eliza Cloud account flow. The app checks the account's plan before local access setup; without one it offers Redeem code and Choose a plan (Cloud's hosted page). Staging QA: [cloud-subscription-qa.md](cloud-subscription-qa.md). It binds a credential reference to the supported Cloud model in native encrypted storage and reuses the saved account on restart. No provider key belongs in the renderer or source, and no hosted agent is provisioned. Account/logout changes retire the old binding and runtime; changed provider selections require a new admitted runtime launch.
 
 **Stop local agent** requests native shutdown and waits for process/service/socket status before reporting success. Disconnecting the UI alone does not prove the background runtime stopped. Existing direct-provider records are legacy development compatibility, not the product onboarding path.
 
@@ -345,3 +345,24 @@ The October 3 qualification used `artifacts/calendar-preferences-review/artifact
 An isolated redaction-on campaign on this source passes five real-provider credential formats, streaming, and owner/contact restoration after an actual host restart. All eleven captured outbound body checks exclude the synthetic raw contacts and credential suffix. Incoming storage now masks complete credentials before the model sees them; nested JSON text/fragments are also protected with exact source-span restoration and bounded decoding. All 97 selected runtime/security tests and all 157 repository tests/typecheck/build pass.
 
 Failed live attempts led to this repair and remain recorded under `test-results/current-redaction-live/`; passing results are in its `storage/` directory. `test-results/encoded-credential-review/` contains source/test evidence. The broader stage-one invalid-native-source failure was subsequently traced to a stale fixture that omitted the intentional single repair attempt. The fixture correction and combined 485-case campaign pass; production runtime behavior is unchanged. Native integration, wider model reliability and current-head full hosted qualification remain open. No Android build ran.
+
+## Google service QA in a separate browser profile
+
+Use `ALPHA_BROWSER_CLOUD_PROFILE=/private/separate/profile npm run dev:ui -- --port 5209 --strictPort`
+for Google-service-only QA without another agent backend. Sign in through the normal
+Eliza Cloud flow. Google authorization is separate from both that Cloud identity
+and the inference provider; use **Settings → Accounts → Google accounts**, Inbox's
+**Connect Gmail**, or Calendar's connection button.
+
+The shared connection panel requests Gmail and Calendar read access. It reports
+server-returned grants, offers explicit calendar selection, and keeps provider events
+read-only and separate from app/native Calendar writes. Gmail permission upgrades
+retain already-selected Calendar read access. Event writes and mail sending are not
+part of read-only qualification.
+
+**Disconnect Google account** removes the entire stored Google connection (Gmail
+and Calendar together), verifies account readback, and invalidates both views. It does
+not delete the Google account, mail or events. An uncertain disconnect remains
+unconfirmed; the user can check again. Reconnect uses the normal Google consent flow.
+Calendar selection contains only nonsecret source identifiers scoped to the Cloud
+user and organization. No provider tokens or calendar event content are stored in it.

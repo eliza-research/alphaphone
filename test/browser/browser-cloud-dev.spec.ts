@@ -17,7 +17,7 @@ test('browser restores an existing host Cloud account, uses canonical voice and 
   if(path==='/api/auth/cli-session/'+session)return Response.json({status:'authenticated',apiKey:secret});
   expect(new Headers(input.headers).get('Authorization')).toBe('Bearer '+secret);
   if(path==='/api/v1/user')return Response.json({success:true,data:{id:owner,organization_id:organizationId,email:'owned@example.invalid'}});
-  if(path==='/api/v1/credits/balance')return Response.json({balance:4});
+  if(path==='/api/v1/billing/limits')return Response.json({success:true,data:{v2:{subscription:{status:'available',value:{planKey:'plus_monthly',state:'active'}}}}});
   if(path==='/api/v1/eliza/google/accounts')return Response.json([]);
   if(path==='/api/v1/voice/stt'){expect(input.body).toBeInstanceOf(FormData);expect((input.body as FormData).get('audio')).toBeInstanceOf(File);return Response.json({transcript:'Closed fixture transcript'});}
   if(path==='/api/v1/voice/tts'){expect(JSON.parse(String(input.body))).toEqual({text:'Closed fixture text',format:'mp3'});return new Response(new Uint8Array([1,2,3]),{headers:{'Content-Type':'audio/mpeg'}});}
@@ -36,10 +36,10 @@ test('browser restores an existing host Cloud account, uses canonical voice and 
    (v as any).capture.clips.set('closed-fixture',{blob:new Blob(['closed fixture'],{type:'audio/webm'}),durationMs:10});
    const options={environment:'production',credentialId:binding.credentialId,requestId:crypto.randomUUID()};
    const transcript=await v.transcribeRecording({...options,recordingId:'closed-fixture'});const prepared=await v.synthesize({...options,requestId:crypto.randomUUID(),text:'Closed fixture text'});
-   const balance=await binding.client.creditBalance(new AbortController().signal);await binding.client.openSubscriptionManagement(new AbortController().signal);await v.releaseLocalSpeech();
-   return {transcript,prepared:!!prepared.playbackId,balance:balance.balance,publicStorage:JSON.stringify(localStorage),opened:(window as any).openedCloudURLs};
+   const plan=await binding.client.billingFallbackPlan(new AbortController().signal);await binding.client.openSubscriptionManagement(new AbortController().signal);await v.releaseLocalSpeech();
+   return {transcript,prepared:!!prepared.playbackId,plan:plan?.status,publicStorage:JSON.stringify(localStorage),opened:(window as any).openedCloudURLs};
   });
-  expect(voice.transcript).toEqual({text:'Closed fixture transcript',local:false});expect(voice.prepared).toBe(true);expect(voice.balance).toBe(4);expect(voice.publicStorage).not.toContain(secret);expect(voice.opened).toEqual(['https://cloud.eliza.app/cloud/billing']);
+  expect(voice.transcript).toEqual({text:'Closed fixture transcript',local:false});expect(voice.prepared).toBe(true);expect(voice.plan).toBe('active');expect(voice.publicStorage).not.toContain(secret);expect(voice.opened).toEqual(['https://cloud.eliza.app/cloud/billing']);
   await page.evaluate(async()=>{const c=(await import('/src/runtime/connection-ui.tsx')).connectionController;c.openCloudAccount();});
   const account=page.getByRole('dialog',{name:'Eliza Cloud',exact:true});await expect(account.getByText('owned@example.invalid',{exact:true})).toBeVisible();await page.screenshot({path:info.outputPath('existing-cloud-account.png'),animations:'disabled'});
   await account.getByRole('button',{name:'Sign out of Eliza Cloud',exact:true}).click();await page.reload();

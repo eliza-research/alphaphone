@@ -22,7 +22,8 @@ async function fixture(){
   if(path==='/api/auth/cli-session/'+session)return pollResponse();
   assert.equal(new Headers(input.headers).get('Authorization'),'Bearer '+secret);
   if(path==='/api/v1/user')return Response.json({success:true,data:{id:owner,organization_id:org,email:'owned@example.invalid'}});
-  if(path==='/api/v1/credits/balance')return Response.json({balance:4});
+  if(path==='/api/v1/billing/limits')return Response.json({success:true,data:{v2:{subscription:{status:'available',value:{planKey:'plus_monthly',state:'active'}}}}});
+  if(path==='/api/v1/subscription/redeem'){const body=JSON.parse(input.body);return Response.json({success:true,replayed:false,grant:{id:'synthetic-grant',endsAt:'2027-04-14T00:00:00.000Z',paidPlanTakesPrecedence:false,echo:body.code===undefined}});}
   return response(url,input);
  };
  let server,origin;
@@ -35,7 +36,10 @@ test('existing Mac credential becomes a real canonical identity/credit reference
  const f=await fixture();try{
   const stored=await f.rpc({operation:'secureRead',slot:'cloud:production'});assert.equal(stored.status,200);assert.equal(stored.data.value.includes(secret),false);const credential=JSON.parse(stored.data.value);assert.equal(credential.credentialReference,reference);assert.equal(credential.credentialId,credentialId);assert.equal(credential.token,undefined);
   const result=await f.rpc({operation:'request',environment:'production',requestId:randomUUID(),input:{url:'https://api.eliza.app/api/v1/user',method:'GET',headers:{Accept:'application/json'},credentialReference:reference}});assert.equal(result.data.status,200);assert.equal(result.data.data.data.id,owner);assert.equal(result.data.data.data.organization_id,org);
-  const balance=await f.rpc({operation:'request',environment:'production',requestId:randomUUID(),input:{url:'https://api.eliza.app/api/v1/credits/balance',method:'GET',headers:{Accept:'application/json'},credentialReference:reference}});assert.equal(balance.data.data.balance,4);assert.equal((await stat(f.profile)).mode&0o077,0);
+  const limits=await f.rpc({operation:'request',environment:'production',requestId:randomUUID(),input:{url:'https://api.eliza.app/api/v1/billing/limits',method:'GET',headers:{Accept:'application/json'},credentialReference:reference}});assert.equal(limits.data.data.data.v2.subscription.value.state,'active');
+  const redeemed=await f.rpc({operation:'request',environment:'production',requestId:randomUUID(),input:{url:'https://api.eliza.app/api/v1/subscription/redeem',method:'POST',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({code:'SYNTHETIC0000CODE',idempotencyKey:randomUUID()}),credentialReference:reference}});assert.equal(redeemed.data.data.success,true);
+  for(const body of [{code:'SYNTHETIC0000CODE'},{code:'SYNTHETIC0000CODE',idempotencyKey:'short'},{code:'SYNTHETIC0000CODE',idempotencyKey:randomUUID(),extra:1}]){const refused=await f.rpc({operation:'request',environment:'production',requestId:randomUUID(),input:{url:'https://api.eliza.app/api/v1/subscription/redeem',method:'POST',headers:{Accept:'application/json'},body:JSON.stringify(body),credentialReference:reference}});assert.ok([400,409].includes(refused.status),JSON.stringify(body));}
+  assert.equal(f.calls.filter(call=>new URL(call.url).pathname==='/api/v1/subscription/redeem').length,1);assert.equal((await stat(f.profile)).mode&0o077,0);
  }finally{await f.close();}
 });
 test('negative origins, methods, authorities, routes, private bearer headers and wrong reference never dispatch',async()=>{
@@ -137,5 +141,54 @@ test('empty-store logout retires an in-flight login poll without NULL-state resu
   const entered=Promise.withResolvers(),release=Promise.withResolvers();f.setPollResponse(async()=>{entered.resolve();await release.promise;return Response.json({status:'authenticated',apiKey:secret});});
   const pending=claim(f);await entered.promise;await f.rpc({operation:'secureRemove',slot:'cloud:production',previousReference:null});release.resolve();const result=await pending;assert.equal(result.status,409);assert.equal(result.data.credentialReference,undefined);
   assert.equal((await f.rpc({operation:'secureRead',slot:'cloud:production'})).data.value,null);
+ }finally{await f.close();}
+});
+
+test('managed Google bridge admits combined consent and encoded owner reads without exposing credentials',async()=>{
+ const f=await fixture(),grant=randomUUID();try{
+  f.setResponse(async(url,input)=>{assert.equal(input.redirect,'error');const parsed=new URL(url);
+   if(parsed.pathname.endsWith('/connect/initiate')){assert.deepEqual(JSON.parse(input.body),{side:'owner',capabilities:['google.basic_identity','google.gmail.triage','google.calendar.read']});return Response.json({authUrl:'https://accounts.google.com/o/oauth2/v2/auth?state=synthetic'});}
+   if(parsed.pathname.endsWith('/disconnect')){assert.deepEqual(JSON.parse(input.body),{side:'owner',connectionId:grant});return Response.json({ok:true});}
+   return Response.json({fixture:true,query:Object.fromEntries(parsed.searchParams)});
+  });
+  const call=(route,method='GET',body,environment='production')=>f.rpc({operation:'request',environment,requestId:randomUUID(),input:{url:(environment==='production'?'https://api.eliza.app':'https://api-staging.eliza.app')+route,method,headers:{Accept:'application/json'},credentialReference:reference,...(body===undefined?{}:{body:JSON.stringify(body)})}});
+  const consent=await call('/api/v1/eliza/google/connect/initiate','POST',{side:'owner',capabilities:['google.basic_identity','google.gmail.triage','google.calendar.read']});assert.equal(consent.data.status,200);assert.equal(JSON.stringify(consent).includes(secret),false);
+  assert.equal((await call('/api/v1/eliza/google/disconnect','POST',{side:'owner',connectionId:grant})).data.data.ok,true);
+  const feed=new URLSearchParams({side:'owner',grantId:grant,calendarId:'owner+calendar@example.invalid',timeMin:'2026-10-13T00:00:00-07:00',timeMax:'2026-10-14T00:00:00-07:00',timeZone:'America/Los_Angeles'});
+  const result=await call('/api/v1/eliza/google/calendar/feed?'+feed);assert.equal(result.status,200);assert.equal(result.data.data.query.calendarId,'owner+calendar@example.invalid');
+  const search=new URLSearchParams({side:'owner',grantId:grant,query:'from:owner@example.invalid after:2026/10/01',maxResults:'25',pageToken:'opaque+/cursor='});
+  assert.equal((await call('/api/v1/eliza/google/gmail/search?'+search)).data.data.query.pageToken,'opaque+/cursor=');
+  for(const route of [`calendar/calendars?side=owner&grantId=${grant}`,`gmail/read?side=owner&grantId=${grant}&messageId=mail%2Fid`,`gmail/inbox-v1/capabilities?grantId=${grant}`,`gmail/inbox-v1/thread?grantId=${grant}&threadId=one&offset=25&historyId=old`,`gmail/inbox-v1/attachment?grantId=${grant}&messageId=one&partId=0.1&historyId=old`,`gmail/inbox-v1/drafts?grantId=${grant}`,`gmail/inbox-v1/draft?grantId=${grant}&draftId=one&content=1`])assert.equal((await call('/api/v1/eliza/google/'+route)).status,200,route);
+  const seed=JSON.parse(await readFile(join(f.profile,'initial-credential.json'),'utf8'));await writeFile(join(f.profile,'credentials.json'),JSON.stringify({staging:seed}),{mode:0o600});
+  assert.equal((await call(`/api/v1/eliza/google/calendar/calendars?side=owner&grantId=${grant}`,'GET',undefined,'staging')).status,200);
+  assert.equal(new URL(f.calls.at(-1).url).origin,'https://api-staging.eliza.app');
+ }finally{await f.close();}
+});
+test('managed Google bridge refuses scope escalation, mutations, malformed query and stale or secret responses',async()=>{
+ const f=await fixture(),grant=randomUUID();try{
+  const call=(route,method='GET',body)=>f.rpc({operation:'request',environment:'production',requestId:randomUUID(),input:{url:'https://api.eliza.app'+route,method,headers:{Accept:'application/json'},credentialReference:reference,...(body===undefined?{}:{body:JSON.stringify(body)})}});
+  const before=f.calls.length;
+  for(const [route,method,body] of [
+   ['/api/v1/eliza/google/connect/initiate','POST',{side:'agent',capabilities:['google.basic_identity']}],
+   ['/api/v1/eliza/google/connect/initiate','POST',{side:'owner',capabilities:['google.basic_identity','google.gmail.manage']}],
+   ['/api/v1/eliza/google/connect/initiate','POST',{side:'owner',capabilities:['google.basic_identity'],redirectUrl:'https://other.invalid'}],
+   ['/api/v1/eliza/google/disconnect','POST',{side:'owner'}],
+   ['/api/v1/eliza/google/disconnect','POST',{side:'owner',connectionId:'bad'}],
+   ['/api/v1/eliza/google/calendar/events','POST',{side:'owner',grantId:grant}],
+   ['/api/v1/eliza/google/gmail/inbox-v1/operations','POST',{grantId:grant}],
+   [`/api/v1/eliza/google/calendar/calendars?side=agent&grantId=${grant}`],
+   [`/api/v1/eliza/google/calendar/calendars?side=owner&side=agent&grantId=${grant}`],
+   [`/api/v1/eliza/google/calendar/calendars?side=owner&grantId=${grant}&url=https%3A%2F%2Fother.invalid`],
+   [`/api/v1/eliza/google/%63alendar/calendars?side=owner&grantId=${grant}`],
+   [`/api/v1/eliza/google/x/../calendar/calendars?side=owner&grantId=${grant}`],
+   [`/api/v1/eliza/google/gmail/search?side=owner&grantId=${grant}&query=a&maxResults=1000`],
+  ])assert.equal((await call(route,method,body)).status,400,route);
+  assert.equal(f.calls.length,before,'invalid requests never reach Cloud');
+  const route=`/api/v1/eliza/google/calendar/calendars?side=owner&grantId=${grant}`;
+  f.setResponse(async()=>Response.json({accessToken:'provider-secret'}));assert.equal((await call(route)).status,400);
+  f.setResponse(async()=>new Response(' '.repeat(16*1024*1024+1)));assert.equal((await call(route)).status,400);
+  const entered=Promise.withResolvers(),release=Promise.withResolvers();f.setResponse(async()=>{entered.resolve();await release.promise;return Response.json([{calendarId:'one'}]);});
+  const pending=call(route);await entered.promise;await f.rpc({operation:'secureRemove',slot:'cloud:production',previousReference:reference});release.resolve();
+  assert.equal((await pending).status,409,'logout prevents publishing an in-flight calendar result');
  }finally{await f.close();}
 });

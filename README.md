@@ -3,8 +3,8 @@
 Independent Android UI on Eliza, using the Alpha Phone prototype as its design
 reference. The current renderer includes native browser, camera,
 calendar, reminders, selected files and local notes. Phone, SMS, Contacts and Wallet
-entry points are disabled by the documented MVP profile. Production Android onboarding signs into an Eliza Cloud account, checks account
-credits, then offers microphone and notification setup. The agent runs on the phone;
+entry points are disabled by the documented MVP profile. Production Android onboarding requires an Eliza Cloud account with a plan
+(a subscription code can grant one), then offers microphone and notification setup. The agent runs on the phone;
 Cloud supplies the configured inference and voice services. Remote pairing and hosted agents are unavailable in every production build. Explicit test-mocks tooling
 retains remote connections as non-product development infrastructure. Mock mode, prototype
 fixture data, developer device controls and the local development endpoint are

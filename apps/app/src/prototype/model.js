@@ -998,7 +998,7 @@ registerView("inbox", {
         inboxUndo(api, msg, snap);
       };
       det = {
-        subj: cur.subj, name: cw.name, ini: cw.ini, body: cur.body, time: cur.time,
+        noHtml: true, canTrash: true, subj: cur.subj, name: cw.name, ini: cw.ini, body: cur.body, time: cur.time,
         meta: (cur.sent ? "From " : "To ") + (multi ? inboxAcctLabel(ca) : ca.address) + " · " + cur.time,
         hasAtt: !!(cur.atts && cur.atts.length), atts: (cur.atts || []).map(function (a) { return { name: a.name, size: a.size, open: function () { inboxOpenFile(api, a); } }; }),
         canArchive: !cur.sent, hasPerson: !!cur.pid, noPerson: !cur.pid,
@@ -1067,7 +1067,7 @@ registerView("inbox", {
     }
 
     return {
-      chips: chips,
+      chips: chips, folderChips: chips, addAccountLabel: 'Add account',
       searching: searching, notSearching: !searching, q: st.q || "", hasQ: !!sq,
       openSearch: function () { api.set({ q: "" }); },
       closeSearch: function () { api.set({ q: null }); },
@@ -1130,6 +1130,7 @@ function calCals(st, api) {
       else list.push({ id: a.id || ("acct" + i), name: a.provider || "Calendar", sub: a.address || "", color: "mut" });
     });
   } else { var subs = copy("calendar").calendarSubs || []; list[0].sub = subs[0] || ""; list[1].sub = subs[1] || ""; }
+  if (st.googleCalendarName) list.push({ id: 'google', name: st.googleCalendarName, sub: 'Google Calendar', color: 'acc' });
   var prefs = st.calPrefs || {};
   return list.map(function (c) { var p = prefs[c.id] || {}; return Object.assign({}, c, { on: p.on !== false, color: p.color || c.color }); });
 }
@@ -5496,9 +5497,10 @@ class Component extends DCLogic {
     ORDER.forEach(function (k) { is[k] = isView && v === k; });
     out.is = is;
     if (isView && mod && mod.render) out[v] = mod.render(st, this.api(v));
+    if (v === "inbox" && out.inbox && !out.inbox.folderTitle) out.inbox.folderTitle = "Inbox";
     // Compose attach copy follows the provider adapter's attachment limit (c.attachLabel); one
     // reviewed file until an adapter reports more.
-    if (v === "inbox" && out.inbox && out.inbox.c && !out.inbox.c.attachLabel) out.inbox.c = Object.assign({}, out.inbox.c, { attachLabel: "Attach one PDF, image or TXT (up to 5 MiB)" });
+    if (v === "inbox" && out.inbox && out.inbox.c && !out.inbox.c.attachLabel) out.inbox.c = Object.assign({}, out.inbox.c, { attachLabel: "Attach file", heading: "New message" });
 
     var apps = ORDER.filter(function (k) { return !VIEWS[k].hidden; }).map(function (k) {
       var def = VIEWS[k];

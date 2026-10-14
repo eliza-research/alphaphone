@@ -66,9 +66,10 @@ export function createDeviceLibrary(port: PhotoLibraryPort = nativePort, availab
   };
 
   async function readScope(): Promise<LibraryScopeState | undefined> {
+    const token = epoch;
     if (!available()) { scope = undefined; return undefined; }
-    try { scope = parseScope(await port.scope()); if (catalog.observeScope(scope)) selection.clear(); }
-    catch { error = 'Library access could not be read.'; }
+    try { const fresh = parseScope(await port.scope()); if (token !== epoch || disposed) return undefined; scope = fresh; if (catalog.observeScope(scope)) selection.clear(); }
+    catch { if (token !== epoch || disposed) return undefined; error = 'Library access could not be read.'; }
     return scope;
   }
 
@@ -85,7 +86,8 @@ export function createDeviceLibrary(port: PhotoLibraryPort = nativePort, availab
       const dropped = selection.reconcile(catalog);
       if (dropped.dropped || dropped.changed) status = 'Some selected items changed or left the library and were unselected.';
     } catch (failure) {
-      if (token === epoch) error = (failure as { code?: string })?.code === 'LIBRARY_DENIED' ? '' : 'The device library could not be loaded. Try again.';
+      if (token !== epoch) return;
+      error = (failure as { code?: string })?.code === 'LIBRARY_DENIED' ? '' : 'The device library could not be loaded. Try again.';
       if ((failure as { code?: string })?.code === 'LIBRARY_DENIED') { catalog.reset(); selection.clear(); await readScope(); }
     } finally { if (token === epoch) { busy = false; refresh(); } }
   }
@@ -101,6 +103,7 @@ export function createDeviceLibrary(port: PhotoLibraryPort = nativePort, availab
       if (catalog.version && current.version !== catalog.version) { await load(); return; }
       let changes: Bag | undefined;
       if (catalog.generation) changes = await port.changes({ version: catalog.version, generation: catalog.generation });
+      if (token !== epoch) return;
       if (changes && changes.reset !== true && Array.isArray(changes.items)) {
         const rows = changes.items.map((row: unknown) => ({ ...parseItem(row), trashed: (row as Bag).trashed === true }));
         const result = catalog.applyChanges(rows, Number(changes.generation) || 0);
@@ -112,7 +115,9 @@ export function createDeviceLibrary(port: PhotoLibraryPort = nativePort, availab
       for (let offset = 0; offset < catalog.items.length && token === epoch; offset += LIBRARY_LIMITS.validate) {
         const batch = catalog.validationBatch(offset);
         if (!batch.length) break;
-        const result = catalog.reconcile(parseValidation(await port.validate({ items: batch })));
+        const validation = parseValidation(await port.validate({ items: batch }));
+        if (token !== epoch) return;
+        const result = catalog.reconcile(validation);
         if (result.removed.length) offset -= result.removed.length;
       }
       const dropped = selection.reconcile(catalog);
@@ -181,6 +186,8 @@ export function createDeviceLibrary(port: PhotoLibraryPort = nativePort, availab
     if (!available() || listeners.length) return;
     listeners.push(port.addListener('libraryChanged', () => { if (visible()) void revalidate(); }));
     listeners.push(port.addListener('scopeChanged', value => {
+      // Retire reads begun under the previous grant before clearing or loading the catalog.
+      epoch++; busy = false;
       try { scope = parseScope(value); if (catalog.observeScope(scope)) { selection.clear(); review = undefined; status = 'Library access changed in Android.'; } } catch { /* read again on next render */ }
       // Any change, including a widened grant, needs a fresh first page; a narrowing already cleared the catalog.
       reloadOnOpen = true;

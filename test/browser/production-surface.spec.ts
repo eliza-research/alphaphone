@@ -326,48 +326,36 @@ for (const mode of ['signed-out','empty','unavailable','funded','replaced','unpa
     if(method==='request'){
      const path=new URL(input.url).pathname;
      if(path==='/api/v1/user')return{status:200,data:{success:true,data:{id}}};
-     if(path==='/api/v1/subscription/entitlement')return { status: 404, data: {} }; // Deployed Cloud has no subscription entitlement route yet.
-     if(path==='/api/v1/credits/balance')return mode==='unavailable'?{status:503,data:{error:'temporary'}}:{status:200,data:{balance:mode==='funded'||mode==='replaced'?5:0}};
+     if(path==='/api/v1/subscription/entitlement')return { status: 404, data: {} }; // Entitlement route absent: the billing snapshot answers.
+     if(path==='/api/v1/billing/limits')return mode==='unavailable'?{status:503,data:{error:'temporary'}}:{status:200,data:{success:true,data:{v2:{subscription:mode==='funded'||mode==='replaced'?{status:'available',value:{planKey:'plus_monthly',state:'active',currentPeriodEnd:'2099-01-01T00:00:00.000Z'}}:{status:'not_applicable',reason:'no_organization_subscription'}}}}};
      throw Error('Unexpected Cloud route: '+path);
     }
     return {};
    }};
   },mode);
   await page.goto('/');
-  if(mode==='signed-out')await expect(page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true})).toBeVisible();
-  if(mode==='empty')await expect(page.getByRole('button',{name:'Notes',exact:true})).toBeVisible();
-  // A billing outage is not a gate: Cloud decides each AI request, and local apps keep working.
-  if(mode==='unavailable'){
-   await expect(page.getByRole('button',{name:'Notes',exact:true})).toBeVisible();
-   await expect(page.getByRole('button',{name:/Manage plan in Eliza Cloud|Open Eliza Cloud billing/})).toHaveCount(0);
+  // Every Alpha Phone signs in to Eliza Cloud and holds a plan: no local-only bypass in any state.
+  if(mode==='signed-out'||mode==='unpackaged'||mode==='legacy-offline'){await expect(page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true})).toBeVisible();await page.keyboard.press('Escape');await expect(page.getByRole('dialog',{name:'Welcome to Alpha'})).toBeVisible();}
+  // No plan, or a plan state Cloud cannot confirm: "needs plan" with Redeem code and Choose a plan.
+  if(mode==='empty'||mode==='unavailable'){
+   const gate=page.getByRole('dialog',{name:'Choose a plan',exact:true});await expect(gate).toBeVisible();
+   await expect(gate.getByRole('button',{name:'Redeem code',exact:true})).toBeVisible();
+   await expect(gate.getByRole('button',{name:'Choose a plan',exact:true})).toBeVisible();
+   await expect(gate.getByText(mode==='empty'?'No active plan':'Plan status unavailable',{exact:true})).toBeVisible();
+   await page.keyboard.press('Escape');await expect(gate).toBeVisible();
   }
-  const admitted=mode==='funded'||mode==='unavailable'||mode==='empty';
+  const admitted=mode==='funded';
   if(mode==='funded')await expect(page.getByRole('button',{name:'Notes',exact:true})).toBeVisible();
   if(mode==='replaced')await expect(page.getByRole('alert')).toContainText(/account changed/i);
-  if(mode==='unpackaged'||mode==='legacy-offline'){await expect(page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true})).toBeVisible();await page.keyboard.press('Escape');await expect(page.getByRole('dialog',{name:'Welcome to Alpha'})).toBeVisible();}
-  // Every unconnected state offers the honest offline path; a connected agent closes Welcome.
-  await expect(page.getByRole('button',{name:'Use local apps without AI',exact:true})).toHaveCount(admitted?0:1);
-  if(!admitted){
-   await page.getByRole('button',{name:'Use local apps without AI',exact:true}).click();
-   await expect(page.getByRole('dialog',{name:'Welcome to Alpha'})).toHaveCount(0);
-   for(const view of ['Notes','Calendar']){
-    await page.getByRole('button',{name:view,exact:true}).click();
-    await expect(page.locator('html')).toHaveAttribute('data-active-view',view.toLowerCase());
-    await page.evaluate(()=>window.dispatchEvent(new Event('launcher-home')));
-    await expect(page.locator('html')).toHaveAttribute('data-active-view','home');
-   }
-   expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('alpha.connection.selection.v1')!))).toEqual({kind:'offline',localApps:true});
-  }
+  await expect(page.getByRole('button',{name:'Use local apps without AI',exact:true})).toHaveCount(0);
   const calls=await page.evaluate(()=>(window as any).residentCalls);
-  expect(calls.some((c:any)=>c.url?.includes('/personal/')||c.url?.includes('/upgrade-tier'))).toBe(false);
+  expect(calls.some((c:any)=>c.url?.includes('/personal/')||c.url?.includes('/upgrade-tier')||c.url?.includes('/credits/'))).toBe(false);
   const native=calls.filter((c:any)=>c.plugin==='Agent').map((c:any)=>c.method);
   if(admitted)expect(native.indexOf('stop')).toBeLessThan(native.indexOf('configureCloudProvider'));
-  else expect(native).not.toContain('start');
-  // Choosing local apps stops a packaged runtime and never configures inference.
-  if(!admitted){expect(native).not.toContain('configureCloudProvider');if(mode!=='unpackaged')expect(native).toContain('stop');}
+  else{expect(native).not.toContain('start');expect(native).not.toContain('configureCloudProvider');}
  });
 }
-test('resident local apps without AI persist across restart and can be closed and reopened',async({page})=>{
+test('a signed-out phone keeps the sign-in gate across restart and offers no local-only bypass',async({page})=>{
  await page.addInitScript(()=>{
   const w=window as any;w.androidBridge={};w.residentCalls=[];
   const methods=(names:string[])=>names.map(name=>({name,rtype:'promise'}));
@@ -394,22 +382,17 @@ test('resident local apps without AI persist across restart and can be closed an
  await expect(welcome).toBeVisible();
  await page.keyboard.press('Escape');
  await expect(welcome).toBeVisible();
- await welcome.getByRole('button',{name:'Use local apps without AI',exact:true}).click();
- await expect(welcome).toHaveCount(0);
+ await expect(welcome.getByRole('button',{name:'Use local apps without AI',exact:true})).toHaveCount(0);
+ await expect(welcome.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true})).toBeVisible();
  await page.reload();
- await expect(page.getByRole('button',{name:'Notes',exact:true})).toBeVisible();
- await expect(welcome).toHaveCount(0);
+ await expect(welcome).toBeVisible();
+ await page.keyboard.press('Escape');
+ await expect(welcome).toBeVisible();
  const calls=await page.evaluate(()=>(window as any).residentCalls);
  expect(calls.filter((c:any)=>c.plugin==='Agent').map((c:any)=>c.method)).not.toContain('start');
  expect(calls.filter((c:any)=>c.method==='request')).toEqual([]);
- await page.getByRole('button',{name:'Settings',exact:true}).click();
- await page.getByRole('button',{name:/Agent connection/}).click();
- await expect(welcome).toBeVisible();
- await expect(welcome.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true})).toBeVisible();
- await page.keyboard.press('Escape');
- await expect(welcome).toHaveCount(0);
 });
-test('resident local apps keep a saved Cloud sign-in available without contacting Cloud',async({page})=>{
+test('an earlier local-only choice with a saved sign-in migrates to the gate and keeps the sign-in offered',async({page})=>{
  await page.addInitScript(()=>{
   const w=window as any;w.androidBridge={};w.residentCalls=[];
   localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline',localApps:true}));
@@ -432,14 +415,15 @@ test('resident local apps keep a saved Cloud sign-in available without contactin
   }};
  });
  await page.goto('/');
+ // The retired choice is replaced by the gate on this launch; the saved sign-in is checked (offline
+ // here, with no recently verified plan), stays offered, and nothing is started.
  const welcome=page.getByRole('dialog',{name:'Reconnect Eliza Cloud'});
- await expect(page.getByRole('button',{name:'Notes',exact:true})).toBeVisible();
- await expect(welcome).toHaveCount(0);
- await page.getByRole('button',{name:'Settings',exact:true}).click();
- await page.getByRole('button',{name:/Agent connection/}).click();
  await expect(welcome.getByRole('button',{name:'Retry saved connection',exact:true})).toBeVisible();
  await expect(welcome.getByRole('button',{name:'Use local apps without AI',exact:true})).toHaveCount(0);
+ await page.keyboard.press('Escape');
+ await expect(welcome).toBeVisible();
+ expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('alpha.connection.selection.v1')!))).toEqual({kind:'none'});
  const calls=await page.evaluate(()=>(window as any).residentCalls);
- expect(calls.filter((c:any)=>c.method==='request')).toEqual([]);
  expect(calls.filter((c:any)=>c.plugin==='Agent').map((c:any)=>c.method)).not.toContain('start');
+ expect(calls.filter((c:any)=>c.plugin==='Agent').map((c:any)=>c.method)).not.toContain('configureCloudProvider');
 });

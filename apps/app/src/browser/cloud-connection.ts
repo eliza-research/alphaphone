@@ -1,3 +1,4 @@
+import {googleAuthorizationUrlAllowed} from '../runtime/google-authorization';
 import {WebPlugin} from '@capacitor/core';
 
 const endpoint='/__alpha-browser-cloud';
@@ -29,7 +30,7 @@ export class BrowserCloudConnection extends WebPlugin {
  async openExternal(input:{url:string;requestId:string}){
   const url=new URL(input.url),login=['eliza.app','staging.eliza.app'].includes(url.hostname)&&url.pathname==='/auth/cli-login'&&/^[0-9a-f-]{36}$/i.test(url.searchParams.get('session')??'')&&[...url.searchParams.keys()].every(k=>k==='session');
   const billing=['cloud.eliza.app','cloud-staging.eliza.app'].includes(url.hostname)&&url.pathname==='/cloud/billing'&&!url.search;
-  if(url.protocol!=='https:'||url.username||url.password||url.hash||url.port||!login&&!billing)throw Error('Unsupported Cloud browser destination');
+  if(url.protocol!=='https:'||url.username||url.password||url.hash||url.port||!login&&!billing&&!googleAuthorizationUrlAllowed(url.href))throw Error('Unsupported Cloud browser destination');
   const opened=window.open(url.href,'_blank');if(!opened)throw Error('Allow the Cloud sign-in window, then try again.');opened.opener=null;
  }
 }

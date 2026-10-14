@@ -114,7 +114,7 @@ public final class PublicCloudTransportProbeInstrumentedTest {
       const bridge=Capacitor.Plugins.AlphaConnection,rows=[];
       void(async()=>{
        try{
-        for(const [endpoint,path] of [['identity','/api/v1/user'],['balance','/api/v1/credits/balance']]){
+        for(const [endpoint,path] of [['identity','/api/v1/user'],['entitlement','/api/v1/subscription/entitlement']]){
          const requestId=crypto.randomUUID();let timer;
          try{
           const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{void bridge.cancel({requestId}).catch(()=>{});reject({code:'OWNED_PROBE_TIMEOUT'});},25000);});

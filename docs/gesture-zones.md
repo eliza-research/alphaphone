@@ -110,3 +110,24 @@ Android accepted the call.
 - Asking Alpha about one of its own notices used to start from the Alpha panel. In product
   builds there is no such entry until it is offered from the notice itself (a notification
   action); the browser development stand-in still shows it for development only.
+
+## Reviewed questions from workflow step notices
+
+An Alpha workflow step notice has a native **Ask Alpha** action alongside its normal
+open tap. Android requires unlock for the action. It carries the existing opaque,
+owner-bound route, never notification text in Intent extras. Alpha resolves the exact
+workflow and run under the current agent before offering the editable excerpt review.
+Continue rereads the still-posted notice and its revision, consumes only that reviewed
+tap, and fills a conversation draft. Send remains a separate choice. Account changes,
+Home/background transitions, dismissed/replaced notices and sensitive excerpts cannot
+silently insert text. Cancel (or Escape/Back) settles the Ask tap natively and returns
+it to untapped, so the review never reopens itself; leaving for Home or the background
+keeps it for the next return. If the step notice is gone when its Ask tap is read (timed
+out, swiped or withdrawn), there is nothing left to review, and the tap opens its run
+like the notice body. Withdrawing a notice revokes both its open and Ask PendingIntents.
+
+This first native action covers workflow **step** notices only. Approval notices retain
+their existing run-review tap; Calendar/reminder and other notice publishers still need
+an equivalent owner/source-bound review path. Issue #449 remains open for that parity
+and actual Android execution. Source tests and synthetic browser bridges do not prove
+SystemUI delivery, lock behavior or AOSP/device acceptance.

@@ -1,3 +1,5 @@
+import {readGmailAccountChoice,saveGmailAccountChoice} from '../apps/app/src/runtime/gmail-account-selection.ts';
+import {GmailReadAhead} from '../apps/app/src/runtime/gmail-read-ahead.ts';
 // Real Inbox adapter lifecycle with an account-bound provider fixture, no real mail.
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -10,18 +12,19 @@ import { CloudProtocolError, safeMailLink } from '../apps/app/src/runtime/cloud-
 import { reviewOpaqueAttachment, checkOutgoingAttachments, outgoingAttachmentLimits, attachmentBytes } from '../apps/app/src/runtime/inbox-operation.ts';
 import * as mailbox from '../apps/app/src/runtime/gmail-mailbox.ts';
 import * as grants from '../apps/app/src/runtime/gmail-grants.ts';
+import * as googleAccounts from '../apps/app/src/runtime/google-accounts.ts';
 import { presentHomeInboxStatus } from '../apps/app/src/prototype/home-cards.ts';
 import { formatTime } from '../apps/app/src/prototype/locale-time.ts';
-let session='account-a',agent='remote-a',releaseSearch,delay=false,failNext=null,connected=true,readGrant=true,confirmAnswer=true;
-const slots=new Map(),searches=[],disconnects=[],toasts=[],events=[];
+let session='account-a',agent='remote-a',releaseSearch,releaseAccounts,delayAccounts=true,delay=false,failNext=null,connected=true,readGrant=true,confirmAnswer=true;
+const slots=new Map(),reads=[],searches=[],disconnects=[],toasts=[],events=[];
 const mail=(id,extra={})=>({id,threadId:'thread-'+id,subject:'Fixture '+id,from:'Sender',fromEmail:'sender@example.invalid',to:['fixture@example.invalid'],snippet:'Preview',receivedAt:'2026-09-30T00:00:00Z',unread:false,...extra});
 const pages={'in:inbox':[[mail('mail-1',{unread:true}),mail('mail-2')],[mail('mail-2'),mail('mail-3')]],'in:sent':[[mail('sent-1',{to:['friend@example.invalid']})]],'from:fixture':[[mail('mail-1')]]};
 const client={
- gmailAccounts:async()=>[{connectionId:'grant-a',label:'Fixture account',connected,grantedCapabilities:connected&&readGrant?['google.gmail.triage']:[]}],
+ gmailAccounts:async()=>{if(delayAccounts)await new Promise(resolve=>{releaseAccounts=resolve;});return [{connectionId:'grant-a',label:'Fixture account',connected,grantedCapabilities:connected&&readGrant?['google.gmail.triage']:[]}];},
  gmailSearch:async(_grant,query,_signal,size,pageToken)=>{searches.push({query,size,pageToken:pageToken??null});if(failNext){const error=failNext;failNext=null;throw error;}
   const list=pages[query]||[[]],index=pageToken?Number(pageToken.slice(5)):0,result={messages:list[index]||[],syncedAt:'revision',nextPageToken:index+1<list.length?'page-'+(index+1):null};
   if(delay)return new Promise(resolve=>{releaseSearch=()=>resolve(result);});return result;},
- gmailRead:async(_grant,id)=>({message:Object.values(pages).flat(2).find(m=>m.id===id),bodyText:'Fixture body'}),
+ gmailRead:async(_grant,id)=>{reads.push(id);return {message:Object.values(pages).flat(2).find(m=>m.id===id),bodyText:'Fixture body'};},
  disconnectGmail:async(id)=>{disconnects.push(id);connected=false;},
  initiateGmail:async()=>{throw new Error('No automatic OAuth');},
 };
@@ -33,45 +36,46 @@ const strip=async(file,name)=>{let source=await readFile(new URL(`../apps/app/sr
 const windowFixture={addEventListener:(name,fn)=>events.push({name,fn}),removeEventListener:()=>{},dispatchEvent:event=>{events.push({dispatched:event.type,detail:event.detail});return true;},confirm:()=>confirmAnswer};
 class CustomEvent{constructor(type,init){this.type=type;this.detail=init?.detail;}}
 const inboxUnsaved=()=>({ready:Promise.resolve(),available:false,conflict:false,error:false,status:'',edit(){},clear:async()=>{},retire(){},resume(){}});
-const sandbox={URL,presentHomeInboxStatus,inboxUnsaved,InboxOperation,composerKind,composerContent,reviewBinding,reviewBindingRefusal,safeMailLink,reviewOpaqueAttachment,checkOutgoingAttachments,outgoingAttachmentLimits,attachmentBytes,reviewMailAttachment,reviewMailContext,validateMailContext,...mailbox,...grants,registerPlugin:()=>({cancel:async()=>{}}),crypto:globalThis.crypto,TextEncoder,structuredClone,secureConnectionStore:{read:async key=>slots.get(key)??null,compareExchange:async(key,prior,next)=>{if(JSON.stringify(slots.get(key)??null)!==JSON.stringify(prior))return {status:'conflict'};if(next===null)slots.delete(key);else slots.set(key,next);return {status:'saved'};}},connectionController:controller,DailyApps:{addListener:async()=>({remove:async()=>{}})},openConnectionBrowser:async()=>{throw new Error('No automatic OAuth');},queueMicrotask,setTimeout,AbortController,DOMException,Date,console,window:windowFixture,CustomEvent,document:{documentElement:{dataset:{connectionMode:'live'}}}};
-vm.createContext(sandbox);
+const sandbox={prepareMailHtml:()=>{throw Error("HTML uses the rendered browser test");},readGmailAccountChoice:()=> 'grant-a',saveGmailAccountChoice,GmailReadAhead,URL,presentHomeInboxStatus,inboxUnsaved,InboxOperation,composerKind,composerContent,reviewBinding,reviewBindingRefusal,safeMailLink,reviewOpaqueAttachment,checkOutgoingAttachments,outgoingAttachmentLimits, attachmentBytes,reviewMailAttachment,reviewMailContext,validateMailContext,...mailbox,...googleAccounts,...grants,Event,googleConnectionController:{open(){throw Error('Explicit Google authorization not exercised by this read fixture');}},registerPlugin:()=>({cancel:async()=>{}}),crypto:globalThis.crypto,TextEncoder,structuredClone,secureConnectionStore:{read:async key=>slots.get(key)??null,compareExchange:async(key,prior,next)=>{if(JSON.stringify(slots.get(key)??null)!==JSON.stringify(prior))return {status:'conflict'};if(next===null)slots.delete(key);else slots.set(key,next);return {status:'saved'};}},connectionController:controller,DailyApps:{addListener:async()=>({remove:async()=>{}})},openConnectionBrowser:async()=>{throw new Error('No automatic OAuth');},queueMicrotask,setTimeout,AbortController,DOMException,Date,console,window:windowFixture,CustomEvent,document:{addEventListener(){},removeEventListener(){},documentElement:{dataset:{connectionMode:'live'}}}};
+sandbox.inboxLocalStore=sandbox.secureConnectionStore;vm.createContext(sandbox);
 for(const [file,name] of [['inbox-provider-controls.ts','inboxProviderControls'],['inbox-drafts.ts','inboxDrafts'],['inbox-cloud-adapter.ts',['installInboxCloudAdapter','inboxAttention','openInbox','linkifyMailText','linkTextMismatch']]])vm.runInContext(await strip(file,name),sandbox);
 sandbox.installInboxCloudAdapter(Shell,views);const inboxAttentionNow=()=>sandbox.inboxAttention();
 const shell=new Shell();shell.componentDidMount();
 const swipes=new Map();const api={sw:fn=>{const handlers={down(){},up(){}};swipes.set(handlers,fn);return handlers;},swallowed:()=>false,get:()=>shell.st,isActive:()=>true,set:p=>shell.vset('inbox',p),toast:text=>toasts.push(text)};
 const render=()=>views.inbox.render(shell.st,api);const tick=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setTimeout(r,0));};
 const local=value=>JSON.parse(JSON.stringify(value));// vm-realm arrays compare by value
-const chip=label=>{const found=render().chips.find(c=>c.label===label);assert.ok(found,`chip ${label} in ${render().chips.map(c=>c.label)}`);return found;};
+const chip=label=>{if(label==='Check connection')return {pick:()=>shell.inboxAccountsChanged({})};if(label==='Refresh')return {pick:render().refresh};const found=[...render().chips,...render().extraFolders].find(c=>c.label===label);assert.ok(found,`chip ${label} in ${render().chips.map(c=>c.label)}`);return found;};
 
 assert.equal(shell.renderVals().homeInboxTitle,'Inbox');assert.equal(searches.length,0,'Home does not discover accounts or read mail');
 // Home's read time is the completed first-page read; a later page or a local recount never moves it.
 const realNow=Date.now,noon=new Date();noon.setHours(12,0,0,0);const clock=minutes=>{const value=noon.getTime()+minutes*60000;Date.now=()=>value;return formatTime(new Date(value));};
 const firstRead=clock(0);
-render();await tick();
+render();await tick();assert.equal(searches.length,1,'remembered first page starts before account discovery finishes');assert.equal(render().rows.length,0,'speculative mail is not displayed before account verification');delayAccounts=false;releaseAccounts();await tick();
 assert.equal(shell.renderVals().homeInboxStatus,`From loaded messages · Read ${firstRead}`,'a partial page names its read time');
 assert.equal(shell.renderVals().homeInboxCount,'1+ unread');assert.deepEqual(local(shell.renderVals().homeInboxRows),[{subject:'Fixture mail-1',from:'Sender'}]);
-assert.deepEqual(searches.map(s=>s.query),['in:inbox'],'opening Inbox loads the connected account without another tap');
+assert.deepEqual(searches.map(s=>s.pageToken),[null,'page-1'],'one first page plus one bounded read-ahead');
 assert.equal(render().rows.length,2);assert.equal(views.inbox.badge(),true,'badge reflects a real unread provider message');
 assert.equal(render().hasMore,true,'provider page token offers Load more');
 const laterPage=clock(7);assert.notEqual(laterPage,firstRead);
-render().loadMore();await tick();
+delay=true;render().loadMore();await tick();assert.equal(render().hasMore,true,'pending pagination stays visible');assert.equal(render().loadMoreLabel,'Loading more…');assert.equal(render().loadMoreDisabled,true);const pendingCount=searches.length;render().loadMore();await tick();assert.equal(searches.length,pendingCount,'double tap never starts another page');releaseSearch();delay=false;await tick();assert.equal(render().loadingMore,false);
 assert.deepEqual(searches.at(-1),{query:'in:inbox',size:25,pageToken:'page-1'},'Load more sends the opaque provider page token');
 assert.match(shell.renderVals().homeInboxStatus,new RegExp(` · Read ${firstRead.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}$`),'a later page keeps the time of the oldest data counted');
 assert.equal(shell.renderVals().homeInboxDescription,shell.renderVals().homeInboxStatus);
 assert.deepEqual(local(render().rows.map(r=>r.subj)),['Fixture mail-1','Fixture mail-2','Fixture mail-3'],'pages append without duplicates');
 assert.equal(render().hasMore,false,'last page has no Load more');
+const beforeWarm=searches.length;views.inbox.onLeave();render();await tick();assert.equal(render().rows.length,3,'warm reopen restores only the same account list');assert.equal(render().cachedListShown,true);assert.equal(searches.length,beforeWarm,'warm reopen spends zero account or page requests');
 assert.equal(shell.renderVals().homeInboxCount,'1 unread','complete paging removes the lower-bound qualifier');const homeSearches=searches.length;for(let i=0;i<5;i++)shell.renderVals();assert.equal(searches.length,homeSearches,'Home rerenders never fetch mail');
-render();[...swipes.values()].at(-1)(-120,4);await tick();assert.match(toasts.at(-1),/Authorize Gmail changes/,'swipe without the grant changes nothing');
+render();[...swipes.values()].at(-1)(-120,4);await tick();assert.match(toasts.at(-1),/Enable Gmail changes in Settings/,'swipe without the grant changes nothing');
 const refreshed=clock(19);
-chip('Refresh').pick();await tick();assert.deepEqual(searches.at(-1),{query:'in:inbox',size:25,pageToken:null},'Refresh restarts from the first page');
-assert.match(shell.renderVals().homeInboxStatus,new RegExp(`Read ${refreshed.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}$`),'a completed refresh moves the read time');Date.now=realNow;
+chip('Refresh').pick();await tick();assert.deepEqual(searches.filter(s=>!s.pageToken).at(-1),{query:'in:inbox',size:25,pageToken:null},'Refresh restarts from the first page');
+assert.match(shell.renderVals().homeInboxStatus,new RegExp(`Read ${refreshed.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}$`),'a completed refresh moves the read time');
 assert.equal(render().rows.length,2);
-render().rows[0].open();await tick();assert.equal(render().d.body,'Fixture body');
+const readsBeforeOpen=reads.length;render().rows[0].open();assert.equal(render().d.body,'Fixture body','a prepared message opens immediately');await tick();assert.equal(reads.length,readsBeforeOpen,'opening the prepared body never repeats its read');
 agent='remote-b';for(const fn of listeners)fn();assert.equal(shell.st.nativeMailSelection,null,'target change clears observation authority');assert.equal(render().d.body,'Fixture body','Cloud mailbox remains independent');
 views.inbox.back(shell.st,api);
 chip('Sent').pick();await tick();assert.equal(searches.at(-1).query,'in:sent','Sent folder uses an in:sent query');
 assert.equal(render().rows[0].name,'To: friend@example.invalid','Sent rows show recipients');assert.equal(views.inbox.badge(),true,'Sent results do not clear the Inbox badge');assert.deepEqual(local(shell.renderVals().homeInboxRows),[{subject:'Fixture mail-1',from:'Sender'}],'Sent does not replace cached Inbox metadata');
-chip('Inbox').pick();await tick();assert.equal(searches.at(-1).query,'in:inbox');
+const folderReturnSearches=searches.length;chip('Inbox').pick();assert.equal(render().rows.length,2,'folder switching immediately restores its loaded list');await tick();assert.equal(searches.filter(row=>!row.pageToken).at(-1).query,'in:sent','returning Inbox does not fetch its first page again');assert.equal(searches.length,folderReturnSearches,'cached folder switch adds no page read');Date.now=realNow;
 render().openSearch();assert.equal(render().rows.length,0,'entering search clears prior-query results');render().onQ({target:{value:'from:fixture'}});
 delay=true;chip('Search Gmail').pick();await tick();assert.match(shell.renderVals().homeInboxStatus,/Updating email/);session='account-b';for(const fn of listeners)fn();releaseSearch();await tick();assert.equal(render().rows.length,0,'late previous-account results discarded');
 assert.equal(views.inbox.badge(),false,'account change clears the badge');assert.equal(shell.renderVals().homeInboxHasRows,false,'account change retires cached subjects');
@@ -80,10 +84,10 @@ render();await tick();assert.equal(render().rows.length,2,'re-bound account load
 
 // Classified failures each offer an explicit Retry; nothing retries on its own.
 for(const [error,kind,text] of [[new TypeError('Failed to fetch'),'offline',/offline/],[new CloudProtocolError('http',409),'revoked',/revoked or needs authorization/],[new CloudProtocolError('http',503),'unavailable',/unavailable/]]){
- failNext=error;const before=searches.length;chip('Refresh').pick();await tick();
- assert.equal(searches.length,before+1,'one attempt only');assert.match(render().emptyText,text,kind);assert.match(shell.renderVals().homeInboxStatus,/retry/,'Home keeps failure distinct from an empty Inbox');if(kind==='revoked')assert.equal(shell.renderVals().homeInboxHasRows,false,'revoked access drops cached subjects');
+ failNext=error;const before=searches.filter(s=>!s.pageToken).length;chip('Refresh').pick();await tick();
+ assert.equal(searches.filter(s=>!s.pageToken).length,before+1,'one demand attempt only');assert.match(render().emptyText,text,kind);assert.match(shell.renderVals().homeInboxStatus,/retry/,'Home keeps failure distinct from an empty Inbox');if(kind==='revoked')assert.equal(shell.renderVals().homeInboxHasRows,false,'revoked access drops cached subjects');
  if(kind==='revoked')chip('Reconnect Gmail');
- chip('Retry').pick();await tick();assert.equal(searches.length,before+2,'Retry is the explicit second attempt');assert.equal(render().rows.length,2);
+ chip('Retry').pick();await tick();assert.equal(searches.filter(s=>!s.pageToken).length,before+2,'Retry is the explicit second demand attempt');assert.equal(render().rows.length,2);
 }
 // P-37: the read grant is withdrawn on the same connection. The re-read drops the shown mail, the
 // Home preview and the badge at once; nothing read under the old grant is shown again.
@@ -91,7 +95,7 @@ assert.equal(shell.renderVals().homeInboxHasRows,true);assert.equal(views.inbox.
 readGrant=false;chip('Check connection').pick();await tick();
 assert.equal(render().rows.length,0,'mail read under the withdrawn grant is gone');assert.equal(shell.renderVals().homeInboxHasRows,false,'Home preview dropped');assert.equal(views.inbox.badge(),false,'badge dropped');
 assert.equal(inboxAttentionNow().unread,0,'Home attention no longer counts the old mail');
-readGrant=true;const regranted=searches.length;chip('Check connection').pick();await tick();assert.equal(searches.length,regranted+1,'a renewed read grant reads again');assert.equal(render().rows.length,2);
+readGrant=true;const regranted=searches.filter(row=>!row.pageToken).length;chip('Check connection').pick();await tick();assert.equal(searches.filter(row=>!row.pageToken).length,regranted+1,'a renewed read grant reads again');assert.equal(render().rows.length,2);
 assert.equal(mailbox.classifyGmailFailure(new CloudProtocolError('http',409),'operation').kind,'stale','operation 409 is a stale review');
 assert.equal(mailbox.classifyGmailFailure(new CloudProtocolError('http',500),'read',false).kind,'offline','browser offline wins');
 
@@ -100,6 +104,7 @@ shell.st.compose={to:'Speaker name',subject:'Shared note',body:'· line one'};re
 assert.equal(shell.st.compose,null,'shared compose request is consumed once');
 const composed=render();assert.equal(composed.composing,true,'shared content opens a composer');assert.equal(composed.c.subject,'Shared note');assert.equal(composed.c.body,'· line one');
 assert.deepEqual(local(composed.c.chips),[],'non-address recipients are not guessed');assert.match(composed.c.status,/nothing has been sent/);
+assert.equal(composed.c.attachLabel,'Attach file');assert.equal(composed.c.showRecipientDetails,false);composed.c.toggleRecipientDetails();assert.equal(render().c.showRecipientDetails,true);
 assert.equal(composed.c.multi,false,'From switcher only appears with more than one account');
 assert.deepEqual(local(views.inbox.suggestions(shell.st)),['Help me write this email']);
 views.inbox.back(shell.st,api);composed.c.discard();render().c.confirmDiscard();await tick();
@@ -116,10 +121,9 @@ views.inbox.back(shell.st,api);render().c.discard();render().c.confirmDiscard();
 pages['in:inbox']=[[]];chip('Refresh').pick();await tick();assert.equal(shell.renderVals().homeInboxTitle,'No unread email');assert.equal(shell.renderVals().homeInboxHasRows,false);
 views.inbox.onLeave();const leftSearches=searches.length;assert.equal(shell.renderVals().homeInboxTitle,'No unread email','Home retains metadata after full messages are retired');assert.equal(searches.length,leftSearches,'returning Home never fetches mail');render();await tick();
 
-// Disconnect requires confirmation and reports the read-back state.
-confirmAnswer=false;chip('Disconnect Gmail').pick();await tick();assert.deepEqual(disconnects,[],'cancelled confirmation sends nothing');
-confirmAnswer=true;chip('Disconnect Gmail').pick();await tick();
-assert.deepEqual(disconnects,['grant-a']);assert.match(render().emptyText,/is disconnected/);assert.equal(render().rows.length,0);
-assert.equal(shell.renderVals().homeInboxTitle,'Connect email');assert.equal(render().chips.some(c=>c.label==='Disconnect Gmail'),false);assert.ok(events.some(e=>e.dispatched==='alpha:gmail-accounts-changed'&&e.detail.source==='inbox'));
+// Account management lives in Settings; a connected inbox never prompts to connect again.
+assert.equal(render().chips.some(c=>/Connect Gmail|Check connection|Authorize|Disconnect|Fixture account/.test(c.label)),false);
+assert.equal(render().emptyAdd,false,'connected empty mailbox is not a connect prompt');
+assert.deepEqual(disconnects,[],'Inbox has no disconnect mutation');
 shell.componentWillUnmount();
-console.log('PASS: Inbox auto-load, Refresh, provider paging, Sent folder, unread badge, account/query fences, classified errors with explicit Retry, shared compose prefill, honest chips and confirmed disconnect. Provider fixture only.');
+console.log('PASS: Inbox auto-load, Refresh, provider paging, Sent folder, unread badge, account/query fences, classified errors with explicit Retry, shared compose prefill, compact toolbar and immediate pagination feedback. Provider fixture only.');

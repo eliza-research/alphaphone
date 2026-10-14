@@ -16,6 +16,22 @@ public final class WorkflowNoticeTapsTest {
   taps.capture(first);receipt(s,"op2","succeeded");taps.capture(second);WorkflowNoticeTaps current=new WorkflowNoticeTaps(s);check(current.pending().getString("runId").equals("run2"));check(current.pending().getBoolean("retained"));
   receipt(s,"op2","unknown");check(!current.pending().getBoolean("retained"));rejects(()->current.consume(second));receipt(s,"op2","succeeded");
   s.fail=true;rejects(()->current.consume(second));s.fail=false;check(current.pending().getString("token").equals(second));current.consume(second);current.capture(second);check(current.pending().getString("runId").equals("run1"));current.consume(first);check(current.pending().length()==0);
+  // Old ledgers need no migration; Ask is a durable purpose on the same exact owner route.
+  Store questionStore=new Store();WorkflowNoticeTaps questionTaps=new WorkflowNoticeTaps(questionStore);
+  String questionToken=questionTaps.prepare("question","b".repeat(64),route("question-run"));receipt(questionStore,"question","succeeded");
+  questionTaps.capture(questionToken,true);check(new WorkflowNoticeTaps(questionStore).pending().getBoolean("question"));
+  check(questionTaps.pending().getString("runId").equals("question-run"));
+  questionTaps.capture(questionToken);check(!questionTaps.pending().has("question"));
+  questionTaps.capture(questionToken,true);questionTaps.consume(questionToken);questionTaps.capture(questionToken,true);check(questionTaps.pending().length()==0);
+  // A reposted notice rotates its route; a stale Ask purpose never survives into the fresh route.
+  questionTaps.fresh("question");String rotated=questionTaps.token("question");check(!rotated.equals(questionToken));check(!new JSONObject(questionStore.values.get(WorkflowNoticeTaps.SLOT)).getJSONObject("question").has("question"));
+  questionTaps.capture(rotated,true);questionTaps.fresh("question");String reposted=questionTaps.token("question");check(questionTaps.pending().length()==0);
+  questionTaps.capture(reposted,false);check(!questionTaps.pending().has("question"));check(questionTaps.pending().getString("token").equals(reposted));
+  rejects(()->questionTaps.settleQuestion(reposted,true));questionTaps.consume(reposted);
+  // Explicit Cancel returns an Ask tap to untapped; a gone notice keeps it as a plain open tap.
+  questionTaps.fresh("question");String canceled=questionTaps.token("question");questionTaps.capture(canceled,true);questionTaps.settleQuestion(canceled,true);check(questionTaps.pending().length()==0);
+  rejects(()->questionTaps.settleQuestion(canceled,true));questionTaps.capture(canceled,true);questionTaps.settleQuestion(canceled,false);check(questionTaps.pending().getString("token").equals(canceled));check(!questionTaps.pending().has("question"));
+  questionTaps.consume(canceled);check(questionTaps.pending().length()==0);
   // Seed prior durable rows once; exercise both sides of the capacity boundary
   // through production prepare without quadratically revalidating setup rows.
   JSONObject full=new JSONObject(s.values.get(WorkflowNoticeTaps.SLOT));

@@ -42,7 +42,7 @@ async function setup(page:Page,parts:Part[],options:{opaque?:boolean;agent?:bool
  await page.goto('/');
  await page.evaluate(async({parts,options})=>{
   const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');
-  const {secureConnectionStore:s}=await import('/src/runtime/native-connection.ts');
+  const {inboxLocalStore:s}=await import('/src/runtime/inbox-local-store.ts');
   const {CloudProtocol}=await import('/src/runtime/cloud-protocol.ts');
   s.read=async()=>null;s.compareExchange=async()=>({status:'saved'});
   const f=(window as any).hostileFixture={attachmentRequests:[] as string[],mutations:0,agentPosts:[] as unknown[]};

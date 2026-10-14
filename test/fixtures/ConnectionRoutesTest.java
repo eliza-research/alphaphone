@@ -64,6 +64,31 @@ public final class ConnectionRoutesTest {
   check(ConnectionRoutes.admittedOrigin("http","10.0.2.2",2138,true),"test mocks keep the development agent");
   for(String route:new String[]{"/api/v1/eliza/agents","/api/v1/eliza/agents/id/api/conversations","/api/auth/pair","/api/conversations","/api/v1/eliza/personal","/api/v1/eliza/google/../agents","/api/v1/%65liza/google/status","/api/v1/eliza/google/status/","/api/v1/eliza/google//status"})for(String method:new String[]{"GET","POST"})check(!ConnectionRoutes.managedService(route,null,method,false,false),"hosted/unreviewed path refused "+route);
   check(ConnectionRoutes.managedService("/api/v1/user",null,"GET",false,false),"owner identity allowed");
+  for(String path:new String[]{"/api/v1/eliza/google/calendar/calendars","/api/v1/eliza/google/calendar/feed"}){
+   check(ConnectionRoutes.managedService(path,"grantId=owned","GET",false,false),"owner Google Calendar read allowed");
+   for(String method:new String[]{"POST","DELETE","PUT","PATCH"})check(!ConnectionRoutes.managedService(path,null,method,true,false),"Google Calendar mutation refused");
+   check(!ConnectionRoutes.managedService(path,null,"GET",true,false),"Google Calendar GET body refused");
+   check(!ConnectionRoutes.managedService(path+"/",null,"GET",false,false),"Google Calendar trailing slash refused");
+  }
+  check(!ConnectionRoutes.managedService("/api/v1/eliza/google/calendar/events",null,"GET",false,false),"unreviewed Google Calendar route refused");
+  // Subscription plan gate (#410): code redemption is one POST with a body; the billing snapshot is read-only; credits are retired.
+  check(ConnectionRoutes.managedService("/api/v1/subscription/redeem",null,"POST",true,false),"subscription code redemption allowed");
+  check(!ConnectionRoutes.managedService("/api/v1/subscription/redeem",null,"POST",false,false),"redemption needs a body");
+  check(!ConnectionRoutes.managedService("/api/v1/subscription/redeem","code=x","POST",true,false),"redemption never carries a query");
+  check(!ConnectionRoutes.managedService("/api/v1/subscription/redeem",null,"GET",false,false),"redemption is POST only");
+  check(!ConnectionRoutes.managedService("/api/v1/subscription/redeem/",null,"POST",true,false)&&!ConnectionRoutes.managedService("/api/v1/subscription/redeem/x",null,"POST",true,false),"neighbouring redemption paths refused");
+  check(ConnectionRoutes.managedService("/api/v1/billing/limits",null,"GET",false,false),"billing snapshot read allowed");
+  check(!ConnectionRoutes.managedService("/api/v1/billing/limits",null,"POST",true,false),"billing snapshot write refused");
+  check(!ConnectionRoutes.managedService("/api/v1/credits/balance",null,"GET",false,false),"credit balance retired");
+  // Reset Alpha data revokes only the presented key, at the exact self-revocation route.
+  check(java.util.Arrays.equals(CloudKeyRevocation.environments(false),new String[]{"production"}),"flag-off reset revokes production only");
+  check(java.util.Arrays.equals(CloudKeyRevocation.environments(true),new String[]{"production","staging"}),"test mocks also revoke staging");
+  for(String environment:new String[]{"production","staging"}){java.net.URI target=java.net.URI.create(CloudKeyRevocation.endpoint(environment));check(revoke(target.getScheme(),target.getHost(),target.getPort(),target.getRawPath(),target.getRawQuery(),"DELETE",false,true),"reset revocation target "+environment);}
+  check(!revoke("https","api-staging.eliza.app",-1,"/api/v1/api-keys/current",null,"DELETE",false,false),"flag-off reset never targets staging");
+  try{CloudKeyRevocation.endpoint("other");throw new AssertionError("unknown environment");}catch(IllegalArgumentException expected){}
+  check(CloudKeyRevocation.bearer(null)==null&&CloudKeyRevocation.bearer("short")==null&&CloudKeyRevocation.bearer("token with space")==null&&CloudKeyRevocation.bearer("token\nline-break")==null,"only a printable bearer is sent");
+  check("eliza_synthetic_token".equals(CloudKeyRevocation.bearer("eliza_synthetic_token")),"printable bearer kept");
+  check(!CloudKeyRevocation.revoke("production",null,false)&&!CloudKeyRevocation.revoke("other","eliza_synthetic_token",false),"nothing is sent without a token or a known environment");
   check(ConnectionRoutes.managedService("/api/v1/subscription/entitlement",null,"GET",false,false)&&ConnectionRoutes.managedService("/api/v1/subscription/entitlement-keys",null,"GET",false,false),"subscription entitlement reads allowed");
   check(!ConnectionRoutes.managedService("/api/v1/subscription/entitlement",null,"POST",true,false)&&!ConnectionRoutes.managedService("/api/v1/subscription/checkout",null,"GET",false,false),"subscription writes and other subscription paths refused");
   check(ConnectionRoutes.managedService("/api/v1/eliza/google/gmail/inbox-v1/thread","grantId=owned", "GET",false,false),"owner Gmail route allowed");

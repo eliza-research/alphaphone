@@ -22,6 +22,10 @@ final class ListenerStore {
  private final SharedPreferences prefs;
  // Persisted consent cannot prove the last process saved a stop successfully. Each new
  // process requires explicit opt-in; a failed write stays latched off in this process.
+ private static final Object CONSENT_LOCK=new Object();
+ private static long resetGeneration;
+ static void serializeConsent(Runnable action){synchronized(CONSENT_LOCK){action.run();}}
+ static long consentGeneration(){synchronized(CONSENT_LOCK){return resetGeneration;}}
  private static volatile boolean processConsent;
  private static volatile boolean storageFailed;
  static boolean storageFailed(){ return storageFailed; }
@@ -60,16 +64,35 @@ final class ListenerStore {
  long consentAt(){return prefs.getLong(CONSENT_AT,0);}
 
  /** Records the explicit opt-in shown in {@link ConsentActivity} and turns listening on. */
- void grantConsent(long now){
+ boolean grantConsent(long now,long generation){
+  synchronized(CONSENT_LOCK){
+  if(generation!=resetGeneration)return false;
   processConsent = commit(prefs.edit().putInt(CONSENT,ListenerPolicy.CONSENT_VERSION).putLong(CONSENT_AT,now).putBoolean(ENABLED,true)
    .putLong(PAUSED_UNTIL,0).remove(EXITS).remove(TRIPPED));
   Listener.speechUnavailable=false;
+  return processConsent;
+  }
  }
 
  /** Withdraws consent: listening stops and must be opted into again. */
  void revokeConsent(){
   processConsent = false;
   commit(prefs.edit().remove(CONSENT).remove(CONSENT_AT).putBoolean(ENABLED,false).remove(PAUSED_UNTIL).remove(EXITS).remove(TRIPPED).putBoolean(SESSION_OPEN,false));
+ }
+
+ /** Delete only listener settings; the caller must observe a durable acknowledgement. */
+ boolean reset(){
+  synchronized(CONSENT_LOCK){
+  resetGeneration++;
+  processConsent=false;
+  Listener.epoch.invalidate();
+  // A reset can recover a previous failed write, but can never grant consent.
+  boolean saved;
+  try{saved=prefs.edit().clear().commit();}catch(RuntimeException failure){saved=false;}
+  storageFailed=!saved;
+  context.stopService(new android.content.Intent(context,ListeningService.class));
+  return saved;
+  }
  }
 
  /** Turning listening back on is an explicit user action and clears a tripped crash loop. */

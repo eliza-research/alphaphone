@@ -34,6 +34,7 @@ const FILE='M6 3h8l4 4v14H6zM14 3v5h4';
 /** Exact existing Files rows/menu/preview; tree mutations require explicit UI. */
 export function installFilesTreeAdapter(views:Bag,accept:(module:string,result:NativeResult,api:Bag,recent?:{kind:'selected'}|{kind:'tree';treeId:string}|false)=>Promise<void>,clearSelected:()=>void){
  const module=views.files,render=module.render,back=module.back,leave=module.onLeave;
+ let selectionEpoch=0;
  let listing:Listing|undefined,api:Bag|undefined,busy=false,status='',generation=0,selected:Entry|undefined,selectedCapability:string|undefined;
  // Native tree IDs are session capabilities; a new process cannot reopen them.
  if(Capacitor.isNativePlatform())filesIndex.revokeTree();
@@ -86,9 +87,10 @@ export function installFilesTreeAdapter(views:Bag,accept:(module:string,result:N
  async function load(id?:string){if(busy)return;busy=true;status='Loading folder…';repaint();try{apply(await tree.list({id}));}catch{status='Folder provider unavailable. Choose the folder again.';}finally{busy=false;repaint();}}
  async function choose(importFolder=false){if(busy)return;busy=true;try{const value=await (importFolder ? tree.importFolder() : tree.choose());if(value.status==='ready'){clearSelected();selected=undefined;selectedCapability=undefined;apply(value);api?.set({folder:'__native_tree',open:null,menu:false});}else if(value.status!=='cancelled')api?.toast(value.message);}catch{api?.toast('Folder selection unavailable.');}finally{busy=false;repaint();}}
  async function openEntry(entry:Entry){if(busy)return;if(entry.directory){void load(entry.id);return;}busy=true;try{const value=await tree.select({id:entry.id});if(value.status==='selected'){if(!api?.isActive()){if(value.selectionId)await DailyApps.forgetSelected({selectionId:value.selectionId});return;}selected=entry;selectedCapability=value.selectionId;await accept('files',value,api!,{kind:'tree',treeId:entry.id});}else api?.toast(value.message||'File unavailable. Refresh this folder.');}catch{api?.toast('This file could not open. Refresh the folder.');}finally{busy=false;repaint();}}
+ // The picker itself hides the page, so only a view switch (epoch) or inactive owner fences its result, never document.hidden.
  async function pick(owner:Bag,mime?:string[]){
-  if(busy)return;busy=true;
-  try{const value=await pickFiles({action:'files',...(mime?{mime}:{})});if(value.status==='selected'){await accept('files',value,owner);owner.toast(value.name?'Selected '+value.name:'Selection received');}else if(value.status!=='cancelled')owner.toast(value.message||'No file was selected.');}
+  if(busy)return;busy=true;const ticket=selectionEpoch;
+  try{const value=await pickFiles({action:'files',...(mime?{mime}:{})});if(value.status==='selected'){if(ticket!==selectionEpoch||!owner.isActive()){if(value.selectionId)await DailyApps.forgetSelected({selectionId:value.selectionId}).catch(()=>{});return;}await accept('files',value,owner);owner.toast(value.name?'Selected '+value.name:'Selection received');}else if(value.status!=='cancelled')owner.toast(value.message||'No file was selected.');}
   catch{owner.toast('The file picker is unavailable. Try again.');}
   finally{busy=false;repaint();}
  }
@@ -196,5 +198,5 @@ export function installFilesTreeAdapter(views:Bag,accept:(module:string,result:N
   return out;
  };
  module.back=(state:Bag,currentApi:Bag)=>{if(dialog){if(!busy){dialog=undefined;repaint();}return true;}if(selecting){resetSelection();repaint();return true;}if(state.open)return back?.(state,currentApi);if(visible()){if(busy)return true;if(state.menu){currentApi.set({menu:false});return true;}if(listing?.folder?.parentId)void load(listing.folder.parentId);else{folderContext();currentApi.set({folder:null});}return true;}return back?.(state,currentApi);};
- module.onLeave=(...args:any[])=>{closeFolderQuestion?.();dialog=undefined;resetSelection();folderContext();return leave?.(...args);};
+ module.onLeave=(...args:any[])=>{selectionEpoch++;closeFolderQuestion?.();dialog=undefined;resetSelection();folderContext();return leave?.(...args);};
 }

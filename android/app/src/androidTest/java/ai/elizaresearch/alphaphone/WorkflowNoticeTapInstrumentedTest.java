@@ -120,4 +120,40 @@ public final class WorkflowNoticeTapInstrumentedTest {
    cold.send();SystemClock.sleep(100);assertFalse(call("Capacitor.Plugins.AlphaNotifications.pendingWorkflowTap()").has("token"));
   }finally{manager.cancel("alpha-workflow-"+first,0);manager.cancel("alpha-workflow-"+second,0);store.writeCredentialSlot(WorkflowNoticeTaps.SLOT,"{}");store.writeCredentialSlot(WorkflowNoticeDelivery.SLOT,"{}");}
  }
+ private boolean noticePresent(NotificationManager manager,String id){for(StatusBarNotification row:manager.getActiveNotifications())if(("alpha-workflow-"+id).equals(row.getTag()))return true;return false;}
+ @Test public void askActionRetainsPurposeAndRequiresExactVisibleRevision()throws Exception{
+  org.junit.Assume.assumeTrue("Dedicated workflow tap campaign","1".equals(InstrumentationRegistry.getArguments().getString("workflowNoticeTap")));
+  assertTrue("Runner must own an isolated secondary user",android.os.Process.myUid()/100000>0);
+  Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();AlphaCredentialStore store=new AlphaCredentialStore(context);NotificationManager manager=context.getSystemService(NotificationManager.class);
+  assertTrue("Isolated ledger",store.readCredentialSlot(WorkflowNoticeTaps.SLOT)==null||"{}".equals(store.readCredentialSlot(WorkflowNoticeTaps.SLOT)));
+  String id="question_"+UUID.randomUUID();
+  try(BoundedActivityScenario<MainActivity> activity=BoundedActivityScenario.launch(MainActivity.class)){
+   AppNavigation.liveMode();
+   JSONObject route=new JSONObject().put("scope","a".repeat(64)).put("origin","https://workflow-fixture.invalid").put("ownerId","fixture-owner").put("agentId","fixture-agent").put("workflowId","fixture-flow").put("runId",id).put("versionId","fixture-version");
+   JSONObject input=new JSONObject().put("operationId",id).put("bindingHash","b".repeat(64)).put("title","Question fixture").put("body","Reviewed local excerpt").put("route",route);
+   String status=call("Capacitor.Plugins.AlphaNotifications.postWorkflow("+input+")").getString("status");
+   long end=SystemClock.elapsedRealtime()+10000;
+   while(!"succeeded".equals(status)&&SystemClock.elapsedRealtime()<end){SystemClock.sleep(50);status=call("Capacitor.Plugins.AlphaNotifications.workflowReceipt("+input+")").getString("status");}
+   assertEquals("succeeded",status);android.app.Notification posted=notice(manager,id);assertEquals(1,posted.actions.length);assertEquals("Ask Alpha",posted.actions[0].title.toString());
+   assertNotEquals("Ask and open are distinct immutable intents",posted.contentIntent,posted.actions[0].actionIntent);
+   if(android.os.Build.VERSION.SDK_INT>=31)assertTrue(posted.actions[0].isAuthenticationRequired());
+   String token=WorkflowNoticeTapsFactory.create(context).token(id);posted.actions[0].actionIntent.send();JSONObject question=pending(token);
+   assertTrue(question.getBoolean("question"));assertEquals("fixture-owner",question.getString("ownerId"));assertEquals("Reviewed local excerpt",question.getJSONObject("notice").getString("text"));
+   String revision=question.getJSONObject("notice").getString("revision");
+   assertTrue("A normal open cannot consume an Ask review",call("Capacitor.Plugins.AlphaNotifications.consumeWorkflowTap({token:"+JSONObject.quote(token)+"})").has("error"));
+   assertTrue("An old revision cannot consume it",call("Capacitor.Plugins.AlphaNotifications.consumeWorkflowTap({token:"+JSONObject.quote(token)+",noticeRevision:'wrong'})").has("error"));
+   assertFalse("Explicit Cancel settles the Ask tap without consuming it",call("Capacitor.Plugins.AlphaNotifications.consumeWorkflowTap({token:"+JSONObject.quote(token)+",discard:true})").has("error"));
+   assertFalse("Canceled Ask review does not reopen",WorkflowNoticeTapsFactory.create(context).pending().has("token"));assertTrue("The notice stays usable",noticePresent(manager,id));
+   posted.actions[0].actionIntent.send();assertTrue(pending(token).getBoolean("question"));
+   PendingIntent open=posted.contentIntent,ask=posted.actions[0].actionIntent;new WorkflowNoticePoster(context).cancel(id);
+   assertThrows("Withdrawal revokes the open target",PendingIntent.CanceledException.class,()->open.send());
+   assertThrows("Withdrawal revokes the Ask target",PendingIntent.CanceledException.class,()->ask.send());
+   long removed=SystemClock.elapsedRealtime()+5000;while(noticePresent(manager,id)&&SystemClock.elapsedRealtime()<removed)SystemClock.sleep(50);
+   JSONObject gone=pending(token);assertFalse("Gone own notice exposes no excerpt",gone.has("notice"));assertFalse("Gone notice settles as a plain open tap",gone.has("question"));
+   assertTrue("Its old revision no longer applies",call("Capacitor.Plugins.AlphaNotifications.consumeWorkflowTap({token:"+JSONObject.quote(token)+",noticeRevision:"+JSONObject.quote(revision)+"})").has("error"));
+   assertFalse(call("Capacitor.Plugins.AlphaNotifications.consumeWorkflowTap({token:"+JSONObject.quote(token)+"})").has("error"));
+   assertFalse(WorkflowNoticeTapsFactory.create(context).pending().has("token"));
+  }finally{manager.cancel("alpha-workflow-"+id,0);store.removeCredentialSlot(WorkflowNoticeTaps.SLOT);store.removeCredentialSlot(WorkflowNoticeDelivery.SLOT);}
+ }
+
 }

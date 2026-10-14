@@ -4,10 +4,12 @@ test.beforeEach(async({context,page})=>{await guardNoMedia(context);await page.r
 // Gmail MVP flows against a controlled provider-boundary fixture: no real account, OAuth or mail.
 type Options={accounts?:string[];readState?:boolean;pages?:Record<string,number>};
 async function setup(page:Page,options:Options={}){
+ // Provider fixtures use local apps; they do not perform resident/Cloud onboarding.
+ await page.addInitScript(()=>localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'})));
  await page.goto('/');
  await page.evaluate(async options=>{
   const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');
-  const {secureConnectionStore:s}=await import('/src/runtime/native-connection.ts');
+  const {inboxLocalStore:s}=await import('/src/runtime/inbox-local-store.ts');
   const {CloudProtocolError}=await import('/src/runtime/cloud-protocol.ts');
   const w=window as any,slots:Record<string,unknown>={};w.gmSlots=slots;
   s.read=async(key:string)=>structuredClone(slots[key]??null) as any;
@@ -148,14 +150,14 @@ test('Inbox disconnect asks first and then shows the honest disconnected state',
  await page.getByRole('button',{name:'Inbox',exact:true}).click();
  await expect(page.getByRole('region',{name:'Inbox',exact:true}).getByText('Subject in-0-a',{exact:true})).toBeVisible();
  page.once('dialog',dialog=>dialog.dismiss());
- await page.getByRole('button',{name:'Disconnect Gmail',exact:true}).click();
+ await page.getByRole('button',{name:'Disconnect Google account',exact:true}).click();
  expect((await gm(page)).disconnects).toEqual([]);
- page.once('dialog',dialog=>{expect(dialog.message()).toContain('No mail is deleted');void dialog.accept();});
- await page.getByRole('button',{name:'Disconnect Gmail',exact:true}).click();
- await expect(page.getByText(/owner@example\.test is disconnected\. Eliza Cloud no longer holds its Gmail access/).first()).toBeVisible();
+ page.once('dialog',dialog=>{expect(dialog.message()).toContain('including Gmail and Calendar');expect(dialog.message()).toContain('mail and calendar events are not deleted');void dialog.accept();});
+ await page.getByRole('button',{name:'Disconnect Google account',exact:true}).click();
+ await expect(page.getByText(/owner@example\.test is disconnected from Alpha\. Eliza Cloud no longer holds this Google connection/).first()).toBeVisible();
  await expect(page.getByText('Subject in-0-a',{exact:true})).toHaveCount(0);
- await expect(page.getByRole('button',{name:'Disconnect Gmail',exact:true})).toHaveCount(0);
- await expect(page.getByRole('button',{name:'Refresh',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Disconnect Google account',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Refresh inbox',exact:true})).toHaveCount(0);
  expect((await gm(page)).disconnects).toEqual(['grant-0']);
 });
 
@@ -163,12 +165,12 @@ test('Settings Connections disconnects one confirmed account and reports the rea
  await setup(page,{accounts:['first@example.test','second@example.test']});
  await page.getByRole('button',{name:'Settings',exact:true}).click();
  await page.getByRole('button',{name:'Connections',exact:true}).click();
- await expect(page.getByRole('button',{name:'Disconnect second@example.test',exact:true})).toBeVisible();
- page.once('dialog',dialog=>dialog.accept());
- await page.getByRole('button',{name:'Disconnect second@example.test',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Disconnect Google account second@example.test',exact:true})).toBeVisible();
+ page.once('dialog',dialog=>{expect(dialog.message()).toContain('Calendar');return dialog.accept();});
+ await page.getByRole('button',{name:'Disconnect Google account second@example.test',exact:true}).click();
  await expect(page.getByText(/second@example\.test is disconnected/).first()).toBeVisible();
- await expect(page.getByRole('button',{name:'Disconnect second@example.test',exact:true})).toHaveCount(0);
- await expect(page.getByRole('button',{name:'Disconnect first@example.test',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Disconnect Google account second@example.test',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Disconnect Google account first@example.test',exact:true})).toBeVisible();
  expect((await gm(page)).disconnects).toEqual(['grant-1']);
 });
 
@@ -189,7 +191,7 @@ test('Share by email from Notes opens a prefilled local draft without sending',a
 test('compose From switcher moves a new email to another connected account',async({page})=>{
  await setup(page,{accounts:['first@example.test','second@example.test']});
  await page.getByRole('button',{name:'Inbox',exact:true}).click();
- await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Refresh inbox',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Compose',exact:true}).click();
  await expect(page.getByRole('button',{name:'From account',exact:true})).toContainText('From first@example.test');
  await page.getByRole('textbox',{name:'Subject',exact:true}).fill('Moving subject');
@@ -205,7 +207,7 @@ test('compose From switcher moves a new email to another connected account',asyn
 test('single-account compose has no From switcher',async({page})=>{
  await setup(page);
  await page.getByRole('button',{name:'Inbox',exact:true}).click();
- await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Refresh inbox',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Compose',exact:true}).click();
  await expect(page.getByRole('textbox',{name:'Subject',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'From account',exact:true})).toHaveCount(0);
@@ -263,7 +265,7 @@ test('From switcher returns the email to its account when the other account alre
  await setup(page,{accounts:['first@example.test','second@example.test']});
  await page.evaluate(()=>{const owner=JSON.stringify(['production','fixture-owner','','grant-1']);(window as any).gmSlots['inbox-drafts:v1:'+owner]={version:1,id:'saved-1',revision:'rev-1',owner,to:[],subject:'Second saved',body:'Kept'};});
  await page.getByRole('button',{name:'Inbox',exact:true}).click();
- await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Refresh inbox',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Compose',exact:true}).click();
  await page.getByRole('textbox',{name:'Subject',exact:true}).fill('Stays subject');
  await page.getByRole('textbox',{name:'Message',exact:true}).fill('Stays body');

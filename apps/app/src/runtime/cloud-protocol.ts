@@ -4,16 +4,17 @@ import { CloudPersonalProtocol, PersonalProtocolError } from './cloud-personal-p
 import { reviewMailAttachment, type MailAttachment } from './inbox-attachment.ts';
 import { reviewOpaqueAttachment, type OpaqueMailAttachment } from './inbox-operation.ts';
 import { gmailCapabilitiesFor } from './gmail-grants.ts';
-import { ENTITLEMENT_KEYS_PATH, ENTITLEMENT_PATH, type EntitlementSource } from './subscription-entitlement.ts';
+import { BILLING_LIMITS_PATH, ENTITLEMENT_KEYS_PATH, ENTITLEMENT_PATH, REDEEM_PATH, fallbackPlanFromLimits, normalizeSubscriptionCode, readServiceLimit, SubscriptionRedeemError, type EntitlementSource, type FallbackPlan, type RedeemResult } from './subscription-entitlement.ts';
 /** Narrow Alpha adapter for Eliza Cloud. Contracts inspected in v3's
  * cloud/api/auth/cli-session, cloud/api/v1/eliza/{agents,google}, and
  * ui/src/api/client-cloud.ts. Native composition owns HTTP and secure storage.
  * This module never stores credentials in renderer persistence or logs them. */
 export type CloudEnvironment = "production" | "staging";
 type CloudAuthority = { readonly api: string; readonly web: string; readonly agents: string };
-// Staging is a test-mocks surface (ELIZA_DEV_ALLOW_TEST_MOCKS=1). Vite replaces
-// import.meta.env at build time, so flag-off bundles fold the staging authority
-// away. Node contract tests import this source without Vite and keep both.
+// Staging is a test-mocks surface (ELIZA_DEV_ALLOW_TEST_MOCKS=1): QA builds reach
+// api-staging.eliza.app, its issuer and its web origins (docs/cloud-subscription-qa.md).
+// Vite replaces import.meta.env at build time, so flag-off bundles fold the staging
+// authority away. Node contract tests import this source without Vite and keep both.
 const stagingAvailable: boolean = import.meta.env === undefined || import.meta.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS === '1';
 const authorities: Partial<Record<CloudEnvironment, CloudAuthority>> = {
   production: { api: "https://api.eliza.app", web: "https://eliza.app", agents: "cloud.eliza.app" },
@@ -21,6 +22,12 @@ const authorities: Partial<Record<CloudEnvironment, CloudAuthority>> = {
 };
 /** Whether this build can address the environment. Production builds expose only production. */
 export function cloudEnvironmentAvailable(environment: CloudEnvironment): boolean { return authorities[environment] !== undefined; }
+/** The one hosted plan page an environment opens in the system browser. Nothing else is opened for billing. */
+export function planManagementUrl(environment: CloudEnvironment): string {
+  const authority = authorities[environment];
+  if (!authority) throw new Error("This Eliza Cloud environment is unavailable in this build.");
+  return `https://${authority.agents}/cloud/billing`;
+}
 export interface CloudCredential {
   /** Local generation identifier, never an authentication credential. */
   credentialId?: string;
@@ -63,6 +70,21 @@ export interface GoogleConnection {
   configured: boolean; connected: boolean; reason: string;
   connectionId: string | null; grantedCapabilities: string[];
 }
+/** Managed Google Calendar wire data. Cloud enforces ownership of each grant. */
+export interface GoogleCalendarSummary {
+  calendarId:string; summary:string; description:string|null; primary:boolean; accessRole:string;
+  backgroundColor:string|null; foregroundColor:string|null; timeZone:string|null; selected:boolean;
+}
+export interface GoogleCalendarEvent {
+  externalId:string; calendarId:string; title:string; description:string; location:string; status:string;
+  startAt:string; endAt:string; isAllDay:boolean; timezone:string|null; htmlLink:string|null; conferenceLink:string|null;
+  organizer:Record<string,unknown>|null;
+  attendees:Array<{email:string|null;displayName:string|null;responseStatus:string|null;self:boolean;organizer:boolean;optional:boolean}>;
+  metadata:Record<string,unknown>;
+}
+/** Core exhausts provider pages before returning; no client cursor exists. */
+export interface GoogleCalendarFeed { calendarId:string; events:GoogleCalendarEvent[]; syncedAt:string }
+export interface GoogleCalendarRange { timeMin:string; timeMax:string; timeZone:string }
 export interface GmailInboxCapabilities {
   version:1; from:string; threads:boolean; send:boolean; providerDrafts:boolean;
   mailboxMutations:boolean; attachments:boolean; providerExactlyOnce:false; atomicDraftReplacement:false;
@@ -211,22 +233,66 @@ export class CloudProtocol {
   private async call(path: string, signal: AbortSignal, options: { body?: unknown; method?: AutomationsMethod; authenticated?: boolean; runtimeBase?: string; timeoutMs?: number; headers?: Record<string,string>; credentialId?: string; expiresAt?: number } = {}) {
     return object(await this.requestData(path, signal, options));
   }
-  /** Transitional pre-subscription account check. Used only while Cloud has not deployed the
-   * subscription entitlement route; the UI shows plan state, never a credit balance or top-up.
-   * The credential ID binds the snapshot to one login; it is not a spend authorization. */
-  async creditBalance(signal: AbortSignal): Promise<{ balance: number; credentialId: string }> {
+  /** Plan state from the read-only billing snapshot, used only while the entitlement route is
+   * absent. `null` when the snapshot route is absent too or does not report a known plan state. */
+  async billingFallbackPlan(signal: AbortSignal): Promise<FallbackPlan | null> {
     signal.throwIfAborted();
     const credential = await this.credentials.read(this.environment);
     signal.throwIfAborted();
     if (!credential?.credentialId) throw new CloudProtocolError("credentials-missing");
-    const data = await this.call("/api/v1/credits/balance", signal, {
-      authenticated: true, credentialId: credential.credentialId,
-    });
+    let data: ObjectValue;
+    try { data = await this.call(BILLING_LIMITS_PATH, signal, { authenticated: true, credentialId: credential.credentialId }); }
+    catch (error) {
+      if (error instanceof CloudProtocolError && error.code === "http" && [404, 405, 501].includes(error.status ?? 0)) return null;
+      throw error;
+    }
     await this.assertSameCredential(credential.credentialId, signal);
-    const balance = typeof data.balance === "number" ? data.balance
-      : typeof data.balance === "string" && data.balance.trim() ? Number(data.balance) : NaN;
-    if (!Number.isFinite(balance)) throw new CloudProtocolError("invalid-response");
-    return { balance, credentialId: credential.credentialId };
+    if (data.success !== true) return null;
+    return fallbackPlanFromLimits(data);
+  }
+  /**
+   * Redeems a subscription grant code for the signed-in account. `idempotencyKey` is fresh for
+   * each owner submission; a transport failure (the request may have arrived) is retried once
+   * with the same key, which Cloud answers with the original grant. HTTP refusals are never
+   * retried. The code is never logged, stored or put in an error.
+   */
+  async redeemSubscriptionCode(code: string, idempotencyKey: string, signal: AbortSignal): Promise<RedeemResult> {
+    signal.throwIfAborted();
+    const normalized = normalizeSubscriptionCode(code);
+    if (!normalized) throw new SubscriptionRedeemError("invalid");
+    if (!/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) throw new TypeError("Invalid idempotency key");
+    const credential = await this.credentials.read(this.environment);
+    signal.throwIfAborted();
+    if (!credential?.credentialId) throw new CloudProtocolError("credentials-missing");
+    let data: ObjectValue | undefined;
+    for (let attempt = 0; data === undefined; attempt++) {
+      try { data = await this.call(REDEEM_PATH, signal, { authenticated: true, credentialId: credential.credentialId, body: { code: normalized, idempotencyKey } }); }
+      catch (error) {
+        signal.throwIfAborted();
+        if (error instanceof CloudProtocolError) {
+          if (error.code !== "http") throw error;
+          const status = error.status ?? 0, body = error.data && typeof error.data === "object" ? error.data as ObjectValue : {};
+          if (status === 401) throw error;
+          if (status === 400) throw new SubscriptionRedeemError("invalid");
+          if (status === 409) throw new SubscriptionRedeemError(body.code === "subscription_grant_already_redeemed" ? "already-redeemed" : "invalid");
+          if (status === 429) throw new SubscriptionRedeemError("rate-limited", readServiceLimit({ status, data: error.data })?.retryAfterMs ?? null);
+          if (status === 403) throw new SubscriptionRedeemError("account");
+          throw new SubscriptionRedeemError("unavailable");
+        }
+        if (error instanceof Error && error.message === "Cloud account changed") throw error;
+        // Transport failure: the request may have reached Cloud. One replay with the same key.
+        if (attempt >= 1) throw new SubscriptionRedeemError("unavailable");
+        await delay(1000, signal);
+      }
+    }
+    await this.assertSameCredential(credential.credentialId, signal);
+    const grant = data.grant && typeof data.grant === "object" && !Array.isArray(data.grant) ? data.grant as ObjectValue : null;
+    if (data.success !== true || !grant || typeof data.replayed !== "boolean") throw new SubscriptionRedeemError("unavailable");
+    const endsAt = typeof grant.endsAt === "string" ? Date.parse(grant.endsAt) : NaN;
+    const summary = data.entitlement && typeof data.entitlement === "object" ? data.entitlement as ObjectValue : null;
+    const plan = summary?.plan && typeof summary.plan === "object" ? summary.plan as ObjectValue : null;
+    const planName = typeof plan?.name === "string" && plan.name.trim() && plan.name.length <= 80 && !/[\x00-\x1f\x7f]/.test(plan.name) ? plan.name.trim() : null;
+    return { replayed: data.replayed, grantEndsAt: Number.isFinite(endsAt) ? endsAt : null, paidPlanTakesPrecedence: grant.paidPlanTakesPrecedence === true, planName };
   }
   private async assertSameCredential(credentialId: string, signal: AbortSignal) {
     const current = await this.credentials.read(this.environment);
@@ -267,12 +333,13 @@ export class CloudProtocol {
     return { issuer: this.entitlementIssuer,
       entitlement: signal => this.subscriptionEntitlement(signal),
       entitlementKeys: signal => this.subscriptionEntitlementKeys(signal),
-      legacyAccountUsable: async signal => (await this.creditBalance(signal)).balance > 0 };
+      fallbackPlan: signal => this.billingFallbackPlan(signal) };
   }
-  /** Opens Cloud's hosted plan management page. No checkout, upgrade or overage purchase is created here. */
+  /** Opens Cloud's hosted plan page (exactly planManagementUrl) in the system browser. No
+   * checkout, upgrade or overage purchase is created here; the owner chooses a plan in Cloud. */
   async openSubscriptionManagement(signal: AbortSignal): Promise<void> {
     signal.throwIfAborted();
-    await this.openExternal(`https://${this.authority.agents}/cloud/billing`, signal);
+    await this.openExternal(planManagementUrl(this.environment), signal);
     signal.throwIfAborted();
   }
   /** Scoped personal onboarding, using the existing native credential transport. */
@@ -479,19 +546,68 @@ export class CloudProtocol {
       ...(response.interrupted === true ? { interrupted: true } : {}),
       ...(response.noResponseReason === "ignored" ? { noResponseReason: "ignored" as const } : {}) };
   }
-  /** Starts Google consent. `read` asks for read access only; `modify` is the one incremental step
-   * for approved mailbox changes (gmail-grants.ts). The single-capability values remain for callers
-   * that ask for one change capability. */
-  async initiateGmail(signal: AbortSignal, permission: 'read'|'modify'|'send'|'drafts'|'mailbox' = 'read'): Promise<string> {
-    const capabilities = permission === "read" || permission === "modify" ? gmailCapabilitiesFor(permission)
-      : ["google.basic_identity", "google.gmail.triage", permission === "send" ? "google.gmail.send" : permission === "drafts" ? "google.gmail.drafts" : "google.gmail.mailbox"];
-    const response = await this.call("/api/v1/eliza/google/connect/initiate", signal, { authenticated: true,
-      body: { side: "owner", capabilities } });
-    let url: URL;
-    try { url = new URL(string(response.authUrl)); } catch { throw new CloudProtocolError("invalid-response"); }
-    if (url.origin !== "https://accounts.google.com" || url.username || url.password || url.hash) throw new CloudProtocolError("invalid-response");
+  /** Read access by default; Calendar writes require explicit additional consent. */
+  async initiateGoogle(signal:AbortSignal, calendarPermission:'read'|'write'='read', gmailPermission:'read'|'modify'|'send'|'drafts'|'mailbox'='read'):Promise<string> {
+    if(!['read','write'].includes(calendarPermission))throw new TypeError('Invalid Calendar permission');
+    if(!['read','modify','send','drafts','mailbox'].includes(gmailPermission))throw new TypeError('Invalid Gmail permission');
+    const response=object(await this.googleRequest('/api/v1/eliza/google/connect/initiate',signal,{side:'owner',capabilities:[
+      ...gmailCapabilitiesFor(gmailPermission==='modify'?'modify':'read'),'google.calendar.read',...(calendarPermission==='write'?['google.calendar.write']:[]),
+      ...(['read','modify'].includes(gmailPermission)?[]:[gmailPermission==='send'?'google.gmail.send':gmailPermission==='drafts'?'google.gmail.drafts':'google.gmail.mailbox']),
+    ]}));
+    return this.googleAuthUrl(response.authUrl);
+  }
+  private googleAuthUrl(value:unknown):string {
+    let url:URL;try{url=new URL(string(value));}catch{throw new CloudProtocolError('invalid-response');}
+    if(url.origin!=='https://accounts.google.com'||url.username||url.password||url.hash)throw new CloudProtocolError('invalid-response');
     return url.href;
   }
+  /** Reject responses from an account that changed while its request was in flight. */
+  private async googleRequest(path:string,signal:AbortSignal,body?:unknown):Promise<unknown> {
+    const credential=await this.credentials.read(this.environment);signal.throwIfAborted();
+    if(!credential)throw new CloudProtocolError('credentials-missing');
+    const binding=JSON.stringify([credential.credentialId,credential.credentialReference,credential.token,credential.userId,credential.organizationId]);
+    const data=await this.requestData(path,signal,{authenticated:true,credentialId:credential.credentialId,body});
+    const current=await this.credentials.read(this.environment);signal.throwIfAborted();
+    if(!current||JSON.stringify([current.credentialId,current.credentialReference,current.token,current.userId,current.organizationId])!==binding)throw new CloudProtocolError('account-changed');
+    return data;
+  }
+  async googleCalendars(grantId:string,signal:AbortSignal):Promise<GoogleCalendarSummary[]> {
+    const params=new URLSearchParams({side:'owner',grantId:uuid(grantId)});
+    const data=await this.googleRequest(`/api/v1/eliza/google/calendar/calendars?${params}`,signal);
+    if(!Array.isArray(data))throw new CloudProtocolError('invalid-response');
+    const seen=new Set<string>();
+    return data.map(value=>{
+      const row=object(value),calendarId=string(row.calendarId);
+      if(seen.has(calendarId)||typeof row.primary!=='boolean'||typeof row.selected!=='boolean')throw new CloudProtocolError('invalid-response');
+      seen.add(calendarId);
+      return {calendarId,summary:string(row.summary),description:optionalString(row.description),primary:row.primary,accessRole:string(row.accessRole),backgroundColor:optionalString(row.backgroundColor),foregroundColor:optionalString(row.foregroundColor),timeZone:optionalString(row.timeZone),selected:row.selected};
+    });
+  }
+  async googleCalendarFeed(grantId:string,calendarId:string,range:GoogleCalendarRange,signal:AbortSignal):Promise<GoogleCalendarFeed> {
+    uuid(grantId);string(calendarId);
+    if(timestamp(range.timeMax)<=timestamp(range.timeMin))throw new TypeError('Calendar range must end after it starts');
+    try{new Intl.DateTimeFormat('en-US',{timeZone:range.timeZone}).format();}catch{throw new TypeError('Invalid Calendar time zone');}
+    const params=new URLSearchParams({side:'owner',grantId,calendarId,timeMin:range.timeMin,timeMax:range.timeMax,timeZone:range.timeZone});
+    const data=object(await this.googleRequest(`/api/v1/eliza/google/calendar/feed?${params}`,signal));
+    if(data.calendarId!==calendarId||!Array.isArray(data.events)||data.nextPageToken!=null||data.truncated===true)throw new CloudProtocolError('invalid-response');
+    timestamp(data.syncedAt);
+    const plain=(value:unknown)=>{if(typeof value!=='string')throw new CloudProtocolError('invalid-response');return value;};
+    const flag=(value:unknown)=>{if(typeof value!=='boolean')throw new CloudProtocolError('invalid-response');return value;};
+    const seen=new Set<string>();
+    const events=data.events.map(value=>{
+      const row=object(value),externalId=string(row.externalId);
+      if(row.calendarId!==calendarId||seen.has(externalId)||!Array.isArray(row.attendees)||timestamp(row.endAt)<timestamp(row.startAt))throw new CloudProtocolError('invalid-response');
+      seen.add(externalId);
+      return {externalId,calendarId,title:plain(row.title),description:plain(row.description),location:plain(row.location),status:string(row.status),startAt:string(row.startAt),endAt:string(row.endAt),isAllDay:flag(row.isAllDay),timezone:optionalString(row.timezone),htmlLink:optionalString(row.htmlLink),conferenceLink:optionalString(row.conferenceLink),organizer:row.organizer==null?null:object(row.organizer),metadata:object(row.metadata),attendees:row.attendees.map(value=>{const a=object(value);return {email:optionalString(a.email),displayName:optionalString(a.displayName),responseStatus:optionalString(a.responseStatus),self:flag(a.self),organizer:flag(a.organizer),optional:flag(a.optional)};})};
+    });
+    return {calendarId,events,syncedAt:string(data.syncedAt)};
+  }
+  async initiateGmail(signal: AbortSignal, permission: 'read'|'modify'|'send'|'drafts'|'mailbox' = 'read'): Promise<string> {
+    const response = await this.call("/api/v1/eliza/google/connect/initiate", signal, { authenticated: true,
+      body: { side: "owner", capabilities: permission==="read"||permission==="modify"?gmailCapabilitiesFor(permission):["google.basic_identity", "google.gmail.triage",permission==="send"?"google.gmail.send":permission==="drafts"?"google.gmail.drafts":"google.gmail.mailbox"] } });
+    return this.googleAuthUrl(response.authUrl);
+  }
+
   private googleConnection(value: unknown): GmailAccount {
     const data = object(value);
     if (typeof data.configured !== "boolean" || typeof data.connected !== "boolean" || !Array.isArray(data.grantedCapabilities)) throw new CloudProtocolError("invalid-response");
@@ -514,7 +630,7 @@ export class CloudProtocol {
       ...(data.hasAttachments === undefined ? {} : typeof data.hasAttachments === "boolean" ? { hasAttachments: data.hasAttachments } : (() => { throw new CloudProtocolError("invalid-response"); })()) };
   }
   /** One page of results. `nextPageToken` is the provider's opaque cursor for the same query, or null. */
-  async gmailSearch(grantId: string, query: string, signal: AbortSignal, maxResults: 10 | 25 | 50 = 25, pageToken?: string): Promise<{ messages: GmailMessage[]; syncedAt: string; nextPageToken: string | null }> {
+  async gmailSearch(grantId: string, query: string, signal: AbortSignal, maxResults: 10 | 25 | 50 = 25, pageToken?: string): Promise<{ messages: GmailMessage[]; syncedAt: string; nextPageToken: string | null;supportsSpamTrash:boolean }> {
     if (pageToken !== undefined && (typeof pageToken !== "string" || !pageToken || pageToken.length > 4096)) throw new TypeError("Invalid Gmail page token");
     const params = new URLSearchParams({ side: "owner", grantId: string(grantId), query: string(query), maxResults: String(maxResults) });
     if (pageToken !== undefined) params.set("pageToken", pageToken);
@@ -522,7 +638,8 @@ export class CloudProtocol {
     if (!Array.isArray(data.messages)) throw new CloudProtocolError("invalid-response");
     const next = data.nextPageToken;
     if (next != null && (typeof next !== "string" || !next || next.length > 4096 || next === pageToken)) throw new CloudProtocolError("invalid-response");
-    return { messages: data.messages.map(value => this.gmailMessage(value)), syncedAt: string(data.syncedAt), nextPageToken: next == null ? null : next };
+    if(data.supportsSpamTrash!==undefined&&typeof data.supportsSpamTrash!=='boolean')throw new CloudProtocolError('invalid-response');
+    return { messages: data.messages.map(value => this.gmailMessage(value)), syncedAt: string(data.syncedAt), nextPageToken: next == null ? null : next,supportsSpamTrash:data.supportsSpamTrash===true };
   }
   /** Revokes Eliza Cloud's stored Google grant for one owner connection. It does not delete mail and
    * cannot remove the app from the user's Google Account permissions; callers verify with gmailAccounts. */
@@ -530,13 +647,16 @@ export class CloudProtocol {
     const data = await this.call("/api/v1/eliza/google/disconnect", signal, { authenticated: true, body: { side: "owner", connectionId: string(connectionId) } });
     if (data.ok !== true) throw new CloudProtocolError("invalid-response");
   }
-  async gmailRead(grantId: string, messageId: string, signal: AbortSignal): Promise<{ message: GmailMessage; bodyText: string; links: GmailLink[] }> {
+  async gmailRead(grantId: string, messageId: string, signal: AbortSignal): Promise<{ message: GmailMessage; bodyText: string; bodyHtml?:string; links: GmailLink[];historyId:string|null;attachments:{partId:string;name:string;mimeType:string;size:number;supported:boolean}[] }> {
     const params = new URLSearchParams({ side: "owner", grantId: string(grantId), messageId: string(messageId) });
     const data = await this.call(`/api/v1/eliza/google/gmail/read?${params}`, signal, { authenticated: true });
     if (typeof data.bodyText !== "string") throw new CloudProtocolError("invalid-response");
     const message = this.gmailMessage(data.message);
     if (message.id !== messageId) throw new CloudProtocolError("invalid-response");
-    return { message, bodyText: data.bodyText, links: mailLinks(data.links) };
+    const metadata=data.message&&typeof data.message==='object'?object(object(data.message).metadata??{}):{};
+    if(data.bodyHtml!==undefined&&data.bodyHtml!==null&&typeof data.bodyHtml!=='string')throw new CloudProtocolError('invalid-response');
+    const attachments=Array.isArray(data.attachments)?data.attachments.map(value=>{const a=object(value);const name=typeof a.filename==='string'?a.filename:a.name;if(typeof a.partId!=='string'||typeof name!=='string'||typeof a.mimeType!=='string'||!Number.isSafeInteger(a.size)||(a.size as number)<0||a.supported!==undefined&&typeof a.supported!=='boolean')throw new CloudProtocolError('invalid-response');return {partId:a.partId,name,mimeType:a.mimeType,size:a.size as number,supported:typeof a.supported==='boolean'?a.supported:['application/pdf','text/plain','image/png','image/jpeg','image/webp'].includes(a.mimeType)};}):[];
+    return { message, bodyText: data.bodyText,...(typeof data.bodyHtml==='string'&&data.bodyHtml&&new TextEncoder().encode(data.bodyHtml).length<=512*1024?{bodyHtml:data.bodyHtml}:{}), links: mailLinks(data.links),historyId:typeof metadata.historyId==='string'?metadata.historyId:null,attachments };
   }
   async gmailInboxCapabilities(grantId:string,signal:AbortSignal):Promise<GmailInboxCapabilities> {
     const data=await this.call(`/api/v1/eliza/google/gmail/inbox-v1/capabilities?${new URLSearchParams({grantId})}`,signal,{authenticated:true});

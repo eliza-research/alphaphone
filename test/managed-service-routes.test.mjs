@@ -5,13 +5,18 @@ import {stripTypeScriptTypes} from 'node:module';
 const source=readFileSync(new URL('../apps/app/src/runtime/managed-service-routes.ts',import.meta.url),'utf8');
 const {managedServiceRequest:allowed}=await import('data:text/javascript,'+encodeURIComponent(stripTypeScriptTypes(source)));
 test('managed service admission preserves owned service APIs and refuses agent hosts, paths and mutation variants',()=>{
- for(const path of ['/api/v1/user','/api/v1/credits/balance','/api/v1/subscription/entitlement','/api/v1/subscription/entitlement-keys','/api/v1/eliza/google/accounts?side=owner','/api/v1/eliza/google/gmail/inbox-v1/thread?grantId=owner'])assert.equal(allowed('https://api.eliza.app'+path,'GET'),true,path);
+ for(const path of ['/api/v1/user','/api/v1/billing/limits','/api/v1/subscription/entitlement','/api/v1/subscription/entitlement-keys','/api/v1/eliza/google/accounts?side=owner','/api/v1/eliza/google/gmail/inbox-v1/thread?grantId=owner'])assert.equal(allowed('https://api.eliza.app'+path,'GET'),true,path);
  for(const url of ['https://agent.cloud.eliza.app/api/v1/user','https://api.eliza.app.evil.test/api/v1/user','https://api.eliza.app:444/api/v1/user','http://api.eliza.app/api/v1/user','https://owner@api.eliza.app/api/v1/user','https://api.eliza.app/api/v1/user#x'])assert.equal(allowed(url,'GET'),false,url);
  for(const path of ['/api/auth/pair','/api/agents','/api/conversations','/api/v1/eliza/agents','/api/v1/eliza/personal','/api/v1/eliza/agents/id/api/conversations','/api/v1/%65liza/google/status','/api/v1/eliza/google/status/'])for(const method of ['GET','POST'])assert.equal(allowed('https://api.eliza.app'+path,method),false,path);
  assert.equal(allowed('https://api.eliza.app/api/v1/user','POST',true),false);
  assert.equal(allowed('https://api.eliza.app/api/v1/user','GET',true),false);
  // Subscription entitlement (P-26) is read-only: no write, body or neighbouring path is admitted.
  for(const [path,method,body] of [['/api/v1/subscription/entitlement','POST',true],['/api/v1/subscription/entitlement','GET',true],['/api/v1/subscription','GET',false],['/api/v1/subscription/entitlement/','GET',false],['/api/v1/subscription/checkout','GET',false]])assert.equal(allowed('https://api.eliza.app'+path,method,body),false,path);
+ // Subscription code redemption (#410): exactly one POST route with a JSON body; nothing else under it.
+ assert.equal(allowed('https://api.eliza.app/api/v1/subscription/redeem','POST',true),true);
+ for(const [url,method,body] of [['https://api.eliza.app/api/v1/subscription/redeem','POST',false],['https://api.eliza.app/api/v1/subscription/redeem','GET',false],['https://api.eliza.app/api/v1/subscription/redeem?code=x','POST',true],['https://api.eliza.app/api/v1/subscription/redeem/','POST',true],['https://api.eliza.app/api/v1/subscription/redeem','DELETE',false],['https://api-staging.eliza.app/api/v1/subscription/redeem','POST',true],['https://api.eliza.app/api/v1/billing/limits','POST',true],['https://api.eliza.app/api/v1/billing/limits?x=1','POST',true]])assert.equal(allowed(url,method,body),false,`${method} ${url}`);
+ // The credit balance check is retired with the subscription plan gate.
+ assert.equal(allowed('https://api.eliza.app/api/v1/credits/balance','GET'),false);
  assert.equal(allowed('https://api.eliza.app/api/v1/api-keys/current','DELETE'),true);
  assert.equal(allowed('https://api.eliza.app/api/v1/api-keys/current?other=owner','DELETE'),false);
  assert.equal(allowed('https://api.eliza.app/api/v1/eliza/google/gmail/inbox-v1/operations/owner-request/dispatch','POST',true),true);
@@ -33,4 +38,17 @@ test('compiled test-mocks transports retain development hosts while flag-off tra
   if(testMocksEnabled)await browser;else await assert.rejects(browser,/managed Cloud services/);
   assert.equal(calls.length,testMocksEnabled?2:0);
  }
+});
+
+
+test('Google Calendar admission is confined to body-free reads of the reviewed service routes',()=>{
+ for(const path of ['/api/v1/eliza/google/calendar/calendars','/api/v1/eliza/google/calendar/feed']){
+  const url='https://api.eliza.app'+path;
+  assert.equal(allowed(url+'?grantId=owned','GET'),true);
+  assert.equal(allowed(url,'GET',true),false);
+  for(const method of ['POST','DELETE','PUT','PATCH'])assert.equal(allowed(url,method,true),false);
+  assert.equal(allowed(url+'/','GET'),false);
+  assert.equal(allowed(url.replace('api.eliza.app','agent.cloud.eliza.app'),'GET'),false);
+ }
+ assert.equal(allowed('https://api.eliza.app/api/v1/eliza/google/calendar/events','GET'),false);
 });

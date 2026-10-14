@@ -1,10 +1,11 @@
 import type {PluginListenerHandle} from '@capacitor/core';
 import type {WorkflowNoticeRoute} from './device-actions';
 import type {WorkflowRun,RemoteWorkflow} from './workflow-protocol';
-export interface WorkflowTap extends WorkflowNoticeRoute {token:string;operationId:string;bindingHash:string;retained:boolean}
+export interface WorkflowTap extends WorkflowNoticeRoute {token:string;operationId:string;bindingHash:string;retained:boolean;question?:boolean;notice?:{id:string;revision:string;source:string;appLabel:string;title:string;text:string}}
 export interface WorkflowTapNative {
  pendingWorkflowTap():Promise<Partial<WorkflowTap>>;
- consumeWorkflowTap(input:{token:string}):Promise<void>;
+ /** `discard` returns an explicitly canceled Ask tap to its untapped state; it opens and fills nothing. */
+ consumeWorkflowTap(input:{token:string;noticeRevision?:string;discard?:boolean}):Promise<void>;
  addListener(event:'pendingWorkflowTap',listener:()=>void):Promise<PluginListenerHandle>;
 }
 export interface WorkflowTapBinding {
@@ -29,6 +30,7 @@ export async function resolveWorkflowTap(native:WorkflowTapNative,binding:Workfl
  const latest=await native.pendingWorkflowTap();signal.throwIfAborted();
  if(!binding.current())throw Error('Agent changed');
  for(const key of ['token','operationId','bindingHash','scope','origin','ownerId','agentId','workflowId','runId','versionId'] as const)if(latest[key]!==tap[key])return {kind:'unavailable' as const};
+ if(latest.question!==tap.question||JSON.stringify(latest.notice)!==JSON.stringify(tap.notice))return {kind:'unavailable' as const};
  if(latest.retained!==true)return {kind:'unavailable' as const};
- return {kind:'ready' as const,token:tap.token,run,workflow};
+ return {kind:'ready' as const,token:tap.token,run,workflow,question:tap.question===true,notice:tap.notice};
 }

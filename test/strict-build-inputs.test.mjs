@@ -175,9 +175,9 @@ test('the input report separates what a script produces from what needs a person
   assert.ok(rows.every(item => item.state === 'missing' && item.action), 'an empty checkout has nothing ready and an action for every input');
   assert.match(row('pinned upstream checkout').action, /git submodule update --init vendor\/eliza/);
   assert.match(row('speech runtime qualified').detail, /installed AAR is not the reviewed one.*functional acceptance is failed \(arm64-v8a failed, x86_64 not-executed\)/);
-  assert.match(row('speech runtime qualified').action, /^Needs a person: the owner decides A-24/);
+  assert.match(row('speech runtime qualified').action, /^Needs a person: approved policy requires on-device speech on both shipped ABIs/);
   assert.match(row('embedding host libraries').action, /^Needs a person: /);
-  assert.match(row('release signer').action, /^Needs a person: decision A-06/);
+  assert.match(row('release signer').action, /^Needs a person: Alpha Compute controls signing and Shaw owns release/);
   assert.match(row('release signer').detail, /says unset; not set in this environment: ELIZAOS_KEYSTORE_PATH, ELIZAOS_KEYSTORE_PASSWORD, ELIZAOS_KEY_ALIAS, ELIZAOS_KEY_PASSWORD/);
   for (const name of ['prepared resident runtime source', 'workflow worker artifact', 'staged resident runtime payload', 'embedding model', 'Gradle dependency verification metadata'])
     assert.match(row(name).action, /^npm run /, name);

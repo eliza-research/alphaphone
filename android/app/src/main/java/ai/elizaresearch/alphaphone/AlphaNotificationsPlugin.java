@@ -41,14 +41,14 @@ public class AlphaNotificationsPlugin extends Plugin {
   int failed=0;Iterator<Map.Entry<String,List<android.content.Intent>>> entries=uncapturedWorkflowTaps.entrySet().iterator();
   while(entries.hasNext()){
    Map.Entry<String,List<android.content.Intent>> entry=entries.next();
-   try{workflowTaps().capture(entry.getKey());for(android.content.Intent intent:entry.getValue())clearCapturedIntent(intent,entry.getKey());entries.remove();}
-   catch(WorkflowNoticeTaps.UnknownTap unknown){for(android.content.Intent intent:entry.getValue())clearCapturedIntent(intent,entry.getKey());entries.remove();}
+   try{String token=entry.getKey().substring(0,36);workflowTaps().capture(token,entry.getKey().endsWith(":ask"));for(android.content.Intent intent:entry.getValue())clearCapturedIntent(intent,token);entries.remove();}
+   catch(WorkflowNoticeTaps.UnknownTap unknown){for(android.content.Intent intent:entry.getValue())clearCapturedIntent(intent,entry.getKey().substring(0,36));entries.remove();}
    catch(Exception unavailable){failed++;/* Retain this exact token; another confirmed tap may still progress. */}
   }
   return failed;
  }
  private void captureWorkflowTap(android.content.Intent intent){
-  if(intent==null||!WorkflowNoticeTaps.ACTION.equals(intent.getAction())||intent.getData()==null)return;
+  if(intent==null||!(WorkflowNoticeTaps.ACTION.equals(intent.getAction())||WorkflowNoticeTaps.ASK_ACTION.equals(intent.getAction()))||intent.getData()==null)return;
   String value=intent.getData().toString();if(!value.startsWith(WorkflowNoticeTaps.PREFIX))return;
   String token=value.substring(WorkflowNoticeTaps.PREFIX.length());if(!token.matches("[a-f0-9-]{36}"))return;
   // Capacitor forwards warm intents without Activity.setIntent. Retain the actual
@@ -58,15 +58,27 @@ public class AlphaNotificationsPlugin extends Plugin {
   // load(), resume and renderer polling may observe the same Intent before the
   // worker's successful capture is cleared on main. Queue that object only once.
   if(!workflowIntentDedup.retain(intent,token))return;
-  try{NOTICE_IO.execute(()->{uncapturedWorkflowTaps.computeIfAbsent(token,key->new ArrayList<>()).add(intent);drainWorkflowTaps();noticeChanged();});}
+  try{NOTICE_IO.execute(()->{uncapturedWorkflowTaps.computeIfAbsent(token+(WorkflowNoticeTaps.ASK_ACTION.equals(intent.getAction())?":ask":""),key->new ArrayList<>()).add(intent);drainWorkflowTaps();noticeChanged();});}
   catch(java.util.concurrent.RejectedExecutionException full){workflowIntentDedup.release(intent,token);/* Intent and OS notice remain available for explicit retry. */}
  }
- @PluginMethod public void pendingWorkflowTap(PluginCall call){noticeMain.post(()->{try{foreground();captureWorkflowTap(getActivity().getIntent());noticeWork(call,"Workflow notification link unavailable; retry after unlocking.",()->{int failed=drainWorkflowTaps();org.json.JSONObject pending=workflowTaps().pending();if(failed>0&&!pending.has("token"))throw new IllegalStateException("Uncaptured workflow notice retained");call.resolve(new JSObject(pending.toString()));});}catch(Exception unavailable){call.reject("Workflow notification link unavailable; retry after unlocking.");}});}
+ @PluginMethod public void pendingWorkflowTap(PluginCall call){noticeMain.post(()->{try{foreground();captureWorkflowTap(getActivity().getIntent());noticeWork(call,"Workflow notification link unavailable; retry after unlocking.",()->{int failed=drainWorkflowTaps();org.json.JSONObject pending=workflowTaps().pending();if(failed>0&&!pending.has("token"))throw new IllegalStateException("Uncaptured workflow notice retained");while(pending.optBoolean("question")){addQuestionNotice(pending);if(pending.has("notice"))break;
+    // Its own notice is gone (timed out, swiped or withdrawn): nothing is left to review, so it opens like the notice body.
+    workflowTaps().settleQuestion(pending.getString("token"),false);pending=workflowTaps().pending();}call.resolve(new JSObject(pending.toString()));});}catch(Exception unavailable){call.reject("Workflow notification link unavailable; retry after unlocking.");}});}
  @PluginMethod public void consumeWorkflowTap(PluginCall call){noticeWork(call,"Workflow notification link was retained; retry.",()->consumePendingWorkflowTap(call));}
  private void consumePendingWorkflowTap(PluginCall call)throws Exception{
   org.json.JSONObject pending=workflowTaps().pending();String token=call.getString("token");
   if(token==null||!token.equals(pending.optString("token")))throw new IllegalStateException("Pending tap changed");
+  if(Boolean.TRUE.equals(call.getBoolean("discard",false))){if(!pending.optBoolean("question"))throw new IllegalStateException("Tap purpose changed");workflowTaps().settleQuestion(token,true);call.resolve();return;}
+  if(pending.optBoolean("question")){addQuestionNotice(pending);org.json.JSONObject notice=pending.optJSONObject("notice");if(notice==null||!notice.getString("revision").equals(call.getString("noticeRevision")))throw new IllegalStateException("Question notice changed");}else if(call.getString("noticeRevision")!=null)throw new IllegalStateException("Tap purpose changed");
   requireNoticeForeground();workflowTaps().consume(token);manager().cancel("alpha-workflow-"+pending.getString("operationId"),0);call.resolve();
+ }
+ /** Question excerpts are read only while unlocked and only from the exact still-posted own notice. */
+ private void addQuestionNotice(org.json.JSONObject pending)throws Exception{
+  requireNoticeForeground();String tag="alpha-workflow-"+pending.getString("operationId");
+  for(StatusBarNotification row:manager().getActiveNotifications())if(row.getId()==0&&tag.equals(row.getTag())){
+   Notification n=row.getNotification();if(!WorkflowNoticePoster.CHANNEL.equals(n.getChannelId())||n.visibility==Notification.VISIBILITY_SECRET)return;
+   String identity=id(identity(row));pending.put("notice",new org.json.JSONObject().put("id",identity).put("revision",identity).put("source","own").put("appLabel","Alpha Phone").put("title",bounded(n.extras.getCharSequence(Notification.EXTRA_TITLE),200)).put("text",bounded(n.extras.getCharSequence(Notification.EXTRA_BIG_TEXT,n.extras.getCharSequence(Notification.EXTRA_TEXT)),2000)));return;
+  }
  }
  private final Map<String,String> ids=new java.util.concurrent.ConcurrentHashMap<>();
  private NotificationManager manager(){return getContext().getSystemService(NotificationManager.class);}

@@ -270,6 +270,9 @@ function parseProviderStatus(value:unknown):LocalProviderStatus {
 /** The native bridge verifies the key against Cerebras before it reports success; the key itself
  * never returns to the renderer. */
 export async function configureLocalProvider(apiKey:string,model:string=LOCAL_PROVIDER_MODEL) {
+  // A bring-your-own key is a developer surface; product phones use the owner's Eliza Cloud plan.
+  // (Inline flag read: this module is also imported by Node tests without Vite.)
+  if(!(import.meta.env!==undefined&&import.meta.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS==='1'))throw Error('Alpha Phone uses your Eliza Cloud plan for AI.');
   if(!Capacitor.isNativePlatform())throw Error('Configure the development provider on the host.');
   if(!await localAgentPackaged())throw Error('On-device agent is unavailable in this version. Connect a remote agent or use Eliza Cloud.');
   if(!native.configureProvider)throw Error('Model provider setup is unavailable.');

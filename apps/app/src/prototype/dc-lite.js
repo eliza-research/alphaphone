@@ -4,7 +4,7 @@ import templateHtml from "./template.html?raw";
 /* Minimal renderer for the prototype's .dc.html template: {{holes}}, sc-if, sc-for, events, refs. */
 
   var h = React.createElement;
-  var EVENTS = { onfocuscapture: "onFocusCapture", onclick: "onClick", oncontextmenu: "onContextMenu", onpointermove: "onPointerMove", onpointerdown: "onPointerDown", onpointerup: "onPointerUp", onpointerleave: "onPointerLeave", onpointercancel: "onPointerCancel", onlostpointercapture: "onLostPointerCapture", onchange: "onChange", onkeydown: "onKeyDown", oninput: "onInput" };
+  var EVENTS = { onload:"onLoad", onfocuscapture: "onFocusCapture", onclick: "onClick", oncontextmenu: "onContextMenu", onpointermove: "onPointerMove", onpointerdown: "onPointerDown", onpointerup: "onPointerUp", onpointerleave: "onPointerLeave", onpointercancel: "onPointerCancel", onlostpointercapture: "onLostPointerCapture", onchange: "onChange", onkeydown: "onKeyDown", oninput: "onInput" };
   var HOLE = /\{\{\s*([^}]+?)\s*\}\}/g;
   var WHOLE = /^\{\{\s*([^}]+?)\s*\}\}$/;
 
@@ -65,6 +65,8 @@ import templateHtml from "./template.html?raw";
       else if (n === "for") n = "htmlFor";
       else if (EVENTS[n]) n = EVENTS[n];
       else if (n === "viewbox") n = "viewBox";
+      else if (n === "srcdoc") n = "srcDoc";
+      else if (n === "referrerpolicy") n = "referrerPolicy";
       else if (n === "tabindex") n = "tabIndex";
       else if (n === "maxlength") n = "maxLength";
       else if (n === "minlength") n = "minLength";

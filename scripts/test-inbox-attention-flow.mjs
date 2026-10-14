@@ -1,3 +1,5 @@
+import {readGmailAccountChoice,saveGmailAccountChoice} from '../apps/app/src/runtime/gmail-account-selection.ts';
+import {GmailReadAhead} from '../apps/app/src/runtime/gmail-read-ahead.ts';
 // Inbox attention summary, explicit Inbox reads, links, folders, provider drafts, multi/forwarded
 // attachments, opaque save and "Use in email" against the real adapter with a closed provider
 // fixture. No network, real account or mail; nothing is dispatched.
@@ -10,6 +12,7 @@ import { reviewMailAttachment } from '../apps/app/src/runtime/inbox-attachment.t
 import { reviewMailContext, validateMailContext } from '../apps/app/src/runtime/reviewed-mail-context.ts';
 import { safeMailLink } from '../apps/app/src/runtime/cloud-protocol.ts';
 import * as mailbox from '../apps/app/src/runtime/gmail-mailbox.ts';
+import * as googleAccounts from '../apps/app/src/runtime/google-accounts.ts';
 import * as grants from '../apps/app/src/runtime/gmail-grants.ts';
 
 const strip=async(file,names)=>{let source=await readFile(new URL(`../apps/app/src/prototype/${file}`,import.meta.url),'utf8');source=source.replace(/^import .*;\n/gm,'').replace(/^export (?=(?:async )?function |const |let |interface |type )/gm,'')+`\n${[].concat(names).map(n=>`globalThis.${n}=${n};`).join('')}`;return '{'+stripTypeScriptTypes(source,{mode:'transform'})+'}';};
@@ -58,24 +61,24 @@ function scenario({caps={},accounts=null}={}){
  class FixedDate extends Date{constructor(...a){super(...(a.length?a:[clock]));}static now(){return clock;}}
  const windowFixture={addEventListener(){},removeEventListener(){},dispatchEvent(){return true;},confirm:text=>{confirms.push(text);return confirmAnswer;}};
  const inboxUnsaved=()=>({ready:Promise.resolve(),available:false,conflict:false,error:false,status:'',edit(){},clear:async()=>{},retire(){},resume(){}});
- const sandbox={URL,Date:FixedDate,inboxUnsaved,InboxOperation,composerKind,composerContent,reviewBinding,reviewBindingRefusal,reviewMailAttachment,reviewOpaqueAttachment,checkOutgoingAttachments,outgoingAttachmentLimits,attachmentBytes,safeMailLink,reviewMailContext,validateMailContext,...mailbox,...grants,
+ const sandbox={prepareMailHtml:()=>{throw Error("HTML uses the rendered browser test");},readGmailAccountChoice,saveGmailAccountChoice,GmailReadAhead,URL,Date:FixedDate,inboxUnsaved,InboxOperation,composerKind,composerContent,reviewBinding,reviewBindingRefusal,reviewMailAttachment,reviewOpaqueAttachment,checkOutgoingAttachments,outgoingAttachmentLimits, attachmentBytes,safeMailLink,reviewMailContext,validateMailContext,...mailbox,...googleAccounts,...grants,Event,googleConnectionController:{open(){throw Error('Explicit Google authorization not exercised by this read fixture');}},
   registerPlugin:()=>native,crypto:globalThis.crypto,TextEncoder,structuredClone,
   secureConnectionStore:{read:async key=>structuredClone(slots.get(key)??null),compareExchange:async(key,prior,next)=>{if(JSON.stringify(slots.get(key)??null)!==JSON.stringify(prior))return {status:'conflict'};if(next===null)slots.delete(key);else slots.set(key,structuredClone(next));return {status:'saved'};}},
   connectionController:controller,
   DailyApps:{addListener:async(name,fn)=>{if(name==='appResumed')resume.push(fn);return {remove:async()=>{}};},perform:async()=>({status:'selected',selectionId:'sel-'+(selectionCount++),name:'file'}),forgetSelected:async()=>{}},
-  openConnectionBrowser:async()=>{throw new Error('No OAuth');},queueMicrotask,setTimeout,AbortController,DOMException,console,window:windowFixture,CustomEvent:class{constructor(t,i){this.type=t;this.detail=i?.detail;}},document:{documentElement:{dataset:{connectionMode:'live'}}},atob,btoa};
+  openConnectionBrowser:async()=>{throw new Error('No OAuth');},queueMicrotask,setTimeout,AbortController,DOMException,console,window:windowFixture,CustomEvent:class{constructor(t,i){this.type=t;this.detail=i?.detail;}},document:{addEventListener(){},removeEventListener(){},documentElement:{dataset:{connectionMode:'live'}}},atob,btoa};
  return {sandbox,client,calls,toasts,prepared,dispatched,opened,saved,navigations,confirms,resume,views,Shell,listeners,slots,
   setSession:v=>{session=v;for(const fn of listeners)fn();},advance:ms=>{clock+=ms;},gate:()=>{let open;probeGate=new Promise(r=>{open=r;});return ()=>{probeGate=null;open();};},failProbe:e=>{probeFail=e;},answer:v=>{confirmAnswer=v;}};
 }
 async function boot(options){
- const s=scenario(options);vm.createContext(s.sandbox);
+ const s=scenario(options);s.sandbox.inboxLocalStore=s.sandbox.secureConnectionStore;vm.createContext(s.sandbox);
  for(const [file,names] of [['inbox-provider-controls.ts','inboxProviderControls'],['inbox-drafts.ts','inboxDrafts'],['inbox-cloud-adapter.ts',['installInboxCloudAdapter','inboxAttention','openInbox','linkifyMailText','linkTextMismatch']]])vm.runInContext(await strip(file,names),s.sandbox);
  const attentionBefore=JSON.parse(JSON.stringify(s.sandbox.inboxAttention()));
  s.sandbox.installInboxCloudAdapter(s.Shell,s.views);const shell=new s.Shell();
  let active=false;const api={sw:()=>({down(){},up(){}}),swallowed:()=>false,get:()=>shell.st,isActive:()=>active,set:p=>shell.vset('inbox',p),toast:t=>s.toasts.push(t)};
  const tick=async()=>{for(let i=0;i<40;i++)await new Promise(r=>setTimeout(r,0));};
  const render=()=>s.views.inbox.render(shell.st,api);
- const chip=label=>{const found=render().chips.find(c=>c.label===label);assert.ok(found,`chip ${label} in ${render().chips.map(c=>c.label)}`);return found;};
+ const chip=label=>{const found=[...render().chips,...render().extraFolders].find(c=>c.label===label);assert.ok(found,`chip ${label} in ${render().chips.map(c=>c.label)}`);return found;};
  return {...s,shell,api,tick,render,chip,attentionBefore,setActive:v=>{active=v;},attention:()=>JSON.parse(JSON.stringify(s.sandbox.inboxAttention())),mount:()=>shell.componentDidMount()};
 }
 const searches=t=>t.calls.filter(c=>Array.isArray(c)&&c[0]==='search');
@@ -120,7 +123,7 @@ const searches=t=>t.calls.filter(c=>Array.isArray(c)&&c[0]==='search');
  }
  const t=await boot({caps:{opaqueAttachments:true,forwardAttachments:true,attachmentPolicy:{maximumOutgoing:10,maximumBytes:5242880,maximumTotalBytes:5242880}}});
  t.mount();t.setActive(true);t.render();await t.tick();
- t.render().rows[0].open();await t.tick();
+ t.render().rows[0].open();await t.tick();if(t.render().d?.canLoadThread){t.render().d.loadThread();await t.tick();}
  const d=t.render().d;assert.equal(d.hasLinks,true);assert.equal(t.render().d.links,d.links,'link rows are computed once per opened body');
  deq(d.links.map(l=>[l.href,l.mismatch]),[['https://tracker.attacker.invalid/r',true],['https://docs.example.org/plan?x=1',false]],'HTML links first, plain-text URL deduplicated, http dropped');
  t.answer(false);d.links[0].open();assert.equal(t.navigations.length,0,'declined review opens nothing');assert.match(t.confirms.at(-1),/tracker\.attacker\.invalid/);assert.match(t.confirms.at(-1),/Warning: the email shows/);
@@ -150,8 +153,8 @@ for(const maximumOutgoing of [10,1]){
  t.render().compose();await t.tick();
  for(let i=0;i<3;i++){t.render().c.attach();await t.tick();}
  let c=t.render().c;
- if(maximumOutgoing===1){deq(c.atts.map(a=>a.name),['a.txt']);assert.match(t.toasts.at(-1),/one attachment per email/);assert.match(c.attachLabel,/Attach one/);t.shell.componentWillUnmount();continue;}
- deq(c.atts.map(a=>a.name),['a.txt','b.txt','c.txt'],'three attachments');assert.equal(c.attachLabel,'Attach PDFs, images or text files');
+ if(maximumOutgoing===1){deq(c.atts.map(a=>a.name),['a.txt']);assert.match(t.toasts.at(-1),/one attachment per email/);assert.equal(c.attachLabel,'Attach file');assert.match(c.attachmentHint,/1 file/);t.shell.componentWillUnmount();continue;}
+ deq(c.atts.map(a=>a.name),['a.txt','b.txt','c.txt'],'three attachments');assert.equal(c.attachLabel,'Attach file');assert.match(c.attachmentHint,/10 files/);
  c.atts[1].rm();c=t.render().c;deq(c.atts.map(a=>a.name),['a.txt','c.txt'],'remove the middle one only');
  c.atts[0].rm();t.render().c.attach();await t.tick();c=t.render().c;deq(c.atts.map(a=>a.name),['c.txt','a.txt']);
  c.onTo({target:{value:'friend@example.invalid'}});c.toKey({key:'Enter',preventDefault(){}});t.render().c.send();await t.tick();
@@ -172,7 +175,7 @@ deq(t.prepared.at(-1).attachments.map(a=>a.name),['c.txt','a.txt']);assert.equal
  t.chip('Drafts').pick();await t.tick();assert.ok(t.calls.includes('drafts'));
  const rows=t.render().rows;deq(rows.map(r=>r.name),['Draft to friend@example.invalid','Draft (no recipients)']);
  rows[1].open();await t.tick();assert.match(t.toasts.at(-1),/is a reply, has attachments or formatting/);assert.equal(t.render().composing,false,'threaded drafts stay in Gmail');
- t.render().rows[0].open();await t.tick();
+ t.render().rows[0].open();await t.tick();if(t.render().d?.canLoadThread){t.render().d.loadThread();await t.tick();}
  const c=t.render().c;assert.equal(t.render().composing,true);assert.equal(c.subject,'Plan draft');assert.equal(c.body,'Draft body');assert.match(c.status,/Saved locally|provider draft/i);
  c.saveProvider();await t.tick();
  deq({kind:t.prepared.at(-1).kind,draftId:t.prepared.at(-1).draftId,expectedDigest:t.prepared.at(-1).expectedDigest},{kind:'draft-replace',draftId:'d1',expectedDigest:'a'.repeat(64)},'editing replaces the same provider draft after review');
@@ -205,7 +208,7 @@ deq(t.prepared.at(-1).attachments.map(a=>a.name),['c.txt','a.txt']);assert.equal
  assert.equal(inbox.useInEmail('Stale list review',{token:fresh.token}),false,'a review made before the message was opened cannot fill a reply');
  assert.equal(t.render().composing,false);
  // The message changes after review: another message is opened.
- t.shell.st.open=null;t.render().rows[0].open();await t.tick();
+ t.shell.st.open=null;t.render().rows[0].open();await t.tick();if(t.render().d?.canLoadThread){t.render().d.loadThread();await t.tick();}
  assert.equal(inbox.useInEmail('For m2 only',{token:reply.token}),false,'a different open message refuses the reviewed text');
  assert.equal(t.render().composing,false,'no draft was created for the wrong message');
  // Current review inserts into exactly that reply.
@@ -305,7 +308,7 @@ deq(t.prepared.at(-1).attachments.map(a=>a.name),['c.txt','a.txt']);assert.equal
  const aside=target();deq({kind:aside.kind,aside:aside.aside,elsewhere:aside.elsewhere,subject:aside.subject},{kind:'draft',aside:true,elsewhere:false,subject:'Re: Fixture m2'});
  assert.equal(inbox.useInEmail('Reviewed while the composer was open',{token:shown.token,append:true}),false,'closing the composer makes the earlier review stale');
  // Another message is opened: the destination is still the m2 draft, and the review is told so.
- t.shell.st.open=null;t.render().rows[0].open();await t.tick();
+ t.shell.st.open=null;t.render().rows[0].open();await t.tick();if(t.render().d?.canLoadThread){t.render().d.loadThread();await t.tick();}
  const other=target();deq({kind:other.kind,aside:other.aside,elsewhere:other.elsewhere,subject:other.subject,to:other.to},{kind:'draft',aside:true,elsewhere:true,subject:'Re: Fixture m2',to:['sender@example.invalid']});
  assert.equal(inbox.useInEmail('Meant for m1',{token:aside.token,append:true}),false,'a review made over the draft\'s own message does not cover another open message');
  assert.equal(t.render().composing,false);
@@ -315,3 +318,20 @@ deq(t.prepared.at(-1).attachments.map(a=>a.name),['c.txt','a.txt']);assert.equal
  t.shell.componentWillUnmount();
 }
 console.log('PASS: Inbox attention (not-connected/ready/error/stale), no background mail fetch, openInbox, reviewed HTTPS links in Browser, clip/time rows, Archive/Trash/Drafts folders, provider draft editing, three-attachment add/remove, forwarded source attachments, opaque Save to Files, Use in email and its reviewed destination binding. Fixture only; zero dispatches.');
+
+// Preparation remains read-only and cannot retain revoked content or run after hiding.
+const preparationFailures=[];
+{
+ const t=await boot();const events=new Map();const doc=t.sandbox.document;doc.hidden=false;doc.addEventListener=(name,fn)=>events.set(name,fn);doc.removeEventListener=name=>events.delete(name);
+ const signals=[];t.client.gmailRead=async(_grant,id,signal)=>{signals.push(signal);return new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(new DOMException('Hidden','AbortError')),{once:true}));};
+ t.mount();t.setActive(true);t.render();await t.tick();
+ try{assert.equal(signals.length,2);doc.hidden=true;events.get('visibilitychange')?.();await t.tick();assert.ok(signals.every(signal=>signal.aborted),'hiding the page cancels every prepared body');const count=signals.length;t.render();await t.tick();assert.equal(signals.length,count,'no hidden-page preparation');}catch(error){preparationFailures.push(error);}finally{t.shell.componentWillUnmount();}
+}
+{
+ const t=await boot();const doc=t.sandbox.document;doc.addEventListener=()=>{};doc.removeEventListener=()=>{};
+ t.client.gmailRead=async()=>{throw Object.assign(new Error('Owned revoked fixture'),{name:'CloudProtocolError',code:'http',status:409});};
+ t.mount();t.setActive(true);t.render();await t.tick();
+ try{assert.equal(t.render().rows.length,0,'observed revoked preparation clears displayed and cached metadata');assert.equal(t.attention().state,'error');assert.equal(t.views.inbox.badge(),false);assert.equal(t.attention().source,null,'revoked cache has no source summary');}catch(error){preparationFailures.push(error);}finally{t.shell.componentWillUnmount();}
+}
+if(preparationFailures.length)throw new AggregateError(preparationFailures,'Gmail preparation lifecycle failures');
+console.log('PASS prepared Gmail reads cancel on hide and invalidate content on observed revocation. Owned fixtures only.');

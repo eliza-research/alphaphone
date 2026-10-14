@@ -8,7 +8,8 @@ for(const theme of ['light','dark'])for(const viewport of [{width:360,height:640
  await expect.poll(()=>body.evaluate(el=>{const b=el.getBoundingClientRect(),p=el.parentElement!.getBoundingClientRect();return b.top>=p.top-1&&b.bottom<=p.bottom+1;})).toBe(true);
  await body.fill('A retained local draft.\nSecond paragraph.');
  await page.getByRole('textbox',{name:'Subject',exact:true}).fill('Compact draft');
- await page.getByRole('textbox',{name:'Cc',exact:true}).fill('copy@example.invalid');
+ await page.getByRole('button', {name: 'Cc and Bcc', exact: true}).click();
+  await page.getByRole('textbox', {name: 'Cc', exact: true}).fill('copy@example.invalid');
  await page.getByRole('textbox',{name:'Bcc',exact:true}).fill('blind@example.invalid');
  const address='a'.repeat(60)+'@'+'b'.repeat(60)+'.example.invalid';
  await page.getByRole('textbox',{name:'To',exact:true}).fill(address);

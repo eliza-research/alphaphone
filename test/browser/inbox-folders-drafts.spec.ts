@@ -6,7 +6,7 @@ async function install(page:Page,caps:Record<string,unknown>){
  await page.goto('/');
  await page.evaluate(async caps=>{
   const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');
-  const {secureConnectionStore:s}=await import('/src/runtime/native-connection.ts');
+  const {inboxLocalStore:s}=await import('/src/runtime/inbox-local-store.ts');
   const f=(window as any).folderFixture={slots:{} as Record<string,unknown>,searches:[] as string[],drafts:0,draftReads:[] as string[],prepared:[] as any[],dispatches:0};
   s.read=async(key:string)=>structuredClone(f.slots[key]??null);
   s.compareExchange=async(key:string,prior:unknown,next:unknown)=>{if(JSON.stringify(f.slots[key]??null)!==JSON.stringify(prior))return {status:'conflict'};f.slots[key]=structuredClone(next);return {status:'saved'};};
@@ -27,7 +27,7 @@ async function install(page:Page,caps:Record<string,unknown>){
   const snapshot={...c.getSnapshot(),cloudAccount:{environment:'production',userId:'fixture-owner',sessionId:'fixture-session',credentialId:'fixture'}} as any;c.getSnapshot=()=>snapshot;
  },caps);
  await page.getByRole('button',{name:'Inbox',exact:true}).click();
- await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Refresh inbox',exact:true})).toBeVisible();
 }
 const fixture=(page:Page)=>page.evaluate(()=>(window as any).folderFixture);
 
@@ -43,11 +43,11 @@ test('Older servers offer only the query-based Archive folder',async({page})=>{
 
 test('Drafts, Archive and Trash load their lists; a Gmail draft opens for editing and saves only through review',async({page})=>{
  await install(page,{draftsList:true,searchTrash:true});
- await page.getByRole('button',{name:'Trash',exact:true}).click();
+ await page.getByRole('combobox',{name:'Other mail folders',exact:true}).selectOption('trash');
  await expect(page.getByText('Trashed fixture',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Archive',exact:true}).click();
  await expect(page.getByText('Archived fixture',{exact:true})).toBeVisible();
- await page.getByRole('button',{name:'Drafts',exact:true}).click();
+ await page.getByRole('combobox',{name:'Other mail folders',exact:true}).selectOption('drafts');
  await expect(page.getByRole('button',{name:/^Gmail draft, Draft to friend@example\.invalid, Quarterly plan/})).toBeVisible();
  expect((await fixture(page)).searches.slice(-2)).toEqual(['in:trash','in:archive']);
  // A reply draft stays in Gmail: its thread headers cannot be reproduced exactly here.
@@ -73,8 +73,8 @@ test('Drafts, Archive and Trash load their lists; a Gmail draft opens for editin
 test('Send opens the exact review and nothing is sent until it is confirmed',async({page})=>{
  await install(page,{});
  await page.getByRole('button',{name:'Compose',exact:true}).click();
- await page.getByPlaceholder('To',{exact:true}).fill('friend@example.invalid');
- await page.getByPlaceholder('To',{exact:true}).press('Enter');
+ await page.getByRole('textbox',{name:'To',exact:true}).fill('friend@example.invalid');
+ await page.getByRole('textbox',{name:'To',exact:true}).press('Enter');
  await page.getByRole('textbox',{name:'Subject',exact:true}).fill('Reviewed subject');
  await page.getByRole('textbox',{name:'Message',exact:true}).fill('Reviewed body');
  await page.getByRole('button',{name:'Send email',exact:true}).click();

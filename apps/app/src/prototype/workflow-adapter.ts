@@ -1,3 +1,4 @@
+import {reviewWorkflowNoticeQuestion} from './workflow-notice-question';
 import {NoticeOwnerCoordinator} from '../runtime/notice-owner-coordinator';
 import {revalidateApprovalNotice} from '../runtime/workflow-notice-return';
 import {WorkflowIntentStore,workflowIntentKey} from '../runtime/workflow-intents';
@@ -65,7 +66,8 @@ export function installWorkflowAdapter(Component:any,views:Bag){
  // Retirement still cancels work, but must not render after document storage is revoked.
  const publish=()=>{if(!suspended&&!document.hidden)owner?.vset('workflows',{remoteWorkflowTick:Date.now()});};
  const authoring=createWorkflowAuthoring(()=>owner,publish,async(id)=>{await open(id);});
- const clear=(keepList=false)=>{unadmitted=null;reviewResend=false;intentStore=null;recovery?.abort();recovery=null;authoring.close();phoneReview=null;phoneSteps=[];phoneConfirm=null;phoneStatus='';generation++;operation?.abort();operation=null;editor=null;removedList=false;lifecycleAvailable=false;lifecycleReview=false;unknownReview=false;reviewRerun=false;if(!keepList){flows=[];listPhase='idle';listSession=null;}homeVisit=null;detail=null;detailSession=null;runs=[];receipt=null;approvalReceipt=null;approvalReview=null;reviewRun=false;reviewActivation=false;reviewCancel=false;phase='idle';publish();};
+ let noticeQuestion:(()=>void)|undefined;
+ const clear=(keepList=false)=>{noticeQuestion?.();noticeQuestion=undefined;unadmitted=null;reviewResend=false;intentStore=null;recovery?.abort();recovery=null;authoring.close();phoneReview=null;phoneSteps=[];phoneConfirm=null;phoneStatus='';generation++;operation?.abort();operation=null;editor=null;removedList=false;lifecycleAvailable=false;lifecycleReview=false;unknownReview=false;reviewRerun=false;if(!keepList){flows=[];listPhase='idle';listSession=null;}homeVisit=null;detail=null;detailSession=null;runs=[];receipt=null;approvalReceipt=null;approvalReview=null;reviewRun=false;reviewActivation=false;reviewCancel=false;phase='idle';publish();};
  async function work(task:(client:NonNullable<ReturnType<typeof connectionController.getWorkflowClient>>['client'],signal:AbortSignal,valid:()=>boolean,sessionId:string,intents:WorkflowIntentStore)=>Promise<void>){
   if(operation)return;const binding=connectionController.getWorkflowClient();if(!binding){connectionController.open();return;}
   const controller=new AbortController(),token=++generation;operation=controller;phase='busy';publish();const valid=()=>token===generation&&!controller.signal.aborted&&binding.sessionId===connectionController.getWorkflowClient()?.sessionId;
@@ -86,6 +88,7 @@ export function installWorkflowAdapter(Component:any,views:Bag){
  let tapBusy=false,tapRequested=false;
  const notificationNative=()=>registerPlugin<WorkflowTapNative>('AlphaNotifications');
  async function checkNotice(explicit=false){
+  if(noticeQuestion)return;
   if(tapBusy){if(explicit)tapRequested=true;return;}
   if(!Capacitor.isNativePlatform()||operation||authoring.active||editor||!owner?.live||document.hidden||connectionController.getSnapshot().open||alphaClient.getState().context.sensitive)return;
   tapBusy=true;const shell=owner,selected=connectionController.getWorkflowClient(),session=connectionController.getSnapshot().session,epoch=generation,initialView=shell.S().view;
@@ -98,6 +101,10 @@ export function installWorkflowAdapter(Component:any,views:Bag){
    if(!current())return;
    if(result.kind==='none')return;
    if(result.kind!=='ready'){shell.toast(result.kind==='other-account'?'Workflow notification saved. Connect its original agent to open it.':'Workflow notification saved. Its exact execution is unavailable; retry from Workflows.');return;}
+   if(result.question){
+    noticeQuestion=reviewWorkflowNoticeQuestion({result,current,recheck:()=>resolveWorkflowTap(native,bound,signal),consume:()=>native.consumeWorkflowTap({token:result.token,noticeRevision:result.notice?.revision}),discard:()=>native.consumeWorkflowTap({token:result.token,discard:true}),compose:draft=>shell.api(shell.S().view).composeContentQuestion(draft),report:message=>shell.toast(message),closed:()=>{noticeQuestion=undefined;}});
+    return;
+   }
    authoring.close();editor=null;phoneReview=null;phoneSteps=[];phoneConfirm=null;phoneStatus='';approvalReceipt=null;approvalReview=null;reviewRun=false;reviewActivation=false;reviewCancel=false;
    detail=result.workflow;detailSession=selected!.sessionId;receipt=result.run;runs=[result.run];phase='ready';
    shell.openView('workflows');publish();

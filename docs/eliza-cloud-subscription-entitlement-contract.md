@@ -1,4 +1,4 @@
-# Eliza Cloud subscription entitlement: proposed contract (issue #410)
+# Eliza Cloud subscription entitlement and plan gate (issue #410)
 
 Status: proposal. This file describes the Alpha phone's side and what the Eliza Cloud server
 must provide. The Cloud server work belongs to the Eliza Cloud repository and is not done here.
@@ -16,7 +16,10 @@ Alpha source: `apps/app/src/runtime/subscription-entitlement.ts`, `cloud-protoco
   top-up or per-token meter.
 - An assistant turn never waits on a billing service. Cloud authorises each inference or Maps
   request from its own cached quota or token bucket.
-- Local apps, on-device speech and local tools never depend on an online billing check.
+- Every Alpha Phone signs in to Eliza Cloud and holds a plan (owner decision, October 2026). The
+  plan gate runs at admission and on return to the app; a turn never does.
+- Once a plan was verified on the phone recently, local apps, on-device speech and local tools do
+  not depend on an online billing check (offline grace, section 4).
 - Nothing is purchased automatically: no overage purchase, upgrade or retry that spends money.
 
 ## 1. Entitlement read
@@ -27,8 +30,8 @@ with `Authorization: Bearer <the phone's Cloud CLI key>` and `Accept: applicatio
 - `200 {"entitlement": "<compact JWS>"}` returns the current entitlement. The JWS is at most
   8192 characters.
 - `401` means the sign-in is invalid. The phone shows the sign-in action.
-- `404`, `405` or `501` means the route is not deployed. The phone then uses the transitional
-  account check (section 5).
+- `404`, `405` or `501` means the route is not deployed. The phone then reads the subscription
+  section of `GET /api/v1/billing/limits` (section 4).
 - Any other status, or a transport failure, is a billing outage (section 4).
 
 The phone reads the entitlement when the resident agent is admitted, then refreshes it in the
@@ -112,44 +115,78 @@ retry and reset times only for direct HTTP refusals.
 
 ## 4. Phone behaviour by condition
 
+Cloud side: elizaOS/eliza PR #36125 (`POST /api/v1/subscription/redeem`, the entitlement and key
+routes, refusal bodies with `retryAfterSeconds`, 402 `allowance_exhausted` with `resetsAt`).
+
 | Condition | Phone result | Agent admitted |
 |---|---|---|
-| Valid entitlement, plan `active`, `trialing` or `past_due` | Plan name and the Cloud allowance. For `past_due`, also a link to manage the plan | yes |
-| Valid entitlement, plan `canceled` or `none` | "No active plan" or "<plan> has ended", with a link to manage the plan in Eliza Cloud. Local orchestration and schedules stay running; Cloud enforces AI access | yes |
-| Route not deployed (404) and the transitional account check fails (section 5) | "AI is unavailable for this Eliza Cloud account", with "Open Eliza Cloud billing". No plan wording; local orchestration stays running | yes |
-| Billing outage (5xx, timeout, offline) | "Plan status unavailable"; Cloud still decides each request | yes |
-| Bad signature, unknown key or bad claims | Reported as unavailable (`invalid`) and never trusted | yes |
+| No saved sign-in (first run, signed out) | Sign-in gate. No local-only bypass; the dialog cannot be dismissed | no |
+| Valid entitlement, plan `active` or `trialing` | Plan name and the Cloud allowance | yes |
+| Valid entitlement, plan `past_due` | Plan name, "Payment is past due" warning and "Manage plan in Eliza Cloud" | yes |
+| Valid entitlement, plan `canceled` or `none` | "Needs plan" gate: "<plan> has ended" or "No active plan", with Redeem code, Choose a plan (hosted page) and Check plan again | no |
+| Route absent (404/405/501) | `GET /api/v1/billing/limits`, `data.v2.subscription`: `trialing`/`active` admit, `grace`/`past_due`/`unpaid` admit with the warning, `canceled`/`incomplete_expired`/`not_applicable` need a plan | as mapped |
+| Route absent and the billing snapshot is absent or reports no known state | "Plan status unavailable" with Check plan again, Redeem code and Choose a plan | no |
+| Billing outage (5xx, timeout) after identity succeeded | Admitted when this sign-in had an admitting plan verified within the last 7 days ("Plan status unavailable"); otherwise the needs-plan gate with a retry | as stated |
+| Cloud unreachable at start (identity read fails in transport) | With a plan verified for this sign-in within 7 days: "Offline" notice, closable; local apps and on-device speech work, no agent starts. Otherwise the sign-in gate with the error | no |
+| Bad signature, unknown key or bad claims | Reported as unavailable (`invalid`), never trusted; needs-plan gate with a retry | no |
 | Entitlement issued for another account, at admission | An error asking the owner to sign in again | no |
+| Plan reported `canceled`/`none` by a background refresh or a return to the app | The resident agent is stopped and the needs-plan gate is shown | stopped |
 | Entitlement issued for another account, during background refresh | Refresh stops, the Cloud-bound resident agent is stopped, the Cloud account is detached and the same sign-in error is shown | stopped |
 | A verified entitlement lapses while refreshes fail | "Plan status is out of date" (`expired`), kept on every later failed refresh until a check succeeds | unchanged; Cloud decides |
 | Sign-in rejected (401), at admission | Sign-in action | no |
 | Sign-in rejected (401), during background refresh | Same as an account mismatch during refresh: agent stopped, sign-in shown | stopped |
+| Cloud sign-in key expires within 14 days (`expiresAt` from the CLI login) | Warning in the account panel and Settings, with "Approve this phone again" (a fresh CLI sign-in) | unchanged |
+
+The 7-day offline grace is an engineering bound for offline use, not a billing decision: Cloud
+refuses every AI request without a plan. The record behind it (`alpha.connection.plan-admission.v1`)
+holds the environment, local credential generation id, user and organization ids, plan name and
+status, and the verification time; no credential.
 
 Background refresh happens at `rfa`, or after 75% of the lifetime. After a failure it retries
-after 30 s, then doubles the wait up to 5 minutes. It stops whenever the Cloud account is detached
-(every sign-out, expiry, account change or re-admission path), on a plan with no access, on a
-rejected sign-in or account mismatch, or when Cloud returns 404 for the route.
+after 30 s, then doubles the wait up to 5 minutes. It also runs when the owner returns to the app.
+It stops whenever the Cloud account is detached (every sign-out, expiry, account change or
+re-admission path), on a plan with no access, on a rejected sign-in or account mismatch, or when
+the plan state came from the billing snapshot.
 
-## 5. Transitional account check
+## 5. Subscription codes
 
-Until Cloud deploys section 1, a `404` sends the phone to the existing
-`GET /api/v1/credits/balance` endpoint. A balance of zero or less displays
-the neutral account copy in section 4; the phone never shows the balance. Against deployed Cloud
-this account status does not gate the resident runtime, and the billing link opens Cloud's
-existing credit billing page. The plan copy applies only once Cloud issues entitlements. Remove
-this path once the entitlement route ships.
+`POST /api/v1/subscription/redeem` with the phone's Cloud CLI key and
+`{"code": "<normalized>", "idempotencyKey": "<UUID>"}`.
+
+- The phone normalizes like Cloud (trim, upper case, remove spaces and hyphens, O→0, I/L→1) and
+  refuses text that cannot be a 16–64 character code locally, with the same generic copy.
+- Each owner submission gets a fresh idempotency key. Only a transport failure (the request may
+  have arrived) is retried, once, with the same key; Cloud answers a replay with the original grant.
+- `400` (unknown, expired, disabled, used up or malformed): "This code could not be redeemed."
+  `409 subscription_grant_already_redeemed`: already received. `429`: "Too many attempts. Try
+  again in …" from `retryAfterSeconds`. `403`: account copy. Anything else: try again later.
+- The code is never logged, stored, put in an error or echoed.
+- On success the phone reads the entitlement again and admits the agent when the plan allows.
+  When a paid plan takes precedence, the copy says so.
+
+The native transport and the renderer allowlist admit exactly this POST (body required, no query),
+and `GET /api/v1/billing/limits`. The credit balance route is no longer admitted.
 
 ## 6. Plan management
 
-"Manage plan in Eliza Cloud" (entitlement source) and "Open Eliza Cloud billing" (transitional
-account check) both open Cloud's hosted page at `https://cloud.eliza.app/cloud/billing` in the
-system browser. Today that page is Cloud's credit billing page. The phone creates no checkout,
-upgrade or purchase.
+"Choose a plan" (needs plan) and "Manage plan in Eliza Cloud" (past due, Settings) open exactly
+`https://cloud.eliza.app/cloud/billing` (staging QA: `https://cloud-staging.eliza.app/cloud/billing`)
+in the system browser. The phone creates no checkout, upgrade or purchase, and checks the plan
+again when the owner returns.
+
+Settings › Eliza Cloud account & plan shows the account, plan, the plan's end when Cloud reported
+it (billing snapshot period end or redeemed grant end), the sign-in expiry, and Redeem code,
+Manage plan and Sign out. Reset Alpha data asks Cloud to revoke this phone's key
+(`DELETE /api/v1/api-keys/current`, one attempt, 3 s timeouts, 8 s overall deadline) after the
+reset is recorded; a failure never blocks the local reset.
 
 ## Gates that remain open
 
-- Eliza Cloud has not implemented sections 1 to 3: entitlement issuance, signing keys, cached
-  quotas and token buckets, asynchronous idempotent usage records, or refusal bodies.
+- elizaOS/eliza PR #36125 implements redemption, entitlement issuance, signing keys and the
+  refusal bodies on `develop`. Whether production and staging have deployed it, with the
+  `ELIZA_ENTITLEMENT_*` and grant-code pepper secrets set, is not verified here.
+- No real-account end-to-end run (sign-in, redeem a real staging code, plan gate, agent admission)
+  has been made; docs/cloud-subscription-qa.md lists the commands.
 - No p50/p95 latency benchmark has been run under the normal, cache-miss, exhausted, expired and
   billing-outage conditions. It needs the deployed Cloud.
 - The numeric burst and sustained limits, the allowance and the price are not selected. They must

@@ -25,6 +25,8 @@ async function closeOverlays(page:Page){
   const open=await page.evaluate(()=>{const d=[...document.querySelectorAll('dialog[open]')] as HTMLDialogElement[];d.forEach(x=>x.close());return d.length;});
   const panel=page.getByRole('button',{name:/^Close connection settings/}).first();
   if(await panel.isVisible().catch(()=>false))await panel.click();
+  const google=page.getByRole('button',{name:'Close Google accounts',exact:true});
+  if(await google.isVisible().catch(()=>false))await google.click();
   if(!open)break;
  }
 }
@@ -77,6 +79,19 @@ test('every production Settings control has a real effect, never a toast alone',
  expect(toastOnly).toEqual([]);
 });
 
+
+test('production Google account entry opens and dismisses its owned dialog',async({page})=>{
+ await page.addInitScript(offline);
+ await openSettings(page);
+ await current(page).getByRole('button',{name:'Accounts',exact:true}).click();
+ await current(page).getByRole('button',{name:'Google accounts',exact:true}).click();
+ const panel=page.getByRole('dialog',{name:'Google accounts',exact:true});
+ await expect(panel).toBeVisible();
+ await expect(panel.getByRole('button',{name:'Sign in to Eliza Cloud',exact:true})).toBeVisible();
+ await closeOverlays(page);
+ await expect(panel).toHaveCount(0);
+ await expect(current(page).getByRole('button',{name:'System accounts',exact:true})).toBeVisible();
+});
 test('production Settings shows no fixture device facts and reports the model honestly',async({page})=>{
  await page.addInitScript(offline);
  // A browser without the Battery Status API must not show a seeded battery level.

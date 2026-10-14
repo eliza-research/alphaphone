@@ -19,7 +19,7 @@ async function fixture(page:Page,theme='light'){
   const original=c.getSnapshot(),snapshots=new Map();c.getSnapshot=()=>{if(!snapshots.has(f.owner))snapshots.set(f.owner,{...original,cloudAccount:{environment:'production',userId:'fixture-'+f.owner,sessionId:'fixture-'+f.owner,credentialId:'fixture-only'}});return snapshots.get(f.owner);};
  });
 }
-async function load(page:Page){await page.getByRole('button',{name:'Inbox',exact:true}).click();await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:/Unread, Synthetic sender A/})).toBeVisible();await returnToApps(page);}
+async function load(page:Page){await page.getByRole('button',{name:'Inbox',exact:true}).click();await expect(page.getByRole('button',{name:'Refresh inbox',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:/Unread, Synthetic sender A/})).toBeVisible();await returnToApps(page);}
 
 for(const theme of ['light','dark'])test(`Home Inbox uses cached unread subjects and aligned text: ${theme}`,async({page},info)=>{
  await fixture(page,theme);await load(page);const card=tile(page);await card.scrollIntoViewIfNeeded();
@@ -41,7 +41,7 @@ test('Home Inbox offers Connect email before a connection and never reads mail',
 });
 
 test('Home Inbox retains failure and retires cached subjects on owner change',async({page})=>{
- await fixture(page);await load(page);await page.getByRole('button',{name:'Inbox',exact:true}).click();await expect(page.getByRole('button',{name:/Unread, Synthetic sender A/})).toBeVisible();await page.evaluate(()=>(window as any).homeInboxFixture.fail=true);await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(page.getByRole('button',{name:'Retry',exact:true})).toBeVisible();await returnToApps(page);await expect(tile(page)).toContainText('Open to retry');await expect(tile(page)).not.toContainText('No unread');
+ await fixture(page);await load(page);await page.getByRole('button',{name:'Inbox',exact:true}).click();await expect(page.getByRole('button',{name:/Unread, Synthetic sender A/})).toBeVisible();await page.evaluate(()=>(window as any).homeInboxFixture.fail=true);await page.getByRole('button',{name:'Refresh inbox',exact:true}).click();await expect(page.getByRole('button',{name:'Retry',exact:true})).toBeVisible();await returnToApps(page);await expect(tile(page)).toContainText('Open to retry');await expect(tile(page)).not.toContainText('No unread');
  await page.evaluate(async()=>{(window as any).homeInboxFixture.owner='b';(await import('/src/runtime/connection-ui.tsx')).connectionController.close();});await expect(tile(page)).not.toContainText('Synthetic quarterly planning subject');await expect(tile(page)).not.toContainText('2 unread');
 });
 

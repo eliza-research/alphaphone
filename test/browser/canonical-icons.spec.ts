@@ -16,7 +16,7 @@ test('published assets retain their recorded provenance',()=>{
  const box:any={};vm.runInNewContext(initial+'\n'+extensions+'\nglobalThis.icons=IC;',box);
  expect(Object.keys(catalog.ic).sort()).toEqual(Object.keys(box.icons).sort());expect(Object.keys(catalog.ic)).toHaveLength(148);
  const paths=new Map<string,string>();for(const [key,asset] of Object.entries(catalog.ic) as [string,string][]){expect(source.assets[asset+'.svg']).toBeTruthy();if(paths.has(box.icons[key]))expect(paths.get(box.icons[key])).toBe(asset);paths.set(box.icons[key],asset);}
- expect(Object.keys(source.assets)).toHaveLength(140);
+ const expectedAssets=new Set([...Object.values(catalog.ic),...catalog.extra].map(name=>name+'.svg'));for(const name of catalog.filled)expectedAssets.add(name+'-filled.svg');expect(Object.keys(source.assets).sort()).toEqual([...expectedAssets].sort());
  for(const [name,entry] of Object.entries(source.assets) as [string,any][]){const svg=readFileSync(new URL(name,root),'utf8');expect(svg).toContain('viewBox="0 0 24 24"');expect(svg).toContain('stroke-width="2"');expect(svg).toContain('stroke-linecap="round"');expect(svg).toContain('stroke-linejoin="round"');expect(svg).toContain(entry.fill?'fill="currentColor"':'fill="none"');}
  const template=readFileSync(new URL('../../apps/app/src/prototype/template.html',import.meta.url),'utf8');expect(template.match(/<svg[^>]*class="i"[^>]*style="[^"]*stroke-width/g)).toBeNull();
 

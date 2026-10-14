@@ -152,9 +152,9 @@ export function installCalendarAdapter(Component: any, views: Bag) {
     out.browserRecovery=!Capacitor.isNativePlatform()&&loadFailed&&!loading;out.openBrowserRecovery=openCalendarRecovery;
     out.reminderRecovery=!Capacitor.isNativePlatform()&&reminderStale;out.openReminderRecovery=openReminderRecovery;out.openReminderCreationRecovery=openReminderCreationRecovery;out.openReminderActionRecovery=openReminderActionRecovery;
     if(!rangeReady&&!state.open&&!state.form)out.empty=true;
-    const allDay=(state.events||[]).filter((e:Bag)=>e.alphaCalendarId&&e.allDay);
+    const allDay=(state.events||[]).filter((e:Bag)=>(e.alphaCalendarId||e.googleCalendarRecord)&&e.allDay);
     const day=Number(state.day||0),onDay=(off:number)=>allDay.filter((e:Bag)=>off>=e.off&&off<e.nativeAllDayEndOff);
-    const timed=(state.events||[]).filter((e:Bag)=>e.alphaCalendarId&&!e.allDay);
+    const timed=(state.events||[]).filter((e:Bag)=>(e.alphaCalendarId||e.googleCalendarRecord)&&!e.allDay);
     const bounds=(off:number)=>{const now=new Date(api.now);return [new Date(now.getFullYear(),now.getMonth(),now.getDate()+off).getTime(),new Date(now.getFullYear(),now.getMonth(),now.getDate()+off+1).getTime()];};
     const timedOn=(off:number)=>{const [start,end]=bounds(off);return timed.filter((e:Bag)=>e.nativeEvent.begin<end&&e.nativeEvent.end>start);};
     const [dayStart,dayEnd]=bounds(day);
@@ -166,11 +166,11 @@ export function installCalendarAdapter(Component: any, views: Bag) {
       const d=Math.min(24-t,Math.max(.25,finish>t?finish-t:(end.getTime()-start.getTime())/3600000));
       return {...e,off:day,t,d};
     });
-    const timeline=[...(state.events||[]).filter((e:Bag)=>!e.alphaCalendarId),...segments];
+    const timeline=[...(state.events||[]).filter((e:Bag)=>!e.alphaCalendarId&&!e.googleCalendarRecord),...segments];
     // Temporary per-day layout only: provider IDs, original timestamps and
     // selected-object identity stay in the durable state, never in split copies.
     if(allDay.length||timed.length)out.events=render({...state,events:timeline},api).events;
-    const realDay=timeline.filter((e:Bag)=>(e.alphaCalendarId||e.alphaReminderId)&&!e.allDay&&e.off===day&&Number.isFinite(e.t)&&e.t>=0);
+    const realDay=timeline.filter((e:Bag)=>(e.alphaCalendarId||e.googleCalendarRecord||e.alphaReminderId)&&!e.allDay&&e.off===day&&Number.isFinite(e.t)&&e.t>=0);
     const first=Math.min(7,...realDay.map((e:Bag)=>Math.floor(e.t))),last=Math.max(23,...realDay.map((e:Bag)=>Math.min(24,Math.ceil(e.t+e.d))));
     if(first<7||last>23){
       const shift=(7-first)*56;

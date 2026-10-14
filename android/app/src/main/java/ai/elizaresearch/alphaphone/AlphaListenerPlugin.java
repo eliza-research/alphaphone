@@ -33,6 +33,18 @@ public final class AlphaListenerPlugin extends Plugin {
    &&context.checkSelfPermission(CONTROL_PERMISSION)==PackageManager.PERMISSION_GRANTED;
  }
 
+ /** Reset may proceed without the image listener, but never past an unacknowledged installed one. */
+ static boolean resetForData(Context context){
+  try{context.getPackageManager().getPackageInfo(LISTENER_PACKAGE,0);}
+  catch(PackageManager.NameNotFoundException absent){return true;}
+  if(!available(context))return false;
+  try{
+   Bundle result=context.getContentResolver().call(CONTROL,"reset",null,null);
+   return result!=null&&result.getBoolean("saved",false)&&!result.getBoolean("consented",true)
+    &&!result.getBoolean("listening",true);
+  }catch(RuntimeException unavailable){return false;}
+ }
+
  private void control(PluginCall call,String method){
   Context context=getContext();
   if(!available(context)){call.resolve(new JSObject().put("available",false));return;}

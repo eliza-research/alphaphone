@@ -239,7 +239,11 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   }catch(Exception unavailable){call.resolve(new JSObject().put("attachable",false).put("reason","unavailable"));}});}
   catch(java.util.concurrent.RejectedExecutionException closed){call.reject("Local agent bridge is closed.");}
  }
+ /** A direct (bring-your-own) Cerebras key is a test-mocks developer surface only. Product phones use
+  * the owner's Eliza Cloud plan through configureCloudProvider; production refuses before reading the key. */
+ static boolean directProviderAllowed(boolean testMocks){return testMocks;}
  @PluginMethod public void configureProvider(PluginCall call) {
+  if(!directProviderAllowed(BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS)){call.reject("Alpha Phone uses your Eliza Cloud plan for AI.");return;}
   if(!runtimePackaged()){call.reject("On-device agent is unavailable in this version. Connect a remote agent or use Eliza Cloud.");return;}
   String key=call.getString("apiKey",""),model=call.getString("model",CEREBRAS_PROVIDER_MODEL);
   if(!validProviderToken(key,1024)||!model.matches("[A-Za-z0-9][A-Za-z0-9._/-]{0,127}")){call.reject("Enter a valid Cerebras key.");return;}

@@ -30,16 +30,17 @@ const record = (value: unknown): Record<string, unknown> | null => value && type
 export function voiceRoutePreference(): VoiceRouteChoice {
   if (!testMocksEnabled) return 'device';
   const value = record(read(voiceRouteKey));
-  return value && value.version === 1 && value.route === 'cloud' && value.disclosed === 'cloud-speech-uses-credits' && Number.isFinite(value.chosenAt) ? 'cloud' : 'device';
+  // 'cloud-speech-uses-credits' is the disclosure id earlier builds stored; it reads as the same choice.
+  return value && value.version === 1 && value.route === 'cloud' && (value.disclosed === 'cloud-speech-uses-plan' || value.disclosed === 'cloud-speech-uses-credits') && Number.isFinite(value.chosenAt) ? 'cloud' : 'device';
 }
 /**
  * Persist an explicit route choice. Cloud requires the caller to have shown the Cloud speech
  * disclosure. Returns false when the choice could not be confirmed in storage; the
  * route then stays on-device.
  */
-export function chooseVoiceRoute(route: VoiceRouteChoice, disclosure?: { disclosed: 'cloud-speech-uses-credits' }): boolean {
+export function chooseVoiceRoute(route: VoiceRouteChoice, disclosure?: { disclosed: 'cloud-speech-uses-plan' }): boolean {
   if (!testMocksEnabled && route === 'cloud') return false;
-  if (route === 'cloud' && disclosure?.disclosed !== 'cloud-speech-uses-credits') return false;
+  if (route === 'cloud' && disclosure?.disclosed !== 'cloud-speech-uses-plan') return false;
   return write(voiceRouteKey, route === 'cloud' ? { version: 1, route, disclosed: disclosure!.disclosed, chosenAt: Date.now() } : { version: 1, route: 'device', chosenAt: Date.now() });
 }
 /** Disclosure shown wherever Cloud speech can be chosen. */

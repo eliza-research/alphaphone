@@ -36,7 +36,7 @@ function device() {
   };
   const controller = {getCloudClient: () => ({client, sessionId: 'session-1'}), getSnapshot: () => ({cloudAccount: {environment: 'production', userId: 'owner-1'}})};
   const sandbox = {InboxOperation, composerKind, composerContent, reviewBinding, reviewBindingRefusal, classifyGmailFailure, ...grants, performance, queueMicrotask, crypto: globalThis.crypto, TextEncoder, structuredClone,
-    secureConnectionStore: store, connectionController: controller, AbortController, DOMException, console, document: {documentElement: {dataset: {connectionMode: 'live'}}}};
+    inboxLocalStore: store, connectionController: controller, AbortController, DOMException, console, document: {documentElement: {dataset: {connectionMode: 'live'}}}};
   vm.createContext(sandbox); vm.runInContext(source, sandbox);
   const provider = sandbox.inboxProviderControls(() => {}, text => toasts.push(text));
   const slot = () => [...slots.values()][0] ?? null;

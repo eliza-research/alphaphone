@@ -48,8 +48,10 @@ import { DailyApps } from './daily';
 import { installPrototypeVoiceAdapter } from './prototype/voice-adapter';
 import { installPrototypeBrowserAdapter } from './prototype/browser-adapter';
 import { installCalendarAdapter } from './prototype/calendar-adapter';
+import {installGoogleCalendarViewAdapter} from './prototype/google-calendar-view-adapter';
 import { installSettingsAdapter } from './prototype/settings-adapter';
 import { ConnectionChooser, connectionController } from './runtime/connection-ui';
+import {GoogleConnectionsPanel} from './runtime/google-connection-ui';
 import { installNotesTrashAdapter } from './prototype/notes-trash-adapter';
 import { installInboxCloudAdapter, inboxAttention, subscribeInboxAttention } from './prototype/inbox-cloud-adapter';
 import { installUseInEmailReview } from './prototype/use-in-email-review';
@@ -102,6 +104,7 @@ if (!fixture) {
   if(isAndroid)installContactsAdapter(Component,VIEWS);
   installCalendarFormDraftAdapter(Component, VIEWS);
   installCalendarEditDraftAdapter(Component, VIEWS);
+  installGoogleCalendarViewAdapter(Component, VIEWS);
   installNoteOriginAdapter(Component, VIEWS);
   installPrototypeDataAdapter(Component, VIEWS);
   // Notice rows feed only the development stand-in shade; product builds read no notice list (#416).
@@ -225,7 +228,7 @@ function Phone() {
     else if(action==='resume'){delete document.documentElement.dataset.devBackground;shell.unlock();window.dispatchEvent(new Event('focus'));}
     if(['power','unlock','boot','background','resume'].includes(action))window.dispatchEvent(new Event('alpha:device-state'));
   }}/>}{testMocksEnabled && mock && <div className="mock-mode-banner" role="status"><span>Mock mode · simulated data and actions</span><button onClick={() => { void connectionController.offline().then(() => { const url = new URL(location.href); url.searchParams.delete('mode'); url.searchParams.delete('start'); location.assign(url.href); }); }}>Exit mock mode</button></div>}<Component configureChatPull={(surface:{input:boolean;scale:number})=>setPullSurface(current=>current.input===surface.input&&current.scale===surface.scale?current:surface)} chatPullBinding={chatPullBinding} phoneSurface assistantSurface={assistantSurface} onCloseAssistant={closeAssistant} onReopenStartupAccess={isAndroid && !fixture && !assistantSurface ? reopenStartupPermissions : undefined} systemShell={launcherPresentation} systemShade={systemShade} nativeSystemChrome={isAndroid || !launcherPresentation} initial={testMocksEnabled && fixture ? query.get('start') || 'home' : 'home'} theme={initialTheme} ref={(value: any) => { shell = value; }} />
-{!fixture && <><ConnectionChooser />{!assistantSurface && <><HostedDigestPanel />{!connection.open && <StartupPermissions />}</>}</>}</>;
+{!fixture && <><ConnectionChooser /><GoogleConnectionsPanel />{!assistantSurface && <><HostedDigestPanel />{!connection.open && <StartupPermissions />}</>}</>}</>;
 }
 /** Android's locale and 24-hour setting; WebView Intl alone does not follow the latter. */
 async function applyDeviceLocale() {

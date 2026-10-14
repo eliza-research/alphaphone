@@ -121,4 +121,45 @@ const fakeApi=()=>{const store={photos:{album:'device'}};return {store,api:{get:
   library.dispose();
  }
 }
+// Delayed reads from an earlier visit/grant must never mutate the new catalog.
+for (const operation of ['changes', 'validate']) {
+ const {state,port}=fakePort(),{api}=fakeApi(),library=createDeviceLibrary(port,()=>true);
+ library.tile(api);library.album({},api);await tick();
+ let complete;
+ const original=port[operation];
+ port[operation]=()=>new Promise(resolve=>{complete=resolve;});
+ state.listeners.libraryChanged();await tick();
+ assert.equal(typeof complete,'function',operation+' read started');
+ library.leave();port[operation]=original;
+ state.rows=[4,3,2,1];library.tile(api).open();await tick();
+ complete(operation==='changes'?{reset:false,items:[{...item(3),trashed:true}],generation:41}:{items:[{id:item(3).id,status:'missing'}]});
+ await tick();
+ assert.deepEqual(library.album({},api).items.map(row=>row.nativeMediaId),state.rows.map(row=>item(row).id),operation+' cannot remove a fresh item after reopen');
+ library.dispose();
+}
+{
+ const {state,port}=fakePort(),{api}=fakeApi(),library=createDeviceLibrary(port,()=>true);
+ let complete;
+ const page=port.page;
+ port.page=async options=>{const snapshot=await page(options);return new Promise(resolve=>{complete=()=>resolve(snapshot);});};
+ library.tile(api);library.album({},api);await tick();
+ assert.equal(typeof complete,'function','page started before revoke');
+ state.scope='denied';state.listeners.scopeChanged(await port.scope());await tick();
+ complete();await tick();
+ const view=library.album({},api);
+ assert.equal(view.count,'Not allowed');assert.equal(view.items.length,0,'pre-revocation page cannot restore removed media');
+ library.dispose();
+}
+{
+ const {state,port}=fakePort(),{api}=fakeApi(),library=createDeviceLibrary(port,()=>true);
+ let reject;
+ const page=port.page;
+ port.page=()=>new Promise((resolve,fail)=>{reject=fail;});
+ library.tile(api);library.album({},api);await tick();
+ assert.equal(typeof reject,'function','old page pending');
+ library.leave();port.page=page;state.rows=[4,3,2,1];library.tile(api).open();await tick();
+ reject(Object.assign(Error('old grant denied'),{code:'LIBRARY_DENIED'}));await tick();
+ assert.deepEqual(library.album({},api).items.map(row=>row.nativeMediaId),state.rows.map(row=>item(row).id),'an old denial must not clear a fresh catalog');
+ library.dispose();
+}
 console.log('PASS photo library adapter');

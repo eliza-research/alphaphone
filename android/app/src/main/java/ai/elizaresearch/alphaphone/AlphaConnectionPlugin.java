@@ -193,7 +193,7 @@ public final class AlphaConnectionPlugin extends Plugin {
   if(seen.contains("reminders.local-record.v1")&&seen.contains("reminders.local-record.v2"))return false;
   return true;
  }
- private enum RequestOperation { CLI_CREATE, CLI_POLL, IDENTITY, BALANCE, ENTITLEMENT, ENTITLEMENT_KEYS, OTHER }
+ private enum RequestOperation { CLI_CREATE, CLI_POLL, IDENTITY, BILLING_LIMITS, ENTITLEMENT, ENTITLEMENT_KEYS, REDEEM, OTHER }
  private enum RequestStage { VALIDATE, CONNECT, WRITE, STATUS, READ, PARSE, RESOLVE }
  /** Never include exception messages, request identifiers or transport data in diagnostics. */
  private static String debugRequestFailure(RequestOperation operation,RequestStage stage,int status,Exception error) {
@@ -223,9 +223,10 @@ public final class AlphaConnectionPlugin extends Plugin {
      if("/api/auth/cli-session".equals(path))operation=RequestOperation.CLI_CREATE;
      else if(path!=null&&path.matches("/api/auth/cli-session/[0-9a-fA-F-]{36}"))operation=RequestOperation.CLI_POLL;
      else if("/api/v1/user".equals(path))operation=RequestOperation.IDENTITY;
-     else if("/api/v1/credits/balance".equals(path))operation=RequestOperation.BALANCE;
+     else if("/api/v1/billing/limits".equals(path))operation=RequestOperation.BILLING_LIMITS;
      else if("/api/v1/subscription/entitlement".equals(path))operation=RequestOperation.ENTITLEMENT;
      else if("/api/v1/subscription/entitlement-keys".equals(path))operation=RequestOperation.ENTITLEMENT_KEYS;
+     else if("/api/v1/subscription/redeem".equals(path))operation=RequestOperation.REDEEM;
     }
     int responseLimit=url.getPath().startsWith("/api/v1/eliza/google/gmail/inbox-v1/")?8*1024*1024:RESPONSE_LIMIT;
     String method = call.getString("method", "GET");

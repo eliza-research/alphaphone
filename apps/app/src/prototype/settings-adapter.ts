@@ -11,6 +11,8 @@ import { broaderPageNotice, switchValue } from './native-adapter';
 import { Capacitor } from '@capacitor/core';
 import { DailyApps } from '../daily';
 import { connectionController } from '../runtime/connection-ui';
+import {googleConnectionController} from '../runtime/google-connection-ui';
+import {GOOGLE_ACCOUNTS_CHANGED,googleDisconnectConfirmation,googleDisconnectMessage} from '../runtime/google-accounts';
 import { browserLocalAgentEnabled } from '../runtime/local-agent';
 import {developmentCartesiaVoiceEnabled} from '../runtime/development-cartesia-conversation';
 import type { GmailAccount } from '../runtime/cloud-protocol';
@@ -189,16 +191,17 @@ export function installSettingsAdapter(Component: any, views: Bag) {
   async function disconnectGmail(account: GmailAccount) {
     const cloud = connectionController.getCloudClient(), instance = owner;
     if (!cloud || !account.connectionId || gmailBusy) return;
-    if (!window.confirm(`Disconnect ${account.label} from Alpha Phone?\n\nEliza Cloud deletes its stored Gmail access for this account and this app stops reading it. No mail is deleted. Local drafts stay in this app until you discard them.`)) return;
+    if (!window.confirm(googleDisconnectConfirmation(account.label))) return;
     gmailBusy = account.connectionId; gmailNotice = ''; changed();
     try {
       const result = await disconnectGmailAccount(cloud.client, account.connectionId, new AbortController().signal);
       if (owner !== instance || connectionController.getCloudClient()?.sessionId !== cloud.sessionId) return;
       if (result.accounts) { gmailAccounts = result.accounts; gmail = gmailGrantLabel(result.accounts); }
       else gmail = 'Authorization not verified';
-      gmailNotice = disconnectMessage(result.outcome, account.label);
+      gmailNotice = googleDisconnectMessage(result.outcome, account.label);
       settingsApi?.toast(gmailNotice);
       window.dispatchEvent(new CustomEvent(GMAIL_ACCOUNTS_CHANGED, { detail: { source: 'settings' } }));
+      window.dispatchEvent(new Event(GOOGLE_ACCOUNTS_CHANGED));
     } catch { if (owner === instance) { gmailNotice = disconnectMessage('unconfirmed', account.label); gmail = 'Authorization not verified'; } }
     finally { gmailBusy = ''; if (owner === instance) changed(); }
   }
@@ -304,6 +307,8 @@ export function installSettingsAdapter(Component: any, views: Bag) {
       const next = JSON.stringify([connectionController.getSnapshot().session?.sessionId, connectionController.getCloudClient()?.sessionId]);
       if (next !== lastBinding) { lastBinding = next; void refreshCapabilities(); }
     });
+    this.googleAccountsChanged=()=>void refreshCapabilities();
+    window.addEventListener(GOOGLE_ACCOUNTS_CHANGED,this.googleAccountsChanged);
     this.deviceResume = DailyApps.addListener('appResumed', () => { void refresh(); void refreshCapabilities(); }).catch(() => null);
   };
   p.componentDidUpdate = function (previousProps: Bag, previousState: Bag) {
@@ -324,6 +329,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     window.removeEventListener('storage',this.appearanceStorageListener);
     window.removeEventListener('pageshow',this.appearanceResumeListener);
     this.settingsConnectionUnsubscribe?.();
+    window.removeEventListener(GOOGLE_ACCOUNTS_CHANGED,this.googleAccountsChanged);
     this.passwordLifecycle?.();
     void this.deviceResume?.then((listener: any) => listener?.remove()); unmount.call(this);
   };
@@ -420,6 +426,25 @@ export function installSettingsAdapter(Component: any, views: Bag) {
             nav('Default apps in Android','default-apps')]));
         }
         page.groups.push(group([{kNav:true,label:'Scheduled digests',lbl:'Scheduled digests',chev:true,noAB:true,go:()=>window.dispatchEvent(new Event('alpha:hosted-digests'))}]));
+        // Every Alpha Phone signs in to Eliza Cloud and holds a plan: account, plan and sign-in expiry.
+        const plan=connectionController.residentPlanSettings();
+        if(plan){
+          const day=(at:number)=>new Date(at).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+          page.groups.push(group([{kNav:true,label:'Eliza Cloud account & plan',lbl:'Eliza Cloud account & plan',val:plan.keyExpiring?'Sign-in expiring':plan.plan,hasVal:true,chev:true,noAB:true,go:()=>api.set({page:'cloud-plan'})}]));
+          if(state.page==='cloud-plan'){
+            const rows:Bag[]=[info('Account',plan.account??(plan.offline?'Eliza Cloud unreachable':'Not signed in')),info('Plan',plan.plan)];
+            if(plan.endsAt)rows.push(info(plan.status==='active'||plan.status==='trialing'||plan.status==='past_due'?'Plan runs until':'Plan ended',day(plan.endsAt)));
+            if(plan.keyExpiresAt)rows.push(info(plan.keyExpiring?'Sign-in expires soon':'Sign-in expires',day(plan.keyExpiresAt)));
+            const actions:Bag[]=plan.signedIn?[
+              ...(plan.keyExpiring?[{kNav:true,label:'Approve this phone again',lbl:'Approve this phone again',chev:true,noAB:true,go:()=>void connectionController.residentCloudLogin()}]:[]),
+              {kNav:true,label:'Redeem code',lbl:'Redeem code',chev:true,noAB:true,go:()=>connectionController.openPlan()},
+              {kNav:true,label:'Manage plan',lbl:'Manage plan',chev:true,noAB:true,go:()=>void connectionController.residentManagePlan()},
+              {kNav:true,label:'Sign out',lbl:'Sign out of Eliza Cloud',chev:true,noAB:true,go:()=>void connectionController.cloudSignOut()},
+            ]:plan.offline?[{kNav:true,label:'Check plan again',lbl:'Check plan again',chev:true,noAB:true,go:()=>void connectionController.startLocal()}]
+            :[{kNav:true,label:'Sign in with Eliza Cloud',lbl:'Sign in with Eliza Cloud',chev:true,noAB:true,go:()=>void connectionController.residentCloudLogin()}];
+            out.stack.push({isTop:false,notTop:true,cls:'enter',z:4,title:'Eliza Cloud account & plan',hasTitle:true,backLabel:'Back to Settings',back:()=>api.set({page:null}),hero:{},groups:[group(rows),group(actions)]});
+          }
+        }
         page.groups.push(group([{kNav:true,label:'Agent connection',lbl:'Agent connection',val:connectionController.getSnapshot().name,hasVal:true,chev:true,noAB:true,go:()=>connectionController.open()}]));
         if(native)page.groups.push(group([{kNav:true,label:'Reset Alpha data',lbl:'Reset Alpha data',sub:'Erase local Alpha data · device unlock required',hasSub:true,chev:true,noAB:true,go:async()=>{
           try{const result=await registerPlugin<{review():Promise<{status:string;message:string}>}>('AlphaReset').review();api.toast(result.message);}
@@ -446,14 +471,14 @@ export function installSettingsAdapter(Component: any, views: Bag) {
         continue;
       }
       if (page.title === 'Accounts') {
-        page.groups = [group([info('Eliza Cloud', cloudLabel), { kNav:true, label:'Manage Cloud account', lbl:'Manage Cloud account', chev:true, noAB:true, go:()=>connectionController.openCloudAccount() }, nav('Device accounts in Android', 'accounts')])];
+        page.groups = [group([info('Eliza Cloud', cloudLabel), { kNav:true, label:'Manage Cloud account', lbl:'Manage Cloud account', chev:true, noAB:true, go:()=>connectionController.openCloudAccount() }, {kNav:true,label:'Google accounts',lbl:'Google accounts',chev:true,noAB:true,go:()=>googleConnectionController.open()}, nav('Device accounts in Android', 'accounts')])];
       } else if (page.title === 'Connections') {
         const connected = gmailAccounts.filter(a => a.connected && a.connectionId);
-        page.groups = [group([info('Gmail', gmail),
+        page.groups = [group([{ kNav:true,label:'Manage Google accounts',lbl:'Manage Google accounts',chev:true,noAB:true,go:()=>googleConnectionController.open() },info('Gmail', gmail),
           ...connected.map(a => info(a.label, { modify: 'Connected · read and change access', readonly: 'Connected · read access', none: 'Connected · read access not granted' }[gmailGrantTier(a)])),
           ...(gmailNotice ? [info('Last change', gmailNotice)] : []),
           { kNav:true, label:'Open Inbox', lbl:'Open Inbox', chev:true, noAB:true, go:()=>api.open('inbox') },
-          ...connected.map(a => { const label = `Disconnect ${a.label}`; return { kNav:true, label, lbl:gmailBusy === a.connectionId ? 'Disconnecting…' : label, chev:true, noAB:true, go:()=>void disconnectGmail(a) }; }),
+          ...connected.map(a => { const label = `Disconnect Google account ${a.label}`; return { kNav:true, label, lbl:gmailBusy === a.connectionId ? 'Disconnecting…' : label, chev:true, noAB:true, go:()=>void disconnectGmail(a) }; }),
           { kNav:true, label:'Check Gmail connection', lbl:'Check Gmail connection', chev:true, noAB:true, go:()=>{ gmailNotice = ''; void refreshCapabilities(); } },
           info('Other connectors', 'Not connected')])];
       } else if (state.page === 'character' && page.hero?.kChar === true) {

@@ -2,11 +2,14 @@ export const clockActions = ["SET_ALARM", "SHOW_ALARMS", "SNOOZE_ALARM", "DISMIS
 export const clockProductRequirement = "\n# Alpha MVP delegates alarms to the real AOSP Clock provider.\nPRODUCT_PACKAGES += DeskClock\n";
 
 /** Read-only image admission. Handler availability does not prove ringing. */
-export function verifyAospClockHandlers(run, user) {
+export function verifyAospClockHandlers(run, user, expectedFingerprint) {
   if (!/^(0|[1-9]\d*)$/.test(user || "")) throw Error("Explicit Android user required");
-  const installed = run("shell", "pm", "list", "packages", "--user", user, "-e", "com.android.deskclock");
+  if (!expectedFingerprint?.trim()) throw Error("Explicit expected image fingerprint required (ALPHA_EXPECTED_IMAGE_FINGERPRINT)");
+  const fingerprint = run("shell", "getprop", "ro.build.fingerprint").trim();
+  if (fingerprint !== expectedFingerprint) throw Error("Image fingerprint differs from expected target");
+  const installed = run("shell", "pm", "list", "packages", "--user", user, "-s", "-e", "com.android.deskclock");
   if (!installed.split(/\r?\n/).includes("package:com.android.deskclock")) {
-    throw Error("Required AOSP DeskClock is not enabled for the selected user");
+    throw Error("Required system AOSP DeskClock is not enabled for the selected user");
   }
   const handlers = {};
   for (const action of clockActions) {
@@ -16,5 +19,5 @@ export function verifyAospClockHandlers(run, user) {
     if (!matches.length) throw Error(`Required Clock handler missing: ${action}`);
     handlers[action] = matches.map(line => line.trim());
   }
-  return { user, packageName: "com.android.deskclock", handlers, ringingVerified: false };
+  return { user, fingerprint, packageName: "com.android.deskclock", handlers, ringingVerified: false };
 }

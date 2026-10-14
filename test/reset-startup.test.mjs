@@ -19,6 +19,7 @@ test('pending reset retries before startup callbacks; accepted, refused and fail
   put('android/system/OsConstants.java',`package android.system; public class OsConstants {public static final int O_RDONLY=0;}`);
   put('android/system/Os.java',`package android.system; public class Os {public static java.io.FileDescriptor open(String path,int flags,int mode){return new java.io.FileDescriptor();}public static void fsync(java.io.FileDescriptor fd){}public static void close(java.io.FileDescriptor fd){} }`);
   put('ai/elizaresearch/alphaphone/Dependencies.java',`package ai.elizaresearch.alphaphone;
+class AlphaListenerPlugin {static boolean resetSaved=true;static boolean resetForData(android.content.Context c){return resetSaved;}}
 class NativeDigestHost {NativeDigestHost(android.content.Context c){NativeSourceHost.started++;}void read(){}}
 class NativeOwnerReminderHost {NativeOwnerReminderHost(android.content.Context c){NativeSourceHost.started++;}void read(){}}
 class NativeSourceHost {static int started;static void configure(Runnable r){started++;}static void configureOwnerReminderContext(Runnable r){started++;}}
@@ -35,6 +36,10 @@ public class ResetStartupTest {
   AlphaDataReset.record(app);check(AlphaDataReset.pending(new AlphaApplication()));
   for(int mode=0;mode<3;mode++){android.app.ActivityManager.mode=mode;try{AlphaApplication restarted=new AlphaApplication();restarted.attachBaseContext(app);throw new AssertionError("Providers would initialize before onCreate");}catch(android.os.Process.Exit stopped){}check(NativeSourceHost.started==0);check(AlphaDataReset.pending(app));}
   check(android.app.ActivityManager.calls==3);
+  AlphaListenerPlugin.resetSaved=false;
+  try{app.attachBaseContext(app);throw new AssertionError("Unacknowledged listener reset resumed");}catch(android.os.Process.Exit stopped){}
+  check(android.app.ActivityManager.calls==3);check(AlphaDataReset.pending(app));check(NativeSourceHost.started==0);
+  AlphaListenerPlugin.resetSaved=true;
   // Simulated system completion: only this fixture directory is erased. Fresh launch initializes.
   for(java.io.File f:android.content.Context.data.listFiles())check(f.delete());
   check(!AlphaDataReset.pending(app));app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==7);

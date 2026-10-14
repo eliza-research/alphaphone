@@ -82,6 +82,7 @@ test('audio and transcripts stay in RAM and invocation carries no content',()=>{
  const consent=readFileSync(join(source,'ConsentActivity.java'),'utf8');
  assert.match(consent,/consentPermissionsGranted\(/,'consent needs microphone and notifications');
  assert.doesNotMatch(consent,/System\.currentTimeMillis\(\),(15|60)/,'no wall-clock pauses');
+ assert.match(consent,/state\.getLong\(PENDING_PROCESS,0\)==processIdentity\(\)/,'a pending consent request survives recreation only within the same process');
  const app=readFileSync(join(source,'SenseApplication.java'),'utf8');
  for(const action of ['ACTION_USER_FOREGROUND','ACTION_USER_BACKGROUND','ACTION_SHUTDOWN','ACTION_APP_BLOCK_STATE_CHANGED','ACTION_NOTIFICATION_CHANNEL_BLOCK_STATE_CHANGED'])assert.match(app,new RegExp(action),action);
  assert.match(service,/ListenerPolicy\.callMode\(mode\)/,'ringing pauses');

@@ -82,7 +82,7 @@ function device() {
     const sandbox = {inboxUnsaved, InboxOperation, composerKind, composerContent, reviewBinding, reviewBindingRefusal, performance, queueMicrotask, checkOutgoingAttachments, outgoingAttachmentLimits,attachmentBytes, reviewMailAttachment, classifyGmailFailure, ...grants, crypto: globalThis.crypto, TextEncoder, structuredClone,
       secureConnectionStore: store, connectionController: controller, registerPlugin: () => ({}), DailyApps: {}, AbortController, DOMException, console, JSON, Promise, Set, Map, Error, Math, String, Array, Object,
       window: {confirm: () => true}, document: {documentElement: {dataset: {connectionMode: 'live'}}}};
-    vm.createContext(sandbox); for (const source of sources) vm.runInContext(source, sandbox);
+    sandbox.inboxLocalStore=sandbox.secureConnectionStore;vm.createContext(sandbox); for (const source of sources) vm.runInContext(source, sandbox);
     const provider = sandbox.inboxProviderControls(() => {}, text => toasts.push(text));
     const drafts = sandbox.inboxDrafts(() => {}, text => toasts.push(text), provider);
     // Wired exactly as inbox-cloud-adapter.ts wires them.
