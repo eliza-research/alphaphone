@@ -37,7 +37,12 @@ The secure-camera fixture passed resource admission and locked capture, while UI
 unlock return remained unresolved. Video capture/native decode/range serving passed
 but WebView playback failed on H.264/AMR-NB. Accessibility failed unlabelled controls
 and reading order. Those results must be rerun where current source changes behavior.
-The historical 93-class inventory is not current coverage of the newly merged tests.
+The historical 93-class inventory is not current coverage of the newly merged tests. The refreshed source inventory contains 168 native test classes (109 named-class runner entries, 59 without that admission) and 2,818 overlapping control/handler candidates across 332 renderer source files; these are review queues, not execution counts.
+Current fresh-guest receipts now pass Contacts catalog, photo mutation fencing,
+ordinary-APK image denial/navigation, installed browser resolution and system shade
+on both variants. A separate corrected Photos campaign passes native catalog checks
+and the visible Device library scope in both variants. Foreign-UID selected/revoked
+media, admitted-image Contacts/telephony and physical acceptance remain open.
 
 **October 12 execution update:** Both developer APK variants build and run on an
 owned API 37 Cuttlefish fixture. HOME acceptance passes 7 methods and restores
@@ -2284,3 +2289,63 @@ refused while owner 0 was still BOOTING after the framework crash. A full guest
 reboot was requested to recover the fixture before any further campaign. These
 platform failures are distinct from application assertions and current-source
 AOSP/Pixel qualification. The full-product goal remains open.
+
+
+## October 13 fresh-guest recovery and completed new-feature checks
+
+The previous fixture's secondary-user failure reproduced after a full reboot:
+`cuttlefish-merge-provider-recovery` again encountered missing credential-encrypted
+user directories and a framework crash before either requested class executed.
+That guest was stopped with `stop_cvd --clear_instance_dirs=false`; its disks, user
+recovery record and logs are preserved in `alphaphone-audit-secure-camera-cuttlefish`.
+The original failed campaign is not relabeled as passing.
+
+Created a separate owned container `alphaphone-audit-merge-cuttlefish`, instance 13,
+ADB `127.0.0.1:6532`, using the same historical secure-camera v2 images read-only,
+with fresh encrypted userdata. It booted to RUNNING_UNLOCKED, WebView 157 and the
+same image digest. `merge-fresh-cvd-boot.json` records its identity. This is fresh
+fixture recovery, not a current-source AOSP build or a fix to Android's storage bug.
+
+At `783d0bbdf`, ImageCapabilities now dispatches each query navigation once and uses
+the existing navigation-aware StartupDocumentProbe before reading the new page.
+The old evaluation crossed document replacement and could lose its callback.
+Photos now opens Albums before checking the Device library tile; `af7463bda` selects
+the icon-only Albums button by its accessible label rather than nonexistent text.
+No Photos product behavior or capability gate was weakened to pass the test.
+
+`cuttlefish-photos-albums-fresh/results.json`, using archived
+`developer-apks-photos-albums`, records 18 passing methods and two Photos fixture
+failures across both variants. Both temporary users (10 and 11) were removed and
+owner 0 restored. In each variant:
+
+- ContactsCatalog: two methods pass bounded/literal provider search, exact identity
+  and revision review, and invalid/stale refusal on synthetic contacts. This does
+  not prove the production AOSP editor or a live account sync.
+- PhotosLibrary: one method passes real provider-generation change detection before
+  observer delivery, including stale page/cursor refusal.
+- ImageCapabilities: two methods pass ordinary-APK native role/tool/editor denial
+  without Android action dispatch and refusal of developer-query entry routes.
+- BrowserInstalledResolver: one method passes installed generic HTTPS-handler
+  visibility; it does not launch a website or external app.
+- SystemShade: three methods pass outcome mapping, flavor-specific permission and
+  actual shade behavior, including launcher interaction and standalone refusal.
+
+`cuttlefish-photos-accessible-tab/results.json`, using archived
+`developer-apks-photos-accessible-tab` at `af7463bda`, then passes PhotoLibrary's one
+method in each variant. It checks full grant scope, 60 synthetic images paged without
+duplicate/missing identities, stable IDs, literal search, thumbnail/inspect revision,
+changed/deleted record detection, refresh requirement and the visible Albums > Device
+library / Full access disclosure. Fixtures are created and cleaned by the app UID;
+this does not establish separate-UID foreign-media visibility, selected-only grants,
+revocation/process death, secure-folder boundaries or real-agent image selection.
+Both campaign packages were removed. Do not collapse the two exact APK cohorts into
+a single run or erase the intermediate failures.
+
+`verify-photos-accessible-tab.log`: full `npm run verify` passes (975 passes, zero
+failures, four TODOs), including production bundle audit. Both developer packaging
+variants and their instrumentation APKs build and pass archive checks. Their
+resident payload remains absent, speech candidate unqualified and releases unsigned.
+The refreshed ignored inventories are `native-inventory-merge-f348.json` and
+`interaction-inventory-merge-f348.json`; lexical candidate counts remain explicitly
+unreviewed. Production local speech routing, real resident startup/Cloud login/
+Cerebras, P-11 voice latency, image/physical/OTA and remaining view/flow gates are open.
