@@ -13,10 +13,10 @@ if(!isMainThread){
  try{const result=await runLeased({options,serial:options.serial,adb,withSecondaryUser:secondaryUserLifecycle({serial:options.serial,lease,imageFingerprint:options.imageFingerprint,adb})});parentPort.postMessage({result});}
  catch(error){parentPort.postMessage({error:String(error.stack||error)});}
 }else{
- const args=process.argv.slice(2),extra={};const capturePolling=args.includes('--capture-polling');if(capturePolling)args.splice(args.indexOf('--capture-polling'),1);const nativeCapture=args.includes('--native-capture');if(capturePolling&&!nativeCapture)throw Error('--capture-polling requires --native-capture');if(nativeCapture)args.splice(args.indexOf('--native-capture'),1);
+ const args=process.argv.slice(2),extra={};const preparedSpeech=args.includes('--prepare-speech');if(preparedSpeech)args.splice(args.indexOf('--prepare-speech'),1);const capturePolling=args.includes('--capture-polling');if(capturePolling)args.splice(args.indexOf('--capture-polling'),1);const nativeCapture=args.includes('--native-capture');if(preparedSpeech&&(!nativeCapture||!capturePolling))throw Error('--prepare-speech requires --native-capture --capture-polling');if(capturePolling&&!nativeCapture)throw Error('--capture-polling requires --native-capture');if(nativeCapture)args.splice(args.indexOf('--native-capture'),1);
  for(const flag of ['--container','--device']){const index=args.indexOf(flag);if(index<0||!args[index+1])throw Error('Requires --container and --device');extra[flag.slice(2)]=args[index+1];args.splice(index,2);}
  if(args.some(a=>['--classes','--all','--test-mocks','--offline-speech'].includes(a)))throw Error('Only controlled production capture or utterance campaigns are supported');
- const options=parseInstrumentationArgs([...args,'--classes',nativeCapture?(capturePolling?'LocalConversationCapturePolling':'LocalConversationCapture'):'LocalConversationUtterance']);
+ const options=parseInstrumentationArgs([...args,'--classes',nativeCapture?(preparedSpeech?'LocalConversationPreparedCapture':capturePolling?'LocalConversationCapturePolling':'LocalConversationCapture'):'LocalConversationUtterance']);
  if(!options.ownedCuttlefish||!/^127\.0\.0\.1:\d+$/.test(options.serial||'')||!options.output||!options.apkDir||!/^cvd-\d+$/.test(extra.device)||! /^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(extra.container))throw Error('Explicit owned guest, image, APK archive and new output required');
  const lease=await acquireDeviceLease(`android:${options.serial}`,{waitMs:0,ttlMs:Number.MAX_SAFE_INTEGER,stateDir:deviceLeaseStateDir(process.env)});
  let log,chain=Promise.resolve(),feederError,workerOutcome,browser;const events=[],audioDiagnostics=[];
@@ -33,8 +33,8 @@ if(!isMainThread){
   // one known waveform only on the current installed fixture's capture marker.
   browser=await openFixtureAudio({address:ip,device:extra.device,wav:original});
   const seen=new Set([...adb(['logcat','-d','-s','AlphaVoiceFixture:I','*:S']).matchAll(/CAPTURE_READY ([a-f0-9-]{36})/g)].map(match=>match[1]));let pending='';
-  log=spawn('adb',['-s',options.serial,'logcat','-T','1','-v','brief','AlphaVoiceFixture:I','AudioSource:W','AudioRecord:W','AudioFlinger:W','AHAL_StreamAlsaMonoPipe:W','*:S']);
-  log.stdout.on('data',chunk=>{pending+=chunk;let index;while((index=pending.indexOf('\n'))>=0){const line=pending.slice(0,index);pending=pending.slice(index+1);if(/AudioSource|AudioRecord|AudioFlinger|AHAL_StreamAlsaMonoPipe/.test(line)&&audioDiagnostics.length<10000)audioDiagnostics.push(line);const id=line.match(/CAPTURE_READY ([a-f0-9-]{36})/)?.[1];if(!id||seen.has(id))continue;seen.add(id);
+  log=spawn('adb',['-s',options.serial,'logcat','-T','1','-v','epoch','AlphaVoiceFixture:I','AudioSource:W','AudioRecord:W','AudioFlinger:W','AHAL_StreamAlsaMonoPipe:W','*:S']);
+  log.stdout.on('data',chunk=>{pending+=chunk;let index;while((index=pending.indexOf('\n'))>=0){const line=pending.slice(0,index);pending=pending.slice(index+1);if(/CAPTURE_READY|AudioSource|AudioRecord|AudioFlinger|AHAL_StreamAlsaMonoPipe/.test(line)&&audioDiagnostics.length<10000)audioDiagnostics.push(line);const id=line.match(/CAPTURE_READY ([a-f0-9-]{36})/)?.[1];if(!id||seen.has(id))continue;seen.add(id);
    chain=chain.then(async()=>{
     const event={id,fixtureSha256,transport:'preconnected-webaudio-pcm',readyAt:new Date().toISOString()};events.push(event);
     event.audioSettings=await browser.start();event.inputStartedAt=new Date().toISOString();console.log('Fixture PCM started for '+id);
@@ -45,7 +45,7 @@ if(!isMainThread){
   const worker=new Worker(new URL(import.meta.url),{workerData:{options,lease:{path:lease.path,lease:lease.lease}}});
   workerOutcome=await new Promise((resolve,reject)=>{let message;worker.on('message',value=>{message=value;});worker.on('error',reject);worker.on('exit',code=>code===0&&message?resolve(message):reject(Error('Instrumentation worker exited '+code)));});
   log.kill();await chain;await browser.close();browser=undefined;
-  const result={kind:nativeCapture?'controlled-virtual-native-capture':'controlled-virtual-voice-conversation',physicalMicrophone:false,realInference:false,capturePolling,containerId:inspect.Id,device:extra.device,browserClosed:true,events,...(feederError?{feederError}:{}),...workerOutcome};
+  const result={kind:nativeCapture?'controlled-virtual-native-capture':'controlled-virtual-voice-conversation',physicalMicrophone:false,realInference:false,capturePolling,preparedSpeech,containerId:inspect.Id,device:extra.device,browserClosed:true,events,...(feederError?{feederError}:{}),...workerOutcome};
   result.passed=!feederError&&workerOutcome.result?.passed===true&&events.length===options.variants.length&&events.every(e=>e.inputStoppedAt);
   await fs.writeFile(path.join(options.output,'android-audio.log'),audioDiagnostics.join('\n')+'\n');
   await fs.writeFile(path.join(options.output,'audio-input.json'),JSON.stringify(result,null,2)+'\n');console.log((result.passed?'PASS ':'FAIL ')+(nativeCapture?'controlled native capture':'controlled voice conversation'));if(!result.passed)process.exitCode=1;
