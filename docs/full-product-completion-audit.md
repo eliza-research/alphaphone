@@ -2702,3 +2702,30 @@ gate must request that snapshot. No real account, grant, payment, subscription
 purchase or provider request occurs. All other requests retain the fixture's
 allowlist. `developer-apks-capture-thread-plan` packages this test-only update at
 `e58cc5bf8`; production capture code remains the verified `22097db0f` code.
+
+
+`cuttlefish-capture-thread-conversation` initially failed both variants before
+recording because the new fixture loaded its static owner before assigning the run
+UUID. The screenshot `conversation-plan-gate.png` shows the invalid-response gate.
+`b10140e55` fixes initialization order; the rebuilt
+`developer-apks-capture-thread-plan-owner` then passes actual synthetic plan
+admission and reaches the real local listening UI.
+
+The subsequent `cuttlefish-capture-thread-conversation-owner` campaign still fails
+both spoken-turn assertions. Standalone reports three starts/two cancels; launcher
+reports seven starts/six cancels. Both report zero transcripts, local synthesis or
+playbacks and zero Cloud speech calls. Their WebViews answer the final observation,
+without the prior main-thread lifecycle timeout. Both browser injection receipts
+have start/stop timestamps and browserClosed=true; this proves the input attempt,
+not successful guest delivery. Users 33/34 were removed and owner restored.
+
+The separate `cvd-microphone-after-capture-thread` probe captures 10.069 seconds
+through the real virtual ALSA microphone but fails fixture identity: envelope
+correlation 0.466955, below the unchanged 0.85 requirement (previous admitted probe
+was 0.96598). Its guest temporary capture and browser were cleaned. This currently
+unqualified virtual input cannot establish local ASR correctness or failure from
+the zero-transcript turns. Next work must restore/requalify the controlled input
+path before repeating the spoken-turn test; it must also migrate signed-out local
+UI fixtures through the new required plan gate. Native responsive-stop and
+recording-limit passes do not establish barge-in, real Cloud/Cerebras, P-11 timing,
+current-source full AOSP or physical acceptance.
