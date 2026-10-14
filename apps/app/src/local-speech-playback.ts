@@ -6,7 +6,7 @@ export async function speakLocalText(text:string,signal:AbortSignal,onStarted?:(
  signal.throwIfAborted();const native=Capacitor.isNativePlatform(),chunks=native?planLocalSpeech(text):[text],voice=registerPlugin<any>('AlphaVoiceCloud');
  const controller=new AbortController(),cancel=()=>controller.abort(signal.reason);signal.addEventListener('abort',cancel,{once:true});if(signal.aborted)cancel();
  const timer=setTimeout(()=>controller.abort(Error('Speech did not finish.')),20*60*1000);let started=false;
- try{for(const chunk of chunks){controller.signal.throwIfAborted();await speakChunk(voice,native,chunk,controller.signal,()=>{if(!started){started=true;onStarted?.();}},queue,requirements);}}
+ try{for(const chunk of chunks){controller.signal.throwIfAborted();await speakChunk(voice,native,chunk,controller.signal,()=>{if(!started){started=true;onStarted?.();}},queue,requirements,undefined,native);}}
  finally{clearTimeout(timer);signal.removeEventListener('abort',cancel);}
 }
 async function speakChunk(voice:any,native:boolean,text:string,signal:AbortSignal,onStarted:()=>void,queue:boolean,requirements?:{execution?:'device'|'browser';assertCurrent:()=>void},prepare?:(requestId:string)=>Promise<{playbackId:string;execution?:string}>,strictDrain=false){

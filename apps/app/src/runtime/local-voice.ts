@@ -65,7 +65,9 @@ export function createOnDeviceVoice() {
       return operation(signal, async (_requestId, interrupted, ownedSignal) => {
         for (const chunk of chunks) {
           check(); ownedSignal.throwIfAborted();
-          await Promise.race([speakLocalText(chunk, ownedSignal, undefined, false, {execution:Capacitor.isNativePlatform()?'device':'browser',assertCurrent:check}), interrupted]);
+          // The owned signal cancels playback. Await its native drain rather than
+          // racing it with an early cancellation result that could admit new audio.
+          await speakLocalText(chunk, ownedSignal, undefined, false, {execution:Capacitor.isNativePlatform()?'device':'browser',assertCurrent:check});
         }
       });
     },
