@@ -21,24 +21,26 @@ async function nativeStub(page:Page,fixture:Fixture={}){
    status:{permissionGranted:true,appEnabled:true,interruption:'all',scope:'alpha-phone',channels:[{id:'c-reminders',name:'Reminders',importance:4,blocked:false,groupBlocked:false},{id:'c-results',name:'Scheduled digest results',importance:3,blocked:false,groupBlocked:false}]} as Record<string,any>,
    cross:{revision:'r1',enabled:false,paused:false,accessGranted:false,connected:false,history:true,apps:[]} as Record<string,unknown>,
    history:[{appLabel:'Stub Mail',state:'posted',at:now-60_000}] as unknown[],
-   items:[] as unknown[],openFails:false,unspecific:[] as string[],unavailable:[] as string[],torch:true,
+   items:[] as unknown[],openFails:false,unspecific:[] as string[],unavailable:[] as string[],torch:true,shadeOutcome:'opened' as string,
   };
   for(const key of drop)delete state.snapshot[key];
   w.truth={calls:[] as any[],shared:[] as string[],state,resume:()=>listeners.filter(l=>l.plugin==='DailyApps'&&l.event==='appResumed').forEach(l=>l.callback({}))};
   const methods=(names:string[])=>names.map(name=>({name,rtype:'promise'}));
   w.Capacitor={
    PluginHeaders:[
+        { name: 'AlphaDeletions', methods: methods(['pending']) },
     {name:'AlphaNotifications',methods:methods(['status','crossAppStatus','notificationHistory','list','open','dismiss','clear','openChannelSettings','openAppSettings','addListener','removeListener'])},
     {name:'AlphaVoiceCloud',methods:methods(['checkPermissions'])},
     {name:'Agent',methods:methods(['getStatus','start','stop','providerStatus'])},
     {name:'AlphaConnection',methods:methods(['secureRead','secureWrite','secureCompareExchange','secureRemove','addListener','removeListener'])},
     {name:'DeviceApps',methods:methods(['buildInfo'])},
     {name:'ElizaSystem',methods:methods(['getStatus','requestRole','getDeviceSettings','setFlashlight'])},
-    {name:'AlphaDevice',methods:methods(['snapshot','crashLog','clearCrashLog','recordRendererFailure','diagnosticsFacts','shareDiagnostics','openSettings'])},
+    {name:'AlphaDevice',methods:methods(['snapshot','crashLog','clearCrashLog','recordRendererFailure','diagnosticsFacts','shareDiagnostics','openSettings','openNotificationShade'])},
     {name:'DailyApps',methods:[{name:'addListener',rtype:'callback'},{name:'removeListener',rtype:'callback'}]},
    ],
    nativeCallback:(plugin:string,method:string,options:any,callback:(value:unknown)=>void)=>{if(method==='addListener'){listeners.push({plugin,event:options?.eventName,callback});return String(listeners.length);}return '0';},
    nativePromise:async(plugin:string,method:string,input:any)=>{
+        if (plugin === 'AlphaDeletions' && method === 'pending') return { deletions: [] };
     w.truth.calls.push({plugin,method,input});
     if(plugin==='AlphaNotifications'){
      if(method==='status')return JSON.parse(JSON.stringify(state.status));
@@ -70,6 +72,8 @@ async function nativeStub(page:Page,fixture:Fixture={}){
      if(method==='diagnosticsFacts')return {appVersion:'0.1.0',versionCode:7,variant:'launcher',buildType:'release',testMocks:false,sdkInt:36,androidRelease:'16',securityPatch:'2026-09-05',runtimeHashes:{'agent/alpha-source.json':'c'.repeat(64)},apiKey:'csk-synthetic-provider-key'};
      if(method==='shareDiagnostics'){w.truth.shared.push(input.text);return {status:'opened'};}
      if(method==='clearCrashLog'||method==='recordRendererFailure')return {};
+     // Android's answer to launcher Home asking for its shade (SystemShade.java); 'throw' stands for a lost bridge.
+     if(method==='openNotificationShade'){if(state.shadeOutcome==='throw')throw Error('Bridge unavailable');return {status:state.shadeOutcome};}
      if(method==='openSettings'){if(state.unavailable.includes(input.page))throw Error('This Android settings page is unavailable');return {status:'opened',page:input.page,specific:!state.unspecific.includes(input.page)};}
     }
     throw Error('Unexpected native operation '+plugin+'.'+method);
@@ -97,121 +101,66 @@ async function openSettings(page:Page){
  await page.getByRole('button',{name:'Settings',exact:true}).click();
  await expect(page.locator('html')).toHaveAttribute('data-active-view','settings');
 }
-async function openShade(page:Page){
- await start(page);
- // Alpha's notifications open from their Home handle; the top-edge swipe is Android's (docs/gesture-zones.md).
- await page.getByRole('button',{name:'Open notifications',exact:true}).click();
- const shade=page.locator('[data-alpha-layer="shade"]');
- await expect(shade).toHaveAttribute('aria-hidden','false');
- return shade;
+/** Android's shade is the one notification and quick-settings surface (#416, #417): no Alpha panel or tile exists. */
+const alphaShade=(page:Page)=>page.locator('[data-alpha-layer="shade"]');
+const shadeRequests=(page:Page)=>page.evaluate(()=>(window as any).truth.calls.filter((c:any)=>c.plugin==='AlphaDevice'&&c.method==='openNotificationShade').length as number);
+/** A real pointer drag in the 412px phone canvas. */
+async function drag(page:Page,from:{x:number;y:number},dy:number){
+ const box=(await page.locator('[data-screen]').boundingBox())!,scale=box.width/412;
+ await page.mouse.move(box.x+from.x*scale,box.y+from.y*scale);await page.mouse.down();
+ await page.mouse.move(box.x+from.x*scale,box.y+(from.y+dy)*scale,{steps:10});await page.mouse.up();
 }
-// A handoff tile's accessible name starts with its label and carries the reported state; the flashlight's is its label.
-const tile=(page:Page,name:string)=>page.locator('[data-alpha-layer="shade"]').getByRole('button',{name:new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(, |$)')});
-/** A tile that opens an Android page is a plain button named with the state Android reported; it is never announced as a toggle. */
-async function expectHandoffTile(page:Page,name:string,state:'on'|'off'|null,opens='opens Android settings'){
- await expect(tile(page,name)).toHaveAccessibleName(name+(state?', '+state:'')+', '+opens);
- await expect(tile(page,name)).not.toHaveAttribute('aria-pressed',/.*/);
- await expect(tile(page,name)).not.toHaveAttribute('role',/.*/);
-}
-const tileState=(page:Page,name:string)=>tile(page,name).locator('[data-tile-state]');
 /** Values that exist only in the reference fixtures or as prototype simulations. */
 const fixtureValues=['you@gmail.example','you@alpha.example','Alpha Home','Studio 5G','Ritual Coffee','Neighbors_2.4','Pixel Buds Pro 2','Keyboard K3','Kitchen Speaker','Vision 2B','Core 7B','elizaOS 2.1','AC1.260915','Alpha Compute phone','Powered by elizaOS','Alpha Mobile','3.2 of 20 GB','2,418 items','About 1 day','Redaction on','Redaction receipt','Enclave lock','Memory wiped','Wipe memory','Up to date','Check for updates','Cloud fallback','Charge to 80%','Verbose logs','Agent summaries','Last sync','Export logs','Logs saved','Pair new device','Tap to pair','Hey Alpha','Speak replies','Proactive briefings','Roaming','This month','Device uptime','NPU'];
 const noFixtures=(text:string,where:string)=>{for(const value of fixtureValues)expect(text,`${where} shows the fixture value "${value}"`).not.toContain(value);};
 
-test('shade tiles show the switch states Android reported and only open the matching Android page',async({page})=>{
+test('launcher Home asks Android for its own shade and draws no Alpha shade, tiles or brightness',async({page})=>{
  await nativeStub(page);
- const shade=await openShade(page);
- const expected:Array<[string,'on'|'off'|null,string]>=[['Wi-Fi','on','On'],['Bluetooth','off','Off'],['Do not disturb','off','Off'],['Agent can listen',null,'Permissions'],['Location','on','On'],['Airplane mode','off','Off']];
- for(const [name,state,text] of expected){
-  await expect(tileState(page,name)).toHaveText(text);
-  await expectHandoffTile(page,name,state,name==='Agent can listen'?'opens Android permission settings':undefined);
+ await start(page);
+ // The shipped renderer has no Alpha notification panel and no quick-settings tiles at all.
+ await expect(alphaShade(page)).toHaveCount(0);
+ for(const name of ['Wi-Fi','Bluetooth','Do not disturb','Agent can listen','Airplane mode','Flashlight','Display settings','Clear all'])
+  await expect(page.getByRole('button',{name:new RegExp('^'+name+'(, |$)')}),name).toHaveCount(0);
+ const button=page.getByRole('button',{name:'Open notifications',exact:true});
+ await expect(button).toBeVisible();
+ await expect(button).not.toHaveAttribute('aria-controls',/.*/);
+ // Android accepted the request: no message, nothing else drawn.
+ await button.click();
+ await expect.poll(()=>shadeRequests(page)).toBe(1);
+ await expect(alphaShade(page)).toHaveCount(0);
+ await expect(page.getByText(/Swipe down from the top edge/)).toHaveCount(0);
+ await expect(page.locator('html')).toHaveAttribute('data-active-view','home');
+ // A pull down on empty Home asks the same way.
+ await drag(page,{x:206,y:420},240);
+ await expect.poll(()=>shadeRequests(page)).toBe(2);
+ // A pull with the composer focused (keyboard up) does not.
+ await page.locator('textarea[data-alpha-composer]').focus();
+ await drag(page,{x:206,y:420},240);
+ await page.waitForTimeout(300);
+ expect(await shadeRequests(page)).toBe(2);
+ await page.locator('textarea[data-alpha-composer]').blur();
+ // Every other outcome says how to reach Android's notifications and never claims they opened.
+ const fallback:Record<string,string>={
+  'permission-missing':'Android did not open its notifications from Alpha. Swipe down from the top edge of the screen instead.',
+  'unsupported':'Android did not open its notifications from Alpha. Swipe down from the top edge of the screen instead.',
+  'not-in-front':'Alpha is not in front. Swipe down from the top edge of the screen for Android notifications.',
+  'throw':'Android did not open its notifications from Alpha. Swipe down from the top edge of the screen instead.',
+ };
+ for(const [outcome,text] of Object.entries(fallback)){
+  await set(page,{shadeOutcome:outcome});
+  const before=await shadeRequests(page);
+  await button.click();
+  await expect.poll(()=>shadeRequests(page)).toBe(before+1);
+  await expect(page.getByText(text,{exact:true}).last()).toBeVisible();
+  await expect(alphaShade(page)).toHaveCount(0);
  }
- // The flashlight is the only toggle. Until Android confirms a state it claims none.
- await expect(tileState(page,'Flashlight')).toHaveText('Tap to switch');
- await expect(tile(page,'Flashlight')).toHaveAccessibleName('Flashlight');
- await expect(tile(page,'Flashlight')).not.toHaveAttribute('aria-pressed',/.*/);
- // No shade tile other than the flashlight is exposed as a toggle or switch.
- expect(await shade.locator('[aria-pressed],[role="switch"],[aria-checked]').evaluateAll(list=>list.map(e=>e.getAttribute('aria-label')))).toEqual([]);
- await expect(shade.getByRole('button',{name:'Enclave lock',exact:true})).toHaveCount(0);
- noFixtures(await shade.innerText(),'Shade');
- await shade.screenshot({path:test.info().outputPath('shade-tiles.png')});
-
- // A tap never changes the tile by itself: it opens the Android page for that switch.
- const pages:Array<[string,string]>=[['Wi-Fi','wifi'],['Bluetooth','bluetooth'],['Do not disturb','dnd'],['Agent can listen','privacy'],['Location','location'],['Airplane mode','airplane']];
- for(const [name,target] of pages){
-  const before=(await opened(page)).length;
-  await tile(page,name).click();
-  await expect.poll(async()=>(await opened(page)).slice(before)).toEqual([target]);
- }
- for(const [name,state,text] of expected){
-  await expect(tileState(page,name)).toHaveText(text);
-  await expectHandoffTile(page,name,state,name==='Agent can listen'?'opens Android permission settings':undefined);
- }
- // Coming back re-reads Android. The owner turned Bluetooth on and Wi-Fi off there.
- await set(page,{snapshot:{bluetoothEnabled:true,wifiEnabled:false,wifiActive:false,interruptionFilter:'priority'}});
- await resume(page);
- await expect(tileState(page,'Bluetooth')).toHaveText('On');
- await expectHandoffTile(page,'Bluetooth','on');
- await expect(tileState(page,'Wi-Fi')).toHaveText('Off');
- await expectHandoffTile(page,'Wi-Fi','off');
- await expect(tileState(page,'Do not disturb')).toHaveText('On');
- await expectHandoffTile(page,'Do not disturb','on');
-
- // Android's own quick settings changed a switch while this shade stayed open: no tile was tapped
- // and the app never paused, so only the window regaining focus says to read again.
- await set(page,{snapshot:{bluetoothEnabled:false,airplaneMode:true}});
- await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
- await expect(tileState(page,'Bluetooth')).toHaveText('Off');
- await expect(tileState(page,'Airplane mode')).toHaveText('On');
- // Android stops answering: every switch loses its state instead of keeping the last one.
- await page.evaluate(()=>{const original=(window as any).Capacitor.nativePromise;(window as any).truth.restore=()=>{(window as any).Capacitor.nativePromise=original;};(window as any).Capacitor.nativePromise=async(plugin:string,method:string,input:unknown)=>{if(plugin==='AlphaDevice'&&method==='snapshot')throw Error('Device facts could not be read');return original(plugin,method,input);};});
- await resume(page);
- for(const name of ['Wi-Fi','Bluetooth','Do not disturb','Location','Airplane mode']){
-  await expect(tileState(page,name)).toHaveText('Open settings');
-  await expectHandoffTile(page,name,null);
- }
- await page.evaluate(()=>(window as any).truth.restore());
- await resume(page);
- await expect(tileState(page,'Airplane mode')).toHaveText('On');
-
- // The flashlight is the one direct control: it shows only what Android confirmed.
- await tile(page,'Flashlight').click();
- await expect(tileState(page,'Flashlight')).toHaveText('On');
- await expect(tile(page,'Flashlight')).toHaveAttribute('aria-pressed','true');
- await expect(tile(page,'Flashlight')).toHaveAccessibleName('Flashlight');
- await tile(page,'Flashlight').click();
- await expect(tileState(page,'Flashlight')).toHaveText('Off');
- await expect(tile(page,'Flashlight')).toHaveAttribute('aria-pressed','false');
- expect(await shade.locator('[aria-pressed]').evaluateAll(list=>list.map(e=>e.getAttribute('aria-label')))).toEqual(['Flashlight']);
- // Brightness is a handoff too; there is no slider that pretends to set it.
- await expect(shade.getByRole('slider')).toHaveCount(0);
- await shade.getByRole('button',{name:'Display settings',exact:true}).click();
- await expect.poll(async()=>(await opened(page)).at(-1)).toBe('display');
  // Nothing in the session asked Android to change a radio, sensor or sound switch.
  const names=await callNames(page);
- expect(names.filter(name=>/\.set(?!Flashlight)|\.toggle|\.enable|\.disable/i.test(name))).toEqual([]);
+ expect(names.filter(name=>/\.set|\.toggle|\.enable|\.disable/i.test(name))).toEqual([]);
 });
 
 test('switches Android does not report are shown as a handoff, never as off, and a broader page is named',async({page})=>{
  await nativeStub(page,{drop:['wifiEnabled','bluetoothEnabled','airplaneMode','locationEnabled','mobileDataEnabled','interruptionFilter','adaptiveBrightness','appVersionCode','appUpdatedAt'],snapshot:{wifiActive:false}});
- await openShade(page);
- for(const name of ['Wi-Fi','Bluetooth','Do not disturb','Location','Airplane mode']){
-  await expect(tileState(page,name)).toHaveText('Open settings');
-  await expectHandoffTile(page,name,null);
- }
- // The phone has no separate airplane page: the broader page opens and the app says so.
- await set(page,{unspecific:['airplane']});
- await tile(page,'Airplane mode').click();
- await expect(page.getByText('Opened Android network settings. This phone has no separate page for that switch.',{exact:true})).toBeVisible();
- // Do Not Disturb falls back to the priority page, and is not called a network page.
- await set(page,{unspecific:['dnd']});
- await tile(page,'Do not disturb').click();
- await expect(page.getByText('Opened Android priority settings. This phone has no separate Do Not Disturb page.',{exact:true})).toBeVisible();
- // No flashlight Alpha can control: the tile goes away instead of staying as a dead switch.
- await set(page,{torch:false});
- await tile(page,'Flashlight').click();
- await expect(tile(page,'Flashlight')).toHaveCount(0);
-
  await openSettings(page);
  await expect(current(page).getByRole('button',{name:'Bluetooth',exact:true})).toContainText('Manage in Android');
  await expect(current(page).getByRole('button',{name:'Wi-Fi',exact:true})).toContainText('Not active');
@@ -340,30 +289,6 @@ test('notification denial and re-enable are read back from Android, and local hi
  await expect(current(page)).not.toContainText('Channel allowed');
 });
 
-test('a notification whose target is gone fails safely and leaves the shade truthful',async({page})=>{
- await nativeStub(page);
- const shade=await openShade(page);
- // The open shade re-reads Android's list; the target of this row is already gone.
- await set(page,{items:[{id:'notice-1',revision:'rev-1',source:'own',appLabel:'Alpha Phone',title:'Scheduled result ready',text:'Open Alpha Phone to review.',at:Date.now(),clearable:true,canOpen:true}],openFails:true});
- const notice=shade.getByRole('button',{name:'Open Scheduled result ready',exact:true});
- await expect(notice).toBeVisible();
- await notice.click();
- await expect(page.getByText('The notification changed or could not be updated.',{exact:true})).toBeVisible();
- // No navigation, no success message, and the row stays until Android says it is gone.
- await expect(page.locator('html')).not.toHaveAttribute('data-active-view','settings');
- await expect(shade).toHaveAttribute('aria-hidden','false');
- await expect(notice).toBeVisible();
- expect(await page.evaluate(()=>(window as any).truth.calls.filter((c:any)=>c.method==='open').map((c:any)=>c.input))).toEqual([{id:'notice-1',revision:'rev-1',source:'own'}]);
- await set(page,{items:[]});
- await expect(notice).toHaveCount(0);
- // A row Android marks as having no action never calls open.
- await set(page,{items:[{id:'notice-2',revision:'rev-2',source:'own',appLabel:'Alpha Phone',title:'Alpha Phone notification',text:'Content hidden',at:Date.now(),clearable:false,canOpen:false}],openFails:false});
- const hidden=shade.getByRole('button',{name:'Open Alpha Phone notification',exact:true});
- await hidden.click();
- await expect(page.getByText('This notification has no available action.',{exact:true})).toBeVisible();
- expect(await page.evaluate(()=>(window as any).truth.calls.filter((c:any)=>c.method==='open').length)).toBe(1);
-});
-
 test('the flag-off build exports redacted diagnostics with the real version and no update claim',async({page})=>{
  await nativeStub(page);
  await openSettings(page);
@@ -398,13 +323,13 @@ test('the browser build of Settings shows no fixture value and no radio or senso
  const about=report.find(row=>row.startsWith('About: '))||'';
  expect(about).toMatch(/Updates Alpha does not check for updates/);
  expect(about).not.toContain('Installed or last updated');
- // The shade offers no radio or sensor switch a browser could not honour.
- const shade=await openShade(page);
- for(const name of ['Wi-Fi','Bluetooth','Airplane mode','Location','Do not disturb','Agent can listen']){
-  const button=shade.getByRole('button',{name,exact:true});
-  if(await button.count())await expect(button).toBeDisabled();
- }
- // A tile the browser cannot read or switch claims no pressed state, and none announces a reference value as on.
- expect(await shade.locator('[aria-pressed]').evaluateAll(list=>list.map(e=>e.getAttribute('aria-label')))).toEqual([]);
- noFixtures(await shade.innerText(),'Browser shade');
+ // The browser build is the standalone app: no Alpha shade, no tiles and no notifications button (#416, #417).
+ await page.goto('/');
+ await page.getByRole('button',{name:'Settings',exact:true}).waitFor({state:'visible'});
+ await expect(page.locator('html')).toHaveAttribute('data-active-view','home');
+ await expect(alphaShade(page)).toHaveCount(0);
+ await expect(page.locator('[data-alpha-shade-handle]')).toHaveCount(0);
+ await drag(page,{x:206,y:420},240);
+ await expect(alphaShade(page)).toHaveCount(0);
+ expect(await page.locator('[aria-pressed]').evaluateAll(list=>list.map(e=>e.getAttribute('aria-label')))).toEqual([]);
 });

@@ -29,6 +29,8 @@ final class CalendarAvailabilityReader {
  static final long DAY=86400000L,MAX_SPAN=7L*DAY;
  /** A chosen calendar is gone or its account, name, owner or access level changed since review. */
  static final class SourceChanged extends Exception {SourceChanged(){super("Selected calendar changed");}}
+ /** CalendarProvider does not prove whether a remote calendar has finished syncing. */
+ static final class FreshnessUnknown extends Exception {FreshnessUnknown(){super("Calendar sync freshness is unknown");}}
  /** More rows than one reviewed read may cover. Nothing is truncated silently. */
  static final class TooMany extends Exception {TooMany(){super("Availability read exceeds its bound");}}
  private static final DateTimeFormatter INSTANT=new DateTimeFormatterBuilder().appendInstant(3).toFormatter();
@@ -84,6 +86,15 @@ final class CalendarAvailabilityReader {
    if(!id.matches("[1-9][0-9]{0,18}")||!source.getString("revision").matches("[a-f0-9]{64}")||!ids.add(id))throw new IllegalArgumentException("Invalid calendar selection");
   }
   assertSources(resolver,selected);
+  // A successful query of a synced cache cannot establish remote availability. Only
+  // device-local calendars have no remote freshness dependency. Do not read partial
+  // intervals from the remaining sources when any selected source is unknown.
+  for(String id:ids){
+   try(Cursor source=resolver.query(ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI,Long.parseLong(id)),
+     new String[]{CalendarContract.Calendars.ACCOUNT_TYPE},null,null,null)){
+    if(source==null||!source.moveToFirst()||!CalendarContract.ACCOUNT_TYPE_LOCAL.equals(source.getString(0))||source.moveToNext())throw new FreshnessUnknown();
+   }
+  }
   long civilBegin=Instant.ofEpochMilli(begin).atZone(zone).toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
   LocalDate lastDay=Instant.ofEpochMilli(end-1).atZone(zone).toLocalDate();
   long civilEnd=lastDay.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();

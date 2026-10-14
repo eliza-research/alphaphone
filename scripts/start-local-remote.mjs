@@ -9,6 +9,7 @@ import {execFileSync} from 'node:child_process';
 import {preparePrivateRuntimeProfile,runtimeEnvironment,startPrivateRuntimeProcess,writePrivateRuntimeJson} from '../vendor/eliza/packages/agent/native-host/private-runtime-launch.mjs';
 import {AGENT_MODEL,agentModelEnvironment} from './agent-model.mjs';
 import {agentTtsEnvironment} from './agent-tts.mjs';
+import {developmentCartesiaEnvironment} from './dev-cartesia.mjs';
 import {agentAsrEnvironment,warmAgentAsr} from './agent-asr.mjs';
 import {nativeViewDeclarationsJson} from './native-view-policy.mjs';
 const source = process.env.ALPHA_ELIZA_SOURCE ? path.resolve(process.env.ALPHA_ELIZA_SOURCE) : sourceDirectory(path.resolve(import.meta.dirname,'..'));
@@ -43,6 +44,7 @@ const modelEnvironment=agentModelEnvironment(privateProfile.config);
 if(!/^[a-f0-9]{64}$/.test(privateProfile.token))throw Error('Invalid owner token');
 const asrEnvironment = agentAsrEnvironment();
 const ttsEnvironment = agentTtsEnvironment();
+const cartesiaEnvironment = developmentCartesiaEnvironment();
 if (asrEnvironment.ELIZA_WHISPER_BACKEND === 'auto' && redaction !== 'all') {
   const lock=JSON.parse(fs.readFileSync(new URL('../upstream.lock.json',import.meta.url),'utf8'));
   verifySource(source,lock.commit);
@@ -59,7 +61,7 @@ try {
 }
 const env=runtimeEnvironment({
  inherited:process.env,allow:['PATH','TMPDIR','LANG','SHELL','USER','LOGNAME','HOME'],
- settings:{CEREBRAS_API_KEY:providerKey,...modelEnvironment,...asrEnvironment,...ttsEnvironment,...(redaction==='all'?{ELIZA_SECRET_SWAP_ENABLED:'true',ELIZA_PII_SWAP_ENABLED:'true'}:{})},
+ settings:{CEREBRAS_API_KEY:providerKey,...modelEnvironment,...asrEnvironment,...ttsEnvironment,...cartesiaEnvironment,...(redaction==='all'?{ELIZA_SECRET_SWAP_ENABLED:'true',ELIZA_PII_SWAP_ENABLED:'true'}:{})},
  owned:{ELIZA_HEADLESS:'1',ELIZA_DISTRIBUTION_PROFILE:'store',ELIZA_PLUGIN_SET:'lean-chat',ELIZA_REQUIRE_LOCAL_AUTH:'1',ELIZA_API_BIND:'127.0.0.1',ELIZA_ALLOWED_HOSTS:'10.0.2.2',ELIZA_API_PORT:String(port),ELIZA_API_EXPOSE_PORT:'1',ELIZA_STATE_DIR:profile,ELIZA_HOST_CONTEXT_REVISION:'boot:'+crypto.randomUUID(),ELIZA_CONFIG_PATH:config,ELIZA_API_TOKEN:privateProfile.token,ELIZAOS_CLOUD_USE_INFERENCE:'false',ELIZA_LEAN_CHAT_WORKFLOWS:'1',ELIZA_NATIVE_VIEW_DECLARATIONS:nativeViewDeclarationsJson},
  remove:['ELIZAOS_CLOUD_API_KEY','OPENAI_API_KEY','ANTHROPIC_API_KEY'],
 });
@@ -70,7 +72,7 @@ try {
  const running=await startPrivateRuntimeProcess({command:process.env.ALPHA_BUN||'bun',args:['--no-install','--conditions=eliza-source',entry],cwd:profile,env,stdio:['ignore',log,log],
   async recordLaunch({pid,launchedAt}){
    const sourceManifest=path.join(source,'.alpha-runtime-source.json');
-   const metadata={localTtsConfigured:ttsEnvironment.ELIZA_KOKORO_ENABLED==='1',localAsrConfigured:asrEnvironment.ELIZA_WHISPER_ENABLED==='1',localAsrBackend:asrEnvironment.ELIZA_WHISPER_BACKEND,asrWarmup,egressRedactionRequested:redaction,sourceManifestSha256:fs.existsSync(sourceManifest)?crypto.createHash('sha256').update(fs.readFileSync(sourceManifest)).digest('hex'):null,pid,port,profile,source,revision:execFileSync('git',['rev-parse','HEAD'],{cwd:source,encoding:'utf8'}).trim(),startedAt:new Date(launchedAt).toISOString()};
+   const metadata={cartesiaConfigured:cartesiaEnvironment.ELIZA_SELF_HOSTED_VOICE_ENABLED==='1',localTtsConfigured:ttsEnvironment.ELIZA_KOKORO_ENABLED==='1',localAsrConfigured:asrEnvironment.ELIZA_WHISPER_ENABLED==='1',localAsrBackend:asrEnvironment.ELIZA_WHISPER_BACKEND,asrWarmup,egressRedactionRequested:redaction,sourceManifestSha256:fs.existsSync(sourceManifest)?crypto.createHash('sha256').update(fs.readFileSync(sourceManifest)).digest('hex'):null,pid,port,profile,source,revision:execFileSync('git',['rev-parse','HEAD'],{cwd:source,encoding:'utf8'}).trim(),startedAt:new Date(launchedAt).toISOString()};
    await writePrivateRuntimeJson(path.join(profile,'process.json'),metadata);
    console.log(JSON.stringify({...metadata,log:path.join(profile,'server.log')}));
   },

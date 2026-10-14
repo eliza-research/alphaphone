@@ -6,7 +6,7 @@ import org.json.*;
 /** Encrypted, bounded notification routes. A tap is a read request, never approval. */
 final class WorkflowNoticeTaps {
  static final class UnknownTap extends Exception {}
- static final String SLOT="workflow-notice-taps:v1";
+ static final String SLOT="workflow-notice-taps:v1", OWNER_SLOT="workflow-notice-owner:v1";
  static final String ACTION="ai.elizaresearch.alphaphone.OPEN_WORKFLOW_NOTICE", PREFIX="alpha-workflow-notice:";
  private static final Object LOCK=new Object();
  private final WorkflowNoticeDelivery.Storage storage;
@@ -38,13 +38,21 @@ final class WorkflowNoticeTaps {
  private boolean same(JSONObject a,JSONObject b)throws Exception{if(!keys(a).equals(keys(b)))return false;for(String k:keys(a))if(!a.get(k).equals(b.get(k)))return false;return true;}
  String prepare(String id,String binding,JSONObject input)throws Exception{synchronized(LOCK){
   if(id==null||!id.matches("[A-Za-z0-9_-]{1,128}")||binding==null||!binding.matches("[a-f0-9]{64}"))throw new IllegalArgumentException();
-  JSONObject exact=route(input),rows=ledger(),row=rows.optJSONObject(id);
+  JSONObject exact=route(input);if(!ownerMatches(exact))throw new IllegalStateException("Notification owner changed");JSONObject rows=ledger(),row=rows.optJSONObject(id);
   if(row!=null){if(!binding.equals(row.getString("binding"))||!same(exact,route(row.getJSONObject("route"))))throw new IllegalStateException("Notification route changed");return row.getString("token");}
   if(rows.has(id)||rows.length()>=512)throw new IllegalStateException("Notification routes full");
   String token=UUID.randomUUID().toString();rows.put(id,new JSONObject().put("binding",binding).put("route",exact).put("token",token).put("state","new").put("order",0));storage.write(SLOT,rows.toString());return token;
  }}
  String token(String id)throws Exception{synchronized(LOCK){JSONObject row=ledger().optJSONObject(id);return row==null?null:row.getString("token");}}
+ void owner(JSONObject owner)throws Exception{synchronized(LOCK){storage.write(OWNER_SLOT,new JSONObject().put("owner",owner==null?JSONObject.NULL:NoticeOwner.identity(owner)).toString());}}
+ boolean ownerMatches(JSONObject route)throws Exception{String raw=storage.read(OWNER_SLOT);if(raw==null)return true;return NoticeOwner.matches(new JSONObject(raw).optJSONObject("owner"),route);}
+ void fresh(String id)throws Exception{synchronized(LOCK){JSONObject rows=ledger(),row=rows.getJSONObject(id);row.put("token",UUID.randomUUID().toString()).put("state","new").put("order",0);storage.write(SLOT,rows.toString());}}
+ JSONArray suspendedApprovals(JSONObject owner,long now)throws Exception{synchronized(LOCK){
+  JSONArray out=new JSONArray();JSONObject rows=ledger();String raw=storage.read(WorkflowNoticeDelivery.APPROVAL_SLOT);JSONObject receipts=raw==null?new JSONObject():new JSONObject(raw);
+  for(String id:keys(rows)){JSONObject row=rows.getJSONObject(id),receipt=receipts.optJSONObject(id);if(!WorkflowNoticeDelivery.approvalId(id)||!NoticeOwner.matches(owner,row.getJSONObject("route"))||receipt==null||!"suspended".equals(receipt.optString("status"))||receipt.getLong("expiresAt")<=now)continue;out.put(new JSONObject().put("id",id).put("bindingHash",row.getString("binding")).put("expiresAt",receipt.getLong("expiresAt")).put("route",row.getJSONObject("route")));}return out;
+ }}
  private boolean confirmed(String id,JSONObject row)throws Exception{
+  if(!ownerMatches(row.getJSONObject("route")))return false;
   if(WorkflowNoticeDelivery.approvalId(id)){
    // An approval notice opens its run only while its receipt is posted; a decision or expiry withdraws it.
    String raw=storage.read(WorkflowNoticeDelivery.APPROVAL_SLOT);if(raw==null)return false;
@@ -65,7 +73,7 @@ final class WorkflowNoticeTaps {
  }}
  JSONObject pending()throws Exception{synchronized(LOCK){
   JSONObject rows=ledger(),selected=null;String selectedId=null;long order=-1;
-  for(String id:keys(rows)){JSONObject row=rows.getJSONObject(id);if("pending".equals(row.getString("state"))&&row.getLong("order")>order){selected=row;selectedId=id;order=row.getLong("order");}}
+  for(String id:keys(rows)){JSONObject row=rows.getJSONObject(id);if(ownerMatches(row.getJSONObject("route"))&&"pending".equals(row.getString("state"))&&row.getLong("order")>order){selected=row;selectedId=id;order=row.getLong("order");}}
   if(selected==null)return new JSONObject();
   return route(selected.getJSONObject("route")).put("token",selected.getString("token")).put("operationId",selectedId).put("bindingHash",selected.getString("binding")).put("retained",confirmed(selectedId,selected));
  }}
@@ -75,12 +83,11 @@ final class WorkflowNoticeTaps {
    row.put("state","consumed");storage.write(SLOT,rows.toString());return;
   }throw new UnknownTap();
  }}
- /** Approval routes prepared for an owner other than this one, in a stable order. Step notices are
-  * retained results and are never listed: only a pending approval is withdrawn on an owner change. */
- List<String> approvalsOfOtherOwners(String ownerId)throws Exception{synchronized(LOCK){
-  if(ownerId==null||ownerId.isBlank()||ownerId.length()>128||ownerId.indexOf('\0')>=0)throw new IllegalArgumentException("Invalid owner");
+ /** All owner-specific routes, in stable order: results share the same privacy boundary. */
+ List<String> noticesOfOtherOwners(JSONObject owner)throws Exception{synchronized(LOCK){
+  NoticeOwner.identity(owner);
   JSONObject rows=ledger();List<String> result=new ArrayList<>();
-  for(String id:keys(rows))if(WorkflowNoticeDelivery.approvalId(id)&&!ownerId.equals(rows.getJSONObject(id).getJSONObject("route").getString("ownerId")))result.add(id);
+  for(String id:keys(rows))if(!NoticeOwner.matches(owner,rows.getJSONObject(id).getJSONObject("route")))result.add(id);
   Collections.sort(result);return result;
  }}
  /** Frees a withdrawn or expired approval route. Its receipt is no longer posted, so even a captured tap could never open. */

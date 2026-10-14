@@ -21,6 +21,15 @@ public final class HostedResultNoticesTest {
   require(new JSONObject(slots.get(HostedResultNotices.LEDGER)).getJSONObject(monday).getString("phase").equals("superseded"),"superseded phase is durable");
   require("superseded".equals(notices.publish(retain.apply("run-monday","morning-loop")))&&posted.size()==3,"a superseded notice is never reposted");
   notices.capture(tuesday);String token=notices.peek().getString("token");notices.consume(token);require(!active.contains(tuesday)&&cancelled.contains(tuesday),"acknowledgement cancels the notice");
+  notices.withdrawOtherOwners(new JSONObject().put("origin",origin).put("ownerId",owner).put("agentId",agent));require(active.contains(evening),"exact result owner stays visible");
+  notices.capture(evening);require(notices.peek().length()>0,"owner's result tap pending");
+  notices.withdrawOtherOwners(new JSONObject().put("origin","https://other.invalid").put("ownerId",owner).put("agentId",agent));require(active.isEmpty()&&notices.peek().length()==0,"owner change cancels result notices and captured taps");
+  notices.capture(evening);require(notices.peek().length()==0,"stale result PendingIntent cannot disclose prior owner");
+  require("owner-changed".equals(notices.publish(retain.apply("run-evening","evening-loop"))),"queued prior-owner result refuses to post");
+  notices=new HostedResultNotices(storage,poster);notices.withdrawOtherOwners(new JSONObject().put("origin",origin).put("ownerId",owner).put("agentId",agent));
+  require("owner-withdrawn".equals(notices.publish(retain.apply("run-evening","evening-loop")))&&posted.size()==3,"return retains result history without resurrecting its notice");
+  JSONObject another=retain.apply("run-agent-collision","other-loop");require("posted".equals(notices.publish(another)),"new matching-owner result posts");
+  notices.withdrawOtherOwners(new JSONObject().put("origin",origin).put("ownerId",owner).put("agentId","other-agent"));require(active.isEmpty(),"same owner and origin with a different agent is private");
   // Renewal notice timing: within the final 24h, withdrawn at expiry, never for an expired or over-long source.
   long now=1_760_000_000_000L,hour=3600000L;
   require(HostedResultNotices.renewalDelay(now+7*24*hour,now)==6*24*hour,"7-day source notifies after 6 days");

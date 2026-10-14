@@ -35,11 +35,13 @@ async function blockStorage(page: Page) {
   });
 }
 async function open(page: Page, view: View, theme: 'light' | 'dark'): Promise<Locator> {
-  await page.goto(theme === 'dark' ? '/?theme=dark' : '/');
+  // Android's shade is the notification surface (#416). This development build stands in for it,
+  // opened from launcher Home's Notifications button (docs/gesture-zones.md); the standalone app has none.
+  const launcher = view === 'Notifications' ? (theme === 'dark' ? '&shell=launcher' : '?shell=launcher') : '';
+  await page.goto((theme === 'dark' ? '/?theme=dark' : '/') + launcher);
   const calendar = page.getByRole('button', { name: 'Calendar', exact: true });
   await calendar.waitFor({ state: 'visible' });
   if (view === 'Notifications') {
-    // The shade is the notification surface; it opens from its handle on Home (docs/gesture-zones.md).
     await page.getByRole('button', { name: 'Open notifications', exact: true }).click();
     const shade = page.locator('[data-alpha-layer="shade"]');
     await expect(shade).toHaveAttribute('aria-hidden', 'false');

@@ -17,7 +17,8 @@ implemented and what is still unproven. It is not acceptance evidence.
    sixteen calendars; unticked calendars are not read.
 4. The phone reads only those calendars, bound to the source revisions the owner saw,
    and shows the exact answer: free or busy, each busy time, and how many events marked
-   free were ignored.
+   free were ignored. The result identifies each selected calendar by name and account
+   on the phone, so identically named calendars remain distinguishable.
 5. On "Share with agent" the same read runs again. If the answer differs, nothing is
    shared and the owner is asked to review again. Otherwise the reviewed result is
    journaled and uploaded as the receipt.
@@ -40,7 +41,8 @@ the renderer rejects any provider row that has a field other than `start`, `end`
 - Events marked free are ignored and counted. Tentative events are busy and flagged.
 - An all-day event blocks the owner's whole local date, not the UTC date.
 - Cancelled events and invitations the owner declined do not count as busy. This follows
-  common free/busy practice and is an engineering default, not an owner decision.
+  the owner-approved policy for #418 (2026-10-12). Unanswered blocking entries
+  remain busy.
 - More than 200 events in the window, or more than 64 readable calendars, fails the
   check instead of returning a partial answer.
 - The Android journal keeps a succeeded check only with its exact answer (window, counts
@@ -107,3 +109,27 @@ the renderer rejects any provider row that has a field other than `start`, `end`
   not return availability. Moving it into the shared calendar plugin needs an upstream
   change.
 - Device and owner acceptance of the wording and flow are separate gates.
+
+## Issue #418 acceptance boundary (2026-10-12)
+
+The executor refuses every non-ready read (including stale, unavailable, changed and
+permission-required), both before review and on the final re-read. These paths produce
+no availability result; an empty payload on a failed read is never interpreted as free.
+Synthetic executor tests cover these states before and after a reviewed empty result.
+
+This does not establish remote sync freshness. The native source revision covers
+calendar identity/access metadata, and the final re-read detects changed local answers;
+neither proves that CalendarProvider has received the latest remote invitation or
+conflict update. Native availability now refuses any selected calendar whose account type is not
+Android's `LOCAL`, before querying event instances, with `freshness-unknown` and no
+intervals. A mixed selection also fails as a whole. Such calendars remain offered,
+including free/busy-only sources; choosing them produces unknown availability until
+remote freshness can be established. Local native and browser reads explicitly return
+`freshness: local`; the renderer refuses a ready response with missing or unknown
+freshness, including on the final re-read. This provider marker stays on the phone and
+is not added to the shared receipt.
+
+Provider-specific freshness evidence and real synced invitation, free/busy-only, revoked-source and
+conflict-update qualification remain required before #418 can close. Local browser
+storage has no remote sync freshness claim. APK compilation, synthetic provider tests
+and browser tests cannot satisfy those live-provider gates.

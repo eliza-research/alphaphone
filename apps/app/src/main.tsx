@@ -1,3 +1,4 @@
+import {bindBrowserDeletionOwner} from './runtime/deletion-owner';
 import {DEFAULT_PULL_DISTANCE,DEFAULT_PULL_VELOCITY} from "../../../.eliza/client-features/packages/ui/src/gestures/constants";
 import {usePullGesture} from "../../../.eliza/client-features/packages/ui/src/components/shell/use-pull-gesture";
 import {installChatOverlayMotion} from './prototype/chat-overlay-motion-adapter';
@@ -7,6 +8,9 @@ import {installCalendarEditDraftAdapter} from './prototype/calendar-edit-draft-a
 import {installCalendarFormDraftAdapter} from './prototype/calendar-form-draft-adapter';
 // Register browser implementations before any runtime module claims plugin identity.
 import './browser/register';
+import { installContactsAdapter } from './prototype/contacts-adapter';
+import { admitImageContacts } from './prototype/mvp-features';
+import {DeletionUndo} from './runtime/deletion-undo';
 import {bindBrowserSpeechConnection} from './browser/agent-speech';
 import { testMocksEnabled, devSurfacesEnabled } from './build-flags';
 import { RootErrorBoundary, installGlobalErrorRecovery } from './runtime/error-boundary';
@@ -23,6 +27,7 @@ import {installNoteSourceAdapter} from './prototype/note-source-adapter';
 import { installNotesDocumentAdapter } from './prototype/notes-document-adapter';
 import { installPrototypeMapsAdapter } from './prototype/maps-adapter';
 import { installNotificationsAdapter } from './prototype/notifications-adapter';
+import { installSystemShade, shadeSurface } from './prototype/system-shade';
 import { installContextSelection } from './prototype/context-selection';
 import { installWorkflowAdapter } from './prototype/workflow-adapter';
 import { installAutomationsAdapter } from './prototype/automations-adapter';
@@ -30,7 +35,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { StartupPermissions } from './startup-permissions';
 import { reopenStartupPermissions } from './startup-permission-flow';
 import { createRoot } from 'react-dom/client';
-import { Component, VIEWS } from './prototype/model.js';
+import { Component, VIEWS, ORDER } from './prototype/model.js';
 import { installReminderAdapter } from './prototype/reminder-adapter';
 import { installNoteOriginAdapter } from './prototype/note-origin-adapter';
 import { installAgentAdapter } from './prototype/agent-adapter';
@@ -63,6 +68,7 @@ const developmentAgentWorkflows=devSurfacesEnabled&&devAgentWorkflowsQuery;
 const BrowserDeviceControls=devSurfacesEnabled?DevDeviceControls:null;
 const MOCK_BANNER_STYLE=".mock-mode-banner{position:fixed;top:0;left:0;right:0;z-index:2000;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 10px;background:#0000ff;color:white;font:11px 'Public Sans',sans-serif}.mock-mode-banner button{border:1px solid white;border-radius:14px;background:transparent;color:white;min-height:24px;padding:4px 8px;font:inherit}.native-phone .mock-mode-banner{top:var(--native-top-inset,24px)}";
 if(!isAndroid)bindBrowserSpeechConnection(connectionController);
+if(!isAndroid)bindBrowserDeletionOwner(()=>{const session=connectionController.getSnapshot().session,device=connectionController.getWorkflowDeviceTarget();return session&&device?'agent:'+JSON.stringify([session.origin,session.ownerId,session.agentId,session.sessionId,device.installationId,device.enrollmentId]):null;});
 const query = new URLSearchParams(location.search);
 document.documentElement.classList.toggle('native-phone', isAndroid);
 const savedMock = testMocksEnabled && (() => {
@@ -72,6 +78,8 @@ const savedMock = testMocksEnabled && (() => {
 // Resolve mock before mounting any native adapter, including after a cold start.
 // Production builds never admit mock or fixture state, whatever the URL or storage says.
 const mock = testMocksEnabled && (query.get('mode') === 'mock' || savedMock);
+// Android's shade is the notification surface (#416, #417); only the browser development build simulates it.
+const systemShade=shadeSurface({native:isAndroid,simulated:devSurfacesEnabled});
 const fixture = testMocksEnabled && (mock || (devSurfacesEnabled && !isAndroid && query.get('fixture') === '1'));
 const initialTheme = (() => {
   if (testMocksEnabled && (query.has('theme') || fixture)) return query.get('theme') === 'dark' ? 'dark' : 'light';
@@ -91,11 +99,13 @@ if (!fixture) {
   installAgentAdapter(Component, VIEWS);
   installReminderAdapter(Component, VIEWS);
   installCalendarAdapter(Component, VIEWS);
+  if(isAndroid)installContactsAdapter(Component,VIEWS);
   installCalendarFormDraftAdapter(Component, VIEWS);
   installCalendarEditDraftAdapter(Component, VIEWS);
   installNoteOriginAdapter(Component, VIEWS);
   installPrototypeDataAdapter(Component, VIEWS);
-  installNotificationsAdapter(Component);
+  // Notice rows feed only the development stand-in shade; product builds read no notice list (#416).
+  if(systemShade==='simulated')installNotificationsAdapter(Component);
   installContextSelection(Component);
   installPrototypeVoiceAdapter(Component, VIEWS);
   installNotesDocumentAdapter(Component, VIEWS);
@@ -126,6 +136,7 @@ if(developmentAgentWorkflows){installWorkflowAdapter(Component,VIEWS);installAut
 installSubviewAccessibility(VIEWS);
 installCalendarMonthFocus(Component, VIEWS);
 installChatOverlayMotion(Component);
+installSystemShade(Component,{native:isAndroid});
 installClockAdapter(Component, VIEWS, { simulated: testMocksEnabled && fixture, browser: !isAndroid });
 // Installed apps come from Android (or the browser device's app list); outermost so its drawer
 // state composes with every Home binding above.
@@ -174,6 +185,9 @@ function Phone() {
       const width = document.documentElement.clientWidth || window.innerWidth;
       const layoutHeight = document.documentElement.clientHeight || window.innerHeight;
       const height = Math.min(layoutHeight, window.visualViewport?.height || layoutHeight);
+      const viewportTop = Math.max(0, Math.min(window.visualViewport?.offsetTop || 0, layoutHeight - height));
+      document.documentElement.style.setProperty('--alpha-visible-height', `${height}px`);
+      document.documentElement.style.setProperty('--alpha-visible-top', `${viewportTop}px`);
       const coarse = !isAndroid && window.matchMedia('(pointer: coarse)').matches;
       const desktop = !isAndroid && width > 600 && !coarse;
       const banner = testMocksEnabled && mock ? document.querySelector('.mock-mode-banner')?.getBoundingClientRect().bottom || 36 : 0;
@@ -195,10 +209,10 @@ function Phone() {
 
     };
     const bannerObserver=new ResizeObserver(size);const bannerElement=testMocksEnabled&&mock?document.querySelector('.mock-mode-banner'):null;if(bannerElement)bannerObserver.observe(bannerElement);
-    size(); window.addEventListener('resize', size); window.visualViewport?.addEventListener('resize', size);
-    return () => { bannerObserver.disconnect(); window.removeEventListener('resize', size); window.visualViewport?.removeEventListener('resize', size); };
+    size(); window.addEventListener('resize', size); window.visualViewport?.addEventListener('resize', size); window.visualViewport?.addEventListener('scroll', size);
+    return () => { bannerObserver.disconnect(); window.removeEventListener('resize', size); window.visualViewport?.removeEventListener('resize', size); window.visualViewport?.removeEventListener('scroll', size); };
   }, []);
-  return <>{BrowserDeviceControls&&!isAndroid&&!mock&&query.get('tools')==='1'&&<BrowserDeviceControls command={action=>{
+  return <>{!mock&&<DeletionUndo/>}{BrowserDeviceControls&&!isAndroid&&!mock&&query.get('tools')==='1'&&<BrowserDeviceControls command={action=>{
     if(!shell)return;
     if(action==='home')window.dispatchEvent(new Event('launcher-home'));
     else if(action==='back')window.dispatchEvent(new Event('alpha-back',{cancelable:true}));
@@ -210,7 +224,7 @@ function Phone() {
     else if(action==='background'){shell.leave();shell.setState({screen:'off',voice:'off',chat:'input',shade:false});document.documentElement.dataset.devBackground='true';window.dispatchEvent(new Event('blur'));}
     else if(action==='resume'){delete document.documentElement.dataset.devBackground;shell.unlock();window.dispatchEvent(new Event('focus'));}
     if(['power','unlock','boot','background','resume'].includes(action))window.dispatchEvent(new Event('alpha:device-state'));
-  }}/>}{testMocksEnabled && mock && <div className="mock-mode-banner" role="status"><span>Mock mode · simulated data and actions</span><button onClick={() => { void connectionController.offline().then(() => { const url = new URL(location.href); url.searchParams.delete('mode'); url.searchParams.delete('start'); location.assign(url.href); }); }}>Exit mock mode</button></div>}<Component configureChatPull={(surface:{input:boolean;scale:number})=>setPullSurface(current=>current.input===surface.input&&current.scale===surface.scale?current:surface)} chatPullBinding={chatPullBinding} phoneSurface assistantSurface={assistantSurface} onCloseAssistant={closeAssistant} onReopenStartupAccess={isAndroid && !fixture && !assistantSurface ? reopenStartupPermissions : undefined} systemShell={launcherPresentation} nativeSystemChrome={isAndroid || !launcherPresentation} initial={testMocksEnabled && fixture ? query.get('start') || 'home' : 'home'} theme={initialTheme} ref={(value: any) => { shell = value; }} />
+  }}/>}{testMocksEnabled && mock && <div className="mock-mode-banner" role="status"><span>Mock mode · simulated data and actions</span><button onClick={() => { void connectionController.offline().then(() => { const url = new URL(location.href); url.searchParams.delete('mode'); url.searchParams.delete('start'); location.assign(url.href); }); }}>Exit mock mode</button></div>}<Component configureChatPull={(surface:{input:boolean;scale:number})=>setPullSurface(current=>current.input===surface.input&&current.scale===surface.scale?current:surface)} chatPullBinding={chatPullBinding} phoneSurface assistantSurface={assistantSurface} onCloseAssistant={closeAssistant} onReopenStartupAccess={isAndroid && !fixture && !assistantSurface ? reopenStartupPermissions : undefined} systemShell={launcherPresentation} systemShade={systemShade} nativeSystemChrome={isAndroid || !launcherPresentation} initial={testMocksEnabled && fixture ? query.get('start') || 'home' : 'home'} theme={initialTheme} ref={(value: any) => { shell = value; }} />
 {!fixture && <><ConnectionChooser />{!assistantSurface && <><HostedDigestPanel />{!connection.open && <StartupPermissions />}</>}</>}</>;
 }
 /** Android's locale and 24-hour setting; WebView Intl alone does not follow the latter. */
@@ -230,8 +244,10 @@ async function mountPhone() {
       DeviceApps.launchInfo().then(info => info.assistant === true).catch(() => false),
     ]);
     assistantSurface = surface || launch;
+    const refreshImage=async()=>{const image=await DeviceApps.platformCapabilities().catch(()=>({aospImage:false,contacts:false}));const admitted=image.aospImage===true&&image.contacts===true;admitImageContacts(admitted);const index=ORDER.indexOf('contacts');if(admitted&&index<0)ORDER.push('contacts');else if(!admitted&&index>=0)ORDER.splice(index,1);if(!admitted&&shell?.S().view==='contacts')shell.goHome();};
+    await refreshImage();
     await applyDeviceLocale();
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) void applyDeviceLocale().then(() => shell?.setState({ localeRevision: Date.now() })); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) void refreshImage().then(()=>applyDeviceLocale()).then(() => shell?.setState({ localeRevision: Date.now() })); });
   } else if (devSurfacesEnabled && query.get('surface') === 'assistant') {
     // Development server only: preview the ACTION_ASSIST surface without an Android host.
     assistantSurface = true;

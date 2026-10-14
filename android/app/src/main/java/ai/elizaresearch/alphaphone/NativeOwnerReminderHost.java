@@ -12,6 +12,7 @@ final class NativeOwnerReminderHost {
   JSONObject exchange(JSONObject session,String path,JSONObject deviceHeaders)throws Exception;
  }
  private final Ports ports;
+ NativeOwnerReminderHost(Ports ports){this.ports=ports;}
  NativeOwnerReminderHost(Context context){
   AlphaCredentialStore store=new AlphaCredentialStore(context.getApplicationContext());
   ports=new Ports(){
@@ -22,6 +23,20 @@ final class NativeOwnerReminderHost {
   };
  }
  JSONObject read()throws Exception{return read(ports);}
+ /** Fast confirmation fence for an owner previously authenticated by read().
+  * No HTTP on the UI thread; delayed dispatch still requires a fresh full read(). */
+ String reviewFence(JSONObject expected)throws Exception{
+  JSONObject provider=ports.provider(),session=ports.ownerSession();String subject=expected.getString("subjectUserId"),agent=expected.getString("agentId");
+  if(!subject.equals(session.getString("ownerId"))||session.getLong("expiresAt")<=System.currentTimeMillis()+30000)throw new SecurityException("Native review authority changed");
+  String account=provider.getString("accountRef");if("native-local".equals(account))account+=":"+subject;
+  if(!account.equals(expected.getString("accountRef"))||!provider.getString("environment").equals(expected.getString("environment"))||!provider.getString("sessionGeneration").equals(expected.getString("sessionGeneration")))throw new SecurityException("Native review authority changed");
+  String slot="device:"+HostedResultNotices.hash(new JSONArray().put("https://device.alpha.invalid").put(subject).put(agent).toString()),raw=ports.device(slot);
+  if(raw==null)throw new SecurityException("Native review authority changed");JSONObject device=new JSONObject(raw);
+  if(!expected.getString("installationId").equals(device.getString("installationId"))||!expected.getString("enrollmentId").equals(device.getString("enrollmentId")))throw new SecurityException("Native review enrollment changed");
+  if(!provider.toString().equals(ports.provider().toString())||!session.toString().equals(ports.ownerSession().toString())||!raw.equals(ports.device(slot)))throw new SecurityException("Native review authority changed");
+  return HostedResultNotices.hash(new JSONArray().put(provider).put(session).put(device).toString());
+ }
+
  static JSONObject read(Ports ports)throws Exception{
   JSONObject provider=new JSONObject(ports.provider().toString()),session=new JSONObject(ports.ownerSession().toString());
   String subject=HostedInbox.id(session.getString("ownerId"));

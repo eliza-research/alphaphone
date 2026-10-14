@@ -210,6 +210,14 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   boolean assistant=activity instanceof AlphaAssistActivity&&activity.getIntent()!=null&&activity.getIntent().getBooleanExtra(AlphaAssistActivity.EXTRA_ASSISTANT,false);
   call.resolve(new JSObject().put("assistant",assistant));
  }
+ /** How this assistant surface was opened, consumed on read: "listener" (the image's always-on
+  * listener, see AssistInvocation) is reported once per launch, then "assist". */
+ @PluginMethod public void takeInvocation(PluginCall call) {
+  android.app.Activity activity=getActivity();
+  boolean assistant=activity instanceof AlphaAssistActivity&&activity.getIntent()!=null&&activity.getIntent().getBooleanExtra(AlphaAssistActivity.EXTRA_ASSISTANT,false);
+  String invocation=assistant?((AlphaAssistActivity)activity).takeInvocation():null;
+  call.resolve(new JSObject().put("assistant",invocation!=null).put("invocation",invocation));
+ }
  /** Read-only: may this surface attach to the admitted running resident under the stored provider
   * admission? Never starts, stops, pairs or rebinds. With credentialId, the stored admission must
   * be that Cloud credential on the pinned model. Reasons are non-sensitive diagnostics. */

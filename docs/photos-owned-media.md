@@ -1,8 +1,48 @@
 # Owned Photos collections and trash
 
-The production Photos adapter uses Android MediaStore for this package's published
-images and videos only. Selected external images continue through explicit picker
-grants. These collection operations add no broad photo-library permission.
+The owned collection operations below manage this package's published images and
+videos. The #408 branch additionally requests photo/video library access only from
+the explicit Photos control. Android 14 selected-only access is reported separately
+from full image and full video access; denial retains the owned collection.
+
+The new catalog queries the current user's MediaStore in 24-item pages. Keys include
+the storage volume, media kind and row ID; revisions also bind the provider version
+and available generation columns. Filename queries run against the provider,
+not only loaded thumbnails. Cursors expire after two minutes and are invalidated
+by library changes or app backgrounding. At most 240 thumbnails remain in the
+renderer; library access does not create a cloud upload or background pixel index.
+Selected reads recheck permission, lock state and revision. A reviewed native-source
+patch lets the existing copy editor read a host-validated permitted still image;
+saved copies remain owned PNGs with the existing operation receipt journal.
+
+The permitted-library branch also queries Favorites, Videos and Recently deleted
+through typed collections. Custom album membership retains volume-qualified identities
+and withholds inaccessible members. Album responses recheck the whole access/version
+snapshot, including the live provider generation on Android 11+; subsequent pages
+bind that snapshot as well as the album revision. This detects ordinary mutations
+before the asynchronous observer callback runs. A new native fixture exercises
+that case with one exact owned synthetic image while main-thread callbacks are
+blocked; it is registered for execution, not yet claimed as passing.
+
+Favorite, trash and restore requests over permitted rows require a native review
+and Android's write-access prompt. Approval is consumed once; the provider update
+still compares the selected row's generation and original identity. A stale row is
+skipped, an uncertain result is not replayed, and a batch can report partial success.
+These grants are not persisted. Permanent deletion of the full library is left to
+Android's expiration/management surface; the owned-only permanent-delete path does
+not silently delete a different scope.
+
+This is work in progress, not #408 acceptance. Local-agent operations and installed
+large-catalog, foreign-media, permission-downgrade, reboot and reviewed-mutation
+campaigns remain required. The initial catalog checkpoint built all four developer
+APKs and passed lint; subsequent organization code has SDK compilation and renderer
+checks but still needs new exact-source APK and native qualification. Repository
+verification passed 755 tests (751 passed, four existing TODOs) at organization checkpoint `07570e62`, including the final
+album-response snapshot tightening; the provider-generation follow-up is pending
+full verification. Existing browser album/batch/delete journeys
+passed all 12 cases. These checks do not prove native provider outcomes. Android's permission
+contract is documented in [selected photo/video access](https://developer.android.com/about/versions/14/changes/partial-photo-video-access).
+
 
 Favorites (Android 11+) sets `IS_FAVORITE` on an active owned row and verifies the
 returned generation and value. Videos and Favorites are native query predicates
@@ -120,3 +160,44 @@ of the neighboring fixture. It also changes one selected row's real generation
 and requires sharing to reject before opening another chooser. The existing
 single-item receiver behavior remains supported. Typecheck passed; native build
 and both-variant execution are pending.
+
+## Device library (source for issue 408)
+
+The Device library album retains the agent proposal, selection, review and receipt
+contract from #442. Its native facade (`AlphaPhotoLibraryPlugin`) uses the
+`AlphaPhotos` plugin's own `PermittedMediaCatalog` and `PermittedMediaReview`
+instances rather than constructing its own: one read epoch, one grant-change
+invalidation, one MediaStore observer and one Android review at a time across both
+surfaces. Both use the same permission grants, typed per-volume collections,
+volume-qualified identities, provider-version/generation revisions and exact
+conditional mutations. There is no second media index. The observer is registered
+only while the main Photos grid or this album is open (each watches under its own
+name), and both refresh bounded pages on provider changes. The two owner surfaces
+(the main grid and this album) still both exist; consolidating them into one view is
+a product decision left open.
+
+Search supports kind, dates and favorites. Names remain local to owner searches;
+the agent search accepts no text and its results omit filenames, albums, byte sizes,
+modification times and pixels. Native revisions remain on the phone; model-facing
+revisions are session-local opaque tokens. Reads require an unlocked profile and
+current grants. Scope loss or locking clears the renderer catalog and selection.
+
+Favorite, unfavorite and trash pass through owner review, Android write-access
+approval, and a generation-conditional mutation. Revisions are checked again after
+Android returns, so an edited item is skipped. Permanent deletion is deliberately
+left to Android media management; the earlier URI-only deletion request could not
+bind the effect to the revision reviewed in Alpha. Main Photos provides restore.
+Sharing opens Android's chooser for the exact selected revisions; it is not a
+receipt that anything was sent.
+
+The Alpha action path supports `photo_library_search`, `photo_library_inspect`,
+`photo_library_select` and `photo_library_review` behind `photos.library.v1` and a
+Photos context check. Upstream Eliza still must emit those operations and negotiate
+that capability, so source registration does not establish live agent acceptance.
+
+The host tests exercise the renderer contract, opaque outbound revisions, selection,
+review expiry and shared catalog delegation. The instrumentation fixture is updated
+for canonical volume-qualified identities and bounded refresh. Earlier foreign-media
+campaign evidence belongs to #437's catalog; it does not qualify the newly reconciled
+agent album. Exact-source APK, installed bridge, permission downgrade, reboot,
+large personal libraries, battery and physical-device acceptance remain separate.

@@ -22,8 +22,9 @@ final class ConnectionRoutes {
   * Origins this transport may contact. A production phone talks to its resident agent over the
   * separate in-process Agent bridge, never through this transport, and does not pair with, restore
   * or connect a remote or Cloud agent (the controller returns before any saved selection is used and
-  * the production dialog offers only Cloud sign-in for inference credits). Every request a flag-off
-  * build legitimately sends here (sign-in, identity, balance, key self-revocation, the connected
+  * the production dialog offers only Cloud sign-in for the subscription plan). Every request a flag-off
+  * build legitimately sends here (sign-in, identity, subscription entitlement and its public keys,
+  * the transitional balance check, key self-revocation, the connected
   * services under /api/v1/eliza/) goes to the Cloud API, so the only admitted origin is exactly
   * https://api.eliza.app on the default port. A dedicated Cloud agent runtime
   * (https://&lt;agent-uuid&gt;.cloud.eliza.app) is always refused in product builds (P-22/P-31). A paired remote agent's origin
@@ -42,7 +43,7 @@ final class ConnectionRoutes {
   if("DELETE".equals(method))return "/api/v1/api-keys/current".equals(path)&&query==null&&!hasBody;
   if("POST".equals(method))return query==null&&(java.util.Set.of("/api/auth/cli-session","/api/v1/eliza/google/connect/initiate","/api/v1/eliza/google/disconnect","/api/v1/eliza/google/gmail/inbox-v1/operations").contains(path)||path.matches("/api/v1/eliza/google/gmail/inbox-v1/operations/[A-Za-z0-9_-]{1,160}/dispatch"));
   if(!"GET".equals(method)||hasBody)return false;
-  return path.matches("/api/auth/cli-session/[0-9a-fA-F-]{36}")||java.util.Set.of("/api/v1/user","/api/v1/credits/balance","/api/v1/eliza/google/accounts","/api/v1/eliza/google/status","/api/v1/eliza/google/gmail/search","/api/v1/eliza/google/gmail/read").contains(path)||path.matches("/api/v1/eliza/google/gmail/inbox-v1/(capabilities|thread|attachment|drafts|draft)")||path.matches("/api/v1/eliza/google/gmail/inbox-v1/operations/[A-Za-z0-9_-]{1,160}");
+  return path.matches("/api/auth/cli-session/[0-9a-fA-F-]{36}")||java.util.Set.of("/api/v1/user","/api/v1/credits/balance","/api/v1/subscription/entitlement","/api/v1/subscription/entitlement-keys","/api/v1/eliza/google/accounts","/api/v1/eliza/google/status","/api/v1/eliza/google/gmail/search","/api/v1/eliza/google/gmail/read").contains(path)||path.matches("/api/v1/eliza/google/gmail/inbox-v1/(capabilities|thread|attachment|drafts|draft)")||path.matches("/api/v1/eliza/google/gmail/inbox-v1/operations/[A-Za-z0-9_-]{1,160}");
  }
  /**
   * Cloud self-revocation: the presented sign-in key revokes only itself. Exactly

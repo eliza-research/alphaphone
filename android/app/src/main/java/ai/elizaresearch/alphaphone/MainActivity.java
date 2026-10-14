@@ -15,7 +15,6 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
-import ai.eliza.plugins.system.SystemPlugin;
 
 /** Derived from packages/app/scripts/mobile/android/templates/main-activity.ts.
  * Product shell: local assets, Eliza's system bridge, no cloud-auth or implicit kiosk policy.
@@ -215,16 +214,19 @@ public class MainActivity extends BridgeActivity {
    if (task == -1 || task != liveTaskId) { liveTaskId = task; liveTaskHome = isHomeTypeStart(getIntent()); }
    startedAsHome = liveTaskHome;
   }
-  registerPlugin(SystemPlugin.class);
+  registerPlugin(AlphaSystemPlugin.class);
   registerPlugin(AlphaResetPlugin.class);
-  registerPlugin(DeviceAppsPlugin.class);
+  registerPlugin(AlphaDeviceAppsPlugin.class);
+  registerPlugin(AlphaContactsPlugin.class);
   registerPlugin(DailyAppsPlugin.class);
   registerPlugin(AlphaMapsTransportPlugin.class);
   registerPlugin(ai.eliza.plugins.camera.CameraPlugin.class);
   registerPlugin(ai.eliza.plugins.location.LocationPlugin.class);
   registerPlugin(AlphaBrowserPlugin.class);
   registerPlugin(AlphaCalendarPlugin.class);
+  registerPlugin(AlphaDeletionsPlugin.class);
   registerPlugin(AlphaPhotosPlugin.class);
+  registerPlugin(AlphaPhotoLibraryPlugin.class);
   registerPlugin(AlphaFilesPlugin.class);
   registerPlugin(AlphaMailAttachmentsPlugin.class);
   registerPlugin(AlphaDevicePlugin.class);
@@ -236,8 +238,11 @@ public class MainActivity extends BridgeActivity {
   registerPlugin(AlphaNoteDocumentsPlugin.class);
   registerPlugin(AlphaNotificationsPlugin.class);
   registerPlugin(AlphaHostedResultsPlugin.class);
+  registerPlugin(AlphaListenerPlugin.class);
   registerPlugin(ai.eliza.plugins.passwords.PasswordsPlugin.class);
   if(BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS)registerPlugin(ai.eliza.plugins.passwords.PasswordTransferPlugin.class);
+  // The native image gate is checked again by every telephony operation.
+  if (AlphaImageCapability.verified(this)) registerPlugin(AlphaTelephonyPlugin.class);
   if (BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS) {
    // Present only in debug builds made with -PELIZA_DEV_ALLOW_TEST_MOCKS=1 (src/testMocks).
    try { registerPlugin(Class.forName("ai.elizaresearch.alphaphone.DevelopmentAgentPlugin").asSubclass(com.getcapacitor.Plugin.class)); }

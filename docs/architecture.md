@@ -54,6 +54,7 @@ Gmail attachments and PDF file creation remain available.
 | --- | --- |
 | `apps/app/src` | Alpha UI, product policy and adapters to shared features |
 | `android` | Product identity, Activity, permissions, resources and standalone/HOME packaging |
+| `android/sense`, `android/aosp/listener` | AOSP-image-only privileged, network-less always-on listener and its image configuration ([ADR 0001](adr/0001-privileged-listener.md)); never in the standalone or launcher APK |
 | `app.config.json` | Package ID, display name, version and orientation |
 | `backend` | Development runtime composition, character and permitted model/actions |
 | `vendor/eliza` | Pinned shared platform source; never modified by consumer builds |
@@ -62,8 +63,8 @@ Gmail attachments and PDF file creation remain available.
 
 Maps, Files and Notes implementations are copied from authenticated upstream
 source into a generated cache outside the submodule. Gradle includes the shared
-password manager directly from the reviewed pin. The secure store uses the explicit
-reviewed patch in `patches/eliza/native-manifest.json`: admission authenticates the pin,
+password manager directly from the reviewed pin. The secure store and notification ledger use explicit
+reviewed patches in `patches/eliza/native-manifest.json`: admission authenticates the pin,
 patch digest, target before/after hashes and complete staged module inventory. Gradle
 compiles the generated copy under `.eliza/patched-native`, never a modified submodule.
 No source patch is applied during client, worker or resident-runtime builds. Photo edits, capture publication, the opt-in notification mirror and the delivery-receipt
@@ -142,6 +143,17 @@ permissions. OS staging admits the product APK separately from Eliza's full app;
 release provisioning owns default roles, signing, update compatibility and
 recovery policy.
 
+Phone, Contacts and SMS exist only on the Alpha AOSP image (decision P-36). The image
+capability is decided natively by `AlphaImageCapability`: the launcher build without test
+mocks, installed from a system partition (`FLAG_SYSTEM`), with the `<package>.aosp_image`
+system feature that `scripts/stage-aosp.mjs` declares in the image product. The launcher
+flavor, test mocks, URLs and saved state never establish it. Only then does `MainActivity`
+register `AlphaTelephonyPlugin` (read-only contacts through upstream `ContactsReader`, role
+and SIM status, dialer and SMS handoffs); the renderer reads its presence from the injected
+plugin headers (`apps/app/src/runtime/aosp-image.ts`). Standalone APKs declare no contacts or
+phone-state permission. Gmail is available in both distributions through Eliza Cloud, with
+read access first and one incremental change grant (`apps/app/src/runtime/gmail-grants.ts`).
+
 Native reminders use the shared `plugin-native-reminders` engine and bridge.
 `AlphaReminders` supplies the product's existing encrypted store, preference and
 channel names, receiver/Activity identities and intent routes. `DailyApps` keeps
@@ -163,3 +175,10 @@ APK builds, emulator bridge/HOME tests, full AOSP image boot, real integrations,
 and physical-device/user acceptance are separate gates. See
 [mvp-current-status.md](mvp-current-status.md) for their current limits. A source
 pin rollback does not by itself establish APK or OS rollback compatibility.
+
+The AOSP telephony contract additionally requires the canonical production image admission
+(`AlphaImageCapabilities`): release launcher, system install and the product-partition RRO.
+The feature XML is an additional telephony contract marker, never an alternative admission path.
+Contacts uses the bounded AlphaContacts adapter and its native capability response; Phone and SMS
+views remain deferred. Telephony contact reads recheck permission, unlock and lifecycle state
+before and after asynchronous provider reads.

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { writeAospCapabilityOverlay } from "./aosp-capability-overlay.mjs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -6,7 +7,9 @@ import { androidEnv, tool } from "./toolchain.mjs";
 import { verifySecureCameraSource, writeSecureCameraOverlay, assertNoAlphaLockScreenSurface } from "./aosp-secure-camera-contract.mjs";
 import { clockProductRequirement } from "./aosp-clock-contract.mjs";
 import { provisioningComponents, writeProvisioningOverlay } from "./aosp-provisioning-overlay.mjs";
+import { writeImageCapability } from "./aosp-image-capability.mjs";
 import { releaseBlockers } from "./release-blockers.mjs";
+import { checkListenerDescriptor, checkListenerSpeechBundle, checkListenerSpeechNatives, stageListener } from "./aosp-listener.mjs";
 
 /**
  * Refuse inputs that must never reach an image: anything from the separate
@@ -65,12 +68,12 @@ const get = (key) => {
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--development" || args[i] === "--production") continue;
   if (
-    !["--apk", "--output", "--descriptor", "--apk-manifest", "--aosp-source"].includes(args[i]) ||
+    !["--apk", "--output", "--descriptor", "--apk-manifest", "--aosp-source", "--listener-apk", "--listener-descriptor"].includes(args[i]) ||
     !args[i + 1] ||
     args[i + 1].startsWith("--")
   )
     throw new Error(
-      "Use --apk FILE --output NEW_DIR [--descriptor FILE [--production] | --development] [--apk-manifest FILE] [--aosp-source PATH]",
+      "Use --apk FILE --output NEW_DIR [--descriptor FILE [--production] | --development] [--apk-manifest FILE] [--aosp-source PATH] [--listener-apk FILE [--listener-descriptor FILE]]",
     );
   i++;
 }
@@ -80,6 +83,10 @@ const development = args.includes("--development");
 // refused until a signed, PACKAGED, qualified release APK exists.
 const production = args.includes("--production");
 if (production && development) throw new Error("--production and --development are exclusive");
+// The always-on listener is part of the AOSP MVP (issue #424): production images must include it.
+const listenerApk = get("--listener-apk");
+const listenerDescriptor = get("--listener-descriptor");
+if (listenerDescriptor && !listenerApk) throw new Error("--listener-descriptor needs --listener-apk");
 const apk = get("--apk");
 if (!apk) throw new Error("Supply --apk PATH to a signed launcher APK.");
 const identity = JSON.parse(fs.readFileSync("app.config.json"));
@@ -91,6 +98,11 @@ admitApk({
   development,
   manifestFile: get("--apk-manifest") || "artifacts/apk-manifest.json",
 });
+// Checked after APK admission so input refusals are reported first.
+if (production && !listenerApk)
+  throw new Error("Production staging requires --listener-apk (the always-on listener built by ./gradlew :sense:assembleRelease).");
+if (production && !listenerDescriptor)
+  throw new Error("Production staging requires --listener-descriptor: an independently reviewed record of the listener's packageName, apkSha256 and certificateSha256.");
 const cameraSource = get("--aosp-source") || !development
   ? verifySecureCameraSource(get("--aosp-source"))
   : { sourceVerified: false, imageVerified: false, lockedCaptureVerified: false, deviceAcceptanceVerified: false, reason: "Development staging without reviewed AOSP source" };
@@ -156,11 +168,48 @@ execFileSync(
   { stdio: "inherit", env },
 );
 fs.appendFileSync(path.join(output, "product.mk"), clockProductRequirement);
+// The image system feature Alpha Phone requires, with a system-partition install, before it offers
+// Phone, Contacts or SMS (P-36). Development and production images both declare it; test-mocks APKs
+// were refused above, and a sideloaded APK never has the system-partition install.
+const capability = writeImageCapability(output, identity.appId);
+console.log(`Image capability: ${Object.keys(capability).find(name => name !== "productMakefile")}.`);
 writeSecureCameraOverlay(output, cameraSource);
 if (production) {
   const components = provisioningComponents(tree, identity.appId);
   writeProvisioningOverlay(output, identity.appId, components);
+  writeAospCapabilityOverlay(output, identity.appId);
   console.log(`Provisioning overlay: HOME ${components.home}, assistant ${identity.appId}, Autofill ${components.autofill}.`);
+}
+if (listenerApk) {
+  // Debuggable listener builds are development-only; a production image takes a release build.
+  if (!development) {
+    let debuggable;
+    try {
+      debuggable = /android:debuggable[^\n]*0xffffffff/.test(execFileSync(tool("aapt"), ["dump", "xmltree", listenerApk, "AndroidManifest.xml"], { encoding: "utf8", env, maxBuffer: 64 << 20 }));
+    } catch {
+      throw new Error(`Refusing ${listenerApk}: its manifest could not be read.`);
+    }
+    if (debuggable) throw new Error(`Refusing ${listenerApk}: a debuggable listener is staged only with --development.`);
+  }
+  const listenerCert = execFileSync(tool("apksigner"), ["verify", "--print-certs", listenerApk], { encoding: "utf8", env });
+  const listenerSigner = /Signer #1 certificate SHA-256 digest:\s*([a-fA-F0-9]+)/.exec(listenerCert)?.[1]?.toLowerCase();
+  const dump = execFileSync(tool("aapt"), ["dump", "permissions", listenerApk], { encoding: "utf8", env, maxBuffer: 16 << 20 });
+  // The privileged APK is pinned like the launcher: reviewed bytes and signer, not just a name.
+  const listenerHash = createHash("sha256").update(fs.readFileSync(listenerApk)).digest("hex");
+  if (listenerDescriptor)
+    checkListenerDescriptor(JSON.parse(fs.readFileSync(listenerDescriptor, "utf8")), { appId: identity.appId, apkSha256: listenerHash, signer: listenerSigner });
+  // A listener without its speech model can never listen; production refuses it.
+  const qualifiedAbis = JSON.parse(fs.readFileSync("android/local-speech/qualified-runtime-manifest.json", "utf8")).qualifiedAbis;
+  const entries = execFileSync("unzip", ["-Z1", listenerApk], { encoding: "utf8", maxBuffer: 64 << 20 }).split(/\r?\n/).filter(Boolean);
+  try {
+    const packaged = checkListenerSpeechBundle(entries, qualifiedAbis);
+    checkListenerSpeechNatives(packaged, qualifiedAbis, entry => createHash("sha256").update(execFileSync("unzip", ["-p", listenerApk, entry], { maxBuffer: 256 << 20 })).digest("hex"));
+  } catch (problem) {
+    if (production) throw new Error(`Refusing ${listenerApk}: ${problem.message}`);
+    console.warn(`Development listener: ${problem.message}. It will report SPEECH_UNAVAILABLE on the image.`);
+  }
+  stageListener({ root: process.cwd(), output, apk: listenerApk, dump, signer: listenerSigner, launcherSigner: String(reviewed.certificateSha256 ?? "").toLowerCase(), appId: identity.appId });
+  console.log(`Always-on listener staged: ${identity.appId}.sense (privileged, no network). Grants, indicator and invocation are image-boot evidence, not staging evidence.`);
 }
 console.log(
   `Add under vendor/${identity.slug.replaceAll("-", "_")} and inherit product.mk from the selected AOSP product. This is staging evidence, not an image boot.`,

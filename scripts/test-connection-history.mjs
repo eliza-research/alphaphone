@@ -13,6 +13,8 @@ const { PersonalProtocolError } = await import('../apps/app/src/runtime/cloud-pe
 const { phoneContextMessage } = await import('../apps/app/src/runtime/phone-context.ts');
 const { RemoteProtocol } = await import('../apps/app/src/runtime/remote-protocol.ts');
 const { presentDeviceRecordOperation } = await import('../apps/app/src/runtime/device-record-presentation.ts');
+const subscriptionEntitlement = await import('../apps/app/src/runtime/subscription-entitlement.ts');
+const { AlphaClientError } = await import('../apps/app/src/runtime/alpha-client.ts');
 const user = '11111111-1111-4111-8111-111111111111', agent = '22222222-2222-4222-8222-222222222222', organization = '99999999-9999-4999-8999-999999999999';
 const personal = 'personal:12345678-1234-5234-8234-123456789abc', agentHost = `https://${agent}.cloud.eliza.app`;
 const conversation = '33333333-3333-4333-8333-333333333333';
@@ -64,6 +66,8 @@ const remoteServer=http.createServer(async(req,res)=>{
   }
   if(url.pathname===`/api/conversations/${remoteConversation}/messages`&&req.method==='POST'){
     if(remote.failPost){remote.failPost=false;remote.failedPosts=(remote.failedPosts||0)+1;return reply(500,{});}
+    // Upstream reply shape for a refused turn: ChatTerminalFailure carries only kind/message/transient/code.
+    if(remote.failureReply){const failure=remote.failureReply;remote.failureReply=null;remote.failureReplies=(remote.failureReplies||0)+1;return reply(200,{text:'',agentName:'Remote fixture',failureKind:failure.kind,terminalFailure:failure});}
     // Held: the phone stops waiting; the agent still finishes and persists the reply.
     remote.sends=(remote.sends||0)+1;const user={id:`88888888-8888-4888-8888-${String(remote.sends*2-1).padStart(12,'0')}`,role:'user',text:body.text,timestamp:Date.now()};
     remoteMessages.push(user);
@@ -94,7 +98,7 @@ let clockRetirements=0,heldClockRetirement=null,clockRetirementStarted=null;
 const retireClockReviews=async()=>{clockRetirements++;clockRetirementStarted?.();if(heldClockRetirement)await heldClockRetirement;};
 // This controller fixture models a host whose transport reaches Eliza Cloud. The flag-off web page
 // has none and starts no Cloud route; test/browser/connection-boundaries.production.spec.ts covers it.
-const sandbox = { browserLocalAgentEnabled:true, retireClockReviews, workflowPresentationProtocol:async()=>2, browserDevProfile:false, devProfileQuery:false, testMocksEnabled:true, devSurfacesEnabled:true, secureConnectionStore:{read:async slot=>deviceSlots.get(slot)??null,write:async(slot,value)=>{deviceSlots.set(slot,value);},remove:async slot=>{deviceSlots.delete(slot);}},
+const sandbox = { ...subscriptionEntitlement, AlphaClientError, browserLocalAgentEnabled:true, retireClockReviews, workflowPresentationProtocol:async()=>2, browserDevProfile:false, devProfileQuery:false, testMocksEnabled:true, devSurfacesEnabled:true, secureConnectionStore:{read:async slot=>deviceSlots.get(slot)??null,write:async(slot,value)=>{deviceSlots.set(slot,value);},remove:async slot=>{deviceSlots.delete(slot);}},
   PersonalProtocolError, personalIntent:async()=>null, savePersonalIntent:async(_owner,intent)=>intent, clearPersonalIntent:async()=>{},
   RemoteProtocol, remoteCredentialStore, nativeRemoteRequest, DeviceActions, presentDeviceRecordOperation, actionScope:async value=>Buffer.from(value).toString('base64url').slice(0,32), negotiateEnabledViews:async()=>'',
   Capacitor:{getPlatform:()=>'web'}, setTimeout:(callback,ms)=>setTimeout(callback,ms===15000?20:ms), clearTimeout, Intl, Date, Buffer, pauseHostedBackground:async()=>{}, configureHostedBackground:async()=>{}, registerPlugin: () => ({}), CloudProtocol, CloudProvisionAcceptedError, phoneContextMessage, nativeCloudRequest,
@@ -242,6 +246,17 @@ try {
   const unknown=await controller.send('Outcome unknown',{view:'home',revision:12,sensitive:false},'unknown-request',new AbortController().signal).then(()=>null,error=>error);
   assert.ok(unknown,'the refused post rejects');assert.equal(unknown.notDispatched,undefined,'a failure after dispatch is never reported as unsent');
   assert.equal(remote.failedPosts,1,'the refused post is not repeated');assert.equal(remote.sends,sendsBefore);
+  // Cloud refusals in the pinned upstream reply shape reach the owner as specific, non-retrying copy.
+  for(const [failure,expected] of [
+    [{kind:'insufficient_credits',message:'Synthetic upstream text',transient:false},/^Eliza Cloud declined this AI request for your account's billing\. Check your account in Settings\. Alpha Phone did not retry your message, and nothing is purchased automatically\./],
+    [{kind:'rate_limited',message:'Synthetic upstream text',transient:true},/^The AI request rate limit was reached\. Wait a moment before sending again\. Alpha Phone did not retry your message\.$/],
+    [{kind:'provider_issue',message:'Synthetic upstream text',transient:true},/^The agent could not complete this response\.$/],
+  ]){
+    const before=remote.failureReplies||0;remote.failureReply=failure;
+    const refused=await controller.send('Refused turn',{view:'home',revision:13,sensitive:false},'refused-'+failure.kind,new AbortController().signal).then(()=>null,error=>error);
+    assert.ok(refused,'a refused turn rejects: '+failure.kind);assert.match(refused.message,expected,failure.kind);
+    assert.equal(remote.failureReplies,before+1,'the refused turn is posted once and never retried');
+  }
   await controller.disconnect();
-  console.log('PASS: real Cloud protocol/controller HTTP history membership, context stripping, action exclusion, next-send binding, current device timezone metadata and omission, separate service disconnect and scoped rejection; remote pairing, keyset history paging over 260 messages, restore on reconnect, device/session revocation with old-bearer 401, plain action presentation, reject/reconcile controller API, single Stop reconciliation and explicit turn abort. Synthetic only.');
+  console.log('PASS: Cloud refusal reply shapes (insufficient_credits, rate_limited, provider_issue) map to owner copy without retry; real Cloud protocol/controller HTTP history membership, context stripping, action exclusion, next-send binding, current device timezone metadata and omission, separate service disconnect and scoped rejection; remote pairing, keyset history paging over 260 messages, restore on reconnect, device/session revocation with old-bearer 401, plain action presentation, reject/reconcile controller API, single Stop reconciliation and explicit turn abort. Synthetic only.');
 } finally { server.closeAllConnections(); remoteServer.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await new Promise(resolve => remoteServer.close(resolve)); }

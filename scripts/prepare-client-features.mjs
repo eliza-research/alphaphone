@@ -33,6 +33,22 @@ function matches(actual, expected) {
 }
 export const CLIENT_FEATURE_PATHS = [
   'packages/ui/src/voice/batch-conversation.ts',
+  'packages/ui/src/voice/voice-session-client.ts',
+  'packages/ui/src/voice/voice-session-protocol.ts',
+  'packages/ui/src/voice/voice-session-state.ts',
+  'packages/ui/src/voice/voice-session-ownership.ts',
+  'packages/ui/src/voice/voice-session-mic-capture.ts',
+  'packages/ui/src/voice/voice-session-playback.ts',
+  'packages/ui/src/voice/voice-session-pcm.ts',
+  'packages/ui/src/voice/browser-audio-runtime.ts',
+  'packages/ui/src/voice/audio-worklet-module-urls.ts',
+  'packages/ui/src/voice/worklets',
+  'packages/ui/src/logger.ts',
+  'packages/ui/src/voice/voice-chat-types.ts',
+  'packages/core/src/logger.ts',
+  'packages/core/src/security/log-redaction.ts',
+  'packages/host/src/voice.ts',
+
   'packages/ui/src/voice/voice-activity.ts',
   'packages/ui/src/voice/tts-playback-activity.ts',
   'packages/ui/src/voice/end-of-turn.ts',
@@ -82,11 +98,37 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-notes/test/notes-trash-schedule.test.mjs',
 ];
 /** Copy authenticated upstream source outside the immutable vendor checkout. */
-export function prepareClientFeatures({ root = projectRoot } = {}) {
+export function prepareClientFeatures({ root = projectRoot, projectVoice = true } = {}) {
   const upstream = upstreamNativeSource(root);
   const source = new Map(CLIENT_FEATURE_PATHS.flatMap(prefix => [...upstream.read(prefix)]));
+  const sourceFiles = Object.fromEntries([...source].map(([name, file]) => [name, file.sha256]));
+  if(projectVoice){
+  // Browser consumer projections retain the canonical implementations and exact type declarations.
+  // The dashboard transport is unavailable here: Alpha must inject its owned, private fetch.
+  if (upstream.pin !== '13c98575987a121decc45b161b0c8a4ee698554e') throw Error('Review voice projections for the new upstream pin.');
+  const projectionInputs={
+    'packages/ui/src/voice/voice-session-client.ts':'1de275fc7c6bc1871d13d37ee42298db3cbb2ec546795417ed9df512606b4081',
+    'packages/ui/src/voice/voice-chat-types.ts':'043e9a3cd224bc78c67e460070f4e3006120d87db50149f5e2515572eab1cd21',
+    'packages/core/src/logger.ts':'8c2401ba44a79b94a11095bdce3568f65374d2d7b1421c5894b08753feafb7d1',
+  };
+  for(const [name,digest] of Object.entries(projectionInputs))if(sourceFiles[name]!==digest)throw Error('Review changed voice projection input: '+name);
+  const project = (name, text) => source.set(name, {bytes:Buffer.from(text),mode:'100644',sha256:hash(Buffer.from(text))});
+  const text = name => source.get(name).bytes.toString();
+  const clientPath='packages/ui/src/voice/voice-session-client.ts';
+  const fallback='      const { fetchVoiceSession } = await import("./voice-session-fetch");\n      return fetchVoiceSession(url, init);';
+  if(text(clientPath).split(fallback).length!==2)throw Error('Voice fetch projection source changed.');
+  project(clientPath,text(clientPath).replace(fallback,'      void url; void init;\n      throw new Error("Alpha voice requires an injected session fetch.");'));
+  const status=text('packages/ui/src/voice/voice-chat-types.ts').match(/export type VoiceContinuousStatus =[\s\S]*?;/)?.[0];
+  const loggerTypes=text('packages/core/src/logger.ts');
+  const start=loggerTypes.indexOf('type LogFn ='),end=loggerTypes.indexOf('/**\n * Log entry structure',start);
+  if(!status||start<0||end<start)throw Error('Voice type projection source changed.');
+  project('packages/ui/src/voice/voice-chat-types.ts',status+'\n');
+  source.delete('packages/core/src/logger.ts');
+  project('alpha-voice-core-types.ts',loggerTypes.slice(start,end));
+  project('alpha-voice-core-protocol.ts','export {ElizaError} from "./packages/core/src/errors";\nexport {redactTrailingArgs} from "./packages/core/src/security/log-redaction";\nexport {parseViewInteractionClientId} from "./packages/core/src/views/view-interact-protocol";\n');
+  }
   const files = Object.fromEntries([...source].map(([name, file]) => [name, file.sha256]));
-  const provenance = { baseCommit: upstream.pin, files };
+  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?1:0, files };
   const parent = path.join(root, '.eliza'), destination = path.join(parent, 'client-features');
   regularPath(parent, true);
   const exists = regularPath(destination, true), stamp = path.join(destination, '.source.json');
@@ -94,7 +136,7 @@ export function prepareClientFeatures({ root = projectRoot } = {}) {
     if (!regularPath(stamp)) throw Error('Refusing to replace an unrecognized client feature directory.');
     const previous = JSON.parse(fs.readFileSync(stamp));
     const actual = inventory(destination); delete actual['.source.json'];
-    if (previous.baseCommit === upstream.pin && matches(previous.files || {}, files) && matches(actual, files)) return destination;
+    if (previous.baseCommit === upstream.pin && previous.projectionVersion === provenance.projectionVersion && matches(previous.files || {}, files) && matches(actual, files)) return destination;
   }
   fs.mkdirSync(parent, { recursive: true });
   const temporary = fs.mkdtempSync(path.join(parent, 'client-features-stage-'));

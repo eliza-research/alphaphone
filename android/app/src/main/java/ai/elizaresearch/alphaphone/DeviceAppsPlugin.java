@@ -166,9 +166,11 @@ public class DeviceAppsPlugin extends Plugin {
   catch (android.content.ActivityNotFoundException | SecurityException error) { call.reject("App could not be opened", error); }
  }
 
- /** The role's hand-off intent carries no number, contact or other data. */
+ /** The role's hand-off intent carries no number, contact or other data. The dial hand-off exists
+  * only in the launcher build (the HOME role keeps a path to the stock dialer and emergency calls);
+  * a standalone APK shows no Phone entry (owner decision P-36). */
  static Intent roleIntent(String role) {
-  if ("dial".equals(role)) return new Intent(Intent.ACTION_DIAL, Uri.parse("tel:"));
+  if ("dial".equals(role) && BuildConfig.IS_LAUNCHER) return new Intent(Intent.ACTION_DIAL, Uri.parse("tel:"));
   return null;
  }
 

@@ -326,6 +326,7 @@ for (const mode of ['signed-out','empty','unavailable','funded','replaced','unpa
     if(method==='request'){
      const path=new URL(input.url).pathname;
      if(path==='/api/v1/user')return{status:200,data:{success:true,data:{id}}};
+     if(path==='/api/v1/subscription/entitlement')return { status: 404, data: {} }; // Deployed Cloud has no subscription entitlement route yet.
      if(path==='/api/v1/credits/balance')return mode==='unavailable'?{status:503,data:{error:'temporary'}}:{status:200,data:{balance:mode==='funded'||mode==='replaced'?5:0}};
      throw Error('Unexpected Cloud route: '+path);
     }
@@ -334,18 +335,19 @@ for (const mode of ['signed-out','empty','unavailable','funded','replaced','unpa
   },mode);
   await page.goto('/');
   if(mode==='signed-out')await expect(page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true})).toBeVisible();
-  if(mode==='empty')await expect(page.getByRole('button',{name:'Add credits in Eliza Cloud',exact:true})).toBeVisible();
+  if(mode==='empty')await expect(page.getByRole('button',{name:'Notes',exact:true})).toBeVisible();
+  // A billing outage is not a gate: Cloud decides each AI request, and local apps keep working.
   if(mode==='unavailable'){
-   await expect(page.getByRole('alert')).toContainText(/unavailable|starting/i);
-   await expect(page.getByRole('button',{name:'Add credits in Eliza Cloud',exact:true})).toHaveCount(0);
+   await expect(page.getByRole('button',{name:'Notes',exact:true})).toBeVisible();
+   await expect(page.getByRole('button',{name:/Manage plan in Eliza Cloud|Open Eliza Cloud billing/})).toHaveCount(0);
   }
+  const admitted=mode==='funded'||mode==='unavailable'||mode==='empty';
   if(mode==='funded')await expect(page.getByRole('button',{name:'Notes',exact:true})).toBeVisible();
   if(mode==='replaced')await expect(page.getByRole('alert')).toContainText(/account changed/i);
   if(mode==='unpackaged'||mode==='legacy-offline'){await expect(page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true})).toBeVisible();await page.keyboard.press('Escape');await expect(page.getByRole('dialog',{name:'Welcome to Alpha'})).toBeVisible();}
   // Every unconnected state offers the honest offline path; a connected agent closes Welcome.
-  await expect(page.getByRole('button',{name:'Use local apps without AI',exact:true})).toHaveCount(mode==='funded'?0:1);
-  if(mode==='unavailable')await expect(page.getByRole('button',{name:'Check credits again',exact:true})).toBeVisible();
-  if(mode!=='funded'){
+  await expect(page.getByRole('button',{name:'Use local apps without AI',exact:true})).toHaveCount(admitted?0:1);
+  if(!admitted){
    await page.getByRole('button',{name:'Use local apps without AI',exact:true}).click();
    await expect(page.getByRole('dialog',{name:'Welcome to Alpha'})).toHaveCount(0);
    for(const view of ['Notes','Calendar']){
@@ -359,10 +361,10 @@ for (const mode of ['signed-out','empty','unavailable','funded','replaced','unpa
   const calls=await page.evaluate(()=>(window as any).residentCalls);
   expect(calls.some((c:any)=>c.url?.includes('/personal/')||c.url?.includes('/upgrade-tier'))).toBe(false);
   const native=calls.filter((c:any)=>c.plugin==='Agent').map((c:any)=>c.method);
-  if(mode==='funded')expect(native.indexOf('stop')).toBeLessThan(native.indexOf('configureCloudProvider'));
+  if(admitted)expect(native.indexOf('stop')).toBeLessThan(native.indexOf('configureCloudProvider'));
   else expect(native).not.toContain('start');
   // Choosing local apps stops a packaged runtime and never configures inference.
-  if(mode!=='funded'){expect(native).not.toContain('configureCloudProvider');if(mode!=='unpackaged')expect(native).toContain('stop');}
+  if(!admitted){expect(native).not.toContain('configureCloudProvider');if(mode!=='unpackaged')expect(native).toContain('stop');}
  });
 }
 test('resident local apps without AI persist across restart and can be closed and reopened',async({page})=>{

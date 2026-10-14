@@ -1,96 +1,112 @@
-# Gesture zones and Alpha's notifications panel
+# Gesture zones and Android's notification shade
 
-This page says which swipes belong to Android and which to Alpha, and how Alpha's own
-notifications are opened. It records the behaviour in source as of round 8
-(`apps/app/src/prototype/model.js`, `template.html`, `phone.css`) and the tests that hold it.
+This page says which swipes belong to Android and which to Alpha, and how a person reaches
+notifications and quick settings. It records the behaviour in source after the owner's
+2026-10-12 decisions A-32 and A-33 (issues #416 and #417): `apps/app/src/prototype/model.js`,
+`system-shade.ts`, `template.html`, `phone.css`, `SystemShade.java` and `AlphaDevicePlugin.java`.
 Browser tests are Chromium on a development or production build. They are not emulator,
-TalkBack or device evidence; the emulator check is named at the end and has not been run at
-this source.
+TalkBack, AOSP-image or device evidence; the instrumented classes named at the end have not
+been run at this source.
 
-## What was wrong
+## The rule
 
-On the launcher flavor, which draws under Android's status bar, a downward swipe that started
-on the very top edge opened Android's notification shade and a swipe that started a little
-lower opened Alpha's notifications (round 7: a start 131 device pixels down opened Android's,
-a start further down opened Alpha's). Two different panels answered one gesture, told apart by
-a few pixels. Alpha's panel also had no control at all: it could only be opened by a swipe, so
-it could not be reached with a keyboard, a switch or TalkBack.
+Android's shade is the one notification and quick-settings surface. Alpha posts its notices
+(workflow results and approvals, hosted results, reminders) as ordinary Android notifications
+whose taps are bound to their owner (`WorkflowNoticeTaps`, `HostedNoticePoster`), and Android
+shows, taps, clears and silences them. Alpha draws no notification panel, no quick-settings
+tiles and no brightness control of its own in any product build. Workflow history stays in
+Alpha (Home's Workflows card, then History); Settings stays reachable from Home.
 
-## What the requirement says
-
-- [PRD](prd.md), explicit limits: "Android status shade, lock screen, secure wallet gestures,
-  default phone/SMS handling and system-wide assistant invocation are OS/role work, not CSS
-  inside a launcher."
-- [Flow audit](flow-audit-and-prd.md), native strategy: "Android owns lock, shade, permission
-  dialogs, role selection, secure prompts, picker, camera/handoff and default apps".
-- Flow audit, F14: "Notification history is a product view of known events, not a replacement
-  system shade."
-
-So the top-edge swipe is Android's, and Alpha's list is a product view that needs its own,
-visible way in.
+The earlier Alpha panel, opened from a "Notifications" handle on Home, competed with Android's
+shade and is removed from product builds. The browser development build
+(`ELIZA_DEV_ALLOW_TEST_MOCKS=1`, not on Android) keeps it only as a stand-in for Android's
+SystemUI, because a browser has none; it is a developer surface (`simulatedShade`).
 
 ## The zones
 
 | Zone | Owner | What happens |
 | --- | --- | --- |
-| A downward swipe from the top edge of the screen (the status bar) | Android | Android opens its own shade. Alpha does not respond: no downward swipe that starts above or beside the handle opens Alpha's panel, in any view, in any presentation. |
-| The "Notifications" handle at the top of Alpha Home | Alpha | Opens Alpha's notifications. See below. |
-| Inside Alpha's open notifications panel | Alpha | A swipe up closes it. A horizontal swipe on a row dismisses that notice. |
+| A downward swipe from the top edge of the screen (the status bar) | Android | Android opens its own shade, in both flavors. Alpha does not answer it. |
+| Launcher Home: the "Notifications" button | Alpha asks Android | Asks Android to expand its shade (`AlphaDevice.openNotificationShade`). |
+| Launcher Home: a downward pull that starts on empty Home | Alpha asks Android | The same request. See "Empty Home" below for what is not empty Home. |
+| Standalone app: any downward pull on Home | Nobody in Alpha | An ordinary app: Android's top-edge swipe is the way in. No button. |
 | A swipe in from the left or right edge | Android (gesture navigation) | Android delivers Back. In the browser build the same swipe within 30px of an edge goes Back. |
 | A swipe up from the bottom edge | Android (gesture navigation) | Android delivers HOME; the launcher flavor shows Alpha Home. |
 | A swipe up on Alpha Home, away from the bottom edge | Alpha | Opens the conversation sheet. |
 
-The former gestures "swipe down from the top 90px of any view" and "swipe down anywhere on
-Home" are removed. They were the ones that competed with Android's status bar.
+## Empty Home
 
-## The handle
+`emptyHomeShadePull` in `system-shade.ts` decides. A pull asks for Android's shade only when all
+of these hold:
 
-- A button labelled "Notifications" with a bell, centred at the top of Home, above the cards.
-  Its accessible name is "Open notifications"; it names the panel it controls
-  (`aria-controls`) and is in the tab order.
-- Target size: at least 44 by 44 pixels of the 412px canvas (it is 44 high and at least 120
-  wide), at every supported text size. The canvas is scaled down to a screen narrower than
-  412px, so there the handle, like every other control, is smaller on screen by that factor
-  (38px high at 360px).
-- Position: below the status bar in every presentation. The standalone app's page starts
-  below Android's bars. The launcher flavor reserves 44px for the bar and Home adds padding;
-  when Android reports a taller bar (`--native-top-inset`, set by `MainActivity` from the
-  system bar inset), Home's top padding grows so the handle starts at least 12 screen pixels
-  below it. The inset is in screen pixels and Home is laid out on the 412px canvas, which is
-  scaled to the screen width, so the rule divides the inset and its margin by that scale
-  (`--phone-scale`). Without the division a 360px wide screen with a 48px bar left under 8px
-  and a 100px bar overlapped the handle (found and fixed in the round-8 review).
-- Ways to open: a tap or click; Enter or Space when it has focus; the accessibility click
-  action (what TalkBack's double tap and Switch Access send); a pull down that starts on the
-  handle. `touch-action: none` on the handle gives the pull to the page instead of scrolling
-  Home.
-- While the panel is open, Home is inert and hidden from assistive technology and focus is
-  inside the panel. Close, Android Back, Escape and a swipe up close it; focus returns to the
-  handle unless something else was opened from the panel.
-- The handle shows no count. The panel reads Android's list when it opens; a number on Home
-  would be a count nobody has just read.
+- the launcher presentation, not the standalone app or the assistant surface;
+- Home with nothing over it: no app view, conversation sheet or full chat, voice session,
+  app drawer, secure (locked camera) state or development shade;
+- a clearly downward pull: more than 46 canvas pixels, and more than 1.5 times its sideways
+  travel (a card row or Back is sideways);
+- it started below Android's 44px status bar band (a pull from there is Android's own);
+- it started inside the Home layer, not on an editable element, not while a text field has focus
+  (the keyboard may be up), and not on content that is scrolled away from its top (that content
+  scrolls back first).
 
-The handle exists on Home only. From inside an app view the way to Alpha's notifications is
-Home; Android's own shade is available everywhere from the top edge.
+On a phone the WebView may take a vertical drag for scrolling before the page sees it. A Home
+whose content fits the screen is marked `data-alpha-home-fits="true"` and gives vertical drags to
+the page (`touch-action: pan-x pinch-zoom`). A Home that overflows (launcher landscape, large
+text or display size) scrolls normally; only at its top, where it cannot scroll further down, does
+Alpha take a clearly downward drag on empty Home from the WebView (a non-passive `touchmove` that
+calls `preventDefault`, `overflowPullDecision` in `system-shade.ts`), so that pull reaches Alpha
+too. Upward drags, sideways drags and drags on a Home scrolled away from its top stay the
+WebView's. Chromium's touch pipeline is covered by the landscape case in
+`notifications-handle.spec.ts`; whether the AOSP image's WebView delivers either path is not
+measured.
+
+## The Notifications button
+
+- Launcher Home only. A button labelled "Notifications" with a bell, centred at the top of Home.
+  Its accessible name is "Open notifications" and its description says it opens Android's
+  notifications and quick settings. It controls no Alpha region.
+- Target size: at least 44 by 44 pixels of the 412px canvas at every supported text size, below
+  Android's status bar. When Android reports a taller bar (`--native-top-inset`, set by
+  `MainActivity`), Home's top padding grows so the button starts at least 12 screen pixels
+  below it, measured in screen pixels on the scaled canvas.
+- Ways to activate: tap or click, Enter or Space, the accessibility click action (TalkBack's
+  double tap, Switch Access), or a pull down that starts on it.
+
+## Asking Android
+
+`AlphaDevice.openNotificationShade` (launcher flavor) calls
+`StatusBarManager.expandNotificationsPanel` by reflection, with the install-time
+`EXPAND_STATUS_BAR` permission that only the launcher flavor's manifest declares. It answers
+only while Alpha's window has focus. It resolves with one status:
+
+| Status | Meaning | What Alpha shows |
+| --- | --- | --- |
+| `opened` | Android accepted the call | Nothing more. Not a measurement that the shade is on screen. |
+| `standalone` | The standalone app never asks | "Swipe down from the top edge of the screen for Android notifications." |
+| `permission-missing`, `unsupported` | No permission, no status bar service, a refused or missing method | "Android did not open its notifications from Alpha. Swipe down from the top edge of the screen instead." |
+| `not-in-front` | Alpha's window does not have focus | "Alpha is not in front. Swipe down from the top edge of the screen for Android notifications." |
+
+A failed bridge call is treated as `unsupported`. No status is ever reported as opened unless
+Android accepted the call.
 
 ## Tests
 
 | Test | Lane | Shows |
 | --- | --- | --- |
-| `test/browser/notifications-handle.spec.ts` | `npm run test:browser` | In the standalone and launcher presentations: the handle's name, size and position; tap, Enter, Space, accessibility click and pull-from-handle open the panel; Close, Back and Escape close it and focus returns; swipes from the top edge, inside the status bar band, beside, above and below the handle, in the middle of Home and inside an app view open nothing; a taller status bar inset moves the handle down; the handle keeps its target at 200% text. |
-| `test/browser/accessibility-sweep.spec.ts`, `accessibility-sweep.production.spec.ts` | both lanes | Home with the handle passes the name, role, focus order, contrast, target size, clipping and overlap rules, at the default size, at 200% text and in landscape. |
-| `test/browser/settings-truth.production.spec.ts`, `root-view-states.spec.ts`, `fixtures-empty-runtime.spec.ts` | both lanes | Open the panel through the handle (they used the removed top-edge swipe). |
-| `test/browser/notifications-handle.spec.ts`, "the launcher handle starts 12 screen pixels below any status bar" | `npm run test:browser` | At 360, 412 and 480px wide and insets of 24 to 100px the handle's top edge on screen is at least 12px below the inset. |
-| `NotificationsInstrumentedTest`, `NotificationChannelsInstrumentedTest` | emulator | Both opened the panel with a synthetic swipe from y=50 that the product no longer answers; they now go to Home and click the handle (`AppNavigation.openNotifications`). Compiled at this source, not run. |
-| `test/gesture-zones-single-instance.test.mjs` | `npm test` | Source shape only: no swipe opener in the shell, no instrumented test synthesizes the removed swipe, the handle's margin rule divides by the canvas scale. |
-| `AccessibilityInstrumentedTest.homeShadeSettingsAndComposerAtDoubleFontScale` | emulator | A swipe from the top edge leaves Alpha's panel closed; a swipe beside the handle opens nothing; the accessibility click action on the handle opens the panel; a pull from the handle opens it. Compiled at this source, not run. |
+| `test/system-shade.test.mjs` | `npm test` | The decision rules for empty Home, the surface choice, the fallback text, the template and model gates, the launcher-only permission and the native outcome mapping (source shape). |
+| `test/gesture-zones-single-instance.test.mjs` | `npm test` | The swipe handler only asks for Android's shade; the development stand-in is gated; no instrumented test still looks for an Alpha panel. |
+| `test/browser/notifications-handle.spec.ts` | `npm run test:browser` | Standalone: no button, no pull opens anything. Launcher (with the development stand-in): the button's name, size and position; tap, Enter, Space, accessibility click, a pull on the button and a pull on empty Home open it; the status bar band, sideways drags, an open sheet, an app view, a focused composer and a scrolled Home do not; in landscape an overflowing Home still scrolls with touch and a downward touch pull at its top opens the stand-in; the button clears a taller status bar at 360, 412 and 480px; 200% text. |
+| `test/browser/settings-truth.production.spec.ts` | `npm run test:browser:production` | The flag-off bundle with a stubbed Android bridge: no Alpha shade, tiles or brightness; the button and an empty-Home pull call `openNotificationShade`; a focused composer does not; every non-opened outcome shows its fallback; the browser build has no shade or button. |
+| `SystemShadeInstrumentedTest` | emulator | Outcome mapping; EXPAND_STATUS_BAR declared and held by the launcher flavor only; launcher Home's request and empty-Home pull open Android's shade, a focused composer does not; standalone never does. Not compiled or run at this source. |
+| `NotificationsInstrumentedTest`, `NotificationChannelsInstrumentedTest` | emulator | A posted notice is found and tapped in Android's shade (opened from the launcher button, or Android's global action on standalone) and its PendingIntent fires; the page has no Alpha shade. Not compiled or run at this source. |
+| `AccessibilityInstrumentedTest.homeShadeSettingsAndComposerAtDoubleFontScale` | emulator | A top-edge swipe opens Android's shade with no Alpha panel behind it; on the launcher the accessibility click action and a pull from the button open Android's shade; standalone has no button. Not compiled or run at this source. |
 
-## Left to the owner
+## Left open
 
-Recorded in [core loop status](core-loop-status.md#gesture-zones-and-the-notifications-panel-round-8),
-not decided here:
-
-- Whether, on the AOSP image, Alpha's notices and quick-settings tiles should live in
-  Android's shade (a SystemUI change in the image) instead of in a panel inside Home.
-- Whether Home should also open Android's shade on a downward swipe, as stock launchers do
-  (that needs `EXPAND_STATUS_BAR` and a decision that Alpha drives the system shade).
+- Actual AOSP portrait, landscape and lock-screen screenshots of Android's shade with Alpha's
+  notices, branding, insets, Do Not Disturb, clear and tap behaviour, and the listening indicator
+  (#416, with #424 for the listening tile and #425 for owner-bound reposting).
+- Swipe, tap, TalkBack and return behaviour on the AOSP image and a Pixel 10a (#417).
+- Asking Alpha about one of its own notices used to start from the Alpha panel. In product
+  builds there is no such entry until it is offered from the notice itself (a notification
+  action); the browser development stand-in still shows it for development only.

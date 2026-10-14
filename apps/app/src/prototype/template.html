@@ -19,9 +19,10 @@
 <div data-alpha-layer="home" onFocusCapture="{{focusAppContent}}" role="region" aria-label="Home" aria-hidden="{{homeHidden}}" inert="{{homeHidden}}" style="position: absolute; inset: 44px 0 0; z-index: 10; box-sizing: border-box; overflow-y:auto; overflow-x:hidden; scroll-padding-bottom:110px">
 <div data-alpha-home-layout style="min-height:100%;display:flex;flex-direction:column;padding:20px 0 108px;box-sizing:border-box">
 <sc-if value="{{storageAccessWarning}}"><p role="alert" class="storage-access-warning">{{storageAccessWarning}}</p></sc-if>
-  <!-- The only way into Alpha's notifications (docs/gesture-zones.md): a visible control below
-       Android's status bar. The top-edge swipe is Android's and opens Android's own shade. -->
-  <div class="alpha-shade-row"><button class="alpha-shade-handle" data-alpha-shade-handle aria-label="Open notifications" aria-controls="alpha-notifications" aria-expanded="false" onClick="{{openShade}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.bell}}"></path></svg><span>Notifications</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.down}}"></path></svg></button></div>
+  <!-- Launcher Home only (docs/gesture-zones.md, #416, #417): Android's shade is the one
+       notification and quick-settings surface. This visible control asks Android to open it, as
+       a pull down on empty Home does; the top-edge swipe stays Android's. Alpha draws no shade. -->
+  <sc-if value="{{showShadeButton}}"><div class="alpha-shade-row"><button class="alpha-shade-handle" data-alpha-shade-handle aria-label="Open notifications" aria-description="Opens Android's notifications and quick settings" onClick="{{openSystemShade}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.bell}}"></path></svg><span>Notifications</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.down}}"></path></svg></button></div></sc-if>
   <div class="scr" style="display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 0 24px; scroll-padding-left: 24px; touch-action: pan-x; flex-shrink: 0">
     <button class="home-calendar-card" data-alpha-home-calendar data-alpha-home-calendar-event="{{homeCalendarHasEvent}}" data-alpha-home-calendar-meta="{{homeCalendarHasMeta}}" data-alpha-home-calendar-overdue="{{homeCalendarOverdue}}" onClick="{{goCalendar}}" aria-label="{{homeCalendarLabel}}" aria-description="{{homeCalendarDescription}}" style="flex-shrink: 0; scroll-snap-align: start; border-radius: 30px; background: var(--acc); color: #ffffff; padding: 22px; box-sizing: border-box">
       <div class="home-calendar-head">
@@ -1410,6 +1411,10 @@
     <button tabindex="-1" aria-label="Close menu" onClick="{{browser.closeMenu}}" style="position: absolute; inset: 0; z-index: 7; background: transparent"></button>
     <div class="drop" role="dialog" aria-label="Browser menu" data-alpha-browser-menu style="position: absolute; top: 98px; right: 10px; z-index: 8; width: 236px; border-radius: 24px; background: var(--s1); box-shadow: 0 0 0 1px var(--line), 0 20px 50px var(--shc); padding: 6px; display: flex; flex-direction: column; max-height: calc(100% - 120px); overflow-y: auto">
       <sc-if value="{{browser.nativeControls}}">
+        <sc-if value="{{browser.externalBrowserAvailable}}">
+          <p role="note" aria-label="Passkeys unsupported" style="margin:0;padding:8px 14px;font-size:13px;line-height:1.4;color:var(--mut)">Passkeys are not supported in Alpha Browser. Use a password or another browser.</p>
+          <button class="tap" aria-label="Open in another browser" onClick="{{browser.openExternalBrowser}}" style="min-height:50px;border-radius:18px;padding:0 14px;text-align:left;font-size:15px">Open in another browser</button>
+        </sc-if>
         <button class="tap" aria-label="Password manager" onClick="{{browser.openPasswordProvider}}" style="height:50px;border-radius:18px;display:flex;align-items:center;padding:0 14px;font-size:15px">Password manager</button>
         <button class="tap" aria-label="Downloads" onClick="{{browser.openDownloads}}" style="height: 50px; border-radius: 18px; display: flex; align-items: center; gap: 14px; padding: 0 14px; font-size: 15px"><svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="{{ic.filesDown}}"></path></svg>Downloads</button>
         <button class="tap" aria-label="Reload page" onClick="{{browser.reload}}" style="height: 50px; border-radius: 18px; display: flex; align-items: center; gap: 14px; padding: 0 14px; font-size: 15px"><svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="{{ic.phRotate}}"></path></svg>Reload page</button>
@@ -1642,7 +1647,7 @@
     <div data-alpha-app-header="detail" style="display: flex; align-items: center; height: 56px; margin-top: 44px; padding: 0 8px 0 16px; flex-shrink: 0">
       <div style="flex-grow: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 4px 0 16px; border-radius: 23px; background: var(--s2)">
         <svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px; color: var(--mut)"><path d="{{ic.search}}"></path></svg>
-        <input ref="{{photos.searchRef}}" aria-label="Search photos" placeholder="People, places, days" value="{{photos.q}}" onChange="{{photos.onQ}}" style="flex-grow: 1; min-width: 0; height: 44px; background: transparent; border: 0; outline: none; color: var(--fg); font-size: 16px">
+        <input ref="{{photos.searchRef}}" aria-label="Search photos" placeholder="{{photos.searchPlaceholder}}" value="{{photos.q}}" onChange="{{photos.onQ}}" style="flex-grow: 1; min-width: 0; height: 44px; background: transparent; border: 0; outline: none; color: var(--fg); font-size: 16px">
         <button class="ib" aria-label="Close search" onClick="{{photos.closeSearch}}" style="width: 40px; height: 40px"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px"><path d="{{ic.x}}"></path></svg></button>
       </div>
     </div>
@@ -1655,6 +1660,7 @@
   </sc-if>
 
   <sc-if value="{{photos.isLib}}">
+    <sc-if value="{{photos.libraryAccessControl}}"><div style="padding:8px 20px;flex-shrink:0"><p role="status" style="margin:0 0 6px;font-size:14px">{{photos.libraryAccessLabel}}</p><sc-if value="{{photos.libraryAccessNeedsChoice}}"><button disabled="{{photos.libraryAccessBusy}}" onClick="{{photos.libraryAccessChoose}}" style="min-height:44px;padding:8px 14px;border-radius:20px;background:var(--s2);color:var(--fg)">{{photos.libraryAccessButton}}</button></sc-if><button onClick="{{photos.libraryAccessSettings}}" style="min-height:44px;padding:8px 14px;border-radius:20px;background:var(--s2);color:var(--fg)">Photo access settings</button></div></sc-if>
     <sc-if value="{{photos.hasFilter}}">
       <div style="display: flex; align-items: center; gap: 12px; padding: 2px 20px 12px; flex-shrink: 0">
         <button aria-label="Clear search {{photos.filterLabel}}" onClick="{{photos.clearFilter}}" style="height: 36px; max-width: 300px; border-radius: 18px; background: var(--acc); color: #ffffff; padding: 0 10px 0 16px; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600">
@@ -1754,10 +1760,33 @@
         <h1 data-alpha-app-title class="serif" style="margin: 0 0 0 4px; font-size: 26px; letter-spacing: -.01em; flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{photos.alb.title}}</h1>
         <span style="font-size: 13px; color: var(--mut); padding: 0 8px">{{photos.alb.count}}</span>
         <sc-if value="{{photos.alb.isCustom}}"><button class="ib" aria-label="Manage album" onClick="{{photos.alb.manage}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.more}}"></path></svg></button></sc-if>
-        <sc-if value="{{photos.alb.isTrash}}">
+        <sc-if value="{{photos.alb.canEmpty}}">
           <button class="ib" aria-label="Delete all forever" onClick="{{photos.alb.emptyTrash}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.trash}}"></path></svg></button>
         </sc-if>
       </div>
+      <sc-if value="{{photos.alb.isDevice}}">
+        <div data-alpha-device-library-actions style="display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 8px; flex-shrink: 0">
+          <sc-if value="{{photos.alb.dev.hasAccess}}"><button class="tap" onClick="{{photos.alb.dev.access}}" style="padding: 8px 14px; border-radius: 18px; background: var(--s2); color: var(--fg); font-size: 13px">{{photos.alb.dev.accessLabel}}</button></sc-if>
+          <sc-if value="{{photos.alb.dev.canAct}}">
+            <button class="tap" aria-label="Share selected library items" onClick="{{photos.alb.dev.share}}" style="padding: 8px 14px; border-radius: 18px; background: var(--s2); color: var(--fg); font-size: 13px">Share</button>
+            <sc-if value="{{photos.alb.dev.canEdit}}">
+              <button class="tap" aria-label="Favorite selected library items" onClick="{{photos.alb.dev.favorite}}" style="padding: 8px 14px; border-radius: 18px; background: var(--s2); color: var(--fg); font-size: 13px">Favorite</button>
+              <button class="tap" aria-label="Move selected library items to trash" onClick="{{photos.alb.dev.trash}}" style="padding: 8px 14px; border-radius: 18px; background: var(--s2); color: var(--fg); font-size: 13px">Trash</button>
+            </sc-if>
+            <button class="tap" aria-label="Clear library selection" onClick="{{photos.alb.dev.clear}}" style="padding: 8px 14px; border-radius: 18px; background: transparent; color: var(--mut); font-size: 13px">Clear</button>
+          </sc-if>
+        </div>
+        <sc-if value="{{photos.alb.dev.reviewing}}">
+          <div role="alertdialog" aria-label="{{photos.alb.dev.reviewTitle}}" style="margin: 0 16px 8px; padding: 14px 16px; border-radius: 16px; background: var(--s2); color: var(--fg); flex-shrink: 0">
+            <div style="font-size: 15px; font-weight: 600">{{photos.alb.dev.reviewTitle}}</div>
+            <div style="font-size: 13px; color: var(--mut); margin-top: 4px">{{photos.alb.dev.reviewDetail}}</div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px">
+              <button class="tap" onClick="{{photos.alb.dev.cancel}}" style="padding: 8px 14px; border-radius: 18px; background: transparent; color: var(--fg); font-size: 13px">Cancel</button>
+              <button class="tap" onClick="{{photos.alb.dev.confirm}}" style="padding: 8px 14px; border-radius: 18px; background: var(--acc); color: #ffffff; font-size: 13px">Continue</button>
+            </div>
+          </div>
+        </sc-if>
+      </sc-if>
       <div class="scr" data-alpha-app-scroll="photos" style="flex-grow: 1; overflow-y: auto; touch-action: pan-y; padding: 8px 0 180px">
         <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px">
           <sc-for list="{{photos.alb.items}}" as="p">
@@ -2538,6 +2567,7 @@
       </div>
     </div>
   </sc-if>
+  <sc-if value="{{contacts.nativeManaged}}"><div style="padding:12px 24px;display:flex;gap:8px;flex-wrap:wrap"><p role="status" style="width:100%;margin:0">{{contacts.nativeStatus}}</p><sc-if value="{{contacts.nativeAccess}}"><button disabled="{{contacts.nativeBusy}}" onClick="{{contacts.nativeRequest}}">Choose Contacts access</button></sc-if><button disabled="{{contacts.nativeBusy}}" onClick="{{contacts.nativeRefresh}}">Refresh contacts</button><sc-if value="{{contacts.nativeMore}}"><button disabled="{{contacts.nativeBusy}}" onClick="{{contacts.nativeLoadMore}}">Load more contacts</button></sc-if></div></sc-if>
   <div class="scr" style="flex-grow: 1; overflow-y: auto; padding-bottom: 130px; touch-action: pan-y">
     <sc-if value="{{contacts.hasFavs}}">
       <div class="scr" style="display: flex; gap: 6px; overflow-x: auto; padding: 8px 14px 10px; touch-action: pan-x">
@@ -2583,9 +2613,9 @@
       <div style="display: flex; align-items: center; height: 56px; margin-top: 44px; padding: 0 8px; gap: 2px; flex-shrink: 0">
         <button class="ib" aria-label="Back to contacts" onClick="{{contacts.d.close}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.back}}"></path></svg></button>
         <span style="flex-grow: 1"></span>
-        <button class="ib" aria-label="{{contacts.d.favLabel}}" aria-pressed="{{contacts.d.fav}}" onClick="{{contacts.d.toggleFav}}"><svg class="i" viewBox="0 0 24 24" style="{{contacts.d.favCss}}"><path d="{{ic.star}}"></path></svg></button>
+        <sc-if value="{{contacts.nativePrototype}}"><button class="ib" aria-label="{{contacts.d.favLabel}}" aria-pressed="{{contacts.d.fav}}" onClick="{{contacts.d.toggleFav}}"><svg class="i" viewBox="0 0 24 24" style="{{contacts.d.favCss}}"><path d="{{ic.star}}"></path></svg></button></sc-if>
         <button class="ib" aria-label="Edit contact" onClick="{{contacts.d.edit}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.edit}}"></path></svg></button>
-        <button class="ib" aria-label="Delete contact" onClick="{{contacts.d.del}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.trash}}"></path></svg></button>
+        <sc-if value="{{contacts.nativePrototype}}"><button class="ib" aria-label="Delete contact" onClick="{{contacts.d.del}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.trash}}"></path></svg></button></sc-if>
       </div>
       <div class="scr" style="flex-grow: 1; overflow-y: auto; padding: 8px 0 130px; touch-action: pan-y">
         <div style="display: flex; flex-direction: column; align-items: center; padding: 0 24px">
@@ -2822,6 +2852,7 @@
           <span style="font-size: 14px; color: var(--mut)">{{files.pv.meta}}</span>
           <sc-if value="{{files.pv.needsReselect}}"><button onClick="{{files.pv.reselect}}" aria-label="Select renamed file" style="padding: 10px 14px; border-radius: 20px; background: var(--acc); color: #fff">Select renamed file</button></sc-if>
         </div>
+        <sc-if value="{{files.pv.canEmail}}"><button onClick="{{files.pv.email}}" style="display:block;min-height:44px;margin-top:12px;padding:0 16px;border-radius:22px;background:var(--s2);font-size:14px;font-weight:600">Use in email</button></sc-if>
         <sc-if value="{{files.pv.canForget}}"><button onClick="{{files.pv.forget}}" aria-label="Forget selected file" style="display: block; margin-top: 12px; color: var(--mut); font-size: 13px">Forget selected file</button></sc-if>
         <sc-if value="{{files.pv.canAsk}}">
           <button onClick="{{files.pv.ask}}" aria-label="{{name}}: summarize this file" style="display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px 0 14px; margin-top: 14px; border-radius: 18px; background: var(--s2); font-size: 14px; font-weight: 600"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex-shrink:0;color:var(--acct)"><span class="alpha-compute-mark" aria-hidden="true" style="width:100%;height:100%"></span></span>{{files.pv.askLabel}}</button>
@@ -3951,6 +3982,8 @@
         <sc-if value="{{chatRecorder.review}}"><textarea aria-label="Review transcript" disabled="{{chatRecorder.transcriptDisabled}}" value="{{chatRecorder.transcript}}" onChange="{{chatRecorder.onTranscript}}" style="width:100%;flex:1;min-height:112px;box-sizing:border-box;background:var(--s2);border:0;border-radius:16px;padding:12px;color:var(--fg);font:inherit;line-height:1.45;resize:vertical"></textarea></sc-if>
         <sc-if value="{{chatRecorder.typeChoice}}"><button class="tap" onClick="{{chatRecorder.typeInstead}}" style="min-height:44px;padding:8px 12px;border-radius:20px;background:var(--s2);color:var(--fg)">Type transcript instead</button></sc-if>
       </div>
+      <sc-if value="{{chatRecorder.canMute}}"><button class="tap" onClick="{{chatRecorder.toggleMute}}" style="min-height:44px;padding:8px 16px;border-radius:16px;background:var(--s2);color:var(--fg)">{{chatRecorder.muteLabel}}</button></sc-if>
+      <sc-if value="{{chatRecorder.needsPlaybackUnlock}}"><button class="tap" onClick="{{chatRecorder.unlockPlayback}}" style="min-height:44px;padding:8px 16px;border-radius:16px;background:var(--s2);color:var(--fg)">Enable sound</button></sc-if>
       <button class="tap" aria-label="{{chatRecorder.primaryLabel}}" disabled="{{chatRecorder.primaryDisabled}}" onClick="{{chatRecorder.stop}}" style="display:flex;align-items:center;justify-content:center;gap:10px;min-height:56px;flex-shrink:0;padding:10px 16px;border-radius:28px;background:var(--acc);color:#fff;font:inherit;font-weight:600"><svg class="i" viewBox="0 0 24 24" style="width:24px;height:24px;flex-shrink:0"><path d="{{chatRecorder.primaryIcon}}"></path></svg><span>{{chatRecorder.primaryLabel}}</span></button>
       <sc-if value="{{chatRecorder.review}}"><button class="tap" aria-label="{{chatRecorder.pauseLabel}}" onClick="{{chatRecorder.toggle}}" style="display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;flex-shrink:0;padding:8px 16px;border-radius:22px;background:var(--s2);color:var(--fg);font:inherit"><svg class="i" viewBox="0 0 24 24" style="width:20px;height:20px"><path d="{{chatRecorder.pauseIcon}}"></path></svg><span>{{chatRecorder.pauseLabel}}</span></button></sc-if>
     </section>
@@ -4139,9 +4172,12 @@
 </sc-if>
 
 
-<!-- No heads-up banner: Alpha shows only real notices, through the shade (AlphaNotifications). -->
+<!-- No heads-up banner: Alpha posts real notices as Android notifications; Android shows them. -->
 
-
+<!-- Development stand-in for Android's shade (ELIZA_DEV_ALLOW_TEST_MOCKS=1 browser builds only,
+     simulatedShade). A browser has no SystemUI, so this simulates it for development tests.
+     Product builds, including every APK, render nothing here: Android's shade is the surface (#416). -->
+<sc-if value="{{simulatedShade}}">
 <sc-if value="{{isOn}}">
 <div data-alpha-layer="shade" id="alpha-notifications" role="region" aria-label="Notifications" aria-hidden="{{shadeHidden}}" inert="{{shadeHidden}}" onKeyDown="{{shadeKey}}" style="position: absolute; inset: 0; z-index: 66; background: var(--bg); transform: translateY({{shadeY}}); transition: transform .55s cubic-bezier(.19,1,.22,1); display: flex; flex-direction: column; padding: 56px 14px 0; box-sizing: border-box">
 <sc-if value="{{storageAccessWarning}}"><p role="alert" class="storage-access-warning">{{storageAccessWarning}}</p></sc-if>
@@ -4181,6 +4217,7 @@
     <button class="ib" aria-label="Settings" onClick="{{goSettings}}" style="background: var(--s2)"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.gear}}"></path></svg></button>
   </div>
 </div>
+</sc-if>
 </sc-if>
 
 

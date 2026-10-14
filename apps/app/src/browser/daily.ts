@@ -1,3 +1,6 @@
+import {browserDeletionOwnerCurrent,browserDeletionOwnerVisible} from '../runtime/deletion-owner';
+import {browserDeletionClock,deletionWindow} from '../runtime/deletion-window';
+import {stageReminderDeletion,settleReminderDeletions,undoReminderDeletion,type ReminderDeletion} from './reminder-deletions';
 import {isReminderCreate,validateReminderCreate,validateReminderCreateResult,type ReminderCreateOperation,type ReminderCreateResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/reminder-create-contract.ts';
 import { validateReminderOperation, reminderFields, reminderTiming, type ReminderOperation, type ReminderResult, type ReminderTarget } from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/reminder-contract.ts';
 import { BrowserFiles } from './files';
@@ -8,8 +11,8 @@ import type { Reminder, ClockRequest } from '../daily';
 import { revision } from './revision';
 import {notificationState} from './notification-store';
 import {reminderDocument} from './reminder-store';
-type Row=Reminder & {revision:string};
-type State={sourceRevision:string;reminders:Row[];receipts?:Record<string,{binding:string;result:ReminderResult|ReminderCreateResult}>};
+type Row=Reminder & {revision:string;pendingDeletion?:string};
+type State={deletions?:Record<string,ReminderDeletion>;deleteClaims?:Record<string,string>;sourceRevision:string;reminders:Row[];receipts?:Record<string,{binding:string;result:ReminderResult|ReminderCreateResult}>};
 const initial=():State=>({sourceRevision:revision(),reminders:[]});
 async function notificationsAllowed(){const state=await notificationState();return state.appEnabled&&state.channels.reminders!==false;}
 async function scheduledStatus():Promise<'scheduled'|'permission-denied'>{return await notificationsAllowed()?'scheduled':'permission-denied';}
@@ -35,6 +38,23 @@ async function decide(row:Row,action:'done'|'snooze') {
 }
 export class BrowserDaily extends WebPlugin {
   constructor(private files:BrowserFiles){super();window.addEventListener('focus',()=>void this.notifyListeners('appResumed',{}));}
+  async deletionSelection(expected:ReminderTarget){const data=await reminderDocument.read(initial),row=data.reminders.find(r=>r.id===expected.reminderId);if(!row||Object.entries(target(data,row)).some(([key,value])=>expected[key as keyof ReminderTarget]!==value))throw Error('Reminder changed. Review it again.');return {row:structuredClone(row),owner:'manual:'+data.sourceRevision};}
+  async stageDeletion(expected:ReminderTarget,owner:string,id?:string,binding?:string,journalBinding?:{scope:string;proposalId:string;operationHash:string}){return reminderDocument.edit(initial,data=>{
+    if(!browserDeletionOwnerCurrent(owner))throw Error('Deletion owner changed during review.');
+    const row=data.reminders.find(r=>r.id===expected.reminderId);if(!row||Object.entries(target(data,row)).some(([key,value])=>expected[key as keyof ReminderTarget]!==value))throw Error('Reminder changed. Review it again.');
+    if(binding&&id){if(data.deleteClaims?.[id])throw Error('Deletion operation already used.');if(Object.keys(data.deleteClaims||{}).length>=500)throw Error('Action deletion history requires review.');(data.deleteClaims??={})[id]=binding;}
+    const staged=stageReminderDeletion(data,row,owner,id,binding);if(journalBinding)data.deletions![staged.id].journalBinding=journalBinding;return staged;
+  });}
+  async deletionReceipt(id:string){const data=await reminderDocument.read(initial);return {entry:data.deletions?.[id]||null,row:data.reminders.find(r=>r.pendingDeletion===id||r.id===data.deletions?.[id]?.target.row.id)};}
+  async pendingDeletions(){const data=await reminderDocument.read(initial),clock=browserDeletionClock();return Object.values(data.deletions||{}).filter(e=>!e.acknowledged&&['queued','paused','unknown','dispatching'].includes(e.phase)&&browserDeletionOwnerVisible(e.owner)).map(e=>({...e,kind:'reminder',window:e.phase==='queued'?deletionWindow(e.deadline,clock):undefined}));}
+  async settleDeletions(){
+    // Polling an empty store must not create a document or a recovery revision.
+    const data=await reminderDocument.read(initial);
+    if(!Object.values(data.deletions||{}).some(entry=>entry.phase==='queued'))return;
+    await reminderDocument.edit(initial,data=>settleReminderDeletions(data,browserDeletionOwnerCurrent));
+  }
+  async dismissDeletion(id:string){return reminderDocument.edit(initial,data=>{const entry=data.deletions?.[id];if(!entry||!browserDeletionOwnerVisible(entry.owner)||!['unknown','dispatching'].includes(entry.phase))throw Error('Uncertain deletion is unavailable.');entry.acknowledged=true;return {status:'acknowledged'};});}
+  async undoDeletion(id:string){return reminderDocument.edit(initial,data=>undoReminderDeletion(data,id,browserDeletionOwnerVisible));}
   async notifyReminder(id:string,occurrenceId:string){await this.notifyListeners('reminderOpened',{id,occurrenceId});}
   async surfaceInfo(){return {developmentBuild:devSurfacesEnabled,assistant:false,reminderCreationVersion:1 as const,reminderTimingVersion:2 as const,topInset:0,bottomInset:0};}
   async closeAssistant(){window.dispatchEvent(new Event('alpha-back',{cancelable:true}));return {closed:true};}
@@ -48,12 +68,12 @@ export class BrowserDaily extends WebPlugin {
     return reminderDocument.edit(initial,async data=>{const status=input.alertMinutes===null?'pending':await scheduledStatus();const previous=data.reminders.find(r=>r.id===input.id);if(previous?.alertMinutes!==undefined&&input.alertMinutes===undefined)throw Error('Explicit reminder timing cannot be discarded');data.reminders=data.reminders.filter(r=>r.id!==input.id);data.reminders.push({...input,body:input.body||'',mode,createdAt:previous?.createdAt||Date.now(),status,occurrenceId:crypto.randomUUID(),dueAt,history:previous?.history||[],revision:revision()});return {status,id:input.id,mode};});
   }
   async listReminders(){
-    const due=(data:State)=>data.reminders.some(row=>row.status==='scheduled'&&row.at<=Date.now());
+    const due=(data:State)=>data.reminders.some(row=>!row.pendingDeletion&&row.status==='scheduled'&&row.at<=Date.now());
     const result=async(data:State)=>({reminders:data.reminders.filter(row=>row.status!=='cancelled').map(row=>({...row,target:target(data,row)})),notificationsEnabled:await notificationsAllowed()});
     const data=await reminderDocument.read(initial);
     // Polling an unchanged schedule must not mint new reset/recovery revisions.
     if(!due(data))return result(data);
-    return reminderDocument.edit(initial,async data=>{for(const row of data.reminders)if(row.status==='scheduled'&&row.at<=Date.now()){row.status=await notificationsAllowed()?'posted':'permission-denied';if(row.status==='posted')row.postedAt=Date.now();row.revision=revision();}return result(data);});
+    return reminderDocument.edit(initial,async data=>{for(const row of data.reminders)if(!row.pendingDeletion&&row.status==='scheduled'&&row.at<=Date.now()){row.status=await notificationsAllowed()?'posted':'permission-denied';if(row.status==='posted')row.postedAt=Date.now();row.revision=revision();}return result(data);});
   }
 
   async cancelReminder(input:{id:string;target:ReminderTarget;operationId:string;bindingHash:string}){if(input.target?.reminderId!==input.id)throw Error('Reviewed reminder target required.');const response=await this.operateReminder({...input,operation:{type:'reminder_cancel',target:input.target}});return {status:response.status==='succeeded'?'cancelled':'unknown',id:input.id};}
@@ -64,6 +84,7 @@ export class BrowserDaily extends WebPlugin {
   }
   async operateReminder(input:{operationId:string;bindingHash:string;operation:ReminderOperation|ReminderCreateOperation}) {
     const operation=isReminderCreate(input.operation)?validateReminderCreate(input.operation):validateReminderOperation(input.operation),binding=operationBinding(input,operation);
+    if(operation.type==='reminder_cancel')throw Error('Use the reviewed deletion window.');
     return reminderDocument.edit(initial,async data=>{
       const receipt=data.receipts?.[input.operationId];if(receipt){if(receipt.binding!==binding)throw Error('Reminder receipt binding changed.');return {status:'succeeded',result:receipt.result};}
       if(document.hidden)throw Error('Return to Alpha to review the reminder.');
@@ -79,13 +100,12 @@ export class BrowserDaily extends WebPlugin {
       }
       const row=data.reminders.find(r=>r.id===operation.target.reminderId);
       if(!row||operation.target.timingVersion!==target(data,row).timingVersion||Object.entries(target(data,row)).some(([k,v])=>operation.target[k as keyof ReminderTarget]!==v))throw Error('Reminder changed. Review it again.');
-      if(operation.type!=='reminder_read_selected'&&(row.status==='cancelled'||row.status==='completed'&&operation.type!=='reminder_cancel'&&operation.type!=='reminder_update'))throw Error('Reminder is no longer active.');
+      if(operation.type!=='reminder_read_selected'&&(row.status==='cancelled'||row.status==='completed'&&operation.type!=='reminder_update'))throw Error('Reminder is no longer active.');
       if(operation.type==='reminder_update'){
         row.title=operation.fields.title;row.body=operation.fields.body;
         if(operation.fields.schedule){const schedule=operation.fields.schedule;if(schedule.at<=Date.now())throw Error('Choose a future reminder time.');row.at=schedule.at;row.recurrence=schedule.recurrence||undefined;row.dueAt=schedule.dueAt??(schedule.recurrence?initialReminderDue(schedule.recurrence,schedule.at):schedule.at);if(schedule.recurrence&&initialReminderDue(schedule.recurrence,schedule.at)!==row.dueAt)throw Error('Reminder civil time changed');if(schedule.alertMinutes===undefined)delete row.alertMinutes;else row.alertMinutes=schedule.alertMinutes;row.mode=row.alertMinutes===null?'none':'inexact';row.occurrenceId=crypto.randomUUID();row.status=row.alertMinutes===null?'pending':await scheduledStatus();delete row.snoozedAt;delete row.postedAt;delete row.completedAt;}
         row.revision=revision();
-      }else if(operation.type==='reminder_cancel'){row.status='cancelled';row.cancelledAt=Date.now();row.revision=revision();}
-      else if(operation.type==='reminder_complete'||operation.type==='reminder_snooze')await decide(row,operation.type==='reminder_complete'?'done':'snooze');
+      }else if(operation.type==='reminder_complete'||operation.type==='reminder_snooze')await decide(row,operation.type==='reminder_complete'?'done':'snooze');
       const result:ReminderResult={...reminderTiming(row),version:1,kind:operation.type,sourceId:'browser-reminders',reminderId:row.id,occurrenceId:row.occurrenceId!,revision:row.revision,status:row.status,at:row.at};
       if(operation.type==='reminder_read_selected')result.fields={title:row.title,body:row.body,schedule:{at:row.alertMinutes===undefined?row.at:row.dueAt!-(row.alertMinutes??0)*60000,recurrence:row.recurrence||null,...reminderTiming(row)}};
       if(document.hidden)throw Error('Return to Alpha to review the reminder.');

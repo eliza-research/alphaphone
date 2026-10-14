@@ -646,7 +646,9 @@ test.describe('a toast raised while a top-layer dialog is open', () => {
 // arrives in the page as pointerdown, mousedown, pointerup, mouseup and click on the element with
 // no pointer travel. Chromium's desktop tree and synthetic events stand in for WebView here; the
 // native delivery itself is AccessibilityInstrumentedTest on an emulator.
-for (const shell of HOME_SHELLS) test(`${shell.name}: the notifications handle is an enabled button under enabled ancestors, and an accessibility click's events open the panel`, async ({ page }) => {
+// The Notifications button exists on launcher Home only (#416, #417). On Android it asks Android to
+// open its shade; this development build opens the stand-in for that shade instead.
+for (const shell of HOME_SHELLS.filter(item => item.name === 'launcher')) test(`${shell.name}: the notifications button is an enabled button under enabled ancestors, and an accessibility click's events reach it`, async ({ page }) => {
   await page.addInitScript(offline);
   await page.goto(shell.url);
   await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
@@ -670,7 +672,13 @@ for (const shell of HOME_SHELLS) test(`${shell.name}: the notifications handle i
     fire('pointerdown', PointerEvent); fire('mousedown', MouseEvent); fire('pointerup', PointerEvent); fire('mouseup', MouseEvent); fire('click', MouseEvent);
     return log;
   });
-  // The handle is still the same element when the click arrives: nothing re-renders it on pointerdown.
+  // The button is still the same element when the click arrives: nothing re-renders it on pointerdown.
   expect(seen).toEqual(['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
   await expect(page.locator('[data-alpha-layer="shade"]')).toHaveAttribute('aria-hidden', 'false');
+});
+test('standalone app: Home offers no notifications control; Android\'s top-edge swipe is the way in', async ({ page }) => {
+  await page.addInitScript(offline);
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
+  await expect(page.locator('[data-alpha-shade-handle]')).toHaveCount(0);
 });

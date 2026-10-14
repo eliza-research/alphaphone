@@ -46,9 +46,10 @@ final class AppNavigation {
  static String composer() { return "[...document.querySelectorAll('textarea[data-alpha-composer]')].find(e=>!e.disabled&&e.getClientRects().length&&!e.closest('[inert], [aria-hidden=\"true\"]'))"; }
  static String type() { return "document.querySelector('button[aria-label=\"Type\"]')?.click()"; }
  /**
-  * Opens Alpha's notifications the one way the product offers: the "Notifications" handle on Home
-  * (docs/gesture-zones.md). Evaluates to true once the handle was clicked; false while Home is not
-  * the view in front. No swipe opens the panel, from the top edge or anywhere else.
+  * Clicks launcher Home's "Notifications" button, which asks Android to open its own shade (#416,
+  * #417; docs/gesture-zones.md). Alpha draws no shade: observe the result with AndroidShade.
+  * Evaluates to true once the button was clicked; false while Home is not the view in front, and
+  * always false on the standalone app, which has no button.
   */
  static String openNotifications() { return "(()=>{const handle=document.querySelector('[data-screen] button[data-alpha-shade-handle]');if(!handle||!handle.getClientRects().length||handle.disabled||handle.closest('[inert]'))return false;handle.click();return true;})()"; }
 }

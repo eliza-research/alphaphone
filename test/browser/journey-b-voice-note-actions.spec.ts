@@ -321,11 +321,12 @@ test('Journey B: recorded note is read aloud, summarized, and becomes an event a
  expect(await eventTitles(page)).toEqual(['Venue booking call','Venue walkthrough edited']);
  await page.getByRole('button',{name:'Delete event',exact:true}).click();
  await deleteReview.getByRole('button',{name:'Delete event',exact:true}).click();
- await expect(page.getByText('Local event deleted and verified.',{exact:true})).toBeVisible();
+ await expect.poll(()=>eventTitles(page),{timeout:15000}).toEqual(['Venue booking call']);
  await expect(page.getByRole('button',{name:/^Venue walkthrough edited,/})).toHaveCount(0);
  await page.getByRole('button',{name:/^Book the venue edited,/}).click();
  await page.getByRole('button',{name:'Delete event',exact:true}).click();
- await expect(page.getByText('Reminder cancelled',{exact:true})).toBeVisible();
+ await page.getByRole('dialog',{name:'Delete reminder?',exact:true}).getByRole('button',{name:'Delete reminder',exact:true}).click();
+ await expect.poll(()=>liveReminders(page),{timeout:15000}).toEqual(['Email the caterer']);
  await expect(page.getByRole('button',{name:/^Book the venue edited,/})).toHaveCount(0);
  await page.reload();await ready(page);
  expect(await eventTitles(page)).toEqual(['Venue booking call']);

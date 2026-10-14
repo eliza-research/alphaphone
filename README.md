@@ -409,6 +409,14 @@ add-on under `artifacts/aosp/`. Copy that directory under an AOSP `vendor/` dire
 and inherit its `product.mk` from the selected product. See [build instructions](docs/android-and-aosp.md)
 for signing, default-home policy and the full image verification boundary.
 
+The opt-in always-on listener ships only in the image. Build it with `./gradlew :sense:assembleRelease`
+(in `android/`, same signing variables as the APKs, after the speech model bundle is prepared) and pass
+it with `--listener-apk FILE`. Production staging requires it together with `--listener-descriptor FILE`, an
+independently reviewed JSON record of `packageName`, `apkSha256` and `certificateSha256`, and refuses a
+listener APK without the qualified speech bundle. `node scripts/verify-aosp-listener.mjs --serial SERIAL --user 0` is a read-only
+check of a booted image. See [ADR 0001](docs/adr/0001-privileged-listener.md) for the privilege
+boundary and the remaining device gates.
+
 ## Layout
 
 `apps/app` owns this product's UI. `android` owns its packaging and launcher bridge.

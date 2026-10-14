@@ -2,7 +2,7 @@ import { returnToApps } from './app-navigation';
 import {test,expect} from '@playwright/test';
 for(const next of ['event','home','new-draft'] as const)test(`late Calendar deletion preserves newer ${next}`,async({page})=>{
  await page.addInitScript(()=>localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'})));
- await page.goto('/?mode=dev');await page.getByRole('button',{name:'Calendar',exact:true}).click();
+ await page.clock.install();await page.goto('/?mode=dev');await page.getByRole('button',{name:'Calendar',exact:true}).click();
  for(const title of ['Keep event B','Delete event A']){
   await page.getByRole('button',{name:'New event',exact:true}).click();
   await page.getByRole('textbox',{name:'Title',exact:true}).fill(title);
@@ -27,6 +27,8 @@ for(const next of ['event','home','new-draft'] as const)test(`late Calendar dele
  if(next==='event')await expect(page.getByRole('heading',{name:'Keep event B',exact:true})).toBeVisible();
  if(next==='home')await expect(page.locator('html')).toHaveAttribute('data-active-view','home');
  if(next==='new-draft')await expect(page.getByRole('textbox',{name:'Title',exact:true})).toHaveValue('New unsaved event');
+ await page.clock.fastForward(11000);
+ await expect.poll(()=>page.evaluate(async()=>JSON.parse((await(await import('/src/browser/calendar-store.ts')).calendarDocument.readRaw())!).events.length)).toBe(1);
  const result=await page.evaluate(async ()=>({calls:(window as any).deleteCompletion.calls,events:JSON.parse((await (await import('/src/browser/calendar-store.ts')).calendarDocument.readRaw())!).events}));
  expect(result.calls).toBe(1);expect(result.events.map((event:any)=>event.title)).toEqual(['Keep event B']);
 });

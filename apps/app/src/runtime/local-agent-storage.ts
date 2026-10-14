@@ -31,6 +31,12 @@ export const developmentActionJournal:ActionJournal={
   const {workflowNoticeReceipt}=await import('../browser/workflow-notices');const receipt=await workflowNoticeReceipt(entry.operationId,effect.title,effect.body,input.bindingHash,AbortSignal.timeout(15000));if(receipt.status!=='succeeded')return {entry};
   return operation({...input,operation:'recoverNotification',expectedEntry:entry});
  },
+ recoverDeletion:async input=>{
+  const {entry}=await operation({...input,operation:'get'});if(!entry)throw Error('Deletion journal missing');
+  if(entry.phase==='terminal'&&entry.status!=='unknown')return {entry};
+  const {deletions}=await import('./deletions');const {recovery}=await deletions.receipt({entry});if(!recovery)return {entry};
+  return operation({...input,operation:'recoverDeletion',expectedEntry:entry,recovery});
+ },
  recoverReminder:async input=>{
   const {entry}=await operation({...input,operation:'get'});if(!entry)throw Error('Reminder journal is missing');
   if(entry.phase==='terminal'&&entry.status!=='unknown')return {entry};

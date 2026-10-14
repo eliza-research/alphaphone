@@ -1,0 +1,53 @@
+import { registerPlugin } from '../platform-plugins';
+import { watchReturnToApp } from './native-adapter';
+import { isMvpView } from './mvp-features';
+type Bag=Record<string,any>;
+const contacts=registerPlugin<any>('AlphaContacts');
+/** Native address-book rows stay in memory, never in prototype persistence or agent context. */
+export function installContactsAdapter(Component:any,views:Bag){
+ const render=views.contacts.render,p=Component.prototype,mount=p.componentDidMount,update=p.componentDidUpdate,unmount=p.componentWillUnmount;
+ let owner:any,rows:Bag[]=[],status='Choose Contacts access to see this profile’s address book.',readable=false,loading=false,more=false,limit=50,epoch=0,active=false;
+ const changed=()=>owner?.setState({contactsNativeRevision:Date.now()});
+ const clear=()=>{epoch++;rows=[];readable=false;more=false;loading=false;changed();};
+ const available=()=>!!owner&&owner.S().view==='contacts'&&isMvpView('contacts')&&!document.hidden;
+ const sync=()=>{const next=available();if(next===active)return;active=next;if(next)void refresh();else clear();};
+ async function refresh(request=false,queryOverride?:string){
+  const target=owner,token=++epoch;if(!available()){return;}loading=true;rows=[];changed();
+  try{
+   const access=request?await contacts.requestPermissions():await contacts.status();
+   if(token!==epoch||target!==owner||!available())return;
+   readable=access.available===true&&access.readable===true;
+   if(!readable){status='Choose Contacts access to see this profile’s address book.';return;}
+   const value=await contacts.list({query:queryOverride??String(target.vget('contacts').q||''),limit});
+   if(token!==epoch||target!==owner||!available())return;
+   if(!Array.isArray(value.contacts))throw Error();rows=value.contacts;more=value.more===true;
+   status=rows.length?`${rows.length} contacts${more?' · more available':''}`:'No contacts found.';
+  }catch{if(token===epoch){rows=[];status='Contacts could not be read. Check access and refresh.';}}
+  finally{if(token===epoch){loading=false;changed();}}
+ }
+ async function editor(selected?:Bag){
+  if(loading||!available())return;loading=true;changed();
+  try{if(selected)await contacts.edit({id:selected.id,lookup:selected.lookup,revision:selected.revision});else await contacts.create();}
+  catch{owner?.toast('Android Contacts could not open. Refresh and try again.');}
+  finally{loading=false;void refresh();}
+ }
+ views.contacts.reply=()=>null;
+ views.contacts.suggestions=()=>[];
+ views.contacts.render=function(st:Bag,api:Bag){
+  const list=rows.map(row=>({id:row.id,name:row.name||'Unnamed contact',first:row.name||'Unnamed contact',ini:(row.name||'#').slice(0,1).toUpperCase(),phone:'',email:'',fav:false}));
+  const model=render({...st,list,edit:null,add:null,form:null},api);
+  model.nativeManaged=true;model.nativePrototype=false;model.nativeStatus=status;model.nativeBusy=loading;model.nativeAccess=!readable;model.nativeMore=more&&limit<200;
+  model.nativeRefresh=()=>void refresh();model.nativeRequest=()=>void refresh(true);model.nativeLoadMore=()=>{limit=Math.min(200,limit+50);void refresh();};
+  model.hasQ=false;model.noHits=false;model.addNew=()=>void editor();
+  model.onQ=(event:Event)=>{api.set({q:(event.target as HTMLInputElement).value,open:null});limit=50;void refresh(false,(event.target as HTMLInputElement).value);};
+  model.closeSearch=()=>{api.set({q:'',searching:false,open:null});limit=50;void refresh(false,'');};
+  if(model.d){const selected=rows.find(row=>row.id===st.open);model.d.nativeManaged=true;model.d.acts=[];model.d.hasActs=false;model.d.hasCtx=false;
+   model.d.fields=selected?[...(selected.phones||[]).map((v:string)=>({d:'M4 4h4l2 5-2 2 5 5 2-2 5 2v4C10 22 2 14 4 4',v})),...(selected.emails||[]).map((v:string)=>({d:'M3 5h18v14H3zM3 5l9 7 9-7',v}))]:[];
+   model.d.hasFields=model.d.fields.length>0;model.d.edit=()=>selected&&void editor(selected);model.d.del=()=>{};model.d.toggleFav=()=>{};
+  }
+  return model;
+ };
+ p.componentDidMount=function(){mount?.call(this);owner=this;this.contactsReturn=watchReturnToApp(()=>void refresh());this.contactsHide=()=>sync();document.addEventListener('visibilitychange',this.contactsHide);sync();};
+ p.componentDidUpdate=function(...args:any[]){update?.apply(this,args);sync();};
+ p.componentWillUnmount=function(){this.contactsReturn?.();document.removeEventListener('visibilitychange',this.contactsHide);if(owner===this){owner=null;clear();}unmount?.call(this);};
+}

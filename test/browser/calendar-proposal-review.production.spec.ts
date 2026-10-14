@@ -78,6 +78,7 @@ async function residentAgent(page: Page, operation: unknown, capabilities: strin
     const methods = (names: string[]) => names.map(name => ({ name, rtype: 'promise' }));
     w.Capacitor = {
       PluginHeaders: [
+        { name: 'AlphaDeletions', methods: methods(['pending']) },
         { name: 'DeviceApps', methods: methods(['buildInfo']) },
         { name: 'Agent', methods: methods(['getStatus', 'start', 'stop', 'configureCloudProvider', 'request', 'providerStatus']) },
         { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite', 'secureRemove', 'secureCompareExchange', 'request', 'cancel', 'openExternal', 'addListener', 'removeListener', 'pauseNotificationCollection']) },
@@ -87,6 +88,7 @@ async function residentAgent(page: Page, operation: unknown, capabilities: strin
         { name: 'AlphaCalendar', methods: methods(['requestAccess', 'executeAgent', 'cancelAgent', 'calendars', 'range', 'listAlerts', 'prepareAgentSource', 'addListener', 'removeListener']) },
       ],
       nativePromise: async (plugin: string, method: string, input: any) => {
+        if (plugin === 'AlphaDeletions' && method === 'pending') return { deletions: [] };
         if (plugin === 'DeviceApps') return { launcher: false, version: 'decline-fixture' };
         if (plugin === 'AlphaNotifications') return { permissionGranted: true, appEnabled: true };
         if (plugin === 'AlphaVoiceCloud') return { microphone: 'granted' };
@@ -127,6 +129,7 @@ async function residentAgent(page: Page, operation: unknown, capabilities: strin
           if (method === 'request') {
             const path = new URL(input.url).pathname;
             if (path === '/api/v1/user') return { status: 200, data: { success: true, data: { id: account } } };
+            if (path === '/api/v1/subscription/entitlement') return { status: 404, data: {} }; // Deployed Cloud has no subscription entitlement route yet.
             if (path === '/api/v1/credits/balance') return { status: 200, data: { balance: 5 } };
             f.unexpected.push('cloud ' + path); return { status: 404, data: {} };
           }
@@ -139,7 +142,7 @@ async function residentAgent(page: Page, operation: unknown, capabilities: strin
 }
 const fixture = (page: Page) => page.evaluate(() => {
   const f = (window as any).declineFixture;
-  return { decisions: f.decisions as string[], journal: f.journal as string[], states: f.proposals.map((p: any) => [p.id, p.state]) as [string, string][], unexpected: f.unexpected as string[], calendar: f.calendar as { operation: unknown; operationId: string }[], receipts: f.receipts as any[] };
+  return { decisions: f.decisions as string[], journal: f.journal as string[], states: f.proposals.map((p: any) => [p.id, p.state]) as [string, string][], unexpected: f.unexpected as string[], journalIdentity: {scope:f.entry?.scope,proposalId:f.entry?.proposalId}, calendar: f.calendar as { operation: unknown; operationId: string; journalIdentity: {scope:string;proposalId:string} }[], receipts: f.receipts as any[] };
 });
 async function connected(page: Page) {
   await page.goto('/');
@@ -169,10 +172,13 @@ test('Android: the proposal card states time zone, calendar and attendees, and A
   await approve.dblclick();
   await expect(page.getByRole('button', { name: /^Completed Created event “Venue booking call”/ })).toBeVisible({ timeout: 20_000 });
   state = await fixture(page);
-  // One native request, carrying the reviewed operation and nothing else.
+  // One native request binds the reviewed operation to its reserved journal identity.
   expect(state.calendar).toHaveLength(1);
   expect(state.calendar[0].operation).toEqual(operation);
-  expect(Object.keys(state.calendar[0]).sort()).toEqual(['operation', 'operationId']);
+  expect(Object.keys(state.calendar[0]).sort()).toEqual(['journalIdentity', 'operation', 'operationId']);
+  expect(state.calendar[0].journalIdentity).toEqual(state.journalIdentity);
+  expect(state.calendar[0].journalIdentity.proposalId).toBe('fixture-calendar');
+  expect(state.calendar[0].journalIdentity.scope).toEqual(expect.any(String));
   expect(state.decisions).toEqual(['approve']);
   expect(state.states).toEqual([['fixture-calendar', 'succeeded']]);
   expect(state.receipts).toEqual([expect.objectContaining({ outcome: 'applied', result: { version: 1, kind: 'calendar_create_local', sourceId: '7', eventId: '42', revision: 'c'.repeat(64) } })]);

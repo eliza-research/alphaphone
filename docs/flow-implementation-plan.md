@@ -31,7 +31,7 @@ Status terms: **source present** means code inspected, **partial** means a narro
 | F06 inbox | Email-app handoff and To/subject/body draft | Missing built-in inbox, official OAuth, folders/thread/search, attachments, real send reconciliation; provider blocked | Owned account read/draft/send/readback, wrong-account/revoke/unknown-outcome |
 | F07 calendar | Calendar-app opening; native insert with title/body/start/end | Partial: no calendar data readback, account/calendar selector, all-day/recurrence/invites or timezone conflict UI | Verify insert payload and cancellation; provider readback for actual saved event |
 | F08 browser | HTTP(S) native dispatch; official Chromium development snapshot installed for testing; embedded credentials rejected | Partial: no owned browser bridge/tab UI/observation/proposals; development snapshot is not approved production browser; default-handler selection must be verified | Native Chromium page flow now; production signed native-host handshake later |
-| F09 passwords | Native provider-settings entry; official Proton Pass installed on disposable emulator with publisher fingerprint match | Partial: provider account, enablement and actual fill/passkey not performed; production preinstall policy unresolved | User/provider-owned setup, owned test login/passkey and no secret in logs/model |
+| F09 passwords | Native provider-settings entry; official Proton Pass installed on disposable emulator with publisher fingerprint match | Partial: provider account, enablement and actual password save/fill not performed; passkeys deferred under #402; production preinstall policy unresolved | User/provider-owned setup, owned test password save/fill and no secret in logs/model |
 | F10 camera | Opens Android still-camera app | Partial: no capture-result attachment, review/retake, video/scan/OCR or embedded preview | Real camera opens; future captured bytes/URI readback and hardware matrix |
 | F11 photos | ACTION_OPEN_DOCUMENT restricted to images; returned URI/name/type visible | Partial: document picker selection is not full photo library; no image rendering/edit/delete/albums/semantic search | Pick/cancel and readable URI, provider revoke; later actual preview/edit/export |
 | F12 notes | Local CRUD, persisted unsaved-note draft recovery, dirty-navigation review, note-revision context invalidation, explicit note-text-to-request draft; approved development-agent create-note path saves locally and checks readback | Partial: no recording/transcript timeline, export/search/checklists or remote sync; native recognition needs provider | Save/edit/delete/restart, dirty navigation/storage failure, approve exact note once; real dictation when supported |
@@ -55,7 +55,7 @@ This is the final source-review status for this document update, not a native-te
 | F04–F05, F17 | Native dialer/SMS/contacts handoff | Built-in provider/role integration incomplete; real telecom acceptance external |
 | F06–F07 | Installed native mail/calendar entry and reviewed compose/event handoff | Live test accounts/OAuth external; full inbox/calendar UI/data adapters and readback incomplete |
 | F08 | Native HTTP(S) dispatch and installed test Chromium | Owned Chromium component/native-host build and signer registration missing; snapshot is not the agent browser |
-| F09 | Installed verified Proton provider and settings entry | Account/provider enablement and fill/passkey acceptance external; production redistribution/update decision open |
+| F09 | Installed verified Proton provider and settings entry | Account/provider enablement and password save/fill acceptance external; passkeys deferred under #402; production redistribution/update decision open |
 | F10–F11 | Camera handoff, scoped selection/photo preview | Capture-result/video/OCR/full gallery incomplete; actual capture/hardware acceptance pending |
 | F12 | Local note CRUD and approval-bound development create-note readback | Native ASR provider external; audio recorder/transcription store/search/export/sync incomplete |
 | F13–F14 | Native one-shot inexact reminders, cancellation, restore, notification posting/tap/history | Native execution evidence pending; recurrence/snooze/complete and remote/cross-app notification features incomplete |
@@ -172,13 +172,20 @@ All native execution rows below are **not run by this document's author**. Offic
 | Native handoffs | Map address, phone number, SMS, inbox, mail draft, calendar insert, browser HTTP(S), settings, autofill settings | F04–F09, F13 partial, F18 | Emulator handlers; do not claim send/save |
 | Native selection | Pick image/file → exact metadata and readable URI → cancel → external revoke → recover; Activity recreation consumes restored result | F11, F16 | DocumentsUI and controlled test files |
 | Real capture/voice | Capture/retake/open pixels; record/playback; dictate actual phrase → review/save; deny/no recognizer/audio interruption | F03, F10, F12 | Emulator camera/audio + qualified services; hardware follow-up |
-| Credential/browser | Default provider setup → owned test site → unlock/fill → passkey create/use → cancel/wrong origin → agent resumes sanitized context | F08, F09, J08 | Signed target Chromium, test vault/provider |
+| Credential/browser | Default provider setup → owned test site → password unlock/save/fill → HTTP authentication manual entry (provider fill disabled pending authenticated origin) → cancel/wrong origin → agent resumes sanitized context | F08, F09, J08 | Signed target Chromium, test vault/provider |
 | Agent ownership | First qualify debug real-provider response and exact approved local create-note/open-view; separately pair production owner A → send → result → cancel → sleep/network off/kill → recover once; switch owner B rejects late A result | F01, F03, J10 | Approved real endpoint and owned test accounts |
 | Mail/calendar | Real read/write with source account, attachments, invitations, recurrence/DST; lose response → provider reconcile without duplicate | F06, F07, J01, J03, J04 | Owned mailbox/calendar and safe recipient |
 | Reminder/notification | Near-term schedule → background → actual alert → deep link → snooze/complete; deny/channel off/reboot/timezone/duplicate | F13, F14, J02 | Real native scheduler and notification service |
 | Remote workflow | Reviewed trigger/version → actual run → wait/approve → one harmless provider effect → cancel/fail/restart/duplicate trigger | F15, J07 | Real workflow backend and owned provider |
 | Resilience/accessibility | Portrait/landscape, text enlargement, keyboard, TalkBack, offline, low storage, corrupt data, app removal and permission revocation | A11Y, all applicable F | Disposable phone; explicit destructive fixture only |
 | Distribution | `npm run verify`; `npm run android:build`; exact APK hashes/manifests; both modes install and HOME behavior; AOSP boot separately | F01, release | Build toolchain, emulator, then image build/hardware |
+
+Passkeys are outside MVP completion under the approved #402 policy. Keep password
+unlock, save, fill, cancellation and wrong-origin checks in the credential suite.
+A separate post-MVP system-provider follow-up must qualify browser/image support,
+passkey creation/use, origin binding and private-profile behavior before enabling
+WebAuthn; Alpha does not currently provide passkeys. The MVP browser must state
+that limitation and offer an explicit external-browser handoff when available.
 
 ## Completion reporting
 

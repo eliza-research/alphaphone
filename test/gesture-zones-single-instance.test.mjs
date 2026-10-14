@@ -9,18 +9,21 @@ import path from 'node:path';
 const read = file => readFileSync(file, 'utf8');
 const ANDROID_TESTS = 'android/app/src/androidTest/java/ai/elizaresearch/alphaphone';
 
-test('Alpha\'s notifications open from the handle only: no swipe opener is left in the shell', () => {
+test('Android\'s shade is the only shade: the swipe handler asks Android, never opens an Alpha panel (#416, #417)', () => {
   const model = read('apps/app/src/prototype/model.js');
   const swipe = model.slice(model.indexOf('  swipe(g, dx, dy) {'), model.indexOf('  sw(fn, opts) {'));
   assert.ok(swipe.length > 200 && swipe.length < 6000, 'swipe() located');
-  // The one opener in the gesture handler is a pull that started on the handle.
-  assert.match(swipe, /if \(dy > T && g\.handle\) return this\.openShade\(\);/);
-  assert.doesNotMatch(swipe, /shade: true/, 'no swipe sets the panel open directly');
+  // The one opener in the gesture handler: a pull on launcher Home's button or on empty Home asks for Android's shade.
+  assert.match(swipe, /if \(dy > T && \(\(g\.handle && this\.props\.systemShell !== false\) \|\| emptyHomeShadePull\(this\.pullContext\(\), g\.pull, g\.y, dx, dy, T\)\)\) return this\.openSystemShade\(\);/);
+  assert.doesNotMatch(swipe, /shade: true/, 'no swipe sets a panel open directly');
+  assert.doesNotMatch(swipe, /this\.openShade\(\)/, 'no swipe opens the development stand-in directly');
   assert.doesNotMatch(swipe, /g\.y < 90/, 'the top-edge band is not a gesture zone of Alpha');
-  assert.match(model, /handle: !!e\.target\.closest\?\.\("\[data-alpha-shade-handle\]"\)/);
+  assert.match(model, /handle: !!e\.target\.closest\?\.\("\[data-alpha-shade-handle\]"\), pull: pullStart\(e\.target\)/);
+  // The development stand-in opens only in a build that has it.
+  assert.match(model, /openShade\(\) \{\s*var S = this\.S\(\);\s*if \(!this\.simulatedShade\(\) \|\| S\.screen !== "home" \|\| S\.shade\) return;/);
   const template = read('apps/app/src/prototype/template.html');
-  assert.match(template, /<button class="alpha-shade-handle" data-alpha-shade-handle aria-label="Open notifications" aria-controls="alpha-notifications"[^>]*onClick="\{\{openShade\}\}"/);
-  assert.match(template, /data-alpha-layer="shade" id="alpha-notifications"/);
+  assert.match(template, /<button class="alpha-shade-handle" data-alpha-shade-handle aria-label="Open notifications"[^>]*onClick="\{\{openSystemShade\}\}"/);
+  assert.match(template, /<sc-if value="\{\{simulatedShade\}\}">\s*<sc-if value="\{\{isOn\}\}">\s*<div data-alpha-layer="shade" id="alpha-notifications"/);
 });
 
 test('the launcher handle\'s margin below the status bar is measured in screen pixels', () => {
@@ -37,8 +40,13 @@ test('no instrumented test opens the panel with the removed swipe', () => {
     assert.doesNotMatch(source, /\['pointerdown',\s*50\]/, `${name} synthesizes the removed top-edge swipe`);
   }
   assert.match(read(path.join(ANDROID_TESTS, 'AppNavigation.java')), /static String openNotifications\(\)[^\n]*data-alpha-shade-handle[^\n]*handle\.click\(\)/);
-  for (const name of ['NotificationsInstrumentedTest.java', 'NotificationChannelsInstrumentedTest.java'])
-    assert.match(read(path.join(ANDROID_TESTS, name)), /AppNavigation\.openNotifications\(\)/, `${name} opens the panel through the handle`);
+  // Notices are opened in Android's own shade; no instrumented test looks for an Alpha panel.
+  for (const name of ['NotificationsInstrumentedTest.java', 'NotificationChannelsInstrumentedTest.java', 'AccessibilityInstrumentedTest.java']) {
+    const source = read(path.join(ANDROID_TESTS, name));
+    assert.match(source, /AndroidShade\.(waitOpen|openWithoutAlpha)\(/, `${name} observes Android's shade`);
+    assert.match(source, /AndroidShade\.ALPHA_SHADE_ABSENT/, `${name} checks that Alpha draws no shade`);
+    assert.doesNotMatch(source, /data-alpha-layer=\\?"?shade\\?"?\]'?\)?\??\.getAttribute\('aria-hidden'\)/, `${name} still expects an Alpha panel`);
+  }
 });
 
 test('the launcher keeps one MainActivity and its kind belongs to the task', () => {

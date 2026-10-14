@@ -4,45 +4,64 @@ import ai.eliza.plugins.reminders.ReminderTestAccess;
 import android.app.*;
 import android.content.*;
 import android.os.SystemClock;
+import android.view.accessibility.AccessibilityNodeInfo;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
-import org.json.JSONObject;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
 
-/** Actual Android notifications -> exact prototype shade -> native open/dismiss. */
+/**
+ * Actual Android notifications -> Android's own shade -> the notification's own tap (#416).
+ * Alpha draws no shade of its own: the page has no notification layer, Android shows the notice,
+ * and the tap reaches the PendingIntent the notice was posted with. The shade is opened with
+ * Android's own global action on both flavors; the launcher button is SystemShadeInstrumentedTest's.
+ * Emulator evidence only; not AOSP-image or device acceptance.
+ */
 @RunWith(AndroidJUnit4.class)
 public class NotificationsInstrumentedTest {
  private void until(String condition)throws Exception{long end=SystemClock.elapsedRealtime()+20000;while(SystemClock.elapsedRealtime()<end){if("true".equals(WebViewTestDriver.evaluate("Boolean("+condition+")")))return;SystemClock.sleep(100);}fail("Notification state: "+condition);}
- private void shade()throws Exception{
-  // The panel opens from its handle on Home; the former top-edge swipe is Android's (docs/gesture-zones.md).
+ private boolean present(NotificationManager manager,String tag,int id){for(android.service.notification.StatusBarNotification row:manager.getActiveNotifications())if(tag.equals(row.getTag())&&row.getId()==id)return true;return false;}
+ /**
+  * Opens Android's shade with Android's own global action on both flavors, so notice delivery is
+  * tested independently of Alpha's launcher button (that mechanism is SystemShadeInstrumentedTest's).
+  */
+ private void openShade()throws Exception{
   until(AppNavigation.selected("Home"));
-  for(int i=0;i<200&&!"true".equals(WebViewTestDriver.evaluate(AppNavigation.openNotifications()));i++)SystemClock.sleep(100);
-  until("document.querySelector('[data-alpha-layer=shade]').getAttribute('aria-hidden')==='false'");
+  until(AndroidShade.ALPHA_SHADE_ABSENT);
+  assertTrue("Android's own action opens its shade",AndroidShade.openWithoutAlpha());
+  // Still no Alpha panel behind it.
+  assertEquals("true",WebViewTestDriver.evaluate(AndroidShade.ALPHA_SHADE_ABSENT));
  }
- private String button(String title){return "document.querySelector('[data-alpha-layer=shade] button[aria-label='+"+JSONObject.quote(JSONObject.quote("Open "+title))+"+']')";}
- @Test public void actualNotificationsRenderRecreateOpenAndClear()throws Exception{
+ @Test public void actualNotificationsAppearAndOpenInAndroidsShade()throws Exception{
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();NotificationManager manager=context.getSystemService(NotificationManager.class);
   InstrumentationRegistry.getInstrumentation().getUiAutomation().grantRuntimePermission(context.getPackageName(),android.Manifest.permission.POST_NOTIFICATIONS);
   ReminderTestAccess.channel(context);String token=java.util.UUID.randomUUID().toString(),title="Synthetic notification "+token,tag="notification-fixture-"+token;
-  Intent intent=new Intent(context,MainActivity.class).setAction("alpha.synthetic.notification.open").addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP|Intent.FLAG_ACTIVITY_CLEAR_TOP);
-  PendingIntent tap=PendingIntent.getActivity(context,token.hashCode(),intent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+  String action="alpha.synthetic.notification.open."+token;java.util.concurrent.atomic.AtomicBoolean delivered=new java.util.concurrent.atomic.AtomicBoolean();
+  BroadcastReceiver receiver=new BroadcastReceiver(){@Override public void onReceive(Context ignored,Intent intent){if(action.equals(intent.getAction()))delivered.set(true);}};
+  if(android.os.Build.VERSION.SDK_INT>=33)context.registerReceiver(receiver,new IntentFilter(action),Context.RECEIVER_NOT_EXPORTED);else context.registerReceiver(receiver,new IntentFilter(action));
+  PendingIntent tap=PendingIntent.getBroadcast(context,token.hashCode(),new Intent(action).setPackage(context.getPackageName()),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
   try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)){
    AppNavigation.liveMode();WebViewTestDriver.evaluate(AppNavigation.request("Home"));until("document.querySelector('[data-screen]')&&!document.querySelector('.alpha-connection-scrim')");
+   AppNavigation.declineStartupAccess();
    manager.notify(tag,1,new Notification.Builder(context,ReminderTestAccess.CHANNEL).setSmallIcon(android.R.drawable.ic_popup_reminder).setContentTitle(title).setContentText("Actual Android fixture body").setContentIntent(tap).setAutoCancel(true).build());
+   // The plugin still refuses to open or dismiss a notice it never identified.
    WebViewTestDriver.evaluate("window.__missingNoticeRejected=undefined;Capacitor.Plugins.AlphaNotifications.open({}).then(()=>window.__missingNoticeRejected=false,()=>window.__missingNoticeRejected=true)");
    until("window.__missingNoticeRejected===true");
    WebViewTestDriver.evaluate("window.__missingDismissFinished=false;Capacitor.Plugins.AlphaNotifications.dismiss({}).then(()=>window.__missingDismissFinished=true)");until("window.__missingDismissFinished===true");
-   boolean fixtureStillPresent=false;for(android.service.notification.StatusBarNotification row:manager.getActiveNotifications())if(tag.equals(row.getTag())&&row.getId()==1)fixtureStillPresent=true;
-   assertTrue("Missing opaque ID cannot open or dismiss an unseen notification",fixtureStillPresent);
-   shade();until(button(title));assertEquals("true",WebViewTestDriver.evaluate("document.querySelector('[data-alpha-layer=shade]').innerText.includes('Actual Android fixture body')"));
-   scenario.recreate();WebViewTestDriver.evaluate(AppNavigation.request("Home"));until("document.querySelector('[data-screen]')&&!document.querySelector('.alpha-connection-scrim')");shade();until(button(title));
-   WebViewTestDriver.evaluate("("+button(title)+").click()");
-   boolean removed=false;for(int i=0;i<100;i++){removed=true;for(android.service.notification.StatusBarNotification row:manager.getActiveNotifications())if(tag.equals(row.getTag())&&row.getId()==1)removed=false;if(removed)break;SystemClock.sleep(100);}assertTrue("Opening auto-cancel notification removes real Android notification",removed);
-   manager.notify(tag,2,new Notification.Builder(context,ReminderTestAccess.CHANNEL).setSmallIcon(android.R.drawable.ic_popup_reminder).setContentTitle(title+" clear").setContentText("Clearable fixture").build());
-   until(button(title+" clear"));WebViewTestDriver.evaluate("document.querySelector('[data-alpha-layer=shade] button[aria-label=\"Clear all\"]').click()");until("!("+button(title+" clear")+")");
-   for(android.service.notification.StatusBarNotification row:manager.getActiveNotifications())assertFalse("Clear action reaches Android",tag.equals(row.getTag()));
-  }finally{manager.cancel(tag,1);manager.cancel(tag,2);tap.cancel();}
+   assertTrue("Missing opaque ID cannot open or dismiss an unseen notification",present(manager,tag,1));
+   openShade();
+   AccessibilityNodeInfo row=AndroidShade.waitText(title,10000);
+   assertNotNull("Android's shade shows the posted notice",row);
+   assertTrue("The notice row in Android's shade is tappable",AndroidShade.tap(row));
+   for(int i=0;i<100&&!delivered.get();i++)SystemClock.sleep(100);
+   assertTrue("The tap reached the notice's own PendingIntent",delivered.get());
+   boolean removed=false;for(int i=0;i<100&&!(removed=!present(manager,tag,1));i++)SystemClock.sleep(100);
+   assertTrue("Opening an auto-cancel notice removes the real Android notification",removed);
+   if(AndroidShade.isOpen())AndroidShade.collapse();
+   // A recreated page still draws no shade of its own.
+   scenario.recreate();WebViewTestDriver.evaluate(AppNavigation.request("Home"));until("document.querySelector('[data-screen]')&&!document.querySelector('.alpha-connection-scrim')");
+   until(AndroidShade.ALPHA_SHADE_ABSENT);
+  }finally{if(AndroidShade.isOpen())AndroidShade.collapse();manager.cancel(tag,1);tap.cancel();context.unregisterReceiver(receiver);}
  }
 }

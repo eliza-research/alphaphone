@@ -51,6 +51,7 @@ async function boot(page: Page, mode: Mode) {
         // Cloud no longer accepts the kept sign-in.
         if (mode === 'rejected') return { status: 401, data: { error: 'unauthorized' } };
         if (path === '/api/v1/user') return { status: 200, data: { success: true, data: { id } } };
+        if (path === '/api/v1/subscription/entitlement') return { status: 404, data: {} }; // Deployed Cloud has no subscription entitlement route yet.
         if (path === '/api/v1/credits/balance') return { status: 200, data: { balance: 5 } };
         throw Error('Unexpected Cloud route: ' + path);
       }
@@ -155,7 +156,7 @@ for (const [name, panel] of Object.entries(PANELS)) {
       // Cloud-hosted agent is listed, provisioned or restored and no remote session is opened.
       const paths = await cloudRequests(page);
       expect(paths).toEqual(expect.arrayContaining(['/api/v1/user', '/api/v1/credits/balance']));
-      expect(paths.filter(path => !['/api/v1/user', '/api/v1/credits/balance', '/api/v1/eliza/google/accounts'].includes(path))).toEqual([]);
+      expect(paths.filter(path => !['/api/v1/user', '/api/v1/subscription/entitlement', '/api/v1/credits/balance', '/api/v1/eliza/google/accounts'].includes(path))).toEqual([]);
       const native = await agentCalls(page);
       expect(native).toContain('configureCloudProvider');
       expect(native).toContain('start');

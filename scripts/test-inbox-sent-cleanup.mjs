@@ -6,9 +6,10 @@ import test from 'node:test';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {stripTypeScriptTypes} from 'node:module';
-import {InboxOperation, checkOutgoingAttachments, outgoingAttachmentLimits, composerKind, composerContent, reviewBinding, reviewBindingRefusal} from '../apps/app/src/runtime/inbox-operation.ts';
+import {InboxOperation, checkOutgoingAttachments, outgoingAttachmentLimits, attachmentBytes, composerKind, composerContent, reviewBinding, reviewBindingRefusal} from '../apps/app/src/runtime/inbox-operation.ts';
 import {reviewMailAttachment} from '../apps/app/src/runtime/inbox-attachment.ts';
 import {classifyGmailFailure} from '../apps/app/src/runtime/gmail-mailbox.ts';
+import * as grants from '../apps/app/src/runtime/gmail-grants.ts';
 import {encodeInboxUnsaved, readInboxUnsaved} from '../apps/app/src/runtime/inbox-unsaved-record.ts';
 
 const strip = async (file, name) => {
@@ -78,7 +79,7 @@ function device() {
         retire() {}, replace() {}, retry: async () => {}, recover() {}};
     };
     const controller = {getCloudClient: () => ({client, sessionId: 'session-1'}), getSnapshot: () => ({cloudAccount: {environment: 'production', userId: 'owner-1', sessionId: 'session-1'}})};
-    const sandbox = {inboxUnsaved, InboxOperation, composerKind, composerContent, reviewBinding, reviewBindingRefusal, performance, queueMicrotask, checkOutgoingAttachments, outgoingAttachmentLimits, reviewMailAttachment, classifyGmailFailure, crypto: globalThis.crypto, TextEncoder, structuredClone,
+    const sandbox = {inboxUnsaved, InboxOperation, composerKind, composerContent, reviewBinding, reviewBindingRefusal, performance, queueMicrotask, checkOutgoingAttachments, outgoingAttachmentLimits,attachmentBytes, reviewMailAttachment, classifyGmailFailure, ...grants, crypto: globalThis.crypto, TextEncoder, structuredClone,
       secureConnectionStore: store, connectionController: controller, registerPlugin: () => ({}), DailyApps: {}, AbortController, DOMException, console, JSON, Promise, Set, Map, Error, Math, String, Array, Object,
       window: {confirm: () => true}, document: {documentElement: {dataset: {connectionMode: 'live'}}}};
     vm.createContext(sandbox); for (const source of sources) vm.runInContext(source, sandbox);

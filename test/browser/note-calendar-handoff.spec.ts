@@ -118,7 +118,10 @@ test('a reminder from a note carries the same link; an unrelated event and remin
  await button(page,/^Open calendar event: Book the venue,/).click();
  await expect(page.getByText('From note: Venue meeting',{exact:true})).toBeVisible();
  await button(page,'Delete event').click();
- await expect(page.getByText('Reminder cancelled',{exact:true})).toBeVisible();
+ await page.getByRole('dialog',{name:'Delete reminder?',exact:true}).getByRole('button',{name:'Delete reminder',exact:true}).click();
+ await expect(page.getByRole('complementary',{name:'Pending deletions'}).getByRole('button',{name:'Undo',exact:true})).toBeVisible();
+ expect(await links(page)).toEqual({[`reminder:${reminder.id}`]:'Venue meeting'});
+ await expect.poll(()=>reminders(page),{timeout:20_000}).toEqual([]);
  await expect.poll(()=>links(page)).toEqual({});
  // A record created directly in Calendar shows no link.
  await button(page,'New event').click();await saveEventDraft(page,'Unrelated event');

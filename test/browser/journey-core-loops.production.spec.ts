@@ -120,6 +120,7 @@ async function android(page: Page, options: { clock?: 'opened' | 'unavailable' |
             const url = new URL(input.url);
             if (url.origin !== 'https://api.eliza.app') throw Error('Connection request failed');
             if (url.pathname === '/api/v1/user') return { status: 200, data: { success: true, data: { id } } };
+            if (url.pathname === '/api/v1/subscription/entitlement') return { status: 404, data: {} }; // Deployed Cloud has no subscription entitlement route yet.
             if (url.pathname === '/api/v1/credits/balance') return { status: 200, data: { balance: 5 } };
             return { status: 404, data: {} };
           }
@@ -204,7 +205,7 @@ test('loop A on Android: the resident agent answers, the conversation follows ac
   await expect(page.getByRole('button', { name: 'Agent connection', exact: true })).toContainText('Alpha');
   await page.getByRole('button', { name: 'Agent connection', exact: true }).click();
   const account = page.getByRole('dialog', { name: 'Your Cloud account' });
-  await expect(account).toContainText('Your agent runs on this phone and uses your Eliza Cloud credits for AI.');
+  await expect(account).toContainText('Your agent runs on this phone and uses your Eliza Cloud plan for AI.');
   await expect(account.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
   expect(await page.locator('body').innerText()).not.toContain('synthetic-cloud-key');
   await expectNoDevelopmentSurface(page);

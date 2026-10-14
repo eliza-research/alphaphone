@@ -2,6 +2,11 @@
 
 Date: 2026-09-29. Target correction: Pixel 10 or similar **phone**, not tablet. The available Pixel 9 emulator profile is a development approximation; it does not establish physical Pixel 10 support or acceptance. Scope: Alpha Phone only, its fourteen designed built-in experiences, shared launcher/assistant flows, and the requested reminders, notification, credential, and transcription journeys. This is a requirements and source-audit document, not evidence that those experiences are implemented or have passed acceptance. Native/API/vendor research accompanies this document separately.
 
+> October 12 scope update: approved [#402](https://github.com/AlphaCompute/alphaphone/issues/402)
+> defers passkeys outside MVP. Historical F09 passkey requirements below belong to
+> a separate system-provider/browser/image qualification follow-up. Password
+> unlock, save, fill, wrong-origin refusal and cancellation remain MVP gates.
+
 ## Evidence and audit finding
 
 The audited baseline is `apps/app/src/main.tsx`, `native.ts`, `useDevice.ts`, the fourteen `registerView` declarations and their state/back/actions in `design/prototype/index.html`, `docs/prd.md`, `architecture.md`, `implementation-plan.md`, `decisions.md`, and `requirements.json`. The design HTML is reference data. Its simulated sign-in forms, timers, seeded messages, bookings, calls, balances, transcripts, memory sizes, battery statistics, model downloads, and security claims are not implementation contracts or real service results.

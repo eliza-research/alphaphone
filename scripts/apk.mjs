@@ -180,10 +180,12 @@ export function validateApk(file, identity, wantsHome) {
   for (const permission of ['CAMERA']) {
     if (!data.xml.includes('android.permission.' + permission)) throw new Error(`Missing native feature permission ${permission} in ${file}`);
   }
-  // MVP-DEFERRED: Contacts is not packaged; restore only with the documented scope gate.
-  for (const permission of ['READ_CONTACTS', 'WRITE_CONTACTS']) {
-    if (data.xml.includes('android.permission.' + permission)) throw new Error(`Deferred Contacts permission ${permission} in ${file}`);
-  }
+  // Contacts reads are packaged only for the launcher. The native image capability,
+  // unlocked profile and runtime grant remain separate requirements for access.
+  if (data.xml.includes('android.permission.READ_CONTACTS') !== wantsHome)
+    throw new Error(`Invalid Contacts read permission for distribution in ${file}`);
+  if (data.xml.includes('android.permission.WRITE_CONTACTS'))
+    throw new Error(`Unexpected Contacts write permission in ${file}`);
   // aapt badging distinguishes required hardware from optional feature declarations.
   if (/uses-feature: name='android\.hardware\.camera(?:\.any|\.autofocus)?'/.test(data.badging))
     throw new Error(`Camera hardware must remain optional in ${file}`);

@@ -87,6 +87,7 @@ async function residentAgent(page: Page, seed: 'pending' | 'reconcile') {
           if (method === 'request') {
             const path = new URL(input.url).pathname;
             if (path === '/api/v1/user') return { status: 200, data: { success: true, data: { id: account } } };
+            if (path === '/api/v1/subscription/entitlement') return { status: 404, data: {} }; // Deployed Cloud has no subscription entitlement route yet.
             if (path === '/api/v1/credits/balance') return { status: 200, data: { balance: 5 } };
             f.unexpected.push('cloud ' + path); return { status: 404, data: {} };
           }

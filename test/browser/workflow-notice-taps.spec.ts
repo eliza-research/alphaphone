@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+const ownerFence=(ownerId:string)=>({owner:{origin:'https://device.alpha.invalid',ownerId,agentId:'fixture-agent'}});
 // Production renderer and authenticated connection; controlled transport/native queue, no real notification.
 for(const scenario of ['two','other-owner','wrong-version','unconfirmed','navigation-race','owner-race','reconnect','owner-change','queue-changed','builder-race','new-tap-during-read'] as const){
  test('scoped native workflow tap '+scenario,async({page})=>{
@@ -73,7 +74,7 @@ for(const scenario of ['two','other-owner','wrong-version','unconfirmed','naviga
      if(method==='status')return {enabled:f.notifications,backgroundEnabled:f.enabled&&f.polling};
      if(method==='setBackgroundPolling'){f.polling=input.enabled;return {backgroundEnabled:f.enabled&&f.polling};}
      if(method==='enable'){f.notifications=true;return {enabled:true};}
-     // The owner-change withdrawal of approval notices: only the connected owner's ID crosses the bridge.
+     // The native notice ledger receives the complete owner fence, or null while offline.
      if(method==='withdrawOtherOwnerApprovalNotices'){f.ownerWithdrawals=(f.ownerWithdrawals||[]);f.ownerWithdrawals.push(input);if(w.__ownerWithdrawalFault&&f.ownerWithdrawals.length===1)throw Error('Synthetic withdrawal failure');return {withdrawn:0};}
      return {};
     }
@@ -126,8 +127,8 @@ for(const scenario of ['two','other-owner','wrong-version','unconfirmed','naviga
   await page.evaluate(async()=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');await c.offline();const w=window as any,f=w.deliveryFixture;f.release();f.hold=false;f.owner='next-owner';
    // The toast is transient; record every notice text shown from here on.
    w.__noticeToasts=[];new MutationObserver(()=>{const shown=document.body.innerText.match(/Workflow notification saved\.[^\n]*/)?.[0];if(shown&&!w.__noticeToasts.includes(shown))w.__noticeToasts.push(shown);}).observe(document.body,{subtree:true,childList:true,characterData:true});});
-  // Ending the session alone withdraws nothing: no owner is connected to compare against.
-  expect(await page.evaluate(()=>(window as any).deliveryFixture.ownerWithdrawals)).toEqual([{ownerId:'fixture-owner'}]);
+  // Going offline suspends prior-owner notices before another owner may connect.
+  await expect.poll(()=>page.evaluate(()=>(window as any).deliveryFixture.ownerWithdrawals)).toEqual([{owner:null},ownerFence('fixture-owner'),{owner:null}]);
   await page.getByRole('button',{name:/Agent connection/}).click();await page.getByRole('button',{name:'Start local agent',exact:true}).click();await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0);
   expect(await page.evaluate(async()=>(await import('/src/runtime/connection-ui.tsx')).connectionController.getSnapshot().session?.ownerId)).toBe('next-owner');
   // The first owner's retained tap never opens under the next owner, and nothing is consumed.
@@ -144,9 +145,12 @@ for(const scenario of ['two','other-owner','wrong-version','unconfirmed','naviga
   expect(await page.evaluate(()=>(window as any).deliveryFixture.taps.length)).toBe(2);
   expect(await page.evaluate(()=>(window as any).deliveryFixture.consumed?.length||0)).toBe(0);
  }
- // Connecting an owner withdraws the approval notices posted for any other owner, once per owner: the
- // native ledger is asked with exactly the connected owner's ID, and a failed request is repeated.
- await expect.poll(()=>page.evaluate(()=>(window as any).deliveryFixture.ownerWithdrawals||[])).toEqual(scenario==='reconnect'?[{ownerId:'fixture-owner'},{ownerId:'fixture-owner'}]:scenario==='owner-change'?[{ownerId:'fixture-owner'},{ownerId:'next-owner'}]:[{ownerId:'fixture-owner'}]);
+ // Every transition carries origin, owner and agent; offline explicitly suspends notices.
+ const transitions:Array<{owner:null|{origin:string;ownerId:string;agentId:string}}>=[{owner:null},...(scenario==='reconnect'?[{owner:null}]:[]),ownerFence('fixture-owner')];
+ if(['owner-race','reconnect','owner-change'].includes(scenario))transitions.push({owner:null});
+ if(scenario==='reconnect')transitions.push(ownerFence('fixture-owner'));
+ if(scenario==='owner-change')transitions.push(ownerFence('next-owner'));
+ await expect.poll(()=>page.evaluate(()=>(window as any).deliveryFixture.ownerWithdrawals||[])).toEqual(transitions);
  expect(errors).toEqual([]);
  });
 }

@@ -31,6 +31,18 @@
       ],
       "@elizaos/ui/voice/batch-conversation": [
         "./.eliza/client-features/packages/ui/src/voice/batch-conversation.ts"
+      ],
+      "@elizaos/ui/voice/voice-session-client": [
+        "./.eliza/client-features/packages/ui/src/voice/voice-session-client.ts"
+      ],
+      "@elizaos/host/protocol": [
+        "./.eliza/client-features/packages/host/src/voice.ts"
+      ],
+      "@elizaos/core/protocol": [
+        "./.eliza/client-features/alpha-voice-core-protocol.ts"
+      ],
+      "@elizaos/core": [
+        "./.eliza/client-features/alpha-voice-core-types.ts"
       ]
     }
   },

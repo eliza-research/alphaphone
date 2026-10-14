@@ -72,7 +72,8 @@ test('HTTP authentication is a native prompt for the page host over a secure con
   assert.match(plugin, /if \(r\.isForMainFrame\(\)\) t\.pendingMain=r\.getUrl\(\)\.toString\(\);/, 'every main-frame request is recorded');
   assert.match(plugin, /if \(r\.isForMainFrame\(\)\) t\.pendingMain=target;/, 'main-frame redirects are recorded');
   assert.match(plugin, /if\(!matched\)\{handler\.cancel\(\);notice\(t,"Blocked a sign-in prompt from a different site\."\);return;\}/);
-  assert.match(plugin, /Alpha Phone does not save this password\./);
+  assert.match(plugin, /"\\nAlpha's browser does not keep this password\."\+managerLine\+/);
+  assert.match(plugin, /String managerLine=!autofillOn\?"":autofillState\.hasEnabledAutofillServices\(\)\?" Alpha's password manager can fill it, and offer to save it after the site accepts it, for "\+authOrigin\+"\.":" If your password manager supports this browser, it can fill or save it for "\+authOrigin\+"\.";/, 'provider wording depends on an enabled service');
   assert.doesNotMatch(plugin, /setHttpAuthUsernamePassword|useHttpAuthUsernamePassword/, 'nothing is stored or reused');
 });
 
@@ -86,9 +87,10 @@ test('find-in-page clears on navigation and tab change; fullscreen exits with Ba
   assert.match(adapter, /if \(s\.finding\) \{ closeFind\(\); return true; \}/, 'Back closes the find bar first');
 });
 
-test('passkeys use WebView browser mode where supported and are reported where not', () => {
-  assert.match(plugin, /WebSettingsCompat\.setWebAuthenticationSupport\(settings,WebSettingsCompat\.WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER\)/);
-  assert.match(plugin, /Passkeys are not available in this browser on this device\./);
+test('passkeys stay disabled and the native browser offers an honest external remedy', () => {
+  assert.match(plugin, /WebSettingsCompat\.setWebAuthenticationSupport\(settings,WebSettingsCompat\.WEB_AUTHENTICATION_SUPPORT_NONE\)/);
+  assert.doesNotMatch(plugin, /WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER/);
+  assert.match(plugin, /Passkeys are not supported in Alpha Browser\./);
 });
 
 test('a page-initiated navigation commits the selected tab autofill session so the provider can offer Save', () => {

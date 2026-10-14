@@ -11,7 +11,7 @@ test('native digest consent and source reads remain bounded across persistence a
  const root=resolve(import.meta.dirname,'..'),temporary=mkdtempSync(join(tmpdir(),'native-digest-'));
  const java=process.env.JAVA_HOME||(process.platform==='darwin'?'/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home':'');const binary=name=>java?join(java,'bin',name):name;
  try{
-  execFileSync(binary('javac'),['--release','11','-cp',jsonJar,'-d',temporary,join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/NativeDigestSources.java'),join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/HostedResultNotices.java'),join(root,'test/fixtures/NativeDigestSourcesTest.java')],{timeout:20000});
+  execFileSync(binary('javac'),['--release','11','-cp',jsonJar,'-d',temporary,join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/NoticeOwner.java'),join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/NativeDigestSources.java'),join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/HostedResultNotices.java'),join(root,'test/fixtures/NativeDigestSourcesTest.java')],{timeout:20000});
   assert.match(execFileSync(binary('java'),['-cp',temporary+':'+jsonJar,'ai.elizaresearch.alphaphone.NativeDigestSourcesTest'],{encoding:'utf8',timeout:20000}),/^PASS native digest sources/);
  }finally{rmSync(temporary,{recursive:true,force:true});}
 });

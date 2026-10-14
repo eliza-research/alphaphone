@@ -12,6 +12,7 @@ public final class AlphaApplication extends android.app.Application {
   // Isolated helper processes have no app storage; only the main process keeps the problem log and schedules upkeep.
   if(android.os.Process.isIsolated()||!getPackageName().equals(getProcessName()))return;
   AlphaCrashLog.install(this);
+  try{NativeDeletionCoordinator.get(this).start();}catch(RuntimeException unavailable){/* Pending intents remain durable and visible on next foreground read. */}
   try{AlphaNoteAudioPlugin.scheduleTrashBackstop(this);}catch(RuntimeException unavailable){/* Retried on the next start; the renderer still purges Trash. */}
  }
 }

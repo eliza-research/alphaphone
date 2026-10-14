@@ -16,7 +16,7 @@ for (const mode of ['read', 'update', 'delete', 'cancel', 'stale'] as const) {
       w.Capacitor = {
         PluginHeaders: [
           { name: 'AlphaConnection', methods: methods(['request', 'cancel', 'secureRead', 'secureWrite','secureCompareExchange', 'secureRemove']) },
-          { name: 'AlphaActionJournal', methods: methods(['reserve', 'markApplying', 'finish', 'get', 'list']) },
+          { name: 'AlphaActionJournal', methods: methods(['reserve', 'markApplying', 'finish', 'get', 'list', 'recoverDeletion']) },
         ],
         nativePromise: async (plugin: string, method: string, input: any) => {
           if (plugin === 'AlphaActionJournal') {
@@ -25,6 +25,7 @@ for (const mode of ['read', 'update', 'delete', 'cancel', 'stale'] as const) {
             if (method === 'markApplying') { Object.assign(w.calendarEntry,{phase:'applying',attemptId:input.attemptId});return {}; }
             if(method==='get')return {entry:structuredClone(w.calendarEntry)};
             if(method==='list')return {entries:w.calendarEntry?[structuredClone(w.calendarEntry)]:[]};
+            if(method==='recoverDeletion'){const {deletions}=await import('/src/runtime/deletions.ts');const {recovery}=await deletions.receipt({entry:structuredClone(w.calendarEntry)});if(recovery){Object.assign(w.calendarEntry,recovery,{phase:'terminal'});w.calendarRetained=structuredClone(w.calendarEntry);}return {entry:structuredClone(w.calendarEntry)};}
             if (method === 'finish') {
               w.calendarRetained = structuredClone(input);Object.assign(w.calendarEntry,structuredClone(input),{phase:'terminal'});
 
@@ -73,7 +74,7 @@ for (const mode of ['read', 'update', 'delete', 'cancel', 'stale'] as const) {
         },
       };
     }, mode);
-    await page.goto('/?mode=dev');
+    await page.clock.install();await page.goto('/?mode=dev');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page.getByRole('button', { name: 'Agent connection', exact: true }).click();
     await page.getByText('Local development agent', { exact: true }).click();
@@ -104,6 +105,13 @@ for (const mode of ['read', 'update', 'delete', 'cancel', 'stale'] as const) {
     if(mode==='stale')await page.evaluate(async()=>{const {calendarDocument}=await import('/src/browser/calendar-store.ts');await calendarDocument.edit(()=>({events:[] as any[]}),data=>{data.events[0].revision='d'.repeat(64);data.events[0].title='Changed series';});});
     await review.getByRole('button',{name:mode==='cancel'?'Cancel':'Confirm',exact:true}).click();
     await expect.poll(()=>page.evaluate(()=>(window as any).recoveryFixture.receipts)).toBe(1);
+    if(mode==='delete'){
+      const retained=await page.evaluate(()=>(window as any).calendarRetained);expect(retained.status).toBe('unknown');expect(retained.summary).toContain('Final outcome remains pending');
+      expect(await page.evaluate(async()=>JSON.parse((await(await import('/src/browser/calendar-store.ts')).calendarDocument.readRaw())!).events)).toEqual(before);
+      await expect(page.getByRole('complementary',{name:'Pending deletions'}).getByRole('button',{name:'Undo',exact:true})).toBeVisible();await page.clock.fastForward(11000);
+      await expect.poll(()=>page.evaluate(async()=>JSON.parse((await(await import('/src/browser/calendar-store.ts')).calendarDocument.readRaw())!).events[0].excluded)).toContain(before[0].begin);
+      const recovered=await page.evaluate(async()=>{const w=window as any;return w.Capacitor.nativePromise('AlphaActionJournal','recoverDeletion',{scope:w.calendarEntry.scope,proposalId:w.calendarEntry.proposalId});});expect(recovered.entry.status).toBe('succeeded');
+    }
     const events=await page.evaluate(async ()=>JSON.parse((await (await import('/src/browser/calendar-store.ts')).calendarDocument.readRaw())!).events);
     const receipt=await page.evaluate(()=>(window as any).calendarRetained);expect(receipt.status).toBe(mode==='cancel'||mode==='stale'?'failed':'succeeded');
     if(mode==='read'){expect(events).toEqual(before);expect(receipt.result.calendarResult.fields.description).toBe('Private description');}
@@ -114,7 +122,7 @@ for (const mode of ['read', 'update', 'delete', 'cancel', 'stale'] as const) {
     if(mode!=='stale'&&mode!=='cancel'){
       expect(receipt.result.calendarResult.eventId).toBe(selected);
       const rows=await page.evaluate(async(begin)=>{const {registerPlugin}=await import('/src/platform-plugins.ts');return (await registerPlugin<any>('AlphaCalendar').list({begin:begin+86400000,end:begin+3*86400000})).events;},before[0].begin);expect(rows).toHaveLength(2);expect(rows.every((r:any)=>r.title==='Selected private event')).toBe(true);
-      const replay=await page.evaluate(async()=>{const {registerPlugin}=await import('/src/platform-plugins.ts');const state=JSON.parse((await (await import('/src/browser/calendar-store.ts')).calendarDocument.readRaw())!),[id,receipt]=Object.entries(state.receipts)[0] as [string,any];await registerPlugin<any>('AlphaCalendar').executeAgent({operationId:id,operation:JSON.parse(receipt.binding)});return JSON.parse((await (await import('/src/browser/calendar-store.ts')).calendarDocument.readRaw())!).events;});expect(replay).toEqual(events);
+      const replay=await page.evaluate(async()=>{const {registerPlugin}=await import('/src/platform-plugins.ts');const state=JSON.parse((await (await import('/src/browser/calendar-store.ts')).calendarDocument.readRaw())!),[id,binding]=Object.entries(state.deleteClaims||{}).length?Object.entries(state.deleteClaims)[0] as [string,string]:Object.entries(state.receipts).map(([id,receipt]:[string,any])=>[id,receipt.binding])[0] as [string,string];const replay=await registerPlugin<any>('AlphaCalendar').executeAgent({operationId:id,operation:JSON.parse(binding)});if(Object.keys(state.deleteClaims||{}).length&&replay.status!=='unknown')throw Error('A retained deletion claim must refuse redispatch');return JSON.parse((await (await import('/src/browser/calendar-store.ts')).calendarDocument.readRaw())!).events;});expect(replay).toEqual(events);
     }
     await page.reload();
     expect(await page.evaluate(async ()=>JSON.parse((await (await import('/src/browser/calendar-store.ts')).calendarDocument.readRaw())!).events)).toEqual(events);

@@ -60,7 +60,7 @@ export async function confirmAvailabilityResult(result:CalendarAvailabilityResul
    content.append(list);
   }else content.append(element('p','No busy times were found in the calendars you chose.'));
   if(result.transparentIgnored)content.append(element('p',`${result.transparentIgnored} event${result.transparentIgnored===1?'':'s'} marked free ${result.transparentIgnored===1?'was':'were'} ignored.`));
-  content.append(element('p',`Read from: ${chosen.map(source=>source.name).join(', ')}.`),element('p',`The agent receives only these times and the number of calendars read (${result.calendarCount}). Calendar names, event titles and details stay on this phone.`));
+  content.append(element('p',`Read from: ${chosen.map(source=>`${source.name} · ${source.account}`).join('; ')}.`),element('p',`The agent receives only these times and the number of calendars read (${result.calendarCount}). Calendar names, event titles and details stay on this phone.`));
   footer.append(cancel,share);return share;
  });
  return approved===true;

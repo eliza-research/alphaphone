@@ -1,3 +1,4 @@
+import {preparePatchedNative} from '../scripts/prepare-patched-native.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readdirSync,mkdtempSync,rmSync,writeFileSync} from 'node:fs';
@@ -11,7 +12,7 @@ test('native workflow notices preserve at-most-once delivery across crashes and 
  const root=resolve(import.meta.dirname,'..'),temporary=mkdtempSync(join(tmpdir(),'workflow-notice-'));
  const java=process.env.JAVA_HOME||(process.platform==='darwin'?'/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home':'');const binary=name=>java?join(java,'bin',name):name;
  try{
-  execFileSync(binary('javac'),['--release','11','-cp',jsonJar,'-d',temporary,join(root,'vendor/eliza/plugins/plugin-native-notifications/android/src/main/java/ai/eliza/plugins/notifications/NoticeDelivery.java'),join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/WorkflowNoticeDelivery.java'),join(root,'test/fixtures/WorkflowNoticeDeliveryTest.java'),join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/WorkflowNoticeRecovery.java'),join(root,'test/fixtures/WorkflowNoticeRecoveryTest.java'),join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/WorkflowNoticeTaps.java'),join(root,'test/fixtures/WorkflowNoticeTapsTest.java')],{timeout:20000});
+  execFileSync(binary('javac'),['--release','11','-cp',jsonJar,'-d',temporary,join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/NoticeOwner.java'),join(preparePatchedNative({root}).root,'plugins/plugin-native-notifications/android/src/main/java/ai/eliza/plugins/notifications/NoticeDelivery.java'),join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/WorkflowNoticeDelivery.java'),join(root,'test/fixtures/WorkflowNoticeDeliveryTest.java'),join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/WorkflowNoticeRecovery.java'),join(root,'test/fixtures/WorkflowNoticeRecoveryTest.java'),join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/WorkflowNoticeTaps.java'),join(root,'test/fixtures/WorkflowNoticeTapsTest.java')],{timeout:20000});
   assert.match(execFileSync(binary('java'),['-cp',temporary+':'+jsonJar,'ai.elizaresearch.alphaphone.WorkflowNoticeDeliveryTest'],{encoding:'utf8',timeout:20000}),/^PASS workflow notices/);
   assert.match(execFileSync(binary('java'),['-cp',temporary+':'+jsonJar,'ai.elizaresearch.alphaphone.WorkflowNoticeRecoveryTest'],{encoding:'utf8',timeout:20000}),/^PASS workflow recovery/);
   assert.match(execFileSync(binary('java'),['-cp',temporary+':'+jsonJar,'ai.elizaresearch.alphaphone.WorkflowNoticeTapsTest'],{encoding:'utf8',timeout:20000}),/^PASS workflow tap/);

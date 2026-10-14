@@ -35,5 +35,5 @@ const viteArgs=process.argv.slice(2);
 const portArgs=viteArgs.some(arg=>arg==='--port'||arg.startsWith('--port='))?[]:['--port','5317'];
 console.log(`Starting the local agent on 127.0.0.1:${port} (profile ${profile}) and the development server.`);
 run(process.execPath,['node_modules/vite/bin/vite.js','--host','127.0.0.1',...portArgs,'--strictPort',...viteArgs],{
-  ...env,ELIZA_DEV_ALLOW_TEST_MOCKS:'1',VITE_LOCAL_AGENT:'1',ALPHA_LOCAL_AGENT_ORIGIN:`http://127.0.0.1:${port}`,ALPHA_LOCAL_AGENT_TOKEN_FILE:join(profile,'owner-token'),
+  ...env,ELIZA_DEV_ALLOW_TEST_MOCKS:'1',VITE_LOCAL_AGENT:'1',VITE_ALPHA_DEV_CARTESIA:env.ALPHA_DEV_CARTESIA==='1'?'1':'',ALPHA_LOCAL_AGENT_ORIGIN:`http://127.0.0.1:${port}`,ALPHA_LOCAL_AGENT_TOKEN_FILE:join(profile,'owner-token'),
 });

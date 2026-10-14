@@ -71,8 +71,12 @@ test('the development profile and deferred apps need test mocks',async()=>{
  const off={features:await load(false,'prototype/mvp-features.ts'),dev:await load(false,'browser/dev-profile.ts')};
  assert.equal(off.dev.browserDevProfile,false,'?mode=dev is ignored without the flag');
  for(const view of ['phone','messages','contacts','wallet'])assert.equal(off.features.isMvpView(view),false,view+' stays deferred');
+ // Off the Alpha AOSP image (every browser and test build) telephony commands stay unavailable (P-36).
+ for(const prompt of ['call 5550100','text Ada I am late','open contacts','send a text message to Ada','pay Ada'])assert.equal(off.features.deferredMvpPrompt(prompt),true,prompt);
+ assert.equal(off.features.deferredMvpPrompt('open inbox'),false);
  const on={features:await load(true,'prototype/mvp-features.ts'),dev:await load(true,'browser/dev-profile.ts')};
  assert.equal(on.dev.browserDevProfile,true);for(const view of ['phone','wallet'])assert.equal(on.features.isMvpView(view),true);
+ assert.equal(on.features.deferredMvpPrompt('call 5550100'),true,'development fixtures never stand in for the AOSP image capability');
 });
 
 test('the local agent host bridge is unavailable without test mocks',async()=>{

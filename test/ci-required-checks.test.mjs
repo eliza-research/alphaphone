@@ -35,9 +35,9 @@ test('production lane selects production-surface and every *.production.spec.ts 
   assert.equal(mixed.browser_production, true);
 });
 
-test('Android foundation runs on main pushes and both workflows end in the required aggregate jobs', () => {
+test('Android foundation runs on main and develop pushes and both workflows end in the required aggregate jobs', () => {
   const android = read('.github/workflows/android.yml');
-  assert.match(android, /^on:\n(?:.*\n)*?  push:\n    branches: \[main\]\n/m);
+  assert.match(android, /^on:\n(?:.*\n)*?  push:\n    branches: \[main, develop\]\n/m);
   assert.match(android, /cancel-in-progress: \$\{\{ github\.event_name != 'push' \}\}/);
   // A shared group would still cancel a pending main run when another push arrives.
   for (const [name, text] of [['android', android], ['browser', read('.github/workflows/browser.yml')]])

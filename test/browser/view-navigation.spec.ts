@@ -14,6 +14,7 @@ const source = [
 	".eliza/client-features/packages/core/src/views/view-action-handoff.ts",
 	".eliza/client-features/packages/core/src/views/completed-action-navigation.ts",
 	"apps/app/src/runtime/alpha-client.ts",
+	"apps/app/src/runtime/aosp-image.ts",
 	"apps/app/src/prototype/mvp-features.ts",
 	"apps/app/src/runtime/view-navigation.ts",
 ]
@@ -26,7 +27,7 @@ async function setup(page: import("@playwright/test").Page) {
 	await page.addScriptTag({
 		type: "module",
 		content:
-			"const browserDevProfile=false;\n" +
+			"const browserDevProfile=false; const Capacitor={getPlatform:()=>\"web\",PluginHeaders:[]};\n" +
 			source +
 			"\nwindow.ViewNavigationClient=ViewNavigationClient;",
 	});

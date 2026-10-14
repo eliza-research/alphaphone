@@ -1,3 +1,4 @@
+import {guardPendingCalendarChanges,type CalendarDeletionState} from './calendar-deletions';
 import {browserDocuments} from './documents';
 import {BrowserDomainDocument,type DomainRecovery} from './domain-document';
 
@@ -19,6 +20,7 @@ export const calendarDocument={
   let modified=false;
   const result=await domain.edit(initial,async data=>{
    const before=JSON.stringify(data),result=await edit(data);
+   guardPendingCalendarChanges(JSON.parse(before) as CalendarDeletionState,data as CalendarDeletionState);
    modified=before!==JSON.stringify(data);return result;
   },signal);
   // Only changed domain bytes need a cross-tab refresh.

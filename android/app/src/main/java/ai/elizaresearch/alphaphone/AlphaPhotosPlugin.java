@@ -16,13 +16,22 @@ import android.provider.MediaStore;
 import android.util.Base64;
 import com.getcapacitor.*;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 import java.io.ByteArrayOutputStream;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Read and explicitly manage only this app's published image/video captures. */
-@CapacitorPlugin(name="AlphaPhotos")
+/** Permission-filtered library reads and explicitly reviewed media management. */
+@CapacitorPlugin(name="AlphaPhotos",permissions={
+ @Permission(alias="libraryLegacy",strings={"android.permission.READ_EXTERNAL_STORAGE"}),
+ @Permission(alias="libraryImages",strings={"android.permission.READ_MEDIA_IMAGES"}),
+ @Permission(alias="libraryVideos",strings={"android.permission.READ_MEDIA_VIDEO"}),
+ @Permission(alias="librarySelected",strings={"android.permission.READ_MEDIA_VISUAL_USER_SELECTED"})
+})
 public class AlphaPhotosPlugin extends Plugin {
+ private PermittedMediaCatalog permitted;
+ private PermittedMediaReview mediaReview;
  private OwnedVideoPlayback playback;
  static final OwnedMediaConfig MEDIA_CONFIG=OwnedMediaConfig.builder("alpha")
    .edits("Pictures/Alpha Phone/Edits/", "Alpha-edit-").captures("Pictures/", "SCAN_").build();
@@ -35,7 +44,41 @@ public class AlphaPhotosPlugin extends Plugin {
   try{worker.execute(()->{if(destroyed)call.reject("Photo library closed");else action.run();});}
   catch(java.util.concurrent.RejectedExecutionException stopped){call.reject("Photo library closed");}
  }
- @Override public void load(){edits=new OwnedPhotoEdits(getContext(), MEDIA_CONFIG);captures=new OwnedCaptures(getContext(), MEDIA_CONFIG);mediaVersions=getContext().getSharedPreferences("alpha-owned-media-versions",0);playback=new OwnedVideoPlayback(getBridge());getBridge().setWebViewClient(playback);}
+ @Override public void load(){
+  // Observation starts only while the Photos grid is open (watchLibrary). Playback grants recheck
+  // their item's revision on every byte request, so unrelated media writes do not revoke them.
+  permitted=new PermittedMediaCatalog(getContext(),false,()->{if(!destroyed)notifyListeners("libraryChanged",new JSObject());});mediaReview=new PermittedMediaReview(getBridge(),permitted,worker);edits=new OwnedPhotoEdits(getContext(), MEDIA_CONFIG,new OwnedPhotoEdits.SourceAccess(){
+  public boolean accepts(String id){return id!=null&&id.startsWith("m:");}
+  public Uri source(String id)throws Exception{revision(id);return permitted.uri(MediaLibraryKey.parse(id));}
+  public String revision(String id)throws Exception{MediaLibraryKey key=MediaLibraryKey.parse(id);if(key.video)throw new IllegalArgumentException("Only still photos support edit copies");JSObject item=permitted.read(id,null,false);if(item.getLong("size")>32L*1024*1024)throw new IllegalArgumentException("Edit copies support source files up to 32 MB");return item.getString("mutationRevision");}
+ });captures=new OwnedCaptures(getContext(), MEDIA_CONFIG);mediaVersions=getContext().getSharedPreferences("alpha-owned-media-versions",0);playback=new OwnedVideoPlayback(getBridge());getBridge().setWebViewClient(playback);}
+ @PluginMethod public void libraryAccess(PluginCall call){call.resolve(permitted.access());}
+ /** Photos grid enter/leave. The Device library album watches the same catalog under its own name. */
+ @PluginMethod public void watchLibrary(PluginCall call){boolean active=call.getBoolean("active",false)&&!destroyed;permitted.watch("photos",active);JSObject out=new JSObject();out.put("active",active);call.resolve(out);}
+ /** The single permitted-media catalog and review shared with AlphaPhotoLibrary: one index, one review at a time. */
+ PermittedMediaCatalog permittedCatalog(){return permitted;}
+ PermittedMediaReview permittedReview(){return mediaReview;}
+ @PluginMethod public void openLibrarySettings(PluginCall call){
+  if(destroyed||!getActivity().hasWindowFocus()){call.reject("Return to Photos to review access");return;}
+  try{getActivity().startActivity(new android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.fromParts("package",getContext().getPackageName(),null)));call.resolve();}catch(RuntimeException unavailable){call.reject("Android app settings could not open");}
+ }
+ /** Only the explicit Photos permission control invokes this, never list/read/resume. */
+ @PluginMethod public void requestLibraryAccess(PluginCall call){
+  if(destroyed||!getActivity().hasWindowFocus()){call.reject("Return to Photos to choose access");return;}
+  String[] aliases=Build.VERSION.SDK_INT>=34?new String[]{"libraryImages","libraryVideos","librarySelected"}:Build.VERSION.SDK_INT>=33?new String[]{"libraryImages","libraryVideos"}:new String[]{"libraryLegacy"};
+  LateLaunch.ask(call,()->requestPermissionForAliases(aliases,call,"libraryPermissionResult"));
+ }
+ @PermissionCallback private void libraryPermissionResult(PluginCall call){permitted.invalidate();libraryAccess(call);}
+ @Override @PluginMethod public void requestPermissions(PluginCall call){requestLibraryAccess(call);}
+ private interface ReadAction {JSObject run()throws Exception;}
+ private void submitRead(PluginCall call,ReadAction action){
+  try{long ticket=permitted.readTicket();submit(call,()->{try{permitted.requireReadTicket(ticket);JSObject value=action.run();permitted.publish(call,value,ticket);}catch(Exception changed){call.reject("Photo library changed or is unavailable. Refresh Photos and check its access.");}});}
+  catch(Exception unavailable){call.reject("Unlock and reopen Photos before reading the library.");}
+ }
+ @PluginMethod public void listPermitted(PluginCall call){submitRead(call,()->permitted.list(call.getString("before",""),call.getString("query",""),call.getString("kind","all"),call.getBoolean("thumbnails",true),call.getString("filter","all")));}
+ @PluginMethod public void readPermitted(PluginCall call){submitRead(call,()->permitted.read(call.getString("id"),call.getString("revision"),call.getBoolean("pixels",true)));}
+ @Override protected void handleOnPause(){if(permitted!=null){permitted.watch("photos",false);permitted.foreground(false);}if(playback!=null)playback.clear();}
+ @Override protected void handleOnResume(){if(permitted!=null)permitted.foreground(true);notifyListeners("libraryChanged",new JSObject());}
  private final ExecutorService worker=Executors.newSingleThreadExecutor();
  private String owned(){return owned(false);}
  private String owned(boolean trashed){return MediaStore.MediaColumns.OWNER_PACKAGE_NAME+"=? AND "+MediaStore.MediaColumns.IS_PENDING+"=0"+(Build.VERSION.SDK_INT>=30?" AND "+MediaStore.MediaColumns.IS_TRASHED+"="+(trashed?1:0):"");}
@@ -70,6 +113,7 @@ public class AlphaPhotosPlugin extends Plugin {
   try{
    boolean trashed=call.getBoolean("trashed",false);if(trashed&&Build.VERSION.SDK_INT<30){call.reject("Android trash requires Android 11 or later");return;}
    String album=call.getString("album","");if(album.startsWith("custom:")){listCustomAlbum(call,album.substring(7));return;}if(!album.isEmpty()&&!album.equals("favorites")&&!album.equals("videos"))throw new IllegalArgumentException();
+   if(!"denied".equals(permitted.access().getString("scope"))){call.resolve(permitted.list(call.getString("before",""),"",album.equals("videos")?"video":"all",true,trashed?"trash":album.equals("favorites")?"favorites":"all"));return;}
    if(trashed&&!album.isEmpty())throw new IllegalArgumentException();
    if(album.equals("favorites")&&Build.VERSION.SDK_INT<30){call.reject("Favorites require Android 11 or later");return;}
    String filter=album.equals("videos")?" AND media_type=3":album.equals("favorites")?" AND is_favorite=1":"";
@@ -92,6 +136,10 @@ public class AlphaPhotosPlugin extends Plugin {
  });}
  @PluginMethod public void read(PluginCall call){submit(call,()->{
   try{
+   if(call.getString("id","").startsWith("m:")){
+    String key=call.getString("id");JSObject result=permitted.read(key,call.getString("revision"),true);MediaLibraryKey media=MediaLibraryKey.parse(key);String revision=result.getString("revision");
+    if(media.video)result.put("path",playback.authorize(permitted.uri(media),()->{try{permitted.read(key,revision,false);}catch(Exception unavailable){throw new SecurityException("Selected video changed or is unavailable");}}));call.resolve(result);return;
+   }
    String key=call.getString("id","");long id=id(key);boolean video=key.startsWith("v:");
    Uri uri=uri(id,video);JSObject result;
    try(Cursor row=getContext().getContentResolver().query(CATALOG,fields(),owned()+" AND _id=? AND media_type=?",new String[]{getContext().getPackageName(),Long.toString(id),video?"3":"1"},null)){
@@ -112,6 +160,10 @@ public class AlphaPhotosPlugin extends Plugin {
  });}
  @PluginMethod public void share(PluginCall call){submit(call,()->{
   try{
+   if(call.getString("id","").startsWith("m:")){
+    String key=call.getString("id"),revision=call.getString("revision");if(revision==null||revision.isEmpty())throw new IllegalArgumentException();permitted.read(key,revision,false);
+    call.resolve(SelectedDocumentAccess.shareUri(getActivity(),permitted.uri(MediaLibraryKey.parse(key))));return;
+   }
    String key=call.getString("id","");long id=id(key);boolean video=key.startsWith("v:");
    Uri uri=uri(id,video);
    try(Cursor row=getContext().getContentResolver().query(CATALOG,fields(),owned()+" AND _id=? AND media_type=?",new String[]{getContext().getPackageName(),Long.toString(id),video?"3":"1"},null)){
@@ -125,11 +177,14 @@ public class AlphaPhotosPlugin extends Plugin {
    JSArray items=call.getArray("items");if(items==null||items.length()<1||items.length()>20)throw new IllegalArgumentException();
    java.util.ArrayList<Uri> uris=new java.util.ArrayList<>();java.util.Set<String> unique=new java.util.HashSet<>();String mime=null;
    for(int i=0;i<items.length();i++){
-    org.json.JSONObject item=items.getJSONObject(i);String key=item.getString("id");if(!key.matches("(?:v:)?[1-9][0-9]*")||!unique.add(key))throw new IllegalArgumentException();boolean video=key.startsWith("v:");long itemId=id(key);
+    org.json.JSONObject item=items.getJSONObject(i);String key=item.getString("id");if(!unique.add(key))throw new IllegalArgumentException();Uri uri;
+    if(key.startsWith("m:")){String revision=item.getString("revision");if(revision.isEmpty())throw new IllegalArgumentException();permitted.read(key,revision,false);uri=permitted.uri(MediaLibraryKey.parse(key));}
+    else {if(!key.matches("(?:v:)?[1-9][0-9]*"))throw new IllegalArgumentException();boolean video=key.startsWith("v:");long itemId=id(key);
     try(Cursor row=getContext().getContentResolver().query(CATALOG,fields(),owned()+" AND _id=? AND media_type=?",new String[]{getContext().getPackageName(),Long.toString(itemId),video?"3":"1"},null)){
      if(row==null||!row.moveToFirst()||!mutationRevision(row).equals(item.getString("revision")))throw new IllegalArgumentException();
     }
-    Uri uri=uri(itemId,video);try(android.content.res.AssetFileDescriptor file=getContext().getContentResolver().openAssetFileDescriptor(uri,"r")){if(file==null)throw new IllegalArgumentException();}
+    uri=uri(itemId,video);}
+    try(android.content.res.AssetFileDescriptor file=getContext().getContentResolver().openAssetFileDescriptor(uri,"r")){if(file==null)throw new IllegalArgumentException();}
     String type=getContext().getContentResolver().getType(uri);if(type==null)type="application/octet-stream";mime=mime==null?type:mime.equals(type)?mime:mime.startsWith("image/")&&type.startsWith("image/")?"image/*":mime.startsWith("video/")&&type.startsWith("video/")?"video/*":"*/*";uris.add(uri);
    }
    android.content.Intent send=new android.content.Intent(android.content.Intent.ACTION_SEND_MULTIPLE).setType(mime).putParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM,uris).addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -166,7 +221,7 @@ public class AlphaPhotosPlugin extends Plugin {
    }
  }
  private void setFlag(PluginCall call,boolean favorite){submit(call,()->{
-  try{Boolean desired=call.getBoolean(favorite?"favorite":"trashed");if(desired==null)throw new IllegalArgumentException();call.resolve(changeFlag(call.getString("id"),call.getString("revision"),favorite,desired));}
+  try{Boolean desired=call.getBoolean(favorite?"favorite":"trashed");if(desired==null)throw new IllegalArgumentException();if(call.getString("id","").startsWith("m:")){mediaReview.request(call,java.util.List.of(call.getString("id")),java.util.List.of(call.getString("revision")),favorite,desired,false);return;}call.resolve(changeFlag(call.getString("id"),call.getString("revision"),favorite,desired));}
   catch(Exception failure){call.reject("This media changed or could not be verified. Refresh Photos before trying again.");}
  });}
  /** A bounded partial operation, never an atomic all-or-nothing promise. */
@@ -174,6 +229,8 @@ public class AlphaPhotosPlugin extends Plugin {
   try{
    String operation=call.getString("operation","");if(!operation.equals("favorite")&&!operation.equals("trash")&&!operation.equals("restore"))throw new IllegalArgumentException();
    JSArray items=call.getArray("items");if(items==null||items.length()<1||items.length()>20)throw new IllegalArgumentException();
+   boolean permittedItems=false;for(int i=0;i<items.length();i++)if(items.getJSONObject(i).getString("id").startsWith("m:"))permittedItems=true;
+   if(permittedItems){java.util.List<String> keys=new java.util.ArrayList<>(),revisions=new java.util.ArrayList<>();for(int i=0;i<items.length();i++){keys.add(items.getJSONObject(i).getString("id"));revisions.add(items.getJSONObject(i).getString("revision"));}mediaReview.request(call,keys,revisions,operation.equals("favorite"),!operation.equals("restore"),true);return;}
    java.util.Set<String> seen=new java.util.HashSet<>();
    // Validate the complete request before the first write.
    for(int i=0;i<items.length();i++){org.json.JSONObject item=items.getJSONObject(i);String key=item.getString("id"),revision=item.getString("revision");if(!key.matches("(?:v:)?[1-9][0-9]*")||!seen.add(key)||revision.isEmpty()||revision.length()>160)throw new IllegalArgumentException();id(key);}
@@ -193,6 +250,7 @@ public class AlphaPhotosPlugin extends Plugin {
  private final java.util.LinkedHashMap<String,TrashConfirmation> confirmations=new java.util.LinkedHashMap<>();
  @PluginMethod public void summary(PluginCall call){submit(call,()->{
   try{
+   if(!"denied".equals(permitted.access().getString("scope"))){call.resolve(permitted.summary());return;}
    Bundle query=new Bundle();query.putString(ContentResolver.QUERY_ARG_SQL_SELECTION,MediaStore.MediaColumns.OWNER_PACKAGE_NAME+"=? AND is_pending=0"+MEDIA);query.putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS,new String[]{getContext().getPackageName()});
    if(Build.VERSION.SDK_INT>=30)query.putInt(MediaStore.QUERY_ARG_MATCH_TRASHED,MediaStore.MATCH_INCLUDE);
    int favorite=0,videos=0,trash=0;
@@ -248,7 +306,7 @@ public class AlphaPhotosPlugin extends Plugin {
  private String albumName(String value){String name=value==null?"":value.trim();if(name.isEmpty()||name.length()>80||name.chars().anyMatch(c->Character.isISOControl(c)))throw new IllegalArgumentException("Use an album name of 1–80 characters");return name;}
  private JSArray albumRows(org.json.JSONObject album,boolean thumbnails,long before,int limit)throws Exception{
   org.json.JSONArray members=album.getJSONArray("members");java.util.Map<String,String> allowed=new java.util.HashMap<>();java.util.List<String> args=new java.util.ArrayList<>();args.add(getContext().getPackageName());StringBuilder ids=new StringBuilder();
-  for(int i=0;i<members.length();i++){org.json.JSONObject member=members.getJSONObject(i);String key=member.getString("id");allowed.put(key,member.getString("identity"));if(ids.length()>0)ids.append(',');ids.append('?');args.add(Long.toString(id(key)));}
+  for(int i=0;i<members.length();i++){org.json.JSONObject member=members.getJSONObject(i);String key=member.getString("id");if(key.startsWith("m:"))continue;allowed.put(key,member.getString("identity"));if(ids.length()>0)ids.append(',');ids.append('?');args.add(Long.toString(id(key)));}
   JSArray result=new JSArray();if(allowed.isEmpty())return result;
   try(Cursor rows=getContext().getContentResolver().query(CATALOG,fields(),owned()+MEDIA+" AND _id IN ("+ids+")",args.toArray(new String[0]),"_id DESC")){
    if(rows==null)throw new IllegalStateException();while(rows.moveToNext()){
@@ -257,15 +315,35 @@ public class AlphaPhotosPlugin extends Plugin {
    }
   }return result;
  }
+ /** Metadata-only permitted members, read in one batched query per volume and type. */
+ private JSArray permittedAlbumRows(org.json.JSONObject album,int offset,int limit)throws Exception{
+  org.json.JSONArray members=album.getJSONArray("members");java.util.List<String[]> wanted=new java.util.ArrayList<>();java.util.List<Integer> offsets=new java.util.ArrayList<>();
+  for(int i=offset;i<members.length();i++){org.json.JSONObject member=members.getJSONObject(i);String key=member.getString("id");if(!key.startsWith("m:"))continue;wanted.add(new String[]{key,member.getString("identity")});offsets.add(i+1);}
+  java.util.Map<String,JSObject> found=permitted.albumItems(wanted);JSArray result=new JSArray();
+  // Retain membership, withhold inaccessible/changed media.
+  for(int i=0;i<wanted.size()&&result.length()<limit;i++){JSObject row=found.get(wanted.get(i)[0]);if(row==null)continue;row.put("albumOffset",offsets.get(i));result.put(row);}
+  return result;
+ }
+ private boolean hasPermittedMembers(org.json.JSONObject album)throws Exception{org.json.JSONArray members=album.getJSONArray("members");for(int i=0;i<members.length();i++)if(members.getJSONObject(i).getString("id").startsWith("m:"))return true;return false;}
  private void listCustomAlbum(PluginCall call,String id)throws Exception{
   if(Build.VERSION.SDK_INT<30)throw new IllegalArgumentException("Owned albums require Android 11 or later");
-  org.json.JSONObject album=albumById(albumsData(),id);String cursor=call.getString("before","");long before=cursor.isEmpty()?Long.MAX_VALUE:Long.parseLong(cursor);if(before<=0)throw new IllegalArgumentException();
+  PermittedMediaCatalog.Fence fence=permitted.fence();org.json.JSONObject album=albumById(albumsData(),id);String cursor=call.getString("before","");
+  if(hasPermittedMembers(album)){
+   String prefix="library:"+album.getString("revision")+":"+fence.cursorIdentity()+":";int offset=0;if(!cursor.isEmpty()){if(!cursor.startsWith(prefix))throw new IllegalArgumentException("Album changed");offset=Integer.parseInt(cursor.substring(prefix.length()));if(offset<0||offset>200)throw new IllegalArgumentException();}
+   java.util.List<org.json.JSONObject> rows=new java.util.ArrayList<>();JSArray legacy=albumRows(album,false,Long.MAX_VALUE,200),full=permittedAlbumRows(album,0,200);for(int i=0;i<legacy.length();i++)rows.add(legacy.getJSONObject(i));for(int i=0;i<full.length();i++)rows.add(full.getJSONObject(i));rows.sort((a,b)->a.optString("id").compareTo(b.optString("id")));
+   // The fence covers only the metadata listing; thumbnails (up to 3 s each) load afterwards and
+   // each permitted thumbnail rechecks its own item revision.
+   permitted.requireCurrent(fence);
+   JSArray items=new JSArray();int end=Math.min(rows.size(),offset+24);for(int i=offset;i<end;i++){org.json.JSONObject row=rows.get(i);String key=row.getString("id");try{if(key.startsWith("m:"))row=permitted.albumItem(key,row.getString("identity"),true);else row.put("image",image(id(key),key.startsWith("v:"),240));}catch(Exception unavailable){continue;}items.put(row);}
+   JSObject result=new JSObject();result.put("items",items);result.put("next",end<rows.size()?prefix+end:"");result.put("name",album.getString("name"));result.put("revision",album.getString("revision"));call.resolve(result);return;
+  }
+  long before=cursor.isEmpty()?Long.MAX_VALUE:Long.parseLong(cursor);if(before<=0)throw new IllegalArgumentException();
   JSArray found=albumRows(album,true,before,25),items=new JSArray();String next="";for(int i=0;i<found.length()&&i<24;i++)items.put(found.getJSONObject(i));if(found.length()>24)next=Long.toString(id(items.getJSONObject(23).getString("id")));
   JSObject result=new JSObject();result.put("items",items);result.put("next",next);result.put("name",album.getString("name"));result.put("revision",album.getString("revision"));call.resolve(result);
  }
  @PluginMethod public void albums(PluginCall call){submit(call,()->{
   if(Build.VERSION.SDK_INT<30){call.reject("Owned albums require Android 11 or later");return;}
-  try{org.json.JSONArray albums=albumsData();JSArray result=new JSArray();for(int i=0;i<albums.length();i++){org.json.JSONObject album=albums.getJSONObject(i);JSObject row=new JSObject();row.put("id",album.getString("id"));row.put("name",album.getString("name"));row.put("revision",album.getString("revision"));JSArray active=albumRows(album,false,Long.MAX_VALUE,200);row.put("count",active.length());JSArray members=new JSArray();for(int j=0;j<active.length();j++)members.put(active.getJSONObject(j).getString("id"));row.put("memberIds",members);result.put(row);}JSObject response=new JSObject();response.put("items",result);call.resolve(response);}catch(Exception failure){call.reject("Owned albums could not be loaded");}
+  try{PermittedMediaCatalog.Fence fence=permitted.fence();org.json.JSONArray albums=albumsData();JSArray result=new JSArray();for(int i=0;i<albums.length();i++){org.json.JSONObject album=albums.getJSONObject(i);JSObject row=new JSObject();row.put("id",album.getString("id"));row.put("name",album.getString("name"));row.put("revision",album.getString("revision"));JSArray active=albumRows(album,false,Long.MAX_VALUE,200);JSArray full=permittedAlbumRows(album,0,200);for(int j=0;j<full.length();j++)active.put(full.getJSONObject(j));row.put("count",active.length());JSArray members=new JSArray();for(int j=0;j<active.length();j++)members.put(active.getJSONObject(j).getString("id"));row.put("memberIds",members);result.put(row);}JSObject response=new JSObject();response.put("items",result);permitted.requireCurrent(fence);call.resolve(response);}catch(Exception failure){call.reject("Owned albums could not be loaded");}
  });}
  @PluginMethod public void changeAlbum(PluginCall call){submit(call,()->{
   if(Build.VERSION.SDK_INT<30){call.reject("Owned albums require Android 11 or later");return;}
@@ -276,11 +354,17 @@ public class AlphaPhotosPlugin extends Plugin {
    if(operation.equals("create")){if(albums.length()>=24)throw new IllegalArgumentException("At most 24 custom albums are supported");album=new org.json.JSONObject().put("id",java.util.UUID.randomUUID().toString()).put("name",albumName(call.getString("name"))).put("members",new org.json.JSONArray());albums.put(album);}
    else{album=albumById(albums,call.getString("id",""));if(!album.getString("revision").equals(call.getString("revision")))throw new IllegalArgumentException("Album changed. Reopen it before trying again");}
    if(operation.equals("create")||operation.equals("add")){
-    String key=call.getString("mediaId","");if(!key.matches("(?:v:)?[1-9][0-9]*"))throw new IllegalArgumentException("Select owned media first");
+    String key=call.getString("mediaId","");
+    if(key.startsWith("m:")){
+     JSObject item=permitted.read(key,call.getString("mediaRevision"),false);org.json.JSONArray members=album.getJSONArray("members"),next=new org.json.JSONArray();for(int i=0;i<members.length();i++)if(!members.getJSONObject(i).getString("id").equals(key))next.put(members.getJSONObject(i));
+     if(next.length()>=200)throw new IllegalArgumentException("An album supports at most 200 items");next.put(new org.json.JSONObject().put("id",key).put("identity",item.getString("identity")));album.put("members",next);
+    }else{
+    if(!key.matches("(?:v:)?[1-9][0-9]*"))throw new IllegalArgumentException("Select owned media first");
     try(Cursor row=getContext().getContentResolver().query(CATALOG,fields(),owned()+" AND _id=? AND media_type=?",new String[]{getContext().getPackageName(),Long.toString(id(key)),key.startsWith("v:")?"3":"1"},null)){
      if(row==null||!row.moveToFirst()||!mutationRevision(row).equals(call.getString("mediaRevision")))throw new IllegalArgumentException("Media changed. Reselect it before trying again");
      org.json.JSONArray members=album.getJSONArray("members"),next=new org.json.JSONArray();for(int i=0;i<members.length();i++)if(!members.getJSONObject(i).getString("id").equals(key))next.put(members.getJSONObject(i));
      if(next.length()>=200)throw new IllegalArgumentException("An album supports at most 200 owned items");next.put(new org.json.JSONObject().put("id",key).put("identity",mediaIdentity(row)));album.put("members",next);
+    }
     }
    }else if(operation.equals("remove")){String key=call.getString("mediaId","");org.json.JSONArray members=album.getJSONArray("members"),next=new org.json.JSONArray();for(int i=0;i<members.length();i++)if(!members.getJSONObject(i).getString("id").equals(key))next.put(members.getJSONObject(i));if(next.length()==members.length())throw new IllegalArgumentException("Media is no longer in this album");album.put("members",next);}
    else if(operation.equals("rename"))album.put("name",albumName(call.getString("name")));
@@ -291,5 +375,5 @@ public class AlphaPhotosPlugin extends Plugin {
   }catch(IllegalArgumentException failure){call.reject(failure.getMessage());}catch(Exception failure){call.reject("Album could not be saved. Reload albums before trying again");}
   }
  });}
- @Override protected void handleOnDestroy(){destroyed=true;if(edits!=null)edits.cancel(null);try{worker.execute(()->{if(edits!=null)edits.close();});}catch(java.util.concurrent.RejectedExecutionException ignored){}worker.shutdown();if(playback!=null)playback.clear();}
+ @Override protected void handleOnDestroy(){destroyed=true;if(mediaReview!=null)mediaReview.close();if(permitted!=null)permitted.close();if(edits!=null)edits.cancel(null);try{worker.execute(()->{if(edits!=null)edits.close();});}catch(java.util.concurrent.RejectedExecutionException ignored){}worker.shutdown();if(playback!=null)playback.clear();}
 }

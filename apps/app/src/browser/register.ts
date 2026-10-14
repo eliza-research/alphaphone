@@ -1,3 +1,4 @@
+import {BrowserDeletions} from './deletions';
 // Registers AlphaConnection with its browser factory (HTTPS fetch, connection-slot secrets, Cloud sign-in tab).
 import '../runtime/native-connection';
 import './register-hosted-results';
@@ -32,6 +33,7 @@ if (!Capacitor.isNativePlatform()) {
   const daily = new BrowserDaily(files);
   registerPlugin('DailyApps', { web: () => daily });
   const calendar=new BrowserCalendar();
+  registerPlugin('AlphaDeletions',{web:()=>new BrowserDeletions(daily,calendar)});
   const notifications=new BrowserNotifications(daily,calendar);
   registerPlugin('AlphaNotifications', { web: () => notifications });
   new BrowserClock(daily,notifications);

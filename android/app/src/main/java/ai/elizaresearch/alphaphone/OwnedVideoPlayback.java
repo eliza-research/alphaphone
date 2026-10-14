@@ -28,15 +28,20 @@ final class OwnedVideoPlayback extends BridgeWebViewClient {
  private volatile String lastFailure="";
  String diagnostics(){return "requests="+intercepted.get()+",status="+lastStatus+",range="+lastWasRange+",requested="+lastRequestedRange+",failure="+lastFailure;}
 
- private final LinkedHashMap<String,Uri> grants=new LinkedHashMap<>();
+ private static final class Grant {final Uri uri;final Runnable check;volatile boolean revoked;Grant(Uri uri,Runnable check){this.uri=uri;this.check=check;}}
+ private final LinkedHashMap<String,Grant> grants=new LinkedHashMap<>();
  OwnedVideoPlayback(Bridge bridge){super(bridge);this.bridge=bridge;}
  synchronized String authorize(Uri uri){
-  String key=UUID.randomUUID().toString()+".mp4";grants.put(key,uri);
-  while(grants.size()>32)grants.remove(grants.keySet().iterator().next());
+  return authorize(uri,null);
+ }
+ /** A host-validated selected library video; every byte request rechecks its revision and access. */
+ synchronized String authorize(Uri uri,Runnable check){
+  String key=UUID.randomUUID().toString()+".mp4";grants.put(key,new Grant(uri,check));
+  while(grants.size()>32)grants.remove(grants.keySet().iterator().next()).revoked=true;
   return bridge.getLocalUrl().replaceAll("/$","")+PREFIX+key;
  }
- synchronized void clear(){grants.clear();}
- synchronized void revoke(Uri uri){grants.entrySet().removeIf(entry->entry.getValue().equals(uri));}
+ synchronized void clear(){for(Grant grant:grants.values())grant.revoked=true;grants.clear();}
+ synchronized void revoke(Uri uri){grants.entrySet().removeIf(entry->{if(!entry.getValue().uri.equals(uri))return false;entry.getValue().revoked=true;return true;});}
  private WebResourceResponse empty(int code,String reason){lastStatus=code;return new WebResourceResponse("text/plain","UTF-8",code,reason,Collections.singletonMap("Cache-Control","no-store"),new ByteArrayInputStream(new byte[0]));}
  @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
   Uri url=request.getUrl();
@@ -45,16 +50,20 @@ final class OwnedVideoPlayback extends BridgeWebViewClient {
   Uri origin=Uri.parse(bridge.getLocalUrl());
   if(!Objects.equals(origin.getScheme(),url.getScheme())||!Objects.equals(origin.getAuthority(),url.getAuthority())||request.isForMainFrame())return empty(403,"Forbidden");
   if(!"GET".equals(request.getMethod())&&!"HEAD".equals(request.getMethod()))return empty(405,"Method Not Allowed");
-  Uri uri; synchronized(this){uri=grants.get(url.getPath().substring(PREFIX.length()));}
-  if(uri==null)return empty(404,"Not Found");
+  Grant grant; synchronized(this){grant=grants.get(url.getPath().substring(PREFIX.length()));}
+  if(grant==null)return empty(404,"Not Found");Uri uri=grant.uri;
   ParcelFileDescriptor descriptor=null;
   try{
    ContentResolver resolver=bridge.getContext().getContentResolver();
+   if(grant.check!=null)grant.check.run();
+   else {
    String selection=MediaStore.MediaColumns.OWNER_PACKAGE_NAME+"=? AND is_pending=0"+(Build.VERSION.SDK_INT>=30?" AND is_trashed=0":"");
    try(Cursor row=resolver.query(uri,new String[]{"_id"},selection,new String[]{bridge.getContext().getPackageName()},null)){
     if(row==null||!row.moveToFirst())return empty(404,"Not Found");
    }
+   }
    descriptor=resolver.openFileDescriptor(uri,"r");if(descriptor==null)return empty(404,"Not Found");
+   if(grant.check!=null)grant.check.run();
    long length=descriptor.getStatSize();if(length<=0)throw new IOException();
    long start=0,end=length-1;String range=null;
    for(Map.Entry<String,String> h:request.getRequestHeaders().entrySet())if(h.getKey().equalsIgnoreCase("Range"))range=h.getValue();
@@ -85,10 +94,14 @@ final class OwnedVideoPlayback extends BridgeWebViewClient {
     FileInputStream stream=new ParcelFileDescriptor.AutoCloseInputStream(descriptor);descriptor=null;final long limit=end+1;
     body=new FilterInputStream(stream){
      long left=limit;
-     @Override public int read()throws IOException{if(left==0)return -1;int b=in.read();if(b>=0)left--;return b;}
-     @Override public int read(byte[] b,int off,int len)throws IOException{if(len==0)return 0;if(left==0)return -1;int n=in.read(b,off,(int)Math.min(len,left));if(n>0)left-=n;return n;}
-     @Override public long skip(long count)throws IOException{long n=in.skip(Math.max(0,Math.min(count,left)));left-=n;return n;}
-     @Override public int available()throws IOException{return in.available();}
+     private void admitted()throws IOException{
+      if(grant.revoked)throw new IOException("Video access ended");
+      if(grant.check!=null){android.app.KeyguardManager keyguard=bridge.getContext().getSystemService(android.app.KeyguardManager.class);android.os.UserManager users=bridge.getContext().getSystemService(android.os.UserManager.class);if(keyguard==null||users==null||keyguard.isDeviceLocked()||!users.isUserUnlocked())throw new IOException("Video profile locked");}
+     }
+     @Override public int read()throws IOException{admitted();if(left==0)return -1;int b=in.read();if(b>=0)left--;return b;}
+     @Override public int read(byte[] b,int off,int len)throws IOException{admitted();if(len==0)return 0;if(left==0)return -1;int n=in.read(b,off,(int)Math.min(len,left));if(n>0)left-=n;return n;}
+     @Override public long skip(long count)throws IOException{admitted();long n=in.skip(Math.max(0,Math.min(count,left)));left-=n;return n;}
+     @Override public int available()throws IOException{admitted();return in.available();}
     };
    }
    lastStatus=range==null?200:206;

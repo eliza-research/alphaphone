@@ -2,7 +2,7 @@ name: Android foundation
 on:
   # Main pushes rebuild both variants so a broken merge is visible on main itself.
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
   workflow_dispatch:
 permissions:

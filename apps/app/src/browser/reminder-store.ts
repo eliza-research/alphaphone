@@ -1,3 +1,4 @@
+import {guardPendingReminderChanges,type ReminderDeletionState} from './reminder-deletions';
 import {browserDocuments} from './documents';
 import {BrowserDomainDocument,type DomainRecovery} from './domain-document';
 
@@ -18,6 +19,7 @@ export const reminderDocument={
   let modified=false;
   const result=await domain.edit(initial,async data=>{
    const before=JSON.stringify(data),result=await edit(data);
+   guardPendingReminderChanges(JSON.parse(before) as ReminderDeletionState,data as ReminderDeletionState);
    modified=before!==JSON.stringify(data);return result;
   },signal);
   // Only changed domain bytes need a cross-tab refresh.

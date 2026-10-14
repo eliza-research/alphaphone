@@ -13,6 +13,88 @@
           "afterSha256": "f301f177f5172cbd5ee41e8b8eb3883447e7054d6f1df292630f8b2a6176add1"
         }
       ]
+    },
+    {
+      "file": "notice-owner-suspension.patch",
+      "sha256": "fbc9a4f1846fc2bae8c2b455297f4c27171abe30cb64dd17a312187fab360764",
+      "module": "plugins/plugin-native-notifications/android",
+      "targets": [
+        {
+          "path": "plugins/plugin-native-notifications/android/src/main/java/ai/eliza/plugins/notifications/NoticeDelivery.java",
+          "beforeSha256": "a6944a6f823bc2db1c05fb99cc16cb00e015d99e4ee7a2ccd349e9e397bc4e53",
+          "afterSha256": "4fb3b7c8a9a56ceb3c51c5990b4e41439d031c729f5db221bd19d4a53b7b3bce"
+        }
+      ]
+    },
+    {
+      "file": "system-product-capabilities.patch",
+      "sha256": "236388e42cd10e43b78a2b8c2ad8de9673aa495db36dbc70560f459797c744c1",
+      "module": "plugins/plugin-native-system/android",
+      "targets": [
+        {
+          "path": "plugins/plugin-native-system/android/src/main/java/ai/eliza/plugins/system/SystemPlugin.kt",
+          "beforeSha256": "a7b615e2a44da2b4c4c76c35bbc731707e4b1fcbe276aa4f80f48509794cf9cd",
+          "afterSha256": "83032a842b700e1c8494ae8837a740889475ca920a353882fd0329b6bf10c622"
+        }
+      ]
+    },
+    {
+      "file": "permitted-photo-copy-source.patch",
+      "sha256": "613ce22e76b9dd383d0a091d4f3065054d5f637faf7dcfe7cc0bec1761f7db91",
+      "module": "plugins/plugin-native-media/android",
+      "targets": [
+        {
+          "path": "plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/OwnedPhotoEdits.java",
+          "beforeSha256": "adcaba3a54f600bcf9906260ffee605158f0119eb70738f24c68af7c757764c7",
+          "afterSha256": "3f09d9455d95e8bec27699133ecb976466ca6af690f3563a466399bb282e4d48"
+        }
+      ]
+    },
+    {
+      "file": "reminder-deletion-window.patch",
+      "sha256": "ed9552c8fa50293a7c77050d37bfab055a82ae9a6f120da2116d28b7252fee6a",
+      "module": "plugins/plugin-native-reminders/android",
+      "targets": [
+        {
+          "path": "plugins/plugin-native-reminders/android/src/main/java/ai/eliza/plugins/reminders/ReminderStore.java",
+          "beforeSha256": "095f7805b1ded1f2b6087185914b9dabb67c1cdc6341c8716f34bb4f9d6cc371",
+          "afterSha256": "7df583854bec16ae17aa6c4defac24b533616c3f47f34cf9d5dd862de006adfb"
+        },
+        {
+          "path": "plugins/plugin-native-reminders/android/src/main/java/ai/eliza/plugins/reminders/ReminderEngine.java",
+          "beforeSha256": "b05bab06a739a29367551f0a58091c5f14201b28eb25fd492c4bd7845c98dfd3",
+          "afterSha256": "f27bedd21716ff5c78bc5b46535987de20b01da5704398860ad0a7113ffbe08e"
+        }
+      ]
+    },
+    {
+      "file": "calendar-deletion-window.patch",
+      "sha256": "c71a1b025fe350d3e571d146001eda71d3542892cc060a4a0496fe1696e61fa2",
+      "module": "plugins/plugin-native-calendar/android",
+      "targets": [
+        {
+          "path": "plugins/plugin-native-calendar/android/src/main/java/ai/eliza/plugins/calendar/CalendarPlugin.java",
+          "beforeSha256": "f3e9b0e7f4accbeeca96a97f916a141ef722f17b773c7997fb80f2867418cc05",
+          "afterSha256": "83c66d1af32ac6bbbefcd21d208fd2f115696cab57aeab25607d745282dd483d"
+        },
+        {
+          "path": "plugins/plugin-native-calendar/android/src/main/java/ai/eliza/plugins/calendar/CalendarEventGuard.java",
+          "beforeSha256": "380371f5c44a3fa5ae27d3efbb87063224613423cf9d6b1adc71109197ca0200",
+          "afterSha256": "3ec5cc1b3cb8f56680f100126b0439ef6e6dd3f6f2b224652bc06bf5d3a0b84d"
+        }
+      ]
+    },
+    {
+      "file": "action-journal-native-claim.patch",
+      "sha256": "61a585ff7a168a0bdaad4af70b06a13e28064729b4d94bdda76f747f125491ea",
+      "module": "plugins/plugin-native-action-journal/android",
+      "targets": [
+        {
+          "path": "plugins/plugin-native-action-journal/android/src/main/java/ai/eliza/plugins/actionjournal/ActionJournal.java",
+          "beforeSha256": "3b0f71bed77506d5a1b48af152191389cf621ecf71789521982a8a46eb285976",
+          "afterSha256": "4902e0d10862fad375d87e70f15782017b685726c069b54e25350368b6cdd346"
+        }
+      ]
     }
   ]
 }

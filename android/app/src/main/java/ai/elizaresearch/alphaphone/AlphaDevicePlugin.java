@@ -146,6 +146,22 @@ public final class AlphaDevicePlugin extends Plugin {
    } catch(RuntimeException unavailable) { call.reject("Password provider setup could not be opened. No provider change is confirmed."); }
   });
  }
+ /**
+  * Asks Android to open its own notification shade (#416, #417). Launcher flavor only, and only
+  * while Alpha's window has focus, so a pull or button on visible Home is the only way to reach it.
+  * Resolves with {status}: opened, standalone, permission-missing, unsupported or not-in-front.
+  * Any status but opened leaves the renderer's truthful fallback to show.
+  */
+ @PluginMethod public void openNotificationShade(PluginCall call){
+  android.app.Activity activity=getActivity();
+  if(activity==null){JSObject out=new JSObject();out.put("status","not-in-front");call.resolve(out);return;}
+  activity.runOnUiThread(()->{
+   JSObject out=new JSObject();
+   if(activity.isFinishing()||activity.isDestroyed()||!activity.hasWindowFocus())out.put("status","not-in-front");
+   else out.put("status",SystemShade.expand(getContext(),BuildConfig.IS_LAUNCHER));
+   call.resolve(out);
+  });
+ }
  @PluginMethod public void openSettings(PluginCall call) {
   String page=call.getString("page","");String[] actions=settingsActions(page);
   if(actions==null){call.reject("Unsupported settings page");return;}

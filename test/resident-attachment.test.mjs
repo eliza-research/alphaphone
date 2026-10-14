@@ -55,6 +55,6 @@ test('the plugin start path attaches before it would retire shared work, and att
  // Renderer: resident admission binds through the attach-aware helper, and connect() surfaces the flag.
  const ui=readFileSync(join(root,'apps/app/src/runtime/connection-ui.tsx'),'utf8');
  const admit=ui.slice(ui.indexOf('async function admitCloudResident('),ui.indexOf('async function connectResident('));
- assert.ok(admit.includes('await bindResidentCloudProvider(credits.credentialId)')&&!admit.includes('configureLocalCloudProvider('));
- assert.ok(admit.indexOf('credits.balance<=0')<admit.indexOf('bindResidentCloudProvider'),'the credit gate still precedes any attach');
+ assert.ok(admit.includes('await bindResidentCloudProvider(account.identity.credentialId)')&&!admit.includes('configureLocalCloudProvider('));
+ assert.ok(admit.indexOf('subscriptionAllowsAgent(')<admit.indexOf('bindResidentCloudProvider'),'the subscription gate still precedes any attach');
 });

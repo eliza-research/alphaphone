@@ -29,6 +29,9 @@ public class DailyAppsPlugin extends ai.eliza.plugins.reminders.ReminderPlugin {
  private boolean selectionPending;
  public DailyAppsPlugin() { super(AlphaReminders.CONFIGURATION, AlphaReminders.STORAGE); }
 
+ /** Cancellation uses AlphaDeletions' native review and durable ten-second window. */
+ @Override @PluginMethod public void operateReminder(PluginCall call){JSObject operation=call.getObject("operation");if(operation!=null&&"reminder_cancel".equals(operation.optString("type"))){call.reject("Use the reviewed deletion window");return;}super.operateReminder(call);}
+ @Override @PluginMethod public void cancelReminder(PluginCall call){call.reject("Use the reviewed deletion window");}
  @Override public void load() {
   SelectedDocumentAccess.initialize(getContext());
   super.load();

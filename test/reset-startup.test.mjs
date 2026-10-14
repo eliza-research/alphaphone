@@ -22,6 +22,7 @@ test('pending reset retries before startup callbacks; accepted, refused and fail
 class NativeDigestHost {NativeDigestHost(android.content.Context c){NativeSourceHost.started++;}void read(){}}
 class NativeOwnerReminderHost {NativeOwnerReminderHost(android.content.Context c){NativeSourceHost.started++;}void read(){}}
 class NativeSourceHost {static int started;static void configure(Runnable r){started++;}static void configureOwnerReminderContext(Runnable r){started++;}}
+class NativeDeletionCoordinator {static NativeDeletionCoordinator get(android.content.Context c){return new NativeDeletionCoordinator();}void start(){NativeSourceHost.started++;}}
 class AlphaCrashLog {static void install(android.content.Context c){NativeSourceHost.started++;}}
 class AlphaNoteAudioPlugin {static void scheduleTrashBackstop(android.content.Context c){NativeSourceHost.started++;}}
 `);
@@ -30,13 +31,13 @@ public class ResetStartupTest {
  static void check(boolean ok){if(!ok)throw new AssertionError();}
  public static void main(String[] args)throws Exception {
   android.content.Context.data=new java.io.File(args[0]);AlphaApplication app=new AlphaApplication();
-  check(!AlphaDataReset.pending(app));app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==6);NativeSourceHost.started=0;
+  check(!AlphaDataReset.pending(app));app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==7);NativeSourceHost.started=0;
   AlphaDataReset.record(app);check(AlphaDataReset.pending(new AlphaApplication()));
   for(int mode=0;mode<3;mode++){android.app.ActivityManager.mode=mode;try{AlphaApplication restarted=new AlphaApplication();restarted.attachBaseContext(app);throw new AssertionError("Providers would initialize before onCreate");}catch(android.os.Process.Exit stopped){}check(NativeSourceHost.started==0);check(AlphaDataReset.pending(app));}
   check(android.app.ActivityManager.calls==3);
   // Simulated system completion: only this fixture directory is erased. Fresh launch initializes.
   for(java.io.File f:android.content.Context.data.listFiles())check(f.delete());
-  check(!AlphaDataReset.pending(app));app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==6);
+  check(!AlphaDataReset.pending(app));app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==7);
   System.out.println("PASS reset startup admission and interrupted dispatch");
  }
 }`);

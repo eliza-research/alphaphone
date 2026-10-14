@@ -57,7 +57,7 @@ test('empty ASR stops without a turn and explicit restart sends the next spoken 
 
 test('billing failure requires explicit restart and does not replay the failed utterance',async({page})=>{
  await setup(page);await page.evaluate(()=>(window as any).cloudNotesVoice.billing=true);await utterance(page);
- await expect(voice(page)).toHaveAttribute('data-voice-state','error');await expect(voice(page)).toContainText('Cloud voice needs credits');
+ await expect(voice(page)).toHaveAttribute('data-voice-state','error');await expect(voice(page)).toContainText('Eliza Cloud declined cloud voice for your account\'s billing');
  await page.waitForTimeout(1000);
  expect(await page.evaluate(()=>{const f=(window as any).ownedVoiceNavigation,c=(window as any).cloudNotesVoice;return {inputs:f.inputs.length,starts:c.starts,speech:c.syntheses,uploads:c.uploads,active:c.active};})).toEqual({inputs:0,starts:1,speech:0,uploads:1,active:null});
  await page.evaluate(()=>(window as any).cloudNotesVoice.billing=false);await voice(page).getByRole('button',{name:'Start voice conversation',exact:true}).click();await expect(voice(page)).toHaveAttribute('data-voice-state','listening');

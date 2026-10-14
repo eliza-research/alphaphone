@@ -29,6 +29,7 @@
         const saved = credential && JSON.parse(credential);
         if (!saved || input.headers?.Authorization !== `Bearer ${saved.token}` || input.method !== 'GET') throw Error('Unbound account request');
         if (path === '/api/v1/user') return { status: 200, data: { success: true, data: { id } } };
+        if (path === '/api/v1/subscription/entitlement') return { status: 404, data: {} }; // Deployed Cloud has no subscription entitlement route yet.
         if (path === '/api/v1/credits/balance') return { status: 200, data: { balance: 5 } };
         throw Error('Unexpected account request');
       }

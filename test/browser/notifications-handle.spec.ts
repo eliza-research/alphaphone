@@ -1,181 +1,249 @@
 import { test, expect, type Page } from '@playwright/test';
 import { auditPage, auditTree, format } from './accessibility-audit';
 
-// Gesture zones (docs/gesture-zones.md). On the launcher flavor a swipe from the very top edge
-// opened Android's shade and a swipe from just below it opened Alpha's notifications: two panels
-// behind one gesture, told apart by a few pixels. The top edge is Android's (docs/prd.md: the
-// status shade is OS work, not CSS inside a launcher). Alpha's notifications now open only from a
-// visible handle on Home: by tap, by keyboard, by an accessibility click, or by a pull that starts
-// on the handle. This is Chromium on a development server; Android's own shade, TalkBack and the
-// system gesture zone are covered by AccessibilityInstrumentedTest on an emulator, not here.
+// Android's shade is the one notification and quick-settings surface (issues #416 and #417,
+// docs/gesture-zones.md). Alpha draws no shade in a product build. On launcher Home a
+// Notifications button, and a pull down that starts on empty Home, ask Android to open its shade;
+// the standalone app is an ordinary app and offers neither. The top edge stays Android's.
+//
+// This is Chromium on the development server, which has no Android: here the request opens the
+// development stand-in for Android's shade ([data-alpha-layer="shade"]). That Android expands its
+// real shade, TalkBack, the system gesture zone and WebView touch handling are emulator/device
+// evidence (SystemShadeInstrumentedTest, AccessibilityInstrumentedTest), not shown here. The
+// product fallback without a stand-in is in settings-truth.production.spec.ts.
 const offline = () => localStorage.setItem('alpha.connection.selection.v1', JSON.stringify({ kind: 'offline' }));
-const panel = (page: Page) => page.locator('[data-alpha-layer="shade"]');
-const handle = (page: Page) => page.getByRole('button', { name: 'Open notifications', exact: true });
+const shade = (page: Page) => page.locator('[data-alpha-layer="shade"]');
+const button = (page: Page) => page.getByRole('button', { name: 'Open notifications', exact: true });
+const LAUNCHER = '/?shell=launcher';
 
-async function home(page: Page, url = '/') {
+async function home(page: Page, url = LAUNCHER) {
   await page.addInitScript(offline);
   await page.goto(url);
   await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
-  await expect(panel(page)).toHaveAttribute('aria-hidden', 'true');
+  await expect(shade(page)).toHaveAttribute('aria-hidden', 'true');
 }
 /** A real pointer drag in screen coordinates of the 412px phone canvas. */
-async function drag(page: Page, from: { x: number; y: number }, dy: number) {
+async function drag(page: Page, from: { x: number; y: number }, dy: number, dx = 0) {
   const box = (await page.locator('[data-screen]').boundingBox())!, scale = box.width / 412;
   await page.mouse.move(box.x + from.x * scale, box.y + from.y * scale);
   await page.mouse.down();
-  await page.mouse.move(box.x + from.x * scale, box.y + (from.y + dy) * scale, { steps: 10 });
+  await page.mouse.move(box.x + (from.x + dx) * scale, box.y + (from.y + dy) * scale, { steps: 10 });
   await page.mouse.up();
 }
-/** The handle's box in the phone canvas's own 412px coordinates. */
-async function handleBox(page: Page) {
-  return handle(page).evaluate(element => {
+/** The button's box in the phone canvas's own 412px coordinates. */
+async function buttonBox(page: Page) {
+  return button(page).evaluate(element => {
     const screen = element.closest('[data-screen]')!.getBoundingClientRect(), scale = screen.width / 412, box = element.getBoundingClientRect();
     return { left: (box.left - screen.left) / scale, top: (box.top - screen.top) / scale, width: box.width / scale, height: box.height / scale };
   });
 }
-
-for (const shell of [{ name: 'standalone app', url: '/' }, { name: 'launcher', url: '/?shell=launcher' }]) {
-  test.describe(shell.name, () => {
-    test('the handle is a visible, named, adequately sized control below the status bar', async ({ page }) => {
-      await home(page, shell.url);
-      await expect(handle(page)).toBeVisible();
-      await expect(handle(page)).toContainText('Notifications');
-      const box = await handleBox(page);
-      expect(box.height).toBeGreaterThanOrEqual(44);
-      expect(box.width).toBeGreaterThanOrEqual(120);
-      // The launcher draws under Android's status bar (44px in the design): the handle starts below it.
-      if (shell.name === 'launcher') expect(box.top).toBeGreaterThanOrEqual(44 + 8);
-      // It names the region it opens, and the page passes the name, role, focus and target-size rules with it.
-      expect(await handle(page).getAttribute('aria-controls')).toBe(await panel(page).getAttribute('id'));
-      await expect(handle(page)).toHaveAttribute('aria-expanded', 'false');
-      const found = format([...await auditTree(page), ...await auditPage(page, { targetSize: 44 })]).filter(line => line.includes('data-alpha-shade-handle'));
-      expect(found, found.join('\n')).toEqual([]);
-    });
-
-    test('a tap opens the panel; Close, Back and Escape close it and focus returns to the handle', async ({ page }) => {
-      await home(page, shell.url);
-      await handle(page).click();
-      await expect(panel(page)).toHaveAttribute('aria-hidden', 'false');
-      await expect(panel(page).getByRole('status').filter({ hasText: 'No notifications' }).or(panel(page).locator('.alpha-shade-list > div').first())).toBeVisible();
-      // Home is inert underneath; focus is inside the panel.
-      await expect(page.locator('[data-alpha-layer="home"]')).toHaveAttribute('aria-hidden', 'true');
-      await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-alpha-layer="shade"]'))).toBe(true);
-      await panel(page).getByRole('button', { name: 'Close', exact: true }).click();
-      await expect(panel(page)).toHaveAttribute('aria-hidden', 'true');
-      await expect(handle(page)).toBeFocused();
-
-      await handle(page).click();
-      await expect(panel(page)).toHaveAttribute('aria-hidden', 'false');
-      await page.keyboard.press('Escape');
-      await expect(panel(page)).toHaveAttribute('aria-hidden', 'true');
-      await expect(handle(page)).toBeFocused();
-
-      await handle(page).click();
-      await expect(panel(page)).toHaveAttribute('aria-hidden', 'false');
-      // Android Back as the shell receives it.
-      await page.evaluate(() => window.dispatchEvent(new Event('alpha-back', { cancelable: true })));
-      await expect(panel(page)).toHaveAttribute('aria-hidden', 'true');
-    });
-
-    for (const key of ['Enter', 'Space']) {
-      test(`the keyboard reaches the handle and ${key} opens the panel`, async ({ page }) => {
-        await home(page, shell.url);
-        // Reached in the tab order, not only by script.
-        let reached = false;
-        for (let presses = 0; presses < 40 && !reached; presses++) { await page.keyboard.press('Tab'); reached = await handle(page).evaluate(element => element === document.activeElement); }
-        expect(reached, 'Tab reaches the notifications handle').toBe(true);
-        await page.keyboard.press(key);
-        await expect(panel(page)).toHaveAttribute('aria-hidden', 'false');
-        await expect(panel(page).getByRole('button', { name: 'Close', exact: true })).toBeFocused();
-        await page.keyboard.press('Enter');
-        await expect(panel(page)).toHaveAttribute('aria-hidden', 'true');
-        await expect(handle(page)).toBeFocused();
-      });
-    }
-
-    test('an accessibility click with no pointer opens the panel', async ({ page }) => {
-      await home(page, shell.url);
-      // What TalkBack's double-tap and Switch Access deliver: the click action alone.
-      await handle(page).evaluate(element => (element as HTMLElement).click());
-      await expect(panel(page)).toHaveAttribute('aria-hidden', 'false');
-    });
-
-    test('a pull down that starts on the handle opens the panel', async ({ page }) => {
-      await home(page, shell.url);
-      const box = await handleBox(page);
-      await drag(page, { x: box.left + box.width / 2, y: box.top + box.height / 2 }, 240);
-      await expect(panel(page)).toHaveAttribute('aria-hidden', 'false');
-      // A swipe up inside the open panel closes it.
-      await drag(page, { x: 206, y: 500 }, -240);
-      await expect(panel(page)).toHaveAttribute('aria-hidden', 'true');
-    });
-
-    test('no other downward swipe opens the panel: not the top edge, not beside or below the handle, not inside an app', async ({ page }) => {
-      await home(page, shell.url);
-      const box = await handleBox(page);
-      const starts = [
-        { name: 'top edge', x: 206, y: 3 },
-        // The launcher draws under Android's status bar; the standalone app starts below it, where the handle is.
-        ...(shell.name === 'launcher' ? [{ name: 'inside the status bar band', x: 206, y: 30 }] : []),
-        { name: 'above the handle', x: 206, y: Math.max(1, box.top - 6) },
-        { name: 'left of the handle', x: Math.max(8, box.left - 40), y: box.top + box.height / 2 },
-        { name: 'below the handle', x: 206, y: box.top + box.height + 30 },
-        { name: 'middle of Home', x: 206, y: 420 },
-      ];
-      for (const start of starts) {
-        await drag(page, start, 260);
-        await page.waitForTimeout(120);
-        await expect(panel(page), start.name).toHaveAttribute('aria-hidden', 'true');
-        // The swipe did nothing else either: still Home, no view opened.
-        await expect(page.locator('html'), start.name).toHaveAttribute('data-active-view', 'home');
-      }
-      await page.getByRole('button', { name: 'Settings', exact: true }).click();
-      await expect(page.locator('html')).toHaveAttribute('data-active-view', 'settings');
-      // In an app view there is no handle: the heights where Home has one do nothing.
-      for (const y of [3, 30, 70]) {
-        await drag(page, { x: 206, y }, 260);
-        await page.waitForTimeout(120);
-        await expect(panel(page), `Settings, start ${y}`).toHaveAttribute('aria-hidden', 'true');
-      }
-      await expect(page.locator('html')).toHaveAttribute('data-active-view', 'settings');
-    });
-  });
+async function closed(page: Page, why: string) {
+  await page.waitForTimeout(120);
+  await expect(shade(page), why).toHaveAttribute('aria-hidden', 'true');
 }
 
-test('a taller status bar pushes the launcher handle down, clear of the system gesture zone', async ({ page }) => {
-  await home(page, '/?shell=launcher');
-  const before = await handleBox(page);
+test.describe('standalone app', () => {
+  test('Home has no notifications control and no downward pull opens a shade', async ({ page }) => {
+    await home(page, '/');
+    await expect(page.locator('[data-alpha-shade-handle]')).toHaveCount(0);
+    for (const start of [{ x: 206, y: 3 }, { x: 206, y: 60 }, { x: 206, y: 300 }, { x: 206, y: 420 }]) {
+      await drag(page, start, 260);
+      await closed(page, `start ${start.y}`);
+      await expect(page.locator('html')).toHaveAttribute('data-active-view', 'home');
+    }
+  });
+});
+
+test.describe('launcher', () => {
+  test('the button is a visible, named, adequately sized control below the status bar', async ({ page }) => {
+    await home(page);
+    await expect(button(page)).toBeVisible();
+    await expect(button(page)).toContainText('Notifications');
+    await expect(button(page)).toHaveAttribute('aria-description', "Opens Android's notifications and quick settings");
+    // It controls no Alpha region: the shade it opens is Android's.
+    await expect(button(page)).not.toHaveAttribute('aria-controls', /.*/);
+    const box = await buttonBox(page);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    expect(box.width).toBeGreaterThanOrEqual(120);
+    expect(box.top).toBeGreaterThanOrEqual(44 + 8);
+    const found = format([...await auditTree(page), ...await auditPage(page, { targetSize: 44 })]).filter(line => line.includes('data-alpha-shade-handle'));
+    expect(found, found.join('\n')).toEqual([]);
+  });
+
+  test('a tap opens the shade; Close, Back and Escape close it and focus returns to the button', async ({ page }) => {
+    await home(page);
+    await button(page).click();
+    await expect(shade(page)).toHaveAttribute('aria-hidden', 'false');
+    await expect(page.locator('[data-alpha-layer="home"]')).toHaveAttribute('aria-hidden', 'true');
+    await shade(page).getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(shade(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(button(page)).toBeFocused();
+    await button(page).click();
+    await page.keyboard.press('Escape');
+    await expect(shade(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(button(page)).toBeFocused();
+    await button(page).click();
+    await page.evaluate(() => window.dispatchEvent(new Event('alpha-back', { cancelable: true })));
+    await expect(shade(page)).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  for (const key of ['Enter', 'Space']) {
+    test(`the keyboard reaches the button and ${key} opens the shade`, async ({ page }) => {
+      await home(page);
+      let reached = false;
+      for (let presses = 0; presses < 40 && !reached; presses++) { await page.keyboard.press('Tab'); reached = await button(page).evaluate(element => element === document.activeElement); }
+      expect(reached, 'Tab reaches the notifications button').toBe(true);
+      await page.keyboard.press(key);
+      await expect(shade(page)).toHaveAttribute('aria-hidden', 'false');
+    });
+  }
+
+  test('an accessibility click with no pointer opens the shade', async ({ page }) => {
+    await home(page);
+    // What TalkBack's double-tap and Switch Access deliver: the click action alone.
+    await button(page).evaluate(element => (element as HTMLElement).click());
+    await expect(shade(page)).toHaveAttribute('aria-hidden', 'false');
+  });
+
+  test('a pull down on the button or on empty Home opens the shade', async ({ page }) => {
+    await home(page);
+    const box = await buttonBox(page);
+    for (const start of [
+      { name: 'on the button', x: box.left + box.width / 2, y: box.top + box.height / 2 },
+      { name: 'beside the button', x: Math.max(8, box.left - 40), y: box.top + box.height / 2 },
+      { name: 'middle of Home', x: 206, y: 420 },
+      { name: 'lower Home', x: 206, y: 640 },
+    ]) {
+      await drag(page, start, 240);
+      await expect(shade(page), start.name).toHaveAttribute('aria-hidden', 'false');
+      // A swipe up inside the open shade closes it.
+      await drag(page, { x: 206, y: 500 }, -240);
+      await expect(shade(page), start.name).toHaveAttribute('aria-hidden', 'true');
+    }
+  });
+
+  test('the top edge, sideways drags, app views and open sheets keep their own gestures', async ({ page }) => {
+    await home(page);
+    // Android's status bar band: Android answers that swipe itself.
+    for (const y of [3, 30]) { await drag(page, { x: 206, y }, 260); await closed(page, `status band ${y}`); }
+    // A mostly sideways drag is a card row or Back, not the shade.
+    await drag(page, { x: 120, y: 420 }, 120, 160);
+    await closed(page, 'sideways');
+    // An upward swipe on Home is the conversation sheet; while it is open a pull down closes it.
+    await drag(page, { x: 206, y: 600 }, -260);
+    await expect(page.locator('[data-alpha-transcript]')).toBeVisible();
+    await drag(page, { x: 206, y: 300 }, 260);
+    await closed(page, 'pull while the conversation sheet was open');
+    // Inside an app view there is no button and no pull.
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-active-view', 'settings');
+    for (const y of [3, 70, 420]) { await drag(page, { x: 206, y }, 260); await closed(page, `Settings, start ${y}`); }
+    await expect(page.locator('html')).toHaveAttribute('data-active-view', 'settings');
+  });
+
+  test('with the composer focused (keyboard up) a pull does not open the shade', async ({ page }) => {
+    await home(page);
+    const composer = page.locator('textarea[data-alpha-composer]');
+    await composer.focus();
+    await expect(composer).toBeFocused();
+    await drag(page, { x: 206, y: 420 }, 240);
+    await closed(page, 'keyboard');
+  });
+
+  test('a Home scrolled away from its top scrolls back before a pull opens the shade', async ({ page }) => {
+    await home(page);
+    // Large text makes Home taller than the screen.
+    await page.evaluate(async () => { const display = await import('/src/browser/display.ts' as string); display.installBrowserDisplay(); document.documentElement.style.setProperty('--browser-text-scale', '2'); });
+    const layer = page.locator('[data-alpha-layer="home"]');
+    await expect.poll(() => layer.evaluate(element => element.scrollHeight > element.clientHeight + 40)).toBe(true);
+    // An overflowing Home keeps ordinary vertical scrolling for touch.
+    await expect(layer).toHaveAttribute('data-alpha-home-fits', 'false');
+    await layer.evaluate(element => { element.scrollTop = 120; });
+    await drag(page, { x: 206, y: 420 }, 240);
+    await closed(page, 'scrolled Home');
+    await layer.evaluate(element => { element.scrollTop = 0; });
+    await drag(page, { x: 206, y: 420 }, 240);
+    await expect(shade(page)).toHaveAttribute('aria-hidden', 'false');
+  });
+
+  test('a Home that fits hands vertical touch drags to the page', async ({ page }) => {
+    await home(page);
+    const layer = page.locator('[data-alpha-layer="home"]');
+    await expect(layer).toHaveAttribute('data-alpha-home-fits', 'true');
+    await expect.poll(() => layer.evaluate(element => getComputedStyle(element).touchAction)).toBe('pan-x pinch-zoom');
+  });
+});
+
+test('a taller status bar pushes the launcher button down, clear of the system gesture zone', async ({ page }) => {
+  await home(page);
+  const before = await buttonBox(page);
   // What MainActivity publishes on the launcher flavor: the status bar height in CSS pixels.
   await page.evaluate(() => document.documentElement.style.setProperty('--native-top-inset', '72px'));
-  await expect.poll(async () => (await handleBox(page)).top).toBeGreaterThanOrEqual(72 + 8);
-  expect((await handleBox(page)).top).toBeGreaterThan(before.top);
-  await handle(page).click();
-  await expect(panel(page)).toHaveAttribute('aria-hidden', 'false');
+  await expect.poll(async () => (await buttonBox(page)).top).toBeGreaterThanOrEqual(72 + 8);
+  expect((await buttonBox(page)).top).toBeGreaterThan(before.top);
 });
 
 // The inset Android reports is in screen pixels; Home is laid out on a 412px canvas scaled to the
 // screen. On a phone narrower than the canvas the margin must still be measured on the screen.
 for (const width of [360, 412, 480]) {
-  test(`the launcher handle starts 12 screen pixels below any status bar on a ${width}px wide screen`, async ({ page }) => {
+  test(`the launcher button starts 12 screen pixels below any status bar on a ${width}px wide screen`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
-    await home(page, '/?shell=launcher');
+    await home(page);
     for (const inset of [24, 48, 56, 72, 100]) {
       await page.evaluate(value => document.documentElement.style.setProperty('--native-top-inset', `${value}px`), inset);
-      // Screen coordinates, not the canvas's own: this is where a finger lands.
-      await expect.poll(async () => Math.round(((await handle(page).boundingBox())!.y - (await page.locator('[data-screen]').boundingBox())!.y) * 10) / 10, { message: `inset ${inset}` }).toBeGreaterThanOrEqual(inset + 12 - .5);
-      expect((await handle(page).boundingBox())!.height, `inset ${inset}`).toBeGreaterThanOrEqual(44 * Math.min(1, width / 412) - .5);
+      await expect.poll(async () => Math.round(((await button(page).boundingBox())!.y - (await page.locator('[data-screen]').boundingBox())!.y) * 10) / 10, { message: `inset ${inset}` }).toBeGreaterThanOrEqual(inset + 12 - .5);
+      expect((await button(page).boundingBox())!.height, `inset ${inset}`).toBeGreaterThanOrEqual(44 * Math.min(1, width / 412) - .5);
     }
   });
 }
 
-test('the handle keeps its target and its whole label at 200% text', async ({ page }) => {
+test('the button keeps its target and its whole label at 200% text', async ({ page }) => {
   await home(page);
   await page.evaluate(async () => { const display = await import('/src/browser/display.ts' as string); display.installBrowserDisplay(); document.documentElement.style.setProperty('--browser-text-scale', '2'); });
   await page.waitForTimeout(350);
-  const box = await handleBox(page);
+  const box = await buttonBox(page);
   expect(box.height).toBeGreaterThanOrEqual(44);
   expect(box.left).toBeGreaterThanOrEqual(0);
   expect(box.left + box.width).toBeLessThanOrEqual(412);
   const found = format(await auditPage(page, { clipping: true, overlap: true })).filter(line => !line.startsWith('text-truncated:'));
   expect(found, found.join('\n')).toEqual([]);
+});
+
+/** A real touch drag in viewport pixels through Chromium's input pipeline, so scrolling and
+ * pointercancel happen as they do for a finger on a phone. */
+async function touchDrag(page: Page, x: number, y: number, dy: number) {
+  const cdp = await page.context().newCDPSession(page);
+  const at = (to: number) => [{ x, y: to }];
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(y) });
+  for (let step = 1; step <= 12; step++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(y + dy * step / 12) }); await page.waitForTimeout(16); }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+}
+
+test.describe('launcher Home taller than the screen (landscape)', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 915, height: 412 } });
+
+  test('a downward touch pull at the top of an overflowing Home opens the shade; upward still scrolls', async ({ page }) => {
+    await home(page);
+    const layer = page.locator('[data-alpha-layer="home"]');
+    await expect(layer).toHaveAttribute('data-alpha-home-fits', 'false');
+    expect(await layer.evaluate(element => element.scrollTop)).toBe(0);
+    // Empty Home beside the Notifications button, where vertical touch would scroll Home.
+    const row = (await page.locator('.alpha-shade-row').boundingBox())!, start = { x: row.x + row.width - 12, y: row.y + row.height - 6 };
+    expect(await page.evaluate(({ x, y }) => { const hit = document.elementFromPoint(x, y); return !!hit?.closest('[data-alpha-layer="home"]') && !hit.closest('button,.scr'); }, start)).toBe(true);
+    const icons = (await page.getByRole('button', { name: 'Browser', exact: true }).boundingBox())!;
+    // An upward drag on the app row is ordinary scrolling: Home moves, no shade.
+    await touchDrag(page, icons.x + icons.width / 2, icons.y + icons.height / 2, -160);
+    await expect.poll(() => layer.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+    await closed(page, 'upward scroll');
+    // Scrolled away from its top, a downward drag scrolls Home back instead of opening the shade.
+    const scrolled = await layer.evaluate(element => element.scrollTop);
+    await touchDrag(page, icons.x + icons.width / 2, 200, 120);
+    await expect.poll(() => layer.evaluate(element => element.scrollTop)).toBeLessThan(scrolled);
+    await closed(page, 'scrolled Home scrolls back');
+    await layer.evaluate(element => { element.scrollTop = 0; });
+    // At the top, a downward pull on empty Home reaches Alpha and opens the shade.
+    await touchDrag(page, start.x, start.y, 280);
+    await expect(shade(page)).toHaveAttribute('aria-hidden', 'false');
+  });
 });

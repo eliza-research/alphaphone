@@ -5,7 +5,7 @@ on:
   # repository variable ELIZA_RESIDENT_QUALIFICATION is "push" (every main commit)
   # or "nightly" (once a day, default branch only). See docs/ci-cost-policy.md.
   push:
-    branches: [main]
+    branches: [main, develop]
   schedule:
     - cron: "23 6 * * *"
 permissions:

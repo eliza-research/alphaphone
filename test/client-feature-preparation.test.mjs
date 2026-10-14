@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {buildSync} from 'esbuild';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -26,36 +27,60 @@ function fixture(run) {
  } finally {fs.rmSync(root,{recursive:true,force:true});}
 }
 test('prepared client source repairs changed, missing and unexpected cached files',()=>fixture(({root,commit})=>{
- const source=prepareClientFeatures({root}),stamp=JSON.parse(fs.readFileSync(path.join(source,'.source.json'))),file=Object.keys(stamp.files)[0],original=fs.readFileSync(path.join(source,file));
+ const source=prepareClientFeatures({root,projectVoice:false}),stamp=JSON.parse(fs.readFileSync(path.join(source,'.source.json'))),file=Object.keys(stamp.files)[0],original=fs.readFileSync(path.join(source,file));
  fs.writeFileSync(path.join(source,file),'corrupt');fs.writeFileSync(path.join(source,'unexpected.ts'),'unreviewed');
- assert.equal(prepareClientFeatures({root}),source);assert.deepEqual(fs.readFileSync(path.join(source,file)),original);assert.equal(fs.existsSync(path.join(source,'unexpected.ts')),false);
- fs.unlinkSync(path.join(source,file));prepareClientFeatures({root});assert.deepEqual(fs.readFileSync(path.join(source,file)),original);assert.equal(stamp.baseCommit,commit);
+ assert.equal(prepareClientFeatures({root,projectVoice:false}),source);assert.deepEqual(fs.readFileSync(path.join(source,file)),original);assert.equal(fs.existsSync(path.join(source,'unexpected.ts')),false);
+ fs.unlinkSync(path.join(source,file));prepareClientFeatures({root,projectVoice:false});assert.deepEqual(fs.readFileSync(path.join(source,file)),original);assert.equal(stamp.baseCommit,commit);
 }));
 test('client source rejects changed pin and upstream content without replacing its cache',()=>fixture(({root,vendor,commit})=>{
- const source=prepareClientFeatures({root}),stamp=fs.readFileSync(path.join(source,'.source.json'));
- fs.writeFileSync(path.join(root,'upstream.lock.json'),JSON.stringify({commit:'0'.repeat(40)}));assert.throws(()=>prepareClientFeatures({root}),/Unexpected upstream source pin/);
+ const source=prepareClientFeatures({root,projectVoice:false}),stamp=fs.readFileSync(path.join(source,'.source.json'));
+ fs.writeFileSync(path.join(root,'upstream.lock.json'),JSON.stringify({commit:'0'.repeat(40)}));assert.throws(()=>prepareClientFeatures({root,projectVoice:false}),/Unexpected upstream source pin/);
  fs.writeFileSync(path.join(root,'upstream.lock.json'),JSON.stringify({commit}));
- fs.appendFileSync(path.join(vendor,CLIENT_FEATURE_PATHS[0]),'corrupt');assert.throws(()=>prepareClientFeatures({root}),/dirty|drift/);assert.deepEqual(fs.readFileSync(path.join(source,'.source.json')),stamp);
+ fs.appendFileSync(path.join(vendor,CLIENT_FEATURE_PATHS[0]),'corrupt');assert.throws(()=>prepareClientFeatures({root,projectVoice:false}),/dirty|drift/);assert.deepEqual(fs.readFileSync(path.join(source,'.source.json')),stamp);
 }));
 test('client source refuses unknown directories and cache symlinks',()=>fixture(({root})=>{
- const source=path.join(root,'.eliza/client-features');fs.mkdirSync(source,{recursive:true});fs.writeFileSync(path.join(source,'keep'),'owned elsewhere');assert.throws(()=>prepareClientFeatures({root}),/unrecognized/);assert.equal(fs.readFileSync(path.join(source,'keep'),'utf8'),'owned elsewhere');
- fs.rmSync(source,{recursive:true});prepareClientFeatures({root});fs.symlinkSync(path.join(root,'upstream.lock.json'),path.join(source,'unexpected-link'));assert.throws(()=>prepareClientFeatures({root}),/Symlink/);assert.equal(fs.existsSync(path.join(root,'upstream.lock.json')),true);
+ const source=path.join(root,'.eliza/client-features');fs.mkdirSync(source,{recursive:true});fs.writeFileSync(path.join(source,'keep'),'owned elsewhere');assert.throws(()=>prepareClientFeatures({root,projectVoice:false}),/unrecognized/);assert.equal(fs.readFileSync(path.join(source,'keep'),'utf8'),'owned elsewhere');
+ fs.rmSync(source,{recursive:true});prepareClientFeatures({root,projectVoice:false});fs.symlinkSync(path.join(root,'upstream.lock.json'),path.join(source,'unexpected-link'));assert.throws(()=>prepareClientFeatures({root,projectVoice:false}),/Symlink/);assert.equal(fs.existsSync(path.join(root,'upstream.lock.json')),true);
 }));
 test('client source cannot follow a linked staging parent',()=>fixture(({root})=>{
- const outside=path.join(root,'outside');fs.mkdirSync(outside);fs.writeFileSync(path.join(outside,'keep'),'retained');fs.symlinkSync(outside,path.join(root,'.eliza'));assert.throws(()=>prepareClientFeatures({root}),/Nonregular/);assert.deepEqual(fs.readdirSync(outside),['keep']);
+ const outside=path.join(root,'outside');fs.mkdirSync(outside);fs.writeFileSync(path.join(outside,'keep'),'retained');fs.symlinkSync(outside,path.join(root,'.eliza'));assert.throws(()=>prepareClientFeatures({root,projectVoice:false}),/Nonregular/);assert.deepEqual(fs.readdirSync(outside),['keep']);
 }));
 test('client source rejects committed symlinks and missing source groups',()=>fixture(({root,vendor,git})=>{
  const file=path.join(vendor,CLIENT_FEATURE_PATHS[0]);fs.unlinkSync(file);fs.symlinkSync('../../outside',file);
  git(['add','.']);git(['-c','user.name=Source fixture','-c','user.email=fixture@example.invalid','commit','-qm','Symlink']);
- fs.writeFileSync(path.join(root,'upstream.lock.json'),JSON.stringify({commit:git(['rev-parse','HEAD'])}));assert.throws(()=>prepareClientFeatures({root}),/Nonregular upstream/);
+ fs.writeFileSync(path.join(root,'upstream.lock.json'),JSON.stringify({commit:git(['rev-parse','HEAD'])}));assert.throws(()=>prepareClientFeatures({root,projectVoice:false}),/Nonregular upstream/);
  fs.unlinkSync(file);git(['add','.']);git(['-c','user.name=Source fixture','-c','user.email=fixture@example.invalid','commit','-qm','Missing source']);
- fs.writeFileSync(path.join(root,'upstream.lock.json'),JSON.stringify({commit:git(['rev-parse','HEAD'])}));assert.throws(()=>prepareClientFeatures({root}),/Missing upstream source/);
+ fs.writeFileSync(path.join(root,'upstream.lock.json'),JSON.stringify({commit:git(['rev-parse','HEAD'])}));assert.throws(()=>prepareClientFeatures({root,projectVoice:false}),/Missing upstream source/);
 }));
 test('direct local development launcher prepares a clean client tree before starting services',()=>fixture(({root,commit})=>{
  for(const file of ['scripts/dev-local.mjs','scripts/dev-speech-settings.mjs','scripts/local-agent-source.mjs','scripts/copy-file-clone.mjs','scripts/prepare-client-features.mjs','scripts/upstream-native-source.mjs']){const target=path.join(root,file);fs.mkdirSync(path.dirname(target),{recursive:true});fs.copyFileSync(file,target);}
+ // The generic copier fixture explicitly tests the non-voice projection path.
+ const prep=path.join(root,'scripts/prepare-client-features.mjs');fs.writeFileSync(prep,fs.readFileSync(prep,'utf8').replace('projectVoice = true','projectVoice = false'));
  const result=spawnSync(process.execPath,[path.join(root,'scripts/dev-local.mjs')],{cwd:root,env:{...process.env,ALPHA_REMOTE_PORT:'0'},encoding:'utf8',timeout:20000});
  assert.equal(result.status,1);assert.match(result.stderr,/Invalid local agent port/);
  assert.equal(JSON.parse(fs.readFileSync(path.join(root,'.eliza/client-features/.source.json'))).baseCommit,commit);
  // Development uses authenticated upstream source without a patch cache.
  assert.equal(fs.existsSync(path.join(root,'.eliza/patched')),false);
 }));
+
+test('voice projection refuses an unreviewed pin by default',()=>fixture(({root})=>{
+ assert.throws(()=>prepareClientFeatures({root}),/Review voice projections/);
+ assert.equal(fs.existsSync(path.join(root,'.eliza/client-features')),false);
+}));
+test('actual pinned voice projection authenticates source and output hashes and excludes dashboard transport',()=>{
+ const source=prepareClientFeatures(),stamp=JSON.parse(fs.readFileSync(path.join(source,'.source.json')));
+ assert.equal(stamp.baseCommit,'13c98575987a121decc45b161b0c8a4ee698554e');assert.equal(stamp.projectionVersion,1);
+ const client='packages/ui/src/voice/voice-session-client.ts',text=fs.readFileSync(path.join(source,client),'utf8');
+ assert.match(text,/requires an injected session fetch/);assert.doesNotMatch(text,/import\("\.\/voice-session-fetch"\)/);
+ assert.notEqual(stamp.sourceFiles[client],stamp.files[client]);
+ assert.ok(stamp.sourceFiles['packages/core/src/logger.ts']);assert.equal(stamp.files['packages/core/src/logger.ts'],undefined);
+ assert.equal(fs.existsSync(path.join(source,'packages/ui/src/voice/voice-session-fetch.ts')),false);
+ const bundle=buildSync({entryPoints:[path.join(source,client)],bundle:true,write:false,platform:'browser',format:'esm',metafile:true,alias:{
+  '@elizaos/host/protocol':path.join(source,'packages/host/src/voice.ts'),
+  '@elizaos/core/protocol':path.join(source,'alpha-voice-core-protocol.ts'),
+  '@elizaos/core':path.join(source,'alpha-voice-core-types.ts'),
+ }});
+ assert.ok(bundle.outputFiles[0].contents.length>10000);
+ assert.equal(Object.keys(bundle.metafile.inputs).some(file=>/csrf-client|steward|persistence|core\/src\/logger|api\//.test(file)),false);
+
+});

@@ -1,8 +1,11 @@
+import {stageCalendarDeletion,settleCalendarDeletions,undoCalendarDeletion,calendarDeletionPending,type CalendarDeletion} from './calendar-deletions';
+import {browserDeletionOwner,browserDeletionOwnerCurrent,browserDeletionOwnerVisible} from '../runtime/deletion-owner';
+import {browserDeletionClock,deletionWindow} from '../runtime/deletion-window';
 import {beginNoticeAction,noticeActionBlocked} from './notice-action';
 import {calendarAlerts} from './calendar-alerts';
 import {editCalendarResponse,calendarResponses} from './calendar-response';
 import {openCalendarMeeting} from './calendar-meeting';
-import {calendarRecord,calendarRange,remapCalendarExclusions,replaceCalendarRecord,deleteCalendarRecord,type CalendarRecord} from './calendar-records';
+import {calendarRecord,calendarRange,remapCalendarExclusions,replaceCalendarRecord,type CalendarRecord} from './calendar-records';
 import { editCalendarEvent } from './calendar-editor';
 import { BrowserReviews } from './review';
 import { calendarAgentReviewText, wholeUtcDates } from './calendar-agent-review';
@@ -12,7 +15,7 @@ import { revision } from './revision';
 import {calendarDocument} from './calendar-store';
 type EventRow=CalendarRecord;
 type CreationReceipt={binding:string;result:{status:"saved";id:string;calendarId:string;creationId:string};acknowledged:boolean};
-type State={creations?:Record<string,CreationReceipt>;alertDismissed?:Record<string,number>;preferences?:{visible:boolean;color:'acc'|'fg'|'mut'};sourceRevision:string;events:EventRow[];receipts?:Record<string,{binding:string;result:CalendarResult}>};
+type State={deletions?:Record<string,CalendarDeletion>;deleteClaims?:Record<string,string>;creations?:Record<string,CreationReceipt>;alertDismissed?:Record<string,number>;preferences?:{visible:boolean;color:'acc'|'fg'|'mut'};sourceRevision:string;events:EventRow[];receipts?:Record<string,{binding:string;result:CalendarResult}>};
 const initial=():State=>({sourceRevision:revision(),events:[]});
 const source={id:'local',name:'App calendar',account:'Alpha Phone',local:true,writable:true};
 const matches=(row:EventRow,expected:Partial<EventRow>|undefined)=>!!expected&&(!expected.revision||expected.revision===row.revision)&&(['title','body','location','begin','end'] as const).every(k=>row[k]===expected[k]);
@@ -31,16 +34,19 @@ export class BrowserCalendar extends WebPlugin {
 
   private active=new Map<string,{cancelled:boolean;controller:AbortController}>();
   async cancelAgent(input:{operationId:string}){const pending=this.active.get(input.operationId);if(pending){pending.cancelled=true;pending.controller.abort();}this.reviews.cancel(input.operationId);return {status:'cancelled'};}
-  async executeAgent(input:{operation:unknown;operationId:string}) {
+  async executeAgent(input:{operation:unknown;operationId:string;journalIdentity?:{scope:string;proposalId:string}}) {
     if(!/^[A-Za-z0-9_-]{1,128}$/.test(input.operationId))throw Error('Invalid operation identity.');
     const operation=validateCalendarOperation(input.operation);
     if(operation.type==='calendar_create_local'||operation.type==='calendar_read_next')return {status:'unsupported'};
+    const deletionOwner=operation.type==='calendar_delete'?browserDeletionOwner():null;
     const binding=JSON.stringify(operation),identity=operation.type==='calendar_create'?operation.source:operation.target;
     if(this.active.has(input.operationId))return {status:'busy'};
     const ticket={cancelled:false,controller:new AbortController()};this.active.set(input.operationId,ticket);
     const fields=(row:EventRow):CalendarFields=>({title:row.title,description:row.body,location:row.location,start:new Date(row.begin).toISOString(),end:new Date(row.end).toISOString(),timeZone:row.timeZone||Intl.DateTimeFormat().resolvedOptions().timeZone});
     try {
+      const operationHash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(operation))))).map(v=>v.toString(16).padStart(2,'0')).join('');
       const data=(await calendarDocument.read(initial,ticket.controller.signal)),row=operation.type==='calendar_create'?undefined:calendarRecord(data.events,operation.target.eventId);
+      if(operation.type==='calendar_delete'&&data.deleteClaims?.[input.operationId])return {status:'unknown'};
       const prior=data.receipts?.[input.operationId];
       if(prior)return prior.binding===binding?{status:'applied',result:prior.result}:{status:'conflict'};
       if(ticket.cancelled||document.hidden)return {status:'cancelled'};
@@ -54,6 +60,13 @@ export class BrowserCalendar extends WebPlugin {
         const receipt=current.receipts?.[input.operationId];if(receipt)return receipt.binding===binding?{status:'applied',result:receipt.result}:{status:'conflict'};
         const before=operation.type==='calendar_create'?undefined:calendarRecord(current.events,operation.target.eventId);
         if(current.sourceRevision!==identity.sourceRevision||operation.type!=='calendar_create'&&(!before||before.revision!==operation.target.revision))return {status:'conflict'};
+        if(operation.type==='calendar_delete'){
+          if(!deletionOwner||!browserDeletionOwnerCurrent(deletionOwner))return {status:'cancelled'};
+          if(current.deleteClaims?.[input.operationId])return {status:'unknown'};
+          if(Object.keys(current.deleteClaims||{}).length>=500)throw Error('Action deletion history requires review.');
+          if(!input.journalIdentity)throw Error('Deletion journal identity missing.');
+          const deletion=stageCalendarDeletion(current,before!,'event',deletionOwner,input.operationId);current.deletions![input.operationId].journalBinding={...input.journalIdentity,operationHash};(current.deleteClaims??={})[input.operationId]=binding;return {status:'queued',deletion};
+        }
         let result:CalendarResult;
         if(operation.type==='calendar_create'||operation.type==='calendar_update'){
           const f=operation.fields,event:EventRow={...before,id:before?.id||crypto.randomUUID(),calendarId:'local',title:f.title,body:f.description,location:f.location,begin:Date.parse(f.start),end:Date.parse(f.end),timeZone:f.timeZone,revision:revision()};
@@ -61,8 +74,7 @@ export class BrowserCalendar extends WebPlugin {
           result={version:1,kind:operation.type,sourceId:'local',eventId:event.id,revision:event.revision};
         }else{
           result={version:1,kind:operation.type,sourceId:'local',eventId:before!.id,revision:before!.revision};
-          if(operation.type==='calendar_delete')current.events=deleteCalendarRecord(current.events,before!,revision());
-          else result.fields=fields(before!);
+          result.fields=fields(before!);
         }
         (current.receipts??={})[input.operationId]={binding,result};return {status:'applied',result};
       },ticket.controller.signal);
@@ -99,8 +111,8 @@ export class BrowserCalendar extends WebPlugin {
     const data=await this.presentationState();if(!data)return {status:'cancelled'};
     const occurrence=calendarRecord(data.events,input.id),series=data.events.find(row=>row.id===occurrence?.seriesId);
     if(!occurrence||occurrence.revision!==input.revision||!series)return {status:'conflict'};
-    if(!await this.reviews.confirm('delete-series-'+series.id,'Delete repeating series',`${series.title}\nDelete every occurrence, including edited dates?`))return {status:'cancelled'};
-    return calendarDocument.edit(initial,current=>{const row=current.events.find(row=>row.id===series.id),selected=calendarRecord(current.events,input.id);if(!row||row.revision!==series.revision||selected?.revision!==input.revision)return {status:'conflict'};current.events=deleteCalendarRecord(current.events,row,revision());return {status:'deleted'};});
+    if(!await this.reviews.confirm('delete-series-'+series.id,'Delete repeating series',`${series.title}\nDelete every occurrence, including edited dates, after 10 seconds? You can Undo during that time.`))return {status:'cancelled'};
+    return calendarDocument.edit(initial,current=>{const row=current.events.find(row=>row.id===series.id),selected=calendarRecord(current.events,input.id);if(!row||row.revision!==series.revision||selected?.revision!==input.revision)return {status:'conflict'};const deletion=stageCalendarDeletion(current,row,'series','manual:'+current.sourceRevision);return {status:'queued',deletion};});
   }
   async editResponse(input:{id:string;revision:string;person:string;name:string}){
     const state=await this.presentationState();if(!state)return {status:'cancelled'};
@@ -118,7 +130,7 @@ export class BrowserCalendar extends WebPlugin {
     if(!row||row.revision!==input.revision||!row.video)throw Error('This meeting changed. Reopen the event.');
     return openCalendarMeeting(row.title,(input.people||row.who||[]).slice(0,100));
   }
-  async listAlerts(){const data=(await calendarDocument.read(initial));return {items:calendarAlerts(data.events,data.alertDismissed||{})};}
+  async listAlerts(){const data=(await calendarDocument.read(initial));return {items:calendarAlerts(data.events,data.alertDismissed||{}).filter(alert=>!calendarDeletionPending(data,alert.eventId))};}
   async alertAction(input:{id:string;revision:string;open:boolean}){
     const action=beginNoticeAction();
     try{
@@ -154,7 +166,7 @@ export class BrowserCalendar extends WebPlugin {
     const range=calendarRange(data.events.filter(row=>row.calendarId===source.id),{begin:Math.min(begin,civilBegin),end:Math.max(end,civilEnd)});
     const rows=range.events.filter(row=>row.allDay?row.begin<civilEnd&&row.end>civilBegin:row.begin<end&&row.end>begin);
     if(range.truncated||rows.length>200)return {status:'too-many'};
-    return {status:'ready',events:rows.map(row=>({start:new Date(row.begin).toISOString(),end:new Date(row.end).toISOString(),allDay:!!row.allDay,availability:'busy'}))};
+    return {status:'ready',freshness:'local',events:rows.map(row=>({start:new Date(row.begin).toISOString(),end:new Date(row.end).toISOString(),allDay:!!row.allDay,availability:'busy'}))};
   }
   async list(input:{begin:number;end:number}) {const data=await calendarDocument.read(initial);return {status:'ready',calendars:[{...source,...(data.preferences??{visible:true,color:'acc'})}],...calendarRange(data.events,input)};}
   async prepareAgentSource(){const raw=await calendarDocument.readRaw(),data:State=raw===null?await calendarDocument.edit(initial,data=>data):JSON.parse(raw);return {status:'ready',sourceId:'local',sourceRevision:data.sourceRevision};}
@@ -201,8 +213,20 @@ export class BrowserCalendar extends WebPlugin {
     const reviewed=calendarRecord(state.events,input.id);
     if(!reviewed||reviewed.calendarId!==input.calendarId||reviewed.revision!==input.revision||!matches(reviewed,input.expected))return {status:'conflict'};
     const when=reviewed.allDay?new Date(reviewed.begin).toLocaleDateString(undefined,{timeZone:'UTC',weekday:'short',year:'numeric',month:'short',day:'numeric'})+' · All day':`${new Date(reviewed.begin).toLocaleString(undefined,{weekday:'short',year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} – ${new Date(reviewed.end).toLocaleString(undefined,{weekday:'short',year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}`;
-    if(!await this.reviews.confirm('delete-event','Delete calendar event?',`${reviewed.title||'Untitled event'}\n${source.name}\n${when}\n\n${reviewed.seriesId?'Delete this one occurrence? Other dates in the series stay.':'Delete this one event?'} This cannot be undone.`,'Delete event'))return {status:'cancelled'};
-    return calendarDocument.edit(initial,data=>{const row=calendarRecord(data.events,input.id);if(!row||row.calendarId!==input.calendarId||row.revision!==input.revision||!matches(row,input.expected))return {status:'conflict'};data.events=deleteCalendarRecord(data.events,row,revision());return {status:'deleted'};});}
+    if(!await this.reviews.confirm('delete-event','Delete calendar event?',`${reviewed.title||'Untitled event'}\n${source.name}\n${when}\n\n${reviewed.seriesId?'Delete this one occurrence? Other dates in the series stay.':'Delete this one event?'} Deletion waits 10 seconds. You can Undo during that time.`,'Delete event'))return {status:'cancelled'};
+    return calendarDocument.edit(initial,data=>{const row=calendarRecord(data.events,input.id);if(!row||row.calendarId!==input.calendarId||row.revision!==input.revision||!matches(row,input.expected))return {status:'conflict'};const deletion=stageCalendarDeletion(data,row,'event','manual:'+data.sourceRevision);return {status:'queued',deletion};});}
+  async deletionReceipt(id:string){const data=await calendarDocument.read(initial);return data.deletions?.[id]||null;}
+  async pendingDeletions(){const data=await calendarDocument.read(initial),clock=browserDeletionClock();return Object.values(data.deletions||{}).filter(e=>!e.acknowledged&&['queued','paused','unknown','dispatching'].includes(e.phase)&&browserDeletionOwnerVisible(e.owner)).map(e=>({...e,kind:'calendar',window:e.phase==='queued'?deletionWindow(e.deadline,clock):undefined}));}
+  async settleDeletions(){
+    // Undo polling runs every 500ms. Only an expired queued deletion may change the
+    // document; any other edit would replace the receipt held by recovery and editors.
+    const raw=await calendarDocument.readRaw();if(raw===null)return;
+    const data:State=JSON.parse(raw),clock=browserDeletionClock();
+    if(!Object.values(data.deletions||{}).some(entry=>entry.phase==='queued'&&deletionWindow(entry.deadline,clock)==='expired'))return;
+    await calendarDocument.edit(initial,data=>settleCalendarDeletions(data,browserDeletionOwnerCurrent));
+  }
+  async dismissDeletion(id:string){return calendarDocument.edit(initial,data=>{const entry=data.deletions?.[id];if(!entry||!browserDeletionOwnerVisible(entry.owner)||!['unknown','dispatching'].includes(entry.phase))throw Error('Uncertain deletion is unavailable.');entry.acknowledged=true;return {status:'acknowledged'};});}
+  async undoDeletion(id:string){return calendarDocument.edit(initial,data=>undoCalendarDeletion(data,id,browserDeletionOwnerVisible));}
   async readWorkflowRange(input:{calendarIds:string[];start:string;end:string;maximumEvents:number}) {const {events}=await this.list({begin:Date.parse(input.start),end:Date.parse(input.end)});return {status:'ready',events:events.filter(e=>input.calendarIds.includes(e.calendarId)).slice(0,input.maximumEvents).map(e=>({...e,start:new Date(e.begin).toISOString(),end:new Date(e.end).toISOString(),allDay:!!e.allDay}))};}
   async open(input?:{id?:string}){
     const state=input?.id?await this.presentationState():undefined;if(state===null)return {status:'cancelled'};

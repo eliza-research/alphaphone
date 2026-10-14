@@ -67,6 +67,14 @@ final class WorkflowNoticePoster implements WorkflowNoticeDelivery.Poster {
   if(!WorkflowNoticeDelivery.approvalId(id)||!approvalsAllowed())throw new SecurityException("Approval notifications are disabled");
   manager().notify(tag(id),0,approval(title,body,timeoutMs,tap(id)).build());awaitListed(id);
  }
- @Override public void cancel(String id){manager().cancel(tag(id),0);}
+ @Override public void postApprovalQuiet(String id,String title,String body,long timeoutMs)throws Exception{
+  if(!WorkflowNoticeDelivery.approvalId(id)||!approvalsAllowed())throw new SecurityException("Approval notifications are disabled");
+  // Group children with SUMMARY-only alert behavior cannot sound/vibrate, even on the high channel.
+  manager().notify(tag(id),0,approval(title,body,timeoutMs,tap(id)).setGroup("alpha_quiet_approvals").setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY).build());awaitListed(id);
+ }
+ @Override public void cancel(String id){
+  manager().cancel(tag(id),0);
+  try{String token=WorkflowNoticeTapsFactory.create(context).token(id);Intent launch=context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());if(token!=null&&launch!=null){launch.setAction(WorkflowNoticeTaps.ACTION).setData(android.net.Uri.parse(WorkflowNoticeTaps.PREFIX+token));PendingIntent pending=PendingIntent.getActivity(context,0,launch,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_NO_CREATE);if(pending!=null)pending.cancel();}}catch(Exception failure){throw new IllegalStateException("Stale workflow tap could not be invalidated",failure);}
+ }
  public boolean matches(String id,String title,String body){for(StatusBarNotification row:manager().getActiveNotifications())if(row.getId()==0&&tag(id).equals(row.getTag())){Notification notice=row.getNotification();return channelFor(id).equals(notice.getChannelId())&&title.contentEquals(notice.extras.getCharSequence(Notification.EXTRA_TITLE,""))&&body.contentEquals(notice.extras.getCharSequence(Notification.EXTRA_BIG_TEXT,notice.extras.getCharSequence(Notification.EXTRA_TEXT,"")));}return false;}
 }

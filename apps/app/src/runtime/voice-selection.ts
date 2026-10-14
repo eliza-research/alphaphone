@@ -32,7 +32,7 @@ export function voiceRoutePreference(): VoiceRouteChoice {
   return value && value.version === 1 && value.route === 'cloud' && value.disclosed === 'cloud-speech-uses-credits' && Number.isFinite(value.chosenAt) ? 'cloud' : 'device';
 }
 /**
- * Persist an explicit route choice. Cloud requires the caller to have shown the credit
+ * Persist an explicit route choice. Cloud requires the caller to have shown the Cloud speech
  * disclosure. Returns false when the choice could not be confirmed in storage; the
  * route then stays on-device.
  */
@@ -41,7 +41,7 @@ export function chooseVoiceRoute(route: VoiceRouteChoice, disclosure?: { disclos
   return write(voiceRouteKey, route === 'cloud' ? { version: 1, route, disclosed: disclosure!.disclosed, chosenAt: Date.now() } : { version: 1, route: 'device', chosenAt: Date.now() });
 }
 /** Disclosure shown wherever Cloud speech can be chosen. */
-export function cloudSpeechDisclosure() { return 'Eliza Cloud speech uploads recordings and reply text to your Cloud account and uses its credits.'; }
+export function cloudSpeechDisclosure() { return 'Eliza Cloud speech uploads recordings and reply text to your Cloud account and counts toward your plan allowance.'; }
 
 /** Opt-in: replies to voice-originated turns are read aloud. Off unless explicitly enabled. */
 export function speakRepliesEnabled(): boolean { const value = record(read(speakRepliesKey)); return !!value && value.version === 1 && value.enabled === true; }

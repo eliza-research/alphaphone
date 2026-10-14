@@ -82,7 +82,23 @@ export class InboxOperation {
   snapshot() { return this.record ? copy(this.record) : null; }
   stop() { this.controller.abort(); }
   private check() { if (!this.deps.active() || this.controller.signal.aborted) throw new DOMException('Inbox account changed','AbortError'); }
-  private async key() { return `inbox-operation:v1:${await digest(JSON.stringify([this.deps.owner,this.deps.grantId]))}`; }
+  private async key() { return InboxOperation.storeKey(this.deps.owner,this.deps.grantId); }
+  private static async storeKey(owner: string, grantId: string) { return `inbox-operation:v1:${await digest(JSON.stringify([owner,grantId]))}`; }
+  /**
+   * Removes the saved record for one owner and grant when it is an undispatched review ('preparing' or
+   * 'review'). It is independent of any live InboxOperation, so a withdrawn grant is honoured even when
+   * the account is rebound or reset meanwhile. A dispatching or observed record is never touched: its
+   * receipt stays. A write that races it is re-read a few times. Returns whether a record was removed.
+   */
+  static async discardUnsent(store: InboxOperationDependencies['store'], owner: string, grantId: string): Promise<boolean> {
+    const key = await InboxOperation.storeKey(owner, grantId);
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const value = await store.read<InboxOperationRecord>(key);
+      if (!value || (value.phase !== 'preparing' && value.phase !== 'review')) return false;
+      if ((await store.compareExchange(key, value, null)).status === 'saved') return true;
+    }
+    throw new Error('The unsent review kept changing and was not discarded. Reload its receipt before continuing.');
+  }
   private async exclusive<T>(run:()=>Promise<T>) { if(this.busy)throw new Error('An Inbox operation is already pending');this.busy=true;try{this.check();return await run();}finally{this.busy=false;} }
   private async save(next: InboxOperationRecord | null) {
     this.check();const result=await this.deps.store.compareExchange(await this.key(),this.record,next);this.check();

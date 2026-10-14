@@ -31,6 +31,24 @@ The development host launches Bun with `--conditions=eliza-source` and `--no-ins
 
 Workflow drafts in local browser development persist in the private host profile, separately scoped to the selected owner/agent. Atomic compare-and-exchange rejects stale-tab changes. These development drafts are not encrypted; the editor says so. Android continues to use its encrypted native draft store. Draft storage does not save or execute a workflow on the agent until the separate reviewed submission.
 
+## Isolated Mac provider QA
+
+Use separate `ALPHA_REMOTE_PROFILE`, `ALPHA_REMOTE_PORT` and Vite `--port` values
+when comparing a developer runtime with an existing preview. Reuse a verified
+prepared source through `ALPHA_ELIZA_SOURCE`; never restart another preview's host.
+
+`ALPHA_DEV_CARTESIA=1` explicitly enables the pinned runtime's self-hosted Cartesia
+speech service. Supply `CARTESIA_API_KEY_FILE` as an absolute reference to an existing
+owner-only regular file. The launcher passes only that reference to the host;
+it does not read the key into the renderer or accept a `VITE_` credential.
+This opt-in does not change the app's Cloud voice controls. Server health,
+selected app voice, actual recording/playback and Android acceptance are separate
+checks. Leave microphone and playback tests to an explicitly authorized session.
+
+The developer Models page reads the active host's inference provider. A saved
+Cloud account is independent of this selection, and an unreported model name
+stays unknown.
+
 ## Speech routes and optional local development
 
 Chat voice, Notes dictation and generic Maps/workflow speech select Eliza Cloud in the product. A valid saved Cloud account is required; opening voice must reuse that account rather than request a new sign-in unnecessarily. Notes recordings remain local until the user explicitly requests transcription. Chat voice has a separate conversation controller and does not open Notes. Actual microphone, playback, backend STT selection and Android permission acceptance require their own qualification; text inference readiness does not prove them.
@@ -279,9 +297,11 @@ npm run agent:test-digest-restart
 
 The command verifies the prepared source against the pinned commit before and after the run, and creates its own temporary working directory, database and workflow state. It kills only its own detached fixture process group after synthetic inference begins. Logs and results stay in the temporary evidence directory it prints; the live local-agent profile is untouched.
 
-What a pass means: the interrupted run is kept as `outcome-unknown` with no finished result and no repeated inference; two concurrent duplicate admissions of the same occurrence return the same run ID; and a separate, never-admitted occurrence a day outside the schedule window produces one explicit `missed` result without running the backlog, with the next occurrence in the future. It checks process-loss safety and overdue scheduling on a host. It does not check automatic recovery of an ambiguous worker outcome, Android background execution, physical power-loss durability or exactly-once provider calls.
+What a pass means: the interrupted run is kept as `outcome-unknown` with no finished result and no repeated inference; two concurrent duplicate admissions of the same occurrence return the same run ID; and a separate, never-admitted occurrence a day outside the schedule window produces one explicit `missed` result without running the backlog, with the next occurrence in the future. A fourth fresh runtime process then verifies the same missed receipt and exact future occurrence survive another restart; concurrent repeat admission still returns that missed run and makes no model call. It checks process-loss safety and overdue scheduling on a host. It does not check automatic recovery of an ambiguous worker outcome, Android background execution, physical power-loss durability or exactly-once provider calls.
 
-Nothing runs this check automatically: it is not part of `npm test`, `npm run verify` or any workflow, because of the prepared source it needs. `test/digest-restart-input.test.mjs` covers only its input admission. Recorded run (host-runtime evidence, not Android): product branch `claude/r5-runner-gaps`, the script as committed in `15d29c3d` (its test phases are unchanged from `8acc6e4b`; only input admission and result labels changed), upstream `352d7a0855b713319cbe1acdab5fbf556fb85aa8`, macOS arm64, Node 24.15.0, Bun 1.4.2, 2026-10-10: exit 0 twice (once with `ALPHA_ELIZA_SOURCE`, once with the default directory); one model call in the admit phase and none in recover or overdue; `recovered.json` `{"sameRunId":true,"resultCount":0,"duplicateAdmissionsSameRun":true,"reconciliation":"outcome-unknown","finished":false}`; `overdue-result.json` `{"status":"missed","resultCount":1,"nextOccurrenceFuture":true,"duplicateAdmissionSameRun":true}`. A changed upstream pin needs a new run.
+The Resident source preparation workflow runs this campaign after installing the pinned runtime dependencies. Its `resident-prepare-evidence` artifact retains the supervised phase outcome and synthetic process logs/results, including failures; the temporary PGlite database is not uploaded. Source preparation alone is not a passing restart campaign.
+
+This check is not part of `npm test` or `npm run verify`, because it needs prepared runtime dependencies; the Resident source preparation workflow runs it after preparation. `test/digest-restart-input.test.mjs` covers only its input admission. Recorded run (host-runtime evidence, not Android): product branch `claude/r5-runner-gaps`, the script as committed in `15d29c3d` (its test phases are unchanged from `8acc6e4b`; only input admission and result labels changed), upstream `352d7a0855b713319cbe1acdab5fbf556fb85aa8`, macOS arm64, Node 24.15.0, Bun 1.4.2, 2026-10-10: exit 0 twice (once with `ALPHA_ELIZA_SOURCE`, once with the default directory); one model call in the admit phase and none in recover or overdue; `recovered.json` `{"sameRunId":true,"resultCount":0,"duplicateAdmissionsSameRun":true,"reconciliation":"outcome-unknown","finished":false}`; `overdue-result.json` `{"status":"missed","resultCount":1,"nextOccurrenceFuture":true,"duplicateAdmissionSameRun":true}`. A changed upstream pin needs a new run.
 
 Repeated at pin `40dbe96bd1`, which round 9 has since replaced with `13c9857598` (host-runtime evidence, not Android; not repeated at the newer pin): product branch `claude/r8-runner-ci` at `dc0baed4`, the script unchanged since `15d29c3d`, upstream `40dbe96bd1fc2603aaff655cd52d0ab899704e2c`, macOS arm64, Node 24.15.0, Bun 1.4.2, 2026-10-11. `ALPHA_RUNTIME_GIT_CACHE="$PWD/vendor/eliza" npm run agent:prepare` exit 0 (27,339 files, 3,236 packages, 5.8 GB; the dependency install was removed afterwards), then `npm run agent:test-digest-restart` with the default directory: exit 0 in 19 seconds, `{"evidenceClass":"host-runtime","upstreamCommit":"40dbe96b…","crashDuringInference":true,"preservedSameRun":true,"unknownOutcomeNotReplayed":true,"noFabricatedResult":true,"overdueSkippedWithoutInference":true,"modelAttempts":1}`; `recovered.json` `{"sameRunId":true,"resultCount":0,"duplicateAdmissionsSameRun":true,"reconciliation":"outcome-unknown","finished":false}` (its run id omitted here); `overdue-result.json` `{"status":"missed","resultCount":1,"nextOccurrenceFuture":true,"duplicateAdmissionSameRun":true}`; one model call, in the admit phase. One run. The evidence directory was a temporary folder and is not kept.
 

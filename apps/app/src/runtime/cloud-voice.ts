@@ -8,7 +8,7 @@ import { connectionController } from './connection-ui';
 export function cloudVoiceFailure(error: unknown): string | null {
   const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
   if (code === 'voice-http-401' || code === 'voice-http-403') return 'Sign in to Eliza Cloud again in Settings, then retry voice.';
-  if (code === 'voice-http-402') return 'Cloud voice needs credits. Add credits in Settings, then retry.';
+  if (code === 'voice-http-402') return 'Eliza Cloud declined cloud voice for your account\'s billing. Check your account in Settings, then retry.';
   return null;
 }
 

@@ -49,7 +49,9 @@ const server = http.createServer(async (req, res) => {
       else if (req.url === '/api/v1/eliza/agents') { assert.equal(req.method, 'GET'); data = { success: true, data: [agent()] }; }
       else if (req.url === `/api/v1/eliza/agents/${id}`) { assert.equal(req.method, 'GET'); data = { success: true, data: agent() }; }
       else if (req.url === '/api/v1/eliza/google/connect/initiate') {
-        assert.deepEqual(body, { side: 'owner', capabilities: ['google.basic_identity', 'google.gmail.triage'] });
+        assert.deepEqual(body, { side: 'owner', capabilities: mode === 'gmail-modify'
+          ? ['google.basic_identity', 'google.gmail.triage', 'google.gmail.send', 'google.gmail.drafts', 'google.gmail.mailbox']
+          : ['google.basic_identity', 'google.gmail.triage'] });
         data = { authUrl: mode === 'foreign-oauth' ? 'https://attacker.invalid/' : 'https://accounts.google.com/o/oauth2/v2/auth?state=synthetic' };
       } else if (req.url === '/api/v1/eliza/google/accounts?side=owner') data = [{ configured: true, connected: true, reason: 'connected', connectionId: grant, grantedCapabilities: ['google.gmail.triage'], identity: { email: 'owner@example.invalid' } }];
       else if (req.url.startsWith('/api/v1/eliza/google/gmail/')) {
@@ -107,6 +109,8 @@ try {
   mode = 'ok';
   assert.equal((await make().agentDetail(id, signal())).id, id, 'new client restores injected credentials');
   assert.match(await client.initiateGmail(signal()), /^https:\/\/accounts.google.com\//);
+  // Incremental grant (P-37): the modify step is one consent that keeps read and adds every change capability.
+  mode = 'gmail-modify'; assert.match(await client.initiateGmail(signal(), 'modify'), /^https:\/\/accounts.google.com\//); mode = 'ok';
   assert.equal((await client.gmailStatus(signal())).connected, false);
   assert.equal((await client.gmailAccounts(signal()))[0].connectionId, grant);
   assert.equal((await client.gmailSearch(grant, 'in:inbox', signal())).messages[0].id, mail.externalId);

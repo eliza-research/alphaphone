@@ -1,3 +1,4 @@
+import {reviewFileEmail} from './file-email-review';
 import {registerPlugin} from '../platform-plugins';
 import {reviewMailAttachment,type MailAttachment} from '../runtime/inbox-attachment';
 import type {Source} from './note-source-adapter';
@@ -119,6 +120,15 @@ export function installSelectedDocumentAdapter(_Component: unknown, views: Recor
         closeQuestion?.();
         closeQuestion=reviewContentQuestion({name:selected.pdf?name+' · page '+(selected.pdf.page+1):name,text:selected.text??'',current:()=>current===selected&&api.get(module).open===marker&&!document.hidden,compose:(draft,source)=>api.composeContentQuestion(draft,source),...(selected.result.selectionId&&['text/plain','application/pdf','image/png','image/jpeg','image/webp'].includes(mime)?{source:async():Promise<Source>=>{const file=await sourceFiles.readSelected({selectionId:selected.result.selectionId!}),checked=await reviewMailAttachment(file);if(current!==selected||checked.sha256!==file.sha256||checked.size!==file.size||file.name!==selected.result.name||file.mimeType!==mime||mime==='text/plain'&&checked.text!==selected.text)throw Error('Source changed');const reference=file.sourceReferenceVersion===1?(await sourceFiles.retainSourceReference({selectionId:selected.result.selectionId!,sha256:checked.sha256})).reference:undefined;if(current!==selected)throw Error('Selection changed');return {version:1,name:file.name,mimeType:file.mimeType,sha256:checked.sha256,size:checked.size,...(reference?{reference}:{})};}}:{}),...(image?{image:async(signal:AbortSignal)=>(await fetch(image,{signal})).blob()}: {})});
       };
+      const email=()=>{
+        closeQuestion?.();
+        closeQuestion=reviewFileEmail({
+          read:async()=>{const file=await sourceFiles.readSelected({selectionId:selected.result.selectionId!});if(file.name!==name||file.mimeType!==mime)throw Error('Selected file changed. Select it again.');return file;},
+          current:()=>current===selected&&api.isActive()&&api.get(module).open===marker&&!renameBusy,
+          target:()=>views.inbox.fileEmailTarget(),insert:(file,token)=>views.inbox.attachReviewedFile(file,token),
+          inserted:()=>api.open('inbox'),
+        });
+      };
       if (module === 'files') {
         const rows = selected.text === undefined
           ? [{ k: 'Status', v: selected.status }]
@@ -130,6 +140,7 @@ export function installSelectedDocumentAdapter(_Component: unknown, views: Recor
         data.isPreview = true;
         data.pv = {
           needsReselect:selected.result.status === 'renamed-reselect', reselect:async()=>{try{const result=await DailyApps.perform({action:'files'});if(current===selected&&result.status==='selected')await accept('files',result,api);}catch{api.toast('File picker unavailable. Try again.');}},
+          canEmail:typeof views.inbox.fileEmailTarget==='function'&&selected.result.status==='selected'&&['text/plain','application/pdf','image/png','image/jpeg','image/webp'].includes(mime),email,
           name, nativeSelectionId:selected.result.selectionId, base: name, ext: '', canForget:true, forget, meta: mime + ' · selected on this device', d: '',
           isPages: !image, pages: selected.pdf ? [] : pages, isPdf: !!selected.pdf, pdfImage: selected.pdf?.image || '', pdfLabel: selected.pdf ? 'Page ' + (selected.pdf.page+1) + ' of ' + selected.pdf.count : '', pdfPrevious: () => selected.pdf && selected.pdf.page > 0 ? pdfPage(selected.pdf.page-1,api) : undefined, pdfNext: () => selected.pdf && selected.pdf.page+1 < selected.pdf.count ? pdfPage(selected.pdf.page+1,api) : undefined, pdfHasPrevious: !!selected.pdf && selected.pdf.page > 0, pdfHasNext: !!selected.pdf && selected.pdf.page+1 < selected.pdf.count, paper: '#FFFFFF', isPhoto: !!image,
           photoBg: image ? `url(${JSON.stringify(image)}) center / contain no-repeat` : '', photoSun: 'none',

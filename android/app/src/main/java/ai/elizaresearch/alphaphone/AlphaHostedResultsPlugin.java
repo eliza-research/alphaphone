@@ -56,11 +56,20 @@ public class AlphaHostedResultsPlugin extends Plugin {
   String id=call.getString("id");if(!WorkflowNoticeDelivery.approvalId(id))throw new IllegalArgumentException();
   WorkflowNoticeTapsFactory.delivery(getContext()).withdrawApproval(WorkflowNoticeTapsFactory.create(getContext()),id,System.currentTimeMillis());call.resolve();
  }catch(Exception error){call.reject("Approval notice could not be withdrawn; it expires with the approval");}});}
- /** The connected owner changed: approval notices posted for any other owner are withdrawn and never reposted. Only the owner ID crosses the bridge. */
+ /** Persisted owner fence; valid suspended notices are revalidated by the matching session before resume. */
  @PluginMethod public void withdrawOtherOwnerApprovalNotices(PluginCall call){submit(call,()->{try{
-  int withdrawn=WorkflowNoticeTapsFactory.delivery(getContext()).withdrawOtherOwners(WorkflowNoticeTapsFactory.create(getContext()),call.getString("ownerId"),System.currentTimeMillis());
-  JSObject out=new JSObject();out.put("withdrawn",withdrawn);call.resolve(out);
+  if(!call.getData().has("owner"))throw new IllegalArgumentException("Explicit owner or sign-out required");JSONObject rawOwner=call.getObject("owner");if(!call.getData().isNull("owner")&&rawOwner==null)throw new IllegalArgumentException("Owner must be an object or explicit null");JSONObject owner=call.getData().isNull("owner")?null:NoticeOwner.identity(rawOwner);
+  // Both privacy fences always run: a failed workflow cancellation never leaves the hosted digest fence unwritten.
+  int withdrawn=0;Exception failed=null;
+  try{withdrawn=WorkflowNoticeTapsFactory.delivery(getContext()).withdrawOtherOwners(WorkflowNoticeTapsFactory.create(getContext()),owner,System.currentTimeMillis());}catch(Exception workflowFailure){failed=workflowFailure;}
+  try{notices().withdrawOtherOwners(owner);}catch(Exception digestFailure){if(failed==null)failed=digestFailure;}
+  if(failed!=null)throw failed;
+  JSObject out=new JSObject();out.put("withdrawn",withdrawn);out.put("suspended",WorkflowNoticeTapsFactory.create(getContext()).suspendedApprovals(owner,System.currentTimeMillis()));call.resolve(out);
  }catch(Exception error){call.reject("Another owner's approval notices could not be withdrawn; they expire with their approvals");}});}
+ @PluginMethod public void resumeWorkflowApprovalNotice(PluginCall call){submit(call,()->{try{
+  Long expiresAt=call.getLong("expiresAt");if(expiresAt==null)throw new IllegalArgumentException();
+  String status=WorkflowNoticeTapsFactory.delivery(getContext()).resumeApproval(WorkflowNoticeTapsFactory.create(getContext()),call.getString("id"),call.getString("bindingHash"),call.getObject("route"),expiresAt,System.currentTimeMillis());JSObject out=new JSObject();out.put("status",status);call.resolve(out);
+ }catch(Exception error){call.reject("Approval notice remains suspended until it can be revalidated");}});}
  private static volatile String pendingRenewal;
  /** A Renew tap only opens the review for that source; it is consumed once and never renews by itself. */
  @PluginMethod public void pendingSourceRenewal(PluginCall call){String id=pendingRenewal;pendingRenewal=null;JSObject out=new JSObject();if(id!=null)out.put("sourceId",id);call.resolve(out);}

@@ -3,6 +3,8 @@ import {automationsRouteAllowed, isAutomationsPath, type AutomationsMethod} from
 import { CloudPersonalProtocol, PersonalProtocolError } from './cloud-personal-protocol.ts';
 import { reviewMailAttachment, type MailAttachment } from './inbox-attachment.ts';
 import { reviewOpaqueAttachment, type OpaqueMailAttachment } from './inbox-operation.ts';
+import { gmailCapabilitiesFor } from './gmail-grants.ts';
+import { ENTITLEMENT_KEYS_PATH, ENTITLEMENT_PATH, type EntitlementSource } from './subscription-entitlement.ts';
 /** Narrow Alpha adapter for Eliza Cloud. Contracts inspected in v3's
  * cloud/api/auth/cli-session, cloud/api/v1/eliza/{agents,google}, and
  * ui/src/api/client-cloud.ts. Native composition owns HTTP and secure storage.
@@ -209,8 +211,9 @@ export class CloudProtocol {
   private async call(path: string, signal: AbortSignal, options: { body?: unknown; method?: AutomationsMethod; authenticated?: boolean; runtimeBase?: string; timeoutMs?: number; headers?: Record<string,string>; credentialId?: string; expiresAt?: number } = {}) {
     return object(await this.requestData(path, signal, options));
   }
-  /** Account billing only: this never selects, creates or starts a hosted agent.
-   * The credential ID binds the snapshot to one login; balance is not a spend authorization. */
+  /** Transitional pre-subscription account check. Used only while Cloud has not deployed the
+   * subscription entitlement route; the UI shows plan state, never a credit balance or top-up.
+   * The credential ID binds the snapshot to one login; it is not a spend authorization. */
   async creditBalance(signal: AbortSignal): Promise<{ balance: number; credentialId: string }> {
     signal.throwIfAborted();
     const credential = await this.credentials.read(this.environment);
@@ -219,17 +222,55 @@ export class CloudProtocol {
     const data = await this.call("/api/v1/credits/balance", signal, {
       authenticated: true, credentialId: credential.credentialId,
     });
-    const current = await this.credentials.read(this.environment);
-    signal.throwIfAborted();
-    if (current?.credentialId !== credential.credentialId) throw new CloudProtocolError("account-changed");
-    if (current.expiresAt !== undefined && current.expiresAt <= Date.now()) throw new CloudProtocolError("expired");
+    await this.assertSameCredential(credential.credentialId, signal);
     const balance = typeof data.balance === "number" ? data.balance
       : typeof data.balance === "string" && data.balance.trim() ? Number(data.balance) : NaN;
     if (!Number.isFinite(balance)) throw new CloudProtocolError("invalid-response");
     return { balance, credentialId: credential.credentialId };
   }
-  /** Uses Cloud's existing hosted billing page; no checkout or payment is created here. */
-  async openTopUp(signal: AbortSignal): Promise<void> {
+  private async assertSameCredential(credentialId: string, signal: AbortSignal) {
+    const current = await this.credentials.read(this.environment);
+    signal.throwIfAborted();
+    if (current?.credentialId !== credentialId) throw new CloudProtocolError("account-changed");
+    if (current.expiresAt !== undefined && current.expiresAt <= Date.now()) throw new CloudProtocolError("expired");
+  }
+  /** Cloud API origin, used as the entitlement issuer. */
+  get entitlementIssuer(): string { return this.authority.api; }
+  /** Short-lived signed subscription entitlement (proposed Cloud contract, issue #410). Read at
+   * admission and by the background refresher, never per assistant turn. `null` means the
+   * deployed Cloud does not offer the route yet (404/405/501). */
+  async subscriptionEntitlement(signal: AbortSignal): Promise<string | null> {
+    signal.throwIfAborted();
+    const credential = await this.credentials.read(this.environment);
+    signal.throwIfAborted();
+    if (!credential?.credentialId) throw new CloudProtocolError("credentials-missing");
+    let data: ObjectValue;
+    try { data = await this.call(ENTITLEMENT_PATH, signal, { authenticated: true, credentialId: credential.credentialId }); }
+    catch (error) {
+      if (error instanceof CloudProtocolError && error.code === "http" && [404, 405, 501].includes(error.status ?? 0)) return null;
+      throw error;
+    }
+    await this.assertSameCredential(credential.credentialId, signal);
+    if (typeof data.entitlement !== "string" || !data.entitlement || data.entitlement.length > 8192) throw new CloudProtocolError("invalid-response");
+    return data.entitlement;
+  }
+  /** Public ES256 verification keys for entitlements. Never private material. */
+  async subscriptionEntitlementKeys(signal: AbortSignal): Promise<JsonWebKey[]> {
+    const data = await this.call(ENTITLEMENT_KEYS_PATH, signal);
+    if (!Array.isArray(data.keys) || data.keys.length > 16) throw new CloudProtocolError("invalid-response");
+    return data.keys.filter((key): key is JsonWebKey => !!key && typeof key === "object" && !Array.isArray(key)
+      && (key as ObjectValue).kty === "EC" && (key as ObjectValue).crv === "P-256" && (key as ObjectValue).d === undefined
+      && typeof (key as ObjectValue).kid === "string" && typeof (key as ObjectValue).x === "string" && typeof (key as ObjectValue).y === "string");
+  }
+  /** Entitlement ports for checkEntitlement, bound to this client. */
+  entitlementSource(): EntitlementSource {
+    return { issuer: this.entitlementIssuer,
+      entitlement: signal => this.subscriptionEntitlement(signal),
+      entitlementKeys: signal => this.subscriptionEntitlementKeys(signal),
+      legacyAccountUsable: async signal => (await this.creditBalance(signal)).balance > 0 };
+  }
+  /** Opens Cloud's hosted plan management page. No checkout, upgrade or overage purchase is created here. */
+  async openSubscriptionManagement(signal: AbortSignal): Promise<void> {
     signal.throwIfAborted();
     await this.openExternal(`https://${this.authority.agents}/cloud/billing`, signal);
     signal.throwIfAborted();
@@ -438,9 +479,14 @@ export class CloudProtocol {
       ...(response.interrupted === true ? { interrupted: true } : {}),
       ...(response.noResponseReason === "ignored" ? { noResponseReason: "ignored" as const } : {}) };
   }
-  async initiateGmail(signal: AbortSignal, permission: 'read'|'send'|'drafts'|'mailbox' = 'read'): Promise<string> {
+  /** Starts Google consent. `read` asks for read access only; `modify` is the one incremental step
+   * for approved mailbox changes (gmail-grants.ts). The single-capability values remain for callers
+   * that ask for one change capability. */
+  async initiateGmail(signal: AbortSignal, permission: 'read'|'modify'|'send'|'drafts'|'mailbox' = 'read'): Promise<string> {
+    const capabilities = permission === "read" || permission === "modify" ? gmailCapabilitiesFor(permission)
+      : ["google.basic_identity", "google.gmail.triage", permission === "send" ? "google.gmail.send" : permission === "drafts" ? "google.gmail.drafts" : "google.gmail.mailbox"];
     const response = await this.call("/api/v1/eliza/google/connect/initiate", signal, { authenticated: true,
-      body: { side: "owner", capabilities: ["google.basic_identity", "google.gmail.triage", ...(permission === "read" ? [] : [permission === "send" ? "google.gmail.send" : permission === "drafts" ? "google.gmail.drafts" : "google.gmail.mailbox"])] } });
+      body: { side: "owner", capabilities } });
     let url: URL;
     try { url = new URL(string(response.authUrl)); } catch { throw new CloudProtocolError("invalid-response"); }
     if (url.origin !== "https://accounts.google.com" || url.username || url.password || url.hash) throw new CloudProtocolError("invalid-response");

@@ -10,12 +10,16 @@ export const AVAILABILITY_MAX_SOURCES=64;
  * Provider boundary for a free/busy read. `readAvailability` returns only intervals and
  * each event's availability; an implementation must not project titles or any other
  * event content. A ready source list echoes the time zone it was checked against.
- * Statuses: ready, permission-required, changed, timezone-changed, too-many, unavailable.
+ * A ready result must include freshness:'local': every selected calendar is device-local
+ * and has no remote sync dependency. Remote cached reads have unknown freshness and
+ * cannot return a ready result until a verifiable remote freshness contract is added.
+ * Statuses: ready, permission-required, changed, timezone-changed, too-many, unavailable,
+ * freshness-unknown.
  */
 export interface AvailabilityProvider {
  requestWorkflowReadAccess():Promise<{status:string}>;
  availabilitySources(input:{timeZone:string}):Promise<{status:string;timeZone?:unknown;calendars?:unknown}>;
- readAvailability(input:{calendars:AvailabilitySelection[];start:string;end:string;timeZone:string}):Promise<{status:string;events?:unknown}>;
+ readAvailability(input:{calendars:AvailabilitySelection[];start:string;end:string;timeZone:string}):Promise<{status:string;events?:unknown;freshness?:unknown}>;
 }
 /** Foreground owner review. Both steps resolve only on an explicit choice. */
 export interface AvailabilityReview {
@@ -67,6 +71,7 @@ export function parseAvailabilityEvents(value:unknown):CalendarAvailabilityEvent
  });
 }
 function readFailure(status:string):AvailabilityOutcome{
+ if(status==='freshness-unknown'||status==='stale')return failed('Calendar freshness could not be verified, so your availability is unknown.');
  if(status==='permission-required')return failed(DENIED);
  if(status==='changed')return failed('A chosen calendar changed on this phone. Review the availability check again.');
  if(status==='timezone-changed')return failed(ZONE_CHANGED);
@@ -119,6 +124,7 @@ export async function executeCalendarAvailability(provider:AvailabilityProvider,
   const read=async():Promise<CalendarAvailabilityResult|AvailabilityOutcome>=>{
    const answer=await provider.readAvailability(request);stable();
    if(answer.status!=='ready')return readFailure(answer.status);
+   if(answer.freshness!=='local')return readFailure('freshness-unknown');
    if(!sameZone())return failed(ZONE_CHANGED);
    return calendarAvailability(operation,chosen.length,parseAvailabilityEvents(answer.events));
   };

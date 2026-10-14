@@ -32,7 +32,7 @@ function fixture(){
    for(const chosen of input.calendars)if(state.calendars.find(item=>item.id===chosen.id)?.sourceRevision!==chosen.revision)return {status:'changed'};
    const ids=new Set(input.calendars.map(item=>item.id));
    // The selection is applied at the provider: unselected calendars are never read.
-   return {status:'ready',events:state.rows.filter(row=>ids.has(row.calendarId)).map(row=>({start:row.start,end:row.end,allDay:row.allDay,availability:row.availability,...(state.extraField?{title:row.title}:{})}))};
+   return {status:'ready',freshness:'local',events:state.rows.filter(row=>ids.has(row.calendarId)).map(row=>({start:row.start,end:row.end,allDay:row.allDay,availability:row.availability,...(state.extraField?{title:row.title}:{})}))};
   },
  };
  return {state,provider};
@@ -157,6 +157,27 @@ const refused=(outcome:Awaited<ReturnType<typeof run>>,pattern:RegExp)=>{assert.
  refused(await run(renamed.provider,day,reviews(['1'],true,{afterChoose:()=>{renamed.state.calendars[0].sourceRevision=rev('d');}}).review),/chosen calendar changed/);
  const swapped=fixture();
  refused(await run(swapped.provider,day,reviews(['1'],true,{afterConfirm:()=>{swapped.state.calendars[0].sourceRevision=rev('d');}}).review),/chosen calendar changed/);
+}
+// A stale/unavailable/revoked read is unknown availability, including after an empty
+// first read was reviewed as free. A non-ready payload must never be interpreted as free.
+for(const status of ['stale','unavailable','permission-required','changed','freshness-unknown']){
+ for(const failedRead of [1,2]){
+  const {provider,state}=fixture();state.rows=[];const read=provider.readAvailability;let calls=0;
+  provider.readAvailability=async input=>++calls===failedRead?{status,events:[]}:read(input);
+  const {review,seen}=reviews(['1']);
+  refused(await run(provider,day,review),/Nothing was shared/);
+  assert.equal(calls,failedRead);
+  assert.equal(seen.results.length,failedRead-1,'no review before a successful read; no receipt after a failed re-read');
+ }
+}
+// Even ready + empty intervals cannot claim free without explicit freshness evidence.
+for(const freshness of [undefined,null,'remote-cache','stale']){
+ for(const failedRead of [1,2]){
+  const {provider,state}=fixture();state.rows=[];const read=provider.readAvailability;let calls=0;
+  provider.readAvailability=async input=>{const answer=await read(input);return ++calls===failedRead?{...answer,freshness}:answer;};
+  refused(await run(provider,day,reviews(['1']).review),/availability is unknown/);
+  assert.equal(calls,failedRead);
+ }
 }
 // Fail closed: provider content, forged choices and bounds.
 {

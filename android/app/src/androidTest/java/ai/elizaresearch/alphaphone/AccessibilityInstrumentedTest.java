@@ -22,13 +22,14 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 /**
- * Home, the notification shade, Settings and the composer at 200% system font scale, the page's
- * own measure of that text size, Home text overlap, and the gesture zones of Alpha's notifications:
+ * Home, Settings and the composer at 200% system font scale, the page's own measure of that text
+ * size, Home text overlap, and the ways into Android's own notification shade (#416, #417; Alpha
+ * draws no shade, and launcher Home's Notifications button asks Android to open its shade):
  * Accessibility Test Framework checks on the native view hierarchy (Espresso) and a
  * UiAutomator check that every actionable node TalkBack reaches has a label, is not
  * clipped off-screen and appears in reading order. Emulator evidence only.
  *
- * Traversal and the accessibility click on the handle use a stand-in screen reader bound
+ * Traversal and the accessibility click on the launcher Notifications button use a stand-in screen reader bound
  * (ScreenReaderStandInService). Without one WebView is in its reduced accessibility mode, where it
  * can omit named groups and accept ACTION_CLICK without delivering it to the page.
  * Keep the stand-in bound through all tree and gesture checks, restoring prior settings afterward.
@@ -81,7 +82,6 @@ public final class AccessibilityInstrumentedTest {
   for(int depth=0;node!=null&&depth<40;depth++,node=node.getParent())out.append(depth==0?"":" < ").append(node.getClassName()).append(node.isEnabled()?"":"(disabled)").append(node.isClickable()?"(clickable)":"");
   return out.toString();
  }
- private static boolean shadeOpens(int tenths)throws Exception{for(int i=0;i<tenths;i++){if("true".equals(js(SHADE_OPEN)))return true;SystemClock.sleep(100);}return false;}
  private static String js(String code)throws Exception{return WebViewTestDriver.evaluate(code);}
  private static void until(String code)throws Exception{for(int i=0;i<200;i++){if("true".equals(js("Boolean("+code+")")))return;SystemClock.sleep(100);}fail("Accessibility flow condition: "+code);}
  private static void open(String view)throws Exception{js(AppNavigation.request(view));until(AppNavigation.selected(view));}
@@ -237,8 +237,6 @@ public final class AccessibilityInstrumentedTest {
   return null;
  }
 
- private static final String SHADE_CLOSED="document.querySelector('[data-alpha-layer=\"shade\"]')?.getAttribute('aria-hidden')==='true'";
- private static final String SHADE_OPEN="document.querySelector('[data-alpha-layer=\"shade\"]')?.getAttribute('aria-hidden')!=='true'";
  /** evaluateJavascript returns a JSON value; this unwraps a JSON string result. */
  private static String unquote(String json)throws Exception{return (String)new org.json.JSONTokener(json).nextValue();}
  /**
@@ -284,52 +282,53 @@ public final class AccessibilityInstrumentedTest {
     assertEquals("Home text printed over other text at 200% font","[]",unquote(js(HOME_TEXT_OVERLAP)));
     assertEquals("Home app labels split mid-word at 200% font","[]",unquote(js(HOME_LABELS_SPLIT)));
 
-    // Gesture zones (docs/gesture-zones.md). The top edge is Android's; Alpha's notifications open
-    // only from the handle on Home.
+    // Gesture zones and Android's shade (#416, #417; docs/gesture-zones.md). Android's shade is the
+    // one notification surface: Alpha draws none, in either flavor.
+    until(AndroidShade.ALPHA_SHADE_ABSENT);
     Rect web=device.findObject(By.clazz("android.webkit.WebView")).getVisibleBounds();
     float css=web.width()/Float.parseFloat(js("window.innerWidth"));
-    org.json.JSONObject handle=new org.json.JSONObject(unquote(js("(()=>{const b=document.querySelector('[data-alpha-shade-handle]').getBoundingClientRect();return JSON.stringify({x:b.left+b.width/2,y:b.top+b.height/2,top:b.top,left:b.left,width:b.width,height:b.height})})()")));
-    assertTrue("The handle is a 44 by 44 CSS pixel target at least: "+handle,handle.getDouble("height")>=44&&handle.getDouble("width")>=44);
-    int handleX=web.left+Math.round((float)handle.getDouble("x")*css),handleY=web.top+Math.round((float)handle.getDouble("y")*css);
-    // 1. A swipe from the very top edge belongs to Android (it opens Android's own shade in both
-    // flavors). Alpha's panel must stay closed. Android's shade is then collapsed again.
+    // 1. A swipe from the very top edge belongs to Android in both flavors and opens Android's shade.
     device.swipe(web.centerX(),2,web.centerX(),web.top+web.height()/2,20);
-    SystemClock.sleep(800);
-    assertEquals("A top-edge swipe does not open Alpha's notifications","true",js(SHADE_CLOSED));
-    shell("cmd statusbar collapse");
+    assertTrue("A top-edge swipe opens Android's own shade",AndroidShade.waitOpen(5000));
+    assertEquals("No Alpha panel opens behind Android's shade","true",js(AndroidShade.ALPHA_SHADE_ABSENT));
+    AndroidShade.collapse();
     assertTrue("Alpha is in front again after Android's shade closes",device.wait(androidx.test.uiautomator.Until.hasObject(By.pkg(BuildConfig.APPLICATION_ID).depth(0)),5000));
     SystemClock.sleep(500);
-    // 2. A swipe that starts beside the handle, below the status bar, opens nothing.
-    device.swipe(web.left+Math.round(12*css),handleY,web.left+Math.round(12*css),web.top+web.height()/2,20);
-    SystemClock.sleep(800);
-    assertEquals("A swipe that starts beside the handle does not open Alpha's notifications","true",js(SHADE_CLOSED));
-    // 3. TalkBack and Switch Access activate the handle with the click action, with no touch.
-    // The handle is exposed by name as a clickable node whatever service is asking.
-    handleNode();
-    // The click itself is performed as those services perform it: with a screen reader bound, so
-    // that WebView delivers default actions to the page (see ScreenReaderStandInService).
-     // WebView notices the new service on its own timer (it polls with a back-off of up to five
-     // seconds) and then rebuilds its tree. Until it has, it still accepts the click and drops
-     // it, so the click is repeated once a second while that switch is under way, and only then.
-     int attempts=0;boolean opened=false;android.view.accessibility.AccessibilityNodeInfo target=null;
-     for(long deadline=SystemClock.uptimeMillis()+20000;!opened&&SystemClock.uptimeMillis()<deadline;){
-      target=handleNode();attempts++;
-      assertTrue("The accessibility click action is accepted",target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));
-      opened=shadeOpens(10);
-     }
-     assertTrue("The accessibility click action opens the panel (attempts: "+attempts+"; running services: "+runningServices()+"; node: "+(target==null?"none":chain(target))+")",opened);
-     device.pressBack();until(SHADE_CLOSED);
-     // With WebView in that mode one click is enough, every time: no second attempt here.
-     target=handleNode();
-     assertTrue("The accessibility click action is accepted again (node: "+target+"; ancestry: "+chain(target)+")",target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));
-     assertTrue("A single accessibility click opens the panel once WebView serves a screen reader (node: "+chain(target)+")",shadeOpens(50));
-     device.pressBack();until(SHADE_CLOSED);
-    // 4. A pull down that starts on the handle opens the panel. On the launcher flavor the handle
-    // sits below the status bar inset Android reports, outside the system's top-edge zone.
-    device.swipe(handleX,handleY,handleX,handleY+web.height()/3,20);
-    until(SHADE_OPEN);
-    talkBackOrder(device,"Notification shade");
-    device.pressBack();until(SHADE_CLOSED);
+    if(!BuildConfig.IS_LAUNCHER){
+     // The standalone app is an ordinary app: no Notifications button on Home.
+     assertEquals("The standalone app offers no Notifications button","0",js("document.querySelectorAll('[data-alpha-shade-handle]').length"));
+    }else{
+     org.json.JSONObject handle=new org.json.JSONObject(unquote(js("(()=>{const b=document.querySelector('[data-alpha-shade-handle]').getBoundingClientRect();return JSON.stringify({x:b.left+b.width/2,y:b.top+b.height/2,top:b.top,left:b.left,width:b.width,height:b.height})})()")));
+     assertTrue("The button is a 44 by 44 CSS pixel target at least: "+handle,handle.getDouble("height")>=44&&handle.getDouble("width")>=44);
+     int handleX=web.left+Math.round((float)handle.getDouble("x")*css),handleY=web.top+Math.round((float)handle.getDouble("y")*css);
+     // 2. TalkBack and Switch Access activate the button with the click action, with no touch.
+     // The button is exposed by name as a clickable node whatever service is asking.
+     handleNode();
+     // The click itself is performed as those services perform it: with a screen reader bound, so
+     // that WebView delivers default actions to the page (see ScreenReaderStandInService).
+      // WebView notices the new service on its own timer (it polls with a back-off of up to five
+      // seconds) and then rebuilds its tree. Until it has, it still accepts the click and drops
+      // it, so the click is repeated once a second while that switch is under way, and only then.
+      int attempts=0;boolean opened=false;android.view.accessibility.AccessibilityNodeInfo target=null;
+      for(long deadline=SystemClock.uptimeMillis()+20000;!opened&&SystemClock.uptimeMillis()<deadline;){
+       target=handleNode();attempts++;
+       assertTrue("The accessibility click action is accepted",target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));
+       opened=AndroidShade.waitOpen(1000);
+      }
+      assertTrue("The accessibility click action opens Android's shade (attempts: "+attempts+"; running services: "+runningServices()+"; node: "+(target==null?"none":chain(target))+")",opened);
+      AndroidShade.collapse();
+      // With WebView in that mode one click is enough, every time: no second attempt here.
+      target=handleNode();
+      assertTrue("The accessibility click action is accepted again (node: "+target+"; ancestry: "+chain(target)+")",target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));
+      assertTrue("A single accessibility click opens Android's shade once WebView serves a screen reader (node: "+chain(target)+")",AndroidShade.waitOpen(5000));
+      AndroidShade.collapse();
+     // 3. A pull down that starts on the button asks for the same shade. It sits below the status
+     // bar inset Android reports, outside the system's top-edge zone.
+     device.swipe(handleX,handleY,handleX,handleY+web.height()/3,20);
+     assertTrue("A pull from the button opens Android's shade",AndroidShade.waitOpen(5000));
+     assertEquals("true",js(AndroidShade.ALPHA_SHADE_ABSENT));
+     AndroidShade.collapse();
+    }
     open("Settings");onView(isRoot()).check(AccessibilityChecks.accessibilityAssertion());talkBackOrder(device,"Settings");
     open("Home");js(AppNavigation.type());until(AppNavigation.composer());talkBackOrder(device,"Composer");
    }

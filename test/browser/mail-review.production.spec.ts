@@ -106,6 +106,7 @@ async function androidWithMailbox(page: Page) {
           if (method === 'request') {
             const path = new URL(input.url).pathname;
             if (path === '/api/v1/user') return { status: 200, data: { success: true, data: { id: account } } };
+            if (path === '/api/v1/subscription/entitlement') return { status: 404, data: {} }; // Deployed Cloud has no subscription entitlement route yet.
             if (path === '/api/v1/credits/balance') return { status: 200, data: { balance: 5 } };
             // Synthetic managed Gmail behind Eliza Cloud, in the server's own response shapes. The
             // product's CloudProtocol validates every one of these replies.

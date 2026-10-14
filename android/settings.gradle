@@ -1,7 +1,6 @@
 pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
 include ':app', ':capacitor-android', ':eliza-system'
 project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/android/capacitor')
-project(':eliza-system').projectDir = new File('../vendor/eliza/plugins/plugin-native-system/android')
 
 include ':eliza-camera'
 project(':eliza-camera').projectDir = new File('../vendor/eliza/plugins/plugin-native-camera/android')
@@ -14,6 +13,8 @@ project(':eliza-location').projectDir = new File('../vendor/eliza/plugins/plugin
 include ':notification-fixture'
 
 include ':local-speech'
+// AOSP-image-only always-on listener APK (docs/adr/0001-privileged-listener.md); never a dependency of :app.
+include ':sense'
 include ':eliza-network-policy'
 project(':eliza-network-policy').projectDir = new File('../vendor/eliza/plugins/plugin-native-network-policy/android')
 
@@ -21,25 +22,31 @@ project(':eliza-network-policy').projectDir = new File('../vendor/eliza/plugins/
 
 // Calendar and reminder engines come from the reviewed upstream pin.
 include ':eliza-calendar'
-project(':eliza-calendar').projectDir = new File('../vendor/eliza/plugins/plugin-native-calendar/android')
 include ':eliza-reminders'
-project(':eliza-reminders').projectDir = new File('../vendor/eliza/plugins/plugin-native-reminders/android')
 // Admission authenticates the pin, patch bytes and complete staged source before Gradle compiles it.
 def nativePatchProcess = new ProcessBuilder('node', '../scripts/prepare-patched-native.mjs').directory(settingsDir).redirectError(ProcessBuilder.Redirect.INHERIT).start()
 def nativePatchOutput = nativePatchProcess.inputStream.getText('UTF-8')
 if (nativePatchProcess.waitFor() != 0) throw new GradleException('Native patch admission failed')
 def nativePatchSource = new groovy.json.JsonSlurper().parseText(nativePatchOutput)
 gradle.ext.nativePatchReceipt = new File(nativePatchSource.root, '.source.json')
+project(':eliza-system').projectDir = new File(nativePatchSource.root, 'plugins/plugin-native-system/android')
+project(':eliza-calendar').projectDir = new File(nativePatchSource.root, 'plugins/plugin-native-calendar/android')
+project(':eliza-reminders').projectDir = new File(nativePatchSource.root, 'plugins/plugin-native-reminders/android')
 include ':elizaos-capacitor-secure-store'
 project(':elizaos-capacitor-secure-store').projectDir = new File(nativePatchSource.root, 'plugins/plugin-native-secure-store/android')
 include ':eliza-passwords'
 project(':eliza-passwords').projectDir = new File('../vendor/eliza/plugins/plugin-native-passwords/android')
 
 include ':eliza-notifications'
-project(':eliza-notifications').projectDir = new File('../vendor/eliza/plugins/plugin-native-notifications/android')
+project(':eliza-notifications').projectDir = new File(nativePatchSource.root, 'plugins/plugin-native-notifications/android')
 
 include ':eliza-owned-media'
-project(':eliza-owned-media').projectDir = new File('../vendor/eliza/plugins/plugin-native-media/android')
+project(':eliza-owned-media').projectDir = new File(nativePatchSource.root, 'plugins/plugin-native-media/android')
+
+// Read-only contact records for the Alpha AOSP image (AlphaTelephonyPlugin). The upstream Capacitor
+// plugin class is not registered; only its ContactsReader is used.
+include ':eliza-contacts'
+project(':eliza-contacts').projectDir = new File('../vendor/eliza/plugins/plugin-native-contacts/android')
 
 include ':eliza-action-journal'
-project(':eliza-action-journal').projectDir = new File('../vendor/eliza/plugins/plugin-native-action-journal/android')
+project(':eliza-action-journal').projectDir = new File(nativePatchSource.root, 'plugins/plugin-native-action-journal/android')

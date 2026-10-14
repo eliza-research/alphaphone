@@ -1,4 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ <!-- Alpha AOSP image only (P-36). The image stages this launcher build; the permissions are requested
+      only by AlphaTelephonyPlugin, which MainActivity registers only after AlphaImageCapability verifies
+      the image. A sideloaded launcher APK declares them but never asks for them. -->
+ <uses-permission android:name="android.permission.READ_CONTACTS" />
+ <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+ <queries>
+  <intent><action android:name="android.intent.action.SENDTO"/><data android:scheme="smsto"/></intent>
+ </queries>
+ <!-- Launcher flavor only (#417): a downward pull on empty Home, or Home's Notifications button,
+      asks Android to expand its own notification shade, as stock launchers do. Install-time
+      permission; see SystemShade.java. The standalone app does not request it. -->
+ <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
  <application><activity android:name=".MainActivity" android:exported="true">
   <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.HOME"/><category android:name="android.intent.category.DEFAULT"/></intent-filter>
  </activity></application>

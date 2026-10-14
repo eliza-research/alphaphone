@@ -1,3 +1,4 @@
+import {validateCalendarOperation,validateCalendarResult} from '../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts';
 import {isReminderCreate,validateReminderCreate,validateReminderCreateResult} from '../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/reminder-create-contract.ts';
 import {validateReminderOperation,validateReminderResult} from '../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/reminder-contract.ts';
 import {mkdirSync,readFileSync,writeFileSync,renameSync,existsSync,chmodSync} from 'node:fs';
@@ -66,6 +67,16 @@ export function localAgentStorage(directory:string,input:any):unknown {
   if(binding!==input.bindingHash||hash(effect)!==previous.operationHash)throw Error('Notification recovery binding changed');
   const entry={...previous,phase:'terminal',status:'succeeded',summary:'Recovered the original notification delivery receipt. Nothing was posted again.',result:{operationId:previous.operationId}};
   entries[input.proposalId]=entry;write(entries);return {entry};
+ }
+ if(operation==='recoverDeletion'){
+  if(JSON.stringify(previous)!==JSON.stringify(input.expectedEntry))throw Error('Deletion journal changed. Refresh history.');
+  if(previous.phase==='terminal'&&previous.status!=='unknown')return {entry:previous};
+  const effect=previous.record.operation,recovery=input.recovery;
+  if(!previous.attemptId||previous.phase!=='applying'&&previous.status!=='unknown'||!['calendar_delete','reminder_cancel'].includes(effect?.type)||createHash('sha256').update(JSON.stringify(effect)).digest('hex')!==previous.operationHash)throw Error('Deletion recovery requires the exact admitted operation.');
+  if(!recovery||!['succeeded','failed'].includes(recovery.status)||typeof recovery.summary!=='string'||recovery.summary.length>2000||recovery.result?.operationId!==previous.operationId)throw Error('Deletion receipt unavailable.');
+  if(recovery.status==='succeeded'){if(effect.type==='calendar_delete')validateCalendarResult(validateCalendarOperation(effect),recovery.result.calendarResult);else validateReminderResult(validateReminderOperation(effect),recovery.result.reminderResult);}
+  else if(Object.keys(recovery.result).length!==1)throw Error('Cancelled deletion cannot report a write.');
+  const entry={...previous,phase:'terminal',status:recovery.status,summary:recovery.summary,result:recovery.result};entries[input.proposalId]=entry;write(entries);return {entry};
  }
  if(operation==='recoverReminder'){
   if(JSON.stringify(previous)!==JSON.stringify(input.expectedEntry))throw Error('Reminder journal changed. Refresh history.');

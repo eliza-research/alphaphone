@@ -1,0 +1,6 @@
+package android.content;
+public final class ContentProviderOperation {
+ public String type,selection;public String[] args;public android.net.Uri uri;public ContentValues values;public int count=-1;
+ public static Builder newAssertQuery(android.net.Uri uri){return new Builder("assert",uri);}public static Builder newDelete(android.net.Uri uri){return new Builder("delete",uri);}public static Builder newUpdate(android.net.Uri uri){return new Builder("update",uri);}public static Builder newInsert(android.net.Uri uri){return new Builder("insert",uri);}
+ public static final class Builder {private final ContentProviderOperation value=new ContentProviderOperation();Builder(String type,android.net.Uri uri){value.type=type;value.uri=uri;}public Builder withValue(String key,Long input){if(value.values==null)value.values=new ContentValues();value.values.put(key,input);return this;}public Builder withValues(ContentValues values){value.values=values;return this;}public Builder withExpectedCount(int count){value.count=count;return this;}public Builder withSelection(String selection,String[] args){value.selection=selection;value.args=args;return this;}public ContentProviderOperation build(){return value;}}
+}

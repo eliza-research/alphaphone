@@ -1,0 +1,139 @@
+{
+  "$comment": "Inventory of every login and secret-entry surface in Alpha (issue #404, policy P-20). test/login-surfaces.test.mjs scans the renderer and native sources and fails when a password field or credential autocomplete token appears that is not registered here. An eligible Alpha-owned login form cannot be registered until it has a provider-owned fill route; see rules below. Status values describe source, never device acceptance.",
+  "rules": {
+    "websiteBinding": "Website fills bind to the committed top-level HTTPS origin of the selected, visible, finished browser tab (scheme, host and port). Cleartext, error, overlay, paused, private-host and cross-origin-frame fields are never offered.",
+    "appBinding": "Native app fills bind to the framework-reported package confirmed by PackageManager#hasSigningCertificate against the signer recorded at save time (rotation-aware).",
+    "secrets": "No password, username value, vault record or provider structure crosses the agent bridge, the observation context, transcripts, notifications, the action journal or logs. The agent observation is sensitive (no view, no selection) while a password page or connection sheet is open.",
+    "rendererWebView": "The privileged renderer WebView stays excluded from Android Autofill (IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS). An eligible Alpha-owned login form must be a native credential surface (kind alpha-owned-native) that reports an authoritative origin or app identity per field, with provider-owned unlock, save and fill.",
+    "externalBrowsers": "No third-party browser is trusted by the integrated vault for website fills. Handing a page to another browser is a user choice; that browser's own manager is then responsible."
+  },
+  "surfaces": [
+    {
+      "id": "browser-website-login",
+      "kind": "website",
+      "eligible": true,
+      "owner": "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaBrowserPlugin.java",
+      "binding": "websiteBinding",
+      "providers": {
+        "integrated": {
+          "status": "blocked-upstream",
+          "detail": "The shared PasswordFormPolicy requires a native per-field origin (fieldOrigin) for every login field. Standard WebView structures do not supply it, so the integrated vault refuses browser fills. Needs an engine-authenticated field-origin adapter in the reviewed upstream pin; Alpha must not synthesize it from the top-level URL or page script."
+        },
+        "proton": {
+          "status": "framework-source",
+          "detail": "Android Autofill reaches the selected provider only through CredentialWebView eligibility. Proton warns because Alpha is not on its recognized-browser list; Alpha preserves that warning."
+        },
+        "other": {
+          "status": "framework-source",
+          "detail": "Any user-selected Autofill service receives the same eligibility-gated framework structure."
+        }
+      },
+      "save": "A page-initiated main-frame navigation commits the framework session so the selected provider may offer Save; the provider asks the user.",
+      "remainingGates": [
+        "redirect and cross-origin iframe structures on a device",
+        "provider unlock pause/resume",
+        "release-signed APK with both providers",
+        "physical Pixel 10a"
+      ]
+    },
+    {
+      "id": "third-party-app-login",
+      "kind": "native-app",
+      "eligible": true,
+      "owner": "vendor/eliza/plugins/plugin-native-passwords (ElizaPasswordAutofillService, consumed from the pinned upstream)",
+      "binding": "appBinding",
+      "providers": {
+        "integrated": {
+          "status": "upstream-source",
+          "detail": "Save and fill for other apps through Android Autofill; app bindings come only from a save capture."
+        },
+        "proton": {
+          "status": "provider-owned",
+          "detail": "Proton's own Autofill service when the user selects it."
+        }
+      },
+      "remainingGates": [
+        "release-signing identity with a real installed app",
+        "both providers on a physical device"
+      ]
+    },
+    {
+      "id": "eliza-cloud-sign-in",
+      "kind": "external-browser",
+      "eligible": false,
+      "owner": "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaConnectionPlugin.java",
+      "reason": "Eliza Cloud and Google account sign-in open the user's own browser (ACTION_VIEW, BROWSABLE). Credentials are entered and filled there, never in Alpha."
+    },
+    {
+      "id": "browser-http-auth-prompt",
+      "kind": "alpha-owned-native",
+      "eligible": false,
+      "file": "android/app/src/main/java/ai/elizaresearch/alphaphone/BrowserHttpAuthAutofill.java",
+      "pattern": "TYPE_TEXT_VARIATION_PASSWORD|setAutofillHints|AUTOFILL_HINT_(?:PASSWORD|USERNAME)",
+      "count": 4,
+      "owner": "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaBrowserPlugin.java (httpAuth)",
+      "binding": "websiteBinding",
+      "fillRoute": "Disabled: no origin is reported, and native fields are IMPORTANT_FOR_AUTOFILL_NO. Manual entry remains available; every browser tab is excluded from Autofill while the prompt is open.",
+      "providers": {
+        "integrated": {
+          "status": "blocked-origin",
+          "detail": "Disabled until the browser engine supplies an authenticated challenge-origin binding."
+        },
+        "proton": {
+          "status": "blocked-origin",
+          "detail": "Disabled until the browser engine supplies an authenticated challenge-origin binding."
+        }
+      },
+      "remainingGates": [
+        "reviewed engine-authenticated HTTP challenge request origin, including redirected resources and frame identity",
+        "integrated vault fill and save on a device against an HTTPS Basic-auth fixture",
+        "Proton warning and fill on a device",
+        "port, redirect and same-host frame cases on a device",
+        "Save offered only after the site accepts the credentials, on a device",
+        "release-signed APK"
+      ],
+      "reason": "WebView reports no authenticated request URL, port or frame for an HTTP-auth challenge. Observed navigation and resource history cannot safely bind provider fill/save."
+    },
+    {
+      "id": "password-entry-editor",
+      "kind": "alpha-owned",
+      "eligible": false,
+      "file": "apps/app/src/passwords/password-manager.ts",
+      "pattern": "input\\(helpers\\.ic, 'Password',[^\\n]*'password'",
+      "reason": "The integrated vault's own write-only editor. The host interface is never filled from the vault (PasswordFormPolicy: Host interface is never filled), and observation is sensitive on this page."
+    },
+    {
+      "id": "cerebras-provider-key",
+      "kind": "alpha-owned",
+      "eligible": false,
+      "file": "apps/app/src/runtime/connection-ui.tsx",
+      "pattern": "<label>Cerebras API key<input ref=\\{providerKey\\} type=\"password\" autoComplete=\"off\"",
+      "reason": "An API key, not an account login. The field is cleared after submit, stored only in Android Keystore, and the connection sheet makes the observation sensitive."
+    },
+    {
+      "id": "pairing-code",
+      "kind": "alpha-owned",
+      "eligible": false,
+      "file": "apps/app/src/runtime/connection-ui.tsx",
+      "pattern": "<label>Pairing code<input ref=\\{(remoteCode|localCode)\\} autoComplete=\"off\"",
+      "count": 2,
+      "reason": "A one-time pairing code shown by the user's agent, not a reusable credential."
+    },
+    {
+      "id": "wifi-network-key-prototype",
+      "kind": "alpha-owned",
+      "eligible": false,
+      "file": "apps/app/src/prototype/template.html",
+      "pattern": "<input aria-label=\"Password\" placeholder=\"Password\" type=\"password\" value=\"\\{\\{settings\\.sheet\\.pw\\}\\}\"",
+      "reason": "Prototype Wi-Fi network key sheet. Production routes its input to Android Settings (native-adapter); a network key is not a website or app login."
+    },
+    {
+      "id": "mail-account-sign-in-prototype",
+      "kind": "alpha-owned",
+      "eligible": false,
+      "file": "apps/app/src/prototype/model.js",
+      "pattern": "stRow\\(\"kInput\", \\{ d: IC\\.lock, label: \"Password\", ph: \"Password\", type: \"password\", value: st\\.addPw",
+      "reason": "Simulated prototype email sign-in. Production Settings forces adding:false, so this form is unreachable; real email accounts connect through Eliza Cloud in the user's browser."
+    }
+  ]
+}

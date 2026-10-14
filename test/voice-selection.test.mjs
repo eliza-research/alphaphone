@@ -30,7 +30,7 @@ test('production preserves the Cloud route regardless of account, legacy prefere
     assert.equal(v.chooseVoiceRoute('cloud',{disclosed:'cloud-speech-uses-credits'}),true);
     assert.equal(v.chooseVoiceRoute('device'),true);
     assert.equal(v.selectVoiceRoute(),'cloud','legacy preference cannot silently override current production policy');
-    assert.match(v.cloudSpeechDisclosure(),/uses its credits/);
+    assert.match(v.cloudSpeechDisclosure(),/counts toward your plan allowance/);
   }
 });
 

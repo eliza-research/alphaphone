@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
  <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.INTERNET" />
+ <uses-permission android:name="android.permission.INTERNET" />
  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
  <uses-permission android:name="android.permission.READ_CALENDAR" />
  <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+ <!-- Photos asks explicitly; selected-only access stays selected-only in its catalog. -->
+ <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+ <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+ <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+ <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
  <!-- Delegation to the installed Clock app; Alpha does not schedule exact alarms itself. -->
  <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
@@ -14,16 +19,21 @@
  <uses-feature android:name="android.hardware.camera" android:required="false" />
  <uses-feature android:name="android.hardware.camera.any" android:required="false" />
  <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
- <!-- MVP-DEFERRED: no Contacts provider access in the shipping MVP profile. -->
- <uses-permission android:name="android.permission.READ_CONTACTS" tools:node="remove" />
+ <!-- Contacts are read-only and exist only on the Alpha AOSP image (P-36): the launcher manifest declares
+      READ_CONTACTS, the standalone manifest removes it, and AlphaTelephonyPlugin requests it only on the
+      verified image. No build writes contacts. -->
  <uses-permission android:name="android.permission.WRITE_CONTACTS" tools:node="remove" />
  <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:node="remove" />
  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" tools:node="remove" />
  <!-- minSdk 29 uses scoped storage; the camera plugin requests this only below API 29. -->
  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
  <queries>
+  <intent><action android:name="android.intent.action.INSERT"/><data android:mimeType="vnd.android.cursor.dir/contact"/></intent>
+  <intent><action android:name="android.intent.action.EDIT"/><data android:mimeType="vnd.android.cursor.item/contact"/></intent>
   <!-- Narrow visibility for password-provider setup; no vault or form access. -->
   <package android:name="proton.android.pass"/>
+  <!-- The AOSP image's always-on listener (android/sense). Absent on ordinary phones; Alpha then reports it unavailable. -->
+  <package android:name="ai.elizaresearch.alphaphone.sense"/>
   <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="content" android:mimeType="application/pdf"/></intent><intent><action android:name="android.intent.action.VIEW"/><data android:scheme="content" android:mimeType="image/*"/></intent><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent>
   <intent><action android:name="android.media.action.STILL_IMAGE_CAMERA"/></intent>
   <intent><action android:name="android.intent.action.OPEN_DOCUMENT"/><data android:mimeType="*/*"/></intent>
@@ -40,13 +50,14 @@
   <!-- Home Phone shortcut: resolve and open the user's dialer with an empty dial pad. Alpha's own
        Phone view, calls and call permissions stay MVP-DEFERRED. -->
   <intent><action android:name="android.intent.action.DIAL"/><data android:scheme="tel"/></intent>
-  <!-- MVP-DEFERRED: <intent><action android:name="android.intent.action.SENDTO"/><data android:scheme="smsto"/></intent> -->
-  <!-- MVP-DEFERRED: <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="content" android:host="com.android.contacts" android:mimeType="vnd.android.cursor.dir/contact"/></intent> -->
+  <!-- SMS handoff visibility (SENDTO smsto) is declared only by the launcher manifest, for the Alpha AOSP image. -->
   <intent><action android:name="android.intent.action.SET_ALARM"/></intent>
   <intent><action android:name="android.intent.action.SHOW_ALARMS"/></intent>
   <intent><action android:name="android.intent.action.SNOOZE_ALARM"/></intent>
   <intent><action android:name="android.intent.action.DISMISS_ALARM"/></intent>
  </queries>
+ <!-- Signature permission defined by the image's listener: read its status and pause or turn it off. Grants nothing elsewhere. -->
+ <uses-permission android:name="ai.elizaresearch.alphaphone.sense.permission.LISTENER_CONTROL" />
  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
  <!-- Turn-by-turn guidance keeps running with the screen off only while the user navigates. -->

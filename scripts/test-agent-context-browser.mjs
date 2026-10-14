@@ -16,7 +16,7 @@ try {
   localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'}));
   const media = { id: 'video-fixture-71', kind: 'video', revision: 'revision-2', width: 640, height: 480, duration: 2, date: 1700000000000, image: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>', path: 'content://PRIVATE_VIDEO_URI_CANARY', privateCaption: 'PRIVATE_VIDEO_CONTENT_CANARY' };
   const drafts = new Map();
-  window.Capacitor = { PluginHeaders: [{name:'AlphaNotifications',methods:['status','addListener','removeListener'].map(name=>({name,rtype:'promise'}))},{name:'AlphaVoiceCloud',methods:[{name:'checkPermissions',rtype:'promise'}]},{ name: 'AlphaConnection', methods: ['secureRead','secureCompareExchange','addListener','removeListener'].map(name => ({ name, rtype: 'promise' })) }, { name: 'AlphaPhotos', methods: ['list','read'].map(name => ({ name, rtype: 'promise' })) }], nativeCallback:()=> 'fixture-listener', nativePromise: async (plugin, method, input) => {
+  window.Capacitor = { PluginHeaders: [{name:'AlphaNotifications',methods:['status','addListener','removeListener'].map(name=>({name,rtype:'promise'}))},{name:'AlphaVoiceCloud',methods:[{name:'checkPermissions',rtype:'promise'}]},{ name: 'AlphaConnection', methods: ['secureRead','secureCompareExchange','addListener','removeListener'].map(name => ({ name, rtype: 'promise' })) }, { name: 'AlphaPhotos', methods: ['list','read','libraryAccess'].map(name => ({ name, rtype: 'promise' })) }], nativeCallback:()=> 'fixture-listener', nativePromise: async (plugin, method, input) => {
    if(plugin==='AlphaNotifications'&&method==='status')return {permissionGranted:true,appEnabled:true};
    if(plugin==='AlphaNotifications'&&method==='addListener')return {callbackId:'fixture-listener'};
    if(plugin==='AlphaNotifications'&&method==='removeListener')return {};
@@ -29,6 +29,7 @@ try {
     throw Error('Unexpected credential operation');
    }
    if (plugin !== 'AlphaPhotos') throw Error('Unexpected native access');
+   if(method==='libraryAccess')return {scope:'denied',images:'denied',videos:'denied'};
    return method === 'list' ? { items: [media], next: '' } : media;
   }};
  });
@@ -178,7 +179,7 @@ try {
   await limited.getByRole('button', { name: 'Type', exact: true }).click();
   const input = limited.locator('[data-alpha-layer="composer"][aria-hidden="false"], [data-alpha-layer="conversation"][aria-hidden="false"]').getByRole('textbox').first();
   await input.fill('First visible fixture message'); await input.press('Enter');
-  const message = 'The agent provider is rate-limiting requests. Wait before sending again. Alpha Phone did not retry your message.';
+  const message = 'The AI request rate limit was reached. Wait a moment before sending again. Alpha Phone did not retry your message.';
   await limited.getByText(message, { exact: true }).waitFor();
   assert.equal(await limited.getByText('PRIVATE_PROVIDER_ERROR_CANARY', { exact: true }).count(), 0);
   await limited.waitForTimeout(1200);

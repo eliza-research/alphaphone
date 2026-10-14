@@ -3,7 +3,7 @@ import { registerPlugin } from '../platform-plugins';
 const attachmentNative=registerPlugin<{readSelected(input:{selectionId:string}):Promise<MailAttachment & {size:number;sha256:string}>}>('AlphaMailAttachments');
 import {DailyApps} from '../daily';
 import {reviewMailAttachment,type MailAttachment} from '../runtime/inbox-attachment';
-import {checkOutgoingAttachments,outgoingAttachmentLimits} from '../runtime/inbox-operation';
+import {checkOutgoingAttachments,outgoingAttachmentLimits,attachmentBytes} from '../runtime/inbox-operation';
 import { secureConnectionStore } from '../runtime/native-connection';
 import { connectionController } from '../runtime/connection-ui';
 import type { GmailMessage } from '../runtime/cloud-protocol';
@@ -32,12 +32,13 @@ export function inboxDrafts(publish:()=>void,toast:(text:string)=>void, provider
  /** Servers without the multi-attachment policy accept one file. */
  const policy=():Policy=>provider?.capabilities()?.attachmentPolicy||{maximumOutgoing:1,maximumTotalBytes:outgoingAttachmentLimits.maximumTotalBytes};
  const forwardProposal=(d:Draft)=>d.forward&&d.forward.parts.length?{forwardAttachments:{messageId:d.forward.messageId,historyId:d.forward.historyId,partIds:d.forward.parts.map(p=>p.partId)}}:{};
+ let reviewRevision=0;
  let owner='',account='',session='',epoch=0,saved:Draft|null=null,draft:Draft|null=null;
  const pendingEdits=new Map<string,{draft:Draft;toQ:string;baseRevision:string|null;persist?:boolean}>();
  let retained:ReturnType<typeof inboxUnsaved>|null=null,baseRevision:string|null=null,staleBase=false;
  // The retained recovery record (runtime/inbox-unsaved-record.ts) does not yet admit forwarded source
  // attachments, so its copy omits them; the explicitly saved local draft keeps them.
- function persist(){if(draft){const {forward:_forward,...copy}=structuredClone(draft);retained?.edit({version:1,owner,baseRevision,draft:copy,toQ});}}
+ function persist(){reviewRevision++;if(draft){const {forward:_forward,...copy}=structuredClone(draft);retained?.edit({version:1,owner,baseRevision,draft:copy,toQ});}}
  function restoreRetained(value:any){draft=structuredClone(value.draft);toQ=value.toQ;baseRevision=value.baseRevision;staleBase=baseRevision!==(saved?.revision||null);open=true;confirm=false;status=staleBase?'The saved local draft changed. Review the latest saved copy before saving these edits.':draft?.mode==='forward'?'Retained forward edits restored without any original attachments; forward the message again to include them. Review before provider actions.':'Retained email edits restored. Review before provider actions.';publish();}
  let loading=false,ready=false,busy=false,open=false,confirm=false,toQ='',label='',status='';
  let fromSwitch:{count():number;cycle():void}|null=null;
@@ -152,6 +153,7 @@ export function inboxDrafts(publish:()=>void,toast:(text:string)=>void, provider
   * identifies the account owner and the exact draft content or message; it never leaves the renderer. */
  function suggestionTarget(reply?:GmailMessage):SuggestionTarget{
   const blocked=(reason:string):SuggestionTarget=>({ready:false,reason,token:JSON.stringify([owner,'blocked',reason])});
+  if(connectionController.getCloudClient()?.sessionId!==session)return blocked('Open Inbox to refresh the selected account first. Nothing was added.');
   if(!owner||!ready||busy)return blocked(loading||busy?'The local email draft is still loading. Try again in a moment.':status||'Connect a Gmail account first.');
   if(draft){
    const recipients=[...draft.to,...(draft.cc||[]),...(draft.bcc||[])];
@@ -160,7 +162,7 @@ export function inboxDrafts(publish:()=>void,toast:(text:string)=>void, provider
    // message, so the review says that this draft is not on screen and is not a reply to that message.
    const aside=!open,elsewhere=aside&&!!reply&&draft.reply?.messageId!==reply.id;
    return {ready:true,kind:'draft',append,aside,elsewhere,reply:!!draft.reply||draft.mode==='reply'||draft.mode==='reply-all',subject:draft.subject,to:recipients,room:append?Math.max(0,64000-draft.body.replace(/\s+$/,'').length-2):64000,
-    token:JSON.stringify([owner,'draft',draft.id,draft.mode||'',draft.reply?.messageId||'',draft.provider?.draftId||'',draft.subject,draft.to,draft.cc||[],draft.bcc||[],draft.body,toQ,aside,elsewhere])};
+    token:JSON.stringify([owner,'draft',draft.id,draft.mode||'',draft.reply?.messageId||'',draft.provider?.draftId||'',draft.subject,draft.to,draft.cc||[],draft.bcc||[],draft.body,draft.revision,reviewRevision,draft.forward||null,toQ,aside,elsewhere])};
   }
   if(retained?.available)return blocked('Resume the retained email edits in Inbox first. The suggestion was not added.');
   if(saved)return blocked('Restore or discard the saved local draft in Inbox first. The suggestion was not added.');
@@ -175,6 +177,16 @@ export function inboxDrafts(publish:()=>void,toast:(text:string)=>void, provider
  }
  return {
   bind,reset,begin,transfer,
+  /** An explicit Files review adds exact bytes to this account's draft, never a provider operation. */
+  attachReviewed(file:MailAttachment,expected:string):boolean{
+   const target=suggestionTarget();if(!target.ready||target.token!==expected)return false;
+   const existing=draft?.attachments||[];
+   if(existing.some(item=>item.dataBase64===file.dataBase64)){toast('This file is already attached. Nothing was added.');return false;}
+   const next=[...existing,{name:file.name,mimeType:file.mimeType,dataBase64:file.dataBase64}];
+   try{checkOutgoingAttachments(next,policy());if(next.length+(draft?.forward?.parts.length||0)>outgoingAttachmentLimits.maximumFiles)throw Error('Too many attachments.');}catch(error){toast(error instanceof Error?error.message:'Attachment unavailable');return false;}
+   if(!draft&&!begin())return false;
+   draft!.attachments=next;open=true;confirm=false;status='Selected file added to this local draft. Review recipients, text and attachments before sending; nothing has been sent.';persist();publish();return true;
+  },
   /** "Use in email": agent text becomes a local draft for the selected message (a reply) or a new
    * email, under the selected account. It is never sent; the composer and provider review still apply.
    * With `expected` (the assistant review), the destination must still be the one that was reviewed, and
@@ -220,7 +232,7 @@ setFromSwitch(value:typeof fromSwitch){fromSwitch=value;},get ready(){return rea
    cc:(draft.cc||[]).join(', '),bcc:(draft.bcc||[]).join(', '),onCc:(e:Bag)=>{if(!busy){draft!.cc=String(e.target.value).split(',').map(v=>v.trim()).filter(Boolean);status='Unsaved local draft';persist();publish();}},onBcc:(e:Bag)=>{if(!busy){draft!.bcc=String(e.target.value).split(',').map(v=>v.trim()).filter(Boolean);status='Unsaved local draft';persist();publish();}},
    subject:draft.subject,body:draft.body,onSubj:(e:Bag)=>edit('subject',String(e.target.value)),onBody:(e:Bag)=>edit('body',String(e.target.value)),hasAtts:!!draft.attachments?.length||!!draft.forward?.parts.length,
    // Each file is removed on its own; forwarded originals are listed and removable the same way.
-   atts:[...(draft.attachments||[]).map((a,index)=>({name:a.name,forwarded:false,rm:()=>{if(busy||!draft)return;const list=draft.attachments||[];if(list[index]!==a)return;draft.attachments=list.filter((_,i)=>i!==index);status='Unsaved local draft';persist();publish();}})),
+   atts:[...(draft.attachments||[]).map((a,index)=>({name:a.name,size:a.mimeType+' · '+attachmentBytes(a).toLocaleString()+' bytes',forwarded:false,rm:()=>{if(busy||!draft)return;const list=draft.attachments||[];if(list[index]!==a)return;draft.attachments=list.filter((_,i)=>i!==index);status='Unsaved local draft';persist();publish();}})),
     ...(draft.forward?.parts||[]).map(part=>({name:`${part.name} (original)`,forwarded:true,rm:()=>{if(busy||!draft?.forward)return;draft.forward={...draft.forward,parts:draft.forward.parts.filter(p=>p.partId!==part.partId)};status='Unsaved local draft';persist();publish();}}))],
    attachLabel:policy().maximumOutgoing>1?'Attach PDFs, images or text files':'Attach one PDF, image or TXT (up to 5 MiB)',attach:()=>void attach()
   }:null};}

@@ -18,14 +18,18 @@ html,body,#root{margin:0;width:100%;height:100%;overflow:hidden;overscroll-behav
 .alpha-phone [data-alpha-layer="conversation"]>.scr{min-height:0}
 
 /* Real event titles share the card with their date and time; empty copy stays large. */
-/* Alpha's notifications open from this handle and nowhere else (docs/gesture-zones.md). It is a
- * 44px target that sits below Android's status bar in every presentation, so a pull that starts on
- * it never starts in the system's top-edge gesture zone. touch-action:none hands the pull to the
- * page instead of scrolling Home. */
+/* Launcher Home's Notifications button asks Android to open its own shade (docs/gesture-zones.md,
+ * #416, #417). It is a 44px target below Android's status bar, so a pull that starts on it never
+ * starts in the system's top-edge gesture zone. touch-action:none hands the pull to the page
+ * instead of scrolling Home. */
 .alpha-shade-row { display:flex; justify-content:center; flex-shrink:0; padding:0 24px 12px; }
 .alpha-shade-handle { display:flex; align-items:center; gap:8px; min-height:44px; min-width:120px; max-width:100%; box-sizing:border-box; padding:6px 16px; border-radius:22px; background:var(--s2); color:var(--fg); font-size:13px; font-weight:500; line-height:1.25; touch-action:none; }
 .alpha-shade-handle .i { width:16px; height:16px; flex-shrink:0; color:var(--mut); }
 .alpha-shade-handle:focus-visible { outline:2px solid var(--acct,#0000ff); outline-offset:2px; }
+/* A launcher Home whose content fits has nothing to scroll vertically: vertical drags go to the
+ * page as pointer events, so a pull down on empty Home reaches Alpha instead of the WebView's
+ * overscroll (#417). Home that overflows (large text) scrolls as usual. Set by markHomeFits(). */
+html:not(.standalone-app) [data-alpha-layer="home"][data-alpha-home-fits="true"] { touch-action:pan-x pinch-zoom; }
 /* The launcher draws under Android's status bar. The design reserves 44px for it; a taller bar
  * (a display cutout) pushes Home down so the handle stays clear of the bar. The inset is in
  * screen pixels and Home is laid out on the 412px canvas, which is scaled to the screen
@@ -331,3 +335,13 @@ html:not(.alpha-landscape) .alpha-phone [data-screen]:not([data-alpha-chat-half=
  * it leave the top of the screen: the Files selection count and the Notes Trash heading. */
 .standalone-app [data-alpha-app-header][data-alpha-header-grow]{height:auto!important}
 [data-alpha-subview="notes-trash"]>div:first-child{height:auto!important;min-height:56px}
+
+/* Modal reviews are outside the scaled phone canvas. The software keyboard may
+ * shrink/pan only the visual viewport, leaving 100dvh and the dialog's default
+ * centering rectangle unchanged. Keep actions inside the measured visible area. */
+dialog:is(.alpha-operation-review,.alpha-calendar-editor,.alpha-calendar-meeting,.alpha-calendar-response){
+ inset-block-start:var(--alpha-visible-top,0px);
+ inset-block-end:calc(100% - var(--alpha-visible-top,0px) - var(--alpha-visible-height,100dvh));
+ max-height:calc(var(--alpha-visible-height,100dvh) - 24px);
+ margin-block:auto;
+}

@@ -112,9 +112,20 @@ for (const mode of ['read', 'update', 'complete', 'cancel', 'stale', 'recurring-
     const presentation=presentDeviceRecordOperation(operation,await page.evaluate(()=>(window as any).calendarSent.metadata.clientDevice.context.timeZone));
     const approvalLabel='Approve: '+presentation.title;
     await page.getByRole('button',{name:approvalLabel+' Tap to approve this exact action',exact:true}).click();
-    await expect.poll(()=>page.evaluate(()=>(window as any).recoveryFixture.receipts)).toBe(1);
+    if(mode==='cancel'){
+      await page.getByRole('dialog',{name:'Delete reminder?',exact:true}).getByRole('button',{name:'Delete reminder',exact:true}).click();
+      await expect(page.getByRole('complementary',{name:'Pending deletions'}).getByRole('button',{name:'Undo',exact:true})).toBeVisible();
+      const queued=await page.evaluate(async()=>JSON.parse((await(await import('/src/browser/reminder-store.ts')).reminderDocument.readRaw())!).reminders[0]);
+      expect(queued.pendingDeletion).toBeTruthy();expect(queued.status).not.toBe('cancelled');
+    }
+    await expect.poll(()=>page.evaluate(()=>(window as any).recoveryFixture.receipts),{timeout:mode==='cancel'?20_000:5_000}).toBe(1);
+    if(mode==='cancel')await expect.poll(()=>page.evaluate(async()=>JSON.parse((await(await import('/src/browser/reminder-store.ts')).reminderDocument.readRaw())!).reminders[0].status),{timeout:20_000}).toBe('cancelled');
     const rows=await page.evaluate(async ()=>JSON.parse((await (await import('/src/browser/reminder-store.ts')).reminderDocument.readRaw())!).reminders);expect(rows).toHaveLength(mode==='create'||mode.startsWith('create-')?2:1);
-    const receipt=await page.evaluate(()=>(window as any).calendarRetained);expect(receipt.summary).not.toContain('Android');expect(receipt.status).toBe(mode==='stale'?'failed':'succeeded');
+    const receipt=await page.evaluate(()=>(window as any).calendarRetained);expect(receipt.summary).not.toContain('Android');expect(receipt.status).toBe(mode==='stale'?'failed':mode==='cancel'?'unknown':'succeeded');
+    if(mode==='cancel'){
+      const recovered=await page.evaluate(async()=>{const {deletions}=await import('/src/runtime/deletions.ts');return deletions.receipt({entry:(window as any).calendarEntry});});
+      expect(recovered.recovery).toMatchObject({status:'succeeded',result:{reminderResult:{kind:'reminder_cancel',status:'cancelled'}}});
+    }
     if(mode.startsWith('create-')){
       expect(receipt.summary).toBe(presentation.appliedSummary);expect(receipt.summary).not.toContain('Reviewed creation body');expect(receipt.summary).not.toMatch(/delivered|\{|\}/);
       expect(rows[1]).toMatchObject({title:'Assistant created reminder',body:'Reviewed creation body',dueAt:Date.parse('2026-10-02T14:00:00Z'),alertMinutes:mode==='create-lead'?10:null,status:mode==='create-lead'?'scheduled':'pending'});

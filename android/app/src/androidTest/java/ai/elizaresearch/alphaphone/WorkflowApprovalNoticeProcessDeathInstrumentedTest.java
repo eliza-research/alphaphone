@@ -17,10 +17,10 @@ import static org.junit.Assert.*;
 
 /** A pending phone-step approval notice across the death of the app's main process. Runs only in the
  * separate instrumentation host (WorkflowNoticeProcessRunner), so main dies while the test stays alive.
- * The post and the repeated request go through the ledger code the AlphaHostedResults bridge calls
- * (WorkflowNoticeTapsFactory), from this helper process; the tap is captured by the restarted main's
- * own AlphaNotifications plugin. Synthetic route: no agent, account, review or device action, and the
- * renderer's authenticated read that follows a captured tap is not driven here. */
+ * Test-mocks restores an explicitly synthetic loopback owner through real initialize; the initial post uses the actual main-process bridge, and the repeated succeeded request
+ * inspects the same ledger from this helper process; the tap is captured by the restarted main's
+ * own AlphaNotifications plugin. Synthetic route: no real account, review or device action.
+ * Exact workflow review remains outside this native capture test. */
 public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
  private static final String APP="ai.elizaresearch.alphaphone";
  private static List<StatusBarNotification> approvals(NotificationManager manager){
@@ -34,27 +34,36 @@ public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
   assertEquals("Exactly one approval notice",1,rows.size());StatusBarNotification row=rows.get(0);
   assertEquals("alpha-workflow-"+id,row.getTag());assertEquals(0,row.getId());return row;
  }
+ private static void assertOriginalPublication(Context context,NotificationManager manager,AlphaCredentialStore store,WorkflowNoticeTaps taps,String id)throws Exception{
+  JSONObject prepared=WorkflowNoticeOwnerFixture.publication(context);StatusBarNotification retained=notice(manager,id);
+  assertEquals("Original notice survived runner transition",prepared.getString("key"),retained.getKey());assertEquals(prepared.getLong("postTime"),retained.getPostTime());
+  Intent launch=context.getPackageManager().getLaunchIntentForPackage(APP);assertNotNull(launch);launch.setAction(WorkflowNoticeTaps.ACTION).setData(android.net.Uri.parse(WorkflowNoticeTaps.PREFIX+prepared.getString("token")));
+  PendingIntent original=PendingIntent.getActivity(context,0,launch,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_NO_CREATE);assertNotNull(original);assertEquals("Exact original OS tap retained",original,retained.getNotification().contentIntent);assertTrue(original.isImmutable());assertEquals(android.os.Process.myUid(),original.getCreatorUid());
+  assertEquals(prepared.getString("token"),taps.token(id));assertEquals(prepared.getString("receipt"),store.readCredentialSlot(WorkflowNoticeDelivery.APPROVAL_SLOT));assertEquals(prepared.getString("routes"),store.readCredentialSlot(WorkflowNoticeTaps.SLOT));
+ }
+ private static void awaitTapCancellation(Context context,WorkflowNoticeTaps taps,String id)throws Exception{
+  String token=taps.token(id);assertNotNull(token);Intent launch=context.getPackageManager().getLaunchIntentForPackage(APP);assertNotNull(launch);launch.setAction(WorkflowNoticeTaps.ACTION).setData(android.net.Uri.parse(WorkflowNoticeTaps.PREFIX+token));
+  long end=SystemClock.elapsedRealtime()+10000;PendingIntent existing;
+  do{existing=PendingIntent.getActivity(context,0,launch,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_NO_CREATE);if(existing==null)return;SystemClock.sleep(50);}while(SystemClock.elapsedRealtime()<end);
+  fail("Old PendingIntent remains registered after signed-out withdrawal");
+ }
  @Test public void pendingApprovalNoticeSurvivesProcessDeathAndOpensItsExactApprovalOnce()throws Exception {
   org.junit.Assume.assumeTrue("Explicit isolated process-death campaign","1".equals(InstrumentationRegistry.getArguments().getString("workflowApprovalNoticeProcessDeath")));
+  if(WorkflowNoticeOwnerFixture.preparing()){WorkflowNoticeOwnerFixture.prepare();return;}
   assertEquals(APP+":workflowNoticeTest",Application.getProcessName());assertTrue("Owned secondary user required",android.os.Process.myUid()/100000>0);
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();AlphaCredentialStore store=new AlphaCredentialStore(context);
-  assertNull("Fresh route ledger required",store.readCredentialSlot(WorkflowNoticeTaps.SLOT));assertNull("Fresh approval ledger required",store.readCredentialSlot(WorkflowNoticeDelivery.APPROVAL_SLOT));
+  assertNotNull("Main prepared route ledger required",store.readCredentialSlot(WorkflowNoticeTaps.SLOT));assertNotNull("Main prepared approval ledger required",store.readCredentialSlot(WorkflowNoticeDelivery.APPROVAL_SLOT));
   NotificationManager manager=context.getSystemService(NotificationManager.class);
   WorkflowNoticeTaps taps=WorkflowNoticeTapsFactory.create(context);WorkflowNoticeDelivery delivery=WorkflowNoticeTapsFactory.delivery(context);
-  String id="approval-"+(UUID.randomUUID().toString()+UUID.randomUUID()).replace("-",""),binding="b".repeat(64),run="fixture-run-"+UUID.randomUUID();
+  JSONObject approval=WorkflowNoticeOwnerFixture.approval(context),route=approval.getJSONObject("route");
+  String id=approval.getString("id"),binding=approval.getString("bindingHash"),run=route.getString("runId");
   assertTrue(WorkflowNoticeDelivery.approvalId(id));
-  long expiresAt=System.currentTimeMillis()+10*60000L;
-  JSONObject route=new JSONObject().put("scope","a".repeat(64)).put("origin","https://workflow-fixture.invalid").put("ownerId","fixture-owner").put("agentId","fixture-agent").put("workflowId","fixture-flow").put("runId",run).put("versionId","fixture-version");
-  try{
-   // One OS dispatch only. An unconfirmed post is reconciled from the actual OS notice by the same request, never reposted.
-   String publication=delivery.postApproval(taps,id,binding,route,expiresAt,System.currentTimeMillis());
-   long publicationEnd=SystemClock.elapsedRealtime()+10000;
-   while(!"succeeded".equals(publication)){
-    assertEquals("OS publication failed or returned an invalid status","unknown",publication);
-    assertTrue("OS publication receipt remained unconfirmed",SystemClock.elapsedRealtime()<publicationEnd);
-    SystemClock.sleep(50);
-    publication=delivery.postApproval(taps,id,binding,route,expiresAt,System.currentTimeMillis());
-   }
+  long expiresAt=approval.getLong("expiresAt");
+  try(WorkflowNoticeOwnerFixture fixture=new WorkflowNoticeOwnerFixture(context)){
+   assertOriginalPublication(context,manager,store,taps,id);
+   Intent initial=context.getPackageManager().getLaunchIntentForPackage(APP);assertNotNull(initial);context.startActivity(initial);
+   WorkflowNoticeProcessDeathInstrumentedTest.Identity before=WorkflowNoticeProcessDeathInstrumentedTest.awaitMain(context);fixture.awaitOwner(true);
+   // The standard runner published through the actual main-process bridge.
    String token=taps.token(id);assertNotNull(token);
    String receipt=store.readCredentialSlot(WorkflowNoticeDelivery.APPROVAL_SLOT),prepared=store.readCredentialSlot(WorkflowNoticeTaps.SLOT);
    JSONObject ledger=new JSONObject(receipt),record=ledger.getJSONObject(id);
@@ -64,8 +73,6 @@ public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
    StatusBarNotification original=notice(manager,id);PendingIntent pending=original.getNotification().contentIntent;assertNotNull(pending);
    assertFalse("Redacted: no route identity in the notice",original.getNotification().extras.toString().contains(run)||original.getNotification().extras.toString().contains("fixture-flow"));
    assertFalse(taps.pending().has("token"));
-   Intent initial=context.getPackageManager().getLaunchIntentForPackage(APP);assertNotNull(initial);context.startActivity(initial);
-   WorkflowNoticeProcessDeathInstrumentedTest.Identity before=WorkflowNoticeProcessDeathInstrumentedTest.awaitMain(context);
    // Remove only this package's tasks before ordinary death, preventing foreground task recovery.
    for(ActivityManager.AppTask task:context.getSystemService(ActivityManager.class).getAppTasks()){
     ActivityManager.RecentTaskInfo info=task.getTaskInfo();assertNotNull(info.baseIntent.getComponent());assertEquals(APP,info.baseIntent.getComponent().getPackageName());task.finishAndRemoveTask();
@@ -73,6 +80,7 @@ public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
    long taskEnd=SystemClock.elapsedRealtime()+10000;
    while(!context.getSystemService(ActivityManager.class).getAppTasks().isEmpty()&&SystemClock.elapsedRealtime()<taskEnd)SystemClock.sleep(50);
    assertTrue("Main tasks still active",context.getSystemService(ActivityManager.class).getAppTasks().isEmpty());
+   int verifiedBeforeDeath=fixture.verified.get(),agentsBeforeDeath=fixture.agents.get();
    before.exact();Os.kill(before.pid,OsConstants.SIGKILL);
    long deathEnd=SystemClock.elapsedRealtime()+10000;
    while((Files.exists(Path.of("/proc/"+before.pid))||!WorkflowNoticeProcessDeathInstrumentedTest.mainPids(context).isEmpty())&&SystemClock.elapsedRealtime()<deathEnd)SystemClock.sleep(50);
@@ -87,6 +95,7 @@ public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
    if(Build.VERSION.SDK_INT>=34)options.setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);
    pending.send(context,0,null,null,null,null,options.toBundle());
    WorkflowNoticeProcessDeathInstrumentedTest.Identity after=WorkflowNoticeProcessDeathInstrumentedTest.awaitMain(context);assertTrue(before.pid!=after.pid||!before.start.equals(after.start));
+   fixture.awaitOwner(true,verifiedBeforeDeath+1,agentsBeforeDeath+1);
    JSONObject captured=null;long captureEnd=SystemClock.elapsedRealtime()+15000;
    do{captured=taps.pending();if(token.equals(captured.optString("token")))break;SystemClock.sleep(50);}while(SystemClock.elapsedRealtime()<captureEnd);
    assertEquals("Restarted main must capture the original token",token,captured.getString("token"));assertTrue("The posted receipt still confirms the tap",captured.getBoolean("retained"));
@@ -112,4 +121,54 @@ public final class WorkflowApprovalNoticeProcessDeathInstrumentedTest {
    // The runner removes this entire fresh user; do not race main's encrypted ledger with cleanup writes.
   }
  }
+ @Test public void definitiveSignedOutColdStartWithdrawsApprovalAndInvalidatesOriginalTap()throws Exception {
+  org.junit.Assume.assumeTrue("Explicit isolated process-death campaign","1".equals(InstrumentationRegistry.getArguments().getString("workflowApprovalNoticeProcessDeath")));
+  if(WorkflowNoticeOwnerFixture.preparing()){WorkflowNoticeOwnerFixture.prepare();return;}
+  assertEquals(APP+":workflowNoticeTest",Application.getProcessName());assertTrue(android.os.Process.myUid()/100000>0);
+  Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();AlphaCredentialStore store=new AlphaCredentialStore(context);
+  NotificationManager manager=context.getSystemService(NotificationManager.class);WorkflowNoticeTaps taps=WorkflowNoticeTapsFactory.create(context);WorkflowNoticeDelivery delivery=WorkflowNoticeTapsFactory.delivery(context);
+  JSONObject approval=WorkflowNoticeOwnerFixture.approval(context);String id=approval.getString("id");
+  try(WorkflowNoticeOwnerFixture fixture=new WorkflowNoticeOwnerFixture(context)){
+   assertOriginalPublication(context,manager,store,taps,id);
+   Intent launch=context.getPackageManager().getLaunchIntentForPackage(APP);assertNotNull(launch);context.startActivity(launch);
+   WorkflowNoticeProcessDeathInstrumentedTest.Identity before=WorkflowNoticeProcessDeathInstrumentedTest.awaitMain(context);fixture.awaitOwner(true);
+   PendingIntent original=notice(manager,id).getNotification().contentIntent;long end;
+   for(ActivityManager.AppTask task:context.getSystemService(ActivityManager.class).getAppTasks()){assertEquals(APP,task.getTaskInfo().baseIntent.getComponent().getPackageName());task.finishAndRemoveTask();}
+   end=SystemClock.elapsedRealtime()+10000;while(!context.getSystemService(ActivityManager.class).getAppTasks().isEmpty()&&SystemClock.elapsedRealtime()<end)SystemClock.sleep(50);assertTrue(context.getSystemService(ActivityManager.class).getAppTasks().isEmpty());
+   before.exact();Os.kill(before.pid,OsConstants.SIGKILL);end=SystemClock.elapsedRealtime()+10000;
+   while((Files.exists(Path.of("/proc/"+before.pid))||!WorkflowNoticeProcessDeathInstrumentedTest.mainPids(context).isEmpty())&&SystemClock.elapsedRealtime()<end)SystemClock.sleep(50);
+   assertFalse(Files.exists(Path.of("/proc/"+before.pid)));assertTrue(WorkflowNoticeProcessDeathInstrumentedTest.mainPids(context).isEmpty());
+   store.removeCredentialSlot("remote:"+fixture.origin);
+   int authBefore=fixture.verified.get();context.startActivity(launch);WorkflowNoticeProcessDeathInstrumentedTest.Identity after=WorkflowNoticeProcessDeathInstrumentedTest.awaitMain(context);assertTrue(before.pid!=after.pid||!before.start.equals(after.start));fixture.awaitOwner(false);
+   end=SystemClock.elapsedRealtime()+10000;while(!approvals(manager).isEmpty()&&SystemClock.elapsedRealtime()<end)SystemClock.sleep(50);assertTrue("Signed-out startup withdraws OS approval",approvals(manager).isEmpty());
+   assertEquals("No credential means no authentication dispatch",authBefore,fixture.verified.get());assertFalse(taps.pending().has("token"));
+   assertEquals("suspended",new JSONObject(store.readCredentialSlot(WorkflowNoticeDelivery.APPROVAL_SLOT)).getJSONObject(id).getString("status"));
+   awaitTapCancellation(context,taps,id);
+   assertThrows("Old OS tap cannot launch signed-out state",PendingIntent.CanceledException.class,()->original.send());
+  }finally{manager.cancel("alpha-workflow-"+id,0);}
+ }
+
+ @Test public void productionSignedOutColdStartWithdrawsPersistedSyntheticApproval()throws Exception {
+  org.junit.Assume.assumeTrue("Explicit isolated product cold-start campaign","1".equals(InstrumentationRegistry.getArguments().getString("workflowApprovalNoticeProcessDeath"))&&!BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS);
+  assertEquals(APP+":workflowNoticeTest",Application.getProcessName());assertTrue(android.os.Process.myUid()/100000>0);
+  Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();AlphaCredentialStore store=new AlphaCredentialStore(context);assertTrue("Main absent before native fixture seed",WorkflowNoticeProcessDeathInstrumentedTest.mainPids(context).isEmpty());
+  assertNull(store.readCredentialSlot(WorkflowNoticeOwnerFixture.OWNER_SLOT));assertNull(store.readCredentialSlot(WorkflowNoticeTaps.SLOT));assertNull(store.readCredentialSlot(WorkflowNoticeDelivery.APPROVAL_SLOT));
+  NotificationManager manager=context.getSystemService(NotificationManager.class);WorkflowNoticeTaps taps=WorkflowNoticeTapsFactory.create(context);WorkflowNoticeDelivery delivery=WorkflowNoticeTapsFactory.delivery(context);
+  String id="approval-"+(UUID.randomUUID().toString()+UUID.randomUUID()).replace("-","");
+  JSONObject owner=new JSONObject().put("origin","https://synthetic-owner.invalid").put("ownerId","synthetic-owner").put("agentId",UUID.randomUUID().toString());
+  // Native-only fixture seed models an owner persisted by a prior process, never a credential.
+  store.writeCredentialSlot(WorkflowNoticeOwnerFixture.OWNER_SLOT,new JSONObject().put("owner",owner).toString());
+  JSONObject route=new JSONObject(owner.toString()).put("scope","a".repeat(64)).put("workflowId","fixture-flow").put("runId","signedout-product-fixture").put("versionId","fixture-version");
+  try{
+   long expires=System.currentTimeMillis()+600000,end=SystemClock.elapsedRealtime()+10000;String published;
+   do{published=delivery.postApproval(taps,id,"b".repeat(64),route,expires,System.currentTimeMillis());if("succeeded".equals(published))break;assertEquals("unknown",published);SystemClock.sleep(50);}while(SystemClock.elapsedRealtime()<end);
+   assertEquals("succeeded",published);PendingIntent original=notice(manager,id).getNotification().contentIntent;
+   Intent launch=context.getPackageManager().getLaunchIntentForPackage(APP);assertNotNull(launch);context.startActivity(launch);WorkflowNoticeProcessDeathInstrumentedTest.awaitMain(context);
+   boolean settled=false;end=SystemClock.elapsedRealtime()+20000;
+   do{String raw=store.readCredentialSlot(WorkflowNoticeOwnerFixture.OWNER_SLOT);settled=raw!=null&&new JSONObject(raw).has("owner")&&new JSONObject(raw).isNull("owner");if(settled&&approvals(manager).isEmpty())break;SystemClock.sleep(50);}while(SystemClock.elapsedRealtime()<end);
+   assertTrue("Actual product initializer settles signed-out owner",settled);assertTrue("Product cold startup withdraws persisted approval",approvals(manager).isEmpty());assertFalse(taps.pending().has("token"));
+   assertEquals("suspended",new JSONObject(store.readCredentialSlot(WorkflowNoticeDelivery.APPROVAL_SLOT)).getJSONObject(id).getString("status"));awaitTapCancellation(context,taps,id);assertThrows(PendingIntent.CanceledException.class,()->original.send());
+  }finally{manager.cancel("alpha-workflow-"+id,0);}
+ }
+
 }

@@ -21,7 +21,7 @@ final class HostedResultNotices {
  static long renewalDelay(long expiresAt,long now){if(expiresAt-now>MAXIMUM_SOURCE_MS)throw new IllegalArgumentException("Source expiry exceeds the reviewed bound");if(expiresAt<=now)return -1;return Math.max(0,expiresAt-RENEWAL_WINDOW_MS-now);}
  /** The renewal notice disappears when the source expires; the in-app notice then shows the paused loop. */
  static long renewalTimeout(long expiresAt,long now){return Math.max(1,expiresAt-now);}
- static final String LEDGER="hosted-notices:v1", PENDING="hosted-notices:pending:v1";
+ static final String LEDGER="hosted-notices:v1", PENDING="hosted-notices:pending:v1", OWNER="hosted-notices:owner:v1";
  private final Storage storage; private final Poster poster;
  HostedResultNotices(Storage storage,Poster poster){this.storage=storage;this.poster=poster;}
  static String hash(String value)throws Exception {byte[] digest=MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));StringBuilder out=new StringBuilder();for(byte b:digest)out.append(String.format(java.util.Locale.ROOT,"%02x",b&255));return out.toString();}
@@ -38,7 +38,14 @@ final class HostedResultNotices {
   if(!run.equals(result.optString("runId"))||!required(route,"workflowId").equals(result.optString("workflowId"))||!required(route,"workflowVersionId").equals(result.optString("workflowVersionId")))throw new IllegalStateException("Retained result mismatch");
   return result;
  }
+ private boolean ownerMatches(JSONObject route)throws Exception {String raw=storage.read(OWNER);if(raw==null)return true;return NoticeOwner.matches(new JSONObject(raw).optJSONObject("owner"),route);}
+ synchronized void withdrawOtherOwners(JSONObject owner)throws Exception {
+  write(OWNER,new JSONObject().put("owner",owner==null?JSONObject.NULL:NoticeOwner.identity(owner)));JSONObject ledger=read(LEDGER),pending=read(PENDING);
+  ArrayList<String> keys=new ArrayList<>();ledger.keys().forEachRemaining(keys::add);
+  for(String key:keys){JSONObject record=ledger.getJSONObject(key);if(ownerMatches(record))continue;record.put("phase","owner-withdrawn");write(LEDGER,ledger);poster.cancel(key);if(key.equals(pending.optString("key")))write(PENDING,new JSONObject());}
+ }
  synchronized String publish(JSONObject requested)throws Exception {
+  if(!ownerMatches(requested))return "owner-changed";
   JSONObject result=result(requested);String digest=hash(result.toString()),key=hash(requested.getString("scope")+":"+requested.getString("runId"));
   JSONObject ledger=read(LEDGER),record=ledger.optJSONObject(key);
   if(record!=null){
@@ -62,13 +69,13 @@ final class HostedResultNotices {
  }
  synchronized void capture(String key)throws Exception {
   if(key==null||!key.matches("[a-f0-9]{64}"))return;
-  JSONObject ledger=read(LEDGER),record=ledger.optJSONObject(key);if(record==null)return;
+  JSONObject ledger=read(LEDGER),record=ledger.optJSONObject(key);if(record==null||!ownerMatches(record)||!"posted".equals(record.optString("phase")))return;
   JSONObject previous=read(PENDING);if(key.equals(previous.optString("key")))return;
   write(PENDING,new JSONObject().put("key",key).put("token",UUID.randomUUID().toString()));
  }
  synchronized JSONObject peek()throws Exception {
   JSONObject pending=read(PENDING),record=read(LEDGER).optJSONObject(pending.optString("key"));
-  if(record==null)return new JSONObject();
+  if(record==null||!ownerMatches(record))return new JSONObject();
   JSONObject out=new JSONObject(record.toString());out.remove("digest");out.remove("createdAt");out.remove("phase");out.put("token",pending.getString("token"));
   try{JSONObject result=result(record);if(!hash(result.toString()).equals(record.getString("digest")))throw new IllegalStateException();out.put("retained",true);}catch(Exception missing){out.put("retained",false);}
   return out;

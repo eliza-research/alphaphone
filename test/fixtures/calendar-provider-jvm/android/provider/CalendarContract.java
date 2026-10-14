@@ -13,6 +13,7 @@ public final class CalendarContract {
  public static final class Reminders {public static final android.net.Uri CONTENT_URI=new android.net.Uri("reminders");}
  public static final class Calendars {
   public static final android.net.Uri CONTENT_URI=new android.net.Uri("calendars");
+  public static final String ACCOUNT_TYPE="account_type";
   public static final String _ID="_id",CALENDAR_DISPLAY_NAME="calendar_displayName",CALENDAR_ACCESS_LEVEL="calendar_access_level";
   public static final int CAL_ACCESS_NONE=0,CAL_ACCESS_FREEBUSY=100,CAL_ACCESS_READ=200,CAL_ACCESS_CONTRIBUTOR=500,CAL_ACCESS_OWNER=700;
  }

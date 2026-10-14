@@ -3,12 +3,16 @@ import { secureConnectionStore } from '../runtime/native-connection';
 import { connectionController } from '../runtime/connection-ui';
 import type { GmailInboxCapabilities, GmailInboxReceipt } from '../runtime/cloud-protocol';
 import { classifyGmailFailure, type GmailFailureKind } from '../runtime/gmail-mailbox';
+import { gmailInboxAllows, type GmailMailboxAction } from '../runtime/gmail-grants';
 type Bag=Record<string,any>;
 /** Explicit provider review; state never enters prototype persistence or agent context. */
 export function inboxProviderControls(publish:()=>void,toast:(message:string)=>void){
  let editor:((proposal:Bag,reference:{draftId:string;providerDigest:string})=>Promise<boolean>)|null=null;
  let selected='',session='',epoch=0,operation:InboxOperation|null=null,caps:GmailInboxCapabilities|null=null,busy=false,visible=false,status='';
  let draftRead:AbortController|null=null,failure:GmailFailureKind|null=null;
+ // P-37: a change grant withdrawn while a provider run is active is applied when that run settles,
+ // or by reset() once the run has stopped, so it is never skipped.
+ let owner='',withdrawal:{owner:string;grant:string}|null=null,running:Promise<unknown>|null=null;
  let onStale:(()=>void)|null=null,onReceipt:((receipt:GmailInboxReceipt)=>void)|null=null,onRestored:(()=>void)|null=null,reported='';
  // F-10: a review belongs to the exact email that was reviewed. `composer` reports the email now in
  // the composer with its local draft identity (null when none is open). An unsent send or draft
@@ -26,13 +30,14 @@ export function inboxProviderControls(publish:()=>void,toast:(message:string)=>v
   * qualify, nor does a succeeded receipt that names no provider message or another account's operation. */
  const sentSource=(record:ReturnType<InboxOperation['snapshot']>)=>record&&record.phase==='observed'&&record.receipt?.state==='succeeded'&&record.receipt.kind==='send'&&record.proposal.kind==='send'&&record.receipt.requestId===record.requestId&&typeof record.receipt.providerResult?.messageId==='string'&&!!record.receipt.providerResult.messageId&&!!selected&&record.grantId===selected&&record.source?record.source:null;
  const settleSent=(owned:InboxOperation)=>{const record=owned.snapshot(),source=sentSource(record);if(record&&source)onSent?.(source,record.proposal,record.grantId);};
- function reset(){epoch++;draftRead?.abort();draftRead=null;operation?.stop();operation=null;selected=session='';caps=null;busy=visible=false;status='';failure=null;reported='';}
+ function reset(){if(withdrawal){const pending=withdrawal,inFlight=running;withdrawal=null;void (async()=>{await inFlight?.catch(()=>{});await InboxOperation.discardUnsent(secureConnectionStore,pending.owner,pending.grant).catch(()=>false);})();}
+ epoch++;draftRead?.abort();draftRead=null;operation?.stop();operation=null;selected=session=owner='';running=null;caps=null;busy=visible=false;status='';failure=null;reported='';}
  async function bind(grant:string){
   const binding=connectionController.getCloudClient(),account=connectionController.getSnapshot().cloudAccount;
   if(binding&&grant===selected&&binding.sessionId===session&&operation){const token=epoch;try{const next=await binding.client.gmailInboxCapabilities(grant,new AbortController().signal);if(token===epoch){caps=next;publish();}}catch{if(token===epoch){caps=null;publish();}}return;}
   reset();if(!binding||!account||!grant||document.documentElement.dataset.connectionMode==='mock')return;
-  selected=grant;session=binding.sessionId;const token=epoch;
-  operation=new InboxOperation({owner:JSON.stringify([account.environment,account.userId,account.organizationId||'']),grantId:grant,store:secureConnectionStore,client:binding.client,active:()=>epoch===token&&session===connectionController.getCloudClient()?.sessionId&&document.documentElement.dataset.connectionMode!=='mock'});
+  selected=grant;session=binding.sessionId;const token=epoch;owner=JSON.stringify([account.environment,account.userId,account.organizationId||'']);
+  operation=new InboxOperation({owner,grantId:grant,store:secureConnectionStore,client:binding.client,active:()=>epoch===token&&session===connectionController.getCloudClient()?.sessionId&&document.documentElement.dataset.connectionMode!=='mock'});
   try{await operation.load();if(token!==epoch)return;
    if(operation.snapshot()){status='Saved mail operation. Check its exact review and receipt before continuing.';visible=true;settleSent(operation);}
    const next=await binding.client.gmailInboxCapabilities(grant,new AbortController().signal);if(token!==epoch)return;caps=next;
@@ -44,7 +49,7 @@ export function inboxProviderControls(publish:()=>void,toast:(message:string)=>v
  // on the control that took its place (tap, tap, tap would otherwise trash, review the undo and
  // confirm it), so those controls ignore taps for a moment after such an operation settles.
  let settled=-Infinity;const doubleTap=()=>performance.now()-settled<700,settle=()=>{settled=performance.now();};
- async function run(task:(owned:InboxOperation,check:()=>void)=>Promise<unknown>){if(busy||!operation)return;const token=epoch,owned=operation,ownerSession=session;const check=()=>{if(token!==epoch||owned!==operation||ownerSession!==connectionController.getCloudClient()?.sessionId)throw new DOMException('Inbox account changed','AbortError');};busy=true;failure=null;publish();try{check();await task(owned,check);if(token===epoch){status='';settleSent(owned);const receipt=owned.snapshot()?.receipt;if(receipt?.state==='succeeded'&&receipt.requestId!==reported){reported=receipt.requestId;onReceipt?.(receipt);if(receipt.kind==='unarchive'||receipt.kind==='untrash')onRestored?.();}}}catch(error){if(token===epoch){const aborted=error instanceof DOMException&&error.name==='AbortError',classified=aborted?null:classifyGmailFailure(error,'operation');failure=classified?.kind||null;status=classified&&classified.kind!=='unavailable'?classified.message:error instanceof Error?error.message:'Mail operation unavailable';toast(status);}}finally{if(token===epoch){busy=false;publish();}}}
+ async function run(task:(owned:InboxOperation,check:()=>void)=>Promise<unknown>){if(busy||!operation)return;const token=epoch,owned=operation,ownerSession=session;const check=()=>{if(token!==epoch||owned!==operation||ownerSession!==connectionController.getCloudClient()?.sessionId)throw new DOMException('Inbox account changed','AbortError');};busy=true;failure=null;publish();try{check();const pending=task(owned,check);running=pending;await pending;if(token===epoch){status='';settleSent(owned);const receipt=owned.snapshot()?.receipt;if(receipt?.state==='succeeded'&&receipt.requestId!==reported){reported=receipt.requestId;onReceipt?.(receipt);if(receipt.kind==='unarchive'||receipt.kind==='untrash')onRestored?.();}}}catch(error){if(token===epoch){const aborted=error instanceof DOMException&&error.name==='AbortError',classified=aborted?null:classifyGmailFailure(error,'operation');failure=classified?.kind||null;status=classified&&classified.kind!=='unavailable'?classified.message:error instanceof Error?error.message:'Mail operation unavailable';toast(status);}}finally{if(token===epoch){running=null;busy=false;publish();if(withdrawal)void applyWithdrawal();}}}
  /** Explicit retry after a classified failure. It never confirms or dispatches: a stale review is
   * discarded (it was never dispatched) and the message reloaded; otherwise the idempotent review is
   * reloaded or the saved receipt is checked. */
@@ -52,16 +57,25 @@ export function inboxProviderControls(publish:()=>void,toast:(message:string)=>v
   if(failure==='stale'&&(record.phase==='preparing'||record.phase==='review')){await run(async(owned,check)=>{await owned.clear();check();visible=false;});if(!operation?.snapshot()){failure=null;onStale?.();}return;}
   if(record.phase==='preparing'){await run(owned=>owned.reloadReview());return;}
   await run(owned=>owned.refresh());}
- async function prepare(proposal:Bag,source?:{draftId:string}){if(!operation)return;const kind=proposal.kind;if(!(kind==='send'?caps?.send:kind.startsWith('draft-')?caps?.providerDrafts:caps?.mailboxMutations)){toast('The selected account has not granted this provider action.');return;}visible=true;
+ async function prepare(proposal:Bag,source?:{draftId:string}){if(!operation)return;const kind=proposal.kind;if(!gmailInboxAllows(caps,kind as GmailMailboxAction)){toast('The selected account has not granted this provider action. Authorize Gmail changes, then try again. Nothing was changed.');return;}visible=true;
   // An unsent review of an earlier version of this email was never dispatched. Discard it and
   // prepare the current content under a new request ID; the same content reopens its own review.
   const pending=unsent();
   if(pending&&composerKind(kind)){if(pending.proposal.kind===kind&&pending.composer?.draftId===source?.draftId&&composerContent(pending.proposal)===composerContent(proposal)&&pending.phase==='review'){publish();return;}await run(async(owned,check)=>{await owned.clear();check();await owned.prepare(proposal,source);});return;}
   await run(owned=>owned.prepare(proposal,source));}
+ /** The account no longer grants a change capability (P-37): the saved undispatched review for this
+  * grant is discarded, so it can never be confirmed against the withdrawn grant. A dispatched or
+  * settled operation keeps its receipt. While a run is active the withdrawal waits for it to settle
+  * (a review still being prepared is discarded once prepared); a reset in between still discards it. */
+ function withdrawn(){if(!operation||!selected||!owner)return;withdrawal={owner,grant:selected};if(!busy)void applyWithdrawal();}
+ async function applyWithdrawal(){const pending=withdrawal;if(!pending||busy)return;withdrawal=null;const token=epoch,owned=operation;busy=true;publish();let removed=false;
+  try{removed=await InboxOperation.discardUnsent(secureConnectionStore,pending.owner,pending.grant);if(token===epoch&&owned===operation&&owned)await owned.load();}
+  catch(error){if(token===epoch)status=error instanceof Error?error.message:'The unsent review could not be discarded.';}
+  finally{if(token===epoch){busy=false;if(removed){visible=false;status='';toast('Gmail change access was withdrawn, so the unsent review was discarded. Nothing was changed.');}publish();}}}
  async function editSavedDraft(){await run(async(owned,check)=>{const record=owned.snapshot(),reference=record?.receipt?.providerResult,binding=connectionController.getCloudClient(),grant=selected;if(!record||!binding||!reference||typeof reference.draftId!=='string'||typeof reference.providerDigest!=='string')throw new Error('No provider draft receipt');const controller=new AbortController();draftRead=controller;try{const current=await binding.client.gmailDraft(grant,reference.draftId,controller.signal);check();if(current.providerDigest!==reference.providerDigest)throw new Error('Gmail draft changed outside this app. The saved content will not overwrite it. Open Gmail to inspect the conflict.');if(!await editor?.(record.proposal,current))throw new Error('Save or discard changed local edits before opening this provider draft.');check();await owned.clear();check();visible=false;}finally{if(draftRead===controller)draftRead=null;controller.abort();}});}
  async function followup(kind:'delete-draft'|'undo'){await run(async(owned,check)=>{const record=owned.snapshot(),result=record?.receipt?.providerResult;if(!record||!result)throw new Error('No confirmed provider result');const proposal=kind==='delete-draft'?{kind:'draft-delete',draftId:result.draftId,expectedDigest:result.providerDigest,confirmPermanentDelete:true}:{kind:record.proposal.kind==='archive'?'unarchive':'untrash',messageId:result.messageId,expectedHistoryId:result.historyId};await owned.clear();check();await owned.prepare(proposal);});}
 
- return {bind,reset,prepare,setEditor:(value:typeof editor)=>{editor=value;},setComposer:(value:typeof composer)=>{composer=value;},
+ return {bind,reset,prepare,withdrawn,setEditor:(value:typeof editor)=>{editor=value;},setComposer:(value:typeof composer)=>{composer=value;},
  /** A confirmed undo put a message back; the list on screen no longer shows the mailbox. */
  onRestored(value:()=>void){onRestored=value;},capabilities:()=>caps,
  setObservers(value:{stale?:()=>void;receipt?:(receipt:GmailInboxReceipt)=>void;sent?:(source:{draftId:string},proposal:Bag,grant:string)=>void;sentNote?:(source:{draftId:string})=>string}){onStale=value.stale||null;onReceipt=value.receipt||null;onSent=value.sent||null;sentNote=value.sentNote||null;},

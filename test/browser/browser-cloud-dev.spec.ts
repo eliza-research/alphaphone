@@ -36,7 +36,7 @@ test('browser restores an existing host Cloud account, uses canonical voice and 
    (v as any).capture.clips.set('closed-fixture',{blob:new Blob(['closed fixture'],{type:'audio/webm'}),durationMs:10});
    const options={environment:'production',credentialId:binding.credentialId,requestId:crypto.randomUUID()};
    const transcript=await v.transcribeRecording({...options,recordingId:'closed-fixture'});const prepared=await v.synthesize({...options,requestId:crypto.randomUUID(),text:'Closed fixture text'});
-   const balance=await binding.client.creditBalance(new AbortController().signal);await binding.client.openTopUp(new AbortController().signal);await v.releaseLocalSpeech();
+   const balance=await binding.client.creditBalance(new AbortController().signal);await binding.client.openSubscriptionManagement(new AbortController().signal);await v.releaseLocalSpeech();
    return {transcript,prepared:!!prepared.playbackId,balance:balance.balance,publicStorage:JSON.stringify(localStorage),opened:(window as any).openedCloudURLs};
   });
   expect(voice.transcript).toEqual({text:'Closed fixture transcript',local:false});expect(voice.prepared).toBe(true);expect(voice.balance).toBe(4);expect(voice.publicStorage).not.toContain(secret);expect(voice.opened).toEqual(['https://cloud.eliza.app/cloud/billing']);

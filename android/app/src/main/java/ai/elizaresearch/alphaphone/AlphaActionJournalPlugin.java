@@ -24,6 +24,18 @@ public final class AlphaActionJournalPlugin extends ActionJournalPlugin {
   JSONObject recovered=WorkflowNoticeRecovery.recover(entry,scope,id,call.getString("bindingHash"),delivery::receipt);
   if(recovered!=entry)store.update(scope,id,previous->recovered);return response(recovered);
  }});}
+ @PluginMethod public void recoverDeletion(PluginCall call){work(call,true,(store,scope,id)->{synchronized(store.lock()){
+  JSONObject entry=read(store,scope,id);if(entry==null)return response(null);
+  JSONObject operation=entry.getJSONObject("record").getJSONObject("operation");String type=operation.optString("type");
+  if(!Set.of("calendar_delete","reminder_cancel").contains(type))return response(entry);
+  JSONObject receipt=NativeDeletionCoordinator.get(getContext()).receipt("calendar_delete".equals(type)?"calendar":"reminder",entry.getString("operationId")),reminderResult=null;
+  if(receipt!=null&&"reminder_cancel".equals(type)&&receipt.has("operationBinding")){
+   JSONObject binding=receipt.getJSONObject("operationBinding"),saved=AlphaReminders.engine(getContext()).operationReceipt(entry.getString("operationId"),binding.getString("bindingHash"),operation);
+   if("succeeded".equals(saved.optString("status")))reminderResult=saved.optJSONObject("result");
+  }
+  JSONObject recovered=NativeDeletionRecovery.recover(entry,receipt,reminderResult);
+  if(recovered!=entry){AlphaActionJournal.checkResult(recovered,recovered.getString("status"),recovered.getJSONObject("result"));store.update(scope,id,previous->recovered);}return response(recovered);
+ }});}
  @PluginMethod public void recoverReminder(PluginCall call){work(call,true,(store,scope,id)->{synchronized(store.lock()){
   JSONObject entry=read(store,scope,id);if(entry==null)throw new IllegalStateException();
   JSONObject operation=entry.getJSONObject("record").getJSONObject("operation");

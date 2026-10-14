@@ -64,6 +64,8 @@ public final class ConnectionRoutesTest {
   check(ConnectionRoutes.admittedOrigin("http","10.0.2.2",2138,true),"test mocks keep the development agent");
   for(String route:new String[]{"/api/v1/eliza/agents","/api/v1/eliza/agents/id/api/conversations","/api/auth/pair","/api/conversations","/api/v1/eliza/personal","/api/v1/eliza/google/../agents","/api/v1/%65liza/google/status","/api/v1/eliza/google/status/","/api/v1/eliza/google//status"})for(String method:new String[]{"GET","POST"})check(!ConnectionRoutes.managedService(route,null,method,false,false),"hosted/unreviewed path refused "+route);
   check(ConnectionRoutes.managedService("/api/v1/user",null,"GET",false,false),"owner identity allowed");
+  check(ConnectionRoutes.managedService("/api/v1/subscription/entitlement",null,"GET",false,false)&&ConnectionRoutes.managedService("/api/v1/subscription/entitlement-keys",null,"GET",false,false),"subscription entitlement reads allowed");
+  check(!ConnectionRoutes.managedService("/api/v1/subscription/entitlement",null,"POST",true,false)&&!ConnectionRoutes.managedService("/api/v1/subscription/checkout",null,"GET",false,false),"subscription writes and other subscription paths refused");
   check(ConnectionRoutes.managedService("/api/v1/eliza/google/gmail/inbox-v1/thread","grantId=owned", "GET",false,false),"owner Gmail route allowed");
   check(ConnectionRoutes.managedService("/api/v1/eliza/google/gmail/inbox-v1/operations/owned-id/dispatch",null,"POST",true,false),"reviewed Gmail dispatch allowed");
   check(!ConnectionRoutes.managedService("/api/v1/user",null,"POST",true,false),"identity write refused");

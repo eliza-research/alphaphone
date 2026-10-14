@@ -16,7 +16,7 @@ for (const mode of ['confirm', 'cancel', 'read', 'update', 'delete'] as const) {
       w.Capacitor = {
         PluginHeaders: [
           { name: 'AlphaConnection', methods: methods(['request', 'cancel', 'secureRead', 'secureWrite','secureCompareExchange', 'secureRemove']) },
-          { name: 'AlphaActionJournal', methods: methods(['reserve', 'markApplying', 'finish', 'get', 'list']) },
+          { name: 'AlphaActionJournal', methods: methods(['reserve', 'markApplying', 'finish', 'get', 'list', 'recoverDeletion']) },
         ],
         nativePromise: async (plugin: string, method: string, input: any) => {
           if (plugin === 'AlphaActionJournal') {
@@ -25,6 +25,7 @@ for (const mode of ['confirm', 'cancel', 'read', 'update', 'delete'] as const) {
             if (method === 'markApplying') { Object.assign(w.calendarEntry,{phase:'applying',attemptId:input.attemptId});return {}; }
             if(method==='get')return {entry:structuredClone(w.calendarEntry)};
             if(method==='list')return {entries:w.calendarEntry?[structuredClone(w.calendarEntry)]:[]};
+            if(method==='recoverDeletion'){const {deletions}=await import('/src/runtime/deletions.ts');const {recovery}=await deletions.receipt({entry:structuredClone(w.calendarEntry)});if(recovery){Object.assign(w.calendarEntry,recovery,{phase:'terminal'});w.calendarRetained=structuredClone(w.calendarEntry);}return {entry:structuredClone(w.calendarEntry)};}
             if (method === 'finish') {
               w.calendarRetained = structuredClone(input);Object.assign(w.calendarEntry,structuredClone(input),{phase:'terminal'});
 
@@ -73,7 +74,7 @@ for (const mode of ['confirm', 'cancel', 'read', 'update', 'delete'] as const) {
         },
       };
     }, mode);
-    await page.goto('/?mode=dev');
+    await page.clock.install();await page.goto('/?mode=dev');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page.getByRole('button', { name: 'Agent connection', exact: true }).click();
     await page.getByText('Local development agent', { exact: true }).click();
@@ -101,6 +102,13 @@ for (const mode of ['confirm', 'cancel', 'read', 'update', 'delete'] as const) {
     await expect(review).toBeVisible();await expect(review).toContainText(creating||mode==='update'?'Assistant planned event':'Selected private event');
     await review.getByRole('button',{name:mode==='cancel'?'Cancel':'Confirm',exact:true}).click();
     await expect.poll(()=>page.evaluate(()=>(window as any).recoveryFixture.receipts)).toBe(1);
+    if(mode==='delete'){
+      const retained=await page.evaluate(()=>(window as any).calendarRetained);expect(retained.status).toBe('unknown');expect(retained.summary).toContain('Final outcome remains pending');
+      expect(await page.evaluate(async()=>JSON.parse((await(await import('/src/browser/calendar-store.ts')).calendarDocument.readRaw())!).events)).toEqual(before);
+      await expect(page.getByRole('complementary',{name:'Pending deletions'}).getByRole('button',{name:'Undo',exact:true})).toBeVisible();await page.clock.fastForward(11000);
+      await expect.poll(()=>page.evaluate(async()=>JSON.parse((await(await import('/src/browser/calendar-store.ts')).calendarDocument.readRaw())!).events.length)).toBe(0);
+      const recovered=await page.evaluate(async()=>{const w=window as any;return w.Capacitor.nativePromise('AlphaActionJournal','recoverDeletion',{scope:w.calendarEntry.scope,proposalId:w.calendarEntry.proposalId});});expect(recovered.entry.status).toBe('succeeded');
+    }
     const events=await page.evaluate(async ()=>JSON.parse((await (await import('/src/browser/calendar-store.ts')).calendarDocument.readRaw())!).events);
     expect(events).toHaveLength(mode==='cancel'||mode==='delete'?0:1);
     if(mode==='confirm'||mode==='update')expect(events[0].title).toBe('Assistant planned event');

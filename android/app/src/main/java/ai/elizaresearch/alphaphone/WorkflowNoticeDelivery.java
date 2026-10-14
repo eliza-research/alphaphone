@@ -37,9 +37,10 @@ final class WorkflowNoticeDelivery {
   if(!approvalId(id)||route==null)throw new IllegalArgumentException("Invalid approval notice identity");
   for(String expired:expireApprovals(now))taps.forget(expired);
   if(approvalTimeout(expiresAt,now)<=0)return "expired";
+  if(!taps.ownerMatches(route))return "owner-changed";
   taps.prepare(id,binding,route);
   String status=publishApproval(id,binding,expiresAt,now);
-  if(!Set.of("applying","succeeded","unknown").contains(status))taps.forget(id);
+  if(!Set.of("applying","succeeded","unknown","suspended").contains(status))taps.forget(id);
   return status;
  }
  /** A decision withdraws the notice. The receipt stays (as withdrawn) until expiry, so the notice is never
@@ -49,17 +50,20 @@ final class WorkflowNoticeDelivery {
   * ledger); the route is released all the same unless its receipt is still posted, so a decided approval
   * never keeps a route that no later call would free. */
  void withdrawApproval(WorkflowNoticeTaps taps,String id,long now)throws Exception{try{withdrawApproval(id,now);}finally{taps.forget(id);}}
- /** An owner change withdraws every approval notice that was posted for another owner: the notice leaves
-  * the shade, its route is released and its receipt stays withdrawn until the approval expires, so a
-  * later request under either owner never posts it again. The step itself is untouched and stays
-  * waiting in Workflows for the owner it belongs to. Every listed approval is attempted; the first
-  * failure is rethrown afterwards, and an approval that could not be recorded keeps its notice and route
-  * for the next attempt. Engineering default, not an owner decision (docs/mvp-owner-actions.md). */
- int withdrawOtherOwners(WorkflowNoticeTaps taps,String ownerId,long now)throws Exception{
-  Exception first=null;int withdrawn=0;
-  for(String id:taps.approvalsOfOtherOwners(ownerId)){try{withdrawApproval(taps,id,now);withdrawn++;}catch(Exception failure){if(first==null)first=failure;}}
-  if(first!=null)throw first;
-  return withdrawn;
+ /** Persist the privacy fence before touching OS notices. Repeated calls complete interrupted cancellation. */
+ int withdrawOtherOwners(WorkflowNoticeTaps taps,JSONObject owner,long now)throws Exception{
+  taps.owner(owner);Exception first=null;int withdrawn=0;
+  for(String id:taps.noticesOfOtherOwners(owner)){try{if(approvalId(id))shared.suspendApproval(id,now);else shared.withdraw(id);withdrawn++;}catch(Exception failure){if(first==null)first=failure;}}
+  if(first!=null)throw first;return withdrawn;
+ }
+ /** Caller revalidated the exact proposal without authorizing it. Rotate its tap before quiet dispatch. */
+ String resumeApproval(WorkflowNoticeTaps taps,String id,String binding,JSONObject route,long expiresAt,long now)throws Exception{
+  if(!taps.ownerMatches(route))return "owner-changed";
+  boolean suspended=false;org.json.JSONArray retained=taps.suspendedApprovals(NoticeOwner.fromRoute(route),now);
+  for(int i=0;i<retained.length();i++)if(id.equals(retained.getJSONObject(i).getString("id")))suspended=true;
+  if(!suspended)return "not-suspended";
+  taps.prepare(id,binding,route);taps.fresh(id);
+  return shared.resumeApproval(id,binding,expiresAt,now);
  }
  /** Removes receipts whose approval expired (the OS already timed the notice out) and returns their IDs. */
  List<String> expireApprovals(long now)throws Exception{return shared.expireApprovals(now);}

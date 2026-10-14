@@ -11,6 +11,7 @@ import {
   ATTENTION_ROWS, HOME_DEFAULTS
 } from "./fixtures.js";
 import { isMvpView, DEFERRED_MVP_VIEWS, deferredMvpPrompt } from "./mvp-features";
+import { emptyHomeShadePull, pullStart, shadeFallback } from "./system-shade";
 import React from "react";
 import { DCLogic } from "./dc-lite.js";
 import { WEEKDAYS, MONTHS, formatTime, formatClock, formatHours, formatHoursRange, formatHour, weekdayName, formatShortDate, formatLongDate, formatMonthDay, formatMonthTitle } from "./locale-time";
@@ -3454,6 +3455,7 @@ registerView("contacts", {
     };
     var canSave = editing && !!(form.first.trim() || form.last.trim() || form.phone.trim());
     return {
+      nativePrototype: true,
       q: st.q || "", hasQ: !!q, qRaw: (st.q || "").trim(),
       searching: !!st.searching, notSearching: !st.searching,
       openSearch: function () { api.set({ searching: true }); },
@@ -5182,7 +5184,8 @@ class Component extends DCLogic {
     if (n === "boot") return this.runBoot();
     this.headsDone = true; this.hintDone = true;
     if (n === "lock") return this.setState(Object.assign({}, home, { screen: "lock" }));
-    if (n === "shade") return this.setState(Object.assign({}, home, { shade: true }));
+    // The development stand-in for Android's shade; product builds have no Alpha shade (#416).
+    if (n === "shade") return this.setState(Object.assign({}, home, { shade: this.simulatedShade() }));
     if (n === "sheet" || n === "full") return this.setState(Object.assign({}, home, { chat: n }));
     if (n === "voice") { this.setState(home); this.later(function () { self.startVoice(); }, 60); return; }
     if (n === "heads") { this.setState(home); this.later(function () { self.showHeads(); }, 60); return; }
@@ -5267,12 +5270,30 @@ class Component extends DCLogic {
     }
   }
 
-  /* ---- notifications panel ---- */
+  /* ---- Android's notification shade (#416, #417; docs/gesture-zones.md) ---- */
+  /** Only the browser development build draws a stand-in for Android's shade. */
+  simulatedShade() { return this.props.systemShade === "simulated"; }
+  /** Opens the development stand-in for Android's shade. Product builds have no Alpha shade. */
   openShade() {
     var S = this.S();
-    if (S.screen !== "home" || S.shade) return;
+    if (!this.simulatedShade() || S.screen !== "home" || S.shade) return;
     if (S.secure) return this.toast("Unlock to see notifications");
     this.setState({ shade: true, heads: false });
+  }
+  /**
+   * Launcher Home's Notifications button and a pull on empty Home. Android's shade is the one
+   * notification and quick-settings surface: on Android this asks Android to expand it
+   * (installSystemShade); the browser development build opens its stand-in; anything else
+   * says how to reach Android's notifications instead of drawing a second panel.
+   */
+  openSystemShade() {
+    var S = this.S();
+    if (S.screen !== "home" || S.view || S.shade) return;
+    // Home reached from the lock-screen camera stays locked: no notifications, from any entry.
+    if (S.secure) return this.toast("Unlock to see notifications");
+    if (this.props.systemShade === "android" && this.expandAndroidShade) return this.expandAndroidShade();
+    if (this.simulatedShade()) return this.openShade();
+    this.toast(shadeFallback("unsupported"));
   }
   /** Home is inert while the panel covers it: focus moves into the panel, and back to the handle when it closes. */
   syncShadeFocus() {
@@ -5293,7 +5314,7 @@ class Component extends DCLogic {
 
   /* ---- gestures ---- */
   scale(el) { var sc = el && el.closest ? el.closest("[data-screen]") : null; var r = (sc || el).getBoundingClientRect(); return { r: r, s: r.width / 412 || 1 }; }
-  gDown(e) { if (e.target.closest?.("[data-alpha-transcript]")) { this.g = null; return; } var o = this.scale(e.currentTarget); this.g = { x: (e.clientX - o.r.left) / o.s, y: (e.clientY - o.r.top) / o.s, cx: e.clientX, cy: e.clientY, s: o.s, handle: !!e.target.closest?.("[data-alpha-shade-handle]") }; }
+  gDown(e) { if (e.target.closest?.("[data-alpha-transcript]")) { this.g = null; return; } var o = this.scale(e.currentTarget); this.g = { x: (e.clientX - o.r.left) / o.s, y: (e.clientY - o.r.top) / o.s, cx: e.clientX, cy: e.clientY, s: o.s, handle: !!e.target.closest?.("[data-alpha-shade-handle]"), pull: pullStart(e.target) }; }
   gUp(e) { var g = this.g; this.g = null; if (!g || window.getSelection()?.isCollapsed === false) return; this.swipe(g, (e.clientX - g.cx) / g.s, (e.clientY - g.cy) / g.s); }
   swipe(g, dx, dy) {
     var S = this.S(); var T = 46; var ax = Math.abs(dx), ay = Math.abs(dy);
@@ -5303,10 +5324,10 @@ class Component extends DCLogic {
     if (S.shade) { if (dy < -T && ay > ax) this.setState({ shade: false }); else if (ax > ay && ((g.x < 30 && dx > T) || (g.x > 382 && dx < -T))) this.back(); return; }
     if (ay > ax) {
       // Gesture zones (docs/gesture-zones.md). The top edge of the screen belongs to Android: a swipe
-      // from there opens Android's own shade, and Alpha does not answer it with a second panel.
-      // Alpha's notifications open only from their visible handle on Home: a tap, Enter or Space,
-      // an accessibility click, or a pull down that starts on the handle itself.
-      if (dy > T && g.handle) return this.openShade();
+      // from there opens Android's own shade, and Alpha does not answer it. On launcher Home a pull
+      // down that starts on the Notifications button or on empty Home asks Android for the same
+      // shade (#417); a pull on editable or scrollable content, or with the keyboard up, does not.
+      if (dy > T && ((g.handle && this.props.systemShell !== false) || emptyHomeShadePull(this.pullContext(), g.pull, g.y, dx, dy, T))) return this.openSystemShade();
       if (this.props.systemShell !== false && dy < -T && g.y > 872) return this.goHome();
       if (S.chat === "sheet" && dy > T) return this.setState({ chat: this.rest() });
       if (!S.view && S.chat !== "sheet" && S.chat !== "full") {
@@ -5315,6 +5336,10 @@ class Component extends DCLogic {
     } else {
       if ((g.x < 30 && dx > T) || (g.x > 382 && dx < -T)) return this.back();
     }
+  }
+  pullContext() {
+    var S = this.S();
+    return { launcher: this.props.systemShell !== false, assistant: !!this.props.assistantSurface, screen: S.screen, view: S.view, chat: S.chat, voice: S.voice, drawer: !!S.drawer, secure: !!S.secure, shade: !!S.shade };
   }
   sw(fn, opts) {
     var self = this; opts = opts || {};
@@ -5539,7 +5564,7 @@ class Component extends DCLogic {
     var legend = [
       [IC.up, "Swipe up from the bottom bar, or tap it · Home, from anywhere"],
       [IC.back, "Swipe in from either edge · back one step inside the app"],
-      [IC.down, "Tap or pull the Notifications handle on Home · notifications and quick settings"],
+      [IC.down, "Swipe down on launcher Home, or tap Notifications · Android notifications and quick settings"],
       [IC.half, "Swipe up on Home · chat. Drag its grabber to resize"],
       [IC.mic, "Side key: hold · talk, tap · lock"]
     ].map(function (l) { return { d: l[0], t: l[1] }; });
@@ -5576,8 +5601,11 @@ class Component extends DCLogic {
       goTriage: function () { self.send("What needs me?"); },
       goFlows: function () { self.openView("workflows", copy("shell").homeWorkflow || null); },
       goSettings: function () { self.openView("settings"); },
-      tiles: tiles, bright: S.bright, brightHandoff: true, brightSlider: false, onBright: function () { self.openView("settings", { page: "display" }); }, shadeN: shadeN, shadeY: isOn && S.shade ? "0" : "-100%",
-      closeShade: function () { self.setState({ shade: false }); }, openShade: function () { self.openShade(); },
+      tiles: tiles, bright: S.bright, brightHandoff: true, brightSlider: false, onBright: function () { self.openView("settings", { page: "display" }); }, shadeN: shadeN, shadeY: isOn && S.shade && this.simulatedShade() ? "0" : "-100%",
+      // Android owns the shade (#416): only the development build renders its stand-in, and only
+      // launcher Home offers the Notifications button that asks Android for its shade (#417).
+      simulatedShade: this.simulatedShade(), showShadeButton: P.systemShell !== false && !P.assistantSurface,
+      closeShade: function () { self.setState({ shade: false }); }, openSystemShade: function () { self.openSystemShade(); },
       shadeKey: function (event) { if (event.key === "Escape" && !event.defaultPrevented) { event.preventDefault(); self.setState({ shade: false }); } }, clearAll: function () { self.setState({ nGone: NOTIFS.map(function (n) { return n.id; }), shade: false }); },
       // Policy P-23: on Android the system Keyguard owns the secure camera; Alpha never
       // opens its own camera, gallery or agent from a locked state. Only the simulated

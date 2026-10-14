@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Only production AOSP staging supplies the product overlay. Ordinary APKs fail closed. -->
+    <bool name="alpha_aosp_image_capability">false</bool>
+    <overlayable name="AlphaImageProvisioning">
+        <policy type="system|product">
+            <item type="bool" name="alpha_aosp_image_capability" />
+        </policy>
+    </overlayable>
+</resources>

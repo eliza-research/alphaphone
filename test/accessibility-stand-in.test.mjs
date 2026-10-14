@@ -47,7 +47,7 @@ test('the test binds before traversal, does not suspend it, and restores what it
   assert.match(step, /finally\{\s*try\{\s*restoreSecure\("enabled_accessibility_services",previousServices\);restoreSecure\("accessibility_enabled",previousEnabled\);/);
   assert.ok(step.indexOf('secure("put","enabled_accessibility_services"') < step.indexOf('talkBackOrder(device,"Home")'));
   // The click is still required to open the panel, and once more with a single attempt.
-  assert.match(step, /assertTrue\("The accessibility click action opens the panel/);
-  assert.match(step, /assertTrue\("A single accessibility click opens the panel/);
+  assert.match(step, /assertTrue\("The accessibility click action opens Android's shade/);
+  assert.match(step, /assertTrue\("A single accessibility click opens Android's shade/);
   assert.equal(step.match(/performAction\(android\.view\.accessibility\.AccessibilityNodeInfo\.ACTION_CLICK\)/g).length, 2);
 });

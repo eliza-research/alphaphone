@@ -105,7 +105,7 @@ for (const mode of ['pending', 'wrong-owner', 'expired', 'wrong-reminder-context
     } else if(mode==='notes-from-calendar'){
       await expect(page.getByText('Review Notes on Home',{exact:true})).toBeVisible();
     } else {
-      const failure = mode === 'rate-limit-empty' ? /The agent provider is rate-limiting/
+      const failure = mode === 'rate-limit-empty' ? /The AI request rate limit was reached/
         : mode === 'pending' ? /The agent could not complete this response\./ : /The agent request failed/;
       await expect(page.getByText(failure).first()).toBeVisible();
     }
