@@ -3003,3 +3003,41 @@ threshold or weaker content assertion is used. The last full verification remain
 1,056 passes, zero failures and four TODOs at `407786ec8`; subsequent changes are
 host failure-evidence handling (29 focused passes) and the final-word Java
 assertion (compiled and exercised in both distributions).
+
+## Four-CPU guest comparison: framework recovery before speech testing
+
+cvd-14 was stopped and relaunched with four CPUs and 8,192 MiB RAM; the image,
+GPU mode, source PCM and `developer-apks-final-word-capture` archive are unchanged.
+`fresh-audio-resources-config.json` confirms the resource change. Launch appears
+to recreate userdata (test user IDs restart at 10), so this is a fresh provisioned
+guest comparison, not evidence from preserved application state.
+
+The first `cuttlefish-four-cpu-conversation` attempt fails before any audio marker.
+The retained crash log shows a fatal SyncManager USER_UNLOCKED receiver exception:
+SQLite cannot create/open `/data/system_ce/10/accounts_ce.db`. System-server death
+then causes zygote and other framework failures; selected-WebView readback becomes
+unavailable. Cleanup correctly reports an unproven removal and retains its failure
+receipt. User 10 and the two APKs installed by that run were subsequently removed
+explicitly from this owned guest. This is historical-image framework instability,
+not an app voice result. The coordinator's new early-failure evidence handling
+preserves the original error rather than masking it with ENOENT.
+
+The next admission attempt refuses the recovering owner in BOOTING state and
+creates no test user or audio input. After Android reports RUNNING_UNLOCKED,
+boot_completed=1 and a stable WebView, the unsecured keyguard is dismissed and a
+new campaign begins. No image or admission guard is relaxed to force testing.
+Logs: `fresh-audio-resources-launch.log`, `four-cpu-framework-crash.txt`,
+`four-cpu-admission-recovery.txt`, and the corresponding campaign `audio-input.json`.
+
+A subsequent admitted attempt (`cuttlefish-four-cpu-conversation-unlocked`) again
+crashes SyncManager while unlocking disposable user 11, with the same missing
+`/data/system_ce/11/accounts_ce.db` failure. There are no capture markers in either
+attempt, so neither can compare voice performance. The repeated framework log is
+retained in `four-cpu-framework-crash-repeat.txt`. User 11 and both installed APKs
+were explicitly removed; Android then re-enters owner recovery. This second
+failure changes the next action: use a separate fresh four-CPU guest, rather than
+repeatedly exercising secondary-user creation on this restarted guest. The image
+and user-lifecycle instability remain AOSP acceptance gaps in their own right.
+No production source, speech thresholds or APK bytes changed during this resource
+experiment. The prior two-CPU speech failures remain the latest actual voice
+results; more CPU/memory has not been shown to fix or worsen them.
