@@ -2515,3 +2515,34 @@ This corrected an obsolete test before attempting continuous conversation covera
 A complete installed local-conversation test still needs controlled agent transport
 and microphone input. No real login/Cerebras, physical audio, barge-in, latency or
 current-source full AOSP acceptance is implied by this permission test.
+
+## October 13 installed local conversation capture lifecycle
+
+`LocalConversationLifecycleInstrumentedTest` now drives the installed production
+renderer's Talk and Stop voice conversation controls. Its test-APK-only activity
+substitutes a closed synthetic Cloud identity and resident identity/history protocol.
+The fixture explicitly rejects inference; the production speech plugins, local
+model readiness and native capture are unchanged. This fixture is not evidence of
+real login, resident execution, Cloud inference or Cerebras.
+
+The initial campaign (`cuttlefish-conversation-lifecycle`) failed both variants
+after fixture sign-in because a startup-access helper searched for the exact
+MainActivity class instead of the fixture subclass. That failure is retained.
+After evaluating startup access in the fixture WebView, the campaign at source
+`49b6af201` (`cuttlefish-conversation-lifecycle-activity/results.json`) passes one
+method per variant, zero skips. Talk starts real local capture with the reported
+29-second cap; the actual UI identifies local transcription; Stop closes the voice
+UI and leaves no capture file. No Cloud speech bridge call or inference dispatch
+was observed. This is Start/capture/Stop acceptance, not an utterance, ASR, auto-send,
+reply playback, barge-in or end-to-end latency acceptance.
+
+Full verification at `c4c784ac5` passed 989 tests, zero failures, four TODOs (993
+total), including production bundle checks. The subsequent change only corrected
+the Java fixture's startup-access evaluation; both distribution variants rebuilt
+successfully in `developer-apks-conversation-lifecycle-activity`. Developer-only
+speech-candidate and absent resident-payload limitations remain unchanged.
+
+Disposable users 20/21 were removed and owner 0 restored; target app and test
+packages were removed. The guest is still the historical x86_64 SDK 37 image.
+A full installed conversation needs controlled speech input and an inference
+transport, followed separately by the real Cloud/Cerebras acceptance environment.
