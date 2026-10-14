@@ -20,17 +20,24 @@ measurement proposals in the chronological log are superseded, not newly open.
 The 93 observed native classes remain historical evidence for their exact archived
 APKs; the new policy does not turn old Cloud-speech tests into local-speech acceptance.
 
-**Latest merged checkpoint:** `344dff84` includes main through `7bf27cc9`
-(reset-only data policy, managed-service route admission and browser cookie isolation).
-Subsequent audit commits retain exact developer APK and image-bound receipts below.
-Both variants pass installed production route/migration refusal and reset cancellation;
-destructive reset remains separately qualified by an external controller. The new
-secure-camera fixture passes resource admission and locked capture, but actual UI
-unlock return is unresolved. Video capture/native decode/range serving pass while
-WebView playback fails on the measured H.264/AMR-NB format. Accessibility still fails
-unlabelled full-screen controls/reading order. Full permitted photo-library access
-is required by current policy and is still absent from the app-owned-only bridge.
-These findings remain separate from upstream's other-device qualification.
+**Latest merged checkpoint:** `171e79885` includes main through `f348e03c8`
+(October 13 pull). Source now includes a permitted photo-library bridge and UI,
+AOSP image capability admission and Contacts catalog, a separate AOSP listener,
+subscription entitlements, scoped Calendar deletion/Undo and Android's system shade.
+These replace earlier source-absence findings; they do not supply installed-device
+or release acceptance. Phone/SMS adapters remain gated, and the production voice
+selector still forces Cloud despite the approved local-only requirement.
+The audit's native playback helper now waits for confirmed cancel/stop completion;
+five focused tests pass, but installed renderer acceptance is still pending.
+
+Historical receipts below retain their exact developer APK and image cohorts.
+Before this merge, both variants passed production route/migration refusal and reset
+cancellation; destructive reset requires separate external-controller evidence.
+The secure-camera fixture passed resource admission and locked capture, while UI
+unlock return remained unresolved. Video capture/native decode/range serving passed
+but WebView playback failed on H.264/AMR-NB. Accessibility failed unlabelled controls
+and reading order. Those results must be rerun where current source changes behavior.
+The historical 93-class inventory is not current coverage of the newly merged tests.
 
 **October 12 execution update:** Both developer APK variants build and run on an
 owned API 37 Cuttlefish fixture. HOME acceptance passes 7 methods and restores

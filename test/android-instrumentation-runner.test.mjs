@@ -620,3 +620,13 @@ test("voice-note lifecycle uses fresh user and method storage with explicit tomb
  const args=instrumentArgs(C("NoteAudio"),{user:"10"});assert.equal(args[args.indexOf("audioFence")+1],"true");
  assert.ok(!DEFAULT_CLASSES.includes("NoteAudio"));
 });
+
+test("new provider fixtures requiring a secondary user are isolated by the campaign", () => {
+  for (const name of ["ContactsCatalog", "PhotosLibrary"]) {
+    assert.equal(CLASS_REGISTRY[name].secondaryUser, true);
+    const source = fs.readFileSync(`android/app/src/androidTest/java/ai/elizaresearch/alphaphone/${name}InstrumentedTest.java`, "utf8");
+    assert.match(source, /android\.os\.Process\.myUid\(\)\/100000>0/);
+    assert.throws(() => parseInstrumentationArgs(["--classes", name]), /owned-emulator or --owned-cuttlefish/);
+    assert.doesNotThrow(() => parseInstrumentationArgs(["--owned-cuttlefish", "--image-fingerprint", "fixture", "--classes", name]));
+  }
+});
