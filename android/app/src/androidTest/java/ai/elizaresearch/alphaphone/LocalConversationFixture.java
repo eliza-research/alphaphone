@@ -84,7 +84,7 @@ final class LocalConversationFixture {
     assertNotNull("Transcript reached synthetic agent",ConversationFixtureAgent.transcript);
     assertEquals("The 6.6-second fixture cannot pass with a truncated recording: "+eval("window.__conversationNative.stoppedDurationMs"),"true",eval("window.__conversationNative.stoppedDurationMs>=6200"));
     String recognized=ConversationFixtureAgent.transcript.toLowerCase(java.util.Locale.ROOT);
-    for(String word:new String[]{"nightfall","lamps","quarter"})assertTrue("Known fixture must cover beginning, middle and end (missing "+word+"): "+ConversationFixtureAgent.transcript,recognized.contains(word));
+    for(String word:new String[]{"nightfall","lamps","quarter","brothel"})assertTrue("Known fixture must cover beginning, middle and end (missing "+word+"): "+ConversationFixtureAgent.transcript,recognized.contains(word));
     assertEquals("Local synthesis and native playback","true",eval("window.__conversationNative.localSpeech===1&&window.__conversationNative.played===1"));
    }
    click("Stop voice conversation");
