@@ -103,6 +103,12 @@ final class BoundedActivityScenario<T extends Activity> implements AutoCloseable
  static <T extends Activity> BoundedActivityScenario<T> launch(Intent intent)throws Exception{
   assertNotNull("Explicit test activity required",intent.getComponent());
   Class<T> type=(Class<T>)Class.forName(intent.getComponent().getClassName());
+  return launch(type,intent);
+ }
+ /** Observe an exact test-only subclass created by an explicitly installed interceptor. */
+ static <T extends Activity> BoundedActivityScenario<T> launch(Class<T> type,Intent intent)throws Exception{
+  assertNotNull("Explicit test activity required",intent.getComponent());
+  assertTrue("Observed activity must implement the declared component",Class.forName(intent.getComponent().getClassName()).isAssignableFrom(type));
   BoundedActivityScenario<T> scenario=new BoundedActivityScenario<>(type);
   main(()->ActivityLifecycleMonitorRegistry.getInstance().addLifecycleCallback(scenario.observer));
   try{

@@ -74,6 +74,7 @@ final class WebViewTestDriver {
  static String evaluate(Class<? extends MainActivity> type, String script) throws Exception {
   return evaluate(type, script, script);
  }
+ static String evaluateSensitive(Class<? extends MainActivity> type,String script)throws Exception {return evaluate(type,script,"private connection input");}
  private static String evaluate(Class<? extends MainActivity> type, String script, String diagnostic) throws Exception {
   CountDownLatch done=new CountDownLatch(1);
   AtomicReference<String> answer=new AtomicReference<>();

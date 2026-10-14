@@ -623,10 +623,10 @@ test("native recording deadline requires an owned isolated user and pre-start mi
 test("voice-note lifecycle uses fresh user and method storage with explicit tombstone fence",()=>{
  const spec=CLASS_REGISTRY.NoteAudio;
  assert.equal(spec.secondaryUser,true);assert.equal(spec.independentMethods,true);
- assert.deepEqual(spec.grant,["RECORD_AUDIO"]);assert.deepEqual(spec.args,{audioFence:"true"});
+ assert.deepEqual(spec.grant,["RECORD_AUDIO"]);assert.deepEqual(spec.args,{audioFence:"true",noteAudioPlan:"1"});
  assert.throws(()=>parseInstrumentationArgs(["--classes","NoteAudio"]),/owned-emulator or --owned-cuttlefish/);
  assert.deepEqual(parseInstrumentationArgs(["--owned-cuttlefish","--image-fingerprint","fixture","--classes","NoteAudio"]).classes,[C("NoteAudio")]);
- const args=instrumentArgs(C("NoteAudio"),{user:"10"});assert.equal(args[args.indexOf("audioFence")+1],"true");
+ const args=instrumentArgs(C("NoteAudio"),{user:"10"});assert.equal(args[args.indexOf("audioFence")+1],"true");assert.equal(args[args.indexOf("noteAudioPlan")+1],"1");
  assert.ok(!DEFAULT_CLASSES.includes("NoteAudio"));
 });
 
