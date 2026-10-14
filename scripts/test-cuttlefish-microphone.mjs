@@ -1,5 +1,5 @@
 /** Owned Cuttlefish WebRTC -> VirtIO capture probe. Never opens a host microphone. */
-import {chromium} from 'playwright';
+import {openFixtureAudio} from './lib/cuttlefish-fixture-audio.mjs';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import {promisify} from 'node:util';
@@ -16,7 +16,7 @@ if(!options.owned||!/^127\.0\.0\.1:\d+$/.test(options.serial||'')||!/^cvd-\d+$/.
 const run=promisify(execFile),execute=async(cmd,args,timeout=15000)=>(await run(cmd,args,{timeout,maxBuffer:1024*1024})).stdout;
 const adb=args=>execute('adb',['-s',options.serial,...args],25000);
 const lease=await acquireDeviceLease(`android:${options.serial}`,{waitMs:0,ttlMs:Number.MAX_SAFE_INTEGER,stateDir:deviceLeaseStateDir(process.env)});
-let browser,page,remote;
+let browser,remote,capture;
 const report={kind:'cuttlefish-virtual-microphone',physicalMicrophone:false,asrVerified:false,passed:false};
 let outputCreated=false;
 try{
@@ -34,23 +34,14 @@ try{
  await fs.mkdir(options.output,{recursive:false});outputCreated=true;
  const fixture=path.resolve('android/app/src/androidTest/assets/speech-fixture/0.wav');
  report.containerId=container.Id;report.device=options.device;report.imageFingerprint=fingerprint;report.fixtureSha256=createHash('sha256').update(await fs.readFile(fixture)).digest('hex');
- browser=await chromium.launch({headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream','--use-file-for-fake-audio-capture='+fixture]});
- page=await browser.newPage({ignoreHTTPSErrors:true});
- // Preserve fixture amplitude and timing: browser speech enhancement is not the
- // system under test, and can suppress a known prerecorded input.
- await page.addInitScript(()=>{const get=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);navigator.mediaDevices.getUserMedia=async options=>{const stream=await get(options?.audio?{...options,audio:{sampleRate:48000,channelCount:1,echoCancellation:false,noiseSuppression:false,autoGainControl:false}}:options);window.__alphaFixtureAudioSettings=stream.getAudioTracks().map(track=>track.getSettings());return stream;};});
- const base=`https://${address}:1443`;
- const devices=await (await page.request.get(base+'/devices')).json();
- if(!devices.some(d=>d.device_id===options.device))throw Error('WebRTC device is not registered');
- await page.goto(`${base}/devices/${options.device}/files/client.html`);
- await page.locator('#mic_btn').waitFor({state:'visible',timeout:30000});
- await page.waitForFunction(()=>document.querySelector('#mic_btn')?.disabled===false,{},{timeout:30000});
- await page.locator('#mic_btn').dispatchEvent('mousedown');
- await page.waitForFunction(()=>document.querySelector('#mic_btn')?.textContent.trim()==='mic',{},{timeout:15000});
- report.audioSettings=await page.evaluate(()=>window.__alphaFixtureAudioSettings);
- await page.waitForTimeout(1500);
+ browser=await openFixtureAudio({address,device:options.device,wav:await fs.readFile(fixture)});
  remote='/data/local/tmp/alpha-audio-probe-'+randomUUID()+'.wav';
- report.captureLog=await adb(['shell','su','0','tinycap',remote,'-D','0','-d','0','-c','1','-r','48000','-b','16','-T','10']);
+ capture=adb(['shell','su','0','tinycap',remote,'-D','0','-d','0','-c','1','-r','48000','-b','16','-T','10']);
+ void capture.catch(()=>{});
+ // Start the known waveform after capture admission, over an already-live peer.
+ await new Promise(resolve=>setTimeout(resolve,300));
+ report.audioSettings=await browser.start();
+ report.captureLog=await capture;await browser.waitEnded();
  const destination=path.join(options.output,'capture.wav');await adb(['pull',remote,destination]);
  const captured=await fs.readFile(destination);report.captureSha256=createHash('sha256').update(captured).digest('hex');
  function envelope(bytes){
@@ -71,7 +62,7 @@ try{
  if(best<.85)throw Error('Captured audio does not sufficiently match the supplied fixture');report.passed=true;
 }catch(error){report.error=String(error.message||error);process.exitCode=1;}
 finally{
- try{if(page)await page.locator('#mic_btn').dispatchEvent('mouseup').catch(()=>{});await browser?.close();if(remote)await adb(['shell','su','0','rm','-f',remote]);report.cleaned=true;}
+ try{await capture?.catch(()=>{});await browser?.close();if(remote)await adb(['shell','su','0','rm','-f',remote]);report.cleaned=true;}
  catch(error){report.cleaned=false;report.passed=false;report.cleanupError=String(error);process.exitCode=1;}
  finally{lease.release();if(outputCreated)await fs.writeFile(path.join(options.output,'result.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));}
 }
