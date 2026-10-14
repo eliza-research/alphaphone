@@ -2729,3 +2729,63 @@ path before repeating the spoken-turn test; it must also migrate signed-out loca
 UI fixtures through the new required plan gate. Native responsive-stop and
 recording-limit passes do not establish barge-in, real Cloud/Cerebras, P-11 timing,
 current-source full AOSP or physical acceptance.
+
+
+## Preconnected virtual microphone and observed activity (October 13 continuation)
+
+The preceding turn made concrete progress (merged source, native stop-thread repair,
+installed fault/deadline evidence and preserved failures). No live build or voice
+campaign remained at the start of this continuation.
+
+The old Chromium file-capture path delivered distorted timing: separate one-second
+segments of the known WAV increasingly drifted from their expected positions in
+the 10-second guest capture. Disabling browser enhancement improved one probe to
+0.8310 but still failed the unchanged 0.85 threshold (`cvd-microphone-unprocessed`).
+Requesting mono 48 kHz did not work as requested: Chromium reported stereo 44.1 kHz,
+and the correlation fell to 0.4034 (`cvd-microphone-48k`). Neither run is qualified.
+
+`b0c90fa8d` adds observation-only native metrics/ASR counters to the installed
+conversation fixture. Both developer APK variants and test APKs built in
+`developer-apks-capture-metrics`, with the same unqualified-runtime/no-resident
+limits as before. `cuttlefish-capture-metrics` then reports 3,414 native metric
+samples, peak 0.010071, seven starts/six cancels, and zero ASR attempts/failures.
+The existing activity threshold is 0.012. Thus the absence of transcription in this
+run precedes ASR dispatch; it is not an observed ASR rejection. Android audio-service
+readback shows the active stream not silenced and microphone mute flags false
+(`capture-metrics-audio-service.txt`). No activity threshold was lowered.
+
+`96c5be1b0` adds a shared controlled audio feed in
+`scripts/lib/cuttlefish-fixture-audio.mjs`. It creates a silent WebAudio destination
+stream, waits for connected WebRTC with outbound audio packets, and triggers exactly
+one known PCM buffer only after the installed fixture reports capture readiness.
+No host microphone or speaker is used. This removes the late peer connection and
+uncontrolled looping file cursor. The coordinator excludes historical capture
+markers, records start/end/settings, closes its browser and retains the device
+lease throughout. The direct microphone probe also waits for capture completion
+before removing its guest file.
+
+Three consecutive raw guest microphone probes pass the unchanged first-three-second
+0.85 correlation gate: 0.904633, 0.914836 and 0.958766
+(`cvd-microphone-primed-pcm`, `-2`, `-3`). A separate read-only whole-fixture envelope
+analysis reports 0.924717, 0.932788 and 0.970212, with capture/source hashes retained
+in `primed-pcm-full-envelope.json`. These establish controlled virtual input in the
+raw ALSA probe, not physical audio quality or every Android recording consumer.
+
+`cuttlefish-conversation-primed-pcm` uses that feed against the exact diagnostic APK
+archive. Standalone passes its complete installed known-utterance turn: local
+transcription containing the fixture word, one automatic synthetic-agent send,
+local synthesis/native playback, rearm, explicit Stop and no Cloud speech calls.
+Launcher reaches the reply/rearm condition and exactly one send but recognizes
+only `both`, failing the unchanged `nightfall` assertion. The aggregate therefore
+fails. This is not stable two-variant voice acceptance and does not establish real
+resident/Cloud/Cerebras inference. The next diagnostic needs the exact stopped
+MediaRecorder audio presented to ASR on the failing launcher turn, to distinguish
+recorded-input truncation/endpointing from recognition quality. No extra delayed
+start or weaker transcript assertion was used to manufacture a pass.
+
+Both disposable users were removed and the coordinator reports browserClosed=true.
+Full verification at `96c5be1b0` passes 1,053 tests, zero failures, four TODOs and the
+397-file production bundle audit (`verify-primed-audio.log`). The signed-out Notes
+fixture migration, native speech qualification, true barge-in, P-11 actual audio
+boundary trials, real login/Cerebras and current-source full AOSP/Pixel acceptance
+remain open as previously recorded.
