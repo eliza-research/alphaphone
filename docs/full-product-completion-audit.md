@@ -2473,3 +2473,19 @@ True barge-in, semantic turn completion and the required P-11 measured latency
 acceptance remain incomplete. Its existing post-playback rearm delay is retained;
 no latency improvement is claimed from synthetic timer tests. The earlier entries
 listing a direct Cloud conversation speech route are historical.
+
+Validation at source `1143f0acb`:
+
+- `verify-local-conversation.log`: full `npm run verify` passes, 993 tests total,
+  989 passed, zero failures, four TODOs; production bundle checks pass.
+- `developer-apks-local-conversation` contains both variants' debug and unsigned
+  release APKs plus instrumentation. As before, this is an explicitly unqualified
+  speech candidate without the resident payload; release acceptance is not implied.
+- `cuttlefish-local-conversation-recorder/results.json`: one native recording-limit
+  test passes per variant, zero skips. The native timer fires without renderer
+  timers, and the full decoded recording is between 27 and 30 seconds without
+  truncation. This is a direct native capture/decoder test, not a renderer voice
+  conversation or ASR quality test.
+- Disposable users 14 and 15 were removed and owner 0 restored, as recorded in
+  each variant's `secondary-user.json`. The image remains the historical SDK 37
+  x86_64 fixture. No personal devices or real Cloud accounts were used.
