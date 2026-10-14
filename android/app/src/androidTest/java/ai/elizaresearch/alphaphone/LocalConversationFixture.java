@@ -59,7 +59,7 @@ final class LocalConversationFixture {
     until("window.__conversationNative.transcripts>=1&&window.__conversationNative.ended>=1&&window.__conversationNative.starts>=2",180000);
     assertEquals("One automatic send",1,ConversationFixtureAgent.sends);
     assertNotNull("Transcript reached synthetic agent",ConversationFixtureAgent.transcript);
-    assertTrue("Known fixture was transcribed",ConversationFixtureAgent.transcript.toLowerCase(java.util.Locale.ROOT).contains("nightfall"));
+    assertTrue("Known fixture was transcribed: "+ConversationFixtureAgent.transcript,ConversationFixtureAgent.transcript.toLowerCase(java.util.Locale.ROOT).contains("nightfall"));
     assertEquals("Local synthesis and native playback","true",eval("window.__conversationNative.localSpeech===1&&window.__conversationNative.played===1"));
    }
    click("Stop voice conversation");
