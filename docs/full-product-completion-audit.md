@@ -3086,3 +3086,68 @@ derives attached-device period size from the HAL buffer and period count, wherea
 these raw trials used tinycap's defaults. Both relevant guest override properties
 are unset. This is a concrete remaining configuration difference, not a proven
 cause or a reason to tune production thresholds.
+
+## PCM control and runtime HAL buffering experiment
+
+Raw capture at 16 kHz with 340-frame periods and four periods also passes the
+whole-source gate (`fourcpu-raw-16k-hal-period`, correlation 0.91325). This matches
+the period settings derived from the previously observed 1,360-frame HAL buffer
+and default period count; it is not a direct readback of an active ALSA stream.
+The period-size difference alone does not explain the Android failure.
+
+`cd1d54842` adds a test-only foreground AudioRecord control: real 16-kHz mono PCM
+capture for 8.5 seconds after real local speech preparation, without MediaRecorder,
+AAC, ASR or automatic endpointing. It retains a bounded, hashed WAV through the
+same disposable-user collector. `developer-apks-pcm-capture` builds both developer
+distributions. `cuttlefish-android-pcm-capture` completes both methods and records
+134,640 frames/8.415 seconds per variant, but full-waveform correlations are only
+0.35868/0.33044, with 62 aggregate ALSA read errors and 95 silence-insertion warnings.
+Thus eliminating AAC and MediaRecorder does not remove the Android input problem.
+Method completion is not speech-content acceptance.
+
+The existing HAL source reads `ro.hardware.audio.tinyalsa.period_size_multiplier`
+when opening the attached-device ALSA proxy. On this owned disposable guest only,
+a privileged runtime assignment sets it to 4; privileged readback is retained in
+`fourcpu-period-multiplier-readback.txt`. The ordinary shell cannot read this audio
+property (libc logs access denied), so prior blank ordinary-shell observations
+must not be treated as proof that the overrides were unset. Privileged period-count
+readback is blank. This is a runtime diagnostic change, cleared by a guest reboot,
+not a reviewed production image configuration or claimed fix.
+
+`cuttlefish-android-pcm-buffer4` has zero ALSA read errors versus 62 in the preceding
+control, but 28 silence warnings and poor waveform correlation remain (0.37206/
+0.24772). The subsequent actual `cuttlefish-conversation-buffer4` passes standalone's
+strict complete-utterance, exactly-one-send, local playback/rearm and Stop checks:
+7,582-ms recording and recognized text through “brothels”. Launcher records 9,100
+ms and recognizes the final phrase, but “night all” instead of “nightfall” fails
+its unchanged beginning-word assertion. Aggregate acceptance remains failed.
+One improved run does not prove stability, word accuracy, physical audio, real
+Cloud/Cerebras or P-11 latency. Repeat unchanged controls before promoting this
+setting. `0078410c8` records privileged runtime audio-property readbacks in future
+campaign evidence so fingerprint-only records cannot hide this configuration.
+
+All completed controls removed their disposable users and closed their browser.
+The test-APK-only PCM control and gate changes compile; 29 focused host tests pass
+after recognizing the exact fully qualified InstrumentationRegistry API name as
+well as its imported spelling. No gate requirement was dropped. Full verification
+is in `verify-pcm-period-controls.log`.
+
+Storage maintenance was confined to this audit's developer APK archives: 190
+byte-identical duplicate paths were replaced with hard links after SHA-256, size,
+mode and ownership verification. Every archive path and APK hash remains intact;
+no APK bytes changed. The storage plan/receipt records an estimated 21.4 GB of
+released duplicate allocation, preventing a low-disk build failure without
+removing evidence. Archived APKs must remain immutable; future builds continue to
+write new uniquely named archives.
+
+Full `verify-pcm-period-controls.log` finishes with 1,056 passes, zero failures,
+four TODOs and the 397-file production bundle audit. The immediate unchanged
+`cuttlefish-conversation-buffer4-repeat` still fails both strict transcript checks:
+standalone records 7,696 ms and says “night follow lamps”; launcher records 8,945 ms
+and says “night” without “fall”. Both reach the final “brothels”, use exactly one
+synthetic-agent send and complete local reply playback. This confirms that the
+buffer experiment has not established stable word accuracy or full acceptance.
+Its `audio-input.json` explicitly records multiplier 4; no production image has
+been changed to ship that setting. Further investigation must retain the distinction
+between resolved short-recording/ALSA-error symptoms and remaining waveform/
+recognition defects. Earlier single passes remain individual trial evidence only.
