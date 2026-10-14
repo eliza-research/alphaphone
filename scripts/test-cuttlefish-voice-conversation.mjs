@@ -47,6 +47,9 @@ if(!isMainThread){
   log.kill();await chain;await browser.close();browser=undefined;
   const result={kind:nativeCapture?'controlled-virtual-native-capture':'controlled-virtual-voice-conversation',physicalMicrophone:false,realInference:false,capturePolling,preparedSpeech,containerId:inspect.Id,device:extra.device,browserClosed:true,events,...(feederError?{feederError}:{}),...workerOutcome};
   result.passed=!feederError&&workerOutcome.result?.passed===true&&events.length===options.variants.length&&events.every(e=>e.inputStoppedAt);
+  // Admission may reject before the worker creates its evidence directory.
+  // Preserve that original failure rather than replacing it with ENOENT.
+  await fs.mkdir(options.output,{recursive:true});
   await fs.writeFile(path.join(options.output,'android-audio.log'),audioDiagnostics.join('\n')+'\n');
   await fs.writeFile(path.join(options.output,'audio-input.json'),JSON.stringify(result,null,2)+'\n');console.log((result.passed?'PASS ':'FAIL ')+(nativeCapture?'controlled native capture':'controlled voice conversation'));if(!result.passed)process.exitCode=1;
  }finally{log?.kill();await chain.catch(()=>{});await browser?.close();lease.release();}
