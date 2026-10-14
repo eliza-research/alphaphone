@@ -29,7 +29,7 @@ public final class VoicePermissionDeniedInstrumentedTest {
  private static void until(String expression,long timeout)throws Exception{long end=SystemClock.elapsedRealtime()+timeout;while(SystemClock.elapsedRealtime()<end){if("true".equals(eval("Boolean("+expression+")")))return;SystemClock.sleep(100);}fail("Voice permission UI condition timed out: "+expression);}
  private static String button(String label){return "[...document.querySelectorAll('button')].find(e=>(e.getAttribute('aria-label')==="+JSONObject.quote(label)+"||e.textContent.trim()==="+JSONObject.quote(label)+")&&e.getClientRects().length&&!e.disabled)";}
  private static void click(String label)throws Exception{until(button(label),20000);eval(button(label)+".click()");}
- /** The live activity, which is the fixture subclass of MainActivity on a build without test mocks. */
+ /** The live production activity, without an injected Cloud or agent transport. */
  private static MainActivity activity()throws Exception{
   java.util.concurrent.atomic.AtomicReference<MainActivity> out=new java.util.concurrent.atomic.AtomicReference<>();
   BoundedActivityScenario.main(()->{for(androidx.test.runner.lifecycle.Stage stage:new androidx.test.runner.lifecycle.Stage[]{androidx.test.runner.lifecycle.Stage.RESUMED,androidx.test.runner.lifecycle.Stage.STARTED,androidx.test.runner.lifecycle.Stage.PAUSED,androidx.test.runner.lifecycle.Stage.STOPPED})for(android.app.Activity a:androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(stage))if(out.get()==null&&a instanceof MainActivity&&!a.isFinishing())out.set((MainActivity)a);});
@@ -47,37 +47,15 @@ public final class VoicePermissionDeniedInstrumentedTest {
   org.junit.Assume.assumeTrue("Run after revoking RECORD_AUDIO (see class documentation)","1".equals(InstrumentationRegistry.getArguments().getString("voicePermissionDenied")));
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
   assertEquals("RECORD_AUDIO must be revoked before this instrumentation starts",PackageManager.PERMISSION_DENIED,context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO));
-  // A build without test mocks records only through Eliza Cloud voice, which needs a signed-in account.
-  // The closed synthetic Cloud transport of the Inbox fixture (test APK only, no network) supplies one;
-  // the production sign-in control, recorder and native microphone path are unchanged.
-  boolean cloudOnly=!BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS;
-  androidx.test.runner.MonitoringInstrumentation runner=(androidx.test.runner.MonitoringInstrumentation)InstrumentationRegistry.getInstrumentation();
-  if(cloudOnly){
-   InboxFixtureScope.phase="prepare";InboxFixtureScope.runId=java.util.UUID.randomUUID().toString();
-   runner.interceptActivityUsing(new androidx.test.runner.intercepting.InterceptingActivityFactory(){
-    @Override public boolean shouldIntercept(ClassLoader loader,String name,android.content.Intent intent){return name.equals(MainActivity.class.getName());}
-    @Override public android.app.Activity create(ClassLoader loader,String name,android.content.Intent intent){return new InboxFixtureActivity();}
-   });
-  }
   try{
    BoundedActivityScenario.main(()->context.startActivity(new android.content.Intent(context,MainActivity.class).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK|android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)));
    until("window.Capacitor?.Plugins?.AlphaVoiceCloud&&document.querySelector('.os')",60000);
-   if(!cloudOnly)AppNavigation.liveMode();eval(AppNavigation.request("Notes"));until(AppNavigation.selected("Notes"),30000);until("window.__alphaTestNavigation?.status==='complete'",30000);
+   AppNavigation.liveMode();eval(AppNavigation.request("Notes"));until(AppNavigation.selected("Notes"),30000);until("window.__alphaTestNavigation?.status==='complete'",30000);
+   eval("window.__deniedCloudSpeech=0;window.__deniedNativePromise=Capacitor.nativePromise;Capacitor.nativePromise=function(plugin,method,input){if(plugin==='AlphaVoiceCloud'&&['synthesize','transcribeRecording'].includes(method))window.__deniedCloudSpeech++;return window.__deniedNativePromise.apply(this,arguments);}");
    click("Record and transcribe");
-   if(cloudOnly){
-    // Signed out: the recorder asks for Eliza Cloud and offers no recording, so the microphone is never requested.
-    until(button("Connect Eliza Cloud"),20000);
-    for(String absent:new String[]{"Start recording","Record without transcription"})assertEquals("Signed-out recorder offers no "+absent,"false",eval("Boolean("+button(absent)+")"));
-    assertTrue("No permission prompt while signed out",appFocused());
-    eval(AppNavigation.request("Settings"));until(AppNavigation.selected("Settings"),30000);until("window.__alphaTestNavigation?.status==='complete'",30000);
-    click("Agent connection");click("Sign in with Eliza Cloud");
-    until("document.querySelector('#connection-title')?.textContent==='Your Cloud account'&&"+button("Sign out"),30000);click("Close connection settings");
-    eval(AppNavigation.request("Notes"));until(AppNavigation.selected("Notes"),30000);until("window.__alphaTestNavigation?.status==='complete'",30000);
-    click("Record and transcribe");
-   }else{
-    // Recording without transcription needs no speech models; it still needs the microphone.
-    click("Record without transcription");
-   }
+   // Local recording is available while signed out. Manual mode avoids requiring
+   // speech models for this permission-denial test; it still uses the real recorder.
+   click("Record without transcription");
    click("Start recording");
    long end=SystemClock.elapsedRealtime()+20000;boolean dismissed=false;String denied="document.querySelector('[data-alpha-subview=\"notes-recording\"]')?.dataset.voiceState==='denied'";
    while(SystemClock.elapsedRealtime()<end&&!"true".equals(eval("Boolean("+denied+")"))){
@@ -111,17 +89,11 @@ public final class VoicePermissionDeniedInstrumentedTest {
    until("("+AppNavigation.composer()+")?.value==="+JSONObject.quote(typed),10000);
    // Leave no draft behind for the next phase or user.
    eval("(()=>{const e=("+AppNavigation.composer()+");if(!e)return;Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,'');e.dispatchEvent(new Event('input',{bubbles:true}));})()");
+   assertEquals("No Cloud speech was requested","0",eval("window.__deniedCloudSpeech"));
    assertEquals("Typing must not grant the permission",PackageManager.PERMISSION_DENIED,context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO));
-   if(cloudOnly)assertEquals("The synthetic transport accepted no write",0,InboxFixtureConnection.rejectedWrites);
+
   }finally{
-   try{
-    if(cloudOnly){
-     // Remove the synthetic sign-in; only the fixture's own token may be removed.
-     AlphaCredentialStore store=new AlphaCredentialStore(context);String saved=store.readCredentialSlot("cloud:production");
-     if(saved!=null){assertTrue("Only the fixture credential is removed",saved.contains(InboxFixtureConnection.token()));store.removeCredentialSlot("cloud:production");}
-    }
-    MainActivity live=activity();if(live!=null)BoundedActivityScenario.main(live::finish);
-   }finally{if(cloudOnly)runner.useDefaultInterceptingActivityFactory();}
+   MainActivity live=activity();if(live!=null)BoundedActivityScenario.main(live::finish);
   }
  }
 }
