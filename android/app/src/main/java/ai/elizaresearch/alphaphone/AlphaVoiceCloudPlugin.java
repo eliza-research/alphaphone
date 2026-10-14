@@ -64,10 +64,10 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
  /** Capacitor's own permission request launches through the activity; see {@link LateLaunch}. */
  @Override @PluginMethod public void requestPermissions(PluginCall call){LateLaunch.ask(call,()->super.requestPermissions(call));}
  @PermissionCallback private void microphonePermission(PluginCall call){Long e=permissionEpochs.remove(call.getCallbackId());if(e==null||e!=epoch.get()){call.reject("Recording cancelled");return;}if(getPermissionState("microphone")!=PermissionState.GRANTED){call.reject("Microphone permission denied","permission-denied");return;}start(call,e);}
- private void start(PluginCall call,long e){main.post(()->{if(destroyed||isDraining()||e!=epoch.get()){call.reject("Recording cancelled");return;}try{int limit=call.getInt("maxDurationMs",59000);if(limit!=29000&&limit!=59000)throw new IllegalArgumentException("Unsupported capture duration");call.resolve(capture.start(limit));}catch(Exception error){call.reject("Microphone could not start");}});}
- @PluginMethod public void getRecordingMetrics(PluginCall call){main.post(()->{try{call.resolve(capture.metrics(call.getString("recordingId")));}catch(RuntimeException error){call.reject("Recording metrics are no longer available");}});}
- @PluginMethod public void stopRecording(PluginCall call){main.post(()->{try{call.resolve(capture.stop());}catch(Exception error){call.reject("Recording could not be saved");}});}
- @PluginMethod public void saveRecording(PluginCall call){getActivity().runOnUiThread(()->{try{String key=call.getString("recordingId");AlphaNoteAudioPlugin store=(AlphaNoteAudioPlugin)getBridge().getPlugin("AlphaNoteAudio").getInstance();call.resolve(capture.retain(store,key,call.getString("noteId"),call.getString("transcript")));}catch(Exception error){call.reject("The recording could not be saved. Keep this draft and retry.");}});}
+ private void start(PluginCall call,long e){AlphaCloudVoiceCapture.dispatcher().post(()->{if(destroyed||isDraining()||e!=epoch.get()){call.reject("Recording cancelled");return;}try{int limit=call.getInt("maxDurationMs",59000);if(limit!=29000&&limit!=59000)throw new IllegalArgumentException("Unsupported capture duration");JSObject result=capture.start(limit);if(destroyed||isDraining()||e!=epoch.get()){capture.cancel();call.reject("Recording cancelled");return;}call.resolve(result);}catch(Exception error){call.reject("Microphone could not start");}});}
+ @PluginMethod public void getRecordingMetrics(PluginCall call){AlphaCloudVoiceCapture.dispatcher().post(()->{try{call.resolve(capture.metrics(call.getString("recordingId")));}catch(RuntimeException error){call.reject("Recording metrics are no longer available");}});}
+ @PluginMethod public void stopRecording(PluginCall call){AlphaCloudVoiceCapture.dispatcher().post(()->{try{call.resolve(capture.stop());}catch(Exception error){call.reject("Recording could not be saved");}});}
+ @PluginMethod public void saveRecording(PluginCall call){AlphaCloudVoiceCapture.dispatcher().post(()->{try{String key=call.getString("recordingId");AlphaNoteAudioPlugin store=(AlphaNoteAudioPlugin)getBridge().getPlugin("AlphaNoteAudio").getInstance();call.resolve(capture.retain(store,key,call.getString("noteId"),call.getString("transcript")));}catch(Exception error){call.reject("The recording could not be saved. Keep this draft and retry.");}});}
  private boolean isDraining(){synchronized(pending){return draining;}}
  private void finishDrain(boolean complete,String error){
   List<PluginCall> calls;synchronized(pending){if(complete)draining=false;calls=new ArrayList<>(drainWaiters.keySet());for(Runnable timeout:drainWaiters.values())main.removeCallbacks(timeout);drainWaiters.clear();}
@@ -81,7 +81,7 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
    Runnable timeout=()->{boolean waiting;synchronized(pending){waiting=drainWaiters.remove(call)!=null;}if(waiting)call.reject("Voice cancellation is still draining");};
    drainWaiters.put(call,timeout);main.postDelayed(timeout,120000);if(draining)return;draining=true;
   }
-  main.post(()->{
+  AlphaCloudVoiceCapture.dispatcher().post(()->{
    try{capture.cancel();}catch(RuntimeException error){finishDrain(false,"Recording cancellation failed");return;}
    // Never wait on the UI thread. The serial worker barrier follows cancelled work and its cleanup.
    try{workers.execute(()->main.post(()->{finishDrain(true,destroyed?"Voice unavailable":null);}));}
@@ -205,16 +205,24 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
  private void clearPlayback(boolean stopped){String previous=playbackId;if(preparingPlayback!=null){preparingPlayback.reject("Playback cancelled");preparingPlayback=null;}if(player!=null){player.release();player=null;}if(playbackFile!=null)playbackFile.delete();playbackFile=null;playbackId=null;playbackRequestId=null;if(stopped&&previous!=null){JSObject event=new JSObject();event.put("playbackId",previous);notifyListeners("playbackStopped",event);}}
  @PluginMethod public void stopPlayback(PluginCall call){String requestId=call.getString("requestId");main.post(()->{if(requestId==null||Objects.equals(playbackRequestId,requestId))clearPlayback();call.resolve();});}
  @PluginMethod public void cancel(PluginCall call){Pending request=pending.get(call.getString("requestId",""));if(request!=null)request.cancel();call.resolve();}
+ private void retireCapture(boolean discard){if(capture==null)return;AlphaCloudVoiceCapture.dispatcher().post(()->{try{if(discard)capture.cancel();else capture.stopAutomatically();}catch(RuntimeException error){finishDrain(false,"Recording cleanup could not be confirmed");}});}
  @Override protected void handleOnResume(){speechForeground=true;scheduleLocalRelease(120000);super.handleOnResume();}
- @Override protected void handleOnPause(){speechForeground=false;scheduleLocalRelease(30000);if(permissionEpochs.isEmpty())epoch.incrementAndGet();if(capture!=null)capture.stopAutomatically();for(Pending request:pending.values())request.cancel();main.post(this::clearPlayback);super.handleOnPause();}
- @Override protected void handleOnDestroy(){destroyed=true;finishDrain(false,"Voice unavailable");epoch.incrementAndGet();permissionEpochs.clear();for(Pending request:pending.values())request.cancel();if(capture!=null)capture.cancel();main.post(this::clearPlayback);main.removeCallbacks(localIdleRelease);getContext().unregisterComponentCallbacks(localMemoryCallbacks);try{workers.execute(localEngine::close);}catch(RejectedExecutionException ignored){}workers.shutdown();super.handleOnDestroy();}
+ @Override protected void handleOnPause(){speechForeground=false;scheduleLocalRelease(30000);if(permissionEpochs.isEmpty())epoch.incrementAndGet();retireCapture(false);for(Pending request:pending.values())request.cancel();main.post(this::clearPlayback);super.handleOnPause();}
+ @Override protected void handleOnDestroy(){destroyed=true;finishDrain(false,"Voice unavailable");epoch.incrementAndGet();permissionEpochs.clear();for(Pending request:pending.values())request.cancel();retireCapture(true);main.post(this::clearPlayback);main.removeCallbacks(localIdleRelease);getContext().unregisterComponentCallbacks(localMemoryCallbacks);try{workers.execute(localEngine::close);}catch(RejectedExecutionException ignored){}workers.shutdown();super.handleOnDestroy();}
 }
 
 /** One foreground-only private audio draft. Capture and upload are separate user actions. */
 final class AlphaCloudVoiceCapture {
+ // Process-wide serialization prevents a new Activity from overtaking a blocked
+ // MediaRecorder stop. Never join this queue from Android's main thread.
+ private static final Handler CAPTURE_HANDLER=createDispatcher();
+ private static Handler createDispatcher(){android.os.HandlerThread thread=new android.os.HandlerThread("AlphaVoiceCapture");thread.start();return new Handler(thread.getLooper());}
+ static Handler dispatcher(){return CAPTURE_HANDLER;}
+ private static final Object OWNER_LOCK=new Object();
+ private static AlphaCloudVoiceCapture owner;
  private final android.content.Context context;
  private final java.util.function.Consumer<JSObject> events;
- private final Handler handler = new Handler(Looper.getMainLooper());
+ private final Handler handler = dispatcher();
  private android.media.MediaRecorder recorder;
  private File file;
  private String id;
@@ -224,24 +232,25 @@ final class AlphaCloudVoiceCapture {
  AlphaCloudVoiceCapture(android.content.Context context, java.util.function.Consumer<JSObject> events) {
   this.context = context; this.events = events;
   File[] stale = context.getCacheDir().listFiles((dir,name) -> name.startsWith("alpha-cloud-voice-") && name.endsWith(".m4a"));
-  if (stale != null) for (File candidate : stale) candidate.delete();
+  synchronized(OWNER_LOCK){if(owner==null&&stale!=null)for(File candidate:stale)candidate.delete();}
  }
  synchronized JSObject start() throws IOException { return start(59000); }
  synchronized JSObject start(int maxDurationMs) throws IOException {
   if(maxDurationMs!=29000&&maxDurationMs!=59000)throw new IllegalArgumentException("Unsupported capture duration");
   if (file != null) throw new IllegalStateException("Finish or discard the current recording first");
+  synchronized(OWNER_LOCK){if(owner!=null&&owner!=this)throw new IllegalStateException("Another recording is still owned");owner=this;}
   id = UUID.randomUUID().toString(); file = new File(context.getCacheDir(), "alpha-cloud-voice-" + id + ".m4a");
-  recorder = new android.media.MediaRecorder();
   try {
+   recorder = new android.media.MediaRecorder();
    recorder.setAudioSource(android.media.MediaRecorder.AudioSource.MIC);
    recorder.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4);
    recorder.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC);
    recorder.setAudioChannels(1); recorder.setAudioSamplingRate(16000); recorder.setAudioEncodingBitRate(64000);
    recorder.setOutputFile(file.getAbsolutePath()); recorder.setMaxDuration(maxDurationMs); recorder.setMaxFileSize(4 * 1024 * 1024);
-   recorder.setOnInfoListener((source, what, extra) -> {
+   recorder.setOnInfoListener((source, what, extra) -> handler.post(()->{
     synchronized(this){if(recorder!=source)return;if (what == android.media.MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED || what == android.media.MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED) stopAutomatically();}
-   });
-   recorder.setOnErrorListener((source, what, extra) -> { JSObject result=new JSObject();synchronized(this) {if(recorder!=source)return;result.put("recordingId",id);cancel();}result.put("status","failed");result.put("message","Recording stopped because Android reported a microphone error");events.accept(result); });
+   }));
+   recorder.setOnErrorListener((source, what, extra) -> handler.post(()->{ JSObject result=new JSObject();synchronized(this) {if(recorder!=source)return;result.put("recordingId",id);cancel();}result.put("status","failed");result.put("message","Recording stopped because Android reported a microphone error");events.accept(result); }));
    recorder.prepare(); recorder.start(); startedAt = android.os.SystemClock.elapsedRealtime();
    final String ownedId=id;deadline=()->{synchronized(this){if(!ownedId.equals(id))return;stopAutomatically();}}; handler.postDelayed(deadline,maxDurationMs);
    JSObject result = new JSObject(); result.put("status","recording"); result.put("recordingId",id); result.put("maxDurationMs",maxDurationMs); return result;
@@ -277,5 +286,6 @@ final class AlphaCloudVoiceCapture {
   if (deadline != null) handler.removeCallbacks(deadline);
   if (recorder != null) { try { recorder.stop(); } catch (RuntimeException ignored) {} recorder.release(); recorder=null; }
   if (file != null) file.delete(); file=null; id=null; durationMs=0;
+  synchronized(OWNER_LOCK){if(owner==this)owner=null;}
  }
 }

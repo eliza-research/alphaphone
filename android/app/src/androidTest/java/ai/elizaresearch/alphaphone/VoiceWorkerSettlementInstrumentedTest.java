@@ -59,4 +59,26 @@ public final class VoiceWorkerSettlementInstrumentedTest {
    release.countDown();first.await();cancel.await();assertNotNull(first.error);assertNull(cancel.error);assertTrue(((Map<?,?>)field("pending").get(p)).isEmpty());submit(p,next,VoiceWorkerSettlementInstrumentedTest::result);next.await();assertNull(next.error);
   }finally{release.countDown();worker.shutdown();assertTrue(worker.awaitTermination(10,TimeUnit.SECONDS));assertTrue(directory.delete());}
  }
+ private static Field captureField(String name)throws Exception{Field f=AlphaCloudVoiceCapture.class.getDeclaredField(name);f.setAccessible(true);return f;}
+ @Test public void blockedRecorderStopKeepsMainResponsiveAndAdmissionClosed()throws Exception{
+  AlphaVoiceCloudPlugin p=new AlphaVoiceCloudPlugin();ExecutorService worker=(ExecutorService)field("workers").get(p);
+  File directory=new File(InstrumentationRegistry.getInstrumentation().getTargetContext().getCacheDir(),"voice-stop-test-"+UUID.randomUUID());assertTrue(directory.mkdir());
+  ContextWrapper context=new ContextWrapper(InstrumentationRegistry.getInstrumentation().getTargetContext()){@Override public File getCacheDir(){return directory;}};
+  CountDownLatch entered=new CountDownLatch(1),release=new CountDownLatch(1),stopped=new CountDownLatch(1);AtomicReference<Throwable> failure=new AtomicReference<>();
+  AlphaCloudVoiceCapture capture=new AlphaCloudVoiceCapture(context,value->stopped.countDown());field("capture").set(p,capture);
+  File audio=new File(directory,"alpha-cloud-voice-fixture.m4a");try(java.io.FileOutputStream out=new java.io.FileOutputStream(audio)){out.write(new byte[]{1,2,3,4});}
+  android.media.MediaRecorder recorder=new android.media.MediaRecorder(){@Override public void stop(){try{assertNotSame("Stop must not run on Android main",android.os.Looper.getMainLooper(),android.os.Looper.myLooper());entered.countDown();assertTrue(release.await(10,TimeUnit.SECONDS));}catch(Throwable error){failure.set(error);throw new IllegalStateException(error);}}};
+  assertNull("No other test owns capture",captureField("owner").get(null));captureField("owner").set(null,capture);
+  captureField("recorder").set(capture,recorder);captureField("file").set(capture,audio);captureField("id").set(capture,"synthetic-stop");captureField("deadline").set(capture,(Runnable)()->{});
+  Call cancel=new Call(),blocked=new Call();
+  try{
+   AlphaCloudVoiceCapture.dispatcher().post(capture::stopAutomatically);assertTrue("Stop entered",entered.await(10,TimeUnit.SECONDS));
+   new AlphaCloudVoiceCapture(context,value->{});assertTrue("A new surface cannot delete pending audio",audio.isFile());
+   p.cancelRecording(cancel);p.startRecording(blocked);blocked.await();assertNotNull("No new recording during pending cleanup",blocked.error);
+   CountDownLatch ui=new CountDownLatch(1);new android.os.Handler(android.os.Looper.getMainLooper()).post(ui::countDown);assertTrue("Main stays responsive while recorder stop blocks",ui.await(1,TimeUnit.SECONDS));
+   assertFalse("Cancellation cannot acknowledge before native stop",cancel.done.await(100,TimeUnit.MILLISECONDS));
+   release.countDown();assertTrue(stopped.await(10,TimeUnit.SECONDS));cancel.await();assertNull(cancel.error);assertNull(failure.get());assertFalse(audio.exists());assertNull(captureField("owner").get(null));
+  }finally{release.countDown();CountDownLatch cleaned=new CountDownLatch(1);AlphaCloudVoiceCapture.dispatcher().post(()->{try{capture.cancel();}finally{cleaned.countDown();}});assertTrue(cleaned.await(10,TimeUnit.SECONDS));worker.shutdown();assertTrue(worker.awaitTermination(10,TimeUnit.SECONDS));assertTrue(directory.delete());}
+ }
+
 }
