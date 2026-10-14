@@ -167,3 +167,19 @@ test('starting another reading or message playback stops note read-aloud', async
   f.box.stopLocalSpeechPlayback();
   assert.equal(await second, 'stopped');
 });
+
+test('unconfirmed note cleanup blocks subsequent note and message speech instead of reopening audio', async () => {
+  const f=fixture();
+  const failure=Object.assign(new Error('Native stop was not confirmed'),{code:'speech-cleanup-unconfirmed'});
+  f.box.speakLocalText=async()=>{throw failure;};
+  assert.equal(await f.box.speakNote('First note',{noteId:'a'}),'failed');
+  await assert.rejects(Promise.resolve(f.box.stopLocalSpeechPlayback()),error=>error===failure);
+  let started=0;f.box.speakLocalText=async()=>{started++;};
+  assert.equal(await f.box.speakNote('Second note',{noteId:'b'}),'failed');
+  f.box.setSpeakReplies(true);const text=f.voiceTurn();
+  f.say({id:'after-failure-user',from:'user',text});
+  f.say({id:'after-failure-reply',from:'agent',text:'Another reply.'});
+  await tick();await tick();
+  assert.equal(started,0,'failed native drain cannot admit another note or reply');
+  await assert.rejects(Promise.resolve(f.box.stopLocalSpeechPlayback()),error=>error===failure);
+});

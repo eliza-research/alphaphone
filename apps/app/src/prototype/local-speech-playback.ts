@@ -70,7 +70,12 @@ async function readNote(text: string, owner: { noteId?: string }): Promise<'fini
     if (noteReading !== reading || signal.aborted) return 'stopped';
     const pending=reading.pending=speakOnDevice(passage, signal, () => { if (noteReading === reading) { reading.state = 'reading'; noteReadingChanged(); } });await pending;
     return noteReading === reading && !signal.aborted ? 'finished' : 'stopped';
-  } catch { return noteReading !== reading || signal.aborted ? 'stopped' : 'failed'; }
+  } catch (error) {
+    // A failed native drain remains a barrier even when the UI reports a settled
+    // note outcome. Otherwise another note or message could start unknown audio.
+    if ((error as {code?:string})?.code === 'speech-cleanup-unconfirmed' && reading.pending) retainSpeechRetirement(reading.pending);
+    return noteReading !== reading || signal.aborted ? 'stopped' : 'failed';
+  }
   finally { if (noteReading === reading) { noteReading = undefined; noteReadingChanged(); } }
 }
 
