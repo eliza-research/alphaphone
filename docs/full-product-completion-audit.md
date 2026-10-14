@@ -2546,3 +2546,36 @@ Disposable users 20/21 were removed and owner 0 restored; target app and test
 packages were removed. The guest is still the historical x86_64 SDK 37 image.
 A full installed conversation needs controlled speech input and an inference
 transport, followed separately by the real Cloud/Cerebras acceptance environment.
+
+## October 13 controlled Cuttlefish microphone input
+
+The owned guest already runs WebRTC and exposes a VirtIO capture device. The new
+`scripts/test-cuttlefish-microphone.mjs` drives its microphone control from a fresh
+headless Chromium instance configured exclusively with the prerecorded speech
+fixture. It never requests the host's physical microphone. The probe acquires the
+shared Android device lease and checks the Docker-bound ADB port, exact image,
+Cuttlefish hardware, configured WebRTC device and guest serial before capture.
+It requires an explicit owned-device flag and a new output directory.
+
+The stricter run (`test-results/full-product-audit/cvd-microphone-bound/result.json`)
+records 10.069 seconds of actual guest ALSA/VirtIO capture at mono 48 kHz PCM16.
+Its first three seconds of fixture audio match the captured amplitude envelope at
+0.96598 correlation, above the probe's 0.85 threshold, with an offset of 5.21 seconds.
+The browser loops the 6.625-second known fixture; the initial delayed connection
+means the entire passage does not necessarily fit inside this ten-second capture.
+That is why the probe checks a specified three-second segment, not a complete
+passage or merely non-silent bytes. Fixture and capture hashes are retained.
+
+The microphone was released, browser closed and exact temporary guest file removed.
+This establishes a reusable controlled virtual microphone input without replacing
+the application's recorder. It does not prove MediaRecorder recognition, ASR,
+automatic sending, reply playback, physical sound, barge-in or latency. Next, join
+this input with the installed conversation fixture and a clearly synthetic reply
+transport; real Cloud/Cerebras remains a separate acceptance gate.
+
+`verify-cvd-microphone.log` records full verification passing: 989 tests passed,
+zero failures, four TODOs (993 total), with production bundle checks passing.
+The required strict `npm run android:build` attempt is retained in
+`cvd-microphone-strict-android-build.log`: it refuses the absent qualified speech
+AAR before building. No application/native source changed in this microphone-probe
+turn, and no new APK or release qualification is claimed.
