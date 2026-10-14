@@ -197,6 +197,7 @@ export const CLASS_REGISTRY = {
   NotificationChannels: { args: { notificationChannels: "1" }, grant: ["POST_NOTIFICATIONS"], note: "fresh app data; unique synthetic channel toggled in Android Settings, read back and deleted in finally; local notification recipient only" },
   VoicePermissionDenied: { secondaryUser: true, args: { voicePermissionDenied: "1" }, revoke: ["RECORD_AUDIO"], note: "fresh user with microphone revoked; signed-out local recording denial/settings/typing UI, no injected Cloud transport or ASR acceptance" },
   VoicePermissionRevoke: { campaign: "node scripts/test-native-permissions.mjs voice-revoke APP.apk TEST.apk OUTPUT (RECORD_AUDIO revoked while recording; the process is killed)" },
+  LocalConversationLifecycle: { secondaryUser: true, args: { localConversation: "1" }, grant: ["RECORD_AUDIO"], note: "production renderer and native local capture Start/Stop with synthetic identity/history; no inference, ASR or full conversation acceptance" },
   LocalVoiceRecordingLimit: { secondaryUser: true, args: { localVoiceRecording: "1" }, grant: ["RECORD_AUDIO"], note: "native 29-second recorder deadline in a fresh user; full PCM decode must fit 27–30 seconds without truncation; no ASR accuracy, Cloud, audible output or latency claim" },
 };
 
