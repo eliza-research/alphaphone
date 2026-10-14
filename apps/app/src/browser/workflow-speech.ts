@@ -1,4 +1,4 @@
-export {speakCloudText as speakWorkflowText} from '../runtime/cloud-voice';
+export {speakDeviceText as speakWorkflowText} from '../runtime/device-speech';
 
 /** Dev pickup is explicit; events while hidden or locked cannot release private speech. */
 export function waitForWorkflowPickup(signal:AbortSignal){
