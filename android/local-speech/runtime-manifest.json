@@ -1,6 +1,6 @@
 {
   "noEspeak": true,
-  "aarSha256": "d08bbbd90f24684cf840efcb1cb9cf84a7d8683b7018859f4cb64305b722b26f",
+  "aarSha256": "39cf0f7170c0328e8be83fd4d6b45a2008438cccfa4d4692da8664e84e22bd2b",
   "qualifiedAbis": [
     {
       "abi": "arm64-v8a",
@@ -11,11 +11,11 @@
       "native": [
         {
           "file": "libsherpa-onnx-jni.so",
-          "bytes": 4042512,
-          "sha256": "4f7b23a6b43ed75f66bf61ae6d2af00d9cc2b619f10822176c8c3bcef98a6061",
+          "bytes": 4042328,
+          "sha256": "a7a1229cd62d1548e42964e3e4b3bc2f0c35d5a97fcc5d3e19a897954d5e16d5",
           "pageAlignment": 16384,
-          "unstrippedSha256": "dd8dcc644f293c6571f397fe7a28a08b37202627824b0564fff2e3db2fa9df65",
-          "unstrippedBytes": 79681960
+          "unstrippedSha256": "a90edba5c74147d14decb56f89711b94c61bb1a933a2f052bbee8a2484af7b09",
+          "unstrippedBytes": 79578960
         },
         {
           "file": "libonnxruntime.so",
@@ -24,7 +24,7 @@
           "pageAlignment": 16384
         }
       ],
-      "aarSha256": "3c52bb15ce752d385e496dd2180623f8d8b1f9dc151157febdd5868f655e763d",
+      "aarSha256": "37770c2fdee422b84bde27ad3a2b3697d550682cfea28fefb9fbe411ce6782f7",
       "deviceExecuted": false,
       "debugSymbolsStripped": true
     },
@@ -37,11 +37,11 @@
       "native": [
         {
           "file": "libsherpa-onnx-jni.so",
-          "bytes": 4394840,
-          "sha256": "87b16837b465ca9eff50779ff4c185bde36d7743464eebd97994dec822a7777f",
+          "bytes": 4394656,
+          "sha256": "6a4db8acf23da296fd11dd2e90e82c4614d087d5bcd232dac96a723126e8e848",
           "pageAlignment": 16384,
-          "unstrippedSha256": "ed70eda4b6eaf6776f9da3b0f4e9682649927a43570a8121344b1d9db1e0482c",
-          "unstrippedBytes": 78703720
+          "unstrippedSha256": "47720d737b5b77eaaed05791b352b25a2ceacad4f34dd004fd686ab4b1aa175e",
+          "unstrippedBytes": 78590208
         },
         {
           "file": "libonnxruntime.so",
@@ -50,7 +50,7 @@
           "pageAlignment": 16384
         }
       ],
-      "aarSha256": "286c0f0289526d6f79c19cb8b75b318934a614aa6e8aae0027add8ec44ee02a5",
+      "aarSha256": "281299371a483521591c5cc54d803b4540cda3da18214effcf6f0a0db487456e",
       "deviceExecuted": false,
       "debugSymbolsStripped": true
     }

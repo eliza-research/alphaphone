@@ -14568,7 +14568,7 @@ SOFTWARE.
 
 ==============================================================================
 Sherpa-ONNX (no-eSpeak Android build)
-Version: 1.13.8 (AAR sha256 d08bbbd90f24684cf840efcb1cb9cf84a7d8683b7018859f4cb64305b722b26f; ABIs arm64-v8a, x86_64)
+Version: 1.13.8 (AAR sha256 39cf0f7170c0328e8be83fd4d6b45a2008438cccfa4d4692da8664e84e22bd2b; ABIs arm64-v8a, x86_64)
 License: Apache-2.0
 Source: https://github.com/k2-fsa/sherpa-onnx/tree/v1.13.8
 

@@ -53,6 +53,8 @@ test('a valid native set does not bypass the pinned local model admission',()=>{
 
 test('text-only pin change reuses exact reviewed native bytes without relabeling the built pin',()=>{
  const f=fixture();try{
+  git(f.vendor,'commit','--allow-empty','-m','Advance runtime without changing native inputs');
+  f.lock(git(f.vendor,'rev-parse','HEAD'));
   const current=JSON.parse(fs.readFileSync(path.join(f.dir,'upstream.lock.json'),'utf8')).commit;
   assert.notEqual(current,qualified.pin);assert.doesNotThrow(()=>verifyEmbeddingInputs(f.dir,qualified));
   assert.equal(JSON.parse(fs.readFileSync(path.join(f.dir,'android/embedding-host/qualified-host.json'),'utf8')).pin,qualified.pin);
@@ -71,7 +73,7 @@ test('changed engine gitlink, dirty JNI and mismatched locked vendor checkout ar
  for(const mutation of [
   f=>{git(f.vendor,'update-index','--cacheinfo','160000,'+'1'.repeat(40)+','+fork);git(f.vendor,'commit','-m','Change engine pin');f.lock(git(f.vendor,'rev-parse','HEAD'));},
   f=>fs.appendFileSync(path.join(f.vendor,qualified.inputs.at(-1).path),'\n// dirty JNI\n'),
-  f=>f.lock(qualified.pin),
+  f=>{git(f.vendor,'commit','--allow-empty','-m','Advance checkout without updating runtime lock');},
  ]){const f=fixture();try{mutation(f);assert.throws(()=>verifyEmbeddingHost(f.dir),/source admission changed/);}finally{f.close();}}
 });
 test('missing, incomplete or altered native qualification cannot admit a new source pin',()=>{

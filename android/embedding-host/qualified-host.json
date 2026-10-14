@@ -1,5 +1,5 @@
 {
-  "pin": "5592c586507544523102dad003a192d6e8395c0f",
+  "pin": "13c98575987a121decc45b161b0c8a4ee698554e",
   "forkPin": "ea8b3f2dfc2641dea3e6238bc6dd99595584b076",
   "identity": "ai.elizaresearch.alphaphone",
   "abi": "arm64-v8a",
@@ -11,14 +11,14 @@
   "libraries": [
     {
       "name": "libelizainference.so",
-      "sha256": "29793dd385ac8742e90562ebe45d00b6c8e157127ccce8e03201f3ce30cf95c5",
-      "bytes": 6199248,
+      "sha256": "de3c19f46c427f0a9408fa6bc5b205c642651d9fea7a4a30df7962f99b6616cb",
+      "bytes": 6186960,
       "alignment16KiB": true
     },
     {
       "name": "libelizavoicejni.so",
-      "sha256": "6ec9c94b10febe6c1c2946f8c8212f9da393c20ac3c46413749e912a4f48753d",
-      "bytes": 1016376,
+      "sha256": "7a9171c3d208434cdc04bbe300fbc82f174e1bce42d3d687215795fa3fad6d2d",
+      "bytes": 1009088,
       "alignment16KiB": true
     },
     {
@@ -28,7 +28,7 @@
       "alignment16KiB": true
     }
   ],
-  "qualificationReceiptSha256": "3caf49bc48b53cc394fc0df4d21f29b99df2dd7c061d6983ef144905da1a56ef",
+  "qualificationReceiptSha256": "d5aef7c57bec677765de3b0cd89c92d19b7a07b60fb7f311c9ff899224786097",
   "jniIdentityRelocated": true,
   "inputs": [
     {

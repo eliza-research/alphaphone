@@ -43,7 +43,7 @@ for(const [name,key,value] of [
  ['permissive SELinux','shell getenforce','Permissive'],
  ['updated data APK',`shell pm path --user 0 ${pkg}`,'package:/data/app/Alpha/base.apk'],
  ['different APK',`shell sha256sum ${expected.apkPath}`,'c'.repeat(64)+'  '+expected.apkPath],
- ['missing Clock','shell pm list packages --user 0 -e com.android.deskclock',''],
+ ['missing Clock','shell pm list packages --user 0 -s -e com.android.deskclock',''],
  ['missing WebView','shell dumpsys webviewupdate','Current WebView package is null'],
  ['unavailable recovery','shell pm list packages --user 0 -s -e com.android.launcher3','']
 ])test('rejects '+name,()=>assert.throws(()=>verifyCuttlefishLauncher(fixture({[key]:value}).run,expected,'0')));
