@@ -3151,3 +3151,42 @@ Its `audio-input.json` explicitly records multiplier 4; no production image has
 been changed to ship that setting. Further investigation must retain the distinction
 between resolved short-recording/ALSA-error symptoms and remaining waveform/
 recognition defects. Earlier single passes remain individual trial evidence only.
+
+## Notes audio acceptance restored through the current plan gate
+
+`70da5a5ef` migrates NoteAudio's installed tests from the retired signed-out/offline
+selection to the production sign-in and plan UI. A test-APK-only Activity substitutes
+closed synthetic identity/plan and agent transports; encrypted storage, native
+recording, Notes audio, MediaPlayer and the production renderer remain real. The
+fixture clicks Sign in, requires the actual billing snapshot request, dismisses
+startup access through its button, and retains the account across Activity
+recreation. It never requests real credentials/network access or sends inference.
+
+The Notes encrypted-storage helper now supports an explicitly chosen exact Activity
+class while retaining the existing MainActivity default. The lifecycle helper also
+observes the exact intercepted test subclass; it does not broaden selection to an
+arbitrary live Activity. Existing native storage assertions use the actual
+credential store rather than casting the synthetic transport to a production
+plugin. No product auth/plan gate was bypassed or weakened.
+
+Both developer distributions rebuild in `developer-apks-notes-plan`.
+`cuttlefish-notes-plan` passes all seven methods in each variant (14 total, zero
+skips): real capture/save/draft revocation with retained visible playback; dictation
+selection replacement and text persistence; manual voice-note creation/review/save/
+recreation/playback; saved-asset survival and Undo; expired deletion refusal; owned
+purge/idempotence; and delayed retired-deletion fencing. This supersedes the three
+per-variant navigation failures caused by the new plan gate. It does not establish
+ASR accuracy, intelligibility, audible output, real account login/subscription or
+real resident/Cloud inference. Manual transcripts are intentional test input.
+
+Both disposable users were removed, owner restored and installed test packages
+cleaned. The guest is cvd-15's historical image with runtime audio multiplier 4;
+post-campaign privileged readback is retained in `guest-audio-properties.json`.
+This remains developer APK/emulator evidence, not current-source image, release
+or physical-device acceptance. Focused host checks pass 27 tests; full verification
+is recorded in `verify-notes-plan.log`.
+
+Full `verify-notes-plan.log` completes with 1,056 passes, zero failures, four TODOs
+and the 397-file production bundle audit. The Notes campaign's two class receipts
+record seven starts/seven passes each, no ignored methods, and confirmed removal
+of users 20 and 21.
