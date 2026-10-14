@@ -8,6 +8,8 @@ public final class ConversationFixtureAgent extends Plugin {
  static final String CONVERSATION="12345678-1234-4234-8234-123456789abc";
  static final java.util.List<String> routes=new java.util.concurrent.CopyOnWriteArrayList<>();
  static volatile int sends;
+ static volatile boolean allowReply;
+ static volatile String transcript;
  @PluginMethod public void launchSurface(PluginCall c){c.resolve(new JSObject().put("assistant",false));}
  @PluginMethod public void takeInvocation(PluginCall c){c.resolve(new JSObject());}
  @PluginMethod public void residentAttachment(PluginCall c){c.resolve(new JSObject().put("attachable",true));}
@@ -15,7 +17,19 @@ public final class ConversationFixtureAgent extends Plugin {
  @PluginMethod public void start(PluginCall c){c.resolve(new JSObject().put("state","ready"));}
  @PluginMethod public void cancelStart(PluginCall c){c.resolve();}
  @PluginMethod public void stop(PluginCall c){c.resolve();}
- @PluginMethod public void requestStream(PluginCall c){sends++;c.reject("Fixture forbids inference");}
+ @PluginMethod public void requestStream(PluginCall c){
+  try{
+   if(!allowReply||!"/api/conversations/".concat(CONVERSATION).concat("/messages/stream").equals(c.getString("path")))throw new IllegalArgumentException();
+   JSONObject body=new JSONObject(c.getString("body"));if(!"VOICE_DM".equals(body.getString("channelType")))throw new IllegalArgumentException();
+   transcript=body.getString("text");sends++;String stream=c.getString("streamId");
+   JSONObject done=new JSONObject().put("type","done").put("fullText","This is a synthetic voice test reply.").put("agentName","Synthetic conversation fixture").put("messageId",java.util.UUID.randomUUID().toString()).put("userMessageId",java.util.UUID.randomUUID().toString());
+   c.resolve(new JSObject().put("streamId",stream));
+   notifyListeners("alphaAgentStream",new JSObject().put("streamId",stream).put("event",new JSObject().put("type","response").put("status",200).put("headers",new JSObject().put("content-type","text/event-stream"))));
+   String bytes=android.util.Base64.encodeToString(("data: "+done.toString()+"\n\n").getBytes(java.nio.charset.StandardCharsets.UTF_8),android.util.Base64.NO_WRAP);
+   notifyListeners("alphaAgentStream",new JSObject().put("streamId",stream).put("event",new JSObject().put("type","chunk").put("dataBase64",bytes)));
+   notifyListeners("alphaAgentStream",new JSObject().put("streamId",stream).put("event",new JSObject().put("type","complete")));
+  }catch(Exception e){c.reject("Fixture forbids this inference request");}
+ }
  @PluginMethod public void cancelStream(PluginCall c){c.resolve();}
  @PluginMethod public void request(PluginCall c){
   try{
