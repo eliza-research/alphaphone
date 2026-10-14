@@ -2235,3 +2235,52 @@ Validation: full source verification passed 819 tests, zero failures and four TO
 including the production bundle audit. These source checks do not override the
 four installed UI failures across the two variants. Native APK bytes were unchanged
 and reused from the previously built, hash-verified two-variant archive.
+
+## October 13 latest-main merge and installed regression campaign
+
+Merged main `f348e03c8` at `171e79885`, preserving the native speech drain fix
+`c09b3b89a`. Resolved the accessibility overlap using Android's system shade while
+keeping the screen-reader stand-in bound through all traversal checks. Corrected
+new ContactsCatalog/PhotosLibrary runner entries to use disposable secondary users.
+Main's browser navigation fixture omitted newly required UI-commit and native-selection
+callbacks; `08abbe31c` supplies these, checks their ordering before navigation, and
+makes unexpected reported errors fail the fixture rather than disappear.
+
+`verify-merge-f348-retry.log`: `npm run verify` passed, 975 tests passed, zero failed,
+four TODOs; production bundle audit passed. The first run's browser harness failure
+is retained in `verify-merge-f348.log`. Strict `npm run android:build` stopped at the
+missing speech AAR. `developer-apks-merge-f348` archives standalone/launcher debug,
+unsigned release and instrumentation APKs built at `08abbe31c`; both packaging
+variants passed build verification. They omit the resident payload and use the
+unqualified speech candidate. Qualified ARM64 speech/embedding host and signing
+remain separate gates. Source inputs were restored after the build.
+
+The owned secure-camera Cuttlefish fixture was restarted after a host interruption;
+its boot digest remains `dac3ff7f7138c93daaa14c9e9724588c96d6bf1c964f6787c4d1127280e1968a`
+and WebView is `157.0.8083.0`. Initial campaign admission correctly refused the locked
+screen. `cuttlefish-merge-f348-retry` then produced **partial standalone evidence**:
+
+- PhotoLibrary reached the final visible “Device library / Full access” assertion
+  and failed there. Earlier native scope, 60-row pagination/uniqueness, stable IDs,
+  literal search, inspect/revision, changed/deleted record and refresh checks passed.
+  This is not a passing Photos flow or foreign-UID/selected-permission acceptance.
+- BrowserInstalledResolver passed its one installed-handler visibility test.
+- SystemShade passed all three methods, including ordinary-APK refusal and actual
+  Android shade interaction. This is standalone evidence only in this campaign.
+- ImageCapabilities passed native denial/role/handoff checks but its developer-query
+  navigation method failed with a dispatched WebView evaluation timeout. No proof
+  of telephony execution or image admission is implied.
+- Secondary-user setup then crashed the guest system process. The SyncManager
+  USER_UNLOCKED receiver could not create `/data/system_ce/10/accounts_ce.db`;
+  permission-controller initialization also failed with a missing path, followed
+  by zygote termination. ContactsCatalog/PhotosLibrary were not executed and the
+  launcher variant was not reached. The runner's final WebView evidence read failed,
+  so no successful campaign summary exists. Preserve the raw class reports and
+  `merge-f348-guest-crash.log`, not a fabricated aggregate pass.
+
+Recovery removed the exact campaign user 10 and both campaign APK packages; owner 0
+and the unchanged image overlays remained. A follow-up owner-only campaign was
+refused while owner 0 was still BOOTING after the framework crash. A full guest
+reboot was requested to recover the fixture before any further campaign. These
+platform failures are distinct from application assertions and current-source
+AOSP/Pixel qualification. The full-product goal remains open.
