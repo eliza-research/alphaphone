@@ -40,7 +40,13 @@ public final class ImageCapabilitiesInstrumentedTest {
    AppNavigation.liveMode();until("document.documentElement.dataset.activeView==='home'");
    for(String view:new String[]{"phone","contacts","messages"}){
     String query="?mode=dev&start="+view;
-    WebViewTestDriver.evaluate("setTimeout(()=>location.replace(location.origin+"+JSONObject.quote(query)+"),0);true");
+    // A document replacement can retire an evaluateJavascript callback. Dispatch once,
+    // then use the navigation-aware readiness probe before querying the new document.
+    try(StartupDocumentProbe startup=new StartupDocumentProbe()){
+     startup.expectNavigation();
+     WebViewTestDriver.withActivity(MainActivity.class,a->a.getBridge().getWebView().evaluateJavascript("location.replace(location.origin+"+JSONObject.quote(query)+")",null));
+     startup.awaitReady(true);
+    }
     until("location.search==="+JSONObject.quote(query)+"&&document.documentElement.dataset.activeView==='home'&&document.documentElement.dataset.connectionMode==='live'");
     assertEquals("No product Phone/Contacts/SMS entry in either distribution","true",WebViewTestDriver.evaluate("![...document.querySelectorAll('button')].some(b=>['Phone','Contacts','Messages'].includes((b.getAttribute('aria-label')||b.textContent||'').trim()))"));
    }
