@@ -60,8 +60,9 @@ final class LocalConversationFixture {
     if(pollCapture)eval("window.__captureProbe.peaks=[];window.__captureProbe.started=performance.now();window.__captureProbe.poll=setInterval(()=>Capacitor.Plugins.AlphaVoiceCloud.getRecordingMetrics({recordingId:window.__captureProbe.id}).then(value=>window.__captureProbe.peaks.push({at:Math.round(performance.now()-window.__captureProbe.started),peak:value.peak}),()=>{}),50)");
     android.util.Log.i("AlphaVoiceFixture","CAPTURE_READY "+InboxFixtureScope.runId);
     SystemClock.sleep(8500);
-    eval("clearInterval(window.__captureProbe.poll);Capacitor.Plugins.AlphaVoiceCloud.stopRecording().then(value=>{window.__captureProbe.durationMs=value.durationMs;return Capacitor.Plugins.AlphaVoiceCloud.transcribeLocalRecording({recordingId:value.recordingId});}).then(value=>{window.__captureProbe.transcript=value.text;return Capacitor.Plugins.AlphaVoiceCloud.cancelRecording();}).then(()=>window.__captureProbe.done=true,error=>window.__captureProbe.error=String(error))");
-    until("window.__captureProbe.done",180000);
+    eval("clearInterval(window.__captureProbe.poll);Capacitor.Plugins.AlphaVoiceCloud.stopRecording().then(value=>{window.__captureProbe.durationMs=value.durationMs;return Capacitor.Plugins.AlphaVoiceCloud.transcribeLocalRecording({recordingId:value.recordingId,requestId:crypto.randomUUID()});}).then(value=>{window.__captureProbe.transcript=value.text;return Capacitor.Plugins.AlphaVoiceCloud.cancelRecording();}).then(()=>window.__captureProbe.done=true,error=>window.__captureProbe.error=String(error))");
+    until("window.__captureProbe.done||window.__captureProbe.error",180000);
+    assertEquals("Native capture and ASR readback must succeed", "true",eval("window.__captureProbe.done===true"));
     assertEquals("The native control records the entire input window","true",eval("window.__captureProbe.durationMs>=8000"));
     assertEquals("Capture polling matches the requested control","true",eval(pollCapture?"window.__conversationNative.metrics>100":"window.__conversationNative.metrics===0"));
     assertEquals("No agent inference in the control",0,ConversationFixtureAgent.sends);

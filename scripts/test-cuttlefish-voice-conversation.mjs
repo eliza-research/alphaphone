@@ -33,8 +33,8 @@ if(!isMainThread){
   // one known waveform only on the current installed fixture's capture marker.
   browser=await openFixtureAudio({address:ip,device:extra.device,wav:original});
   const seen=new Set([...adb(['logcat','-d','-s','AlphaVoiceFixture:I','*:S']).matchAll(/CAPTURE_READY ([a-f0-9-]{36})/g)].map(match=>match[1]));let pending='';
-  log=spawn('adb',['-s',options.serial,'logcat','-T','1','-v','brief','AlphaVoiceFixture:I','AudioSource:W','AudioRecord:W','AudioFlinger:W','*:S']);
-  log.stdout.on('data',chunk=>{pending+=chunk;let index;while((index=pending.indexOf('\n'))>=0){const line=pending.slice(0,index);pending=pending.slice(index+1);if(/AudioSource|AudioRecord|AudioFlinger/.test(line)&&audioDiagnostics.length<10000)audioDiagnostics.push(line);const id=line.match(/CAPTURE_READY ([a-f0-9-]{36})/)?.[1];if(!id||seen.has(id))continue;seen.add(id);
+  log=spawn('adb',['-s',options.serial,'logcat','-T','1','-v','brief','AlphaVoiceFixture:I','AudioSource:W','AudioRecord:W','AudioFlinger:W','AHAL_StreamAlsaMonoPipe:W','*:S']);
+  log.stdout.on('data',chunk=>{pending+=chunk;let index;while((index=pending.indexOf('\n'))>=0){const line=pending.slice(0,index);pending=pending.slice(index+1);if(/AudioSource|AudioRecord|AudioFlinger|AHAL_StreamAlsaMonoPipe/.test(line)&&audioDiagnostics.length<10000)audioDiagnostics.push(line);const id=line.match(/CAPTURE_READY ([a-f0-9-]{36})/)?.[1];if(!id||seen.has(id))continue;seen.add(id);
    chain=chain.then(async()=>{
     const event={id,fixtureSha256,transport:'preconnected-webaudio-pcm',readyAt:new Date().toISOString()};events.push(event);
     event.audioSettings=await browser.start();event.inputStartedAt=new Date().toISOString();console.log('Fixture PCM started for '+id);
