@@ -2489,3 +2489,29 @@ Validation at source `1143f0acb`:
 - Disposable users 14 and 15 were removed and owner 0 restored, as recorded in
   each variant's `secondary-user.json`. The image remains the historical SDK 37
   x86_64 fixture. No personal devices or real Cloud accounts were used.
+
+## October 13 signed-out local microphone denial acceptance
+
+The installed `VoicePermissionDenied` test still encoded the retired requirement
+that production voice must first sign in to Cloud. It now uses the actual production
+activity with no fixture transport, selects recording without transcription while
+signed out, and exercises the native permission denial and recovery controls.
+Manual recording isolates the permission flow from model readiness; this does not
+establish local ASR or ongoing conversation acceptance.
+
+At source `539bd2bbd`, `verify-local-voice-denial.log` records 989 passing tests,
+zero failures and four TODOs (993 total), with production distribution checks passing.
+Both APK variants build in `developer-apks-local-voice-denial`, retaining the same
+developer-only, unqualified speech and absent resident-payload limitations.
+
+`cuttlefish-local-voice-denial/results.json` records one installed method passing
+for each variant, zero skips. The assertions cover denied guidance, Open app settings,
+Back to Alpha, available typing, permission remaining denied, no raw recording file,
+and zero Cloud speech method calls. The guest had networking available; the latter
+is a bridge-method observation, not a packet-level egress proof. Fresh users 16 and
+17 were removed and owner 0 restored; application/test packages were removed.
+
+This corrected an obsolete test before attempting continuous conversation coverage.
+A complete installed local-conversation test still needs controlled agent transport
+and microphone input. No real login/Cerebras, physical audio, barge-in, latency or
+current-source full AOSP acceptance is implied by this permission test.
