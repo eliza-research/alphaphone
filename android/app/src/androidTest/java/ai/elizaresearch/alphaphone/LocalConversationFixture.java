@@ -33,7 +33,7 @@ final class LocalConversationFixture {
   assertFalse("Production renderer required",BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS);
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
   assertEquals(PackageManager.PERMISSION_GRANTED,context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO));
-  InboxFixtureScope.phase="prepare";InboxFixtureScope.runId=java.util.UUID.randomUUID().toString();ConversationFixtureAgent.routes.clear();ConversationFixtureAgent.sends=0;ConversationFixtureAgent.allowReply=utterance;ConversationFixtureAgent.transcript=null;
+  InboxFixtureConnection.conversationPlan=true;InboxFixtureConnection.routes.clear();InboxFixtureScope.phase="prepare";InboxFixtureScope.runId=java.util.UUID.randomUUID().toString();ConversationFixtureAgent.routes.clear();ConversationFixtureAgent.sends=0;ConversationFixtureAgent.allowReply=utterance;ConversationFixtureAgent.transcript=null;
   androidx.test.runner.MonitoringInstrumentation runner=(androidx.test.runner.MonitoringInstrumentation)InstrumentationRegistry.getInstrumentation();
   runner.interceptActivityUsing(new androidx.test.runner.intercepting.InterceptingActivityFactory(){
    @Override public boolean shouldIntercept(ClassLoader loader,String name,android.content.Intent intent){return name.equals(MainActivity.class.getName());}
@@ -44,6 +44,7 @@ final class LocalConversationFixture {
    until("document.querySelector('.os')&&window.Capacitor?.Plugins?.AlphaVoiceCloud",60000);
    click("Sign in with Eliza Cloud");
    until("!document.querySelector('.alpha-connection-scrim')",60000);
+   assertTrue("Actual plan gate fetched the closed synthetic billing snapshot",InboxFixtureConnection.routes.contains("GET /api/v1/billing/limits"));
    for(int i=0;i<150;i++){
     if("true".equals(eval("(()=>{try{return JSON.parse(localStorage.getItem('alpha.startup-permissions.v1')||'null')?.dismissed===true}catch{return false}})()")))break;
     if("true".equals(eval("(()=>{const b=[...document.querySelectorAll('dialog.alpha-startup-permissions[open] button')].find(b=>b.textContent.trim()==='Not now');if(!b)return false;b.click();return true})()")))break;
@@ -70,7 +71,7 @@ final class LocalConversationFixture {
    assertEquals("Cancelled capture is removed",0,captures==null?0:captures.length);
   }finally{
    MainActivity live=activity();if(live!=null)BoundedActivityScenario.main(live::finish);
-   ConversationFixtureAgent.allowReply=false;runner.useDefaultInterceptingActivityFactory();
+   ConversationFixtureAgent.allowReply=false;InboxFixtureConnection.conversationPlan=false;runner.useDefaultInterceptingActivityFactory();
   }
  }
 }

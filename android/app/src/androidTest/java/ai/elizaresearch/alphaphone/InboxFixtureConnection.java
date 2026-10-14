@@ -10,6 +10,8 @@ public final class InboxFixtureConnection extends Plugin {
  static final String OWNER=InboxFixtureScope.runId,LOGIN="12345678-1234-4234-8234-123456789def";
  static final CopyOnWriteArrayList<String> routes=new CopyOnWriteArrayList<>();
  static int rejectedWrites;
+ // Opt-in only for installed conversation tests; no real subscription or network.
+ static boolean conversationPlan;
  private final AlphaConnectionPlugin store=new AlphaConnectionPlugin();
  @Override public void load(){store.setBridge(getBridge());}
  @Override protected void handleOnDestroy(){store.handleOnDestroy();super.handleOnDestroy();}
@@ -33,6 +35,8 @@ public final class InboxFixtureConnection extends Plugin {
    if(path.equals("/api/auth/cli-session")&&"POST".equals(method))data=new JSONObject().put("sessionId",LOGIN).put("expiresAt",java.time.Instant.now().plusSeconds(3600).toString());
    else if(path.equals("/api/auth/cli-session/"+LOGIN)&&"GET".equals(method))data=new JSONObject().put("status","authenticated").put("token",token());
    else if(!"GET".equals(method)){rejectedWrites++;throw new IllegalArgumentException();}
+   else if(conversationPlan&&path.equals("/api/v1/subscription/entitlement")){JSObject missing=new JSObject();missing.put("status",404);missing.put("data",new JSONObject());call.resolve(missing);return;}
+   else if(conversationPlan&&path.equals("/api/v1/billing/limits"))data=new JSONObject().put("success",true).put("data",new JSONObject().put("schemaVersion",2).put("v2",new JSONObject().put("subscription",new JSONObject().put("status","available").put("value",new JSONObject().put("planKey","plus_monthly").put("state","active").put("currentPeriodEnd",java.time.Instant.now().plusSeconds(3600).toString())))));
    else if(path.equals("/api/v1/user"))data=new JSONObject().put("success",true).put("data",new JSONObject().put("id",OWNER));
    else if(path.equals("/api/v1/eliza/agents"))data=new JSONObject().put("success",true).put("data",new JSONArray());
    else if(path.equals("/api/v1/eliza/google/accounts")){JSONArray list=new JSONArray();for(String id:new String[]{"a","b"})list.put(new JSONObject().put("configured",true).put("connected",true).put("reason","fixture").put("connectionId",id).put("grantedCapabilities",new JSONArray().put("google.gmail.triage")).put("identity",new JSONObject().put("name","Fixture "+id)));data=list;}

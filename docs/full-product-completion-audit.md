@@ -2635,3 +2635,50 @@ pass 989 tests, zero failures, four TODOs, with production bundle checks passing
 Both APK variants were built in `developer-apks-conversation-utterance-coordinated`
 at `7dea90705`; later changes are host input coordination only. Developer-only
 unqualified speech and absent resident-payload limits still apply.
+
+
+## Latest-main integration and recorder-thread repair (October 13 continuation)
+
+The requested pull fetched and merged `origin/main` at `8aa3e3e82` into this
+isolated audit branch (`058022f30`). The original product checkout was not changed.
+The merge includes the upstream Gmail/Calendar, subscription, Photos, Notes and
+native voice-latency work. Conflict resolution retains production on-device speech,
+explicit manual recording, automatic ongoing voice sending, and route-specific
+legacy diagnostics. New native audio-boundary aggregation remains separate from
+legacy renderer timing; a synthetic parser pass is not real latency acceptance.
+The upstream issue audit is a main-branch snapshot, not a replacement for the
+additional implementation and exact-artifact evidence recorded here.
+
+The merge exposed a Clock verifier call that omitted the newly required expected
+image fingerprint. `22097db0f` supplies the pinned expectation and updates the
+system-package fixture. All 14 launcher-verifier tests pass. The focused speech
+routing/native and legacy latency tests pass all 16 cases. After installing the
+updated lockfile dependencies (including DOMPurify), full `npm run verify` passes
+1,053 tests, zero failures, four TODOs, plus the production bundle audit
+(`verify-merge-oct14-final.log`). Earlier missing-dependency and Clock-failure logs
+are retained; they are not reported as passing runs.
+
+`be8d941b9` addresses the observed Android main-thread stall in MediaRecorder.stop:
+native capture operations and deadlines now run on one process-wide serial capture
+thread. A replacement activity cannot overtake blocked cleanup or remove its
+pending draft. Start rechecks cancellation after native start; cancellation still
+waits for native capture cleanup and the speech-worker barrier before confirming.
+A hung native recorder can still block the capture queue; this repair preserves UI
+responsiveness and refuses premature admission rather than proving recovery of
+Android's audio service.
+
+Strict `npm run android:build` still fails preflight for the absent qualified speech
+AAR (`strict-android-merge-oct14.log`). The separate developer build at `22097db0f`
+succeeded for standalone and launcher debug/unsigned-release APKs and both test
+APKs (`developer-apks-capture-thread-merged`). Its temporary packaging inputs were
+restored. Its speech runtime remains unqualified and resident payload absent.
+The wrapper initially refused changed license notices; the old backup was retained
+and refreshed with the verified current notices, whose added entry is DOMPurify.
+
+On owned Cuttlefish `127.0.0.1:6532`, `cuttlefish-capture-thread-settlement` passes
+all four VoiceWorkerSettlement methods on each variant. The new installed fault
+test holds native Stop open and verifies main-thread responsiveness, pending-file
+protection across surface construction, rejected new recording during drain,
+no premature cancellation acknowledgement, and eventual file/owner cleanup.
+This is controlled native fault evidence on the historical image, not a current
+full-image boot, real microphone, resident agent, Cloud login or Cerebras result.
