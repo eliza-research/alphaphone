@@ -2428,3 +2428,23 @@ installed Maps/workflow/agent end-to-end or physical speaker acceptance.
 Ongoing voice conversation still directly selects Cloud capture/transcription and
 synthesis. Its local migration, barge-in and measured speech-to-audio latency remain
 open. Earlier entries record the state before this migration.
+
+Validation at source `d1d3e1aed`:
+
+- `npm run verify` passes: 987 tests, 983 pass, zero failures and four TODOs;
+  production web distribution audit passes (`verify-device-speech.log`).
+- Both standalone and launcher debug/release-unsigned APKs and test APKs build
+  in `developer-apks-device-speech`. The qualification record explicitly retains
+  `developerOnly: true`, `residentPayloadPackaged: false` and
+  `speechCandidateQualified: false`. Its dirty flag reflects the temporary speech
+  manifest substitution; the application source fingerprint is the empty diff.
+- `cuttlefish-device-speech-regression/results.json` records both installed
+  `VoiceNoteReadAloud` methods passing in each variant, zero failures/skips,
+  production test-mocks flag off. This regression checks actual Notes read-aloud
+  completion/Stop plus the direct native playback test, not the newly migrated
+  Maps/workflow/agent interaction paths.
+- The owned SDK 37 x86_64 Cuttlefish guest used the previously recorded historical
+  image (boot digest `dac3ff7f7138c93daaa14c9e9724588c96d6bf1c964f6787c4d1127280e1968a`).
+  `offline-network.json` confirms offline observation and restored network state.
+  These receipts do not qualify ARM64, a current-source full image, physical audio,
+  resident agent execution, real login/Cerebras or P-11 latency.
