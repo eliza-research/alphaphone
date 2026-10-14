@@ -45,7 +45,11 @@ public final class LocalConversationLifecycleInstrumentedTest {
    until("document.querySelector('.os')&&window.Capacitor?.Plugins?.AlphaVoiceCloud",60000);
    click("Sign in with Eliza Cloud");
    until("!document.querySelector('.alpha-connection-scrim')",60000);
-   AppNavigation.declineStartupAccess();
+   for(int i=0;i<150;i++){
+    if("true".equals(eval("(()=>{try{return JSON.parse(localStorage.getItem('alpha.startup-permissions.v1')||'null')?.dismissed===true}catch{return false}})()")))break;
+    if("true".equals(eval("(()=>{const b=[...document.querySelectorAll('dialog.alpha-startup-permissions[open] button')].find(b=>b.textContent.trim()==='Not now');if(!b)return false;b.click();return true})()")))break;
+    SystemClock.sleep(100);
+   }
    eval("window.__conversationNative={starts:0,cancels:0,cloud:0};window.__conversationPromise=Capacitor.nativePromise;Capacitor.nativePromise=function(plugin,method,input){const s=window.__conversationNative;if(plugin==='AlphaVoiceCloud'&&['synthesize','transcribeRecording'].includes(method))s.cloud++;return window.__conversationPromise.apply(this,arguments).then(value=>{if(plugin==='AlphaVoiceCloud'){if(method==='startRecording'){s.starts++;s.maxDurationMs=value.maxDurationMs;}if(method==='cancelRecording')s.cancels++;}return value;});}");
    click("Talk");until("window.__conversationNative.starts===1",180000);
    assertEquals("Local recording cap","29000",eval("window.__conversationNative.maxDurationMs"));
