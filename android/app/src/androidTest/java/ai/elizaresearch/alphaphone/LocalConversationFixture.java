@@ -11,7 +11,7 @@ import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
 /** Real renderer/native capture lifecycle; only identity/history use a closed synthetic transport. */
 final class LocalConversationFixture {
- private static void until(String expression,long timeout)throws Exception{long end=SystemClock.elapsedRealtime()+timeout;while(SystemClock.elapsedRealtime()<end){if("true".equals(eval("Boolean("+expression+")")))return;SystemClock.sleep(100);}fail("Voice permission UI condition timed out: "+expression);}
+ private static void until(String expression,long timeout)throws Exception{long end=SystemClock.elapsedRealtime()+timeout;while(SystemClock.elapsedRealtime()<end){if("true".equals(eval("Boolean("+expression+")")))return;SystemClock.sleep(100);}fail("Conversation fixture condition timed out: "+expression+"; observed="+eval("JSON.stringify({native:window.__conversationNative,state:document.querySelector('[data-alpha-chat-recorder]')?.getAttribute('data-voice-state'),text:document.querySelector('[data-alpha-chat-recorder]')?.textContent})"));}
  private static String button(String label){return "[...document.querySelectorAll('button')].find(e=>(e.getAttribute('aria-label')==="+JSONObject.quote(label)+"||e.textContent.trim()==="+JSONObject.quote(label)+")&&e.getClientRects().length&&!e.disabled)";}
  private static void click(String label)throws Exception{until(button(label),20000);eval(button(label)+".click()");}
  /** The live production activity, without an injected Cloud or agent transport. */
