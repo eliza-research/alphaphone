@@ -2579,3 +2579,59 @@ The required strict `npm run android:build` attempt is retained in
 `cvd-microphone-strict-android-build.log`: it refuses the absent qualified speech
 AAR before building. No application/native source changed in this microphone-probe
 turn, and no new APK or release qualification is claimed.
+
+## October 13 installed utterance integration and recorder stall
+
+Added `LocalConversationUtteranceInstrumentedTest` and a closed synthetic reply
+protocol to the test APK. The production renderer, MediaRecorder, local ASR, local
+TTS and playback remain real. The test requires the known fixture word `nightfall`,
+exactly one automatic VOICE_DM send, one local synthesis/playback completion,
+rearmed capture, and Stop cleanup. No real resident runtime, Cloud sign-in or
+Cerebras inference is exercised by the synthetic identity/history/reply transport.
+
+The new `scripts/test-cuttlefish-voice-conversation.mjs` coordinates the normal
+instrumentation runner and prerecorded WebRTC input under one device lease. A
+worker keeps synchronous ADB instrumentation from blocking the browser controller.
+It verifies container/ADB/WebRTC identity and uses a fresh fake-audio-only Chromium
+process per capture-ready marker. Input hashes and start/stop/close timestamps are
+recorded beside instrumentation receipts. The current controller pads the known
+WAV with three seconds of leading and four seconds of trailing silence and waits
+for the Cuttlefish microphone control to enable and acknowledge input.
+
+Evidence and failures are deliberately separate:
+
+- `cuttlefish-conversation-utterance`: standalone passes the complete controlled
+  utterance; launcher reaches transcription/send/reply playback but fails the
+  known-word assertion. The ad hoc feeder reused one browser input cursor.
+- `cuttlefish-conversation-utterance-coordinated`: both variants reach the turn
+  but fail recognition of the expected word. Recorded transcripts show clipped
+  or misrecognized speech. The assertion was not weakened.
+- `cuttlefish-conversation-utterance-padded`: launcher passes; standalone receives
+  no recognized speech and repeatedly cycles capture. This exposed a feeder race:
+  a visible microphone button can still be disabled before connection completes.
+- `cuttlefish-conversation-utterance-ready`: after waiting for control readiness,
+  standalone stalls and the campaign stops before launcher. The retained Java
+  main-thread stack is in `MediaRecorder.stop()` via
+  `AlphaCloudVoiceCapture.stopAutomatically()` at the native recording deadline.
+  Main lifecycle commands cannot dispatch. Capture operations must be moved off
+  the UI thread with explicit pending/failed cleanup ownership; simply timing out
+  and admitting a new recorder would be unsafe and would not fix this failure.
+
+There is no stable both-variant passing aggregate yet. Separate successful methods
+are not acceptance for repeatable continuous conversation, physical sound, general
+ASR quality, barge-in or P-11 latency.
+
+The last campaign initially could not confirm removal of disposable user 28.
+`conversation-utterance-user28-recovery2.json` records force-stop, stopped/removed
+user 28, then readback showing only owner 0 and no app/test package even with `-u`.
+Subsequent uninstall attempts returned DELETE_FAILED_INTERNAL_ERROR because those
+packages had already disappeared with the removed user; the original failure
+receipt is preserved. No new campaign was started over uncertain cleanup.
+
+`verify-conversation-utterance.log` initially caught missing class-local opt-in
+declarations after helper extraction. The corrected full verification runs
+`verify-conversation-utterance-gated.log` and `verify-conversation-coordinator.log`
+pass 989 tests, zero failures, four TODOs, with production bundle checks passing.
+Both APK variants were built in `developer-apks-conversation-utterance-coordinated`
+at `7dea90705`; later changes are host input coordination only. Developer-only
+unqualified speech and absent resident-payload limits still apply.

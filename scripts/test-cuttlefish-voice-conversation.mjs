@@ -1,6 +1,7 @@
 /** Installed voice turns with prerecorded WebRTC input; synthetic agent reply only. */
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import {execFileSync,spawnSync,spawn} from 'node:child_process';
 import {Worker,isMainThread,parentPort,workerData} from 'node:worker_threads';
 import {createHash} from 'node:crypto';
@@ -18,7 +19,7 @@ if(!isMainThread){
  const options=parseInstrumentationArgs([...args,'--classes','LocalConversationUtterance']);
  if(!options.ownedCuttlefish||!/^127\.0\.0\.1:\d+$/.test(options.serial||'')||!options.output||!options.apkDir||!/^cvd-\d+$/.test(extra.device)||! /^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(extra.container))throw Error('Explicit owned guest, image, APK archive and new output required');
  const lease=await acquireDeviceLease(`android:${options.serial}`,{waitMs:0,ttlMs:Number.MAX_SAFE_INTEGER,stateDir:deviceLeaseStateDir(process.env)});
- let log,chain=Promise.resolve(),feederError,workerOutcome,browser;const events=[];
+ let log,chain=Promise.resolve(),feederError,workerOutcome,browser,inputDirectory;const events=[];
  try{
   const inspect=JSON.parse(execFileSync('docker',['inspect',extra.container],{encoding:'utf8'}))[0],port=options.serial.split(':')[1];
   if(!inspect.State.Running||!Object.values(inspect.NetworkSettings.Ports).flat().some(p=>p?.HostIp==='127.0.0.1'&&p.HostPort===port))throw Error('Container does not own the ADB endpoint');
@@ -27,17 +28,24 @@ if(!isMainThread){
   if(!instance||adb(['shell','getprop','ro.serialno']).trim()!==instance.serial_number||adb(['shell','getprop','ro.build.fingerprint']).trim()!==options.imageFingerprint)throw Error('Guest identities differ');
   const ip=Object.values(inspect.NetworkSettings.Networks)[0]?.IPAddress;if(!/^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(ip||''))throw Error('Expected isolated Docker bridge');
   try{await fs.access(options.output);throw Error('Output already exists');}catch(error){if(error.code!=='ENOENT')throw error;}
-  const fixture=path.resolve('android/app/src/androidTest/assets/speech-fixture/0.wav'),fixtureSha256=createHash('sha256').update(await fs.readFile(fixture)).digest('hex');
+  const original=await fs.readFile(path.resolve('android/app/src/androidTest/assets/speech-fixture/0.wav')),fixtureSha256=createHash('sha256').update(original).digest('hex');
+  let pcm,rate;for(let i=12;i+8<=original.length;){const n=original.readUInt32LE(i+4),start=i+8,name=original.toString('ascii',i,i+4);if(start+n>original.length)throw Error('Invalid source WAV');if(name==='fmt '){if(original.readUInt16LE(start)!==1||original.readUInt16LE(start+2)!==1||original.readUInt16LE(start+14)!==16)throw Error('Expected PCM mono16 fixture');rate=original.readUInt32LE(start+4);}if(name==='data')pcm=original.subarray(start,start+n);i=start+n+(n%2);}
+  if(rate!==16000||!pcm)throw Error('Unexpected fixture format');
+  // WebRTC renegotiation must complete before the first word; trailing silence
+  // lets the production endpoint detector finish without looping more speech.
+  const data=Buffer.concat([Buffer.alloc(rate*2*3),pcm,Buffer.alloc(rate*2*4)]),header=Buffer.alloc(44);header.write('RIFF');header.writeUInt32LE(data.length+36,4);header.write('WAVEfmt ',8);header.writeUInt32LE(16,16);header.writeUInt16LE(1,20);header.writeUInt16LE(1,22);header.writeUInt32LE(rate,24);header.writeUInt32LE(rate*2,28);header.writeUInt16LE(2,32);header.writeUInt16LE(16,34);header.write('data',36);header.writeUInt32LE(data.length,40);
+  inputDirectory=await fs.mkdtemp(path.join(os.tmpdir(),'alpha-voice-input-'));const fixture=path.join(inputDirectory,'input.wav');await fs.writeFile(fixture,Buffer.concat([header,data]));
+  const inputSha256=createHash('sha256').update(await fs.readFile(fixture)).digest('hex');
   const {chromium}=await import('playwright');const seen=new Set();let pending='';
   log=spawn('adb',['-s',options.serial,'logcat','-T','1','-v','brief','AlphaVoiceFixture:I','*:S']);
   log.stdout.on('data',chunk=>{pending+=chunk;let index;while((index=pending.indexOf('\n'))>=0){const line=pending.slice(0,index);pending=pending.slice(index+1);const id=line.match(/CAPTURE_READY ([a-f0-9-]{36})/)?.[1];if(!id||seen.has(id))continue;seen.add(id);
    chain=chain.then(async()=>{
-    const event={id,fixtureSha256,readyAt:new Date().toISOString()};events.push(event);
+    const event={id,fixtureSha256,inputSha256,leadingSilenceMs:3000,trailingSilenceMs:4000,readyAt:new Date().toISOString()};events.push(event);
     // A fresh process resets Chromium's fake-input cursor for each Android variant.
     browser=await chromium.launch({headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream','--use-file-for-fake-audio-capture='+fixture]});
     const page=await browser.newPage({ignoreHTTPSErrors:true});try{
-     await page.goto(`https://${ip}:1443/devices/${extra.device}/files/client.html`);await page.locator('#mic_btn').waitFor({state:'visible',timeout:30000});
-     await page.locator('#mic_btn').dispatchEvent('mousedown');event.inputStartedAt=new Date().toISOString();await page.waitForTimeout(7600);await page.locator('#mic_btn').dispatchEvent('mouseup');event.inputStoppedAt=new Date().toISOString();
+     await page.goto(`https://${ip}:1443/devices/${extra.device}/files/client.html`);await page.locator('#mic_btn').waitFor({state:'visible',timeout:30000});await page.waitForFunction(()=>document.querySelector('#mic_btn')?.disabled===false,{},{timeout:30000});
+     await page.locator('#mic_btn').dispatchEvent('mousedown');await page.waitForFunction(()=>document.querySelector('#mic_btn')?.textContent.trim()==='mic',{},{timeout:15000});event.inputStartedAt=new Date().toISOString();await page.waitForTimeout(13000);await page.locator('#mic_btn').dispatchEvent('mouseup');event.inputStoppedAt=new Date().toISOString();
     }finally{await browser.close();browser=undefined;event.browserClosed=true;}
    }).catch(error=>{feederError=String(error.stack||error);});
   }});
@@ -48,5 +56,5 @@ if(!isMainThread){
   const result={kind:'controlled-virtual-voice-conversation',physicalMicrophone:false,realInference:false,containerId:inspect.Id,device:extra.device,events,...(feederError?{feederError}:{}),...workerOutcome};
   result.passed=!feederError&&workerOutcome.result?.passed===true&&events.length===options.variants.length&&events.every(e=>e.inputStoppedAt&&e.browserClosed);
   await fs.writeFile(path.join(options.output,'audio-input.json'),JSON.stringify(result,null,2)+'\n');console.log(result.passed?'PASS controlled voice conversation':'FAIL controlled voice conversation');if(!result.passed)process.exitCode=1;
- }finally{log?.kill();await chain.catch(()=>{});await browser?.close();lease.release();}
+ }finally{log?.kill();await chain.catch(()=>{});await browser?.close();if(inputDirectory)await fs.rm(inputDirectory,{recursive:true});lease.release();}
 }
