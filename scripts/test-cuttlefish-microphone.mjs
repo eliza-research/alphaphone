@@ -36,12 +36,19 @@ try{
  report.containerId=container.Id;report.device=options.device;report.imageFingerprint=fingerprint;report.fixtureSha256=createHash('sha256').update(await fs.readFile(fixture)).digest('hex');
  browser=await chromium.launch({headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream','--use-file-for-fake-audio-capture='+fixture]});
  page=await browser.newPage({ignoreHTTPSErrors:true});
+ // Preserve fixture amplitude and timing: browser speech enhancement is not the
+ // system under test, and can suppress a known prerecorded input.
+ await page.addInitScript(()=>{const get=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);navigator.mediaDevices.getUserMedia=async options=>{const stream=await get(options?.audio?{...options,audio:{sampleRate:48000,channelCount:1,echoCancellation:false,noiseSuppression:false,autoGainControl:false}}:options);window.__alphaFixtureAudioSettings=stream.getAudioTracks().map(track=>track.getSettings());return stream;};});
  const base=`https://${address}:1443`;
  const devices=await (await page.request.get(base+'/devices')).json();
  if(!devices.some(d=>d.device_id===options.device))throw Error('WebRTC device is not registered');
  await page.goto(`${base}/devices/${options.device}/files/client.html`);
  await page.locator('#mic_btn').waitFor({state:'visible',timeout:30000});
- await page.locator('#mic_btn').dispatchEvent('mousedown');await page.waitForTimeout(1500);
+ await page.waitForFunction(()=>document.querySelector('#mic_btn')?.disabled===false,{},{timeout:30000});
+ await page.locator('#mic_btn').dispatchEvent('mousedown');
+ await page.waitForFunction(()=>document.querySelector('#mic_btn')?.textContent.trim()==='mic',{},{timeout:15000});
+ report.audioSettings=await page.evaluate(()=>window.__alphaFixtureAudioSettings);
+ await page.waitForTimeout(1500);
  remote='/data/local/tmp/alpha-audio-probe-'+randomUUID()+'.wav';
  report.captureLog=await adb(['shell','su','0','tinycap',remote,'-D','0','-d','0','-c','1','-r','48000','-b','16','-T','10']);
  const destination=path.join(options.output,'capture.wav');await adb(['pull',remote,destination]);
