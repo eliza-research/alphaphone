@@ -59,7 +59,7 @@ export function verifyCuttlefishLauncher(run, expected, user) {
     return shell('pm', 'list', 'packages', '--user', user, '-s', '-e', pkg).split(/\r?\n/).includes(`package:${pkg}`);
   });
   requireThat(recovery.length > 0, 'No enabled system recovery HOME remains');
-  const clock = verifyAospClockHandlers(run, user);
+  const clock = verifyAospClockHandlers(run, user, expected.fingerprint);
   const webview = /Current WebView package \(name, version\):\s*\(([^,\s]+),\s*([^\)]+)\)/
     .exec(shell('dumpsys', 'webviewupdate'));
   requireThat(webview, 'Current WebView provider unavailable');

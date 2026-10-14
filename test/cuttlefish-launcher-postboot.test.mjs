@@ -32,7 +32,7 @@ test('exact image and system launcher checks remain read-only and narrowly scope
  const f=fixture(),r=verifyCuttlefishLauncher(f.run,expected,'0');
  assert.equal(r.passed,true);assert.equal(f.hashes(),2);
  assert.deepEqual(r.recoveryHomes,['com.android.launcher3/com.android.launcher3.Launcher']);
- assert.equal(r.clock.ringingVerified,false);assert.equal(r.runtimeExecutionVerified,false);assert.equal(r.physicalDeviceVerified,false);
+ assert.equal(r.clock.fingerprint,expected.fingerprint);assert.equal(r.clock.ringingVerified,false);assert.equal(r.runtimeExecutionVerified,false);assert.equal(r.physicalDeviceVerified,false);
  assert.ok(f.calls.every(a=>a[0]==='shell'&&!a.some(x=>['install','uninstall','start','set','grant','reboot'].includes(x))));
 });
 for(const [name,key,value] of [
@@ -43,7 +43,7 @@ for(const [name,key,value] of [
  ['permissive SELinux','shell getenforce','Permissive'],
  ['updated data APK',`shell pm path --user 0 ${pkg}`,'package:/data/app/Alpha/base.apk'],
  ['different APK',`shell sha256sum ${expected.apkPath}`,'c'.repeat(64)+'  '+expected.apkPath],
- ['missing Clock','shell pm list packages --user 0 -e com.android.deskclock',''],
+ ['missing Clock','shell pm list packages --user 0 -s -e com.android.deskclock',''],
  ['missing WebView','shell dumpsys webviewupdate','Current WebView package is null'],
  ['unavailable recovery','shell pm list packages --user 0 -s -e com.android.launcher3','']
 ])test('rejects '+name,()=>assert.throws(()=>verifyCuttlefishLauncher(fixture({[key]:value}).run,expected,'0')));

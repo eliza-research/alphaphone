@@ -144,6 +144,7 @@ APK variant was built or qualified in this review. No new emulator, full-image,
 physical-device or real-service acceptance is claimed.
 
 The ongoing [full-product audit](full-product-completion-audit.md) retains exact developer APK/Cuttlefish evidence, remaining failures and the requested Wallet planning package outside MVP. It does not replace the October 12 approved MVP policy or claim release acceptance.
+
 ### Reviewed Photos source attachment (#419; depends on #442 and #456)
 
 The permitted Photos viewer exposes an explicit Email action for PNG, JPEG and WebP
