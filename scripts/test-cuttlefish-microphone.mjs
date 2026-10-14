@@ -9,15 +9,16 @@ import {acquireDeviceLease,deviceLeaseStateDir} from '../vendor/eliza/packages/a
 const options={};
 for(let i=2;i<process.argv.length;i++){
  const key=process.argv[i];if(key==='--owned-cuttlefish'){options.owned=true;continue;}
- if(!['--container','--serial','--device','--image-fingerprint','--output'].includes(key)||!process.argv[i+1])throw Error('Required: --owned-cuttlefish --container NAME --serial 127.0.0.1:PORT --device cvd-N --image-fingerprint VALUE --output NEW_DIRECTORY');
+ if(!['--container','--serial','--device','--image-fingerprint','--output','--capture-rate'].includes(key)||!process.argv[i+1])throw Error('Required: --owned-cuttlefish --container NAME --serial 127.0.0.1:PORT --device cvd-N --image-fingerprint VALUE --output NEW_DIRECTORY');
  options[key.slice(2)]=process.argv[++i];
 }
 if(!options.owned||!/^127\.0\.0\.1:\d+$/.test(options.serial||'')||!/^cvd-\d+$/.test(options.device||'')||!/^[-a-zA-Z0-9_.]+$/.test(options.container||'')||options.container.startsWith('-')||!options['image-fingerprint']||!options.output)throw Error('Explicit owned guest identity and new output directory required');
+const captureRate=options['capture-rate']??'48000';if(!['16000','48000'].includes(captureRate))throw Error('Capture rate must be 16000 or 48000');
 const run=promisify(execFile),execute=async(cmd,args,timeout=15000)=>(await run(cmd,args,{timeout,maxBuffer:1024*1024})).stdout;
 const adb=args=>execute('adb',['-s',options.serial,...args],25000);
 const lease=await acquireDeviceLease(`android:${options.serial}`,{waitMs:0,ttlMs:Number.MAX_SAFE_INTEGER,stateDir:deviceLeaseStateDir(process.env)});
 let browser,remote,capture;
-const report={kind:'cuttlefish-virtual-microphone',physicalMicrophone:false,asrVerified:false,passed:false};
+const report={kind:'cuttlefish-virtual-microphone',physicalMicrophone:false,asrVerified:false,captureRate:Number(captureRate),passed:false};
 let outputCreated=false;
 try{
  const [container]=JSON.parse(await execute('docker',['inspect',options.container]));
@@ -36,7 +37,7 @@ try{
  report.containerId=container.Id;report.device=options.device;report.imageFingerprint=fingerprint;report.fixtureSha256=createHash('sha256').update(await fs.readFile(fixture)).digest('hex');
  browser=await openFixtureAudio({address,device:options.device,wav:await fs.readFile(fixture)});
  remote='/data/local/tmp/alpha-audio-probe-'+randomUUID()+'.wav';
- capture=adb(['shell','su','0','tinycap',remote,'-D','0','-d','0','-c','1','-r','48000','-b','16','-T','10']);
+ capture=adb(['shell','su','0','tinycap',remote,'-D','0','-d','0','-c','1','-r',captureRate,'-b','16','-T','10']);
  void capture.catch(()=>{});
  // Start the known waveform after capture admission, over an already-live peer.
  await new Promise(resolve=>setTimeout(resolve,300));
@@ -52,14 +53,19 @@ try{
    if(name==='data')data=bytes.subarray(start,start+n);i=start+n+(n%2);
   }
   if(!rate||!data)throw Error('Incomplete WAV');const width=rate/100;if(!Number.isInteger(width))throw Error('Unsupported sample rate');
-  const values=[];for(let i=0;i+width*2<=data.length;i+=width*2){let sum=0;for(let j=0;j<width;j++){const v=data.readInt16LE(i+j*2);sum+=v*v;}values.push(Math.sqrt(sum/width));}return {values,seconds:data.length/2/rate};
+  const values=[];for(let i=0;i+width*2<=data.length;i+=width*2){let sum=0;for(let j=0;j<width;j++){const v=data.readInt16LE(i+j*2);sum+=v*v;}values.push(Math.sqrt(sum/width));}return {values,seconds:data.length/2/rate,rate};
  }
- const reference=envelope(await fs.readFile(fixture)).values.slice(0,300),actual=envelope(captured);
+ const wholeReference=envelope(await fs.readFile(fixture)).values,actual=envelope(captured);
+ if(actual.rate!==Number(captureRate))throw Error('Capture sample rate differs from request');
  if(actual.seconds<9||actual.seconds>12)throw Error('Unexpected capture duration');
+ function correlate(reference){
  const mean=reference.reduce((a,b)=>a+b,0)/reference.length,variance=reference.reduce((a,b)=>a+(b-mean)**2,0);let best=-1,offset=0;
  for(let i=0;i+reference.length<=actual.values.length;i++){const segment=actual.values.slice(i,i+reference.length),m=segment.reduce((a,b)=>a+b,0)/segment.length;let dot=0,v=0;for(let j=0;j<segment.length;j++){dot+=(segment[j]-m)*(reference[j]-mean);v+=(segment[j]-m)**2;}const correlation=v?dot/Math.sqrt(v*variance):0;if(correlation>best){best=correlation;offset=i*10;}}
- report.durationSeconds=actual.seconds;report.firstThreeSecondsEnvelopeCorrelation=best;report.segmentOffsetMs=offset;
- if(best<.85)throw Error('Captured audio does not sufficiently match the supplied fixture');report.passed=true;
+ return {best,offset};
+ }
+ const first=correlate(wholeReference.slice(0,300)),whole=correlate(wholeReference);
+ report.durationSeconds=actual.seconds;report.firstThreeSecondsEnvelopeCorrelation=first.best;report.segmentOffsetMs=first.offset;report.wholeFixtureEnvelopeCorrelation=whole.best;report.wholeFixtureOffsetMs=whole.offset;
+ if(first.best<.85||whole.best<.85)throw Error('Captured audio does not sufficiently match the supplied fixture');report.passed=true;
 }catch(error){report.error=String(error.message||error);process.exitCode=1;}
 finally{
  try{await capture?.catch(()=>{});await browser?.close();if(remote)await adb(['shell','su','0','rm','-f',remote]);report.cleaned=true;}
