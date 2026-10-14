@@ -20,16 +20,31 @@ measurement proposals in the chronological log are superseded, not newly open.
 The 93 observed native classes remain historical evidence for their exact archived
 APKs; the new policy does not turn old Cloud-speech tests into local-speech acceptance.
 
-**Latest merged checkpoint:** `171e79885` includes main through `f348e03c8`
-(October 13 pull). Source now includes a permitted photo-library bridge and UI,
-AOSP image capability admission and Contacts catalog, a separate AOSP listener,
-subscription entitlements, scoped Calendar deletion/Undo and Android's system shade.
-These replace earlier source-absence findings; they do not supply installed-device
-or release acceptance. Phone/SMS adapters remain gated, and ongoing conversation still hardcodes Cloud despite the approved local-only
-requirement. The shared production selector now uses device speech; see the latest
-local-selection receipts below.
-The audit's native playback helper now waits for confirmed cancel/stop completion;
-five focused tests pass, but installed renderer acceptance is still pending.
+**Latest merged checkpoint:** `058022f30` includes main through `8aa3e3e82`
+(the latest requested pull). Source includes the permitted photo-library bridge,
+AOSP image capability admission/Contacts, isolated listener, subscription gate,
+Gmail/Google Calendar additions, scoped Calendar deletion/Undo and system shade.
+These replace earlier source-absence findings without proving device/release acceptance.
+Phone/SMS remain gated. The merged account/plan gate rejects the old signed-out
+local-app fixture setup; local outage access requires a recently admitted plan.
+
+Production manual/ongoing speech and shared read-aloud consumers now use local
+speech in this audit branch. Native recorder work runs off Android's main thread,
+with passing installed blocked-Stop and recording-limit checks. **Whole-utterance
+voice acceptance fails on both variants.** Exact AAC/PCM snapshots show a
+6.6-second controlled utterance cut to roughly 2.6–3.7 seconds before ASR.
+The earlier standalone “pass” checked one word and only proves a partial-input
+send/reply/playback path; it is explicitly superseded for complete-utterance
+acceptance. `0175fae12` adds length and beginning/middle/end transcript checks,
+which fail correctly on both variants. The next isolation compares native capture
+with and without the active conversation UI; do not lower activity or transcript
+thresholds to turn missing input into a passing result.
+
+Full verification at `31ebc3287` passes 1,056 tests, zero failures and four TODOs.
+Both developer variants build at `0175fae12`, with unqualified speech and no resident
+payload. Real login/Cerebras, qualified ARM64 resident/speech, true barge-in,
+P-11 audio-boundary trials and current-source full AOSP/physical acceptance remain
+unproven. Exact receipts and chronological changes follow.
 
 Historical receipts below retain their exact developer APK and image cohorts.
 Before this merge, both variants passed production route/migration refusal and reset
@@ -38,7 +53,7 @@ The secure-camera fixture passed resource admission and locked capture, while UI
 unlock return remained unresolved. Video capture/native decode/range serving passed
 but WebView playback failed on H.264/AMR-NB. Accessibility failed unlabelled controls
 and reading order. Those results must be rerun where current source changes behavior.
-The historical 93-class inventory is not current coverage of the newly merged tests. The refreshed source inventory contains 168 native test classes (109 named-class runner entries, 59 without that admission) and 2,818 overlapping control/handler candidates across 332 renderer source files; these are review queues, not execution counts.
+The historical 93-class inventory is not current coverage of the newly merged tests. The earlier refreshed inventory recorded 168 native test classes (109 named-class runner entries, 59 without that admission) and 2,818 overlapping control/handler candidates across 332 renderer source files. It predates the newest merge and voice fixtures; it is a historical review queue, not a current execution count.
 Current fresh-guest receipts now pass Contacts catalog, photo mutation fencing,
 ordinary-APK image denial/navigation, installed browser resolution and system shade
 on both variants. A separate corrected Photos campaign passes native catalog checks
@@ -2789,3 +2804,54 @@ Full verification at `96c5be1b0` passes 1,053 tests, zero failures, four TODOs a
 fixture migration, native speech qualification, true barge-in, P-11 actual audio
 boundary trials, real login/Cerebras and current-source full AOSP/Pixel acceptance
 remain open as previously recorded.
+
+
+## Exact ASR input exposes truncated-utterance false positives
+
+This continuation starts from completed prior work, with no live voice/build process.
+`31ebc3287` adds a test-APK-only snapshot plugin. Before dispatching local ASR, the
+controlled conversation fixture copies its already-stopped, identity-checked AAC
+file and decodes that copy through the same AlphaVoicePcm converter. It emits a
+bounded receipt with paths, lengths and SHA-256. The host collector accepts only
+this test's UUID directory under the explicit non-owner disposable user, validates
+all paths before reads, checks decoded bytes/hash, refuses overwrites and collects
+before user removal. Three focused collector tests cover success, unsafe paths/
+users/duplicate receipts and corruption. Production capture code is unchanged.
+The added diagnostic decode excludes these runs from latency qualification.
+
+`developer-apks-conversation-input-evidence` built both developer distributions at
+`31ebc3287`. `cuttlefish-conversation-input-evidence` preserved the exact native
+inputs: standalone 52,224 samples/3.264 seconds and launcher 40,960 samples/2.560
+seconds, versus the 6.625-second known source. Native reported stop durations are
+3,318 and 2,659 ms. Both produce a local transcript and local reply playback; the
+transcripts are partial (“After early nightfall, all the yellow” and “After early
+night”). Source speech continues while the retained captures have approximately
+600 ms of low peak at their ends. Source low-peak spans occur only at its opening
+and trailing silence, not at those mid-utterance positions. The analysis and hashes
+are in `captured-input-analysis.json` inside that campaign directory. The failure
+precedes ASR; these results do not establish that the recognizer dropped intact
+recorded speech. Raw ALSA input qualification does not prove every Android consumer.
+
+Crucially, the earlier single-word `nightfall` assertion admitted the standalone
+partial recording. Historical passes retain their receipts but are **not full
+known-utterance acceptance**. `0175fae12` corrects the test to require at least
+6,200 ms for this fixed 6,625-ms utterance and words spanning its beginning, middle
+and end (`nightfall`, `lamps`, `quarter`), retaining exactly-one-send, playback,
+Stop/cleanup and no-Cloud-speech assertions.
+
+Both developer variants and test APKs rebuilt in
+`developer-apks-conversation-whole-utterance`. The new
+`cuttlefish-conversation-whole-utterance` campaign fails both variants on the new
+length check (3,238 and 3,672 ms). One standalone run also transcribes another
+fragment after rearming; this is not an accepted complete conversational turn.
+Artifacts were collected with matching hashes, both disposable users were removed,
+and final readback shows only owner 0. No native side effect was sent to a real
+agent/service. Next work is an isolated controlled native recording comparison
+without the animated conversation UI and activity polling, followed by guest audio
+and scheduling diagnostics as indicated by that evidence.
+
+`verify-captured-audio.log` passes 1,056 tests, zero failures, four TODOs and the
+397-file production bundle audit at the snapshot implementation. The final stricter
+Java assertions were compiled and exercised in both variants. Qualified release
+assets, resident runtime, real Cloud/Cerebras and current-source image/physical
+acceptance limits remain unchanged.
