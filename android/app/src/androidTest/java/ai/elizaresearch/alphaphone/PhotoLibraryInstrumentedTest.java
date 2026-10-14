@@ -133,8 +133,8 @@ public class PhotoLibraryInstrumentedTest {
     AppNavigation.declineStartupAccess();
     // The device-library tile belongs to Albums, not the initial Photos grid.
     // Open the real visible tab once before asserting its scope disclosure.
-    until("[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Albums'&&b.getClientRects().length&&!b.disabled&&!b.closest('[inert]'))");
-    js("[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Albums'&&b.getClientRects().length&&!b.disabled&&!b.closest('[inert]')).click()");
+    until("[...document.querySelectorAll('button')].some(b=>b.getAttribute('aria-label')==='Albums'&&b.getClientRects().length&&!b.disabled&&!b.closest('[inert]'))");
+    js("[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')==='Albums'&&b.getClientRects().length&&!b.disabled&&!b.closest('[inert]')).click()");
     until("document.body.innerText.includes('Device library')&&document.body.innerText.includes('Full access')");
    }
   } finally {
