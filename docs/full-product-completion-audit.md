@@ -2354,3 +2354,58 @@ The refreshed ignored inventories are `native-inventory-merge-f348.json` and
 `interaction-inventory-merge-f348.json`; lexical candidate counts remain explicitly
 unreviewed. Production local speech routing, real resident startup/Cloud login/
 Cerebras, P-11 voice latency, image/physical/OTA and remaining view/flow gates are open.
+
+## October 13 production local selection and actual Notes voice acceptance
+
+`22fadc83d` changes the shared production speech selector from Cloud to device.
+Account presence, legacy disclosed Cloud preferences and a requested agent fallback
+cannot override it; explicit manual recording remains available without an account
+or speech engine. New production Cloud preference writes are refused without erasing
+retained data. Notes dictation/transcription and message read-aloud consumers now use
+local speech. This is a partial migration: ongoing conversation and direct Cloud
+speech calls from Maps, workflow speech and reviewed agent speech still need changes.
+
+The renderer contract exercises actual selection/Notes adapter sources over synthetic
+ports: local transcription without uploads, edited transcript retention after failed
+persistence, exact selected-text replacement without changing note kind/pinning,
+signed-out manual recording and no automatic chat send. Message reply tests now
+expect device execution. These are contract checks, not microphone/ASR evidence.
+The first full run retained two tests expecting the superseded Cloud route; corrected
+contracts and the passing retry are archived, not treated as provider failures.
+
+Added an installed method to VoiceNoteReadAloud that creates a synthetic note through
+real Notes controls, invokes Read aloud, observes the real native synthesis/playback
+and acknowledged cancel/stop calls, then stops a longer passage with the visible
+Stop reading control. The observation wrapper delegates native calls unchanged;
+it does not synthesize their result or invoke speech directly. It asserts no Cloud
+speech method was called and no active network throughout. The original direct
+bridge method remains separate in that class.
+
+`cuttlefish-local-notes-reading/results.json` passes both methods in both variants
+using `developer-apks-local-selection` at `22fadc83d`. `offline-network.json` proves
+radio/network isolation and restoration. `cuttlefish-local-selection-note-audio`
+passes all seven NoteAudio methods per variant with no skips: actual capture/retained
+playback, recreation, deletion/Undo/purge ownership and late-operation fencing,
+manual selected-text replacement/caret/recreation, and manually transcribed audio
+saved and replayed from the signed-out Notes UI. The last two formerly failed before
+the local-selection change. This separate NoteAudio campaign uses the app's offline
+selection but does not disable guest networking; it is not a network-egress proof.
+Its temporary users 12/13 and both APK packages were removed, with owner 0 restored.
+
+The cleanup audit found an additional failure path: Notes read-aloud returned a
+settled failure without retaining an unconfirmed native drain. A fault-injected
+actual-renderer-source test failed before the fix (`note-cleanup-fault-before.log`).
+`80050eeca` retains that rejected cleanup barrier, so subsequent note and message
+speech cannot start; the test then passes. Native fault injection is not claimed.
+Normal installed playback/Stop was repeated on the rebuilt
+`developer-apks-note-drain-barrier` archive at `022c20004`:
+`cuttlefish-note-drain-barrier/results.json` again passes two methods per variant,
+with offline state observed and network restoration confirmed.
+
+`verify-note-cleanup-barrier.log`: full verification passes with 977 tests, zero
+failures and four TODOs; production bundle audit passes. Both developer distribution
+variants and their instrumentation APKs build and pass archive checks. These retain
+the unqualified x86_64/ARM64 speech candidate, omit the resident payload and have
+unsigned releases. They are not release artifacts. Speech recognition accuracy,
+physical speakers/microphone/Bluetooth, ARM64 functional qualification, streaming/
+barge-in, all production speech paths and P-11 end-to-end latency remain unproved.
