@@ -13,10 +13,10 @@ if(!isMainThread){
  try{const result=await runLeased({options,serial:options.serial,adb,withSecondaryUser:secondaryUserLifecycle({serial:options.serial,lease,imageFingerprint:options.imageFingerprint,adb})});parentPort.postMessage({result});}
  catch(error){parentPort.postMessage({error:String(error.stack||error)});}
 }else{
- const args=process.argv.slice(2),extra={};
+ const args=process.argv.slice(2),extra={};const nativeCapture=args.includes('--native-capture');if(nativeCapture)args.splice(args.indexOf('--native-capture'),1);
  for(const flag of ['--container','--device']){const index=args.indexOf(flag);if(index<0||!args[index+1])throw Error('Requires --container and --device');extra[flag.slice(2)]=args[index+1];args.splice(index,2);}
- if(args.some(a=>['--classes','--all','--test-mocks','--offline-speech'].includes(a)))throw Error('Only the production utterance campaign is supported');
- const options=parseInstrumentationArgs([...args,'--classes','LocalConversationUtterance']);
+ if(args.some(a=>['--classes','--all','--test-mocks','--offline-speech'].includes(a)))throw Error('Only controlled production capture or utterance campaigns are supported');
+ const options=parseInstrumentationArgs([...args,'--classes',nativeCapture?'LocalConversationCapture':'LocalConversationUtterance']);
  if(!options.ownedCuttlefish||!/^127\.0\.0\.1:\d+$/.test(options.serial||'')||!options.output||!options.apkDir||!/^cvd-\d+$/.test(extra.device)||! /^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(extra.container))throw Error('Explicit owned guest, image, APK archive and new output required');
  const lease=await acquireDeviceLease(`android:${options.serial}`,{waitMs:0,ttlMs:Number.MAX_SAFE_INTEGER,stateDir:deviceLeaseStateDir(process.env)});
  let log,chain=Promise.resolve(),feederError,workerOutcome,browser;const events=[];
@@ -45,8 +45,8 @@ if(!isMainThread){
   const worker=new Worker(new URL(import.meta.url),{workerData:{options,lease:{path:lease.path,lease:lease.lease}}});
   workerOutcome=await new Promise((resolve,reject)=>{let message;worker.on('message',value=>{message=value;});worker.on('error',reject);worker.on('exit',code=>code===0&&message?resolve(message):reject(Error('Instrumentation worker exited '+code)));});
   log.kill();await chain;await browser.close();browser=undefined;
-  const result={kind:'controlled-virtual-voice-conversation',physicalMicrophone:false,realInference:false,containerId:inspect.Id,device:extra.device,browserClosed:true,events,...(feederError?{feederError}:{}),...workerOutcome};
+  const result={kind:nativeCapture?'controlled-virtual-native-capture':'controlled-virtual-voice-conversation',physicalMicrophone:false,realInference:false,containerId:inspect.Id,device:extra.device,browserClosed:true,events,...(feederError?{feederError}:{}),...workerOutcome};
   result.passed=!feederError&&workerOutcome.result?.passed===true&&events.length===options.variants.length&&events.every(e=>e.inputStoppedAt);
-  await fs.writeFile(path.join(options.output,'audio-input.json'),JSON.stringify(result,null,2)+'\n');console.log(result.passed?'PASS controlled voice conversation':'FAIL controlled voice conversation');if(!result.passed)process.exitCode=1;
+  await fs.writeFile(path.join(options.output,'audio-input.json'),JSON.stringify(result,null,2)+'\n');console.log((result.passed?'PASS ':'FAIL ')+(nativeCapture?'controlled native capture':'controlled voice conversation'));if(!result.passed)process.exitCode=1;
  }finally{log?.kill();await chain.catch(()=>{});await browser?.close();lease.release();}
 }

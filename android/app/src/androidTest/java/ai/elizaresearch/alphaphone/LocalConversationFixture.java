@@ -11,7 +11,7 @@ import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
 /** Real renderer/native capture lifecycle; only identity/history use a closed synthetic transport. */
 final class LocalConversationFixture {
- private static void until(String expression,long timeout)throws Exception{long end=SystemClock.elapsedRealtime()+timeout;while(SystemClock.elapsedRealtime()<end){if("true".equals(eval("Boolean("+expression+")")))return;SystemClock.sleep(100);}fail("Conversation fixture condition timed out: "+expression+"; observed="+eval("JSON.stringify({native:window.__conversationNative,state:document.querySelector('[data-alpha-chat-recorder]')?.getAttribute('data-voice-state'),text:document.querySelector('[data-alpha-chat-recorder]')?.textContent})"));}
+ private static void until(String expression,long timeout)throws Exception{long end=SystemClock.elapsedRealtime()+timeout;while(SystemClock.elapsedRealtime()<end){if("true".equals(eval("Boolean("+expression+")")))return;SystemClock.sleep(100);}fail("Conversation fixture condition timed out: "+expression+"; observed="+eval("JSON.stringify({native:window.__conversationNative,probe:window.__captureProbe,state:document.querySelector('[data-alpha-chat-recorder]')?.getAttribute('data-voice-state'),text:document.querySelector('[data-alpha-chat-recorder]')?.textContent})"));}
  private static String button(String label){return "[...document.querySelectorAll('button')].find(e=>(e.getAttribute('aria-label')==="+JSONObject.quote(label)+"||e.textContent.trim()==="+JSONObject.quote(label)+")&&e.getClientRects().length&&!e.disabled)";}
  private static void click(String label)throws Exception{until(button(label),20000);eval(button(label)+".click()");}
  /** The live production activity, without an injected Cloud or agent transport. */
@@ -28,7 +28,8 @@ final class LocalConversationFixture {
   assertTrue("WebView responds",done.await(10,java.util.concurrent.TimeUnit.SECONDS));return out.get();
  }
  private static boolean appFocused()throws Exception{MainActivity a=activity();AtomicBoolean focused=new AtomicBoolean();if(a!=null)BoundedActivityScenario.main(()->focused.set(a.hasWindowFocus()));return focused.get();}
- void run(boolean utterance)throws Exception {
+ void run(boolean utterance)throws Exception {run(utterance,false);}
+ void run(boolean utterance,boolean captureOnly)throws Exception {
   org.junit.Assume.assumeTrue("Owned disposable user required","1".equals(InstrumentationRegistry.getArguments().getString("localConversation")));
   assertFalse("Production renderer required",BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS);
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
@@ -52,6 +53,18 @@ final class LocalConversationFixture {
    }
    eval("window.__conversationNative={starts:0,cancels:0,cloud:0,transcripts:0,localSpeech:0,played:0,ended:0,metrics:0,maxPeak:0,asrAttempts:0,asrFailures:0};window.__conversationPromise=Capacitor.nativePromise;Capacitor.nativePromise=function(plugin,method,input){const s=window.__conversationNative;if(plugin==='AlphaVoiceCloud'&&['synthesize','transcribeRecording'].includes(method))s.cloud++;const args=arguments,self=this;const pending=plugin==='AlphaVoiceCloud'&&method==='transcribeLocalRecording'?window.__conversationPromise.call(Capacitor,'ConversationInputEvidence','snapshot',{recordingId:input.recordingId}).then(()=>{s.asrAttempts++;return window.__conversationPromise.apply(self,args);}):window.__conversationPromise.apply(self,args);return pending.then(value=>{if(plugin==='AlphaVoiceCloud'){if(method==='startRecording'){s.starts++;s.maxDurationMs=value.maxDurationMs;}if(method==='cancelRecording')s.cancels++;if(method==='getRecordingMetrics'){s.metrics++;s.maxPeak=Math.max(s.maxPeak,value.peak);}if(method==='stopRecording')s.stoppedDurationMs=value.durationMs;if(method==='transcribeLocalRecording'&&value.execution==='device'){s.transcripts++;s.text=value.text;}if(method==='synthesizeLocal'&&value.execution==='device')s.localSpeech++;if(method==='play')s.played++;}return value;},error=>{if(plugin==='AlphaVoiceCloud'){s.failedMethod=method;s.failureCode=typeof error?.code==='string'?error.code:'unspecified';if(method==='transcribeLocalRecording')s.asrFailures++;}throw error;});}");
    eval("Capacitor.Plugins.AlphaVoiceCloud.addListener('playbackEnded',()=>window.__conversationNative.ended++).then(h=>window.__conversationEndListener=h)");until("window.__conversationEndListener",10000);
+   if(captureOnly){
+    eval("window.__captureProbe={};Capacitor.Plugins.AlphaVoiceCloud.startRecording({maxDurationMs:29000}).then(value=>window.__captureProbe.id=value.recordingId,error=>window.__captureProbe.error=String(error))");
+    until("window.__captureProbe.id",30000);android.util.Log.i("AlphaVoiceFixture","CAPTURE_READY "+InboxFixtureScope.runId);
+    SystemClock.sleep(8500);
+    eval("Capacitor.Plugins.AlphaVoiceCloud.stopRecording().then(value=>{window.__captureProbe.durationMs=value.durationMs;return Capacitor.Plugins.ConversationInputEvidence.snapshot({recordingId:value.recordingId});}).then(()=>Capacitor.Plugins.AlphaVoiceCloud.cancelRecording()).then(()=>window.__captureProbe.done=true,error=>window.__captureProbe.error=String(error))");
+    until("window.__captureProbe.done",30000);
+    assertEquals("The native control records the entire input window","true",eval("window.__captureProbe.durationMs>=8000"));
+    assertEquals("No renderer activity polling in the control","0",eval("window.__conversationNative.metrics"));
+    assertEquals("No ASR or inference in the control",0,ConversationFixtureAgent.sends);
+    assertEquals("No ASR in the control","0",eval("window.__conversationNative.asrAttempts"));
+    return;
+   }
    click("Talk");until("window.__conversationNative.starts===1",180000);
    assertEquals("Local recording cap","29000",eval("window.__conversationNative.maxDurationMs"));
    until("document.querySelector('[data-alpha-chat-recorder]')?.textContent.includes('transcribed on this device')",20000);
