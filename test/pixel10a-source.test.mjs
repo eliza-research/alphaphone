@@ -61,3 +61,7 @@ test('changed manifest worktree and unlisted local manifests cannot retain sourc
 test('changing the selected manifest or registered project list fails',async t=>{
  const f=fixture(t);fs.appendFileSync(path.join(f.source,'.repo/project.list'),'extra\n');await assert.rejects(verifyPixel10aSource(f),/Source bytes differ/);
 });
+
+test('ignored build inputs cannot bypass project status verification',async t=>{
+ const f=fixture(t);fs.writeFileSync(path.join(f.project.dir,'.git/info/exclude'),'hidden.cpp\n');fs.writeFileSync(path.join(f.project.dir,'hidden.cpp'),'unreviewed');await assert.rejects(verifyPixel10aSource(f),/Ignored source inventory differs/);
+});

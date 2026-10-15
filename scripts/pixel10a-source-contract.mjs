@@ -81,6 +81,21 @@ export async function verifyPixel10aSource({source, factory, lock = defaultLockP
       const expected = [...overrides.keys()].filter(name => name.startsWith(`${project.path}/`)).sort();
       if (JSON.stringify(actual) !== JSON.stringify(expected)) throw Error(`Unrecorded source changes: ${project.path}`);
       for (const name of expected) await checkFile(root, overrides.get(name));
+      // git status hides ignored source. Bind even ignored extraction-tool outputs;
+      // a new ignored Android.bp or source file must not silently enter the build.
+      const ignored = (await git(directory, ['ls-files','--others','--ignored','--exclude-standard','-z'])).split('\0').filter(Boolean).map(name => `${project.path}/${name}`).sort();
+      const expectedIgnored = (contract.ignoredInputs ?? []).find(entry => entry.project === project.path);
+      if (ignored.length !== (expectedIgnored?.files ?? 0)) throw Error(`Ignored source inventory differs: ${project.path}`);
+      if (ignored.length) {
+        const tree = createHash('sha256');
+        for (const name of ignored) {
+          const file = within(root, name), stat = fs.lstatSync(file);
+          const record = stat.isSymbolicLink() ? {path:name, link:fs.readlinkSync(file)} : {path:name, sizeBytes:stat.size, sha256:await fileHash(file)};
+          if (!stat.isSymbolicLink() && !stat.isFile()) throw Error(`Invalid ignored source input: ${name}`);
+          tree.update(JSON.stringify(record)+'\n');
+        }
+        if (tree.digest('hex') !== expectedIgnored.sha256) throw Error(`Ignored source bytes differ: ${project.path}`);
+      }
     }
   }));
   const files = contract.generated.files;

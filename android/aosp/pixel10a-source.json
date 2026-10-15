@@ -36379,5 +36379,12 @@
       "baseSha256": "ebbbe67189e0083c1403e766e0fc7d74682464e4c6e25859ff40d520d9c96173",
       "sha256": "e3ce759333761b382379bbbda8a5df45e768372bd7661ab2fd3f7232dc2f71eb"
     }
+  ],
+  "ignoredInputs": [
+    {
+      "project": "vendor/adevtool",
+      "files": 20240,
+      "sha256": "cad523f6693fa7b1cdf8225707cd239fb2486bafdc7b43e1fc0d53e92adb2833"
+    }
   ]
 }

@@ -34,8 +34,10 @@ node scripts/verify-pixel10a-source.mjs \
 The command reads files and Git state. It checks every listed project revision,
 rejects additional tracked/untracked source changes and hidden index flags, compares
 all reviewed overrides and the complete generated vendor inventory, and hashes the
-factory archive. It writes only the explicitly requested new report. It neither
-prepares nor patches a source tree. Ignored build outputs and the separately staged
+factory archive. Ignored files are also checked: the recorded extraction-tool
+dependency/build output tree has a complete aggregate hash, and ignored inputs
+in any other project are refused. It writes only the explicitly requested new report. It neither
+prepares nor patches a source tree. The top-level AOSP `out/` build outputs and the separately staged
 `vendor/alphaphone` app payload are not covered by this source-input check; APK,
 secure camera and listener admission still apply independently during staging.
 
