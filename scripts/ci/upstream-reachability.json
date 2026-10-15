@@ -325,12 +325,13 @@
       "mergedAt": "2026-10-14T21:44:16Z",
       "mergeCommit": "f7f3765d0a9cb8414f6c3a472446cff77e6fb9c7",
       "head": "claude/alpha-ipc-events"
+    },
+    {
+      "number": 36303,
+      "state": "merged",
+      "mergedAt": "2026-10-15T03:21:11Z",
+      "mergeCommit": "c0145e3090cefe3fb87c22963fb5c15b76945162",
+      "head": "adef3e4e3e7ca48e89a5a858404a3349269acac7"
     }
-  ],
-  "pendingPullRequest": {
-    "number": 36303,
-    "url": "https://github.com/elizaOS/eliza/pull/36303",
-    "state": "open",
-    "note": "Develop-based equivalent of the isolated Maps relay commit; isolated pin retains the previous native source baseline."
-  }
+  ]
 }
