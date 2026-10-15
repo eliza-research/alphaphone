@@ -56,6 +56,20 @@ Decided by the product owner on 2026-10-13 (P-54) and 2026-10-14 (P-55), recorde
 - **P-54** On-device speech output is **Paradee-8M** (Apache-2.0), not Kokoro-82M, running on libelizainference (P-42) through the shared elizaOS paradee-voice library: native misaki English G2P with its lexicon, and eSpeak NG 1.52.0 for out-of-lexicon words. eSpeak NG is GPL-3.0-or-later and statically linked into libelizainference; like every licence finding it is listed and flagged in the notices and never blocks a build (P-09). The 32 MB Paradee GGUF ships in the APK assets. No Kokoro model, voice preset or CMUdict lexicon ships, and the Android CMUdict G2P workaround is removed. See [fused speech](fused-speech.md).
 - **P-55** **Phonon-2** is the on-device ASR (faster, smaller and more accurate; owner, 2026-10-13 and 2026-10-14). It was ported upstream (elizaOS/eliza#36212 merged on 2026-10-14 as `d06a1aa9c9`, with streaming ASR #36213 `d68909cb` and live voice #36214 `70dc0bbf`) and is consumed at the pin `c7a9a0d7e7` (2026-10-14, llama.cpp `5df17a66`): the voice bundle's ASR slot holds the single parakeet-tdt GGUF `asr/phonon-2-fv5.gguf` (330,632,256 bytes, sha256 `dc552eb7…`, converted from `FermionResearch/Phonon-2@7e153e40`), pinned in `android/paradee-voice/asr-inputs.json` with backend `parakeet`, and the APK sets `ELIZA_ASR_BACKEND=parakeet` by default. The Qwen3-ASR pair no longer ships; the slot still accepts it as the `qwen3` backend. Phonon-2 weights are CC-BY-4.0: the attribution, Fermion's NOTICE and the licence text ship in the bundle and the notices; the training-data terms the NOTICE names (CHiME-6 CC-BY-SA-4.0, SPGISpeech Kensho terms) are flagged for review, never blocking (P-09). The voice conversation on Android streams to the resident agent's live ASR route with Silero VAD in the app process; the send policy is unchanged (P-39, MVP-01: `VOICE_SEND_POLICY`). The voice host stays unqualified until a person reviews on-device qualification. Text inference is unchanged: Qwen qwen-3.8-27b on Cerebras. See [fused speech](fused-speech.md).
 
+## October 14 Maps allowance clarification
+
+Decided by the owner in chat on 2026-10-14 (2026-10-15 UTC), while reviewing
+[#410](https://github.com/AlphaCompute/alphaphone/issues/410). This clarifies P-26
+and P-28; it does not establish implementation, deployment or acceptance.
+
+- **P-56** Maps has a **separate Maps request allowance, with no per-request charge**.
+  Enforce that allowance across the organization, separately from inference usage.
+  Usage accounting must not introduce a monetary charge or automatic overage.
+  Numeric prices and limits remain unset until supported by cost and pilot evidence.
+  Preserve revocation/expiry checks, idempotent accounting and local speech's
+  independence from billing. Source, deployment and real-account acceptance remain
+  open under #410.
+
 ## October 12 owner decisions
 
 The owner approved the following choices in chat on 2026-10-12. The matching GitHub
