@@ -28,8 +28,10 @@ the operator's index of build, provisioning, release and support material is the
   agent runs behind it, and the plan decides only whether Cloud inference is bound into the
   running agent. There is no "without AI" or offline mode. Remote pairing is retired on production Android and
   remains a browser and test-mocks development transport (see Connection choices below).
-- The upstream pin in `upstream.lock.json` is `968348d792` (moved on 2026-10-14,
-  PR #531), with llama.cpp gitlink `3e5f73922ee8`. It preserves Phonon-2 batch/streaming
+- The upstream pin in `upstream.lock.json` is `2d1c8a9071` (moved on 2026-10-15
+  for the Maps owner relay), with unchanged native source and llama.cpp gitlink `3e5f73922ee8`
+  from `968348d792` (PR #531). This is source admission only; native execution and qualification
+  records retain their historical pins. The native baseline preserves Phonon-2 batch/streaming
   ASR, Paradee-8M TTS, misaki G2P and voice ABI 18 from the previous `c7a9a0d7e7` pin,
   adds the upstream-preserving native integration, native build/Kokoro classification repairs
   and disables the optional Android video helper. A consumer wrapper records both clean source revisions around the shared voice build; staging checks
