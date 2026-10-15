@@ -3,17 +3,25 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "dbc28d779473b8896d3df2ca6ee779de7f89ec34",
-  "head": "2d1c8a9071dc5db1db253b940e4eba350e389861",
+  "head": "1a5a05db0c80dceeff528d3b70c1724cf84ea153",
   "recordedAt": "2026-10-15",
-  "command": "gh api repos/elizaOS/eliza/compare/dbc28d779473b8896d3df2ca6ee779de7f89ec34...2d1c8a9071dc5db1db253b940e4eba350e389861",
+  "command": "gh api repos/elizaOS/eliza/compare/dbc28d779473b8896d3df2ca6ee779de7f89ec34...1a5a05db0c80dceeff528d3b70c1724cf84ea153",
   "status": "diverged",
-  "aheadBy": 1,
+  "aheadBy": 3,
   "behindBy": 33,
   "mergeBase": "968348d792d3d36df129bc53bd85cebed47d0830",
   "pinOnlyCommits": [
     {
       "sha": "2d1c8a9071dc5db1db253b940e4eba350e389861",
       "subject": "Bind Maps navigation to authenticated phone turns"
+    },
+    {
+      "sha": "c70652190ad3a1cbdee6888bf73d665aa6164577",
+      "subject": "fix(maps): require string relay phases and result fields"
+    },
+    {
+      "sha": "1a5a05db0c80dceeff528d3b70c1724cf84ea153",
+      "subject": "Test nonstring Maps protocol fields"
     }
   ],
   "pullRequests": [

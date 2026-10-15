@@ -1441,7 +1441,7 @@ emulator, AOSP boot, physical-device or distribution qualification.
 
 ## Maps relay admission pin (2026-10-15)
 
-The consumer now admits `2d1c8a9071dc5db1db253b940e4eba350e389861`, a single
+The consumer now admits `1a5a05db0c80dceeff528d3b70c1724cf84ea153`, a single
 Maps relay commit directly above `968348d792d3d36df129bc53bd85cebed47d0830`.
 The develop-based equivalent is [Eliza #36303](https://github.com/elizaOS/eliza/pull/36303).
 [Source equivalence](evidence/maps-relay-pin-source-equivalence-2026-10-15.json)

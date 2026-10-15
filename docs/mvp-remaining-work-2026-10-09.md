@@ -1,6 +1,6 @@
 # MVP remaining-work inventory — policy reconciled October 12, 2026
 
-Current source pin: `2d1c8a9071dc` (2026-10-15, Maps owner relay), llama.cpp `3e5f73922ee8`.
+Current source pin: `1a5a05db0c80` (2026-10-15, Maps owner relay), llama.cpp `3e5f73922ee8`.
 The relay preserves native source from `968348d792d3` (PR #531). Voice remains unqualified and the prior embedding-host
 receipt remains refused pending requalification. Historical evidence below is not promoted.
 

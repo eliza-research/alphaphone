@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "baseCommit": "968348d792d3d36df129bc53bd85cebed47d0830",
-  "admittedCommit": "2d1c8a9071dc5db1db253b940e4eba350e389861",
+  "admittedCommit": "1a5a05db0c80dceeff528d3b70c1724cf84ea153",
   "purpose": "Source equivalence for admission metadata only; not native build or execution evidence.",
   "changedPaths": [
     "bun.lock",
@@ -63,5 +63,10 @@
   ],
   "nativeSourceUnchanged": true,
   "nativeExecutionAtNewPin": false,
-  "nativeQualificationTransferred": false
+  "nativeQualificationTransferred": false,
+  "lockCompatibility": {
+    "previousAuditedCommit": "2d1c8a9071dc5db1db253b940e4eba350e389861",
+    "rawLockSha256": "6ed8cf7a3b4494767ae8a81e62701c6f29abd2a620ce255b6eb4c1810133ed8f",
+    "byteIdentical": true
+  }
 }
