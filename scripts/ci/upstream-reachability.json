@@ -2,15 +2,20 @@
   "schema": 1,
   "repository": "elizaOS/eliza",
   "base": "develop",
-  "baseCommit": "172e072c623c7b08b66f120020997e5f90f4de7a",
-  "head": "968348d792d3d36df129bc53bd85cebed47d0830",
+  "baseCommit": "dbc28d779473b8896d3df2ca6ee779de7f89ec34",
+  "head": "2d1c8a9071dc5db1db253b940e4eba350e389861",
   "recordedAt": "2026-10-15",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...968348d792d3d36df129bc53bd85cebed47d0830",
-  "status": "behind",
-  "aheadBy": 0,
-  "behindBy": 15,
+  "command": "gh api repos/elizaOS/eliza/compare/dbc28d779473b8896d3df2ca6ee779de7f89ec34...2d1c8a9071dc5db1db253b940e4eba350e389861",
+  "status": "diverged",
+  "aheadBy": 1,
+  "behindBy": 33,
   "mergeBase": "968348d792d3d36df129bc53bd85cebed47d0830",
-  "pinOnlyCommits": [],
+  "pinOnlyCommits": [
+    {
+      "sha": "2d1c8a9071dc5db1db253b940e4eba350e389861",
+      "subject": "Bind Maps navigation to authenticated phone turns"
+    }
+  ],
   "pullRequests": [
     {
       "number": 34453,
@@ -313,5 +318,11 @@
       "mergeCommit": "f7f3765d0a9cb8414f6c3a472446cff77e6fb9c7",
       "head": "claude/alpha-ipc-events"
     }
-  ]
+  ],
+  "pendingPullRequest": {
+    "number": 36303,
+    "url": "https://github.com/elizaOS/eliza/pull/36303",
+    "state": "open",
+    "note": "Develop-based equivalent of the isolated Maps relay commit; isolated pin retains the previous native source baseline."
+  }
 }

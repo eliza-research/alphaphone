@@ -1417,9 +1417,9 @@ Both runners bind the bytes upstream pins to the admitted hashes in `preflightVa
 any install, so a build that overwrites the archive after admission fails the run instead of
 being recorded under the admitted hashes. These are source checks only, as above.
 
-## Latest upstream pin integration (2026-10-15)
+## Native source pin integration (2026-10-15; historical 968348 baseline)
 
-The candidate source pin is `968348d792d3d36df129bc53bd85cebed47d0830`.
+The native build reference source pin is `968348d792d3d36df129bc53bd85cebed47d0830`.
 It contains merged Eliza #36157 and #36292. Its llama.cpp gitlink is
 `3e5f73922ee804806a2e955b50843a5042e6e401`, fork main after upstream integration
 #72 and the native build repairs in #80. All existing native patch target
@@ -1437,3 +1437,23 @@ Their measured hashes are recorded in the unqualified voice-host manifest; ELF
 architecture, required exports and 16 KiB alignment checks passed. The separate
 resident-host qualification receipt remains historical and unchanged. A source pin or development library build does not establish
 emulator, AOSP boot, physical-device or distribution qualification.
+
+
+## Maps relay admission pin (2026-10-15)
+
+The consumer now admits `2d1c8a9071dc5db1db253b940e4eba350e389861`, a single
+Maps relay commit directly above `968348d792d3d36df129bc53bd85cebed47d0830`.
+The develop-based equivalent is [Eliza #36303](https://github.com/elizaOS/eliza/pull/36303).
+[Source equivalence](evidence/maps-relay-pin-source-equivalence-2026-10-15.json)
+records every changed path, unchanged native gitlinks and matching existing native
+patch target hashes. Native source, build scripts and JNI inputs are unchanged.
+Only source-admission markers advance: native build reference hashes remain tied
+to 968348, the embedding receipt remains historical and rejected, and voice
+qualification remains false. No new-pin native execution or acceptance is claimed.
+
+The corrected Bun lock adds the Maps workspace dependency without changing any
+package version. A fresh resident dependency audit of this exact pin returned the
+same 98 findings across 3675 package versions and the same normalized input hash;
+existing reviewed dispositions and deadlines remain unchanged. This does not
+replace a packaged-runtime audit or device qualification. Hosted consumer checks
+and the upstream review/CI gate remain required before integration is accepted.
