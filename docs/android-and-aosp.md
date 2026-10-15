@@ -172,7 +172,7 @@ product or publish a Pixel 10 installer before its device inputs are admitted.
 An SDK emulator with an installed launcher is useful HOME/app evidence, but is not
 proof that this product makefile built or booted in a custom AOSP image.
 
-## Cuttlefish and Pixel 10 handoff
+## Cuttlefish and Pixel 10a handoff
 
 Track image work in [Alpha #377](https://github.com/AlphaCompute/alphaphone/issues/377)
 and app acceptance in [Alpha #378](https://github.com/AlphaCompute/alphaphone/issues/378).
@@ -193,13 +193,15 @@ approvals, saved history and lifecycle recovery. Preserve build IDs, hashes and 
 The [Cuttlefish host instructions](https://source.android.com/docs/devices/cuttlefish/get-started)
 require KVM and a host package matching the image build.
 
-Pixel 10 needs its own verified device/kernel/vendor lock and product configuration.
-The currently inspected OS catalog has no Pixel 10 product; its tegu and grizzly
-products must not be relabeled. Acquire and validate the exact inputs before exposing
-a Pixel 10 lunch target. Keep licensed inputs outside Git. A successful Cuttlefish
-image is the agreed virtual-device validation, not evidence that Pixel 10 images
-build or boot. Physical flashing, hardware checks and signed recovery remain later
-acceptance steps.
+The approved physical target is **Pixel 10a (stallion), Android 17**, not Pixel 10
+or Pixel 11. The [Pixel 10a source contract](pixel10a-source-contract.md) records
+the exact AOSP manifest, device-tool revisions, factory archive, kernel and generated
+vendor inputs of the inspected development baseline. Licensed binaries stay outside
+Git. The older `android/aosp/pixel10.lock.json` remains an unadmitted historical
+placeholder and must not be relabeled as stallion. Cuttlefish, source-input verification,
+a development image boot, current-app acceptance, release signing and recovery are
+separate gates. The new source contract does not promote the older image to a
+current or distributable release.
 
 ## Distribution boundaries
 
