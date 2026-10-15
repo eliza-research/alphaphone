@@ -17,7 +17,24 @@
   "manifest": {
     "commit": "5bc9a7ce1cd78dd53613bbfd0ebf506e1e4adb0f",
     "tag": "android-17.0.0_r1",
-    "tagObject": "7a9e46ba6ed424f922a3457f4964e67e0b966201"
+    "tagObject": "7a9e46ba6ed424f922a3457f4964e67e0b966201",
+    "configuration": [
+      {
+        "path": ".repo/manifest.xml",
+        "sizeBytes": 500,
+        "sha256": "33d794c99c197c2eb0726ff2cc8c4bcd532e0f3fcd75eaea3fbd10bd53675d25"
+      },
+      {
+        "path": ".repo/project.list",
+        "sizeBytes": 25438,
+        "sha256": "bfbbd52d0f2d1c71326fd1c381da1e8038fb1dfdf376e649e4138ab660d01cc5"
+      },
+      {
+        "path": ".repo/local_manifests/alpha-pins.xml",
+        "sizeBytes": 154204,
+        "sha256": "36c916c7e0c9b3855c4f0226a66f1f1a2520d7746bf8381e25d21dda17aa9f43"
+      }
+    ]
   },
   "factory": {
     "filename": "stallion-cp3a.261005.005-factory-d1d25502.zip",

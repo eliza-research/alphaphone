@@ -24,6 +24,8 @@ function fixture(t) {
  fs.writeFileSync(factory,'factory');
  const record=name=>{const bytes=fs.readFileSync(path.join(source,name));return {path:name,sizeBytes:bytes.length,sha256:sha(bytes)}};
  const contract={schema:1,target:'pixel10a',device:{codename:'stallion',androidRelease:'17'},developmentOnly:true,releaseQualified:false,manifest:{commit:manifest.commit},factory:{sizeBytes:7,sha256:sha('factory')},projects:[{path:'framework',commit:project.commit}],overrides:[record('framework/source.txt')],generated:{root:'vendor/google_devices/stallion',files:[record(generated)]}};
+ fs.writeFileSync(path.join(source,'.repo/manifest.xml'),'<manifest/>');fs.writeFileSync(path.join(source,'.repo/project.list'),'framework\n');
+ contract.manifest.configuration=[record('.repo/manifest.xml'),record('.repo/project.list')];
  const save=()=>fs.writeFileSync(lock,JSON.stringify(contract));save();
  return {source,factory,lock,contract,save,project};
 }
@@ -49,4 +51,13 @@ test('unrecorded generated file and changed reviewed override fail',async t=>{
 test('wrong device and unsafe source paths fail without staging outputs',async t=>{
  const f=fixture(t);f.contract.device.codename='grizzly';f.save();await assert.rejects(verifyPixel10aSource(f),/Not the Pixel 10a/);
  f.contract.device.codename='stallion';f.contract.projects[0].path='../outside';f.save();await assert.rejects(verifyPixel10aSource(f),/Unsafe source path/);
+});
+
+test('changed manifest worktree and unlisted local manifests cannot retain source admission',async t=>{
+ const f=fixture(t),file=path.join(f.source,'.repo/manifests/source.txt');
+ fs.writeFileSync(file,'changed manifest');await assert.rejects(verifyPixel10aSource(f),/manifest working tree differs/);
+ fs.writeFileSync(file,'original');fs.mkdirSync(path.join(f.source,'.repo/local_manifests'));fs.writeFileSync(path.join(f.source,'.repo/local_manifests/extra.xml'),'<manifest/>');await assert.rejects(verifyPixel10aSource(f),/Local manifest inventory differs/);
+});
+test('changing the selected manifest or registered project list fails',async t=>{
+ const f=fixture(t);fs.appendFileSync(path.join(f.source,'.repo/project.list'),'extra\n');await assert.rejects(verifyPixel10aSource(f),/Source bytes differ/);
 });

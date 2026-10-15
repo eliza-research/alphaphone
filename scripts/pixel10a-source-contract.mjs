@@ -49,7 +49,16 @@ export async function verifyPixel10aSource({source, factory, lock = defaultLockP
   if (!contract.projects?.length || !contract.generated?.files?.length) throw Error('Incomplete Pixel 10a source inventory');
   const expectedFactory = contract.factory;
   if (!fs.statSync(factory).isFile() || fs.statSync(factory).size !== expectedFactory.sizeBytes || await fileHash(factory) !== expectedFactory.sha256) throw Error('Pixel 10a factory archive differs from the source lock');
-  if ((await git(path.join(root, '.repo/manifests'), ['rev-parse','HEAD'])).trim() !== contract.manifest.commit) throw Error('AOSP manifest revision differs');
+  const manifestRoot = path.join(root, '.repo/manifests');
+  if ((await git(manifestRoot, ['rev-parse','HEAD'])).trim() !== contract.manifest.commit) throw Error('AOSP manifest revision differs');
+  if ((await git(manifestRoot, ['ls-files','-v','-z'])).split('\0').some(row => row && row[0] !== 'H') || (await git(manifestRoot, ['status','--porcelain=v1','-z','--untracked-files=all'])).length) throw Error('AOSP manifest working tree differs');
+  const configuration = contract.manifest.configuration;
+  if (!Array.isArray(configuration) || !configuration.some(entry => entry.path === '.repo/manifest.xml') || !configuration.some(entry => entry.path === '.repo/project.list')) throw Error('Missing manifest configuration inventory');
+  for (const entry of configuration) await checkFile(root, entry);
+  const localRoot = '.repo/local_manifests';
+  const actualLocal = fs.existsSync(path.join(root, localRoot)) ? inventory(root, localRoot) : [];
+  const expectedLocal = configuration.filter(entry => entry.path.startsWith(`${localRoot}/`)).map(entry => entry.path).sort();
+  if (JSON.stringify(actualLocal) !== JSON.stringify(expectedLocal)) throw Error('Local manifest inventory differs');
   const overrides = new Map();
   for (const entry of contract.overrides) {
     if (overrides.has(entry.path)) throw Error(`Duplicate override: ${entry.path}`);
