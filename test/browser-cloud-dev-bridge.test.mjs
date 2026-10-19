@@ -43,6 +43,7 @@ async function fixture(resident,environment){
   if(signIn){const handled=await signIn(path,input);if(handled)return handled;}
   if(path==='/api/auth/cli-session')return Response.json({sessionId:session,expiresAt:new Date(Date.now()+60000).toISOString()});
   if(path==='/api/auth/cli-session/'+session)return pollResponse();
+  if(path==='/api/v1/subscription/entitlement-keys')return response(url,input);
   assert.equal(new Headers(input.headers).get('Authorization'),'Bearer '+secret);
   if(path==='/api/v1/user')return Response.json({success:true,data:{id:owner,organization_id:org,email:'owned@example.invalid'}});
   if(path==='/api/v1/billing/limits')return Response.json({success:true,data:{v2:{subscription:{status:'available',value:{planKey:'plus_monthly',state:'active'}}}}});
@@ -442,5 +443,21 @@ test('explicit Cloud resident rejects a different issuer before dispatch',async(
   const before=f.calls.length;
   const result=await f.rpc({operation:'secureRead',slot:'cloud:production'});
   assert.notEqual(result.status,200);assert.equal(f.calls.length,before);
+ }finally{await f.close();}
+});
+
+test('real CloudProtocol verifies a signed plan through public host keys without a credential reference',async()=>{
+ const {checkEntitlement,ENTITLEMENT_TYPE,ENTITLEMENT_AUDIENCE}=await import('../apps/app/src/runtime/subscription-entitlement.ts');
+ const pair=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
+ const key={...await crypto.subtle.exportKey('jwk',pair.publicKey),kid:'host-public-keys-regression'};
+ const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');const now=Math.floor(Date.now()/1000);
+ const unsigned=encode({alg:'ES256',typ:ENTITLEMENT_TYPE,kid:key.kid})+'.'+encode({iss:'https://api.eliza.app',aud:ENTITLEMENT_AUDIENCE,sub:owner,org,jti:'synthetic-plan',iat:now-1,exp:now+300,plan:{id:'none',name:'No plan',status:'none'}});
+ const token=unsigned+'.'+Buffer.from(await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},pair.privateKey,Buffer.from(unsigned))).toString('base64url');
+ const f=await fixture();try{
+  let publicRead=false;f.setResponse(async(url,input)=>{if(new URL(url).pathname==='/api/v1/subscription/entitlement-keys'){assert.equal(new Headers(input.headers).get('Authorization'),null);publicRead=true;return Response.json({keys:[key]});}if(new URL(url).pathname==='/api/v1/subscription/entitlement')return Response.json({entitlement:token});return Response.json({},{status:404});});
+  const stored=JSON.parse((await f.rpc({operation:'secureRead',slot:'cloud:production'})).data.value);
+  const client=new CloudProtocol('production',async input=>{const r=await f.rpc({operation:'request',environment:'production',requestId:randomUUID(),input});assert.equal(r.status,200);return r.data;},{acceptsReferences:true,read:async()=>stored,write:async()=>{},clear:async()=>{}},async()=>{});
+  const checked=await checkEntitlement(client.entitlementSource(),{userId:owner,organizationId:org},new AbortController().signal);
+  assert.equal(publicRead,true);assert.equal(checked.view.kind,'inactive');assert.equal(checked.view.status,'none');assert.ok(checked.entitlement);
  }finally{await f.close();}
 });
