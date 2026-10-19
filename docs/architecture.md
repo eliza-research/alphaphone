@@ -75,10 +75,12 @@ Browser policy helpers are staged from the same authenticated pin. Gradle writes
 library outputs under the host build directory, outside the immutable vendor checkout.
 Product wrappers inject presentation, device configuration and installed storage identities. Resident
 runtime preparation also uses the locked upstream source without patch replay.
-Resident Java staging also admits the two reviewed files in
-`patches/eliza/resident-native-manifest.json` into a generated copy. It verifies
-base, patch, patched and generated hashes before host identity/resource/environment
-configuration. The vendor checkout and prepared resident runtime stay unchanged.
+Resident Java staging reads the exact locked upstream source, which now contains
+the reviewed IPC startup recovery pair. Its generated-source receipt binds original
+and generated hashes across host identity/resource/environment configuration; CI
+requires both recovery files and refuses resident patches. The retired patch and
+source equivalence are recorded in `patches/eliza/resident-ipc-recovery.md`.
+The vendor checkout and prepared resident runtime stay unchanged.
 
 Generic behavior belongs upstream with configurable host inputs. Product names,
 package IDs, storage namespaces, view allowlists and approval policy stay here.

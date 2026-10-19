@@ -6,8 +6,6 @@ import {fileURLToPath} from 'node:url';
 import {upstreamNativeSource,sha} from './upstream-native-source.mjs';
 const ROOT=fileURLToPath(new URL('../',import.meta.url));
 const HEX=/^[a-f0-9]{64}$/;
-const RESIDENT_MODULE='packages/app/platforms/android/app';
-const RESIDENT_TARGETS=['ElizaAgentService','IpcStartupRecovery'].map(name=>`${RESIDENT_MODULE}/src/main/java/ai/elizaos/app/${name}.java`);
 const safe=name=>typeof name==='string'&&!name.startsWith('/')&&!name.split('/').some(x=>!x||x==='.'||x==='..')&&!name.includes('\\');
 function inventory(root){const files={};function visit(dir){for(const row of fs.readdirSync(dir,{withFileTypes:true})){const name=path.join(dir,row.name);if(row.isSymbolicLink())throw Error('Symlink in patched source');if(row.isDirectory())visit(name);else if(row.isFile())files[path.relative(root,name)]=sha(fs.readFileSync(name));else throw Error('Nonregular patched source');}}visit(root);return files;}
 function verifyModes(root,modes){for(const [name,mode] of Object.entries(modes))if((fs.statSync(path.join(root,name)).mode&0o111)!==(mode==='100755'?0o111:0))throw Error('Native staged source mode drift');}
@@ -16,7 +14,7 @@ function same(a,b){return JSON.stringify(Object.entries(a).sort())===JSON.string
 export function materializeNativePatches({source,manifest,patchRoot,temporary}){
  if(manifest.schema!==1||manifest.baseCommit!==source.pin||!Array.isArray(manifest.patches))throw Error('Native patch manifest pin/schema mismatch');
  const modules=[...new Set(manifest.patches.map(p=>p.module))].sort(),files=new Map(),expected={};
- for(const module of modules){if(module!==RESIDENT_MODULE&&!/^plugins\/plugin-native-[a-z-]+\/android$/.test(module))throw Error('Invalid native patch module');for(const [name,file] of source.read(module)){files.set(name,file);expected[name]=file.sha256;}}
+ for(const module of modules){if(!/^plugins\/plugin-native-[a-z-]+\/android$/.test(module))throw Error('Invalid native patch module');for(const [name,file] of source.read(module)){files.set(name,file);expected[name]=file.sha256;}}
  for(const [name,file] of files){const dest=path.join(temporary,name);fs.mkdirSync(path.dirname(dest),{recursive:true});fs.writeFileSync(dest,file.bytes,{mode:parseInt(file.mode,8)});}
  const targets=new Set();
  for(const patch of manifest.patches){
@@ -40,24 +38,15 @@ export function nativePatchReceipt(prepared){const {root,...receipt}=prepared;re
 export function verifyNativePatchReceipt(raw,prepared){let receipt;try{receipt=JSON.parse(raw);}catch{throw Error('Missing or invalid packaged native patch receipt');}if(JSON.stringify(receipt)!==JSON.stringify(nativePatchReceipt(prepared)))throw Error('Packaged native patch receipt mismatch');return receipt;}
 export function preparePatchedNative({root=ROOT,manifestFile='native-manifest.json'}={}){
  root=path.resolve(root);
- if(!['native-manifest.json','resident-native-manifest.json'].includes(manifestFile))throw Error('Unknown native patch slot');
- const upstream=upstreamNativeSource(root),patchRoot=path.join(root,'patches/eliza'),manifestBytes=fs.readFileSync(path.join(patchRoot,manifestFile)),manifest=JSON.parse(manifestBytes);
- let source=upstream;
- if(manifestFile==='resident-native-manifest.json'){
-  const patch=manifest.patches?.[0];
-  if(manifest.patches?.length!==1||patch?.module!==RESIDENT_MODULE||patch.file!=='resident-ipc-recovery.patch'||
-   !/^[a-f0-9]{40}$/.test(manifest.upstreamCandidateCommit)||
-   JSON.stringify(patch.targets?.map(target=>target.path))!==JSON.stringify(RESIDENT_TARGETS))throw Error('Resident native patch slot must contain exactly the reviewed service/recovery pair');
-  // Read only the two declared blobs from the pinned Git source, never copy the SDK module.
-  source={...upstream,read(module){if(module!==RESIDENT_MODULE)throw Error('Unexpected resident patch module');return new Map(RESIDENT_TARGETS.flatMap(name=>[...upstream.read(name)]));}};
- }else if(manifest.patches?.some(patch=>patch.module===RESIDENT_MODULE))throw Error('Resident source requires its explicit native patch slot');
+ if(manifestFile!=='native-manifest.json')throw Error('Unknown native patch slot');
+ const source=upstreamNativeSource(root),patchRoot=path.join(root,'patches/eliza'),manifestBytes=fs.readFileSync(path.join(patchRoot,manifestFile)),manifest=JSON.parse(manifestBytes);
  const key=sha(Buffer.concat([manifestBytes,fs.readFileSync(fileURLToPath(import.meta.url))]));
  const parent=path.join(root,'.eliza/patched-native'),destination=path.join(parent,key);
  for(let current=parent;current!==root;current=path.dirname(current))if(fs.existsSync(current)&&fs.lstatSync(current).isSymbolicLink())throw Error('Symlink in native staging parent');
  const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'alpha-native-patches-'));
  try{
   const verified=materializeNativePatches({source,manifest,patchRoot,temporary});
-  const receipt={baseCommit:source.pin,manifestSha256:sha(manifestBytes),preparerSha256:sha(fs.readFileSync(fileURLToPath(import.meta.url))),...(manifestFile==='resident-native-manifest.json'?{manifestFile,upstreamCandidateCommit:manifest.upstreamCandidateCommit}:{}),...verified};
+  const receipt={baseCommit:source.pin,manifestSha256:sha(manifestBytes),preparerSha256:sha(fs.readFileSync(fileURLToPath(import.meta.url))),...verified};
   if(fs.existsSync(destination)){
    if(fs.lstatSync(destination).isSymbolicLink())throw Error('Symlink in staged native source');
    verifyModes(destination,verified.modes);

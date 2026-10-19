@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "description": "On-device voice host: libelizainference (llama.cpp/ggml; Paradee-8M TTS with native misaki G2P and eSpeak NG out-of-lexicon fallback, Phonon-2 parakeet-tdt ASR with batch and streaming decode, Silero VAD) through the shared paradee-voice Java API (ai.eliza.voice) and RegisterNatives JNI. The only on-device speech engine; llama.cpp-based, no other neural runtime. These are the exact bytes scripts/android-stage-voice-models.mjs may stage; nothing here claims emulator, device or user acceptance.",
-  "pin": "cc52bef586997875047d9a9c74276084fad8610c",
+  "pin": "080adfc5c5822602321d1125f12f25e6f20340c2",
   "forkPin": "6e6a4401aae473723cb164a3190eebea6526ea6e",
   "identity": "ai.elizaresearch.alphaphone",
   "provider": "libelizainference-paradee",
@@ -361,47 +361,55 @@
     "newDeviceQualification": false
   },
   "sourceEquivalence": {
-    "previousConsumerPin": "65dab3188fde739f30d6fcffeb7d4701977100ed",
-    "reviewedConsumerPin": "cc52bef586997875047d9a9c74276084fad8610c",
+    "previousConsumerPin": "cc52bef586997875047d9a9c74276084fad8610c",
+    "mergedConsumerPin": "080adfc5c5822602321d1125f12f25e6f20340c2",
     "newDeviceAcceptance": false,
-    "evidence": "docs/evidence/sdk-inference-diagnostics-20261019.json: exact reviewed Calendar and finite inference-diagnostic two-scope chain;11native target preimages,4voice projection hashes,3strict schema source hashes and bun.lock unchanged. Other SDK paths unchanged. Runtime/host/worker must be reproduced; no provider or Notes acceptance transferred.",
+    "evidence": "docs/evidence/sdk-merged-cloud-integration-20261019.json: native compilation trees and all carried projection inputs unchanged; reviewed resident Java recovery now comes directly from upstream. Rebuild resident runtime/worker; no device or service acceptance transferred.",
     "nativeLibraryCompilationInputsChanged": false,
     "runtimeTypeScriptChanged": true,
     "previous": {
-      "previousConsumerPin": "3ede6a583ea42f5d59e3595b32c62cd812d986b0",
-      "reviewedConsumerPin": "65dab3188fde739f30d6fcffeb7d4701977100ed",
+      "previousConsumerPin": "65dab3188fde739f30d6fcffeb7d4701977100ed",
+      "reviewedConsumerPin": "cc52bef586997875047d9a9c74276084fad8610c",
       "newDeviceAcceptance": false,
-      "evidence": "docs/evidence/sdk-strict-context-20261019.json: exact three-file child;11native target preimages and4voice projection hashes unchanged. All other SDK tree paths, including bun.lock, unchanged. Runtime/host/worker must be reproduced; no provider or Notes acceptance transferred.",
+      "evidence": "docs/evidence/sdk-inference-diagnostics-20261019.json: exact reviewed Calendar and finite inference-diagnostic two-scope chain;11native target preimages,4voice projection hashes,3strict schema source hashes and bun.lock unchanged. Other SDK paths unchanged. Runtime/host/worker must be reproduced; no provider or Notes acceptance transferred.",
       "nativeLibraryCompilationInputsChanged": false,
       "runtimeTypeScriptChanged": true,
       "previous": {
-        "previousConsumerPin": "3d76ff5acacb369e2c58fc8512e69e59f53ce69b",
-        "reviewedConsumerPin": "3ede6a583ea42f5d59e3595b32c62cd812d986b0",
+        "previousConsumerPin": "3ede6a583ea42f5d59e3595b32c62cd812d986b0",
+        "reviewedConsumerPin": "65dab3188fde739f30d6fcffeb7d4701977100ed",
         "newDeviceAcceptance": false,
-        "evidence": "Exact direct-child comparison: only plugin-assistant context-discovery.ts and context-read-recovery.test.ts changed; native library, JNI, engine, Bun lock and four fixed voice projection inputs unchanged. Source-only schema compatibility fix from elizaOS/eliza#37014; this child is unmerged.",
+        "evidence": "docs/evidence/sdk-strict-context-20261019.json: exact three-file child;11native target preimages and4voice projection hashes unchanged. All other SDK tree paths, including bun.lock, unchanged. Runtime/host/worker must be reproduced; no provider or Notes acceptance transferred.",
         "nativeLibraryCompilationInputsChanged": false,
         "runtimeTypeScriptChanged": true,
         "previous": {
-          "previousConsumerPin": "985322b5df96a91e9dc913c73280a97b82890642",
-          "mergedConsumerPin": "3d76ff5acacb369e2c58fc8512e69e59f53ce69b",
+          "previousConsumerPin": "3d76ff5acacb369e2c58fc8512e69e59f53ce69b",
+          "reviewedConsumerPin": "3ede6a583ea42f5d59e3595b32c62cd812d986b0",
           "newDeviceAcceptance": false,
-          "evidence": "elizaOS/eliza compare 985322b5df96...3d76ff5acacb (develop tip, 2026-10-18): 174 files, llama.cpp gitlink 6e6a4401aae4 unchanged, no native source, JNI class, build input or voice projection change; bun.lock changed (resident audit re-run)",
+          "evidence": "Exact direct-child comparison: only plugin-assistant context-discovery.ts and context-read-recovery.test.ts changed; native library, JNI, engine, Bun lock and four fixed voice projection inputs unchanged. Source-only schema compatibility fix from elizaOS/eliza#37014; this child is unmerged.",
           "nativeLibraryCompilationInputsChanged": false,
           "runtimeTypeScriptChanged": true,
           "previous": {
-            "previousConsumerPin": "6ef36b8d6aa1f7fd4d522567823756b1de9e3d0a",
-            "mergedConsumerPin": "985322b5df96a91e9dc913c73280a97b82890642",
+            "previousConsumerPin": "985322b5df96a91e9dc913c73280a97b82890642",
+            "mergedConsumerPin": "3d76ff5acacb369e2c58fc8512e69e59f53ce69b",
             "newDeviceAcceptance": false,
-            "evidence": "elizaOS/eliza compare 6ef36b8d6aa1...985322b5df96 (develop tip after elizaOS/eliza#36598): 183 files, llama.cpp gitlink 6e6a4401aae4 unchanged, no native source, JNI class, build input or bun.lock change",
+            "evidence": "elizaOS/eliza compare 985322b5df96...3d76ff5acacb (develop tip, 2026-10-18): 174 files, llama.cpp gitlink 6e6a4401aae4 unchanged, no native source, JNI class, build input or voice projection change; bun.lock changed (resident audit re-run)",
             "nativeLibraryCompilationInputsChanged": false,
             "runtimeTypeScriptChanged": true,
             "previous": {
-              "previousConsumerPin": "9365c9bb0d1771f17eedafcb5b3240ae129b276a",
-              "mergedConsumerPin": "6ef36b8d6aa1f7fd4d522567823756b1de9e3d0a",
+              "previousConsumerPin": "6ef36b8d6aa1f7fd4d522567823756b1de9e3d0a",
+              "mergedConsumerPin": "985322b5df96a91e9dc913c73280a97b82890642",
               "newDeviceAcceptance": false,
-              "evidence": "docs/evidence/sdk-native-source-merge-20261017.json",
+              "evidence": "elizaOS/eliza compare 6ef36b8d6aa1...985322b5df96 (develop tip after elizaOS/eliza#36598): 183 files, llama.cpp gitlink 6e6a4401aae4 unchanged, no native source, JNI class, build input or bun.lock change",
               "nativeLibraryCompilationInputsChanged": false,
-              "runtimeTypeScriptChanged": true
+              "runtimeTypeScriptChanged": true,
+              "previous": {
+                "previousConsumerPin": "9365c9bb0d1771f17eedafcb5b3240ae129b276a",
+                "mergedConsumerPin": "6ef36b8d6aa1f7fd4d522567823756b1de9e3d0a",
+                "newDeviceAcceptance": false,
+                "evidence": "docs/evidence/sdk-native-source-merge-20261017.json",
+                "nativeLibraryCompilationInputsChanged": false,
+                "runtimeTypeScriptChanged": true
+              }
             }
           }
         }

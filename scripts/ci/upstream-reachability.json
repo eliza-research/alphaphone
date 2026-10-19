@@ -2,37 +2,23 @@
   "schema": 1,
   "repository": "elizaOS/eliza",
   "base": "develop",
-  "baseCommit": "72df346fafc6c258b5965c217d20eaef91d288ec",
-  "head": "cc52bef586997875047d9a9c74276084fad8610c",
+  "baseCommit": "080adfc5c5822602321d1125f12f25e6f20340c2",
+  "head": "080adfc5c5822602321d1125f12f25e6f20340c2",
   "recordedAt": "2026-10-19",
-  "command": "gh api --method GET repos/elizaOS/eliza/compare/develop...cc52bef586997875047d9a9c74276084fad8610c",
-  "status": "diverged",
-  "aheadBy": 4,
-  "behindBy": 118,
-  "mergeBase": "3d76ff5acacb369e2c58fc8512e69e59f53ce69b",
-  "pinOnlyCommits": [
+  "command": "gh api repos/elizaOS/eliza/compare/develop...080adfc5c5822602321d1125f12f25e6f20340c2",
+  "status": "identical",
+  "aheadBy": 0,
+  "behindBy": 0,
+  "mergeBase": "080adfc5c5822602321d1125f12f25e6f20340c2",
+  "pinOnlyCommits": [],
+  "pullRequests": [
     {
-      "sha": "3ede6a583ea42f5d59e3595b32c62cd812d986b0",
-      "subject": "Omit unavailable context requests from strict response tools"
+      "url": "https://github.com/elizaOS/eliza/pull/37009",
+      "status": "merged"
     },
     {
-      "sha": "65dab3188fde739f30d6fcffeb7d4701977100ed",
-      "subject": "Use exact source choices in strict context tools"
-    },
-    {
-      "sha": "34933d71b3b4c34518338b59942f06c25791a823",
-      "subject": "Keep Calendar intent IDs host-validated in strict tools"
-    },
-    {
-      "sha": "cc52bef586997875047d9a9c74276084fad8610c",
-      "subject": "Keep content-free Cloud inference failure diagnostics"
+      "url": "https://github.com/elizaOS/eliza/pull/37014",
+      "status": "merged"
     }
-  ],
-  "pullRequests": [],
-  "pendingPullRequest": {
-    "url": "https://github.com/elizaOS/eliza/pull/37014",
-    "reviewHead": "7a0a30d0590d33160c7ab688771e0dfe7d33bca0",
-    "compatibilityHead": "cc52bef586997875047d9a9c74276084fad8610c",
-    "note": "Reviewed unmerged compatibility child; status above is the actual public comparison, not merge evidence."
-  }
+  ]
 }

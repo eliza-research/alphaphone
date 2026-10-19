@@ -1,3 +1,5 @@
+Current source admission candidate: SDK `080adfc5c5822602321d1125f12f25e6f20340c2` integrates merged Cloud/authentication fixes and upstream resident IPC recovery. See `docs/evidence/sdk-merged-cloud-integration-20261019.json` for exact source equivalence. Native qualification and provider/device acceptance remain separate. Historical source-bound evidence follows.
+
 Current source admission candidate: SDK `cc52bef586997875047d9a9c74276084fad8610c` is a reviewed two-scope descendant of `65dab3188fde739f30d6fcffeb7d4701977100ed` for Calendar compatibility and finite inference diagnostics. Source integration is not canonical, native, provider or Notes acceptance. Historical source-bound evidence follows.
 
 <!-- Checked source integration a89b72fce70bbb559bdeabbdb8dcb12956f7f8bd; full native product qualification remains pending. -->
@@ -33,7 +35,7 @@ The historical October 14 development rebuild used upstream `193d9264fc`; curren
   agent runs behind it, and the plan decides only whether Cloud inference is bound into the
   running agent. There is no "without AI" or offline mode. Remote pairing is retired on production Android and
   remains a browser and test-mocks development transport (see Connection choices below).
-- The consumer pin in `upstream.lock.json` is `cc52bef586` (reviewed Calendar and finite inference-diagnostic compatibility stack; qualification remains separate). The preceding3d76 baseline was `3d76ff5aca` (2026-10-18: the eliza `develop` tip, 223 commits after `985322b5df`, the merge of elizaOS/eliza#36598, which carries the authenticated native Google host and reviewed Gmail changes; Calendar delete, native Gmail send and Gmail mailbox changes are upstream default-off flags Alpha keeps off; full current qualification and native Google prompt acceptance remain pending). Before that it was the off-develop `6ef36b8d6a` (2026-10-17). The earlier pin was `968348d792` (moved on 2026-10-14,
+- The consumer pin in `upstream.lock.json` is `080adfc5c5`; the preceding pin was `cc52bef586` (reviewed Calendar and finite inference-diagnostic compatibility stack; qualification remains separate). The preceding3d76 baseline was `3d76ff5aca` (2026-10-18: the eliza `develop` tip, 223 commits after `985322b5df`, the merge of elizaOS/eliza#36598, which carries the authenticated native Google host and reviewed Gmail changes; Calendar delete, native Gmail send and Gmail mailbox changes are upstream default-off flags Alpha keeps off; full current qualification and native Google prompt acceptance remain pending). Before that it was the off-develop `6ef36b8d6a` (2026-10-17). The earlier pin was `968348d792` (moved on 2026-10-14,
   PR #531), with llama.cpp gitlink `3e5f73922ee8`. It preserves Phonon-2 batch/streaming
   ASR, Paradee-8M TTS, misaki G2P and voice ABI 18 from the previous `c7a9a0d7e7` pin,
   adds the upstream-preserving native integration, native build/Kokoro classification repairs
