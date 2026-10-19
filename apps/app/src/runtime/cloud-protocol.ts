@@ -1,4 +1,4 @@
-import {browserCloudResidentEnabled,browserCloudResidentEnvironment} from './browser-cloud-resident';
+import {browserCloudResidentEnabled,browserCloudResidentEnvironment} from './browser-cloud-resident.ts';
 import {calendarSyncHttp,type CalendarSyncRequest} from './calendar-linked-provider.ts';
 import type {AutomationsMethod} from './automations-route-policy.ts';
 import { reviewMailAttachment, type MailAttachment } from './inbox-attachment.ts';
