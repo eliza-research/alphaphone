@@ -1,3 +1,4 @@
+import {browserCloudResidentEnabled,browserCloudResidentEnvironment} from './browser-cloud-resident';
 import {calendarSyncHttp,type CalendarSyncRequest} from './calendar-linked-provider.ts';
 import type {AutomationsMethod} from './automations-route-policy.ts';
 import { reviewMailAttachment, type MailAttachment } from './inbox-attachment.ts';
@@ -19,11 +20,11 @@ import { BILLING_LIMITS_PATH, ENTITLEMENT_KEYS_PATH, ENTITLEMENT_PATH, REDEEM_PA
  * development-cloud-agents.ts and is constructed only in ELIZA_DEV_ALLOW_TEST_MOCKS=1 builds. */
 export type CloudEnvironment = "production" | "staging";
 export type CloudAuthority = { readonly api: string; readonly web: string; readonly agents: string };
-// Staging is a test-mocks surface (ELIZA_DEV_ALLOW_TEST_MOCKS=1): QA builds reach
+// Staging is admitted in test mocks or the explicitly selected real browser Cloud QA host. QA builds reach
 // api-staging.eliza.app, its issuer and its web origins (docs/cloud-subscription-qa.md).
 // Vite replaces import.meta.env at build time, so flag-off bundles fold the staging
 // authority away. Node contract tests import this source without Vite and keep both.
-const stagingAvailable: boolean = import.meta.env === undefined || import.meta.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS === '1';
+const stagingAvailable: boolean = import.meta.env === undefined || import.meta.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS === '1' || (browserCloudResidentEnabled && browserCloudResidentEnvironment === 'staging');
 const authorities: Partial<Record<CloudEnvironment, CloudAuthority>> = {
   production: { api: "https://api.eliza.app", web: "https://eliza.app", agents: "cloud.eliza.app" },
   ...(stagingAvailable ? { staging: { api: "https://api-staging.eliza.app", web: "https://staging.eliza.app", agents: "cloud-staging.eliza.app" } } : {}),
