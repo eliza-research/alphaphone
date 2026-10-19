@@ -37,7 +37,7 @@ test('Cloud browser login admits only one session and the optional fixed Alpha h
 async function fixture(resident,environment){
  const profile=await mkdtemp(join(tmpdir(),'alpha-browser-cloud-')),file=join(profile,'existing-secret');await writeFile(file,secret,{mode:0o600});
  const seed={environment:'production',credentialFile:file,credentialSha256:createHash('sha256').update(secret).digest('hex'),userId:owner,organizationId:org,credentialReference:reference,credentialId};await writeFile(join(profile,'initial-credential.json'),JSON.stringify(seed),{mode:0o600});
- const calls=[];let signIn=null,response=async()=>new Response('{}'),pollResponse=async()=>Response.json({status:'authenticated',apiKey:secret});const session=randomUUID();
+ const calls=[],diagnostics=[];let signIn=null,response=async()=>new Response('{}'),pollResponse=async()=>Response.json({status:'authenticated',apiKey:secret});const session=randomUUID();
  const request=async(url,input={})=>{
   const path=new URL(url).pathname;calls.push({url,input});
   if(signIn){const handled=await signIn(path,input);if(handled)return handled;}
@@ -50,10 +50,10 @@ async function fixture(resident,environment){
   return response(url,input);
  };
  let server,origin,host;
- const start=async()=>{host=createBrowserCloudDevHandler({profile,request,resident,environment});server=createServer(host);await new Promise(r=>server.listen(0,'127.0.0.1',r));origin=`http://127.0.0.1:${server.address().port}`;};await start();
+ const start=async()=>{host=createBrowserCloudDevHandler({profile,request,resident,environment,diagnostic:event=>diagnostics.push(event)});server=createServer(host);await new Promise(r=>server.listen(0,'127.0.0.1',r));origin=`http://127.0.0.1:${server.address().port}`;};await start();
  const send=(data,options={})=>fetch(origin,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','X-Alpha-Browser-Cloud':'1',...(options.headers||{})},body:JSON.stringify(data),signal:options.signal});
  const rpc=async data=>{const r=await send(data);return {status:r.status,data:await r.json()};};
- return {profile,file,calls,send,rpc,host:()=>host,setSignIn:fn=>{signIn=fn;},setResponse:fn=>{response=fn;},setPollResponse:fn=>{pollResponse=fn;},origin:()=>origin,session,restart:async()=>{await new Promise(r=>server.close(r));await start();},close:async()=>{server.closeAllConnections();await new Promise(r=>server.close(r));await rm(profile,{recursive:true,force:true});}};
+ return {profile,file,calls,diagnostics,send,rpc,host:()=>host,setSignIn:fn=>{signIn=fn;},setResponse:fn=>{response=fn;},setPollResponse:fn=>{pollResponse=fn;},origin:()=>origin,session,restart:async()=>{await new Promise(r=>server.close(r));await start();},close:async()=>{server.closeAllConnections();await new Promise(r=>server.close(r));await rm(profile,{recursive:true,force:true});}};
 }
 test('existing Mac credential becomes a real canonical identity/credit reference, never a browser bearer',async()=>{
  const f=await fixture();try{
@@ -276,6 +276,7 @@ test('development host email sign-in mints a mobile key server-side and commits 
    await assert.rejects(client.verifyEmailSignIn(started.attemptId,'000000',new AbortController().signal),error=>error.code==='invalid-code');
    const outcome=await client.verifyEmailSignIn(started.attemptId,'123456',new AbortController().signal);
    assert.equal(outcome.status,'authenticated');assert.equal(outcome.accountCreated,true);
+   assert.ok(f.diagnostics.some(row=>row.operation==='/api/v1/app-auth/mobile/token'&&row.status===200));assert.ok(f.diagnostics.every(row=>Object.keys(row).every(key=>['environment','operation','status','code'].includes(key))));assert.ok(!JSON.stringify(f.diagnostics).includes(minted));
    assert.deepEqual(order.filter(path=>path!=='/steward/auth/email/code/verify'&&path!=='/steward/auth/logout'),['/steward/auth/email/code/send','/api/v1/app-auth/connect','/api/v1/app-auth/mobile/token','/api/v1/app-auth/mobile/ack','/api/v1/user'],'acknowledged before the identity read and the commit');
    for(let wait=0;wait<50&&!order.includes('/steward/auth/logout');wait++)await new Promise(resolve=>setTimeout(resolve,10));
    assert.ok(order.includes('/steward/auth/logout'),'the Steward session is revoked, best effort');

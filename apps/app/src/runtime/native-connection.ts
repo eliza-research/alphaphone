@@ -1,4 +1,4 @@
-import {browserCloudResidentEnabled} from './browser-cloud-resident';
+import {browserCloudResidentEnabled,browserCloudManagedServiceAllowed} from './browser-cloud-resident';
 import {managedServiceRequest} from './managed-service-routes';
 import {automationsRouteAllowed} from './automations-route-policy';
 import {BrowserCloudConnection,BrowserCloudSignIn} from '../browser/cloud-connection';
@@ -224,7 +224,7 @@ export const remoteCredentialStore:RemoteCredentialStore={
 };
 export const nativeCloudRequest:CloudNativeRequest=async input=>{
   input.signal.throwIfAborted();
-  if(!testMocksEnabled&&!managedServiceRequest(input.url,input.method,input.body!==undefined))throw new Error('Only managed Cloud services are available.');
+  if(!testMocksEnabled&&!browserCloudManagedServiceAllowed(input.url,input.method,input.body!==undefined))throw new Error('Only managed Cloud services are available.');
   const requestId=crypto.randomUUID();
   let rejectAbort:(reason:unknown)=>void=()=>{};
   const interrupted=new Promise<never>((_,reject)=>{rejectAbort=reject;});

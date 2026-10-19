@@ -19,7 +19,7 @@ function refusal(status:number,code:string){return Object.assign(Error(code),{st
 function requestId(value:unknown):string{if(typeof value!=='string'||!UUID.test(value))throw Error('Invalid request identity');return value;}
 function object(value:unknown):Record<string,any>{if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid Cloud request');return value as Record<string,any>;}
 /** DEV transport only. Canonical Cloud owns login, identity, plan entitlement and speech authorization. */
-export function createBrowserCloudDevHandler(options:{profile:string;request?:typeof fetch;environment?:Environment;resident?:{bind:(credential:{token:string;credentialId:string;reference:string;expiresAt?:number})=>Promise<unknown>;clear:()=>Promise<unknown>;status:(id?:string)=>unknown;ready:(signal:AbortSignal)=>Promise<unknown>}}){
+export function createBrowserCloudDevHandler(options:{profile:string;request?:typeof fetch;environment?:Environment;diagnostic?:(event:{environment:Environment;operation:string;status:number;code?:string})=>void;resident?:{bind:(credential:{token:string;credentialId:string;reference:string;expiresAt?:number})=>Promise<unknown>;clear:()=>Promise<unknown>;status:(id?:string)=>unknown;ready:(signal:AbortSignal)=>Promise<unknown>}}){
  const profile=path.resolve(options.profile),stateFile=path.join(profile,'credentials.json'),initialFile=path.join(profile,'initial-credential.json'),fetchCloud=options.request??fetch;
  let queue:Promise<unknown>=Promise.resolve();
  const pending=new Map<string,{environment:Environment;expiresAt:number;previousReference:string|null}>();
@@ -54,6 +54,9 @@ export function createBrowserCloudDevHandler(options:{profile:string;request?:ty
   catch(error:any){if(signal.aborted)throw signInFailure('cancelled');throw signInFailure('offline');}
   const text=await response.text();signal.throwIfAborted();if(text.length>256*1024)throw signInFailure('unavailable');
   let data:Record<string,any>={};try{if(text)data=object(JSON.parse(text));}catch{if(response.ok)throw signInFailure('unavailable');}
+  const codes=new Set(['invalid_client','binding_mismatch','invalid_request','authorization_code_expired','authorization_complete','credential_proof_invalid','invalid_authorization_code','invalid_code_verifier','server_configuration_error']);
+  const code=codes.has(data.error)?data.error:codes.has(data.code)?data.code:undefined;
+  options.diagnostic?.({environment:env,operation:route,status:response.status,...(code?{code}:{})});
   return {status:response.status,data};
  }
  const pkce=()=>{const verifier=randomBytes(48).toString('base64url');return {verifier,challenge:createHash('sha256').update(verifier).digest('base64url'),state:randomBytes(32).toString('base64url')};};
@@ -248,6 +251,6 @@ export function browserCloudDevBridge():Plugin {
   const selected=environment(process.env.VITE_ALPHA_CLOUD_ENVIRONMENT??'production');
   const resident=cloudResident?await createCloudResidentHost({source:path.resolve(process.env.ALPHA_ELIZA_SOURCE!),profile:path.resolve(process.env.ALPHA_REMOTE_PROFILE!),port:Number(process.env.ALPHA_REMOTE_PORT),environment:selected}):undefined;
   if(resident)server.httpServer?.once('close',()=>{void resident.close();});
-  const handler=createBrowserCloudDevHandler({profile,resident,...(cloudResident?{environment:selected}:{})});server.middlewares.use(BROWSER_CLOUD_BRIDGE_PATH,(req,res)=>{void handler(req,res);});
+  const handler=createBrowserCloudDevHandler({profile,resident,...(cloudResident?{environment:selected,diagnostic:(event:unknown)=>console.info('[alpha-cloud-auth]',JSON.stringify(event))}:{})});server.middlewares.use(BROWSER_CLOUD_BRIDGE_PATH,(req,res)=>{void handler(req,res);});
  }};
 }
