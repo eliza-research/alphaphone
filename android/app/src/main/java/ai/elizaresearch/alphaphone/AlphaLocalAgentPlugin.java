@@ -420,14 +420,16 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   }
   // No usable provider: every provider credential and selector is removed (applyUnboundEnvironment).
   if(provider==null)applyUnboundEnvironment(env);
-  if(provider!=null&&"elizacloud".equals(provider.optString("provider"))&&nativeHostResources!=null){
+  if(provider!=null&&"elizacloud".equals(provider.optString("provider"))){
+   if(nativeHostResources==null)throw new java.io.IOException("Native Cloud routing resources unavailable");
    java.io.File google=new java.io.File(nativeHostResources,"google-host.mjs");
-   if(google.isFile()){
+   if(!google.isFile())throw new java.io.IOException("Native Cloud routing module unavailable");
+   {
+    env.put("ELIZA_NATIVE_GOOGLE_HOST_MODULE",google.getCanonicalPath());
     JSONObject binding=LocalAgentProviderAdmission.managedGoogleBinding(saved,cloudSaved,System.currentTimeMillis());
     if(binding!=null){
     JSONObject current=new AlphaCredentialStore(context).providerAdmissionSnapshot();
     if(!binding.getString("accountRef").equals(current.getString("accountRef"))||!binding.getString("sessionGeneration").equals(current.getString("sessionGeneration"))||!LocalAgentProviderAdmission.sameCloudCredential(cloudSaved,new AlphaCredentialStore(context).readCredentialSlot("cloud:production")))throw new SecurityException("Native Google provider changed");
-    env.put("ELIZA_NATIVE_GOOGLE_HOST_MODULE",google.getCanonicalPath());
     env.put("ELIZA_NATIVE_GOOGLE_BINDING_JSON",binding.toString());
     }
    }
