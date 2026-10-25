@@ -9,12 +9,16 @@ The 124 existing full-lock findings are reused as dated source-review evidence;
 no fresh registry query or remediation is claimed. See
 [source identity and pending gates](evidence/source-metadata-a424-f414-20261025.json).
 
-The snapshot and artifact dispositions below retain their earlier SDK/artifact
-binding. The new APK closure, packaged advisory review and disposition binding
-remain pending Android's exact artifact. Offline current-pin audit admission
-therefore remains pending; this metadata update neither renews deadlines nor
-waives shipped high or critical findings. Historical APK evidence does not qualify
-the new runtime or device.
+The current snapshot and disposition binding now name this SDK and exact signed
+APK `77c65ebe29c011f7d8f211a3a5dcfb2a79d1909cc74ecf0e40a0f4a68377f0cb`.
+Its [artifact review](security/resident-artifact-review-77c65ebe29c011f7-2026-10-25.json)
+verifies the same 603-version packaged npm input: one moderate UUID finding and
+no shipped high or critical npm finding. UUID affected-function aliases remain
+unused by the reviewed v4-only consumers, and Zod wrappers resolve to 4.6.6.
+Bun external Undici implementation remains outside this npm closure conclusion.
+The old artifact review is preserved; no exception object or deadline is renewed.
+Owning offline audit checks pass for this binding. Functional provider/navigation,
+voice hardware and physical-device acceptance remain separate pending gates.
 
 
 Covers inventory items MVP-45 (dependency findings), the licence flags of decision P-09, the
