@@ -206,8 +206,8 @@ function clock(at: number): string {
   try { return new Date(at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
   catch { return new Date(at).toISOString(); }
 }
-export function allowanceText(allowance: PlanAllowance | null, now: number = Date.now()): string {
-  if (!allowance) return 'Plan allowance details are in Eliza Cloud.';
+export function allowanceText(allowance: PlanAllowance | null, now: number = Date.now(), serviceName = 'Cloud'): string {
+  if (!allowance) return `Plan allowance details are in ${serviceName}.`;
   if (allowance.unit === 'usd_micros') {
     // Rounded down, so the phone never shows more than Cloud reports.
     const reset = allowance.resetsAt > now ? ` Resets ${clock(allowance.resetsAt)}.` : '';
@@ -220,10 +220,10 @@ export function allowanceText(allowance: PlanAllowance | null, now: number = Dat
   if (allowance.limit !== null && allowance.used !== null) return `${Math.min(allowance.used, allowance.limit).toLocaleString()} of ${allowance.limit.toLocaleString()} ${allowance.unit} used ${per}.${reset}`;
   if (allowance.limit !== null) return `Allowance: ${allowance.limit.toLocaleString()} ${allowance.unit} per ${allowance.period}.${reset}`;
   if (allowance.used !== null) return `${allowance.used.toLocaleString()} ${allowance.unit} used ${per}.${reset}`;
-  return `Plan allowance details are in Eliza Cloud.${reset}`;
+  return `Plan allowance details are in ${serviceName}.${reset}`;
 }
 const LOCAL_KEEPS_WORKING = 'Local apps keep working.';
-export const MANAGE_PLAN_LABEL = 'Manage plan in Eliza Cloud';
+export const MANAGE_PLAN_LABEL = 'Manage plan';
 export const CHOOSE_PLAN_LABEL = 'Choose a plan';
 /** What the plan gate does with a view. Only the gate decides; turns never read billing. */
 export type PlanAdmission = 'admit' | 'admit-with-warning' | 'needs-plan' | 'unknown';
@@ -234,18 +234,19 @@ export function planAdmission(view: SubscriptionView | null | undefined): PlanAd
   if (view.kind === 'inactive') return 'needs-plan';
   return 'unknown';
 }
-export function describeSubscription(view: SubscriptionView | null | undefined): { headline: string; detail: string; manage: boolean; manageLabel: string } {
-  if (!view || view.kind === 'checking') return { headline: 'Checking your plan…', detail: '', manage: false, manageLabel: MANAGE_PLAN_LABEL };
+export function describeSubscription(view: SubscriptionView | null | undefined, serviceName = 'Cloud'): { headline: string; detail: string; manage: boolean; manageLabel: string } {
+  const manageLabel = `Manage plan in ${serviceName}`;
+  if (!view || view.kind === 'checking') return { headline: 'Checking your plan…', detail: '', manage: false, manageLabel };
   switch (view.kind) {
-    case 'credits': return { headline: 'Eliza Cloud credits', detail: 'Uses your Eliza Cloud account balance.', manage: true, manageLabel: 'Manage billing in Eliza Cloud' };
+    case 'credits': return { headline: `${serviceName} credits`, detail: `Uses your ${serviceName} account balance.`, manage: true, manageLabel: `Manage billing in ${serviceName}` };
     case 'active': return {
       headline: view.status === 'past_due' ? `${view.planName} · payment due` : view.status === 'trialing' ? `${view.planName} · trial` : view.planName,
-      detail: [view.source === 'billing-limits' ? '' : allowanceText(view.allowance), view.status === 'past_due' ? 'Payment is past due. Update payment in Eliza Cloud to keep AI available.' : '', view.refreshFailed ? 'Plan status could not be refreshed; Eliza Cloud still decides each AI request.' : ''].filter(Boolean).join(' '),
-      manage: view.status === 'past_due', manageLabel: MANAGE_PLAN_LABEL };
+      detail: [view.source === 'billing-limits' ? '' : allowanceText(view.allowance, Date.now(), serviceName), view.status === 'past_due' ? `Payment is past due. Update payment in ${serviceName} to keep AI available.` : '', view.refreshFailed ? `Plan status could not be refreshed; ${serviceName} still decides each AI request.` : ''].filter(Boolean).join(' '),
+      manage: view.status === 'past_due', manageLabel };
     case 'inactive':
-      return { headline: view.status === 'canceled' ? `${view.planName ?? 'Your plan'} has ended` : 'No active plan', detail: 'Alpha Phone needs an active Eliza Cloud plan. Redeem a subscription code or choose a plan in Eliza Cloud. Nothing is purchased automatically, and your data on this phone is kept.', manage: true, manageLabel: CHOOSE_PLAN_LABEL };
-    case 'expired': return { headline: view.planName, detail: `Plan status is out of date and could not be refreshed. Eliza Cloud still decides each AI request. ${LOCAL_KEEPS_WORKING}`, manage: false, manageLabel: MANAGE_PLAN_LABEL };
-    case 'unavailable': return { headline: 'Plan status unavailable', detail: view.reason === 'not-published' ? 'Eliza Cloud did not report a plan for this account. Check again, redeem a subscription code or choose a plan. Your data on this phone is kept.' : `Plan status could not be checked right now. Eliza Cloud still decides each AI request. ${LOCAL_KEEPS_WORKING}`, manage: false, manageLabel: MANAGE_PLAN_LABEL };
+      return { headline: view.status === 'canceled' ? `${view.planName ?? 'Your plan'} has ended` : 'No active plan', detail: `Alpha Phone needs an active ${serviceName} plan. Redeem a subscription code or choose a plan in ${serviceName}. Nothing is purchased automatically, and your data on this phone is kept.`, manage: true, manageLabel: CHOOSE_PLAN_LABEL };
+    case 'expired': return { headline: view.planName, detail: `Plan status is out of date and could not be refreshed. ${serviceName} still decides each AI request. ${LOCAL_KEEPS_WORKING}`, manage: false, manageLabel };
+    case 'unavailable': return { headline: 'Plan status unavailable', detail: view.reason === 'not-published' ? `${serviceName} did not report a plan for this account. Check again, redeem a subscription code or choose a plan. Your data on this phone is kept.` : `Plan status could not be checked right now. ${serviceName} still decides each AI request. ${LOCAL_KEEPS_WORKING}`, manage: false, manageLabel };
   }
 }
 

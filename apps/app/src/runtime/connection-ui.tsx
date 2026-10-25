@@ -1752,10 +1752,11 @@ export const connectionController = {
   /** Plan state for Settings. Null when this build has no Cloud sign-in and plan flow. */
   residentPlanSettings(){
     if(!residentCloudFlow())return null;
-    const view=state.residentSubscription,account=state.cloudAccount,plan=view&&view.kind!=='checking'?describeSubscription(view):null;
+    const serviceName=cloudServiceName(cloud.environment);
+    const view=state.residentSubscription,account=state.cloudAccount,plan=view&&view.kind!=='checking'?describeSubscription(view,serviceName):null;
     const expiresAt=account?.expiresAt??null;
     // The agent always runs; this says only whether Eliza Cloud AI is connected to it.
-    const inference=state.residentInference==='unknown'?'Status unconfirmed':state.residentInference==='cloud'?'Eliza Cloud':state.residentPlanNotice==='offline'?'Unavailable · Cloud unreachable':state.residentInference==='unavailable'?(account?(view?.kind==='inactive'?'Unavailable · check Cloud account':'Unavailable · Cloud status unconfirmed'):'Unavailable · sign in'):'Starting…';
+    const inference=state.residentInference==='unknown'?'Status unconfirmed':state.residentInference==='cloud'?serviceName:state.residentPlanNotice==='offline'?'Unavailable · Cloud unreachable':state.residentInference==='unavailable'?(account?(view?.kind==='inactive'?'Unavailable · check Cloud account':'Unavailable · Cloud status unconfirmed'):'Unavailable · sign in'):'Starting…';
     if(state.residentPlanNotice==='offline'&&!account){const recent=readPlanAdmission();return {signedIn:false,offline:true,account:null,plan:recent?`${recent.planName} · offline`:'Offline',status:recent?.status??null,endsAt:state.planEndsAt??null,keyExpiresAt:null,keyExpiring:false,inference};}
     return {signedIn:!!account,offline:false,inference,account:account?(account.email||`Account ${account.userId.slice(0,8)}`):null,
       plan:plan?.headline??(account?'Checking plan…':'Not signed in'),
@@ -2594,7 +2595,7 @@ export function ConnectionChooser() {
   // A check that ended without a view (identity or transport failure) is "unavailable", never a stale gate.
   const residentPlanView=snapshot.residentSubscription;
   const residentPlanUnchecked=!residentPlanView||residentPlanView.kind==='checking';
-  const residentPlanDescribed=residentPlanUnchecked&&!snapshot.busy?{headline:'Plan status unavailable',detail:'Try again.',manage:false,manageLabel:''}:describeSubscription(residentPlanView);
+  const residentPlanDescribed=residentPlanUnchecked&&!snapshot.busy?{headline:'Plan status unavailable',detail:'Try again.',manage:false,manageLabel:''}:describeSubscription(residentPlanView,serviceName);
   const residentPlan=residentNeedsPlan&&residentPlanView?.kind==='unavailable'&&residentPlanView.reason!=='not-published'
     ?{...residentPlanDescribed,detail:`${serviceName} could not confirm a plan for this account right now. Check again, redeem a subscription code or choose a plan. Your data on this phone is kept.`}:residentPlanDescribed;
   const residentPlanRecheck=residentPlanUnchecked||residentPlanView.kind==='inactive'||residentPlanView.kind==='unavailable';
@@ -2627,7 +2628,7 @@ export function ConnectionChooser() {
       {residentOffline&&<p role="status">{OFFLINE_NOTICE}</p>}
       <div className="alpha-connection-actions">
       {snapshot.cloudAccount&&!residentSignInRejected ? <>
-        {residentNeedsPlan?<button disabled={snapshot.busy} onClick={()=>void connectionController.residentManagePlan()}>{CHOOSE_PLAN_LABEL}</button>:(residentPlan.manage||planPanel)&&<button disabled={snapshot.busy} onClick={()=>void connectionController.residentManagePlan()}>{residentPlan.manage?residentPlan.manageLabel:MANAGE_PLAN_LABEL}</button>}
+        {residentNeedsPlan?<button disabled={snapshot.busy} onClick={()=>void connectionController.residentManagePlan()}>{CHOOSE_PLAN_LABEL}</button>:(residentPlan.manage||planPanel)&&<button disabled={snapshot.busy} onClick={()=>void connectionController.residentManagePlan()}>{residentPlan.manageLabel||MANAGE_PLAN_LABEL}</button>}
         {!snapshot.residentRecoveryReason&&(residentPlanRecheck||residentNeedsPlan)?<button disabled={snapshot.busy} onClick={()=>void connectionController.startLocal()}>Check plan again</button>:planPanel&&<button disabled={snapshot.busy} onClick={()=>connectionController.close()}>Done</button>}
         <button disabled={snapshot.busy} onClick={()=>void connectionController.cloudSignOut()}>Sign out</button>
       </>:<>
