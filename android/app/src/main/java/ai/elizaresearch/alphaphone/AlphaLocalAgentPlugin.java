@@ -779,10 +779,15 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   }
  }
  static boolean calendarApprovalReadAllowed(String path,String method,String owner){return "/api/approvals?state=all&limit=500".equals(path)&&"GET".equals(method)&&owner!=null&&!owner.trim().isEmpty();}
+ private static void logRequestFailure(String category,String method,int status,String reason) {
+  String safeMethod=java.util.Arrays.asList("GET","POST","PATCH","DELETE").contains(method)?method:"OTHER";
+  android.util.Log.w("AlphaAgentRequest","category="+category+" method="+safeMethod+" status="+status+" reason="+reason);
+ }
  @PluginMethod public void request(PluginCall call) {
   String path=call.getString("path",""),method=call.getString("method","GET"),body=call.getString("body"),expectedOwner=call.getString("ownerId");
   boolean record=AppRecordRoutes.owns(path),automation=record||AutomationsRoutes.owns(path),approvalRead=calendarApprovalReadAllowed(path,method,expectedOwner);
   if((automation? (record?!AppRecordRoutes.allowed(path,method,body):!AutomationsRoutes.allowed(path,method))||expectedOwner==null||expectedOwner.trim().isEmpty(): ((path.startsWith("/api/views/")||path.endsWith("/messages/truncate")||path.endsWith("/heard"))&&(!method.equals("POST")||expectedOwner==null||expectedOwner.trim().isEmpty()))||(path.equals("/api/asr/local-inference/end-of-turn")&&!method.equals("POST"))||(path.contains("?before=")&&!method.equals("GET"))||(path.startsWith("/api/turns/")&&!method.equals("POST"))||path.contains("..")||path.contains("%")||path.contains("\\")||(!approvalRead&&!path.matches("^/api/(auth/me|agents|status|conversations(/[A-Za-z0-9_-]+(/messages(/truncate|/[0-9a-fA-F-]{36}/heard|\\?before=[0-9]{1,16}(&beforeId=[0-9a-fA-F-]{36})?(&limit=[0-9]{1,3})?)?)?)?|turns/[0-9a-fA-F-]{36}/abort|views/interact-(claim|result)|client-devices/[A-Za-z0-9_/-]+|workflow(/[A-Za-z0-9_/?=&-]+)?|asr/local-inference/(live(/status)?|end-of-turn))$"))||!(method.equals("GET")||method.equals("POST")))||((method.equals("GET")||method.equals("DELETE"))&&body!=null)||(body!=null&&body.length()>2*1024*1024)){
+   logRequestFailure(record?"app-record":automation?"automation":"other",method,0,"gate");
    call.reject("Unsupported local agent request.");return;
   }
   JSONObject headers=call.getObject("headers");
@@ -791,15 +796,16 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   PluginWorkers.submit(workers,()->{try{
    requireOwned(call,epoch);
    String token=enroll(epoch);
-   synchronized(lifecycleLock){requireCurrent(epoch);if(expectedOwner!=null&&!expectedOwner.equals(ownerIdentity)){resolveCurrent(call,epoch,new JSObject().put("status",409).put("body","{\"error\":\"Local owner changed; reconnect before continuing\"}"));return;}}
+   synchronized(lifecycleLock){requireCurrent(epoch);if(expectedOwner!=null&&!expectedOwner.equals(ownerIdentity)){logRequestFailure(record?"app-record":automation?"automation":"other",method,409,"owner-mismatch");resolveCurrent(call,epoch,new JSObject().put("status",409).put("body","{\"error\":\"Local owner changed; reconnect before continuing\"}"));return;}}
    requireOwned(call,epoch);
    JSONObject result=raw(path,method,body,token,headers,120000);
+   if(result.getInt("status")>=400)logRequestFailure(record?"app-record":automation?"automation":"other",method,result.getInt("status"),"http");
    requireCurrent(epoch);
    if(result.getInt("status")==401)synchronized(lifecycleLock){requireCurrent(epoch);clearEnrollment();}
    if(path.equals("/api/auth/me")&&result.getInt("status")==200){JSONObject who=new JSONObject(result.getString("body"));who.getJSONObject("session").put("id","native-owned-session");result.put("body",who.toString());result.remove("bodyBase64");}
    resolveCurrent(call,epoch,new JSObject(result.toString()));
   }catch(Superseded stale){rejectSuperseded(call);}
-  catch(Exception error){rejectPending(call,"Local agent request failed. No automatic retry was made.");}},()->{rejectPending(call,"Local agent bridge is closed.");});
+  catch(Exception error){logRequestFailure(record?"app-record":automation?"automation":"other",method,0,"transport");rejectPending(call,"Local agent request failed. No automatic retry was made.");}},()->{rejectPending(call,"Local agent bridge is closed.");});
  }
  /** Cancellation acknowledges transport closure, never server-effect cancellation. */
  @PluginMethod public void cancelStream(PluginCall call) {
