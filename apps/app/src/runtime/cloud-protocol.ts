@@ -37,7 +37,7 @@ export function cloudEnvironmentAvailable(environment: CloudEnvironment): boolea
 /** The one hosted plan page an environment opens in the system browser. Nothing else is opened for billing. */
 export function planManagementUrl(environment: CloudEnvironment): string {
   const authority = authorities[environment];
-  if (!authority) throw new Error("This Eliza Cloud environment is unavailable in this build.");
+  if (!authority) throw new Error("This Cloud environment is unavailable in this build.");
   return `https://${authority.agents}/cloud/billing`;
 }
 export interface CloudCredential {
@@ -170,7 +170,7 @@ function mailHtml(value: unknown): {bodyHtml?: string} {
 }
 export class CloudProtocolError extends Error {
   constructor(readonly code: "invalid-response" | "http" | "expired" | "credentials-missing" | "credential-consumed" | "login-active" | "account-changed", readonly status?: number, readonly data?: unknown, readonly retryAfter?: string) {
-    super(`Eliza Cloud ${code}${status ? ` (${status})` : ""}`);
+    super(`Cloud ${code}${status ? ` (${status})` : ""}`);
     this.name = "CloudProtocolError";
   }
 }
@@ -212,7 +212,7 @@ export class CloudProtocol {
     private readonly options: CloudProtocolOptions = {}) {}
   protected get authority(): CloudAuthority {
     const authority = authorities[this.environment];
-    if (!authority) throw new Error("This Eliza Cloud environment is unavailable in this build.");
+    if (!authority) throw new Error("This Cloud environment is unavailable in this build.");
     return authority;
   }
   protected async requestData(path: string, signal: AbortSignal, options: { credentialReference?: string; body?: unknown; method?: AutomationsMethod | 'PATCH'; authenticated?: boolean; runtimeBase?: string; timeoutMs?: number; headers?: Record<string,string>; credentialId?: string; expiresAt?: number; onStatus?: (status:number)=>void } = {}) {

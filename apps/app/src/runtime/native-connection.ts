@@ -171,7 +171,7 @@ export function createBrowserConnection(options:{fetch?:typeof fetch;secrets?:Br
       if(url.protocol!=='https:')throw new Error('Only HTTPS sign-in pages can be opened.');
       // A new tab keeps this page polling. A blocked pop-up is reported instead of navigating away.
       const opened=options.open?options.open(url.href):(()=>{const target=window.open(url.href,'_blank');if(target)target.opener=null;return !!target;})();
-      if(!opened)throw new Error('Allow pop-ups for Alpha Phone, then select Sign in with Eliza Cloud again.');
+      if(!opened)throw new Error('Allow pop-ups for Alpha Phone, then try Cloud sign-in again.');
     },
   };
 }
