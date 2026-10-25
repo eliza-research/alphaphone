@@ -174,3 +174,8 @@ test('browser speech has no Web Speech fallback', () => {
   for (const file of ['apps/app/src/browser/voice.ts', 'apps/app/src/browser/browser-surface.ts'])
     assert.doesNotMatch(read(file), /speechSynthesis|SpeechSynthesisUtterance/, file);
 });
+
+test('the on-device agent runs in the phone time zone', () => {
+  const configure = between(plugin, 'static void configureEnvironment(', '@PluginMethod public void start(');
+  assert.match(configure, /env\.put\("TZ",java\.util\.TimeZone\.getDefault\(\)\.getID\(\)\);/);
+});
