@@ -110,7 +110,7 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   if(projectVoice){
   // Browser consumer projections retain the canonical implementations and exact type declarations.
   // The dashboard transport is unavailable here: Alpha must inject its owned, private fetch.
-  if (upstream.pin !== '00ee639798a02f3d7f2fae61ea8b902160e85d72') throw Error('Review voice projections for the new upstream pin.');
+  if (upstream.pin !== 'ff9c8264550efd64fd0119c6ff50f99eb8561977') throw Error('Review voice projections for the new upstream pin.');
   // The camera contract is upstream at this pin; carry it with the other device-action contracts.
   for(const [name,file] of upstream.read('plugins/plugin-assistant/src/services/device-actions/camera-contract.ts'))source.set(name,file);
 
