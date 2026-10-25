@@ -35,6 +35,7 @@ export interface CloudSignInMfaRequired { status: 'mfa'; method: 'totp' | 'sms' 
 export interface CloudSignInGoogleMfaRequired extends CloudSignInMfaRequired { attemptId: string; environment: CloudEnvironment }
 export type CloudSignInGoogleOutcome = CloudSignInAuthenticated | CloudSignInGoogleMfaRequired;
 export interface CloudSignInPort {
+  serviceInfo?(input: { environment: CloudEnvironment }): Promise<unknown>;
   /** Opens Google's consent in a Custom Tab and resolves once the App Link return is exchanged. */
   startGoogle(input: { environment: CloudEnvironment }): Promise<unknown>;
   startEmail(input: { environment: CloudEnvironment; email: string }): Promise<unknown>;

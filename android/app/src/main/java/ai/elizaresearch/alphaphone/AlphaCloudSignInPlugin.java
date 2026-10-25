@@ -149,6 +149,21 @@ public final class AlphaCloudSignInPlugin extends Plugin {
 
  // ── Readiness: in-app only once Cloud is ready for this phone ───────────────────────────────
 
+ /** Public provider documents come only from this build's configured API origin. */
+ @PluginMethod public void serviceInfo(PluginCall call) {
+  final CloudSignInFlow.Environment environment;
+  try { environment = CloudSignInFlow.environment(call.getString("environment", "production"), testMocks()); }
+  catch (Exception invalid) { call.reject("Unsupported Cloud environment", "invalid-request"); return; }
+  try {
+   prober.execute(() -> {
+    try {
+     Response response = get(environment.api() + "/api/public/service");
+     if (response.status != 200) { call.reject("Service information unavailable", "unavailable"); return; }
+     call.resolve(JSObject.fromJSONObject(response.data));
+    } catch (Exception unavailable) { call.reject("Service information unavailable", "unavailable"); }
+   });
+  } catch (java.util.concurrent.RejectedExecutionException closed) { call.reject("Sign-in closed", "unavailable"); }
+ }
  @PluginMethod public void status(PluginCall call) {
   final CloudSignInFlow.Environment environment;
   try { environment = CloudSignInFlow.environment(call.getString("environment", "production"), testMocks()); }

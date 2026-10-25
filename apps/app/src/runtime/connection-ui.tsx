@@ -1,3 +1,4 @@
+import {parseCloudServiceInfo} from './cloud-service-info';
 import {productionCloud, stagingCloud} from './cloud-deployment.generated.ts';
 import {browserCloudResidentEnabled,browserCloudResidentEnvironment} from './browser-cloud-resident';
 import {CAMERA_CAPTURE_CAPABILITY} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/camera-contract.ts';
@@ -396,6 +397,10 @@ async function personalWork(message:string,action:(binding:NonNullable<typeof pe
 function detachCloudTarget() { if (testMocksEnabled && active?.kind === 'cloud') retire(); }
 // Only the Android transport admits Cloud's self-revocation DELETE; elsewhere sign-out reports a local removal.
 // Product builds construct only the managed-services adapter; the hosted-agent fixture exists only with test mocks.
+async function loadSignInService(environment: CloudEnvironment) {
+ if (!cloudSignIn?.serviceInfo) throw new Error('Service information unavailable');
+ return parseCloudServiceInfo(await cloudSignIn.serviceInfo({environment}));
+}
 function makeCloud(environment: CloudEnvironment): CloudProtocol { return testMocksEnabled ? new DevelopmentCloudAgentProtocol(environment, nativeCloudRequest, cloudCredentialStore, openConnectionBrowser, { deleteRequests: cloudSelfRevocationSupported, signIn: cloudSignIn }) : new CloudProtocol(environment, nativeCloudRequest, cloudCredentialStore, openConnectionBrowser, { deleteRequests: cloudSelfRevocationSupported, signIn: cloudSignIn }); }
 /** The client for an in-app sign-in in this environment; replaced when the environment changes. */
 function signInClient(environment: CloudEnvironment): CloudProtocol {
@@ -2531,7 +2536,7 @@ export function ConnectionChooser() {
     </aside>;
   }
   if (snapshot.signIn) return <div className={productionSignInRequired?'alpha-auth-page':'alpha-connection-scrim'}><div className={`alpha-connection alpha-connection-native alpha-cloud-sign-in${productionSignInRequired?' alpha-auth-content':''}`} role={productionSignInRequired?'main':'dialog'} aria-modal={productionSignInRequired?undefined:true} aria-labelledby="cloud-sign-in-title" aria-busy={snapshot.busy||undefined} tabIndex={-1} ref={panel}>
-    <CloudSignInPanel view={snapshot.signIn} busy={snapshot.busy} google={inAppGoogle} phone={cloudSignInPhone && inAppPhone} emailEnabled={inAppEmail} message={snapshot.message} error={snapshot.error}
+    <CloudSignInPanel serviceLoader={loadSignInService} view={snapshot.signIn} busy={snapshot.busy} google={inAppGoogle} phone={cloudSignInPhone && inAppPhone} emailEnabled={inAppEmail} message={snapshot.message} error={snapshot.error}
       actions={{phone:number=>void connectionController.signInPhone(number),google:()=>void connectionController.signInGoogle(),email:address=>void connectionController.signInEmail(address),verify:code=>void connectionController.verifySignInCode(code),resend:()=>void connectionController.resendSignInCode(),cancel:()=>connectionController.cancelSignIn()}}
       extra={browserCloudResidentEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Sign in with browser</button>:testMocksEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Browser sign-in (diagnostic)</button>:undefined}/>
   </div></div>;

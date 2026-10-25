@@ -1,3 +1,5 @@
+import type {CloudServiceInfo} from './cloud-service-info';
+import type {CloudEnvironment} from './cloud-protocol';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { SignInView } from './connection-ui';
 
@@ -9,11 +11,21 @@ import type { SignInView } from './connection-ui';
 export interface CloudSignInActions {
   phone?(number: string): void; google(): void; email(address: string): void; verify(code: string): void; resend(): void; cancel(): void;
 }
-export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = true, message, error, actions, extra }: {
+export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = true, message, error, actions, extra, serviceLoader }: {
   view: SignInView; busy: boolean; google: boolean; phone?: boolean; emailEnabled?: boolean; message: string; error: string; actions: CloudSignInActions;
   /** Optional hosted sign-in entry supplied by the caller's build gate. */
   extra?: ReactNode;
+  serviceLoader?: (environment: CloudEnvironment) => Promise<CloudServiceInfo>;
 }) {
+  const [service,setService]=useState<CloudServiceInfo|null>(null),[serviceError,setServiceError]=useState(false),[retry,setRetry]=useState(0);
+  const [legal,setLegal]=useState<'terms'|'privacy'|null>(null);
+  const legalHeading=useRef<HTMLHeadingElement>(null),legalTrigger=useRef<HTMLButtonElement|null>(null);
+  useEffect(()=>{
+    let current=true;setService(null);setServiceError(false);setLegal(null);
+    if(serviceLoader)void serviceLoader(view.environment).then(value=>{if(current)setService(value);},()=>{if(current)setServiceError(true);});
+    return ()=>{current=false;};
+  },[serviceLoader,view.environment,retry]);
+  useEffect(()=>{if(legal)legalHeading.current?.focus();else legalTrigger.current?.focus();},[legal]);
   const phoneInput = useRef<HTMLInputElement>(null);
   const email = useRef<HTMLInputElement>(null), code = useRef<HTMLInputElement>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -34,10 +46,11 @@ export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = tru
   const wait = view.step === 'code' ? Math.max(0, Math.ceil((view.resendAt - now) / 1000)) : 0;
   const submitCode = (event: FormEvent) => { event.preventDefault(); const input = code.current; const value = input?.value || ''; if (input) input.value = ''; actions.verify(value); };
   return <>
-    <header><h1 id="cloud-sign-in-title" className="serif">Sign in to Eliza Cloud</h1></header>
+    <header><h1 id="cloud-sign-in-title" className="serif">Sign in to {service?.name || 'Eliza Cloud'}</h1></header>
+    <div hidden={legal !== null}>
     {view.step === 'choose' && <>
       {!google && !phone && !emailEnabled && <p role="status">This service offers no sign-in method supported by this app. Contact the service administrator.</p>}
-      <p>Sign in to Eliza Cloud to use AI. Your agent keeps running on this device.</p>
+      <p>Sign in to {service?.name || 'Eliza Cloud'} to use AI. Your agent keeps running on this device.</p>
       {google && <div className="alpha-connection-actions"><button disabled={busy} onClick={actions.google}>Continue with Google</button></div>}
       {emailEnabled && <form className="alpha-cloud-sign-in-email" aria-label="Sign in with email" onSubmit={event => { event.preventDefault(); actions.email(email.current?.value || ''); }}>
         <label>Email<input ref={email} type="email" name="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="email" maxLength={320} required disabled={busy} /></label>
@@ -64,5 +77,15 @@ export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = tru
       <button className="alpha-connection-cancel" onClick={actions.cancel}>{view.step === 'choose' && !busy ? 'Back' : 'Cancel sign-in'}</button>
       {view.step === 'choose' && extra}
     </div>
+    {service && <p>Service documents: <button type="button" disabled={busy} onClick={event=>{legalTrigger.current=event.currentTarget;setLegal('terms');}}>Terms of Service</button> and <button type="button" disabled={busy} onClick={event=>{legalTrigger.current=event.currentTarget;setLegal('privacy');}}>Privacy Policy</button>.</p>}
+    {serviceError && <p role="status">Service information is unavailable. <button type="button" disabled={busy} onClick={()=>setRetry(value=>value+1)}>Retry service information</button></p>}
+    </div>
+    {legal && service && <section aria-labelledby="cloud-legal-title" className="alpha-cloud-legal">
+      <button type="button" onClick={()=>setLegal(null)}>Back to sign-in</button>
+      <h2 id="cloud-legal-title" tabIndex={-1} ref={legalHeading}>{service[legal].title}</h2>
+      <p>{service.name} · Revision {service[legal].revision}</p>
+      {service[legal].sections.map((section,index)=><section key={index}><h3>{section.title}</h3>{section.paragraphs.map((paragraph,i)=><p key={i} style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{paragraph}</p>)}</section>)}
+      <button type="button" onClick={()=>setLegal(null)}>Return to sign-in</button>
+    </section>}
   </>;
 }

@@ -52,14 +52,14 @@ async function entitlements(overrides:Record<string,unknown>={}){
 
 
 type SignInMode='ok'|'created'|'mfa'|'hold'|'offline'|'readiness-hold'|'not-ready';
-async function boot(page:Page,initial:{signIn?:SignInMode;tokens?:Record<string,string>;keys?:unknown[];keyLifetimeMs?:number;methods?:{email:boolean;phone:boolean;google:boolean}}={}){
+async function boot(page:Page,initial:{signIn?:SignInMode;tokens?:Record<string,string>;keys?:unknown[];serviceName?:string;keyLifetimeMs?:number;methods?:{email:boolean;phone:boolean;google:boolean}}={}){
  page.on('pageerror',(error:Error)=>console.error('Composition page error:',error.message));
  await page.route('https://**',route=>route.abort());
  await page.addInitScript(initial=>{
   const w=window as any;
   if(!sessionStorage.getItem('signin-fixture-seeded')){sessionStorage.setItem('signin-fixture-seeded','1');localStorage.setItem('alpha.startup-permissions.v1',JSON.stringify({dismissed:true,attempted:{}}));}
   const f=w.signInFixture={signIn:'ok',...initial,saved:false as boolean,credential:null as any,running:false,bound:false,calls:[] as any[],release:null as null|((error:unknown)=>void)};
-  const names={AlphaConnection:['secureRead','secureWrite','secureRemove','request','cancel','openExternal'],AlphaCloudSignIn:['startPhone','verifyPhone','startGoogle','startEmail','verifyEmail','verifyMfa','cancel','status','addListener','removeListener'],Agent:['start','stop','getStatus','configureCloudProvider','clearProvider','providerStatus','residentAttachment','request','addListener','requestStream','cancelStream'],DailyApps:['addListener','removeListener'],AlphaNotifications:['status'],AlphaVoiceCloud:['checkPermissions'],AlphaHostedResults:['disableBackground']};
+  const names={AlphaConnection:['secureRead','secureWrite','secureRemove','request','cancel','openExternal'],AlphaCloudSignIn:['serviceInfo','startPhone','verifyPhone','startGoogle','startEmail','verifyEmail','verifyMfa','cancel','status','addListener','removeListener'],Agent:['start','stop','getStatus','configureCloudProvider','clearProvider','providerStatus','residentAttachment','request','addListener','requestStream','cancelStream'],DailyApps:['addListener','removeListener'],AlphaNotifications:['status'],AlphaVoiceCloud:['checkPermissions'],AlphaHostedResults:['disableBackground']};
   const fail=(code:string)=>Object.assign(new Error(code),{code});
   // The native host stores the key before reporting success and returns only non-secret fields.
   const store=()=>{f.saved=true;f.credential={credentialId:crypto.randomUUID(),token:'synthetic-mobile-key',expiresAt:Date.now()+((f as any).keyLifetimeMs??30*24*3600*1000),serverCredentialId:'55555555-5555-4555-8555-555555555555'};return {status:'authenticated',environment:'production',expiresAt:f.credential.expiresAt,accountCreated:f.signIn==='created'};};
@@ -68,6 +68,7 @@ async function boot(page:Page,initial:{signIn?:SignInMode;tokens?:Record<string,
    f.calls.push({plugin,method,path:input?.url?new URL(input.url).pathname:input?.path,email:input?.email,phone:input?.phone,environment:input?.environment});
    if(plugin==='AlphaCloudSignIn'){
     if(method==='addListener'||method==='removeListener')return {};
+    if(method==='serviceInfo'){const doc={title:'Terms of Service',revision:'fixture-v1',sections:[{title:'Provider terms',paragraphs:['<img src=x onerror=alert(1)> is plain text.','Synthetic provider document.']}]};return {success:true,version:1,service:{name:f.serviceName||'Eliza Cloud',terms:doc,privacy:{...doc,title:'Privacy Policy'}}};}
     if(method==='cancel'){f.release?.(fail('cancelled'));f.release=null;return {};}
     if(method==='status'&&f.signIn==='readiness-hold')return new Promise(resolve=>{(f as any).releaseReadiness=()=>resolve({active:false,inApp:true,google:true,email:true,phone:true});});
     if(method==='status'&&f.methods)return {active:false,inApp:Object.values(f.methods).some(Boolean),methodsKnown:true,...f.methods};
@@ -351,5 +352,37 @@ for(const phone of [true,false]) test(`tenant method discovery ${phone?'offers p
  await expect(dialog.getByRole('button',{name:'Text me a code',exact:true})).toHaveCount(phone?1:0);
  if(!phone)await expect(dialog.getByText('This service offers no sign-in method supported by this app. Contact the service administrator.',{exact:true})).toBeVisible();
  expect((await calls(page)).filter(c=>['startPhone','startEmail','startGoogle'].includes(c.method))).toEqual([]);
+ await noHandOff(page);
+});
+
+test('provider legal text stays inside Alpha and returning preserves phone entry and the code attempt',async({page},info)=>{
+ await page.setViewportSize({width:390,height:844});
+ await boot(page,await entitlements());await agent(page,'unavailable');
+ await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
+ const dialog=signInDialog(page);
+ await dialog.getByLabel('Phone number with country code').fill('+14155550100');
+ await dialog.getByRole('button',{name:'Terms of Service',exact:true}).click();
+ await expect(dialog.getByRole('heading',{name:'Terms of Service',exact:true})).toBeFocused();
+ await expect(dialog.getByText('<img src=x onerror=alert(1)> is plain text.',{exact:true})).toBeVisible();
+ await expect(dialog.locator('.alpha-cloud-legal img')).toHaveCount(0);
+ await page.screenshot({path:info.outputPath('native-legal-mobile.png'),animations:'disabled'});
+ await dialog.getByRole('button',{name:'Back to sign-in',exact:true}).click();
+ await expect(dialog.getByRole('button',{name:'Terms of Service',exact:true})).toBeFocused();
+ await expect(dialog.getByLabel('Phone number with country code')).toHaveValue('+14155550100');
+ await dialog.getByRole('button',{name:'Text me a code',exact:true}).click();
+ await dialog.getByLabel('Six-digit code').fill('123');
+ await dialog.getByRole('button',{name:'Privacy Policy',exact:true}).click();
+ await expect(dialog.getByRole('heading',{name:'Privacy Policy',exact:true})).toBeVisible();
+ await dialog.getByRole('button',{name:'Back to sign-in',exact:true}).click();
+ await expect(dialog.getByLabel('Six-digit code')).toHaveValue('123');
+ expect((await calls(page)).filter(c=>c.method==='startPhone')).toHaveLength(1);
+ expect((await calls(page)).filter(c=>c.method==='verifyPhone')).toHaveLength(0);
+ await noHandOff(page);
+});
+
+test('configured provider name is shown in the app-owned sign-in view',async({page})=>{
+ await boot(page,{...await entitlements(),serviceName:'Example Service'});await agent(page,'unavailable');
+ await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Sign in to Example Service',exact:true})).toBeVisible();
  await noHandOff(page);
 });
