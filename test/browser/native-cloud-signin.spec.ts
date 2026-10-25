@@ -133,6 +133,11 @@ async function noHandOff(page:Page){
 }
 const signInDialog=(page:Page)=>page.getByRole('main',{name:'Sign in to Eliza Cloud',exact:true}).or(page.getByRole('dialog',{name:'Sign in to Eliza Cloud',exact:true}));
 
+async function revealOtherMethods(page:Page){
+ const toggle=signInDialog(page).getByRole('button',{name:'Other sign-in methods',exact:true});
+ if(await toggle.isVisible())await toggle.click();
+}
+
 test.describe('in-app Eliza Cloud sign-in on the production Android composition',()=>{
  test('email code sign-in stays in Alpha, retries a wrong code, waits out resend and binds Cloud AI',async({page},info)=>{
   await boot(page,await entitlements());
@@ -142,9 +147,19 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
   const dialog=signInDialog(page);await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toBeVisible();
   await expect(dialog.getByText(/in your browser/)).toHaveCount(0);
+  await expect(dialog.getByRole('textbox',{name:'Email',exact:true})).toBeHidden();
+  await expect(dialog.getByLabel('Phone number with country code')).toBeHidden();
+  const disclosure=dialog.getByRole('button',{name:'Other sign-in methods',exact:true});
+  await expect(disclosure).toHaveAttribute('aria-expanded','false');
   await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:info.outputPath('sign-in-choose.png'),animations:'disabled'});
+  await disclosure.focus();await disclosure.press('Enter');
+  await expect(dialog.getByRole('textbox',{name:'Email',exact:true})).toBeFocused();
+  await expect(dialog.getByLabel('Phone number with country code')).toBeVisible();
+  await page.screenshot({path:info.outputPath('sign-in-other-methods.png'),animations:'disabled'});
+ await revealOtherMethods(page);
   await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('not-an-address');await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
   expect((await calls(page)).filter(c=>c.method==='startEmail')).toHaveLength(0);
+ await revealOtherMethods(page);
   await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('  synthetic-signin@example.invalid ');
   await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
   await expect(dialog.getByRole('form',{name:'Enter your email code'})).toBeVisible();
@@ -174,6 +189,7 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
   // Change wall time without a timer tick: the host's new cooldown must not use panel-mount time.
   const later=await page.evaluate(()=>Date.now()+120000);
   await page.clock.setSystemTime(later);
+ await revealOtherMethods(page);
   await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('synthetic-signin@example.invalid');
   await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
   await expect(dialog.getByRole('button',{name:'Resend code in 60s',exact:true})).toBeDisabled();
@@ -281,6 +297,7 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
   await agent(page,'unavailable');
   await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
   const dialog=signInDialog(page);
+ await revealOtherMethods(page);
   await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('synthetic-signin@example.invalid');await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
   await dialog.getByLabel('Six-digit code').fill('123456');await dialog.getByRole('button',{name:'Verify',exact:true}).click();
   await expect(dialog.getByRole('form',{name:'Enter your verification code'})).toBeVisible();
@@ -296,6 +313,7 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
   await agent(page,'unavailable');
   await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
   const dialog=signInDialog(page);
+ await revealOtherMethods(page);
   await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('synthetic-signin@example.invalid');await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
   await expect(dialog.getByRole('alert')).toContainText('Alpha could not reach Eliza Cloud');
   await expect(dialog.getByRole('form',{name:'Sign in with email'})).toBeVisible();
@@ -311,6 +329,7 @@ for (const mode of ['ok','mfa'] as const) test(`phone code stays inside Alpha th
  await agent(page,'unavailable');
  await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
  const dialog=signInDialog(page);
+ await revealOtherMethods(page);
  await dialog.getByLabel('Phone number with country code').fill('+14155550100');
  await dialog.getByRole('button',{name:'Text me a code',exact:true}).click();
  await expect(dialog.getByRole('form',{name:'Enter your phone code'})).toBeVisible();
@@ -334,6 +353,7 @@ test('phone code cancellation discards the in-app step without a credential',asy
  await boot(page,await entitlements());await agent(page,'unavailable');
  await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
  const dialog=signInDialog(page);
+ await revealOtherMethods(page);
  await dialog.getByLabel('Phone number with country code').fill('+14155550100');
  await dialog.getByRole('button',{name:'Text me a code',exact:true}).click();
  await expect(dialog.getByRole('form',{name:'Enter your phone code'})).toBeVisible();
@@ -360,6 +380,7 @@ test('provider legal text stays inside Alpha and returning preserves phone entry
  await boot(page,await entitlements());await agent(page,'unavailable');
  await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
  const dialog=signInDialog(page);
+ await revealOtherMethods(page);
  await dialog.getByLabel('Phone number with country code').fill('+14155550100');
  await dialog.getByRole('button',{name:'Terms of Service',exact:true}).click();
  await expect(dialog.getByRole('heading',{name:'Terms of Service',exact:true})).toBeFocused();
@@ -395,6 +416,7 @@ test('long provider documents scroll to the end and return to an unfinished sign
  await boot(page,{...await entitlements(),legalParagraphs:paragraphs});await agent(page,'unavailable');
  await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
  const dialog=signInDialog(page);
+ await revealOtherMethods(page);
  await dialog.getByLabel('Email',{exact:true}).fill('unfinished@example.invalid');
  await dialog.getByRole('button',{name:'Terms of Service',exact:true}).click();
  await expect(dialog.getByRole('heading',{name:'Terms of Service',exact:true})).toBeInViewport();

@@ -19,6 +19,10 @@ export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = tru
 }) {
   const [service,setService]=useState<CloudServiceInfo|null>(null),[serviceError,setServiceError]=useState(false),[retry,setRetry]=useState(0);
   const [legal,setLegal]=useState<'terms'|'privacy'|null>(null);
+  const [otherMethods,setOtherMethods]=useState(false);
+  const googleButton=useRef<HTMLButtonElement>(null);
+  const showOtherMethods=!google||otherMethods;
+  useEffect(()=>setOtherMethods(false),[view.environment]);
   const legalHeading=useRef<HTMLHeadingElement>(null),legalTrigger=useRef<HTMLButtonElement|null>(null);
   useEffect(()=>{
     let current=true;setService(null);setServiceError(false);setLegal(null);
@@ -41,8 +45,8 @@ export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = tru
   }, [view]);
   useEffect(() => {
     // Disabled inputs lose focus during verification. Restore it for a wrong-code retry too.
-    if (!busy) (view.step === 'code' || view.step === 'mfa' ? code : view.step === 'choose' ? email : null)?.current?.focus();
-  }, [view.step, busy]);
+    if (!busy) (view.step === 'code' || view.step === 'mfa' ? code : view.step === 'choose' ? !showOtherMethods ? googleButton : emailEnabled ? email : phoneInput : null)?.current?.focus();
+  }, [view.step, busy, showOtherMethods, emailEnabled]);
   const wait = view.step === 'code' ? Math.max(0, Math.ceil((view.resendAt - now) / 1000)) : 0;
   const submitCode = (event: FormEvent) => { event.preventDefault(); const input = code.current; const value = input?.value || ''; if (input) input.value = ''; actions.verify(value); };
   return <>
@@ -52,7 +56,9 @@ export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = tru
       {!google && !phone && !emailEnabled && <p role="status">This service offers no sign-in method supported by this app. Contact the service administrator.</p>}
       <p>Sign in to {service?.name || cloudServiceName(view.environment)} to use AI. Your agent keeps running on this device.</p>
       <p role="note">Sign in to verify your account. You’ll review access before authorizing Alpha Phone.</p>
-      {google && <div className="alpha-connection-actions"><button disabled={busy} onClick={actions.google}>Continue with Google</button></div>}
+      {google && <div className="alpha-connection-actions"><button ref={googleButton} disabled={busy} onClick={actions.google}>Continue with Google</button></div>}
+      {google && (emailEnabled || phone) && <button type="button" className="alpha-connection-cancel" aria-expanded={otherMethods} aria-controls="alpha-sign-in-other-methods" disabled={busy} onClick={()=>setOtherMethods(value=>!value)}>{otherMethods ? 'Hide other sign-in methods' : 'Other sign-in methods'}</button>}
+      <div id="alpha-sign-in-other-methods" hidden={!showOtherMethods}>
       {emailEnabled && <form className="alpha-cloud-sign-in-email" aria-label="Sign in with email" onSubmit={event => { event.preventDefault(); actions.email(email.current?.value || ''); }}>
         <label>Email<input ref={email} type="email" name="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="email" maxLength={320} required disabled={busy} /></label>
         <button disabled={busy}>Email me a code</button>
@@ -61,6 +67,7 @@ export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = tru
         <label>Phone number with country code<input ref={phoneInput} type="tel" name="phone" autoComplete="tel" placeholder="+14155550100" maxLength={16} required disabled={busy} /></label>
         <button disabled={busy}>Text me a code</button>
       </form>}
+      </div>
     </>}
     {view.step === 'google'  && <p>Choose your Google account in the window that opened. When Google returns you to Alpha, sign-in finishes here.</p>}
     {(view.step === 'code' || view.step === 'mfa') && <form className="alpha-cloud-sign-in-code" aria-label={view.step === 'code' ? view.phone ? 'Enter your phone code' : 'Enter your email code' : 'Enter your verification code'} onSubmit={submitCode}>

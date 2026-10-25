@@ -186,6 +186,8 @@ export const setStub = (page: Page, patch: Record<string, unknown>) => page.eval
 export async function emailCode(page: Page, verify = true) {
   const dialog=page.getByRole('main',{name:'Sign in to Eliza Cloud',exact:true}).or(page.getByRole('dialog',{name:'Sign in to Eliza Cloud',exact:true}));
   await expect(dialog).toBeVisible();
+  const otherMethods=dialog.getByRole('button',{name:'Other sign-in methods',exact:true});
+  if(await otherMethods.isVisible())await otherMethods.click();
   await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('fixture@example.invalid');
   await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
   await expect(dialog.getByLabel('Six-digit code')).toBeVisible();
