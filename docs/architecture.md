@@ -142,24 +142,24 @@ production authentication.
 
 ### Eliza Cloud sign-in ownership (in-app, 2026-10-14)
 
-Sign-in happens on Alpha's own screens once Cloud is ready for it; no Eliza Cloud web page is part
-of a successful in-app sign-in. If readiness fails or times out, Alpha shows an unavailable error
-and lets the owner retry. It does not open Cloud website sign-in; the local agent keeps running.
+Native sign-in stays on Alpha's own screens. Email remains available when the optional Google
+readiness probe fails or times out; its native request reports any service configuration failure.
+There is no automatic Eliza Cloud website sign-in fallback.
 
-- **Readiness (`CloudSignInReadiness`, `AlphaCloudSignInPlugin.status`)**: in-app sign-in is offered
-  only when all of these hold, checked with a few short requests and cached (6 hours when ready,
+- **Readiness (`CloudSignInReadiness`, `AlphaCloudSignInPlugin.status`)**: readiness reports email and optional Google separately, checked with a few short requests and cached (6 hours when ready,
   10 minutes when not; any error, timeout or unexpected answer is "not ready"):
   - `GET /api/v1/app-auth/mobile/config` confirms the registration for client
     `ai.elizaresearch.alphaphone`, this environment and the return URL;
-  - Steward's Google authorize route redirects to Google for the return URL (the tenant redirect
-    allowlist admits it; nothing is followed);
-  - `/.well-known/assetlinks.json` on the return host grants `handle_all_urls` to this package and
-    the certificate this APK is signed with;
+  - For Google only, Steward's authorize route redirects to Google for the return URL (the tenant
+    redirect allowlist admits it; nothing is followed);
+  - For Google only, `/.well-known/assetlinks.json` on the return host grants `handle_all_urls`
+    to this package and the certificate this APK is signed with;
   - `GET /steward/auth/providers` offers email without a captcha for `email_otp`, and the email code
     route exists (an empty-object POST is refused as invalid, not as unknown; no email is sent).
   Google is offered on top only when Steward offers it and Android reports the return host verified
   for this package. A refusal from Cloud during an in-app sign-in clears the cache so the next
-  attempt re-checks. The renderer waits at most 6 seconds for the answer, then uses the hand-off.
+  attempt re-checks. The renderer waits at most 6 seconds, then offers email alone. A late result cannot
+  change the already opened attempt.
 - **Native (`AlphaCloudSignInPlugin`, `CloudSignInFlow`, `CloudEmailCode`)** holds the Steward
   session, codes and PKCE verifiers and makes every sign-in request, using fixed URLs on the Cloud API
   origin (`ConnectionRoutes.signInRoute`; the renderer transport admits none of them):
@@ -198,8 +198,8 @@ and lets the owner retry. It does not open Cloud website sign-in; the local agen
   (`login-active`). It then runs the unchanged identity, entitlement, redeem and resident-binding
   path on the stored key, and says so when `accountCreated` is true.
 - **Cloud sign-in hand-off (`CloudProtocol.login`, `/api/auth/cli-session`, the `cli-login` page)**:
-  retained for the explicit browser-host sign-in and the **Browser sign-in (diagnostic)** button
-  in test-mocks builds. It is not the native readiness fallback.
+  the explicit browser development profile and a **Browser sign-in (diagnostic)** button
+  in test-mocks builds only; it is not the native readiness fallback.
 - **Cloud (elizaOS/eliza `packages/cloud`, `packages/auth`, `packages/app`)** owns the accounts:
   - Steward links Google and email to the existing user by verified email.
   - Mobile App Auth mints the key, valid for 30 days.

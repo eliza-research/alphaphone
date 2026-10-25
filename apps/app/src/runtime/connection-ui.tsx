@@ -412,7 +412,7 @@ function prepareSignInReplacement() {
   const replacingCloud = active?.kind === 'cloud' || selection()?.kind === 'cloud';
   detachCloudTarget(); detachService(); if (replacingCloud) save({ kind: 'none' }); update({ agents: [], accountCreated: false });
 }
-/** How long sign-in waits for the host's cached readiness answer before using the browser hand-off. */
+/** How long sign-in waits for optional Google readiness before offering email alone. */
 const SIGN_IN_READINESS_WAIT_MS = 6000;
 /** Whether the last ready host offered Google (it needs this phone's verified App Link return). */
 let inAppGoogle = false;
@@ -1423,7 +1423,7 @@ async function pairedRequest(selected:Extract<Active,{kind:'remote'|'local'}>,se
 }
 const hosted = testMocksEnabled ? { pairedRequest, pair, restore: restoreHosted, inspectPersonal, cloudList, cloudManage, personalDecline, personalAccept, personalPoll, personalFinalize, personalRecoveryOpen, personalConnect } : null;
 
-/** Browser sign-in body shared by explicit browser login and readiness fallback in one operation. */
+/** Browser sign-in body for the explicit browser development/diagnostic entry. */
 async function residentBrowserLoginAction(signal: AbortSignal) {
   // P-43: the resident keeps running while the owner signs in in the browser. A cancelled or
   // failed first sign-in leaves it untouched; a sign-in kept on this phone is re-admitted then.
@@ -1979,27 +1979,28 @@ export const connectionController = {
     if (!digits) { update({ error: signInFailureMessage('invalid-code') }); return; }
     await work('Checking your code…', async signal => {
       const client = signInClient(view.environment);
-      let authenticated = false;
+      let outcome: CloudSignInAuthenticated;
       try {
-        if (view.step === 'mfa') { const outcome = await client.verifyMfaSignIn(view.attemptId, digits, signal); authenticated = true; await signedIn(client, outcome, signal); return; }
-        const outcome = await client.verifyEmailSignIn(view.attemptId, digits, signal);
-        if (outcome.status === 'mfa') {
-          signInFailed(view.environment, true);
-          update({ signIn: { step: 'mfa', environment: view.environment, email: view.email, attemptId: view.attemptId, method: outcome.method, expiresAt: outcome.expiresAt },
-            message: outcome.method === 'totp' ? 'Enter the six-digit code from your authenticator app.' : outcome.method === 'sms' ? 'Enter the six-digit code sent to your phone.' : '' });
-          if (outcome.method === 'passkey') throw new CloudSignInError('mfa-unsupported');
-          return;
+        if (view.step === 'mfa') outcome = await client.verifyMfaSignIn(view.attemptId, digits, signal);
+        else {
+          const emailOutcome = await client.verifyEmailSignIn(view.attemptId, digits, signal);
+          if (emailOutcome.status === 'mfa') {
+            signInFailed(view.environment, true);
+            update({ signIn: { step: 'mfa', environment: view.environment, email: view.email, attemptId: view.attemptId, method: emailOutcome.method, expiresAt: emailOutcome.expiresAt },
+              message: emailOutcome.method === 'totp' ? 'Enter the six-digit code from your authenticator app.' : emailOutcome.method === 'sms' ? 'Enter the six-digit code sent to your phone.' : '' });
+            if (emailOutcome.method === 'passkey') throw new CloudSignInError('mfa-unsupported');
+            return;
+          }
+          outcome = emailOutcome;
         }
-        authenticated = true;
-        await signedIn(client, outcome, signal);
       } catch (error) {
-        // A resident restart failure must not reopen a completed sign-in.
-        if (authenticated) throw error;
-        // A wrong code keeps this step so the owner can retry or resend; anything else ends it.
+        // Only native verification failures retire the attempt. Once authenticated, resident
+        // startup failures must not reopen sign-in over the stored key and permission setup.
         if (!(error instanceof CloudSignInError && error.code === 'invalid-code')) signInFailed(view.environment);
         else signInFailed(view.environment, true);
         throw error;
       }
+      await signedIn(client, outcome, signal);
     });
     await ensureResident();
   },
@@ -2037,8 +2038,8 @@ export const connectionController = {
     update({ open: true, signIn: state.signIn ? { step: 'choose', environment: state.signIn.environment } : state.signIn, message: '', error: signInFailureMessage('app-link-unverified') });
   },
   /**
-   * The Cloud sign-in hand-off in the browser (cli-session). The product fallback until the in-app
-   * readiness probe passes, and a diagnostic button on the in-app screen in test-mocks builds.
+   * The Cloud sign-in hand-off in the browser (cli-session), used by the explicit browser
+   * development profile and the test-mocks diagnostic entry. Never a native readiness fallback.
    */
   async signInBrowser(environment: CloudEnvironment = state.signIn?.environment ?? (residentCloudFlow() ? residentEnvironment() : cloud.environment)) {
     if (operation) return;
@@ -2111,7 +2112,6 @@ export const connectionController = {
   async cloudLogin(environment: CloudEnvironment) {
     if(!testMocksEnabled && !isAndroid && !browserLocalAgentEnabled){update({open:true,error:WEB_CLOUD_UNAVAILABLE,message:''});return;}
     if(residentCloudFlow()){await connectionController.residentCloudLogin();return;}
-    if (testMocksEnabled && !isAndroid) { await connectionController.browserCloudLogin(environment); return; }
     await connectionController.beginSignIn(environment);
   },
   async browserCloudLogin(environment: CloudEnvironment) {
