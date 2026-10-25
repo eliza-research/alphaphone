@@ -7,6 +7,7 @@ final class CloudDeployment {
  static final String PRODUCTION_WEB = "https://eliza.app";
  static final String PRODUCTION_SERVICES = "https://cloud.eliza.app";
  static final String PRODUCTION_TENANT = "elizacloud";
+ static final String PRODUCTION_NAME = "Eliza Cloud";
  static final String PRODUCTION_API_HOST = "api.eliza.app";
  static final String PRODUCTION_WEB_HOST = "eliza.app";
  static final String PRODUCTION_SERVICES_HOST = "cloud.eliza.app";
@@ -14,6 +15,7 @@ final class CloudDeployment {
  static final String STAGING_WEB = "https://staging.eliza.app";
  static final String STAGING_SERVICES = "https://cloud-staging.eliza.app";
  static final String STAGING_TENANT = "elizacloud-staging";
+ static final String STAGING_NAME = "Eliza Cloud";
  static final String STAGING_API_HOST = "api-staging.eliza.app";
  static final String STAGING_WEB_HOST = "staging.eliza.app";
  static final String STAGING_SERVICES_HOST = "cloud-staging.eliza.app";

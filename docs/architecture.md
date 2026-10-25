@@ -8,7 +8,9 @@ revision in `upstream.lock.json` and `vendor/eliza`.
 ## Cloud deployment configuration
 
 `config/cloud-deployment.json` owns the public production and staging API, web,
-services origins and tenant identifiers. Eliza Cloud remains the default. Run
+services origins, tenant identifiers and optional public service names. A deployment
+without a name displays its API hostname until its public metadata loads. Names
+do not change credential authority or its storage namespace. Eliza Cloud remains the default. Run
 `node scripts/cloud-deployment.mjs` after changing it; renderer and Android builds
 reject stale generated TypeScript or Java. The current configuration accepts
 canonical HTTPS origins on the default port, without base paths or credentials.

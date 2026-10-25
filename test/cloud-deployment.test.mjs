@@ -116,3 +116,15 @@ test('custom deployment reaches native inference configuration and Google transp
   fs.rmSync(temp,{recursive:true,force:true});
  }
 });
+
+test('configured service names reach the renderer without changing credential authority',async()=>{
+ const {stripTypeScriptTypes}=await import('node:module');
+ const load=async config=>import('data:text/javascript;base64,'+Buffer.from(stripTypeScriptTypes(deploymentOutputs(config)['apps/app/src/runtime/cloud-deployment.generated.ts'])).toString('base64'));
+ const original=await load(defaults),config=structuredClone(defaults);
+ config.production.name='Independent Service';config.staging.name='Independent Preview';
+ const changed=await load(config);
+ assert.equal(changed.productionCloud.name,'Independent Service');assert.equal(changed.stagingCloud.name,'Independent Preview');
+ assert.equal(changed.cloudStorageNamespace,original.cloudStorageNamespace);
+ delete config.production.name;assert.equal((await load(config)).productionCloud.name,new URL(config.production.api).hostname);
+ for(const name of ['', '   ', ' Invalid', 'Invalid\nName', 42]){config.production.name=name;assert.throws(()=>validateCloudDeployment(config));}
+});
