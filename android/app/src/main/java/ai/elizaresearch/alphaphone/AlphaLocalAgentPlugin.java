@@ -16,6 +16,7 @@ import org.json.JSONObject;
 public final class AlphaLocalAgentPlugin extends Plugin {
  private final ExecutorService workers=Executors.newFixedThreadPool(2);
  private final ExecutorService voiceWorkers=new java.util.concurrent.ThreadPoolExecutor(1,1,0L,java.util.concurrent.TimeUnit.MILLISECONDS,new java.util.concurrent.SynchronousQueue<>());
+ private final ExecutorService rendererWorkers=new java.util.concurrent.ThreadPoolExecutor(1,1,0L,java.util.concurrent.TimeUnit.MILLISECONDS,new java.util.concurrent.SynchronousQueue<>());
  // Set only from in-process debug instrumentation; no route, intent or preference activation.
  static volatile java.net.ServerSocket instrumentationRecoveryEndpoint;
  private static String rootToken,ownerToken,ownerIdentity;
@@ -815,9 +816,9 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  }
  @PluginMethod public void requestStream(PluginCall call) {
   String id=call.getString("streamId",""),path=call.getString("path",""),owner=call.getString("ownerId",""),body=call.getString("body","");
-  if(!id.matches("[A-Za-z0-9-]{16,64}")||!path.matches("^/api/conversations/[A-Za-z0-9_-]+/messages/stream$")||owner.isEmpty()||body.isEmpty()||body.length()>2*1024*1024){call.reject("Unsupported local stream.");return;}
+  if(!id.matches("[A-Za-z0-9-]{16,64}")||id.startsWith("voice-")||id.startsWith("view-")||!path.matches("^/api/conversations/[A-Za-z0-9_-]+/messages/stream$")||owner.isEmpty()||body.isEmpty()||body.length()>2*1024*1024){call.reject("Unsupported local stream.");return;}
   final long epoch;final var handle=new ElizaAgentService.LocalStreamHandle();
-  try{synchronized(lifecycleLock){epoch=admittedEpoch();if(streams.size()>=2||streams.containsKey(id))throw new IllegalStateException();streams.put(id,handle);streamInvalidators.put(id,()->notifyListeners("alphaAgentStream",new JSObject().put("streamId",id).put("event",new JSObject().put("type","complete").put("error","Local connection changed. Outcome unknown; check history before retrying."))));}}
+  try{synchronized(lifecycleLock){epoch=admittedEpoch();if(streams.keySet().stream().filter(value->!value.startsWith("voice-")&&!value.startsWith("view-")).count()>=2||streams.containsKey(id))throw new IllegalStateException();streams.put(id,handle);streamInvalidators.put(id,()->notifyListeners("alphaAgentStream",new JSObject().put("streamId",id).put("event",new JSObject().put("type","complete").put("error","Local connection changed. Outcome unknown; check history before retrying."))));}}
   catch(Exception unavailable){call.reject("Local stream unavailable.");return;}
   final JSONObject supplied=call.getObject("headers");
   call.resolve(new JSObject().put("streamId",id));
@@ -860,9 +861,38 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   synchronized(lifecycleLock){var handle=streams.remove(key);streamInvalidators.remove(key);if(handle!=null)handle.cancel();}
   call.resolve(new JSObject().put("closed",true));
  }
+ @PluginMethod public void subscribeViewEvents(PluginCall call) {
+  String id=call.getString("subscriptionId",""),owner=call.getString("ownerId",""),clientId=call.getString("clientId","");
+  if(!id.matches("[A-Za-z0-9-]{16,64}")||owner.isEmpty()||!clientId.matches("[A-Za-z0-9._-]{1,128}")){call.reject("Invalid voice subscription.");return;}
+  String key="view-"+id;final long epoch;final var handle=new ElizaAgentService.LocalStreamHandle();
+  try{synchronized(lifecycleLock){epoch=admittedEpoch();if(streams.keySet().stream().anyMatch(value->value.startsWith("view-")))throw new IllegalStateException();streams.put(key,handle);streamInvalidators.put(key,()->notifyListeners("alphaViewEvent",new JSObject().put("subscriptionId",id).put("type","end")));}}
+  catch(Exception unavailable){call.reject("Renderer subscription unavailable.");return;}
+  final java.util.concurrent.atomic.AtomicBoolean resolved=new java.util.concurrent.atomic.AtomicBoolean();
+  PluginWorkers.submit(rendererWorkers,()->{try{
+   enroll(epoch);final String admittedRoot;
+   synchronized(lifecycleLock){requireCurrent(epoch);admittedRoot=rootToken;if(!VoiceEventAdmission.current(admittedRoot,rootToken,ElizaAgentService.localAgentToken(),owner,ownerIdentity,expiresAt,System.currentTimeMillis())||streams.get(key)!=handle)throw new Superseded();}
+   JSONObject input=new JSONObject().put("streams",new org.json.JSONArray().put("view-interact")).put("clientId",clientId);
+   ElizaAgentService.subscribeLocalAgentEvents(input.toString(),event->{synchronized(lifecycleLock){try{
+    requireCurrent(epoch);if(streams.get(key)!=handle)return;
+    if(!VoiceEventAdmission.current(admittedRoot,rootToken,ElizaAgentService.localAgentToken(),owner,ownerIdentity,expiresAt,System.currentTimeMillis())){handle.cancel();return;}
+    JSONObject value=new JSONObject(event);
+    if("subscribed".equals(value.optString("type"))){if(resolved.compareAndSet(false,true))call.resolve(new JSObject().put("subscriptionId",id));return;}
+    if(!"event".equals(value.optString("type")))return;
+    JSONObject envelope=value.optJSONObject("event");if(envelope==null||!"agent_event".equals(envelope.optString("type"))||!"view-interact".equals(envelope.optString("stream")))return;
+    JSONObject payload=envelope.optJSONObject("payload");if(payload==null||!clientId.equals(payload.optString("clientId")))return;
+    notifyListeners("alphaViewEvent",new JSObject().put("subscriptionId",id).put("type","event").put("event",envelope));
+   }catch(Exception ignored){handle.cancel();}}},handle);
+  }catch(Exception unavailable){if(resolved.compareAndSet(false,true))call.reject("Renderer subscription unavailable.");}
+  finally{if(resolved.compareAndSet(false,true))call.reject("Renderer subscription ended before admission.");synchronized(lifecycleLock){if(streams.get(key)==handle){streams.remove(key);streamInvalidators.remove(key);notifyListeners("alphaViewEvent",new JSObject().put("subscriptionId",id).put("type","end"));}handle.cancel();}}},()->{if(resolved.compareAndSet(false,true))call.reject("Renderer worker unavailable.");synchronized(lifecycleLock){if(streams.get(key)==handle){streams.remove(key);streamInvalidators.remove(key);notifyListeners("alphaViewEvent",new JSObject().put("subscriptionId",id).put("type","end"));}handle.cancel();}});
+ }
+ @PluginMethod public void unsubscribeViewEvents(PluginCall call) {
+  String key="view-"+call.getString("subscriptionId","");
+  synchronized(lifecycleLock){var handle=streams.remove(key);streamInvalidators.remove(key);if(handle!=null)handle.cancel();}
+  call.resolve(new JSObject().put("closed",true));
+ }
  /** Destroying one surface (for example closing the assistant) cancels only this instance's
   * calls and streams. The shared runtime, its epoch and the owner enrollment stay valid for
   * other surfaces. When the last surface goes away (the app is closed or recreated) the epoch
   * advances and the enrollment is cleared, as before; the next surface enrolls again. */
- @Override protected void handleOnDestroy(){synchronized(lifecycleLock){disposed=true;invalidateOwnCalls();instances.remove(this);if(instances.isEmpty()){++lifecycleEpoch;clearEnrollment();}}workers.shutdownNow();voiceWorkers.shutdownNow();super.handleOnDestroy();}
+ @Override protected void handleOnDestroy(){synchronized(lifecycleLock){disposed=true;invalidateOwnCalls();instances.remove(this);if(instances.isEmpty()){++lifecycleEpoch;clearEnrollment();}}workers.shutdownNow();voiceWorkers.shutdownNow();rendererWorkers.shutdownNow();super.handleOnDestroy();}
 }

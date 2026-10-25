@@ -1,3 +1,4 @@
+import {subscribeNativeViewEvents,type NativeViewEventPort} from "./native-view-events";
 import {browserCloudResidentEnabled,browserResidentCall} from './browser-cloud-resident';
 import {isAppRecordPath,appRecordRouteAllowed,type AppRecordMethod} from './app-record-route-policy';
 import {developmentCartesiaVoiceEnabled} from './development-cartesia-flag';
@@ -33,7 +34,7 @@ export interface LocalAgentBridge {
   request(input: { path: string; audioBase64?:string;requestId?:string;ownerId?:string; method: LocalAgentMethod; headers: Record<string,string>; body?: string; timeoutMs: number }, signal?:AbortSignal): Promise<{status:number;body?:string}>;
   stream?(input:{path:string;ownerId:string;headers:Record<string,string>;body:string},signal:AbortSignal,onText:(text:string)=>void,onReplyReady?:(results:readonly unknown[]|undefined)=>void):Promise<RemoteChatReply>;
 }
-const native = registerPlugin<Omit<LocalAgentBridge, 'subscribeVoiceEvents'> & NativeStreamPort & NativeVoiceEventPort>('Agent');
+const native = registerPlugin<Omit<LocalAgentBridge, 'subscribeVoiceEvents'> & NativeStreamPort & NativeVoiceEventPort & NativeViewEventPort>('Agent');
 // Capacitor proxies synthesize functions for unknown methods. Do not use that
 // proxy to feature-detect streaming before the native IPC adapter implements it.
 const nativeBridge:LocalAgentBridge={subscribeVoiceEvents:(ownerId,listener)=>subscribeNativeVoiceEvents(native,ownerId,listener),start:()=>native.start(),request:input=>native.request(input),stream:(input,signal,onText,onReplyReady)=>streamNativeAgent(native,input,signal,onText,onReplyReady)};
@@ -152,6 +153,11 @@ export class LocalAgentProtocol {
     const detach=this.bridge.subscribeConversationEvents(session.ownerId,value=>{if(current())listener(value);},(state,resync)=>{if(current())onState(state,resync);});
     const close=()=>{if(!active)return;active=false;this.conversationSubscriptions.delete(close);detach();};
     this.conversationSubscriptions.add(close);return close;
+  }
+  subscribeViewEvents(clientId:string,listener:(frame:unknown)=>void,ended:()=>void){
+    const session=this.session,generation=this.generation;
+    if(!session||this.bridge!==nativeBridge)throw Error('Native renderer events unavailable');
+    return subscribeNativeViewEvents(native,session.ownerId,clientId,frame=>{if(session===this.session&&generation===this.generation)listener(frame);},ended);
   }
   deviceHeaders:Record<string,string>={};
   constructor(private bridge:LocalAgentBridge = Capacitor.isNativePlatform() ? nativeBridge : browserBridge ?? unavailableBridge) {}

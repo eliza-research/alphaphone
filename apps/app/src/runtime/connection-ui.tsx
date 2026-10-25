@@ -1486,6 +1486,7 @@ async function refreshActionReview(signal:AbortSignal){
     update({actionHistory:entries,...(review&&!(isAndroid&&!testMocksEnabled)?{open:true,message:'A phone action needs your review. Check this phone, then record whether it happened.'}:{})});
   }catch{signal.throwIfAborted();/* The history stays available from Phone action history. */}
 }
+let viewInteractionExecutor:((view:string,capability:string,params:unknown,signal:AbortSignal,current:()=>void)=>Promise<unknown>)|undefined;
 function boundNavigation():ViewNavigationClient|undefined {
  const selected=active,session=state.session,generation=epoch;
  if(!selected||!session||!navigationContext)return undefined;
@@ -1495,7 +1496,10 @@ function boundNavigation():ViewNavigationClient|undefined {
    ? (path:string,body:unknown,signal:AbortSignal)=>selected.remote.viewNavigationRequest(path,body,signal)
    : undefined);
  if(!request)return undefined;
- return selected.viewNavigation??=new ViewNavigationClient(request,()=>active===selected&&state.session===session&&epoch===generation&&!state.open&&!state.busy,()=>navigationContext?.()??null);
+ const subscribe=isAndroid&&selected.kind==='resident'?(clientId:string,listener:(frame:unknown)=>void,ended:()=>void)=>selected.remote.subscribeViewEvents(clientId,listener,ended):undefined;
+ const execute=(view:string,capability:string,params:unknown,signal:AbortSignal,current:()=>void)=>{if(!viewInteractionExecutor)throw Error('Native view executor unavailable');return viewInteractionExecutor(view,capability,params,signal,current);};
+ if(!selected.viewNavigation)return selected.viewNavigation=new ViewNavigationClient(request,()=>active===selected&&state.session===session&&epoch===generation&&!state.open&&!state.busy,()=>navigationContext?.()??null,subscribe,execute);
+ selected.viewNavigation.connectRenderer();return selected.viewNavigation;
 }
 
 /*
@@ -1668,6 +1672,7 @@ export const connectionController = {
   voiceRendererClientId(){return boundNavigation()?.clientId;},
   voiceRendererMetadata(context:ContextEnvelope){return boundNavigation()?.metadata(context)??{};},
   captureViewNavigation(context:ContextEnvelope){const client=boundNavigation();return client?{client,attempt:client.capture(context)}:undefined;},
+  setViewInteractionExecutor(executor:typeof viewInteractionExecutor){viewInteractionExecutor=executor;},
   setDeviceExecutor(executor: DeviceExecutor) { deviceExecutor = executor; },
   setForegroundExecutor(executor: ForegroundReviewExecutor) { foregroundExecutor = executor; },
   setDeviceReadReview(review:(proposal:ActionProposal,context:ContextEnvelope,signal:AbortSignal)=>Promise<void>){deviceReadReview=review;},

@@ -1,3 +1,4 @@
+import {parseNativeHistoryCommand} from "../../../../.eliza/client-features/plugins/plugin-browser/src/native-client-command.ts";
 import { registerPlugin } from '../platform-plugins';
 import { Capacitor } from '@capacitor/core';
 import { DailyApps } from '../daily';
@@ -409,6 +410,17 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     if (browserActive && !browserWasActive) void readingSupport?.check();
     if (!sessionRead && this.vget('browser')?.tabs) void restoreSession();
     browserWasActive = browserActive;
+    this.browserCommand = async (raw:unknown,signal:AbortSignal,current:()=>void) => {
+      const command=parseNativeHistoryCommand(raw),id=state()?.cur,info=metadata.get(id);
+      const admittedNavigation=info?.navigation;
+      const bound=()=>{signal.throwIfAborted();current();if(disposed||!Capacitor.isNativePlatform()||document.hidden||shell.S().view!=='browser'||state()?.menu||state()?.tabsOpen||state()?.lib||state()?.share||state()?.editing||shell.S().shade||state()?.cur!==id||!created.has(id)||!info?.committed||info.error||info.loading||metadata.get(id)?.navigation!==admittedNavigation)throw Error('Current native browser tab changed');};
+      bound();
+      const receipt=await Browser.command({session,id,command:command.subaction,navigation:admittedNavigation});
+      // A back/reload dispatch may change its own document. Keep exact tab/session
+      // and lifetime fences; never call the command again to obtain an acknowledgment.
+      signal.throwIfAborted();if(disposed||shell.S().view!=='browser'||state()?.cur!==id||receipt?.session!==session||receipt?.id!==id)throw Error('Native browser result belongs to another tab or session');
+      return {ok:true,data:{dispatched:true,completed:false,requiresReadback:true}};
+    };
     this.browserNavigateApproved = Capacitor.isNativePlatform() ? async (raw: string, signal: AbortSignal) => {
       const url = new URL(raw);
       if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Only HTTPS destinations may be approved');

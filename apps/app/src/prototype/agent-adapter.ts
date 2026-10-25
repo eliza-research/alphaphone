@@ -665,6 +665,10 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       const result=await DailyApps.reminderOperationReceipt({operation,operationId,bindingHash});signal.throwIfAborted();
       return result.status==='succeeded'?{status:'succeeded',reminderResult:isReminderCreate(operation)?validateReminderCreateResult(operation,result.result,operationId):validateReminderResult(operation,result.result)}:{status:'unknown'};
     });
+    connectionController.setViewInteractionExecutor(async(view,capability,params,signal,current)=>{
+      current();if(!this.live||view!=='browser'||capability!=='browser-command'||!params||typeof params!=='object'||!this.browserCommand)throw Error('Native view capability is unavailable');
+      return this.browserCommand((params as Record<string,unknown>).command,signal,current);
+    });
     connectionController.setNavigationContext(()=>this.live?alphaClient.getState().context:null);
     connectionController.setDeviceReadReview(async(proposal,expectedContext,signal)=>{
       if(typeof this.prepareDeviceReadReview!=='function')throw Error('Notes review is unavailable. Nothing was shared.');

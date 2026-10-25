@@ -32,6 +32,7 @@ function matches(actual, expected) {
     Object.entries(expected).every(([file, digest]) => actual[file] === digest);
 }
 export const CLIENT_FEATURE_PATHS = [
+  "plugins/plugin-browser/src/native-client-command.ts",
   'packages/core/src/types/plugin.ts',
   'packages/ui/src/api/client-base.ts',
   'plugins/plugin-calendar/src/meetings/auto-join-settings.ts',
