@@ -52,7 +52,7 @@ async function entitlements(overrides:Record<string,unknown>={}){
 
 
 type SignInMode='ok'|'created'|'mfa'|'hold'|'offline'|'readiness-hold'|'not-ready';
-async function boot(page:Page,initial:{signIn?:SignInMode;tokens?:Record<string,string>;keys?:unknown[];keyLifetimeMs?:number}={}){
+async function boot(page:Page,initial:{signIn?:SignInMode;tokens?:Record<string,string>;keys?:unknown[];keyLifetimeMs?:number;methods?:{email:boolean;phone:boolean;google:boolean}}={}){
  page.on('pageerror',(error:Error)=>console.error('Composition page error:',error.message));
  await page.route('https://**',route=>route.abort());
  await page.addInitScript(initial=>{
@@ -69,8 +69,9 @@ async function boot(page:Page,initial:{signIn?:SignInMode;tokens?:Record<string,
    if(plugin==='AlphaCloudSignIn'){
     if(method==='addListener'||method==='removeListener')return {};
     if(method==='cancel'){f.release?.(fail('cancelled'));f.release=null;return {};}
-    if(method==='status'&&f.signIn==='readiness-hold')return new Promise(resolve=>{(f as any).releaseReadiness=()=>resolve({active:false,inApp:true,google:true,email:true});});
-    if(method==='status')return f.signIn==='not-ready'?{active:false,inApp:false,google:false,email:false}:{active:false,inApp:true,google:true,email:true};
+    if(method==='status'&&f.signIn==='readiness-hold')return new Promise(resolve=>{(f as any).releaseReadiness=()=>resolve({active:false,inApp:true,google:true,email:true,phone:true});});
+    if(method==='status'&&f.methods)return {active:false,inApp:Object.values(f.methods).some(Boolean),methodsKnown:true,...f.methods};
+    if(method==='status')return f.signIn==='not-ready'?{active:false,inApp:false,google:false,email:false}:{active:false,inApp:true,google:true,email:true,phone:true};
     if(method==='startGoogle'){if(f.signIn==='hold')return new Promise((_,reject)=>{f.release=reject;});return store();}
     if(method==='startEmail'||method==='startPhone'){if(f.signIn==='offline')throw fail('offline');return {attemptId:'33333333-3333-4333-8333-333333333333',expiresAt:Date.now()+600000,resendAt:Date.now()+60000};}
     if(method==='verifyEmail'||method==='verifyPhone'){if(input.code!=='123456')throw fail('invalid-code');if(f.signIn==='mfa')return {status:'mfa',method:'totp',expiresAt:Date.now()+300000};return store();}
@@ -338,5 +339,17 @@ test('phone code cancellation discards the in-app step without a credential',asy
  await dialog.getByRole('button',{name:'Cancel sign-in',exact:true}).click();
  await expect(dialog).toHaveCount(0);expect((await fixture(page)).saved).toBe(false);
  expect((await calls(page)).some(c=>c.plugin==='AlphaCloudSignIn'&&c.method==='cancel')).toBe(true);
+ await noHandOff(page);
+});
+
+for(const phone of [true,false]) test(`tenant method discovery ${phone?'offers phone without email':'hides all disabled methods'}`,async({page})=>{
+ await boot(page,{...await entitlements(),methods:{phone,email:false,google:false}});await agent(page,'unavailable');
+ await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
+ const dialog=signInDialog(page);await expect(dialog).toBeVisible();
+ await expect(dialog.getByRole('button',{name:'Email me a code',exact:true})).toHaveCount(0);
+ await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toHaveCount(0);
+ await expect(dialog.getByRole('button',{name:'Text me a code',exact:true})).toHaveCount(phone?1:0);
+ if(!phone)await expect(dialog.getByText('This service offers no sign-in method supported by this app. Contact the service administrator.',{exact:true})).toBeVisible();
+ expect((await calls(page)).filter(c=>['startPhone','startEmail','startGoogle'].includes(c.method))).toEqual([]);
  await noHandOff(page);
 });

@@ -416,7 +416,7 @@ function prepareSignInReplacement() {
 /** How long sign-in waits for the host's cached readiness answer before using the browser hand-off. */
 const SIGN_IN_READINESS_WAIT_MS = 6000;
 /** Whether the last ready host offered Google (it needs this phone's verified App Link return). */
-let inAppGoogle = false;
+let inAppGoogle = false, inAppPhone = false, inAppEmail = true;
 /**
  * The verified optional sign-in methods, or null when the readiness probe is unavailable. The host
  * (AlphaCloudSignInPlugin) runs a cheap, cached readiness probe: the native client registration,
@@ -424,7 +424,7 @@ let inAppGoogle = false;
  * package and signing certificate, and Android's verification of the return host. Fail-safe: no
  * host, an error, a slow or malformed answer, or `inApp` not exactly true hides Google.
  */
-async function inAppSignInMethods(environment: CloudEnvironment, signal: AbortSignal): Promise<{ google: boolean } | null> {
+async function inAppSignInMethods(environment: CloudEnvironment, signal: AbortSignal): Promise<{ google: boolean; phone: boolean; email: boolean } | null> {
   const port = cloudSignIn;
   if (!port?.status) return null;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -1934,6 +1934,8 @@ export const connectionController = {
       // reports the actual failure; missing Google/App Link setup never opens hosted login.
       if (!cloudSignIn) throw new CloudSignInError('unavailable');
       inAppGoogle = methods?.google === true;
+      inAppPhone = methods?.phone === true;
+      inAppEmail = methods === null || methods.email !== false;
       if (cloud.environment !== environment) cloud = makeCloud(environment);
       cloud.cancelLogin();
       update({ open: true, ...(residentCloudFlow() && state.purpose !== 'cloud-account' ? { purpose: 'agent' as const } : {}), signIn: { step: 'choose', environment }, message: '', error: '' });
@@ -1973,7 +1975,7 @@ export const connectionController = {
     if (state.error && state.signIn?.step !== 'code') update({ signIn: { step: 'choose', environment: view.environment } });
   },
   async signInPhone(phone: string) {
-    const view = state.signIn; if (!view || !cloudSignInPhone) return;
+    const view = state.signIn; if (!view || !cloudSignInPhone || !inAppPhone) return;
     const number = phone.trim();
     if (!validSignInPhone(number)) { update({ error: signInFailureMessage('invalid-phone') }); return; }
     await work('Sending your code…', async signal => {
@@ -2529,7 +2531,7 @@ export function ConnectionChooser() {
     </aside>;
   }
   if (snapshot.signIn) return <div className={productionSignInRequired?'alpha-auth-page':'alpha-connection-scrim'}><div className={`alpha-connection alpha-connection-native alpha-cloud-sign-in${productionSignInRequired?' alpha-auth-content':''}`} role={productionSignInRequired?'main':'dialog'} aria-modal={productionSignInRequired?undefined:true} aria-labelledby="cloud-sign-in-title" aria-busy={snapshot.busy||undefined} tabIndex={-1} ref={panel}>
-    <CloudSignInPanel view={snapshot.signIn} busy={snapshot.busy} google={inAppGoogle} phone={cloudSignInPhone} message={snapshot.message} error={snapshot.error}
+    <CloudSignInPanel view={snapshot.signIn} busy={snapshot.busy} google={inAppGoogle} phone={cloudSignInPhone && inAppPhone} emailEnabled={inAppEmail} message={snapshot.message} error={snapshot.error}
       actions={{phone:number=>void connectionController.signInPhone(number),google:()=>void connectionController.signInGoogle(),email:address=>void connectionController.signInEmail(address),verify:code=>void connectionController.verifySignInCode(code),resend:()=>void connectionController.resendSignInCode(),cancel:()=>connectionController.cancelSignIn()}}
       extra={browserCloudResidentEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Sign in with browser</button>:testMocksEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Browser sign-in (diagnostic)</button>:undefined}/>
   </div></div>;

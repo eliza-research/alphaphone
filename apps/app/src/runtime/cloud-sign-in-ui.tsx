@@ -9,8 +9,8 @@ import type { SignInView } from './connection-ui';
 export interface CloudSignInActions {
   phone?(number: string): void; google(): void; email(address: string): void; verify(code: string): void; resend(): void; cancel(): void;
 }
-export function CloudSignInPanel({ view, busy, google, phone, message, error, actions, extra }: {
-  view: SignInView; busy: boolean; google: boolean; phone?: boolean; message: string; error: string; actions: CloudSignInActions;
+export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = true, message, error, actions, extra }: {
+  view: SignInView; busy: boolean; google: boolean; phone?: boolean; emailEnabled?: boolean; message: string; error: string; actions: CloudSignInActions;
   /** Optional hosted sign-in entry supplied by the caller's build gate. */
   extra?: ReactNode;
 }) {
@@ -36,12 +36,13 @@ export function CloudSignInPanel({ view, busy, google, phone, message, error, ac
   return <>
     <header><h1 id="cloud-sign-in-title" className="serif">Sign in to Eliza Cloud</h1></header>
     {view.step === 'choose' && <>
+      {!google && !phone && !emailEnabled && <p role="status">This service offers no sign-in method supported by this app. Contact the service administrator.</p>}
       <p>Sign in to Eliza Cloud to use AI. Your agent keeps running on this device.</p>
       {google && <div className="alpha-connection-actions"><button disabled={busy} onClick={actions.google}>Continue with Google</button></div>}
-      <form className="alpha-cloud-sign-in-email" aria-label="Sign in with email" onSubmit={event => { event.preventDefault(); actions.email(email.current?.value || ''); }}>
+      {emailEnabled && <form className="alpha-cloud-sign-in-email" aria-label="Sign in with email" onSubmit={event => { event.preventDefault(); actions.email(email.current?.value || ''); }}>
         <label>Email<input ref={email} type="email" name="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="email" maxLength={320} required disabled={busy} /></label>
         <button disabled={busy}>Email me a code</button>
-      </form>
+      </form>}
       {phone && <form aria-label="Sign in with phone" onSubmit={event => { event.preventDefault(); actions.phone?.(phoneInput.current?.value || ''); }}>
         <label>Phone number with country code<input ref={phoneInput} type="tel" name="phone" autoComplete="tel" placeholder="+14155550100" maxLength={16} required disabled={busy} /></label>
         <button disabled={busy}>Text me a code</button>

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {signInReadiness} from '../apps/app/src/runtime/cloud-sign-in.ts';
 import assert from 'node:assert/strict';
 import {buildSync} from 'esbuild';
 import {createRequire} from 'node:module';
@@ -16,6 +17,7 @@ test('phone sign-in and code entry stay in the app and are absent without native
  assert.doesNotMatch(render({phone:false}),/Text me a code/);
  assert.match(render({phone:true}),/Phone number with country code/);
  assert.match(render({phone:true}),/type="tel"/);
+ assert.doesNotMatch(render({phone:true,emailEnabled:false}),/Email me a code/);
  const entered=render({phone:true,view:{step:'code',environment:'production',phone:'+14155550100',email:'',attemptId:'synthetic',expiresAt:Date.now()+60000,resendAt:Date.now()+60000}});
  assert.match(entered,/Enter your phone code/);assert.match(entered,/\+14155550100/);assert.match(entered,/Resend code in/);
  assert.doesNotMatch(entered,/href=|iframe|type="email"/);
@@ -35,4 +37,13 @@ test('phone codes use the native host, retain MFA, and never reach renderer HTTP
   delete signIn.startPhone;
   await assert.rejects(client.startPhoneSignIn('+14155550100',signal),error=>error.code==='unavailable');
  }finally{await server.close();}
+});
+
+test('method discovery accepts independent methods and never guesses SMS from old or malformed answers',()=>{
+ assert.deepEqual(signInReadiness({inApp:true,email:false,phone:true,google:false}),{email:false,phone:true,google:false});
+ assert.deepEqual(signInReadiness({inApp:true,email:false,google:true}),{email:false,phone:false,google:true});
+ assert.equal(signInReadiness({inApp:false,phone:true}),null);
+ assert.equal(signInReadiness({inApp:true,email:true,phone:'true'}).phone,false);
+ assert.equal(signInReadiness(null),null);
+ assert.deepEqual(signInReadiness({inApp:false,methodsKnown:true,email:false,phone:false,google:false}),{email:false,phone:false,google:false});
 });

@@ -133,16 +133,13 @@ export function googleOutcome(value: unknown, environment: CloudEnvironment): Cl
 }
 export const normalizeSignInCode = (value: string): string | null => { const digits = value.replace(/[\s-]/g, ''); return /^\d{6}$/.test(digits) ? digits : null; };
 export const validSignInEmail = (value: string): boolean => value.length <= 320 && /^[^\s@\p{Cc}\p{Cf}]+@[^\s@\p{Cc}\p{Cf}]+\.[^\s@\p{Cc}\p{Cf}]+$/u.test(value.trim());
-/**
- * The host's readiness answer. In-app sign-in is used only when the host says `inApp: true` and
- * offers email; anything else (absent, malformed, false) leaves Google unavailable. Google is
- * offered only when the host also reports it.
- */
-export function signInReadiness(value: unknown): { google: boolean } | null {
+/** Explicit provider capabilities from the host. Unknown readiness keeps the existing email error/retry
+ * surface; known disabled methods stay hidden. Optional SMS is never inferred from an older host. */
+export function signInReadiness(value: unknown): { google: boolean; phone: boolean; email: boolean } | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
-  if (row.inApp !== true || row.email !== true) return null;
-  return { google: row.google === true };
+  if (row.inApp !== true && row.methodsKnown !== true) return null;
+  return { google: row.google === true, phone: row.phone === true, email: row.email === true };
 }
 
 export const validSignInPhone = (value: string): boolean => /^\+[1-9][0-9]{6,14}$/.test(value.trim());

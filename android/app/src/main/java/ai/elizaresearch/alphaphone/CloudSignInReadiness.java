@@ -73,16 +73,19 @@ final class CloudSignInReadiness {
 
  /** The probe's answer. */
  static final class Result {
-  final boolean inApp, google; final long until;
-  Result(boolean inApp, boolean google, long until) { this.inApp = inApp; this.google = inApp && google; this.until = until; }
-  static Result notReady(long now) { return new Result(false, false, now + NOT_READY_TTL_MS); }
+  final boolean inApp, email, google, phone, methodsKnown; final long until;
+  Result(boolean inApp, boolean google, long until) { this(inApp, inApp && google, false, until); }
+  Result(boolean email, boolean google, boolean phone, long until) { this(email, google, phone, true, until); }
+  Result(boolean email, boolean google, boolean phone, boolean methodsKnown, long until) { this.methodsKnown = methodsKnown; this.email = email; this.google = google; this.phone = phone; this.inApp = email || google || phone; this.until = until; }
+  static Result notReady(long now) { return new Result(false, false, false, false, now + NOT_READY_TTL_MS); }
   boolean fresh(long now) { return now < until && until - now <= READY_TTL_MS; }
-  String serialize() { return "v2|" + inApp + "|" + google + "|" + until; }
+  String serialize() { return "v3|" + email + "|" + google + "|" + phone + "|" + methodsKnown + "|" + until; }
   static Result parse(String value) {
    if (value == null) return null;
    String[] parts = value.split("\\|", -1);
-   if (parts.length != 4 || !"v2".equals(parts[0])) return null;
-   try { return new Result(Boolean.parseBoolean(parts[1]), Boolean.parseBoolean(parts[2]), Long.parseLong(parts[3])); }
+   if (parts.length != 6 || !"v3".equals(parts[0])) return null;
+   for (int i = 1; i <= 4; i++) if (!"true".equals(parts[i]) && !"false".equals(parts[i])) return null;
+   try { return new Result(Boolean.parseBoolean(parts[1]), Boolean.parseBoolean(parts[2]), Boolean.parseBoolean(parts[3]), Boolean.parseBoolean(parts[4]), Long.parseLong(parts[5])); }
    catch (Exception invalid) { return null; }
   }
  }

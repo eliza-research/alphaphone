@@ -159,7 +159,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   synchronized (lock) {
    JSObject out = new JSObject().put("active", attempt != null);
    if (attempt != null) out.put("kind", attempt.google ? "google" : attempt.mfaType != null ? "mfa" : attempt.phone != null ? "phone" : "email");
-   return out.put("inApp", result.inApp).put("email", result.inApp).put("google", result.google);
+   return out.put("methodsKnown", result.methodsKnown).put("inApp", result.inApp).put("email", result.email).put("phone", result.phone).put("google", result.google);
   }
  }
  /** Answers from the cache when fresh; otherwise one probe per environment runs and answers every waiting call. */
@@ -212,14 +212,16 @@ public final class AlphaCloudSignInPlugin extends Plugin {
    config.data.optString("environment", null), config.data.optString("redirectUri", null), config.data.optString("codeChallengeMethod", null), environment);
   if (!registered) return CloudSignInReadiness.Result.notReady(now);
   Response providers = get(environment.api() + "/steward/auth/providers?tenantId=" + environment.tenant);
+  if (providers.status != 200) return CloudSignInReadiness.Result.notReady(now);
   JSONObject captcha = providers.data.optJSONObject("captcha");
-  List<String> requiredFor = new ArrayList<>();
   JSONArray required = captcha == null ? null : captcha.optJSONArray("requiredFor");
+  List<String> requiredFor = required == null ? null : new ArrayList<>();
   if (required != null) for (int i = 0; i < required.length(); i++) requiredFor.add(required.optString(i));
   boolean emailOffered = CloudSignInReadiness.emailOffered(providers.status, providers.data.opt("email"), captcha == null ? null : captcha.opt("enabled"), requiredFor);
-  if (!emailOffered) return CloudSignInReadiness.Result.notReady(now);
+  boolean phoneOffered = CloudSmsCode.offered(providers.status, providers.data.opt("sms"), captcha == null ? null : captcha.opt("enabled"), requiredFor);
   // An empty object names no address, so Steward refuses it and no email is sent.
-  boolean emailRoute = CloudSignInReadiness.emailRoutePresent(probePost(environment, CloudEmailCode.SEND_PATH));
+  boolean emailRoute = false;
+  if (emailOffered) try { emailRoute = CloudSignInReadiness.emailRoutePresent(probePost(environment, CloudEmailCode.SEND_PATH)); } catch (Exception unavailable) { /* Other providers remain independent. */ }
   boolean redirectAllowed = false, assetLinks = false, deviceVerified = false;
   if (CloudSignInReadiness.googleOffered(providers.status, providers.data.opt("google")) && appLinkVerified(environment)) {
    // Google readiness is optional: a failed request cannot disable email.
@@ -230,8 +232,10 @@ public final class AlphaCloudSignInPlugin extends Plugin {
     deviceVerified = appLinkVerified(environment);
    } catch (Exception unavailable) { /* Email remains available. */ }
   }
-  return CloudSignInReadiness.combine(registered, redirectAllowed, assetLinks, emailOffered, emailRoute,
-   CloudSignInReadiness.googleOffered(providers.status, providers.data.opt("google")), deviceVerified, now);
+  boolean emailReady = emailOffered && emailRoute;
+  boolean googleReady = redirectAllowed && assetLinks && deviceVerified;
+  return new CloudSignInReadiness.Result(emailReady, googleReady, phoneOffered,
+   now + (emailReady || googleReady || phoneOffered ? CloudSignInReadiness.READY_TTL_MS : CloudSignInReadiness.NOT_READY_TTL_MS));
  }
  private boolean assetLinksGrant(CloudSignInFlow.Environment environment) {
   try {
