@@ -14,7 +14,7 @@ const digest=value=>createHash('sha256').update(value).digest('hex');
 const runtimeSource=sourceDirectory(root);
 if(!fs.existsSync(path.join(runtimeSource,'.alpha-runtime-source.json')))throw Error(`Prepared runtime source ${path.relative(root,runtimeSource)} is missing. Run npm run android:build:local (distributable APKs) or npm run agent:prepare first.`);
 verifySource(runtimeSource,pin);
-const classes=['SecureStoreFrameInput','AgentSecureStore','DeviceRamTierPolicy','ElizaAgentService','IpcStartupRecovery','WorkflowSurvivorInventory','ElizaAgentWatchdogPolicy','ElizaAssetExtractionPolicy','ElizaBionicInferenceServer','NativeSourceHost','ElizaStartupTrace','ElizaWorkScheduler','ElizaTasksWorker','InferenceMemoryPolicy','RuntimeInstallationIdentity','BionicDecodeLoop','BionicAsrStreams','ElizaAsrNativeEnv','ElizaVoiceNative','BgeEmbeddingSession'];
+const classes=['SecureStoreFrameInput','AgentSecureStore','DeviceRamTierPolicy','ElizaAgentService','IpcStartupRecovery','WorkflowSurvivorInventory','AndroidBunTarget','ElizaAgentWatchdogPolicy','ElizaAssetExtractionPolicy','ElizaBionicInferenceServer','NativeSourceHost','ElizaStartupTrace','ElizaWorkScheduler','ElizaTasksWorker','InferenceMemoryPolicy','RuntimeInstallationIdentity','BionicDecodeLoop','BionicAsrStreams','ElizaAsrNativeEnv','ElizaVoiceNative','BgeEmbeddingSession'];
 const output=path.join(root,'android/app/build/generated/local-agent/java');
 fs.rmSync(output,{recursive:true,force:true});
 const target=path.join(output,...identity.split('.'));fs.mkdirSync(target,{recursive:true});
