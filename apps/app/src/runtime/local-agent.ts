@@ -1,10 +1,11 @@
 import {browserCloudResidentEnabled,browserResidentCall} from './browser-cloud-resident';
-import {isAppRecordPath,appRecordRouteAllowed,type AppRecordMethod} from './app-record-route-policy';
+import type {AppRecordMethod} from './app-record-route-policy';
 import {developmentCartesiaVoiceEnabled} from './development-cartesia-flag';
 import {parseRecoveryReview,parseRecoveryArchive} from './resident-recovery';
 import {anyAbortSignal} from './abort-signal';
 import {developmentCloudVoiceEnabled} from './development-cloud-voice';
-import {automationsRouteAllowed, isAutomationsPath, type AutomationsMethod} from './automations-route-policy.ts';
+import type {AutomationsMethod} from './automations-route-policy.ts';
+import {ownerRouteAllowed, ownerRouteGroup} from './owner-route-policy.ts';
 import { registerPlugin } from '../platform-plugins';
 import { Capacitor } from '@capacitor/core';
 import type { VerifiedSession, ChatChannel } from './alpha-client';
@@ -157,7 +158,8 @@ export class LocalAgentProtocol {
   constructor(private bridge:LocalAgentBridge = Capacitor.isNativePlatform() ? nativeBridge : browserBridge ?? unavailableBridge) {}
   async request(path:string, body:unknown|undefined, signal:AbortSignal, headers:Record<string,string> = {}, method:LocalAgentMethod = body===undefined?'GET':'POST'):Promise<any> {
     signal.throwIfAborted();
-    if (isAppRecordPath(path) ? !appRecordRouteAllowed(path,method) || !this.session : isAutomationsPath(path) ? !automationsRouteAllowed(path,method) || !this.session : !['GET','POST'].includes(method)) throw Error('Invalid local app request');
+    const group=ownerRouteGroup(path);
+    if (group ? !ownerRouteAllowed(group,path,method) || !this.session : !['GET','POST'].includes(method)) throw Error('Invalid local app request');
     if ((method==='GET'||method==='DELETE') && body!==undefined) throw Error('Invalid local request body');
     const generation=this.generation;
     let cancel:()=>void=()=>{};
