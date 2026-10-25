@@ -59,7 +59,7 @@ import { DevelopmentCloudAgentProtocol, type CloudPhoneTarget } from './developm
 import { checkEntitlement, clearEntitlementKeyCache, describeSubscription, EntitlementError, EntitlementRefresher, isEntitlementSignInFailure, CHOOSE_PLAN_LABEL, MANAGE_PLAN_LABEL, planAdmission, readServiceLimit, redeemFailureMessage, redeemSuccessMessage, serviceLimitMessage, SubscriptionRedeemError, type ServiceLimit, type SubscriptionView } from './subscription-entitlement';
 import { RemoteProtocol, RemoteProtocolError } from './remote-protocol';
 import { phoneContextMessage } from './phone-context';
-import { CloudSignInPanel } from './cloud-sign-in-ui';
+import { AlphaAuthBrand, CloudSignInPanel } from './cloud-sign-in-ui';
 import { cloudCredentialStore, cloudSelfRevocationSupported, cloudSignIn, remoteCredentialStore, nativeCloudRequest, nativeRemoteRequest, openConnectionBrowser, removeStoredCloudCredential, secureConnectionStore } from './native-connection';
 import { findStoppedUserTurn, type StoppedTurn } from './stopped-reply-match';
 import './connection-ui.css';
@@ -2742,19 +2742,20 @@ export function ConnectionChooser() {
     </aside>;
   }
   if (snapshot.signIn) return <div className={productionSignInRequired?'alpha-auth-page':'alpha-connection-scrim'}><div className={`alpha-connection alpha-connection-native alpha-cloud-sign-in${productionSignInRequired?' alpha-auth-content':''}`} role={productionSignInRequired?'main':'dialog'} aria-modal={productionSignInRequired?undefined:true} aria-labelledby="cloud-sign-in-title" aria-busy={snapshot.busy||undefined} tabIndex={-1} ref={panel}>
-    <CloudSignInPanel view={snapshot.signIn} busy={snapshot.busy} google={inAppGoogle} message={snapshot.message} error={snapshot.error}
+    <CloudSignInPanel view={snapshot.signIn} busy={snapshot.busy} google={inAppGoogle} message={snapshot.message} error={snapshot.error} errorIsNotice={snapshot.error===RESIDENT_UNPACKAGED}
       actions={{google:()=>void connectionController.signInGoogle(),email:address=>void connectionController.signInEmail(address),verify:code=>void connectionController.verifySignInCode(code),resend:()=>void connectionController.resendSignInCode(),cancel:()=>connectionController.cancelSignIn()}}
       extra={browserCloudResidentEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Sign in with browser</button>:testMocksEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Browser sign-in (diagnostic)</button>:undefined}/>
   </div></div>;
   if(productionSignInRequired)return <div className="alpha-auth-page"><div className="alpha-connection alpha-auth-content" role="main" aria-labelledby="alpha-auth-title" aria-busy={snapshot.busy||undefined} tabIndex={-1} ref={panel}>
     <div className="alpha-auth-body">
-      <h1 id="alpha-auth-title" className="serif">Sign in</h1>
-      <p>Sign in to Eliza Cloud to use Alpha Phone.</p>
+      <AlphaAuthBrand/>
+      <h1 id="alpha-auth-title" className="serif">Welcome to Alpha.</h1>
+      <p className="alpha-auth-intro">Sign in with your Eliza Cloud account to get started.</p>
       <div className="alpha-connection-actions"><button disabled={snapshot.busy} onClick={()=>void connectionController.residentCloudLogin()}>Sign in with Eliza Cloud</button></div>
       {snapshot.busy&&<><p role="status">{snapshot.message||'Please wait…'}</p><button className="alpha-connection-cancel" onClick={()=>connectionController.cancel()}>Cancel</button></>}
       {!snapshot.busy&&snapshot.message&&snapshot.message!=='Connected'&&<p role="status">{snapshot.message}</p>}
       {snapshot.residentSavedCredential&&!snapshot.residentRecoveryReason&&snapshot.error!==errorMessage({status:401})&&<button disabled={snapshot.busy} onClick={()=>void connectionController.startLocal()}>Retry saved connection</button>}
-      {snapshot.error&&<p role="alert" className="alpha-connection-error">{snapshot.error}</p>}
+      {snapshot.error&&<p role={snapshot.error===RESIDENT_UNPACKAGED?'status':'alert'} className={snapshot.error===RESIDENT_UNPACKAGED?'alpha-auth-notice':'alpha-connection-error'}>{snapshot.error}</p>}
       <ResidentRecoveryPanel snapshot={snapshot}/>
     </div>
   </div></div>;

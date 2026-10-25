@@ -9,8 +9,12 @@ import type { SignInView } from './connection-ui';
 export interface CloudSignInActions {
   google(): void; email(address: string): void; verify(code: string): void; resend(): void; cancel(): void;
 }
-export function CloudSignInPanel({ view, busy, google, message, error, actions, extra }: {
+export function AlphaAuthBrand() {
+  return <div className="alpha-auth-brand"><span className="alpha-auth-mark" aria-hidden="true"/><span className="serif">Alpha</span></div>;
+}
+export function CloudSignInPanel({ view, busy, google, message, error, errorIsNotice = false, actions, extra }: {
   view: SignInView; busy: boolean; google: boolean; message: string; error: string; actions: CloudSignInActions;
+  errorIsNotice?: boolean;
   /** Optional hosted sign-in entry supplied by the caller's build gate. */
   extra?: ReactNode;
 }) {
@@ -33,10 +37,13 @@ export function CloudSignInPanel({ view, busy, google, message, error, actions, 
   const wait = view.step === 'code' ? Math.max(0, Math.ceil((view.resendAt - now) / 1000)) : 0;
   const submitCode = (event: FormEvent) => { event.preventDefault(); const input = code.current; const value = input?.value || ''; if (input) input.value = ''; actions.verify(value); };
   return <>
-    <header><h1 id="cloud-sign-in-title" className="serif">Sign in to Eliza Cloud</h1></header>
+    <AlphaAuthBrand/>
+    <header><h1 id="cloud-sign-in-title" className="serif">{view.step === 'choose' ? 'Welcome to Alpha.' : view.step === 'google' ? 'Continue with Google' : 'Check your code.'}</h1></header>
     {view.step === 'choose' && <>
-      <p>Sign in to Eliza Cloud to use AI. Your agent keeps running on this device.</p>
-      {google && <div className="alpha-connection-actions"><button disabled={busy} onClick={actions.google}>Continue with Google</button></div>}
+      <p className="alpha-auth-intro">Use your Eliza Cloud account to sign in.</p>
+      <div className="alpha-connection-actions alpha-auth-google"><button disabled={busy || !google} onClick={actions.google} aria-describedby={!google ? 'alpha-google-unavailable' : undefined}><span aria-hidden="true" className="alpha-google-icon"/>Continue with Google</button></div>
+      {!google && <p id="alpha-google-unavailable" className="alpha-auth-method-note">Google sign-in is unavailable on this device right now. You can continue with email.</p>}
+      <div className="alpha-auth-divider"><span>or sign in with email</span></div>
       <form className="alpha-cloud-sign-in-email" aria-label="Sign in with email" onSubmit={event => { event.preventDefault(); actions.email(email.current?.value || ''); }}>
         <label>Email<input ref={email} type="email" name="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="email" maxLength={320} required disabled={busy} /></label>
         <button disabled={busy}>Email me a code</button>
@@ -53,7 +60,7 @@ export function CloudSignInPanel({ view, busy, google, message, error, actions, 
       {view.step === 'code' && <button type="button" disabled={busy || wait > 0} onClick={actions.resend}>{wait > 0 ? `Resend code in ${wait}s` : 'Resend code'}</button>}
     </form>}
     {message && <p role="status">{message}</p>}
-    {error && <p role="alert" className="alpha-connection-error">{error}</p>}
+    {error && <p role={errorIsNotice ? 'status' : 'alert'} className={errorIsNotice ? 'alpha-auth-notice' : 'alpha-connection-error'}>{error}</p>}
     <div className="alpha-connection-actions">
       <button className="alpha-connection-cancel" onClick={actions.cancel}>{view.step === 'choose' && !busy ? 'Back' : 'Cancel sign-in'}</button>
       {view.step === 'choose' && extra}
