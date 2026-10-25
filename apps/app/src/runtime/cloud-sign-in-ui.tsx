@@ -42,7 +42,7 @@ export function CloudSignInPanel({ view, busy, google, message, error, errorIsNo
     {view.step === 'choose' && <>
       <p className="alpha-auth-intro">Use your Eliza Cloud account to sign in.</p>
       <div className="alpha-connection-actions alpha-auth-google"><button disabled={busy || !google} onClick={actions.google} aria-describedby={!google ? 'alpha-google-unavailable' : undefined}><span aria-hidden="true" className="alpha-google-icon"/>Continue with Google</button></div>
-      {!google && <p id="alpha-google-unavailable" className="alpha-auth-method-note">Google sign-in is unavailable on this device right now. You can continue with email.</p>}
+      {!google && !busy && <p id="alpha-google-unavailable" className="alpha-auth-method-note">Google sign-in is unavailable on this device right now. You can continue with email.</p>}
       <div className="alpha-auth-divider"><span>or sign in with email</span></div>
       <form className="alpha-cloud-sign-in-email" aria-label="Sign in with email" onSubmit={event => { event.preventDefault(); actions.email(email.current?.value || ''); }}>
         <label>Email<input ref={email} type="email" name="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="email" maxLength={320} required disabled={busy} /></label>

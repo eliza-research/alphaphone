@@ -59,7 +59,7 @@ import { DevelopmentCloudAgentProtocol, type CloudPhoneTarget } from './developm
 import { checkEntitlement, clearEntitlementKeyCache, describeSubscription, EntitlementError, EntitlementRefresher, isEntitlementSignInFailure, CHOOSE_PLAN_LABEL, MANAGE_PLAN_LABEL, planAdmission, readServiceLimit, redeemFailureMessage, redeemSuccessMessage, serviceLimitMessage, SubscriptionRedeemError, type ServiceLimit, type SubscriptionView } from './subscription-entitlement';
 import { RemoteProtocol, RemoteProtocolError } from './remote-protocol';
 import { phoneContextMessage } from './phone-context';
-import { AlphaAuthBrand, CloudSignInPanel } from './cloud-sign-in-ui';
+import { CloudSignInPanel } from './cloud-sign-in-ui';
 import { cloudCredentialStore, cloudSelfRevocationSupported, cloudSignIn, remoteCredentialStore, nativeCloudRequest, nativeRemoteRequest, openConnectionBrowser, removeStoredCloudCredential, secureConnectionStore } from './native-connection';
 import { findStoppedUserTurn, type StoppedTurn } from './stopped-reply-match';
 import './connection-ui.css';
@@ -2635,6 +2635,14 @@ export function ConnectionChooser() {
   // Production Android always enters through sign-in while signed out.
   // Only the explicit test-mocks build retains developer bypass behavior.
   const productionSignInRequired=productionCloudSignInRequired(snapshot);
+  const automaticSignInProbe = useRef(false);
+  useEffect(() => {
+    if (!productionSignInRequired) { automaticSignInProbe.current = false; return; }
+    if (automaticSignInProbe.current || snapshot.busy || snapshot.signIn) return;
+    automaticSignInProbe.current = true;
+    // Readiness only: neither email nor Google starts until the owner chooses it.
+    void connectionController.beginSignIn(residentEnvironment());
+  }, [productionSignInRequired, snapshot.busy, snapshot.signIn]);
   const visible=connectionChooserVisible(snapshot,!!sending);
   const [developmentAction,setDevelopmentAction]=useState('{"type":"create_note","title":"Development note","body":"Reviewed local action"}');
   const [developmentProfile,setDevelopmentProfile]=useState<DevelopmentProfile>('local'),[reply,setReply]=useState(''),[developmentError,setDevelopmentError]=useState('');
@@ -2757,23 +2765,14 @@ export function ConnectionChooser() {
       </div>
     </aside>;
   }
-  if (snapshot.signIn) return <div className={productionSignInRequired?'alpha-auth-page':'alpha-connection-scrim'}><div className={`alpha-connection alpha-connection-native alpha-cloud-sign-in${productionSignInRequired?' alpha-auth-content':''}`} role={productionSignInRequired?'main':'dialog'} aria-modal={productionSignInRequired?undefined:true} aria-labelledby="cloud-sign-in-title" aria-busy={snapshot.busy||undefined} tabIndex={-1} ref={panel}>
-    <CloudSignInPanel view={snapshot.signIn} busy={snapshot.busy} google={inAppGoogle} message={snapshot.message} error={snapshot.error} errorIsNotice={snapshot.error===RESIDENT_UNPACKAGED}
+  const requiredSignInView: SignInView = snapshot.signIn ?? { step: 'choose', environment: residentEnvironment() };
+  if (snapshot.signIn || productionSignInRequired) return <div className={productionSignInRequired?'alpha-auth-page':'alpha-connection-scrim'}><div className={`alpha-connection alpha-connection-native alpha-cloud-sign-in${productionSignInRequired?' alpha-auth-content':''}`} role={productionSignInRequired?'main':'dialog'} aria-modal={productionSignInRequired?undefined:true} aria-labelledby="cloud-sign-in-title" aria-busy={snapshot.busy||undefined} tabIndex={-1} ref={panel}>
+    <CloudSignInPanel view={requiredSignInView} busy={snapshot.busy || !snapshot.signIn} google={inAppGoogle} message={snapshot.message} error={snapshot.error} errorIsNotice={snapshot.error===RESIDENT_UNPACKAGED}
       actions={{google:()=>void connectionController.signInGoogle(),email:address=>void connectionController.signInEmail(address),verify:code=>void connectionController.verifySignInCode(code),resend:()=>void connectionController.resendSignInCode(),cancel:()=>connectionController.cancelSignIn()}}
-      extra={browserCloudResidentEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Sign in with browser</button>:testMocksEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Browser sign-in (diagnostic)</button>:undefined}/>
-  </div></div>;
-  if(productionSignInRequired)return <div className="alpha-auth-page"><div className="alpha-connection alpha-auth-content" role="main" aria-labelledby="alpha-auth-title" aria-busy={snapshot.busy||undefined} tabIndex={-1} ref={panel}>
-    <div className="alpha-auth-body">
-      <AlphaAuthBrand/>
-      <h1 id="alpha-auth-title" className="serif">Welcome to Alpha.</h1>
-      <p className="alpha-auth-intro">Sign in with your Eliza Cloud account to get started.</p>
-      <div className="alpha-connection-actions"><button disabled={snapshot.busy} onClick={()=>void connectionController.residentCloudLogin()}>Sign in with Eliza Cloud</button></div>
-      {snapshot.busy&&<><p role="status">{snapshot.message||'Please wait…'}</p><button className="alpha-connection-cancel" onClick={()=>connectionController.cancel()}>Cancel</button></>}
-      {!snapshot.busy&&snapshot.message&&snapshot.message!=='Connected'&&<p role="status">{snapshot.message}</p>}
-      {snapshot.residentSavedCredential&&!snapshot.residentRecoveryReason&&snapshot.error!==errorMessage({status:401})&&<button disabled={snapshot.busy} onClick={()=>void connectionController.startLocal()}>Retry saved connection</button>}
-      {snapshot.error&&<p role={snapshot.error===RESIDENT_UNPACKAGED?'status':'alert'} className={snapshot.error===RESIDENT_UNPACKAGED?'alpha-auth-notice':'alpha-connection-error'}>{snapshot.error}</p>}
-      <ResidentRecoveryPanel snapshot={snapshot}/>
-    </div>
+      extra={productionSignInRequired && !snapshot.signIn && !snapshot.busy
+        ? <button onClick={()=>void connectionController.beginSignIn(residentEnvironment())}>Retry sign-in</button>
+        : browserCloudResidentEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Sign in with browser</button>:testMocksEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Browser sign-in (diagnostic)</button>:undefined}/>
+    {productionSignInRequired && <ResidentRecoveryPanel snapshot={snapshot}/>}
   </div></div>;
   const accountCreatedNotice=snapshot.accountCreated&&snapshot.cloudAccount&&<p role="status" className="alpha-cloud-account-created">This sign-in created a new Eliza Cloud account{snapshot.cloudAccount.email?` (${snapshot.cloudAccount.email})`:''}. If you meant to use an existing account, sign out and sign in with that account’s email or Google.</p>;
   const actionReview=snapshot.session&&snapshot.phoneActionsAvailable&&<details open={snapshot.actionHistory.some(item=>item.state==='reconciliation_required')}><summary>Phone action history</summary><button disabled={snapshot.busy} onClick={() => void connectionController.actionHistory()}>Refresh actions</button><button disabled={snapshot.busy} onClick={() => void connectionController.actionHistory(true)}>Sync recorded receipts</button>{snapshot.actionHistory.map(item => <section key={item.id} className="alpha-connection-agent"><strong>{item.title}</strong>{item.detail&&<span>{item.detail}</span>}<span>{item.outcome}{item.timestamp&&` · ${item.timestamp}`}</span>{item.state === 'pending' && <button disabled={snapshot.busy} onClick={() => void connectionController.rejectAction(item.id)}>Reject proposal</button>}{['executing','reconciliation_required'].includes(item.state) && <><p>After checking this phone, confirm whether this exact action happened.</p><button disabled={snapshot.busy} onClick={() => void connectionController.reconcileAction(item.id, 'applied')}>I verified it happened</button><button disabled={snapshot.busy} onClick={() => void connectionController.reconcileAction(item.id, 'not_applied')}>I verified it did not happen</button></>}</section>)}</details>;
