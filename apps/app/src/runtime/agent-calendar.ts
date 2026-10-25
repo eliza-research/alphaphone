@@ -60,10 +60,12 @@ export class AgentCalendar {
   if(this.value.mutating||!(creation?['ready','partial','unavailable']:['ready','partial']).includes(this.value.status))throw Error('Wait for the current Calendar source');
   const port=this.port();if(!port||calendarOwnerKey(port)!==this.value.ownerKey)throw Error('Calendar owner changed');if(!port.current())throw Error('Calendar owner or agent changed');
   const epoch=this.epoch,signal=this.abort?.signal;if(!signal)throw Error('Calendar is not ready');
-  const fresh=await this.preservation.capture(signal);this.current(port,epoch,signal);
-  if(!fresh.readable||fresh.pending||fresh.fingerprint!==this.value.legacy?.fingerprint)throw Error('Saved app calendar changed; review preservation before continuing');
   this.publish({mutating:true});
-  try{const result=await operation(this.client(port,signal),port);this.current(port,epoch,signal);return result;}
+  try{
+   const fresh=await this.preservation.capture(signal);this.current(port,epoch,signal);
+   if(!fresh.readable||fresh.pending||fresh.fingerprint!==this.value.legacy?.fingerprint)throw Error('Saved app calendar changed; review preservation before continuing');
+   const result=await operation(this.client(port,signal),port);this.current(port,epoch,signal);return result;
+  }
   finally{if(epoch===this.epoch)this.publish({mutating:false});}
  }
  create(sourceKey:string,request:Omit<CreateLifeOpsCalendarEventRequest,'side'|'grantId'|'calendarId'> & {idempotencyKey:string}){
