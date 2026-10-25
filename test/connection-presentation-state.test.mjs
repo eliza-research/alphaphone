@@ -17,7 +17,7 @@ function fixture({android=true,dev=false,account={expiresAt:Date.now()+60000},pu
  const entries=[{id:'review-1',state:'reconciliation_required'}];let release;
  const selected={request(){},actions:{}};
  const context=vm.createContext({isAndroid:android,testMocksEnabled:dev,developmentPageSuspended:false,sending:null,flushConversationEvents:()=>{},listeners:new Set(),state:{open,automaticRestore:false,busy:false,error:'',cloudAccount:account,purpose,signIn:null,message:'Finish signing in in your browser.',session:{}},active:selected,epoch:1,navigationContext:()=>({view:'home'}),errorMessage:()=> 'Sign-in expired',readActionHistory:async()=>entries,Date,
-  ViewNavigationClient:class {constructor(request,current,context){this.current=current;this.context=context;}}});
+  ViewNavigationClient:class {constructor(request,current,context){this.current=current;this.context=context;}connectRenderer(){return()=>{};}}});
  vm.runInContext(code,context);
  return {context,entries,update:patch=>context.update(patch),snapshot:()=>context.state,review:()=>context.refreshActionReview(new AbortController().signal),navigation:()=>context.boundNavigation()};
 }
