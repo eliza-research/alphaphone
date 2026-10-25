@@ -28,8 +28,8 @@
       "libraries": [
         {
           "name": "libelizainference.so",
-          "sha256": "1aac36d40a2228f97c39baa629d1f3ad0c8388c39b18e0f2eacf3ec165669920",
-          "bytes": 8063904
+          "sha256": "ffb1855a8478780fda444bea058f584ce8c4267dcb0db62d5ec34b5ca3154625",
+          "bytes": 8062696
         },
         {
           "name": "libc++_shared.so",
@@ -327,16 +327,12 @@
     }
   ],
   "evidence": {
-    "classes": "Native component execution on physical Pixel and emulator",
-    "build": "Exact 58df source and 6003 native fork, NDK 28.2.13676358; recorded binaries and all model files hash-verified.",
+    "classes": "ARM64 emulator component tests",
+    "deviceExecuted": false,
     "emulatorDeviceExecuted": true,
-    "deviceExecuted": true,
     "userAccepted": false,
-    "pixelAsr": "docs/evidence/native-58df/asr-wer-58df-pixel.json",
-    "pixelTts": "docs/evidence/native-58df/paradee-roundtrip-58df-pixel.json",
-    "emulatorAsr": "docs/evidence/native-58df/asr-wer-58df-emulator.json",
-    "emulatorTts": "docs/evidence/native-58df/paradee-roundtrip-58df-emulator.json",
-    "scope": "101 pinned recognition samples plus silence and 230 synthesis-to-ASR round trips on each ABI. No microphone/speaker, current streaming-cancel, full Alpha or user-acceptance claim."
+    "receipt": "docs/evidence/native-ffb185-20261025/qualification.json",
+    "scope": "NewARM64 only, nooldPixel/x86evidencetransfer"
   },
   "acceptance": "Component corpora passed on Pixel ARM64 and API35 x86_64. qualified remains false pending current streaming/cancellation, installed Alpha capture/playback, device workflows and user acceptance.",
   "sourceAdmission": {
@@ -366,5 +362,40 @@
     ],
     "evidenceTransferred": false,
     "scope": "Consumer pin admission only. Original binary source pins and execution evidence remain unchanged; qualified remains false."
-  }
+  },
+  "newArm64EngineQualification": {
+    "engineSha256": "ffb1855a8478780fda444bea058f584ce8c4267dcb0db62d5ec34b5ca3154625",
+    "engineBytes": 8062696,
+    "sourceCommit": "6003a10368d8a6d5fb1f70fe9c63a70866e8bcff",
+    "host": "macOS arm64",
+    "ndk": "28.2.13676358",
+    "producerScriptCommit": "58dfddf87ee5adec414746a86a23dada124fbbae",
+    "previousEngineSha256": "1aac36d40a2228f97c39baa629d1f3ad0c8388c39b18e0f2eacf3ec165669920",
+    "receipt": "docs/evidence/native-ffb185-20261025/qualification.json",
+    "scope": "New ARM64 build independently measured on API34 ARM64 emulator; not a reproduction of previous hash or transfer of Pixel evidence. BGE,101ASR,230TTSroundtrip,stream/cancel/reopen pass. No physicalaudio or fullapp acceptance."
+  },
+  "previousQualification": {
+    "engineSha256": "1aac36d40a2228f97c39baa629d1f3ad0c8388c39b18e0f2eacf3ec165669920",
+    "receipt": null,
+    "evidence": {
+      "classes": "Native component execution on physical Pixel and emulator",
+      "build": "Exact 58df source and 6003 native fork, NDK 28.2.13676358; recorded binaries and all model files hash-verified.",
+      "emulatorDeviceExecuted": true,
+      "deviceExecuted": true,
+      "userAccepted": false,
+      "pixelAsr": "docs/evidence/native-58df/asr-wer-58df-pixel.json",
+      "pixelTts": "docs/evidence/native-58df/paradee-roundtrip-58df-pixel.json",
+      "emulatorAsr": "docs/evidence/native-58df/asr-wer-58df-emulator.json",
+      "emulatorTts": "docs/evidence/native-58df/paradee-roundtrip-58df-emulator.json",
+      "scope": "101 pinned recognition samples plus silence and 230 synthesis-to-ASR round trips on each ABI. No microphone/speaker, current streaming-cancel, full Alpha or user-acceptance claim."
+    },
+    "sourceAdmission": {
+      "record": "docs/evidence/native-58df/embedding-58df-QUALIFICATION.json",
+      "engineBuildRecord": "docs/evidence/native-58df/voice-build-record.json",
+      "priorFork": "6e6a4401aae473723cb164a3190eebea6526ea6e",
+      "nativeInputsUnchanged": false,
+      "nativeQualificationTransferred": false
+    }
+  },
+  "qualificationReceiptSha256": "b01dbe89f80b20d58c75ff76a908f4794d52c89e8fb7b05d01690a0523a0d390"
 }

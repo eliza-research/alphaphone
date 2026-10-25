@@ -11,8 +11,8 @@
   "libraries": [
     {
       "name": "libelizainference.so",
-      "sha256": "1aac36d40a2228f97c39baa629d1f3ad0c8388c39b18e0f2eacf3ec165669920",
-      "bytes": 8063904,
+      "sha256": "ffb1855a8478780fda444bea058f584ce8c4267dcb0db62d5ec34b5ca3154625",
+      "bytes": 8062696,
       "alignment16KiB": true
     },
     {
@@ -28,7 +28,7 @@
       "alignment16KiB": true
     }
   ],
-  "qualificationReceiptSha256": "01cec23b19c9886094cb27ca9d9b73a74749e02bd3237c98e1b95a05e6a546ec",
+  "qualificationReceiptSha256": "b01dbe89f80b20d58c75ff76a908f4794d52c89e8fb7b05d01690a0523a0d390",
   "jniIdentityRelocated": true,
   "inputs": [
     {
@@ -66,5 +66,22 @@
     "mode": "registered",
     "className": "ai/elizaresearch/alphaphone/ElizaVoiceNative",
     "subset": "full"
+  },
+  "newArm64EngineQualification": {
+    "engineSha256": "ffb1855a8478780fda444bea058f584ce8c4267dcb0db62d5ec34b5ca3154625",
+    "engineBytes": 8062696,
+    "sourceCommit": "6003a10368d8a6d5fb1f70fe9c63a70866e8bcff",
+    "host": "macOS arm64",
+    "ndk": "28.2.13676358",
+    "producerScriptCommit": "58dfddf87ee5adec414746a86a23dada124fbbae",
+    "previousEngineSha256": "1aac36d40a2228f97c39baa629d1f3ad0c8388c39b18e0f2eacf3ec165669920",
+    "receipt": "docs/evidence/native-ffb185-20261025/qualification.json",
+    "scope": "New ARM64 build independently measured on API34 ARM64 emulator; not a reproduction of previous hash or transfer of Pixel evidence. BGE,101ASR,230TTSroundtrip,stream/cancel/reopen pass. No physicalaudio or fullapp acceptance."
+  },
+  "previousQualification": {
+    "engineSha256": "1aac36d40a2228f97c39baa629d1f3ad0c8388c39b18e0f2eacf3ec165669920",
+    "receipt": "01cec23b19c9886094cb27ca9d9b73a74749e02bd3237c98e1b95a05e6a546ec",
+    "evidence": null,
+    "sourceAdmission": null
   }
 }
