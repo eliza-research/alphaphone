@@ -13,13 +13,13 @@ test('repeat days are 1-7 unique Calendar values, normalised ascending for EXTRA
  assert.deepEqual(clockDays([7,1]), [1,7]);
  for (const days of [[0], [8], [2,2], [1.5], ['2'], [1,2,3,4,5,6,7,1]]) assert.throws(() => clockDays(days), /repeat days/);
  assert.throws(() => clockDays('2,3'), /repeat days/);
- assert.throws(() => clockDays([]), /empty list is not supported here; omit days for a one-time alarm/);
+ assert.throws(() => clockDays([]), /repeat days/);
 });
 test('set operations accept an optional days field and keep exact keys otherwise', () => {
  assert.equal('days' in validateClockOperation(set({})), false);
  assert.deepEqual(validateClockOperation(set({days:[1,7]})).days, [1,7]);
  assert.deepEqual(validateClockOperation(set({days:[7,1]})).days, [1,7]);
- assert.throws(() => validateClockOperation(set({days:[]})), /omit days for a one-time alarm/);
+ assert.equal('days' in validateClockOperation(set({days:[]})), false, 'an explicit [] is a one-time alarm');
  assert.throws(() => validateClockOperation({type:'clock_handoff',action:'show',days:[2]}), /Unexpected Clock fields/);
  assert.match(describeClockHandoff(validateClockOperation(set({days:[2,3,4,5,6]}))), /repeating weekdays/);
  assert.match(describeClockHandoff(validateClockOperation(set({days:[6,5,4,3,2]}))), /repeating weekdays/, 'review text does not depend on the order');
@@ -28,12 +28,12 @@ test('set operations accept an optional days field and keep exact keys otherwise
  assert.deepEqual(buildClockRequest({action:'set',time:'06:45',label:'Gym',snooze:'10',days:[6,2,4,3,5]},'UTC').days, [2,3,4,5,6]);
  assert.equal('days' in buildClockRequest({action:'set',time:'06:45',label:'Gym',snooze:'10',days:[]},'UTC'), false, 'no chips selected is a one-time alarm');
 });
-test('every upstream-valid repeat is accepted, or refused only for the documented empty-list restriction', {skip: !upstream && 'vendor/eliza is not checked out'}, () => {
+test('every upstream-valid repeat is accepted; an explicit [] becomes a one-time alarm', {skip: !upstream && 'vendor/eliza is not checked out'}, () => {
  const accepted = [[2,3,4,5,6], [6,2,4], [3,2,1], [7,1], [1,2,3,4,5,6,7], [5], []];
  for (const days of accepted) {
   const remote = upstream.validateClockOperation(set({days}));
   assert.deepEqual(remote.days, days, 'upstream keeps the order it received');
-  if (days.length === 0) { assert.throws(() => validateClockOperation(set({days})), /empty list is not supported here; omit days for a one-time alarm/); continue; }
+  if (days.length === 0) { assert.equal('days' in validateClockOperation(set({days})), false); continue; }
   const local = validateClockOperation(set({days}));
   assert.deepEqual(local.days, [...days].sort((a, b) => a - b), JSON.stringify(days));
   assert.deepEqual({...local, days: undefined}, {...remote, days: undefined}, 'every other field is unchanged');
