@@ -1,3 +1,5 @@
+// Hosted/CLI behavior is test-mocks-only diagnostic coverage. Enter that explicit controller
+// route; the production sign-in button uses native email and never falls back to this route.
 import { test, expect, type Page } from '@playwright/test';
 
 async function intentSnapshot(page:Page){return page.evaluate(async()=>{const {personalIntentDocument}=await import('/src/runtime/cloud-personal-intent.ts');return (await personalIntentDocument({environment:'production',userId:'11111111-1111-4111-8111-111111111111',organizationId:'22222222-2222-4222-8222-222222222222',credentialId:'snapshot-only'})).capture();});}
@@ -44,7 +46,7 @@ for(const scenario of ['decline','accepted-reload','lost-activation','quote-chan
    }};
   },scenario);
   await page.goto('/');await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Agent connection',exact:true}).click();await page.locator('summary').filter({hasText:/^Development Cloud agent infrastructure$/}).click();
-  await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
+  await page.evaluate(async()=>{const {connectionController}=await import('/src/runtime/connection-ui.tsx');void connectionController.signInBrowser();});
   const review=page.getByRole('region',{name:'Dedicated hosting review'});
   // Section has an accessible name and is a region; display real reviewed price fields.
   await expect(review).toBeVisible();await expect(review).toContainText('$2.40/day');await expect(review).toContainText('Minimum charge per successful start: $0.50');
@@ -84,7 +86,7 @@ for(const scenario of ['decline','accepted-reload','lost-activation','quote-chan
     expect(await page.evaluate(async()=>{const c=(await import('/src/runtime/connection-ui.tsx')).connectionController;return {client:c.getCloudClient(),account:c.getSnapshot().cloudAccount};})).toEqual({client:null,account:null});
    }else await expect(page.getByText('Signed in to Eliza Cloud',{exact:true})).toBeVisible();
    expect(await intentSnapshot(page)).toEqual(before);
-   await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
+   await page.evaluate(async()=>{const {connectionController}=await import('/src/runtime/connection-ui.tsx');void connectionController.signInBrowser();});
    await expect(page.getByText('Signed in to Eliza Cloud',{exact:true})).toBeVisible();
    await expect(page.getByText('Dedicated setup accepted',{exact:true})).toBeVisible();
    expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('fixture.cloud.setup')!))).toMatchObject({activation:1,cutover:0});return;

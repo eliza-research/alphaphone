@@ -222,7 +222,7 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
  });
 
  for(const mode of ['not-ready','readiness-hold'] as const){
-  test(`${mode==='not-ready'?'Unavailable':'Timed-out'} readiness opens the normal Cloud browser hand-off`,async({page})=>{
+  test(`${mode==='not-ready'?'Unavailable':'Timed-out'} readiness keeps email sign-in in Alpha without Google`,async({page})=>{
    if(mode==='readiness-hold')await page.clock.install();
    await boot(page,{...await entitlements(),signIn:mode});
    await agent(page,'unavailable');
@@ -231,15 +231,20 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
     await expect(page.getByText('Checking Eliza Cloud sign-in…',{exact:true})).toBeVisible();
     await page.clock.runFor(6000);
    }
-   await expect.poll(async()=>(await calls(page)).filter(c=>c.method==='openExternal').length).toBe(1);
-   await expect(page.getByText('Finish signing in to Eliza Cloud in your browser, then return here.',{exact:true})).toBeVisible();
-   await expect(signInDialog(page)).toHaveCount(0);
-   await page.getByRole('button',{name:'Cancel',exact:true}).click();
-   await expect(page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true})).toBeEnabled();
-   if(mode==='readiness-hold')await page.evaluate(()=>(window as any).signInFixture.releaseReadiness());
-   await expect(signInDialog(page)).toHaveCount(0);
+   const dialog=signInDialog(page);
+   await expect(dialog).toBeVisible();
+   await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toHaveCount(0);
    expect(await fixture(page)).toMatchObject({saved:false,bound:false,running:true});
-   expect((await calls(page)).filter(c=>c.method==='openExternal')).toHaveLength(1);
+   if(mode==='readiness-hold')await page.evaluate(()=>(window as any).signInFixture.releaseReadiness());
+   // A late readiness answer cannot add Google to an already opened attempt.
+   await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toHaveCount(0);
+   await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('synthetic-signin@example.invalid');
+   await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
+   await dialog.getByLabel('Six-digit code').fill('123456');
+   await dialog.getByRole('button',{name:'Verify',exact:true}).click();
+   await agent(page,'cloud');
+   expect(await fixture(page)).toMatchObject({saved:true,bound:true,running:true});
+   await noHandOff(page);
   });
  }
 
