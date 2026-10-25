@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "fa7b8ea7bbea8d823ea0644f85278f63ab86075f",
+  "head": "0a8466582c6230227052144a39c5f7f476f39547",
   "recordedAt": "2026-10-25",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...fa7b8ea7bbea8d823ea0644f85278f63ab86075f",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...0a8466582c6230227052144a39c5f7f476f39547",
   "status": "diverged",
-  "aheadBy": 28,
+  "aheadBy": 29,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -118,6 +118,10 @@
     {
       "sha": "fa7b8ea7bbea8d823ea0644f85278f63ab86075f",
       "subject": "fix: classify terminal argv during resident shutdown"
+    },
+    {
+      "sha": "0a8466582c6230227052144a39c5f7f476f39547",
+      "subject": "fix: use patched Zod for shared runtime schemas"
     }
   ],
   "pullRequests": [
