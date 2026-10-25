@@ -81,3 +81,38 @@ test('every authority change gives renderer and native credentials a new namespa
   assert.ok(deploymentOutputs(config)['android/app/src/main/java/ai/elizaresearch/alphaphone/CloudDeployment.java'].includes(changed.cloudStorageNamespace));
  }
 });
+
+test('custom deployment reaches native inference configuration and Google transport',async()=>{
+ const {pathToFileURL}=await import('node:url');
+ const config=structuredClone(defaults);
+ config.production={api:'https://api.example.org',web:'https://login.example.org',services:'https://services.example.org',tenant:'example'};
+ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'alpha-cloud-backend-'));
+ const write=(name,text)=>{fs.mkdirSync(path.dirname(path.join(temp,name)),{recursive:true});fs.writeFileSync(path.join(temp,name),text);};
+ const oldBase=process.env.ELIZAOS_CLOUD_BASE_URL,oldSmall=process.env.ELIZAOS_CLOUD_SMALL_MODEL,oldLarge=process.env.ELIZAOS_CLOUD_LARGE_MODEL;
+ try{
+  write('package.json','{"type":"module"}');
+  for(const [name,text] of Object.entries(deploymentOutputs(config)))write(name,text);
+  for(const name of ['backend/managed-google-route-policy.ts','backend/native-google-cloud-port.ts','backend/native-cloud-runtime-config.ts','apps/app/src/runtime/managed-service-routes.ts'])write(name,fs.readFileSync(name,'utf8'));
+  write('vendor/eliza/packages/agent/src/config/config.ts','export const config={cloud:{apiKey:"stale-synthetic"}}; export function loadElizaConfig(){return config;} export function saveElizaConfig(value){Object.assign(config,value);}');
+  write('vendor/eliza/packages/host/src/contracts/service-routing.ts','export function buildElizaCloudServiceRoute(options={}){return options;}');
+  write('vendor/eliza/plugins/plugin-native-inference/src/model-catalog/routing-preferences.ts','export async function updateRoutingPreferences(update){update({});}');
+  const load=name=>import(pathToFileURL(path.join(temp,name)).href);
+  const {prepareNativeCloudRuntime}=await load('backend/native-cloud-runtime-config.ts');
+  process.env.ELIZAOS_CLOUD_SMALL_MODEL='synthetic-small';process.env.ELIZAOS_CLOUD_LARGE_MODEL='synthetic-large';
+  process.env.ELIZAOS_CLOUD_BASE_URL=config.production.api+'/api/v1';
+  await prepareNativeCloudRuntime();
+  const saved=(await load('vendor/eliza/packages/agent/src/config/config.ts')).config;
+  assert.equal(saved.cloud.baseUrl,config.production.api+'/api/v1');assert.equal(saved.cloud.apiKey,undefined);
+  process.env.ELIZAOS_CLOUD_BASE_URL=defaults.production.api+'/api/v1';
+  await assert.rejects(prepareNativeCloudRuntime(),/binding is incomplete/);
+  const {createNativeGoogleCloudPort}=await load('backend/native-google-cloud-port.ts');
+  const id='11111111-1111-4111-8111-111111111111',user='22222222-2222-4222-8222-222222222222',org='33333333-3333-4333-8333-333333333333',calls=[];
+  const port=createNativeGoogleCloudPort({credentialId:id,userId:user,organizationId:org,accountRef:JSON.stringify(['cloud','production',user,org]),sessionGeneration:'synthetic',token:'synthetic-token'},()=>{},async(url)=>{calls.push(String(url));return new Response('{}',{headers:{'content-type':'application/json'}});});
+  const request={url:config.production.api+'/api/v1/eliza/google/accounts?side=owner',method:'GET',credentialReference:'native-google-reference:'+id,signal:new AbortController().signal};
+  await port.agentRead(request);assert.deepEqual(calls,[request.url]);
+  await assert.rejects(port.agentRead({...request,url:defaults.production.api+'/api/v1/eliza/google/accounts?side=owner'}),/refused/);
+ }finally{
+  for(const [name,value] of Object.entries({ELIZAOS_CLOUD_BASE_URL:oldBase,ELIZAOS_CLOUD_SMALL_MODEL:oldSmall,ELIZAOS_CLOUD_LARGE_MODEL:oldLarge})){if(value===undefined)delete process.env[name];else process.env[name]=value;}
+  fs.rmSync(temp,{recursive:true,force:true});
+ }
+});

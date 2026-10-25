@@ -1,3 +1,4 @@
+import {productionCloud} from '../apps/app/src/runtime/cloud-deployment.generated.ts';
 import { managedGoogleRequest, boundedServiceJson } from './managed-google-route-policy.ts';
 import type { ManagedGoogleAgentPort } from './managed-google-agent-host.ts';
 
@@ -23,7 +24,7 @@ export function createNativeGoogleCloudPort(binding:NativeGoogleBinding,assertCu
  async function call(input:RequestInput,purpose:'read'|'gmail'|'calendar') {
   current();input.signal.throwIfAborted();
   const url=new URL(input.url),body=input.body===undefined?undefined:JSON.stringify(input.body);
-  if(url.origin!=='https://api.eliza.app'||url.username||url.password||url.hash||url.port||input.credentialReference!==reference)throw Error('Native Google request refused');
+  if(url.origin!==productionCloud.api||url.username||url.password||url.hash||url.port||input.credentialReference!==reference)throw Error('Native Google request refused');
   const read=input.method==='GET'&&body===undefined&&(url.pathname==='/api/v1/user'&&!url.search||readPaths.has(url.pathname)&&managedGoogleRequest(url,'GET',undefined));
   let permitted=read;
   if(purpose==='gmail'&&/^\/api\/v1\/eliza\/google\/gmail\/inbox-v1\/operations(?:\/[A-Za-z0-9_-]{1,160}(?:\/dispatch)?)?$/.test(url.pathname)) {
