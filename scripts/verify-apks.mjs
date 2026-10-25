@@ -31,7 +31,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
-  auditBundle, distributionProblems, extractWebPayload, readBuildFlags, signerDigest, validateApk,
+  auditBundle, distributionProblems, extractWebPayload, readBuildFlags, signerDigest, validateApk, verifyOwnerRouteTable,
 } from "./apk.mjs";
 import { androidEnv, tool } from "./toolchain.mjs";
 import { readReleaseSigner, releaseAdmission, RELEASE_SIGNER_FILE } from "./build-android.mjs";
@@ -155,6 +155,8 @@ for (const variant of ["standalone", "launcher"])
     }
     try { verifyNativePatchReceipt(execFileSync('unzip', ['-p', file, 'assets/native-patches.json'], {encoding:'utf8',stdio:['ignore','pipe','pipe']}), admittedNativePatches); }
     catch (error) { problems.push(`Native patch provenance: ${error.message}`); }
+    try { verifyOwnerRouteTable(file); }
+    catch (error) { problems.push(`Owner route table: ${error.message}`); }
     let signerSha256 = null;
     if (signed) {
       try { signerSha256 = signerDigest(file); }
