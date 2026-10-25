@@ -10,6 +10,7 @@ import { withResidentMapsNavigation } from '../maps/resident-relay.ts';
 import {aospImage} from './aosp-image';
 import {SMS_SEND_CAPABILITY} from './sms-agent-contract';
 import {automationsRouteAllowed, type AutomationsMethod} from './automations-route-policy.ts';
+import {notesRouteAllowed} from './notes-route-policy.ts';
 import {iconStyle} from '../icon-style';
 import {validateUuid} from '../../../../vendor/eliza/packages/core/src/utils/uuid';
 import type {ConversationMessageTarget, ChatChannel, VoiceConversationBinding,VoiceTurnSignal,ReadReplyBinding,NativeNotesReadReplyHint} from './alpha-client';
@@ -267,7 +268,7 @@ let active: Active | null = null, operation: AbortController | null = null;
 let startup: Promise<void> | null = null, epoch = 0;
 let sending: AbortController | null = null;
 let developmentVoiceExpiresAt=0;
-const automationsRequests = new Set<AbortController>();
+const ownerRouteRequests = new Set<AbortController>();
 const conversationMemory = new Map<string, string>();
 const actionReceipts = new Map<string, { sessionId: string; result: Promise<OperationReceipt> }>();
 const readReplyOwners=new Map<ReadReplyBinding,{actions:DeviceActions;proposalId:string;digest:string;cancelled:boolean}>();
@@ -325,7 +326,7 @@ const RESIDENT_UNBIND_UNCONFIRMED='Cloud inference removal could not be confirme
 let residentRebindQueued = false;
 /** Every Cloud detach ends background plan refresh, so no request goes out under a stale admission. */
 function stopEntitlementRefresh(){entitlementRefresher?.stop();entitlementRefresher=null;clearEntitlementKeyCache();}
-function detachService() { stopEntitlementRefresh(); retireReadReplies();for(const request of automationsRequests)request.abort(new DOMException('Cloud account changed','AbortError')); clearPersonalSetup(); service = null; update({ cloudAccount: null }); }
+function detachService() { stopEntitlementRefresh(); retireReadReplies();for(const request of ownerRouteRequests)request.abort(new DOMException('Cloud account changed','AbortError')); clearPersonalSetup(); service = null; update({ cloudAccount: null }); }
 async function verifyService(client: CloudProtocol, signal: AbortSignal, expected?:{credentialId:string;credentialReference?:string}) {
   const credential = await cloudCredentialStore.read(client.environment); signal.throwIfAborted();
   if(expected&&(credential?.credentialId!==expected.credentialId||credential?.credentialReference!==expected.credentialReference))throw new Error('Cloud account changed. Try again.');
@@ -493,7 +494,7 @@ function retire(name?: string) {
   actionReceipts.clear();
   conversationMemory.clear();
   cancelStoppedReply();
-  for(const request of automationsRequests)request.abort(new DOMException('The connection changed','AbortError'));
+  for(const request of ownerRouteRequests)request.abort(new DOMException('The connection changed','AbortError'));
   epoch++;
   sending?.abort(new DOMException('The connection changed.', 'AbortError'));
   sending = null;
@@ -610,7 +611,7 @@ function activate(next: Active, session: VerifiedSession, name: string) {
   actionReceipts.clear();
   conversationMemory.clear();
   cancelStoppedReply();
-  for(const request of automationsRequests)request.abort(new DOMException('The connection changed','AbortError'));
+  for(const request of ownerRouteRequests)request.abort(new DOMException('The connection changed','AbortError'));
   epoch++; sending?.abort(new DOMException('The connection changed.', 'AbortError')); sending = null; active = next;
   update({ residentRecoveryReason:undefined,residentRecovery:undefined, phoneActionsAvailable:!!next.actions, conversations: [], history: null, historyError: '', historyPartial:false, replyNotice:'', actionHistory: [], kind: next.kind, name, session, open: false, message: next.kind === 'resident' && state.inferenceOffline ? '' : 'Connected', error: '' });
 }
@@ -1426,6 +1427,26 @@ async function pairedRequest(selected:Extract<Active,{kind:'remote'|'local'}>,se
   return response.body;
 }
 const hosted = testMocksEnabled ? { pairedRequest, pair, restore: restoreHosted, inspectPersonal, cloudList, cloudManage, personalDecline, personalAccept, personalPoll, personalFinalize, personalRecoveryOpen, personalConnect } : null;
+/** Owner-route transport for the active agent: Automations and stock Notes routes share it, each limited to its own exact policy. */
+function ownerRouteClient(allowed:(path:string,method:AutomationsMethod)=>boolean): {sessionId:string;scope?:string;request:(path:string,method:AutomationsMethod,body:unknown|undefined,signal:AbortSignal)=>Promise<unknown>} | null {
+  const selected=active,session=state.session,generation=epoch;
+  if(!selected||!session||(testMocksEnabled&&selected.kind==='cloud'&&!selected.phoneTarget))return null;
+  return {sessionId:session.sessionId,scope:selected.actions?.scope,request:async(path,method,body,signal)=>{
+    if(!allowed(path,method)||((method==='GET'||method==='DELETE')&&body!==undefined))throw Error('Unsupported agent route request');
+    const controller=new AbortController(),bounded=anyAbortSignal([signal,controller.signal]);ownerRouteRequests.add(controller);
+    const current=()=>{bounded.throwIfAborted();if(generation!==epoch||selected!==active||session!==state.session)throw new DOMException('The connection changed','AbortError');};
+    try{
+      current();
+      let result:unknown;
+      if(selected.kind==='resident')result=await selected.remote.request(path,body,bounded,{},method);
+      else if(!hosted)throw Error('Your agent runs on this device.');
+      else if(selected.kind==='cloud')result=await selected.cloud.phoneRequest(selected.phoneTarget!,path,bounded,body,method);
+      else result=await hosted.pairedRequest(selected,session,path,method,body,bounded,current,true);
+      current();return result;
+    }catch(error){if(error instanceof CloudProtocolError&&error.status)throw new WorkflowHttpError(error.status,error.data);if(error&&typeof error==='object'&&'status' in error&&typeof error.status==='number'&&!(error instanceof WorkflowHttpError))throw new WorkflowHttpError(error.status,'data' in error?error.data:undefined);throw error;}
+    finally{ownerRouteRequests.delete(controller);}
+  }};
+}
 
 /** Browser sign-in body shared by explicit browser login and readiness fallback in one operation. */
 async function residentBrowserLoginAction(signal: AbortSignal) {
@@ -1654,25 +1675,8 @@ export const connectionController = {
       update({ actionHistory: [], message: 'Review recorded. Refresh action history; no action was repeated.' });
     });
   },
-  getAutomationsClient(): {sessionId:string;scope?:string;request:(path:string,method:AutomationsMethod,body:unknown|undefined,signal:AbortSignal)=>Promise<unknown>} | null {
-    const selected=active,session=state.session,generation=epoch;
-    if(!selected||!session||(testMocksEnabled&&selected.kind==='cloud'&&!selected.phoneTarget))return null;
-    return {sessionId:session.sessionId,scope:selected.actions?.scope,request:async(path,method,body,signal)=>{
-      if(!automationsRouteAllowed(path,method)||((method==='GET'||method==='DELETE')&&body!==undefined))throw Error('Unsupported automation request');
-      const controller=new AbortController(),bounded=anyAbortSignal([signal,controller.signal]);automationsRequests.add(controller);
-      const current=()=>{bounded.throwIfAborted();if(generation!==epoch||selected!==active||session!==state.session)throw new DOMException('The connection changed','AbortError');};
-      try{
-        current();
-        let result:unknown;
-        if(selected.kind==='resident')result=await selected.remote.request(path,body,bounded,{},method);
-        else if(!hosted)throw Error('Your agent runs on this device.');
-        else if(selected.kind==='cloud')result=await selected.cloud.phoneRequest(selected.phoneTarget!,path,bounded,body,method);
-        else result=await hosted.pairedRequest(selected,session,path,method,body,bounded,current,true);
-        current();return result;
-      }catch(error){if(error instanceof CloudProtocolError&&error.status)throw new WorkflowHttpError(error.status,error.data);if(error&&typeof error==='object'&&'status' in error&&typeof error.status==='number'&&!(error instanceof WorkflowHttpError))throw new WorkflowHttpError(error.status,'data' in error?error.data:undefined);throw error;}
-      finally{automationsRequests.delete(controller);}
-    }};
-  },
+  getAutomationsClient() { return ownerRouteClient(automationsRouteAllowed); },
+  getNotesClient() { return ownerRouteClient(notesRouteAllowed); },
   getWorkflowClient(): { client: WorkflowProtocol; sessionId: string; scope?:string } | null {
     const selected = active, session = state.session;
     if (!selected || !session || (testMocksEnabled && selected.kind==='cloud' && !selected.phoneTarget)) return null;

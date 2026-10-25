@@ -2984,6 +2984,11 @@ function notesDiscardRec(api) {
   notesUndoable(api, note, 0, "Recording discarded");
 }
 function notesLast(list) { for (var i = 0; i < list.length; i++) if (list[i].kind === "voice") return list[i]; return null; }
+/* The agent's own notes (stock plugin-notes) are one text each: first line is the title. Saves go through api.agentNoteSave. */
+async function notesAgentClose(api) {
+  var s = api.get("notes"); if (!s.agentOpen) return;
+  if (await api.agentNoteSave(s.agentOpen, s.agentText) !== false) api.set({ agentOpen: null, agentConfirm: null });
+}
 function notesShare(api, n, via) {
   var parts = n.kind === "voice" ? n.summary.concat(n.actions.map(function (a) { return "Next: " + a.t; }))
     : n.kind === "list" ? n.items.map(function (i) { return (i.done ? "Done: " : "") + i.t; })
@@ -3001,7 +3006,7 @@ function notesShare(api, n, via) {
 registerView("notes", {
   title: "Notes", icon: "notes", aliases: ["note", "recorder", "memos"],
   chat: "hidden",
-  state: { list: NOTES_SEED, open: null, blankCreationId: null, q: null, rec: null, record: false, compose: false, proc: null, sheet: null, pos: 0, playing: false, dict: false, newItem: "" },
+  state: { list: NOTES_SEED, open: null, blankCreationId: null, q: null, rec: null, record: false, compose: false, proc: null, sheet: null, pos: 0, playing: false, dict: false, newItem: "", agent: { status: "idle", notes: [], busy: false, error: "", source: "" }, agentOpen: null, agentText: "", agentNew: "", agentConfirm: null },
   persist: ["list"],
   jumps: [[null, "Notes"], ["editor", "Note editor"], ["rec", "Recording"], ["voice", "Voice note"]],
   preset: function (sub) {
@@ -3015,10 +3020,11 @@ registerView("notes", {
     if (st.rec) { notesStopRec(api); return true; }
     if (st.sheet) { api.set({ sheet: null }); return true; }
     if (st.open) { notesClose(api); return true; }
+    if (st.agentOpen) { notesAgentClose(api); return true; }
     if (st.q !== null && st.q !== undefined) { api.set({ q: null }); return true; }
     return false;
   },
-  onLeave: function (api) { var s = api.get("notes"); if (s.blankCreationId) api.set(notesLeave(api, null)); else notesStopTimers(); },
+  onLeave: function (api) { var s = api.get("notes"); if (s.agentOpen) notesAgentClose(api); if (s.blankCreationId) api.set(notesLeave(api, null)); else notesStopTimers(); },
   ongoing: function (st) { return st.rec ? { label: notesFmt(st.rec.tick / 4), icon: "notesRecDot", color: NOTES_RED } : null; },
   suggestions: function (st, api) {
     var n = st.open ? notesFind(st.list, st.open) : null;
@@ -3113,6 +3119,28 @@ registerView("notes", {
     });
     var colL = [], colR = [];
     cards.forEach(function (c, i) { (i % 2 ? colR : colL).push(c); });
+    var ag = st.agent || {};
+    var agentCards = (ag.notes || []).filter(function (x) { return !q || x.text.toLowerCase().indexOf(q) >= 0; }).map(function (x) {
+      var cut = x.text.indexOf("\n"), title = (cut < 0 ? x.text : x.text.slice(0, cut)).trim() || "Untitled", rest = cut < 0 ? "" : x.text.slice(cut + 1);
+      var editing = st.agentOpen === x.id, confirming = editing && st.agentConfirm === x.id;
+      return {
+        title: title, body: rest.slice(0, 180), hasBody: !!rest.trim(), closed: !editing, editing: editing, confirming: confirming, notConfirming: !confirming,
+        text: editing ? st.agentText : "", busy: !!ag.busy,
+        open: function () { if (!api.get("notes").agentOpen) api.set({ agentOpen: x.id, agentText: x.text, agentConfirm: null }); },
+        onText: function (e) { api.set({ agentText: e.target.value }); },
+        save: function () { api.agentNoteSave(x.id, api.get("notes").agentText); },
+        done: function () { notesAgentClose(api); },
+        del: function () { api.set({ agentConfirm: x.id }); },
+        cancelDel: function () { api.set({ agentConfirm: null }); },
+        confirmDel: async function () {
+          var text = await api.agentNoteDelete(x.note);
+          if (text === null) return;
+          api.set({ agentOpen: null, agentConfirm: null });
+          api.toast(title + " deleted", { undo: function () { api.agentNoteCreate(text); } });
+        }
+      };
+    });
+    var agentShown = agentCards.length > 0 || (!q && (ag.status === "starting" || ag.status === "unavailable"));
 
     /* open note */
     var n = st.open ? notesFind(list, st.open) : null;
@@ -3262,7 +3290,13 @@ registerView("notes", {
       endSearch: function () { api.set({ q: null }); },
       newNote: function () { notesNew(api, "text"); },
       record: function () { notesStartRec(api); },
-      colL: colL, colR: colR, none: cards.length === 0,
+      colL: colL, colR: colR, none: cards.length === 0 && !agentShown,
+      agentShown: agentShown, agentCards: agentCards, phoneLabel: agentShown && cards.length > 0,
+      agentLabel: "Alpha notes" + (ag.source ? " on " + ag.source : ""),
+      agentStatus: ag.status === "starting" ? "Starting your agent\u2026" : ag.status === "unavailable" ? "Alpha notes are unavailable" : "",
+      agentError: ag.error || "", agentCanCreate: agentShown && ag.status === "ready" && !q, agentNew: st.agentNew || "",
+      onAgentNew: function (e) { api.set({ agentNew: e.target.value }); },
+      agentCreate: async function () { var v = api.get("notes").agentNew || ""; if (!v.trim()) return; if (await api.agentNoteCreate(v) && api.get("notes").agentNew === v) api.set({ agentNew: "" }); },
       emptyText: q ? "No matches" : "No notes yet. Create a note to get started.",
       askQ: "Ask " + api.name + ": “" + String(st.q || "").trim() + "”", hasQ: !!q,
       askSearch: function () { var qq = String(api.get("notes").q || "").trim(); api.set({ q: null }); api.send("Find my notes about " + qq); },

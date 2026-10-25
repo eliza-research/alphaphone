@@ -25,8 +25,30 @@ export async function cloudNotesVoiceFixture(page:Page,signed=true,development=f
   BrowserVoice.prototype.play=async function(input:any){queueMicrotask(()=>void (this as any).notifyListeners('playbackEnded',{playbackId:input.playbackId}));};
   BrowserVoice.prototype.stopPlayback=async()=>{};BrowserVoice.prototype.cancel=async()=>{f.cancels++;};
  },signed);
+ await agentNotesMock(page);
  return {foreign};
 }
+/** Synthetic agent notes store behind the real stock notes client and Alpha transport. Empty by default. */
+export async function agentNotesMock(page:Page,notes:Array<{id:string;title:string;body:string}>=[]){
+ await page.evaluate(async notes=>{
+  const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');
+  const stamp={color:'yellow',createdAt:'2026-10-01T00:00:00.000Z',updatedAt:'2026-10-01T00:00:00.000Z'};
+  const split=(content:string)=>{const cut=content.indexOf('\n');return cut<0?{title:content,body:''}:{title:content.slice(0,cut),body:content.slice(cut)};};
+  const a=(window as any).agentNotes={notes:notes.map(note=>({...stamp,...note})),revision:1,calls:[] as any[],next:[] as Array<(body:any)=>unknown>,
+   add(content:string){a.notes.unshift({...stamp,id:'agent-'+a.revision,...split(content)});a.revision++;}};
+  const state=()=>({notes:structuredClone(a.notes),revision:a.revision}),ok=()=>({requestId:crypto.randomUUID(),success:true,result:{success:true,text:'Done.',state:state()}});
+  c.getNotesClient=()=>({sessionId:'fixture-agent-notes',request:async(path:string,method:string,body:any)=>{
+   a.calls.push({path,method,body});const next=a.next.shift();if(next)return next(body);
+   if(path==='/api/notes/state'&&method==='GET')return {success:true,data:state()};
+   const {capability,params}=body;
+   if(capability==='create-note'){a.add(params.content);return ok();}
+   if(capability==='update-note'){if(params.expectedRevision!==a.revision)return {requestId:crypto.randomUUID(),success:false,result:{success:false,text:'The notes changed since this edit was prepared.',error:{code:'NOTES_EDIT_CONFLICT',message:'The notes changed since this edit was prepared.'}}};Object.assign(a.notes.find((note:any)=>note.id===params.id),split(params.content));a.revision++;return ok();}
+   if(capability==='delete-note'){a.notes=a.notes.filter((note:any)=>note.id!==params.id);a.revision++;return ok();}
+   throw Object.assign(Error('Unsupported synthetic notes request'),{status:400});
+  }});
+ },notes);
+}
+export const agentNotesInteractions=(page:Page)=>page.evaluate(()=>(window as any).agentNotes.calls.filter((call:any)=>call.method==='POST').map((call:any)=>call.body));
 export const notesRecorder=(page:Page)=>page.locator('[data-alpha-subview="notes-recording"]');
 export async function openNotesRecorder(page:Page){await page.getByRole('button',{name:'Notes',exact:true}).click();await page.getByRole('button',{name:'Record and transcribe',exact:true}).click();}
 export async function recordClosedClip(page:Page){const panel=notesRecorder(page);await panel.getByRole('button',{name:'Start recording',exact:true}).click();await expect(panel.getByRole('button',{name:'Stop recording',exact:true})).toBeVisible();await panel.getByRole('button',{name:'Stop recording',exact:true}).click();await expect(panel.getByRole('button',{name:'Transcribe with Eliza Cloud',exact:true})).toBeVisible();}

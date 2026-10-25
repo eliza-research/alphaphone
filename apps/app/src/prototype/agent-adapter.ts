@@ -42,6 +42,7 @@ import { SecureNotesStore, readLegacyDailyNotes, notesDraftBase, applyNotesDraft
 import { secureConnectionStore } from '../runtime/native-connection';
 import {NotesCommitUncertain,isStorageFull} from '../runtime/notes-store';
 import {isNotesOperation} from '../runtime/notes-contract';
+import {AgentNotes} from './agent-notes-adapter';
 import {isCalendarOperation,validateCalendarResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts';
 import { isMvpView } from "./mvp-features";
 import { workflowSha, validateWorkflowResult } from '../runtime/workflow-device-contract';
@@ -127,7 +128,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
   const messageReviews=new BrowserReviews();
   const notesRender = views.notes.render;
   // Navigation resets transient view state, but must retain the actual storage receipt.
-  views.notes.persist = [...new Set([...(views.notes.persist || []), 'storageStatus'])];
+  views.notes.persist = [...new Set([...(views.notes.persist || []), 'storageStatus', 'agent'])];
 
   function sizeComposer(){
     for(const input of document.querySelectorAll<HTMLTextAreaElement>('textarea[data-alpha-composer]')){
@@ -446,6 +447,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         this.closeSummaryReview?.();this.reviewedSourceDraft=null;
         clearMapsSelection();
         this.connectionSession = session;
+        void this.agentNotes?.refresh();
         alphaClient.disconnect();
         if (this.live) this.setState({ msgs: [], ...(preserveStartupDraft?{}:{draft:''}), typing: false });
       }
@@ -492,9 +494,11 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       document.documentElement.dataset.notesStorageState='recovery';
       document.documentElement.dataset.notesRecoveryCategory=error instanceof SyntaxError?'invalid-json':error instanceof NotesCommitUncertain?'migration-unconfirmed':(error instanceof Error&&Object.hasOwn(categories,error.message)?categories[error.message]:'unclassified');
       originalSet.call(this,'notes',{list:[],storageStatus:'Saved notes need recovery. Original data retained.'});this.toast('Saved notes could not be opened. No new edits are allowed.');}});
-    this.notesCommittedHandler=()=>{if(this.live&&this.notesStore&&!this.notesStorageFailed&&!this.notesPending){this.notesRaw=this.notesStore.raw;originalSet.call(this,'notes',{list:this.notesStore.list,storageStatus:''});context(this);}};
+    this.notesCommittedHandler=()=>{if(this.live&&this.notesStore&&!this.notesStorageFailed&&!this.notesPending){this.notesRaw=this.notesStore.raw;originalSet.call(this,'notes',{list:this.notesStore.list,storageStatus:''});context(this);}void this.agentNotes.refresh();};
     window.addEventListener('alpha:notes-committed',this.notesCommittedHandler);
-    this.visibilityHandler = () => { if(document.hidden)connectionController.cancelViewNavigation();if (this.live) context(this); };
+    // The agent's own notes store is separate from the phone collection above and never reaches vset or notesStore.
+    this.agentNotes=new AgentNotes(()=>{if(this.live)originalSet.call(this,'notes',{agent:this.agentNotes.view()});},()=>this.live&&!document.hidden&&this.S().view==='notes');
+    this.visibilityHandler = () => { if(document.hidden)connectionController.cancelViewNavigation();else void this.agentNotes.refresh();if (this.live) context(this); };
     this.pageHideHandler = () => { notesRecovery?.abort();this.pageSuspended = true; if (this.live) context(this); };
     this.pageShowHandler = () => { this.pageSuspended = false; if (this.live) context(this); };
     document.addEventListener('visibilitychange', this.visibilityHandler);
@@ -825,7 +829,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     });
     context(this);
   };
-  p.componentDidUpdate = function (prev: Shell) { originalUpdate.call(this, prev); context(this); sizeComposer();this.composerDraft?.edit(String(this.S().draft||''));const shade=!!this.S().shade;if(shade&&!this.shadeWasOpen)this.refreshTileFacts();this.shadeWasOpen=shade;const selected=this.messageReplyTarget||this.messageEditTarget;if(selected&&(JSON.stringify(selected.session)!==JSON.stringify(connectionController.getSnapshot().session)||!this.S().msgs.some((m:Shell)=>m.id===selected.messageId&&m.text===selected.text))){cancelMessageContext(this);this.setState({});} };
+  p.componentDidUpdate = function (prev: Shell) { originalUpdate.call(this, prev); context(this); sizeComposer();const notesOpen=this.S().view==='notes',typing=!!this.S().typing;if(notesOpen&&!this.agentNotesOpen||this.agentNotesTyping&&!typing)void this.agentNotes.refresh();this.agentNotesOpen=notesOpen;this.agentNotesTyping=typing;this.composerDraft?.edit(String(this.S().draft||''));const shade=!!this.S().shade;if(shade&&!this.shadeWasOpen)this.refreshTileFacts();this.shadeWasOpen=shade;const selected=this.messageReplyTarget||this.messageEditTarget;if(selected&&(JSON.stringify(selected.session)!==JSON.stringify(connectionController.getSnapshot().session)||!this.S().msgs.some((m:Shell)=>m.id===selected.messageId&&m.text===selected.text))){cancelMessageContext(this);this.setState({});} };
   p.componentWillUnmount = function () {
     this.cancelReadReplyCompletions?.();
     cancelMessageContext(this);connectionController.cancelViewNavigation();
@@ -834,7 +838,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     this.notesOpenAbort?.abort();if(activeShell===this){activeShell=null;notesRecovery?.abort();}
     this.closeSummaryReview?.();
     this.connectionUnsubscribe?.();
-    window.removeEventListener('alpha:notes-committed',this.notesCommittedHandler);
+    window.removeEventListener('alpha:notes-committed',this.notesCommittedHandler);this.agentNotes?.dispose();
     document.removeEventListener('visibilitychange', this.visibilityHandler);
     window.removeEventListener('pagehide', this.pageHideHandler);
     window.removeEventListener('pageshow', this.pageShowHandler);
@@ -931,7 +935,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         return note;
       };
     }
-    if(key==='notes'){api.set=(patch:Shell)=>this.vset('notes',patch);api.storageReady=()=>!this.notesStorageFailed&&!this.notesPending; }
+    if(key==='notes'){api.set=(patch:Shell)=>this.vset('notes',patch);api.storageReady=()=>!this.notesStorageFailed&&!this.notesPending;api.agentNoteCreate=(content:string)=>this.agentNotes.create(content);api.agentNoteSave=(id:string,content:string)=>this.agentNotes.update(id,content);api.agentNoteDelete=(note:Shell)=>this.agentNotes.remove(note); }
     api.say = () => this.toast('Connect the underlying account or select real content before requesting this action.');
     // Open the real conversation without sending a prompt or uploading content.
     // Keep the current view/selection so a subsequent user message is scoped.

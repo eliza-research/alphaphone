@@ -4,6 +4,7 @@ import {parseRecoveryReview,parseRecoveryArchive} from './resident-recovery';
 import {anyAbortSignal} from './abort-signal';
 import {developmentCloudVoiceEnabled} from './development-cloud-voice';
 import {automationsRouteAllowed, isAutomationsPath, type AutomationsMethod} from './automations-route-policy.ts';
+import {notesRouteAllowed, isNotesPath} from './notes-route-policy.ts';
 import { registerPlugin } from '../platform-plugins';
 import { Capacitor } from '@capacitor/core';
 import type { VerifiedSession, ChatChannel } from './alpha-client';
@@ -102,7 +103,7 @@ export class LocalAgentProtocol {
   constructor(private bridge:LocalAgentBridge = Capacitor.isNativePlatform() ? nativeBridge : browserBridge ?? unavailableBridge) {}
   async request(path:string, body:unknown|undefined, signal:AbortSignal, headers:Record<string,string> = {}, method:AutomationsMethod = body===undefined?'GET':'POST'):Promise<any> {
     signal.throwIfAborted();
-    if (isAutomationsPath(path) ? !automationsRouteAllowed(path,method) || !this.session : !['GET','POST'].includes(method)) throw Error('Invalid local automation request');
+    if (isAutomationsPath(path)||isNotesPath(path) ? !(automationsRouteAllowed(path,method)||notesRouteAllowed(path,method)) || !this.session : !['GET','POST'].includes(method)) throw Error('Invalid local automation request');
     if ((method==='GET'||method==='DELETE') && body!==undefined) throw Error('Invalid local request body');
     const generation=this.generation;
     let cancel:()=>void=()=>{};

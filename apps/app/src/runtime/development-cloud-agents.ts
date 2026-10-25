@@ -1,5 +1,6 @@
 import type {ChatChannel} from './alpha-client';
 import {automationsRouteAllowed, isAutomationsPath, type AutomationsMethod} from './automations-route-policy.ts';
+import {notesRouteAllowed} from './notes-route-policy.ts';
 import { CloudPersonalProtocol, PersonalProtocolError } from './cloud-personal-protocol.ts';
 import { CloudProtocol, CloudProtocolError, object, optionalString, string, uuid, type CloudAgent } from './cloud-protocol.ts';
 
@@ -24,7 +25,7 @@ export class DevelopmentCloudAgentProtocol extends CloudProtocol {
   async phoneRequest(target: CloudPhoneTarget, path: string, signal: AbortSignal, body?: unknown, method: AutomationsMethod = body === undefined ? 'GET' : 'POST'): Promise<Record<string,unknown>> {
     signal.throwIfAborted();
     const automation = isAutomationsPath(path);
-    if (automation ? !automationsRouteAllowed(path, method) : !['GET','POST'].includes(method) || !(/^\/api\/(?:client-devices|workflow|conversations)(?:\/|\?|$)/.test(path)||/^\/api\/views\/interact-(claim|result)$/.test(path)) || path.includes('..') || /[\\#\s]/.test(path)) throw new Error('Invalid phone route');
+    if (automation ? !automationsRouteAllowed(path, method) : !notesRouteAllowed(path, method) && (!['GET','POST'].includes(method) || !(/^\/api\/(?:client-devices|workflow|conversations)(?:\/|\?|$)/.test(path)||/^\/api\/views\/interact-(claim|result)$/.test(path)) || path.includes('..') || /[\\#\s]/.test(path))) throw new Error('Invalid phone route');
     if ((method === 'GET' || method === 'DELETE') && body !== undefined) throw new Error('Invalid phone request body');
     const credential = await this.credentials.read(this.environment); signal.throwIfAborted();
     if (!credential || credential.credentialId !== target.credentialId) throw new Error('Cloud account changed');
