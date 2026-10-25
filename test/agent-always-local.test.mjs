@@ -139,7 +139,7 @@ test('a chat turn without Cloud inference gets an honest answer with the plan ac
 test('the plan surface is a notice beside the running agent, not a gate', () => {
   const chooser = ui.slice(ui.indexOf('export function ConnectionChooser'));
   assert.match(chooser, /if \(!visible\) \{\n\s+\/\/ Never a gate: the agent is running\./);
-  assert.ok(chooser.includes('<aside className="alpha-plan-notice" role="region" aria-label="Eliza Cloud plan notice">'));
+  assert.ok(chooser.includes('<aside className="alpha-plan-notice" role="region" aria-label={`${serviceName} plan notice`}>'));
   // Admission without a plan opens nothing; only a required sign-in opens (and locks) the dialog.
   assert.ok(between(ui, 'async function admitCloudResident(', 'function residentPlanEnded(').includes("update({residentSubscription:view,residentPlanNotice:'needs-plan',planEndsAt:null});\n    return {binding:'unbound',account};"));
   assert.ok(chooser.includes("const residentMustSignIn=residentCloudFlow()&&!snapshot.cloudAccount&&snapshot.residentPlanNotice!=='offline'&&!snapshot.residentStarting;"));
