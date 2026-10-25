@@ -335,7 +335,7 @@ export async function checkEntitlement(source: EntitlementSource, expected: Omit
   if (signed) return signed;
   if (!plan) return { view: { kind: 'unavailable', reason: 'not-published' }, entitlement: null };
   if (plan.status === 'canceled' || plan.status === 'none') return { view: { kind: 'inactive', planName: plan.status === 'none' ? null : plan.planName, status: plan.status, source: 'billing-limits' }, entitlement: null };
-  return { view: { kind: 'active', planName: plan.planName ?? 'Eliza Cloud plan', status: plan.status, allowance: null, expiresAt: plan.periodEnd ?? 0, refreshFailed: false, source: 'billing-limits' }, entitlement: null };
+  return { view: { kind: 'active', planName: plan.planName ?? 'Cloud plan', status: plan.status, allowance: null, expiresAt: plan.periodEnd ?? 0, refreshFailed: false, source: 'billing-limits' }, entitlement: null };
 }
 /** A refusal that means the signed-in account is no longer the one this phone admitted. */
 export function isEntitlementSignInFailure(error: unknown): boolean {
@@ -554,7 +554,7 @@ export function retryDuration(ms: number): string {
   return `about ${Math.ceil(minutes / 60)} hours`;
 }
 /** Owner-facing copy. Nothing is retried, purchased or upgraded automatically. */
-export function serviceLimitMessage(limit: ServiceLimit | null, now: number = Date.now()): string {
+export function serviceLimitMessage(limit: ServiceLimit | null, now: number = Date.now(), serviceName = 'Cloud'): string {
   if (!limit || limit.kind === 'rate-limited') {
     const wait = limit?.retryAfterMs != null ? `Try again in ${retryDuration(limit.retryAfterMs)}.` : limit?.resetsAt != null && limit.resetsAt > now ? `Try again in ${retryDuration(limit.resetsAt - now)}.` : 'Wait a moment before sending again.';
     return `The AI request rate limit was reached. ${wait} Alpha Phone did not retry your message.`;
@@ -564,8 +564,8 @@ export function serviceLimitMessage(limit: ServiceLimit | null, now: number = Da
     return `Your plan's AI allowance for this period is used up.${reset} Nothing is purchased automatically. ${LOCAL_KEEPS_WORKING}`;
   }
   // A structured period reset from the agent or Cloud is shown; without one the copy is unchanged.
-  if (limit.kind === 'billing-refused') return `Eliza Cloud declined this AI request for your account's billing.${limit.resetsAt != null && limit.resetsAt > now ? ` Eliza Cloud reports your plan allowance resets ${clock(limit.resetsAt)}.` : ''} Check your account in Settings. Alpha Phone did not retry your message, and nothing is purchased automatically. ${LOCAL_KEEPS_WORKING}`;
-  return `AI needs an active Eliza Cloud plan. Manage your plan in Eliza Cloud. Nothing is purchased automatically. ${LOCAL_KEEPS_WORKING}`;
+  if (limit.kind === 'billing-refused') return `${serviceName} declined this AI request for your account's billing.${limit.resetsAt != null && limit.resetsAt > now ? ` ${serviceName} reports your plan allowance resets ${clock(limit.resetsAt)}.` : ''} Check your account in Settings. Alpha Phone did not retry your message, and nothing is purchased automatically. ${LOCAL_KEEPS_WORKING}`;
+  return `AI needs an active ${serviceName} plan. Manage your plan in ${serviceName}. Nothing is purchased automatically. ${LOCAL_KEEPS_WORKING}`;
 }
 
 /**
@@ -586,12 +586,12 @@ export class SubscriptionRedeemError extends Error {
 }
 export interface RedeemResult { planEndsAt: number | null; replayed: boolean; grantEndsAt: number | null; paidPlanTakesPrecedence: boolean; planName: string | null }
 /** Owner-facing redemption copy. Unknown, expired, disabled and used-up codes share one answer. */
-export function redeemFailureMessage(error: unknown): string {
+export function redeemFailureMessage(error: unknown, serviceName = 'Cloud'): string {
   if (error instanceof SubscriptionRedeemError) {
     if (error.code === 'invalid') return 'This code could not be redeemed. Check the code and try again.';
     if (error.code === 'already-redeemed') return 'This account has already received this subscription. Check your plan again.';
     if (error.code === 'rate-limited') return `Too many attempts. Try again in ${retryDuration(error.retryAfterMs ?? 60_000)}.`;
-    if (error.code === 'account') return 'Eliza Cloud could not apply a code to this account. Check the account in Eliza Cloud.';
+    if (error.code === 'account') return `${serviceName} could not apply a code to this account. Check the account in ${serviceName}.`;
   }
   return 'The code could not be redeemed right now. Try again.';
 }

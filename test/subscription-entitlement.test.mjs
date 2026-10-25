@@ -337,7 +337,7 @@ test('Cloud limit refusals carry retry information and never imply a purchase or
   assert.match(serviceLimitMessage(allowance, NOW), /allowance for this period is used up\. It resets .+\. Nothing is purchased automatically\. Local apps keep working\.$/);
   const subscription = readServiceLimit({status: 402, data: {error: 'subscription_required'}}, NOW);
   assert.equal(subscription.kind, 'subscription-required');
-  assert.match(serviceLimitMessage(subscription, NOW), /active Eliza Cloud plan.*Nothing is purchased automatically/);
+  assert.match(serviceLimitMessage(subscription, NOW, 'Nebula'), /active Nebula plan.*Nothing is purchased automatically/);
   // A bare 402 does not say whether a plan is missing or usage is spent: neutral billing copy.
   const bare = readServiceLimit({status: 402, data: {}}, NOW);
   assert.equal(bare.kind, 'billing-refused');
@@ -345,7 +345,7 @@ test('Cloud limit refusals carry retry information and never imply a purchase or
   // Legacy replies and history without a live provider wait remain supported.
   const upstreamCredits = readServiceLimit({failureKind: 'insufficient_credits', terminalFailure: {kind: 'insufficient_credits', message: 'Synthetic upstream message', transient: false}}, NOW);
   assert.deepEqual(upstreamCredits, {kind: 'billing-refused', retryAfterMs: null, resetsAt: null});
-  assert.match(serviceLimitMessage(upstreamCredits, NOW), /^Eliza Cloud declined this AI request for your account's billing\. .*did not retry your message, and nothing is purchased automatically\./);
+  assert.match(serviceLimitMessage(upstreamCredits, NOW, 'Nebula'), /^Nebula declined this AI request for your account's billing\. .*did not retry your message, and nothing is purchased automatically\./);
   const upstreamRate = readServiceLimit({failureKind: 'rate_limited', terminalFailure: {kind: 'rate_limited', message: 'Synthetic', transient: true}}, NOW);
   assert.deepEqual(upstreamRate, {kind: 'rate-limited', retryAfterMs: null, resetsAt: null});
   assert.match(serviceLimitMessage(upstreamRate, NOW), /Wait a moment before sending again/);
@@ -383,7 +383,7 @@ test('a resident turn failure may carry a structured period-allowance reset; abs
   ]) {
     const limit = readServiceLimit(source, NOW);
     assert.deepEqual(limit, {kind: 'billing-refused', retryAfterMs: null, resetsAt: NOW + 3 * 86400000});
-    assert.match(serviceLimitMessage(limit, NOW), /^Eliza Cloud declined this AI request for your account's billing\. Eliza Cloud reports your plan allowance resets .+\. Check your account in Settings\./);
+    assert.match(serviceLimitMessage(limit, NOW, 'Nebula'), /^Nebula declined this AI request for your account's billing\. Nebula reports your plan allowance resets .+\. Check your account in Settings\./);
     assert.doesNotMatch(serviceLimitMessage(limit, NOW), /credit|top.?up|upgrade|buy/i);
   }
   // An explicit reset wins over a relative wait; a past reset is not shown.

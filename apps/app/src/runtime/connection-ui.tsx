@@ -351,7 +351,7 @@ function personalCurrent(binding:NonNullable<typeof personalSetup>,generation:nu
 async function inspectPersonal(signal:AbortSignal){
  if(!testMocksEnabled)throw Error(PAIRING_RETIRED);
  const generation=personalGeneration,serviceId=service?.identity.sessionId;
- if(!serviceId)throw Error('Sign in with Eliza Cloud first.');
+ if(!serviceId)throw Error(`Sign in with ${cloudServiceName(cloud.environment)} first.`);
  const client=await developmentCloud().personal(signal);signal.throwIfAborted();
  if(generation!==personalGeneration||service?.identity.sessionId!==serviceId||service.identity.credentialId!==client.owner.credentialId||service.identity.userId!==client.owner.userId||service.identity.organizationId!==client.owner.organizationId)throw Error('Cloud account changed. Refresh status.');
  const binding={client,serviceId};personalSetup=binding;
@@ -1149,7 +1149,7 @@ function failureKindOf(value:unknown):string|undefined {
  * so the chat can offer the next step (plan, sign-in); the rest keep the generic text. */
 function replyFailure(kind:string|undefined,selected:Active,limit:ServiceLimit|null):Error {
   if(selected.kind==='resident'&&(limit?.kind==='subscription-required'||limit?.kind==='billing-refused'))connectionController.recheckPlanAfterRefusal();
-  if(limit)return Object.assign(new AlphaClientError('transport-failed',serviceLimitMessage(limit)),{failureKind:kind??limit.kind,serviceLimit:limit.kind});
+  if(limit)return Object.assign(new AlphaClientError('transport-failed',serviceLimitMessage(limit, Date.now(), cloudServiceName(cloud.environment))),{failureKind:kind??limit.kind,serviceLimit:limit.kind});
   if(kind==='rate_limited')return new AlphaClientError('transport-failed',RATE_LIMITED);
   // The on-device agent without Eliza Cloud inference (no plan, offline, signed out): the same honest
   // answer as a recorded provider-less reply, with its plan action. Nothing is retried or purchased.
@@ -2090,10 +2090,10 @@ export const connectionController = {
     update({redeemError:'',redeemNotice:''});
     await work('Redeeming your code…',async signal=>{
       const account=service;
-      if(!account)throw Error('Sign in with Eliza Cloud first.');
+      if(!account)throw Error(`Sign in with ${cloudServiceName(cloud.environment)} first.`);
       let result;
       try{result=await account.client.redeemSubscriptionCode(code,idempotencyKey,signal);}
-      catch(error){if(error instanceof SubscriptionRedeemError){update({redeemError:redeemFailureMessage(error),message:''});return;}throw error;}
+      catch(error){if(error instanceof SubscriptionRedeemError){update({redeemError:redeemFailureMessage(error, cloudServiceName(account.client.environment)),message:''});return;}throw error;}
       if(service!==account)throw Error('Cloud account changed. Sign in again.');
       redeemed=true;
       update({planEndsAt:result.planEndsAt});
@@ -2373,7 +2373,7 @@ export const connectionController = {
       // Stop (or leaving the chat) after dispatch: the turn may still complete on the agent.
       if (signal.aborted && dispatched && generation === epoch && selected === active && state.session?.sessionId === session.sessionId) scheduleStoppedReply(selected, session, dispatched.conversationId, { clientMessageId: requestId, text, sentAt: dispatched.at });
       if (error && typeof error === 'object' && 'status' in error && error.status === 429) {
-        const limited = refused ? Object.assign(new AlphaClientError('transport-failed', 'The agent is busy and did not accept this message. Wait, then send it again.'), { refusedBeforeTurn: true }) : new AlphaClientError('transport-failed', serviceLimitMessage(readServiceLimit(error)));
+        const limited = refused ? Object.assign(new AlphaClientError('transport-failed', 'The agent is busy and did not accept this message. Wait, then send it again.'), { refusedBeforeTurn: true }) : new AlphaClientError('transport-failed', serviceLimitMessage(readServiceLimit(error), Date.now(), cloudServiceName(cloud.environment)));
         // Rate-limited before the post (creating or reading the conversation): still provably unsent.
         mark(limited); throw limited;
       }
