@@ -171,6 +171,7 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   if(!status||start<0||end<start)throw Error('Voice type projection source changed.');
   project('packages/ui/src/voice/voice-chat-types.ts',status+'\n');
   source.delete('packages/core/src/logger.ts');
+  project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\n');
   // Project only existing public type declarations; do not bundle host/client implementations.
   const declarations = (name, names) => names.map(declaration => {
     const escaped = declaration.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

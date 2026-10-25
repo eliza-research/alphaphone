@@ -48,7 +48,7 @@
         "./.eliza/client-features/alpha-voice-core-types.ts"
       ],
       "@elizaos/contracts": [
-        "./.eliza/client-features/packages/contracts/src/calendar.ts"
+        "./.eliza/client-features/client-contracts.ts"
       ],
       "@elizaos/ui": [
         "./.eliza/client-features/alpha-client-fetch-types.ts"
