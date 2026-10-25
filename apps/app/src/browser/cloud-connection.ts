@@ -50,7 +50,7 @@ export async function clearBrowserCloudCredentialIfCurrent(environment:CloudEnvi
 /** Binds native-compatible voice calls to the current host reference and account generation. */
 export async function browserCloudCredential(environment:string,credentialId:string,signal:AbortSignal){
  const stored=await rpc({operation:'secureRead',slot:'cloud:'+environment},signal),credential=stored.value===null?null:JSON.parse(stored.value);signal.throwIfAborted();
- if(!credential?.credentialReference)throw Object.assign(Error('Sign in to Eliza Cloud before using voice.'),{code:'voice-http-401',status:401});
+ if(!credential?.credentialReference)throw Object.assign(Error('Sign in to Cloud before using voice.'),{code:'voice-http-401',status:401});
  if(credential.credentialId!==credentialId)throw new DOMException('Cloud account changed','AbortError');return credential;
 }
 export async function browserCloudVoice(input:{environment:string;credentialId:string;requestId:string},operation:'stt'|'tts',payload:Blob|string,signal:AbortSignal):Promise<Response>{
