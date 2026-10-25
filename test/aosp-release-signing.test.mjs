@@ -171,7 +171,7 @@ test("the committed Pixel 10a production descriptor and channel name every unset
   assert.equal(product.ota.channel, CHANNEL);
   assert.equal(channel.recovery.stockFactoryImage.sha256, read("android/aosp/pixel10a-source.json").factory.sha256, "stock recovery is the locked factory archive");
   const problems = pixel10aProductProblems(root);
-  for (const expected of [/sourceLock\.sha256 is unset/, /still marked developmentOnly/, /signerSha256 is "unset"/, /platformCertificateSha256 must be a SHA-256/])
+  for (const expected of [/sourceLock\.sha256 is unset/, /still marked developmentOnly/, /platformCertificateSha256 must be a SHA-256/])
     assert.ok(problems.some(problem => expected.test(problem)), `${expected}\n${problems.join("\n")}`);
   assert.ok(channelSigningProblems(channel, product).some(problem => /otaCertificateSha256 is unset/.test(problem)));
   const distribution = channelDistributionProblems(channel);
@@ -346,7 +346,7 @@ test("signing refuses unsafe keys, mismatched digests, changed inputs and unset 
   await refuse(({ options }) => { fs.mkdirSync(options.out); fs.chmodSync(options.out, 0o700); }, /already exists/);
   await refuse(({ repo }) => { repo.write(CHANNEL, { ...read(CHANNEL), avbPublicKeySha256: "UNSET" }); }, /avbPublicKeySha256 is unset/);
   await refuse(({ repo }) => { repo.write(CHANNEL, { ...JSON.parse(fs.readFileSync(path.join(repo.dir, CHANNEL), "utf8")), downgradeAllowed: true }); }, /downgradeAllowed must be false/);
-  await refuse(({ repo }) => { repo.write("android/release-signer.json", read("android/release-signer.json")); }, /signerSha256 is "unset"/);
+  await refuse(({ repo }) => { repo.write("android/release-signer.json", {...read("android/release-signer.json"),signerSha256:"unset"}); }, /signerSha256 is "unset"/);
   // Keys inside a Git working tree (for example this repository) are refused.
   await refuse(({ options, key }) => {
     const inside = fs.mkdtempSync(path.join(options.root, "keys-"));
@@ -378,7 +378,11 @@ test("release blockers judge a recorded release against the current signer and t
   const signer = signerSha256 => ({ schema: 1, signerSha256, lastRelease: { versionCode: null, versionName: null, recordedAt: null } });
   assert.deepEqual(releaseBlockers(row), [], "the recorded admission alone");
   assert.ok(releaseBlockers(row, { releaseSigner: signer("unset") }).includes("release signer is unset in android/release-signer.json"));
-  assert.ok(releaseBlockers(row, { releaseSigner: read("android/release-signer.json") }).some(item => /release signer is unset/.test(item)), "the committed signer is unset");
+  const committedSigner = read("android/release-signer.json");
+  const committedBlockers = releaseBlockers(row, {releaseSigner:committedSigner});
+  if (committedSigner.signerSha256 === "unset") assert.ok(committedBlockers.some(item => /release signer is unset/.test(item)));
+  else if (committedSigner.signerSha256 !== row.signerSha256) assert.ok(committedBlockers.some(item => /does not match android\/release-signer\.json/.test(item)));
+  else assert.deepEqual(committedBlockers, []);
   assert.ok(releaseBlockers(row, { releaseSigner: signer("e".repeat(64)) }).some(item => /does not match android\/release-signer\.json/.test(item)));
   assert.deepEqual(releaseBlockers(row, { releaseSigner: signer("d".repeat(64)) }), []);
   assert.deepEqual(releaseBlockers(row, { releaseSigner: signer("d".repeat(64)), image: { platformCertificateSha256: "c".repeat(64) } }), []);

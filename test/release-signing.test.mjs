@@ -27,9 +27,10 @@ test("a partial ELIZAOS_ signing set is refused by name, never by value", () => 
   assert.doesNotMatch(gradle, /producing unsigned release APKs/);
 });
 
-test("the committed descriptor is valid and starts unset", () => {
+test("the committed descriptor is valid and unset fixtures remain supported", () => {
   const committed = readReleaseSigner();
-  assert.equal(committed.signerSha256, "unset");
+  assert.equal(validateReleaseSigner(committed), committed);
+  assert.equal(validateReleaseSigner(descriptor("unset")).signerSha256, "unset");
   assert.throws(() => validateReleaseSigner({ ...descriptor(), signerSha256: "ABC" }), /signerSha256/);
   assert.throws(() => validateReleaseSigner({ ...descriptor(), lastRelease: { versionCode: 0 } }), /versionCode/);
   assert.throws(() => validateReleaseSigner({ ...descriptor(), schema: 2 }), /schema/);
@@ -74,8 +75,8 @@ test("assetlinks.json is rendered only from the recorded release signer, never u
   assert.match(statement.target.sha256_cert_fingerprints[0], /^(AA:){31}AA$/);
   assert.doesNotMatch(text, new RegExp(PLACEHOLDER));
   assert.deepEqual(assetLinksProblems(text), []);
-  // The committed descriptor is unset, so rendering is refused until the release key exists (A-06).
-  assert.throws(() => renderAssetLinks({ template, signerSha256: readReleaseSigner().signerSha256, packageName }), /"unset"/);
+  // An unset descriptor is refused until its release key exists (A-06).
+  assert.throws(() => renderAssetLinks({ template, signerSha256: "unset", packageName }), /"unset"/);
   assert.throws(() => renderAssetLinks({ template, signerSha256: PLACEHOLDER, packageName }), /placeholder/);
   assert.throws(() => renderAssetLinks({ template, signerSha256: "ABC", packageName }), /64 lower-case hex/);
   assert.throws(() => renderAssetLinks({ template, signerSha256: SIGNER, packageName: "other.app" }), /not other\.app/);
@@ -86,9 +87,15 @@ test("assetlinks.json is rendered only from the recorded release signer, never u
   const debugFile = text.replace(fingerprint(SIGNER), fingerprint(debugKey));
   assert.match(assetLinksProblems(debugFile, { debugFingerprints: [debugKey] }).join(), /is a debug signing certificate/);
   assert.match(assetLinksProblems(text.replace(fingerprint(SIGNER), "unset")).join(), /unset release signer/);
-  // The CLI exits non-zero on the committed (unset) descriptor and writes nothing.
+  // The CLI exits non-zero on an isolated unset descriptor and writes nothing.
   const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "alpha-assetlinks-")), "assetlinks.json");
-  const run = spawnSync(process.execPath, ["scripts/render-assetlinks.mjs", "--out", out], { encoding: "utf8" });
+  const fixtureRoot = path.dirname(out);
+  for (const file of ["scripts/render-assetlinks.mjs", TEMPLATE, "app.config.json"]) {
+    fs.mkdirSync(path.dirname(path.join(fixtureRoot, file)), {recursive:true});
+    fs.copyFileSync(file, path.join(fixtureRoot, file));
+  }
+  fs.writeFileSync(path.join(fixtureRoot, "android/release-signer.json"), JSON.stringify(descriptor("unset")));
+  const run = spawnSync(process.execPath, ["scripts/render-assetlinks.mjs", "--out", out], { cwd:fixtureRoot, encoding: "utf8" });
   assert.equal(run.status, 1);
   assert.match(run.stderr, /signerSha256 is "unset"/);
   assert.equal(fs.existsSync(out), false);

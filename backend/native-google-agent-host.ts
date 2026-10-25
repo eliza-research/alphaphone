@@ -1,4 +1,8 @@
-export {prepareNativeCloudRuntime} from './native-cloud-runtime-config.ts';
+/** Load provider configuration only for the native boot path, not a standalone Google host. */
+export async function prepareNativeCloudRuntime() {
+ const {prepareNativeCloudRuntime:prepare}=await import('./native-cloud-runtime-config.ts');
+ return prepare();
+}
 import {createServer} from 'node:http';
 import {timingSafeEqual} from 'node:crypto';
 import {createManagedGoogleAgentHost} from './managed-google-agent-host.ts';
