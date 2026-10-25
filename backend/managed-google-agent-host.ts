@@ -1,3 +1,4 @@
+import {recordManagedGoogleFailure,type ManagedGoogleFailureStage} from './managed-google-failure-stage.ts';
 import {gmailAgentMailbox,type AgentMailboxChange} from '../scripts/gmail-agent-mailbox-host.ts';
 import {calendarAgentWrite} from '../vendor/eliza/plugins/plugin-calendar/src/service/managed-calendar-host.ts';
 /** Owner-only Google tools. Provider credentials remain in the private Cloud
@@ -15,17 +16,27 @@ export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort){
  const refuseWrite=()=>{throw Error('Gmail agent reads cannot change credentials or mail.');};
  /** The verified Cloud owner and its connected accounts holding `capability`, each with its owner-scoped id. */
  async function ownerAccounts(parent:AbortSignal|undefined,capability:string,operation:false|true|'calendar'){
+  let stage:ManagedGoogleFailureStage='credential';
+  try{
   const credential=await host.agentCredential();if(!credential)throw Error('Sign in to Eliza Cloud before reading Gmail.');
+  stage='signal';
   const identity=JSON.stringify(credential),signal=parent?AbortSignal.any([parent,AbortSignal.timeout(30000)]):AbortSignal.timeout(30000);
   const current=async()=>{signal.throwIfAborted();if(JSON.stringify(await host.agentCredential())!==identity)throw Error('Cloud account changed while reading Gmail.');};
+  stage='client';
   const client=new CloudProtocol('production',operation==='calendar'?host.agentCalendarOperation:operation?host.agentGmailOperation:host.agentRead,{acceptsReferences:true,read:async()=>{await current();return credential;},write:async()=>refuseWrite(),clear:async()=>refuseWrite()},async()=>refuseWrite());
+  stage='identity';
   const owner=await client.identity(signal);await current();
   if(owner.userId!==credential.userId||owner.organizationId!==credential.organizationId)throw Error('Cloud owner could not be verified for Gmail.');
-  const accounts=(await client.gmailAccounts(signal)).filter(a=>a.connected&&a.connectionId&&a.grantedCapabilities.includes(capability)).map(account=>({account,grantId:account.connectionId!,scope:createHash('sha256').update(identity+':'+account.connectionId).digest('hex')}));
+  stage='accounts';
+  const listed=await client.gmailAccounts(signal);
+  stage='account-projection';
+  const accounts=listed.filter(a=>a.connected&&a.connectionId&&a.grantedCapabilities.includes(capability)).map(account=>({account,grantId:account.connectionId!,scope:createHash('sha256').update(identity+':'+account.connectionId).digest('hex')}));
+  stage='credential-recheck';
   await current();
   // Every grant used by the read must still hold the capability after it, or nothing is returned.
-  const confirm=async(grantIds:string[])=>{const latest=await client.gmailAccounts(signal);if(grantIds.some(id=>!latest.some(a=>a.connectionId===id&&a.connected&&a.grantedCapabilities.includes(capability))))throw Error('Gmail permission changed.');await current();};
+  const confirm=async(grantIds:string[])=>{try{const latest=await client.gmailAccounts(signal);if(grantIds.some(id=>!latest.some(a=>a.connectionId===id&&a.connected&&a.grantedCapabilities.includes(capability))))throw Error('Gmail permission changed.');await current();}catch(error){recordManagedGoogleFailure(error,'permission-recheck');throw error;}};
   return {client,signal,accounts,confirm};
+  }catch(error){recordManagedGoogleFailure(error,stage);throw error;}
  }
  async function verified<T>(run:(client:CloudProtocol,grantId:string,scope:string,signal:AbortSignal)=>Promise<T>,parent?:AbortSignal,capability='google.gmail.triage',operation:false|true|'calendar'=false){
   const {client,signal,accounts,confirm}=await ownerAccounts(parent,capability,operation);
@@ -65,6 +76,7 @@ export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort){
    },parent,'google.gmail.send',true);
   },
   async calendarSources(parent?:AbortSignal){
+   try{
    // An unconnected optional provider contributes no sources. Connected-owner
    // identity/permission/provider failures still propagate.
    if(!await host.agentCredential())return [];
@@ -72,6 +84,7 @@ export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort){
    const {client,signal,accounts,confirm}=await ownerAccounts(parent,'google.calendar.read','calendar');
    const sources=(await Promise.all(accounts.map(async({account,grantId,scope})=>(await client.googleCalendars(grantId,signal)).filter(row=>['reader','writer','owner'].includes(row.accessRole)).map(row=>({...row,provider:'google',side:'owner',grantId:`alpha-google:${scope}`,connectorAccountId:`alpha-google:${scope}`,accountEmail:account.label,includeInFeed:true,selectionVersion:1}))))).flat();
    await confirm(accounts.map(a=>a.grantId));return sources;
+   }catch(error){recordManagedGoogleFailure(error,'calendar-sources');throw error;}
   },
   async calendarFeed(input:{grantId:string;calendarId:string;timeMin:string;timeMax:string;timeZone:string},parent?:AbortSignal){
    const {client,signal,accounts,confirm}=await ownerAccounts(parent,'google.calendar.read','calendar');

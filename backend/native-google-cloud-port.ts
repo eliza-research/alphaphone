@@ -1,3 +1,4 @@
+import {recordManagedGoogleFailure,type ManagedGoogleFailureStage} from './managed-google-failure-stage.ts';
 import { managedGoogleRequest, boundedServiceJson } from './managed-google-route-policy.ts';
 import type { ManagedGoogleAgentPort } from './managed-google-agent-host.ts';
 
@@ -21,6 +22,8 @@ export function createNativeGoogleCloudPort(binding:NativeGoogleBinding,assertCu
   ...(binding.expiresAt===undefined?{}:{expiresAt:binding.expiresAt})};
  const current=()=>{assertCurrent();if(binding.expiresAt!==undefined&&binding.expiresAt<=Date.now())throw Error('Native Google provider binding expired');};
  async function call(input:RequestInput,purpose:'read'|'gmail'|'calendar') {
+  let stage:ManagedGoogleFailureStage='request-validation';
+  try{
   current();input.signal.throwIfAborted();
   const url=new URL(input.url),body=input.body===undefined?undefined:JSON.stringify(input.body);
   if(url.origin!=='https://api.eliza.app'||url.username||url.password||url.hash||url.port||input.credentialReference!==reference)throw Error('Native Google request refused');
@@ -32,11 +35,14 @@ export function createNativeGoogleCloudPort(binding:NativeGoogleBinding,assertCu
   }
   if(purpose==='calendar'&&url.pathname.startsWith('/api/v1/eliza/google/calendar/sync-v1/'))permitted=managedGoogleRequest(url,input.method,body);
   if(!permitted)throw Error('Native Google operation is outside this host');
+  stage='fetch';
   const response=await request(url,{method:input.method,redirect:'error',signal:input.signal,
    headers:{Accept:'application/json',Authorization:'Bearer '+binding.token,'User-Agent':'AlphaPhone-Native-Google/1',...(body===undefined?{}:{'Content-Type':'application/json'})},
    ...(body===undefined?{}:{body})});
+  stage='response-json';
   const data=await boundedServiceJson(response);current();input.signal.throwIfAborted();
   return {status:response.status,data};
+  }catch(error){recordManagedGoogleFailure(error,stage);throw error;}
  }
  return {async agentCredential(){current();return {...credential};},agentRead:input=>call(input,'read'),agentGmailOperation:input=>call(input,'gmail'),agentCalendarOperation:input=>call(input,'calendar')};
 }
