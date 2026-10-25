@@ -3531,19 +3531,22 @@
         <button class="ib" aria-label="Back to {{workflows.r.flow}}" onClick="{{workflows.r.close}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.back}}"></path></svg></button>
       </div>
       <div class="scr" style="flex-grow: 1; overflow-y: auto; padding: 4px 24px 130px; touch-action: pan-y">
-        <h1 class="serif" style="margin: 0; font-size: 34px; line-height: 1.05; letter-spacing: -.01em">{{workflows.r.when}}</h1>
-        <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 15px">
+        <h1 class="serif workflow-run-title" style="margin: 0; font-size: 34px; line-height: 1.05; letter-spacing: -.01em">{{workflows.r.flow}}</h1>
+        <div class="workflow-run-summary" style="display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 15px">
           <span style="width: 24px; height: 24px; border-radius: 12px; display: flex; align-items: center; justify-content: center; {{workflows.r.scss}}"><svg class="i" viewBox="0 0 24 24" style="width: 13px; height: 13px; "><path d="{{workflows.r.sd}}"></path></svg></span>
-          <span style="font-weight: 600">{{workflows.r.status}}</span><span style="color: var(--mut)">{{workflows.r.flow}}</span>
+          <span style="font-weight: 600">{{workflows.r.status}}</span><span style="color: var(--mut)">{{workflows.r.when}}</span>
         </div>
 
+        <sc-if value="{{workflows.r.notice}}"><p class="workflow-run-notice" role="status">{{workflows.r.notice}}</p></sc-if>
+        <sc-if value="{{workflows.r.versionNotice}}"><p class="workflow-run-note">{{workflows.r.versionNotice}}</p></sc-if>
+        <sc-if value="{{workflows.r.phoneNotice}}"><p class="workflow-run-note" role="status">{{workflows.r.phoneNotice}}</p></sc-if>
         <sc-if value="{{workflows.r.phoneAvailable}}">
         <section aria-label="Workflow phone steps" style="margin-top: 22px; padding: 18px 20px; border-radius: 24px; background: var(--s2); font-size: 15px; line-height: 1.45">
-          <strong>Phone steps</strong><p>{{workflows.r.phoneStatus}}</p>
+          <strong>Device actions</strong><p>{{workflows.r.phoneStatus}}</p>
           <sc-if value="{{workflows.r.phoneSpeaking}}"><button aria-label="Stop workflow speech" onClick="{{workflows.r.phoneStopSpeech}}" style="min-height:44px;padding:0 18px;border-radius:22px;background:var(--bg)">Stop reading</button></sc-if>
           <div style="display:flex; gap:12px; flex-wrap:wrap">
-            <button aria-label="Review phone steps" onClick="{{workflows.r.phoneReview}}" disabled="{{workflows.r.phoneBusy}}" style="min-height:44px; padding:0 18px; border-radius:22px; background:var(--bg)">Review phone steps</button>
-            <button aria-label="Sync saved phone receipts" onClick="{{workflows.r.phoneSync}}" disabled="{{workflows.r.phoneBusy}}" style="min-height:44px; padding:0 18px; border-radius:22px; background:var(--bg)">Sync saved receipts</button>
+<sc-if value="{{workflows.r.phoneReviewAvailable}}">            <button aria-label="Review device actions" onClick="{{workflows.r.phoneReview}}" disabled="{{workflows.r.phoneBusy}}" style="min-height:44px; padding:0 18px; border-radius:22px; background:var(--bg)">Review device actions</button></sc-if>
+<sc-if value="{{workflows.r.phoneSyncAvailable}}">            <button aria-label="Check saved device results" onClick="{{workflows.r.phoneSync}}" disabled="{{workflows.r.phoneBusy}}" style="min-height:44px; padding:0 18px; border-radius:22px; background:var(--bg)">Check saved results</button></sc-if>
           </div>
           <sc-for list="{{workflows.r.phoneSteps}}" as="step">
             <section aria-label="Workflow phone step review" style="margin-top:18px; border-top:1px solid var(--line); padding-top:18px">
@@ -3560,7 +3563,7 @@
         </sc-if>
         <sc-for list="{{workflows.r.approvals}}" as="approval">
           <section aria-label="Workflow approval review" style="margin-top: 22px; padding: 18px 20px; border-radius: 24px; background: var(--s2); font-size: 15px; line-height: 1.45">
-            <strong>{{approval.title}}</strong><p>{{approval.summary}}</p><p>{{approval.disclosure}}</p><p style="font-size: 12px; overflow-wrap: anywhere; color: var(--mut)">{{approval.identity}}</p><p>{{approval.status}}</p>
+            <strong>{{approval.title}}</strong><p>{{approval.summary}}</p><p>{{approval.disclosure}}</p><details class="workflow-run-details"><summary>Approval details</summary><p>{{approval.identity}}</p></details><p>{{approval.status}}</p>
             <sc-if value="{{approval.canDecide}}">
               <div style="display: flex; gap: 12px">
                 <button onClick="{{approval.deny}}" disabled="{{approval.denyDisabled}}" aria-label="{{approval.denyLabel}}" style="min-height: 44px; padding: 0 18px; border-radius: 22px; background: var(--bg)">{{approval.denyLabel}}</button>
@@ -3578,25 +3581,16 @@
           </div>
         </sc-if>
 
-        <div style="display: flex; flex-direction: column; margin-top: 26px">
-          <sc-for list="{{workflows.r.log}}" as="l">
-            <div style="display: flex; gap: 14px">
-              <div style="display: flex; flex-direction: column; align-items: center; width: 28px; flex-shrink: 0">
-                <span style="width: 28px; height: 28px; border-radius: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; {{l.css}}"><svg class="i" viewBox="0 0 24 24" style="width: 14px; height: 14px; "><path d="{{l.d}}"></path></svg></span>
-                <span style="width: 2px; flex-grow: 1; min-height: 12px; background: {{l.line}}"></span>
-              </div>
-              <div style="flex-grow: 1; display: flex; gap: 10px; padding: 3px 0 20px">
-                <svg class="i" viewBox="0 0 24 24" style="width: 16px; height: 16px; color: var(--mut); flex-shrink: 0; margin-top: 3px"><path d="{{l.kd}}"></path></svg>
-                <div style="font-size: 15.5px; line-height: 1.45; {{l.tcss}}">{{l.t}}</div>
-              </div>
-            </div>
-          </sc-for>
-        </div>
+        <details class="workflow-run-details" aria-label="Workflow execution details">
+          <summary>Execution details</summary>
+          <dl><sc-for list="{{workflows.r.log}}" as="l"><div><dt>{{l.k}}</dt><dd>{{l.t}}</dd></div></sc-for></dl>
+          <sc-if value="{{workflows.r.phoneInspectAvailable}}"><button onClick="{{workflows.r.phoneReview}}" disabled="{{workflows.r.phoneBusy}}" class="workflow-run-check">Check device actions</button></sc-if>
+        </details>
 
-        <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px">
-          <button onClick="{{workflows.r.ask}}" aria-label="{{workflows.r.askAria}}" style="height: 36px; padding: 0 16px 0 14px; border-radius: 18px; background: var(--s2); font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px"><span style="font-family: Denton, Fraunces, Georgia, serif; font-style: italic; font-size: 19px; line-height: 1; color: var(--acct)"><span class="alpha-compute-mark" aria-hidden="true"></span></span>{{workflows.r.askLabel}}</button>
+        <div class="workflow-run-actions" style="display: flex; align-items: center; gap: 8px; margin-top: 4px">
+          <sc-if value="{{workflows.r.showRefresh}}">          <button onClick="{{workflows.r.ask}}" aria-label="{{workflows.r.askAria}}" style="height: 36px; padding: 0 16px 0 14px; border-radius: 18px; background: var(--s2); font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px"><span style="font-family: Denton, Fraunces, Georgia, serif; font-style: italic; font-size: 19px; line-height: 1; color: var(--acct)"><span class="alpha-compute-mark" aria-hidden="true"></span></span>{{workflows.r.askLabel}}</button></sc-if>
           <span style="flex-grow: 1"></span>
-          <button aria-label="{{workflows.r.againAria}}" disabled="{{workflows.r.againDisabled}}" onClick="{{workflows.r.again}}" style="min-height: 44px; padding: 0 18px; border-radius: 22px; background: var(--acc); color: #fff; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px"><svg class="i" viewBox="0 0 24 24" style="width: 14px; height: 14px; fill: currentColor"><path d="{{ic.play}}"></path></svg>{{workflows.r.againLabel}}</button>
+          <button aria-label="{{workflows.r.againAria}}" disabled="{{workflows.r.againDisabled}}" onClick="{{workflows.r.again}}" style="min-height: 44px; padding: 0 18px; border-radius: 22px; background: var(--acc); color: #fff; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px">{{workflows.r.againLabel}}</button>
         </div>
       </div>
     </div>

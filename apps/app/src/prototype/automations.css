@@ -32,3 +32,19 @@
 .automation-management span+span{font-size:14px;color:var(--mut)}
 .automation-management svg{position:absolute;right:0;top:22px;color:var(--mut)}
 .automation-review{margin-top:24px;padding-top:16px;border-top:1px solid var(--line)}
+
+.workflow-run-details{margin:24px 0;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.workflow-run-details summary{min-height:44px;box-sizing:border-box;padding:12px 0;cursor:pointer;font-weight:600}
+.workflow-run-details summary:focus-visible,.workflow-run-check:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
+.workflow-run-details dl{margin:8px 0 0}
+.workflow-run-details dl>div{padding:10px 0;border-top:1px solid var(--line)}
+.workflow-run-details dt{color:var(--mut);font-size:13px}
+.workflow-run-details dd{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.workflow-run-note,.workflow-run-notice{margin:16px 0 0;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.workflow-run-note{color:var(--mut)}
+.workflow-run-check{min-height:44px;margin-top:12px;padding:10px 16px;border-radius:22px;background:var(--s2);font-size:14px}
+
+.workflow-run-title{overflow-wrap:anywhere}
+.workflow-run-summary{flex-wrap:wrap}
+
+.workflow-run-actions{flex-wrap:wrap}
