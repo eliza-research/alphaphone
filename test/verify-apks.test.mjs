@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
-import { archiveWebPayload, readBuildFlags } from "../scripts/apk.mjs";
+import { archiveWebPayload, readBuildFlags, verifyOwnerRouteTable } from "../scripts/apk.mjs";
 const root = path.resolve(import.meta.dirname, "..");
 /** Copy the committed AOSP product files into `dir` with every unset value filled, so production staging passes its lock check. */
 function completeAospLock(dir) {
@@ -155,6 +155,20 @@ test("AOSP staging refuses --production without a descriptor, with --development
     }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("APK verification requires the packaged owner route table to be config/owner-routes.json byte for byte", t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "alpha-owner-routes-apk-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const table = fs.readFileSync(path.join(root, "config/owner-routes.json"), "utf8"), apk = path.join(dir, "app.apk");
+  zip(apk, { "classes.dex": "app", "assets/owner-routes.json": table });
+  verifyOwnerRouteTable(apk);
+  zip(apk, { "classes.dex": "app" });
+  assert.throws(() => verifyOwnerRouteTable(apk), /assets\/owner-routes\.json is missing/);
+  for (const other of [table + "\n", table.replace("/api/approvals?", "/api/approvals/x?"), ""]) {
+    zip(apk, { "assets/owner-routes.json": other });
+    assert.throws(() => verifyOwnerRouteTable(apk), /assets\/owner-routes\.json differs from config\/owner-routes\.json/);
   }
 });
 

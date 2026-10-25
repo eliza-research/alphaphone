@@ -151,6 +151,15 @@ export function readBuildFlags(publicDir) {
   return flags;
 }
 
+/** OwnerRoutes reads assets/owner-routes.json; it must be config/owner-routes.json, the table the renderer imports. */
+export function verifyOwnerRouteTable(file) {
+  let packaged;
+  try { packaged = execFileSync("unzip", ["-p", file, "assets/owner-routes.json"], { stdio: ["ignore", "pipe", "pipe"] }); }
+  catch { throw new Error("assets/owner-routes.json is missing"); }
+  if (!packaged.equals(fs.readFileSync(new URL("../config/owner-routes.json", import.meta.url))))
+    throw new Error("assets/owner-routes.json differs from config/owner-routes.json");
+}
+
 export const AUDIT_SCRIPT = "scripts/audit-production-bundle.mjs";
 /** Run the shared production-bundle audit CLI against an extracted web payload. */
 export function auditBundle(directory, { testMocks = false, script = AUDIT_SCRIPT } = {}) {

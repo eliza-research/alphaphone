@@ -31,26 +31,28 @@ final class OwnerRoutes {
    for(int i=0;i<routes.length();i++){
     JSONObject row=routes.getJSONObject(i);Route route=new Route();
     route.methods=strings(row.getJSONArray("methods"));route.paths=strings(row.getJSONArray("paths"));route.query=row.has("query")?strings(row.getJSONArray("query")):null;
+    for(String path:route.paths)if(path.contains("{id}")&&group.id==null)throw new JSONException("Owner route group "+name+" has an {id} route but no id pattern");
     group.routes.add(route);
    }
    groups.put(name,group);
   }
  }
- /** The table packaged from config/owner-routes.json, read once per process. */
+ /** The table packaged from config/owner-routes.json, read once per process. Any failure to load it (missing or empty
+  * asset, malformed JSON, invalid pattern or table) is an IllegalStateException, which callers refuse on; it is not cached. */
  static synchronized OwnerRoutes shipped(Assets assets){
   if(shipped==null)try(java.io.InputStream table=assets.open("owner-routes.json")){shipped=new OwnerRoutes(new java.util.Scanner(table,"UTF-8").useDelimiter("\\A").next());}
-  catch(java.io.IOException|JSONException unavailable){throw new IllegalStateException("Owner route table unavailable",unavailable);}
+  catch(Exception unavailable){throw new IllegalStateException("Owner route table unavailable",unavailable);}
   return shipped;
  }
  /** The group, among those named or else all, whose longest prefix claims the path; null when none does. */
  String group(String path,String... among){
   String claimant=null;int longest=-1;
-  for(String name:among.length>0?java.util.Arrays.asList(among):groups.keySet())for(String prefix:groups.get(name).prefixes)
+  for(String name:among.length>0?java.util.Arrays.asList(among):groups.keySet())for(String prefix:named(name).prefixes)
    if(path!=null&&prefix.length()>longest&&(path.equals(prefix)||path.startsWith(prefix+"/")||path.startsWith(prefix+"?"))){claimant=name;longest=prefix.length();}
   return claimant;
  }
  boolean allowed(String name,String path,String method){
-  Group group=groups.get(name);
+  Group group=named(name);
   if(path==null||path.length()>2048||!path.startsWith("/")||path.startsWith("//")||unsafe.matcher(path).find()||MALFORMED_ESCAPE.matcher(path).find())return false;
   String[] parts=path.split("\\?",-1);if(parts.length>2)return false;
   String raw=parts[0];if(raw.contains("//")||DOT_SEGMENT.matcher(raw).find())return false;
@@ -61,6 +63,12 @@ final class OwnerRoutes {
    if(id!=null&&(id.isEmpty()||group.id.matcher(route.query!=null?decode(id):id).matches()))return true;
   }
   return false;
+ }
+ /** The named group; an unknown name is a caller error, never a group that admits nothing or everything. */
+ private Group named(String name){
+  Group group=groups.get(name);
+  if(group==null)throw new IllegalArgumentException("Unknown owner route group "+name);
+  return group;
  }
  /** The {id} segment of path under pattern, "" when the pattern has none, null when the path does not fit it. */
  private static String segment(String pattern,String path){
