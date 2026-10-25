@@ -2127,6 +2127,10 @@ export const connectionController = {
       const methods = await inAppSignInMethods(environment, signal);
       signal.throwIfAborted();
       if (!methods) {
+        if (isAndroid) {
+          update({ signIn: null, message: '', error: 'Alpha sign-in is temporarily unavailable. Try again.' });
+          return;
+        }
         update({ signIn: null, message: 'Opening Eliza Cloud sign-in…' });
         if (residentCloudFlow()) await residentBrowserLoginAction(signal);
         else await browserCloudLoginAction(environment, signal);

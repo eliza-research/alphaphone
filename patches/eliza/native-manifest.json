@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "baseCommit": "6b84ed6dd062607efec1f2608da02a6f10548d4b",
+  "baseCommit": "096b5fdba239861348d63df31fee471f736dd69c",
   "patches": [],
   "modules": [
     "plugins/plugin-native-action-journal/android",
