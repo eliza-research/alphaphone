@@ -204,7 +204,7 @@ function residentQa(): CloudEnvironment | null {
  */
 function residentCloudFlow(): boolean { return browserCloudResidentEnabled || (isAndroid && !testMocksEnabled) || residentQa() !== null; }
 /** The on-device agent is never stopped or disconnected on a product phone (owner directive 2026-10-13). */
-const ALWAYS_LOCAL = 'Your agent always runs on this device. Sign out of Eliza Cloud or change your plan in Settings; the agent keeps running.';
+const ALWAYS_LOCAL = 'Your agent always runs on this device. Sign out of Cloud or change your plan in Settings; the agent keeps running.';
 /**
  * First run and a rejected sign-in: the Eliza Cloud sign-in dialog cannot be dismissed. The agent
  * runs meanwhile (without Cloud inference). Offline is not a sign-in requirement.
@@ -249,18 +249,18 @@ function cloudUnreachable(error: unknown): boolean {
   if (error instanceof EntitlementError) return false;
   return error instanceof Error && /^(Connection request failed|Connection timed out|Request cancelled)$/.test(error.message);
 }
-const OFFLINE_NOTICE = 'Eliza Cloud cannot be reached right now. Your agent is running on this device; AI replies return when Cloud is reachable again, checked when the network returns or you come back to Alpha Phone.';
+const OFFLINE_NOTICE = 'Cloud cannot be reached right now. Your agent is running on this device; AI replies return when Cloud is reachable again, checked when the network returns or you come back to Alpha Phone.';
 /** Notice shown when Cloud inference is unavailable or account access is unconfirmed. */
-const NEEDS_PLAN_NOTICE = 'Your agent is running on this device. AI replies aren’t available right now. Check your Eliza Cloud account in Settings.';
+const NEEDS_PLAN_NOTICE = 'Your agent is running on this device. AI replies aren’t available right now. Check your Cloud account in Settings.';
 /**
  * The on-device agent's honest answer to a chat or assistant request while Eliza Cloud inference
  * is not bound (the local runtime reports it as a provider-less turn). Local tools keep working.
  */
 export function inferenceUnavailableReply(notice: ConnectionSnapshot['residentPlanNotice'], signedIn: boolean): string {
   const local = 'Local apps keep working.';
-  if (notice === 'offline') return `I'm running on this device, but I can't reach Eliza Cloud for AI replies right now. ${local} Check your connection and try again.`;
-  if (!signedIn) return `I'm running on this device, but AI replies need Eliza Cloud. Sign in with Eliza Cloud to continue. ${local}`;
-  return `I'm running on this device, but AI replies aren’t available right now. Check your Eliza Cloud account in Settings. ${local} Nothing was purchased.`;
+  if (notice === 'offline') return `I'm running on this device, but I can't reach ${cloudServiceName(cloud.environment)} for AI replies right now. ${local} Check your connection and try again.`;
+  if (!signedIn) return `I'm running on this device, but AI replies need ${cloudServiceName(cloud.environment)}. Sign in with ${cloudServiceName(cloud.environment)} to continue. ${local}`;
+  return `I'm running on this device, but AI replies aren’t available right now. Check your ${cloudServiceName(cloud.environment)} account in Settings. ${local} Nothing was purchased.`;
 }
 const listeners = new Set<() => void>();
 let developmentPageSuspended = false;
@@ -470,17 +470,17 @@ async function signedIn(client: CloudProtocol, outcome: CloudSignInAuthenticated
     try { await connectResident(signal); } catch (error) { if (residentAlwaysPresent && !active) update({ kind: 'recovering' }); showPostSignInSetup(); throw error; }
     if (!state.cloudAccount && state.residentPlanNotice !== 'offline' && issued && (await cloudCredentialStore.read(residentEnvironment()).catch(() => null))?.credentialId === issued) {
       await cloudCredentialStore.clear(residentEnvironment());
-      update({ residentSavedCredential: false, open: true, error: 'Eliza Cloud refused this sign-in. Your agent keeps running; sign in again to turn AI on.' });
+      update({ residentSavedCredential: false, open: true, error: `${cloudServiceName(cloud.environment)} refused this sign-in. Your agent keeps running; sign in again to turn AI on.` });
       return;
     }
-    if (unconfirmed) update({ message: 'Signed in. Eliza Cloud did not confirm revoking the sign-in this phone used before.' });
+    if (unconfirmed) update({ message: `Signed in. ${cloudServiceName(cloud.environment)} did not confirm revoking the sign-in this phone used before.` });
     showPostSignInSetup();
     return;
   }
   const accountOnly = state.purpose === 'cloud-account';
   await verifyService(client, signal);
   if (!active) save({ kind: 'none' });
-  if (accountOnly || created || unconfirmed) update({ message: created ? 'Signed in. Eliza Cloud created a new account for this sign-in.' : unconfirmed ? 'Signed in to Eliza Cloud. Eliza Cloud did not confirm revoking the previous sign-in.' : 'Signed in to Eliza Cloud.' });
+  if (accountOnly || created || unconfirmed) update({ message: created ? `Signed in. ${cloudServiceName(cloud.environment)} created a new account for this sign-in.` : unconfirmed ? `Signed in to ${cloudServiceName(cloud.environment)}. ${cloudServiceName(cloud.environment)} did not confirm revoking the previous sign-in.` : `Signed in to ${cloudServiceName(cloud.environment)}.` });
   else if (hosted) await hosted.inspectPersonal(signal);
   if(accountOnly)showPostSignInSetup();
 }
@@ -549,13 +549,13 @@ function errorMessage(error: unknown): string {
   const recovery=residentRecoveryReason(error);if(recovery)return residentRecoveryMessage(recovery);
   if (error instanceof CloudSignInError) return signInFailureMessage(error.code);
   if (error && typeof error === 'object' && 'code' in error) {
-    if (error.code === 'expired') return testMocksEnabled ? 'This sign-in link has expired. Close the old browser tab and select Sign in with Eliza Cloud to open a fresh link.' : 'Your Eliza Cloud sign-in has expired. Sign in again.';
-    if (error.code === 'credential-consumed') return 'This sign-in link has already been used. Close the old browser tab and start a fresh Eliza Cloud sign-in.';
+    if (error.code === 'expired') return testMocksEnabled ? `This sign-in link has expired. Close the old browser tab and select Sign in with ${cloudServiceName(cloud.environment)} to open a fresh link.` : `Your ${cloudServiceName(cloud.environment)} sign-in has expired. Sign in again.`;
+    if (error.code === 'credential-consumed') return `This sign-in link has already been used. Close the old browser tab and start a fresh ${cloudServiceName(cloud.environment)} sign-in.`;
     if (error.code === 'login-active') return signInFailureMessage('login-active');
-    if (error.code === 'credentials-missing') return 'Sign in with Eliza Cloud to reconnect your account.';
+    if (error.code === 'credentials-missing') return `Sign in with ${cloudServiceName(cloud.environment)} to reconnect your account.`;
   }
   if (error instanceof DOMException && error.name === 'AbortError') return 'Connection cancelled.';
-  if (error instanceof EntitlementError && error.code === 'account-mismatch') return 'Eliza Cloud returned plan status for a different account. Sign in again.';
+  if (error instanceof EntitlementError && error.code === 'account-mismatch') return `${cloudServiceName(cloud.environment)} returned plan status for a different account. Sign in again.`;
   // Production phones have no pairing to fall back on: an expired session is a Cloud sign-in.
   if (error && typeof error === 'object' && 'status' in error && error.status === 401) return !testMocksEnabled ? RESIDENT_SIGN_IN_EXPIRED : 'Your session has expired. Sign in or pair again.';
   if (error && typeof error === 'object' && 'status' in error && error.status === 503) return 'The agent is starting or temporarily unavailable. Try again shortly.';
@@ -803,7 +803,7 @@ async function admitCloudResident(signal:AbortSignal):Promise<ResidentAdmission>
     update({residentSubscription:view,residentPlanNotice:'needs-plan',planEndsAt:null});
     return {binding:'unbound',account};
   }
-  if(view.kind==='active'||view.kind==='credits')writePlanAdmission({version:1,environment,credentialId:account.identity.credentialId,userId:account.identity.userId,organizationId:account.identity.organizationId??null,status:view.kind==='credits'?'credit-funded':view.status,planName:view.kind==='credits'?'Eliza Cloud credits':view.planName,verifiedAt:Date.now(),endsAt});
+  if(view.kind==='active'||view.kind==='credits')writePlanAdmission({version:1,environment,credentialId:account.identity.credentialId,userId:account.identity.userId,organizationId:account.identity.organizationId??null,status:view.kind==='credits'?'credit-funded':view.status,planName:view.kind==='credits'?`${cloudServiceName(cloud.environment)} credits`:view.planName,verifiedAt:Date.now(),endsAt});
   update({residentSubscription:view,residentPlanNotice:null,planEndsAt:endsAt});
   // Background refresh: it updates what the owner sees, never interrupts a turn, and unbinds Cloud
   // inference (the agent keeps running) when Cloud reports the plan ended. Revocation is enforced
@@ -812,7 +812,7 @@ async function admitCloudResident(signal:AbortSignal):Promise<ResidentAdmission>
     check:refreshSignal=>checkEntitlement(client.entitlementSource(),expected,refreshSignal),
     onView:next=>{if(service!==account)return;update({residentSubscription:next,...(next.kind==='credits'?{planEndsAt:null}:{})});
       const nextDecision=planAdmission(next);
-      if((next.kind==='active'&&!next.refreshFailed)||next.kind==='credits')writePlanAdmission({version:1,environment,credentialId:account.identity.credentialId,userId:account.identity.userId,organizationId:account.identity.organizationId??null,status:next.kind==='credits'?'credit-funded':next.status,planName:next.kind==='credits'?'Eliza Cloud credits':next.planName,verifiedAt:Date.now(),endsAt:next.kind==='credits'?null:(state.planEndsAt??null)});
+      if((next.kind==='active'&&!next.refreshFailed)||next.kind==='credits')writePlanAdmission({version:1,environment,credentialId:account.identity.credentialId,userId:account.identity.userId,organizationId:account.identity.organizationId??null,status:next.kind==='credits'?'credit-funded':next.status,planName:next.kind==='credits'?`${cloudServiceName(cloud.environment)} credits`:next.planName,verifiedAt:Date.now(),endsAt:next.kind==='credits'?null:(state.planEndsAt??null)});
       if(nextDecision==='needs-plan')residentPlanEnded(account,next);},
     onAuthFailure:error=>{if(service===account)residentRefreshRefused(account,error);}});
   return {binding:'cloud',credentialId:account.identity.credentialId,account};
@@ -874,9 +874,9 @@ async function applyResidentBinding(admission:ResidentAdmission,signal:AbortSign
       // The agent always starts. It is reported unbound only after native confirms removal;
       // otherwise its inference state is unconfirmed (native still gates a Cloud binding on a
       // valid production credential at use time) and the owner can retry in Settings.
-      try{await clearLocalProvider();}catch{signal.throwIfAborted();return {binding:'unknown',error:`AI could not be connected to your Eliza Cloud plan: ${errorMessage(error)} ${RESIDENT_UNBIND_UNCONFIRMED}`};}
+      try{await clearLocalProvider();}catch{signal.throwIfAborted();return {binding:'unknown',error:`AI could not be connected to your ${cloudServiceName(cloud.environment)} plan: ${errorMessage(error)} ${RESIDENT_UNBIND_UNCONFIRMED}`};}
       signal.throwIfAborted();
-      return {binding:'unbound',error:`AI could not be connected to your Eliza Cloud plan: ${errorMessage(error)} Your agent is running; check your plan again in Settings.`};
+      return {binding:'unbound',error:`AI could not be connected to your ${cloudServiceName(cloud.environment)} plan: ${errorMessage(error)} Your agent is running; check your plan again in Settings.`};
     }
   }
   // Unbound: remove any stored Cloud inference binding. A no-op (no restart) when none is stored.
@@ -887,7 +887,7 @@ async function applyResidentBinding(admission:ResidentAdmission,signal:AbortSign
 }
 /** The packaged-runtime refusal. Android production without the runtime is a non-distributable
  * developer build (--allow-unpackaged-runtime); browser development needs the host agent running. */
-const RESIDENT_UNPACKAGED = !testMocksEnabled ? 'This developer build does not include the on-device agent.' : !isAndroid && browserLocalAgentEnabled ? 'The local agent on this computer is not running. Start it with bun run dev.' : webCloudUnavailable() ? 'The local agent is unavailable here. Alpha runs its agent on the phone; this preview needs the local agent.' : 'The local agent is unavailable in this version. Connect a remote agent or sign in with Eliza Cloud.';
+const RESIDENT_UNPACKAGED = !testMocksEnabled ? 'This developer build does not include the on-device agent.' : !isAndroid && browserLocalAgentEnabled ? 'The local agent on this computer is not running. Start it with bun run dev.' : webCloudUnavailable() ? 'The local agent is unavailable here. Alpha runs its agent on the phone; this preview needs the local agent.' : 'The local agent is unavailable in this version. Connect a remote agent or sign in with Cloud.';
 async function connectResident(signal: AbortSignal) {
   let admission:ResidentAdmission|null=null,bound:Awaited<ReturnType<typeof applyResidentBinding>>|null=null;
   if(residentCloudFlow()){
@@ -1013,7 +1013,7 @@ async function connectCloud(agentId: string, signal: AbortSignal, expectedOwner?
   }
   await verifyPersonalOwner();signal.throwIfAborted();
   save({ kind:'cloud',environment:client.environment,agentId,ownerId:identity.userId });
-  activate(next,session,agent.name || 'Eliza Cloud agent'); attached=true; update({phoneCapabilityReason:reason});
+  activate(next,session,agent.name || `${cloudServiceName(cloud.environment)} agent`); attached=true; update({phoneCapabilityReason:reason});
   await restoreSavedHistory(signal);
 }
 
@@ -1121,18 +1121,18 @@ function pairingError(error: unknown, withCode: boolean): unknown {
   return new Error(text, { cause: error });
 }
 /** After the provider key is removed or Cloud is signed out: the agent keeps running with AI off. */
-const AI_OFF_MESSAGE = 'Your agent is running. Sign in to Eliza Cloud to turn AI back on.';
-const PAIRING_RETIRED = 'Pairing is unavailable. Your agent runs on this device; sign in to Eliza Cloud for inference.';
-const RESIDENT_SIGN_IN_EXPIRED = 'Your Eliza Cloud sign-in has expired. Sign in with Eliza Cloud again.';
+const AI_OFF_MESSAGE = 'Your agent is running. Sign in to Cloud to turn AI back on.';
+const PAIRING_RETIRED = 'Pairing is unavailable. Your agent runs on this device; sign in to Cloud for inference.';
+const RESIDENT_SIGN_IN_EXPIRED = 'Your Cloud sign-in has expired. Sign in with Cloud again.';
 /** Shown beside the composer while the resident is connected and the phone has no network. */
 export const INFERENCE_OFFLINE_NOTICE = 'Your agent is running; AI needs a connection. Nothing is sent until this phone is back online.';
 const RATE_LIMITED = 'The agent provider is rate-limiting requests. Wait before sending again. Alpha Phone did not retry your message.';
 /** Owner-facing states for upstream's CHAT_FAILURE_KINDS (pinned contracts `chat.ts`). Each says
  * what happened and what to do next; none retries the message. Unlisted kinds keep the generic text. */
 export const REPLY_FAILURES = {
-  hosted_unreachable: 'Hosted inference (Eliza Cloud / Cerebras) could not be reached; nothing was retried.',
+  hosted_unreachable: 'Hosted inference (Cloud / Cerebras) could not be reached; nothing was retried.',
   provider_unreachable: 'The agent’s model provider could not be reached; nothing was retried.',
-  no_provider_resident: 'Your agent answered without its Eliza Cloud AI connection. Check Eliza Cloud again; nothing was retried.',
+  no_provider_resident: 'Your agent answered without its Cloud AI connection. Check Cloud again; nothing was retried.',
   no_provider: 'The agent has no model provider configured. Set one up on the agent; nothing was retried.',
 } as const;
 /** The upstream failure kind a reply or a stream error frame carried, if any. */
@@ -1168,7 +1168,7 @@ function replyFailure(kind:string|undefined,selected:Active,limit:ServiceLimit|n
 /** After a failed reply or a lost network, "Connected" is no longer a true statement; only a later
  * connection (which reads the plan) sets it again. */
 function retractReadiness(){if(state.message==='Connected')update({message:''});}
-export const WEB_CLOUD_UNAVAILABLE = 'Eliza Cloud sign-in is available in the Alpha Phone Android app. Eliza Cloud does not accept sign-in requests from this web page.';
+export const WEB_CLOUD_UNAVAILABLE = 'Cloud sign-in is available in the Alpha Phone Android app. Cloud does not accept sign-in requests from this web page.';
 /** Stop closes the transport and asks the agent to cancel through upstream's
  * `POST /api/turns/:roomId/abort` (resident, remote and local agents). Cloud agents and agents that
  * refuse that route keep the honest "may still finish" state. Either way one later read of the
@@ -1443,7 +1443,7 @@ async function residentBrowserLoginAction(signal: AbortSignal) {
   update({residentSubscription:null,residentPlanNotice:null,redeemError:'',redeemNotice:''}); cloud=makeCloud(residentEnvironment());
   // A login over a saved key revokes that key first (best effort); see CloudProtocol.login.
   let login:Awaited<ReturnType<typeof cloud.login>>;
-  try{login=await cloud.login(signal,()=>update({message:'Finish signing in to Eliza Cloud in your browser, then return here.'}));}
+  try{login=await cloud.login(signal,()=>update({message:`Finish signing in to ${cloudServiceName(cloud.environment)} in your browser, then return here.`}));}
   // A cancelled or failed sign-in leaves the stored sign-in as it was: re-admit it afterwards.
   catch(error){if(kept)residentRebindQueued=true;throw error;}
   const issued=(await cloudCredentialStore.read(residentEnvironment()))?.credentialId;
@@ -1453,9 +1453,9 @@ async function residentBrowserLoginAction(signal: AbortSignal) {
   try{await connectResident(signal);}catch(error){if(residentAlwaysPresent&&!active)update({kind:'recovering'});showPostSignInSetup();throw error;}
   // Cloud refused the key it just issued. It is removed rather than kept for a retry that cannot
   // work; the agent keeps running without Cloud inference.
-  if(!state.cloudAccount&&state.residentPlanNotice!=='offline'&&issued&&(await cloudCredentialStore.read(residentEnvironment()).catch(()=>null))?.credentialId===issued){await cloudCredentialStore.clear(residentEnvironment());update({residentSavedCredential:false,open:true,error:'Eliza Cloud refused this sign-in. Your agent keeps running; sign in again to turn AI on.'});return;}
+  if(!state.cloudAccount&&state.residentPlanNotice!=='offline'&&issued&&(await cloudCredentialStore.read(residentEnvironment()).catch(()=>null))?.credentialId===issued){await cloudCredentialStore.clear(residentEnvironment());update({residentSavedCredential:false,open:true,error:`${cloudServiceName(cloud.environment)} refused this sign-in. Your agent keeps running; sign in again to turn AI on.`});return;}
   // A verified account finishes through setup; AI binding/plan warnings stay visible there.
-  if(login.previousSignIn==='unconfirmed')update({message:'Signed in. Eliza Cloud did not confirm revoking the sign-in this phone used before.'});
+  if(login.previousSignIn==='unconfirmed')update({message:`Signed in. ${cloudServiceName(cloud.environment)} did not confirm revoking the sign-in this phone used before.`});
   showPostSignInSetup();
 }
 async function browserCloudLoginAction(environment: CloudEnvironment, signal: AbortSignal) {
@@ -1465,10 +1465,10 @@ async function browserCloudLoginAction(environment: CloudEnvironment, signal: Ab
   const replacingCloud = active?.kind === 'cloud' || selection()?.kind === 'cloud';
   detachCloudTarget(); detachService(); if (replacingCloud) save({ kind: 'none' }); update({ agents: [] });
   cloud = makeCloud(environment);
-  const login = await cloud.login(signal, () => update({ message: accountOnly?'Finish signing in to Eliza Cloud in your browser, then return here. If the link expires, cancel and sign in again.':'Use the newly opened browser tab to sign in and approve this phone. If the link expires, cancel here and start a fresh sign-in.' }));
+  const login = await cloud.login(signal, () => update({ message: accountOnly?`Finish signing in to ${cloudServiceName(cloud.environment)} in your browser, then return here. If the link expires, cancel and sign in again.`:'Use the newly opened browser tab to sign in and approve this phone. If the link expires, cancel here and start a fresh sign-in.' }));
   await verifyService(cloud, signal);
   if (!active) save({ kind: 'none' });
-  if(accountOnly)update({message:login.previousSignIn==='unconfirmed'?'Signed in to Eliza Cloud. Eliza Cloud did not confirm revoking the previous sign-in.':'Signed in to Eliza Cloud.'});else if(hosted)await hosted.inspectPersonal(signal);
+  if(accountOnly)update({message:login.previousSignIn==='unconfirmed'?`Signed in to ${cloudServiceName(cloud.environment)}. ${cloudServiceName(cloud.environment)} did not confirm revoking the previous sign-in.`:`Signed in to ${cloudServiceName(cloud.environment)}.`});else if(hosted)await hosted.inspectPersonal(signal);
   if(accountOnly)showPostSignInSetup();
 }
 
@@ -1723,7 +1723,7 @@ export const connectionController = {
     const environment = service.identity.environment;
     if (testMocksEnabled && active?.kind === 'cloud' && active.cloud.environment === environment) retire('Sign-in required');
     detachService();
-    update({ error: testMocksEnabled?'Eliza Cloud sign-in has expired. Sign in again; remote agent pairing is unchanged.':'Eliza Cloud sign-in has expired. Sign in again to use managed services.' });
+    update({ error: testMocksEnabled?`${cloudServiceName(cloud.environment)} sign-in has expired. Sign in again; remote agent pairing is unchanged.`:`${cloudServiceName(cloud.environment)} sign-in has expired. Sign in again to use managed services.` });
     return true;
   },
   // A recovering resident keeps its start failure visible beside Retry.
@@ -1828,7 +1828,7 @@ export const connectionController = {
       if (saved?.kind === 'mock') { const url = new URL(location.href); url.searchParams.set('mode', 'mock'); location.replace(url.href); return; }
       await work('Restoring your connection…', async signal => {
         const environment = localStorage.getItem(CLOUD_SERVICE);
-        if (environment === 'staging' && !testMocksEnabled) { localStorage.removeItem(CLOUD_SERVICE); update({ message: 'Sign in with Eliza Cloud to continue.' }); }
+        if (environment === 'staging' && !testMocksEnabled) { localStorage.removeItem(CLOUD_SERVICE); update({ message: `Sign in with ${cloudServiceName(cloud.environment)} to continue.` }); }
         else if (cloudEnvironmentAllowed(environment)) {
           try { await verifyService(makeCloud(environment), signal); }
           catch (error) { signal.throwIfAborted(); detachService(); update({ message: 'Cloud services need sign-in or retry. Your agent connection is independent.' }); }
@@ -1849,7 +1849,7 @@ export const connectionController = {
     if (operation) return;
     if (residentAlwaysPresent) { await connectionController.startLocal(); return; }
     // Subscription gate QA (test-mocks builds): the gate has no local-only bypass.
-    if(residentCloudFlow()){update({open:true,error:'Sign in with Eliza Cloud to use AI replies.',message:''});return;}
+    if(residentCloudFlow()){update({open:true,error:`Sign in with ${cloudServiceName(cloud.environment)} to use AI replies.`,message:''});return;}
     // The flag-off web preview runs no agent at all (A-27): it may close its notice and keep that choice.
     if (!testMocksEnabled && !webCloudUnavailable()) return;
     retire(); detachService();
@@ -2046,7 +2046,7 @@ export const connectionController = {
       });
       await ensureResident(); return;
     }
-    await work('Finishing Eliza Cloud sign-in…', signal => signedIn(signInClient(environment), outcome, signal));
+    await work(`Finishing ${cloudServiceName(cloud.environment)} sign-in…`, signal => signedIn(signInClient(environment), outcome, signal));
     await ensureResident();
   },
   /**
@@ -2070,13 +2070,13 @@ export const connectionController = {
     else await connectionController.browserCloudLogin(environment);
   },
   async residentBrowserLogin() {
-    await work('Opening Eliza Cloud sign-in…', residentBrowserLoginAction);
+    await work(`Opening ${cloudServiceName(cloud.environment)} sign-in…`, residentBrowserLoginAction);
     // A cancelled or failed sign-in never leaves the phone without its agent (P-43).
     await ensureResident();
   },
   /** Opens the hosted plan page in the system browser; the plan is checked again on return. */
   async residentManagePlan() {
-    await work('Opening Eliza Cloud plans…',async signal=>{await makeCloud(residentEnvironment()).openSubscriptionManagement(signal);planManagementReturn=true;update({message:'Choose or manage your plan in Eliza Cloud, then return here. Alpha checks your plan again when you come back.'});});
+    await work(`Opening ${cloudServiceName(cloud.environment)} plans…`,async signal=>{await makeCloud(residentEnvironment()).openSubscriptionManagement(signal);planManagementReturn=true;update({message:`Choose or manage your plan in ${cloudServiceName(cloud.environment)}, then return here. Alpha checks your plan again when you come back.`});});
   },
   /**
    * Redeems a subscription code for the signed-in account, then checks the plan again and admits
@@ -2138,7 +2138,7 @@ export const connectionController = {
     await connectionController.beginSignIn(environment);
   },
   async browserCloudLogin(environment: CloudEnvironment) {
-    await work('Opening Eliza Cloud sign-in…', signal => browserCloudLoginAction(environment, signal));
+    await work(`Opening ${cloudServiceName(cloud.environment)} sign-in…`, signal => browserCloudLoginAction(environment, signal));
   },
   async cloudList(environment: CloudEnvironment) {
     if (!hosted) { update({ error: PAIRING_RETIRED }); return; }
@@ -2201,7 +2201,7 @@ export const connectionController = {
       let revoked = false;
       if (typeof client.revokeSession === 'function') { try { const result = await client.revokeSession(signal, expected); revoked = result?.supported === true && result.revoked === true; } catch { /* Unconfirmed. A cancelled or failed revocation still removes the local token below. */ } }
       await client.disconnect(expected);
-      const message = (revoked ? 'Signed out of Eliza Cloud. This sign-in was revoked.' : 'Signed out of Eliza Cloud on this phone. The sign-in token was removed here; Eliza Cloud did not confirm revoking it.')+(isAndroid&&!testMocksEnabled?' '+AI_OFF_MESSAGE:'');
+      const message = (revoked ? `Signed out of ${cloudServiceName(cloud.environment)}. This sign-in was revoked.` : `Signed out of ${cloudServiceName(cloud.environment)} on this phone. The sign-in token was removed here; ${cloudServiceName(cloud.environment)} did not confirm revoking it.`)+(isAndroid&&!testMocksEnabled?' '+AI_OFF_MESSAGE:'');
       update({ agents: [], residentSavedCredential:false, ...(residentCloudFlow()?{purpose:'agent' as const}:{}), message });
       // The agent keeps running: reconnected (or restarted) without Cloud inference, and the
       // sign-in dialog asks for an account again.
