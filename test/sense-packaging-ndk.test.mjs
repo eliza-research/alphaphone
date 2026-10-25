@@ -13,7 +13,7 @@ const ndkVersion = source => source.match(/^\s*ndkVersion\s+['"]([^'"]+)['"]/m)?
 const version = ndkVersion(read('android/sense/build.gradle'));
 
 test('Sense packaging selects the same explicit NDK as the pinned voice consumer', () => {
-  const consumer = read('vendor/eliza/packages/app/platforms/android/paradee-voice/consumer.gradle');
+  const consumer = read('vendor/eliza/plugins/plugin-local-inference/native/android/consumer.gradle');
   assert.ok(version, 'an implicit AGP NDK can leave shared libraries unstripped');
   assert.equal(version, ndkVersion(consumer));
   assert.doesNotMatch(read('android/sense/build.gradle'), /keepDebugSymbols|doNotStrip/,

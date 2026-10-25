@@ -66,5 +66,10 @@
     "mode": "registered",
     "className": "ai/elizaresearch/alphaphone/ElizaVoiceNative",
     "subset": "full"
+  },
+  "requalification": {
+    "required": true,
+    "atPin": "58cb9265da8300d81dad437bbb4ce9c3df0cdca6",
+    "reason": "The eliza pin moved the llama.cpp engine gitlink from 6003a10368d8a6d5fb1f70fe9c63a70866e8bcff to 0d9fd4b9db239bbf851068f98c99f4263f8c05c5, so the qualified embedding host bytes are no longer built from the pinned engine; rebuild and requalify the arm64-v8a host at this pin."
   }
 }

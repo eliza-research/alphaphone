@@ -50,7 +50,7 @@ android {
  }
  // :local-speech omits inference JNI to avoid duplicating :app's resident host.
  // This separate APK has no resident host and must package its own reviewed bytes.
- if (file('../../vendor/eliza/packages/app/platforms/android/paradee-voice/consumer.gradle').isFile()) {
+ if (file('../../vendor/eliza/plugins/plugin-local-inference/native/android/consumer.gradle').isFile()) {
   sourceSets.main.jniLibs.srcDirs += [file('../../.eliza/paradee-voice/native/jniLibs')]
  }
  lint { abortOnError true; disable 'ProtectedPermissions', 'SystemPermissionTypo' }

@@ -50,6 +50,12 @@
       "@elizaos/contracts": [
         "./.eliza/client-features/client-contracts.ts"
       ],
+      "@elizaos/plugin-assistant/device-calendar-contract": [
+        "./.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts"
+      ],
+      "@elizaos/plugin-assistant/device-foreground-review": [
+        "./.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/foreground-review-contract.ts"
+      ],
       "@elizaos/ui": [
         "./.eliza/client-features/alpha-client-fetch-types.ts"
       ]

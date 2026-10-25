@@ -154,7 +154,7 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   const projectionInputs={
     'packages/host/src/voice.ts':'19b5c0e5bbe03a27d3641e6edb4ab40bc989084a2bdd5aa9308e9494843aa0b1',
     'packages/ui/src/voice/voice-session-client.ts':'0692de311d8231262af1ca2113563628836faf01c2ac7bb96f16c51ad22fd6b1',
-    'packages/ui/src/voice/voice-chat-types.ts':'043e9a3cd224bc78c67e460070f4e3006120d87db50149f5e2515572eab1cd21',
+    'packages/ui/src/voice/voice-chat-types.ts':'bb3eb85d76fb4766c91221c3964347c0284ddb9bbdaba765944cc4ea8e96f745',
     'packages/core/src/logger.ts':'8c2401ba44a79b94a11095bdce3568f65374d2d7b1421c5894b08753feafb7d1',
   };
   for(const [name,digest] of Object.entries(projectionInputs))if(sourceFiles[name]!==digest)throw Error('Review changed voice projection input: '+name);
@@ -171,7 +171,9 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   if(!status||start<0||end<start)throw Error('Voice type projection source changed.');
   project('packages/ui/src/voice/voice-chat-types.ts',status+'\n');
   source.delete('packages/core/src/logger.ts');
-  project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\n');
+  // Calendar named reads and the foreground review contract import the shared device-review
+  // contracts through the package entry since #37621; expose only those reviewed modules.
+  project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\nexport * from "./packages/contracts/src/device-reviews";\n');
   // Project only existing public type declarations; do not bundle host/client implementations.
   const declarations = (name, names) => names.map(declaration => {
     const escaped = declaration.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -200,7 +202,7 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
 
   }
   const files = Object.fromEntries([...source].map(([name, file]) => [name, file.sha256]));
-  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?8:0, files };
+  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?9:0, files };
   const parent = path.join(root, '.eliza'), destination = path.join(parent, 'client-features');
   regularPath(parent, true);
   const exists = regularPath(destination, true), stamp = path.join(destination, '.source.json');
