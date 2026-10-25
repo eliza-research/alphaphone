@@ -122,7 +122,7 @@ test('one email code adapter: native constants, the bridge config and the route 
  const config=JSON.parse(read('config/cloud-email-code.json')),adapter=read(native+'CloudEmailCode.java'),routes=read(native+'ConnectionRoutes.java');
  assert.match(adapter,new RegExp(`SEND_PATH = "${config.sendPath}"`));assert.match(adapter,new RegExp(`VERIFY_PATH = "${config.verifyPath}"`));
  for(const path of [config.sendPath,config.verifyPath])assert.ok(routes.includes(`"${path}"`),path);
- assert.deepEqual(config.tenants,{production:'elizacloud',staging:'elizacloud-staging'});assert.equal(config.client,'ai.elizaresearch.alphaphone');
+ assert.equal(config.tenants,undefined);assert.equal(config.client,'ai.elizaresearch.alphaphone');
  for(const field of ['"email"','"tenantId"','"client"','"pkce"','"codeChallenge"','"codeChallengeMethod"','"code"','"codeVerifier"'])assert.ok(adapter.includes(field),field);
  const bridge=read('scripts/browser-cloud-dev-bridge.ts');
  assert.match(bridge,/CLOUD_EMAIL_CODE\.sendPath,emailCodeSendBody\(/);assert.match(bridge,/CLOUD_EMAIL_CODE\.verifyPath,emailCodeVerifyBody\(/);
