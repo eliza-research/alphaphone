@@ -7,7 +7,7 @@
 //
 // Evidence boundary: source/test evidence for the flag-off renderer only. Nothing here is the
 // native Agent or AlphaConnection plugin, the resident runtime, Eliza Cloud, Cerebras or a device.
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 export interface StubAccount { token: string; userId: string; email: string; balance: number; userStatus?: number; inbox?: string;
   /** 'none': the billing snapshot reports a canceled plan, so no plan admits Cloud inference. */
@@ -84,7 +84,25 @@ export async function residentStub(page: Page, options: ResidentStubOptions = {}
     // plugin only with digests; here only its pause exists, recorded as a step.
     const pauseOnly = !w.Capacitor.PluginHeaders.some((row: any) => row.name === 'AlphaHostedResults');
     if (pauseOnly) w.Capacitor.PluginHeaders.push({ name: 'AlphaHostedResults', methods: [{ name: 'disableBackground', rtype: 'promise' }] });
+    w.Capacitor.PluginHeaders.push({name:'AlphaCloudSignIn',methods:['status','startEmail','verifyEmail','cancel','addListener','removeListener'].map(name=>({name,rtype:'promise'}))});
     w.Capacitor.nativePromise = async (plugin: string, method: string, input: any) => {
+      if (plugin === 'AlphaCloudSignIn') {
+        if (method === 'status') return {active:false,inApp:true,email:true,google:false};
+        if (method === 'startEmail') return {attemptId:id,expiresAt:Date.now()+600000,resendAt:Date.now()+60000};
+        if (method === 'verifyEmail') {
+          if (input.code !== '123456') throw Object.assign(new Error('invalid-code'),{code:'invalid-code'});
+          if (s.login === 'expired') throw Object.assign(new Error('expired'),{code:'expired'});
+          s.order.push('native authenticated');
+          const previous = f.slots['cloud:production'] ? JSON.parse(f.slots['cloud:production']) : null;
+          if (previous) { s.order.push('revoke Bearer '+previous.token); delete f.slots['cloud:production']; }
+          const expiresAt=Date.now()+86400000;
+          f.slots['cloud:production']=JSON.stringify({token:s.nextToken,credentialId:crypto.randomUUID(),expiresAt});
+          s.order.push('store '+s.nextToken); f.persist(); persist();
+          return {status:'authenticated',environment:'production',expiresAt,...(previous?{previousSignIn:'revoked'}:{})};
+        }
+        return {};
+      }
+
       if (pauseOnly && plugin === 'AlphaHostedResults' && method === 'disableBackground') { s.order.push('pause background delivery'); persist(); return {}; }
       // Removing a stored provider stops the process launched with it (AlphaCredentialStore requiresShutdown).
       if (plugin === 'Agent' && method === 'clearProvider' && f.slots['native:local-agent-provider']) { s.order.push('Agent.stop'); persist(); }
@@ -163,3 +181,13 @@ export async function residentStub(page: Page, options: ResidentStubOptions = {}
 export const stub = <T>(page: Page, read: (s: any) => T) => page.evaluate(`(${read.toString()})(window.residentStub)`) as Promise<T>;
 /** Changes this stub's settings (stream mode, accounts, login outcome) from the test. */
 export const setStub = (page: Page, patch: Record<string, unknown>) => page.evaluate(patch => { Object.assign((window as any).residentStub, patch); (window as any).residentStub.persist(); }, patch);
+
+/** Explicit synthetic email/code journey through the shipped renderer. */
+export async function emailCode(page: Page, verify = true) {
+  const dialog=page.getByRole('main',{name:'Sign in to Eliza Cloud',exact:true}).or(page.getByRole('dialog',{name:'Sign in to Eliza Cloud',exact:true}));
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('fixture@example.invalid');
+  await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
+  await expect(dialog.getByLabel('Six-digit code')).toBeVisible();
+  if(verify){await dialog.getByLabel('Six-digit code').fill('123456');await dialog.getByRole('button',{name:'Verify',exact:true}).click();}
+}

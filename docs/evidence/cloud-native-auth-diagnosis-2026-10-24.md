@@ -46,6 +46,22 @@ other application's registration was reused.
 
 ## Remaining configuration work
 
+### Follow-up inventory (October 24 Pacific time)
+
+[Read-only Alpha inventory run](https://github.com/elizaOS/eliza/actions/runs/40156329036)
+completed successfully with the database identity matching its protected pins.
+All three Worker bindings were present. The exact Alpha callback has one app
+row, which is active and approved and has a valid owner. Zero callback rows
+match the protected organization/owner settings. Public mobile/config still
+returns 503 and Google authorize still returns the callback-allowlist 400.
+
+This narrows the issue: the configured missing app ID is not evidence that no
+Alpha callback registration exists. Reconcile the registry with the intended
+existing registration after confirming its organization ownership; do not
+create a duplicate app or copy the other product's primary registration.
+No signed-in Cloud tenant administration session was available in the connected
+browser, so no tenant allowlist or ownership setting was changed.
+
 For mobile credential issuance, reconcile the **production** protected inputs:
 
 - `ELIZA_MOBILE_APP_AUTH_CLIENTS_JSON`: enabled Alpha client with its intended app

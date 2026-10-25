@@ -563,10 +563,12 @@ test.describe('account, plan and sign-in expiry',()=>{
   await expect(page.getByText(/Your Eliza Cloud sign-in on this phone expires .*\. Approve this phone again to keep AI available\./)).toBeVisible();
   expect(await page.evaluate(()=>(window as any).planController.residentPlanSettings().keyExpiring)).toBe(true);
   await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:info.outputPath('sign-in-expiry-warning.png'),animations:'disabled'});
+  await page.evaluate(()=>{(window as any).planFixture.holdProvider=false;});
   await release(page);
   await page.getByRole('button',{name:'Approve this phone again',exact:true}).click();
-  // Re-approval is the real Cloud CLI sign-in (the fixture refuses it here).
-  await expect.poll(async()=>(await calls(page)).some(c=>c.path==='/api/auth/cli-session'&&c.httpMethod==='POST')).toBe(true);
+  // This fixture omits the native sign-in plugin; re-approval reports that in Alpha.
+  await expect(page.getByRole('alert')).toContainText('unavailable');
+  expect((await calls(page)).some(c=>c.path==='/api/auth/cli-session'&&c.httpMethod==='POST')).toBe(false);
  });
 
  test('a key with more than 14 days left shows no expiry warning',async({page})=>{
