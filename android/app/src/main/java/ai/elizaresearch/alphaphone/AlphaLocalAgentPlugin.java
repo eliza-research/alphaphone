@@ -434,7 +434,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
     }
    }
   }
-  if(provider==null||!"elizacloud".equals(provider.optString("provider","cerebras")))configureLocalEmbeddings(new File(context.getApplicationInfo().nativeLibraryDir),context.getFilesDir(),env);
+  if(!"cloud".equals(BuildConfig.ELIZA_RUNTIME_PROFILE))configureLocalEmbeddings(new File(context.getApplicationInfo().nativeLibraryDir),context.getFilesDir(),env);
   // The agent process has no /etc/localtime on Android and would run in UTC; calendar dates and
   // "tomorrow at 3pm" resolve in the process zone when no owner resolver is registered.
   env.put("TZ",java.util.TimeZone.getDefault().getID());
