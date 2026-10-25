@@ -1,6 +1,6 @@
 # Current MVP status
 
-Current source pin: SDK `0a8466582c6230227052144a39c5f7f476f39547`. This pin includes the reviewed LifeOps mobile loading, ordinary-request thinking policy, navigation handoff and Notes supplied-text guidance, plus the root Zod dependency update. Native navigation acknowledgment remains under separate runtime review. This metadata refresh does not change capability statuses or transfer historical native, APK, provider or device acceptance to the current pin. Earlier admissions remain scoped to their recorded source and evidence.
+Current source pin: SDK `4e561dc37e962595d8e28e600600430d50e9dd7d`. This pin includes the reviewed LifeOps mobile loading, ordinary-request thinking policy, navigation handoff and Notes supplied-text guidance, plus the root Zod dependency update, targeted native Browser command binding and prepared-navigation phase repair. Native navigation acknowledgment remains under separate runtime review. This metadata refresh does not change capability statuses or transfer historical native, APK, provider or device acceptance to the current pin. Earlier admissions remain scoped to their recorded source and evidence.
 
 
 Historical source admission: SDK `58dfddf87ee5adec414746a86a23dada124fbbae` carries the reviewed Maps place-ID correction, task-origin/browser navigation fixes and Android mobile bridge loader. The listed Alpha-compiled native modules, client projections, native engine gitlink and model inputs are unchanged from `f931082ebd87a0fecc3f11f8eacf58f598294d4a`. Shared upstream native browser code changed, but that module is not an Alpha Gradle dependency. Native qualification remains false; current runtime/APK/live acceptance is pending. See [source comparison](evidence/sdk-reviewed-maps-tasks-source-20261023.json).
@@ -50,7 +50,7 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-The current upstream source pin is `0a8466582c` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
+The current upstream source pin is `4e561dc37e` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 

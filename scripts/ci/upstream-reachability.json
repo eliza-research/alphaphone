@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "0a8466582c6230227052144a39c5f7f476f39547",
+  "head": "4e561dc37e962595d8e28e600600430d50e9dd7d",
   "recordedAt": "2026-10-25",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...0a8466582c6230227052144a39c5f7f476f39547",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...4e561dc37e962595d8e28e600600430d50e9dd7d",
   "status": "diverged",
-  "aheadBy": 29,
+  "aheadBy": 31,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -122,6 +122,14 @@
     {
       "sha": "0a8466582c6230227052144a39c5f7f476f39547",
       "subject": "fix: use patched Zod for shared runtime schemas"
+    },
+    {
+      "sha": "ebed6ecc1ef9bc33c191cb91286e18a1afed52f8",
+      "subject": "fix: keep prepared view navigation pending until renderer execution"
+    },
+    {
+      "sha": "4e561dc37e962595d8e28e600600430d50e9dd7d",
+      "subject": "fix: connect native renderer to canonical targeted view commands"
     }
   ],
   "pullRequests": [
