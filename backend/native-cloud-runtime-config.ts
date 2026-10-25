@@ -11,7 +11,7 @@ export async function prepareNativeCloudRuntime(){
  // A previous desktop-style credential must not shadow the admitted native credential.
  delete cloud.apiKey;
  config.cloud={...cloud,enabled:true,baseUrl};
- config.serviceRouting={...config.serviceRouting,...(process.env.ELIZA_RUNTIME_PROFILE==='cloud'?{embeddings:buildElizaCloudServiceRoute()}:{}),llmText:buildElizaCloudServiceRoute({nanoModel:small,smallModel:small,mediumModel:small,largeModel:large,megaModel:large,responseHandlerModel:small,actionPlannerModel:large})};
+ config.serviceRouting={...config.serviceRouting,...(process.env.ELIZA_RUNTIME_PROFILE==='cloud'?{embeddings:buildElizaCloudServiceRoute()}:process.env.ELIZA_LOCAL_EMBEDDING_ENABLED==='1'&&process.env.ELIZA_DISABLE_LOCAL_EMBEDDINGS==='false'?{embeddings:{backend:'eliza-local-inference',transport:'direct'}}:{}),llmText:buildElizaCloudServiceRoute({nanoModel:small,smallModel:small,mediumModel:small,largeModel:large,megaModel:large,responseHandlerModel:small,actionPlannerModel:large})};
  saveElizaConfig(config);
  await updateRoutingPreferences(current=>({
   preferredProvider:{...current.preferredProvider,TEXT_SMALL:'elizacloud',TEXT_LARGE:'elizacloud'},
