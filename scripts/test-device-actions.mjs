@@ -59,19 +59,20 @@ async function reviewNoticesAndForeground(){
  listed=[make('note-delete',{type:'notes_delete',target}),make('open',{type:'open_view',view:'notes'}),
   {...make('foreign',{type:'open_view',view:'home'}),subjectUserId:'someone-else'},make('broken',{type:'not_a_device_operation'}),
   make('finished-broken',{type:'not_a_device_operation'},{state:'done'}),make('expired-broken',{type:'not_a_device_operation'},{expiresAt:new Date(Date.now()-1000).toISOString()})];
- const review=await client().pendingReview(home,signal());
- assert.deepEqual(review.filter(item=>item.proposal).map(item=>item.proposal.id),['open'],'one invalid proposal does not hide valid siblings');
+ const reviewClient=client();const review=await reviewClient.pendingReview(home,signal());
+ assert.deepEqual(review.filter(item=>item.proposal).map(item=>item.proposal.id),['note-delete','open'],'navigation-only review does not hide valid siblings');
  const notices=review.filter(item=>!item.proposal).map(item=>item.notice);
- assert.equal(notices.length,3,'mismatch plus two invalid pending proposals; completed or expired invalid history stays quiet');
- assert.match(notices[0],/Open the selected note to review this action\./);
- assert.ok(notices.slice(1).every(notice=>/could not be shown on this phone/.test(notice)));
+ assert.equal(notices.length,2,'two invalid pending proposals; completed or expired invalid history stays quiet');
+ assert.equal(review[0].proposal.reviewDestination,'notes');
+ const staleReview=await reviewClient.approve('note-delete',home,signal());assert.equal(staleReview.status,'unknown');assert.equal(posted.length,0,'navigation-only card cannot dispatch approval');
+ assert.ok(notices.every(notice=>/could not be shown on this phone/.test(notice)));
  assert.ok(!notices.join('\n').includes(target.noteId),'notices never expose record identities');
- assert.deepEqual((await client().pending(home,signal())).map(card=>card.id),['open']);
+ assert.deepEqual((await client().pending(home,signal())).map(card=>card.id),['note-delete','open']);
  // pending() still fails when nothing is reviewable and a proposal was invalid.
  listed=[{...make('foreign',{type:'open_view',view:'home'}),subjectUserId:'someone-else'}];
  await assert.rejects(client().pending(home,signal()),/another identity/);
  listed=[make('note-delete',{type:'notes_delete',target})];
- assert.deepEqual(await client().pending(home,signal()),[]);
+ assert.equal((await client().pending(home,signal()))[0].reviewDestination,'notes');
  assert.equal((await client().pendingReview({...home,sensitive:true},signal()))[0].notice,'Delete selected note: Unlock the phone to review this action.');
  // Foreground availability: Home or Calendar, after approval, outside workflow bindings.
  listed=[make('free-busy',tuesday),make('named',{type:'notes_named',action:'delete',name:'Groceries'}),make('search',{type:'notes_search',query:{kind:'content',text:'passport'}})];

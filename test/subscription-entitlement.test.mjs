@@ -460,8 +460,9 @@ test('an outer retry hint never turns an exhausted period allowance back into a 
 test('only admission and its background refresher read the entitlement; turns and local speech never do', () => {
   const ui = fs.readFileSync('apps/app/src/runtime/connection-ui.tsx', 'utf8');
   const admission = ui.slice(ui.indexOf('async function admitCloudResident'), ui.indexOf('async function connectResident'));
+  const explicitRefresh=ui.slice(ui.indexOf('async function refreshMembershipBalance'),ui.indexOf('function clearPersonalSetup'));
   assert.ok(admission.includes('checkEntitlement('));
-  assert.equal(ui.split('checkEntitlement(').length, admission.split('checkEntitlement(').length, 'checkEntitlement is called only during admission/refresh');
+  assert.equal(ui.split('checkEntitlement(').length, admission.split('checkEntitlement(').length + explicitRefresh.split('checkEntitlement(').length - 1, 'checkEntitlement is called only during admission or explicit/background refresh');
   // Every Cloud detach stops background refresh; the send path never reads billing.
   const detach = ui.slice(ui.indexOf('function detachService()'), ui.indexOf('async function verifyService'));
   assert.match(detach, /^function detachService\(\) \{ stopEntitlementRefresh\(\);/);
@@ -472,11 +473,12 @@ test('only admission and its background refresher read the entitlement; turns an
   const importers = [];
   const walk = dir => { for (const entry of fs.readdirSync(dir, {withFileTypes: true})) { const path = `${dir}/${entry.name}`; if (entry.isDirectory()) walk(path); else if (/\.(ts|tsx|js|mjs)$/.test(entry.name) && /subscription-entitlement/.test(fs.readFileSync(path, 'utf8'))) importers.push(path); } };
   walk('apps/app/src');
-  assert.deepEqual(importers.sort(), ['apps/app/src/maps/cloud-provider.ts', 'apps/app/src/prototype/settings-adapter.ts', 'apps/app/src/runtime/cloud-protocol.ts', 'apps/app/src/runtime/connection-ui.tsx', 'apps/app/src/runtime/diagnostics-export.ts', 'apps/app/src/runtime/subscription-entitlement.ts']);
+  assert.deepEqual(importers.sort(), ['apps/app/src/maps/cloud-provider.ts', 'apps/app/src/prototype/settings-adapter.ts', 'apps/app/src/runtime/cloud-membership-ui.tsx', 'apps/app/src/runtime/cloud-protocol.ts', 'apps/app/src/runtime/connection-ui.tsx', 'apps/app/src/runtime/diagnostics-export.ts', 'apps/app/src/runtime/subscription-entitlement.ts']);
   for (const [file, typeOnly, names] of [
     ['apps/app/src/maps/cloud-provider.ts', false, ['readServiceLimit', 'retryDuration']],
     ['apps/app/src/prototype/settings-adapter.ts', false, ['planAdmission']],
     ['apps/app/src/runtime/diagnostics-export.ts', true, ['PlanAdmission', 'PlanStatus', 'SubscriptionView']],
+    ['apps/app/src/runtime/cloud-membership-ui.tsx', true, ['SubscriptionView']],
   ]) {
     const text = fs.readFileSync(file, 'utf8');
     const imports = [...text.matchAll(/import(\s+type)?\s*\{([^}]+)\}\s*from\s*['"][^'"]*subscription-entitlement(?:\.ts)?['"]/g)];

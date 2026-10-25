@@ -7,7 +7,7 @@ const src=readFileSync('apps/app/src/runtime/device-actions.ts','utf8');
 const start=src.indexOf('  async performRequested('),end=src.indexOf('  /** Notice restoration',start);
 const method=stripTypeScriptTypes('class Fixture {'+src.slice(start,end)+'}',{mode:'transform'})+'; globalThis.Fixture=Fixture;';
 const context=vm.createContext({});vm.runInContext(method,context);
-function fixture(rows,status='succeeded'){const f=new context.Fixture();f.proposals=new Map(rows.map(([id,source,workflow,type="create_note"])=>[id,{proposal:{requestMessageId:source,workflow,operation:{type}}}]));f.calls=[];f.approve=async id=>{f.calls.push(id);return {proposalId:id,status,summary:'Test result'};};return f;}
+function fixture(rows,status='succeeded'){const f=new context.Fixture();f.proposals=new Map(rows.map(([id,source,workflow,type="create_note"])=>[id,{proposal:{requestMessageId:source,workflow,operation:{type}}}]));f.card=()=>({});f.calls=[];f.approve=async id=>{f.calls.push(id);return {proposalId:id,status,summary:'Test result'};};return f;}
 test('only current-request proposals execute; old, unbound and workflow stay pending',async()=>{const f=fixture([['old','previous'],['unbound',undefined],['current','request'],['workflow','request',{}]]);await f.performRequested('request',{},new AbortController().signal,async()=>true);assert.deepEqual(f.calls,['current']);});
 test('ask-first preference executes nothing',async()=>{const f=fixture([['current','request']]);await f.performRequested('request',{},new AbortController().signal,async()=>false);assert.deepEqual(f.calls,[]);});
 test('preference is rechecked before each action',async()=>{const f=fixture([['one','request'],['two','request']]);let n=0;await f.performRequested('request',{},new AbortController().signal,async()=>++n===1);assert.deepEqual(f.calls,['one']);});
@@ -29,3 +29,5 @@ test('only the enumerated reversible local actions can run directly',async()=>{
  await f.performRequested('request',{},new AbortController().signal,async()=>true);
  assert.deepEqual(f.calls,types);
 });
+
+test('navigation-only cards never auto-execute',async()=>{const f=fixture([['current','request']]);f.card=()=>({reviewDestination:'notes'});await f.performRequested('request',{},new AbortController().signal,async()=>true);assert.deepEqual(f.calls,[]);});

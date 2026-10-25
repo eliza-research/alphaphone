@@ -83,6 +83,9 @@ function rendererSlots(){
    // Pure cache CAS exchanges a whole document; the platform factory's hashed slot is checked separately.
    if(where.endsWith('runtime/service-read-cache.ts')&&receiver==='this.store')continue;
    if(browserOnly.has(receiver))continue;
+   // These typed canonical Notes adapters exchange a document revision; they do not name a secure slot.
+   if(where.endsWith('prototype/legacy-notes-access.ts')&&receiver==='port'){assert.match(text,/port:NotesDocumentPort/);assert.equal(match[2].trim(),'expected');continue;}
+   if(where.endsWith('prototype/legacy-notes-access.ts')&&receiver==='vault'){assert.match(text,/SecureNotesStore\.open\(guarded/);assert.equal(match[2].trim(),'key');continue;}
    assert.ok(nativeReceivers.has(receiver),`${where}: classify compareExchange receiver ${receiver}`);
    // The capacity wrapper passes its caller's key through; the shared store's slot is checked below.
    if(where.endsWith('runtime/notes-secure-store.ts')&&match[2].trim()==='key')continue;

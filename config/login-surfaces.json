@@ -79,10 +79,10 @@
     },
     {
       "id": "eliza-cloud-sign-in-google",
-      "kind": "external-browser",
+      "kind": "native-account-picker",
       "eligible": false,
       "owner": "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaCloudSignInPlugin.java (startGoogle), apps/app/src/runtime/cloud-sign-in-ui.tsx",
-      "reason": "Continue with Google opens Steward's Google authorize URL in a Custom Tab of the user's own browser (never a WebView, never Alpha's browser; plain ACTION_VIEW with CATEGORY_BROWSABLE when no Custom Tabs browser exists). Google's password is entered and filled by that browser's own manager. The only Alpha web handler is the verified App Link https://eliza.app/alphaphone/auth/callback (declared only by builds with ELIZAOS_APP_LINK_HOST; staging host in test-mocks builds only), which receives a one-time Steward code, never a page."
+      "reason": "Android Credential Manager owns the Google account picker. Alpha receives the returned Google ID token through its native sign-in bridge and exchanges it for its own session. No reusable Google password field is rendered in Alpha; Google account credentials are managed by the system provider."
     },
     {
       "id": "eliza-cloud-sign-in-code",
@@ -96,8 +96,8 @@
       "id": "eliza-cloud-subscription-code",
       "kind": "alpha-owned",
       "eligible": false,
-      "file": "apps/app/src/runtime/connection-ui.tsx",
-      "pattern": "name=\"subscription-code\" autoComplete=\"one-time-code\"",
+      "file": "apps/app/src/runtime/cloud-membership-ui.tsx",
+      "pattern": "name=\"membership-code\" autoComplete=\"one-time-code\"",
       "reason": "A subscription grant redemption code, not a username or reusable password. It remains only in the input after a refused attempt and is cleared after successful redemption; Alpha never persists it. This privileged renderer WebView is excluded from Android Autofill, and the field is not an integrated-vault or password-provider fill target."
     },
     {
