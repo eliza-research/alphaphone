@@ -16,19 +16,18 @@ import java.util.Set;
  * In-app (email, and Google when the phone can receive its return) requires all of:
  * - Cloud's mobile App Auth registration for this client, environment and redirect URI
  *   (GET /api/v1/app-auth/mobile/config);
- * - Steward's redirect allowlist admitting the return URL (the Google authorize route answers with a
- *   redirect to Google rather than a 400; nothing is followed);
- * - /.well-known/assetlinks.json on the return host granting handle_all_urls to this package and the
- *   certificate this APK is signed with;
  * - Steward offering email without a captcha for email_otp (GET /steward/auth/providers), and the
  *   email code route existing (CloudEmailCode.SEND_PATH answers a bodiless POST with a 4xx other than
  *   404/405; no address is sent, so no email goes out).
- * Google is offered on top of that only when Steward offers Google and Android reports this phone's
- * App Link for the return host verified (or selected by the user).
+ * The mobile config route also verifies that the registered app allows the exact return URL.
+ * Email completes over native HTTPS and does not receive a browser callback. Google additionally
+ * requires /.well-known/assetlinks.json to grant this package and installed certificate,
+ * Steward's Google authorize route to admit the return URL, and Android to report this phone's
+ * App Link verified (or selected by the user). Google readiness cannot hide ready native email.
  */
 final class CloudSignInReadiness {
  private CloudSignInReadiness() {}
- /** A positive answer is reused for six hours; a negative one is re-checked after ten minutes. */
+ /** Both methods ready: six hours. Partial or unavailable methods: re-check after ten minutes. */
  static final long READY_TTL_MS = 6 * 60 * 60 * 1000L;
  static final long NOT_READY_TTL_MS = 10 * 60 * 1000L;
  /** Each probe request is short; the renderer waits at most a few seconds before using the hand-off. */
@@ -93,18 +92,19 @@ final class CloudSignInReadiness {
   Result(boolean inApp, boolean google, long until) { this.inApp = inApp; this.google = inApp && google; this.until = until; }
   static Result notReady(long now) { return new Result(false, false, now + NOT_READY_TTL_MS); }
   boolean fresh(long now) { return now < until && until - now <= READY_TTL_MS; }
-  String serialize() { return "v1|" + inApp + "|" + google + "|" + until; }
+  String serialize() { return "v2|" + inApp + "|" + google + "|" + until; }
   static Result parse(String value) {
    if (value == null) return null;
    String[] parts = value.split("\\|", -1);
-   if (parts.length != 4 || !"v1".equals(parts[0])) return null;
+   if (parts.length != 4 || !"v2".equals(parts[0])) return null;
    try { return new Result(Boolean.parseBoolean(parts[1]), Boolean.parseBoolean(parts[2]), Long.parseLong(parts[3])); }
    catch (Exception invalid) { return null; }
   }
  }
  static Result combine(boolean registered, boolean redirectAllowed, boolean assetLinks, boolean emailOffered, boolean emailRoute,
                        boolean googleOffered, boolean deviceVerified, long now) {
-  boolean inApp = registered && redirectAllowed && assetLinks && emailOffered && emailRoute;
-  return new Result(inApp, googleOffered && deviceVerified, now + (inApp ? READY_TTL_MS : NOT_READY_TTL_MS));
+  boolean inApp = registered && emailOffered && emailRoute;
+  boolean google = inApp && googleOffered && assetLinks && redirectAllowed && deviceVerified;
+  return new Result(inApp, google, now + (google ? READY_TTL_MS : NOT_READY_TTL_MS));
  }
 }

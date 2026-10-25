@@ -220,13 +220,22 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   if (!emailOffered) return CloudSignInReadiness.Result.notReady(now);
   // An empty object names no address, so Steward refuses it and no email is sent.
   boolean emailRoute = CloudSignInReadiness.emailRoutePresent(probePost(environment, CloudEmailCode.SEND_PATH));
-  // A fresh, unused state and challenge: Steward stores one short-lived authorize record and nothing is followed.
-  Response authorize = get(CloudSignInFlow.authorizeUrl(environment, CloudSignInFlow.s256(CloudSignInFlow.newVerifier()), CloudSignInFlow.newState()));
-  boolean redirectAllowed = CloudSignInReadiness.redirectAllowed(authorize.status, authorize.location);
-  boolean assetLinks = assetLinksGrant(environment);
-  boolean deviceVerified = appLinkVerified(environment);
+  boolean googleOffered = CloudSignInReadiness.googleOffered(providers.status, providers.data.opt("google"));
+  boolean assetLinks = false, deviceVerified = false;
+  boolean redirectAllowed = false;
+  if (googleOffered) {
+   assetLinks = assetLinksGrant(environment);
+   deviceVerified = appLinkVerified(environment);
+   if (assetLinks && deviceVerified) {
+    try {
+     // A fresh state and challenge; no redirect followed. These checks apply only to Google's browser return.
+     Response authorize = get(CloudSignInFlow.authorizeUrl(environment, CloudSignInFlow.s256(CloudSignInFlow.newVerifier()), CloudSignInFlow.newState()));
+     redirectAllowed = CloudSignInReadiness.redirectAllowed(authorize.status, authorize.location);
+    } catch (Exception unavailable) { /* Google remains unavailable; required email checks above still apply. */ }
+   }
+  }
   return CloudSignInReadiness.combine(registered, redirectAllowed, assetLinks, emailOffered, emailRoute,
-   CloudSignInReadiness.googleOffered(providers.status, providers.data.opt("google")), deviceVerified, now);
+   googleOffered, deviceVerified, now);
  }
  private boolean assetLinksGrant(CloudSignInFlow.Environment environment) {
   try {
