@@ -1,3 +1,4 @@
+import {cloudServiceName} from '../runtime/cloud-protocol';
 import {openCalendarSyncSettings} from '../runtime/calendar-sync-settings';
 import {browserDevProfile as devProfileQuery} from '../browser/dev-profile';
 import {cloudRuntimeEnabled,testMocksEnabled,devSurfacesEnabled} from '../build-flags';
@@ -262,7 +263,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
   async function disconnectGmail(account: GmailAccount) {
     const cloud = connectionController.getCloudClient(), instance = owner;
     if (!cloud || !account.connectionId || gmailBusy) return;
-    if (!window.confirm(googleDisconnectConfirmation(account.label))) return;
+    if (!window.confirm(googleDisconnectConfirmation(account.label,cloudServiceName(cloud.client.environment)))) return;
     gmailBusy = account.connectionId; gmailNotice = ''; changed();
     // Native background state is retired alongside the revoke; it never gates it.
     const retirement = retireGmailBackground(account.connectionId);
@@ -271,7 +272,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
       if (owner !== instance || connectionController.getCloudClient()?.sessionId !== cloud.sessionId) return;
       if (result.accounts) { gmailAccounts = result.accounts; gmail = gmailGrantLabel(result.accounts); }
       else gmail = 'Authorization not verified';
-      gmailNotice = googleDisconnectMessage(result.outcome, account.label);
+      gmailNotice = googleDisconnectMessage(result.outcome, account.label,cloudServiceName(cloud.client.environment));
       settingsApi?.toast(gmailNotice);
       window.dispatchEvent(new CustomEvent(GMAIL_ACCOUNTS_CHANGED, { detail: { source: 'settings' } }));
       window.dispatchEvent(new Event(GOOGLE_ACCOUNTS_CHANGED));

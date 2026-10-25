@@ -5,6 +5,8 @@ import {createRequire} from 'node:module';
 import vm from 'node:vm';
 import {transformSync} from 'esbuild';
 import {JSDOM} from 'jsdom';
+import {tsImport} from 'tsx/esm/api';
+const {cloudServiceName}=await tsImport(new URL('../apps/app/src/runtime/cloud-protocol.ts',import.meta.url).href,{parentURL:import.meta.url});
 
 // Mount the actual panel. Only external account/Calendar I/O is replaced.
 test('Google settings keep display choices local, revalidate grants and own Android Back',async()=>{
@@ -19,6 +21,7 @@ test('Google settings keep display choices local, revalidate grants and own Andr
  const snapshot={cloudAccount:{environment:'production',userId:'22222222-2222-4222-8222-222222222222',organizationId:'33333333-3333-4333-8333-333333333333'}};
  const ACCOUNTS='alpha:test-google-accounts',SELECTION='alpha:test-google-selection';
  const modules={
+  './cloud-protocol':{cloudServiceName},
   './gmail-background':{gmailBackgroundStatus:async()=>({}),gmailBackgroundMessage:()=>'',gmailNotificationSettings:async()=>{},GMAIL_BACKGROUND_CHANGED:'alpha:test-gmail-background'},
   '../native':{isAndroid:true},
   './gmail-grants':{gmailGrantTier:()=> 'send',googleAccountAccessLabel:()=> 'Read and send access'},
