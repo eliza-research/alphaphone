@@ -59,21 +59,21 @@ async function boot(page:Page,initial:{signIn?:SignInMode;tokens?:Record<string,
   const w=window as any;
   if(!sessionStorage.getItem('signin-fixture-seeded')){sessionStorage.setItem('signin-fixture-seeded','1');localStorage.setItem('alpha.startup-permissions.v1',JSON.stringify({dismissed:true,attempted:{}}));}
   const f=w.signInFixture={signIn:'ok',...initial,saved:false as boolean,credential:null as any,running:false,bound:false,calls:[] as any[],release:null as null|((error:unknown)=>void)};
-  const names={AlphaConnection:['secureRead','secureWrite','secureRemove','request','cancel','openExternal'],AlphaCloudSignIn:['startGoogle','startEmail','verifyEmail','verifyMfa','cancel','status','addListener','removeListener'],Agent:['start','stop','getStatus','configureCloudProvider','clearProvider','providerStatus','residentAttachment','request','addListener','requestStream','cancelStream'],DailyApps:['addListener','removeListener'],AlphaNotifications:['status'],AlphaVoiceCloud:['checkPermissions'],AlphaHostedResults:['disableBackground']};
+  const names={AlphaConnection:['secureRead','secureWrite','secureRemove','request','cancel','openExternal'],AlphaCloudSignIn:['startPhone','verifyPhone','startGoogle','startEmail','verifyEmail','verifyMfa','cancel','status','addListener','removeListener'],Agent:['start','stop','getStatus','configureCloudProvider','clearProvider','providerStatus','residentAttachment','request','addListener','requestStream','cancelStream'],DailyApps:['addListener','removeListener'],AlphaNotifications:['status'],AlphaVoiceCloud:['checkPermissions'],AlphaHostedResults:['disableBackground']};
   const fail=(code:string)=>Object.assign(new Error(code),{code});
   // The native host stores the key before reporting success and returns only non-secret fields.
   const store=()=>{f.saved=true;f.credential={credentialId:crypto.randomUUID(),token:'synthetic-mobile-key',expiresAt:Date.now()+((f as any).keyLifetimeMs??30*24*3600*1000),serverCredentialId:'55555555-5555-4555-8555-555555555555'};return {status:'authenticated',environment:'production',expiresAt:f.credential.expiresAt,accountCreated:f.signIn==='created'};};
   const reply=(status:number,body:unknown)=>({status,body:JSON.stringify(body)});
   w.Capacitor={PluginHeaders:Object.entries(names).map(([name,methods])=>({name,methods:methods.map(name=>({name,rtype:'promise'}))})),nativePromise:async(plugin:string,method:string,input:any)=>{
-   f.calls.push({plugin,method,path:input?.url?new URL(input.url).pathname:input?.path,email:input?.email,environment:input?.environment});
+   f.calls.push({plugin,method,path:input?.url?new URL(input.url).pathname:input?.path,email:input?.email,phone:input?.phone,environment:input?.environment});
    if(plugin==='AlphaCloudSignIn'){
     if(method==='addListener'||method==='removeListener')return {};
     if(method==='cancel'){f.release?.(fail('cancelled'));f.release=null;return {};}
     if(method==='status'&&f.signIn==='readiness-hold')return new Promise(resolve=>{(f as any).releaseReadiness=()=>resolve({active:false,inApp:true,google:true,email:true});});
     if(method==='status')return f.signIn==='not-ready'?{active:false,inApp:false,google:false,email:false}:{active:false,inApp:true,google:true,email:true};
     if(method==='startGoogle'){if(f.signIn==='hold')return new Promise((_,reject)=>{f.release=reject;});return store();}
-    if(method==='startEmail'){if(f.signIn==='offline')throw fail('offline');return {attemptId:'33333333-3333-4333-8333-333333333333',expiresAt:Date.now()+600000,resendAt:Date.now()+60000};}
-    if(method==='verifyEmail'){if(input.code!=='123456')throw fail('invalid-code');if(f.signIn==='mfa')return {status:'mfa',method:'totp',expiresAt:Date.now()+300000};return store();}
+    if(method==='startEmail'||method==='startPhone'){if(f.signIn==='offline')throw fail('offline');return {attemptId:'33333333-3333-4333-8333-333333333333',expiresAt:Date.now()+600000,resendAt:Date.now()+60000};}
+    if(method==='verifyEmail'||method==='verifyPhone'){if(input.code!=='123456')throw fail('invalid-code');if(f.signIn==='mfa')return {status:'mfa',method:'totp',expiresAt:Date.now()+300000};return store();}
     if(method==='verifyMfa'){if(input.code!=='654321')throw fail('invalid-code');return store();}
    }
    if(plugin==='Agent'){
@@ -117,7 +117,7 @@ async function boot(page:Page,initial:{signIn?:SignInMode;tokens?:Record<string,
  // The composition imports the complete runtime before publishing its readiness marker.
  await expect.poll(()=>page.evaluate(()=>(window as any).planFlags),{timeout:30000}).toEqual({native:'android',mocks:false});
 }
-type Call={plugin:string;method:string;path?:string;email?:string;environment?:string};
+type Call={plugin:string;method:string;path?:string;email?:string;phone?:string;environment?:string};
 const calls=(page:Page)=>page.evaluate(()=>(window as any).signInFixture.calls as Call[]);
 const snapshot=(page:Page)=>page.evaluate(()=>(window as any).planController.getSnapshot());
 const fixture=(page:Page)=>page.evaluate(()=>{const f=(window as any).signInFixture;return {saved:f.saved,bound:f.bound,running:f.running};});
@@ -303,3 +303,40 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
 });
 
 test.beforeEach(async({page})=>seedCompletedAccessSetup(page));
+
+for (const mode of ['ok','mfa'] as const) test(`phone code stays inside Alpha through ${mode === 'mfa' ? 'MFA' : 'verification'}`,async({page})=>{
+ await boot(page,{...await entitlements(),signIn:mode});
+ await agent(page,'unavailable');
+ await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
+ const dialog=signInDialog(page);
+ await dialog.getByLabel('Phone number with country code').fill('+14155550100');
+ await dialog.getByRole('button',{name:'Text me a code',exact:true}).click();
+ await expect(dialog.getByRole('form',{name:'Enter your phone code'})).toBeVisible();
+ await expect(dialog.getByRole('button',{name:/Resend code in/})).toBeDisabled();
+ await dialog.getByLabel('Six-digit code').fill('000000');await dialog.getByRole('button',{name:'Verify',exact:true}).click();
+ await expect(dialog.getByRole('alert')).toContainText('That code did not work');
+ await expect(dialog.getByLabel('Six-digit code')).toHaveValue('');
+ expect((await fixture(page)).saved).toBe(false);
+ await dialog.getByLabel('Six-digit code').fill('123456');await dialog.getByRole('button',{name:'Verify',exact:true}).click();
+ if(mode==='mfa'){
+  await expect(dialog.getByRole('form',{name:'Enter your verification code'})).toBeVisible();
+  expect((await fixture(page)).saved).toBe(false);
+  await dialog.getByLabel('Six-digit code').fill('654321');await dialog.getByRole('button',{name:'Verify',exact:true}).click();
+ }
+ await agent(page,'cloud');await noHandOff(page);
+ expect((await calls(page)).filter(c=>c.method==='startPhone')).toMatchObject([{phone:'+14155550100',environment:'production'}]);
+ expect((await calls(page)).filter(c=>c.method==='verifyEmail'||c.method==='startEmail')).toEqual([]);
+});
+
+test('phone code cancellation discards the in-app step without a credential',async({page})=>{
+ await boot(page,await entitlements());await agent(page,'unavailable');
+ await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
+ const dialog=signInDialog(page);
+ await dialog.getByLabel('Phone number with country code').fill('+14155550100');
+ await dialog.getByRole('button',{name:'Text me a code',exact:true}).click();
+ await expect(dialog.getByRole('form',{name:'Enter your phone code'})).toBeVisible();
+ await dialog.getByRole('button',{name:'Cancel sign-in',exact:true}).click();
+ await expect(dialog).toHaveCount(0);expect((await fixture(page)).saved).toBe(false);
+ expect((await calls(page)).some(c=>c.plugin==='AlphaCloudSignIn'&&c.method==='cancel')).toBe(true);
+ await noHandOff(page);
+});

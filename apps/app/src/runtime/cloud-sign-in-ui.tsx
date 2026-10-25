@@ -7,13 +7,14 @@ import type { SignInView } from './connection-ui';
  * Codes go straight to the controller and are never kept in component state after submission.
  */
 export interface CloudSignInActions {
-  google(): void; email(address: string): void; verify(code: string): void; resend(): void; cancel(): void;
+  phone?(number: string): void; google(): void; email(address: string): void; verify(code: string): void; resend(): void; cancel(): void;
 }
-export function CloudSignInPanel({ view, busy, google, message, error, actions, extra }: {
-  view: SignInView; busy: boolean; google: boolean; message: string; error: string; actions: CloudSignInActions;
+export function CloudSignInPanel({ view, busy, google, phone, message, error, actions, extra }: {
+  view: SignInView; busy: boolean; google: boolean; phone?: boolean; message: string; error: string; actions: CloudSignInActions;
   /** Optional hosted sign-in entry supplied by the caller's build gate. */
   extra?: ReactNode;
 }) {
+  const phoneInput = useRef<HTMLInputElement>(null);
   const email = useRef<HTMLInputElement>(null), code = useRef<HTMLInputElement>(null);
   const [now, setNow] = useState(() => Date.now());
   // Resend becomes available when the host's cooldown ends; the countdown is the only timer.
@@ -41,10 +42,14 @@ export function CloudSignInPanel({ view, busy, google, message, error, actions, 
         <label>Email<input ref={email} type="email" name="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="email" maxLength={320} required disabled={busy} /></label>
         <button disabled={busy}>Email me a code</button>
       </form>
+      {phone && <form aria-label="Sign in with phone" onSubmit={event => { event.preventDefault(); actions.phone?.(phoneInput.current?.value || ''); }}>
+        <label>Phone number with country code<input ref={phoneInput} type="tel" name="phone" autoComplete="tel" placeholder="+14155550100" maxLength={16} required disabled={busy} /></label>
+        <button disabled={busy}>Text me a code</button>
+      </form>}
     </>}
-    {view.step === 'google' && <p>Choose your Google account in the window that opened. When Google returns you to Alpha, sign-in finishes here.</p>}
-    {(view.step === 'code' || view.step === 'mfa') && <form className="alpha-cloud-sign-in-code" aria-label={view.step === 'code' ? 'Enter your email code' : 'Enter your verification code'} onSubmit={submitCode}>
-      {view.step === 'code' && <p>Enter the six-digit code sent to <strong>{view.email}</strong>.</p>}
+    {view.step === 'google'  && <p>Choose your Google account in the window that opened. When Google returns you to Alpha, sign-in finishes here.</p>}
+    {(view.step === 'code' || view.step === 'mfa') && <form className="alpha-cloud-sign-in-code" aria-label={view.step === 'code' ? view.phone ? 'Enter your phone code' : 'Enter your email code' : 'Enter your verification code'} onSubmit={submitCode}>
+      {view.step === 'code' && <p>Enter the six-digit code sent to <strong>{view.phone || view.email}</strong>.</p>}
       {view.step === 'mfa' && <p>{view.method === 'totp' ? 'This account uses an authenticator app. Enter its six-digit code.' : view.method === 'sms' ? 'Enter the six-digit code sent to your phone.' : 'This account’s second verification is not available in Alpha yet.'}</p>}
       {(view.step === 'code' || view.method !== 'passkey') && <>
         <label>Six-digit code<input ref={code} name="one-time-code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9 -]{6,9}" maxLength={9} required disabled={busy} /></label>

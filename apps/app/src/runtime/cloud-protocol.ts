@@ -479,6 +479,13 @@ export class CloudProtocol {
   async startEmailSignIn(email: string, signal: AbortSignal): Promise<CloudSignInEmailStarted> {
     return this.signInStep(signal, port => port.startEmail({ environment: this.environment, email: email.trim() }), emailStarted);
   }
+  async startPhoneSignIn(phone: string, signal: AbortSignal): Promise<CloudSignInEmailStarted> {
+    return this.signInStep(signal, port => { if (!port.startPhone) throw new CloudSignInError('unavailable'); return port.startPhone({ environment: this.environment, phone: phone.trim() }); }, emailStarted);
+  }
+  async verifyPhoneSignIn(attemptId: string, code: string, signal: AbortSignal): Promise<CloudSignInAuthenticated | CloudSignInMfaRequired> {
+    const outcome = await this.signInStep(signal, port => { if (!port.verifyPhone) throw new CloudSignInError('unavailable'); return port.verifyPhone({ attemptId, code }); }, value => signInVerified(value, this.environment));
+    return outcome.status === "mfa" ? outcome : this.storedSignIn(outcome, signal);
+  }
   async verifyEmailSignIn(attemptId: string, code: string, signal: AbortSignal): Promise<CloudSignInAuthenticated | CloudSignInMfaRequired> {
     const outcome = await this.signInStep(signal, port => port.verifyEmail({ attemptId, code }), value => signInVerified(value, this.environment));
     return outcome.status === "mfa" ? outcome : this.storedSignIn(outcome, signal);

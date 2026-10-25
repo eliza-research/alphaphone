@@ -21,6 +21,7 @@ const nativeSignInHeader=(Capacitor as typeof Capacitor&{PluginHeaders?:{name:st
  */
 /** Google sign-in needs the phone's App Link return; the browser bridge offers email only. */
 export const cloudSignInGoogle=nativeSignInHeader;
+export const cloudSignInPhone=(Capacitor as typeof Capacitor&{PluginHeaders?:{name:string;methods?:{name:string}[]}[]}).PluginHeaders?.some(header=>header.name==='AlphaCloudSignIn'&&header.methods?.some(method=>method.name==='startPhone')&&header.methods?.some(method=>method.name==='verifyPhone'))??false;
 export const cloudSignIn:CloudSignInPort|undefined=nativeSignInHeader?registerPlugin<CloudSignInPort>('AlphaCloudSignIn')
   :browserCloudHost?registerPlugin<CloudSignInPort>('AlphaCloudSignIn',{web:()=>new BrowserCloudSignIn()}):undefined;
 

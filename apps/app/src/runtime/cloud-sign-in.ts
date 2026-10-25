@@ -17,7 +17,7 @@ import type { CloudEnvironment } from './cloud-protocol';
  * it never selects hosted login as a fallback.
  */
 export type CloudSignInFailureCode =
-  | 'cancelled' | 'login-active' | 'invalid-email' | 'invalid-code' | 'cooldown' | 'expired' | 'rate-limited'
+  | 'cancelled' | 'login-active' | 'invalid-phone' | 'invalid-email' | 'invalid-code' | 'cooldown' | 'expired' | 'rate-limited'
   | 'offline' | 'unavailable' | 'account-check' | 'state-mismatch' | 'browser-closed' | 'browser-unavailable'
   | 'provider-refused' | 'mfa-browser' | 'mfa-unsupported' | 'activation-pending' | 'storage' | 'rejected' | 'invalid-request'
   | 'app-link-unverified' | 'attempts-exhausted';
@@ -38,6 +38,8 @@ export interface CloudSignInPort {
   /** Opens Google's consent in a Custom Tab and resolves once the App Link return is exchanged. */
   startGoogle(input: { environment: CloudEnvironment }): Promise<unknown>;
   startEmail(input: { environment: CloudEnvironment; email: string }): Promise<unknown>;
+  startPhone?(input: { environment: CloudEnvironment; phone: string }): Promise<unknown>;
+  verifyPhone?(input: { attemptId: string; code: string }): Promise<unknown>;
   verifyEmail(input: { attemptId: string; code: string }): Promise<unknown>;
   verifyMfa(input: { attemptId: string; code: string }): Promise<unknown>;
   /** Revalidates a retained MFA event against the current native attempt; no network or secrets. */
@@ -52,7 +54,7 @@ export interface CloudSignInPort {
    * `signInMfaRequired`: a retained hint that must be revalidated through resumeMfa. */
   addListener?(event: 'signInCompleted' | 'signInIncomplete' | 'signInMfaRequired', listener: (outcome: unknown) => void): Promise<unknown>;
 }
-const CODES = new Set<string>(['cancelled', 'login-active', 'invalid-email', 'invalid-code', 'cooldown', 'expired', 'rate-limited', 'offline', 'unavailable', 'account-check', 'state-mismatch', 'browser-closed', 'browser-unavailable', 'provider-refused', 'mfa-browser', 'mfa-unsupported', 'activation-pending', 'storage', 'rejected', 'invalid-request', 'app-link-unverified', 'attempts-exhausted']);
+const CODES = new Set<string>(['cancelled', 'login-active', 'invalid-phone', 'invalid-email', 'invalid-code', 'cooldown', 'expired', 'rate-limited', 'offline', 'unavailable', 'account-check', 'state-mismatch', 'browser-closed', 'browser-unavailable', 'provider-refused', 'mfa-browser', 'mfa-unsupported', 'activation-pending', 'storage', 'rejected', 'invalid-request', 'app-link-unverified', 'attempts-exhausted']);
 export class CloudSignInError extends Error {
   readonly code: CloudSignInFailureCode;
   constructor(code: CloudSignInFailureCode) { super(`Eliza Cloud sign-in ${code}`); this.code = code; this.name = 'CloudSignInError'; }
@@ -67,6 +69,7 @@ export function signInFailureMessage(code: CloudSignInFailureCode): string {
   switch (code) {
     case 'cancelled': return 'Sign-in cancelled.';
     case 'login-active': return 'A sign-in is already in progress. Finish or cancel it first.';
+    case 'invalid-phone': return 'Enter your phone number with its country code, such as +14155550100.';
     case 'invalid-email': return 'Enter a valid email address.';
     case 'invalid-code': return 'That code did not work. Check it and try again, or send a new code.';
     case 'cooldown': return 'Wait a minute before sending another code.';
@@ -141,3 +144,5 @@ export function signInReadiness(value: unknown): { google: boolean } | null {
   if (row.inApp !== true || row.email !== true) return null;
   return { google: row.google === true };
 }
+
+export const validSignInPhone = (value: string): boolean => /^\+[1-9][0-9]{6,14}$/.test(value.trim());

@@ -80,7 +80,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   volatile boolean cancelled, browserLaunched, browserPaused, callbackReceived;
   volatile HttpURLConnection connection;
   PluginCall waiting;
-  String email, emailVerifier, mfaType, mfaChallenge;
+  String email, phone, emailVerifier, mfaType, mfaChallenge;
   long expiresAt, resendAt;
   int failedVerifies;
   boolean busy;
@@ -158,7 +158,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
  private JSObject statusOutcome(CloudSignInReadiness.Result result) {
   synchronized (lock) {
    JSObject out = new JSObject().put("active", attempt != null);
-   if (attempt != null) out.put("kind", attempt.google ? "google" : attempt.mfaType != null ? "mfa" : "email");
+   if (attempt != null) out.put("kind", attempt.google ? "google" : attempt.mfaType != null ? "mfa" : attempt.phone != null ? "phone" : "email");
    return out.put("inApp", result.inApp).put("email", result.inApp).put("google", result.google);
   }
  }
@@ -434,15 +434,68 @@ public final class AlphaCloudSignInPlugin extends Plugin {
    catch (Exception unexpected) { release(current); call.reject("unavailable", "unavailable"); }
   });
  }
+ @PluginMethod public void startPhone(PluginCall call) {
+  final CloudSignInFlow.Environment environment;
+  final String phone = call.getString("phone") == null ? null : call.getString("phone").trim();
+  try { environment = CloudSignInFlow.environment(call.getString("environment"), testMocks()); }
+  catch (Exception invalid) { call.reject("Unsupported Cloud environment", "invalid-request"); return; }
+  if (!CloudSmsCode.validPhone(phone)) { call.reject("Enter a phone number with country code", "invalid-phone"); return; }
+  final Attempt current;
+  synchronized (lock) {
+   long now = System.currentTimeMillis();
+   if (attempt != null && (attempt.google || attempt.busy)) { call.reject("Another sign-in is in progress", "login-active"); return; }
+   // One send a minute from this phone, whatever the address (Steward also limits sends server-side).
+   if (now < lastEmailSendAt + CloudSignInFlow.RESEND_COOLDOWN_MS) { call.reject("Wait before requesting another code", "cooldown"); return; }
+   if (attempt != null) attempt.cancel();
+   current = new Attempt(environment, false);
+   current.phone = phone; current.busy = true; attempt = current;
+   lastEmailSendAt = now;
+  }
+  run(() -> {
+   try {
+    requirePhoneAvailable(current);
+    Response sent = post(current, CloudSmsCode.SEND_PATH, CloudSmsCode.sendBody(current.environment, phone), null);
+    if (sent.status != 200 && sent.status != 202) throw new SignInFailure(CloudSignInFlow.failureForStatus("send", sent.status));
+    JSONObject data = sent.data.optJSONObject("data") != null ? sent.data.optJSONObject("data") : sent.data;
+    long now = System.currentTimeMillis(), expiresAt = CloudEmailCode.expiresAt(data.opt("expiresAt"), now);
+    synchronized (lock) {
+     if (attempt != current || current.cancelled) throw new SignInFailure("cancelled");
+     current.expiresAt = expiresAt; current.resendAt = lastEmailSendAt + CloudSignInFlow.RESEND_COOLDOWN_MS; current.busy = false;
+    }
+    call.resolve(new JSObject().put("attemptId", current.id).put("expiresAt", expiresAt).put("resendAt", current.resendAt));
+   } catch (SignInFailure failure) { release(current); refused(current.environment, failure.code); call.reject(failure.code, failure.code); }
+   catch (Exception unexpected) { release(current); call.reject("unavailable", "unavailable"); }
+  });
+ }
+ /** Check registration and tenant SMS policy before sending a real code. No website alias or captcha bypass. */
+ private void requirePhoneAvailable(Attempt current) throws Exception {
+  CloudSignInFlow.Environment environment = current.environment;
+  Response config = get(environment.api() + "/api/v1/app-auth/mobile/config?clientId=" + CloudSignInFlow.CLIENT_ID
+   + "&environment=" + environment.name + "&redirectUri=" + Uri.encode(environment.callback()));
+  if (!CloudSignInReadiness.registered(config.status, config.data.opt("success"), config.data.optString("clientId", null),
+   config.data.optString("environment", null), config.data.optString("redirectUri", null), config.data.optString("codeChallengeMethod", null), environment))
+   throw new SignInFailure("unavailable");
+  Response providers = get(environment.api() + "/steward/auth/providers?tenantId=" + environment.tenant);
+  JSONObject captcha = providers.data.optJSONObject("captcha");
+  JSONArray required = captcha == null ? null : captcha.optJSONArray("requiredFor");
+  List<String> requiredFor = required == null ? null : new ArrayList<>();
+  if (required != null) for (int i = 0; i < required.length(); i++) requiredFor.add(required.optString(i));
+  if (!CloudSmsCode.offered(providers.status, providers.data.opt("sms"), captcha == null ? null : captcha.opt("enabled"), requiredFor))
+   throw new SignInFailure("unavailable");
+  synchronized (lock) { if (attempt != current || current.cancelled) throw new SignInFailure("cancelled"); }
+ }
+ @PluginMethod public void verifyPhone(PluginCall call) { verify(call, false, true); }
  @PluginMethod public void verifyEmail(PluginCall call) { verify(call, false); }
  @PluginMethod public void verifyMfa(PluginCall call) { verify(call, true); }
- private void verify(PluginCall call, boolean mfa) {
+ private void verify(PluginCall call, boolean mfa) { verify(call, mfa, false); }
+ private void verify(PluginCall call, boolean mfa, boolean phone) {
   final String code = call.getString("code");
   if (!CloudSignInFlow.validCode(code)) { call.reject("Enter the six-digit code", "invalid-code"); return; }
   final Attempt current;
   synchronized (lock) {
    current = attempt;
    if (current == null || (current.google && !mfa) || !current.id.equals(call.getString("attemptId"))) { call.reject("Sign-in expired. Start again.", "expired"); return; }
+   if (!mfa && phone != (current.phone != null)) { call.reject("Sign-in step changed. Start again.", "expired"); return; }
    if (current.busy) { call.reject("Another sign-in is in progress", "login-active"); return; }
    if (System.currentTimeMillis() >= current.expiresAt) { attempt = null; call.reject("Sign-in expired. Start again.", "expired"); return; }
    if (current.failedVerifies >= CloudSignInFlow.MAX_VERIFY_ATTEMPTS) { attempt = null; call.reject("Too many incorrect codes", "attempts-exhausted"); return; }
@@ -454,6 +507,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
    try {
     Response verified = mfa
      ? post(current, "/steward/auth/mfa/" + current.mfaType + "/complete", new JSONObject().put("challengeId", current.mfaChallenge).put("code", code), null)
+     : phone ? post(current, CloudSmsCode.VERIFY_PATH, CloudSmsCode.verifyBody(current.environment, current.phone, code), null)
      : post(current, CloudEmailCode.VERIFY_PATH, CloudEmailCode.verifyBody(current.environment, current.email, code, current.emailVerifier), null);
     if (verified.status != 200) throw new SignInFailure(CloudSignInFlow.failureForStatus(mfa ? "mfa" : "verify", verified.status));
     JSONObject session = verified.data.optJSONObject("data") != null && !verified.data.has("token") ? verified.data.optJSONObject("data") : verified.data;

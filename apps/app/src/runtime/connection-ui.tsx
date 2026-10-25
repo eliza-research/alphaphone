@@ -50,13 +50,13 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { isAndroid } from '../native';
 import type { ActionProposal, OperationReceipt, ContextEnvelope, VerifiedSession } from './alpha-client';
 import { CloudProtocol, CloudProtocolError, type CloudAgent, type CloudEnvironment } from './cloud-protocol';
-import { googleOutcome as signInOutcome, type CloudSignInGoogleOutcome, CloudSignInError, normalizeSignInCode, signInFailureMessage, signInReadiness, validSignInEmail, type CloudSignInAuthenticated } from './cloud-sign-in';
+import { googleOutcome as signInOutcome, type CloudSignInGoogleOutcome, CloudSignInError, normalizeSignInCode, signInFailureMessage, signInReadiness, validSignInEmail, validSignInPhone, type CloudSignInAuthenticated } from './cloud-sign-in';
 import { DevelopmentCloudAgentProtocol, type CloudPhoneTarget } from './development-cloud-agents';
 import { checkEntitlement, clearEntitlementKeyCache, describeSubscription, EntitlementError, EntitlementRefresher, isEntitlementSignInFailure, CHOOSE_PLAN_LABEL, MANAGE_PLAN_LABEL, planAdmission, readServiceLimit, redeemFailureMessage, redeemSuccessMessage, serviceLimitMessage, SubscriptionRedeemError, type ServiceLimit, type SubscriptionView } from './subscription-entitlement';
 import { RemoteProtocol, RemoteProtocolError } from './remote-protocol';
 import { phoneContextMessage } from './phone-context';
 import { CloudSignInPanel } from './cloud-sign-in-ui';
-import { cloudCredentialStore, cloudSelfRevocationSupported, cloudSignIn, remoteCredentialStore, nativeCloudRequest, nativeRemoteRequest, openConnectionBrowser, removeStoredCloudCredential, secureConnectionStore } from './native-connection';
+import { cloudCredentialStore, cloudSelfRevocationSupported, cloudSignIn, cloudSignInPhone, remoteCredentialStore, nativeCloudRequest, nativeRemoteRequest, openConnectionBrowser, removeStoredCloudCredential, secureConnectionStore } from './native-connection';
 import { findStoppedUserTurn, type StoppedTurn } from './stopped-reply-match';
 import './connection-ui.css';
 
@@ -134,7 +134,7 @@ export interface ConnectionSnapshot {
 export type SignInView =
   | { step: 'choose'; environment: CloudEnvironment }
   | { step: 'google'; environment: CloudEnvironment }
-  | { step: 'code'; environment: CloudEnvironment; email: string; attemptId: string; expiresAt: number; resendAt: number }
+  | { step: 'code'; environment: CloudEnvironment; email: string; phone?: string; attemptId: string; expiresAt: number; resendAt: number }
   | { step: 'mfa'; environment: CloudEnvironment; email?: string; attemptId: string; method: 'totp' | 'sms' | 'passkey'; expiresAt: number };
 /** `revokeDevice` revokes this phone's enrollment on the agent; `deviceSlot` names its installation key. */
 type Enrollment = { revokeDevice?: (signal: AbortSignal) => Promise<boolean>; deviceSlot?: string; deviceHeaders?: Record<string,string> };
@@ -1971,7 +1971,17 @@ export const connectionController = {
     });
     if (state.error && state.signIn?.step !== 'code') update({ signIn: { step: 'choose', environment: view.environment } });
   },
-  async resendSignInCode() { const view = state.signIn; if (view?.step === 'code') await connectionController.signInEmail(view.email); },
+  async signInPhone(phone: string) {
+    const view = state.signIn; if (!view || !cloudSignInPhone) return;
+    const number = phone.trim();
+    if (!validSignInPhone(number)) { update({ error: signInFailureMessage('invalid-phone') }); return; }
+    await work('Sending your code…', async signal => {
+      const started = await signInClient(view.environment).startPhoneSignIn(number, signal);
+      update({ signIn: { step: 'code', environment: view.environment, email: '', phone: number, ...started }, message: `We sent a six-digit code to ${number}. Enter it here.` });
+    });
+    if (state.error && state.signIn?.step !== 'code') update({ signIn: { step: 'choose', environment: view.environment } });
+  },
+  async resendSignInCode() { const view = state.signIn; if (view?.step === 'code') { if (view.phone) await connectionController.signInPhone(view.phone); else await connectionController.signInEmail(view.email); } },
   /** Verifies the emailed code, or the second verification Cloud asked for. */
   async verifySignInCode(code: string) {
     const view = state.signIn; if (!view || (view.step !== 'code' && view.step !== 'mfa')) return;
@@ -1982,7 +1992,7 @@ export const connectionController = {
       let authenticated = false;
       try {
         if (view.step === 'mfa') { const outcome = await client.verifyMfaSignIn(view.attemptId, digits, signal); authenticated = true; await signedIn(client, outcome, signal); return; }
-        const outcome = await client.verifyEmailSignIn(view.attemptId, digits, signal);
+        const outcome = view.phone ? await client.verifyPhoneSignIn(view.attemptId, digits, signal) : await client.verifyEmailSignIn(view.attemptId, digits, signal);
         if (outcome.status === 'mfa') {
           signInFailed(view.environment, true);
           update({ signIn: { step: 'mfa', environment: view.environment, email: view.email, attemptId: view.attemptId, method: outcome.method, expiresAt: outcome.expiresAt },
@@ -2518,8 +2528,8 @@ export function ConnectionChooser() {
     </aside>;
   }
   if (snapshot.signIn) return <div className={productionSignInRequired?'alpha-auth-page':'alpha-connection-scrim'}><div className={`alpha-connection alpha-connection-native alpha-cloud-sign-in${productionSignInRequired?' alpha-auth-content':''}`} role={productionSignInRequired?'main':'dialog'} aria-modal={productionSignInRequired?undefined:true} aria-labelledby="cloud-sign-in-title" aria-busy={snapshot.busy||undefined} tabIndex={-1} ref={panel}>
-    <CloudSignInPanel view={snapshot.signIn} busy={snapshot.busy} google={inAppGoogle} message={snapshot.message} error={snapshot.error}
-      actions={{google:()=>void connectionController.signInGoogle(),email:address=>void connectionController.signInEmail(address),verify:code=>void connectionController.verifySignInCode(code),resend:()=>void connectionController.resendSignInCode(),cancel:()=>connectionController.cancelSignIn()}}
+    <CloudSignInPanel view={snapshot.signIn} busy={snapshot.busy} google={inAppGoogle} phone={cloudSignInPhone} message={snapshot.message} error={snapshot.error}
+      actions={{phone:number=>void connectionController.signInPhone(number),google:()=>void connectionController.signInGoogle(),email:address=>void connectionController.signInEmail(address),verify:code=>void connectionController.verifySignInCode(code),resend:()=>void connectionController.resendSignInCode(),cancel:()=>connectionController.cancelSignIn()}}
       extra={browserCloudResidentEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Sign in with browser</button>:testMocksEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Browser sign-in (diagnostic)</button>:undefined}/>
   </div></div>;
   if(productionSignInRequired)return <div className="alpha-auth-page"><div className="alpha-connection alpha-auth-content" role="main" aria-labelledby="alpha-auth-title" aria-busy={snapshot.busy||undefined} tabIndex={-1} ref={panel}>
