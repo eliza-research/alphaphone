@@ -1433,7 +1433,7 @@ async function restoreSavedHistory(signal:AbortSignal) {
       if(missing?.code!=='conversation_missing')throw error;
       if(typeof missing.latest==='string')await restoreConversationHistory(missing.latest,signal,false,true);
       else await createSelectedConversation(selected,conversationKey(session),saved,signal,()=>{signal.throwIfAborted();if(generation!==epoch||selected!==active||state.session!==session)throw Error('The agent changed.');});
-      update({message:typeof missing.latest==='string'?'The saved conversation is no longer on the agent. Its most recent conversation is shown.':'The saved conversation is no longer on the agent. A new conversation was started.'});
+      update({historyError:'',message:typeof missing.latest==='string'?'The saved conversation is no longer on the agent. Its most recent conversation is shown.':'The saved conversation is no longer on the agent. A new conversation was started.'});
     });
   }catch(error){
     signal.throwIfAborted();
