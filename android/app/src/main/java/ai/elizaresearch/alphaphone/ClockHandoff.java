@@ -46,8 +46,8 @@ final class ClockHandoff {
    if(guard!=null&&guard.isKeyguardLocked())return result(action,"failed","Unlock the phone before continuing to Clock");
    if(target.resolveActivity(activity.getPackageManager())==null)return result(action,"unavailable","No installed Clock app handles this action");
    if(timeZone!=null){
-    String requested=android.icu.util.TimeZone.getCanonicalID(timeZone);
-    String current=android.icu.util.TimeZone.getCanonicalID(java.util.TimeZone.getDefault().getID());
+    String requested=canonicalZone(timeZone);
+    String current=canonicalZone(java.util.TimeZone.getDefault().getID());
     if(!"set".equals(action)||requested==null||!requested.equals(current))return result(action,"failed","Phone time zone changed. Review the Clock request again.");
    }
    activity.startActivity(target);
@@ -56,5 +56,11 @@ final class ClockHandoff {
   catch(SecurityException denied) {return result(action,"denied","Android did not allow this Clock action");}
   catch(IllegalArgumentException invalid) {return result(action,"failed",invalid.getMessage());}
   catch(RuntimeException unknown) {return result(action,"unknown","Clock result is unknown. Check Clock before trying again.");}
+ }
+ static String canonicalZone(String zone) {
+  String canonical=android.icu.util.TimeZone.getCanonicalID(zone);
+  // ICU keeps these two fixed-zero zones distinct, while WebView can report
+  // either as +00:00. They describe the same clock; regional zones stay distinct.
+  return "Etc/GMT".equals(canonical)||"Etc/UTC".equals(canonical)?"UTC":canonical;
  }
 }

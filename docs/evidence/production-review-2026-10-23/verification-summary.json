@@ -1,0 +1,118 @@
+{
+  "date": "2026-10-23",
+  "timezone": "America/Los_Angeles",
+  "alphaMain": "3f25885d1fe9fac624a10cb2307596f7cf34178a",
+  "elizaMain": "f931082ebd87a0fecc3f11f8eacf58f598294d4a",
+  "status": "completed",
+  "controlledCounterexamples": {
+    "backgroundStillActiveAfterNativeInactive": true,
+    "missingRecoveryProblems": [],
+    "opaquePlaceDetail": {
+      "providerInstalled": true,
+      "result": null,
+      "requests": [
+        "capabilities"
+      ]
+    }
+  },
+  "workspaceVerify": {
+    "exitCode": 0,
+    "passed": 275,
+    "failed": 0
+  },
+  "mainInitialVerify": {
+    "exitCode": 1,
+    "passed": 1793,
+    "failed": 3,
+    "skipped": 6,
+    "cause": "JAVA_HOME unset; two javac ENOENT and one JAVA_HOME assertion"
+  },
+  "mainJdkVerify": {
+    "status": "passed",
+    "exitCode": 0,
+    "tests": 1802,
+    "passed": 1796,
+    "failed": 0,
+    "skipped": 6,
+    "typecheck": "passed",
+    "notesQueryFlow": "passed, synthetic",
+    "webBuild": "passed",
+    "productionBundleAudit": {
+      "status": "passed",
+      "files": 408,
+      "testMocks": false
+    },
+    "environment": {
+      "JAVA_HOME": "/usr/lib/jvm/java-21-openjdk",
+      "ANDROID_HOME": "/home/shaw/Android/Sdk"
+    }
+  },
+  "mainProductionBrowser": {
+    "status": "passed",
+    "exitCode": 0,
+    "passed": 305,
+    "failed": 0,
+    "durationMinutes": 7.6,
+    "profile": "flag-off production build, Chromium; controlled synthetic/native bridge fixtures, not real providers"
+  },
+  "mainAndroid": {
+    "exitCode": 2,
+    "builtVariants": [],
+    "blocker": "admitted native voice outputs missing"
+  },
+  "workspaceAndroid": {
+    "exitCode": 1,
+    "builtVariants": [],
+    "blocker": "stageLocalAgentSources prepared Git source missing HEAD"
+  },
+  "device": {
+    "adbDevices": [],
+    "emulatorRun": false,
+    "aospBoot": false,
+    "physicalAcceptance": false,
+    "liveProviderAcceptance": false
+  },
+  "productionWebBundle": {
+    "entryBytes": 3892601,
+    "cssBytes": 159656,
+    "diskUsageApproxMiB": 28
+  },
+  "audit": {
+    "productionVulnerabilities": 0,
+    "allDependencyVulnerabilities": {
+      "high": 1,
+      "moderate": 3
+    }
+  },
+  "skips": [
+    "four pinned AOSP/SystemUI source checks without platform tree",
+    "resident SDK Cloud base without prepared runtime",
+    "Cloud audio file-type classifier without prepared dependency"
+  ],
+  "retainedLogs": [
+    {
+      "path": "main-android.log",
+      "sha256": "8c9191a23ce1cf4005c3b92f1bc216b6917d76341d5792645757bea32ab0372a"
+    },
+    {
+      "path": "main-production-browser.log",
+      "sha256": "123209d5821e1838ef84446cbb17bff6c12dce236fe81a0d7c4c05434c790255"
+    },
+    {
+      "path": "main-verify-jdk.log",
+      "sha256": "dc7da81689354db04d97fcb5ed4128b03608292fc16b9c5224c439ff79cdeeac"
+    },
+    {
+      "path": "main-verify-without-jdk.log",
+      "sha256": "eb11f8f67e00e605a4b14f15eaff7d0802fd206edc7365701f1a0b0554ac01c2"
+    },
+    {
+      "path": "workspace-android.log",
+      "sha256": "fae6e2bd273496745acb945a536ce92dd61ba3f3e39add5cdf00b76ffd62bb5d"
+    },
+    {
+      "path": "workspace-verify.log",
+      "sha256": "04b70e0a6e241cc038615d2beee0e865f2801d9ac403e8c16aa427807dd7655c"
+    }
+  ]
+}

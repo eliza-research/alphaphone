@@ -1,0 +1,98 @@
+{
+  "terms": [
+    {
+      "title": "1. Acceptance of Terms",
+      "paragraphs": [
+        "By accessing and using the elizaOS platform (\"Service\"), you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service."
+      ],
+      "items": []
+    },
+    {
+      "title": "4. API Usage and Limits",
+      "paragraphs": [
+        "Your use of the elizaOS API is subject to rate limits and usage quotas. You agree not to exceed these limits or attempt to circumvent them. We reserve the right to modify, suspend, or discontinue the API at any time with or without notice."
+      ],
+      "items": []
+    },
+    {
+      "title": "5. Payment and Billing",
+      "paragraphs": [
+        "You agree to pay all fees associated with your use of the Service. All fees are non-refundable unless otherwise stated. We reserve the right to change our pricing structure at any time with reasonable notice to users."
+      ],
+      "items": []
+    },
+    {
+      "title": "10. Contact Information",
+      "paragraphs": [
+        "If you have any questions about these Terms, please contact us through our support channels."
+      ],
+      "items": []
+    }
+  ],
+  "privacy": [
+    {
+      "title": "2. Information We Collect",
+      "paragraphs": [
+        "We collect information you provide directly, including account details, support requests, billing details, API usage, and information you choose to submit through Eliza Cloud features."
+      ],
+      "items": []
+    },
+    {
+      "title": "3. Automatically Collected Information",
+      "paragraphs": [
+        "When you access the service, we may collect device identifiers, browser details, operating system, access times, viewed pages, feature usage, API usage patterns, and performance metrics."
+      ],
+      "items": []
+    },
+    {
+      "title": "4. How We Use Your Information",
+      "paragraphs": [
+        "We use collected information to provide and improve the service, process transactions, send technical notices, respond to support requests, analyze usage, prevent abuse, and comply with legal obligations."
+      ],
+      "items": []
+    },
+    {
+      "title": "5. Information Sharing and Disclosure",
+      "paragraphs": [
+        "We may share information with service providers, when required by law, to protect users and the service, in connection with a business transaction, or with your consent. We do not sell personal information to third parties."
+      ],
+      "items": []
+    },
+    {
+      "title": "8. Your Rights and Choices",
+      "paragraphs": [
+        "Depending on your location, you may have rights to access, correct, delete, object to processing, request portability, or withdraw consent for certain personal information. You can request account deletion in Account & Security settings or at https://eliza.app/account-deletion."
+      ],
+      "items": []
+    },
+    {
+      "title": "9. Cookies and Tracking Technologies",
+      "paragraphs": [
+        "We use cookies and similar technologies to understand service usage and support product functionality. Browser settings may allow you to control cookies."
+      ],
+      "items": []
+    },
+    {
+      "title": "10. Third-Party Services",
+      "paragraphs": [
+        "The service may link to third-party websites or services. We are not responsible for their privacy practices and encourage reviewing their policies."
+      ],
+      "items": []
+    },
+    {
+      "title": "11. Changes to This Policy",
+      "paragraphs": [
+        "We may update this Privacy Policy from time to time. Continued use of the service after updates means you accept the updated policy."
+      ],
+      "items": []
+    }
+  ],
+  "provenance": {
+    "repository": "elizaOS/eliza",
+    "commit": "91dc19196c307eb8559b9b58de8dbf63eb47f43f",
+    "paths": [
+      "packages/ui/src/cloud/public-pages/pages/legal/terms-of-service-page.tsx",
+      "packages/ui/src/cloud/public-pages/pages/legal/privacy-policy-page.tsx"
+    ]
+  }
+}

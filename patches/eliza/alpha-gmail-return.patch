@@ -1,0 +1,207 @@
+--- a/packages/cloud/api/v1/oauth/generic-callback.ts
++++ b/packages/cloud/api/v1/oauth/generic-callback.ts
+@@ -1,4 +1,6 @@
+ // Handles v1 cloud API v1 oauth generic callback route traffic with route-local auth expectations.
++import { cache } from "@/lib/cache/client";
++import { resolveAppOAuthReturn, buildAppOAuthReturn } from "./app-oauth-return";
+ import { getCloudAwareEnv } from "@/lib/runtime/cloud-bindings";
+ import {
+   getDefaultPlatformRedirectOrigins,
+@@ -53,8 +55,28 @@
+     );
+   }
+ 
++  // Resolve an opt-in application return from cached state, never request redirect parameters.
++  const state = searchParams.get("state");
++  let appReturn: ReturnType<typeof resolveAppOAuthReturn> = null;
++  let appReturnLookupFailed = false;
++  if (state && /^[0-9a-f-]{36}$/i.test(state)) {
++    try {
++      appReturn = resolveAppOAuthReturn(
++        await cache.get(`oauth2:${provider.id}:${state}`), provider.id,
++        getCloudAwareEnv().ALPHA_OAUTH_RETURN_URLS,
++      );
++    } catch {
++      appReturnLookupFailed = true;
++      logger.warn("[OAuth] Application return state unavailable");
++    }
++  }
++
+   // Check if provider is configured
+   if (!isProviderConfigured(provider)) {
++    if (appReturn) {
++      await cache.del(`oauth2:${provider.id}:${state}`);
++      return Response.redirect(buildAppOAuthReturn(appReturn, "failed"));
++    }
+     logger.error(`[OAuth ${platform}] Provider not configured in callback`);
+     return Response.redirect(
+       appendParam(defaultRedirect, `oauth_error=not_configured`),
+@@ -65,6 +87,10 @@
+   const error = searchParams.get("error");
+   const errorDescription = searchParams.get("error_description");
+   if (error) {
++    if (appReturn) {
++      await cache.del(`oauth2:${provider.id}:${state}`);
++      return Response.redirect(buildAppOAuthReturn(appReturn, "denied"));
++    }
+     logger.warn(`[OAuth ${platform}] Authorization denied by user`, {
+       error,
+       errorDescription,
+@@ -77,9 +103,12 @@
+ 
+   // Get required parameters
+   const code = searchParams.get("code");
+-  const state = searchParams.get("state");
+ 
+   if (!code || !state) {
++    if (appReturn) {
++      await cache.del(`oauth2:${provider.id}:${state}`);
++      return Response.redirect(buildAppOAuthReturn(appReturn, "failed"));
++    }
+     logger.error(`[OAuth ${platform}] Missing code or state in callback`);
+     return Response.redirect(
+       appendParam(defaultRedirect, `${platform}_error=missing_params`),
+@@ -93,13 +122,21 @@
+ 
+   try {
+     const result = await handleOAuth2Callback(provider, code, state);
++    // A completed provider exchange is also authoritative if the preliminary cache read failed.
++    if (appReturnLookupFailed) appReturn = resolveAppOAuthReturn(
++      { ...result, providerId: provider.id, createdAt: Date.now() }, provider.id,
++      getCloudAwareEnv().ALPHA_OAUTH_RETURN_URLS,
++    );
++    if (appReturn && result.redirectUrl !== appReturn.source) throw new Error("OAuth return binding changed");
+ 
+     const allowedAbsoluteOrigins = [
+       ...getDefaultPlatformRedirectOrigins(),
+       ...LOOPBACK_REDIRECT_ORIGINS,
+     ];
+ 
+-    const { target: redirectTarget, rejected } = resolveOAuthSuccessRedirectUrl(
++    const { target: redirectTarget, rejected } = appReturn
++      ? { target: new URL(buildAppOAuthReturn(appReturn, "connected", result.connectionId)), rejected: false }
++      : resolveOAuthSuccessRedirectUrl(
+       {
+         value: result.redirectUrl,
+         baseUrl,
+@@ -125,28 +162,30 @@
+     // Replace only reserved OAuth success markers (known provider `*_connected`,
+     // proof/platform/connection_id). Unrelated caller query state such as
+     // `socket_connected` is preserved.
+-    clearOAuthSuccessParams(redirectTarget);
+-    redirectTarget.searchParams.set(`${platformLower}_connected`, "true");
+-    redirectTarget.searchParams.set("platform", platformLower);
+-    redirectTarget.searchParams.set("connection_id", result.connectionId);
+-    // Proofs are only consumed by `/auth/success`. Do not attach transferable
+-    // tokens to dashboard/settings or other callback consumers that strip
+-    // markers but historically leave unknown query keys in history/Referer.
+-    if (isOAuthSuccessLandingPath(redirectTarget.pathname)) {
+-      const proof = await mintOAuthSuccessProof({
+-        platform: platformLower,
+-        connectionId: result.connectionId,
+-        organizationId: result.organizationId,
+-        userId: result.userId,
+-      });
+-      if (proof) {
+-        redirectTarget.searchParams.set("proof", proof);
+-      } else {
+-        // connection_id remains for sessioned ownership; without a mintable
+-        // ticket the success page cannot claim Connected from a proof alone.
+-        logger.error(
+-          `[OAuth ${platform}] success proof secret/ticket unavailable; /auth/success will require a browser session to verify connection_id`,
+-        );
++    if (!appReturn) {
++      clearOAuthSuccessParams(redirectTarget);
++      redirectTarget.searchParams.set(`${platformLower}_connected`, "true");
++      redirectTarget.searchParams.set("platform", platformLower);
++      redirectTarget.searchParams.set("connection_id", result.connectionId);
++      // Proofs are only consumed by `/auth/success`. Do not attach transferable
++      // tokens to dashboard/settings or other callback consumers that strip
++      // markers but historically leave unknown query keys in history/Referer.
++      if (isOAuthSuccessLandingPath(redirectTarget.pathname)) {
++        const proof = await mintOAuthSuccessProof({
++          platform: platformLower,
++          connectionId: result.connectionId,
++          organizationId: result.organizationId,
++          userId: result.userId,
++        });
++        if (proof) {
++          redirectTarget.searchParams.set("proof", proof);
++        } else {
++          // connection_id remains for sessioned ownership; without a mintable
++          // ticket the success page cannot claim Connected from a proof alone.
++          logger.error(
++            `[OAuth ${platform}] success proof secret/ticket unavailable; /auth/success will require a browser session to verify connection_id`,
++          );
++        }
+       }
+     }
+     const finalUrl = redirectTarget.toString();
+@@ -183,6 +222,10 @@
+       stack: error instanceof Error ? error.stack : undefined,
+     });
+ 
++    if (appReturn) {
++      await cache.del(`oauth2:${provider.id}:${state}`);
++      return Response.redirect(buildAppOAuthReturn(appReturn, "failed"));
++    }
+     const errorMessage =
+       error instanceof Error
+         ? encodeURIComponent(error.message)
+--- /dev/null
++++ b/packages/cloud/api/v1/oauth/app-oauth-return.ts
+@@ -0,0 +1,30 @@
++/** Optional native-app handoff, recovered only from server-owned OAuth state. */
++export interface AppOAuthReturn { url: string; state: string; source: string }
++export function resolveAppOAuthReturn(value: unknown, providerId: string, allowlist: string | undefined, now = Date.now()): AppOAuthReturn | null {
++  if (!allowlist || providerId !== 'google' || !value || typeof value !== 'object') return null;
++  const record = value as Record<string, unknown>;
++  if (record.providerId !== providerId || typeof record.redirectUrl !== 'string' ||
++      typeof record.createdAt !== 'number' || !Number.isFinite(record.createdAt) ||
++      record.createdAt > now || now - record.createdAt >= 600_000 ||
++      typeof record.organizationId !== 'string' || !record.organizationId ||
++      typeof record.userId !== 'string' || !record.userId) return null;
++  try {
++    const url = new URL(record.redirectUrl);
++    if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.port) return null;
++    const state = url.searchParams.get('state');
++    if (!state || !/^[A-Za-z0-9_-]{43}$/.test(state) || [...url.searchParams.keys()].length !== 1) return null;
++    url.search = '';
++    if (!allowlist.split(',').map(s => s.trim()).includes(url.href)) return null;
++    return {url: url.href, state, source: record.redirectUrl};
++  } catch { return null; }
++}
++export function buildAppOAuthReturn(target: AppOAuthReturn, result: 'connected' | 'denied' | 'failed', connectionId?: string): string {
++  const url = new URL(target.url);
++  const params = new URLSearchParams({state: target.state, result});
++  if (result === 'connected') {
++    if (!connectionId || !/^[A-Za-z0-9_-]{1,128}$/.test(connectionId)) throw new Error('Invalid connector ID');
++    params.set('connectionId', connectionId);
++  }
++  url.hash = params.toString();
++  return url.href;
++}
+--- a/packages/cloud/api/v1/eliza/google/connect/initiate/route.ts
++++ b/packages/cloud/api/v1/eliza/google/connect/initiate/route.ts
+@@ -5,6 +5,8 @@
+  * managed Google connection (with optional capability scopes).
+  */
+ 
++import { resolveAppOAuthReturn } from "../../../../oauth/app-oauth-return";
++import { getCloudAwareEnv } from "@/lib/runtime/cloud-bindings";
+ import { Hono } from "hono";
+ import { z } from "zod";
+ import { failureResponse } from "@/lib/api/cloud-worker-errors";
+@@ -58,7 +60,11 @@
+       redirectUrl: parsed.data.redirectUrl,
+       capabilities: parsed.data.capabilities,
+     });
+-    return c.json(result);
++    const alphaReturn = resolveAppOAuthReturn({
++      providerId: "google", organizationId: user.organization_id, userId: user.id,
++      createdAt: Date.now(), redirectUrl: parsed.data.redirectUrl,
++    }, "google", getCloudAwareEnv().ALPHA_OAUTH_RETURN_URLS);
++    return c.json(alphaReturn ? { ...result, alphaReturn: 2 } : result);
+   } catch (error) {
+     if (error instanceof AgentGoogleConnectorError) {
+       return c.json({ error: error.message }, error.status as 400);

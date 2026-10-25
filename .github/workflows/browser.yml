@@ -29,7 +29,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      # Verification is independent of the browser shard; run it once per workflow.
       - run: npm run verify
+        if: matrix.shard == 1
       - run: npm run test:browser -- --shard=${{ matrix.shard }}/3
       - name: Exercise synthetic local-agent speech profile
         if: matrix.shard == 1

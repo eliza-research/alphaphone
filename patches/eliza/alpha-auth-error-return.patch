@@ -1,0 +1,35 @@
+--- a/packages/auth/src/server/api/src/routes/auth.ts
++++ b/packages/auth/src/server/api/src/routes/auth.ts
+@@ -1,3 +1,4 @@
++import { buildOAuthAppErrorReturn } from "./oauth-app-error-return";
+ /**
+  * Serves identity login, account enrollment, MFA and session lifecycle endpoints.
+  * Tenant policy gates every login method; one-time challenges and refresh tokens
+@@ -4842,6 +4843,12 @@
+   c: Context,
+   options: OAuthCallbackFailureOptions,
+ ): Response {
++  // A verified stored-state return address belongs to the host app. Return
++  // errors there as well as successes so native clients can recover internally.
++  if (options.redirectUrl && options.appState) {
++    const target = buildOAuthAppErrorReturn(options.redirectUrl.toString(), options.appState, options.code, process.env.STEWARD_OAUTH_APP_ERROR_REDIRECTS);
++    if (target) return c.redirect(target, 302);
++  }
+   if (!oauthCallbackPrefersHtml(c)) {
+     return c.json<ApiResponse>(
+       {
+--- /dev/null
++++ b/packages/auth/src/server/api/src/routes/oauth-app-error-return.ts
+@@ -0,0 +1,12 @@
++/** Only call with a return URL verified from server-owned OAuth state. */
++export function buildOAuthAppErrorReturn(redirectUrl: string, state: string, code: string, allowedReturns?: string): string | null {
++  if (!allowedReturns?.split(",").map(value => value.trim()).includes(redirectUrl)) return null;
++  let url: URL;
++  try { url = new URL(redirectUrl); } catch { return null; }
++  if (url.protocol !== "https:" || url.username || url.password || !state || state.length > 1024 || !/^[a-z0-9_]{1,100}$/.test(code)) return null;
++  // Use the same fragment transport as successful code callbacks. Do not echo
++  // provider descriptions, credentials, or pre-existing callback parameters.
++  url.search = "";
++  url.hash = new URLSearchParams({ error: code, state }).toString();
++  return url.toString();
++}

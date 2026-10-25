@@ -46,7 +46,7 @@ final class ClockAgentReview {
  }
  static void zone(JSONObject operation)throws Exception{
   if(!"set".equals(operation.getString("action")))return;
-  String wanted=android.icu.util.TimeZone.getCanonicalID(operation.getString("timeZone")),actual=android.icu.util.TimeZone.getCanonicalID(java.util.TimeZone.getDefault().getID());
+  String wanted=ClockHandoff.canonicalZone(operation.getString("timeZone")),actual=ClockHandoff.canonicalZone(java.util.TimeZone.getDefault().getID());
   if(wanted==null||!wanted.equals(actual))throw new IllegalStateException();
  }
  static Intent intent(JSONObject operation)throws Exception{

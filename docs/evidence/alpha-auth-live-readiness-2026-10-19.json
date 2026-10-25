@@ -1,0 +1,71 @@
+{
+  "checkedAt": "2026-10-20T02:26:45.945636+00:00",
+  "method": "Unauthenticated HTTPS GET with no redirect following for original targets; no login attempt or credential exchange",
+  "checks": [
+    {
+      "check": "production readiness",
+      "status": 404,
+      "contentType": "application/json",
+      "redirect": null,
+      "response": {
+        "ok": false,
+        "error": "Not found"
+      }
+    },
+    {
+      "check": "staging readiness",
+      "status": 404,
+      "contentType": "application/json",
+      "redirect": null,
+      "response": {
+        "ok": false,
+        "error": "Not found"
+      }
+    },
+    {
+      "check": "Alpha callback",
+      "status": 308,
+      "contentType": null,
+      "redirect": "https://www.alphacompute.ai/alphaphone/auth/callback",
+      "alphaCallbackMarker": false,
+      "androidPackageMarker": false
+    },
+    {
+      "check": "Android association",
+      "status": 308,
+      "contentType": null,
+      "redirect": "https://www.alphacompute.ai/.well-known/assetlinks.json",
+      "alphaCallbackMarker": false,
+      "androidPackageMarker": false
+    }
+  ],
+  "wwwFollowup": [
+    {
+      "url": "https://www.alphacompute.ai/alphaphone/auth/callback",
+      "status": 403,
+      "contentType": "text/plain; charset=UTF-8",
+      "finalUrl": "https://www.alphacompute.ai/alphaphone/auth/callback",
+      "androidPackageMarker": false,
+      "alphaCallbackMarker": false
+    },
+    {
+      "url": "https://www.alphacompute.ai/.well-known/assetlinks.json",
+      "status": 403,
+      "contentType": "text/plain; charset=UTF-8",
+      "finalUrl": "https://www.alphacompute.ai/.well-known/assetlinks.json",
+      "androidPackageMarker": false,
+      "alphaCallbackMarker": false
+    }
+  ],
+  "qualification": "403 responses are observations from this host, not proof of global unavailability",
+  "repository": {
+    "name": "AlphaCompute/alpha-compute",
+    "branch": "prod",
+    "finding": "next.config.ts identifies App Runner hosting and apex-to-www canonical redirects; Vercel project metadata also exists"
+  },
+  "access": {
+    "vercel": "Connector requires reauthentication",
+    "backendDeploymentOwner": "Not established"
+  },
+  "liveAcceptance": false
+}

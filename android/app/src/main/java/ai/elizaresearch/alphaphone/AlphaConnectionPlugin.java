@@ -38,8 +38,8 @@ import org.json.JSONTokener;
 @CapacitorPlugin(name = "AlphaConnection")
 public final class AlphaConnectionPlugin extends Plugin {
  private volatile Uri delegationCallback;
- @Override public void load() { super.load(); captureDelegationCallback(getActivity().getIntent()); }
- @Override protected void handleOnNewIntent(Intent intent) { super.handleOnNewIntent(intent); captureDelegationCallback(intent); }
+ @Override public void load() { super.load(); captureDelegationCallback(getActivity().getIntent()); captureAuthCallback(getActivity().getIntent()); }
+ @Override protected void handleOnNewIntent(Intent intent) { super.handleOnNewIntent(intent); captureDelegationCallback(intent); captureAuthCallback(intent); }
  private void captureDelegationCallback(Intent intent) {
   Uri uri = intent == null ? null : intent.getData();
   if(uri==null || !"alphaphone".equals(uri.getScheme()) || !"cloud-delegation".equals(uri.getHost()) || uri.getPort()!=-1 || uri.getUserInfo()!=null || uri.getFragment()!=null || (uri.getPath()!=null&&!uri.getPath().isEmpty()&&!"/".equals(uri.getPath())))return;
@@ -64,6 +64,61 @@ public final class AlphaConnectionPlugin extends Plugin {
   String state=call.getString("state");Uri uri=delegationCallback;
   if(uri!=null&&state!=null&&state.equals(uri.getQueryParameter("state"))){delegationCallback=null;Intent intent=getActivity().getIntent();if(intent!=null&&uri.equals(intent.getData()))intent.setData(null);}
   call.resolve();
+ }
+
+ // The native bridge retains only a bounded callback. PKCE/state validation belongs to
+ // the Alpha login controller; neither unsolicited links nor Google pages receive the bridge.
+ private volatile String authCallback;
+ private volatile String gmailCallback;
+ private void captureAuthCallback(Intent intent) {
+  Uri uri=intent==null?null:intent.getData();
+  if(uri==null || uri.toString().length()>4096 || uri.getUserInfo()!=null || uri.getPort()!=-1)return;
+  boolean gmailLink="https".equals(uri.getScheme()) && "alphacompute.ai".equals(uri.getHost()) &&
+   Set.of("/alphaphone/gmail/callback","/alphaphone/gmail/staging/callback").contains(uri.getPath());
+  boolean gmailFallback="alphaphone".equals(uri.getScheme()) && "gmail".equals(uri.getHost()) &&
+   Set.of("/production","/staging").contains(uri.getPath());
+  if(gmailLink||gmailFallback){gmailCallback=uri.toString();getActivity().setIntent(intent);return;}
+  boolean appLink="https".equals(uri.getScheme()) && "alphacompute.ai".equals(uri.getHost()) &&
+   Set.of("/alphaphone/auth/callback","/alphaphone/auth/staging/callback").contains(uri.getPath());
+  boolean fallback="alphaphone".equals(uri.getScheme()) && "auth".equals(uri.getHost()) &&
+   Set.of("/production","/staging").contains(uri.getPath());
+  if(!appLink&&!fallback)return;
+  authCallback=uri.toString();getActivity().setIntent(intent);
+ }
+ @PluginMethod public void readAuthCallback(PluginCall call) {
+  JSObject out=new JSObject();out.put("url",authCallback==null?JSONObject.NULL:authCallback);call.resolve(out);
+ }
+ @PluginMethod public void readGmailCallback(PluginCall call) {
+  JSObject out=new JSObject();out.put("url",gmailCallback==null?JSONObject.NULL:gmailCallback);call.resolve(out);
+ }
+ @PluginMethod public void clearGmailCallback(PluginCall call) {
+  String old=gmailCallback;gmailCallback=null;Intent intent=getActivity().getIntent();
+  if(intent!=null&&intent.getData()!=null&&intent.getData().toString().equals(old))intent.setData(null);
+  call.resolve();
+ }
+ @PluginMethod public void clearAuthCallback(PluginCall call) {
+  String old=authCallback;authCallback=null;Intent intent=getActivity().getIntent();
+  if(intent!=null&&intent.getData()!=null&&intent.getData().toString().equals(old))intent.setData(null);
+  call.resolve();
+ }
+ @PluginMethod public void openAuth(PluginCall call) {
+  try {
+   URI url=validatedUrl(call.getString("url"),false);
+   boolean account=CloudDeployment.authorize(url);
+   boolean gmail="accounts.google.com".equals(url.getHost()) && "/o/oauth2/v2/auth".equals(url.getPath());
+   if((!account&&!gmail) || (gmail && url.getPort()!=-1))throw new IllegalArgumentException();
+   getActivity().runOnUiThread(()->{
+    try {
+     // Custom Tabs keep the provider isolated while preserving the Alpha app task.
+     androidx.browser.customtabs.CustomTabsIntent tab=new androidx.browser.customtabs.CustomTabsIntent.Builder()
+      .setShowTitle(true).setDefaultColorSchemeParams(new androidx.browser.customtabs.CustomTabColorSchemeParams.Builder()
+       .setToolbarColor(android.graphics.Color.rgb(245,243,237)).build()).build();
+     String browser=androidx.browser.customtabs.CustomTabsClient.getPackageName(getContext(),null);
+     if(browser==null){call.reject("Google sign-in requires a system browser with Custom Tabs.");return;}
+     tab.intent.setPackage(browser);tab.launchUrl(getActivity(),Uri.parse(url.toASCIIString()));call.resolve();
+    }catch(RuntimeException error){call.reject("Alpha Phone sign-in is unavailable.");}
+   });
+  }catch(Exception error){call.reject("Unsupported sign-in URL");}
  }
 
  private static final String KEY_ALIAS = "alpha.connection.aes.v1";
@@ -264,10 +319,11 @@ public final class AlphaConnectionPlugin extends Plugin {
     Iterator<String> names = headers.keys();
     while (names.hasNext()) {
      String name = names.next(), normalized = name.toLowerCase(Locale.ROOT);
-     if (!Set.of("accept", "content-type", "authorization", "x-eliza-device-id", "x-eliza-device-key", "x-eliza-device-capabilities", "x-eliza-phone-protocol").contains(normalized)) throw new IllegalArgumentException();
+     if (!Set.of("accept", "content-type", "authorization", "x-steward-tenant", "x-eliza-device-id", "x-eliza-device-key", "x-eliza-device-capabilities", "x-eliza-phone-protocol").contains(normalized)) throw new IllegalArgumentException();
      Object raw = headers.get(name); if (!(raw instanceof String)) throw new IllegalArgumentException();
      String value = (String) raw;
      if (value.length() > 16384 || value.contains("\r") || value.contains("\n")) throw new IllegalArgumentException();
+     if ("x-steward-tenant".equals(normalized) && !value.matches("[A-Za-z0-9_-]{1,100}")) throw new IllegalArgumentException();
      if ("x-eliza-device-capabilities".equals(normalized) && !validDeviceCapabilities(value)) throw new IllegalArgumentException();
      if ("x-eliza-phone-protocol".equals(normalized) && !"1".equals(value)) throw new IllegalArgumentException();
      connection.setRequestProperty(name, value);

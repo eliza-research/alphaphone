@@ -1,0 +1,55 @@
+ * Body: { email, tenantId?, captchaToken? }
+ * Returns 200 { ok: true, data: { expiresAt, codeLength: 6 } }
+ *
+ * Native in-app email sign-in (Alpha Phone). Emails ONLY a six-digit code,
+ * rendered with the sign-in code template: the email has no link, and no link
+ * token is ever published, so nothing in it can sign in a browser or consume
+ * the challenge. The app redeems the code through POST /email/code/verify,
+
+ * Generates an OAuth authorization URL, stores the CSRF state in the challenge
+ * store (keyed as `oauth:<state>`), then redirects the user to the provider.
+ */
+// Alpha readiness is read-only: no challenge, credential or provider navigation.
+auth.get("/oauth/google/alpha-readiness", async (c) => {
+  c.header("Cache-Control", "no-store");
+  const tenantId = c.req.query("tenant_id");
+  const redirectUri = c.req.query("redirect_uri");
+  const expected =
+    tenantId === "elizacloud"
+      ? "https://alphacompute.ai/alphaphone/auth/callback"
+      : tenantId === "elizacloud-staging"
+        ? "https://alphacompute.ai/alphaphone/auth/staging/callback"
+        : undefined;
+  if (!expected || redirectUri !== expected) {
+    return c.json({ ok: false, error: "Alpha Phone sign-in unavailable" }, 400);
+  }
+  const rl = await checkAuthRateLimit(c, "alpha-auth-readiness", 60_000, 30);
+  if (!rl.allowed) return c.json({ ok: false, error: "Try again later" }, 429);
+  try {
+    const denied = await requireTenantLoginMethodAllowed(
+      c,
+      tenantId,
+      "oauth",
+      "google",
+    );
+    if (denied)
+      return c.json(
+        { ok: false, error: "Alpha Phone sign-in unavailable" },
+        403,
+      );
+    await assertAllowedOAuthRedirectUri(redirectUri, tenantId);
+    getProviderConfig("google");
+    const errorReturn = buildOAuthAppErrorReturn(
+      redirectUri,
+      "s".repeat(43),
+      "access_denied",
+      process.env.STEWARD_OAUTH_APP_ERROR_REDIRECTS,
+    );
+    if (!errorReturn) throw new Error("App error returns are not configured");
+    return c.json({ ok: true, alphaAuth: 1, tenantId, redirectUri });
+  } catch {
+    return c.json({ ok: false, error: "Alpha Phone sign-in unavailable" }, 503);
+  }
+});
+
+auth.get("/oauth/:provider/authorize", async (c) => {

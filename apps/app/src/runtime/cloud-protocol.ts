@@ -1,14 +1,12 @@
+import { cloudDeployment } from './cloud-deployment.ts';
 import { CloudPersonalProtocol, PersonalProtocolError } from './cloud-personal-protocol.ts';
+import { gmailReturnURL } from './alpha-gmail.ts';
 import { reviewMailAttachment, type MailAttachment } from './inbox-attachment.ts';
 /** Narrow Alpha adapter for Eliza Cloud. Contracts inspected in v3's
  * cloud/api/auth/cli-session, cloud/api/v1/eliza/{agents,google}, and
  * ui/src/api/client-cloud.ts. Native composition owns HTTP and secure storage.
  * This module never stores credentials in renderer persistence or logs them. */
 export type CloudEnvironment = "production" | "staging";
-const authorities = {
-  production: { api: "https://api.eliza.app", web: "https://eliza.app", agents: "cloud.eliza.app" },
-  staging: { api: "https://api-staging.eliza.app", web: "https://staging.eliza.app", agents: "cloud-staging.eliza.app" },
-} as const;
 export interface CloudCredential {
   /** Local generation identifier, never an authentication credential. */
   credentialId?: string;
@@ -30,7 +28,7 @@ export interface CloudNativeRequest {
     body?: unknown; signal: AbortSignal; timeoutMs: number; redirect: "error";
   }): Promise<{ status: number; data: unknown }>;
 }
-export interface CloudLoginAttempt { sessionId: string; expiresAt: number; browserUrl: string }
+export interface CloudLoginAttempt { sessionId: string; expiresAt: number }
 export interface CloudAgent {
   id: string; name: string | null; status: string; executionTier: string | null;
   /** Only validated REST targets, never internal bridge URLs. Null until available. */
@@ -111,8 +109,8 @@ export class CloudProtocol {
   private activeLogin: AbortController | null = null;
   constructor(readonly environment: CloudEnvironment, private readonly request: CloudNativeRequest,
     private readonly credentials: CloudCredentialStore,
-    private readonly openExternal: (url: string, signal: AbortSignal) => Promise<void>) {}
-  private get authority() { return authorities[this.environment]; }
+    private readonly authenticate?: (signal: AbortSignal) => Promise<string>) {}
+  private get authority() { return cloudDeployment(this.environment); }
   private async requestData(path: string, signal: AbortSignal, options: { body?: unknown; authenticated?: boolean; runtimeBase?: string; timeoutMs?: number; headers?: Record<string,string>; credentialId?: string; onStatus?: (status:number)=>void } = {}) {
     signal.throwIfAborted();
     const headers: Record<string, string> = { Accept: "application/json", ...options.headers };
@@ -176,7 +174,7 @@ export class CloudProtocol {
   cancelLogin(): void { this.activeLogin?.abort(new DOMException("Login cancelled", "AbortError")); }
   /** Only one poller may claim the server's single-consumption credential. A
    * cancelled/lost claim is not retried automatically; start a fresh login. */
-  async login(signal: AbortSignal, onWaiting?: (attempt: CloudLoginAttempt) => void): Promise<void> {
+  async login(signal: AbortSignal, onWaiting?: (attempt: CloudLoginAttempt) => void, authenticate = this.authenticate): Promise<void> {
     if (this.activeLogin) throw new CloudProtocolError("login-active");
     signal.throwIfAborted();
     const controller = new AbortController();
@@ -185,15 +183,19 @@ export class CloudProtocol {
     signal.addEventListener("abort", abort, { once: true });
     let expiryTimer: ReturnType<typeof setTimeout> | undefined;
     try {
+      if (!authenticate) throw new Error("Alpha Phone sign-in is unavailable on this platform.");
+      const identityToken = string(await authenticate(controller.signal));
+      controller.signal.throwIfAborted();
       // The server issues the UUID; client-chosen IDs are deliberately ignored.
       const created = await this.call("/api/auth/cli-session", controller.signal, { body: {} });
       const sessionId = uuid(created.sessionId);
       const expiresAt = timestamp(created.expiresAt);
       if (expiresAt <= Date.now()) throw new CloudProtocolError("expired");
       expiryTimer = setTimeout(() => controller.abort(new CloudProtocolError("expired")), Math.min(expiresAt - Date.now(), 2_147_483_647));
-      const browserUrl = `${this.authority.web}/auth/cli-login?session=${encodeURIComponent(sessionId)}`;
-      onWaiting?.({ sessionId, expiresAt, browserUrl });
-      await this.openExternal(browserUrl, controller.signal);
+      onWaiting?.({ sessionId, expiresAt });
+      const completed = await this.call(`/api/auth/cli-session/${sessionId}/complete`, controller.signal,
+        { body: {}, headers: { Authorization: `Bearer ${identityToken}` } });
+      if (completed.success !== true) throw new CloudProtocolError("invalid-response");
       while (true) {
         let response: ObjectValue;
         try { response = await this.call(`/api/auth/cli-session/${sessionId}`, controller.signal); }
@@ -233,7 +235,7 @@ export class CloudProtocol {
     const sharedPath = `/api/v1/eliza/agents/${id}`;
     const dedicated = url.hostname === `${id}.${this.authority.agents}` && (url.pathname === "/" || url.pathname === "");
     const shared = url.origin === this.authority.api && url.pathname.replace(/\/$/, "") === sharedPath;
-    if (url.protocol !== "https:" || url.username || url.password || url.port || url.search || url.hash || (!dedicated && !shared)) throw new CloudProtocolError("invalid-response");
+    if (url.protocol !== "https:" || url.username || url.password || (url.port && !shared) || url.search || url.hash || (!dedicated && !shared)) throw new CloudProtocolError("invalid-response");
     return url.href.replace(/\/$/, "");
   }
   private agent(value: unknown): CloudAgent {
@@ -303,9 +305,13 @@ export class CloudProtocol {
       ...(response.interrupted === true ? { interrupted: true } : {}),
       ...(response.noResponseReason === "ignored" ? { noResponseReason: "ignored" as const } : {}) };
   }
-  async initiateGmail(signal: AbortSignal, permission: 'read'|'send'|'drafts'|'mailbox' = 'read'): Promise<string> {
+  async initiateGmail(signal: AbortSignal, permission: 'read'|'send'|'drafts'|'mailbox' = 'read', returnState?: string): Promise<string> {
+    if (!returnState) throw new CloudProtocolError('invalid-response');
     const response = await this.call("/api/v1/eliza/google/connect/initiate", signal, { authenticated: true,
-      body: { side: "owner", capabilities: ["google.basic_identity", "google.gmail.triage", ...(permission === "read" ? [] : [permission === "send" ? "google.gmail.send" : permission === "drafts" ? "google.gmail.drafts" : "google.gmail.mailbox"])] } });
+      body: { side: "owner", redirectUrl: gmailReturnURL(this.environment, returnState), capabilities: ["google.basic_identity", "google.gmail.triage", ...(permission === "read" ? [] : [permission === "send" ? "google.gmail.send" : permission === "drafts" ? "google.gmail.drafts" : "google.gmail.mailbox"])] } });
+    // Older/unconfigured backends return to an Eliza frontend. Stay inside Alpha
+    // rather than opening Google unless this exact app-return contract is enabled.
+    if (response.appReturn !== 2) throw new CloudProtocolError('invalid-response');
     let url: URL;
     try { url = new URL(string(response.authUrl)); } catch { throw new CloudProtocolError("invalid-response"); }
     if (url.origin !== "https://accounts.google.com" || url.username || url.password || url.hash) throw new CloudProtocolError("invalid-response");

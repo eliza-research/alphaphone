@@ -1,0 +1,52 @@
+--- a/next.config.ts
++++ b/next.config.ts
+@@ -93,7 +93,7 @@
+     if (!isProductionDeploy) return moved;
+     return [
+       {
+-        source: "/:path*",
++        source: "/:path((?!alphaphone(?:/|$)|\\.well-known/assetlinks\\.json$).*)",
+         has: [{ type: "host", value: "alphacompute.ai" }],
+         destination: `https://${CANONICAL_HOST}/:path*`,
+         permanent: true,
+@@ -108,6 +108,10 @@
+       // robots.ts), so this intercepts /robots.txt and serves the custom
+       // handler that includes Content-Signal directives.
+       beforeFiles: [
++        { source: "/alphaphone/auth/callback", destination: "/alphaphone/auth/callback.html" },
++        { source: "/alphaphone/auth/staging/callback", destination: "/alphaphone/auth/callback.html" },
++        { source: "/alphaphone/gmail/callback", destination: "/alphaphone/auth/callback.html" },
++        { source: "/alphaphone/gmail/staging/callback", destination: "/alphaphone/auth/callback.html" },
+         { source: "/robots.txt", destination: "/api/robots-txt" },
+         {
+           source: "/.well-known/oauth-protected-resource",
+@@ -188,6 +192,29 @@
+           },
+         ],
+       },
++      // Alpha authentication is static and must not inherit marketing caching/referrers.
++      {
++        source: "/alphaphone/:path*",
++        headers: [
++          { key: "Cache-Control", value: "no-store, no-transform" },
++          { key: "Referrer-Policy", value: "no-referrer" },
++          { key: "X-Content-Type-Options", value: "nosniff" },
++          { key: "Content-Security-Policy", value: "default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" },
++        ],
++      },
++      {
++        source: "/.well-known/assetlinks.json",
++        headers: [{ key: "Content-Type", value: "application/json" }],
++      },
++      {
++        source: "/alphaphone/verify/:path*",
++        headers: [
++          { key: "Cache-Control", value: "no-store, no-transform" },
++          { key: "Referrer-Policy", value: "no-referrer" },
++          { key: "X-Content-Type-Options", value: "nosniff" },
++          { key: "Content-Security-Policy", value: "default-src 'none'; script-src 'self' https://challenges.cloudflare.com https://hcaptcha.com https://*.hcaptcha.com; style-src 'self' 'unsafe-inline'; frame-src https://challenges.cloudflare.com https://hcaptcha.com https://*.hcaptcha.com; connect-src https://challenges.cloudflare.com https://hcaptcha.com https://*.hcaptcha.com; img-src 'self' data: https://challenges.cloudflare.com https://hcaptcha.com https://*.hcaptcha.com; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" },
++        ],
++      },
+       // Static asset long-cache (overrides the above for hashed files)
+       {
+         source: "/:path(team|videos|images|fonts|media)/:file*",

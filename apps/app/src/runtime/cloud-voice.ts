@@ -23,7 +23,7 @@ export function createCloudVoice() {
   const environment = connectionController.getCloudEnvironment();
   const binding = connectionController.getCloudClient();
   const sessionId = binding?.sessionId, credentialId = binding?.credentialId;
-  if (!environment || !sessionId || !credentialId) throw new Error('Sign in to Eliza Cloud to use Cloud voice.');
+  if (!environment || !sessionId || !credentialId) throw new Error('Sign in to Alpha Phone to use Cloud voice.');
   const check = () => {
     if (environment !== connectionController.getCloudEnvironment() || sessionId !== connectionController.getCloudClient()?.sessionId || credentialId !== connectionController.getCloudClient()?.credentialId) throw new DOMException('Voice account changed', 'AbortError');
   };

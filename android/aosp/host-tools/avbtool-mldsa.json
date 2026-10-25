@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "baseRepository": "https://android.googlesource.com/platform/external/avb",
+  "baseCommit": "ba2dec4b035b0a3b61c5f8f8a74d86bcd450b1ee",
+  "sourcePath": "avbtool.py",
+  "baseSha256": "1aa6f2b462aa67aa3fdf488bee83ab517de8ad9d8228c7b45c35267ab2cf6781",
+  "patch": "avbtool-mldsa.patch",
+  "patchSha256": "7a1a43e5e5decfab0a459ba59530e1ab6c13a04c963906e9f53a10d2cde23811",
+  "resultSha256": "da733b43019931f1dd5d62a0e856bc769acbd7034dd8d376582881f42a9a83c3",
+  "upstreamDecodeFix": "https://android.googlesource.com/platform/external/avb/+/d81a4087883417ea4334b87c76d03ae9ff29049b%5E%21/",
+  "keyLengthFix": "Local correction: raw ML-DSA key length excludes the four-byte AVB key header. Diagnostic displays key length, not signature length.",
+  "scope": "Standalone host validation candidate only. Not applied to the AOSP source lock, active build, or vendor/eliza. Not a release signing authorization."
+}

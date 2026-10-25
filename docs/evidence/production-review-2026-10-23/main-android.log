@@ -1,0 +1,6 @@
+
+> @eliza-research/alphaphone@0.1.0 android:build
+> node scripts/build-android.mjs
+
+Android build prerequisites are missing:
+  - The on-device voice outputs in .eliza/paradee-voice/native are not admitted by android/voice-host/qualified-voice-host.json (On-device voice outputs are not staged in .eliza/paradee-voice/native; run node scripts/android-stage-voice-models.mjs; Gradle :app:verifyVoiceHost rejects the build). npm run android:build:local does not produce them: stage them with node scripts/android-stage-voice-models.mjs --from <directory of the recorded voice outputs and models> (see docs/fused-speech.md).

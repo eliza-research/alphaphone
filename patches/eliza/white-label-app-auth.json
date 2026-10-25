@@ -1,0 +1,13 @@
+{
+  "baseCommit": "97d8024b3d5d2763536236719e125c2723717817",
+  "preimages": {
+    "packages/auth/README.md": "fe3601e3f7b739620f72ff78c504c53096760ed267b9c7bcf2e1d73aae9a478d",
+    "packages/auth/src/server/__tests__/native-app-link-oauth.integration.test.ts": "138630d559c1867006b2457b02ecc5a213ae8375ce3060468f197ec59d74c68e",
+    "packages/auth/src/server/api/routes/auth.ts": "37d42494cdead895b3e6a97a07ca6af8f6e8f1e4b39f5975e57520e22627f56b",
+    "packages/cloud/api/README.md": "ef456e8532e9d2ed16b878a5ecf0a7b09727b5d71942db20a9bd07714f24b8df",
+    "packages/cloud/api/v1/eliza/google/connect/initiate/route.ts": "c9a51d5d04c5958f4c8def9ec8cf6fd425972733bf8860af745340ea0ad9a0bf",
+    "packages/cloud/api/v1/oauth/generic-callback.ts": "907eaf1b154d10e694886e847c7b6eec57736cd96b811881967f271b3095b939",
+    "packages/cloud/api/wrangler.toml": "1b652e3a3548c0b4f5d71c25fffd22cb155d5ac8d1d5f663c5a0fded7b870d1a",
+    "packages/cloud/shared/src/lib/services/oauth/oauth2.personal-context-publication.pglite.test.ts": "f6171e5e17bb57a327150c0787332616317528c4b1d1a1ec9276f2a81605b45e"
+  }
+}

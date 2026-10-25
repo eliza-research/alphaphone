@@ -28,6 +28,8 @@ const server = http.createServer(async (req, res) => {
     if (req.url === '/api/auth/cli-session') {
       assert.equal(req.method, 'POST'); assert.deepEqual(body, {});
       data = { sessionId, status: 'pending', expiresAt: new Date(Date.now() + (mode === 'expiry' ? 80 : 60000)).toISOString() };
+    } else if (req.url === `/api/auth/cli-session/${sessionId}/complete`) {
+      assert.equal(req.method, 'POST'); assert.equal(req.headers.authorization, 'Bearer synthetic-interactive-token'); data = {success:true};
     } else if (req.url === `/api/auth/cli-session/${sessionId}`) {
       polls++;
       if (mode === 'pending' || mode === 'expiry') { data = { status: 'pending' }; pendingObserved?.(); }
@@ -49,8 +51,8 @@ const server = http.createServer(async (req, res) => {
       else if (req.url === '/api/v1/eliza/agents') { assert.equal(req.method, 'GET'); data = { success: true, data: [agent()] }; }
       else if (req.url === `/api/v1/eliza/agents/${id}`) { assert.equal(req.method, 'GET'); data = { success: true, data: agent() }; }
       else if (req.url === '/api/v1/eliza/google/connect/initiate') {
-        assert.deepEqual(body, { side: 'owner', capabilities: ['google.basic_identity', 'google.gmail.triage'] });
-        data = { authUrl: mode === 'foreign-oauth' ? 'https://attacker.invalid/' : 'https://accounts.google.com/o/oauth2/v2/auth?state=synthetic' };
+        assert.deepEqual(body, { side: 'owner', redirectUrl: 'https://alphacompute.ai/alphaphone/gmail/callback?state='+ 's'.repeat(43), capabilities: ['google.basic_identity', 'google.gmail.triage'] });
+        data = { appReturn: mode === 'legacy-gmail' ? 1 : 2, authUrl: mode === 'foreign-oauth' ? 'https://attacker.invalid/' : 'https://accounts.google.com/o/oauth2/v2/auth?state=synthetic' };
       } else if (req.url === '/api/v1/eliza/google/accounts?side=owner') data = [{ configured: true, connected: true, reason: 'connected', connectionId: grant, grantedCapabilities: ['google.gmail.triage'], identity: { email: 'owner@example.invalid' } }];
       else if (req.url.startsWith('/api/v1/eliza/google/gmail/')) {
         const url = new URL(req.url, 'http://localhost'); assert.equal(url.searchParams.get('grantId'), grant); assert.equal(req.method, 'GET');
@@ -79,14 +81,14 @@ const store = {
   async write(_environment, value, signal) { signal.throwIfAborted(); saved = structuredClone(value); },
   async clear() { saved = null; },
 };
-const opened = [];
-const make = (environment = 'production') => new CloudProtocol(environment, request, store, async (url, signal) => { signal.throwIfAborted(); opened.push(url); });
+const requestPaths = [];
+const make = (environment = 'production') => new CloudProtocol(environment, async input => { requestPaths.push(new URL(input.url).pathname); return request(input); }, store, async () => 'synthetic-interactive-token');
 const signal = () => new AbortController().signal;
 try {
   const client = make();
   await client.login(signal());
   assert.equal(saved.token, token, 'session token preferred over legacy API key');
-  assert.equal(opened.at(-1), `https://eliza.app/auth/cli-login?session=${sessionId}`);
+  assert.ok(requestPaths.every(path=>path.startsWith('/api/')), 'login only calls backend APIs');
   assert.equal((await client.identity(signal())).userId, id);
   assert.equal((await client.listAgents(signal()))[0].id, id);
   assert.equal((await client.listConversations(id, signal()))[0].id, conversationId);
@@ -100,14 +102,16 @@ try {
   assert.equal(runtimeTargets.at(-1), `https://api.eliza.app/api/v1/eliza/agents/${id}/api/conversations/${conversationId}/messages`);
   mode = 'ok';
   assert.equal((await make().agentDetail(id, signal())).id, id, 'new client restores injected credentials');
-  assert.match(await client.initiateGmail(signal()), /^https:\/\/accounts.google.com\//);
+  await assert.rejects(client.initiateGmail(signal()),error=>error.code==='invalid-response');
+  assert.match(await client.initiateGmail(signal(), 'read', 's'.repeat(43)), /^https:\/\/accounts.google.com\//);
   assert.equal((await client.gmailStatus(signal())).connected, false);
   assert.equal((await client.gmailAccounts(signal()))[0].connectionId, grant);
   assert.equal((await client.gmailSearch(grant, 'in:inbox', signal())).messages[0].id, mail.externalId);
   assert.equal((await client.gmailSearch(grant, 'in:inbox', signal(), 50)).messages[0].id, mail.externalId);
   assert.equal((await client.gmailRead(grant, mail.externalId, signal())).bodyText, '<script>plain untrusted email text</script>');
   mode = 'foreign-runtime'; await assert.rejects(client.listAgents(signal()), error => error.code === 'invalid-response');
-  mode = 'foreign-oauth'; await assert.rejects(client.initiateGmail(signal()), error => error.code === 'invalid-response');
+  mode = 'legacy-gmail'; await assert.rejects(client.initiateGmail(signal(), 'read', 's'.repeat(43)),error=>error.code==='invalid-response');
+  mode = 'foreign-oauth'; await assert.rejects(client.initiateGmail(signal(), 'read', 's'.repeat(43)), error => error.code === 'invalid-response');
   const readsBeforeOutage = agentReads;
   mode = 'outage'; await assert.rejects(client.listAgents(signal()), error => error.status === 503);
   assert.equal(agentReads, readsBeforeOutage + 1); assert.ok(saved);
@@ -127,7 +131,7 @@ try {
   cancel.abort(); await rejection; assert.equal(saved, null);
   const pollsAtCancel = polls; await new Promise(resolve => setTimeout(resolve, 30)); assert.equal(polls, pollsAtCancel);
   mode = 'ok'; await make('staging').login(signal());
-  assert.equal(opened.at(-1), `https://staging.eliza.app/auth/cli-login?session=${sessionId}`);
+  assert.ok(requestPaths.every(path=>path.startsWith('/api/')), 'staging only calls backend APIs');
   await client.disconnect();
   process.stdout.write('PASS: synthetic HTTP Cloud login, credential preference/storage, restart, agent list/detail, dedicated/shared conversation routing and send, Gmail scopes/status/account/search/read, URL rejection, outage without retry, consumed claim, expiry, cancellation and staging routing. No live account acceptance.\n');
 } finally {

@@ -1,0 +1,702 @@
+[
+  {
+    "headRefOid": "6bb4d65b16af6f5c06988529214dd66ff484d2b7",
+    "number": 615,
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T19:33:29Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40012302973/job/120615481852",
+        "name": "changes / changes",
+        "startedAt": "2026-10-23T19:33:14Z",
+        "status": "COMPLETED",
+        "workflowName": "Android foundation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T19:34:47Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40012303056/job/120615948252",
+        "name": "changes / changes",
+        "startedAt": "2026-10-23T19:34:19Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T19:33:29Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40012302991/job/120615482587",
+        "name": "changes / changes",
+        "startedAt": "2026-10-23T19:33:15Z",
+        "status": "COMPLETED",
+        "workflowName": "Resident source preparation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T19:34:16Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40012303056/job/120615949929",
+        "name": "Browser storage (${{ matrix.browser }}, shard ${{ matrix.shard }}/2)",
+        "startedAt": "2026-10-23T19:34:17Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T19:33:29Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40012302991/job/120615608182",
+        "name": "prepare",
+        "startedAt": "2026-10-23T19:33:29Z",
+        "status": "COMPLETED",
+        "workflowName": "Resident source preparation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T19:42:20Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40012302973/job/120615606093",
+        "name": "build",
+        "startedAt": "2026-10-23T19:33:32Z",
+        "status": "COMPLETED",
+        "workflowName": "Android foundation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T19:42:29Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40012302973/job/120619571169",
+        "name": "Android foundation result",
+        "startedAt": "2026-10-23T19:42:24Z",
+        "status": "COMPLETED",
+        "workflowName": "Android foundation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T19:41:23Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40012303056/job/120616167425",
+        "name": "Repository verification",
+        "startedAt": "2026-10-23T19:34:50Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T20:00:27Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40012303056/job/120616167667",
+        "name": "Browser MVP (shard 1/4)",
+        "startedAt": "2026-10-23T19:34:50Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T20:23:14Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40012303056/job/120616167695",
+        "name": "Browser MVP (shard 2/4)",
+        "startedAt": "2026-10-23T19:34:51Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T20:27:33Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40012303056/job/120616167612",
+        "name": "Browser MVP (shard 3/4)",
+        "startedAt": "2026-10-23T19:34:50Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T20:14:59Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40012303056/job/120616167562",
+        "name": "Browser MVP (shard 4/4)",
+        "startedAt": "2026-10-23T19:34:50Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T19:52:05Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40012303056/job/120616167523",
+        "name": "Browser production surface (flag off)",
+        "startedAt": "2026-10-23T19:34:51Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T20:27:41Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40012303056/job/120639612001",
+        "name": "Browser MVP result",
+        "startedAt": "2026-10-23T20:27:36Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      }
+    ],
+    "title": "Restore credit-funded Cloud access and recover pending permission setup",
+    "url": "https://github.com/AlphaCompute/alphaphone/pull/615"
+  },
+  {
+    "headRefOid": "dea39a4933dd583b879181cef1ff5594aa6d90d4",
+    "number": 614,
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-24T02:03:16Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052524905/job/120748084331",
+        "name": "changes / changes",
+        "startedAt": "2026-10-24T02:03:03Z",
+        "status": "COMPLETED",
+        "workflowName": "Android foundation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-24T02:03:21Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052524856/job/120748084263",
+        "name": "changes / changes",
+        "startedAt": "2026-10-24T02:03:03Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-24T02:03:21Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052524851/job/120748084142",
+        "name": "changes / changes",
+        "startedAt": "2026-10-24T02:03:03Z",
+        "status": "COMPLETED",
+        "workflowName": "Resident source preparation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052524905/job/120748150954",
+        "name": "build",
+        "startedAt": "2026-10-24T02:03:19Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Android foundation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052524851/job/120748167238",
+        "name": "prepare",
+        "startedAt": "2026-10-24T02:03:24Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Resident source preparation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-24T02:03:00Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052524856/job/120748085265",
+        "name": "Browser storage (${{ matrix.browser }}, shard ${{ matrix.shard }}/2)",
+        "startedAt": "2026-10-24T02:03:00Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052524856/job/120748167053",
+        "name": "Repository verification",
+        "startedAt": "2026-10-24T02:03:24Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052524856/job/120748167089",
+        "name": "Browser MVP (shard 1/4)",
+        "startedAt": "2026-10-24T02:03:24Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052524856/job/120748167139",
+        "name": "Browser MVP (shard 2/4)",
+        "startedAt": "2026-10-24T02:03:23Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052524856/job/120748167067",
+        "name": "Browser MVP (shard 3/4)",
+        "startedAt": "2026-10-24T02:03:23Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052524856/job/120748167096",
+        "name": "Browser MVP (shard 4/4)",
+        "startedAt": "2026-10-24T02:03:24Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052524856/job/120748167085",
+        "name": "Browser production surface (flag off)",
+        "startedAt": "2026-10-24T02:03:23Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Browser MVP"
+      }
+    ],
+    "title": "Qualify current native speech and embedding components",
+    "url": "https://github.com/AlphaCompute/alphaphone/pull/614"
+  },
+  {
+    "headRefOid": "91049c125edd84720f43dcdcf9a039a1b1d78109",
+    "number": 613,
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:06:34Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39922152343/job/120310084134",
+        "name": "changes / changes",
+        "startedAt": "2026-10-23T08:06:08Z",
+        "status": "COMPLETED",
+        "workflowName": "Android foundation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:06:41Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39922152204/job/120310205929",
+        "name": "changes / changes",
+        "startedAt": "2026-10-23T08:06:26Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:06:24Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39922152226/job/120310098659",
+        "name": "changes / changes",
+        "startedAt": "2026-10-23T08:06:10Z",
+        "status": "COMPLETED",
+        "workflowName": "Resident source preparation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:06:23Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39922152204/job/120310207525",
+        "name": "Browser storage (${{ matrix.browser }}, shard ${{ matrix.shard }}/2)",
+        "startedAt": "2026-10-23T08:06:24Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:14:13Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39922152343/job/120310276822",
+        "name": "build",
+        "startedAt": "2026-10-23T08:06:37Z",
+        "status": "COMPLETED",
+        "workflowName": "Android foundation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:14:17Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39922152226/job/120310208948",
+        "name": "prepare",
+        "startedAt": "2026-10-23T08:06:27Z",
+        "status": "COMPLETED",
+        "workflowName": "Resident source preparation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:14:20Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39922152343/job/120313243028",
+        "name": "Android foundation result",
+        "startedAt": "2026-10-23T08:14:16Z",
+        "status": "COMPLETED",
+        "workflowName": "Android foundation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:13:20Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39922152204/job/120310319371",
+        "name": "Repository verification",
+        "startedAt": "2026-10-23T08:06:44Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:40:27Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39922152204/job/120310319395",
+        "name": "Browser MVP (shard 1/4)",
+        "startedAt": "2026-10-23T08:06:44Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:41:11Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39922152204/job/120310319621",
+        "name": "Browser MVP (shard 2/4)",
+        "startedAt": "2026-10-23T08:06:44Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:52:46Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39922152204/job/120310319570",
+        "name": "Browser MVP (shard 3/4)",
+        "startedAt": "2026-10-23T08:06:44Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:46:02Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39922152204/job/120310319456",
+        "name": "Browser MVP (shard 4/4)",
+        "startedAt": "2026-10-23T08:06:44Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:16:42Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39922152204/job/120310319489",
+        "name": "Browser production surface (flag off)",
+        "startedAt": "2026-10-23T08:06:44Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:52:54Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39922152204/job/120328333957",
+        "name": "Browser MVP result",
+        "startedAt": "2026-10-23T08:52:49Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      }
+    ],
+    "title": "Reproduce the pinned Paradee v1.1 model on macOS ARM64",
+    "url": "https://github.com/AlphaCompute/alphaphone/pull/613"
+  },
+  {
+    "headRefOid": "84956f075bc417165f57d17b97826a378b7e8ced",
+    "number": 612,
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T07:35:50Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39918786618/job/120298668869",
+        "name": "changes / changes",
+        "startedAt": "2026-10-23T07:35:35Z",
+        "status": "COMPLETED",
+        "workflowName": "Android foundation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T07:35:53Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39918786457/job/120298668111",
+        "name": "changes / changes",
+        "startedAt": "2026-10-23T07:35:36Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T07:35:50Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39918786460/job/120298668055",
+        "name": "changes / changes",
+        "startedAt": "2026-10-23T07:35:35Z",
+        "status": "COMPLETED",
+        "workflowName": "Resident source preparation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T07:35:32Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39918786457/job/120298669616",
+        "name": "Browser storage (${{ matrix.browser }}, shard ${{ matrix.shard }}/2)",
+        "startedAt": "2026-10-23T07:35:33Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T07:45:49Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39918786618/job/120298770808",
+        "name": "build",
+        "startedAt": "2026-10-23T07:35:53Z",
+        "status": "COMPLETED",
+        "workflowName": "Android foundation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T07:43:45Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39918786460/job/120298774193",
+        "name": "prepare",
+        "startedAt": "2026-10-23T07:35:53Z",
+        "status": "COMPLETED",
+        "workflowName": "Resident source preparation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T07:45:58Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39918786618/job/120302511772",
+        "name": "Android foundation result",
+        "startedAt": "2026-10-23T07:45:52Z",
+        "status": "COMPLETED",
+        "workflowName": "Android foundation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T07:40:38Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39918786457/job/120298793467",
+        "name": "Repository verification",
+        "startedAt": "2026-10-23T07:35:56Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:11:54Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39918786457/job/120298793522",
+        "name": "Browser MVP (shard 1/4)",
+        "startedAt": "2026-10-23T07:35:56Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:11:36Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39918786457/job/120298793466",
+        "name": "Browser MVP (shard 2/4)",
+        "startedAt": "2026-10-23T07:35:56Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:10:08Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39918786457/job/120298793498",
+        "name": "Browser MVP (shard 3/4)",
+        "startedAt": "2026-10-23T07:35:56Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:02:12Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39918786457/job/120298793531",
+        "name": "Browser MVP (shard 4/4)",
+        "startedAt": "2026-10-23T07:35:56Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T07:44:50Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39918786457/job/120298793507",
+        "name": "Browser production surface (flag off)",
+        "startedAt": "2026-10-23T07:35:56Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-23T08:12:05Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/39918786457/job/120312356510",
+        "name": "Browser MVP result",
+        "startedAt": "2026-10-23T08:11:58Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      }
+    ],
+    "title": "Reject missing recovery evidence in release distribution checks",
+    "url": "https://github.com/AlphaCompute/alphaphone/pull/612"
+  },
+  {
+    "headRefOid": "662543d3c4487aa3f4f64f7c768fce41c9ff4b3f",
+    "number": 611,
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-24T02:01:41Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052407704/job/120747718223",
+        "name": "changes / changes",
+        "startedAt": "2026-10-24T02:01:27Z",
+        "status": "COMPLETED",
+        "workflowName": "Android foundation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-24T02:01:44Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052407772/job/120747718385",
+        "name": "changes / changes",
+        "startedAt": "2026-10-24T02:01:27Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-24T02:01:45Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052407756/job/120747718282",
+        "name": "changes / changes",
+        "startedAt": "2026-10-24T02:01:27Z",
+        "status": "COMPLETED",
+        "workflowName": "Resident source preparation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052407704/job/120747780504",
+        "name": "build",
+        "startedAt": "2026-10-24T02:01:44Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Android foundation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052407756/job/120747797752",
+        "name": "prepare",
+        "startedAt": "2026-10-24T02:01:48Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Resident source preparation"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-24T02:01:25Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052407772/job/120747719777",
+        "name": "Browser storage (${{ matrix.browser }}, shard ${{ matrix.shard }}/2)",
+        "startedAt": "2026-10-24T02:01:25Z",
+        "status": "COMPLETED",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052407772/job/120747792804",
+        "name": "Repository verification",
+        "startedAt": "2026-10-24T02:01:47Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052407772/job/120747792816",
+        "name": "Browser MVP (shard 1/4)",
+        "startedAt": "2026-10-24T02:01:47Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052407772/job/120747792784",
+        "name": "Browser MVP (shard 2/4)",
+        "startedAt": "2026-10-24T02:01:47Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052407772/job/120747792836",
+        "name": "Browser MVP (shard 3/4)",
+        "startedAt": "2026-10-24T02:01:47Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052407772/job/120747792882",
+        "name": "Browser MVP (shard 4/4)",
+        "startedAt": "2026-10-24T02:01:47Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Browser MVP"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/AlphaCompute/alphaphone/actions/runs/40052407772/job/120747792864",
+        "name": "Browser production surface (flag off)",
+        "startedAt": "2026-10-24T02:01:47Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Browser MVP"
+      }
+    ],
+    "title": "Adopt reviewed Maps and mobile task fixes",
+    "url": "https://github.com/AlphaCompute/alphaphone/pull/611"
+  }
+]

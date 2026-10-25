@@ -1,0 +1,26 @@
+{
+  "scope": "Prepared website patch; no deployment",
+  "websiteRepository": "AlphaCompute/alpha-compute",
+  "referenceBranch": "prod",
+  "configGitBlob": "3a30d82c876b30ac9da1602aac1b1a12f5e60dfe",
+  "nextPackage": {
+    "name": "next",
+    "version": "16.4.0",
+    "shasum": "880d9da9d4b2a41bc0010d6f01d659aa24185ec7",
+    "integrity": "sha512-N2C+9q89Z/oLrsepSRS4jRMtwmUZAoZuAHU0e9T6+sAB5DdhADmrnOW+zjYijlrYFmVfmQhGVGy9eMFoB7UgKg=="
+  },
+  "checks": {
+    "fixturePatchApplies": true,
+    "configurationHooks": true,
+    "bundledNextRouteParser": true,
+    "callbackAndAssetExceptions": true,
+    "marketingRedirectsRetained": true
+  },
+  "notPerformed": [
+    "Full website Next build",
+    "Website staging or production deployment",
+    "CDN verification",
+    "Real signing certificate association",
+    "Live OAuth and device acceptance"
+  ]
+}

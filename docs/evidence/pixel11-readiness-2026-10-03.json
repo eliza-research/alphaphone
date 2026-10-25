@@ -1,0 +1,1777 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-03",
+  "timezone": "America/Los_Angeles",
+  "deployReady": false,
+  "physicalDeviceObserved": true,
+  "physicalFlashPerformed": true,
+  "sourcePin": "91dc19196c307eb8559b9b58de8dbf63eb47f43f",
+  "verification": {
+    "alphaVerify": {
+      "passed": true,
+      "tests": 274,
+      "command": "ALPHA_LOCAL_AGENT_SOURCE_DIR=/home/shaw/Work/alphaphone/artifacts/pixel11-runtime-source taskset -c 4-7 npm run verify",
+      "executionNote": "Full post-boot-checker verification passed 274 tests plus typecheck/web build; one subsequent CLI regression passed in the focused five-test run. No claim of 275 tests in a single full run.",
+      "log": "artifacts/pixel11-research/verify-alpha-postboot.log"
+    },
+    "androidBuild": {
+      "passed": true,
+      "flavors": [
+        "standalone",
+        "launcher"
+      ],
+      "outputs": [
+        "signed-debug",
+        "unsigned-release"
+      ],
+      "lint": true,
+      "physicalAcceptance": false
+    },
+    "upstreamSafety": {
+      "passed": true,
+      "tests": 62,
+      "scope": "mock transports, contracts, firmware preparation, flash metadata, locks; no physical flash"
+    },
+    "preflight": {
+      "passed": true,
+      "tests": 7,
+      "defaultExit": 2,
+      "scope": "read-only; no authorization",
+      "fileReplacementRejected": true
+    },
+    "aospOverlay": {
+      "passed": true,
+      "development": true,
+      "modules": [
+        "AlphaPhone",
+        "DeskClock"
+      ],
+      "imageBuilt": false
+    },
+    "recoveryVerifier": {
+      "passed": true,
+      "syntheticCases": 8,
+      "realArchiveInspected": false,
+      "partialArchiveRejected": true,
+      "scope": "Offline hash, ZIP CRCs, member set and stock firmware metadata; no device operations or physical restoration.",
+      "pathReplacementRejected": true,
+      "pipeInputRejectedWithoutBlocking": true
+    },
+    "alphaGrizzlyProduct": {
+      "staged": true,
+      "productName": "alpha_grizzly_phone",
+      "lunch": "alpha_grizzly_phone-cp2a-userdebug",
+      "developmentOnly": true,
+      "unsupportedTargetRejected": true,
+      "nonDevelopmentRejected": true,
+      "aospProductEvaluation": false,
+      "imageBuilt": false,
+      "deployReady": false
+    },
+    "liveWrongTargetPreflight": {
+      "path": "artifacts/pixel11-research/preflight-cuttlefish-rejected.json",
+      "sha256": "c2b1da7374f2b2928c2143e209b7af70cae3fefb46fcea3db23daa60d57d21ff",
+      "exitCode": 2,
+      "expectedResult": "Read-only preflight rejects connected Cuttlefish as not grizzly; complete factory hash passes.",
+      "deviceWrites": false
+    },
+    "hostAvbToolRepositoryVerify": {
+      "path": "artifacts/pixel11-research/verify-avbtool-host-candidate.log",
+      "sha256": "4942de0f416cfb9858f9a279d0e9c8d0d7bbb06a1fcae38e9f1844fed1632413",
+      "exitCode": 0,
+      "tests": 266
+    }
+  },
+  "apks": {
+    "createdAt": "2026-10-04T03:43:37.235Z",
+    "upstream": {
+      "url": "https://github.com/elizaOS/eliza.git",
+      "commit": "91dc19196c307eb8559b9b58de8dbf63eb47f43f",
+      "appSource": "packages/app",
+      "nativeSystemSource": "plugins/plugin-native-system",
+      "osSource": "packages/os"
+    },
+    "results": [
+      {
+        "file": "artifacts/standalone-debug.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": false,
+        "launcher": true,
+        "debuggable": true,
+        "sha256": "00159c58c95262ae9559020263675bb0d3ee04f1d28e0d9ad143fec145bb98f3",
+        "webPayload": true
+      },
+      {
+        "file": "artifacts/standalone-release-unsigned.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": false,
+        "launcher": true,
+        "debuggable": false,
+        "sha256": "d44b1ab1e0c21ecb3be871dbe85155b1e6437f251febb27d945ed0a343ae007e",
+        "webPayload": true
+      },
+      {
+        "file": "artifacts/launcher-debug.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": true,
+        "launcher": true,
+        "debuggable": true,
+        "sha256": "5b654fd7aaf02bb791463f74c129ac5dae639cab65ee6d82f9d2d76c0f74bbac",
+        "webPayload": true
+      },
+      {
+        "file": "artifacts/launcher-release-unsigned.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": true,
+        "launcher": true,
+        "debuggable": false,
+        "sha256": "8c7ccae114b23f5238c00bff8a0b187246ab9bb300ff7518a84858cfc4e7b31c",
+        "webPayload": true
+      }
+    ]
+  },
+  "environmentRemediation": [
+    "Preserved incomplete runtime cache; prepared exact pinned commit from local submodule in new artifacts/pixel11-runtime-source.",
+    "Installed generated speech AAR/models through current hash-validating installer after confirming acquisition/source patch manifests match prior local build; verified 6329 regular source files. Updated generated runtime manifest to actual local build hashes."
+  ],
+  "logs": {
+    "verify-final.log": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/verify-final.log",
+      "sha256": "d2708aedeb2ddadf3154e38ef917eb386ad45a02cea9380ae322ea8a99b68326"
+    },
+    "android-build-final.log": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/android-build-final.log",
+      "sha256": "5c238c911d77712b824a3b47673b42ae186b49dab339266f0906a6aa96046b62"
+    },
+    "preflight-tests.log": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/preflight-tests.log",
+      "sha256": "331d306d004258446f020d045ad88034dfebb68db40f80463fb1bc66448e3477"
+    },
+    "upstream-safety.log": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/upstream-safety.log",
+      "sha256": "6db9b68d79ec14c70585f3d91a713852f5c7d7934f0cd9f7d2c53360f8cebd34"
+    },
+    "speech-install.log": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/speech-install.log",
+      "sha256": "325b638cb0d4af3dedd0e433ae7a065be6e17f265fcf43049e8c919d28966baa"
+    },
+    "speech-source-verify.log": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/speech-source-verify.log",
+      "sha256": "4c406594eb71c5a4dbe8d4a487ee0e565315cc629bb10db04de4455f413f0853"
+    },
+    "alpha-overlay.log": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/alpha-overlay.log",
+      "sha256": "86c5594e129acf9af771291483c8d35371d0bff985e8b70dd18e5dfa3b77dc52"
+    },
+    "preflight-final.json": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/preflight-final.json",
+      "sha256": "55aefbf567b53b10273bd1506b28de07134326ca28530bef395ba78ba7767262"
+    },
+    "recovery-verifier-tests.log": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/recovery-verifier-tests.log",
+      "sha256": "f080cf5ee4f2857d219c08afd06c908ccdf90c4046275acfcc8645b8c8d8f721"
+    },
+    "recovery-partial-rejection.log": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/recovery-partial-rejection.log",
+      "sha256": "2f142ce174eb07309c2614bd4d6c8e0b8149de885132ebdc96eb82b9f6fd3ee6"
+    },
+    "verify-host-contention.log": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/verify-host-contention.log",
+      "sha256": "b6e5fce3953649a50ad64e41629112537238a32b6927d69c4c0bb4699313647d"
+    },
+    "verify-timeout-recheck.log": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/verify-timeout-recheck.log",
+      "sha256": "887337c38ae3597fb7d0bec48ac5c691472c34465c5d03c3f74d0e45b3cf0dc0"
+    },
+    "alpha-grizzly-stage.log": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/alpha-grizzly-stage.log",
+      "sha256": "19a68aabc247e32b3521f29b95ae843b18e9e45910c423178e31164aac7c04b9"
+    },
+    "verify-fd-hardening.log": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/verify-fd-hardening.log",
+      "sha256": "64ace0c5dd82c64ad289acff96eacf3dde46152b951dd0673fdc4f249bb66413"
+    },
+    "recovery-verifier-fd-tests.log": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/recovery-verifier-fd-tests.log",
+      "sha256": "3f1e18637e10773a41fdfdf19c7d2752a7341ea1ab4a12fa162c6fc5d55a74d9"
+    },
+    "verify-recovery-fd-hardening.log": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/verify-recovery-fd-hardening.log",
+      "sha256": "234e5bc0a79284b7f99826442301c622b7f85ce213bbbc3b0413d51d3af2471c"
+    }
+  },
+  "recovery": {
+    "downloadInProgress": false,
+    "sha256Verified": true,
+    "outerAndInnerCrcVerified": true,
+    "stockFirmwareRequirementsMatch": true,
+    "deviceRestorationTested": false,
+    "source": "Existing exact Google archive from local recovery cache; isolated copy rehashed and fully reverified. Redundant downloader deliberately stopped after verification.",
+    "file": "artifacts/pixel11-recovery/grizzly-cd1a.260905.001.b1-factory-4ce23ec8.zip",
+    "verificationEvidence": {
+      "path": "artifacts/pixel11-research/recovery-verified.json",
+      "sha256": "a4d9ce1f65301eaeac90cc79b99ebee3fbdee20becb4c3a56675f4e6fd208d29",
+      "result": {
+        "schemaVersion": 1,
+        "factorySha256": "4ce23ec89002abdff0d9b7f3fb32d9efe5741355f4280ee573217dcf426211d3",
+        "outerAndInnerCrcVerified": true,
+        "stockFirmwareRequirementsMatch": true,
+        "images": [
+          "android-info.txt",
+          "fastboot-info.txt",
+          "super_empty.img",
+          "vbmeta.img",
+          "vbmeta_vendor.img",
+          "vbmeta_system.img",
+          "pvmfw.img",
+          "vendor_kernel_boot.img",
+          "vendor_boot.img",
+          "init_boot.img",
+          "dtbo.img",
+          "boot.img",
+          "userdata_exp.ai.img",
+          "system.img",
+          "system_dlkm.img",
+          "vendor_dlkm.img",
+          "system_ext.img",
+          "system_other.img",
+          "vendor.img",
+          "product.img",
+          "abl.img",
+          "bl31.img",
+          "cap.img",
+          "cpm.img",
+          "dbc.img",
+          "dbl.img",
+          "dram_init_0.img",
+          "dram_init_1.img",
+          "dram_init_10.img",
+          "dram_init_11.img",
+          "dram_init_2.img",
+          "dram_init_3.img",
+          "dram_init_4.img",
+          "dram_init_5.img",
+          "dram_init_6.img",
+          "dram_init_7.img",
+          "dram_init_8.img",
+          "dram_init_9.img",
+          "dram_phy.img",
+          "gc.img",
+          "gdmc.img",
+          "gsa_bl1.img",
+          "gsa_fw.img",
+          "modem.img",
+          "tzsw.img"
+        ],
+        "metadata": {
+          "android-info.txt": "\nrequire version-baseband=a900a-MP_260716-260716-M-15880348\nrequire board=spacecraft|kodiak|kodiak_2|grizzly|grizzly_2|cubs|yogi\nrequire version-bootloader=spacecraft-17.4-16238327\n",
+          "fastboot-info.txt": "# fastboot-info for grizzly\nversion 1\nflash boot\nflash init_boot\nflash dtbo\nflash vendor_kernel_boot\nflash pvmfw\nflash vendor_boot\nflash --apply-vbmeta vbmeta\nflash vbmeta_system\nflash vbmeta_vendor\nreboot fastboot\nupdate-super\nflash system\nflash system_dlkm\nflash system_ext\nflash product\nflash vendor\nflash vendor_dlkm\nflash --slot-other system system_other.img\nif-wipe erase userdata\nif-wipe erase metadata\n"
+        },
+        "vbmetaSha256": {
+          "vbmeta.img": "068d116b02bfe31f7a0f9a90ed65bf4a9a569f1c5648917b57597ffdadcb75b6",
+          "vbmeta_system.img": "d57b200b8a149faffec857e345d5658e7890734b8b8122ca933fd89ee191c709",
+          "vbmeta_vendor.img": "ce161d981dd25fa468bd5aaa17ed1ce7f36ed81cf6952672bbce2642019fc1c2"
+        },
+        "deployReady": false,
+        "restorationTested": false,
+        "boundary": "Archive integrity and contents only; no signature, device compatibility, anti-rollback, boot or restoration qualification."
+      }
+    },
+    "stockVbmetaSignatureResearch": {
+      "path": "artifacts/pixel11-research/stock-vbmeta-signature-validation.json",
+      "sha256": "1dff6419a363ffa2354531da81a4adc8e78cd376bc0f9c2606bf29cb18e3e5b4",
+      "result": {
+        "factorySha256": "4ce23ec89002abdff0d9b7f3fb32d9efe5741355f4280ee573217dcf426211d3",
+        "baseAvbtoolSha256": "1aa6f2b462aa67aa3fdf488bee83ab517de8ad9d8228c7b45c35267ab2cf6781",
+        "candidateSha256": "da733b43019931f1dd5d62a0e856bc769acbd7034dd8d376582881f42a9a83c3",
+        "corrections": [
+          "Use pub.hex() to encode public-key bytes",
+          "Exclude 4-byte AVB public-key length prefix when validating raw ML-DSA key length"
+        ],
+        "activeSourceModified": false,
+        "openssl": "OpenSSL 3.6.4 25 Aug 2026 (Library: OpenSSL 3.6.4 25 Aug 2026)",
+        "results": [
+          {
+            "name": "vbmeta.img",
+            "sha256": "068d116b02bfe31f7a0f9a90ed65bf4a9a569f1c5648917b57597ffdadcb75b6",
+            "algorithm": "MLDSA65",
+            "signatureVerifiedAgainstEmbeddedKey": true,
+            "corruptedSignatureRejected": true,
+            "rollbackIndex": 1788220800
+          },
+          {
+            "name": "vbmeta_system.img",
+            "sha256": "d57b200b8a149faffec857e345d5658e7890734b8b8122ca933fd89ee191c709",
+            "algorithm": "MLDSA65",
+            "signatureVerifiedAgainstEmbeddedKey": true,
+            "corruptedSignatureRejected": true,
+            "rollbackIndex": 1788220800
+          },
+          {
+            "name": "vbmeta_vendor.img",
+            "sha256": "ce161d981dd25fa468bd5aaa17ed1ce7f36ed81cf6952672bbce2642019fc1c2",
+            "algorithm": "MLDSA65",
+            "signatureVerifiedAgainstEmbeddedKey": true,
+            "corruptedSignatureRejected": true,
+            "rollbackIndex": 1788220800
+          }
+        ],
+        "scope": "Candidate tool only; signatures against embedded keys for bytes bound to factory SHA. No full descriptor-chain verification, device trust-store or rollback qualification."
+      },
+      "candidatePatch": "artifacts/pixel11-research/avbtool-mldsa-decode.patch",
+      "candidatePatchSha256": "7a1a43e5e5decfab0a459ba59530e1ab6c13a04c963906e9f53a10d2cde23811",
+      "unmodifiedToolResult": "TypeError from hex(bytes); after first correction, invalid ML-DSA public-key length comparison fails.",
+      "candidateAdmittedToBuild": false,
+      "regressions": {
+        "path": "artifacts/pixel11-research/avbtool-candidate-regressions.json",
+        "sha256": "8b2eb77003228b8e82c65bac15e6cf865094095561da549345204693d6c380d3",
+        "result": {
+          "candidateSha256": "da733b43019931f1dd5d62a0e856bc769acbd7034dd8d376582881f42a9a83c3",
+          "ephemeralTestKeysRetained": false,
+          "results": [
+            {
+              "algorithm": "MLDSA65",
+              "validSignature": true,
+              "corruptSignatureRejected": true,
+              "changedMessageRejected": true,
+              "badKeySizeRejected": true
+            },
+            {
+              "algorithm": "MLDSA87",
+              "validSignature": true,
+              "corruptSignatureRejected": true,
+              "changedMessageRejected": true,
+              "badKeySizeRejected": true
+            },
+            {
+              "algorithm": "SHA256_RSA2048",
+              "validSignature": true,
+              "corruptSignatureRejected": true
+            }
+          ],
+          "scope": "Candidate host verifier regression tests, not production signing or device boot."
+        }
+      },
+      "upstreamDecodeFix": {
+        "commit": "d81a4087883417ea4334b87c76d03ae9ff29049b",
+        "url": "https://android.googlesource.com/platform/external/avb/+/d81a4087883417ea4334b87c76d03ae9ff29049b%5E%21/",
+        "scope": "Google commit confirms the same pub.hex() decode correction. Does not establish upstream adoption of the separate key-length fix."
+      },
+      "retainedHostTool": {
+        "patch": "android/aosp/host-tools/avbtool-mldsa.patch",
+        "contract": "android/aosp/host-tools/avbtool-mldsa.json",
+        "prepare": "scripts/prepare-pixel11-avbtool.py",
+        "regressions": "scripts/test-pixel11-avbtool.py",
+        "tool": "artifacts/pixel11-avbtool-verified/avbtool.py",
+        "sha256": "da733b43019931f1dd5d62a0e856bc769acbd7034dd8d376582881f42a9a83c3",
+        "negativeCases": [
+          "Wrong source digest rejected before output creation",
+          "Wrong candidate digest rejected before import",
+          "Wrong patch digest rejected before output creation",
+          "Existing output rejected without changing verified tool"
+        ],
+        "appliedToImageBuild": false
+      }
+    },
+    "fullStockAvbAudit": {
+      "script": "artifacts/pixel11-research/verify-stock-avb-chain.py",
+      "scriptSha256": "f43fc872d9bbeffbd3bb293b02689e2536aeaf548fea911ae23c016b75992ae1",
+      "sessionId": 37443,
+      "status": "Completed successfully; stock root and four child chains plus covered hash/hashtree descriptors verified.",
+      "report": "artifacts/pixel11-research/stock-avb-chain-validation.json",
+      "deviceOperations": false,
+      "reportSha256": "16b289a6f2c7bc5003ac85df886b273b9b7d7e896bde9f03c96b292711adb1c8",
+      "commandLog": {
+        "path": "artifacts/pixel11-research/stock-avb-chain-command.log",
+        "sha256": "563534be0bf3bb79b5dfbea1f482bfdc010491b308cbcc1fec582f735c94bc82"
+      },
+      "extractedImages": 43,
+      "chainKeyBindingVerifiedInToolSource": true,
+      "deviceRollbackOrRestorationVerified": false
+    },
+    "stockAvbChainVerified": true
+  },
+  "remaining": [
+    "Physical grizzly identity, firmware, SKU, capacity and rollback state",
+    "Complete Alpha physical product build, image bundle and release adapter",
+    "Reviewed source/kernel/vendor/AVB/fstab/VINTF closure",
+    "Device-compatible recovery plan and tested stock restoration",
+    "Scoped lab release trust and experiment admission",
+    "Physical boot, hardware, resident agent, OTA and user acceptance"
+  ],
+  "notes": [
+    "No submodule source or pin changed.",
+    "A completed APK/emulator/Cuttlefish test is not evidence that an Alpha grizzly image boots."
+  ],
+  "researchLeads": {
+    "powerphoneSource": "4664b65e3a1c955bc409c9b8ffd41d67ca4589dd",
+    "espadaSource": "3e7ca981eb24cdaa5874f613f92cf39eafafe12b",
+    "avbFstabTopology": "Candidate mismatch requires generated grizzly image comparison; no fix or device boot claimed.",
+    "pinnedFstabTransform": "Confirmed at pinned adevtool copy.ts lines 184-205: root AVB rewrite, wrapped-key encryption rewrite. Effective generated grizzly topology still unobserved.",
+    "lineageKernel": {
+      "repository": "https://github.com/Reeky-ux/lineage_kernel_google_kodiak",
+      "commit": "188b1a271525545f55579e6180b67f5673cd6186",
+      "scope": "Kodiak kernel source lead with spacecraft family files; no verified grizzly ROM or complete reproducible build",
+      "currentSourceBase": "CP41 kernel-16136351 according to commit history; README still says A9"
+    },
+    "lineageReproductionIssue": "https://github.com/Reeky-ux/lineage_kernel_google_kodiak/issues/1"
+  },
+  "sourceSnapshots": {
+    "adevtool-copy.ts": {
+      "sha256": "51680f3b9484c53d83eb49cf57f292ea8788254bec6f0bca8e0bb72b6016f698",
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/adevtool-copy.ts"
+    },
+    "adevtool-config_mk_google_devices_platform_malibu_BoardConfig-common.mk": {
+      "sha256": "11db3973cae9f79ef8cbb340a672bc742b8defc7194de110fab96e521faffca4",
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/adevtool-config_mk_google_devices_platform_malibu_BoardConfig-common.mk"
+    },
+    "powerphone-fstab.sh": {
+      "sha256": "03458b8a75b593daf5998af25bb696c3d65c362105eb5c7fd92b363b94e18817",
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/powerphone-fstab.sh"
+    },
+    "0002-malibu-avb-chain-topology.patch": {
+      "sha256": "bda309e188617b9d550944af15f3f00d2776b4ae93a6113ce28ceeb38e2b6929",
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/0002-malibu-avb-chain-topology.patch"
+    },
+    "remote-factory-metadata.json": {
+      "sha256": "32f50046b95fd1097fab1a1cfa35f41d003e2c0efa7d108774700c25c3e81913",
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/remote-factory-metadata.json"
+    },
+    "unverified-stock-vbmeta.img": {
+      "sha256": "068d116b02bfe31f7a0f9a90ed65bf4a9a569f1c5648917b57597ffdadcb75b6",
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/unverified-stock-vbmeta.img"
+    },
+    "unverified-stock-vbmeta_system.img": {
+      "sha256": "d57b200b8a149faffec857e345d5658e7890734b8b8122ca933fd89ee191c709",
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/unverified-stock-vbmeta_system.img"
+    },
+    "unverified-stock-vbmeta_vendor.img": {
+      "sha256": "ce161d981dd25fa468bd5aaa17ed1ce7f36ed81cf6952672bbce2642019fc1c2",
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/unverified-stock-vbmeta_vendor.img"
+    },
+    "stock-vbmeta-info.txt": {
+      "sha256": "c6656dfac333b3db3f512f496d19df0af15e37333a9cd119f91bd8b17d038850",
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/stock-vbmeta-info.txt"
+    },
+    "stock-vbmeta-system-info.txt": {
+      "sha256": "5dc2f3960749227e2a129225280d7828101e9451911384dfb7cf465453a367f0",
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/stock-vbmeta-system-info.txt"
+    },
+    "stock-vbmeta-vendor-info.txt": {
+      "sha256": "54e06aa9f6bc5d27396f1396e7a186f22369249fdd81473dbd42db601a7cda68",
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/stock-vbmeta-vendor-info.txt"
+    },
+    "reeky-head.json": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/reeky-head.json",
+      "sha256": "e0b39c6aa0ee7ae2a1ff6ca977d18fdf0474ade876a738cf6b29594cc9e8575b"
+    },
+    "reeky-commits.json": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/reeky-commits.json",
+      "sha256": "e06f75ae51bdaf0d63d9dde982dad116322234c9f079167e0ab0c2717d603e60"
+    },
+    "reeky-default.xml": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/reeky-default.xml",
+      "sha256": "05692a109e40ed67ba0c174f6ca124c43764c9a17ff72b91d823a9eb414f05b7"
+    },
+    "reeky-GKI-PREBUILTS.md": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/reeky-GKI-PREBUILTS.md",
+      "sha256": "d660dde8c698b2b71142f829a64ec341debde38a5ba990d1f036406e784bf6c5"
+    },
+    "alpha-physical-product.json": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-alpha-product/physical-product.json",
+      "sha256": "890c3e0545f950e355d7fe5e25975746b4d227b9339aaaac52d0b40299168759"
+    },
+    "reeky-issues.json": {
+      "path": "/home/shaw/Work/alphaphone/artifacts/pixel11-research/reeky-issues.json",
+      "sha256": "102b646840ba0a7cb851eb3dd2e4fcf2f7d5c24e69154b1e82037caf72052a23"
+    }
+  },
+  "provisionalStockInspection": {
+    "authenticatedByFullFactoryHash": false,
+    "signatureVerified": false,
+    "method": "HTTPS range reads of pinned factory ZIP metadata and three bounded vbmeta entries; local avbtool info_image only",
+    "rootAlgorithm": "MLDSA65",
+    "rootRollbackIndex": 1788220800,
+    "chainRollbackLocations": {
+      "boot": 2,
+      "init_boot": 4,
+      "vbmeta_system": 1,
+      "vbmeta_vendor": 3
+    },
+    "avbtoolSha256": "1aa6f2b462aa67aa3fdf488bee83ab517de8ad9d8228c7b45c35267ab2cf6781",
+    "fullArchiveHashNowVerified": true,
+    "threeVbmetaHashesMatchFullArchive": true
+  },
+  "sourcePreparation": {
+    "existingManifestCommit": "5bc9a7ce1cd78dd53613bbfd0ebf506e1e4adb0f",
+    "lockedProjects": 1084,
+    "existingObjectAvailabilityVerified": 1084,
+    "isolatedCheckout": "/home/shaw/Work/alphaphone/artifacts/pixel11-aosp",
+    "checkoutComplete": true,
+    "sourceLockVerified": true,
+    "imageBuilt": false,
+    "originalCheckoutModified": false,
+    "externalProjectsFetched": true,
+    "independentMetadataCopied": true,
+    "copyValidation": "All 1084 worktree/object references checked before independent metadata copy. Isolated checkout and 1087-project baseline audit completed; original objects are referenced through alternates.",
+    "adevtoolDependenciesInstalled": true,
+    "lockedModeReproduction": {
+      "time": "2026-10-04T04:37:35.343Z",
+      "scope": "Only isolated build/make manifest-linked trees; unchanged file contents; locked group-write permission bits reproduced for user primary group.",
+      "results": [
+        {
+          "path": "build/core",
+          "before": "b812925601496c5379c3fbcc32c44e5de5e3116f4cb2819d462bc317863b989b",
+          "expected": "42243fa74efa126966c831b6add7260a5204023ca22afc88ed71187a09024685"
+        },
+        {
+          "path": "build/target",
+          "before": "e00169797df0885c42351b1fd2e18c13ae3ff60444d1db454a2ec0aa93099409",
+          "expected": "8bd04d4c8628ee3ddf11a6d5b3338020c160287263a059ba4f8f9654bea41de0"
+        },
+        {
+          "path": "build/tools",
+          "before": "d44133c23a1abbc03106d729b651574df779552dab914a137e789b9a08afd712",
+          "expected": "4a3b02b7873b6d006a7f202cb2348a1c398341dea4f0f0443bc50cff38c97308"
+        }
+      ],
+      "changedFiles": 1581
+    },
+    "baselineEvidence": {
+      "path": "artifacts/pixel11-research/source-baseline.json",
+      "sha256": "325ca2ebd90c63849ebb987a0914ceefd9da18e43a1f699f2ae5da126da1198b",
+      "result": {
+        "observedAt": "2026-10-04T04:37:49.836Z",
+        "manifestCommit": "5bc9a7ce1cd78dd53613bbfd0ebf506e1e4adb0f",
+        "resolvedManifestSha256": "01bac1fa7a01e0555e759b41b4ce5160376b630cf7ea5933db9c81e73c5bc9ca",
+        "sourceRoot": "/home/shaw/Work/alphaphone/artifacts/pixel11-aosp",
+        "closure": {
+          "projectCount": 1087,
+          "boundTrees": [],
+          "rootEntries": [
+            {
+              "path": "Android.bp",
+              "sha256": "faaf34f6e465d8a792f73023f73283182842c63934d4b865ad0bc4eb1957cc06"
+            },
+            {
+              "path": "bootstrap.bash",
+              "sha256": "d0834e9fea229e339fca5d8516de94dc208979f459b0e3ec0b3d4eecda3640bf"
+            },
+            {
+              "path": "build/CleanSpec.mk",
+              "sha256": "eb97c2b04bb2b62a58d642323eae419e8d58d3b7e6f85cf40788200209d69f2f"
+            },
+            {
+              "path": "build/buildspec.mk.default",
+              "sha256": "60168307ae67d117d9ca87ab19cf79d532a9fbb3ab782bdd45291d858ae965d1"
+            },
+            {
+              "path": "build/core",
+              "sha256": "42243fa74efa126966c831b6add7260a5204023ca22afc88ed71187a09024685"
+            },
+            {
+              "path": "build/envsetup.sh",
+              "sha256": "b33ca1b7b2d7fb5ec5e4d60293ae728932c6ff90855cc1b81345d7cc31ed099e"
+            },
+            {
+              "path": "build/target",
+              "sha256": "8bd04d4c8628ee3ddf11a6d5b3338020c160287263a059ba4f8f9654bea41de0"
+            },
+            {
+              "path": "build/tools",
+              "sha256": "4a3b02b7873b6d006a7f202cb2348a1c398341dea4f0f0443bc50cff38c97308"
+            },
+            {
+              "path": "lk_inc.mk",
+              "sha256": "083778590fe579ecc6b484cb6381c7b09649397bde9665c089d83e45774108d4"
+            },
+            {
+              "path": "trusty/.bazelrc",
+              "sha256": "ef3bd7663029cb8ffd9c1ad6a923ef3df5560b0a21a6fef09e474410f8c6c34f"
+            },
+            {
+              "path": "trusty/WORKSPACE.bazel",
+              "sha256": "99de3e0138ac8dd3f6aac6bfc175fa21da1a3a3f57284c15e3820d51f3eca94a"
+            }
+          ]
+        },
+        "commitsRemotesAndNonignoredStatusVerified": true,
+        "sourceOverlaysApplied": false,
+        "generatedVendor": false,
+        "imageBuilt": false,
+        "deployReady": false,
+        "scope": "Clean baseline before locked overlays and generated vendor. Not a final release snapshot; ignored dependency files and eventual generated inputs need their own build admission."
+      }
+    },
+    "sourceOverlaysEvidence": {
+      "path": "artifacts/pixel11-research/source-overlays.json",
+      "sha256": "108fa84b1e86a0391dfb353602eef28a2e5bf191cc2c4f6a210cee9c1d02355a",
+      "result": {
+        "appliedAt": "2026-10-04T04:38:57.913Z",
+        "overlays": [
+          {
+            "path": "frameworks/base/tools/aapt2/Android.bp",
+            "url": "https://raw.githubusercontent.com/GrapheneOS/platform_frameworks_base/b2be3bb5f88bc5833dd4f9a11b3c295259ae733f/tools/aapt2/Android.bp",
+            "sourceCommit": "b2be3bb5f88bc5833dd4f9a11b3c295259ae733f",
+            "baseSha256": "95bc042ba4e10e2a0ad803c1ab96374e5c085c2e4ba318316c06b751e52c2e3b",
+            "sha256": "ecf7e90381479335fdfb9a96a1616fbbe5b66972b1f7c1beaa9fcdaa3b223a39"
+          },
+          {
+            "path": "frameworks/base/tools/aapt2/BriefPackageInfo.proto",
+            "url": "https://raw.githubusercontent.com/GrapheneOS/platform_frameworks_base/b2be3bb5f88bc5833dd4f9a11b3c295259ae733f/tools/aapt2/BriefPackageInfo.proto",
+            "sourceCommit": "b2be3bb5f88bc5833dd4f9a11b3c295259ae733f",
+            "baseSha256": null,
+            "sha256": "a7695326ebfc0799888e2b785a1e31518ea1bb85cc89591e66c83879cc3880e7"
+          },
+          {
+            "path": "frameworks/base/tools/aapt2/Configuration.proto",
+            "url": "https://raw.githubusercontent.com/GrapheneOS/platform_frameworks_base/b2be3bb5f88bc5833dd4f9a11b3c295259ae733f/tools/aapt2/Configuration.proto",
+            "sourceCommit": "b2be3bb5f88bc5833dd4f9a11b3c295259ae733f",
+            "baseSha256": "a51fca4be60094c8e895f6b49188d07af64ae4fc4c65134a07e5edd6830a067b",
+            "sha256": "9161de5a4711e574e8e38457938ab3b10ba5445874106a0bf1b22dcd739f51ed"
+          },
+          {
+            "path": "frameworks/base/tools/aapt2/cmd/Dump.cpp",
+            "url": "https://raw.githubusercontent.com/GrapheneOS/platform_frameworks_base/b2be3bb5f88bc5833dd4f9a11b3c295259ae733f/tools/aapt2/cmd/Dump.cpp",
+            "sourceCommit": "b2be3bb5f88bc5833dd4f9a11b3c295259ae733f",
+            "baseSha256": "67965516d553bc2966fee3692e7e9212f33cfcebff79ae073efd605fb8e01fc7",
+            "sha256": "1a0414d6af278aaf138d98c53d7fee10a185a480241d037e5748eb0465055518"
+          },
+          {
+            "path": "frameworks/base/tools/aapt2/cmd/Convert.cpp",
+            "url": "https://raw.githubusercontent.com/GrapheneOS/platform_frameworks_base/b2be3bb5f88bc5833dd4f9a11b3c295259ae733f/tools/aapt2/cmd/Convert.cpp",
+            "sourceCommit": "b2be3bb5f88bc5833dd4f9a11b3c295259ae733f",
+            "baseSha256": "11a19bcd5ae30dc3e459d893b400f9ae34c868bbcdfb7212549e60ec285b22cf",
+            "sha256": "df70b3a1420e5d0e4e8407714cee5cbee14f91c7f6dc6f41f5b08910a88858ad"
+          },
+          {
+            "path": "frameworks/base/tools/aapt2/cmd/Convert.h",
+            "url": "https://raw.githubusercontent.com/GrapheneOS/platform_frameworks_base/b2be3bb5f88bc5833dd4f9a11b3c295259ae733f/tools/aapt2/cmd/Convert.h",
+            "sourceCommit": "b2be3bb5f88bc5833dd4f9a11b3c295259ae733f",
+            "baseSha256": "d782589b86a08cfd19bd5ca1e4cb5da50fa2bbfa56e52cb2a9d67e3d4c9c35ef",
+            "sha256": "e0abe22f1ba50702c963a395b961fcc5db16674b0022ca37419cda305b97cfeb"
+          },
+          {
+            "path": "frameworks/base/tools/aapt2/cmd/Dump.h",
+            "url": "https://raw.githubusercontent.com/GrapheneOS/platform_frameworks_base/b2be3bb5f88bc5833dd4f9a11b3c295259ae733f/tools/aapt2/cmd/Dump.h",
+            "sourceCommit": "b2be3bb5f88bc5833dd4f9a11b3c295259ae733f",
+            "baseSha256": "5dd42182c4972e58a2b4bb647bb650f777625dbeed516d5c266ec8a24d98a344",
+            "sha256": "8271bc53c7421846582a76ea3c5c84b7e7f1d69b6bfc7dfd58b8a7a3f14ba971"
+          },
+          {
+            "path": "frameworks/base/tools/aapt2/format/proto/ProtoSerialize.h",
+            "url": "https://raw.githubusercontent.com/GrapheneOS/platform_frameworks_base/b2be3bb5f88bc5833dd4f9a11b3c295259ae733f/tools/aapt2/format/proto/ProtoSerialize.h",
+            "sourceCommit": "b2be3bb5f88bc5833dd4f9a11b3c295259ae733f",
+            "baseSha256": "7bc19c0fcc8dc50ca95b6a2fbeb18f5fe2f5f7e00e06ac04b7f11af1ba31f73c",
+            "sha256": "67b1441fc748881c6fc059a22e1a6ffacb1858d6a4cf64432f494e2d6c971b97"
+          },
+          {
+            "path": "frameworks/base/tools/aapt2/format/proto/ProtoSerialize.cpp",
+            "url": "https://raw.githubusercontent.com/GrapheneOS/platform_frameworks_base/b2be3bb5f88bc5833dd4f9a11b3c295259ae733f/tools/aapt2/format/proto/ProtoSerialize.cpp",
+            "sourceCommit": "b2be3bb5f88bc5833dd4f9a11b3c295259ae733f",
+            "baseSha256": "7c00e64e926d0f745ec8c101a6afcf571a3a8d6d59fd4d9979d8cdedfeedca79",
+            "sha256": "b348a29437cbe7974c7fd10dc22227c903d3866c9f4184ce5c6a87f5692cdf46"
+          },
+          {
+            "path": "tools/apksig/Android.bp",
+            "url": "https://raw.githubusercontent.com/GrapheneOS/platform_tools_apksig/ba4d984e1a360d427307d669d2f789212130e9e8/Android.bp",
+            "sourceCommit": "ba4d984e1a360d427307d669d2f789212130e9e8",
+            "baseSha256": "22f86ab11f2470d9e34861f7273dd92c0ba4e9b914710a71c22dc374ebbac2fb",
+            "sha256": "bd0d99efcab646fb4a39cab3da0b1c15c251169161010a9e8aac1b2d6f59b0c4"
+          },
+          {
+            "path": "tools/apksig/src/apksigner/java/com/android/apksigner/ApkSignerTool.java",
+            "url": "https://raw.githubusercontent.com/GrapheneOS/platform_tools_apksig/ba4d984e1a360d427307d669d2f789212130e9e8/src/apksigner/java/com/android/apksigner/ApkSignerTool.java",
+            "sourceCommit": "ba4d984e1a360d427307d669d2f789212130e9e8",
+            "baseSha256": "52e5771bc9768b38d3988c50ee34cde1e404fe692113ec5f0629af157968d68d",
+            "sha256": "8604499845681d82c69e25ed516127c8bb03ce2a7525e1cb5b1293bdf5aea7c7"
+          },
+          {
+            "path": "tools/apksig/src/main/java/com/android/apksig/internal/apk/Flags.java",
+            "url": "https://raw.githubusercontent.com/GrapheneOS/platform_tools_apksig/ba4d984e1a360d427307d669d2f789212130e9e8/src/main/java/com/android/apksig/internal/apk/Flags.java",
+            "sourceCommit": "ba4d984e1a360d427307d669d2f789212130e9e8",
+            "baseSha256": null,
+            "sha256": "b043cd0fb7a5d90d3561810583ed83796b17766795b88594cc545537d079ed62"
+          },
+          {
+            "path": "tools/apksig/src/main/java/com/android/apksig/internal/apk/v2/V2SchemeVerifier.java",
+            "url": "https://raw.githubusercontent.com/GrapheneOS/platform_tools_apksig/ba4d984e1a360d427307d669d2f789212130e9e8/src/main/java/com/android/apksig/internal/apk/v2/V2SchemeVerifier.java",
+            "sourceCommit": "ba4d984e1a360d427307d669d2f789212130e9e8",
+            "baseSha256": "c33606383a44f77189144acbefc777f53b42d48901f5c3cfae36b9ff91bc5799",
+            "sha256": "47db6b28f3de18b0dd9040cf4ab79f6e3c5c0e2843ca72072ecf3401073be590"
+          },
+          {
+            "path": "tools/apksig/src/main/java/com/android/apksig/internal/apk/v3/V3SchemeVerifier.java",
+            "url": "https://raw.githubusercontent.com/GrapheneOS/platform_tools_apksig/ba4d984e1a360d427307d669d2f789212130e9e8/src/main/java/com/android/apksig/internal/apk/v3/V3SchemeVerifier.java",
+            "sourceCommit": "ba4d984e1a360d427307d669d2f789212130e9e8",
+            "baseSha256": "ebbbe67189e0083c1403e766e0fc7d74682464e4c6e25859ff40d520d9c96173",
+            "sha256": "e3ce759333761b382379bbbda8a5df45e768372bd7661ab2fd3f7232dc2f71eb"
+          }
+        ],
+        "changed": true
+      }
+    },
+    "alphaProductSourceEvidence": {
+      "path": "artifacts/pixel11-research/alpha-product-source.json",
+      "sha256": "4c79a54359df2e5d5fd14c78cd858fc02294af54d6dbdea873ba5ba6512b7578",
+      "result": {
+        "source": "/home/shaw/Work/alphaphone/artifacts/pixel11-alpha-product",
+        "destination": "/home/shaw/Work/alphaphone/artifacts/pixel11-aosp/vendor/alphaphone",
+        "files": [
+          {
+            "path": "Android.bp",
+            "sha256": "a4b41939bb2ef3c5ef4367f8e6f8de00d85c7cd6d29cc723f7f72a960edc5aa1"
+          },
+          {
+            "path": "AndroidProducts.mk",
+            "sha256": "a818c1f282f98b0778d2b6d3542c823626f22aad3f21fbf51113a7bd293fb242"
+          },
+          {
+            "path": "Launcher.apk",
+            "sha256": "5b654fd7aaf02bb791463f74c129ac5dae639cab65ee6d82f9d2d76c0f74bbac"
+          },
+          {
+            "path": "alpha_grizzly_phone.mk",
+            "sha256": "77ae546a56128963dd04c89d6fd7bc6372ce3d248d5ee54336019e468bffa8f1"
+          },
+          {
+            "path": "launcher.json",
+            "sha256": "9c2512633ce3fe213e06fe1957d8615ad841621e199db565592134454cd1a4fd"
+          },
+          {
+            "path": "physical-product.json",
+            "sha256": "890c3e0545f950e355d7fe5e25975746b4d227b9339aaaac52d0b40299168759"
+          },
+          {
+            "path": "product.mk",
+            "sha256": "15f421399e2e62deb6eaa5dac0c1069a6884bdf40d07c9e3eed75a561724b797"
+          }
+        ],
+        "imageBuilt": false,
+        "deployReady": false
+      }
+    },
+    "sourceOverlaysApplied": true,
+    "alphaProductCopied": true,
+    "hostDependenciesBuild": "Completed successfully: Soong analysis and 8966 build steps; all 14 required executables present and launchable. Factory extraction pending.",
+    "finalSourceSnapshotVerified": false,
+    "hostDependenciesEvidence": {
+      "path": "artifacts/pixel11-research/host-tools-built.json",
+      "sha256": "7535bb9aed197dbffaa6b017ef0de43123e1f09e8541304b9eb2ec0a3c8db831",
+      "result": {
+        "observedAt": "2026-10-04T05:05:56.530255+00:00",
+        "buildExitCode": 0,
+        "sourceRoot": "/home/shaw/Work/alphaphone/artifacts/pixel11-aosp",
+        "tools": [
+          {
+            "name": "aapt2",
+            "sha256": "7b4c1ba06068a2aa9b3dfafe55d498c48058d22a7627611f9882839c4964ffe6",
+            "sizeBytes": 24291952,
+            "args": [
+              "version"
+            ],
+            "exitCode": 0,
+            "output": "Android Asset Packaging Tool (aapt) 2.20-alpha-host-tools\n"
+          },
+          {
+            "name": "apksigner",
+            "sha256": "b47549e373b895ce6ca620d0c7887e674d9615ffa837a86ac601dcfd04adb0f0",
+            "sizeBytes": 2959,
+            "args": [
+              "version"
+            ],
+            "exitCode": 0,
+            "output": "0.9\n"
+          },
+          {
+            "name": "aprotoc",
+            "sha256": "0e3aae383ed74af88dd30c3c22c7727dc2cef694ae2471fb58bacce382abd58c",
+            "sizeBytes": 35821272,
+            "args": [
+              "--version"
+            ],
+            "exitCode": 0,
+            "output": "libprotoc 33.5\n"
+          },
+          {
+            "name": "arsclib",
+            "sha256": "fd1f035b6a3d068f459202c893ef385bd87275c0a0d3d5b9e752381fb7e2ff6d",
+            "sizeBytes": 1646,
+            "args": [
+              "--help"
+            ],
+            "exitCode": 1,
+            "output": "Exception in thread \"main\" java.lang.IllegalArgumentException: expected --json-stdin option\n\tat org.grapheneos.arsclib.Main.main(Main.java:21)\n"
+          },
+          {
+            "name": "debugfs",
+            "sha256": "d1f8091ebe4f5f08e0596ba59759f353e7aed5de31cb56073eefdcd9a2571161",
+            "sizeBytes": 437104,
+            "args": [
+              "-V"
+            ],
+            "exitCode": 0,
+            "output": "debugfs 1.47.2 (1-Jan-2025)\n\tUsing EXT2FS Library version android-platform-15.0.0_r5-314-ga1f793f6b\n"
+          },
+          {
+            "name": "dispol",
+            "sha256": "43f490ca3bc4516435b5b2e6f91287cf6bf0ce041c3caf43591d120db7d67875",
+            "sizeBytes": 511072,
+            "args": [
+              "--help"
+            ],
+            "exitCode": 1,
+            "output": "Usage:\n /home/shaw/Work/alphaphone/artifacts/pixel11-aosp/out_adevtool_deps/host/linux-x86/bin/dispol [OPTIONS] binary_pol_file\n\nOptions:\n -h, --help   print this help message\n -a, --actions ACTIONS   run non-interactively\n\nActions:\n  1    display unconditional AVTAB\n  2    display conditional AVTAB (entirely)\n  3    display conditional AVTAB (only ENABLED rules)\n  4    display conditional AVTAB (only DISABLED rules)\n  5    display booleans\n  6    display conditional expressions\n  8    display role transitions\n  c    display policy capabilities\n  C    display classes\n  u    display users\n  r    display roles\n  t    display types\n  a    display type attributes\n  p    display the list of permissive types\n  U    display unknown handling setting\n  F    display filename_trans rules\n\n"
+          },
+          {
+            "name": "fsck.erofs",
+            "sha256": "d97975db9cf0bc2892da6a39485e882260064d5e0ff264e11451f78ff8d15765",
+            "sizeBytes": 1228088,
+            "args": [
+              "--version"
+            ],
+            "exitCode": 0,
+            "output": "fsck.erofs (erofs-utils) 1.8.3\navailable decompressors: lz4, lz4hc, deflate\n"
+          },
+          {
+            "name": "lpdump",
+            "sha256": "3d73bb3350df8f3de0dc9d976c0e308a30022d59324f58162448ad7df2cff989",
+            "sizeBytes": 9080,
+            "args": [
+              "--help"
+            ],
+            "exitCode": 0,
+            "output": "/home/shaw/Work/alphaphone/artifacts/pixel11-aosp/out_adevtool_deps/host/linux-x86/bin/lpdump - command-line tool for dumping Android Logical Partition images.\n\nUsage:\n  /home/shaw/Work/alphaphone/artifacts/pixel11-aosp/out_adevtool_deps/host/linux-x86/bin/lpdump [-s <SLOT#>|--slot=<SLOT#>] [-j|--json] [FILE|DEVICE]\n\nOptions:\n  -s, --slot=N     Slot number or suffix.\n  -j, --json       Print in JSON format.\n  -d, --dump-metadata-size\n                   Print the space reserved for metadata to stdout\n                   in bytes.\n  -a, --all        Dump all slots (not available in JSON mode).\n"
+          },
+          {
+            "name": "lpunpack",
+            "sha256": "f55c7e44530d425e084ee10099036a31a59e64833f6883170612cf1dcb5851b5",
+            "sizeBytes": 185208,
+            "args": [
+              "--help"
+            ],
+            "exitCode": 64,
+            "output": "/home/shaw/Work/alphaphone/artifacts/pixel11-aosp/out_adevtool_deps/host/linux-x86/bin/lpunpack: unrecognized option '--help'\nUnrecognized argument.\n/home/shaw/Work/alphaphone/artifacts/pixel11-aosp/out_adevtool_deps/host/linux-x86/bin/lpunpack - command-line tool for extracting partition images from super\n\nUsage:\n  /home/shaw/Work/alphaphone/artifacts/pixel11-aosp/out_adevtool_deps/host/linux-x86/bin/lpunpack [options...] SUPER_IMAGE [OUTPUT_DIR]\n\nThe SUPER_IMAGE argument is mandatory and expected to contain\nthe metadata. Additional super images are referenced with '-i' as needed to extract\nthe desired partition[s].\nDefault OUTPUT_DIR is '.'.\n\nOptions:\n  -i, --image=IMAGE        Use the given file as an additional super image.\n                           This can be specified multiple times.\n  -p, --partition=NAME     Extract the named partition. This can\n                           be specified multiple times.\n  -S, --slot=NUM           Slot number (default is 0).\n"
+          },
+          {
+            "name": "lz4",
+            "sha256": "026bb48e12be3a290a6c2d8cd6596dc44f5b1704006eb218aa13e9c9c57f711c",
+            "sizeBytes": 577680,
+            "args": [
+              "--version"
+            ],
+            "exitCode": 0,
+            "output": "*** lz4 v1.10.0 64-bit single-thread, by Yann Collet ***\n"
+          },
+          {
+            "name": "ota_extractor",
+            "sha256": "549ab33672aa25235949d19c0e35d3fee1c833cb8d64b769d5e35ec8bdeebd88",
+            "sizeBytes": 6825112,
+            "args": [
+              "--help"
+            ],
+            "exitCode": 1,
+            "output": "ota_extractor: A tool to extract device images from Android OTA packages\n\n  Flags from external/gflags/src/gflags.cc:\n    -flagfile (load flags from file) type: string default: \"\"\n    -fromenv (set flags from the environment [use 'export FLAGS_flag1=value'])\n      type: string default: \"\"\n    -tryfromenv (set flags from the environment if present) type: string\n      default: \"\"\n    -undefok (comma-separated list of flag names that it is okay to specify on\n      the command line even if the program does not define a flag with that\n      name.  IMPORTANT: flags in this list that have arguments MUST use the\n      flag=value format) type: string default: \"\"\n\n  Flags from external/gflags/src/gflags_completions.cc:\n    -tab_completion_columns (Number of columns to use in output for tab\n      completion) type: int32 default: 80\n    -tab_completion_word (If non-empty, HandleCommandLineCompletions() will\n      hijack the process and attempt to do bash-style command line flag\n      completion on this value.) type: string default: \"\"\n\n  Flags from external/gflags/src/gflags_reporting.cc:\n    -help (show help on all flags [tip: all flags can have two dashes])\n      type: bool default: false currently: true\n    -helpfull (show help on all flags -- same as -help) type: bool\n      default: false\n    -helpmatch (show help on modules whose name contains the specified substr)\n      type: string default: \"\"\n    -helpon (show help on the modules named by this flag value) type: string\n      default: \"\"\n    -helppackage (show help on all modules in the main package) type: bool\n      default: false\n    -helpshort (show help on only the main module for this program) type: bool\n      default: false\n    -helpxml (produce an xml version of help) type: bool default: false\n    -version (show version and build info and exit) type: bool default: false\n\n\n\n  Flags from system/update_engine/aosp/ota_extractor.cc:\n    -input_dir (Directory to read input images. Only required for incremental\n      OTAs) type: string default: \"\"\n    -output_dir (Directory to put output images) type: string default: \"\"\n    -partitions (Comma separated list of partitions to extract, leave empty for\n      extracting all partitions) type: string default: \"\"\n    -payload (Path to payload.bin) type: string default: \"\"\n    -payload_offset (Offset to start of payload.bin. Useful if payload path\n      actually points to a .zip file containing payload.bin) type: int64\n      default: 0\n    -single_thread (Limit extraction to a single thread) type: bool\n      default: false\n"
+          },
+          {
+            "name": "simg2img",
+            "sha256": "b61f6609e4da68206ad5ad44532a041dfada971f509e0224452edaaf1f8940be",
+            "sizeBytes": 306576,
+            "args": [],
+            "exitCode": 1,
+            "output": "Usage: simg2img <sparse_image_files> <raw_image_file>\n"
+          },
+          {
+            "name": "sqlite3",
+            "sha256": "807312587c2f5ae0bcd6d2601545446a3ae98d5a03687027078b9aca46c0f91c",
+            "sizeBytes": 8596872,
+            "args": [
+              "--version"
+            ],
+            "exitCode": 0,
+            "output": "3.50.6 2025-09-22 18:50:24 9cc554372371e07bf01d8070a64d461ac85b91be6eef0e642ed129a0c7fa8105 (64-bit)\n"
+          },
+          {
+            "name": "toybox",
+            "sha256": "4dbea2320505b3f1c2041bc4670eeca5ece76086471e89e64cce4e4a2441c696",
+            "sizeBytes": 3443056,
+            "args": [
+              "--version"
+            ],
+            "exitCode": 0,
+            "output": "toybox 0.8.13-android\n"
+          }
+        ],
+        "scope": "Built host tools and bounded version/help launches; extraction and device images not tested.",
+        "adevtoolCommit": "144f004cc484d7e7234cdd167cee48e5f240288f",
+        "log": {
+          "path": "artifacts/pixel11-research/host-dependencies-resume.log",
+          "sha256": "36b1b1483483d6106737a13936e33b6f8c05dd6db8e6c9da06b5fb2defe62d95"
+        },
+        "javaArchives": [
+          {
+            "path": "artifacts/pixel11-aosp/out_adevtool_deps/host/linux-x86/framework/apksigner.jar",
+            "sha256": "9d4432bdf16e285605de62e106489b22782a25801745d3e5a45cae6ea894ceb2",
+            "sizeBytes": 1196789
+          },
+          {
+            "path": "artifacts/pixel11-aosp/out_adevtool_deps/host/linux-x86/framework/arsclib.jar",
+            "sha256": "b7e9931e610d2ef57d33ccce5b3a24dc705468b73a05158e09a805c62a04db7d",
+            "sizeBytes": 6480553
+          }
+        ],
+        "launchCheckLimitations": "Version/help probes only. Nonzero usage exits recorded; arsclib does not implement --help and requires --json-stdin. Actual archive extraction and resource conversion remain pending."
+      }
+    },
+    "vendorPreparationWorker": {
+      "path": "artifacts/pixel11-research/continue-vendor-preparation.py",
+      "sha256": "4f0e97fe8bc8ae6cd327b6873868c26ec62b15c1f524236468be07517f2198d4",
+      "sessionId": 78740,
+      "downloadPid": 740076,
+      "status": "Completed with exit code zero; 16 required vendor files, VINTF API and graphics-stack assertions passed.",
+      "log": "artifacts/pixel11-research/vendor-preparation.log",
+      "deviceOperations": false,
+      "completionEvidence": "artifacts/pixel11-research/vendor-preparation-completed.json"
+    },
+    "vendorGenerationEvidence": {
+      "path": "artifacts/pixel11-research/vendor-preparation-completed.json",
+      "sha256": "2eedaf1be5e44e49aa2e140b50c3809bd390fc7c464dc0109de8faca99d2db6e",
+      "result": {
+        "completedAt": "2026-10-04T05:17:33.246622+00:00",
+        "command": [
+          "taskset",
+          "-c",
+          "0-3",
+          "node",
+          "/home/shaw/Work/alphaphone/vendor/eliza/packages/os/scripts/distro-android/prepare-grizzly.ts",
+          "--aosp-root",
+          "/home/shaw/Work/alphaphone/artifacts/pixel11-aosp",
+          "--lock",
+          "/home/shaw/Work/alphaphone/vendor/eliza/packages/os/android/pixel11pro.lock.json",
+          "--skip-install"
+        ],
+        "factorySha256": "4ce23ec89002abdff0d9b7f3fb32d9efe5741355f4280ee573217dcf426211d3",
+        "prepareExitCode": 0,
+        "imageBuilt": false,
+        "deviceFlashed": false,
+        "deployReady": false
+      },
+      "logSha256": "cee589d407be6fcd0165023c7d617c0143ecc6ad45cceab646ac16e215dd0364",
+      "prepareStamp": {
+        "renderengineBackend": null,
+        "renderengineGraphite": true,
+        "eglSelection": null,
+        "earlyBootProbes": false,
+        "conservativeF2fs": false,
+        "keymasterNonblocking": false
+      },
+      "additionalStockFileReported": "vendor/etc/mdota/custom/carrier_config_a900a-MP_260716-260727-M-15947729"
+    },
+    "developmentBuildInputs": {
+      "path": "artifacts/pixel11-research/alpha-build-inputs.json",
+      "sha256": "4b23b95dc59d8e84c956ce2f386428f71d16d1468dbf2464da925a5bc31a4836"
+    },
+    "resolvedProductConfiguration": {
+      "path": "artifacts/pixel11-research/alpha-grizzly-config.log",
+      "sha256": "1f946c08d8d263f38d6db1b7446f9df9d8a63cba4e21c72353706c99b651330b"
+    },
+    "developmentImageBuild": {
+      "sessionId": 12010,
+      "status": "Compiling target-files-package; approximately 178000 scheduled steps.",
+      "target": "target-files-package",
+      "lunch": "alpha_grizzly_phone-cp2a-userdebug",
+      "outDir": "out_adevtool_deps",
+      "log": "artifacts/pixel11-research/alpha-grizzly-build.log",
+      "releaseQualifiedBuilder": false,
+      "scope": "Local development image for inspection, not signed release admission.",
+      "warningsToAudit": [
+        "Duplicate install rules for hostapd and supplicant VINTF manifest XML; inspect selected output and VINTF validation."
+      ]
+    },
+    "generatedFstabComparison": {
+      "path": "artifacts/pixel11-research/generated-fstab-comparison.json",
+      "sha256": "60b66275b2e312641d9e667813f77e1850cdc19a25b16024d5c500c5ec0004b5",
+      "scope": "Three stock versus generated fstab copies; AVB rewrites observed; userdata mount entries unchanged in all three. Image coherence and boot remain unverified."
+    },
+    "wifiVintfDuplicateAudit": {
+      "path": "artifacts/pixel11-research/wifi-vintf-duplicate-audit.json",
+      "sha256": "be0e53a877f9641a130542f132bcfccebf62d71abbb03bd2863f24056c4ca629",
+      "result": "HAL declarations equivalent; selected generated rule. Final packaged VINTF and physical Wi-Fi unverified."
+    },
+    "artifactVerifierCompatibility": {
+      "path": "vendor/eliza/packages/os/scripts/distro-android/verify-grizzly-artifacts.ts",
+      "sha256": "e19e9443d834c3b3915198f2beb7bf2ecdfe4d8e544d24171c73aaa2eafec2f3",
+      "findings": [
+        "readImageEntry uses sparse conversion plus debugfs; no EROFS reader branch. Generated grizzly BoardConfig selects EROFS.",
+        "checkElfAlignment targets system/priv-app/Eliza; absent directory is skipped. Alpha packaged-APK validation is required independently."
+      ],
+      "requiredFollowup": "Inspect actual images with EROFS-aware tools and verify the packaged Alpha APK, AVB graph and VINTF. Do not treat this verifier alone as Alpha image qualification."
+    },
+    "erofsReaderValidation": {
+      "path": "artifacts/pixel11-research/erofs-reader-validation.json",
+      "sha256": "3aa0a01948df16f565d86470038903364abc5e4d10a44943552f424e02b5b102",
+      "result": {
+        "factorySha256": "4ce23ec89002abdff0d9b7f3fb32d9efe5741355f4280ee573217dcf426211d3",
+        "archiveMember": "system_dlkm.img",
+        "memberSha256": "1337dc27790a10ce6b72ca9edefe8f122586f1cc9b6b8369afdcd378b387c46c",
+        "rawSha256": "1337dc27790a10ce6b72ca9edefe8f122586f1cc9b6b8369afdcd378b387c46c",
+        "toolSha256": "d97975db9cf0bc2892da6a39485e882260064d5e0ff264e11451f78ff8d15765",
+        "checks": [
+          {
+            "case": "valid",
+            "exitCode": 0,
+            "output": ""
+          },
+          {
+            "case": "bad-magic",
+            "exitCode": 1,
+            "output": "<E> erofs: cannot find valid erofs superblock\n<E> erofs: failed to read superblock\n"
+          }
+        ],
+        "scope": "Read-only full-file decompression check against verified stock EROFS plus corrupt fixture; no Alpha image or device qualification."
+      }
+    },
+    "plannedAvbDefaults": {
+      "source": "build/make/core/Makefile",
+      "algorithm": "SHA256_RSA4096",
+      "key": "external/avb/test/data/testkey_rsa4096.pem",
+      "publicTestKey": true,
+      "engHashtreeDisableRuleAppliesToUserdebug": false,
+      "actualImageVerified": false,
+      "scope": "Source rules inspected after configuration; actual vbmeta key, flags and descriptors require image inspection."
+    }
+  },
+  "xdaPrimaryInspection": {
+    "url": "https://xdaforums.com/t/lineageos-for-pixel-11-pro-xl.4800740/",
+    "pagesRead": 4,
+    "lastPostRead": 74,
+    "target": "kodiak",
+    "grizzlyBootEstablished": false,
+    "reportedUpdates": [
+      "20260908",
+      "20260911",
+      "20260913"
+    ],
+    "networkFixReportPost": 31,
+    "cameraRecoveryReportPost": 55,
+    "sourceClosureVerified": false,
+    "firmwarePrerequisiteUnresolved": true,
+    "romArtifactsVerified": false,
+    "publishedFolder": {
+      "url": "https://drive.google.com/drive/folders/10qZ2NTJpTJpo_VnQF8aeZjvjlq5_C2x4",
+      "visibleFiles": [
+        "boot.img",
+        "init_boot.img",
+        "vendor_boot.img",
+        "lineage-24.0-20260913-UNOFFICIAL-reeky-kodiak.zip"
+      ],
+      "missingRecipeFiles": [
+        "dtbo.img",
+        "vendor_kernel_boot.img"
+      ],
+      "authenticated": false
+    },
+    "attachedLogs": {
+      "kernel": "https://xdaforums.com/attachments/dmesg-txt.6390831/",
+      "android": "https://xdaforums.com/attachments/logcat-txt.6390832/",
+      "contentsVerified": false,
+      "access": "Direct retrieval returned HTTP 403; browser download timed out."
+    },
+    "deviceTreeForkSearch": {
+      "android_device_google_grizzly": {
+        "query": "android_device_google_grizzly in:name fork:true",
+        "totalCount": 0,
+        "repositories": [],
+        "responseSha256": "44237c0b8744e50ccc2657ae3b3f9f92d3dcf02cb1e47dc64cb3e0908e829a49"
+      },
+      "android_device_google_kodiak": {
+        "query": "android_device_google_kodiak in:name fork:true",
+        "totalCount": 1,
+        "repositories": [
+          "0xnullsect0r/android_device_google_kodiak"
+        ],
+        "responseSha256": "fb67368fac78d163c2e5411aa0a0f31010caa4bbe1ed540fed3d08f9c9e146f8"
+      }
+    }
+  },
+  "apk16KiBAlignment": {
+    "path": "artifacts/pixel11-research/apk-16k-alignment.json",
+    "sha256": "2cac2a9fa3959a2e05c24335e5a7477dcf6132b5176916f7f523015f4a22e076",
+    "result": {
+      "scope": "Packaged arm64 ELF segment and zip alignment only; not native execution on Pixel or complete image alignment.",
+      "apks": [
+        {
+          "apk": "artifacts/launcher-debug.apk",
+          "sha256": "5b654fd7aaf02bb791463f74c129ac5dae639cab65ee6d82f9d2d76c0f74bbac",
+          "zipalign16KiBPassed": true,
+          "arm64Libraries": [
+            {
+              "name": "lib/arm64-v8a/libimage_processing_util_jni.so",
+              "sha256": "f0e4611db0d6b68942d8ba6977519f3dd1cdbffa87b7fc16d8006696ba954af4",
+              "loadSegments": [
+                {
+                  "alignment": 16384,
+                  "offset": 0,
+                  "virtualAddress": 0
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 29488,
+                  "virtualAddress": 45872
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 30480,
+                  "virtualAddress": 63248
+                }
+              ]
+            },
+            {
+              "name": "lib/arm64-v8a/libonnxruntime.so",
+              "sha256": "33847ad43bffe204699fd4a27f7f3603452a8cdaf2f9a44983a0bc31ffcf2da1",
+              "loadSegments": [
+                {
+                  "alignment": 16384,
+                  "offset": 0,
+                  "virtualAddress": 0
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 5536608,
+                  "virtualAddress": 5552992
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 21771072,
+                  "virtualAddress": 21803840
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 22243040,
+                  "virtualAddress": 22292192
+                }
+              ]
+            },
+            {
+              "name": "lib/arm64-v8a/libsherpa-onnx-jni.so",
+              "sha256": "cd9b0d4ab1e72aad2832c3c45a7acfba72e1e47723513c4cc3cf4b4e7762a855",
+              "loadSegments": [
+                {
+                  "alignment": 16384,
+                  "offset": 0,
+                  "virtualAddress": 0
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 4200048,
+                  "virtualAddress": 4216432
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 4256960,
+                  "virtualAddress": 4289728
+                }
+              ]
+            },
+            {
+              "name": "lib/arm64-v8a/libsurface_util_jni.so",
+              "sha256": "6cb2eac3c68e6a82ce2a5ea5aba86749eb8c609914392e125f6cdfbc208992f8",
+              "loadSegments": [
+                {
+                  "alignment": 16384,
+                  "offset": 0,
+                  "virtualAddress": 0
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 2480,
+                  "virtualAddress": 18864
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "apk": "artifacts/launcher-release-unsigned.apk",
+          "sha256": "8c7ccae114b23f5238c00bff8a0b187246ab9bb300ff7518a84858cfc4e7b31c",
+          "zipalign16KiBPassed": true,
+          "arm64Libraries": [
+            {
+              "name": "lib/arm64-v8a/libimage_processing_util_jni.so",
+              "sha256": "f0e4611db0d6b68942d8ba6977519f3dd1cdbffa87b7fc16d8006696ba954af4",
+              "loadSegments": [
+                {
+                  "alignment": 16384,
+                  "offset": 0,
+                  "virtualAddress": 0
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 29488,
+                  "virtualAddress": 45872
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 30480,
+                  "virtualAddress": 63248
+                }
+              ]
+            },
+            {
+              "name": "lib/arm64-v8a/libonnxruntime.so",
+              "sha256": "33847ad43bffe204699fd4a27f7f3603452a8cdaf2f9a44983a0bc31ffcf2da1",
+              "loadSegments": [
+                {
+                  "alignment": 16384,
+                  "offset": 0,
+                  "virtualAddress": 0
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 5536608,
+                  "virtualAddress": 5552992
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 21771072,
+                  "virtualAddress": 21803840
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 22243040,
+                  "virtualAddress": 22292192
+                }
+              ]
+            },
+            {
+              "name": "lib/arm64-v8a/libsherpa-onnx-jni.so",
+              "sha256": "cd9b0d4ab1e72aad2832c3c45a7acfba72e1e47723513c4cc3cf4b4e7762a855",
+              "loadSegments": [
+                {
+                  "alignment": 16384,
+                  "offset": 0,
+                  "virtualAddress": 0
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 4200048,
+                  "virtualAddress": 4216432
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 4256960,
+                  "virtualAddress": 4289728
+                }
+              ]
+            },
+            {
+              "name": "lib/arm64-v8a/libsurface_util_jni.so",
+              "sha256": "6cb2eac3c68e6a82ce2a5ea5aba86749eb8c609914392e125f6cdfbc208992f8",
+              "loadSegments": [
+                {
+                  "alignment": 16384,
+                  "offset": 0,
+                  "virtualAddress": 0
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 2480,
+                  "virtualAddress": 18864
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "apk": "artifacts/standalone-debug.apk",
+          "sha256": "00159c58c95262ae9559020263675bb0d3ee04f1d28e0d9ad143fec145bb98f3",
+          "zipalign16KiBPassed": true,
+          "arm64Libraries": [
+            {
+              "name": "lib/arm64-v8a/libimage_processing_util_jni.so",
+              "sha256": "f0e4611db0d6b68942d8ba6977519f3dd1cdbffa87b7fc16d8006696ba954af4",
+              "loadSegments": [
+                {
+                  "alignment": 16384,
+                  "offset": 0,
+                  "virtualAddress": 0
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 29488,
+                  "virtualAddress": 45872
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 30480,
+                  "virtualAddress": 63248
+                }
+              ]
+            },
+            {
+              "name": "lib/arm64-v8a/libonnxruntime.so",
+              "sha256": "33847ad43bffe204699fd4a27f7f3603452a8cdaf2f9a44983a0bc31ffcf2da1",
+              "loadSegments": [
+                {
+                  "alignment": 16384,
+                  "offset": 0,
+                  "virtualAddress": 0
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 5536608,
+                  "virtualAddress": 5552992
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 21771072,
+                  "virtualAddress": 21803840
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 22243040,
+                  "virtualAddress": 22292192
+                }
+              ]
+            },
+            {
+              "name": "lib/arm64-v8a/libsherpa-onnx-jni.so",
+              "sha256": "cd9b0d4ab1e72aad2832c3c45a7acfba72e1e47723513c4cc3cf4b4e7762a855",
+              "loadSegments": [
+                {
+                  "alignment": 16384,
+                  "offset": 0,
+                  "virtualAddress": 0
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 4200048,
+                  "virtualAddress": 4216432
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 4256960,
+                  "virtualAddress": 4289728
+                }
+              ]
+            },
+            {
+              "name": "lib/arm64-v8a/libsurface_util_jni.so",
+              "sha256": "6cb2eac3c68e6a82ce2a5ea5aba86749eb8c609914392e125f6cdfbc208992f8",
+              "loadSegments": [
+                {
+                  "alignment": 16384,
+                  "offset": 0,
+                  "virtualAddress": 0
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 2480,
+                  "virtualAddress": 18864
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "apk": "artifacts/standalone-release-unsigned.apk",
+          "sha256": "d44b1ab1e0c21ecb3be871dbe85155b1e6437f251febb27d945ed0a343ae007e",
+          "zipalign16KiBPassed": true,
+          "arm64Libraries": [
+            {
+              "name": "lib/arm64-v8a/libimage_processing_util_jni.so",
+              "sha256": "f0e4611db0d6b68942d8ba6977519f3dd1cdbffa87b7fc16d8006696ba954af4",
+              "loadSegments": [
+                {
+                  "alignment": 16384,
+                  "offset": 0,
+                  "virtualAddress": 0
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 29488,
+                  "virtualAddress": 45872
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 30480,
+                  "virtualAddress": 63248
+                }
+              ]
+            },
+            {
+              "name": "lib/arm64-v8a/libonnxruntime.so",
+              "sha256": "33847ad43bffe204699fd4a27f7f3603452a8cdaf2f9a44983a0bc31ffcf2da1",
+              "loadSegments": [
+                {
+                  "alignment": 16384,
+                  "offset": 0,
+                  "virtualAddress": 0
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 5536608,
+                  "virtualAddress": 5552992
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 21771072,
+                  "virtualAddress": 21803840
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 22243040,
+                  "virtualAddress": 22292192
+                }
+              ]
+            },
+            {
+              "name": "lib/arm64-v8a/libsherpa-onnx-jni.so",
+              "sha256": "cd9b0d4ab1e72aad2832c3c45a7acfba72e1e47723513c4cc3cf4b4e7762a855",
+              "loadSegments": [
+                {
+                  "alignment": 16384,
+                  "offset": 0,
+                  "virtualAddress": 0
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 4200048,
+                  "virtualAddress": 4216432
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 4256960,
+                  "virtualAddress": 4289728
+                }
+              ]
+            },
+            {
+              "name": "lib/arm64-v8a/libsurface_util_jni.so",
+              "sha256": "6cb2eac3c68e6a82ce2a5ea5aba86749eb8c609914392e125f6cdfbc208992f8",
+              "loadSegments": [
+                {
+                  "alignment": 16384,
+                  "offset": 0,
+                  "virtualAddress": 0
+                },
+                {
+                  "alignment": 16384,
+                  "offset": 2480,
+                  "virtualAddress": 18864
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "d8Api37Warning": {
+    "observedAt": "2026-10-04T07:57:57.953583+00:00",
+    "prebuiltCommit": "65fe8f9f5c6769d35f91fe67b786b767a2db5249",
+    "compilerVersion": "D8 9.2.12-dev",
+    "compilerSourceCommit": "3bec476bbff78407704bff11caa40ea817fcb8fa",
+    "jarSha256": "49a6139b96a272482570cb8f32685cc89c27f2457e5d0ec9f447689e52ec9779",
+    "requestedApi": 37,
+    "latestModeledApi": "36.1",
+    "api37Mapping": "MAIN",
+    "diagnosticSeverity": "warning",
+    "sourceObservations": [
+      {
+        "path": "AndroidApiLevel.java",
+        "sha256": "15c5b436605fcf144ed14a3bec76ba7e0cd14ad0a216efe50a1432b782906e11",
+        "url": "https://r8.googlesource.com/r8/+/3bec476bbff78407704bff11caa40ea817fcb8fa/src/main/java/com/android/tools/r8/utils/AndroidApiLevel.java"
+      },
+      {
+        "path": "BaseCompilerCommand.java",
+        "sha256": "f304ee8a30acf67206a51d35d1e115429602579bf22d8de086e8c0758aa4367f",
+        "url": "https://r8.googlesource.com/r8/+/3bec476bbff78407704bff11caa40ea817fcb8fa/src/main/java/com/android/tools/r8/BaseCompilerCommand.java"
+      }
+    ],
+    "scope": "Compiler metadata and source behavior only; no dex execution, physical boot or compatibility qualification. Pinned compiler unchanged."
+  },
+  "apkPackagingCorrection": {
+    "initialBuildExitCode": 1,
+    "failure": "Presigned preprocessed APK contained compressed JNI libraries",
+    "failureEvidence": "artifacts/pixel11-research/alpha-build-apk-packaging-failure.json",
+    "preparedApkEvidence": "artifacts/pixel11-aosp-apk/signed-validation.json",
+    "productEvidence": "artifacts/pixel11-research/alpha-product-source.json",
+    "inputAuditEvidence": "artifacts/pixel11-research/alpha-build-inputs-packaging-v3.json",
+    "sourceProjectsVerified": 1087,
+    "nativeFilesStaged": 4,
+    "verificationLog": "artifacts/pixel11-research/verify-aosp-apk-packaging-v3.log",
+    "verifyPassed": true,
+    "nativeNegativeCasesPassed": 5,
+    "apkNegativeCasesPassed": 5,
+    "residentAgentIncluded": false,
+    "imageBuilt": true,
+    "deployReady": false,
+    "nativeInstallStrategy": "Make APPS prebuilt, PRESIGNED, SDK 36, LOCAL_PREBUILT_JNI_LIBS; retains compression/alignment checks",
+    "v2BuildExitCode": 1,
+    "v2Failure": "prebuilt_any is forbidden in handwritten Android.bp",
+    "v3SourceAuditPassed": true,
+    "v3BuildExitCode": 0
+  },
+  "completedDevelopmentImage": {
+    "imageBuilt": true,
+    "buildCompletionEvidence": "artifacts/pixel11-research/alpha-build-completed-v3.json",
+    "targetFilesIntegrityEvidence": "artifacts/pixel11-research/alpha-target-files-integrity-v3.json",
+    "targetFilesSha256": "1fe28a4df73f0fd11ff1761eb67c7615b93ee35854134b1a6228df7c26fb7d74",
+    "avbAndCapacityEvidence": "artifacts/pixel11-research/alpha-built-image-validation.json",
+    "erofsEvidence": "artifacts/pixel11-research/alpha-built-erofs-validation.json",
+    "launcherEvidence": "artifacts/pixel11-research/alpha-built-launcher-validation.json",
+    "archiveCrcsPassed": true,
+    "avbCoveredPartitionsVerified": 12,
+    "erofsPartitionsChecked": 6,
+    "launcherAndFourNativeLibraryHashesMatched": true,
+    "publicTestKeys": true,
+    "residentAgentIncluded": false,
+    "physicalDevicePresent": false,
+    "imageBootVerified": false,
+    "restoreDrillVerified": false,
+    "deployReady": false,
+    "finalSourceAuditEvidence": "artifacts/pixel11-research/alpha-build-inputs-completed-v3.json",
+    "finalSourceProjectsVerified": 1087,
+    "bootComponentEvidence": "artifacts/pixel11-research/alpha-built-boot-validation.json",
+    "stockKernelAndDtbMatched": true,
+    "bootConfigurationReviewRequired": true,
+    "vintfEvidence": "artifacts/pixel11-research/alpha-built-vintf-validation.json",
+    "vintfCompatible": true,
+    "vintfImageInputsMatched": 127,
+    "vintfEffectiveKernelLevel": 202504,
+    "vintfManifestKernelLevel": 202604
+  },
+  "packagingRegressionCoverage": {
+    "recordedAt": "2026-10-04T12:44:04.963984+00:00",
+    "pythonFixture": "test/aosp-packaging-fixtures.py",
+    "nodeWrapper": "test/aosp-packaging.test.mjs",
+    "pythonTestMethods": 9,
+    "focusedPassed": true,
+    "fullVerifyStatus": "passed",
+    "fullVerifyLog": "artifacts/pixel11-research/verify-aosp-packaging-regressions.log",
+    "scope": "Offline payload/admission tests. Alignment is stubbed in unit tests; actual built APK alignment evidence remains separate.",
+    "fullVerifyExitCode": 0,
+    "nodeTestsPassed": 267,
+    "realApkPreparationPassed": true,
+    "realPreparedOutputUnchanged": true,
+    "realPreparationEvidence": "artifacts/pixel11-aosp-apk-regression-v4/preparation.json"
+  },
+  "residentAgentPreparation": {
+    "source": "artifacts/pixel11-runtime-source",
+    "dependenciesInstalled": true,
+    "workflowWorkerBuilt": true,
+    "hostBun": "artifacts/pixel11-host-bun-1.4.2/provenance.json",
+    "hostBunVersion": "1.4.2",
+    "hostBunVerified": true,
+    "runtimeStaged": true,
+    "imageContainsResidentAgent": false,
+    "dependencyInstallStatus": "passed",
+    "dependencyInstallLog": "artifacts/pixel11-research/alpha-resident-dependencies.log",
+    "workflowWorkerBuildLog": "artifacts/pixel11-research/alpha-workflow-worker-build.log",
+    "workflowWorkerArtifact": "artifacts/pixel11-workflow-worker",
+    "runtimeStagingLog": "artifacts/pixel11-research/alpha-resident-mobile-staging.log",
+    "androidBuildStatus": "passed",
+    "androidBuildLog": "artifacts/pixel11-research/alpha-resident-android-build-v2.log",
+    "androidBuildExitCode": 0,
+    "apkEvidence": "artifacts/pixel11-research/alpha-resident-apks.json",
+    "aospApkPreparedAndDevelopmentSigned": true,
+    "aospApkEvidence": "artifacts/pixel11-aosp-resident-apk-v1/signed-validation.json",
+    "aospApkSha256": "c4e102dd8e7a3a5df87c7b79223a8ebeae8e953d3dfb30510e1479b67f3c5b0f",
+    "runtimeProvenanceFilesMatched": 36,
+    "systemExecutableModesVerified": false,
+    "aospStaged": true,
+    "runtimeAdmissionEvidence": "artifacts/pixel11-research/alpha-resident-runtime-admission.json",
+    "fsConfigValidationEvidence": "artifacts/pixel11-research/alpha-resident-fs-config-validation.json"
+  },
+  "bootConfigurationFinding": {
+    "evidence": "artifacts/pixel11-research/alpha-built-boot-validation.json",
+    "source": "vendor/adevtool/config/mk/google_devices/common/BoardConfig-armv9.mk",
+    "addedAgainstB1": [
+      "bootloader.pixel.MTE_FORCE_ON",
+      "kasan.fault=panic"
+    ],
+    "removedAgainstB1": [
+      "dyndbg=\"func alloc_contig_dump_pages +p\"",
+      "init_on_alloc=0",
+      "init_on_free=1",
+      "kasan=off"
+    ],
+    "inheritedUserspaceSanitizer": "memtag_heap",
+    "stockKernelAndDtbIdentical": true,
+    "firstStageFstabsMatchGeneratedInputs": true,
+    "decision": "Do not deploy existing candidate until inherited MTE and stock-command-line differences are reviewed and resolved. No OEM commands or image changes made.",
+    "physicalFailureObserved": false,
+    "resolvedSoongEvidence": "artifacts/pixel11-research/alpha-mte-build-configuration.json",
+    "resolvedInSource": true,
+    "resolvedInImage": false
+  },
+  "stockBoardPolicyCorrection": {
+    "preparer": "scripts/prepare-grizzly-stock-board.py",
+    "policy": "android/aosp/grizzly/stock-boot-policy.mk",
+    "preparation": "artifacts/pixel11-stock-board-policy-v1/preparation.json",
+    "application": "artifacts/pixel11-research/alpha-stock-board-policy-applied.json",
+    "resolvedEvidence": "artifacts/pixel11-research/alpha-stock-board-policy-resolved.json",
+    "makeTestsPassed": 7,
+    "fullVerifyPassed": true,
+    "nodeTestsPassed": 268,
+    "fullVerifyLog": "artifacts/pixel11-research/verify-stock-board-policy.log",
+    "pinnedCheckoutModified": false,
+    "appliedToGeneratedTree": true,
+    "imageRebuilt": false,
+    "deployReady": false,
+    "derivedContractHelper": "scripts/aosp-grizzly-contract.mjs",
+    "derivedContractSourceAudit": "artifacts/pixel11-research/alpha-build-inputs-resident-v2.json"
+  },
+  "residentImageBuild": {
+    "recordedAt": "2026-10-04T13:08:54.243085+00:00",
+    "buildNumber": "alpha-grizzly-resident-dev",
+    "product": "alpha_grizzly_phone-cp2a-userdebug",
+    "sourceAudit": "artifacts/pixel11-research/alpha-build-inputs-resident-v2.json",
+    "stockBoardOverlay": "artifacts/pixel11-research/alpha-stock-board-policy-applied.json",
+    "runtimeAdmission": "artifacts/pixel11-research/alpha-resident-runtime-admission.json",
+    "fsConfigValidation": "artifacts/pixel11-research/alpha-resident-fs-config-validation.json",
+    "productSource": "artifacts/pixel11-research/alpha-product-source.json",
+    "repositoryVerifyTestsPassed": 270,
+    "buildLog": "artifacts/pixel11-research/alpha-grizzly-build-resident-v1.log",
+    "buildStatus": "succeeded-but-rejected-for-stale-avb-fingerprint",
+    "imageBuilt": true,
+    "physicalBootVerified": false,
+    "deployReady": false
+  },
+  "alphaPostBootChecker": {
+    "script": "scripts/pixel11-postboot.mjs",
+    "command": "npm run aosp:postboot",
+    "readOnly": true,
+    "unitTestFile": "test/pixel11-postboot.test.mjs",
+    "focusedTestsPassed": 5,
+    "focusedLog": "artifacts/pixel11-research/alpha-postboot-tests.log",
+    "fullVerifyLog": "artifacts/pixel11-research/verify-alpha-postboot.log",
+    "fullVerifyExitCode": 0,
+    "fullVerifyTestsPassed": 274,
+    "additionalCliRegressionPassed": true,
+    "liveEmulatorRejection": "artifacts/pixel11-research/postboot-emulator-rejected.json",
+    "liveEmulatorRejectionExitCode": 2,
+    "androidCommandSyntaxEvidence": "artifacts/pixel11-research/postboot-android-command-syntax.json",
+    "physicalPositiveRun": false,
+    "deployReady": false
+  },
+  "googleFactoryScriptReview": {
+    "report": "artifacts/pixel11-research/google-factory-script-review.json",
+    "archiveScriptsReviewed": 3,
+    "physicalDevicePresent": false,
+    "execution": false,
+    "physicalRestorationVerified": false,
+    "deployReady": false
+  },
+  "residentProductImageAudit": {
+    "script": "artifacts/pixel11-research/validate-resident-product.py",
+    "scriptSha256": "c5d5b93b1d3f027f81a176311454bf84b1e756ea7ca8d3f88954c11a6c5f7647",
+    "negativeReport": "artifacts/pixel11-research/resident-product-negative-v3/report.json",
+    "negativeControlImageSha256": "1495ef1d1fd29a5ac2085693f24520ef6aed37b0dbfdd2e8e220b19126e68f05",
+    "negativeControlRejected": true,
+    "oldSharedLibrariesMatched": 4,
+    "replacementImageAuditComplete": true,
+    "imageOwnershipVerified": true,
+    "physicalBootVerified": false,
+    "deployReady": false,
+    "positiveReport": "artifacts/pixel11-research/resident-product-built-v1/report.json"
+  },
+  "residentCompletedImageV1": {
+    "recordedAt": "2026-10-04T18:38:12.716173+00:00",
+    "archive": "artifacts/pixel11-aosp-completed-resident-v1/target-files.zip",
+    "archiveSha256": "53a82320b6dbc140c8e301c796c7204ed7655cbce563c115e8d3b8c9775a3726",
+    "bytes": 4156791621,
+    "entries": 7659,
+    "allCrcPassed": true,
+    "productAudit": "artifacts/pixel11-research/resident-product-built-v1/report.json",
+    "inodeAudit": "artifacts/pixel11-research/alpha-resident-image-inode-validation.json",
+    "bootAudit": "artifacts/pixel11-built-boot-resident-v1/report.json",
+    "avbAudit": "artifacts/pixel11-research/resident-avb-v1/report.json",
+    "vintfAudit": "artifacts/pixel11-research/alpha-resident-vintf-validation.json",
+    "sourceAudit": "artifacts/pixel11-research/alpha-build-inputs-resident-completed-v1.json",
+    "imageHashes": "artifacts/pixel11-research/alpha-resident-image-hashes-v1.json",
+    "fingerprintInconsistency": "artifacts/pixel11-research/alpha-resident-fingerprint-inconsistency.json",
+    "artifactAdmissionPassed": false,
+    "physicalBootVerified": false,
+    "deployReady": false
+  },
+  "residentCleanRepackageV2": {
+    "startedAt": "2026-10-04T18:38:12.716186+00:00",
+    "log": "artifacts/pixel11-research/alpha-grizzly-resident-clean-repackage-v2.log",
+    "buildStatus": "succeeded",
+    "reason": "Android properties use alpha-grizzly-resident-dev while cached misc_info/AVB fingerprint properties still use alpha-grizzly-dev. Run installclean and rebuild packaging from compiled outputs.",
+    "imageBuilt": true,
+    "deployReady": false,
+    "artifactChecksPassed": true,
+    "identityInconsistencyResolved": true,
+    "finalReport": "artifacts/pixel11-research/resident-final-images-v2/report.json",
+    "ramdiskReport": "artifacts/pixel11-research/resident-final-images-v2/ramdisk-validation.json",
+    "geometryReport": "artifacts/pixel11-research/resident-final-images-v2/geometry.json",
+    "targetFilesSha256": "2d455d18652e94cce74f7a7e51f7805ba0c252b34fa6e97e4c238eacdac77e94",
+    "targetFilesBytes": 4156791582,
+    "osImageZip": "artifacts/pixel11-aosp-completed-resident-v2/alpha-grizzly-resident-dev-os-only-img.zip",
+    "osImageZipSha256": "bad29a0b8d79b46c68855a3a0084b98f438f64f1b97ee9999caf0970b504889d",
+    "osImageZipBytes": 2054848956,
+    "osImageValidation": "artifacts/pixel11-aosp-completed-resident-v2/os-image-validation.json",
+    "postBootExpectationFiles": [
+      "artifacts/pixel11-research/resident-final-images-v2/postboot-expectation-slot-a.json",
+      "artifacts/pixel11-research/resident-final-images-v2/postboot-expectation-slot-b.json"
+    ],
+    "physicalBootVerified": false,
+    "physicalRestorationVerified": false
+  },
+  "lastUpdatedAt": "2026-10-04T19:25:19.582334+00:00",
+  "physicalDeviceDiagnosis": {
+    "report": "artifacts/pixel11-device-observation-20261004/diagnosis.json",
+    "bootloaderObservation": "artifacts/pixel11-research/physical-fastboot-initial-20261004.json",
+    "logicalSlotLayout": "artifacts/pixel11-device-observation-20261004/logical-slot-layout.json",
+    "fastbootdObservation": "artifacts/pixel11-device-observation-20261004/fastbootd-observation.json",
+    "proposedInstallPlan": "artifacts/pixel11-device-observation-20261004/proposed-alpha-install.json",
+    "physicalBaselineFirmwareMatched": true,
+    "stockFastbootdBooted": true,
+    "partitionWritesPerformed": true,
+    "deployReady": false,
+    "preparedStockRestoration": "artifacts/pixel11-device-observation-20261004/prepared-stock-restoration.json",
+    "stockRestoreZipSha256": "bd0defdad7199ae52f17a60dad833d7912c537dfce42dd12a95d223fab343d70",
+    "dataErasureDecision": "User explicitly authorized: erase and flash"
+  },
+  "physicalAlphaInstallation": {
+    "targetSlot": "a",
+    "archiveSha256": "bad29a0b8d79b46c68855a3a0084b98f438f64f1b97ee9999caf0970b504889d",
+    "journal": "artifacts/pixel11-device-observation-20261004/alpha-install-journal.jsonl",
+    "commandLog": "artifacts/pixel11-device-observation-20261004/alpha-fastboot-update.log",
+    "updateExitCode": 0,
+    "userdataAndMetadataErased": true,
+    "fastbootAutomaticFormatting": false,
+    "formattingNote": "Fastboot reported raw partition type; first-boot fstab formattable handling remains to be observed.",
+    "bootloaderAndModemUnchanged": true,
+    "alphaFastbootdBooted": true,
+    "bootloaderRelocked": false,
+    "normalBootRequested": true,
+    "normalAndroidBootVerified": false,
+    "residentAgentExecutionVerified": false,
+    "physicalRestorationTested": false,
+    "deployReady": false,
+    "currentDeviceState": {
+      "observedAt": "2026-10-04T19:47:32.235920+00:00",
+      "userReportedScreen": "black after Google logo",
+      "usbProduct": "Pixel 11 Pro Recovery",
+      "fastbootMode": "ROM Recovery",
+      "bootStage": "dbl",
+      "nextBootStage": "gsa_bl1",
+      "product": "mbu",
+      "versionDbl": "15665922",
+      "devkeyAllow": "no",
+      "normalBootloaderAvailable": false,
+      "powerVolumeDownAttempt": "User reports still black after 30 seconds",
+      "causeEstablished": false,
+      "restorationCurrentlyPossibleThroughNormalFastboot": false,
+      "evidence": "artifacts/pixel11-device-observation-20261004/rom-recovery-getvar-all.json",
+      "softwareRebootBootloader": "Rejected: Unknown command",
+      "powerOnly35SecondAttempt": "User reports nothing happens",
+      "latestUsbObservation": "Still ROM Recovery; repeated USB disconnect/re-enumeration",
+      "recoveryStatus": "Unresolved; no verified software restoration path in current mode"
+    }
+  }
+}

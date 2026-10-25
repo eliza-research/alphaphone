@@ -1,0 +1,273 @@
+diff --git a/packages/auth/README.md b/packages/auth/README.md
+index 630ee7afc1..601ba5832c 100644
+--- a/packages/auth/README.md
++++ b/packages/auth/README.md
+@@ -45,15 +45,16 @@ The default tests also verify the built deployment package. The login tests use
+ local OpenSSL to generate ephemeral attestation certificates and verify that
+ untrusted chains cannot trigger revocation requests.
+ 
+-## Alpha-owned OAuth returns
++## Registered application OAuth returns
+ 
+-`GET /auth/oauth/google/alpha-readiness` checks the exact Alpha tenant/return
+-pair, tenant policy, registered redirect, existing Google credentials and app
+-error returns. It returns `{ok:true, alphaAuth:1, tenantId, redirectUri}` without
+-creating a challenge. Configure `STEWARD_OAUTH_APP_ERROR_REDIRECTS` with the exact
+-registered Alpha HTTPS callback for each environment. Validated-state failures
+-then return a bounded error/state fragment. Other clients keep existing behavior.
++`GET /auth/oauth/google/app-readiness` checks tenant policy, the app's registered
++HTTPS redirect, existing Google credentials and error-return configuration. It
++returns `{ok:true, appAuth:1, tenantId, redirectUri}` without creating a challenge.
++Configure `STEWARD_OAUTH_APP_ERROR_REDIRECTS` with each exact registered HTTPS
++callback. Validated-state failures return a bounded error/state fragment.
+ Unknown state cannot select an app return. Google uses the existing Cloud client.
++Each app owns its login view, branding and return handling. No product route or
++product identity is needed in the shared login service.
+ 
+ ## Native enrollment
+ 
+diff --git a/packages/auth/src/server/__tests__/native-app-link-oauth.integration.test.ts b/packages/auth/src/server/__tests__/native-app-link-oauth.integration.test.ts
+index 42e67fe9d0..2a7cbbca99 100644
+--- a/packages/auth/src/server/__tests__/native-app-link-oauth.integration.test.ts
++++ b/packages/auth/src/server/__tests__/native-app-link-oauth.integration.test.ts
+@@ -206,14 +206,12 @@ describe("native App Link OAuth (Alpha Phone)", () => {
+       tenant_id: TENANT_ID,
+       redirect_uri: ALPHA_LINK,
+     });
+-    const ready = await nativeGet(
+-      `/auth/oauth/google/alpha-readiness?${query}`,
+-    );
++    const ready = await nativeGet(`/auth/oauth/google/app-readiness?${query}`);
+     expect(ready.status).toBe(200);
+     expect(ready.headers.get("cache-control")).toBe("no-store");
+     expect(await ready.json()).toEqual({
+       ok: true,
+-      alphaAuth: 1,
++      appAuth: 1,
+       tenantId: TENANT_ID,
+       redirectUri: ALPHA_LINK,
+     });
+@@ -264,7 +262,7 @@ describe("native App Link OAuth (Alpha Phone)", () => {
+     try {
+       delete process.env.GOOGLE_CLIENT_SECRET;
+       const unavailable = await nativeGet(
+-        `/auth/oauth/google/alpha-readiness?${query}`,
++        `/auth/oauth/google/app-readiness?${query}`,
+       );
+       expect(unavailable.status).toBe(503);
+       const refused = await nativeGet(
+@@ -277,6 +275,33 @@ describe("native App Link OAuth (Alpha Phone)", () => {
+     }
+   }, 30_000);
+ 
++  test("readiness supports another registered app without product routing", async () => {
++    const previous = process.env.STEWARD_OAUTH_APP_ERROR_REDIRECTS;
++    try {
++      process.env.STEWARD_OAUTH_APP_ERROR_REDIRECTS = APP_LINK;
++      const query = new URLSearchParams({
++        tenant_id: TENANT_ID,
++        redirect_uri: APP_LINK,
++      });
++      const response = await nativeGet(
++        `/auth/oauth/google/app-readiness?${query}`,
++      );
++      expect(response.status).toBe(200);
++      expect(await response.json()).toEqual({
++        ok: true,
++        appAuth: 1,
++        tenantId: TENANT_ID,
++        redirectUri: APP_LINK,
++      });
++      query.set("redirect_uri", "https://unregistered.example/callback");
++      expect(
++        (await nativeGet(`/auth/oauth/google/app-readiness?${query}`)).status,
++      ).toBe(503);
++    } finally {
++      process.env.STEWARD_OAUTH_APP_ERROR_REDIRECTS = previous;
++    }
++  });
++
+   test("authorize forwards prompt=select_account to Google and accepts no Origin", async () => {
+     const appState = base64url(randomBytes(32));
+     const response = await nativeGet(
+diff --git a/packages/auth/src/server/api/routes/auth.ts b/packages/auth/src/server/api/routes/auth.ts
+index 51e82f5997..2f06962996 100644
+--- a/packages/auth/src/server/api/routes/auth.ts
++++ b/packages/auth/src/server/api/routes/auth.ts
+@@ -9659,7 +9659,7 @@ auth.post("/email/send", async (c) => {
+  * Body: { email, tenantId?, captchaToken? }
+  * Returns 200 { ok: true, data: { expiresAt, codeLength: 6 } }
+  *
+- * Native in-app email sign-in (Alpha Phone). Emails ONLY a six-digit code,
++ * Native in-app email sign-in. Emails ONLY a six-digit code,
+  * rendered with the sign-in code template: the email has no link, and no link
+  * token is ever published, so nothing in it can sign in a browser or consume
+  * the challenge. The app redeems the code through POST /email/code/verify,
+@@ -10723,21 +10723,34 @@ export function resolveOAuthPromptPassthrough(
+  * Generates an OAuth authorization URL, stores the CSRF state in the challenge
+  * store (keyed as `oauth:<state>`), then redirects the user to the provider.
+  */
+-// Alpha readiness is read-only: no challenge, credential or provider navigation.
+-auth.get("/oauth/google/alpha-readiness", async (c) => {
++// Read-only readiness for any registered application. Never issues a credential.
++auth.get("/oauth/google/app-readiness", async (c) => {
+   c.header("Cache-Control", "no-store");
+   const tenantId = c.req.query("tenant_id");
+   const redirectUri = c.req.query("redirect_uri");
+-  const expected =
+-    tenantId === "elizacloud"
+-      ? "https://alphacompute.ai/alphaphone/auth/callback"
+-      : tenantId === "elizacloud-staging"
+-        ? "https://alphacompute.ai/alphaphone/auth/staging/callback"
+-        : undefined;
+-  if (!expected || redirectUri !== expected) {
+-    return c.json({ ok: false, error: "Alpha Phone sign-in unavailable" }, 400);
++  if (
++    !tenantId ||
++    tenantId.length > 100 ||
++    !redirectUri ||
++    redirectUri.length > 2048
++  ) {
++    return c.json({ ok: false, error: "App sign-in unavailable" }, 400);
+   }
+-  const rl = await checkAuthRateLimit(c, "alpha-auth-readiness", 60_000, 30);
++  try {
++    const target = new URL(redirectUri);
++    if (
++      target.protocol !== "https:" ||
++      target.username ||
++      target.password ||
++      target.hash ||
++      target.search
++    ) {
++      return c.json({ ok: false, error: "App sign-in unavailable" }, 400);
++    }
++  } catch {
++    return c.json({ ok: false, error: "App sign-in unavailable" }, 400);
++  }
++  const rl = await checkAuthRateLimit(c, "app-auth-readiness", 60_000, 30);
+   if (!rl.allowed) return c.json({ ok: false, error: "Try again later" }, 429);
+   try {
+     const denied = await requireTenantLoginMethodAllowed(
+@@ -10747,10 +10760,7 @@ auth.get("/oauth/google/alpha-readiness", async (c) => {
+       "google",
+     );
+     if (denied)
+-      return c.json(
+-        { ok: false, error: "Alpha Phone sign-in unavailable" },
+-        403,
+-      );
++      return c.json({ ok: false, error: "App sign-in unavailable" }, 403);
+     await assertAllowedOAuthRedirectUri(redirectUri, tenantId);
+     getProviderConfig("google");
+     const errorReturn = buildOAuthAppErrorReturn(
+@@ -10760,9 +10770,9 @@ auth.get("/oauth/google/alpha-readiness", async (c) => {
+       process.env.STEWARD_OAUTH_APP_ERROR_REDIRECTS,
+     );
+     if (!errorReturn) throw new Error("App error returns are not configured");
+-    return c.json({ ok: true, alphaAuth: 1, tenantId, redirectUri });
++    return c.json({ ok: true, appAuth: 1, tenantId, redirectUri });
+   } catch {
+-    return c.json({ ok: false, error: "Alpha Phone sign-in unavailable" }, 503);
++    return c.json({ ok: false, error: "App sign-in unavailable" }, 503);
+   }
+ });
+ 
+diff --git a/packages/cloud/api/README.md b/packages/cloud/api/README.md
+index f3308836a0..e9c506a1f7 100644
+--- a/packages/cloud/api/README.md
++++ b/packages/cloud/api/README.md
+@@ -86,9 +86,9 @@ be enabled and bound to that environment's callback.
+ 
+ ### Alpha-owned managed Google returns
+ 
+-The Alpha-owned callback rollout uses `ALPHA_OAUTH_RETURN_URLS` for exact HTTPS
++App-owned connector callbacks use `APP_OAUTH_RETURN_URLS` for exact HTTPS
+ Gmail return addresses. Initiation accepts the app nonce as the only `state`
+-query parameter and returns `alphaReturn: 2` when configured. The callback uses
++query parameter and returns `appReturn: 2` when configured. The callback uses
+ server-owned state and returns only state/result plus `connectionId` on success.
+ The app must verify that connection through its authenticated connector list.
+ Denial retires state and creates no grant. Unknown state keeps existing recovery.
+diff --git a/packages/cloud/api/v1/eliza/google/connect/initiate/route.ts b/packages/cloud/api/v1/eliza/google/connect/initiate/route.ts
+index bccc655f99..0645ddacba 100644
+--- a/packages/cloud/api/v1/eliza/google/connect/initiate/route.ts
++++ b/packages/cloud/api/v1/eliza/google/connect/initiate/route.ts
+@@ -86,7 +86,7 @@ app.post("/", async (c) => {
+         ? { personalContextPurpose: parsed.data.purpose }
+         : {}),
+     });
+-    const alphaReturn = resolveAppOAuthReturn(
++    const appReturn = resolveAppOAuthReturn(
+       {
+         providerId: "google",
+         organizationId: user.organization_id,
+@@ -95,9 +95,9 @@ app.post("/", async (c) => {
+         redirectUrl: parsed.data.redirectUrl,
+       },
+       "google",
+-      getCloudAwareEnv().ALPHA_OAUTH_RETURN_URLS,
++      getCloudAwareEnv().APP_OAUTH_RETURN_URLS,
+     );
+-    return c.json(alphaReturn ? { ...result, alphaReturn: 2 } : result);
++    return c.json(appReturn ? { ...result, appReturn: 2 } : result);
+   } catch (error) {
+     if (error instanceof AgentGoogleConnectorError) {
+       return c.json({ error: error.message }, error.status as 400);
+diff --git a/packages/cloud/api/v1/oauth/generic-callback.ts b/packages/cloud/api/v1/oauth/generic-callback.ts
+index c6aa1f547e..ca2e5f46a8 100644
+--- a/packages/cloud/api/v1/oauth/generic-callback.ts
++++ b/packages/cloud/api/v1/oauth/generic-callback.ts
+@@ -64,7 +64,7 @@ export async function handleGenericOAuthCallback(
+       appReturn = resolveAppOAuthReturn(
+         await cache.get(`oauth2:${provider.id}:${state}`),
+         provider.id,
+-        getCloudAwareEnv().ALPHA_OAUTH_RETURN_URLS,
++        getCloudAwareEnv().APP_OAUTH_RETURN_URLS,
+       );
+     } catch {
+       appReturnLookupFailed = true;
+@@ -128,7 +128,7 @@ export async function handleGenericOAuthCallback(
+       appReturn = resolveAppOAuthReturn(
+         { ...result, providerId: provider.id, createdAt: Date.now() },
+         provider.id,
+-        getCloudAwareEnv().ALPHA_OAUTH_RETURN_URLS,
++        getCloudAwareEnv().APP_OAUTH_RETURN_URLS,
+       );
+     if (appReturn && result.redirectUrl !== appReturn.source)
+       throw new Error("OAuth return binding changed");
+diff --git a/packages/cloud/api/wrangler.toml b/packages/cloud/api/wrangler.toml
+index cfb8fc2c6c..646d54b514 100644
+--- a/packages/cloud/api/wrangler.toml
++++ b/packages/cloud/api/wrangler.toml
+@@ -610,7 +610,7 @@ binding = "AI"
+ binding = "BROWSER"
+ 
+ [env.staging.vars]
+-ALPHA_OAUTH_RETURN_URLS = "https://alphacompute.ai/alphaphone/gmail/staging/callback"
++APP_OAUTH_RETURN_URLS = "https://alphacompute.ai/alphaphone/gmail/staging/callback"
+ NODE_ENV = "production"
+ LOGIN_API_URL = "https://steward-api-staging.up.railway.app"
+ # Signed Twilio callbacks and media-stream URLs must use the externally routed
+@@ -945,7 +945,7 @@ binding = "AI"
+ binding = "BROWSER"
+ 
+ [env.production.vars]
+-ALPHA_OAUTH_RETURN_URLS = "https://alphacompute.ai/alphaphone/gmail/callback"
++APP_OAUTH_RETURN_URLS = "https://alphacompute.ai/alphaphone/gmail/callback"
+ LOGIN_API_URL = "https://steward-api-production-115d.up.railway.app"
+ NODE_ENV = "production"
+ # Signed Twilio callbacks and media-stream URLs must use the externally routed
+diff --git a/packages/cloud/shared/src/lib/services/oauth/oauth2.personal-context-publication.pglite.test.ts b/packages/cloud/shared/src/lib/services/oauth/oauth2.personal-context-publication.pglite.test.ts
+index c3c9e78bbd..0688f64852 100644
+--- a/packages/cloud/shared/src/lib/services/oauth/oauth2.personal-context-publication.pglite.test.ts
++++ b/packages/cloud/shared/src/lib/services/oauth/oauth2.personal-context-publication.pglite.test.ts
+@@ -60,7 +60,7 @@ mock.module("../../runtime/cloud-bindings", () => ({
+   ...originals.bindings,
+   getCloudAwareEnv: () => ({
+     NEXT_PUBLIC_APP_URL: "https://fixture.example.test",
+-    ALPHA_OAUTH_RETURN_URLS: "https://alphacompute.ai/alphaphone/gmail/callback",
++    APP_OAUTH_RETURN_URLS: "https://alphacompute.ai/alphaphone/gmail/callback",
+   }),
+ }));
+ mock.module("./provider-registry", () => ({

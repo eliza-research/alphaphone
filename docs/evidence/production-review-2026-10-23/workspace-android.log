@@ -1,0 +1,352 @@
+
+> @eliza-research/alphaphone@0.1.0 android:build
+> node scripts/build-android.mjs
+
+Eliza source verified: 91dc19196c307eb8559b9b58de8dbf63eb47f43f
+
+> @eliza-research/alphaphone@0.1.0 android:sync
+> npm run build && cap sync android
+
+
+> @eliza-research/alphaphone@0.1.0 build
+> vite build
+
+vite v8.3.1 building client environment for production...
+transforming...
+✓ 495 modules transformed.
+rendering chunks...
+computing gzip size...
+web-dist/pdfjs-assets/cmaps/CNS2-V.bcmap                                0.09 kB
+web-dist/pdfjs-assets/cmaps/Roman.bcmap                                 0.09 kB
+web-dist/pdfjs-assets/cmaps/Katakana.bcmap                              0.10 kB
+web-dist/pdfjs-assets/cmaps/ETenms-B5-H.bcmap                           0.10 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UCS2-HW-H.bcmap                      0.11 kB
+web-dist/pdfjs-assets/cmaps/Hiragana.bcmap                              0.12 kB
+web-dist/pdfjs-assets/cmaps/Hankaku.bcmap                               0.13 kB
+web-dist/pdfjs-assets/cmaps/B5-V.bcmap                                  0.14 kB
+web-dist/pdfjs-assets/cmaps/CNS1-V.bcmap                                0.14 kB
+web-dist/pdfjs-assets/cmaps/B5pc-V.bcmap                                0.14 kB
+web-dist/pdfjs-assets/cmaps/HKdla-B5-V.bcmap                            0.14 kB
+web-dist/pdfjs-assets/cmaps/HKdlb-B5-V.bcmap                            0.14 kB
+web-dist/pdfjs-assets/cmaps/HKgccs-B5-V.bcmap                           0.14 kB
+web-dist/pdfjs-assets/cmaps/HKm314-B5-V.bcmap                           0.14 kB
+web-dist/pdfjs-assets/cmaps/HKm471-B5-V.bcmap                           0.14 kB
+web-dist/pdfjs-assets/cmaps/UniCNS-UCS2-V.bcmap                         0.15 kB
+web-dist/pdfjs-assets/cmaps/UniCNS-UTF16-V.bcmap                        0.15 kB
+web-dist/pdfjs-assets/cmaps/UniCNS-UTF8-V.bcmap                         0.15 kB
+web-dist/pdfjs-assets/cmaps/ETHK-B5-V.bcmap                             0.15 kB
+web-dist/pdfjs-assets/cmaps/ETen-B5-V.bcmap                             0.15 kB
+web-dist/pdfjs-assets/cmaps/HKscs-B5-V.bcmap                            0.15 kB
+web-dist/pdfjs-assets/cmaps/KSC-V.bcmap                                 0.16 kB
+web-dist/pdfjs-assets/cmaps/UniCNS-UTF32-V.bcmap                        0.16 kB
+web-dist/pdfjs-assets/cmaps/KSC-EUC-V.bcmap                             0.16 kB
+web-dist/pdfjs-assets/cmaps/UniKS-UTF16-V.bcmap                         0.16 kB
+web-dist/pdfjs-assets/cmaps/KSC-Johab-V.bcmap                           0.16 kB
+web-dist/pdfjs-assets/cmaps/KSCms-UHC-V.bcmap                           0.16 kB
+web-dist/pdfjs-assets/cmaps/KSCpc-EUC-V.bcmap                           0.16 kB
+web-dist/pdfjs-assets/cmaps/V.bcmap                                     0.16 kB
+web-dist/pdfjs-assets/cmaps/UniKS-UTF32-V.bcmap                         0.16 kB
+web-dist/pdfjs-assets/cmaps/78-V.bcmap                                  0.16 kB
+web-dist/pdfjs-assets/cmaps/KSCms-UHC-HW-V.bcmap                        0.16 kB
+web-dist/pdfjs-assets/cmaps/UniKS-UTF8-V.bcmap                          0.16 kB
+web-dist/pdfjs-assets/cmaps/EUC-V.bcmap                                 0.17 kB
+web-dist/pdfjs-assets/cmaps/RKSJ-V.bcmap                                0.17 kB
+web-dist/pdfjs-assets/cmaps/ETenms-B5-V.bcmap                           0.17 kB
+web-dist/pdfjs-assets/cmaps/78-EUC-V.bcmap                              0.17 kB
+web-dist/pdfjs-assets/cmaps/78-RKSJ-V.bcmap                             0.17 kB
+web-dist/pdfjs-assets/cmaps/GB-V.bcmap                                  0.17 kB
+web-dist/pdfjs-assets/cmaps/GBT-V.bcmap                                 0.17 kB
+web-dist/pdfjs-assets/cmaps/UniGB-UTF16-V.bcmap                         0.17 kB
+web-dist/pdfjs-assets/cmaps/UniKS-UCS2-V.bcmap                          0.17 kB
+web-dist/pdfjs-assets/cmaps/GB-EUC-V.bcmap                              0.17 kB
+web-dist/pdfjs-assets/cmaps/WP-Symbol.bcmap                             0.17 kB
+web-dist/pdfjs-assets/cmaps/GBK-EUC-V.bcmap                             0.18 kB
+web-dist/pdfjs-assets/cmaps/GBT-EUC-V.bcmap                             0.18 kB
+web-dist/pdfjs-assets/cmaps/GBKp-EUC-V.bcmap                            0.18 kB
+web-dist/pdfjs-assets/cmaps/GBpc-EUC-V.bcmap                            0.18 kB
+web-dist/pdfjs-assets/cmaps/UniGB-UTF8-V.bcmap                          0.18 kB
+web-dist/pdfjs-assets/cmaps/GBTpc-EUC-V.bcmap                           0.18 kB
+web-dist/pdfjs-assets/cmaps/UniGB-UTF32-V.bcmap                         0.18 kB
+web-dist/pdfjs-assets/cmaps/UniGB-UCS2-V.bcmap                          0.19 kB
+web-dist/pdfjs-assets/cmaps/Ext-V.bcmap                                 0.21 kB
+web-dist/pdfjs-assets/cmaps/Adobe-GB1-0.bcmap                           0.21 kB
+web-dist/pdfjs-assets/cmaps/Ext-RKSJ-V.bcmap                            0.21 kB
+web-dist/pdfjs-assets/cmaps/GBK2K-V.bcmap                               0.21 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Japan1-0.bcmap                        0.22 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Japan1-1.bcmap                        0.22 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Japan1-2.bcmap                        0.23 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Korea1-0.bcmap                        0.24 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Japan1-3.bcmap                        0.24 kB
+web-dist/pdfjs-assets/cmaps/Adobe-GB1-1.bcmap                           0.25 kB
+web-dist/pdfjs-assets/cmaps/NWP-V.bcmap                                 0.25 kB
+web-dist/pdfjs-assets/cmaps/90pv-RKSJ-V.bcmap                           0.26 kB
+web-dist/pdfjs-assets/cmaps/Add-V.bcmap                                 0.28 kB
+web-dist/pdfjs-assets/cmaps/Add-RKSJ-V.bcmap                            0.28 kB
+web-dist/pdfjs-assets/cmaps/78ms-RKSJ-V.bcmap                           0.29 kB
+web-dist/pdfjs-assets/cmaps/90ms-RKSJ-V.bcmap                           0.29 kB
+web-dist/pdfjs-assets/cmaps/90msp-RKSJ-V.bcmap                          0.29 kB
+web-dist/pdfjs-assets/cmaps/Adobe-CNS1-0.bcmap                          0.31 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Japan1-4.bcmap                        0.33 kB
+web-dist/pdfjs-assets/cmaps/Adobe-CNS1-1.bcmap                          0.37 kB
+web-dist/pdfjs-assets/cmaps/Adobe-CNS1-2.bcmap                          0.37 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Korea1-1.bcmap                        0.38 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Korea1-2.bcmap                        0.39 kB
+web-dist/pdfjs-assets/cmaps/Adobe-CNS1-3.bcmap                          0.40 kB
+web-dist/pdfjs-assets/cmaps/Adobe-CNS1-4.bcmap                          0.40 kB
+web-dist/pdfjs-assets/cmaps/Adobe-CNS1-5.bcmap                          0.40 kB
+web-dist/pdfjs-assets/cmaps/Adobe-CNS1-6.bcmap                          0.40 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Japan1-5.bcmap                        0.43 kB
+web-dist/pdfjs-assets/cmaps/Adobe-GB1-2.bcmap                           0.46 kB
+web-dist/pdfjs-assets/cmaps/Adobe-GB1-3.bcmap                           0.47 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Japan1-6.bcmap                        0.48 kB
+web-dist/pdfjs-assets/cmaps/CNS2-H.bcmap                                0.50 kB
+web-dist/pdfjs-assets/cmaps/GB-H.bcmap                                  0.52 kB
+web-dist/pdfjs-assets/cmaps/RKSJ-H.bcmap                                0.53 kB
+web-dist/pdfjs-assets/cmaps/GB-EUC-H.bcmap                              0.54 kB
+web-dist/pdfjs-assets/cmaps/H.bcmap                                     0.55 kB
+web-dist/pdfjs-assets/wasm/LICENSE_PDFJS_JBIG2                          0.55 kB
+web-dist/pdfjs-assets/cmaps/GBpc-EUC-H.bcmap                            0.55 kB
+web-dist/pdfjs-assets/cmaps/EUC-H.bcmap                                 0.57 kB
+web-dist/pdfjs-assets/cmaps/Adobe-GB1-4.bcmap                           0.60 kB
+web-dist/pdfjs-assets/cmaps/Adobe-GB1-5.bcmap                           0.62 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UTF16-V.bcmap                        0.64 kB
+web-dist/pdfjs-assets/cmaps/UniJIS2004-UTF16-V.bcmap                    0.64 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UCS2-V.bcmap                         0.66 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UTF32-V.bcmap                        0.67 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UTF8-V.bcmap                         0.67 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UCS2-HW-V.bcmap                      0.68 kB
+web-dist/pdfjs-assets/cmaps/UniJIS2004-UTF32-V.bcmap                    0.68 kB
+web-dist/pdfjs-assets/cmaps/UniJIS2004-UTF8-V.bcmap                     0.68 kB
+web-dist/pdfjs-assets/cmaps/UniJISX0213-UTF32-V.bcmap                   0.68 kB
+web-dist/pdfjs-assets/cmaps/UniJISX02132004-UTF32-V.bcmap               0.68 kB
+web-dist/pdfjs-assets/cmaps/UniJISPro-UCS2-V.bcmap                      0.68 kB
+web-dist/index.html                                                     0.70 kB │ gzip:   0.34 kB
+web-dist/pdfjs-assets/cmaps/UniJISPro-UCS2-HW-V.bcmap                   0.70 kB
+web-dist/pdfjs-assets/cmaps/CNS1-H.bcmap                                0.70 kB
+web-dist/pdfjs-assets/cmaps/90msp-RKSJ-H.bcmap                          0.71 kB
+web-dist/pdfjs-assets/cmaps/90ms-RKSJ-H.bcmap                           0.72 kB
+web-dist/pdfjs-assets/cmaps/UniJISPro-UTF8-V.bcmap                      0.72 kB
+web-dist/pdfjs-assets/cmaps/83pv-RKSJ-H.bcmap                           0.90 kB
+web-dist/pdfjs-assets/cmaps/90pv-RKSJ-H.bcmap                           0.98 kB
+web-dist/pdfjs-assets/wasm/LICENSE_PDFJS_QCMS                           1.03 kB
+web-dist/ocr/pdf-lib-LICENSE.txt                                        1.07 kB │ gzip:   0.65 kB
+web-dist/pdfjs-assets/cmaps/B5-H.bcmap                                  1.08 kB
+web-dist/pdfjs-assets/cmaps/B5pc-H.bcmap                                1.09 kB
+web-dist/pdfjs-assets/wasm/LICENSE_QCMS                                 1.12 kB
+web-dist/pdfjs-assets/cmaps/ETen-B5-H.bcmap                             1.12 kB
+web-dist/pdfjs-assets/wasm/LICENSE_PDFJS_OPENJPEG                       1.28 kB
+web-dist/pdfjs-assets/standard_fonts/LICENSE_FOXIT                      1.55 kB
+web-dist/pdfjs-assets/cmaps/HKm314-B5-H.bcmap                           1.77 kB
+web-dist/pdfjs-assets/cmaps/CNS-EUC-H.bcmap                             1.78 kB
+web-dist/pdfjs-assets/cmaps/KSC-H.bcmap                                 1.83 kB
+web-dist/pdfjs-assets/cmaps/KSC-EUC-H.bcmap                             1.84 kB
+web-dist/pdfjs-assets/cmaps/CNS-EUC-V.bcmap                             1.92 kB
+web-dist/pdfjs-assets/cmaps/KSCpc-EUC-H.bcmap                           2.02 kB
+web-dist/pdfjs-assets/cmaps/LICENSE                                     2.08 kB
+web-dist/pdfjs-assets/wasm/LICENSE_OPENJPEG                             2.11 kB
+web-dist/pdfjs-assets/cmaps/HKm471-B5-H.bcmap                           2.17 kB
+web-dist/pdfjs-assets/cmaps/HKgccs-B5-H.bcmap                           2.29 kB
+web-dist/pdfjs-assets/cmaps/78-H.bcmap                                  2.37 kB
+web-dist/pdfjs-assets/cmaps/78-RKSJ-H.bcmap                             2.39 kB
+web-dist/pdfjs-assets/cmaps/78-EUC-H.bcmap                              2.40 kB
+web-dist/pdfjs-assets/cmaps/Add-RKSJ-H.bcmap                            2.41 kB
+web-dist/pdfjs-assets/cmaps/HKdlb-B5-H.bcmap                            2.41 kB
+web-dist/pdfjs-assets/cmaps/Add-H.bcmap                                 2.41 kB
+web-dist/pdfjs-assets/cmaps/Ext-H.bcmap                                 2.53 kB
+web-dist/pdfjs-assets/cmaps/Ext-RKSJ-H.bcmap                            2.54 kB
+web-dist/pdfjs-assets/cmaps/78ms-RKSJ-H.bcmap                           2.65 kB
+web-dist/pdfjs-assets/cmaps/HKdla-B5-H.bcmap                            2.65 kB
+web-dist/pdfjs-assets/cmaps/NWP-H.bcmap                                 2.76 kB
+web-dist/pdfjs-assets/cmaps/KSCms-UHC-H.bcmap                           2.78 kB
+web-dist/pdfjs-assets/cmaps/KSCms-UHC-HW-H.bcmap                        2.78 kB
+web-dist/pdfjs-assets/cmaps/ETHK-B5-H.bcmap                             4.42 kB
+web-dist/pdfjs-assets/cmaps/HKscs-B5-H.bcmap                            4.43 kB
+web-dist/pdfjs-assets/wasm/quickjs-eval.js                              6.23 kB
+web-dist/pdfjs-assets/cmaps/GBT-H.bcmap                                 7.26 kB
+web-dist/pdfjs-assets/cmaps/GBT-EUC-H.bcmap                             7.29 kB
+web-dist/pdfjs-assets/cmaps/GBTpc-EUC-H.bcmap                           7.29 kB
+web-dist/pdfjs-assets/LICENSE                                          10.17 kB
+web-dist/ocr/tessdata-LICENSE.txt                                      11.35 kB │ gzip:   3.95 kB
+web-dist/ocr/tesseract-LICENSE.txt                                     11.35 kB │ gzip:   3.95 kB
+web-dist/ocr/core-LICENSE.txt                                          11.35 kB │ gzip:   3.95 kB
+web-dist/pdfjs-assets/wasm/LICENSE_JBIG2                               12.86 kB
+web-dist/assets/public-sans-latin-400-normal-8Rpg0ruU.woff2            14.63 kB
+web-dist/pdfjs-assets/cmaps/GBKp-EUC-H.bcmap                           14.68 kB
+web-dist/pdfjs-assets/cmaps/GBK-EUC-H.bcmap                            14.69 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitSymbol.pfb                   16.72 kB
+web-dist/pdfjs-assets/cmaps/KSC-Johab-H.bcmap                          16.79 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitFixed.pfb                    17.59 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitFixedBold.pfb                18.05 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitFixedItalic.pfb              18.74 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitFixedBoldItalic.pfb          19.15 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitSerifBold.pfb                19.39 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitSerif.pfb                    19.46 kB
+web-dist/pdfjs-assets/cmaps/GBK2K-H.bcmap                              19.66 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitSerifBoldItalic.pfb          20.73 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitSerifItalic.pfb              21.22 kB
+web-dist/pdfjs-assets/standard_fonts/LICENSE_LIBERATION                22.15 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Korea1-UCS2.bcmap                    23.29 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UCS2-H.bcmap                        25.43 kB
+web-dist/pdfjs-assets/cmaps/UniKS-UCS2-H.bcmap                         25.78 kB
+web-dist/pdfjs-assets/cmaps/UniKS-UTF16-H.bcmap                        26.32 kB
+web-dist/pdfjs-assets/cmaps/UniKS-UTF32-H.bcmap                        26.45 kB
+web-dist/pdfjs-assets/cmaps/UniKS-UTF8-H.bcmap                         27.79 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitDingbats.pfb                 29.51 kB
+web-dist/pdfjs-assets/cmaps/Adobe-GB1-UCS2.bcmap                       33.97 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UTF16-H.bcmap                       39.44 kB
+web-dist/pdfjs-assets/cmaps/UniJIS2004-UTF16-H.bcmap                   39.53 kB
+web-dist/pdfjs-assets/cmaps/UniJISX0213-UTF32-H.bcmap                  40.51 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UTF32-H.bcmap                       40.53 kB
+web-dist/pdfjs-assets/cmaps/UniJISX02132004-UTF32-H.bcmap              40.60 kB
+web-dist/pdfjs-assets/cmaps/UniJIS2004-UTF32-H.bcmap                   40.63 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Japan1-UCS2.bcmap                    40.95 kB
+web-dist/pdfjs-assets/cmaps/Adobe-CNS1-UCS2.bcmap                      41.19 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UTF8-H.bcmap                        41.69 kB
+web-dist/pdfjs-assets/cmaps/UniJIS2004-UTF8-H.bcmap                    41.77 kB
+web-dist/pdfjs-assets/cmaps/UniGB-UCS2-H.bcmap                         43.36 kB
+web-dist/pdfjs-assets/cmaps/UniGB-UTF16-H.bcmap                        44.08 kB
+web-dist/pdfjs-assets/cmaps/UniGB-UTF32-H.bcmap                        45.73 kB
+web-dist/pdfjs-assets/cmaps/UniGB-UTF8-H.bcmap                         46.83 kB
+web-dist/pdfjs-assets/cmaps/UniCNS-UCS2-H.bcmap                        48.28 kB
+web-dist/pdfjs-assets/cmaps/UniCNS-UTF16-H.bcmap                       50.41 kB
+web-dist/pdfjs-assets/cmaps/UniCNS-UTF32-H.bcmap                       52.67 kB
+web-dist/pdfjs-assets/cmaps/UniCNS-UTF8-H.bcmap                        53.62 kB
+web-dist/pdfjs-assets/wasm/qcms_bg.wasm                                96.58 kB │ gzip:  36.09 kB
+web-dist/pdfjs-assets/wasm/jbig2.wasm                                 104.85 kB │ gzip:  40.89 kB
+web-dist/ocr/worker.min.js                                            111.30 kB
+web-dist/pdfjs-assets/standard_fonts/LiberationSans-BoldItalic.ttf    135.12 kB
+web-dist/pdfjs-assets/standard_fonts/LiberationSans-Bold.ttf          137.05 kB
+web-dist/pdfjs-assets/standard_fonts/LiberationSans-Regular.ttf       139.51 kB
+web-dist/pdfjs-assets/wasm/jbig2_nowasm_fallback.js                   145.70 kB
+web-dist/pdfjs-assets/standard_fonts/LiberationSans-Italic.ttf        162.03 kB
+web-dist/pdfjs-assets/wasm/openjpeg.wasm                              252.03 kB │ gzip:  83.79 kB
+web-dist/pdfjs-assets/wasm/openjpeg_nowasm_fallback.js                451.59 kB
+web-dist/pdfjs-assets/wasm/quickjs-eval.wasm                          469.10 kB │ gzip: 220.69 kB
+web-dist/assets/maplibre-gl-worker-CRiIRpYb.js                        509.70 kB
+web-dist/assets/pdf.worker.min-Dswkl-cV.mjs                         1,265.41 kB
+web-dist/ocr/eng.traineddata.gz                                     2,952.87 kB
+web-dist/ocr/tesseract-core-lstm.wasm.js                            3,896.48 kB
+web-dist/ocr/tesseract-core-simd-lstm.wasm.js                       3,899.47 kB
+web-dist/ocr/tesseract-core-relaxedsimd-lstm.wasm.js                3,905.76 kB
+web-dist/assets/index-OZmccoJw.css                                    109.83 kB │ gzip:  15.57 kB
+web-dist/assets/dev-profile-DMEx33p_.js                                 0.02 kB │ gzip:   0.04 kB
+web-dist/assets/digest-storage-CCnqfV8E.js                              0.15 kB │ gzip:   0.15 kB
+web-dist/assets/preload-helper-BZ1Pz5am.js                              1.21 kB │ gzip:   0.69 kB
+web-dist/assets/browser-note-documents-Bd3g-nm1.js                      2.06 kB │ gzip:   1.01 kB
+web-dist/assets/dist-Z0lPoSvM.js                                        7.76 kB │ gzip:   3.10 kB
+web-dist/assets/reading-review-BGYBouf5.js                              8.26 kB │ gzip:   3.57 kB
+web-dist/assets/es-Cwa7s75K.js                                        420.20 kB │ gzip: 175.63 kB
+web-dist/assets/pdf-W-iKJp2S.js                                       429.74 kB │ gzip: 128.70 kB
+web-dist/assets/src-B6V7vwHo.js                                       571.06 kB │ gzip: 142.49 kB
+web-dist/assets/index-BO8vBk1T.js                                   2,457.39 kB │ gzip: 656.52 kB
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0mapps/app/src/browser/workflow-notices.ts is dynamically imported by apps/app/src/runtime/local-agent-storage.ts but also statically imported by apps/app/src/browser/notifications.ts, apps/app/src/browser/simulated-workflows.ts, apps/app/src/browser/workflow-history.ts, apps/app/src/prototype/agent-adapter.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0mapps/app/src/daily.ts is dynamically imported by apps/app/src/browser/development-actions.ts, apps/app/src/runtime/local-agent-storage.ts but also statically imported by apps/app/src/browser/simulated-inbox.ts, apps/app/src/browser/simulated-messages.ts, apps/app/src/main.tsx, apps/app/src/maps/regional-provider.ts, apps/app/src/prototype/agent-adapter.ts, ..., dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0mapps/app/src/browser/development-digests.ts is dynamically imported by apps/app/src/runtime/hosted-digest-ui.tsx but also statically imported by apps/app/src/browser/development-workflows.ts, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0mapps/app/src/runtime/phone-workflow-authoring.ts is dynamically imported by apps/app/src/runtime/workflow-device-contract.ts but also statically imported by apps/app/src/browser/development-workflows.ts, apps/app/src/prototype/workflow-authoring.ts, apps/app/src/runtime/workflow-protocol.ts, dynamic import will not move module into another chunk.
+
+✓ built in 1.46s
+✔ Copying web assets from web-dist to android/app/src/main/assets/public in 26.41ms
+✔ Creating capacitor.config.json in android/app/src/main/assets in 307.41μs
+✔ copy android in 48.26ms
+✔ Updating Android plugins in 3.50ms
+✔ update android in 31.87ms
+[info] Sync finished in 0.093s
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.13/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Warning: SDK processing. This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+
+> Task :app:stageLocalAgentSources FAILED
+fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+'git <command> [<revision>...] -- [<file>...]'
+node:internal/errors:985
+  const err = new Error(message);
+              ^
+
+Error: Command failed: git rev-parse HEAD
+fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+'git <command> [<revision>...] -- [<file>...]'
+
+    at genericNodeError (node:internal/errors:985:15)
+    at wrappedFn (node:internal/errors:539:14)
+    at checkExecSyncError (node:child_process:925:11)
+    at execFileSync (node:child_process:961:15)
+    at git (file:///home/shaw/Work/alphaphone/scripts/local-agent-source.mjs:43:20)
+    at verifySource (file:///home/shaw/Work/alphaphone/scripts/local-agent-source.mjs:44:5)
+    at file:///home/shaw/Work/alphaphone/scripts/stage-local-agent-sources.mjs:15:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)
+    at async node:internal/modules/esm/loader:639:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  status: 128,
+  signal: null,
+  output: [
+    null,
+    'HEAD\n',
+    "fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree.\n" +
+      "Use '--' to separate paths from revisions, like this:\n" +
+      "'git <command> [<revision>...] -- [<file>...]'\n"
+  ],
+  pid: 3354150,
+  stdout: 'HEAD\n',
+  stderr: "fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree.\n" +
+    "Use '--' to separate paths from revisions, like this:\n" +
+    "'git <command> [<revision>...] -- [<file>...]'\n"
+}
+
+Node.js v24.15.0
+
+[Incubating] Problems report is available at: file:///home/shaw/Work/alphaphone/android/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:stageLocalAgentSources'.
+> Process 'command 'node'' finished with non-zero exit value 1
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 18s
+1 actionable task: 1 executed
+node:internal/errors:985
+  const err = new Error(message);
+              ^
+
+Error: Command failed: ./gradlew --no-daemon :app:assembleStandaloneDebug :app:assembleLauncherDebug :app:assembleStandaloneRelease :app:assembleLauncherRelease :app:assembleStandaloneDebugAndroidTest :app:assembleLauncherDebugAndroidTest :app:lint
+    at genericNodeError (node:internal/errors:985:15)
+    at wrappedFn (node:internal/errors:539:14)
+    at checkExecSyncError (node:child_process:925:11)
+    at execFileSync (node:child_process:961:15)
+    at run (file:///home/shaw/Work/alphaphone/scripts/build-android.mjs:6:3)
+    at file:///home/shaw/Work/alphaphone/scripts/build-android.mjs:9:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)
+    at async node:internal/modules/esm/loader:639:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  status: 1,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 3345087,
+  stdout: null,
+  stderr: null
+}
+
+Node.js v24.15.0

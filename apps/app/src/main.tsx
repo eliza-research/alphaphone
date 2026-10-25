@@ -1,3 +1,4 @@
+import { AuthCodeDialog } from './runtime/auth-code-dialog';
 // Register browser implementations before any runtime module claims plugin identity.
 import './browser/register';
 import {bindBrowserSpeechConnection} from './browser/agent-speech';
@@ -113,7 +114,7 @@ function Phone() {
     else if(action==='resume'){delete document.documentElement.dataset.devBackground;shell.unlock();window.dispatchEvent(new Event('focus'));}
     if(['power','unlock','boot','background','resume'].includes(action))window.dispatchEvent(new Event('alpha:device-state'));
   }}/>}{mock && <div className="mock-mode-banner" role="status"><span>Mock mode · simulated data and actions</span><button onClick={() => { void connectionController.offline().then(() => { const url = new URL(location.href); url.searchParams.delete('mode'); url.searchParams.delete('start'); location.assign(url.href); }); }}>Exit mock mode</button></div>}<Component phoneSurface nativeSystemChrome={isAndroid} initial={fixture ? query.get('start') || 'home' : 'home'} theme={initialTheme} ref={(value: any) => { shell = value; }} />
-{!fixture && <><ConnectionChooser /><HostedDigestPanel /></>}</>;
+{!fixture && <><ConnectionChooser /><HostedDigestPanel /><AuthCodeDialog /></>}</>;
 }
 async function mountPhone() {
   if (mock && isAndroid) {

@@ -1,0 +1,74 @@
+{
+  "date": "2026-10-19",
+  "scope": "Local Gmail contract version 2; prepared backend patch is not deployed",
+  "verify": {
+    "tests": 257,
+    "passed": 257,
+    "typecheck": true,
+    "webBuild": true
+  },
+  "browser": {
+    "scenarios": 5,
+    "passed": 5,
+    "fixtureBoundary": "Synthetic account and callback-page routes"
+  },
+  "android": {
+    "variants": [
+      {
+        "file": "artifacts/standalone-debug.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": false,
+        "launcher": true,
+        "debuggable": true,
+        "sha256": "1804ee9be061cbf6755199271c687180f2b76af875c2caf5f80b09f22a963d1f",
+        "webPayload": true,
+        "accountAndGmailCallbacks": true
+      },
+      {
+        "file": "artifacts/standalone-release-unsigned.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": false,
+        "launcher": true,
+        "debuggable": false,
+        "sha256": "a58757ca52e440bb61e4724ca190212414589ba0dd4680b134842eecc55ece9f",
+        "webPayload": true,
+        "accountAndGmailCallbacks": true
+      },
+      {
+        "file": "artifacts/launcher-debug.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": true,
+        "launcher": true,
+        "debuggable": true,
+        "sha256": "e2e1572d49e2697ec4265ee933b489ad957f3dbd7fed5f055576dd772f4f6272",
+        "webPayload": true,
+        "accountAndGmailCallbacks": true
+      },
+      {
+        "file": "artifacts/launcher-release-unsigned.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": true,
+        "launcher": true,
+        "debuggable": false,
+        "sha256": "3b5fd860a4697e764165e740e8bf64525b4e7368414de702bb7020bbea1dd648",
+        "webPayload": true,
+        "accountAndGmailCallbacks": true
+      }
+    ],
+    "instrumentation": "compiled only",
+    "lint": "passed"
+  },
+  "acceptance": {
+    "liveGoogle": false,
+    "backendDeployment": false,
+    "domainAssociation": false,
+    "emulatorHome": false,
+    "aospBoot": false,
+    "physicalDevice": false
+  },
+  "remaining": [
+    "Configure Alpha-specific Google client selection without changing shared Eliza clients or account identity mapping",
+    "Deploy reviewed backend patches, tenant redirects and signed Android domain association",
+    "Qualify live success, denial, expiry, warm/cold callbacks and device acceptance"
+  ]
+}

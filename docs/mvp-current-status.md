@@ -1,5 +1,10 @@
 # Current MVP status — October 3, 2026
 
+October 11: the [full-product completion audit](full-product-completion-audit.md)
+adds Phone, SMS, Contacts and Wallet to the implementation plan and requires
+resident-agent inference through Eliza Cloud. The dated evidence below remains
+historical; consult the new campaign for current source/image results.
+
 The MVP is **not complete**. This is the current requirement/evidence index; [the browser review](mvp-browser-review.md) retains the chronological implementation record and failed attempts. Older build and enclave checkpoints are historical evidence, not the current acceptance checklist.
 
 See the [combined resident/browser implementation report](mvp-stack-convergence.md) for integration history. Repository main is merged through PRs 136 and 137 at `8053d04f3d6fe553fdab5de98ecfd5ad64718c9b`. It pins upstream `2fe9f510501863af97bda887e2870158b3a3e2b2` and retires the runtime patches; [the migration ledger](upstream-patch-migration.md) records their dispositions. The current complete browser campaign is [37160959650](https://github.com/AlphaCompute/alphaphone/actions/runs/37160959650), still running. The earlier campaign on `c8e91b8` was superseded when main advanced; its passed repository steps and partial browser results are not a complete current-source pass.

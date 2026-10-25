@@ -1,0 +1,435 @@
+{
+  "date": "2026-10-21",
+  "timezone": "America/Los_Angeles",
+  "reviewedPR": {
+    "url": "https://github.com/elizaOS/eliza/pull/36966",
+    "head": "0232e112a98908ad418beedb16b4eb1f5ff1dee3",
+    "state": "CLOSED",
+    "closedAt": "2026-10-22T01:29:00Z"
+  },
+  "verify": {
+    "tests": 274,
+    "passed": 274,
+    "typecheck": "passed",
+    "webBuild": "passed",
+    "log": "/tmp/alphaphone-native-header-verify.log",
+    "followup": "274 tests, typecheck and web build passed after native tenant-header fix."
+  },
+  "android": {
+    "build": "passed",
+    "instrumentationCompilation": "passed",
+    "lint": "passed",
+    "apkInspection": [
+      {
+        "file": "artifacts/standalone-debug.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": false,
+        "launcher": true,
+        "debuggable": true,
+        "sha256": "7d9da12effd1c2565c0a3c0278d8beecfcf7c60162f3f16b76ab266ddfec926a",
+        "webPayload": true
+      },
+      {
+        "file": "artifacts/standalone-release-unsigned.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": false,
+        "launcher": true,
+        "debuggable": false,
+        "sha256": "4dee753b6bb21436ca67e701cc263f2c4ad8ff8943111715b4f50ab1953835ec",
+        "webPayload": true
+      },
+      {
+        "file": "artifacts/launcher-debug.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": true,
+        "launcher": true,
+        "debuggable": true,
+        "sha256": "53768a121d03bc77be77c62f5f7aa39f06f24283772cb3847ed74da7233b4193",
+        "webPayload": true
+      },
+      {
+        "file": "artifacts/launcher-release-unsigned.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": true,
+        "launcher": true,
+        "debuggable": false,
+        "sha256": "607c830d9b59a914061fbe63eaf5cd481e80ca6739f0c4d3142aa955723f2483",
+        "webPayload": true
+      }
+    ],
+    "log": "/tmp/alphaphone-native-header-build.log"
+  },
+  "backend": {
+    "worktree": "/home/shaw/Work/eliza-white-label-app-auth",
+    "base": "97d8024b3d5d2763536236719e125c2723717817",
+    "oauthPGliteTests": {
+      "passed": 17,
+      "failed": 0
+    },
+    "gmailPGlite": {
+      "passed": 8,
+      "failed": 0
+    },
+    "authTypecheck": "passed",
+    "publishedPR": "https://github.com/elizaOS/eliza/pull/37240",
+    "deployed": false,
+    "nativeEmailCode": {
+      "passed": 10,
+      "failed": 0
+    },
+    "authLint": "passed",
+    "rootVerify": {
+      "status": "passed",
+      "head": "53d93e30e1c89060210c5d8b0b150e9c530c1ca3",
+      "workspaceTasks": 309,
+      "workerDryRun": "passed",
+      "exitCode": 0,
+      "log": "/tmp/alphaphone-white-label-upstream-verify-rebased.log"
+    },
+    "head": "53d93e30e1c89060210c5d8b0b150e9c530c1ca3",
+    "focusedTestsAtHead": {
+      "oauth": 17,
+      "email": 10,
+      "gmail": 8
+    },
+    "githubChecks": {
+      "head": "53d93e30e1c89060210c5d8b0b150e9c530c1ca3",
+      "status": "all six reported checks passed",
+      "run": "https://github.com/elizaOS/eliza/actions/runs/39708710131"
+    },
+    "mergedAt": "2026-10-22T04:40:36Z",
+    "mergeCommit": "35b4dda6b6c5599a3b9641eb63f42c2340acf48c",
+    "state": "MERGED"
+  },
+  "browser": {
+    "accountAndCallbackScenarios": "5 passed after code-only email endpoint update",
+    "initialRegressionSuite": "17 passed, 4 timed out",
+    "subsequentRegressionSuite": "interrupted under high host load; not a clean full-suite pass",
+    "googleMfaScenarios": "3 passed: authenticator code, TOTP recovery code, cancellation"
+  },
+  "notEstablished": [
+    "backend deployment",
+    "real provider login",
+    "emulator HOME-role run",
+    "full AOSP boot",
+    "device/user acceptance",
+    "live CAPTCHA provider acceptance"
+  ],
+  "sha256": {
+    "apps/app/src/runtime/cloud-deployment.json": "d9d57d5ac8248f4b9bdc8a5d31ff21730dbfd43b566ddaeffa2431eb8d21a8b1",
+    "apps/app/src/runtime/cloud-login.ts": "57f45acb6a281c5e532885f6043e82052881fedfa0123c2d83fc0e63a9295ed3",
+    "apps/app/src/runtime/cloud-login-ui.tsx": "4b5c5a0be8e5bde32e5778c653a29153caf708a133c8fb6136bb3089346baf2c",
+    "apps/app/src/runtime/alpha-auth.ts": "ebc7554014ca497ae2f96f6f15445a8d6a6159e0b4060e2cb1211c39f08bb760",
+    "apps/app/src/runtime/cloud-protocol.ts": "0b3c9b40cc2ddd2b00ace601b4980cd6c58e75c2e0715ee04ab438d6df7dad95",
+    "patches/eliza/white-label-app-auth.patch": "e6b62a979a84441776a622bad6614917ec22862af28a34ffa88549cbe8f6a7a9",
+    "apps/app/src/runtime/auth-code-prompt.ts": "7b883becc8eaf4373622f277a0c106382c387bf7717393e6e0927d930ed83675",
+    "apps/app/src/runtime/auth-code-dialog.tsx": "01fe572c6dc2358f38757b8bc828f7696497ce215f4dc7dee1d332d0fe57d94e",
+    "apps/app/src/runtime/native-captcha.ts": "b6dab18fed694f49932dadaa65e237df7e0f2d77e0e67dbfe067d0a99dfb6cdf",
+    "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaCaptchaPlugin.java": "4ca4b2d233a039659160771c281b10bbf602931eeebfb6aad8139d49ef89ee94",
+    "deployment/alpha-auth/verification/verification.js": "decfb4989fb0b9054fe79a88f92d35dbc44a2afa92d826e3a0dc9fef19584e0f",
+    "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaConnectionPlugin.java": "e6cd2ee675900da40a1e33c60e2b03277dfde7a95013743ab4ad29de82ad14a6",
+    "android/app/src/androidTest/java/ai/elizaresearch/alphaphone/AuthVerificationInstrumentedTest.java": "c088d747b10120c36e68519684430ddce09559ff12a56333b91bc48a3c864cfa",
+    "android/app/src/androidTest/java/ai/elizaresearch/alphaphone/AuthCloudProbeInstrumentedTest.java": "791b03691e8d0d9675beda58ab92b10ad363eef4715e35bf764a7bbd6ec39992"
+  },
+  "captcha": {
+    "implementation": "isolated Android WebView; no Capacitor bridge",
+    "providerPageBrowserTests": {
+      "passed": 3,
+      "providers": "synthetic scripts under deployment CSP"
+    },
+    "accountUiTests": {
+      "passed": 2,
+      "nativeBoundary": "synthetic CAPTCHA plugin"
+    },
+    "hostingPR": "https://github.com/AlphaCompute/alpha-compute/pull/74",
+    "hostingHead": "238b647055e573b9a246e2f0053242c0941210f5",
+    "hostingTests": 25,
+    "hostingBuild": "passed with fixture/local-only database; CMS fallbacks used",
+    "hostingRuntime": [
+      {
+        "path": "/alphaphone/verify/index.html",
+        "status": 200,
+        "sha256": "5df495d1e3c6a2d73ca00b1291a55ee42a696f0f8cb125588c14dd835486c88d",
+        "exactBytes": true,
+        "headers": "passed"
+      },
+      {
+        "path": "/alphaphone/verify/verification.js",
+        "status": 200,
+        "sha256": "decfb4989fb0b9054fe79a88f92d35dbc44a2afa92d826e3a0dc9fef19584e0f",
+        "exactBytes": true,
+        "headers": "passed"
+      },
+      {
+        "path": "/alphaphone/verify/verification.css",
+        "status": 200,
+        "sha256": "34fc4754ea04755b97de4666006db8e822eb03d94f14e5961c55e469f03f6367",
+        "exactBytes": true,
+        "headers": "passed"
+      },
+      {
+        "path": "/alphaphone/auth/callback",
+        "status": 200,
+        "strictCallbackCsp": "preserved"
+      }
+    ],
+    "deployed": false,
+    "liveProviderProbe": "HTTP 403 from Cloudflare, error 1010 browser_signature_banned for command-line client; not evidence of tenant authentication failure",
+    "hostingCI": "No checks reported on draft branch",
+    "hostingStagingDeployed": true,
+    "hostingProductionDeployed": false
+  },
+  "liveAccess": {
+    "browser": "In-app browser opened https://eliza.app and redirected to /login?returnTo=%2F; no authenticated account session",
+    "needed": "Tenant administrator session and rollout/device qualification",
+    "credentialCollection": "none"
+  },
+  "nativeAuthVerification": {
+    "emulator": "Disposable API 35 Google APIs x86_64; standalone debug candidate",
+    "captchaLifecycle": {
+      "passed": 3,
+      "log": "/tmp/alphaphone-native-verification-final-tests.log"
+    },
+    "tenantHeaderFixture": {
+      "passed": 1,
+      "observedRequests": [
+        {
+          "path": "/steward/auth/providers",
+          "tenant": "elizacloud-staging"
+        }
+      ],
+      "malformedTenant": "rejected before HTTP",
+      "log": "/tmp/alphaphone-native-header-fixture-test.log"
+    },
+    "liveProviderDiscovery": {
+      "staging": {
+        "status": 200,
+        "google": true,
+        "email": true,
+        "sms": true
+      },
+      "production": {
+        "status": 200,
+        "google": true,
+        "email": true,
+        "sms": true
+      },
+      "scope": "Read-only GET /steward/auth/providers through real native AlphaConnection transport; no login, OTP sends, grants or account mutations"
+    },
+    "fix": "Permit X-Steward-Tenant in bounded native header allowlist; validate [A-Za-z0-9_-]{1,100}"
+  },
+  "liveFollowup20261022": {
+    "authorization": "User authorized live login tests with their supplied email and phone; identifiers omitted from saved evidence",
+    "websiteSms": "One production login attempt returned SMS verification is temporarily unavailable; no success claimed",
+    "websiteEmail": "Initial production magic-link request reached Check your email. Later browser was at cloud.eliza.app/login?returnTo=%2Fcloud showing another login form; user link completion is unconfirmed, no authenticated session observed.",
+    "nativeEmailCode": "One staging request through real AlphaConnection returned success with codeLength 6; delivery receipt and verification require user completion",
+    "nativeCodeRoutePreflight": {
+      "staging": 400,
+      "production": 400,
+      "body": "empty; no code requested by preflight"
+    },
+    "nativeGoogleReadiness": {
+      "staging": 404,
+      "production": 404,
+      "scope": "registered Alpha HTTPS callback, generic app-readiness route"
+    },
+    "railwayAccess": "CLI unauthorized; browser unauthenticated and platform outage banner visible",
+    "hostingCandidate": "0e82c199c3d6ff46c9f67bfe7d13f8a6d76ccabd",
+    "hostingDependencies": {
+      "next": "16.4.2",
+      "dompurify": "3.4.17"
+    },
+    "hostingValidation": {
+      "tests": 25,
+      "productionBuild": "passed with fixture/local-only DB and expected CMS fallbacks",
+      "runtime": [
+        {
+          "path": "/alphaphone/verify/index.html",
+          "status": 200,
+          "sha256": "5df495d1e3c6a2d73ca00b1291a55ee42a696f0f8cb125588c14dd835486c88d",
+          "exactBytes": true,
+          "headers": "passed"
+        },
+        {
+          "path": "/alphaphone/verify/verification.js",
+          "status": 200,
+          "sha256": "decfb4989fb0b9054fe79a88f92d35dbc44a2afa92d826e3a0dc9fef19584e0f",
+          "exactBytes": true,
+          "headers": "passed"
+        },
+        {
+          "path": "/alphaphone/verify/verification.css",
+          "status": 200,
+          "sha256": "34fc4754ea04755b97de4666006db8e822eb03d94f14e5961c55e469f03f6367",
+          "exactBytes": true,
+          "headers": "passed"
+        },
+        {
+          "path": "/alphaphone/auth/callback",
+          "status": 200,
+          "strictCallbackCsp": "preserved"
+        }
+      ]
+    },
+    "hostingStaging": {
+      "pr": "https://github.com/AlphaCompute/alpha-compute/pull/74",
+      "state": "merged",
+      "source": "860e4ff5b553b6afe839e06c4f56405174ae95cf",
+      "run": "https://github.com/AlphaCompute/alpha-compute/actions/runs/39881629787",
+      "status": "success",
+      "liveVersion": {
+        "sha": "860e4ff5b553b6afe839e06c4f56405174ae95cf",
+        "env": "staging"
+      },
+      "publicAssetChecks": [
+        {
+          "path": "/alphaphone/verify/index.html",
+          "status": 200,
+          "sha256": "5df495d1e3c6a2d73ca00b1291a55ee42a696f0f8cb125588c14dd835486c88d",
+          "exactBytes": true,
+          "headers": "passed"
+        },
+        {
+          "path": "/alphaphone/verify/verification.js",
+          "status": 200,
+          "sha256": "decfb4989fb0b9054fe79a88f92d35dbc44a2afa92d826e3a0dc9fef19584e0f",
+          "exactBytes": true,
+          "headers": "passed"
+        },
+        {
+          "path": "/alphaphone/verify/verification.css",
+          "status": 200,
+          "sha256": "34fc4754ea04755b97de4666006db8e822eb03d94f14e5961c55e469f03f6367",
+          "exactBytes": true,
+          "headers": "passed"
+        },
+        {
+          "path": "/alphaphone/auth/callback",
+          "status": 200,
+          "strictCallbackCsp": "preserved"
+        }
+      ],
+      "repeatPublicAssetChecks": "passed",
+      "transition": "initial request failed during rollout, two subsequent complete probes passed"
+    },
+    "productionPromotionScope": "Current staging also contains newsroom, status/error pages, newsletter templates and llms metadata changes not on prod; review whole image before promotion.",
+    "nativeTestedApkSha256": "7d9da12effd1c2565c0a3c0278d8beecfcf7c60162f3f16b76ab266ddfec926a",
+    "freshVerify": "npm run verify passed (typecheck, complete current test suite, web build); terminal process exited 0",
+    "androidBuild": {
+      "status": "passed",
+      "variants": "standalone and launcher, debug and release; instrumentation and lint passed",
+      "apkHashes": [
+        {
+          "file": "artifacts/standalone-debug.apk",
+          "sha256": "7d9da12effd1c2565c0a3c0278d8beecfcf7c60162f3f16b76ab266ddfec926a",
+          "matchesPreviouslyTestedCandidate": true
+        },
+        {
+          "file": "artifacts/standalone-release-unsigned.apk",
+          "sha256": "4dee753b6bb21436ca67e701cc263f2c4ad8ff8943111715b4f50ab1953835ec",
+          "matchesPreviouslyTestedCandidate": true
+        },
+        {
+          "file": "artifacts/launcher-debug.apk",
+          "sha256": "53768a121d03bc77be77c62f5f7aa39f06f24283772cb3847ed74da7233b4193",
+          "matchesPreviouslyTestedCandidate": true
+        },
+        {
+          "file": "artifacts/launcher-release-unsigned.apk",
+          "sha256": "607c830d9b59a914061fbe63eaf5cd481e80ca6739f0c4d3142aa955723f2483",
+          "matchesPreviouslyTestedCandidate": true
+        }
+      ],
+      "log": "test-results/white-label-cloud/live-followup-android-build.log"
+    },
+    "productionPromotionPR": "https://github.com/AlphaCompute/alpha-compute/pull/75",
+    "publicHostingProbe": "Python urllib was rejected with Cloudflare1010; ordinary curl successfully read the prior staging version while rollout was in progress. No user-agent spoofing or access-policy changes.",
+    "productionPromotion": "Awaiting approval of wider staged website scope; PR75 remains draft"
+  },
+  "appFocusedFollowup20261023": {
+    "scope": "Native app login; no website login prerequisite",
+    "readiness": {
+      "checkedAt": "2026-10-23T07:01:57.863Z",
+      "scope": "Public GET-only discovery; not sign-in or delivery acceptance",
+      "results": [
+        {
+          "environment": "staging",
+          "api": "https://api-staging.eliza.app",
+          "providers": {
+            "status": 200,
+            "email": true,
+            "sms": true,
+            "google": true
+          },
+          "googleApp": {
+            "status": 404,
+            "ready": false
+          }
+        },
+        {
+          "environment": "production",
+          "api": "https://api.eliza.app",
+          "providers": {
+            "status": 200,
+            "email": true,
+            "sms": true,
+            "google": true
+          },
+          "googleApp": {
+            "status": 404,
+            "ready": false
+          }
+        }
+      ]
+    },
+    "changes": [
+      "Distinguish temporary backend outage and unsupported in-app method without exposing raw diagnostics",
+      "Reusable bounded GET-only readiness probe"
+    ],
+    "verify": {
+      "tests": 275,
+      "passed": 275,
+      "typecheck": "passed",
+      "webBuild": "passed"
+    },
+    "android": {
+      "build": "passed",
+      "variants": [
+        "standalone",
+        "launcher"
+      ],
+      "modes": [
+        "debug",
+        "release"
+      ],
+      "instrumentationCompilation": "passed",
+      "lint": "passed",
+      "apks": [
+        {
+          "file": "artifacts/standalone-debug.apk",
+          "sha256": "3c7c4bf895be8ec26c78062214abc46d5b05b56dbfc2126587b30e31b89db5bb"
+        },
+        {
+          "file": "artifacts/standalone-release-unsigned.apk",
+          "sha256": "d252c2df9d7f3d135a56492e3f43314f7fd956858176b2f73c08fe37ff72b2de"
+        },
+        {
+          "file": "artifacts/launcher-debug.apk",
+          "sha256": "310891584ca12881e92779fb7a8e35da861c1ebc779214e046c70af74ca3d00d"
+        },
+        {
+          "file": "artifacts/launcher-release-unsigned.apk",
+          "sha256": "b018c746d1dd50ce210cde9a42c2082b3ca5545778c897af2c8a490ea6d0fe3d"
+        }
+      ]
+    },
+    "automation": {
+      "id": "finish-alpha-phone-native-login",
+      "schedule": "hourly",
+      "policy": "quiet while unchanged/non-actionable; no repeated code sends; app-focused checks/fixes"
+    },
+    "railway": "CLI unauthorized",
+    "newLiveCodeSends": 0,
+    "acceptance": "These new APKs were built and inspected; earlier native live tests belong to their recorded APK hashes. Authenticated app flow still unverified."
+  }
+}

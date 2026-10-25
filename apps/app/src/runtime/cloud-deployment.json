@@ -1,0 +1,22 @@
+{
+  "production": {
+    "api": "https://api.eliza.app",
+    "agents": "cloud.eliza.app",
+    "tenant": "elizacloud",
+    "authorizationOrigins": [
+      "https://eliza.app",
+      "https://cloud.eliza.app"
+    ],
+    "verificationPage": "https://alphacompute.ai/alphaphone/verify/index.html"
+  },
+  "staging": {
+    "api": "https://api-staging.eliza.app",
+    "agents": "cloud-staging.eliza.app",
+    "tenant": "elizacloud-staging",
+    "authorizationOrigins": [
+      "https://staging.eliza.app",
+      "https://cloud-staging.eliza.app"
+    ],
+    "verificationPage": "https://alphacompute.ai/alphaphone/verify/index.html"
+  }
+}

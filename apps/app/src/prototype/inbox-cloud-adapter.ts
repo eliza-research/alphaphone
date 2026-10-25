@@ -5,7 +5,8 @@ import { inboxProviderControls } from './inbox-provider-controls';
 import { inboxDrafts } from './inbox-drafts';
 import { connectionController } from '../runtime/connection-ui';
 import type { GmailAccount, GmailMessage } from '../runtime/cloud-protocol';
-import { openConnectionBrowser } from '../runtime/native-connection';
+import { alphaGmailHost } from '../runtime/native-connection';
+import { beginAlphaGmail, finishAlphaGmail, pendingGmailReturn, activeGmailAttempt, cancelAlphaGmail } from '../runtime/alpha-gmail';
 import { DailyApps } from '../daily';
 
 type Bag = Record<string, any>;
@@ -23,9 +24,10 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
   let contextReview:ReviewedMailContext|null=null,contextBusy=false;
   let attachmentView:{name:string;text:string;hash:string;external:boolean;open:()=>void}|null=null;
   let selected = '', body: { message: GmailMessage; bodyText: string; historyId?:string|null;attachments?:{partId:string;name:string;mimeType:string;size:number;supported:boolean}[] } | null = null;
-  let status = 'Connect Eliza Cloud to use Gmail', phase = 'idle', revision = '';
+  let status = 'Sign in to Alpha Phone to use Gmail', phase = 'idle', revision = '';
   let agentSession = connectionController.getSnapshot().session?.sessionId;
   let operation: AbortController | null = null, generation = 0, sessionId: string | undefined;
+  let gmailWaiting=false;
   const publish = (patch: Bag = {}) => shell?.vset('inbox', { nativeMailTick: Date.now(), ...patch });
   const provider = inboxProviderControls(() => publish(), text => api?.toast(text));
   const drafts = inboxDrafts(() => publish(), text => api?.toast(text), provider);
@@ -33,8 +35,9 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
   function clear() {
     void attachmentNative.cancel().catch(()=>{});contextReview=null;attachmentView=null;provider.reset(); drafts.reset();
     generation++; operation?.abort(); operation = null;
+    gmailWaiting=false;
     thread=null; accounts = []; messages = []; selected = ''; loadedQuery = ''; loadedLimit = 25; body = null; phase = 'idle'; revision = '';
-    status = 'Connect Eliza Cloud to use Gmail';
+    status = 'Sign in to Alpha Phone to use Gmail';
     publish({ mails: [], sent: [], open: null, compose: null, nativeMailSelection: null });
   }
   function cancelRead() {
@@ -56,7 +59,7 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
     try { await task(binding, controller.signal, valid); }
     catch (error) {
       if (valid() && connectionController.rejectCloudSession(binding.sessionId, error)) {
-        status = 'Eliza Cloud sign-in expired. Connect Eliza Cloud to continue.'; publish(); return;
+        status = 'Alpha Phone sign-in expired. Sign in again to continue.'; publish(); return;
       }
       if (valid()) {
         messages = []; body = null; phase = 'error';
@@ -77,12 +80,37 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
     });
   }
   async function connect(permission:'read'|'send'|'drafts'|'mailbox'='read') {
-    await work('Complete Gmail authorization in your browser', async ({ client }, signal, valid) => {
-      const url = await client.initiateGmail(signal,permission);
-      if (!valid()) return;
-      await openConnectionBrowser(url, signal);
-      if (valid()) status = 'After authorizing Gmail, tap Check connection.';
+    await work('Confirm Gmail access in Google’s secure account chooser', async ({ client }, signal, valid) => {
+      const owner=connectionController.getSnapshot().cloudAccount;
+      if(!owner)throw Error('Sign in to Alpha Phone first');
+      await beginAlphaGmail(owner,permission,alphaGmailHost,state=>client.initiateGmail(signal,permission,state),signal);
+      if(valid())gmailWaiting=true;
+      if (valid()) status = 'Waiting for Google. You’ll return to Alpha Phone when authorization finishes.';
     });
+  }
+  let checkingReturn=false;
+  async function checkGmailReturn():Promise<boolean> {
+    if(checkingReturn||operation||!shell)return false;
+    const owner=connectionController.getSnapshot().cloudAccount,binding=connectionController.getCloudClient();
+    if(!owner||!binding)return false;
+    checkingReturn=true;
+    try {
+      const waiting=!!await activeGmailAttempt(owner,alphaGmailHost);
+      if(binding.sessionId!==connectionController.getCloudClient()?.sessionId)return false;
+      if(waiting!==gmailWaiting){gmailWaiting=waiting;publish();}
+      if(!await pendingGmailReturn(owner,alphaGmailHost)||binding.sessionId!==connectionController.getCloudClient()?.sessionId)return false;
+      await work('Checking the returned Gmail permissions…',async({client},signal,valid)=>{
+        if(shell?.S().view!=='inbox')shell?.openView('inbox');
+        const outcome=await finishAlphaGmail(owner,alphaGmailHost,()=>client.gmailAccounts(signal),signal);
+        if(!outcome||!valid())return;
+        gmailWaiting=false;
+        if(outcome.accounts){accounts=outcome.accounts;selected=accounts.find(a=>a.connectionId===outcome.connectionId&&a.connected&&a.grantedCapabilities.includes('google.gmail.triage'))?.connectionId||'';void provider.bind(selected);void drafts.bind(selected,accounts.find(a=>a.connectionId===selected)?.label||'');}
+        status=outcome.result==='connected'?'Gmail permissions confirmed. Tap Load Inbox.':outcome.result==='denied'?'Gmail authorization was cancelled.':outcome.result==='missing-permission'?'Google returned, but the requested Gmail permission is not confirmed. Review access and try again.':'Gmail authorization could not finish. Try connecting again.';
+        publish({open:null,nativeMailSelection:null});
+      });
+      return true;
+    } catch {return false;}
+    finally {checkingReturn=false;}
   }
   async function load(more = false) {
     if (!selected) { await refreshAccounts(); return; }
@@ -151,7 +179,8 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
       css: on ? 'background:var(--fg);color:var(--bg)' : 'background:var(--s2);color:var(--fg)', pick: action });
     const chips: Bag[] = binding ? [
       chip('Connect Gmail', () => void connect()),
-      chip('Check connection', () => void refreshAccounts()),
+      ...(gmailWaiting?[chip('Cancel Gmail connection attempt',()=>void work('Cancelling Gmail connection attempt…',async(_binding,_signal,valid)=>{const owner=connectionController.getSnapshot().cloudAccount;if(owner)await cancelAlphaGmail(owner,alphaGmailHost);if(valid()){gmailWaiting=false;status='Stopped waiting for Google. Previously granted access is unchanged.';}}))]:[]),
+      chip('Check connection', () => void checkGmailReturn().then(found=>{if(!found)void refreshAccounts();})),
       ...(selected&&!provider.capabilities()?.send?[chip('Authorize Gmail sending',()=>void connect('send'))]:[]),
       ...(selected&&!provider.capabilities()?.providerDrafts?[chip('Authorize Gmail drafts',()=>void connect('drafts'))]:[]),
       ...(selected&&!provider.capabilities()?.mailboxMutations?[chip('Authorize mailbox changes',()=>void connect('mailbox'))]:[]),
@@ -164,7 +193,7 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
       ...(selected ? [chip(st.q ? 'Search Gmail' : 'Load Inbox', () => void load())] : []),
       ...(messages.length >= 25 && loadedLimit === 25 ? [chip('Load up to 50 results', () => void load(true))] : []),
       ...(messages.length ? [chip(`${messages.length} loaded · max ${loadedLimit}`, () => api?.toast('Cloud search supports up to 50 results. Refine your search to find other messages.'))] : []),
-    ] : [chip('Connect Eliza Cloud', () => connectionController.open())];
+    ] : [chip('Sign in to Alpha Phone', () => connectionController.open())];
     chips.push(...drafts.chips(chip), ...provider.chips(chip));
 
     if (operation) chips.push(chip('Cancel', cancelRead));
@@ -188,11 +217,12 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
     mount.call(this); shell = this; sessionId = connectionController.getCloudClient()?.sessionId;
     this.inboxConnectionUnsubscribe = connectionController.subscribe(() => {
       const next = connectionController.getCloudClient()?.sessionId;
-      if (next !== sessionId) { sessionId = next; clear(); }
+      if (next !== sessionId) { sessionId = next; clear(); void checkGmailReturn(); }
       const nextAgent = connectionController.getSnapshot().session?.sessionId;
       if (nextAgent !== agentSession) { contextReview=null;agentSession = nextAgent; publish({ nativeMailSelection: null }); }
     });
-    this.inboxResume = DailyApps.addListener('appResumed', () => { if (api?.isActive() && !operation) void refreshAccounts(); }).catch(() => null);
+    void checkGmailReturn();
+    this.inboxResume = DailyApps.addListener('appResumed', () => { void checkGmailReturn().then(found=>{if(!found&&api?.isActive()&&!operation)void refreshAccounts();}); }).catch(() => null);
   };
   p.componentWillUnmount = function () {
     this.inboxConnectionUnsubscribe?.(); void this.inboxResume?.then((handle: Bag) => handle?.remove());

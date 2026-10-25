@@ -37,7 +37,7 @@ The active shell derives its Capacitor activity lifecycle, splash installation, 
 
 **ADR-02: separate UI, shared platform contracts.** No cross-product imports. Each product owns layouts, tokens, routes, branding, package ID and store/OS metadata. Generic transport, platform capability checks, redaction, task/approval protocol and native plugins belong upstream. Product task policy must be supplied explicitly, not hard-coded into the shared agent.
 
-**ADR-03: two install modes.** `standalone` is an ordinary app with MAIN/LAUNCHER and no HOME filter. `launcher` adds MAIN/HOME/DEFAULT and handles Back/Home at its root. Both use the same product package ID so they are alternate installations, not two simultaneous apps. Alpha and senior-care package IDs are different and can coexist. Debug APKs are signed locally; release outputs are unsigned until controlled signing. The signed launcher APK is prepared for import as a nonprivileged presigned AOSP product app; a full image build and boot remain unverified. System installation alone does not grant accessibility, overlay, dialer, SMS, assistant or signature permissions.
+**ADR-03: two install modes.** `standalone` is an ordinary app with MAIN/LAUNCHER and no HOME filter. `launcher` adds MAIN/HOME/DEFAULT and handles Back/Home at its root. Both use the same product package ID so they are alternate installations, not two simultaneous apps. Alpha and senior-care package IDs are different and can coexist. Debug APKs are signed locally; release outputs are unsigned until controlled signing. The signed launcher APK is imported as a nonprivileged presigned AOSP product app. An October 4 grizzly development image built with the resident payload and passed host artifact checks after a clean repackage corrected stale AVB fingerprint metadata. Physical boot, resident-agent execution and deployment qualification remain incomplete (see [Pixel 11 readiness](pixel11-readiness-2026-10-03.md)). System installation alone does not grant accessibility, overlay, dialer, SMS, assistant or signature permissions.
 
 **ADR-04: no implicit privileged bundle.** The new OS staging tool admits a custom APK separately from Eliza's full local-agent system APK. It emits an additive Soong module and product fragment after hash/signer/HOME checks. It does not replace Eliza, Launcher3, SystemUI or Chromium. Device enrollment chooses the default HOME role; production selection/rollback policy is a release gate. Do not remove the stock recovery launcher before that gate.
 
@@ -54,3 +54,14 @@ The active shell derives its Capacitor activity lifecycle, splash installation, 
 5. Before production, run upstream required root checks, the real auth/agent suite, signed-image build and physical-device acceptance. Reverting the submodule pin is the source rollback; installed APK/OS rollback must separately respect signing identity and Android versionCode rules.
 
 No production secrets or signing keys belong in these repos. Account credentials are encrypted with Android Keystore AES-GCM in the app no-backup directory. Renderer preferences contain only nonsecret connection selection and conversation identifiers. Cloud voice requests bind to a specific saved credential generation. Platform backup remains disabled until retention/key ownership is specified.
+
+## App-owned Cloud authentication
+
+Alpha Phone owns login, verification, consent and legal presentation. Shared
+Cloud code exposes application-neutral APIs and validates registered tenants and
+callbacks. `apps/app/src/runtime/cloud-deployment.json` is the common renderer
+and Android release configuration; endpoint changes isolate stored credentials.
+Backend-only migration patches are explicit artifacts under `patches/eliza` and
+are not applied to the pinned mobile runtime. See
+[white-label login migration](white-label-cloud-login.md) for the PR review,
+protocol changes and remaining acceptance work.

@@ -1,0 +1,74 @@
+{
+  "date": "2026-10-19",
+  "scope": "Local app and prepared backend patches; not deployed",
+  "verify": {
+    "tests": 256,
+    "passed": 256,
+    "typecheck": true,
+    "webBuild": true
+  },
+  "browser": {
+    "scenarios": 21,
+    "passed": 21,
+    "fixtureBoundary": "Synthetic HTTP, provider, storage and callback-page routes"
+  },
+  "android": {
+    "variants": [
+      {
+        "file": "artifacts/standalone-debug.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": false,
+        "launcher": true,
+        "debuggable": true,
+        "sha256": "7eff09e5594de19aae3a2036dfd56612984de716ccb6d6735313f6c505a5ae92",
+        "webPayload": true,
+        "accountAndGmailCallbacks": true
+      },
+      {
+        "file": "artifacts/standalone-release-unsigned.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": false,
+        "launcher": true,
+        "debuggable": false,
+        "sha256": "8c113e3568ff78fabe3eb375e4fb59dce079bfe8666dc86d7a532a942daf2ab0",
+        "webPayload": true,
+        "accountAndGmailCallbacks": true
+      },
+      {
+        "file": "artifacts/launcher-debug.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": true,
+        "launcher": true,
+        "debuggable": true,
+        "sha256": "0a7d48821de07c0ae427ee0756ea1ce0282d5b245f116bba6a742f764420c849",
+        "webPayload": true,
+        "accountAndGmailCallbacks": true
+      },
+      {
+        "file": "artifacts/launcher-release-unsigned.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": true,
+        "launcher": true,
+        "debuggable": false,
+        "sha256": "5bac6a9c0ad249c0a0f811cfdb9c2c2b026cd47095c0e6435005f92d09fea055",
+        "webPayload": true,
+        "accountAndGmailCallbacks": true
+      }
+    ],
+    "instrumentation": "compiled only",
+    "lint": "passed"
+  },
+  "acceptance": {
+    "liveGoogle": false,
+    "backendDeployment": false,
+    "domainAssociation": false,
+    "emulatorHome": false,
+    "aospBoot": false,
+    "physicalDevice": false
+  },
+  "remaining": [
+    "Bind Gmail return to exact connector ID and test multiple Google accounts",
+    "Deploy and qualify Alpha-specific Google consent and backend/domain settings",
+    "Qualify live success, denial, expiry, warm/cold callbacks and device acceptance"
+  ]
+}

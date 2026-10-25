@@ -296,7 +296,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
           this.openView('notes'); enter(); pairedAsrReady = true; chatDestination = { shell: this, view }; refresh(); return;
         } catch { if (current()) this.toast('Agent transcription is unavailable. Check this connection or use the keyboard.'); return; }
       }
-      if (localStorage.getItem('alpha.connection.selection.v1') !== null) { this.toast('Sign in to Eliza Cloud to use voice with this agent, or use the keyboard.'); return; }
+      if (localStorage.getItem('alpha.connection.selection.v1') !== null) { this.toast('Sign in to Alpha Phone to use voice with this agent, or use the keyboard.'); return; }
       return originalStartVoice?.apply(this, args);
     }
     this.openView('notes'); enter(); chatDestination = { shell: this, view }; refresh();

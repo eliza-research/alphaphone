@@ -1,0 +1,25 @@
+--- a/avbtool.py
++++ b/avbtool.py
+@@ -762,7 +762,7 @@
+                 'pubkey=FORMAT:HEX,BITSTRING:{}\n'
+                 '\n'
+                 '[mldsa_alg]\n'
+-                'algorithm=OID:{}\n').format(hex(pub), oid)
++                'algorithm=OID:{}\n').format(pub.hex(), oid)
+     with tempfile.NamedTemporaryFile() as asn1_tmpfile:
+       asn1_tmpfile.write(asn1_str.encode('ascii'))
+       asn1_tmpfile.flush()
+@@ -879,11 +879,11 @@
+       raise AvbError('Algorithm with name {} is not supported.'
+                      .format(algorithm_name))
+ 
+-    if len(self.pub) != algorithm.public_key_num_bytes:
++    if len(self.pub) != algorithm.public_key_num_bytes - 4:
+       raise AvbError('Key size of key ({} bytes) does not match key size '
+                      '({} bytes) of given algorithm {}.'
+                      .format(len(self.pub),
+-                             algorithm.signature_num_bytes,
++                             algorithm.public_key_num_bytes - 4,
+                              algorithm_name))
+ 
+     # Verifies the signature.

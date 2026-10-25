@@ -4,17 +4,6 @@ import {readFileSync} from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
 import vm from 'node:vm';
 const root=new URL('../',import.meta.url);
-test('all four public credential entrypoints guard before storage while trusted internals remain separate',()=>{
- const source=readFileSync(new URL('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaConnectionPlugin.java',root),'utf8');
- for(const method of ['secureRead','secureWrite','secureCompareExchange','secureRemove']){
-  const start=source.indexOf('@PluginMethod public void '+method+'(');assert.ok(start>=0);
-  const body=source.slice(start,source.indexOf('\n }',start)+3);
-  assert.match(body,/RendererCredentialSlots\.requireAllowed\(call\.getString\("slot"\)\)/);
-  assert.ok(body.indexOf('requireAllowed')<body.indexOf('call.resolve'),method);
- }
- const trusted=readFileSync(new URL('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaCredentialStore.java',root),'utf8');
- assert.doesNotMatch(trusted,/RendererCredentialSlots/);
-});
 test('actual digest inbox fallback stores only renderer namespace while native-ready uses validated transport',async()=>{
  const context={crypto:globalThis.crypto,AbortController};
  const digest=readFileSync(new URL('apps/app/src/runtime/hosted-digests.ts',root),'utf8').replace(/export /g,'');

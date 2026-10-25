@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-19",
+  "scope": "Local account sign-in implementation; no deployment or live provider acceptance",
+  "verify": {
+    "status": "passed",
+    "tests": 237,
+    "typecheck": true,
+    "webBuild": true
+  },
+  "browser": {
+    "status": "passed",
+    "accountAndCallbackScenarios": 22,
+    "keyboardAndThemeScenarios": 1,
+    "fixtureBoundary": "Native HTTP/storage and Google responses are synthetic; no live account"
+  },
+  "android": {
+    "status": "passed",
+    "instrumentation": "compiled only",
+    "lint": "passed",
+    "variants": [
+      {
+        "file": "artifacts/standalone-debug.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": false,
+        "launcher": true,
+        "debuggable": true,
+        "sha256": "d6930eb2e5b7f0457e720ce233c5a33232d137191fc3d07584882035dec8597c",
+        "webPayload": true
+      },
+      {
+        "file": "artifacts/standalone-release-unsigned.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": false,
+        "launcher": true,
+        "debuggable": false,
+        "sha256": "24610426e2a703dfd4e3675a26e6c990b4115745a23e5da95fa6933905e31f79",
+        "webPayload": true
+      },
+      {
+        "file": "artifacts/launcher-debug.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": true,
+        "launcher": true,
+        "debuggable": true,
+        "sha256": "71ae3d55ecd1c77d7697bff22e6f2f62609d079c8a387fe670297b911bbbec74",
+        "webPayload": true
+      },
+      {
+        "file": "artifacts/launcher-release-unsigned.apk",
+        "packageName": "ai.elizaresearch.alphaphone",
+        "home": true,
+        "launcher": true,
+        "debuggable": false,
+        "sha256": "0f85f9cabbae4077d4fadf343fb63d79435894e72be208c0c17cbde50a2b31fd",
+        "webPayload": true
+      }
+    ]
+  },
+  "notVerified": [
+    "Live Google sign-in and callback",
+    "Alpha domain association deployment",
+    "Alpha Google consent identity",
+    "Gmail/delegation return migration",
+    "Emulator HOME role",
+    "AOSP image boot",
+    "Physical device/user acceptance"
+  ]
+}

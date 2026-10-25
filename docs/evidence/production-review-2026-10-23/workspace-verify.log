@@ -1,0 +1,570 @@
+
+> @eliza-research/alphaphone@0.1.0 verify
+> npm run typecheck && npm test && npm run build
+
+
+> @eliza-research/alphaphone@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @eliza-research/alphaphone@0.1.0 test
+> node --test test/*.test.mjs
+
+✔ adapter contract: test-calendar-crud-review.mjs (167.237563ms)
+✔ adapter contract: test-calendar-query-race.mjs (124.722665ms)
+✔ adapter contract: test-reminder-time-flow.mjs (172.859087ms)
+✔ adapter contract: test-clock-handoff-flow.mjs (152.430016ms)
+✔ adapter contract: test-cloud-protocol.mjs (485.708802ms)
+✔ adapter contract: test-cloud-personal-flow.mjs (228.758504ms)
+✔ adapter contract: test-cloud-voice-flow.mjs (201.288621ms)
+✔ adapter contract: test-inbox-cloud-flow.mjs (168.147736ms)
+✔ adapter contract: test-device-actions.mjs (184.305105ms)
+✔ adapter contract: test-workflow-protocol.mjs (175.56982ms)
+✔ adapter contract: test-workflow-ui-flow.mjs (540.643365ms)
+✔ adapter contract: test-workflow-approval-ui-flow.mjs (554.20443ms)
+✔ adapter contract: test-workflow-lifecycle-ui-flow.mjs (337.356575ms)
+✔ adapter contract: test-workflow-metadata-ui-flow.mjs (403.085001ms)
+✔ adapter contract: test-notes-store-flow.ts (69.50079ms)
+✔ adapter contract: test-notes-action-flow.ts (118.241269ms)
+✔ host ASR is optional unless requested and never accepts relative or missing configured assets (1.545681ms)
+✔ host ASR rejects an incompatible model before enabling its runtime provider (1.305819ms)
+✔ ASR backend selection rejects unknown modes rather than passing arbitrary CLI flags (0.198995ms)
+✔ automatic ASR warm-up uses private synthetic silence and removes it after success (8.777851ms)
+✔ ASR warm-up cleans failed work and does not silently substitute a CPU backend (3.600288ms)
+✔ new local profile uses the selected model consistently in saved routing and child environment (107.734016ms)
+✔ existing local profile retains distinct reviewed models without rewriting its configuration (93.004168ms)
+✔ conflicting or malformed explicit model selection fails before a child starts and preserves the profile (187.250804ms)
+✔ redaction rejects unqualified source before starting a child or creating configuration (160.53591ms)
+✔ invalid or partial redaction selection cannot silently start an unprotected agent (172.876356ms)
+✔ host TTS requires an explicit installed library and rejects ambiguous configuration (17.397196ms)
+✔ host TTS rejects unverified voice assets before enabling the agent (13.087853ms)
+✔ backend error-return patch applies to pinned source and preserves bound errors (49.739327ms)
+✔ cold return routing preserves the validated callback and identifies its original agent (2.444769ms)
+✔ account returns, expired requests, wrong-state and wrong-environment links cannot route delegation (0.627635ms)
+✔ provider denial routes back to its original consent without fabricating success (0.389149ms)
+✔ callback deployment binds both distributions to explicitly supplied signing certificates (111.082947ms)
+✔ callbacks require exact origin, route, environment, state and one bounded code (1.722027ms)
+✔ direct backend Google PKCE flow exchanges once and clears encrypted pending state (10.708873ms)
+✔ cold callback resumes without another provider window (1.292274ms)
+✔ a delegation callback cannot be consumed by account login or a different agent (0.547184ms)
+✔ staging has separate backend, tenant and return path (1.966018ms)
+✔ cancelled and denied flows cannot exchange credentials (0.770615ms)
+✔ lost exchange response is not replayed on restart (0.240543ms)
+✔ wrong-state callbacks do not trigger exchange; a later valid callback can finish (300.668495ms)
+✔ abort during exchange cannot return the late identity token (0.425379ms)
+✔ missing or mismatched readiness stays inside Alpha without opening a provider (0.512106ms)
+✔ cancel during readiness cannot open Google after a late response (0.217899ms)
+✔ Google requests an app-owned MFA continuation and cannot skip the challenge (3.412185ms)
+✔ cancellation during Google MFA cannot release a late token (0.25856ms)
+✔ delegation review validates registry through fixed backend without navigating to frontend (2.648737ms)
+✔ untrusted host, duplicate params and broader scopes never reach the backend (2.424006ms)
+✔ registry cannot change app identity or add permissions (3.187638ms)
+✔ approval uses interactive Bearer and returns only a typed one-time delegation code (0.818786ms)
+✔ abort after interactive authentication prevents consent; lost POST is never retried (0.959775ms)
+✔ staging consent remains on staging APIs and rejects wrong code type (0.43761ms)
+(node:3300258) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Gmail backend patch applies and routes only bounded server-bound outcomes (144.398576ms)
+✔ Gmail initiation persists account and permission binding before opening Google (5.998405ms)
+✔ Gmail returns require exact environment, nonce and bounded fragment outcome (4.68577ms)
+✔ cold completion refreshes actual permissions and never trusts a success marker (0.481793ms)
+✔ account switches, re-login credentials and expired attempts do not consume another return (0.16816ms)
+✔ denial and failure retire the attempt without reading mail or claiming connected (1.028703ms)
+✔ failed status check remains recoverable; cancellation during initiation retires only its attempt (0.322281ms)
+✔ cancelling a pending attempt is owner-bound and a late return cannot reconnect it (0.161246ms)
+✔ a cancelled permission refresh never publishes or consumes a late result (0.172643ms)
+✔ another Google account cannot mask missing permissions on the returned connection (1.347688ms)
+✔ Alpha Google client patch composes with error returns and isolates consent credentials (305.400432ms)
+(node:3300308) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ website patch preserves canonical marketing URLs but serves Alpha returns at the registered host (48.523139ms)
+✔ Alpha board derivation preserves the reference and every unrelated requirement (1.240576ms)
+✔ Alpha board derivation rejects altered base, extra edits, and ambiguous reference entries (0.423151ms)
+✔ AOSP APK packaging preserves payload and rejects unsafe admission fixtures (477.064227ms)
+✔ MFA prompt is single-owner and accepts only its current explicit code (1.822631ms)
+✔ cancel, expiry and parent abort retire prompts without releasing a code (11.591894ms)
+✔ recovery codes require an explicit TOTP prompt and do not survive cancellation (0.423092ms)
+✔ bookmark runner requires exact method across real process-boundary command sequence (79.075989ms)
+✔ bookmark runner refuses skip and retains cleanup evidence (50.504399ms)
+✔ bookmark runner refuses wrong-method and retains cleanup evidence (48.212938ms)
+✔ bookmark runner refuses missing-start and retains cleanup evidence (51.87558ms)
+✔ bookmark runner refuses duplicate and retains cleanup evidence (44.032798ms)
+✔ bookmark runner refuses wrong-terminal and retains cleanup evidence (60.64339ms)
+✔ bookmark runner refuses wrong-count and retains cleanup evidence (46.615927ms)
+✔ bookmark runner refuses timeout and retains cleanup evidence (103.990505ms)
+(node:3300333) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ paired ignores unrelated completion and retires its exact replacement without stopping newer audio (87.577955ms)
+✔ paired cancellation settles stalled listener setup and removes a late handle (8.858547ms)
+✔ paired late synthesis cannot start after cancellation (10.074571ms)
+✔ paired visibility and changed authorization cancel bound speech (18.869042ms)
+✔ cloud ignores unrelated completion and retires its exact replacement without stopping newer audio (11.841981ms)
+✔ cloud cancellation settles stalled listener setup and removes a late handle (7.341291ms)
+✔ cloud late synthesis cannot start after cancellation (9.691979ms)
+✔ cloud visibility and changed authorization cancel bound speech (18.196531ms)
+✔ paired browser reading sends only the approved token through its distinct native endpoint (9.304036ms)
+✔ cancelling paired readiness/transcription and Cloud recording does not stop unrelated audio (13.066223ms)
+(node:3300345) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ overlapping permission requests release the older stream without disturbing the newer recording (392.559166ms)
+✔ constructor and start failures release their microphone and permit a retry (100.812752ms)
+✔ cancel while stopping rejects the old clip; late stop cannot clear a new recording or its timer (99.710596ms)
+✔ duplicate stops share one result and automatic stop retains one usable clip (38.038603ms)
+✔ hidden page or cancellation during permission releases late media (12.366536ms)
+✔ recorder error, oversized audio, and missing stop callback cannot retain microphone ownership (9.596863ms)
+✔ reject invalid capture limits before permission and bound retained clips (3.030115ms)
+✔ a device-ended recording publishes its final clip without waiting for a manual stop (5.139174ms)
+(node:3300368) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ cancel settles a held database read immediately; late bytes cannot start audio (93.251924ms)
+✔ cancel a held play then start another clip; old resolution cannot resume or clear it (11.597867ms)
+✔ autoplay rejection and media end/error release object URLs and retain correct state (16.922804ms)
+✔ late events from a replaced player cannot stop or announce completion for the new player (11.643229ms)
+✔ play startup timeout settles and cleans its player (3.591475ms)
+✔ speech selects a local voice and ignores stale speech events after replacement (3.731574ms)
+✔ remote-only speech fails without speaking; cancellation removes voice loading listeners and timers (6.594254ms)
+✔ smoke invokes four actual opt-in classes before each unchanged ordinary suite (2353.908762ms)
+✔ qualification rejects skip while retaining both variant outcomes (2221.888529ms)
+✔ qualification rejects skip-sensitive while retaining both variant outcomes (2190.320893ms)
+✔ qualification rejects duplicate while retaining both variant outcomes (2189.307173ms)
+✔ qualification rejects wrong-count while retaining both variant outcomes (2201.590755ms)
+✔ diagnostics retain bounded raw policy and fixed guest identities without mutation (1.468606ms)
+✔ failed diagnostic commands consume a shared 15 second budget without further reads (0.196541ms)
+✔ actual locked CI policy remains rejected despite awake screen and delegate inputRestricted=false (1.262254ms)
+✔ fresh hosted fixture waits for observed consecutive unlock after successful dismissal (1.351562ms)
+✔ secure, nonfresh and other-user fixtures fail before any mutation (0.961154ms)
+✔ local, self-hosted and wrong-serial contexts execute no device command (0.953082ms)
+✔ read-only preflight does not repair or ignore a locked display (0.644808ms)
+✔ false then true at the final credential check refuses every mutation (0.227019ms)
+✔ persistent secure state times out without mutation; transient state must become false (0.662025ms)
+✔ captured637 delegate defaults are unready until user0 monitor binds (0.496478ms)
+✔ unbound malformed and bound-secure observations never permit mutations (1.414052ms)
+✔ readiness and unlock share the original30-attempt admission budget (0.87999ms)
+✔ malformed prewrite observation cannot mutate an initially ready fixture (0.200925ms)
+✔ independent readonly admission rejects persistent sentinel and bound secure state (1.417791ms)
+✔ captured e09b bound secure observation waits read-only until later raw false (0.709949ms)
+✔ secure wait detects fixture identity drift before mutation (0.21206ms)
+✔ readonly secure transition still requires two consecutive false observations (0.19454ms)
+✔ missing alias before or after reboot refuses without late repair (1.21873ms)
+✔ preexisting correct alias is verified without mutation (0.155096ms)
+✔ wrong image refuses before mutation (0.763839ms)
+✔ non-ext4 data refuses before mutation (0.097106ms)
+✔ ambiguous data mounts refuses before mutation (0.074985ms)
+✔ wrong mapper name refuses before mutation (0.064553ms)
+✔ multiple physical slaves refuses before mutation (0.157559ms)
+✔ different physical slave refuses before mutation (0.075863ms)
+✔ wrong physical block number refuses before mutation (0.094775ms)
+✔ non-block node refuses before mutation (0.218804ms)
+✔ redirected alias directory refuses before mutation (0.098908ms)
+✔ wrong alias refuses before mutation (0.068685ms)
+✔ regular existing alias refuses before mutation (0.065218ms)
+✔ initial admission denied refuses before mutation (0.046603ms)
+✔ alias drift during re-admission is not overwritten (0.125987ms)
+✔ scratch inventory rejects malformed or indented named rows instead of treating them as absent (0.849201ms)
+✔ exact observed topology and boot-time alias required, missing/mismatched/duplicate readback refused (13.397091ms)
+✔ readback excludes unrelated boot properties and records malformed candidates before refusal (10.618746ms)
+✔ oversized retained fields are bounded without truncating validation input (15.813193ms)
+✔ valid identity with oversized whitespace cannot bypass retained admission bounds (1.161878ms)
+✔ provider admission rejects wrong fixtures before any mutation (2.023128ms)
+✔ stock provider removal admits one known AOSP file only (0.362754ms)
+✔ provider provenance rejects altered signer ABI and dependency metadata (0.422049ms)
+✔ full provider command sequence survives one offline reboot and delayed RELRO (569.248447ms)
+✔ provider main refuses identity stock and remount drift before deletion/install (710.027093ms)
+✔ offline boot and incomplete RELRO have fixed deadlines (2641.870604ms)
+✔ framework starts again when stopped-provider hash check refuses deletion (59.807311ms)
+✔ scratch policy refuses drift before verity or provider mutations (36.383546ms)
+✔ remount failure preserves cause and collects bounded read-only storage evidence (60.359235ms)
+✔ diagnostics re-admit every query with finite time and output bounds (6.591703ms)
+✔ diagnostics reject drift before device details and retain host errors (1.06118ms)
+✔ stock backup failure retains original error, provenance and bounded read-only evidence (15.6183ms)
+✔ provider preparation refuses userdata or alias drift before verity/provider changes (42.696881ms)
+✔ cached or undersized scratch never qualifies provider replacement (112.877596ms)
+✔ one authenticated requested overlay activation reboot completes provider flow (175.723921ms)
+✔ requested overlay reboot refuses repeat, unknown wording, changed identity, stock, backing and size (616.914714ms)
+✔ stderr-only remount transcript follows the bounded overlay reboot flow (172.473269ms)
+✔ successful-looking remount stderr never overrides failed exit or termination (123.225509ms)
+✔ repeated emulator reboot advisory requires live overlay proof and removed write probe (254.702359ms)
+✔ live overlay admission refuses namespace, backing and write-probe failures before provider removal (508.475056ms)
+✔ provider installation waits for the restarted primary user to be running unlocked (609.545842ms)
+✔ boot identity drift refuses before provider effects and never creates a late alias (70.280167ms)
+✔ root-unavailable fixture fails before privileged boot read or any provider mutation (4.214312ms)
+✔ closed root acknowledgement is reconciled by identity and uid without replay (129.029894ms)
+✔ closed root acknowledgement refuses root-lost-ack-unprivileged (10.979152ms)
+✔ closed root acknowledgement refuses root-lost-ack-restarted (5.7788ms)
+✔ framework restart waits past published binders and stale boot property before installing once (124.249851ms)
+✔ framework incomplete, stale generation or rotating identity never dispatches install (11663.986896ms)
+✔ a failed provider install is never retried after successful framework admission (61.097367ms)
+✔ postreboot root refusal is never replayed and never reaches privileged stat or install (606.476404ms)
+✔ successful replacement requires a new framework generation without losing the kernel overlay (233.90139ms)
+✔ postreplacement framework restart refuses identity, provenance, readiness, secure state and ANR without replay (8208.248421ms)
+✔ missing postrestart scratch retains bounded storage evidence and refuses without later mutations (121.235246ms)
+✔ super layout is read before any remount without adding install or reboot (118.984687ms)
+✔ focused framework ANR preserves bounded read-only evidence without accepting or retrying setup (282.794873ms)
+✔ oversized ANR reports retain a bounded leading stack without changing failure (110.821901ms)
+✔ SurfaceFlinger backtrace refuses ambiguous process identity (229.601853ms)
+✔ secure postrestart display refusal retains graphics evidence without admission or lock changes (319.549192ms)
+✔ backend outages and missing app endpoints do not blame account details or expose server errors (1.505955ms)
+✔ code login uses tenant-bound APIs and preserves MFA before issuing a session (1.378287ms)
+✔ email uses the native code-only endpoint and requires its delivery contract (0.4965ms)
+✔ disabled methods and CAPTCHA requirements cannot send codes (0.39909ms)
+✔ expiration, malformed tokens, unsupported MFA and late cancellation fail closed (1.490002ms)
+✔ deployment config requires exact HTTPS authorities and isolates credential slots (0.306226ms)
+✔ TOTP recovery submits exactly one factor and is unavailable for SMS (0.205843ms)
+✔ CAPTCHA is completed before a code send and a cancelled challenge cannot send late (0.4298ms)
+✔ Cloud playback actual renderer cancels despite stalled native cleanup and rejects stale completions (2825.573295ms)
+✔ connection contract: test-remote-protocol.mjs (270.151109ms)
+✔ connection contract: test-cloud-protocol.mjs (388.792162ms)
+✔ connection contract: test-connection-history.mjs (870.98648ms)
+✔ Cuttlefish admission rejects physical, remote and unbooted targets (1.332611ms)
+✔ instrumentation distinguishes actual success, assumptions, incomplete and duplicate cases (1.462832ms)
+✔ real loopback development request advertises only supported routes and rejects injected deferred proposals (324.809978ms)
+✔ PDF export validates bounded encoding and detects provider truncation, mutation and extra bytes (1369.202626ms)
+✔ authenticated DEV bridge forwards profile GET/conditional POST using existing device headers (41.184716ms)
+✔ native source is pinned and unmodified (404.970745ms)
+✔ grizzly stock board admission and Make policy preserve the declared baseline (277.392067ms)
+(node:3300715) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ retiring a session while native begin is pending cancels before configure (41.335838ms)
+✔ late configure success after disconnect is cancelled; retiring another session does not abort current setup (3.387824ms)
+✔ failed configuration retires its reservation before allowing foreground fallback (5.03451ms)
+✔ local agent contracts (synthetic HTTP and durable development journal) (299.680655ms)
+✔ local agent streaming and cancellation contracts (2192.981837ms)
+✔ local browser digest persistence and recovery (85.390462ms)
+✔ digest cancellation preserves replay recovery (71.312479ms)
+✔ local agent speech bridge owns credentials, binary bounds and cancellation (280.374482ms)
+✔ local agent TTS bridge validates audio identity, ownership and cancellation (179.429905ms)
+✔ normal source and worker selection follows the admitted commit without altering old trees (3.870218ms)
+✔ explicit fresh overrides remain contained and refuse source aliases (23.998795ms)
+✔ output selection refuses active unprepared and historical stamped source ancestors (15.348928ms)
+(node:3300912) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ native full passage is preflighted and completed sequentially with one start callback (147.861571ms)
+✔ unsupported trailing text fails before any partial native speech (5.971653ms)
+✔ queued native synthesis waits without replacing another consumer (206.393918ms)
+✔ cancelling queued native speech leaves other playback untouched (8.429151ms)
+✔ replacement and failure events stop the passage without starting another chunk (22.33581ms)
+✔ abort settles with hung cleanup and late synthesis cannot play (512.11786ms)
+✔ browser speech retains its original text and single utterance (10.304331ms)
+✔ abort during listener registration removes a late handle without synthesizing (5.325803ms)
+✔ a stopped prepared utterance exits the playback queue immediately (11.257308ms)
+✔ play admission error is preserved when its cleanup emits a stopped event (6.881475ms)
+✔ Maps gateway binds served data and graph to an explicitly reviewed revision (2295.353934ms)
+(node:3300986) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ resident reading passes only its approved token and waits for owned completion (65.68357ms)
+✔ resident reading rejects a non-device synthesis result before playback (8.494157ms)
+✔ resident binding change cancels a pending request and retires its late audio (19.204827ms)
+✔ background and explicit cancellation stop only the owned reading request (15.849359ms)
+✔ paired reading retains its existing token route (3.130743ms)
+(node:3301012) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ actual digest inbox fallback stores only renderer namespace while native-ready uses validated transport (68.595298ms)
+✔ native reviewed passage preflights all chunks, emits bounded PCM and wipes cancelled audio (1396.442231ms)
+✔ PDF distribution preserves upstream and font/decoder license files byte for byte (116.079616ms)
+✔ Alpha image checks use read-only commands and retain separate acceptance boundaries (1.782485ms)
+✔ wrong device, serial, SKU or emulator stops before package inspection (0.552921ms)
+✔ fallback slot, changed firmware, file mismatch, wrong permissions and timeout fail image checks (0.417676ms)
+✔ invalid expectations and mutation flags reject before any device query (0.290574ms)
+✔ CLI refuses changed tools and existing reports before executing ADB (1.877154ms)
+✔ preflight rejects write switches, duplicates and unscoped mode (1.40662ms)
+✔ every physical query is explicitly serial-bound and read-only (1.382893ms)
+✔ failed and ambiguous queries remain unknown (0.318456ms)
+✔ wrong devices, newer firmware and pending snapshots cannot qualify (1.728653ms)
+✔ recovery verifies exact bytes, rejects tampering, truncation and symlinks (13.143991ms)
+✔ default audit makes no device calls and cannot authorize deployment (5.997053ms)
+✔ recovery rejects path replacement after opening even with identical bytes (3.521817ms)
+✔ offline Pixel recovery verifier rejects corrupt and incompatible fixtures (244.978786ms)
+✔ product delegates admitted identity and verifies generic producer output without compiler fallback (47.274521ms)
+✔ producer rejects active and historical source overlap before import or writes (2.605424ms)
+✔ ambiguous reminder action requests clarification without creating a proposal (11.577248ms)
+✔ unambiguous future reminder prepares an exact proposal without scheduling (1.704355ms)
+✔ resident crash evidence is owned, fixed-schema and bounded on real subprocesses (5123.85549ms)
+✔ rejects missing consent and physical serial before accessing the device (1.069056ms)
+✔ fixture cleanup preserves changed ownership and rejects unconfirmed removal (0.829309ms)
+✔ requires emulator identity and preserves existing package installations across users (0.962749ms)
+✔ resident result IPC verifies identity and preserves durable inbox recovery (1449.318308ms)
+✔ resident delivery coordinator uses IPC and retires its encrypted session binding (1346.233411ms)
+(node:3301374) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ resident speech waits for its own completion and cleans only its own request (57.784135ms)
+✔ resident cancellation during hung listener setup settles and removes late handles (7.004739ms)
+✔ late synthesis after resident cancellation cannot play or clear another consumer (10.28688ms)
+✔ resident voice preserves provider execution checks before playback (7.074169ms)
+✔ replacement and hidden-device cancellation settle resident speech (28.413374ms)
+✔ cancelling readiness or transcription never stops unrelated audio (7.432972ms)
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+3 warnings
+✔ pinned generated secure-store helper reads bounded actual bytes on the Java 8 API (21345.346696ms)
+✔ configured host speech warms before requests and recovers from cold failure (126.90791ms)
+✔ patched TTS service contains worker pipe failures and recovers after cancellation (77.543826ms)
+✔ generic readiness accepts separately registered apps and refuses policy/redirect failures (22.324606ms)
+✔ native workflow notices preserve at-most-once delivery across crashes and replay (3803.154833ms)
+✔ notification storage never runs on caller and preserves bounded FIFO under a blocked write (1143.450068ms)
+✔ Android source publication publishes complete bytes across concurrent writers and retains importer inode (63.214369ms)
+✔ Android publication refuses existing symlinks and permissive files without replacing them (3.439333ms)
+✔ Android publication preserves abandoned reservations and never steals their source path (5014.398751ms)
+✔ Android publication refuses nonprivate reservations and writable parent directories (3.467839ms)
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+3 warnings
+✔ worker staging rejects drift, traversal, missing files and symlinks before replacement (12.952523ms)
+✔ native worker extractor verifies bytes and preserves the previous installation on failure (1018.260959ms)
+✔ worker termination persistence admits only missing-result fixed process metadata (42.058383ms)
+ℹ tests 275
+ℹ suites 0
+ℹ pass 275
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 29217.681836
+
+> @eliza-research/alphaphone@0.1.0 build
+> vite build
+
+vite v8.3.1 building client environment for production...
+transforming...
+✓ 495 modules transformed.
+rendering chunks...
+computing gzip size...
+web-dist/pdfjs-assets/cmaps/CNS2-V.bcmap                                0.09 kB
+web-dist/pdfjs-assets/cmaps/Roman.bcmap                                 0.09 kB
+web-dist/pdfjs-assets/cmaps/Katakana.bcmap                              0.10 kB
+web-dist/pdfjs-assets/cmaps/ETenms-B5-H.bcmap                           0.10 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UCS2-HW-H.bcmap                      0.11 kB
+web-dist/pdfjs-assets/cmaps/Hiragana.bcmap                              0.12 kB
+web-dist/pdfjs-assets/cmaps/Hankaku.bcmap                               0.13 kB
+web-dist/pdfjs-assets/cmaps/B5-V.bcmap                                  0.14 kB
+web-dist/pdfjs-assets/cmaps/CNS1-V.bcmap                                0.14 kB
+web-dist/pdfjs-assets/cmaps/B5pc-V.bcmap                                0.14 kB
+web-dist/pdfjs-assets/cmaps/HKdla-B5-V.bcmap                            0.14 kB
+web-dist/pdfjs-assets/cmaps/HKdlb-B5-V.bcmap                            0.14 kB
+web-dist/pdfjs-assets/cmaps/HKgccs-B5-V.bcmap                           0.14 kB
+web-dist/pdfjs-assets/cmaps/HKm314-B5-V.bcmap                           0.14 kB
+web-dist/pdfjs-assets/cmaps/HKm471-B5-V.bcmap                           0.14 kB
+web-dist/pdfjs-assets/cmaps/UniCNS-UCS2-V.bcmap                         0.15 kB
+web-dist/pdfjs-assets/cmaps/UniCNS-UTF16-V.bcmap                        0.15 kB
+web-dist/pdfjs-assets/cmaps/UniCNS-UTF8-V.bcmap                         0.15 kB
+web-dist/pdfjs-assets/cmaps/ETHK-B5-V.bcmap                             0.15 kB
+web-dist/pdfjs-assets/cmaps/ETen-B5-V.bcmap                             0.15 kB
+web-dist/pdfjs-assets/cmaps/HKscs-B5-V.bcmap                            0.15 kB
+web-dist/pdfjs-assets/cmaps/KSC-V.bcmap                                 0.16 kB
+web-dist/pdfjs-assets/cmaps/UniCNS-UTF32-V.bcmap                        0.16 kB
+web-dist/pdfjs-assets/cmaps/KSC-EUC-V.bcmap                             0.16 kB
+web-dist/pdfjs-assets/cmaps/UniKS-UTF16-V.bcmap                         0.16 kB
+web-dist/pdfjs-assets/cmaps/KSC-Johab-V.bcmap                           0.16 kB
+web-dist/pdfjs-assets/cmaps/KSCms-UHC-V.bcmap                           0.16 kB
+web-dist/pdfjs-assets/cmaps/KSCpc-EUC-V.bcmap                           0.16 kB
+web-dist/pdfjs-assets/cmaps/V.bcmap                                     0.16 kB
+web-dist/pdfjs-assets/cmaps/UniKS-UTF32-V.bcmap                         0.16 kB
+web-dist/pdfjs-assets/cmaps/78-V.bcmap                                  0.16 kB
+web-dist/pdfjs-assets/cmaps/KSCms-UHC-HW-V.bcmap                        0.16 kB
+web-dist/pdfjs-assets/cmaps/UniKS-UTF8-V.bcmap                          0.16 kB
+web-dist/pdfjs-assets/cmaps/EUC-V.bcmap                                 0.17 kB
+web-dist/pdfjs-assets/cmaps/RKSJ-V.bcmap                                0.17 kB
+web-dist/pdfjs-assets/cmaps/ETenms-B5-V.bcmap                           0.17 kB
+web-dist/pdfjs-assets/cmaps/78-EUC-V.bcmap                              0.17 kB
+web-dist/pdfjs-assets/cmaps/78-RKSJ-V.bcmap                             0.17 kB
+web-dist/pdfjs-assets/cmaps/GB-V.bcmap                                  0.17 kB
+web-dist/pdfjs-assets/cmaps/GBT-V.bcmap                                 0.17 kB
+web-dist/pdfjs-assets/cmaps/UniGB-UTF16-V.bcmap                         0.17 kB
+web-dist/pdfjs-assets/cmaps/UniKS-UCS2-V.bcmap                          0.17 kB
+web-dist/pdfjs-assets/cmaps/GB-EUC-V.bcmap                              0.17 kB
+web-dist/pdfjs-assets/cmaps/WP-Symbol.bcmap                             0.17 kB
+web-dist/pdfjs-assets/cmaps/GBK-EUC-V.bcmap                             0.18 kB
+web-dist/pdfjs-assets/cmaps/GBT-EUC-V.bcmap                             0.18 kB
+web-dist/pdfjs-assets/cmaps/GBKp-EUC-V.bcmap                            0.18 kB
+web-dist/pdfjs-assets/cmaps/GBpc-EUC-V.bcmap                            0.18 kB
+web-dist/pdfjs-assets/cmaps/UniGB-UTF8-V.bcmap                          0.18 kB
+web-dist/pdfjs-assets/cmaps/GBTpc-EUC-V.bcmap                           0.18 kB
+web-dist/pdfjs-assets/cmaps/UniGB-UTF32-V.bcmap                         0.18 kB
+web-dist/pdfjs-assets/cmaps/UniGB-UCS2-V.bcmap                          0.19 kB
+web-dist/pdfjs-assets/cmaps/Ext-V.bcmap                                 0.21 kB
+web-dist/pdfjs-assets/cmaps/Adobe-GB1-0.bcmap                           0.21 kB
+web-dist/pdfjs-assets/cmaps/Ext-RKSJ-V.bcmap                            0.21 kB
+web-dist/pdfjs-assets/cmaps/GBK2K-V.bcmap                               0.21 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Japan1-0.bcmap                        0.22 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Japan1-1.bcmap                        0.22 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Japan1-2.bcmap                        0.23 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Korea1-0.bcmap                        0.24 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Japan1-3.bcmap                        0.24 kB
+web-dist/pdfjs-assets/cmaps/Adobe-GB1-1.bcmap                           0.25 kB
+web-dist/pdfjs-assets/cmaps/NWP-V.bcmap                                 0.25 kB
+web-dist/pdfjs-assets/cmaps/90pv-RKSJ-V.bcmap                           0.26 kB
+web-dist/pdfjs-assets/cmaps/Add-V.bcmap                                 0.28 kB
+web-dist/pdfjs-assets/cmaps/Add-RKSJ-V.bcmap                            0.28 kB
+web-dist/pdfjs-assets/cmaps/78ms-RKSJ-V.bcmap                           0.29 kB
+web-dist/pdfjs-assets/cmaps/90ms-RKSJ-V.bcmap                           0.29 kB
+web-dist/pdfjs-assets/cmaps/90msp-RKSJ-V.bcmap                          0.29 kB
+web-dist/pdfjs-assets/cmaps/Adobe-CNS1-0.bcmap                          0.31 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Japan1-4.bcmap                        0.33 kB
+web-dist/pdfjs-assets/cmaps/Adobe-CNS1-1.bcmap                          0.37 kB
+web-dist/pdfjs-assets/cmaps/Adobe-CNS1-2.bcmap                          0.37 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Korea1-1.bcmap                        0.38 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Korea1-2.bcmap                        0.39 kB
+web-dist/pdfjs-assets/cmaps/Adobe-CNS1-3.bcmap                          0.40 kB
+web-dist/pdfjs-assets/cmaps/Adobe-CNS1-4.bcmap                          0.40 kB
+web-dist/pdfjs-assets/cmaps/Adobe-CNS1-5.bcmap                          0.40 kB
+web-dist/pdfjs-assets/cmaps/Adobe-CNS1-6.bcmap                          0.40 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Japan1-5.bcmap                        0.43 kB
+web-dist/pdfjs-assets/cmaps/Adobe-GB1-2.bcmap                           0.46 kB
+web-dist/pdfjs-assets/cmaps/Adobe-GB1-3.bcmap                           0.47 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Japan1-6.bcmap                        0.48 kB
+web-dist/pdfjs-assets/cmaps/CNS2-H.bcmap                                0.50 kB
+web-dist/pdfjs-assets/cmaps/GB-H.bcmap                                  0.52 kB
+web-dist/pdfjs-assets/cmaps/RKSJ-H.bcmap                                0.53 kB
+web-dist/pdfjs-assets/cmaps/GB-EUC-H.bcmap                              0.54 kB
+web-dist/pdfjs-assets/cmaps/H.bcmap                                     0.55 kB
+web-dist/pdfjs-assets/wasm/LICENSE_PDFJS_JBIG2                          0.55 kB
+web-dist/pdfjs-assets/cmaps/GBpc-EUC-H.bcmap                            0.55 kB
+web-dist/pdfjs-assets/cmaps/EUC-H.bcmap                                 0.57 kB
+web-dist/pdfjs-assets/cmaps/Adobe-GB1-4.bcmap                           0.60 kB
+web-dist/pdfjs-assets/cmaps/Adobe-GB1-5.bcmap                           0.62 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UTF16-V.bcmap                        0.64 kB
+web-dist/pdfjs-assets/cmaps/UniJIS2004-UTF16-V.bcmap                    0.64 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UCS2-V.bcmap                         0.66 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UTF32-V.bcmap                        0.67 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UTF8-V.bcmap                         0.67 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UCS2-HW-V.bcmap                      0.68 kB
+web-dist/pdfjs-assets/cmaps/UniJIS2004-UTF32-V.bcmap                    0.68 kB
+web-dist/pdfjs-assets/cmaps/UniJIS2004-UTF8-V.bcmap                     0.68 kB
+web-dist/pdfjs-assets/cmaps/UniJISX0213-UTF32-V.bcmap                   0.68 kB
+web-dist/pdfjs-assets/cmaps/UniJISX02132004-UTF32-V.bcmap               0.68 kB
+web-dist/pdfjs-assets/cmaps/UniJISPro-UCS2-V.bcmap                      0.68 kB
+web-dist/index.html                                                     0.70 kB │ gzip:   0.34 kB
+web-dist/pdfjs-assets/cmaps/UniJISPro-UCS2-HW-V.bcmap                   0.70 kB
+web-dist/pdfjs-assets/cmaps/CNS1-H.bcmap                                0.70 kB
+web-dist/pdfjs-assets/cmaps/90msp-RKSJ-H.bcmap                          0.71 kB
+web-dist/pdfjs-assets/cmaps/90ms-RKSJ-H.bcmap                           0.72 kB
+web-dist/pdfjs-assets/cmaps/UniJISPro-UTF8-V.bcmap                      0.72 kB
+web-dist/pdfjs-assets/cmaps/83pv-RKSJ-H.bcmap                           0.90 kB
+web-dist/pdfjs-assets/cmaps/90pv-RKSJ-H.bcmap                           0.98 kB
+web-dist/pdfjs-assets/wasm/LICENSE_PDFJS_QCMS                           1.03 kB
+web-dist/ocr/pdf-lib-LICENSE.txt                                        1.07 kB │ gzip:   0.65 kB
+web-dist/pdfjs-assets/cmaps/B5-H.bcmap                                  1.08 kB
+web-dist/pdfjs-assets/cmaps/B5pc-H.bcmap                                1.09 kB
+web-dist/pdfjs-assets/wasm/LICENSE_QCMS                                 1.12 kB
+web-dist/pdfjs-assets/cmaps/ETen-B5-H.bcmap                             1.12 kB
+web-dist/pdfjs-assets/wasm/LICENSE_PDFJS_OPENJPEG                       1.28 kB
+web-dist/pdfjs-assets/standard_fonts/LICENSE_FOXIT                      1.55 kB
+web-dist/pdfjs-assets/cmaps/HKm314-B5-H.bcmap                           1.77 kB
+web-dist/pdfjs-assets/cmaps/CNS-EUC-H.bcmap                             1.78 kB
+web-dist/pdfjs-assets/cmaps/KSC-H.bcmap                                 1.83 kB
+web-dist/pdfjs-assets/cmaps/KSC-EUC-H.bcmap                             1.84 kB
+web-dist/pdfjs-assets/cmaps/CNS-EUC-V.bcmap                             1.92 kB
+web-dist/pdfjs-assets/cmaps/KSCpc-EUC-H.bcmap                           2.02 kB
+web-dist/pdfjs-assets/cmaps/LICENSE                                     2.08 kB
+web-dist/pdfjs-assets/wasm/LICENSE_OPENJPEG                             2.11 kB
+web-dist/pdfjs-assets/cmaps/HKm471-B5-H.bcmap                           2.17 kB
+web-dist/pdfjs-assets/cmaps/HKgccs-B5-H.bcmap                           2.29 kB
+web-dist/pdfjs-assets/cmaps/78-H.bcmap                                  2.37 kB
+web-dist/pdfjs-assets/cmaps/78-RKSJ-H.bcmap                             2.39 kB
+web-dist/pdfjs-assets/cmaps/78-EUC-H.bcmap                              2.40 kB
+web-dist/pdfjs-assets/cmaps/Add-RKSJ-H.bcmap                            2.41 kB
+web-dist/pdfjs-assets/cmaps/HKdlb-B5-H.bcmap                            2.41 kB
+web-dist/pdfjs-assets/cmaps/Add-H.bcmap                                 2.41 kB
+web-dist/pdfjs-assets/cmaps/Ext-H.bcmap                                 2.53 kB
+web-dist/pdfjs-assets/cmaps/Ext-RKSJ-H.bcmap                            2.54 kB
+web-dist/pdfjs-assets/cmaps/78ms-RKSJ-H.bcmap                           2.65 kB
+web-dist/pdfjs-assets/cmaps/HKdla-B5-H.bcmap                            2.65 kB
+web-dist/pdfjs-assets/cmaps/NWP-H.bcmap                                 2.76 kB
+web-dist/pdfjs-assets/cmaps/KSCms-UHC-H.bcmap                           2.78 kB
+web-dist/pdfjs-assets/cmaps/KSCms-UHC-HW-H.bcmap                        2.78 kB
+web-dist/pdfjs-assets/cmaps/ETHK-B5-H.bcmap                             4.42 kB
+web-dist/pdfjs-assets/cmaps/HKscs-B5-H.bcmap                            4.43 kB
+web-dist/pdfjs-assets/wasm/quickjs-eval.js                              6.23 kB
+web-dist/pdfjs-assets/cmaps/GBT-H.bcmap                                 7.26 kB
+web-dist/pdfjs-assets/cmaps/GBT-EUC-H.bcmap                             7.29 kB
+web-dist/pdfjs-assets/cmaps/GBTpc-EUC-H.bcmap                           7.29 kB
+web-dist/pdfjs-assets/LICENSE                                          10.17 kB
+web-dist/ocr/tessdata-LICENSE.txt                                      11.35 kB │ gzip:   3.95 kB
+web-dist/ocr/tesseract-LICENSE.txt                                     11.35 kB │ gzip:   3.95 kB
+web-dist/ocr/core-LICENSE.txt                                          11.35 kB │ gzip:   3.95 kB
+web-dist/pdfjs-assets/wasm/LICENSE_JBIG2                               12.86 kB
+web-dist/assets/public-sans-latin-400-normal-8Rpg0ruU.woff2            14.63 kB
+web-dist/pdfjs-assets/cmaps/GBKp-EUC-H.bcmap                           14.68 kB
+web-dist/pdfjs-assets/cmaps/GBK-EUC-H.bcmap                            14.69 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitSymbol.pfb                   16.72 kB
+web-dist/pdfjs-assets/cmaps/KSC-Johab-H.bcmap                          16.79 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitFixed.pfb                    17.59 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitFixedBold.pfb                18.05 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitFixedItalic.pfb              18.74 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitFixedBoldItalic.pfb          19.15 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitSerifBold.pfb                19.39 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitSerif.pfb                    19.46 kB
+web-dist/pdfjs-assets/cmaps/GBK2K-H.bcmap                              19.66 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitSerifBoldItalic.pfb          20.73 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitSerifItalic.pfb              21.22 kB
+web-dist/pdfjs-assets/standard_fonts/LICENSE_LIBERATION                22.15 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Korea1-UCS2.bcmap                    23.29 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UCS2-H.bcmap                        25.43 kB
+web-dist/pdfjs-assets/cmaps/UniKS-UCS2-H.bcmap                         25.78 kB
+web-dist/pdfjs-assets/cmaps/UniKS-UTF16-H.bcmap                        26.32 kB
+web-dist/pdfjs-assets/cmaps/UniKS-UTF32-H.bcmap                        26.45 kB
+web-dist/pdfjs-assets/cmaps/UniKS-UTF8-H.bcmap                         27.79 kB
+web-dist/pdfjs-assets/standard_fonts/FoxitDingbats.pfb                 29.51 kB
+web-dist/pdfjs-assets/cmaps/Adobe-GB1-UCS2.bcmap                       33.97 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UTF16-H.bcmap                       39.44 kB
+web-dist/pdfjs-assets/cmaps/UniJIS2004-UTF16-H.bcmap                   39.53 kB
+web-dist/pdfjs-assets/cmaps/UniJISX0213-UTF32-H.bcmap                  40.51 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UTF32-H.bcmap                       40.53 kB
+web-dist/pdfjs-assets/cmaps/UniJISX02132004-UTF32-H.bcmap              40.60 kB
+web-dist/pdfjs-assets/cmaps/UniJIS2004-UTF32-H.bcmap                   40.63 kB
+web-dist/pdfjs-assets/cmaps/Adobe-Japan1-UCS2.bcmap                    40.95 kB
+web-dist/pdfjs-assets/cmaps/Adobe-CNS1-UCS2.bcmap                      41.19 kB
+web-dist/pdfjs-assets/cmaps/UniJIS-UTF8-H.bcmap                        41.69 kB
+web-dist/pdfjs-assets/cmaps/UniJIS2004-UTF8-H.bcmap                    41.77 kB
+web-dist/pdfjs-assets/cmaps/UniGB-UCS2-H.bcmap                         43.36 kB
+web-dist/pdfjs-assets/cmaps/UniGB-UTF16-H.bcmap                        44.08 kB
+web-dist/pdfjs-assets/cmaps/UniGB-UTF32-H.bcmap                        45.73 kB
+web-dist/pdfjs-assets/cmaps/UniGB-UTF8-H.bcmap                         46.83 kB
+web-dist/pdfjs-assets/cmaps/UniCNS-UCS2-H.bcmap                        48.28 kB
+web-dist/pdfjs-assets/cmaps/UniCNS-UTF16-H.bcmap                       50.41 kB
+web-dist/pdfjs-assets/cmaps/UniCNS-UTF32-H.bcmap                       52.67 kB
+web-dist/pdfjs-assets/cmaps/UniCNS-UTF8-H.bcmap                        53.62 kB
+web-dist/pdfjs-assets/wasm/qcms_bg.wasm                                96.58 kB │ gzip:  36.09 kB
+web-dist/pdfjs-assets/wasm/jbig2.wasm                                 104.85 kB │ gzip:  40.89 kB
+web-dist/ocr/worker.min.js                                            111.30 kB
+web-dist/pdfjs-assets/standard_fonts/LiberationSans-BoldItalic.ttf    135.12 kB
+web-dist/pdfjs-assets/standard_fonts/LiberationSans-Bold.ttf          137.05 kB
+web-dist/pdfjs-assets/standard_fonts/LiberationSans-Regular.ttf       139.51 kB
+web-dist/pdfjs-assets/wasm/jbig2_nowasm_fallback.js                   145.70 kB
+web-dist/pdfjs-assets/standard_fonts/LiberationSans-Italic.ttf        162.03 kB
+web-dist/pdfjs-assets/wasm/openjpeg.wasm                              252.03 kB │ gzip:  83.79 kB
+web-dist/pdfjs-assets/wasm/openjpeg_nowasm_fallback.js                451.59 kB
+web-dist/pdfjs-assets/wasm/quickjs-eval.wasm                          469.10 kB │ gzip: 220.69 kB
+web-dist/assets/maplibre-gl-worker-CRiIRpYb.js                        509.70 kB
+web-dist/assets/pdf.worker.min-Dswkl-cV.mjs                         1,265.41 kB
+web-dist/ocr/eng.traineddata.gz                                     2,952.87 kB
+web-dist/ocr/tesseract-core-lstm.wasm.js                            3,896.48 kB
+web-dist/ocr/tesseract-core-simd-lstm.wasm.js                       3,899.47 kB
+web-dist/ocr/tesseract-core-relaxedsimd-lstm.wasm.js                3,905.76 kB
+web-dist/assets/index-OZmccoJw.css                                    109.83 kB │ gzip:  15.57 kB
+web-dist/assets/dev-profile-DMEx33p_.js                                 0.02 kB │ gzip:   0.04 kB
+web-dist/assets/digest-storage-CCnqfV8E.js                              0.15 kB │ gzip:   0.15 kB
+web-dist/assets/preload-helper-BZ1Pz5am.js                              1.21 kB │ gzip:   0.69 kB
+web-dist/assets/browser-note-documents-Bd3g-nm1.js                      2.06 kB │ gzip:   1.01 kB
+web-dist/assets/dist-Z0lPoSvM.js                                        7.76 kB │ gzip:   3.10 kB
+web-dist/assets/reading-review-BGYBouf5.js                              8.26 kB │ gzip:   3.57 kB
+web-dist/assets/es-Cwa7s75K.js                                        420.20 kB │ gzip: 175.63 kB
+web-dist/assets/pdf-W-iKJp2S.js                                       429.74 kB │ gzip: 128.70 kB
+web-dist/assets/src-B6V7vwHo.js                                       571.06 kB │ gzip: 142.49 kB
+web-dist/assets/index-BO8vBk1T.js                                   2,457.39 kB │ gzip: 656.52 kB
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0mapps/app/src/browser/workflow-notices.ts is dynamically imported by apps/app/src/runtime/local-agent-storage.ts but also statically imported by apps/app/src/browser/notifications.ts, apps/app/src/browser/simulated-workflows.ts, apps/app/src/browser/workflow-history.ts, apps/app/src/prototype/agent-adapter.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0mapps/app/src/daily.ts is dynamically imported by apps/app/src/browser/development-actions.ts, apps/app/src/runtime/local-agent-storage.ts but also statically imported by apps/app/src/browser/simulated-inbox.ts, apps/app/src/browser/simulated-messages.ts, apps/app/src/main.tsx, apps/app/src/maps/regional-provider.ts, apps/app/src/prototype/agent-adapter.ts, ..., dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0mapps/app/src/browser/development-digests.ts is dynamically imported by apps/app/src/runtime/hosted-digest-ui.tsx but also statically imported by apps/app/src/browser/development-workflows.ts, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0mapps/app/src/runtime/phone-workflow-authoring.ts is dynamically imported by apps/app/src/runtime/workflow-device-contract.ts but also statically imported by apps/app/src/browser/development-workflows.ts, apps/app/src/prototype/workflow-authoring.ts, apps/app/src/runtime/workflow-protocol.ts, dynamic import will not move module into another chunk.
+
+✓ built in 2.59s

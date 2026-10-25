@@ -1,0 +1,55 @@
+{
+  "origin": "https://alphacompute.dev",
+  "sourceSha": "864d6df57c65169fe947a7b7484368f20336b681",
+  "routes": [
+    {
+      "path": "/alphaphone/auth/callback",
+      "status": 200,
+      "sha256": "c8f60fb2597969c92dc424634ec5a98d163cc5acb2b3e500f3d2ac8aec0f72f0",
+      "cacheControl": "no-store, no-transform",
+      "referrerPolicy": "no-referrer"
+    },
+    {
+      "path": "/alphaphone/auth/staging/callback",
+      "status": 200,
+      "sha256": "c8f60fb2597969c92dc424634ec5a98d163cc5acb2b3e500f3d2ac8aec0f72f0",
+      "cacheControl": "no-store, no-transform",
+      "referrerPolicy": "no-referrer"
+    },
+    {
+      "path": "/alphaphone/gmail/callback",
+      "status": 200,
+      "sha256": "c8f60fb2597969c92dc424634ec5a98d163cc5acb2b3e500f3d2ac8aec0f72f0",
+      "cacheControl": "no-store, no-transform",
+      "referrerPolicy": "no-referrer"
+    },
+    {
+      "path": "/alphaphone/gmail/staging/callback",
+      "status": 200,
+      "sha256": "c8f60fb2597969c92dc424634ec5a98d163cc5acb2b3e500f3d2ac8aec0f72f0",
+      "cacheControl": "no-store, no-transform",
+      "referrerPolicy": "no-referrer"
+    },
+    {
+      "path": "/alphaphone/auth/callback.js",
+      "status": 200,
+      "sha256": "3904e45f26c174ea8c9c11043e44b285c131e7c46ea86b053ef1b0f711ca9155",
+      "cacheControl": "no-store, no-transform",
+      "referrerPolicy": "no-referrer"
+    },
+    {
+      "path": "/alphaphone/auth/callback.css",
+      "status": 200,
+      "sha256": "dbf3a0181374c58886431cf1d0acab3a473761772f8043292286b04649ed7eb3",
+      "cacheControl": "no-store, no-transform",
+      "referrerPolicy": "no-referrer"
+    },
+    {
+      "path": "/.well-known/assetlinks.json",
+      "status": 200,
+      "sha256": "617d9d1d9413bc6d66a3465a97b1a49cf5dd0b143c98b6c38c2588b20d7c22e0",
+      "cacheControl": "no-cache, must-revalidate",
+      "referrerPolicy": "strict-origin-when-cross-origin"
+    }
+  ]
+}

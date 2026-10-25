@@ -21,9 +21,9 @@ final class PairedAgentCredential {
    if(!origin.equals(binding.getString("origin"))||!owner.equals(binding.getString("ownerId"))||!session.equals(binding.getString("sessionId"))||expires!=binding.getLong("expiresAt"))throw new IOException("Cloud selection changed");
    String environment=binding.getString("environment"),agent=binding.getString("agentId");
    if(!agent.matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}"))throw new IOException("Invalid agent");
-   String suffix="production".equals(environment)?"cloud.eliza.app":"staging".equals(environment)?"cloud-staging.eliza.app":null;
+   String suffix=CloudDeployment.agents(environment);
    if(suffix==null||!origin.equals("https://"+agent+"."+suffix))throw new IOException("Invalid Cloud target");
-   JSONObject credential=new JSONObject(store.readCredentialSlot("cloud:"+environment));
+   JSONObject credential=new JSONObject(store.readCredentialSlot(CloudDeployment.slot(environment)));
    if(!binding.getString("credentialId").equals(credential.getString("credentialId"))||(credential.has("expiresAt")&&credential.getLong("expiresAt")<=System.currentTimeMillis())||(credential.has("userId")&&!credential.getString("userId").equals(binding.getString("userId"))))throw new IOException("Cloud credential changed");
    return new PairedAgentCredential(credential.getString("token"),true);
   }

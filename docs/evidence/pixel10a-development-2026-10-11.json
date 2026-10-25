@@ -1,0 +1,203 @@
+{
+  "observedAt": "2026-10-11T19:31:39.700115+00:00",
+  "scope": "Physical Pixel 10a development image boot and targeted integration qualification; not production or complete user acceptance.",
+  "platform": "Eliza-based Alpha AOSP Android 17; GrapheneOS device tooling and attributed compatibility references only",
+  "device": "stallion",
+  "serialSha256": "beaa7cdc39268c27cc845664906401a0995f92280e861a0b98bb397f883fbd44",
+  "elizaPin": "91dc19196c307eb8559b9b58de8dbf63eb47f43f",
+  "aospManifestCommit": "5bc9a7ce1cd78dd53613bbfd0ebf506e1e4adb0f",
+  "factoryInputSha256": "d1d2550268de9fd4bfdd4ff0910cc4471fec6ba361506278c25f34f312106675",
+  "image": {
+    "path": "/home/shaw/Android/pixel10a-preparation/qualified-package-vendor-config/alpha-stallion-vendor-config.zip",
+    "sha256": "918865311c600f49f9f0680fd3da21a0acc5fbdb3a67a73ea1a880bad6d09195",
+    "development": true,
+    "avbVerified": true,
+    "partitions": {
+      "boot.img": "0bb33979a98d774284e787eec4a0418ba0394484bf3810f6276f89de99447f69",
+      "dtbo.img": "55573aa935bb66e20521bd91b693f463cd66fc943f89aa7453f409e6ac62cc98",
+      "init_boot.img": "0184b11738942dec08e47fb01708f68872135a966c41994a2e81b852f14964c9",
+      "product.img": "50500052ce360d21e5688ebd75a883afc346673db115104341d4360faa9f9a45",
+      "pvmfw.img": "9024fed3bc02aec890ef8aae03f6d03ff0cdf297b1dfd17eb2dedf856edf74af",
+      "super_empty.img": "34cbe5c51a222b464a1983ec800a4877fec147481bf907ff326454b5d380c036",
+      "system.img": "317b70bf9752c5aec53b694a4c6cc7a87d665305e8abd1d322d84865fd57dde0",
+      "system_dlkm.img": "bbe55ba29e293dc5316e6029763ed02fc0092e9d8e0bcee785719aa7818290ff",
+      "system_ext.img": "ee9891d5f77de209e5a68602033373d644f9b1571a0dea0602bc6797b1832d22",
+      "system_other.img": "b929e41031bc33516eee0ee479f9273fcb7f9cbf8b61aa3ebef6d030c67e6df9",
+      "userdata.img": "344f8da4df36113dc3a53d3cd874d53fca1d3ef13a74d020ed9a34b8774500d8",
+      "vbmeta.img": "b1429ebf61c901df00f76d6b95e233980f2ee537fc0c7950b4047c700d0e1691",
+      "vendor.img": "6ad7c574d70545a22ed9cadeff8dac799ff174be02888a86916187b5bbee1598",
+      "vendor_boot.img": "81c7c4ee9162d072b08b6ee1fc0a37c21a74ab17b382c1a4d31084bae2193ba4",
+      "vendor_dlkm.img": "844f549554f1f651822e6b588075663a15e3825968001af8d318fa04ab0cadc5",
+      "vendor_kernel_boot.img": "5a0513eb0824bd096c1418dc8d71658aa6404f27b6931ea4c2d166413e64c41e",
+      "abl.img": "27dcf3179cacfb3077434d390f96c7782b235059a4cc788020237c7b3167cb17",
+      "bl1.img": "adea737dbe3f7fa61d22fc6abaecdac9f149c1301618aa23eea4eceae7ff1a6d",
+      "bl2.img": "43c639ba6ac42f84af2a4256eeac13dd205d221d57346e5c22ecfe83c7eae7c1",
+      "bl31.img": "bb56b32bcc730b78c573b7d73396512cfb81b2d6637e496a1ff2bd2d7caa6773",
+      "gcf.img": "bccaf98cf54098d71862c7ffcf7f3132be8a0bd8922d71436fc22645f7c64bf7",
+      "gsa.img": "e19bd831a7cc24eeddcbc44fa24f1b06be26cc9d5a5cc426e214f4a5442e8eba",
+      "gsa_bl1.img": "cce13a6ba9b59db6d45a3540dd3eca15ac911e7c72cbf3839986eeb26bee1a3d",
+      "ldfw.img": "1c6c842d7275779db1bd7132ce2419f69e6556e10808d3923be1d2fb927b4431",
+      "modem.img": "601d0f655fe14aacf6d6439db033a2e6c7514982cb9fead794672b20d40a9b8e",
+      "pbl.img": "f8a272cf07c5025804c91acf605f1cc4c0d28272572d6a2dce94c939451c6f76",
+      "tzsw.img": "89e4a5d89a3522bb0279297c750959e17cbde3b5384b1258a352a8cb01ce378c"
+    },
+    "sourcePackageSha256": "ff8e44bec84375f902add15155a94fa918015d0518db484123daa8cf3743b4d6",
+    "replacedImages": [
+      "boot.img",
+      "dtbo.img",
+      "init_boot.img",
+      "product.img",
+      "pvmfw.img",
+      "super_empty.img",
+      "system.img",
+      "system_dlkm.img",
+      "system_ext.img",
+      "system_other.img",
+      "userdata.img",
+      "vbmeta.img",
+      "vendor.img",
+      "vendor_boot.img",
+      "vendor_dlkm.img",
+      "vendor_kernel_boot.img"
+    ]
+  },
+  "installedVerification": {
+    "observedAt": "2026-10-11T19:31:39.700115+00:00",
+    "serialSha256": "beaa7cdc39268c27cc845664906401a0995f92280e861a0b98bb397f883fbd44",
+    "archive": "918865311c600f49f9f0680fd3da21a0acc5fbdb3a67a73ea1a880bad6d09195",
+    "first": {
+      "properties": {
+        "sys.boot_completed": "1",
+        "ro.product.device": "stallion",
+        "ro.build.fingerprint": "Alpha/alpha_stallion_phone/stallion:17/CP2A.260605.016/eng.shaw:userdebug/test-keys",
+        "ro.build.version.security_patch": "2026-06-05",
+        "ro.vendor.build.security_patch": "2026-06-05",
+        "ro.bootloader": "stallion-17.0-15819938",
+        "ro.boot.slot_suffix": "_a",
+        "ro.boot.flash.locked": "0",
+        "ro.boot.verifiedbootstate": "orange"
+      },
+      "selinux": "Enforcing",
+      "services": {
+        "pixelstats": "running",
+        "trustyMetrics": "running",
+        "citadel": "running",
+        "keymintCitadel": "running",
+        "keymintTrusty": "running"
+      },
+      "pids": {
+        "pixelstats-vendor": "2746",
+        "trusty_metricsd": "1147",
+        "com.google.euiccpixel": "3048"
+      },
+      "home": "ai.elizaresearch.alphaphone/.MainActivity"
+    },
+    "after30Seconds": {
+      "properties": {
+        "sys.boot_completed": "1",
+        "ro.product.device": "stallion",
+        "ro.build.fingerprint": "Alpha/alpha_stallion_phone/stallion:17/CP2A.260605.016/eng.shaw:userdebug/test-keys",
+        "ro.build.version.security_patch": "2026-06-05",
+        "ro.vendor.build.security_patch": "2026-06-05",
+        "ro.bootloader": "stallion-17.0-15819938",
+        "ro.boot.slot_suffix": "_a",
+        "ro.boot.flash.locked": "0",
+        "ro.boot.verifiedbootstate": "orange"
+      },
+      "selinux": "Enforcing",
+      "services": {
+        "pixelstats": "running",
+        "trustyMetrics": "running",
+        "citadel": "running",
+        "keymintCitadel": "running",
+        "keymintTrusty": "running"
+      },
+      "pids": {
+        "pixelstats-vendor": "2746",
+        "trusty_metricsd": "1147",
+        "com.google.euiccpixel": "3048"
+      },
+      "home": "ai.elizaresearch.alphaphone/.MainActivity"
+    },
+    "installedHashes": {
+      "installedApkSha256": "8fcaadbefc291f4c5db843de5a4a71635ab63b3d53159367bd626fec5530dfce",
+      "factoryStatsV3Sha256": "36259c0f38e9de97e313e4c32c705265d82239cc8002ba2def8c51210d9821b7",
+      "sourceBuiltStatsV1Sha256": "2116bdbe306ca67e5d76808558302495ed71240d646c516de2629049be83e093",
+      "systemVendorConfigApkSha256": "b28e284061e6eaff1458e93a35dbedeb702ce6ba1c41537e3160bcf42a8baa58"
+    },
+    "providerVisibility": [
+      "forceQueryable=true"
+    ],
+    "temporaryBootDiagnosticsAbsent": true,
+    "prototypeInstrumentationAbsent": true,
+    "crashBufferEmpty": true,
+    "passed": true
+  },
+  "fixes": [
+    "Include extracted SELinux policy extensions while preserving neverallow checks",
+    "Normalize zero-offset GMT/UTC aliases in renderer and native Clock review",
+    "Match factory stats V3 NDK and source-built stats V1 C++ vendor dependencies",
+    "Provide readonly extracted eSIM configuration to exact system eSIM clients",
+    "Remove temporary boot diagnostics and prototype APKs"
+  ],
+  "localValidation": {
+    "verify": {
+      "passed": 225,
+      "failed": 0,
+      "includes": [
+        "typecheck",
+        "web build"
+      ]
+    },
+    "androidBuild": {
+      "passed": true,
+      "variants": [
+        "standalone",
+        "launcher"
+      ],
+      "includes": [
+        "debug",
+        "release",
+        "instrumentation APKs",
+        "lint",
+        "APK verification"
+      ]
+    },
+    "browserClockAndHome": {
+      "passed": 21
+    },
+    "physicalDebugApkIntegrationBeforeFinalFlash": {
+      "shellAndReadiness": 2,
+      "clockIntentInterception": 1,
+      "offlineSpeech": 1,
+      "rearAndFrontPreview": true,
+      "scope": "Same updated app source, debug APK with instrumentation. Final image contains the signed release APK; these are not instrumentation runs against that release APK."
+    },
+    "providerProtocolPrototype": {
+      "passed": true,
+      "scope": "Real key/prefix reads, absent key, rejected writes; shell caller rejected. Prototype APK removed before final image installation."
+    },
+    "finalImage": "Actual system APK paths and hashes, SELinux enforcing, Alpha HOME, stable vendor metrics services, eSIM helper and empty crash buffer checked after physical flash.",
+    "remoteCI": "Not run for these uncommitted local changes"
+  },
+  "ciCleanup": [
+    "Removed isolated helper and source-text assertions while retaining integration/e2e coverage",
+    "Run common verify once across push/PR workflows; retain standalone manual verification",
+    "Retain three parallel browser shards",
+    "Avoid recompressing APK artifacts and uploading duplicate APKs or prepared source trees"
+  ],
+  "remainingAcceptance": [
+    "Resident agent provider configuration and live inference/integrations",
+    "Connected Wi-Fi and cellular/eSIM activation, calling and data",
+    "Physical microphone and speaker acceptance",
+    "Private release signing, OTA/rollback and stock restoration qualification"
+  ],
+  "bootloaderRelockQualified": false,
+  "evidenceRoot": "/home/shaw/Android/pixel10a-preparation/reference",
+  "systemProviderAcceptance": {
+    "esimHelperPid": "3048",
+    "configurationErrors": 0,
+    "unauthorizedShellReadRejected": true,
+    "systemProviderInstalled": true
+  }
+}

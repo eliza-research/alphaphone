@@ -1,3 +1,6 @@
+import { CloudLegalViews } from './cloud-legal-ui';
+import { CloudLoginOptions } from './cloud-login-ui';
+import { AlphaAuthError, validPending } from './alpha-auth';
 import {retireClockReviews} from './clock-agent-review';
 import { negotiateEnabledViews } from './device-view-profile';
 import { workflowPresentationProtocol } from './workflow-presentation';
@@ -27,7 +30,7 @@ import type { ActionProposal, OperationReceipt, ContextEnvelope, VerifiedSession
 import { CloudProtocol, CloudProtocolError, type CloudAgent, type CloudEnvironment, type CloudPhoneTarget } from './cloud-protocol';
 import { RemoteProtocol } from './remote-protocol';
 import { phoneContextMessage } from './phone-context';
-import { cloudCredentialStore, remoteCredentialStore, nativeCloudRequest, nativeRemoteRequest, openConnectionBrowser, secureConnectionStore } from './native-connection';
+import { alphaAuthHost, nativeAlphaAuthenticate, cloudCredentialStore, remoteCredentialStore, nativeCloudRequest, nativeRemoteRequest, secureConnectionStore } from './native-connection';
 import './connection-ui.css';
 
 type Selection = {kind:'development';profile:DevelopmentProfile;account?:string} | { kind: 'resident' } | { kind: 'offline' } | { kind: 'none' } | { kind: 'mock' } | { kind: 'remote' | 'local'; origin: string } | { kind: 'cloud'; environment: CloudEnvironment; agentId: string; ownerId?: string };
@@ -35,6 +38,7 @@ export interface CloudServiceSession { environment: CloudEnvironment; userId: st
 export interface RestoredMessage { id: string; from: 'user' | 'agent'; text: string }
 export interface ConnectionSnapshot {
   cloudPersonal?: PersonalSetupState;
+  signInEnvironment?: CloudEnvironment;
   phoneActionsAvailable: boolean; phoneCapabilityReason: string;
   conversations: Array<{ id: string; title: string }>;
   history: { sessionId: string; conversationId: string; revision: number; messages: RestoredMessage[] } | null;
@@ -80,7 +84,7 @@ function clearPersonalSetup(){personalGeneration++;personalSetup=null;update({cl
 function personalCurrent(binding:NonNullable<typeof personalSetup>,generation:number){return generation===personalGeneration&&personalSetup===binding&&service?.identity.sessionId===binding.serviceId&&service.identity.credentialId===binding.client.owner.credentialId&&service.identity.environment===binding.client.owner.environment&&service.identity.userId===binding.client.owner.userId&&service.identity.organizationId===binding.client.owner.organizationId;}
 async function inspectPersonal(signal:AbortSignal){
  const generation=personalGeneration,serviceId=service?.identity.sessionId;
- if(!serviceId)throw Error('Sign in with Eliza Cloud first.');
+ if(!serviceId)throw Error('Sign in to Alpha Phone first.');
  const client=await cloud.personal(signal);signal.throwIfAborted();
  if(generation!==personalGeneration||service?.identity.sessionId!==serviceId||service.identity.credentialId!==client.owner.credentialId||service.identity.userId!==client.owner.userId||service.identity.organizationId!==client.owner.organizationId)throw Error('Cloud account changed. Refresh status.');
  const binding={client,serviceId};personalSetup=binding;
@@ -114,7 +118,7 @@ async function personalWork(message:string,action:(binding:NonNullable<typeof pe
  });
 }
 function detachCloudTarget() { if (active?.kind === 'cloud') retire(); }
-function makeCloud(environment: CloudEnvironment) { return new CloudProtocol(environment, nativeCloudRequest, cloudCredentialStore, openConnectionBrowser); }
+function makeCloud(environment: CloudEnvironment) { return new CloudProtocol(environment, nativeCloudRequest, cloudCredentialStore, signal => nativeAlphaAuthenticate(environment, signal)); }
 function update(patch: Partial<ConnectionSnapshot>) { state = { ...state, ...patch }; listeners.forEach(listener => listener()); }
 function save(selection: Selection) { localStorage.setItem(SELECTION, JSON.stringify(selection)); }
 function retire(name = 'Offline') {
@@ -151,10 +155,11 @@ function selection(): Selection | null {
   return null;
 }
 function errorMessage(error: unknown): string {
+  if (error instanceof AlphaAuthError) return error.code === 'denied' ? 'Google sign-in was not approved. You can try again.' : error.code === 'expired' ? 'Your sign-in expired. Please try again.' : 'Alpha Phone could not complete sign-in. Please try again.';
   if (error && typeof error === 'object' && 'code' in error) {
-    if (error.code === 'expired') return 'This sign-in link has expired. Close the old browser tab and select Sign in with Eliza Cloud to open a fresh link.';
-    if (error.code === 'credential-consumed') return 'This sign-in link has already been used. Close the old browser tab and start a fresh Eliza Cloud sign-in.';
-    if (error.code === 'credentials-missing') return 'Sign in with Eliza Cloud to reconnect your account.';
+    if (error.code === 'expired') return 'This sign-in link has expired. Select Continue with Google to start again.';
+    if (error.code === 'credential-consumed') return 'This sign-in has already been used. Select Continue with Google to start again.';
+    if (error.code === 'credentials-missing') return 'Sign in to Alpha Phone to reconnect your account.';
   }
   if (error instanceof DOMException && error.name === 'AbortError') return 'Connection cancelled.';
   if (error && typeof error === 'object' && 'status' in error && error.status === 401) return 'Your session has expired. Sign in or pair again.';
@@ -249,7 +254,7 @@ async function connectDevelopment(profile:DevelopmentProfile,signal:AbortSignal)
  const identity=developmentIdentity(profile);const client=new LocalAgentProtocol(developmentBridge(profile,identity));const {session,name}=await client.connect(signal);signal.throwIfAborted();const credential=developmentCredential(profile,identity),scope=await actionScope(JSON.stringify([client.origin,session.ownerId,session.agentId,credential.installationId]));const actions=new DeviceActions(session,credential,scope,(path,body,signal)=>client.request(path,body,signal),developmentJournal(profile,identity),(op,id,context,signal,binding,workflowRoute,journalIdentity)=>deviceExecutor(op,id,context,signal,binding,workflowRoute,journalIdentity),(op,id,binding,signal)=>deviceRecovery?deviceRecovery(op,id,binding,signal):Promise.resolve({status:'unknown'}),true,true);await retire();signal.throwIfAborted();assertDevelopmentIdentity(identity);const workflowProtocol=2 as const;save({kind:'development',profile,...(identity.account?{account:identity.account}:{})});developmentVoiceExpiresAt=Date.now()+3600000;activate({kind:'resident',remote:client,origin:client.origin,actions,workflowProtocol},session,name);
 }
 async function connectResident(signal: AbortSignal) {
-  if (!await localAgentPackaged()) throw new Error('The local agent is unavailable here. Connect a remote agent, use Eliza Cloud, or continue in mock mode.');
+  if (!await localAgentPackaged()) throw new Error('The local agent is unavailable here. Connect a remote agent, connect your Alpha Phone account, or continue in mock mode.');
   signal.throwIfAborted();
   const client = new LocalAgentProtocol();
   const { session, name } = await client.connect(signal);
@@ -343,7 +348,7 @@ async function connectCloud(agentId: string, signal: AbortSignal, expectedOwner?
   }
   await verifyPersonalOwner();signal.throwIfAborted();
   save({ kind:'cloud',environment:cloud.environment,agentId,ownerId:identity.userId });
-  activate(next,session,agent.name || 'Eliza Cloud agent'); attached=true; update({phoneCapabilityReason:reason});
+  activate(next,session,agent.name || 'Your Cloud agent'); attached=true; update({phoneCapabilityReason:reason});
 }
 
 function conversationKey(session: VerifiedSession) { return JSON.stringify([session.origin, session.ownerId, session.agentId]); }
@@ -467,7 +472,7 @@ export const connectionController = {
     const environment = service.identity.environment;
     if (active?.kind === 'cloud' && active.cloud.environment === environment) retire('Sign-in required');
     detachService();
-    update({ error: 'Eliza Cloud sign-in has expired. Sign in again; remote agent pairing is unchanged.' });
+    update({ error: 'Alpha Phone sign-in has expired. Sign in again; remote agent pairing is unchanged.' });
     return true;
   },
   open() { update({ open: true, error: '' }); },
@@ -478,6 +483,18 @@ export const connectionController = {
     startup = (async () => {
       if(browserDevProfile){const saved=selection();if(saved?.kind==='development'){if(saved.account!==developmentIdentity(saved.profile).account){save({kind:'none'});return;}await work('Restoring development agent…',signal=>connectDevelopment(saved.profile,signal));return;}}
       if ((!isAndroid && !browserLocalAgentEnabled) || new URLSearchParams(location.search).get('mode') === 'mock') return;
+      if (isAndroid) {
+        const pending = await alphaAuthHost.read();
+        if (validPending(pending) && (pending.purpose ?? 'account') === 'account') {
+          const previous = selection();
+          update({open:true}); await connectionController.cloudLogin(pending.environment);
+          // Account authentication must not replace an independently selected local/remote agent.
+          if (previous?.kind === 'resident') await work('Restoring your on-device agent…', connectResident);
+          else if (previous?.kind === 'remote' || previous?.kind === 'local') await work('Restoring your agent…', signal => connectRemote(previous.kind, previous.origin, '', signal));
+          return;
+        }
+        if (pending && !validPending(pending)) { await alphaAuthHost.clear(); await alphaAuthHost.clearCallback(); update({open:true,error:'Your sign-in expired. Please try again.'}); }
+      }
       const saved = selection();
       if (saved?.kind === 'offline') return;
       if (saved?.kind === 'mock') { const url = new URL(location.href); url.searchParams.set('mode', 'mock'); location.replace(url.href); return; }
@@ -518,15 +535,19 @@ export const connectionController = {
   async pair(kind: 'remote' | 'local', origin: string, code: string) {
     await work('Verifying your agent…', signal => { retire(); return connectRemote(kind, origin, code, signal); });
   },
-  async cloudLogin(environment: CloudEnvironment) {
-    await work('Opening Eliza Cloud sign-in…', async signal => {
+  showSignIn(environment: CloudEnvironment) { if (!operation) update({signInEnvironment:environment,message:'',error:''}); },
+  closeSignIn() { if (!operation) update({signInEnvironment:undefined,message:'',error:''}); },
+  async cloudLogin(environment: CloudEnvironment, identityToken?: string) {
+    update({signInEnvironment:environment});
+    await work(identityToken ? 'Finishing sign-in securely in Alpha Phone…' : 'Opening Google’s secure account chooser. Return here to finish or cancel sign-in.', async signal => {
       // A login can replace the environment's secure token with a different
       // account. Detach the old identity before any token can be replaced.
       const replacingCloud = active?.kind === 'cloud' || selection()?.kind === 'cloud';
       detachCloudTarget(); detachService(); if (replacingCloud) save({ kind: 'none' }); update({ agents: [] });
       cloud = makeCloud(environment);
-      await cloud.login(signal, () => update({ message: 'Use the newly opened browser tab to sign in and approve this phone. If the link expires, cancel here and start a fresh sign-in.' }));
+      await cloud.login(signal, () => update({ message: 'Finishing sign-in securely in Alpha Phone…' }), identityToken ? async authSignal => {authSignal.throwIfAborted();return identityToken;} : undefined);
       await verifyService(cloud, signal);
+      update({signInEnvironment:undefined});
       if (!active) save({ kind: 'none' });
       await inspectPersonal(signal);
     });
@@ -570,7 +591,6 @@ export const connectionController = {
    else if(next.kind==='review'||next.kind==='unavailable')savePersonalIntent(binding.client.owner,{phase:'activation',personalElizaId:view.receipt.personalElizaId,dedicatedAgentId:view.receipt.dedicatedAgentId,state:'accepted'});
    if(personalCurrent(binding,generation))publishPersonal(binding,next);
   });},
-  async cloudManage(environment:CloudEnvironment){await work('Opening Cloud account…',signal=>openConnectionBrowser(environment==='staging'?'https://cloud-staging.eliza.app/cloud/agents':'https://cloud.eliza.app/cloud/agents',signal));},
   async cloudPersonalConnect(){await personalWork('Verifying your personal Cloud agent…',async(binding,_view,signal)=>{
    const generation=personalGeneration,next=await binding.client.inspect(signal);if(!personalCurrent(binding,generation))return;publishPersonal(binding,next);
    if(next.kind!=='ready'||state.cloudPersonal?.blocked)throw Error('Your personal Cloud agent is not ready.');
@@ -591,7 +611,7 @@ export const connectionController = {
       localStorage.removeItem(CLOUD_SERVICE);
       if (!active) save({ kind: 'none' });
       await (previous?.client ?? cloud).disconnect();
-      update({ agents: [], message: 'Signed out of Eliza Cloud on this phone.' });
+      update({ agents: [], message: 'Signed out of your Alpha Phone account.' });
     });
   },
   async mock() {
@@ -725,6 +745,10 @@ export function ConnectionChooser() {
   const remoteOrigin = useRef<HTMLInputElement>(null), remoteCode = useRef<HTMLInputElement>(null);
   const localOrigin = useRef<HTMLInputElement>(null), localCode = useRef<HTMLInputElement>(null);
   const environment = useRef<HTMLSelectElement>(null);
+  const [selectedEnvironment,setSelectedEnvironment] = useState<CloudEnvironment>('production');
+  const [accountExpanded,setAccountExpanded] = useState(false);
+  useEffect(()=>{if(snapshot.cloudAccount)setAccountExpanded(true);},[snapshot.cloudAccount?.sessionId]);
+  useEffect(()=>{if(snapshot.signInEnvironment)setSelectedEnvironment(snapshot.signInEnvironment);},[snapshot.signInEnvironment]);
   useEffect(() => { void connectionController.initialize(); }, []);
   useEffect(()=>{if(!browserDevProfile)return;const changed=()=>{const selected=selection();if(selected?.kind==='development'&&selected.profile==='cloud'){operation?.abort();sending?.abort();void retire();save({kind:'none'});}try{setReply(developmentReply(developmentProfile));setDevelopmentError('');}catch{setDevelopmentError('Development data could not be read.');}};const stored=(event:StorageEvent)=>{if(event.key===developmentCloudKey||event.key===null)changed();};window.addEventListener('alpha:development-account-changed',changed);window.addEventListener('storage',stored);return()=>{window.removeEventListener('alpha:development-account-changed',changed);window.removeEventListener('storage',stored);};},[developmentProfile]);
   useEffect(()=>{if(!browserDevProfile)return;const cancel=()=>{operation?.abort();sending?.abort();update({open:false});},hidden=()=>{if(document.hidden)cancel();},storage=(event:StorageEvent)=>{if(event.key===SELECTION||event.key===null){operation?.abort();void retire();update({open:false});}};const events=['launcher-home','alpha:device-state','pagehide'];events.forEach(event=>window.addEventListener(event,cancel));window.addEventListener('storage',storage);document.addEventListener('visibilitychange',hidden);return()=>{events.forEach(event=>window.removeEventListener(event,cancel));window.removeEventListener('storage',storage);document.removeEventListener('visibilitychange',hidden);};},[]);
@@ -739,10 +763,10 @@ export function ConnectionChooser() {
       for (const key of ['bg', 'fg', 's2', 'line', 'mut', 'acc']) panel.current.style.setProperty(`--connection-${key}`, theme.getPropertyValue(`--${key}`));
     }
     panel.current?.focus();
-    const back = (event: Event) => { event.preventDefault(); event.stopImmediatePropagation(); if (snapshot.busy) connectionController.cancel(); else connectionController.close(); };
+    const back = (event: Event) => { event.preventDefault(); event.stopImmediatePropagation(); if (snapshot.busy) connectionController.cancel(); else if (snapshot.signInEnvironment) connectionController.closeSignIn(); else connectionController.close(); };
     window.addEventListener('alpha-back', back, true);
     const key = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); if (snapshot.busy) connectionController.cancel(); else connectionController.close(); }
+      if (event.key === 'Escape') { event.preventDefault(); if (snapshot.busy) connectionController.cancel(); else if (snapshot.signInEnvironment) connectionController.closeSignIn(); else connectionController.close(); }
       if (event.key === 'Tab' && panel.current) {
         const items = Array.from(panel.current.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),summary')).filter(item => item.getClientRects().length);
         const first = items[0], last = items.at(-1);
@@ -752,7 +776,7 @@ export function ConnectionChooser() {
     };
     document.addEventListener('keydown', key);
     return () => { document.removeEventListener('keydown', key); window.removeEventListener('alpha-back', back, true); releaseInert(); previous?.focus(); };
-  }, [snapshot.open, snapshot.busy]);
+  }, [snapshot.open, snapshot.busy, snapshot.signInEnvironment]);
   if (!snapshot.open) return null;
   const pairingOptions=<>
     <details><summary>Remote agent</summary><form onSubmit={event => { event.preventDefault(); void connectionController.pair('remote', remoteOrigin.current?.value || '', remoteCode.current?.value || ''); if (remoteCode.current) remoteCode.current.value = ''; }}>
@@ -781,6 +805,20 @@ export function ConnectionChooser() {
     <p role="status">{snapshot.message}</p>{(snapshot.error||developmentError)&&<p role="alert">{snapshot.error||developmentError}</p>}{snapshot.busy&&<button onClick={()=>connectionController.cancel()}>Cancel</button>}
   </div></div>;
   const env = () => environment.current?.value === 'staging' ? 'staging' : 'production';
+  if (snapshot.signInEnvironment) return <div className="alpha-connection-scrim"><div className="alpha-connection alpha-sign-in" role="dialog" aria-modal="true" aria-labelledby="connection-title" tabIndex={-1} ref={panel}>
+    <header><span className="alpha-connection-logo serif" aria-hidden="true">a</span><button aria-label="Back to account settings" disabled={snapshot.busy} onClick={()=>connectionController.closeSignIn()}>×</button></header>
+    <p className="alpha-auth-brand">ALPHA COMPUTE</p>
+    <h1 id="connection-title" className="serif">Welcome to<br/>Alpha Phone.</h1>
+    <p>Your account. Your assistant. Your phone.</p>
+    <CloudLoginOptions key={snapshot.signInEnvironment} environment={snapshot.signInEnvironment} busy={snapshot.busy} google={()=>void connectionController.cloudLogin(snapshot.signInEnvironment!)} complete={token=>connectionController.cloudLogin(snapshot.signInEnvironment!,token)}/>
+    {snapshot.signInEnvironment==='staging'&&<p>Staging account</p>}
+    <div role="status" aria-live="polite">{snapshot.message}</div>
+    {snapshot.error&&<p role="alert" className="alpha-connection-error">{snapshot.error}</p>}
+    {snapshot.busy&&<button className="alpha-connection-cancel" onClick={()=>connectionController.cancel()}>Cancel sign-in</button>}
+    <CloudLegalViews/>
+    <p className="alpha-sign-in-footer">Email access and hosting are set up separately. You choose what to connect.</p>
+  </div></div>;
+
   return <div className="alpha-connection-scrim"><div className="alpha-connection" role="dialog" aria-modal="true" aria-labelledby="connection-title" tabIndex={-1} ref={panel}>
     <header><span className="alpha-connection-logo serif">a</span><button aria-label="Close connection settings" disabled={snapshot.busy} onClick={() => connectionController.close()}>×</button></header>
     <h1 id="connection-title" className="serif">Your agent.<br />Your phone.</h1>
@@ -790,21 +828,21 @@ export function ConnectionChooser() {
       {isAndroid && localPackaging==='available' && <details><summary>Model provider</summary><p>Cerebras receives prompts and selected context for inference. Your key is stored using Android Keystore. Saving a new key takes effect after the agent restarts.</p><form onSubmit={event=>{event.preventDefault();const key=providerKey.current?.value||'';const model=providerModel.current?.value||'';if(providerKey.current)providerKey.current.value='';void connectionController.configureLocal(key,model);}}><label>Cerebras API key<input ref={providerKey} type="password" autoComplete="off" required disabled={snapshot.busy}/></label><label>Model<input ref={providerModel} defaultValue="qwen-3.8-27b" required disabled={snapshot.busy}/></label><button disabled={snapshot.busy}>Save provider</button></form></details>}
       <button disabled={snapshot.busy || localPackaging!=='available'} onClick={() => void connectionController.startLocal()}>Start local agent</button>
       {localPackaging==='checking' && <p role="status">Checking local agent availability…</p>}
-      {localPackaging==='unavailable' && <p>The local agent is unavailable in this version. Connect a remote agent, use Eliza Cloud, or continue in mock mode.</p>}
+      {localPackaging==='unavailable' && <p>The local agent is unavailable in this version. Connect a remote agent, connect your Alpha Phone account, or continue in mock mode.</p>}
     </section>
-    {snapshot.session && <section className="alpha-connection-current"><strong>{snapshot.name}</strong><span>Connected · {snapshot.kind === 'cloud' ? 'Eliza Cloud' : snapshot.kind === 'resident' ? (isAndroid ? 'On this device' : 'On this computer · development') : snapshot.kind === 'local' ? 'Local development' : 'Remote agent'}</span><button disabled={snapshot.busy} onClick={() => void connectionController.disconnect()}>Disconnect agent</button>{isAndroid && snapshot.kind==='resident' && <button disabled={snapshot.busy} onClick={()=>void connectionController.stopLocal()}>Stop local agent</button>}</section>}
+    {snapshot.session && <section className="alpha-connection-current"><strong>{snapshot.name}</strong><span>Connected · {snapshot.kind === 'cloud' ? 'Alpha Phone Cloud' : snapshot.kind === 'resident' ? (isAndroid ? 'On this device' : 'On this computer · development') : snapshot.kind === 'local' ? 'Local development' : 'Remote agent'}</span><button disabled={snapshot.busy} onClick={() => void connectionController.disconnect()}>Disconnect agent</button>{isAndroid && snapshot.kind==='resident' && <button disabled={snapshot.busy} onClick={()=>void connectionController.stopLocal()}>Stop local agent</button>}</section>}
     {snapshot.session && <details><summary>Conversation history</summary><p>Load from this agent only. Restoring replaces the visible chat and draft; it does not run past actions.</p><button disabled={snapshot.busy} onClick={() => void connectionController.listHistory()}>Load conversations</button>{snapshot.conversations.map(item => <section key={item.id} className="alpha-connection-agent"><strong>{item.title}</strong><button disabled={snapshot.busy} onClick={() => void connectionController.restoreHistory(item.id)}>Restore conversation</button></section>)}</details>}
     {snapshot.session && snapshot.phoneCapabilityReason && <p role="status">{snapshot.phoneCapabilityReason}</p>}
     {snapshot.session && snapshot.phoneActionsAvailable && <details><summary>Phone action history</summary><button disabled={snapshot.busy} onClick={() => void connectionController.actionHistory()}>Refresh actions</button><button disabled={snapshot.busy} onClick={() => void connectionController.actionHistory(true)}>Sync recorded receipts</button>{snapshot.actionHistory.map(item => <section key={item.id} className="alpha-connection-agent"><strong>{item.description}</strong><span>{item.state}</span>{item.state === 'pending' && <button disabled={snapshot.busy} onClick={() => void connectionController.rejectAction(item.id)}>Reject proposal</button>}{['executing','reconciliation_required'].includes(item.state) && <><p>After checking this phone, confirm whether this exact action happened.</p><button disabled={snapshot.busy} onClick={() => void connectionController.reconcileAction(item.id, 'applied')}>I verified it happened</button><button disabled={snapshot.busy} onClick={() => void connectionController.reconcileAction(item.id, 'not_applied')}>I verified it did not happen</button></>}</section>)}</details>}
     <div role="status" aria-live="polite">{snapshot.message}</div>
     {snapshot.error && <p role="alert" className="alpha-connection-error">{snapshot.error}</p>}
     {snapshot.busy && <button className="alpha-connection-cancel" onClick={() => connectionController.cancel()}>{snapshot.cloudPersonal?.view?'Stop waiting':'Cancel'}</button>}
-    <details><summary>Eliza Cloud</summary><p>Connect your personal Eliza. Dedicated hosting requires a reviewed setup before it starts.</p>
-      {snapshot.cloudAccount && <section className="alpha-connection-current"><strong>Cloud services connected</strong><span>{snapshot.cloudAccount.environment} · verified account {snapshot.cloudAccount.userId.slice(0, 8)}</span><p>Gmail and speech use this account independently of your agent.</p><button disabled={snapshot.busy} onClick={() => void connectionController.cloudSignOut()}>Sign out of Eliza Cloud</button></section>}
-      <label>Environment<select aria-label="Environment" ref={environment} disabled={snapshot.busy} defaultValue="production" onChange={() => connectionController.cloudEnvironment(env())}><option value="production">Production</option><option value="staging">Staging</option></select></label>
-      <div className="alpha-connection-actions"><button disabled={snapshot.busy} onClick={() => void connectionController.cloudLogin(env())}>Sign in with Eliza Cloud</button><button disabled={snapshot.busy} onClick={() => void connectionController.cloudList(env())}>Refresh agent status</button></div>
+    <details open={accountExpanded} onToggle={event=>setAccountExpanded(event.currentTarget.open)}><summary>Alpha Phone account</summary><p>Connect your account, email and voice with Alpha Phone.</p>
+      {snapshot.cloudAccount && <section className="alpha-connection-current"><strong>Cloud services connected</strong><span>{snapshot.cloudAccount.environment} · verified account {snapshot.cloudAccount.userId.slice(0, 8)}</span><p>Gmail and speech use this account independently of your agent.</p><button disabled={snapshot.busy} onClick={() => void connectionController.cloudSignOut()}>Sign out of Alpha Phone</button></section>}
+      <label>Environment<select aria-label="Environment" ref={environment} disabled={snapshot.busy} defaultValue={selectedEnvironment} onChange={() => {setSelectedEnvironment(env());connectionController.cloudEnvironment(env());}}><option value="production">Production</option><option value="staging">Staging</option></select></label>
+      <div className="alpha-connection-actions"><button disabled={snapshot.busy} onClick={() => connectionController.showSignIn(env())}>Sign in to Alpha Phone</button><button disabled={snapshot.busy} onClick={() => void connectionController.cloudList(env())}>Refresh agent status</button></div>
       {snapshot.cloudPersonal&&<CloudPersonalSetup setup={snapshot.cloudPersonal} busy={snapshot.busy} onAccept={()=>void connectionController.cloudPersonalAccept()} onDecline={()=>connectionController.cloudPersonalDecline()} onPoll={()=>void connectionController.cloudPersonalPoll()} onFinalize={()=>void connectionController.cloudPersonalFinalize()} onConnect={()=>void connectionController.cloudPersonalConnect()}/>}
-      <button disabled={snapshot.busy} onClick={()=>void connectionController.cloudManage(env())}>Manage Cloud account</button>
+
     </details>
     {pairingOptions}
     <details><summary>Mock mode</summary><p>Explore the prototype with simulated data and actions. No live agent connection is used.</p><button disabled={snapshot.busy} onClick={() => connectionController.mock()}>Enter mock mode</button></details>

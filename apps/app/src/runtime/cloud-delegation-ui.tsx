@@ -3,8 +3,13 @@ import { registerPlugin } from '../platform-plugins';
 import { type PluginListenerHandle } from '@capacitor/core';
 import {
 	secureConnectionStore,
-	openConnectionBrowser,
+	nativeCloudRequest,
+	nativeAlphaAuthenticate,
+	clearAlphaAuthenticationPurpose,
+	alphaAuthHost,
 } from "./native-connection";
+import { readAlphaDelegationReturn } from './alpha-auth-return';
+import { reviewAlphaDelegation, approveAlphaDelegation, type DelegationReview, type ReadKind } from './alpha-delegation';
 import type { HostedDigestProtocol } from "./hosted-digests";
 export const delegationNative = registerPlugin<{
 	addListener(
@@ -22,6 +27,9 @@ type Pending = {
 	expiresAt: string;
 	phase: "waiting" | "finishing";
 	code?: string;
+	review?: DelegationReview;
+	kinds?: ReadKind[];
+	approved?: boolean;
 };
 export function CloudDelegationPanel({
 	client,
@@ -49,7 +57,8 @@ export function CloudDelegationPanel({
 		[grantId, setGrantId] = useState("");
 	const locked = useRef(false),
 		slot = "cloud-delegation:v1:" + scope;
-	const valid = () => current() && !signal.aborted;
+	const mounted = useRef(true), interactive = useRef<AbortController | null>(null);
+	const valid = () => mounted.current && current() && !signal.aborted;
 	async function clear(expected: Pending) {
 		const result = await secureConnectionStore.compareExchange(
 			slot,
@@ -58,6 +67,7 @@ export function CloudDelegationPanel({
 		);
 		if (result.status !== "saved")
 			throw Error("The connection changed. Reopen this screen.");
+		await clearAlphaAuthenticationPurpose(`delegation:${scope}:${expected.state}`);
 		if (valid()) setPending(null);
 	}
 	async function run(work: () => Promise<void>) {
@@ -115,7 +125,7 @@ export function CloudDelegationPanel({
 				? "Cloud is finishing authorization. Check again shortly."
 				: record.code
 					? "Authorization completion is not confirmed. Check status again; it will not be retried automatically."
-					: "Finish authorization in the browser, then return here.",
+						: "Review the permissions below to continue in Alpha Phone.",
 		);
 	}
 	async function callback() {
@@ -162,14 +172,16 @@ export function CloudDelegationPanel({
 	}
 	useEffect(() => {
 		let disposed = false;
+		mounted.current = true;
         void refreshRevocations().catch(()=>{});
 		void secureConnectionStore
 			.read<Pending>(slot)
-			.then((record) => {
+			.then(async (record) => {
 				if (!disposed && valid()) {
 					setPending(record);
 					if (record) setExpanded(true);
-					void callback();
+					await callback();
+					if (!disposed && valid()) await resumeApproval();
 				}
 			})
 			.catch(() => {
@@ -181,19 +193,19 @@ export function CloudDelegationPanel({
 			.catch(() => null);
 		return () => {
 			disposed = true;
+			mounted.current = false;
+			interactive.current?.abort(new DOMException('Consent screen closed', 'AbortError'));
 			void listener.then((l) => l?.remove());
 		};
 	}, [scope, client]);
 	async function start() {
 		await run(async () => {
+			const kinds: ReadKind[] = [...(email ? ['email' as const] : []), ...(calendar ? ['calendar' as const] : [])];
 			const result = await client.delegation(
 				"start",
 				{
 					confirmed: true,
-					kinds: [
-						...(email ? ["email"] : []),
-						...(calendar ? ["calendar"] : []),
-					],
+					kinds,
 				},
 				signal,
 			);
@@ -216,6 +228,7 @@ export function CloudDelegationPanel({
 				authUrl: url.href,
 				expiresAt: result.expiresAt,
 				phase: "waiting",
+				kinds,
 			};
 			const saved = await secureConnectionStore.compareExchange(
 				slot,
@@ -226,11 +239,60 @@ export function CloudDelegationPanel({
 				throw Error("Authorization already pending");
 			if (!valid()) return;
 			setPending(record);
-			await openConnectionBrowser(url.href, signal);
-			setMessage(
-				"Review the read permissions in Cloud, then choose Continue in Alpha Phone.",
-			);
+			await review(record);
 		});
+	}
+	async function review(record: Pending) {
+		if (!record.kinds || Date.parse(record.expiresAt) <= Date.now()) throw Error('Start a new permission review');
+		const verified = await reviewAlphaDelegation(record.authUrl, record.kinds, nativeCloudRequest, signal);
+		if (!valid()) return;
+		const next = {...record, review: verified, approved: false};
+		const saved = await secureConnectionStore.compareExchange(slot, record, next);
+		if (saved.status !== 'saved') throw Error('Authorization changed');
+		if (valid()) { setPending(next); setMessage('Review access for this agent. Google may ask you to confirm your account in its secure account chooser.'); }
+	}
+	async function resumeApproval() {
+		await run(async () => {
+			const target = await readAlphaDelegationReturn(alphaAuthHost);
+			if (!valid() || !target || target.scope !== scope) return;
+			const record = await secureConnectionStore.read<Pending>(slot);
+			if (!valid() || !record || record.state !== target.state || !record.approved) return;
+			await approve(record, true);
+		});
+	}
+	async function approve(record: Pending, resume = false) {
+		if (!record.review || !record.kinds || record.code || Date.parse(record.expiresAt) <= Date.now()) throw Error('Start a new permission review');
+		if (resume && !record.approved) return;
+		const verified = await reviewAlphaDelegation(record.authUrl, record.kinds, nativeCloudRequest, signal);
+		if (!valid()) return;
+		if (JSON.stringify(verified) !== JSON.stringify(record.review)) { await review(record); return; }
+		if (!resume) {
+			const approved = {...record, approved: true};
+			const result = await secureConnectionStore.compareExchange(slot, record, approved);
+			if (result.status !== 'saved') throw Error('Authorization changed');
+			record = approved;
+			if (!valid()) return;
+			setPending(record);
+		}
+		const controller = new AbortController();
+		interactive.current = controller;
+		const abort = () => controller.abort(signal.reason);
+		signal.addEventListener('abort', abort, {once: true});
+		if (signal.aborted) abort();
+		let code: string;
+		try { code = await approveAlphaDelegation(verified, nativeCloudRequest, async (environment, authSignal) => {
+			const token = await nativeAlphaAuthenticate(environment, authSignal, `delegation:${scope}:${record.state}`);
+			if (!valid() || Date.parse(record.expiresAt) <= Date.now()) throw Error('The selected agent changed or authorization expired');
+			return token;
+		}, controller.signal); }
+		finally { signal.removeEventListener('abort', abort); interactive.current = null; }
+		if (!valid()) return;
+		const next: Pending = {...record, phase: 'finishing', code};
+		const saved = await secureConnectionStore.compareExchange(slot, record, next);
+		if (saved.status !== 'saved') throw Error('Authorization changed');
+		if (!valid()) return;
+		setPending(next);
+		await recover(next);
 	}
 	return (
 		<details
@@ -273,20 +335,27 @@ export function CloudDelegationPanel({
 			)}
 			{pending && (
 				<>
+					{pending.review && !pending.code && <section className="alpha-delegation-review" aria-label="Alpha Phone permission review">
+						<p>ALPHA COMPUTE</p><h3>Allow scheduled reads?</h3>
+						<p>Registered application: {pending.review.appName}</p>
+						<p>This agent can read your account identity{pending.kinds?.includes('email') ? ', and read and search your Gmail messages' : ''}{pending.kinds?.includes('calendar') ? ', and read your Google calendars' : ''}. Access expires within seven days.</p>
+						<p>No sending, calendar changes, or billing access.</p>
+						<button disabled={busy} onClick={() => void run(() => approve(pending))}>Allow selected reads</button>
+					</section>}
 					<button
 						disabled={busy}
 						onClick={() => void run(() => recover(pending))}
 					>
 						Check authorization status
 					</button>
-					<button
+					{!pending.code && !pending.review && pending.kinds && <button
 						disabled={busy}
 						onClick={() =>
-							void run(() => openConnectionBrowser(pending.authUrl, signal))
+							void run(() => review(pending))
 						}
 					>
-						Return to authorization
-					</button>
+						Review permissions
+					</button>}
 					<button
 						disabled={busy || pending.phase === "finishing"}
 						onClick={() =>

@@ -52,6 +52,9 @@ jobs:
           echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
       - run: npm ci
       - run: npm run verify
+        # Push/PR verification already runs once in Browser MVP. Preserve it
+        # when this workflow is dispatched independently for an APK build.
+        if: github.event_name == 'workflow_dispatch'
       - run: node --test vendor/eliza/packages/os/scripts/__tests__/stage-launcher-overlay.node.test.ts
       # Cache only acquisition inputs. Every hit is size/hash verified; generated
       # AARs, extracted sources and models are rebuilt in this clean job.
@@ -110,13 +113,20 @@ jobs:
           name: android-smoke-apks-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/smoke-bundle/
           if-no-files-found: error
+          # APKs are already compressed; avoid recompressing the six-APK bundle.
+          compression-level: 0
           retention-days: 14
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: android-build-evidence
+          # Prepared upstream checkouts are reproducible inputs, not evidence.
           path: |
             artifacts/
+            !artifacts/**/*.apk
+            !artifacts/smoke-bundle/
+            !artifacts/local-agent-*/**
+            !artifacts/mobile-workflow-worker-*/**
             test-results/
             android/app/build/reports/
             scripts/local-speech/build-*/build.log

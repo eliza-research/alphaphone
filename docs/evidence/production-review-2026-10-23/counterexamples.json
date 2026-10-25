@@ -1,0 +1,11 @@
+{
+  "backgroundStillActiveAfterNativeInactive": true,
+  "missingRecoveryProblems": [],
+  "opaquePlaceDetail": {
+    "providerInstalled": true,
+    "result": null,
+    "requests": [
+      "capabilities"
+    ]
+  }
+}

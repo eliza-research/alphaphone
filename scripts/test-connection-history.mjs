@@ -8,6 +8,7 @@ import { spawnSync } from 'node:child_process';
 if (!process.execArgv.includes('--experimental-transform-types')) {
   process.exit(spawnSync(process.execPath, ['--experimental-transform-types', process.argv[1]], { stdio: 'inherit' }).status ?? 1);
 }
+const { AlphaAuthError, validPending } = await import('../apps/app/src/runtime/alpha-auth.ts');
 const { CloudProtocol, CloudProvisionAcceptedError } = await import('../apps/app/src/runtime/cloud-protocol.ts');
 const { phoneContextMessage } = await import('../apps/app/src/runtime/phone-context.ts');
 const user = '11111111-1111-4111-8111-111111111111', agent = '22222222-2222-4222-8222-222222222222';
@@ -37,7 +38,7 @@ const nativeCloudRequest = async input => {
 };
 let clockRetirements=0,heldClockRetirement=null,clockRetirementStarted=null;
 const retireClockReviews=async()=>{clockRetirements++;clockRetirementStarted?.();if(heldClockRetirement)await heldClockRetirement;};
-const sandbox = { retireClockReviews, workflowPresentationProtocol:async()=>2, browserDevProfile:false, secureConnectionStore:{read:async()=>null,write:async()=>{},remove:async()=>{}}, pauseHostedBackground:async()=>{}, configureHostedBackground:async()=>{}, registerPlugin: () => ({}), CloudProtocol, CloudProvisionAcceptedError, phoneContextMessage, nativeCloudRequest,
+const sandbox = { AlphaAuthError, validPending, nativeAlphaAuthenticate:async()=>{throw Error("Unexpected sign-in");}, retireClockReviews, workflowPresentationProtocol:async()=>2, browserDevProfile:false, secureConnectionStore:{read:async()=>null,write:async()=>{},remove:async()=>{}}, pauseHostedBackground:async()=>{}, configureHostedBackground:async()=>{}, registerPlugin: () => ({}), CloudProtocol, CloudProvisionAcceptedError, phoneContextMessage, nativeCloudRequest,
   cloudCredentialStore: { read: async () => credential, write: async (_environment, value) => { credential = value; }, clear: async () => { credential = null; } },
   openConnectionBrowser: async () => { throw new Error('Unexpected browser effect'); },
   isAndroid: false, localStorage: { getItem: key => memory.get(key) ?? null, setItem: (key, value) => memory.set(key, value), removeItem: key => memory.delete(key) },

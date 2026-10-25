@@ -38,7 +38,7 @@ assert.equal(render().rec,undefined,'late old-account transcript cannot reopen r
 delayTranscript=false;render().record();render().rec.changeRoute();render().rec.stop();await tick();render().rec.stop();await tick();render().rec.stop();await tick();
 render().rec.onTranscript({target:{value:'Edited saved transcript'}});shell.failPersistence=true;render().rec.stop();await tick();assert.equal(shell.notes.list.length,0);assert.equal(render().rec.transcript,'Edited saved transcript');
 shell.failPersistence=false;render().rec.stop();await tick();assert.equal(shell.notes.list.length,1);assert.equal(shell.notes.list[0].kind,'voice');assert.equal(shell.notes.list[0].audio.transcript,'Edited saved transcript');assert.equal(shell.notes.list[0].body,'Edited saved transcript');assert.equal(audioSaves,2);assert.equal(sends,0);
-account=null;for(const fn of listeners)fn();shell.startVoice();assert.match(shell.messages.at(-1),/Sign in to Eliza Cloud/);assert.equal(starts,3);
+account=null;for(const fn of listeners)fn();shell.startVoice();assert.match(shell.messages.at(-1),/Sign in to Alpha Phone/);assert.equal(starts,3);
 const uploadsBeforeOffline=uploads;
 for(const kind of ['offline','local','remote']) {
  selectionKind=kind;render().record();render().rec.recordOnly();assert.match(render().rec.lines[0].t,/without signing in/);
@@ -47,7 +47,7 @@ for(const kind of ['offline','local','remote']) {
  assert.equal(render().rec.review,true);assert.equal(render().rec.transcript,'');assert.equal(uploads,uploadsBeforeOffline,'device-only recording must not call any transcription provider');
  render().rec.onTranscript({target:{value:'Manual '+kind+' transcript'}});render().rec.stop();await tick();
  assert.equal(shell.notes.list[0].body,'Manual '+kind+' transcript');assert.equal(shell.notes.list[0].audio.transcript,'Manual '+kind+' transcript');assert.equal(shell.notes.list[0].kind,'voice');assert.equal(sends,0);
- shell.startVoice();assert.match(shell.messages.at(-1),/Sign in to Eliza Cloud/,'composer stays provider-gated');
+ shell.startVoice();assert.match(shell.messages.at(-1),/Sign in to Alpha Phone/,'composer stays provider-gated');
 }
 assert.equal(audioSaves,5);assert.equal(uploads,uploadsBeforeOffline);
 const textNote={id:'dictation-selection-fixture',kind:'text',title:'Existing text',body:'Before OLD after',pinned:true,when:'Earlier'};

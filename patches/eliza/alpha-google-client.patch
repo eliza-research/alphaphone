@@ -1,0 +1,68 @@
+--- a/packages/auth/src/server/api/src/routes/auth.ts
++++ b/packages/auth/src/server/api/src/routes/auth.ts
+@@ -9,6 +9,7 @@
+   randomBytes,
+   verify as verifySignature,
+ } from "node:crypto";
++import { getAppOAuthProviderConfig } from "./oauth-app-provider";
+ import { request as httpsRequest } from "node:https";
+ import { isIP } from "node:net";
+ import { logger } from "@elizaos/core";
+@@ -11986,7 +11987,7 @@
+ 
+   let oauthClient: OAuthClient;
+   try {
+-    oauthClient = new OAuthClient(getProviderConfig(providerName));
++    oauthClient = new OAuthClient(getAppOAuthProviderConfig(providerName, redirectUri, getProviderConfig, process.env));
+   } catch (err) {
+     return c.json<ApiResponse>(
+       {
+@@ -12185,7 +12186,7 @@
+ 
+   let oauthClient: OAuthClient;
+   try {
+-    oauthClient = new OAuthClient(getProviderConfig(providerName));
++    oauthClient = new OAuthClient(getAppOAuthProviderConfig(providerName, redirectUrl.toString(), getProviderConfig, process.env));
+   } catch (err) {
+     logger.error(
+       {
+--- /dev/null
++++ b/packages/auth/src/server/api/src/routes/oauth-app-provider.ts
+@@ -0,0 +1,37 @@
++import type { getProviderConfig } from "@stwd/auth";
++
++type ProviderConfig = ReturnType<typeof getProviderConfig>;
++const ALPHA_RETURNS = new Set([
++  "https://alphacompute.ai/alphaphone/auth/callback",
++  "https://alphacompute.ai/alphaphone/auth/staging/callback",
++]);
++
++/** Select credentials only; provider identity stays google for existing accounts.
++ * The caller must still enforce tenant login policy and redirect registration.
++ * Callback callers must use the validated redirect from server-owned state.
++ */
++export function getAppOAuthProviderConfig(
++  provider: string,
++  redirectUri: string | undefined,
++  sharedConfig: (provider: string) => ProviderConfig,
++  env: Record<string, string | undefined>,
++): ProviderConfig {
++  if (provider !== "google" || !redirectUri || !ALPHA_RETURNS.has(redirectUri)) {
++    return sharedConfig(provider);
++  }
++  const allowed = env.STEWARD_ALPHA_GOOGLE_REDIRECTS?.split(",").map(value => value.trim());
++  const clientId = env.STEWARD_ALPHA_GOOGLE_CLIENT_ID?.trim();
++  const clientSecret = env.STEWARD_ALPHA_GOOGLE_CLIENT_SECRET?.trim();
++  // Never silently use the shared Eliza consent identity for an Alpha return.
++  if (!allowed?.includes(redirectUri) || !clientId || !clientSecret) {
++    throw new Error("Alpha Phone Google sign-in is not configured");
++  }
++  return {
++    clientId,
++    clientSecret,
++    authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth",
++    tokenUrl: "https://oauth2.googleapis.com/token",
++    userInfoUrl: "https://www.googleapis.com/oauth2/v3/userinfo",
++    scopes: ["openid", "email", "profile"],
++  };
++}

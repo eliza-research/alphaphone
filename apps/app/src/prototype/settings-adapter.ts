@@ -119,7 +119,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     const active = (key: string) => typeof facts[key] === 'boolean' ? facts[key] ? 'Active connection' : 'Not active' : 'Unavailable';
     const topValues: Bag = {
       'Wi-Fi': active('wifiActive'), 'Bluetooth': Capacitor.isNativePlatform()?'Manage in Android':active('bluetoothActive'), 'Mobile data': active('cellularActive'),
-      'Accounts': account ? 'Eliza Cloud connected' : 'Not signed in', 'Connections': gmail,
+      'Accounts': account ? 'Alpha Phone connected' : 'Not signed in', 'Connections': gmail,
       'Privacy & Enclave': runtimeLocation,
       'Battery': percent, 'Models': target, 'About': facts.appVersion || 'Unavailable',
       'Notifications': typeof delivery.appEnabled !== 'boolean' ? 'Unavailable' : !delivery.appEnabled || !delivery.permissionGranted ? 'App notifications off' : delivery.channels?.some((c:Bag)=>c.blocked||c.groupBlocked) ? 'Some channels blocked' : 'App notifications allowed',
@@ -162,7 +162,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
         continue;
       }
       if (page.title === 'Accounts') {
-        page.groups = [group([info('Eliza Cloud', cloudLabel), { kNav:true, label:'Manage Cloud account', lbl:'Manage Cloud account', chev:true, noAB:true, go:()=>connectionController.open() }, nav('Device accounts in Android', 'accounts')])];
+        page.groups = [group([info('Alpha Phone account', cloudLabel), { kNav:true, label:'Manage Alpha Phone account', lbl:'Manage Alpha Phone account', chev:true, noAB:true, go:()=>connectionController.open() }, nav('Device accounts in Android', 'accounts')])];
       } else if (page.title === 'Connections') {
         page.groups = [group([info('Gmail', gmail), { kNav:true, label:'Open Inbox', lbl:'Open Inbox', chev:true, noAB:true, go:()=>api.open('inbox') }, info('Other connectors', 'Not connected')])];
       } else if (state.page === 'character' && page.hero?.kChar === true) {

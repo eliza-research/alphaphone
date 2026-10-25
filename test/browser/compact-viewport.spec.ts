@@ -64,7 +64,7 @@ test('Connection dialog follows a live theme change and remains keyboard accessi
   await page.evaluate(()=>window.dispatchEvent(new Event('alpha-back',{cancelable:true})));
   await page.getByRole('button',{name:'Accounts',exact:true}).click();
   // Open by keyboard: WebKit intentionally does not focus buttons on a pointer click.
-  const opener=page.getByRole('button',{name:'Manage Cloud account',exact:true});await opener.focus();await opener.press('Enter');
+  const opener=page.getByRole('button',{name:'Manage Alpha Phone account',exact:true});await opener.focus();await opener.press('Enter');
   const dialog=page.getByRole('dialog',{name:'Your agent. Your phone.',exact:true});
   await expect(dialog).toHaveCSS('background-color','rgb(0, 0, 0)');
   await page.setViewportSize({width:412,height:300});
@@ -74,6 +74,6 @@ test('Connection dialog follows a live theme change and remains keyboard accessi
   await expect(address).toBeInViewport();
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByRole('button',{name:'Manage Cloud account',exact:true})).toBeFocused();
+  await expect(page.getByRole('button',{name:'Manage Alpha Phone account',exact:true})).toBeFocused();
   await page.screenshot({path:info.outputPath('focus-restored.png')});
 });

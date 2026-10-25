@@ -67,8 +67,8 @@ for (const mode of ['checking', 'unavailable', 'available'] as const) {
     await chooser.locator('summary').filter({ hasText: /^Remote agent$/ }).click();
     await expect(chooser.getByLabel('Agent HTTPS address')).toBeEditable();
     await expect(chooser.getByRole('button', { name: 'Connect remote agent', exact: true })).toBeEnabled();
-    await chooser.locator('summary').filter({ hasText: /^Eliza Cloud$/ }).click();
-    await expect(chooser.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true })).toBeEnabled();
+    await chooser.locator('summary').filter({ hasText: /^Alpha Phone account$/ }).click();
+    await expect(chooser.getByRole('button', { name: 'Sign in to Alpha Phone', exact: true })).toBeEnabled();
     expect(await page.evaluate(() => (window as any).packagingFixture)).toEqual({
       saved: mode === 'available' ? 1 : 0, started: 0, requests: 0,
       keys: mode === 'available' ? ['synthetic-e2e-key'] : [],

@@ -12,7 +12,8 @@ import { HostedLiveSourcePicker } from "./hosted-live-source-ui";
 import { hostedResultNative, publishHostedResult, resolveHostedResultTap, type HostedResultBinding } from "./hosted-result-notices";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { connectionController } from "./connection-ui";
-import { secureConnectionStore } from "./native-connection";
+import { secureConnectionStore, alphaAuthHost } from "./native-connection";
+import { readAlphaDelegationReturn } from './alpha-auth-return';
 import { actionScope } from "./device-actions";
 import {
 	HostedSourceRejected,
@@ -73,6 +74,15 @@ export function HostedDigestPanel() {
 	const mutationBusy = useRef(false);
 	const refreshFlight = useRef<{controller:AbortController;promise:Promise<void>} | null>(null);
 	const mounted = useRef(true);
+	const checkAuthReturn = async () => {
+		if (!isAndroid || document.hidden) return;
+		const b = binding.current;
+		if (!b) return;
+		const target = await readAlphaDelegationReturn(alphaAuthHost);
+		if (!target || !mounted.current || binding.current !== b || !b.notices.current()) return;
+		setOpen(true);
+		if (target.scope !== b.notices.scope) setMessage('This sign-in belongs to another agent. Connect the agent that started the permission review.');
+	};
 	useEffect(() => {
 		mounted.current = true;
 		const show = () => setOpen(true);
@@ -201,6 +211,8 @@ export function HostedDigestPanel() {
 				controller,
 			};
 			binding.current = b;
+			// Optional authentication routing must not prevent ordinary digest recovery.
+			await checkAuthReturn().catch(()=>{});
             if(development){const {startDevelopmentDigestScheduler}=await import('../browser/development-digests');if(!disposed)releaseScheduler=startDevelopmentDigestScheduler(notices.current,controller.signal);}
             if(!isAndroid)releaseBrowser=browserHostedResults.bind(session.sessionId,notices);
 			try {
@@ -212,6 +224,7 @@ export function HostedDigestPanel() {
 		})().catch(()=>{if(!disposed)setMessage('Result storage could not be connected. Reconnect the agent to try again.');});
 		const resume = () => {
 			if (!canSyncResults()) { refreshFlight.current?.controller.abort(); return; }
+			void checkAuthReturn().catch(()=>{});
 			void (async () => { await refreshFlight.current?.promise; if (!disposed && !document.hidden) await refresh(); })();
 		};
 		// Foreground freshness only; Android background delivery is a separate transport.

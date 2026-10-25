@@ -39,6 +39,9 @@ function integer(value: unknown, min: number, max: number): number {
   return value;
 }
 export function clockTimeZone(value: unknown): string {
+  // Fresh Android devices can expose GMT as an offset through WebView's Intl.
+  // Use the named equivalent understood by both Intl and Android's ICU bridge.
+  if (value === "+00:00" || value === "-00:00") value = "UTC";
   if (
     typeof value !== "string" ||
     value.length > 100 ||

@@ -78,3 +78,10 @@ The retired app baseline remains an audit/migration source in Git history; see `
 - `Receipt`: operation/task identity, observed provider status, exact-decimal/minor-unit amount if applicable, source/evidence, timestamps and separate storage outcome.
 
 Keep these contracts host-independent in the existing core/shared contracts layer. Native adapters provide capabilities; product policy reduces them. Do not add a second scheduler, identity provider or general-purpose credential vault.
+
+### October 21 login ownership correction
+
+PR #36966's product-specific Cloud pages are superseded by the app-owned login
+migration. [The migration record](white-label-cloud-login.md) maps its behavior to
+Alpha views and records the generic backend patch, configurable deployments,
+verification and remaining CAPTCHA, magic-link, deployment and device gates.

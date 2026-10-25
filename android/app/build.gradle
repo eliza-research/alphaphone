@@ -15,6 +15,7 @@ android {
  }
  buildFeatures { buildConfig true }
  defaultConfig {
+  buildConfigField 'String', 'CLOUD_DEPLOYMENTS', groovy.json.JsonOutput.toJson(file('../../apps/app/src/runtime/cloud-deployment.json').text)
   buildConfigField 'boolean', 'AOSP_BUILD', 'false'
   buildConfigField 'String', 'ELIZA_CHROMIUM_PACKAGE_NAME', '""'
   buildConfigField 'String', 'ELIZA_CHROMIUM_CERT_SHA256', '""'

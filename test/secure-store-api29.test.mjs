@@ -4,7 +4,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {sourceDirectory} from '../scripts/local-agent-source.mjs';
 import {createHash} from 'node:crypto';
 const root=path.resolve(import.meta.dirname,'..');
 
@@ -20,13 +19,13 @@ test('pinned generated secure-store helper reads bounded actual bytes on the Jav
     // Native lifecycle sources must be physical, admitted runtime files; a vendor
     // symlink alone cannot stand in for their independent committed provenance.
     const lock=JSON.parse(fs.readFileSync(path.join(root,'upstream.lock.json')));
-    const runtimeSource=sourceDirectory(root);
     const runtimeFixture=path.join(fixture,'artifacts/local-agent-source');
     // Exercise the real source preparer even on a clean checkout. This fixture
     // compiles Java only; dependency installation remains the runtime build's job.
-    // An existing source is an object cache, never trusted as prepared test input.
+    // The pinned submodule supplies objects; an interrupted runtime preparation
+    // may have created its directory without fetching the pinned commit.
     const stageEnv={...process.env,ALPHA_LOCAL_AGENT_SOURCE_DIR:runtimeFixture,
-      ALPHA_RUNTIME_GIT_CACHE:fs.existsSync(runtimeSource)?runtimeSource:path.join(root,'vendor/eliza')};
+      ALPHA_RUNTIME_GIT_CACHE:path.join(root,'vendor/eliza')};
     execFileSync(process.execPath,[path.join(fixture,'scripts/prepare-local-agent.mjs'),'--source-only'],{stdio:'pipe',timeout:180000,env:stageEnv});
     const launcherResult=execFileSync('python3',[path.join(root,'test/fixtures/resident-launcher-survival.py'),fixture,runtimeFixture],{encoding:'utf8',timeout:15000,maxBuffer:65536});
     assert.ok(launcherResult.includes('PASS source-derived'));
