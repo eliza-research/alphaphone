@@ -22,7 +22,7 @@ export const REDEEM_PATH = '/api/v1/subscription/redeem';
 /** Read-only organization billing snapshot; also identifies credit billing when there is no subscription. */
 export const BILLING_LIMITS_PATH = '/api/v1/billing/limits';
 export const ENTITLEMENT_TYPE = 'eliza-entitlement+jwt';
-export const ENTITLEMENT_AUDIENCE = 'eliza-alpha-phone';
+export const ENTITLEMENT_AUDIENCE = 'cloud-subscription';
 /** Client acceptance ceiling for "short-lived": an engineering bound, not a billing decision. */
 export const MAX_ENTITLEMENT_LIFETIME_MS = 60 * 60 * 1000;
 export const CLOCK_SKEW_MS = 60 * 1000;
@@ -125,14 +125,14 @@ export function decodeEntitlement(token: string): { header: Bag; claims: Bag; si
   return { header: base64UrlJson(parts[0]), claims: base64UrlJson(parts[1]), signingInput: `${parts[0]}.${parts[1]}`, signature: base64UrlBytes(parts[2]) };
 }
 
-export interface EntitlementExpectation { userId: string; organizationId?: string | null; issuer: string }
+export interface EntitlementExpectation { userId: string; organizationId?: string | null; issuer: string; audience?: string }
 /** Pure claim validation; signature verification happens before this is trusted. */
 export function entitlementClaims(header: Bag, claims: Bag, expected: EntitlementExpectation, now: number): SubscriptionEntitlement {
   if (header.alg !== 'ES256' || header.typ !== ENTITLEMENT_TYPE || header.crit !== undefined) throw new EntitlementError('unsupported');
   const keyId = text(header.kid, 128);
   if (claims.iss !== expected.issuer) throw new EntitlementError('audience');
   const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-  if (!audience.includes(ENTITLEMENT_AUDIENCE)) throw new EntitlementError('audience');
+  if (!audience.includes(expected.audience ?? ENTITLEMENT_AUDIENCE)) throw new EntitlementError('audience');
   const userId = text(claims.sub, 128);
   const organizationId = claims.org == null ? null : text(claims.org, 128);
   // Cloud ids are UUIDs; a difference in letter case alone is the same account.
@@ -258,6 +258,7 @@ export interface EntitlementSource {
    * `null` when that snapshot is unavailable or does not say. */
   fallbackPlan?(signal: AbortSignal): Promise<FallbackPlan | null>;
   readonly issuer: string;
+  readonly audience: string;
 }
 export type EntitlementCheck = { view: SubscriptionView; entitlement: SubscriptionEntitlement | null };
 /** Plan state from the unsigned billing snapshot. Only known states are reported. */
@@ -309,7 +310,7 @@ export async function checkEntitlement(source: EntitlementSource, expected: Omit
       const { header } = decodeEntitlement(token);
       const keys = await keysFor(source, header.kid, signal, now());
       signal.throwIfAborted();
-      const entitlement = await verifyEntitlement(token, keys, { ...expected, issuer: source.issuer }, now());
+      const entitlement = await verifyEntitlement(token, keys, { ...expected, issuer: source.issuer, audience: source.audience }, now());
       signal.throwIfAborted();
       signed = { view: subscriptionView(entitlement), entitlement };
       // No subscription is distinct from canceled access. Cloud can still bill this

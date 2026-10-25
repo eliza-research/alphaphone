@@ -8,9 +8,12 @@ revision in `upstream.lock.json` and `vendor/eliza`.
 ## Cloud deployment configuration
 
 `config/cloud-deployment.json` owns the public production and staging API, web,
-services origins, tenant identifiers and optional public service names. A deployment
+services origins, tenant identifiers, entitlement audiences and optional public service names. A deployment
 without a name displays its API hostname until its public metadata loads. Names
-do not change credential authority or its storage namespace. Eliza Cloud remains the default. Run
+do not change credential authority or its storage namespace. `entitlementAudience`
+selects the signed plan contract the client verifies; its default is
+`cloud-subscription`. The Eliza records explicitly retain `eliza-alpha-phone`
+for compatibility with the deployed signer. Eliza Cloud remains the default. Run
 `node scripts/cloud-deployment.mjs` after changing it; renderer and Android builds
 reject stale generated TypeScript or Java. The current configuration accepts
 canonical HTTPS origins on the default port, without base paths or credentials.
@@ -24,7 +27,7 @@ builds only. Changing the backend does not import another product's identity.
 
 Cloud credentials, pending sign-in state, acknowledgments and the local agent's
 provider binding are scoped to a fingerprint of both deployment records.
-Changing an authority or tenant requires a fresh sign-in; credentials from the
+Changing an authority, tenant or entitlement audience requires a fresh sign-in; credentials from the
 old configuration are never implicitly adopted. Local notes keep their existing
 storage names. The development browser bridge scopes its private profile by the
 same fingerprint. These source checks do not prove authenticated login or device

@@ -724,3 +724,16 @@ test('Settings retains unknown, expired, inactive and credit-funded admission st
   assert.equal(offline.inference, 'Unavailable · Cloud unreachable');
   assert.equal(summarize(snapshot, () => false, describeSubscription, () => null, 86400000), null);
 });
+
+
+test('configured entitlement audiences accept only the intended signed service contract',async()=>{
+ const {jwk,sign}=await keyPair();
+ const token=await sign(claims({aud:'independent-service'}));
+ const accepted=await verifyEntitlement(token,[jwk],{...expected,audience:'independent-service'},NOW);
+ assert.equal(accepted.plan.status,'active');
+ await rejects(verifyEntitlement(token,[jwk],{...expected,audience:'another-service'},NOW),'audience');
+ const source={issuer:ISSUER,audience:'independent-service',entitlement:async()=>token,entitlementKeys:async()=>[jwk]};
+ clearEntitlementKeyCache();
+ assert.equal((await checkEntitlement(source,expected,new AbortController().signal,()=>NOW)).entitlement.plan.status,'active');
+ assert.equal((await checkEntitlement({...source,audience:'another-service'},expected,new AbortController().signal,()=>NOW)).entitlement,null);
+});

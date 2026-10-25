@@ -72,8 +72,8 @@ test('every authority change gives renderer and native credentials a new namespa
   return import('data:text/javascript;base64,'+Buffer.from(stripTypeScriptTypes(deploymentOutputs(config)[file])).toString('base64'));
  };
  const original=await load(defaults);
- for(const env of ['production','staging'])for(const key of ['api','web','services','tenant']){
-  const config=structuredClone(defaults);config[env][key]=key==='tenant'?'another-tenant':'https://different.example.org';
+ for(const env of ['production','staging'])for(const key of ['api','web','services','tenant','entitlementAudience']){
+  const config=structuredClone(defaults);config[env][key]=key==='tenant'?'another-tenant':key==='entitlementAudience'?'another-audience':'https://different.example.org';
   const changed=await load(config);
   assert.notEqual(changed.cloudStorageSlot('cloud:production'),original.cloudStorageSlot('cloud:production'));
   assert.notEqual(changed.cloudStorageSlot('cloud-signin:v1:ack:production'),original.cloudStorageSlot('cloud-signin:v1:ack:production'));
