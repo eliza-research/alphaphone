@@ -464,7 +464,9 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   final long retryEpoch,retryIntent;
   synchronized(lifecycleLock){
    if(credentialShutdownRetryEpoch>=0){call.reject("Provider shutdown is already being checked; wait before retrying.");return true;}
-   if(credentialShutdownRequest==-1||credentialShutdownRequest>=0&&ElizaAgentService.isCredentialShutdownConfirmed(credentialShutdownRequest))return false;
+   // An ordinary refused stop also latches stopping, without a credential request.
+   // Only a new Start/Retry request enters this existing strict owner/absence recheck.
+   if((credentialShutdownRequest==-1&&!stopping)||(credentialShutdownRequest>=0&&ElizaAgentService.isCredentialShutdownConfirmed(credentialShutdownRequest)))return false;
    if(disposed||getActivity()==null||!getActivity().hasWindowFocus()){call.reject("Return to the app before retrying provider shutdown.");return true;}
    if(credentialMutationEpoch>=0){call.reject("Provider shutdown is already being checked; wait before retrying.");return true;}
    if(requestId!=null&&cancelledStarts.remove(requestId)){call.reject("Local startup cancelled");return true;}

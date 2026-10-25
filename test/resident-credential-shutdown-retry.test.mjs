@@ -7,7 +7,7 @@ import {execFileSync} from 'node:child_process';
 const root=resolve(import.meta.dirname,'..');
 const directory=join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone');
 const source=readFileSync(join(directory,'AlphaLocalAgentPlugin.java'),'utf8');
-const java=process.env.JAVA_HOME||'/opt/android-studio/jbr';
+import {javaBinary} from './fixtures/jvm-tools.mjs';
 test('strict shutdown retry requires exact current acknowledgment plus absence and current owner',()=>{
  const temporary=mkdtempSync(join(tmpdir(),'credential-shutdown-retry-'));
  try{
@@ -26,7 +26,7 @@ public class RetryGuardHarness {
  static class ElizaAgentService {static boolean confirmed;static boolean isCredentialShutdownConfirmed(long request){return confirmed;}}
  long credentialShutdownRequest=10;
  static class Activity {boolean focus=true;boolean hasWindowFocus(){return focus;}}
- boolean disposed;long credentialIntentEpoch=4,lifecycleEpoch=8,credentialShutdownRetryEpoch=8,credentialMutationEpoch=-1;
+ boolean disposed,stopping;long credentialIntentEpoch=4,lifecycleEpoch=8,credentialShutdownRetryEpoch=8,credentialMutationEpoch=-1;
  final Set<PluginCall> pending=new HashSet<>(); final Activity activity=new Activity(); Activity getActivity(){return activity;}
  boolean admission(PluginCall call){${actualAdmission}return false;}
  ${actualGuard}
@@ -48,9 +48,9 @@ public class RetryGuardHarness {
  System.out.println("PASS actual plugin retry owner guard: account intent, lifecycle cancel, request owner, mutation, pending call, foreground, disposal");
  }
 }`);
-  execFileSync(join(java,'bin/javac'),['-d',temporary,join(directory,'ResidentCredentialShutdownRetry.java'),join(root,'test/fixtures/ResidentCredentialShutdownRetryTest.java'),join(temporary,'RetryGuardHarness.java')]);
-  assert.match(execFileSync(join(java,'bin/java'),['-cp',temporary,'ai.elizaresearch.alphaphone.ResidentCredentialShutdownRetryTest'],{encoding:'utf8'}),/PASS strict retry/);
-  assert.match(execFileSync(join(java,'bin/java'),['-cp',temporary,'ai.elizaresearch.alphaphone.RetryGuardHarness'],{encoding:'utf8'}),/PASS actual plugin retry owner guard/);
+  execFileSync(javaBinary('javac'),['-d',temporary,join(directory,'ResidentCredentialShutdownRetry.java'),join(root,'test/fixtures/ResidentCredentialShutdownRetryTest.java'),join(temporary,'RetryGuardHarness.java')]);
+  assert.match(execFileSync(javaBinary('java'),['-cp',temporary,'ai.elizaresearch.alphaphone.ResidentCredentialShutdownRetryTest'],{encoding:'utf8'}),/PASS strict retry/);
+  assert.match(execFileSync(javaBinary('java'),['-cp',temporary,'ai.elizaresearch.alphaphone.RetryGuardHarness'],{encoding:'utf8'}),/PASS actual plugin retry owner guard/);
  }finally{rmSync(temporary,{recursive:true,force:true});}
 });
 test('actual asynchronous retry transition dispatches only after strict proof and current continuation',()=>{
@@ -90,7 +90,13 @@ public class RetryTransitionHarness {
  static RetryTransitionHarness fresh(){credentialShutdownRequest=1;credentialShutdownRetryEpoch=-1;lifecycleEpoch=0;credentialIntentEpoch=0;credentialMutationEpoch=-1;PluginWorkers.queue.clear();ElizaAgentService.epoch=1;ElizaAgentService.stops=0;ElizaAgentService.probes=0;ElizaAgentService.confirmChecks=0;ElizaAgentService.confirmed=false;ElizaAgentService.absent=true;ElizaAgentService.failDispatch=false;ElizaAgentService.onProbe=()->{};ElizaAgentService.onFourthConfirmation=()->{};return new RetryTransitionHarness();}
  static void run(){PluginWorkers.queue.remove().run();}
  public static void main(String[] args){
- RetryTransitionHarness h=fresh();PluginCall first=new PluginCall(),second=new PluginCall();check(h.retryCredentialShutdown(first,"first"),"fenced start reserves retry");ElizaAgentService.confirmed=true;check(h.retryCredentialShutdown(second,"second")&&second.rejected==1,"second start blocked while first inflight");run();check(h.dispatched==1&&ElizaAgentService.stops==1&&credentialShutdownRequest==-1,"one confirmed stop permits one start");
+ RetryTransitionHarness h=fresh();credentialShutdownRequest=-1;stopping=true;PluginCall ordinary=new PluginCall();check(h.retryCredentialShutdown(ordinary,"ordinary-stop"),"ordinary STOPPING must admit one explicit strict stop recheck");check(PluginWorkers.queue.size()==1&&h.dispatched==0,"ordinary retry queues no start before proof");ElizaAgentService.onProbe=()->ElizaAgentService.confirmed=true;run();check(h.dispatched==1&&ElizaAgentService.stops==1&&!stopping&&credentialShutdownRequest==-1,"fresh exact acknowledgment and absence settle ordinary stop before requested continuation");
+ h=fresh();credentialShutdownRequest=-1;stopping=true;ordinary=new PluginCall();check(h.retryCredentialShutdown(ordinary,"ordinary-unknown"),"unknown ordinary stop remains retryable");run();check(h.dispatched==0&&ordinary.rejected==1&&stopping&&credentialShutdownRequest!=-1,"closed socket without exact inventory acknowledgment cannot settle ordinary stop");
+ PluginCall recovered=new PluginCall();check(h.retryCredentialShutdown(recovered,"ordinary-explicit-retry"),"a later explicit request may recheck the retained stop");ElizaAgentService.onProbe=()->ElizaAgentService.confirmed=true;run();check(h.dispatched==1&&ElizaAgentService.stops==2&&!stopping,"fresh proof on the next explicit request recovers the ordinary stop without replay");
+ h=fresh();credentialShutdownRequest=-1;stopping=true;ElizaAgentService.absent=false;ElizaAgentService.confirmed=true;ordinary=new PluginCall();check(h.retryCredentialShutdown(ordinary,"ordinary-live"),"live ordinary stop reserves check only");run();check(h.dispatched==0&&ordinary.rejected==1&&stopping,"live service or socket remains refused despite an acknowledgment");
+ h=fresh();credentialShutdownRequest=-1;stopping=false;ordinary=new PluginCall();check(!h.retryCredentialShutdown(ordinary,"normal-start")&&PluginWorkers.queue.isEmpty(),"ordinary nonstopping start adds no teardown");
+ h=fresh();credentialShutdownRequest=-1;stopping=true;h.activity.focus=false;ordinary=new PluginCall();check(h.retryCredentialShutdown(ordinary,"background")&&ordinary.rejected==1&&PluginWorkers.queue.isEmpty(),"background retry cannot dispatch a stop or start");
+ h=fresh();PluginCall first=new PluginCall(),second=new PluginCall();check(h.retryCredentialShutdown(first,"first"),"fenced start reserves retry");ElizaAgentService.confirmed=true;check(h.retryCredentialShutdown(second,"second")&&second.rejected==1,"second start blocked while first inflight");run();check(h.dispatched==1&&ElizaAgentService.stops==1&&credentialShutdownRequest==-1,"one confirmed stop permits one start");
  h=fresh();first=new PluginCall();h.retryCredentialShutdown(first,"unknown");run();check(h.dispatched==0&&first.rejected==1&&credentialShutdownRequest!=-1,"unknown owner preserves fence");
  first=new PluginCall();h.retryCredentialShutdown(first,"retry-again");ElizaAgentService.onProbe=()->ElizaAgentService.confirmed=true;run();check(h.dispatched==1&&ElizaAgentService.stops==2&&ElizaAgentService.epoch==3,"a later explicit Retry obtains a fresh strict stop epoch");
  h=fresh();first=new PluginCall();h.retryCredentialShutdown(first,"transient");ElizaAgentService.onProbe=()->{if(ElizaAgentService.probes==2)ElizaAgentService.confirmed=true;};run();check(h.dispatched==1&&ElizaAgentService.probes>=2,"later strict proof recovers transient failure");
@@ -101,7 +107,7 @@ public class RetryTransitionHarness {
  System.out.println("PASS actual retry transition: serial admission, strict stop count, unknown owner, transient recovery, cancel, post-proof account/focus, uncertain dispatch");
  }
 }`);
-  execFileSync(join(java,'bin/javac'),['-d',temporary,join(directory,'ResidentCredentialShutdownRetry.java'),join(temporary,'SystemClock.java'),join(temporary,'RetryTransitionHarness.java')]);
-  assert.match(execFileSync(join(java,'bin/java'),['-cp',temporary,'ai.elizaresearch.alphaphone.RetryTransitionHarness'],{encoding:'utf8',timeout:30000}),/PASS actual retry transition/);
+  execFileSync(javaBinary('javac'),['-d',temporary,join(directory,'ResidentCredentialShutdownRetry.java'),join(temporary,'SystemClock.java'),join(temporary,'RetryTransitionHarness.java')]);
+  assert.match(execFileSync(javaBinary('java'),['-cp',temporary,'ai.elizaresearch.alphaphone.RetryTransitionHarness'],{encoding:'utf8',timeout:30000}),/PASS actual retry transition/);
  }finally{rmSync(temporary,{recursive:true,force:true});}
 });
