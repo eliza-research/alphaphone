@@ -58,7 +58,7 @@ export interface CloudSignInPort {
 const CODES = new Set<string>(['cancelled', 'login-active', 'invalid-phone', 'invalid-email', 'invalid-code', 'cooldown', 'expired', 'rate-limited', 'offline', 'unavailable', 'account-check', 'state-mismatch', 'browser-closed', 'browser-unavailable', 'provider-refused', 'mfa-browser', 'mfa-unsupported', 'activation-pending', 'storage', 'rejected', 'invalid-request', 'app-link-unverified', 'attempts-exhausted']);
 export class CloudSignInError extends Error {
   readonly code: CloudSignInFailureCode;
-  constructor(code: CloudSignInFailureCode) { super(`Eliza Cloud sign-in ${code}`); this.code = code; this.name = 'CloudSignInError'; }
+  constructor(code: CloudSignInFailureCode) { super(`Cloud sign-in ${code}`); this.code = code; this.name = 'CloudSignInError'; }
   static from(error: unknown): CloudSignInError {
     if (error instanceof CloudSignInError) return error;
     const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined;
@@ -66,7 +66,7 @@ export class CloudSignInError extends Error {
   }
 }
 /** Owner-facing copy. Never includes server text, codes or addresses. */
-export function signInFailureMessage(code: CloudSignInFailureCode): string {
+export function signInFailureMessage(code: CloudSignInFailureCode, serviceName: string): string {
   switch (code) {
     case 'cancelled': return 'Sign-in cancelled.';
     case 'login-active': return 'A sign-in is already in progress. Finish or cancel it first.';
@@ -76,20 +76,20 @@ export function signInFailureMessage(code: CloudSignInFailureCode): string {
     case 'cooldown': return 'Wait a minute before sending another code.';
     case 'expired': return 'This sign-in expired. Start again.';
     case 'rate-limited': return 'Too many attempts. Wait a few minutes, then try again.';
-    case 'offline': return 'Alpha could not reach Eliza Cloud. Check your connection and try again.';
-    case 'account-check': return 'This account needs an extra check that Alpha cannot complete. Use account recovery or contact Eliza Cloud support.';
+    case 'offline': return `Alpha could not reach ${serviceName}. Check your connection and try again.`;
+    case 'account-check': return `This account needs an extra check that Alpha cannot complete. Use account recovery or contact ${serviceName} support.`;
     case 'state-mismatch': return 'That sign-in return did not match this phone’s request. Start again.';
     case 'browser-closed': return 'Google sign-in was closed before it finished. Start again when you are ready.';
     case 'browser-unavailable': return 'No browser that can show Google sign-in is available. Use your email instead.';
     case 'provider-refused': return 'Google did not complete the sign-in. Try again or use your email.';
     case 'mfa-browser': return 'This account needs a second verification step. Sign in with your email to complete it in Alpha.';
-    case 'mfa-unsupported': return 'This account’s second verification method is not available in Alpha yet. Use account recovery or contact Eliza Cloud support.';
-    case 'activation-pending': return 'Signed in, but Eliza Cloud has not confirmed this phone yet. Alpha retries when it starts again; you can also sign in again.';
+    case 'mfa-unsupported': return `This account’s second verification method is not available in Alpha yet. Use account recovery or contact ${serviceName} support.`;
+    case 'activation-pending': return `Signed in, but ${serviceName} has not confirmed this phone yet. Alpha retries when it starts again; you can also sign in again.`;
     case 'storage': return 'Alpha could not save the sign-in securely on this phone. Try again.';
     case 'app-link-unverified': return 'Alpha did not receive the sign-in from your browser, so you are not signed in yet. Start sign-in again in Alpha.';
     case 'attempts-exhausted': return 'Too many incorrect codes. Send a new code and try again.';
-    case 'rejected': case 'invalid-request': return 'Eliza Cloud refused this sign-in. Start again.';
-    default: return 'Eliza Cloud sign-in is unavailable right now. Try again.';
+    case 'rejected': case 'invalid-request': return `${serviceName} refused this sign-in. Start again.`;
+    default: return `${serviceName} sign-in is unavailable right now. Try again.`;
   }
 }
 function object(value: unknown): Record<string, unknown> {

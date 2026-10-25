@@ -52,7 +52,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { isAndroid } from '../native';
 import type { ActionProposal, OperationReceipt, ContextEnvelope, VerifiedSession } from './alpha-client';
 import { CloudProtocol, CloudProtocolError, type CloudAgent, type CloudEnvironment } from './cloud-protocol';
-import { googleOutcome as signInOutcome, type CloudSignInGoogleOutcome, CloudSignInError, normalizeSignInCode, signInFailureMessage, signInReadiness, validSignInEmail, validSignInPhone, type CloudSignInAuthenticated } from './cloud-sign-in';
+import { googleOutcome as signInOutcome, type CloudSignInGoogleOutcome, CloudSignInError, normalizeSignInCode, signInFailureMessage as formatSignInFailureMessage, signInReadiness, validSignInEmail, validSignInPhone, type CloudSignInAuthenticated } from './cloud-sign-in';
 import { DevelopmentCloudAgentProtocol, type CloudPhoneTarget } from './development-cloud-agents';
 import { checkEntitlement, clearEntitlementKeyCache, describeSubscription, EntitlementError, EntitlementRefresher, isEntitlementSignInFailure, CHOOSE_PLAN_LABEL, MANAGE_PLAN_LABEL, planAdmission, readServiceLimit, redeemFailureMessage, redeemSuccessMessage, serviceLimitMessage, SubscriptionRedeemError, type ServiceLimit, type SubscriptionView } from './subscription-entitlement';
 import { RemoteProtocol, RemoteProtocolError } from './remote-protocol';
@@ -540,6 +540,10 @@ function selection(): Selection | null {
     if (value?.kind === 'cloud' && cloudEnvironmentAllowed(value.environment) && typeof value.agentId === 'string') return value;
   } catch { /* Invalid nonsecret preferences do not authenticate a connection. */ }
   return null;
+}
+function signInFailureMessage(code: CloudSignInError['code']): string {
+  const environment=state.signIn?.environment??cloud.environment;
+  return formatSignInFailureMessage(code,(environment==='staging'?stagingCloud:productionCloud).name);
 }
 function errorMessage(error: unknown): string {
   const recovery=residentRecoveryReason(error);if(recovery)return residentRecoveryMessage(recovery);
@@ -1932,7 +1936,7 @@ export const connectionController = {
     if (operation || !cloudEnvironmentAllowed(environment)) return;
     // Readiness may take six seconds on a fresh install. Keep that wait cancellable and prevent
     // repeated taps from starting competing probes or opening a browser after the owner cancelled.
-    await work('Checking Eliza Cloud sign-in…', async signal => {
+    await work(`Checking ${(environment==='staging'?stagingCloud:productionCloud).name} sign-in…`, async signal => {
       const methods = await inAppSignInMethods(environment, signal);
       signal.throwIfAborted();
       // Email stays inside Alpha even when readiness is unavailable. Its native request
