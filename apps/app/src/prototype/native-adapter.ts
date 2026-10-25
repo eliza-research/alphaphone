@@ -1,3 +1,4 @@
+import {cloudServiceName} from '../runtime/cloud-protocol';
 import {browserDevProfile} from '../browser/dev-profile';
 import { cloudRuntimeEnabled, testMocksEnabled } from '../build-flags';
 import { Capacitor } from '@capacitor/core';
@@ -28,8 +29,10 @@ export type EgressPrivacy = { big: string; sub: string };
 /** Per-connection wording. Only the packaged Android resident runtime is known to enable
  * the upstream secret and PII swaps; every other agent decides for itself and does not report it. */
 export function egressPrivacy(connection: Pick<ConnectionSnapshot, 'kind' | 'session' | 'cloudAccount'>, native = Capacitor.isNativePlatform()): EgressPrivacy {
-  if (cloudRuntimeEnabled && (connection.session || connection.cloudAccount))
-    return { big: 'Uses Eliza Cloud', sub: 'When used, messages and selected content go to Eliza Cloud for AI. Voice recordings and text for playback also go to Cloud.' };
+  if (cloudRuntimeEnabled && (connection.session || connection.cloudAccount)) {
+    const serviceName = cloudServiceName(connection.cloudAccount?.environment ?? 'production');
+    return { big: `Uses ${serviceName}`, sub: `When used, messages and selected content go to ${serviceName} for AI. Voice recordings and text for playback also go to Cloud.` };
+  }
   if (connection.session && connection.kind === 'resident' && native)
     return { big: 'Identifier swap only', sub: 'Secret and contact identifiers are swapped before hosted inference; names and free text are not covered' };
   if (connection.session || connection.cloudAccount) return { big: 'Not reported', sub: 'Depends on the selected agent; not reported' };
@@ -50,7 +53,7 @@ export function residentModelLabel(connection: ConnectionSnapshot, refresh: () =
     void residentProvider.providerStatus().then(status => {
       const provider = status?.provider, model = status?.model;
       // Copy only the two identity fields; ignore anything else a bridge might return.
-      const providerLabel = provider === 'elizacloud' ? 'Eliza Cloud' : provider === 'cerebras' ? 'Cerebras' : null;
+      const providerLabel = provider === 'elizacloud' ? cloudServiceName(connection.cloudAccount?.environment ?? 'production') : provider === 'cerebras' ? 'Cerebras' : null;
       const label = status?.configured === true && providerLabel && typeof model === 'string' && providerModelPattern.test(model) ? modelLabel(providerLabel, model) : null;
       if (providerReading === sessionId) providerStatus = { sessionId, label };
     }).catch(() => { if (providerReading === sessionId) providerStatus = { sessionId, label: null }; })

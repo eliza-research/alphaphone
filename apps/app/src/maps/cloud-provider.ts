@@ -1,7 +1,7 @@
 import { readServiceLimit, retryDuration } from '../runtime/subscription-entitlement.ts';
 import { boundedText, coordinate, MapsFailure, place, type Coordinate, type MapsProvider, type Place, type ProviderConfig, type Route, type TravelMode } from './contracts.ts';
 
-/** Exact Eliza Cloud Maps routes (#412) that the managed-service transport admits. */
+/** Exact Cloud Maps routes (#412) that the managed-service transport admits. */
 export type CloudMapsRoute = 'capabilities' | 'geocode' | 'reverse' | 'places/search' | 'places/details' | 'routes';
 /** Account-bound Cloud request. Queries and coordinates travel only in the JSON body. */
 export type CloudMapsRequest = (route: CloudMapsRoute, signal: AbortSignal, body?: Record<string, unknown>) => Promise<Record<string, unknown>>;
@@ -27,16 +27,16 @@ export function cloudMapsFailure(error: unknown, signal?: AbortSignal): MapsFail
  if (signal?.aborted) return new MapsFailure('cancelled', 'Maps request cancelled.');
  const failure = error as { name?: unknown; code?: unknown; status?: unknown; data?: unknown } | null;
  if (failure && typeof failure === 'object' && failure.name === 'CloudProtocolError') {
-  if (failure.code === 'invalid-response') return new MapsFailure('invalid-response', 'Eliza Cloud Maps sent an invalid response.');
-  if (failure.code !== 'http') return new MapsFailure('unauthorized', 'Sign in to Eliza Cloud to use Maps.');
+  if (failure.code === 'invalid-response') return new MapsFailure('invalid-response', 'Cloud Maps sent an invalid response.');
+  if (failure.code !== 'http') return new MapsFailure('unauthorized', 'Sign in to Cloud to use Maps.');
   const code = failure.data && typeof failure.data === 'object' ? (failure.data as { code?: unknown }).code : undefined;
-  if(code==='maps_allowance_unconfigured')return new MapsFailure('unconfigured','Eliza Cloud Maps is not available yet.');
+  if(code==='maps_allowance_unconfigured')return new MapsFailure('unconfigured','Cloud Maps is not available yet.');
   if(code==='maps_admission_unknown'||code==='maps_request_already_admitted'||code==='maps_request_identity_conflict')return new MapsFailure('unavailable','This Maps request could not be confirmed. It will not retry automatically.');
   switch (failure.status) {
-   case 401: return new MapsFailure('unauthorized', 'Sign in to Eliza Cloud to use Maps.');
+   case 401: return new MapsFailure('unauthorized', 'Sign in to Cloud to use Maps.');
    // An authenticated 404 means this Cloud deployment does not serve Maps yet (#412).
-   case 404: return new MapsFailure('unconfigured', 'Eliza Cloud Maps is not available yet.');
-   case 403: return new MapsFailure('unauthorized', code === 'subscription_required' ? 'Maps needs an active Eliza subscription.' : 'Eliza Cloud refused this Maps request.');
+   case 404: return new MapsFailure('unconfigured', 'Cloud Maps is not available yet.');
+   case 403: return new MapsFailure('unauthorized', code === 'subscription_required' ? 'Maps needs an active Cloud subscription.' : 'Cloud refused this Maps request.');
    case 429: {
     const now = Date.now(), limit = readServiceLimit(error, now);
     if (limit?.kind === 'allowance-exhausted') {
@@ -47,17 +47,17 @@ export function cloudMapsFailure(error: unknown, signal?: AbortSignal): MapsFail
     const wait = retryMs != null ? `Try again in ${retryDuration(retryMs)}.` : 'Try again later.';
     return new MapsFailure('rate-limited', `Maps request limit reached. ${wait}`);
    }
-   case 422: return new MapsFailure('unsupported', code === 'no_route' ? 'No route is available between these places.' : code === 'unsupported_mode' ? 'This travel mode is not available from Eliza Cloud Maps.' : 'This location is outside Eliza Cloud Maps coverage.');
-   case 503: return code === 'maps_not_configured' ? new MapsFailure('unconfigured', 'Eliza Cloud Maps is not available yet.') : new MapsFailure('unavailable', 'Eliza Cloud Maps is temporarily unavailable. Try again later.');
-   default: return new MapsFailure(failure.status === 502 ? 'invalid-response' : 'unavailable', 'Eliza Cloud Maps could not complete this request.');
+   case 422: return new MapsFailure('unsupported', code === 'no_route' ? 'No route is available between these places.' : code === 'unsupported_mode' ? 'This travel mode is not available from Cloud Maps.' : 'This location is outside Cloud Maps coverage.');
+   case 503: return code === 'maps_not_configured' ? new MapsFailure('unconfigured', 'Cloud Maps is not available yet.') : new MapsFailure('unavailable', 'Cloud Maps is temporarily unavailable. Try again later.');
+   default: return new MapsFailure(failure.status === 502 ? 'invalid-response' : 'unavailable', 'Cloud Maps could not complete this request.');
   }
  }
- if (error instanceof Error && /network|offline|timed out|failed to fetch|load failed|internet/i.test(error.message)) return new MapsFailure('offline', 'Eliza Cloud Maps is unreachable. Check the connection.');
- return new MapsFailure('unavailable', 'Eliza Cloud Maps could not complete this request.');
+ if (error instanceof Error && /network|offline|timed out|failed to fetch|load failed|internet/i.test(error.message)) return new MapsFailure('offline', 'Cloud Maps is unreachable. Check the connection.');
+ return new MapsFailure('unavailable', 'Cloud Maps could not complete this request.');
 }
 
 /**
- * Eliza Cloud Maps as the device provider. Cloud supplies places and routes only; GPS,
+ * Cloud Maps as the device provider. Cloud supplies places and routes only; GPS,
  * the active route and guidance stay on the phone. Cloud serves no tiles, so the
  * capabilities report no map plane.
  */
@@ -121,7 +121,7 @@ export function createCloudMaps(captureRequest: () => CloudMapsRequest, configur
     !regions.every(r => r && typeof r === 'object' && boundedText(r.id, 64) && boundedText(r.name, 100) && validBounds(r.bounds)) ||
     !caps || caps.search !== true || caps.placeDetails !== true || caps.traffic !== 'none' || caps.transit !== 'none' ||
     !Array.isArray(caps.modes) || caps.modes.length < 1 || !caps.modes.every(mode => MODES.includes(mode)))
-    throw new MapsFailure('invalid-response', 'Eliza Cloud Maps coverage is invalid.');
+    throw new MapsFailure('invalid-response', 'Cloud Maps coverage is invalid.');
    coverage = Object.freeze({ providerId: meta.providerId, revision: meta.revision as string, attribution: meta.attribution as string,
     regions: Object.freeze(regions.map(r => Object.freeze({ id: r.id, name: r.name, bounds: Object.freeze([...r.bounds]) as unknown as CloudMapsRegion['bounds'] }))) });
    configure({ status: 'configured', providerId: meta.providerId, connectionId: meta.connectionId, revision: meta.revision as string,

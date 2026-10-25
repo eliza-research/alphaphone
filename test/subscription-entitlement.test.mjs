@@ -118,9 +118,9 @@ test('account binding, issuer, audience and short lifetime are enforced', async 
 });
 
 test('presentation uses only Cloud numbers and never mentions credits or top-ups', async () => {
-  assert.equal(allowanceText(null), 'Plan allowance details are in Eliza Cloud.');
+  assert.equal(allowanceText(null), 'Plan allowance details are in Cloud.');
   assert.match(allowanceText({unit: 'requests', period: 'month', limit: 40, used: 3, resetsAt: null}), /^3 of 40 requests used this month\.$/);
-  assert.match(allowanceText({unit: 'tokens', period: 'day', limit: null, used: null, resetsAt: null}), /^Plan allowance details are in Eliza Cloud\.$/);
+  assert.match(allowanceText({unit: 'tokens', period: 'day', limit: null, used: null, resetsAt: null}), /^Plan allowance details are in Cloud\.$/);
   assert.doesNotMatch(allowanceText({unit: 'tokens', period: 'day', limit: null, used: 7, resetsAt: null}), /of/);
   const period = {unit: 'usd_micros', granted: 25_000_000, remaining: 12_345_678, periodStart: NOW - 86400000, resetsAt: NOW + 86400000};
   assert.match(allowanceText(period, NOW), /^49% of this billing period's plan allowance is left\. Resets .+\.$/);
@@ -337,7 +337,7 @@ test('Cloud limit refusals carry retry information and never imply a purchase or
   assert.match(serviceLimitMessage(allowance, NOW), /allowance for this period is used up\. It resets .+\. Nothing is purchased automatically\. Local apps keep working\.$/);
   const subscription = readServiceLimit({status: 402, data: {error: 'subscription_required'}}, NOW);
   assert.equal(subscription.kind, 'subscription-required');
-  assert.match(serviceLimitMessage(subscription, NOW), /active Eliza Cloud plan.*Nothing is purchased automatically/);
+  assert.match(serviceLimitMessage(subscription, NOW, 'Nebula'), /active Nebula plan.*Nothing is purchased automatically/);
   // A bare 402 does not say whether a plan is missing or usage is spent: neutral billing copy.
   const bare = readServiceLimit({status: 402, data: {}}, NOW);
   assert.equal(bare.kind, 'billing-refused');
@@ -345,7 +345,7 @@ test('Cloud limit refusals carry retry information and never imply a purchase or
   // Legacy replies and history without a live provider wait remain supported.
   const upstreamCredits = readServiceLimit({failureKind: 'insufficient_credits', terminalFailure: {kind: 'insufficient_credits', message: 'Synthetic upstream message', transient: false}}, NOW);
   assert.deepEqual(upstreamCredits, {kind: 'billing-refused', retryAfterMs: null, resetsAt: null});
-  assert.match(serviceLimitMessage(upstreamCredits, NOW), /^Eliza Cloud declined this AI request for your account's billing\. .*did not retry your message, and nothing is purchased automatically\./);
+  assert.match(serviceLimitMessage(upstreamCredits, NOW, 'Nebula'), /^Nebula declined this AI request for your account's billing\. .*did not retry your message, and nothing is purchased automatically\./);
   const upstreamRate = readServiceLimit({failureKind: 'rate_limited', terminalFailure: {kind: 'rate_limited', message: 'Synthetic', transient: true}}, NOW);
   assert.deepEqual(upstreamRate, {kind: 'rate-limited', retryAfterMs: null, resetsAt: null});
   assert.match(serviceLimitMessage(upstreamRate, NOW), /Wait a moment before sending again/);
@@ -383,7 +383,7 @@ test('a resident turn failure may carry a structured period-allowance reset; abs
   ]) {
     const limit = readServiceLimit(source, NOW);
     assert.deepEqual(limit, {kind: 'billing-refused', retryAfterMs: null, resetsAt: NOW + 3 * 86400000});
-    assert.match(serviceLimitMessage(limit, NOW), /^Eliza Cloud declined this AI request for your account's billing\. Eliza Cloud reports your plan allowance resets .+\. Check your account in Settings\./);
+    assert.match(serviceLimitMessage(limit, NOW, 'Nebula'), /^Nebula declined this AI request for your account's billing\. Nebula reports your plan allowance resets .+\. Check your account in Settings\./);
     assert.doesNotMatch(serviceLimitMessage(limit, NOW), /credit|top.?up|upgrade|buy/i);
   }
   // An explicit reset wins over a relative wait; a past reset is not shown.
@@ -629,8 +629,8 @@ test('organization-credit billing remains available when a signed entitlement re
   const checked=await checkEntitlement(transport,exp,signal(),()=>NOW);
   assert.deepEqual(checked,creditView);assert.equal(reads,1);
   assert.equal(planAdmission(checked.view),'admit');
-  assert.equal(describeSubscription(checked.view).headline,'Eliza Cloud credits');
-  assert.equal(describeSubscription(checked.view).manageLabel,'Manage billing in Eliza Cloud');
+  assert.equal(describeSubscription(checked.view,'Eliza Cloud').headline,'Eliza Cloud credits');
+  assert.equal(describeSubscription(checked.view,'Eliza Cloud').manageLabel,'Manage billing in Eliza Cloud');
   assert.equal(checked.entitlement,null,'credit admission uses periodic billing refresh rather than terminal no-plan scheduling');
 });
 test('credit billing cannot override canceled, invalid, expired or mismatched signed authority',async()=>{
@@ -690,11 +690,11 @@ test('Settings retains unknown, expired, inactive and credit-funded admission st
   const start = ui.indexOf('  residentPlanSettings(){');
   const end = ui.indexOf('\n  },', start);
   assert.ok(start >= 0 && end > start, 'actual Settings summary method located');
-  const summarize = new Function('state', 'residentCloudFlow', 'describeSubscription', 'readPlanAdmission', 'CLOUD_KEY_EXPIRY_WARNING_MS',
+  const summarize = new Function('state', 'residentCloudFlow', 'describeSubscription', 'readPlanAdmission', 'CLOUD_KEY_EXPIRY_WARNING_MS', 'cloudServiceName', 'cloud',
     `return ({${ui.slice(start, end + 5)}}).residentPlanSettings();`);
   const account = {email:'qa@example.invalid', userId:USER};
   const snapshot = {cloudAccount:account, residentPlanNotice:'needs-plan', residentInference:'unavailable'};
-  const read = overrides => summarize({...snapshot, ...overrides}, () => true, describeSubscription, () => null, 86400000);
+  const read = overrides => summarize({...snapshot, ...overrides}, () => true, describeSubscription, () => null, 86400000, () => 'Nebula', {environment:'production'});
   for (const reason of ['outage', 'not-published', 'invalid']) {
     const result = read({residentSubscription:{kind:'unavailable', reason}});
     assert.equal(result.plan, 'Plan status unavailable', reason);
@@ -712,8 +712,8 @@ test('Settings retains unknown, expired, inactive and credit-funded admission st
     assert.equal(result.inference, 'Unavailable · check Cloud account');
   }
   const credits = read({residentSubscription:{kind:'credits', source:'billing-limits'}, residentPlanNotice:null, residentInference:'cloud'});
-  assert.equal(credits.plan, 'Eliza Cloud credits');
-  assert.equal(credits.inference, 'Eliza Cloud');
+  assert.equal(credits.plan, 'Nebula credits');
+  assert.equal(credits.inference, 'Nebula');
   const active = read({residentSubscription:{kind:'active', planName:'Synthetic plan', status:'active', allowance:null, expiresAt:NOW, refreshFailed:false}, residentPlanNotice:null, residentInference:'cloud'});
   assert.equal(active.plan, 'Synthetic plan');
   assert.equal(active.status, 'active');
@@ -723,4 +723,17 @@ test('Settings retains unknown, expired, inactive and credit-funded admission st
   assert.equal(offline.plan, 'Offline');
   assert.equal(offline.inference, 'Unavailable · Cloud unreachable');
   assert.equal(summarize(snapshot, () => false, describeSubscription, () => null, 86400000), null);
+});
+
+
+test('configured entitlement audiences accept only the intended signed service contract',async()=>{
+ const {jwk,sign}=await keyPair();
+ const token=await sign(claims({aud:'independent-service'}));
+ const accepted=await verifyEntitlement(token,[jwk],{...expected,audience:'independent-service'},NOW);
+ assert.equal(accepted.plan.status,'active');
+ await rejects(verifyEntitlement(token,[jwk],{...expected,audience:'another-service'},NOW),'audience');
+ const source={issuer:ISSUER,audience:'independent-service',entitlement:async()=>token,entitlementKeys:async()=>[jwk]};
+ clearEntitlementKeyCache();
+ assert.equal((await checkEntitlement(source,expected,new AbortController().signal,()=>NOW)).entitlement.plan.status,'active');
+ assert.equal((await checkEntitlement({...source,audience:'another-service'},expected,new AbortController().signal,()=>NOW)).entitlement,null);
 });

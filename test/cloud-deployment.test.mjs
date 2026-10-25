@@ -72,8 +72,8 @@ test('every authority change gives renderer and native credentials a new namespa
   return import('data:text/javascript;base64,'+Buffer.from(stripTypeScriptTypes(deploymentOutputs(config)[file])).toString('base64'));
  };
  const original=await load(defaults);
- for(const env of ['production','staging'])for(const key of ['api','web','services','tenant']){
-  const config=structuredClone(defaults);config[env][key]=key==='tenant'?'another-tenant':'https://different.example.org';
+ for(const env of ['production','staging'])for(const key of ['api','web','services','tenant','entitlementAudience']){
+  const config=structuredClone(defaults);config[env][key]=key==='tenant'?'another-tenant':key==='entitlementAudience'?'another-audience':'https://different.example.org';
   const changed=await load(config);
   assert.notEqual(changed.cloudStorageSlot('cloud:production'),original.cloudStorageSlot('cloud:production'));
   assert.notEqual(changed.cloudStorageSlot('cloud-signin:v1:ack:production'),original.cloudStorageSlot('cloud-signin:v1:ack:production'));
@@ -115,4 +115,16 @@ test('custom deployment reaches native inference configuration and Google transp
   for(const [name,value] of Object.entries({ELIZAOS_CLOUD_BASE_URL:oldBase,ELIZAOS_CLOUD_SMALL_MODEL:oldSmall,ELIZAOS_CLOUD_LARGE_MODEL:oldLarge})){if(value===undefined)delete process.env[name];else process.env[name]=value;}
   fs.rmSync(temp,{recursive:true,force:true});
  }
+});
+
+test('configured service names reach the renderer without changing credential authority',async()=>{
+ const {stripTypeScriptTypes}=await import('node:module');
+ const load=async config=>import('data:text/javascript;base64,'+Buffer.from(stripTypeScriptTypes(deploymentOutputs(config)['apps/app/src/runtime/cloud-deployment.generated.ts'])).toString('base64'));
+ const original=await load(defaults),config=structuredClone(defaults);
+ config.production.name='Independent Service';config.staging.name='Independent Preview';
+ const changed=await load(config);
+ assert.equal(changed.productionCloud.name,'Independent Service');assert.equal(changed.stagingCloud.name,'Independent Preview');
+ assert.equal(changed.cloudStorageNamespace,original.cloudStorageNamespace);
+ delete config.production.name;assert.equal((await load(config)).productionCloud.name,new URL(config.production.api).hostname);
+ for(const name of ['', '   ', ' Invalid', 'Invalid\nName', 42]){config.production.name=name;assert.throws(()=>validateCloudDeployment(config));}
 });

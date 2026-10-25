@@ -135,7 +135,7 @@ export class AlphaMapsDeviceNavigation implements MapsDeviceNavigation {
   // A Cloud place is re-read from the phone's own Cloud provider; a coordinate place is a dropped pin.
   const cloud = ref.provider === AGENT_CLOUD_PROVIDER || ref.provider === this.owner.providerId;
   if (!cloud && ref.provider !== 'coordinates')
-   throw new DeviceNavigationFailure('MAPS_INVALID_INPUT', 'The phone can show only Eliza Cloud Maps places or coordinates.');
+   throw new DeviceNavigationFailure('MAPS_INVALID_INPUT', 'The phone can show only Cloud Maps places or coordinates.');
   try {
    return {
     place: validPlace({ providerId: this.owner.providerId, id: cloud ? ref.providerPlaceId : 'coordinates', name: ref.name.trim(), coordinate: point,
@@ -150,7 +150,7 @@ export class AlphaMapsDeviceNavigation implements MapsDeviceNavigation {
   check();
   if (!shown) throw unavailable('Open Alpha on the phone to use Maps. Nothing was changed on the map.');
   const provider = this.surface.snapshot()?.provider;
-  if (provider?.status !== 'configured' || provider.providerId !== this.owner.providerId) throw unavailable('Eliza Cloud Maps is not connected on the phone.');
+  if (provider?.status !== 'configured' || provider.providerId !== this.owner.providerId) throw unavailable('Cloud Maps is not connected on the phone.');
   return provider;
  }
 
@@ -159,7 +159,7 @@ export class AlphaMapsDeviceNavigation implements MapsDeviceNavigation {
   const selection = this.surface.snapshot()?.selection;
   if (selection?.phase === 'ready' && selection.value?.id === place.id && selection.value.providerId === place.providerId) return selection.value;
   if (selection?.phase === 'error' && selection.error) throw deviceNavigationFailure(selection.error);
-  if (selection?.phase === 'empty') throw new DeviceNavigationFailure('MAPS_NOT_FOUND', 'Eliza Cloud Maps has no such place.');
+  if (selection?.phase === 'empty') throw new DeviceNavigationFailure('MAPS_NOT_FOUND', 'Cloud Maps has no such place.');
   throw unavailable('The place could not be shown on the phone.');
  }
 
@@ -191,7 +191,7 @@ export class AlphaMapsDeviceNavigation implements MapsDeviceNavigation {
    if (this.surface.guidance()) throw new DeviceNavigationFailure('MAPS_INVALID_INPUT', 'Navigation is already active on the phone. End it before starting another route.');
    const provider = await this.present(run.check);
    if (this.surface.guidance()) throw new DeviceNavigationFailure('MAPS_INVALID_INPUT', 'Navigation started on the phone. End it before starting another route.');
-   if (!provider.capabilities.modes.includes(travelMode)) throw new DeviceNavigationFailure('MAPS_UNSUPPORTED_REGION', `Eliza Cloud Maps does not plan ${travelMode} routes.`);
+   if (!provider.capabilities.modes.includes(travelMode)) throw new DeviceNavigationFailure('MAPS_UNSUPPORTED_REGION', `Cloud Maps does not plan ${travelMode} routes.`);
    await this.surface.showDirections(place, travelMode, resolveDetails);
    run.check();
    const destination = this.selected(place), status = { placeName: destination.name, travelMode };

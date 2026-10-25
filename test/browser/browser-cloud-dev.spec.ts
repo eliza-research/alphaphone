@@ -2,10 +2,11 @@ import {seedCompletedAccessSetup} from './flag-off-android';
 import {test,expect} from '@playwright/test';
 import {completeAccessSetup} from './flag-off-android';
 import {createServer} from 'vite';
-import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
+import {mkdtemp,mkdir,writeFile,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
+import {cloudStorageNamespace} from '../../apps/app/src/runtime/cloud-deployment.generated';
 import {createBrowserCloudDevHandler} from '../../scripts/browser-cloud-dev-bridge';
 import {createLocalAgentDevHandler} from '../../scripts/local-agent-dev-bridge';
 
@@ -13,7 +14,9 @@ import {createLocalAgentDevHandler} from '../../scripts/local-agent-dev-bridge';
 test('browser restores an existing host Cloud account, uses canonical voice and preserves explicit logout',async({page},info)=>{
  test.setTimeout(45000);
  const profile=await mkdtemp(join(tmpdir(),'alpha-browser-cloud-ui-')),secret='synthetic-cloud-ui-credential',owner='11111111-1111-4111-8111-111111111111',organizationId='22222222-2222-4222-8222-222222222222',credentialId='33333333-3333-4333-8333-333333333333',reference='browser-cloud-reference:44444444-4444-4444-8444-444444444444',session=randomUUID(),calls:string[]=[];
- await writeFile(join(profile,'credential'),secret,{mode:0o600});await writeFile(join(profile,'initial-credential.json'),JSON.stringify({environment:'production',credentialFile:join(profile,'credential'),credentialSha256:createHash('sha256').update(secret).digest('hex'),userId:owner,organizationId,credentialReference:reference,credentialId}),{mode:0o600});
+ const deploymentProfile=join(profile,cloudStorageNamespace.replaceAll(':','-'));
+ await mkdir(deploymentProfile,{mode:0o700});
+ await writeFile(join(profile,'credential'),secret,{mode:0o600});await writeFile(join(deploymentProfile,'initial-credential.json'),JSON.stringify({environment:'production',credentialFile:join(profile,'credential'),credentialSha256:createHash('sha256').update(secret).digest('hex'),userId:owner,organizationId,credentialReference:reference,credentialId}),{mode:0o600});
  const handler=createBrowserCloudDevHandler({profile,request:async(url,input={})=>{
   const path=new URL(String(url)).pathname;calls.push(path);
   if(path==='/api/auth/cli-session')return Response.json({sessionId:session,expiresAt:new Date(Date.now()+60000).toISOString()});
@@ -56,7 +59,7 @@ test('browser restores an existing host Cloud account, uses canonical voice and 
   await expect(page.getByRole('status').filter({hasText:'This sign-in was revoked.'})).toBeVisible();
   // Reload only after sign-out has removed the host credential, not its earlier in-memory detach.
   await expect.poll(async()=>{
-   try{return JSON.parse(await readFile(join(profile,'credentials.json'),'utf8'));}
+   try{return JSON.parse(await readFile(join(deploymentProfile,'credentials.json'),'utf8'));}
    catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return null;throw error;}
   }).toEqual({});
   await expect.poll(()=>page.evaluate(async()=>{const state=(await import('/src/runtime/connection-ui.tsx')).connectionController.getSnapshot();return !state.busy&&state.cloudAccount===null;})).toBe(true);
@@ -66,9 +69,9 @@ test('browser restores an existing host Cloud account, uses canonical voice and 
   // Completed returning users still review access after explicit Settings sign-in.
   await page.evaluate(()=>window.dispatchEvent(new Event('alpha:agent-settings')));
   await page.evaluate(async()=>(await import('/src/runtime/connection-ui.tsx')).connectionController.openCloudAccount());
-  await page.getByRole('dialog',{name:'Eliza Cloud',exact:true}).getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
-  // In-app sign-in through the development host offers the email code (Google needs the phone's App
-  // Link); the retired browser hand-off stays reachable here as the test-mocks diagnostic fallback.
+  // This test-mocks host's account button retains the diagnostic browser route. Exercise the
+  // shared in-app entry explicitly before that handoff; native production uses this entry.
+  await page.evaluate(async()=>(await import('/src/runtime/connection-ui.tsx')).connectionController.beginSignIn('production'));
   const signIn=page.getByRole('dialog',{name:'Sign in to Eliza Cloud',exact:true});
   await expect(signIn.getByRole('form',{name:'Sign in with email'})).toBeVisible();
   await expect(signIn.getByRole('button',{name:'Continue with Google',exact:true})).toHaveCount(0);

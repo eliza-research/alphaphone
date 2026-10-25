@@ -2,6 +2,8 @@
 // This compiles no APK, runs nothing on Android and boots no image. Device, image and
 // long-running acceptance are separate gates (docs/adr/0001-privileged-listener.md).
 import test from 'node:test';
+import {stripTypeScriptTypes} from 'node:module';
+import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import {existsSync,mkdirSync,mkdtempSync,readFileSync,readdirSync,rmSync,writeFileSync} from 'node:fs';
 import {homedir,tmpdir} from 'node:os';
@@ -240,5 +242,12 @@ test('Settings shows the listener status and offers only Pause, Turn off and the
  assert.match(settings,/status\.consented && status\.state !== 'OFF' \? \[action\('Turn off listening'/);
  assert.match(settings,/action\('Listening settings'/);
  assert.doesNotMatch(settings,/Resume listening|Turn on listening|resumeListener/,'Alpha cannot turn listening on or resume it');
- assert.match(settings,/testMocksEnabled\?'Eliza Cloud \(counts toward your plan\)':'On this device'/,'production speech is described as on this device');
+ const speechStart=settings.indexOf('    const speechRows =');
+ const speechEnd=settings.indexOf('    const action =',speechStart);
+ assert(speechStart>=0&&speechEnd>speechStart);
+ const speech=stripTypeScriptTypes(settings.slice(speechStart,speechEnd),{mode:'strip'});
+ const readSpeech=(cloudRuntimeEnabled,testMocksEnabled)=>vm.runInNewContext(`(()=>{${speech};return speechRows();})()`,{developmentCartesiaVoiceEnabled:false,cloudRuntimeEnabled,testMocksEnabled,serviceName:'Nebula',info:(label,value)=>({label,value})})[0].value;
+ assert.equal(readSpeech(false,false),'On this device','production native speech remains local');
+ assert.equal(readSpeech(true,false),'Nebula · Cartesia output (uses your plan)');
+ assert.equal(readSpeech(false,true),'Nebula (counts toward your plan)');
 });
