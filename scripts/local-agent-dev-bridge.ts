@@ -1,3 +1,4 @@
+import {parseViewInteractionClientId} from "../.eliza/client-features/packages/core/src/views/view-interact-protocol.ts";
 import {isAppRecordPath,appRecordRouteAllowed} from '../apps/app/src/runtime/app-record-route-policy.ts';
 import {CALENDAR_APPROVAL_READ_PATH} from '../apps/app/src/runtime/calendar-approval.ts';
 import {createGmailAgentDevBroker} from './gmail-agent-dev-broker.ts';
@@ -126,6 +127,9 @@ export function createLocalAgentDevHandler(options:{origin:string;tokenFile:stri
          ((input.path.startsWith('/api/views/')||input.path.endsWith('/messages/truncate'))&&(input.method!=='POST'||typeof input.ownerId!=='string'||!input.ownerId.trim()))||
          (input.body!==undefined&&typeof input.body!=='string')||
          (['GET','DELETE'].includes(input.method)&&input.body!==undefined)) {fail(400,'Unsupported local request');return;}
+      const routingHeaders=Object.entries(input.headers??{}).filter(([name])=>name.toLowerCase()==='x-elizaos-client-id');
+      const routedClient=routingHeaders.length===1?parseViewInteractionClientId(routingHeaders[0][1]):undefined;
+      if(routingHeaders.length&&(routingHeaders.length!==1||!routedClient||input.method!=='POST'||!/^\/api\/conversations\/[^/?#]+\/messages(?:\/stream)?$/.test(input.path))){fail(400,'Invalid conversation renderer header');return;}
       let audio:Buffer|undefined;
       if(asr){
         if(typeof input.ownerId!=='string'||!input.ownerId||input.storage||input.stream||input.body!==undefined){fail(400,'Invalid speech request');return;}
@@ -164,6 +168,7 @@ export function createLocalAgentDevHandler(options:{origin:string;tokenFile:stri
       for(const key of ['X-Eliza-Device-Id','X-Eliza-Device-Key','X-Eliza-Device-Capabilities']){
         const value=input.headers?.[key];if(value!==undefined){if(typeof value!=='string'||value.length>2048||/[\r\n]/.test(value))throw new Error('Invalid device header');headers[key]=value;}
       }
+      if(routedClient)headers['X-ElizaOS-Client-Id']=routedClient;
       if(cloudAsr)headers['X-Eliza-STT-Provider']='cartesia';
       if(audio){headers['Content-Type']='audio/wav';headers['X-Request-Id']=input.requestId;}
       if(ttsAudio){headers['X-Request-Id']=input.requestId;headers.Accept=cloudTts?'audio/mpeg':'audio/wav';}

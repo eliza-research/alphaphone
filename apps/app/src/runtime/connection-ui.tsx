@@ -1471,8 +1471,14 @@ async function refreshActionReview(signal:AbortSignal){
 }
 function boundNavigation():ViewNavigationClient|undefined {
  const selected=active,session=state.session,generation=epoch;
- if(!selected?.request||!session||!navigationContext)return undefined;
- return selected.viewNavigation??=new ViewNavigationClient(selected.request,()=>active===selected&&state.session===session&&epoch===generation&&!state.open&&!state.busy,()=>navigationContext?.()??null);
+ if(!selected||!session||!navigationContext)return undefined;
+ // Basic view delivery uses the owner session even when device enrollment fails.
+ // DeviceActions remains unavailable; claim/result endpoints retain server custody.
+ const request=selected.request??((selected.kind==='resident'||selected.kind==='remote'||selected.kind==='local')
+   ? (path:string,body:unknown,signal:AbortSignal)=>selected.remote.viewNavigationRequest(path,body,signal)
+   : undefined);
+ if(!request)return undefined;
+ return selected.viewNavigation??=new ViewNavigationClient(request,()=>active===selected&&state.session===session&&epoch===generation&&!state.open&&!state.busy,()=>navigationContext?.()??null);
 }
 
 /*

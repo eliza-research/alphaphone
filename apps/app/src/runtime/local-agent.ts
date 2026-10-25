@@ -8,7 +8,7 @@ import {automationsRouteAllowed, isAutomationsPath, type AutomationsMethod} from
 import { registerPlugin } from '../platform-plugins';
 import { Capacitor } from '@capacitor/core';
 import type { VerifiedSession, ChatChannel } from './alpha-client';
-import { conversationRoomId, messagePageQuery, turnAbortOutcome, turnAbortPath, type MessagePage, type RemoteChatReply, type RemoteConversation, type TurnAbortOutcome } from './remote-protocol';
+import { conversationViewHeaders, conversationRoomId, messagePageQuery, turnAbortOutcome, turnAbortPath, type MessagePage, type RemoteChatReply, type RemoteConversation, type TurnAbortOutcome } from './remote-protocol';
 import { readLocalAgentStream } from './local-agent-stream';
 import { streamNativeAgent, type NativeStreamPort } from './local-agent-native-stream';
 import { subscribeNativeVoiceEvents, type NativeVoiceEventPort } from './local-agent-native-events';
@@ -278,9 +278,13 @@ export class LocalAgentProtocol {
     }finally{this.streams.delete(controller);}
   }
   async disconnect() { for(const close of this.conversationSubscriptions)close();this.conversationSubscriptions.clear();for(const close of this.voiceSubscriptions)close();this.voiceSubscriptions.clear();this.generation++; this.session=null; for(const controller of this.streams)controller.abort();this.streams.clear(); }
-  private async json(path:string,body:unknown|undefined,signal?:AbortSignal) {
+  private async json(path:string,body:unknown|undefined,signal?:AbortSignal,headers:Record<string,string>={}) {
     if(!this.session)throw new Error('Start the local agent first.');
-    return record(await this.request(path,body,signal||new AbortController().signal));
+    return record(await this.request(path,body,signal||new AbortController().signal,headers));
+  }
+  async viewNavigationRequest(path:string,body:unknown,signal:AbortSignal):Promise<unknown> {
+    if(path!=="/api/views/interact-claim"&&path!=="/api/views/interact-result")throw Error("Invalid navigation route");
+    return this.json(path,body,signal);
   }
   async listConversations(signal?:AbortSignal):Promise<RemoteConversation[]> {
     const value=await this.json('/api/conversations',undefined,signal);
@@ -306,6 +310,7 @@ export class LocalAgentProtocol {
    * Stop and connection changes are never retried. */
   async send(id:string,text:string,options:{metadata?:Record<string,unknown>;clientMessageId?:string;channelType?:ChatChannel;onReplyReady?:(results:readonly unknown[]|undefined)=>void;signal?:AbortSignal;onText?:(text:string)=>void}={}):Promise<RemoteChatReply> {
     const path=`/api/conversations/${encodeURIComponent(identifier(id))}/messages`;
+    const headers=conversationViewHeaders(options.metadata);
     const body={text,channelType:options.channelType??'DM',metadata:options.metadata,clientMessageId:options.clientMessageId};
     if(this.bridge.stream&&options.onText){
       if(!this.session)throw Error('Start the local agent first.');
@@ -314,7 +319,7 @@ export class LocalAgentProtocol {
       const valid=()=>{signal.throwIfAborted();if(generation!==this.generation||session!==this.session)throw Error('Local agent connection changed.');};
       try{
         valid();
-        const result=await this.bridge.stream({path:`${path}/stream`,ownerId:session.ownerId,headers:this.deviceHeaders,
+        const result=await this.bridge.stream({path:`${path}/stream`,ownerId:session.ownerId,headers:{...this.deviceHeaders,...headers},
           body:JSON.stringify({...body,streamProtocol:'delta-v2'})},signal,value=>{valid();options.onText!(value);},results=>{valid();options.onReplyReady?.(results);});
         valid();return result;
       }catch(error){
@@ -322,12 +327,12 @@ export class LocalAgentProtocol {
         // A refusal, an undispatched stream or a terminal failure frame is the outcome: nothing is re-read.
         if(!options.clientMessageId||(error&&typeof error==='object'&&(('status' in error&&typeof error.status==='number'&&error.status<500)||'beforeDispatch' in error||'failureKind' in error)))throw error;
         this.recoveries++;
-        const recovered=await this.json(path,body,signal);valid();
+        const recovered=await this.json(path,body,signal,headers);valid();
         if(typeof recovered.text!=='string'||typeof recovered.agentName!=='string')throw new Error('Invalid local agent reply.');
         return recovered as RemoteChatReply;
       }finally{this.streams.delete(controller);}
     }
-    const value=await this.json(path,body,options.signal);
+    const value=await this.json(path,body,options.signal,headers);
     if(typeof value.text!=='string'||typeof value.agentName!=='string')throw new Error('Invalid local agent reply.');
     return value as RemoteChatReply;
   }
