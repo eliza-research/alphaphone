@@ -1,3 +1,4 @@
+import {productionCloud, stagingCloud} from './cloud-deployment.generated.ts';
 import {browserCloudResidentEnabled,browserCloudResidentEnvironment} from './browser-cloud-resident.ts';
 import {calendarSyncHttp,type CalendarSyncRequest} from './calendar-linked-provider.ts';
 import type {AutomationsMethod} from './automations-route-policy.ts';
@@ -26,8 +27,8 @@ export type CloudAuthority = { readonly api: string; readonly web: string; reado
 // authority away. Node contract tests import this source without Vite and keep both.
 const stagingAvailable: boolean = import.meta.env === undefined || import.meta.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS === '1' || (browserCloudResidentEnabled && browserCloudResidentEnvironment === 'staging');
 const authorities: Partial<Record<CloudEnvironment, CloudAuthority>> = {
-  production: { api: "https://api.eliza.app", web: "https://eliza.app", agents: "cloud.eliza.app" },
-  ...(stagingAvailable ? { staging: { api: "https://api-staging.eliza.app", web: "https://staging.eliza.app", agents: "cloud-staging.eliza.app" } } : {}),
+  production: productionCloud,
+  ...(stagingAvailable ? { staging: stagingCloud } : {}),
 };
 /** Whether this build can address the environment. Production builds expose only production. */
 export function cloudEnvironmentAvailable(environment: CloudEnvironment): boolean { return authorities[environment] !== undefined; }

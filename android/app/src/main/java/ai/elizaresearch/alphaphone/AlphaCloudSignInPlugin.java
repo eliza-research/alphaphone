@@ -63,7 +63,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
  static final String PENDING_SLOT = "cloud-signin:v1:pending";
  static String receiptSlot(CloudSignInFlow.Environment environment) { return "cloud-signin:v1:ack:" + environment.name; }
  /** Non-secret readiness cache (plain preferences): booleans and a timestamp per environment. */
- private static final String READINESS_PREFERENCES = "alpha-cloud-signin-readiness";
+ private static final String READINESS_PREFERENCES = "alpha-cloud-signin-readiness-" + CloudDeployment.STORAGE_NAMESPACE;
  private static final int RESPONSE_LIMIT = 256 * 1024;
  private static final long RETURN_GRACE_MS = 1500;
 

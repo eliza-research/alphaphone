@@ -1,19 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {mkdtemp,writeFile,rm,mkdir} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash,randomUUID} from 'node:crypto';
 if(!process.execArgv.includes('tsx')){const child=spawnSync(process.execPath,['--import','tsx',process.argv[1]],{stdio:'inherit',timeout:60000});if(child.error)throw child.error;process.exit(child.status??1);}
 const {createGmailAgentReadHost}=await import('../scripts/gmail-agent-read-host.ts');
+const {cloudStorageNamespace}=await import('../apps/app/src/runtime/cloud-deployment.generated.ts');
 const owner='11111111-1111-4111-8111-111111111111',org='22222222-2222-4222-8222-222222222222',grant='33333333-3333-4333-8333-333333333333';
 const account={configured:true,connected:true,reason:'connected',connectionId:grant,grantedCapabilities:['google.gmail.triage']};
 const message={externalId:'mail1',threadId:'thread1',subject:'A &amp; B',from:'Sender',to:[],snippet:'Hello',receivedAt:'2026-10-15T00:00:00Z',isUnread:true};
 async function fixture(){
  const profile=await mkdtemp(join(tmpdir(),'alpha-gmail-reader-'));
+ const scoped=join(profile,cloudStorageNamespace.replaceAll(':','-'));await mkdir(scoped,{mode:0o700});
  const credential={credentialReference:'browser-cloud-reference:44444444-4444-4444-8444-444444444444',credentialId:grant,userId:owner,organizationId:org,token:'synthetic-only'};
- const save=()=>writeFile(join(profile,'credentials.json'),JSON.stringify({production:credential}),{mode:0o600});await save();
+ const save=()=>writeFile(join(scoped,'credentials.json'),JSON.stringify({production:credential}),{mode:0o600});await save();
  const calls=[],sends=new Map();let loseDispatch=false,accounts=()=>[account],afterRead=async()=>{},pages=()=>({messages:[message],syncedAt:message.receivedAt});
  const original=globalThis.fetch;globalThis.fetch=async(url,init={})=>{
   const u=new URL(url);calls.push(u);

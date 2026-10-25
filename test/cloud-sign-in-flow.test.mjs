@@ -19,7 +19,7 @@ const native='android/app/src/main/java/ai/elizaresearch/alphaphone/';
 test('PKCE, state, authorize URL, strict App Link return, pending record, readiness and routes (plain JVM)',()=>{
  const temporary=mkdtempSync(join(tmpdir(),'cloud-sign-in-'));
  try{
-  execFileSync(binary('javac'),['--release','11','-d',temporary,join(root,native,'CloudSignInFlow.java'),join(root,native,'CloudSignInReadiness.java'),join(root,native,'ConnectionRoutes.java'),join(root,'test/fixtures/CloudSignInFlowTest.java'),join(root,'test/fixtures/CloudSignInContractTest.java')],{timeout:60000});
+  execFileSync(binary('javac'),['--release','11','-d',temporary,join(root,native,'CloudDeployment.java'),join(root,native,'CloudSignInFlow.java'),join(root,native,'CloudSignInReadiness.java'),join(root,native,'ConnectionRoutes.java'),join(root,'test/fixtures/CloudSignInFlowTest.java'),join(root,'test/fixtures/CloudSignInContractTest.java')],{timeout:60000});
   assert.match(execFileSync(binary('java'),['-cp',temporary,'ai.elizaresearch.alphaphone.CloudSignInFlowTest'],{encoding:'utf8',timeout:60000}),/^PASS cloud sign-in flow \(\d+ checks\)/);
  }finally{rmSync(temporary,{recursive:true,force:true});}
 });
@@ -49,7 +49,7 @@ test('shared callback contract vectors (fixture shared with elizaOS/eliza) throu
  const temporary=mkdtempSync(join(tmpdir(),'cloud-sign-in-contract-'));
  try{
   writeFileSync(join(temporary,'vectors.tsv'),lines.map(line=>line.join('\t')).join('\n')+'\n');
-  execFileSync(binary('javac'),['--release','11','-d',temporary,join(root,native,'CloudSignInFlow.java'),join(root,'test/fixtures/CloudSignInContractTest.java')],{timeout:60000});
+  execFileSync(binary('javac'),['--release','11','-d',temporary,join(root,native,'CloudDeployment.java'),join(root,native,'CloudSignInFlow.java'),join(root,'test/fixtures/CloudSignInContractTest.java')],{timeout:60000});
   assert.match(execFileSync(binary('java'),['-cp',temporary,'ai.elizaresearch.alphaphone.CloudSignInContractTest',join(temporary,'vectors.tsv')],{encoding:'utf8',timeout:60000}),new RegExp(`^PASS callback contract \\(${lines.length} vectors\\)`));
  }finally{rmSync(temporary,{recursive:true,force:true});}
 });
@@ -63,7 +63,7 @@ test('the sign-in App Link is build-gated with the delegation return; staging li
  assert.ok(!main.includes('staging.eliza.app'),'no staging host in a product manifest');
  assert.ok(between(main,'<activity android:name=".MainActivity"','</activity>').includes('<data android:scheme="alphaphone" android:host="cloud-delegation"/>'),'the delegation return is unchanged');
  assert.ok(main.includes('<intent><action android:name="android.support.customtabs.action.CustomTabsService"/></intent>'),'Custom Tabs providers are visible');
- assert.ok(mocks.includes(filter('staging.eliza.app'))&&mocks.includes('<activity android:name=".MainActivity" tools:node="merge">'),'the staging return merges into MainActivity in test-mocks builds');
+ assert.ok(mocks.includes(filter('${stagingCloudWebHost}'))&&mocks.includes('<activity android:name=".MainActivity" tools:node="merge">'),'the staging return merges into MainActivity in test-mocks builds');
  const assetlinks=JSON.parse(read('android/app/src/main/assetlinks.template.json'));
  assert.equal(assetlinks[0].target.package_name,'ai.elizaresearch.alphaphone');
  assert.deepEqual(assetlinks[0].relation,['delegate_permission/common.handle_all_urls']);

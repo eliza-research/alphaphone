@@ -35,7 +35,7 @@ final class ConnectionRoutes {
   */
  static boolean admittedOrigin(String scheme,String host,int port,boolean testMocks){
   if(testMocks)return true;
-  return "https".equals(scheme)&&"api.eliza.app".equals(host)&&(port==-1||port==443);
+  return "https".equals(scheme)&&CloudDeployment.PRODUCTION_API_HOST.equals(host)&&(port==-1||port==443);
  }
  /**
   * In-app Eliza Cloud sign-in (AlphaCloudSignInPlugin). These fixed routes are sent only by the
@@ -57,12 +57,12 @@ final class ConnectionRoutes {
  /** The readiness probe's one read on the return host: its Digital Asset Links statement list. */
  static boolean signInAssetLinks(String scheme,String host,int port,String rawPath,String rawQuery,boolean testMocks){
   if(!"https".equals(scheme)||(port!=-1&&port!=443)||rawQuery!=null||!"/.well-known/assetlinks.json".equals(rawPath))return false;
-  return "eliza.app".equals(host)||testMocks&&"staging.eliza.app".equals(host);
+  return CloudDeployment.PRODUCTION_WEB_HOST.equals(host)||testMocks&&CloudDeployment.STAGING_WEB_HOST.equals(host);
  }
  /** The sign-in client's origin: exactly the environment's Cloud API on the default port. */
  static boolean signInOrigin(String scheme,String host,int port,boolean testMocks){
   if(!"https".equals(scheme)||(port!=-1&&port!=443))return false;
-  return "api.eliza.app".equals(host)||testMocks&&"api-staging.eliza.app".equals(host);
+  return CloudDeployment.PRODUCTION_API_HOST.equals(host)||testMocks&&CloudDeployment.STAGING_API_HOST.equals(host);
  }
  /** P-22/P-31: allow current managed APIs; new services need explicit route review. */
  static boolean managedService(String path,String query,String method,boolean hasBody,boolean testMocks){
@@ -87,22 +87,21 @@ final class ConnectionRoutes {
  }
  /**
   * Hosts openExternal may hand to the system browser. A flag-off renderer opens only Cloud sign-in
-  * (https://eliza.app/auth/cli-login), subscription plan and account management on
-  * https://cloud.eliza.app/cloud/billing (Manage plan / Choose a plan; nothing is bought in-app), and Google's consent page for Gmail
-  * (https://accounts.google.com). Staging (staging.eliza.app, cloud-staging.eliza.app) and any other
-  * *.eliza.app host are admitted only in test-mocks builds. HTTPS on the default port only; the host
-  * is compared lower-cased and exactly, so a lookalike or trailing-dot spelling is refused.
+  * at the configured web origin, subscription management at the configured services origin,
+  * and Google's consent page (https://accounts.google.com). Configured staging web/services
+  * hosts are admitted only in test-mocks builds. HTTPS on the default port only; exact hosts
+  * refuse lookalikes and trailing-dot spellings.
   */
  static boolean externalHost(String scheme,String host,int port,boolean testMocks){
   if(!"https".equals(scheme)||host==null||(port!=-1&&port!=443))return false;
   String value=host.toLowerCase(java.util.Locale.ROOT);
-  if("eliza.app".equals(value)||"cloud.eliza.app".equals(value)||"accounts.google.com".equals(value))return true;
-  return testMocks&&value.matches("[a-z0-9-]+(\\.[a-z0-9-]+)*\\.eliza\\.app");
+  if(CloudDeployment.PRODUCTION_WEB_HOST.equals(value)||CloudDeployment.PRODUCTION_SERVICES_HOST.equals(value)||"accounts.google.com".equals(value))return true;
+  return testMocks&&(CloudDeployment.STAGING_WEB_HOST.equals(value)||CloudDeployment.STAGING_SERVICES_HOST.equals(value));
  }
  /** The Cloud sign-in page, whose return is a browser handoff rather than a fire-and-forget open. */
  static boolean externalCliLogin(String host,String path,boolean testMocks){
   String value=host==null?"":host.toLowerCase(java.util.Locale.ROOT);
-  return ("eliza.app".equals(value)||testMocks&&"staging.eliza.app".equals(value))&&"/auth/cli-login".equals(path);
+  return (CloudDeployment.PRODUCTION_WEB_HOST.equals(value)||testMocks&&CloudDeployment.STAGING_WEB_HOST.equals(value))&&"/auth/cli-login".equals(path);
  }
  /**
   * Request headers this transport forwards. Product builds talk only to the managed Cloud API, which
@@ -128,7 +127,7 @@ final class ConnectionRoutes {
   */
  static boolean cloudSelfRevocation(String scheme,String host,int port,String rawPath,String rawQuery,String method,boolean hasBody,boolean testMocks){
   if(!"DELETE".equals(method)||hasBody||rawQuery!=null||!"https".equals(scheme)||(port!=-1&&port!=443))return false;
-  if(!("api.eliza.app".equals(host)||(testMocks&&"api-staging.eliza.app".equals(host))))return false;
+  if(!(CloudDeployment.PRODUCTION_API_HOST.equals(host)||(testMocks&&CloudDeployment.STAGING_API_HOST.equals(host))))return false;
   return "/api/v1/api-keys/current".equals(rawPath);
  }
 }

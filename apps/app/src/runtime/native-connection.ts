@@ -1,3 +1,4 @@
+import {cloudStorageSlot} from './cloud-deployment.generated.ts';
 import {browserCloudResidentEnabled,browserCloudManagedServiceAllowed} from './browser-cloud-resident';
 import {managedServiceRequest} from './managed-service-routes';
 import {automationsRouteAllowed} from './automations-route-policy';
@@ -115,7 +116,7 @@ function webSecrets():BrowserSecretBackend{
   let degraded=false;
   // Private windows can refuse IndexedDB. Keep this page usable without claiming persistence.
   const use=async<T>(work:(backend:BrowserSecretBackend)=>Promise<T>)=>{if(degraded)return work(fallback);try{return await work(durable);}catch(error){if(error instanceof DOMException&&['InvalidStateError','UnknownError','SecurityError','NotSupportedError'].includes(error.name)){degraded=true;return work(fallback);}throw error;}};
-  return {read:slot=>use(backend=>backend.read(slot)),compareExchange:(slot,expected,value)=>use(backend=>backend.compareExchange(slot,expected,value))};
+  return {read:slot=>use(backend=>backend.read(cloudStorageSlot(slot))),compareExchange:(slot,expected,value)=>use(backend=>backend.compareExchange(cloudStorageSlot(slot),expected,value))};
 }
 /** Plain-HTTP loopback agents are a test-mocks surface; flag-off bundles accept HTTPS only. */
 const webDevelopmentHttp:boolean=import.meta.env!==undefined&&import.meta.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS==='1';

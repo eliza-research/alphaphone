@@ -30,7 +30,7 @@ test('signed-out production Cloud speech offers sign-in without microphone or lo
 test('native production Cloud voice pins host and Cartesia; staging and other output providers fail closed',()=>{
  const out=fs.mkdtempSync(path.join(os.tmpdir(),'alpha-cloud-speech-'));
  try {const binary=name=>process.env.JAVA_HOME?path.join(process.env.JAVA_HOME,'bin',name):name;
- execFileSync(binary('javac'),['--release','11','-d',out,'android/app/src/main/java/ai/elizaresearch/alphaphone/CloudSpeechPolicy.java','test/fixtures/CloudSpeechPolicyTest.java']);
+ execFileSync(binary('javac'),['--release','11','-d',out,'android/app/src/main/java/ai/elizaresearch/alphaphone/CloudDeployment.java','android/app/src/main/java/ai/elizaresearch/alphaphone/CloudSpeechPolicy.java','test/fixtures/CloudSpeechPolicyTest.java']);
  assert.match(execFileSync(binary('java'),['-cp',out,'ai.elizaresearch.alphaphone.CloudSpeechPolicyTest'],{encoding:'utf8'}),/PASS Cloud speech production host and Cartesia admission/);
  const native=fs.readFileSync('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaVoiceCloudPlugin.java','utf8');
  const upload=native.slice(native.indexOf('@PluginMethod public void transcribeRecording('),native.indexOf('private void submitLocal('));
@@ -105,7 +105,7 @@ public class CloudWavUploadTest {
  }
 }`);
  const binary=name=>process.env.JAVA_HOME?path.join(process.env.JAVA_HOME,'bin',name):name;
- execFileSync(binary('javac'),['--release','11','-d',out,file,'android/app/src/main/java/ai/elizaresearch/alphaphone/CloudSpeechPolicy.java']);
+ execFileSync(binary('javac'),['--release','11','-d',out,file,'android/app/src/main/java/ai/elizaresearch/alphaphone/CloudDeployment.java','android/app/src/main/java/ai/elizaresearch/alphaphone/CloudSpeechPolicy.java']);
  assert.match(execFileSync(binary('java'),['-cp',out,'ai.elizaresearch.alphaphone.CloudWavUploadTest'],{encoding:'utf8'}),/PASS real native multipart WAV upload and cleanup/);
  }finally{fs.rmSync(out,{recursive:true,force:true});}
 });
