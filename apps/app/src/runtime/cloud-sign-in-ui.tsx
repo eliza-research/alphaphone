@@ -1,6 +1,5 @@
-import {productionCloud,stagingCloud} from './cloud-deployment.generated';
 import type {CloudServiceInfo} from './cloud-service-info';
-import type {CloudEnvironment} from './cloud-protocol';
+import {cloudServiceName, type CloudEnvironment} from './cloud-protocol';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { SignInView } from './connection-ui';
 
@@ -47,11 +46,11 @@ export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = tru
   const wait = view.step === 'code' ? Math.max(0, Math.ceil((view.resendAt - now) / 1000)) : 0;
   const submitCode = (event: FormEvent) => { event.preventDefault(); const input = code.current; const value = input?.value || ''; if (input) input.value = ''; actions.verify(value); };
   return <>
-    <header><h1 id="cloud-sign-in-title" className="serif">Sign in to {service?.name || (view.environment==='staging'?stagingCloud:productionCloud).name}</h1></header>
+    <header><h1 id="cloud-sign-in-title" className="serif">Sign in to {service?.name || cloudServiceName(view.environment)}</h1></header>
     <div hidden={legal !== null}>
     {view.step === 'choose' && <>
       {!google && !phone && !emailEnabled && <p role="status">This service offers no sign-in method supported by this app. Contact the service administrator.</p>}
-      <p>Sign in to {service?.name || (view.environment==='staging'?stagingCloud:productionCloud).name} to use AI. Your agent keeps running on this device.</p>
+      <p>Sign in to {service?.name || cloudServiceName(view.environment)} to use AI. Your agent keeps running on this device.</p>
       <p role="note">Sign in to verify your account. You’ll review access before authorizing Alpha Phone.</p>
       {google && <div className="alpha-connection-actions"><button disabled={busy} onClick={actions.google}>Continue with Google</button></div>}
       {emailEnabled && <form className="alpha-cloud-sign-in-email" aria-label="Sign in with email" onSubmit={event => { event.preventDefault(); actions.email(email.current?.value || ''); }}>

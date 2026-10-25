@@ -138,9 +138,9 @@ test('native sign-in never falls back to hosted login when readiness fails',asyn
  const compiled=transformSync('const controller={'+method+'};',{loader:'ts'}).code;
  for(const methods of [null,{google:false},{google:true}]) {
   const updates=[];let ensured=false,checking='';
-  const run=new Function('operation','cloudEnvironmentAllowed','work','inAppSignInMethods','cloudSignIn','CloudSignInError','cloud','residentCloudFlow','state','update','ensureResident','productionCloud','stagingCloud',
+  const run=new Function('operation','cloudEnvironmentAllowed','work','inAppSignInMethods','cloudSignIn','CloudSignInError','cloud','residentCloudFlow','state','update','ensureResident','cloudServiceName',
    'let inAppGoogle=false,inAppPhone=false,inAppEmail=true;'+compiled+';return controller.beginSignIn("production");');
-  await run(false,()=>true,async(message,action)=>{checking=message;return action(new AbortController().signal);},async()=>methods,{},Error,{environment:'production',cancelLogin(){}},()=>true,{purpose:'agent'},v=>updates.push(v),async()=>{ensured=true;},{name:'Independent Service'},{name:'Preview Service'});
+  await run(false,()=>true,async(message,action)=>{checking=message;return action(new AbortController().signal);},async()=>methods,{},Error,{environment:'production',cancelLogin(){}},()=>true,{purpose:'agent'},v=>updates.push(v),async()=>{ensured=true;},()=> 'Independent Service');
   assert.equal(updates.at(-1).signIn.step,'choose');assert.equal(ensured,true);assert.equal(checking,'Checking Independent Service sign-in…');
  }
  const plugin=read(native+'AlphaCloudSignInPlugin.java');

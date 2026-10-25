@@ -20,7 +20,7 @@ import { BILLING_LIMITS_PATH, ENTITLEMENT_KEYS_PATH, ENTITLEMENT_PATH, REDEEM_PA
  * pairing route. The development-only hosted-agent fixture extends it in
  * development-cloud-agents.ts and is constructed only in ELIZA_DEV_ALLOW_TEST_MOCKS=1 builds. */
 export type CloudEnvironment = "production" | "staging";
-export type CloudAuthority = { readonly api: string; readonly web: string; readonly agents: string; readonly entitlementAudience: string };
+export type CloudAuthority = { readonly name: string; readonly api: string; readonly web: string; readonly agents: string; readonly entitlementAudience: string };
 // Staging is admitted in test mocks or the explicitly selected real browser Cloud QA host. QA builds reach
 // api-staging.eliza.app, its issuer and its web origins (docs/cloud-subscription-qa.md).
 // Vite replaces import.meta.env at build time, so flag-off bundles fold the staging
@@ -30,6 +30,8 @@ const authorities: Partial<Record<CloudEnvironment, CloudAuthority>> = {
   production: productionCloud,
   ...(stagingAvailable ? { staging: stagingCloud } : {}),
 };
+/** Display names follow the same build gate as request authorities. */
+export function cloudServiceName(environment: CloudEnvironment): string { return authorities[environment]?.name ?? 'Cloud service'; }
 /** Whether this build can address the environment. Production builds expose only production. */
 export function cloudEnvironmentAvailable(environment: CloudEnvironment): boolean { return authorities[environment] !== undefined; }
 /** The one hosted plan page an environment opens in the system browser. Nothing else is opened for billing. */

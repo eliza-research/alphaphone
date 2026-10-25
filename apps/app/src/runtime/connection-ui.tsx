@@ -51,7 +51,7 @@ import { DeviceActions, actionScope, type DeviceCredential, type DeviceExecutor,
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { isAndroid } from '../native';
 import type { ActionProposal, OperationReceipt, ContextEnvelope, VerifiedSession } from './alpha-client';
-import { CloudProtocol, CloudProtocolError, type CloudAgent, type CloudEnvironment } from './cloud-protocol';
+import { cloudServiceName, CloudProtocol, CloudProtocolError, type CloudAgent, type CloudEnvironment } from './cloud-protocol';
 import { googleOutcome as signInOutcome, type CloudSignInGoogleOutcome, CloudSignInError, normalizeSignInCode, signInFailureMessage as formatSignInFailureMessage, signInReadiness, validSignInEmail, validSignInPhone, type CloudSignInAuthenticated } from './cloud-sign-in';
 import { DevelopmentCloudAgentProtocol, type CloudPhoneTarget } from './development-cloud-agents';
 import { checkEntitlement, clearEntitlementKeyCache, describeSubscription, EntitlementError, EntitlementRefresher, isEntitlementSignInFailure, CHOOSE_PLAN_LABEL, MANAGE_PLAN_LABEL, planAdmission, readServiceLimit, redeemFailureMessage, redeemSuccessMessage, serviceLimitMessage, SubscriptionRedeemError, type ServiceLimit, type SubscriptionView } from './subscription-entitlement';
@@ -543,7 +543,7 @@ function selection(): Selection | null {
 }
 function signInFailureMessage(code: CloudSignInError['code']): string {
   const environment=state.signIn?.environment??cloud.environment;
-  return formatSignInFailureMessage(code,(environment==='staging'?stagingCloud:productionCloud).name);
+  return formatSignInFailureMessage(code,cloudServiceName(environment));
 }
 function errorMessage(error: unknown): string {
   const recovery=residentRecoveryReason(error);if(recovery)return residentRecoveryMessage(recovery);
@@ -1936,7 +1936,7 @@ export const connectionController = {
     if (operation || !cloudEnvironmentAllowed(environment)) return;
     // Readiness may take six seconds on a fresh install. Keep that wait cancellable and prevent
     // repeated taps from starting competing probes or opening a browser after the owner cancelled.
-    await work(`Checking ${(environment==='staging'?stagingCloud:productionCloud).name} sign-in…`, async signal => {
+    await work(`Checking ${cloudServiceName(environment)} sign-in…`, async signal => {
       const methods = await inAppSignInMethods(environment, signal);
       signal.throwIfAborted();
       // Email stays inside Alpha even when readiness is unavailable. Its native request
@@ -2516,7 +2516,7 @@ export function ConnectionChooser() {
     return () => { document.removeEventListener('keydown', key); window.removeEventListener('alpha-back', back, true); releaseInert(); previous?.focus(); };
   }, [visible, snapshot.busy,snapshot.purpose]);
   const env = (): CloudEnvironment => resolveCloudEnvironment(cloudEnvironmentPolicy, environment.current?.value ?? snapshot.signIn?.environment ?? cloud.environment);
-  const serviceName=(env()==='staging'?stagingCloud:productionCloud).name;
+  const serviceName=cloudServiceName(env());
   const browserOnly = !testMocksEnabled && !isAndroid && !browserLocalAgentEnabled;
   const cloudAccountControls=<>
     {browserOnly&&<p>{WEB_CLOUD_UNAVAILABLE}</p>}
