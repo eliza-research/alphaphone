@@ -11,6 +11,7 @@ const calendar=model.slice(model.indexOf('/* ===== module: calendar ===== */'),m
 const source=stripTypeScriptTypes(readFileSync('apps/app/src/prototype/google-calendar-view-adapter.ts','utf8').replace(/^import .*;\n/gm,'').replace(/^export /gm,''),{mode:'transform'});
 // Day columns: one day, as on a phone, unless a test asks for more.
 const calendarDays=stripTypeScriptTypes('const currentSurfaceLayout=()=>({split:false,calendarDays:globalThis.calendarDayColumnsUnderTest||1});\n'+readFileSync('apps/app/src/prototype/calendar-days.ts','utf8').replace(/^import .*;\n/gm,'').replace(/^export /gm,''),{mode:'transform'});
+const intervalSource=stripTypeScriptTypes(readFileSync('apps/app/src/prototype/calendar-interval-presentation.ts','utf8').replace(/^import .*;\n/gm,'').replace(/^export /gm,''),{mode:'transform'});
 const nativeSource=stripTypeScriptTypes(readFileSync('apps/app/src/prototype/calendar-adapter.ts','utf8').replace(/^import .*;\n/gm,'').replace(/^export /gm,''),{mode:'transform'});
 const at=(day,hour)=>new Date(2026,9,day,hour).getTime();
 const instant=at(13,12);
@@ -35,7 +36,7 @@ async function harness(events,{day=0,personal=true,days=1}={}){
     startCalendarSyncHost:()=>()=>{},calendarSyncHost:{resume:async()=>{},linkedProviderEvents:async()=>new Set()},
     GoogleCalendarReader:class{invalidate(){}selectSource(){}async listSources(){return allowRead?{status:'ready',calendars:[{id:selected.sourceId}]}:{status:'not-connected',message:'Disconnected'};}async read(){if(pendingRead)await pendingRead;return {status:'ready',events};}},
   });
-  vm.runInContext(calendarDays+'\n'+calendar+'\n{'+nativeSource+'\nglobalThis.installNative=installCalendarAdapter;}\n{'+source+'\nglobalThis.install=installGoogleCalendarViewAdapter;}',ctx);
+  vm.runInContext(calendarDays+'\n{'+intervalSource+'\nglobalThis.presentCalendarIntervals=presentCalendarIntervals;}\n'+calendar+'\n{'+nativeSource+'\nglobalThis.installNative=installCalendarAdapter;}\n{'+source+'\nglobalThis.install=installGoogleCalendarViewAdapter;}',ctx);
   class Shell{live=true;S(){return {view};}vget(){return state;}vset(_key,patch){Object.assign(state,patch);}async refreshReminders(){}componentDidMount(){}componentDidUpdate(){}componentWillUnmount(){}}
   ctx.installNative(Shell,{calendar:ctx.view});ctx.install(Shell,{calendar:ctx.view});const shell=new Shell();shell.componentDidMount();shell.componentDidUpdate();
   for(let i=0;i<24;i++)await Promise.resolve();
