@@ -47,9 +47,7 @@ export const CLOCK_DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
  * (vendor/eliza/plugins/plugin-assistant/src/services/device-actions/clock-contract.ts):
  * like upstream, any order is accepted and a repeated day is refused. The order is then
  * normalised (ascending), so review text and Clock's EXTRA_DAYS do not depend on it.
- *
- * Like upstream clock.handoff.v2, an operation's [] is an explicit one-off: it is
- * normalised to an omitted `days`, so Clock never receives an empty EXTRA_DAYS.
+ * An empty list is refused: callers omit `days` for a one-off alarm.
  */
 export function clockDays(value: unknown): ClockDay[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > 7)
@@ -105,6 +103,8 @@ export function validateClockOperation(value: unknown): ClockOperation {
       minute: integer(v.minute, 0, 59),
       label: v.label,
       timeZone: clockTimeZone(v.timeZone),
+      // Like upstream clock.handoff.v2, an operation's [] is an explicit one-off: it is
+      // normalised to an omitted `days`, so Clock never receives an empty EXTRA_DAYS.
       ...(Object.hasOwn(v, "days") && !(Array.isArray(v.days) && v.days.length === 0) ? { days: clockDays(v.days) } : {}),
     };
   }
