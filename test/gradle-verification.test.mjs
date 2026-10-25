@@ -44,7 +44,9 @@ test('the committed metadata verifies every artifact by SHA-256 and trusts nothi
 
 test('every coordinate that ships in the APKs is pinned, and the build tools are pinned for each CI host', () => {
   const classpath = JSON.parse(read(CLASSPATH));
-  assert.equal(classpath.coordinates.length, 88);
+  assert.equal(classpath.coordinates.length, 103, 'resolved runtime snapshot includes native Google sign-in dependencies');
+  for (const coordinate of ['com.google.android.gms:play-services-auth:21.1.1', 'com.google.android.libraries.identity.googleid:googleid:1.1.1'])
+    assert.ok(classpath.coordinates.includes(coordinate), coordinate);
   let archives = 0;
   for (const coordinate of classpath.coordinates) {
     const pinned = coordinateChecksum(metadata, ...coordinate.split(':'));
