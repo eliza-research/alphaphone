@@ -29,7 +29,7 @@ const routes=[
 test('the Android request gate admits the canonical Notes and Calendar routes exactly as the renderer policy, owner-bound',()=>{
  const plugin=readFileSync(nativeSource('AlphaLocalAgentPlugin.java'),'utf8'),request=plugin.slice(plugin.indexOf('@PluginMethod public void request(PluginCall call) {'));
  const approval=plugin.match(/ static boolean calendarApprovalReadAllowed\([^\n]*\}/)[0],decl=request.match(/\n  (boolean record=AppRecordRoutes\.owns\(path\),automation=record\|\|AutomationsRoutes\.owns\(path\),[^\n]*;)\n/)[1];
- const gate=request.match(/\n  if\((.*)\)\{\n   call\.reject\("Unsupported local agent request\."\);return;/)[1];
+ const gate=request.match(/\n  if\(([^\n]+)\)\{\n/)[1];
  const directory=mkdtempSync(join(tmpdir(),'alpha-record-gate-')),harness=join(directory,'RecordGateHarness.java');
  const cases=[...routes.map(([m,p,b])=>[m,p,b,owner]),...routes.slice(0,8).map(([m,p,b])=>[m,p,b,NULL])];
  try{

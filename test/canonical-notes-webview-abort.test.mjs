@@ -1,8 +1,8 @@
-import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import ts from 'typescript';
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import {transformSync} from 'esbuild';
 // The real controller and compatibility helper run with WebView113's static
 // AbortSignal surface. The canonical-client seam only forwards its fetch.
 function fixture({wait=false}={}){
- const compile=file=>ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
+ const compile=file=>transformSync(fs.readFileSync(file,'utf8'),{loader:'ts',target:'es2022',format:'cjs'}).code;
  const globals={AbortController,AbortSignal:{},DOMException,structuredClone};
  const helper={exports:{}};vm.runInNewContext(compile('apps/app/src/runtime/abort-signal.ts'),{...globals,exports:helper.exports,module:helper});
  const phases=[],snapshots=[],requests=[];let observedSignal;
