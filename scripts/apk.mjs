@@ -165,16 +165,24 @@ export function auditBundle(directory, { testMocks = false, script = AUDIT_SCRIP
 }
 
 /** apksigner certificate digest of the first signer, or null when unsigned. */
-export function signerDigest(file) {
-  const output = execFileSync(tool("apksigner"), ["verify", "--print-certs", file], {
+export function signerDigest(file, { apiLevel } = {}) {
+  if (apiLevel !== undefined && (!Number.isInteger(apiLevel) || apiLevel < 1)) throw new Error("Invalid Android API level");
+  const output = execFileSync(tool("apksigner"), ["verify", "--print-certs", ...(apiLevel === undefined ? [] : ["--min-sdk-version", String(apiLevel), "--max-sdk-version", String(apiLevel)]), file], {
     encoding: "utf8", env: androidEnv(),
   });
-  return parseSignerDigest(output);
+  return parseSignerDigest(output, { apiLevel });
 }
-export function parseSignerDigest(output) {
-  const digest = /Signer #1 certificate SHA-256 digest:\s*([a-fA-F0-9]{64})/.exec(output)?.[1];
-  if (!digest) throw new Error("apksigner reported no SHA-256 signer digest");
-  return digest.toLowerCase();
+export function parseSignerDigest(output, { apiLevel } = {}) {
+  const legacy = [...output.matchAll(/Signer #([0-9]+) certificate SHA-256 digest:\s*([a-fA-F0-9]{64})/g)];
+  const ranged = [...output.matchAll(/Signer \(minSdkVersion=([0-9]+), maxSdkVersion=([0-9]+)\) certificate SHA-256 digest:\s*([a-fA-F0-9]{64})/g)];
+  if (legacy.length && ranged.length) throw new Error('Ambiguous APK signer output');
+  if (legacy.length === 1 && legacy[0][1] === '1') return legacy[0][2].toLowerCase();
+  if (legacy.length) throw new Error('Multiple or unrecognized APK signers are not supported');
+  if (!ranged.length) throw new Error('apksigner reported no SHA-256 signer digest');
+  if (!Number.isInteger(apiLevel) || apiLevel < 1) throw new Error('Rotated APK signer requires an explicit Android API level');
+  const matches = ranged.filter(row => Number(row[1]) <= apiLevel && apiLevel <= Number(row[2]));
+  if (matches.length !== 1) throw new Error('No unique APK signer for the requested Android API level');
+  return matches[0][3].toLowerCase();
 }
 
 export function validateApk(file, identity, wantsHome) {
