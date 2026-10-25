@@ -46,3 +46,22 @@ test('stale action history replies cannot mutate the current connection',async()
 test('development and non-Android presentation retain their explicit review notice',async()=>{
  for(const options of [{dev:true},{android:false}]){const f=fixture(options);f.update({open:true});assert.equal(f.snapshot().open,true);await f.review();assert.equal(f.snapshot().actionHistory,f.entries);assert.match(f.snapshot().message,/phone action needs your review/);}
 });
+
+test('unresolved saved-session restore does not start the earlier automatic sign-in probe',()=>{
+ const f=fixture({account:null});f.update({startupResolved:false,automaticRestore:true,busy:false});
+ const a=source.indexOf('  useEffect(() => {\n    if (!productionSignInRequired)'),b=source.indexOf('  }, [productionSignInRequired, snapshot.busy, snapshot.signIn]);',a);assert.ok(a>=0&&b>a);
+ let probes=0,automaticSignInProbe={current:false};
+ const callback=source.slice(a,b).replace('  useEffect(() => {','(()=>{')+'})';
+ const evaluate=()=>{f.context.snapshot=f.snapshot();f.context.productionSignInRequired=f.context.productionCloudSignInRequired(f.snapshot());f.context.automaticSignInProbe=automaticSignInProbe;f.context.residentEnvironment=()=> 'production';f.context.connectionController={beginSignIn:()=>{probes++;}};vm.runInContext(stripTypeScriptTypes('var runProbe='+callback+';runProbe();',{mode:'transform'}),f.context);};
+ evaluate();assert.equal(probes,0,'the sign-in effect is declared first but must leave restore alone');assert.equal(f.context.connectionChooserVisible(f.snapshot()),false);
+ f.update({cloudAccount:{expiresAt:Date.now()+60000},startupResolved:true,automaticRestore:false});evaluate();assert.equal(probes,0);assert.equal(f.context.connectionChooserVisible(f.snapshot()),false);
+});
+test('resolved signed-out and sign-out transitions still request sign-in',()=>{
+ const f=fixture({account:null});f.update({startupResolved:false,automaticRestore:true});assert.equal(f.context.productionCloudSignInRequired(f.snapshot()),false);
+ f.update({startupResolved:true,automaticRestore:false});assert.equal(f.context.productionCloudSignInRequired(f.snapshot()),true);assert.equal(f.snapshot().open,true);
+ const returning=fixture();returning.update({startupResolved:true,cloudAccount:null});assert.equal(returning.context.productionCloudSignInRequired(returning.snapshot()),true);
+});
+test('expired and rejected restored sessions still require authentication; valid offline account stays nonmodal',()=>{
+ for(const patch of [{cloudAccount:{expiresAt:Date.now()-1000},startupResolved:true},{cloudAccount:null,startupResolved:true,error:'Sign-in expired'},{cloudAccount:null,startupResolved:false,error:'Sign-in expired'}]){const f=fixture();f.update(patch);assert.equal(f.context.productionCloudSignInRequired(f.snapshot()),true);}
+ const f=fixture();f.update({startupResolved:true,inferenceOffline:true});assert.equal(f.context.productionCloudSignInRequired(f.snapshot()),false);assert.equal(f.snapshot().open,false);
+});
