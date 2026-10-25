@@ -124,8 +124,12 @@ test('a chat turn without Cloud inference gets an honest answer with the plan ac
   const failure = between(ui, 'function replyFailure(', '\n}\n');
   assert.match(failure, /if\(kind==='no_provider'&&selected\.kind==='resident'&&residentCloudFlow\(\)\)\{[\s\S]*inferenceUnavailableReply\(notice,signedIn\)[\s\S]*planAction:/);
   const reply = between(ui, 'export function inferenceUnavailableReply(', '\n}\n');
-  for (const text of ['Check your Eliza Cloud account in Settings', "can't reach Eliza Cloud", 'Sign in with Eliza Cloud', 'Local apps keep working'])
-    assert.ok(reply.includes(text), text);
+  const renderReply = new Function('cloudServiceName', 'cloud',
+    reply.replace(/^export /, '').replace(/notice: ConnectionSnapshot\['residentPlanNotice'\], signedIn: boolean\): string/, 'notice, signedIn)')
+      + '\n}; return inferenceUnavailableReply;')(() => 'Nebula', {environment:'production'});
+  const replies = [renderReply('offline', true), renderReply(null, false), renderReply(null, true)].join('\n');
+  for (const text of ['Check your Nebula account in Settings', "can't reach Nebula", 'Sign in with Nebula', 'Local apps keep working'])
+    assert.ok(replies.includes(text), text);
   assert.doesNotMatch(reply, /no agent|without AI|credit|top.?up|upgrade|needs? (?:an? )?Eliza Cloud (?:account with a )?plan|on-device speech|Nothing was sent to Cloud/i);
   // Workflow text generation fails honestly instead of using the plan answer as generated text.
   const client = read('apps/app/src/runtime/alpha-client.ts');
