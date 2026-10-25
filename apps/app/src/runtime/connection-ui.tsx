@@ -1186,9 +1186,9 @@ async function ensureSelectedConversation(selected:Active,session:VerifiedSessio
  if(!conversationMemory.has(key)){current();conversationMemory.set(key,id);}
  return id;
 }
-async function createSelectedConversation(selected:Active,key:string,expected:ConversationChoice|null,signal:AbortSignal,current:()=>void):Promise<string>{
+async function createSelectedConversation(selected:Active,key:string,expected:ConversationChoice|null,signal:AbortSignal,current:()=>void,requireSaved=false):Promise<string>{
  const created=selected.kind==='cloud'?await selected.cloud.createConversation(selected.agentId,'Alpha Phone',signal):await selected.remote.createConversation('Alpha Phone',signal);current();
- let saved=true;try{await selectConversation(key,expected,created.id,signal,current);}catch{saved=false;}
+ let saved=true;try{await selectConversation(key,expected,created.id,signal,current);}catch(error){if(requireSaved)throw error;saved=false;}
  current();conversationMemory.set(key,created.id);update({});
  if(!saved)update({message:'Conversation is connected for this session. Its selection could not be saved for restart.'});
  return created.id;
@@ -1335,7 +1335,7 @@ async function conversationList(selected: Active, signal: AbortSignal) {
   return list.map(item => ({ id: item.id, title: typeof item.title === 'string' && item.title ? item.title : 'Conversation' }));
 }
 
-async function restoreConversationHistory(id:string,signal:AbortSignal,automatic:boolean,afterConnect=false) {
+async function restoreConversationHistory(id:string,signal:AbortSignal,automatic:boolean,afterConnect=false,fallbackExpected?:ConversationChoice) {
   const selected=active,session=state.session,generation=epoch;
   if(!selected||!session)throw noSessionError(NO_SESSION_FALLBACK);
   const account=selected.kind==='resident'&&residentCloudFlow()?service:null;
@@ -1347,6 +1347,7 @@ async function restoreConversationHistory(id:string,signal:AbortSignal,automatic
   };
   const key=conversationKey(session),expected=await captureConversationChoice(key,signal);
   await assertAccount();
+  if(fallbackExpected&&JSON.stringify(expected)!==JSON.stringify(fallbackExpected))throw Error('Saved conversation selection changed.');
   if(automatic&&expected?.id!==id)throw Error('Saved conversation selection changed.');
   const list=await conversationList(selected,signal);await assertAccount();
   if(!list.some(item=>item.id===id))throw Object.assign(Error('This conversation is no longer available to this agent.'),{code:'conversation_missing',latest:list[0]?.id});
@@ -1367,10 +1368,10 @@ async function restoreConversationHistory(id:string,signal:AbortSignal,automatic
   }
   await assertAccount();
   let saved=true;
-  if(!automatic)try{await selectConversation(key,expected,id,signal,assertCurrent);}catch{saved=false;}
+  if(!automatic)try{await selectConversation(key,expected,id,signal,assertCurrent);}catch(error){if(fallbackExpected)throw error;saved=false;}
   await assertAccount();
   if(automatic){
-    const current=Capacitor.getPlatform()==='android'?captureConversationChoice(key,signal):await captureConversationChoice(key,signal);
+    const current=await captureConversationChoice(key,signal);
     assertCurrent();
     if(JSON.stringify(current)!==JSON.stringify(expected))throw Error('Saved conversation selection changed.');
   }
@@ -1431,8 +1432,13 @@ async function restoreSavedHistory(signal:AbortSignal) {
       // recent conversation, or to a new one; otherwise every send fails with HTTP 404.
       const missing=error as {code?:unknown;latest?:unknown}|null;
       if(missing?.code!=='conversation_missing')throw error;
-      if(typeof missing.latest==='string')await restoreConversationHistory(missing.latest,signal,false,true);
-      else await createSelectedConversation(selected,conversationKey(session),saved,signal,()=>{signal.throwIfAborted();if(generation!==epoch||selected!==active||state.session!==session)throw Error('The agent changed.');});
+      const stillSelected=await captureConversationChoice(conversationKey(session),signal);signal.throwIfAborted();
+      if(JSON.stringify(stillSelected)!==JSON.stringify(saved))throw Error('Saved conversation selection changed.');
+      if(typeof missing.latest==='string')await restoreConversationHistory(missing.latest,signal,false,true,saved);
+      else {
+        const id=await createSelectedConversation(selected,conversationKey(session),saved,signal,()=>{signal.throwIfAborted();if(generation!==epoch||selected!==active||state.session!==session)throw Error('The agent changed.');},true);
+        update({history:{sessionId:session.sessionId,conversationId:id,revision:(state.history?.revision||0)+1,messages:[],automatic:true}});
+      }
       update({historyError:'',message:typeof missing.latest==='string'?'The saved conversation is no longer on the agent. Its most recent conversation is shown.':'The saved conversation is no longer on the agent. A new conversation was started.'});
     });
   }catch(error){
