@@ -347,7 +347,7 @@ export class CloudProtocol {
   }
   /** Public ES256 verification keys for entitlements. Never private material. */
   async subscriptionEntitlementKeys(signal: AbortSignal): Promise<JsonWebKey[]> {
-    const data = await this.call(ENTITLEMENT_KEYS_PATH, signal, { authenticated: true });
+    const data = await this.call(ENTITLEMENT_KEYS_PATH, signal);
     if (!Array.isArray(data.keys) || data.keys.length > 16) throw new CloudProtocolError("invalid-response");
     return data.keys.filter((key): key is JsonWebKey => !!key && typeof key === "object" && !Array.isArray(key)
       && (key as ObjectValue).kty === "EC" && (key as ObjectValue).crv === "P-256" && (key as ObjectValue).d === undefined

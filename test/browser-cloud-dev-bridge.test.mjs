@@ -588,3 +588,13 @@ test('stale logout identity cannot revoke or disconnect a newer reference before
  const protocol=new CloudProtocol('production',async()=>{requests++;throw Error('Must not dispatch');},store,async()=>{}, {deleteRequests:true});
  await assert.rejects(protocol.revokeSession(new AbortController().signal,captured),/Cloud account changed/);await protocol.disconnect(captured);assert.equal(requests,0);assert.equal(clears,0);
 });
+
+test('public signing keys do not read or forward account credentials',async()=>{
+ const key={kty:'EC',crv:'P-256',kid:'public-only',x:'test-public-x',y:'test-public-y'};let requests=0;
+ const client=new CloudProtocol('production',async input=>{
+  requests++;assert.equal(new URL(input.url).pathname,'/api/v1/subscription/entitlement-keys');
+  assert.equal(input.headers.Authorization,undefined);assert.equal(input.credentialReference,undefined);
+  return {status:200,data:{keys:[key]}};
+ },{read:async()=>{throw Error('Public key lookup must not read account storage');},write:async()=>{},clear:async()=>{}},async()=>{});
+ assert.deepEqual(await client.subscriptionEntitlementKeys(new AbortController().signal),[key]);assert.equal(requests,1);
+});
