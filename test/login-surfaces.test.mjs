@@ -292,7 +292,7 @@ test('secrets stay out of observations, transcripts and logs', () => {
   for (const file of ['apps/app/src/passwords/password-manager.ts', 'apps/app/src/browser/password-provider.ts', 'apps/app/src/prototype/browser-adapter.ts']) {
     assert.doesNotMatch(read(file), /console\.(log|info|warn|error|debug)\(/, `${file} does not log`);
   }
-  for (const file of ['AlphaBrowserPlugin.java', 'PasswordProviderSupport.java', 'BrowserPasskeys.java', 'BrowserLoginFields.java', 'BrowserFieldOrigin.java']) {
+  for (const file of ['AlphaBrowserPlugin.java', 'PasswordProviderSupport.java', 'BrowserLoginFields.java', 'BrowserFieldOrigin.java']) {
     const text = read('android/app/src/main/java/ai/elizaresearch/alphaphone/' + file);
     const logs = [...text.matchAll(/(?:android\.util\.)?Log\.[vdiwe]\([^;]*;/g)].map(match => match[0]);
     for (const line of logs) assert.doesNotMatch(line, /url|value|password|username|structure|getText|origin/i, `${file}: ${line}`);

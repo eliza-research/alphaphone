@@ -15,7 +15,6 @@ import android.webkit.*;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 import androidx.webkit.ProfileStore;
-import androidx.webkit.WebSettingsCompat;
 import androidx.webkit.WebStorageCompat;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
@@ -373,9 +372,9 @@ public class AlphaBrowserPlugin extends Plugin {
    if(tabCookies.acceptThirdPartyCookies(t.web)!=!priv)throw new IllegalStateException("Browser cookie isolation is unavailable");
    // Approved MVP policy: passwords remain enabled; passkeys require separate provider qualification.
    t.passkeys=false;
-   if(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_AUTHENTICATION))BrowserPasskeys.disable(
-    ()->WebSettingsCompat.setWebAuthenticationSupport(settings,WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_NONE),
-    ()->WebSettingsCompat.getWebAuthenticationSupport(settings),WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_NONE);
+   // A fresh WebView defaults to WebAuthn NONE; this app never enables it.
+   // Avoid the redundant compat settings conversion here: it can stall tab creation.
+   // https://developer.android.com/reference/androidx/webkit/WebSettingsCompat#WEB_AUTHENTICATION_SUPPORT_NONE
    t.readingWorld=new BrowserReadingWorld(t.web);
    t.capture=new BrowserDownloads.BlobCapture(t.web,downloads.captureDirectory());
    t.web.setFindListener((ordinal,count,done)->findResult(t,ordinal,count,done));
