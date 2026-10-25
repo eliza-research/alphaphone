@@ -26,13 +26,17 @@ const user = '11111111-1111-4111-8111-111111111111', agent = '22222222-2222-4222
 const personal = 'personal:12345678-1234-5234-8234-123456789abc', agentHost = `https://${agent}.cloud.eliza.app`;
 const conversation = '33333333-3333-4333-8333-333333333333';
 const sentBodies=[];
+let registrationVersion = "unavailable";
 let credential = { token: 'synthetic-token', credentialId: 'synthetic-generation' }, historyReads = 0, sends = 0;
 const observed = phoneContextMessage('Earlier user text', { view: 'inbox', revision: 2, sensitive: false }).text;
 const server = http.createServer(async (req, res) => {
   assert.equal(req.headers.authorization, 'Bearer synthetic-token');
   let data, status = 200;
   // The personal identity is already on a running Dedicated agent; the chooser connects to it.
-  if (req.url === '/api/v1/billing/limits') data = {success:true,data:{schemaVersion:2,v2:{balance:{status:'available',source:'organizations',observedAt:new Date().toISOString(),value:{revision:'1',balance:{unit:'usd',currency:'USD',value:'10'}}}}}};
+  if (registrationVersion !== 'unavailable' && req.url === '/api/client-devices/capabilities') data = {protocol:1,agentId:agent,identityId:user,externalIdentity:{subject:user,organizationId:organization,issuer:'https://login.example'},deviceActions:{protocol:1,capabilities:['calendar.local-event.v1']}};
+  else if (registrationVersion !== 'unavailable' && req.url === '/api/client-devices/register') data = {installationId:req.headers['x-eliza-device-id'],enrollmentId:'cloud-enrollment',capabilities:['calendar.local-event.v1'],viewProfileVersion:1,...(registrationVersion===undefined?{}:{userTextFormatVersion:registrationVersion})};
+  else if (registrationVersion !== 'unavailable' && req.url === '/api/client-devices/revoke') data = {revoked:true};
+  else if (req.url === '/api/v1/billing/limits') data = {success:true,data:{schemaVersion:2,v2:{balance:{status:'available',source:'organizations',observedAt:new Date().toISOString(),value:{revision:'1',balance:{unit:'usd',currency:'USD',value:'10'}}}}}};
   else if (req.url === '/api/v1/user') data = { success: true, data: { id: user, organization_id: organization } };
   else if (req.url === '/api/v1/eliza/personal') data = { success: true, data: { identity: { id: personal, displayName: 'Fixture', runtime: 'dedicated', activeAgentId: agent, apiBase: agentHost } } };
   else if (req.url === `/api/v1/eliza/agents/${agent}`) data = { success: true, data: { id: agent, agentName: 'Fixture', status: 'running', executionTier: 'dedicated-always', webUiUrl: agentHost } };
@@ -161,6 +165,20 @@ try {
   await assert.rejects(controller.send('Invalid zone',{view:'home',revision:3,sensitive:false,timeZone:'Not/A_Zone'},'invalid-zone',new AbortController().signal));
   assert.equal(sends,3,'An invalid timezone cannot reach the transport');
 
+  for (const version of [1, undefined, 2, '1']) {
+    await controller.disconnect();
+    registrationVersion=version;
+    await controller.cloudPersonalConnect();
+    assert.ok(controller.getSnapshot().session,'registered Cloud connection succeeds');
+    assert.equal(controller.getSnapshot().error,'');
+    const literal=phoneContextMessage('literal authored envelope',{view:'notes',revision:9,sensitive:false}).text;
+    await controller.send(literal,{view:'notes',revision:10,sensitive:false},'format-'+String(version),new AbortController().signal);
+    const sent=sentBodies.at(-1);
+    assert.equal(sent.text,version===1?literal:phoneContextMessage(literal,{view:'notes',revision:10,sensitive:false}).text);
+    assert.equal(sent.metadata.userTextFormat,version===1?'plain-v1':undefined);
+    assert.equal(Object.hasOwn(sent.metadata,'alphaPhone'),version!==1);
+    assert.equal(sent.metadata.clientDevice.context.view,'notes');
+  }
   const beforeRetirements=clockRetirements;
   let releaseClockRetirement;heldClockRetirement=new Promise(resolve=>{releaseClockRetirement=resolve;});
   const retirementStarted=new Promise(resolve=>{clockRetirementStarted=resolve;});

@@ -1104,6 +1104,7 @@ async function connectCloud(agentId: string, signal: AbortSignal, expectedOwner?
     session.ownerId=capability.identityId;
     const registered=await request('/api/client-devices/register',{label:'Alpha Phone',workflowProtocol},signal);
     if (registered.installationId!==credential.installationId || typeof registered.enrollmentId!=='string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(registered.enrollmentId)) throw new Error('Cloud device registration was not verified');
+    if(registered.userTextFormatVersion===1)next.userTextFormatVersion=1;
     const profileReason = await negotiateEnabledViews(registered.viewProfileVersion, request, signal);
 
     credential.enrollmentId=registered.enrollmentId; await secureConnectionStore.write(slot,credential); signal.throwIfAborted();
