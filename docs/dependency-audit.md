@@ -1,5 +1,22 @@
 # Dependency and artifact supply chain
 
+## Current source projection (2026-10-25)
+
+SDK `f4142d3a92d6b5b49ef6c6a666155218b8b75b07` at product
+`a424de923b4b19aa0d86a7e23ef30598f6704d94` has the same Bun lock bytes and
+normalized 3,694-version registry input as the October 25 snapshot at SDK `4e561dc`.
+The 124 existing full-lock findings are reused as dated source-review evidence;
+no fresh registry query or remediation is claimed. See
+[source identity and pending gates](evidence/source-metadata-a424-f414-20261025.json).
+
+The snapshot and artifact dispositions below retain their earlier SDK/artifact
+binding. The new APK closure, packaged advisory review and disposition binding
+remain pending Android's exact artifact. Offline current-pin audit admission
+therefore remains pending; this metadata update neither renews deadlines nor
+waives shipped high or critical findings. Historical APK evidence does not qualify
+the new runtime or device.
+
+
 Covers inventory items MVP-45 (dependency findings), the licence flags of decision P-09, the
 software part of MVP-43 (Denton typeface rights) and the read-back tooling for MVP-46
 (required checks). Everything here is source and test evidence. It is not an APK build,

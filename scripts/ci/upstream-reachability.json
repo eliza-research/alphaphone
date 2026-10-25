@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "4e561dc37e962595d8e28e600600430d50e9dd7d",
+  "head": "f4142d3a92d6b5b49ef6c6a666155218b8b75b07",
   "recordedAt": "2026-10-25",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...4e561dc37e962595d8e28e600600430d50e9dd7d",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...f4142d3a92d6b5b49ef6c6a666155218b8b75b07",
   "status": "diverged",
-  "aheadBy": 31,
+  "aheadBy": 33,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -130,6 +130,14 @@
     {
       "sha": "4e561dc37e962595d8e28e600600430d50e9dd7d",
       "subject": "fix: connect native renderer to canonical targeted view commands"
+    },
+    {
+      "sha": "f7bd0c6f4e230b069dabd434944cdb2460ab1dcd",
+      "subject": "fix: retain LifeOps ownership of promoted Calendar actions"
+    },
+    {
+      "sha": "f4142d3a92d6b5b49ef6c6a666155218b8b75b07",
+      "subject": "fix: retain trusted native delivery when plugin views register"
     }
   ],
   "pullRequests": [

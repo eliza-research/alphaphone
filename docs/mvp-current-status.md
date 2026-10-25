@@ -1,5 +1,9 @@
 # Current MVP status
 
+Current source pin: SDK `f4142d3a92d6b5b49ef6c6a666155218b8b75b07` at product `a424de923b4b19aa0d86a7e23ef30598f6704d94`. This candidate includes reviewed native Notes destination continuity, consolidated Calendar child-action registration, Workflows receipt presentation cleanup and finite Cloud fetch diagnostics. The Cloud-bound Calendar fetch remains unresolved; a successful unbound local feed is not its acceptance. The two owning SDK test files passed 21 tests and the product integration passed 49 targeted tests. These source checks do not qualify the newly built runtime, APK, provider or physical device. Android's full SDK/APK producer and subsequent native startup, navigation, Cloud Calendar and device checks remain pending. No historical acceptance or artifact disposition is transferred. See [source input reuse and current gates](evidence/source-metadata-a424-f414-20261025.json).
+
+Historical metadata projection: # Current MVP status
+
 Current source pin: SDK `4e561dc37e962595d8e28e600600430d50e9dd7d`. This pin includes the reviewed LifeOps mobile loading, ordinary-request thinking policy, navigation handoff and Notes supplied-text guidance, plus the root Zod dependency update, targeted native Browser command binding and prepared-navigation phase repair. Native navigation acknowledgment remains under separate runtime review. This metadata refresh does not change capability statuses or transfer historical native, APK, provider or device acceptance to the current pin. Earlier admissions remain scoped to their recorded source and evidence.
 
 
@@ -49,6 +53,8 @@ the operator's index of build, provisioning, release and support material is the
 [operational hand-off index](operational-handoff.md).
 
 ## Product boundaries
+
+Current source projection: SDK `f4142d3a92` at product `a424de923b`; runtime, artifact and device qualification remains separate as recorded above.
 
 The current upstream source pin is `4e561dc37e` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
 
