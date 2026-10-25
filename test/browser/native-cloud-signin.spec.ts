@@ -52,7 +52,7 @@ async function entitlements(overrides:Record<string,unknown>={}){
 
 
 type SignInMode='ok'|'created'|'mfa'|'hold'|'offline'|'readiness-hold'|'not-ready';
-async function boot(page:Page,initial:{signIn?:SignInMode;tokens?:Record<string,string>;keys?:unknown[];serviceName?:string;keyLifetimeMs?:number;methods?:{email:boolean;phone:boolean;google:boolean}}={}){
+async function boot(page:Page,initial:{signIn?:SignInMode;tokens?:Record<string,string>;keys?:unknown[];serviceName?:string;legalParagraphs?:string[];keyLifetimeMs?:number;methods?:{email:boolean;phone:boolean;google:boolean}}={}){
  page.on('pageerror',(error:Error)=>console.error('Composition page error:',error.message));
  await page.route('https://**',route=>route.abort());
  await page.addInitScript(initial=>{
@@ -68,7 +68,7 @@ async function boot(page:Page,initial:{signIn?:SignInMode;tokens?:Record<string,
    f.calls.push({plugin,method,path:input?.url?new URL(input.url).pathname:input?.path,email:input?.email,phone:input?.phone,environment:input?.environment});
    if(plugin==='AlphaCloudSignIn'){
     if(method==='addListener'||method==='removeListener')return {};
-    if(method==='serviceInfo'){const doc={title:'Terms of Service',revision:'fixture-v1',sections:[{title:'Provider terms',paragraphs:['<img src=x onerror=alert(1)> is plain text.','Synthetic provider document.']}]};return {success:true,version:1,service:{name:f.serviceName||'Eliza Cloud',terms:doc,privacy:{...doc,title:'Privacy Policy'}}};}
+    if(method==='serviceInfo'){const doc={title:'Terms of Service',revision:'fixture-v1',sections:[{title:'Provider terms',paragraphs:f.legalParagraphs||['<img src=x onerror=alert(1)> is plain text.','Synthetic provider document.']}]};return {success:true,version:1,service:{name:f.serviceName||'Eliza Cloud',terms:doc,privacy:{...doc,title:'Privacy Policy'}}};}
     if(method==='cancel'){f.release?.(fail('cancelled'));f.release=null;return {};}
     if(method==='status'&&f.signIn==='readiness-hold')return new Promise(resolve=>{(f as any).releaseReadiness=()=>resolve({active:false,inApp:true,google:true,email:true,phone:true});});
     if(method==='status'&&f.methods)return {active:false,inApp:Object.values(f.methods).some(Boolean),methodsKnown:true,...f.methods};
@@ -384,5 +384,26 @@ test('configured provider name is shown in the app-owned sign-in view',async({pa
  await boot(page,{...await entitlements(),serviceName:'Example Service'});await agent(page,'unavailable');
  await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Sign in to Example Service',exact:true})).toBeVisible();
+ await noHandOff(page);
+});
+
+
+test('long provider documents scroll to the end and return to an unfinished sign-in on a small phone',async({page})=>{
+ await page.setViewportSize({width:320,height:568});
+ const paragraphs=Array.from({length:40},(_,i)=>`Section ${i+1}. ${'Provider document text with readable wrapping. '.repeat(12)}`);
+ paragraphs.push('End of the provider document.');
+ await boot(page,{...await entitlements(),legalParagraphs:paragraphs});await agent(page,'unavailable');
+ await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
+ const dialog=signInDialog(page);
+ await dialog.getByLabel('Email',{exact:true}).fill('unfinished@example.invalid');
+ await dialog.getByRole('button',{name:'Terms of Service',exact:true}).click();
+ await expect(dialog.getByRole('heading',{name:'Terms of Service',exact:true})).toBeInViewport();
+ const end=dialog.getByText('End of the provider document.',{exact:true});
+ await end.scrollIntoViewIfNeeded();await expect(end).toBeInViewport();
+ const back=dialog.getByRole('button',{name:'Return to sign-in',exact:true});
+ await back.scrollIntoViewIfNeeded();await expect(back).toBeInViewport();await back.click();
+ await expect(dialog.getByRole('button',{name:'Terms of Service',exact:true})).toBeFocused();
+ await expect(dialog.getByLabel('Email',{exact:true})).toHaveValue('unfinished@example.invalid');
+ expect((await calls(page)).filter(c=>['startEmail','startPhone','startGoogle'].includes(c.method))).toEqual([]);
  await noHandOff(page);
 });
