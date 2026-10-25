@@ -16,6 +16,8 @@ function fixture(run) {
    const file=path.join(vendor,path.extname(prefix)?prefix:prefix+'/fixture.ts');
    fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,'export const value = 1;\n');
   }
+  // The voice projection also reads this explicitly pinned companion before checking hashes.
+  const camera=path.join(vendor,'plugins/plugin-assistant/src/services/device-actions/camera-contract.ts');fs.mkdirSync(path.dirname(camera),{recursive:true});fs.writeFileSync(camera,'export const value = 1;\n');
   // The development launcher imports the shared verifier through its product adapter.
   for(const name of ['immutable-workspace-source.mjs','committed-source.mjs']) {
    const relative=`packages/app/scripts/lib/${name}`,target=path.join(vendor,relative);
@@ -64,12 +66,12 @@ test('direct local development launcher prepares a clean client tree before star
 }));
 
 test('voice projection refuses an unreviewed pin by default',()=>fixture(({root})=>{
- assert.throws(()=>prepareClientFeatures({root}),/Review voice projections/);
+ assert.throws(()=>prepareClientFeatures({root}),/Review changed voice projection input/);
  assert.equal(fs.existsSync(path.join(root,'.eliza/client-features')),false);
 }));
 test('actual pinned host projections authenticate source/output hashes and exclude dashboard transport',()=>{
  const source=prepareClientFeatures(),stamp=JSON.parse(fs.readFileSync(path.join(source,'.source.json')));
-assert.equal(stamp.baseCommit,'58dfddf87ee5adec414746a86a23dada124fbbae');assert.equal(stamp.projectionVersion,7);
+assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','utf8')).commit);assert.equal(stamp.projectionVersion,8);
  const relayPath='plugins/plugin-maps/src/client/navigation-relay.ts';
  // The WebView signal shim is upstream (elizaOS/eliza#37315); the relay is carried unchanged.
  assert.equal(stamp.sourceFiles[relayPath],stamp.files[relayPath]);
