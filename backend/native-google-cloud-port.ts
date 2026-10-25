@@ -36,7 +36,7 @@ export function createNativeGoogleCloudPort(binding:NativeGoogleBinding,assertCu
   if(purpose==='calendar'&&url.pathname.startsWith('/api/v1/eliza/google/calendar/sync-v1/'))permitted=managedGoogleRequest(url,input.method,body);
   if(!permitted)throw Error('Native Google operation is outside this host');
   stage='fetch';
-  const response=await request(url,{method:input.method,redirect:'error',signal:input.signal,
+  const response=await request(url.toString(),{method:input.method,redirect:'error',signal:input.signal,
    headers:{Accept:'application/json',Authorization:'Bearer '+binding.token,'User-Agent':'AlphaPhone-Native-Google/1',...(body===undefined?{}:{'Content-Type':'application/json'})},
    ...(body===undefined?{}:{body})});
   stage='response-json';

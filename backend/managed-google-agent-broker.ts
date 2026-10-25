@@ -1,11 +1,11 @@
-import {managedGoogleFailureStage,type ManagedGoogleFailureStage} from './managed-google-failure-stage.ts';
+import {managedGoogleFailureStage,managedGoogleTransportCodes,type ManagedGoogleFailureStage,type ManagedGoogleTransportCode} from './managed-google-failure-stage.ts';
 /** Private Google tool transport shared by browser and signed native hosts. */
 import type {IncomingMessage,ServerResponse} from 'node:http';
 import {CloudProtocolError} from '../apps/app/src/runtime/cloud-protocol.ts';
 import {CalendarAgentWriteRefused} from '../vendor/eliza/plugins/plugin-calendar/src/service/managed-calendar-host.ts';
 import type {createManagedGoogleAgentHost} from './managed-google-agent-host.ts';
 type BrokerOperation='request'|'gmail.list'|'gmail.message'|'gmail.mailbox'|'gmail.send.prepare'|'gmail.send.dispatch'|'gmail.send.receipt'|'calendar.sources'|'calendar.feed'|'calendar.write-capabilities'|'calendar.write-target'|'calendar.write-execute';
-export type ManagedGoogleBrokerDiagnostic={operation:BrokerOperation;errorClass:'CloudProtocolError'|'CalendarAgentWriteRefused'|'AbortError'|'TypeError'|'Error'|'unknown';code:'invalid-response'|'http'|'expired'|'credentials-missing'|'credential-consumed'|'login-active'|'account-changed'|'unclassified';status?:number;stage?:ManagedGoogleFailureStage;capabilities:{abortAny:boolean;abortTimeout:boolean;fetch:boolean}};
+export type ManagedGoogleBrokerDiagnostic={operation:BrokerOperation;errorClass:'CloudProtocolError'|'CalendarAgentWriteRefused'|'AbortError'|'TypeError'|'Error'|'unknown';code:'invalid-response'|'http'|'expired'|'credentials-missing'|'credential-consumed'|'login-active'|'account-changed'|'unclassified';status?:number;stage?:ManagedGoogleFailureStage;transportCode?:ManagedGoogleTransportCode;causeTransportCode?:ManagedGoogleTransportCode;capabilities:{abortAny:boolean;abortTimeout:boolean;fetch:boolean}};
 function reportBrokerFailure(error:unknown,operation:BrokerOperation,report:(value:ManagedGoogleBrokerDiagnostic)=>void){
  try{
   const cloud=error instanceof CloudProtocolError;
@@ -15,7 +15,7 @@ function reportBrokerFailure(error:unknown,operation:BrokerOperation,report:(val
   const errorClass=cloud?'CloudProtocolError':error instanceof CalendarAgentWriteRefused?'CalendarAgentWriteRefused':error instanceof DOMException&&error.name==='AbortError'?'AbortError':error instanceof TypeError?'TypeError':error instanceof Error?'Error':'unknown';
   const stage=managedGoogleFailureStage(error);
   const capabilities={abortAny:typeof AbortSignal.any==='function',abortTimeout:typeof AbortSignal.timeout==='function',fetch:typeof fetch==='function'};
-  report({operation,errorClass,code,...(status===undefined?{}:{status}),...(stage?{stage}:{}),capabilities});
+  report({operation,errorClass,code,...(status===undefined?{}:{status}),...(stage?{stage}:{}),...(stage==='fetch'?managedGoogleTransportCodes(error):{}),capabilities});
  }catch{/* Diagnostics cannot change the broker's refusal or response. */}
 }
 export function createManagedGoogleAgentBroker(options:{host:ReturnType<typeof createManagedGoogleAgentHost>;authorized(value:string|undefined):Promise<boolean>;diagnostic?:(value:ManagedGoogleBrokerDiagnostic)=>void}){
