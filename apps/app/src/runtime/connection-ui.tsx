@@ -1363,7 +1363,7 @@ async function restoreConversationHistory(id:string,signal:AbortSignal,automatic
   if(fallbackExpected&&JSON.stringify(expected)!==JSON.stringify(fallbackExpected))throw Error('Saved conversation selection changed.');
   if(automatic&&expected?.id!==id)throw Error('Saved conversation selection changed.');
   const list=await conversationList(selected,signal);await assertAccount();
-  if(!list.some(item=>item.id===id))throw Object.assign(Error('This conversation is no longer available to this agent.'),{code:'conversation_missing',latest:list[0]?.id});
+  if(!list.some(item=>item.id===id))throw new ConversationMissing(list[0]?.id);
   const result=await readConversation(selected,id,signal,assertCurrent);
   assertCurrent();
   const messages=restoredMessages(result.messages);
@@ -1397,6 +1397,7 @@ async function restoreConversationHistory(id:string,signal:AbortSignal,automatic
   if(afterConnect&&selected.kind==='resident'&&last?.role==='user'&&typeof last.text==='string'&&typeof last.timestamp==='number'&&last.timestamp>Date.now()-RESTORED_REPLY_WINDOW_MS)
     scheduleStoppedReply(selected,session,id,{text:restoredText(last.text,last.userTextFormat),sentAt:last.timestamp,...(typeof last.clientMessageId==='string'?{clientMessageId:last.clientMessageId}:{})},STOPPED_REPLY_CHECK_MS,false);
 }
+class ConversationMissing extends Error{constructor(readonly latest?:string){super('This conversation is no longer available to this agent.');}}
 /** Restored chats are bounded; anything older stays on the agent and is reported as partial. */
 const HISTORY_LIMIT=2000, HISTORY_PAGE=200;
 /** Reads the recent window, then pages older messages with ?before=<createdAt>&beforeId=<id> until
@@ -1443,16 +1444,16 @@ async function restoreSavedHistory(signal:AbortSignal) {
     if(saved)await restoreConversationHistory(saved.id,signal,true,true).catch(async(error:unknown)=>{
       // As in stock eliza, a saved conversation the agent no longer has falls back to its most
       // recent conversation, or to a new one; otherwise every send fails with HTTP 404.
-      const missing=error as {code?:unknown;latest?:unknown}|null;
-      if(missing?.code!=='conversation_missing')throw error;
+      if(!(error instanceof ConversationMissing))throw error;
+      const latest=error.latest;
       const stillSelected=await captureConversationChoice(conversationKey(session),signal);signal.throwIfAborted();
       if(JSON.stringify(stillSelected)!==JSON.stringify(saved))throw Error('Saved conversation selection changed.');
-      if(typeof missing.latest==='string')await restoreConversationHistory(missing.latest,signal,false,true,saved);
+      if(latest)await restoreConversationHistory(latest,signal,false,true,saved);
       else {
         const id=await createSelectedConversation(selected,conversationKey(session),saved,signal,()=>{signal.throwIfAborted();if(generation!==epoch||selected!==active||state.session!==session)throw Error('The agent changed.');},true);
         update({history:{sessionId:session.sessionId,conversationId:id,revision:(state.history?.revision||0)+1,messages:[],automatic:true}});
       }
-      update({historyError:'',message:typeof missing.latest==='string'?'The saved conversation is no longer on the agent. Its most recent conversation is shown.':'The saved conversation is no longer on the agent. A new conversation was started.'});
+      update({historyError:'',message:latest?'The saved conversation is no longer on the agent. Its most recent conversation is shown.':'The saved conversation is no longer on the agent. A new conversation was started.'});
     });
   }catch(error){
     signal.throwIfAborted();
