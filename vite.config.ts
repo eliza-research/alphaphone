@@ -137,7 +137,8 @@ export default defineConfig({
     realpathSync(fileURLToPath(new URL('./.eliza/client-features', import.meta.url))),
     fileURLToPath(new URL('./.eliza/patched', import.meta.url)),
     fileURLToPath(new URL('./node_modules', import.meta.url)),
-    fileURLToPath(new URL('./vendor/eliza/plugins/plugin-native-system', import.meta.url)),
+    fileURLToPath(new URL('./config/owner-routes.json', import.meta.url)),
+  fileURLToPath(new URL('./vendor/eliza/plugins/plugin-native-system', import.meta.url)),
     fileURLToPath(new URL('./vendor/eliza/plugins/plugin-assistant/src/services/device-actions', import.meta.url)),
   ] } },
 });

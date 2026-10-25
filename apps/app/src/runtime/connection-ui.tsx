@@ -13,7 +13,7 @@ import {resolveCloudEnvironment} from './cloud-environment-selection';
 import { withResidentMapsNavigation } from '../maps/resident-relay.ts';
 import {aospImage} from './aosp-image';
 import {SMS_SEND_CAPABILITY} from './sms-agent-contract';
-import {automationsRouteAllowed, assertAutomationRequestAllowed, AutomationRequestNotDispatchedError, type AutomationsMethod} from './automations-route-policy.ts';
+import {assertAutomationRequestAllowed, AutomationRequestNotDispatchedError, type AutomationsMethod} from './automations-route-policy.ts';
 import {iconStyle} from '../icon-style';
 import {validateUuid} from '../../../../vendor/eliza/packages/core/src/utils/uuid';
 import type {ConversationMessageTarget, ChatChannel, VoiceConversationBinding,VoiceTurnSignal,ReadReplyBinding,NativeNotesReadReplyHint} from './alpha-client';

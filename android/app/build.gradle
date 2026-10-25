@@ -194,6 +194,15 @@ def stageNativePatchReceipt = tasks.register('stageNativePatchReceipt', Copy) {
 }
 tasks.named('preBuild').configure { dependsOn stageNativePatchReceipt }
 
+// OwnerRoutes reads the owner route table the renderer imports, so both gates enforce the same bytes.
+def ownerRouteAssets = layout.buildDirectory.dir('generated/owner-route-assets')
+android.sourceSets.main.assets.srcDir(ownerRouteAssets)
+def stageOwnerRoutes = tasks.register('stageOwnerRoutes', Copy) {
+ from(file('../../config/owner-routes.json'))
+ into(ownerRouteAssets)
+}
+tasks.named('preBuild').configure { dependsOn stageOwnerRoutes }
+
 // On-device voice: the shared paradee-voice library (:local-speech) links libelizainference but does
 // not package it; the app packages its resident host's engine, so the two must be identical bytes.
 // Staged voice outputs must also be the bytes android/voice-host/qualified-voice-host.json records.

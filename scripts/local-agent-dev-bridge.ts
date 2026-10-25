@@ -1,9 +1,7 @@
 import {parseViewInteractionClientId} from "../.eliza/client-features/packages/core/src/views/view-interact-protocol.ts";
-import {isAppRecordPath,appRecordRouteAllowed} from '../apps/app/src/runtime/app-record-route-policy.ts';
-import {CALENDAR_APPROVAL_READ_PATH} from '../apps/app/src/runtime/calendar-approval.ts';
+import {ownerRouteAllowed,ownerRouteGroup} from '../apps/app/src/runtime/owner-route-policy.ts';
 import {createGmailAgentDevBroker} from './gmail-agent-dev-broker.ts';
 import {homedir} from 'node:os';
-import {automationsRouteAllowed, isAutomationsPath} from '../apps/app/src/runtime/automations-route-policy.ts';
 import {dirname,join} from 'node:path';
 import {once} from 'node:events';
 import {localAgentStorage} from './local-agent-dev-storage.ts';
@@ -52,7 +50,8 @@ function voiceControlResponse(kind:string,input:any,status:number,raw:string,ori
  return value;
 }
 export function localAgentPathAllowed(path:unknown):path is string {
-  if(isAppRecordPath(path))return ['GET','POST','PATCH','DELETE'].some(method=>appRecordRouteAllowed(path,method));
+  const group=ownerRouteGroup(path);
+  if(group)return ['GET','POST','PUT','PATCH','DELETE'].some(method=>ownerRouteAllowed(group,path,method));
   if(typeof path!=='string'||path.length>2048||/[\\#%\r\n]/.test(path)||path.includes('..'))return false;
   if(/^\/api\/conversations\/[A-Za-z0-9_-]+\/messages\?/.test(path)){
     const query=new URL(path,'http://localhost').searchParams,keys=[...query.keys()];
@@ -60,8 +59,6 @@ export function localAgentPathAllowed(path:unknown):path is string {
     const before=query.get('before'),id=query.get('beforeId'),limit=query.get('limit');
     return (limit===null||/^[1-9][0-9]{0,2}$/.test(limit)&&Number(limit)<=200)&&(before===null&&id===null||before!==null&&/^[0-9]{1,16}$/.test(before)&&Number.isSafeInteger(Number(before))&&id!==null&&VOICE_AGENT_ID.test(id));
   }
-  if(isAutomationsPath(path))return ['GET','POST','PUT','DELETE'].some(method=>automationsRouteAllowed(path,method));
-  if(path===CALENDAR_APPROVAL_READ_PATH)return true;
   if(TRAJECTORY_READ.test(path))return true;
   if(path===ASR_PATH||path===ASR_PATH+'/status'||path===TTS_PATH||path===TTS_PATH+'/status')return true;
   return /^\/api\/(auth\/me|agents|status|conversations(?:\/[A-Za-z0-9_-]+(?:\/messages(?:\/(?:stream|truncate))?)?)?|views\/interact-(claim|result)|client-devices\/[A-Za-z0-9_/-]+|workflow(?:\/[A-Za-z0-9_/?=&-]+)?)$/.test(path);
@@ -121,8 +118,8 @@ export function createLocalAgentDevHandler(options:{origin:string;tokenFile:stri
       const speech=asr||tts,ttsAudio=(directTts||cloudTts||input.path===TTS_PATH)&&input.method==='POST';
       if(size>LIMIT&&!((cloudAsr||input.path===ASR_PATH)&&input.method==='POST')){fail(413,'Request too large');return;}
       if(input.storage){const result=localAgentStorage(join(dirname(options.tokenFile),'browser-device'),input.storage);res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(result));return;}
-      if((!renderer&&!voice&&!cloudSpeech&&!directTts&&!localAgentPathAllowed(input.path))||(isAppRecordPath(input.path)?!appRecordRouteAllowed(input.path,input.method)||typeof input.ownerId!=='string'||!input.ownerId.trim():isAutomationsPath(input.path)?!automationsRouteAllowed(input.path,input.method)||typeof input.ownerId!=='string'||!input.ownerId.trim():!['GET','POST'].includes(input.method))||
-         (input.path===CALENDAR_APPROVAL_READ_PATH&&(input.method!=='GET'||typeof input.ownerId!=='string'||!input.ownerId.trim()))||
+      const group=ownerRouteGroup(input.path);
+      if((!renderer&&!voice&&!cloudSpeech&&!directTts&&!localAgentPathAllowed(input.path))||(group?!ownerRouteAllowed(group,input.path,input.method)||typeof input.ownerId!=='string'||!input.ownerId.trim():!['GET','POST'].includes(input.method))||
          (TRAJECTORY_READ.test(input.path)&&(input.method!=='GET'||typeof input.ownerId!=='string'||!input.ownerId.trim()))||
          ((input.path.startsWith('/api/views/')||input.path.endsWith('/messages/truncate'))&&(input.method!=='POST'||typeof input.ownerId!=='string'||!input.ownerId.trim()))||
          (input.body!==undefined&&typeof input.body!=='string')||
