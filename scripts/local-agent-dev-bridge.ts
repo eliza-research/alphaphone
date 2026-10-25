@@ -1,3 +1,4 @@
+import {isAppRecordPath,appRecordRouteAllowed} from '../apps/app/src/runtime/app-record-route-policy.ts';
 import {CALENDAR_APPROVAL_READ_PATH} from '../apps/app/src/runtime/calendar-approval.ts';
 import {createGmailAgentDevBroker} from './gmail-agent-dev-broker.ts';
 import {homedir} from 'node:os';
@@ -50,6 +51,7 @@ function voiceControlResponse(kind:string,input:any,status:number,raw:string,ori
  return value;
 }
 export function localAgentPathAllowed(path:unknown):path is string {
+  if(isAppRecordPath(path))return ['GET','POST','PATCH','DELETE'].some(method=>appRecordRouteAllowed(path,method));
   if(typeof path!=='string'||path.length>2048||/[\\#%\r\n]/.test(path)||path.includes('..'))return false;
   if(/^\/api\/conversations\/[A-Za-z0-9_-]+\/messages\?/.test(path)){
     const query=new URL(path,'http://localhost').searchParams,keys=[...query.keys()];
@@ -105,8 +107,9 @@ export function createLocalAgentDevHandler(options:{origin:string;tokenFile:stri
       const chunks:Buffer[]=[];let size=0;
       for await(const chunk of req){size+=chunk.length;if(size>AUDIO_ENVELOPE_LIMIT){fail(413,'Request too large');return;}chunks.push(Buffer.from(chunk));}
       const input=JSON.parse(Buffer.concat(chunks).toString('utf8'));
-      const renderer=input.path==='/api/views/voice-channel';
-      if(renderer&&(!realtimeEnabled||input.method!=='POST'||typeof input.ownerId!=='string'||typeof input.body!=='string'||Object.keys(input.headers??{}).some(key=>!['accept','content-type','x-eliza-device-id','x-eliza-device-key','x-eliza-device-capabilities'].includes(key.toLowerCase()))||input.stream||input.storage||input.audioBase64||input.requestId)){fail(400,'Invalid renderer channel request');return;}
+      const conversationRenderer=input.path==='/api/views/renderer-channel';
+      const renderer=conversationRenderer||input.path==='/api/views/voice-channel';
+      if(renderer&&((!conversationRenderer&&!realtimeEnabled)||input.method!=='POST'||typeof input.ownerId!=='string'||typeof input.body!=='string'||Object.keys(input.headers??{}).some(key=>!['accept','content-type','x-eliza-device-id','x-eliza-device-key','x-eliza-device-capabilities'].includes(key.toLowerCase()))||input.stream||input.storage||input.audioBase64||input.requestId)){fail(400,'Invalid renderer channel request');return;}
       let rendererId:string|undefined;if(renderer){const body=JSON.parse(input.body);if(!body||Object.keys(body).length!==1||!VOICE_UUID.test(body.clientId)){fail(400,'Invalid renderer identity');return;}rendererId=body.clientId;}
       const directTts=input.path===VOICE_PATH+'/read-aloud',voicePath=typeof input.path==='string'&&input.path.startsWith(VOICE_PATH)&&!directTts,voice=voicePath&&realtimeEnabled?voiceControl(input):null;
       if(voicePath&&!voice){fail(400,'Unsupported development voice request');return;}
@@ -117,7 +120,7 @@ export function createLocalAgentDevHandler(options:{origin:string;tokenFile:stri
       const speech=asr||tts,ttsAudio=(directTts||cloudTts||input.path===TTS_PATH)&&input.method==='POST';
       if(size>LIMIT&&!((cloudAsr||input.path===ASR_PATH)&&input.method==='POST')){fail(413,'Request too large');return;}
       if(input.storage){const result=localAgentStorage(join(dirname(options.tokenFile),'browser-device'),input.storage);res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(result));return;}
-      if((!renderer&&!voice&&!cloudSpeech&&!directTts&&!localAgentPathAllowed(input.path))||(isAutomationsPath(input.path)?!automationsRouteAllowed(input.path,input.method)||typeof input.ownerId!=='string'||!input.ownerId.trim():!['GET','POST'].includes(input.method))||
+      if((!renderer&&!voice&&!cloudSpeech&&!directTts&&!localAgentPathAllowed(input.path))||(isAppRecordPath(input.path)?!appRecordRouteAllowed(input.path,input.method)||typeof input.ownerId!=='string'||!input.ownerId.trim():isAutomationsPath(input.path)?!automationsRouteAllowed(input.path,input.method)||typeof input.ownerId!=='string'||!input.ownerId.trim():!['GET','POST'].includes(input.method))||
          (input.path===CALENDAR_APPROVAL_READ_PATH&&(input.method!=='GET'||typeof input.ownerId!=='string'||!input.ownerId.trim()))||
          (TRAJECTORY_READ.test(input.path)&&(input.method!=='GET'||typeof input.ownerId!=='string'||!input.ownerId.trim()))||
          ((input.path.startsWith('/api/views/')||input.path.endsWith('/messages/truncate'))&&(input.method!=='POST'||typeof input.ownerId!=='string'||!input.ownerId.trim()))||
@@ -207,7 +210,7 @@ export function createLocalAgentDevHandler(options:{origin:string;tokenFile:stri
     const reject=()=>{socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');};
     try{
       const host=req.headers.host,url=new URL(req.url,'http://localhost'),id=url.searchParams.get('sessionId'),ticket=id?tickets.get(id):undefined;
-      if(!realtimeEnabled||!host||!/^(?:127\.0\.0\.1|localhost):\d+$/.test(host)||req.headers.origin!==`http://${host}`||req.method!=='GET'||url.pathname!==(ticket?.clientId?LOCAL_RENDERER_WS_PATH:LOCAL_VOICE_WS_PATH)||url.search!==`?sessionId=${id}`||!id||!VOICE_UUID.test(id)||!ticket||ticket.claimed||ticket.expiresAt<=Date.now()||req.headers.upgrade?.toLowerCase()!=='websocket'||req.headers['sec-websocket-version']!=='13'||typeof req.headers['sec-websocket-key']!=='string'||!/^[A-Za-z0-9+/]{22}==$/.test(req.headers['sec-websocket-key'])){reject();return true;}
+      if((!realtimeEnabled&&!ticket?.clientId)||!host||!/^(?:127\.0\.0\.1|localhost):\d+$/.test(host)||req.headers.origin!==`http://${host}`||req.method!=='GET'||url.pathname!==(ticket?.clientId?LOCAL_RENDERER_WS_PATH:LOCAL_VOICE_WS_PATH)||url.search!==`?sessionId=${id}`||!id||!VOICE_UUID.test(id)||!ticket||ticket.claimed||ticket.expiresAt<=Date.now()||req.headers.upgrade?.toLowerCase()!=='websocket'||req.headers['sec-websocket-version']!=='13'||typeof req.headers['sec-websocket-key']!=='string'||!/^[A-Za-z0-9+/]{22}==$/.test(req.headers['sec-websocket-key'])){reject();return true;}
       const stat=statSync(options.tokenFile);if(!stat.isFile()||(stat.mode&0o077)!==0)throw Error('Private runtime credential required');
       const currentRoot=readFileSync(options.tokenFile,'utf8').trim();for(const [key,entry]of tickets)if(entry.root!==currentRoot||entry.expiresAt<=Date.now()){entry.close?.();tickets.delete(key);}
       const credential=await session(currentRoot);

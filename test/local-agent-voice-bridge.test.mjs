@@ -118,3 +118,33 @@ test('localhost does not widen HTTP host or origin trust',async()=>{
   assert.equal(f.calls.length,0);
  }finally{await f.close();}
 });
+
+test('canonical app records use the shared method policy and bound owner without voice',async()=>{
+ const f=await fixture(false);try{
+  for(const input of [
+   {path:'/api/notes/state',method:'GET'},
+   {path:'/api/views/notes/interact',method:'POST',body:'{}'},
+   {path:'/api/lifeops/calendar/feed?timeMin=2026-10-25T07%3A00%3A00Z&timeMax=2026-10-26T07%3A00%3A00Z',method:'GET'},
+   {path:'/api/lifeops/calendar/events',method:'POST',body:'{}'},
+   {path:'/api/lifeops/calendar/events/local%3Aevent-1',method:'PATCH',body:'{}'},
+   {path:'/api/lifeops/calendar/events/local%3Aevent-1?expectedProviderVersion=1',method:'DELETE'},
+  ]){const r=await f.call(input);assert.equal(r.status,200,input.path);assert.equal(r.data.status,200,input.path);assert.ok(f.calls.some(c=>new URL(c.url).pathname===new URL(input.path,'http://example.invalid').pathname&&c.input.method===input.method));assert(!JSON.stringify(r).includes(paired));}
+  for(const input of [
+   {path:'/api/notes/state',method:'PATCH',body:'{}'},
+   {path:'/api/lifeops/calendar/unknown',method:'GET'},
+   {path:'/api/lifeops/calendar/events/a%2Fb',method:'DELETE'},
+   {path:'/api/lifeops/calendar/feed?unknown=1',method:'GET'},
+   {path:'/api/lifeops/calendar/feed?mode=local&mode=remote',method:'GET'},
+  ]){const before=f.calls.length;assert.equal((await f.call(input)).status,400,input.path);assert.equal(f.calls.length,before);}
+  const before=f.calls.length;assert.equal((await f.call({path:'/api/notes/state',method:'GET',ownerId:'wrong-owner'})).status,409);assert.equal(f.calls.length,before);
+ }finally{await f.close();}
+});
+
+test('ordinary conversation renderer lease works without enabling voice and stays single-use',async()=>{
+ const f=await fixture(false);try{
+  const clientId=randomUUID();const r=await f.call({path:'/api/views/renderer-channel',method:'POST',body:JSON.stringify({clientId})});assert.equal(r.status,200);assert.equal(r.data.status,200);
+  const ticket=JSON.parse(r.data.body);assert(!JSON.stringify(r).includes(paired));assert.equal((await upgrade(ticket.wsUrl,'https://other.invalid')).status,403);
+  const connection=await upgrade(ticket.wsUrl,f.origin);assert.equal(connection.status,101);assert.equal((await upgrade(ticket.wsUrl,f.origin)).status,403);assert.deepEqual(f.rendererHeaders,[{url:'/ws?clientId='+clientId,authorization:'Bearer '+paired}]);connection.socket.destroy();
+  assert.equal((await f.call(mint())).status,400);
+ }finally{await f.close();}
+});
