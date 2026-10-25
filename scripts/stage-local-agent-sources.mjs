@@ -28,6 +28,8 @@ for(const name of classes){
   if(name==='ElizaAgentService'){
     const anchor='agentEnv.put("ELIZA_LOCAL_AGENT_SOCKET_PATH",privateSocketPath);';
     if(value.split(anchor).length!==2)throw Error('Native runtime environment insertion point changed');
+    // Alpha relies on the stock service to run the agent in the phone time zone.
+    if(!value.includes('agentEnv.put("TZ",'))throw Error('Native runtime no longer sets the agent time zone');
     value=value.replace(anchor,anchor+`\n            agentEnv.put("ELIZA_ANDROID_SECURE_STORE_SOCKET", "${identity}.secure-store");\n            try { AlphaLocalAgentPlugin.configureEnvironment(this, agentEnv); } catch (java.io.IOException unavailable) { currentStatus = "provider-unavailable"; updateNotification(); return; }`);
   }
   fs.writeFileSync(path.join(target,name+'.java'),value);
