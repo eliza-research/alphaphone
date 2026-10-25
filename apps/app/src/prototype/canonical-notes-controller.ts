@@ -1,3 +1,4 @@
+import {anyAbortSignal} from '../runtime/abort-signal';
 /** Canonical Notes view lifecycle only: no local persistence or parallel Notes codec. */
 import {createNotesClient,type NotesInteractResult} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-api.ts';
 import type {NotesSnapshot} from '../../../../.eliza/client-features/plugins/plugin-notes/src/types.ts';
@@ -29,7 +30,7 @@ export class CanonicalNotesController {
   // Adapt the existing canonical client's fetch contract to Root's admitted
   // resident port. JSON parsing here is transport framing, never a domain codec.
   this.notes=createNotesClient({fetch:async<T>(path:string,options:RequestInit={}):Promise<T>=>{
-   const signal=AbortSignal.any([this.lifetime.signal,...(options.signal?[options.signal]:[])]);
+   const signal=anyAbortSignal([this.lifetime.signal,...(options.signal?[options.signal]:[])]);
    this.assertCurrent(signal);
    const method=options.method??'GET';
    if(method!=='GET'&&method!=='POST')throw Error('Unsupported Notes transport method.');
@@ -61,7 +62,7 @@ export class CanonicalNotesController {
   if(this.read)return this.read;
   this.invalidated=false;this.hooks.phase('loading');
   const abort=new AbortController();this.readAbort=abort;
-  const pending=this.notes.readState(AbortSignal.any([this.lifetime.signal,abort.signal])).then(value=>{this.publish(value,'read');this.hooks.phase('ready');return structuredClone(value);}).catch(error=>{if(this.current&&!abort.signal.aborted)this.hooks.phase('review');throw error;});
+  const pending=this.notes.readState(anyAbortSignal([this.lifetime.signal,abort.signal])).then(value=>{this.publish(value,'read');this.hooks.phase('ready');return structuredClone(value);}).catch(error=>{if(this.current&&!abort.signal.aborted)this.hooks.phase('review');throw error;});
   this.read=pending;
   try{return await pending;}finally{
    if(this.read===pending){this.read=null;this.readAbort=null;}

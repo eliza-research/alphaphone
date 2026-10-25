@@ -1,3 +1,4 @@
+import {anyAbortSignal} from './abort-signal';
 /** Passive singleton for the existing web plugin. Binding is injected after main initialization. */
 import {parseOwnerReminderList,type CoreReminderNotice,type ReminderNotificationBinding,type ReminderNotificationSource} from './owner-reminder-notification-protocol';
 export interface ReminderVisibility { foreground:boolean; shadeOpen:boolean; unlocked:boolean; appEnabled:boolean; reminderChannelEnabled:boolean; }
@@ -47,7 +48,7 @@ export class OwnerReminderNotificationPort {
   const epoch=this.epoch,controller=this.controller=new AbortController();this.reads++;
   const task=(async()=>{try{
    const reconcile=this.uncertain.size>0&&this.reconcileRequested;this.reconcileRequested=false;
-   const raw=await (reconcile?binding.readback(AbortSignal.any([controller.signal,AbortSignal.timeout(2500)])):binding.listUnread(AbortSignal.any([controller.signal,AbortSignal.timeout(2500)])));
+   const raw=await (reconcile?binding.readback(anyAbortSignal([controller.signal,AbortSignal.timeout(2500)])):binding.listUnread(anyAbortSignal([controller.signal,AbortSignal.timeout(2500)])));
    if(controller.signal.aborted||!this.ownerCurrent(binding,epoch)||!this.visible()||!binding.passiveAllowed())return;
    const rows=await parseOwnerReminderList(raw,binding.identity,this.clock());
    if(controller.signal.aborted||!this.ownerCurrent(binding,epoch)||!this.visible()||!binding.passiveAllowed())return;
@@ -68,7 +69,7 @@ export class OwnerReminderNotificationPort {
   const shown=this.rows.find(row=>row.id===input.id&&row.revision===input.revision);if(!shown||open&&!this.canOpen(shown))throw Error('Reminder is no longer available');
   this.controller?.abort();if(this.flight)await this.flight;
   if(this.actions.size)throw Error('A reminder action is already pending');
-  const controller=new AbortController(),signal=AbortSignal.any([controller.signal,AbortSignal.timeout(10000)]);this.actions.add(controller);
+  const controller=new AbortController(),signal=anyAbortSignal([controller.signal,AbortSignal.timeout(10000)]);this.actions.add(controller);
   const current=()=>{signal.throwIfAborted();if(!this.ownerCurrent(binding,epoch))throw Error('Reminder owner changed');};
   try{
    current();const fresh=await parseOwnerReminderList(await binding.listUnread(signal),binding.identity,this.clock());current();

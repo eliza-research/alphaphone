@@ -1820,7 +1820,7 @@ export const connectionController = {
     const check=(signal:AbortSignal)=>{signal.throwIfAborted();if(!current()||state.open||document.hidden)throw new DOMException('Reminder owner changed','AbortError');};
     const request=async(path:string,method:'GET'|'POST',signal:AbortSignal)=>{
       if(!ownerReminderRoute(path,method,undefined))throw Error('Unsupported reminder request');
-      const bounded=AbortSignal.any([signal,AbortSignal.timeout(2500)]);check(bounded);
+      const bounded=anyAbortSignal([signal,AbortSignal.timeout(2500)]);check(bounded);
       const result=await selected.remote.request(path,undefined,bounded,{},method);check(bounded);return result;
     };
     const port:ReminderNotificationBinding={
@@ -1832,7 +1832,7 @@ export const connectionController = {
       async openConversation(conversationId,messageId,signal){
         if(!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(conversationId)||!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(messageId)||state.open||state.busy||document.hidden)throw Error('Reminder source unavailable');
         check(signal);let opened=false;
-        await work('Opening reminder…',async own=>{const bounded=AbortSignal.any([signal,own]);check(bounded);await restoreConversationHistory(conversationId,bounded,false);check(bounded);
+        await work('Opening reminder…',async own=>{const bounded=anyAbortSignal([signal,own]);check(bounded);await restoreConversationHistory(conversationId,bounded,false);check(bounded);
           if(state.history?.sessionId!==session.sessionId||state.history.conversationId!==conversationId||!state.history.messages.some(row=>row.id===messageId))throw Error('The reminder message could not be restored');opened=true;
         });
         check(signal);if(!opened)throw Error('Reminder source did not open');return {opened:true};
@@ -1849,7 +1849,7 @@ export const connectionController = {
       request:async(path:string,method:AppRecordMethod,body:unknown|undefined,signal:AbortSignal):Promise<unknown>=>{
         assertAppRecordRequestAllowed(path,method,body);
         signal.throwIfAborted();if(!current())throw new DOMException('The app record connection changed','AbortError');
-        const controller=new AbortController(),bounded=AbortSignal.any([signal,controller.signal]);appRequests.add(controller);
+        const controller=new AbortController(),bounded=anyAbortSignal([signal,controller.signal]);appRequests.add(controller);
         try{const result=await selected.remote.request(path,body,bounded,{},method);bounded.throwIfAborted();if(!current())throw new DOMException('The app record connection changed','AbortError');return result;}
         finally{appRequests.delete(controller);}
       }};
@@ -1864,7 +1864,7 @@ export const connectionController = {
     };
     return {sessionId:session.sessionId,scope:selected.actions?.scope,preflight,request:async(path,method,body,signal)=>{
       preflight(path,method,body,signal);
-      const controller=new AbortController(),bounded=AbortSignal.any([signal,controller.signal]);appRequests.add(controller);
+      const controller=new AbortController(),bounded=anyAbortSignal([signal,controller.signal]);appRequests.add(controller);
       const current=()=>{bounded.throwIfAborted();if(generation!==epoch||selected!==active||session!==state.session)throw new DOMException('The connection changed','AbortError');};
       try{
         current();
