@@ -51,6 +51,7 @@ export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = tru
     {view.step === 'choose' && <>
       {!google && !phone && !emailEnabled && <p role="status">This service offers no sign-in method supported by this app. Contact the service administrator.</p>}
       <p>Sign in to {service?.name || 'Eliza Cloud'} to use AI. Your agent keeps running on this device.</p>
+      <p role="note">By continuing, you allow Alpha Phone to access your account and use this service on this device. You can sign out in Settings.</p>
       {google && <div className="alpha-connection-actions"><button disabled={busy} onClick={actions.google}>Continue with Google</button></div>}
       {emailEnabled && <form className="alpha-cloud-sign-in-email" aria-label="Sign in with email" onSubmit={event => { event.preventDefault(); actions.email(email.current?.value || ''); }}>
         <label>Email<input ref={email} type="email" name="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="email" maxLength={320} required disabled={busy} /></label>
