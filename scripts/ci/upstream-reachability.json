@@ -2,15 +2,124 @@
   "schema": 1,
   "repository": "elizaOS/eliza",
   "base": "develop",
-  "baseCommit": "58dfddf87ee5adec414746a86a23dada124fbbae",
-  "head": "58dfddf87ee5adec414746a86a23dada124fbbae",
-  "recordedAt": "2026-10-23",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...58dfddf87ee5adec414746a86a23dada124fbbae",
-  "status": "identical",
-  "aheadBy": 0,
-  "behindBy": 0,
+  "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
+  "head": "fa7b8ea7bbea8d823ea0644f85278f63ab86075f",
+  "recordedAt": "2026-10-25",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...fa7b8ea7bbea8d823ea0644f85278f63ab86075f",
+  "status": "diverged",
+  "aheadBy": 28,
+  "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
-  "pinOnlyCommits": [],
+  "pinOnlyCommits": [
+    {
+      "sha": "e401e45cacb50b837c344533f54067c5d577058c",
+      "subject": "Checkpoint joined canonical Alpha SDK source on 58df"
+    },
+    {
+      "sha": "6b84ed6dd062607efec1f2608da02a6f10548d4b",
+      "subject": "Remove whitespace errors in canonical source checkpoint"
+    },
+    {
+      "sha": "096b5fdba239861348d63df31fee471f736dd69c",
+      "subject": "Fix Calendar package identity and finish normal startup lifecycle cleanup"
+    },
+    {
+      "sha": "e946e275dff358ae213557805f599d6341abeb65",
+      "subject": "Build Calendar read schemas only from supported field definitions"
+    },
+    {
+      "sha": "672cf6321b1fa3a3af4860d15a4188b914b3a373",
+      "subject": "Fix Calendar declaration output by consuming package contracts"
+    },
+    {
+      "sha": "11d9af66de1f5e6714071d8b773dd5a05ea00bac",
+      "subject": "Preserve error severity and default fresh local configurations to local embeddings"
+    },
+    {
+      "sha": "ef0cf9deb75924cc7001a3b9d611c1d4cc31630b",
+      "subject": "fix(core): classify invalid tool definitions and suppress futile retries"
+    },
+    {
+      "sha": "ad0eebddb3a94565c532d939d3944b83d0e363f4",
+      "subject": "Defer settled historical effects with their reviewed background history"
+    },
+    {
+      "sha": "99af6a5dfa4c404142501f32d44d3b8fbf39d9b0",
+      "subject": "chore: format PR sources, drop unreachable camera receipt branches, pass required title args"
+    },
+    {
+      "sha": "e6696ca6a73b36ab6a61704f6d4b0eacac07516d",
+      "subject": "Reconcile historical proposal previews with owner-bound terminal receipts"
+    },
+    {
+      "sha": "3ea91149647153b4186b0fc36e5dc635e10ac2df",
+      "subject": "style: format merged canonical context assembly"
+    },
+    {
+      "sha": "13a988d44587ab06ba792e7918e4e257f8cba83e",
+      "subject": "fix: use public device review contracts in plugin builds"
+    },
+    {
+      "sha": "601868d34e074ef1db1a165fa87e36a87a941bc6",
+      "subject": "fix: export shared device contracts across plugin build boundaries"
+    },
+    {
+      "sha": "374c14a8e3c43dee93ae44bd65f5438fef35a0fc",
+      "subject": "fix: retain mobile browser schema and inherit Android timezone"
+    },
+    {
+      "sha": "321d90ecaa28f5958b4019916740521062db9b9c",
+      "subject": "fix(calendar): mount owner calendar reads from plugin-calendar"
+    },
+    {
+      "sha": "b8aad0be52d55c4409dc623b4a79fa81d08949c8",
+      "subject": "fix: load canonical LifeOps on mobile while preserving explicit opt-outs"
+    },
+    {
+      "sha": "47bd45d8f00695778d423c338739da62697fb507",
+      "subject": "build: select native speech ABI targets explicitly"
+    },
+    {
+      "sha": "2366e070e1dd1734ee544ba3f0d58fa8be2413b7",
+      "subject": "fix: use effective Android embedding configuration for document retrieval"
+    },
+    {
+      "sha": "25da37b8fd384fd358efd0dc31eeef6bfac5396d",
+      "subject": "fix: initialize admitted mobile Cloud routing independently of Google"
+    },
+    {
+      "sha": "b4ad6ead56773c076de14099a32db5851ecb81d0",
+      "subject": "fix: expose shared LifeOps contracts through mobile plugin entries"
+    },
+    {
+      "sha": "298a74c370d734152cfd208ecccc89d1844bd476",
+      "subject": "test: preserve orgless native Cloud routing and admission coverage"
+    },
+    {
+      "sha": "cdd624f136ce79776aceb4961bfecad1b7940057",
+      "subject": "fix: tolerate confirmed process exit during Android stop inventory"
+    },
+    {
+      "sha": "bb07ca8780091141417231f1a8f102c5ce98867b",
+      "subject": "fix: resolve LifeOps and supported UI plugins in mobile runtime"
+    },
+    {
+      "sha": "d8ab4fddf9dd34e7baa53bf8b8190bf27c5bb123",
+      "subject": "fix: respect ordinary request thinking policy and exposed tools"
+    },
+    {
+      "sha": "0dbe62ac3861ac4914635cb48888fde126a697aa",
+      "subject": "fix: initialize supported mobile LifeOps and preserve prepared navigation"
+    },
+    {
+      "sha": "8dfc87676343fc2b4d859dce8a1fa280dd0cb665",
+      "subject": "fix: distinguish supplied note text from generated content"
+    },
+    {
+      "sha": "fa7b8ea7bbea8d823ea0644f85278f63ab86075f",
+      "subject": "fix: classify terminal argv during resident shutdown"
+    }
+  ],
   "pullRequests": [
     {
       "url": "https://github.com/elizaOS/eliza/pull/37059",

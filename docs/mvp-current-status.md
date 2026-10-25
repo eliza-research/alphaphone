@@ -1,7 +1,9 @@
 # Current MVP status
 
+Current source pin: SDK `fa7b8ea7bbea8d823ea0644f85278f63ab86075f`. This pin includes the reviewed LifeOps mobile loading, ordinary-request thinking policy, completed navigation handoff and Notes supplied-text guidance. This metadata refresh does not change capability statuses or transfer historical native, APK, provider or device acceptance to the current pin. Earlier admissions remain scoped to their recorded source and evidence.
 
-Current source admission: SDK `58dfddf87ee5adec414746a86a23dada124fbbae` carries the reviewed Maps place-ID correction, task-origin/browser navigation fixes and Android mobile bridge loader. The listed Alpha-compiled native modules, client projections, native engine gitlink and model inputs are unchanged from `f931082ebd87a0fecc3f11f8eacf58f598294d4a`. Shared upstream native browser code changed, but that module is not an Alpha Gradle dependency. Native qualification remains false; current runtime/APK/live acceptance is pending. See [source comparison](evidence/sdk-reviewed-maps-tasks-source-20261023.json).
+
+Historical source admission: SDK `58dfddf87ee5adec414746a86a23dada124fbbae` carries the reviewed Maps place-ID correction, task-origin/browser navigation fixes and Android mobile bridge loader. The listed Alpha-compiled native modules, client projections, native engine gitlink and model inputs are unchanged from `f931082ebd87a0fecc3f11f8eacf58f598294d4a`. Shared upstream native browser code changed, but that module is not an Alpha Gradle dependency. Native qualification remains false; current runtime/APK/live acceptance is pending. See [source comparison](evidence/sdk-reviewed-maps-tasks-source-20261023.json).
 
 Previous source admission: SDK `f931082ebd87a0fecc3f11f8eacf58f598294d4a` carries the reviewed host-model size correction, consented browser control fixes, Clef decisions and migration diagnostics. Android native module inputs, voice projections, native engine gitlink and voice model inputs are unchanged from `b322e38de25a2c2ff26a137552e4470ec2ccc0cc`. See [source comparison](evidence/sdk-reviewed-voice-browser-source-20261023.json).
 
@@ -47,6 +49,8 @@ the operator's index of build, provisioning, release and support material is the
 [operational hand-off index](operational-handoff.md).
 
 ## Product boundaries
+
+The current upstream source pin is `fa7b8ea7bb` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 

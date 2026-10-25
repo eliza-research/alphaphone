@@ -1,16 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
 
 // Each process owns an isolated real config/routing store; module caches and
 // provider environment cannot leak between native, Cloud and disabled cases.
-const moduleUrl = new URL('../backend/native-cloud-runtime-config.ts', import.meta.url).href;
+const moduleFile = process.env.ALPHA_NATIVE_CLOUD_HOST_MODULE;
+if(!moduleFile||!path.isAbsolute(moduleFile))throw Error('Run through scripts/test-native-cloud-runtime-config.mjs with a verified prepared host');
+const moduleUrl = pathToFileURL(moduleFile).href;
 for (const mode of ['native', 'cloud', 'disabled']) {
  test(`native Cloud preparation preserves ${mode} embedding ownership`, () => {
   const code = `
    import assert from 'node:assert/strict';
    import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
+import {pathToFileURL} from 'node:url';
    const root=fs.mkdtempSync(path.join(os.tmpdir(),'alpha-routing-'));
    const config=path.join(root,'eliza.json'); const mode=${JSON.stringify(mode)};
    Object.assign(process.env, {ELIZA_STATE_DIR:root,ELIZA_CONFIG_PATH:config,ELIZA_PERSIST_CONFIG_PATH:config,
@@ -33,7 +37,7 @@ for (const mode of ['native', 'cloud', 'disabled']) {
   `;
   const bun = process.versions.bun ? process.execPath : process.env.BUN_BIN || 'bun';
   const result = spawnSync(bun, ['--conditions=eliza-source','-e',code], {
-   cwd:fileURLToPath(new URL('..',import.meta.url)),encoding:'utf8',timeout:30000,
+   cwd:path.dirname(moduleFile),encoding:'utf8',timeout:30000,
   });
   assert.ifError(result.error);
   assert.equal(result.status,0,result.stderr || result.stdout);
