@@ -29,7 +29,7 @@ export function deploymentOutputs(config){
  for(const env of ['production','staging']){
   const row=config[env];
   ts.push(`export const ${env}Cloud = ${JSON.stringify({name:row.name??new URL(row.api).hostname,entitlementAudience:row.entitlementAudience??'cloud-subscription',api:row.api,web:row.web,agents:new URL(row.services).host,tenant:row.tenant})} as const;`);
-  for(const [key,value] of Object.entries({...row,apiHost:new URL(row.api).host,webHost:new URL(row.web).host,servicesHost:new URL(row.services).host}))java.push(` static final String ${env.toUpperCase()}_${key.replace(/[A-Z]/g,c=>'_'+c).toUpperCase()} = ${JSON.stringify(value)};`);
+  for(const [key,value] of Object.entries({...row,name:row.name??new URL(row.api).hostname,apiHost:new URL(row.api).host,webHost:new URL(row.web).host,servicesHost:new URL(row.services).host}))java.push(` static final String ${env.toUpperCase()}_${key.replace(/[A-Z]/g,c=>'_'+c).toUpperCase()} = ${JSON.stringify(value)};`);
  }
  java.push(` static final String STORAGE_NAMESPACE = "cloud-deployment:${fingerprint}:";`,
   ' static String storageSlot(String name) {',

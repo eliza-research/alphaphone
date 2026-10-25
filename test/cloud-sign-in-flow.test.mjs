@@ -162,3 +162,16 @@ test('browser resident sign-in exposes the existing hosted hand-off only in its 
  assert.equal(render(React,true,false,{busy:true},controller).props.disabled,true);
  assert.equal(render(React,false,true,{busy:false},controller).props.children,'Browser sign-in (diagnostic)');
 });
+
+
+test('the native session exchange requires Android authorization before requesting an app key',()=>{
+ const plugin=read(native+'AlphaCloudSignInPlugin.java');
+ const complete=between(plugin,'private void complete(Attempt current, JSONObject session)','/** The saved key');
+ assert.ok(complete.indexOf('requireAuthorization(current);')>complete.indexOf('validStewardToken(token)'));
+ assert.ok(complete.indexOf('requireAuthorization(current);')<complete.indexOf('"/api/v1/app-auth/connect"'));
+ assert.match(complete,/finally[\s\S]*"\/steward\/auth\/logout"/);
+ const gate=between(plugin,'private void requireAuthorization(Attempt current)','// ── Shared tail');
+ assert.match(gate,/new AlertDialog.Builder/);assert.match(gate,/decision.await/);
+ assert.match(gate,/!current.authorized/);assert.match(gate,/current.expiresAt/);
+ assert.doesNotMatch(gate,/PluginCall|call.getBoolean|writeCredentialSlot/);
+});

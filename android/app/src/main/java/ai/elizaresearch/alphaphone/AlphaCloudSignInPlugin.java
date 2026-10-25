@@ -1,5 +1,6 @@
 package ai.elizaresearch.alphaphone;
 
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
@@ -31,6 +32,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.json.JSONArray;
@@ -80,12 +83,14 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   volatile boolean cancelled, browserLaunched, browserPaused, callbackReceived;
   volatile HttpURLConnection connection;
   PluginCall waiting;
+  volatile CountDownLatch authorizationDecision;
+  volatile boolean authorized;
   String email, phone, emailVerifier, mfaType, mfaChallenge;
   long expiresAt, resendAt;
   int failedVerifies;
   boolean busy;
   Attempt(CloudSignInFlow.Environment environment, boolean google) { this.environment = environment; this.google = google; }
-  void cancel() { cancelled = true; HttpURLConnection current = connection; if (current != null) current.disconnect(); }
+  void cancel() { cancelled = true; CountDownLatch decision = authorizationDecision; if (decision != null) decision.countDown(); HttpURLConnection current = connection; if (current != null) current.disconnect(); }
  }
  private static final class Response {
   final int status; final JSONObject data; final String location;
@@ -563,6 +568,53 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   call.resolve();
  }
 
+ /** Post-authentication consent is owned by Android, never a renderer-supplied boolean.
+  * The worker retains the session only in memory while this bounded prompt is open.
+  * Closing the activity, cancellation and expiration all refuse access. */
+ private void requireAuthorization(Attempt current) throws Exception {
+  CountDownLatch decision = new CountDownLatch(1);
+  final AlertDialog[] shown = new AlertDialog[1];
+  synchronized (lock) {
+   if (attempt != current || current.cancelled || destroyed) throw new SignInFailure("cancelled");
+   current.authorized = false;
+   current.authorizationDecision = decision;
+  }
+  main.post(() -> {
+   synchronized (lock) {
+    if (attempt != current || current.cancelled || destroyed || System.currentTimeMillis() >= current.expiresAt
+     || getActivity() == null || getActivity().isFinishing() || getActivity().isDestroyed()) { decision.countDown(); return; }
+    String service = current.environment == CloudSignInFlow.Environment.STAGING ? CloudDeployment.STAGING_NAME : CloudDeployment.PRODUCTION_NAME;
+    try {
+     shown[0] = new AlertDialog.Builder(getActivity())
+      .setTitle("Authorize Alpha Phone")
+      .setMessage("Allow Alpha Phone to access your account with " + service + " and use its services on this device? You can sign out in Settings.")
+      .setPositiveButton("Authorize", (dialog, which) -> {
+       synchronized (lock) {
+        if (attempt == current && !current.cancelled && !destroyed && System.currentTimeMillis() < current.expiresAt) current.authorized = true;
+       }
+       decision.countDown();
+      })
+      .setNegativeButton("Cancel", (dialog, which) -> decision.countDown())
+      .setOnCancelListener(dialog -> decision.countDown())
+      .create();
+     shown[0].setCanceledOnTouchOutside(false);
+     shown[0].show();
+    } catch (RuntimeException unavailable) { decision.countDown(); }
+   }
+  });
+  try {
+   long remaining = Math.max(0, current.expiresAt - System.currentTimeMillis());
+   if (!decision.await(remaining, TimeUnit.MILLISECONDS)) throw new SignInFailure("expired");
+   synchronized (lock) {
+    if (System.currentTimeMillis() >= current.expiresAt) throw new SignInFailure("expired");
+    if (attempt != current || current.cancelled || destroyed || !current.authorized) throw new SignInFailure("cancelled");
+   }
+  } finally {
+   current.authorizationDecision = null;
+   main.post(() -> { if (shown[0] != null) shown[0].dismiss(); });
+  }
+ }
+
  // ── Shared tail: Steward session → eliza_mobile_ key ─────────────────────────────────────────
 
  private void complete(Attempt current, JSONObject session) throws Exception {
@@ -591,6 +643,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   if (!CloudSignInFlow.validStewardToken(token)) throw new SignInFailure("unavailable");
   CloudSignInFlow.Environment environment = current.environment;
   try {
+   requireAuthorization(current);
    String state = CloudSignInFlow.newState(), verifier = CloudSignInFlow.newVerifier();
    JSONObject binding = new JSONObject().put("clientId", CloudSignInFlow.CLIENT_ID).put("environment", environment.name).put("redirectUri", environment.callback());
    Response connected = post(current, "/api/v1/app-auth/connect", new JSONObject(binding.toString()).put("flow", "mobile_pkce").put("state", state)
