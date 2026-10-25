@@ -147,3 +147,19 @@ test('Cloud profile sends one credential-bound recorded turn and speaks its matc
   assert.equal(f.localFactories,0);assert.equal(f.pairedFactories,0);assert.equal(f.box.testMocksEnabled,false);
  }finally{f.close();await clock.flush();}
 });
+
+
+test('configured service name follows voice disclosure and sign-in recovery without starting capture',async()=>{
+ for(const account of ['cloud-account',null]){
+  const f=cloudVoiceViewFixture({cloudProfile:true,account});
+  try {
+   f.box.cloudServiceName=()=> 'Nebula';
+   f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;
+   await f.shell.startVoice();const view=f.renderChat();
+   assert.doesNotMatch(JSON.stringify(view),/Eliza Cloud/);
+   if(account){assert.match(JSON.stringify(view),/Nebula uploads your recordings and reply text/);assert.match(JSON.stringify(view),/plan allowance/);assert.equal(view.recoveryLabel,'Start Cloud voice');}
+   else {assert.equal(view.recoveryLabel,'Connect Nebula');view.recover();await f.tick();assert.equal(f.accountOpens,1);}
+   assert.equal(f.starts,0);assert.equal(f.uploads,0);assert.equal(f.localFactories,0);
+  }finally{f.close();await f.tick();}
+ }
+});
