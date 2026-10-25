@@ -5,6 +5,7 @@
 // or device run. The browser specs in test/browser/native-cloud-subscription.spec.ts exercise the
 // composed flow with synthetic ports.
 import test from 'node:test';
+import {stripTypeScriptTypes} from 'node:module';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DENYLIST, RETIRED_NO_AGENT_TEXT, RETIRED_REMOTE_AGENT_TEXT} from '../scripts/audit-production-bundle.mjs';
@@ -137,6 +138,16 @@ test('a chat turn without Cloud inference gets an honest answer with the plan ac
   const adapter = read('apps/app/src/prototype/agent-adapter.ts');
   assert.match(adapter, /if\(card\.planAction\)\{\n\s+if\(card\.planAction==='plan'\)connectionController\.openPlan\(\);/);
   assert.doesNotMatch(adapter, /title:'Set up AI'|connectionSetup/);
+  const cards=adapter.slice(adapter.indexOf('function selectedCloudName('),adapter.indexOf('/** Context notices for proposals'));
+  const renderCard=new Function('cloudServiceName','connectionController',stripTypeScriptTypes(cards,{mode:'transform'})+';return planActionCard;')(
+    environment=>environment==='staging'?'Nebula':'Other service',
+    {getCloudEnvironment:()=>null,getSnapshot:()=>({signIn:{environment:'staging'}})});
+  assert.equal(renderCard('sign-in').title,'Sign in with Nebula');
+  assert.equal(renderCard('retry').title,'Check Nebula again');
+  assert.equal(renderCard('plan').planAction,'plan');
+  assert.ok(renderCard('plan').sub.includes('Nebula account & plan'));
+  assert.equal(renderCard('unknown'),undefined);
+
   assert.match(adapter, /const planCard=planActionCard\(\(e as \{planAction\?:unknown\}\)\.planAction\);/);
 });
 
