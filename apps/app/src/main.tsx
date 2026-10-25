@@ -1,5 +1,11 @@
 // Register browser implementations before any runtime module claims plugin identity.
 import './browser/register';
+import {installCanonicalNotesView} from './prototype/canonical-notes-ui';
+import {installCanonicalCalendarDrafts} from './prototype/canonical-calendar-drafts';
+import {installAgentCalendarAdapter,nativeCalendarScope,legacyGoogleCalendarScope} from './prototype/agent-calendar-adapter';
+import {Capacitor} from '@capacitor/core';
+import {ownerReminderNotifications} from './runtime/owner-reminder-notification-port';
+import type {ReminderNotificationBinding} from './runtime/owner-reminder-notification-protocol';
 import {installCalendarApprovalAdapter} from './prototype/calendar-approval-adapter';
 import {bindBrowserDeletionOwner} from './runtime/deletion-owner';
 import {DEFAULT_PULL_DISTANCE,DEFAULT_PULL_VELOCITY} from "../../../.eliza/client-features/packages/ui/src/gestures/constants";
@@ -72,6 +78,8 @@ import { installToastLayer } from './runtime/toast-layer';
 import './prototype/prototype.css';
 import './prototype/phone.css';
 installGlobalErrorRecovery();
+// Registration has completed; this injected source cannot form a register→connection cycle.
+if(!Capacitor.isNativePlatform()){const notices=connectionController as typeof connectionController & {getOwnerReminderNotificationBinding?:()=>ReminderNotificationBinding|null};ownerReminderNotifications.bind({binding:()=>notices.getOwnerReminderNotificationBinding?.()??null,subscribeBinding:listener=>connectionController.subscribe(listener)});}
 // Developer surfaces are only reachable in an explicitly flagged development server.
 const browserDevProfile=devSurfacesEnabled&&devProfileQuery;
 const developmentAgentWorkflows=devSurfacesEnabled&&devAgentWorkflowsQuery;
@@ -107,13 +115,15 @@ if (!fixture) {
   installPrototypeCameraAdapter(Component, VIEWS);
   installAgentAdapter(Component, VIEWS);
   installReminderAdapter(Component, VIEWS);
-  installCalendarAdapter(Component, VIEWS);
+  installCalendarAdapter(Component, VIEWS, {active:nativeCalendarScope});
   if(isAndroid){installContactsAdapter(Component,VIEWS);installSmsAdapter(Component,VIEWS);}
-  installCalendarFormDraftAdapter(Component, VIEWS);
-  installCalendarEditDraftAdapter(Component, VIEWS);
-  installGoogleCalendarViewAdapter(Component, VIEWS);
+  installCalendarFormDraftAdapter(Component, VIEWS, {active:shell=>nativeCalendarScope(shell)||shell?.vget('calendar').form?.cal==='alpha-reminders'});
+  installCalendarEditDraftAdapter(Component, VIEWS, {active:shell=>nativeCalendarScope(shell)||shell?.vget('calendar').form?.cal==='alpha-reminders'});
+  installGoogleCalendarViewAdapter(Component, VIEWS, {active:legacyGoogleCalendarScope,preserveReadOnly:true});
   installNoteOriginAdapter(Component, VIEWS);
   installPrototypeDataAdapter(Component, VIEWS);
+  installAgentCalendarAdapter(Component,VIEWS);
+  installCanonicalCalendarDrafts(Component,VIEWS);
   // Notice rows feed only the development stand-in shade; product builds read no notice list (#416).
   if(systemShade==='simulated')installNotificationsAdapter(Component);
   installContextSelection(Component);
@@ -122,6 +132,7 @@ if (!fixture) {
   installNotesDocumentAdapter(Component, VIEWS);
   installNotesShareAdapter(VIEWS);
   installNotesTrashAdapter(Component, VIEWS);
+  installCanonicalNotesView(Component,VIEWS);
   installNoteSourceAdapter(VIEWS);
   installNoteWebSourceAdapter(VIEWS);
   installPrototypeBrowserAdapter(Component, VIEWS);

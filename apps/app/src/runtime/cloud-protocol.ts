@@ -6,7 +6,7 @@ import { reviewOpaqueAttachment, type OpaqueMailAttachment } from './inbox-opera
 import { gmailCapabilitiesFor } from './gmail-grants.ts';
 import type { CloudMapsRoute } from '../maps/cloud-provider.ts';
 import { authenticated as signInAuthenticated, CloudSignInError, emailStarted, verified as signInVerified, type CloudSignInAuthenticated, type CloudSignInEmailStarted, type CloudSignInMfaRequired, type CloudSignInPort } from './cloud-sign-in.ts';
-import { BILLING_LIMITS_PATH, ENTITLEMENT_KEYS_PATH, ENTITLEMENT_PATH, REDEEM_PATH, fallbackPlanFromLimits, normalizeSubscriptionCode, readServiceLimit, SubscriptionRedeemError, type EntitlementSource, type FallbackPlan, type RedeemResult } from './subscription-entitlement.ts';
+import { BILLING_LIMITS_PATH, ENTITLEMENT_KEYS_PATH, ENTITLEMENT_PATH, REDEEM_PATH, fallbackPlanFromLimits, membershipCreditDetailsFromLimits, type MembershipCreditDetails, normalizeSubscriptionCode, readServiceLimit, SubscriptionRedeemError, type EntitlementSource, type FallbackPlan, type RedeemResult } from './subscription-entitlement.ts';
 /** Narrow Alpha adapter for Eliza Cloud managed services: sign-in, identity, subscription plan and
  * the connected Google services. Sign-in is in-app (cloud-sign-in.ts) once the native host reports
  * Cloud ready for this phone: the host signs in with Steward and mints an `eliza_mobile_` key through
@@ -258,6 +258,21 @@ export class CloudProtocol {
     if (data.success !== true) return null;
     return fallbackPlanFromLimits(data);
   }
+  /** Read-only UI eligibility, bound to the current credential. Never grants spending authority. */
+  async membershipBalance(signal: AbortSignal): Promise<'zero' | 'funded' | 'unavailable'> {
+    return (await this.membershipCredits(signal)).state;
+  }
+  async membershipCredits(signal:AbortSignal):Promise<MembershipCreditDetails> {
+    signal.throwIfAborted();
+    const credential=await this.credentials.read(this.environment);signal.throwIfAborted();
+    if(!credential?.credentialId)throw new CloudProtocolError('credentials-missing');
+    const binding=JSON.stringify([credential.credentialId,credential.credentialReference,credential.token,credential.userId,credential.organizationId]);
+    const payload=await this.call(BILLING_LIMITS_PATH,signal,{authenticated:true,credentialId:credential.credentialId});
+    await this.assertSameCredential(credential.credentialId,signal);
+    const current=await this.credentials.read(this.environment);signal.throwIfAborted();
+    if(!current||JSON.stringify([current.credentialId,current.credentialReference,current.token,current.userId,current.organizationId])!==binding)throw new CloudProtocolError('account-changed');
+    return membershipCreditDetailsFromLimits(payload);
+  }
   /**
    * Redeems a subscription grant code for the signed-in account. `idempotencyKey` is fresh for
    * each owner submission; a transport failure (the request may have arrived) is retried once
@@ -332,7 +347,7 @@ export class CloudProtocol {
   }
   /** Public ES256 verification keys for entitlements. Never private material. */
   async subscriptionEntitlementKeys(signal: AbortSignal): Promise<JsonWebKey[]> {
-    const data = await this.call(ENTITLEMENT_KEYS_PATH, signal);
+    const data = await this.call(ENTITLEMENT_KEYS_PATH, signal, { authenticated: true });
     if (!Array.isArray(data.keys) || data.keys.length > 16) throw new CloudProtocolError("invalid-response");
     return data.keys.filter((key): key is JsonWebKey => !!key && typeof key === "object" && !Array.isArray(key)
       && (key as ObjectValue).kty === "EC" && (key as ObjectValue).crv === "P-256" && (key as ObjectValue).d === undefined

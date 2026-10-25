@@ -1,6 +1,6 @@
 /** Private Google tool transport shared by browser and signed native hosts. */
 import type {IncomingMessage,ServerResponse} from 'node:http';
-import {CalendarAgentWriteRefused} from '../scripts/calendar-agent-write-host.ts';
+import {CalendarAgentWriteRefused} from '../vendor/eliza/plugins/plugin-calendar/src/service/managed-calendar-host.ts';
 import type {createManagedGoogleAgentHost} from './managed-google-agent-host.ts';
 export function createManagedGoogleAgentBroker(options:{host:ReturnType<typeof createManagedGoogleAgentHost>;authorized(value:string|undefined):Promise<boolean>}){
  const reader=options.host;

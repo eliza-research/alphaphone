@@ -32,6 +32,43 @@ function matches(actual, expected) {
     Object.entries(expected).every(([file, digest]) => actual[file] === digest);
 }
 export const CLIENT_FEATURE_PATHS = [
+  'packages/core/src/types/plugin.ts',
+  'packages/ui/src/api/client-base.ts',
+  'plugins/plugin-calendar/src/meetings/auto-join-settings.ts',
+  'packages/core/src/types/permissions.ts',
+  'packages/contracts/src/lifeops/gmail.ts',
+  'packages/contracts/src/lifeops/policy.ts',
+  'packages/contracts/src/lifeops/telemetry.ts',
+  'packages/contracts/src/lifeops/inbox.ts',
+  'packages/contracts/src/lifeops/connectors.ts',
+  'packages/contracts/src/lifeops/workflows.ts',
+  'packages/contracts/src/lifeops/scheduling.ts',
+  'packages/contracts/src/lifeops/reminders.ts',
+  'packages/contracts/src/lifeops/events.ts',
+  'packages/contracts/src/lifeops/health.ts',
+  'packages/contracts/src/lifeops-connector-degradation.ts',
+  'packages/contracts/src/lifeops/goals.ts',
+
+  'packages/contracts/src/calendar.ts',
+  'packages/core/src/types/effects.ts',
+  'plugins/plugin-assistant/src/services/device-actions/foreground-review-contract.ts',
+  'plugins/plugin-calendar/src/api/calendar-api.ts',
+  'plugins/plugin-calendar/src/api/client-calendar.ts',
+  'plugins/plugin-calendar/src/browser.ts',
+  'plugins/plugin-calendar/src/client/named-read.ts',
+  'plugins/plugin-calendar/src/components/EventEditorDrawer.tsx',
+  'plugins/plugin-calendar/src/components/event-editor-command.ts',
+  'plugins/plugin-calendar/src/components/event-editor-policy.ts',
+  'plugins/plugin-calendar/src/index.ts',
+  'plugins/plugin-calendar/src/internal/time.ts',
+  'plugins/plugin-calendar/src/service/managed-calendar-host.ts',
+  'plugins/plugin-notes/src/capabilities.ts',
+  'plugins/plugin-notes/src/client/notes-api.ts',
+  'plugins/plugin-notes/src/note-authored.ts',
+  'plugins/plugin-notes/src/note-format.ts',
+  'plugins/plugin-notes/src/note-id.ts',
+  'plugins/plugin-notes/src/types.ts',
+
   'packages/contracts/src/calendar-linked-sync.ts',
   'packages/ui/src/voice/batch-conversation.ts',
   'packages/ui/src/voice/voice-session-client.ts',
@@ -110,7 +147,7 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   if(projectVoice){
   // Browser consumer projections retain the canonical implementations and exact type declarations.
   // The dashboard transport is unavailable here: Alpha must inject its owned, private fetch.
-  if (upstream.pin !== '58dfddf87ee5adec414746a86a23dada124fbbae') throw Error('Review voice projections for the new upstream pin.');
+  // The locked commit authenticates source; reviewed per-file hashes below bind voice projections across SDK updates.
   // The camera contract is upstream at this pin; carry it with the other device-action contracts.
   for(const [name,file] of upstream.read('plugins/plugin-assistant/src/services/device-actions/camera-contract.ts'))source.set(name,file);
 
@@ -134,14 +171,35 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   if(!status||start<0||end<start)throw Error('Voice type projection source changed.');
   project('packages/ui/src/voice/voice-chat-types.ts',status+'\n');
   source.delete('packages/core/src/logger.ts');
-  project('alpha-voice-core-types.ts',loggerTypes.slice(start,end));
-  project('alpha-voice-core-protocol.ts','export {ElizaError} from "./packages/core/src/errors";\nexport {redactTrailingArgs} from "./packages/core/src/security/log-redaction";\nexport {parseViewInteractionClientId} from "./packages/core/src/views/view-interact-protocol";\nexport {findViewActionHandoff, type ViewActionHandoff} from "./packages/core/src/views/view-action-handoff";\n');
+  // Project only existing public type declarations; do not bundle host/client implementations.
+  const declarations = (name, names) => names.map(declaration => {
+    const escaped = declaration.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const content = text(name);
+    const interfaces = [...content.matchAll(new RegExp('^export interface ' + escaped + '\\s*\\{[\\s\\S]*?^\\}', 'gm'))];
+    const aliases = [...content.matchAll(new RegExp('^export type ' + escaped + '\\s*=[\\s\\S]*?;', 'gm'))];
+    const matches = [...interfaces, ...aliases];
+    if (matches.length !== 1) throw Error('Review changed client type declaration: ' + name + ':' + declaration);
+    return matches[0][0];
+  }).join('\n') + '\n';
+  project('alpha-voice-core-types.ts',loggerTypes.slice(start,end) + '\n' + declarations(
+    'packages/core/src/types/plugin.ts', ['ViewCapabilityParameter', 'ViewCapability']));
+  const clientName = 'packages/ui/src/api/client-base.ts';
+  const fetchMatches = [...text(clientName).matchAll(/^  async fetch<T>\([\s\S]*?^  \): Promise<T> \{/gm)];
+  if (fetchMatches.length !== 1) throw Error('Review changed ElizaClient fetch declaration.');
+  const fetchSignature = fetchMatches[0][0].replace(/^  async /, '').replace(/ \{$/, '').trim();
+  project('alpha-client-fetch-types.ts', 'export interface ElizaClient { ' + fetchSignature + '; }\n');
+  project('plugins/plugin-calendar/src/meetings/auto-join-settings.ts', declarations(
+    'plugins/plugin-calendar/src/meetings/auto-join-settings.ts', ['MeetingAutoJoinPolicy', 'MeetingAutoJoinSettings']));
+  source.delete('packages/core/src/types/plugin.ts');
+  source.delete(clientName);
+
+  project('alpha-voice-core-protocol.ts','export {ElizaError} from "./packages/core/src/errors";\nexport {redactTrailingArgs} from "./packages/core/src/security/log-redaction";\nexport {parseViewInteractionClientId} from "./packages/core/src/views/view-interact-protocol";\nexport {findViewActionHandoff, type ViewActionHandoff} from "./packages/core/src/views/view-action-handoff";\nexport type {PermissionState} from "./packages/core/src/types/permissions";\n');
   // The pinned upstream global renderer is byte-identical to the carried projection.
 
 
   }
   const files = Object.fromEntries([...source].map(([name, file]) => [name, file.sha256]));
-  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?7:0, files };
+  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?8:0, files };
   const parent = path.join(root, '.eliza'), destination = path.join(parent, 'client-features');
   regularPath(parent, true);
   const exists = regularPath(destination, true), stamp = path.join(destination, '.source.json');

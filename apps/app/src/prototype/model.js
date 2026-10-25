@@ -1128,6 +1128,8 @@ function calFind(list, id) { for (var i = 0; i < list.length; i++) if (list[i].i
 function calPeople(api) { var c = api.get("contacts"); return (c && c.list && c.list.length) ? c.list : PEOPLE; }
 function calPerson(api, id) { var l = calPeople(api); for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i]; return api.person(id) || { id: id, name: id, ini: id.slice(0, 2).toUpperCase() }; }
 function calCals(st, api) {
+  if(Array.isArray(st.calendarPresentationSources))return st.calendarPresentationSources;
+  if(Array.isArray(st.canonicalCalendars))return st.canonicalCalendars;
   var accts = (api.get("settings") || {}).accounts;
   var list = [{ id: "personal", name: "Personal", sub: "", color: "fg" }, { id: "work", name: "Work", sub: "", color: "acc" }];
   if (Array.isArray(accts)) {
@@ -1334,8 +1336,8 @@ registerView("calendar", {
     var list = st.events || CAL_SEED;
     var sel = st.day || 0;
     var cals = calCals(st, api);
-    var calOf = function (id) { for (var i = 0; i < cals.length; i++) if (cals[i].id === id) return cals[i]; return cals[0]; };
-    var visible = function (e) { return calOf(e.cal).on && !(e.invite && e.invite.status === "declined"); };
+    var calOf = function (id) { for (var i = 0; i < cals.length; i++) if (cals[i].id === id) return cals[i]; return null; };
+    var visible = function (e) { var source = calOf(e.cal); return !!source && source.on && !(e.invite && e.invite.status === "declined"); };
     var on = function (off) { return list.filter(function (e) { return visible(e) && calOccurs(e, off, api); }); };
     var set = function (p) { api.set(p); };
     var today = calDate(api, 0);
@@ -1383,7 +1385,7 @@ registerView("calendar", {
     var tlDown = sw.down, tlUp = sw.up;
 
     // pending invites
-    var invites = list.filter(function (e) { return e.invite && e.invite.status === "pending" && calOf(e.cal).on; }).map(function (e) {
+    var invites = list.filter(function (e) { return e.invite && e.invite.status === "pending" && visible(e); }).map(function (e) {
       var p = calPerson(api, e.invite.from);
       var rs = function (s) { return function () { set({ events: list.map(function (x) { return x.id === e.id ? Object.assign({}, x, { invite: Object.assign({}, x.invite, { status: s }) }) : x; }) }); api.toast(s === "yes" ? "Accepted · " + p.name.split(" ")[0] + " will see it" : "Declined"); }; };
       return { ini: p.ini, title: e.title, when: calDayName(api, e.off) + " · " + calAmpm(e.t), open: function () { set({ day: e.off, open: e.id, openDay: e.off }); }, accept: rs("yes"), decline: rs("declined") };
@@ -1416,6 +1418,7 @@ registerView("calendar", {
 
     // detail
     var ev = st.open ? calFind(list, st.open) : null;
+    if (ev && !calOf(ev.cal)) ev = null;
     var evDay = ev ? (st.openDay != null && calOccurs(ev, st.openDay, api) ? st.openDay : ev.off) : 0;
     var undo = function (label, ev) {
       api.toast(label, { undo: function () { var l = calEvents(api); if (!calFind(l, ev.id)) api.setView("calendar", { events: l.concat([ev]) }); } });
@@ -1483,7 +1486,7 @@ registerView("calendar", {
         onPq: function (e) { fp({ pq: e.target.value }); },
         pqKey: function (e) { if (e.key === "Enter" && sugg.length) { e.preventDefault(); sugg[0].pick(); } if (e.key === "Escape") fp({ pq: null }); },
         valid: !!(f.title || "").trim(), saveOff: !(f.title || "").trim(), saveCss: (f.title || "").trim() ? "background:var(--acc);color:#fff" : "background:var(--s2);color:var(--mut)",
-        cals: cals.map(function (c) { return { name: c.name, dot: CAL_COLORS[c.color], css: chip(f.cal === c.id), pick: function () { fp({ cal: c.id }); } }; }),
+        cals: (Array.isArray(st.canonicalCalendars) ? st.canonicalCalendars : cals).map(function (c) { return { name: c.name, dot: CAL_COLORS[c.color], css: chip(f.cal === c.id), pick: function () { fp({ cal: c.id }); } }; }),
         repeats: CAL_REPEAT.map(function (r) { return { label: r[1], css: chip(f.repeat === r[0]), pick: function () { fp({ repeat: r[0] }); } }; }),
         alerts: CAL_ALERT.map(function (a) { return { label: a[1], css: chip(f.alert === a[0]), pick: function () { fp({ alert: a[0] }); } }; }),
         cancel: function () { set({ form: null }); },
@@ -2902,6 +2905,7 @@ function notesFmt(sec) { sec = Math.max(0, Math.floor(sec)); return Math.floor(s
 function notesNowLabel(d) { return formatTime(d); }
 function notesFind(list, id) { for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; return null; }
 function notesUpd(api, id, patch) {
+  if (api.canonicalNotes) return api.canonicalNotes.update(id, patch);
   var s = api.get("notes");
   var list = s.list.map(function (n) { return n.id === id ? Object.assign({}, n, typeof patch === "function" ? patch(n) : patch) : n; });
   var change = { list: list };
@@ -2921,6 +2925,7 @@ function notesClose(api) {
 /** Leaves the open note as Back does: dictation and the unsent checklist item end with it, and an
  * empty new note is dropped. On a split canvas (#411) another note opens beside the list directly. */
 function notesLeave(api, next) {
+  if (api.canonicalNotes) { void api.canonicalNotes.leave(next); return {}; }
   var s = api.get("notes"); notesStopTimers();
   var n = s.open !== next && s.open === s.blankCreationId ? notesFind(s.list, s.open) : null;
   var patch = { open: next, sheet: null, playing: false, dict: false, newItem: "", blankCreationId: next === s.open ? s.blankCreationId : null };
@@ -2931,6 +2936,7 @@ function notesUndoable(api, note, idx, label) {
   api.toast(label, { undo: function () { var s = api.get("notes"); if (notesFind(s.list, note.id)) return; var l = s.list.slice(); l.splice(Math.min(idx, l.length), 0, note); api.set({ list: l }); } });
 }
 async function notesDelete(api, id) {
+  if (api.canonicalNotes) return api.canonicalNotes.remove(id);
   var s = api.get("notes"); notesStopTimers();
   var idx = -1; s.list.forEach(function (n, i) { if (n.id === id) idx = i; });
   if (idx < 0) return;
@@ -2941,6 +2947,7 @@ async function notesDelete(api, id) {
   notesUndoable(api, note, idx, (note.title || "Note") + " deleted");
 }
 function notesNew(api, kind) {
+  if (api.canonicalNotes) { api.canonicalNotes.create(kind); api.set({ compose: false, q: null }); return; }
   var id = "n" + Date.now();
   var n = kind === "list" ? { id: id, kind: "list", title: "", items: [], pinned: false, when: "Now" } : { id: id, kind: "text", title: "", body: "", pinned: false, when: "Now" };
   var leave = notesLeave(api, id);
@@ -3032,8 +3039,13 @@ registerView("notes", {
   },
   voicePhrase: "Start recording",
   actions: {
-    save: function (card, api) {
+    save: async function (card, api) {
       var body = card.body || (card.bullets || []).join("\n");
+      if (api.canonicalNotes) {
+        var content = card.title ? card.title + (body ? "\n" + body : "") : body;
+        if (await api.canonicalNotes.saveCard(content)) api.toast("Saved to Notes");
+        return;
+      }
       var s = api.get("notes");
       api.set({ list: [{ id: "n" + Date.now(), kind: "text", title: card.title || "Key points", body: body, pinned: false, when: "Now" }].concat(s.list) });
       api.toast("Saved to Notes");

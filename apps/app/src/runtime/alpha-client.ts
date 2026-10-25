@@ -1,6 +1,6 @@
 /** Browser-safe boundary. The composition root supplies an authenticated transport;
  * this module neither invents endpoints nor handles credentials. */
-import type {NativeNotesReadReplyOrigin,NativeNotesReadReplyHint} from '../../../../.eliza/client-features/packages/contracts/src/native-notes-query.ts';
+import {validateNativeNotesReadReplyHint,validateNativeNotesReadReplyOrigin,type NativeNotesReadReplyOrigin,type NativeNotesReadReplyHint} from '../../../../.eliza/client-features/packages/contracts/src/native-notes-query.ts';
 export type {NativeNotesReadReply,NativeNotesReadReplyHint} from '../../../../.eliza/client-features/packages/contracts/src/native-notes-query.ts';
 export type AlphaView =
   | "home"
@@ -55,7 +55,9 @@ export interface ActionProposal {
   /** Derived by the owning SDK from a validated Notes read operation. */
   privateNotesRead?:true;
   /** Navigation-only presentation; the SDK still refuses reads outside Home/Notes. */
-  reviewDestination?:'home';
+  reviewDestination?:'home'|'notes'|'calendar';
+  /** Validated exact target for navigation only. Opening it never approves the operation. */
+  reviewNoteTarget?:import('./notes-contract').NotesTarget;
   title: string;
   /** Human-readable exact target/action review. Must contain no secret values. */
   description: string;
@@ -88,6 +90,9 @@ export interface AgentReply {
   text: string;
   actionResults?: readonly unknown[];
   proposals?: ActionProposal[];
+  /** Confirmed automatic reads retain their original reply binding. */
+  completedReads?: Array<{proposal:ActionProposal;receipt:OperationReceipt}>;
+  completedActions?:OperationReceipt[];
   /** Owner-facing reasons a pending phone action cannot be reviewed from this screen. Display only. */
   notices?: string[];
   /**
@@ -102,6 +107,8 @@ export interface OperationReceipt {
   summary: string;
   /** Present only after a confirmed applied native read receipt. */
   readReply?:NativeNotesReadReplyHint;
+  /** Publish only after the originating UI has delivered this receipt. */
+  committedChanges?:ReadonlyArray<'calendar'|'notes'|'reminders'>;
 }
 export interface VerifiedSessionTransport {
   /** Must be server-verified, not derived from a user-entered owner ID. */
@@ -327,10 +334,11 @@ export class AlphaClient {
     } catch (error) {
       if (error instanceof AlphaClientError) throw error;
       // Never show untrusted adapter errors which can contain URLs or tokens.
-      throw new AlphaClientError(
+      const rejected = !!error && typeof error === "object" && (error as {notDispatched?:unknown}).notDispatched === true;
+      throw Object.assign(new AlphaClientError(
         "transport-failed",
-        "The agent request failed. Check connection and action history before sending another request.",
-      );
+        rejected ? "The agent did not accept this message. Check its connection before trying again." : "The agent request failed. Check connection and action history before sending another request.",
+      ), rejected ? {notDispatched:true} : {});
     } finally {
       externalSignal?.removeEventListener("abort",cancelOwned);
       if (abortListener)
@@ -375,7 +383,8 @@ export class AlphaClient {
       if (
         !result ||
         typeof result.text !== "string" ||
-        (result.proposals !== undefined && !Array.isArray(result.proposals))
+        (result.proposals !== undefined && !Array.isArray(result.proposals)) ||
+        (result.completedReads !== undefined && !Array.isArray(result.completedReads))
       ) {
         throw new AlphaClientError(
           "invalid-response",
@@ -403,9 +412,19 @@ export class AlphaClient {
         }
         next.set(proposal.id, { ...proposal });
       }
+      const completedReads = (result.completedReads ?? []).map(item => {
+        if(!item?.proposal?.readReply||item.receipt?.status!=='succeeded'||item.receipt.proposalId!==item.proposal.id)throw new AlphaClientError('invalid-response','Invalid completed note read.');
+        const origin=validateNativeNotesReadReplyOrigin(item.proposal.readReply.origin),hint=validateNativeNotesReadReplyHint(item.receipt.readReply);
+        if(hint.proposalId!==item.proposal.id||hint.digest!==item.proposal.readReply.digest||origin.requestId!==hint.requestId||origin.conversationId!==hint.conversationId||origin.inReplyTo!==hint.inReplyTo)throw new AlphaClientError('invalid-response','Completed note read binding changed.');
+        return {proposal:{...item.proposal,readReply:{...item.proposal.readReply,origin}},receipt:{...item.receipt,readReply:hint}};
+      });
+      const completedActions=result.completedActions??[];
+      if(!Array.isArray(completedActions)||completedActions.some(receipt=>!receipt||typeof receipt.proposalId!=='string'||typeof receipt.summary!=='string'||!['succeeded','denied','cancelled','failed','unknown'].includes(receipt.status)||receipt.committedChanges&&(!Array.isArray(receipt.committedChanges)||receipt.committedChanges.some(view=>!['calendar','notes','reminders'].includes(view)))))throw new AlphaClientError('invalid-response','Invalid completed device receipt.');
       this.proposals = next;
       return {
         text: result.text,
+        ...(completedReads.length?{completedReads}:{}),
+        ...(completedActions.length?{completedActions}:{}),
         ...(result.messageId?{messageId:result.messageId}:{}),
         ...(result.userMessageId?{userMessageId:result.userMessageId}:{}),
         ...(result.messageBinding?{messageBinding:result.messageBinding}:{}),

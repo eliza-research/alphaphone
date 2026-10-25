@@ -1,5 +1,5 @@
 import {gmailAgentMailbox,type AgentMailboxChange} from '../scripts/gmail-agent-mailbox-host.ts';
-import {calendarAgentWrite} from "../scripts/calendar-agent-write-host.ts";
+import {calendarAgentWrite} from '../vendor/eliza/plugins/plugin-calendar/src/service/managed-calendar-host.ts';
 /** Owner-only Google tools. Provider credentials remain in the private Cloud
  * store; Gmail sends use the canonical prepared-review/dispatch/receipt flow. */
 import {createHash} from 'node:crypto';
@@ -27,7 +27,7 @@ export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort){
  }
  return {
   async mailbox(input:AgentMailboxChange,parent?:AbortSignal){return verified((client,grantId,scope,signal)=>gmailAgentMailbox(client,grantId,scope,input,signal),parent,'google.gmail.mailbox',true);},
-  async calendarWrite(input:Record<string,unknown>,parent?:AbortSignal){return verified((client,grantId,scope,signal)=>calendarAgentWrite(client,grantId,scope,input,signal),parent,'google.calendar.write','calendar');},
+  async calendarWrite(input:Record<string,unknown>,parent?:AbortSignal){return verified((client,grantId,scope,signal)=>calendarAgentWrite(client,grantId,scope,input,signal,'alpha-google'),parent,'google.calendar.write','calendar');},
   async prepareSend(input:AgentSendContent&{requestId:string},parent?:AbortSignal){
    const proposal=sendProposal(input);if(!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(input.requestId))throw Error('Invalid send request identity.');
    return verified(async(client,grantId,scope,signal)=>{
@@ -58,6 +58,9 @@ export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort){
    },parent,'google.gmail.send',true);
   },
   async calendarSources(parent?:AbortSignal){
+   // An unconnected optional provider contributes no sources. Connected-owner
+   // identity/permission/provider failures still propagate through verified.
+   if(!await host.agentCredential())return [];
    return verified(async(client,grantId,scope,signal)=>{
     const account=(await client.gmailAccounts(signal)).find(a=>a.connectionId===grantId)!;
     return (await client.googleCalendars(grantId,signal)).filter(row=>['reader','writer','owner'].includes(row.accessRole)).map(row=>({...row,provider:'google',side:'owner',grantId:`alpha-google:${scope}`,connectorAccountId:`alpha-google:${scope}`,accountEmail:account.label,includeInFeed:true,selectionVersion:1}));
@@ -87,7 +90,7 @@ export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort){
      if(next.mailboxHistoryId!==result.mailboxHistoryId)throw Error('The Gmail mailbox changed during this read. Search again.');
      const ids=new Set(rows.map(row=>row.id));for(const row of next.messages)if(!ids.has(row.id)){ids.add(row.id);rows.push(row);}
     }
-    return rows.slice(0,limit).map(row=>{if(!Number.isFinite(Date.parse(row.receivedAt)))throw Error('Gmail returned an invalid received date.');return {id:`alpha-gmail:${scope}:${row.id}`,platform:'gmail' as const,channel:'gmail',senderName:row.from,snippet:decodeBasicHtmlEntities(row.snippet),receivedAt:row.receivedAt,threadTopic:decodeBasicHtmlEntities(row.subject),unread:row.unread};});
+    return rows.slice(0,limit).map(row=>{if(!Number.isFinite(Date.parse(row.receivedAt)))throw Error('Gmail returned an invalid received date.');return {id:`alpha-gmail:${scope}:${row.id}`,platform:'gmail' as const,channel:'gmail',senderName:row.from,...(row.fromEmail?{senderIdentifier:row.fromEmail}:{}),snippet:decodeBasicHtmlEntities(row.snippet),receivedAt:row.receivedAt,threadTopic:decodeBasicHtmlEntities(row.subject),unread:row.unread};});
    },parent);
   },
   async message(messageId:string,parent?:AbortSignal){

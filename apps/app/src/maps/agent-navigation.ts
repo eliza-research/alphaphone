@@ -49,10 +49,10 @@ export function bindAgentNavigation(options: AgentNavigationOptions) {
   retire();
   if (!next) return;
   const { installation, provider } = next;
-  const binding = new AlphaMapsDeviceNavigation(options.surface, {
+  const binding: AlphaMapsDeviceNavigation = new AlphaMapsDeviceNavigation(options.surface, {
    providerId: installation.providerId,
    attribution: installation.attribution,
-   current: () => current?.binding === binding && installed()?.provider === provider,
+   current: (): boolean => current?.binding === binding && installed()?.provider === provider,
   }, options.limits);
   current = { binding, provider };
   options.port.register(binding);
