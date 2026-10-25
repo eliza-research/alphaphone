@@ -15,7 +15,9 @@ test('phone sign-in and code entry stay in the app and are absent without native
  const props={view:{step:'choose',environment:'production'},busy:false,google:false,message:'',error:'',actions:{}};
  const render=extra=>renderToStaticMarkup(React.createElement(panel,{...props,...extra}));
  assert.doesNotMatch(render({phone:false}),/Text me a code/);
- assert.match(render({phone:false}),/By continuing, you allow Alpha Phone to access your account/);
+ assert.match(render({phone:false}),/Sign in to verify your account/);
+ assert.match(render({phone:false}),/review access before authorizing Alpha Phone/);
+ assert.doesNotMatch(render({phone:false}),/By continuing, you allow/);
  assert.match(render({phone:true}),/Phone number with country code/);
  assert.match(render({phone:true}),/type="tel"/);
  assert.doesNotMatch(render({phone:true,emailEnabled:false}),/Email me a code/);
