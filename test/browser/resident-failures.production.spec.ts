@@ -31,10 +31,10 @@ async function send(page: Page, text: string) { await composer(page).fill(text);
 const KINDS = {
   // Cloud's billing refusal is a service limit (subscription-entitlement.ts): nothing is bought or upgraded.
   insufficient_credits: "Eliza Cloud declined this AI request for your account's billing. Check your account in Settings. Alpha Phone did not retry your message, and nothing is purchased automatically. Local apps keep working.",
-  provider_issue: 'Hosted inference (Eliza Cloud / Cerebras) could not be reached; nothing was retried.',
-  generation_timeout: 'Hosted inference (Eliza Cloud / Cerebras) could not be reached; nothing was retried.',
+  provider_issue: 'Hosted inference (Cloud / Cerebras) could not be reached; nothing was retried.',
+  generation_timeout: 'Hosted inference (Cloud / Cerebras) could not be reached; nothing was retried.',
   // Bound to an admitted plan, yet the agent ran without a provider: a recheck is offered.
-  no_provider: 'Your agent answered without its Eliza Cloud AI connection. Check Eliza Cloud again; nothing was retried.',
+  no_provider: 'Your agent answered without its Cloud AI connection. Check Cloud again; nothing was retried.',
 } as const;
 
 for (const [kind, text] of Object.entries(KINDS)) for (const frame of ['done', 'error'] as const) {

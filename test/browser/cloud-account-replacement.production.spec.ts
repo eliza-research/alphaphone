@@ -140,7 +140,7 @@ test('a second sign-in over a saved key revokes that key once, before the new ke
   // The resident starts again with AI off; Your agent says the saved sign-in is no longer valid.
   await expect.poll(() => harness(page, f => f.calls.includes('Agent.start')), { timeout: 30_000 }).toBe(true);
   welcome = await openYourAgent(page);
-  await expect(welcome.getByText('Your Eliza Cloud sign-in has expired. Sign in with Eliza Cloud again.', { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(welcome.getByText('Your Cloud sign-in has expired. Sign in with Cloud again.', { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(welcome).not.toContainText(/pair/i);
   await welcome.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();
   await emailCode(page);
