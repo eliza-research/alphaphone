@@ -29,9 +29,16 @@ Local artifact: `artifacts/pixel-native-auth-v10/launcher-aosp-development.apk`.
 This is a development-signed application update, not a production release or a
 new full AOSP image. Earlier version 9 image deployment is recorded separately.
 
-Installation and device UI/App Link verification are pending: ADB lost the
-Pixel before installation and subsequently listed no devices. No version 10
-device acceptance or successful user authentication is claimed.
+After the Pixel reconnected, streamed `adb install --no-incremental -r`
+succeeded. Package inspection confirms version 10 and the expected version name.
+Following normal `pm verify-app-links --re-verify`, Android reports
+`eliza.app: verified`; no domain state was forced. Full device acceptance and
+successful user authentication remain unverified.
+
+On-device interaction confirmed that tapping Sign in opens the product's own
+email-code form while the resumed activity remains Alpha's `MainActivity`.
+No email address was entered, code sent, or hosted login opened. Google is not
+offered while the production readiness requirements remain unsatisfied.
 
 Live authentication additionally requires the two operator configuration fixes
 in [Cloud diagnosis](cloud-native-auth-diagnosis-2026-10-24.md): restore the
