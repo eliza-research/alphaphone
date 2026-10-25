@@ -101,7 +101,7 @@ export function HostedDigestPanel({composeQuestion,canComposeQuestion}:{composeQ
 		notices: HostedResultBinding;
 		client: HostedDigestProtocol;
 		inbox: ResultInbox;
-		slot: string;
+		pendingSlot: string;
 		sessionId: string;
 		controller: AbortController;
 	} | null>(null);
@@ -177,7 +177,7 @@ export function HostedDigestPanel({composeQuestion,canComposeQuestion}:{composeQ
 				b.client.sources(signal),
 				b.client.loops(signal),
 				b.inbox.sync(b.client, signal),
-				b.storage.read<Pending>(b.slot + ":pending"),
+				b.storage.read<Pending>(b.pendingSlot),
 			]);
 			signal.throwIfAborted();
 			if (binding.current !== b || document.hidden) return;
@@ -251,7 +251,7 @@ export function HostedDigestPanel({composeQuestion,canComposeQuestion}:{composeQ
                 recover:development&&'recovery' in storage?()=>openDomainRecovery(storage.recovery as Parameters<typeof openDomainRecovery>[0],'digest inbox','Development digest inbox recovery','Download saved results and pending recovery records before resetting. Reset clears this account’s local inbox and pending request records. It does not cancel or restart agent schedules. Review uncertain requests with the agent before creating replacements. The backup preserves older slot bytes inside a JSON archive. Close older Alpha tabs before continuing.',controller.signal):undefined,
 				client,
 				inbox,
-				slot,
+				pendingSlot: (isAndroid ? "renderer-" : "") + slot + ":pending",
 				sessionId: selected.sessionId,
 				controller,
 			};
@@ -372,7 +372,7 @@ export function HostedDigestPanel({composeQuestion,canComposeQuestion}:{composeQ
 			refreshFlight.current?.controller.abort();
 			await refreshFlight.current?.promise;
 			if (binding.current !== b) return;
-			await b.storage.write(b.slot + ":pending", value);
+			await b.storage.write(b.pendingSlot, value);
 			if (binding.current !== b) return;
 			setPending(value);
 			let body=value.body;
@@ -399,14 +399,14 @@ export function HostedDigestPanel({composeQuestion,canComposeQuestion}:{composeQ
             if(value.renews&&binding.current===b)setRenewing(null);
             if(value.missedRunId&&binding.current===b){const id=value.missedRunId;setRanMissed(prior=>new Set([...prior,id]));}
 			if (binding.current !== b) return;
-			await b.storage.remove(b.slot + ":pending");
+			await b.storage.remove(b.pendingSlot);
 			setPending(null);
 			setReview(null);
 			setText("");
 			await refresh(true);
 		} catch (error) {
       if(error instanceof HostedSourceRejected && binding.current===b){
-        try { await b.storage.remove(b.slot + ":pending"); } catch {setMessage("Source was not saved, but its local recovery record could not be cleared. Retry to clear it safely.");return;}
+        try { await b.storage.remove(b.pendingSlot); } catch {setMessage("Source was not saved, but its local recovery record could not be cleared. Retry to clear it safely.");return;}
         if(binding.current!==b)return;
         setPending(null);setReview(null);await refresh(true);setMessage(error.message);return;
       }
