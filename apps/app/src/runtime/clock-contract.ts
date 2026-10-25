@@ -48,16 +48,11 @@ export const CLOCK_DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
  * like upstream, any order is accepted and a repeated day is refused. The order is then
  * normalised (ascending), so review text and Clock's EXTRA_DAYS do not depend on it.
  *
- * Alpha restriction: upstream also accepts [] as an "explicit one-off" for its
- * clock.handoff.v2 capability. Alpha advertises only clock.handoff.v1 plus the native
- * clockRepeatDaysVersion, whose handoff has no distinct empty EXTRA_DAYS meaning, so an
- * empty list is refused with that reason rather than reinterpreted. Omit `days` for a
- * one-time alarm.
+ * Like upstream clock.handoff.v2, an operation's [] is an explicit one-off: it is
+ * normalised to an omitted `days`, so Clock never receives an empty EXTRA_DAYS.
  */
 export function clockDays(value: unknown): ClockDay[] {
-  if (Array.isArray(value) && value.length === 0)
-    throw Error("Invalid Clock repeat days: an empty list is not supported here; omit days for a one-time alarm");
-  if (!Array.isArray(value) || value.length > 7)
+  if (!Array.isArray(value) || value.length === 0 || value.length > 7)
     throw Error("Invalid Clock repeat days");
   for (const day of value)
     if (typeof day !== "number" || !Number.isInteger(day) || day < 1 || day > 7)
@@ -110,7 +105,7 @@ export function validateClockOperation(value: unknown): ClockOperation {
       minute: integer(v.minute, 0, 59),
       label: v.label,
       timeZone: clockTimeZone(v.timeZone),
-      ...(Object.hasOwn(v, "days") ? { days: clockDays(v.days) } : {}),
+      ...(Object.hasOwn(v, "days") && !(Array.isArray(v.days) && v.days.length === 0) ? { days: clockDays(v.days) } : {}),
     };
   }
   if (v.action === "snooze") {
