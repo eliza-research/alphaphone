@@ -58,3 +58,12 @@ test('cancelled history restore cannot silently switch the active conversation',
  await expect.poll(()=>page.evaluate(async key=>(await navigator.locks.query()).pending?.some(lock=>lock.name===JSON.stringify(['browser-document','alpha.browser.documents.v1',key])),key)).toBe(true);
  await page.evaluate(async()=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');c.cancel();(window as any).releaseRestore();await(window as any).restoring;c.close();});await page.getByRole('textbox',{name:'Message Alpha',exact:true}).fill('Keep original');await page.getByRole('textbox',{name:'Message Alpha',exact:true}).press('Enter');await expect.poll(()=>page.evaluate(()=>(window as any).sentConversation)).toBe('original');
 });
+for(const latest of ['recent',null])test(`a saved conversation the agent no longer has falls back to ${latest?'its most recent conversation':'a new conversation'}`,async({page})=>{
+ await page.goto('/?mode=dev');
+ expect(await page.evaluate(async latest=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');await c.initialize();await c.startDevelopment('local');const {LocalAgentProtocol}=await import('/src/runtime/local-agent.ts');const m=await import('/src/runtime/conversation-selection.ts');const session=c.getSnapshot().session!,owner=JSON.stringify([session.origin,session.ownerId,session.agentId]);
+  LocalAgentProtocol.prototype.listConversations=async()=>latest?[{id:latest,title:'Recent'}]:[];LocalAgentProtocol.prototype.messages=async()=>({messages:[]});LocalAgentProtocol.prototype.createConversation=async()=>({id:'fresh'});LocalAgentProtocol.prototype.send=async id=>{(window as any).sentConversation=id;return {text:'Fallback receipt'};};
+  await m.selectConversation(owner,await m.captureConversationChoice(owner),'gone',new AbortController().signal,()=>{});await c.retrySavedHistory();
+  return {choice:(await m.captureConversationChoice(owner))?.id,historyError:c.getSnapshot().historyError};},latest)).toEqual({choice:latest??'fresh',historyError:''});
+ await page.evaluate(async()=>(await import('/src/runtime/connection-ui.tsx')).connectionController.close());const composer=page.getByRole('textbox',{name:latest?'Message Alpha':'Ask Alpha',exact:true});await composer.fill('After fallback');await composer.press('Enter');
+ await expect.poll(()=>page.evaluate(()=>(window as any).sentConversation)).toBe(latest??'fresh');
+});
