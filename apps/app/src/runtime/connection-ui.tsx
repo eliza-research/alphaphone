@@ -1979,8 +1979,9 @@ export const connectionController = {
     if (!digits) { update({ error: signInFailureMessage('invalid-code') }); return; }
     await work('Checking your code…', async signal => {
       const client = signInClient(view.environment);
+      let authenticated = false;
       try {
-        if (view.step === 'mfa') { await signedIn(client, await client.verifyMfaSignIn(view.attemptId, digits, signal), signal); return; }
+        if (view.step === 'mfa') { const outcome = await client.verifyMfaSignIn(view.attemptId, digits, signal); authenticated = true; await signedIn(client, outcome, signal); return; }
         const outcome = await client.verifyEmailSignIn(view.attemptId, digits, signal);
         if (outcome.status === 'mfa') {
           signInFailed(view.environment, true);
@@ -1989,8 +1990,11 @@ export const connectionController = {
           if (outcome.method === 'passkey') throw new CloudSignInError('mfa-unsupported');
           return;
         }
+        authenticated = true;
         await signedIn(client, outcome, signal);
       } catch (error) {
+        // A resident restart failure must not reopen a completed sign-in.
+        if (authenticated) throw error;
         // A wrong code keeps this step so the owner can retry or resend; anything else ends it.
         if (!(error instanceof CloudSignInError && error.code === 'invalid-code')) signInFailed(view.environment);
         else signInFailed(view.environment, true);
@@ -2107,6 +2111,7 @@ export const connectionController = {
   async cloudLogin(environment: CloudEnvironment) {
     if(!testMocksEnabled && !isAndroid && !browserLocalAgentEnabled){update({open:true,error:WEB_CLOUD_UNAVAILABLE,message:''});return;}
     if(residentCloudFlow()){await connectionController.residentCloudLogin();return;}
+    if (testMocksEnabled && !isAndroid) { await connectionController.browserCloudLogin(environment); return; }
     await connectionController.beginSignIn(environment);
   },
   async browserCloudLogin(environment: CloudEnvironment) {

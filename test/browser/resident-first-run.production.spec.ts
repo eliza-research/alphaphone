@@ -1,25 +1,13 @@
-// First run on the flag-off Android renderer under decision P-43 (resident agent always present):
-// no Cloud key is saved, the resident starts by itself with AI off, and no Welcome gate opens. The
-// owner opens Settings › Agent connection ("Your agent") and presses "Sign in with Eliza Cloud";
-// the interactive CLI-session sign-in binds inference and the resident restarts and answers. Then
-// the branches that keep no key: each leaves the resident running without AI, never "no agent".
-//
-// Path under test: connectionController.residentCloudLogin -> CloudProtocol.login (POST
-// /api/auth/cli-session, AlphaConnection.openExternal, polling /api/auth/cli-session/:id) -> the
-// cloud:production slot -> admitCloudResident (identity, credits, configureCloudProvider) ->
-// connectResident (Agent.start).
-//
-// Evidence boundary: source/test evidence for the flag-off renderer only. The bridge stub is not
-// the native plugins, the browser hand-off, Eliza Cloud, the resident runtime or a device.
+// Flag-off Android first-run email/code sign-in, provider binding and resident lifecycle.
+// Only native bridge ports are synthetic; no real account, code or provider is used.
 import { test, expect, type Page } from '@playwright/test';
 import { flagOffAndroid, harness, button, fenceNetwork, expectNoDevelopmentSurface, openYourAgent } from './flag-off-android';
-import { residentStub, stub, setStub, type StubAccount } from './resident-stub';
+import { residentStub, stub, setStub, emailCode, type StubAccount } from './resident-stub';
 
 test.beforeEach(({}, testInfo) => { test.skip(testInfo.project.name !== 'production', 'Production bundle only'); });
 
 const id = '9f1dc45a-4011-4e44-947a-30d999d24fa5';
 const account: StubAccount = { token: 'first-run-key', userId: id, email: 'new-owner@example.invalid', balance: 5 };
-const WAITING = 'Finish signing in to Eliza Cloud in your browser, then return here.';
 const starts = (page: Page) => stub(page, s => s.order.filter((entry: string) => entry === 'Agent.start').length) as Promise<number>;
 
 async function firstRun(page: Page, overrides: Partial<StubAccount> = {}) {
@@ -84,11 +72,11 @@ async function nothingLeft(page: Page, welcome: ReturnType<Page['getByRole']>, u
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('alpha.connection.selection.v1') ?? 'null'))).toEqual({ kind: 'resident' });
 }
 
-test('first run: Cloud sign-in in the browser, credits, provider binding, then the resident agent answers', async ({ page }) => {
+test('first run: native email sign-in, credits, provider binding, then the resident agent answers', async ({ page }) => {
   test.setTimeout(120_000);
   const { foreign, welcome } = await firstRun(page);
   await welcome.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();
-  await expect(welcome.getByText(WAITING, { exact: true })).toBeVisible();
+  await emailCode(page);
   await expect(welcome).toHaveCount(0, { timeout: 30_000 });
   // Fresh sign-in owns the original required sequence, with no Skip or automatic requests.
   const access=page.locator('dialog.alpha-startup-permissions');
@@ -109,22 +97,21 @@ test('first run: Cloud sign-in in the browser, credits, provider binding, then t
   const order = await stub(page, s => s.order) as string[];
   const stored = JSON.parse(await harness(page, f => f.slots['cloud:production']));
   expect(stored.token).toBe(account.token);
-  // In call order: the browser hand-off, one pending poll, the key stored, the plan read, the provider
+  // In call order: native email verification, the key stored, the plan read, the provider
   // bound to that key, and only then the agent started. Nothing was revoked (no key was saved before).
   const at = (entry: string) => order.indexOf(entry);
-  expect(order.filter(entry => entry.startsWith('openExternal'))).toEqual(['openExternal https://eliza.app']);
-  expect(order.filter(entry => entry.startsWith('poll'))).toEqual(['poll pending', 'poll authenticated']);
-  expect(at('openExternal https://eliza.app')).toBeLessThan(at('poll pending'));
-  expect(at('poll authenticated')).toBeLessThan(at('store first-run-key'));
+  expect(order.filter(entry => entry.startsWith('openExternal'))).toEqual([]);
+  expect(order.filter(entry => entry.startsWith('poll'))).toEqual([]);
+  expect(at('native authenticated')).toBeLessThan(at('store first-run-key'));
   expect(at('store first-run-key')).toBeLessThan(at('plan new-owner@example.invalid'));
   expect(at('plan new-owner@example.invalid')).toBeLessThan(at('configureCloudProvider ' + stored.credentialId));
   // The resident restarts after the provider is bound to the new key.
   expect(at('configureCloudProvider ' + stored.credentialId)).toBeLessThan(order.lastIndexOf('Agent.start'));
-  expect(order.indexOf('Agent.start')).toBeLessThan(at('openExternal https://eliza.app'));
+  expect(order.indexOf('Agent.start')).toBeLessThan(at('native authenticated'));
   expect(order.filter(entry => entry.startsWith('revoke'))).toEqual([]);
-  expect(await stub(page, s => s.opened)).toEqual(['https://eliza.app/auth/cli-login?session=b7a2c1d0-5e4f-4a3b-8c2d-1e0f9a8b7c6d&app=alpha']);
+  expect(await stub(page, s => s.opened)).toEqual([]);
   // Every Cloud request went to the Cloud API through the native transport.
-  expect((await stub(page, s => s.cloud) as Array<{ path: string }>).map(row => row.path)).toEqual(expect.arrayContaining(['/api/auth/cli-session', '/api/v1/user', '/api/v1/billing/limits']));
+  expect((await stub(page, s => s.cloud) as Array<{ path: string }>).map(row => row.path)).toEqual(expect.arrayContaining(['/api/v1/user', '/api/v1/billing/limits']));
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('alpha.connection.selection.v1')!))).toEqual({ kind: 'resident' });
 
   const ask = page.getByRole('textbox', { name: 'Ask Alpha', exact: true });
@@ -140,15 +127,13 @@ test('first run: Cloud sign-in in the browser, credits, provider binding, then t
   expect(foreign).toEqual([]);
 });
 
-test('first run: Cancel while waiting for the browser sign-in keeps no key and the resident runs without AI', async ({ page }) => {
+test('first run: Cancel while entering the email code keeps no key and the resident runs without AI', async ({ page }) => {
   test.setTimeout(90_000);
   const { foreign, welcome } = await firstRun(page);
   await setStub(page, { login: 'hold' });
   await welcome.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();
-  await expect(welcome.getByText(WAITING, { exact: true })).toBeVisible();
-  await expect.poll(() => stub(page, s => s.polls)).toBeGreaterThan(0);
-  await welcome.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect(welcome.getByText('Connection cancelled.', { exact: true })).toBeVisible();
+  await emailCode(page, false);
+  await page.getByRole('button', { name: 'Cancel sign-in', exact: true }).click();
   const polls = await stub(page, s => s.polls);
   await page.waitForTimeout(2000);
   expect(await stub(page, s => s.polls)).toBe(polls);
@@ -161,7 +146,9 @@ test('first run: an expired sign-in session keeps no key and the resident runs w
   const { welcome } = await firstRun(page);
   await setStub(page, { login: 'expired' });
   await welcome.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();
-  await expect(welcome.getByText('Your Eliza Cloud sign-in has expired. Sign in again.', {exact:true})).toBeVisible({ timeout: 30_000 });
+  await emailCode(page);
+  await expect(page.getByRole('alert')).toContainText('expired');
+  await page.getByRole('button',{name:'Back',exact:true}).click();
   await nothingLeft(page, welcome, true);
 });
 
@@ -169,6 +156,7 @@ test('first run: Cloud refusing the new key (401 on the account read) removes it
   test.setTimeout(90_000);
   const { welcome } = await firstRun(page, { userStatus: 401 });
   await welcome.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();
+  await emailCode(page);
   await expect(welcome.getByRole('alert')).toBeVisible({ timeout: 30_000 });
   await expect(welcome).not.toContainText(/pair/i);
   expect(await stub(page, s => s.order.filter((entry: string) => entry.startsWith('store') || entry === 'remove cloud key'))).toEqual(['store first-run-key', 'remove cloud key']);
@@ -190,6 +178,7 @@ test('first run: recovered provider restart clears its stale startup error', asy
   const { foreign, welcome } = await firstRun(page);
   await setStub(page, { start: 'reject-once' });
   await welcome.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();
+  await emailCode(page);
   // Successful sign-in now continues into access setup; the recovered start must leave no error anywhere.
   await expect(welcome).toHaveCount(0, { timeout: 30_000 });
   await expect(page.locator('dialog.alpha-startup-permissions')).toBeVisible();
