@@ -1,7 +1,7 @@
 /**
  * Verify the four APKs of one build and record the result in apk-manifest.json.
  *
- *   node scripts/verify-apks.mjs [--test-mocks] [--allow-unpackaged-runtime]
+ *   node scripts/verify-apks.mjs [--test-mocks] [--allow-unpackaged-runtime] [--signer-api-level=N]
  *
  * Default: the distribution APKs in artifacts/. They must be flag-off
  * (testMocks:false), pass the shared production bundle audit, carry no
@@ -45,10 +45,16 @@ import { apkPermissions, checkListenerPermissions, checkListenerSpeechBundle, li
 import { listenerApkRow, listenerManifestSection, readListenerRecord } from "./listener-qualification.mjs";
 
 import { preparePatchedNative, nativePatchReceipt, verifyNativePatchReceipt } from './prepare-patched-native.mjs';
-const USAGE = "Usage: node scripts/verify-apks.mjs [--test-mocks] [--allow-unpackaged-runtime]";
+const USAGE = "Usage: node scripts/verify-apks.mjs [--test-mocks] [--allow-unpackaged-runtime] [--signer-api-level=N]";
 const args = process.argv.slice(2);
 for (const arg of args)
-  if (!["--test-mocks", "--allow-unpackaged-runtime", "--runtime-profile=cloud"].includes(arg)) throw new Error(`Unknown option ${arg}. ${USAGE}`);
+  if (!["--test-mocks", "--allow-unpackaged-runtime", "--runtime-profile=cloud"].includes(arg) && !/^--signer-api-level=[1-9][0-9]*$/.test(arg)) throw new Error(`Unknown option ${arg}. ${USAGE}`);
+// Artifact signing admission is explicitly scoped to this Android API. Device
+// install/update independently verify the certificate applicable to the actual device.
+const signerApiArgs = args.filter(arg => arg.startsWith("--signer-api-level="));
+if (signerApiArgs.length > 1) throw new Error("Specify --signer-api-level only once");
+const signerApiLevel = signerApiArgs.length ? Number(signerApiArgs[0].split("=")[1]) : undefined;
+if (signerApiLevel !== undefined && !Number.isSafeInteger(signerApiLevel)) throw new Error("Invalid signer API level");
 const testMocks = args.includes("--test-mocks");
 const runtimeProfile=args.includes("--runtime-profile=cloud")?"cloud":"native";
 if(runtimeProfile==="cloud"&&(testMocks||args.includes("--allow-unpackaged-runtime")))throw Error("Cloud requires a genuine resident without mocks");
@@ -157,7 +163,7 @@ for (const variant of ["standalone", "launcher"])
     catch (error) { problems.push(`Native patch provenance: ${error.message}`); }
     let signerSha256 = null;
     if (signed) {
-      try { signerSha256 = signerDigest(file); }
+      try { signerSha256 = signerDigest(file, {apiLevel: signerApiLevel}); }
       catch (error) { problems.push(`apksigner verify failed for ${file}: ${error.message}`); }
     }
     if (problems.length) failures.push(`${file}:\n  - ${problems.join("\n  - ")}`);
@@ -170,6 +176,7 @@ for (const variant of ["standalone", "launcher"])
       versionName: facts.versionName,
       signed,
       signerSha256,
+      signerApiLevel: signerApiLevel ?? null,
       exportedComponents: facts.exported.map(component => component.name).sort(),
       appLinks: appLinkFilters(xml),
       testMocks: flags?.testMocks ?? null,
@@ -257,7 +264,7 @@ const listenerRecord = readListenerRecord();
 function listenerFacts(file, mode, signed) {
   const facts = { file, mode, signed, sha256: createHash("sha256").update(fs.readFileSync(file)).digest("hex") };
   if (signed) {
-    try { facts.signerSha256 = signerDigest(file); }
+    try { facts.signerSha256 = signerDigest(file, {apiLevel: signerApiLevel}); }
     catch (error) { facts.permissionProblem = `apksigner verify failed: ${error.message}`; }
   }
   const dump = execFileSync(tool("aapt"), ["dump", "permissions", file], { encoding: "utf8", env: androidEnv(), maxBuffer: 16 << 20 });
@@ -310,6 +317,8 @@ fs.writeFileSync(
         release: release.every(row => row.signed) ? { signed: true, signerSha256: release[0].signerSha256 } : { signed: false },
         debugSignerSha256: results.find(row => row.mode === "debug").signerSha256,
         apksigner: apksignerVersion,
+        apiLevel: signerApiLevel ?? null,
+        scope: signerApiLevel === undefined ? "unscoped legacy signer" : "specified Android API; device admission is checked separately",
         descriptor: { file: RELEASE_SIGNER_FILE, signerSha256: releaseSigner.signerSha256, lastReleaseVersionCode: releaseSigner.lastRelease.versionCode },
       },
       mappings,

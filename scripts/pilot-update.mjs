@@ -138,11 +138,12 @@ async function main() {
   if (!fs.existsSync(recordFile)) throw new Error(`${recordFile} is missing; provision the unit with scripts/provision-unit.mjs first`);
   const unit = JSON.parse(fs.readFileSync(recordFile, "utf8"));
   const apk = admitUnitApk(options.apkManifest, options);
-  requireConsistentApk(apk);
   const mismatch = unitApkMismatch(unit, apk);
   if (mismatch) throw new Error(`Unit ${options.alias}: ${mismatch}`);
   const adb = adbFor(options.serial);
   const device = deviceFacts(adb, options.serial);
+  if (!Number.isSafeInteger(device.sdk) || device.sdk < 1) throw new Error("Device Android API level is unavailable");
+  requireConsistentApk(apk, {apiLevel: device.sdk});
   if (device.serialSha256 !== unit.device?.serialSha256) throw new Error(`Serial does not belong to unit ${options.alias}`);
   if (apk.rehearsal && !device.emulator) throw new Error("--build debug is an emulator rehearsal only");
 
@@ -153,9 +154,9 @@ async function main() {
     const apkPath = /^package:(\/\S+\.apk)$/m.exec(adb(["shell", "pm", "path", PACKAGE]))?.[1];
     if (!apkPath) throw new Error("Alpha Phone is not installed on this unit");
     adb(["pull", apkPath, path.join(pulled, "installed.apk")], { timeout: 600_000 });
-    installedSigner = signerDigest(path.join(pulled, "installed.apk"));
+    installedSigner = signerDigest(path.join(pulled, "installed.apk"), {apiLevel: device.sdk});
   } finally { fs.rmSync(pulled, { recursive: true, force: true }); }
-  const newSigner = signerDigest(apk.file);
+  const newSigner = signerDigest(apk.file, {apiLevel: device.sdk});
   const problems = updateAdmission({ installedVersionCode: before.versionCode, installedSigner, newVersionCode: apk.versionCode, newSigner });
   if (problems.length) throw new Error(`Update refused: ${problems.join("; ")}`);
 
@@ -181,6 +182,7 @@ async function main() {
   }
   const update = {
     createdAt: new Date().toISOString(),
+    signerApiLevel: device.sdk,
     from: { versionCode: before.versionCode, versionName: before.versionName, signerSha256: installedSigner },
     to: { versionCode: apk.versionCode, versionName: apk.versionName, sha256: apk.sha256, signerSha256: newSigner, build: apk.build },
     packageIdentityPreserved: after.userId === before.userId && after.firstInstallTime === before.firstInstallTime,
