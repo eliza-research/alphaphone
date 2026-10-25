@@ -178,6 +178,7 @@ public class AlphaTelephonyPlugin extends Plugin {
  }
  /** Active SIM subscriptions, or JSON null when Android refuses the read: never an empty list in its place. */
  private Object subscriptions() {
+  if (getContext().checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) return JSONObject.NULL;
   SubscriptionManager manager = getContext().getSystemService(SubscriptionManager.class);
   if (manager == null) return JSONObject.NULL;
   List<SubscriptionInfo> active;
@@ -427,6 +428,7 @@ public class AlphaTelephonyPlugin extends Plugin {
   return activeSubscription(subscriptionId) == null ? "That SIM is not active now. Review the message again." : null;
  }
  private SubscriptionInfo activeSubscription(int id) {
+  if (getContext().checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) return null;
   SubscriptionManager manager = getContext().getSystemService(SubscriptionManager.class);
   if (manager == null) return null;
   try { List<SubscriptionInfo> active = manager.getActiveSubscriptionInfoList(); if (active != null) for (SubscriptionInfo info : active) if (info != null && info.getSubscriptionId() == id && info.getSimSlotIndex() >= 0) return info; }
