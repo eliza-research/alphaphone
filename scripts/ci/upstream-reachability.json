@@ -2,15 +2,36 @@
   "schema": 1,
   "repository": "elizaOS/eliza",
   "base": "develop",
-  "baseCommit": "2743655cd6f63a6e73d6a6b1fe4a14d80ecfd32a",
-  "head": "2743655cd6f63a6e73d6a6b1fe4a14d80ecfd32a",
+  "baseCommit": "f2e096ad4842c0856407e0f18339bdb8e380d9b4",
+  "head": "c95a37be8d56fb672825df7e9e9a742b59567bbb",
   "recordedAt": "2026-10-24",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...2743655cd6f63a6e73d6a6b1fe4a14d80ecfd32a",
-  "status": "identical",
-  "aheadBy": 0,
-  "behindBy": 0,
-  "mergeBase": "2743655cd6f63a6e73d6a6b1fe4a14d80ecfd32a",
-  "pinOnlyCommits": [],
+  "command": "gh api repos/elizaOS/eliza/compare/develop...c95a37be8d56fb672825df7e9e9a742b59567bbb",
+  "status": "diverged",
+  "aheadBy": 22,
+  "behindBy": 11,
+  "mergeBase": "ed6213632a50f0749b312f272d6407de3fcb863c",
+  "pinOnlyCommits": [
+    {
+      "sha": "f13094d5139fc3053634ef2c9b1e70edb9dccaa3",
+      "subject": "ci(cloud): pin /tmp-building deploy jobs to ubuntu-24.04"
+    },
+    {
+      "sha": "6bac9afeeee45883f8f9c295f9089a55dd7b7887",
+      "subject": "ci(cloud): pass the gateway bootstrap credential to Cloud CF release"
+    },
+    {
+      "sha": "61e7cec2f01b5b4012ccb8050fb0135f52baa988",
+      "subject": "ci: qualify existing runner with one approved metadata observation [skip ci]"
+    },
+    {
+      "sha": "ce49297d731d0e6dfe899e594f44d7d048ef1ca3",
+      "subject": "ci(cloud): resolve the staging session exchange API key identity"
+    },
+    {
+      "sha": "2e2c29d818e30208b38ac417d84706d50655447a",
+      "subject": "Report fixed migration ledger failure categories without private data (#37374)"
+    }
+  ],
   "pullRequests": [
     {
       "url": "https://github.com/elizaOS/eliza/pull/37059",

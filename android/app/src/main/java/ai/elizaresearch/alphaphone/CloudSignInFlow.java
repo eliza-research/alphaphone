@@ -85,7 +85,7 @@ final class CloudSignInFlow {
   if (!validState(state) || challenge == null || !challenge.matches("[A-Za-z0-9_-]{43}")) throw new IllegalArgumentException();
   return environment.api() + "/steward/auth/oauth/google/authorize?response_type=code&tenant_id=" + environment.tenant
    + "&redirect_uri=" + percent(environment.callback()) + "&code_challenge=" + challenge
-   + "&code_challenge_method=S256&state=" + state + "&prompt=" + PROMPT;
+   + "&code_challenge_method=S256&state=" + state + "&prompt=" + PROMPT + "&mfa=exchange";
  }
  private static String percent(String value) {
   StringBuilder out = new StringBuilder();

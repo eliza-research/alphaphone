@@ -54,7 +54,7 @@ import org.json.JSONTokener;
  * this sign-in replaces is revoked once, best effort, after the new key is active.
  *
  * Readiness: status() reports `inApp` only after CloudSignInReadiness confirms Cloud is ready for this
- * phone (cached); until then the renderer keeps the Cloud sign-in hand-off. Returns follow the shared
+ * phone (cached). Email stays in Alpha even if this probe fails. Returns follow the shared
  * callback contract (CloudSignInFlow.parseCallback). Nothing here logs URLs, codes, headers or bodies.
  */
 @CapacitorPlugin(name = "AlphaCloudSignIn")
@@ -189,7 +189,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
    if (answered != null) for (PluginCall waiting : answered) waiting.resolve(statusOutcome(CloudSignInReadiness.Result.notReady(now)));
   }
  }
- /** Cloud refused this phone's in-app sign-in: re-check before offering it again, so the hand-off returns. */
+ /** Cloud refused this phone's in-app sign-in: invalidate the optional-method readiness cache. */
  private void forgetReadiness(CloudSignInFlow.Environment environment) {
   synchronized (lock) { readiness.remove(environment); }
   try { getContext().getSharedPreferences(READINESS_PREFERENCES, android.content.Context.MODE_PRIVATE).edit().remove(environment.name).apply(); } catch (Exception ignored) { /* Re-probed anyway. */ }
@@ -220,11 +220,16 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   if (!emailOffered) return CloudSignInReadiness.Result.notReady(now);
   // An empty object names no address, so Steward refuses it and no email is sent.
   boolean emailRoute = CloudSignInReadiness.emailRoutePresent(probePost(environment, CloudEmailCode.SEND_PATH));
-  // A fresh, unused state and challenge: Steward stores one short-lived authorize record and nothing is followed.
-  Response authorize = get(CloudSignInFlow.authorizeUrl(environment, CloudSignInFlow.s256(CloudSignInFlow.newVerifier()), CloudSignInFlow.newState()));
-  boolean redirectAllowed = CloudSignInReadiness.redirectAllowed(authorize.status, authorize.location);
-  boolean assetLinks = assetLinksGrant(environment);
-  boolean deviceVerified = appLinkVerified(environment);
+  boolean redirectAllowed = false, assetLinks = false, deviceVerified = false;
+  if (CloudSignInReadiness.googleOffered(providers.status, providers.data.opt("google")) && appLinkVerified(environment)) {
+   // Google readiness is optional: a failed request cannot disable email.
+   try {
+    Response authorize = get(CloudSignInFlow.authorizeUrl(environment, CloudSignInFlow.s256(CloudSignInFlow.newVerifier()), CloudSignInFlow.newState()));
+    redirectAllowed = CloudSignInReadiness.redirectAllowed(authorize.status, authorize.location);
+    assetLinks = assetLinksGrant(environment);
+    deviceVerified = appLinkVerified(environment);
+   } catch (Exception unavailable) { /* Email remains available. */ }
+  }
   return CloudSignInReadiness.combine(registered, redirectAllowed, assetLinks, emailOffered, emailRoute,
    CloudSignInReadiness.googleOffered(providers.status, providers.data.opt("google")), deviceVerified, now);
  }
@@ -373,6 +378,8 @@ public final class AlphaCloudSignInPlugin extends Plugin {
     synchronized (lock) { if (attempt != null) return; attempt = owner; }
    }
    if (pending.expired(now)) { end(owner, "expired", false); return; }
+   owner.expiresAt = pending.expiresAt;
+   owner.callbackReceived = true;
    if (received.kind == CloudSignInFlow.ReturnKind.ERROR) {
     end(owner, "mfa_required".equals(received.error) ? "mfa-browser" : "app_link_unverified".equals(received.error) ? "app-link-unverified" : "provider-refused", false);
     return;
@@ -435,7 +442,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   final Attempt current;
   synchronized (lock) {
    current = attempt;
-   if (current == null || current.google || !current.id.equals(call.getString("attemptId"))) { call.reject("Sign-in expired. Start again.", "expired"); return; }
+   if (current == null || (current.google && !mfa) || !current.id.equals(call.getString("attemptId"))) { call.reject("Sign-in expired. Start again.", "expired"); return; }
    if (current.busy) { call.reject("Another sign-in is in progress", "login-active"); return; }
    if (System.currentTimeMillis() >= current.expiresAt) { attempt = null; call.reject("Sign-in expired. Start again.", "expired"); return; }
    if (current.failedVerifies >= CloudSignInFlow.MAX_VERIFY_ATTEMPTS) { attempt = null; call.reject("Too many incorrect codes", "attempts-exhausted"); return; }
@@ -450,18 +457,6 @@ public final class AlphaCloudSignInPlugin extends Plugin {
      : post(current, CloudEmailCode.VERIFY_PATH, CloudEmailCode.verifyBody(current.environment, current.email, code, current.emailVerifier), null);
     if (verified.status != 200) throw new SignInFailure(CloudSignInFlow.failureForStatus(mfa ? "mfa" : "verify", verified.status));
     JSONObject session = verified.data.optJSONObject("data") != null && !verified.data.has("token") ? verified.data.optJSONObject("data") : verified.data;
-    if (Boolean.TRUE.equals(session.opt("mfaRequired")) && !mfa) {
-     JSONObject challenge = session.optJSONObject("mfa");
-     String type = challenge == null ? null : challenge.optString("type", null), id = challenge == null ? null : challenge.optString("challengeId", null);
-     long expiresAt = challenge == null ? 0 : instant(challenge.opt("expiresAt"));
-     if (id == null || id.isEmpty() || id.length() > 256 || !("totp".equals(type) || "sms".equals(type) || "passkey".equals(type))) throw new SignInFailure("unavailable");
-     synchronized (lock) {
-      if (attempt != current || current.cancelled) throw new SignInFailure("cancelled");
-      current.mfaType = type; current.mfaChallenge = id; current.failedVerifies = 0; current.expiresAt = Math.min(current.expiresAt, expiresAt); current.busy = false; current.waiting = null;
-     }
-     call.resolve(new JSObject().put("status", "mfa").put("method", type).put("expiresAt", current.expiresAt));
-     return;
-    }
     complete(current, session);
    } catch (SignInFailure failure) {
     if (!"invalid-code".equals(failure.code)) { end(current, failure.code, false); return; }
@@ -476,6 +471,16 @@ public final class AlphaCloudSignInPlugin extends Plugin {
  }
  private void release(Attempt current) { synchronized (lock) { current.busy = false; if (attempt == current && current.expiresAt == 0) attempt = null; } }
 
+ /** A retained MFA event is only a hint: the renderer must re-check its live attempt before displaying it. */
+ @PluginMethod public void resumeMfa(PluginCall call) {
+  synchronized (lock) {
+   boolean active = attempt != null && !attempt.cancelled && attempt.mfaType != null
+    && attempt.id.equals(call.getString("attemptId")) && attempt.environment.name.equals(call.getString("environment"))
+    && attempt.expiresAt > System.currentTimeMillis();
+   call.resolve(new JSObject().put("active", active));
+  }
+ }
+
  @PluginMethod public void cancel(PluginCall call) {
   Attempt current;
   synchronized (lock) { current = attempt; attempt = null; }
@@ -488,6 +493,27 @@ public final class AlphaCloudSignInPlugin extends Plugin {
  // ── Shared tail: Steward session → eliza_mobile_ key ─────────────────────────────────────────
 
  private void complete(Attempt current, JSONObject session) throws Exception {
+  if (Boolean.TRUE.equals(session.opt("mfaRequired"))) {
+   JSONObject challenge = session.optJSONObject("mfa");
+   String type = challenge == null ? null : challenge.optString("type", null), id = challenge == null ? null : challenge.optString("challengeId", null);
+   long expiresAt = challenge == null ? 0 : instant(challenge.opt("expiresAt"));
+   if (id == null || id.isEmpty() || id.length() > 256 || !("totp".equals(type) || "sms".equals(type) || "passkey".equals(type))) throw new SignInFailure("unavailable");
+   PluginCall waiting;
+   synchronized (lock) {
+    if (attempt != current || current.cancelled) throw new SignInFailure("cancelled");
+    if (current.mfaType != null) throw new SignInFailure("unavailable");
+    long deadline = Math.min(current.expiresAt, expiresAt);
+    if (deadline <= System.currentTimeMillis()) throw new SignInFailure("expired");
+    current.mfaType = type; current.mfaChallenge = id; current.failedVerifies = 0; current.expiresAt = deadline;
+    current.busy = false; waiting = current.waiting; current.waiting = null;
+   }
+   // Only the local attempt ID crosses the bridge; the server challenge stays native.
+   JSObject required = new JSObject().put("status", "mfa").put("method", type).put("expiresAt", current.expiresAt)
+    .put("attemptId", current.id).put("environment", current.environment.name);
+   if (waiting != null) waiting.resolve(required);
+   else notifyListeners("signInMfaRequired", required, true);
+   return;
+  }
   String token = session.optString("token", null), refresh = session.optString("refreshToken", null);
   if (!CloudSignInFlow.validStewardToken(token)) throw new SignInFailure("unavailable");
   CloudSignInFlow.Environment environment = current.environment;

@@ -50,7 +50,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { isAndroid } from '../native';
 import type { ActionProposal, OperationReceipt, ContextEnvelope, VerifiedSession } from './alpha-client';
 import { CloudProtocol, CloudProtocolError, type CloudAgent, type CloudEnvironment } from './cloud-protocol';
-import { authenticated as signInOutcome, CloudSignInError, normalizeSignInCode, signInFailureMessage, signInReadiness, validSignInEmail, type CloudSignInAuthenticated } from './cloud-sign-in';
+import { googleOutcome as signInOutcome, type CloudSignInGoogleOutcome, CloudSignInError, normalizeSignInCode, signInFailureMessage, signInReadiness, validSignInEmail, type CloudSignInAuthenticated } from './cloud-sign-in';
 import { DevelopmentCloudAgentProtocol, type CloudPhoneTarget } from './development-cloud-agents';
 import { checkEntitlement, clearEntitlementKeyCache, describeSubscription, EntitlementError, EntitlementRefresher, isEntitlementSignInFailure, CHOOSE_PLAN_LABEL, MANAGE_PLAN_LABEL, planAdmission, readServiceLimit, redeemFailureMessage, redeemSuccessMessage, serviceLimitMessage, SubscriptionRedeemError, type ServiceLimit, type SubscriptionView } from './subscription-entitlement';
 import { RemoteProtocol, RemoteProtocolError } from './remote-protocol';
@@ -135,7 +135,7 @@ export type SignInView =
   | { step: 'choose'; environment: CloudEnvironment }
   | { step: 'google'; environment: CloudEnvironment }
   | { step: 'code'; environment: CloudEnvironment; email: string; attemptId: string; expiresAt: number; resendAt: number }
-  | { step: 'mfa'; environment: CloudEnvironment; email: string; attemptId: string; method: 'totp' | 'sms' | 'passkey'; expiresAt: number };
+  | { step: 'mfa'; environment: CloudEnvironment; email?: string; attemptId: string; method: 'totp' | 'sms' | 'passkey'; expiresAt: number };
 /** `revokeDevice` revokes this phone's enrollment on the agent; `deviceSlot` names its installation key. */
 type Enrollment = { revokeDevice?: (signal: AbortSignal) => Promise<boolean>; deviceSlot?: string; deviceHeaders?: Record<string,string> };
 type DeviceRequest=(path:string,body:unknown|undefined,signal:AbortSignal)=>Promise<unknown>;
@@ -417,11 +417,11 @@ const SIGN_IN_READINESS_WAIT_MS = 6000;
 /** Whether the last ready host offered Google (it needs this phone's verified App Link return). */
 let inAppGoogle = false;
 /**
- * The in-app methods this phone may use now, or null for the Cloud sign-in hand-off. The host
+ * The verified optional sign-in methods, or null when the readiness probe is unavailable. The host
  * (AlphaCloudSignInPlugin) runs a cheap, cached readiness probe: the native client registration,
  * Steward's redirect allowlist and providers, /.well-known/assetlinks.json listing this app's
  * package and signing certificate, and Android's verification of the return host. Fail-safe: no
- * host, an error, a slow or malformed answer, or `inApp` not exactly true keeps the hand-off.
+ * host, an error, a slow or malformed answer, or `inApp` not exactly true hides Google.
  */
 async function inAppSignInMethods(environment: CloudEnvironment, signal: AbortSignal): Promise<{ google: boolean } | null> {
   const port = cloudSignIn;
@@ -439,6 +439,12 @@ async function inAppSignInMethods(environment: CloudEnvironment, signal: AbortSi
 /** A failed or cancelled step leaves the stored sign-in and the running service as they were. */
 function signInFailed(environment: CloudEnvironment, keepStep = false) {
   if (!keepStep) update({ signIn: { step: 'choose', environment } });
+}
+/** The provider authenticated only the first factor; keep the credential and agent unchanged. */
+function showGoogleMfa(outcome: Extract<CloudSignInGoogleOutcome, { status: 'mfa' }>) {
+  update({ open: true, signIn: { step: 'mfa', environment: outcome.environment, attemptId: outcome.attemptId, method: outcome.method, expiresAt: outcome.expiresAt },
+    message: outcome.method === 'totp' ? 'Enter the six-digit code from your authenticator app.' : outcome.method === 'sms' ? 'Enter the six-digit code sent to your phone.' : '',
+    error: outcome.method === 'passkey' ? signInFailureMessage('mfa-unsupported') : '' });
 }
 /** A verified interactive sign-in finishes through setup, not the account/plan modal underneath it. */
 function showPostSignInSetup() {
@@ -1910,9 +1916,8 @@ export const connectionController = {
   },
   /**
    * Eliza Cloud sign-in for the resident agent (owner directive 2026-10-14: sign-in happens inside
-   * Alpha). Alpha's own screens are used once this phone's sign-in host reports Cloud ready for it
-   * (inAppSignInReady); until then the Cloud sign-in hand-off stays the path, so a phone is never left
-   * unable to sign in. The agent keeps running throughout.
+   * Alpha). Email always uses Alpha's own screens. Readiness controls whether Google is offered;
+   * a failed probe never opens hosted login. The agent keeps running throughout.
    */
   async residentCloudLogin() { await connectionController.beginSignIn(residentEnvironment()); },
   /** Opens Alpha's own sign-in screen when ready. Nothing is sent until the owner chooses Google or
@@ -1924,13 +1929,10 @@ export const connectionController = {
     await work('Checking Eliza Cloud sign-in…', async signal => {
       const methods = await inAppSignInMethods(environment, signal);
       signal.throwIfAborted();
-      if (!methods) {
-        update({ signIn: null, message: 'Opening Eliza Cloud sign-in…' });
-        if (residentCloudFlow()) await residentBrowserLoginAction(signal);
-        else await browserCloudLoginAction(environment, signal);
-        return;
-      }
-      inAppGoogle = methods.google;
+      // Email stays inside Alpha even when readiness is unavailable. Its native request
+      // reports the actual failure; missing Google/App Link setup never opens hosted login.
+      if (!cloudSignIn) throw new CloudSignInError('unavailable');
+      inAppGoogle = methods?.google === true;
       if (cloud.environment !== environment) cloud = makeCloud(environment);
       cloud.cancelLogin();
       update({ open: true, ...(residentCloudFlow() && state.purpose !== 'cloud-account' ? { purpose: 'agent' as const } : {}), signIn: { step: 'choose', environment }, message: '', error: '' });
@@ -1949,9 +1951,10 @@ export const connectionController = {
     await work('Continue in the Google window. Alpha finishes signing in when you return.', async signal => {
       update({ signIn: { step: 'google', environment: view.environment } });
       const client = signInClient(view.environment);
-      let outcome: CloudSignInAuthenticated;
+      let outcome: CloudSignInGoogleOutcome;
       try { outcome = await client.signInWithGoogle(signal); }
       catch (error) { signInFailed(view.environment); throw error; }
+      if (outcome.status === 'mfa') { showGoogleMfa(outcome); return; }
       await signedIn(client, outcome, signal);
     });
     // A cancelled or failed sign-in never leaves the phone without its agent (P-43).
@@ -1998,13 +2001,24 @@ export const connectionController = {
   },
   /**
    * Native finished a Google return after Alpha restarted (the process stopped while the Custom Tab
-   * was open). The key is already stored; continue exactly as a completed in-app sign-in.
+   * was open). Completed sign-ins have a stored key; MFA returns first revalidate the native attempt.
    */
   async signInReturned(value: unknown) {
     const environment = residentCloudFlow() ? residentEnvironment() : cloud.environment;
-    let outcome: CloudSignInAuthenticated;
+    let outcome: CloudSignInGoogleOutcome;
     try { outcome = signInOutcome(value, environment); } catch { return; }
     if (operation) { queuedSignInReturn = value; return; }
+    if (outcome.status === 'mfa') {
+      const resumeMfa = cloudSignIn?.resumeMfa?.bind(cloudSignIn);
+      if (!resumeMfa) return;
+      await work('Checking verification…', async signal => {
+        const resumed = await resumeMfa({ attemptId: outcome.attemptId, environment });
+        signal.throwIfAborted();
+        if (resumed && typeof resumed === 'object' && (resumed as { active?: unknown }).active === true
+          && outcome.expiresAt > Date.now()) showGoogleMfa(outcome);
+      });
+      await ensureResident(); return;
+    }
     await work('Finishing Eliza Cloud sign-in…', signal => signedIn(signInClient(environment), outcome, signal));
     await ensureResident();
   },
@@ -2359,6 +2373,7 @@ export const connectionController = {
 
 // A Google sign-in that native finished after Alpha restarted arrives as a retained event.
 if (cloudSignIn?.addListener) Promise.resolve(cloudSignIn.addListener('signInCompleted', outcome => { void connectionController.signInReturned(outcome); })).catch(() => { /* No retained return. */ });
+if (cloudSignIn?.addListener) Promise.resolve(cloudSignIn.addListener('signInMfaRequired', outcome => { void connectionController.signInReturned(outcome); })).catch(() => { /* No retained challenge. */ });
 if (cloudSignIn?.addListener) Promise.resolve(cloudSignIn.addListener('signInIncomplete', value => { connectionController.signInIncomplete(value); })).catch(() => { /* No retained return. */ });
 export function productionCloudSignInRequired(snapshot: Pick<ConnectionSnapshot,'cloudAccount'|'error'>): boolean {
   return isAndroid&&!testMocksEnabled&&(!snapshot.cloudAccount||snapshot.error===errorMessage({status:401})||(snapshot.cloudAccount.expiresAt!==undefined&&snapshot.cloudAccount.expiresAt<=Date.now()));

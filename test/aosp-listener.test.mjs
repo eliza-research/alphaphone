@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { FORBIDDEN, INDICATOR_EXEMPT_ROLES, LISTENER_SOURCE, UNPRIVILEGED, apkPermissions, checkListenerDescriptor, checkListenerOverlay, checkListenerPermissions, checkListenerSpeechBundle, checkListenerSpeechNatives, listenerPackage, privappPermissions, stageListener, verifyAospListener } from "../scripts/aosp-listener.mjs";
+import { FORBIDDEN, INDICATOR_EXEMPT_ROLES, LISTENER_SOURCE, UNPRIVILEGED, apkPermissions, checkListenerDescriptor, checkListenerOverlay, checkListenerPermissions, checkListenerSpeechBundle, checkListenerSpeechNatives, listenerPackage, listenerProductMakefile, privappPermissions, stageListener, verifyAospListener } from "../scripts/aosp-listener.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const APP = JSON.parse(fs.readFileSync(path.join(root, "app.config.json"), "utf8")).appId;
@@ -225,4 +225,14 @@ test('pinned Soong requires preprocessed modern APKs and accepts only normalized
  execFileSync('python3',[...args,apk,stamp]);assert.ok(fs.existsSync(stamp));
  execFileSync('python3',['scripts/verify-aosp-listener-apk.py',apk]);
  assert.equal(JSON.parse(fs.readFileSync(path.join(prepared,'preparation.json'))).payloadUnchanged,true);
+});
+
+test("listener includes keep the product directory after MAKEFILE_LIST advances", t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "listener-make-path-"));
+  t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+  fs.mkdirSync(path.join(directory, "listener/systemui/chip"), {recursive: true});
+  fs.writeFileSync(path.join(directory, "listener/listener.mk"), "PRODUCT_PACKAGES += AlphaSense\n");
+  fs.writeFileSync(path.join(directory, "listener/systemui/chip/chip.mk"), "PRODUCT_PACKAGES += ChipWitness\n");
+  fs.writeFileSync(path.join(directory, "product.mk"), listenerProductMakefile() + "\nall:\n\t@echo $(PRODUCT_PACKAGES)\n");
+  assert.equal(execFileSync("make", ["--no-print-directory", "-f", path.join(directory, "product.mk"), "all"], {encoding: "utf8"}).trim(), "AlphaSense ChipWitness");
 });

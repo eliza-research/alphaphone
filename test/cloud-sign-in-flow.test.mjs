@@ -129,30 +129,23 @@ test('one email code adapter: native constants, the bridge config and the route 
  assert.doesNotMatch(bridge,/'\/steward\/auth\/email\/send'/);
 });
 
-test('the Cloud sign-in hand-off stays the fallback until the readiness probe passes',()=>{
- const connection=read(native+'AlphaConnectionPlugin.java');
- assert.match(connection,/if\("\/api\/auth\/cli-session"\.equals\(path\)\)operation=RequestOperation\.CLI_CREATE;/);
- assert.match(connection,/boolean cliLogin=ConnectionRoutes\.externalCliLogin\(/);
- const routes=read('apps/app/src/runtime/managed-service-routes.ts');
- assert.match(routes,/cli-session/,'the product renderer allowlist keeps the hand-off');
- const protocol=read('apps/app/src/runtime/cloud-protocol.ts');
- assert.match(protocol,/async login\(signal: AbortSignal, onWaiting\?: \(attempt: CloudLoginAttempt\) => void\): Promise<CloudLoginResult>/);
+test('native sign-in never falls back to hosted login when readiness fails',async()=>{
  const ui=read('apps/app/src/runtime/connection-ui.tsx');
  const begin=between(ui,'async beginSignIn(','cancelSignIn() {');
- assert.ok(begin.indexOf('await inAppSignInMethods(environment, signal)')>=0&&begin.indexOf('if (!methods) {')>begin.indexOf('await inAppSignInMethods(environment, signal)'),'not ready: the hand-off');
- assert.match(begin, /if \(residentCloudFlow\(\)\) await residentBrowserLoginAction\(signal\);/,'fallback runs within the readiness operation');
- const readiness=between(ui,'async function inAppSignInMethods(','/** A failed or cancelled step');
- assert.match(readiness,/if \(!port\?\.status\) return null;/);assert.match(readiness,/catch \{ return null; \}/);assert.match(readiness,/SIGN_IN_READINESS_WAIT_MS/);
- assert.match(read('apps/app/src/runtime/cloud-sign-in.ts'),/if \(row\.inApp !== true \|\| row\.email !== true\) return null;/,'only an explicit ready answer switches to in-app');
- assert.match(ui,/extra=\{browserCloudResidentEnabled\?<button disabled=\{snapshot\.busy\} onClick=\{\(\)=>void connectionController\.signInBrowser\(\)\}>Sign in with browser<\/button>:testMocksEnabled\?/);
- const audit=read('scripts/audit-production-bundle.mjs');
- assert.ok(audit.includes("'Browser sign-in (diagnostic)'")&&audit.includes("'staging.eliza.app/alphaphone'"));
- assert.ok(!audit.includes("'/api/auth/cli-session'")&&!audit.includes("'/auth/cli-login'"),'the hand-off ships until Cloud is ready');
- // Readiness probe: cached, fail-safe, every part required.
+ assert.doesNotMatch(begin,/residentBrowserLoginAction|browserCloudLoginAction|Opening Eliza Cloud sign-in/);
+ // Execute the controller method with an unavailable, malformed, or timed-out readiness result.
+ const method=begin.slice(0,begin.lastIndexOf('},')+1);
+ const compiled=transformSync('const controller={'+method+'};',{loader:'ts'}).code;
+ for(const methods of [null,{google:false},{google:true}]) {
+  const updates=[];let ensured=false;
+  const run=new Function('operation','cloudEnvironmentAllowed','work','inAppSignInMethods','cloudSignIn','CloudSignInError','cloud','residentCloudFlow','state','update','ensureResident',
+   'let inAppGoogle=false;'+compiled+';return controller.beginSignIn("production");');
+  await run(false,()=>true,async(_,action)=>action(new AbortController().signal),async()=>methods,{},Error,{environment:'production',cancelLogin(){}},()=>true,{purpose:'agent'},v=>updates.push(v),async()=>{ensured=true;});
+  assert.equal(updates.at(-1).signIn.step,'choose');assert.equal(ensured,true);
+ }
  const plugin=read(native+'AlphaCloudSignInPlugin.java');
  const measure=between(plugin,'private CloudSignInReadiness.Result measure(','private boolean assetLinksGrant(');
  for(const part of ['/api/v1/app-auth/mobile/config','/steward/auth/providers','CloudEmailCode.SEND_PATH','CloudSignInFlow.authorizeUrl(','assetLinksGrant(environment)','appLinkVerified(environment)'])assert.ok(measure.includes(part),part);
- assert.match(between(plugin,'private void probe(','/** Cloud refusing'),/catch \(Exception failure\) \{ result = CloudSignInReadiness\.Result\.notReady/);
 });
 
 // Evaluate the actual JSX prop, rather than maintaining a second sign-in view.

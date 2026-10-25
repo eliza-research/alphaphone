@@ -5,7 +5,7 @@ import { reviewMailAttachment, type MailAttachment } from './inbox-attachment.ts
 import { reviewOpaqueAttachment, type OpaqueMailAttachment } from './inbox-operation.ts';
 import { gmailCapabilitiesFor } from './gmail-grants.ts';
 import type { CloudMapsRoute } from '../maps/cloud-provider.ts';
-import { authenticated as signInAuthenticated, CloudSignInError, emailStarted, verified as signInVerified, type CloudSignInAuthenticated, type CloudSignInEmailStarted, type CloudSignInMfaRequired, type CloudSignInPort } from './cloud-sign-in.ts';
+import { authenticated as signInAuthenticated, googleOutcome, type CloudSignInGoogleOutcome, CloudSignInError, emailStarted, verified as signInVerified, type CloudSignInAuthenticated, type CloudSignInEmailStarted, type CloudSignInMfaRequired, type CloudSignInPort } from './cloud-sign-in.ts';
 import { BILLING_LIMITS_PATH, ENTITLEMENT_KEYS_PATH, ENTITLEMENT_PATH, REDEEM_PATH, fallbackPlanFromLimits, normalizeSubscriptionCode, readServiceLimit, SubscriptionRedeemError, type EntitlementSource, type FallbackPlan, type RedeemResult } from './subscription-entitlement.ts';
 /** Narrow Alpha adapter for Eliza Cloud managed services: sign-in, identity, subscription plan and
  * the connected Google services. Sign-in is in-app (cloud-sign-in.ts) once the native host reports
@@ -469,10 +469,10 @@ export class CloudProtocol {
     if (credential.expiresAt !== undefined && credential.expiresAt <= Date.now()) throw new CloudProtocolError("expired");
     return outcome;
   }
-  /** Google through a Custom Tab and a verified App Link return. Resolves once the key is stored. */
-  async signInWithGoogle(signal: AbortSignal): Promise<CloudSignInAuthenticated> {
-    const outcome = await this.signInStep(signal, port => port.startGoogle({ environment: this.environment }), value => signInAuthenticated(value, this.environment));
-    return this.storedSignIn(outcome, signal);
+  /** Google through a verified App Link: request native MFA, or finish after the key is stored. */
+  async signInWithGoogle(signal: AbortSignal): Promise<CloudSignInGoogleOutcome> {
+    const outcome = await this.signInStep(signal, port => port.startGoogle({ environment: this.environment }), value => googleOutcome(value, this.environment));
+    return outcome.status === "mfa" ? outcome : this.storedSignIn(outcome, signal);
   }
   /** Sends a six-digit code to the address. The address is never stored or logged here. */
   async startEmailSignIn(email: string, signal: AbortSignal): Promise<CloudSignInEmailStarted> {

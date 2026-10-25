@@ -143,8 +143,8 @@ production authentication.
 ### Eliza Cloud sign-in ownership (in-app, 2026-10-14)
 
 Sign-in happens on Alpha's own screens once Cloud is ready for it; no Eliza Cloud web page is part
-of a successful in-app sign-in. Until the readiness probe passes, the Cloud sign-in hand-off stays
-the product path, so shipping Alpha before Cloud is configured never leaves a phone unable to sign in.
+of a successful in-app sign-in. If readiness fails or times out, Alpha shows an unavailable error
+and lets the owner retry. It does not open Cloud website sign-in; the local agent keeps running.
 
 - **Readiness (`CloudSignInReadiness`, `AlphaCloudSignInPlugin.status`)**: in-app sign-in is offered
   only when all of these hold, checked with a few short requests and cached (6 hours when ready,
@@ -198,8 +198,8 @@ the product path, so shipping Alpha before Cloud is configured never leaves a ph
   (`login-active`). It then runs the unchanged identity, entitlement, redeem and resident-binding
   path on the stored key, and says so when `accountCreated` is true.
 - **Cloud sign-in hand-off (`CloudProtocol.login`, `/api/auth/cli-session`, the `cli-login` page)**:
-  the product path until the readiness probe passes, and a **Browser sign-in (diagnostic)** button
-  on the in-app screen in test-mocks builds afterwards.
+  retained for the explicit browser-host sign-in and the **Browser sign-in (diagnostic)** button
+  in test-mocks builds. It is not the native readiness fallback.
 - **Cloud (elizaOS/eliza `packages/cloud`, `packages/auth`, `packages/app`)** owns the accounts:
   - Steward links Google and email to the existing user by verified email.
   - Mobile App Auth mints the key, valid for 30 days.

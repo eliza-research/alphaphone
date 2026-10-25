@@ -39,7 +39,7 @@ public final class CloudSignInFlowTest {
   URI authorize = new URI(CloudSignInFlow.authorizeUrl(production, challenge, state));
   check("https".equals(authorize.getScheme()) && "api.eliza.app".equals(authorize.getHost()) && authorize.getPort() == -1, "Cloud API authority");
   check("/steward/auth/oauth/google/authorize".equals(authorize.getPath()), "Steward Google authorize");
-  check(authorize.getRawQuery().equals("response_type=code&tenant_id=elizacloud&redirect_uri=https%3A%2F%2Feliza.app%2Falphaphone%2Fauth%2Fcallback&code_challenge=" + challenge + "&code_challenge_method=S256&state=" + state + "&prompt=select_account"), "exact query, with Google's account chooser");
+  check(authorize.getRawQuery().equals("response_type=code&tenant_id=elizacloud&redirect_uri=https%3A%2F%2Feliza.app%2Falphaphone%2Fauth%2Fcallback&code_challenge=" + challenge + "&code_challenge_method=S256&state=" + state + "&prompt=select_account&mfa=exchange"), "exact query, with Google's account chooser and native MFA");
   check(new URI(CloudSignInFlow.authorizeUrl(staging, challenge, state)).getHost().equals("api-staging.eliza.app"), "staging authority");
   for (String[] bad : new String[][]{{challenge, "short"}, {"x", state}, {challenge, state + "&x=1"}}) {
    try { CloudSignInFlow.authorizeUrl(production, bad[0], bad[1]); check(false, "refused authorize input"); } catch (IllegalArgumentException expected) { checks++; }
@@ -152,12 +152,16 @@ public final class CloudSignInFlowTest {
   long t = 1_800_000_000_000L;
   CloudSignInReadiness.Result ready = CloudSignInReadiness.combine(true, true, true, true, true, true, true, t);
   check(ready.inApp && ready.google && ready.until == t + CloudSignInReadiness.READY_TTL_MS && ready.fresh(t + 1) && !ready.fresh(ready.until), "ready, cached six hours");
-  boolean[][] missing = {{false,true,true,true,true},{true,false,true,true,true},{true,true,false,true,true},{true,true,true,false,true},{true,true,true,true,false}};
-  for (boolean[] row : missing) { CloudSignInReadiness.Result r = CloudSignInReadiness.combine(row[0], row[1], row[2], row[3], row[4], true, true, t); check(!r.inApp && !r.google && r.until == t + CloudSignInReadiness.NOT_READY_TTL_MS, "any missing part keeps the hand-off"); }
+  boolean[][] missing = {{false,true,true,true,true},{true,true,true,false,true},{true,true,true,true,false}};
+  for (boolean[] row : missing) { CloudSignInReadiness.Result r = CloudSignInReadiness.combine(row[0], row[1], row[2], row[3], row[4], true, true, t); check(!r.inApp && !r.google && r.until == t + CloudSignInReadiness.NOT_READY_TTL_MS, "missing email prerequisite refuses readiness"); }
+  for (boolean[] row : new boolean[][] {{false,true},{true,false},{false,false}}) {
+   CloudSignInReadiness.Result result = CloudSignInReadiness.combine(true,row[0],row[1],true,true,true,true,t);
+   check(result.inApp && !result.google, "missing Google redirect or signer grant preserves native email");
+  }
   CloudSignInReadiness.Result emailOnly = CloudSignInReadiness.combine(true, true, true, true, true, true, false, t);
   check(emailOnly.inApp && !emailOnly.google, "Google only when this phone's App Link is verified");
   CloudSignInReadiness.Result restored2 = CloudSignInReadiness.Result.parse(ready.serialize());
-  check(restored2 != null && restored2.inApp && restored2.google && restored2.until == ready.until && CloudSignInReadiness.Result.parse("v2|true|true|1") == null && CloudSignInReadiness.Result.parse(null) == null, "cache round trip");
+  check(restored2 != null && restored2.inApp && restored2.google && restored2.until == ready.until && CloudSignInReadiness.Result.parse("v1|true|true|1") == null && CloudSignInReadiness.Result.parse(null) == null, "cache round trip");
   check(!new CloudSignInReadiness.Result(true, true, t + 365L * 86400000L).fresh(t), "a cache entry from the future is not trusted");
   check(MessageDigest.isEqual("a".getBytes(StandardCharsets.US_ASCII), "a".getBytes(StandardCharsets.US_ASCII)), "jdk");
   System.out.println("PASS cloud sign-in flow (" + checks + " checks)");

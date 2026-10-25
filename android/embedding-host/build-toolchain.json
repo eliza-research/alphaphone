@@ -1,13 +1,13 @@
 {
   "schema": 1,
   "ndk": "28.2.13676358",
-  "ndkEvidence": "Current33a6 component receipt used NDK28.2.13676358; strippedlibc++ SHAcd61762848882a16c8244c964a6f396c0caa0b440588a210ce9cc4ab0e6d9f0c,1253544bytes. Actual full JNI/BGE execution passed twice onSeeker. Receipt:docs/evidence/native-google-33a6/ARM64-EMBEDDING-33A6-REVIEWED-QUALIFICATION.json.",
+  "ndkEvidence": "Current c95a component preparation receipts use NDK28.2.13676358. Full Alpha JNI/BGE execution passed on Pixel ARM64 and API35 x86_64; evidence under docs/evidence/native-c95a.",
   "cmake": "4.0.3",
   "engineRepository": "https://github.com/elizaOS/llama.cpp.git",
   "engineRepositoryEvidence": "vendor/eliza .gitmodules, submodule plugins/plugin-local-inference/native/llama.cpp; the commit is the gitlink recorded as forkPin in qualified-host.json.",
   "remapBuildPath": true,
-  "remapBuildPathEvidence": "Current33a6/6e ARM64 component was built with explicit file-prefix remapping and reviewed against Seeker execution. A normal build-embedding-host --candidate run in a different directory on the same Linux host reproduced all three reviewed library hashes exactly. Evidence: docs/evidence/native-google-33a6/ARM64-FRESH-PATH-REPRODUCTION.json. Automatic rebuilds retain the matching-library staging fence.",
-  "remapBuildPathMeaning": "Remapping is enabled for the current reviewed libraries. The normal build wrapper stages rebuilt libraries only when every SHA256 matches the reviewed bytes; a differing rebuild stops with exit3. Current Linux different-directory reproduction passed on the same host and genuine engine Git cache. Cross-host/OS and shallow-Git reproduction are not established. Historical macOS evidence below applies only to its recorded older source.",
+  "remapBuildPathEvidence": "Current c95a binaries were built with explicit path remapping. PREPARATION receipts retain exact compiler inputs and remap environment. Fresh-path reproduction of this engine revision has not been measured.",
+  "remapBuildPathMeaning": "Automatic rebuilding remains fenced by the exact admitted library hashes. A differing output cannot be staged; cross-host/OS reproduction is not established. Historical candidate measurements below are not current evidence.",
   "unqualifiedCandidateMeasurement": {
     "note": "NOT reviewed, NOT qualified and NOT staged by any script. Two --remap-build-path builds in different directories on one macOS arm64 host, 2026-10-11, were byte-identical to each other, and a third built by `node scripts/build-embedding-host.mjs --candidate` in another directory matched them. Recorded so a later candidate build can be compared with it.",
     "pin": "13c98575987a121decc45b161b0c8a4ee698554e",
@@ -29,5 +29,5 @@
       }
     ]
   },
-  "currentReproductionStatus": "Fresh-path comparison pending; a mismatch must stop before staging. Existing remotely staged bytes already match the reviewed component receipt."
+  "currentReproductionStatus": "Current libraries are admitted by fresh build receipts and exact component execution. Independent-directory byte reproduction is pending."
 }
