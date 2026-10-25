@@ -412,16 +412,16 @@ function prepareSignInReplacement() {
   const replacingCloud = active?.kind === 'cloud' || selection()?.kind === 'cloud';
   detachCloudTarget(); detachService(); if (replacingCloud) save({ kind: 'none' }); update({ agents: [], accountCreated: false });
 }
-/** How long sign-in waits for the host's cached readiness answer before using the browser hand-off. */
+/** How long sign-in waits for the host's cached readiness answer before reporting an in-app error. */
 const SIGN_IN_READINESS_WAIT_MS = 6000;
 /** Whether the last ready host offered Google (it needs this phone's verified App Link return). */
 let inAppGoogle = false;
 /**
- * The in-app methods this phone may use now, or null for the Cloud sign-in hand-off. The host
+ * The in-app methods this phone may use now, or null when sign-in is unavailable. The host
  * (AlphaCloudSignInPlugin) runs a cheap, cached readiness probe: the native client registration,
  * Steward's redirect allowlist and providers, /.well-known/assetlinks.json listing this app's
  * package and signing certificate, and Android's verification of the return host. Fail-safe: no
- * host, an error, a slow or malformed answer, or `inApp` not exactly true keeps the hand-off.
+ * host, an error, a slow or malformed answer, or `inApp` not exactly true keeps sign-in inside Alpha with an error.
  */
 async function inAppSignInMethods(environment: CloudEnvironment, signal: AbortSignal): Promise<{ google: boolean } | null> {
   const port = cloudSignIn;
@@ -1910,9 +1910,8 @@ export const connectionController = {
   },
   /**
    * Eliza Cloud sign-in for the resident agent (owner directive 2026-10-14: sign-in happens inside
-   * Alpha). Alpha's own screens are used once this phone's sign-in host reports Cloud ready for it
-   * (inAppSignInReady); until then the Cloud sign-in hand-off stays the path, so a phone is never left
-   * unable to sign in. The agent keeps running throughout.
+   * Alpha). Alpha's own screens are used once this phone's sign-in host reports Cloud ready for it.
+   * An unavailable host leaves an error and retry inside Alpha. The agent keeps running throughout.
    */
   async residentCloudLogin() { await connectionController.beginSignIn(residentEnvironment()); },
   /** Opens Alpha's own sign-in screen when ready. Nothing is sent until the owner chooses Google or
@@ -1925,10 +1924,9 @@ export const connectionController = {
       const methods = await inAppSignInMethods(environment, signal);
       signal.throwIfAborted();
       if (!methods) {
-        update({ signIn: null, message: 'Opening Eliza Cloud sign-in…' });
-        if (residentCloudFlow()) await residentBrowserLoginAction(signal);
-        else await browserCloudLoginAction(environment, signal);
-        return;
+        inAppGoogle = false;
+        update({ signIn: null, message: '' });
+        throw new CloudSignInError('unavailable');
       }
       inAppGoogle = methods.google;
       if (cloud.environment !== environment) cloud = makeCloud(environment);

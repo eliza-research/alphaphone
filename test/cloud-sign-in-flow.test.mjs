@@ -129,7 +129,7 @@ test('one email code adapter: native constants, the bridge config and the route 
  assert.doesNotMatch(bridge,/'\/steward\/auth\/email\/send'/);
 });
 
-test('the Cloud sign-in hand-off stays the fallback until the readiness probe passes',()=>{
+test('unavailable native readiness does not open Cloud website sign-in',()=>{
  const connection=read(native+'AlphaConnectionPlugin.java');
  assert.match(connection,/if\("\/api\/auth\/cli-session"\.equals\(path\)\)operation=RequestOperation\.CLI_CREATE;/);
  assert.match(connection,/boolean cliLogin=ConnectionRoutes\.externalCliLogin\(/);
@@ -139,15 +139,16 @@ test('the Cloud sign-in hand-off stays the fallback until the readiness probe pa
  assert.match(protocol,/async login\(signal: AbortSignal, onWaiting\?: \(attempt: CloudLoginAttempt\) => void\): Promise<CloudLoginResult>/);
  const ui=read('apps/app/src/runtime/connection-ui.tsx');
  const begin=between(ui,'async beginSignIn(','cancelSignIn() {');
- assert.ok(begin.indexOf('await inAppSignInMethods(environment, signal)')>=0&&begin.indexOf('if (!methods) {')>begin.indexOf('await inAppSignInMethods(environment, signal)'),'not ready: the hand-off');
- assert.match(begin, /if \(residentCloudFlow\(\)\) await residentBrowserLoginAction\(signal\);/,'fallback runs within the readiness operation');
+ assert.ok(begin.indexOf('await inAppSignInMethods(environment, signal)')>=0&&begin.indexOf('if (!methods) {')>begin.indexOf('await inAppSignInMethods(environment, signal)'),'readiness is checked before selecting the sign-in path');
+ assert.match(begin, /throw new CloudSignInError\('unavailable'\)/);
+ assert.doesNotMatch(begin, /(?:residentBrowserLoginAction|browserCloudLoginAction)\(/);
  const readiness=between(ui,'async function inAppSignInMethods(','/** A failed or cancelled step');
  assert.match(readiness,/if \(!port\?\.status\) return null;/);assert.match(readiness,/catch \{ return null; \}/);assert.match(readiness,/SIGN_IN_READINESS_WAIT_MS/);
  assert.match(read('apps/app/src/runtime/cloud-sign-in.ts'),/if \(row\.inApp !== true \|\| row\.email !== true\) return null;/,'only an explicit ready answer switches to in-app');
  assert.match(ui,/extra=\{browserCloudResidentEnabled\?<button disabled=\{snapshot\.busy\} onClick=\{\(\)=>void connectionController\.signInBrowser\(\)\}>Sign in with browser<\/button>:testMocksEnabled\?/);
  const audit=read('scripts/audit-production-bundle.mjs');
  assert.ok(audit.includes("'Browser sign-in (diagnostic)'")&&audit.includes("'staging.eliza.app/alphaphone'"));
- assert.ok(!audit.includes("'/api/auth/cli-session'")&&!audit.includes("'/auth/cli-login'"),'the hand-off ships until Cloud is ready');
+ assert.ok(!audit.includes("'/api/auth/cli-session'")&&!audit.includes("'/auth/cli-login'"),'explicit browser-host sign-in remains available separately');
  // Readiness probe: cached, fail-safe, every part required.
  const plugin=read(native+'AlphaCloudSignInPlugin.java');
  const measure=between(plugin,'private CloudSignInReadiness.Result measure(','private boolean assetLinksGrant(');

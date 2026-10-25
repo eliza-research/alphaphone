@@ -14,7 +14,7 @@ import type { CloudEnvironment } from './cloud-protocol';
  * outcomes themselves carry no secret.
  *
  * Until the host's readiness probe reports Cloud ready for this phone (`status().inApp`), the
- * renderer keeps the Cloud sign-in hand-off (CloudProtocol.login) as the product path.
+ * renderer reports unavailability inside Alpha; it does not open Cloud website sign-in.
  */
 export type CloudSignInFailureCode =
   | 'cancelled' | 'login-active' | 'invalid-email' | 'invalid-code' | 'cooldown' | 'expired' | 'rate-limited'
