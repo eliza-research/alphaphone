@@ -434,6 +434,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     out.persona = 'Voice and agent settings';
     const connection = connectionController.getSnapshot();
     const account = connection.cloudAccount;
+    const serviceName = cloudServiceName(connectionController.getCloudClient()?.client.environment ?? account?.environment ?? connection.signIn?.environment ?? 'production');
     const target = connection.session ? connection.name : 'Not connected';
     const runtimeLocation=!connection.session?'Not connected':connection.kind==='resident'?(Capacitor.isNativePlatform()?'On this device':'On this computer · development'):testMocksEnabled?'Remote agent':'Unsupported connection';
     const cloudLabel = account ? account.email||`Account ${account.userId.slice(0, 8)}` : 'Not signed in';
@@ -442,7 +443,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     const nav = (label: string, page: string): Bag => ({ kNav: true, label, lbl: label, chev: true, noAB: true, go: manage(page) });
     const group = (rows: Bag[]) => ({ css: 'background:var(--s2);padding:4px 0', rows });
     // Speech follows the explicit production runtime profile; developer routes stay separate.
-    const speechRows = (): Bag[] => [info('Speech', developmentCartesiaVoiceEnabled?'Cartesia · development':cloudRuntimeEnabled?'Eliza Cloud · Cartesia output (uses your plan)':testMocksEnabled?'Eliza Cloud (counts toward your plan)':'On this device')];
+    const speechRows = (): Bag[] => [info('Speech', developmentCartesiaVoiceEnabled?'Cartesia · development':cloudRuntimeEnabled?`${serviceName} · Cartesia output (uses your plan)`:testMocksEnabled?`${serviceName} (counts toward your plan)`:'On this device')];
     const action = (label: string, go: () => void): Bag => ({ kNav:true, label, lbl:label, chev:true, noAB:true, go });
     const listenerRows = (): Bag[] => {
       if (!listener.available) return [info('Wake word', 'Not available')];
@@ -470,7 +471,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     const browserNotifications = delivery.scope === 'browser';
     const topValues: Bag = {
       'Wi-Fi': wifiValue, 'Bluetooth': bluetoothValue, 'Mobile data': mobileValue,
-      'Accounts': account ? 'Eliza Cloud connected' : 'Not signed in', 'Connections': gmail,
+      'Accounts': account ? `${serviceName} connected` : 'Not signed in', 'Connections': gmail,
       'Battery': percent, 'Models': target, 'About': facts.appVersion || 'Unavailable',
       'Notifications': typeof delivery.appEnabled !== 'boolean' ? 'Unavailable' : !delivery.appEnabled || !delivery.permissionGranted ? (browserNotifications ? 'In-app alerts off' : 'App notifications off') : delivery.channels?.some((c:Bag)=>c.blocked||c.groupBlocked) ? (browserNotifications ? 'Some in-app alerts off' : 'Some channels blocked') : (browserNotifications ? 'In-app alerts enabled' : 'App notifications allowed'),
       'Sound & vibration': Capacitor.isNativePlatform()?'Android settings':'App sound settings',
@@ -555,10 +556,10 @@ export function installSettingsAdapter(Component: any, views: Bag) {
         const plan=connectionController.residentPlanSettings();
         if(plan){
           const day=(at:number)=>new Date(at).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
-          page.groups.push(group([{kNav:true,label:'Eliza Cloud account & plan',lbl:'Eliza Cloud account & plan',val:plan.keyExpiring?'Sign-in expiring':plan.plan,hasVal:true,chev:true,noAB:true,go:()=>api.set({page:'cloud-plan'})}]));
+          page.groups.push(group([{kNav:true,label:`${serviceName} account & plan`,lbl:`${serviceName} account & plan`,val:plan.keyExpiring?'Sign-in expiring':plan.plan,hasVal:true,chev:true,noAB:true,go:()=>api.set({page:'cloud-plan'})}]));
           if(state.page==='cloud-plan'){
             // Runtime location and Cloud inference are separate facts.
-            const rows:Bag[]=[info('Account',plan.account??(plan.offline?'Eliza Cloud unreachable':'Not signed in')),info('Plan',plan.plan),info('Agent execution',runtimeLocation),info('AI replies',plan.inference)];
+            const rows:Bag[]=[info('Account',plan.account??(plan.offline?`${serviceName} unreachable`:'Not signed in')),info('Plan',plan.plan),info('Agent execution',runtimeLocation),info('AI replies',plan.inference)];
             if(plan.endsAt)rows.push(info(plan.status==='active'||plan.status==='trialing'||plan.status==='past_due'?'Plan runs until':'Plan ended',day(plan.endsAt)));
             if(plan.keyExpiresAt)rows.push(info(plan.keyExpiring?'Sign-in expires soon':'Sign-in expires',day(plan.keyExpiresAt)));
             if(connection.busy)rows.push(info('Status',connection.message||'Please wait…'));
@@ -566,15 +567,15 @@ export function installSettingsAdapter(Component: any, views: Bag) {
               ...(plan.keyExpiring?[{kNav:true,label:'Approve this phone again',lbl:'Approve this phone again',chev:true,noAB:true,go:()=>void connectionController.residentCloudLogin()}]:[]),
               ...(connection.residentSubscription?.kind!=='credits'?[{kNav:true,label:'Redeem code',lbl:'Redeem code',chev:true,noAB:true,go:()=>connectionController.openPlan()}]:[]),
               {kNav:true,label:'Manage plan',lbl:'Manage plan',chev:true,noAB:true,go:()=>void connectionController.residentManagePlan()},
-              {kNav:true,label:'Sign out',lbl:'Sign out of Eliza Cloud',chev:true,noAB:true,go:()=>void connectionController.cloudSignOut()},
+              {kNav:true,label:'Sign out',lbl:`Sign out of ${serviceName}`,chev:true,noAB:true,go:()=>void connectionController.cloudSignOut()},
             ]:plan.offline?[{kNav:true,label:'Check plan again',lbl:'Check plan again',chev:true,noAB:true,go:()=>connectionController.recheckPlanOnReturn()}]
-            :[{kNav:true,label:'Sign in with Eliza Cloud',lbl:'Sign in with Eliza Cloud',chev:true,noAB:true,go:()=>void connectionController.residentCloudLogin()}];
-            out.stack.push({isTop:false,notTop:true,cls:'enter',z:4,title:'Eliza Cloud account & plan',hasTitle:true,backLabel:'Back to Settings',back:()=>api.set({page:null}),hero:{},groups:[group(rows),group(actions)]});
+            :[{kNav:true,label:`Sign in with ${serviceName}`,lbl:`Sign in with ${serviceName}`,chev:true,noAB:true,go:()=>void connectionController.residentCloudLogin()}];
+            out.stack.push({isTop:false,notTop:true,cls:'enter',z:4,title:`${serviceName} account & plan`,hasTitle:true,backLabel:'Back to Settings',back:()=>api.set({page:null}),hero:{},groups:[group(rows),group(actions)]});
           }
         }
         page.groups.push(group([{kNav:true,label:'Agent connection',lbl:'Agent connection',val:connectionController.getSnapshot().name,hasVal:true,chev:true,noAB:true,go:()=>native&&!testMocksEnabled?api.set({page:'agent-connection'}):connectionController.open()}]));
         if(native&&!testMocksEnabled&&state.page==='agent-connection'){
-          const agentRows=[info('Agent',connection.session?'Running on this device':connection.residentRecoveryReason?'Recovery review needed':connection.kind==='recovering'?'Not running':'Starting…'),info('AI',connection.residentInference==='cloud'?'Eliza Cloud':connection.cloudAccount?'Not available':'Sign in required')];
+          const agentRows=[info('Agent',connection.session?'Running on this device':connection.residentRecoveryReason?'Recovery review needed':connection.kind==='recovering'?'Not running':'Starting…'),info('AI',connection.residentInference==='cloud'?serviceName:connection.cloudAccount?'Not available':'Sign in required')];
           if(connection.message)agentRows.push(info('Status',connection.message));
           if(connection.error)agentRows.push(info('Connection problem',connection.error));
           if(connection.residentRecoveryReason&&!connection.session){
@@ -645,7 +646,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
         continue;
       }
       if (page.title === 'Accounts') {
-        page.groups = [group([info('Eliza Cloud', cloudLabel), { kNav:true, label:'Manage Cloud account', lbl:'Manage Cloud account', chev:true, noAB:true, go:()=>connectionController.openCloudAccount() }, {kNav:true,label:'Google accounts',lbl:'Google accounts',chev:true,noAB:true,go:()=>googleConnectionController.open()}, nav('Device accounts in Android', 'accounts')])];
+        page.groups = [group([info(serviceName, cloudLabel), { kNav:true, label:'Manage Cloud account', lbl:'Manage Cloud account', chev:true, noAB:true, go:()=>connectionController.openCloudAccount() }, {kNav:true,label:'Google accounts',lbl:'Google accounts',chev:true,noAB:true,go:()=>googleConnectionController.open()}, nav('Device accounts in Android', 'accounts')])];
       } else if (page.title === 'Connections') {
         const connected = gmailAccounts.filter(a => a.connected && a.connectionId);
         page.groups = [group([{ kNav:true,label:'Manage Google accounts',lbl:'Manage Google accounts',chev:true,noAB:true,go:()=>googleConnectionController.open() },info('Gmail', gmail),
@@ -700,8 +701,8 @@ export function installSettingsAdapter(Component: any, views: Bag) {
           nav('Manage mobile networks', 'mobile'), ...(Capacitor.isNativePlatform() ? [nav('Airplane mode in Android', 'airplane')] : [])])];
       } else if (page.title === 'Models') {
         const native=Capacitor.isNativePlatform(),provider=connection.kind==='resident'&&connection.session?connection.providerStatus:null;
-        page.hero = { ...page.hero, big: target, sub: cloudRuntimeEnabled?'Conversation uses Eliza Cloud. Speech uploads recordings and reply text to your Cloud account and uses your plan allowance.':native?'Conversation uses the selected agent. Voice runs on this device.':developmentCartesiaVoiceEnabled?'Direct Cerebras and Cartesia · development':'Conversation uses the selected agent. Voice uses Eliza Cloud.' };
-        page.groups = [group([info('Connection', native?runtimeLocation:connection.kind), ...(native?[info('Inference provider',provider?provider.configured?(provider.provider==='elizacloud'?'Eliza Cloud':'Cerebras'):'Not configured':'Status unavailable')]:browserLocalAgentEnabled ? [info('Inference provider', inferenceProvider)] : []), info('Inference model', native&&provider?.configured&&provider.model?provider.model:'Not reported by agent'), info('Voice', cloudRuntimeEnabled?(account?'Eliza Cloud · Cartesia output':'Cloud sign-in required'):native?'On this device':developmentCartesiaVoiceEnabled?'Cartesia · development':account ? 'Eliza Cloud' : 'Sign-in required'), { kNav:true, label:'Eliza Cloud account', lbl:'Eliza Cloud account', chev:true, noAB:true, go:()=>connectionController.openCloudAccount() }])];
+        page.hero = { ...page.hero, big: target, sub: cloudRuntimeEnabled?`Conversation uses ${serviceName}. Speech uploads recordings and reply text to your Cloud account and uses your plan allowance.`:native?'Conversation uses the selected agent. Voice runs on this device.':developmentCartesiaVoiceEnabled?'Direct Cerebras and Cartesia · development':`Conversation uses the selected agent. Voice uses ${serviceName}.` };
+        page.groups = [group([info('Connection', native?runtimeLocation:connection.kind), ...(native?[info('Inference provider',provider?provider.configured?(provider.provider==='elizacloud'?serviceName:'Cerebras'):'Not configured':'Status unavailable')]:browserLocalAgentEnabled ? [info('Inference provider', inferenceProvider)] : []), info('Inference model', native&&provider?.configured&&provider.model?provider.model:'Not reported by agent'), info('Voice', cloudRuntimeEnabled?(account?`${serviceName} · Cartesia output`:'Cloud sign-in required'):native?'On this device':developmentCartesiaVoiceEnabled?'Cartesia · development':account ? serviceName : 'Sign-in required'), { kNav:true, label:`${serviceName} account`, lbl:`${serviceName} account`, chev:true, noAB:true, go:()=>connectionController.openCloudAccount() }])];
       } else if (page.title === 'Developer') {
         page.groups = [group([info('App version', facts.appVersion || buildVersion), info('Agent memory', connection.session?'Usage not reported by agent':'Not connected')]), group([problemsRow(), diagnosticsRow()]), group([nav('Android developer settings', 'developer')])];
       } else if (page.title === 'Notifications') {
