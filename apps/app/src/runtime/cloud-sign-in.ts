@@ -73,7 +73,7 @@ export function signInFailureMessage(code: CloudSignInFailureCode): string {
     case 'state-mismatch': return 'That sign-in return did not match this phone’s request. Start again.';
     case 'browser-closed': return 'Google sign-in was closed before it finished. Start again when you are ready.';
     case 'browser-unavailable': return 'No browser that can show Google sign-in is available. Use your email instead.';
-    case 'google-account-unavailable': return 'No Google account is available on this device. Add an account in Android Settings or sign in with email.';
+    case 'google-account-unavailable': return 'Google could not complete sign-in on this device. Check your Google account and update Google Play services, then try again or use email.';
     case 'provider-refused': return 'Google did not complete the sign-in. Try again or use your email.';
     case 'mfa-browser': return 'This account needs a second verification step. Sign in with your email to complete it in Alpha.';
     case 'mfa-unsupported': return 'This account’s second verification method is not available in Alpha yet. Use account recovery or contact Eliza Cloud support.';

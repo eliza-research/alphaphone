@@ -708,7 +708,7 @@ async function ensureResident() {
   const { message, error, open } = state;
   const startFailed = !!error && error === residentStartFailure;
   await startResident('Restarting your agent…', true);
-  update({ open: open || state.open, message: message || (state.session ? '' : state.message), error: state.error || (state.session && startFailed ? '' : error) });
+  update({ open: open || state.open, message: message || (state.session ? '' : state.message), error: error && !startFailed ? error : state.error || (state.session && startFailed ? '' : error) });
 }
 /** P-43: a startup path that ended without any agent (a Cloud account check that returned early, or
  * a saved development/remote/Cloud agent that could not be restored) must not keep claiming
@@ -2155,7 +2155,7 @@ export const connectionController = {
     cloud.cancelLogin();
     update({ signIn: null, message: '', error: '' });
   },
-  /** Google's consent in a Custom Tab, returning to Alpha through a verified App Link. */
+  /** Android's native Google account picker, followed by the existing session flow. */
   async signInGoogle() {
     const view = state.signIn; if (!view) return;
     await work('Choose your Google account to sign in to Alpha.', async signal => {

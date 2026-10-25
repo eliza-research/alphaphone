@@ -1,0 +1,39 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {transformSync} from 'esbuild';
+import {readFileSync} from 'node:fs';
+const source=readFileSync(new URL('../apps/app/src/runtime/connection-ui.tsx',import.meta.url),'utf8');
+const panelSource=readFileSync(new URL('../apps/app/src/runtime/cloud-sign-in-ui.tsx',import.meta.url),'utf8');
+const between=(text,start,end)=>{const a=text.indexOf(start),b=text.indexOf(end,a);assert.ok(a>=0&&b>a);return text.slice(a,b);};
+const compiled=transformSync(panelSource.replace(/^import .*;\n/gm,'').replaceAll('export ',''),{loader:'tsx',jsxFactory:'React.createElement'}).code;
+const CloudSignInPanel=new Function('React','useRef','useState','useEffect',compiled+';return CloudSignInPanel;')(React,React.useRef,React.useState,React.useEffect);
+const branch=between(source,'  const requiredSignInView:', '  const accountCreatedNotice=');
+const renderBranch=new Function('React','CloudSignInPanel','snapshot','productionSignInRequired','residentEnvironment','inAppGoogle','panel','RESIDENT_UNPACKAGED','connectionController','browserCloudResidentEnabled','testMocksEnabled','ResidentRecoveryPanel',transformSync('function render(){'+branch+'return null;}',{loader:'tsx',jsxFactory:'React.createElement'}).code+';return render();');
+const controller={beginSignIn(){},signInGoogle(){},signInEmail(){},verifySignInCode(){},resendSignInCode(){},cancelSignIn(){}};
+const render=snapshot=>renderToStaticMarkup(renderBranch(React,CloudSignInPanel,snapshot,true,()=> 'production',false,null,'unpackaged',controller,false,false,()=>null));
+test('production signed-out entry server-renders direct options before readiness without false Google failure',()=>{
+ const html=render({signIn:null,busy:false,message:'',error:''});
+ assert.match(html,/Welcome to Alpha/);assert.match(html,/Continue with Google/);assert.match(html,/Email me a code/);assert.match(html,/Retry sign-in/);
+ assert.doesNotMatch(html,/Sign in with Eliza Cloud|Google sign-in is unavailable/);assert.match(html,/disabled/);
+});
+test('ready choice renders usable email path and explicit unavailable Google notice',()=>{
+ const html=render({signIn:{step:'choose',environment:'production'},busy:false,message:'',error:''});
+ assert.match(html,/Google sign-in is unavailable/);assert.doesNotMatch(html,/Retry sign-in/);assert.match(html,/<input[^>]+type="email"(?![^>]*disabled)/);
+});
+test('automatic readiness is one attempt per signed-out cycle, defers while busy and never initiates Google or email',()=>{
+ const code=between(source,'  const automaticSignInProbe =','  const visible=');
+ let ref,callback,count=0;
+ const apply=new Function('useRef','useEffect','productionSignInRequired','snapshot','connectionController','residentEnvironment',transformSync(code,{loader:'tsx'}).code);
+ const draw=(required,busy=false,signIn=null)=>{callback=null;apply(()=>ref??=( {current:false}),fn=>{callback=fn;},required,{busy,signIn},{beginSignIn(){count++;},signInGoogle(){throw Error('Unexpected Google');},signInEmail(){throw Error('Unexpected email');}},()=> 'production');callback();};
+ draw(true,true);assert.equal(count,0);draw(true);draw(true);assert.equal(count,1);
+ draw(true,false,{step:'choose'});assert.equal(count,1);draw(false);draw(true);assert.equal(count,2);
+});
+test('Cancel delegates in-flight readiness to the existing abort operation, without clearing saved credentials',()=>{
+ const code=between(source,'  cancelSignIn() {','  async signInGoogle()');let aborted=0,loginCancelled=0,changes=[];
+ const make=new Function('operation','connectionController','cloud','update',transformSync('const target={'+code+'};',{loader:'ts'}).code+';return target;');
+ const run=active=>make(active,{cancel(){aborted++;}},{cancelLogin(){loginCancelled++;}},v=>changes.push(v)).cancelSignIn();
+ run({});assert.equal(aborted,1);assert.equal(loginCancelled,0);assert.deepEqual(changes,[]);
+ run(null);assert.equal(loginCancelled,1);assert.deepEqual(changes,[{signIn:null,message:'',error:''}]);
+});

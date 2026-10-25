@@ -227,7 +227,7 @@ test('native readiness refuses browser fallback and requires native Google avail
  const readiness=between(ui,'async function inAppSignInMethods(','/** A failed or cancelled step');
  assert.match(readiness,/if \(!port\?\.status\) return null;/);assert.match(readiness,/catch \{ return null; \}/);assert.match(readiness,/SIGN_IN_READINESS_WAIT_MS/);
  assert.match(read('apps/app/src/runtime/cloud-sign-in.ts'),/if \(row\.inApp !== true \|\| row\.email !== true\) return null;/,'only an explicit ready answer switches to in-app');
- assert.match(ui,/extra=\{browserCloudResidentEnabled\?<button disabled=\{snapshot\.busy\} onClick=\{\(\)=>void connectionController\.signInBrowser\(\)\}>Sign in with browser<\/button>:testMocksEnabled\?/);
+ assert.match(ui,/browserCloudResidentEnabled\?<button disabled=\{snapshot\.busy\} onClick=\{\(\)=>void connectionController\.signInBrowser\(\)\}>Sign in with browser<\/button>:testMocksEnabled\?/);
  const audit=read('scripts/audit-production-bundle.mjs');
  assert.ok(audit.includes("'Browser sign-in (diagnostic)'")&&audit.includes("'staging.eliza.app/alphaphone'"));
  assert.ok(!audit.includes("'/api/auth/cli-session'")&&!audit.includes("'/auth/cli-login'"),'the hand-off ships until Cloud is ready');
@@ -242,14 +242,25 @@ test('native readiness refuses browser fallback and requires native Google avail
 // Evaluate the actual JSX prop, rather than maintaining a second sign-in view.
 test('browser resident sign-in exposes the existing hosted hand-off only in its admitted view',()=>{
  const ui=read('apps/app/src/runtime/connection-ui.tsx');
- const expression=between(ui,'      extra={','}/>\n  </div></div>;').slice('      extra={'.length);
+ const expression=between(ui,'      extra={','}/>\n    {productionSignInRequired').slice('      extra={'.length);
  const compiled=transformSync('const extra='+expression+';',{loader:'tsx',jsxFactory:'React.createElement'}).code;
- const render=new Function('React','browserCloudResidentEnabled','testMocksEnabled','snapshot','connectionController',compiled+'return extra;');
+ const render=new Function('React','browserCloudResidentEnabled','testMocksEnabled','snapshot','connectionController','productionSignInRequired','residentEnvironment',compiled+'return extra;');
  let calls=0;const controller={signInBrowser(){calls++;}};
- assert.equal(render(React,false,false,{busy:false},controller),undefined,'ordinary browser and packaged views have no extra entry');
- const browser=render(React,true,false,{busy:false},controller);
+ assert.equal(render(React,false,false,{busy:false},controller,false,()=>'production'),undefined,'ordinary browser and packaged views have no extra entry');
+ const browser=render(React,true,false,{busy:false},controller,false,()=>'production');
  assert.equal(browser.type,'button');assert.equal(browser.props.children,'Sign in with browser');assert.equal(browser.props.disabled,false);
  browser.props.onClick();assert.equal(calls,1,'dispatches the existing hosted sign-in callback');
- assert.equal(render(React,true,false,{busy:true},controller).props.disabled,true);
- assert.equal(render(React,false,true,{busy:false},controller).props.children,'Browser sign-in (diagnostic)');
+ assert.equal(render(React,true,false,{busy:true},controller,false,()=>'production').props.disabled,true);
+ assert.equal(render(React,false,true,{busy:false},controller,false,()=>'production').props.children,'Browser sign-in (diagnostic)');
+});
+
+test('native sign-in errors survive resident startup without hiding genuine startup failures', async () => {
+ const source=between(read('apps/app/src/runtime/connection-ui.tsx'),'async function ensureResident()','/** P-43: a startup path');
+ const compiled=transformSync(source,{loader:'ts'}).code;
+ const run=new Function('state','update','startResident','residentStartFailure',`const residentAlwaysPresent=true,active=null,operation=null;${compiled};return ensureResident();`);
+ for(const row of [{error:'Google sign-in failed',startup:'Agent unavailable',previous:'Earlier failure',expected:'Google sign-in failed'},{error:'Earlier failure',startup:'New startup failure',previous:'Earlier failure',expected:'New startup failure'}]){
+  const state={error:row.error,message:'',open:true,session:null};
+  await run(state,change=>Object.assign(state,change),async()=>Object.assign(state,{error:row.startup}),row.previous);
+  assert.equal(state.error,row.expected);
+ }
 });
