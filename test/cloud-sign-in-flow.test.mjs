@@ -50,7 +50,7 @@ public class CloudSignInProbeTest {
  }
  Response get(String url)throws Exception{
   if(url.contains("/mobile/config?"))return new Response(registered?200:503,new JSONObject().put("success",true).put("clientId",CloudSignInFlow.CLIENT_ID).put("environment","production").put("redirectUri","https://eliza.app/alphaphone/auth/callback").put("codeChallengeMethod","S256"),null);
-  if(url.contains("/steward/auth/providers?"))return new Response(200,new JSONObject().put("email",email).put("google",google),null);
+  if(url.contains("/steward/auth/providers?"))return new Response(200,new JSONObject().put("email",email).put("google",true).put("googleNative",google),null);
   authorizeCalls++;
   if(mode.equals("timeout"))throw new java.net.SocketTimeoutException();
   return new Response(mode.equals("refused")?400:302,new JSONObject(),mode.equals("refused")?null:"https://accounts.google.com/o/oauth2/v2/auth");
@@ -66,10 +66,10 @@ public class CloudSignInProbeTest {
  public static void main(String[] args)throws Exception{
   CloudSignInProbeTest p=new CloudSignInProbeTest();p.google=false;p.check(true,false);
   if(p.authorizeCalls!=0)throw new AssertionError("disabled Google must not be probed");
-  p.google=true;p.mode="timeout";p.check(true,false);
-  p.mode="refused";p.check(true,false);
-  p.mode="ready";p.device=false;p.check(true,false);
-  p.device=true;p.dal=false;p.check(true,false);
+  p.google=true;p.mode="timeout";p.check(true,true);
+  p.mode="refused";p.check(true,true);
+  p.mode="ready";p.device=false;p.check(true,true);
+  p.device=true;p.dal=false;p.check(true,true);
   p.dal=true;p.registered=false;p.check(false,false);
   p.registered=true;p.email=false;p.check(false,false);
   p.email=true;p.check(true,true);
@@ -87,8 +87,8 @@ test('exact native email verify/connect/token/ack chain retains failures and cus
  try{
   const plugin=read(native+'AlphaCloudSignInPlugin.java');
   const methods={
-   ACTUAL_VERIFY:between(plugin,' private void verify(PluginCall call, boolean mfa)',' private void release('),
-   ACTUAL_RELEASE:between(plugin,' private void release(',' @PluginMethod public void cancel('),
+   ACTUAL_VERIFY:between(plugin,' private void verify(PluginCall call, boolean mfa)',' private void release(')+between(plugin,' private void completeOrRequireMfa(',' // ── Shared tail:'),
+   ACTUAL_RELEASE:between(plugin,' private void release(',' @PluginMethod public void clearCredentialState('),
    ACTUAL_COMPLETE:between(plugin,' private void complete(',' /** The saved key'),
    ACTUAL_PREVIOUS_TOKEN:between(plugin,' private static String previousToken(',' /** Bounded retry'),
    ACTUAL_ACK:between(plugin,' private boolean acknowledge(',' /** A key stored before'),
@@ -163,9 +163,12 @@ test('the native sign-in client owns every secret, compares state before burning
  const post=between(plugin,'private Response post(Attempt current, CloudSignInFlow.Environment environment,','/** The readiness probe');
  assert.ok(post.indexOf('ConnectionRoutes.signInOrigin(')<post.indexOf('fetch(')&&post.indexOf('ConnectionRoutes.signInRoute(')<post.indexOf('fetch('));
  assert.match(between(plugin,'private Fetched fetch(URI url, byte[] body, String bearer, Attempt current','private static final class Fetched'),/setInstanceFollowRedirects\(false\)/);
- // Google: pending record encrypted before the browser opens.
- const google=between(plugin,'@PluginMethod public void startGoogle(','/** Custom Tab in a browser');
- assert.ok(google.indexOf('writeCredentialSlot(PENDING_SLOT')<google.indexOf('openBrowser(url)'));
+ // Native Google uses the platform picker with a server nonce and native token exchange.
+ const google=between(plugin,'@PluginMethod public void startGoogle(','/**\n  * Strict App Link capture');
+ assert.match(google,/NativeGoogleCredential.request/);
+ assert.match(google,/google\/native\/challenge/);
+ assert.match(google,/google\/native\/verify/);
+ assert.doesNotMatch(google,/openBrowser|authorizeUrl|writeCredentialSlot/);
  const capture=between(plugin,'private boolean captureCallback(','private void burnUnclaimedPending()');
  assert.ok(capture.indexOf('intent.setData(null)')>0&&capture.indexOf('intent.setData(null)')<capture.indexOf('run(() ->'),'the return is consumed once');
  // Contract: a return without a result keeps the pending record; a state mismatch is ignored; the
@@ -209,7 +212,7 @@ test('one email code adapter: native constants, the bridge config and the route 
  assert.doesNotMatch(bridge,/'\/steward\/auth\/email\/send'/);
 });
 
-test('the Cloud sign-in hand-off stays the fallback until the readiness probe passes',()=>{
+test('native readiness refuses browser fallback and requires native Google availability',()=>{
  const connection=read(native+'AlphaConnectionPlugin.java');
  assert.match(connection,/if\("\/api\/auth\/cli-session"\.equals\(path\)\)operation=RequestOperation\.CLI_CREATE;/);
  assert.match(connection,/boolean cliLogin=ConnectionRoutes\.externalCliLogin\(/);
@@ -231,7 +234,8 @@ test('the Cloud sign-in hand-off stays the fallback until the readiness probe pa
  // Readiness probe: cached, fail-safe, every part required.
  const plugin=read(native+'AlphaCloudSignInPlugin.java');
  const measure=between(plugin,'private CloudSignInReadiness.Result measure(','private boolean assetLinksGrant(');
- for(const part of ['/api/v1/app-auth/mobile/config','/steward/auth/providers','CloudEmailCode.SEND_PATH','CloudSignInFlow.authorizeUrl(','assetLinksGrant(environment)','appLinkVerified(environment)'])assert.ok(measure.includes(part),part);
+ for(const part of ['/api/v1/app-auth/mobile/config','/steward/auth/providers','CloudEmailCode.SEND_PATH','googleNative'])assert.ok(measure.includes(part),part);
+ assert.doesNotMatch(measure,/authorizeUrl|assetLinksGrant|appLinkVerified/);
  assert.match(between(plugin,'private void probe(','/** Cloud refusing'),/catch \(Exception failure\) \{ result = CloudSignInReadiness\.Result\.notReady/);
 });
 

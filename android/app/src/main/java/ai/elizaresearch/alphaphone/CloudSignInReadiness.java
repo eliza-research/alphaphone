@@ -8,22 +8,10 @@ import java.util.Set;
 /**
  * Pure policy for the in-app sign-in readiness probe (no Android classes, so it runs on a plain JVM).
  *
- * Product builds keep the Cloud sign-in hand-off (cli-session) until Cloud is ready for this phone's
- * in-app sign-in, so shipping Alpha before Cloud is configured never leaves a phone unable to sign
- * in. AlphaCloudSignInPlugin gathers these observations with a few small GETs (and one bodiless POST
- * that sends nothing) and caches the answer; any failure, timeout or unexpected answer is "not ready".
- *
- * In-app (email, and Google when the phone can receive its return) requires all of:
- * - Cloud's mobile App Auth registration for this client, environment and redirect URI
- *   (GET /api/v1/app-auth/mobile/config);
- * - Steward offering email without a captcha for email_otp (GET /steward/auth/providers), and the
- *   email code route existing (CloudEmailCode.SEND_PATH answers a bodiless POST with a 4xx other than
- *   404/405; no address is sent, so no email goes out).
- * The mobile config route also verifies that the registered app allows the exact return URL.
- * Email completes over native HTTPS and does not receive a browser callback. Google additionally
- * requires /.well-known/assetlinks.json to grant this package and installed certificate,
- * Steward's Google authorize route to admit the return URL, and Android to report this phone's
- * App Link verified (or selected by the user). Google readiness cannot hide ready native email.
+ * Native sign-in requires Cloud's matching mobile App Auth registration and email OTP routes.
+ * Native Google is separately enabled only when the backend advertises googleNative.
+ * Credential Manager completes through native HTTPS; it has no browser or App Link prerequisite.
+ * Legacy App Link parsing remains for previously started browser flows.
  */
 final class CloudSignInReadiness {
  private CloudSignInReadiness() {}
@@ -92,11 +80,11 @@ final class CloudSignInReadiness {
   Result(boolean inApp, boolean google, long until) { this.inApp = inApp; this.google = inApp && google; this.until = until; }
   static Result notReady(long now) { return new Result(false, false, now + NOT_READY_TTL_MS); }
   boolean fresh(long now) { return now < until && until - now <= READY_TTL_MS; }
-  String serialize() { return "v2|" + inApp + "|" + google + "|" + until; }
+  String serialize() { return "v3-native-google|" + inApp + "|" + google + "|" + until; }
   static Result parse(String value) {
    if (value == null) return null;
    String[] parts = value.split("\\|", -1);
-   if (parts.length != 4 || !"v2".equals(parts[0])) return null;
+   if (parts.length != 4 || !"v3-native-google".equals(parts[0])) return null;
    try { return new Result(Boolean.parseBoolean(parts[1]), Boolean.parseBoolean(parts[2]), Long.parseLong(parts[3])); }
    catch (Exception invalid) { return null; }
   }

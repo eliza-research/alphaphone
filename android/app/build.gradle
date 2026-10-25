@@ -138,6 +138,9 @@ android {
 }
 if (appLinkHost) androidComponents { onVariants(selector().all()) { variant -> variant.sources.manifests.addStaticManifestFile(appLinksManifest) } }
 dependencies {
+ implementation 'androidx.credentials:credentials:1.6.0'
+ implementation 'androidx.credentials:credentials-play-services-auth:1.6.0'
+ implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
  implementation project(':eliza-network-policy')
  implementation project(':local-speech')
  implementation 'androidx.browser:browser:1.9.0'

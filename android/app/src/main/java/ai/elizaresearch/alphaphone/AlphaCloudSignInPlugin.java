@@ -11,8 +11,6 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import androidx.browser.customtabs.CustomTabsClient;
-import androidx.browser.customtabs.CustomTabsIntent;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -39,7 +37,7 @@ import org.json.JSONTokener;
 
 /**
  * In-app Eliza Cloud sign-in (owner directive 2026-10-14). Native screens collect an email code or
- * open Google's consent in a Custom Tab; no Eliza Cloud web page is part of a successful sign-in.
+ * use Android's Google account picker; no Eliza Cloud web page is part of a successful sign-in.
  * Every secret-bearing request (Steward code exchange or email/MFA verification, mobile App Auth
  * connect, token and ack, Steward logout) is made here with fixed URLs (CloudSignInFlow,
  * CloudEmailCode, ConnectionRoutes). The Steward session, refresh token, authorization codes and
@@ -79,13 +77,15 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   final boolean google;
   volatile boolean cancelled, browserLaunched, browserPaused, callbackReceived;
   volatile HttpURLConnection connection;
+  volatile android.os.CancellationSignal googleCancellation;
+  String googleVerifier, googleChallengeId;
   PluginCall waiting;
   String email, emailVerifier, mfaType, mfaChallenge;
   long expiresAt, resendAt;
   int failedVerifies;
   boolean busy;
   Attempt(CloudSignInFlow.Environment environment, boolean google) { this.environment = environment; this.google = google; }
-  void cancel() { cancelled = true; HttpURLConnection current = connection; if (current != null) current.disconnect(); }
+  void cancel() { cancelled = true; android.os.CancellationSignal picker = googleCancellation; if (picker != null) picker.cancel(); googleVerifier = null; googleChallengeId = null; HttpURLConnection current = connection; if (current != null) current.disconnect(); }
  }
  private static final class Response {
   final int status; final JSONObject data; final String location;
@@ -220,22 +220,10 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   if (!emailOffered) return CloudSignInReadiness.Result.notReady(now);
   // An empty object names no address, so Steward refuses it and no email is sent.
   boolean emailRoute = CloudSignInReadiness.emailRoutePresent(probePost(environment, CloudEmailCode.SEND_PATH));
-  boolean googleOffered = CloudSignInReadiness.googleOffered(providers.status, providers.data.opt("google"));
-  boolean assetLinks = false, deviceVerified = false;
-  boolean redirectAllowed = false;
-  if (googleOffered) {
-   assetLinks = assetLinksGrant(environment);
-   deviceVerified = appLinkVerified(environment);
-   if (assetLinks && deviceVerified) {
-    try {
-     // A fresh state and challenge; no redirect followed. These checks apply only to Google's browser return.
-     Response authorize = get(CloudSignInFlow.authorizeUrl(environment, CloudSignInFlow.s256(CloudSignInFlow.newVerifier()), CloudSignInFlow.newState()));
-     redirectAllowed = CloudSignInReadiness.redirectAllowed(authorize.status, authorize.location);
-    } catch (Exception unavailable) { /* Google remains unavailable; required email checks above still apply. */ }
-   }
-  }
-  return CloudSignInReadiness.combine(registered, redirectAllowed, assetLinks, emailOffered, emailRoute,
-   googleOffered, deviceVerified, now);
+  // Native Google uses a server-verified ID token, not a browser return or App Link.
+  boolean googleOffered = providers.status == 200 && Boolean.TRUE.equals(providers.data.opt("googleNative"));
+  return new CloudSignInReadiness.Result(registered && emailOffered && emailRoute, googleOffered,
+    now + (googleOffered ? CloudSignInReadiness.READY_TTL_MS : CloudSignInReadiness.NOT_READY_TTL_MS));
  }
  private boolean assetLinksGrant(CloudSignInFlow.Environment environment) {
   try {
@@ -286,7 +274,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   } catch (Exception unavailable) { return false; }
  }
 
- // ── Google: Authorization Code + PKCE, verified App Link return ─────────────────────────────
+ // ── Google: native Credential Manager with server-bound nonce and PKCE ────────────────────
 
  @PluginMethod public void startGoogle(PluginCall call) {
   final CloudSignInFlow.Environment environment;
@@ -297,39 +285,51 @@ public final class AlphaCloudSignInPlugin extends Plugin {
    if (attempt != null) { call.reject("Another sign-in is in progress", "login-active"); return; }
    attempt = next; next.waiting = call;
   }
-  final CloudSignInFlow.Pending pending = CloudSignInFlow.Pending.create(environment, System.currentTimeMillis());
+  next.googleVerifier = CloudSignInFlow.newVerifier();
+  next.googleCancellation = new android.os.CancellationSignal();
+  next.busy = true;
   run(() -> {
    try {
-    // Encrypted at rest before the browser opens, so a return after process death can be matched.
-    // Starting again replaces any earlier pending record (the explicit retry).
-    store().writeCredentialSlot(PENDING_SLOT, pending.serialize());
-    if (next.cancelled) throw new SignInFailure("cancelled");
-    final String url = CloudSignInFlow.authorizeUrl(environment, CloudSignInFlow.s256(pending.verifier), pending.state);
+    store().removeCredentialSlot(PENDING_SLOT);
+    Response challenge = post(next, "/steward/auth/oauth/google/native/challenge", new JSONObject()
+      .put("tenantId", environment.tenant).put("clientId", "alpha-phone")
+      .put("codeChallenge", CloudSignInFlow.s256(next.googleVerifier)).put("codeChallengeMethod", "S256"), null);
+    if (challenge.status != 200) throw new SignInFailure(CloudSignInFlow.failureForStatus("exchange", challenge.status));
+    JSONObject data = challenge.data;
+    String challengeId = data.optString("challengeId", ""), nonce = data.optString("nonce", ""), clientId = data.optString("serverClientId", "");
+    long expiresAt = instant(data.opt("expiresAt")), now = System.currentTimeMillis();
+    if (!Boolean.TRUE.equals(data.opt("ok")) || challengeId.isEmpty() || challengeId.length() > 256
+        || !nonce.matches("[A-Za-z0-9_-]{32,256}") || !clientId.matches("[0-9]+-[A-Za-z0-9_-]+\\.apps\\.googleusercontent\\.com")
+        || expiresAt <= now || expiresAt > now + CloudSignInFlow.PENDING_TTL_MS) throw new SignInFailure("unavailable");
+    synchronized (lock) {
+     if (attempt != next || next.cancelled) throw new SignInFailure("cancelled");
+     next.googleChallengeId = challengeId; next.expiresAt = expiresAt;
+    }
     getActivity().runOnUiThread(() -> {
-     synchronized (lock) { if (attempt != next || next.cancelled) return; next.browserLaunched = true; }
-     if (!openBrowser(url)) end(next, "browser-unavailable", true);
+     synchronized (lock) { if (attempt != next || next.cancelled) return; }
+     NativeGoogleCredential.request(getActivity(), clientId, nonce, next.googleCancellation, new NativeGoogleCredential.Callback() {
+      @Override public void failure(String code) { end(next, code, false); }
+      @Override public void token(String idToken) {
+       run(() -> {
+        try {
+         synchronized (lock) { if (attempt != next || next.cancelled) throw new SignInFailure("cancelled"); }
+         if (System.currentTimeMillis() >= next.expiresAt) throw new SignInFailure("expired");
+         Response verified = post(next, "/steward/auth/oauth/google/native/verify", new JSONObject()
+           .put("tenantId", environment.tenant).put("clientId", "alpha-phone")
+           .put("challengeId", next.googleChallengeId).put("idToken", idToken).put("codeVerifier", next.googleVerifier), null);
+         next.googleVerifier = null; next.googleChallengeId = null; next.googleCancellation = null;
+         if (verified.status != 200) throw new SignInFailure(CloudSignInFlow.failureForStatus("exchange", verified.status));
+         JSONObject session = verified.data.optJSONObject("data") != null && !verified.data.has("token") ? verified.data.optJSONObject("data") : verified.data;
+         completeOrRequireMfa(next, session);
+        } catch (SignInFailure failure) { end(next, failure.code, false); }
+        catch (Exception unavailable) { end(next, "unavailable", false); }
+       });
+      }
+     });
     });
-   } catch (SignInFailure failure) { end(next, failure.code, true); }
-   catch (Exception storage) { end(next, "storage", true); }
+   } catch (SignInFailure failure) { end(next, failure.code, false); }
+   catch (Exception unavailable) { end(next, "unavailable", false); }
   });
- }
- /** Custom Tab in a browser that supports it, never an embedded user agent (Google refuses those); plain ACTION_VIEW otherwise. */
- private boolean openBrowser(String url) {
-  Uri uri = Uri.parse(url);
-  try {
-   String browser = CustomTabsClient.getPackageName(getContext(), null);
-   if (browser != null && !browser.equals(getContext().getPackageName())) {
-    CustomTabsIntent tab = new CustomTabsIntent.Builder().setShowTitle(true).setShareState(CustomTabsIntent.SHARE_STATE_OFF).build();
-    tab.intent.setPackage(browser);
-    tab.launchUrl(getActivity(), uri);
-    return true;
-   }
-  } catch (RuntimeException unavailable) { /* Fall through to the system browser. */ }
-  try {
-   Intent view = new Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE);
-   getActivity().startActivity(view);
-   return true;
-  } catch (RuntimeException unavailable) { return false; }
  }
  /**
   * Strict App Link capture under the shared callback contract. Only this environment's exact
@@ -444,7 +444,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   final Attempt current;
   synchronized (lock) {
    current = attempt;
-   if (current == null || current.google || !current.id.equals(call.getString("attemptId"))) { call.reject("Sign-in expired. Start again.", "expired"); return; }
+   if (current == null || (current.google && !mfa) || !current.id.equals(call.getString("attemptId"))) { call.reject("Sign-in expired. Start again.", "expired"); return; }
    if (current.busy) { call.reject("Another sign-in is in progress", "login-active"); return; }
    if (System.currentTimeMillis() >= current.expiresAt) { attempt = null; call.reject("Sign-in expired. Start again.", "expired"); return; }
    if (current.failedVerifies >= CloudSignInFlow.MAX_VERIFY_ATTEMPTS) { attempt = null; call.reject("Too many incorrect codes", "attempts-exhausted"); return; }
@@ -459,19 +459,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
      : post(current, CloudEmailCode.VERIFY_PATH, CloudEmailCode.verifyBody(current.environment, current.email, code, current.emailVerifier), null);
     if (verified.status != 200) throw new SignInFailure(CloudSignInFlow.failureForStatus(mfa ? "mfa" : "verify", verified.status));
     JSONObject session = verified.data.optJSONObject("data") != null && !verified.data.has("token") ? verified.data.optJSONObject("data") : verified.data;
-    if (Boolean.TRUE.equals(session.opt("mfaRequired")) && !mfa) {
-     JSONObject challenge = session.optJSONObject("mfa");
-     String type = challenge == null ? null : challenge.optString("type", null), id = challenge == null ? null : challenge.optString("challengeId", null);
-     long expiresAt = challenge == null ? 0 : instant(challenge.opt("expiresAt"));
-     if (id == null || id.isEmpty() || id.length() > 256 || !("totp".equals(type) || "sms".equals(type) || "passkey".equals(type))) throw new SignInFailure("unavailable");
-     synchronized (lock) {
-      if (attempt != current || current.cancelled) throw new SignInFailure("cancelled");
-      current.mfaType = type; current.mfaChallenge = id; current.failedVerifies = 0; current.expiresAt = Math.min(current.expiresAt, expiresAt); current.busy = false; current.waiting = null;
-     }
-     call.resolve(new JSObject().put("status", "mfa").put("method", type).put("expiresAt", current.expiresAt));
-     return;
-    }
-    complete(current, session);
+    completeOrRequireMfa(current, session);
    } catch (SignInFailure failure) {
     if (!"invalid-code".equals(failure.code)) { end(current, failure.code, false); return; }
     // A wrong code keeps the step for a retry, up to the per-attempt cap; then the attempt ends.
@@ -485,6 +473,10 @@ public final class AlphaCloudSignInPlugin extends Plugin {
  }
  private void release(Attempt current) { synchronized (lock) { current.busy = false; if (attempt == current && current.expiresAt == 0) attempt = null; } }
 
+ @PluginMethod public void clearCredentialState(PluginCall call) {
+  getActivity().runOnUiThread(() -> NativeGoogleCredential.clear(getActivity(), () -> call.resolve()));
+ }
+
  @PluginMethod public void cancel(PluginCall call) {
   Attempt current;
   synchronized (lock) { current = attempt; attempt = null; }
@@ -492,6 +484,27 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   // The explicit cancel burns a pending Google record.
   burnUnclaimedPending();
   call.resolve();
+ }
+
+ private void completeOrRequireMfa(Attempt current, JSONObject session) throws Exception {
+  if (Boolean.TRUE.equals(session.opt("mfaRequired"))) {
+   if (current.mfaType != null) throw new SignInFailure("unavailable");
+   JSONObject challenge = session.optJSONObject("mfa");
+   String type = challenge == null ? null : challenge.optString("type", null), id = challenge == null ? null : challenge.optString("challengeId", null);
+   long expiresAt = challenge == null ? 0 : instant(challenge.opt("expiresAt"));
+   if (id == null || id.isEmpty() || id.length() > 256 || expiresAt <= System.currentTimeMillis()
+       || !("totp".equals(type) || "sms".equals(type) || "passkey".equals(type))) throw new SignInFailure("unavailable");
+   PluginCall waiting;
+   synchronized (lock) {
+    if (attempt != current || current.cancelled || current.waiting == null) throw new SignInFailure("cancelled");
+    current.mfaType = type; current.mfaChallenge = id; current.failedVerifies = 0;
+    current.expiresAt = Math.min(current.expiresAt, expiresAt); current.busy = false;
+    waiting = current.waiting; current.waiting = null;
+   }
+   waiting.resolve(new JSObject().put("status", "mfa").put("attemptId", current.id).put("method", type).put("expiresAt", current.expiresAt));
+   return;
+  }
+  complete(current, session);
  }
 
  // ── Shared tail: Steward session → eliza_mobile_ key ─────────────────────────────────────────

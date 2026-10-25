@@ -2152,12 +2152,18 @@ export const connectionController = {
   /** Google's consent in a Custom Tab, returning to Alpha through a verified App Link. */
   async signInGoogle() {
     const view = state.signIn; if (!view) return;
-    await work('Continue in the Google window. Alpha finishes signing in when you return.', async signal => {
+    await work('Choose your Google account to sign in to Alpha.', async signal => {
       update({ signIn: { step: 'google', environment: view.environment } });
       const client = signInClient(view.environment);
-      let outcome: CloudSignInAuthenticated;
+      let outcome: Awaited<ReturnType<CloudProtocol['signInWithGoogle']>>;
       try { outcome = await client.signInWithGoogle(signal); }
       catch (error) { signInFailed(view.environment); throw error; }
+      if (outcome.status === 'mfa') {
+        if (!outcome.attemptId) throw new CloudSignInError('unavailable');
+        update({ signIn: { step: 'mfa', environment: view.environment, email: '', attemptId: outcome.attemptId, method: outcome.method, expiresAt: outcome.expiresAt }, message: '' });
+        if (outcome.method === 'passkey') throw new CloudSignInError('mfa-unsupported');
+        return;
+      }
       await signedIn(client, outcome, signal);
     });
     // A cancelled or failed sign-in never leaves the phone without its agent (P-43).

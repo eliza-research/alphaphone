@@ -49,7 +49,7 @@ export function CloudSignInPanel({ view, busy, google, message, error, errorIsNo
         <button disabled={busy}>Email me a code</button>
       </form>
     </>}
-    {view.step === 'google' && <p>Choose your Google account in the window that opened. When Google returns you to Alpha, sign-in finishes here.</p>}
+    {view.step === 'google' && <p>Choose your Google account in the Android sign-in sheet. Alpha will finish signing you in.</p>}
     {(view.step === 'code' || view.step === 'mfa') && <form className="alpha-cloud-sign-in-code" aria-label={view.step === 'code' ? 'Enter your email code' : 'Enter your verification code'} onSubmit={submitCode}>
       {view.step === 'code' && <p>Enter the six-digit code sent to <strong>{view.email}</strong>.</p>}
       {view.step === 'mfa' && <p>{view.method === 'totp' ? 'This account uses an authenticator app. Enter its six-digit code.' : view.method === 'sms' ? 'Enter the six-digit code sent to your phone.' : 'This account’s second verification is not available in Alpha yet.'}</p>}

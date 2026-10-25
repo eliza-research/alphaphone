@@ -484,9 +484,13 @@ export class CloudProtocol {
     if (credential.expiresAt !== undefined && credential.expiresAt <= Date.now()) throw new CloudProtocolError("expired");
     return outcome;
   }
-  /** Google through a Custom Tab and a verified App Link return. Resolves once the key is stored. */
-  async signInWithGoogle(signal: AbortSignal): Promise<CloudSignInAuthenticated> {
-    const outcome = await this.signInStep(signal, port => port.startGoogle({ environment: this.environment }), value => signInAuthenticated(value, this.environment));
+  /** Google through the native account picker; keys are stored before authenticated resolves. */
+  async signInWithGoogle(signal: AbortSignal): Promise<CloudSignInAuthenticated | CloudSignInMfaRequired> {
+    const outcome = await this.signInStep(signal, port => port.startGoogle({ environment: this.environment }), value => signInVerified(value, this.environment));
+    if (outcome.status === "mfa") {
+      if (!outcome.attemptId) throw new CloudSignInError("unavailable");
+      return outcome;
+    }
     return this.storedSignIn(outcome, signal);
   }
   /** Sends a six-digit code to the address. The address is never stored or logged here. */
@@ -515,7 +519,10 @@ export class CloudProtocol {
     signal.throwIfAborted();
     if (expected !== undefined && !sameCloudCredential(credential, expected)) throw new Error("Cloud account changed");
     if (!credential) return { supported: false, reason: "no-credential" };
-    return this.revokeStored(credential, signal);
+    try { return await this.revokeStored(credential, signal); }
+    finally {
+      if (!await this.credentials.read(this.environment)) await this.options.signIn?.clearCredentialState?.().catch(() => {});
+    }
   }
   /** One revocation of the saved key a new login is about to replace. Never retried or thrown. */
   private async revokeReplaced(signal: AbortSignal, issued: CloudCredential): Promise<"revoked" | "unconfirmed" | undefined> {

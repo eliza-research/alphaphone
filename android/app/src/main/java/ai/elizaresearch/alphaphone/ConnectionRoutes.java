@@ -51,6 +51,7 @@ final class ConnectionRoutes {
   if("GET".equals(method))return !hasBody&&java.util.Set.of("/api/v1/app-auth/mobile/config","/steward/auth/providers","/steward/auth/oauth/google/authorize").contains(path);
   if(!"POST".equals(method)||!hasBody)return false;
   return java.util.Set.of("/steward/auth/email/code/send","/steward/auth/email/code/verify","/steward/auth/oauth/exchange",
+   "/steward/auth/oauth/google/native/challenge","/steward/auth/oauth/google/native/verify",
    "/steward/auth/mfa/totp/complete","/steward/auth/mfa/sms/complete","/steward/auth/logout",
    "/api/v1/app-auth/connect","/api/v1/app-auth/mobile/token","/api/v1/app-auth/mobile/ack").contains(path);
  }
