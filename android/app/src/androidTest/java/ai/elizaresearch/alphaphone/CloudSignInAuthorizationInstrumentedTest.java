@@ -40,7 +40,13 @@ public final class CloudSignInAuthorizationInstrumentedTest {
      if("retired".equals(choice)) {
       Method cancel=attemptType.getDeclaredMethod("cancel");cancel.setAccessible(true);cancel.invoke(attempt);
      } else if("back".equals(choice)) device.pressBack();
-     else device.findObject(By.text("cancel".equals(choice)?"Cancel":"Authorize")).click();
+     else {
+      // AlertDialog button labels may be transformed to uppercase by the Android theme.
+      // Select the platform's positive/negative control, not its presentation text.
+      var button=device.wait(Until.findObject(By.res("android", "cancel".equals(choice)?"button2":"button1")),10000);
+      assertNotNull("Native decision button appears for "+choice,button);
+      button.click();
+     }
      waiting.join(10000);
      assertFalse("Consent decision terminates the gate",waiting.isAlive());
      if("authorize".equals(choice)) assertNull(failure.get());
