@@ -1,6 +1,8 @@
 # Current MVP status
 
-Current source pin: SDK `349235fd384f0c0694b8ad9b3f96fec493f33440` at fixed build-source product `19bd44c31b97903212e1b00935c5c715d0a17602`. The shared repair separates prepared renderer navigation from external-device requests and retains valid held prospective wording behind existing exact binding and egress checks. Root source tests and full TypeScript graphs pass; live/device acceptance is pending.
+Current source pin: SDK `b3838f87fbad21f9d3a459b0eaafa630a6093387` consumes the shared Calendar discovery correction. Fresh runtime and device qualification remain separate; the fixed build tuple below is historical evidence.
+
+Previous fixed build source: SDK `349235fd384f0c0694b8ad9b3f96fec493f33440` at fixed build-source product `19bd44c31b97903212e1b00935c5c715d0a17602`. The shared repair separates prepared renderer navigation from external-device requests and retains valid held prospective wording behind existing exact binding and egress checks. Root source tests and full TypeScript graphs pass; live/device acceptance is pending.
 
 Installed APK `877a8de6…` remains product d7/SDK0f. Home passed; Notes opened but its saved reply incorrectly denied delivery. The next full producer is fixed to19bd/349; metadata-only children must not restart or relabel it. Original requirements and historical evidence below retain their exact scopes.
 
@@ -46,9 +48,9 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-Current source projection: SDK `349235fd38` at fixed build-source product `d7efacf063`; runtime, artifact and device qualification remains separate as recorded above.
+Current source projection: SDK `b3838f87fb` with source metadata refreshed for this pin; runtime, artifact and device qualification remains separate as recorded above.
 
-The current upstream source pin is `349235fd38` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
+The current upstream source pin is `b3838f87fb` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 
