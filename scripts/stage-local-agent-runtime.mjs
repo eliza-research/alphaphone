@@ -4,27 +4,54 @@ import {verifyWorkerArtifact,workerHash} from './workflow-worker-artifact.mjs';
 import fs from 'node:fs';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {nativeViewPolicyPath} from './native-view-policy.mjs';
 import {verifyNativeGoogleHostArtifact} from './native-google-host-artifact.mjs';
 const root=path.resolve(import.meta.dirname,'..');
+
+/** Explicit producer inputs; native Android never falls back to a musl archive or another ABI. */
+export function runtimeStagingSelection(source,parentEnv=process.env){
+ const bunTarget=parentEnv.ELIZA_ANDROID_BUN_TARGET??'linux-musl';
+ if(!['linux-musl','android'].includes(bunTarget))throw Error('Unsupported Android Bun target');
+ const requested=(parentEnv.ELIZA_ANDROID_TARGET_ABIS??'arm64-v8a,x86_64').split(',').map(abi=>abi.trim());
+ if(!requested.length||new Set(requested).size!==requested.length||requested.some(abi=>!['arm64-v8a','x86_64'].includes(abi)))throw Error('Invalid Android runtime ABI selection');
+ const targetAbis=requested.join(',');
+ const extra={ELIZA_ANDROID_TARGET_ABIS:targetAbis,ELIZA_ANDROID_BUN_TARGET:bunTarget};
+ if(bunTarget==='android'){
+  if(targetAbis!=='arm64-v8a')throw Error('Native Android producer requires explicit ARM64-only selection');
+  if(!['stable','release'].includes((parentEnv.ELIZA_BUN_CHANNEL??'stable').trim().toLowerCase()))throw Error('Native Android producer requires the reviewed stable channel');
+  const archive=parentEnv.ELIZA_BUN_AARCH64_FILE;
+  if(!archive||!path.isAbsolute(archive)||!fs.lstatSync(archive).isFile())throw Error('Native Android producer requires an absolute verified archive file');
+  if(fs.statSync(archive).size>40*1024*1024)throw Error('Native Android archive exceeds the reviewed size bound');
+  const lock=JSON.parse(fs.readFileSync(path.join(source,'packages/app/scripts/lib/android-bun-artifacts.lock.json'),'utf8'));
+  const expected=lock.targets?.android?.stable?.artifacts?.aarch64?.archiveSha256;
+  if(!/^[a-f0-9]{64}$/.test(expected??'')||createHash('sha256').update(fs.readFileSync(archive)).digest('hex')!==expected)throw Error('Native Android archive differs from the pinned SDK artifact');
+  extra.ELIZA_BUN_AARCH64_FILE=archive;extra.ELIZA_BUN_CHANNEL='stable';
+ }
+ return {bunTarget,targetAbis,env:preparedSourceEnv(parentEnv,extra)};
+}
+
+function stageLocalAgentRuntime(){
+
 const profile=process.argv.slice(2);
 if(profile.some(arg=>arg!=='--runtime-profile=cloud'))throw Error('Unknown runtime profile');
 const runtimeProfile=profile.includes('--runtime-profile=cloud')?'cloud':'native';
 const source=sourceDirectory(root);
 if(!fs.existsSync(path.join(source,'.alpha-runtime-source.json')))throw Error('Run npm run agent:prepare first.');
 execFileSync(process.execPath,[path.join(root,'scripts/prepare-local-agent.mjs'),'--source-only'],{cwd:root,stdio:'inherit'});
+const selection=runtimeStagingSelection(source,process.env);
 verifyWorkerArtifact(workerArtifactDirectory(root),
  {sourceStampSha256:workerHash(fs.readFileSync(path.join(source,'.alpha-runtime-source.json'))),lockSha256:workerHash(fs.readFileSync(path.join(source,'bun.lock')))});
 verifyNativeGoogleHostArtifact(root,workerArtifactDirectory(root));
 // Children run inside the immutable prepared source; keep turbo from editing its AGENTS.md.
-const env=preparedSourceEnv(process.env,{ELIZA_ANDROID_TARGET_ABIS:'arm64-v8a,x86_64'});
+const env=selection.env;
 execFileSync(process.env.ALPHA_BUN||'bun',['run','--cwd','packages/agent','build:mobile','--target=android'],{cwd:source,env,stdio:'inherit'});
 // The build must leave the prepared source at the exact pinned commit.
 execFileSync(process.execPath,[path.join(root,'scripts/prepare-local-agent.mjs'),'--source-only'],{cwd:root,stdio:'inherit'});
 // Bun supplies the upstream TypeScript staging module's runtime semantics.
 const runner=path.join(source,'.alpha-stage-runtime.ts');
-fs.writeFileSync(runner,`import {stageAndroidAgentRuntime} from './packages/app/scripts/lib/stage-android-agent.ts';\nawait stageAndroidAgentRuntime({androidDir:${JSON.stringify(path.join(root,'android'))},spikeDir:${JSON.stringify(path.join(source,'packages/app/scripts'))}});\n`);
+fs.writeFileSync(runner,`import {stageAndroidAgentRuntime} from './packages/app/scripts/lib/stage-android-agent.ts';\nawait stageAndroidAgentRuntime({androidDir:${JSON.stringify(path.join(root,'android'))},spikeDir:${JSON.stringify(path.join(source,'packages/app/scripts'))},bunTarget:${JSON.stringify(selection.bunTarget)}});\n`);
 try{execFileSync(process.env.ALPHA_BUN||'bun',[runner],{cwd:source,env,stdio:'inherit'});}finally{fs.unlinkSync(runner);}
 fs.copyFileSync(path.join(source,'.alpha-runtime-source.json'),path.join(root,'android/app/src/main/assets/agent/alpha-source.json'));
 // Host configuration is separate from the authenticated, unmodified producer source.
@@ -40,4 +67,7 @@ if(runtimeProfile==='cloud'){
 // The original producer provenance remains unchanged; this explicit consumer projection
 // records the exact local-only model deliberately omitted from the Cloud APK.
 fs.writeFileSync(path.join(root,'android/app/src/main/assets/agent/alpha-runtime-profile.json'),JSON.stringify({version:1,runtimeProfile,...(runtimeProfile==='cloud'?{omittedLocalModels}:{})},null,2)+'\n');
-console.log('Android runtime payload staged for ARM64 and x86_64. This is not device execution evidence.');
+console.log(`Android runtime payload staged for ${selection.targetAbis} with ${selection.bunTarget}. This is not device execution evidence.`);
+
+}
+if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))stageLocalAgentRuntime();
