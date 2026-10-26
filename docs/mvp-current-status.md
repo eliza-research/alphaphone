@@ -1,6 +1,8 @@
 # Current MVP status
 
-Current source pin: SDK `603f73bc6317329a61eadfa7858741742a3d5fff`, prepared on product `39b1d472a3da696e43a3d0827422787059eb8079`. Selected native context and prepared-navigation recovery passed 41 focused tests and scoped types. Actual live performance and device proof remain pending. The existing client type projection fix is retained. See [source identity](evidence/source-metadata-39b1-603-20261026.json).
+Current source pin: SDK `ff4a0bdeb47e8f3ddf15b55139939165b10bb612`, prepared on product `a9bda8928022f8e749fe9df2fdd6e074566341b3`. Routing and reminder create/no-alert repairs are source tested. Full Life type validation hit its bounded heap limit; actual live reminder proof remains pending. Unknown native destination fallback and owner rules remain intact. See [source identity](evidence/source-metadata-a9-ff-20261026.json).
+
+Previous source checkpoint: Current source pin: SDK `603f73bc6317329a61eadfa7858741742a3d5fff`, prepared on product `39b1d472a3da696e43a3d0827422787059eb8079`. Selected native context and prepared-navigation recovery passed 41 focused tests and scoped types. Actual live performance and device proof remain pending. The existing client type projection fix is retained. See [source identity](evidence/source-metadata-39b1-603-20261026.json).
 
 Previous source checkpoint: Current source pin: SDK `f8b8299cc2be0f6e91127808384cbd17b90f906f`, prepared on product `91c6a74b3123d3e15a10c5711cfb2f94b025e281`. This combines exact-ID Notes deletion with suffix-only plain-note append. The existing transactional store, ambiguity checks, revision checks and recoverable trash are retained. 28 focused tests and scoped type checks passed; live combined proof remains pending and the wider baseline action failures remain separately recorded. No new build or device acceptance is claimed. See [source identity](evidence/source-metadata-91c6-f8-20261026.json).
 
@@ -60,9 +62,9 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-Current source projection: SDK `603f73bc63` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
+Current source projection: SDK `ff4a0bdeb4` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
 
-The current upstream source pin is `603f73bc63` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
+The current upstream source pin is `ff4a0bdeb4` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 

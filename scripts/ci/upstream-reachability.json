@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "603f73bc6317329a61eadfa7858741742a3d5fff",
+  "head": "ff4a0bdeb47e8f3ddf15b55139939165b10bb612",
   "recordedAt": "2026-10-26",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...603f73bc6317329a61eadfa7858741742a3d5fff",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...ff4a0bdeb47e8f3ddf15b55139939165b10bb612",
   "status": "diverged",
-  "aheadBy": 52,
+  "aheadBy": 54,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -214,6 +214,14 @@
     {
       "sha": "603f73bc6317329a61eadfa7858741742a3d5fff",
       "subject": "perf(assistant): scope phone context and reuse prepared navigation replies"
+    },
+    {
+      "sha": "2622486ca4b69f9f47e8cccab21be1d8cb1dda18",
+      "subject": "perf(views): expose registered navigation for explicit requests"
+    },
+    {
+      "sha": "ff4a0bdeb47e8f3ddf15b55139939165b10bb612",
+      "subject": "fix(reminders): accept create placeholders and preserve no-alert requests"
     }
   ],
   "pullRequests": [
