@@ -19,6 +19,22 @@ qualification states are preserved; no device or full-app result transfers.
 
 ## Current source-only input rebind (2026-10-25)
 
+SDK `0f4d375aaf9f5109e30923eff9992f67f50ee1a0` at fixed build-source product `d7efacf0639ed81828fe35e3ee4c388a388d2c31` has
+byte-identical Bun lock and normalized 3,694-package audit input versus `737c4d578f69659a6881afe8ff06e3379cbc713c`.
+The dated audit findings, every exception object, maintenance record and deadline
+remain unchanged. No registry query, waiver, remediation or renewal occurred.
+See [source identity evidence](evidence/source-metadata-d7-0f-20261025.json).
+
+Installed APK `5a89ba6d026d8f348dab9748760f3047e22d7aaff73d681f0e895a578764bf36`
+remains bound to c880/737. Its subsequent Home request failed during reply review;
+the exact underlying cause remains unknown. Older dependency artifact reviews stay
+bound to their own bytes; none qualifies a new0f bundle/APK, native builtin/FFI,
+provider response, physical audio or Seeker. Current-source artifact qualification
+remains false; the fresh Notes performance comparison is pending. Metadata-only
+children do not change the fixed producer tuple or trigger a rebuild.
+
+## Historical 737 source-only input rebind (2026-10-25)
+
 SDK `737c4d578f69659a6881afe8ff06e3379cbc713c` at build-source product `c8801829f4f3ff9c1fed6f700473460852820a65`
 has byte-identical Bun lock and normalized 3,694-package input versus the prior
 `a95cd4d28eb2bcd5fe5527e98058c167ff480557` source. The dated October 25 registry result and all124 findings,

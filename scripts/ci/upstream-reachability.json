@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "737c4d578f69659a6881afe8ff06e3379cbc713c",
+  "head": "0f4d375aaf9f5109e30923eff9992f67f50ee1a0",
   "recordedAt": "2026-10-25",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...737c4d578f69659a6881afe8ff06e3379cbc713c",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...0f4d375aaf9f5109e30923eff9992f67f50ee1a0",
   "status": "diverged",
-  "aheadBy": 39,
+  "aheadBy": 41,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -162,6 +162,14 @@
     {
       "sha": "737c4d578f69659a6881afe8ff06e3379cbc713c",
       "subject": "debug: bind optional capture to the next fresh owner chat turn"
+    },
+    {
+      "sha": "64f8c2bd7ae8347601cfa77fb5c53a3989fd8bdb",
+      "subject": "fix: request the canonical recovered-reply schema across providers"
+    },
+    {
+      "sha": "0f4d375aaf9f5109e30923eff9992f67f50ee1a0",
+      "subject": "fix: type the fixed derived verdict schema without changing its output"
     }
   ],
   "pullRequests": [
