@@ -35,6 +35,9 @@ export const CLIENT_FEATURE_PATHS = [
   "packages/ui/src/utils/reminder-presentation.ts",
   "plugins/plugin-browser/src/native-client-command.ts",
   'packages/core/src/types/plugin.ts',
+  'packages/core/src/types/components.ts',
+  'packages/core/src/types/model.ts',
+  'packages/core/src/types/primitives.ts',
   'packages/ui/src/api/client-base.ts',
   'plugins/plugin-calendar/src/meetings/auto-join-settings.ts',
   'packages/core/src/types/permissions.ts',
@@ -185,7 +188,10 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
     return matches[0][0];
   }).join('\n') + '\n';
   project('alpha-voice-core-types.ts',loggerTypes.slice(start,end) + '\n' + declarations(
-    'packages/core/src/types/plugin.ts', ['ViewCapabilityParameter', 'ViewCapability']));
+    'packages/core/src/types/plugin.ts', ['ViewCapabilityParameter', 'ViewCapability']) + declarations(
+    'packages/core/src/types/primitives.ts', ['JsonPrimitive', 'JsonValue']) + declarations(
+    'packages/core/src/types/components.ts', ['ActionParameterSchema']) + declarations(
+    'packages/core/src/types/model.ts', ['JSONSchema']));
   const clientName = 'packages/ui/src/api/client-base.ts';
   const fetchMatches = [...text(clientName).matchAll(/^  async fetch<T>\([\s\S]*?^  \): Promise<T> \{/gm)];
   if (fetchMatches.length !== 1) throw Error('Review changed ElizaClient fetch declaration.');
@@ -194,6 +200,9 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   project('plugins/plugin-calendar/src/meetings/auto-join-settings.ts', declarations(
     'plugins/plugin-calendar/src/meetings/auto-join-settings.ts', ['MeetingAutoJoinPolicy', 'MeetingAutoJoinSettings']));
   source.delete('packages/core/src/types/plugin.ts');
+  source.delete('packages/core/src/types/components.ts');
+  source.delete('packages/core/src/types/model.ts');
+  source.delete('packages/core/src/types/primitives.ts');
   source.delete(clientName);
 
   project('alpha-voice-core-protocol.ts','export {ElizaError} from "./packages/core/src/errors";\nexport {redactTrailingArgs} from "./packages/core/src/security/log-redaction";\nexport {parseViewInteractionClientId} from "./packages/core/src/views/view-interact-protocol";\nexport {findViewActionHandoff, type ViewActionHandoff} from "./packages/core/src/views/view-action-handoff";\nexport type {PermissionState} from "./packages/core/src/types/permissions";\n');
@@ -202,7 +211,7 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
 
   }
   const files = Object.fromEntries([...source].map(([name, file]) => [name, file.sha256]));
-  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?8:0, files };
+  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?9:0, files };
   const parent = path.join(root, '.eliza'), destination = path.join(parent, 'client-features');
   regularPath(parent, true);
   const exists = regularPath(destination, true), stamp = path.join(destination, '.source.json');

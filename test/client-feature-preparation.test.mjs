@@ -71,7 +71,17 @@ test('voice projection refuses an unreviewed pin by default',()=>fixture(({root}
 }));
 test('actual pinned host projections authenticate source/output hashes and exclude dashboard transport',()=>{
  const source=prepareClientFeatures(),stamp=JSON.parse(fs.readFileSync(path.join(source,'.source.json')));
-assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','utf8')).commit);assert.equal(stamp.projectionVersion,8);
+assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','utf8')).commit);assert.equal(stamp.projectionVersion,9);
+ const coreTypes=fs.readFileSync(path.join(source,'alpha-voice-core-types.ts'),'utf8');
+ for(const [file,names]of Object.entries({'components.ts':['ActionParameterSchema'],'model.ts':['JSONSchema'],'primitives.ts':['JsonPrimitive','JsonValue']})){
+  const input='packages/core/src/types/'+file,original=fs.readFileSync(path.join('vendor/eliza',input),'utf8');
+  assert.ok(stamp.sourceFiles[input],'canonical type input has provenance');
+  assert.equal(stamp.files[input],undefined,'unrelated core module is not shipped to the browser');
+  for(const name of names){
+   const declaration=original.match(new RegExp('^export interface '+name+'\\s*\\{[\\s\\S]*?^\\}','m'))?.[0]??original.match(new RegExp('^export type '+name+'\\s*=[\\s\\S]*?;','m'))?.[0];
+   assert.ok(declaration&&coreTypes.includes(declaration),name+' is retained byte-for-byte from the pinned SDK');
+  }
+ }
  const relayPath='plugins/plugin-maps/src/client/navigation-relay.ts';
  // The WebView signal shim is upstream (elizaOS/eliza#37315); the relay is carried unchanged.
  assert.equal(stamp.sourceFiles[relayPath],stamp.files[relayPath]);
