@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "da82a74e8bb1c45ae76beba64ee5bf0c1c2778e6",
+  "head": "8bce98d798e9e8f1f6b65820d70d2e2d05c83118",
   "recordedAt": "2026-10-26",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...da82a74e8bb1c45ae76beba64ee5bf0c1c2778e6",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...8bce98d798e9e8f1f6b65820d70d2e2d05c83118",
   "status": "diverged",
-  "aheadBy": 61,
+  "aheadBy": 62,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -250,6 +250,10 @@
     {
       "sha": "da82a74e8bb1c45ae76beba64ee5bf0c1c2778e6",
       "subject": "fix(assistant): narrow single-owner initial tool exposure"
+    },
+    {
+      "sha": "8bce98d798e9e8f1f6b65820d70d2e2d05c83118",
+      "subject": "fix(views): bind previous navigation to authenticated request owner"
     }
   ],
   "pullRequests": [
