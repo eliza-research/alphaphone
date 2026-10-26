@@ -1,6 +1,8 @@
 # Current MVP status
 
-Current source pin: SDK `7481f0eac237341903c5c1fad9208879d442cf9d`, prepared on product `9957155b3e2a9c3d7152ccffd53f4ff48900e2ac`. This combines the Cloud public-setting classification and structured-JSON SecretSwap repairs. Offline owning tests and real runtime-dispatch checks passed; live native proof remains pending. No new build or device acceptance is claimed. See [source identity](evidence/source-metadata-9957-748-20261026.json).
+Current source pin: SDK `f8b8299cc2be0f6e91127808384cbd17b90f906f`, prepared on product `91c6a74b3123d3e15a10c5711cfb2f94b025e281`. This combines exact-ID Notes deletion with suffix-only plain-note append. The existing transactional store, ambiguity checks, revision checks and recoverable trash are retained. 28 focused tests and scoped type checks passed; live combined proof remains pending and the wider baseline action failures remain separately recorded. No new build or device acceptance is claimed. See [source identity](evidence/source-metadata-91c6-f8-20261026.json).
+
+Previous source checkpoint: Current source pin: SDK `7481f0eac237341903c5c1fad9208879d442cf9d`, prepared on product `9957155b3e2a9c3d7152ccffd53f4ff48900e2ac`. This combines the Cloud public-setting classification and structured-JSON SecretSwap repairs. Offline owning tests and real runtime-dispatch checks passed; live native proof remains pending. No new build or device acceptance is claimed. See [source identity](evidence/source-metadata-9957-748-20261026.json).
 
 Previous source checkpoint: Current source pin: SDK `c2a0ef993bcf790a920698a8b661511b81725891`, prepared on product `7d94781429cbf027d1522d4cf68d46434e12e730`. This diagnostic-only child extends evaluator diagnostics with fixed protocol-guard classifications and primitive types. It does not fix the native Notes continuation failure or change planner behavior, limits or validation. No new runtime, build or device acceptance is claimed. See [diagnostic source identity](evidence/source-metadata-7d94-c2-20261026.json). The previous source and browser evidence remains recorded below.
 
@@ -56,9 +58,9 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-Current source projection: SDK `7481f0eac2` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
+Current source projection: SDK `f8b8299cc2` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
 
-The current upstream source pin is `7481f0eac2` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
+The current upstream source pin is `f8b8299cc2` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 
