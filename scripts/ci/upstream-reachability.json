@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "efc7fa578eb2c62da6a6f56117176f106b574841",
+  "head": "387c8ebaf22f3bf0c7dd1d72bad90075d023fde1",
   "recordedAt": "2026-10-26",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...efc7fa578eb2c62da6a6f56117176f106b574841",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...387c8ebaf22f3bf0c7dd1d72bad90075d023fde1",
   "status": "diverged",
-  "aheadBy": 46,
+  "aheadBy": 47,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -190,6 +190,10 @@
     {
       "sha": "efc7fa578eb2c62da6a6f56117176f106b574841",
       "subject": "fix(views): preserve verified destination aliases in navigation receipts"
+    },
+    {
+      "sha": "387c8ebaf22f3bf0c7dd1d72bad90075d023fde1",
+      "subject": "fix(views): share verified navigation targets across routing and execution"
     }
   ],
   "pullRequests": [
