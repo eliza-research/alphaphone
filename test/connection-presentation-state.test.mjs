@@ -65,3 +65,113 @@ test('expired and rejected restored sessions still require authentication; valid
  for(const patch of [{cloudAccount:{expiresAt:Date.now()-1000},startupResolved:true},{cloudAccount:null,startupResolved:true,error:'Sign-in expired'},{cloudAccount:null,startupResolved:false,error:'Sign-in expired'}]){const f=fixture();f.update(patch);assert.equal(f.context.productionCloudSignInRequired(f.snapshot()),true);}
  const f=fixture();f.update({startupResolved:true,inferenceOffline:true});assert.equal(f.context.productionCloudSignInRequired(f.snapshot()),false);assert.equal(f.snapshot().open,false);
 });
+
+// Execute the actual controller preflights. Stop send immediately after its
+// normal conversation binding, before preferences, transport or model work.
+const preflightSource = [
+  section('function residentSignInRequired()', '\n'),
+  'const preflightController = {',
+  section('  close() {', '  cancel() {'),
+  section('  async prepareVoiceConversation(', '  async send('),
+  section('  async send(', '      if(expectedConversationId!==undefined&&id!==expectedConversationId)'),
+  '      return id;',
+  '    } finally { signal.removeEventListener("abort", cancel); if (sending === controller) sending = null; }',
+  '  },',
+  '}; globalThis.preflightController = preflightController;',
+].join('\n');
+const preflightCode = stripTypeScriptTypes(preflightSource, {mode: 'transform'});
+function preflightFixture(balance, options = {}) {
+  const f = fixture({purpose: 'plan', ...options});
+  let bindings = 0;
+  Object.assign(f.context, {
+    AbortController, DOMException, document: {hidden: false}, navigator: {onLine: true},
+    residentCloudFlow: () => true, residentAlwaysPresent: true,
+    residentStartInBackground: false, pendingBillingReview: null,
+    operation: null, requestedCameraContinuation: undefined,
+    NO_AGENT_SEND: 'No selected session', NO_AGENT_VOICE: 'No selected session',
+    INFERENCE_OFFLINE_NOTICE: 'Offline',
+    noSessionError: () => Error('No selected session'),
+    phoneContextMessage: (text, context) => ({text, context}),
+    boundNavigation: () => undefined, cancelStoppedReply: () => {},
+    clearPersonalSetup: () => {},
+    ensureSelectedConversation: async (_selected, _session, _signal, current) => {
+      current(); bindings++; return 'conversation-1';
+    },
+  });
+  f.context.state = {...f.snapshot(), open: false, membershipBalance: balance,
+    membershipDismissed: false, session: {sessionId: 'session-1'}};
+  f.context.active = {kind: 'remote', remote: {session: {expiresAt: Date.now() + 60000}}};
+  vm.runInContext(preflightCode, f.context);
+  f.context.connectionController = f.context.preflightController;
+  return {...f, get bindings() {return bindings;},
+    voice: () => f.context.preflightController.prepareVoiceConversation(new AbortController().signal),
+    send: () => f.context.preflightController.send('Hello', {}, 'request-1', new AbortController().signal),
+    close: () => f.context.preflightController.close()};
+}
+for (const balance of ['zero', 'checking', 'unavailable', undefined, 'funded', 'member']) {
+  test(`voice and send preflights distinguish ${String(balance)} from verified zero`, async () => {
+    for (const method of ['voice', 'send']) {
+      const f = preflightFixture(balance);
+      if (balance === 'zero') {
+        await assert.rejects(f[method](), error => {
+          assert.match(error.message, /Add funds or an active membership/);
+          if (method === 'send') assert.equal(error.notDispatched, true);
+          return true;
+        });
+        assert.equal(f.bindings, 0);
+      } else {
+        const result = await f[method]();
+        assert.equal(method === 'voice' ? result.conversationId : result, 'conversation-1');
+        assert.equal(f.bindings, 1);
+        assert.equal(f.context.operation, null);
+        assert.equal(f.context.sending, null);
+      }
+    }
+  });
+}
+test('unknown balance does not bypass missing, expired or busy conversation guards', async () => {
+  for (const balance of ['checking', 'unavailable', undefined]) {
+    for (const method of ['voice', 'send']) {
+      const missing = preflightFixture(balance, {account: null});
+      missing.context.active = null; missing.context.state.session = null;
+      await assert.rejects(missing[method](), /No selected session/);
+      assert.equal(missing.bindings, 0);
+      const expired = preflightFixture(balance);
+      expired.context.active.remote.session.expiresAt = Date.now() - 1;
+      await assert.rejects(expired[method](), /session.*expired/i);
+      assert.equal(expired.bindings, 0);
+      const busy = preflightFixture(balance);
+      busy.context.operation = new AbortController();
+      await assert.rejects(busy[method](), /Finish the.*operation/);
+      assert.equal(busy.bindings, 0);
+    }
+  }
+});
+test('closing unknown balance uses ordinary close rules without claiming zero balance', () => {
+  for (const balance of ['checking', 'unavailable', undefined, 'funded', 'member']) {
+    const f = preflightFixture(balance);
+    f.context.state.open = true;
+    f.close();
+    assert.equal(f.snapshot().open, false);
+    assert.equal(f.snapshot().membershipDismissed, false);
+    const busy = preflightFixture(balance);
+    busy.context.state.open = true; busy.context.state.busy = true;
+    busy.close();
+    assert.equal(busy.snapshot().open, true);
+  }
+  const zero = preflightFixture('zero');
+  zero.context.state.open = true; zero.close();
+  assert.equal(zero.snapshot().open, false);
+  assert.equal(zero.snapshot().membershipDismissed, true);
+});
+test('closing unknown balance preserves required sign-in for signed-out and expired accounts', () => {
+  for (const balance of ['checking', 'unavailable', undefined]) {
+    for (const account of [null, {expiresAt: Date.now() - 1}]) {
+      const f = preflightFixture(balance, {account});
+      f.context.state.open = true; f.close();
+      assert.equal(f.snapshot().open, true);
+      assert.equal(f.snapshot().membershipDismissed, false);
+      assert.equal(f.context.productionCloudSignInRequired(f.snapshot()), true);
+    }
+  }
+});

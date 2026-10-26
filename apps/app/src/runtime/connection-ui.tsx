@@ -1987,7 +1987,7 @@ export const connectionController = {
   close() {
     // The in-app sign-in screen closes back to where it was opened; a pending attempt is cancelled.
     if(pendingBillingReview){connectionController.cancelBillingReview();return;}
-    if(state.cloudAccount&&state.membershipBalance!==undefined&&!['funded','member'].includes(state.membershipBalance)){update({open:false,purpose:'agent',membershipDismissed:true});return;}
+    if(state.cloudAccount&&state.membershipBalance==='zero'){update({open:false,purpose:'agent',membershipDismissed:true});return;}
     if(state.signIn){connectionController.cancelSignIn();return;}
     if(residentSignInRequired()){if((state.purpose==='cloud-account'||state.purpose==='plan')&&!state.busy)update({purpose:'agent',message:'',error:'',redeemError:'',redeemNotice:''});return;}
     if (!state.busy || residentStartInBackground || state.residentStarting) {if(state.purpose!=='cloud-account'&&state.purpose!=='plan')clearPersonalSetup();update({ open: false,purpose:'agent',redeemError:'',redeemNotice:'' });}
@@ -2501,7 +2501,7 @@ export const connectionController = {
     return !!active&&(!foreground||!state.open&&!state.busy&&!document.hidden)&&binding.connectionEpoch===epoch&&JSON.stringify(state.session)===JSON.stringify(binding.session)&&conversationMemory.get(conversationKey(binding.session))===binding.conversationId;
   },
   async prepareVoiceConversation(signal:AbortSignal):Promise<VoiceConversationBinding>{
-    if(state.cloudAccount&&state.membershipBalance!==undefined&&!['funded','member'].includes(state.membershipBalance))throw Error('Add funds or an active membership in Settings before asking Alpha.');
+    if(state.cloudAccount&&state.membershipBalance==='zero')throw Error('Add funds or an active membership in Settings before asking Alpha.');
     if(operation||sending||state.open||state.busy||document.hidden)throw Error('Finish the current connection or conversation operation first.');
     const selected=active,session=state.session,generation=epoch;
     if(!selected||!session)throw noSessionError(NO_AGENT_VOICE);
@@ -2512,7 +2512,7 @@ export const connectionController = {
     finally{signal.removeEventListener('abort',cancel);if(operation===controller)operation=null;}
   },
   async send(text: string, context: ContextEnvelope, requestId: string, signal: AbortSignal, onText?:(text:string)=>void,replyTo?:ConversationMessageTarget,onReplyReady?:(results:readonly unknown[]|undefined)=>void,channelType:ChatChannel='DM',expectedConversationId?:string,voiceTurnSignal?:VoiceTurnSignal): Promise<{ messageId?:string;userMessageId?:string;messageBinding?:{conversationId:string;session:VerifiedSession};text: string; proposals?: ActionProposal[]; actionResults?:readonly unknown[]; planAction?: 'plan' | 'retry' | 'sign-in' }> {
-    if(state.cloudAccount&&state.membershipBalance!==undefined&&!['funded','member'].includes(state.membershipBalance))throw Object.assign(new Error('Add funds or an active membership in Settings before asking Alpha.'),{notDispatched:true});
+    if(state.cloudAccount&&state.membershipBalance==='zero')throw Object.assign(new Error('Add funds or an active membership in Settings before asking Alpha.'),{notDispatched:true});
     // P-43: before the resident has a session, say it is starting (or recovering); nothing is sent.
     if (!active && residentAlwaysPresent) throw noSessionError('');
     if (operation) throw new Error('Finish the connection or history operation before sending.');
