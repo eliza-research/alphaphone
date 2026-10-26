@@ -855,7 +855,7 @@
 <sc-if value="{{is.calendar}}">
 <div onFocusCapture="{{calendar.captureSubviewFocus}}" style="display: flex; flex-direction: column; height: 100%; position: relative">
   <div data-alpha-subview="calendar-list" inert="{{calendar.listCovered}}" aria-hidden="{{calendar.listCovered}}" style="display:flex;flex-direction:column;flex:1;min-height:0">
-  <div data-alpha-app-header="main" style="display: flex; align-items: center; height: 56px; margin-top: 44px; padding: 0 8px 0 20px; gap: 2px; flex-shrink: 0">
+  <div data-alpha-app-header="main" style="display: flex; align-items: center; min-height: 56px; height: auto; margin-top: 44px; padding: 0 8px 0 20px; gap: 2px; flex-shrink: 0">
     <sc-if value="{{showAppBack}}"><button class="app-header-back" aria-label="Back to apps" onClick="{{backToApps}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.back}}"></path></svg></button></sc-if>
     <button onClick="{{calendar.toggleMonth}}" aria-label="Month view" aria-expanded="{{calendar.monthOpen}}" style="display: flex; align-items: center; gap: 6px; min-height: 48px; flex-grow: 1; min-width: 0">
       <h1 data-alpha-app-title class="serif" style="margin: 0; min-width: 0; font-size: 32px; letter-spacing: -.01em; white-space: nowrap">{{calendar.month}}</h1>
