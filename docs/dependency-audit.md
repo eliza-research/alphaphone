@@ -1,6 +1,6 @@
 # Dependency and artifact supply chain
 
-## Current native Android APK npm closure (2026-10-25)
+## Reviewed native Android APK npm closure (2026-10-25)
 
 The exact signed ARM64 APK `d3f1fd7792071e0ac76484e437e9a15cd1aa082e75f236ea8c4e4b8e5bdd5e10`
 was built from product `4fd8228` / SDK `a95cd4d`. Its normalized packaged npm input
@@ -17,21 +17,9 @@ outside the npm absence conclusion. All earlier artifact records and functional
 qualification states are preserved; no device or full-app result transfers.
 
 
-## Current source-only input rebind (2026-10-25)
+## Current source-only input rebind (2026-10-26)
 
-SDK `0f4d375aaf9f5109e30923eff9992f67f50ee1a0` at fixed build-source product `d7efacf0639ed81828fe35e3ee4c388a388d2c31` has
-byte-identical Bun lock and normalized 3,694-package audit input versus `737c4d578f69659a6881afe8ff06e3379cbc713c`.
-The dated audit findings, every exception object, maintenance record and deadline
-remain unchanged. No registry query, waiver, remediation or renewal occurred.
-See [source identity evidence](evidence/source-metadata-d7-0f-20261025.json).
-
-Installed APK `5a89ba6d026d8f348dab9748760f3047e22d7aaff73d681f0e895a578764bf36`
-remains bound to c880/737. Its subsequent Home request failed during reply review;
-the exact underlying cause remains unknown. Older dependency artifact reviews stay
-bound to their own bytes; none qualifies a new0f bundle/APK, native builtin/FFI,
-provider response, physical audio or Seeker. Current-source artifact qualification
-remains false; the fresh Notes performance comparison is pending. Metadata-only
-children do not change the fixed producer tuple or trigger a rebuild.
+SDK `349235fd384f0c0694b8ad9b3f96fec493f33440` at fixed build-source product `19bd44c31b97903212e1b00935c5c715d0a17602` changes shared prepared-navigation reply handling only. The raw Bun lock and normalized3,694-package advisory input are unchanged from0f. The dated findings, exception objects and deadlines remain unchanged; no new registry query or security clearance is claimed. Installed877a/d7/0f and its Notes reply mismatch remain separate. See [source identity evidence](evidence/source-metadata-19bd-349-20261026.json).
 
 ## Historical 737 source-only input rebind (2026-10-25)
 

@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "0f4d375aaf9f5109e30923eff9992f67f50ee1a0",
-  "recordedAt": "2026-10-25",
+  "head": "349235fd384f0c0694b8ad9b3f96fec493f33440",
+  "recordedAt": "2026-10-26",
   "command": "gh api repos/elizaOS/eliza/compare/develop...0f4d375aaf9f5109e30923eff9992f67f50ee1a0",
   "status": "diverged",
-  "aheadBy": 41,
+  "aheadBy": 42,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -170,6 +170,10 @@
     {
       "sha": "0f4d375aaf9f5109e30923eff9992f67f50ee1a0",
       "subject": "fix: type the fixed derived verdict schema without changing its output"
+    },
+    {
+      "sha": "349235fd384f0c0694b8ad9b3f96fec493f33440",
+      "subject": "fix: preserve prospective replies for bound prepared navigation"
     }
   ],
   "pullRequests": [
