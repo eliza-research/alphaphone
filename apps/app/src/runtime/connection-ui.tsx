@@ -674,7 +674,7 @@ async function work(message: string, action: (signal: AbortSignal) => Promise<vo
   try { await action(controller.signal); }
   catch (error) {
     const recovery=residentRecoveryReason(error);if(recovery&&!active)update({residentRecoveryReason:recovery});
-    if(controller.signal.aborted&&!state.open){update({error:'',message:''});return;}
+    if(controller.signal.aborted&&(!state.open||error===controller.signal.reason)){update({error:'',message:''});return;}
     if(background&&!openOnError&&!state.open){update({error:errorMessage(error),message:''});return;}
     if (testMocksEnabled && expired(error) && active?.kind === 'cloud' && active.cloud.environment === cloud.environment) {
       const previous = active; retire('Sign-in required'); detachService();
@@ -1988,7 +1988,7 @@ export const connectionController = {
     // The in-app sign-in screen closes back to where it was opened; a pending attempt is cancelled.
     if(pendingBillingReview){connectionController.cancelBillingReview();return;}
     if(state.cloudAccount&&state.membershipBalance!==undefined&&!['funded','member'].includes(state.membershipBalance)){update({open:false,purpose:'agent',membershipDismissed:true});return;}
-    if(state.signIn&&!state.busy){connectionController.cancelSignIn();return;}
+    if(state.signIn){connectionController.cancelSignIn();return;}
     if(residentSignInRequired()){if((state.purpose==='cloud-account'||state.purpose==='plan')&&!state.busy)update({purpose:'agent',message:'',error:'',redeemError:'',redeemNotice:''});return;}
     if (!state.busy || residentStartInBackground || state.residentStarting) {if(state.purpose!=='cloud-account'&&state.purpose!=='plan')clearPersonalSetup();update({ open: false,purpose:'agent',redeemError:'',redeemNotice:'' });}
   },
@@ -2184,11 +2184,14 @@ export const connectionController = {
     });
     await ensureResident();
   },
-  /** Leaves the sign-in screen and burns any pending attempt. The stored sign-in is unchanged. */
+  /** Leaves the sign-in screen for the chooser and burns the pending attempt. Stored sign-in stays unchanged. */
   cancelSignIn() {
-    if (operation) { connectionController.cancel(); return; }
-    cloud.cancelLogin();
-    update({ signIn: null, message: '', error: '' });
+    const view = state.signIn;
+    const pending = !!operation;
+    // Back on the required top-level chooser has nowhere to go; keep its controls usable.
+    if (!pending && view?.step === 'choose' && productionCloudSignInRequired(state)) return;
+    connectionController.cancel();
+    update({ signIn: view && (pending || view.step !== 'choose') ? { step: 'choose', environment: view.environment } : null, message: '', error: '' });
   },
   /** Android's native Google account picker, followed by the existing session flow. */
   async signInGoogle() {
@@ -2197,8 +2200,8 @@ export const connectionController = {
       update({ signIn: { step: 'google', environment: view.environment } });
       const client = signInClient(view.environment);
       let outcome: Awaited<ReturnType<CloudProtocol['signInWithGoogle']>>;
-      try { outcome = await client.signInWithGoogle(signal); }
-      catch (error) { signInFailed(view.environment); throw error; }
+      try { outcome = await client.signInWithGoogle(signal); signal.throwIfAborted(); }
+      catch (error) { signal.throwIfAborted(); signInFailed(view.environment); throw error; }
       if (outcome.status === 'mfa') {
         if (!outcome.attemptId) throw new CloudSignInError('unavailable');
         update({ signIn: { step: 'mfa', environment: view.environment, email: '', attemptId: outcome.attemptId, method: outcome.method, expiresAt: outcome.expiresAt }, message: '' });
@@ -2216,7 +2219,8 @@ export const connectionController = {
     const address = email.trim();
     if (!validSignInEmail(address)) { update({ error: signInFailureMessage('invalid-email') }); return; }
     await work('Sending your code…', async signal => {
-      const started = await signInClient(view.environment).startEmailSignIn(address, signal);
+      const started = await signInClient(view.environment).startEmailSignIn(address, signal).catch(error => { signal.throwIfAborted(); throw error; });
+      signal.throwIfAborted();
       update({ signIn: { step: 'code', environment: view.environment, email: address, ...started }, message: `We sent a six-digit code to ${address}. Enter it here.` });
     });
     if (state.error && state.signIn?.step !== 'code') update({ signIn: { step: 'choose', environment: view.environment } });
@@ -2230,8 +2234,9 @@ export const connectionController = {
     await work('Checking your code…', async signal => {
       const client = signInClient(view.environment);
       try {
-        if (view.step === 'mfa') { await signedIn(client, await client.verifyMfaSignIn(view.attemptId, digits, signal), signal); return; }
+        if (view.step === 'mfa') { const outcome = await client.verifyMfaSignIn(view.attemptId, digits, signal); signal.throwIfAborted(); await signedIn(client, outcome, signal); return; }
         const outcome = await client.verifyEmailSignIn(view.attemptId, digits, signal);
+        signal.throwIfAborted();
         if (outcome.status === 'mfa') {
           signInFailed(view.environment, true);
           update({ signIn: { step: 'mfa', environment: view.environment, email: view.email, attemptId: view.attemptId, method: outcome.method, expiresAt: outcome.expiresAt },
@@ -2241,6 +2246,7 @@ export const connectionController = {
         }
         await signedIn(client, outcome, signal);
       } catch (error) {
+        signal.throwIfAborted();
         // A wrong code keeps this step so the owner can retry or resend; anything else ends it.
         if (!(error instanceof CloudSignInError && error.code === 'invalid-code')) signInFailed(view.environment);
         else signInFailed(view.environment, true);
@@ -2763,11 +2769,16 @@ export function ConnectionChooser() {
     // A child form restores its input after verification. Updating the trap for busy state must
     // preserve that focus, rather than moving it back to the dialog and dismissing the keyboard.
     if (!panel.current?.contains(document.activeElement)) panel.current?.focus();
-    const back = (event: Event) => { if(document.querySelector("dialog[open]"))return; event.preventDefault(); event.stopImmediatePropagation(); if (snapshot.busy) connectionController.cancel(); else connectionController.close(); };
+    const dismiss = () => {
+      if (connectionController.getSnapshot().signIn) connectionController.cancelSignIn();
+      else if (snapshot.busy) connectionController.cancel();
+      else connectionController.close();
+    };
+    const back = (event: Event) => { if(document.querySelector("dialog[open]"))return; event.preventDefault(); event.stopImmediatePropagation(); dismiss(); };
     window.addEventListener('alpha-back', back, true);
     const key = (event: KeyboardEvent) => {
       if(document.querySelector("dialog[open]"))return;
-      if (event.key === 'Escape') { event.preventDefault(); if (snapshot.busy) connectionController.cancel(); else connectionController.close(); }
+      if (event.key === 'Escape') { event.preventDefault(); dismiss(); }
       if (event.key === 'Tab' && panel.current) {
         const items = Array.from(panel.current.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),summary')).filter(item => item.getClientRects().length);
         const first = items[0], last = items.at(-1);
@@ -2805,7 +2816,7 @@ export function ConnectionChooser() {
   }
   const requiredSignInView: SignInView = snapshot.signIn ?? { step: 'choose', environment: residentEnvironment() };
   if (snapshot.signIn || productionSignInRequired) return <div className={productionSignInRequired?'alpha-auth-page':'alpha-connection-scrim'}><div className={`alpha-connection alpha-connection-native alpha-cloud-sign-in${productionSignInRequired?' alpha-auth-content':''}`} role={productionSignInRequired?'main':'dialog'} aria-modal={productionSignInRequired?undefined:true} aria-labelledby="cloud-sign-in-title" aria-busy={snapshot.busy||undefined} tabIndex={-1} ref={panel}>
-    <CloudSignInPanel view={requiredSignInView} busy={snapshot.busy || !snapshot.signIn} google={inAppGoogle} message={snapshot.message} error={snapshot.error} errorIsNotice={snapshot.error===RESIDENT_UNPACKAGED}
+    <CloudSignInPanel view={requiredSignInView} busy={snapshot.busy} ready={!!snapshot.signIn} dismissible={!productionSignInRequired} google={inAppGoogle} message={snapshot.message} error={snapshot.error} errorIsNotice={snapshot.error===RESIDENT_UNPACKAGED}
       actions={{google:()=>void connectionController.signInGoogle(),email:address=>void connectionController.signInEmail(address),verify:code=>void connectionController.verifySignInCode(code),resend:()=>void connectionController.resendSignInCode(),cancel:()=>connectionController.cancelSignIn()}}
       extra={productionSignInRequired && !snapshot.signIn && !snapshot.busy
         ? <button onClick={()=>void connectionController.beginSignIn(residentEnvironment(),true)}>Retry sign-in</button>

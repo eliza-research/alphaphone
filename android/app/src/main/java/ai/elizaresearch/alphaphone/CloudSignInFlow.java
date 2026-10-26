@@ -31,8 +31,8 @@ final class CloudSignInFlow {
  static final long PENDING_TTL_MS = 10 * 60 * 1000L;
  /** Ack is idempotent and the token route re-reveals the same key until acknowledgeBy. */
  static final int ACK_ATTEMPTS = 3;
- /** Steward rate-limits sends; this phone waits a minute between any two code sends, whatever the address. */
- static final long RESEND_COOLDOWN_MS = 60 * 1000L;
+ /** Steward rate-limits sends; the phone adds a 30-second minimum and honors longer server deadlines. */
+ static final long RESEND_COOLDOWN_MS = 30 * 1000L;
  /** Wrong codes allowed per email attempt before it ends; a new code starts a new attempt. */
  static final int MAX_VERIFY_ATTEMPTS = 5;
  /** Google's account chooser: a user gesture precedes Steward's final redirect, so Chrome hands the App Link to Alpha. */

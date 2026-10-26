@@ -89,8 +89,9 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   void cancel() { cancelled = true; android.os.CancellationSignal picker = googleCancellation; if (picker != null) picker.cancel(); googleVerifier = null; googleChallengeId = null; HttpURLConnection current = connection; if (current != null) current.disconnect(); }
  }
  private static final class Response {
-  final int status; final JSONObject data; final String location;
-  Response(int status, JSONObject data, String location) { this.status = status; this.data = data; this.location = location; }
+  final int status; final JSONObject data; final String location, retryAfter;
+  Response(int status, JSONObject data, String location) { this(status, data, location, null); }
+  Response(int status, JSONObject data, String location, String retryAfter) { this.status = status; this.data = data; this.location = location; this.retryAfter = retryAfter; }
  }
  private final Object lock = new Object();
  private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -100,8 +101,8 @@ public final class AlphaCloudSignInPlugin extends Plugin {
  private final Map<CloudSignInFlow.Environment, CloudSignInReadiness.Result> readiness = new EnumMap<>(CloudSignInFlow.Environment.class);
  private final Map<CloudSignInFlow.Environment, List<PluginCall>> probing = new EnumMap<>(CloudSignInFlow.Environment.class);
  private Attempt attempt;
- /** Global code-send cooldown: one send a minute from this phone, whatever the address. */
- private long lastEmailSendAt;
+ /** Global code-send cooldown, including any longer deadline supplied by Cloud. */
+ private long lastEmailSendAt, emailSendAllowedAt;
  private volatile boolean destroyed;
  private boolean testMocks() { return BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS; }
 
@@ -431,8 +432,8 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   synchronized (lock) {
    long now = System.currentTimeMillis();
    if (attempt != null && (attempt.google || attempt.busy)) { call.reject("Another sign-in is in progress", "login-active"); return; }
-   // One send a minute from this phone, whatever the address (Steward also limits sends server-side).
-   if (now < lastEmailSendAt + CloudSignInFlow.RESEND_COOLDOWN_MS) { call.reject("Wait before requesting another code", "cooldown"); return; }
+   // The minimum applies across addresses; Cloud may require a longer wait.
+   if (now < Math.max(lastEmailSendAt + CloudSignInFlow.RESEND_COOLDOWN_MS, emailSendAllowedAt)) { call.reject("Wait before requesting another code", "cooldown"); return; }
    if (attempt != null) attempt.cancel();
    current = new Attempt(environment, false);
    current.email = email; current.emailVerifier = CloudSignInFlow.newVerifier(); current.busy = true; attempt = current;
@@ -441,12 +442,14 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   run(() -> {
    try {
     Response sent = post(current, CloudEmailCode.SEND_PATH, CloudEmailCode.sendBody(current.environment, email, current.emailVerifier), null);
-    if (sent.status != 200 && sent.status != 202) throw new SignInFailure(CloudSignInFlow.failureForStatus("send", sent.status));
     JSONObject data = sent.data.optJSONObject("data") != null ? sent.data.optJSONObject("data") : sent.data;
     long now = System.currentTimeMillis(), expiresAt = CloudEmailCode.expiresAt(data.opt("expiresAt"), now);
+    long resendAt = CloudEmailCode.resendAt(data.opt("resendAt"), sent.retryAfter, now);
+    synchronized (lock) { emailSendAllowedAt = Math.max(emailSendAllowedAt, resendAt); }
+    if (sent.status != 200 && sent.status != 202) throw new SignInFailure(CloudSignInFlow.failureForStatus("send", sent.status));
     synchronized (lock) {
      if (attempt != current || current.cancelled) throw new SignInFailure("cancelled");
-     current.expiresAt = expiresAt; current.resendAt = lastEmailSendAt + CloudSignInFlow.RESEND_COOLDOWN_MS; current.busy = false;
+     current.expiresAt = expiresAt; current.resendAt = emailSendAllowedAt; current.busy = false;
     }
     call.resolve(new JSObject().put("attemptId", current.id).put("expiresAt", expiresAt).put("resendAt", current.resendAt));
    } catch (SignInFailure failure) { release(current); refused(current.environment, failure.code); call.reject(failure.code, failure.code); }
@@ -674,7 +677,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
    catch (SignInFailure invalid) { throw invalid; }
    catch (Exception invalid) { if (fetched.status < 300) throw new SignInFailure("unavailable"); }
   }
-  return new Response(fetched.status, data, fetched.location);
+  return new Response(fetched.status, data, fetched.location, fetched.retryAfter);
  }
  private Fetched fetch(URI url, byte[] body, String bearer) throws Exception {
   return fetch(url, body, bearer, null, CloudSignInReadiness.REQUEST_TIMEOUT_MS, CloudSignInReadiness.REQUEST_TIMEOUT_MS);
@@ -700,7 +703,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
    byte[] bytes;
    try (InputStream input = status >= 400 ? connection.getErrorStream() : connection.getInputStream()) { bytes = readBounded(input); }
    if (current != null && current.cancelled) throw new SignInFailure("cancelled");
-   return new Fetched(status, new String(bytes, StandardCharsets.UTF_8), null);
+   return new Fetched(status, new String(bytes, StandardCharsets.UTF_8), null, connection.getHeaderField("Retry-After"));
   } catch (java.net.UnknownHostException | java.net.ConnectException | java.net.NoRouteToHostException offline) {
    throw new SignInFailure(current != null && current.cancelled ? "cancelled" : "offline");
   } catch (java.io.IOException transport) {
@@ -711,8 +714,9 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   }
  }
  private static final class Fetched {
-  final int status; final String body, location;
-  Fetched(int status, String body, String location) { this.status = status; this.body = body; this.location = location; }
+  final int status; final String body, location, retryAfter;
+  Fetched(int status, String body, String location) { this(status, body, location, null); }
+  Fetched(int status, String body, String location, String retryAfter) { this.status = status; this.body = body; this.location = location; this.retryAfter = retryAfter; }
  }
  private static byte[] readBounded(InputStream input) throws Exception {
   if (input == null) return new byte[0];

@@ -209,7 +209,7 @@ test('the native sign-in client owns every secret, compares state before burning
  assert.match(plugin,/@Override public void load\(\) \{[\s\S]*?run\(this::resumeAcknowledgements\);/,'an interrupted ack resumes on the next start');
  // Email: the code adapter, a per-attempt verify cap and a global send cooldown.
  const email=between(plugin,'@PluginMethod public void startEmail(','@PluginMethod public void verifyEmail(');
- assert.match(email,/if \(now < lastEmailSendAt \+ CloudSignInFlow\.RESEND_COOLDOWN_MS\) \{ call\.reject\("Wait before requesting another code", "cooldown"\); return; \}/);
+ assert.match(email,/if \(now < Math\.max\(lastEmailSendAt \+ CloudSignInFlow\.RESEND_COOLDOWN_MS, emailSendAllowedAt\)\) \{ call\.reject\("Wait before requesting another code", "cooldown"\); return; \}/);
  assert.match(email,/CloudEmailCode\.SEND_PATH, CloudEmailCode\.sendBody\(/);assert.doesNotMatch(plugin,/"\/steward\/auth\/email\/send"/,'no magic-link send');
  const verify=between(plugin,'private void verify(PluginCall call, boolean mfa)','private void release(');
  assert.match(verify,/CloudEmailCode\.VERIFY_PATH, CloudEmailCode\.verifyBody\(/);
