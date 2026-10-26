@@ -595,7 +595,7 @@ test.describe('a toast raised while a top-layer dialog is open', () => {
   async function openDialog(page: Page) {
     await page.addInitScript(offline);
     await page.goto('/');
-    for (const step of ['Notes', 'New note', 'Link source document']) await page.getByRole('button', { name: step, exact: true }).first().click();
+    await openLegacyAttachment(page);
     const dialog = page.locator('dialog[open]');
     await expect(dialog).toBeVisible();
     expect(await dialog.evaluate(el => el.matches(':modal'))).toBe(true);

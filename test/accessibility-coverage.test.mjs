@@ -53,9 +53,10 @@ test('every subview of a retained view is opened by a state that asserts it is t
   const table = states.slice(states.indexOf('const SUBVIEW'), states.indexOf('export const MOCK_STATES'));
   assert.match(states, /\.map\(start => mock\(start, \[\], SUBVIEW\[start\]\)\)/, 'deep-link states assert their subview');
   assert.match(states, /const showing = async[\s\S]*?\[data-alpha-subview="\$\{subview\}"\]:not\(\[inert\]\)[\s\S]*?toBeVisible\(\)/, 'a declared subview is asserted when the state opens');
+  assert.match(states, /const legacyNotes = [\s\S]*?await showing\(page, shows\);/, 'legacy source states assert their exposed subview too');
   const asserted = new Set([
     ...[...table.matchAll(/'[a-z]+:[a-z]+': '([a-zA-Z-]+)'/g)].map(match => match[1]),
-    ...[...states.matchAll(/(?:live|mock)\([^\n]*, '([a-zA-Z-]+)'\),/g)].map(match => match[1]),
+    ...[...states.matchAll(/(?:live|mock|legacyNotes)\([^\n]*, '([a-zA-Z-]+)'\),/g)].map(match => match[1]),
     ...[...states.matchAll(/shows: '([a-zA-Z-]+)'/g)].map(match => match[1]),
   ]);
   for (const id of subviews) {

@@ -1,6 +1,6 @@
 /** Interpreter for config/owner-routes.json, the owner-bound routes the renderer may reach; the Android gate
  * (OwnerRoutes.java) reads the same table. Domain validation and mutation authority stay in the Eliza services. */
-import table from '../../../../config/owner-routes.json';
+import table from '../../../../config/owner-routes.json' with {type:'json'};
 export type OwnerRouteGroup = keyof typeof table.groups;
 const unsafe = new RegExp(table.unsafe);
 // Validated and compiled once, at load: an {id} route needs its group's id pattern.

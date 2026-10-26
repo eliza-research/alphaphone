@@ -50,6 +50,8 @@ html:not(.standalone-app) [data-alpha-layer="home"][data-alpha-home-fits="true"]
 /* The title's line height opens with the measured text scale (1.02 at 100%, 1.14 at 200%): at
  * twice the size the descenders of its last line no longer fit a 1.02 line and were cut by the clamp. */
 .home-calendar-title { min-width:0; align-self:center; font-size:36px; line-height:calc(1.02 + (clamp(1,var(--alpha-text-scale,1),2) - 1) * .12); letter-spacing:-.01em; overflow:hidden; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; }
+/* Availability copy is app state, not an event preview; keep the whole message readable. */
+.home-calendar-card:not([data-alpha-home-calendar-event="true"]) .home-calendar-title { display:block; -webkit-line-clamp:unset; overflow:visible; }
 .home-calendar-card[data-alpha-home-calendar-event="true"] { grid-template-rows:auto minmax(0,1fr) auto; }
 .home-calendar-card[data-alpha-home-calendar-event="true"] .home-calendar-title { font-size:26px; line-height:calc(1.1 + (clamp(1,var(--alpha-text-scale,1),2) - 1) * .08); }
 .home-card { min-height:196px; gap:12px; }
