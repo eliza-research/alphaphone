@@ -19,6 +19,21 @@ qualification states are preserved; no device or full-app result transfers.
 
 ## Current source-only input rebind (2026-10-25)
 
+SDK `737c4d578f69659a6881afe8ff06e3379cbc713c` at build-source product `c8801829f4f3ff9c1fed6f700473460852820a65`
+has byte-identical Bun lock and normalized 3,694-package input versus the prior
+`a95cd4d28eb2bcd5fe5527e98058c167ff480557` source. The dated October 25 registry result and all124 findings,
+104 exception objects,103 maintenance records and existing deadlines stay unchanged.
+No registry query, new waiver, remediation or renewal occurred. See [current source
+scope](evidence/source-metadata-c880-737-20261025.json).
+
+The installed `d3f1fd7792071e0ac76484e437e9a15cd1aa082e75f236ea8c4e4b8e5bdd5e10`
+artifact remains bound to4fd/a95. Its packaged npm review and older receipts are
+preserved. They do not qualify a737 bundle/APK, Bun builtins, native FFI, Notes
+navigation, provider responses, hardware audio or Seeker. Current-source artifact
+qualification remains false while the normal producer and acceptance are pending.
+
+## Historical a95 source-only input rebind (2026-10-25)
+
 SDK `a95cd4d28eb2bcd5fe5527e98058c167ff480557` at product `4fd822874850a68c3d82675630593e4c63be943d`
 uses exactly the prior full Bun lock bytes and normalized 3,694-version registry
 input. The dated October 25 registry result and 124 source findings are reused;

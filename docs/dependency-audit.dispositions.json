@@ -35,8 +35,8 @@
     }
   ],
   "resident": {
-    "upstreamCommit": "a95cd4d28eb2bcd5fe5527e98058c167ff480557",
-    "description": "Current exact native Android APK d3f1fd7792071e0ac76484e437e9a15cd1aa082e75f236ea8c4e4b8e5bdd5e10 at product4fd/SDKa95 is reviewed for its packaged npm closure under docs/security/resident-artifact-review-d3f1fd7792071e0a-2026-10-25.json. Same603-version advisory input and unchanged affected UUID/Zod module bodies support the existing scoped npm dispositions. Native Bun ELF/builtin/FFI and device behavior receive no assurance. All exception objects, deadlines, qualification states and older artifact records remain unchanged.",
+    "upstreamCommit": "737c4d578f69659a6881afe8ff06e3379cbc713c",
+    "description": "Current SOURCE-only rebind at SDK 737c4d578f69659a6881afe8ff06e3379cbc713c, product c8801829f4f3ff9c1fed6f700473460852820a65: raw Bun lock and normalized 3,694-package input are byte-identical to a95cd4d28eb2bcd5fe5527e98058c167ff480557. The October 25 audit,104 exception objects,103 maintenance rows and all deadlines remain unchanged; no new query, remediation, waiver or current-source artifact qualification. Installed d3/4fd/a95 review remains historical to that exact APK; no 737 APK is claimed. Earlier artifact context: Current exact native Android APK d3f1fd7792071e0ac76484e437e9a15cd1aa082e75f236ea8c4e4b8e5bdd5e10 at product4fd/SDKa95 is reviewed for its packaged npm closure under docs/security/resident-artifact-review-d3f1fd7792071e0a-2026-10-25.json. Same603-version advisory input and unchanged affected UUID/Zod module bodies support the existing scoped npm dispositions. Native Bun ELF/builtin/FFI and device behavior receive no assurance. All exception objects, deadlines, qualification states and older artifact records remain unchanged.",
     "shippedSetEvidence": "docs/security/resident-artifact-review-d3f1fd7792071e0a-2026-10-25.json binds the exact native APK, package inputs, bundle hashes and124 source finding classifications; scope is npm closure only.",
     "pendingUpstreamFixes": [],
     "exceptions": [
@@ -3145,12 +3145,20 @@
     },
     "currentArtifactReview": "docs/security/resident-artifact-review-d3f1fd7792071e0a-2026-10-25.json",
     "sourceInputReview": {
-      "evidence": "docs/evidence/source-metadata-4fd-a95-20261025.json",
-      "priorSourcePin": "f4142d3a92d6b5b49ef6c6a666155218b8b75b07",
+      "evidence": "docs/evidence/source-metadata-c880-737-20261025.json",
+      "priorSourcePin": "a95cd4d28eb2bcd5fe5527e98058c167ff480557",
       "currentSourceArtifactQualified": false,
       "newArtifactReviewPending": true,
       "existingProposalStatusAppliesTo": "previously reviewed artifacts only",
-      "lastReviewedArtifact": "docs/security/resident-artifact-review-77c65ebe29c011f7-2026-10-25.json"
+      "lastReviewedArtifact": "docs/security/resident-artifact-review-d3f1fd7792071e0a-2026-10-25.json",
+      "previousSourceInputReview": {
+        "evidence": "docs/evidence/source-metadata-4fd-a95-20261025.json",
+        "priorSourcePin": "f4142d3a92d6b5b49ef6c6a666155218b8b75b07",
+        "currentSourceArtifactQualified": false,
+        "newArtifactReviewPending": true,
+        "existingProposalStatusAppliesTo": "previously reviewed artifacts only",
+        "lastReviewedArtifact": "docs/security/resident-artifact-review-77c65ebe29c011f7-2026-10-25.json"
+      }
     },
     "previousDependencyArtifactReview": "docs/security/resident-artifact-review-77c65ebe29c011f7-2026-10-25.json",
     "currentArtifactReviewScope": "Packaged npm closure only. Existing proposal/qualification states and currentSourceArtifactQualified=false are not promoted; native runtime/device gates remain separate."

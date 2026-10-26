@@ -103,7 +103,7 @@
   ],
   "resident": {
     "description": "Advisories for the resident runtime's npm packages at the pinned upstream commit, from the npm bulk advisory endpoint. Regenerate with: node scripts/dependency-audit.mjs --resident --write. Dispositions live in docs/dependency-audit.dispositions.json under \"resident\".",
-    "upstreamCommit": "a95cd4d28eb2bcd5fe5527e98058c167ff480557",
+    "upstreamCommit": "737c4d578f69659a6881afe8ff06e3379cbc713c",
     "input": "vendor/eliza/bun.lock",
     "auditedOn": "2026-10-25",
     "inputSha256": "6db6e88363397fd2c73a561ea1f3a071dfc11b31378cbe0c193163ea1ecf70ff",
@@ -1869,16 +1869,23 @@
       }
     ],
     "inputReuse": {
-      "previousUpstreamCommit": "f4142d3a92d6b5b49ef6c6a666155218b8b75b07",
+      "previousUpstreamCommit": "a95cd4d28eb2bcd5fe5527e98058c167ff480557",
       "normalizedInputIdentical": true,
       "rawLockBytesIdentical": true,
       "newRegistryQuery": false,
-      "reviewEvidence": "docs/evidence/source-metadata-4fd-a95-20261025.json",
+      "reviewEvidence": "docs/evidence/source-metadata-c880-737-20261025.json",
       "previousInputReuse": {
-        "previousUpstreamCommit": "4e561dc37e962595d8e28e600600430d50e9dd7d",
+        "previousUpstreamCommit": "f4142d3a92d6b5b49ef6c6a666155218b8b75b07",
         "normalizedInputIdentical": true,
+        "rawLockBytesIdentical": true,
         "newRegistryQuery": false,
-        "reviewEvidence": "docs/security/resident-artifact-review-77c65ebe29c011f7-2026-10-25.json"
+        "reviewEvidence": "docs/evidence/source-metadata-4fd-a95-20261025.json",
+        "previousInputReuse": {
+          "previousUpstreamCommit": "4e561dc37e962595d8e28e600600430d50e9dd7d",
+          "normalizedInputIdentical": true,
+          "newRegistryQuery": false,
+          "reviewEvidence": "docs/security/resident-artifact-review-77c65ebe29c011f7-2026-10-25.json"
+        }
       }
     }
   }

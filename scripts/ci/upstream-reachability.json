@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "a95cd4d28eb2bcd5fe5527e98058c167ff480557",
+  "head": "737c4d578f69659a6881afe8ff06e3379cbc713c",
   "recordedAt": "2026-10-25",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...a95cd4d28eb2bcd5fe5527e98058c167ff480557",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...737c4d578f69659a6881afe8ff06e3379cbc713c",
   "status": "diverged",
-  "aheadBy": 35,
+  "aheadBy": 39,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -146,6 +146,22 @@
     {
       "sha": "a95cd4d28eb2bcd5fe5527e98058c167ff480557",
       "subject": "fix: support verified native Android Bun runtime deployment"
+    },
+    {
+      "sha": "88a928aef51a824388575382c55e9e19cd25fae5",
+      "subject": "fix: declare canonical successful reads for historical observation projection"
+    },
+    {
+      "sha": "54a0b93a54c2617d3913298bdf4b229303c8d4ab",
+      "subject": "debug: bound optional navigation operational capture to one exact turn"
+    },
+    {
+      "sha": "61b1300ce1a17c8475eff43282727306c9bd124c",
+      "subject": "test: keep navigation diagnostic boundary cases portable in shared owner"
+    },
+    {
+      "sha": "737c4d578f69659a6881afe8ff06e3379cbc713c",
+      "subject": "debug: bind optional capture to the next fresh owner chat turn"
     }
   ],
   "pullRequests": [
