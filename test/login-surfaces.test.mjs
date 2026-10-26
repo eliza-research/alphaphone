@@ -190,11 +190,11 @@ test('Google sign-in and Google account authorization leave Alpha for the user\'
   // Exact production hosts (eliza.app, cloud.eliza.app, accounts.google.com); staging only with test mocks.
   assert.match(open, /if \(!ConnectionRoutes\.externalHost\(url\.getScheme\(\), url\.getHost\(\), url\.getPort\(\), BuildConfig\.ELIZA_DEV_ALLOW_TEST_MOCKS\)\) throw new IllegalArgumentException\(\);/);
   const routes = read('android/app/src/main/java/ai/elizaresearch/alphaphone/ConnectionRoutes.java');
-  assert.match(routes, /if\("eliza\.app"\.equals\(value\)\|\|"cloud\.eliza\.app"\.equals\(value\)\|\|"accounts\.google\.com"\.equals\(value\)\)return true;/);
+  assert.match(routes, /if\(CloudDeployment\.PRODUCTION_WEB_HOST\.equals\(value\)\|\|CloudDeployment\.PRODUCTION_SERVICES_HOST\.equals\(value\)\|\|"accounts\.google\.com"\.equals\(value\)\)return true;/);
   assert.doesNotMatch(open, /setPackage\(getContext\(\)\.getPackageName\(\)\)|AlphaBrowserPlugin/, 'never opened in Alpha\'s own browser');
   // Alpha registers no general web handler, so a sign-in page cannot resolve back into Alpha. The one
   // exception is the verified in-app sign-in return: exactly one https host and one exact path.
-  const callback = /^<intent-filter android:autoVerify="true"><action android:name="android\.intent\.action\.VIEW"\/><category android:name="android\.intent\.category\.DEFAULT"\/><category android:name="android\.intent\.category\.BROWSABLE"\/><data android:scheme="https" android:host="(eliza\.app|staging\.eliza\.app)" android:path="\/alphaphone\/auth\/callback"\/><\/intent-filter>$/;
+  const callback = /^<intent-filter android:autoVerify="true"><action android:name="android\.intent\.action\.VIEW"\/><category android:name="android\.intent\.category\.DEFAULT"\/><category android:name="android\.intent\.category\.BROWSABLE"\/><data android:scheme="https" android:host="(eliza\.app|\$\{stagingCloudWebHost\})" android:path="\/alphaphone\/auth\/callback"\/><\/intent-filter>$/;
   const returns = [];
   for (const manifest of walk('android', file => file.endsWith('AndroidManifest.xml') && !/[\\/](test|androidTest|build)[\\/]/.test(file))) {
     const live = read(manifest).replace(/<!--[\s\S]*?-->/g, '');
@@ -205,7 +205,7 @@ test('Google sign-in and Google account authorization leave Alpha for the user\'
       returns.push(`${manifest.split(path.sep).join('/')}:${match[1]}`);
     }
   }
-  assert.deepEqual(returns.sort(), ['android/app/src/testMocks/AndroidManifest.xml:staging.eliza.app'], 'the production return comes only from the ELIZAOS_APP_LINK_HOST overlay (android/app/build.gradle); the staging return exists only in the test-mocks overlay');
+  assert.deepEqual(returns.sort(), ['android/app/src/testMocks/AndroidManifest.xml:${stagingCloudWebHost}'], 'the production return comes only from the ELIZAOS_APP_LINK_HOST overlay (android/app/build.gradle); the staging return exists only in the test-mocks overlay');
   assert.match(read('android/app/build.gradle'), /android:host="\\\$\{appLinkHost\}" android:path="\/alphaphone\/auth\/callback"\/><\/intent-filter>/, 'the build-gated sign-in return is one exact path');
   const signIn = read('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaCloudSignInPlugin.java');
   assert.match(signIn, /CustomTabsIntent tab = new CustomTabsIntent\.Builder\(\)/, 'Google consent opens in a Custom Tab');

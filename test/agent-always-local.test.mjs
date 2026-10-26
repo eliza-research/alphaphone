@@ -5,6 +5,7 @@
 // or device run. The browser specs in test/browser/native-cloud-subscription.spec.ts exercise the
 // composed flow with synthetic ports.
 import test from 'node:test';
+import {stripTypeScriptTypes} from 'node:module';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DENYLIST, RETIRED_NO_AGENT_TEXT, RETIRED_REMOTE_AGENT_TEXT} from '../scripts/audit-production-bundle.mjs';
@@ -124,8 +125,12 @@ test('a chat turn without Cloud inference gets an honest answer with the plan ac
   const failure = between(ui, 'function replyFailure(', '\n}\n');
   assert.match(failure, /if\(kind==='no_provider'&&selected\.kind==='resident'&&residentCloudFlow\(\)\)\{[\s\S]*inferenceUnavailableReply\(notice,signedIn\)[\s\S]*planAction:/);
   const reply = between(ui, 'export function inferenceUnavailableReply(', '\n}\n');
-  for (const text of ['Check your Eliza Cloud account in Settings', "can't reach Eliza Cloud", 'Sign in with Eliza Cloud', 'Local apps keep working'])
-    assert.ok(reply.includes(text), text);
+  const renderReply = new Function('cloudServiceName', 'cloud',
+    reply.replace(/^export /, '').replace(/notice: ConnectionSnapshot\['residentPlanNotice'\], signedIn: boolean\): string/, 'notice, signedIn)')
+      + '\n}; return inferenceUnavailableReply;')(() => 'Nebula', {environment:'production'});
+  const replies = [renderReply('offline', true), renderReply(null, false), renderReply(null, true)].join('\n');
+  for (const text of ['Check your Nebula account in Settings', "can't reach Nebula", 'Sign in with Nebula', 'Local apps keep working'])
+    assert.ok(replies.includes(text), text);
   assert.doesNotMatch(reply, /no agent|without AI|credit|top.?up|upgrade|needs? (?:an? )?Eliza Cloud (?:account with a )?plan|on-device speech|Nothing was sent to Cloud/i);
   // Workflow text generation fails honestly instead of using the plan answer as generated text.
   const client = read('apps/app/src/runtime/alpha-client.ts');
@@ -133,13 +138,23 @@ test('a chat turn without Cloud inference gets an honest answer with the plan ac
   const adapter = read('apps/app/src/prototype/agent-adapter.ts');
   assert.match(adapter, /if\(card\.planAction\)\{\n\s+if\(card\.planAction==='plan'\)connectionController\.openPlan\(\);/);
   assert.doesNotMatch(adapter, /title:'Set up AI'|connectionSetup/);
+  const cards=adapter.slice(adapter.indexOf('function selectedCloudName('),adapter.indexOf('/** Context notices for proposals'));
+  const renderCard=new Function('cloudServiceName','connectionController',stripTypeScriptTypes(cards,{mode:'transform'})+';return planActionCard;')(
+    environment=>environment==='staging'?'Nebula':'Other service',
+    {getCloudEnvironment:()=>null,getSnapshot:()=>({signIn:{environment:'staging'}})});
+  assert.equal(renderCard('sign-in').title,'Sign in with Nebula');
+  assert.equal(renderCard('retry').title,'Check Nebula again');
+  assert.equal(renderCard('plan').planAction,'plan');
+  assert.ok(renderCard('plan').sub.includes('Nebula account & plan'));
+  assert.equal(renderCard('unknown'),undefined);
+
   assert.match(adapter, /const planCard=planActionCard\(\(e as \{planAction\?:unknown\}\)\.planAction\);/);
 });
 
 test('the plan surface is a notice beside the running agent, not a gate', () => {
   const chooser = ui.slice(ui.indexOf('export function ConnectionChooser'));
   assert.match(chooser, /if \(!visible\) \{\n\s+\/\/ Never a gate: the agent is running\./);
-  assert.ok(chooser.includes('<aside className="alpha-plan-notice" role="region" aria-label="Eliza Cloud plan notice">'));
+  assert.ok(chooser.includes('<aside className="alpha-plan-notice" role="region" aria-label={`${serviceName} plan notice`}>'));
   // Admission without a plan opens nothing; only a required sign-in opens (and locks) the dialog.
   assert.ok(between(ui, 'async function admitCloudResident(', 'function residentPlanEnded(').includes("update({residentSubscription:view,residentPlanNotice:'needs-plan',planEndsAt:null});\n    return {binding:'unbound',account};"));
   assert.ok(chooser.includes("const residentMustSignIn=residentCloudFlow()&&!snapshot.cloudAccount&&snapshot.residentPlanNotice!=='offline'&&!snapshot.residentStarting;"));

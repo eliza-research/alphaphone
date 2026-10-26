@@ -81,8 +81,8 @@ public final class ConnectionRoutesTest {
   for(String host:new String[]{"staging.eliza.app","cloud-staging.eliza.app","www.eliza.app","api.eliza.app","evil.eliza.app",agent+".cloud.eliza.app","a.b.eliza.app",
    "eliza.app.","cloud.eliza.app.","eliza.app.evil.example","evil-eliza.app","xeliza.app","accounts.google.com.evil.example","mail.google.com","google.com","example.com","",null})
    check(!ConnectionRoutes.externalHost("https",host,-1,false),"flag-off refuses to open "+host);
-  for(String host:new String[]{"staging.eliza.app","cloud-staging.eliza.app","www.eliza.app",agent+".cloud.eliza.app"})check(ConnectionRoutes.externalHost("https",host,-1,true),"test mocks open "+host);
-  for(String host:new String[]{".eliza.app","eliza.app.evil.example","evil-eliza.app","a..eliza.app","eliza.app.","evil.example",null})check(!ConnectionRoutes.externalHost("https",host,-1,true),"test mocks still refuse "+host);
+  for(String host:new String[]{"staging.eliza.app","cloud-staging.eliza.app"})check(ConnectionRoutes.externalHost("https",host,-1,true),"test mocks open "+host);
+  for(String host:new String[]{"www.eliza.app",agent+".cloud.eliza.app",".eliza.app","eliza.app.evil.example","evil-eliza.app","a..eliza.app","eliza.app.","evil.example",null})check(!ConnectionRoutes.externalHost("https",host,-1,true),"test mocks still refuse "+host);
   check(!ConnectionRoutes.externalHost("http","eliza.app",-1,true),"openExternal is HTTPS only");
   check(!ConnectionRoutes.externalHost("https","eliza.app",8443,true),"openExternal uses the default port only");
   check(!ConnectionRoutes.externalHost(null,"eliza.app",-1,false),"openExternal needs a scheme");

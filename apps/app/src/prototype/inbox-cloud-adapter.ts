@@ -20,7 +20,7 @@ import { inboxDrafts, type ComposePrefill, type SuggestionTarget } from './inbox
 import { attachmentReadFailure, classifyGmailFailure, gmailReadable, setGmailReadState, GMAIL_ACCOUNTS_CHANGED, type GmailFailureKind } from '../runtime/gmail-mailbox';
 import { connectionController, agentPendingText } from '../runtime/connection-ui';
 import { gmailGrantChange, gmailInboxAllows, gmailModifyIncomplete, gmailReadCacheKey } from '../runtime/gmail-grants';
-import { safeMailLink, type GmailAccount, type GmailDraftContent, type GmailDraftSummary, type GmailLink, type GmailMessage } from '../runtime/cloud-protocol';
+import { cloudServiceName, safeMailLink, type GmailAccount, type GmailDraftContent, type GmailDraftSummary, type GmailLink, type GmailMessage } from '../runtime/cloud-protocol';
 import { reviewOpaqueAttachment } from '../runtime/inbox-operation';
 import {googleConnectionController} from '../runtime/google-connection-ui';
 import {GOOGLE_ACCOUNTS_CHANGED} from '../runtime/google-accounts';
@@ -194,7 +194,8 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
 
   const bodyKey=(id:string)=>{const binding=connectionController.getCloudClient();return JSON.stringify([binding?.sessionId,binding?.credentialId,selected,id]);};
   function rememberBody(value:MailBody){if(value.loading)return;const key=bodyKey(value.message.id);messageBodies.delete(key);messageBodies.set(key,{at:Date.now(),body:value});let bytes=0;for(const row of messageBodies.values())bytes+=new TextEncoder().encode(JSON.stringify(row.body)).length;while(messageBodies.size>16||bytes>4*1024*1024){const first=messageBodies.keys().next().value!;bytes-=new TextEncoder().encode(JSON.stringify(messageBodies.get(first)!.body)).length;messageBodies.delete(first);}persistMailbox();}
-  let status = 'Connect Eliza Cloud to use Gmail', phase = 'idle', revision = '';
+  const serviceName=()=>cloudServiceName(connectionController.getCloudClient()?.client.environment??connectionController.getSnapshot().cloudAccount?.environment??connectionController.getSnapshot().signIn?.environment??'production');
+  let status = `Connect ${serviceName()} to use Gmail`, phase = 'idle', revision = '';
   let agentSession = connectionController.getSnapshot().session?.sessionId;
   let operation: AbortController | null = null, generation = 0, sessionId: string | undefined;
   const readAhead = new GmailReadAhead<Awaited<ReturnType<NonNullable<ReturnType<typeof connectionController.getCloudClient>>['client']['gmailSearch']>>>();
@@ -322,7 +323,7 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
     thread=null; accounts = []; accountsChecked = false;accountsSession=''; messages = []; selected = ''; loadedQuery = ''; nextPageToken = null; body = null; phase = 'idle'; revision = '';
     hasUnread = false; inboxPreview=null;homePreview=null;homeRestoreAttempt='';homeFailure=null; failure = null; pendingCompose = null; resumeDraftFor = '';
     readStateInFlight.clear(); readStateUnconfirmed.clear(); seenCursors = new Set();
-    status = 'Connect Eliza Cloud to use Gmail';
+    status = `Connect ${serviceName()} to use Gmail`;
     publish({ mails: [], sent: [], open: null, compose: null, nativeMailSelection: null });
   }
   /** One provider read at a time. `retry` is offered after a classified failure; `keep` leaves the
@@ -337,7 +338,7 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
     try { await task(binding, controller.signal, valid); }
     catch (error) {
       if (valid() && connectionController.rejectCloudSession(binding.sessionId, error)) {
-        purgeOffline();status = 'Eliza Cloud sign-in expired. Connect Eliza Cloud to continue.'; publish(); return;
+        purgeOffline();status = `${serviceName()} sign-in expired. Connect ${serviceName()} to continue.`; publish(); return;
       }
       if (valid()) {
         readAhead.invalidate();
@@ -762,7 +763,7 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
       // Stays after the notice has passed, until the list is loaded again from its first page.
       ...(selected && newerMail && messages.length && loadedQuery === currentQuery() ? [chip('Load newer mail', () => void load())] : []),
       ...((readable().length > 1) ? readable().map(a => chip(a.label, () => selectAccount(a), a.connectionId === selected)) : []),
-    ] : [chip('Connect Eliza Cloud', () => connectionController.openCloudAccount())];
+    ] : [chip(`Connect ${serviceName()}`, () => connectionController.openCloudAccount())];
     const extraFolders = binding&&selected&&st.q==null?[
       {...chip('Starred',()=>setFolder('starred'),folder==='starred'),value:'starred'},
       {...chip('All mail',()=>setFolder('all'),folder==='all'),value:'all'},

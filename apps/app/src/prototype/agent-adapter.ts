@@ -1,3 +1,4 @@
+import {cloudServiceName} from '../runtime/cloud-protocol';
 import {CAMERA_CONTEXT_NOTICE} from '../runtime/device-actions';
 import {captureAgentPhoto} from './camera-adapter';
 import {isCameraCapture} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/camera-contract.ts';
@@ -82,11 +83,15 @@ async function transportSettled(attempt:SendAttempt){
   if(!attempt.settled)return;
   await Promise.race([attempt.settled,new Promise(resolve=>setTimeout(resolve,5000))]);
 }
+function selectedCloudName():string {
+  const snapshot=connectionController.getSnapshot();
+  return cloudServiceName(connectionController.getCloudEnvironment()??snapshot.cloudAccount?.environment??snapshot.signIn?.environment??'production');
+}
 /** The action offered with the on-device agent's answer while Eliza Cloud AI is not connected. */
 function planActionCard(action:unknown):Shell|undefined{
-  if(action==='plan')return {type:'generic',icon:'info',title:'Redeem code or choose a plan',sub:'Opens Eliza Cloud account & plan. Nothing is purchased automatically.',planAction:'plan'};
-  if(action==='sign-in')return {type:'generic',icon:'info',title:'Sign in with Eliza Cloud',sub:'Connects AI to your plan. Your agent keeps running on this phone.',planAction:'sign-in'};
-  if(action==='retry')return {type:'generic',icon:'info',title:'Check Eliza Cloud again',sub:'AI replies return when Cloud is reachable.',planAction:'retry'};
+  if(action==='plan')return {type:'generic',icon:'info',title:'Redeem code or choose a plan',sub:`Opens ${selectedCloudName()} account & plan. Nothing is purchased automatically.`,planAction:'plan'};
+  if(action==='sign-in')return {type:'generic',icon:'info',title:`Sign in with ${selectedCloudName()}`,sub:'Connects AI to your plan. Your agent keeps running on this phone.',planAction:'sign-in'};
+  if(action==='retry')return {type:'generic',icon:'info',title:`Check ${selectedCloudName()} again`,sub:'AI replies return when Cloud is reachable.',planAction:'retry'};
   return undefined;
 }
 /** Context notices for proposals that exist but are not reviewable on this screen. */
@@ -1024,7 +1029,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         const ic=out.ic||{};
         return {...m,cGeneric:false,cDigest:true,actionReviewClass:'alpha-action-review',rows:[
           {ini:'',who:c.title,text:c.sub,icon:ic.right,open:()=>void connectionController.residentManagePlan()},
-          {ini:'',who:'Use a membership code',text:'Opens the code form for your Eliza Cloud account.',icon:ic.right,open:()=>connectionController.openPlan()},
+          {ini:'',who:'Use a membership code',text:`Opens the code form for your ${selectedCloudName()} account.`,icon:ic.right,open:()=>connectionController.openPlan()},
         ]};
       }
       if(!c.proposalId||c.done||c.reviewUnavailable||!m.cGeneric)return m;
@@ -1255,7 +1260,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
           else this.setState((previous:Shell)=>({chat:previous.chat==='full'?'full':'sheet',msgs:[...(previous.msgs||[]),{id:crypto.randomUUID(),from:'agent',text:message,card:planCard??null,interrupted:true}]}));
           const limit=(e as {serviceLimit?:unknown}).serviceLimit;
           // A plan or billing refusal offers Cloud's plan page only; nothing is bought or upgraded here.
-          if((limit==='billing-refused'||limit==='subscription-required'||limit==='allowance-exhausted')&&connectionController.getSnapshot().kind==='resident')this.agentSay(limit==='subscription-required'?'Your Eliza Cloud plan needs attention before your agent can answer.':'Your Eliza Cloud billing needs attention before your agent can answer.',{type:'generic',icon:'info',title:limit==='subscription-required'?'Manage plan in Eliza Cloud':'Manage billing in Eliza Cloud',sub:'Opens Eliza Cloud billing in your browser. Nothing is sent or purchased.',managePlan:true,billingCodeEntry:limit==='billing-refused'});
+          if((limit==='billing-refused'||limit==='subscription-required'||limit==='allowance-exhausted')&&connectionController.getSnapshot().kind==='resident')this.agentSay(limit==='subscription-required'?`Your ${selectedCloudName()} plan needs attention before your agent can answer.`:`Your ${selectedCloudName()} billing needs attention before your agent can answer.`,{type:'generic',icon:'info',title:limit==='subscription-required'?`Manage plan in ${selectedCloudName()}`:`Manage billing in ${selectedCloudName()}`,sub:`Opens ${selectedCloudName()} billing in your browser. Nothing is sent or purchased.`,managePlan:true,billingCodeEntry:limit==='billing-refused'});
         }
         else if(this.live&&reconciling){if(streamed)this.setState((previous:Shell)=>({msgs:previous.msgs.map((item:Shell)=>item.id===streamedId?{...item,streaming:false,interrupted:true,text:`${item.text}\n\nStopped.`}:item)}));}
         else if (this.live) {

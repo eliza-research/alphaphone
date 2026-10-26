@@ -100,7 +100,7 @@ export async function disconnectGmailAccount(client: DisconnectClient, connectio
   }
 }
 export function disconnectMessage(outcome: GmailDisconnectOutcome, label: string): string {
-  if (outcome === 'disconnected') return `${label} is disconnected. Eliza Cloud no longer holds its Gmail access. No mail was deleted; local drafts stay on this phone until you discard them. Google may still list the app in your Google Account permissions.`;
+  if (outcome === 'disconnected') return `${label} is disconnected. Cloud no longer holds its Gmail access. No mail was deleted; local drafts stay on this phone until you discard them. Google may still list the app in your Google Account permissions.`;
   if (outcome === 'still-connected') return `Disconnect was requested, but Gmail still reports ${label} as connected. Check the connection again.`;
   return `Disconnect of ${label} was not confirmed. Check the connection to see its current state before trying again.`;
 }

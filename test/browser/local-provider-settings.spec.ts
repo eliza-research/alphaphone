@@ -90,7 +90,7 @@ test('the chooser names the Eliza Cloud model as Settings does', async ({ page }
   const chooser = page.locator('.alpha-connection');
   await expect(chooser).toBeVisible();
   await chooser.getByText('Model provider', { exact: true }).click();
-  await expect(chooser.getByText('Configured · Eliza Cloud · qwen-3.8-27b (Cerebras)', { exact: true })).toBeVisible();
+  await expect(chooser.getByText('Configured · Cloud · qwen-3.8-27b (Cerebras)', { exact: true })).toBeVisible();
 });
 
 for(const cloud of [false,true])test(`native Models shows on-device voice and actual provider admission: ${cloud?'configured':'unconfigured'}`,async({page})=>{

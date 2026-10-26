@@ -47,8 +47,8 @@ final class CloudSignInFlow {
 
  /** Fixed authorities. Staging exists only in ELIZA_DEV_ALLOW_TEST_MOCKS=1 builds. */
  enum Environment {
-  PRODUCTION("production", "api.eliza.app", "eliza.app", "elizacloud"),
-  STAGING("staging", "api-staging.eliza.app", "staging.eliza.app", "elizacloud-staging");
+  PRODUCTION("production", CloudDeployment.PRODUCTION_API_HOST, CloudDeployment.PRODUCTION_WEB_HOST, CloudDeployment.PRODUCTION_TENANT),
+  STAGING("staging", CloudDeployment.STAGING_API_HOST, CloudDeployment.STAGING_WEB_HOST, CloudDeployment.STAGING_TENANT);
   final String name, apiHost, callbackHost, tenant;
   /** Steward tenant: staging Cloud only accepts tokens from its own tenant. */
   Environment(String name, String apiHost, String callbackHost, String tenant) { this.name = name; this.apiHost = apiHost; this.callbackHost = callbackHost; this.tenant = tenant; }

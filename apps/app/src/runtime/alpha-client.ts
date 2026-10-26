@@ -350,7 +350,7 @@ export class AlphaClient {
       const reply=await transport.send({requestId:crypto.randomUUID(),text,context,signal});
       if(signal.aborted)throw new AlphaClientError('cancelled','Request cancelled.');
       // Without Eliza Cloud inference there is no generated text: the step fails with the honest reason.
-      if(reply&&(reply as AgentReply).planAction)throw new AlphaClientError('unconfigured',typeof reply.text==='string'&&reply.text.length<=1000?reply.text:'AI replies aren’t available right now. Check your Eliza Cloud account in Settings.');
+      if(reply&&(reply as AgentReply).planAction)throw new AlphaClientError('unconfigured',typeof reply.text==='string'&&reply.text.length<=1000?reply.text:'AI replies aren’t available right now. Check your Cloud account in Settings.');
       if(!reply||typeof reply.text!=='string'||!reply.text.trim()||reply.text.length>16000||(reply.proposals!==undefined&&(!Array.isArray(reply.proposals)||reply.proposals.length>0)))throw new AlphaClientError('invalid-response','The workflow needs a text result without action proposals, up to 16000 characters.');
       return reply.text;
     },signal,automatic);

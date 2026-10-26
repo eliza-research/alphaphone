@@ -53,3 +53,28 @@ test('Android cloud cleanup retains the native credential restriction instead of
  });
  expect(result.conditional).toBe('undefined');expect(result.supported).toBe(true);expect(result.calls).toEqual([{method:'secureRemove',slot:'cloud:production'}]);expect(result.credential).toBeNull();
 });
+
+test('deployment-scoped Cloud secrets survive reload without adopting or deleting another deployment',async({page})=>{
+ await page.goto('/?mode=offline');
+ await page.evaluate(async()=>{
+  const {indexedDbSecretBackend,createBrowserConnection}=await import('/src/runtime/native-connection.ts');
+  const {cloudStorageSlot}=await import('/src/runtime/cloud-deployment.generated.ts');
+  const raw=indexedDbSecretBackend();
+  await raw.compareExchange('cloud:production',undefined,'legacy-synthetic-secret');
+  await raw.compareExchange('cloud-deployment:other:cloud:production',undefined,'other-synthetic-secret');
+  const port=createBrowserConnection();
+  if((await port.secureRead({slot:'cloud:production'})).value!==null)throw Error('Adopted an unrelated credential');
+  await port.secureWrite({slot:'cloud:production',value:'current-synthetic-secret'});
+  if(await raw.read(cloudStorageSlot('cloud:production'))!=='current-synthetic-secret')throw Error('Credential was not scoped');
+ });
+ await page.reload();
+ const result=await page.evaluate(async()=>{
+  const {indexedDbSecretBackend,createBrowserConnection}=await import('/src/runtime/native-connection.ts');
+  const {cloudStorageSlot}=await import('/src/runtime/cloud-deployment.generated.ts');
+  const raw=indexedDbSecretBackend(),port=createBrowserConnection();
+  const resumed=(await port.secureRead({slot:'cloud:production'})).value;
+  await port.secureRemove({slot:'cloud:production'});
+  return {resumed,current:await raw.read(cloudStorageSlot('cloud:production')),legacy:await raw.read('cloud:production'),other:await raw.read('cloud-deployment:other:cloud:production')};
+ });
+ expect(result).toEqual({resumed:'current-synthetic-secret',current:null,legacy:'legacy-synthetic-secret',other:'other-synthetic-secret'});
+});

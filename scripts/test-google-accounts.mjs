@@ -81,8 +81,8 @@ test('abort and an empty connection ID cannot start a disconnect',async()=>{
   assert.deepEqual(f.calls,[]);
 });
 test('disconnect copy identifies the whole integration and explicitly preserves personal data',()=>{
-  const prompt=googleDisconnectConfirmation(account.label),done=googleDisconnectMessage('disconnected',account.label);
-  for(const copy of [prompt,done]){assert.match(copy,/Gmail/);assert.match(copy,/Calendar/);assert.match(copy,/Google account, mail and (?:calendar )?events (?:are|were) not deleted/);}
+  const prompt=googleDisconnectConfirmation(account.label,'Nebula'),done=googleDisconnectMessage('disconnected',account.label,'Nebula');
+  for(const copy of [prompt,done]){assert.match(copy,/Nebula/);assert.doesNotMatch(copy,/Eliza/);assert.match(copy,/Gmail/);assert.match(copy,/Calendar/);assert.match(copy,/Google account, mail and (?:calendar )?events (?:are|were) not deleted/);}
   assert.match(done,/Google may still list the app/);
   assert.match(googleDisconnectMessage('still-connected',account.label),/still reports/);
   assert.match(googleDisconnectMessage('unconfirmed',account.label),/not confirmed/);

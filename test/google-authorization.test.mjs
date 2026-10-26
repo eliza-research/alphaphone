@@ -1,6 +1,5 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {stripTypeScriptTypes} from 'node:module';
-const source=stripTypeScriptTypes(readFileSync('apps/app/src/runtime/google-authorization.ts','utf8'),{mode:'transform'});
-const {googleAuthorizationUrlAllowed:allowed}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+import test from 'node:test';import assert from 'node:assert/strict';
+const {googleAuthorizationUrlAllowed:allowed}=await import('../apps/app/src/runtime/google-authorization.ts');
 const params={client_id:'synthetic.apps.googleusercontent.com',response_type:'code',state:'owned-synthetic',redirect_uri:'https://api.eliza.app/api/v1/oauth/google/callback',scope:'openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly'};
 const url=(patch={})=>'https://accounts.google.com/o/oauth2/v2/auth?'+new URLSearchParams({...params,...patch});
 test('only managed Google consent opens in the browser',()=>{assert.equal(allowed(url()),true);assert.equal(allowed(url({redirect_uri:'https://api-staging.eliza.app/api/v1/oauth/google/callback'})),true);});
