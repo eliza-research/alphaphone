@@ -346,7 +346,7 @@ test("signing refuses unsafe keys, mismatched digests, changed inputs and unset 
   await refuse(({ options }) => { fs.mkdirSync(options.out); fs.chmodSync(options.out, 0o700); }, /already exists/);
   await refuse(({ repo }) => { repo.write(CHANNEL, { ...read(CHANNEL), avbPublicKeySha256: "UNSET" }); }, /avbPublicKeySha256 is unset/);
   await refuse(({ repo }) => { repo.write(CHANNEL, { ...JSON.parse(fs.readFileSync(path.join(repo.dir, CHANNEL), "utf8")), downgradeAllowed: true }); }, /downgradeAllowed must be false/);
-  await refuse(({ repo }) => { repo.write("android/release-signer.json", read("android/release-signer.json")); }, /signerSha256 is "unset"/);
+  await refuse(({ repo }) => { repo.write("android/release-signer.json", { ...read("android/release-signer.json"), signerSha256: "unset" }); }, /signerSha256 is "unset"/);
   // Keys inside a Git working tree (for example this repository) are refused.
   await refuse(({ options, key }) => {
     const inside = fs.mkdtempSync(path.join(options.root, "keys-"));
@@ -378,7 +378,9 @@ test("release blockers judge a recorded release against the current signer and t
   const signer = signerSha256 => ({ schema: 1, signerSha256, lastRelease: { versionCode: null, versionName: null, recordedAt: null } });
   assert.deepEqual(releaseBlockers(row), [], "the recorded admission alone");
   assert.ok(releaseBlockers(row, { releaseSigner: signer("unset") }).includes("release signer is unset in android/release-signer.json"));
-  assert.ok(releaseBlockers(row, { releaseSigner: read("android/release-signer.json") }).some(item => /release signer is unset/.test(item)), "the committed signer is unset");
+  const committed = read("android/release-signer.json");
+  if (committed.signerSha256 === "unset") assert.ok(releaseBlockers(row, { releaseSigner: committed }).some(item => /release signer is unset/.test(item)), "the committed signer is unset");
+  else assert.ok(!releaseBlockers(row, { releaseSigner: committed }).some(item => /release signer is unset/.test(item)), "the committed signer is pinned");
   assert.ok(releaseBlockers(row, { releaseSigner: signer("e".repeat(64)) }).some(item => /does not match android\/release-signer\.json/.test(item)));
   assert.deepEqual(releaseBlockers(row, { releaseSigner: signer("d".repeat(64)) }), []);
   assert.deepEqual(releaseBlockers(row, { releaseSigner: signer("d".repeat(64)), image: { platformCertificateSha256: "c".repeat(64) } }), []);

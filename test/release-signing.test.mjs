@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { X509Certificate } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -27,9 +28,12 @@ test("a partial ELIZAOS_ signing set is refused by name, never by value", () => 
   assert.doesNotMatch(gradle, /producing unsigned release APKs/);
 });
 
-test("the committed descriptor is valid and starts unset", () => {
+test("the committed descriptor is unset or pins the committed public APK certificate (P-57)", () => {
   const committed = readReleaseSigner();
-  assert.equal(committed.signerSha256, "unset");
+  if (committed.signerSha256 !== "unset") {
+    const pem = fs.readFileSync("android/release-keys/apk.x509.pem");
+    assert.equal(committed.signerSha256, new X509Certificate(pem).fingerprint256.replaceAll(":", "").toLowerCase());
+  }
   assert.throws(() => validateReleaseSigner({ ...descriptor(), signerSha256: "ABC" }), /signerSha256/);
   assert.throws(() => validateReleaseSigner({ ...descriptor(), lastRelease: { versionCode: 0 } }), /versionCode/);
   assert.throws(() => validateReleaseSigner({ ...descriptor(), schema: 2 }), /schema/);

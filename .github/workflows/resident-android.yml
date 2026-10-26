@@ -10,6 +10,11 @@ on:
         options:
           - native
           - cloud
+      sign_release:
+        description: Sign the release APKs with the Alpha release key (release environment; owner approval required)
+        type: boolean
+        required: false
+        default: false
   # Optional automatic PACKAGED qualification. Both triggers are inert unless the
   # repository variable ELIZA_RESIDENT_QUALIFICATION is "push" (every main commit)
   # or "nightly" (once a day, default branch only). See docs/ci-cost-policy.md.
@@ -45,10 +50,27 @@ jobs:
       manifest_sha256: ${{ steps.freeze.outputs.sha256 }}
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+    # P-57: only a dispatched, owner-approved run enters the release environment and its keys.
+    environment: ${{ (github.event_name == 'workflow_dispatch' && inputs.sign_release) && 'release' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: true
+      - name: Materialize release keystore
+        if: github.event_name == 'workflow_dispatch' && inputs.sign_release
+        env:
+          ELIZAOS_KEYSTORE_BASE64: ${{ secrets.ELIZAOS_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.ELIZAOS_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.ELIZAOS_KEY_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.ELIZAOS_KEY_ALIAS }}
+        run: |
+          test -n "$ELIZAOS_KEYSTORE_BASE64" || { echo "release environment has no ELIZAOS_KEYSTORE_BASE64" >&2; exit 1; }
+          umask 077
+          printf '%s' "$ELIZAOS_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/alpha-release.p12"
+          echo "ELIZAOS_KEYSTORE_PATH=$RUNNER_TEMP/alpha-release.p12" >> "$GITHUB_ENV"
+          echo "ELIZAOS_KEYSTORE_PASSWORD=$RELEASE_STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ELIZAOS_KEY_PASSWORD=$RELEASE_KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "ELIZAOS_KEY_ALIAS=$RELEASE_KEY_ALIAS" >> "$GITHUB_ENV"
       # Install the selected toolchain before capacity provisioning authenticates it.
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
@@ -225,6 +247,16 @@ jobs:
           name: ${{ env.ALPHA_RUNTIME_PROFILE == 'cloud' && 'resident-cloud-archive' || 'resident-archive' }}-${{ github.sha }}-${{ github.run_id }}
           path: ${{ env.ALPHA_RUNTIME_PROFILE == 'cloud' && 'test-results/resident-ci-cloud/' || 'test-results/resident-ci-archive/' }}
           retention-days: 3
+          if-no-files-found: error
+      - name: Remove release keystore
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.sign_release
+        run: rm -f "$RUNNER_TEMP/alpha-release.p12"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.event_name == 'workflow_dispatch' && inputs.sign_release
+        with:
+          name: alpha-signed-release-${{ github.sha }}-${{ github.run_id }}
+          path: ${{ env.ALPHA_RUNTIME_PROFILE == 'cloud' && 'test-results/resident-ci-cloud/' || 'test-results/resident-ci-distribution/' }}
+          retention-days: 30
           if-no-files-found: error
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
