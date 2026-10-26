@@ -53,7 +53,7 @@ import org.json.JSONTokener;
  *
  * Readiness: status() reports `inApp` only after CloudSignInReadiness confirms Cloud is ready for this
  * phone (cached); until then the renderer keeps the Cloud sign-in hand-off. Returns follow the shared
- * callback contract (CloudSignInFlow.parseCallback). Nothing here logs URLs, codes, headers or bodies.
+ * callback contract (CloudSignInFlow.parseCallback). Native Google logs only bounded stage/status/reason/timing; never URLs, credentials, headers or bodies.
  */
 @CapacitorPlugin(name = "AlphaCloudSignIn")
 public final class AlphaCloudSignInPlugin extends Plugin {
@@ -73,6 +73,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
  /** The one sign-in in progress. One at a time (the renderer's `login-active` rule). */
  private static final class Attempt {
   final String id = UUID.randomUUID().toString();
+  final long startedAt = System.currentTimeMillis();
   final CloudSignInFlow.Environment environment;
   final boolean google;
   volatile boolean cancelled, browserLaunched, browserPaused, callbackReceived;
@@ -295,7 +296,8 @@ public final class AlphaCloudSignInPlugin extends Plugin {
     Response challenge = post(next, "/steward/auth/oauth/google/native/challenge", new JSONObject()
       .put("tenantId", environment.tenant).put("clientId", "alpha-phone")
       .put("codeChallenge", CloudSignInFlow.s256(next.googleVerifier)).put("codeChallengeMethod", "S256"), null);
-    if (challenge.status != 200) throw new SignInFailure(CloudSignInFlow.failureForStatus("exchange", challenge.status));
+    CloudSignInFlow.GoogleFailure challengeOutcome = observeGoogleResponse(next, CloudSignInFlow.GoogleStage.CHALLENGE, challenge);
+    if (challenge.status != 200) throw new SignInFailure(challengeOutcome.code);
     JSONObject data = challenge.data;
     String challengeId = data.optString("challengeId", ""), nonce = data.optString("nonce", ""), clientId = data.optString("serverClientId", "");
     long expiresAt = instant(data.opt("expiresAt")), now = System.currentTimeMillis();
@@ -314,12 +316,17 @@ public final class AlphaCloudSignInPlugin extends Plugin {
        run(() -> {
         try {
          synchronized (lock) { if (attempt != next || next.cancelled) throw new SignInFailure("cancelled"); }
-         if (System.currentTimeMillis() >= next.expiresAt) throw new SignInFailure("expired");
+         if (System.currentTimeMillis() >= next.expiresAt) {
+          CloudSignInFlow.GoogleFailure expired = CloudSignInFlow.googleFailure(CloudSignInFlow.GoogleStage.LOCAL_DEADLINE, 0, null, null);
+          logGoogleOutcome(next, CloudSignInFlow.GoogleStage.LOCAL_DEADLINE, 0, expired);
+          throw new SignInFailure(expired.code);
+         }
          Response verified = post(next, "/steward/auth/oauth/google/native/verify", new JSONObject()
            .put("tenantId", environment.tenant).put("clientId", "alpha-phone")
            .put("challengeId", next.googleChallengeId).put("idToken", idToken).put("codeVerifier", next.googleVerifier), null);
          next.googleVerifier = null; next.googleChallengeId = null; next.googleCancellation = null;
-         if (verified.status != 200) throw new SignInFailure(CloudSignInFlow.failureForStatus("exchange", verified.status));
+         CloudSignInFlow.GoogleFailure verifyOutcome = observeGoogleResponse(next, CloudSignInFlow.GoogleStage.VERIFY, verified);
+         if (verified.status != 200) throw new SignInFailure(verifyOutcome.code);
          JSONObject session = verified.data.optJSONObject("data") != null && !verified.data.has("token") ? verified.data.optJSONObject("data") : verified.data;
          completeOrRequireMfa(next, session);
         } catch (SignInFailure failure) { end(next, failure.code, false); }
@@ -331,6 +338,15 @@ public final class AlphaCloudSignInPlugin extends Plugin {
    } catch (SignInFailure failure) { end(next, failure.code, false); }
    catch (Exception unavailable) { end(next, "unavailable", false); }
   });
+ }
+ /** Observe only the already received native Google response; never persist provider text. */
+ private CloudSignInFlow.GoogleFailure observeGoogleResponse(Attempt current, CloudSignInFlow.GoogleStage stage, Response response) {
+  CloudSignInFlow.GoogleFailure outcome = CloudSignInFlow.googleFailure(stage, response.status, response.data.opt("ok"), response.data.opt("error"));
+  logGoogleOutcome(current, stage, response.status, outcome);
+  return outcome;
+ }
+ private void logGoogleOutcome(Attempt current, CloudSignInFlow.GoogleStage stage, int status, CloudSignInFlow.GoogleFailure outcome) {
+  android.util.Log.i("AlphaCloudSignIn", CloudSignInFlow.googleDiagnostic(stage, status, outcome, current.startedAt, current.expiresAt, System.currentTimeMillis()));
  }
  /**
   * Strict App Link capture under the shared callback contract. Only this environment's exact

@@ -194,6 +194,48 @@ final class CloudSignInFlow {
   if (status >= 500 || status == 408) return "unavailable";
   return "rejected";
  }
+ /** Native Google alone consumes these finite server response classifications.
+  * Unknown error text never crosses the UI/log boundary. Legacy exchange/email/MFA keep their mapper. */
+ enum GoogleStage { CHALLENGE, VERIFY, LOCAL_DEADLINE }
+ static final class GoogleFailure {
+  final String code, reason;
+  private GoogleFailure(String code, String reason) { this.code = code; this.reason = reason; }
+ }
+ static GoogleFailure googleFailure(GoogleStage stage, int status, Object ok, Object error) {
+  if (stage == null) throw new IllegalArgumentException("Google stage required");
+  if (stage == GoogleStage.LOCAL_DEADLINE) return new GoogleFailure("expired", "local-deadline");
+  if (status == 200) return new GoogleFailure(null, "response-received");
+  if (Boolean.FALSE.equals(ok) && error instanceof String) {
+   if (status == 400 && "A valid tenantId and clientId are required".equals(error)) return new GoogleFailure("invalid-request", "invalid-binding-input");
+   if (status == 400 && "tenantId does not match X-Steward-Tenant".equals(error)) return new GoogleFailure("state-mismatch", "tenant-binding-mismatch");
+   if (status == 404 && "App client not found or disabled".equals(error)) return new GoogleFailure("provider-refused", "client-unavailable");
+   if (status == 503 && "Native Google sign-in is not configured for this app".equals(error)) return new GoogleFailure("unavailable", "native-google-unconfigured");
+   if (status == 400 && stage == GoogleStage.CHALLENGE && "An S256 code challenge is required".equals(error)) return new GoogleFailure("invalid-request", "pkce-challenge-invalid");
+   if (status == 400 && stage == GoogleStage.VERIFY && "challengeId, idToken and codeVerifier are required".equals(error)) return new GoogleFailure("invalid-request", "verification-input-invalid");
+   if (status == 401 && stage == GoogleStage.VERIFY && "Sign-in challenge expired or was already used".equals(error)) return new GoogleFailure("expired", "challenge-unavailable");
+   if (status == 401 && stage == GoogleStage.VERIFY && "Sign-in challenge does not match this request".equals(error)) return new GoogleFailure("state-mismatch", "challenge-request-mismatch");
+   if (status == 401 && stage == GoogleStage.VERIFY && "Google identity could not be verified".equals(error)) return new GoogleFailure("provider-refused", "google-identity-unverified");
+   if (status == 401 && stage == GoogleStage.VERIFY && "Sign-in challenge was already used".equals(error)) return new GoogleFailure("expired", "challenge-consumed");
+   if (status == 401 && stage == GoogleStage.VERIFY && "Google identity token was already used or expired".equals(error)) return new GoogleFailure("provider-refused", "identity-proof-unavailable");
+   if (status == 429 && "Too many sign-in attempts. Try again later.".equals(error)) return new GoogleFailure("rate-limited", "rate-limited");
+  }
+  if (status == 410) return new GoogleFailure("expired", "http-expired");
+  if (status == 429) return new GoogleFailure("rate-limited", "http-rate-limited");
+  if (status == 403) return new GoogleFailure("account-check", "http-account-check");
+  if (status >= 500 || status == 408) return new GoogleFailure("unavailable", "http-unavailable");
+  return new GoogleFailure("rejected", "unclassified-provider-refusal");
+ }
+ /** Fixed fields only: no attempt ID, body, provider text, token or callback. */
+ static String googleDiagnostic(GoogleStage stage, int status, GoogleFailure failure, long startedAt, long expiresAt, long now) {
+  long elapsed = now >= startedAt && startedAt > 0 ? Math.min(86_400_000L, now - startedAt) : 0L;
+  long remaining = expiresAt > 0 ? Math.max(-86_400_000L, Math.min(86_400_000L, expiresAt - now)) : 0L;
+  // Derive reason again from fixed classification output, never accept caller text.
+  String reason = failure.reason;
+  return "stage=" + stage.name().toLowerCase(java.util.Locale.ROOT)
+   + " status=" + (status >= 100 && status <= 599 ? status : 0)
+   + " reason=" + reason + " elapsedMs=" + elapsed + " deadlineRemainingMs=" + remaining;
+ }
+
  /** Ack is retried only for a transport failure or a retryable server status. */
  static boolean ackRetryable(int status) { return status == -1 || status == 408 || status == 429 || status >= 500; }
  static long ackBackoffMs(int attempt) { return attempt <= 0 ? 0 : Math.min(4000L, 1000L << (attempt - 1)); }
