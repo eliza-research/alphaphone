@@ -540,7 +540,7 @@ let inAppGoogle = false;
  * package and signing certificate, and Android's verification of the return host. Fail-safe: no
  * host, an error, a slow or malformed answer, or `inApp` not exactly true keeps the hand-off.
  */
-async function inAppSignInMethods(environment: CloudEnvironment, signal: AbortSignal): Promise<{ google: boolean } | null> {
+async function inAppSignInMethods(environment: CloudEnvironment, signal: AbortSignal, refreshNegative = false): Promise<{ google: boolean } | null> {
   const port = cloudSignIn;
   if (!port?.status) return null;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -548,7 +548,7 @@ async function inAppSignInMethods(environment: CloudEnvironment, signal: AbortSi
   try {
     signal.throwIfAborted();
     const cancelled = new Promise<null>(resolve => { abort = () => resolve(null); signal.addEventListener('abort', abort, { once: true }); });
-    const value = await Promise.race([port.status({ environment }), cancelled, new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), SIGN_IN_READINESS_WAIT_MS); })]);
+    const value = await Promise.race([port.status({ environment, ...(refreshNegative ? { refreshNegative: true } : {}) }), cancelled, new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), SIGN_IN_READINESS_WAIT_MS); })]);
     return signInReadiness(value);
   } catch { return null; }
   finally { clearTimeout(timer); if (abort) signal.removeEventListener('abort', abort); }
@@ -2160,12 +2160,12 @@ export const connectionController = {
   async residentCloudLogin() { await connectionController.beginSignIn(residentEnvironment()); },
   /** Opens Alpha's own sign-in screen when ready. Nothing is sent until the owner chooses Google or
    * enters an email; no Eliza Cloud web page is opened. */
-  async beginSignIn(environment: CloudEnvironment = residentCloudFlow() ? residentEnvironment() : cloud.environment) {
+  async beginSignIn(environment: CloudEnvironment = residentCloudFlow() ? residentEnvironment() : cloud.environment, refreshNegative = false) {
     if (operation || !cloudEnvironmentAllowed(environment)) return;
     // Readiness may take six seconds on a fresh install. Keep that wait cancellable and prevent
     // repeated taps from starting competing probes or opening a browser after the owner cancelled.
     await work('Checking Eliza Cloud sign-in…', async signal => {
-      const methods = await inAppSignInMethods(environment, signal);
+      const methods = await inAppSignInMethods(environment, signal, refreshNegative);
       signal.throwIfAborted();
       if (!methods) {
         if (isAndroid) {
@@ -2808,7 +2808,7 @@ export function ConnectionChooser() {
     <CloudSignInPanel view={requiredSignInView} busy={snapshot.busy || !snapshot.signIn} google={inAppGoogle} message={snapshot.message} error={snapshot.error} errorIsNotice={snapshot.error===RESIDENT_UNPACKAGED}
       actions={{google:()=>void connectionController.signInGoogle(),email:address=>void connectionController.signInEmail(address),verify:code=>void connectionController.verifySignInCode(code),resend:()=>void connectionController.resendSignInCode(),cancel:()=>connectionController.cancelSignIn()}}
       extra={productionSignInRequired && !snapshot.signIn && !snapshot.busy
-        ? <button onClick={()=>void connectionController.beginSignIn(residentEnvironment())}>Retry sign-in</button>
+        ? <button onClick={()=>void connectionController.beginSignIn(residentEnvironment(),true)}>Retry sign-in</button>
         : browserCloudResidentEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Sign in with browser</button>:testMocksEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Browser sign-in (diagnostic)</button>:undefined}/>
     {productionSignInRequired && <ResidentRecoveryPanel snapshot={snapshot}/>}
   </div></div>;

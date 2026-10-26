@@ -112,7 +112,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   captureCallback(getActivity().getIntent());
   run(this::resumeAcknowledgements);
   // Warm the cached readiness answer so opening sign-in rarely waits for it.
-  probe(CloudSignInFlow.Environment.PRODUCTION, null);
+  probe(CloudSignInFlow.Environment.PRODUCTION, null, false);
  }
  @Override protected void handleOnNewIntent(Intent intent) { super.handleOnNewIntent(intent); captureCallback(intent); }
  @Override protected void handleOnPause() { synchronized (lock) { if (attempt != null && attempt.google && attempt.browserLaunched) attempt.browserPaused = true; } super.handleOnPause(); }
@@ -153,7 +153,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   final CloudSignInFlow.Environment environment;
   try { environment = CloudSignInFlow.environment(call.getString("environment", "production"), testMocks()); }
   catch (Exception invalid) { call.reject("Unsupported Cloud environment", "invalid-request"); return; }
-  probe(environment, call);
+  probe(environment, call, Boolean.TRUE.equals(call.getBoolean("refreshNegative", false)));
  }
  private JSObject statusOutcome(CloudSignInReadiness.Result result) {
   synchronized (lock) {
@@ -162,14 +162,15 @@ public final class AlphaCloudSignInPlugin extends Plugin {
    return out.put("inApp", result.inApp).put("email", result.inApp).put("google", result.google);
   }
  }
- /** Answers from the cache when fresh; otherwise one probe per environment runs and answers every waiting call. */
- private void probe(CloudSignInFlow.Environment environment, PluginCall call) {
+ /** Fresh positive readiness stays cached. An explicit Retry remeasures negative/partial
+  * readiness through the same full probe; concurrent callers still join one probe per environment. */
+ private void probe(CloudSignInFlow.Environment environment, PluginCall call, boolean refreshNegative) {
   long now = System.currentTimeMillis();
   CloudSignInReadiness.Result cached;
   synchronized (lock) {
    cached = readiness.get(environment);
    if (cached == null) { cached = storedReadiness(environment); if (cached != null) readiness.put(environment, cached); }
-   if (cached != null && cached.fresh(now)) { if (call != null) call.resolve(statusOutcome(cached)); return; }
+   if (cached != null && cached.fresh(now) && (!refreshNegative || cached.inApp && cached.google)) { if (call != null) call.resolve(statusOutcome(cached)); return; }
    List<PluginCall> waiting = probing.get(environment);
    if (waiting != null) { if (call != null) waiting.add(call); return; }
    waiting = new ArrayList<>(); if (call != null) waiting.add(call); probing.put(environment, waiting);

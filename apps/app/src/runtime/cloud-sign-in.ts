@@ -43,7 +43,7 @@ export interface CloudSignInPort {
   clearCredentialState?(): Promise<void>;
   /** Which methods this host offers and whether Cloud is ready for in-app sign-in on this phone
    * (`inApp`, from the host's cached readiness probe). Hosts without Google (the browser bridge) say so. */
-  status?(input?: { environment: CloudEnvironment }): Promise<unknown>;
+  status?(input?: { environment: CloudEnvironment; refreshNegative?: boolean }): Promise<unknown>;
   /** `signInCompleted`: a Google return that completed after Alpha restarted (no waiting call).
    * `signInIncomplete`: a return without a sign-in result arrived with no waiting call. */
   addListener?(event: 'signInCompleted' | 'signInIncomplete', listener: (outcome: unknown) => void): Promise<unknown>;
