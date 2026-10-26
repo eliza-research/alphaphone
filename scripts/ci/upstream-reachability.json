@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "c2a0ef993bcf790a920698a8b661511b81725891",
+  "head": "7481f0eac237341903c5c1fad9208879d442cf9d",
   "recordedAt": "2026-10-26",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...c2a0ef993bcf790a920698a8b661511b81725891",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...7481f0eac237341903c5c1fad9208879d442cf9d",
   "status": "diverged",
-  "aheadBy": 49,
+  "aheadBy": 50,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -202,6 +202,10 @@
     {
       "sha": "c2a0ef993bcf790a920698a8b661511b81725891",
       "subject": "debug(assistant): identify evaluator protocol rejection fields"
+    },
+    {
+      "sha": "7481f0eac237341903c5c1fad9208879d442cf9d",
+      "subject": "fix(runtime): preserve JSON types during secret substitution"
     }
   ],
   "pullRequests": [
