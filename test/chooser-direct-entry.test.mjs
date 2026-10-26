@@ -31,9 +31,11 @@ test('automatic readiness is one attempt per signed-out cycle, defers while busy
  draw(true,false,{step:'choose'});assert.equal(count,1);draw(false);draw(true);assert.equal(count,2);
 });
 test('Cancel delegates in-flight readiness to the existing abort operation, without clearing saved credentials',()=>{
- const code=between(source,'  cancelSignIn() {','  async signInGoogle()');let aborted=0,loginCancelled=0,changes=[];
- const make=new Function('operation','connectionController','cloud','update',transformSync('const target={'+code+'};',{loader:'ts'}).code+';return target;');
- const run=active=>make(active,{cancel(){aborted++;}},{cancelLogin(){loginCancelled++;}},v=>changes.push(v)).cancelSignIn();
- run({});assert.equal(aborted,1);assert.equal(loginCancelled,0);assert.deepEqual(changes,[]);
- run(null);assert.equal(loginCancelled,1);assert.deepEqual(changes,[{signIn:null,message:'',error:''}]);
+ const code=between(source,'  cancelSignIn() {','  async signInGoogle()');let aborted=0,changes=[];
+ const make=new Function('operation','connectionController','state','productionCloudSignInRequired','update',transformSync('const target={'+code+'};',{loader:'ts'}).code+';return target;');
+ const run=(active,signIn=null,required=false)=>make(active,{cancel(){aborted++;}},{signIn},()=>required,v=>changes.push(v)).cancelSignIn();
+ run({});assert.equal(aborted,1);assert.deepEqual(changes,[{signIn:null,message:'',error:''}]);
+ changes=[];run({}, {step:'code',environment:'production'});assert.equal(aborted,2);assert.deepEqual(changes,[{signIn:{step:'choose',environment:'production'},message:'',error:''}]);
+ changes=[];run(null,{step:'choose',environment:'production'},true);assert.equal(aborted,2);assert.deepEqual(changes,[],'required idle chooser remains usable');
+ run(null);assert.equal(aborted,3);assert.deepEqual(changes,[{signIn:null,message:'',error:''}]);
 });
