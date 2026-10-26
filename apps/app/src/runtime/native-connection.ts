@@ -21,6 +21,7 @@ const nativeSignInHeader=(Capacitor as typeof Capacitor&{PluginHeaders?:{name:st
  */
 /** Google sign-in needs the phone's App Link return; the browser bridge offers email only. */
 export const cloudSignInGoogle=nativeSignInHeader;
+export const cloudSignInPhone=(Capacitor as typeof Capacitor&{PluginHeaders?:{name:string;methods?:{name:string}[]}[]}).PluginHeaders?.some(header=>header.name==='AlphaCloudSignIn'&&header.methods?.some(method=>method.name==='startPhone')&&header.methods?.some(method=>method.name==='verifyPhone'))??false;
 export const cloudSignIn:CloudSignInPort|undefined=nativeSignInHeader?registerPlugin<CloudSignInPort>('AlphaCloudSignIn')
   :browserCloudHost?registerPlugin<CloudSignInPort>('AlphaCloudSignIn',{web:()=>new BrowserCloudSignIn()}):undefined;
 
@@ -170,7 +171,7 @@ export function createBrowserConnection(options:{fetch?:typeof fetch;secrets?:Br
       if(url.protocol!=='https:')throw new Error('Only HTTPS sign-in pages can be opened.');
       // A new tab keeps this page polling. A blocked pop-up is reported instead of navigating away.
       const opened=options.open?options.open(url.href):(()=>{const target=window.open(url.href,'_blank');if(target)target.opener=null;return !!target;})();
-      if(!opened)throw new Error('Allow pop-ups for Alpha Phone, then select Sign in with Eliza Cloud again.');
+      if(!opened)throw new Error('Allow pop-ups for Alpha Phone, then try Cloud sign-in again.');
     },
   };
 }

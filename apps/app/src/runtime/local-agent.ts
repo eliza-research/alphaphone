@@ -48,8 +48,8 @@ export async function localAgentPackaged():Promise<boolean> {
   try{return (await native.getStatus?.())?.packaged===true;}catch{return false;}
 }
 const unavailableBridge: LocalAgentBridge = {
-  async start() { throw new Error('On-device agent is unavailable here. Connect to an agent or use Eliza Cloud.'); },
-  async request() { throw new Error('On-device agent is unavailable here. Connect to an agent or use Eliza Cloud.'); },
+  async start() { throw new Error('On-device agent is unavailable here. Connect to an agent or use Cloud.'); },
+  async request() { throw new Error('On-device agent is unavailable here. Connect to an agent or use Cloud.'); },
 };
 const browserBridge: LocalAgentBridge | null = developmentBridgeAllowed ? {
   async start() { if(browserCloudResidentEnabled)await browserResidentCall('residentStart');return { state: 'host-managed' }; },
@@ -308,10 +308,10 @@ export function modelLabel(providerLabel:string,model:string):string {
 }
 export function providerStatusLabel(status:LocalProviderStatus|null|undefined):string {
   if(!status)return 'Provider status unavailable';
-  if(!status.configured)return status.provider==='elizacloud'?'Not configured · Eliza Cloud sign-in required':'Not configured';
+  if(!status.configured)return status.provider==='elizacloud'?'Not configured · Cloud sign-in required':'Not configured';
   // Eliza Cloud serves the same Qwen model through Cerebras.
   const model=status.model||(status.provider==='elizacloud'?'cerebras/'+LOCAL_PROVIDER_MODEL:LOCAL_PROVIDER_MODEL);
-  return 'Configured · '+modelLabel(status.provider==='elizacloud'?'Eliza Cloud':'Cerebras',model);
+  return 'Configured · '+modelLabel(status.provider==='elizacloud'?'Cloud':'Cerebras',model);
 }
 function parseProviderStatus(value:unknown):LocalProviderStatus {
   const row=record(value);
@@ -326,7 +326,7 @@ function parseProviderStatus(value:unknown):LocalProviderStatus {
 export async function configureLocalProvider(apiKey:string,model:string=LOCAL_PROVIDER_MODEL) {
   // A bring-your-own key is a developer surface; product phones use the owner's Eliza Cloud plan.
   // (Inline flag read: this module is also imported by Node tests without Vite.)
-  if(!(import.meta.env!==undefined&&import.meta.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS==='1'))throw Error('Alpha Phone uses your Eliza Cloud plan for AI.');
+  if(!(import.meta.env!==undefined&&import.meta.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS==='1'))throw Error('Alpha Phone uses your Cloud plan for AI.');
   if(!Capacitor.isNativePlatform())throw Error('Configure the development provider on the host.');
   if(!await localAgentPackaged())throw Error('On-device agent is unavailable in this version.');
   if(!native.configureProvider)throw Error('Model provider setup is unavailable.');

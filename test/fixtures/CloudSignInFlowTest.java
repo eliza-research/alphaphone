@@ -162,6 +162,13 @@ public final class CloudSignInFlowTest {
   check(emailOnly.inApp && !emailOnly.google, "Google only when this phone's App Link is verified");
   CloudSignInReadiness.Result restored2 = CloudSignInReadiness.Result.parse(ready.serialize());
   check(restored2 != null && restored2.inApp && restored2.google && restored2.until == ready.until && CloudSignInReadiness.Result.parse("v1|true|true|1") == null && CloudSignInReadiness.Result.parse(null) == null, "cache round trip");
+  CloudSignInReadiness.Result phoneOnly = new CloudSignInReadiness.Result(false, false, true, t + 1000);
+  check(phoneOnly.inApp && !phoneOnly.email && !phoneOnly.google && phoneOnly.phone, "phone does not depend on email");
+  check(CloudSignInReadiness.Result.parse(phoneOnly.serialize()).phone, "phone cache round trip");
+  CloudSignInReadiness.Result googleOnly = new CloudSignInReadiness.Result(false, true, false, t + 1000);
+  check(googleOnly.inApp && googleOnly.google && !googleOnly.email, "Google does not depend on email");
+  check(CloudSignInReadiness.Result.parse("v2|true|true|1800000001000") == null, "old cache must re-probe SMS policy");
+  check(CloudSignInReadiness.Result.parse("v3|true|true|yes|true|1800000001000") == null, "malformed method flag refused");
   check(!new CloudSignInReadiness.Result(true, true, t + 365L * 86400000L).fresh(t), "a cache entry from the future is not trusted");
   check(MessageDigest.isEqual("a".getBytes(StandardCharsets.US_ASCII), "a".getBytes(StandardCharsets.US_ASCII)), "jdk");
   System.out.println("PASS cloud sign-in flow (" + checks + " checks)");

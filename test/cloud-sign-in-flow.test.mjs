@@ -122,7 +122,7 @@ test('one email code adapter: native constants, the bridge config and the route 
  const config=JSON.parse(read('config/cloud-email-code.json')),adapter=read(native+'CloudEmailCode.java'),routes=read(native+'ConnectionRoutes.java');
  assert.match(adapter,new RegExp(`SEND_PATH = "${config.sendPath}"`));assert.match(adapter,new RegExp(`VERIFY_PATH = "${config.verifyPath}"`));
  for(const path of [config.sendPath,config.verifyPath])assert.ok(routes.includes(`"${path}"`),path);
- assert.deepEqual(config.tenants,{production:'elizacloud',staging:'elizacloud-staging'});assert.equal(config.client,'ai.elizaresearch.alphaphone');
+ assert.equal(config.tenants,undefined);assert.equal(config.client,'ai.elizaresearch.alphaphone');
  for(const field of ['"email"','"tenantId"','"client"','"pkce"','"codeChallenge"','"codeChallengeMethod"','"code"','"codeVerifier"'])assert.ok(adapter.includes(field),field);
  const bridge=read('scripts/browser-cloud-dev-bridge.ts');
  assert.match(bridge,/CLOUD_EMAIL_CODE\.sendPath,emailCodeSendBody\(/);assert.match(bridge,/CLOUD_EMAIL_CODE\.verifyPath,emailCodeVerifyBody\(/);
@@ -137,11 +137,11 @@ test('native sign-in never falls back to hosted login when readiness fails',asyn
  const method=begin.slice(0,begin.lastIndexOf('},')+1);
  const compiled=transformSync('const controller={'+method+'};',{loader:'ts'}).code;
  for(const methods of [null,{google:false},{google:true}]) {
-  const updates=[];let ensured=false;
-  const run=new Function('operation','cloudEnvironmentAllowed','work','inAppSignInMethods','cloudSignIn','CloudSignInError','cloud','residentCloudFlow','state','update','ensureResident',
-   'let inAppGoogle=false;'+compiled+';return controller.beginSignIn("production");');
-  await run(false,()=>true,async(_,action)=>action(new AbortController().signal),async()=>methods,{},Error,{environment:'production',cancelLogin(){}},()=>true,{purpose:'agent'},v=>updates.push(v),async()=>{ensured=true;});
-  assert.equal(updates.at(-1).signIn.step,'choose');assert.equal(ensured,true);
+  const updates=[];let ensured=false,checking='';
+  const run=new Function('operation','cloudEnvironmentAllowed','work','inAppSignInMethods','cloudSignIn','CloudSignInError','cloud','residentCloudFlow','state','update','ensureResident','cloudServiceName',
+   'let inAppGoogle=false,inAppPhone=false,inAppEmail=true;'+compiled+';return controller.beginSignIn("production");');
+  await run(false,()=>true,async(message,action)=>{checking=message;return action(new AbortController().signal);},async()=>methods,{},Error,{environment:'production',cancelLogin(){}},()=>true,{purpose:'agent'},v=>updates.push(v),async()=>{ensured=true;},()=> 'Independent Service');
+  assert.equal(updates.at(-1).signIn.step,'choose');assert.equal(ensured,true);assert.equal(checking,'Checking Independent Service sign-in…');
  }
  const plugin=read(native+'AlphaCloudSignInPlugin.java');
  const measure=between(plugin,'private CloudSignInReadiness.Result measure(','private boolean assetLinksGrant(');
@@ -161,4 +161,17 @@ test('browser resident sign-in exposes the existing hosted hand-off only in its 
  browser.props.onClick();assert.equal(calls,1,'dispatches the existing hosted sign-in callback');
  assert.equal(render(React,true,false,{busy:true},controller).props.disabled,true);
  assert.equal(render(React,false,true,{busy:false},controller).props.children,'Browser sign-in (diagnostic)');
+});
+
+
+test('the native session exchange requires Android authorization before requesting an app key',()=>{
+ const plugin=read(native+'AlphaCloudSignInPlugin.java');
+ const complete=between(plugin,'private void complete(Attempt current, JSONObject session)','/** The saved key');
+ assert.ok(complete.indexOf('requireAuthorization(current);')>complete.indexOf('validStewardToken(token)'));
+ assert.ok(complete.indexOf('requireAuthorization(current);')<complete.indexOf('"/api/v1/app-auth/connect"'));
+ assert.match(complete,/finally[\s\S]*"\/steward\/auth\/logout"/);
+ const gate=between(plugin,'private void requireAuthorization(Attempt current)','// ── Shared tail');
+ assert.match(gate,/new AlertDialog.Builder/);assert.match(gate,/decision.await/);
+ assert.match(gate,/!current.authorized/);assert.match(gate,/current.expiresAt/);
+ assert.doesNotMatch(gate,/PluginCall|call.getBoolean|writeCredentialSlot/);
 });

@@ -114,8 +114,8 @@ test('Cloud voice shows finite HTTP support codes without replacing sign-in or b
  const f=cloudVoiceViewFixture({cloudProfile:true});
  try{
   const failure=code=>f.box.cloudVoiceFailure({code,message:'PRIVATE_HTTP_SENTINEL'});
-  for(const status of [401,403])assert.equal(failure(`voice-http-${status}`),'Sign in to Eliza Cloud again in Settings, then retry voice.');
-  assert.equal(failure('voice-http-402'),"Eliza Cloud declined cloud voice for your account's billing. Check your account in Settings, then retry.");
+  for(const status of [401,403])assert.equal(failure(`voice-http-${status}`),'Sign in to Cloud again in Settings, then retry voice.');
+  assert.equal(failure('voice-http-402'),"Cloud declined cloud voice for your account's billing. Check your account in Settings, then retry.");
   for(const status of [400,429,503])assert.equal(failure(`voice-http-${status}`),`Cloud voice could not complete this request (${status}). Try again later.`);
   for(const code of ['voice-http-200','voice-http-600','voice-http-400PRIVATE_HTTP_SENTINEL','voice-http-400\n','voice-http-400\r\n','voice-http-400\nPRIVATE_HTTP_SENTINEL','voice-http-0400',400,null])assert.equal(failure(code),null);
  }finally{f.close();}
@@ -146,4 +146,20 @@ test('Cloud profile sends one credential-bound recorded turn and speaks its matc
   assert.equal(f.speechInputs[0].credentialId,'cloud-credential');assert.equal(f.speechInputs[0].text,'Synthetic matching reply.');
   assert.equal(f.localFactories,0);assert.equal(f.pairedFactories,0);assert.equal(f.box.testMocksEnabled,false);
  }finally{f.close();await clock.flush();}
+});
+
+
+test('configured service name follows voice disclosure and sign-in recovery without starting capture',async()=>{
+ for(const account of ['cloud-account',null]){
+  const f=cloudVoiceViewFixture({cloudProfile:true,account});
+  try {
+   f.box.cloudServiceName=()=> 'Nebula';
+   f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;
+   await f.shell.startVoice();const view=f.renderChat();
+   assert.doesNotMatch(JSON.stringify(view),/Eliza Cloud/);
+   if(account){assert.match(JSON.stringify(view),/Nebula uploads your recordings and reply text/);assert.match(JSON.stringify(view),/plan allowance/);assert.equal(view.recoveryLabel,'Start Cloud voice');}
+   else {assert.equal(view.recoveryLabel,'Connect Nebula');view.recover();await f.tick();assert.equal(f.accountOpens,1);}
+   assert.equal(f.starts,0);assert.equal(f.uploads,0);assert.equal(f.localFactories,0);
+  }finally{f.close();await f.tick();}
+ }
 });

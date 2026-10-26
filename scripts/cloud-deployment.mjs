@@ -9,7 +9,9 @@ export function validateCloudDeployment(input){
  if(!input||typeof input!=='object'||Object.keys(input).sort().join(',')!=='production,staging')throw Error('Expected production and staging Cloud configuration');
  for(const environment of ['production','staging']){
   const row=input[environment];
-  if(!row||Object.keys(row).sort().join(',')!=='api,services,tenant,web')throw Error('Invalid Cloud configuration fields');
+  if(!row||Object.keys(row).filter(key=>!['name','entitlementAudience'].includes(key)).sort().join(',')!=='api,services,tenant,web')throw Error('Invalid Cloud configuration fields');
+  if(row.entitlementAudience!==undefined&&(typeof row.entitlementAudience!=='string'||! /^[A-Za-z0-9._-]{1,128}$/.test(row.entitlementAudience)))throw Error('Invalid entitlement audience');
+  if(row.name!==undefined&&(typeof row.name!=='string'||!row.name.trim()||row.name!==row.name.trim()||/[\u0000-\u001f\u007f]/.test(row.name)))throw Error('Invalid Cloud service name');
   for(const field of ['api','web','services']){
    const value=row[field];let url;try{url=new URL(value);}catch{throw Error('Invalid Cloud origin');}
    if(typeof value!=='string'||url.protocol!=='https:'||url.origin!==value||url.username||url.password||url.port||!url.hostname.includes('.')||url.hostname.endsWith('.'))throw Error('Cloud origins must be canonical HTTPS origins on the default port');
@@ -21,13 +23,13 @@ export function validateCloudDeployment(input){
 }
 export function deploymentOutputs(config){
  validateCloudDeployment(config);
- const fingerprint=createHash('sha256').update(JSON.stringify(['production','staging'].map(env=>['api','web','services','tenant'].map(key=>config[env][key])))).digest('hex');
+ const fingerprint=createHash('sha256').update(JSON.stringify(['production','staging'].map(env=>[...['api','web','services','tenant'].map(key=>config[env][key]),config[env].entitlementAudience??'cloud-subscription']))).digest('hex');
  const java=['package ai.elizaresearch.alphaphone;','','/** Generated from config/cloud-deployment.json. Run node scripts/cloud-deployment.mjs. */','final class CloudDeployment {',' private CloudDeployment() {}'];
  const ts=['// Generated from config/cloud-deployment.json. Run node scripts/cloud-deployment.mjs.'];
  for(const env of ['production','staging']){
   const row=config[env];
-  ts.push(`export const ${env}Cloud = ${JSON.stringify({api:row.api,web:row.web,agents:new URL(row.services).host,tenant:row.tenant})} as const;`);
-  for(const [key,value] of Object.entries({...row,apiHost:new URL(row.api).host,webHost:new URL(row.web).host,servicesHost:new URL(row.services).host}))java.push(` static final String ${env.toUpperCase()}_${key.replace(/[A-Z]/g,c=>'_'+c).toUpperCase()} = ${JSON.stringify(value)};`);
+  ts.push(`export const ${env}Cloud = ${JSON.stringify({name:row.name??new URL(row.api).hostname,entitlementAudience:row.entitlementAudience??'cloud-subscription',api:row.api,web:row.web,agents:new URL(row.services).host,tenant:row.tenant})} as const;`);
+  for(const [key,value] of Object.entries({...row,name:row.name??new URL(row.api).hostname,apiHost:new URL(row.api).host,webHost:new URL(row.web).host,servicesHost:new URL(row.services).host}))java.push(` static final String ${env.toUpperCase()}_${key.replace(/[A-Z]/g,c=>'_'+c).toUpperCase()} = ${JSON.stringify(value)};`);
  }
  java.push(` static final String STORAGE_NAMESPACE = "cloud-deployment:${fingerprint}:";`,
   ' static String storageSlot(String name) {',

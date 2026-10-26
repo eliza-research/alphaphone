@@ -9,7 +9,7 @@ import {createServer} from 'node:http';
 if(!process.execArgv.some((arg,i)=>arg==='--import'&&process.execArgv[i+1]==='tsx')){const child=spawnSync(process.execPath,['--import','tsx',process.argv[1]],{stdio:'inherit',timeout:60000});if(child.error)throw child.error;process.exit(child.status??1);}
 const {createBrowserCloudDevHandler}=await import('../scripts/browser-cloud-dev-bridge.ts');
 const {CloudProtocol}=await import('../apps/app/src/runtime/cloud-protocol.ts');
-const {cloudStorageNamespace}=await import('../apps/app/src/runtime/cloud-deployment.generated.ts');
+const {cloudStorageNamespace,productionCloud}=await import('../apps/app/src/runtime/cloud-deployment.generated.ts');
 const profileFile=(profile,name)=>join(profile,cloudStorageNamespace.replaceAll(':','-'),name);
 const {BrowserCloudConnection}=await import('../apps/app/src/browser/cloud-connection.ts');
 const owner='11111111-1111-4111-8111-111111111111',org='22222222-2222-4222-8222-222222222222',credentialId='33333333-3333-4333-8333-333333333333',reference='browser-cloud-reference:44444444-4444-4444-8444-444444444444';
@@ -468,11 +468,11 @@ test('explicit Cloud resident rejects a different issuer before dispatch',async(
 });
 
 test('real CloudProtocol verifies a signed plan through public host keys without a credential reference',async()=>{
- const {checkEntitlement,ENTITLEMENT_TYPE,ENTITLEMENT_AUDIENCE}=await import('../apps/app/src/runtime/subscription-entitlement.ts');
+ const {checkEntitlement,ENTITLEMENT_TYPE}=await import('../apps/app/src/runtime/subscription-entitlement.ts');
  const pair=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
  const key={...await crypto.subtle.exportKey('jwk',pair.publicKey),kid:'host-public-keys-regression'};
  const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');const now=Math.floor(Date.now()/1000);
- const unsigned=encode({alg:'ES256',typ:ENTITLEMENT_TYPE,kid:key.kid})+'.'+encode({iss:'https://api.eliza.app',aud:ENTITLEMENT_AUDIENCE,sub:owner,org,jti:'synthetic-plan',iat:now-1,exp:now+300,plan:{id:'none',name:'No plan',status:'none'}});
+ const unsigned=encode({alg:'ES256',typ:ENTITLEMENT_TYPE,kid:key.kid})+'.'+encode({iss:productionCloud.api,aud:productionCloud.entitlementAudience,sub:owner,org,jti:'synthetic-plan',iat:now-1,exp:now+300,plan:{id:'none',name:'No plan',status:'none'}});
  const token=unsigned+'.'+Buffer.from(await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},pair.privateKey,Buffer.from(unsigned))).toString('base64url');
  const f=await fixture();try{
   let publicRead=false;f.setResponse(async(url,input)=>{if(new URL(url).pathname==='/api/v1/subscription/entitlement-keys'){assert.equal(new Headers(input.headers).get('Authorization'),null);publicRead=true;return Response.json({keys:[key]});}if(new URL(url).pathname==='/api/v1/subscription/entitlement')return Response.json({entitlement:token});return Response.json({},{status:404});});

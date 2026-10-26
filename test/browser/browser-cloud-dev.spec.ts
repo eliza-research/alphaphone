@@ -1,4 +1,3 @@
-import {cloudStorageNamespace} from '../../apps/app/src/runtime/cloud-deployment.generated';
 import {seedCompletedAccessSetup} from './flag-off-android';
 import {test,expect} from '@playwright/test';
 import {completeAccessSetup} from './flag-off-android';
@@ -7,6 +6,7 @@ import {mkdtemp,mkdir,writeFile,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
+import {cloudStorageNamespace} from '../../apps/app/src/runtime/cloud-deployment.generated';
 import {createBrowserCloudDevHandler} from '../../scripts/browser-cloud-dev-bridge';
 import {createLocalAgentDevHandler} from '../../scripts/local-agent-dev-bridge';
 
@@ -69,9 +69,9 @@ test('browser restores an existing host Cloud account, uses canonical voice and 
   // Completed returning users still review access after explicit Settings sign-in.
   await page.evaluate(()=>window.dispatchEvent(new Event('alpha:agent-settings')));
   await page.evaluate(async()=>(await import('/src/runtime/connection-ui.tsx')).connectionController.openCloudAccount());
-  await page.getByRole('dialog',{name:'Eliza Cloud',exact:true}).getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
-  // In-app sign-in through the development host offers the email code (Google needs the phone's App
-  // Link); the retired browser hand-off stays reachable here as the test-mocks diagnostic fallback.
+  // This test-mocks host's account button retains the diagnostic browser route. Exercise the
+  // shared in-app entry explicitly before that handoff; native production uses this entry.
+  await page.evaluate(async()=>(await import('/src/runtime/connection-ui.tsx')).connectionController.beginSignIn('production'));
   const signIn=page.getByRole('dialog',{name:'Sign in to Eliza Cloud',exact:true});
   await expect(signIn.getByRole('form',{name:'Sign in with email'})).toBeVisible();
   await expect(signIn.getByRole('button',{name:'Continue with Google',exact:true})).toHaveCount(0);

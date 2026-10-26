@@ -30,7 +30,7 @@ public final class ResetRecoveryActivity extends Activity {
   TextView title=new TextView(this);title.setText("Reset could not finish");title.setTextSize(24);title.setPadding(0,0,0,pad/2);root.addView(title);
   boolean installed=listenerInstalled();controllable=AlphaListenerPlugin.available(this);
   TextView body=new TextView(this);body.setTextSize(16);body.setText(
-   "You confirmed Reset Alpha data, but the reset has not finished. Alpha's local data has not been deleted yet. (Alpha may already have asked Eliza Cloud to revoke this phone's sign-in.)\n\n"+
+   "You confirmed Reset Alpha data, but the reset has not finished. Alpha's local data has not been deleted yet. (Alpha may already have asked Cloud to revoke this phone's sign-in.)\n\n"+
    (!installed?"Android has not accepted Alpha's request to delete its data. "
     :controllable?"Alpha deletes its data only after the phone's always-on listener confirms that its consent has been withdrawn, and that confirmation has not arrived. "
     :"Alpha deletes its data only after the phone's always-on listener confirms that its consent has been withdrawn. Alpha cannot reach the listener's controls on this phone, so it cannot get that confirmation, and trying again will not finish the reset until the listener is repaired. ")+

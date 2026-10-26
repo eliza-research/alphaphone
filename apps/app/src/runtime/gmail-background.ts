@@ -30,7 +30,7 @@ export function gmailBackgroundMessage(value:GmailBackgroundStatus):string{
  const checked=value.lastSyncAt?` Last successful check: ${new Date(value.lastSyncAt).toLocaleString()}.`:' No successful background check yet.';
  const suffix=checked+' Android may delay checks in Doze or battery saver. Open Inbox to check current mail.';
  if(value.status==='web-unavailable')return 'Background Gmail notices are available in the Android app.';
- if(value.status==='provider-unsupported')return 'Background Gmail checks currently require Eliza Cloud as this phone\'s agent inference provider. Inbox still checks mail while it is open.';
+ if(value.status==='provider-unsupported')return 'Background Gmail checks currently require Cloud as this phone\'s agent inference provider. Inbox still checks mail while it is open.';
  if(value.status==='disabled')return 'Open Inbox and select a connected Gmail account to enable background checks.';
  if(value.status==='unsupported')return 'Background Gmail is unavailable on this server. Open Inbox to check mail.'+checked;
  if(value.status==='grant-unavailable')return 'Gmail background checks need the matching Cloud sign-in and Google read access. Recheck the account in Inbox.';

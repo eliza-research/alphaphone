@@ -44,8 +44,8 @@
 
 /* The production signed-out route is a page, never an agent status sheet. */
 .alpha-auth-page{position:fixed;inset:0;z-index:10000;display:flex;align-items:stretch;background:var(--bg,#fff);color:var(--fg,#000);font:15px/1.45 'Public Sans',system-ui,sans-serif}
-.alpha-auth-page .alpha-auth-content{width:100%;max-width:none;min-height:100%;display:flex;flex-direction:column;justify-content:center;padding:calc(env(safe-area-inset-top) + 28px) max(env(safe-area-inset-right),24px) calc(env(safe-area-inset-bottom) + 28px) max(env(safe-area-inset-left),24px);border-radius:0;box-shadow:none}
-.alpha-auth-body{width:min(100%,28rem);margin:auto}
+.alpha-auth-page .alpha-auth-content{width:100%;max-width:none;min-height:100%;display:flex;flex-direction:column;justify-content:safe center;padding:calc(env(safe-area-inset-top) + 28px) max(env(safe-area-inset-right),24px) calc(env(safe-area-inset-bottom) + 28px) max(env(safe-area-inset-left),24px);border-radius:0;box-shadow:none}
+.alpha-auth-body{width:min(100%,28rem);margin:auto;flex-shrink:0}
 .alpha-auth-body h1{margin:0 0 16px}
 .alpha-auth-body>p{margin:0 0 28px}
 .alpha-auth-body .alpha-connection-actions button{width:100%;min-height:52px}

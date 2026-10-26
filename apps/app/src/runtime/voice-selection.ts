@@ -59,7 +59,7 @@ export function chooseVoiceRoute(route: VoiceRouteChoice, disclosure?: { disclos
   return write(voiceRouteKey, route === 'cloud' ? { version: 1, route, disclosed: disclosure!.disclosed, chosenAt: Date.now() } : { version: 1, route: 'device', chosenAt: Date.now() });
 }
 /** Disclosure shown wherever Cloud speech can be chosen. */
-export function cloudSpeechDisclosure() { return 'Eliza Cloud speech uploads recordings and reply text to your Cloud account and counts toward your plan allowance.'; }
+export function cloudSpeechDisclosure(serviceName = 'Cloud') { return `${serviceName} speech uploads recordings and reply text to your Cloud account and counts toward your plan allowance.`; }
 
 /** Opt-in: replies to voice-originated turns are read aloud. Off unless explicitly enabled. */
 export function speakRepliesEnabled(): boolean { const value = record(read(speakRepliesKey)); return !!value && value.version === 1 && value.enabled === true; }

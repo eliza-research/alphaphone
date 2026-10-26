@@ -2,8 +2,19 @@
   "$comment": "In-app Eliza Cloud email sign-in code routes (elizaOS/eliza PR #36260). The single source for the development browser bridge (scripts/cloud-email-code.ts); android CloudEmailCode.java holds the same values and test/cloud-sign-in-flow.test.mjs pins them together. If Cloud's final routes differ, change this file and CloudEmailCode.java only.",
   "sendPath": "/steward/auth/email/code/send",
   "verifyPath": "/steward/auth/email/code/verify",
-  "tenants": {"production": "elizacloud", "staging": "elizacloud-staging"},
   "client": "ai.elizaresearch.alphaphone",
-  "sendBody": ["email", "tenantId", "client", "pkce.codeChallenge", "pkce.codeChallengeMethod"],
-  "verifyBody": ["email", "code", "tenantId", "client", "pkce.codeVerifier"]
+  "sendBody": [
+    "email",
+    "tenantId",
+    "client",
+    "pkce.codeChallenge",
+    "pkce.codeChallengeMethod"
+  ],
+  "verifyBody": [
+    "email",
+    "code",
+    "tenantId",
+    "client",
+    "pkce.codeVerifier"
+  ]
 }
