@@ -10,7 +10,7 @@ export type NavigationBridge = {
   stopNavigation(input: { sessionId: string }): Promise<{ stopped: boolean }>;
   addListener(name: 'navigationStopped', listener: (event: { sessionId: string; reason: string }) => void): Promise<PluginListenerHandle>;
 };
-type Session = { id: string; title: string; text: string; listener?: Promise<PluginListenerHandle>; stopped: boolean; onStopped: (reason: string) => void };
+type Session = { id: string; title: string; text: string; listener?: Promise<PluginListenerHandle>; stopped: boolean; started: boolean; onStopped: (reason: string) => void };
 
 export class BackgroundNavigation {
   private session?: Session;
@@ -23,7 +23,7 @@ export class BackgroundNavigation {
   async start(title: string, text: string, onStopped: (reason: string) => void): Promise<boolean> {
     await this.stop();
     if (!this.native()) return false;
-    const session: Session = { id: crypto.randomUUID().replaceAll('-', ''), title, text, stopped: false, onStopped };
+    const session: Session = { id: crypto.randomUUID().replaceAll('-', ''), title, text, stopped: false, started: false, onStopped };
     this.session = session;
     try {
       if (!(await this.bridge.navigationAvailability()).background) throw new Error('unavailable');
@@ -37,8 +37,14 @@ export class BackgroundNavigation {
       });
       await session.listener;
       if (this.session !== session) return false;
-      await this.bridge.startNavigation({ sessionId: session.id, title, text });
-      return this.session === session && !session.stopped;
+      const shown = { title: session.title, text: session.text };
+      await this.bridge.startNavigation({ sessionId: session.id, ...shown });
+      if (this.session !== session || session.stopped) return false;
+      session.started = true;
+      // An instruction that changed while the native session was starting is sent now: before
+      // the start resolved, native had no session to update, and that answer is not a loss.
+      if (session.title !== shown.title || session.text !== shown.text) this.push(session);
+      return true;
     } catch {
       if (this.session === session) await this.stop();
       return false;
@@ -49,6 +55,10 @@ export class BackgroundNavigation {
     const session = this.session;
     if (!session || session.stopped || (session.title === title && session.text === text)) return;
     session.title = title; session.text = text;
+    if (session.started) this.push(session);
+  }
+  private push(session: Session) {
+    const { title, text } = session;
     void this.bridge.updateNavigation({ sessionId: session.id, title, text }).then(result => {
       if (result?.active !== true) this.lost(session);
     }, () => this.lost(session));

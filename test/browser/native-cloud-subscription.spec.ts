@@ -65,9 +65,14 @@ async function boot(page:Page,initial:Fixture&{tokens?:Record<string,string>;key
   if(!sessionStorage.getItem('plan-fixture-seeded')){sessionStorage.setItem('plan-fixture-seeded','1');for(const [key,value] of Object.entries(initial.storage||{}))localStorage.setItem(key,value as string);}
   const f=w.planFixture={plan:'active',route:'signed',limits:'absent',identity:'ok',redeem:'ok',redeemPlan:'active',saved:true,holdProvider:true,cashBalance:0,...initial,calls:[]as any[],bodies:[]as any[],releaseProvider:null as null|(()=>void)};
   const credential={credentialId:'11111111-1111-4111-8111-111111111111',token:'synthetic-plan-token',expiresAt:initial.expiresAt??Date.now()+60*24*3600*1000};
-  const names={AlphaConnection:['secureRead','secureWrite','secureRemove','request','cancel','openExternal'],Agent:['stop','getStatus','configureCloudProvider','clearProvider','providerStatus','start','request'],AlphaHostedResults:['disableBackground'],DailyApps:['addListener','removeListener'],AlphaNotifications:['status'],AlphaVoiceCloud:['checkPermissions']};
+  const names={AlphaCloudSignIn:['status','startEmail','verifyEmail','cancel','addListener','removeListener'],AlphaConnection:['secureRead','secureWrite','secureRemove','request','cancel','openExternal'],Agent:['stop','getStatus','configureCloudProvider','clearProvider','providerStatus','start','request'],AlphaHostedResults:['disableBackground'],DailyApps:['addListener','removeListener'],AlphaNotifications:['status'],AlphaVoiceCloud:['checkPermissions']};
   w.Capacitor={PluginHeaders:Object.entries(names).map(([name,methods])=>({name,methods:methods.map(name=>({name,rtype:'promise'}))})),nativePromise:async(plugin:string,method:string,input:any)=>{
    f.calls.push({plugin,method,path:input?.url?new URL(input.url).pathname:undefined,url:input?.url,httpMethod:input?.method});
+   if(plugin==='AlphaCloudSignIn'){
+    if(method==='status')return {active:false,inApp:true,email:true,google:false};
+    if(method==='addListener'||method==='removeListener'||method==='cancel')return {};
+    throw Error('Unexpected sign-in operation in plan fixture');
+   }
    if(plugin==='Agent'){
     if(method==='getStatus')return {packaged:true,state:'stopped',serviceActive:false,socketListening:false};
     if(method==='configureCloudProvider'){if(f.providerFailure)throw Error(f.providerFailure);if(f.holdProvider)await new Promise<void>(resolve=>f.releaseProvider=resolve);return {};}
@@ -563,12 +568,12 @@ test.describe('account, plan and sign-in expiry',()=>{
   await expect(page.getByText(/Your Eliza Cloud sign-in on this phone expires .*\. Approve this phone again to keep AI available\./)).toBeVisible();
   expect(await page.evaluate(()=>(window as any).planController.residentPlanSettings().keyExpiring)).toBe(true);
   await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:info.outputPath('sign-in-expiry-warning.png'),animations:'disabled'});
-  await page.evaluate(()=>{(window as any).planFixture.holdProvider=false;});
   await release(page);
   await page.getByRole('button',{name:'Approve this phone again',exact:true}).click();
-  // This fixture omits the native sign-in plugin; re-approval reports that in Alpha.
-  await expect(page.getByRole('alert')).toContainText('unavailable');
-  expect((await calls(page)).some(c=>c.path==='/api/auth/cli-session'&&c.httpMethod==='POST')).toBe(false);
+  // Re-approval opens the native email form without sending a code until explicitly requested.
+  await expect(page.getByRole('textbox',{name:'Email',exact:true})).toBeVisible();
+  expect((await calls(page)).some(c=>c.plugin==='AlphaCloudSignIn'&&c.method==='status')).toBe(true);
+  expect((await calls(page)).filter(c=>c.path?.startsWith('/api/auth/cli-session')||c.method==='openExternal'||c.method==='startEmail')).toEqual([]);
  });
 
  test('a key with more than 14 days left shows no expiry warning',async({page})=>{

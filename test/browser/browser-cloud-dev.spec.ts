@@ -15,7 +15,7 @@ test('browser restores an existing host Cloud account, uses canonical voice and 
  test.setTimeout(45000);
  const profile=await mkdtemp(join(tmpdir(),'alpha-browser-cloud-ui-')),secret='synthetic-cloud-ui-credential',owner='11111111-1111-4111-8111-111111111111',organizationId='22222222-2222-4222-8222-222222222222',credentialId='33333333-3333-4333-8333-333333333333',reference='browser-cloud-reference:44444444-4444-4444-8444-444444444444',session=randomUUID(),calls:string[]=[];
  const deploymentProfile=join(profile,cloudStorageNamespace.replaceAll(':','-'));
- await mkdir(deploymentProfile,{mode:0o700});
+ await mkdir(deploymentProfile,{recursive:true,mode:0o700});
  await writeFile(join(profile,'credential'),secret,{mode:0o600});await writeFile(join(deploymentProfile,'initial-credential.json'),JSON.stringify({environment:'production',credentialFile:join(profile,'credential'),credentialSha256:createHash('sha256').update(secret).digest('hex'),userId:owner,organizationId,credentialReference:reference,credentialId}),{mode:0o600});
  const handler=createBrowserCloudDevHandler({profile,request:async(url,input={})=>{
   const path=new URL(String(url)).pathname;calls.push(path);
