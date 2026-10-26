@@ -162,7 +162,9 @@ owner, the OTA certificate and AVB key digests, `downgradeAllowed: false`, the s
 image for recovery, a known-good release slot and the drill record. A signed release is not
 distributable while the known-good release is unset or any signed-update, interrupted-update,
 compatible-rollback or stock-recovery drill is not `passed`; the script prints those as
-`NOT DISTRIBUTABLE`. Drill results are recorded from executed drills, never by software.
+`NOT DISTRIBUTABLE`. Drill results are recorded from executed drills, never by software:
+[Pixel 10a flashing and drills](pixel10a-drills.md) runs them on a device and applies only
+complete, passing evidence to the channel.
 
 `node --test test/aosp-release-signing.test.mjs` exercises these refusals, the command lines
 and the record with mocked releasetools and throwaway certificates. It is not a signed image,

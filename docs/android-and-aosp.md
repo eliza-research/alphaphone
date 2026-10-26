@@ -210,8 +210,10 @@ update and recovery gates below.
    version/hash compatibility record come from `scripts/sign-aosp-release.mjs` on the image
    host ([Pixel 10a staging and release signing](pixel10a-staging.md)); the one update channel
    is `android/aosp/pixel10a-ota-channel.json`. No release key, signed image, applied OTA,
-   interrupted-update, rollback or stock-recovery drill exists yet, and
-   `scripts/pilot-update.mjs` still refuses a lower APK versionCode.
+   interrupted-update, rollback or stock-recovery drill has run yet, and
+   `scripts/pilot-update.mjs` still refuses a lower APK versionCode. Flashing and the four
+   drills are run and recorded with `scripts/pixel10a-flash.mjs` and `scripts/pixel10a-drills.mjs`
+   ([Pixel 10a flashing and drills](pixel10a-drills.md)).
 
 An SDK emulator with an installed launcher is useful HOME/app evidence, but is not
 proof that this product makefile built or booted in a custom AOSP image.

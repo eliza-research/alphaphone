@@ -73,7 +73,8 @@ export function channelSigningProblems(channel, product, file = "android/aosp/pi
 /**
  * Problems with distributing a signed release on the channel: a retained known-good recovery
  * release and passed signed-update, interruption, rollback and stock-recovery drills. These are
- * recorded from executed drills; nothing in this repository runs them.
+ * recorded from executed drills (scripts/pixel10a-drills.mjs runs them on a device and
+ * --apply-to-channel sets them only from complete passing evidence); nothing here passes one.
  */
 export function channelDistributionProblems(channel, file = "android/aosp/pixel10a-ota-channel.json") {
   const problems = [];
