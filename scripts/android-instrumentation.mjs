@@ -33,6 +33,21 @@
  * the source commit and every installed APK's SHA-256, with raw output per class.
  * This is emulator-class evidence (class E). It is not physical-device, AOSP image,
  * real-integration or user acceptance.
+ *
+ * Device targets (decision P-58, docs/device-acceptance-gates.md) replace --owned-emulator/--avd:
+ *
+ *   npm run test:android:instrumentation -- --device-target cuttlefish --serial 127.0.0.1:6520 --allow-reinstall ...
+ *   npm run test:android:instrumentation -- --device-target pixel --serial <USB serial> --allow-reinstall ...
+ *
+ * cuttlefish admits only a loopback adb endpoint running the Alpha Cuttlefish product
+ * (ro.product.name alpha_cf_<arch>_phone, ro.hardware cutf_*, ro.product.device vsoc_*) and
+ * records class I; pixel admits only a USB serial whose ro.serialno matches and whose
+ * ro.product.device is stallion (Pixel 10a) and records class D. Neither is ever an emulator.
+ * The runner installs, clears app data before each class and uninstalls, so a device target
+ * needs --allow-reinstall; without it nothing is installed, cleared or removed. Classes that
+ * need an owned disposable emulator (secondary users, real alarms, a fixture screen lock) and
+ * test-mocks builds are refused on a device target. --home-role reuses the same admission and
+ * restoration as on an emulator: the previous HOME holder is put back and read back.
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -251,6 +266,20 @@ export const NOT_RUN_BY_A_RUNNER = {
  * method needs a test-mocks app build, so on the default build the class could only be recorded
  * "skipped", which fails the run. It runs with `--test-mocks --classes BrowserDownload`.
  */
+/** Device targets: the evidence class each records, and why the other classes do not apply. */
+export const DEVICE_TARGETS = {
+  cuttlefish: { evidenceClass: "I", evidence: "cuttlefish-image-instrumentation" },
+  pixel: { evidenceClass: "D", evidence: "physical-device-instrumentation" },
+};
+/**
+ * Classes that change device state only an owned, disposable emulator may lose: a fixture screen
+ * lock PIN (PasswordVault*), real alarms (RealClock) or a created Android user (secondaryUser).
+ */
+export const OWNED_EMULATOR_ONLY = new Set(["PasswordVaultSettings", "PasswordVaultFill", "RealClock"]);
+const CUTTLEFISH_SERIAL = /^(127\.0\.0\.1|localhost):\d{2,5}$/;
+// A USB serial: no host:port (network adb) and no emulator console name.
+const USB_SERIAL = /^(?!emulator-)[A-Za-z0-9]{6,32}$/;
+
 export const DEFAULT_CLASSES = [
   "NoMockProduct", "Shell", "StartupReadiness", "TextScale", "BrowserSignins", "BrowserFlow",
   "BrowserContinuity",
@@ -265,7 +294,8 @@ export const qualifiedClass = name => {
 
 export function parseInstrumentationArgs(argv) {
   const options = { classes: null, all: false, variants: ["standalone", "launcher"], testMocks: false, apkDir: null, output: null,
-    serial: null, avd: null, ownedEmulator: false, timeoutMs: 900_000, clockExclusive: false, homeRole: false, liveNetwork: false };
+    serial: null, avd: null, ownedEmulator: false, timeoutMs: 900_000, clockExclusive: false, homeRole: false, liveNetwork: false,
+    deviceTarget: null, allowReinstall: false };
   const value = (arg, index) => {
     if (arg.includes("=")) return [arg.slice(arg.indexOf("=") + 1), index];
     if (argv[index + 1] === undefined) throw new Error(`${arg} needs a value`);
@@ -282,6 +312,8 @@ export function parseInstrumentationArgs(argv) {
       case "--clock-exclusive": options.clockExclusive = true; break;
       case "--home-role": options.homeRole = true; break;
       case "--live-network": options.liveNetwork = true; break;
+      case "--allow-reinstall": options.allowReinstall = true; break;
+      case "--device-target": [v, index] = value(arg, index); options.deviceTarget = v; break;
       case "--classes": [v, index] = value(arg, index); options.classes = v.split(",").map(s => s.trim()).filter(Boolean); break;
       case "--variants": [v, index] = value(arg, index); options.variants = v.split(",").map(s => s.trim()).filter(Boolean); break;
       case "--apk-dir": [v, index] = value(arg, index); options.apkDir = v; break;
@@ -296,6 +328,8 @@ export function parseInstrumentationArgs(argv) {
   if (!options.variants.length || options.variants.some(v => !["standalone", "launcher"].includes(v)) || new Set(options.variants).size !== options.variants.length)
     throw new Error("--variants must list standalone and/or launcher once each");
   if (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs < 10_000) throw new Error("--timeout-ms must be at least 10000");
+  if (options.deviceTarget !== null) admitDeviceTargetOptions(options);
+  else if (options.allowReinstall) throw new Error("--allow-reinstall applies only to --device-target");
   options.apkDir ??= options.testMocks ? "artifacts/test-mocks" : "artifacts";
   if (!options.all) {
     const requested = (options.classes ?? DEFAULT_CLASSES).map(qualifiedClass);
@@ -313,16 +347,57 @@ export function parseInstrumentationArgs(argv) {
       if (spec.homeRole && !options.homeRole)
         throw new Error(`${short(cls)} needs the HOME role phase; pass --home-role on an owned emulator (the runner selects the launcher APK as HOME and restores the original)`);
       if (spec.homeRole && !options.variants.includes("launcher")) throw new Error(`${short(cls)} runs only on the launcher variant`);
+      if (options.deviceTarget && (spec.secondaryUser || OWNED_EMULATOR_ONLY.has(short(cls))))
+        throw new Error(`${short(cls)} changes state only an owned disposable emulator may lose; it is refused on --device-target ${options.deviceTarget}`);
     }
     options.classes = requested;
   }
   if (options.homeRole) {
     if (options.all) throw new Error("--home-role runs named classes; it cannot be combined with --all");
-    if (!options.ownedEmulator) throw new Error("--home-role changes the HOME role; it requires --owned-emulator");
+    if (!options.ownedEmulator && !options.deviceTarget) throw new Error("--home-role changes the HOME role; it requires --owned-emulator");
     if (!options.variants.includes("launcher")) throw new Error("--home-role needs the launcher variant");
     if (!options.classes.some(cls => CLASS_REGISTRY[short(cls)]?.homeRole)) throw new Error("--home-role was given but no requested class uses the HOME role (LauncherHome, SettingsRoles)");
   }
   return options;
+}
+
+/** Option rules for --device-target, checked before any adb command. */
+function admitDeviceTargetOptions(options) {
+  const target = options.deviceTarget;
+  if (!Object.hasOwn(DEVICE_TARGETS, target)) throw new Error("--device-target must be cuttlefish or pixel");
+  if (options.ownedEmulator || options.avd !== null) throw new Error("--device-target replaces --owned-emulator and --avd; a device target is never an emulator");
+  if (typeof options.serial !== "string") throw new Error(`--device-target ${target} needs an explicit --serial`);
+  if (target === "cuttlefish" && !CUTTLEFISH_SERIAL.test(options.serial)) throw new Error("--device-target cuttlefish needs a loopback adb endpoint (127.0.0.1:NNNN)");
+  if (target === "pixel" && !USB_SERIAL.test(options.serial)) throw new Error("--device-target pixel needs a USB serial (no host:port, no emulator-NNNN)");
+  if (!options.allowReinstall)
+    throw new Error(`--device-target ${target} installs Alpha, clears its data before every class and uninstalls it; pass --allow-reinstall to permit that on ${options.serial}`);
+  if (options.testMocks) throw new Error("--test-mocks builds are not device evidence; --device-target runs flag-off APKs only");
+  if (options.clockExclusive) throw new Error("--clock-exclusive changes real alarms; it is refused on a device target");
+}
+
+/**
+ * Admission of a device target before anything is installed. Only read-only getprop calls; the
+ * returned identity is written into the record so the evidence class can be checked against it.
+ */
+export function admitDeviceTarget(adb, target, serial) {
+  const prop = name => adb(["shell", "getprop", name]).trim();
+  if (prop("sys.boot_completed") !== "1") throw new Error(`${serial} has not finished booting`);
+  if (prop("ro.kernel.qemu") === "1" || prop("ro.boot.qemu") === "1") throw new Error(`${serial} is an emulator; use --owned-emulator, never a device target`);
+  const identity = { target, product: prop("ro.product.name"), device: prop("ro.product.device"), model: prop("ro.product.model"), hardware: prop("ro.hardware"),
+    fingerprint: prop("ro.build.fingerprint"), buildType: prop("ro.build.type"), sdk: prop("ro.build.version.sdk"), abi: prop("ro.product.cpu.abi"),
+    serialSha256: createHash("sha256").update(serial).digest("hex") };
+  if (target === "cuttlefish") {
+    if (!CUTTLEFISH_SERIAL.test(serial)) throw new Error("A Cuttlefish target is reached through a loopback adb endpoint only");
+    if (!/^alpha_cf_(x86_64|arm64)_phone$/.test(identity.product) || !/^cutf_/.test(identity.hardware) || !/^vsoc_/.test(identity.device))
+      throw new Error(`${serial} is not the Alpha Cuttlefish product (product ${JSON.stringify(identity.product)}, hardware ${JSON.stringify(identity.hardware)}, device ${JSON.stringify(identity.device)})`);
+  } else if (target === "pixel") {
+    if (!USB_SERIAL.test(serial)) throw new Error("A Pixel target is reached through its USB serial only");
+    if (prop("ro.serialno") !== serial) throw new Error(`${serial} does not report itself as that USB serial (ro.serialno)`);
+    if (identity.device !== "stallion" || /^cutf_/.test(identity.hardware) || /^vsoc_/.test(identity.device))
+      throw new Error(`${serial} is not a Pixel 10a (ro.product.device ${JSON.stringify(identity.device)}, expected "stallion")`);
+  } else throw new Error("--device-target must be cuttlefish or pixel");
+  if (!identity.fingerprint) throw new Error(`${serial} reports no build fingerprint`);
+  return identity;
 }
 
 /** `am instrument` arguments for one class (or one phase method), never through a shell. */
@@ -456,10 +531,13 @@ function sourceCommit() {
 
 async function main() {
   const options = parseInstrumentationArgs(process.argv.slice(2));
-  const serial = options.serial ?? process.env.ANDROID_SERIAL;
-  if (!options.ownedEmulator) throw new Error("Pass --owned-emulator to confirm the emulator is disposable and owned by this run");
-  if (!/^emulator-\d+$/.test(serial ?? "")) throw new Error("An emulator serial (emulator-NNNN) is required; physical devices are refused");
-  if (!/^[A-Za-z0-9_.-]+$/.test(options.avd ?? "")) throw new Error("--avd <name> of the owned emulator is required");
+  // A device target is named explicitly (parseInstrumentationArgs checked its serial); never ANDROID_SERIAL.
+  const serial = options.deviceTarget ? options.serial : options.serial ?? process.env.ANDROID_SERIAL;
+  if (!options.deviceTarget) {
+    if (!options.ownedEmulator) throw new Error("Pass --owned-emulator to confirm the emulator is disposable and owned by this run");
+    if (!/^emulator-\d+$/.test(serial ?? "")) throw new Error("An emulator serial (emulator-NNNN) is required; physical devices are refused");
+    if (!/^[A-Za-z0-9_.-]+$/.test(options.avd ?? "")) throw new Error("--avd <name> of the owned emulator is required");
+  }
   const { androidEnv } = await import("./toolchain.mjs");
   const env = androidEnv();
   const adbPath = path.join(env.ANDROID_HOME, "platform-tools/adb");
@@ -474,20 +552,32 @@ async function main() {
   // runner cannot install between the admission checks and this run's installs.
   const { acquireDeviceLease, deviceLeaseStateDir } = await import("../vendor/eliza/packages/app/scripts/lib/device-lease.ts");
   const lease = await acquireDeviceLease(`android:${serial}`, { waitMs: 0, ttlMs: Number.MAX_SAFE_INTEGER, stateDir: deviceLeaseStateDir(process.env) });
-  try { process.exitCode = (await runLeased({ options, serial, adb, withSecondaryUser: secondaryUserLifecycle({ serial, lease, avd: options.avd, adb }) })).passed ? 0 : 1; } finally { lease.release(); }
+  const withSecondaryUser = options.deviceTarget ? undefined : secondaryUserLifecycle({ serial, lease, avd: options.avd, adb });
+  try { process.exitCode = (await runLeased({ options, serial, adb, withSecondaryUser })).passed ? 0 : 1; } finally { lease.release(); }
 }
 
 /** One leased run. `timing` only shortens the HOME role polling in tests. */
 export async function runLeased({ options, serial, adb, timing = {}, withSecondaryUser }) {
   // Admission before any installation.
-  const avd = adb(["emu", "avd", "name"]).split(/\r?\n/)[0].trim();
-  if (avd !== options.avd) throw new Error(`Serial ${serial} runs AVD ${JSON.stringify(avd)}, not ${options.avd}`);
+  const target = options.deviceTarget ?? null;
+  // The option rules are re-checked here so a caller that built options by hand cannot skip them.
+  if (target) { if (options.serial !== serial) throw new Error("Device target serial mismatch"); admitDeviceTargetOptions(options); }
+  const device = target ? admitDeviceTarget(adb, target, serial) : null;
   const prop = name => adb(["shell", "getprop", name]).trim();
-  if (prop("ro.kernel.qemu") !== "1" && prop("ro.boot.qemu") !== "1") throw new Error("Not an emulator");
-  if (prop("sys.boot_completed") !== "1") throw new Error("Emulator has not finished booting");
+  let avd = null;
+  if (!target) {
+    avd = adb(["emu", "avd", "name"]).split(/\r?\n/)[0].trim();
+    if (avd !== options.avd) throw new Error(`Serial ${serial} runs AVD ${JSON.stringify(avd)}, not ${options.avd}`);
+    if (prop("ro.kernel.qemu") !== "1" && prop("ro.boot.qemu") !== "1") throw new Error("Not an emulator");
+    if (prop("sys.boot_completed") !== "1") throw new Error("Emulator has not finished booting");
+  }
   const packages = adb(["shell", "pm", "list", "packages", "-u", "--user", "all"]).split(/\r?\n/).map(s => s.trim());
-  if (packages.some(row => row === `package:${PACKAGE}` || row === `package:${PACKAGE}.test`))
+  const preexisting = [PACKAGE, `${PACKAGE}.test`].filter(pkg => packages.includes(`package:${pkg}`));
+  // An emulator is never replaced. A device target replaces only with --allow-reinstall (checked above).
+  if (preexisting.length && !target)
     throw new Error("Alpha Phone or its test package is already installed; use a fresh emulator (never replaced)");
+  if (preexisting.length && !options.allowReinstall) throw new Error(`${preexisting.join(", ")} already installed on ${serial}; pass --allow-reinstall to replace it`);
+  if (device && preexisting.length) device.replacedPackages = preexisting;
   const apks = options.variants.flatMap(variant => admitApks(options.apkDir, variant, options));
   const home = options.homeRole ? admitHome(adb) : null;
   const inSecondaryUser = cls => CLASS_REGISTRY[short(cls)]?.secondaryUser === true;
@@ -501,7 +591,9 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
 
   const classes = [];
   const installed = [];
-  const emulator = { avd, abi: prop("ro.product.cpu.abi"), sdk: prop("ro.build.version.sdk"), serialSha256: createHash("sha256").update(serial).digest("hex") };
+  const emulator = target ? null : { avd, abi: prop("ro.product.cpu.abi"), sdk: prop("ro.build.version.sdk"), serialSha256: createHash("sha256").update(serial).digest("hex") };
+  // A device target replaces an installation that was already there (only with --allow-reinstall).
+  const installArgs = file => target ? ["install", "-r", "-t", file] : ["install", "-t", file];
   const fingerprint = (pkg, expected) => {
     const apkPath = /^package:(\/\S+\.apk)$/m.exec(adb(["shell", "pm", "path", pkg]))?.[1];
     const actual = apkPath && adb(["shell", "sha256sum", apkPath]).trim().split(/\s+/)[0];
@@ -510,8 +602,8 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
   try {
     for (const variant of options.variants) {
       const [app, test] = apks.filter(apk => apk.variant === variant);
-      adb(["install", "-t", app.file], { timeout: 600_000 }); installed.push(PACKAGE);
-      adb(["install", "-t", test.file], { timeout: 600_000 }); installed.push(`${PACKAGE}.test`);
+      adb(installArgs(app.file), { timeout: 600_000 }); installed.push(PACKAGE);
+      adb(installArgs(test.file), { timeout: 600_000 }); installed.push(`${PACKAGE}.test`);
       fingerprint(PACKAGE, app.sha256);
       fingerprint(`${PACKAGE}.test`, test.sha256);
       const dir = path.join(output, variant);
@@ -621,7 +713,7 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
     }
   }
   const result = writeInstrumentationRecord(path.join(output, "results.json"), {
-    runId, createdAt: new Date().toISOString(), commit, dirty, testMocks: options.testMocks, emulator,
+    runId, createdAt: new Date().toISOString(), commit, dirty, testMocks: options.testMocks, ...(target ? { deviceTarget: target, device } : { emulator }),
     apks: apks.map(({ file, ...apk }) => ({ ...apk, file: path.relative(process.cwd(), path.resolve(file)) })),
     mode: options.all ? "all" : "classes",
     ...(options.liveNetwork ? { liveNetwork: true } : {}),
@@ -631,7 +723,10 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
     classes,
   });
   for (const row of classes) console.log(`${row.status.padEnd(8)} ${row.variant.padEnd(10)} ${short(row.class)}${row.user ? " (secondary user)" : ""}${row.ignored.length ? ` (skipped by assumption: ${row.ignored.join(", ")})` : ""}`);
-  console.log(`${result.passed ? "PASSED" : "FAILED"}: ${path.relative(process.cwd(), path.join(output, "results.json"))} (emulator class E evidence only; not device acceptance)`);
+  const scope = target === "cuttlefish" ? "Cuttlefish image class I evidence only; not emulator, physical-device or user acceptance"
+    : target === "pixel" ? "physical-device class D instrumentation evidence for these classes only; not image, real-integration or full user acceptance"
+    : "emulator class E evidence only; not device acceptance";
+  console.log(`${result.passed ? "PASSED" : "FAILED"}: ${path.relative(process.cwd(), path.join(output, "results.json"))} (${scope})`);
   return result;
 }
 
