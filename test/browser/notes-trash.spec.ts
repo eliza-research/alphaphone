@@ -1,9 +1,10 @@
+import {openLegacyNotes} from './helpers/legacy-notes';
 import { returnToApps } from './app-navigation';
 import {test,expect,type Page} from '@playwright/test';
 const DAY=24*60*60*1000;
 const savedRecords=(page:Page)=>page.evaluate(async()=>JSON.parse(await (await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw()).records);
 const trashEntries=(page:Page)=>page.evaluate(async()=>(await (await import('/src/runtime/notes-trash.ts')).readNotesTrash()).entries);
-async function openNotes(page:Page){await page.getByRole('button',{name:'Notes',exact:true}).click();await expect(page.locator('html')).toHaveAttribute('data-notes-storage-state','ready');}
+const openNotes=openLegacyNotes;
 async function createNote(page:Page,title:string,body:string){
  await page.getByRole('button',{name:'New note',exact:true}).click();
  await page.getByRole('textbox',{name:'Title',exact:true}).fill(title);
@@ -84,7 +85,7 @@ test('Delete forever and Empty Trash ask first, and checklists use the same Tras
  expect(await page.evaluate(async()=>JSON.stringify((await (await import('/src/browser/documents.ts')).browserDocuments.read('alpha.browser.notes-trash.v1'))??null).includes('Three'))).toBe(false);
 });
 
-test('Trash purges exactly three days after deletion, at startup and when Notes opens',async({page})=>{
+test('canonical startup preserves unselected legacy Trash; Older notes purges exactly at three days',async({page})=>{
  const t0=Date.UTC(2026,9,7,12);
  await page.clock.install({time:t0});
  await page.goto('/');await openNotes(page);
@@ -103,7 +104,7 @@ test('Trash purges exactly three days after deletion, at startup and when Notes 
  await expect(trash.getByText('Note · 1 day left',{exact:true})).toBeVisible();
  await expect(trash.getByText('Note · 2 days left',{exact:true})).toBeVisible();
 
- // Past the boundary, opening Notes purges without a restart.
+ // Past the boundary, explicitly opening Older notes purges without a restart.
  await page.clock.setSystemTime(deletedAt+3*DAY+60_000);
  await returnToApps(page);
  await openNotes(page);
@@ -113,10 +114,26 @@ test('Trash purges exactly three days after deletion, at startup and when Notes 
  await expect(trash.getByText('Later',{exact:true})).toBeVisible();
  expect(await page.evaluate(async()=>JSON.stringify((await (await import('/src/browser/documents.ts')).browserDocuments.read('alpha.browser.notes-trash.v1'))??null).includes('Gone after three days'))).toBe(false);
 
- // Startup purge: the second note expires while the app is closed. Repeating it is a no-op.
+ // Canonical startup must not open or rewrite unselected legacy records, even
+ // when their Trash entry expires while the app is closed. Preserve the exact
+ // collection and Trash document receipt/bytes before explicitly selecting Older notes.
+ const retained=await page.evaluate(async()=>({
+  notes:await(await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw(),
+  trash:await(await import('/src/browser/documents.ts')).browserDocuments.read('alpha.browser.notes-trash.v1'),
+ }));
+ expect((await trashEntries(page)).map((entry:any)=>entry.note.title)).toEqual(['Later']);
  await page.clock.setSystemTime(deletedAt+4*DAY+60_000);
  await page.reload();
+ await expect(page.locator('html')).toHaveAttribute('data-active-view','home');
+ expect(await page.evaluate(async()=>({
+  notes:await(await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw(),
+  trash:await(await import('/src/browser/documents.ts')).browserDocuments.read('alpha.browser.notes-trash.v1'),
+ }))).toEqual(retained);
+ expect((await trashEntries(page)).map((entry:any)=>entry.note.title)).toEqual(['Later']);
+ // Selecting the retained source now admits its existing three-day maintenance.
+ await openNotes(page);
  await expect.poll(()=>trashEntries(page)).toEqual([]);
+ // Reopening the already purged source is still a no-op.
  await page.reload();await openNotes(page);
  expect(await trashEntries(page)).toEqual([]);
  expect((await savedRecords(page)).map((n:any)=>n.title)).toEqual([]);
