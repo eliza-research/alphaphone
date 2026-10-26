@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { setTextScale } from './accessibility-states';
+import {canonicalNotesFixture,openCanonicalNotes} from './helpers/canonical-notes';
 import {openOwnedPhotoViewer} from './helpers/owned-photo';
 import { auditPage, auditTabOrder, format } from './accessibility-audit';
 
@@ -96,13 +97,15 @@ test('a new browser tab shows no find bar until find is opened', async ({ page }
 });
 
 test('the note editor keeps Delete on screen beside the other header actions', async ({ page }) => {
-  await page.addInitScript(offline);
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Notes', exact: true }).click();
+  const {foreign,errors}=await canonicalNotesFixture(page);
+  await openCanonicalNotes(page);
   await page.getByRole('button', { name: 'New note', exact: true }).click();
   for (const name of ['Back to notes', 'Share note', 'Delete note']) await reachable(page, page.getByRole('button', { name, exact: true }));
   const sizes = await page.locator('.note-editor [data-alpha-app-header] button').evaluateAll(list => list.map(el => el.getBoundingClientRect().width));
   for (const width of sizes) expect(width).toBeGreaterThanOrEqual(44);
+  expect(sizes.length).toBeGreaterThanOrEqual(3);
+  expect(foreign).toEqual([]);
+  expect(errors).toEqual([]);
 });
 
 test.describe('200% text keeps the way out on screen', () => {
