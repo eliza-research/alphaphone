@@ -170,7 +170,7 @@ const cloudAdmittedBefore=new Map([
  * transport's automations verdict; then whether unknown group names are refused. */
 function nativeGate(config,cases){
  const plugin=readFileSync(nativeSource('AlphaLocalAgentPlugin.java'),'utf8'),request=plugin.slice(plugin.indexOf('@PluginMethod public void request(PluginCall call) {'));
- const load=request.match(/\n  (OwnerRoutes routes;\n  try\{routes=OwnerRoutes\.shipped\(getContext\(\)\.getAssets\(\)::open\);\}catch\(IllegalStateException unavailable\)\{call\.reject\("Unsupported local agent request\."\);return;\}\n  String group=routes\.group\(path\);)\n/)[1]
+ const load=request.match(/\n  (OwnerRoutes routes;\n  try\{routes=OwnerRoutes\.shipped\(getContext\(\)\.getAssets\(\)::open\);\}catch\(IllegalStateException unavailable\)\{logRequestFailure\("other",method,0,"route-table"\);call\.reject\("Unsupported local agent request\."\);return;\}\n  String group=routes\.group\(path\);)\n/)[1]
   .replace('getContext().getAssets()::open','CONFIG').replace('call.reject("Unsupported local agent request.");return;','return true;');
  const gate=request.match(/\n  if\((.*)\)\{\n   logRequestFailure\(group==null\?\"other\":group,method,0,\"gate\"\);\n   call\.reject\("Unsupported local agent request\."\);return;/)[1];
  const directory=mkdtempSync(join(tmpdir(),'alpha-owner-routes-')),harness=join(directory,'OwnerRouteHarness.java');

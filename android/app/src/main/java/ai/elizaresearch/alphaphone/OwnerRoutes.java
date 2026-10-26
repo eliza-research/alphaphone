@@ -57,10 +57,11 @@ final class OwnerRoutes {
   String[] parts=path.split("\\?",-1);if(parts.length>2)return false;
   String raw=parts[0];if(raw.contains("//")||DOT_SEGMENT.matcher(raw).find())return false;
   List<String> keys=new ArrayList<>();
-  if(parts.length==2&&!parts[1].isEmpty())for(String pair:parts[1].split("&",-1)){String key=decode(pair.split("=",2)[0]);if(keys.contains(key))return false;keys.add(key);}
+  if(parts.length==2&&!parts[1].isEmpty())for(String pair:parts[1].split("&",-1)){String key=decode(pair.split("=",2)[0]);if(key==null||keys.contains(key))return false;keys.add(key);}
   for(Route route:group.routes)if(route.methods.contains(method)&&(route.query==null||route.query.containsAll(keys)))for(String pattern:route.paths){
    String id=segment(pattern,route.query!=null?raw:path);
-   if(id!=null&&(id.isEmpty()||group.id.matcher(route.query!=null?decode(id):id).matches()))return true;
+   String value=id!=null&&route.query!=null?decode(id):id;
+   if(id!=null&&(id.isEmpty()||value!=null&&group.id.matcher(value).matches()))return true;
   }
   return false;
  }
@@ -84,8 +85,8 @@ final class OwnerRoutes {
   for(int i=0;i<values.length();i++)list.add(values.getString(i));
   return list;
  }
- /** Percent-decodes keeping '+' literal; malformed UTF-8 becomes U+FFFD, which no allowed key or id accepts. */
+ /** decodeURIComponent: '+' stays literal; an undecodable value is null, which callers refuse. */
  private static String decode(String value){
-  try{return java.net.URLDecoder.decode(value.replace("+","%2B"),"UTF-8");}catch(java.io.UnsupportedEncodingException impossible){throw new AssertionError(impossible);}
+  try{return java.net.URLDecoder.decode(value.replace("+","%2B"),"UTF-8");}catch(Exception invalid){return null;}
  }
 }
