@@ -1,0 +1,177 @@
+name: Device lab (AOSP image, Cuttlefish, Pixel 10a)
+# Runs on the release owner's self-hosted alpha-device builder (P-58). Dispatch only: the
+# repository is public, so no pull-request or push trigger may reach this runner
+# (test/self-hosted-runner-guard.test.mjs). Jobs share one runner checkout, so evidence lives
+# under the runner's ALPHA_DEVICE_LAB_ROOT, not the workspace. Each job records its own evidence
+# class; an image build is not a boot, a Cuttlefish run is not a device run, and a skipped stage
+# is not a pass.
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Image stage: none, development (userdebug build) or release (production build + release signing; owner approval)"
+        type: choice
+        default: none
+        options: [none, development, release]
+      cuttlefish_gates:
+        description: Run instrumentation and the per-view screenshot gate on the running Alpha Cuttlefish
+        type: boolean
+        default: true
+      pixel_serial:
+        description: USB serial of the attached Pixel 10a (empty skips device stages)
+        type: string
+        default: ""
+      pixel_flash:
+        description: Flash this run's image to the Pixel
+        type: boolean
+        default: false
+      pixel_wipe:
+        description: Allow userdata wipes (flash -w, stock recovery, reinstalling Alpha for instrumentation)
+        type: boolean
+        default: false
+      pixel_drills:
+        description: Run signed-update, interrupted-update, rollback and stock-recovery drills (needs image=release and pixel_wipe)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: device-lab
+  cancel-in-progress: false
+jobs:
+  image:
+    if: inputs.image != 'none'
+    runs-on: [self-hosted, alpha-device, aosp]
+    timeout-minutes: 900
+    # P-57: release keys exist only in the approved release environment.
+    environment: ${{ inputs.image == 'release' && 'release' || '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+      - name: Evidence directory outside the checkout
+        run: echo "ALPHA_EVIDENCE_ROOT=${ALPHA_DEVICE_LAB_ROOT:?runner sets ALPHA_DEVICE_LAB_ROOT}/${{ github.run_id }}" >> "$GITHUB_ENV"
+      - name: Development image build
+        if: inputs.image == 'development'
+        run: |
+          node scripts/aosp-build-image.mjs --aosp-source "$ALPHA_AOSP_SOURCE" --factory-image "$ALPHA_FACTORY_IMAGE" \
+            --variant development --out "$ALPHA_EVIDENCE_ROOT/build"
+      - name: Production build and release signing
+        if: inputs.image == 'release'
+        env:
+          ALPHA_KEY_RELEASEKEY_PK8: ${{ secrets.ALPHA_KEY_RELEASEKEY_PK8 }}
+          ALPHA_KEY_PLATFORM_PK8: ${{ secrets.ALPHA_KEY_PLATFORM_PK8 }}
+          ALPHA_KEY_SHARED_PK8: ${{ secrets.ALPHA_KEY_SHARED_PK8 }}
+          ALPHA_KEY_MEDIA_PK8: ${{ secrets.ALPHA_KEY_MEDIA_PK8 }}
+          ALPHA_KEY_NETWORKSTACK_PK8: ${{ secrets.ALPHA_KEY_NETWORKSTACK_PK8 }}
+          ALPHA_KEY_SDK_SANDBOX_PK8: ${{ secrets.ALPHA_KEY_SDK_SANDBOX_PK8 }}
+          ALPHA_KEY_BLUETOOTH_PK8: ${{ secrets.ALPHA_KEY_BLUETOOTH_PK8 }}
+          ALPHA_KEY_NFC_PK8: ${{ secrets.ALPHA_KEY_NFC_PK8 }}
+          ALPHA_KEY_APEX_PK8: ${{ secrets.ALPHA_KEY_APEX_PK8 }}
+          ALPHA_KEY_AVB_PEM: ${{ secrets.ALPHA_KEY_AVB_PEM }}
+          ALPHA_KEY_APEX_PAYLOAD_PEM: ${{ secrets.ALPHA_KEY_APEX_PAYLOAD_PEM }}
+        run: |
+          node scripts/aosp-release-pipeline.mjs --aosp-source "$ALPHA_AOSP_SOURCE" --factory-image "$ALPHA_FACTORY_IMAGE" \
+            --out "$ALPHA_EVIDENCE_ROOT/release-pipeline"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: device-lab-image-${{ github.run_id }}
+          path: |
+            ${{ env.ALPHA_EVIDENCE_ROOT }}/build/*.json
+            ${{ env.ALPHA_EVIDENCE_ROOT }}/release-pipeline/*.json
+            ${{ env.ALPHA_EVIDENCE_ROOT }}/release-pipeline/build/*.json
+            ${{ env.ALPHA_EVIDENCE_ROOT }}/release-pipeline/release/release-record.json
+          retention-days: 30
+          if-no-files-found: warn
+
+  cuttlefish:
+    if: always() && inputs.cuttlefish_gates && (needs.image.result == 'success' || needs.image.result == 'skipped')
+    needs: image
+    runs-on: [self-hosted, alpha-device, cuttlefish]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+      - name: Evidence directory outside the checkout
+        run: echo "ALPHA_EVIDENCE_ROOT=${ALPHA_DEVICE_LAB_ROOT:?runner sets ALPHA_DEVICE_LAB_ROOT}/${{ github.run_id }}" >> "$GITHUB_ENV"
+      - name: Per-view screenshot gate on Cuttlefish (image class)
+        run: |
+          node scripts/device-view-capture.mjs --device-target cuttlefish --serial 127.0.0.1:6520 \
+            --output "$ALPHA_EVIDENCE_ROOT/cuttlefish-views"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: device-lab-cuttlefish-${{ github.run_id }}
+          path: ${{ env.ALPHA_EVIDENCE_ROOT }}/cuttlefish-views/
+          retention-days: 30
+          if-no-files-found: warn
+
+  pixel:
+    if: always() && inputs.pixel_serial != '' && (needs.image.result == 'success' || needs.image.result == 'skipped')
+    needs: image
+    runs-on: [self-hosted, alpha-device, pixel10a]
+    timeout-minutes: 480
+    env:
+      PIXEL_SERIAL: ${{ inputs.pixel_serial }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+      - name: Evidence directory outside the checkout
+        run: echo "ALPHA_EVIDENCE_ROOT=${ALPHA_DEVICE_LAB_ROOT:?runner sets ALPHA_DEVICE_LAB_ROOT}/${{ github.run_id }}" >> "$GITHUB_ENV"
+      - name: Locate this run's image
+        id: image
+        if: inputs.pixel_flash || inputs.pixel_drills
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const root = process.env.ALPHA_EVIDENCE_ROOT, out = process.env.GITHUB_OUTPUT;
+            const pipeline = `${root}/release-pipeline`;
+            if (fs.existsSync(`${pipeline}/pipeline.json`)) {
+              const release = `${pipeline}/release`;
+              for (const name of ["signed-img.zip", "ota.zip"]) if (!fs.existsSync(`${release}/${name}`)) throw new Error(`${name} missing`);
+              const { createHash } = await import("node:crypto");
+              const hash = file => createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+              fs.appendFileSync(out, `zip=${release}/signed-img.zip\nzip_sha256=${hash(`${release}/signed-img.zip`)}\nota=${release}/ota.zip\nota_sha256=${hash(`${release}/ota.zip`)}\nrecord=${release}/release-record.json\n`);
+            } else {
+              const record = JSON.parse(fs.readFileSync(`${root}/build/build-result.json`, "utf8"));
+              const image = record.artifacts?.image;
+              if (!image?.sha256) throw new Error("no development image in this run");
+              fs.appendFileSync(out, `zip=${image.file}\nzip_sha256=${image.sha256}\n`);
+            }'
+      - name: Flash Pixel 10a
+        if: inputs.pixel_flash
+        run: |
+          node scripts/pixel10a-flash.mjs --serial "$PIXEL_SERIAL" --image-zip "${{ steps.image.outputs.zip }}" \
+            --image-sha256 "${{ steps.image.outputs.zip_sha256 }}" ${{ inputs.pixel_wipe && '--wipe' || '' }} \
+            --out "$ALPHA_EVIDENCE_ROOT/pixel-flash"
+      - name: Per-view screenshot gate on Pixel (device class)
+        run: |
+          node scripts/device-view-capture.mjs --device-target pixel --serial "$PIXEL_SERIAL" \
+            --output "$ALPHA_EVIDENCE_ROOT/pixel-views"
+      - name: Update and recovery drills
+        if: inputs.pixel_drills && inputs.pixel_wipe && inputs.image == 'release'
+        run: |
+          d="$ALPHA_EVIDENCE_ROOT/pixel-drills"; mkdir -p "$d"
+          ota=(--ota "${{ steps.image.outputs.ota }}" --ota-sha256 "${{ steps.image.outputs.ota_sha256 }}")
+          node scripts/pixel10a-drills.mjs signed-update --serial "$PIXEL_SERIAL" "${ota[@]}" --out "$d/signed-update" --confirm-destructive
+          node scripts/pixel10a-drills.mjs interrupted-update --serial "$PIXEL_SERIAL" "${ota[@]}" --out "$d/interrupted-update"
+          node scripts/pixel10a-drills.mjs compatible-rollback --serial "$PIXEL_SERIAL" "${ota[@]}" \
+            --known-good-record "${{ steps.image.outputs.record }}" --out "$d/compatible-rollback"
+          node scripts/pixel10a-drills.mjs stock-recovery --serial "$PIXEL_SERIAL" --factory-zip "$ALPHA_FACTORY_IMAGE" \
+            --alpha-image-zip "${{ steps.image.outputs.zip }}" --alpha-image-sha256 "${{ steps.image.outputs.zip_sha256 }}" \
+            --out "$d/stock-recovery" --confirm-destructive
+          args=(); for r in "$d"/*/{signedUpdate,interruptedUpdate,compatibleRollback,stockRecovery}.json; do [ -f "$r" ] && args+=(--result "$r"); done
+          node scripts/pixel10a-drills.mjs record "${args[@]}" --out "$d/drills.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: device-lab-pixel-${{ github.run_id }}
+          path: |
+            ${{ env.ALPHA_EVIDENCE_ROOT }}/pixel-flash/
+            ${{ env.ALPHA_EVIDENCE_ROOT }}/pixel-views/
+            ${{ env.ALPHA_EVIDENCE_ROOT }}/pixel-drills/
+          retention-days: 30
+          if-no-files-found: warn
