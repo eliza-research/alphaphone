@@ -11,7 +11,7 @@ import path from "node:path";
 import { createHash, X509Certificate } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { PIXEL10A_PRODUCT, pixel10aOptions, pixel10aProductProblems } from "../scripts/aosp-pixel10a.mjs";
-import { channelDistributionProblems, channelSigningProblems, gitWorkTreeProblem, isWithin, parseSigningArgs, signingCommands, signRelease, X509_KEYS } from "../scripts/sign-aosp-release.mjs";
+import { channelDistributionProblems, channelSigningProblems, gitWorkTreeProblem, inspectTargetFiles, targetFilesProblems, isWithin, parseSigningArgs, signingCommands, signRelease, X509_KEYS } from "../scripts/sign-aosp-release.mjs";
 import { chainedPartitionsFromMiscInfo, compatibilityRecord, parseProperties } from "../scripts/aosp-release-record.mjs";
 import { releaseBlockers } from "../scripts/release-blockers.mjs";
 
@@ -66,13 +66,16 @@ function releaseCertificates({ releasekey, apex }) {
 }
 
 /** A repository copy whose production descriptors are complete for the given keys. */
+/** The fixture target-files chains vbmeta_system and vbmeta_vendor (MISC_INFO); the committed build chains none. */
+const FIXTURE_CHAINED = Object.freeze(["vbmeta_system", "vbmeta_vendor"]);
+
 function completeRoot(t, { platform, releasekey, apex, avb }) {
   const dir = temporary(t, "alpha-release-root-");
   const write = (rel, value) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), typeof value === "string" ? value : JSON.stringify(value, null, 2)); };
   const lock = JSON.stringify({ schema: 1, target: "pixel10a", device: { codename: "stallion", androidRelease: "17" }, developmentOnly: false, releaseQualified: false });
   write("android/aosp/pixel10a-source.json", lock);
   const product = read(PIXEL10A_PRODUCT);
-  write(PIXEL10A_PRODUCT, { ...product, sourceLock: { ...product.sourceLock, sha256: sha256(lock) }, signer: { ...product.signer, platformCertificateSha256: platform, releaseCertificates: releaseCertificates({ releasekey, apex }) }, avb: { ...product.avb, publicKeySha256: avb } });
+  write(PIXEL10A_PRODUCT, { ...product, sourceLock: { ...product.sourceLock, sha256: sha256(lock) }, signer: { ...product.signer, platformCertificateSha256: platform, releaseCertificates: releaseCertificates({ releasekey, apex }) }, avb: { ...product.avb, chainedPartitions: [...FIXTURE_CHAINED], publicKeySha256: avb } });
   write(CHANNEL, { ...read(CHANNEL), otaCertificateSha256: releasekey, avbPublicKeySha256: avb });
   write("android/release-signer.json", { ...read("android/release-signer.json"), signerSha256: "d".repeat(64) });
   return { dir, write, product: read(PIXEL10A_PRODUCT) };
@@ -264,7 +267,7 @@ test("the stallion product sets no board AVB variables; signing carries the AVB 
 });
 
 test("signing commands follow the upstream releasetools job with keys only as runtime paths", () => {
-  const product = read(PIXEL10A_PRODUCT);
+  const committed = read(PIXEL10A_PRODUCT), product = { ...committed, avb: { ...committed.avb, chainedPartitions: [...FIXTURE_CHAINED] } };
   const { commands } = signingCommands({ targetFiles: "/in/tf.zip", keysDir: "/dev/shm/keys", releasetools: "/otatools/bin", out: "/out", product, incrementalFrom: "/prev/tf.zip" });
   assert.deepEqual(commands.map(command => path.basename(command.tool)), ["sign_target_files_apks", "ota_from_target_files"]);
   assert.deepEqual(commands[0].args.slice(0, 5), ["-p", "/otatools", "-o", "-d", "/dev/shm/keys"]);
@@ -422,8 +425,12 @@ test("APK certificates without a release key mapping are refused before signing;
   assert.ok(fixture.ota.calls()[0].includes(`vendor/google/certs/camera=${path.join(fixture.key.keys, "camera")}`));
   assert.equal(JSON.parse(fs.readFileSync(result.record, "utf8")).certificates.camera, cameraDigest);
   // External signing and a partly presigned APEX are refused.
-  fixture = setup(t, {}, { apkcerts: [...APKCERTS, apkcert("Ext.apk", "EXTERNAL")] });
+  fixture = setup(t, {}, { apkcerts: [...APKCERTS, apkcert("Ext.apk", "EXTERNAL")], files: { "PRODUCT/app/Ext/Ext.apk": { CERT: TEST_KEY_DIGEST } } });
   await refusedBeforeSigning(fixture, fixture.options, /APK Ext\.apk is EXTERNAL/);
+  // apkcerts.txt also lists CTS/test APK modules the image never packages (4,843 rows for 228
+  // packaged APKs in the real stallion build); only packaged APKs need a release mapping.
+  fixture = setup(t, {}, { apkcerts: [...APKCERTS, apkcert("CtsKeySetTest.apk", "cts/hostsidetests/appsecurity/certs/keysets/cts-keyset-test-a.x509.pem")] });
+  assert.ok(!targetFilesProblems(inspectTargetFiles(fixture.tf.file), { product: read(PIXEL10A_PRODUCT) }).some(problem => /CtsKeySetTest/.test(problem)));
   fixture = setup(t, {}, { apexkeys: [...APEXKEYS, 'name="com.x.apex" public_key="PRESIGNED" private_key="PRESIGNED" container_certificate="x.x509.pem" container_private_key="x.pk8"'] });
   await refusedBeforeSigning(fixture, fixture.options, /APEX com\.x\.apex is only partly presigned/);
 });

@@ -131,7 +131,10 @@ export function inspectTargetFiles(zip) {
   const miscInfo = misc === null ? null : parseProperties(misc);
   const apkcerts = parseQuotedRows(read("META/apkcerts.txt") ?? "");
   const apexkeys = parseQuotedRows(read("META/apexkeys.txt") ?? "");
-  return { miscInfo, apkcerts, apexkeys, hasApkcerts: names.has("META/apkcerts.txt"), chainedPartitions: miscInfo ? chainedPartitionsFromMiscInfo(miscInfo) : [] };
+  // apkcerts.txt lists every APK module the build knows (CTS and test APKs included); only the
+  // APKs packaged in the target-files are re-signed, so only those need a release key mapping.
+  const packagedApks = new Set([...names].filter(name => !name.startsWith("META/") && name.endsWith(".apk")).map(name => path.posix.basename(name)));
+  return { miscInfo, apkcerts, apexkeys, packagedApks, hasApkcerts: names.has("META/apkcerts.txt"), chainedPartitions: miscInfo ? chainedPartitionsFromMiscInfo(miscInfo) : [] };
 }
 
 /** APEXes the job re-signs (neither payload nor container presigned). */
@@ -161,6 +164,7 @@ export function targetFilesProblems(inspection, { product, keyMap = {} }) {
     if (!inspection.chainedPartitions.includes(partition)) problems.push(`${PIXEL10A_PRODUCT} maps --avb_${partition}_key, but the target-files does not chain ${partition}`);
   if (!inspection.hasApkcerts) problems.push("--target-files has no META/apkcerts.txt; its APK certificates cannot be checked");
   for (const row of inspection.apkcerts) {
+    if (inspection.packagedApks && !inspection.packagedApks.has(row.name)) continue;
     if (row.certificate === "EXTERNAL") { problems.push(`APK ${row.name} is EXTERNAL; externally signed APKs are not supported by this job`); continue; }
     const source = sourceKey(row.certificate);
     if (source && !releaseKeyFor(source, keyMap)) problems.push(`APK ${row.name} is signed with ${row.certificate}, which no release key mapping covers (use --map-key ${source}=NAME)`);

@@ -32,7 +32,7 @@
   "avb": {
     "algorithm": "SHA256_RSA4096",
     "vbmetaKey": "avb.pem",
-    "chainedPartitions": ["vbmeta_system", "vbmeta_vendor"],
+    "chainedPartitions": [],
     "publicKeyMetadata": "avb_pkmd.bin",
     "publicKeySha256": "43cea74d290d0f33956d6aa7cc13601e881e27ac0b9ef436a22ac0ca6d19a2eb"
   },
