@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import {openCanonicalCalendarForm} from './helpers/canonical-calendar';
 import {openOwnedPhotoViewer} from './helpers/owned-photo';
 
 /**
@@ -6,7 +7,9 @@ import {openOwnedPhotoViewer} from './helpers/owned-photo';
  *
  * "live" states use the product adapters with no connection and no data: they are what a
  * new or disconnected phone shows, including each app's empty, unavailable and
- * permission-denied states. "mock" states are the labelled fixture mode with populated
+ * permission-denied states. The event form explicitly supplies a closed canonical
+ * read port because a disconnected agent correctly refuses to open that form.
+ * "mock" states are the labelled fixture mode with populated
  * lists and open subviews, reached by its `start=` deep links (development server only).
  */
 export type State = {
@@ -64,7 +67,8 @@ export const LIVE_STATES: State[] = [
   live('Conversation', ['Open conversation']),
   live('Inbox (not connected)', ['Inbox']),
   live('Calendar', ['Calendar']),
-  live('Calendar new event', ['Calendar', 'New event']),
+  // An admitted read-only source exposes the real form; no calendar event write runs.
+  {name:'live Calendar new event',shows:'calendar-form',open:async(page,theme)=>{await openCanonicalCalendarForm(page,theme);await settle(page);await showing(page,'calendar-form');}},
   live('Calendar month', ['Calendar', 'Month view']),
   live('Browser', ['Browser']),
   live('Browser tabs', ['Browser', 'Tabs']),
