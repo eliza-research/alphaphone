@@ -1,3 +1,4 @@
+import {productionCloud, stagingCloud} from './cloud-deployment.generated.ts';
 import {browserCloudResidentEnabled,browserCloudResidentEnvironment} from './browser-cloud-resident.ts';
 import {calendarSyncHttp,type CalendarSyncRequest} from './calendar-linked-provider.ts';
 import type {AutomationsMethod} from './automations-route-policy.ts';
@@ -19,22 +20,24 @@ import { BILLING_LIMITS_PATH, ENTITLEMENT_KEYS_PATH, ENTITLEMENT_PATH, REDEEM_PA
  * pairing route. The development-only hosted-agent fixture extends it in
  * development-cloud-agents.ts and is constructed only in ELIZA_DEV_ALLOW_TEST_MOCKS=1 builds. */
 export type CloudEnvironment = "production" | "staging";
-export type CloudAuthority = { readonly api: string; readonly web: string; readonly agents: string };
+export type CloudAuthority = { readonly name: string; readonly api: string; readonly web: string; readonly agents: string; readonly entitlementAudience: string };
 // Staging is admitted in test mocks or the explicitly selected real browser Cloud QA host. QA builds reach
 // api-staging.eliza.app, its issuer and its web origins (docs/cloud-subscription-qa.md).
 // Vite replaces import.meta.env at build time, so flag-off bundles fold the staging
 // authority away. Node contract tests import this source without Vite and keep both.
 const stagingAvailable: boolean = import.meta.env === undefined || import.meta.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS === '1' || (browserCloudResidentEnabled && browserCloudResidentEnvironment === 'staging');
 const authorities: Partial<Record<CloudEnvironment, CloudAuthority>> = {
-  production: { api: "https://api.eliza.app", web: "https://eliza.app", agents: "cloud.eliza.app" },
-  ...(stagingAvailable ? { staging: { api: "https://api-staging.eliza.app", web: "https://staging.eliza.app", agents: "cloud-staging.eliza.app" } } : {}),
+  production: productionCloud,
+  ...(stagingAvailable ? { staging: stagingCloud } : {}),
 };
+/** Display names follow the same build gate as request authorities. */
+export function cloudServiceName(environment: CloudEnvironment): string { return authorities[environment]?.name ?? 'Cloud service'; }
 /** Whether this build can address the environment. Production builds expose only production. */
 export function cloudEnvironmentAvailable(environment: CloudEnvironment): boolean { return authorities[environment] !== undefined; }
 /** The one hosted plan page an environment opens in the system browser. Nothing else is opened for billing. */
 export function planManagementUrl(environment: CloudEnvironment): string {
   const authority = authorities[environment];
-  if (!authority) throw new Error("This Eliza Cloud environment is unavailable in this build.");
+  if (!authority) throw new Error("This Cloud environment is unavailable in this build.");
   return `https://${authority.agents}/cloud/billing`;
 }
 export interface CloudCredential {
@@ -167,7 +170,7 @@ function mailHtml(value: unknown): {bodyHtml?: string} {
 }
 export class CloudProtocolError extends Error {
   constructor(readonly code: "invalid-response" | "http" | "expired" | "credentials-missing" | "credential-consumed" | "login-active" | "account-changed", readonly status?: number, readonly data?: unknown, readonly retryAfter?: string) {
-    super(`Eliza Cloud ${code}${status ? ` (${status})` : ""}`);
+    super(`Cloud ${code}${status ? ` (${status})` : ""}`);
     this.name = "CloudProtocolError";
   }
 }
@@ -209,7 +212,7 @@ export class CloudProtocol {
     private readonly options: CloudProtocolOptions = {}) {}
   protected get authority(): CloudAuthority {
     const authority = authorities[this.environment];
-    if (!authority) throw new Error("This Eliza Cloud environment is unavailable in this build.");
+    if (!authority) throw new Error("This Cloud environment is unavailable in this build.");
     return authority;
   }
   protected async requestData(path: string, signal: AbortSignal, options: { credentialReference?: string; body?: unknown; method?: AutomationsMethod | 'PATCH'; authenticated?: boolean; runtimeBase?: string; timeoutMs?: number; headers?: Record<string,string>; credentialId?: string; expiresAt?: number; onStatus?: (status:number)=>void } = {}) {
@@ -340,7 +343,7 @@ export class CloudProtocol {
   }
   /** Entitlement ports for checkEntitlement, bound to this client. */
   entitlementSource(): EntitlementSource {
-    return { issuer: this.entitlementIssuer,
+    return { issuer: this.entitlementIssuer, audience: this.authority.entitlementAudience,
       entitlement: signal => this.subscriptionEntitlement(signal),
       entitlementKeys: signal => this.subscriptionEntitlementKeys(signal),
       fallbackPlan: signal => this.billingFallbackPlan(signal) };
@@ -477,6 +480,13 @@ export class CloudProtocol {
   /** Sends a six-digit code to the address. The address is never stored or logged here. */
   async startEmailSignIn(email: string, signal: AbortSignal): Promise<CloudSignInEmailStarted> {
     return this.signInStep(signal, port => port.startEmail({ environment: this.environment, email: email.trim() }), emailStarted);
+  }
+  async startPhoneSignIn(phone: string, signal: AbortSignal): Promise<CloudSignInEmailStarted> {
+    return this.signInStep(signal, port => { if (!port.startPhone) throw new CloudSignInError('unavailable'); return port.startPhone({ environment: this.environment, phone: phone.trim() }); }, emailStarted);
+  }
+  async verifyPhoneSignIn(attemptId: string, code: string, signal: AbortSignal): Promise<CloudSignInAuthenticated | CloudSignInMfaRequired> {
+    const outcome = await this.signInStep(signal, port => { if (!port.verifyPhone) throw new CloudSignInError('unavailable'); return port.verifyPhone({ attemptId, code }); }, value => signInVerified(value, this.environment));
+    return outcome.status === "mfa" ? outcome : this.storedSignIn(outcome, signal);
   }
   async verifyEmailSignIn(attemptId: string, code: string, signal: AbortSignal): Promise<CloudSignInAuthenticated | CloudSignInMfaRequired> {
     const outcome = await this.signInStep(signal, port => port.verifyEmail({ attemptId, code }), value => signInVerified(value, this.environment));

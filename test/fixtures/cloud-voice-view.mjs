@@ -1,3 +1,5 @@
+import { tsImport } from 'tsx/esm/api';
+const {cloudServiceName}=await tsImport(new URL('../../apps/app/src/runtime/cloud-protocol.ts',import.meta.url).href,{parentURL:import.meta.url});
 /** Loads the actual Alpha voice views with in-memory ports only.
  * No microphone, MediaRecorder, native plugin, provider, playback or account API is used. */
 import fs from 'node:fs';
@@ -25,6 +27,7 @@ export function cloudVoiceViewFixture(options={}){
  load('runtime/voice-states.ts',box,['voiceFailure','transcriptProvenance','deniedSettingsChoice','DENIED_SETTINGS_LABEL']);
  // Issue #395 native stage bridge: a no-op outside the phone.
  box.installNativeVoiceTurnMarks=()=>{};
+ box.cloudServiceName=cloudServiceName;
  load('prototype/voice-adapter.ts',box,['installPrototypeVoiceAdapter']);
  const icons={check:'check',mic:'official-mic-path',stop:'stop',play:'play',x:'close',cloud:'cloud',user:'account'};
  class Shell{

@@ -2,6 +2,7 @@ import {Capacitor, type PluginListenerHandle} from '@capacitor/core';
 import React, {useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore} from 'react';
 import {registerPlugin} from './platform-plugins';
 import {connectionController} from './runtime/connection-ui';
+import {cloudServiceName} from './runtime/cloud-protocol';
 import {googleConnectionController} from './runtime/google-connection-ui';
 import {readStartupPermissionMemory,writeStartupPermissionMemory,startupPhotoAccess,startupLocationAccess,STARTUP_PERMISSIONS_REOPEN} from './startup-permission-flow';
 import {iconStyle} from './icon-style';
@@ -205,7 +206,7 @@ export function StartupPermissions({active:enabled = true}: {active?: boolean} =
     {connection.residentInference&&connection.residentInference!=='cloud'&&<p role="status" className="alpha-permission-status">{connection.residentPlanNotice==='needs-plan'?'AI needs an active Cloud plan. Manage it in Settings.':'AI is not ready yet. Check your connection in Settings.'}</p>}
     {connection.error&&<p role="alert" className="alpha-permission-status">{connection.error}</p>}
     {connection.message?.includes('did not confirm revoking')&&<p role="status" className="alpha-permission-status">{connection.message}</p>}
-    {connection.accountCreated&&<p role="status" className="alpha-permission-status">This sign-in created a new Eliza Cloud account{connection.cloudAccount?.email?` (${connection.cloudAccount.email})`:''}.</p>}
+    {connection.accountCreated&&<p role="status" className="alpha-permission-status">This sign-in created a new {cloudServiceName(connection.cloudAccount?.environment ?? 'production')} account{connection.cloudAccount?.email?` (${connection.cloudAccount.email})`:''}.</p>}
     {progressError&&<p role="alert" className="alpha-permission-status">Setup progress could not be saved. Try again.</p>}
     <div className="alpha-permission-actions"><button type="button" className="alpha-permission-primary" disabled={busy} onClick={()=>void finish()}>{busy?'Checking…':'Go to Alpha'}</button></div>
   </div></dialog>;

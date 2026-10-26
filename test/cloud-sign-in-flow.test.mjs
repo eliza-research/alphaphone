@@ -19,7 +19,7 @@ const native='android/app/src/main/java/ai/elizaresearch/alphaphone/';
 test('PKCE, state, authorize URL, strict App Link return, pending record, readiness and routes (plain JVM)',()=>{
  const temporary=mkdtempSync(join(tmpdir(),'cloud-sign-in-'));
  try{
-  execFileSync(binary('javac'),['--release','11','-d',temporary,join(root,native,'CloudSignInFlow.java'),join(root,native,'CloudSignInReadiness.java'),join(root,native,'ConnectionRoutes.java'),join(root,'test/fixtures/CloudSignInFlowTest.java'),join(root,'test/fixtures/CloudSignInContractTest.java')],{timeout:60000});
+  execFileSync(binary('javac'),['--release','11','-d',temporary,join(root,native,'CloudDeployment.java'),join(root,native,'CloudSignInFlow.java'),join(root,native,'CloudSignInReadiness.java'),join(root,native,'ConnectionRoutes.java'),join(root,'test/fixtures/CloudSignInFlowTest.java'),join(root,'test/fixtures/CloudSignInContractTest.java')],{timeout:60000});
   assert.match(execFileSync(binary('java'),['-cp',temporary,'ai.elizaresearch.alphaphone.CloudSignInFlowTest'],{encoding:'utf8',timeout:60000}),/^PASS cloud sign-in flow \(\d+ checks\)/);
  }finally{rmSync(temporary,{recursive:true,force:true});}
 });
@@ -49,7 +49,7 @@ test('shared callback contract vectors (fixture shared with elizaOS/eliza) throu
  const temporary=mkdtempSync(join(tmpdir(),'cloud-sign-in-contract-'));
  try{
   writeFileSync(join(temporary,'vectors.tsv'),lines.map(line=>line.join('\t')).join('\n')+'\n');
-  execFileSync(binary('javac'),['--release','11','-d',temporary,join(root,native,'CloudSignInFlow.java'),join(root,'test/fixtures/CloudSignInContractTest.java')],{timeout:60000});
+  execFileSync(binary('javac'),['--release','11','-d',temporary,join(root,native,'CloudDeployment.java'),join(root,native,'CloudSignInFlow.java'),join(root,'test/fixtures/CloudSignInContractTest.java')],{timeout:60000});
   assert.match(execFileSync(binary('java'),['-cp',temporary,'ai.elizaresearch.alphaphone.CloudSignInContractTest',join(temporary,'vectors.tsv')],{encoding:'utf8',timeout:60000}),new RegExp(`^PASS callback contract \\(${lines.length} vectors\\)`));
  }finally{rmSync(temporary,{recursive:true,force:true});}
 });
@@ -63,7 +63,7 @@ test('the sign-in App Link is build-gated with the delegation return; staging li
  assert.ok(!main.includes('staging.eliza.app'),'no staging host in a product manifest');
  assert.ok(between(main,'<activity android:name=".MainActivity"','</activity>').includes('<data android:scheme="alphaphone" android:host="cloud-delegation"/>'),'the delegation return is unchanged');
  assert.ok(main.includes('<intent><action android:name="android.support.customtabs.action.CustomTabsService"/></intent>'),'Custom Tabs providers are visible');
- assert.ok(mocks.includes(filter('staging.eliza.app'))&&mocks.includes('<activity android:name=".MainActivity" tools:node="merge">'),'the staging return merges into MainActivity in test-mocks builds');
+ assert.ok(mocks.includes(filter('${stagingCloudWebHost}'))&&mocks.includes('<activity android:name=".MainActivity" tools:node="merge">'),'the staging return merges into MainActivity in test-mocks builds');
  const assetlinks=JSON.parse(read('android/app/src/main/assetlinks.template.json'));
  assert.equal(assetlinks[0].target.package_name,'ai.elizaresearch.alphaphone');
  assert.deepEqual(assetlinks[0].relation,['delegate_permission/common.handle_all_urls']);
@@ -122,7 +122,7 @@ test('one email code adapter: native constants, the bridge config and the route 
  const config=JSON.parse(read('config/cloud-email-code.json')),adapter=read(native+'CloudEmailCode.java'),routes=read(native+'ConnectionRoutes.java');
  assert.match(adapter,new RegExp(`SEND_PATH = "${config.sendPath}"`));assert.match(adapter,new RegExp(`VERIFY_PATH = "${config.verifyPath}"`));
  for(const path of [config.sendPath,config.verifyPath])assert.ok(routes.includes(`"${path}"`),path);
- assert.deepEqual(config.tenants,{production:'elizacloud',staging:'elizacloud-staging'});assert.equal(config.client,'ai.elizaresearch.alphaphone');
+ assert.equal(config.tenants,undefined);assert.equal(config.client,'ai.elizaresearch.alphaphone');
  for(const field of ['"email"','"tenantId"','"client"','"pkce"','"codeChallenge"','"codeChallengeMethod"','"code"','"codeVerifier"'])assert.ok(adapter.includes(field),field);
  const bridge=read('scripts/browser-cloud-dev-bridge.ts');
  assert.match(bridge,/CLOUD_EMAIL_CODE\.sendPath,emailCodeSendBody\(/);assert.match(bridge,/CLOUD_EMAIL_CODE\.verifyPath,emailCodeVerifyBody\(/);
@@ -137,11 +137,11 @@ test('native sign-in never falls back to hosted login when readiness fails',asyn
  const method=begin.slice(0,begin.lastIndexOf('},')+1);
  const compiled=transformSync('const controller={'+method+'};',{loader:'ts'}).code;
  for(const methods of [null,{google:false},{google:true}]) {
-  const updates=[];let ensured=false;
-  const run=new Function('operation','cloudEnvironmentAllowed','work','inAppSignInMethods','cloudSignIn','CloudSignInError','cloud','residentCloudFlow','state','update','ensureResident',
-   'let inAppGoogle=false;'+compiled+';return controller.beginSignIn("production");');
-  await run(false,()=>true,async(_,action)=>action(new AbortController().signal),async()=>methods,{},Error,{environment:'production',cancelLogin(){}},()=>true,{purpose:'agent'},v=>updates.push(v),async()=>{ensured=true;});
-  assert.equal(updates.at(-1).signIn.step,'choose');assert.equal(ensured,true);
+  const updates=[];let ensured=false,checking='';
+  const run=new Function('operation','cloudEnvironmentAllowed','work','inAppSignInMethods','cloudSignIn','CloudSignInError','cloud','residentCloudFlow','state','update','ensureResident','cloudServiceName',
+   'let inAppGoogle=false,inAppPhone=false,inAppEmail=true;'+compiled+';return controller.beginSignIn("production");');
+  await run(false,()=>true,async(message,action)=>{checking=message;return action(new AbortController().signal);},async()=>methods,{},Error,{environment:'production',cancelLogin(){}},()=>true,{purpose:'agent'},v=>updates.push(v),async()=>{ensured=true;},()=> 'Independent Service');
+  assert.equal(updates.at(-1).signIn.step,'choose');assert.equal(ensured,true);assert.equal(checking,'Checking Independent Service sign-in…');
  }
  const plugin=read(native+'AlphaCloudSignInPlugin.java');
  const measure=between(plugin,'private CloudSignInReadiness.Result measure(','private boolean assetLinksGrant(');
@@ -161,4 +161,17 @@ test('browser resident sign-in exposes the existing hosted hand-off only in its 
  browser.props.onClick();assert.equal(calls,1,'dispatches the existing hosted sign-in callback');
  assert.equal(render(React,true,false,{busy:true},controller).props.disabled,true);
  assert.equal(render(React,false,true,{busy:false},controller).props.children,'Browser sign-in (diagnostic)');
+});
+
+
+test('the native session exchange requires Android authorization before requesting an app key',()=>{
+ const plugin=read(native+'AlphaCloudSignInPlugin.java');
+ const complete=between(plugin,'private void complete(Attempt current, JSONObject session)','/** The saved key');
+ assert.ok(complete.indexOf('requireAuthorization(current);')>complete.indexOf('validStewardToken(token)'));
+ assert.ok(complete.indexOf('requireAuthorization(current);')<complete.indexOf('"/api/v1/app-auth/connect"'));
+ assert.match(complete,/finally[\s\S]*"\/steward\/auth\/logout"/);
+ const gate=between(plugin,'private void requireAuthorization(Attempt current)','// ── Shared tail');
+ assert.match(gate,/new AlertDialog.Builder/);assert.match(gate,/decision.await/);
+ assert.match(gate,/!current.authorized/);assert.match(gate,/current.expiresAt/);
+ assert.doesNotMatch(gate,/PluginCall|call.getBoolean|writeCredentialSlot/);
 });

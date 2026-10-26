@@ -115,7 +115,7 @@ function screen(maps, options = {}) {
  assert.deepEqual(await nav.select({ provider: 'coordinates', providerPlaceId: 'geo:43.7314,7.4199', name: 'Palace', coordinates: PALACE, categories: [] }), { state: 'selected', placeName: 'Palace' });
  assert.equal(maps.calls.length, 1);
  await failsWith(nav.select({ ...portRef, providerPlaceId: 'N9999' }), 'MAPS_NOT_FOUND');
- await failsWith(nav.select({ ...portRef, provider: 'google' }), 'MAPS_INVALID_INPUT', /Eliza Cloud Maps places or coordinates/);
+ await failsWith(nav.select({ ...portRef, provider: 'google' }), 'MAPS_INVALID_INPUT', /Cloud Maps places or coordinates/);
  await failsWith(nav.select({ ...portRef, coordinates: { latitude: 91, longitude: 0 } }), 'MAPS_INVALID_INPUT');
  const hidden = screen(provider(), { present: false });
  await failsWith(new AlphaMapsDeviceNavigation(hidden.surface, owner).select(portRef), 'MAPS_DEVICE_UNAVAILABLE', /Open Alpha/);

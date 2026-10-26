@@ -7,7 +7,7 @@ type Reason = { name?: unknown; code?: unknown } | null | undefined;
  * Failures with their own state and guidance. Anything else keeps the caller's generic,
  * route-specific message. Cancellation is never reported as a failure here.
  */
-export function voiceFailure(reason: unknown, context: { transcribing: boolean; browser: boolean; cloud?: boolean }): { kind: VoiceFailure; message: string } | null {
+export function voiceFailure(reason: unknown, context: { transcribing: boolean; browser: boolean; cloud?: boolean; serviceName?: string }): { kind: VoiceFailure; message: string } | null {
   const value = (reason && typeof reason === 'object' ? reason : undefined) as Reason;
   const name = typeof value?.name === 'string' ? value.name : '', code = typeof value?.code === 'string' ? value.code : '';
   if (name === 'AbortError') return null;
@@ -21,7 +21,7 @@ export function voiceFailure(reason: unknown, context: { transcribing: boolean; 
   // The Cloud route renders no typing choice (MVP-01 decides whether it should), so its
   // wording offers only what is on screen: the kept clip, Transcribe again and Record again.
   if (code === 'no-speech' && context.cloud)
-    return { kind: 'no-speech', message: 'Eliza Cloud heard no speech in this recording. Your recording is kept. Choose Transcribe with Eliza Cloud to try again, or Record again.' };
+    return { kind: 'no-speech', message: `${context.serviceName ?? 'Cloud'} heard no speech in this recording. Your recording is kept. Choose Transcribe with ${context.serviceName ?? 'Cloud'} to try again, or Record again.` };
   if (code === 'no-speech')
     return { kind: 'no-speech', message: 'No speech was detected in this recording. Record again, or type the transcript instead.' };
   // The web build has no in-browser recognizer; local speech needs the local agent (libelizainference).

@@ -1,3 +1,4 @@
+import {productionCloud, stagingCloud, cloudStorageNamespace} from '../apps/app/src/runtime/cloud-deployment.generated.ts';
 import {createCloudResidentHost} from './cloud-resident-host.mjs';
 import {managedGoogleRequest,boundedServiceJson} from '../backend/managed-google-route-policy.ts';
 import {CLOUD_EMAIL_CODE,emailCodeExpiresAt,emailCodeSendBody,emailCodeVerifyBody} from './cloud-email-code.ts';
@@ -10,7 +11,7 @@ import type {Plugin} from 'vite';
 
 export const BROWSER_CLOUD_BRIDGE_PATH='/__alpha-browser-cloud';
 const UUID=/^[0-9a-f-]{36}$/i,REFERENCE=/^browser-cloud-reference:[0-9a-f-]{36}$/i;
-const authorities={production:'https://api.eliza.app',staging:'https://api-staging.eliza.app'};
+const authorities={production:productionCloud.api,staging:stagingCloud.api};
 type Environment=keyof typeof authorities;
 type Credential={credentialReference:string;credentialId:string;userId:string;organizationId:string;email?:string;expiresAt?:number;token?:string;credentialFile?:string;credentialSha256?:string};
 const publicCredential=(c:Credential)=>({credentialReference:c.credentialReference,credentialId:c.credentialId,userId:c.userId,organizationId:c.organizationId,...(c.expiresAt===undefined?{}:{expiresAt:c.expiresAt})});
@@ -20,7 +21,7 @@ function requestId(value:unknown):string{if(typeof value!=='string'||!UUID.test(
 function object(value:unknown):Record<string,any>{if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid Cloud request');return value as Record<string,any>;}
 /** DEV transport only. Canonical Cloud owns login, identity, plan entitlement and speech authorization. */
 export function createBrowserCloudDevHandler(options:{profile:string;request?:typeof fetch;environment?:Environment;diagnostic?:(event:{environment:Environment;operation:string;status:number;code?:string})=>void;resident?:{bind:(credential:{token:string;credentialId:string;reference:string;expiresAt?:number})=>Promise<unknown>;clear:()=>Promise<unknown>;status:(id?:string)=>unknown;ready:(signal:AbortSignal)=>Promise<unknown>}}){
- const profile=path.resolve(options.profile),stateFile=path.join(profile,'credentials.json'),initialFile=path.join(profile,'initial-credential.json'),fetchCloud=options.request??fetch;
+ const profile=path.resolve(options.profile,cloudStorageNamespace.replaceAll(':','-')),stateFile=path.join(profile,'credentials.json'),initialFile=path.join(profile,'initial-credential.json'),fetchCloud=options.request??fetch;
  let queue:Promise<unknown>=Promise.resolve();
  const pending=new Map<string,{environment:Environment;expiresAt:number;previousReference:string|null}>();
  const claims=new Map<string,{environment:Environment;previousReference:string|null;expiresAt:number;credential:Credential}>();
@@ -45,7 +46,7 @@ export function createBrowserCloudDevHandler(options:{profile:string;request?:ty
  let signIn:SignInAttempt|null=null;
  // One code send a minute, whatever the address; five wrong codes end an attempt (as AlphaCloudSignInPlugin).
  let lastEmailSendAt=0;const MAX_VERIFY_ATTEMPTS=5;
- const SIGN_IN_CLIENT='ai.elizaresearch.alphaphone',SIGN_IN_CALLBACK={production:'https://eliza.app/alphaphone/auth/callback',staging:'https://staging.eliza.app/alphaphone/auth/callback'} as const;
+ const SIGN_IN_CLIENT='ai.elizaresearch.alphaphone',SIGN_IN_CALLBACK={production:productionCloud.web+'/alphaphone/auth/callback',staging:stagingCloud.web+'/alphaphone/auth/callback'} as const;
  const signInFailure=(code:string)=>Object.assign(Error(code),{status:409,code});
  const signInStatus=(stage:string,status:number)=>status===429?'rate-limited':status===410?'expired':status===403?'account-check':(status===400||status===401)&&(stage==='verify'||stage==='mfa')?'invalid-code':status>=500?'unavailable':'rejected';
  async function signInCall(env:Environment,route:string,body:Record<string,unknown>,signal:AbortSignal,bearer?:string){

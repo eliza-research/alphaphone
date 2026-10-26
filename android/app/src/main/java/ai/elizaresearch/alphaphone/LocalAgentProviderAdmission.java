@@ -17,7 +17,7 @@ final class LocalAgentProviderAdmission {
  static final String PROVIDER_SLOT="local-agent-provider:v1";
  static final String CEREBRAS_PROVIDER_MODEL="qwen-3.8-27b";
  static final String CLOUD_PROVIDER_MODEL="cerebras/qwen-3.8-27b";
- static final String CLOUD_PROVIDER_BASE="https://api.eliza.app/api/v1";
+ static final String CLOUD_PROVIDER_BASE=CloudDeployment.PRODUCTION_API+"/api/v1";
  static final String PROVIDER_MODEL_PATTERN="[A-Za-z0-9][A-Za-z0-9._/-]{0,127}";
  /** Safe diagnostics never contain credential values, identities or response bodies. */
  static final class CloudReadFailure extends SecurityException {

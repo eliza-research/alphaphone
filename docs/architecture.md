@@ -5,6 +5,34 @@ navigation, presentation, capability policy and storage configuration. Shared
 runtime, browser features, native plugins and OS tooling come from the exact
 revision in `upstream.lock.json` and `vendor/eliza`.
 
+## Cloud deployment configuration
+
+`config/cloud-deployment.json` owns the public production and staging API, web,
+services origins, tenant identifiers, entitlement audiences and optional public service names. A deployment
+without a name displays its API hostname until its public metadata loads. Names
+do not change credential authority or its storage namespace. `entitlementAudience`
+selects the signed plan contract the client verifies; its default is
+`cloud-subscription`. The Eliza records explicitly retain `eliza-alpha-phone`
+for compatibility with the deployed signer. Eliza Cloud remains the default. Run
+`node scripts/cloud-deployment.mjs` after changing it; renderer and Android builds
+reject stale generated TypeScript or Java. The current configuration accepts
+canonical HTTPS origins on the default port, without base paths or credentials.
+
+Alpha retains its own package/client ID and `/alphaphone/auth/callback` return
+path. The configured deployment must register that client, approve its callback
+and publish the app's signing certificate in its web host's assetlinks document.
+`ELIZAOS_APP_LINK_HOST`, when enabled, must equal the configured production web
+host. The staging return uses the configured staging web host in test-mocks
+builds only. Changing the backend does not import another product's identity.
+
+Cloud credentials, pending sign-in state, acknowledgments and the local agent's
+provider binding are scoped to a fingerprint of both deployment records.
+Changing an authority, tenant or entitlement audience requires a fresh sign-in; credentials from the
+old configuration are never implicitly adopted. Local notes keep their existing
+storage names. The development browser bridge scopes its private profile by the
+same fingerprint. These source checks do not prove authenticated login or device
+acceptance against a configured deployment.
+
 ## October 12 approved runtime and distribution policy
 
 [Owner decisions](decisions.md#october-12-owner-decisions) and the

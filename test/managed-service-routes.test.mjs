@@ -1,9 +1,8 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-const source=readFileSync(new URL('../apps/app/src/runtime/managed-service-routes.ts',import.meta.url),'utf8');
-const {managedServiceRequest:allowed}=await import('data:text/javascript,'+encodeURIComponent(stripTypeScriptTypes(source)));
+import test from 'node:test';
+import assert from 'node:assert/strict';
+const {managedServiceRequest:allowed}=await import('../apps/app/src/runtime/managed-service-routes.ts');
 test('managed service admission preserves owned service APIs and refuses agent hosts, paths and mutation variants',()=>{
  for(const path of ['/api/v1/user','/api/v1/billing/limits','/api/v1/subscription/entitlement','/api/v1/subscription/entitlement-keys','/api/v1/eliza/google/accounts?side=owner','/api/v1/eliza/google/gmail/inbox-v1/thread?grantId=owner'])assert.equal(allowed('https://api.eliza.app'+path,'GET'),true,path);
  for(const url of ['https://agent.cloud.eliza.app/api/v1/user','https://api.eliza.app.evil.test/api/v1/user','https://api.eliza.app:444/api/v1/user','http://api.eliza.app/api/v1/user','https://owner@api.eliza.app/api/v1/user','https://api.eliza.app/api/v1/user#x'])assert.equal(allowed(url,'GET'),false,url);

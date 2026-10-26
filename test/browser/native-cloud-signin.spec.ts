@@ -52,28 +52,30 @@ async function entitlements(overrides:Record<string,unknown>={}){
 
 
 type SignInMode='ok'|'created'|'mfa'|'hold'|'offline'|'readiness-hold'|'not-ready';
-async function boot(page:Page,initial:{signIn?:SignInMode;tokens?:Record<string,string>;keys?:unknown[];keyLifetimeMs?:number}={}){
+async function boot(page:Page,initial:{signIn?:SignInMode;tokens?:Record<string,string>;keys?:unknown[];serviceName?:string;legalParagraphs?:string[];keyLifetimeMs?:number;methods?:{email:boolean;phone:boolean;google:boolean}}={}){
  page.on('pageerror',(error:Error)=>console.error('Composition page error:',error.message));
  await page.route('https://**',route=>route.abort());
  await page.addInitScript(initial=>{
   const w=window as any;
   if(!sessionStorage.getItem('signin-fixture-seeded')){sessionStorage.setItem('signin-fixture-seeded','1');localStorage.setItem('alpha.startup-permissions.v1',JSON.stringify({dismissed:true,attempted:{}}));}
   const f=w.signInFixture={signIn:'ok',...initial,saved:false as boolean,credential:null as any,running:false,bound:false,calls:[] as any[],release:null as null|((error:unknown)=>void)};
-  const names={AlphaConnection:['secureRead','secureWrite','secureRemove','request','cancel','openExternal'],AlphaCloudSignIn:['startGoogle','startEmail','verifyEmail','verifyMfa','cancel','status','addListener','removeListener'],Agent:['start','stop','getStatus','configureCloudProvider','clearProvider','providerStatus','residentAttachment','request','addListener','requestStream','cancelStream'],DailyApps:['addListener','removeListener'],AlphaNotifications:['status'],AlphaVoiceCloud:['checkPermissions'],AlphaHostedResults:['disableBackground']};
+  const names={AlphaConnection:['secureRead','secureWrite','secureRemove','request','cancel','openExternal'],AlphaCloudSignIn:['serviceInfo','startPhone','verifyPhone','startGoogle','startEmail','verifyEmail','verifyMfa','cancel','status','addListener','removeListener'],Agent:['start','stop','getStatus','configureCloudProvider','clearProvider','providerStatus','residentAttachment','request','addListener','requestStream','cancelStream'],DailyApps:['addListener','removeListener'],AlphaNotifications:['status'],AlphaVoiceCloud:['checkPermissions'],AlphaHostedResults:['disableBackground']};
   const fail=(code:string)=>Object.assign(new Error(code),{code});
   // The native host stores the key before reporting success and returns only non-secret fields.
   const store=()=>{f.saved=true;f.credential={credentialId:crypto.randomUUID(),token:'synthetic-mobile-key',expiresAt:Date.now()+((f as any).keyLifetimeMs??30*24*3600*1000),serverCredentialId:'55555555-5555-4555-8555-555555555555'};return {status:'authenticated',environment:'production',expiresAt:f.credential.expiresAt,accountCreated:f.signIn==='created'};};
   const reply=(status:number,body:unknown)=>({status,body:JSON.stringify(body)});
   w.Capacitor={PluginHeaders:Object.entries(names).map(([name,methods])=>({name,methods:methods.map(name=>({name,rtype:'promise'}))})),nativePromise:async(plugin:string,method:string,input:any)=>{
-   f.calls.push({plugin,method,path:input?.url?new URL(input.url).pathname:input?.path,email:input?.email,environment:input?.environment});
+   f.calls.push({plugin,method,path:input?.url?new URL(input.url).pathname:input?.path,email:input?.email,phone:input?.phone,environment:input?.environment});
    if(plugin==='AlphaCloudSignIn'){
     if(method==='addListener'||method==='removeListener')return {};
+    if(method==='serviceInfo'){const doc={title:'Terms of Service',revision:'fixture-v1',sections:[{title:'Provider terms',paragraphs:f.legalParagraphs||['<img src=x onerror=alert(1)> is plain text.','Synthetic provider document.']}]};return {success:true,version:1,service:{name:f.serviceName||'Eliza Cloud',terms:doc,privacy:{...doc,title:'Privacy Policy'}}};}
     if(method==='cancel'){f.release?.(fail('cancelled'));f.release=null;return {};}
-    if(method==='status'&&f.signIn==='readiness-hold')return new Promise(resolve=>{(f as any).releaseReadiness=()=>resolve({active:false,inApp:true,google:true,email:true});});
-    if(method==='status')return f.signIn==='not-ready'?{active:false,inApp:false,google:false,email:false}:{active:false,inApp:true,google:true,email:true};
+    if(method==='status'&&f.signIn==='readiness-hold')return new Promise(resolve=>{(f as any).releaseReadiness=()=>resolve({active:false,inApp:true,google:true,email:true,phone:true});});
+    if(method==='status'&&f.methods)return {active:false,inApp:Object.values(f.methods).some(Boolean),methodsKnown:true,...f.methods};
+    if(method==='status')return f.signIn==='not-ready'?{active:false,inApp:false,google:false,email:false}:{active:false,inApp:true,google:true,email:true,phone:true};
     if(method==='startGoogle'){if(f.signIn==='hold')return new Promise((_,reject)=>{f.release=reject;});return store();}
-    if(method==='startEmail'){if(f.signIn==='offline')throw fail('offline');return {attemptId:'33333333-3333-4333-8333-333333333333',expiresAt:Date.now()+600000,resendAt:Date.now()+60000};}
-    if(method==='verifyEmail'){if(input.code!=='123456')throw fail('invalid-code');if(f.signIn==='mfa')return {status:'mfa',method:'totp',expiresAt:Date.now()+300000};return store();}
+    if(method==='startEmail'||method==='startPhone'){if(f.signIn==='offline')throw fail('offline');return {attemptId:'33333333-3333-4333-8333-333333333333',expiresAt:Date.now()+600000,resendAt:Date.now()+60000};}
+    if(method==='verifyEmail'||method==='verifyPhone'){if(input.code!=='123456')throw fail('invalid-code');if(f.signIn==='mfa')return {status:'mfa',method:'totp',expiresAt:Date.now()+300000};return store();}
     if(method==='verifyMfa'){if(input.code!=='654321')throw fail('invalid-code');return store();}
    }
    if(plugin==='Agent'){
@@ -117,7 +119,7 @@ async function boot(page:Page,initial:{signIn?:SignInMode;tokens?:Record<string,
  // The composition imports the complete runtime before publishing its readiness marker.
  await expect.poll(()=>page.evaluate(()=>(window as any).planFlags),{timeout:30000}).toEqual({native:'android',mocks:false});
 }
-type Call={plugin:string;method:string;path?:string;email?:string;environment?:string};
+type Call={plugin:string;method:string;path?:string;email?:string;phone?:string;environment?:string};
 const calls=(page:Page)=>page.evaluate(()=>(window as any).signInFixture.calls as Call[]);
 const snapshot=(page:Page)=>page.evaluate(()=>(window as any).planController.getSnapshot());
 const fixture=(page:Page)=>page.evaluate(()=>{const f=(window as any).signInFixture;return {saved:f.saved,bound:f.bound,running:f.running};});
@@ -131,6 +133,11 @@ async function noHandOff(page:Page){
 }
 const signInDialog=(page:Page)=>page.getByRole('main',{name:'Sign in to Eliza Cloud',exact:true}).or(page.getByRole('dialog',{name:'Sign in to Eliza Cloud',exact:true}));
 
+async function revealOtherMethods(page:Page){
+ const toggle=signInDialog(page).getByRole('button',{name:'Other sign-in methods',exact:true});
+ if(await toggle.isVisible())await toggle.click();
+}
+
 test.describe('in-app Eliza Cloud sign-in on the production Android composition',()=>{
  test('email code sign-in stays in Alpha, retries a wrong code, waits out resend and binds Cloud AI',async({page},info)=>{
   await boot(page,await entitlements());
@@ -140,9 +147,19 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
   const dialog=signInDialog(page);await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toBeVisible();
   await expect(dialog.getByText(/in your browser/)).toHaveCount(0);
+  await expect(dialog.getByRole('textbox',{name:'Email',exact:true})).toBeHidden();
+  await expect(dialog.getByLabel('Phone number with country code')).toBeHidden();
+  const disclosure=dialog.getByRole('button',{name:'Other sign-in methods',exact:true});
+  await expect(disclosure).toHaveAttribute('aria-expanded','false');
   await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:info.outputPath('sign-in-choose.png'),animations:'disabled'});
+  await disclosure.focus();await disclosure.press('Enter');
+  await expect(dialog.getByRole('textbox',{name:'Email',exact:true})).toBeFocused();
+  await expect(dialog.getByLabel('Phone number with country code')).toBeVisible();
+  await page.screenshot({path:info.outputPath('sign-in-other-methods.png'),animations:'disabled'});
+ await revealOtherMethods(page);
   await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('not-an-address');await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
   expect((await calls(page)).filter(c=>c.method==='startEmail')).toHaveLength(0);
+ await revealOtherMethods(page);
   await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('  synthetic-signin@example.invalid ');
   await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
   await expect(dialog.getByRole('form',{name:'Enter your email code'})).toBeVisible();
@@ -172,6 +189,7 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
   // Change wall time without a timer tick: the host's new cooldown must not use panel-mount time.
   const later=await page.evaluate(()=>Date.now()+120000);
   await page.clock.setSystemTime(later);
+ await revealOtherMethods(page);
   await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('synthetic-signin@example.invalid');
   await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
   await expect(dialog.getByRole('button',{name:'Resend code in 60s',exact:true})).toBeDisabled();
@@ -283,6 +301,7 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
   await agent(page,'unavailable');
   await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
   const dialog=signInDialog(page);
+ await revealOtherMethods(page);
   await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('synthetic-signin@example.invalid');await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
   await dialog.getByLabel('Six-digit code').fill('123456');await dialog.getByRole('button',{name:'Verify',exact:true}).click();
   await expect(dialog.getByRole('form',{name:'Enter your verification code'})).toBeVisible();
@@ -298,6 +317,7 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
   await agent(page,'unavailable');
   await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
   const dialog=signInDialog(page);
+ await revealOtherMethods(page);
   await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('synthetic-signin@example.invalid');await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
   await expect(dialog.getByRole('alert')).toContainText('Alpha could not reach Eliza Cloud');
   await expect(dialog.getByRole('form',{name:'Sign in with email'})).toBeVisible();
@@ -307,3 +327,109 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
 });
 
 test.beforeEach(async({page})=>seedCompletedAccessSetup(page));
+
+for (const mode of ['ok','mfa'] as const) test(`phone code stays inside Alpha through ${mode === 'mfa' ? 'MFA' : 'verification'}`,async({page})=>{
+ await boot(page,{...await entitlements(),signIn:mode});
+ await agent(page,'unavailable');
+ await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
+ const dialog=signInDialog(page);
+ await revealOtherMethods(page);
+ await dialog.getByLabel('Phone number with country code').fill('+14155550100');
+ await dialog.getByRole('button',{name:'Text me a code',exact:true}).click();
+ await expect(dialog.getByRole('form',{name:'Enter your phone code'})).toBeVisible();
+ await expect(dialog.getByRole('button',{name:/Resend code in/})).toBeDisabled();
+ await dialog.getByLabel('Six-digit code').fill('000000');await dialog.getByRole('button',{name:'Verify',exact:true}).click();
+ await expect(dialog.getByRole('alert')).toContainText('That code did not work');
+ await expect(dialog.getByLabel('Six-digit code')).toHaveValue('');
+ expect((await fixture(page)).saved).toBe(false);
+ await dialog.getByLabel('Six-digit code').fill('123456');await dialog.getByRole('button',{name:'Verify',exact:true}).click();
+ if(mode==='mfa'){
+  await expect(dialog.getByRole('form',{name:'Enter your verification code'})).toBeVisible();
+  expect((await fixture(page)).saved).toBe(false);
+  await dialog.getByLabel('Six-digit code').fill('654321');await dialog.getByRole('button',{name:'Verify',exact:true}).click();
+ }
+ await agent(page,'cloud');await noHandOff(page);
+ expect((await calls(page)).filter(c=>c.method==='startPhone')).toMatchObject([{phone:'+14155550100',environment:'production'}]);
+ expect((await calls(page)).filter(c=>c.method==='verifyEmail'||c.method==='startEmail')).toEqual([]);
+});
+
+test('phone code cancellation discards the in-app step without a credential',async({page})=>{
+ await boot(page,await entitlements());await agent(page,'unavailable');
+ await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
+ const dialog=signInDialog(page);
+ await revealOtherMethods(page);
+ await dialog.getByLabel('Phone number with country code').fill('+14155550100');
+ await dialog.getByRole('button',{name:'Text me a code',exact:true}).click();
+ await expect(dialog.getByRole('form',{name:'Enter your phone code'})).toBeVisible();
+ await dialog.getByRole('button',{name:'Cancel sign-in',exact:true}).click();
+ await expect(dialog).toHaveCount(0);expect((await fixture(page)).saved).toBe(false);
+ expect((await calls(page)).some(c=>c.plugin==='AlphaCloudSignIn'&&c.method==='cancel')).toBe(true);
+ await noHandOff(page);
+});
+
+for(const phone of [true,false]) test(`tenant method discovery ${phone?'offers phone without email':'hides all disabled methods'}`,async({page})=>{
+ await boot(page,{...await entitlements(),methods:{phone,email:false,google:false}});await agent(page,'unavailable');
+ await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
+ const dialog=signInDialog(page);await expect(dialog).toBeVisible();
+ await expect(dialog.getByRole('button',{name:'Email me a code',exact:true})).toHaveCount(0);
+ await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toHaveCount(0);
+ await expect(dialog.getByRole('button',{name:'Text me a code',exact:true})).toHaveCount(phone?1:0);
+ if(!phone)await expect(dialog.getByText('This service offers no sign-in method supported by this app. Contact the service administrator.',{exact:true})).toBeVisible();
+ expect((await calls(page)).filter(c=>['startPhone','startEmail','startGoogle'].includes(c.method))).toEqual([]);
+ await noHandOff(page);
+});
+
+test('provider legal text stays inside Alpha and returning preserves phone entry and the code attempt',async({page},info)=>{
+ await page.setViewportSize({width:390,height:844});
+ await boot(page,await entitlements());await agent(page,'unavailable');
+ await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
+ const dialog=signInDialog(page);
+ await revealOtherMethods(page);
+ await dialog.getByLabel('Phone number with country code').fill('+14155550100');
+ await dialog.getByRole('button',{name:'Terms of Service',exact:true}).click();
+ await expect(dialog.getByRole('heading',{name:'Terms of Service',exact:true})).toBeFocused();
+ await expect(dialog.getByText('<img src=x onerror=alert(1)> is plain text.',{exact:true})).toBeVisible();
+ await expect(dialog.locator('.alpha-cloud-legal img')).toHaveCount(0);
+ await page.screenshot({path:info.outputPath('native-legal-mobile.png'),animations:'disabled'});
+ await dialog.getByRole('button',{name:'Back to sign-in',exact:true}).click();
+ await expect(dialog.getByRole('button',{name:'Terms of Service',exact:true})).toBeFocused();
+ await expect(dialog.getByLabel('Phone number with country code')).toHaveValue('+14155550100');
+ await dialog.getByRole('button',{name:'Text me a code',exact:true}).click();
+ await dialog.getByLabel('Six-digit code').fill('123');
+ await dialog.getByRole('button',{name:'Privacy Policy',exact:true}).click();
+ await expect(dialog.getByRole('heading',{name:'Privacy Policy',exact:true})).toBeVisible();
+ await dialog.getByRole('button',{name:'Back to sign-in',exact:true}).click();
+ await expect(dialog.getByLabel('Six-digit code')).toHaveValue('123');
+ expect((await calls(page)).filter(c=>c.method==='startPhone')).toHaveLength(1);
+ expect((await calls(page)).filter(c=>c.method==='verifyPhone')).toHaveLength(0);
+ await noHandOff(page);
+});
+
+test('configured provider name is shown in the app-owned sign-in view',async({page})=>{
+ await boot(page,{...await entitlements(),serviceName:'Example Service'});await agent(page,'unavailable');
+ await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Sign in to Example Service',exact:true})).toBeVisible();
+ await noHandOff(page);
+});
+
+
+test('long provider documents scroll to the end and return to an unfinished sign-in on a small phone',async({page})=>{
+ await page.setViewportSize({width:320,height:568});
+ const paragraphs=Array.from({length:40},(_,i)=>`Section ${i+1}. ${'Provider document text with readable wrapping. '.repeat(12)}`);
+ paragraphs.push('End of the provider document.');
+ await boot(page,{...await entitlements(),legalParagraphs:paragraphs});await agent(page,'unavailable');
+ await page.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true}).click();
+ const dialog=signInDialog(page);
+ await revealOtherMethods(page);
+ await dialog.getByLabel('Email',{exact:true}).fill('unfinished@example.invalid');
+ await dialog.getByRole('button',{name:'Terms of Service',exact:true}).click();
+ await expect(dialog.getByRole('heading',{name:'Terms of Service',exact:true})).toBeInViewport();
+ const end=dialog.getByText('End of the provider document.',{exact:true});
+ await end.scrollIntoViewIfNeeded();await expect(end).toBeInViewport();
+ const back=dialog.getByRole('button',{name:'Return to sign-in',exact:true});
+ await back.scrollIntoViewIfNeeded();await expect(back).toBeInViewport();await back.click();
+ await expect(dialog.getByRole('button',{name:'Terms of Service',exact:true})).toBeFocused();
+ await expect(dialog.getByLabel('Email',{exact:true})).toHaveValue('unfinished@example.invalid');
+ expect((await calls(page)).filter(c=>['startEmail','startPhone','startGoogle'].includes(c.method))).toEqual([]);
+ await noHandOff(page);
+});

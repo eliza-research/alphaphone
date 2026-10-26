@@ -190,10 +190,24 @@ export const stub = <T>(page: Page, read: (s: any) => T) => page.evaluate(`(${re
 /** Changes this stub's settings (stream mode, accounts, login outcome) from the test. */
 export const setStub = (page: Page, patch: Record<string, unknown>) => page.evaluate(patch => { Object.assign((window as any).residentStub, patch); (window as any).residentStub.persist(); }, patch);
 
+/** Explicit synthetic email/code journey through the shipped renderer. */
+export async function emailCode(page: Page, verify = true) {
+  const dialog=page.getByRole('main',{name:'Sign in to Eliza Cloud',exact:true}).or(page.getByRole('dialog',{name:'Sign in to Eliza Cloud',exact:true}));
+  await expect(dialog).toBeVisible();
+  const otherMethods=dialog.getByRole('button',{name:'Other sign-in methods',exact:true});
+  if(await otherMethods.isVisible())await otherMethods.click();
+  await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('fixture@example.invalid');
+  await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
+  await expect(dialog.getByLabel('Six-digit code')).toBeVisible();
+  if(verify){await dialog.getByLabel('Six-digit code').fill('123456');await dialog.getByRole('button',{name:'Verify',exact:true}).click();}
+}
+
 /** Complete the visible synthetic native email form after the product sign-in button is clicked. */
 export async function enterNativeEmailCode(page: Page, email='owner@example.invalid') {
   const panel=page.getByRole('main',{name:'Sign in to Eliza Cloud',exact:true}).or(page.getByRole('dialog',{name:'Sign in to Eliza Cloud',exact:true}));
   await expect(panel).toBeVisible();
+  const otherMethods=panel.getByRole('button',{name:'Other sign-in methods',exact:true});
+  if(await otherMethods.isVisible())await otherMethods.click();
   await panel.getByRole('textbox',{name:'Email',exact:true}).fill(email);
   await panel.getByRole('button',{name:'Email me a code',exact:true}).click();
   await panel.getByLabel('Six-digit code').fill('123456');
