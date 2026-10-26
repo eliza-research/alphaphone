@@ -149,11 +149,28 @@ test('the sign-in App Link is build-gated with the delegation return; staging li
  assert.deepEqual(assetlinks[0].relation,['delegate_permission/common.handle_all_urls']);
 });
 
-test('the native sign-in client owns every secret, compares state before burning and never logs',()=>{
+test('the native sign-in client owns every secret, compares state before burning and logs only fixed Google diagnostics',()=>{
  const plugin=read(native+'AlphaCloudSignInPlugin.java');
  assert.match(read(native+'MainActivity.java'),/registerPlugin\(AlphaCloudSignInPlugin\.class\);/);
  assert.match(read(native+'RendererCredentialSlots.java'),/"cloud-signin"/,'pending and receipt slots are native-only');
- assert.doesNotMatch(plugin,/android\.util\.Log|System\.out|printStackTrace|Log\.[dewiv]\(/,'nothing is logged');
+ const diagnostic = between(plugin,' private void logGoogleOutcome(', '\n /**\n  * Strict App Link capture');
+ const diagnosticBody = diagnostic.slice(diagnostic.indexOf('{') + 1, diagnostic.lastIndexOf('}')).trim();
+ assert.equal(diagnosticBody, 'android.util.Log.i("AlphaCloudSignIn", CloudSignInFlow.googleDiagnostic(stage, status, outcome, current.startedAt, current.expiresAt, System.currentTimeMillis()));', 'the only log accepts the fixed serializer, never raw response, URL, token, headers or body');
+ assert.equal((plugin.match(/android\.util\.Log\./g)||[]).length, 1, 'one native log sink');
+ assert.equal((plugin.match(/CloudSignInFlow\.googleDiagnostic\(/g)||[]).length, 1, 'one fixed serializer call');
+ assert.doesNotMatch(plugin.replace(diagnostic, ''),/android\.util\.Log|System\.out|printStackTrace|Log\.[dewiv]\(/,'all other native sign-in logging remains forbidden');
+ const observer = between(plugin,' private CloudSignInFlow.GoogleFailure observeGoogleResponse(', ' private void logGoogleOutcome(');
+ assert.equal(observer.slice(observer.indexOf('{')+1,observer.lastIndexOf('}')).replace(/\s+/g,' ').trim(), 'CloudSignInFlow.GoogleFailure outcome = CloudSignInFlow.googleFailure(stage, response.status, response.data.opt("ok"), response.data.opt("error")); logGoogleOutcome(current, stage, response.status, outcome); return outcome;', 'provider data enters only the classifier; only classified outcome reaches logging');
+ assert.equal((plugin.match(/\blogGoogleOutcome\(/g)||[]).length, 3, 'only observer and local deadline call the single log method');
+ assert.ok(plugin.includes('logGoogleOutcome(next, CloudSignInFlow.GoogleStage.LOCAL_DEADLINE, 0, expired);'));
+ assert.ok(plugin.includes('CloudSignInFlow.GoogleFailure expired = CloudSignInFlow.googleFailure(CloudSignInFlow.GoogleStage.LOCAL_DEADLINE, 0, null, null);'));
+ const flow = read(native+'CloudSignInFlow.java');
+ assert.doesNotMatch(flow,/android\.util\.Log|System\.out|printStackTrace|Log\.[dewiv]\(/,'classification itself never logs');
+ const serializer = between(flow,' static String googleDiagnostic(', '\n /** Ack');
+ assert.doesNotMatch(serializer,/getMessage|toString|\.data|\.token|\.verifier|\.headers|\.body|\.location|\.id\b/, 'no raw provider/request fields are serialized');
+ assert.match(serializer,/status >= 100 && status <= 599/);
+ assert.match(serializer,/Math\.min\(86_400_000L/);
+ assert.match(serializer,/Math\.max\(-86_400_000L/);
  // The renderer receives only these outcome fields.
  for(const resolved of plugin.match(/\.resolve\([^;]*;/g)||[])assert.doesNotMatch(resolved,/token|secret|verifier|refresh|code"/i,resolved);
  const finish=between(plugin,'JSObject outcome = new JSObject()','finish(current, outcome);');assert.doesNotMatch(finish,/\.put\("(?:secret|token)"/);
