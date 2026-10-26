@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "8bce98d798e9e8f1f6b65820d70d2e2d05c83118",
+  "head": "94a2f9d848d2d1ed311fb5c28eba94b58635eeae",
   "recordedAt": "2026-10-26",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...8bce98d798e9e8f1f6b65820d70d2e2d05c83118",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...94a2f9d848d2d1ed311fb5c28eba94b58635eeae",
   "status": "diverged",
-  "aheadBy": 62,
+  "aheadBy": 64,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -254,6 +254,14 @@
     {
       "sha": "8bce98d798e9e8f1f6b65820d70d2e2d05c83118",
       "subject": "fix(views): bind previous navigation to authenticated request owner"
+    },
+    {
+      "sha": "f1034f6d070b8b5a8d3f28df674040ec1403991e",
+      "subject": "perf(views): reuse navigation constraints and confirmed Back routing"
+    },
+    {
+      "sha": "94a2f9d848d2d1ed311fb5c28eba94b58635eeae",
+      "subject": "fix(views): preserve verified destination wording through Back"
     }
   ],
   "pullRequests": [

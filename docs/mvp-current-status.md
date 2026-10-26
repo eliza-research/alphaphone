@@ -1,6 +1,6 @@
 # Current MVP status
 
-Current source SDK 8bce98d798e9e8f1f6b65820d70d2e2d05c83118 on product base ac9ded4e9012edc141693173727accf0cbb5b796 binds previous-view context to the authenticated HTTP principal rather than the conversation entity. Distinct-identity HTTP regression and scoped types passed; live Back verification remains pending. Other view/client/runtime/owner/installation checks and prior account fixes remain. See docs/evidence/source-metadata-ac9-8bce-20261026.json.
+Current source SDK 94a2f9d848d2d1ed311fb5c28eba94b58635eeae on product base 6f86e54d46458ec9b4d3d6fdaceb51d70970b0ae includes first-review navigation consistency, trusted confirmed Back candidate routing and acknowledged verified destination alias retention. Focused behavior, baseline regression and scoped semantic checks passed. Live call-cost and wording acceptance for this new source remains pending; native qualification stays bound to its own artifact and receipts. See docs/evidence/source-metadata-6f86-94a2-20261026.json.
 
 Previous source checkpoint: Current source SDK da82a74e8bb1c45ae76beba64ee5bf0c1c2778e6 on product base 79eafc5511296a915933a6fef8bcc3d228cc1aa3 includes confirmed previous-view context and conservative initial-tool selection. Product account preflight and optional credential-reference fixes are retained. Focused source tests passed; full runtime and native acceptance, live performance and final release are still pending. See [source identity](evidence/source-metadata-79e-da82-20261026.json).
 
@@ -70,9 +70,9 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-Current source projection: SDK `8bce98d798` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
+Current source projection: SDK `94a2f9d848` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
 
-The current upstream source pin is `8bce98d798` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
+The current upstream source pin is `94a2f9d848` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 
