@@ -1,5 +1,22 @@
 # Dependency and artifact supply chain
 
+## Current native Android APK npm closure (2026-10-25)
+
+The exact signed ARM64 APK `d3f1fd7792071e0ac76484e437e9a15cd1aa082e75f236ea8c4e4b8e5bdd5e10`
+was built from product `4fd8228` / SDK `a95cd4d`. Its normalized packaged npm input
+is the same 603 versions as the preserved `77c65e` review, so the dated registry
+result is reused without a query: one moderate UUID finding, no high or critical
+npm finding. Current affected UUID/Zod bodies and Zod 4.6.6 aliases were checked;
+existing exception objects and deadlines remain unchanged. See the
+[exact artifact review](security/resident-artifact-review-d3f1fd7792071e0a-2026-10-25.json).
+
+Bun itself changed from the musl binary to native Android binary `f2970336…`,
+using Android's linker. The npm dispositions do not prove this binary's builtin,
+ELF, FFI/JNI or device security/behavior. External Undici implementation remains
+outside the npm absence conclusion. All earlier artifact records and functional
+qualification states are preserved; no device or full-app result transfers.
+
+
 ## Current source-only input rebind (2026-10-25)
 
 SDK `a95cd4d28eb2bcd5fe5527e98058c167ff480557` at product `4fd822874850a68c3d82675630593e4c63be943d`
