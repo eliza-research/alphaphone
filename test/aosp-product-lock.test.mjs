@@ -46,8 +46,10 @@ test("the committed Cuttlefish product names its target, lock, host packages and
   assert.equal(fs.existsSync(path.join(root, "android/aosp/pixel10.lock.json")), false, "the unadmitted Pixel 10 placeholder lock is retired");
   const problems = aospProductLockProblems(root);
   for (const expected of [/manifest\.commit is unset/, /must be a full Git object ID/, /host package cuttlefish-base needs a version and a SHA-256/,
-    /signerSha256 is "unset"/, /platformCertificateSha256 must be a SHA-256/])
+    /platformCertificateSha256 must be a SHA-256/])
     assert.ok(problems.some(problem => expected.test(problem)), `${expected}\n${problems.join("\n")}`);
+  // The APK release signer is pinned (P-57); the Cuttlefish image still has its own unset inputs.
+  assert.ok(!problems.some(problem => /signerSha256 is "unset"/.test(problem)), problems.join("\n"));
 });
 
 test("a fully populated fixture lock is complete; each unset, placeholder or foreign field is refused", t => {

@@ -27,7 +27,7 @@ done
 command -v gh >/dev/null || { echo "gh is required" >&2; exit 1; }
 [ -e /dev/kvm ] && [ -r /dev/kvm ] || echo "warning: /dev/kvm is not readable; Cuttlefish jobs will fail" >&2
 
-mkdir -p "$DIR"
+mkdir -p "$DIR" "$HOME/alpha-device-lab"
 cd "$DIR"
 if [ ! -x ./config.sh ]; then
   archive="actions-runner-linux-x64-$VERSION.tar.gz"
@@ -62,6 +62,7 @@ RestartSec=10
 Environment=ALPHA_AOSP_SOURCE=$HOME/Android/pixel10a-preparation/eliza-source
 Environment=ALPHA_FACTORY_IMAGE=$HOME/Android/pixel10a-preparation/recovery/stallion-cp3a.261005.005-factory-d1d25502.zip
 Environment=ANDROID_HOME=$HOME/Android/Sdk
+Environment=ALPHA_DEVICE_LAB_ROOT=$HOME/alpha-device-lab
 
 [Install]
 WantedBy=default.target

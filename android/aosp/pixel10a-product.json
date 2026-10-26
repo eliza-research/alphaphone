@@ -17,15 +17,15 @@
   },
   "signer": {
     "apkDescriptor": "android/release-signer.json",
-    "platformCertificateSha256": "UNSET",
+    "platformCertificateSha256": "c30662a39c4271bcbd957aa9b6e99a6cc5b745e0fc29be2929cd034514d5fc24",
     "releaseCertificates": {
-      "shared": "UNSET",
-      "media": "UNSET",
-      "networkstack": "UNSET",
-      "sdk_sandbox": "UNSET",
-      "bluetooth": "UNSET",
-      "nfc": "UNSET",
-      "apex": "UNSET"
+      "shared": "cdac391e3d76b28a81060005ad8e695c72d0c46e3e9e4a0d2154887649852637",
+      "media": "0512c0c5f0036a9ffed5256ba700caac2ce596c79aeab45e68fdbddc41091f2a",
+      "networkstack": "496e570eaa4b5d39e3ca53e2a176fa95acae9fce0f016066aa5a7891f2707cd7",
+      "sdk_sandbox": "ebf6dc788e0108e1362987f5484b1f1167e91d7938160a516f2f97b0d134a8ee",
+      "bluetooth": "4f4fac34e0f93b2cd81df8c8dbf7dd30a9c7c81ada278f3f0fc793004981ed47",
+      "nfc": "234948bdf131aee268655b0599cecb11b16957f7d377a55df507bcf6c0ce47cd",
+      "apex": "749124f9bc32803363704e13fd8484f40242f47eab4d17de06997a4b04f90399"
     },
     "decision": "A-06"
   },
@@ -34,7 +34,7 @@
     "vbmetaKey": "avb.pem",
     "chainedPartitions": ["vbmeta_system", "vbmeta_vendor"],
     "publicKeyMetadata": "avb_pkmd.bin",
-    "publicKeySha256": "UNSET"
+    "publicKeySha256": "43cea74d290d0f33956d6aa7cc13601e881e27ac0b9ef436a22ac0ca6d19a2eb"
   },
   "ota": {
     "channel": "android/aosp/pixel10a-ota-channel.json"

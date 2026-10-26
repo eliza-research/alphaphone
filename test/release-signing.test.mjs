@@ -78,8 +78,11 @@ test("assetlinks.json is rendered only from the recorded release signer, never u
   assert.match(statement.target.sha256_cert_fingerprints[0], /^(AA:){31}AA$/);
   assert.doesNotMatch(text, new RegExp(PLACEHOLDER));
   assert.deepEqual(assetLinksProblems(text), []);
-  // The committed descriptor is unset, so rendering is refused until the release key exists (A-06).
-  assert.throws(() => renderAssetLinks({ template, signerSha256: readReleaseSigner().signerSha256, packageName }), /"unset"/);
+  // Rendering follows the committed descriptor: refused while unset, the pinned release key once recorded (P-57).
+  const committed = readReleaseSigner().signerSha256;
+  if (committed === "unset") assert.throws(() => renderAssetLinks({ template, signerSha256: committed, packageName }), /"unset"/);
+  else assert.deepEqual(JSON.parse(renderAssetLinks({ template, signerSha256: committed, packageName }))[0].target.sha256_cert_fingerprints, [fingerprint(committed)]);
+  assert.throws(() => renderAssetLinks({ template, signerSha256: "unset", packageName }), /"unset"/);
   assert.throws(() => renderAssetLinks({ template, signerSha256: PLACEHOLDER, packageName }), /placeholder/);
   assert.throws(() => renderAssetLinks({ template, signerSha256: "ABC", packageName }), /64 lower-case hex/);
   assert.throws(() => renderAssetLinks({ template, signerSha256: SIGNER, packageName: "other.app" }), /not other\.app/);
@@ -90,12 +93,19 @@ test("assetlinks.json is rendered only from the recorded release signer, never u
   const debugFile = text.replace(fingerprint(SIGNER), fingerprint(debugKey));
   assert.match(assetLinksProblems(debugFile, { debugFingerprints: [debugKey] }).join(), /is a debug signing certificate/);
   assert.match(assetLinksProblems(text.replace(fingerprint(SIGNER), "unset")).join(), /unset release signer/);
-  // The CLI exits non-zero on the committed (unset) descriptor and writes nothing.
+  // The CLI refuses an unset committed descriptor and writes nothing; a pinned one renders only that key.
   const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "alpha-assetlinks-")), "assetlinks.json");
   const run = spawnSync(process.execPath, ["scripts/render-assetlinks.mjs", "--out", out], { encoding: "utf8" });
-  assert.equal(run.status, 1);
-  assert.match(run.stderr, /signerSha256 is "unset"/);
-  assert.equal(fs.existsSync(out), false);
+  if (committed === "unset") {
+    assert.equal(run.status, 1);
+    assert.match(run.stderr, /signerSha256 is "unset"/);
+    assert.equal(fs.existsSync(out), false);
+  } else {
+    assert.equal(run.status, 0, run.stderr);
+    const rendered = fs.readFileSync(out, "utf8");
+    assert.deepEqual(assetLinksProblems(rendered), []);
+    assert.deepEqual(JSON.parse(rendered)[0].target.sha256_cert_fingerprints, [fingerprint(committed)]);
+  }
   fs.rmSync(path.dirname(out), { recursive: true, force: true });
 });
 

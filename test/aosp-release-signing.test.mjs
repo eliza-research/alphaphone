@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createHash } from "node:crypto";
+import { createHash, X509Certificate } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { PIXEL10A_PRODUCT, pixel10aOptions, pixel10aProductProblems } from "../scripts/aosp-pixel10a.mjs";
 import { channelDistributionProblems, channelSigningProblems, gitWorkTreeProblem, isWithin, parseSigningArgs, signingCommands, signRelease, X509_KEYS } from "../scripts/sign-aosp-release.mjs";
@@ -162,7 +162,7 @@ function setup(t, tools = {}, tf = {}) {
   return { key, repo, tf: target, ota, out, options: { root: repo.dir, targetFiles: target.file, targetFilesSha256: target.sha256, keysDir: key.keys, releasetools: ota.bin, out } };
 }
 
-test("the committed Pixel 10a production descriptor and channel name every unset release input and never claim qualification", () => {
+test("the committed Pixel 10a production descriptor and channel pin the release keys, name every remaining unset input and never claim qualification", () => {
   const product = read(PIXEL10A_PRODUCT), channel = read(CHANNEL);
   assert.equal(product.product, "alpha_stallion_phone");
   assert.deepEqual(product.device, { codename: "stallion", androidRelease: "17" });
@@ -171,9 +171,16 @@ test("the committed Pixel 10a production descriptor and channel name every unset
   assert.equal(product.ota.channel, CHANNEL);
   assert.equal(channel.recovery.stockFactoryImage.sha256, read("android/aosp/pixel10a-source.json").factory.sha256, "stock recovery is the locked factory archive");
   const problems = pixel10aProductProblems(root);
-  for (const expected of [/sourceLock\.sha256 is unset/, /still marked developmentOnly/, /signerSha256 is "unset"/, /platformCertificateSha256 must be a SHA-256/])
+  for (const expected of [/sourceLock\.sha256 is unset/, /still marked developmentOnly/])
     assert.ok(problems.some(problem => expected.test(problem)), `${expected}\n${problems.join("\n")}`);
-  assert.ok(channelSigningProblems(channel, product).some(problem => /otaCertificateSha256 is unset/.test(problem)));
+  // Release keys are pinned from the committed public certificates (P-57).
+  assert.ok(!problems.some(problem => /signerSha256 is "unset"|platformCertificateSha256|releaseCertificates|avb\.publicKeySha256/.test(problem)), problems.join("\n"));
+  assert.deepEqual(channelSigningProblems(channel, product), []);
+  const certificate = name => new X509Certificate(fs.readFileSync(path.join(root, "android/release-keys", `${name}.x509.pem`))).fingerprint256.replaceAll(":", "").toLowerCase();
+  assert.equal(product.signer.platformCertificateSha256, certificate("platform"));
+  assert.equal(channel.otaCertificateSha256, certificate("releasekey"));
+  for (const [name, digest] of Object.entries(product.signer.releaseCertificates)) assert.equal(digest, certificate(name), name);
+  assert.equal(product.avb.publicKeySha256, sha256(fs.readFileSync(path.join(root, "android/release-keys/avb_pkmd.bin"))));
   const distribution = channelDistributionProblems(channel);
   for (const drill of ["signedUpdate", "interruptedUpdate", "compatibleRollback", "stockRecovery"]) assert.ok(distribution.some(problem => problem.includes(`${drill} drill is "not run"`)), drill);
   assert.ok(distribution.some(problem => /knownGoodRelease\.otaSha256 is unset/.test(problem)));
@@ -240,7 +247,7 @@ test("stage-aosp --target pixel10a --production refuses the committed descriptor
   const out = spawnSync(process.execPath, [path.join(root, "scripts/stage-aosp.mjs"), "--target", "pixel10a", "--production", "--descriptor", "reviewed.json",
     "--apk", "absent.apk", "--aosp-source", "/absent/source", "--factory-image", "/absent/factory.zip"], { cwd: root, encoding: "utf8" });
   assert.notEqual(out.status, 0);
-  assert.match(out.stderr, /Refusing production staging: the Pixel 10a production product \(android\/aosp\/pixel10a-product\.json\) is incomplete\.[\s\S]*platformCertificateSha256/);
+  assert.match(out.stderr, /Refusing production staging: the Pixel 10a production product \(android\/aosp\/pixel10a-product\.json\) is incomplete\.[\s\S]*sourceLock\.sha256/);
   assert.doesNotMatch(out.stderr, /absent/);
 });
 

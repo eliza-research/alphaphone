@@ -140,6 +140,8 @@ export function generate({ out, avbtool, root }) {
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+  // The signer refuses any key-directory file readable by group or others, public halves included.
+  for (const file of fs.readdirSync(keys)) fs.chmodSync(path.join(keys, file), 0o600);
   const certificates = Object.fromEntries(PAIR_KEYS.map(name => [name, certificateSha256(fs.readFileSync(path.join(keys, `${name}.x509.pem`)))]));
   const digests = { certificates, apk: certificateSha256(fs.readFileSync(path.join(keys, "apk.x509.pem"))), avb: sha256(fs.readFileSync(path.join(keys, AVB_KEYS.avb.pub))) };
   const next = pinnedDescriptors(descriptors, digests);
