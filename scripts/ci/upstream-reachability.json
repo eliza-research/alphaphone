@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "b3838f87fbad21f9d3a459b0eaafa630a6093387",
+  "head": "efc7fa578eb2c62da6a6f56117176f106b574841",
   "recordedAt": "2026-10-26",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...b3838f87fbad21f9d3a459b0eaafa630a6093387",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...efc7fa578eb2c62da6a6f56117176f106b574841",
   "status": "diverged",
-  "aheadBy": 45,
+  "aheadBy": 46,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -186,6 +186,10 @@
     {
       "sha": "b3838f87fbad21f9d3a459b0eaafa630a6093387",
       "subject": "fix(assistant): preserve family discovery for shared noun forms"
+    },
+    {
+      "sha": "efc7fa578eb2c62da6a6f56117176f106b574841",
+      "subject": "fix(views): preserve verified destination aliases in navigation receipts"
     }
   ],
   "pullRequests": [
