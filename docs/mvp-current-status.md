@@ -394,7 +394,10 @@ These cannot be completed in software from this repository; they are prepared bu
 - Release signing key custody and signed release APKs (`ELIZAOS_*` signing values held by
   the release owner), plus the signed Pixel 10a OS image, OTA/update, interrupted-update,
   rollback and stock-recovery drills. The image signing, OTA and compatibility-record tooling
-  (`scripts/sign-aosp-release.mjs`) is tested only against mocked releasetools.
+  (`scripts/sign-aosp-release.mjs`), including its managed (PKCS#11 token, AVB signing helper,
+  payload signer) mode, is tested against mocked releasetools. Its argument vectors were checked
+  against the AOSP 17 option parsers, and the AVB-helper and signapk-token interfaces were
+  checked with the built tools; it has not signed a real target-files.
 - App Links: publishing `assetlinks.json` on an owned domain with the release signer
   fingerprint, and verifying it on an installed signed build.
 - Gmail OAuth: production client/consent configuration and a real account grant,
