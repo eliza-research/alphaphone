@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
+import {openLegacyAttachment} from './helpers/legacy-notes';
 import { setTextScale } from './accessibility-states';
 import {canonicalNotesFixture,openCanonicalNotes} from './helpers/canonical-notes';
 import {openOwnedPhotoViewer} from './helpers/owned-photo';
@@ -171,8 +172,7 @@ test.describe('menus and sheets over a scrim own focus', () => {
       const ownedInfo=start==='photos:viewer'&&name==='Photo info';
       const nativeShare=start==='notes:editor'&&name==='Share';
       if(nativeShare){
-        await page.addInitScript(offline);await page.goto('/');
-        await page.getByRole('button',{name:'Notes',exact:true}).click();
+        await canonicalNotesFixture(page);await openCanonicalNotes(page);
         await page.getByRole('button',{name:'New note',exact:true}).click();
         await page.getByRole('textbox',{name:'Title',exact:true}).fill('Owned share focus note');
         await page.getByRole('textbox',{name:'Note',exact:true}).fill('Exact locally created content.');
@@ -306,7 +306,7 @@ test.describe('recovery screen', () => {
   test('a render failure under an open modal dialog dismisses the dialog and hands focus to Reload', async ({ page }) => {
     await page.addInitScript(offline);
     await page.goto('/');
-    for (const name of ['Notes', 'New note', 'Link source document']) await page.getByRole('button', { name, exact: true }).click();
+    await openLegacyAttachment(page);
     const dialog = page.getByRole('dialog', { name: 'Note source document' });
     await expect(dialog).toBeVisible();
     // A modal <dialog> is in the top layer: left open, it covers recovery and makes it inert.
