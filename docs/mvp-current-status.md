@@ -1,6 +1,8 @@
 # Current MVP status
 
-Current source pin: SDK `ff4a0bdeb47e8f3ddf15b55139939165b10bb612`, prepared on product `a9bda8928022f8e749fe9df2fdd6e074566341b3`. Routing and reminder create/no-alert repairs are source tested. Full Life type validation hit its bounded heap limit; actual live reminder proof remains pending. Unknown native destination fallback and owner rules remain intact. See [source identity](evidence/source-metadata-a9-ff-20261026.json).
+Current source pin: SDK `f3c38ace5d2de647b5bff6ed9b783bf97d80d60c`, prepared on product `961352ecb2d02d125d9758cd530c03c8cbe31708`. Typed alert preference and pending-navigation repairs are source tested; direct and native live validation remains pending. Full Life graph type qualification remains limited as recorded. Auth and chooser-test fixes are preserved. See [source identity](evidence/source-metadata-961-f3-20261026.json).
+
+Previous source checkpoint: Current source pin: SDK `ff4a0bdeb47e8f3ddf15b55139939165b10bb612`, prepared on product `a9bda8928022f8e749fe9df2fdd6e074566341b3`. Routing and reminder create/no-alert repairs are source tested. Full Life type validation hit its bounded heap limit; actual live reminder proof remains pending. Unknown native destination fallback and owner rules remain intact. See [source identity](evidence/source-metadata-a9-ff-20261026.json).
 
 Previous source checkpoint: Current source pin: SDK `603f73bc6317329a61eadfa7858741742a3d5fff`, prepared on product `39b1d472a3da696e43a3d0827422787059eb8079`. Selected native context and prepared-navigation recovery passed 41 focused tests and scoped types. Actual live performance and device proof remain pending. The existing client type projection fix is retained. See [source identity](evidence/source-metadata-39b1-603-20261026.json).
 
@@ -62,9 +64,9 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-Current source projection: SDK `ff4a0bdeb4` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
+Current source projection: SDK `f3c38ace5d` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
 
-The current upstream source pin is `ff4a0bdeb4` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
+The current upstream source pin is `f3c38ace5d` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 

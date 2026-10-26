@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "ff4a0bdeb47e8f3ddf15b55139939165b10bb612",
+  "head": "f3c38ace5d2de647b5bff6ed9b783bf97d80d60c",
   "recordedAt": "2026-10-26",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...ff4a0bdeb47e8f3ddf15b55139939165b10bb612",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...f3c38ace5d2de647b5bff6ed9b783bf97d80d60c",
   "status": "diverged",
-  "aheadBy": 54,
+  "aheadBy": 56,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -222,6 +222,14 @@
     {
       "sha": "ff4a0bdeb47e8f3ddf15b55139939165b10bb612",
       "subject": "fix(reminders): accept create placeholders and preserve no-alert requests"
+    },
+    {
+      "sha": "67d88cd06b2b9e8dc1a6cc7add6b97fd009dc2a1",
+      "subject": "fix(assistant): ground pending navigation replies without redundant rescue"
+    },
+    {
+      "sha": "f3c38ace5d2de647b5bff6ed9b783bf97d80d60c",
+      "subject": "fix(reminders): carry notification preference through semantic planning"
     }
   ],
   "pullRequests": [
