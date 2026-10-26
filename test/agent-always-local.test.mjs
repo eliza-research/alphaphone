@@ -144,9 +144,9 @@ test('the plan surface is a notice beside the running agent, not a gate', () => 
   assert.ok(between(ui, 'async function admitCloudResident(', 'function residentPlanEnded(').includes("update({residentSubscription:view,residentPlanNotice:'needs-plan',planEndsAt:null});\n    return {binding:'unbound',account};"));
   assert.ok(chooser.includes("const residentMustSignIn=residentCloudFlow()&&!snapshot.cloudAccount&&snapshot.residentPlanNotice!=='offline'&&!snapshot.residentStarting;"));
   assert.ok(chooser.includes('{!residentMustSignIn&&<button aria-label="Close connection settings"'));
-  // Back from the in-app sign-in screen returns to the gate; the gate itself still cannot be dismissed.
+  // Auth owns Back even while busy; the required top-level chooser remains protected.
   const close = between(ui, '  close() {', '  cancel() {');
-  const cancelSignIn = close.indexOf('if(state.signIn&&!state.busy){connectionController.cancelSignIn();return;}');
+  const cancelSignIn = close.indexOf('if(state.signIn){connectionController.cancelSignIn();return;}');
   const requiredSignIn = close.indexOf('if(residentSignInRequired()){');
   assert.ok(cancelSignIn >= 0 && requiredSignIn > cancelSignIn, 'Sign-in cancellation precedes the required-sign-in gate, after independent billing notices.');
   // No agent-less product choice remains in the phone's flow.
