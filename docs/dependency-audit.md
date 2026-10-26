@@ -1,6 +1,22 @@
 # Dependency and artifact supply chain
 
-## Current source projection (2026-10-25)
+## Current source-only input rebind (2026-10-25)
+
+SDK `a95cd4d28eb2bcd5fe5527e98058c167ff480557` at product `4fd822874850a68c3d82675630593e4c63be943d`
+uses exactly the prior full Bun lock bytes and normalized 3,694-version registry
+input. The dated October 25 registry result and 124 source findings are reused;
+no registry query or exception deadline renewal occurred. The source snapshot and
+disposition source binding now name this pin. See [identity and qualification
+scope](evidence/source-metadata-4fd-a95-20261025.json).
+
+The artifact review below stays bound to APK `77c65ebe29c011f7d8f211a3a5dcfb2a79d1909cc74ecf0e40a0f4a68377f0cb`,
+product `a424de9`, SDK `f4142d3`. Native Android Bun changes the binary/platform
+contract. Its new APK closure, packaged advisory review, app-UID behavior and
+full device acceptance remain pending; source-input identity transfers none of
+those results. No shipped high/critical waiver or Bun builtin assurance is added.
+
+
+## Historical f414 source and artifact projection (2026-10-25)
 
 SDK `f4142d3a92d6b5b49ef6c6a666155218b8b75b07` at product
 `a424de923b4b19aa0d86a7e23ef30598f6704d94` has the same Bun lock bytes and

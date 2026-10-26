@@ -35,8 +35,8 @@
     }
   ],
   "resident": {
-    "upstreamCommit": "f4142d3a92d6b5b49ef6c6a666155218b8b75b07",
-    "description": "Current exact signed APK 77c65ebe29c011f7d8f211a3a5dcfb2a79d1909cc74ecf0e40a0f4a68377f0cb at SDK f4142d3a92d6b5b49ef6c6a666155218b8b75b07: same603-version npm audit input and unchanged affected UUID/Zod module code support reuse of existing dispositions under docs/security/resident-artifact-review-77c65ebe29c011f7-2026-10-25.json. Prior per-finding text remains historical evidence; exception objects, deadlines and maintenance records are unchanged. No shipped high/critical waiver or Bun builtin assurance.",
+    "upstreamCommit": "a95cd4d28eb2bcd5fe5527e98058c167ff480557",
+    "description": "Current source-only input rebind at SDK a95cd4d28eb2bcd5fe5527e98058c167ff480557: full-lock bytes and normalized3,694-version registry input are identical to the reviewed f4142d3a92d6b5b49ef6c6a666155218b8b75b07 input. Existing exception objects/deadlines and maintenance records remain unchanged; no new registry query, remediation, native binary assurance or new APK shipment conclusion is claimed. New exact artifact review remains pending. Earlier artifact context: Current exact signed APK 77c65ebe29c011f7d8f211a3a5dcfb2a79d1909cc74ecf0e40a0f4a68377f0cb at SDK f4142d3a92d6b5b49ef6c6a666155218b8b75b07: same603-version npm audit input and unchanged affected UUID/Zod module code support reuse of existing dispositions under docs/security/resident-artifact-review-77c65ebe29c011f7-2026-10-25.json. Prior per-finding text remains historical evidence; exception objects, deadlines and maintenance records are unchanged. No shipped high/critical waiver or Bun builtin assurance.",
     "shippedSetEvidence": "docs/security/resident-artifact-review-2026-10-25.json binds current APK, bundle/notices hashes and all124 source findings. Earlier92-entry dispositions remain in Git history; local independent review records retain exact prior bytes.",
     "pendingUpstreamFixes": [],
     "exceptions": [
@@ -3143,6 +3143,14 @@
       "description": "Reviewed current resident npm closure for exact signed APK ab2dbd9ca2e756bd954fce21adcf17c76c0fa5717671a50f0062b35ad7cefe27 at SDK4e561dc. Full-lock124findings remain visible:603 packagedversions report one moderateUUID row. Per-finding npm nonshipment and unchanged agent v4-only call paths support scoped dispositions. No shipped high/critical waiver, Bun builtin assurance, upstream remediation claim or prior deadline extension.",
       "artifactReview": "docs/security/resident-artifact-review-2026-10-25.json"
     },
-    "currentArtifactReview": "docs/security/resident-artifact-review-77c65ebe29c011f7-2026-10-25.json"
+    "currentArtifactReview": "docs/security/resident-artifact-review-77c65ebe29c011f7-2026-10-25.json",
+    "sourceInputReview": {
+      "evidence": "docs/evidence/source-metadata-4fd-a95-20261025.json",
+      "priorSourcePin": "f4142d3a92d6b5b49ef6c6a666155218b8b75b07",
+      "currentSourceArtifactQualified": false,
+      "newArtifactReviewPending": true,
+      "existingProposalStatusAppliesTo": "previously reviewed artifacts only",
+      "lastReviewedArtifact": "docs/security/resident-artifact-review-77c65ebe29c011f7-2026-10-25.json"
+    }
   }
 }

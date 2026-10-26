@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "f4142d3a92d6b5b49ef6c6a666155218b8b75b07",
+  "head": "a95cd4d28eb2bcd5fe5527e98058c167ff480557",
   "recordedAt": "2026-10-25",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...f4142d3a92d6b5b49ef6c6a666155218b8b75b07",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...a95cd4d28eb2bcd5fe5527e98058c167ff480557",
   "status": "diverged",
-  "aheadBy": 33,
+  "aheadBy": 35,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -138,6 +138,14 @@
     {
       "sha": "f4142d3a92d6b5b49ef6c6a666155218b8b75b07",
       "subject": "fix: retain trusted native delivery when plugin views register"
+    },
+    {
+      "sha": "a58423b55ab02dc2246c15b046ff19aa4a63ef37",
+      "subject": "refactor: share existing reminder presentation and eligibility"
+    },
+    {
+      "sha": "a95cd4d28eb2bcd5fe5527e98058c167ff480557",
+      "subject": "fix: support verified native Android Bun runtime deployment"
     }
   ],
   "pullRequests": [
