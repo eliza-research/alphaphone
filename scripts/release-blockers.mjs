@@ -14,7 +14,7 @@
  * while UNRESOLVED_FONT_LICENCE_BLOCKS_DISTRIBUTION (scripts/licence-policy.mjs) is true.
  *
  * @param {Record<string, any>} row one `results[]` entry with mode "release"
- * @param {{manifestTestMocks?: unknown, admission?: {failures: string[], blockers: string[], signerMatches?: boolean}, releaseSigner?: Record<string, any>, image?: {platformCertificateSha256?: unknown}, fontLicenceBlocks?: boolean}} [options]
+ * @param {{manifestTestMocks?: unknown, manifestRuntimeProfile?: unknown, admission?: {failures: string[], blockers: string[], signerMatches?: boolean}, releaseSigner?: Record<string, any>, image?: {platformCertificateSha256?: unknown}, fontLicenceBlocks?: boolean}} [options]
  *   admission defaults to the row's recorded releaseAdmission; pass a freshly computed one, or
  *   the current android/release-signer.json as releaseSigner (which recomputes it), to judge the
  *   row against the committed signer: an unset signer then always blocks, whatever was recorded.
@@ -29,7 +29,7 @@ import { releaseAdmission } from "./build-android.mjs";
 const FONT_CHECK = /^(unresolved-font-licence: |font licence check failed: )/;
 const HEX64 = /^[0-9a-f]{64}$/;
 
-export function releaseBlockers(row, { manifestTestMocks = false, admission = row?.releaseAdmission, releaseSigner, image, fontLicenceBlocks = UNRESOLVED_FONT_LICENCE_BLOCKS_DISTRIBUTION } = {}) {
+export function releaseBlockers(row, { manifestTestMocks = false, manifestRuntimeProfile = "native", admission = row?.releaseAdmission, releaseSigner, image, fontLicenceBlocks = UNRESOLVED_FONT_LICENCE_BLOCKS_DISTRIBUTION } = {}) {
   const blockers = [];
   if (releaseSigner !== undefined) {
     try { admission = releaseAdmission(row, releaseSigner); }
@@ -54,7 +54,8 @@ export function releaseBlockers(row, { manifestTestMocks = false, admission = ro
   const voice = row.voiceHost;
   if (!voice || typeof voice !== "object" || Array.isArray(voice) || typeof voice.packaged !== "boolean")
     blockers.push("on-device voice admission was not recorded");
-  else if (!voice.packaged) blockers.push("no on-device voice packaged (local speech would be unavailable)");
+  // P-57: a Cloud release packages no local speech by design and needs no voice host.
+  else if (!voice.packaged) { if (manifestRuntimeProfile !== "cloud") blockers.push("no on-device voice packaged (local speech would be unavailable)"); }
   else {
     const missing = [(!Array.isArray(voice.differences) || voice.differences.length) && "bytes differ from the voice-host record",
       voice.qualified !== true && "device qualification pending"].filter(Boolean);

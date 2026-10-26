@@ -1,0 +1,102 @@
+# Private release repository (AlphaCompute/alphaphone-release): GitHub CI is the release
+# operator (decision P-58). Signs one unsigned alpha_stallion_phone target-files build with the
+# release keys from the AOSP_RELEASE_KEYS secret using alphaphone's scripts/sign-aosp-release.mjs
+# (key-file mode), builds the OTA and the fastboot image archive, and attaches the outputs and
+# release-record.json to the same release. Inputs are attached to the release by the image
+# builder: target_files.zip.part-* (split under the 2 GiB asset limit), target_files.zip.sha256,
+# otatools.zip and the apk-manifest.json of the admitted launcher. Licensed vendor blobs stay in
+# this private repository; only the public release record is copied to alphaphone.
+name: Sign release image
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release of this repository holding the unsigned image inputs
+        required: true
+      alphaphone_ref:
+        description: Full alphaphone commit SHA whose descriptors hold the reviewed identities
+        required: true
+permissions:
+  contents: write
+concurrency:
+  group: sign-${{ inputs.release_tag }}
+  cancel-in-progress: false
+jobs:
+  sign:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - name: Require an exact alphaphone commit
+        env:
+          REF: ${{ inputs.alphaphone_ref }}
+        run: '[[ "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "alphaphone_ref must be a full commit SHA"; exit 1; }'
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/local/.ghcup
+          df -h "$GITHUB_WORKSPACE"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: AlphaCompute/alphaphone
+          ref: ${{ inputs.alphaphone_ref }}
+          path: alphaphone
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: alphaphone/.nvmrc
+      - name: Download inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          mkdir in
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -D in -p 'target_files.zip.part-*' -p 'target_files.zip.sha256' -p 'otatools.zip' -p 'apk-manifest.json'
+          cat $(ls in/target_files.zip.part-* | sort) > in/target_files.zip
+          rm in/target_files.zip.part-*
+          expected=$(cut -d' ' -f1 in/target_files.zip.sha256)
+          [[ "$(sha256sum in/target_files.zip | cut -d' ' -f1)" == "$expected" ]] || { echo "target-files hash differs"; exit 1; }
+          echo "TARGET_FILES_SHA256=$expected" >> "$GITHUB_ENV"
+          mkdir otatools && unzip -q in/otatools.zip -d otatools && rm in/otatools.zip
+          df -h "$GITHUB_WORKSPACE"
+      - name: Install keys
+        env:
+          AOSP_RELEASE_KEYS: ${{ secrets.AOSP_RELEASE_KEYS }}
+        run: |
+          umask 077
+          mkdir -m 0700 "$RUNNER_TEMP/keys"
+          printf '%s' "$AOSP_RELEASE_KEYS" | base64 -d | tar -xz -C "$RUNNER_TEMP/keys"
+          rm -f "$RUNNER_TEMP/keys/alpha_apk.pk8"
+          cp alphaphone/android/aosp/release-keys/*.x509.pem alphaphone/android/aosp/release-keys/avb_pkmd.bin alphaphone/android/aosp/release-keys/*.avbpubkey "$RUNNER_TEMP/keys/"
+          rm -f "$RUNNER_TEMP/keys/alpha_apk.x509.pem"
+          chmod 0600 "$RUNNER_TEMP"/keys/*
+      - name: Sign target-files and build the OTA
+        working-directory: alphaphone
+        run: |
+          node scripts/sign-aosp-release.mjs \
+            --target-files "$GITHUB_WORKSPACE/in/target_files.zip" --target-files-sha256 "$TARGET_FILES_SHA256" \
+            --keys-dir "$RUNNER_TEMP/keys" --releasetools "$GITHUB_WORKSPACE/otatools/bin" \
+            --apk-manifest "$GITHUB_WORKSPACE/in/apk-manifest.json" --out "$GITHUB_WORKSPACE/release"
+      - name: Remove keys
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/keys" ]; then find "$RUNNER_TEMP/keys" -type f -exec shred -u {} +; rm -rf "$RUNNER_TEMP/keys"; fi
+      - name: Build fastboot images from the signed target-files
+        run: |
+          set -euo pipefail
+          rm in/target_files.zip
+          PATH="$GITHUB_WORKSPACE/otatools/bin:$PATH" img_from_target_files release/signed-target_files.zip release/signed-img.zip
+          cd release
+          for file in signed-target_files.zip ota.zip signed-img.zip; do
+            sha256sum "$file" >> release.sha256
+            split -b 1900m -d -a 2 "$file" "$file.part-" && rm "$file"
+          done
+          cat release.sha256
+      - name: Attach signed release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag }}
+        run: gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber release/*

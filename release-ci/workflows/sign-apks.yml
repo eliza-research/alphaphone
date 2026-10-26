@@ -1,0 +1,85 @@
+# Private release repository (AlphaCompute/alphaphone-release): GitHub CI is the release
+# operator (decision P-58). Signs the unsigned launcher, standalone and listener release APKs
+# attached to a release of this private repository with the alpha_apk key from the
+# AOSP_RELEASE_KEYS secret, then attaches the signed APKs to the same release.
+# The signing code and the reviewed signer digest come from public alphaphone at alphaphone_ref.
+name: Sign release APKs
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release of this repository holding the *-release-unsigned.apk inputs
+        required: true
+      alphaphone_ref:
+        description: Full alphaphone commit SHA whose release-signer.json is the reviewed signer
+        required: true
+permissions:
+  contents: write
+concurrency:
+  group: sign-${{ inputs.release_tag }}
+  cancel-in-progress: false
+jobs:
+  sign:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Require an exact alphaphone commit
+        env:
+          REF: ${{ inputs.alphaphone_ref }}
+        run: '[[ "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "alphaphone_ref must be a full commit SHA"; exit 1; }'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: AlphaCompute/alphaphone
+          ref: ${{ inputs.alphaphone_ref }}
+          path: alphaphone
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          packages: build-tools;36.0.0
+          log-accepted-android-sdk-licenses: false
+      - name: Download unsigned APKs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          mkdir in
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -D in -p '*-release-unsigned.apk'
+          ls -l in
+      - name: Install keys
+        env:
+          AOSP_RELEASE_KEYS: ${{ secrets.AOSP_RELEASE_KEYS }}
+        run: |
+          umask 077
+          mkdir -m 0700 "$RUNNER_TEMP/keys"
+          printf '%s' "$AOSP_RELEASE_KEYS" | base64 -d | tar -xz -C "$RUNNER_TEMP/keys" alpha_apk.pk8
+          cp alphaphone/android/aosp/release-keys/alpha_apk.x509.pem "$RUNNER_TEMP/keys/"
+      - name: Sign and check against the reviewed signer
+        run: |
+          set -euo pipefail
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          expected=$(node -p 'require("./alphaphone/android/release-signer.json").signerSha256')
+          [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || { echo "release-signer.json has no reviewed signer"; exit 1; }
+          mkdir out
+          for input in in/*-release-unsigned.apk; do
+            name=$(basename "$input" -release-unsigned.apk)
+            [[ "$name" =~ ^(launcher|standalone|sense)$ ]] || { echo "unexpected APK $input"; exit 1; }
+            "$tools/zipalign" -c -P 16 -v 4 "$input" > /dev/null
+            "$tools/apksigner" sign --key "$RUNNER_TEMP/keys/alpha_apk.pk8" --cert "$RUNNER_TEMP/keys/alpha_apk.x509.pem" \
+              --out "out/$name-release.apk" "$input"
+            actual=$("$tools/apksigner" verify --print-certs "out/$name-release.apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+            [[ "$actual" == "$expected" ]] || { echo "$name signed by $actual, expected $expected"; exit 1; }
+          done
+          (cd out && sha256sum *.apk > signed-apks.sha256 && cat signed-apks.sha256)
+      - name: Remove keys
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/keys" ]; then find "$RUNNER_TEMP/keys" -type f -exec shred -u {} +; rm -rf "$RUNNER_TEMP/keys"; fi
+      - name: Attach signed APKs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag }}
+        run: gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber out/*

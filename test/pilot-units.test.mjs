@@ -72,6 +72,8 @@ test("a pilot or acceptance unit never gets a non-distributable release, and eve
   assert.match(refusal({ voiceHost: { packaged: true, asr: true, differences: ["assets/paradee-voice/v1/x: differs"], qualified: false } }), /unqualified on-device voice \(bytes differ from the voice-host record, device qualification pending\)/);
   assert.match(refusal({ voiceHost: { packaged: true, asr: true, differences: [], qualified: false } }), /unqualified on-device voice \(device qualification pending\)/);
   assert.match(refusal({ voiceHost: { packaged: false, asr: false, differences: [], qualified: false } }), /no on-device voice packaged/);
+  // P-57: the same row in a Cloud-profile manifest is not blocked on voice.
+  assert.ok(!releaseBlockers({ ...DISTRIBUTABLE, testMocks: false, bundleAudit: "passed", releaseAdmission: { failures: [], blockers: [], signerMatches: true }, licenceBlockers: [], voiceHost: { packaged: false, asr: false, differences: [], qualified: false } }, { manifestRuntimeProfile: "cloud" }).some(item => /voice/.test(item)));
   assert.equal(admit({ voiceHost: { packaged: true, asr: true, differences: [], qualified: true } }).distributable, true);
   assert.match(refusal({ voiceHost: undefined }), /on-device voice admission was not recorded/);
   assert.match(refusal({ testMocks: true }), /test-mocks build/);

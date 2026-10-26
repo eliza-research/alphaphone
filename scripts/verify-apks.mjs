@@ -238,10 +238,12 @@ for (const row of release) {
   row.voiceHost = voiceHostAdmission(row.file);
   if (row.voiceHost.differences.length)
     throw new Error(`On-device voice in ${row.file} is not admitted:\n  - ${row.voiceHost.differences.join("\n  - ")}`);
+  // P-57: a Cloud release that packages no on-device voice needs no voice qualification.
+  row.voiceHostRequired = !(runtimeProfile === "cloud" && row.voiceHost.packaged !== true);
   row.distributable = !testMocks && row.signed === true && row.releaseAdmission.signerMatches === true &&
     row.releaseAdmission.blockers.length === 0 && row.releaseAdmission.failures.length === 0 &&
     runtime.distributable === true && row.runtimeNotices === true &&
-    row.voiceHost.packaged === true && row.voiceHost.qualified === true &&
+    (!row.voiceHostRequired || (row.voiceHost.packaged === true && row.voiceHost.qualified === true)) &&
     row.licenceBlockers.length === 0;
 }
 for (const row of results.filter(row => row.mode === "debug")) {
@@ -327,7 +329,7 @@ fs.writeFileSync(
 console.log(JSON.stringify(results, null, 2));
 const undistributable = release.filter(row => !row.distributable);
 if (undistributable.length)
-  console.warn(`Not distributable: ${undistributable.map(row => `${row.file} (${[row.runtime !== "PACKAGED" && "no packaged runtime", testMocks && "test-mocks build", !row.runtimeNotices && "notices lack the packaged runtime (run node scripts/generate-licenses.mjs --packaged-runtime after staging)", !row.voiceHost.packaged && "no on-device voice packaged", row.voiceHost.packaged && !row.voiceHost.qualified && "on-device voice not qualified (no recorded device acceptance)", ...row.releaseAdmission.blockers, ...row.licenceBlockers].filter(Boolean).join(", ")})`).join("; ")}`);
+  console.warn(`Not distributable: ${undistributable.map(row => `${row.file} (${[row.runtime !== "PACKAGED" && "no packaged runtime", testMocks && "test-mocks build", !row.runtimeNotices && "notices lack the packaged runtime (run node scripts/generate-licenses.mjs --packaged-runtime after staging)", row.voiceHostRequired && !row.voiceHost.packaged && "no on-device voice packaged", row.voiceHost.packaged && !row.voiceHost.qualified && "on-device voice not qualified (no recorded device acceptance)", ...row.releaseAdmission.blockers, ...row.licenceBlockers].filter(Boolean).join(", ")})`).join("; ")}`);
 console.warn(`Listener (${listener.record}): ${listener.blockers.join("; ")}.`);
 // Licence flags are warnings: recorded per APK above, printed once here, never a failure.
 for (const line of flagLines) console.warn(line);

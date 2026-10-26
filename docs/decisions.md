@@ -212,3 +212,11 @@ Cloud permission consent does not enable sync by itself. Settings reviews the ex
 The owner requested use of the existing funded Cloud account. The native provider uses the standard Cloud API key and /api/v1 endpoint. The current API admits organization-credit requests through its normal credential, quota and credit-reservation checks. A billing snapshot with subscription.status=not_applicable and reason=no_organization_subscription is not an inference refusal.
 
 This supersedes P-43's plan-only assumption for that explicit legacy billing mode while the signed entitlement route is absent. Alpha binds only the verified account and credential reference, shows Cloud credits rather than an active plan, and keeps bounded background refresh. Signed plan validation, account changes, expiry, revocation, quotas and server refusals keep their existing checks. Alpha does not create a plan, grant funds, buy anything, make per-turn balance checks or retry a failed turn.
+
+## October 26 owner decisions: Pixel 10a release (#399)
+
+Decided by the product owner on 2026-10-26 for the first Pixel 10a release. Policy, not evidence.
+
+- **P-57** The Cloud-profile release is distributable without on-device voice. A Cloud release packages no local inference or speech; local speech reports unavailable, never a network fallback. `scripts/verify-apks.mjs` therefore does not require a qualified voice host for a Cloud release that packages none. The native profile keeps its voice-host qualification requirement, and on-device voice qualification remains open work.
+- **P-58** GitHub CI is the release operator. Release keys are key files, generated once by `scripts/aosp-release-key-ceremony.mjs`. They are held only as an Actions secret on the private `AlphaCompute/alphaphone-release` repository, plus the owner's encrypted offline backup. That repository's workflows (sources in `release-ci/`) sign the APKs, target-files and OTA. This replaces P-16's managed or hardware-backed requirement for this release; managed mode (#622) stays available. Alpha Compute keeps signing and update authority, and Shaw stays the accountable release owner.
+- **P-59** User acceptance is not required to close #399. The `userAcceptance` gate is recorded as waived under this decision. It is not recorded as passed.

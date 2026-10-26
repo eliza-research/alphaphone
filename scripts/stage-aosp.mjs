@@ -119,7 +119,7 @@ function admitApk({ apk, hash, development, manifestFile, platformCertificateSha
   // verify-apks recorded, and requires the reviewed image platform certificate.
   const current = development ? {} : { releaseSigner: readReleaseSigner(), image: { platformCertificateSha256 } };
   const blockers = entry?.mode === "release" || entry?.distributable !== undefined
-    ? releaseBlockers(entry, { manifestTestMocks: manifest.testMocks, ...current }) : [];
+    ? releaseBlockers(entry, { manifestTestMocks: manifest.testMocks, manifestRuntimeProfile: manifest.runtimeProfile, ...current }) : [];
   if (entry && (entry.distributable === false || (entry.mode === "release" && blockers.length)))
     throw new Error(`Refusing ${apk}: ${manifestFile} records this release as not distributable (runtime ${entry.runtime ?? "unknown"}, ${entry.signed ? "signed" : "unsigned"}). Unresolved blockers:\n${blockers.map(item => `  - ${item}`).join("\n")}`);
   if (!development && !(entry && entry.mode === "release" && entry.distributable === true && blockers.length === 0))

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {GATE_NAMES, PIXEL10A_GATES, pixel10aGateProblems} from '../scripts/pixel10a-gates.mjs';
 
-const FILES = [PIXEL10A_GATES, 'android/aosp/pixel10a-product.json', 'android/aosp/pixel10a-source.json', 'android/aosp/pixel10a-ota-channel.json',
+const FILES = [PIXEL10A_GATES, 'docs/decisions.md', 'android/aosp/pixel10a-product.json', 'android/aosp/pixel10a-source.json', 'android/aosp/pixel10a-ota-channel.json',
   'docs/pixel10a-source-verification-2026-10-25.json', 'docs/pixel10a-code6-boot-evidence.json', 'docs/evidence/cuttlefish-observation-2026-10-25.json'];
 const read = file => JSON.parse(fs.readFileSync(file, 'utf8'));
 
@@ -43,7 +43,7 @@ test('gates cannot be merged, dropped or passed out of order', t => {
   const dropped = {[PIXEL10A_GATES]: record => { const {cuttlefishBoot, ...rest} = record.gates; return {...record, gates: rest}; }};
   assert.match(pixel10aGateProblems(copy(t, dropped)).join('\n'), /gates must be exactly/);
   const accepted = gate('userAcceptance', g => ({...g, status: 'passed', evidence: [{ref: 'docs/pixel10a-code6-boot-evidence.json', level: 'release'}]}));
-  assert.match(pixel10aGateProblems(copy(t, accepted)).join('\n'), /userAcceptance cannot pass before every other gate/);
+  assert.match(pixel10aGateProblems(copy(t, accepted)).join('\n'), /userAcceptance cannot pass or be waived before every other gate passes/);
 });
 
 test('signed update and recovery cannot pass while the channel drills are not run', t => {
@@ -60,4 +60,10 @@ test('source admission must match the pinned, admitted lock and its verification
   assert.match(problems, /does not pin the lock/);
   const stale = {'docs/pixel10a-source-verification-2026-10-25.json': report => ({...report, sourceLockSha256: '0'.repeat(64)})};
   assert.match(pixel10aGateProblems(copy(t, stale)).join('\n'), /evidence does not verify the pinned admitted lock/);
+});
+
+test('only user acceptance can be waived, by a recorded decision, after every other gate passes', t => {
+  assert.match(pixel10aGateProblems(copy(t, gate('cuttlefishBoot', g => ({...g, status: 'waived', decision: 'P-59'})))).join('\n'), /cuttlefishBoot cannot be waived/);
+  assert.match(pixel10aGateProblems(copy(t, gate('userAcceptance', g => ({...g, status: 'waived', decision: 'P-999'})))).join('\n'), /waived without a recorded owner decision/);
+  assert.match(pixel10aGateProblems(copy(t, gate('userAcceptance', g => ({...g, status: 'waived', decision: 'P-59'})))).join('\n'), /cannot pass or be waived before every other gate passes/);
 });

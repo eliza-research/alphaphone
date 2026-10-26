@@ -261,7 +261,7 @@ function main() {
       result.androidBuild.apks = manifest.results.map(row => ({
         variant: row.variant, mode: row.mode, file: row.file, sha256: row.sha256, signed: row.signed,
         runtime: row.runtime, distributable: row.distributable, bundleAudit: row.bundleAudit,
-        ...(row.mode === "release" ? { distributionBlockers: releaseBlockers(row, { manifestTestMocks: manifest.testMocks }) } : {}),
+        ...(row.mode === "release" ? { distributionBlockers: releaseBlockers(row, { manifestTestMocks: manifest.testMocks, manifestRuntimeProfile: manifest.runtimeProfile }) } : {}),
       }));
       const expected = ["standalone/debug", "standalone/release", "launcher/debug", "launcher/release"];
       const built = manifest.results.map(row => `${row.variant}/${row.mode}`).sort();

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "description": "Distinct Pixel 10a (stallion) Android 17 distribution gates for issue #399. Each gate is recorded separately: one gate's evidence never satisfies another, and development evidence never makes a gate passed. Statuses are 'not run', 'development', 'failed' or 'passed'; 'passed' needs at least one release-level evidence entry. Statuses are recorded from executed builds, boots, drills and user sessions, never by software. scripts/aosp-pixel10a.mjs pixel10aGateProblems checks this file against the source lock, product descriptor and update channel.",
+  "description": "Distinct Pixel 10a (stallion) Android 17 distribution gates for issue #399. Each gate is recorded separately: one gate's evidence never satisfies another, and development evidence never makes a gate passed. Statuses are 'not run', 'development', 'failed', 'passed' or 'waived'; 'passed' needs at least one release-level evidence entry, and only userAcceptance can be 'waived', by a recorded owner decision (P-59) once every other gate has passed. Statuses are recorded from executed builds, boots, drills and user sessions, never by software. scripts/aosp-pixel10a.mjs pixel10aGateProblems checks this file against the source lock, product descriptor and update channel.",
   "target": "pixel10a",
   "product": "alpha_stallion_phone",
   "gates": {

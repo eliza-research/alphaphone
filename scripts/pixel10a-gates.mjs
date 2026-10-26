@@ -7,7 +7,9 @@ import {channelDistributionProblems} from './sign-aosp-release.mjs';
 /** The distinct Pixel 10a distribution gates (issue #399). */
 export const PIXEL10A_GATES = 'android/aosp/pixel10a-qualification-gates.json';
 export const GATE_NAMES = ['sourceAdmission', 'apkVariants', 'cuttlefishBoot', 'physicalDevice', 'signedUpdateRecovery', 'userAcceptance'];
-const STATUSES = ['not run', 'development', 'failed', 'passed'];
+const STATUSES = ['not run', 'development', 'failed', 'passed', 'waived'];
+/** Only user acceptance can be waived, and only by a recorded owner decision (P-59). */
+const WAIVABLE = ['userAcceptance'];
 const LEVELS = ['development', 'release'];
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const readJson = (root, file) => JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
@@ -35,8 +37,12 @@ export function pixel10aGateProblems(root = process.cwd()) {
       if (typeof entry?.ref !== 'string' || !entry.ref) problems.push(`${at} evidence needs a ref`);
       else if (!/^https:\/\//.test(entry.ref) && !fs.existsSync(path.join(root, entry.ref))) problems.push(`${at} evidence ${entry.ref} is missing`);
     }
-    if (gate.status !== 'not run' && !gate.evidence.length) problems.push(`${at} is "${gate.status}" without evidence`);
+    if (!['not run', 'waived'].includes(gate.status) && !gate.evidence.length) problems.push(`${at} is "${gate.status}" without evidence`);
     if (gate.status === 'passed' && !gate.evidence.some(entry => entry?.level === 'release')) problems.push(`${at} cannot pass on development evidence`);
+    if (gate.status === 'waived') {
+      if (!WAIVABLE.includes(name)) problems.push(`${at} cannot be waived`);
+      else if (!/^P-\d+$/.test(gate.decision ?? '') || !new RegExp(`\\*\\*${gate.decision}\\*\\*`).test(fs.readFileSync(path.join(root, 'docs/decisions.md'), 'utf8'))) problems.push(`${at} is waived without a recorded owner decision`);
+    }
   }
   // Source admission must name the exact admitted lock.
   if (gates.sourceAdmission?.status === 'passed') {
@@ -54,7 +60,7 @@ export function pixel10aGateProblems(root = process.cwd()) {
     for (const problem of channelDistributionProblems(readJson(root, product.ota.channel), product.ota.channel)) problems.push(`${PIXEL10A_GATES}: signedUpdateRecovery passed while ${problem}`);
   }
   // User acceptance follows every other gate.
-  if (gates.userAcceptance?.status === 'passed' && GATE_NAMES.some(name => name !== 'userAcceptance' && gates[name]?.status !== 'passed'))
-    problems.push(`${PIXEL10A_GATES}: userAcceptance cannot pass before every other gate`);
+  if (['passed', 'waived'].includes(gates.userAcceptance?.status) && GATE_NAMES.some(name => name !== 'userAcceptance' && gates[name]?.status !== 'passed'))
+    problems.push(`${PIXEL10A_GATES}: userAcceptance cannot pass or be waived before every other gate passes`);
   return problems;
 }
