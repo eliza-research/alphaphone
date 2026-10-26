@@ -98,11 +98,33 @@ const hex64 = /^[0-9a-f]{64}$/;
 const hex40 = /^[0-9a-f]{40}$/;
 
 /**
+ * Evidence class of a record, derived only from where it ran (docs/verification.md): an emulator
+ * is class E, the Alpha Cuttlefish image class I, a physical Pixel class D. A caller cannot set
+ * the class itself; the fields below are written after the record so they cannot be overridden.
+ */
+export const EVIDENCE_BY_TARGET = {
+  emulator: { evidenceClass: 'E', evidence: 'emulator-instrumentation',
+    notEvidenceFor: ['physical-device acceptance', 'user acceptance', 'AOSP image boot', 'real integrations'] },
+  cuttlefish: { evidenceClass: 'I', evidence: 'cuttlefish-image-instrumentation',
+    notEvidenceFor: ['emulator instrumentation', 'physical-device acceptance', 'user acceptance', 'real integrations', 'other images or fingerprints'] },
+  pixel: { evidenceClass: 'D', evidence: 'physical-device-instrumentation',
+    notEvidenceFor: ['emulator instrumentation', 'AOSP image boot', 'real integrations', 'user acceptance beyond the executed classes', 'other device models or builds'] },
+};
+
+/**
  * Write one instrumentation evidence record. Every record is bound to the source
- * commit and the SHA-256 of each installed APK, and is labelled emulator-class
- * evidence (class E): it never stands for device or user acceptance.
+ * commit and the SHA-256 of each installed APK. Without `deviceTarget` it is
+ * emulator-class evidence (class E) and must carry `emulator`; with `deviceTarget`
+ * cuttlefish or pixel it is class I or D and must carry the admitted `device` identity.
+ * No class ever stands for another.
  */
 export function writeInstrumentationRecord(file, record) {
+  const target = record?.deviceTarget ?? 'emulator';
+  if (!Object.hasOwn(EVIDENCE_BY_TARGET, target) || target === 'emulator' && record.deviceTarget !== undefined)
+    throw new Error(`Unknown device target ${JSON.stringify(record?.deviceTarget)}`);
+  if (target === 'emulator' && record.device !== undefined) throw new Error('An emulator record carries no device identity');
+  if (target !== 'emulator' && (record.emulator !== undefined || record.device?.target !== target || !record.device?.fingerprint))
+    throw new Error(`A ${target} record needs the admitted device identity (target and fingerprint) and no emulator identity`);
   if (!hex40.test(record?.commit ?? '')) throw new Error('Instrumentation record needs the full source commit');
   if (!Array.isArray(record.apks) || !record.apks.length || record.apks.some(apk => !hex64.test(apk.sha256 ?? '') || !apk.role || !apk.variant))
     throw new Error('Instrumentation record needs the variant, role and SHA-256 of every installed APK');
@@ -112,10 +134,8 @@ export function writeInstrumentationRecord(file, record) {
       throw new Error(`Invalid class result ${JSON.stringify(row)}`);
   const body = {
     schema: 1,
-    evidenceClass: 'E',
-    evidence: 'emulator-instrumentation',
-    notEvidenceFor: ['physical-device acceptance', 'user acceptance', 'AOSP image boot', 'real integrations'],
     ...record,
+    ...EVIDENCE_BY_TARGET[target],
     // A run that changed the HOME role passes only with the original holder proven restored.
     passed: record.classes.length > 0 && record.classes.every(row => row.status === 'passed')
       && (record.homeRole === undefined || (record.homeRole.restored === true && record.homeRole.coldHome?.resumed === true)),

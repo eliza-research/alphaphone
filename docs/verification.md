@@ -115,7 +115,11 @@ and the browser loopback cases. `<output>/results.json` (via
 `scripts/instrumentation-result.mjs`) records per-class `passed`, `failed`, `skipped`
 (every method skipped by its own assumption gate) or `missing`, bound to the commit, a
 dirty flag and every installed APK's SHA-256, with raw output per class. It is labelled
-emulator class E evidence and is never device or user acceptance. Process-death,
+emulator class E evidence and is never device or user acceptance. The same runner's
+`--device-target cuttlefish|pixel` mode records class I (the Alpha Cuttlefish image) or class D
+(a physical Pixel 10a) instead, and `scripts/device-view-capture.mjs` is the per-view screenshot
+gate on those targets; both are described in [device acceptance gates](device-acceptance-gates.md)
+(decision P-58). Process-death,
 permission-changing and provider-credential campaigns (ReminderTapProcessDeath,
 WorkflowNoticeProcessDeath, NotificationChannels, VoicePermissionDenied,
 VoicePermissionRevoke, LocalVoiceRecordingLimit, ResidentEgressRedaction) are refused
