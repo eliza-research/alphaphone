@@ -117,9 +117,11 @@
     }
   ],
   "imageRebuild": {
-    "status": "running",
+    "status": "completed",
     "unit": "alpha-v11-image-build-20261024.service",
-    "previousAttempt": "interrupted with no result; all processes confirmed absent before restart"
+    "previousAttempt": "stopped by the 12 GiB free-space reserve (exit -15); retry built, verified, flashed and booted",
+    "imageArchiveSha256": "053dcde1cfdea6c8a305fd0c0eec1f6ef02276a27d607c9275e9973fb79d401e",
+    "receipt": "docs/evidence/pixel-version11-aosp-deployment-2026-10-25.json"
   },
   "productionQualified": false,
   "realProviderAcceptance": false
