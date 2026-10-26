@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "f3c38ace5d2de647b5bff6ed9b783bf97d80d60c",
+  "head": "50394d04d5f9714b98c7bdce48a720bee1f70099",
   "recordedAt": "2026-10-26",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...f3c38ace5d2de647b5bff6ed9b783bf97d80d60c",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...50394d04d5f9714b98c7bdce48a720bee1f70099",
   "status": "diverged",
-  "aheadBy": 56,
+  "aheadBy": 59,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -230,6 +230,18 @@
     {
       "sha": "f3c38ace5d2de647b5bff6ed9b783bf97d80d60c",
       "subject": "fix(reminders): carry notification preference through semantic planning"
+    },
+    {
+      "sha": "2cccd224e4eb61265802aa628f730f299689f461",
+      "subject": "fix(cerebras): envelope root union responses without weakening validation"
+    },
+    {
+      "sha": "1ca370cb14b0cc69f67700df67df101c188f87be",
+      "subject": "fix(reminders): clarify canonical destination and exclusive date selectors"
+    },
+    {
+      "sha": "50394d04d5f9714b98c7bdce48a720bee1f70099",
+      "subject": "fix(views): retain verified request aliases through navigation handoff"
     }
   ],
   "pullRequests": [
