@@ -254,7 +254,9 @@ html:not(.standalone-app) [data-alpha-layer="home"][data-alpha-home-fits="true"]
  * and the last row can still be brought fully above the assistant. */
 :root { --alpha-dock-reserve:max(108px,calc(var(--alpha-dock-clearance,102px) + 6px)); --alpha-dock-rest-reserve:max(108px,calc(var(--alpha-dock-rest,102px) + 6px)); }
 html:not(.alpha-landscape) .alpha-phone [data-alpha-layer="home"] { bottom:0!important; scroll-padding-bottom:var(--alpha-dock-reserve)!important; }
-html:not(.alpha-landscape) .alpha-phone [data-alpha-home-layout] { padding-bottom:var(--alpha-dock-reserve)!important; min-height:calc(100% + var(--alpha-dock-reserve) - var(--alpha-dock-rest-reserve))!important; }
+/* Grow scroll clearance, not the flex space containing the icons. The resting
+ * pill and composer have different heights but share the same Home layout. */
+html:not(.alpha-landscape) .alpha-phone [data-alpha-home-layout] { padding-bottom:var(--alpha-dock-reserve)!important; min-height:calc(100% + var(--alpha-dock-reserve) - 108px)!important; }
 /* The app library fills the screen behind the floating dock. Its final row can
    scroll above the dock because the clearance belongs inside the list. */
 html:not(.alpha-landscape) .alpha-phone [data-alpha-layer="drawer"] { padding-bottom:0!important; }

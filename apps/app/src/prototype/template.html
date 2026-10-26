@@ -4203,7 +4203,7 @@
       <sc-if value="{{chatRecorder.canMute}}"><button class="ib" aria-label="{{chatRecorder.muteLabel}}" disabled="{{chatRecorder.muteDisabled}}" aria-pressed="{{chatRecorder.muted}}" onClick="{{chatRecorder.toggleMute}}"><span aria-hidden="true" class="mail-toolbar-icon" style="mask-image:url('{{chatRecorder.muteAsset}}');-webkit-mask-image:url('{{chatRecorder.muteAsset}}')"></span></button></sc-if>
       <button class="alpha-voice-primary" aria-label="{{chatRecorder.primaryLabel}}" disabled="{{chatRecorder.primaryDisabled}}" onClick="{{chatRecorder.stop}}"><svg class="i" viewBox="0 0 24 24"><path d="{{chatRecorder.primaryIcon}}"></path></svg></button>
     </section>
-    <sc-if value="{{chatRecorder.cloudDisclosure}}"><p class="alpha-voice-error" role="status"><sc-for list="{{chatRecorder.lines}}" as="line"><span>{{line.t}}</span></sc-for></p></sc-if>
+    <sc-if value="{{chatRecorder.cloudDisclosure}}"><p class="alpha-voice-error" role="note">{{chatRecorder.cloudDisclosureText}}</p></sc-if>
     <sc-if value="{{chatRecorder.problem}}"><p class="alpha-voice-error" role="alert"><sc-for list="{{chatRecorder.lines}}" as="line"><span>{{line.t}}</span></sc-for></p></sc-if>
       <sc-if value="{{chatRecorder.recoveryLabel}}"><button data-alpha-voice-recovery class="tap alpha-voice-recovery" onClick="{{chatRecorder.recover}}" style="align-self:center;min-height:max(44px,calc(45px / var(--phone-scale,1)));margin:-18px 16px 12px;padding:8px 16px;border-radius:22px;color:var(--acct);font:inherit">{{chatRecorder.recoveryLabel}}</button></sc-if>
     <sc-if value="{{chatRecorder.needsPlaybackUnlock}}"><button class="tap alpha-voice-unlock" onClick="{{chatRecorder.unlockPlayback}}">Enable sound</button></sc-if>

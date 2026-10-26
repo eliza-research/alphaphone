@@ -81,6 +81,11 @@ Select it explicitly with `--runtime-profile=cloud` for runtime staging and Andr
 builds (`agent:stage-android` and `android:build`). Renderer, native and packaged
 runtime admission must agree on the profile; test mocks and unpackaged runtimes
 are rejected. The default remains `native` with its existing qualification gates.
+The Talk button is the explicit voice start; it opens the voice surface and starts
+the microphone without a second Start Cloud voice button. The active surface keeps
+the Cloud upload and plan-usage disclosure visible. Account and conversation binding,
+permission failures, and explicit Stop remain enforced.
+
 Cloud QA builds do not establish offline/native-speech, AOSP or release acceptance;
 real account, inference, microphone and playback evidence is still required.
 

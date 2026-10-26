@@ -8,16 +8,15 @@ import {resolveCloudSignatureClassifier,verifyCloudRecordingSignatures} from '..
 import {voiceFakeClock} from './fixtures/shared-batch-voice.mjs';
 import {cloudVoiceViewFixture} from './fixtures/cloud-voice-view.mjs';
 
-test('production Cloud conversation discloses uploads before mic, avoids local models, and stops on account change',async()=>{
+test('one explicit Talk action starts Cloud voice, keeps its disclosure, and stops on account change',async()=>{
  const f=cloudVoiceViewFixture({cloudProfile:true});
  try {
   f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;f.shell.state.chat='hidden';
   await f.shell.startVoice();
-  assert.equal(f.shell.state.chat,'sheet','hidden Home entry must reveal the consent sheet');
-  let view=f.renderChat();assert.equal(view.state,'idle');assert.equal(view.cloudDisclosure,true);
-  assert.match(view.lines[0].t,/uploads your recordings.*plan allowance/);
-  assert.equal(view.recoveryLabel,'Start Cloud voice');assert.equal(f.starts,0);assert.equal(f.localFactories,0);assert.equal(f.box.testMocksEnabled,false);
-  view.recover();for(let i=0;i<20&&!f.starts;i++)await f.tick();
+  assert.equal(f.shell.state.chat,'sheet','hidden Home entry reveals the active voice sheet');
+  const view=f.renderChat();assert.equal(view.state,'listening');assert.equal(view.cloudDisclosure,true);
+  assert.match(view.cloudDisclosureText,/uploads recordings.*plan allowance/);
+  assert.notEqual(view.recoveryLabel,'Start Cloud voice');assert.equal(f.localFactories,0);assert.equal(f.box.testMocksEnabled,false);
   assert.equal(f.starts,1);assert.equal(f.localFactories,0);assert.equal(f.pairedFactories,0);
   f.credential='different-credential';f.changed();for(let i=0;i<20;i++)await f.tick();
   assert.equal(f.uploads,0);assert.equal(f.cloudSpeech,0);assert.equal(f.sends,0);
@@ -139,7 +138,7 @@ test('Cloud profile sends one credential-bound recorded turn and speaks its matc
  const clock=voiceFakeClock(),f=cloudVoiceViewFixture({cloudProfile:true,clock,peak:0.5});
  try {
   f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;
-  await f.shell.startVoice();f.renderChat().recover();await clock.flush();
+  await f.shell.startVoice();await clock.flush();
   await clock.advance(700);f.peak=0;await clock.advance(1200);
   assert.equal(f.uploads,1);assert.equal(f.sends,1);assert.equal(f.cloudSpeech,1);
   assert.equal(f.transcribeInput.environment,'production');assert.equal(f.transcribeInput.credentialId,'cloud-credential');
