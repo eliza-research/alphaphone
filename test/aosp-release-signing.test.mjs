@@ -14,6 +14,7 @@ import { PIXEL10A_PRODUCT, pixel10aOptions, pixel10aProductProblems } from "../s
 import { AVB_SIGNABLE_PARTITIONS, channelDistributionProblems, channelSigningProblems, gitWorkTreeProblem, isWithin, parseSigningArgs, PKCS11_JAVA_ARGS, signingCommands, signRelease, X509_KEYS } from "../scripts/sign-aosp-release.mjs";
 import { chainedPartitionsFromMiscInfo, compatibilityRecord, parseProperties } from "../scripts/aosp-release-record.mjs";
 import { releaseBlockers } from "../scripts/release-blockers.mjs";
+import { avbPublicKeyMetadata, rsaModulus } from "../scripts/avb-public-key.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const read = rel => JSON.parse(fs.readFileSync(path.join(root, rel), "utf8"));
@@ -413,7 +414,7 @@ test("APK certificates without a release key mapping are refused before signing;
   assert.ok(fixture.ota.calls()[0].includes(`vendor/google/certs/camera=${path.join(fixture.key.keys, "camera")}`));
   assert.equal(JSON.parse(fs.readFileSync(result.record, "utf8")).certificates.camera, cameraDigest);
   // External signing and a partly presigned APEX are refused.
-  fixture = setup(t, {}, { apkcerts: [...APKCERTS, apkcert("Ext.apk", "EXTERNAL")] });
+  fixture = setup(t, {}, { apkcerts: [...APKCERTS, apkcert("Ext.apk", "EXTERNAL")], files: { "SYSTEM/app/Ext/Ext.apk": { CERT: TEST_KEY_DIGEST } } });
   await refusedBeforeSigning(fixture, fixture.options, /APK Ext\.apk is EXTERNAL/);
   fixture = setup(t, {}, { apexkeys: [...APEXKEYS, 'name="com.x.apex" public_key="PRESIGNED" private_key="PRESIGNED" container_certificate="x.x509.pem" container_private_key="x.pk8"'] });
   await refusedBeforeSigning(fixture, fixture.options, /APEX com\.x\.apex is only partly presigned/);
@@ -551,10 +552,20 @@ function managedSetup(t, tf = {}) {
   const fixture = setup(t, {}, tf);
   const { keys } = fixture.key;
   for (const name of fs.readdirSync(keys).filter(name => name.endsWith(".pk8"))) fs.rmSync(path.join(keys, name));
-  for (const name of ["avb.pem", "apex_payload.pem"]) {
-    fs.writeFileSync(path.join(keys, name), "-----BEGIN PUBLIC KEY-----\nTEST-ONLY-PUBLIC-MARKER\n-----END PUBLIC KEY-----\n");
-    fs.chmodSync(path.join(keys, name), 0o600);
-  }
+  // Real (throwaway) RSA public keys whose AVB metadata matches, as a token's exported keys would.
+  const publicKey = (pem, metadata) => {
+    const scratch = temporary(t, "alpha-avb-key-");
+    execFileSync("openssl", ["genrsa", "-out", path.join(scratch, "private.pem"), "2048"], { stdio: "ignore" });
+    execFileSync("openssl", ["rsa", "-in", path.join(scratch, "private.pem"), "-pubout", "-out", path.join(keys, pem)], { stdio: "ignore" });
+    fs.writeFileSync(path.join(keys, metadata), avbPublicKeyMetadata(rsaModulus(path.join(keys, pem), { publicOnly: true })));
+    for (const name of [pem, metadata]) fs.chmodSync(path.join(keys, name), 0o600);
+  };
+  publicKey("avb.pem", "avb_pkmd.bin");
+  publicKey("apex_payload.pem", "apex_payload.avbpubkey");
+  const avb = sha256(fs.readFileSync(path.join(keys, "avb_pkmd.bin")));
+  const product = JSON.parse(fs.readFileSync(path.join(fixture.repo.dir, PIXEL10A_PRODUCT), "utf8"));
+  fixture.repo.write(PIXEL10A_PRODUCT, { ...product, avb: { ...product.avb, publicKeySha256: avb } });
+  fixture.repo.write(CHANNEL, { ...JSON.parse(fs.readFileSync(path.join(fixture.repo.dir, CHANNEL), "utf8")), avbPublicKeySha256: avb });
   const tools = temporary(t, "alpha-managed-signing-");
   const pkcs11Config = path.join(tools, "token.cfg"), avbSigningHelper = path.join(tools, "avb-helper"), payloadSigner = path.join(tools, "payload-signer");
   fs.writeFileSync(pkcs11Config, "name = AlphaRelease\nlibrary = /usr/lib/pkcs11/token.so\n");
@@ -583,6 +594,10 @@ test("managed signing keeps private keys in the token and passes the helper, key
     assert.equal(value(sign, `--avb_${partition}_extra_args`), `--signing_helper_with_files ${managed.avbSigningHelper}`, partition);
   assert.equal(value(sign, "--avb_vbmeta_key"), path.join(keys, "avb.pem"), "avbtool receives the public key; the helper signs");
   assert.equal(value(ota, "-k"), path.join(keys, "releasekey"));
+  // Embedded boot OTAs are re-signed by sign_target_files_apks with the same package key and payload signer.
+  assert.equal(value(sign, "--package_key"), path.join(keys, "releasekey"));
+  assert.equal(value(sign, "--payload_signer"), managed.payloadSigner);
+  assert.equal(value(sign, "--payload_signer_maximum_signature_size"), "512");
   assert.equal(value(ota, "--payload_signer"), managed.payloadSigner);
   assert.equal(value(ota, "--payload_signer_args"), "-key alpha-release-ota");
   assert.equal(value(ota, "--payload_signer_maximum_signature_size"), "512");
@@ -594,6 +609,7 @@ test("managed signing keeps private keys in the token and passes the helper, key
   const record = JSON.parse(fs.readFileSync((await signRelease(plain.options)).record, "utf8"));
   assert.equal(record.inputs.signingMode, "key-files");
   assert.ok(!plain.ota.calls().flat().some(arg => /signing_helper|payload_signer|extra_signapk_args|java_args/.test(arg)));
+  assert.equal(plain.ota.calls()[0][plain.ota.calls()[0].indexOf("--package_key") + 1], path.join(plain.key.keys, "releasekey"), "key-file mode also re-signs embedded boot OTAs with the release key");
 });
 
 test("managed signing refuses mixed or unsafe inputs before any tool runs", async t => {
@@ -605,6 +621,8 @@ test("managed signing refuses mixed or unsafe inputs before any tool runs", asyn
   await refuse(({ options }) => ({ ...options, payloadSignerSignatureSize: undefined }), /missing --payload-signer-signature-size/);
   await refuse(({ key }) => { fs.writeFileSync(path.join(key.keys, "platform.pk8"), "TEST-ONLY-PRIVATE-MARKER"); fs.chmodSync(path.join(key.keys, "platform.pk8"), 0o600); }, /holds platform\.pk8; managed signing keeps private keys in the PKCS#11 token/);
   await refuse(({ key }) => { fs.writeFileSync(path.join(key.keys, "avb.pem"), "TEST-ONLY-PRIVATE-MARKER"); }, /avb\.pem must be the public key/);
+  await refuse(({ key }) => { fs.copyFileSync(path.join(key.keys, "apex_payload.pem"), path.join(key.keys, "avb.pem")); }, /avb\.pem is not the key in avb_pkmd\.bin/);
+  await refuse(({ key }) => { fs.copyFileSync(path.join(key.keys, "avb.pem"), path.join(key.keys, "apex_payload.pem")); }, /apex_payload\.pem is not the key in apex_payload\.avbpubkey/);
   await refuse(({ key }) => { fs.writeFileSync(path.join(key.keys, "apex_payload.pem"), "-----BEGIN PRIVATE KEY-----\n"); }, /apex_payload\.pem must be the public key/);
   await refuse(({ key }) => { fs.rmSync(path.join(key.keys, "media.x509.pem")); }, /lacks media\.x509\.pem \(managed signing needs every release certificate and public key\)/);
   await refuse(({ options }) => ({ ...options, pkcs11Config: "token.cfg" }), /--pkcs11-config must be an absolute path/);
@@ -628,4 +646,21 @@ test("managed signing options parse from the command line; a signer argument may
     { dryRun: false, pkcs11Config: "/t.cfg", avbSigningHelper: "/h", payloadSigner: "/s", payloadSignerArgs: ["--key", "ota"], payloadSignerSignatureSize: "512" });
   assert.throws(() => parseSigningArgs(["--payload-signer-arg"]), /Use --target-files/);
   assert.throws(() => parseSigningArgs(["--pkcs11-config", "/a", "--pkcs11-config", "/b"]), /Use --target-files/);
+});
+
+test("AVB public key metadata matches avbtool extract_public_key for the AOSP RSA-4096 test key", () => {
+  const dir = path.join(root, "test/fixtures/avb");
+  const encoded = avbPublicKeyMetadata(rsaModulus(path.join(dir, "aosp-testkey_rsa4096.pub.pem"), { publicOnly: true }));
+  assert.deepEqual(encoded, fs.readFileSync(path.join(dir, "aosp-testkey_rsa4096.avbpubkey")));
+  assert.equal(encoded.readUInt32BE(0), 4096);
+  assert.equal(encoded.length, 8 + 2 * 512);
+});
+
+test("only APKs packaged in the target-files need a release key mapping", async t => {
+  // apkcerts.txt lists every APK the build knows; a CTS package that is not in the image is ignored.
+  const fixture = setup(t, {}, { apkcerts: [...APKCERTS, apkcert("CtsTestApp.apk", "cts/hostsidetests/appsecurity/certs/cts-testkey1.x509.pem")] });
+  const dry = await signRelease({ ...fixture.options, dryRun: true });
+  assert.deepEqual(dry.problems, []);
+  const packaged = setup(t, {}, { apkcerts: [...APKCERTS, apkcert("CtsTestApp.apk", "cts/hostsidetests/appsecurity/certs/cts-testkey1.x509.pem")], files: { "SYSTEM/app/CtsTestApp/CtsTestApp.apk": { CERT: TEST_KEY_DIGEST } } });
+  await refusedBeforeSigning(packaged, packaged.options, /APK CtsTestApp\.apk is signed with cts\/hostsidetests\/appsecurity\/certs\/cts-testkey1\.x509\.pem, which no release key mapping covers/);
 });

@@ -45,6 +45,7 @@ import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { PIXEL10A_PRODUCT, pixel10aProductProblems, placeholderFields } from "./aosp-pixel10a.mjs";
+import { avbPublicKeyMetadata, rsaModulus } from "./avb-public-key.mjs";
 import { chainedPartitionsFromMiscInfo, compatibilityRecord, entries, entry, fileSha256, incrementalSource, keyCertificates, parseProperties, parseQuotedRows, writeRecord } from "./aosp-release-record.mjs";
 
 /** x509/pk8 keys sign_target_files_apks maps by default name (upstream key-manifest.json). */
@@ -198,7 +199,9 @@ export function inspectTargetFiles(zip) {
   const miscInfo = misc === null ? null : parseProperties(misc);
   const apkcerts = parseQuotedRows(read("META/apkcerts.txt") ?? "");
   const apexkeys = parseQuotedRows(read("META/apexkeys.txt") ?? "");
-  return { miscInfo, apkcerts, apexkeys, hasApkcerts: names.has("META/apkcerts.txt"), chainedPartitions: miscInfo ? chainedPartitionsFromMiscInfo(miscInfo) : [] };
+  // apkcerts.txt lists every APK the build knows (test and CTS packages included); only packaged ones are signed.
+  const packages = new Set([...names].filter(name => /\.(apk|apex|capex)$/.test(name)).map(name => path.posix.basename(name)));
+  return { miscInfo, apkcerts, apexkeys, packages, hasApkcerts: names.has("META/apkcerts.txt"), chainedPartitions: miscInfo ? chainedPartitionsFromMiscInfo(miscInfo) : [] };
 }
 
 /** APEXes the job re-signs (neither payload nor container presigned). */
@@ -230,6 +233,7 @@ export function targetFilesProblems(inspection, { product, keyMap = {} }) {
     if (!inspection.chainedPartitions.includes(partition)) problems.push(`${PIXEL10A_PRODUCT} maps --avb_${partition}_key, but the target-files does not chain ${partition}`);
   if (!inspection.hasApkcerts) problems.push("--target-files has no META/apkcerts.txt; its APK certificates cannot be checked");
   for (const row of inspection.apkcerts) {
+    if (inspection.packages && !inspection.packages.has(row.name)) continue;
     if (row.certificate === "EXTERNAL") { problems.push(`APK ${row.name} is EXTERNAL; externally signed APKs are not supported by this job`); continue; }
     const source = sourceKey(row.certificate);
     if (source && !releaseKeyFor(source, keyMap)) problems.push(`APK ${row.name} is signed with ${row.certificate}, which no release key mapping covers (use --map-key ${source}=NAME)`);
@@ -266,6 +270,18 @@ export function keyDirectoryProblems(keysDir, { product, channel, root = process
       const file = path.join(real, name);
       if (fs.existsSync(file) && fs.lstatSync(file).isFile() && keyFileHead(file) !== PUBLIC_PEM)
         problems.push(`--keys-dir ${name} must be the public key (${PUBLIC_PEM}) when managed signing holds the private key`);
+    }
+    // The public key avbtool signs with must be the one the device verifies: avb.pem against
+    // avb_pkmd.bin, and apex_payload.pem against apex_payload.avbpubkey.
+    const pairs = [[product?.avb?.vbmetaKey ?? "avb.pem", product?.avb?.publicKeyMetadata ?? "avb_pkmd.bin"],
+      ...(inspection && signedApexes(inspection.apexkeys).length ? [[`${APEX_KEYS.payload}.pem`, `${APEX_KEYS.payload}.avbpubkey`]] : [])];
+    for (const [pem, metadata] of pairs) {
+      const [pemFile, metadataFile] = [path.join(real, pem), path.join(real, metadata)];
+      if (!fs.existsSync(pemFile) || !fs.existsSync(metadataFile) || keyFileHead(pemFile) !== PUBLIC_PEM) continue;
+      let encoded = null;
+      try { encoded = avbPublicKeyMetadata(rsaModulus(pemFile, { publicOnly: true })); } catch { encoded = null; }
+      if (!encoded) problems.push(`--keys-dir ${pem} is not a readable RSA public key`);
+      else if (!encoded.equals(fs.readFileSync(metadataFile))) problems.push(`--keys-dir ${pem} is not the key in ${metadata}`);
     }
   }
   const certs = keyCertificates(real, ["platform", "releasekey"]);
@@ -309,7 +325,10 @@ export function signingCommands({ targetFiles, keysDir, releasetools, out, produ
   return {
     signed, ota,
     commands: [
-      { tool: path.join(tools, "sign_target_files_apks"), args: ["-p", path.dirname(tools), ...token, "-o", "-d", keys, ...explicit, ...apex, ...apexHelper, ...avb, path.resolve(targetFiles), signed] },
+      // --package_key and the payload signer also re-sign any embedded boot OTA (boot_otas/*.zip);
+      // without them sign_target_files_apks would use the build's development certificate.
+      { tool: path.join(tools, "sign_target_files_apks"), args: ["-p", path.dirname(tools), ...token, "-o", "-d", keys, ...explicit, ...apex, ...apexHelper, ...avb,
+        "--package_key", path.join(keys, "releasekey"), ...payload, path.resolve(targetFiles), signed] },
       { tool: path.join(tools, "ota_from_target_files"), args: ["-p", path.dirname(tools), ...token, "-k", path.join(keys, "releasekey"), ...payload, ...(incrementalFrom ? ["-i", path.resolve(incrementalFrom)] : []), signed, ota] },
     ],
   };

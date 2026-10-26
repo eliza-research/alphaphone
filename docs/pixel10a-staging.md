@@ -134,7 +134,11 @@ every APEX that is not presigned, and the `avb` key and algorithm for vbmeta and
 partition. Before any OTA is built it runs `apksigner verify --print-certs` on every APK and
 APEX in the signed target-files that is not presigned and refuses any signer that is not a
 release certificate from the key directory (a remaining test, development or unknown key), and
-any re-signed APEX without the release payload public key. Then it runs
+any re-signed APEX without the release payload public key. `sign_target_files_apks` also receives `--package_key KEYS/releasekey` (and, under managed
+signing, the payload signer), so an embedded boot OTA (`VENDOR/` or `SYSTEM/boot_otas/*.zip`)
+is re-signed with the release key rather than the build's development certificate. Only APKs
+packaged in the target-files need a key mapping; `apkcerts.txt` also lists test and CTS packages
+the image does not contain. Then it runs
 `ota_from_target_files -k KEYS/releasekey`, copies the public `avb_pkmd.bin`
 (enrolled on a device with `fastboot flash avb_custom_key avb_pkmd.bin` before
 `fastboot flashing lock`), and writes `release-record.json`: build fingerprints and versions,
@@ -196,6 +200,15 @@ stops the job before any OTA is built.
 - **OTA payload**: `ota_from_target_files --payload_signer` runs
   `SIGNER ARGS... -in HASH_FILE -out SIGNATURE_FILE`; the arguments name the token key.
   `--payload-signer-signature-size` is the signature size in bytes (512 for RSA-4096).
+
+signapk opens the PKCS#11 keystore without a PIN (it passes none, and this job never puts one
+on a command line), so the token must expose its signing keys without a login, as a managed key
+service's PKCS#11 library authenticated by its own credentials does. A token that requires a
+user PIN makes every key lookup fail with `Key ... not found`.
+
+In managed mode the public `avb.pem` must encode to exactly `avb_pkmd.bin`, and
+`apex_payload.pem` to `apex_payload.avbpubkey` (`scripts/avb-public-key.mjs`, checked against
+`avbtool extract_public_key`); a mismatched public key is refused.
 
 Paths and signer arguments must be plain words (no spaces, quotes or shell characters), because
 the releasetools split them with `shlex`. A token PIN or service credential belongs in the
