@@ -1,6 +1,8 @@
 # Current MVP status
 
-Current source pin: SDK `8d4228f4d9801e6ec4bc04a3720756b61c4f93b8`, prepared on product `bcc6dc0f175706ace78013089af1db385a64607c`. This diagnostic-only child records finite evaluator completion decisions; it does not fix the native Notes continuation failure or change planner behavior, limits or validation. No new runtime, build or device acceptance is claimed. See [diagnostic source identity](evidence/source-metadata-bcc6-8d-20261026.json). Shared Stage 1, executor and reply validation use the verified navigation aliases. Root recorded one successful live browser Open Workflows with the saved reply "Opening Workflows."; this is browser evidence only, not device or performance acceptance. The dated 2026-10-26 dependency audit is reused after exact raw-lock and normalized-input identity checks; no registry query, exception change or deadline renewal occurred. Requirements/statuses and all historical artifact claims retain their original scope. See [source identity and acceptance scope](evidence/source-metadata-b444-387-20261026.json).
+Current source pin: SDK `c2a0ef993bcf790a920698a8b661511b81725891`, prepared on product `7d94781429cbf027d1522d4cf68d46434e12e730`. This diagnostic-only child extends evaluator diagnostics with fixed protocol-guard classifications and primitive types. It does not fix the native Notes continuation failure or change planner behavior, limits or validation. No new runtime, build or device acceptance is claimed. See [diagnostic source identity](evidence/source-metadata-7d94-c2-20261026.json). The previous source and browser evidence remains recorded below.
+
+Previous source checkpoint: Current source pin: SDK `8d4228f4d9801e6ec4bc04a3720756b61c4f93b8`, prepared on product `bcc6dc0f175706ace78013089af1db385a64607c`. This diagnostic-only child records finite evaluator completion decisions; it does not fix the native Notes continuation failure or change planner behavior, limits or validation. No new runtime, build or device acceptance is claimed. See [diagnostic source identity](evidence/source-metadata-bcc6-8d-20261026.json). Shared Stage 1, executor and reply validation use the verified navigation aliases. Root recorded one successful live browser Open Workflows with the saved reply "Opening Workflows."; this is browser evidence only, not device or performance acceptance. The dated 2026-10-26 dependency audit is reused after exact raw-lock and normalized-input identity checks; no registry query, exception change or deadline renewal occurred. Requirements/statuses and all historical artifact claims retain their original scope. See [source identity and acceptance scope](evidence/source-metadata-b444-387-20261026.json).
 
 Historical efc7 source projection: Current source pin: SDK `efc7fa578eb2c62da6a6f56117176f106b574841` consumes verified destination alias navigation receipts. Build and device evidence below retains its original source revision.
 
@@ -52,9 +54,9 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-Current source projection: SDK `8d4228f4d9` with source metadata refreshed for this diagnostic-only pin; runtime, artifact and device qualification remains separate as recorded above.
+Current source projection: SDK `c2a0ef993b` with source metadata refreshed for this diagnostic-only pin; runtime, artifact and device qualification remains separate as recorded above.
 
-The current upstream source pin is `8d4228f4d9` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
+The current upstream source pin is `c2a0ef993b` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 
