@@ -33,6 +33,8 @@ export const APK_KEY = "alpha_apk";
 export const X509_NAMES = Object.freeze([...X509_KEYS, APEX_KEYS.container, APK_KEY]);
 const RSA4096 = Object.freeze(["avb", APEX_KEYS.payload]);
 const SECRET_LIMIT = 48 * 1024;
+/** `GH_BIN` selects the GitHub CLI when `gh` on PATH is a wrapper. */
+const GH = process.env.GH_BIN || "gh";
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
 export function parseArgs(args) {
@@ -119,7 +121,7 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   const existing = existingIdentities();
   if (existing.length) throw Error(`Release identities are already recorded; rotation is a separate reviewed change:\n  - ${existing.join("\n  - ")}`);
-  execFileSync("gh", ["repo", "view", options.repo, "--json", "isPrivate", "--jq", "if .isPrivate then \"private\" else error(\"public\") end"], { stdio: ["ignore", "ignore", "inherit"] });
+  execFileSync(GH, ["repo", "view", options.repo, "--json", "isPrivate", "--jq", "if .isPrivate then \"private\" else error(\"public\") end"], { stdio: ["ignore", "ignore", "inherit"] });
   const keys = fs.mkdtempSync(path.join(fs.existsSync("/dev/shm") ? "/dev/shm" : os.tmpdir(), "alpha-release-keys-"));
   fs.chmodSync(keys, 0o700);
   try {
@@ -131,7 +133,7 @@ async function main() {
     const backup = spawnSync("openssl", ["enc", "-aes-256-cbc", "-pbkdf2", "-iter", "600000", "-salt", "-out", options.backup], { input: archive, stdio: ["pipe", "inherit", "inherit"] });
     if (backup.status !== 0) throw Error("Backup encryption failed; nothing was uploaded");
     fs.chmodSync(options.backup, 0o600);
-    execFileSync("gh", ["secret", "set", options.secret, "--repo", options.repo], { input: encoded, stdio: ["pipe", "inherit", "inherit"] });
+    execFileSync(GH, ["secret", "set", options.secret, "--repo", options.repo], { input: encoded, stdio: ["pipe", "inherit", "inherit"] });
     const identities = recordPublicIdentities(keys);
     console.log(`Stored ${options.secret} on ${options.repo} and wrote the encrypted backup ${options.backup}.`);
     console.log(`Public identities: platform ${identities.platform}, OTA ${identities.releasekey}, APK ${identities.apk}, AVB ${identities.avbPublicKeySha256}.`);
