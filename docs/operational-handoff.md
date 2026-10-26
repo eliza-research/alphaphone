@@ -40,6 +40,12 @@ the current source says so in its own document, and the gaps named below are ope
   [`scripts/sign-aosp-release.mjs`](../scripts/sign-aosp-release.mjs),
   [`scripts/aosp-release-record.mjs`](../scripts/aosp-release-record.mjs)
   ([Pixel 10a staging and release signing](pixel10a-staging.md)).
+- Image build and release pipeline (build record, in-memory key materialization, signing,
+  signed-image packaging, read-only verification, key cleanup):
+  [`scripts/aosp-build-image.mjs`](../scripts/aosp-build-image.mjs),
+  [`scripts/aosp-release-pipeline.mjs`](../scripts/aosp-release-pipeline.mjs)
+  ([image build and release pipeline](aosp-release-pipeline.md)). Neither has run a real
+  AOSP build or signed a real image.
 
 ## Dependency and licence inventory
 

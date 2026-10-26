@@ -97,6 +97,14 @@ key and the descriptor's algorithm.
 `physical-product.json` records the descriptor hash with `imageBuilt`, `imageSigned`,
 `releaseQualified` and `deviceAcceptanceVerified` all `false`.
 
+## Image build
+
+`node scripts/aosp-build-image.mjs --aosp-source DIR --factory-image ZIP --variant
+development|production --out NEW_DIR` builds the staged tree and writes the build record.
+`node scripts/aosp-release-pipeline.mjs --build-record NEW_DIR/build-result.json --out
+NEW_DIR` runs signing from that record. Both are described in
+[image build and release pipeline](aosp-release-pipeline.md).
+
 ## Release signing, OTA and compatibility record
 
 On the Linux image host, after the production image build, sign the unsigned target-files
