@@ -40,7 +40,7 @@ import { PersonalProtocolError, type CloudPersonalProtocol, type PersonalView, t
 import { holdPhoneInert } from './modal-inert';
 import { pauseHostedBackground } from './hosted-background';
 import {developmentDeviceStore,developmentActionJournal} from './local-agent-storage';
-import { reviewLocalRecovery,archiveLocalRecovery,stopLocalAgent, configureLocalProvider, bindResidentCloudProvider, LocalAgentProtocol, localAgentPackaged, browserLocalAgentEnabled, localProviderStatus, clearLocalProvider, providerStatusLabel, LOCAL_PROVIDER_MODEL, type LocalProviderStatus } from './local-agent';
+import { reviewLocalRecovery,archiveLocalRecovery,stopLocalAgent, configureLocalProvider, bindResidentCloudProvider, LocalCloudProviderStopUnconfirmed, LocalAgentProtocol, localAgentPackaged, browserLocalAgentEnabled, localProviderStatus, clearLocalProvider, providerStatusLabel, LOCAL_PROVIDER_MODEL, type LocalProviderStatus } from './local-agent';
 import { presentDeviceRecordOperation } from './device-record-presentation';
 import type { MessagePage } from './remote-protocol';
 import type {DeviceRecovery} from "./device-actions";
@@ -970,6 +970,7 @@ async function applyResidentBinding(admission:ResidentAdmission,signal:AbortSign
   if(!residentBindable())return {binding:admission.binding};
   if(admission.binding==='kept')return {binding:'kept'};
   if(admission.binding==='cloud'&&admission.credentialId&&admission.account){
+    const bindingEpoch=epoch;
     try{
       // An admitted running resident under this same Cloud admission is reused, not stopped and
       // rebound: opening the assistant, or reconnecting one surface, must not retire the other's work.
@@ -978,6 +979,17 @@ async function applyResidentBinding(admission:ResidentAdmission,signal:AbortSign
       if(service!==admission.account || (await cloudCredentialStore.read(residentEnvironment()))?.credentialId!==admission.credentialId)throw Error('Cloud account changed. Sign in again.');
       return {binding:'cloud'};
     }catch(error){
+      if(error instanceof LocalCloudProviderStopUnconfirmed){
+        // No bind was attempted. Retire only this operation's still-current
+        // renderer client; never expose an old owner's resident as ready, and
+        // never retire a newer connection that superseded this operation.
+        if(epoch===bindingEpoch){
+          if(active||state.session)retire();
+          update({residentInference:'unknown'});
+        }
+        signal.throwIfAborted();
+        throw error;
+      }
       signal.throwIfAborted();
       // The agent always starts. It is reported unbound only after native confirms removal;
       // otherwise its inference state is unconfirmed (native still gates a Cloud binding on a

@@ -442,10 +442,20 @@ export async function bindResidentCloudProvider(credentialId:string,ports:{attac
   return 'configured';
 }
 
+/** The renderer has not attempted a credential bind when this stop fails.
+ * Keep the saved slot; native ownership must be resolved before another start. */
+export class LocalCloudProviderStopUnconfirmed extends Error {
+  constructor(cause:unknown) {
+    super('Local agent shutdown could not be confirmed. Your saved AI connection was kept. Check local agent status before reconnecting.',{cause});
+    this.name='LocalCloudProviderStopUnconfirmed';
+  }
+}
+
 export async function configureLocalCloudProvider(credentialId:string) {
   if(browserCloudResidentEnabled){await browserResidentCall('residentBind',credentialId);return;}
   if(!Capacitor.isNativePlatform() || !await localAgentPackaged()) throw Error('The on-device runtime is unavailable in this build.');
-  await stopLocalAgent();
+  try { await stopLocalAgent(); }
+  catch(cause) { throw new LocalCloudProviderStopUnconfirmed(cause); }
   if(!native.configureCloudProvider)throw Error('Cloud billing is unavailable in this version.');
   await native.configureCloudProvider({credentialId,model:'cerebras/qwen-3.8-27b'});
 }
