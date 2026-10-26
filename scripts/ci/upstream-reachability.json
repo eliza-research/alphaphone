@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "94a2f9d848d2d1ed311fb5c28eba94b58635eeae",
+  "head": "2a8bbc5d55f9100cd55c00f1ca9df98cd6b02e40",
   "recordedAt": "2026-10-26",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...94a2f9d848d2d1ed311fb5c28eba94b58635eeae",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...2a8bbc5d55f9100cd55c00f1ca9df98cd6b02e40",
   "status": "diverged",
-  "aheadBy": 64,
+  "aheadBy": 66,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -262,6 +262,14 @@
     {
       "sha": "94a2f9d848d2d1ed311fb5c28eba94b58635eeae",
       "subject": "fix(views): preserve verified destination wording through Back"
+    },
+    {
+      "sha": "899d166f4962e7fdcbfbb10ea0175d4133efe1d2",
+      "subject": "fix(calendar): ground explicit date ranges with computed weekdays"
+    },
+    {
+      "sha": "2a8bbc5d55f9100cd55c00f1ca9df98cd6b02e40",
+      "subject": "fix(reminders): route owner inventory reads to canonical review"
     }
   ],
   "pullRequests": [

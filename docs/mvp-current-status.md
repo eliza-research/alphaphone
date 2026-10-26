@@ -1,6 +1,6 @@
 # Current MVP status
 
-Current source SDK 94a2f9d848d2d1ed311fb5c28eba94b58635eeae on product base 6f86e54d46458ec9b4d3d6fdaceb51d70970b0ae includes first-review navigation consistency, trusted confirmed Back candidate routing and acknowledged verified destination alias retention. Focused behavior, baseline regression and scoped semantic checks passed. Live call-cost and wording acceptance for this new source remains pending; native qualification stays bound to its own artifact and receipts. See docs/evidence/source-metadata-6f86-94a2-20261026.json.
+Current source SDK 2a8bbc5d55f9100cd55c00f1ca9df98cd6b02e40 on product base af09c3f3668cd192d87bf1d912f1c8c4d76ca8e3 combines first-review navigation consistency, trusted Back routing, verified destination alias retention, computed explicit Calendar weekdays and canonical owner reminder inventory-read routing. Focused behavior and narrow production type checks passed; full Calendar and reminder-test type graphs reached the unchanged heap limit and remain unqualified. Live cost, wording and read acceptance for this new source remains pending; device qualification stays bound to its own artifact and receipts. See docs/evidence/source-metadata-af09-2a8-20261026.json.
 
 Previous source checkpoint: Current source SDK da82a74e8bb1c45ae76beba64ee5bf0c1c2778e6 on product base 79eafc5511296a915933a6fef8bcc3d228cc1aa3 includes confirmed previous-view context and conservative initial-tool selection. Product account preflight and optional credential-reference fixes are retained. Focused source tests passed; full runtime and native acceptance, live performance and final release are still pending. See [source identity](evidence/source-metadata-79e-da82-20261026.json).
 
@@ -70,9 +70,9 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-Current source projection: SDK `94a2f9d848` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
+Current source projection: SDK `2a8bbc5d55` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
 
-The current upstream source pin is `94a2f9d848` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
+The current upstream source pin is `2a8bbc5d55` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 

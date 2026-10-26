@@ -8,7 +8,7 @@
     "deferred": "Out of the MVP by recorded policy.",
     "blocked": "Cannot progress without an external decision, resource or artifact."
   },
-  "note": "Current source SDK 94a2f9d848d2d1ed311fb5c28eba94b58635eeae on product base 6f86e54d46458ec9b4d3d6fdaceb51d70970b0ae includes first-review navigation consistency, trusted confirmed Back candidate routing and acknowledged verified destination alias retention. Focused behavior, baseline regression and scoped semantic checks passed. Live call-cost and wording acceptance for this new source remains pending; native qualification stays bound to its own artifact and receipts. See docs/evidence/source-metadata-6f86-94a2-20261026.json.",
+  "note": "Current source SDK 2a8bbc5d55f9100cd55c00f1ca9df98cd6b02e40 on product base af09c3f3668cd192d87bf1d912f1c8c4d76ca8e3 combines first-review navigation consistency, trusted Back routing, verified destination alias retention, computed explicit Calendar weekdays and canonical owner reminder inventory-read routing. Focused behavior and narrow production type checks passed; full Calendar and reminder-test type graphs reached the unchanged heap limit and remain unqualified. Live cost, wording and read acceptance for this new source remains pending; device qualification stays bound to its own artifact and receipts. See docs/evidence/source-metadata-af09-2a8-20261026.json.",
   "requirements": [
     {
       "id": "AP-01",
