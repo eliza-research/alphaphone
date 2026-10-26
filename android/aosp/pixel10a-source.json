@@ -6,13 +6,13 @@
     "observedSku": "GE1GQ",
     "androidRelease": "17"
   },
-  "developmentOnly": true,
+  "developmentOnly": false,
   "releaseQualified": false,
   "provenance": {
     "upstreamRepository": "https://github.com/elizaos/eliza",
     "upstreamCommit": "74504c953b84701153319ad7d08e666d2ba4ac91",
     "referenceLockSha256": "9c5c30da5a7e9913b8a9a0e00ef8b5f06f4190c41d0c992c7a0c30a1c9d6816c",
-    "purpose": "Reproduce the inspected October 11 development source baseline; not current app, release signing, or device acceptance."
+    "purpose": "Release source inputs for Pixel 10a (stallion) Android 17, admitted on 2026-10-26 under P-58 after scripts/verify-pixel10a-source.mjs passed against the builder tree with the manifest-listed SystemUI listening-chip patch (docs/evidence/pixel10a-source-release-admission-2026-10-26.json). Not an image build, signing, boot or device acceptance."
   },
   "manifest": {
     "commit": "5bc9a7ce1cd78dd53613bbfd0ebf506e1e4adb0f",

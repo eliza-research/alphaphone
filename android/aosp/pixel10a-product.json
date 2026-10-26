@@ -13,7 +13,7 @@
   },
   "sourceLock": {
     "file": "android/aosp/pixel10a-source.json",
-    "sha256": "UNSET"
+    "sha256": "4b01816cf1a710b22ba49fc7bdf16538b109c8c9ab3cef964b482836e2a5640e"
   },
   "signer": {
     "apkDescriptor": "android/release-signer.json",

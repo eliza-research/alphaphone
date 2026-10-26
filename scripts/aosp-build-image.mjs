@@ -34,7 +34,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { PIXEL10A_PRODUCT, pixel10aProductProblems } from "./aosp-pixel10a.mjs";
 import { fileSha256, parseProperties } from "./aosp-release-record.mjs";
-import { verifyPixel10aSource } from "./pixel10a-source-contract.mjs";
+import { loadAdmittedPatches, verifyPixel10aSource } from "./pixel10a-source-contract.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const BUILD_RECORD_KIND = "alpha-aosp-image-build";
@@ -218,7 +218,7 @@ export async function buildPreflight(options, deps = {}) {
   // Source verification hashes the whole tree; run it only once everything cheaper has passed.
   let sourceEvidence = null;
   if (!problems.length && !settings.dryRun) {
-    try { sourceEvidence = await verifySource({ source, factory: settings.factory }); } catch (error) { problems.push(`source verification failed: ${error.message}`); }
+    try { sourceEvidence = await verifySource({ source, factory: settings.factory, patches: loadAdmittedPatches(root) }); } catch (error) { problems.push(`source verification failed: ${error.message}`); }
     if (sourceEvidence && settings.variant === "production" && sourceEvidence.developmentOnly !== false) problems.push("source verification reports a developmentOnly source lock; a production build needs inputs admitted for release");
   }
   return { problems, settings, product, lunch, command, freeBytes: free, sourceEvidence };

@@ -122,9 +122,10 @@ test("the build refuses when source verification fails, and production refuses o
     { freeBytes: plenty, verifySource: passingSource, productProblems: () => [], spawn: producingSpawn({ fingerprint: USER_FINGERPRINT, calls }) }), /developmentOnly source lock/);
   assert.equal(calls.length, 0);
   assert.deepEqual(fs.readdirSync(base), []);
-  // The real descriptor is still UNSET: production is refused (dry run, no source hashing).
-  const dry = await buildImage({ root, source, factory: "/f.zip", variant: "production", out: path.join(base, "d"), dryRun: true }, { freeBytes: plenty });
-  assert.ok(dry.problems.some(problem => /^production: .*UNSET|^production: .*unset/i.test(problem)));
+  // The committed descriptor is complete (P-57 keys, admitted source lock): a production dry run
+  // reports no product problem and plans the user lunch target (no source hashing).
+  const dry = await buildImage({ root, source, factory: "/f.zip", variant: "production", out: path.join(base, "d"), dryRun: true }, { freeBytes: plenty, verifySource: passingSource });
+  assert.ok(!dry.problems.some(problem => /^production: /.test(problem)), dry.problems.join("\n"));
   assert.equal(dry.plan.lunch, product.lunch.production);
 });
 

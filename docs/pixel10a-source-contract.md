@@ -51,10 +51,16 @@ Alpha HOME on the physical Pixel, but with an app override under `/data/app`.
 Cuttlefish at the separately inspected target had Alpha under `/product/app` and
 Alpha HOME. Neither observation qualifies the current app/runtime pin or signed updates.
 
-The lock records `developmentOnly: true`. Production staging (`--target pixel10a
---production`, see [Pixel 10a staging](pixel10a-staging.md)) refuses it until a reviewed
-change marks the inputs admitted for release and pins the resulting lock hash in
-`android/aosp/pixel10a-product.json`; the verifier reports the lock's value.
+On 2026-10-26 the inputs were admitted for release (P-58): the verifier passed against the
+builder tree with the manifest-listed SystemUI listening-chip patch
+(`android/aosp/listener/systemui/chip/manifest.json`), recorded in
+[the admission evidence](evidence/pixel10a-source-release-admission-2026-10-26.json). The lock
+now records `developmentOnly: false`, and its hash is pinned in
+`android/aosp/pixel10a-product.json` and in both SystemUI patch manifests. Admitted patches are
+checked file by file against their recorded bytes and must name this exact lock as their
+baseline; `scripts/verify-pixel10a-source.mjs` applies them by default
+(`--admitted-patch` overrides the list). Source admission is not an image build, signing,
+boot or device acceptance.
 
 Remaining work includes integrating these inputs with the current admitted APK and
 listener, rebuilding/booting exact images, native runtime and speech execution,

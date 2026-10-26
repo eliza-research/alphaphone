@@ -44,7 +44,39 @@ async function git(root, args) {
  * certify build outputs, or authorize a flash. Ignored build outputs are not inputs.
  * `developmentOnly` is reported from the lock; production staging separately requires it
  * to be false (pixel10aProductProblems). */
-export async function verifyPixel10aSource({source, factory, lock = defaultLockPath}) {
+/**
+ * Overrides contributed by reviewed, manifest-listed source patches (for example the SystemUI
+ * listening chip, android/aosp/listener/systemui/chip/manifest.json). A patch is admitted only
+ * on top of this exact lock (baselineLockSha256), its project's locked revision and its own
+ * patch bytes; each file it adds or modifies must then match its recorded afterSha256.
+ */
+/** Reviewed source patches the Pixel 10a image applies on top of the lock (repository-relative manifests). */
+export const PIXEL10A_SOURCE_PATCHES = Object.freeze(['android/aosp/listener/systemui/chip/manifest.json']);
+
+/** Read admitted patch manifests and their patch bytes from the repository. */
+export function loadAdmittedPatches(repoRoot, manifests = PIXEL10A_SOURCE_PATCHES) {
+  return manifests.map(rel => {
+    const file = path.resolve(repoRoot, rel), manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return {manifest, patchBytes: fs.readFileSync(path.join(path.dirname(file), manifest.patch))};
+  });
+}
+
+export function admittedPatchOverrides(contract, lockSha256, patches = []) {
+  const result = [];
+  for (const {manifest, patchBytes} of patches) {
+    if (manifest?.schema !== 1 || !Array.isArray(manifest.files)) throw Error('Invalid admitted source patch manifest');
+    if (manifest.baselineLockSha256 !== lockSha256) throw Error(`Admitted patch for ${manifest.project} names another source lock baseline`);
+    const project = contract.projects.find(entry => entry.path === manifest.project);
+    if (!project || project.commit !== manifest.revision) throw Error(`Admitted patch for ${manifest.project} does not match the locked project revision`);
+    if (createHash('sha256').update(patchBytes).digest('hex') !== manifest.patchSha256) throw Error(`Admitted patch bytes differ: ${manifest.project}/${manifest.patch}`);
+    for (const file of manifest.files) {
+      if (!/^[0-9a-f]{64}$/.test(file.afterSha256 ?? '') || typeof file.path !== 'string' || file.path.startsWith('/') || file.path.split('/').includes('..')) throw Error(`Invalid admitted patch file in ${manifest.project}`);
+      result.push({path:`${manifest.project}/${file.path}`, sha256:file.afterSha256, patch:true});
+    }
+  }
+  return result;
+}
+export async function verifyPixel10aSource({source, factory, lock = defaultLockPath, patches = []}) {
   if (!source || !factory) throw Error('Pixel 10a staging requires --aosp-source and --factory-image');
   const root = fs.realpathSync(source), bytes = fs.readFileSync(lock), contract = JSON.parse(bytes);
   if (contract.schema !== 1 || contract.target !== 'pixel10a' || contract.device?.codename !== 'stallion' || contract.device?.androidRelease !== '17' || typeof contract.developmentOnly !== 'boolean' || contract.releaseQualified !== false) throw Error('Not the Pixel 10a Android 17 source contract');
@@ -62,7 +94,7 @@ export async function verifyPixel10aSource({source, factory, lock = defaultLockP
   const expectedLocal = configuration.filter(entry => entry.path.startsWith(`${localRoot}/`)).map(entry => entry.path).sort();
   if (JSON.stringify(actualLocal) !== JSON.stringify(expectedLocal)) throw Error('Local manifest inventory differs');
   const overrides = new Map();
-  for (const entry of contract.overrides) {
+  for (const entry of [...contract.overrides, ...admittedPatchOverrides(contract, digest(bytes), patches)]) {
     if (overrides.has(entry.path)) throw Error(`Duplicate override: ${entry.path}`);
     overrides.set(entry.path, entry);
   }
@@ -82,7 +114,11 @@ export async function verifyPixel10aSource({source, factory, lock = defaultLockP
       const actual = changed.split('\0').filter(Boolean).map(row => `${project.path}/${row.slice(3)}`).sort();
       const expected = [...overrides.keys()].filter(name => name.startsWith(`${project.path}/`)).sort();
       if (JSON.stringify(actual) !== JSON.stringify(expected)) throw Error(`Unrecorded source changes: ${project.path}`);
-      for (const name of expected) await checkFile(root, overrides.get(name));
+      for (const name of expected) {
+        const entry = overrides.get(name);
+        if (entry.patch) { if (await fileHash(within(root, name)) !== entry.sha256) throw Error(`Admitted patch bytes differ in tree: ${name}`); }
+        else await checkFile(root, entry);
+      }
       // git status hides ignored source. Bind even ignored extraction-tool outputs;
       // a new ignored Android.bp or source file must not silently enter the build.
       const ignored = (await git(directory, ['ls-files','--others','--ignored','--exclude-standard','-z'])).split('\0').filter(Boolean).map(name => `${project.path}/${name}`).sort();
@@ -105,5 +141,5 @@ export async function verifyPixel10aSource({source, factory, lock = defaultLockP
   if (new Set(expectedNames).size !== files.length || files.some(entry => !entry.path.startsWith(`${contract.generated.root}/`))) throw Error('Invalid generated vendor inventory');
   if (JSON.stringify(inventory(root, contract.generated.root)) !== JSON.stringify(expectedNames)) throw Error('Generated vendor inventory differs');
   for (const entry of files) await checkFile(root, entry);
-  return {schema:1, target:'pixel10a', codename:'stallion', sourceLockSha256:digest(bytes), manifestCommit:contract.manifest.commit, factorySha256:expectedFactory.sha256, projectsChecked:seen.size, overridesChecked:overrides.size, generatedFilesChecked:files.length, developmentOnly:contract.developmentOnly, imageBuilt:false, releaseQualified:false, deviceAcceptanceVerified:false};
+  return {schema:1, target:'pixel10a', codename:'stallion', sourceLockSha256:digest(bytes), manifestCommit:contract.manifest.commit, factorySha256:expectedFactory.sha256, projectsChecked:seen.size, overridesChecked:overrides.size, admittedPatches:patches.map(({manifest}) => ({project:manifest.project, patchSha256:manifest.patchSha256})), generatedFilesChecked:files.length, developmentOnly:contract.developmentOnly, imageBuilt:false, releaseQualified:false, deviceAcceptanceVerified:false};
 }

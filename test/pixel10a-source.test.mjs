@@ -65,3 +65,19 @@ test('changing the selected manifest or registered project list fails',async t=>
 test('ignored build inputs cannot bypass project status verification',async t=>{
  const f=fixture(t);fs.writeFileSync(path.join(f.project.dir,'.git/info/exclude'),'hidden.cpp\n');fs.writeFileSync(path.join(f.project.dir,'hidden.cpp'),'unreviewed');await assert.rejects(verifyPixel10aSource(f),/Ignored source inventory differs/);
 });
+
+test('admitted source patches bind the exact lock, locked revision and patch bytes', async () => {
+  const {admittedPatchOverrides, loadAdmittedPatches, PIXEL10A_SOURCE_PATCHES} = await import('../scripts/pixel10a-source-contract.mjs');
+  const {createHash} = await import('node:crypto');
+  const fsm = (await import('node:fs')).default;
+  const lockBytes = fsm.readFileSync('android/aosp/pixel10a-source.json');
+  const lockSha = createHash('sha256').update(lockBytes).digest('hex'), contract = JSON.parse(lockBytes);
+  const [chip] = loadAdmittedPatches(process.cwd(), PIXEL10A_SOURCE_PATCHES);
+  const overrides = admittedPatchOverrides(contract, lockSha, [chip]);
+  assert.equal(overrides.length, chip.manifest.files.length);
+  assert.ok(overrides.every(entry => entry.path.startsWith(`${chip.manifest.project}/`) && /^[0-9a-f]{64}$/.test(entry.sha256)));
+  assert.throws(() => admittedPatchOverrides(contract, '0'.repeat(64), [chip]), /another source lock baseline/);
+  assert.throws(() => admittedPatchOverrides(contract, lockSha, [{...chip, patchBytes: Buffer.from('changed')}]), /patch bytes differ/);
+  assert.throws(() => admittedPatchOverrides(contract, lockSha, [{...chip, manifest: {...chip.manifest, revision: 'f'.repeat(40)}}]), /locked project revision/);
+  assert.throws(() => admittedPatchOverrides(contract, lockSha, [{...chip, manifest: {...chip.manifest, files: [{path: '../escape', afterSha256: 'a'.repeat(64)}]}}]), /Invalid admitted patch file/);
+});
