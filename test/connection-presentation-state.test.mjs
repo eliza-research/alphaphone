@@ -175,3 +175,86 @@ test('closing unknown balance preserves required sign-in for signed-out and expi
     }
   }
 });
+
+const verifyServiceCode = stripTypeScriptTypes(
+  section('async function verifyService(', 'let pendingBillingReview:'),
+  {mode: 'transform'},
+);
+function serviceVerificationFixture({replaceCredential, identityPatch} = {}) {
+  let credential = {credentialId: 'credential-1', credentialReference: 'native-reference-1'};
+  let reads = 0, identityReads = 0, refreshes = 0;
+  const updates = [], saved = [];
+  const identity = {userId: 'owner-1', organizationId: 'organization-1', ...identityPatch};
+  const client = {environment: 'production', identity: async () => {
+    identityReads++;
+    if (replaceCredential) credential = {...credential, ...replaceCredential};
+    return identity;
+  }};
+  class CloudProtocolError extends Error {
+    constructor(code) {super(code); this.code = code;}
+  }
+  const context = vm.createContext({
+    service: null, membershipRead: null, pendingBillingReview: null,
+    cloudCredentialStore: {read: async () => {reads++; return {...credential};}},
+    residentCloudFlow: () => true,
+    update: patch => updates.push(patch), CloudProtocolError,
+    localStorage: {setItem: (key, value) => saved.push([key, value])},
+    CLOUD_SERVICE: 'fixture-cloud-service', crypto: {randomUUID: () => 'session-1'},
+    refreshMembershipBalance: async () => {refreshes++;},
+  });
+  vm.runInContext(verifyServiceCode, context);
+  return {context, identity, updates, saved,
+    get reads() {return reads;}, get identityReads() {return identityReads;},
+    get refreshes() {return refreshes;},
+    verify: expected => context.verifyService(client, new AbortController().signal, expected)};
+}
+const expectedServiceIdentity = {
+  credentialId: 'credential-1', userId: 'owner-1', organizationId: 'organization-1',
+};
+test('service verification accepts a stable opaque reference when expected reference is omitted', async () => {
+  const f = serviceVerificationFixture();
+  assert.equal(await f.verify(expectedServiceIdentity), f.identity);
+  assert.equal(f.reads, 2);
+  assert.equal(f.identityReads, 1);
+  assert.equal(f.context.service.credentialReference, 'native-reference-1');
+  assert.equal(f.context.service.identity.userId, 'owner-1');
+  assert.equal(f.updates.filter(patch => patch.cloudAccount).length, 1);
+  assert.equal(f.saved.length, 1);
+  assert.equal(f.refreshes, 1);
+});
+test('service verification still enforces an explicitly expected opaque reference', async () => {
+  const valid = serviceVerificationFixture();
+  await valid.verify({...expectedServiceIdentity, credentialReference: 'native-reference-1'});
+  assert.equal(valid.context.service.credentialReference, 'native-reference-1');
+  for (const credentialReference of ['other-reference', '']) {
+    const f = serviceVerificationFixture();
+    await assert.rejects(f.verify({...expectedServiceIdentity, credentialReference}), /Cloud account changed/);
+    assert.equal(f.identityReads, 0);
+    assert.equal(f.context.service, null);
+    assert.equal(f.saved.length, 0);
+  }
+});
+for (const replaceCredential of [
+  {credentialId: 'credential-2'},
+  {credentialReference: 'native-reference-2'},
+]) {
+  test(`service verification rejects ${Object.keys(replaceCredential)[0]} replacement during identity lookup`, async () => {
+    const f = serviceVerificationFixture({replaceCredential});
+    await assert.rejects(f.verify(expectedServiceIdentity), /Cloud account changed/);
+    assert.equal(f.reads, 2);
+    assert.equal(f.context.service, null);
+    assert.equal(f.updates.filter(patch => patch.cloudAccount).length, 0);
+    assert.equal(f.saved.length, 0);
+    assert.equal(f.refreshes, 0);
+  });
+}
+for (const identityPatch of [{userId: 'other-owner'}, {organizationId: 'other-organization'}]) {
+  test(`service verification rejects an unexpected ${Object.keys(identityPatch)[0]}`, async () => {
+    const f = serviceVerificationFixture({identityPatch});
+    await assert.rejects(f.verify(expectedServiceIdentity), error => error.code === 'account-changed');
+    assert.equal(f.context.service, null);
+    assert.equal(f.updates.filter(patch => patch.cloudAccount).length, 0);
+    assert.equal(f.saved.length, 0);
+    assert.equal(f.refreshes, 0);
+  });
+}

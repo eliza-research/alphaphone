@@ -406,7 +406,7 @@ async function verifyService(client: CloudProtocol, signal: AbortSignal, expecte
   const identity = await client.identity(signal); signal.throwIfAborted();
   if(expected?.userId&&(identity.userId!==expected.userId||identity.organizationId!==expected.organizationId))throw new CloudProtocolError('account-changed');
   const current=await cloudCredentialStore.read(client.environment);
-  if (current?.credentialId !== credential.credentialId || current?.credentialReference !== credential.credentialReference || expected&&current?.credentialReference!==expected.credentialReference) throw new Error('Cloud account changed. Try again.');
+  if (current?.credentialId !== credential.credentialId || current?.credentialReference !== credential.credentialReference || expected?.credentialReference!==undefined&&current?.credentialReference!==expected.credentialReference) throw new Error('Cloud account changed. Try again.');
   signal.throwIfAborted();
   const same = service?.identity.environment === client.environment && service.identity.userId === identity.userId && service.identity.organizationId === identity.organizationId && service.identity.credentialId === credential.credentialId && service.credentialReference === credential.credentialReference;
   const account = { ...identity, credentialId: credential.credentialId, environment: client.environment, sessionId: same ? service!.identity.sessionId : crypto.randomUUID(), ...(Number.isFinite(credential.expiresAt) ? { expiresAt: credential.expiresAt } : {}) };
