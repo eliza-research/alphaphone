@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {reviewedSourceOverrides} from '../scripts/stage-aosp.mjs';
+import {reviewedSourceOverrides,stagingBuildPatches} from '../scripts/stage-aosp.mjs';
 import {verifySecureCameraSource} from '../scripts/aosp-secure-camera-contract.mjs';
 
 test('secure camera staging accepts exact reviewed SystemUI changes without admitting other source changes', t => {
@@ -45,4 +45,19 @@ test('secure camera staging accepts exact reviewed SystemUI changes without admi
   options.appliedPatches.pop();
   fs.writeFileSync(path.join(directory, 'unreviewed.java'), 'extra');
   assert.throws(() => verifySecureCameraSource(source, contract, overrides()), /not clean/);
+});
+
+
+test('host build patch admission is explicit, target-bound, and pinned to the source lock', () => {
+  assert.deepEqual(stagingBuildPatches([], false), []);
+  assert.throws(() => stagingBuildPatches(['soong-memory'], false), /requires --target/);
+  assert.throws(() => stagingBuildPatches(['soong-memory','soong-memory'], true), /Duplicate/);
+  assert.throws(() => stagingBuildPatches(['arbitrary'], true), /Unknown AOSP build patch/);
+  const [{name,manifest}] = stagingBuildPatches(['soong-memory'], true);
+  const lock = fs.readFileSync('android/aosp/pixel10a-source.json');
+  assert.equal(name, 'soong-memory');
+  assert.equal(manifest.baselineLockSha256, createHash('sha256').update(lock).digest('hex'));
+  assert.equal(manifest.revision, JSON.parse(lock).projects.find(row => row.path === 'build/soong').commit);
+  assert.deepEqual(manifest.files.map(row => row.path), ['ui/build/soong.go']);
+  assert.ok(manifest.files.every(row => /^[a-f0-9]{64}$/.test(row.beforeSha256) && /^[a-f0-9]{64}$/.test(row.afterSha256)));
 });
