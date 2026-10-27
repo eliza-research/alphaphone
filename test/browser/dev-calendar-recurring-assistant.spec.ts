@@ -1,3 +1,4 @@
+import {openBrowserCalendar} from './helpers/browser-calendar';
 import {presentDeviceRecordOperation} from '../../apps/app/src/runtime/device-record-presentation.ts';
 import { returnToApps } from './app-navigation';
 import { test, expect } from '@playwright/test';
@@ -21,7 +22,7 @@ for (const mode of ['read', 'update', 'delete', 'cancel', 'stale'] as const) {
         nativePromise: async (plugin: string, method: string, input: any) => {
           if (plugin === 'AlphaActionJournal') {
             fixture.journal.push(method);
-            if (method === 'reserve') { w.calendarEntry={...structuredClone(input),phase:'reserved'}; return { created: true }; }
+            if (method === 'reserve') { w.calendarEntry={...structuredClone(input),phase:'reserved'}; return { created: true, entry: structuredClone(w.calendarEntry) }; }
             if (method === 'markApplying') { Object.assign(w.calendarEntry,{phase:'applying',attemptId:input.attemptId});return {}; }
             if(method==='get')return {entry:structuredClone(w.calendarEntry)};
             if(method==='list')return {entries:w.calendarEntry?[structuredClone(w.calendarEntry)]:[]};
@@ -86,7 +87,7 @@ for (const mode of ['read', 'update', 'delete', 'cancel', 'stale'] as const) {
     await returnToApps(page);
 
 
-    await page.getByRole('button',{name:'Calendar',exact:true}).click();
+    await openBrowserCalendar(page);
     await page.getByRole('button',{name:/^Selected private event,/}).click();
     await expect.poll(()=>page.evaluate(()=>document.documentElement.dataset.activeView)).toBe('calendar');
     await page.getByRole('button',{name:'Type',exact:true}).click();
