@@ -1,7 +1,7 @@
 import {createDeviceActionExecution} from '../../../../.eliza/client-features/packages/contracts/src/device-action-execution.ts';
 import {browserNavigationSummary} from './action-message-presentation';
 import {namedCalendarReadTarget} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/client/named-read.ts';
-import {foregroundReviewOperationAvailable} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/foreground-review-contract.ts';
+import {foregroundReviewOperationAvailable,isForegroundReviewOperation,validateForegroundReviewOperation,validateForegroundReviewResult,type ForegroundReviewOperation,type ForegroundReviewResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/foreground-review-contract.ts';
 import {CAMERA_CAPTURE_CAPABILITY,isCameraCapture,validateCameraCapture,validateCameraCaptureResult,type CameraCaptureOperation,type CameraCaptureResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/camera-contract.ts';
 import {isSmsSend,validateSmsSend,validateSmsResult,smsAgentHash,smsDeviceStatus,SMS_SEND_CAPABILITY,type SmsSendOperation,type SmsSendResult} from './sms-agent-contract.ts';
 import {isOriginalDeviceReadOperationType,isNativeNotesQuery,validateNativeNotesQuery,NOTES_QUERY_CAPABILITY,validateNativeNotesReadReplyOrigin,validateNativeNotesReadReplyHint,validateNativeNotesReadReply,type NativeNotesReadReplyOrigin,type NativeNotesReadReplyHint,type NativeNotesReadReply,type NativeNotesQueryOperation} from '../../../../.eliza/client-features/packages/contracts/src/native-notes-query.ts';
@@ -13,10 +13,9 @@ import {isClockOperation,validateClockOperation,validateClockResult,assertClockT
 import { isMapsOperation, validateMapsOperation, validateMapsResult, type MapsOperation, type MapsResult } from './maps-contract';
 import { validateMapsSelectedObject } from '../maps/agent-context';
 import { isLibraryOperation, validateLibraryOperation, validateLibraryResult, describeLibraryOperation, PHOTO_LIBRARY_CAPABILITY, type LibraryAgentOperation, type LibraryAgentResult } from './photo-library';
-import {type ReminderOperation,type ReminderResult,isReminderOperation,reminderFields,validateReminderOperation,validateReminderResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/reminder-contract.ts';
-import {type NotesOperation,type NotesResult,type NotesTarget,isNotesOperation,notesFields,validateNotesOperation,validateNotesResult} from './notes-contract';
-import {CALENDAR_AGENDA_CAPABILITY,calendarSource,type CalendarSource,type CalendarOperation,type CalendarResult,type CalendarRecordResult,calendarCapabilityAvailable,calendarFields,isCalendarOperation,validateCalendarOperation,validateCalendarResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts';
-import {type DeviceReviewOperation,type CalendarAvailabilityResult,type NotesSearchResult,type NamedTargetResult,type NamedTargetValidators,deviceReviewCapabilityAvailable,isCalendarAvailabilityOperation,isNotesSearchOperation,validateCalendarAvailabilityOperation,validateCalendarAvailabilityResult,validateNotesSearchOperation,validateNotesSearchResult,validateNamedTargetOperation,validateNamedTargetResult} from '../../../../.eliza/client-features/packages/contracts/src/device-reviews.ts';
+import {type ReminderOperation,type ReminderResult,isReminderOperation,validateReminderOperation,validateReminderResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/reminder-contract.ts';
+import {type NotesOperation,type NotesResult,isNotesOperation,validateNotesOperation,validateNotesResult} from './notes-contract';
+import {CALENDAR_AGENDA_CAPABILITY,calendarSource,type CalendarSource,type CalendarOperation,type CalendarResult,calendarCapabilityAvailable,isCalendarOperation,validateCalendarOperation,validateCalendarResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts';
 import { isMvpView } from "../prototype/mvp-features";
 import { parseWorkflowBinding, parseWorkflowRead, validateWorkflowResult, assertWorkflowOperation, type WorkflowReadOperation, type WorkflowReadResult, type WorkflowDeviceBinding, type WorkflowPhoneReview } from './workflow-device-contract';
 import type { AlphaClient, ActionProposal, ContextEnvelope, OperationReceipt, VerifiedSession } from './alpha-client';
@@ -25,31 +24,9 @@ export type WorkflowPresentationOperation = {type:'post_notification';title:stri
 export type DeviceOperation = CameraCaptureOperation | SmsSendOperation | ReminderCreateOperation | WorkflowPresentationOperation | ClockOperation | MapsOperation | LibraryAgentOperation | ReminderOperation | NotesOperation | NativeNotesQueryOperation | CalendarOperation | WorkflowReadOperation | { type: 'create_note'; title: string; body: string }
   | { type: 'create_reminder'; title: string; dueAt: string }
   | { type: 'open_view'; view: string } | { type: 'browser_navigate'; url: string };
-/** Kept in step with the patched contract's FOREGROUND_REVIEW_TYPES (asserted by test-device-actions). */
-export const FOREGROUND_OPERATION_TYPES: readonly string[] = ['calendar_availability','notes_search','notes_named','calendar_named','reminder_named'];
-function isForegroundReview(value: unknown): value is ForegroundReviewOperation { return !!value && typeof value === 'object' && FOREGROUND_OPERATION_TYPES.includes(String((value as {type?:unknown}).type)); }
-export type ForegroundReviewOperation = DeviceReviewOperation;
-/** Exact selected-record operation a named proposal resolves to after the owner's choice. */
-export type NamedTargetExactOperation = Extract<NotesOperation|CalendarOperation|ReminderOperation,{target:unknown}>;
-export type ForegroundReviewResult = CalendarAvailabilityResult|NotesSearchResult<NotesTarget,NotesResult>|NamedTargetResult<NamedTargetExactOperation,NotesResult|CalendarRecordResult|ReminderResult>;
-/** Shared device-review contracts bound to this renderer's Notes, Calendar and reminder contracts.
- * Methods resolve their validators on call, so loading this module touches no domain contract. */
-export const namedTargetValidators:NamedTargetValidators<NamedTargetExactOperation,NotesResult|CalendarRecordResult|ReminderResult>={
- notesFields:value=>notesFields(value),calendarFields:value=>calendarFields(value),reminderFields:value=>reminderFields(value),
- exact(value){const exact=isNotesOperation(value)?validateNotesOperation(value):isCalendarOperation(value)?validateCalendarOperation(value):isReminderOperation(value)?validateReminderOperation(value):undefined;if(!exact||!('target' in exact))throw Error('Unsupported named target operation');return exact;},
- record(operation,value){if(isNotesOperation(operation))return validateNotesResult(operation,value);if(isCalendarOperation(operation)){const result=validateCalendarResult(operation,value);if(result.kind==='calendar_read_next')throw Error('Unexpected Calendar discovery result');return result;}return validateReminderResult(operation,value);},
-};
-export function selectedNotesRead(target:unknown,record:unknown):{target:NotesTarget;record:NotesResult}{const selected=validateNotesOperation({type:'notes_read_selected',target});if(selected.type!=='notes_read_selected')throw Error('Invalid selected Notes read');return {target:selected.target,record:validateNotesResult(selected,record)};}
-export function validateForegroundReviewOperation(value:unknown):ForegroundReviewOperation{
- if(isCalendarAvailabilityOperation(value))return validateCalendarAvailabilityOperation(value);
- if(isNotesSearchOperation(value))return validateNotesSearchOperation(value);
- return validateNamedTargetOperation(value,namedTargetValidators);
-}
-export function validateForegroundReviewResult(operation:ForegroundReviewOperation,value:unknown):ForegroundReviewResult{
- if(operation.type==='calendar_availability')return validateCalendarAvailabilityResult(operation,value);
- if(operation.type==='notes_search')return validateNotesSearchResult(operation,value,selectedNotesRead);
- return validateNamedTargetResult(operation,value,namedTargetValidators);
-}
+/** Foreground reviews (free/busy, Notes search, name-targeted edits) and their validators are
+ * the shared device-review contract bound to the shared Notes, Calendar and reminder contracts. */
+export {FOREGROUND_REVIEW_TYPES as FOREGROUND_OPERATION_TYPES,namedTargetValidators,selectedNotesRead,validateForegroundReviewOperation,validateForegroundReviewResult,type ForegroundReviewOperation,type ForegroundReviewResult,type NamedTargetExactOperation} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/foreground-review-contract.ts';
 /** Every operation a proposal may carry. Foreground reviews run through their own executor. */
 export type ReviewableDeviceOperation = DeviceOperation | ForegroundReviewOperation;
 /** Runs the phone's local review (calendar choice, note choice, record disambiguation)
@@ -83,7 +60,7 @@ function id(value: unknown): string { const valueText = text(value); if (!/^[A-Z
 /** Every proposal operation, including foreground reviews. */
 export function validateReviewableDeviceOperation(value: unknown): ReviewableDeviceOperation {
   const p = object(value);
-  return isForegroundReview(p) ? validateForegroundReviewOperation(p) : validateDeviceOperation(p);
+  return isForegroundReviewOperation(p) ? validateForegroundReviewOperation(p) : validateDeviceOperation(p);
 }
 export function validateDeviceOperation(value: unknown): DeviceOperation {
   const p = object(value);
@@ -150,7 +127,7 @@ function assertNotesContext(operation:NotesOperation,context:ContextEnvelope){co
 function assertProposalContext(operation:ReviewableDeviceOperation,context:ContextEnvelope){
  if(operation.type==='read_calendar_range'&&(context.sensitive||typeof document!=='undefined'&&document.hidden))throw new ContextNotice('Unlock this foreground Calendar read before approving it.');
  if(isCameraCapture(operation)&&(context.sensitive||context.view!=='camera'))throw new ContextNotice(CAMERA_CONTEXT_NOTICE);
- if(isForegroundReview(operation))assertForegroundContext(operation,context);
+ if(isForegroundReviewOperation(operation))assertForegroundContext(operation,context);
  if(isSmsSend(operation)&&(context.sensitive||context.view!=='messages'||context.selectedObject?.kind!=='sms-subscription'||context.selectedObject.id!==String(operation.subscriptionId)))throw new ContextNotice('Open Messages and select the reviewed SIM before approving SMS.');
  if(isClockOperation(operation))assertClockTimeZone(operation,context.timeZone);
  if(isMapsOperation(operation))assertMapsContext(operation,context);
@@ -251,7 +228,7 @@ export class DeviceActions {
     if(isCalendarOperation(op)&&(op.type==='calendar_create_local'||op.type==='calendar_read_next')&&!calendarCapabilityAvailable(op.type,this.credential.capabilities))throw Error('This agent has not negotiated native Calendar creation or discovery. Reconnect to a compatible agent.');
     if(isNativeNotesQuery(op)&&!this.credential.capabilities?.includes(NOTES_QUERY_CAPABILITY))throw Error('Notes discovery was not negotiated with this agent');
     if(isLibraryOperation(op)&&!this.credential.capabilities?.includes(PHOTO_LIBRARY_CAPABILITY))throw Error('Device library access was not negotiated with this agent');
-    if(isForegroundReview(op)&&(!foregroundReviewOperationAvailable(op,this.credential.capabilities)||!this.executeForeground))throw Error('This action was not negotiated with this agent. Reconnect to a compatible agent.');
+    if(isForegroundReviewOperation(op)&&(!foregroundReviewOperationAvailable(op,this.credential.capabilities)||!this.executeForeground))throw Error('This action was not negotiated with this agent. Reconnect to a compatible agent.');
     if(isReminderCreate(op)&&!this.reminderCreate)throw Error('This agent does not support reviewed reminder creation. Reconnect to a compatible agent.');
     if(isReminderOperation(op)&&(op.target.timingVersion===2||op.type==='reminder_update'&&op.fields.schedule?.alertMinutes!==undefined)&&!this.reminderV2)throw Error('This agent does not support this reminder timing. Reconnect to a compatible agent.');
     const agendaSource=payload.calendarAgendaSource===undefined?undefined:calendarSource(payload.calendarAgendaSource);
@@ -283,7 +260,7 @@ export class DeviceActions {
   private card(proposal: Proposal, context: ContextEnvelope): ActionProposal {
     const op = proposal.operation;
     const notesDestination=(op.type==='notes_delete'||op.type==='notes_update')&&!context.sensitive&&['home','notes'].includes(context.view)&&proposalContextNotice(op,context)?{reviewDestination:'notes' as const,reviewNoteTarget:structuredClone(op.target)}:{};
-    if (isForegroundReview(op)) return { ...(op.type==='calendar_named'&&op.action==='read'&&!context.sensitive&&['home','calendar'].includes(context.view)&&!namedCalendarReadTarget(context)?{reviewDestination:'calendar' as const}:{}), id: proposal.id, ...describeForegroundReview(op, context.timeZone), expiresAt: proposal.expiresAt, contextRevision: context.revision,...((op.type==='calendar_availability'||op.type==='calendar_named'&&op.action==='read'&&!!namedCalendarReadTarget(context))&&proposal.readReplyOrigin?{readReply:{origin:structuredClone(proposal.readReplyOrigin),digest:proposal.digest}}:{}) };
+    if (isForegroundReviewOperation(op)) return { ...(op.type==='calendar_named'&&op.action==='read'&&!context.sensitive&&['home','calendar'].includes(context.view)&&!namedCalendarReadTarget(context)?{reviewDestination:'calendar' as const}:{}), id: proposal.id, ...describeForegroundReview(op, context.timeZone), expiresAt: proposal.expiresAt, contextRevision: context.revision,...((op.type==='calendar_availability'||op.type==='calendar_named'&&op.action==='read'&&!!namedCalendarReadTarget(context))&&proposal.readReplyOrigin?{readReply:{origin:structuredClone(proposal.readReplyOrigin),digest:proposal.digest}}:{}) };
     if(isSmsSend(op))return {id:proposal.id,title:'Review SMS',description:`To: ${op.recipients.join(', ')}\nSIM subscription: ${op.subscriptionId}\n\n${op.body}\n\nConfirm again in Android. Submission does not prove delivery.`,expiresAt:proposal.expiresAt,contextRevision:context.revision};
     if(isCameraCapture(op))return {id:proposal.id,title:'Take photo',description:'Use the current camera and save one photo in Photos. The photo stays on this device.',expiresAt:proposal.expiresAt,contextRevision:context.revision};
     if (isLibraryOperation(op)) return { id: proposal.id, ...describeLibraryOperation(op), expiresAt: proposal.expiresAt, contextRevision: context.revision };
@@ -382,7 +359,7 @@ export class DeviceActions {
       let result: Awaited<ReturnType<DeviceExecutor>> & { foregroundResult?: ForegroundReviewResult };
       try { signal.throwIfAborted(); if (p.expiresAt <= Date.now()) throw new Error('Expired action'); const bindingHash=await actionScope(JSON.stringify([this.scope,this.session.ownerId,this.session.agentId,this.session.sessionId,this.session.origin,this.credential.installationId,this.credential.enrollmentId,p.id,p.digest,operationId]));
         execution.markDispatched(reserved.entry);
-        if(isForegroundReview(p.operation)){if(!this.executeForeground)throw Error('Foreground review is unavailable');result=await this.executeForeground(p.operation,operationId,context,signal,bindingHash,{scope:this.scope,proposalId:p.id},this.credential.capabilities??[]);}
+        if(isForegroundReviewOperation(p.operation)){if(!this.executeForeground)throw Error('Foreground review is unavailable');result=await this.executeForeground(p.operation,operationId,context,signal,bindingHash,{scope:this.scope,proposalId:p.id},this.credential.capabilities??[]);}
         else result = await this.execute(p.operation, operationId, context, signal, bindingHash,p.workflow?{scope:this.scope,origin:this.session.origin,ownerId:this.session.ownerId,agentId:this.session.agentId,workflowId:p.workflow.workflowId,runId:p.workflow.runId,versionId:p.workflow.versionId}:undefined,{scope:this.scope,proposalId:p.id},p.calendarAgendaSource); }
       catch { result = { status: 'unknown', summary: 'Action outcome needs review. It will not be repeated automatically.' }; }
       let smsResult:SmsSendResult|undefined;
@@ -407,7 +384,7 @@ export class DeviceActions {
       let calendarResult:CalendarResult|undefined;
       if(isCalendarOperation(p.operation)){if(result.status==='succeeded')calendarResult=validateCalendarResult(p.operation,result.calendarResult);else if(result.calendarResult!==undefined)throw Error('Failed Calendar action cannot return content');}else if(result.calendarResult!==undefined)throw Error('Unexpected Calendar result');
       let foregroundResult:ForegroundReviewResult|undefined;
-      if(isForegroundReview(p.operation)){if(result.status==='succeeded')foregroundResult=validateForegroundReviewResult(p.operation,result.foregroundResult);else if(result.foregroundResult!==undefined)throw Error('An unconfirmed review cannot return a result');}else if(result.foregroundResult!==undefined)throw Error('Unexpected foreground review result');
+      if(isForegroundReviewOperation(p.operation)){if(result.status==='succeeded')foregroundResult=validateForegroundReviewResult(p.operation,result.foregroundResult);else if(result.foregroundResult!==undefined)throw Error('An unconfirmed review cannot return a result');}else if(result.foregroundResult!==undefined)throw Error('Unexpected foreground review result');
       let readResult:WorkflowReadResult|undefined;
       if(p.operation.type==='read_selected_notes'||p.operation.type==='read_calendar_range'){
         if(result.status==='succeeded')readResult=await validateWorkflowResult(p.operation,result.readResult);
@@ -616,7 +593,7 @@ export class DeviceActions {
     return isNativeNotesQuery(p.operation)?validateNotesQueryResult(p.operation,entry.result?.notesResult):validateNotesResult(p.operation,entry.result?.notesResult);
   }
   private async savedForegroundResult(p:Proposal,summary:JournalEntry):Promise<ForegroundReviewResult|undefined>{
-    if(!isForegroundReview(p.operation)||summary.status!=='succeeded')return undefined;
+    if(!isForegroundReviewOperation(p.operation)||summary.status!=='succeeded')return undefined;
     const {entry}=await this.journal.get({scope:this.scope,proposalId:p.id});
     if(!entry||entry.phase!=='terminal'||entry.status!=='succeeded'||entry.operationId!==summary.operationId||entry.record.digest!==p.digest||entry.record.ownerId!==this.session.ownerId||entry.record.agentId!==this.session.agentId||entry.record.origin!==this.session.origin)throw Error('No exact saved review receipt; the phone will not read or change anything again');
     return validateForegroundReviewResult(p.operation,entry.result?.foregroundResult);
@@ -649,7 +626,7 @@ export class DeviceActions {
     const notesResult=outcome==='applied'&&entry?await this.savedNotesResult(p,entry):undefined;
     const reminderResult=outcome==='applied'&&entry?await this.savedReminderResult(p,entry):undefined;
     const foregroundResult=outcome==='applied'&&entry?await this.savedForegroundResult(p,entry):undefined;
-    if(outcome==='applied'&&isForegroundReview(p.operation)&&!foregroundResult)throw Error('Applied review reconciliation requires its exact saved receipt');
+    if(outcome==='applied'&&isForegroundReviewOperation(p.operation)&&!foregroundResult)throw Error('Applied review reconciliation requires its exact saved receipt');
     if(outcome==='applied'&&(isReminderOperation(p.operation)||isReminderCreate(p.operation))&&!reminderResult)throw Error('Applied reminder reconciliation requires exact saved receipt');
     if(outcome==='applied'&&(isNotesOperation(p.operation)||isNativeNotesQuery(p.operation))&&!notesResult)throw Error('Applied Notes reconciliation requires its exact saved receipt');
     if(outcome==='applied'&&isCalendarOperation(p.operation)&&!calendarResult)throw Error('Applied Calendar reconciliation requires exact saved provider receipt');
