@@ -72,6 +72,12 @@
    <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started local personal agent runtime" />
   </service>
   <service android:name=".AlphaNavigationService" android:exported="false" android:foregroundServiceType="location" />
+  <!-- Android alone binds this action tile. A locked-device tap requires unlocking; no capture
+       or connection authority comes from a tile being present in Quick Settings. -->
+  <service android:name=".AlphaQuickSettingsTile" android:label="@string/alpha_quick_settings_label" android:icon="@drawable/notification_icon" android:exported="true" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+   <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE"/></intent-filter>
+   <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="false"/>
+  </service>
   <activity android:name=".AlphaMailPdfActivity" android:exported="false" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="PDF attachment" />
   <service android:name=".IsolatedPdfService" android:exported="false" android:isolatedProcess="true" android:process=":isolated_pdf" android:stopWithTask="true" />
   <!-- Release-build data integrity export for pilot updates: per-file HMAC digests only, read-only,
