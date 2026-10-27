@@ -30,6 +30,30 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  private static long startRequestEpoch;
  private static boolean startOwnsLaunch;
  private static long credentialIntentEpoch;
+ private static long powerAuthorizationMutationEpoch;
+ /** Native-only authorization mutation marker. Both locks are already held by credential commit. */
+ static void powerAuthorizationChanged(){
+  if(!Thread.holdsLock(lifecycleLock)||!Thread.holdsLock(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK))throw new IllegalStateException("Credential lock order required");
+  powerAuthorizationMutationEpoch++;
+ }
+ /** A protected launch constraint, never authority minted by stored account correlation alone. */
+ static final class PowerLaunchPin implements ai.eliza.plugins.system.SenseListenerClient.PowerLaunchValidator {
+  private final Context context;private final long mutation;private final String account,generation;
+  private PowerLaunchPin(Context context,long mutation,JSONObject admitted)throws Exception{this.context=context.getApplicationContext();this.mutation=mutation;account=admitted.getString("accountRef");generation=admitted.getString("sessionGeneration");}
+  public boolean isCurrent(){synchronized(lifecycleLock){
+   if(mutation!=powerAuthorizationMutationEpoch||stopping||credentialMutationEpoch>=0||credentialShutdownRequest!=-1||context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return false;
+   try{JSONObject now=new AlphaCredentialStore(context).providerAdmissionSnapshot();return "elizacloud".equals(now.optString("provider"))&&"production".equals(now.optString("environment"))&&account.equals(now.getString("accountRef"))&&generation.equals(now.getString("sessionGeneration"));}catch(Exception unavailable){return false;}
+  }}
+  public boolean authorize(String candidate,java.util.function.BooleanSupplier consume){synchronized(lifecycleLock){synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){
+   // Native credential commit and grant issuance are one atomic authorization point. SDK
+   // enters without its own locks; callback checks its current lease under app -> SDK order.
+   return account.equals(candidate)&&isCurrent()&&consume.getAsBoolean();
+  }}}
+ }
+ static PowerLaunchPin capturePowerLaunchPin(Context context){synchronized(lifecycleLock){
+  if(stopping||credentialMutationEpoch>=0||credentialShutdownRequest!=-1||context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return null;
+  try{JSONObject admitted=new AlphaCredentialStore(context).providerAdmissionSnapshot();if(!"elizacloud".equals(admitted.optString("provider"))||!"production".equals(admitted.optString("environment")))return null;return new PowerLaunchPin(context,powerAuthorizationMutationEpoch,admitted);}catch(Exception unavailable){return null;}
+ }}
  private final java.util.Set<String> cancelledStarts=new java.util.HashSet<>();
  private static boolean accepting=true,stopping;
  private volatile boolean disposed;

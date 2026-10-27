@@ -108,9 +108,11 @@ final class AlphaCredentialStore {
     if(!LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)&&java.util.Objects.equals(before,value))return true;
     if(!java.util.Objects.equals(before,slots.read(CloudDeployment.storageSlot(name)))||!java.util.Objects.equals(provider,slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT))))throw new IllegalStateException("Credential changed");
     if(LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)||"cloud:production".equals(name)&&!LocalAgentProviderAdmission.sameCloudCredential(before,value))cloudChange.changed();
+    String committed=LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)&&value!=null?LocalAgentProviderAdmission.withoutAdmission(value):value;
+    if(!java.util.Objects.equals(before,committed))AlphaLocalAgentPlugin.powerAuthorizationChanged();
     invalidateProviderAdmission(name,value);
     if(value==null)slots.remove(CloudDeployment.storageSlot(name));
-    else slots.write(CloudDeployment.storageSlot(name),LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)?LocalAgentProviderAdmission.withoutAdmission(value):value);
+    else slots.write(CloudDeployment.storageSlot(name),committed);
     return true;
    }
   });
@@ -147,6 +149,7 @@ final class AlphaCredentialStore {
     if(credentialSlot!=null&&!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(credentialSlot)),expectedCredential)
       ||!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT)),expected))throw new IllegalStateException("Provider changed");
     if(LocalAgentProviderAdmission.currentGeneration(admitted,expectedCredential)==null)throw new IllegalStateException("Provider credential expired");
+    if(!java.util.Objects.equals(expected,admitted))AlphaLocalAgentPlugin.powerAuthorizationChanged();
     slots.write(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT),admitted);return admitted;
    }
   });
@@ -167,6 +170,7 @@ final class AlphaCredentialStore {
    public Void commit()throws Exception{
     if(!owned)return null;
     if(!java.util.Objects.equals(current,slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT))))throw new IllegalStateException("Provider changed");
+    AlphaLocalAgentPlugin.powerAuthorizationChanged();
     if(previous==null)slots.remove(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT));
     else slots.write(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT),LocalAgentProviderAdmission.withoutAdmission(previous));
     return null;
