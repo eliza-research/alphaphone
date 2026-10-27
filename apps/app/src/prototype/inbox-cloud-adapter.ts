@@ -20,7 +20,8 @@ import { inboxDrafts, type ComposePrefill, type SuggestionTarget } from './inbox
 import { attachmentReadFailure, classifyGmailFailure, gmailReadable, setGmailReadState, GMAIL_ACCOUNTS_CHANGED, type GmailFailureKind } from '../runtime/gmail-mailbox';
 import { connectionController, agentPendingText } from '../runtime/connection-ui';
 import { gmailGrantChange, gmailInboxAllows, gmailModifyIncomplete, gmailReadCacheKey } from '../runtime/gmail-grants';
-import { cloudServiceName, safeMailLink, type GmailAccount, type GmailDraftContent, type GmailDraftSummary, type GmailLink, type GmailMessage } from '../runtime/cloud-protocol';
+import { cloudServiceName, type GmailAccount, type GmailDraftContent, type GmailDraftSummary, type GmailLink, type GmailMessage } from '../runtime/cloud-protocol';
+import { linkifyMailText, linkTextMismatch } from '../../../../.eliza/client-features/plugins/plugin-inbox/src/mailbox/links.ts';
 import { reviewOpaqueAttachment } from '../runtime/inbox-operation';
 import {googleConnectionController} from '../runtime/google-connection-ui';
 import {GOOGLE_ACCOUNTS_CHANGED} from '../runtime/google-accounts';
@@ -50,31 +51,6 @@ export function inboxAttention(): InboxAttention { return { ...attention }; }
 export function subscribeInboxAttention(listener: () => void): () => void { attentionListeners.add(listener); return () => { attentionListeners.delete(listener); }; }
 /** Opens the Inbox list (Home's triage tile). A no-op until the Inbox adapter is installed. */
 export function openInbox(): void { openInboxHandler?.(); }
-/** Plain-text https URLs in a message body, trimmed of trailing punctuation. Nothing is fetched. */
-export function linkifyMailText(text: string): GmailLink[] {
-  const links: GmailLink[] = [], seen = new Set<string>();
-  for (const match of String(text || '').matchAll(/https:\/\/[^\s<>"'`]+/gi)) {
-    // Trailing punctuation is trimmed in one linear pass (hostile bodies may end a URL with a long run
-    // of ")"); a ")" stays while it closes a "(" in the URL.
-    const raw = match[0];
-    let end = raw.length, open = 0, close = 0;
-    for (const c of raw) { if (c === '(') open++; else if (c === ')') close++; }
-    while (end > 0 && '.,;:!?)]}>'.includes(raw[end - 1])) { if (raw[end - 1] === ')') { if (open >= close) break; close--; } end--; }
-    const link = safeMailLink({ href: raw.slice(0, end), text: raw.slice(0, end) });
-    if (link && !seen.has(link.href)) { seen.add(link.href); links.push(link); }
-    if (links.length >= 50) break;
-  }
-  return links;
-}
-/** The link text names a different site than the destination (a common phishing pattern). */
-export function linkTextMismatch(link: GmailLink): boolean {
-  let host: string;
-  try { host = new URL(link.href).hostname.toLowerCase().replace(/^www\./, ''); } catch { return true; }
-  const named = link.text.toLowerCase().match(/(?:https?:\/\/)?((?:[a-z0-9-]+\.)+[a-z]{2,63})(?=[\/:\s]|$)/);
-  if (!named) return false;
-  const shown = named[1].replace(/^www\./, '');
-  return shown !== host && !host.endsWith('.' + shown);
-}
 /** Managed Gmail reads and explicit encrypted local drafts in the reference Inbox layout. Provider content lives
  * only in this closure, never prototype persistence or automatic agent context. */
 export function installInboxCloudAdapter(Component: any, views: Record<string, Bag>) {
