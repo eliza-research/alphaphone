@@ -22,7 +22,7 @@ export function openCalendarSyncSettings() {
 	title.textContent = "Google Calendar sync";
 	const description = document.createElement("p");
 	description.textContent =
-		"Events created in Alpha sync to your selected Google calendar. Later edits and deletions sync both ways for linked events while Alpha is open. Google receives event details and guest email addresses. Pausing keeps saved events.";
+		"Device calendar events created in Alpha sync to your selected Google calendar. Later edits and deletions sync both ways for linked events while Alpha is open. Agent Calendar events stay with your agent and do not sync. Google receives event details and guest email addresses. Pausing keeps saved events.";
 	const summary = document.createElement("p");
 	summary.setAttribute("role", "status");
 	summary.setAttribute("aria-live", "polite");
