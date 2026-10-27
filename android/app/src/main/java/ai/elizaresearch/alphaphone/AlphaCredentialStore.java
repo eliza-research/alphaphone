@@ -109,7 +109,11 @@ final class AlphaCredentialStore {
     if(!java.util.Objects.equals(before,slots.read(CloudDeployment.storageSlot(name)))||!java.util.Objects.equals(provider,slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT))))throw new IllegalStateException("Credential changed");
     if(LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)||"cloud:production".equals(name)&&!LocalAgentProviderAdmission.sameCloudCredential(before,value))cloudChange.changed();
     String committed=LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)&&value!=null?LocalAgentProviderAdmission.withoutAdmission(value):value;
-    if(!java.util.Objects.equals(before,committed))AlphaLocalAgentPlugin.powerAuthorizationChanged();
+    // Metadata/valid expiry refresh is not replacement; use the same canonical credential
+    // comparison that retains provider admission. Provider writes still strip admission.
+    boolean authorityChanged=LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)
+      ?!java.util.Objects.equals(before,committed):!LocalAgentProviderAdmission.sameCloudCredential(before,committed);
+    if(authorityChanged)AlphaLocalAgentPlugin.powerAuthorizationChanged();
     invalidateProviderAdmission(name,value);
     if(value==null)slots.remove(CloudDeployment.storageSlot(name));
     else slots.write(CloudDeployment.storageSlot(name),committed);
@@ -149,7 +153,11 @@ final class AlphaCredentialStore {
     if(credentialSlot!=null&&!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(credentialSlot)),expectedCredential)
       ||!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT)),expected))throw new IllegalStateException("Provider changed");
     if(LocalAgentProviderAdmission.currentGeneration(admitted,expectedCredential)==null)throw new IllegalStateException("Provider credential expired");
-    if(!java.util.Objects.equals(expected,admitted))AlphaLocalAgentPlugin.powerAuthorizationChanged();
+    // admit() retains generation only when the native canonical fingerprint is unchanged.
+    // A fresh random request revision alone must not revoke a protected cold-start grant.
+    String previousGeneration=expected==null?null:LocalAgentProviderAdmission.currentGeneration(expected,expectedCredential);
+    String admittedGeneration=LocalAgentProviderAdmission.currentGeneration(admitted,expectedCredential);
+    if(previousGeneration==null||!previousGeneration.equals(admittedGeneration))AlphaLocalAgentPlugin.powerAuthorizationChanged();
     slots.write(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT),admitted);return admitted;
    }
   });
