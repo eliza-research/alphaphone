@@ -131,6 +131,7 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/ui/src/platform/browser-document-store.ts',
   'packages/contracts/src/native-notes-query.ts',
   'packages/contracts/src/device-reviews.ts',
+  'packages/contracts/src/device-action-execution.ts',
   'packages/contracts/src/calendar-linked-sync.ts',
   'plugins/plugin-assistant/src/services/device-actions/camera-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/notes-query-result.ts',

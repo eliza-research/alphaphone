@@ -21,6 +21,9 @@
     "ignoreDeprecations": "6.0",
     "paths": {
       "@elizaos/capacitor-system/launcher": ["./.eliza/client-features/plugins/plugin-native-system/src/client/launcher.ts"],
+      "@elizaos/contracts/device-action-execution": [
+        "./.eliza/client-features/packages/contracts/src/device-action-execution.ts"
+      ],
       "@elizaos/contracts/native-notes-query": [
         "./.eliza/client-features/packages/contracts/src/native-notes-query.ts"
       ],
