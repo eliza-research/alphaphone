@@ -7,6 +7,7 @@ import { registerPlugin } from '../platform-plugins';
 import { connectionController, agentAvailabilityNotice, type ConnectionSnapshot } from '../runtime/connection-ui';
 import { modelLabel } from '../runtime/local-agent';
 import { askAboutCapture } from './camera-adapter';
+import { broaderPageNotice, handoffGate, switchValue, SYSTEM_TILE_SETTINGS_PAGES, tileAccessibleName, tileFactsFromSystemFacts, tileStateText, type SystemTileFacts, type SystemTileKey } from '@elizaos/capacitor-system/settings';
 import { captureQuestion, locationMimeTypes } from './context-selection';
 
 type Bag = Record<string, any>;
@@ -64,44 +65,19 @@ export function residentModelLabel(connection: ConnectionSnapshot, refresh: () =
 const externalModules = new Set(['phone', 'messages', 'inbox', 'browser', 'camera', 'photos', 'maps', 'calendar', 'contacts', 'files', 'settings', 'wallet', 'workflows']);
 const text = (value: unknown) => typeof value === 'string' ? value : '';
 
-// tile-facts:begin (dependency-free; exercised by test/shade-tile-facts.test.mjs)
-export type TileKey = 'wifi' | 'bt' | 'dnd' | 'mic' | 'loc' | 'plane' | 'torch';
+// tile-facts:begin (Alpha's tile labels and theme over the shared truthful presentation; test/shade-tile-facts.test.mjs)
 /** Only directly observed native facts. A missing key means unknown: no on/off is shown. */
-export type TileFacts = Partial<Record<TileKey, boolean>>;
+export type TileKey = SystemTileKey;
+export type TileFacts = SystemTileFacts;
+/** Alpha's tile labels; state, wording and handoff pages are the shared @elizaos/capacitor-system/settings. */
 export const tileKeys: Record<string, TileKey> = { 'Wi-Fi': 'wifi', 'Bluetooth': 'bt', 'Do not disturb': 'dnd', 'Agent can listen': 'mic', 'Location': 'loc', 'Airplane mode': 'plane', 'Flashlight': 'torch' };
 /** Settings page each tile hands off to (AlphaDevice.openSettings). The flashlight is a direct control. */
-export const tileSettingsPages: Partial<Record<TileKey, string>> = { wifi: 'wifi', bt: 'bluetooth', dnd: 'dnd', plane: 'airplane', loc: 'location', mic: 'privacy' };
-/** Android system switches as AlphaDevice.snapshot() read them. A switch Android did not answer for
- * is absent. App permissions are not switch states, so the microphone tile never gets one here.
- * Without the Wi-Fi switch, an active Wi-Fi transport still proves Wi-Fi is on; no active
- * transport does not prove it is off (it may be on and disconnected). */
-export function tileFactsFromSnapshot(snapshot: unknown, torch?: boolean): TileFacts {
-  const facts: TileFacts = {}, value = snapshot && typeof snapshot === 'object' ? snapshot as Record<string, unknown> : {};
-  if (typeof value.wifiEnabled === 'boolean') facts.wifi = value.wifiEnabled;
-  else if (value.wifiActive === true) facts.wifi = true;
-  if (typeof value.bluetoothEnabled === 'boolean') facts.bt = value.bluetoothEnabled;
-  if (typeof value.airplaneMode === 'boolean') facts.plane = value.airplaneMode;
-  if (typeof value.locationEnabled === 'boolean') facts.loc = value.locationEnabled;
-  if (value.interruptionFilter === 'all') facts.dnd = false;
-  else if (value.interruptionFilter === 'priority' || value.interruptionFilter === 'alarms' || value.interruptionFilter === 'none') facts.dnd = true;
-  if (typeof torch === 'boolean') facts.torch = torch;
-  return facts;
-}
+export const tileSettingsPages: Partial<Record<TileKey, string>> = SYSTEM_TILE_SETTINGS_PAGES;
+/** Android system switches as AlphaDevice.snapshot() read them (the shared SystemFacts keys). */
+export const tileFactsFromSnapshot: (snapshot: unknown, torch?: boolean) => TileFacts = tileFactsFromSystemFacts;
+export { broaderPageNotice, handoffGate, switchValue, tileAccessibleName, tileStateText };
 /** `on` colours the tile; `aria` is its accessible name and `pressed` its toggle state (toggles only). */
 export type ShadeTile = { label: string; on?: boolean; aria?: string; pressed?: boolean; css?: string; toggle?: () => void; stateText?: string; [key: string]: unknown };
-/** Visible state under each tile. An unread switch says what the tile does instead of looking off. */
-export function tileStateText(key: TileKey | null, on: boolean | undefined): string {
-  if (typeof on === 'boolean') return on ? 'On' : 'Off';
-  return key === 'torch' ? 'Tap to switch' : key === 'mic' ? 'Permissions' : 'Open settings';
-}
-/** Accessible name of a tile. A handoff tile opens an Android page and cannot be switched here, so it is
- * announced as a button whose name carries the reported state ("Wi-Fi, on, opens Android settings")
- * and never as a toggle. The flashlight is the one real toggle and keeps its plain name. */
-export function tileAccessibleName(label: string, key: TileKey | null, on: boolean | undefined): string {
-  if (key === 'torch') return label;
-  const state = typeof on === 'boolean' ? (on ? ', on' : ', off') : '';
-  return label + state + (key === 'mic' ? ', opens Android permission settings' : ', opens Android settings');
-}
 /** Present tiles with state only from native facts. Hide the flashlight without a native control.
  * Every tile except the flashlight only opens its Android page: Alpha cannot change these switches. */
 export function honestTiles(tiles: ShadeTile[], facts: TileFacts, options: { flashlight: boolean; act: (key: TileKey | null, tile: ShadeTile) => void }): ShadeTile[] {
@@ -110,25 +86,6 @@ export function honestTiles(tiles: ShadeTile[], facts: TileFacts, options: { fla
     const on = typeof fact === 'boolean' ? fact : undefined;
     return { ...tile, on, aria: tileAccessibleName(tile.label, key, on), pressed: key === 'torch' ? on : undefined, stateText: tileStateText(key, on), css: (on ? 'background:var(--acc);color:#fff' : 'background:var(--s2);color:var(--fg)') + ';flex-direction:column;gap:3px', toggle: () => options.act(key, tile) };
   });
-}
-/** Settings row wording for a system switch: the switch state when Android reported it, else the fallback. */
-export function switchValue(on: unknown, fallback: string, detail?: { on?: string; off?: string }): string {
-  return typeof on === 'boolean' ? (on ? detail?.on ?? 'On' : detail?.off ?? 'Off') : fallback;
-}
-/** One settings handoff per brightness gesture: repeated change events inside the window are ignored. */
-export function handoffGate(windowMs = 2000, now: () => number = () => Date.now()) {
-  let last = -Infinity, inFlight = false;
-  return {
-    begin(): boolean { const at = now(); if (inFlight || at - last < windowMs) return false; inFlight = true; last = at; return true; },
-    end() { inFlight = false; last = now(); },
-  };
-}
-/** What to say when Android opened a broader page than the one asked for; null when the specific page opened. */
-export function broaderPageNotice(page: string, opened: unknown): string | null {
-  if (!opened || typeof opened !== 'object' || (opened as { specific?: unknown }).specific !== false) return null;
-  if (page === 'airplane' || page === 'mobile') return 'Opened Android network settings. This phone has no separate page for that switch.';
-  if (page === 'dnd') return 'Opened Android priority settings. This phone has no separate Do Not Disturb page.';
-  return 'Opened a related Android settings page. This phone has no separate page for that setting.';
 }
 // tile-facts:end
 /** Run each time the owner comes back to the app or its window regains focus (returning from an

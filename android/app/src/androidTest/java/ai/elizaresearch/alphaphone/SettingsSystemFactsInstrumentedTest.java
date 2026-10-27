@@ -26,18 +26,18 @@ public final class SettingsSystemFactsInstrumentedTest {
   }
  }
  @Test public void switchMappingsNeverGuess(){
-  assertEquals(Boolean.FALSE,AlphaDevicePlugin.wifiSwitch(0));assertEquals(Boolean.TRUE,AlphaDevicePlugin.wifiSwitch(1));
-  assertEquals(Boolean.TRUE,AlphaDevicePlugin.wifiSwitch(2));assertEquals(Boolean.FALSE,AlphaDevicePlugin.wifiSwitch(3));
-  assertNull(AlphaDevicePlugin.wifiSwitch(4));assertNull(AlphaDevicePlugin.wifiSwitch(-1));
-  assertEquals(Boolean.FALSE,AlphaDevicePlugin.binarySwitch(0));assertEquals(Boolean.TRUE,AlphaDevicePlugin.binarySwitch(1));
-  assertNull(AlphaDevicePlugin.binarySwitch(2));assertNull(AlphaDevicePlugin.binarySwitch(-1));
-  assertEquals(Boolean.TRUE,AlphaDevicePlugin.adapterSwitch(android.bluetooth.BluetoothAdapter.STATE_ON));assertEquals(Boolean.FALSE,AlphaDevicePlugin.adapterSwitch(android.bluetooth.BluetoothAdapter.STATE_OFF));
-  assertNull(AlphaDevicePlugin.adapterSwitch(android.bluetooth.BluetoothAdapter.STATE_TURNING_ON));assertNull(AlphaDevicePlugin.adapterSwitch(android.bluetooth.BluetoothAdapter.STATE_TURNING_OFF));assertNull(AlphaDevicePlugin.adapterSwitch(-1));
-  assertEquals("all",AlphaDevicePlugin.interruptionName(NotificationManager.INTERRUPTION_FILTER_ALL));
-  assertEquals("priority",AlphaDevicePlugin.interruptionName(NotificationManager.INTERRUPTION_FILTER_PRIORITY));
-  assertEquals("alarms",AlphaDevicePlugin.interruptionName(NotificationManager.INTERRUPTION_FILTER_ALARMS));
-  assertEquals("none",AlphaDevicePlugin.interruptionName(NotificationManager.INTERRUPTION_FILTER_NONE));
-  assertNull(AlphaDevicePlugin.interruptionName(NotificationManager.INTERRUPTION_FILTER_UNKNOWN));
+  assertEquals(Boolean.FALSE,ai.eliza.plugins.system.SystemFacts.wifiSwitch(0));assertEquals(Boolean.TRUE,ai.eliza.plugins.system.SystemFacts.wifiSwitch(1));
+  assertEquals(Boolean.TRUE,ai.eliza.plugins.system.SystemFacts.wifiSwitch(2));assertEquals(Boolean.FALSE,ai.eliza.plugins.system.SystemFacts.wifiSwitch(3));
+  assertNull(ai.eliza.plugins.system.SystemFacts.wifiSwitch(4));assertNull(ai.eliza.plugins.system.SystemFacts.wifiSwitch(-1));
+  assertEquals(Boolean.FALSE,ai.eliza.plugins.system.SystemFacts.binarySwitch(0));assertEquals(Boolean.TRUE,ai.eliza.plugins.system.SystemFacts.binarySwitch(1));
+  assertNull(ai.eliza.plugins.system.SystemFacts.binarySwitch(2));assertNull(ai.eliza.plugins.system.SystemFacts.binarySwitch(-1));
+  assertEquals(Boolean.TRUE,ai.eliza.plugins.system.SystemFacts.adapterSwitch(android.bluetooth.BluetoothAdapter.STATE_ON));assertEquals(Boolean.FALSE,ai.eliza.plugins.system.SystemFacts.adapterSwitch(android.bluetooth.BluetoothAdapter.STATE_OFF));
+  assertNull(ai.eliza.plugins.system.SystemFacts.adapterSwitch(android.bluetooth.BluetoothAdapter.STATE_TURNING_ON));assertNull(ai.eliza.plugins.system.SystemFacts.adapterSwitch(android.bluetooth.BluetoothAdapter.STATE_TURNING_OFF));assertNull(ai.eliza.plugins.system.SystemFacts.adapterSwitch(-1));
+  assertEquals("all",ai.eliza.plugins.system.SystemFacts.interruptionName(NotificationManager.INTERRUPTION_FILTER_ALL));
+  assertEquals("priority",ai.eliza.plugins.system.SystemFacts.interruptionName(NotificationManager.INTERRUPTION_FILTER_PRIORITY));
+  assertEquals("alarms",ai.eliza.plugins.system.SystemFacts.interruptionName(NotificationManager.INTERRUPTION_FILTER_ALARMS));
+  assertEquals("none",ai.eliza.plugins.system.SystemFacts.interruptionName(NotificationManager.INTERRUPTION_FILTER_NONE));
+  assertNull(ai.eliza.plugins.system.SystemFacts.interruptionName(NotificationManager.INTERRUPTION_FILTER_UNKNOWN));
  }
  @Test public void reportedFactsMatchThisAndroidImage()throws Exception{
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
@@ -57,7 +57,7 @@ public final class SettingsSystemFactsInstrumentedTest {
    if(state.find())assertEquals("bluetoothEnabled matches the Bluetooth service state "+state.group(1),"ON".equals(state.group(1)),facts.getBoolean("bluetoothEnabled"));
   }
   if(facts.has("locationEnabled"))assertEquals(context.getSystemService(LocationManager.class).isLocationEnabled(),facts.getBoolean("locationEnabled"));
-  if(facts.has("interruptionFilter"))assertEquals(AlphaDevicePlugin.interruptionName(context.getSystemService(NotificationManager.class).getCurrentInterruptionFilter()),facts.getString("interruptionFilter"));
+  if(facts.has("interruptionFilter"))assertEquals(ai.eliza.plugins.system.SystemFacts.interruptionName(context.getSystemService(NotificationManager.class).getCurrentInterruptionFilter()),facts.getString("interruptionFilter"));
   if(facts.has("adaptiveBrightness"))assertEquals("1".equals(shell("settings get system screen_brightness_mode")),facts.getBoolean("adaptiveBrightness"));
   assertEquals(BuildConfig.VERSION_CODE,facts.getInt("appVersionCode"));
   assertTrue("Android recorded an install time",facts.getLong("appUpdatedAt")>0);

@@ -26,12 +26,15 @@ test('prototype-only sheets (memory wipe, Wi-Fi password, forget network) never 
  assert.doesNotMatch(source,/Memory wiped|memWiped/);
 });
 test('native system facts are read without new permissions and are omitted when unreadable',()=>{
- const facts=java.slice(java.indexOf('static void systemFacts('),java.indexOf('static String[] settingsActions('));
- for(const key of ['wifiEnabled','bluetoothEnabled','airplaneMode','locationEnabled','mobileDataEnabled','interruptionFilter','adaptiveBrightness','appVersionCode','appUpdatedAt'])assert.match(facts,new RegExp(`fact\\(out,"${key}"`));
- // Every fact goes through the omit-on-failure helper; none is put directly with a default.
- assert.doesNotMatch(facts,/out\.put\(/);
- // Reads only: the plugin has no setter for a system switch.
- assert.doesNotMatch(java,/Settings\.(Global|System|Secure)\.put|setWifiEnabled|\.enable\(\)|\.disable\(\)|setInterruptionFilter/);
+ // Switch facts come from the shared reader at the pin (plugin-native-system SystemFacts, tested there);
+ // Alpha adds only its own build facts, through the same omit-on-failure helper.
+ const shared=readFileSync('vendor/eliza/plugins/plugin-native-system/android/src/main/java/ai/eliza/plugins/system/SystemFacts.java','utf8');
+ for(const key of ['wifiEnabled','bluetoothEnabled','airplaneMode','locationEnabled','mobileDataEnabled','interruptionFilter','adaptiveBrightness'])assert.match(shared,new RegExp(`fact\\(out, "${key}"`));
+ assert.match(java,/SystemFacts\.read\(getContext\(\)\)/);
+ const app=java.slice(java.indexOf('static void appFacts('),java.indexOf('@PluginMethod public void openPasswordProvider('));
+ for(const key of ['appVersionCode','appUpdatedAt'])assert.match(app,new RegExp(`SystemFacts\\.fact\\(facts,"${key}"`));
+ // Reads only: neither the shared reader nor the plugin has a setter for a system switch.
+ for(const source of [java,shared])assert.doesNotMatch(source,/Settings\.(Global|System|Secure)\.put|setWifiEnabled|\.enable\(\)|\.disable\(\)|setInterruptionFilter/);
  const manifest=readFileSync('android/app/src/main/AndroidManifest.xml','utf8');
  for(const permission of ['ACCESS_WIFI_STATE','CHANGE_WIFI_STATE','BLUETOOTH_CONNECT','READ_PHONE_STATE','WRITE_SECURE_SETTINGS','ACCESS_NOTIFICATION_POLICY'])assert.doesNotMatch(manifest,new RegExp(`<uses-permission[^>]*android\\.permission\\.${permission}"(?![^>]*tools:node="remove")`),permission);
 });
