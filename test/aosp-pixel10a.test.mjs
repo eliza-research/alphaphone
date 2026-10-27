@@ -45,6 +45,7 @@ test('physical overlay installs ARM64 JNI and development product without boot c
   const product = fs.readFileSync(path.join(output, 'product.mk'), 'utf8');
   assert.match(product, /existing camera, clock and image capability/);
   assert.match(product, /TARGET_FS_CONFIG_GEN \+= vendor\/alphaphone\/config.fs/);
+  assert.equal(product.match(/^PRODUCT_PACKAGES \+= DeskClock$/gm)?.length, 1, 'the shared composition keeps the system Clock once');
   assert.match(fs.readFileSync(path.join(output, 'AndroidProducts.mk'), 'utf8'), /alpha_stallion_phone/);
   assert.ok(fs.existsSync(path.join(output, 'stallion/vendor-config/Android.bp')));
   const report = JSON.parse(fs.readFileSync(path.join(output, 'physical-product.json')));
