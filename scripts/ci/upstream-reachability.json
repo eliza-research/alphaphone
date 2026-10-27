@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "89d8ca03bf4ceb18418cad813c75287183482b37",
+  "head": "28a249541cd0262f9d0ac126b43bfeb8ce0b781e",
   "recordedAt": "2026-10-27",
-  "command": "git -C vendor/eliza rev-list --left-right --count 04658de1b942510e0d37efc777c154530f5c0ef1...89d8ca03bf4ceb18418cad813c75287183482b37",
+  "command": "git -C vendor/eliza rev-list --left-right --count 04658de1b942510e0d37efc777c154530f5c0ef1...28a249541cd0262f9d0ac126b43bfeb8ce0b781e",
   "status": "diverged",
-  "aheadBy": 83,
+  "aheadBy": 84,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -330,6 +330,10 @@
     {
       "sha": "89d8ca03bf4ceb18418cad813c75287183482b37",
       "subject": "fix(core): classify schema-rejected actions before dispatch"
+    },
+    {
+      "sha": "28a249541cd0262f9d0ac126b43bfeb8ce0b781e",
+      "subject": "fix(calendar): resolve original guest intent before validating planner hints"
     }
   ],
   "pullRequests": [
@@ -424,6 +428,6 @@
   ],
   "provenance": {
     "method": "Local immutable graph against retained develop snapshot, not current published develop qualification",
-    "priorHead": "3de03adb2d88f566e5d4fa9ba9b6294d9867aeb0"
+    "priorHead": "89d8ca03bf4ceb18418cad813c75287183482b37"
   }
 }

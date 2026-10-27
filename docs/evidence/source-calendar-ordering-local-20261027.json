@@ -1,0 +1,21 @@
+{
+  "productBase": "339b9b1b41da6e738e36dd8e9dc29646fb1a1b4b",
+  "SDK": "28a249541cd0262f9d0ac126b43bfeb8ce0b781e",
+  "priorSDK": "89d8ca03bf4ceb18418cad813c75287183482b37",
+  "SDKTree": "cc892a0fe2e9b93e221c2f870d763b769616c2fe",
+  "reviewedSourceFiles": {
+    "plugins/plugin-calendar/src/actions/calendar-handler.ts": "16d47cd2b1ea5ac4d53b4f2fa591bcba6d253b185aac63f7a7a88b257498374e",
+    "plugins/plugin-calendar/test/eliza-calendar.pglite.test.ts": "58216537daede9ca8b3db465db1618a22c128c6a1e4469be48d1a555f57db44d"
+  },
+  "owningFocusedCasesPassed": 7,
+  "baselineSameMatrixFailures": 2,
+  "baselineSameMatrixPasses": 5,
+  "SDKLockUnchanged": true,
+  "packageLockUnchanged": true,
+  "engineModelProviderABIChanges": false,
+  "historyContextPolicyChanged": false,
+  "MacModelAcceptance": false,
+  "AndroidAcceptance": false,
+  "localOnly": true,
+  "published": false
+}
