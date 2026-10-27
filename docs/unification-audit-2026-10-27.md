@@ -231,7 +231,7 @@ Largest relevant orchestration files: `apps/app/src/runtime/connection-ui.tsx` 2
 
 ### 8. Managed Google host is still Alpha-owned but generally reusable
 
-- Alpha backend: `managed-google-agent-host.ts` 101 lines, `managed-google-agent-broker.ts` 46, `managed-google-route-policy.ts` 74, `native-google-cloud-port.ts` 43, `native-google-agent-host.ts` 32. Also `scripts/gmail-agent-{mailbox,read}-host.ts` and `calendar-agent-write-host.ts`.
+- Alpha backend: `managed-google-agent-host.ts` 101 lines, `managed-google-agent-broker.ts` 46, `managed-google-route-policy.ts` 74, `native-google-cloud-port.ts` 43, `native-google-agent-host.ts` 32. Also `scripts/gmail-agent-mailbox-host.ts`, `scripts/gmail-agent-read-host.ts` and `calendar-agent-write-host.ts`.
 - Upstream already defines `ManagedGmailAdapter`, managed-gmail read/send/manage transports and managed Calendar interfaces. Alpha implements the private loopback host expected by these interfaces.
 - Move the host port adapter, revision-bound prepare/dispatch/read receipt flow and route admission into a shared host package. Inject deployment origin, identity/credential port, allowed capabilities, client user-agent and account selector. Avoid Alpha prefixes in new cross-product IDs; preserve old persisted IDs through a supported compatibility reader/migration.
 - The service currently requires exactly one matching account rather than sharing a canonical account-selection policy. A shared selector can support both products without guessing when several accounts are connected.
