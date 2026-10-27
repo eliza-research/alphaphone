@@ -74,6 +74,8 @@ async function android(page: Page, options: { clock?: 'opened' | 'unavailable' |
     const data = (streamId: string, value: unknown) => emit(streamId, { type: 'chunk', dataBase64: btoa('data: ' + JSON.stringify(value) + '\n\n') });
     const request = (method: string, path: string, body: any, headers: Record<string, string>): { status: number; data: unknown } => {
       const ok = (value: unknown) => ({ status: 200, data: value });
+      // Mounted canonical views probe these sources; this native fixture provides none.
+      if (method === 'GET' && ['/api/notes/state', '/api/lifeops/calendar/feed', '/api/lifeops/calendar/calendars', '/api/lifeops/calendar/next-context'].includes(path.split('?')[0])) return { status: 503, data: { error: 'Canonical records unavailable in this fixture' } };
       if (path === '/api/auth/me') return ok({ identity: { id, kind: 'owner' }, access: { role: 'OWNER', mode: 'local' } });
       if (path === '/api/agents') return ok({ agents: [{ id: agentId, name: 'Alpha', status: 'running' }] });
       if (path === '/api/client-devices/register') return ok({ installationId: headers['X-Eliza-Device-Id'], enrollmentId: 'fixture-enrollment', capabilities: [] });
