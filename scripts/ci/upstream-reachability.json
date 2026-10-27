@@ -3,17 +3,21 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "6c227e5ff0d488843728c97684004dcfc760983c",
-  "head": "f983d68173f12b89af22f93502d81234c7112b7d",
+  "head": "8cc623855ce49cab68f9ed321b206abcad4d5c0b",
   "recordedAt": "2026-10-27",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...f983d68173f12b89af22f93502d81234c7112b7d",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...8cc623855ce49cab68f9ed321b206abcad4d5c0b",
   "status": "diverged",
-  "aheadBy": 1,
+  "aheadBy": 2,
   "behindBy": 28,
   "mergeBase": "18cc0cf2ee9f332afe8b6dffecc8f9b2fbcf8d47",
   "pinOnlyCommits": [
     {
       "sha": "f983d68173f12b89af22f93502d81234c7112b7d",
       "subject": "fix(assistant): retain context metadata type during reply recovery"
+    },
+    {
+      "sha": "8cc623855ce49cab68f9ed321b206abcad4d5c0b",
+      "subject": "fix(calendar): share exclusive read windows with owner promoted tools"
     }
   ],
   "pullRequests": [
@@ -238,6 +242,6 @@
       "status": "merged"
     }
   ],
-  "preservationBranch": "codex/recovery-context-type-20261027",
-  "publicEquivalentFix": "a31318ca4ec50ced08650c2f1b6ec69adf06a936"
+  "preservationBranch": "codex/personal-calendar-read-schema-20261027",
+  "typeAnnotationEquivalentPublicFix": "a31318ca4ec50ced08650c2f1b6ec69adf06a936"
 }
