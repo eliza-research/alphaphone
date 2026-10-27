@@ -1,3 +1,4 @@
+import {openLegacyNotes} from './helpers/legacy-notes';
 // B-10 (docs/core-loop-audit.md): a full Notes Trash refuses a deletion without losing data.
 // Browser build only; source/test evidence. The native slot cap ("storage-full" from
 // AlphaConnectionPlugin) and NotesStorageDurabilityInstrumentedTest are separate gates.
@@ -9,7 +10,7 @@
 import {test,expect,type Page} from '@playwright/test';
 const savedRecords=(page:Page)=>page.evaluate(async()=>JSON.parse(await (await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw()).records as any[]);
 const trashEntries=(page:Page)=>page.evaluate(async()=>(await (await import('/src/runtime/notes-trash.ts')).readNotesTrash()).entries as any[]);
-async function openNotes(page:Page){await page.getByRole('button',{name:'Notes',exact:true}).click();await expect(page.locator('html')).toHaveAttribute('data-notes-storage-state','ready');}
+async function openNotes(page:Page){await openLegacyNotes(page);await expect(page.getByRole('button',{name:'New note',exact:true})).toBeEnabled();}
 async function createNote(page:Page,title:string,body:string){
  await page.getByRole('button',{name:'New note',exact:true}).click();
  await page.getByRole('textbox',{name:'Title',exact:true}).fill(title);
