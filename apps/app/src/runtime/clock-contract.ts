@@ -71,7 +71,7 @@ export function describeClockHandoff(op:ClockOperation):string{
  return op.action==='set'?`Ask Clock to set ${String(op.hour).padStart(2,'0')}:${String(op.minute).padStart(2,'0')} in ${op.timeZone}${op.days?`, repeating ${describeClockDays(op.days)}`:''}${op.label?` named “${op.label}”`:''}. Review the alarm in Clock; Alpha cannot confirm creation or ringing.`:op.action==='show'?'Open Clock’s alarms page.':op.action==='snooze'?`Open Clock so you can choose the intended alarm and snooze it yourself. Select the duration there; ${op.snoozeMinutes} minutes will not be applied automatically. Completion stays unverified.`:'Open Clock so you can choose the intended alarm and dismiss it yourself. Alpha will not dismiss or disable an alarm automatically. Completion stays unverified.';
 }
 
-export function validateClockResult(operation:ClockOperation,value:unknown):ClockResult{const status=(value as any)?.status;return validateClockOutcome(operation,value,status==='opened'?'applied':status==='unknown'?'unknown':'failed');}
+export function validateClockResult(operation:ClockOperation,value:unknown):ClockResult{const status=(value as {status?:unknown}|null)?.status;return validateClockOutcome(operation,value,status==='opened'?'applied':status==='unknown'?'unknown':'failed');}
 
 /** Reviewed set request with a repeat (AlarmClock.EXTRA_DAYS); renderer shape with `reviewed: true`. */
 export type ClockSetRequest={action:'set';hour:number;minute:number;label:string;timeZone:string;reviewed:true;days?:ClockDay[]};

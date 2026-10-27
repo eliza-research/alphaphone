@@ -69,6 +69,6 @@ export async function boundedServiceJson(response:Response):Promise<any>{
  try{for(;;){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>16*1024*1024)throw Error('Cloud response too large');chunks.push(part.value);}}finally{await reader.cancel().catch(()=>{});}
  const value=JSON.parse(Buffer.concat(chunks).toString('utf8'));
  // Managed services never return authentication material. Refuse accidental exposure.
- const inspect=(item:any):void=>{if(item&&typeof item==='object')for(const [key,nested]of Object.entries(item)){if(/^(?:access_?token|refresh_?token|api_?key|authorization|credentialReference|credentialFile|token|sessionId)$/i.test(key))throw Error('Unexpected Cloud credential response');inspect(nested);}};
+ const inspect=(item:unknown):void=>{if(item&&typeof item==='object')for(const [key,nested]of Object.entries(item)){if(/^(?:access_?token|refresh_?token|api_?key|authorization|credentialReference|credentialFile|token|sessionId)$/i.test(key))throw Error('Unexpected Cloud credential response');inspect(nested);}};
  inspect(value);return value;
 }

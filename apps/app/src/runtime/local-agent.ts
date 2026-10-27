@@ -114,9 +114,9 @@ function subscribeBrowserConversationEvents(bridge:LocalAgentBridge,ownerId:stri
   void connect();return stop;
 }
 
-function record(value:unknown):Record<string,any> {
+function record(value:unknown):Record<string,unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid local agent response.');
-  return value as Record<string,any>;
+  return value as Record<string,unknown>;
 }
 // Set when this surface attached to the running resident but the attach did not yield a verified
 // owner session. The surface then stops asking to attach: its next resident admission takes the
@@ -201,7 +201,7 @@ export class LocalAgentProtocol {
     signal.throwIfAborted();
     const identity=record(who.identity),access=record(who.access);
     // Only the explicitly selected native/host bridge may establish local trust.
-    if(identity.kind!=='owner'||access.role!=='OWNER'||!['local','session'].includes(access.mode))throw new Error('The local runtime did not verify local owner access.');
+    if(identity.kind!=='owner'||access.role!=='OWNER'||access.mode!=='local'&&access.mode!=='session')throw new Error('The local runtime did not verify local owner access.');
     const result=record(await this.request('/api/agents',undefined,signal));
     signal.throwIfAborted();
     if(!Array.isArray(result.agents)||result.agents.length!==1)throw new Error('The local runtime must expose exactly one agent.');

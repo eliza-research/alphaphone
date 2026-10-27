@@ -79,6 +79,7 @@ export const DailyApps = registerPlugin<{
     callback: (result: { id: string; occurrenceId?: string }) => void,
   ): Promise<PluginListenerHandle>;
   restoreSelected(): Promise<NativeResult>;
+  describeSelected(options: { selectionId: string }): Promise<NativeResult>;
   renameSelected(options: { selectionId: string; name: string }): Promise<NativeResult>;
   pdfSelected(options: { selectionId: string; page: number }): Promise<{status:string; message?:string; page?:number; pageCount?:number; imageUri?:string; text?:string}>;
   readSelected(options: {
@@ -113,6 +114,8 @@ export const DailyApps = registerPlugin<{
   operateReminder(options:{operationId:string;bindingHash:string;operation:ReminderOperation|ReminderCreateOperation}):Promise<{status:string;result?:ReminderResult|ReminderCreateResult;message?:string}>;
   reminderOperationReceipt(options:{operationId:string;bindingHash:string;operation:ReminderOperation|ReminderCreateOperation}):Promise<{status:string;result?:ReminderResult|ReminderCreateResult;message?:string}>;
   reminderDecision(options:{id:string;occurrenceId:string;action:"done"|"snooze"}):Promise<{status:string;message?:string}>;
+  saveTodo(options:{id:string;title:string;body?:string}):Promise<{status:string;id:string;message?:string}>;
+  todoDecision(options:{target:NonNullable<Reminder['target']>;action:'done'|'reopen'|'cancel'}):Promise<{status:string;id:string}>;
   listReminders(): Promise<{
     reminders: Reminder[];
     notificationsEnabled: boolean;
@@ -129,6 +132,7 @@ export const DailyApps = registerPlugin<{
     url?: string;
     startTime?: number;
     endTime?: number;
+    mime?: string[];
   }): Promise<NativeResult>;
 }>("DailyApps");
 export type Note = {

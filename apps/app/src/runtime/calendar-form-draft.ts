@@ -10,7 +10,7 @@ const fail=()=>{throw Error('Saved calendar form needs recovery.');};
 function validate(value:any,requireCreation=true){
  if(!value||value.version!==1||Object.keys(value).some(key=>!['version','date','zone','form'].includes(key))||typeof value.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value.date)||!Number.isFinite(Date.parse(value.date))||new Date(value.date).toISOString().slice(0,10)!==value.date||typeof value.zone!=='string')fail();
  try{new Intl.DateTimeFormat('en',{timeZone:value.zone});}catch{fail();}
- const f=value.form;if(!f||Array.isArray(f)||Object.keys(f).some(key=>!fields.includes(key as any)))fail();
+ const f=value.form;if(!f||Array.isArray(f)||Object.keys(f).some(key=>!(fields as readonly string[]).includes(key)))fail();
  for(const key of ['title','notes','where'])if(typeof f[key]!=='string'||f[key].length>(key==='notes'?32768:2048))fail();
  if(!Number.isFinite(f.t)||f.t<0||f.t>=24||!Number.isFinite(f.d)||f.d<=0||f.d>168||typeof f.video!=='boolean'||!Array.isArray(f.who)||f.who.length>100||f.who.some((id:any)=>typeof id!=='string'||id.length>256))fail();
  if(typeof f.cal!=='string'||f.cal.length>256||!(f.cal==='alpha-reminders'||f.cal.startsWith('native:')||/^agent:[a-f0-9]{64}$/.test(f.cal))||!(['none','daily','weekdays','weekly'].includes(f.repeat)||/^agent:[a-f0-9]{64}$/.test(f.cal)&&f.repeat==='preserve')||f.alert!==null&&(!Number.isFinite(f.alert)||f.alert<0||f.alert>10080))fail();
