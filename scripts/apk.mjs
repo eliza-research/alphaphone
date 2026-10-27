@@ -32,6 +32,12 @@ export const EXPORTED_COMPONENTS = Object.freeze({
   // Telecom alone may bind the InCallService, and ACTION_DIAL is the role's public entry point.
   "ai.elizaresearch.alphaphone.AlphaInCallService": "android.permission.BIND_INCALL_SERVICE",
   "ai.elizaresearch.alphaphone.AlphaDialPadActivity": null,
+  // Launcher-only SMS role (#421), enabled only on the verified image: only the telephony stack may
+  // deliver texts, MMS notifications and quick replies; SENDTO is the role's public compose entry.
+  "ai.elizaresearch.alphaphone.AlphaSmsDeliverReceiver": "android.permission.BROADCAST_SMS",
+  "ai.elizaresearch.alphaphone.AlphaMmsWapPushReceiver": "android.permission.BROADCAST_WAP_PUSH",
+  "ai.elizaresearch.alphaphone.AlphaRespondViaMessageService": "android.permission.SEND_RESPOND_VIA_MESSAGE",
+  "ai.elizaresearch.alphaphone.AlphaSmsComposeActivity": null,
 });
 // On-device speech is the fused libelizainference engine only. Entries and classes of the removed
 // speech runtimes (Open Neural Network Exchange models and runtimes, sherpa, ORT-Web, the former
@@ -240,10 +246,14 @@ export function validateApk(file, identity, wantsHome) {
   // The dialer role grants CALL_PHONE to its holder; only the launcher declares the role components.
   if (data.xml.includes('android.permission.CALL_PHONE') !== wantsHome)
     throw new Error(`Invalid CALL_PHONE permission for distribution in ${file}`);
-  for (const component of ['AlphaInCallService', 'AlphaCallActivity', 'AlphaDialPadActivity'])
+  for (const component of ['AlphaInCallService', 'AlphaCallActivity', 'AlphaDialPadActivity', 'AlphaSmsDeliverReceiver', 'AlphaMmsWapPushReceiver', 'AlphaMmsResultReceiver', 'AlphaRespondViaMessageService', 'AlphaSmsComposeActivity'])
     if (data.xml.includes(`ai.elizaresearch.alphaphone.${component}`) !== wantsHome)
-      throw new Error(`Invalid dialer-role component ${component} for distribution in ${file}`);
-  for (const permission of ['RECEIVE_SMS', 'RECEIVE_MMS', 'RECEIVE_WAP_PUSH', 'READ_CALL_LOG', 'WRITE_CALL_LOG', 'MANAGE_OWN_CALLS', 'ANSWER_PHONE_CALLS'])
+      throw new Error(`Invalid telephony-role component ${component} for distribution in ${file}`);
+  // The SMS role grants these to its holder; only the launcher declares the role components.
+  for (const permission of ['RECEIVE_SMS', 'RECEIVE_MMS', 'RECEIVE_WAP_PUSH'])
+    if (data.xml.includes(`android.permission.${permission}`) !== wantsHome)
+      throw new Error(`Invalid ${permission} permission for distribution in ${file}`);
+  for (const permission of ['READ_CALL_LOG', 'WRITE_CALL_LOG', 'MANAGE_OWN_CALLS', 'ANSWER_PHONE_CALLS'])
     if (data.xml.includes(`android.permission.${permission}`))
       throw new Error(`Unexpected telephony permission ${permission} in ${file}`);
   // aapt badging distinguishes required hardware from optional feature declarations.

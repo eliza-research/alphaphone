@@ -230,7 +230,7 @@ test("manifests: SMS permissions and the result receiver exist only in the launc
   }
   assert.match(launcher, /<receiver android:name="\.AlphaSmsSendReceiver" android:exported="false" \/>/);
   for (const permission of ["RECEIVE_SMS", "RECEIVE_MMS", "RECEIVE_WAP_PUSH"]) {
-    assert.ok(removed(launcher).includes(`android.permission.${permission}`), `${permission} from the shared module is removed until Alpha holds the SMS role`);
+    assert.ok(declared(launcher).includes(`android.permission.${permission}`), `${permission} is declared for the image-only SMS role`);
     assert.ok(removed(standalone).includes(`android.permission.${permission}`));
   }
   assert.match(launcher, /<uses-feature android:name="android\.hardware\.telephony" android:required="false" \/>/, "telephony hardware stays optional");

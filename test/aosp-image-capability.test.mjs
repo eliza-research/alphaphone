@@ -119,11 +119,16 @@ test("permissions: standalone has none, the launcher declares read access only, 
   }
   assert.ok(removed(main).includes("android.permission.WRITE_CONTACTS"), "contact writes are removed from every build");
   for (const xml of [main, launcher, standalone])
-    for (const permission of ["RECEIVE_SMS", "RECEIVE_MMS", "RECEIVE_WAP_PUSH", "READ_CALL_LOG", "WRITE_CALL_LOG", "ANSWER_PHONE_CALLS", "MANAGE_OWN_CALLS"])
+    for (const permission of ["READ_CALL_LOG", "WRITE_CALL_LOG", "ANSWER_PHONE_CALLS", "MANAGE_OWN_CALLS"])
       assert.ok(!declared(xml).includes(`android.permission.${permission}`), `${permission} is not declared`);
   // CALL_PHONE reaches only the dialer-role holder, and only the launcher can be offered that role.
   assert.ok(declared(launcher).includes("android.permission.CALL_PHONE") && !declared(main).includes("android.permission.CALL_PHONE"));
   assert.ok(removed(standalone).includes("android.permission.CALL_PHONE"), "standalone removes CALL_PHONE from the shared phone module");
+  // RECEIVE_* reach only the SMS-role holder; only the launcher can be offered that role.
+  for (const permission of ["RECEIVE_SMS", "RECEIVE_MMS", "RECEIVE_WAP_PUSH"]) {
+    assert.ok(declared(launcher).includes(`android.permission.${permission}`) && !declared(main).includes(`android.permission.${permission}`));
+    assert.ok(removed(standalone).includes(`android.permission.${permission}`));
+  }
   // SMS reads and reviewed sends (#421): launcher flavor only, never main or standalone.
   for (const permission of ["SEND_SMS", "READ_SMS"]) {
     assert.ok(!declared(main).includes(`android.permission.${permission}`) && !declared(standalone).includes(`android.permission.${permission}`), `${permission} is launcher-only`);
@@ -151,15 +156,21 @@ test("queued contacts cannot return data after access or lifecycle changes", () 
   assert.match(read(`${JAVA}/AlphaTelephonyPlugin.java`),/fencedRead\(call, "contacts", "Contacts"/);
 });
 
-test("dialer-role components exist only in the launcher, disabled until the image is verified", () => {
+test("dialer- and SMS-role components exist only in the launcher, disabled until the image is verified", () => {
   const launcher = read("android/app/src/launcher/AndroidManifest.xml"), standalone = read("android/app/src/standalone/AndroidManifest.xml"), main = read("android/app/src/main/AndroidManifest.xml");
-  const component = name => launcher.match(new RegExp(`<(?:service|activity) android:name="\\.${name}"[^>]*>`))?.[0] ?? "";
-  for (const name of ["AlphaInCallService", "AlphaCallActivity", "AlphaDialPadActivity"]) {
+  const component = name => launcher.match(new RegExp(`<(?:service|activity|receiver) android:name="\\.${name}"[^>]*>`))?.[0] ?? "";
+  for (const name of ["AlphaInCallService", "AlphaCallActivity", "AlphaDialPadActivity", "AlphaSmsDeliverReceiver", "AlphaMmsWapPushReceiver", "AlphaMmsResultReceiver", "AlphaRespondViaMessageService", "AlphaSmsComposeActivity"]) {
     assert.match(component(name), /android:enabled="false"/, `${name} is declared disabled`);
     assert.doesNotMatch(main + standalone, new RegExp(name), `${name} is launcher-only`);
   }
   assert.match(component("AlphaInCallService"), /android:permission="android\.permission\.BIND_INCALL_SERVICE"/, "only Telecom can bind the call service");
   assert.match(component("AlphaCallActivity"), /android:exported="false"/);
+  assert.match(component("AlphaSmsDeliverReceiver"), /android:permission="android\.permission\.BROADCAST_SMS"/);
+  assert.match(component("AlphaMmsWapPushReceiver"), /android:permission="android\.permission\.BROADCAST_WAP_PUSH"/);
+  assert.match(component("AlphaRespondViaMessageService"), /android:permission="android\.permission\.SEND_RESPOND_VIA_MESSAGE"/);
+  assert.match(component("AlphaMmsResultReceiver"), /android:exported="false"/);
+  assert.match(launcher, /<provider android:name="ai\.eliza\.plugins\.messages\.MmsFileProvider" android:authorities="\$\{applicationId\}\.mms" android:enabled="false" android:exported="false" android:grantUriPermissions="true" \/>/);
+  assert.match(read("android/app/src/launcher/java/ai/elizaresearch/alphaphone/AlphaTelephonyRoles.java"), /AlphaSmsDeliverReceiver\.class, AlphaMmsWapPushReceiver\.class, AlphaMmsResultReceiver\.class, AlphaRespondViaMessageService\.class, AlphaSmsComposeActivity\.class, ai\.eliza\.plugins\.messages\.MmsFileProvider\.class/);
   assert.match(launcher, /android\.telecom\.IN_CALL_SERVICE_UI" android:value="true"/);
   const roles = read("android/app/src/launcher/java/ai/elizaresearch/alphaphone/AlphaTelephonyRoles.java");
   assert.match(roles, /boolean image = AlphaImageCapability\.verified\(context\);/);
