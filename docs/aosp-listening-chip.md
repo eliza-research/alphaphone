@@ -292,7 +292,11 @@ inactive and the listener never captures. Never replace the complete baseline re
 receipt. The chip receipt verifies only its nine listed files; all other files
 in the build copy remain outside its verification scope. Newly added source files
 must be absent in the original input; collisions and changed bytes are refused.
-The ordinary full-source verifier still rejects this modified build tree.
+The ordinary full-source verifier still rejects this modified build tree. To check that
+such a copy is otherwise the exact locked baseline, run `scripts/verify-pixel10a-source.mjs`
+with `--applied-systemui-patch chip` (and `ops` when applied): only the bundle's listed files
+may differ, each preimage at the pinned revision and each postimage must match its manifest,
+and every other check is unchanged.
 
 The manifest and derived receipts keep `fullTreeVerified`, `imageBuilt` and
 `lockAodIndicatorQualified` false. `indicatorHealthLeaseImplemented` is true for
