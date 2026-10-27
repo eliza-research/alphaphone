@@ -1,6 +1,7 @@
-import type {CreateLifeOpsCalendarEventRequest,LifeOpsCalendarEvent,LifeOpsCalendarEventUpdate,LifeOpsCalendarFeed,LifeOpsCalendarSummary,LifeOpsNextCalendarEventContext,GetLifeOpsCalendarFeedRequest} from '../../../../.eliza/client-features/packages/contracts/src/calendar';
+import type {CreateLifeOpsCalendarEventRequest,LifeOpsCalendarEvent,LifeOpsCalendarEventUpdate,LifeOpsCalendarFeed,LifeOpsCalendarSummary,LifeOpsNextCalendarEventContext,GetLifeOpsCalendarFeedRequest,LifeOpsLinkedCalendarControl,UpdateLifeOpsLinkedCalendarControlRequest} from '../../../../.eliza/client-features/packages/contracts/src/calendar';
 import {eventEditorMutability,cancellationModeForEditorEvent} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/components/event-editor-policy';
 import {agentCalendarClient,type AgentCalendarClient,type AppRecordPort} from './agent-calendar-client';
+export type AgentCalendarSyncReview={binding:string;control:LifeOpsLinkedCalendarControl;sources:LifeOpsCalendarSummary[];visibleLocalEventIds:string[]};
 export type LegacyCalendarCapture={fingerprint:string;present:boolean;readable:boolean;pending:boolean;records:readonly unknown[]};
 export interface CalendarPreservation {
  capture(signal:AbortSignal):Promise<LegacyCalendarCapture>;
@@ -13,7 +14,7 @@ export const calendarOwnerKey=(p:AppRecordPort)=>JSON.stringify([new URL(p.ident
 export const calendarSourceKey=(s:Pick<LifeOpsCalendarSummary,'provider'|'side'|'grantId'|'calendarId'|'connectorAccountId'>)=>JSON.stringify([s.provider,s.side,s.grantId,s.connectorAccountId,s.calendarId]);
 export const calendarEventKey=(e:LifeOpsCalendarEvent)=>JSON.stringify([e.provider,e.side,e.grantId??'',e.connectorAccountId??'',e.calendarId,e.externalId,e.id]);
 const empty=():AgentCalendarState=>({ownerKey:null,status:'disconnected',feed:null,calendars:[],next:null,legacy:null,error:null,mutating:false});
-type ClientFactory=(p:AppRecordPort,s:AbortSignal)=>Pick<AgentCalendarClient,'getLifeOpsCalendarFeed'|'getLifeOpsCalendars'|'getLifeOpsNextCalendarEventContext'|'createLifeOpsCalendarEvent'|'updateLifeOpsCalendarEvent'|'deleteLifeOpsCalendarEvent'>;
+type ClientFactory=(p:AppRecordPort,s:AbortSignal)=>Pick<AgentCalendarClient,'getLifeOpsCalendarFeed'|'getLifeOpsCalendars'|'getLifeOpsNextCalendarEventContext'|'createLifeOpsCalendarEvent'|'updateLifeOpsCalendarEvent'|'deleteLifeOpsCalendarEvent'|'getLinkedCalendarControl'|'updateLinkedCalendarControl'>;
 /** UI snapshot only. CalendarService remains the sole app-record authority. */
 export class AgentCalendar {
  private value=empty();private epoch=0;private abort:AbortController|undefined;private listeners=new Set<()=>void>();private binding='';private sourceRevisions=new Map<string,string>();
@@ -81,6 +82,33 @@ export class AgentCalendar {
  delete(eventKey:string,version:string,key:string,scope?:LifeOpsCalendarEventUpdate['recurrenceScope']){
   const event=this.eventForMutation(eventKey,version,scope),mode=cancellationModeForEditorEvent(event);if(!mode)throw Error('Organizer disposition is unavailable; no cancellation was sent');if(!key.trim())throw Error('Retain this deletion operation key');
   return this.mutate(api=>api.deleteLifeOpsCalendarEvent(event.externalId,{side:event.side,grantId:event.grantId,calendarId:event.calendarId,expectedProviderVersion:version,idempotencyKey:key,cancellationMode:mode,...(scope?{recurrenceScope:scope}:{})}));
+ }
+ /** Review the same owner-bound Calendar service as the active view; no legacy source is read or linked. */
+ async reviewSync():Promise<AgentCalendarSyncReview>{
+  return this.mutate(async(api,port)=>{
+   const binding=JSON.stringify([calendarOwnerKey(port),port.sessionId,port.scope]);
+   const [control,result]=await Promise.all([api.getLinkedCalendarControl(),api.getLifeOpsCalendars({side:'owner'})]);
+   return {binding,control,sources:result.calendars.filter(source=>source.provider==='google'&&source.side==='owner'&&['owner','writer'].includes(source.accessRole)),visibleLocalEventIds:this.value.feed?.events.filter(event=>event.provider==='eliza'&&event.side==='owner').map(event=>event.id)??[]};
+  },true);
+ }
+ async changeSync(review:AgentCalendarSyncReview,operation:UpdateLifeOpsLinkedCalendarControlRequest['operation'],key:string,current:()=>boolean,sourceKey?:string){
+  if(!current())throw Error('Keep or finish the current Calendar draft before changing sync');
+  const port=this.port();
+  if(!port||review.binding!==JSON.stringify([calendarOwnerKey(port),port.sessionId,port.scope])||this.value.ownerKey!==calendarOwnerKey(port))throw Error('Calendar owner or agent changed; review sync again');
+  if(!key.trim())throw Error('Retain this sync operation key');
+  const epoch=this.epoch,signal=this.abort?.signal;if(!signal)throw Error('Calendar is not ready');
+  return this.mutate(async(api)=>{
+   let request:UpdateLifeOpsLinkedCalendarControlRequest={operation:operation as 'pause'|'resume'|'recover',expectedRevision:review.control.revision,idempotencyKey:key};
+   if(operation==='select'||operation==='resume'){
+    const selected=operation==='select'?review.sources.find(source=>calendarSourceKey(source)===sourceKey):review.sources.find(source=>source.connectorAccountId===review.control.destination?.connectorAccountId&&source.calendarId===review.control.destination?.providerCalendarId);
+    if(!selected)throw Error('Choose a current authorized Google Calendar destination');
+    const fresh=await api.getLifeOpsCalendars({side:'owner'});
+    if(!fresh.calendars.some(source=>calendarSourceKey(source)===calendarSourceKey(selected)&&source.selectionVersion===selected.selectionVersion&&source.provider==='google'&&source.side==='owner'&&['owner','writer'].includes(source.accessRole)))throw Error('Calendar destination changed; review sync again');
+    if(operation==='select')request={operation,expectedRevision:review.control.revision,idempotencyKey:key,destination:{connectorAccountId:selected.connectorAccountId,providerCalendarId:selected.calendarId}};
+   }
+   this.current(port,epoch,signal);if(!current())throw Error('Calendar context changed; review sync again');
+   return api.updateLinkedCalendarControl(request);
+  },true);
  }
  private eventForMutation(key:string,version:string,scope?:LifeOpsCalendarEventUpdate['recurrenceScope']){
   const event=this.value.feed?.events.find(e=>calendarEventKey(e)===key);if(!event)throw Error('Refresh this event before editing');const policy=eventEditorMutability(event);

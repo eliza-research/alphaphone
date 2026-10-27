@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "45e8647ae0ad1dfda75a4f8c74b6589cf073bf95",
+  "head": "ba65413a4da69b353a54014e3245f740ebfb9598",
   "recordedAt": "2026-10-27",
-  "command": "git -C vendor/eliza rev-list --left-right --count 04658de1b942510e0d37efc777c154530f5c0ef1...45e8647ae0ad1dfda75a4f8c74b6589cf073bf95",
+  "command": "git -C vendor/eliza rev-list --left-right --count 04658de1b942510e0d37efc777c154530f5c0ef1...ba65413a4da69b353a54014e3245f740ebfb9598",
   "status": "diverged",
-  "aheadBy": 74,
+  "aheadBy": 75,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -302,6 +302,10 @@
     {
       "sha": "45e8647ae0ad1dfda75a4f8c74b6589cf073bf95",
       "subject": "fix(planner): respect canonical nonretryable failure receipts"
+    },
+    {
+      "sha": "ba65413a4da69b353a54014e3245f740ebfb9598",
+      "subject": "fix(calendar): join managed linked sync with reviewed planner source"
     }
   ],
   "pullRequests": [
@@ -396,6 +400,6 @@
   ],
   "provenance": {
     "method": "Local immutable graph against retained develop snapshot, not current published develop qualification",
-    "priorHead": "b3867a4805626e39c268c13df452a797b69c6e6a"
+    "priorHead": "45e8647ae0ad1dfda75a4f8c74b6589cf073bf95"
   }
 }

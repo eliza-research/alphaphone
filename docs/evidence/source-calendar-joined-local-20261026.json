@@ -1,0 +1,28 @@
+{
+  "productBase": "48568b5878d0b66de949c80df80e31a1f9a18464",
+  "SDK": "ba65413a4da69b353a54014e3245f740ebfb9598",
+  "priorSDK": "45e8647ae0ad1dfda75a4f8c74b6589cf073bf95",
+  "SDKTree": "cdedea26d077bfeca48f4df3bb5a0b20672f72f9",
+  "reviewedSourceFiles": {
+    "plugins/plugin-calendar/src/service/CalendarService.ts": "654dcb391e372868a756c3d563e5909652691e598d150c269747ae6631ae279b",
+    "plugins/plugin-calendar/src/service/managed-calendar-read.ts": "c3f3d945d3845a1b13382c131285ad5f7f3f0ab142c5ad336443ccbeda5ee1bf",
+    "plugins/plugin-calendar/src/service/managed-calendar-host.ts": "21b2e8541b2811d487a99caa41b1cb614859c385ffeee51d12bbfe8b525523e1",
+    "plugins/plugin-calendar/src/service/managed-linked-calendar.ts": "7a2a6674f48604098af87913b0b17f690e8e43408f210e6ee8cf09098eb2241d",
+    "plugins/plugin-calendar/src/mutations/managed.ts": "585a00b8186a0c9f17495e3e79158c12d99c202438308b0c63da02784cc0ad49",
+    "plugins/plugin-calendar/src/service/linked-calendar-sync.test.ts": "21db7d46a50726757aa90ab8e38bd0cf8e1ce86bbc10c0de2e578b22366d181d",
+    "plugins/plugin-calendar/src/service/linked-calendar-control.test.ts": "d68ba548f676ad7d08ed343ea3afcc1f081097a66600613e33de000451d234ad",
+    "plugins/plugin-calendar/src/mutations/managed.test.ts": "fee2aa0c15af7014653b2110ae07d804f076aade17a9c21414d15dc213dc00a9"
+  },
+  "reviewedSharedCalendarCasesPassed": 21,
+  "reviewedProductCalendarCasesPassed": 21,
+  "reviewedNativeGateCasesPassed": 504,
+  "joinedPrivateContractPassed": true,
+  "localOnly": true,
+  "published": false,
+  "MacModelAcceptance": false,
+  "AndroidAcceptance": false,
+  "packageLockUnchanged": true,
+  "SDKLockUnchanged": true,
+  "engineModelProviderABIChanges": false,
+  "canonicalNewBaseQualification": "Separate, not claimed"
+}

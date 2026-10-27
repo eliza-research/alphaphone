@@ -522,7 +522,14 @@ export function installSettingsAdapter(Component: any, views: Bag) {
             if(display.native)rows.push(info('Calendar visibility','Managed in Android Calendar'));
           }else rows.push(info('Calendar access','Not available in this version'));
           const groups=[{...group(rows),cap:'Calendars shown in Alpha',hasCap:true}];
-          groups.push({...group([{kNav:true,label:'Google Calendar sync',lbl:'Google Calendar sync',sub:'Review the destination and enable linked event sync',hasSub:true,chev:true,noAB:true,go:openCalendarSyncSettings}]),cap:'Sync',hasCap:true});
+          groups.push({...group([{kNav:true,label:'Google Calendar sync',lbl:'Google Calendar sync',sub:'Review the destination and enable linked event sync',hasSub:true,chev:true,noAB:true,go:()=>{
+            const shell=owner,authority=shell?.vget('calendar').calendarAuthority;
+            if(authority==='android-native'){openCalendarSyncSettings();return;}
+            if(authority==='legacy'||authority==='legacy-google'){api.toast('Choose Agent Calendar before reviewing sync. Retained calendars stay read only.');return;}
+            const calendar=shell?.agentCalendar,ownerKey=calendar?.state.ownerKey;
+            if(!calendar||!ownerKey){api.toast('Connect to Agent Calendar before reviewing sync.');return;}
+            openCalendarSyncSettings({calendar,current:()=>owner===shell&&shell.live&&shell.agentCalendar===calendar&&calendar.state.ownerKey===ownerKey&&!['android-native','legacy','legacy-google'].includes(shell.vget('calendar').calendarAuthority),canChange:()=>!shell.vget('calendar').form&&!shell.canonicalDraftText&&!shell.canonicalDraftInvalid&&!shell.canonicalDraft?.state.opening&&!shell.canonicalDraft?.state.consuming});
+          }}]),cap:'Sync',hasCap:true});
           if(testMocksEnabled&&!Capacitor.isNativePlatform())groups.push({...group([{kNav:true,label:'Calendar backups',lbl:'Calendar backups',sub:'Events saved in this app',hasSub:true,chev:true,noAB:true,go:()=>openCalendarRecovery()}]),cap:'Saved data',hasCap:true});
           out.stack.push({isTop:false,notTop:true,cls:'enter',z:4,title:'Calendar',hasTitle:true,backLabel:'Back to Settings',back:()=>api.set({page:null}),hero:{},groups});
         }
