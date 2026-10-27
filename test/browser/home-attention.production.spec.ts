@@ -23,7 +23,7 @@ test('not connected: the attention card offers Gmail setup and opens Connections
   expect(errors).toEqual([]);
 });
 
-test('unloaded workflow and empty calendar states do not fabricate results or avatars', async ({ page }) => {
+test('unloaded workflow and unverified calendar states do not fabricate results or avatars', async ({ page }) => {
   await page.addInitScript(offline);
   await page.goto('/');
   const brief = page.getByRole('button', { name: 'Open workflows and automations', exact: true });
@@ -32,10 +32,11 @@ test('unloaded workflow and empty calendar states do not fabricate results or av
   await brief.click();
   await expect(page.locator('html')).toHaveAttribute('data-active-view', 'workflows');
   await page.getByRole('button', { name: 'Back to apps', exact: true }).click();
-  // The browser calendar is read from this browser; an empty calendar says so instead of neutral copy.
+  // An unverified agent source cannot claim a successful empty calendar read.
   const calendar = page.locator('[data-alpha-layer="home"] button[data-alpha-home-calendar]');
-  await expect(calendar).toHaveAttribute('aria-label', /^(Open your calendar|Open calendar event: .+)$/);
-  await expect(calendar).toContainText(/No upcoming events|Calendar/);
+  await expect(calendar).toHaveAttribute('aria-label','Open Agent Calendar');
+  await expect(calendar).toContainText('Calendar has not been verified');
+  await expect(calendar).not.toContainText('No upcoming events');
   await expect(calendar).toHaveAttribute('data-alpha-home-calendar-event','false');
   await expect(calendar).not.toContainText(/^(MC|JP|\+2)$/);
   await expect(page.locator('[data-alpha-layer="home"]').getByText(/^(MC|JP|\+2)$/)).toHaveCount(0);
