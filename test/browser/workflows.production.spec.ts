@@ -1,3 +1,4 @@
+import {newWorkflow} from './workflow-navigation';
 // AP-11 on the FLAG-OFF bundle: the workflow library against the connected resident agent, with only
 // the Android bridge stubbed (test/browser/flag-off-android.ts plus the agent's workflow routes below).
 // Every other workflow spec runs the development build (?mode=dev&workflows=agent); this one runs the
@@ -43,6 +44,8 @@ async function workflowAgent(page: Page) {
       if (method === 'GET') state.gets.push(path); else state.posts.push({ path, body });
       if (path === '/api/workflow/status') return ok({ engine: 'smthrs', status: 'ready', manualSubmissionProtocol: 1, approvalReceiptProtocol: 1, lifecycleMutationProtocol: 1 });
       if (path === '/api/automations') return ok({ automations: state.flows.map((f: any) => ({ id: 'workflow:' + f.id, type: 'workflow', workflowId: f.id, title: f.name, description: f.description, enabled: f.active, status: f.active ? 'active' : 'paused', schedules: [] })) });
+      // The mounted Calendar view may read its canonical source; this workflow fixture has none.
+      if (method === 'GET' && ['/api/lifeops/calendar/feed', '/api/lifeops/calendar/calendars', '/api/lifeops/calendar/next-context'].includes(path.split('?')[0])) return { status: 503, data: { error: 'Calendar unavailable in this workflow fixture' } };
       if (path === '/api/lifeops/reminders') return ok({ reminders: [] });
       if (path === '/api/lifeops/scheduled-tasks?ownerVisibleOnly=1') return ok({ tasks: [] });
       if (path === '/api/workflow/removed-workflows') return ok({ workflows: [] });
@@ -251,8 +254,7 @@ test('a lost Run request stays outcome unknown until the owner sends the same su
 test('an out-of-scope workflow request is refused before anything is sent to the agent', async ({ page }) => {
   test.setTimeout(120_000);
   const foreign = await start(page);
-  await button(page, 'New automation').click();
-  await page.getByRole('region', { name: 'New automation', exact: true }).getByRole('button', { name: /^Workflow/ }).click();
+  await newWorkflow(page);
   await page.getByRole('textbox', { name: 'Workflow name', exact: true }).fill('Retained original draft');
   await page.getByRole('button', { name: /Describe it to/ }).click();
   await page.getByRole('textbox', { name: 'Workflow request', exact: true }).fill('Pay my rent on the first of the month');
