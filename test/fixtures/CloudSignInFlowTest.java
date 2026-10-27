@@ -182,7 +182,8 @@ public final class CloudSignInFlowTest {
   CloudSignInReadiness.Result googleOnly = new CloudSignInReadiness.Result(false, true, false, t + 1000);
   check(googleOnly.inApp && googleOnly.google && !googleOnly.email, "Google does not depend on email");
   check(CloudSignInReadiness.Result.parse("v2|true|true|1800000001000") == null, "old cache must re-probe SMS policy");
-  check(CloudSignInReadiness.Result.parse("v4-native-google|true|true|yes|true|1800000001000") == null, "malformed method flag refused");
+  check(CloudSignInReadiness.Result.parse("v4-native-google|true|true|false|true|1800000001000") == null, "old six-hour partial cache must re-probe");
+  check(CloudSignInReadiness.Result.parse("v5-partial-expiry|true|true|yes|true|1800000001000") == null, "malformed method flag refused");
   check(!new CloudSignInReadiness.Result(true, true, t + 365L * 86400000L).fresh(t), "a cache entry from the future is not trusted");
   check(MessageDigest.isEqual("a".getBytes(StandardCharsets.US_ASCII), "a".getBytes(StandardCharsets.US_ASCII)), "jdk");
   System.out.println("PASS cloud sign-in flow (" + checks + " checks)");

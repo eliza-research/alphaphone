@@ -82,11 +82,12 @@ final class CloudSignInReadiness {
   Result(boolean email, boolean google, boolean phone, boolean methodsKnown, long until) { this.methodsKnown = methodsKnown; this.email = email; this.google = google; this.phone = phone; this.inApp = email || google || phone; this.until = until; }
   static Result notReady(long now) { return new Result(false, false, false, false, now + NOT_READY_TTL_MS); }
   boolean fresh(long now) { return now < until && until - now <= READY_TTL_MS; }
-  String serialize() { return "v4-native-google|" + email + "|" + google + "|" + phone + "|" + methodsKnown + "|" + until; }
+  // Older records may retain partial readiness for six hours; require a fresh probe.
+  String serialize() { return "v5-partial-expiry|" + email + "|" + google + "|" + phone + "|" + methodsKnown + "|" + until; }
   static Result parse(String value) {
    if (value == null) return null;
    String[] parts = value.split("\\|", -1);
-   if (parts.length != 6 || !"v4-native-google".equals(parts[0])) return null;
+   if (parts.length != 6 || !"v5-partial-expiry".equals(parts[0])) return null;
    for (int i = 1; i <= 4; i++) if (!"true".equals(parts[i]) && !"false".equals(parts[i])) return null;
    try { return new Result(Boolean.parseBoolean(parts[1]), Boolean.parseBoolean(parts[2]), Boolean.parseBoolean(parts[3]), Boolean.parseBoolean(parts[4]), Long.parseLong(parts[5])); }
    catch (Exception invalid) { return null; }

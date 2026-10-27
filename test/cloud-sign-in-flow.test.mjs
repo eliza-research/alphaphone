@@ -31,7 +31,7 @@ test('actual native probe keeps email ready with missing DAL, unverified links o
   const harness=`package ai.elizaresearch.alphaphone;
 import java.util.*;
 public class CloudSignInProbeTest {
- boolean google=true, dal=true, device=true, registered=true, email=true;
+ boolean google=true, dal=true, device=true, registered=true, email=true, phone=false;
  String mode="ready"; int authorizeCalls=0;
  static class JSONObject {
   final Map<String,Object> values=new HashMap<>();
@@ -50,7 +50,7 @@ public class CloudSignInProbeTest {
  }
  Response get(String url)throws Exception{
   if(url.contains("/mobile/config?"))return new Response(registered?200:503,new JSONObject().put("success",true).put("clientId",CloudSignInFlow.CLIENT_ID).put("environment","production").put("redirectUri","https://eliza.app/alphaphone/auth/callback").put("codeChallengeMethod","S256"),null);
-  if(url.contains("/steward/auth/providers?"))return new Response(200,new JSONObject().put("email",email).put("google",true).put("googleNative",google),null);
+  if(url.contains("/steward/auth/providers?"))return new Response(200,new JSONObject().put("email",email).put("google",true).put("googleNative",google).put("sms",phone),null);
   authorizeCalls++;
   if(mode.equals("timeout"))throw new java.net.SocketTimeoutException();
   return new Response(mode.equals("refused")?400:302,new JSONObject(),mode.equals("refused")?null:"https://accounts.google.com/o/oauth2/v2/auth");
@@ -60,8 +60,13 @@ public class CloudSignInProbeTest {
  boolean appLinkVerified(CloudSignInFlow.Environment e){return device;}
  ${measure}
  void check(boolean expectedEmail,boolean expectedGoogle)throws Exception{
+  long before=System.currentTimeMillis();
   CloudSignInReadiness.Result result=measure(CloudSignInFlow.environment("production",false));
+  long after=System.currentTimeMillis();
   if(result.email!=expectedEmail||result.google!=expectedGoogle)throw new AssertionError(mode);
+  if(result.phone!=phone)throw new AssertionError("phone readiness");
+  long ttl=expectedEmail&&expectedGoogle?CloudSignInReadiness.READY_TTL_MS:CloudSignInReadiness.NOT_READY_TTL_MS;
+  if(result.until<before+ttl||result.until>after+ttl)throw new AssertionError("production probe expiry: "+mode);
  }
  public static void main(String[] args)throws Exception{
   CloudSignInProbeTest p=new CloudSignInProbeTest();p.google=false;p.check(true,false);
@@ -73,12 +78,14 @@ public class CloudSignInProbeTest {
   p.dal=true;p.registered=false;p.check(false,false);
   p.registered=true;p.email=false;p.check(false,true);
   p.email=true;p.check(true,true);
-  System.out.println("PASS optional Google probe (8 scenarios)");
+  p.email=false;p.google=false;p.phone=true;p.check(false,false);
+  p.phone=false;p.check(false,false);
+  System.out.println("PASS optional Google probe (10 scenarios)");
  }
 }`;
   const source=join(temporary,'CloudSignInProbeTest.java');writeFileSync(source,harness);
   execFileSync(binary('javac'),['--release','11','-d',temporary,join(root,native,'CloudDeployment.java'),join(root,native,'CloudSignInFlow.java'),join(root,native,'CloudSignInReadiness.java'),join(root,native,'CloudSmsCode.java'),join(root,'test/fixtures/native-email/org/json/JSONObject.java'),source],{timeout:60000});
-  assert.match(execFileSync(binary('java'),['-cp',temporary,'ai.elizaresearch.alphaphone.CloudSignInProbeTest'],{encoding:'utf8',timeout:60000}),/^PASS optional Google probe \(8 scenarios\)/);
+  assert.match(execFileSync(binary('java'),['-cp',temporary,'ai.elizaresearch.alphaphone.CloudSignInProbeTest'],{encoding:'utf8',timeout:60000}),/^PASS optional Google probe \(10 scenarios\)/);
  }finally{rmSync(temporary,{recursive:true,force:true});}
 });
 

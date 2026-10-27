@@ -249,7 +249,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   boolean googleReady = Boolean.TRUE.equals(providers.data.opt("googleNative"));
   boolean emailReady = emailOffered && emailRoute;
   return new CloudSignInReadiness.Result(emailReady, googleReady, phoneOffered,
-   now + (emailReady || googleReady || phoneOffered ? CloudSignInReadiness.READY_TTL_MS : CloudSignInReadiness.NOT_READY_TTL_MS));
+   now + (emailReady && googleReady ? CloudSignInReadiness.READY_TTL_MS : CloudSignInReadiness.NOT_READY_TTL_MS));
  }
  private boolean assetLinksGrant(CloudSignInFlow.Environment environment) {
   try {
