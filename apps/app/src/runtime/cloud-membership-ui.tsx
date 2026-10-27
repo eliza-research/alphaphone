@@ -1,33 +1,46 @@
-import React,{useRef,useState} from 'react';
+import React,{useEffect,useId,useRef,useState} from 'react';
 import './cloud-membership-ui.css';
 export type MembershipBalance='checking'|'zero'|'funded'|'member'|'unavailable';
 import type {SubscriptionView} from './subscription-entitlement';
 function creditLabel(usd:string):string {
  const [whole,fraction='']=usd.split('.');
- return `$${whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')}.${fraction.padEnd(2,'0')} USD`;
+ return `$${whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')}.${fraction.replace(/0+$/,'').padEnd(2,'0')}`;
 }
 function endLabel(endsAt:number):string {
  const date=new Date(endsAt).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
  const days=Math.ceil((endsAt-Date.now())/86400000);
  return days>0?`Ends ${date} · ${days} ${days===1?'day':'days'} left`:`Ended ${date}`;
 }
-/** Same account and membership controls in onboarding and Settings; only verified facts are displayed. */
+/** Approved bottom-sheet content; balances and actions remain bound to the current Cloud account. */
 export function CloudMembershipControls({balance,busy,error,notice,email,credits,plan,endsAt,onRedeem,onAddFunds,onRefresh}:{balance:MembershipBalance;busy:boolean;error?:string;notice?:string;email?:string;credits?:{usd:string;observedAt:number}|null;plan?:SubscriptionView|null;endsAt?:number|null;onRedeem:(code:string)=>Promise<boolean>;onAddFunds:()=>void;onRefresh:()=>void}){
- const code=useRef<HTMLInputElement>(null);
- const active=plan?.kind==='active';
+ const code=useRef<HTMLInputElement>(null),pending=useRef(false),codeEntryId=useId();
+ const [codeVisible,setCodeVisible]=useState(false),[submitting,setSubmitting]=useState(false),[submissionError,setSubmissionError]=useState(''),[codeValue,setCodeValue]=useState('');
+ const active=plan?.kind==='active',disabled=busy||submitting;
+ useEffect(()=>{if(codeVisible)code.current?.focus();},[codeVisible]);
+ async function redeem(event:React.FormEvent){
+  event.preventDefault();const input=code.current;
+  if(!input||!input.value.trim()||disabled||pending.current)return;
+  pending.current=true;setSubmitting(true);setSubmissionError('');
+  try{const ok=await onRedeem(input.value);if(ok&&code.current===input)setCodeValue('');}
+  catch{setSubmissionError('Code redemption could not be confirmed. Check your account before trying again.');}
+  finally{pending.current=false;setSubmitting(false);}
+ }
  return <section className="alpha-membership" aria-label="Membership and credits">
+   <p className="alpha-membership-account">{email||'Signed in to Eliza Cloud'}</p>
    <dl className="alpha-membership-facts">
-    <div><dt>Account</dt><dd>{email||'Signed in to Eliza Cloud'}</dd></div>
-    <div><dt>Available credits</dt><dd>{credits?creditLabel(credits.usd):balance==='checking'?'Checking…':'Not available'}{credits&&<small>Checked {new Date(credits.observedAt).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})}</small>}</dd></div>
-    <div><dt>Membership</dt><dd>{active?plan.planName:plan?.kind==='inactive'?'No active membership':plan?.kind==='credits'?'No active membership':balance==='checking'?'Checking…':'Not confirmed'}{active&&<small>{typeof endsAt==='number'&&Number.isFinite(endsAt)?endLabel(endsAt):'End date not provided'}</small>}</dd></div>
+    <div className="alpha-membership-credit-fact"><dt>Available credits</dt><dd>
+     <div className="alpha-membership-balance"><span className={credits?'alpha-membership-amount':'alpha-membership-amount-unavailable'}>{credits?<>{creditLabel(credits.usd)}<span className="alpha-membership-currency">USD</span></>:balance==='checking'?'Checking…':'Not available'}</span><button type="button" className="alpha-membership-refresh" disabled={disabled||balance==='checking'} onClick={onRefresh}>{balance==='checking'?'Checking…':'Refresh'}</button></div>
+     {credits&&<small className="alpha-membership-fresh">Checked {new Date(credits.observedAt).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})}</small>}
+    </dd></div>
+    <div className="alpha-membership-plan-fact"><dt>Membership</dt><dd>{active?plan.planName:plan?.kind==='inactive'||plan?.kind==='credits'?'No active membership':balance==='checking'?'Checking…':'Not confirmed'}{active&&<small>{typeof endsAt==='number'&&Number.isFinite(endsAt)?endLabel(endsAt):'End date not provided'}</small>}</dd></div>
    </dl>
-   <p role="status">{balance==='checking'?'Checking your account…':balance==='unavailable'?'Account details could not be refreshed. You can still redeem a code or check again.':balance==='zero'?'Use a membership code or add funds to ask Alpha.':''}</p>
-   <form aria-label="Redeem a membership code" onSubmit={event=>{event.preventDefault();const input=code.current;if(!input)return;void onRedeem(input.value).then(ok=>{if(ok&&code.current)code.current.value='';});}}>
-     <label>Membership code<input ref={code} name="membership-code" autoComplete="one-time-code" autoCapitalize="characters" autoCorrect="off" spellCheck={false} data-autofill-ignore="true" maxLength={64} disabled={busy} required aria-invalid={!!error||undefined}/></label>
-     <button type="submit" disabled={busy}>Redeem code</button>
-   </form>
-   <div className="alpha-membership-actions"><button type="button" disabled={busy} onClick={onAddFunds}>Add funds</button><button type="button" disabled={busy||balance==='checking'} onClick={onRefresh}>Check balance</button></div>
-   {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
+   <p className="alpha-membership-support" role="status">{balance==='checking'?'Checking your account…':balance==='unavailable'?'Account details could not be refreshed. You can still redeem a code or check again.':balance==='zero'?'Add funds or use a membership code to ask Alpha.':''}</p>
+   <div className="alpha-membership-main-actions"><button type="button" className="alpha-membership-primary" disabled={disabled} onClick={onAddFunds}>Add funds</button>{!codeVisible&&<button type="button" className="alpha-membership-secondary" aria-expanded={false} aria-controls={codeEntryId} disabled={disabled} onClick={()=>setCodeVisible(true)}>Use membership code</button>}</div>
+   {codeVisible&&<div id={codeEntryId} className="alpha-membership-code-entry"><form aria-label="Redeem a membership code" onSubmit={event=>void redeem(event)}>
+     <label>Membership code<input ref={code} name="membership-code" value={codeValue} onChange={event=>setCodeValue(event.target.value)} placeholder="Enter code" autoComplete="one-time-code" autoCapitalize="characters" autoCorrect="off" spellCheck={false} data-autofill-ignore="true" maxLength={64} disabled={disabled} required aria-invalid={!!error||!!submissionError||undefined}/></label>
+     <button type="submit" disabled={disabled||!codeValue.trim()}>{submitting?'Redeeming…':'Redeem'}</button>
+   </form></div>}
+   {(error||submissionError)&&<p role="alert">{error||submissionError}</p>}{notice&&<p role="status">{notice}</p>}
  </section>;
 }
 
