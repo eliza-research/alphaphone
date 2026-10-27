@@ -1168,6 +1168,7 @@
                 </sc-for>
               </div>
             </div>
+            <sc-if value="{{calendar.f.repeats}}">
             <div style="display: flex; align-items: center; gap: 14px; min-height: 48px">
               <svg class="i" viewBox="0 0 24 24" style="color: var(--mut); flex-shrink: 0"><path d="{{ic.calRepeat}}"></path></svg>
               <div style="display: flex; gap: 6px; flex-wrap: wrap">
@@ -1176,6 +1177,8 @@
                 </sc-for>
               </div>
             </div>
+            </sc-if>
+            <sc-if value="{{calendar.f.alerts}}">
             <div style="display: flex; align-items: center; gap: 14px; min-height: 48px">
               <svg class="i" viewBox="0 0 24 24" style="color: var(--mut); flex-shrink: 0"><path d="{{ic.bell}}"></path></svg>
               <div style="display: flex; gap: 6px; flex-wrap: wrap">
@@ -1184,6 +1187,7 @@
                 </sc-for>
               </div>
             </div>
+            </sc-if>
           </div>
 
           <div style="display: flex; align-items: flex-start; gap: 14px; min-height: 56px; padding: 12px 16px; border-radius: 16px; background: var(--s2)">
