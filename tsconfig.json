@@ -58,6 +58,15 @@
       ],
       "@elizaos/plugin-assistant/device-foreground-review": [
         "./.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/foreground-review-contract.ts"
+      ],
+      "@elizaos/host/voice/ui-context": [
+        "./.eliza/client-features/packages/host/src/voice/ui-context.ts"
+      ],
+      "@elizaos/core/logging": [
+        "./.eliza/client-features/packages/core/src/logging.ts"
+      ],
+      "@elizaos/core/view-interaction": [
+        "./.eliza/client-features/packages/core/src/view-interaction.ts"
       ]
     }
   },

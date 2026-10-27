@@ -1,0 +1,36 @@
+{
+  "previousPin": "4b928290d388e8f9866b6c404a1b186c7bfe7f70",
+  "candidatePin": "b72f26be3b9640562dfccaabf6e1a5a8fdb23434",
+  "comparisons": [
+    {
+      "path": "plugins/plugin-local-inference/native/llama.cpp",
+      "unchanged": true
+    },
+    {
+      "path": "plugins/plugin-local-inference/native/android/inputs.json",
+      "unchanged": true
+    },
+    {
+      "path": "packages/app/scripts/stage-elizavoice-lib.ts",
+      "unchanged": true
+    },
+    {
+      "path": "packages/app/platforms/android/app/src/main/elizavoice-jni",
+      "unchanged": true
+    },
+    {
+      "path": "packages/app/platforms/android/app/src/main/java/ai/elizaos/app/ElizaVoiceNative.java",
+      "unchanged": true
+    },
+    {
+      "path": "bun.lock",
+      "unchanged": true
+    }
+  ],
+  "speechContract": "passed: upstream stream-contract.test.mjs at candidate pin",
+  "dependencyAudit": "Existing snapshot and dispositions rebound only because bun.lock is byte-identical; no new registry audit claimed.",
+  "nativeQualificationTransferred": false,
+  "apkBuilt": false,
+  "imageBuilt": false,
+  "deviceInstalled": false
+}

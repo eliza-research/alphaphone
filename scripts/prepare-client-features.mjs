@@ -32,6 +32,12 @@ function matches(actual, expected) {
     Object.entries(expected).every(([file, digest]) => actual[file] === digest);
 }
 export const CLIENT_FEATURE_PATHS = [
+  'packages/ui/src/voice/voice-session-client-core.ts',
+  'packages/ui/src/voice/voice-session-status.ts',
+  'packages/core/src/logging.ts',
+  'packages/core/src/view-interaction.ts',
+  'packages/host/src/voice/ui-context.ts',
+
   "packages/ui/src/utils/reminder-presentation.ts",
   "plugins/plugin-browser/src/native-client-command.ts",
   'packages/core/src/types/plugin.ts',
@@ -157,24 +163,21 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   for(const [name,file] of upstream.read('plugins/plugin-assistant/src/services/device-actions/camera-contract.ts'))source.set(name,file);
 
   const projectionInputs={
-    'packages/host/src/voice.ts':'19b5c0e5bbe03a27d3641e6edb4ab40bc989084a2bdd5aa9308e9494843aa0b1',
-    'packages/ui/src/voice/voice-session-client.ts':'0692de311d8231262af1ca2113563628836faf01c2ac7bb96f16c51ad22fd6b1',
-    'packages/ui/src/voice/voice-chat-types.ts':'bb3eb85d76fb4766c91221c3964347c0284ddb9bbdaba765944cc4ea8e96f745',
-    'packages/core/src/logger.ts':'8c2401ba44a79b94a11095bdce3568f65374d2d7b1421c5894b08753feafb7d1',
+    'packages/host/src/voice.ts':'6fb045651135d7286e4889ae042d2d4a89487741cbebd9dc77cb24b6d4f5dd4c',
+    'packages/ui/src/voice/voice-session-client.ts':'a0b99f49add5e3628015ed4fd8edb496f4d5b94c738c1d8589bab38ea489646b',
+    'packages/ui/src/voice/voice-chat-types.ts':'552b9bd4f47f6fb56464baffcb5cd2c5afc9a2ed8536b7aee3884c5b0a9408c5',
+    'packages/core/src/logger.ts':'9c5ebd00a4f0f40ef134a5b331390d0aa21b767ba3a384198fb9c060403eebe6',
+    'packages/core/src/logging.ts':'167f07945cfcd4eb4c47a53e9c32217215954f6bb6d02fe6b5cf3d5dfa9f00be',
   };
   for(const [name,digest] of Object.entries(projectionInputs))if(sourceFiles[name]!==digest)throw Error('Review changed voice projection input: '+name);
   const project = (name, text) => source.set(name, {bytes:Buffer.from(text),mode:'100644',sha256:hash(Buffer.from(text))});
   const text = name => source.get(name).bytes.toString();
 
   const clientPath='packages/ui/src/voice/voice-session-client.ts';
-  const fallback='      const { fetchVoiceSession } = await import("./voice-session-fetch");\n      return fetchVoiceSession(url, init);';
+  const fallback='        const { fetchVoiceSession } = await import("./voice-session-fetch");\n        return fetchVoiceSession(url, init);';
   if(text(clientPath).split(fallback).length!==2)throw Error('Voice fetch projection source changed.');
   project(clientPath,text(clientPath).replace(fallback,'      void url; void init;\n      throw new Error("Alpha voice requires an injected session fetch.");'));
-  const status=text('packages/ui/src/voice/voice-chat-types.ts').match(/export type VoiceContinuousStatus =[\s\S]*?;/)?.[0];
-  const loggerTypes=text('packages/core/src/logger.ts');
-  const start=loggerTypes.indexOf('type LogFn ='),end=loggerTypes.indexOf('/**\n * Log entry structure',start);
-  if(!status||start<0||end<start)throw Error('Voice type projection source changed.');
-  project('packages/ui/src/voice/voice-chat-types.ts',status+'\n');
+  project('packages/ui/src/voice/voice-chat-types.ts', 'export type { VoiceContinuousStatus } from \"./voice-session-status\";\n');
   source.delete('packages/core/src/logger.ts');
   project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\nexport * from "./packages/contracts/src/device-reviews";\n');
   // Project only existing public type declarations; do not bundle host/client implementations.
@@ -187,7 +190,7 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
     if (matches.length !== 1) throw Error('Review changed client type declaration: ' + name + ':' + declaration);
     return matches[0][0];
   }).join('\n') + '\n';
-  project('alpha-voice-core-types.ts',loggerTypes.slice(start,end) + '\n' + declarations(
+  project('alpha-voice-core-types.ts','export type { Logger, LoggerBindings } from \"./packages/core/src/logging\";\n' + declarations(
     'packages/core/src/types/plugin.ts', ['ViewCapabilityParameter', 'ViewCapability']) + declarations(
     'packages/core/src/types/primitives.ts', ['JsonPrimitive', 'JsonValue']) + declarations(
     'packages/core/src/types/components.ts', ['ActionParameterSchema']) + declarations(
@@ -211,7 +214,7 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
 
   }
   const files = Object.fromEntries([...source].map(([name, file]) => [name, file.sha256]));
-  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?9:0, files };
+  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?10:0, files };
   const parent = path.join(root, '.eliza'), destination = path.join(parent, 'client-features');
   regularPath(parent, true);
   const exists = regularPath(destination, true), stamp = path.join(destination, '.source.json');

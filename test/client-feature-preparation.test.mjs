@@ -71,7 +71,7 @@ test('voice projection refuses an unreviewed pin by default',()=>fixture(({root}
 }));
 test('actual pinned host projections authenticate source/output hashes and exclude dashboard transport',()=>{
  const source=prepareClientFeatures(),stamp=JSON.parse(fs.readFileSync(path.join(source,'.source.json')));
-assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','utf8')).commit);assert.equal(stamp.projectionVersion,9);
+assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','utf8')).commit);assert.equal(stamp.projectionVersion,10);
  const coreTypes=fs.readFileSync(path.join(source,'alpha-voice-core-types.ts'),'utf8');
  for(const [file,names]of Object.entries({'components.ts':['ActionParameterSchema'],'model.ts':['JSONSchema'],'primitives.ts':['JsonPrimitive','JsonValue']})){
   const input='packages/core/src/types/'+file,original=fs.readFileSync(path.join('vendor/eliza',input),'utf8');
@@ -99,8 +99,9 @@ assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','u
  assert.ok(stamp.sourceFiles['packages/core/src/logger.ts']);assert.equal(stamp.files['packages/core/src/logger.ts'],undefined);
  assert.equal(fs.existsSync(path.join(source,'packages/ui/src/voice/voice-session-fetch.ts')),false);
  const bundle=buildSync({entryPoints:[path.join(source,client)],bundle:true,write:false,platform:'browser',format:'esm',metafile:true,alias:{
-  '@elizaos/host/protocol':path.join(source,'packages/host/src/voice.ts'),
+  '@elizaos/host/voice/ui-context':path.join(source,'packages/host/src/voice/ui-context.ts'),'@elizaos/core/logging':path.join(source,'packages/core/src/logging.ts'),'@elizaos/core/view-interaction':path.join(source,'packages/core/src/view-interaction.ts'),'@elizaos/host/protocol':path.join(source,'packages/host/src/voice.ts'),
   '@elizaos/core/protocol':path.join(source,'alpha-voice-core-protocol.ts'),
+  '@elizaos/core/speech':path.join(source,'packages/core/src/speech.ts'),
   '@elizaos/core':path.join(source,'alpha-voice-core-types.ts'),
  }});
  assert.ok(bundle.outputFiles[0].contents.length>10000);
