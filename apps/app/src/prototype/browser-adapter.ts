@@ -421,7 +421,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
       signal.throwIfAborted();if(disposed||shell.S().view!=='browser'||state()?.cur!==id||receipt?.session!==session||receipt?.id!==id)throw Error('Native browser result belongs to another tab or session');
       return {ok:true,data:{dispatched:true,completed:false,requiresReadback:true}};
     };
-    this.browserNavigateApproved = Capacitor.isNativePlatform() ? async (raw: string, signal: AbortSignal) => {
+    this.browserNavigateApproved = async (raw: string, signal: AbortSignal) => {
       const url = new URL(raw);
       if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Only HTTPS destinations may be approved');
       signal.throwIfAborted();
@@ -429,7 +429,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
       // The native tab was created before this view transition. A normal
       // openView resets the destination state and loses its current-tab ID.
       if (!disposed) shell.openView('browser', null, null, { restore: true });
-    } : undefined;
+    };
     // Identity only: visible page content, URL and browsing history are not
     // transmitted merely by opening the agent. Navigation changes the revision
     // so a proposal for an earlier document cannot retain current authority.
