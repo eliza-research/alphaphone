@@ -2601,6 +2601,9 @@ export const connectionController = {
       const reply = selected.kind === 'cloud' ? await selected.cloud.send(selected.agentId, id, wireText, options) : selected.kind==='resident'?await withResidentMapsNavigation(selected.request,id,requestSignal,()=>selected.remote.send(id,wireText,{...options,onText:progress,onReplyReady:replyReady})):await selected.remote.send(id, wireText, options);
       requestSignal.throwIfAborted();
       assertCurrent();
+      // Action callbacks (calendar receipts, approval cards) commit rows outside the streamed reply;
+      // the deferred update after this send re-reads the conversation.
+      if('historyRefreshRequired' in reply&&reply.historyRefreshRequired===true)conversationResync=true;
       if(channelType==='VOICE_DM' && (('interrupted' in reply && reply.interrupted===true)||('noResponseReason' in reply && reply.noResponseReason==='ignored')))throw Error('The voice response did not complete. Check conversation history before speaking again.');
       let responseFailure: Error | undefined;
       const failed = ('interrupted' in reply && reply.interrupted===true) || ('failureKind' in reply && !!reply.failureKind) || ('terminalFailure' in reply && !!reply.terminalFailure);
