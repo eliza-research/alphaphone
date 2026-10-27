@@ -26,7 +26,7 @@ export function stageAgentBundleDependencies(sourceDir, agentDir) {
 }
 
 function producerInventory(sourceDir, agentDir) {
-  const manifest = JSON.parse(fs.readFileSync(path.join(sourceDir, 'packages/agent/dist-mobile/manifest.json'), 'utf8'));
+  const manifest = JSON.parse(fs.readFileSync(path.join(sourceDir, 'packages/agent/dist-mobile/plugins-manifest.json'), 'utf8'));
   if (manifest.bundle !== 'agent-bundle.js' || manifest.platform !== 'android')
     throw new Error('Agent bundle dependency inventory requires the Android mobile manifest');
   const packages = readMobileBundleDependencies(
