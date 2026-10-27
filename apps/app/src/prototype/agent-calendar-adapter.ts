@@ -58,6 +58,18 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
   const model=controller?.state,sources=sourceRows();if(!model?.ownerKey||!['ready','partial','unavailable'].includes(model.status)){api.toast('Wait for the agent Calendar source and preservation review.');return;}
   api.set({open:null,form:{id:null,canonicalOwnerKey:model.ownerKey,creationId:crypto.randomUUID(),title:'',notes:'',where:'',off:state.day||0,t:17,d:1,zone:zone(),who:[],video:false,repeat:'none',alert:null,cal:sources.length===1?sources[0].id:''}});
  }
+ // A scan is only a draft. Admit it to the current source without writing or
+ // replacing an existing form; refusal leaves the camera review intact.
+ p.reviewScannedCalendarDraft=function(draft:Bag){
+  if(owner!==this||!this.live)return false;
+  const state=this.vget('calendar');if(state.form)return false;
+  if(nativeCalendarScope(this)){
+   this.openView('calendar',{calendarAuthority:'android-native',form:draft,open:null,month:null,day:draft.off},'hidden');return true;
+  }
+  const model=controller?.state,sources=sourceRows();
+  if(state.calendarAuthority==='legacy'||legacyGoogleCalendarScope(this)||!model?.ownerKey||!['ready','partial','unavailable'].includes(model.status)||!sources.length)return false;
+  this.openView('calendar',{calendarAuthority:'canonical',form:{...draft,canonicalOwnerKey:model.ownerKey,creationId:crypto.randomUUID(),cal:sources.length===1?sources[0].id:'',zone:zone()},open:null,month:null,day:draft.off},'hidden');return true;
+ };
  function typedForm(f:Bag):CanonicalCalendarForm{
   const model=controller!.state;if(f.canonicalOwnerKey!==model.ownerKey)throw Error('This retained draft belongs to another owner or agent');
   const sourceKey=controller!.sourceKeyForHandle(f.cal);if(!sourceKey)throw Error('Choose a current authorized Calendar source');
