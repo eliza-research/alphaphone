@@ -143,6 +143,7 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
   const prototype=(_Component as any)?.prototype, originalApi=prototype?.api;
   const scanApi=typeof originalApi==='function'?function(this:Bag,key:string){
     const value=originalApi.call(this,key);
+    if(key==='camera')value.reviewScannedCalendarDraft=(draft:Bag)=>this.reviewScannedCalendarDraft?.(draft)??false;
     if(key==='camera')value.saveScannedNote=async(text:string,id:string)=>{
       if(this.notesStorageFailed||this.notesPending||!this.notesStore)return false;
       const list=this.vget('notes').list||[];
@@ -679,7 +680,7 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
         if(photo.format!=='jpeg'||!photo.base64||photo.width<=0||photo.height<=0)throw new Error('Incomplete photo receipt');
         if(disposed||token!==epoch||!active())return;
         const bytes=Uint8Array.from(atob(photo.base64),char=>char.charCodeAt(0));
-        closeScan=openScanReview(new Blob([bytes],{type:'image/jpeg'}),(text,id)=>owner.saveScannedNote?.(text,id)??Promise.resolve(false),draft=>{if(disposed||!active())return false;owner.open('calendar',{form:draft,open:null,month:null,day:draft.off},'hidden');return true;},'unsaved',(_image,signal)=>keepScan(photo,signal,owner));
+        closeScan=openScanReview(new Blob([bytes],{type:'image/jpeg'}),(text,id)=>owner.saveScannedNote?.(text,id)??Promise.resolve(false),draft=>{if(disposed||!active())return false;return owner.reviewScannedCalendarDraft?.(draft)??false;},'unsaved',(_image,signal)=>keepScan(photo,signal,owner));
         message('Page captured. It is not saved to Photos unless you keep it.');
       }catch{if(token===epoch&&active())message('Page could not be captured. Nothing was saved.');}
       finally{capturing=false;}
@@ -729,7 +730,7 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
       const image=await pickNativeScanImage();
       // The picker covered the page, so the preview restarted: check the view, not the camera epoch.
       if(!image||disposed||!owner.isActive())return;
-      closeScan=openScanReview(image,(text,id)=>owner.saveScannedNote?.(text,id)??Promise.resolve(false),draft=>{if(disposed||!active())return false;owner.open('calendar',{form:draft,open:null,month:null,day:draft.off},'hidden');return true;},'selected');
+      closeScan=openScanReview(image,(text,id)=>owner.saveScannedNote?.(text,id)??Promise.resolve(false),draft=>{if(disposed||!active())return false;return owner.reviewScannedCalendarDraft?.(draft)??false;},'selected');
     }catch(error){if(!disposed&&owner.isActive())message(error instanceof Error&&error.message?error.message:'The selected image could not be read.');}
   }
   function chooseImage(){
@@ -741,7 +742,7 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
       if(token===epoch&&active()){captures=[normalize(row),...captures.filter(item=>nativeId(item.id)!==row.id)];owner.setView('photos',{nativeCaptureRevision:row.id});message('');}
     },image=>{
       if(token!==epoch||!active())return;
-      closeScan=openScanReview(image,(text,id)=>owner.saveScannedNote?.(text,id)??Promise.resolve(false),draft=>{if(disposed||!active())return false;owner.open('calendar',{form:draft,open:null,month:null,day:draft.off},'hidden');return true;},'selected');
+      closeScan=openScanReview(image,(text,id)=>owner.saveScannedNote?.(text,id)??Promise.resolve(false),draft=>{if(disposed||!active())return false;return owner.reviewScannedCalendarDraft?.(draft)??false;},'selected');
     });
   }
   function askCameraFrame(owner:Bag):boolean{

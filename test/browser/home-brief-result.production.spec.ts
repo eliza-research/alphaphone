@@ -1,5 +1,5 @@
 // MVP-19 on the FLAG-OFF bundle: one run from a scheduled-digest result to the Home brief card,
-// and the device calendar name on the Home calendar card.
+// and the canonical Agent Calendar ownership boundary on the Home card.
 //
 // Digest results enter the way they do on a phone, through the connected resident agent:
 //  - `native`: the Android result inbox (AlphaHostedResults) commits what the agent produced and
@@ -156,123 +156,59 @@ test('with only occurrences that did not run, Home shows no brief card', async (
   expect(await harness(page, f => f.unexpected)).toEqual([]);
 });
 
-// ---- Device calendar name on the Home calendar card ----
+// ---- Canonical Agent Calendar owns the Home card; device sources remain separate. ----
 const calendarCard = (page: Page) => page.locator('[data-alpha-home-calendar]');
-const origin = (page: Page) => calendarCard(page).locator('[data-alpha-home-calendar-origin]');
 const soon = () => { const begin = Date.now() + 3_600_000; return { begin, end: begin + 1_800_000 }; };
-/** The phone leaves and returns to the app; Calendar reads the provider again. */
-async function resume(page: Page) {
-  const before = await harness(page, f => f.calendar.lists);
-  await harness(page, f => f.emit('DailyApps', 'appResumed'));
-  await expect.poll(() => harness(page, f => f.calendar.lists), { timeout: 20_000 }).toBeGreaterThan(before);
+async function canonicalHome(page: Page, mode: 'event' | 'empty' | 'wrong-owner') {
+  await flagOffAndroid(page, { calendar: { access: 'granted', calendars: [{ id: '7', name: 'Private device calendar' }], events: [{ id: '42', calendarId: '7', title: 'Device-only event', ...soon() }] } });
+  await page.addInitScript(mode => {
+    const w = window as any, base = w.Capacitor.nativePromise;
+    const now = Date.now(), startAt = new Date(now + 3_600_000).toISOString(), endAt = new Date(now + 5_400_000).toISOString();
+    const event = { id: 'canonical-event', externalId: 'canonical-event', agentId: mode === 'wrong-owner' ? 'another-agent' : '6f1d3c3e-8c55-4c1b-9d1f-2b6f0b0d3a11', provider: 'eliza', side: 'owner', calendarId: 'agent-calendar', grantId: 'fixture-grant', connectorAccountId: 'fixture-account', title: 'Agent calendar meeting', description: '', location: '', status: 'confirmed', startAt, endAt, isAllDay: false, timezone: 'UTC', htmlLink: null, conferenceLink: null, organizer: null, attendees: [], metadata: {}, syncedAt: new Date(now - 7_200_000).toISOString(), updatedAt: new Date(now - 7_200_000).toISOString() };
+    w.canonicalHomeReads = [];
+    w.Capacitor.nativePromise = async (plugin: string, method: string, input: any) => {
+      if (plugin !== 'Agent' || method !== 'request' || !input.path.startsWith('/api/lifeops/calendar/')) return base(plugin, method, input);
+      if (input.method !== 'GET') throw Error('Home calendar fixture forbids writes');
+      const url = new URL(input.path, location.origin); w.canonicalHomeReads.push(url.pathname);
+      const chosen = mode === 'empty' ? null : event;
+      let data;
+      if (url.pathname === '/api/lifeops/calendar/feed') data = { calendarId: 'agent-calendar', events: chosen ? [chosen] : [], source: 'cache', state: 'complete', sources: [], timeMin: url.searchParams.get('timeMin'), timeMax: url.searchParams.get('timeMax'), syncedAt: event.syncedAt };
+      else if (url.pathname === '/api/lifeops/calendar/calendars') data = { calendars: [{provider: 'eliza', side: 'owner', grantId: 'fixture-grant', connectorAccountId: 'fixture-account', accountEmail: null, calendarId: 'agent-calendar', summary: 'Agent Calendar', description: null, primary: true, accessRole: 'owner', backgroundColor: null, foregroundColor: null, timeZone: 'UTC', selected: true, includeInFeed: true, selectionVersion: 0}] };
+      else if (url.pathname === '/api/lifeops/calendar/next-context') data = { event: chosen, readScope: { selection: 'next_event', timeMin: new Date(now).toISOString(), timeMax: new Date(now + 86_400_000).toISOString(), exhaustive: false }, calendarFeedState: 'complete', calendarSources: [], startsAt: chosen?.startAt ?? null, startsInMinutes: chosen ? 60 : null, attendeeCount: 0, attendeeNames: [], location: null, conferenceLink: null, preparationChecklist: [], linkedMailState: 'unavailable', linkedMailError: null, linkedMail: [] };
+      else throw Error('Unexpected canonical Home route');
+      return { status: 200, body: JSON.stringify(data) };
+    };
+  }, mode);
+  await residentHome(page);
 }
 
-test('the Home calendar card names the device calendar its event was read from, follows a rename, and never shows a name it did not just read', async ({ page }, info) => {
-  test.setTimeout(120_000);
+test('Home renders the canonical agent event without borrowing device names or inventing a fresh device read', async ({ page }) => {
   const foreign = await fenceNetwork(page);
-  await flagOffAndroid(page, { calendar: { access: 'granted', calendars: [{ id: '7', name: 'Harbour team', account: 'owner@example.invalid' }, { id: '8', name: 'Family', account: 'owner@example.invalid' }], events: [{ id: '42', calendarId: '7', title: 'Quay inspection', ...soon() }] } });
-  await residentHome(page);
+  await canonicalHome(page, 'event');
   const card = calendarCard(page);
-  await expect(card).toContainText('Quay inspection', { timeout: 20_000 });
-  await expect(origin(page)).toHaveText('Harbour team');
-  // The card's visible row names only the calendar; when it was read is in the accessible description.
-  await expect(card.locator('[data-alpha-home-calendar-source]')).toHaveCount(0);
-  await expect(card).toHaveAttribute('aria-description', /^Harbour team\. Read \d{1,2}:\d{2}.* from calendars on this device$/);
-  await page.screenshot({ path: info.outputPath('home-calendar-name.png'), animations: 'disabled' });
-
-  // Renamed in Android Calendar: the next read carries the new name; the old one is gone.
-  await harness(page, f => { f.calendar.calendars[0].name = 'Harbour crew'; });
-  await resume(page);
-  await expect(origin(page)).toHaveText('Harbour crew');
-  await expect(card).toHaveAttribute('aria-description', /^Harbour crew\. Read /);
-  await expect(card).not.toContainText('Harbour team');
-
-  // Unknown calendar: the event's calendar is not among the calendars the read returned (for
-  // example it was removed while the instance was still listed). No other calendar's name is used.
-  await harness(page, f => { f.calendar.calendars = f.calendar.calendars.filter((row: any) => row.id !== '7'); });
-  await resume(page);
-  // No calendar name is borrowed or invented for an event whose calendar the read did not return.
-  await expect(origin(page)).toHaveText('');
-  await expect(card).toContainText('Quay inspection');
-  await expect(card).toHaveAttribute('aria-description', /^Read \d{1,2}:\d{2}.* from calendars on this device$/);
-  await expect(card).not.toContainText(/Harbour|Family/);
-
-  // A calendar the provider reports without a display name is named as unnamed, not guessed.
-  await harness(page, f => { f.calendar.calendars.push({ id: '7', account: 'owner@example.invalid' }); });
-  await resume(page);
-  await expect(origin(page)).toHaveText('Unnamed calendar');
-
-  // Permission revoked in Android settings: the event, the name and the read time all go.
-  await harness(page, f => { f.calendar.access = 'not-granted'; });
-  await resume(page);
-  await expect(card).toContainText('Connect your calendar');
-  await expect(card).not.toContainText(/Quay inspection|Unnamed calendar|Harbour|Read \d/);
-  await expect(origin(page)).toHaveText('');
-  await expect(card).not.toHaveAttribute('aria-description', /Read|Harbour/);
-  await expectNoDevelopmentSurface(page);
+  await expect(card).toContainText('Agent calendar meeting');
+  await expect(card).toHaveAccessibleName('Open agent Calendar event Agent calendar meeting');
+  await expect(card).not.toContainText(/Device-only event|Private device calendar/);
+  await expect(card).not.toHaveAttribute('aria-description', /Read|device/);
+  await card.click();
+  await expect(page.getByRole('region', {name: 'Calendar', exact: true})).toContainText('Agent calendar meeting');
+  expect(await harness(page, f => f.calendar.requests)).toBe(0);
   expect(await harness(page, f => f.unexpected)).toEqual([]);
   expect(foreign).toEqual([]);
 });
 
-test('calendar permission denied: Home says access is off and shows no event, calendar name or read time', async ({ page }) => {
-  test.setTimeout(120_000);
-  // The provider holds a named calendar and an event, but READ_CALENDAR is not granted and the
-  // user refuses the request.
-  await flagOffAndroid(page, { calendar: { access: 'not-granted', request: 'denied', calendars: [{ id: '7', name: 'Harbour team', account: 'owner@example.invalid' }], events: [{ id: '42', calendarId: '7', title: 'Quay inspection', ...soon() }] } });
-  await residentHome(page);
-  const card = calendarCard(page);
-  // Before any request the card asks to connect; nothing was requested on the user's behalf.
-  await expect(card).toContainText('Connect your calendar', { timeout: 20_000 });
+test('a verified empty Agent Calendar does not substitute device events', async ({ page }) => {
+  await canonicalHome(page, 'empty');
+  await expect(calendarCard(page)).toContainText('No upcoming events in this window');
+  await expect(calendarCard(page)).not.toContainText(/Device-only event|Private device calendar/);
   expect(await harness(page, f => f.calendar.requests)).toBe(0);
-  await button(page, 'Settings').click();
-  await button(page, 'Calendar').click();
-  await button(page, 'Connect or refresh device calendars').click();
-  await expect.poll(() => harness(page, f => f.calendar.requests)).toBe(1);
-  await page.evaluate(() => window.dispatchEvent(new Event('launcher-home')));
-  await expect(page.locator('html')).toHaveAttribute('data-active-view', 'home');
-  await expect(card).toContainText('Calendar access is off');
-  await expect(card).not.toContainText(/Quay inspection|Harbour team|Read \d/);
-  await expect(origin(page)).toHaveText('');
-  await expect(card).not.toHaveAttribute('aria-description', /Read|Harbour/);
-
-  // Granting it later (the user allows the request) shows the event with its calendar's name.
-  await harness(page, f => { f.calendar.request = 'granted'; });
-  await button(page, 'Settings').click();
-  await button(page, 'Calendar').click();
-  await button(page, 'Connect or refresh device calendars').click();
-  await expect.poll(() => harness(page, f => f.calendar.requests)).toBe(2);
-  await page.evaluate(() => window.dispatchEvent(new Event('launcher-home')));
-  await expect(card).toContainText('Quay inspection', { timeout: 20_000 });
-  await expect(origin(page)).toHaveText('Harbour team');
   expect(await harness(page, f => f.unexpected)).toEqual([]);
 });
 
-test('the Home calendar card shows when the provider read completed, not when Home first drew its rows', async ({ page }) => {
-  test.setTimeout(120_000);
-  // The read finishes, then the app's follow-up work (pending creations) takes two minutes before
-  // Home can draw the rows. The card must name the read, not the draw.
-  await page.clock.install();
-  await flagOffAndroid(page, { calendar: { access: 'granted', calendars: [{ id: '7', name: 'Harbour team', account: 'owner@example.invalid' }], events: [{ id: '42', calendarId: '7', title: 'Quay inspection', ...soon() }] } });
-  await page.addInitScript(() => {
-    const w = window as any, base = w.Capacitor, native = base.nativePromise;
-    const record = w.readTiming = { completed: [] as number[], held: 0 };
-    base.nativePromise = async (plugin: string, method: string, input: any) => {
-      const result = await native(plugin, method, input);
-      if (plugin === 'AlphaCalendar' && method === 'list' && result?.status === 'ready') record.completed.push(Date.now());
-      if (plugin === 'AlphaCalendar' && method === 'pendingCreations' && record.held++ === 0) await new Promise(resolve => setTimeout(resolve, 120_000));
-      return result;
-    };
-  });
-  await page.goto('/');
-  await expect.poll(() => page.evaluate(() => (window as any).readTiming.held), { timeout: 30_000 }).toBeGreaterThan(0);
-  const completed = await page.evaluate(() => (window as any).readTiming.completed[0] as number);
-  await page.clock.fastForward('02:01');
-  const card = calendarCard(page);
-  await expect(card).toContainText('Quay inspection', { timeout: 20_000 });
-  const drawnAt = await page.evaluate(() => Date.now());
-  expect(drawnAt - completed).toBeGreaterThanOrEqual(120_000);
-  await expect(card.locator('[data-alpha-home-calendar-source]')).toHaveCount(0);
-  await expect(card).toHaveAttribute('aria-description',`Harbour team. Read ${await when(page, completed)} from calendars on this device`);
-  expect(await when(page, completed)).not.toBe(await when(page, drawnAt));
+test('an event from another agent is not presented as this agent’s next event or as a verified empty calendar', async ({ page }) => {
+  await canonicalHome(page, 'wrong-owner');
+  await expect(calendarCard(page)).toContainText('Calendar has not been verified');
+  await expect(calendarCard(page)).toHaveAttribute('aria-description', /another agent/);
+  await expect(calendarCard(page)).not.toContainText(/Agent calendar meeting|Device-only event|No upcoming events/);
   expect(await harness(page, f => f.unexpected)).toEqual([]);
 });
