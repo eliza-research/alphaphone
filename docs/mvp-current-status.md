@@ -1,6 +1,6 @@
 # Current MVP status
 
-Current local integration candidate: SDK `41d99bb4c86cb61bfa07d5e49b07603dbbe1080b` joins the reviewed develop lineage with Calendar authority, recovery, managed sync, target correlation and effective parent-result fixes. Product typechecking, 146 focused owning cases, production bundling and the 419-file audit pass on the joined source. Full SDK CI, live provider/UI QA and final Android packaging/device qualification remain separate open gates; historical APK and native qualification records are not transferred. The previous public source admission was SDK `fd5511ca1dacdccfadd93879bddff2038ebe8665`.
+Current local integration candidate: SDK `18cc0cf2ee9f332afe8b6dffecc8f9b2fbcf8d47` preserves the reviewed Calendar, recovery, managed sync, target correlation and effective parent-result fixes, and bounds fallback recovery history while retaining explicit full-context restoration. Product typechecking, 247 focused owning cases, 31 source/document checks, production bundling and the 419-file bundle audit pass on this source. Live provider/UI acceptance and final Android artifact/device qualification remain separate gates; historical APK and native qualification records are not transferred.
 
 Previous source admission: SDK `6497825b38cbe41b3677c0a445341fec900f0dd2` is the reviewed Eliza develop snapshot admitted on October 27 UTC, following the develop merge of elizaOS/eliza#37971. All six original open PR heads are integrated in the candidate branch; main still requires independent review. Exact native and voice source comparisons are recorded in `docs/evidence/merge-build-native-source-2026-10-26.json`; current build evidence remains bound to its recorded source and artifact hashes. No new device or user acceptance is claimed.
 
@@ -79,9 +79,9 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-Current source projection: SDK `41d99bb4c8` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
+Current source projection: SDK `18cc0cf2ee` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
 
-The current upstream source pin is `41d99bb4c8` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
+The current upstream source pin is `18cc0cf2ee` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 
