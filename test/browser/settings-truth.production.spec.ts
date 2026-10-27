@@ -242,9 +242,12 @@ test('every Settings page shows native facts or an honest handoff, with no fixtu
   expect(switches.filter(name=>!owned.includes(name)),`${label} has a switch that nothing backs`).toEqual([]);
   if(label==='Connections'){
    const images=()=>current(page).getByRole('button',{name:'Automatically load email images',exact:true});
+   // Loading also renders false; wait for the owned preference before clicking its switch.
+   await expect(current(page).getByText('Load remote images when you open an email.',{exact:true})).toBeVisible();
    await expect(images()).toHaveAttribute('aria-pressed','true');
    await images().click();await expect(images()).toHaveAttribute('aria-pressed','false');
    await openSettings(page);await current(page).getByRole('button',{name:'Connections',exact:true}).click();
+   await expect(current(page).getByText('Load remote images when you open an email.',{exact:true})).toBeVisible();
    await expect(images()).toHaveAttribute('aria-pressed','false');
    await images().click();await expect(images()).toHaveAttribute('aria-pressed','true');
   }
@@ -273,7 +276,7 @@ test('every Settings page shows native facts or an honest handoff, with no fixtu
 test('the owned email image preference persists off and on across production reloads',async({page})=>{
  await nativeStub(page);
  const images=()=>current(page).getByRole('button',{name:'Automatically load email images',exact:true});
- const connections=async()=>{await openSettings(page);await current(page).getByRole('button',{name:'Connections',exact:true}).click();};
+ const connections=async()=>{await openSettings(page);await current(page).getByRole('button',{name:'Connections',exact:true}).click();await expect(current(page).getByText('Load remote images when you open an email.',{exact:true})).toBeVisible();};
  await connections();await expect(images()).toHaveAttribute('aria-pressed','true');
  await images().click();await expect(images()).toHaveAttribute('aria-pressed','false');
  // openSettings navigates afresh: this checks the durable document, not the prior renderer cache.
