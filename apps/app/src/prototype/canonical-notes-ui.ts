@@ -1,110 +1,100 @@
-import {parseNoteFormat} from '../../../../.eliza/client-features/plugins/plugin-notes/src/note-format.ts';
-/** Thin branded-view binding to canonical Notes commands and one editor draft. */
-import type {StickyNote} from '../../../../.eliza/client-features/plugins/plugin-notes/src/types.ts';
-import {projectNoteForModel} from '../../../../.eliza/client-features/plugins/plugin-notes/src/types.ts';
+import React from 'react';
+import {NotesWorkspace,type NotesWorkspaceHandle} from '../../../../.eliza/client-features/plugins/plugin-notes/src/workspace.ts';
+import {createNotesClient} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-api.ts';
+import {projectNoteForModel,type StickyNote} from '../../../../.eliza/client-features/plugins/plugin-notes/src/types.ts';
 import type {AppRecordPort} from '../runtime/app-record-route-policy';
-import {CanonicalNotesController,type NotesPhase} from './canonical-notes-controller';
-import {CanonicalNotesEditor} from './canonical-notes-editor';
+import {shareSelectedText,copySelectedText} from '../runtime/text-share';
+import {noteShareText} from '../runtime/note-share-text';
+import {DailyApps} from '../daily';
+import {registerPlugin} from '../platform-plugins';
+import {speakNote,stopSpeaking} from './local-speech-playback';
 type Bag=Record<string,any>;
+const documents=registerPlugin<{exportText(input:{title:string;text:string}):Promise<{status:string;message:string}>}>('AlphaNoteDocuments');
+const identity=(port:AppRecordPort)=>JSON.stringify([port.sessionId,port.scope??null,port.identity.ownerId,port.identity.agentId,port.identity.sessionId,port.identity.origin]);
+const row=(note:StickyNote)=>({...structuredClone(note.format?.data??{}),...projectNoteForModel(note),id:note.id,kind:note.format?.kind??'text'});
+
+/** Authenticated transport and platform ports only; the upstream workspace owns UI and drafts. */
 export class CanonicalNotesUi {
- readonly controller:CanonicalNotesController;
- readonly editor:CanonicalNotesEditor;
- private phase:NotesPhase='loading';
- private reviewPending=false;
- private baseRows:Bag[]=[];
- private rowsValue:Bag[]=[];
- private openValue:string|null=null;
- private blankCreationValue:string|null=null;
- private trashValue:{id:string;title:string;kind:string}[]=[];
- constructor(port:AppRecordPort,private readonly hooks:{paint():void;review():void;committed?(id:string):void}){
-  this.controller=new CanonicalNotesController(port,{snapshot:snapshot=>{this.trashValue=(snapshot.trash??[]).map(entry=>({id:entry.note.id,title:entry.note.title,kind:entry.note.format?.kind??'text'}));this.baseRows=snapshot.notes.map(note=>this.row(note,snapshot.revision));this.editor?.reconcile();this.refreshDraftView();},phase:phase=>{if(phase==='review')this.reviewPending=true;this.phase=phase==='ready'&&this.reviewPending?'review':phase;this.hooks.paint();}});
-  this.editor=new CanonicalNotesEditor(this.controller,{changed:()=>this.refreshDraftView(),review:()=>this.needsReview(),committed:target=>{this.reviewPending=false;this.phase='ready';this.hooks.paint();this.hooks.committed?.(target.id);}});
+ private handle:NotesWorkspaceHandle|null=null;
+ private resolveReady!:(handle:NotesWorkspaceHandle|null)=>void;
+ private ready=new Promise<NotesWorkspaceHandle|null>(resolve=>{this.resolveReady=resolve;});
+ private retired=false;
+ private active=false;
+ private shell:Bag|null=null;
+ private element:React.ReactNode=null;
+ private elementKey='';
+ private rowsRevision:number|null=null;
+ private rows:Bag[]=[];
+ private readonly attach=(handle:NotesWorkspaceHandle|null)=>{this.handle=handle;if(handle?.current())this.resolveReady(handle);};
+ private readonly selectionChanged=()=>this.hooks.paint();
+ private target:{id:string;sequence:number}|null=null;
+ private api:Bag|null=null;
+ private readonly captured:string;
+ readonly client;
+ readonly binding;
+ readonly events;
+ constructor(private readonly port:AppRecordPort,private readonly hooks:{paint():void;review():void;committed?(id:string):void}){
+  this.captured=identity(port);
+  this.binding={key:this.captured,current:()=>this.current};
+  this.client=createNotesClient({fetch:async<T>(path:string,options:RequestInit={}):Promise<T>=>{
+   const signal=options.signal??new AbortController().signal;signal.throwIfAborted();if(!this.current)throw new DOMException('The Notes connection changed.','AbortError');
+   const method=options.method??'GET';if(method!=='GET'&&method!=='POST')throw Error('Unsupported Notes transport method.');
+   if(options.body!==undefined&&typeof options.body!=='string')throw Error('Unsupported Notes request framing.');
+   const value=await port.request(path,method,options.body===undefined?undefined:JSON.parse(options.body),signal);
+   signal.throwIfAborted();if(!this.current)throw new DOMException('The Notes connection changed.','AbortError');return value as T;
+  }});
+  queueMicrotask(()=>{if(this.current)this.hooks.paint();});
+  this.events={subscribeInvalidation:(listener:(revision?:number)=>void)=>{
+   const changed=(event:Event)=>{const value=(event as CustomEvent).detail;if(this.current&&value?.sessionId===port.sessionId)listener(Number.isSafeInteger(value.revision)&&value.revision>=0?value.revision:undefined);};
+   window.addEventListener('alpha:canonical-notes-invalidated',changed);return()=>window.removeEventListener('alpha:canonical-notes-invalidated',changed);
+  }};
  }
- private needsReview():void{this.reviewPending=true;this.phase='review';this.hooks.paint();this.hooks.review();}
- /** Rich UI data stays owner-visible and lossless; only id/revision becomes
-  * phone context. Shared canonical parsing and persistence remain authoritative. */
- private row(note:StickyNote,revision:number):Bag{
-  const parts=projectNoteForModel(note);
-  return {...structuredClone(note.format?.data??{}),id:note.id,kind:note.format?.kind??'text',title:parts.title,body:parts.body,canonicalRevision:revision};
+ get current(){return !this.retired&&this.port.current()&&identity(this.port)===this.captured;}
+ get pending(){return this.handle?.pending()??false;}
+ get dirty(){return this.handle?.hasUnsavedChanges()??false;}
+ get editing(){return this.handle?.isEditing()??false;}
+ get list(){if(!this.current)return [];const revision=this.handle?.revision()??null;if(revision!==this.rowsRevision){const snapshot=this.handle?.snapshot();this.rows=(snapshot?.notes??[]).map(note=>({...row(note),canonicalRevision:revision}));this.rowsRevision=revision;}return this.rows;}
+ get open(){return this.handle?.selection()?.id??null;}
+ selection(){return this.handle?.selection();}
+ private async admitted(){const handle=this.handle?.current()?this.handle:await this.ready;if(!handle||!this.current)throw new DOMException('The Notes connection changed.','AbortError');return handle;}
+ async refresh(){const handle=await this.admitted();await handle.refresh();}
+ async leave(){const handle=await this.admitted();return handle.requestLeave();}
+ async create(kind:'text'|'list'='text'){const handle=await this.admitted();await handle.refresh();return handle.begin(kind);}
+ async saveCard(content:string){
+  try{const handle=await this.admitted(),result=await handle.interact('create-note',{content});if(!this.current||!result.target)return false;this.hooks.committed?.(result.target.id);return true;}
+  catch{if(this.current){this.api?.toast('Could not confirm the save. Check Notes before trying again.');this.hooks.review();}return false;}
  }
- private refreshDraftView():void{
-  const rows=this.baseRows.slice(),draft=this.editor?.draft;
-  this.openValue=draft?draft.id??'draft-'+draft.token:null;this.blankCreationValue=draft&&!draft.id?this.openValue:null;
-  if(draft){
-   const record={...structuredClone(draft.format?.data??{}),id:this.openValue,kind:draft.format?.kind??'text',title:draft.title,body:draft.body,canonicalRevision:draft.baseRevision};
-   const index=rows.findIndex(row=>row.id===draft.id);if(index<0)rows.unshift(record);else rows[index]=record;
-  }
-  this.rowsValue=rows;this.hooks.paint();
- }
- get list():Bag[]{return this.controller.current?this.rowsValue.slice():[];}
- get open():string|null{return this.controller.current?this.openValue:null;}
- renderState(previous:Bag):Bag{return {...previous,list:this.list,open:this.open,rec:null,proc:null,record:false,playing:false,dict:false,trash:[],trashConfirm:null,trashFull:null,canonicalNotes:true,canonicalNotesPhase:this.phase,storageStatus:this.phase==='loading'?'Opening Notes…':this.phase==='saving'?'Saving…':this.phase==='review'?'Review unsaved changes.':'',blankCreationId:this.blankCreationValue};}
- async start():Promise<void>{await this.controller.refresh();}
- /** Caller supplies only authenticated same-session canonical event names. */
- listen(target:EventTarget):void{this.controller.listen(target);}
- retire():void{this.editor.close();this.controller.retire();this.baseRows=[];this.rowsValue=[];this.openValue=null;this.trashValue=[];}
- select(id:string|null):void{if(id===null)this.editor.close();else this.editor.open(id);}
- create(kind:'text'|'list'='text'):void{
-  if(this.editor.draft?.version){this.needsReview();return;}
-  this.editor.begin(kind);if(kind==='list')this.editor.edit({format:{kind:'list',data:{items:[],pinned:false}}});
- }
- async update(id:string,patch:Bag|((record:Bag)=>Bag)):Promise<boolean>{
-  try{
-   if(this.open!==id)this.editor.open(id);
-   const original=this.list.find(row=>row.id===id);if(!original)throw Error('Current canonical note unavailable.');
-   const next=typeof patch==='function'?patch(structuredClone(original)):patch;
-   if(!next||typeof next!=='object'||Array.isArray(next)||next.id!==undefined&&next.id!==id)throw Error('Editor target changed.');
-   const draft=this.editor.draft!;
-   const data:Record<string,unknown>={...structuredClone(draft.format?.data??{})};
-   // These fields are view identity/formatting, not authored rich metadata.
-   const reserved=new Set(['id','title','body','kind','canonicalRevision','createdAt','updatedAt','when']);let richChanged=false;
-   for(const [key,value]of Object.entries(next))if(!reserved.has(key)){data[key]=value;richChanged=true;}
-   const kind=next.kind??draft.format?.kind??'text';
-   this.editor.edit({...(next.title===undefined?{}:{title:next.title}),...(next.body===undefined?{}:{body:next.body}),...(richChanged||next.kind!==undefined?{format:parseNoteFormat({kind,data})}:{})});
-   return await this.editor.save();
-  }catch{this.needsReview();return false;}
- }
- async leave(next:string|null):Promise<void>{
-  const draft=this.editor.draft;
-  if(draft?.version&&(draft.id||this.editor.hasAuthoredContent)){if(!await this.editor.save())return;}
-  // The awaited save may have been retired/replaced while pending.
-  if(!this.controller.current)return;
-  if(draft&&this.editor.draft?.token!==draft.token)return;
-  this.select(next);
- }
- async remove(id:string):Promise<boolean>{return this.editor.remove(id);}
- async saveCard(content:string):Promise<boolean>{
-  if(!this.controller.current)return false;
-  try{const result=await this.controller.interact('create-note',{content});if(!result.target)return false;this.hooks.committed?.(result.target.id);return true;}catch{this.needsReview();return false;}
- }
- async discardDraftAndReload():Promise<void>{
-  const id=this.editor.draft?.id;this.reviewPending=false;this.editor.close();
-  try{await this.controller.refresh();if(id&&this.controller.hasViewNote(id))this.editor.open(id);}catch{this.needsReview();}
- }
- /** Canonical Trash has restore semantics, not the legacy device timer. */
- trashView(view:Bag,api:Bag,state:Bag):Bag{
-  const rows=this.controller.current?this.trashValue:[];
-  return {...view,none:this.controller.revision!==null&&this.phase==='ready'&&view.none,canonicalReview:this.phase==='review',canonicalReviewLabel:this.editor.draft?.version?'Discard draft and reload':'Reload Notes',canonicalReviewAction:()=>void this.discardDraftAndReload(),browserRecovery:false,canRecord:false,canImportText:false,trashAvailable:true,trashOpen:!!state.trashOpen,trashCanErase:false,trashRetentionText:'Deleted notes are kept here for recovery.',trashLabel:rows.length?`Trash, ${rows.length} item${rows.length===1?'':'s'}`:'Trash',trashNone:this.controller.revision!==null&&this.phase==='ready'&&rows.length===0,trashError:'',trashBusy:this.controller.pending,trashEmptyDisabled:true,trashConfirmOpen:false,trashFullOpen:false,
-   trashRows:rows.map(row=>({id:row.id,title:row.title||'Untitled',kind:row.kind==='text'?'Note':row.kind==='list'?'Checklist':row.kind==='voice'?'Voice note':'Link',left:'Recoverable',restoreLabel:`Restore ${row.title||'note'}`,disabled:this.controller.pending,restore:()=>void this.editor.restore(row.id)})),
-   openTrash:()=>{void this.leave(null).then(()=>{if(this.open===null&&this.controller.current){api.set({trashOpen:true,sheet:null,q:null});void this.controller.refresh().catch(()=>{});}});},closeTrash:()=>api.set({trashOpen:false}),emptyTrash:()=>this.needsReview(),trashConfirmGo:()=>this.needsReview(),trashCancel:()=>api.set({trashConfirm:null,trashFull:null})};
- }
- /** Decorate this view's API only. No global client or shared NotesStore swap. */
- api(original:Bag):Bag{
-  return {...original,canonicalNotes:this,storageReady:()=>this.controller.current&&this.controller.revision!==null&&!this.controller.pending,
-   get:(key:string)=>key==='notes'?this.renderState(original.get(key)):original.get(key),
-   set:(patch:Bag)=>{if(Object.hasOwn(patch,'list')||patch.record===true||patch.rec){this.needsReview();return false;}return original.set(patch);},
-   moveNoteToTrash:(note:Bag)=>this.remove(note.id),
-   notesTrash:{restore:(id:string)=>this.editor.restore(id),maintain:async()=>{},forget:()=>{},erase:()=>{this.needsReview();return false;},deleteForever:()=>{this.needsReview();return false;}},
-  };
+ retire(){this.retired=true;this.resolveReady(null);this.handle?.retire();this.handle=null;this.rows=[];this.element=null;}
+ select(id:string|null){if(id===null){void this.leave().then(()=>this.hooks.paint()).catch(()=>{});return;}this.target=id?{id,sequence:(this.target?.sequence??0)+1}:null;this.hooks.paint();}
+ render(shell:Bag,active:boolean){
+  this.shell=shell;this.active=active;
+  const api=this.api=shell.api('notes');
+  const options=api.notesSourceOptions??[];
+  const elementKey=JSON.stringify([active,this.target,options.map((source:Bag)=>[source.id,source.label,source.selected])]);
+  if(this.element&&elementKey===this.elementKey)return this.element;
+  this.elementKey=elementKey;
+  const selected=(note:StickyNote,signal:AbortSignal)=>{signal.throwIfAborted();if(!this.active||!this.current||this.open!==note.id)throw new DOMException('The note changed.','AbortError');return noteShareText(row(note));};
+  return this.element=React.createElement('div',{className:'notes-layout',hidden:!active,inert:!active||undefined,'aria-hidden':!active||undefined,'data-alpha-shared-notes':true,role:'region','aria-label':'Notes',style:{position:'absolute',inset:0,zIndex:21,background:'var(--bg)',paddingTop:44,boxSizing:'border-box',display:active?'flex':'none',flexDirection:'column','--text':'var(--fg)','--txt':'var(--fg)','--muted':'var(--mut)','--muted-strong':'var(--mut)','--card':'var(--bg)','--surface':'var(--s2)','--border':'var(--line)','--input':'var(--bg)','--eliza-chat-clearance':'var(--alpha-chat-clearance,0px)'} as React.CSSProperties},
+   React.createElement('header',{'data-alpha-app-header':'main',style:{display:'flex',alignItems:'center',height:56,flexShrink:0,gap:12,padding:'0 16px'}},React.createElement('button',{className:'app-header-back','aria-label':'Back to apps',onClick:()=>this.shell?.goHome()},React.createElement('span',{'aria-hidden':true,style:{fontSize:28}},'‹')),React.createElement('h1',{'data-alpha-app-title':true,style:{margin:0,fontSize:24}},'Notes')),
+   React.createElement(NotesWorkspace,{ref:this.attach,client:this.client,binding:this.binding,events:this.events,active,sourceNoteTarget:this.target,onSelectionChange:this.selectionChanged,sources:options.map((source:Bag)=>({id:source.id,label:source.label??(source.id==='legacy'?'Older notes':'Notes'),selected:source.selected,select:async()=>{await this.api?.notesSourceOptions?.find((option:Bag)=>option.id===source.id)?.choose();}})),ports:{
+    copyText:async(note,signal)=>{const value=selected(note,signal);await copySelectedText(value.text);},
+    share:async(note,signal)=>{await shareSelectedText(selected(note,signal));},
+    exportText:async(note,signal)=>{const value=selected(note,signal);const result=await documents.exportText(value);if(this.current&&!signal.aborted)this.api?.toast(result.message);},
+    composeEmail:async(note,signal)=>{const value=selected(note,signal);this.api?.open('inbox',{compose:{subject:value.title,body:value.text}});},
+    dictate:async signal=>{signal.throwIfAborted();const result=await DailyApps.perform({action:'voice'});signal.throwIfAborted();if(!this.current)throw new DOMException('The Notes connection changed.','AbortError');if(!result.transcript)throw Error(result.message||'Speech recognition is unavailable.');return result.transcript;},
+    readAloud:async(note,signal)=>{const value=selected(note,signal),cancel=()=>stopSpeaking();signal.addEventListener('abort',cancel,{once:true});try{const result=await speakNote(value.text,{noteId:note.id});if(result!=='finished'&&result!=='stopped')throw Error('Reading this note is unavailable.');}finally{signal.removeEventListener('abort',cancel);}},
+   }}));
  }
 }
-/** Root initializes shell.canonicalNotesUi only for the explicit canonical
- * source, before its legacy Notes bootstrap branch. Existing legacy UI remains
- * untouched when the binding is absent. Install after the existing app adapter. */
+
+/** The stable screen-level React hole stays mounted across Home/app changes. */
 export function installCanonicalNotesView(Component:any,views:Record<string,Bag>):void{
- const prototype=Component.prototype,get=prototype.vget,api=prototype.api;
- prototype.vget=function(key:string){const state=get.call(this,key);return key==='notes'&&this.canonicalNotesUi?this.canonicalNotesUi.renderState(state):state;};
- prototype.api=function(key:string){const value=api.call(this,key);if(key!=='notes')return value;if(this.canonicalNotesUi)return this.canonicalNotesUi.api(value);return this.notesSourceMode==='canonical'?{...value,notesSourceMode:'canonical',notesTrash:undefined,moveNoteToTrash:()=>false}:value;};
- const notes=views.notes,render=notes.render;
- notes.render=(state:Bag,value:Bag)=>{const ui=value.canonicalNotes,pending=!ui&&value.notesSourceMode==='canonical',current=ui?ui.renderState(state):pending?{...state,list:[],open:null,trash:[],record:false,rec:null,storageStatus:state.storageStatus||'Waiting for an agent connection to open Notes.'}:state,result=render(current,value);const sources=value.notesSourceOptions??[],older=sources.find((source:Bag)=>source.id==='legacy'),main=sources.find((source:Bag)=>source.id==='canonical');result.notesTitle=older?.selected?'Older notes':'Notes';result.primaryNotes=!older?.selected;result.olderNotesAction=older&&!older.selected?(event?:Event)=>{(event?.currentTarget as HTMLElement|null)?.closest('details')?.removeAttribute('open');older.choose();}:null;result.returnToNotesAction=main&&!main.selected?main.choose:null;return ui?ui.trashView(result,value,current):pending?{...result,none:false,browserRecovery:false,trashAvailable:false,canRecord:false,canImportText:false}:result;};
+ const prototype=Component.prototype,renderVals=prototype.renderVals,get=prototype.vget,api=prototype.api;
+ prototype.vget=function(key:string){const value=get.call(this,key),ui=this.canonicalNotesUi;return key==='notes'&&ui?{...value,list:ui.list,open:ui.open,rec:null,record:false}:value;};
+ prototype.api=function(key:string){const value=api.call(this,key);if(key!=='notes')return value;const ui=this.canonicalNotesUi;if(!ui)return this.notesSourceMode==='canonical'?{...value,notesSourceMode:'canonical',notesTrash:undefined,moveNoteToTrash:()=>false}:value;return {...value,canonicalNotes:ui,notesSourceMode:'canonical',set:(patch:Bag)=>{if(Object.hasOwn(patch,'list'))return false;if(Object.hasOwn(patch,'open'))ui.select(patch.open);if(patch.compose)void ui.create();const rest={...patch};delete rest.open;delete rest.compose;return Object.keys(rest).length?value.set(rest):true;}};};
+ prototype.renderVals=function(){const value=renderVals.call(this),ui=this.canonicalNotesUi;return {...value,canonicalNotesWorkspace:ui?ui.render(this,this.live&&this.S().screen==='home'&&this.S().view==='notes'):this.notesSourceMode==='canonical'&&this.live&&this.S().screen==='home'&&this.S().view==='notes'?React.createElement('div',{role:'status',className:'notes-layout',style:{position:'absolute',inset:0,zIndex:21,paddingTop:88,paddingInline:24}},React.createElement('p',null,'Waiting for an agent connection to open Notes.'),React.createElement('button',{'aria-label':'Back to apps',onClick:()=>this.goHome()},'Back'),...(this.api('notes').notesSourceOptions??[]).filter((source:Bag)=>!source.selected).map((source:Bag)=>React.createElement('button',{key:source.id,onClick:source.choose},source.id==='legacy'?'Older notes':source.label))):null};};
+ const notes=views.notes,render=notes.render,back=notes.back,leave=notes.onLeave;
+ notes.render=(state:Bag,value:Bag)=>{if(value.notesSourceMode==='canonical'||value.canonicalNotes)return {legacyNotes:false};const result=render(state,value),main=(value.notesSourceOptions??[]).find((source:Bag)=>source.id==='canonical');return {...result,legacyNotes:true,notesTitle:'Older notes',primaryNotes:false,olderNotesAction:null,returnToNotesAction:main?.choose};};
+ notes.back=(state:Bag,value:Bag)=>{const ui=value.canonicalNotes;if(!ui)return back?.(state,value);if(!ui.editing)return false;void ui.leave();return true;};
+ notes.onLeave=(value:Bag)=>{if(!value.canonicalNotes)leave?.(value);};
 }

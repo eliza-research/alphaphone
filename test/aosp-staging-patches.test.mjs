@@ -68,7 +68,7 @@ test('Soong app-native installation patch is independently pinned and has no gua
   assert.equal(manifest.baselineLockSha256, createHash('sha256').update(lock).digest('hex'));
   assert.equal(manifest.revision, JSON.parse(lock).projects.find(row => row.path === 'build/soong').commit);
   assert.deepEqual(manifest.files.map(row => row.path), ['etc/prebuilt_etc.go', 'etc/prebuilt_etc_test.go']);
-  const patch = fs.readFileSync('android/aosp/app-native/' + manifest.patch, 'utf8');
+  const patch = fs.readFileSync('vendor/eliza/packages/os/android/patches/soong-app-native/' + manifest.patch, 'utf8');
   assert.match(patch, /InitPrebuiltEtcModule\(module, "app"\)/);
   assert.doesNotMatch(patch, /BUILD_BROKEN|Check_elf_files|check_elf_files|prebuilt_any/);
   assert.equal(stagingBuildPatches(['soong-memory', 'soong-app-native'], true).length, 2);
