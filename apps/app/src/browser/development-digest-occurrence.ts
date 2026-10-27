@@ -1,7 +1,9 @@
+import {DIGEST_MISSED_TEXT as MISSED_TEXT,DIGEST_PAUSED_TEXT,DIGEST_RUN_WINDOW_MS as RUN_WINDOW_MS,digestOccurrenceMissed,digestSourceState as sharedSourceState} from '../../../../.eliza/client-features/plugins/plugin-workflow/src/services/hosted-digest-policy.ts';
 /**
- * Occurrence admission for development digest schedules. Pure, so it is tested without a browser
- * against the pinned agent (`vendor/eliza/plugins/plugin-workflow/src/services/hosted-digest.ts`,
- * `digestAdmission`), whose rules it mirrors:
+ * Occurrence admission for development digest schedules. Pure, so it is tested without a browser.
+ * The run window, record texts and source state are the agent's own shared occurrence policy
+ * (`plugins/plugin-workflow/src/services/hosted-digest-policy.ts`, used by `digestAdmission`); this
+ * file adds only the development scheduler's civil-time bookkeeping:
  *  - a lapsed source is checked first and yields one explicit `unavailable` record that pauses the
  *    schedule until a new source is reviewed;
  *  - an occurrence more than 120 seconds late is recorded as `missed` and never run;
@@ -18,17 +20,14 @@ export type OccurrenceLoop={active:boolean;removed?:boolean;createdAt:number;spe
  /** Set with the one `unavailable` record; a new reviewed version of the loop clears it. */
  sourcePaused?:true};
 export type Occurrence={at:number;local:string;missed:boolean};
-/** Agent: `now - scheduledAt > 120000` is missed. */
-export const DIGEST_RUN_WINDOW_MS=120000;
-export const DIGEST_MISSED_TEXT='The scheduled time was missed. No backlog was executed.';
-export const DIGEST_UNAVAILABLE_TEXT=Object.freeze({
- expired:'Source expired. This schedule is paused until you renew the source. No fresh phone data was read.',
- revoked:'Source revoked. This schedule is paused until you review a new source. No fresh phone data was read.',
-});
+/** Agent: an occurrence admitted more than this long after its time is missed. */
+export const DIGEST_RUN_WINDOW_MS=RUN_WINDOW_MS;
+export const DIGEST_MISSED_TEXT=MISSED_TEXT;
+export const DIGEST_UNAVAILABLE_TEXT=DIGEST_PAUSED_TEXT;
 const SETTLED_LIMIT=32;
 /** Agent `digestSourceState`: revocation wins, and a source expires at its expiry instant. */
 export function digestSourceState(source:{revoked:boolean;expiresAt:string},now:number):'current'|'expired'|'revoked'{
- return source.revoked?'revoked':Date.parse(source.expiresAt)<=now?'expired':'current';
+ return sharedSourceState(source,now);
 }
 const formats=new Map<string,Intl.DateTimeFormat>();
 /** Civil minute of an instant in a zone, `YYYY-MM-DDTHH:MM`. Throws for an unknown zone. */
@@ -68,7 +67,7 @@ export function scheduledOccurrence(loop:OccurrenceLoop,now:number):Occurrence|n
  if(!loop.active||loop.removed||loop.sourcePaused)return null;
  const found=latestOccurrence(loop.spec.timeZone,loop.spec.localTime,Math.floor(now/60000)*60000);
  if(!found||loop.createdAt>found.at)return null;
- const missed=now-found.at>DIGEST_RUN_WINDOW_MS;
+ const missed=digestOccurrenceMissed(found.at,now);
  if(loop.lastOccurrence===undefined||found.local>loop.lastOccurrence)return {...found,missed};
  const settled=loop.settledOccurrences;
  // Without a settled list (an older document) everything up to the newest record counts as settled.
