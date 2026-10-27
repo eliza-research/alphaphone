@@ -1,4 +1,5 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import {flagOffAndroid} from "../flag-off-android";
 /** Closed read-only canonical Calendar transport for accessibility form states.
  * The real Calendar client/controller/form run unchanged; no event store or write is simulated. */
 export async function openCanonicalCalendarForm(page: Page, theme = "light") {
@@ -10,17 +11,10 @@ export async function openCanonicalCalendarForm(page: Page, theme = "light") {
       await route.abort();
     },
   );
-  await page.addInitScript(() =>
-    localStorage.setItem(
-      "alpha.connection.selection.v1",
-      JSON.stringify({ kind: "offline" }),
-    ),
-  );
-  await page.goto(`/?theme=${theme}`);
-  await page.evaluate(async () => {
-    const { connectionController: c } = await import(
-      "/src/runtime/connection-ui.tsx"
-    );
+  const native = test.info().project.name === 'production';
+  if (native) await flagOffAndroid(page);
+  else await page.addInitScript(() => localStorage.setItem('alpha.connection.selection.v1', JSON.stringify({kind:'offline'})));
+  const install = async (native:boolean) => {
     const identity = {
       ownerId: "calendar-fixture-owner",
       agentId: "calendar-fixture-agent",
@@ -51,7 +45,7 @@ export async function openCanonicalCalendarForm(page: Page, theme = "light") {
       includeInFeed: true,
       selectionVersion: 0,
     };
-    c.getAppRecordClient = () => ({
+    const client = {
       sessionId: identity.sessionId,
       identity,
       current: () => true,
@@ -105,9 +99,25 @@ export async function openCanonicalCalendarForm(page: Page, theme = "light") {
           };
         throw Error("Unexpected closed Calendar accessibility route");
       },
-    });
-    await c.offline();
-  });
+    };
+    if(native){
+      const w=window as any,base=w.Capacitor.nativePromise;
+      w.Capacitor.nativePromise=async(plugin:string,method:string,input:any)=>{
+        if(plugin==='Agent'&&method==='request'&&(input.path.startsWith('/api/lifeops/calendar/')||input.path==='/api/notes/state')){
+          const data=await client.request(input.path,input.method,input.body,new AbortController().signal);
+          return {status:200,body:JSON.stringify(data)};
+        }
+        return base(plugin,method,input);
+      };
+    }else{
+      const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');
+      c.getAppRecordClient=()=>client;
+      await c.offline();
+    }
+  };
+  if(native)await page.addInitScript(install,true);
+  await page.goto(`/?theme=${theme}`);
+  if(!native)await page.evaluate(install,false);
   await page.getByRole("button", { name: "Calendar", exact: true }).click();
   await expect
     .poll(() =>
