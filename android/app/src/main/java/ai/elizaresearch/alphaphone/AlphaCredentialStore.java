@@ -95,6 +95,7 @@ final class AlphaCredentialStore {
     before=slots.read(CloudDeployment.storageSlot(name));provider=slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT));
     conflict=compare&&!java.util.Objects.equals(before,expected);
     if(conflict)return false;
+    legacyRecovery().block();
     if(LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name))return before!=null||value!=null;
     if(java.util.Objects.equals(before,value))return false;
     // No stored provider: the running agent was launched unbound (removing a provider stops it),
@@ -114,6 +115,13 @@ final class AlphaCredentialStore {
     return true;
    }
   });
+ }
+ private LegacyCloudRecovery legacyRecovery(){return new LegacyCloudRecovery(slots,CloudDeployment.STORAGE_NAMESPACE,assertOwner);}
+ boolean legacyCloudRecoveryEligible()throws Exception{return legacyRecovery().eligible();}
+ boolean restoreLegacyCloudCredential()throws Exception{
+  // This path cannot replace a configured/running provider. The explicit native intent and
+  // shared slot lock fence a concurrent sign-out/provider change across identity verification.
+  return legacyRecovery().restore(token->{AlphaConnectionPlugin.readCloudIdentity(token);assertOwner.run();});
  }
  void assertCurrent(){assertOwner.run();}
  private void invalidateProviderAdmission(String changedSlot,String replacement)throws Exception{
@@ -135,6 +143,7 @@ final class AlphaCredentialStore {
     conflict=credentialSlot!=null&&!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(credentialSlot)),expectedCredential)
       ||!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT)),expected);
     if(conflict)return false;
+    legacyRecovery().block();
     org.json.JSONObject requested=new org.json.JSONObject(selection);
     boolean cloud="elizacloud".equals(requested.optString("provider"));
     if(cloud?!"cloud:production".equals(credentialSlot):credentialSlot!=null||expectedCredential!=null||verifiedIdentity!=null)throw new IllegalArgumentException();

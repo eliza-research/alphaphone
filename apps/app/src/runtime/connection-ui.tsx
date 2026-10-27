@@ -89,6 +89,7 @@ export interface ConnectionSnapshot {
   billingReviewEmail?: string;
   membershipDismissed?: boolean;
   residentSavedCredential?: boolean;
+  legacySignInRecovery?: boolean;
   /**
    * Production plan notice (#410). The on-device agent ALWAYS runs (owner directive 2026-10-13);
    * plan state only decides whether Eliza Cloud inference is bound into it. 'needs-plan': signed
@@ -2175,6 +2176,16 @@ export const connectionController = {
     });
     if(archived)await connectionController.startLocal();
   },
+  async restoreSavedSignIn() {
+    if(!isAndroid||!residentCloudFlow()||operation||state.cloudAccount||!cloudSignIn?.restoreSavedSignIn)return;
+    let restored=false;
+    await work('Restoring saved sign-in…',async signal=>{
+      const outcome=await cloudSignIn!.restoreSavedSignIn!();signal.throwIfAborted();
+      if(outcome.restored!==true)throw Error('Saved sign-in is no longer available. Sign in to continue.');
+      restored=true;update({legacySignInRecovery:false,residentSavedCredential:true,signIn:null});
+    });
+    if(restored&&!operation)await connectionController.startLocal();
+  },
   async startLocal() { if(state.residentRecoveryReason){update({open:true,purpose:'agent',error:residentRecoveryMessage(state.residentRecoveryReason)});return;} if (residentAlwaysPresent) { if (!operation) { retire(); await startResident('Starting the local agent…', false); } return; } await work('Starting the local agent…', signal => { retire(); return connectResident(signal); }); },
   async pair(kind: 'remote' | 'local', origin: string, code: string) {
     if (!hosted) { update({ error: PAIRING_RETIRED }); return; }
@@ -2753,6 +2764,12 @@ export function ConnectionChooser() {
     // Automatic probes preserve a genuine saved-sign-in or startup refusal.
     void connectionController.beginSignIn(residentEnvironment(), false, true);
   }, [signInEntryRequired, snapshot.busy, snapshot.signIn, snapshot.startupResolved, snapshot.automaticRestore]);
+  useEffect(()=>{
+    if(!isAndroid||!signInEntryRequired||snapshot.cloudAccount||!cloudSignIn?.savedSignInRecoveryStatus)return;
+    let current=true;
+    void cloudSignIn.savedSignInRecoveryStatus().then(result=>{if(current)update({legacySignInRecovery:result.eligible===true});}).catch(()=>{if(current)update({legacySignInRecovery:false});});
+    return()=>{current=false;};
+  },[signInEntryRequired,snapshot.cloudAccount,snapshot.signOutNotice]);
   const visible=connectionChooserVisible(snapshot,!!sending);
   const [developmentAction,setDevelopmentAction]=useState('{"type":"create_note","title":"Development note","body":"Reviewed local action"}');
   const [developmentProfile,setDevelopmentProfile]=useState<DevelopmentProfile>('local'),[reply,setReply]=useState(''),[developmentError,setDevelopmentError]=useState('');
@@ -2888,6 +2905,7 @@ export function ConnectionChooser() {
       extra={signInEntryRequired && !snapshot.signIn && !snapshot.busy
         ? <button onClick={()=>void connectionController.beginSignIn(residentEnvironment(),true)}>Retry sign-in</button>
         : browserCloudResidentEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Sign in with browser</button>:testMocksEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Browser sign-in (diagnostic)</button>:undefined}/>
+    {snapshot.legacySignInRecovery&&requiredSignInView.step==='choose'&&<button disabled={snapshot.busy} onClick={()=>void connectionController.restoreSavedSignIn()}>Restore saved sign-in</button>}
     {snapshot.signOutNotice && snapshot.signOutNotice!==snapshot.message && <p role="status">{snapshot.signOutNotice}</p>}
     {productionSignInRequired && <ResidentRecoveryPanel snapshot={snapshot}/>}
   </div></div>;

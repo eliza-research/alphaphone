@@ -1,0 +1,63 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync,writeFileSync,mkdtempSync,rmSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {root,nativeSource,runJvm,jsonJarSkip} from './fixtures/jvm-tools.mjs';
+import {prepareNativeFixture} from './fixtures/native-source.mjs';
+test('explicit native legacy recovery uses real encrypted slots and current token validation',{skip:jsonJarSkip},()=>{
+ const dir=mkdtempSync(join(tmpdir(),'alpha-legacy-recovery-'));
+ try{
+  const prepared=prepareNativeFixture(root,dir).root;
+  const relative='plugins/plugin-native-secure-store/android/src/main/java/ai/eliza/plugins/securestore/nativeonly/JsonCredentialSlots.java';
+  let source=readFileSync(join(prepared,relative),'utf8').replace('import android.security.keystore.KeyGenParameterSpec;','').replace('import android.security.keystore.KeyProperties;','');
+  const start=source.indexOf(' private SecretKey key()'),end=source.indexOf(' private static Object parseJson',start);assert.ok(start>0&&end>start);
+  // Host-only key acquisition adapter. AES-GCM/AAD, parsing, hashing, committed readback and CAS remain real.
+  source=source.slice(0,start)+' private SecretKey key(){return new javax.crypto.spec.SecretKeySpec(new byte[32],"AES");}\n'+source.slice(end);
+  const store=join(dir,'JsonCredentialSlots.java');writeFileSync(store,source);
+    const atomic=join(dir,'AtomicFile.java');
+  writeFileSync(atomic,readFileSync(join(root,'test/fixtures/secure-store-memory/android/util/AtomicFile.java'),'utf8').replace('public static int corruptNextCommit;','public static int corruptNextCommit; public static int failAfterStarts=-1;').replace('return new FileOutputStream(file);','if(failAfterStarts==0){failAfterStarts=-1;throw new IOException("synthetic write failure");}if(failAfterStarts>0)failAfterStarts--;return new FileOutputStream(file);'));
+  const context=join(dir,'Context.java');writeFileSync(context,`package android.content;public class Context {private final java.io.File directory;public Context(java.io.File directory){this.directory=directory;}public Context getApplicationContext(){return this;}public java.io.File getNoBackupFilesDir(){return directory;}}`);
+  const lifecycle=join(dir,'AlphaLocalAgentPlugin.java');writeFileSync(lifecycle,`package ai.elizaresearch.alphaphone;class AlphaLocalAgentPlugin {interface CredentialMutation<T>{boolean requiresShutdown()throws Exception;T commit()throws Exception;}static <T>T mutateCredentials(android.content.Context c,Runnable owner,CredentialMutation<T> mutation)throws Exception{synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){owner.run();mutation.requiresShutdown();owner.run();return mutation.commit();}}static boolean providerAdmissionReadable(){return true;}}`);
+  const identity=join(dir,'AlphaConnectionPlugin.java');writeFileSync(identity,`package ai.elizaresearch.alphaphone;class AlphaConnectionPlugin {static int verified;static org.json.JSONObject readCloudIdentity(String token){if(!token.equals("synthetic-test-token"))throw new AssertionError();verified++;return new org.json.JSONObject();}}`);
+  const sources=[store,atomic,context,lifecycle,identity,nativeSource('AlphaCredentialStore.java'),nativeSource('CloudDeployment.java'),join(root,'test/fixtures/legacy-cloud-recovery/StoreIntegrationTest.java'),join(root,'vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderAdmission.java'),nativeSource('LocalAgentProviderAdmission.java'),nativeSource('LegacyCloudRecovery.java'),join(root,'test/fixtures/legacy-cloud-recovery/LegacyCloudRecoveryTest.java')];
+  const result=runJvm(sources,'ai.elizaresearch.alphaphone.LegacyCloudRecoveryTest',{json:true,args:[join(dir,'slots')]});
+  assert.match(runJvm(sources,'ai.elizaresearch.alphaphone.StoreIntegrationTest',{json:true,args:[join(dir,'integration')]}),/PASS actual AlphaCredentialStore/);
+  assert.match(result,/PASS \d+ real encrypted-slot recovery assertions/);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+test('all explicit scoped credential and provider mutations durably suppress legacy reuse',()=>{
+ const source=readFileSync(nativeSource('AlphaCredentialStore.java'),'utf8');
+ const mutate=source.slice(source.indexOf('private boolean mutateSlotOnce'),source.indexOf(' void assertCurrent'));
+ assert.match(mutate,/if\(conflict\)return false;\s+legacyRecovery\(\)\.block\(\);/);
+ const admission=source.slice(source.indexOf(' String compareExchangeProviderAdmission'),source.indexOf(' void rollbackProviderAdmission'));
+ assert.match(admission,/if\(conflict\)return false;\s+legacyRecovery\(\)\.block\(\);/);
+ assert.match(source,/restore\(token->\{AlphaConnectionPlugin\.readCloudIdentity\(token\);assertOwner\.run\(\);\}\)/);
+});
+test('chooser recovery continues through normal resident admission only after native success',async()=>{
+ const {transformSync}=await import('esbuild');
+ const source=readFileSync(join(root,'apps/app/src/runtime/connection-ui.tsx'),'utf8');
+ const start=source.indexOf('  async restoreSavedSignIn()'),end=source.indexOf('  async startLocal()',start);assert.ok(start>0&&end>start);
+ const method=transformSync('({'+source.slice(start,end)+'})',{loader:'ts',format:'cjs'}).code.trim().replace(/;$/,'');
+ // Exercise the exact controller method, with only native and resident boundaries stubbed.
+ const make=new Function('flags',`let isAndroid=flags.android??true,operation=flags.operation??null;const state={cloudAccount:flags.account??null};let nativeCalls=0,starts=0;const updates=[];const controller=new AbortController();const cloudSignIn={async restoreSavedSignIn(){nativeCalls++;if(flags.cancel)controller.abort();if(flags.failure)throw Error('transport');return {restored:flags.restored??true};}};const residentCloudFlow=()=>true;const update=x=>updates.push(x);const work=async(_,fn)=>{try{await fn(controller.signal)}catch{}};const connectionController={startLocal:async()=>{starts++;}};const subject=${method};return {subject,read:()=>({nativeCalls,starts,updates})};`);
+ for(const flags of [{},{restored:false},{cancel:true},{failure:true},{android:false},{operation:{}},{account:{}}]){
+  const h=make(flags);await h.subject.restoreSavedSignIn();const result=h.read();
+  assert.equal(result.starts,Object.keys(flags).length?0:1,JSON.stringify(flags));
+  if(flags.android===false||flags.operation||flags.account)assert.equal(result.nativeCalls,0);
+ }
+ assert.match(source,/snapshot\.legacySignInRecovery&&requiredSignInView\.step==='choose'/);
+ assert.match(source,/current=false/);
+});
+test('native recovery metadata stays private and cancellation invalidates its continuation',()=>{
+ const source=readFileSync(nativeSource('AlphaCloudSignInPlugin.java'),'utf8');
+ const start=source.indexOf('@PluginMethod public void savedSignInRecoveryStatus'),end=source.indexOf('// ── Readiness:',start);assert.ok(start>0&&end>start);
+ const methods=source.slice(start,end);
+ assert.match(methods,/\.put\("eligible",store\(\)\.legacyCloudRecoveryEligible\(\)\)/);
+ assert.match(methods,/AlphaLocalAgentPlugin\.reserveCredentialIntent\(\)/);
+ assert.match(methods,/recoveryEpoch!=owner/);assert.match(methods,/AlphaLocalAgentPlugin\.requireCredentialIntent\(intent\)/);
+ assert.match(methods,/\.put\("restored",restored\)/);
+ assert.doesNotMatch(methods,/put\("(?:token|credentialId|userId|organizationId|value)"/);
+ const cancel=source.slice(source.indexOf('@PluginMethod public void cancel('),source.indexOf('private void requireAuthorization('));assert.match(cancel,/recoveryEpoch\+\+/);
+ const slots=readFileSync(nativeSource('RendererCredentialSlots.java'),'utf8');assert.doesNotMatch(slots,/legacy-recovery|JOURNAL/);
+});
