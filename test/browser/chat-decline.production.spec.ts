@@ -126,8 +126,9 @@ test('a proposal is declined from its chat card and the agent records the reject
   const decline = page.getByRole('button', { name: /^Cancel Keep things as they are\./ });
   await expect(decline).toBeVisible();
   await decline.click();
-  await expect(page.getByText('Declined', { exact: true })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText('Declined. No phone action was performed.', { exact: true })).toBeVisible();
+  const declined = page.getByText('Declined. No phone action was performed.', { exact: true });
+  await expect(declined).toBeVisible({ timeout: 20_000 });
+  await expect(declined).toHaveCount(1);
   await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0);
   // Server state reads back as rejected; nothing was claimed, journaled or executed.
   const state = await fixture(page);
