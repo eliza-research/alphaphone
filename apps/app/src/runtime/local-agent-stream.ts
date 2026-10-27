@@ -1,3 +1,4 @@
+import {SseEventFramer} from '../../../../.eliza/client-features/packages/ui/src/api/transport.ts';
 import {findViewActionHandoff} from '../../../../.eliza/client-features/packages/core/src/views/view-action-handoff.ts';
 import type {RemoteChatReply} from './remote-protocol';
 
@@ -16,13 +17,14 @@ function preparedNavigation(results:unknown):readonly unknown[]|undefined {
 export async function readLocalAgentStream(response:Response, signal:AbortSignal, onText:(text:string)=>void,onReplyReady?:(results:readonly unknown[]|undefined)=>void):Promise<RemoteChatReply> {
  if(!response.ok)throw Object.assign(Error(`Local agent request failed (HTTP ${response.status}).`),{status:response.status});
  if(!response.headers.get('content-type')?.startsWith('text/event-stream')||!response.body)throw Error('Invalid local stream response');
+ const framer=new SseEventFramer();
  const reader=response.body.getReader(),decoder=new TextDecoder('utf-8',{fatal:true});
- let text='',received=0,lineParts:string[]=[],lines:string[]=[],readySeen=false,readyKey:string|undefined;
+ let text='',received=0,readySeen=false,readyKey:string|undefined;
  const invalid=(message:string):never=>{onReplyReady?.(undefined);throw Error(message);};
  const abort=()=>{void reader.cancel().catch(()=>{});};
  signal.addEventListener('abort',abort,{once:true});
- function frame(raw:string):RemoteChatReply|undefined {
-  const data=raw.split('\n').filter(line=>line.startsWith('data:')).map(line=>line.slice(5).replace(/^ /,'')).join('\n');
+ function frame(lines:readonly string[]):RemoteChatReply|undefined {
+  const data=lines.filter(line=>line.startsWith('data:')).map(line=>line.slice(5).replace(/^ /,'')).join('\n');
   if(!data)return;
   let value;try{value=JSON.parse(data);}catch{return invalid('Invalid stream event');}
   if(!value||typeof value!=='object'||Array.isArray(value))return invalid('Invalid stream event');
@@ -59,14 +61,9 @@ export async function readLocalAgentStream(response:Response, signal:AbortSignal
    signal.throwIfAborted();const part=await reader.read();signal.throwIfAborted();
    if(part.done)throw Error('Local agent stream ended without a completed reply. Check history before retrying.');
    received+=part.value.byteLength;if(received>2*1024*1024)return invalid('Local stream exceeds limit');
-   let chunk;try{chunk=decoder.decode(part.value,{stream:true});}catch{return invalid('Invalid stream encoding');}let start=0,boundary;
-   // Scan only new data. Re-scanning an accumulated frame is quadratic when
-   // a server fragments a long token or terminal event into tiny chunks.
-   while((boundary=chunk.indexOf('\n',start))!==-1){
-    lineParts.push(chunk.slice(start,boundary));const line=lineParts.join('').replace(/\r$/,'');lineParts=[];start=boundary+1;
-    if(line===''){const result=frame(lines.join('\n'));lines=[];if(result)return result;}else lines.push(line);
-   }
-   if(start<chunk.length)lineParts.push(chunk.slice(start));
+   let chunk;try{chunk=decoder.decode(part.value,{stream:true});}catch{return invalid('Invalid stream encoding');}let result:RemoteChatReply|undefined;
+   framer.push(chunk,lines=>{result=frame(lines);return result!==undefined;});
+   if(result)return result;
   }
  } finally {signal.removeEventListener('abort',abort);await reader.cancel().catch(()=>{});reader.releaseLock();}
 }

@@ -61,8 +61,8 @@ export function aospProductLockProblems(root = process.cwd()) {
   }
   // Source lock through the pinned upstream loader (manifest url, tag and full object IDs).
   const lockFile = product.sourceLock?.file, profileName = product.sourceLock?.profile;
-  if (typeof lockFile !== "string" || !lockFile.startsWith("android/aosp/") || !fs.existsSync(at(lockFile))) problems.push(`${PRODUCT_DESCRIPTOR}: sourceLock.file must name an existing lock under android/aosp/`);
-  else if (Object.values(product.separateLocks ?? {}).includes(lockFile)) problems.push(`${lockFile} is a separate product's lock; it is not admitted for the Cuttlefish product`);
+  if (Object.values(product.separateLocks ?? {}).includes(lockFile)) problems.push(`${lockFile} is a separate product's lock; it is not admitted for the Cuttlefish product`);
+  else if (typeof lockFile !== "string" || !lockFile.startsWith("android/aosp/") || !fs.existsSync(at(lockFile))) problems.push(`${PRODUCT_DESCRIPTOR}: sourceLock.file must name an existing lock under android/aosp/`);
   else {
     const lock = read(lockFile);
     if (lock.admitted === false) problems.push(`${lockFile} is not admitted`);
@@ -377,7 +377,7 @@ if (listenerApk) {
 }
 if (cuttlefish) writeCuttlefishNatives({root:process.cwd(), output, apk, module:identity.moduleName});
 if (physical) {
-  writePixel10aProduct({root:process.cwd(), output, apk, identity, sourceEvidence:physicalSource, production});
+  writePixel10aProduct({root:process.cwd(), output, apk, identity, launcher:reviewed, sourceEvidence:physicalSource, production});
 }
 if (physical || cuttlefish) {
   if (fs.existsSync(destination)) throw Error('Output appeared during staging: ' + destination);

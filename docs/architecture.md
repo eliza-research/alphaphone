@@ -99,7 +99,7 @@ Gmail attachments and PDF file creation remain available.
 | --- | --- |
 | `apps/app/src` | Alpha UI, product policy and adapters to shared features |
 | `android` | Product identity, Activity, permissions, resources and standalone/HOME packaging |
-| `android/sense`, `android/aosp/listener` | AOSP-image-only privileged, network-less always-on listener and its image configuration ([ADR 0001](adr/0001-privileged-listener.md)); never in the standalone or launcher APK |
+| `android/sense` | Product identity wrappers for the upstream Sense listener; shared implementation and SystemUI policy live in `vendor/eliza/packages/app/platforms/android/sense` and `vendor/eliza/packages/os/android/sense` ([ADR 0001](adr/0001-privileged-listener.md)); never in the standalone or launcher APK |
 | `app.config.json` | Package ID, display name, version and orientation |
 | `backend` | Development runtime composition, character and permitted model/actions |
 | `vendor/eliza` | Pinned shared platform source; never modified by consumer builds |
@@ -412,3 +412,22 @@ distributions still require native qualification.
 A consent permission request pending while ConsentActivity is recreated
 (for example on rotation) is restored only within the same process, so a request made
 before a restart can never match the listener's fresh reset generation.
+
+### Shared Pixel 10a source and product
+
+Eliza owns the Pixel 10a/stallion source inventory, strict source verification,
+hardware configuration, product composition, Sense listener and SystemUI lease.
+Alpha imports these through its reviewed pin. Its thin adapters supply the
+installed package/component identities, signing descriptors and explicit build-host
+patch envelope. The immutable inventory still binds the `vendor/alphaphone`
+AOSP path for both products; that compatibility path is not the launcher brand.
+
+Both Pixel 10a main apps remain nonprivileged. Only the separately admitted
+Sense APK receives the two reviewed privileges. Each Sense APK has its own
+speech module and packages the complete admitted libelizainference runtime;
+the main app's speech module links to its host-owned runtime. This keeps the
+separate process independent without duplicate runtime selection in either APK.
+
+Source reuse does not transfer image, signing or device qualification. Alpha's
+runtime provenance, image capability and listener acceptance gates remain active,
+and `releaseQualified` remains false.

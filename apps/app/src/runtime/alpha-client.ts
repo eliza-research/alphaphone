@@ -371,7 +371,7 @@ export class AlphaClient {
       try { result = await transport.send({
         requestId: options?.requestId ?? crypto.randomUUID(),
         ...(options?{channelType:options.channelType,expectedConversationId:options.expectedConversationId,voiceTurnSignal:options.voiceTurnSignal}:{}),
-        text: text.trim(),
+        text,
         ...(replyTo?{replyTo}:{}),
         context,
         signal,

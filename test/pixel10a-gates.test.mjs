@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {GATE_NAMES, PIXEL10A_GATES, pixel10aGateProblems} from '../scripts/pixel10a-gates.mjs';
 
-const FILES = [PIXEL10A_GATES, 'android/aosp/pixel10a-product.json', 'android/aosp/pixel10a-source.json', 'android/aosp/pixel10a-ota-channel.json',
+const FILES = [PIXEL10A_GATES, 'android/aosp/pixel10a-product.json', 'vendor/eliza/packages/os/android/sources/pixel10a-stallion.json', 'android/aosp/pixel10a-ota-channel.json',
   'docs/pixel10a-source-verification-2026-10-25.json', 'docs/pixel10a-code6-boot-evidence.json', 'docs/evidence/cuttlefish-observation-2026-10-25.json'];
 const read = file => JSON.parse(fs.readFileSync(file, 'utf8'));
 
@@ -54,7 +54,7 @@ test('signed update and recovery cannot pass while the channel drills are not ru
 });
 
 test('source admission must match the pinned, admitted lock and its verification', t => {
-  const unadmitted = {'android/aosp/pixel10a-source.json': lock => ({...lock, developmentOnly: true})};
+  const unadmitted = {'vendor/eliza/packages/os/android/sources/pixel10a-stallion.json': lock => ({...lock, developmentOnly: true})};
   const problems = pixel10aGateProblems(copy(t, unadmitted)).join('\n');
   assert.match(problems, /sourceAdmission passed while the lock is developmentOnly/);
   assert.match(problems, /does not pin the lock/);

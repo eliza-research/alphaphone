@@ -16,6 +16,8 @@ await assert.rejects(readLocalAgentStream(response(event({type:'error',message:'
 await assert.rejects(readLocalAgentStream(response(event({type:'done',fullText:'not enough'})),signal,()=>{}),/Invalid terminal/);
 await assert.rejects(readLocalAgentStream(response(event({type:'token',text:'x'.repeat(200001)}),4096),signal,()=>{}),/display limit/);
 await assert.rejects(readLocalAgentStream(response('data: not-json\n\n'),signal,()=>{}));
+await assert.rejects(readLocalAgentStream(new Response(new ReadableStream({start(c){c.enqueue(new Uint8Array([0xc3,0x28]));c.close();}}),{headers:{'content-type':'text/event-stream'}}),signal,()=>{}),/Invalid stream encoding/);
+await assert.rejects(readLocalAgentStream(response(':'+ 'x'.repeat(2*1024*1024),4096),signal,()=>{}),/Local stream exceeds limit/);
 let cancelled=false;
 const aborted=new AbortController();const hanging=new Response(new ReadableStream({cancel(){cancelled=true;}}),{headers:{'content-type':'text/event-stream'}});
 const pending=readLocalAgentStream(hanging,aborted.signal,()=>{});aborted.abort();await assert.rejects(pending,error=>error.name==='AbortError');assert.equal(cancelled,true);
@@ -63,6 +65,15 @@ client.attachVerifiedTransport({session:{ownerId:'owner',agentId:'agent',session
 await client.send('Hello',text=>values.push(text));late('Late');assert.deepEqual(values,['Progress']);
 client.disconnect();client.attachVerifiedTransport({session:{ownerId:'owner',agentId:'agent',sessionId:'new',origin:'https://agent.example'},send:({onText})=>{late=onText;return new Promise(r=>{resolveSend=r;});},execute:async()=>{throw Error('No action');}});
 const stale=client.send('Cancel',text=>values.push(text));client.cancel();late('Stale');resolveSend({text:'Too late'});await assert.rejects(stale);assert.deepEqual(values,['Progress']);
+
+// Original authored bytes cross the verified transport unchanged; whitespace-only is not sent.
+{
+ const textClient=new AlphaClient(),sent=[];
+ textClient.attachVerifiedTransport({session:{ownerId:'owner',agentId:'agent',sessionId:'authored',origin:'https://agent.example'},send:async input=>{sent.push(input.text);return {text:'Done'};},execute:async()=>{throw Error('No action');}});
+ await assert.rejects(textClient.send(' \n\t  '),/Enter a message/);assert.equal(sent.length,0);
+ const authored='  Indented line.\n\nTrailing space.  \n';
+ await textClient.send(authored);assert.deepEqual(sent,[authored]);
+}
 
 // Dropped stream: exactly one non-streaming read of the persisted reply under the same clientMessageId.
 {

@@ -9,7 +9,7 @@ product's UI is imported.
 
 The inspected Pixel source has `frameworks/base` revision
 `94b4c163b7dfe5ce3607f7bb8456f9573f7de57d`. The two original files are bound by
-SHA-256 in `android/aosp/listener/systemui/manifest.json`, together with the current
+SHA-256 in `vendor/eliza/packages/os/android/sense/systemui/manifest.json`, together with the current
 Pixel source-lock hash. `microphone-ops.patch` adds `OP_RECORD_AUDIO_HOTWORD` and
 `OP_RECORD_AUDIO_SANDBOXED` at exactly three sites:
 
@@ -95,4 +95,4 @@ The current host regression applies the real patch, checks all three mappings,
 and, when `ALPHA_SYSTEMUI_TEST_SOURCE` names the pinned source, verifies original
 and patched hashes and mutation rejection. These are source tests only.
 
-The separate [Listening chip source candidate](aosp-listening-chip.md) adds a `--chip` preparation bundle, required by every staged listener product (staging includes its overlay and records it in `listener/systemui/required-source-patches.json`). Its independent monitor/views, Pause action and indicator health lease (source and host tests only) do not complete G3: SystemUI compilation and image/device qualification remain blockers. The original two-file microphone-op bundle and its receipt retain their original scope.
+The separate [Listening chip source candidate](aosp-listening-chip.md) adds a `--chip` preparation bundle, required by every staged listener product (staging includes its overlay and records it in `listener/evidence.json`). Its independent monitor/views, Pause action and indicator health lease (source and host tests only) do not complete G3: SystemUI compilation and image/device qualification remain blockers. The original two-file microphone-op bundle and its receipt retain their original scope.

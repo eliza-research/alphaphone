@@ -5,7 +5,7 @@ The connected development device's hardware SKU is `GE1GQ`. Pixel 10 and Pixel 1
 are different devices and are not supported targets; the former Pixel 10 placeholder lock is
 retired, and no other device configuration can admit this one.
 
-`android/aosp/pixel10a-source.json` records the inspected development source inputs:
+`vendor/eliza/packages/os/android/sources/pixel10a-stallion.json` records the inspected development source inputs:
 
 - AOSP `android-17.0.0_r1`, manifest commit `5bc9a7ce1cd78dd53613bbfd0ebf506e1e4adb0f`.
 - 1,084 platform project revisions plus three pinned device extraction projects.
