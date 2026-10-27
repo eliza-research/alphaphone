@@ -19,8 +19,23 @@
       "failed": 0
     },
     "typecheck": "passed",
-    "fullRepository": "Initial merged run interrupted; fixture compatibility repairs and final rerun pending",
-    "androidBuildLocal": "Runtime preparation interrupted; final rerun pending"
+    "fullRepository": {
+      "command": "npm run verify",
+      "tests": 2106,
+      "passed": 2100,
+      "failed": 0,
+      "skipped": 6,
+      "typecheck": "passed",
+      "productionBuild": "passed",
+      "productionBundleAudit": "passed"
+    },
+    "androidBuildLocal": "Runtime preparation interrupted; final rerun pending",
+    "finalUpstream": "4b928290d388e8f9866b6c404a1b186c7bfe7f70",
+    "followUpGoogleChooserFixture": {
+      "tests": 10,
+      "passed": 10,
+      "failed": 0
+    }
   },
   "mainUpdated": false,
   "deviceAcceptance": false

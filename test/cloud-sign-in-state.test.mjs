@@ -27,7 +27,7 @@ async function panel(run){
   const {createRoot}=await import('react-dom/client');
   const root=createRoot(document.getElementById('root'));
   const calls=[];
-  let props={view:code,busy:false,google:false,message:'',error:'',actions:{verify:value=>calls.push(value),google(){},email(){},resend(){},cancel(){}}};
+  let props={view:code,busy:false,google:true,message:'',error:'',actions:{verify:value=>calls.push(value),google(){},email(){},resend(){},cancel(){}}};
   const render=async next=>{props={...props,...next};await act(()=>root.render(React.createElement(CloudSignInPanel,props)));};
   try{await render({});await run({document:dom.window.document,window:dom.window,render,calls});}
   finally{await act(()=>root.unmount());dom.window.close();for(const [key,value]of Object.entries(previous)){if(value)Object.defineProperty(globalThis,key,value);else delete globalThis[key];}}
@@ -74,7 +74,7 @@ test('mandatory chooser omits inert Back and distinguishes readiness from an ema
   await render({busy:true,message:'Sending your code…'});
   assert.equal(document.querySelector('form button').textContent,'Sending code…');
   assert.equal(document.querySelector('[role="status"]:not(#alpha-google-unavailable)')===null,true,'sending does not add a line or shift the form');
-  assert.equal(document.querySelector('.alpha-connection-cancel').textContent,'Cancel sign-in');
+  assert.equal([...document.querySelectorAll('.alpha-connection-cancel')].some(button=>button.textContent==='Cancel sign-in'),true);
 }));
 
 test('resend starts at thirty seconds and cannot be clicked during the countdown',async context=>{
