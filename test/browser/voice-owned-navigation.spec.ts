@@ -1,8 +1,10 @@
+import {openLegacyNotes} from './helpers/legacy-notes';
+import {returnToApps} from './app-navigation';
 import {test,expect,type Page} from '@playwright/test';
 import {cloudNotesVoiceFixture,noPhysicalOrLocalVoice} from './cloud-notes-voice-fixture';
 const voice=(page:Page)=>page.getByRole('region',{name:'Voice conversation',exact:true});
 async function setup(page:Page,detent='sheet'){
- await cloudNotesVoiceFixture(page);
+ await cloudNotesVoiceFixture(page);await openLegacyNotes(page);await returnToApps(page);
  await page.evaluate(async detent=>{
   const {connectionController:c}=await import('/src/runtime/connection-ui.tsx'),{alphaClient}=await import('/src/runtime/alpha-client.ts'),{ViewNavigationClient}=await import('/src/runtime/view-navigation.ts'),{BrowserVoice}=await import('/src/browser/voice.ts'),{Component}=await import('/src/prototype/model.js');
   const w=window as any,f=w.ownedVoiceNavigation={room:crypto.randomUUID(),installationId:crypto.randomUUID(),session:{origin:'https://owned.invalid',ownerId:'synthetic-owner',agentId:'synthetic-agent',sessionId:'synthetic-session'},peak:0,target:'notes',claims:0,acks:0,inputs:[],requests:[],holdClaim:false,holdAck:false};

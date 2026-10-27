@@ -1,3 +1,4 @@
+import {openLegacyNotes} from './helpers/legacy-notes';
 import {test,expect} from '@playwright/test';
 import {installCloudVoiceFixture} from './cloud-voice-fixture';
 test('Notes records, reviews, saves, reloads, plays and restores the same retained audio',async({page})=>{
@@ -16,7 +17,7 @@ test('Notes records, reviews, saves, reloads, plays and restores the same retain
   window.MediaRecorder=class extends Original{constructor(stream:MediaStream,options?:MediaRecorderOptions){super(stream,options);this.addEventListener('dataavailable',event=>{(window as any).recordedBytes+=event.data.size;});}};
   Object.defineProperty(navigator,'mediaDevices',{value:{getUserMedia:async()=>sink.stream},configurable:true});(window as any).fixture={ctx,osc};
  });
- await page.getByRole('button',{name:'Notes',exact:true}).click();
+ await openLegacyNotes(page);
  await expect.poll(()=>page.evaluate(()=>(window as any).fixture.ctx.state)).toBe('running');
  await page.getByRole('button',{name:'Record and transcribe',exact:true}).click();
  await page.getByRole('button',{name:'Start recording',exact:true}).click();
@@ -33,7 +34,7 @@ test('Notes records, reviews, saves, reloads, plays and restores the same retain
  // Reload only after asynchronous title autosave reaches the durable document.
  await expect.poll(()=>page.evaluate(async()=>{const raw=await(await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw();return raw?JSON.parse(raw).records.some((note:any)=>note.title==='Browser audio journey'&&note.body==='A recorded note saved through the real Notes interface.'&&!!note.audio?.audioId):false;})).toBe(true);
  await page.evaluate(async()=>{const {ctx,osc}=(window as any).fixture;osc.stop();await ctx.close();});
- await page.reload();await page.getByRole('button',{name:'Notes',exact:true}).click();await page.getByRole('button',{name:'Open Browser audio journey',exact:true}).click();
+ await page.reload();await openLegacyNotes(page);await page.getByRole('button',{name:'Open Browser audio journey',exact:true}).click();
  await expect(page.getByText('A recorded note saved through the real Notes interface.',{exact:true}).first()).toBeVisible();
  const note=await page.evaluate(async ()=>JSON.parse((await (await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw())!).records.find((n:any)=>n.title==='Browser audio journey'));
  const replay=await page.evaluate(async(note)=>{

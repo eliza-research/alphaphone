@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "reviewedHead": "723397b3d8ddceb5502a69d6c945f6f99cd374e5",
+  "upstream": "6497825b38cbe41b3677c0a445341fec900f0dd2",
+  "priorCheckpoint": {
+    "upstream": "c307290782dd7fa22c2c826ccc6a929574ea418d",
+    "fullVerification": {
+      "command": [
+        "npm",
+        "run",
+        "verify"
+      ],
+      "startedAtEpoch": 1793102212.8053985,
+      "passed": true,
+      "pin": "c307290782dd7fa22c2c826ccc6a929574ea418d",
+      "exitCode": 0,
+      "finishedAtEpoch": 1793102644.2769473
+    },
+    "tests": 2079,
+    "passed": 2075,
+    "skipped": 4,
+    "failed": 0,
+    "apkManifest": "docs/evidence/merge-build-final-apks-v12-2026-10-27.json"
+  },
+  "reviewNotes": [
+    "Maps padding and attribution respond to sheet placement and rotation without taking route camera ownership.",
+    "Disconnected Notes retains a reachable opaque app surface.",
+    "Browser Calendar selection is enabled only by the explicit test-mocks build and is denied by production-bundle audit.",
+    "Page reading requires a committed, nonloading, nonfailed, non-external-only document.",
+    "The upstream delta changes two Cloud release-tooling files; phone runtime source is unchanged."
+  ],
+  "currentPinVerification": "pending",
+  "imageBuilt": false,
+  "bootTested": false,
+  "deviceAccepted": false
+}
