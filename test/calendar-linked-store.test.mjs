@@ -2,12 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { stripTypeScriptTypes } from "node:module";
-const code = stripTypeScriptTypes(
-	readFileSync("apps/app/src/runtime/calendar-linked-store.ts", "utf8"),
-	{ mode: "transform" },
-);
+// The shared store (@elizaos/plugin-calendar/linked-sync) through Alpha's installed-key wrapper.
 const { CalendarLinkedStore } = await import(
-	"data:text/javascript;base64," + Buffer.from(code).toString("base64")
+	"../apps/app/src/runtime/calendar-linked-store.ts"
 );
 const engineCode = stripTypeScriptTypes(
 	readFileSync(
@@ -230,6 +227,11 @@ test("new operation keys survive a grant reconnect without sharing old checkpoin
 	const b = await reconnected.link("event", "r1");
 	assert.notEqual(a.id, b.id);
 	assert.equal(a.idempotencyKey, b.idempotencyKey);
+	assert.match(
+		a.idempotencyKey,
+		/^alpha-calendar-sync:[a-f0-9]{64}:event$/,
+		"installed provider keys keep Alpha's original prefix",
+	);
 	const changedAgent = await f.open({ agentId: "new-agent" });
 	assert.equal(
 		(await changedAgent.link("event", "r1")).idempotencyKey,
