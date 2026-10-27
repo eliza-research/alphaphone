@@ -65,9 +65,103 @@
     "output": "ok android/soong/etc 0.012s",
     "log": "/tmp/alphaphone-soong-native-go-test.log"
   },
-  "correctedImagePayloadsVerified": false,
+  "correctedImagePayloadsVerified": true,
   "finalPin": "4e617a0c15080df16391ced88dbbc73b818a7af5",
   "finalPinImagesBuilt": false,
   "bootTested": false,
-  "deviceAcceptance": false
+  "deviceAcceptance": false,
+  "correctedCheckpointBuild": {
+    "cpuAffinity": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "target": "cuttlefish",
+    "startedAtEpoch": 1793088636.0858176,
+    "minimumFreeBytes": 99396460544,
+    "imageBuilt": true,
+    "imageFlashed": false,
+    "bootTested": false,
+    "exitCode": 0,
+    "finishedAtEpoch": 1793091105.2746148
+  },
+  "correctedCheckpointPayloads": {
+    "imagePayloadsVerified": true,
+    "checks": [
+      {
+        "path": "/home/shaw/.codex/worktrees/integrate-pr621/alphaphone/artifacts/aosp-campaign-20261027/cuttlefish-extracted/product/app/AlphaPhone/AlphaPhone.apk",
+        "sha256": "5e10e36cf3d9aac54ff243a55815d70edfee0204d78b3c609de422bc09afbc8c",
+        "mode": "0o644"
+      },
+      {
+        "path": "/home/shaw/.codex/worktrees/integrate-pr621/alphaphone/artifacts/aosp-campaign-20261027/cuttlefish-extracted/product/app/AlphaPhone/lib/x86_64/libc++_shared.so",
+        "sha256": "2e855857f80819737d25a663109fedf816a5e996a85423166806014a06593256",
+        "mode": "0o644"
+      },
+      {
+        "path": "/home/shaw/.codex/worktrees/integrate-pr621/alphaphone/artifacts/aosp-campaign-20261027/cuttlefish-extracted/product/app/AlphaPhone/lib/x86_64/libeliza_bun.so",
+        "sha256": "16b72935ffd7a503b978c186874539c92aade4e3515b70a5abf5db2581fdef7d",
+        "mode": "0o755"
+      },
+      {
+        "path": "/home/shaw/.codex/worktrees/integrate-pr621/alphaphone/artifacts/aosp-campaign-20261027/cuttlefish-extracted/product/app/AlphaPhone/lib/x86_64/libeliza_gcc_s.so",
+        "sha256": "2298274ad3316109d6e895083398e220f16fbdd12957c4afcc9af8849e734151",
+        "mode": "0o644"
+      },
+      {
+        "path": "/home/shaw/.codex/worktrees/integrate-pr621/alphaphone/artifacts/aosp-campaign-20261027/cuttlefish-extracted/product/app/AlphaPhone/lib/x86_64/libeliza_ld_musl_x86_64.so",
+        "sha256": "03e14ad9640d09622682bcc08ad331113d5feb3a50b4d578f13e5ef38f2774ed",
+        "mode": "0o755"
+      },
+      {
+        "path": "/home/shaw/.codex/worktrees/integrate-pr621/alphaphone/artifacts/aosp-campaign-20261027/cuttlefish-extracted/product/app/AlphaPhone/lib/x86_64/libeliza_ld_musl_x86_64_real.so",
+        "sha256": "2fb72c67f292827c8c4095067197af7880c234a3a4060136e1b5518d10de1eb9",
+        "mode": "0o755"
+      },
+      {
+        "path": "/home/shaw/.codex/worktrees/integrate-pr621/alphaphone/artifacts/aosp-campaign-20261027/cuttlefish-extracted/product/app/AlphaPhone/lib/x86_64/libeliza_stdcpp.so",
+        "sha256": "08d5c7eb7c1e210d0fb56a33af0b97ab86339f2d321ceb31fcd53c563f8803c9",
+        "mode": "0o644"
+      },
+      {
+        "path": "/home/shaw/.codex/worktrees/integrate-pr621/alphaphone/artifacts/aosp-campaign-20261027/cuttlefish-extracted/product/app/AlphaPhone/lib/x86_64/libelizainference.so",
+        "sha256": "fe1f563e5cd02b86ba547d2f6971822303a8338b11374818393432a002f80581",
+        "mode": "0o644"
+      },
+      {
+        "path": "/home/shaw/.codex/worktrees/integrate-pr621/alphaphone/artifacts/aosp-campaign-20261027/cuttlefish-extracted/product/app/AlphaPhone/lib/x86_64/libelizavoicejni.so",
+        "sha256": "8b55c7f0d3502e0d7b5750bd6664ae48bfcf037d27dd888ad2bb4c271a13ef08",
+        "mode": "0o644"
+      },
+      {
+        "path": "/home/shaw/.codex/worktrees/integrate-pr621/alphaphone/artifacts/aosp-campaign-20261027/cuttlefish-extracted/product/app/AlphaPhone/lib/x86_64/libimage_processing_util_jni.so",
+        "sha256": "f5d02c9c50c33a45c2125f63f4d6c954aec0e9b1a6ade25074f146ed92264efe",
+        "mode": "0o644"
+      },
+      {
+        "path": "/home/shaw/.codex/worktrees/integrate-pr621/alphaphone/artifacts/aosp-campaign-20261027/cuttlefish-extracted/product/app/AlphaPhone/lib/x86_64/libparadeevoicejni.so",
+        "sha256": "8448ab15b153570f3fb0b669b77c1955835bbbf92367c77229869ed9ea5567cf",
+        "mode": "0o644"
+      },
+      {
+        "path": "/home/shaw/.codex/worktrees/integrate-pr621/alphaphone/artifacts/aosp-campaign-20261027/cuttlefish-extracted/product/app/AlphaPhone/lib/x86_64/libsigsys-handler.so",
+        "sha256": "6939ae9fcac095ba8355641865dcc0594dc3af783de5fa29b84b8986dd76c548",
+        "mode": "0o644"
+      },
+      {
+        "path": "/home/shaw/.codex/worktrees/integrate-pr621/alphaphone/artifacts/aosp-campaign-20261027/cuttlefish-extracted/product/app/AlphaPhone/lib/x86_64/libsurface_util_jni.so",
+        "sha256": "84d8ca201f2160b2ca3a5bd2886994f7287ee7cd09fe73b081f5b236dda8496d",
+        "mode": "0o644"
+      },
+      {
+        "path": "/home/shaw/.codex/worktrees/integrate-pr621/alphaphone/artifacts/aosp-campaign-20261027/cuttlefish-extracted/system_ext/priv-app/AlphaSense/AlphaSense.apk",
+        "sha256": "98d1510fc6e76357dddf01288096d2fe8df690d3db92c3324a22cddda86e0700",
+        "mode": "0o644"
+      }
+    ],
+    "runtimeVerified": false,
+    "bootTested": false,
+    "deviceAcceptance": false
+  }
 }

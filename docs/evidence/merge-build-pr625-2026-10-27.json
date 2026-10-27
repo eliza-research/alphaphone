@@ -34,5 +34,12 @@
     "failed": 0,
     "total": 2108,
     "log": "/tmp/alphaphone-soong-packaging-verify.log"
+  },
+  "latestIntegratedHead": "d448f6a53",
+  "latestIntegrationCommit": "94fcb5cac",
+  "receiptPresentationFix": "4036618980ed7b6ebe87563be500ae226a173183",
+  "receiptPresentationVerification": {
+    "focusedTestsPassed": 19,
+    "browserRerun": "running; prior Clock unknown failure reproduced and traced to Calendar projection overwriting the device result"
   }
 }
