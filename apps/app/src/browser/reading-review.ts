@@ -1,5 +1,5 @@
 import {layoutBrowserDialog} from './dialog-layout';
-import {sensitiveReadingUrl,sensitiveReadingText} from './reading-sensitive';
+import {sensitiveReadingUrl,sensitiveReadingText} from '../../../../.eliza/client-features/plugins/plugin-native-browser-surface/src/page-reading.ts';
 import {browserReadingSource} from './reading-source';
 import {speakLocalText} from '../local-speech-playback';
 

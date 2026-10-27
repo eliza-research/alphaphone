@@ -1,5 +1,5 @@
 import {sourceOf,type Source} from './note-source-adapter';
-import {sensitiveReadingUrl} from '../browser/reading-sensitive';
+import {sensitiveReadingUrl} from '../../../../.eliza/client-features/plugins/plugin-native-browser-surface/src/page-reading.ts';
 export type WebSource={kind:'web-page';version:1;name:string;url:string};
 export type RecordingSource={kind:'recording';version:1;name:string;noteId:string;revision:string};
 export type SummarySource=Source|WebSource|RecordingSource;

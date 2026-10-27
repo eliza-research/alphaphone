@@ -1,5 +1,7 @@
 package ai.elizaresearch.alphaphone;
 
+import ai.eliza.plugins.browsersurface.BrowserPageReading;
+
 import android.app.AlertDialog;
 import android.os.SystemClock;
 import android.view.View;
@@ -121,8 +123,8 @@ public final class BrowserSensitiveReadingInstrumentedTest {
     assertEquals("true",child.child("(()=>{if(window["+JSONObject.quote(key)+"])return false;const old=document.body;window["+JSONObject.quote(key)+"]=old;const next=document.createElement('body');next.innerHTML="+JSONObject.quote(markup)+";old.replaceWith(next);return true;})()"));installed=true;
     js("window.__readingArgs=null;Capacitor.Plugins.AlphaBrowser.command({...window.__readingTab,command:'stop'}).then(v=>window.__readingArgs={session:v.session,id:v.id,navigation:v.navigation,url:v.url})");waitFor("window.__readingArgs");
     String review="Capacitor.Plugins.AlphaBrowser.reviewReading({...window.__readingArgs,"+binding+"})";
-    for(String url:new String[]{"https://pass.proton.me/","https://pass.proton.me./","https://vault.bitwarden.com/","https://accounts.google.com/","https://example.com/recovery","https://example.com/#/vault","https://example.com/?access_token=synthetic","https://example.com/%70assword"})assertTrue(url,BrowserReading.sensitiveUrl(url));
-    assertFalse(BrowserReading.sensitiveUrl("https://example.com/gardening"));
+    for(String url:new String[]{"https://pass.proton.me/","https://pass.proton.me./","https://vault.bitwarden.com/","https://accounts.google.com/","https://example.com/recovery","https://example.com/#/vault","https://example.com/?access_token=synthetic","https://example.com/%70assword"})assertTrue(url,BrowserPageReading.sensitiveUrl(url));
+    assertFalse(BrowserPageReading.sensitiveUrl("https://example.com/gardening"));
     for(String sensitive:new String[]{"<article><div>Your vault</div><div>synthetic-only</div></article>","<article><div>Password: synthetic-only</div></article>","<aside>Recovery codes: synthetic-only</aside><article>Garden journal</article>","<article><span>Verification</span><span>code</span><div>123456</div></article>","<article>123456</article>","<input type='password' hidden><article>Garden journal</article>","<input autocomplete='one-time-code'><article>Garden journal</article>","<article>"+"garden ".repeat(10000)+"</article>"}){
      assertEquals("true",child.child("document.body.innerHTML="+JSONObject.quote(sensitive)+";true"));
      JSONObject denied=call(review);assertTrue(denied.toString(),denied.has("error"));assertFalse(denied.has("readingToken"));assertEquals(0,server.bodies.size());

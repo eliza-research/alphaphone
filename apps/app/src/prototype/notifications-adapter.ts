@@ -1,7 +1,7 @@
 import { registerPlugin } from '../platform-plugins';
 import { Capacitor } from '@capacitor/core';
 import { reviewContentQuestion } from '../browser/content-question';
-import { sensitiveReadingText } from '../browser/reading-sensitive';
+import { sensitiveReadingText } from '../../../../.eliza/client-features/plugins/plugin-native-browser-surface/src/page-reading.ts';
 import { noticeCurrent, noticeExcerpt, noticeReviewable } from './context-selection';
 type Bag = Record<string, any>;
 const opaque=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;

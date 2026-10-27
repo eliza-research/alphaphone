@@ -7,8 +7,7 @@ import { DailyApps } from '../daily';
 import { createNativeReadingVoice } from '../runtime/native-reading-voice';
 import {reviewContentQuestion} from '../browser/content-question';
 import {browserReadingSource} from '../browser/reading-source';
-import {sensitiveReadingText} from '../browser/reading-sensitive';
-import {createReadingSupport, READING_UNSUPPORTED_MESSAGE} from '../browser/reading-capability';
+import {createReadingSupport, pageQuestionExcerpt, READING_UNSUPPORTED_MESSAGE, sensitiveReadingText} from '../../../../.eliza/client-features/plugins/plugin-native-browser-surface/src/page-reading.ts';
 import {webSourceOf} from './summary-source';
 import { connectionController, agentPendingText } from '../runtime/connection-ui';
 import { BrowserReviews } from '../browser/review';
@@ -142,15 +141,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
         // Android may be unable to read the page in its isolated world (an old System WebView) or return
         // nothing usable. Then the review opens with an empty excerpt, as the web CORS-denied path does,
         // and Continue stays disabled until the user pastes text. A sensitive page never opens a review.
-        const result=await Browser.reviewQuestion({session,id,url:info.url,navigation:info.navigation}).catch((error:unknown)=>{
-          const {code,message}=(error||{}) as {code?:unknown;message?:unknown};
-          if(code==='sensitive-page')throw error;
-          if(code==='isolated-world-unavailable'||/^Isolated page reading is unavailable/.test(String(message||'')))return null;
-          throw error;
-        });
-        const excerpt=typeof result?.text==='string'?result.text:'';
-        if(excerpt&&sensitiveReadingText(excerpt))throw Error('This page may contain credentials or verification codes. Open a different page.');
-        text=excerpt.trim()&&excerpt.length<=5000?excerpt:'';
+        text=await pageQuestionExcerpt(()=>Browser.reviewQuestion({session,id,url:info.url,navigation:info.navigation}));
       }else{
         const result=await browserReadingSource(source.url,controller.signal);if(result?.blocked)throw Error('This page may contain credentials or verification codes. Open a different page.');text=result?.text||'';
       }

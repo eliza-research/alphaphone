@@ -1,5 +1,7 @@
 package ai.elizaresearch.alphaphone;
 
+import ai.eliza.plugins.browsersurface.BrowserPageReading;
+
 import android.app.AlertDialog;
 import android.os.SystemClock;
 import android.view.View;
@@ -282,7 +284,7 @@ public final class BrowserPageQuestionInstrumentedTest {
     pages = openBrowser();
     // The address alone is enough to refuse, before the document is read.
     for (String url : new String[]{BASE + "/?api_key=SYNTHETIC-ONLY", BASE + "/account/recovery"}) {
-     assertTrue(url, BrowserReading.sensitiveUrl(url));
+     assertTrue(url, BrowserPageReading.sensitiveUrl(url));
      pages.routes.put(url, page(ARTICLE, ""));
      open(url);
      JSONObject refused = call(REVIEW);
@@ -292,7 +294,7 @@ public final class BrowserPageQuestionInstrumentedTest {
     }
     // An ordinary address with credential-like content anywhere in the document is refused as a whole.
     String ordinary = BASE + "/gardening";
-    assertFalse(BrowserReading.sensitiveUrl(ordinary));
+    assertFalse(BrowserPageReading.sensitiveUrl(ordinary));
     String[] sensitive = {
      page(ARTICLE, "<p>Password: synthetic-only</p>"),
      "<html><body><aside>Recovery codes: synthetic-only</aside><article><p>" + ARTICLE + "</p></article></body></html>",

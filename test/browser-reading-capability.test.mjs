@@ -15,7 +15,9 @@ const world = java("BrowserReadingWorld"), reading = java("BrowserReading"), plu
 const shared = name => fs.readFileSync(`vendor/eliza/plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface/${name}.java`, "utf8");
 const downloads = shared("BrowserDownloads"), capture = shared("BrowserBlobCapture"), loginFields = shared("BrowserLoginFields");
 const adapter = fs.readFileSync("apps/app/src/prototype/browser-adapter.ts", "utf8");
-const capability = fs.readFileSync("apps/app/src/browser/reading-capability.ts", "utf8");
+// The shared page-reading policy at the pin: the renderer module and its native half.
+const capability = fs.readFileSync("vendor/eliza/plugins/plugin-native-browser-surface/src/page-reading.ts", "utf8");
+const policy = shared("BrowserPageReading");
 const template = fs.readFileSync("apps/app/src/prototype/template.html", "utf8");
 
 test("no browser source can put a script or a bridge in a page's own world", () => {
@@ -48,19 +50,19 @@ test("the native side reports the capability and refuses a review with the unava
   // Unavailable is the first answer of a review: before a speech route is asked for, before the
   // page is judged, before extraction, and it is not the "reload this page" answer.
   const review = reading.slice(reading.indexOf("private void review(PluginCall call,WebView web,BrowserReadingWorld world,BooleanSupplier stillCurrent,boolean question){"));
-  const unsupported = review.indexOf("if(world==null||!world.available()){call.reject(UNSUPPORTED,UNSUPPORTED_CODE);return;}");
+  const unsupported = review.indexOf("if(world==null||!world.available()){call.reject(BrowserPageReading.UNSUPPORTED_MESSAGE,BrowserPageReading.READING_UNSUPPORTED);return;}");
   const route = review.indexOf('call.reject("Select an available speech route before reading")');
-  const sensitive = review.indexOf('call.reject("Reading unavailable on a sensitive or unverified page",SENSITIVE_PAGE)');
-  const notReady = review.indexOf('if(!world.ready()){call.reject("This page is not ready for private reading. Reload this page, then try again.","reading-not-ready");return;}');
-  const extract = review.indexOf("world.evaluate(EXTRACT,");
+  const sensitive = review.indexOf('call.reject("Reading unavailable on a sensitive or unverified page",BrowserPageReading.SENSITIVE_PAGE)');
+  const notReady = review.indexOf('if(!world.ready()){call.reject("This page is not ready for private reading. Reload this page, then try again.",BrowserPageReading.READING_NOT_READY);return;}');
+  const extract = review.indexOf("world.evaluate(BrowserPageReading.EXTRACT,");
   assert.ok(unsupported > 0 && route > unsupported && sensitive > route && notReady > sensitive && extract > notReady, "unsupported, then speech route, sensitive page, not ready, then extraction");
   assert.match(review, /^[^\n]*\n\s*cancel\(\);final long expected=generation;\n\s*\/\/[^\n]*\n\s*if\(world==null\|\|!world\.available\(\)\)/, "nothing but the cancellation of an earlier review precedes it");
-  assert.match(reading, /static final String UNSUPPORTED_CODE="reading-unsupported";/);
+  assert.match(policy, /public static final String READING_UNSUPPORTED = "reading-unsupported";/);
 });
 
 test("the renderer and the native side say the same words", () => {
-  const message = /READING_UNSUPPORTED_MESSAGE =\s*'([^']+)';/.exec(capability)?.[1];
-  const native = /static final String UNSUPPORTED="([^"]+)";/.exec(reading)?.[1];
+  const message = /READING_UNSUPPORTED_MESSAGE =\s*"([^"]+)";/.exec(capability)?.[1];
+  const native = /public static final String UNSUPPORTED_MESSAGE =\s*"([^"]+)";/.exec(policy)?.[1];
   assert.ok(message && native);
   assert.equal(native, message);
   assert.match(message, /Read aloud and Ask about page are unavailable on this device/);
@@ -78,7 +80,7 @@ test("the renderer asks on Android only, says so before any speech route or exce
   assert.match(adapter, /readingUnavailable:readingSupport\?\.state==='unavailable',readingNote:READING_UNSUPPORTED_MESSAGE,/);
   assert.match(template, /<sc-if value="\{\{browser\.readingUnavailable\}\}"><p role="note" aria-label="Page reading unavailable" data-alpha-reading-unavailable [^>]*>\{\{browser\.readingNote\}\}<\/p><\/sc-if>/);
   // Only an explicit boolean is believed.
-  assert.match(capability, /if \(available === true\) state = 'available';\s*else if \(available === false\) state = 'unavailable';/);
+  assert.match(capability, /if \(available === true\) state = "available";\s*else if \(available === false\) state = "unavailable";/);
 });
 
 test("BrowserReadingNavigation runs exactly one method per provider and records which", () => {

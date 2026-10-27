@@ -4,7 +4,7 @@ import {reviewMailAttachment,type MailAttachment} from '../runtime/inbox-attachm
 import type {Source} from './note-source-adapter';
 const sourceFiles=registerPlugin<{readSelected(input:{selectionId:string}):Promise<MailAttachment & {sha256:string;size:number;sourceReferenceVersion?:1}>;retainSourceReference(input:{selectionId:string;sha256:string}):Promise<{reference?:string}>}>('AlphaMailAttachments');
 import {reviewContentQuestion} from '../browser/content-question';
-import {sensitiveReadingText} from '../browser/reading-sensitive';
+import {sensitiveReadingText} from '../../../../.eliza/client-features/plugins/plugin-native-browser-surface/src/page-reading.ts';
 import { installFilesTreeAdapter } from './files-tree-adapter';
 import { Capacitor } from '@capacitor/core';
 import { DailyApps, type NativeResult } from '../daily';

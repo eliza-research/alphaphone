@@ -1,5 +1,5 @@
 import {anyAbortSignal} from '../runtime/abort-signal';
-import {sensitiveReadingUrl,sensitiveReadingText,sensitiveReadingDocument} from './reading-sensitive';
+import {sensitiveReadingUrl,sensitiveReadingText,sensitiveReadingDocument} from '../../../../.eliza/client-features/plugins/plugin-native-browser-surface/src/page-reading.ts';
 export type ReadingSource={text:string;truncated:boolean;blocked?:false}|{blocked:true};
 /** A bounded public source fetch. The isolated live frame retains its opaque origin. */
 export async function browserReadingSource(address:string,signal:AbortSignal):Promise<ReadingSource|undefined>{

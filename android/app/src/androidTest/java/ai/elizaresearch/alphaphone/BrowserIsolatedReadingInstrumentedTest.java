@@ -1,5 +1,7 @@
 package ai.elizaresearch.alphaphone;
 
+import ai.eliza.plugins.browsersurface.BrowserPageReading;
+
 import android.app.AlertDialog;
 import android.os.SystemClock;
 import android.view.View;
@@ -67,8 +69,8 @@ public final class BrowserIsolatedReadingInstrumentedTest {
     assertEquals("true",child.child("(()=>{const frame=document.createElement('iframe');document.body.append(frame);const hidden=typeof frame.contentWindow.__alphaBrowserReadWorld==='undefined';frame.remove();return hidden;})()"));
     String poisonKey=key+"Poison";
     assertEquals("true",child.child("(()=>{window["+JSONObject.quote(poisonKey)+"]={test:RegExp.prototype.test,normalize:String.prototype.normalize,query:Document.prototype.querySelector,style:window.getComputedStyle,json:JSON.stringify};RegExp.prototype.test=()=>false;String.prototype.normalize=()=> 'Garden journal';Document.prototype.querySelector=function(){return this.body;};window.getComputedStyle=()=>({display:'block',visibility:'visible',opacity:'1',contentVisibility:'visible',clip:'auto',clipPath:'none'});JSON.stringify=()=>'{\"text\":\"Forged harmless page\"}';return true;})()"));
-    for(String url:new String[]{"https://pass.proton.me/","https://pass.proton.me./","https://vault.bitwarden.com/","https://accounts.google.com/","https://example.com/recovery","https://example.com/#/vault","https://example.com/?access_token=synthetic","https://example.com/%70assword"})assertTrue(url,BrowserReading.sensitiveUrl(url));
-    assertFalse(BrowserReading.sensitiveUrl("https://example.com/gardening"));
+    for(String url:new String[]{"https://pass.proton.me/","https://pass.proton.me./","https://vault.bitwarden.com/","https://accounts.google.com/","https://example.com/recovery","https://example.com/#/vault","https://example.com/?access_token=synthetic","https://example.com/%70assword"})assertTrue(url,BrowserPageReading.sensitiveUrl(url));
+    assertFalse(BrowserPageReading.sensitiveUrl("https://example.com/gardening"));
     for(String sensitive:new String[]{"<article><div>Your vault</div><div>synthetic-only</div></article>","<article><div>Password: synthetic-only</div></article>","<aside>Recovery codes: synthetic-only</aside><article>Garden journal</article>","<article><span>Verification</span><span>code</span><div>123456</div></article>","<article>123456</article>","<input type='password' hidden><article>Garden journal</article>","<input autocomplete='one-time-code'><article>Garden journal</article>","<article>"+"garden ".repeat(10000)+"</article>"}){
      assertEquals("true",child.child("document.body.innerHTML="+JSONObject.quote(sensitive)+";true"));
      JSONObject denied=call(review);assertTrue(denied.toString(),denied.has("error"));assertFalse(denied.has("readingToken"));assertEquals(0,server.bodies.size());

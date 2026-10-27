@@ -1,5 +1,5 @@
 import {reviewContentQuestion} from '../browser/content-question';
-import {sensitiveReadingText} from '../browser/reading-sensitive';
+import {sensitiveReadingText} from '../../../../.eliza/client-features/plugins/plugin-native-browser-surface/src/page-reading.ts';
 import {noticeExcerpt,noticeReviewable} from './context-selection';
 type Notice=Parameters<typeof noticeReviewable>[0];
 /** The publisher supplies an exact current own-notice excerpt, never an arbitrary deep-link payload. */
