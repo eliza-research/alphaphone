@@ -18,6 +18,7 @@ export const EXPORTED_COMPONENTS = Object.freeze({
   "ai.elizaresearch.alphaphone.MainActivity": null,
   "ai.elizaresearch.alphaphone.AlphaAssistActivity": null,
   "ai.elizaresearch.alphaphone.AlphaNotificationListener": "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE",
+  "ai.elizaresearch.alphaphone.AlphaQuickSettingsTile": "android.permission.BIND_QUICK_SETTINGS_TILE",
   // Alpha's password vault as an Android Autofill provider (shared plugin-native-passwords).
   "ai.eliza.plugins.passwords.ElizaPasswordAutofillService": "android.permission.BIND_AUTOFILL_SERVICE",
   // Google Play services alone may notify this native sign-in revocation service.
@@ -33,7 +34,7 @@ export const EXPORTED_COMPONENTS = Object.freeze({
 // in-browser model directory public/browser-speech/) never ship.
 export const REMOVED_SPEECH_ENTRY = /(?:\.on{2}x$|libon{2}xruntime|libsherpa|k2fsa|ort-wasm|^assets\/public\/browser-speech\/)/i;
 export const REMOVED_SPEECH_CLASSES = Object.freeze(["Lcom/k2fsa/", "Lai/eliza/speech/"]);
-import { manifestFacts } from "../vendor/eliza/packages/app/scripts/lib/android-manifest-facts.mjs";
+import { manifestFacts, parseXmlTree } from "../vendor/eliza/packages/app/scripts/lib/android-manifest-facts.mjs";
 export { manifestFacts, parseXmlTree } from "../vendor/eliza/packages/app/scripts/lib/android-manifest-facts.mjs";
 const isFalse = value => value === "0x0";
 
@@ -69,6 +70,20 @@ export function distributionProblems(apk, { mode, testMocks = false } = {}) {
     const required = EXPORTED_COMPONENTS[component.name];
     if (required && component.permission !== required)
       problems.push(`Exported ${component.name} must require ${required}`);
+  }
+  const tileName = "ai.elizaresearch.alphaphone.AlphaQuickSettingsTile";
+  const tile = facts.components.find(component => component.name === tileName);
+  if (tile) {
+    const application = parseXmlTree(apk.xml).children.find(node => node.name === "manifest")
+      ?.children.find(node => node.name === "application");
+    const nodes = application?.children.filter(node =>
+      node.attrs.name === tileName || node.attrs.name === ".AlphaQuickSettingsTile") ?? [];
+    const actions = nodes.flatMap(node => node.children.filter(child => child.name === "intent-filter")
+      .flatMap(filter => filter.children.filter(child => child.name === "action").map(child => child.attrs.name)));
+    if (tile.tag !== "service" || !tile.exported ||
+        tile.permission !== EXPORTED_COMPONENTS[tileName] || nodes.length !== 1 ||
+        actions.length !== 1 || actions[0] !== "android.service.quicksettings.action.QS_TILE")
+      problems.push("Alpha Quick Settings tile must be one exported, permission-protected QS_TILE service");
   }
   // Test-only names (mock providers, fixture peers) never ship in a flag-off build.
   if (!debugHooksAllowed) {
