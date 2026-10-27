@@ -1,7 +1,7 @@
 import React,{useRef,useState} from 'react';
 import './cloud-membership-ui.css';
 export type MembershipBalance='checking'|'zero'|'funded'|'member'|'unavailable';
-import type {SubscriptionView} from './subscription-entitlement';
+import {subscriptionSummary,type ServiceLimit,type SubscriptionView} from './subscription-entitlement';
 function creditLabel(usd:string):string {
  const [whole,fraction='']=usd.split('.');
  return `$${whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')}.${fraction.padEnd(2,'0')} USD`;
@@ -11,22 +11,31 @@ function endLabel(endsAt:number):string {
  const days=Math.ceil((endsAt-Date.now())/86400000);
  return days>0?`Ends ${date} · ${days} ${days===1?'day':'days'} left`:`Ended ${date}`;
 }
-/** Same account and membership controls in onboarding and Settings; only verified facts are displayed. */
-export function CloudMembershipControls({balance,busy,error,notice,email,credits,plan,endsAt,onRedeem,onAddFunds,onRefresh}:{balance:MembershipBalance;busy:boolean;error?:string;notice?:string;email?:string;credits?:{usd:string;observedAt:number}|null;plan?:SubscriptionView|null;endsAt?:number|null;onRedeem:(code:string)=>Promise<boolean>;onAddFunds:()=>void;onRefresh:()=>void}){
+/**
+ * The account and plan section shared by onboarding and Settings (#410, P-26): the plan state, the
+ * plan allowance Cloud reports, the plan end and the retry time of the latest Cloud limit, all from
+ * the shared subscription summary. A credit balance appears only in Cloud's explicit
+ * organization-credit mode, read-only. Nothing is bought here: the manage action opens Cloud's own
+ * billing page after the account review.
+ */
+export function CloudMembershipControls({balance,busy,error,notice,email,credits,plan,endsAt,lastLimit,serviceName='Cloud',onRedeem,onManage,onRefresh}:{balance:MembershipBalance;busy:boolean;error?:string;notice?:string;email?:string;credits?:{usd:string;observedAt:number}|null;plan?:SubscriptionView|null;endsAt?:number|null;lastLimit?:(ServiceLimit&{observedAt:number})|null;serviceName?:string;onRedeem:(code:string)=>Promise<boolean>;onManage:()=>void;onRefresh:()=>void}){
  const code=useRef<HTMLInputElement>(null);
- const active=plan?.kind==='active';
- return <section className="alpha-membership" aria-label="Membership and credits">
+ const summary=subscriptionSummary(plan??(balance==='checking'?{kind:'checking'}:null),{planEndsAt:endsAt??null,lastLimit:lastLimit??null,lastLimitAt:lastLimit?.observedAt??null,serviceName});
+ const planEnd=typeof summary.planEndsAt==='number'&&Number.isFinite(summary.planEndsAt)?summary.planEndsAt:null;
+ return <section className="alpha-membership" aria-label="Plan and membership">
    <dl className="alpha-membership-facts">
-    <div><dt>Account</dt><dd>{email||'Signed in to Eliza Cloud'}</dd></div>
-    <div><dt>Available credits</dt><dd>{credits?creditLabel(credits.usd):balance==='checking'?'Checking…':'Not available'}{credits&&<small>Checked {new Date(credits.observedAt).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})}</small>}</dd></div>
-    <div><dt>Membership</dt><dd>{active?plan.planName:plan?.kind==='inactive'?'No active membership':plan?.kind==='credits'?'No active membership':balance==='checking'?'Checking…':'Not confirmed'}{active&&<small>{typeof endsAt==='number'&&Number.isFinite(endsAt)?endLabel(endsAt):'End date not provided'}</small>}</dd></div>
+    <div><dt>Account</dt><dd>{email||`Signed in to ${serviceName}`}</dd></div>
+    <div><dt>Plan</dt><dd>{plan?summary.headline:balance==='checking'?'Checking…':'Not confirmed'}{plan?.kind==='active'&&<small>{planEnd!==null?endLabel(planEnd):'End date not provided'}</small>}</dd></div>
+    {summary.allowance&&<div><dt>Plan allowance</dt><dd>{summary.allowance}</dd></div>}
+    {plan?.kind==='credits'&&<div><dt>{serviceName} credits</dt><dd>{credits?creditLabel(credits.usd):'Not available'}{credits&&<small>Checked {new Date(credits.observedAt).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})}</small>}</dd></div>}
+    {summary.limit&&<div><dt>AI requests</dt><dd role="status">{summary.limit}</dd></div>}
    </dl>
-   <p role="status">{balance==='checking'?'Checking your account…':balance==='unavailable'?'Account details could not be refreshed. You can still redeem a code or check again.':balance==='zero'?'Use a membership code or add funds to ask Alpha.':''}</p>
+   <p role="status">{balance==='checking'?'Checking your plan…':balance==='unavailable'?'Plan details could not be refreshed. You can still redeem a code or check again.':balance==='zero'?'Redeem a membership code or choose a plan to ask Alpha. Nothing is purchased automatically.':''}</p>
    <form aria-label="Redeem a membership code" onSubmit={event=>{event.preventDefault();const input=code.current;if(!input)return;void onRedeem(input.value).then(ok=>{if(ok&&code.current)code.current.value='';});}}>
      <label>Membership code<input ref={code} name="membership-code" autoComplete="one-time-code" autoCapitalize="characters" autoCorrect="off" spellCheck={false} data-autofill-ignore="true" maxLength={64} disabled={busy} required aria-invalid={!!error||undefined}/></label>
      <button type="submit" disabled={busy}>Redeem code</button>
    </form>
-   <div className="alpha-membership-actions"><button type="button" disabled={busy} onClick={onAddFunds}>Add funds</button><button type="button" disabled={busy||balance==='checking'} onClick={onRefresh}>Check balance</button></div>
+   <div className="alpha-membership-actions"><button type="button" disabled={busy} onClick={onManage}>{summary.manageLabel}</button><button type="button" disabled={busy||balance==='checking'} onClick={onRefresh}>Check plan again</button></div>
    {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
  </section>;
 }

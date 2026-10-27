@@ -61,7 +61,8 @@ for (const [kind, text] of Object.entries(KINDS)) for (const frame of ['done', '
       const account = page.getByRole('dialog', { name: /^Eliza Cloud account/ });
       await expect(account).toBeVisible();
       await expect(account.getByRole('textbox', { name: 'Membership code' })).toBeVisible();
-      await expect(account.getByRole('button', { name: 'Add funds', exact: true })).toBeVisible();
+      await expect(account.getByRole('button', { name: /^(Choose a plan|Manage (plan|billing) in Eliza Cloud)$/ })).toBeVisible();
+      await expect(account.getByRole('button', { name: /Add funds|Check balance/ })).toHaveCount(0);
       expect(await stub(page, s => s.opened)).toEqual([]);
       await page.screenshot({path:info.outputPath('membership-code-mobile.png'),animations:'disabled'});
       await page.setViewportSize({width:1024,height:768});
