@@ -13,6 +13,7 @@ const strings=read('android/app/src/main/res/values/alpha-system-entry.xml');
 const names=[...strings.matchAll(/<string name="([^"]+)"/g)].map(m=>m[1]);
 const rClass='package ai.elizaresearch.alphaphone; public class R { public static class drawable { public static final int notification_icon=1; } public static class string {'+names.map((n,i)=>`public static final int ${n}=${i+10};`).join('')+'}}';
 const stubs={
+ 'android/annotation/SuppressLint.java':'package android.annotation; public @interface SuppressLint { String[] value(); }',
  'android/content/Context.java':'package android.content; public class Context { public String getString(int id){return String.valueOf(id);} }',
  'android/content/Intent.java':'package android.content; public class Intent { public static final String ACTION_ASSIST="android.intent.action.ASSIST"; public static final int FLAG_ACTIVITY_NEW_TASK=0x10000000, FLAG_ACTIVITY_CLEAR_TOP=0x04000000; public Class<?> target; public String action; public int flags; public Intent(Context context,Class<?> cls){target=cls;} public Intent setAction(String a){action=a;return this;} public Intent addFlags(int f){flags|=f;return this;} }',
  'android/app/PendingIntent.java':'package android.app; public class PendingIntent { public static final int FLAG_UPDATE_CURRENT=0x08000000, FLAG_IMMUTABLE=0x04000000; public android.content.Intent intent; public int flags; public static PendingIntent getActivity(android.content.Context c,int request,android.content.Intent i,int f){PendingIntent p=new PendingIntent();p.intent=i;p.flags=f;return p;} }',
@@ -44,6 +45,13 @@ public class TileTest {
   check((t.lastPending.flags&android.app.PendingIntent.FLAG_IMMUTABLE)!=0,"immutable pending intent");
   AlphaQuickSettingsTile legacy=new AlphaQuickSettingsTile();android.os.Build.VERSION.SDK_INT=33;
   legacy.onClick();check(legacy.launched==1&&legacy.lastPending==null,"supported older Android intent path");
+  android.os.Build.VERSION.SDK_INT=36;
+  try {
+   java.lang.reflect.Method method=AlphaQuickSettingsTile.class.getDeclaredMethod("openLegacyAssistant",android.content.Intent.class);method.setAccessible(true);
+   method.invoke(legacy,legacy.lastIntent);throw new AssertionError("legacy path accepted modern Android");
+  } catch(java.lang.reflect.InvocationTargetException expected){check(expected.getCause() instanceof IllegalStateException,"modern OS must fail closed");}
+  catch(ReflectiveOperationException broken){throw new AssertionError(broken);}
+  check(legacy.launched==1,"rejected modern legacy entry launches nothing");
   legacy.onStartListening();check(legacy.tile.subtitle.equals(String.valueOf(R.string.alpha_quick_settings_open)),"open subtitle");
   legacy.tile=null;legacy.onStartListening();
   System.out.println("PASS actual Alpha tile lock/unlock and Android entry contracts");

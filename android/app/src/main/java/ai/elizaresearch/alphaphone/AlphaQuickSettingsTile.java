@@ -1,6 +1,7 @@
 package ai.elizaresearch.alphaphone;
 
 import android.app.PendingIntent;
+import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.graphics.drawable.Icon;
 import android.os.Build;
@@ -44,7 +45,17 @@ public final class AlphaQuickSettingsTile extends TileService {
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             startActivityAndCollapse(pending);
         } else {
-            startActivityAndCollapse(intent);
+            openLegacyAssistant(intent);
         }
+    }
+
+    /** Android's Intent overload is the supported API before 34; the PendingIntent overload
+     * does not exist there. Lint's target-SDK rule does not account for this OS-version guard. */
+    @SuppressLint("StartActivityAndCollapseDeprecated")
+    private void openLegacyAssistant(Intent intent) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            throw new IllegalStateException("Use the PendingIntent tile entry on Android 14 and later");
+        }
+        startActivityAndCollapse(intent);
     }
 }
