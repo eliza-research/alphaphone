@@ -68,3 +68,7 @@ test('a cached event is cleared when the source no longer grants readable event 
 test('included readable source remains eligible; selectionVersion or provider selected flag is not feed opt-out',async()=>{
  const f=await fixture();f.source.selectionVersion=2;f.source.selected=false;f.source.accessRole='reader';f.api.getLifeOpsNextCalendarEventContext=async()=>{throw Error('Unavailable');};await f.calendar.refresh({});assert.equal(f.calendar.state.next,f.next);assert.equal(f.calendar.state.nextFresh,false);f.retire();
 });
+test('foreign next event keeps the specific owner refusal before the source/end-time guard',async()=>{
+ const f=await fixture();f.next.event={...f.event,agentId:'another-agent'};await f.calendar.refresh({});
+ assert.equal(f.calendar.state.status,'error');assert.match(f.calendar.state.error,/another agent/);assert.equal(f.calendar.state.feed,null);assert.equal(f.calendar.state.next,null);assert.equal(f.calendar.state.nextFresh,false);assert.equal(f.writes.length,0);f.retire();
+});
