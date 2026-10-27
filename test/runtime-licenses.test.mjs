@@ -48,7 +48,7 @@ function stagedRuntime(t) {
         return {directory, name, version, packageJsonSha256: sha256(bytes)};
       }),
     };
-    write(path.join(source, 'packages/agent/dist-mobile/manifest.json'), JSON.stringify({
+    write(path.join(source, 'packages/agent/dist-mobile/plugins-manifest.json'), JSON.stringify({
       bundle: 'agent-bundle.js', platform: 'android', bundleDependencies,
     }));
     stageAgentBundleDependencies(source, agent);
@@ -68,7 +68,7 @@ test('legacy bundle path comments retain their scoped-package fixture API', () =
 test('staging retains the producer inventory independently of compact bundle text', t => {
   const {agent, source} = stagedRuntime(t);
   assert.doesNotMatch(fs.readFileSync(path.join(agent, 'agent-bundle.js'), 'utf8'), /node_modules/);
-  const manifest = JSON.parse(fs.readFileSync(path.join(source, 'packages/agent/dist-mobile/manifest.json')));
+  const manifest = JSON.parse(fs.readFileSync(path.join(source, 'packages/agent/dist-mobile/plugins-manifest.json')));
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(agent, AGENT_BUNDLE_DEPENDENCIES))), manifest.bundleDependencies);
   assert.deepEqual(readAgentBundleDependencies(source, agent).map(row => row.directory), bundledDirectories);
 });
@@ -89,7 +89,7 @@ test('staging rejects a different bundle or non-Android manifest without replaci
   fs.appendFileSync(path.join(agent, 'agent-bundle.js'), 'console.log("changed");');
   assert.throws(() => stageAgentBundleDependencies(source, agent), /inventory is missing or mismatched/);
   assert.deepEqual(fs.readFileSync(path.join(agent, AGENT_BUNDLE_DEPENDENCIES)), inventory);
-  const file = path.join(source, 'packages/agent/dist-mobile/manifest.json');
+  const file = path.join(source, 'packages/agent/dist-mobile/plugins-manifest.json');
   const manifest = JSON.parse(fs.readFileSync(file));
   manifest.platform = 'ios';
   fs.writeFileSync(file, JSON.stringify(manifest));
