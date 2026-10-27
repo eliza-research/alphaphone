@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {
-  ROOT, JSON_OUTPUT, TEXT_OUTPUT, ALLOWLIST, NO_FONT_LICENCE, UNKNOWN, UNVERIFIED, BUN_ENTRY, generate, collectNotices, detectLicenceFromText, loadTemplates, packageNotice, packagedRuntimePresent, shippedPackagedRuntime, renderJson, renderText,
+  ROOT, JSON_OUTPUT, TEXT_OUTPUT, ALLOWLIST, NO_FONT_LICENCE, UNKNOWN, UNVERIFIED, generate, collectNotices, detectLicenceFromText, loadTemplates, packageNotice,
 } from '../scripts/generate-licenses.mjs';
 import {FLAGS, classifyLicence, licenceFlagLines, licenceFlagRecords, obligationNote} from '../scripts/licence-policy.mjs';
 import {releaseBlockers} from '../scripts/release-blockers.mjs';
@@ -58,11 +58,8 @@ test('the committed notices flag what the product ships today, in the JSON and a
   assert.ok(fresh.flagLines.every(line => /^LICENCE FLAG [a-z-]+: .+@.+ \(.+\)$/.test(line)));
 });
 
-test('the generator exits 0 with flagged entries and prints them as LICENCE FLAG warnings', t => {
-  // Exercise the CLI against source notices even when this checkout retains the
-  // complete distribution inventory but has not staged its runtime (source CI).
-  const dir = scratchRoot(t, {sourceNotices: true});
-  const run = spawnSync(process.execPath, [path.join(dir, 'scripts/generate-licenses.mjs'), '--check'], {cwd: dir, encoding: 'utf8'});
+test('the generator exits 0 with flagged entries and prints them as LICENCE FLAG warnings', () => {
+  const run = spawnSync(process.execPath, [path.join(ROOT, 'scripts/generate-licenses.mjs'), '--check'], {cwd: ROOT, encoding: 'utf8'});
   assert.equal(run.status, 0, run.stderr);
   assert.match(run.stderr, /^LICENCE FLAG copyleft-strong: pdf\.js standard fonts: Liberation@bundled with pdfjs-dist [^ ]+ \(GPL-2\.0-only WITH Font-exception-2\.0\)$/m);
   assert.match(run.stderr, /^LICENCE FLAG proprietary-licence-held-outside-repo: Denton typeface@[^\n]+ \(LicenseRef-Commercial-Font\)$/m);
@@ -142,24 +139,7 @@ test('a package without a licence file gets the canonical text and a flag; an un
   assert.match(unknown.text, /no licence could be established/);
 });
 
-test('checked-in notice text and source entries are current without requiring staged runtime bytes', () => {
-  const committed = JSON.parse(fs.readFileSync(path.join(ROOT, JSON_OUTPUT), 'utf8'));
-  assert.equal(fs.readFileSync(path.join(ROOT, JSON_OUTPUT), 'utf8'), renderJson(committed));
-  assert.equal(fs.readFileSync(path.join(ROOT, TEXT_OUTPUT), 'utf8'), renderText(committed));
-  // Runtime rows are verified against their actual bundled inputs by the full
-  // generation check below, and by the strict Android distribution build.
-  const sourceRows = entries => entries.filter(entry => entry.name !== BUN_ENTRY
-    && entry.name !== 'On-device elizaOS agent runtime payload'
-    && !entry.text.startsWith('Bundled in the on-device '));
-  assert.deepEqual(sourceRows(committed), sourceRows(fresh.entries));
-  assert.equal(committed.filter(entry => entry.name === 'On-device elizaOS agent runtime payload').length, 1);
-});
-
-test('checked-in notices are byte-identical to a fresh generation', t => {
-  if (shippedPackagedRuntime(ROOT) && !packagedRuntimePresent(ROOT)) {
-    t.skip('Packaged inventory regeneration requires staged runtime inputs; source entries are checked separately.');
-    return;
-  }
+test('checked-in notices are byte-identical to a fresh generation', () => {
   const shipped = generate(ROOT);
   assert.deepEqual(shipped.errors, []);
   assert.equal(fs.readFileSync(path.join(ROOT, JSON_OUTPUT), 'utf8'), shipped.json, `${JSON_OUTPUT} is stale; run node scripts/generate-licenses.mjs`);
@@ -266,7 +246,7 @@ test('Paradee notices preserve the eSpeak license and exclude the retired speech
   assert.equal(entries.some(row => /^Sherpa-O/.test(row.name)), false);
 });
 
-function scratchRoot(t, {ownNodeModules = false, sourceNotices = false} = {}) {
+function scratchRoot(t, {ownNodeModules = false} = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'alpha-licenses-'));
   t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
   for (const name of ['vendor', 'android']) fs.symlinkSync(path.join(ROOT, name), path.join(dir, name));
@@ -277,20 +257,8 @@ function scratchRoot(t, {ownNodeModules = false, sourceNotices = false} = {}) {
     for (const name of fs.readdirSync(installed)) fs.symlinkSync(path.join(installed, name), path.join(dir, 'node_modules', name));
   } else fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(dir, 'node_modules'));
   fs.mkdirSync(path.join(dir, 'apps/app'), {recursive: true});
-  if (sourceNotices) {
-    fs.mkdirSync(path.join(dir, 'apps/app/public/licenses'), {recursive: true});
-    for (const name of fs.readdirSync(path.join(ROOT, 'apps/app/public'))) {
-      if (name !== 'licenses') fs.symlinkSync(path.join(ROOT, 'apps/app/public', name), path.join(dir, 'apps/app/public', name));
-    }
-    fs.cpSync(path.join(ROOT, 'scripts'), path.join(dir, 'scripts'), {recursive: true});
-  } else fs.symlinkSync(path.join(ROOT, 'apps/app/public'), path.join(dir, 'apps/app/public'));
+  fs.symlinkSync(path.join(ROOT, 'apps/app/public'), path.join(dir, 'apps/app/public'));
   for (const name of ['package.json', 'package-lock.json', 'upstream.lock.json']) fs.copyFileSync(path.join(ROOT, name), path.join(dir, name));
   fs.cpSync(path.join(ROOT, 'licenses'), path.join(dir, 'licenses'), {recursive: true});
-  if (sourceNotices) {
-    const notices = generate(dir, {packagedRuntime: false});
-    assert.deepEqual(notices.errors, []);
-    fs.writeFileSync(path.join(dir, JSON_OUTPUT), notices.json);
-    fs.writeFileSync(path.join(dir, TEXT_OUTPUT), notices.text);
-  }
   return dir;
 }

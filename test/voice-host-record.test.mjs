@@ -61,7 +61,7 @@ test('the schema rejects bad hashes, missing ABIs, non-GGUF models, an incomplet
 });
 
 test('notices list the engine components and every voice model, flagging eSpeak NG copyleft without blocking', () => {
-  const {entries, errors} = collectNotices(ROOT, {packagedRuntime: false});
+  const {entries, errors} = collectNotices(ROOT);
   assert.deepEqual(errors, []);
   const espeak = entries.filter(entry => entry.name.startsWith('eSpeak NG'));
   assert.ok(espeak.length >= 2, 'the linked library and the bundled data');
