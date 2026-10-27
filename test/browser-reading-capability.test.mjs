@@ -10,25 +10,28 @@ import fs from "node:fs";
 import test from "node:test";
 
 const java = name => fs.readFileSync(`android/app/src/main/java/ai/elizaresearch/alphaphone/${name}.java`, "utf8");
-const world = java("BrowserReadingWorld"), reading = java("BrowserReading"), plugin = java("AlphaBrowserPlugin"), downloads = java("BrowserDownloads");
+const world = java("BrowserReadingWorld"), reading = java("BrowserReading"), plugin = java("AlphaBrowserPlugin");
+// Blob capture and downloads are staged into the app from the reviewed pin (plugin-native-browser-surface).
+const shared = name => fs.readFileSync(`vendor/eliza/plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface/${name}.java`, "utf8");
+const downloads = shared("BrowserDownloads"), capture = shared("BrowserBlobCapture"), loginFields = shared("BrowserLoginFields");
 const adapter = fs.readFileSync("apps/app/src/prototype/browser-adapter.ts", "utf8");
 const capability = fs.readFileSync("apps/app/src/browser/reading-capability.ts", "utf8");
 const template = fs.readFileSync("apps/app/src/prototype/template.html", "utf8");
 
 test("no browser source can put a script or a bridge in a page's own world", () => {
-  for (const [name, source] of [["BrowserReadingWorld", world], ["BrowserReading", reading], ["AlphaBrowserPlugin", plugin], ["BrowserDownloads", downloads]]) {
+  for (const [name, source] of [["BrowserReadingWorld", world], ["BrowserReading", reading], ["AlphaBrowserPlugin", plugin], ["BrowserDownloads", downloads], ["BrowserBlobCapture", capture], ["BrowserLoginFields", loginFields]]) {
     assert.doesNotMatch(source, /addJavascriptInterface\s*\(/, `${name}: no JavaScript interface on a page`);
     assert.doesNotMatch(source, /addDocumentStartJavaScript\s*\(/, `${name}: no page-world document-start script`);
     const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     assert.doesNotMatch(code, /PAGE_WORLD|getPageWorld|JavaScriptExecutionWorld\.PAGE/, `${name}: the page world is never chosen`);
   }
   // Every listener and injected script names an isolated world as its last argument.
-  for (const [name, source] of [["BrowserReadingWorld", world], ["BrowserDownloads", downloads]]) {
+  for (const [name, source] of [["BrowserReadingWorld", world], ["BrowserBlobCapture", capture], ["BrowserLoginFields", loginFields]]) {
     const listeners = [...source.matchAll(/WebViewCompat\.addWebMessageListener\(([^;]*);/g)];
     const scripts = [...source.matchAll(/WebViewCompat\.addJavaScriptOnEvent\(/g)];
-    const isolatedScripts = [...source.matchAll(/WebViewCompat\.addJavaScriptOnEvent\([\s\S]{0,400}?Set\.of\("\*"\),world\);/g)];
+    const isolatedScripts = [...source.matchAll(/WebViewCompat\.addJavaScriptOnEvent\([\s\S]{0,400}?Set\.of\("\*"\),\s*(?:fields\.)?world\);/g)];
     assert.ok(listeners.length >= 1 && scripts.length >= 1, `${name}: listener and script found`);
-    for (const match of listeners) assert.match(match[1], /Set\.of\("\*"\),world,/, `${name}: the listener lives in the isolated world`);
+    for (const match of listeners) assert.match(match[1], /Set\.of\("\*"\),\s*(?:fields\.)?world,/, `${name}: the listener lives in the isolated world`);
     assert.equal(isolatedScripts.length, scripts.length, `${name}: every injected script runs in the isolated world`);
   }
   // Reading never evaluates in the page: only through the isolated world's own proxy.

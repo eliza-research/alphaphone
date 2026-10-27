@@ -1,5 +1,14 @@
 package ai.elizaresearch.alphaphone;
 import ai.eliza.plugins.browsersurface.BrowserAutofillEligibility;
+import ai.eliza.plugins.browsersurface.BrowserAutofillExtras;
+import ai.eliza.plugins.browsersurface.BrowserBlobCapture;
+import ai.eliza.plugins.browsersurface.BrowserDownloads;
+import ai.eliza.plugins.browsersurface.BrowserFieldOrigin;
+import ai.eliza.plugins.browsersurface.BrowserHttpAuthAutofill;
+import ai.eliza.plugins.browsersurface.BrowserHttpAuthOrigin;
+import ai.eliza.plugins.browsersurface.BrowserLoginFields;
+import ai.eliza.plugins.browsersurface.BrowserWebOrigin;
+import ai.eliza.plugins.securestore.nativeonly.PasswordAutofillPolicy;
 
 import android.graphics.Bitmap;
 import android.net.Uri;
@@ -42,6 +51,10 @@ public class AlphaBrowserPlugin extends Plugin {
  static final String PRIVATE_PREFIX = "alpha_private_";
  /** Builds before the sign-in decision gave every tab an ephemeral profile. */
  static final String LEGACY_PREFIX = "alpha_public_";
+ /** Installed download list (preference file name kept for existing history). */
+ static final String DOWNLOAD_PREFERENCES = "alpha-browser-downloads";
+ /** The integrated vault's per-field and top-level origin extras for engine-bound login fields. */
+ static final BrowserAutofillExtras AUTOFILL_EXTRAS = new BrowserAutofillExtras(PasswordAutofillPolicy.FIELD_ORIGIN, PasswordFormPolicy.TOP_ORIGIN_EXTRA);
  static boolean ephemeralProfile(String name) { return name != null && (name.startsWith(PRIVATE_PREFIX) || name.startsWith(LEGACY_PREFIX)); }
  private final Map<String, Tab> tabs = new HashMap<>();
  private String namespace = PRIVATE_PREFIX + UUID.randomUUID().toString().replace("-", "");
@@ -114,7 +127,7 @@ public class AlphaBrowserPlugin extends Plugin {
  @Override public void load() {
   reading=new BrowserReading(getActivity(),id->{AlphaVoiceCloudPlugin voice=(AlphaVoiceCloudPlugin)getBridge().getPlugin("AlphaVoiceCloud").getInstance();voice.cancelBrowserSpeech(id);});
   pageShare=getActivity().getActivityResultRegistry().register("alpha-browser-share",new ActivityResultContracts.StartActivityForResult(),result->{shareOutstanding=false;});
-  downloads=new BrowserDownloads(getActivity());
+  downloads=new BrowserDownloads(getActivity(),new BrowserDownloads.Config(DOWNLOAD_PREFERENCES,BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS));
   downloads.purgeStaleCaptures();
   runtimePermissions=getActivity().getActivityResultRegistry().register("alpha-browser-site-permission",new ActivityResultContracts.RequestMultiplePermissions(),result->{
    java.util.function.Consumer<Map<String,Boolean>> callback=runtimeResult;runtimeResult=null;if(callback!=null)callback.accept(result);
@@ -158,7 +171,7 @@ public class AlphaBrowserPlugin extends Plugin {
  /** Kept separate from dispatch so resolver changes cannot bypass page/owner checks. */
  private java.util.function.Function<Intent,java.util.List<android.content.pm.ResolveInfo>> externalBrowserResolver =
   intent->getContext().getPackageManager().queryIntentActivities(intent,android.content.pm.PackageManager.MATCH_DEFAULT_ONLY|android.content.pm.PackageManager.GET_RESOLVED_FILTER);
- private static class Tab { BrowserReadingWorld readingWorld; BrowserDownloads.BlobCapture capture; String findQuery; /** Latest main-frame request or redirect target (any thread). */ volatile String pendingMain; /** Origin of a submitted HTTP sign-in whose result is pending; Save waits for it. */ String authSaveOrigin; int authAttempts; boolean passkeys; String id, profile, opener, url = "", error = "", finishedUrl = "", lastCommittedUrl = ""; WebView web; FrameLayout frame; TextView message; /** Engine-attested login fields (null when the WebView cannot attest field origins). */ BrowserLoginFields fields; boolean priv, handedOff, loading, dead, committed, autofillEnabled; int httpStatus, autofillVirtualId=View.NO_ID; long navigation; Runnable timeout; }
+ private static class Tab { BrowserReadingWorld readingWorld; BrowserBlobCapture capture; String findQuery; /** Latest main-frame request or redirect target (any thread). */ volatile String pendingMain; /** Origin of a submitted HTTP sign-in whose result is pending; Save waits for it. */ String authSaveOrigin; int authAttempts; boolean passkeys; String id, profile, opener, url = "", error = "", finishedUrl = "", lastCommittedUrl = ""; WebView web; FrameLayout frame; TextView message; /** Engine-attested login fields (null when the WebView cannot attest field origins). */ BrowserLoginFields fields; boolean priv, handedOff, loading, dead, committed, autofillEnabled; int httpStatus, autofillVirtualId=View.NO_ID; long navigation; Runnable timeout; }
  /** Credentials stay in the framework/provider and the remote document. No bridge API
   * reads fields or replaces Chromium's frame-specific webDomain metadata. The only addition
   * is the committed top-level origin, which the password provider requires to equal the
@@ -376,11 +389,11 @@ public class AlphaBrowserPlugin extends Plugin {
    // Avoid the redundant compat settings conversion here: it can stall tab creation.
    // https://developer.android.com/reference/androidx/webkit/WebSettingsCompat#WEB_AUTHENTICATION_SUPPORT_NONE
    t.readingWorld=new BrowserReadingWorld(t.web);
-   t.capture=new BrowserDownloads.BlobCapture(t.web,downloads.captureDirectory());
+   t.capture=new BrowserBlobCapture(t.web,downloads.captureDirectory());
    t.web.setFindListener((ordinal,count,done)->findResult(t,ordinal,count,done));
    t.frame = new FrameLayout(getActivity()); t.frame.setClipChildren(true); t.frame.setVisibility(View.GONE); t.frame.addView(t.web, new FrameLayout.LayoutParams(-1,-1));
    // Before any document loads: WebView applies the listener and script only to later documents.
-   t.fields=BrowserLoginFields.install(t.web,()->fieldSnapshot(t));
+   t.fields=BrowserLoginFields.install(t.web,()->fieldSnapshot(t),AUTOFILL_EXTRAS);
    if(t.fields!=null)t.frame.addView(t.fields.anchor, new FrameLayout.LayoutParams(-1,-1));
    t.message = new TextView(getActivity()); t.message.setPadding(24,24,24,24); t.message.setBackgroundColor(0xfffafafa); t.message.setTextColor(0xff222222); t.message.setVisibility(View.GONE); t.frame.addView(t.message, new FrameLayout.LayoutParams(-1,-1));
    t.web.setWebViewClient(new WebViewClient() {
@@ -458,7 +471,7 @@ public class AlphaBrowserPlugin extends Plugin {
     long revision=t.navigation;
     java.util.function.BooleanSupplier current=()->!paused&&!t.dead&&tabs.get(t.id)==t&&t.navigation==revision&&Objects.equals(presentedId,t.id);
     // The cookie is read at confirmation from this tab's own profile, and only for its exact page origin.
-    BrowserDownloads.Source source=new BrowserDownloads.Source(t.id,t.priv,BrowserDownloads.origin(t.lastCommittedUrl),()->{
+    BrowserDownloads.Source source=new BrowserDownloads.Source(t.id,t.priv,BrowserWebOrigin.of(t.lastCommittedUrl),()->{
      if(t.dead||tabs.get(t.id)!=t)return null;
      try{return WebViewCompat.getProfile(t.web).getCookieManager().getCookie(url);}catch(Exception unavailable){return null;}
     },agent);
@@ -532,9 +545,9 @@ public class AlphaBrowserPlugin extends Plugin {
  private boolean androidGranted(String kind){for(String permission:androidPermissions(kind))if(declared(permission)&&granted(permission))return true;return false;}
  /** Only a secure top-level page may be asked, and only for its own origin. */
  private String permissionOrigin(Tab t,String requested){
-  String page=BrowserDownloads.origin(t.lastCommittedUrl),asked=BrowserDownloads.origin(requested);
+  String page=BrowserWebOrigin.of(t.lastCommittedUrl),asked=BrowserWebOrigin.of(requested);
   // Same-document changes (pushState, fragments) keep the origin, so compare origins, not URLs.
-  if(page==null||!page.equals(asked)||!page.equals(BrowserDownloads.origin(t.web.getUrl())))return null;
+  if(page==null||!page.equals(asked)||!page.equals(BrowserWebOrigin.of(t.web.getUrl())))return null;
   Uri uri=Uri.parse(page);
   boolean secure="https".equals(uri.getScheme())||(BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS&&("127.0.0.1".equals(uri.getHost())||"localhost".equals(uri.getHost())));
   return secure?page:null;
@@ -543,7 +556,7 @@ public class AlphaBrowserPlugin extends Plugin {
   * Private tabs never read or store decisions. The result lists the kinds actually granted. */
  private void sitePermission(Tab t,String origin,List<String> kinds,java.util.function.Consumer<Set<String>> result){
   long revision=t.navigation;
-  java.util.function.BooleanSupplier current=()->!destroyed&&!t.dead&&tabs.get(t.id)==t&&t.navigation==revision&&Objects.equals(origin,BrowserDownloads.origin(t.web.getUrl()));
+  java.util.function.BooleanSupplier current=()->!destroyed&&!t.dead&&tabs.get(t.id)==t&&t.navigation==revision&&Objects.equals(origin,BrowserWebOrigin.of(t.web.getUrl()));
   LinkedHashSet<String> wanted=new LinkedHashSet<>(),allowed=new LinkedHashSet<>();
   // Only the selected, shown page may use a device sensor, even with a stored Allow:
   // a background tab or a paused app is refused without asking.
@@ -581,7 +594,7 @@ public class AlphaBrowserPlugin extends Plugin {
  }
  private void mediaPermission(Tab t,PermissionRequest request){
   String origin=permissionOrigin(t,request.getOrigin()==null?null:request.getOrigin().toString());
-  if(origin==null){request.deny();if(request.getOrigin()!=null&&!Objects.equals(BrowserDownloads.origin(request.getOrigin().toString()),BrowserDownloads.origin(t.lastCommittedUrl)))notice(t,"Blocked a camera or microphone request from an embedded site.");return;}
+  if(origin==null){request.deny();if(request.getOrigin()!=null&&!Objects.equals(BrowserWebOrigin.of(request.getOrigin().toString()),BrowserWebOrigin.of(t.lastCommittedUrl)))notice(t,"Blocked a camera or microphone request from an embedded site.");return;}
   ArrayList<String> kinds=new ArrayList<>();
   for(String resource:request.getResources()){if(PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource))kinds.add("camera");else if(PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource))kinds.add("microphone");}
   if(kinds.isEmpty()){request.deny();return;}
@@ -630,8 +643,8 @@ public class AlphaBrowserPlugin extends Plugin {
   String authOrigin=authDecision.origin;
   BrowserHttpAuthOrigin.Binding authBinding=authOrigin==null?null:new BrowserHttpAuthOrigin.Binding(authOrigin,t.navigation);
   java.util.function.BooleanSupplier bound=()->authBinding!=null&&authBinding.admits(authSnapshot(t,host,realm))&&siteDialogTab==t;
-  android.widget.EditText user=BrowserHttpAuthAutofill.field(getActivity(),authOrigin,bound,false);
-  android.widget.EditText pass=BrowserHttpAuthAutofill.field(getActivity(),authOrigin,bound,true);
+  android.widget.EditText user=BrowserHttpAuthAutofill.field(getActivity(),authOrigin,bound,false,AUTOFILL_EXTRAS);
+  android.widget.EditText pass=BrowserHttpAuthAutofill.field(getActivity(),authOrigin,bound,true,AUTOFILL_EXTRAS);
   form.addView(user);form.addView(pass);
   String label=realm==null?"":realm.replaceAll("[\\x00-\\x1f\\x7f]"," ").trim();if(label.length()>100)label=label.substring(0,100);
   // Name the password manager only when Android has one enabled for Alpha. Whether a third-party
