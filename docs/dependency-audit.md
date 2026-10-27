@@ -681,3 +681,7 @@ The Bun lock and normalized input hash changed. The old raw/normalized input equ
 ### October 27 test dependency refresh
 
 The shared Notes consumer changes the npm lockfile, so the audit was regenerated. The fresh audit identified Undici 8.11.2 under the development-only jsdom dependency. The lockfile now resolves 8.12.3 within jsdom's existing `^8.11.2` range. The upstream patched threshold is 8.12.2 for [GHSA-4qv8-2p9j-2685](https://github.com/advisories/GHSA-4qv8-2p9j-2685), [GHSA-f72v-6w45-q472](https://github.com/advisories/GHSA-f72v-6w45-q472), and [GHSA-xjj6-f33q-929c](https://github.com/advisories/GHSA-xjj6-f33q-929c). The new audit contains the same three moderate findings covered by the existing Capacitor/xcode/uuid disposition and no high or critical findings. No exception or review deadline was expanded.
+The shared installed-app launcher receives Alpha's existing Denton/Fraunces/Georgia
+font stack from `apps/app/src/prototype/home-launcher.ts`. This adds no font file
+or download: `prototype.css` remains the sole Denton loading rule. The owner-stated
+commercial license record and the open/system fallback stack are unchanged.

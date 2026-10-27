@@ -141,7 +141,9 @@ for (const mode of ['confirm','transcribed','zone','modal','unknown','receipt-lo
       expect(await page.evaluate(async()=>{try{await (await import('/src/runtime/alpha-client.ts')).alphaClient.approve('fixture-proposal');return false;}catch{return true;}})).toBe(true);
       expect(await page.evaluate(()=>(window as any).recoveryFixture.effects)).toBe(0);return;
     }
-    await page.getByText('clock handoff',{exact:true}).click();
+    // Activate the actual review button through its keyboard path. The chat sheet
+    // can still be settling after voice closes; nested text is not a stable click target.
+    await page.getByRole('button',{name:/^clock handoff /}).press('Enter');
     if(mode==='zone'){await expect(page.getByText('This action is no longer pending for the current screen. Open its original selection and review again.',{exact:true}).first()).toBeVisible();expect(await page.evaluate(()=>(window as any).recoveryFixture.effects)).toBe(0);return;}
 
     if(mode==='review-cancel'){

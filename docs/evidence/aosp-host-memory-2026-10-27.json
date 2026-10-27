@@ -63,5 +63,22 @@
     "deviceAcceptanceVerified": false
   },
   "imageBuilt": false,
-  "imageFlashed": false
+  "imageFlashed": false,
+  "graphGeneration": {
+    "status": "passed",
+    "reportedDuration": "14m39.05s",
+    "completedGraphSteps": 1,
+    "fullImageBuildComplete": false
+  },
+  "fullRepositoryVerification": {
+    "command": "npm run verify",
+    "tests": 2107,
+    "passed": 2101,
+    "skipped": 6,
+    "failed": 0,
+    "typecheck": "passed",
+    "productionBuild": "passed",
+    "productionBundleAudit": "passed"
+  },
+  "observationStage": "Graph generation passed; full image build still running"
 }
