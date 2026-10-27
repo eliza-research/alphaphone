@@ -240,3 +240,24 @@ test('a mail context switched, deleted or changed during its review cannot send 
  assert.match(adapter,/const text=await validateMailContext\(review,mailContext\(\),destination\);/);
  assert.match(adapter,/if \(body\?\.message\.id === id\) \{ body = null;/,'an archived or trashed open message is cleared');
 });
+
+
+test('calendar source discovery coalesces per owner, retries failures and fences old sources',async()=>{
+ const {stripTypeScriptTypes}=await import('node:module');const vm=await import('node:vm');
+ const core=readFileSync(new URL('../vendor/eliza/packages/core/src/runtime/single-flight-memo.ts',import.meta.url),'utf8').replace(/^export /gm,'');
+ const SingleFlightMemo=vm.runInNewContext(stripTypeScriptTypes(core,{mode:'transform'})+';SingleFlightMemo');
+ const ui=readFileSync(new URL('../apps/app/src/runtime/connection-ui.tsx',import.meta.url),'utf8');
+ const source=ui.slice(ui.indexOf('type CalendarAgendaSourceObservation='),ui.indexOf('async function deviceCapabilities'));
+ const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
+ const window=new EventTarget();let calls=0;const queue=[];
+ const sandbox={SingleFlightMemo,window,Capacitor:{isNativePlatform:()=>false},registerPlugin:()=>({prepareAgentSource(){calls++;return queue.shift();}})};
+ const {calendarAgendaObservation:read}=vm.runInNewContext(stripTypeScriptTypes(source,{mode:'transform'})+';({calendarAgendaObservation})',sandbox);
+ const owner={supportsCalendarAgenda:true},first=deferred();queue.push(first.promise);
+ const a=read(owner),b=read(owner);await Promise.resolve();assert.equal(calls,1);first.resolve({sourceId:'one',sourceRevision:'one'});await Promise.all([a,b]);
+ queue.push(Promise.reject(Error('unavailable')));const failOwner={supportsCalendarAgenda:true};assert.equal(await read(failOwner),undefined);
+ queue.push(Promise.resolve({sourceId:'retry',sourceRevision:'two'}));assert.equal((await read(failOwner)).sourceId,'retry');
+ const old=deferred();queue.push(old.promise);const changing={supportsCalendarAgenda:true};const pending=read(changing);await Promise.resolve();window.dispatchEvent(new Event('alpha:calendar-sync-source-changed'));old.resolve({sourceId:'stale',sourceRevision:'old'});assert.equal(await pending,undefined);
+ queue.push(Promise.resolve({sourceId:'current',sourceRevision:'new'}));assert.equal((await read(changing)).sourceId,'current');
+ queue.push(Promise.resolve({sourceId:'separate',sourceRevision:'owner'}));assert.equal((await read({supportsCalendarAgenda:true})).sourceId,'separate');
+ assert.equal(queue.length,0);
+});

@@ -31,6 +31,9 @@
       "@elizaos/voice/turn": [
         "./.eliza/client-features/packages/voice/src/turn.ts"
       ],
+      "@elizaos/core/read-memo": [
+        "./.eliza/client-features/packages/core/src/read-memo.ts"
+      ],
       "@elizaos/core/speech": [
         "./.eliza/client-features/packages/core/src/speech.ts"
       ],

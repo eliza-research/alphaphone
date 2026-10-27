@@ -2,15 +2,36 @@
   "schema": 1,
   "repository": "elizaOS/eliza",
   "base": "develop",
-  "baseCommit": "3d05abdcdc9bd2437f15763cdecddf774c12864b",
-  "head": "3d05abdcdc9bd2437f15763cdecddf774c12864b",
+  "baseCommit": "4c2c4793bec5e1f292231e8877d950547749268b",
+  "head": "de1ebdb521f39cb8ab5766ef9a2edc6704393077",
   "recordedAt": "2026-10-27",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...3d05abdcdc9bd2437f15763cdecddf774c12864b",
-  "status": "identical",
-  "aheadBy": 0,
+  "command": "gh api repos/elizaOS/eliza/compare/develop...de1ebdb521f39cb8ab5766ef9a2edc6704393077",
+  "status": "ahead",
+  "aheadBy": 8,
   "behindBy": 0,
-  "mergeBase": "3d05abdcdc9bd2437f15763cdecddf774c12864b",
-  "pinOnlyCommits": [],
+  "mergeBase": "4c2c4793bec5e1f292231e8877d950547749268b",
+  "pinOnlyCommits": [
+    {
+      "sha": "939c4792d21a6a4ace02ec67ffe4153f6c378490",
+      "subject": "Declare the native system activity dependency"
+    },
+    {
+      "sha": "120714fe361634448884661dfd6d573fe793a022",
+      "subject": "Share native provider admission and binding lifecycle"
+    },
+    {
+      "sha": "fa862cdfd55f798a7a53342121f91e027e4c13f3",
+      "subject": "Expose provider store port to native host adapters"
+    },
+    {
+      "sha": "3a5ec86875377f4356b8cb301f30c2d8d6b14dd9",
+      "subject": "Share Soong native APK installation for Pixel products"
+    },
+    {
+      "sha": "c3027dc80dd6fd4716fb224052995bb8a6b00bbf",
+      "subject": "Expose runtime read coalescing to browser hosts"
+    }
+  ],
   "pullRequests": [
     {
       "url": "https://github.com/elizaOS/eliza/pull/37059",
@@ -199,6 +220,31 @@
     {
       "url": "https://github.com/elizaOS/eliza/pull/37958",
       "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37936",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37966",
+      "status": "open"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37967",
+      "status": "open"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37968",
+      "status": "open"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37969",
+      "status": "open"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37971",
+      "status": "open"
     }
-  ]
+  ],
+  "pendingPullRequest": "https://github.com/elizaOS/eliza/pull/37971"
 }

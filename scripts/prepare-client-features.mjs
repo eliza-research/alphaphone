@@ -128,6 +128,8 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/ui/src/voice/worklets',
   'packages/ui/src/logger.ts',
   'packages/core/src/logging.ts',
+  'packages/core/src/read-memo.ts',
+  'packages/core/src/runtime/single-flight-memo.ts',
   'packages/core/src/view-interaction.ts',
   'packages/core/src/security/log-redaction.ts',
   'packages/host/src/voice/ui-context.ts',
