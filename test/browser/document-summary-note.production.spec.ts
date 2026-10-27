@@ -1,3 +1,5 @@
+import {openRetainedNativeNotes} from './helpers/native-notes';
+import {returnToApps} from './app-navigation';
 // J03 on the FLAG-OFF bundle with an agent: a document chosen in Files, a reviewed question, the
 // resident agent's answer and an explicit, reviewed Save that keeps one note linked to its source.
 //
@@ -61,6 +63,8 @@ test('J03 on Android: a picked document, a trimmed question and the resident ans
   const foreign = await fenceNetwork(page);
   await flagOffAndroid(page, { document: garden });
   await residentHome(page);
+  await openRetainedNativeNotes(page);
+  await returnToApps(page);
   await askAboutDocument(page);
 
   // An answer alone saves nothing; the summary is reviewed first and Cancel is a real cancel.
@@ -91,10 +95,10 @@ test('J03 on Android: a picked document, a trimmed question and the resident ans
   await page.reload();
   await expect.poll(() => harness(page, f => f.calls.includes('Agent.start')), { timeout: 30_000 }).toBe(true);
   await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0, { timeout: 30_000 });
-  await button(page, 'Notes').click();
+  await openRetainedNativeNotes(page);
   await expect(page.getByRole('region', { name: 'Notes' }).getByRole('button', { name: /^Open (?!Trash$)/ })).toHaveCount(1);
   await button(page, 'Open Garden summary').click();
-  await button(page, 'Source document linked').click();
+  await button(page, 'Attachment').click();
   const source = page.getByRole('dialog', { name: 'Note source document' });
   await expect(source).toContainText('garden-report.txt');
   await expect(source).toContainText(sha256);
@@ -113,6 +117,8 @@ test('J03 on Android: a resident session that changes before Save withdraws the 
   const foreign = await fenceNetwork(page);
   await flagOffAndroid(page, { document: garden });
   await residentHome(page);
+  await openRetainedNativeNotes(page);
+  await returnToApps(page);
   await askAboutDocument(page);
   await expect(page.getByRole('button', { name: /^Review summary note/ })).toHaveCount(1);
   // The resident agent is reconnected from Settings: a new verified session.
