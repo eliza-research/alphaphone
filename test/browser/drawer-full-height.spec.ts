@@ -3,7 +3,7 @@ for(const height of [600,915])test(`All apps fills the screen and its last contr
  await page.setViewportSize({width:412,height});
  await page.addInitScript(()=>localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'})));
  await page.goto('/');await page.getByRole('button',{name:'All apps',exact:true}).click();
- const list=page.locator('[data-alpha-app-scroll="drawer"]');
+ const list=page.locator('[data-installed-apps-scroll]');
  await expect(list).toBeVisible();
  expect(await list.evaluate(el=>Math.abs(el.getBoundingClientRect().bottom-document.querySelector('[data-screen]')!.getBoundingClientRect().bottom))).toBeLessThanOrEqual(1);
  for(const raised of [false,true]){
