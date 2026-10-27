@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "1e4a4a274cb1712eb733ab1b4e1f96adc0bfa703",
+  "head": "a681dc583ffb7c7c6ecec9e6bcee944ea49f20b2",
   "recordedAt": "2026-10-27",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...1e4a4a274cb1712eb733ab1b4e1f96adc0bfa703",
+  "command": "git -C vendor/eliza rev-list --left-right --count 04658de1b942510e0d37efc777c154530f5c0ef1...a681dc583ffb7c7c6ecec9e6bcee944ea49f20b2",
   "status": "diverged",
-  "aheadBy": 69,
+  "aheadBy": 70,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -282,6 +282,10 @@
     {
       "sha": "1e4a4a274cb1712eb733ab1b4e1f96adc0bfa703",
       "subject": "fix(browser): recognize a bare web address with a port"
+    },
+    {
+      "sha": "a681dc583ffb7c7c6ecec9e6bcee944ea49f20b2",
+      "subject": "fix(android): bound executable hashing during resident shutdown"
     }
   ],
   "pullRequests": [
@@ -373,5 +377,10 @@
       "url": "https://github.com/elizaOS/eliza/pull/37275",
       "status": "merged"
     }
-  ]
+  ],
+  "provenance": {
+    "method": "Local immutable graph comparison against retained develop baseCommit; no GitHub API or develop refresh performed",
+    "priorHead": "1e4a4a274cb1712eb733ab1b4e1f96adc0bfa703",
+    "currentParent": "1e4a4a274cb1712eb733ab1b4e1f96adc0bfa703"
+  }
 }

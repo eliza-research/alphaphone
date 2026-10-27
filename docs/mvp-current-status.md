@@ -1,6 +1,8 @@
 # Current MVP status
 
-Current source SDK 1e4a4a274cb1712eb733ab1b4e1f96adc0bfa703 on product base 4ad78f16744a4a32fc19e1bac4116554bbfc5cd2 adds shared resource recognition and authenticated native Browser open routing through the existing device proposal/review path, preserving prior navigation, Calendar range/weekday and canonical reminder-read repairs. The exact Browser source has 32 passing focused tests and scoped checks. Actual native Browser acceptance remains open: a VIEWS installation does not establish device enrollment or an authenticated DeviceTurn. Full Calendar and reminder-test semantic graph limits remain unqualified; live and device results stay bound to their exact artifacts and receipts. See docs/evidence/source-metadata-4ad-1e4-20261026.json.
+Current source SDK a681dc583ffb7c7c6ecec9e6bcee944ea49f20b2 on product base fe63ad6628a7f58f91948173c858efec2c4ccf47 consumes the canonical Android resident-stop digest-cost repair. The same bounded stop now reuses FD- and nanosecond-metadata-bound executable observations, performs fresh digest/UID/start/argv/map verification before the existing signal, waits without repeated executable hashing, and requires full classified absence before releasing ownership. The total deadline, unknown-actor guards, engine, Bun, models and dependency locks are unchanged. The owning JVM suite passes 29 tests. Prior fe63/1e4 native Calendar/reminder/Browser/navigation passes and the later Google verification pass retain their exact receipts; the post-sign-in resident handoff failed, and this successor still needs a full native build and actual provider-rebind/request/reopen proof. See docs/evidence/source-metadata-fe63-a681-20261026.json.
+
+Previous source checkpoint: Current source SDK 1e4a4a274cb1712eb733ab1b4e1f96adc0bfa703 on product base 4ad78f16744a4a32fc19e1bac4116554bbfc5cd2 adds shared resource recognition and authenticated native Browser open routing through the existing device proposal/review path, preserving prior navigation, Calendar range/weekday and canonical reminder-read repairs. The exact Browser source has 32 passing focused tests and scoped checks. Actual native Browser acceptance remains open: a VIEWS installation does not establish device enrollment or an authenticated DeviceTurn. Full Calendar and reminder-test semantic graph limits remain unqualified; live and device results stay bound to their exact artifacts and receipts. See docs/evidence/source-metadata-4ad-1e4-20261026.json.
 
 Previous source checkpoint: Current source SDK da82a74e8bb1c45ae76beba64ee5bf0c1c2778e6 on product base 79eafc5511296a915933a6fef8bcc3d228cc1aa3 includes confirmed previous-view context and conservative initial-tool selection. Product account preflight and optional credential-reference fixes are retained. Focused source tests passed; full runtime and native acceptance, live performance and final release are still pending. See [source identity](evidence/source-metadata-79e-da82-20261026.json).
 
@@ -70,9 +72,9 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-Current source projection: SDK `1e4a4a274c` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
+Current source projection: SDK `a681dc583f` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
 
-The current upstream source pin is `1e4a4a274c` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
+The current upstream source pin is `a681dc583f` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 
