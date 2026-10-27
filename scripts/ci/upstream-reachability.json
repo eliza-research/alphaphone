@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "2a8bbc5d55f9100cd55c00f1ca9df98cd6b02e40",
-  "recordedAt": "2026-10-26",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...2a8bbc5d55f9100cd55c00f1ca9df98cd6b02e40",
+  "head": "1e4a4a274cb1712eb733ab1b4e1f96adc0bfa703",
+  "recordedAt": "2026-10-27",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...1e4a4a274cb1712eb733ab1b4e1f96adc0bfa703",
   "status": "diverged",
-  "aheadBy": 66,
+  "aheadBy": 69,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -270,6 +270,18 @@
     {
       "sha": "2a8bbc5d55f9100cd55c00f1ca9df98cd6b02e40",
       "subject": "fix(reminders): route owner inventory reads to canonical review"
+    },
+    {
+      "sha": "7c0fd130a8a7577b33363ce72ef5172caeede549",
+      "subject": "fix(calendar): retain both stated date-range endpoints"
+    },
+    {
+      "sha": "1b7698fec167b6f877df2eaf5bcedaec4427df9e",
+      "subject": "fix(browser): route native URL commands through the device operation"
+    },
+    {
+      "sha": "1e4a4a274cb1712eb733ab1b4e1f96adc0bfa703",
+      "subject": "fix(browser): recognize a bare web address with a port"
     }
   ],
   "pullRequests": [
