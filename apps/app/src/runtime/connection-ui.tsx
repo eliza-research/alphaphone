@@ -2186,6 +2186,8 @@ export const connectionController = {
    * enters an email; no Eliza Cloud web page is opened. */
   async beginSignIn(environment: CloudEnvironment = residentCloudFlow() ? residentEnvironment() : cloud.environment, refreshNegative = false) {
     if (operation || !cloudEnvironmentAllowed(environment)) return;
+    // Readiness and the resident restart must not dismiss an expired-session sign-in request.
+    const expiredNotice = state.error === RESIDENT_SIGN_IN_EXPIRED ? state.error : '';
     // Readiness may take six seconds on a fresh install. Keep that wait cancellable and prevent
     // repeated taps from starting competing probes or opening a browser after the owner cancelled.
     await work(`Checking ${cloudServiceName(environment)} sign-in…`, async signal => {
@@ -2202,6 +2204,7 @@ export const connectionController = {
       update({ open: true, ...(residentCloudFlow() && state.purpose !== 'cloud-account' ? { purpose: 'agent' as const } : {}), signIn: { step: 'choose', environment }, message: '', error: '' });
     });
     await ensureResident();
+    if (expiredNotice && state.signIn?.step === 'choose') update({ open: true, error: expiredNotice });
   },
   /** Leaves the sign-in screen for the chooser and burns the pending attempt. Stored sign-in stays unchanged. */
   cancelSignIn() {
