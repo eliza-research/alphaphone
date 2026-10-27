@@ -1,3 +1,4 @@
+import {openRetainedNativeNotes} from './helpers/native-notes';
 import {test,expect,type Page} from '@playwright/test';
 import {button} from './flag-off-android';
 import {setupNativeSpeech as setup} from './native-speech-fixture';
@@ -19,7 +20,7 @@ test('cancelling local transcription rejects late output without submitting a tu
  const foreign=await setup(page);await page.evaluate(()=>(window as any).nativeSpeech.holdTranscript=true);await button(page,'Talk').click();await expect(voice(page)).toHaveAttribute('data-voice-state','listening');await utterance(page);await expect(voice(page)).toHaveAttribute('data-voice-state','transcribing');await button(page,'Stop voice conversation').click();await expect(voice(page)).toHaveCount(0);await page.evaluate(()=>(window as any).nativeSpeech.releaseTranscript());await expect.poll(()=>page.evaluate(()=>(window as any).nativeSpeech.cancels.length)).toBeGreaterThan(0);expect(await page.evaluate(()=>(window as any).flagOff.posts)).toEqual([]);await noCloud(page,foreign);
 });
 test('production Notes reads through local synthesis and Stop retires owned playback',async({page})=>{
- const foreign=await setup(page);await button(page,'Notes').click();await button(page,'New note').click();await page.getByRole('textbox',{name:'Title',exact:true}).fill('Groceries');await page.getByRole('textbox',{name:'Note',exact:true}).fill('Milk and eggs.');await button(page,'Read aloud').click();await expect.poll(()=>page.evaluate(()=>(window as any).nativeSpeech.spoken)).toEqual(['Groceries. Milk and eggs.']);await button(page,'Stop reading').click();await expect.poll(()=>page.evaluate(()=>(window as any).nativeSpeech.stopped)).toBeGreaterThan(0);await noCloud(page,foreign);
+ const foreign=await setup(page);await openRetainedNativeNotes(page);await button(page,'New note').click();await page.getByRole('textbox',{name:'Title',exact:true}).fill('Groceries');await page.getByRole('textbox',{name:'Note',exact:true}).fill('Milk and eggs.');await button(page,'Read aloud').click();await expect.poll(()=>page.evaluate(()=>(window as any).nativeSpeech.spoken)).toEqual(['Groceries. Milk and eggs.']);await button(page,'Stop reading').click();await expect.poll(()=>page.evaluate(()=>(window as any).nativeSpeech.stopped)).toBeGreaterThan(0);await noCloud(page,foreign);
 });
 
 test('Maps local speech adapter cancels owned guidance and refuses local-unready without a network fallback',async({page})=>{
@@ -54,7 +55,7 @@ test('offline and fenced, speech still captures, transcribes and reads aloud on 
  await expect(voice(page)).toHaveAttribute('data-voice-state','error');await expect(voice(page)).toContainText('Local spoken request');
  expect(await page.evaluate(()=>{const f=(window as any).nativeSpeech;return {starts:f.starts,transcripts:f.transcripts,spoken:f.spoken,posts:(window as any).flagOff.posts.length};})).toEqual({starts:1,transcripts:1,spoken:[],posts:0});
  await button(page,'Stop voice conversation').click();await expect(voice(page)).toHaveCount(0);
- await button(page,'Notes').click();await button(page,'New note').click();await page.getByRole('textbox',{name:'Title',exact:true}).fill('Offline');await page.getByRole('textbox',{name:'Note',exact:true}).fill('Still speaks.');await button(page,'Read aloud').click();
+ await openRetainedNativeNotes(page);await button(page,'New note').click();await page.getByRole('textbox',{name:'Title',exact:true}).fill('Offline');await page.getByRole('textbox',{name:'Note',exact:true}).fill('Still speaks.');await button(page,'Read aloud').click();
  await expect.poll(()=>page.evaluate(()=>(window as any).nativeSpeech.spoken)).toEqual(['Offline. Still speaks.']);
  expect(await page.evaluate(()=>(window as any).nativeSpeech.turns)).toEqual([undefined]);
  await noCloud(page,foreign);
