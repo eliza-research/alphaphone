@@ -428,58 +428,38 @@ test('loop C on Android: a phone time zone that changes after review retires the
   expect(await native(page, f => f.clock)).toEqual([]);
 });
 
-test('loops B, C and J04 in the web build: local calendar and alarm records are real, and Maps says a provider is missing instead of routing', async ({ page }) => {
+test('loops B, C and J04 in the web build: Agent Calendar requires a connection, local alarms persist, and Maps waits for a location', async ({ page }) => {
   test.setTimeout(120_000);
   const foreign = await fenceNetwork(page);
   await page.addInitScript(offline);
   await page.goto('/');
   await button(page, 'Calendar').click();
+  await expect(page.getByRole('region', {name: 'Calendar', exact: true})).toContainText('Connect to view Agent Calendar.');
   await button(page, 'New event').click();
-  await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Flag-off meeting');
-  await page.getByRole('textbox', { name: 'Location', exact: true }).fill('12 Market Street, Test Town');
-  await button(page, 'Save event').click();
-  await expect(page.getByRole('heading', { name: 'Flag-off meeting', level: 1 })).toBeVisible();
-  // J04: the location is handed to Maps once; with no provider there are no places, routes or times.
-  await button(page, '12 Market Street, Test Town').click();
-  await expect(page.locator('html')).toHaveAttribute('data-active-view', 'maps');
-  await expect(page.getByRole('textbox', { name: 'Search places', exact: true })).toHaveValue('12 Market Street, Test Town');
-  await expect(page.getByText('Connect a Maps provider to search places and plan routes.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', {name: 'Title', exact: true})).toHaveCount(0);
+  await expect(button(page, 'Save event')).toHaveCount(0);
+  expect(await storedEvents(page)).toEqual([]);
+  // An unavailable Agent Calendar must not silently create a local event.
+  await page.goto('/');
+  await button(page, 'Maps').click();
+  await expect(page.getByRole('region', {name: 'Map', exact: true})).toBeVisible();
+  await expect(page.getByRole('status')).toContainText('Add a location');
   await expect(button(page, 'Directions')).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Maps' })).not.toContainText(/\d+ min|\d km/);
-  // C: the web build keeps its own alarm list (it is not a development surface) and it survives a reload.
+  await expect(page.getByRole('region', {name: 'Maps'})).not.toContainText(/\d+ min|\d km/);
+  // The independent browser alarm list remains a durable local feature.
   await page.goto('/');
   await button(page, 'Calendar').click();
   await button(page, 'Clock alarms').click();
-  let clock = page.getByRole('dialog', { name: 'Clock alarms', exact: true });
-  await clock.getByRole('textbox', { name: 'Alarm label' }).fill('Flag-off web alarm');
-  await clock.getByLabel('Alarm time', { exact: true }).fill('07:15');
-  await clock.getByRole('button', { name: 'Save alarm', exact: true }).click();
-  await expect(clock.getByText('Flag-off web alarm', { exact: true })).toHaveCount(1);
+  let clock = page.getByRole('dialog', {name: 'Clock alarms', exact: true});
+  await clock.getByRole('textbox', {name: 'Alarm label'}).fill('Flag-off web alarm');
+  await clock.getByLabel('Alarm time', {exact: true}).fill('07:15');
+  await clock.getByRole('button', {name: 'Save alarm', exact: true}).click();
+  await expect(clock.getByText('Flag-off web alarm', {exact: true})).toHaveCount(1);
   await page.reload();
   await button(page, 'Calendar').click();
-  // B (direct UI): the saved event is still there after the reload, exactly once, and can be deleted.
-  await expect(page.getByRole('button', { name: /^Flag-off meeting,/ })).toHaveCount(1);
   await button(page, 'Clock alarms').click();
-  clock = page.getByRole('dialog', { name: 'Clock alarms', exact: true });
-  await expect(clock.getByText('Flag-off web alarm', { exact: true })).toHaveCount(1);
-  await clock.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await page.getByRole('button', { name: /^Flag-off meeting,/ }).click();
-  expect((await storedEvents(page)).map(row => row.title)).toEqual(['Flag-off meeting']);
-  await button(page, 'Delete event').click();
-  // Delete is reviewed first: the dialog names the event, and nothing is removed until it is confirmed.
-  const review = page.getByRole('dialog', { name: 'Delete calendar event?' });
-  await expect(review).toContainText('Flag-off meeting');
-  await expect(review).toContainText('Deletion waits 10 seconds. You can Undo during that time.');
-  expect((await storedEvents(page)).map(row => row.title)).toEqual(['Flag-off meeting']);
-  await review.getByRole('button', { name: 'Delete event', exact: true }).click();
-  await expect(review).toHaveCount(0);
-  // The deletion is queued with Undo for 10 seconds, then removes exactly the reviewed event.
-  await expect(page.getByRole('complementary', { name: 'Pending deletions' }).getByRole('button', { name: 'Undo', exact: true })).toBeVisible();
-  await expect.poll(() => storedEvents(page), { timeout: 30_000 }).toEqual([]);
-  // After a restart the event is gone from the list and from the saved calendar document.
-  await page.reload();
-  await button(page, 'Calendar').click();
-  await expect(page.getByRole('button', { name: /^Flag-off meeting,/ })).toHaveCount(0);
+  clock = page.getByRole('dialog', {name: 'Clock alarms', exact: true});
+  await expect(clock.getByText('Flag-off web alarm', {exact: true})).toHaveCount(1);
   expect(await storedEvents(page)).toEqual([]);
   await expectNoDevelopmentSurface(page);
   expect(foreign).toEqual([]);
