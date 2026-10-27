@@ -3,7 +3,7 @@ import {browserNavigationSummary,projectActionMessages} from '../runtime/action-
 import {CanonicalNotesUi} from './canonical-notes-ui';
 import {openExistingBrowserNotes,openExistingDeviceNotes} from './legacy-notes-access';
 import {executeNamedCalendarRead,type NamedCalendarReadProvider} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/client/named-read.ts';
-import {notesEditorRefresh} from './notes-editor-refresh';
+import {reconcileNotesEditor} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-draft.ts';
 import {CAMERA_CONTEXT_NOTICE,publishCommittedDeviceChanges} from '../runtime/device-actions';
 import {captureAgentPhoto} from './camera-adapter';
 import {isCameraCapture} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/camera-contract.ts';
@@ -157,7 +157,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     const savedRaw=typeof shell.notesRaw==='string'?shell.notesRaw:'';
     shell.notesDraftTask=Promise.resolve(shell.notesDraftTask).then(async()=>{
       let saved:Shell[]=[];try{const parsed=JSON.parse(savedRaw).records;if(Array.isArray(parsed))saved=parsed;}catch{/* no saved collection */}
-      shell.notesDraftSaved=await SecureNotesStore.saveDraft(secureConnectionStore,{base:await notesDraftBase(savedRaw),reason,list:records,saved,own:shell.notesDraftSaved,kept:shell.notesDraftKept});
+      shell.notesDraftSaved=await SecureNotesStore.saveDraft(secureConnectionStore,{savedRaw,reason,list:records,saved,own:shell.notesDraftSaved,kept:shell.notesDraftKept});
       notesDataset('notesDraftState','saved');
       if(shell.live&&shell.notesStorageFailed)originalSet.call(shell,'notes',{storageStatus:failedNotesStatus(shell,true)});
     }).catch(()=>{
@@ -541,7 +541,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       const store=this.notesStore,epoch=this.notesSourceEpoch,current=()=>this.live&&this.notesSourceMode==='legacy'&&this.notesSourceEpoch===epoch&&this.notesStore===store;
       if(store&&!this.notesPending&&!this.notesStorageFailed)void previousNotesObservation(store,current).then(value=>{if(current()){this.notesLegacySource=value;context(this);}}).catch(()=>{});
       if(!this.live||!this.notesStore||this.notesStorageFailed||this.notesPending||this.notesStore.needsRecovery)return;
-      const update=notesEditorRefresh(this.notesRaw,this.vget('notes').list,this.notesStore.raw,this.notesStore.list);
+      const update=reconcileNotesEditor(this.notesRaw,this.vget('notes').list,this.notesStore.raw,this.notesStore.list);
       if(update.kind==='unchanged')return;
       if(update.kind==='conflict'){
         originalSet.call(this,'notes',{storageStatus:'A newer saved note is available. Your unsaved text is still here.'});return;
