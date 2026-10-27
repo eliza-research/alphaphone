@@ -102,13 +102,16 @@ function controllerFixture(){
     const signInClient=()=>client,ensureResident=async()=>{},residentRecoveryReason=()=>null;
     const errorMessage=e=>e.message,runQueuedResidentRebind=()=>{},runQueuedSignInReturn=()=>{};
     const testMocksEnabled=false,expired=()=>false,residentCloudFlow=()=>true;
-    let required=false;const productionCloudSignInRequired=()=>required;
+    let required=false;const productionCloudSignInRequired=()=>required,residentSignInRequired=()=>required;let pendingBillingReview=null;const clearPersonalSetup=()=>{};
+    ${ui.includes('export function explicitSignedOutCloudEntry(')?part('export function explicitSignedOutCloudEntry(', 'export function connectionChooserVisible(').replace('export ',''):'function explicitSignedOutCloudEntry(){return false;}'}
     const validSignInEmail=()=>true,normalizeSignInCode=value=>/^\\d{6}$/.test(value)?value:null;
     class CloudSignInError extends Error {constructor(code){super(code);this.code=code;}}
     const signInFailureMessage=code=>code,signInFailed=(environment,keep=false)=>{if(!keep)update({signIn:{step:'choose',environment}});};
     const signedIn=async()=>events.push({authenticated:true});
     ${part('async function work(', '/** Start (or restart) the resident.')}
-    const connectionController={cancel(){operation?.abort(new DOMException('Cancelled','AbortError'));cloud.cancelLogin();},
+    const connectionController={
+    ${part('  close() {', '  cancel() {')}
+    cancel(){operation?.abort(new DOMException('Cancelled','AbortError'));cloud.cancelLogin();},
     ${part('  cancelSignIn() {','  /** Android’s native'.replace('’',"'"))}
     ${part('  async signInGoogle()', '  /** Sends a six-digit code')}
     ${part('  async signInEmail(', '  /**\n   * Native finished a Google return')}
@@ -178,3 +181,22 @@ test('Back on the required chooser keeps sign-in enabled instead of creating a r
   f.setRequired(false);f.connectionController.cancelSignIn();
   assert.equal(f.state.signIn,null,'optional account dialog can still be dismissed');
 });
+
+const entryStart=ui.indexOf('  const requiredSignInView:'),entryEnd=ui.indexOf('  const accountCreatedNotice=',entryStart);assert.ok(entryStart>=0&&entryEnd>entryStart);
+const selectorSource=ui.slice(entryStart,entryEnd);
+const explicitEntrySource=ui.includes('export function explicitSignedOutCloudEntry(')?part('export function explicitSignedOutCloudEntry(', 'export function connectionChooserVisible(').replace('export ',''):'function explicitSignedOutCloudEntry(){return false;}';
+const entryFunction=transformSync(`${explicitEntrySource}function selectEntry(snapshot){const productionSignInRequired=false,explicitSignInEntry=explicitSignedOutCloudEntry(snapshot),signInEntryRequired=productionSignInRequired||explicitSignInEntry;const panel=null,residentEnvironment=()=> 'production',inAppGoogle=false,RESIDENT_UNPACKAGED='unpackaged',browserCloudResidentEnabled=false,testMocksEnabled=false;${selectorSource}return null;}`,{loader:'tsx',format:'cjs',jsx:'automatic'}).code;
+const noAuthCalls=[];const entryController=new Proxy({},{get:(_,name)=>()=>noAuthCalls.push(name)});
+const selectEntry=new Function('require','CloudSignInPanel','connectionController','ResidentRecoveryPanel',entryFunction+';return selectEntry;')(createRequire(import.meta.url),CloudSignInPanel,entryController,()=>null);
+test('explicit signed-out account and plan entry render approved email/Google chooser directly, with no legacy CTA or auth action',async()=>{const {renderToStaticMarkup}=await import('react-dom/server');for(const purpose of['cloud-account','plan']){const element=selectEntry({open:true,purpose,cloudAccount:null,busy:false,message:'',error:'',signIn:null});assert.ok(element,'the actual root-page branch must select the existing sign-in component');const html=renderToStaticMarkup(element);assert.match(html,/Welcome to Alpha/);assert.match(html,/Continue with Google/);assert.match(html,/Sign in with email/);assert.doesNotMatch(html,/Sign in to use connected services such as Gmail/);assert.deepEqual(noAuthCalls,[]);}});
+test('verified account is not redirected from membership into first-run sign-in',()=>{assert.equal(selectEntry({open:true,purpose:'cloud-account',cloudAccount:{userId:'synthetic-owner'},busy:false,signIn:null}),null);});
+
+test('explicit account chooser readiness never falls back to the legacy web auth attempt',async()=>{
+ const begin=part('  async beginSignIn(', '  /** Leaves the sign-in screen');
+ const body=`${explicitEntrySource}function make(purpose,methods){let operation=null,inAppGoogle=false;const state={open:true,purpose,cloudAccount:null},updates=[],calls=[];const residentCloudFlow=()=>false,residentEnvironment=()=> 'production',cloudEnvironmentAllowed=()=>true,isAndroid=false;let cloud={environment:'production',cancelLogin(){calls.push('cancel');}};const inAppSignInMethods=async()=>{calls.push('status');return methods;},update=patch=>{updates.push(patch);Object.assign(state,patch);},work=async(_,fn)=>fn(new AbortController().signal),ensureResident=async()=>{},browserCloudLoginAction=async()=>calls.push('web-auth'),residentBrowserLoginAction=async()=>calls.push('resident-auth');const connectionController={${begin}};return {controller:connectionController,state,updates,calls};}`;
+ const compiled=transformSync(body,{loader:'ts',format:'cjs'}).code,make=new Function(compiled+';return make;')();
+ for(const purpose of ['cloud-account','plan']){const f=make(purpose,null);await f.controller.beginSignIn('production');assert.deepEqual(f.calls,['status']);assert.match(f.state.error,/temporarily unavailable/);const ready=make(purpose,{google:false});await ready.controller.beginSignIn('production');assert.equal(ready.state.signIn.step,'choose');assert.deepEqual(ready.calls,['status','cancel']);}
+ const oldDiagnostic=make('agent',null);await oldDiagnostic.controller.beginSignIn('production');assert.deepEqual(oldDiagnostic.calls,['status','web-auth'],'unrelated existing diagnostic fallback is preserved');
+});
+
+test('Back from optional explicit sign-in returns to Settings through the existing close fence',()=>{const f=controllerFixture();Object.assign(f.state,{signIn:{...choose},purpose:'cloud-account',cloudAccount:null});f.connectionController.cancelSignIn();assert.equal(f.state.signIn,null);assert.equal(f.state.open,false);assert.equal(f.state.purpose,'agent');assert.ok(!f.events.some(event=>event.authenticated));});

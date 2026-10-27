@@ -2174,7 +2174,7 @@ export const connectionController = {
       const methods = await inAppSignInMethods(environment, signal, refreshNegative);
       signal.throwIfAborted();
       if (!methods) {
-        if (isAndroid) {
+        if (isAndroid || explicitSignedOutCloudEntry(state)) {
           update({ signIn: null, message: '', error: 'Alpha sign-in is temporarily unavailable. Try again.' });
           return;
         }
@@ -2196,8 +2196,10 @@ export const connectionController = {
     const pending = !!operation;
     // Back on the required top-level chooser has nowhere to go; keep its controls usable.
     if (!pending && view?.step === 'choose' && productionCloudSignInRequired(state)) return;
+    const closeExplicitEntry=!pending&&(!view||view.step==='choose')&&explicitSignedOutCloudEntry(state);
     connectionController.cancel();
     update({ signIn: view && (pending || view.step !== 'choose') ? { step: 'choose', environment: view.environment } : null, message: '', error: '' });
+    if(closeExplicitEntry)connectionController.close();
   },
   /** Android's native Google account picker, followed by the existing session flow. */
   async signInGoogle() {
@@ -2675,6 +2677,10 @@ export function productionCloudSignInRequired(snapshot: Pick<ConnectionSnapshot,
   const retainedOfflineIdentity=!snapshot.cloudAccount&&snapshot.residentSavedCredential===true&&snapshot.residentPlanNotice==='offline'&&!snapshot.error;
   return isAndroid&&!testMocksEnabled&&!retainedOfflineIdentity&&(!snapshot.cloudAccount||snapshot.error===errorMessage({status:401})||(snapshot.cloudAccount.expiresAt!==undefined&&snapshot.cloudAccount.expiresAt<=Date.now()));
 }
+/** An explicit signed-out account/plan entry uses Alpha's existing sign-in screen. */
+export function explicitSignedOutCloudEntry(snapshot: Pick<ConnectionSnapshot,'open'|'cloudAccount'|'purpose'>): boolean {
+  return snapshot.open&&!snapshot.cloudAccount&&(snapshot.purpose==='cloud-account'||snapshot.purpose==='plan');
+}
 export function connectionChooserVisible(snapshot: Pick<ConnectionSnapshot,'open'|'automaticRestore'|'busy'|'error'>&Partial<Pick<ConnectionSnapshot,'cloudAccount'|'purpose'|'signIn'|'membershipBalance'|'billingReviewEmail'|'membershipDismissed'|'startupResolved'|'residentSavedCredential'|'residentPlanNotice'>>,foregroundReply=false): boolean {
   if(snapshot.billingReviewEmail)return true;
   if(snapshot.cloudAccount&&!snapshot.membershipDismissed&&snapshot.membershipBalance==='zero'&&!foregroundReply)return true;
@@ -2690,14 +2696,16 @@ export function ConnectionChooser() {
   // Production Android always enters through sign-in while signed out.
   // Only the explicit test-mocks build retains developer bypass behavior.
   const productionSignInRequired=productionCloudSignInRequired(snapshot);
+  const explicitSignInEntry=explicitSignedOutCloudEntry(snapshot);
+  const signInEntryRequired=productionSignInRequired||explicitSignInEntry;
   const automaticSignInProbe = useRef(false);
   useEffect(() => {
-    if (!productionSignInRequired) { automaticSignInProbe.current = false; return; }
-    if (automaticSignInProbe.current || snapshot.busy || snapshot.signIn) return;
+    if (!signInEntryRequired) { automaticSignInProbe.current = false; return; }
+    if (automaticSignInProbe.current || snapshot.busy || snapshot.signIn || snapshot.startupResolved===false || snapshot.automaticRestore) return;
     automaticSignInProbe.current = true;
     // Readiness only: neither email nor Google starts until the owner chooses it.
     void connectionController.beginSignIn(residentEnvironment());
-  }, [productionSignInRequired, snapshot.busy, snapshot.signIn]);
+  }, [signInEntryRequired, snapshot.busy, snapshot.signIn, snapshot.startupResolved, snapshot.automaticRestore]);
   const visible=connectionChooserVisible(snapshot,!!sending);
   const [developmentAction,setDevelopmentAction]=useState('{"type":"create_note","title":"Development note","body":"Reviewed local action"}');
   const [developmentProfile,setDevelopmentProfile]=useState<DevelopmentProfile>('local'),[reply,setReply]=useState(''),[developmentError,setDevelopmentError]=useState('');
@@ -2826,10 +2834,10 @@ export function ConnectionChooser() {
     </aside>;
   }
   const requiredSignInView: SignInView = snapshot.signIn ?? { step: 'choose', environment: residentEnvironment() };
-  if (snapshot.signIn || productionSignInRequired) return <div className={productionSignInRequired?'alpha-auth-page':'alpha-connection-scrim'}><div className={`alpha-connection alpha-connection-native alpha-cloud-sign-in${productionSignInRequired?' alpha-auth-content':''}`} role={productionSignInRequired?'main':'dialog'} aria-modal={productionSignInRequired?undefined:true} aria-labelledby="cloud-sign-in-title" aria-busy={snapshot.busy||undefined} tabIndex={-1} ref={panel}>
+  if (snapshot.signIn || signInEntryRequired) return <div className={productionSignInRequired?'alpha-auth-page':'alpha-connection-scrim'}><div className={`alpha-connection alpha-connection-native alpha-cloud-sign-in${productionSignInRequired?' alpha-auth-content':''}`} role={productionSignInRequired?'main':'dialog'} aria-modal={productionSignInRequired?undefined:true} aria-labelledby="cloud-sign-in-title" aria-busy={snapshot.busy||undefined} tabIndex={-1} ref={panel}>
     <CloudSignInPanel view={requiredSignInView} busy={snapshot.busy} ready={!!snapshot.signIn} dismissible={!productionSignInRequired} google={inAppGoogle} message={snapshot.message} error={snapshot.error} errorIsNotice={snapshot.error===RESIDENT_UNPACKAGED}
       actions={{google:()=>void connectionController.signInGoogle(),email:address=>void connectionController.signInEmail(address),verify:code=>void connectionController.verifySignInCode(code),resend:()=>void connectionController.resendSignInCode(),cancel:()=>connectionController.cancelSignIn()}}
-      extra={productionSignInRequired && !snapshot.signIn && !snapshot.busy
+      extra={signInEntryRequired && !snapshot.signIn && !snapshot.busy
         ? <button onClick={()=>void connectionController.beginSignIn(residentEnvironment(),true)}>Retry sign-in</button>
         : browserCloudResidentEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Sign in with browser</button>:testMocksEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Browser sign-in (diagnostic)</button>:undefined}/>
     {productionSignInRequired && <ResidentRecoveryPanel snapshot={snapshot}/>}
