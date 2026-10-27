@@ -4,9 +4,12 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# Reading the pinned checkout must not create ignored bytecode beside its sources.
+sys.dont_write_bytecode = True
 SHARED = ROOT / 'vendor/eliza/packages/os/scripts/android/stage-android-native.py'
 spec = importlib.util.spec_from_file_location('eliza_android_native', SHARED)
 shared = importlib.util.module_from_spec(spec)

@@ -2,14 +2,14 @@
   "schema": 1,
   "repository": "elizaOS/eliza",
   "base": "develop",
-  "baseCommit": "4e617a0c15080df16391ced88dbbc73b818a7af5",
-  "head": "4e617a0c15080df16391ced88dbbc73b818a7af5",
+  "baseCommit": "3d05abdcdc9bd2437f15763cdecddf774c12864b",
+  "head": "3d05abdcdc9bd2437f15763cdecddf774c12864b",
   "recordedAt": "2026-10-27",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...4e617a0c15080df16391ced88dbbc73b818a7af5",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...3d05abdcdc9bd2437f15763cdecddf774c12864b",
   "status": "identical",
   "aheadBy": 0,
   "behindBy": 0,
-  "mergeBase": "4e617a0c15080df16391ced88dbbc73b818a7af5",
+  "mergeBase": "3d05abdcdc9bd2437f15763cdecddf774c12864b",
   "pinOnlyCommits": [],
   "pullRequests": [
     {
@@ -158,6 +158,46 @@
     },
     {
       "url": "https://github.com/elizaOS/eliza/pull/37912",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37910",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37913",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37914",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37915",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37920",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37928",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37929",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37930",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37933",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37958",
       "status": "merged"
     }
   ]

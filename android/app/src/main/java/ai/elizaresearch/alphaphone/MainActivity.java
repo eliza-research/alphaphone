@@ -273,6 +273,7 @@ public class MainActivity extends BridgeActivity {
   registerPlugin(AlphaHostedResultsPlugin.class);
   registerPlugin(AlphaGmailPlugin.class);
   registerPlugin(AlphaListenerPlugin.class);
+  registerPlugin(ai.eliza.plugins.system.SensePlugin.class);
   registerPlugin(ai.eliza.plugins.passwords.PasswordsPlugin.class);
   if(BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS)registerPlugin(ai.eliza.plugins.passwords.PasswordTransferPlugin.class);
   // The native image gate is checked again by every telephony operation.

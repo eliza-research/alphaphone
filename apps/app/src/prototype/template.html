@@ -9,6 +9,7 @@
 <div style="position: absolute; right: -5px; top: 316px; width: 6px; height: 118px; border-radius: 0 4px 4px 0; background: #262626"></div>
 
 <div data-screen="1" data-alpha-chat-half="{{nonblockingChat}}" onPointerDown="{{gDown}}" onPointerUp="{{gUp}}" onPointerCancel="{{gCancel}}" style="position: absolute; top: 12px; left: 14px; width: 412px; height: 915px; border-radius: 48px; overflow: hidden; background: var(--bg); color: var(--fg); user-select: none; -webkit-user-select: none; touch-action: none; font-size: 15px; --alpha-chat-clearance:{{panelH}}px">
+{{canonicalNotesWorkspace}}
 
 <div data-alpha-system-cutout style="position: absolute; top: 13px; left: 195px; width: 22px; height: 22px; border-radius: 11px; background: #000; box-shadow: 0 0 0 1.5px #111; z-index: 99; pointer-events: none"></div>
 
@@ -2252,7 +2253,7 @@
 </sc-if>
 
 
-<sc-if value="{{is.notes}}">
+<sc-if value="{{is.notes}}"><sc-if value="{{notes.legacyNotes}}">
 <div onFocusCapture="{{notes.captureSubviewFocus}}" class="notes-layout" style="display: flex; flex-direction: column; height: 100%; position: relative; padding-top: 44px; box-sizing: border-box">
   <sc-if value="{{notes.audioDeletionUnknown}}"><div role="status" style="padding:8px 24px;font-size:13px">Voice note deletion needs review. No deletion will be repeated.<button class="tap" onClick="{{notes.checkAudioDeletion}}" style="display:block;min-height:44px;padding:0 4px;color:var(--acct);font-weight:600;text-align:left">Check deletion status</button><sc-for list="{{notes.audioDeletionPending}}" as="pending"><div>{{pending.title}} <button class="tap" onClick="{{pending.restore}}" style="min-height:44px;padding:0 4px;color:var(--acct);font-weight:600;text-align:left">Restore note and recording</button></div></sc-for></div></sc-if>
   <sc-if value="{{notes.browserRecovery}}"><div style="display:flex;gap:8px;padding:0 24px 6px;flex-wrap:wrap"><button aria-label="Recover browser Notes" onClick="{{notes.openBrowserRecovery}}" style="min-height:44px;padding:10px;border-radius:12px;background:var(--s2);color:var(--fg)">Notes recovery</button><button aria-label="Recover note audio deletion history" onClick="{{notes.openAudioRecovery}}" style="min-height:44px;padding:10px;border-radius:12px;background:var(--s2);color:var(--fg)">Audio deletion recovery</button></div></sc-if>
@@ -2579,6 +2580,7 @@
 </sc-if>
 
 
+</sc-if>
 <sc-if value="{{is.contacts}}">
 <div style="display: flex; flex-direction: column; height: 100%; position: relative">
   <sc-if value="{{contacts.notSearching}}">

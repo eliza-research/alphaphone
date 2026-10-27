@@ -2907,7 +2907,6 @@ function notesFmt(sec) { sec = Math.max(0, Math.floor(sec)); return Math.floor(s
 function notesNowLabel(d) { return formatTime(d); }
 function notesFind(list, id) { for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; return null; }
 function notesUpd(api, id, patch) {
-  if (api.canonicalNotes) return api.canonicalNotes.update(id, patch);
   var s = api.get("notes");
   var list = s.list.map(function (n) { return n.id === id ? Object.assign({}, n, typeof patch === "function" ? patch(n) : patch) : n; });
   var change = { list: list };
@@ -2927,7 +2926,6 @@ function notesClose(api) {
 /** Leaves the open note as Back does: dictation and the unsent checklist item end with it, and an
  * empty new note is dropped. On a split canvas (#411) another note opens beside the list directly. */
 function notesLeave(api, next) {
-  if (api.canonicalNotes) { void api.canonicalNotes.leave(next); return {}; }
   var s = api.get("notes"); notesStopTimers();
   var n = s.open !== next && s.open === s.blankCreationId ? notesFind(s.list, s.open) : null;
   var patch = { open: next, sheet: null, playing: false, dict: false, newItem: "", blankCreationId: next === s.open ? s.blankCreationId : null };
@@ -2938,7 +2936,6 @@ function notesUndoable(api, note, idx, label) {
   api.toast(label, { undo: function () { var s = api.get("notes"); if (notesFind(s.list, note.id)) return; var l = s.list.slice(); l.splice(Math.min(idx, l.length), 0, note); api.set({ list: l }); } });
 }
 async function notesDelete(api, id) {
-  if (api.canonicalNotes) return api.canonicalNotes.remove(id);
   var s = api.get("notes"); notesStopTimers();
   var idx = -1; s.list.forEach(function (n, i) { if (n.id === id) idx = i; });
   if (idx < 0) return;
@@ -2949,7 +2946,6 @@ async function notesDelete(api, id) {
   notesUndoable(api, note, idx, (note.title || "Note") + " deleted");
 }
 function notesNew(api, kind) {
-  if (api.canonicalNotes) { api.canonicalNotes.create(kind); api.set({ compose: false, q: null }); return; }
   var id = "n" + Date.now();
   var n = kind === "list" ? { id: id, kind: "list", title: "", items: [], pinned: false, when: "Now" } : { id: id, kind: "text", title: "", body: "", pinned: false, when: "Now" };
   var leave = notesLeave(api, id);
@@ -3055,6 +3051,7 @@ registerView("notes", {
     sendShare: function (card, api) { api.toast("Sent to " + card.to.split(" ")[0]); }
   },
   reply: function (t, raw, api) {
+    if (api.notesSourceMode === "canonical") return null;
     var st = api.get("notes");
     var m = raw.match(/^\s*(?:please\s+)?(?:take a note|make a note|note|jot down|write down|remember)\b(?:\s+(?:that|to))?\s*[:,]?\s*(.+)$/i);
     if (m && m[1].trim()) {

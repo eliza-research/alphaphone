@@ -10,13 +10,15 @@ import {execFileSync} from 'node:child_process';
 const root = path.resolve(import.meta.dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const ndkVersion = source => source.match(/^\s*ndkVersion\s+['"]([^'"]+)['"]/m)?.[1];
-const version = ndkVersion(read('android/sense/build.gradle'));
+const senseConsumer = read('vendor/eliza/packages/app/platforms/android/sense/consumer.gradle');
+const version = ndkVersion(senseConsumer);
 
 test('Sense packaging selects the same explicit NDK as the pinned voice consumer', () => {
   const consumer = read('vendor/eliza/plugins/plugin-local-inference/native/android/consumer.gradle');
+  assert.match(read('android/sense/build.gradle'), /apply from: new File\(elizaSenseSourceDir, 'consumer\.gradle'\)/);
   assert.ok(version, 'an implicit AGP NDK can leave shared libraries unstripped');
   assert.equal(version, ndkVersion(consumer));
-  assert.doesNotMatch(read('android/sense/build.gradle'), /keepDebugSymbols|doNotStrip/,
+  assert.doesNotMatch(senseConsumer + read('android/sense/build.gradle'), /keepDebugSymbols|doNotStrip/,
     'preserving raw STL bytes does not satisfy the recorded packaged-library contract');
 });
 

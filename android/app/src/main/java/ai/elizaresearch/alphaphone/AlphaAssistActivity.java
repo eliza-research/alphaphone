@@ -12,9 +12,6 @@ public final class AlphaAssistActivity extends MainActivity {
  @Override protected boolean isAssistantSurface() { return true; }
  private String newIntentCaller;
  /** This launch's origin until the renderer takes it; see {@link #takeInvocation}. */
- private String invocation;
- private long invocationAt;
- private boolean invocationLocked;
  /** Window event the renderer listens for: a new invocation reached the already open surface. */
  static final String INVOCATION_EVENT = "alpha:assist-invocation";
  @Override public void onCreate(Bundle state) {
@@ -40,27 +37,20 @@ public final class AlphaAssistActivity extends MainActivity {
  /** The only extra: a product-set launch flag the renderer may read. Caller extras are dropped. */
  static final String EXTRA_ASSISTANT = "alpha.assistant";
  /**
-  * Reads and consumes this launch's origin: {@link AssistInvocation#LISTENER} is returned at most
-  * once per launch, then {@link AssistInvocation#ASSIST}, so a consumer that starts a voice turn on
-  * it cannot fire twice.
+  * Legacy Agent read: no owner-bound session accompanies this method, so it is a navigation
+  * hint only. ElizaSense owns authenticated, one-shot wake consumption.
   */
  synchronized String takeInvocation() {
-  String origin = AssistInvocation.take(invocation, invocationAt, android.os.SystemClock.elapsedRealtime(), invocationLocked);
-  invocation = AssistInvocation.ASSIST;
-  return origin;
+  // Legacy Agent callers lack an owner-bound session; only the shared ElizaSense bridge
+  // can consume a wake as microphone authority. Keep this old method as a UI-only hint.
+  return "assist";
  }
  /**
   * The caller package is known only when the caller shared its identity (the listener does). The
   * origin comes from Android-reported caller identity only, never from caller extras.
   */
  private Intent cleanIntent(String caller) {
-  boolean sameSigner = caller != null && getPackageManager().checkSignatures(getPackageName(), caller) == PackageManager.SIGNATURE_MATCH;
-  android.app.KeyguardManager keyguard = getSystemService(android.app.KeyguardManager.class);
-  synchronized (this) {
-   invocation = AssistInvocation.origin(caller, sameSigner);
-   invocationAt = android.os.SystemClock.elapsedRealtime();
-   invocationLocked = keyguard == null || keyguard.isKeyguardLocked();
-  }
+  new ai.eliza.plugins.system.SenseListenerClient(this).recordInvocation(caller);
   return new Intent(this, AlphaAssistActivity.class).setAction(Intent.ACTION_ASSIST).putExtra(EXTRA_ASSISTANT, true);
  }
 }
