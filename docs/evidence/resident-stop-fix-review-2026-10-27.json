@@ -1,0 +1,41 @@
+{
+  "observedAt": "2026-10-27T06:47:48.770677+00:00",
+  "issue": 410,
+  "failure": "Resident exits during stop inventory; identity read throws before absence is checked.",
+  "reviewedFix": {
+    "commit": "cdd624f136ce79776aceb4961bfecad1b7940057",
+    "pullRequest": "https://github.com/elizaOS/eliza/pull/37621",
+    "mergedAt": "2026-10-27T04:48:00Z"
+  },
+  "consumer": {
+    "pullRequest": 624,
+    "commit": "d1487df60f634a3fdf915fedd9a41f4a2a2ffa96",
+    "pin": "6293e29bf398603d0ea233871edbdeb57e5c2405",
+    "fixIsAncestor": true,
+    "generatedSourceHashesVerified": true,
+    "sourceReceipt": {
+      "path": "packages/app/platforms/android/app/src/main/java/ai/elizaos/app/WorkflowSurvivorInventory.java",
+      "generatedPath": "android/app/build/generated/local-agent/java/ai/elizaresearch/alphaphone/WorkflowSurvivorInventory.java",
+      "sourceSha256": "3270bebe7e125705eda25e91ba9996f99cb80fbcb7e534c0d1ea47672a0fc42b",
+      "sha256": "3270bebe7e125705eda25e91ba9996f99cb80fbcb7e534c0d1ea47672a0fc42b",
+      "generatedSha256": "db63f8f301f4a7f5bf038da5364054e1c07a6e345d2671a3d2a28a9906536cff"
+    }
+  },
+  "validation": {
+    "suite": "WorkflowSurvivorObservationTest",
+    "runner": "JUnit 4.13.2; JDK 21; Android 36 SDK classes",
+    "passed": 5,
+    "failed": 0,
+    "scope": "Success, proven absence, live failure, uncertain presence, terminal-state classification. No device execution."
+  },
+  "device": {
+    "connected": false,
+    "fixInstalledAndExercised": false
+  },
+  "remaining": [
+    "Install the candidate when the Pixel reconnects.",
+    "Verify native stop reaches stopped, then Cloud binding and resident restart succeed.",
+    "Run authenticated admission and real inference; do not infer them from JVM tests."
+  ],
+  "supersedes": "The October 26 device note said the equivalent fix was not reviewed, merged or pinned; that source status is now superseded. Device acceptance remains open."
+}
