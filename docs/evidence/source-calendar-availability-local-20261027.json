@@ -1,0 +1,21 @@
+{
+  "productBase": "868efd2416367c2122c1cce3771564af2ac5f826",
+  "SDK": "e8218fd5150b91238c3f813f530075839b78cc45",
+  "priorSDK": "28a249541cd0262f9d0ac126b43bfeb8ce0b781e",
+  "SDKTree": "c6c50b15b1b082874f497730e3217c0436095fb2",
+  "reviewedSourceFiles": {
+    "plugins/plugin-assistant/src/services/device-actions/calendar-availability-source.test.ts": "fe472c181129534ce775481d4a64b88450e7ca52eeeb49ff22785986da522851",
+    "plugins/plugin-assistant/src/services/device-actions/service.ts": "a8e56d2545e33fecf9cd2b4fa4745748d29b1ae24f447f57ff6c25453331416a"
+  },
+  "owningFocusedCasesPassed": 9,
+  "baselineSameMatrixFailures": 5,
+  "owningTestScope": "Actualsourcehelper/action/binding/conflictengine, syntheticfeed; no provider/PGlite/liveproof",
+  "SDKLockUnchanged": true,
+  "packageLockUnchanged": true,
+  "engineModelProviderABIChanges": false,
+  "historyContextPolicyChanged": false,
+  "MacModelAcceptance": false,
+  "AndroidAcceptance": false,
+  "localOnly": true,
+  "published": false
+}

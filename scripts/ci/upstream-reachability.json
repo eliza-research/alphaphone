@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "28a249541cd0262f9d0ac126b43bfeb8ce0b781e",
+  "head": "e8218fd5150b91238c3f813f530075839b78cc45",
   "recordedAt": "2026-10-27",
-  "command": "git -C vendor/eliza rev-list --left-right --count 04658de1b942510e0d37efc777c154530f5c0ef1...28a249541cd0262f9d0ac126b43bfeb8ce0b781e",
+  "command": "git -C vendor/eliza rev-list --left-right --count 04658de1b942510e0d37efc777c154530f5c0ef1...e8218fd5150b91238c3f813f530075839b78cc45",
   "status": "diverged",
-  "aheadBy": 84,
+  "aheadBy": 85,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -334,6 +334,10 @@
     {
       "sha": "28a249541cd0262f9d0ac126b43bfeb8ce0b781e",
       "subject": "fix(calendar): resolve original guest intent before validating planner hints"
+    },
+    {
+      "sha": "e8218fd5150b91238c3f813f530075839b78cc45",
+      "subject": "fix(assistant): keep runtime Calendar availability on canonical source"
     }
   ],
   "pullRequests": [
@@ -428,6 +432,6 @@
   ],
   "provenance": {
     "method": "Local immutable graph against retained develop snapshot, not current published develop qualification",
-    "priorHead": "89d8ca03bf4ceb18418cad813c75287183482b37"
+    "priorHead": "28a249541cd0262f9d0ac126b43bfeb8ce0b781e"
   }
 }
