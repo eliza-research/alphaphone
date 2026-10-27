@@ -39,7 +39,7 @@ public final class CloudSignInFlowTest {
   URI authorize = new URI(CloudSignInFlow.authorizeUrl(production, challenge, state));
   check("https".equals(authorize.getScheme()) && "api.eliza.app".equals(authorize.getHost()) && authorize.getPort() == -1, "Cloud API authority");
   check("/steward/auth/oauth/google/authorize".equals(authorize.getPath()), "Steward Google authorize");
-  check(authorize.getRawQuery().equals("response_type=code&tenant_id=elizacloud&redirect_uri=https%3A%2F%2Feliza.app%2Falphaphone%2Fauth%2Fcallback&code_challenge=" + challenge + "&code_challenge_method=S256&state=" + state + "&prompt=select_account"), "exact query, with Google's account chooser");
+  check(authorize.getRawQuery().equals("response_type=code&tenant_id=elizacloud&redirect_uri=https%3A%2F%2Feliza.app%2Falphaphone%2Fauth%2Fcallback&code_challenge=" + challenge + "&code_challenge_method=S256&state=" + state + "&prompt=select_account&mfa=exchange"), "exact query, with Google's account chooser and native MFA");
   check(new URI(CloudSignInFlow.authorizeUrl(staging, challenge, state)).getHost().equals("api-staging.eliza.app"), "staging authority");
   for (String[] bad : new String[][]{{challenge, "short"}, {"x", state}, {challenge, state + "&x=1"}}) {
    try { CloudSignInFlow.authorizeUrl(production, bad[0], bad[1]); check(false, "refused authorize input"); } catch (IllegalArgumentException expected) { checks++; }
@@ -158,7 +158,11 @@ public final class CloudSignInFlowTest {
   CloudSignInReadiness.Result ready = CloudSignInReadiness.combine(true, true, true, true, true, true, true, t);
   check(ready.inApp && ready.google && ready.until == t + CloudSignInReadiness.READY_TTL_MS && ready.fresh(t + 1) && !ready.fresh(ready.until), "ready, cached six hours");
   boolean[][] missing = {{false,true,true,true,true},{true,true,true,false,true},{true,true,true,true,false}};
-  for (boolean[] row : missing) { CloudSignInReadiness.Result r = CloudSignInReadiness.combine(row[0], row[1], row[2], row[3], row[4], true, true, t); check(!r.inApp && !r.google && r.until == t + CloudSignInReadiness.NOT_READY_TTL_MS, "any missing part keeps the hand-off"); }
+  for (boolean[] row : missing) { CloudSignInReadiness.Result r = CloudSignInReadiness.combine(row[0], row[1], row[2], row[3], row[4], true, true, t); check(!r.inApp && !r.google && r.until == t + CloudSignInReadiness.NOT_READY_TTL_MS, "missing email prerequisite refuses readiness"); }
+  for (boolean[] row : new boolean[][] {{false,true},{true,false},{false,false}}) {
+   CloudSignInReadiness.Result result = CloudSignInReadiness.combine(true,row[0],row[1],true,true,true,true,t);
+   check(result.inApp && !result.google, "missing Google redirect or signer grant preserves native email");
+  }
   CloudSignInReadiness.Result emailOnly = CloudSignInReadiness.combine(true, true, true, true, true, true, false, t);
   check(emailOnly.inApp && !emailOnly.google && emailOnly.until == t + CloudSignInReadiness.NOT_READY_TTL_MS, "email works with unverified device link; Google retries after ten minutes");
   for (int bits = 0; bits < 128; bits++) {
@@ -171,7 +175,14 @@ public final class CloudSignInFlowTest {
    check(r.until == t + (expectedGoogle ? CloudSignInReadiness.READY_TTL_MS : CloudSignInReadiness.NOT_READY_TTL_MS), "partial readiness retries row " + bits);
   }
   CloudSignInReadiness.Result restored2 = CloudSignInReadiness.Result.parse(ready.serialize());
-  check(restored2 != null && restored2.inApp && restored2.google && restored2.until == ready.until && CloudSignInReadiness.Result.parse("v1|true|true|1") == null && CloudSignInReadiness.Result.parse(null) == null, "v2 cache round trip rejects old coupled readiness");
+  check(restored2 != null && restored2.inApp && restored2.google && restored2.until == ready.until && CloudSignInReadiness.Result.parse("v1|true|true|1") == null && CloudSignInReadiness.Result.parse(null) == null, "cache round trip");
+  CloudSignInReadiness.Result phoneOnly = new CloudSignInReadiness.Result(false, false, true, t + 1000);
+  check(phoneOnly.inApp && !phoneOnly.email && !phoneOnly.google && phoneOnly.phone, "phone does not depend on email");
+  check(CloudSignInReadiness.Result.parse(phoneOnly.serialize()).phone, "phone cache round trip");
+  CloudSignInReadiness.Result googleOnly = new CloudSignInReadiness.Result(false, true, false, t + 1000);
+  check(googleOnly.inApp && googleOnly.google && !googleOnly.email, "Google does not depend on email");
+  check(CloudSignInReadiness.Result.parse("v2|true|true|1800000001000") == null, "old cache must re-probe SMS policy");
+  check(CloudSignInReadiness.Result.parse("v3|true|true|yes|true|1800000001000") == null, "malformed method flag refused");
   check(!new CloudSignInReadiness.Result(true, true, t + 365L * 86400000L).fresh(t), "a cache entry from the future is not trusted");
   check(MessageDigest.isEqual("a".getBytes(StandardCharsets.US_ASCII), "a".getBytes(StandardCharsets.US_ASCII)), "jdk");
   System.out.println("PASS cloud sign-in flow (" + checks + " checks)");

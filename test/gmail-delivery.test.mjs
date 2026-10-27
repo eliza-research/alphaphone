@@ -13,7 +13,7 @@ test('Native Gmail delivery transport retains owner fences and startup cursor',(
  const walk=path=>readdirSync(path,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(join(path,e.name)):[join(path,e.name)]);
  const java=process.env.JAVA_HOME||(process.platform==='darwin'?'/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home':'');const binary=name=>java?join(java,'bin',name):name;
  try{
-  execFileSync(binary('javac'),['--release','11','-cp',jsonJar,'-d',temporary,join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/GmailReconciliation.java'),join(root,'test/fixtures/GmailReconciliationTest.java'),join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/GmailDelivery.java'),...walk(join(root,'test/fixtures/gmail-delivery'))],{timeout:20000});
+  execFileSync(binary('javac'),['--release','11','-cp',jsonJar,'-d',temporary,join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/CloudDeployment.java'),join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/GmailReconciliation.java'),join(root,'test/fixtures/GmailReconciliationTest.java'),join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/GmailDelivery.java'),...walk(join(root,'test/fixtures/gmail-delivery'))],{timeout:20000});
   assert.match(execFileSync(binary('java'),['-cp',temporary+':'+jsonJar,'ai.elizaresearch.alphaphone.GmailDeliveryTest'],{encoding:'utf8',timeout:20000}),/^PASS Gmail delivery/);
  }finally{rmSync(temporary,{recursive:true,force:true});}
 });

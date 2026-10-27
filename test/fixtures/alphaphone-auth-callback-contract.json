@@ -39,7 +39,8 @@
     "response_type": "code",
     "tenant_id": "elizacloud",
     "code_challenge_method": "S256",
-    "prompt": "select_account"
+    "prompt": "select_account",
+    "mfa": "exchange"
   },
   "fallbackHandoffs": [
     {

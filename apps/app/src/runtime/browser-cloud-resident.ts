@@ -1,3 +1,4 @@
+import {productionCloud, stagingCloud} from './cloud-deployment.generated.ts';
 import {managedServiceRequest} from './managed-service-routes.ts';
 import {Capacitor} from '@capacitor/core';
 /** Explicit loopback development host with real Cloud services; never enabled in built artifacts. */
@@ -14,9 +15,9 @@ export async function browserResidentCall(operation:'residentBind'|'residentClea
 export function browserCloudManagedServiceAllowed(input:string,method:string,hasBody=false):boolean {
  if(browserCloudResidentEnabled&&browserCloudResidentEnvironment==='staging'){
   let url:URL;try{url=new URL(input);}catch{return false;}
-  if(url.origin!=='https://api-staging.eliza.app')return false;
+  if(url.origin!==stagingCloud.api)return false;
   // Policy comparison only. The transport still dispatches the original staging URL.
-  url.hostname='api.eliza.app';
+  url.hostname=new URL(productionCloud.api).hostname;
   return managedServiceRequest(url.href,method,hasBody);
  }
  return managedServiceRequest(input,method,hasBody);

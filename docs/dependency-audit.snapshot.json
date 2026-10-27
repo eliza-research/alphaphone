@@ -103,16 +103,16 @@
   ],
   "resident": {
     "description": "Advisories for the resident runtime's npm packages at the pinned upstream commit, from the npm bulk advisory endpoint. Regenerate with: node scripts/dependency-audit.mjs --resident --write. Dispositions live in docs/dependency-audit.dispositions.json under \"resident\".",
-    "upstreamCommit": "58dfddf87ee5adec414746a86a23dada124fbbae",
+    "upstreamCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
     "input": "vendor/eliza/bun.lock",
-    "auditedOn": "2026-10-23",
-    "inputSha256": "db4abd2f41fe9ce438617059d44becec4eefb01ec560a4208a77f16aaf4122d8",
+    "auditedOn": "2026-10-26",
+    "inputSha256": "63509920ce413bb6fcb44fc7e5b1047cc22517eab2ea51a445203e29bd7c6201",
     "packages": 3694,
     "counts": {
       "info": 0,
-      "low": 14,
-      "moderate": 43,
-      "high": 48,
+      "low": 17,
+      "moderate": 53,
+      "high": 53,
       "critical": 1
     },
     "findings": [
@@ -523,6 +523,34 @@
         }
       },
       {
+        "package": "body-parser",
+        "versions": [
+          "1.20.8"
+        ],
+        "severity": "high",
+        "advisory": {
+          "id": "GHSA-27r3-jxmh-p828",
+          "severity": "high",
+          "vulnerableRange": "<1.20.9",
+          "title": "body-parser vulnerable to Denial of Service via trailing bytes after a compressed request body",
+          "url": "https://github.com/advisories/GHSA-27r3-jxmh-p828"
+        }
+      },
+      {
+        "package": "body-parser",
+        "versions": [
+          "2.3.0"
+        ],
+        "severity": "high",
+        "advisory": {
+          "id": "GHSA-27r3-jxmh-p828",
+          "severity": "high",
+          "vulnerableRange": ">=2.0.0 <2.4.0",
+          "title": "body-parser vulnerable to Denial of Service via trailing bytes after a compressed request body",
+          "url": "https://github.com/advisories/GHSA-27r3-jxmh-p828"
+        }
+      },
+      {
         "package": "brace-expansion",
         "versions": [
           "5.0.9"
@@ -562,20 +590,6 @@
           "vulnerableRange": ">=4.0.0 <5.0.11",
           "title": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion",
           "url": "https://github.com/advisories/GHSA-qhr7-859c-m2p7"
-        }
-      },
-      {
-        "package": "braces",
-        "versions": [
-          "3.0.3"
-        ],
-        "severity": "high",
-        "advisory": {
-          "id": "GHSA-vfj7-8cjw-p6xm",
-          "severity": "high",
-          "vulnerableRange": "<=3.0.3",
-          "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
-          "url": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm"
         }
       },
       {
@@ -702,6 +716,62 @@
           "vulnerableRange": "<=2.0.1",
           "title": "extract-zip unvalidated symlink path traversal",
           "url": "https://github.com/advisories/GHSA-jmr9-qjv8-65gv"
+        }
+      },
+      {
+        "package": "fast-uri",
+        "versions": [
+          "3.1.8"
+        ],
+        "severity": "low",
+        "advisory": {
+          "id": "GHSA-333x-w4r6-6crp",
+          "severity": "low",
+          "vulnerableRange": ">=3.0.0 <3.1.9",
+          "title": "fast-uri vulnerable to scheme injection via an unescaped first-segment colon in suffix references",
+          "url": "https://github.com/advisories/GHSA-333x-w4r6-6crp"
+        }
+      },
+      {
+        "package": "fast-uri",
+        "versions": [
+          "3.1.8"
+        ],
+        "severity": "moderate",
+        "advisory": {
+          "id": "GHSA-w74x-v6f9-j3xg",
+          "severity": "moderate",
+          "vulnerableRange": ">=3.0.0 <3.1.9",
+          "title": "fast-uri vulnerable to URI scheme spoofing via percent-encoded scheme decoding",
+          "url": "https://github.com/advisories/GHSA-w74x-v6f9-j3xg"
+        }
+      },
+      {
+        "package": "fast-uri",
+        "versions": [
+          "3.1.8"
+        ],
+        "severity": "moderate",
+        "advisory": {
+          "id": "GHSA-wjr9-j795-jxcr",
+          "severity": "moderate",
+          "vulnerableRange": ">=3.1.3 <3.1.9",
+          "title": "fast-uri vulnerable to host confusion via unchecked WHATWG host canonicalization",
+          "url": "https://github.com/advisories/GHSA-wjr9-j795-jxcr"
+        }
+      },
+      {
+        "package": "fast-uri",
+        "versions": [
+          "3.1.8"
+        ],
+        "severity": "low",
+        "advisory": {
+          "id": "GHSA-xhq7-xmqj-769h",
+          "severity": "low",
+          "vulnerableRange": ">=3.0.0 <3.1.9",
+          "title": "fast-uri vulnerable to improper path equivalence in relative reference normalization",
+          "url": "https://github.com/advisories/GHSA-xhq7-xmqj-769h"
         }
       },
       {
@@ -832,6 +902,48 @@
         }
       },
       {
+        "package": "nodemailer",
+        "versions": [
+          "10.0.12"
+        ],
+        "severity": "moderate",
+        "advisory": {
+          "id": "GHSA-85x2-q946-cp5h",
+          "severity": "moderate",
+          "vulnerableRange": ">=3.0.0 <10.1.4",
+          "title": "Nodemailer: A \">\" inside a quoted local part ends an angle-addr early in addressparser, delivering to a domain the header does not name",
+          "url": "https://github.com/advisories/GHSA-85x2-q946-cp5h"
+        }
+      },
+      {
+        "package": "nodemailer",
+        "versions": [
+          "10.0.12"
+        ],
+        "severity": "moderate",
+        "advisory": {
+          "id": "GHSA-8c8m-p3m8-cjg8",
+          "severity": "moderate",
+          "vulnerableRange": ">=3.0.0 <10.1.4",
+          "title": "Nodemailer: A nested comment ends early in addressparser, releasing the rest of the comment as a recipient",
+          "url": "https://github.com/advisories/GHSA-8c8m-p3m8-cjg8"
+        }
+      },
+      {
+        "package": "nodemailer",
+        "versions": [
+          "10.0.12"
+        ],
+        "severity": "moderate",
+        "advisory": {
+          "id": "GHSA-m943-m63m-w62w",
+          "severity": "moderate",
+          "vulnerableRange": ">=3.0.0 <10.1.4",
+          "title": "Nodemailer: A \";\" inside a quoted string or comment ends an address group early in addressparser, turning display text into a recipient",
+          "url": "https://github.com/advisories/GHSA-m943-m63m-w62w"
+        }
+      },
+      {
         "package": "pbkdf2",
         "versions": [
           "3.1.6"
@@ -843,6 +955,20 @@
           "vulnerableRange": "<=3.1.6",
           "title": "pbkdf2 rehashes long passwords on every iteration, enabling denial of service",
           "url": "https://github.com/advisories/GHSA-477h-4r7f-fvrx"
+        }
+      },
+      {
+        "package": "serialize-javascript",
+        "versions": [
+          "7.0.5"
+        ],
+        "severity": "low",
+        "advisory": {
+          "id": "GHSA-m5mm-p8h7-m29v",
+          "severity": "low",
+          "vulnerableRange": "<7.1.3",
+          "title": "Serialize JavaScript: Cross-site scripting (XSS) via unescaped </script at the end of a serialized function body",
+          "url": "https://github.com/advisories/GHSA-m5mm-p8h7-m29v"
         }
       },
       {
@@ -1213,6 +1339,51 @@
       {
         "package": "undici",
         "versions": [
+          "8.10.0",
+          "8.10.2",
+          "8.11.2"
+        ],
+        "severity": "moderate",
+        "advisory": {
+          "id": "GHSA-4qv8-2p9j-2685",
+          "severity": "moderate",
+          "vulnerableRange": ">=8.0.0 <8.12.2",
+          "title": "undici vulnerable to Denial of Service via unbounded memory in the EventSource parser",
+          "url": "https://github.com/advisories/GHSA-4qv8-2p9j-2685"
+        }
+      },
+      {
+        "package": "undici",
+        "versions": [
+          "7.28.0",
+          "7.29.1"
+        ],
+        "severity": "moderate",
+        "advisory": {
+          "id": "GHSA-4qv8-2p9j-2685",
+          "severity": "moderate",
+          "vulnerableRange": ">=7.0.0 <7.30.1",
+          "title": "undici vulnerable to Denial of Service via unbounded memory in the EventSource parser",
+          "url": "https://github.com/advisories/GHSA-4qv8-2p9j-2685"
+        }
+      },
+      {
+        "package": "undici",
+        "versions": [
+          "6.28.1"
+        ],
+        "severity": "moderate",
+        "advisory": {
+          "id": "GHSA-4qv8-2p9j-2685",
+          "severity": "moderate",
+          "vulnerableRange": ">=6.5.0 <6.29.1",
+          "title": "undici vulnerable to Denial of Service via unbounded memory in the EventSource parser",
+          "url": "https://github.com/advisories/GHSA-4qv8-2p9j-2685"
+        }
+      },
+      {
+        "package": "undici",
+        "versions": [
           "8.10.0"
         ],
         "severity": "low",
@@ -1264,6 +1435,37 @@
           "vulnerableRange": "<6.28.0",
           "title": "undici vulnerable to downstream response desynchronization via retry interceptor",
           "url": "https://github.com/advisories/GHSA-8xcm-r25x-g524"
+        }
+      },
+      {
+        "package": "undici",
+        "versions": [
+          "8.10.0",
+          "8.10.2",
+          "8.11.2"
+        ],
+        "severity": "moderate",
+        "advisory": {
+          "id": "GHSA-f72v-6w45-q472",
+          "severity": "moderate",
+          "vulnerableRange": ">=8.0.0 <8.12.2",
+          "title": "undici vulnerable to Subresource Integrity bypass via non-lowercase algorithm tokens",
+          "url": "https://github.com/advisories/GHSA-f72v-6w45-q472"
+        }
+      },
+      {
+        "package": "undici",
+        "versions": [
+          "7.28.0",
+          "7.29.1"
+        ],
+        "severity": "moderate",
+        "advisory": {
+          "id": "GHSA-f72v-6w45-q472",
+          "severity": "moderate",
+          "vulnerableRange": ">=7.15.0 <7.30.1",
+          "title": "undici vulnerable to Subresource Integrity bypass via non-lowercase algorithm tokens",
+          "url": "https://github.com/advisories/GHSA-f72v-6w45-q472"
         }
       },
       {
@@ -1589,6 +1791,51 @@
         }
       },
       {
+        "package": "undici",
+        "versions": [
+          "8.10.0",
+          "8.10.2",
+          "8.11.2"
+        ],
+        "severity": "high",
+        "advisory": {
+          "id": "GHSA-xjj6-f33q-929c",
+          "severity": "high",
+          "vulnerableRange": ">=8.0.0 <8.12.2",
+          "title": "undici vulnerable to Denial of Service via unhandled error on excessive content-encodings",
+          "url": "https://github.com/advisories/GHSA-xjj6-f33q-929c"
+        }
+      },
+      {
+        "package": "undici",
+        "versions": [
+          "7.28.0",
+          "7.29.1"
+        ],
+        "severity": "high",
+        "advisory": {
+          "id": "GHSA-xjj6-f33q-929c",
+          "severity": "high",
+          "vulnerableRange": ">=7.18.0 <7.30.1",
+          "title": "undici vulnerable to Denial of Service via unhandled error on excessive content-encodings",
+          "url": "https://github.com/advisories/GHSA-xjj6-f33q-929c"
+        }
+      },
+      {
+        "package": "undici",
+        "versions": [
+          "6.28.1"
+        ],
+        "severity": "high",
+        "advisory": {
+          "id": "GHSA-xjj6-f33q-929c",
+          "severity": "high",
+          "vulnerableRange": ">=6.23.0 <6.29.1",
+          "title": "undici vulnerable to Denial of Service via unhandled error on excessive content-encodings",
+          "url": "https://github.com/advisories/GHSA-xjj6-f33q-929c"
+        }
+      },
+      {
         "package": "uuid",
         "versions": [
           "7.0.3",
@@ -1602,6 +1849,22 @@
           "vulnerableRange": "<11.1.1",
           "title": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided",
           "url": "https://github.com/advisories/GHSA-w5hq-g745-h8pq"
+        }
+      },
+      {
+        "package": "zod",
+        "versions": [
+          "3.22.4",
+          "3.25.76",
+          "4.4.3"
+        ],
+        "severity": "high",
+        "advisory": {
+          "id": "GHSA-mrhx-c7xc-m3w5",
+          "severity": "high",
+          "vulnerableRange": "<4.6.6",
+          "title": "Zod can exhaust memory while validating oversized constrained collections",
+          "url": "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5"
         }
       }
     ]

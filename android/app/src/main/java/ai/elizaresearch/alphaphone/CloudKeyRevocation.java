@@ -16,8 +16,8 @@ final class CloudKeyRevocation {
  /** Production always; staging only in test-mocks builds. */
  static String[] environments(boolean testMocks){return testMocks?new String[]{"production","staging"}:new String[]{"production"};}
  static String endpoint(String environment){
-  if("production".equals(environment))return "https://api.eliza.app/api/v1/api-keys/current";
-  if("staging".equals(environment))return "https://api-staging.eliza.app/api/v1/api-keys/current";
+  if("production".equals(environment))return CloudDeployment.PRODUCTION_API+"/api/v1/api-keys/current";
+  if("staging".equals(environment))return CloudDeployment.STAGING_API+"/api/v1/api-keys/current";
   throw new IllegalArgumentException();
  }
  /** The bearer value of a saved Cloud credential, or null. Only a printable ASCII token is used. */

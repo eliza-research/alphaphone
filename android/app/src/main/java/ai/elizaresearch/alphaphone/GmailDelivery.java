@@ -53,7 +53,7 @@ final class GmailDelivery {
   // Constructed paths only, with a fixed service authority. No remote-agent host or redirect.
   if(!(path.equals("/api/v1/user")||path.equals("/api/v1/eliza/google/accounts?side=owner")||path.startsWith("/api/v1/eliza/google/gmail/history?grantId=")))throw new SecurityException("Gmail route denied");
   guard.check();String raw=store.readCredentialSlot("cloud:production");JSONObject credential=new JSONObject(raw);if(credential.has("expiresAt")&&credential.getDouble("expiresAt")<=System.currentTimeMillis())throw new SecurityException("Cloud key expired");
-  HttpURLConnection connection=connections.open(new URL("https://api.eliza.app"+path));
+  HttpURLConnection connection=connections.open(new URL(CloudDeployment.PRODUCTION_API+path));
   try{connection.setInstanceFollowRedirects(false);connection.setUseCaches(false);connection.setConnectTimeout(15000);connection.setReadTimeout(30000);connection.setRequestMethod("GET");connection.setRequestProperty("Accept","application/json");connection.setRequestProperty("Authorization","Bearer "+credential.getString("token"));guard.check();int status=connection.getResponseCode();if(status<200||status>=300)throw new HttpFailure(status);ByteArrayOutputStream bytes=new ByteArrayOutputStream();try(InputStream in=connection.getInputStream()){byte[] buffer=new byte[8192];for(int n;(n=in.read(buffer))!=-1;){guard.check();if(bytes.size()+n>1100000)throw new IOException("Gmail response exceeds bound");bytes.write(buffer,0,n);}}guard.check();return new JSONObject(bytes.toString(StandardCharsets.UTF_8.name()));}finally{connection.disconnect();}
  }
  private void verify(JSONObject binding,GmailReconciliation.Guard guard)throws Exception{

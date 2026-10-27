@@ -66,12 +66,12 @@ final class AlphaCredentialStore {
   if(value.length()<=retainedLimit(name)/3)return;
   if(value.getBytes(StandardCharsets.UTF_8).length>retainedLimit(name))throw new StorageFullException();
  }
- String slotHash(String name)throws Exception{return slots.slotHash(name);}
+ String slotHash(String name)throws Exception{return slots.slotHash(CloudDeployment.storageSlot(name));}
  AtomicFile slotFile(String hash)throws Exception{return slots.slotFile(hash);}
- String readCredentialSlot(String name)throws Exception{return slots.read(name);}
+ String readCredentialSlot(String name)throws Exception{return slots.read(CloudDeployment.storageSlot(name));}
  /** Reads a saved slot before Application startup during pending reset recovery. */
  static String readSlotBeforeAttach(Context base,String name)throws Exception{
-  return new JsonCredentialSlots(new File(base.getNoBackupFilesDir(),"connection-credentials"),"alpha.connection.aes.v1",AlphaCredentialStore::slotLimit).read(name);
+  return new JsonCredentialSlots(new File(base.getNoBackupFilesDir(),"connection-credentials"),"alpha.connection.aes.v1",AlphaCredentialStore::slotLimit).read(CloudDeployment.storageSlot(name));
  }
  /** Critical credential changes cannot leave a child process using the old environment. */
  void writeCredentialSlot(String name,String value)throws Exception{if(value==null)throw new IllegalArgumentException("Credential value required");requireCapacity(name,value);mutateSlot(name,null,value,false);}
@@ -85,14 +85,14 @@ final class AlphaCredentialStore {
  private boolean mutateSlotOnce(String name,String expected,String value,boolean compare)throws Exception{
   if(!"cloud:production".equals(name)&&!"cloud:staging".equals(name)&&!LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)){
    synchronized(JsonCredentialSlots.LOCK){
-    assertOwner.run();if(compare&&!java.util.Objects.equals(slots.read(name),expected))return false;
-    if(value==null)slots.remove(name);else slots.write(name,value);return true;
+    assertOwner.run();if(compare&&!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(name)),expected))return false;
+    if(value==null)slots.remove(CloudDeployment.storageSlot(name));else slots.write(CloudDeployment.storageSlot(name),value);return true;
    }
   }
   return AlphaLocalAgentPlugin.mutateCredentials(context,assertOwner,new AlphaLocalAgentPlugin.CredentialMutation<Boolean>(){
    String before,provider;boolean conflict;
    public boolean requiresShutdown()throws Exception{
-    before=slots.read(name);provider=slots.read(LocalAgentProviderAdmission.PROVIDER_SLOT);
+    before=slots.read(CloudDeployment.storageSlot(name));provider=slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT));
     conflict=compare&&!java.util.Objects.equals(before,expected);
     if(conflict)return false;
     if(LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name))return before!=null||value!=null;
@@ -106,11 +106,11 @@ final class AlphaCredentialStore {
    public Boolean commit()throws Exception{
     if(conflict)return false;
     if(!LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)&&java.util.Objects.equals(before,value))return true;
-    if(!java.util.Objects.equals(before,slots.read(name))||!java.util.Objects.equals(provider,slots.read(LocalAgentProviderAdmission.PROVIDER_SLOT)))throw new IllegalStateException("Credential changed");
+    if(!java.util.Objects.equals(before,slots.read(CloudDeployment.storageSlot(name)))||!java.util.Objects.equals(provider,slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT))))throw new IllegalStateException("Credential changed");
     if(LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)||"cloud:production".equals(name)&&!LocalAgentProviderAdmission.sameCloudCredential(before,value))cloudChange.changed();
     invalidateProviderAdmission(name,value);
-    if(value==null)slots.remove(name);
-    else slots.write(name,LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)?LocalAgentProviderAdmission.withoutAdmission(value):value);
+    if(value==null)slots.remove(CloudDeployment.storageSlot(name));
+    else slots.write(CloudDeployment.storageSlot(name),LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)?LocalAgentProviderAdmission.withoutAdmission(value):value);
     return true;
    }
   });
@@ -118,22 +118,22 @@ final class AlphaCredentialStore {
  void assertCurrent(){assertOwner.run();}
  private void invalidateProviderAdmission(String changedSlot,String replacement)throws Exception{
   if(!"cloud:production".equals(changedSlot)&&!"cloud:staging".equals(changedSlot))return;
-  String saved=slots.read(LocalAgentProviderAdmission.PROVIDER_SLOT);
+  String saved=slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT));
   if(saved==null)return;
   org.json.JSONObject provider=new org.json.JSONObject(saved);
   if(!changedSlot.equals("cloud:"+provider.optString("environment","production")))return;
-  String previous=slots.read(changedSlot);
+  String previous=slots.read(CloudDeployment.storageSlot(changedSlot));
   if(replacement!=null&&LocalAgentProviderAdmission.currentGeneration(saved,previous)!=null
      &&LocalAgentProviderAdmission.sameCloudCredential(previous,replacement))return;
-  slots.write(LocalAgentProviderAdmission.PROVIDER_SLOT,LocalAgentProviderAdmission.withoutAdmission(saved));
+  slots.write(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT),LocalAgentProviderAdmission.withoutAdmission(saved));
  }
  /** Only explicit, validated native provider configuration may establish admission identity. */
  String compareExchangeProviderAdmission(String expected,String selection,String credentialSlot,String expectedCredential,org.json.JSONObject verifiedIdentity)throws Exception{
   return AlphaLocalAgentPlugin.mutateCredentials(context,assertOwner,new AlphaLocalAgentPlugin.CredentialMutation<String>(){
    String admitted;boolean conflict;
    public boolean requiresShutdown()throws Exception{
-    conflict=credentialSlot!=null&&!java.util.Objects.equals(slots.read(credentialSlot),expectedCredential)
-      ||!java.util.Objects.equals(slots.read(LocalAgentProviderAdmission.PROVIDER_SLOT),expected);
+    conflict=credentialSlot!=null&&!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(credentialSlot)),expectedCredential)
+      ||!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT)),expected);
     if(conflict)return false;
     org.json.JSONObject requested=new org.json.JSONObject(selection);
     boolean cloud="elizacloud".equals(requested.optString("provider"));
@@ -144,10 +144,10 @@ final class AlphaCredentialStore {
    }
    public String commit()throws Exception{
     if(conflict)return null;
-    if(credentialSlot!=null&&!java.util.Objects.equals(slots.read(credentialSlot),expectedCredential)
-      ||!java.util.Objects.equals(slots.read(LocalAgentProviderAdmission.PROVIDER_SLOT),expected))throw new IllegalStateException("Provider changed");
+    if(credentialSlot!=null&&!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(credentialSlot)),expectedCredential)
+      ||!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT)),expected))throw new IllegalStateException("Provider changed");
     if(LocalAgentProviderAdmission.currentGeneration(admitted,expectedCredential)==null)throw new IllegalStateException("Provider credential expired");
-    slots.write(LocalAgentProviderAdmission.PROVIDER_SLOT,admitted);return admitted;
+    slots.write(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT),admitted);return admitted;
    }
   });
  }
@@ -156,7 +156,7 @@ final class AlphaCredentialStore {
   AlphaLocalAgentPlugin.mutateCredentials(context,assertOwner,new AlphaLocalAgentPlugin.CredentialMutation<Void>(){
    String current;boolean owned;
    public boolean requiresShutdown()throws Exception{
-    current=slots.read(LocalAgentProviderAdmission.PROVIDER_SLOT);
+    current=slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT));
     if(current==null)return false;
     org.json.JSONObject held=new org.json.JSONObject(current);
     owned=java.util.Objects.equals(current,admitted)
@@ -166,9 +166,9 @@ final class AlphaCredentialStore {
    }
    public Void commit()throws Exception{
     if(!owned)return null;
-    if(!java.util.Objects.equals(current,slots.read(LocalAgentProviderAdmission.PROVIDER_SLOT)))throw new IllegalStateException("Provider changed");
-    if(previous==null)slots.remove(LocalAgentProviderAdmission.PROVIDER_SLOT);
-    else slots.write(LocalAgentProviderAdmission.PROVIDER_SLOT,LocalAgentProviderAdmission.withoutAdmission(previous));
+    if(!java.util.Objects.equals(current,slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT))))throw new IllegalStateException("Provider changed");
+    if(previous==null)slots.remove(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT));
+    else slots.write(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT),LocalAgentProviderAdmission.withoutAdmission(previous));
     return null;
    }
   });
@@ -176,21 +176,21 @@ final class AlphaCredentialStore {
  /** Read-only correlation, not an authorization or migration API. Legacy selections remain unavailable. */
  String providerAdmissionGeneration()throws Exception{
   synchronized(JsonCredentialSlots.LOCK){
-   String saved=slots.read(LocalAgentProviderAdmission.PROVIDER_SLOT);
+   String saved=slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT));
    if(saved==null||!AlphaLocalAgentPlugin.providerAdmissionReadable())return null;
    org.json.JSONObject selected=new org.json.JSONObject(saved);
-   String credential="elizacloud".equals(selected.optString("provider"))?slots.read("cloud:production"):null;
+   String credential="elizacloud".equals(selected.optString("provider"))?slots.read(CloudDeployment.storageSlot("cloud:production")):null;
    return LocalAgentProviderAdmission.currentGeneration(saved,credential);
   }
  }
  /** Private whitelist only; neither the logical fingerprint nor billing credentials leave the store. */
  org.json.JSONObject providerAdmissionSnapshot()throws Exception{
   synchronized(JsonCredentialSlots.LOCK){
-   String saved=slots.read(LocalAgentProviderAdmission.PROVIDER_SLOT);
+   String saved=slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT));
    if(saved==null||!AlphaLocalAgentPlugin.providerAdmissionReadable())throw new SecurityException("Native provider binding unavailable");
    org.json.JSONObject selected=new org.json.JSONObject(saved);
    String kind=selected.optString("provider","cerebras");
-   String cloud="elizacloud".equals(kind)?slots.read("cloud:production"):null;
+   String cloud="elizacloud".equals(kind)?slots.read(CloudDeployment.storageSlot("cloud:production")):null;
    String generation=LocalAgentProviderAdmission.currentGeneration(saved,cloud);
    if(generation==null)throw new SecurityException("Native provider binding unavailable");
    String accountRef="elizacloud".equals(kind)?LocalAgentProviderAdmission.cloudAccountRef(selected):"native-local";

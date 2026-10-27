@@ -24,6 +24,19 @@ and no source rewrite (`scripts/embedding-native-contract.mjs`). The paradee-voi
 the app's engine instead of packaging a second copy, so the two must be byte-identical
 (`node scripts/paradee-runtime.mjs --app-linkage`, Gradle `:app:verifyParadeeAppLinkage`).
 
+## October 24 source update
+
+Current consumer pin `c95a37be8d56` uses native engine `0d9fd4b9db23`.
+The shared Android module now lives at
+`plugins/plugin-local-inference/native/android`; its compatible Java APIs use the
+full registered JNI surface. Alpha retains its own renderer and packaging.
+Phonon-2 now uses the upstream b5x3t7 layout: 208,932,352 bytes, SHA-256
+`c0f6ad42f0a5b481904416077dde0a1a78e5b8642295fdf2356ace822588c3df`.
+The unchanged converter reproduced that exact hash under ARM64 Python/NumPy.
+Fresh native receipts and component results are under `docs/evidence/native-c95a`.
+Historical measurements below apply only to their named source and model hashes.
+Complete device capture/playback and user acceptance remain separate requirements.
+
 ## The voice bundle
 
 The bundle uses the libelizainference layout and ships **in the APK assets**

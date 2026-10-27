@@ -115,6 +115,7 @@ test("the https autoVerify filter is build-gated by ELIZAOS_APP_LINK_HOST and re
   // Default build: the main manifest has no https autoVerify filter at all; only the property adds the overlay.
   assert.doesNotMatch(manifest.replace(/<!--[\s\S]*?-->/g, ""), /autoVerify/);
   assert.match(gradle, /project\.findProperty\('ELIZAOS_APP_LINK_HOST'\) \?: envValue\('ELIZAOS_APP_LINK_HOST'\)/);
+  assert.ok(gradle.includes('<activity android:name="${identity.appId}.MainActivity" android:exported="true">'), 'the generated App Link activity explicitly exports its external return intent');
   assert.match(gradle, /manifestPlaceholders = \[appOrientation: identity\.orientation, appLinkHost: appLinkHost\]/);
   assert.match(gradle, /if \(appLinkHost\) androidComponents \{ onVariants\(selector\(\)\.all\(\)\) \{ variant -> variant\.sources\.manifests\.addStaticManifestFile\(appLinksManifest\) \} \}/);
   assert.match(gradle, /<intent-filter android:autoVerify="true">[^\n]*android:scheme="https" android:host="\\\$\{appLinkHost\}" android:pathPrefix="\/alphaphone\/cloud-delegation"/);

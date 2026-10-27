@@ -104,10 +104,10 @@ function fixtureProduct(t) {
   const write = (relative, content) => { fs.mkdirSync(path.dirname(path.join(from, relative)), {recursive: true}); fs.writeFileSync(path.join(from, relative), content); return {sha256: sha(content), bytes: Buffer.byteLength(content)}; };
   for (const model of record.models) Object.assign(model, write(model.sourceFile ? path.join(path.dirname(model.path), model.sourceFile) : model.path, `fixture ${model.path}`));
   for (const abi of record.abis) Object.assign(abi.libraries[0], write(`jniLibs/${abi.abi}/libelizainference.so`, `engine ${abi.abi}`));
-  const inputs = JSON.parse(fs.readFileSync(path.join(ROOT, 'vendor/eliza/packages/app/platforms/android/paradee-voice/inputs.json'), 'utf8'));
+  const inputs = JSON.parse(fs.readFileSync(path.join(ROOT, 'vendor/eliza/plugins/plugin-local-inference/native/android/inputs.json'), 'utf8'));
   for (const key of ['paradee', 'lexicon']) { const row = record.models.find(model => model.path === inputs[key].path); inputs[key] = {...inputs[key], sha256: row.sha256, bytes: row.bytes}; }
-  fs.mkdirSync(path.join(dir, 'vendor/eliza/packages/app/platforms/android/paradee-voice'), {recursive: true});
-  fs.writeFileSync(path.join(dir, 'vendor/eliza/packages/app/platforms/android/paradee-voice/inputs.json'), JSON.stringify(inputs, null, 2));
+  fs.mkdirSync(path.join(dir, 'vendor/eliza/plugins/plugin-local-inference/native/android'), {recursive: true});
+  fs.writeFileSync(path.join(dir, 'vendor/eliza/plugins/plugin-local-inference/native/android/inputs.json'), JSON.stringify(inputs, null, 2));
   fs.mkdirSync(path.join(dir, 'android/voice-host'), {recursive: true});fs.mkdirSync(path.join(dir, 'android/paradee-voice'), {recursive: true});
   fs.writeFileSync(path.join(dir, VOICE_HOST), JSON.stringify(record, null, 2));
   fs.writeFileSync(path.join(dir, VOICE_ASR_SLOT), JSON.stringify({backend: record.asrSlot.backend, files: record.models.filter(model => model.role.startsWith('asr-')).map(({path: file, role, sha256, bytes}) => ({path: file, role, sha256, bytes}))}));

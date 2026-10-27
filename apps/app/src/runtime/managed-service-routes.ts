@@ -1,8 +1,9 @@
+import {productionCloud} from './cloud-deployment.generated.ts';
 /** Product transport admits managed services, never agent hosts or provisioning. */
 const MAPS_POST=/^\/api\/v1\/maps\/(?:geocode|reverse|places\/search|places\/details|routes)$/;
 export function managedServiceRequest(url:string,method:string,hasBody=false):boolean {
  let parsed:URL;try{parsed=new URL(url);}catch{return false;}
- if(parsed.origin!=='https://api.eliza.app'||parsed.username||parsed.password||parsed.hash)return false;
+ if(parsed.origin!==productionCloud.api||parsed.username||parsed.password||parsed.hash)return false;
  const path=parsed.pathname;
  if(/[\\%]/.test(path)||path.includes('//'))return false;
  if(path==='/api/v1/eliza/google/calendar/sync-v1/capabilities')return method==='GET'&&!!parsed.search&&!hasBody;

@@ -8,7 +8,7 @@ import {nativeSource,fixture,runJvm} from './fixtures/jvm-tools.mjs';
 // APK, run on Android, or contact Eliza Cloud or any agent.
 // The JDK is JAVA_HOME, else the Homebrew openjdk@21 on darwin when it is installed, else javac on PATH.
 test('native transport refuses production pairing and non-Cloud origins and admits DELETE only for Cloud self-revocation',()=>{
- assert.match(runJvm([nativeSource('ConnectionRoutes.java'),nativeSource('CloudKeyRevocation.java'),fixture('ConnectionRoutesTest.java')],'ai.elizaresearch.alphaphone.ConnectionRoutesTest'),/^PASS connection routes/);
+ assert.match(runJvm([nativeSource('CloudDeployment.java'),nativeSource('ConnectionRoutes.java'),nativeSource('CloudKeyRevocation.java'),fixture('ConnectionRoutesTest.java')],'ai.elizaresearch.alphaphone.ConnectionRoutesTest'),/^PASS connection routes/);
 });
 
 // Source-order check of the plugin that applies the policy; the policy itself is run on the JVM above.

@@ -1,5 +1,5 @@
 // Shared native speech API and build policy come from the exact reviewed pin.
-def paradee = file('../../vendor/eliza/packages/app/platforms/android/paradee-voice')
+def paradee = file('../../vendor/eliza/plugins/plugin-local-inference/native/android')
 if (!paradee.isDirectory()) {
  ext.elizaSpeechSourceDir = file('../../vendor/eliza/packages/app/platforms/android/local-speech')
  apply from: new File(ext.elizaSpeechSourceDir, 'consumer.gradle')

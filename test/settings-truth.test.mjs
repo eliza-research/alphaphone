@@ -45,12 +45,12 @@ test('Cloud privacy facts describe AI and speech without model-navigation claims
 test('Cloud privacy hero includes speech while retaining native and offline/startup truth',async()=>{
  const nativeSource=readFileSync('apps/app/src/prototype/native-adapter.ts','utf8');
  const wording=nativeSource.slice(nativeSource.indexOf('export function egressPrivacy('),nativeSource.indexOf('/** Only a verified resident session'));
- const load=async cloud=>import('data:text/javascript;base64,'+Buffer.from(`const cloudRuntimeEnabled=${cloud};const testMocksEnabled=false;const Capacitor={isNativePlatform:()=>true};`+stripTypeScriptTypes(wording,{mode:'transform'})).toString('base64'));
+ const load=async cloud=>import('data:text/javascript;base64,'+Buffer.from(`const cloudRuntimeEnabled=${cloud};const testMocksEnabled=false;const Capacitor={isNativePlatform:()=>true};const cloudServiceName=environment=>environment==='staging'?'Nebula':'Cloud Test';`+stripTypeScriptTypes(wording,{mode:'transform'})).toString('base64'));
  const cloud=await load(true),native=await load(false);
- const connected={kind:'resident',session:{sessionId:'qa'},cloudAccount:null};
+ const connected={kind:'resident',session:{sessionId:'qa'},cloudAccount:{environment:'staging'}};
  for(const isNative of [true,false]){
   const fact=cloud.egressPrivacy(connected,isNative);
-  assert.equal(fact.big,'Uses Eliza Cloud');
+  assert.equal(fact.big,'Uses Nebula');assert.ok(fact.sub.includes('go to Nebula for AI'));
   for(const content of ['When used','messages','selected content','Voice recordings','text for playback'])assert.ok(fact.sub.includes(content),content);
  }
  assert.equal(native.egressPrivacy(connected,true).big,'Identifier swap only');

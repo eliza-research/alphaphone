@@ -183,7 +183,7 @@ public final class AlphaConnectionPlugin extends Plugin {
  }
  private static JSONObject readCloudObject(String token,String path)throws Exception {
   if(!AlphaLocalAgentPlugin.validProviderToken(token,16384))throw new IllegalArgumentException();
-  HttpURLConnection connection=(HttpURLConnection)validatedUrl("https://api.eliza.app"+path,false).toURL().openConnection();
+  HttpURLConnection connection=(HttpURLConnection)validatedUrl(CloudDeployment.PRODUCTION_API+path,false).toURL().openConnection();
   try{
    connection.setInstanceFollowRedirects(false);connection.setUseCaches(false);
    connection.setConnectTimeout(20000);connection.setReadTimeout(20000);connection.setRequestMethod("GET");
@@ -246,7 +246,7 @@ public final class AlphaConnectionPlugin extends Plugin {
     if(ConnectionRoutes.retiredPairing(url.getPath(),BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS))throw new IllegalArgumentException();
     boolean selfRevocation=ConnectionRoutes.cloudSelfRevocation(url.getScheme(),url.getHost(),url.getPort(),url.getRawPath(),url.getRawQuery(),method,call.getString("body")!=null,BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS);
     if((AutomationsRoutes.owns(url.getPath())||AutomationsRoutes.owns(route))?!AutomationsRoutes.allowed(route,method):!(Set.of("GET","POST").contains(method)||selfRevocation||ConnectionRoutes.calendarSync(url.getPath(),url.getRawQuery(),method,call.getString("body")!=null)))throw new IllegalArgumentException();
-    if("GET".equals(method)&&("api.eliza.app".equals(url.getHost())||"api-staging.eliza.app".equals(url.getHost()))&&url.getPath().matches("/api/auth/cli-session/[0-9a-fA-F-]{36}")){
+    if("GET".equals(method)&&(CloudDeployment.PRODUCTION_API_HOST.equals(url.getHost())||CloudDeployment.STAGING_API_HOST.equals(url.getHost()))&&url.getPath().matches("/api/auth/cli-session/[0-9a-fA-F-]{36}")){
      // Gate only future dispatch. A claim already sent must finish and may be saved while backgrounded.
      long expiresAt=call.getLong("expiresAt",System.currentTimeMillis()+30000);
      synchronized(foregroundLock){
