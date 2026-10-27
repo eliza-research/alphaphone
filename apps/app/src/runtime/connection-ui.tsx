@@ -1463,10 +1463,7 @@ async function readConversation(selected:Active,id:string,signal:AbortSignal,ass
   if(messages.length>HISTORY_LIMIT){messages=messages.slice(-HISTORY_LIMIT);partial=true;}
   return {messages,partial,deliveryRevisionAtStart};
 }
-/** Restores the saved conversation for any verified connection (resident, remote or Cloud).
- * The resident-specific name is kept for existing contract tests. */
-const restoreSavedResidentHistory=(signal:AbortSignal)=>restoreSavedHistory(signal);
-void restoreSavedResidentHistory;
+/** Restores the saved conversation for any verified connection (resident, remote or Cloud). */
 async function restoreSavedHistory(signal:AbortSignal) {
   const selected=active,session=state.session,generation=epoch;
   if(!selected||!session)return;
@@ -2471,7 +2468,7 @@ export const connectionController = {
   },
   async cloudSignOut() {
     await work('Signing out of Cloud services…', async signal => {
-      const previous = service, client = (previous?.client ?? cloud) as CloudProtocol;
+      const previous = service, client = previous?.client ?? cloud;
       const expected = await cloudCredentialStore.read(client.environment);
       if(previous && (expected?.credentialId!==previous.identity.credentialId || expected?.credentialReference!==previous.credentialReference))throw new Error('Cloud account changed. Reopen account settings before signing out.');
       if(residentCloudFlow()){
@@ -2489,7 +2486,7 @@ export const connectionController = {
       // Only a confirmed server-side revocation counts. A transport or server that does not offer
       // the route ({supported:false}) or a failed request removes this phone's token only, and the copy says so.
       let revoked = false;
-      if (typeof client.revokeSession === 'function') { try { const result = await client.revokeSession(signal, expected); revoked = result?.supported === true && result.revoked === true; } catch { /* Unconfirmed. A cancelled or failed revocation still removes the local token below. */ } }
+      try { const result = await client.revokeSession(signal, expected); revoked = result?.supported === true && result.revoked === true; } catch { /* Unconfirmed. A cancelled or failed revocation still removes the local token below. */ }
       await client.disconnect(expected);
       const message = (revoked ? `Signed out of ${cloudServiceName(cloud.environment)}. This sign-in was revoked.` : `Signed out of ${cloudServiceName(cloud.environment)} on this phone. The sign-in token was removed here; ${cloudServiceName(cloud.environment)} did not confirm revoking it.`)+(isAndroid&&!testMocksEnabled?' '+AI_OFF_MESSAGE:'');
       update({ agents: [], residentSavedCredential:false, ...(residentCloudFlow()?{purpose:'agent' as const}:{}), message, signOutNotice:message });

@@ -117,10 +117,6 @@ export const DailyApps = registerPlugin<{
     reminders: Reminder[];
     notificationsEnabled: boolean;
   }>;
-  /** Compatibility alias; ID-only cancellation is refused. */
-  cancelReminder(options: {
-    id: string; target: ReminderTarget; operationId: string; bindingHash: string;
-  }): Promise<{ status: "cancelled" | "unknown"; id: string }>;
   capabilities(): Promise<{
     platform: string;
     actions: { action: Action; available: boolean; mode: string }[];
