@@ -5,16 +5,20 @@ must provide. The Cloud server work belongs to the Eliza Cloud repository and is
 No price, plan allowance, entitlement lifetime or burst/sustained limit is chosen in this file.
 Those values come from measured provider cost and pilot traffic, and the owner selects them.
 
-Alpha source: `apps/app/src/runtime/subscription-entitlement.ts`, `cloud-protocol.ts`
-(`subscriptionEntitlement`, `subscriptionEntitlementKeys`, `openSubscriptionManagement`) and
-`connection-ui.tsx` (`admitCloudResident`). Tests: `test/subscription-entitlement.test.mjs` and
-`test/browser/native-cloud-subscription.spec.ts`.
+Client source: the shared `@elizaos/cloud-sdk/subscription-entitlement` (elizaOS/eliza
+`packages/cloud/sdk/src/subscription-entitlement.ts` and its tests), projected from the pin.
+Alpha binds its copy in `apps/app/src/runtime/subscription-entitlement.ts` and uses it from
+`cloud-protocol.ts` (`subscriptionEntitlement`, `subscriptionEntitlementKeys`,
+`openSubscriptionManagement`), `connection-ui.tsx` (`admitCloudResident`) and the account section
+(`cloud-membership-ui.tsx`: plan, plan allowance, plan end and the latest limit's retry time). Alpha
+tests: `test/subscription-entitlement.test.mjs` and `test/browser/native-cloud-subscription.spec.ts`.
 
 ## Principles (policy P-26)
 
 - Cloud billing uses subscription allowances or organization credits, with server-side admission.
-  Alpha supports the owner's credit-funded inference setup; the phone shows no balance, top-up
-  or per-token meter and never grants credits.
+  Alpha supports the owner's credit-funded inference setup; the phone shows no top-up or
+  per-token meter and never grants credits. A read-only Cloud credit balance appears only in the
+  explicit organization-credit mode; beside a plan the phone shows plan state and allowance.
 - An assistant turn never waits on a billing service. Cloud authorises each inference or Maps
   request from its own cached quota or token bucket.
 - Every Alpha Phone signs in to Eliza Cloud. Admission accepts a valid active/trialing plan or
@@ -227,8 +231,11 @@ reset is recorded; a failure never blocks the local reset.
   `ELIZA_ENTITLEMENT_*` and grant-code pepper secrets set, is not verified here.
 - No real-account end-to-end run (sign-in, redeem a real staging code, plan gate, agent admission)
   has been made; docs/cloud-subscription-qa.md lists the commands.
-- No p50/p95 latency benchmark has been run under the normal, cache-miss, exhausted, expired and
-  billing-outage conditions. It needs the deployed Cloud.
+- No p50/p95 latency benchmark has been run against a deployment under the normal, cache-miss,
+  exhausted, expired and billing-outage conditions. The harness exists
+  (elizaOS/eliza `packages/cloud/scripts/plan-admission-deployed-latency.ts`): a person prepares one
+  account per condition, names its keys by environment variable and runs it with
+  `--confirm-real-requests`; normal-condition requests are real and billed or counted.
 - The numeric burst and sustained limits, the allowance and the price are not selected. They must
   be proposed from measured provider cost and pilot traffic, and the owner decides them.
 - Live resident rate-limit waits are supported at the current pin. Allowance reset timestamps

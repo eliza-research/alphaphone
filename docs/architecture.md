@@ -186,11 +186,19 @@ production authentication.
 
 ### Eliza Cloud sign-in ownership (in-app, 2026-10-14)
 
+October 27: the native client below is the shared elizaOS library `packages/auth/android`
+(`ai.eliza.auth.cloud`: `CloudSignInPlugin`, `CloudSignInFlow`, `CloudEmailCode`, `CloudSmsCode`,
+`CloudSignInReadiness`, `CloudSignInRoutes`, `CloudKeyRevocation`), consumed from the pin.
+`AlphaCloudSignInPlugin` only registers Alpha: its App Auth client, callback path, deployments,
+product name, Steward app client for native Google, installed slot and preference names, the
+Keystore credential store and the resident credential-intent fence. The subscription entitlement
+client is likewise `@elizaos/cloud-sdk/subscription-entitlement`; Alpha binds only its copy.
+
 Native sign-in stays on Alpha's own screens. Email remains available when the optional Google
 readiness probe fails or times out; its native request reports any service configuration failure.
 There is no automatic Eliza Cloud website sign-in fallback.
 
-- **Readiness (`CloudSignInReadiness`, `AlphaCloudSignInPlugin.status`)**: readiness reports email and optional Google separately, checked with a few short requests and cached (6 hours when ready,
+- **Readiness (`CloudSignInReadiness`, `CloudSignInPlugin.status`)**: readiness reports email and optional Google separately, checked with a few short requests and cached (6 hours when ready,
   10 minutes when not; any error, timeout or unexpected answer is "not ready"):
   - `GET /api/v1/app-auth/mobile/config` confirms the registration for client
     `ai.elizaresearch.alphaphone`, this environment and the return URL;
@@ -204,9 +212,9 @@ There is no automatic Eliza Cloud website sign-in fallback.
   for this package. A refusal from Cloud during an in-app sign-in clears the cache so the next
   attempt re-checks. The renderer waits at most 6 seconds, then offers email alone. A late result cannot
   change the already opened attempt.
-- **Native (`AlphaCloudSignInPlugin`, `CloudSignInFlow`, `CloudEmailCode`)** holds the Steward
+- **Native (`CloudSignInPlugin` registered by `AlphaCloudSignInPlugin`, `CloudSignInFlow`, `CloudEmailCode`)** holds the Steward
   session, codes and PKCE verifiers and makes every sign-in request, using fixed URLs on the Cloud API
-  origin (`ConnectionRoutes.signInRoute`; the renderer transport admits none of them):
+  origin (`CloudSignInRoutes`; the renderer transport admits none of them):
   - Email: the six-digit code endpoints of elizaOS/eliza #36260, kept in one adapter
     (`CloudEmailCode`, `config/cloud-email-code.json`): `POST /steward/auth/email/code/send`, then
     the code typed into Alpha goes to `POST /steward/auth/email/code/verify` with a PKCE verifier.
