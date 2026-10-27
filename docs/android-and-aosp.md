@@ -475,3 +475,21 @@ Cuttlefish baseline is not approved Pixel 10a Android 17 device acceptance.
 Locked capture, absence of pre-unlock gallery/account access, return after
 unlock, permission denial and physical gesture behavior require separate
 image/device tests. These remain open acceptance work for issue #407.
+
+
+## Building on a memory-constrained host
+
+The recorded `android/aosp/build-host/soong-memory.patch` forwards only `GOGC`
+and `GOMEMLIMIT` into Soong's otherwise empty bootstrap environment. It changes
+host graph generation, not device code, and leaves default behavior unchanged
+when those variables are unset. Apply it only to the exact `build/soong` revision
+in its manifest. Source verification and staging must then include
+`--applied-build-patch soong-memory` alongside any applied SystemUI patch.
+The patch is bound to the existing Pixel source lock by its before/after hashes;
+unrecorded source changes are still refused.
+
+For this host, the image campaign uses `GOMEMLIMIT=18GiB GOGC=50`, two build jobs,
+and a separate systemd user service with a 22-GiB RAM and 32-GiB swap limit.
+These settings are build-host controls, not device qualification. The first
+unbounded-heap attempt was killed by systemd-oomd during graph generation; its
+logs remain in the campaign artifacts and do not count as a completed image.

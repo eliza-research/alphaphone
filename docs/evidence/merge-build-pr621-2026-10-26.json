@@ -81,9 +81,36 @@
       "payloadUnchanged": true,
       "deployReady": false
     },
-    "latestBrowserChecks": "In progress. Initial CAS race in fixture fixed and passed targeted rerun; production fixture updated for collapsed details and canonical Notes state. Resource-related timeouts must be rerun, not counted as passes."
+    "latestBrowserChecks": {
+      "changedDevelopmentCases": 85,
+      "initialPassed": 81,
+      "initialFailed": 4,
+      "autosaveRaceFixtureRepair": {
+        "passed": 1,
+        "failed": 0
+      },
+      "singleWorkerTimeoutRerun": {
+        "passed": 3,
+        "failed": 0,
+        "timeoutMs": 120000
+      },
+      "productionWorkflowCases": {
+        "passed": 4,
+        "failed": 0
+      },
+      "evidenceBoundary": "Local browser fixtures, not real providers, device actions or native acceptance."
+    },
+    "pr617FinalReceipt": "Final documentation-only commit merged; current source status retained, previous build receipts preserved as historical evidence."
   },
   "mainUpdated": false,
   "deviceAcceptance": false,
-  "latestReviewedHead": "f7fb45c50002c72f8a822c3481ba33eeeef79ed8"
+  "latestReviewedHead": "f7fb45c50002c72f8a822c3481ba33eeeef79ed8",
+  "integratedHeads": {
+    "616": "baa1d6bf0c3a1797a10c9f1faff3443c11d1e102",
+    "617": "2ceec4593a8d8adfcef0faa3d6abfc01dce5baf3",
+    "620": "0d6a168a269863f8813a0a39326c7257eeb973ba",
+    "621": "f7fb45c50002c72f8a822c3481ba33eeeef79ed8",
+    "622": "231b26280d121ae8747f9309a5eb845a258ea79e",
+    "623": "aabe72f867c9777e2ebc6e2d2f229a23c25b532f"
+  }
 }

@@ -146,3 +146,12 @@ export function listenerSystemuiPatch(bundle) {
   if (digest(fs.readFileSync(path.join(directory, manifest.patch))) !== manifest.patchSha256) throw Error(`SystemUI ${bundle} patch hash mismatch`);
   return {name:`listener-systemui-${bundle}`, manifest, manifestSha256:digest(manifestBytes)};
 }
+
+/** Explicit host-build patches; defaults and device source remain unchanged. */
+export function aospBuildPatch(bundle) {
+  if (bundle !== 'soong-memory') throw Error(`Unknown AOSP build patch: ${bundle}`);
+  const directory = fileURLToPath(new URL('../android/aosp/build-host/', import.meta.url));
+  const bytes = fs.readFileSync(path.join(directory, 'manifest.json')), manifest = JSON.parse(bytes);
+  if (digest(fs.readFileSync(path.join(directory, manifest.patch))) !== manifest.patchSha256) throw Error(`AOSP build patch ${bundle} hash mismatch`);
+  return {name:bundle, manifest, manifestSha256:digest(bytes)};
+}
