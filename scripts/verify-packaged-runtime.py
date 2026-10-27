@@ -89,8 +89,13 @@ def verify(apk, release=False, runtime_profile="native"):
                 raise ValueError(f'Packaged runtime mismatch: {entry}')
             checks[entry] = observed
 
-        for name in ['alpha-source.json', 'agent-bundle.js', 'workflow-worker/files.sha256', 'workflow-worker/manifest.json']:
+        for name in ['alpha-source.json', 'agent-bundle.js', 'agent-bundle-dependencies.json', 'workflow-worker/files.sha256', 'workflow-worker/manifest.json']:
             check('assets/agent/' + name, staged / name)
+        bundle_dependencies = json.loads(archive.read('assets/agent/agent-bundle-dependencies.json'))
+        if (bundle_dependencies.get('version') != 1 or
+                bundle_dependencies.get('bundleSha256') != checks['assets/agent/agent-bundle.js'] or
+                not isinstance(bundle_dependencies.get('packages'), list) or not bundle_dependencies['packages']):
+            raise ValueError('Packaged agent dependency inventory does not match bundle')
         check('assets/agent/native-view-declarations.json', staged / 'native-view-declarations.json', file_hash(ROOT / 'config/native-view-declarations.json'))
         worker_manifest = json.loads((staged / 'workflow-worker/manifest.json').read_text())
         worker_files = worker_manifest.get('files')

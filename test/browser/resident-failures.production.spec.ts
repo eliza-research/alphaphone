@@ -19,7 +19,7 @@ const bubble = (page: Page, text: string) => page.getByRole('button', { name: 'M
 const UNKNOWN = 'The reply stopped before it finished. Check the saved conversation before trying again.';
 const NOT_SENT = 'Not sent. Your message is back in the composer.';
 
-async function connected(page: Page, nativeSignIn = false) {
+async function connected(page: Page, nativeSignIn = true) {
   const foreign = await fenceNetwork(page);
   await flagOffAndroid(page);
   await residentStub(page, { accounts: [owner], nativeSignIn });

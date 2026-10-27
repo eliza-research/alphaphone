@@ -192,7 +192,7 @@ export const setStub = (page: Page, patch: Record<string, unknown>) => page.eval
 
 /** Explicit synthetic email/code journey through the shipped renderer. */
 export async function emailCode(page: Page, verify = true) {
-  const dialog=page.getByRole('main',{name:'Sign in to Eliza Cloud',exact:true}).or(page.getByRole('dialog',{name:'Sign in to Eliza Cloud',exact:true}));
+  const dialog=page.locator('.alpha-cloud-sign-in');
   await expect(dialog).toBeVisible();
   const otherMethods=dialog.getByRole('button',{name:'Other sign-in methods',exact:true});
   if(await otherMethods.isVisible())await otherMethods.click();
@@ -202,9 +202,9 @@ export async function emailCode(page: Page, verify = true) {
   if(verify){await dialog.getByLabel('Six-digit code').fill('123456');await dialog.getByRole('button',{name:'Verify',exact:true}).click();}
 }
 
-/** Complete the visible synthetic native email form after the product sign-in button is clicked. */
+/** Complete the visible native email form on the required page or an optional sign-in dialog. */
 export async function enterNativeEmailCode(page: Page, email='owner@example.invalid') {
-  const panel=page.getByRole('main',{name:'Sign in to Eliza Cloud',exact:true}).or(page.getByRole('dialog',{name:'Sign in to Eliza Cloud',exact:true}));
+  const panel=page.locator('.alpha-cloud-sign-in');
   await expect(panel).toBeVisible();
   const otherMethods=panel.getByRole('button',{name:'Other sign-in methods',exact:true});
   if(await otherMethods.isVisible())await otherMethods.click();

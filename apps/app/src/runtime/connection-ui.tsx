@@ -691,10 +691,10 @@ function errorMessage(error: unknown): string {
 /** A resident start that does not open the dialog: Home shows the starting state (P-43). */
 let residentStartInBackground = false;
 /** `openOnError`: a background check (the quiet Cloud account restore) that opens the dialog only to report a failure. */
-async function work(message: string, action: (signal: AbortSignal) => Promise<void>, background = false, openOnError = false) {
+async function work(message: string, action: (signal: AbortSignal) => Promise<void>, background = false, openOnError = false, preserveError = false) {
   if (operation) return;
   const controller = new AbortController(); operation = controller; residentStartInBackground = background;
-  update({ busy: true, ...(background ? {} : { open: true }), message, error: '' });
+  update({ busy: true, ...(background ? {} : { open: true }), message, error: preserveError ? state.error : '' });
   try { await action(controller.signal); }
   catch (error) {
     const recovery=residentRecoveryReason(error);if(recovery&&!active)update({residentRecoveryReason:recovery});
@@ -2184,10 +2184,10 @@ export const connectionController = {
   async residentCloudLogin() { await connectionController.beginSignIn(residentEnvironment()); },
   /** Opens Alpha's own sign-in screen when ready. Nothing is sent until the owner chooses Google or
    * enters an email; no Eliza Cloud web page is opened. */
-  async beginSignIn(environment: CloudEnvironment = residentCloudFlow() ? residentEnvironment() : cloud.environment, refreshNegative = false) {
+  async beginSignIn(environment: CloudEnvironment = residentCloudFlow() ? residentEnvironment() : cloud.environment, refreshNegative = false, automatic = false) {
     if (operation || !cloudEnvironmentAllowed(environment)) return;
-    // Readiness and the resident restart must not dismiss an expired-session sign-in request.
-    const expiredNotice = state.error === RESIDENT_SIGN_IN_EXPIRED ? state.error : '';
+    // An automatic readiness probe must not erase why the saved sign-in was refused.
+    // A new attempt explicitly started by the owner still clears the earlier error.
     // Readiness may take six seconds on a fresh install. Keep that wait cancellable and prevent
     // repeated taps from starting competing probes or opening a browser after the owner cancelled.
     await work(`Checking ${cloudServiceName(environment)} sign-in…`, async signal => {
@@ -2201,10 +2201,10 @@ export const connectionController = {
       inAppEmail = methods === null || methods.email !== false;
       if (cloud.environment !== environment) cloud = makeCloud(environment);
       cloud.cancelLogin();
-      update({ open: true, ...(residentCloudFlow() && state.purpose !== 'cloud-account' ? { purpose: 'agent' as const } : {}), signIn: { step: 'choose', environment }, message: '', error: '' });
-    });
-    await ensureResident();
-    if (expiredNotice && state.signIn?.step === 'choose') update({ open: true, error: expiredNotice });
+      update({ open: true, ...(residentCloudFlow() && state.purpose !== 'cloud-account' ? { purpose: 'agent' as const } : {}), signIn: { step: 'choose', environment }, message: '' });
+    }, false, false, automatic);
+    // Readiness does not stop the agent and must not retry a blocked startup.
+    if (!automatic) await ensureResident();
   },
   /** Leaves the sign-in screen for the chooser and burns the pending attempt. Stored sign-in stays unchanged. */
   cancelSignIn() {
@@ -2731,10 +2731,11 @@ export function ConnectionChooser() {
   const automaticSignInProbe = useRef(false);
   useEffect(() => {
     if (!productionSignInRequired) { automaticSignInProbe.current = false; return; }
-    if (automaticSignInProbe.current || snapshot.busy || snapshot.signIn) return;
+    if (snapshot.signIn) { automaticSignInProbe.current = false; return; }
+    if (automaticSignInProbe.current || snapshot.busy) return;
     automaticSignInProbe.current = true;
     // Readiness only: neither email nor Google starts until the owner chooses it.
-    void connectionController.beginSignIn(residentEnvironment());
+    void connectionController.beginSignIn(residentEnvironment(), false, true);
   }, [productionSignInRequired, snapshot.busy, snapshot.signIn]);
   const visible=connectionChooserVisible(snapshot,!!sending);
   const [developmentAction,setDevelopmentAction]=useState('{"type":"create_note","title":"Development note","body":"Reviewed local action"}');
