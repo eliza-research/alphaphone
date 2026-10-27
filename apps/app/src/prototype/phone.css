@@ -207,7 +207,7 @@ html:not(.standalone-app) [data-alpha-layer="home"][data-alpha-home-fits="true"]
 .app-header-back .i { width:22px; height:22px; }
 .app-header-back:focus-visible { outline:2px solid var(--acct); outline-offset:-2px; }
 .standalone-app [data-screen]:has([data-alpha-app-header]) [data-alpha-app-back-fallback] { display:none!important; }
-.standalone-app [data-alpha-app-header] { margin-top:0!important; height:52px!important; min-height:52px; padding-left:8px!important; padding-right:8px!important; gap:2px!important; box-sizing:border-box; }
+.standalone-app [data-alpha-app-header] { margin-top:0!important; height:52px!important; min-height:52px!important; padding-left:8px!important; padding-right:8px!important; gap:2px!important; box-sizing:border-box; }
 .standalone-app [data-alpha-app-header-overlay] { top:0!important; }
 .standalone-app [data-alpha-app-header] [data-alpha-app-title] { font-family:inherit; font-size:20px!important; line-height:1.2; letter-spacing:normal!important; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .standalone-app [data-alpha-app-header] .ib { width:52px!important; height:52px!important; min-width:52px; min-height:52px; flex-shrink:0; }
@@ -457,7 +457,9 @@ button[aria-label$=" on or off"][aria-pressed]::before { content:""; position:ab
 .alpha-map-privacy { flex-shrink:0; }
 .alpha-map-privacy > summary { display:flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; cursor:pointer; list-style:none; }
 .alpha-map-privacy > summary::-webkit-details-marker { display:none; }
+.alpha-map-privacy > summary [data-alpha-icon] { width:18px; height:18px; }
 .alpha-map-info { position:absolute; right:0; bottom:calc(100% + 8px); width:min(320px,100%); padding:12px; border:1px solid var(--line); border-radius:16px; background:var(--bg); color:var(--fg); box-shadow:0 4px 20px var(--shc); font-size:14px; }
+.alpha-landscape .alpha-map-credits { bottom:12px!important; right:auto; width:calc(100% - min(440px,50%) - 24px); box-sizing:border-box; }
 .alpha-map-privacy:not([open]) > p { display:none; }
 
 .alpha-chat-composer { display:flex; align-items:center; gap:6px; flex-shrink:0; min-height:68px; box-sizing:border-box; margin:0 12px 30px; padding:6px 6px 6px 20px; border-radius:28px; background:var(--s2); color:var(--fg); }

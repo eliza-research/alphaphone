@@ -83,8 +83,8 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
   const refresh = () => shell?.vset('browser', { nativeRevision: Date.now() });
   const report = (error: unknown) => !disposed && shell?.toast(browserErrorMessage(error));
   let reading: AbortController | undefined, questionReview=false;
-  // Android only: whether this WebView provider can read a page in isolation. The web build
-  // external-only fallback never claims a loaded document.
+  // Android only: whether this WebView provider can read a page in isolation.
+  // The web build separately requires a committed embedded document.
   const readingSupport = Capacitor.isNativePlatform() ? createReadingSupport(() => Browser.readingSupport(), () => refresh()) : undefined;
   /** Says so, with the menu closed, when page reading cannot work on this device. */
   async function readingUnsupported() {
@@ -99,7 +99,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     const id=state()?.cur, info=metadata.get(id), revision=documentRevisions.get(id);
     if(!Capacitor.isNativePlatform()){
       // The refusal is not left behind an open menu (the same rule as Ask about page).
-      if(!info?.committed || info.loading || info.error){shell.vset('browser',{menu:false});report(new Error('Load a page before reading.'));return;}
+      if(!info?.committed || info.loading || info.error || info.externalOnly){shell.vset('browser',{menu:false});report(new Error('Load a page before reading.'));return;}
       const controller=new AbortController();reading=controller;
       const valid=()=>{controller.signal.throwIfAborted();if(disposed||document.hidden||document.documentElement.hasAttribute('data-dev-background')||shell.S().screen!=='home'||shell.S().view!=='browser'||state()?.cur!==id||documentRevisions.get(id)!==revision||connectionController.getSnapshot().open)throw new DOMException('Reading cancelled','AbortError');};
       try{shell.vset('browser',{menu:false});const {reviewBrowserReading}=await import('../browser/reading-review');valid();await reviewBrowserReading(info.url,controller.signal,valid);}
@@ -129,7 +129,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     if(reading||disposed)return;
     const id=state()?.cur,info=metadata.get(id),revision=documentRevisions.get(id);
     const source=webSourceOf({kind:'web-page',version:1,name:String(info?.title||info?.url||'Web page').replace(/[\x00-\x1f\x7f]/g,' ').trim().slice(0,120),url:info?.url});
-    if(!source||!info?.committed||info.loading||info.error){shell.vset('browser',{menu:false});report(new Error('Load a public HTTPS page before asking about it.'));return;}
+    if(!source||!info?.committed||info.loading||info.error||info.externalOnly){shell.vset('browser',{menu:false});report(new Error('Load a public HTTPS page before asking about it.'));return;}
     const controller=new AbortController();reading=controller;
     const current=()=>!controller.signal.aborted&&!disposed&&!document.hidden&&!document.documentElement.hasAttribute('data-dev-background')&&shell.S().screen==='home'&&shell.S().view==='browser'&&state()?.cur===id&&documentRevisions.get(id)===revision&&!connectionController.getSnapshot().open;
     try{
@@ -398,7 +398,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
         onKey:(e:KeyboardEvent)=>{if(e.key==='Enter'){e.preventDefault();findStep(!e.shiftKey);}else if(e.key==='Escape'){e.preventDefault();closeFind();}},
         next:()=>findStep(true),prev:()=>findStep(false),close:()=>closeFind(),nextOp:s.findCount?1:0.3,prevOp:s.findCount?1:0.3},
       host:url?.host || 'Search or type address',path:url ? url.pathname + url.search : '', hasLock:Capacitor.isNativePlatform() && !!url && url.protocol==='https:' && !!info?.committed && !info?.loading && !info?.error,
-      pageContentAvailable:Capacitor.isNativePlatform(),nativeControls:true,externalBrowserAvailable:Capacitor.isNativePlatform(),openExternalBrowser:()=>void openExternalBrowser(),openPasswordProvider:()=>{api.set({menu:false});api.open('settings',{page:'password-provider'});},openDownloads:()=>{api.set({menu:false});void Browser.downloads({session}).catch(report);},reload:()=>{api.set({menu:false});void command('reload');},stopLoading:()=>{api.set({menu:false});void command('stop');},loading:!!info?.loading,goBack:()=>void command('back'),goFwd:()=>void command('forward'),backOp:info?.canBack?1:0.3,fwdOp:info?.canForward?1:0.3,
+      pageShareAvailable:Capacitor.isNativePlatform(),pageContentAvailable:Capacitor.isNativePlatform()||!!info?.committed&&!info.loading&&!info.error&&!info.externalOnly,nativeControls:true,externalBrowserAvailable:Capacitor.isNativePlatform(),openExternalBrowser:()=>void openExternalBrowser(),openPasswordProvider:()=>{api.set({menu:false});api.open('settings',{page:'password-provider'});},openDownloads:()=>{api.set({menu:false});void Browser.downloads({session}).catch(report);},reload:()=>{api.set({menu:false});void command('reload');},stopLoading:()=>{api.set({menu:false});void command('stop');},loading:!!info?.loading,goBack:()=>void command('back'),goFwd:()=>void command('forward'),backOp:info?.canBack?1:0.3,fwdOp:info?.canForward?1:0.3,
       startEdit:()=>api.set({editing:true,addr:info?.url||'',menu:false}),onAddrKey:(e:KeyboardEvent)=>{ if(e.key==='Enter'){e.preventDefault();void navigate((e.target as HTMLInputElement).value);} else if(e.key==='Escape')api.set({editing:false}); },
       toggleMark:()=>{if((!info?.committed&&!(info?.externalOnly&&!Capacitor.isNativePlatform())) || info.loading || info.error || url?.protocol!=='https:'){api.toast('Load an HTTPS page before bookmarking it.');return;}saveBookmark(info.url);},markLabel:s.marks.includes(info?.url)?'Bookmarked':'Bookmark',markFill:s.marks.includes(info?.url)?'currentColor':'none',libRows:[...(bookmarkRecovery&&s.lib!=='history'?[{title:'Recover saved bookmarks',host:'Saved bookmarks could not be opened. Their original data is retained.',ini:'!',go:openBookmarkRecovery,canRemove:false,removeAria:'',remove:()=>{}}]:[]),...(s.lib==='history'?s.visits:s.marks).map((u:string)=>({title:u,host:u,ini:new URL(u).hostname[0],go:()=>void navigate(u),canRemove:s.lib!=='history',removeAria:'Remove bookmark',remove:()=>saveBookmark(u,false)}))],libEmpty:!(bookmarkRecovery&&s.lib!=='history')&&!(s.lib==='history'?s.visits:s.marks).length,newTab:()=>openNew(false),askPage:()=>void askPage(),readAloud:()=>void readPage(),readingUnavailable:readingSupport?.state==='unavailable',readingNote:READING_UNSUPPORTED_MESSAGE,bookNow:unavailable,cfOk:unavailable,openShare:()=>void sharePage(),shareEmail:()=>sharePageEmail(),
       tabCards:s.tabs.map((tab:Bag)=>{const page=known(tab.id),label=page?.title||(tab.priv?'New private tab':'New tab');return {title:page?.title || page?.url || (tab.priv?'New private tab':'New tab'),host:(tab.priv?'Private · ':'')+(page?.url||''),css:tab.id===s.cur?'box-shadow:inset 0 0 0 2px var(--acc)':'',prev:tab.priv?'background:var(--fg);opacity:.85':'background:var(--s2)',aria:'Switch to '+(tab.priv?'private tab ':'')+label,closeAria:tab.priv?'Close private tab':'Close tab',pick:()=>api.set({cur:tab.id,tabsOpen:false}),close:()=>{ const rest=state().tabs.filter((t:Bag)=>t.id!==tab.id); const fallback=newTabId();if(created.has(tab.id))void Browser.close({session,id:tab.id}).catch(report);created.delete(tab.id);metadata.delete(tab.id);restored.delete(tab.id);api.set({tabs:rest.length?rest:[{id:fallback,hist:['newtab'],pos:0}],cur:state().cur===tab.id?(rest[0]?.id||fallback):state().cur}); }};}),
@@ -472,7 +472,8 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     if ((event.url && event.url !== previous?.url) || (event.loading && !previous?.loading))
       documentRevisions.set(event.id, (documentRevisions.get(event.id) || 0) + 1);
     const committedPage = Capacitor.isNativePlatform() && !!event.url && !!event.committed && !event.loading && !event.error;
-    metadata.set(event.id,{...metadata.get(event.id),...event,...(!Capacitor.isNativePlatform()?{committed:false}:{}),...(committedPage?{savedUrl:event.url}:{})});
+    // Embedded web pages report real commits too; an external-only fallback never gains reading authority.
+    metadata.set(event.id,{...metadata.get(event.id),...event,...(event.externalOnly?{committed:false}:{}),...(committedPage?{savedUrl:event.url}:{})});
     // Private tabs never enter history or saved tabs.
     if(committedPage && state() && !isPrivate(event.id) && !event.private)shell.vset('browser',{visits:[event.url,...state().visits.filter((u:string)=>u!==event.url)].slice(0,MAX_HISTORY)});refresh();
   }).then((value:any)=>{listener=value;}).catch(()=>{});
