@@ -8,6 +8,7 @@ import {noteShareText} from '../runtime/note-share-text';
 import {DailyApps} from '../daily';
 import {registerPlugin} from '../platform-plugins';
 import {speakNote,stopSpeaking} from './local-speech-playback';
+import {appRecordPendingText} from '../runtime/connection-ui';
 type Bag=Record<string,any>;
 const documents=registerPlugin<{exportText(input:{title:string;text:string}):Promise<{status:string;message:string}>}>('AlphaNoteDocuments',{
  web:()=>import('../runtime/browser-note-documents').then(module=>new module.BrowserNoteDocuments()),
@@ -104,7 +105,7 @@ function WaitingNotes({shell,storageAccessWarning}:{shell:Bag;storageAccessWarni
    React.createElement('h1',{'data-alpha-app-title':true,style:{margin:0,fontSize:24}},'Notes')),
   React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:16,minHeight:0,overflowY:'auto',padding:'16px 24px calc(var(--alpha-chat-clearance, 120px) + 24px)'}},
    storageAccessWarning?React.createElement('p',{role:'alert',className:'storage-access-warning'},storageAccessWarning):null,
-   React.createElement('p',{role:'status',style:{margin:0,lineHeight:1.5}},'Waiting for an agent connection to open Notes.'),
+   React.createElement('p',{role:'status',style:{margin:0,lineHeight:1.5}},appRecordPendingText('Waiting for an agent connection to open Notes.')),
    ...(shell.api('notes').notesSourceOptions??[]).filter((source:Bag)=>!source.selected).map((source:Bag)=>React.createElement('button',{key:source.id,onClick:source.choose,style:{minHeight:48,padding:'12px 18px',borderRadius:16,background:'var(--s2)',color:'var(--fg)',font:'inherit'}},source.id==='legacy'?'Older notes':source.label))));
 }
 

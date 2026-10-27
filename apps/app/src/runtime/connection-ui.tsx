@@ -194,6 +194,10 @@ export function residentPendingText(snapshot: Pick<ConnectionSnapshot, 'kind'|'r
 export function agentPendingText(snapshot: Pick<ConnectionSnapshot, 'kind'|'residentRecoveryReason'> = state, remote = PENDING_FALLBACK): string {
   return residentAlwaysPresent || snapshot.kind === 'starting' || snapshot.kind === 'recovering' ? residentPendingText(snapshot) : remote;
 }
+/** Calendar and Notes records are kept by the on-phone agent; another selected agent has none. */
+export function appRecordPendingText(remote: string): string {
+  return state.session && state.kind !== 'resident' ? 'Calendar and Notes use the on-phone agent. Start it in Settings › Agent connection.' : agentPendingText(state, remote);
+}
 /** Passive surfaces stay quiet during normal startup; attempted actions still explain refusals. */
 export function agentAvailabilityNotice(snapshot: Pick<ConnectionSnapshot, 'kind'|'residentRecoveryReason'> = state, remote = PENDING_FALLBACK): string {
   return snapshot.kind === 'starting' ? '' : agentPendingText(snapshot, remote);
