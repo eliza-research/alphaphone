@@ -1,10 +1,11 @@
+import {openLegacyNotes} from './helpers/legacy-notes';
 import { test, expect } from '@playwright/test';
 
 for (const viewport of [{width:320,height:568},{width:412,height:430},{width:915,height:412},{width:1440,height:500}]) {
   test(`Notes remains editable and navigable at ${viewport.width}x${viewport.height}`, async ({ page }, info) => {
     await page.setViewportSize(viewport);
     await page.goto('/');
-    await page.getByRole('button',{name:'Notes',exact:true}).click();
+    await openLegacyNotes(page);
     await page.getByRole('button',{name:'New note',exact:true}).click();
     const title=page.getByRole('textbox',{name:'Title',exact:true});
     const body=page.getByRole('textbox',{name:'Note',exact:true});
@@ -69,7 +70,7 @@ test('Connection dialog follows a live theme change and remains keyboard accessi
   await expect(dialog).toHaveCSS('background-color','rgb(0, 0, 0)');
   await page.setViewportSize({width:412,height:300});
   await expect(dialog.getByText('Remote agent',{exact:true})).toHaveCount(0);
-  const signIn=dialog.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true});
+  const signIn=dialog.getByRole('button',{name:'Sign in',exact:true});
   await signIn.focus();await expect(signIn).toBeInViewport();
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
