@@ -27,7 +27,6 @@ import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { copyFilesClone } from "./copy-file-clone.mjs";
 
 const FLAG = "ELIZA_DEV_ALLOW_TEST_MOCKS";
 const FLAG_ENV_NAMES = [FLAG, `VITE_${FLAG}`, `ORG_GRADLE_PROJECT_${FLAG}`];
@@ -180,18 +179,24 @@ async function main() {
   if (preflight.status !== 0) process.exit(preflight.status ?? 1);
   // A malformed release-signer descriptor fails before the long build, not after it.
   readReleaseSigner();
-  // The toolchain resolver lives in the pinned checkout, which the preflight verified.
+  // The toolchain resolver and the build orchestration live in the pinned checkout, which the preflight verified.
   const { androidEnv } = await import("./toolchain.mjs");
+  const { buildAndroidConsumer } = await import("../vendor/eliza/packages/app/scripts/mobile/android/build-consumer.mjs");
   const baseEnv = androidEnv();
   const run = (cmd, args, extra = {}) =>
     execFileSync(cmd, args, { stdio: "inherit", env: buildEnv(baseEnv, options), ...extra });
-  withDistributionWebRestored(options, baseEnv, run, () => build(options, baseEnv, run));
+  withDistributionWebRestored(options, baseEnv, run, () => build(options, baseEnv, run, buildAndroidConsumer));
 }
 
-function build(options, baseEnv, run) {
+/**
+ * The upstream consumer build owns the Gradle invocation and artifact collection: the four
+ * distribution APKs (signed releases keep `<variant>-release.apk`), instrumentation APKs,
+ * R8 mappings and the optional sequential low-disk mode (ALPHA_ANDROID_LOW_DISK=1).
+ * Alpha supplies the flags, output directory, build record and its own APK verification.
+ */
+function build(options, baseEnv, run, buildAndroidConsumer) {
   const env = buildEnv(baseEnv, options);
   const outDir = outputDirectory(options);
-  const gradleFlags = gradleFlagArgs(options);
   console.log(`Android build: ${options.testMocks ? "TEST-MOCKS (never distributable) -> " : "distribution, test mocks off -> "}${outDir}/`);
 
   run("node", ["scripts/verify-upstream.mjs"]);
@@ -208,127 +213,41 @@ function build(options, baseEnv, run) {
   }
 
   const root = fs.realpathSync(path.resolve(import.meta.dirname, ".."));
-  const outputs = path.join(root, "android/app/build/outputs");
-  // Remove previous release outputs so signed/unsigned detection sees only this build.
-  for (const variant of ["standalone", "launcher"]) {
-    fs.rmSync(path.join(outputs, "apk", variant, "release"), { recursive: true, force: true });
-    fs.rmSync(path.join(outputs, "mapping", `${variant}Release`), { recursive: true, force: true });
-  }
-  fs.mkdirSync(outDir, { recursive: true });
-  fs.rmSync(path.join(outDir, "apk-manifest.json"), { force: true });
-  fs.rmSync(path.join(outDir, "mapping"), { recursive: true, force: true });
-  if (!options.testMocks) fs.rmSync(path.join(outDir, "instrumentation"), { recursive: true, force: true });
-
-  // Opt-in for constrained builders; retained APKs and source evidence are never cleaned.
-  const lowDisk = process.env.ALPHA_ANDROID_LOW_DISK === "1";
-  function cleanPackagingIntermediates() {
-    if (fs.realpathSync(process.cwd()) !== root)
-      throw new Error("Low-disk build must run from this product checkout");
-    const categories = ["assets", "compressed_assets", "merged_native_libs", "merged_jni_libs", "stripped_native_libs"];
-    const targets = categories.map(name => path.join(root, "android/app/build/intermediates", name));
-    // Preflight every ancestor before deleting anything. rmSync removes nested links
-    // themselves, never their targets; a linked category or ancestor is rejected.
-    for (const target of targets) {
-      let current = root;
-      for (const segment of path.relative(root, target).split(path.sep)) {
-        current = path.join(current, segment);
-        let stat;
-        try { stat = fs.lstatSync(current); }
-        catch (error) { if (error.code === "ENOENT") break; throw error; }
-        if (stat.isSymbolicLink() || !stat.isDirectory())
-          throw new Error(`Unsafe packaging intermediate path: ${current}`);
-      }
-    }
-    for (const target of targets) fs.rmSync(target, { recursive: true, force: true });
-  }
-  function copy(source, destination) {
-    fs.rmSync(destination, { force: true });
-    copyFilesClone([{ source, destination }]);
-  }
   const requested = signingRequested(env);
-  function copyVariant(variant, modes = ["debug", "release"]) {
-    for (const mode of modes) {
-      const dir = path.join(outputs, "apk", variant, mode);
-      if (mode === "debug") {
-        copy(path.join(dir, `app-${variant}-debug.apk`), path.join(outDir, `${variant}-debug.apk`));
-        // The shared Gradle outputs are overwritten by the next build; keep the
-        // matching instrumentation APK beside a test-mocks build.
-        const androidTest = path.join(outputs, "apk/androidTest", variant, "debug", `app-${variant}-debug-androidTest.apk`);
-        if (options.testMocks) copy(androidTest, path.join(outDir, `${variant}-androidTest.apk`));
-        else if (!options.skipInstrumentation) {
-          // Distribution instrumentation APKs live in a subdirectory so artifacts/*.apk
-          // stays the four distribution APKs (scripts/android-instrumentation.mjs).
-          fs.mkdirSync(path.join(outDir, "instrumentation"), { recursive: true });
-          copy(androidTest, path.join(outDir, "instrumentation", `${variant}-androidTest.apk`));
-        }
-        continue;
-      }
-      const signed = path.join(dir, `app-${variant}-release.apk`);
-      const unsigned = path.join(dir, `app-${variant}-release-unsigned.apk`);
-      const isSigned = fs.existsSync(signed);
-      if (!isSigned && !fs.existsSync(unsigned)) throw new Error(`Gradle produced no ${variant} release APK in ${dir}`);
-      if (requested && !isSigned)
-        throw new Error(`${SIGNING_ENV.join(", ")} are set but Gradle produced an unsigned ${variant} release`);
-      const name = `${variant}-release${isSigned ? "" : "-unsigned"}.apk`;
-      // Exactly one release name per variant: drop the other form from older builds.
-      fs.rmSync(path.join(outDir, `${variant}-release${isSigned ? "-unsigned" : ""}.apk`), { force: true });
-      copy(isSigned ? signed : unsigned, path.join(outDir, name));
-      const mapping = path.join(outputs, "mapping", `${variant}Release`, "mapping.txt");
-      if (fs.existsSync(mapping)) {
-        const mappingDir = path.join(outDir, "mapping");
-        fs.mkdirSync(mappingDir, { recursive: true });
-        fs.copyFileSync(mapping, path.join(mappingDir, `${variant}-release-mapping.txt`));
-      }
-    }
-  }
-  if (lowDisk) {
-    cleanPackagingIntermediates();
-    for (const variant of ["standalone", "launcher"]) {
-      const taskName = variant[0].toUpperCase() + variant.slice(1);
-      for (const mode of ["debug", "release"]) {
-        const modeName = mode[0].toUpperCase() + mode.slice(1);
-        try {
-          run("./gradlew", ["--no-daemon", ...gradleFlags, `:app:assemble${taskName}${modeName}`,
-            ...(mode === "debug" && !options.skipInstrumentation ? [`:app:assemble${taskName}DebugAndroidTest`] : [])], { cwd: "android" });
-          copyVariant(variant, [mode]);
-        } finally {
-          cleanPackagingIntermediates();
-        }
-      }
-    }
-    if (!options.testMocks) run("./gradlew", ["--no-daemon", ...gradleFlags, ":app:lint"], { cwd: "android" });
-  } else {
-    run(
-      "./gradlew",
-      [
-        "--no-daemon",
-        ...gradleFlags,
-        ":app:assembleStandaloneDebug",
-        ":app:assembleLauncherDebug",
-        ":app:assembleStandaloneRelease",
-        ":app:assembleLauncherRelease",
-        ...(options.skipInstrumentation ? [] : [
-          ":app:assembleStandaloneDebugAndroidTest",
-          ":app:assembleLauncherDebugAndroidTest",
-        ]),
-        ...(options.testMocks ? [] : [":app:lint"]),
-      ],
-      { cwd: "android" },
-    );
-    for (const variant of ["standalone", "launcher"]) copyVariant(variant);
-  }
-  fs.writeFileSync(path.join(outDir, "build-config.json"), JSON.stringify({
-    createdAt: new Date().toISOString(),
-    testMocks: options.testMocks,
-    runtimeProfile: options.runtimeProfile || "native",
-    mapsConfigured: Boolean(env.VITE_MAPS_BASE_URL),
-    signingRequested: requested,
-    versionOverride: { code: env.ELIZAOS_VERSION_CODE ?? null, name: env.ELIZAOS_VERSION_NAME ?? null },
-  }, null, 2) + "\n");
-  run("node", ["scripts/verify-apks.mjs",
-    ...(options.testMocks ? ["--test-mocks"] : []),
-    ...(options.allowUnpackagedRuntime ? ["--allow-unpackaged-runtime"] : []),
-    ...(options.runtimeProfile === "cloud" ? ["--runtime-profile=cloud"] : [])]);
+  buildAndroidConsumer({
+    root,
+    environment: env,
+    variants: ["standalone", "launcher"],
+    project: "android",
+    output: outDir,
+    gradleArguments: gradleFlagArgs(options),
+    androidTest: !options.skipInstrumentation,
+    // Distribution instrumentation APKs live in a subdirectory so artifacts/*.apk stays the four
+    // distribution APKs (scripts/android-instrumentation.mjs); test-mocks keeps them beside its APKs.
+    androidTestOutput: options.testMocks ? "" : "instrumentation",
+    lint: !options.testMocks,
+    signing: { environment: [...SIGNING_ENV] },
+    mappings: true,
+    // Opt-in for constrained builders; retained APKs and source evidence are never cleaned.
+    sequential: process.env.ALPHA_ANDROID_LOW_DISK === "1",
+    // verify-apks compares this record with the APKs it verifies.
+    prepare: [() => {
+      fs.mkdirSync(path.join(root, outDir), { recursive: true });
+      fs.writeFileSync(path.join(root, outDir, "build-config.json"), JSON.stringify({
+        createdAt: new Date().toISOString(),
+        testMocks: options.testMocks,
+        runtimeProfile: options.runtimeProfile || "native",
+        mapsConfigured: Boolean(env.VITE_MAPS_BASE_URL),
+        signingRequested: requested,
+        versionOverride: { code: env.ELIZAOS_VERSION_CODE ?? null, name: env.ELIZAOS_VERSION_NAME ?? null },
+      }, null, 2) + "\n");
+    }],
+    verify: { command: "node", args: ["scripts/verify-apks.mjs",
+      ...(options.testMocks ? ["--test-mocks"] : []),
+      ...(options.allowUnpackagedRuntime ? ["--allow-unpackaged-runtime"] : []),
+      ...(options.runtimeProfile === "cloud" ? ["--runtime-profile=cloud"] : [])] },
+    archive: null,
+  });
   if (options.testMocks)
     console.log("Test-mocks APKs are for mock-isolation instrumentation only and are never distributable.");
   else run("node", ["scripts/generate-sbom.mjs", ...sbomArgs(outDir, root)]);
