@@ -35,11 +35,28 @@
     "total": 2108,
     "log": "/tmp/alphaphone-soong-packaging-verify.log"
   },
-  "latestIntegratedHead": "d448f6a53",
+  "latestIntegratedHead": "107f2271598e954a67159dc3672d0ccf9991d2ad",
   "latestIntegrationCommit": "94fcb5cac",
   "receiptPresentationFix": "4036618980ed7b6ebe87563be500ae226a173183",
   "receiptPresentationVerification": {
     "focusedTestsPassed": 19,
     "browserRerun": "running; prior Clock unknown failure reproduced and traced to Calendar projection overwriting the device result"
+  },
+  "sharedAndroidReview": {
+    "commit": "cfa2784d6",
+    "areas": [
+      "shared launcher model and component retain Alpha theme, package IDs and explicit native bridge",
+      "shared Sense logic uses stable Alpha wrapper component names and separate complete speech runtime",
+      "shared Pixel source inventory hash matches existing admitted lock",
+      "shared SSE framing replaces duplicate decoder",
+      "retain Soong-only installation adaptation after shared native admission and product composition"
+    ],
+    "focusedStagingTestsPassed": 11,
+    "focusedSenseTestsPassed": 31,
+    "focusedSenseTestsSkipped": 1,
+    "priorDevelopmentBrowserPassed": 50,
+    "priorProductionBrowserPassed": 50,
+    "newSourceFullVerify": "running",
+    "newSourceBrowser": "queued/running"
   }
 }
