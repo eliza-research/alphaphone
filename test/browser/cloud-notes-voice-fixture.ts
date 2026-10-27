@@ -1,3 +1,4 @@
+import {openLegacyNotes} from './helpers/legacy-notes';
 import {expect,type Page} from '@playwright/test';
 // Closed media/Cloud ports. No microphone, speech model, audio playback or provider HTTP.
 export async function cloudNotesVoiceFixture(page:Page,signed=true,development=false){
@@ -28,6 +29,6 @@ export async function cloudNotesVoiceFixture(page:Page,signed=true,development=f
  return {foreign};
 }
 export const notesRecorder=(page:Page)=>page.locator('[data-alpha-subview="notes-recording"]');
-export async function openNotesRecorder(page:Page){await page.getByRole('button',{name:'Notes',exact:true}).click();await page.getByRole('button',{name:'Record and transcribe',exact:true}).click();}
+export async function openNotesRecorder(page:Page){await openLegacyNotes(page);await page.getByRole('button',{name:'Record and transcribe',exact:true}).click();}
 export async function recordClosedClip(page:Page){const panel=notesRecorder(page);await panel.getByRole('button',{name:'Start recording',exact:true}).click();await expect(panel.getByRole('button',{name:'Stop recording',exact:true})).toBeVisible();await panel.getByRole('button',{name:'Stop recording',exact:true}).click();await expect(panel.getByRole('button',{name:'Transcribe with Eliza Cloud',exact:true})).toBeVisible();}
 export async function noPhysicalOrLocalVoice(page:Page){expect(await page.evaluate(()=>{const f=(window as any).cloudNotesVoice;return {mic:f.mic,plays:f.plays,local:f.local,paired:f.paired};})).toEqual({mic:0,plays:0,local:0,paired:0});}
