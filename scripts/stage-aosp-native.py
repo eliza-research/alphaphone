@@ -5,6 +5,10 @@ import hashlib
 import importlib.util
 import json
 import re
+import sys
+
+# The pinned vendor checkout is immutable, including generated Python caches.
+sys.dont_write_bytecode = True
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
