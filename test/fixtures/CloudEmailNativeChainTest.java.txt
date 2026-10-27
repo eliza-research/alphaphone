@@ -23,7 +23,7 @@ public class CloudEmailNativeChainTest {
  }
  static class Attempt {
   final CloudSignInFlow.Environment environment=CloudSignInFlow.Environment.PRODUCTION;
-  final String id=UUID.randomUUID().toString();String email="owner@example.invalid",emailVerifier=CloudSignInFlow.newVerifier(),mfaType,mfaChallenge;
+  final String id=UUID.randomUUID().toString();String email="owner@example.invalid",emailVerifier=CloudSignInFlow.newVerifier(),mfaType,mfaChallenge,phone;
   long expiresAt=System.currentTimeMillis()+60000;boolean google,busy,cancelled;int failedVerifies;PluginCall waiting;
   void cancel(){cancelled=true;}
  }
@@ -46,6 +46,7 @@ public class CloudEmailNativeChainTest {
  void run(Runnable task){task.run();}
  void refused(CloudSignInFlow.Environment environment,String code){}
  void burnUnclaimedPending(){}
+ void requireAuthorization(Attempt current)throws Exception{events.add("authorization");}
  void notifyListeners(String event,JSObject value,boolean retained){throw new AssertionError("fixture owns waiting call");}
 
  Response post(Attempt current,String path,JSONObject body,String bearer)throws Exception{
@@ -59,6 +60,7 @@ public class CloudEmailNativeChainTest {
    return new Response(200,new JSONObject().put("token","synthetic-steward-token-for-fixture"));
   }
   if(path.equals("/api/v1/app-auth/connect")){
+   check(events.contains("authorization"),"native authorization precedes account connection");
    if(mode.equals("config-denied"))return new Response(503,new JSONObject());
    check(CloudSignInFlow.CLIENT_ID.equals(body.getString("clientId")),"client binding");
    check(environment.name.equals(body.getString("environment")),"environment binding");

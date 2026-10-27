@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "observedOn": "2026-10-26",
+  "candidateUpstream": "6293e29bf398603d0ea233871edbdeb57e5c2405",
+  "integratedPullRequests": [
+    616,
+    617,
+    620,
+    622,
+    623
+  ],
+  "heldPullRequests": [
+    {
+      "number": 621,
+      "reason": "Draft; conflicts with later authentication, native admission and source metadata. Its description retains unresolved Calendar/provider behavior and asks that it remain draft."
+    }
+  ],
+  "mainUpdated": false,
+  "mergeBlocker": {
+    "ruleset": 25695986,
+    "name": "Require review before merge",
+    "requiredApprovals": 1,
+    "requireLastPushApproval": true,
+    "currentUserCanBypass": "never"
+  },
+  "verification": {
+    "focusedAuthentication": {
+      "passed": 10,
+      "failed": 0
+    },
+    "focusedAuthenticationAndMetadata": {
+      "passed": 27,
+      "failed": 0
+    },
+    "imageStagingSigningAndGates": {
+      "passed": 32,
+      "failed": 0
+    },
+    "fullRepository": "Running; initial run includes stale metadata/harness failures since fixed. Latest resident dependency audit is not dispositioned and remains a blocker."
+  },
+  "builds": {
+    "android": "Running strict native distribution chain",
+    "aosp": "Source verified; latest APK staging/build pending",
+    "cuttlefish": "Latest APK staging/build pending",
+    "flashed": false,
+    "deviceAcceptance": false
+  },
+  "sourceReuse": "Only recorded native bytes with unchanged committed build inputs were reused; no new native device qualification is claimed. A fresh ARM64 embedding reproduction is running."
+}

@@ -61,7 +61,7 @@ public class CloudSignInProbeTest {
  ${measure}
  void check(boolean expectedEmail,boolean expectedGoogle)throws Exception{
   CloudSignInReadiness.Result result=measure(CloudSignInFlow.environment("production",false));
-  if(result.inApp!=expectedEmail||result.google!=expectedGoogle)throw new AssertionError(mode);
+  if(result.email!=expectedEmail||result.google!=expectedGoogle)throw new AssertionError(mode);
  }
  public static void main(String[] args)throws Exception{
   CloudSignInProbeTest p=new CloudSignInProbeTest();p.google=false;p.check(true,false);
@@ -71,13 +71,13 @@ public class CloudSignInProbeTest {
   p.mode="ready";p.device=false;p.check(true,false);
   p.device=true;p.dal=false;p.check(true,false);
   p.dal=true;p.registered=false;p.check(false,false);
-  p.registered=true;p.email=false;p.check(false,false);
+  p.registered=true;p.email=false;p.check(false,true);
   p.email=true;p.check(true,true);
   System.out.println("PASS optional Google probe (8 scenarios)");
  }
 }`;
   const source=join(temporary,'CloudSignInProbeTest.java');writeFileSync(source,harness);
-  execFileSync(binary('javac'),['--release','11','-d',temporary,join(root,native,'CloudSignInFlow.java'),join(root,native,'CloudSignInReadiness.java'),source],{timeout:60000});
+  execFileSync(binary('javac'),['--release','11','-d',temporary,join(root,native,'CloudDeployment.java'),join(root,native,'CloudSignInFlow.java'),join(root,native,'CloudSignInReadiness.java'),join(root,native,'CloudSmsCode.java'),join(root,'test/fixtures/native-email/org/json/JSONObject.java'),source],{timeout:60000});
   assert.match(execFileSync(binary('java'),['-cp',temporary,'ai.elizaresearch.alphaphone.CloudSignInProbeTest'],{encoding:'utf8',timeout:60000}),/^PASS optional Google probe \(8 scenarios\)/);
  }finally{rmSync(temporary,{recursive:true,force:true});}
 });
@@ -88,7 +88,7 @@ test('exact native email verify/connect/token/ack chain retains failures and cus
   const plugin=read(native+'AlphaCloudSignInPlugin.java');
   const methods={
    ACTUAL_VERIFY:between(plugin,' private void verify(PluginCall call, boolean mfa)',' private void release('),
-   ACTUAL_RELEASE:between(plugin,' private void release(',' @PluginMethod public void cancel('),
+   ACTUAL_RELEASE:between(plugin,' private void release(',' /** A retained MFA event'),
    ACTUAL_COMPLETE:between(plugin,' private void complete(',' /** The saved key'),
    ACTUAL_PREVIOUS_TOKEN:between(plugin,' private static String previousToken(',' /** Bounded retry'),
    ACTUAL_ACK:between(plugin,' private boolean acknowledge(',' /** A key stored before'),
@@ -99,7 +99,7 @@ test('exact native email verify/connect/token/ack chain retains failures and cus
   let harness=read('test/fixtures/CloudEmailNativeChainTest.java.txt');
   for(const [name,source]of Object.entries(methods)){assert(source,name);harness=harness.replace('/* '+name+' */',source);}
   const source=join(temporary,'CloudEmailNativeChainTest.java');writeFileSync(source,harness);
-  execFileSync(binary('javac'),['--release','11','-d',temporary,join(root,native,'CloudSignInFlow.java'),join(root,native,'CloudEmailCode.java'),join(root,'test/fixtures/native-email/org/json/JSONObject.java'),source],{timeout:60000});
+  execFileSync(binary('javac'),['--release','11','-d',temporary,join(root,native,'CloudDeployment.java'),join(root,native,'CloudSignInFlow.java'),join(root,native,'CloudEmailCode.java'),join(root,native,'CloudSmsCode.java'),join(root,'test/fixtures/native-email/org/json/JSONObject.java'),source],{timeout:60000});
   assert.match(execFileSync(binary('java'),['-cp',temporary,'ai.elizaresearch.alphaphone.CloudEmailNativeChainTest'],{encoding:'utf8',timeout:60000}),/^PASS native email chain \(13 scenarios; no browser\/DAL facilities\)/);
  }finally{rmSync(temporary,{recursive:true,force:true});}
 });
