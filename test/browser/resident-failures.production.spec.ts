@@ -19,10 +19,10 @@ const bubble = (page: Page, text: string) => page.getByRole('button', { name: 'M
 const UNKNOWN = 'The reply stopped before it finished. Check the saved conversation before trying again.';
 const NOT_SENT = 'Not sent. Your message is back in the composer.';
 
-async function connected(page: Page) {
+async function connected(page: Page, nativeSignIn = true) {
   const foreign = await fenceNetwork(page);
   await flagOffAndroid(page);
-  await residentStub(page, { nativeSignIn: true, accounts: [owner] });
+  await residentStub(page, { accounts: [owner], nativeSignIn });
   await residentHome(page);
   return foreign;
 }
@@ -220,12 +220,14 @@ test('a restart while the resident holds a reply posts nothing and shows the use
 
 test('a resident send the runtime no longer accepts (401) asks for an Eliza Cloud sign-in, never pairing', async ({ page }) => {
   test.setTimeout(120_000);
-  await connected(page);
+  await connected(page, true);
   await setStub(page, { stream: 'expired' });
   await send(page, 'Sent with an expired session');
-  const dialog = page.locator('[role="main"].alpha-cloud-sign-in');
-  await expect(dialog.getByRole('alert')).toBeVisible({ timeout: 30_000 });
-  await expect(dialog.getByRole('button', { name: 'Email me a code', exact: true })).toBeVisible();
+  const dialog = page.getByRole('main',{name:'Welcome to Alpha.',exact:true});
+  await expect(dialog.getByRole('alert')).toHaveText('Your Cloud sign-in has expired. Sign in with Cloud again.', { timeout: 30_000 });
+  await expect(dialog.getByRole('button', { name: 'Continue with Google', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Email me a code', exact: true })).toBeEnabled();
+  expect(await harness(page, f => ({ streams: f.streams, posts: f.posts.length }))).toEqual({ streams: 1, posts: 0 });
   await expect(page.locator('body')).not.toContainText(/pair/i);
   expect(await stub(page, s => s.recoveries)).toEqual([]);
 });

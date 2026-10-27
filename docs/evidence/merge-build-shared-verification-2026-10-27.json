@@ -70,9 +70,64 @@
     "method": "android-stage-voice-models.mjs validated existing exact-hash payloads and generated current-pin record",
     "nativeCommit": "0d9fd4b9db239bbf851068f98c99f4263f8c05c5"
   },
-  "androidBuild": "running; not accepted yet",
+  "androidBuild": {
+    "result": {
+      "command": [
+        "npm",
+        "run",
+        "android:build:local"
+      ],
+      "startedAtEpoch": 1793098721.4565074,
+      "passed": true,
+      "pin": "4e617a0c15080df16391ced88dbbc73b818a7af5",
+      "exitCode": 0,
+      "finishedAtEpoch": 1793099047.5167606
+    },
+    "manifest": "docs/evidence/merge-build-final-apks-v11-2026-10-27.json",
+    "packagedDependencyAudit": {
+      "packages": 603,
+      "moderate": 1,
+      "high": 0,
+      "critical": 0,
+      "exception": "existing UUID exception; no new exception"
+    }
+  },
   "finalImages": "pending; older Soong packaging checkpoint separately verified",
   "physicalDeviceConnected": false,
   "flashed": false,
-  "deviceAcceptance": false
+  "deviceAcceptance": false,
+  "developmentBrowser": {
+    "passed": 83,
+    "failed": 0,
+    "result": {
+      "command": [
+        "npx",
+        "playwright",
+        "test",
+        "test/browser/home-launcher.spec.ts",
+        "test/browser/home-native-launcher.spec.ts",
+        "test/browser/home-app-library.spec.ts",
+        "test/browser/drawer-full-height.spec.ts",
+        "test/browser/local-agent-stream.spec.ts",
+        "test/browser/local-agent-native-stream.spec.ts",
+        "test/browser/canonical-notes.spec.ts",
+        "test/browser/calendar-creation-recovery.spec.ts",
+        "test/browser/agent-clock-handoff.spec.ts",
+        "test/browser/clock-dialog-accessibility.spec.ts",
+        "test/browser/dev-clock.spec.ts",
+        "--project=chromium",
+        "--workers=1",
+        "--timeout=120000",
+        "--max-failures=1",
+        "--reporter=list",
+        "--output=test-results/shared-final-domains"
+      ],
+      "startedAtEpoch": 1793099354.8451872,
+      "passed": true,
+      "pin": "4e617a0c15080df16391ced88dbbc73b818a7af5",
+      "exitCode": 0,
+      "finishedAtEpoch": 1793099848.9162996
+    }
+  },
+  "productionBrowser": "85 cases running"
 }
