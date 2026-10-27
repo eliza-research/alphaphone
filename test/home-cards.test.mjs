@@ -99,7 +99,9 @@ test('attendee initials come only from event names, capped with an overflow coun
   const template = readFileSync(new URL('../apps/app/src/prototype/template.html', import.meta.url), 'utf8');
   assert.doesNotMatch(template, />(MC|JP|\+2)<\/span>/, 'no hard-coded avatar initials');
   assert.doesNotMatch(template, /\{\{lockSum\}\}|\{\{showHeads\}\}/, 'no fixture lock summary or heads-up banner');
-  assert.match(template, /<sc-if value="\{\{homeCalendarVideo\}\}"[^>]*><svg[^>]*><path d="\{\{ic\.video\}\}">/, 'video icon only with a meeting link');
+  // The agenda card is the shared upstream card; its video icon is passed only with a meeting link.
+  const cards = readFileSync(new URL('../apps/app/src/prototype/home-overview-cards.ts', import.meta.url), 'utf8');
+  assert.match(cards, /videoIcon: out\.homeCalendarVideo \? createElement\('svg'[^\n]*out\.ic\?\.video[^\n]*: undefined,/, 'video icon only with a meeting link');
 });
 test('brief card: shown only for a retained result, with agent, run time and failure state', () => {
   assert.deepEqual(H.presentHomeBriefCard(null, now), {has: false, title: '', status: '', failed: false, label: ''});
@@ -157,8 +159,9 @@ test('next item: an overdue reminder does not hide the next event, which keeps i
   const reminder = H.presentHomeCalendarSource({state: 'ready', overdue: false, reminder: true, reminderReadAt: at(14, 50), readAt: at(15, 4), now, native: false});
   assert.deepEqual(H.presentHomeNext({title: '  ', begin: at(17), allDay: false, now, provenance: reminder}),
     {text: 'Next: Untitled event 5:00 PM', source: 'Reminder', description: 'Next: Untitled event, 5:00 PM. Reminder saved on this browser, read 2:50 PM'});
-  const template = readFileSync(new URL('../apps/app/src/prototype/template.html', import.meta.url), 'utf8');
-  assert.match(template, /data-alpha-home-calendar-next-line>.*\{\{homeCalendarNext\}\}.*\{\{homeCalendarNextSource\}\}/);
+  const cards = readFileSync(new URL('../apps/app/src/prototype/home-overview-cards.ts', import.meta.url), 'utf8');
+  assert.match(cards, /out\.homeCalendarHasNext \? \{text: String\(out\.homeCalendarNext \|\| ''\), source: String\(out\.homeCalendarNextSource \|\| ''\)\}/);
+  assert.match(cards, /next: \{'data-alpha-home-calendar-next-line': ''\}, nextSource: \{'data-alpha-home-calendar-next-source': ''\}/);
 });
 test('inbox status: readable freshness and every non-ready state', () => {
   const base = {failure: false, pending: false, cached: null, connected: false, unchecked: false, now};
@@ -181,13 +184,14 @@ test('workflow freshness: a load time only after a list was actually loaded', ()
 test('Home template renders source, freshness and the brief card only from live values', () => {
   const template = readFileSync(new URL('../apps/app/src/prototype/template.html', import.meta.url), 'utf8');
   const home = template.slice(template.indexOf('data-alpha-home-layout'), template.indexOf('{{apps}}'));
-  assert.match(home, /data-alpha-home-calendar-source>\{\{homeCalendarSource\}\}</);
-  assert.match(home, /data-alpha-home-calendar-origin>\{\{homeCalendarOrigin\}\}</);
-  assert.match(home, /aria-description="\{\{homeCalendarDescription\}\}"/);
+  // The agenda and brief cards are the shared upstream cards (home-overview-cards.ts); the template
+  // only places them. Their DOM is asserted in test/home-overview-cards.test.mjs.
+  assert.match(home, /^\s*\{\{homeAgendaCard\}\}$/m);
+  assert.match(home, /^\s*\{\{homeBriefCard\}\}$/m);
+  assert.doesNotMatch(home, /home-calendar-card|home-brief-card|\{\{homeCalendarTitle\}\}|\{\{homeBriefTitle\}\}/, 'no second copy of the shared card markup');
   assert.match(home, /aria-description="\{\{homeInboxDescription\}\}"/);
   assert.match(home, /aria-description="\{\{homeWorkflowDescription\}\}"/);
   assert.match(home, /<sc-if value="\{\{homeWorkflowFreshness\}\}"><span data-alpha-home-workflow-freshness>/);
-  assert.match(home, /<sc-if value="\{\{homeBriefHas\}\}"><button[^>]*data-alpha-home-brief[^>]*aria-label="\{\{homeBriefLabel\}\}"/, 'no brief card without a retained brief');
   assert.doesNotMatch(home, /Morning brief|Design review|7:02 AM/, 'no fixture brief or agenda text in the template');
   const adapter = readFileSync(new URL('../apps/app/src/prototype/data-adapter.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(adapter, /gmailSearch|gmailThread|\.sync\(|fetch\(/, 'the Home adapter starts no mail read, digest sync or network request');

@@ -4,11 +4,38 @@ This maps the daily overview requirement to the cards Home actually renders. It 
 source behavior and browser tests only. It is not APK, emulator, AOSP image, real-provider or
 device acceptance evidence; those gates stay open in [current status](mvp-current-status.md).
 
+## Shared ownership (October 27 direction)
+
+The overview domain and cards are upstream elizaOS code that Alpha consumes through the pin
+(`scripts/prepare-client-features.mjs` stages them):
+
+- `packages/ui/src/overview/daily-overview.ts`: presenters for every card state (loading, ready,
+  empty, stale, error, access off, not connected), agenda selection (`selectOverviewAgenda`:
+  overdue reminders first, the next item kept on its own line), the agent-calendar feed states
+  (`presentOverviewAgendaFeed`) and the stale rule (`overviewReadIsStale`: the last completed read
+  is from an earlier local day). `apps/app/src/prototype/home-cards.ts` only binds Alpha's locale.
+- `packages/ui/src/overview/OverviewCards.tsx`: the agenda, attention and brief cards. Home renders
+  the agenda and brief cards through `apps/app/src/prototype/home-overview-cards.ts`, which keeps
+  Alpha's classes and the installed `data-alpha-home-*` selectors.
+- `plugins/plugin-workflow/src/client/hosted-digests.ts`: the digest client, the client-scoped
+  result inbox, retained-brief selection and `RetainedBriefStore`, fenced to the current
+  connection scope (origin, owner and agent). `apps/app/src/runtime/hosted-digests.ts` keeps only
+  Alpha's store binding and the `alpha:retained-digest` event.
+- `plugins/plugin-workflow/src/services/hosted-digest-policy.ts`: the occurrence policy (120-second
+  run window, not-run records and their texts, source state) used by the agent's admission and by
+  the test-mocks development scheduler. Scheduling stays with the agent's durable runtime
+  scheduler (TaskService triggers): schedules run only while the phone is on, an occurrence that
+  came due while it was off is recorded once as missed at startup and never run late, and no
+  second scheduler exists.
+
+The Inbox card still renders through the template with the shared presenter text; its values are
+computed by the Inbox adapter.
+
 ## Cards
 
 | Card | Source | Attribution and freshness shown | States |
 | --- | --- | --- | --- |
-| Calendar (`data-alpha-home-calendar`) | Device calendars read by the Calendar adapter (the app's own calendar in a browser), plus reminders from the reminder store | Calendar name beside the date, `Read <time>` beside the event time; the full sentence is the card's accessible description. An upcoming reminder shows `Reminder` and the reminder store's read time instead of a calendar's | Loading, no upcoming events, results limited to the first 2,000 events, read failed with `Open Calendar to retry` (opening Calendar from the card reads it again), access off, not connected |
+| Calendar (`data-alpha-home-calendar`) | The agent's calendar feed (Agent Calendar) when it owns Home; device calendars read by the Calendar adapter in the explicit device scope; reminders from the reminder store. Agent Calendar states: reading, not connected, under review, failed or unavailable (`Open Calendar to retry`, read again on open), fresh (`Agent Calendar`, `As of <time>` in the description), empty only after a complete read, and stale (a partial feed or a snapshot from an earlier day keeps the item with `Not updated since <time>` and `data-alpha-home-calendar-stale="true"`). Under an overdue reminder the agent's next event shows on the `Next:` line | Calendar name beside the date, `Read <time>` beside the event time; the full sentence is the card's accessible description. An upcoming reminder shows `Reminder` and the reminder store's read time instead of a calendar's | Loading, no upcoming events, results limited to the first 2,000 events, read failed with `Open Calendar to retry` (opening Calendar from the card reads it again), access off, not connected |
 | Overdue reminder (same card) | Reminders that are due and not done (`overdueReminders`) | Header `Overdue reminder` or `N overdue reminders`, `Due <time>`, `Read <time>` of the reminder store; description names the reminder store | Shown before any event, including one already in progress, until it is completed or cancelled or its due time moves to the future. A snoozed reminder that keeps its original due time stays listed. The next event or reminder still shows below it on a `Next: <title> <time>` line with its own source and read time |
 | Workflows (`data-alpha-home-workflows`) | Workflow list from the connected agent; the unified automations list after the user opens Workflows | `Loaded <time>` under the status line once a list was loaded for the current connection; the source is named in the accessible description only | Connect agent, loading, empty, failed with retry, partial, last loaded |
 | Inbox (`data-alpha-home-inbox`) | Metadata of the Inbox page the user loaded in Inbox | Account label and `Read <time>`; `From loaded messages` when the page was partial. The time is the completed first-page read; loading more pages or changing read state in Inbox does not move it | Connect email, open to check or load, updating, no unread email, failed with `Open to retry · last read <time>`, reconnect |

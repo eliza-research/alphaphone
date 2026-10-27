@@ -207,8 +207,10 @@ test('a verified empty Agent Calendar does not substitute device events', async 
 
 test('an event from another agent is not presented as this agent’s next event or as a verified empty calendar', async ({ page }) => {
   await canonicalHome(page, 'wrong-owner');
-  await expect(calendarCard(page)).toContainText('Calendar has not been verified');
-  await expect(calendarCard(page)).toHaveAttribute('aria-description', /another agent/);
+  // A refused read is a failure with retry, never a verified empty calendar.
+  await expect(calendarCard(page)).toContainText('Calendar unavailable');
+  await expect(calendarCard(page).locator('[data-alpha-home-calendar-source]')).toHaveText('Open Calendar to retry');
+  await expect(calendarCard(page)).toHaveAttribute('aria-description', /another agent.*Open Calendar to retry\.$/);
   await expect(calendarCard(page)).not.toContainText(/Agent calendar meeting|Device-only event|No upcoming events/);
   expect(await harness(page, f => f.unexpected)).toEqual([]);
 });

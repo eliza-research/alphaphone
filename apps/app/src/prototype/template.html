@@ -25,17 +25,7 @@
        a pull down on empty Home does; the top-edge swipe stays Android's. Alpha draws no shade. -->
   <sc-if value="{{showShadeButton}}"><div class="alpha-shade-row"><button class="alpha-shade-handle" data-alpha-shade-handle aria-label="Open notifications" aria-description="Opens Android's notifications and quick settings" onClick="{{openSystemShade}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.bell}}"></path></svg><span>Notifications</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.down}}"></path></svg></button></div></sc-if>
   <div class="scr" style="display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 0 24px; scroll-padding-left: 24px; touch-action: pan-x; flex-shrink: 0">
-    <button class="home-calendar-card" data-alpha-home-calendar data-alpha-home-calendar-event="{{homeCalendarHasEvent}}" data-alpha-home-calendar-meta="{{homeCalendarHasMeta}}" data-alpha-home-calendar-overdue="{{homeCalendarOverdue}}" data-alpha-home-calendar-next="{{homeCalendarHasNext}}" onClick="{{goCalendar}}" aria-label="{{homeCalendarLabel}}" aria-description="{{homeCalendarDescription}}" style="flex-shrink: 0; scroll-snap-align: start; border-radius: 30px; background: var(--acc); color: #ffffff; padding: 22px; box-sizing: border-box">
-      <div class="home-calendar-head">
-        <span class="home-calendar-time">{{homeCalendarTime}}</span>
-        <span class="home-calendar-origin" data-alpha-home-calendar-origin>{{homeCalendarOrigin}}</span>
-        <span aria-hidden="true" style="display:block;flex-shrink:0;width:24px;height:24px;background:#ffffff;mask:url('/icons/lucide/calendar.svg') center/contain no-repeat;-webkit-mask:url('/icons/lucide/calendar.svg') center/contain no-repeat"></span>
-      </div>
-      <sc-if value="{{homeCalendarVideo}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="{{ic.video}}"></path></svg></sc-if>
-      <div class="serif home-calendar-title">{{homeCalendarTitle}}</div>
-      <sc-if value="{{homeCalendarHasMeta}}"><span class="home-calendar-meta"><sc-if value="{{homeCalendarHasEvent}}"><span class="home-calendar-footer">{{homeCalendarFooter}}</span></sc-if><sc-if value="{{homeCalendarSource}}"><span class="home-calendar-source" data-alpha-home-calendar-source>{{homeCalendarSource}}</span></sc-if></span></sc-if>
-      <sc-if value="{{homeCalendarHasNext}}"><span class="home-calendar-meta home-calendar-next" data-alpha-home-calendar-next-line><span class="home-calendar-next-text">{{homeCalendarNext}}</span><sc-if value="{{homeCalendarNextSource}}"><span class="home-calendar-source" data-alpha-home-calendar-next-source>{{homeCalendarNextSource}}</span></sc-if></span></sc-if>
-    </button>
+    {{homeAgendaCard}}
     <button data-alpha-home-workflows onClick="{{goFlows}}" aria-label="{{homeWorkflowLabel}}" aria-description="{{homeWorkflowDescription}}" class="home-card" style="flex-shrink: 0; scroll-snap-align: start; width: max-content; min-width: 172px; max-width: calc(100% - 48px); border-radius: 30px; background: var(--s2); padding: 22px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between">
       <div style="display:flex;justify-content:flex-end;width:100%"><span aria-hidden="true" style="display:block;flex-shrink:0;width:24px;height:24px;background:var(--acct);mask:url('/icons/lucide/workflow.svg') center/contain no-repeat;-webkit-mask:url('/icons/lucide/workflow.svg') center/contain no-repeat"></span></div>
       <sc-if value="{{homeWorkflowHasRows}}"><div style="display:flex;flex-direction:column;gap:10px;max-width:260px;min-width:0;text-align:left"><sc-for list="{{homeWorkflowRows}}" as="flow"><div style="min-width:0"><div style="font-size:18px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{flow.name}}</div><div style="font-size:12px;line-height:1.4;color:var(--mut)">{{flow.status}}</div></div></sc-for></div></sc-if>
@@ -53,11 +43,7 @@
         </sc-for>
       </div></sc-if>
     </button>
-    <sc-if value="{{homeBriefHas}}"><button class="home-brief-card" data-alpha-home-brief data-alpha-home-brief-failed="{{homeBriefFailed}}" onClick="{{goBrief}}" aria-label="{{homeBriefLabel}}" aria-haspopup="dialog">
-      <div class="home-brief-head"><span>Latest brief</span><span aria-hidden="true" style="display:block;flex-shrink:0;width:24px;height:24px;background:var(--acct);mask:url('/icons/lucide/sparkles.svg') center/contain no-repeat;-webkit-mask:url('/icons/lucide/sparkles.svg') center/contain no-repeat"></span></div>
-      <span class="home-brief-title">{{homeBriefTitle}}</span>
-      <span class="home-brief-status">{{homeBriefStatus}}</span>
-    </button></sc-if>
+    {{homeBriefCard}}
     <div style="flex-shrink: 0; width: 12px"></div>
   </div>
 
