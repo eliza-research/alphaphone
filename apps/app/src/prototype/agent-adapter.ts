@@ -104,19 +104,13 @@ function replyNotices(reply:unknown):string[]{
   const notices=reply&&typeof reply==='object'?(reply as {notices?:unknown}).notices:undefined;
   return Array.isArray(notices)?notices.filter((n):n is string=>typeof n==='string'&&!!n.trim()&&n.length<=500).slice(0,5):[];
 }
-type ProposalController=typeof connectionController&{rejectProposal?(id:string):Promise<unknown>;reconcile?(id:string,applied:boolean):Promise<unknown>};
-/** Decline one pending proposal without executing it. Prefers the shared controller entry point. */
+/** Decline one pending proposal without executing it. */
 export async function declineProposal(id:string):Promise<{ok:boolean;message:string}>{
-  const controller=connectionController as ProposalController,before=controller.getSnapshot(),wasOpen=before.open;
-  if(before.busy)return {ok:false,message:'Wait for the current connection step, then decline again. Nothing was performed.'};
-  try{if(controller.rejectProposal)await controller.rejectProposal(id);else await controller.rejectAction(id);}
+  if(connectionController.getSnapshot().busy)return {ok:false,message:'Wait for the current connection step, then decline again. Nothing was performed.'};
+  try{await connectionController.rejectProposal(id);}
   catch(error){return {ok:false,message:error instanceof Error?error.message:'The proposal could not be declined.'};}
-  const after=controller.getSnapshot();
+  const after=connectionController.getSnapshot();
   if(after.error)return {ok:false,message:after.error};
-  // The legacy path reports success only through its completion message.
-  if(!controller.rejectProposal&&after.message!=='Proposal rejected. No device action was performed.')return {ok:false,message:'The decline was not confirmed. Check phone action history.'};
-  // The legacy controller path opens the connection panel to show progress; return to the chat.
-  if(!wasOpen&&after.open)controller.close();
   return {ok:true,message:'Declined. No phone action was performed.'};
 }
 export function installAgentAdapter(Component: Shell, views: Shell) {

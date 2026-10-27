@@ -3,7 +3,6 @@ import { Capacitor } from '@capacitor/core';
 import { reviewContentQuestion } from '../browser/content-question';
 import { sensitiveReadingText } from '../browser/reading-sensitive';
 import { noticeCurrent, noticeExcerpt, noticeReviewable } from './context-selection';
-type Bag = Record<string, any>;
 const opaque=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 /** Agent-context identity for one of Alpha Phone's own notifications. Other apps' and
  * hosted rows are never selectable; titles and text stay on the phone. */

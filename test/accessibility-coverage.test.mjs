@@ -195,7 +195,7 @@ test('the layout fixes the sweep depends on stay in the stylesheet and template'
     assert.match(lines[index - 1], /<div ref="\{\{[a-zA-Z.]+\}\}"/, `scrim on line ${index + 1} sits in a focus-owning container`);
     assert.match(lines[index + 1], /role="dialog"[^>]* aria-label="[^"]+"/, `panel on line ${index + 2} is a named dialog`);
   });
-  // Notes sharing now uses the common native dialog, covered by share-panel.test.mjs.
+  // Notes sharing uses the common native dialog (share-panel.test.mjs), not a scrim popup.
   assert.ok(scrims >= 12, `the template still marks its remaining scrim popups (${scrims})`);
   const access = read('apps/app/src/prototype/subview-accessibility.ts');
   for (const ref of [...template.matchAll(/<div ref="\{\{([a-z]+)\.([a-zA-Z]+)\}\}" data-alpha-popup/g)])

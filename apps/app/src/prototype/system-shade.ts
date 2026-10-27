@@ -18,8 +18,6 @@ import { registerPlugin } from '../platform-plugins';
 // system-shade:begin (dependency-free; exercised by test/system-shade.test.mjs)
 /** Who answers "open notifications": Android itself, the development stand-in, or nobody. */
 export type ShadeSurface = 'android' | 'simulated' | 'none';
-/** Outcome names AlphaDevice.openNotificationShade resolves with (SystemShade.java). */
-export type ShadeOutcome = 'opened' | 'standalone' | 'permission-missing' | 'unsupported' | 'not-in-front';
 
 export function shadeSurface(options: { native: boolean; simulated: boolean }): ShadeSurface {
   if (options.native) return 'android';

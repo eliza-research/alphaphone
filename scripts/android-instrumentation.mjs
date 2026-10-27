@@ -249,7 +249,7 @@ export const NOT_RUN_BY_A_RUNNER = {
 
 /**
  * What a run without --classes executes. Every one of these has at least one method that runs on a
- * flag-off build, so a default run can pass. BrowserDownload left the list in round 8: its only
+ * flag-off build, so a default run can pass. BrowserDownload is not listed: its only
  * method needs a test-mocks app build, so on the default build the class could only be recorded
  * "skipped", which fails the run. It runs with `--test-mocks --classes BrowserDownload`.
  */
@@ -551,7 +551,7 @@ export async function runLeased({ options, serial, adb, timing = {}, withSeconda
               failed: [...merged.failed, ...row.failed], ignored: [...merged.ignored, ...row.ignored],
               // A phase that did not run (missing) or only skipped fails the phased class. A class
               // without phases keeps its own status: one whose every method was skipped by its
-              // gate is "skipped", as documented, and was recorded as "failed" until round 7.
+              // gate is "skipped", as documented.
               status: merged.status !== "passed" ? merged.status : row.status === "passed" ? "passed" : spec.phases ? "failed" : row.status };
             if (row.status !== "passed") break; // Later phases depend on earlier ones.
           }
