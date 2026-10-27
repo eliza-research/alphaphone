@@ -1,5 +1,21 @@
 # Architecture and ownership
 
+## October 27 shared application direction
+
+The owner now requires one upstream mobile application for Alpha and Eliza.
+This supersedes the earlier separate-renderer ownership policy as the migration
+target. Reusable views, plugins, agent/context/action handling, native adapters
+and Pixel 10a / Android 17 image support belong upstream. Alpha should select the
+common native profile and provide theme, character and product registration.
+Its package ID, signing identity, callback registration and installed storage
+names remain compatibility inputs, not a separate behavioral implementation.
+
+The sections below describe current implementation and safety boundaries until
+each component has moved. Preserve user data, source authorization, cancellation
+and durable effect receipts. Consume reviewed upstream commits through the pin;
+do not edit the vendor checkout. The [unification audit](unification-audit-2026-10-27.md)
+records the migration order and the gaps that prevent a completion claim.
+
 Alpha Phone is an independent Android product. `apps/app` owns its renderer,
 navigation, presentation, capability policy and storage configuration. Shared
 runtime, browser features, native plugins and OS tooling come from the exact
