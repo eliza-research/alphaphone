@@ -27,6 +27,7 @@ import {developmentExecutionDocument} from '../browser/development-execution-doc
 import {developmentAgentDocument} from '../browser/development-agent-document';
 import {openDomainRecovery} from '../browser/domain-recovery';
 import {retireClockReviews} from './clock-agent-review';
+import {clockHandoffCapabilities} from './clock-contract';
 import { negotiateEnabledViews } from './device-view-profile';
 import { workflowPresentationProtocol } from './workflow-presentation';
 import {developmentIdentity,readDevelopmentIdentity,verifyDevelopmentIdentity,developmentOwnerRecovery,assertDevelopmentIdentity} from '../browser/development-identity';
@@ -384,8 +385,8 @@ async function deviceCapabilities(offered:unknown):Promise<string>{
   for(const capability of [...(!Capacitor.isNativePlatform()?['calendar.agenda-read.v1']:[]),'notes.query.v1','reminders.create.v1','calendar.create.v1',...(android||!Capacitor.isNativePlatform()?['calendar.next-read.v1']:[]),'maps.selected-read.v1'])if(agent.includes(capability))capabilities.push(capability);
   if(availabilityNegotiated(agent))capabilities.push(CALENDAR_AVAILABILITY_CAPABILITY);
   if((android||!Capacitor.isNativePlatform())&&typeof foregroundExecutor==='function'&&agent.includes('calendar.named-read.v1'))capabilities.push('calendar.named-read.v1');
-  if(android&&agent.includes('clock.handoff.v1'))capabilities.push('clock.handoff.v1');
-  if(android&&agent.includes('clock.handoff.v2')&&await clockRepeatDaysSupported())capabilities.push('clock.handoff.v2');
+  // One shared external-handoff policy for every brand: never clock.alarms.v1 (P-17).
+  capabilities.push(...clockHandoffCapabilities({offered:agent,handler:android,repeatDays:android&&agent.includes('clock.handoff.v2')&&await clockRepeatDaysSupported()}));
   // SMS sending is negotiated only on the AOSP image, where Alpha holds the SMS role.
   if(aospImage&&agent.includes(SMS_SEND_CAPABILITY))capabilities.push(SMS_SEND_CAPABILITY);
   return capabilities.join(',');

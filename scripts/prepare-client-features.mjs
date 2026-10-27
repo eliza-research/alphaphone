@@ -173,6 +173,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-assistant/src/services/device-actions/sms-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-review-executor.ts',
+  'plugins/plugin-assistant/src/services/device-actions/clock-handoff.ts',
   'plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/device-record-presentation.ts',
   'plugins/plugin-assistant/src/services/device-actions/notes-contract.ts',
