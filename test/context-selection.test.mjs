@@ -241,7 +241,6 @@ test('a mail context switched, deleted or changed during its review cannot send 
  assert.match(adapter,/if \(body\?\.message\.id === id\) \{ body = null;/,'an archived or trashed open message is cleared');
 });
 
-
 test('calendar source discovery coalesces per owner, retries failures and fences old sources',async()=>{
  const {stripTypeScriptTypes}=await import('node:module');const vm=await import('node:vm');
  const core=readFileSync(new URL('../vendor/eliza/packages/core/src/runtime/single-flight-memo.ts',import.meta.url),'utf8').replace(/^export /gm,'');
@@ -260,4 +259,9 @@ test('calendar source discovery coalesces per owner, retries failures and fences
  queue.push(Promise.resolve({sourceId:'current',sourceRevision:'new'}));assert.equal((await read(changing)).sourceId,'current');
  queue.push(Promise.resolve({sourceId:'separate',sourceRevision:'owner'}));assert.equal((await read({supportsCalendarAgenda:true})).sourceId,'separate');
  assert.equal(queue.length,0);
+});
+
+test('Calendar shares only selections the agent routes; legacy and Clock draft kinds are never sent',()=>{
+ for(const selectedObject of [{kind:'legacy-app-calendar-source',id:'legacy-app-calendar',accountId:'device-local-legacy',revision:'a'.repeat(64)},{kind:'clock-draft',id:'draft',revision:'1'}])
+  assert.throws(()=>sanitizePhoneContext({view:'calendar',revision:1,sensitive:false,selectedObject}),/cannot share agent context/);
 });

@@ -50,7 +50,7 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
  p.calendarSelection=function(){
   if(deviceCalendarScope(this))return selection?.call(this);
   const state=this.vget('calendar'),model=this.agentCalendar as AgentCalendar|undefined;
-  if(state.calendarAuthority==='legacy'||state.calendarAuthority==='legacy-google'||model&&['transition-required','legacy-recovery'].includes(model.state.status))return{kind:'legacy-app-calendar-source',id:state.calendarAuthority==='legacy-google'?'legacy-connected-calendar':'legacy-app-calendar',accountId:'device-local-legacy',revision:model?.state.legacy?.fingerprint};
+  if(state.calendarAuthority==='legacy'||state.calendarAuthority==='legacy-google'||model&&['transition-required','legacy-recovery'].includes(model.state.status))return;
   if(state.open?.startsWith('canonical-calendar:'))return model?.selection(state.open.slice('canonical-calendar:'.length));
   const key=model?.sourceKeyForHandle(state.form?.cal);return key?model?.sourceSelection(key):undefined;
  };

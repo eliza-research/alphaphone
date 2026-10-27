@@ -131,13 +131,11 @@ for (const mode of ['confirm','transcribed','zone','modal','unknown','receipt-lo
     if(mode==='modal'){
       await page.evaluate(()=>window.dispatchEvent(new Event('alpha-back',{cancelable:true})));
       await page.getByRole('button',{name:'Calendar',exact:true}).click();await page.getByRole('button',{name:'Clock alarms',exact:true}).click();
-      const context=await page.evaluate(async()=> (await import('/src/runtime/alpha-client.ts')).alphaClient.getState().context);
-      expect(context.selectedObject.kind).toBe('clock-draft');
+      // Calendar view routes no Clock draft selection, so none is shared while the sheet is open or edited.
       await page.getByLabel('Alarm label',{exact:true}).fill('Edited draft');
-      const edited=await page.evaluate(async()=> (await import('/src/runtime/alpha-client.ts')).alphaClient.getState().context);
-      expect(edited.revision).toBeGreaterThan(context.revision);expect(edited.selectedObject.revision).not.toBe(context.selectedObject.revision);
+      const context=await page.evaluate(async()=> (await import('/src/runtime/alpha-client.ts')).alphaClient.getState().context);
+      expect(context.selectedObject).toBeUndefined();
       await page.getByRole('button',{name:'Close Clock',exact:true}).click();
-      const closed=await page.evaluate(async()=> (await import('/src/runtime/alpha-client.ts')).alphaClient.getState().context);expect(closed.selectedObject?.kind).not.toBe('clock-draft');
       expect(await page.evaluate(async()=>{try{await (await import('/src/runtime/alpha-client.ts')).alphaClient.approve('fixture-proposal');return false;}catch{return true;}})).toBe(true);
       expect(await page.evaluate(()=>(window as any).recoveryFixture.effects)).toBe(0);return;
     }

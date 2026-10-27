@@ -58,7 +58,7 @@ f.shell.componentWillUnmount();f=await fixture();assert.match(f.render().clock.m
 failStorage=true;f.render().clock.prepare();await f.render().clock.review.confirm();assert.equal(writes.length,count);assert.match(f.render().clock.message,/not sent/);failStorage=false;
 hidden=true;f.render().clock.prepare();await f.render().clock.review.confirm();assert.equal(writes.length,count);hidden=false;
 // Leaving the view invalidates even a retained confirmation callback.
-f.render().clock.prepare();const departed=f.render().clock.review;f.leave();await departed.confirm();assert.equal(writes.length,count);assert.equal(f.render().clock,null);assert.equal(f.shell.clockSelection(),undefined);f.render().openClock();assert.equal(f.render().clock.review,null);
+f.render().clock.prepare();const departed=f.render().clock.review;f.leave();await departed.confirm();assert.equal(writes.length,count);assert.equal(f.render().clock,null);f.render().openClock();assert.equal(f.render().clock.review,null);
 // Both startup mock and a mode switch during review prevent the native call.
 // Without ELIZA_DEV_ALLOW_TEST_MOCKS there is no simulation: a mock request fails closed.
 for(const startupMock of [true,false]){const mock=await fixture(startupMock);mock.render().clock.prepare();document.documentElement.dataset.connectionMode='mock';const review=mock.render().clock.review;assert.equal(review.label,testMocksEnabled?'Simulate Clock request':'Continue to Clock');await review.confirm();assert.equal(writes.length,count);assert.match(mock.render().clock.message,testMocksEnabled?/simulated/:/unavailable without a live connection/);mock.shell.componentWillUnmount();document.documentElement.dataset.connectionMode='live';}

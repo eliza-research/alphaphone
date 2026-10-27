@@ -462,7 +462,6 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         if(record.alphaReminderId){const target=shell.reminderTargets?.get(id);providerSelection=target?{kind:'reminder',id:target.reminderId,revision:target.revision,accountId:target.sourceId,sourceRevision:target.sourceRevision,occurrenceId:target.occurrenceId,...(target.timingVersion===2?{timingVersion:2}: {})}:undefined;}
       }
     }
-    if(view==='calendar'&&shell.clockSelection?.())providerSelection=shell.clockSelection();
     // Folder, notification and settings selections are published by the views that own them.
     if(view==='files'&&!providerSelection&&shell.vget('files').open!=='__native_selected_document'&&shell.folderSelection?.())providerSelection=shell.folderSelection();
     if(view==='settings'&&!providerSelection&&shell.settingsSelection?.())providerSelection=shell.settingsSelection();

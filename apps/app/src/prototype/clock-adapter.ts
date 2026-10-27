@@ -9,8 +9,6 @@ const actions=['set','show','snooze','dismiss'] as const;
 /** A reviewed handoff, never a local alarm database or a provider-success claim. */
 export function installClockAdapter(Component:any,views:Bag,options:{simulated:boolean;browser?:boolean}) {
  const p=Component.prototype,render=views.calendar.render,leave=views.calendar.onLeave;
- const draftId=crypto.randomUUID();let draftRevision=0;
- const selection=()=>open?{kind:'clock-draft',id:draftId,revision:String(draftRevision)}:undefined;
  let owner:any,open=false,action:ClockRequest['action']='set',time='07:00',label='',snooze='10',days:ClockDay[]=[],review:ClockRequest|null=null,busy=false,message='',generation=0;
  // Repeat days reach Clock only when the native handoff reports it carries EXTRA_DAYS
  // (surfaceInfo clockRepeatDaysVersion 1 or later). Otherwise the chips are hidden and a repeat is refused,
@@ -22,7 +20,7 @@ export function installClockAdapter(Component:any,views:Bag,options:{simulated:b
  const simulated=()=>testMocksEnabled&&mockRequested();
  const repeatAvailable=()=>simulated()||repeatSupported;
  const blocked=()=>!testMocksEnabled&&mockRequested();
- const publish=()=>{++draftRevision;owner?.vset('calendar',{});};
+ const publish=()=>{owner?.vset('calendar',{});};
  const history=createClockHandoffHistory(secureConnectionStore,()=>localStorage.getItem(clockHandoffLegacyKey));
  let snapshot:ClockHandoffSnapshot|null=null,loading=false,historyGeneration=0;
  const restore=async()=>{
@@ -43,8 +41,8 @@ export function installClockAdapter(Component:any,views:Bag,options:{simulated:b
  const retireReview=()=>{review=null;++generation;};
  const hidden=()=>{if(document.hidden)retireReview();else if(open&&!busy)void restore();};
  const mount=p.componentDidMount,unmount=p.componentWillUnmount;
- p.componentDidMount=function(){mount.call(this);owner=this;this.clockSelection=selection;void restore();window.addEventListener('alpha-back',back,true);window.addEventListener('pagehide',retireReview);document.addEventListener('visibilitychange',hidden);};
- p.componentWillUnmount=function(){if(owner===this){window.removeEventListener('alpha-back',back,true);window.removeEventListener('pagehide',retireReview);document.removeEventListener('visibilitychange',hidden);delete this.clockSelection;owner=null;open=false;review=null;++generation;}unmount.call(this);};
+ p.componentDidMount=function(){mount.call(this);owner=this;void restore();window.addEventListener('alpha-back',back,true);window.addEventListener('pagehide',retireReview);document.addEventListener('visibilitychange',hidden);};
+ p.componentWillUnmount=function(){if(owner===this){window.removeEventListener('alpha-back',back,true);window.removeEventListener('pagehide',retireReview);document.removeEventListener('visibilitychange',hidden);owner=null;open=false;review=null;++generation;}unmount.call(this);};
  const change=(fn:()=>void)=>{if(busy)return;fn();review=null;publish();};
  // One-time requests keep the original builder; a repeat uses the contract's validated builder.
  const build=():ClockRequest=>{

@@ -7,7 +7,7 @@ import { validateMapsSelectedObject } from '../maps/agent-context.ts';
 import type { ContextEnvelope } from './alpha-client';
 
 const views = new Set(['home', 'assistant', 'apps', 'maps', 'camera', 'photos', 'notes', 'calendar', 'notifications', 'reminders', 'workflows', 'files', 'inbox', 'browser', 'phone', 'messages', 'contacts', 'settings']);
-const kinds = new Set(['legacy-app-notes-source','note-source','canonical-note','canonical-calendar-event','canonical-calendar-source','legacy-app-calendar-source','legacy-app-calendar-event','note', 'document', 'photo', 'video', 'browser-tab', 'calendar-event', 'calendar-source', 'event', 'reminder', 'contact', 'email', 'file', 'workflow', 'workflow-run', 'map-place', 'map-route', 'map-search','clock-draft','folder','notification','settings','sms-subscription']);
+const kinds = new Set(['legacy-app-notes-source','note-source','canonical-note','canonical-calendar-event','canonical-calendar-source','note', 'document', 'photo', 'video', 'browser-tab', 'calendar-event', 'calendar-source', 'event', 'reminder', 'contact', 'email', 'file', 'workflow', 'workflow-run', 'map-place', 'map-route', 'map-search','folder','notification','settings','sms-subscription']);
 /** Marker for Alpha Phone's own notifications; other apps' and hosted notices never become context. */
 export const OWN_NOTIFICATION_SOURCE = 'own';
 const SETTINGS_SECTION = /^[a-z][a-z0-9-]{0,63}$/;
@@ -35,11 +35,6 @@ export function sanitizePhoneContext(input: ContextEnvelope): ContextEnvelope {
       if(selected.kind==='canonical-calendar-event'&&(typeof selected.revision!=='string'||selected.revision.length>256||!(/^(?:W\/)?"[!#-~]+"$/.test(selected.revision)||/^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/.test(selected.revision))))throw Error('Canonical Calendar provider version is unavailable');
       result.selectedObject={kind:selected.kind,id,revision:selected.revision,accountId:selected.accountId,sourceRevision:selected.sourceRevision};return result;
     }
-    if(selected.kind==='legacy-app-calendar-source'||selected.kind==='legacy-app-calendar-event'){
-      if(input.view!=='calendar'||selected.accountId!=='device-local-legacy'||selected.sourceRevision!==undefined||selected.occurrenceId!==undefined||selected.timingVersion!==undefined||typeof selected.revision!=='string'||!/^[a-f0-9]{64}$/.test(selected.revision))throw Error('Legacy Calendar observation changed');
-      result.selectedObject={kind:selected.kind,id:opaque(selected.id),revision:selected.revision,accountId:selected.accountId};return result;
-    }
-    if(selected.kind==='clock-draft'&&(input.view!=='calendar'||!selected.revision||selected.accountId!==undefined||selected.sourceRevision!==undefined||selected.occurrenceId!==undefined))throw Error('Clock context changed');
     if(selected.kind==='folder'){
       // Opaque Files tree identity plus listing revision; never a path or display name.
       if(input.view!=='files'||selected.revision===undefined||selected.accountId!==undefined||selected.sourceRevision!==undefined||selected.occurrenceId!==undefined||selected.id.length>128||selected.revision.length>128)throw new Error('The folder observation is no longer current.');
