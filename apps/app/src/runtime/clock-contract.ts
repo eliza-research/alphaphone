@@ -1,82 +1,33 @@
 /** Android Clock intent handoffs only: never evidence that an alarm exists or rang. */
-export const CLOCK_CAPABILITY = "clock.handoff.v1";
-export type ClockOperation =
-  | {
-      type: "clock_handoff";
-      action: "set";
-      hour: number;
-      minute: number;
-      label: string;
-      timeZone: string;
-      /** Repeat days for AlarmClock.EXTRA_DAYS: java.util.Calendar values, Sunday=1 … Saturday=7. */
-      days?: ClockDay[];
-    }
-  | { type: "clock_handoff"; action: "snooze"; snoozeMinutes: number }
-  | { type: "clock_handoff"; action: "show" | "dismiss" };
-export interface ClockResult {
-  kind: "clock-handoff";
-  action: ClockOperation["action"];
-  status: "opened" | "unavailable" | "denied" | "failed" | "unknown";
-}
-function object(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw Error("Invalid Clock object");
-  return value as Record<string, unknown>;
-}
-function keys(value: Record<string, unknown>, required: string[]) {
-  if (
-    Object.keys(value).length !== required.length ||
-    required.some((key) => !Object.hasOwn(value, key))
-  )
-    throw Error("Unexpected Clock fields");
-}
-function integer(value: unknown, min: number, max: number): number {
-  if (
-    typeof value !== "number" ||
-    !Number.isInteger(value) ||
-    value < min ||
-    value > max
-  )
-    throw Error("Invalid Clock number");
-  return value;
-}
-export type ClockDay = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+import {
+  assertClockObservation as upstreamAssertClockObservation,
+  clockDays as upstreamClockDays,
+  clockTimeZone,
+  validateClockOperation as upstreamValidateClockOperation,
+  validateClockResult as upstreamValidateClockResult,
+  type ClockDay,
+  type ClockHandoffOperation as ClockOperation,
+  type ClockHandoffResult as ClockResult,
+} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/clock-contract.ts';
+export {CLOCK_CAPABILITY, clockTimeZone} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/clock-contract.ts';
+export type {ClockDay, ClockHandoffOperation as ClockOperation, ClockHandoffResult as ClockResult, ClockHandoffResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/clock-contract.ts';
+
 export const CLOCK_DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
-/**
- * Repeat days, reconciled with the pinned upstream contract
- * (vendor/eliza/plugins/plugin-assistant/src/services/device-actions/clock-contract.ts):
- * like upstream, any order is accepted and a repeated day is refused. The order is then
- * normalised (ascending), so review text and Clock's EXTRA_DAYS do not depend on it.
- * An empty list is refused: callers omit `days` for a one-off alarm.
- */
+/** Alpha's form omits empty repeats and sorts valid upstream days for EXTRA_DAYS. */
 export function clockDays(value: unknown): ClockDay[] {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 7)
+  try {
+    const days = upstreamClockDays(value);
+    if (days.length === 0) throw Error("Invalid Clock repeat days");
+    return days.sort((a, b) => a - b);
+  } catch {
     throw Error("Invalid Clock repeat days");
-  for (const day of value)
-    if (typeof day !== "number" || !Number.isInteger(day) || day < 1 || day > 7)
-      throw Error("Invalid Clock repeat days");
-  if (new Set(value).size !== value.length) throw Error("Invalid Clock repeat days: a day is repeated");
-  return [...value].sort((a, b) => a - b) as ClockDay[];
+  }
 }
 export function describeClockDays(days: readonly ClockDay[]): string {
   if (days.length === 7) return "every day";
   if (days.join() === "2,3,4,5,6") return "weekdays";
   if (days.join() === "1,7") return "weekends";
   return days.map((day) => CLOCK_DAY_NAMES[day - 1]).join(", ");
-}
-export function clockTimeZone(value: unknown): string {
-  if (
-    typeof value !== "string" ||
-    value.length > 100 ||
-    !/^[A-Za-z_]+(?:\/[A-Za-z0-9_+.-]+)*$/.test(value)
-  )
-    throw Error("Invalid Clock time zone");
-  try {
-    new Intl.DateTimeFormat("en", { timeZone: value }).format(0);
-  } catch {
-    throw Error("Invalid Clock time zone");
-  }
-  return value;
 }
 export function isClockOperation(value: unknown): value is ClockOperation {
   return (
@@ -86,81 +37,29 @@ export function isClockOperation(value: unknown): value is ClockOperation {
   );
 }
 export function validateClockOperation(value: unknown): ClockOperation {
-  const v = object(value);
-  if (v.type !== "clock_handoff") throw Error("Invalid Clock operation");
-  if (v.action === "set") {
-    keys(v, Object.hasOwn(v, "days") ? ["type", "action", "hour", "minute", "label", "timeZone", "days"] : ["type", "action", "hour", "minute", "label", "timeZone"]);
-    if (
-      typeof v.label !== "string" ||
-      v.label.length > 200 ||
-      /[\u0000-\u001f\u007f]/.test(v.label)
-    )
-      throw Error("Invalid Clock label");
-    return {
-      type: v.type,
-      action: v.action,
-      hour: integer(v.hour, 0, 23),
-      minute: integer(v.minute, 0, 59),
-      label: v.label,
-      timeZone: clockTimeZone(v.timeZone),
-      // Like upstream clock.handoff.v2, an operation's [] is an explicit one-off: it is
-      // normalised to an omitted `days`, so Clock never receives an empty EXTRA_DAYS.
-      ...(Object.hasOwn(v, "days") && !(Array.isArray(v.days) && v.days.length === 0) ? { days: clockDays(v.days) } : {}),
-    };
-  }
-  if (v.action === "snooze") {
-    keys(v, ["type", "action", "snoozeMinutes"]);
-    return {
-      type: v.type,
-      action: v.action,
-      snoozeMinutes: integer(v.snoozeMinutes, 1, 60),
-    };
-  }
-  keys(v, ["type", "action"]);
-  if (v.action !== "show" && v.action !== "dismiss")
-    throw Error("Invalid Clock action");
-  return { type: v.type, action: v.action };
+  const operation = upstreamValidateClockOperation(value);
+  // This renderer implements external Clock handoffs, not Eliza-owned alarms.
+  if (operation.type !== "clock_handoff") throw Error("Invalid Clock operation");
+  if (operation.action !== "set" || operation.days === undefined) return operation;
+  const {days, ...oneOff} = operation;
+  // Explicit [] remains a one-off; never send an empty EXTRA_DAYS to Clock.
+  return days.length ? {...oneOff, days: days.sort((a, b) => a - b)} : oneOff;
 }
-export function assertClockObservation(
-  operation: ClockOperation,
-  value: unknown,
-) {
-  if (operation.action !== "set") return;
-  const v = object(value);
-  if (
-    v.sensitive !== false ||
-    !Number.isSafeInteger(v.revision) ||
-    Number(v.revision) < 0 ||
-    clockTimeZone(v.timeZone) !== operation.timeZone
-  )
-    throw Error("Clock time zone observation unavailable or changed");
+export function assertClockObservation(operation: ClockOperation, value: unknown) {
+  if (!isClockOperation(operation)) throw Error("Invalid Clock operation");
+  upstreamAssertClockObservation(operation, value);
 }
 export function validateClockOutcome(
   operation: ClockOperation,
   value: unknown,
   outcome: unknown,
 ): ClockResult {
-  const v = object(value);
-  keys(v, ["kind", "action", "status"]);
-  if (v.kind !== "clock-handoff" || v.action !== operation.action)
-    throw Error("Clock result binding changed");
-  const valid =
-    outcome === "applied"
-      ? v.status === "opened"
-      : outcome === "unknown"
-        ? v.status === "unknown"
-        : outcome === "failed" || outcome === "not_applied"
-          ? ["unavailable", "denied", "failed"].includes(String(v.status))
-          : false;
-  if (!valid) throw Error("Clock result cannot establish this outcome");
-  return {
-    kind: v.kind,
-    action: operation.action,
-    status: v.status as ClockResult["status"],
-  };
+  if (!isClockOperation(operation)) throw Error("Invalid Clock operation");
+  const result = upstreamValidateClockResult(operation, value, outcome);
+  if (result.kind !== "clock-handoff") throw Error("Clock result binding changed");
+  return result;
 }
 
-export type ClockHandoffResult = ClockResult;
 export function currentClockTimeZone(): string {
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   // Newer Android ICU/WebView reports the GMT default as an ISO zero offset.

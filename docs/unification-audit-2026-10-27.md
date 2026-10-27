@@ -38,6 +38,29 @@ This report precedes implementation. It is based on direct source inspection, no
 
 The goal is incomplete while either app retains a separate behavioral implementation, the native profile uses a second local-model stack, or Pixel 10a is not a common upstream target. Full completion also needs real native speech/context performance measurements, both Android distributions, full image boot and device/user acceptance. Missing credentials, qualified model inputs, signing or device access must be recorded as unavailable evidence; they cannot be replaced with synthetic success.
 
+## Implementation ledger
+
+The following changes are reviewed and merged upstream. Alpha's current candidate pin is `2d1d8797bc185cf6fe9d29c1ed7d5db4c8cae82a`; this is an implementation checkpoint, not completion of the migration.
+
+| Upstream PR | Result |
+| --- | --- |
+| [#37627](https://github.com/elizaOS/eliza/pull/37627) | Reviewed native Google-auth backport merged to `main`; no deployment was performed. |
+| [#37899](https://github.com/elizaOS/eliza/pull/37899) | Shared native inference session exposes streaming capability without loading models and the actual speech sample rate. |
+| [#37893](https://github.com/elizaOS/eliza/pull/37893) | Canonical nonretryable effect-receipt handling, including nested failure metadata. |
+| [#37901](https://github.com/elizaOS/eliza/pull/37901) | Browser-safe realtime voice client and narrow logger/context/type exports, removing Alpha's private source rewriting for voice. |
+| [#37902](https://github.com/elizaOS/eliza/pull/37902) | Shared Notes controller, editor and monotonic snapshot state; Alpha now consumes these implementations. |
+| [#37903](https://github.com/elizaOS/eliza/pull/37903) | Explicit native speech preparation and passive loaded-state reporting, including cancellation during initial model loading. |
+| [#37895](https://github.com/elizaOS/eliza/pull/37895) | Optional reminder profile companions, preserving explicit profile selection. |
+| [#37904](https://github.com/elizaOS/eliza/pull/37904) | Removed a duplicate camera action-schema branch: assembled prompts shrink by 139 bytes without changing the remaining prompt. |
+
+Alpha's stacked [#625](https://github.com/AlphaCompute/alphaphone/pull/625) consumes these APIs, uses the shared PCM encoder and Clock handoff validator/executor, and refuses silent Cloud embedding fallback when the native profile lacks local embedding assets. Clock remains an external handoff until the common native alarm implementation and its acceptance tests are migrated; reusing its contract does not establish that an alarm was scheduled.
+
+At the preceding implementation checkpoint, 54 focused tests, five actual Chromium browser tests, TypeScript, the production build and its 419-file mock-exclusion audit passed. Six Clock contract/native tests also passed after the subsequent Clock consolidation. Full verification and strict Android packaging must be rerun at the final candidate pin; interrupted or failed runs are not passing evidence. Model assets are packaged with `qualified:false`, and no physical voice or image acceptance is claimed.
+
+Work in progress is the shared editable Notes interface and opt-in upstream Pixel 10a source target/verification. The larger shell, account/transport/context composition, native services and common image policy remain open. The independent domain audits below remain historical findings, rather than claims that their listed work is complete.
+
+Two audit clarifications matter for migration: Alpha's Older notes source is writable, with encrypted edits, recording and Trash support; preserve that functionality when introducing the shared interface. The currently integrated Pixel source record has `developmentOnly:false` and `releaseQualified:false`; its exact 1,715,781-byte inventory hash is `760a7184c62c93aeac40595cf5733f8089aa16ccd28eb7a5f5ce41d4dae741d3`. Source provenance does not establish signing, boot or device qualification.
+
 
 ---
 
