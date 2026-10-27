@@ -47,7 +47,7 @@ export class AssistantDraftController {
     if(current!==restored){
      if(!sending&&b.record&&b.record.text!==current){b.failed=true;this.publish({opening:false,conflict:true,savedText:b.record.text,message:'A saved draft is available. Review both copies.'});return;}
      b.last=restored;this.publish({opening:false,message:''});this.edit(current);
-    }else this.publish({opening:false,message:restored?'Draft restored locally. Review before sending.':''});
+    }else this.publish({opening:false,message:''});
    }
   }catch{if(this.active===b){b.failed=true;this.publish({opening:false,conflict:false,error:true,message:'Local draft could not be read. Your current text is retained.'});}}
  }
@@ -103,7 +103,7 @@ export class AssistantDraftController {
    if(b.failed)return;
    const current=this.active===b,remaining=current?this.text():'';
    try{
-    b.record=await b.store!.save(b.record,remaining);if(current){b.last=remaining;if(remaining)this.publish({message:'Draft saved locally.'});}
+    b.record=await b.store!.save(b.record,remaining);if(this.active===b&&this.text()===remaining){b.last=remaining;this.publish({message:remaining?'Draft saved locally.':''});}
     // A reopened binding for the same conversation shares this receipt.
     const peer=held.peer;if(peer&&this.active===peer&&!peer.failed){peer.record=b.record;}
    }

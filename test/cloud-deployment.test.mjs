@@ -92,7 +92,7 @@ test('custom deployment reaches native inference configuration and Google transp
  try{
   write('package.json','{"type":"module"}');
   for(const [name,text] of Object.entries(deploymentOutputs(config)))write(name,text);
-  for(const name of ['backend/managed-google-route-policy.ts','backend/native-google-cloud-port.ts','backend/native-cloud-runtime-config.ts','apps/app/src/runtime/managed-service-routes.ts'])write(name,fs.readFileSync(name,'utf8'));
+  for(const name of ['backend/managed-google-failure-stage.ts','backend/managed-google-route-policy.ts','backend/native-google-cloud-port.ts','backend/native-cloud-runtime-config.ts','apps/app/src/runtime/managed-service-routes.ts'])write(name,fs.readFileSync(name,'utf8'));
   write('vendor/eliza/packages/agent/src/config/config.ts','export const config={cloud:{apiKey:"stale-synthetic"}}; export function loadElizaConfig(){return config;} export function saveElizaConfig(value){Object.assign(config,value);}');
   write('vendor/eliza/packages/host/src/contracts/service-routing.ts','export function buildElizaCloudServiceRoute(options={}){return options;}');
   write('vendor/eliza/plugins/plugin-native-inference/src/model-catalog/routing-preferences.ts','export async function updateRoutingPreferences(update){update({});}');

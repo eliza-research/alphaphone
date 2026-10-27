@@ -1,3 +1,4 @@
+import {reminderDeliveryLabel,reminderDue} from "../../../../.eliza/client-features/packages/ui/src/utils/reminder-presentation";
 import {formatSchedule} from '../../../../.eliza/client-features/packages/ui/src/utils/cron-format.ts';
 /** Alpha presentation over OG's canonical automation, ScheduledTask and LifeOps contracts.
  * No runner, mirroring, task storage or automatic execution lives in this client. */
@@ -61,7 +62,8 @@ function scheduled(value:unknown):AutomationRow {
 }
 function reminder(value:unknown):AutomationRow {
  const row=object(value),definition=object(row.definition),id=automationId(definition.id),occurrence=row.occurrence?object(row.occurrence):null;
- return {key:'reminder:'+id,id,kind:'reminder',title:text(definition.title)||'Reminder',description:text(definition.description),status:text(definition.status),enabled:definition.status==='active',source:'Agent reminder',schedule:schedule(definition.cadence),record:row,...(occurrence?{occurrenceId:automationId(occurrence.id)}:{})};
+ const presentation={definition:row.definition,occurrence:row.occurrence??null,latestAttempt:row.latestAttempt??null},due=reminderDue(presentation);
+ return {key:'reminder:'+id,id,kind:'reminder',title:text(definition.title)||'Reminder',description:text(definition.description),status:reminderDeliveryLabel(presentation),enabled:definition.status==='active',source:'Agent reminder',schedule:due?new Date(due).toLocaleString(undefined,{timeZone:definition.timezone,year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'No upcoming occurrence',record:row,...(occurrence?{occurrenceId:automationId(occurrence.id)}:{})};
 }
 export function automationIssue(source:AutomationIssue['source'],error:unknown):AutomationIssue {
  const status=error&&typeof error==='object'&&'status' in error?Number(error.status):0;
@@ -111,7 +113,7 @@ export class AutomationsProtocol {
  }
  async editReminder(row:AutomationRow,message:string,due:string,signal:AbortSignal){
   if(row.kind!=='reminder'||!message.trim())throw Error('Add a reminder message.');const definition=object(row.record.definition),payload:ObjectValue=definition.cadence?.kind==='once'&&definition.metadata?.ownerSurface==='OWNER_REMINDERS'&&text(definition.description).trim()?{description:message.trim()}:{title:message.trim()};
-  if(definition.cadence?.kind==='once'&&due&&due!==automationLocalDateInput(definition.cadence.dueAt)){const date=localDate(due);if(date.getTime()<=Date.now())throw Error('Choose a future time.');payload.cadence={...definition.cadence,dueAt:date.toISOString()};}
+  if(definition.cadence?.kind==='once'&&due&&due!==automationLocalDateInput(reminderDue({definition:row.record.definition,occurrence:row.record.occurrence??null,latestAttempt:row.record.latestAttempt??null})||definition.cadence.dueAt)){const date=localDate(due);if(date.getTime()<=Date.now())throw Error('Choose a future time.');payload.cadence={...definition.cadence,dueAt:date.toISOString()};}
   const result=object(await this.request('/api/lifeops/definitions/'+automationId(row.id),'PUT',payload,signal)),saved=object(result.definition);if(saved.id!==row.id||Object.entries(payload).some(([field,value])=>field!=='cadence'&&saved[field]!==value)||(payload.cadence&&saved.cadence?.dueAt!==payload.cadence.dueAt))throw Error('Reminder edit was not confirmed.');
  }
  async cancelReminder(id:string,signal:AbortSignal){const definition=object(object(await this.request('/api/lifeops/definitions/'+automationId(id),'PUT',{status:'archived'},signal)).definition);if(definition.id!==id||definition.status!=='archived')throw Error('Reminder cancellation was not confirmed.');}

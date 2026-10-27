@@ -603,3 +603,13 @@ test('legacy profile credentials cannot authenticate the configured deployment',
   assert.equal(result.status,401);assert.equal(f.calls.length,0);
  }finally{await f.close();}
 });
+
+test('public signing keys do not read or forward account credentials',async()=>{
+ const key={kty:'EC',crv:'P-256',kid:'public-only',x:'test-public-x',y:'test-public-y'};let requests=0;
+ const client=new CloudProtocol('production',async input=>{
+  requests++;assert.equal(new URL(input.url).pathname,'/api/v1/subscription/entitlement-keys');
+  assert.equal(input.headers.Authorization,undefined);assert.equal(input.credentialReference,undefined);
+  return {status:200,data:{keys:[key]}};
+ },{read:async()=>{throw Error('Public key lookup must not read account storage');},write:async()=>{},clear:async()=>{}},async()=>{});
+ assert.deepEqual(await client.subscriptionEntitlementKeys(new AbortController().signal),[key]);assert.equal(requests,1);
+});

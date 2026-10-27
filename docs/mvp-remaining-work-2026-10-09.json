@@ -1673,5 +1673,6 @@
     "source": "Owner answers to all 32 decision issues",
     "plan": "docs/owner-approved-mvp-plan-2026-10-12.md",
     "meaning": "Choices resolved; remaining work is implementation/qualification, not new owner scope decisions. Historical current fields retained as observations only."
-  }
+  },
+  "ledger_refresh_2026_10_26": "Source identity only; fixed19bd/349 producer, installed877a separate. No requirement/item status changed."
 }

@@ -92,7 +92,7 @@ public final class CloudSignInFlowTest {
   check(!pending.matches(mine, pending.expiresAt), "expired record never matches");
   check(!pending.matches(null, now), "no return");
   check(pending.sameState(mine) && !pending.sameState(other) && !pending.sameState(CloudSignInFlow.Callback.NO_RESULT), "state compared before anything is burned; a return without a result has no state");
-  check(CloudSignInFlow.MAX_VERIFY_ATTEMPTS == 5 && CloudSignInFlow.RESEND_COOLDOWN_MS == 60_000L, "verify cap and send cooldown");
+  check(CloudSignInFlow.MAX_VERIFY_ATTEMPTS == 5 && CloudSignInFlow.RESEND_COOLDOWN_MS == 30_000L, "verify cap and send cooldown");
   CloudSignInFlow.Pending restored = CloudSignInFlow.Pending.parse(pending.serialize(), false);
   check(restored != null && restored.state.equals(pending.state) && restored.verifier.equals(pending.verifier) && restored.expiresAt == pending.expiresAt && restored.environment == production, "encrypted-at-rest round trip");
   check(CloudSignInFlow.Pending.parse(CloudSignInFlow.Pending.create(staging, now).serialize(), false) == null, "a staging record is refused by a product build");
@@ -182,7 +182,7 @@ public final class CloudSignInFlowTest {
   CloudSignInReadiness.Result googleOnly = new CloudSignInReadiness.Result(false, true, false, t + 1000);
   check(googleOnly.inApp && googleOnly.google && !googleOnly.email, "Google does not depend on email");
   check(CloudSignInReadiness.Result.parse("v2|true|true|1800000001000") == null, "old cache must re-probe SMS policy");
-  check(CloudSignInReadiness.Result.parse("v3|true|true|yes|true|1800000001000") == null, "malformed method flag refused");
+  check(CloudSignInReadiness.Result.parse("v4-native-google|true|true|yes|true|1800000001000") == null, "malformed method flag refused");
   check(!new CloudSignInReadiness.Result(true, true, t + 365L * 86400000L).fresh(t), "a cache entry from the future is not trusted");
   check(MessageDigest.isEqual("a".getBytes(StandardCharsets.US_ASCII), "a".getBytes(StandardCharsets.US_ASCII)), "jdk");
   System.out.println("PASS cloud sign-in flow (" + checks + " checks)");

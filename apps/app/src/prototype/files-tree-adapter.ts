@@ -131,7 +131,12 @@ export function installFilesTreeAdapter(views:Bag,accept:(module:string,result:N
    if(wasPreview){clearSelected();selected=undefined;api?.set({open:null});}
    let target=folder.id;
    if(request.kind==='delete'&&entry?.id===folder.id)target=folder.parentId!;
-   apply(await tree.list({id:target}));
+   const refreshed=await tree.list({id:target});
+   if(value.status==='renamed'&&entry&&refreshed.status==='ready'){
+    const changed=[refreshed.folder,...(refreshed.entries||[])].find(row=>row?.id===entry.id);
+    if(changed)filesIndex.renameTree(changed.id,changed.name);
+   }
+   apply(refreshed);
   }catch(error){request.error=error instanceof Error?error.message:'Refresh the folder and try again.';api?.toast(request.error);}
   finally{busy=false;repaint();}
  }

@@ -7,7 +7,7 @@ import { reviewOpaqueAttachment, type OpaqueMailAttachment } from './inbox-opera
 import { gmailCapabilitiesFor } from './gmail-grants.ts';
 import type { CloudMapsRoute } from '../maps/cloud-provider.ts';
 import { authenticated as signInAuthenticated, googleOutcome, type CloudSignInGoogleOutcome, CloudSignInError, emailStarted, verified as signInVerified, type CloudSignInAuthenticated, type CloudSignInEmailStarted, type CloudSignInMfaRequired, type CloudSignInPort } from './cloud-sign-in.ts';
-import { BILLING_LIMITS_PATH, ENTITLEMENT_KEYS_PATH, ENTITLEMENT_PATH, REDEEM_PATH, fallbackPlanFromLimits, normalizeSubscriptionCode, readServiceLimit, SubscriptionRedeemError, type EntitlementSource, type FallbackPlan, type RedeemResult } from './subscription-entitlement.ts';
+import { BILLING_LIMITS_PATH, ENTITLEMENT_KEYS_PATH, ENTITLEMENT_PATH, REDEEM_PATH, fallbackPlanFromLimits, membershipCreditDetailsFromLimits, type MembershipCreditDetails, normalizeSubscriptionCode, readServiceLimit, SubscriptionRedeemError, type EntitlementSource, type FallbackPlan, type RedeemResult } from './subscription-entitlement.ts';
 /** Narrow Alpha adapter for Eliza Cloud managed services: sign-in, identity, subscription plan and
  * the connected Google services. Sign-in is in-app (cloud-sign-in.ts) once the native host reports
  * Cloud ready for this phone: the host signs in with Steward and mints an `eliza_mobile_` key through
@@ -261,6 +261,21 @@ export class CloudProtocol {
     if (data.success !== true) return null;
     return fallbackPlanFromLimits(data);
   }
+  /** Read-only UI eligibility, bound to the current credential. Never grants spending authority. */
+  async membershipBalance(signal: AbortSignal): Promise<'zero' | 'funded' | 'unavailable'> {
+    return (await this.membershipCredits(signal)).state;
+  }
+  async membershipCredits(signal:AbortSignal):Promise<MembershipCreditDetails> {
+    signal.throwIfAborted();
+    const credential=await this.credentials.read(this.environment);signal.throwIfAborted();
+    if(!credential?.credentialId)throw new CloudProtocolError('credentials-missing');
+    const binding=JSON.stringify([credential.credentialId,credential.credentialReference,credential.token,credential.userId,credential.organizationId]);
+    const payload=await this.call(BILLING_LIMITS_PATH,signal,{authenticated:true,credentialId:credential.credentialId});
+    await this.assertSameCredential(credential.credentialId,signal);
+    const current=await this.credentials.read(this.environment);signal.throwIfAborted();
+    if(!current||JSON.stringify([current.credentialId,current.credentialReference,current.token,current.userId,current.organizationId])!==binding)throw new CloudProtocolError('account-changed');
+    return membershipCreditDetailsFromLimits(payload);
+  }
   /**
    * Redeems a subscription grant code for the signed-in account. `idempotencyKey` is fresh for
    * each owner submission; a transport failure (the request may have arrived) is retried once
@@ -472,7 +487,7 @@ export class CloudProtocol {
     if (credential.expiresAt !== undefined && credential.expiresAt <= Date.now()) throw new CloudProtocolError("expired");
     return outcome;
   }
-  /** Google through a verified App Link: request native MFA, or finish after the key is stored. */
+  /** Google through the native account picker: request native MFA, or finish after the key is stored. */
   async signInWithGoogle(signal: AbortSignal): Promise<CloudSignInGoogleOutcome> {
     const outcome = await this.signInStep(signal, port => port.startGoogle({ environment: this.environment }), value => googleOutcome(value, this.environment));
     return outcome.status === "mfa" ? outcome : this.storedSignIn(outcome, signal);
@@ -510,7 +525,10 @@ export class CloudProtocol {
     signal.throwIfAborted();
     if (expected !== undefined && !sameCloudCredential(credential, expected)) throw new Error("Cloud account changed");
     if (!credential) return { supported: false, reason: "no-credential" };
-    return this.revokeStored(credential, signal);
+    try { return await this.revokeStored(credential, signal); }
+    finally {
+      if (!await this.credentials.read(this.environment)) await this.options.signIn?.clearCredentialState?.().catch(() => {});
+    }
   }
   /** One revocation of the saved key a new login is about to replace. Never retried or thrown. */
   private async revokeReplaced(signal: AbortSignal, issued: CloudCredential): Promise<"revoked" | "unconfirmed" | undefined> {

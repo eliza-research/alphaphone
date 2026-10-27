@@ -12,8 +12,6 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import androidx.browser.customtabs.CustomTabsClient;
-import androidx.browser.customtabs.CustomTabsIntent;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -42,7 +40,7 @@ import org.json.JSONTokener;
 
 /**
  * In-app Eliza Cloud sign-in (owner directive 2026-10-14). Native screens collect an email code or
- * open Google's consent in a Custom Tab; no Eliza Cloud web page is part of a successful sign-in.
+ * use Android's Google account picker; no Eliza Cloud web page is part of a successful sign-in.
  * Every secret-bearing request (Steward code exchange or email/MFA verification, mobile App Auth
  * connect, token and ack, Steward logout) is made here with fixed URLs (CloudSignInFlow,
  * CloudEmailCode, ConnectionRoutes). The Steward session, refresh token, authorization codes and
@@ -58,7 +56,7 @@ import org.json.JSONTokener;
  *
  * Readiness: status() reports `inApp` only after CloudSignInReadiness confirms Cloud is ready for this
  * phone (cached). Email stays in Alpha even if this probe fails. Returns follow the shared
- * callback contract (CloudSignInFlow.parseCallback). Nothing here logs URLs, codes, headers or bodies.
+ * callback contract (CloudSignInFlow.parseCallback). Native Google diagnostics contain only bounded stage/status/timing, never URLs, codes, headers or bodies.
  */
 @CapacitorPlugin(name = "AlphaCloudSignIn")
 public final class AlphaCloudSignInPlugin extends Plugin {
@@ -78,10 +76,13 @@ public final class AlphaCloudSignInPlugin extends Plugin {
  /** The one sign-in in progress. One at a time (the renderer's `login-active` rule). */
  private static final class Attempt {
   final String id = UUID.randomUUID().toString();
+  final long startedAt = System.currentTimeMillis();
   final CloudSignInFlow.Environment environment;
   final boolean google;
   volatile boolean cancelled, browserLaunched, browserPaused, callbackReceived;
   volatile HttpURLConnection connection;
+  volatile android.os.CancellationSignal googleCancellation;
+  String googleVerifier, googleChallengeId;
   PluginCall waiting;
   volatile CountDownLatch authorizationDecision;
   volatile boolean authorized;
@@ -90,11 +91,12 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   int failedVerifies;
   boolean busy;
   Attempt(CloudSignInFlow.Environment environment, boolean google) { this.environment = environment; this.google = google; }
-  void cancel() { cancelled = true; CountDownLatch decision = authorizationDecision; if (decision != null) decision.countDown(); HttpURLConnection current = connection; if (current != null) current.disconnect(); }
+  void cancel() { cancelled = true; CountDownLatch decision = authorizationDecision; if (decision != null) decision.countDown(); android.os.CancellationSignal picker = googleCancellation; if (picker != null) picker.cancel(); googleVerifier = null; googleChallengeId = null; HttpURLConnection current = connection; if (current != null) current.disconnect(); }
  }
  private static final class Response {
-  final int status; final JSONObject data; final String location;
-  Response(int status, JSONObject data, String location) { this.status = status; this.data = data; this.location = location; }
+  final int status; final JSONObject data; final String location, retryAfter;
+  Response(int status, JSONObject data, String location) { this(status, data, location, null); }
+  Response(int status, JSONObject data, String location, String retryAfter) { this.status = status; this.data = data; this.location = location; this.retryAfter = retryAfter; }
  }
  private final Object lock = new Object();
  private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -104,8 +106,8 @@ public final class AlphaCloudSignInPlugin extends Plugin {
  private final Map<CloudSignInFlow.Environment, CloudSignInReadiness.Result> readiness = new EnumMap<>(CloudSignInFlow.Environment.class);
  private final Map<CloudSignInFlow.Environment, List<PluginCall>> probing = new EnumMap<>(CloudSignInFlow.Environment.class);
  private Attempt attempt;
- /** Global code-send cooldown: one send a minute from this phone, whatever the address. */
- private long lastEmailSendAt;
+ /** Global code-send cooldown, including any longer deadline supplied by Cloud. */
+ private long lastEmailSendAt, emailSendAllowedAt;
  private volatile boolean destroyed;
  private boolean testMocks() { return BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS; }
 
@@ -117,7 +119,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   captureCallback(getActivity().getIntent());
   run(this::resumeAcknowledgements);
   // Warm the cached readiness answer so opening sign-in rarely waits for it.
-  probe(CloudSignInFlow.Environment.PRODUCTION, null);
+  probe(CloudSignInFlow.Environment.PRODUCTION, null, false);
  }
  @Override protected void handleOnNewIntent(Intent intent) { super.handleOnNewIntent(intent); captureCallback(intent); }
  @Override protected void handleOnPause() { synchronized (lock) { if (attempt != null && attempt.google && attempt.browserLaunched) attempt.browserPaused = true; } super.handleOnPause(); }
@@ -173,7 +175,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   final CloudSignInFlow.Environment environment;
   try { environment = CloudSignInFlow.environment(call.getString("environment", "production"), testMocks()); }
   catch (Exception invalid) { call.reject("Unsupported Cloud environment", "invalid-request"); return; }
-  probe(environment, call);
+  probe(environment, call, Boolean.TRUE.equals(call.getBoolean("refreshNegative", false)));
  }
  private JSObject statusOutcome(CloudSignInReadiness.Result result) {
   synchronized (lock) {
@@ -182,14 +184,15 @@ public final class AlphaCloudSignInPlugin extends Plugin {
    return out.put("methodsKnown", result.methodsKnown).put("inApp", result.inApp).put("email", result.email).put("phone", result.phone).put("google", result.google);
   }
  }
- /** Answers from the cache when fresh; otherwise one probe per environment runs and answers every waiting call. */
- private void probe(CloudSignInFlow.Environment environment, PluginCall call) {
+ /** Fresh positive readiness stays cached. An explicit Retry remeasures negative/partial
+  * readiness through the same full probe; concurrent callers still join one probe per environment. */
+ private void probe(CloudSignInFlow.Environment environment, PluginCall call, boolean refreshNegative) {
   long now = System.currentTimeMillis();
   CloudSignInReadiness.Result cached;
   synchronized (lock) {
    cached = readiness.get(environment);
    if (cached == null) { cached = storedReadiness(environment); if (cached != null) readiness.put(environment, cached); }
-   if (cached != null && cached.fresh(now)) { if (call != null) call.resolve(statusOutcome(cached)); return; }
+   if (cached != null && cached.fresh(now) && (!refreshNegative || cached.inApp && cached.google)) { if (call != null) call.resolve(statusOutcome(cached)); return; }
    List<PluginCall> waiting = probing.get(environment);
    if (waiting != null) { if (call != null) waiting.add(call); return; }
    waiting = new ArrayList<>(); if (call != null) waiting.add(call); probing.put(environment, waiting);
@@ -241,19 +244,10 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   boolean phoneOffered = CloudSmsCode.offered(providers.status, providers.data.opt("sms"), captcha == null ? null : captcha.opt("enabled"), requiredFor);
   // An empty object names no address, so Steward refuses it and no email is sent.
   boolean emailRoute = false;
-  if (emailOffered) try { emailRoute = CloudSignInReadiness.emailRoutePresent(probePost(environment, CloudEmailCode.SEND_PATH)); } catch (Exception unavailable) { /* Other providers remain independent. */ }
-  boolean redirectAllowed = false, assetLinks = false, deviceVerified = false;
-  if (CloudSignInReadiness.googleOffered(providers.status, providers.data.opt("google")) && appLinkVerified(environment)) {
-   // Google readiness is optional: a failed request cannot disable email.
-   try {
-    Response authorize = get(CloudSignInFlow.authorizeUrl(environment, CloudSignInFlow.s256(CloudSignInFlow.newVerifier()), CloudSignInFlow.newState()));
-    redirectAllowed = CloudSignInReadiness.redirectAllowed(authorize.status, authorize.location);
-    assetLinks = assetLinksGrant(environment);
-    deviceVerified = appLinkVerified(environment);
-   } catch (Exception unavailable) { /* Email remains available. */ }
-  }
+  if (emailOffered) try { emailRoute = CloudSignInReadiness.emailRoutePresent(probePost(environment, CloudEmailCode.SEND_PATH)); } catch (Exception unavailable) { /* Other methods remain independent. */ }
+  // Native Google verifies an ID token and does not require a browser return.
+  boolean googleReady = Boolean.TRUE.equals(providers.data.opt("googleNative"));
   boolean emailReady = emailOffered && emailRoute;
-  boolean googleReady = redirectAllowed && assetLinks && deviceVerified;
   return new CloudSignInReadiness.Result(emailReady, googleReady, phoneOffered,
    now + (emailReady || googleReady || phoneOffered ? CloudSignInReadiness.READY_TTL_MS : CloudSignInReadiness.NOT_READY_TTL_MS));
  }
@@ -306,7 +300,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   } catch (Exception unavailable) { return false; }
  }
 
- // ── Google: Authorization Code + PKCE, verified App Link return ─────────────────────────────
+ // ── Google: native Credential Manager with server-bound nonce and PKCE ────────────────────
 
  @PluginMethod public void startGoogle(PluginCall call) {
   final CloudSignInFlow.Environment environment;
@@ -317,39 +311,66 @@ public final class AlphaCloudSignInPlugin extends Plugin {
    if (attempt != null) { call.reject("Another sign-in is in progress", "login-active"); return; }
    attempt = next; next.waiting = call;
   }
-  final CloudSignInFlow.Pending pending = CloudSignInFlow.Pending.create(environment, System.currentTimeMillis());
+  next.googleVerifier = CloudSignInFlow.newVerifier();
+  next.googleCancellation = new android.os.CancellationSignal();
+  next.busy = true;
   run(() -> {
    try {
-    // Encrypted at rest before the browser opens, so a return after process death can be matched.
-    // Starting again replaces any earlier pending record (the explicit retry).
-    store().writeCredentialSlot(PENDING_SLOT, pending.serialize());
-    if (next.cancelled) throw new SignInFailure("cancelled");
-    final String url = CloudSignInFlow.authorizeUrl(environment, CloudSignInFlow.s256(pending.verifier), pending.state);
+    store().removeCredentialSlot(PENDING_SLOT);
+    Response challenge = post(next, "/steward/auth/oauth/google/native/challenge", new JSONObject()
+      .put("tenantId", environment.tenant).put("clientId", "alpha-phone")
+      .put("codeChallenge", CloudSignInFlow.s256(next.googleVerifier)).put("codeChallengeMethod", "S256"), null);
+    CloudSignInFlow.GoogleFailure challengeOutcome = observeGoogleResponse(next, CloudSignInFlow.GoogleStage.CHALLENGE, challenge);
+    if (challenge.status != 200) throw new SignInFailure(challengeOutcome.code);
+    JSONObject data = challenge.data;
+    String challengeId = data.optString("challengeId", ""), nonce = data.optString("nonce", ""), clientId = data.optString("serverClientId", "");
+    long expiresAt = instant(data.opt("expiresAt")), now = System.currentTimeMillis();
+    if (!Boolean.TRUE.equals(data.opt("ok")) || challengeId.isEmpty() || challengeId.length() > 256
+        || !nonce.matches("[A-Za-z0-9_-]{32,256}") || !clientId.matches("[0-9]+-[A-Za-z0-9_-]+\\.apps\\.googleusercontent\\.com")
+        || expiresAt <= now || expiresAt > now + CloudSignInFlow.PENDING_TTL_MS) throw new SignInFailure("unavailable");
+    synchronized (lock) {
+     if (attempt != next || next.cancelled) throw new SignInFailure("cancelled");
+     next.googleChallengeId = challengeId; next.expiresAt = expiresAt;
+    }
     getActivity().runOnUiThread(() -> {
-     synchronized (lock) { if (attempt != next || next.cancelled) return; next.browserLaunched = true; }
-     if (!openBrowser(url)) end(next, "browser-unavailable", true);
+     synchronized (lock) { if (attempt != next || next.cancelled) return; }
+     NativeGoogleCredential.request(getActivity(), clientId, nonce, next.googleCancellation, new NativeGoogleCredential.Callback() {
+      @Override public void failure(String code) { end(next, code, false); }
+      @Override public void token(String idToken) {
+       run(() -> {
+        try {
+         synchronized (lock) { if (attempt != next || next.cancelled) throw new SignInFailure("cancelled"); }
+         if (System.currentTimeMillis() >= next.expiresAt) {
+          CloudSignInFlow.GoogleFailure expired = CloudSignInFlow.googleFailure(CloudSignInFlow.GoogleStage.LOCAL_DEADLINE, 0, null, null);
+          logGoogleOutcome(next, CloudSignInFlow.GoogleStage.LOCAL_DEADLINE, 0, expired);
+          throw new SignInFailure(expired.code);
+         }
+         Response verified = post(next, "/steward/auth/oauth/google/native/verify", new JSONObject()
+           .put("tenantId", environment.tenant).put("clientId", "alpha-phone")
+           .put("challengeId", next.googleChallengeId).put("idToken", idToken).put("codeVerifier", next.googleVerifier), null);
+         next.googleVerifier = null; next.googleChallengeId = null; next.googleCancellation = null;
+         CloudSignInFlow.GoogleFailure verifyOutcome = observeGoogleResponse(next, CloudSignInFlow.GoogleStage.VERIFY, verified);
+         if (verified.status != 200) throw new SignInFailure(verifyOutcome.code);
+         JSONObject session = verified.data.optJSONObject("data") != null && !verified.data.has("token") ? verified.data.optJSONObject("data") : verified.data;
+         completeOrRequireMfa(next, session);
+        } catch (SignInFailure failure) { end(next, failure.code, false); }
+        catch (Exception unavailable) { end(next, "unavailable", false); }
+       });
+      }
+     });
     });
-   } catch (SignInFailure failure) { end(next, failure.code, true); }
-   catch (Exception storage) { end(next, "storage", true); }
+   } catch (SignInFailure failure) { end(next, failure.code, false); }
+   catch (Exception unavailable) { end(next, "unavailable", false); }
   });
  }
- /** Custom Tab in a browser that supports it, never an embedded user agent (Google refuses those); plain ACTION_VIEW otherwise. */
- private boolean openBrowser(String url) {
-  Uri uri = Uri.parse(url);
-  try {
-   String browser = CustomTabsClient.getPackageName(getContext(), null);
-   if (browser != null && !browser.equals(getContext().getPackageName())) {
-    CustomTabsIntent tab = new CustomTabsIntent.Builder().setShowTitle(true).setShareState(CustomTabsIntent.SHARE_STATE_OFF).build();
-    tab.intent.setPackage(browser);
-    tab.launchUrl(getActivity(), uri);
-    return true;
-   }
-  } catch (RuntimeException unavailable) { /* Fall through to the system browser. */ }
-  try {
-   Intent view = new Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE);
-   getActivity().startActivity(view);
-   return true;
-  } catch (RuntimeException unavailable) { return false; }
+ /** Observe only the already received native Google response; never persist provider text. */
+ private CloudSignInFlow.GoogleFailure observeGoogleResponse(Attempt current, CloudSignInFlow.GoogleStage stage, Response response) {
+  CloudSignInFlow.GoogleFailure outcome = CloudSignInFlow.googleFailure(stage, response.status, response.data.opt("ok"), response.data.opt("error"));
+  logGoogleOutcome(current, stage, response.status, outcome);
+  return outcome;
+ }
+ private void logGoogleOutcome(Attempt current, CloudSignInFlow.GoogleStage stage, int status, CloudSignInFlow.GoogleFailure outcome) {
+  android.util.Log.i("AlphaCloudSignIn", CloudSignInFlow.googleDiagnostic(stage, status, outcome, current.startedAt, current.expiresAt, System.currentTimeMillis()));
  }
  /**
   * Strict App Link capture under the shared callback contract. Only this environment's exact
@@ -436,8 +457,8 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   synchronized (lock) {
    long now = System.currentTimeMillis();
    if (attempt != null && (attempt.google || attempt.busy)) { call.reject("Another sign-in is in progress", "login-active"); return; }
-   // One send a minute from this phone, whatever the address (Steward also limits sends server-side).
-   if (now < lastEmailSendAt + CloudSignInFlow.RESEND_COOLDOWN_MS) { call.reject("Wait before requesting another code", "cooldown"); return; }
+   // The minimum applies across addresses; Cloud may require a longer wait.
+   if (now < Math.max(lastEmailSendAt + CloudSignInFlow.RESEND_COOLDOWN_MS, emailSendAllowedAt)) { call.reject("Wait before requesting another code", "cooldown"); return; }
    if (attempt != null) attempt.cancel();
    current = new Attempt(environment, false);
    current.email = email; current.emailVerifier = CloudSignInFlow.newVerifier(); current.busy = true; attempt = current;
@@ -446,12 +467,14 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   run(() -> {
    try {
     Response sent = post(current, CloudEmailCode.SEND_PATH, CloudEmailCode.sendBody(current.environment, email, current.emailVerifier), null);
-    if (sent.status != 200 && sent.status != 202) throw new SignInFailure(CloudSignInFlow.failureForStatus("send", sent.status));
     JSONObject data = sent.data.optJSONObject("data") != null ? sent.data.optJSONObject("data") : sent.data;
     long now = System.currentTimeMillis(), expiresAt = CloudEmailCode.expiresAt(data.opt("expiresAt"), now);
+    long resendAt = CloudEmailCode.resendAt(data.opt("resendAt"), sent.retryAfter, now);
+    synchronized (lock) { emailSendAllowedAt = Math.max(emailSendAllowedAt, resendAt); }
+    if (sent.status != 200 && sent.status != 202) throw new SignInFailure(CloudSignInFlow.failureForStatus("send", sent.status));
     synchronized (lock) {
      if (attempt != current || current.cancelled) throw new SignInFailure("cancelled");
-     current.expiresAt = expiresAt; current.resendAt = lastEmailSendAt + CloudSignInFlow.RESEND_COOLDOWN_MS; current.busy = false;
+     current.expiresAt = expiresAt; current.resendAt = emailSendAllowedAt; current.busy = false;
     }
     call.resolve(new JSObject().put("attemptId", current.id).put("expiresAt", expiresAt).put("resendAt", current.resendAt));
    } catch (SignInFailure failure) { release(current); refused(current.environment, failure.code); call.reject(failure.code, failure.code); }
@@ -535,7 +558,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
      : post(current, CloudEmailCode.VERIFY_PATH, CloudEmailCode.verifyBody(current.environment, current.email, code, current.emailVerifier), null);
     if (verified.status != 200) throw new SignInFailure(CloudSignInFlow.failureForStatus(mfa ? "mfa" : "verify", verified.status));
     JSONObject session = verified.data.optJSONObject("data") != null && !verified.data.has("token") ? verified.data.optJSONObject("data") : verified.data;
-    complete(current, session);
+    completeOrRequireMfa(current, session);
    } catch (SignInFailure failure) {
     if (!"invalid-code".equals(failure.code)) { end(current, failure.code, false); return; }
     // A wrong code keeps the step for a retry, up to the per-attempt cap; then the attempt ends.
@@ -557,6 +580,9 @@ public final class AlphaCloudSignInPlugin extends Plugin {
     && attempt.expiresAt > System.currentTimeMillis();
    call.resolve(new JSObject().put("active", active));
   }
+ }
+ @PluginMethod public void clearCredentialState(PluginCall call) {
+  getActivity().runOnUiThread(() -> NativeGoogleCredential.clear(getActivity(), () -> call.resolve()));
  }
 
  @PluginMethod public void cancel(PluginCall call) {
@@ -613,6 +639,26 @@ public final class AlphaCloudSignInPlugin extends Plugin {
    current.authorizationDecision = null;
    main.post(() -> { if (shown[0] != null) shown[0].dismiss(); });
   }
+ }
+ private void completeOrRequireMfa(Attempt current, JSONObject session) throws Exception {
+  if (Boolean.TRUE.equals(session.opt("mfaRequired"))) {
+   if (current.mfaType != null) throw new SignInFailure("unavailable");
+   JSONObject challenge = session.optJSONObject("mfa");
+   String type = challenge == null ? null : challenge.optString("type", null), id = challenge == null ? null : challenge.optString("challengeId", null);
+   long expiresAt = challenge == null ? 0 : instant(challenge.opt("expiresAt"));
+   if (id == null || id.isEmpty() || id.length() > 256 || expiresAt <= System.currentTimeMillis()
+       || !("totp".equals(type) || "sms".equals(type) || "passkey".equals(type))) throw new SignInFailure("unavailable");
+   PluginCall waiting;
+   synchronized (lock) {
+    if (attempt != current || current.cancelled || current.waiting == null) throw new SignInFailure("cancelled");
+    current.mfaType = type; current.mfaChallenge = id; current.failedVerifies = 0;
+    current.expiresAt = Math.min(current.expiresAt, expiresAt); current.busy = false;
+    waiting = current.waiting; current.waiting = null;
+   }
+   waiting.resolve(new JSObject().put("status", "mfa").put("attemptId", current.id).put("environment", current.environment.name).put("method", type).put("expiresAt", current.expiresAt));
+   return;
+  }
+  complete(current, session);
  }
 
  // ── Shared tail: Steward session → eliza_mobile_ key ─────────────────────────────────────────
@@ -787,7 +833,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
    catch (SignInFailure invalid) { throw invalid; }
    catch (Exception invalid) { if (fetched.status < 300) throw new SignInFailure("unavailable"); }
   }
-  return new Response(fetched.status, data, fetched.location);
+  return new Response(fetched.status, data, fetched.location, fetched.retryAfter);
  }
  private Fetched fetch(URI url, byte[] body, String bearer) throws Exception {
   return fetch(url, body, bearer, null, CloudSignInReadiness.REQUEST_TIMEOUT_MS, CloudSignInReadiness.REQUEST_TIMEOUT_MS);
@@ -813,7 +859,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
    byte[] bytes;
    try (InputStream input = status >= 400 ? connection.getErrorStream() : connection.getInputStream()) { bytes = readBounded(input); }
    if (current != null && current.cancelled) throw new SignInFailure("cancelled");
-   return new Fetched(status, new String(bytes, StandardCharsets.UTF_8), null);
+   return new Fetched(status, new String(bytes, StandardCharsets.UTF_8), null, connection.getHeaderField("Retry-After"));
   } catch (java.net.UnknownHostException | java.net.ConnectException | java.net.NoRouteToHostException offline) {
    throw new SignInFailure(current != null && current.cancelled ? "cancelled" : "offline");
   } catch (java.io.IOException transport) {
@@ -824,8 +870,9 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   }
  }
  private static final class Fetched {
-  final int status; final String body, location;
-  Fetched(int status, String body, String location) { this.status = status; this.body = body; this.location = location; }
+  final int status; final String body, location, retryAfter;
+  Fetched(int status, String body, String location) { this(status, body, location, null); }
+  Fetched(int status, String body, String location, String retryAfter) { this.status = status; this.body = body; this.location = location; this.retryAfter = retryAfter; }
  }
  private static byte[] readBounded(InputStream input) throws Exception {
   if (input == null) return new byte[0];

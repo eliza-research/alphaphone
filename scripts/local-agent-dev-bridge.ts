@@ -1,7 +1,7 @@
-import {CALENDAR_APPROVAL_READ_PATH} from '../apps/app/src/runtime/calendar-approval.ts';
+import {parseViewInteractionClientId} from "../.eliza/client-features/packages/core/src/views/view-interact-protocol.ts";
+import {ownerRouteAllowed,ownerRouteGroup} from '../apps/app/src/runtime/owner-route-policy.ts';
 import {createGmailAgentDevBroker} from './gmail-agent-dev-broker.ts';
 import {homedir} from 'node:os';
-import {automationsRouteAllowed, isAutomationsPath} from '../apps/app/src/runtime/automations-route-policy.ts';
 import {dirname,join} from 'node:path';
 import {once} from 'node:events';
 import {localAgentStorage} from './local-agent-dev-storage.ts';
@@ -50,6 +50,8 @@ function voiceControlResponse(kind:string,input:any,status:number,raw:string,ori
  return value;
 }
 export function localAgentPathAllowed(path:unknown):path is string {
+  const group=ownerRouteGroup(path);
+  if(group)return ['GET','POST','PUT','PATCH','DELETE'].some(method=>ownerRouteAllowed(group,path,method));
   if(typeof path!=='string'||path.length>2048||/[\\#%\r\n]/.test(path)||path.includes('..'))return false;
   if(/^\/api\/conversations\/[A-Za-z0-9_-]+\/messages\?/.test(path)){
     const query=new URL(path,'http://localhost').searchParams,keys=[...query.keys()];
@@ -57,8 +59,6 @@ export function localAgentPathAllowed(path:unknown):path is string {
     const before=query.get('before'),id=query.get('beforeId'),limit=query.get('limit');
     return (limit===null||/^[1-9][0-9]{0,2}$/.test(limit)&&Number(limit)<=200)&&(before===null&&id===null||before!==null&&/^[0-9]{1,16}$/.test(before)&&Number.isSafeInteger(Number(before))&&id!==null&&VOICE_AGENT_ID.test(id));
   }
-  if(isAutomationsPath(path))return ['GET','POST','PUT','DELETE'].some(method=>automationsRouteAllowed(path,method));
-  if(path===CALENDAR_APPROVAL_READ_PATH)return true;
   if(TRAJECTORY_READ.test(path))return true;
   if(path===ASR_PATH||path===ASR_PATH+'/status'||path===TTS_PATH||path===TTS_PATH+'/status')return true;
   return /^\/api\/(auth\/me|agents|status|conversations(?:\/[A-Za-z0-9_-]+(?:\/messages(?:\/(?:stream|truncate))?)?)?|views\/interact-(claim|result)|client-devices\/[A-Za-z0-9_/-]+|workflow(?:\/[A-Za-z0-9_/?=&-]+)?)$/.test(path);
@@ -95,7 +95,7 @@ export function createLocalAgentDevHandler(options:{origin:string;tokenFile:stri
   const handler=async(req:IncomingMessage,res:ServerResponse)=>{
     const fail=(status:number,message:string)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:message}));};
     const host=req.headers.host;
-    if(!host||!/^127\.0\.0\.1:\d+$/.test(host)||req.headers.origin!==`http://${host}`||
+    if(!host||!/^(?:127\.0\.0\.1|localhost):\d+$/.test(host)||req.headers.origin!==`http://${host}`||
        req.headers['x-alpha-local-agent']!=='1'||req.method!=='POST'||req.headers['content-type']!=='application/json'){
       fail(403,'Local development origin required');return;
     }
@@ -105,8 +105,9 @@ export function createLocalAgentDevHandler(options:{origin:string;tokenFile:stri
       const chunks:Buffer[]=[];let size=0;
       for await(const chunk of req){size+=chunk.length;if(size>AUDIO_ENVELOPE_LIMIT){fail(413,'Request too large');return;}chunks.push(Buffer.from(chunk));}
       const input=JSON.parse(Buffer.concat(chunks).toString('utf8'));
-      const renderer=input.path==='/api/views/voice-channel';
-      if(renderer&&(!realtimeEnabled||input.method!=='POST'||typeof input.ownerId!=='string'||typeof input.body!=='string'||Object.keys(input.headers??{}).some(key=>!['accept','content-type','x-eliza-device-id','x-eliza-device-key','x-eliza-device-capabilities'].includes(key.toLowerCase()))||input.stream||input.storage||input.audioBase64||input.requestId)){fail(400,'Invalid renderer channel request');return;}
+      const conversationRenderer=input.path==='/api/views/renderer-channel';
+      const renderer=conversationRenderer||input.path==='/api/views/voice-channel';
+      if(renderer&&((!conversationRenderer&&!realtimeEnabled)||input.method!=='POST'||typeof input.ownerId!=='string'||typeof input.body!=='string'||Object.keys(input.headers??{}).some(key=>!['accept','content-type','x-eliza-device-id','x-eliza-device-key','x-eliza-device-capabilities'].includes(key.toLowerCase()))||input.stream||input.storage||input.audioBase64||input.requestId)){fail(400,'Invalid renderer channel request');return;}
       let rendererId:string|undefined;if(renderer){const body=JSON.parse(input.body);if(!body||Object.keys(body).length!==1||!VOICE_UUID.test(body.clientId)){fail(400,'Invalid renderer identity');return;}rendererId=body.clientId;}
       const directTts=input.path===VOICE_PATH+'/read-aloud',voicePath=typeof input.path==='string'&&input.path.startsWith(VOICE_PATH)&&!directTts,voice=voicePath&&realtimeEnabled?voiceControl(input):null;
       if(voicePath&&!voice){fail(400,'Unsupported development voice request');return;}
@@ -117,12 +118,15 @@ export function createLocalAgentDevHandler(options:{origin:string;tokenFile:stri
       const speech=asr||tts,ttsAudio=(directTts||cloudTts||input.path===TTS_PATH)&&input.method==='POST';
       if(size>LIMIT&&!((cloudAsr||input.path===ASR_PATH)&&input.method==='POST')){fail(413,'Request too large');return;}
       if(input.storage){const result=localAgentStorage(join(dirname(options.tokenFile),'browser-device'),input.storage);res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(result));return;}
-      if((!renderer&&!voice&&!cloudSpeech&&!directTts&&!localAgentPathAllowed(input.path))||(isAutomationsPath(input.path)?!automationsRouteAllowed(input.path,input.method)||typeof input.ownerId!=='string'||!input.ownerId.trim():!['GET','POST'].includes(input.method))||
-         (input.path===CALENDAR_APPROVAL_READ_PATH&&(input.method!=='GET'||typeof input.ownerId!=='string'||!input.ownerId.trim()))||
+      const group=ownerRouteGroup(input.path);
+      if((!renderer&&!voice&&!cloudSpeech&&!directTts&&!localAgentPathAllowed(input.path))||(group?!ownerRouteAllowed(group,input.path,input.method)||typeof input.ownerId!=='string'||!input.ownerId.trim():!['GET','POST'].includes(input.method))||
          (TRAJECTORY_READ.test(input.path)&&(input.method!=='GET'||typeof input.ownerId!=='string'||!input.ownerId.trim()))||
          ((input.path.startsWith('/api/views/')||input.path.endsWith('/messages/truncate'))&&(input.method!=='POST'||typeof input.ownerId!=='string'||!input.ownerId.trim()))||
          (input.body!==undefined&&typeof input.body!=='string')||
          (['GET','DELETE'].includes(input.method)&&input.body!==undefined)) {fail(400,'Unsupported local request');return;}
+      const routingHeaders=Object.entries(input.headers??{}).filter(([name])=>name.toLowerCase()==='x-elizaos-client-id');
+      const routedClient=routingHeaders.length===1?parseViewInteractionClientId(routingHeaders[0][1]):undefined;
+      if(routingHeaders.length&&(routingHeaders.length!==1||!routedClient||input.method!=='POST'||!/^\/api\/conversations\/[^/?#]+\/messages(?:\/stream)?$/.test(input.path))){fail(400,'Invalid conversation renderer header');return;}
       let audio:Buffer|undefined;
       if(asr){
         if(typeof input.ownerId!=='string'||!input.ownerId||input.storage||input.stream||input.body!==undefined){fail(400,'Invalid speech request');return;}
@@ -161,6 +165,7 @@ export function createLocalAgentDevHandler(options:{origin:string;tokenFile:stri
       for(const key of ['X-Eliza-Device-Id','X-Eliza-Device-Key','X-Eliza-Device-Capabilities']){
         const value=input.headers?.[key];if(value!==undefined){if(typeof value!=='string'||value.length>2048||/[\r\n]/.test(value))throw new Error('Invalid device header');headers[key]=value;}
       }
+      if(routedClient)headers['X-ElizaOS-Client-Id']=routedClient;
       if(cloudAsr)headers['X-Eliza-STT-Provider']='cartesia';
       if(audio){headers['Content-Type']='audio/wav';headers['X-Request-Id']=input.requestId;}
       if(ttsAudio){headers['X-Request-Id']=input.requestId;headers.Accept=cloudTts?'audio/mpeg':'audio/wav';}
@@ -207,7 +212,7 @@ export function createLocalAgentDevHandler(options:{origin:string;tokenFile:stri
     const reject=()=>{socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');};
     try{
       const host=req.headers.host,url=new URL(req.url,'http://localhost'),id=url.searchParams.get('sessionId'),ticket=id?tickets.get(id):undefined;
-      if(!realtimeEnabled||!host||!/^127\.0\.0\.1:\d+$/.test(host)||req.headers.origin!==`http://${host}`||req.method!=='GET'||url.pathname!==(ticket?.clientId?LOCAL_RENDERER_WS_PATH:LOCAL_VOICE_WS_PATH)||url.search!==`?sessionId=${id}`||!id||!VOICE_UUID.test(id)||!ticket||ticket.claimed||ticket.expiresAt<=Date.now()||req.headers.upgrade?.toLowerCase()!=='websocket'||req.headers['sec-websocket-version']!=='13'||typeof req.headers['sec-websocket-key']!=='string'||!/^[A-Za-z0-9+/]{22}==$/.test(req.headers['sec-websocket-key'])){reject();return true;}
+      if((!realtimeEnabled&&!ticket?.clientId)||!host||!/^(?:127\.0\.0\.1|localhost):\d+$/.test(host)||req.headers.origin!==`http://${host}`||req.method!=='GET'||url.pathname!==(ticket?.clientId?LOCAL_RENDERER_WS_PATH:LOCAL_VOICE_WS_PATH)||url.search!==`?sessionId=${id}`||!id||!VOICE_UUID.test(id)||!ticket||ticket.claimed||ticket.expiresAt<=Date.now()||req.headers.upgrade?.toLowerCase()!=='websocket'||req.headers['sec-websocket-version']!=='13'||typeof req.headers['sec-websocket-key']!=='string'||!/^[A-Za-z0-9+/]{22}==$/.test(req.headers['sec-websocket-key'])){reject();return true;}
       const stat=statSync(options.tokenFile);if(!stat.isFile()||(stat.mode&0o077)!==0)throw Error('Private runtime credential required');
       const currentRoot=readFileSync(options.tokenFile,'utf8').trim();for(const [key,entry]of tickets)if(entry.root!==currentRoot||entry.expiresAt<=Date.now()){entry.close?.();tickets.delete(key);}
       const credential=await session(currentRoot);

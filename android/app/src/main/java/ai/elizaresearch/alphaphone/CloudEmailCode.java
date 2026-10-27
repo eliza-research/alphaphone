@@ -36,4 +36,18 @@ final class CloudEmailCode {
   if (value <= 0) return now + 10 * 60 * 1000L;
   return Math.min(value, now + 15 * 60 * 1000L);
  }
+ /** Never shorten a server resend timestamp or Retry-After header. No timer sends automatically. */
+ static long resendAt(Object reported, String retryAfter, long now) {
+  long result = now + CloudSignInFlow.RESEND_COOLDOWN_MS;
+  long timestamp = reported instanceof Number ? ((Number) reported).longValue() : 0;
+  if (reported instanceof String) try { timestamp = java.time.Instant.parse((String) reported).toEpochMilli(); } catch (Exception invalid) { /* Use the local minimum. */ }
+  result = Math.max(result, timestamp);
+  if (retryAfter != null) try {
+   String value = retryAfter.trim();
+   long deadline = value.matches("[0-9]{1,9}") ? now + Long.parseLong(value) * 1000L
+    : java.time.ZonedDateTime.parse(value, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli();
+   result = Math.max(result, deadline);
+  } catch (Exception invalid) { /* A malformed header cannot shorten the local or server deadline. */ }
+  return result;
+ }
 }

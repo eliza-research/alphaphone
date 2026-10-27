@@ -1,18 +1,23 @@
+import {subscribeNativeViewEvents,type NativeViewEventPort} from "./native-view-events";
 import {browserCloudResidentEnabled,browserResidentCall} from './browser-cloud-resident';
+import type {AppRecordMethod} from './app-record-route-policy';
 import {developmentCartesiaVoiceEnabled} from './development-cartesia-flag';
 import {parseRecoveryReview,parseRecoveryArchive} from './resident-recovery';
 import {anyAbortSignal} from './abort-signal';
 import {developmentCloudVoiceEnabled} from './development-cloud-voice';
-import {automationsRouteAllowed, isAutomationsPath, type AutomationsMethod} from './automations-route-policy.ts';
+import type {AutomationsMethod} from './automations-route-policy.ts';
+import {ownerRouteAllowed, ownerRouteGroup} from './owner-route-policy.ts';
 import { registerPlugin } from '../platform-plugins';
 import { Capacitor } from '@capacitor/core';
 import type { VerifiedSession, ChatChannel } from './alpha-client';
-import { conversationRoomId, messagePageQuery, turnAbortOutcome, turnAbortPath, type MessagePage, type RemoteChatReply, type RemoteConversation, type TurnAbortOutcome } from './remote-protocol';
+import { conversationViewHeaders, conversationRoomId, messagePageQuery, turnAbortOutcome, turnAbortPath, type MessagePage, type RemoteChatReply, type RemoteConversation, type TurnAbortOutcome } from './remote-protocol';
 import { readLocalAgentStream } from './local-agent-stream';
 import { streamNativeAgent, type NativeStreamPort } from './local-agent-native-stream';
 import { subscribeNativeVoiceEvents, type NativeVoiceEventPort } from './local-agent-native-events';
 
+export type LocalAgentMethod = AutomationsMethod | AppRecordMethod;
 export interface LocalAgentBridge {
+  subscribeConversationEvents?(ownerId:string,listener:(envelope:unknown)=>void,onState:(state:"connected"|"unavailable",resync:boolean)=>void):()=>void;
   subscribeVoiceEvents?(ownerId:string,listener:(envelope:unknown)=>void):()=>void;
   start(input?:{requestId:string}): Promise<unknown>;
   cancelStart?(input:{requestId:string}):Promise<unknown>;
@@ -27,17 +32,17 @@ export interface LocalAgentBridge {
   /** Read-only native query; see residentAttachable. */
   residentAttachment?(input:{credentialId?:string}):Promise<{attachable?:unknown;reason?:unknown}>;
   configureCloudProvider?(input:{credentialId:string;model:string}):Promise<unknown>;
-  request(input: { path: string; audioBase64?:string;requestId?:string;ownerId?:string; method: AutomationsMethod; headers: Record<string,string>; body?: string; timeoutMs: number }, signal?:AbortSignal): Promise<{status:number;body?:string}>;
+  request(input: { path: string; audioBase64?:string;requestId?:string;ownerId?:string; method: LocalAgentMethod; headers: Record<string,string>; body?: string; timeoutMs: number }, signal?:AbortSignal): Promise<{status:number;body?:string}>;
   stream?(input:{path:string;ownerId:string;headers:Record<string,string>;body:string},signal:AbortSignal,onText:(text:string)=>void,onReplyReady?:(results:readonly unknown[]|undefined)=>void):Promise<RemoteChatReply>;
 }
-const native = registerPlugin<Omit<LocalAgentBridge, 'subscribeVoiceEvents'> & NativeStreamPort & NativeVoiceEventPort>('Agent');
+const native = registerPlugin<Omit<LocalAgentBridge, 'subscribeVoiceEvents'> & NativeStreamPort & NativeVoiceEventPort & NativeViewEventPort>('Agent');
 // Capacitor proxies synthesize functions for unknown methods. Do not use that
 // proxy to feature-detect streaming before the native IPC adapter implements it.
 const nativeBridge:LocalAgentBridge={subscribeVoiceEvents:(ownerId,listener)=>subscribeNativeVoiceEvents(native,ownerId,listener),start:()=>native.start(),request:input=>native.request(input),stream:(input,signal,onText,onReplyReady)=>streamNativeAgent(native,input,signal,onText,onReplyReady)};
 // The host bridge at /__alpha-local-agent exists only on the development server
 // with test mocks or the explicit real Cloud resident mode. This
 // module is also imported by Node contract tests, where import.meta.env is absent.
-const developmentBridgeAllowed: boolean = browserCloudResidentEnabled || (import.meta.env !== undefined && import.meta.env.DEV === true && import.meta.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS === '1');
+const developmentBridgeAllowed: boolean = browserCloudResidentEnabled || (import.meta.env !== undefined && import.meta.env.DEV === true && (import.meta.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS === '1' || (import.meta.env.VITE_ALPHA_PRIVATE_LOCAL_PREVIEW === '1' && import.meta.env.VITE_LOCAL_AGENT === '1')));
 export const browserLocalAgentEnabled: boolean = developmentBridgeAllowed && import.meta.env.VITE_LOCAL_AGENT === '1';
 export const localAgentAvailable = () => Capacitor.isNativePlatform()
   ? Capacitor.isPluginAvailable('Agent') : browserLocalAgentEnabled;
@@ -52,6 +57,7 @@ const unavailableBridge: LocalAgentBridge = {
   async request() { throw new Error('On-device agent is unavailable here. Connect to an agent or use Cloud.'); },
 };
 const browserBridge: LocalAgentBridge | null = developmentBridgeAllowed ? {
+  subscribeConversationEvents(ownerId,listener,onState){return subscribeBrowserConversationEvents(this,ownerId,listener,onState);},
   async start() { if(browserCloudResidentEnabled)await browserResidentCall('residentStart');return { state: 'host-managed' }; },
   async stream(input,signal,onText,onReplyReady){
     const bounded=anyAbortSignal([signal,AbortSignal.timeout(120000)]);
@@ -64,10 +70,50 @@ const browserBridge: LocalAgentBridge | null = developmentBridgeAllowed ? {
       method:'POST', headers:{'Content-Type':'application/json','X-Alpha-Local-Agent':'1'},
       body:JSON.stringify(input), signal:signal ? anyAbortSignal([signal,AbortSignal.timeout(input.timeoutMs)]) : AbortSignal.timeout(input.timeoutMs), redirect:'error',
     });
-    if (!response.ok) throw new Error('Local agent development bridge unavailable. Check the development server.');
+    if (!response.ok) throw Object.assign(new Error('Local agent development bridge unavailable. Check the development server.'),{status:response.status});
     return response.json();
   },
 } : null;
+/** Passive owner conversation events over the existing authenticated renderer WS bridge.
+ * Lease renewal/reconnect carries no message sends, workflow runs or polling reads. */
+function subscribeBrowserConversationEvents(bridge:LocalAgentBridge,ownerId:string,listener:(envelope:unknown)=>void,onState:(state:'connected'|'unavailable',resync:boolean)=>void):()=>void {
+  const clientId=crypto.randomUUID(),lifecycle=new AbortController();
+  let retired=false,current:WebSocket|undefined,pending:WebSocket|undefined,timer:ReturnType<typeof setTimeout>|undefined,connecting=false,backoff=1000;
+  const clear=()=>{if(timer!==undefined)clearTimeout(timer);timer=undefined;};
+  const stop=()=>{if(retired)return;retired=true;clear();lifecycle.abort();current?.close();pending?.close();current=pending=undefined;};
+  const schedule=(delay:number)=>{if(retired)return;clear();timer=setTimeout(()=>{timer=undefined;void connect();},delay);};
+  const failed=()=>{if(retired)return;onState('unavailable',false);schedule(backoff);backoff=Math.min(30000,backoff*2);};
+  const connect=async()=>{
+    if(retired||connecting)return;connecting=true;
+    let next:WebSocket|undefined;
+    try{
+      const response=await bridge.request({path:'/api/views/renderer-channel',ownerId,method:'POST',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({clientId}),timeoutMs:15000},lifecycle.signal);
+      if(retired)return;
+      if(response.status===401||response.status===403){onState('unavailable',false);stop();return;}
+      if(response.status!==200)throw Error('Conversation channel unavailable');
+      const value=JSON.parse(response.body||'{}'),url=new URL(value.wsUrl),expiresAt=value.expiresAt;
+      if(url.protocol!=='ws:'||url.host!==location.host||url.pathname!=='/__alpha-local-renderer/ws'||typeof expiresAt!=='number'||!Number.isFinite(expiresAt)||expiresAt<=Date.now()+10000||expiresAt>Date.now()+125000)throw Error('Invalid conversation renderer lease');
+      next=new WebSocket(url);pending=next;
+      await new Promise<void>((resolve,reject)=>{
+        const socket=next!;let settled=false;
+        const finish=(error?:Error)=>{if(settled)return;settled=true;clearTimeout(deadline);lifecycle.signal.removeEventListener('abort',abort);socket.onopen=socket.onerror=socket.onclose=null;error?reject(error):resolve();};
+        const abort=()=>finish(new DOMException('Conversation channel retired','AbortError'));
+        const deadline=setTimeout(()=>finish(Error('Conversation channel timed out')),5000);
+        socket.onopen=()=>finish();socket.onerror=()=>finish(Error('Conversation channel unavailable'));socket.onclose=()=>finish(Error('Conversation channel closed'));lifecycle.signal.addEventListener('abort',abort,{once:true});if(lifecycle.signal.aborted)abort();
+      });
+      if(retired){next.close();return;}
+      const previous=current,gap=!previous||previous.readyState!==WebSocket.OPEN;current=next;pending=undefined;backoff=1000;
+      const socket=next;
+      socket.onmessage=event=>{if(retired||current!==socket||typeof event.data!=='string'||event.data.length>2*1048576)return;let value;try{value=JSON.parse(event.data);}catch{return;}if(value&&typeof value==='object'&&!Array.isArray(value)&&value.type==='proactive-message')listener(value);};
+      socket.onclose=event=>{if(retired||current!==socket)return;current=undefined;if(event.code===1008){onState('unavailable',false);stop();return;}failed();};
+      socket.onerror=()=>{if(!retired&&current===socket)socket.close();};
+      previous?.close();onState('connected',gap);schedule(expiresAt-Date.now()-10000);
+    }catch(error){next?.close();if(pending===next)pending=undefined;const status=error&&typeof error==='object'?Reflect.get(error,'status'):undefined;if(status===401||status===403||status===409){onState('unavailable',false);stop();return;}failed();}
+    finally{connecting=false;}
+  };
+  void connect();return stop;
+}
+
 function record(value:unknown):Record<string,any> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid local agent response.');
   return value as Record<string,any>;
@@ -90,6 +136,7 @@ export class LocalAgentProtocol {
   private generation = 0;
   private streams = new Set<AbortController>();
   private voiceSubscriptions = new Set<()=>void>();
+  private conversationSubscriptions = new Set<()=>void>();
   subscribeVoiceEvents(listener:(envelope:unknown)=>void):()=>void {
     const session=this.session,generation=this.generation;
     if(!session||!this.bridge.subscribeVoiceEvents)return ()=>{};
@@ -98,11 +145,27 @@ export class LocalAgentProtocol {
     const close=()=>{if(!active)return;active=false;this.voiceSubscriptions.delete(close);detach();};
     this.voiceSubscriptions.add(close);return close;
   }
+  /** Transport capability is optional; native/remote peers must implement it before claiming live updates. */
+  subscribeConversationEvents(listener:(envelope:unknown)=>void,onState:(state:'connected'|'unavailable',resync:boolean)=>void):()=>void {
+    const session=this.session,generation=this.generation;
+    if(!session||!this.bridge.subscribeConversationEvents){onState('unavailable',false);return ()=>{};}
+    let active=true;
+    const current=()=>active&&session===this.session&&generation===this.generation;
+    const detach=this.bridge.subscribeConversationEvents(session.ownerId,value=>{if(current())listener(value);},(state,resync)=>{if(current())onState(state,resync);});
+    const close=()=>{if(!active)return;active=false;this.conversationSubscriptions.delete(close);detach();};
+    this.conversationSubscriptions.add(close);return close;
+  }
+  subscribeViewEvents(clientId:string,listener:(frame:unknown)=>void,ended:()=>void){
+    const session=this.session,generation=this.generation;
+    if(!session||this.bridge!==nativeBridge)throw Error('Native renderer events unavailable');
+    return subscribeNativeViewEvents(native,session.ownerId,clientId,frame=>{if(session===this.session&&generation===this.generation)listener(frame);},ended);
+  }
   deviceHeaders:Record<string,string>={};
   constructor(private bridge:LocalAgentBridge = Capacitor.isNativePlatform() ? nativeBridge : browserBridge ?? unavailableBridge) {}
-  async request(path:string, body:unknown|undefined, signal:AbortSignal, headers:Record<string,string> = {}, method:AutomationsMethod = body===undefined?'GET':'POST'):Promise<any> {
+  async request(path:string, body:unknown|undefined, signal:AbortSignal, headers:Record<string,string> = {}, method:LocalAgentMethod = body===undefined?'GET':'POST'):Promise<any> {
     signal.throwIfAborted();
-    if (isAutomationsPath(path) ? !automationsRouteAllowed(path,method) || !this.session : !['GET','POST'].includes(method)) throw Error('Invalid local automation request');
+    const group=ownerRouteGroup(path);
+    if (group ? !ownerRouteAllowed(group,path,method) || !this.session : !['GET','POST'].includes(method)) throw Error('Invalid local app request');
     if ((method==='GET'||method==='DELETE') && body!==undefined) throw Error('Invalid local request body');
     const generation=this.generation;
     let cancel:()=>void=()=>{};
@@ -222,10 +285,14 @@ export class LocalAgentProtocol {
       return new Blob([bytes],{type:'audio/wav'});
     }finally{this.streams.delete(controller);}
   }
-  async disconnect() { for(const close of this.voiceSubscriptions)close();this.voiceSubscriptions.clear();this.generation++; this.session=null; for(const controller of this.streams)controller.abort();this.streams.clear(); }
-  private async json(path:string,body:unknown|undefined,signal?:AbortSignal) {
+  async disconnect() { for(const close of this.conversationSubscriptions)close();this.conversationSubscriptions.clear();for(const close of this.voiceSubscriptions)close();this.voiceSubscriptions.clear();this.generation++; this.session=null; for(const controller of this.streams)controller.abort();this.streams.clear(); }
+  private async json(path:string,body:unknown|undefined,signal?:AbortSignal,headers:Record<string,string>={}) {
     if(!this.session)throw new Error('Start the local agent first.');
-    return record(await this.request(path,body,signal||new AbortController().signal));
+    return record(await this.request(path,body,signal||new AbortController().signal,headers));
+  }
+  async viewNavigationRequest(path:string,body:unknown,signal:AbortSignal):Promise<unknown> {
+    if(path!=="/api/views/interact-claim"&&path!=="/api/views/interact-result")throw Error("Invalid navigation route");
+    return this.json(path,body,signal);
   }
   async listConversations(signal?:AbortSignal):Promise<RemoteConversation[]> {
     const value=await this.json('/api/conversations',undefined,signal);
@@ -251,6 +318,7 @@ export class LocalAgentProtocol {
    * Stop and connection changes are never retried. */
   async send(id:string,text:string,options:{metadata?:Record<string,unknown>;clientMessageId?:string;channelType?:ChatChannel;onReplyReady?:(results:readonly unknown[]|undefined)=>void;signal?:AbortSignal;onText?:(text:string)=>void}={}):Promise<RemoteChatReply> {
     const path=`/api/conversations/${encodeURIComponent(identifier(id))}/messages`;
+    const headers=conversationViewHeaders(options.metadata);
     const body={text,channelType:options.channelType??'DM',metadata:options.metadata,clientMessageId:options.clientMessageId};
     if(this.bridge.stream&&options.onText){
       if(!this.session)throw Error('Start the local agent first.');
@@ -259,7 +327,7 @@ export class LocalAgentProtocol {
       const valid=()=>{signal.throwIfAborted();if(generation!==this.generation||session!==this.session)throw Error('Local agent connection changed.');};
       try{
         valid();
-        const result=await this.bridge.stream({path:`${path}/stream`,ownerId:session.ownerId,headers:this.deviceHeaders,
+        const result=await this.bridge.stream({path:`${path}/stream`,ownerId:session.ownerId,headers:{...this.deviceHeaders,...headers},
           body:JSON.stringify({...body,streamProtocol:'delta-v2'})},signal,value=>{valid();options.onText!(value);},results=>{valid();options.onReplyReady?.(results);});
         valid();return result;
       }catch(error){
@@ -267,12 +335,12 @@ export class LocalAgentProtocol {
         // A refusal, an undispatched stream or a terminal failure frame is the outcome: nothing is re-read.
         if(!options.clientMessageId||(error&&typeof error==='object'&&(('status' in error&&typeof error.status==='number'&&error.status<500)||'beforeDispatch' in error||'failureKind' in error)))throw error;
         this.recoveries++;
-        const recovered=await this.json(path,body,signal);valid();
+        const recovered=await this.json(path,body,signal,headers);valid();
         if(typeof recovered.text!=='string'||typeof recovered.agentName!=='string')throw new Error('Invalid local agent reply.');
         return recovered as RemoteChatReply;
       }finally{this.streams.delete(controller);}
     }
-    const value=await this.json(path,body,options.signal);
+    const value=await this.json(path,body,options.signal,headers);
     if(typeof value.text!=='string'||typeof value.agentName!=='string')throw new Error('Invalid local agent reply.');
     return value as RemoteChatReply;
   }
@@ -376,10 +444,20 @@ export async function bindResidentCloudProvider(credentialId:string,ports:{attac
   return 'configured';
 }
 
+/** The renderer has not attempted a credential bind when this stop fails.
+ * Keep the saved slot; native ownership must be resolved before another start. */
+export class LocalCloudProviderStopUnconfirmed extends Error {
+  constructor(cause:unknown) {
+    super('Local agent shutdown could not be confirmed. Your saved AI connection was kept. Check local agent status before reconnecting.',{cause});
+    this.name='LocalCloudProviderStopUnconfirmed';
+  }
+}
+
 export async function configureLocalCloudProvider(credentialId:string) {
   if(browserCloudResidentEnabled){await browserResidentCall('residentBind',credentialId);return;}
   if(!Capacitor.isNativePlatform() || !await localAgentPackaged()) throw Error('The on-device runtime is unavailable in this build.');
-  await stopLocalAgent();
+  try { await stopLocalAgent(); }
+  catch(cause) { throw new LocalCloudProviderStopUnconfirmed(cause); }
   if(!native.configureCloudProvider)throw Error('Cloud billing is unavailable in this version.');
   await native.configureCloudProvider({credentialId,model:'cerebras/qwen-3.8-27b'});
 }

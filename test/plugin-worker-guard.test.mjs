@@ -21,7 +21,7 @@ const plugins={
  AlphaDevicePlugin:['diagnosticsWorker'],
  AlphaFilesPlugin:['worker'],
  AlphaHostedResultsPlugin:['io'],
- AlphaLocalAgentPlugin:['workers','voiceWorkers'],
+ AlphaLocalAgentPlugin:['workers','voiceWorkers','rendererWorkers'],
  AlphaMailAttachmentsPlugin:['worker'],
  AlphaMapsTransportPlugin:['workers','closers','deadlines'],
  AlphaNoteAudioPlugin:['migrationWorker'],

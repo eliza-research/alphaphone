@@ -282,9 +282,9 @@ operation and result shapes and the validation of an agent's request, and
 the host app) in `packages/agent/src/api/device-action-routes.ts` at the pin. Alpha
 advertises `clock.handoff.v1`, adds `clock.handoff.v2` only on Android when the agent offers
 it and the native surface reports `clockRepeatDaysVersion` of at least 1, and never
-advertises `clock.alarms.v1`, because Alpha does not own alarms (A-11). Alpha's one
-restriction on top of upstream's shape, that a repeat-days list is never empty, is stated
-in `clock-contract.ts`.
+advertises `clock.alarms.v1`, because Alpha does not own alarms (A-11). As upstream
+defines, an explicit empty repeat-days list is a one-time alarm; `clock-contract.ts`
+normalises it to an omitted `days`, so Clock never receives an empty `EXTRA_DAYS`.
 
 `AlphaReminders` supplies the product's existing encrypted store, preference and
 channel names, receiver/Activity identities and intent routes. `DailyApps` keeps

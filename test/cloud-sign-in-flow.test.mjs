@@ -50,7 +50,7 @@ public class CloudSignInProbeTest {
  }
  Response get(String url)throws Exception{
   if(url.contains("/mobile/config?"))return new Response(registered?200:503,new JSONObject().put("success",true).put("clientId",CloudSignInFlow.CLIENT_ID).put("environment","production").put("redirectUri","https://eliza.app/alphaphone/auth/callback").put("codeChallengeMethod","S256"),null);
-  if(url.contains("/steward/auth/providers?"))return new Response(200,new JSONObject().put("email",email).put("google",google),null);
+  if(url.contains("/steward/auth/providers?"))return new Response(200,new JSONObject().put("email",email).put("google",true).put("googleNative",google),null);
   authorizeCalls++;
   if(mode.equals("timeout"))throw new java.net.SocketTimeoutException();
   return new Response(mode.equals("refused")?400:302,new JSONObject(),mode.equals("refused")?null:"https://accounts.google.com/o/oauth2/v2/auth");
@@ -66,10 +66,10 @@ public class CloudSignInProbeTest {
  public static void main(String[] args)throws Exception{
   CloudSignInProbeTest p=new CloudSignInProbeTest();p.google=false;p.check(true,false);
   if(p.authorizeCalls!=0)throw new AssertionError("disabled Google must not be probed");
-  p.google=true;p.mode="timeout";p.check(true,false);
-  p.mode="refused";p.check(true,false);
-  p.mode="ready";p.device=false;p.check(true,false);
-  p.device=true;p.dal=false;p.check(true,false);
+  p.google=true;p.mode="timeout";p.check(true,true);
+  p.mode="refused";p.check(true,true);
+  p.mode="ready";p.device=false;p.check(true,true);
+  p.device=true;p.dal=false;p.check(true,true);
   p.dal=true;p.registered=false;p.check(false,false);
   p.registered=true;p.email=false;p.check(false,true);
   p.email=true;p.check(true,true);
@@ -87,7 +87,7 @@ test('exact native email verify/connect/token/ack chain retains failures and cus
  try{
   const plugin=read(native+'AlphaCloudSignInPlugin.java');
   const methods={
-   ACTUAL_VERIFY:between(plugin,' private void verify(PluginCall call, boolean mfa)',' private void release('),
+   ACTUAL_VERIFY:between(plugin,' private void verify(PluginCall call, boolean mfa)',' private void release(')+between(plugin,' private void completeOrRequireMfa(',' // ── Shared tail:'),
    ACTUAL_RELEASE:between(plugin,' private void release(',' /** A retained MFA event'),
    ACTUAL_COMPLETE:between(plugin,' private void complete(',' /** The saved key'),
    ACTUAL_PREVIOUS_TOKEN:between(plugin,' private static String previousToken(',' /** Bounded retry'),
@@ -149,11 +149,28 @@ test('the sign-in App Link is build-gated with the delegation return; staging li
  assert.deepEqual(assetlinks[0].relation,['delegate_permission/common.handle_all_urls']);
 });
 
-test('the native sign-in client owns every secret, compares state before burning and never logs',()=>{
+test('the native sign-in client owns every secret, compares state before burning and logs only fixed Google diagnostics',()=>{
  const plugin=read(native+'AlphaCloudSignInPlugin.java');
  assert.match(read(native+'MainActivity.java'),/registerPlugin\(AlphaCloudSignInPlugin\.class\);/);
  assert.match(read(native+'RendererCredentialSlots.java'),/"cloud-signin"/,'pending and receipt slots are native-only');
- assert.doesNotMatch(plugin,/android\.util\.Log|System\.out|printStackTrace|Log\.[dewiv]\(/,'nothing is logged');
+ const diagnostic = between(plugin,' private void logGoogleOutcome(', '\n /**\n  * Strict App Link capture');
+ const diagnosticBody = diagnostic.slice(diagnostic.indexOf('{') + 1, diagnostic.lastIndexOf('}')).trim();
+ assert.equal(diagnosticBody, 'android.util.Log.i("AlphaCloudSignIn", CloudSignInFlow.googleDiagnostic(stage, status, outcome, current.startedAt, current.expiresAt, System.currentTimeMillis()));', 'the only log accepts the fixed serializer, never raw response, URL, token, headers or body');
+ assert.equal((plugin.match(/android\.util\.Log\./g)||[]).length, 1, 'one native log sink');
+ assert.equal((plugin.match(/CloudSignInFlow\.googleDiagnostic\(/g)||[]).length, 1, 'one fixed serializer call');
+ assert.doesNotMatch(plugin.replace(diagnostic, ''),/android\.util\.Log|System\.out|printStackTrace|Log\.[dewiv]\(/,'all other native sign-in logging remains forbidden');
+ const observer = between(plugin,' private CloudSignInFlow.GoogleFailure observeGoogleResponse(', ' private void logGoogleOutcome(');
+ assert.equal(observer.slice(observer.indexOf('{')+1,observer.lastIndexOf('}')).replace(/\s+/g,' ').trim(), 'CloudSignInFlow.GoogleFailure outcome = CloudSignInFlow.googleFailure(stage, response.status, response.data.opt("ok"), response.data.opt("error")); logGoogleOutcome(current, stage, response.status, outcome); return outcome;', 'provider data enters only the classifier; only classified outcome reaches logging');
+ assert.equal((plugin.match(/\blogGoogleOutcome\(/g)||[]).length, 3, 'only observer and local deadline call the single log method');
+ assert.ok(plugin.includes('logGoogleOutcome(next, CloudSignInFlow.GoogleStage.LOCAL_DEADLINE, 0, expired);'));
+ assert.ok(plugin.includes('CloudSignInFlow.GoogleFailure expired = CloudSignInFlow.googleFailure(CloudSignInFlow.GoogleStage.LOCAL_DEADLINE, 0, null, null);'));
+ const flow = read(native+'CloudSignInFlow.java');
+ assert.doesNotMatch(flow,/android\.util\.Log|System\.out|printStackTrace|Log\.[dewiv]\(/,'classification itself never logs');
+ const serializer = between(flow,' static String googleDiagnostic(', '\n /** Ack');
+ assert.doesNotMatch(serializer,/getMessage|toString|\.data|\.token|\.verifier|\.headers|\.body|\.location|\.id\b/, 'no raw provider/request fields are serialized');
+ assert.match(serializer,/status >= 100 && status <= 599/);
+ assert.match(serializer,/Math\.min\(86_400_000L/);
+ assert.match(serializer,/Math\.max\(-86_400_000L/);
  // The renderer receives only these outcome fields.
  for(const resolved of plugin.match(/\.resolve\([^;]*;/g)||[])assert.doesNotMatch(resolved,/token|secret|verifier|refresh|code"/i,resolved);
  const finish=between(plugin,'JSObject outcome = new JSObject()','finish(current, outcome);');assert.doesNotMatch(finish,/\.put\("(?:secret|token)"/);
@@ -163,9 +180,12 @@ test('the native sign-in client owns every secret, compares state before burning
  const post=between(plugin,'private Response post(Attempt current, CloudSignInFlow.Environment environment,','/** The readiness probe');
  assert.ok(post.indexOf('ConnectionRoutes.signInOrigin(')<post.indexOf('fetch(')&&post.indexOf('ConnectionRoutes.signInRoute(')<post.indexOf('fetch('));
  assert.match(between(plugin,'private Fetched fetch(URI url, byte[] body, String bearer, Attempt current','private static final class Fetched'),/setInstanceFollowRedirects\(false\)/);
- // Google: pending record encrypted before the browser opens.
- const google=between(plugin,'@PluginMethod public void startGoogle(','/** Custom Tab in a browser');
- assert.ok(google.indexOf('writeCredentialSlot(PENDING_SLOT')<google.indexOf('openBrowser(url)'));
+ // Native Google uses the platform picker with a server nonce and native token exchange.
+ const google=between(plugin,'@PluginMethod public void startGoogle(','/**\n  * Strict App Link capture');
+ assert.match(google,/NativeGoogleCredential.request/);
+ assert.match(google,/google\/native\/challenge/);
+ assert.match(google,/google\/native\/verify/);
+ assert.doesNotMatch(google,/openBrowser|authorizeUrl|writeCredentialSlot/);
  const capture=between(plugin,'private boolean captureCallback(','private void burnUnclaimedPending()');
  assert.ok(capture.indexOf('intent.setData(null)')>0&&capture.indexOf('intent.setData(null)')<capture.indexOf('run(() ->'),'the return is consumed once');
  // Contract: a return without a result keeps the pending record; a state mismatch is ignored; the
@@ -189,7 +209,7 @@ test('the native sign-in client owns every secret, compares state before burning
  assert.match(plugin,/@Override public void load\(\) \{[\s\S]*?run\(this::resumeAcknowledgements\);/,'an interrupted ack resumes on the next start');
  // Email: the code adapter, a per-attempt verify cap and a global send cooldown.
  const email=between(plugin,'@PluginMethod public void startEmail(','@PluginMethod public void verifyEmail(');
- assert.match(email,/if \(now < lastEmailSendAt \+ CloudSignInFlow\.RESEND_COOLDOWN_MS\) \{ call\.reject\("Wait before requesting another code", "cooldown"\); return; \}/);
+ assert.match(email,/if \(now < Math\.max\(lastEmailSendAt \+ CloudSignInFlow\.RESEND_COOLDOWN_MS, emailSendAllowedAt\)\) \{ call\.reject\("Wait before requesting another code", "cooldown"\); return; \}/);
  assert.match(email,/CloudEmailCode\.SEND_PATH, CloudEmailCode\.sendBody\(/);assert.doesNotMatch(plugin,/"\/steward\/auth\/email\/send"/,'no magic-link send');
  const verify=between(plugin,'private void verify(PluginCall call, boolean mfa)','private void release(');
  assert.match(verify,/CloudEmailCode\.VERIFY_PATH, CloudEmailCode\.verifyBody\(/);
@@ -225,22 +245,33 @@ test('native sign-in never falls back to hosted login when readiness fails',asyn
  }
  const plugin=read(native+'AlphaCloudSignInPlugin.java');
  const measure=between(plugin,'private CloudSignInReadiness.Result measure(','private boolean assetLinksGrant(');
- for(const part of ['/api/v1/app-auth/mobile/config','/steward/auth/providers','CloudEmailCode.SEND_PATH','CloudSignInFlow.authorizeUrl(','assetLinksGrant(environment)','appLinkVerified(environment)'])assert.ok(measure.includes(part),part);
+ for(const part of ['/api/v1/app-auth/mobile/config','/steward/auth/providers','CloudEmailCode.SEND_PATH','googleNative'])assert.ok(measure.includes(part),part);
 });
 
 // Evaluate the actual JSX prop, rather than maintaining a second sign-in view.
 test('browser resident sign-in exposes the existing hosted hand-off only in its admitted view',()=>{
  const ui=read('apps/app/src/runtime/connection-ui.tsx');
- const expression=between(ui,'      extra={','}/>\n  </div></div>;').slice('      extra={'.length);
+ const expression=between(ui,'      extra={','}/>').slice('      extra={'.length);
  const compiled=transformSync('const extra='+expression+';',{loader:'tsx',jsxFactory:'React.createElement'}).code;
- const render=new Function('React','browserCloudResidentEnabled','testMocksEnabled','snapshot','connectionController',compiled+'return extra;');
+ const render=new Function('React','browserCloudResidentEnabled','testMocksEnabled','snapshot','connectionController','productionSignInRequired','residentEnvironment',compiled+'return extra;');
  let calls=0;const controller={signInBrowser(){calls++;}};
- assert.equal(render(React,false,false,{busy:false},controller),undefined,'ordinary browser and packaged views have no extra entry');
- const browser=render(React,true,false,{busy:false},controller);
+ assert.equal(render(React,false,false,{busy:false},controller,false,()=>'production'),undefined,'ordinary browser and packaged views have no extra entry');
+ const browser=render(React,true,false,{busy:false},controller,false,()=>'production');
  assert.equal(browser.type,'button');assert.equal(browser.props.children,'Sign in with browser');assert.equal(browser.props.disabled,false);
  browser.props.onClick();assert.equal(calls,1,'dispatches the existing hosted sign-in callback');
- assert.equal(render(React,true,false,{busy:true},controller).props.disabled,true);
- assert.equal(render(React,false,true,{busy:false},controller).props.children,'Browser sign-in (diagnostic)');
+ assert.equal(render(React,true,false,{busy:true},controller,false,()=>'production').props.disabled,true);
+ assert.equal(render(React,false,true,{busy:false},controller,false,()=>'production').props.children,'Browser sign-in (diagnostic)');
+});
+
+test('native sign-in errors survive resident startup without hiding genuine startup failures', async () => {
+ const source=between(read('apps/app/src/runtime/connection-ui.tsx'),'async function ensureResident()','/** P-43: a startup path');
+ const compiled=transformSync(source,{loader:'ts'}).code;
+ const run=new Function('state','update','startResident','residentStartFailure',`const residentAlwaysPresent=true,active=null,operation=null;${compiled};return ensureResident();`);
+ for(const row of [{error:'Google sign-in failed',startup:'Agent unavailable',previous:'Earlier failure',expected:'Google sign-in failed'},{error:'Earlier failure',startup:'New startup failure',previous:'Earlier failure',expected:'New startup failure'}]){
+  const state={error:row.error,message:'',open:true,session:null};
+  await run(state,change=>Object.assign(state,change),async()=>Object.assign(state,{error:row.startup}),row.previous);
+  assert.equal(state.error,row.expected);
+ }
 });
 
 
@@ -250,7 +281,7 @@ test('the native session exchange requires Android authorization before requesti
  assert.ok(complete.indexOf('requireAuthorization(current);')>complete.indexOf('validStewardToken(token)'));
  assert.ok(complete.indexOf('requireAuthorization(current);')<complete.indexOf('"/api/v1/app-auth/connect"'));
  assert.match(complete,/finally[\s\S]*"\/steward\/auth\/logout"/);
- const gate=between(plugin,'private void requireAuthorization(Attempt current)','// ── Shared tail');
+ const gate=between(plugin,'private void requireAuthorization(Attempt current)','private void completeOrRequireMfa(');
  assert.match(gate,/new AlertDialog.Builder/);assert.match(gate,/decision.await/);
  assert.match(gate,/!current.authorized/);assert.match(gate,/current.expiresAt/);
  assert.doesNotMatch(gate,/PluginCall|call.getBoolean|writeCredentialSlot/);

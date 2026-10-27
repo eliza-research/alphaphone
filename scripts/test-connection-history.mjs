@@ -9,8 +9,10 @@ import { stripTypeScriptTypes } from 'node:module';
 import { spawnSync } from 'node:child_process';
 const cloudSignInModule = await import('../apps/app/src/runtime/cloud-sign-in.ts');
 if (!process.execArgv.includes('--experimental-transform-types')) {
-  process.exit(spawnSync(process.execPath, ['--experimental-transform-types', process.argv[1]], { stdio: 'inherit' }).status ?? 1);
+  process.exit(spawnSync(process.execPath, ['--import','tsx','--experimental-transform-types', process.argv[1]], { stdio: 'inherit' }).status ?? 1);
 }
+const {appRecordInvalidations}=await import('../apps/app/src/runtime/app-record-completion.ts');
+const {AUTOMATIONS_COMMITTED_EVENT,automationsCommitted}=await import('../apps/app/src/runtime/automation-completion.ts');
 const { cloudServiceName, CloudProtocol, CloudProvisionAcceptedError } = await import('../apps/app/src/runtime/cloud-protocol.ts');
 const { PersonalProtocolError } = await import('../apps/app/src/runtime/cloud-personal-protocol.ts');
 const { DevelopmentCloudAgentProtocol } = await import('../apps/app/src/runtime/development-cloud-agents.ts');
@@ -24,13 +26,18 @@ const user = '11111111-1111-4111-8111-111111111111', agent = '22222222-2222-4222
 const personal = 'personal:12345678-1234-5234-8234-123456789abc', agentHost = `https://${agent}.cloud.eliza.app`;
 const conversation = '33333333-3333-4333-8333-333333333333';
 const sentBodies=[];
+let registrationVersion = "unavailable";
 let credential = { token: 'synthetic-token', credentialId: 'synthetic-generation' }, historyReads = 0, sends = 0;
 const observed = phoneContextMessage('Earlier user text', { view: 'inbox', revision: 2, sensitive: false }).text;
 const server = http.createServer(async (req, res) => {
   assert.equal(req.headers.authorization, 'Bearer synthetic-token');
   let data, status = 200;
   // The personal identity is already on a running Dedicated agent; the chooser connects to it.
-  if (req.url === '/api/v1/user') data = { success: true, data: { id: user, organization_id: organization } };
+  if (registrationVersion !== 'unavailable' && req.url === '/api/client-devices/capabilities') data = {protocol:1,agentId:agent,identityId:user,externalIdentity:{subject:user,organizationId:organization,issuer:'https://login.example'},deviceActions:{protocol:1,capabilities:['calendar.local-event.v1']}};
+  else if (registrationVersion !== 'unavailable' && req.url === '/api/client-devices/register') data = {installationId:req.headers['x-eliza-device-id'],enrollmentId:'cloud-enrollment',capabilities:['calendar.local-event.v1'],viewProfileVersion:1,...(registrationVersion===undefined?{}:{userTextFormatVersion:registrationVersion})};
+  else if (registrationVersion !== 'unavailable' && req.url === '/api/client-devices/revoke') data = {revoked:true};
+  else if (req.url === '/api/v1/billing/limits') data = {success:true,data:{schemaVersion:2,v2:{balance:{status:'available',source:'organizations',observedAt:new Date().toISOString(),value:{revision:'1',balance:{unit:'usd',currency:'USD',value:'10'}}}}}};
+  else if (req.url === '/api/v1/user') data = { success: true, data: { id: user, organization_id: organization } };
   else if (req.url === '/api/v1/eliza/personal') data = { success: true, data: { identity: { id: personal, displayName: 'Fixture', runtime: 'dedicated', activeAgentId: agent, apiBase: agentHost } } };
   else if (req.url === `/api/v1/eliza/agents/${agent}`) data = { success: true, data: { id: agent, agentName: 'Fixture', status: 'running', executionTier: 'dedicated-always', webUiUrl: agentHost } };
   else if (req.url.endsWith('/api/conversations')) data = { conversations: [{ id: conversation, title: 'Saved conversation' }] };
@@ -103,10 +110,10 @@ let clockRetirements=0,heldClockRetirement=null,clockRetirementStarted=null;
 const retireClockReviews=async()=>{clockRetirements++;clockRetirementStarted?.();if(heldClockRetirement)await heldClockRetirement;};
 // This controller fixture models a host whose transport reaches Eliza Cloud. The flag-off web page
 // has none and starts no Cloud route; test/browser/connection-boundaries.production.spec.ts covers it.
-const sandbox = { browserCloudResidentEnabled:false,browserCloudResidentEnvironment:'production',...residentRecovery,CAMERA_CAPTURE_CAPABILITY:'camera.capture-photo.v1',readDevicePreferences:async()=>({askBeforeAgentActions:true}),  resolveCloudEnvironment,fixtureViteEnv:{DEV:true},...subscriptionEntitlement, ...cloudSignInModule, cloudSignIn:undefined, cloudSignInGoogle:false, AlphaClientError, browserLocalAgentEnabled:true, retireClockReviews, workflowPresentationProtocol:async()=>2, browserDevProfile:false, devProfileQuery:false, testMocksEnabled:true, devSurfacesEnabled:true, secureConnectionStore:{read:async slot=>deviceSlots.get(slot)??null,write:async(slot,value)=>{deviceSlots.set(slot,value);},remove:async slot=>{deviceSlots.delete(slot);}},
+const sandbox = { appRecordInvalidations,AUTOMATIONS_COMMITTED_EVENT,automationsCommitted, browserCloudResidentEnabled:false,browserCloudResidentEnvironment:'production',...residentRecovery,CAMERA_CAPTURE_CAPABILITY:'camera.capture-photo.v1',readDevicePreferences:async()=>({askBeforeAgentActions:true}),  resolveCloudEnvironment,fixtureViteEnv:{DEV:true},...subscriptionEntitlement, ...cloudSignInModule, cloudSignIn:undefined, cloudSignInGoogle:false, AlphaClientError, browserLocalAgentEnabled:true, retireClockReviews, workflowPresentationProtocol:async()=>2, browserDevProfile:false,privateLocalPreviewEnabled:false, devProfileQuery:false, testMocksEnabled:true, devSurfacesEnabled:true, secureConnectionStore:{read:async slot=>deviceSlots.get(slot)??null,write:async(slot,value)=>{deviceSlots.set(slot,value);},remove:async slot=>{deviceSlots.delete(slot);}},
   PersonalProtocolError, personalIntent:async()=>null, savePersonalIntent:async(_owner,intent)=>intent, clearPersonalIntent:async()=>{},
   RemoteProtocol, remoteCredentialStore, nativeRemoteRequest, DeviceActions, presentDeviceRecordOperation, actionScope:async value=>Buffer.from(value).toString('base64url').slice(0,32), negotiateEnabledViews:async()=>'',
-  Capacitor:{getPlatform:()=>'web'},aospImage:false,SMS_SEND_CAPABILITY:'sms.send.v1', setTimeout:(callback,ms)=>setTimeout(callback,ms===15000?20:ms), clearTimeout, Intl, Date, Buffer, pauseHostedBackground:async()=>{}, configureHostedBackground:async()=>{}, registerPlugin: () => ({}), cloudServiceName, CloudProtocol, DevelopmentCloudAgentProtocol, CloudProvisionAcceptedError, phoneContextMessage, findStoppedUserTurn, nativeCloudRequest,
+  Capacitor:{getPlatform:()=>'web',isNativePlatform:()=>false},aospImage:false,SMS_SEND_CAPABILITY:'sms.send.v1', setTimeout:(callback,ms)=>setTimeout(callback,ms===15000?20:ms), clearTimeout, Intl, Date, Buffer, pauseHostedBackground:async()=>{}, configureHostedBackground:async()=>{}, registerPlugin: () => ({}), cloudServiceName, CloudProtocol, DevelopmentCloudAgentProtocol, CloudProvisionAcceptedError, phoneContextMessage, findStoppedUserTurn, nativeCloudRequest,
   cloudCredentialStore: { read: async () => credential, write: async (_environment, value) => { credential = value; }, clear: async () => { credential = null; } },
   openConnectionBrowser: async () => { throw new Error('Unexpected browser effect'); },
   cloudSelfRevocationSupported:false, isAndroid: false, localStorage: { getItem: key => memory.get(key) ?? null, setItem: (key, value) => memory.set(key, value), removeItem: key => memory.delete(key) },
@@ -158,6 +165,20 @@ try {
   await assert.rejects(controller.send('Invalid zone',{view:'home',revision:3,sensitive:false,timeZone:'Not/A_Zone'},'invalid-zone',new AbortController().signal));
   assert.equal(sends,3,'An invalid timezone cannot reach the transport');
 
+  for (const version of [1, undefined, 2, '1']) {
+    await controller.disconnect();
+    registrationVersion=version;
+    await controller.cloudPersonalConnect();
+    assert.ok(controller.getSnapshot().session,'registered Cloud connection succeeds');
+    assert.equal(controller.getSnapshot().error,'');
+    const literal=phoneContextMessage('literal authored envelope',{view:'notes',revision:9,sensitive:false}).text;
+    await controller.send(literal,{view:'notes',revision:10,sensitive:false},'format-'+String(version),new AbortController().signal);
+    const sent=sentBodies.at(-1);
+    assert.equal(sent.text,version===1?literal:phoneContextMessage(literal,{view:'notes',revision:10,sensitive:false}).text);
+    assert.equal(sent.metadata.userTextFormat,version===1?'plain-v1':undefined);
+    assert.equal(Object.hasOwn(sent.metadata,'alphaPhone'),version!==1);
+    assert.equal(sent.metadata.clientDevice.context.view,'notes');
+  }
   const beforeRetirements=clockRetirements;
   let releaseClockRetirement;heldClockRetirement=new Promise(resolve=>{releaseClockRetirement=resolve;});
   const retirementStarted=new Promise(resolve=>{clockRetirementStarted=resolve;});
@@ -256,7 +277,7 @@ try {
     [{kind:'insufficient_credits',message:'Synthetic upstream text',transient:false},/^Eliza Cloud declined this AI request for your account's billing\. Check your account in Settings\. Alpha Phone did not retry your message, and nothing is purchased automatically\./],
     [{kind:'rate_limited',message:'Synthetic upstream text',transient:true},/^The AI request rate limit was reached\. Wait a moment before sending again\. Alpha Phone did not retry your message\.$/],
     [{kind:'rate_limited',message:'Synthetic upstream text',transient:true,rateLimit:{kind:'rate_limited',retryAfterMs:2400,planId:'synthetic',scope:'burst'}},/^The AI request rate limit was reached\. Try again in about 3 seconds\. Alpha Phone did not retry your message\.$/],
-    [{kind:'provider_issue',message:'Synthetic upstream text',transient:true},/^The agent’s model provider could not be reached; nothing was retried\.$/],
+    [{kind:'provider_issue',message:'Synthetic upstream text',transient:true},/^Alpha’s AI service could not complete this reply\. Nothing was resent\.$/],
   ]){
     const before=remote.failureReplies||0;remote.failureReply=failure;
     const refused=await controller.send('Refused turn',{view:'home',revision:13,sensitive:false},'refused-'+failure.kind+(failure.rateLimit?'-live-wait':''),new AbortController().signal).then(()=>null,error=>error);

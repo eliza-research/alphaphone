@@ -7,40 +7,8 @@ import type {
 } from "../../../../.eliza/client-features/packages/contracts/src/calendar-linked-sync";
 import type { CalendarSyncBinding } from "./calendar-linked-store";
 
-export type CalendarSyncSelection = {
-	grantId: string;
-	calendarId: string;
-	accountId: string;
-};
-export type CalendarSyncRequest =
-	| {
-			kind: "capabilities";
-			selection: Omit<CalendarSyncSelection, "accountId">;
-	  }
-	| {
-			kind: "get";
-			selection: CalendarSyncSelection;
-			reference: { eventId: string } | { idempotencyKey: string };
-	  }
-	| {
-			kind: "create";
-			selection: CalendarSyncSelection;
-			idempotencyKey: string;
-			event: LinkedCalendarSemanticEvent;
-	  }
-	| {
-			kind: "update";
-			selection: CalendarSyncSelection;
-			eventId: string;
-			expectedEtag: string;
-			event: LinkedCalendarSemanticEvent;
-	  }
-	| {
-			kind: "delete";
-			selection: CalendarSyncSelection;
-			eventId: string;
-			expectedEtag: string;
-	  };
+export type {CalendarSyncSelection,CalendarSyncRequest} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/service/managed-calendar-host.ts';
+import type {CalendarSyncSelection,CalendarSyncRequest} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/service/managed-calendar-host.ts';
 const text = (value: unknown, max = 2048): value is string =>
 	typeof value === "string" &&
 	value.length > 0 &&

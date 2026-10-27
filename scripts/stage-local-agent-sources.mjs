@@ -26,6 +26,29 @@ for(const name of classes){
   // Abstract sockets are device-global. Give the consumer its own namespace.
   value=value.replaceAll('"eliza_local_agent_v1"',`"${identity}.agent.v1"`).replaceAll('"eliza_bionic_infer_v1"',`"${identity}.inference.v1"`);
   if(name==='ElizaAgentService'){
+    // Product presentation over the canonical runtime. Keep the state machine, notification
+    // timing, Stop action and bootstrap's binder-free path unchanged. Each reviewed source
+    // anchor fails closed if an upstream update changes it; generated hashes record the result.
+    const notificationBranding = [
+      ['"Eliza Agent"', 'getString(R.string.alpha_runtime_channel_name)', 1],
+      ['"Local Eliza agent runtime status"', 'getString(R.string.alpha_runtime_channel_description)', 1],
+      ['"Eliza agent"', 'getString(R.string.alpha_runtime_title)', 2],
+      ['"Eliza agent · Running"', 'getString(R.string.alpha_runtime_running)', 1],
+      ['"Eliza agent · Starting"', 'getString(R.string.alpha_runtime_starting)', 1],
+      ['"Eliza agent · Stopped"', 'getString(R.string.alpha_runtime_stopped)', 1],
+      ['"Eliza agent · Asset error"', 'getString(R.string.alpha_runtime_asset_error)', 1],
+      ['"Eliza agent · Missing files"', 'getString(R.string.alpha_runtime_missing_files)', 1],
+      ['"Eliza agent · Spawn failed"', 'getString(R.string.alpha_runtime_spawn_failed)', 1],
+      ['"Eliza agent · Restart blocked"', 'getString(R.string.alpha_runtime_restart_blocked)', 1],
+      ['"On-device agent ready"', 'getString(R.string.alpha_runtime_running_detail)', 1],
+    ];
+    for (const [from, to, expected] of notificationBranding) {
+      if (value.split(from).length !== expected + 1) throw Error('Review changed runtime notification presentation: ' + from);
+      value = value.replaceAll(from, to);
+    }
+    const notificationIcon = '.setSmallIcon(R.drawable.notification_icon)';
+    if (value.split(notificationIcon).length !== 3) throw Error('Review changed runtime notification builders');
+    value = value.replaceAll(notificationIcon, notificationIcon + '\n            .setColor(0xff0000ff)');
     const anchor='agentEnv.put("ELIZA_LOCAL_AGENT_SOCKET_PATH",privateSocketPath);';
     if(value.split(anchor).length!==2)throw Error('Native runtime environment insertion point changed');
     value=value.replace(anchor,anchor+`\n            agentEnv.put("ELIZA_ANDROID_SECURE_STORE_SOCKET", "${identity}.secure-store");\n            try { AlphaLocalAgentPlugin.configureEnvironment(this, agentEnv); } catch (java.io.IOException unavailable) { currentStatus = "provider-unavailable"; updateNotification(); return; }`);

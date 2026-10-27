@@ -49,6 +49,10 @@ export function createFilesIndex(store:Store|undefined=defaultStore(),now:()=>nu
       write(kept);
       return evicted.flatMap(old=>old.selectionId&&!kept.some(k=>k.selectionId===old.selectionId)?[old.selectionId]:[]);
     },
+    /** Refresh display metadata from a confirmed provider listing, never access. */
+    renameTree(treeId:string,name:string){
+      write(read().map(row=>row.kind==='tree'&&row.treeId===treeId?(clean({...row,name})??row):row));
+    },
     revoke(key:string){write(read().map(row=>row.key===key?{...row,status:'revoked' as const}:row));},
     remove(key:string){const rows=read(),gone=rows.find(row=>row.key===key);write(rows.filter(row=>row.key!==key));return gone;},
     /** The selection showing when the app last closed, so a restart restores only that one. */

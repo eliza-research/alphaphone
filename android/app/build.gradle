@@ -144,6 +144,9 @@ android {
 }
 if (appLinkHost) androidComponents { onVariants(selector().all()) { variant -> variant.sources.manifests.addStaticManifestFile(appLinksManifest) } }
 dependencies {
+ implementation 'androidx.credentials:credentials:1.6.0'
+ implementation 'androidx.credentials:credentials-play-services-auth:1.6.0'
+ implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
  implementation project(':eliza-network-policy')
  implementation project(':local-speech')
  implementation 'androidx.browser:browser:1.9.0'
@@ -197,18 +200,31 @@ def stageNativePatchReceipt = tasks.register('stageNativePatchReceipt', Copy) {
 }
 tasks.named('preBuild').configure { dependsOn stageNativePatchReceipt }
 
+// OwnerRoutes reads the owner route table the renderer imports, so both gates enforce the same bytes.
+def ownerRouteAssets = layout.buildDirectory.dir('generated/owner-route-assets')
+android.sourceSets.main.assets.srcDir(ownerRouteAssets)
+def stageOwnerRoutes = tasks.register('stageOwnerRoutes', Copy) {
+ from(file('../../config/owner-routes.json'))
+ into(ownerRouteAssets)
+}
+tasks.named('preBuild').configure { dependsOn stageOwnerRoutes }
+
 // On-device voice: the shared paradee-voice library (:local-speech) links libelizainference but does
 // not package it; the app packages its resident host's engine, so the two must be identical bytes.
 // Staged voice outputs must also be the bytes android/voice-host/qualified-voice-host.json records.
 // The listener APK packages its own verified copy of the engine.
+// One explicit selection controls JNI compilation and the same integrity checks.
+def selectedParadeeAbis = project.findProperty('elizaParadeeAbis')?.toString()?.split(',', -1)?.toList() ?: ['arm64-v8a', 'x86_64']
+if (!selectedParadeeAbis || selectedParadeeAbis.toSet().size() != selectedParadeeAbis.size() || selectedParadeeAbis.any { !(it in ['arm64-v8a', 'x86_64']) }) throw new GradleException('Invalid elizaParadeeAbis')
+def paradeeAbiArgs = selectedParadeeAbis.collectMany { ['--abi', it] }
 def unpackagedRuntime = project.findProperty('ELIZA_ALLOW_UNPACKAGED_RUNTIME')?.toString() == '1'
 def verifyParadeeAppLinkage = tasks.register('verifyParadeeAppLinkage', Exec) {
  workingDir rootProject.projectDir.parentFile
- commandLine(['node', 'scripts/paradee-runtime.mjs', '--app-linkage'] + ((unpackagedRuntime || runtimeProfile == 'cloud') ? ['--allow-absent'] : []))
+ commandLine(['node', 'scripts/paradee-runtime.mjs', '--app-linkage'] + paradeeAbiArgs + ((unpackagedRuntime || runtimeProfile == 'cloud') ? ['--allow-absent'] : []))
 }
 def verifyVoiceHost = tasks.register('verifyVoiceHost', Exec) {
  workingDir rootProject.projectDir.parentFile
- commandLine(['node', 'scripts/voice-host.mjs', '--verify'] + ((unpackagedRuntime || runtimeProfile == 'cloud') ? ['--allow-absent'] : []))
+ commandLine(['node', 'scripts/voice-host.mjs', '--verify'] + paradeeAbiArgs + ((unpackagedRuntime || runtimeProfile == 'cloud') ? ['--allow-absent'] : []))
 }
 tasks.named('preBuild').configure { dependsOn verifyParadeeAppLinkage, verifyVoiceHost }
 

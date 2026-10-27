@@ -159,8 +159,11 @@ test('the plan surface is a notice beside the running agent, not a gate', () => 
   assert.ok(between(ui, 'async function admitCloudResident(', 'function residentPlanEnded(').includes("update({residentSubscription:view,residentPlanNotice:'needs-plan',planEndsAt:null});\n    return {binding:'unbound',account};"));
   assert.ok(chooser.includes("const residentMustSignIn=residentCloudFlow()&&!snapshot.cloudAccount&&snapshot.residentPlanNotice!=='offline'&&!snapshot.residentStarting;"));
   assert.ok(chooser.includes('{!residentMustSignIn&&<button aria-label="Close connection settings"'));
-  // Back from the in-app sign-in screen returns to the gate; the gate itself still cannot be dismissed.
-  assert.match(ui, /close\(\) \{\n(\s+\/\/[^\n]*\n)*\s+if\(state\.signIn&&!state\.busy\)\{connectionController\.cancelSignIn\(\);return;\}\n\s+if\(residentSignInRequired\(\)\)\{/);
+  // Auth owns Back even while busy; the required top-level chooser remains protected.
+  const close = between(ui, '  close() {', '  cancel() {');
+  const cancelSignIn = close.indexOf('if(state.signIn){connectionController.cancelSignIn();return;}');
+  const requiredSignIn = close.indexOf('if(residentSignInRequired()){');
+  assert.ok(cancelSignIn >= 0 && requiredSignIn > cancelSignIn, 'Sign-in cancellation precedes the required-sign-in gate, after independent billing notices.');
   // No agent-less product choice remains in the phone's flow.
   const resident = between(chooser, 'if(residentCloudFlow())return', 'if(browserOnly)return');
   assert.doesNotMatch(resident, /Use local apps without AI|without AI|No agent connected/);
@@ -188,4 +191,9 @@ test('native starts the agent without a provider and never offers it a Cloud key
 test('browser speech has no Web Speech fallback', () => {
   for (const file of ['apps/app/src/browser/voice.ts', 'apps/app/src/browser/browser-surface.ts'])
     assert.doesNotMatch(read(file), /speechSynthesis|SpeechSynthesisUtterance/, file);
+});
+
+test('the on-device agent runs in the phone time zone', () => {
+  const configure = between(plugin, 'static void configureEnvironment(', '@PluginMethod public void start(');
+  assert.match(configure, /env\.put\("TZ",java\.util\.TimeZone\.getDefault\(\)\.getID\(\)\);/);
 });

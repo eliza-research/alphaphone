@@ -54,7 +54,7 @@ test('browser restores an existing host Cloud account, uses canonical voice and 
   });
   expect(voice.transcript).toEqual({text:'Closed fixture transcript',local:false});expect(voice.prepared).toBe(true);expect(voice.plan).toBe('active');expect(voice.publicStorage).not.toContain(secret);expect(voice.opened).toEqual(['https://cloud.eliza.app/cloud/billing']);
   await page.evaluate(async()=>{const c=(await import('/src/runtime/connection-ui.tsx')).connectionController;c.openCloudAccount();});
-  const account=page.getByRole('dialog',{name:'Eliza Cloud',exact:true});await expect(account.getByText('owned@example.invalid',{exact:true})).toBeVisible();await page.screenshot({path:info.outputPath('existing-cloud-account.png'),animations:'disabled'});
+  const account=page.getByRole('dialog',{name:'Eliza Cloud',exact:true});await expect(account.getByRole('region',{name:'Membership and credits',exact:true}).getByText('owned@example.invalid',{exact:true})).toBeVisible();await page.screenshot({path:info.outputPath('existing-cloud-account.png'),animations:'disabled'});
   await account.getByRole('button',{name:'Sign out of Eliza Cloud',exact:true}).click();
   await expect(page.getByRole('status').filter({hasText:'This sign-in was revoked.'})).toBeVisible();
   // Reload only after sign-out has removed the host credential, not its earlier in-memory detach.
@@ -72,9 +72,10 @@ test('browser restores an existing host Cloud account, uses canonical voice and 
   // This test-mocks host's account button retains the diagnostic browser route. Exercise the
   // shared in-app entry explicitly before that handoff; native production uses this entry.
   await page.evaluate(async()=>(await import('/src/runtime/connection-ui.tsx')).connectionController.beginSignIn('production'));
-  const signIn=page.getByRole('dialog',{name:'Sign in to Eliza Cloud',exact:true});
+  const signIn=page.getByRole('dialog',{name:'Welcome to Alpha.',exact:true});
   await expect(signIn.getByRole('form',{name:'Sign in with email'})).toBeVisible();
-  await expect(signIn.getByRole('button',{name:'Continue with Google',exact:true})).toHaveCount(0);
+  await expect(signIn.getByRole('button',{name:'Continue with Google',exact:true})).toBeDisabled();
+  await expect(signIn.getByText('Google sign-in is unavailable on this device right now. You can continue with email.',{exact:true})).toBeVisible();
   await signIn.getByRole('button',{name:'Browser sign-in (diagnostic)',exact:true}).click();
   await expect.poll(()=>page.evaluate(async()=>(await import('/src/runtime/connection-ui.tsx')).connectionController.getSnapshot().cloudAccount?.userId)).toBe(owner);
   await expect(page.getByRole('dialog',{name:'Eliza Cloud',exact:true})).toHaveCount(0);
@@ -86,7 +87,7 @@ test('browser restores an existing host Cloud account, uses canonical voice and 
   await expect(page.getByRole('button',{name:'Inbox',exact:true})).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.evaluate(async()=>(await import('/src/runtime/connection-ui.tsx')).connectionController.openCloudAccount());
-  await expect(page.getByRole('dialog',{name:'Eliza Cloud',exact:true}).getByText('owned@example.invalid',{exact:true})).toBeVisible();
+  await expect(page.getByRole('dialog',{name:'Eliza Cloud',exact:true}).getByRole('region',{name:'Membership and credits',exact:true}).getByText('owned@example.invalid',{exact:true})).toBeVisible();
   expect(await page.evaluate(()=>(window as any).openedCloudURLs)).toContain(`https://eliza.app/auth/cli-login?session=${session}&app=alpha`);
   await page.evaluate(async()=>(await import('/src/runtime/connection-ui.tsx')).connectionController.close());
   await expect(page.getByRole('dialog')).toHaveCount(0);

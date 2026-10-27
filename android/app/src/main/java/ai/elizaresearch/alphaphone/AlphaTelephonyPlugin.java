@@ -178,13 +178,10 @@ public class AlphaTelephonyPlugin extends Plugin {
  }
  /** Active SIM subscriptions, or JSON null when Android refuses the read: never an empty list in its place. */
  private Object subscriptions() {
-  SubscriptionManager manager = getContext().getSystemService(SubscriptionManager.class);
-  if (manager == null) return JSONObject.NULL;
-  List<SubscriptionInfo> active;
-  try { active = manager.getActiveSubscriptionInfoList(); }
-  catch (SecurityException denied) { return JSONObject.NULL; }
+  if (getContext().checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) return JSONObject.NULL;
+  List<SubscriptionInfo> active = AlphaSubscriptions.active(getContext());
+  if (active == null) return JSONObject.NULL;
   JSArray rows = new JSArray();
-  if (active == null) return rows;
   int sms = SubscriptionManager.getDefaultSmsSubscriptionId(), voice = SubscriptionManager.getDefaultVoiceSubscriptionId();
   for (SubscriptionInfo info : active) {
    if (rows.length() >= MAX_SUBSCRIPTIONS) break;
@@ -427,10 +424,9 @@ public class AlphaTelephonyPlugin extends Plugin {
   return activeSubscription(subscriptionId) == null ? "That SIM is not active now. Review the message again." : null;
  }
  private SubscriptionInfo activeSubscription(int id) {
-  SubscriptionManager manager = getContext().getSystemService(SubscriptionManager.class);
-  if (manager == null) return null;
-  try { List<SubscriptionInfo> active = manager.getActiveSubscriptionInfoList(); if (active != null) for (SubscriptionInfo info : active) if (info != null && info.getSubscriptionId() == id && info.getSimSlotIndex() >= 0) return info; }
-  catch (SecurityException denied) { return null; }
+  if (getContext().checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) return null;
+  List<SubscriptionInfo> active = AlphaSubscriptions.active(getContext());
+  if (active != null) for (SubscriptionInfo info : active) if (info != null && info.getSubscriptionId() == id && info.getSimSlotIndex() >= 0) return info;
   return null;
  }
  private static String[] numbers(JSArray recipients) {

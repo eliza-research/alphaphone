@@ -10,6 +10,8 @@ if(!process.execArgv.includes('tsx')){const child=spawnSync(process.execPath,['-
 const {createLocalAgentDevHandler,localAgentPathAllowed,LOCAL_VOICE_WS_PATH}=await import('../scripts/local-agent-dev-bridge.ts');
 const owner=randomUUID(),agent=randomUUID(),conversation=randomUUID(),nonce='a'.repeat(43),voiceToken='b'.repeat(43),root='1'.repeat(64),paired='synthetic-owner-bearer';
 const BASE='/api/v1/voice/session';
+function requestJson(url,headers,body){return new Promise((resolve,reject)=>{const request=httpRequest(url,{method:'POST',headers},response=>{let text='';response.setEncoding('utf8');response.on('data',chunk=>text+=chunk);response.on('end',()=>resolve({status:response.statusCode,data:JSON.parse(text)}));});request.on('error',reject);request.end(body);});}
+
 async function fixture(enabled=true,cloudRealtime=false,attestation={}){
  const directory=await mkdtemp(join(tmpdir(),'alpha-voice-bridge-')),tokenFile=join(directory,'token');await writeFile(tokenFile,root,{mode:0o600});
  const calls=[];let mode='ok',upgrades=0;const rendererHeaders=[];
@@ -29,7 +31,7 @@ async function fixture(enabled=true,cloudRealtime=false,attestation={}){
  };
  const handler=createLocalAgentDevHandler({origin:runtimeOrigin,tokenFile,request,cartesiaEnabled:enabled,cloudRealtimeEnabled:cloudRealtime}),server=createServer(handler);server.on('upgrade',(req,socket,head)=>void handler.upgrade(req,socket,head));
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${server.address().port}`;
- const call=async input=>{const response=await fetch(origin,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','X-Alpha-Local-Agent':'1'},body:JSON.stringify({ownerId:owner,headers:{Accept:'application/json'},...input})});return {status:response.status,data:await response.json()};};
+ const call=async (input,hostOverride)=>{if(hostOverride)return requestJson(origin,{Host:hostOverride,Origin:'http://'+hostOverride,'Content-Type':'application/json','X-Alpha-Local-Agent':'1'},JSON.stringify({ownerId:owner,headers:{Accept:'application/json'},...input}));const response=await fetch(origin,{method:'POST',headers:{Origin:hostOverride?`http://${hostOverride}`:origin,...(hostOverride?{Host:hostOverride}:{}),'Content-Type':'application/json','X-Alpha-Local-Agent':'1'},body:JSON.stringify({ownerId:owner,headers:{Accept:'application/json'},...input})});return {status:response.status,data:await response.json()};};
  return {call,calls,origin,tokenFile,mode:value=>{mode=value;},rendererHeaders,upgrades:()=>upgrades,close:async()=>{handler.closeVoice();for(const socket of runtimeSockets)socket.destroy();server.closeAllConnections();runtime.closeAllConnections();await Promise.all([new Promise(r=>server.close(r)),new Promise(r=>runtime.close(r))]);await rm(directory,{recursive:true,force:true});}};
 }
 const mint=()=>({path:BASE,method:'POST',body:JSON.stringify({agentId:agent,conversationId:conversation,consentNonce:nonce,transport:'websocket'})});
@@ -53,7 +55,7 @@ test('voice gate, malformed controls, foreign mint, expiry, unknown fields and w
   f.mode('error');const error=await f.call(mint());assert.equal(error.data.status,403);assert.deepEqual(JSON.parse(error.data.body),{code:'voice_owner_session_required'});
  }finally{await f.close();}
 });
-function upgrade(url,origin){return new Promise((resolve,reject)=>{const req=httpRequest(url.replace('ws:','http:'),{headers:{Origin:origin,Connection:'Upgrade',Upgrade:'websocket','Sec-WebSocket-Version':'13','Sec-WebSocket-Key':'dGhlIHNhbXBsZSBub25jZQ=='}});req.on('upgrade',(response,socket)=>resolve({status:response.statusCode,socket}));req.on('response',response=>{response.resume();resolve({status:response.statusCode});});req.on('error',reject);req.end();});}
+function upgrade(url,origin,hostOverride){return new Promise((resolve,reject)=>{const req=httpRequest(url.replace('ws:','http:'),{headers:{Origin:origin,...(hostOverride?{Host:hostOverride}:{}),Connection:'Upgrade',Upgrade:'websocket','Sec-WebSocket-Version':'13','Sec-WebSocket-Key':'dGhlIHNhbXBsZSBub25jZQ=='}});req.on('upgrade',(response,socket)=>resolve({status:response.statusCode,socket}));req.on('response',response=>{response.resume();resolve({status:response.statusCode});});req.on('error',reject);req.end();});}
 test('same-origin owned minted upgrade is single use; revoke and credential rollover close its tunnel',async()=>{
  const f=await fixture();try{
   const ticket=JSON.parse((await f.call(mint())).data.body);
@@ -97,3 +99,52 @@ test('renderer renewal issues a fresh single-use short ticket; expired and old-r
 
 test('Cloud realtime bridge shares owned voice/renderer controls but requires genuine route attestation',async()=>{const f=await fixture(false,true,{speechRoute:'cloud',speechProvider:'cartesia',providerAdmission:'at-session-start'});try{const result=await f.call({path:BASE+'/health?conversationId='+conversation,method:'GET'});assert.equal(result.data.status,200);assert.equal(JSON.parse(result.data.body).speechRoute,'cloud');const minted=await f.call(mint());assert.equal(minted.data.status,200);assert.match(JSON.parse(minted.data.body).wsUrl,/__alpha-local-voice/);}finally{await f.close();}});
 test('Cloud realtime rejects absent/direct provider metadata, and contradictory flags fail before enrollment',async()=>{for(const attestation of [{},{speechRoute:'direct',speechProvider:'cartesia',providerAdmission:'at-session-start'},{speechRoute:'cloud',speechProvider:'cartesia',providerAdmission:'deferred'}]){const f=await fixture(false,true,attestation);try{assert.notEqual((await f.call({path:BASE+'/health?conversationId='+conversation,method:'GET'})).data.status,200);}finally{await f.close();}}assert.throws(()=>createLocalAgentDevHandler({origin:'http://127.0.0.1:9',tokenFile:'unused',cartesiaEnabled:true,cloudRealtimeEnabled:true}),/cannot both/);});
+
+test('localhost HTTP and websocket aliases remain exact-origin and single-use',async()=>{
+ const f=await fixture();try{
+  const authority='localhost:'+new URL(f.origin).port,localOrigin='http://'+authority;
+  assert.equal((await f.call({path:BASE+'/health?conversationId='+conversation,method:'GET'},authority)).data.status,200);
+  const ticket=JSON.parse((await f.call(mint(),authority)).data.body),wire=ticket.wsUrl.replace('localhost','127.0.0.1');
+  assert.equal((await upgrade(wire,f.origin,authority)).status,403);
+  const accepted=await upgrade(wire,localOrigin,authority);assert.equal(accepted.status,101);assert.equal((await upgrade(wire,localOrigin,authority)).status,403);accepted.socket.destroy();
+ }finally{await f.close();}
+});
+test('localhost does not widen HTTP host or origin trust',async()=>{
+ const f=await fixture();try{
+  const port=new URL(f.origin).port,input={path:BASE+'/health?conversationId='+conversation,method:'GET'};
+  for(const [host,origin] of [['localhost:'+port,f.origin],['127.0.0.1:'+port,'http://localhost:'+port],['localhost.evil:'+port,'http://localhost.evil:'+port],['127.0.0.1.evil:'+port,'http://127.0.0.1.evil:'+port],['example.com:'+port,'http://example.com:'+port],['localhost:'+port,'http://localhost:1']]){
+   const r=await requestJson(f.origin,{Host:host,Origin:origin,'Content-Type':'application/json','X-Alpha-Local-Agent':'1'},JSON.stringify({ownerId:owner,...input}));assert.equal(r.status,403);
+  }
+  assert.equal(f.calls.length,0);
+ }finally{await f.close();}
+});
+
+test('canonical app records use the shared method policy and bound owner without voice',async()=>{
+ const f=await fixture(false);try{
+  for(const input of [
+   {path:'/api/notes/state',method:'GET'},
+   {path:'/api/views/notes/interact',method:'POST',body:'{}'},
+   {path:'/api/lifeops/calendar/feed?timeMin=2026-10-25T07%3A00%3A00Z&timeMax=2026-10-26T07%3A00%3A00Z',method:'GET'},
+   {path:'/api/lifeops/calendar/events',method:'POST',body:'{}'},
+   {path:'/api/lifeops/calendar/events/local%3Aevent-1',method:'PATCH',body:'{}'},
+   {path:'/api/lifeops/calendar/events/local%3Aevent-1?expectedProviderVersion=1',method:'DELETE'},
+  ]){const r=await f.call(input);assert.equal(r.status,200,input.path);assert.equal(r.data.status,200,input.path);assert.ok(f.calls.some(c=>new URL(c.url).pathname===new URL(input.path,'http://example.invalid').pathname&&c.input.method===input.method));assert(!JSON.stringify(r).includes(paired));}
+  for(const input of [
+   {path:'/api/notes/state',method:'PATCH',body:'{}'},
+   {path:'/api/lifeops/calendar/unknown',method:'GET'},
+   {path:'/api/lifeops/calendar/events/a%2Fb',method:'DELETE'},
+   {path:'/api/lifeops/calendar/feed?unknown=1',method:'GET'},
+   {path:'/api/lifeops/calendar/feed?mode=local&mode=remote',method:'GET'},
+  ]){const before=f.calls.length;assert.equal((await f.call(input)).status,400,input.path);assert.equal(f.calls.length,before);}
+  const before=f.calls.length;assert.equal((await f.call({path:'/api/notes/state',method:'GET',ownerId:'wrong-owner'})).status,409);assert.equal(f.calls.length,before);
+ }finally{await f.close();}
+});
+
+test('ordinary conversation renderer lease works without enabling voice and stays single-use',async()=>{
+ const f=await fixture(false);try{
+  const clientId=randomUUID();const r=await f.call({path:'/api/views/renderer-channel',method:'POST',body:JSON.stringify({clientId})});assert.equal(r.status,200);assert.equal(r.data.status,200);
+  const ticket=JSON.parse(r.data.body);assert(!JSON.stringify(r).includes(paired));assert.equal((await upgrade(ticket.wsUrl,'https://other.invalid')).status,403);
+  const connection=await upgrade(ticket.wsUrl,f.origin);assert.equal(connection.status,101);assert.equal((await upgrade(ticket.wsUrl,f.origin)).status,403);assert.deepEqual(f.rendererHeaders,[{url:'/ws?clientId='+clientId,authorization:'Bearer '+paired}]);connection.socket.destroy();
+  assert.equal((await f.call(mint())).status,400);
+ }finally{await f.close();}
+});

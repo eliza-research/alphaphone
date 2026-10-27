@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "observedOn": "2026-10-26",
+  "baseIntegration": "d1487df60f634a3fdf915fedd9a41f4a2a2ffa96",
+  "pullRequest": 621,
+  "reviewedHead": "08ea12a32fb4335158bb0bc293579a67e2d11e6f",
+  "upstream": "6293e29bf398603d0ea233871edbdeb57e5c2405",
+  "resolution": [
+    "Use canonical Notes/Calendar records, shared owner routes, native Google Credential Manager, and action result presentation from PR 621.",
+    "Preserve independent email and phone readiness, configured Cloud deployment, native authorization before account-key exchange, and environment-bound MFA.",
+    "Preserve the newer admitted native source and library hashes. PR 621 native-engine and pin changes do not replace these inputs.",
+    "Keep the production release signer unset: a candidate APK signer receipt is not production-key admission.",
+    "Keep explicit Talk auto-start from PR 621 while binding the disclosure to the configured service; show an unavailable-Google notice and in-button email-send progress."
+  ],
+  "verification": {
+    "focusedAuthenticationVoiceAndPresentation": {
+      "tests": 36,
+      "passed": 36,
+      "failed": 0
+    },
+    "typecheck": "passed",
+    "fullRepository": "Initial merged run interrupted; fixture compatibility repairs and final rerun pending",
+    "androidBuildLocal": "Runtime preparation interrupted; final rerun pending"
+  },
+  "mainUpdated": false,
+  "deviceAcceptance": false
+}

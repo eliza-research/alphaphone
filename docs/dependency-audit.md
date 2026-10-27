@@ -1,5 +1,78 @@
 # Dependency and artifact supply chain
 
+## Reviewed native Android APK npm closure (2026-10-25)
+
+The exact signed ARM64 APK `d3f1fd7792071e0ac76484e437e9a15cd1aa082e75f236ea8c4e4b8e5bdd5e10`
+was built from product `4fd8228` / SDK `a95cd4d`. Its normalized packaged npm input
+is the same 603 versions as the preserved `77c65e` review, so the dated registry
+result is reused without a query: one moderate UUID finding, no high or critical
+npm finding. Current affected UUID/Zod bodies and Zod 4.6.6 aliases were checked;
+existing exception objects and deadlines remain unchanged. See the
+[exact artifact review](security/resident-artifact-review-d3f1fd7792071e0a-2026-10-25.json).
+
+Bun itself changed from the musl binary to native Android binary `f2970336…`,
+using Android's linker. The npm dispositions do not prove this binary's builtin,
+ELF, FFI/JNI or device security/behavior. External Undici implementation remains
+outside the npm absence conclusion. All earlier artifact records and functional
+qualification states are preserved; no device or full-app result transfers.
+
+
+## Current source-only input rebind (2026-10-26)
+
+SDK `349235fd384f0c0694b8ad9b3f96fec493f33440` at fixed build-source product `19bd44c31b97903212e1b00935c5c715d0a17602` changes shared prepared-navigation reply handling only. The raw Bun lock and normalized3,694-package advisory input are unchanged from0f. The dated findings, exception objects and deadlines remain unchanged; no new registry query or security clearance is claimed. Installed877a/d7/0f and its Notes reply mismatch remain separate. See [source identity evidence](evidence/source-metadata-19bd-349-20261026.json).
+
+## Historical 737 source-only input rebind (2026-10-25)
+
+SDK `737c4d578f69659a6881afe8ff06e3379cbc713c` at build-source product `c8801829f4f3ff9c1fed6f700473460852820a65`
+has byte-identical Bun lock and normalized 3,694-package input versus the prior
+`a95cd4d28eb2bcd5fe5527e98058c167ff480557` source. The dated October 25 registry result and all124 findings,
+104 exception objects,103 maintenance records and existing deadlines stay unchanged.
+No registry query, new waiver, remediation or renewal occurred. See [current source
+scope](evidence/source-metadata-c880-737-20261025.json).
+
+The installed `d3f1fd7792071e0ac76484e437e9a15cd1aa082e75f236ea8c4e4b8e5bdd5e10`
+artifact remains bound to4fd/a95. Its packaged npm review and older receipts are
+preserved. They do not qualify a737 bundle/APK, Bun builtins, native FFI, Notes
+navigation, provider responses, hardware audio or Seeker. Current-source artifact
+qualification remains false while the normal producer and acceptance are pending.
+
+## Historical a95 source-only input rebind (2026-10-25)
+
+SDK `a95cd4d28eb2bcd5fe5527e98058c167ff480557` at product `4fd822874850a68c3d82675630593e4c63be943d`
+uses exactly the prior full Bun lock bytes and normalized 3,694-version registry
+input. The dated October 25 registry result and 124 source findings are reused;
+no registry query or exception deadline renewal occurred. The source snapshot and
+disposition source binding now name this pin. See [identity and qualification
+scope](evidence/source-metadata-4fd-a95-20261025.json).
+
+The artifact review below stays bound to APK `77c65ebe29c011f7d8f211a3a5dcfb2a79d1909cc74ecf0e40a0f4a68377f0cb`,
+product `a424de9`, SDK `f4142d3`. Native Android Bun changes the binary/platform
+contract. Its new APK closure, packaged advisory review, app-UID behavior and
+full device acceptance remain pending; source-input identity transfers none of
+those results. No shipped high/critical waiver or Bun builtin assurance is added.
+
+
+## Historical f414 source and artifact projection (2026-10-25)
+
+SDK `f4142d3a92d6b5b49ef6c6a666155218b8b75b07` at product
+`a424de923b4b19aa0d86a7e23ef30598f6704d94` has the same Bun lock bytes and
+normalized 3,694-version registry input as the October 25 snapshot at SDK `4e561dc`.
+The 124 existing full-lock findings are reused as dated source-review evidence;
+no fresh registry query or remediation is claimed. See
+[source identity and pending gates](evidence/source-metadata-a424-f414-20261025.json).
+
+The current snapshot and disposition binding now name this SDK and exact signed
+APK `77c65ebe29c011f7d8f211a3a5dcfb2a79d1909cc74ecf0e40a0f4a68377f0cb`.
+Its [artifact review](security/resident-artifact-review-77c65ebe29c011f7-2026-10-25.json)
+verifies the same 603-version packaged npm input: one moderate UUID finding and
+no shipped high or critical npm finding. UUID affected-function aliases remain
+unused by the reviewed v4-only consumers, and Zod wrappers resolve to 4.6.6.
+Bun external Undici implementation remains outside this npm closure conclusion.
+The old artifact review is preserved; no exception object or deadline is renewed.
+Owning offline audit checks pass for this binding. Functional provider/navigation,
+voice hardware and physical-device acceptance remain separate pending gates.
+
+
 Covers inventory items MVP-45 (dependency findings), the licence flags of decision P-09, the
 software part of MVP-43 (Denton typeface rights) and the read-back tooling for MVP-46
 (required checks). Everything here is source and test evidence. It is not an APK build,

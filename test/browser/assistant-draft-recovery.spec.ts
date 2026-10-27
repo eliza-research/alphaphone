@@ -9,7 +9,8 @@ async function saved(page:any){
  await expect(status(page)).toHaveCount(0);
 }
 test('an unsent multiline draft survives reload and clearing stays cleared',async({page})=>{
- await composer(page).fill('Remember this\nwithout sending');await saved(page);await page.reload();await expect(composer(page)).toHaveValue('Remember this\nwithout sending');await expect(status(page)).toContainText('Draft restored');await composer(page).fill('');await saved(page);await page.reload();await expect(composer(page)).toHaveValue('');
+ await composer(page).fill('Remember this\nwithout sending');await saved(page);await page.reload();await expect(composer(page)).toHaveValue('Remember this\nwithout sending');// Successful restore stays quiet; the exact composer value above proves restoration.
+ await expect(status(page)).toHaveCount(0);await composer(page).fill('');await saved(page);await page.reload();await expect(composer(page)).toHaveValue('');
 });
 test('another tab cannot replace a draft silently and recovery retains the current text',async({page,context},info)=>{
  const other=await context.newPage();await other.goto(page.url());await expect(composer(other)).toBeEnabled();await composer(page).fill('First window');await saved(page);await composer(other).fill('Second window');await expect(status(other)).toContainText('Review the saved copy');await expect(composer(other)).toHaveValue('Second window');await expect(other.getByText('Saved copy: First window',{exact:true})).toBeVisible();await other.screenshot({path:info.outputPath('assistant-draft-conflict.png'),animations:'disabled'});

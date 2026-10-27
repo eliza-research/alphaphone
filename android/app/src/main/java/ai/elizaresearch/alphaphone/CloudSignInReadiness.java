@@ -6,9 +6,12 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Native email readiness depends on mobile registration and the email-code service.
- * Google additionally requires an admitted redirect and a verified App Link for this signer.
- * Missing Google infrastructure must never disable native email or trigger hosted login.
+ * Pure policy for the in-app sign-in readiness probe (no Android classes, so it runs on a plain JVM).
+ *
+ * Native sign-in requires Cloud's matching mobile App Auth registration and email OTP routes.
+ * Native Google is separately enabled only when the backend advertises googleNative.
+ * Credential Manager completes through native HTTPS; it has no browser or App Link prerequisite.
+ * Legacy App Link parsing remains for previously started browser flows.
  */
 final class CloudSignInReadiness {
  private CloudSignInReadiness() {}
@@ -79,11 +82,11 @@ final class CloudSignInReadiness {
   Result(boolean email, boolean google, boolean phone, boolean methodsKnown, long until) { this.methodsKnown = methodsKnown; this.email = email; this.google = google; this.phone = phone; this.inApp = email || google || phone; this.until = until; }
   static Result notReady(long now) { return new Result(false, false, false, false, now + NOT_READY_TTL_MS); }
   boolean fresh(long now) { return now < until && until - now <= READY_TTL_MS; }
-  String serialize() { return "v3|" + email + "|" + google + "|" + phone + "|" + methodsKnown + "|" + until; }
+  String serialize() { return "v4-native-google|" + email + "|" + google + "|" + phone + "|" + methodsKnown + "|" + until; }
   static Result parse(String value) {
    if (value == null) return null;
    String[] parts = value.split("\\|", -1);
-   if (parts.length != 6 || !"v3".equals(parts[0])) return null;
+   if (parts.length != 6 || !"v4-native-google".equals(parts[0])) return null;
    for (int i = 1; i <= 4; i++) if (!"true".equals(parts[i]) && !"false".equals(parts[i])) return null;
    try { return new Result(Boolean.parseBoolean(parts[1]), Boolean.parseBoolean(parts[2]), Boolean.parseBoolean(parts[3]), Boolean.parseBoolean(parts[4]), Long.parseLong(parts[5])); }
    catch (Exception invalid) { return null; }
