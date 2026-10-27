@@ -2,11 +2,21 @@
 
 The physical product is `alpha_stallion_phone`, for the exact Android 17 stallion
 source and factory inputs in [the source contract](pixel10a-source-contract.md).
+Before image staging, apply the exact recorded Soong app-native patch to its
+manifest's `build/soong` revision. From this repository, after setting `AOSP_SOURCE`
+to the admitted source checkout:
+
+```sh
+git -C "$AOSP_SOURCE/build/soong" apply --check "$PWD/android/aosp/app-native/soong-app-native.patch"
+git -C "$AOSP_SOURCE/build/soong" apply "$PWD/android/aosp/app-native/soong-app-native.patch"
+```
+
 The following stages a new directory; it does not patch the source, build or flash
 an image, or admit a production release:
 
 ```sh
 npm run aosp:stage -- --target pixel10a --development \
+  --applied-build-patch soong-app-native \
   --apk /absolute/admitted-launcher-debug.apk \
   --aosp-source /absolute/prepared/stallion-source \
   --factory-image /absolute/stallion-cp3a.261005.005-factory-d1d25502.zip \
@@ -79,6 +89,7 @@ factory archive or APK is read it refuses, naming each gap, while:
 
 ```sh
 npm run aosp:stage -- --target pixel10a --production \
+  --applied-build-patch soong-app-native \
   --apk /absolute/launcher-release.apk --apk-manifest /absolute/apk-manifest.json \
   --descriptor /absolute/reviewed-launcher.json \
   --listener-apk /absolute/sense-release.apk --listener-descriptor /absolute/reviewed-listener.json \

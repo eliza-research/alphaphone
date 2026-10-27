@@ -82,9 +82,10 @@ export function pixel10aProductProblems(root = process.cwd()) {
 }
 
 export function writePixel10aProduct({root, output, apk, identity, launcher, sourceEvidence, production = false}) {
-  const nativeStagingEvidence = JSON.parse(execFileSync('python3', [path.join(root, 'scripts/stage-aosp-native.py'), '--apk', path.resolve(apk), '--output', output, '--module', identity.moduleName, '--target', 'stallion'], {encoding:'utf8'}));
+  const nativeStagingEvidence = JSON.parse(execFileSync('python3', [path.join(root, 'scripts/stage-aosp-native.py'), '--apk', path.resolve(apk), '--output', output, '--module', identity.moduleName, '--target', 'stallion', '--defer-soong'], {encoding:'utf8'}));
   const product = JSON.parse(fs.readFileSync(path.join(root, PIXEL10A_COMPOSITION), 'utf8'));
   const report = composePixel10aProduct({output, product, launcher, sourceEvidence, nativeStagingEvidence, production});
+  execFileSync('python3', [path.join(root, 'scripts/stage-aosp-native.py'), '--apk', path.resolve(apk), '--output', output, '--module', identity.moduleName, '--finalize-soong'], {stdio:'pipe'});
   if (production) {
     const bytes = fs.readFileSync(path.join(root, PIXEL10A_PRODUCT));
     const descriptor = JSON.parse(bytes);
