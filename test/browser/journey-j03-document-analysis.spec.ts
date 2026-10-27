@@ -1,3 +1,4 @@
+import {openLegacyNotes} from './helpers/legacy-notes';
 /*
  * Journey J03: Inbox attachment -> Files -> reviewed document question -> reviewed summary note
  * with a verified source reference, driven start to finish through rendered controls in the
@@ -51,9 +52,9 @@ const ready=(page:Page)=>expect(page.getByRole('button',{name:'Settings',exact:t
 
 async function openLinkedSource(page:Page){
  await returnToApps(page);
- await page.getByRole('button',{name:'Notes',exact:true}).click();
+ await openLegacyNotes(page);
  await page.getByRole('button',{name:'Open Garden summary',exact:true}).click();
- await page.getByRole('button',{name:'Source document linked',exact:true}).click();
+ await page.getByRole('button',{name:'Attachment',exact:true}).click();
  const source=page.getByRole('dialog',{name:'Note source document'});
  await expect(source).toContainText('garden-report.txt');
  await source.getByRole('button',{name:'Open linked source',exact:true}).click();
@@ -67,7 +68,7 @@ test('J03: an Inbox attachment is saved to Files, analysed, and kept as a review
  await page.getByRole('textbox',{name:'Scripted reply'}).fill(reply);
  await page.getByRole('button',{name:'Save development reply'}).click();
  await page.getByRole('button',{name:'Connect development profile'}).click();
- await returnToApps(page);
+ await returnToApps(page);await openLegacyNotes(page);await returnToApps(page);
 
  // ---- 1. Incoming email attachment -> Inbox review -> Save to Files ----
  await page.getByRole('button',{name:'Device controls',exact:true}).click();
@@ -151,7 +152,7 @@ test('J03: an Inbox attachment is saved to Files, analysed, and kept as a review
  await page.reload();await ready(page);
  // Rendered first: the Notes list shows the summary exactly once.
  await returnToApps(page);
- await page.getByRole('button',{name:'Notes',exact:true}).click();
+ await openLegacyNotes(page);
  await expect(page.getByRole('button',{name:'Open Garden summary',exact:true})).toHaveCount(1);
  await expect(page.getByRole('region',{name:'Notes'}).getByRole('button',{name:/^Open (?!Trash$)/})).toHaveCount(1);
  // Storage agrees (secondary check).

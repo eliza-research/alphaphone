@@ -73,7 +73,7 @@ test('journey C: agent-proposed alarm is reviewed, saved once, survives reload, 
 
  // 4. Approve once. The durable receipt records only that the handoff was opened.
  await approve(page).click();
- await expect(page.getByRole('button',{name:'Completed Alarm saved.',exact:true})).toHaveCount(1);
+ await expect(conversation.getByText('Alarm saved.',{exact:true})).toHaveCount(1);
  await expect(approve(page)).toHaveCount(0);
  state=await actions(page);
  expect(state.proposals).toHaveLength(1);

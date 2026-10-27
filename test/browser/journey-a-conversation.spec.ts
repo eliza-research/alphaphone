@@ -1,3 +1,4 @@
+import {openLegacyNotes} from './helpers/legacy-notes';
 /*
  * Journey A (docs/mvp-completion-plan.md "A. Boot, authenticate and keep a conversation"), browser build.
  *
@@ -91,7 +92,8 @@ test('journey A: boot, connect, converse across apps, stop a reply, reload and r
  for(const app of ['Notes','Calendar','Browser']){
   await returnToApps(page);
   await page.getByRole('button',{name:app,exact:true}).click();
-  await expect(page.getByRole('region',{name:app,exact:true})).toBeVisible();
+  const region=app==='Notes'?page.locator('[data-alpha-shared-notes]'):page.getByRole('region',{name:app,exact:true});
+  await expect(region).toBeVisible();
   await page.getByRole('button',{name:'Open conversation',exact:true}).click();
   await expect(bubble(page,'Journey A first request')).toHaveCount(1);
   if(app==='Notes'){
@@ -119,7 +121,7 @@ test('journey A: boot, connect, converse across apps, stop a reply, reload and r
    await expect(bubble(page,'Your message may have reached the agent. Check before sending it again.')).toHaveCount(0);
    await expect(conversation.getByText('The agent stopped this reply.',{exact:true})).toHaveCount(0);
    // While the single check is pending there is nothing to press: the check is automatic.
-   await expect(page.getByRole('button',{name:/^Check for reply/})).toHaveCount(0);
+   await expect(page.getByRole('button',{name:/^Check saved conversation/})).toHaveCount(0);
    await expect(bubble(page,'Journey A cancelled request')).toHaveCount(1);
    await expect(bubble(page,REPLY)).toHaveCount(2);
    // The cancelled text is not returned to the composer (it was dispatched; never a blind resend).
@@ -136,7 +138,7 @@ test('journey A: boot, connect, converse across apps, stop a reply, reload and r
    // the agent has no record of the stopped message. The pending notice is replaced, not added to.
    await expect(conversation.getByText(NOT_RECORDED,{exact:true})).toHaveCount(1,{timeout:60_000});
    await expect(conversation.getByText(MAY_FINISH,{exact:true})).toHaveCount(0);
-   await expect(page.getByRole('button',{name:/^Check for reply/})).toHaveCount(1);
+   await expect(page.getByRole('button',{name:/^Check saved conversation/})).toHaveCount(1);
    await expect(bubble(page,'Journey A cancelled request')).toHaveCount(1);
    await expect(bubble(page,REPLY)).toHaveCount(2);
    await expect(message).toHaveValue('');
@@ -151,13 +153,13 @@ test('journey A: boot, connect, converse across apps, stop a reply, reload and r
    expect(await agentDocument(page)).toEqual(afterStop);
    // The Check card is the user's explicit re-read of the agent's history. It never posts: the unconfirmed
    // bubble is replaced by what the agent holds.
-   await page.getByRole('button',{name:/^Check for reply/}).click();
+   await page.getByRole('button',{name:/^Check saved conversation/}).click();
    await expect(bubble(page,'Journey A cancelled request')).toHaveCount(0);
    await expect(bubble(page,'Journey A first request')).toHaveCount(1);
    await expect(bubble(page,'Journey A second request')).toHaveCount(1);
    await expect(bubble(page,REPLY)).toHaveCount(2);
    expect(await agentDocument(page)).toEqual(afterStop);
-   await expect(page.getByRole('button',{name:/^Check for reply/})).toHaveCount(0);
+   await expect(page.getByRole('button',{name:/^Check saved conversation/})).toHaveCount(0);
   }
  }
 
@@ -205,7 +207,7 @@ test('journey A: a proposed phone action is declined from the conversation and n
  test.setTimeout(120_000);
  const notes=()=>page.evaluate(async()=>JSON.parse((await (await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw())||'{"records":[]}').records as any[]);
  const actions=()=>page.evaluate(async()=>(await (await import('/src/browser/development-execution-document.ts')).readExecutionPart({namespace:'local'} as any,'actions',()=>({proposals:[],journal:[]}))) as any);
- await page.goto('/?mode=dev');
+ await page.goto('/?mode=dev');await openLegacyNotes(page);await returnToApps(page);
  await expect(page.getByRole('region',{name:'Home'})).toBeVisible();
  const ask=page.getByRole('textbox',{name:'Ask Alpha',exact:true}),conversation=page.locator('[data-alpha-layer="conversation"]');
  await openConnection(page);
@@ -247,7 +249,7 @@ test('journey A: a proposed phone action is declined from the conversation and n
 
  await page.reload();
  await expect(page.getByRole('region',{name:'Home'})).toBeVisible();
- await page.getByRole('button',{name:'Notes',exact:true}).click();
+ await openLegacyNotes(page);
  await expect(page.getByRole('button',{name:'Open Journey A declined note',exact:true})).toHaveCount(0);
  expect(await notes()).toEqual([]);
  state=await actions();

@@ -1,3 +1,4 @@
+import {installHomeCalendar} from './helpers/home-calendar';
 import { test, expect, type Page } from '@playwright/test';
 import { auditPage, format } from './accessibility-audit';
 import { setTextScale } from './accessibility-states';
@@ -114,6 +115,7 @@ test('the Home app grid keeps four columns at the default size and makes room fo
 
 test('the Home calendar card shows its whole title at 200% and widens to the row', async ({ page }) => {
   await home(page);
+  await installHomeCalendar(page,{title:'Weekly project meeting',startAt:new Date(Date.now()+3600000).toISOString(),endAt:new Date(Date.now()+7200000).toISOString()});
   const card = page.locator('[data-alpha-home-calendar]');
   const design = (await card.boundingBox())!;
   expect(Math.round(design.width)).toBe(280);
@@ -138,7 +140,7 @@ test('the Home calendar card shows its whole title at 200% and widens to the row
   // Every line the title wraps to has its own line box: none is hidden by the clamp or a fixed height.
   expect(geometry.lines).toBeLessThanOrEqual(3);
   expect(geometry.height, 'title lines hidden').toBeGreaterThanOrEqual(geometry.lines * geometry.lineHeight - 1);
-  await expect(title).toHaveText('No upcoming events');
+  await expect(title).toHaveText('Weekly project meeting');
 });
 
 for (const scale of [1, 2]) {

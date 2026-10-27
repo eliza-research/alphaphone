@@ -142,6 +142,7 @@ export function installPrototypeDataAdapter(Component: any, views: Record<string
       homeCalendarHasMeta: !!(agenda || provenance.read),
       homeCalendarSource: provenance.read, homeCalendarOrigin: provenance.origin, homeCalendarOverdue: overdue,
       homeCalendarDescription: [provenance.description, next?.description].filter(Boolean).join('. '),
+      homeCalendarItemDescription: provenance.description,
       homeCalendarNext: next?.text || '', homeCalendarNextSource: next?.source || '', homeCalendarHasNext: !!next,
       homeCalendarVideo: calendar.video, homeCalendarPeople: calendar.people.map(ini => ({ini})),
       homePeopleVisibility: calendar.people.length ? 'visible' : 'hidden',
