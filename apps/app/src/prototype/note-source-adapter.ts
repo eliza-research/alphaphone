@@ -4,8 +4,10 @@ import {runFilePicker,inputFiles} from '../browser/file-picker';
 import {DailyApps} from '../daily';
 import {registerPlugin} from '../platform-plugins';
 import {reviewMailAttachment,type MailAttachment} from '../runtime/inbox-attachment';
+import {documentSourceOf,retainedSourceReferences,type DocumentSourceLink} from '../../../../.eliza/client-features/plugins/plugin-files/src/documents/source-links.ts';
 type Bag=Record<string,any>;
-export type Source={version:1;name:string;mimeType:string;sha256:string;size:number;reference?:string};
+/** A note's linked source document (shared plugin-files source-link rules, J03). */
+export type Source=DocumentSourceLink;
 const attachments=registerPlugin<{
  readSelected(input:{selectionId:string}):Promise<MailAttachment & {sha256:string;size:number;sourceReferenceVersion?:1}>;
  openReviewed(input:MailAttachment & {sha256:string;reviewed:boolean}):Promise<{message:string}>;
@@ -25,14 +27,10 @@ const attachments=registerPlugin<{
  */
 export async function releaseUnusedSourceReferences(notes:readonly unknown[]):Promise<void>{
  if(Capacitor.getPlatform()!=='android')return;
- const keep=[...new Set(notes.map(note=>sourceOf((note as Bag|undefined)?.documentSource)?.reference).filter((reference):reference is string=>!!reference&&reference.startsWith('a1:')))];
+ const keep=retainedSourceReferences(notes);
  await attachments.releaseSourceReferences({keep});
 }
-export function sourceOf(value:unknown):Source|undefined {
- const s=value as Source|undefined;
- if(!s||s.version!==1||typeof s.name!=='string'||!s.name||s.name.length>120||/[\\/\x00-\x1f\x7f]/.test(s.name)||typeof s.mimeType!=='string'||!['text/plain','application/pdf','image/png','image/jpeg','image/webp'].includes(s.mimeType)||typeof s.sha256!=='string'||!/^[a-f0-9]{64}$/.test(s.sha256)||!Number.isSafeInteger(s.size)||s.size<0||s.size>5*1024*1024)return;
- return {version:1,name:s.name,mimeType:s.mimeType,sha256:s.sha256,size:s.size,...(typeof s.reference==='string'&&/^(?:b1:[a-f0-9-]{36}|a1:[a-f0-9]{64})$/.test(s.reference)?{reference:s.reference}:{})};
-}
+export const sourceOf=documentSourceOf;
 /** Alpha's cross-app source review. Notes owns persistence; existing file ports
  * own picker grants and exact-byte validation. Never persist temporary grants. */
 export function installNoteSourceAdapter(views:Bag){

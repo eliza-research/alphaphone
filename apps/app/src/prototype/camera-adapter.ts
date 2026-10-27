@@ -1,4 +1,6 @@
 import {validateCameraCaptureResult,type CameraCaptureResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/camera-contract.ts';
+// Shared camera host rules: explicit-denial classification and resume recovery that never re-prompts.
+import {cameraAccessDenied,restartAfterResume,type CameraAccessKind as AccessKind} from '../../../../.eliza/client-features/plugins/plugin-native-camera/src/host-ports.ts';
 import {reviewFileEmail} from './file-email-review';
 import {connectionController} from '../runtime/connection-ui';
 import type {MailAttachment} from '../runtime/inbox-attachment';
@@ -43,21 +45,7 @@ const nativeCamera = registerPlugin<{
 }>('ElizaCamera');
 /** A read of the current grant; it never shows Android's permission dialog. */
 const cameraAccess = registerPlugin<{ checkPermissions(): Promise<{ camera?: string }> }>('ElizaCamera');
-// camera-resume:begin
-/**
- * Whether a resume may restart a preview that stopped on a camera denial. Closing Android's own
- * permission dialog resumes the app too, so restarting on every resume asked for the camera again
- * straight after "Don't allow". Only an actual grant (made in Android settings) restarts the preview;
- * the read never prompts, and an unreadable state restarts nothing.
- */
-export async function restartAfterResume(state: () => { denied?: string; phase: string; disposed: boolean }, check: () => Promise<{ camera?: string }>): Promise<boolean> {
-  const stopped = () => { const now = state(); return now.denied === 'camera' && now.phase === 'error' && !now.disposed; };
-  if (!stopped()) return false;
-  let granted = false;
-  try { granted = (await check()).camera === 'granted'; } catch { /* Unknown access never restarts. */ }
-  return granted && stopped();
-}
-// camera-resume:end
+export {restartAfterResume};
 type LibraryAccess = {scope:'full'|'partial'|'selected'|'denied';images:'full'|'selected'|'denied';videos:'full'|'selected'|'denied'};
 type SavedPhoto = { name?:string;owned?:boolean;kind?: 'image' | 'video'; duration?: number; path?: string; id: string; image: string; width: number; height: number; date: number; revision: string; mutationRevision?: string; contentRevision?: string; trashed?: boolean; expiresAt?: number; favorite?: boolean };
 const nativeLibrary = registerPlugin<{
@@ -94,16 +82,8 @@ const nativeLibrary = registerPlugin<{
 }>('AlphaPhotos');
 const photoAttachments=registerPlugin<{readPhotoSelected(input:{id:string;revision:string}):Promise<MailAttachment&{size:number;sha256:string}>;cancelPhotoSelected():Promise<void>}>('AlphaMailAttachments');
 const device=registerPlugin<{openSettings(options:{page:'privacy'}):Promise<{status:string}>}>('AlphaDevice');
-type AccessKind='camera'|'microphone';
-/** Only an explicit permission denial gets settings recovery. Every other
- * failure keeps the generic retry message; nothing is inferred from timing. */
-export function mediaAccessDenied(error:unknown):AccessKind|undefined{
-  const value=error as {code?:unknown;name?:unknown;message?:unknown}|null;
-  const code=typeof value?.code==='string'?value.code:'',name=typeof value?.name==='string'?value.name:'',message=typeof value?.message==='string'?value.message:'';
-  if(code==='MICROPHONE_DENIED'||/microphone permission denied/i.test(message))return 'microphone';
-  if(code==='CAMERA_PERMISSION_DENIED'||name==='NotAllowedError'||name==='PermissionDeniedError'||/camera permission denied/i.test(message))return 'camera';
-  return undefined;
-}
+/** Only an explicit permission denial gets settings recovery (shared camera host rule). */
+export const mediaAccessDenied=cameraAccessDenied;
 /** Describe or extract text from a capture before anything reaches the
  * conversation draft. Pixels never leave the device; only reviewed text does. */
 const CAPTURE_STOP=new Set(['of','at','the','in','on','from','with','and','my','a','an','me','show','find']);
