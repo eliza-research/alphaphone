@@ -1,4 +1,4 @@
-import React,{useRef,useState} from 'react';
+import React,{useId,useRef,useState} from 'react';
 import './cloud-membership-ui.css';
 export type MembershipBalance='checking'|'zero'|'funded'|'member'|'unavailable';
 import type {SubscriptionView} from './subscription-entitlement';
@@ -14,6 +14,7 @@ function endLabel(endsAt:number):string {
 /** Same account and membership controls in onboarding and Settings; only verified facts are displayed. */
 export function CloudMembershipControls({balance,busy,error,notice,email,credits,plan,endsAt,onRedeem,onAddFunds,onRefresh}:{balance:MembershipBalance;busy:boolean;error?:string;notice?:string;email?:string;credits?:{usd:string;observedAt:number}|null;plan?:SubscriptionView|null;endsAt?:number|null;onRedeem:(code:string)=>Promise<boolean>;onAddFunds:()=>void;onRefresh:()=>void}){
  const code=useRef<HTMLInputElement>(null);
+ const errorId=useId();
  const active=plan?.kind==='active';
  return <section className="alpha-membership" aria-label="Membership and credits">
    <dl className="alpha-membership-facts">
@@ -23,11 +24,11 @@ export function CloudMembershipControls({balance,busy,error,notice,email,credits
    </dl>
    <p role="status">{balance==='checking'?'Checking your account…':balance==='unavailable'?'Account details could not be refreshed. You can still redeem a code or check again.':balance==='zero'?'Use a membership code or add funds to ask Alpha.':''}</p>
    <form aria-label="Redeem a membership code" onSubmit={event=>{event.preventDefault();const input=code.current;if(!input)return;void onRedeem(input.value).then(ok=>{if(ok&&code.current)code.current.value='';});}}>
-     <label>Membership code<input ref={code} name="membership-code" autoComplete="one-time-code" autoCapitalize="characters" autoCorrect="off" spellCheck={false} data-autofill-ignore="true" maxLength={64} disabled={busy} required aria-invalid={!!error||undefined}/></label>
+     <label>Membership code<input ref={code} name="membership-code" autoComplete="one-time-code" autoCapitalize="characters" autoCorrect="off" spellCheck={false} data-autofill-ignore="true" maxLength={64} disabled={busy} required aria-invalid={!!error||undefined} aria-describedby={error?errorId:undefined}/></label>
      <button type="submit" disabled={busy}>Redeem code</button>
    </form>
    <div className="alpha-membership-actions"><button type="button" disabled={busy} onClick={onAddFunds}>Add funds</button><button type="button" disabled={busy||balance==='checking'} onClick={onRefresh}>Check balance</button></div>
-   {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
+   {error&&<p id={errorId} role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
  </section>;
 }
 
