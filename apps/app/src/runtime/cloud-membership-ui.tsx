@@ -12,7 +12,7 @@ function endLabel(endsAt:number):string {
  return days>0?`Ends ${date} · ${days} ${days===1?'day':'days'} left`:`Ended ${date}`;
 }
 /** Approved bottom-sheet content; balances and actions remain bound to the current Cloud account. */
-export function CloudMembershipControls({balance,busy,error,notice,email,credits,plan,endsAt,onRedeem,onAddFunds,onRefresh}:{balance:MembershipBalance;busy:boolean;error?:string;notice?:string;email?:string;credits?:{usd:string;observedAt:number}|null;plan?:SubscriptionView|null;endsAt?:number|null;onRedeem:(code:string)=>Promise<boolean>;onAddFunds:()=>void;onRefresh:()=>void}){
+export function CloudMembershipControls({balance,busy,error,connectionError,notice,email,credits,plan,endsAt,onRedeem,onAddFunds,onRefresh}:{balance:MembershipBalance;busy:boolean;error?:string;connectionError?:string;notice?:string;email?:string;credits?:{usd:string;observedAt:number}|null;plan?:SubscriptionView|null;endsAt?:number|null;onRedeem:(code:string)=>Promise<boolean>;onAddFunds:()=>void;onRefresh:()=>void}){
  const code=useRef<HTMLInputElement>(null),pending=useRef(false),codeEntryId=useId();
  const [codeVisible,setCodeVisible]=useState(false),[submitting,setSubmitting]=useState(false),[submissionError,setSubmissionError]=useState(''),[codeValue,setCodeValue]=useState('');
  const active=plan?.kind==='active',disabled=busy||submitting;
@@ -40,7 +40,7 @@ export function CloudMembershipControls({balance,busy,error,notice,email,credits
      <label>Membership code<input ref={code} name="membership-code" value={codeValue} onChange={event=>setCodeValue(event.target.value)} placeholder="Enter code" autoComplete="one-time-code" autoCapitalize="characters" autoCorrect="off" spellCheck={false} data-autofill-ignore="true" maxLength={64} disabled={disabled} required aria-invalid={!!error||!!submissionError||undefined}/></label>
      <button type="submit" disabled={disabled||!codeValue.trim()}>{submitting?'Redeeming…':'Redeem'}</button>
    </form></div>}
-   {(error||submissionError)&&<p role="alert">{error||submissionError}</p>}{notice&&<p role="status">{notice}</p>}
+   {[...new Set([error||submissionError,connectionError].filter((value):value is string=>!!value))].map(value=><p key={value} role="alert">{value}</p>)}{notice&&<p role="status">{notice}</p>}
  </section>;
 }
 
