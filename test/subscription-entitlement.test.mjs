@@ -473,9 +473,9 @@ test('only admission and its background refresher read the entitlement; turns an
   const importers = [];
   const walk = dir => { for (const entry of fs.readdirSync(dir, {withFileTypes: true})) { const path = `${dir}/${entry.name}`; if (entry.isDirectory()) walk(path); else if (/\.(ts|tsx|js|mjs)$/.test(entry.name) && /subscription-entitlement/.test(fs.readFileSync(path, 'utf8'))) importers.push(path); } };
   walk('apps/app/src');
-  assert.deepEqual(importers.sort(), ['apps/app/src/maps/cloud-provider.ts', 'apps/app/src/prototype/settings-adapter.ts', 'apps/app/src/runtime/cloud-membership-ui.tsx', 'apps/app/src/runtime/cloud-protocol.ts', 'apps/app/src/runtime/connection-ui.tsx', 'apps/app/src/runtime/diagnostics-export.ts', 'apps/app/src/runtime/subscription-entitlement.ts']);
+  // Cloud Maps limit hints are read by the upstream plugin-maps device provider, not from here.
+  assert.deepEqual(importers.sort(), ['apps/app/src/prototype/settings-adapter.ts', 'apps/app/src/runtime/cloud-membership-ui.tsx', 'apps/app/src/runtime/cloud-protocol.ts', 'apps/app/src/runtime/connection-ui.tsx', 'apps/app/src/runtime/diagnostics-export.ts', 'apps/app/src/runtime/subscription-entitlement.ts']);
   for (const [file, typeOnly, names] of [
-    ['apps/app/src/maps/cloud-provider.ts', false, ['readServiceLimit', 'retryDuration']],
     ['apps/app/src/prototype/settings-adapter.ts', false, ['planAdmission']],
     ['apps/app/src/runtime/diagnostics-export.ts', true, ['PlanAdmission', 'PlanStatus', 'SubscriptionView']],
     ['apps/app/src/runtime/cloud-membership-ui.tsx', true, ['SubscriptionView']],
