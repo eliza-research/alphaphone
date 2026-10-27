@@ -912,7 +912,7 @@ test('loop B / J02 on Android signed out: the Eliza Cloud sign-in comes first an
   await expect(dialog).toBeVisible({ timeout: 30_000 });
   await expect(dialog.getByRole('button', { name: 'Continue with Google', exact: true })).toBeDisabled();
   await expect(dialog.getByRole('textbox', { name: 'Email', exact: true })).toBeDisabled();
-  await expect(dialog.getByRole('alert')).toHaveText('Alpha sign-in is temporarily unavailable. Try again.');
+  await expect(dialog.getByRole('alert')).toHaveText('Eliza Cloud sign-in is unavailable right now. Try again.');
   await expect(dialog.getByRole('button', { name: 'Close connection settings', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Use local apps without AI', exact: true })).toHaveCount(0);
   await expect(button(page, 'Start recording')).toHaveCount(0);
