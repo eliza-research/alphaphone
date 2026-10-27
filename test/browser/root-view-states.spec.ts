@@ -10,16 +10,16 @@ type View = typeof ROOT[number] | 'Reminders' | 'Notifications';
 const VIEWS: View[] = [...ROOT, 'Reminders', 'Notifications'];
 const EMPTY: Record<View, RegExp> = {
   Inbox: /Connect Eliza Cloud to use Gmail/,
-  Calendar: /No visible events|Nothing scheduled/,
+  Calendar: /Connect to view Agent Calendar\./,
   Browser: /No open pages|New tab/,
   Camera: /^Camera unavailable$/,
   Photos: /^No photos$/,
   Maps: /Add a location/,
-  Notes: /No notes yet/,
+  Notes: /Waiting for an agent connection to open Notes\./,
   Files: /No recent files/,
   Workflows: /Connect your remote agent in Settings\. Reminders on this phone stay available/,
   Settings: /Not signed in/,
-  Reminders: /No visible events or reminders/,
+  Reminders: /Connect to view Agent Calendar\./,
   Notifications: /No notifications/,
 };
 // Fixture identities from the reference prototype must never appear in a live profile.
@@ -56,6 +56,7 @@ async function open(page: Page, view: View, theme: 'light' | 'dark'): Promise<Lo
   await expect(page.locator('html')).toHaveAttribute('data-active-view', view === 'Reminders' ? 'calendar' : view.toLowerCase());
   const app = page.locator('[data-alpha-layer="app"]');
   await expect(app).toHaveAttribute('aria-hidden', 'false');
+  if(view==='Notes')return page.getByRole('region',{name:'Notes',exact:true}).filter({has:page.getByRole('heading',{name:'Notes',exact:true})});
   return app;
 }
 async function themeIsApplied(surface: Locator, theme: 'light' | 'dark') {
@@ -71,7 +72,7 @@ for (const theme of ['light', 'dark'] as const) for (const view of VIEWS) {
     const surface = await open(page, view, theme);
     // One fresh profile covers the same root's content, landmark and focus.
     if (view !== 'Camera') await themeIsApplied(surface, theme);
-    await expect(surface.getByText(EMPTY[view]).first()).toBeVisible();
+    await expect(surface.getByText(EMPTY[view]).filter({visible:true}).first()).toBeVisible();
     if (view === 'Camera') {
       const recovery = surface.getByRole('alert', { name: 'Camera unavailable', exact: true });
       await expect(recovery).toBeVisible();
