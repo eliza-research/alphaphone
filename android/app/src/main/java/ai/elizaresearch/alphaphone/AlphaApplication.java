@@ -15,6 +15,9 @@ public final class AlphaApplication extends android.app.Application {
   // Isolated helper processes have no app storage; only the main process keeps the problem log and schedules upkeep.
   if(android.os.Process.isIsolated()||!getPackageName().equals(getProcessName()))return;
   AlphaCrashLog.install(this);
+  // A listener wake that reaches a cold process may start voice once the renderer binds a session
+  // for the same native owner (shared SenseInvocation); before this registration it only opens.
+  new ai.eliza.plugins.system.SenseListenerClient(this).admitOwner(()->AlphaLocalAgentPlugin.invocationOwner(this));
   // Shared voice latency trials keep Alpha's existing timing document name and build identity.
   ai.eliza.voice.VoiceLatencyProbe.configureHost("alpha-native-voice-timing-v3",BuildConfig.ELIZA_SOURCE_COMMIT,BuildConfig.ELIZA_SOURCE_DIRTY,BuildConfig.FLAVOR+"-"+BuildConfig.BUILD_TYPE);
   try{NativeDeletionCoordinator.get(this).start();}catch(RuntimeException unavailable){/* Pending intents remain durable and visible on next foreground read. */}
