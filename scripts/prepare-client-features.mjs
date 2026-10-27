@@ -100,6 +100,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-calendar/src/api/client-calendar.ts',
   'plugins/plugin-calendar/src/browser.ts',
   'plugins/plugin-calendar/src/client/named-read.ts',
+  'plugins/plugin-calendar/src/client/availability-review.ts',
   'plugins/plugin-calendar/src/components/EventEditorDrawer.tsx',
   'plugins/plugin-calendar/src/components/event-editor-command.ts',
   'plugins/plugin-calendar/src/components/event-editor-policy.ts',
