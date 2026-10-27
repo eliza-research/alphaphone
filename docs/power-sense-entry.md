@@ -33,3 +33,32 @@ cannot launch the protected child or spoof Power through SearchManager. On the e
 paired image verify ordinary Assist/QS/lock no-capture, cold no-capture, same-child warm
 one-shot capture, owner/session changes, visibility, cancellation and lock races.
 No hardware/audio result is inferred from source tests.
+
+## Isolated cold-entry extension (not device qualified)
+
+The cold-entry prototype adds a separate native protected-launch grant. It does not queue an
+unbound warm/listener receipt. Only fresh `AlphaPowerVoiceActivity.onCreate(null)` may ask the
+shared SDK to begin it; restore, ordinary Assist and caller extras provide no authority.
+The first actual bridge, five-second deadline, focus, full lease and one-use checks remain SDK-owned.
+
+`AlphaLocalAgentPlugin.PowerLaunchPin` constrains that protected launch to a currently admitted
+production Cloud account verified natively by `/api/v1/user`, including the organization or its
+explicit absence. The renderer supplies the same canonical public account reference from its
+independently verified Cloud service session. Neither value grants microphone access by itself.
+Existing microphone permission is required before mint and at authorization, so an initial launch
+cannot wait across a new permission approval.
+
+A process-wide authorization-mutation epoch advances inside actual critical credential/provider
+commits, including no-shutdown changes, removal, CAS, provider admission, rollback and ABA. The
+comparison uses the actual persisted provider value after admission stripping. Normal resident
+startup's lifecycle epoch is deliberately independent. Native account/epoch validation and SDK
+issuance share one atomic `authorize` callback under `lifecycleLock -> JsonCredentialSlots.LOCK ->
+SDK` ordering; the SDK must enter this callback without holding its own locks.
+
+Renderer startup waiting is explicit and bounded by the original native deadline. Initial render
+before the initialize effect and quiet automatic restoration may wait. Interactive sign-in, setup,
+errors and visible connection/modal UI invalidate the grant. A signed-out account never obtains a
+native pin. A late restore or missing admission leaves the ordinary surface available for Talk.
+
+Focused source/JVM and Android API compilation checks are not a full APK, emulator lifecycle,
+physical Power, cold-start timing or speech acceptance. Those gates remain pending.

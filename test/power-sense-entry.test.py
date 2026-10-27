@@ -34,16 +34,19 @@ class PowerSenseEntry(unittest.TestCase):
 public class SenseListenerClient {
  public static int ordinary,powerAttempts,powerAccepted;public static String caller,origin;public static boolean bound,ownsActivity=true;
  public SenseListenerClient(Object context){}
+ public static int coldBegins,cancels,focusChanges;public boolean beginProtectedPowerLaunch(Object pin){coldBegins++;return true;}public void protectedPowerWindowFocusChanged(boolean focus){focusChanges++;}public void cancelProtectedPowerLaunch(){cancels++;}
  public static void reset(){ordinary=powerAttempts=powerAccepted=0;caller=origin=null;bound=false;ownsActivity=true;}
  public void recordInvocation(String from){ordinary++;caller=from;origin="assist";}
  public boolean recordProtectedPower(){powerAttempts++;if(!ownsActivity)return false;if(!bound){origin=null;return false;}origin="power";powerAccepted++;return true;}
 }''')
+            write(out,'ai/elizaresearch/alphaphone/AlphaLocalAgentPlugin.java','package ai.elizaresearch.alphaphone;class AlphaLocalAgentPlugin {static class PowerLaunchPin {}static PowerLaunchPin pin;static PowerLaunchPin capturePowerLaunchPin(Object context){return pin;}}')
             write(out,'ai/elizaresearch/alphaphone/MainActivity.java',r'''package ai.elizaresearch.alphaphone;
 import android.os.Bundle;import android.content.Intent;import android.app.ComponentCaller;
 public class MainActivity {
  public static class Bridge {public int events;public void triggerWindowJSEvent(String name){events++;}}
  public Bridge bridge;public Intent intent;public int superNew;public String caller="foreign.package";
  protected boolean isAssistantSurface(){return false;}public Bridge getBridge(){return bridge;}
+ public void onWindowFocusChanged(boolean f){}public void onPause(){}public void onDestroy(){}
  public void onCreate(Bundle b){}public void onNewIntent(Intent i){superNew++;}public void onNewIntent(Intent i,ComponentCaller c){onNewIntent(i);}
  public void setIntent(Intent i){intent=i;}public String getLaunchedFromPackage(){return caller;}
 }''')
@@ -66,6 +69,8 @@ public final class PowerEntryTest {
   AlphaPowerVoiceActivity restored=new AlphaPowerVoiceActivity();SenseListenerClient.bound=true;int offered=SenseListenerClient.powerAttempts;restored.onCreate(new Bundle());check(SenseListenerClient.powerAttempts==offered&&SenseListenerClient.origin.equals("assist"));
   restored.onNewIntent(new Intent(restored,AlphaPowerVoiceActivity.class));check(SenseListenerClient.powerAttempts==offered); // no bridge
   AlphaAssistActivity ordinary=new AlphaAssistActivity();ordinary.bridge=new MainActivity.Bridge();ordinary.onCreate(null);ordinary.onNewIntent(new Intent(ordinary,AlphaAssistActivity.class),new ComponentCaller("foreign.package"));check(SenseListenerClient.powerAttempts==offered);check(ordinary.intent.target==AlphaAssistActivity.class&&ordinary.intent.extras==1);check(ordinary.takeInvocation().equals("assist")&&p.takeInvocation().equals("assist"));
+  AlphaLocalAgentPlugin.pin=new AlphaLocalAgentPlugin.PowerLaunchPin();AlphaPowerVoiceActivity fresh=new AlphaPowerVoiceActivity();fresh.onCreate(null);check(SenseListenerClient.coldBegins==1);fresh.onWindowFocusChanged(true);fresh.onWindowFocusChanged(false);check(SenseListenerClient.focusChanges==2);fresh.onPause();fresh.onDestroy();check(SenseListenerClient.cancels==2);
+  AlphaPowerVoiceActivity recreated=new AlphaPowerVoiceActivity();recreated.onCreate(new Bundle());check(SenseListenerClient.coldBegins==1);new AlphaAssistActivity().onCreate(null);check(SenseListenerClient.coldBegins==1);
   System.out.println("PASS actual Power shell: cold/restored/no-bridge/ordinary fail closed; same-bound-instance callback once; owner reset clears offer");
  }
 }''')
@@ -79,7 +84,8 @@ public final class PowerEntryTest {
         with tempfile.TemporaryDirectory(prefix='alpha-power-sense-api36-')as temp:
             out=Path(temp)
             write(out,'androidx/annotation/RequiresApi.java','package androidx.annotation;public @interface RequiresApi {int value();}')
-            write(out,'ai/eliza/plugins/system/SenseListenerClient.java','package ai.eliza.plugins.system;public class SenseListenerClient {public SenseListenerClient(android.content.Context c){}public void recordInvocation(String c){}public boolean recordProtectedPower(){return false;}}')
+            write(out,'ai/eliza/plugins/system/SenseListenerClient.java','package ai.eliza.plugins.system;public class SenseListenerClient {public SenseListenerClient(android.content.Context c){}public void recordInvocation(String c){}public boolean recordProtectedPower(){return false;}public boolean beginProtectedPowerLaunch(Object pin){return false;}public void protectedPowerWindowFocusChanged(boolean f){}public void cancelProtectedPowerLaunch(){}}')
+            write(out,'ai/elizaresearch/alphaphone/AlphaLocalAgentPlugin.java','package ai.elizaresearch.alphaphone;class AlphaLocalAgentPlugin {static class PowerLaunchPin {}static PowerLaunchPin capturePowerLaunchPin(Object context){return null;}}')
             write(out,'ai/elizaresearch/alphaphone/MainActivity.java',r'''package ai.elizaresearch.alphaphone;
 public class MainActivity extends android.app.Activity {protected boolean isAssistantSurface(){return false;}public static class Bridge {public void triggerWindowJSEvent(String n){}}public Bridge getBridge(){return null;}@Override public void onCreate(android.os.Bundle b){super.onCreate(b);}@Override public void onNewIntent(android.content.Intent i){super.onNewIntent(i);}}
 ''')
