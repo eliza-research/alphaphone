@@ -124,6 +124,13 @@ final class AlphaCredentialStore {
    public T commit()throws Exception{return step.call();}
   });
  }
+ /** Automatic startup unbind is a no-op when native confirms there is no provider.
+  * Explicit clear still uses removeCredentialSlot and durably blocks legacy recovery. */
+ void removeProviderIfPresent()throws Exception{
+  String before=recoveryStep(()->slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT)));
+  if(before==null)return;
+  if(!compareExchangeCredentialSlot(LocalAgentProviderAdmission.PROVIDER_SLOT,before,null))throw new IllegalStateException("Provider changed");
+ }
  boolean legacyCloudRecoveryEligible()throws Exception{return recoveryStep(()->legacyRecovery().eligible());}
  boolean restoreLegacyCloudCredential()throws Exception{
   LegacyCloudRecovery.Snapshot before=recoveryStep(()->legacyRecovery().snapshot());

@@ -4,7 +4,7 @@ import ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots;
 public final class StoreIntegrationTest {
  static void check(boolean value,String why){if(!value)throw new AssertionError(why);}
  public static void main(String[] args)throws Exception{
-  for(String operation:new String[]{"restore","remove","same-remove","write","provider"}){
+  for(String operation:new String[]{"restore","remove","same-remove","write","provider","explicit-provider-clear"}){
    android.content.Context context=new android.content.Context(new File(args[0],operation));
    JsonCredentialSlots raw=new JsonCredentialSlots(new File(context.getNoBackupFilesDir(),"connection-credentials"),"alpha.connection.aes.v1",name->262144);
    raw.write("cloud:production",LegacyCloudRecoveryTest.SAVED);
@@ -21,6 +21,7 @@ public final class StoreIntegrationTest {
     check(AlphaConnectionPlugin.verified==2,"normal admission rechecks canonical identity instead of reusing old proof");
    }else{
     if(operation.equals("remove")||operation.equals("same-remove"))store.removeCredentialSlot("cloud:production");
+    else if(operation.equals("explicit-provider-clear"))AlphaLocalAgentPlugin.clearProviderSlot(store,false);
     else if(operation.equals("write"))store.writeCredentialSlot("cloud:production",LegacyCloudRecoveryTest.SAVED);
     else store.writeCredentialSlot("local-agent-provider:v1","{\"provider\":\"cerebras\",\"model\":\"qwen-3.8-27b\"}");
     check(!store.legacyCloudRecoveryEligible(),"actual explicit mutation suppresses future restore: "+operation);
@@ -34,6 +35,15 @@ public final class StoreIntegrationTest {
   android.util.AtomicFile.failAfterStarts=0;
   try{new AlphaCredentialStore(context).removeCredentialSlot("cloud:production");throw new AssertionError("failed tombstone allowed removal");}catch(java.io.IOException expected){}
   check(LegacyCloudRecoveryTest.SAVED.equals(raw.read(CloudDeployment.STORAGE_NAMESPACE+"cloud:production")),"failed tombstone keeps current key");
+  android.content.Context startup=new android.content.Context(new File(args[0],"passive-startup"));
+  JsonCredentialSlots startupRaw=new JsonCredentialSlots(new File(startup.getNoBackupFilesDir(),"connection-credentials"),"alpha.connection.aes.v1",name->262144);
+  startupRaw.write("cloud:production",LegacyCloudRecoveryTest.SAVED);
+  AlphaCredentialStore startupStore=new AlphaCredentialStore(startup);
+  check(!AlphaLocalAgentPlugin.clearProviderSlot(startupStore,true).optBoolean("configured"),"startup confirms genuinely empty provider");
+  check(startupStore.legacyCloudRecoveryEligible()&&startupRaw.read(CloudDeployment.STORAGE_NAMESPACE+LegacyCloudRecovery.JOURNAL)==null,"automatic empty unbind preserves recovery instead of manufacturing signout");
+  startupRaw.write(CloudDeployment.STORAGE_NAMESPACE+"local-agent-provider:v1","{}");
+  AlphaLocalAgentPlugin.clearProviderSlot(startupStore,true);
+  check(startupStore.readCredentialSlot("local-agent-provider:v1")==null&&!startupStore.legacyCloudRecoveryEligible(),"present provider removal still clears and tombstones even if malformed");
   // Hold the REAL lifecycle lock while recovery starts. Correct code waits before acquiring
   // the vault. The previous Json→intent path occupies the vault and fails this bounded test.
   android.content.Context contention=new android.content.Context(new File(args[0],"lock-order"));

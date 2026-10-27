@@ -40,5 +40,7 @@ public final class LegacyCloudRecoveryTest {
   }
   fresh();slots.write(NS+LegacyCloudRecovery.JOURNAL,"{\"status\":\"complete\"}");check(!recovery.eligible(),"completed marker no reimport even absent target");
   System.out.println("PASS "+passed+" real encrypted-slot recovery assertions");
+  StoreIntegrationTest.main(new String[]{new File(root,"integration").getPath()});
+  RendererRecoverySlotsTest.main(new String[0]);
  }
 }

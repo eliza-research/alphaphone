@@ -7,7 +7,7 @@ import org.json.JSONObject;
 /** Explicit recovery of this product's pre-deployment production sign-in. Never a read fallback. */
 final class LegacyCloudRecovery {
  static final String LEGACY_NAMESPACE="cloud-deployment:897efc6f09b9d4db345c61226d8301a9f1257ad98f0491e8591f63d4f4515874:";
- static final String JOURNAL="cloud:legacy-recovery:v1";
+ static final String JOURNAL="cloud-signin:legacy-recovery:v1";
  static final String CLOUD="cloud:production";
  static final String PROVIDER="local-agent-provider:v1";
  private final JsonCredentialSlots slots;

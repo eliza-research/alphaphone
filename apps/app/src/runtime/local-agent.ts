@@ -27,7 +27,7 @@ export interface LocalAgentBridge {
   archiveRecovery?(input:{reviewToken:string}):Promise<unknown>;
   configureProvider?(input:{apiKey:string;model:string}):Promise<unknown>;
   providerStatus?():Promise<{provider?:unknown;configured?:unknown;model?:unknown}>;
-  clearProvider?():Promise<{configured?:unknown}>;
+  clearProvider?(input?:{onlyIfPresent:true}):Promise<{configured?:unknown}>;
   /** Read-only native query; see residentAttachable. */
   residentAttachment?(input:{credentialId?:string}):Promise<{attachable?:unknown;reason?:unknown}>;
   configureCloudProvider?(input:{credentialId:string;model:string}):Promise<unknown>;
@@ -406,10 +406,10 @@ export async function localProviderStatus():Promise<LocalProviderStatus> {
   return parseProviderStatus(await native.providerStatus());
 }
 /** Removes the stored key and reads native status back; success requires configured:false. */
-export async function clearLocalProvider():Promise<LocalProviderStatus> {
+export async function clearLocalProvider(onlyIfPresent=false):Promise<LocalProviderStatus> {
   if(browserCloudResidentEnabled){const cleared=parseProviderStatus(await browserResidentCall('residentClear'));if(cleared.configured)throw Error('Cloud provider removal unconfirmed');return cleared;}
   if(!Capacitor.isNativePlatform()||!native.clearProvider)throw Error('Provider removal is unavailable in this version.');
-  const cleared=await native.clearProvider();
+  const cleared=await native.clearProvider(onlyIfPresent?{onlyIfPresent:true}:undefined);
   if(record(cleared).configured!==false)throw Error('The provider key could not be confirmed removed.');
   const status=await localProviderStatus();
   if(status.configured)throw Error('The provider key could not be confirmed removed.');
