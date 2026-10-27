@@ -1,3 +1,4 @@
+import {newWorkflow} from './workflow-navigation';
 import {test,expect} from '@playwright/test';
 const ownerFence=(ownerId:string)=>({owner:{origin:'https://device.alpha.invalid',ownerId,agentId:'fixture-agent'}});
 // Production renderer and authenticated connection; controlled transport/native queue, no real notification.
@@ -167,7 +168,7 @@ for(const scenario of ['lookup-unavailable','lookup-unavailable-navigation','ask
   await expect(page.getByText('Verified retained result run1',{exact:true})).toHaveCount(0);
  }else if(scenario==='builder-race'){
   await expect.poll(()=>page.evaluate(()=>Boolean((window as any).deliveryFixture.release))).toBe(true);
-  await page.getByRole('button',{name:'New automation',exact:true}).click();await page.getByRole('button',{name:/^Workflow Build reviewed steps/}).click();
+  await newWorkflow(page);
   await page.evaluate(()=>(window as any).deliveryFixture.release());
   await expect(page.getByText('Verified retained result run1',{exact:true})).toHaveCount(0);
   expect(await page.evaluate(()=>(window as any).deliveryFixture.consumed?.length||0)).toBe(0);

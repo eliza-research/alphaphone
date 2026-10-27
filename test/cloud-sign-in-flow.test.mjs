@@ -251,7 +251,7 @@ test('native sign-in never falls back to hosted login when readiness fails',asyn
 // Evaluate the actual JSX prop, rather than maintaining a second sign-in view.
 test('browser resident sign-in exposes the existing hosted hand-off only in its admitted view',()=>{
  const ui=read('apps/app/src/runtime/connection-ui.tsx');
- const expression=between(ui,'      extra={','}/>').slice('      extra={'.length);
+ const expression=between(ui,'      extra={','}/>\n').slice('      extra={'.length);
  const compiled=transformSync('const extra='+expression+';',{loader:'tsx',jsxFactory:'React.createElement'}).code;
  const render=new Function('React','browserCloudResidentEnabled','testMocksEnabled','snapshot','connectionController','productionSignInRequired','residentEnvironment',compiled+'return extra;');
  let calls=0;const controller={signInBrowser(){calls++;}};
