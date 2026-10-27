@@ -16,7 +16,7 @@ const owner = { token: 'synthetic-cloud-key', userId: id, email: 'owner@example.
 const composer = (page: Page) => page.locator('[data-alpha-layer="composer"][aria-hidden="false"], [data-alpha-layer="conversation"][aria-hidden="false"]').getByRole('textbox').first();
 const conversation = (page: Page) => page.locator('[data-alpha-layer="conversation"]');
 const bubble = (page: Page, text: string) => page.getByRole('button', { name: 'Message actions: ' + text, exact: true });
-const UNKNOWN = 'Your message may have reached the agent. Check before sending it again.';
+const UNKNOWN = 'The reply stopped before it finished. Check the saved conversation before trying again.';
 const NOT_SENT = 'Not sent. Your message is back in the composer.';
 
 async function connected(page: Page) {
@@ -31,8 +31,8 @@ async function send(page: Page, text: string) { await composer(page).fill(text);
 const KINDS = {
   // Cloud's billing refusal is a service limit (subscription-entitlement.ts): nothing is bought or upgraded.
   insufficient_credits: "Eliza Cloud declined this AI request for your account's billing. Check your account in Settings. Alpha Phone did not retry your message, and nothing is purchased automatically. Local apps keep working.",
-  provider_issue: 'Hosted inference (Eliza Cloud / Cerebras) could not be reached; nothing was retried.',
-  generation_timeout: 'Hosted inference (Eliza Cloud / Cerebras) could not be reached; nothing was retried.',
+  provider_issue: 'Alpha’s AI service could not complete this reply. Nothing was resent.',
+  generation_timeout: 'Alpha’s AI service could not complete this reply. Nothing was resent.',
   // Bound to an admitted plan, yet the agent ran without a provider: a recheck is offered.
   no_provider: 'Your agent answered without its Eliza Cloud AI connection. Check Eliza Cloud again; nothing was retried.',
 } as const;
@@ -59,16 +59,21 @@ for (const [kind, text] of Object.entries(KINDS)) for (const frame of ['done', '
       await code.click();
       const account = page.getByRole('dialog', { name: /^Eliza Cloud account/ });
       await expect(account).toBeVisible();
-      await expect(account.getByRole('textbox', { name: 'Subscription code' })).toBeVisible();
-      await expect(account.getByRole('button', { name: /^(Manage (billing|plan) in Eliza Cloud|Choose a plan)/ })).toBeVisible();
+      await expect(account.getByRole('textbox', { name: 'Membership code' })).toBeVisible();
+      await expect(account.getByRole('button', { name: 'Add funds', exact: true })).toBeVisible();
       expect(await stub(page, s => s.opened)).toEqual([]);
       await page.screenshot({path:info.outputPath('membership-code-mobile.png'),animations:'disabled'});
       await page.setViewportSize({width:1024,height:768});
-      await expect(account.getByRole('textbox',{name:'Subscription code'})).toBeVisible();
+      await expect(account.getByRole('textbox',{name:'Membership code'})).toBeVisible();
       await page.screenshot({path:info.outputPath('membership-code-wide.png'),animations:'disabled'});
       await page.setViewportSize({width:412,height:915});
       await account.getByRole('button', { name: 'Close connection settings', exact: true }).click();
       await manage.click();
+      await expect(page.getByRole('heading',{name:'Check the billing account',exact:true})).toBeVisible();
+      await expect(page.getByRole('button',{name:'Open billing',exact:true})).toBeDisabled();
+      expect(await stub(page,s=>s.opened)).toEqual([]);
+      await page.getByRole('checkbox',{name:'I’ll check the account before paying.',exact:true}).check();
+      await page.getByRole('button',{name:'Open billing',exact:true}).click();
       await expect.poll(() => stub(page, s => s.opened)).toEqual(['https://cloud.eliza.app/cloud/billing']);
     } else {
       if (kind === 'no_provider') await expect(page.getByRole('button', { name: /^Check Eliza Cloud again/ })).toHaveCount(1);
@@ -176,7 +181,7 @@ test('a resident stream that fails after the turn was recorded offers a history 
   await stub(page, s => { s.stream = 'drop'; });
   await send(page, 'Dropped after recording');
   await expect(page.getByText(UNKNOWN, { exact: true })).toHaveCount(1);
-  await expect(page.getByRole('button', { name: /^Check for reply/ })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /^Check saved conversation/ })).toHaveCount(1);
   await expect(composer(page)).toHaveValue('');
   // The one re-read of a dropped stream reuses the same clientMessageId; nothing new is posted.
   const [body] = await stub(page, s => s.bodies);

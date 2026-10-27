@@ -141,6 +141,7 @@ test('the list shows only the agent’s workflows; detail, Run with its receipt,
   expect(sent.body.submissionId).toMatch(/^[0-9a-f-]{36}$/);
   // The receipt is the agent's execution: its status and output.
   await expect(page.getByText('Synthetic agenda: two meetings before noon.', { exact: true })).toBeVisible();
+  await page.locator('summary').filter({hasText:'Execution details'}).click();
   await expect(page.getByText('Terminal execution reported by agent', { exact: true })).toBeVisible();
   await button(page, 'Back to Agenda digest').click();
   await expect(button(page, 'finished execution')).toBeVisible();
