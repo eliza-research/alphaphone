@@ -24,7 +24,7 @@ async function fixture(){
  const calendar=new AgentCalendar(()=>port,preservation,()=>api as never);
  await calendar.refresh({});
  const create=(key:string)=>calendar.create(calendarSourceKey(source as never),{idempotencyKey:key,title:'Synthetic test',startAt:'2026-10-25T09:00:00Z',endAt:'2026-10-25T10:00:00Z'} as Parameters<AgentCalendar['create']>[1]);
- return {calendar,snapshot,writes,create,setCapture:(next:CalendarPreservation['capture'])=>{capture=next;}};
+ return {calendar,api,snapshot,writes,create,setCapture:(next:CalendarPreservation['capture'])=>{capture=next;}};
 }
 
 test('pending reservation covers the first await and refuses a concurrent write',async()=>{
@@ -55,4 +55,19 @@ test('preservation rejection releases pending and permits a later explicit write
  assert.deepEqual(f.writes,['later-explicit-request']);
  assert.equal(f.calendar.state.mutating,false);
  f.calendar.retire();
+});
+
+test('a failed read keeps the last verified next event instead of blanking the Home card',async()=>{
+ const f=await fixture(),next={event:{id:'standup',agentId:'test-agent',title:'Standup',endAt:'2999-01-01T10:00:00Z'}};
+ f.api.getLifeOpsNextCalendarEventContext=async()=>next as never;await f.calendar.refresh({});
+ assert.equal(f.calendar.state.next,next);
+ f.api.getLifeOpsNextCalendarEventContext=async()=>{throw Error('Synthetic next-context failure');};await f.calendar.refresh({});
+ assert.equal(f.calendar.state.status,'ready','the feed still renders');assert.equal(f.calendar.state.next,next);
+ f.api.getLifeOpsCalendarFeed=async()=>{throw Error('Synthetic feed failure');};await f.calendar.refresh({});
+ assert.equal(f.calendar.state.status,'error');assert.equal(f.calendar.state.feed,null);assert.equal(f.calendar.state.next,next);
+ f.api.getLifeOpsCalendarFeed=async()=>({state:'complete',events:[]}) as never;
+ f.api.getLifeOpsNextCalendarEventContext=async()=>({event:{...next.event,endAt:'2000-01-01T10:00:00Z'}}) as never;await f.calendar.refresh({});
+ f.api.getLifeOpsNextCalendarEventContext=async()=>{throw Error('Synthetic next-context failure');};await f.calendar.refresh({});
+ assert.equal(f.calendar.state.next,null,'an event that has ended is not kept as the next one');
+ f.calendar.retire();assert.equal(f.calendar.state.next,null);
 });

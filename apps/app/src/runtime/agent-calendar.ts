@@ -28,19 +28,24 @@ export class AgentCalendar {
   if(!port){this.binding='';this.publish(empty());return;}
   if(!port.current()){this.binding='';this.publish(empty());return;}const ownerKey=calendarOwnerKey(port),binding=JSON.stringify([ownerKey,port.sessionId,port.scope]);this.binding=binding;
   if(this.value.ownerKey!==ownerKey)this.value=empty();
-  this.publish({ownerKey,status:'loading',error:null,feed:null,calendars:[],next:null,mutating:false});
+  this.publish({ownerKey,status:'loading',error:null,feed:null,calendars:[],mutating:false});
   try{
    const legacy=await this.preservation.capture(signal);this.current(port,epoch,signal);this.publish({legacy});
    if(!legacy.readable||legacy.pending){this.publish({status:'legacy-recovery'});return;}
    if(legacy.present&&!await this.preservation.retainedReadOnly(ownerKey,legacy.fingerprint,signal)){this.current(port,epoch,signal);this.publish({status:'transition-required'});return;}
    this.current(port,epoch,signal);const api=this.client(port,signal);
-   const [feed,sources,next]=await Promise.all([api.getLifeOpsCalendarFeed(window,{signal}),api.getLifeOpsCalendars({side:window.side,mode:window.mode},{signal}),api.getLifeOpsNextCalendarEventContext({side:window.side,mode:window.mode,timeZone:window.timeZone})]);
+   const [feedRead,sourcesRead,nextRead]=await Promise.allSettled([api.getLifeOpsCalendarFeed(window,{signal}),api.getLifeOpsCalendars({side:window.side,mode:window.mode},{signal}),api.getLifeOpsNextCalendarEventContext({side:window.side,mode:window.mode,timeZone:window.timeZone})]);
    this.current(port,epoch,signal);
+   // A failed next-event read keeps the last verified one for this owner until it ends; the feed and sources are still required.
+   if(nextRead.status==='fulfilled'){if(nextRead.value.event&&nextRead.value.event.agentId!==port.identity.agentId)throw Error('Calendar response belongs to another agent');this.publish({next:nextRead.value});}
+   else if(Date.parse(this.value.next?.event?.endAt??'')<=Date.now())this.publish({next:null});
+   if(feedRead.status==='rejected')throw feedRead.reason;if(sourcesRead.status==='rejected')throw sourcesRead.reason;
+   const feed=feedRead.value,sources=sourcesRead.value;
    if(window.timeMin&&Date.parse(window.timeMin)!==Date.parse(feed.timeMin)||window.timeMax&&Date.parse(window.timeMax)!==Date.parse(feed.timeMax))throw Error('Calendar response window changed');
-   if(feed.events.some((e:LifeOpsCalendarEvent)=>e.agentId!==port.identity.agentId)||next.event&&next.event.agentId!==port.identity.agentId)throw Error('Calendar response belongs to another agent');
+   if(feed.events.some((e:LifeOpsCalendarEvent)=>e.agentId!==port.identity.agentId))throw Error('Calendar response belongs to another agent');
    const revisions=await Promise.all(sources.calendars.map(async(source:LifeOpsCalendarSummary)=>[calendarSourceKey(source),Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(calendarSourceKey(source))))).map(n=>n.toString(16).padStart(2,'0')).join('')] as const));this.current(port,epoch,signal);this.sourceRevisions=new Map(revisions);
-   this.publish({feed,calendars:sources.calendars,next,status:feed.state==='complete'?'ready':feed.state==='partial'?'partial':'unavailable'});
-  }catch(error){if(epoch===this.epoch&&!signal.aborted)this.publish({status:'error',error:error instanceof Error?error.message:'Calendar could not be verified',feed:null,calendars:[],next:null});}
+   this.publish({feed,calendars:sources.calendars,status:feed.state==='complete'?'ready':feed.state==='partial'?'partial':'unavailable'});
+  }catch(error){if(epoch===this.epoch&&!signal.aborted)this.publish({status:'error',error:error instanceof Error?error.message:'Calendar could not be verified',feed:null,calendars:[]});}
  }
  async confirmLegacyRetention(){
   const port=this.port(),previous=this.value.legacy;if(!port||!previous||!this.preservation.confirmReadOnly)throw Error('Calendar transition review is required');
