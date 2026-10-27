@@ -1,3 +1,4 @@
+import {openLegacyNotes} from './helpers/legacy-notes';
 import {test,expect} from '@playwright/test';
 import {silentMicrophone,agentContext} from './voice-fixture';
 
@@ -10,7 +11,7 @@ test.beforeEach(async({page})=>{await page.addInitScript(()=>localStorage.setIte
 test('unavailable chat voice preserves the selected note and returns to typing without sending',async({page})=>{
  let sent=0;page.on('request',request=>{if(request.method()==='POST')sent++;});
  await page.goto('/');await silentMicrophone(page);
- await page.getByRole('button',{name:'Notes',exact:true}).click();
+ await openLegacyNotes(page);
  await page.getByRole('button',{name:'New note',exact:true}).click();
  await page.getByRole('textbox',{name:'Title',exact:true}).fill('Voice context');
  await page.getByRole('textbox',{name:'Note',exact:true}).fill('Original body stays put.');

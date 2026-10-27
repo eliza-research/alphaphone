@@ -1,12 +1,13 @@
+import {openLegacyNotes} from './helpers/legacy-notes';
 import {guardCalendarFixture as guardNoMedia} from './calendar-draft-readiness';
 import { returnToApps } from './app-navigation';
 import {test,expect,type Page} from '@playwright/test';
 test.beforeEach(async({context})=>guardNoMedia(context));
 const key='alpha.browser.execution.local.v1';
 async function open(page:Page){await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Agent connection',exact:true}).click();}
-async function setup(page:Page){await page.goto('/?mode=dev');await open(page);await page.getByRole('button',{name:'Connect development profile'}).click();await page.getByRole('button',{name:'Agent connection',exact:true}).click();await page.getByText('Development device actions',{exact:true}).click();}
+async function setup(page:Page){await page.goto('/?mode=dev');await openLegacyNotes(page);await returnToApps(page);await open(page);await page.getByRole('button',{name:'Connect development profile'}).click();await page.getByRole('button',{name:'Agent connection',exact:true}).click();await page.getByText('Development device actions',{exact:true}).click();}
 async function queue(page:Page){await page.getByRole('button',{name:'Queue action for review'}).click();await expect(page.getByText('Action queued. Send a chat message to review it on the current screen.',{exact:true})).toBeVisible();}
-async function chat(page:Page){await page.getByRole('button',{name:'Close connection settings'}).click();await returnToApps(page);await page.getByRole('textbox',{name:'Ask Alpha',exact:true}).fill('Review my development action');await page.getByRole('textbox',{name:'Ask Alpha',exact:true}).press('Enter');await expect(page.getByText('Create note',{exact:true})).toBeVisible();}
+async function chat(page:Page){await page.getByRole('button',{name:'Close connection settings'}).click();await returnToApps(page);await page.getByRole('textbox',{name:/^(Ask Alpha|Message Alpha)$/}).fill('Review my development action');await page.getByRole('textbox',{name:/^(Ask Alpha|Message Alpha)$/}).press('Enter');await expect(page.getByText('Create note',{exact:true})).toBeVisible();}
 const state=(page:Page)=>page.evaluate(async()=>(await (await import('/src/browser/development-execution-document.ts')).readExecutionPart({namespace:'local'} as any,'actions',()=>({proposals:[],journal:[]}))));
 test('queued development action executes once only after review and preserves its receipt on reload',async({page})=>{
  await setup(page);await queue(page);expect((await state(page)).proposals[0].state).toBe('pending');expect((await state(page)).journal).toHaveLength(0);await chat(page);await expect(page.getByText('Create note',{exact:true})).toHaveCount(1);expect(await page.evaluate(async ()=>JSON.parse((await (await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw())||'{"records":[]}').records.some((n:any)=>n.title==='Development note'))).toBe(false);await page.getByText('Create note',{exact:true}).click();await expect.poll(async()=>(await state(page)).proposals[0].state).toBe('completed');expect((await state(page)).journal[0].phase).toBe('terminal');await page.reload();await open(page);await page.getByText('Development device actions',{exact:true}).click();await page.getByRole('button',{name:'Sync recorded receipts'}).click();await expect(page.getByText('completed',{exact:true})).toBeVisible();expect(await page.evaluate(async ()=>JSON.parse((await (await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw())!).records.filter((n:any)=>n.title==='Development note').length)).toBe(1);
@@ -34,10 +35,11 @@ test('journal write failure never dispatches the reviewed effect',async({page})=
 });
 test('two tabs cannot execute the same development proposal twice',async({page,context})=>{
  await setup(page);await queue(page);await chat(page);
- const other=await context.newPage();await other.goto('/?mode=dev');
+ const other=await context.newPage();await other.goto('/?mode=dev');await openLegacyNotes(other);await returnToApps(other);
  await expect.poll(()=>other.evaluate(async()=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');return !!c.getSnapshot().session;})).toBe(true);
- await other.getByRole('textbox',{name:'Ask Alpha',exact:true}).fill('Review this proposal');
- await other.getByRole('textbox',{name:'Ask Alpha',exact:true}).press('Enter');
+ await other.getByRole('button',{name:'Type',exact:true}).click();
+ await other.getByRole('textbox',{name:/^(Ask Alpha|Message Alpha)$/}).fill('Review this proposal');
+ await other.getByRole('textbox',{name:/^(Ask Alpha|Message Alpha)$/}).press('Enter');
  await expect(other.getByText('Create note',{exact:true})).toBeVisible();
  // Queue both real UI intents before either storage claim can complete. Without
  // this barrier the winning tab can disable the other button before its click,
@@ -68,7 +70,7 @@ test('Home cancels proposal authoring queued behind storage without publishing i
 for(const action of ['set','show','dismiss','snooze'] as const)test(`approved development Clock ${action} reaches the browser Clock`,async({page})=>{
  await setup(page);
  const operation=await page.evaluate(action=>action==='set'?{type:'clock_handoff',action,hour:7,minute:30,label:'Agent alarm',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}:action==='snooze'?{type:'clock_handoff',action,snoozeMinutes:12}:{type:'clock_handoff',action},action);
- await page.getByRole('textbox',{name:'Action JSON'}).fill(JSON.stringify(operation));await queue(page);await page.getByRole('button',{name:'Close connection settings'}).click();await returnToApps(page);await page.getByRole('textbox',{name:'Ask Alpha',exact:true}).fill('Review Clock action');await page.getByRole('textbox',{name:'Ask Alpha',exact:true}).press('Enter');await expect(page.getByText('clock handoff',{exact:true})).toBeVisible();
+ await page.getByRole('textbox',{name:'Action JSON'}).fill(JSON.stringify(operation));await queue(page);await page.getByRole('button',{name:'Close connection settings'}).click();await returnToApps(page);await page.getByRole('textbox',{name:/^(Ask Alpha|Message Alpha)$/}).fill('Review Clock action');await page.getByRole('textbox',{name:/^(Ask Alpha|Message Alpha)$/}).press('Enter');await expect(page.getByText('clock handoff',{exact:true})).toBeVisible();
  // Seed the ringing alarm after navigation, then close its modal explicitly.
  // Closing Clock silences its UI without dismissing or snoozing the alarm.
  if(action==='dismiss'||action==='snooze'){
@@ -112,7 +114,7 @@ for(const mode of ['none','lead','repeat','lost-response','old-native'] as const
  await page.clock.setFixedTime(new Date('2026-10-02T12:00:00Z'));await setup(page);
  const schedule={at:Date.parse('2026-10-02T13:00:00Z')-(mode==='lead'?600000:0),dueAt:Date.parse('2026-10-02T13:00:00Z'),alertMinutes:mode==='lead'?10:null,recurrence:mode==='repeat'?{rule:'daily',zone:'UTC',date:'2026-10-02',time:'13:00',leadMinutes:0}:null};
  const operation={type:'reminder_create',fields:{title:'Reviewed creation',body:'Exact private details',schedule}};
- await page.getByRole('textbox',{name:'Action JSON'}).fill(JSON.stringify(operation));await queue(page);await page.getByRole('button',{name:'Close connection settings'}).click();await returnToApps(page);await page.getByRole('textbox',{name:'Ask Alpha',exact:true}).fill('Review reminder creation');await page.getByRole('textbox',{name:'Ask Alpha',exact:true}).press('Enter');await expect(page.getByText('Create reminder',{exact:true})).toBeVisible();
+ await page.getByRole('textbox',{name:'Action JSON'}).fill(JSON.stringify(operation));await queue(page);await page.getByRole('button',{name:'Close connection settings'}).click();await returnToApps(page);await page.getByRole('textbox',{name:/^(Ask Alpha|Message Alpha)$/}).fill('Review reminder creation');await page.getByRole('textbox',{name:/^(Ask Alpha|Message Alpha)$/}).press('Enter');await expect(page.getByText('Create reminder',{exact:true})).toBeVisible();
  expect(await page.evaluate(async ()=>JSON.parse((await (await import('/src/browser/reminder-store.ts')).reminderDocument.readRaw())||'{"reminders":[]}').reminders)).toEqual([]);
  if(mode==='lost-response'||mode==='old-native')await page.evaluate(async mode=>{const {BrowserDaily}=await import('/src/browser/daily.ts');const DailyApps=BrowserDaily.prototype;if(mode==='old-native'){(DailyApps as any).surfaceInfo=async()=>({reminderTimingVersion:2});return;}const original=DailyApps.operateReminder;(DailyApps as any).operateReminder=async function(input:any){await original.call(this,input);throw Error('Lost native response');};},mode);
  await page.getByText('Create reminder',{exact:true}).click();
