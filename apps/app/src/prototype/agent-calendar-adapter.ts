@@ -64,7 +64,7 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
   if(owner!==this||!this.live)return false;
   const state=this.vget('calendar');if(state.form)return false;
   if(nativeCalendarScope(this)){
-   this.openView('calendar',{form:draft,open:null,month:null,day:draft.off},'hidden');return true;
+   this.openView('calendar',{calendarAuthority:'android-native',form:draft,open:null,month:null,day:draft.off},'hidden');return true;
   }
   const model=controller?.state,sources=sourceRows();
   if(state.calendarAuthority==='legacy'||legacyGoogleCalendarScope(this)||!model?.ownerKey||!['ready','partial','unavailable'].includes(model.status)||!sources.length)return false;
