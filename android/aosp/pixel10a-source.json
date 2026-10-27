@@ -6,7 +6,7 @@
     "observedSku": "GE1GQ",
     "androidRelease": "17"
   },
-  "developmentOnly": true,
+  "developmentOnly": false,
   "releaseQualified": false,
   "provenance": {
     "upstreamRepository": "https://github.com/elizaos/eliza",

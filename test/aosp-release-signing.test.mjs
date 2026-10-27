@@ -163,7 +163,7 @@ function setup(t, tools = {}, tf = {}) {
   return { key, repo, tf: target, ota, out, options: { root: repo.dir, targetFiles: target.file, targetFilesSha256: target.sha256, keysDir: key.keys, releasetools: ota.bin, out } };
 }
 
-test("the committed Pixel 10a production descriptor and channel name every unset release input and never claim qualification", () => {
+test("the committed Pixel 10a production descriptor admits its pinned source lock, names every unset release input and never claims qualification", () => {
   const product = read(PIXEL10A_PRODUCT), channel = read(CHANNEL);
   assert.equal(product.product, "alpha_stallion_phone");
   assert.deepEqual(product.device, { codename: "stallion", androidRelease: "17" });
@@ -172,8 +172,13 @@ test("the committed Pixel 10a production descriptor and channel name every unset
   assert.equal(product.ota.channel, CHANNEL);
   assert.equal(channel.recovery.stockFactoryImage.sha256, read("android/aosp/pixel10a-source.json").factory.sha256, "stock recovery is the locked factory archive");
   const problems = pixel10aProductProblems(root);
-  for (const expected of [/sourceLock\.sha256 is unset/, /still marked developmentOnly/, /signerSha256 is "unset"/, /platformCertificateSha256 must be a SHA-256/])
+  for (const expected of [/signerSha256 is "unset"/, /platformCertificateSha256 must be a SHA-256/])
     assert.ok(problems.some(problem => expected.test(problem)), `${expected}\n${problems.join("\n")}`);
+  // Issue #399: the source lock is admitted for release and pinned; signing remains unset (A-06).
+  const lockBytes = fs.readFileSync(path.join(root, product.sourceLock.file));
+  assert.equal(JSON.parse(lockBytes).developmentOnly, false);
+  assert.equal(createHash("sha256").update(lockBytes).digest("hex"), product.sourceLock.sha256);
+  assert.ok(!problems.some(problem => /sourceLock|pixel10a-source\.json/.test(problem)), problems.join("\n"));
   assert.ok(channelSigningProblems(channel, product).some(problem => /otaCertificateSha256 is unset/.test(problem)));
   const distribution = channelDistributionProblems(channel);
   for (const drill of ["signedUpdate", "interruptedUpdate", "compatibleRollback", "stockRecovery"]) assert.ok(distribution.some(problem => problem.includes(`${drill} drill is "not run"`)), drill);

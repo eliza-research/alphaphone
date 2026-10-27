@@ -13,6 +13,9 @@ function within(root, name) {
   if (!safe(name)) throw Error(`Unsafe source path: ${name}`);
   return path.join(root, name);
 }
+async function gitBytes(root, args) {
+  return (await exec('git', ['-C', root, ...args], {encoding:'buffer', maxBuffer:64 * 1024 * 1024, env:{...process.env, GIT_OPTIONAL_LOCKS:'0'}})).stdout;
+}
 async function fileHash(file) {
   const hash = createHash('sha256');
   for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
@@ -43,8 +46,12 @@ async function git(root, args) {
 /** Verify the recorded source inputs. Does not modify source, admit an APK,
  * certify build outputs, or authorize a flash. Ignored build outputs are not inputs.
  * `developmentOnly` is reported from the lock; production staging separately requires it
- * to be false (pixel10aProductProblems). */
-export async function verifyPixel10aSource({source, factory, lock = defaultLockPath}) {
+ * to be false (pixel10aProductProblems).
+ * `appliedPatches` admits a build copy that also carries reviewed manifest-listed source
+ * patches (listener SystemUI bundles, see listenerSystemuiPatch): only their listed files may
+ * differ, each preimage at the pinned revision and each postimage must match exactly, and the
+ * baseline everywhere else is verified as usual. */
+export async function verifyPixel10aSource({source, factory, lock = defaultLockPath, appliedPatches = []}) {
   if (!source || !factory) throw Error('Pixel 10a staging requires --aosp-source and --factory-image');
   const root = fs.realpathSync(source), bytes = fs.readFileSync(lock), contract = JSON.parse(bytes);
   if (contract.schema !== 1 || contract.target !== 'pixel10a' || contract.device?.codename !== 'stallion' || contract.device?.androidRelease !== '17' || typeof contract.developmentOnly !== 'boolean' || contract.releaseQualified !== false) throw Error('Not the Pixel 10a Android 17 source contract');
@@ -66,6 +73,19 @@ export async function verifyPixel10aSource({source, factory, lock = defaultLockP
     if (overrides.has(entry.path)) throw Error(`Duplicate override: ${entry.path}`);
     overrides.set(entry.path, entry);
   }
+  // Patch files are checked by preimage at the pinned revision and exact postimage, not as overrides.
+  const patched = new Map();
+  for (const {name, manifest} of appliedPatches) {
+    if (manifest.baselineLockSha256 !== digest(bytes)) throw Error(`Applied patch ${name} is not reviewed against this source lock`);
+    const project = contract.projects.find(entry => entry.path === manifest.project);
+    if (!project || project.commit !== manifest.revision) throw Error(`Applied patch ${name} does not target a locked project revision`);
+    for (const file of manifest.files) {
+      const relative = `${manifest.project}/${file.path}`;
+      within(root, relative);
+      if (overrides.has(relative) || patched.has(relative)) throw Error(`Applied patch overlaps another source change: ${relative}`);
+      patched.set(relative, {path: file.path, beforeSha256: file.beforeSha256, afterSha256: file.afterSha256});
+    }
+  }
   const seen = new Set();
   // Bound filesystem pressure on a full AOSP checkout.
   let cursor = 0;
@@ -80,9 +100,17 @@ export async function verifyPixel10aSource({source, factory, lock = defaultLockP
       if (flags.split('\0').some(row => row && row[0] !== 'H')) throw Error(`Hidden or unresolved index entries: ${project.path}`);
       const changed = await git(directory, ['status','--porcelain=v1','-z','--untracked-files=all']);
       const actual = changed.split('\0').filter(Boolean).map(row => `${project.path}/${row.slice(3)}`).sort();
-      const expected = [...overrides.keys()].filter(name => name.startsWith(`${project.path}/`)).sort();
+      const expected = [...overrides.keys(), ...patched.keys()].filter(name => name.startsWith(`${project.path}/`)).sort();
       if (JSON.stringify(actual) !== JSON.stringify(expected)) throw Error(`Unrecorded source changes: ${project.path}`);
-      for (const name of expected) await checkFile(root, overrides.get(name));
+      for (const name of expected) {
+        if (overrides.has(name)) { await checkFile(root, overrides.get(name)); continue; }
+        const entry = patched.get(name);
+        let before = null;
+        try { before = digest(await gitBytes(directory, ['show', `HEAD:${entry.path}`])); } catch { before = null; }
+        if (before !== entry.beforeSha256) throw Error(`Applied patch preimage differs: ${name}`);
+        const file = within(root, name);
+        if (!fs.lstatSync(file).isFile() || await fileHash(file) !== entry.afterSha256) throw Error(`Applied patch bytes differ: ${name}`);
+      }
       // git status hides ignored source. Bind even ignored extraction-tool outputs;
       // a new ignored Android.bp or source file must not silently enter the build.
       const ignored = (await git(directory, ['ls-files','--others','--ignored','--exclude-standard','-z'])).split('\0').filter(Boolean).map(name => `${project.path}/${name}`).sort();
@@ -105,5 +133,16 @@ export async function verifyPixel10aSource({source, factory, lock = defaultLockP
   if (new Set(expectedNames).size !== files.length || files.some(entry => !entry.path.startsWith(`${contract.generated.root}/`))) throw Error('Invalid generated vendor inventory');
   if (JSON.stringify(inventory(root, contract.generated.root)) !== JSON.stringify(expectedNames)) throw Error('Generated vendor inventory differs');
   for (const entry of files) await checkFile(root, entry);
-  return {schema:1, target:'pixel10a', codename:'stallion', sourceLockSha256:digest(bytes), manifestCommit:contract.manifest.commit, factorySha256:expectedFactory.sha256, projectsChecked:seen.size, overridesChecked:overrides.size, generatedFilesChecked:files.length, developmentOnly:contract.developmentOnly, imageBuilt:false, releaseQualified:false, deviceAcceptanceVerified:false};
+  return {schema:1, target:'pixel10a', codename:'stallion', sourceLockSha256:digest(bytes), manifestCommit:contract.manifest.commit, factorySha256:expectedFactory.sha256, projectsChecked:seen.size, overridesChecked:overrides.size, generatedFilesChecked:files.length, developmentOnly:contract.developmentOnly,
+    ...(appliedPatches.length ? {appliedPatches:appliedPatches.map(({name, manifest, manifestSha256}) => ({name, project:manifest.project, revision:manifest.revision, manifestSha256, patchSha256:manifest.patchSha256, filesChecked:manifest.files.length}))} : {}),
+    imageBuilt:false, releaseQualified:false, deviceAcceptanceVerified:false};
+}
+
+/** A reviewed listener SystemUI bundle ('ops' or 'chip') in the form verifyPixel10aSource accepts. */
+export function listenerSystemuiPatch(bundle) {
+  if (!['ops', 'chip'].includes(bundle)) throw Error(`Unknown SystemUI bundle: ${bundle}`);
+  const directory = fileURLToPath(new URL(`../android/aosp/listener/systemui/${bundle === 'chip' ? 'chip/' : ''}`, import.meta.url));
+  const manifestBytes = fs.readFileSync(path.join(directory, 'manifest.json')), manifest = JSON.parse(manifestBytes);
+  if (digest(fs.readFileSync(path.join(directory, manifest.patch))) !== manifest.patchSha256) throw Error(`SystemUI ${bundle} patch hash mismatch`);
+  return {name:`listener-systemui-${bundle}`, manifest, manifestSha256:digest(manifestBytes)};
 }

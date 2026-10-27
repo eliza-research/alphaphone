@@ -2,7 +2,7 @@
   "schema": 1,
   "project": "frameworks/base",
   "revision": "94b4c163b7dfe5ce3607f7bb8456f9573f7de57d",
-  "baselineLockSha256": "2829fe087a13e946e27ecf7782948c454e991614d977b2a91a8a78d1791f40ce",
+  "baselineLockSha256": "760a7184c62c93aeac40595cf5733f8089aa16ccd28eb7a5f5ce41d4dae741d3",
   "patch": "listening-chip.patch",
   "patchSha256": "dd8aaf6ef95ed1a6e09d6c1926c63849dd06bb7a0cd35e5ff34d44d1fd747419",
   "files": [
