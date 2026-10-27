@@ -1,15 +1,17 @@
 import {test,expect,type Page} from '@playwright/test';
 // Product decision: normal tabs keep sign-ins, tabs and history; private tabs are
-// ephemeral and never saved. The development surface uses sandboxed frames, so
-// these cases cover the renderer adapter contract; Android instrumentation
-// covers the native persistent and private WebView profiles.
+// ephemeral and never saved. These native-renderer contract tests use the
+// registered sandboxed BrowserSurface as a closed stand-in for native events.
+// They explicitly select native presentation; the web fallback does not certify
+// iframe loads as committed pages. Android instrumentation covers actual
+// persistent/private WebView profiles and cookies.
 test.beforeEach(async({page})=>{
  await page.addInitScript(()=>localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'})));
  await page.route('https://signins.example/**',route=>route.fulfill({contentType:'text/html',body:`<title>${new URL(route.request().url()).pathname.slice(1)}</title><h1>${new URL(route.request().url()).pathname.slice(1)}</h1>`}));
  await page.goto('/');
 });
 const heading=(page:Page,name:string)=>page.frameLocator('[data-browser-surface]:visible iframe').getByRole('heading',{name,exact:true});
-async function openBrowser(page:Page){await page.getByRole('button',{name:'Browser',exact:true}).click();await expect(page.getByRole('button',{name:'Menu',exact:true})).toBeVisible();}
+async function openBrowser(page:Page){await page.evaluate(()=>{(window as any).Capacitor.isNativePlatform=()=>true;});await page.getByRole('button',{name:'Browser',exact:true}).click();await expect(page.getByRole('button',{name:'Menu',exact:true})).toBeVisible();}
 async function navigate(page:Page,path:string){
  if(!await page.getByRole('textbox',{name:'Address',exact:true}).isVisible())await page.getByRole('button',{name:'Edit address',exact:true}).click();
  await page.getByRole('textbox',{name:'Address',exact:true}).fill('https://signins.example/'+path);await page.getByRole('textbox',{name:'Address',exact:true}).press('Enter');

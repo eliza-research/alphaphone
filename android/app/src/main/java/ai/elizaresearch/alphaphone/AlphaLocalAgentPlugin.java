@@ -363,11 +363,17 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  }
  /** The shared service activates its bionic host from this same packaged engine/JNI pair. */
  static void configureLocalEmbeddings(File nativeDirectory,File filesDirectory,java.util.Map<String,String> env) {
+  // Native profile never sends memory to Cloud when its local assets are unavailable.
+  // Clear inherited provider selectors before checking the exact local inputs.
+  env.put("ELIZAOS_CLOUD_USE_EMBEDDINGS","false");
+  env.remove("ELIZAOS_CLOUD_EMBEDDING_MODEL");env.remove("ELIZAOS_CLOUD_EMBEDDING_DIMENSIONS");
+  env.put("ELIZA_DISABLE_LOCAL_EMBEDDINGS","true");
+  env.put("ELIZA_LOCAL_EMBEDDING_ENABLED","0");
+  env.remove("ELIZA_LOCAL_EMBEDDING_MODEL_PATH");env.remove("ELIZA_LOCAL_EMBEDDING_DIMENSIONS");
   File model=new File(filesDirectory,".eliza/local-inference/models/bge-small-en-v1.5-f16.gguf");
   if(!new File(nativeDirectory,"libelizainference.so").isFile()||!new File(nativeDirectory,"libelizavoicejni.so").isFile()||!model.isFile())return;
   // The APK build guard pins these native bytes and the BGE model. BgeEmbeddingSession
   // verifies the actual extracted model and vector space before native inference.
-  env.put("ELIZAOS_CLOUD_USE_EMBEDDINGS","false");
   env.put("ELIZA_DISABLE_LOCAL_EMBEDDINGS","false");
   env.put("ELIZA_LOCAL_EMBEDDING_ENABLED","1");
   env.put("ELIZA_LOCAL_EMBEDDING_MODEL_PATH",model.getAbsolutePath());

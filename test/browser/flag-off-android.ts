@@ -87,6 +87,8 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
     const data = (streamId: string, value: unknown) => emitStream(streamId, { type: 'chunk', dataBase64: btoa('data: ' + JSON.stringify(value) + '\n\n') });
     const ok = (value: unknown) => ({ status: 200, data: value });
     const request = async (method: string, path: string, body: any, headers: Record<string, string>): Promise<{ status: number; data: unknown }> => {
+      // Mounted canonical views probe these sources; this native fixture provides none.
+      if (method === 'GET' && ['/api/notes/state', '/api/lifeops/calendar/feed', '/api/lifeops/calendar/calendars', '/api/lifeops/calendar/next-context'].includes(path.split('?')[0])) return { status: 503, data: { error: 'Canonical records unavailable in this fixture' } };
       if (path === '/api/auth/me') return ok({ identity: { id, kind: 'owner' }, access: { role: 'OWNER', mode: 'local' } });
       if (path === '/api/notes/state' && method === 'GET') return ok({success:true,data:{notes:[],trash:[],revision:0}});
       if (path === '/api/agents') return ok({ agents: [{ id: agentId, name: agentName, status: 'running' }] });

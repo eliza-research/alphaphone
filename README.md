@@ -1,5 +1,19 @@
 # Alpha Phone (alphaphone)
 
+## Shared application direction — October 27
+
+The owner has requested one upstream Eliza mobile application and AOSP target,
+with Alpha supplying its character, theme and product registration. Shared views,
+plugins, agent context, action contracts and native behavior must move upstream;
+the separate renderer described below is the current implementation, not the target.
+The native profile uses libelizainference for local models (Paradee speech,
+Phonon-2 recognition and local embeddings), with Cerebras for Cloud text inference.
+Both branded images target Pixel 10a / Android 17. Package IDs, signing, callbacks
+and existing storage namespaces remain explicit compatibility inputs.
+
+See the [consolidation audit](docs/unification-audit-2026-10-27.md) for discrepancies,
+migration order and separate source, APK, image and device acceptance gates.
+
 Independent Android UI on Eliza, using the Alpha Phone prototype as its design
 reference. The current renderer includes native browser, camera,
 calendar, reminders, selected files and local notes. Phone, Contacts and SMS/MMS are
