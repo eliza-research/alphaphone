@@ -2,24 +2,15 @@
   "schema": 1,
   "repository": "elizaOS/eliza",
   "base": "develop",
-  "baseCommit": "c5ace9a07c87f449004755996c4e9f799e284f74",
-  "head": "f3852e8ee338c2397336aecd1abb790e1bd25c46",
+  "baseCommit": "c307290782dd7fa22c2c826ccc6a929574ea418d",
+  "head": "c307290782dd7fa22c2c826ccc6a929574ea418d",
   "recordedAt": "2026-10-27",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...f3852e8ee338c2397336aecd1abb790e1bd25c46",
-  "status": "ahead",
-  "aheadBy": 6,
+  "command": "gh api repos/elizaOS/eliza/compare/develop...c307290782dd7fa22c2c826ccc6a929574ea418d",
+  "status": "identical",
+  "aheadBy": 0,
   "behindBy": 0,
-  "mergeBase": "c5ace9a07c87f449004755996c4e9f799e284f74",
-  "pinOnlyCommits": [
-    {
-      "sha": "3a5ec86875377f4356b8cb301f30c2d8d6b14dd9",
-      "subject": "Share Soong native APK installation for Pixel products"
-    },
-    {
-      "sha": "c3027dc80dd6fd4716fb224052995bb8a6b00bbf",
-      "subject": "Expose runtime read coalescing to browser hosts"
-    }
-  ],
+  "mergeBase": "c307290782dd7fa22c2c826ccc6a929574ea418d",
+  "pinOnlyCommits": [],
   "pullRequests": [
     {
       "url": "https://github.com/elizaOS/eliza/pull/37059",

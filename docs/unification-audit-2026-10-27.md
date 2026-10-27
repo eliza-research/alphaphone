@@ -40,7 +40,7 @@ The goal is incomplete while either app retains a separate behavioral implementa
 
 ## Implementation ledger
 
-The following changes are reviewed and merged upstream. Alpha's current candidate pin is `f3852e8ee338c2397336aecd1abb790e1bd25c46`; this is an implementation checkpoint, not completion of the migration.
+The following changes are reviewed and merged upstream. Alpha's current candidate pin is `c307290782dd7fa22c2c826ccc6a929574ea418d`; this is an implementation checkpoint, not completion of the migration.
 
 | Upstream PR | Result |
 | --- | --- |

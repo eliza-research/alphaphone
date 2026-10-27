@@ -1,6 +1,6 @@
 # Current MVP status
 
-Current source admission: SDK `f3852e8ee338c2397336aecd1abb790e1bd25c46` is the reviewed integration candidate in elizaOS/eliza#37971 on October 27 UTC; its component changes are still in review. All six original open PR heads are integrated in the candidate branch; main still requires independent review. Exact native and voice source comparisons are recorded in `docs/evidence/merge-build-native-source-2026-10-26.json`; runtime, APK and image rebuilding is in progress. No new device or user acceptance is claimed.
+Current source admission: SDK `c307290782dd7fa22c2c826ccc6a929574ea418d` is the reviewed integration candidate in elizaOS/eliza#37971 on October 27 UTC; its component changes are still in review. All six original open PR heads are integrated in the candidate branch; main still requires independent review. Exact native and voice source comparisons are recorded in `docs/evidence/merge-build-native-source-2026-10-26.json`; runtime, APK and image rebuilding is in progress. No new device or user acceptance is claimed.
 
 
 Previous source admission: SDK `00ee639798a02f3d7f2fae61ea8b902160e85d72` is the October 24 upstream main snapshot. It relocates Android local inference into the shared plugin and changes the native engine to `0d9fd4b9db239bbf851068f98c99f4263f8c05c5` and the Phonon model layout. Fresh native builds and component execution are recorded in [native-c95a evidence](evidence/native-c95a/README.md); prior evidence remains historical. Complete native/device qualification and user acceptance remain false.
