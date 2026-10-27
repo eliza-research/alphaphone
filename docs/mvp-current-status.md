@@ -1,6 +1,6 @@
 # Current MVP status
 
-Current source admission: SDK `04658de1b942510e0d37efc777c154530f5c0ef1` is Eliza develop observed on October 26. Native build inputs and voice projections are unchanged from the previous pin. Runtime and APK rebuilding is in progress; no new device or user acceptance is claimed.
+Current source admission: SDK `04658de1b942510e0d37efc777c154530f5c0ef1` is Eliza develop observed on October 26. Native build inputs and voice projections are unchanged from the previous pin. Runtime, workflow worker and both standalone/launcher debug and release APK builds passed (docs/evidence/latest-develop-integration-2026-10-26.json). Release APKs are unsigned; no new device or user acceptance is claimed.
 
 
 Previous source admission: SDK `00ee639798a02f3d7f2fae61ea8b902160e85d72` is the October 24 upstream main snapshot. It relocates Android local inference into the shared plugin and changes the native engine to `0d9fd4b9db239bbf851068f98c99f4263f8c05c5` and the Phonon model layout. Fresh native builds and component execution are recorded in [native-c95a evidence](evidence/native-c95a/README.md); prior evidence remains historical. Complete native/device qualification and user acceptance remain false.
