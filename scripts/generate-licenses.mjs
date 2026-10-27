@@ -553,7 +553,7 @@ export function androidDependencyFingerprint(root) {
     }
   }
   // The shared paradee-voice library (:local-speech) declares its build in the pinned consumer script.
-  const paradeeConsumer = 'vendor/eliza/packages/app/platforms/android/paradee-voice/consumer.gradle';
+  const paradeeConsumer = 'vendor/eliza/plugins/plugin-local-inference/native/android/consumer.gradle';
   if (exists(root, paradeeConsumer) && !files.includes(paradeeConsumer)) files.push(paradeeConsumer);
   const lines = [];
   for (const file of [...new Set(files)].sort()) {

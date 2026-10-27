@@ -7,7 +7,7 @@
 //
 // Evidence boundary: source/test evidence for the flag-off renderer only. Nothing here is the
 // native Agent or AlphaConnection plugin, the resident runtime, Eliza Cloud, Cerebras or a device.
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 export interface StubAccount { token: string; userId: string; email: string; balance: number; userStatus?: number; inbox?: string;
   /** 'none': the billing snapshot reports a canceled plan, so no plan admits Cloud inference. */
@@ -26,6 +26,8 @@ export type StubStream =
   /** The turn fails on the agent with this upstream failure kind, in a `done` or `error` frame. */
   | { failure: string; frame: 'done' | 'error' };
 export interface ResidentStubOptions {
+  /** Synthetic native email-code boundary; no real code is sent. */
+  nativeSignIn?: boolean;
   /** First run: no Cloud key is saved on this phone. */
   emptyKeystore?: boolean;
   /** Eliza Cloud accounts, answered by bearer token. The first is the harness's saved key unless emptyKeystore. */
@@ -84,7 +86,31 @@ export async function residentStub(page: Page, options: ResidentStubOptions = {}
     // plugin only with digests; here only its pause exists, recorded as a step.
     const pauseOnly = !w.Capacitor.PluginHeaders.some((row: any) => row.name === 'AlphaHostedResults');
     if (pauseOnly) w.Capacitor.PluginHeaders.push({ name: 'AlphaHostedResults', methods: [{ name: 'disableBackground', rtype: 'promise' }] });
+    let rejectSignIn: null | ((error: Error) => void) = null;
+    if(options.nativeSignIn)w.Capacitor.PluginHeaders.push({name:'AlphaCloudSignIn',methods:['status','startEmail','verifyEmail','cancel','addListener','removeListener'].map(name=>({name,rtype:'promise'}))});
     w.Capacitor.nativePromise = async (plugin: string, method: string, input: any) => {
+      if(options.nativeSignIn && plugin==='AlphaCloudSignIn'){
+        s.order.push('native sign-in '+method);persist();
+        if(method==='status')return {active:false,inApp:true,email:true,google:false};
+        if(method==='addListener'||method==='removeListener')return {};
+        if(method==='cancel'){rejectSignIn?.(Object.assign(new Error('cancelled'),{code:'cancelled'}));rejectSignIn=null;return {};}
+        if(method==='startEmail')return {attemptId:'33333333-3333-4333-8333-333333333333',expiresAt:Date.now()+600000,resendAt:Date.now()+60000};
+        if(method==='verifyEmail'){
+          if(input.code!=='123456')throw Object.assign(new Error('invalid-code'),{code:'invalid-code'});
+          if(s.login==='hold')return new Promise((_,reject)=>{rejectSignIn=reject;});
+          if(s.login==='expired')throw Object.assign(new Error('expired'),{code:'expired'});
+          const old=f.slots['cloud:production']?JSON.parse(f.slots['cloud:production']):null;
+          const credential={credentialId:crypto.randomUUID(),token:s.nextToken,expiresAt:Date.now()+30*86400000};
+          await base('AlphaConnection','secureWrite',{slot:'cloud:production',value:JSON.stringify(credential)});
+          s.order.push('store '+s.nextToken);
+          // Native stores the acknowledged replacement before best-effort revocation. This is
+          // a synthetic native outcome, not proof of the real plugin's network ordering.
+          if(old?.token && old.token!==s.nextToken)s.order.push('revoke Bearer '+old.token);
+          persist();return {status:'authenticated',environment:'production',expiresAt:credential.expiresAt,...(old?.token?{previousSignIn:'revoked'}:{})};
+        }
+        throw Error('Unexpected native sign-in method '+method);
+      }
+
       if (pauseOnly && plugin === 'AlphaHostedResults' && method === 'disableBackground') { s.order.push('pause background delivery'); persist(); return {}; }
       // Removing a stored provider stops the process launched with it (AlphaCredentialStore requiresShutdown).
       if (plugin === 'Agent' && method === 'clearProvider' && f.slots['native:local-agent-provider']) { s.order.push('Agent.stop'); persist(); }
@@ -163,3 +189,27 @@ export async function residentStub(page: Page, options: ResidentStubOptions = {}
 export const stub = <T>(page: Page, read: (s: any) => T) => page.evaluate(`(${read.toString()})(window.residentStub)`) as Promise<T>;
 /** Changes this stub's settings (stream mode, accounts, login outcome) from the test. */
 export const setStub = (page: Page, patch: Record<string, unknown>) => page.evaluate(patch => { Object.assign((window as any).residentStub, patch); (window as any).residentStub.persist(); }, patch);
+
+/** Explicit synthetic email/code journey through the shipped renderer. */
+export async function emailCode(page: Page, verify = true) {
+  const dialog=page.getByRole('main',{name:'Sign in to Eliza Cloud',exact:true}).or(page.getByRole('dialog',{name:'Sign in to Eliza Cloud',exact:true}));
+  await expect(dialog).toBeVisible();
+  const otherMethods=dialog.getByRole('button',{name:'Other sign-in methods',exact:true});
+  if(await otherMethods.isVisible())await otherMethods.click();
+  await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('fixture@example.invalid');
+  await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
+  await expect(dialog.getByLabel('Six-digit code')).toBeVisible();
+  if(verify){await dialog.getByLabel('Six-digit code').fill('123456');await dialog.getByRole('button',{name:'Verify',exact:true}).click();}
+}
+
+/** Complete the visible synthetic native email form after the product sign-in button is clicked. */
+export async function enterNativeEmailCode(page: Page, email='owner@example.invalid') {
+  const panel=page.getByRole('main',{name:'Sign in to Eliza Cloud',exact:true}).or(page.getByRole('dialog',{name:'Sign in to Eliza Cloud',exact:true}));
+  await expect(panel).toBeVisible();
+  const otherMethods=panel.getByRole('button',{name:'Other sign-in methods',exact:true});
+  if(await otherMethods.isVisible())await otherMethods.click();
+  await panel.getByRole('textbox',{name:'Email',exact:true}).fill(email);
+  await panel.getByRole('button',{name:'Email me a code',exact:true}).click();
+  await panel.getByLabel('Six-digit code').fill('123456');
+  await panel.getByRole('button',{name:'Verify',exact:true}).click();
+}

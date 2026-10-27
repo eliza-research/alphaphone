@@ -91,7 +91,7 @@ final class CalendarSyncBridge {
   observe();Context previous=lease;lease=null;
   long admittedEpoch=epoch;
   JSONObject owner=NativeDeletionCoordinator.get(plugin.getContext()).agentOwner();
-  String credential=store.readCredentialSlot("cloud:production");if(credential==null)throw new SecurityException("Connect Eliza Cloud before enabling sync");
+  String credential=store.readCredentialSlot("cloud:production");if(credential==null)throw new SecurityException("Connect Cloud before enabling sync");
   String credentialId=new JSONObject(credential).getString("credentialId"),token=LocalAgentProviderAdmission.cloudProviderToken(credential,credentialId,System.currentTimeMillis());
   JSONObject identity=AlphaConnectionPlugin.readCloudIdentity(token);
   if(admittedEpoch!=epoch||!foreground()||!granted()||!NativeDeletionCoordinator.get(plugin.getContext()).stageAdmissible(owner)||!LocalAgentProviderAdmission.sameCloudCredential(credential,store.readCredentialSlot("cloud:production")))throw new SecurityException("Calendar review changed");

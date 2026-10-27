@@ -56,14 +56,14 @@ export class BrowserSurface extends WebPlugin {
   async share(input:{session:string;id:string;url:string;navigation:number}) {const tab=this.tab(input);if(!tab.committed||tab.loading||tab.error||document.hidden||tab.container.style.display==='none'||tab.navigation!==input.navigation||tab.history[tab.position]!==input.url)throw Error('The page changed. Share it again.');if(!navigator.share)throw Error('Sharing is unavailable in this browser. Use Copy text.');await navigator.share({url:input.url});}
   async browsingState() {return browsingSessionDocument.read<Saved>(()=>normalize({})).then(normalize);}
   async saveBrowsingState(input:Partial<Saved>) {const next=normalize(input);return browsingSessionDocument.edit<Saved,Saved>(()=>normalize({}),state=>{Object.assign(state,next);return next;});}
-  /** Development frames are sandboxed with opaque origins, so they keep no
-   * cookies or site storage; clearing closes normal tabs and saved history. */
+  /** Clear Alpha-owned tabs and history only. The embedding browser owns remote
+   * cookies and site storage; sandboxing does not grant us authority to erase them. */
   async clearBrowsingData(input:{session:string}) {
     const closed:string[]=[];for(const [key,tab] of this.tabs)if(tab.session===input.session&&!tab.private){tab.container.remove();this.tabs.delete(key);closed.push(tab.id);}
     await browsingSessionDocument.edit<Saved,void>(()=>normalize({}),state=>{Object.assign(state,normalize({}));});
     return {closed};
   }
-  async clearSiteData(input:{session:string;id:string;url:string}) {const tab=this.tab(input);if(tab.history[tab.position]!==input.url)throw Error('Load a website before clearing its data.');return {site:new URL(input.url).hostname};}
+  async clearSiteData(_input:{session:string;id:string;url:string}): Promise<{site:string}> {throw Error('Clear website data in your browser settings.');}
   async downloads() {window.dispatchEvent(new CustomEvent('alpha:browser-open-view',{detail:'files'}));}
   /** Page reading plays agent audio only (no Web Speech); the voice facade stops that playback. */
   async cancelReading() {}

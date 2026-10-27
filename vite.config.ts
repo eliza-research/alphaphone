@@ -1,3 +1,4 @@
+import {checkCloudDeployment} from './scripts/cloud-deployment.mjs';
 import {browserCloudDevBridge} from './scripts/browser-cloud-dev-bridge.ts';
 import {localOcrAssets} from './scripts/local-ocr-assets.ts';
 import { browserPdfAssets } from './scripts/browser-pdf-assets.ts';
@@ -12,6 +13,7 @@ import { localAgentDevBridge } from './scripts/local-agent-dev-bridge.ts';
 // One switch, upstream name (vendor/eliza/packages/app/scripts/dev-ui.ts): "1" opts
 // test-only mocks, fixtures and developer surfaces into a build. Anything else is off.
 // Only this single key is exposed; envPrefix stays VITE_ so ELIZA_* secrets never reach the bundle.
+checkCloudDeployment(fileURLToPath(new URL('.', import.meta.url)));
 const flagOn = process.env.ELIZA_DEV_ALLOW_TEST_MOCKS === '1' || process.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS === '1';
 const appConfig = JSON.parse(readFileSync(fileURLToPath(new URL('./app.config.json', import.meta.url)), 'utf8')) as { version?: unknown };
 const appVersion = process.env.ELIZAOS_VERSION_NAME?.trim() || (typeof appConfig.version === 'string' ? appConfig.version : '0.0.0');

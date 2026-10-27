@@ -7,7 +7,7 @@ import {seedCompletedAccessSetup} from './flag-off-android';
 // resident runtime or a device. Two synthetic accounts stand in for two real ones.
 import { test, expect, type Page } from '@playwright/test';
 import { flagOffAndroid, harness, button, fenceNetwork, expectNoDevelopmentSurface, residentHome, openYourAgent, completeAccessSetup } from './flag-off-android';
-import { residentStub, stub, setStub, type StubAccount } from './resident-stub';
+import { residentStub, stub, setStub, enterNativeEmailCode, type StubAccount } from './resident-stub';
 
 test.beforeEach(({}, testInfo) => { test.skip(testInfo.project.name !== 'production', 'Production bundle only'); });
 
@@ -32,7 +32,7 @@ test('signing out of account A and into account B stops the resident before A is
   test.setTimeout(150_000);
   const foreign = await fenceNetwork(page);
   await flagOffAndroid(page);
-  await residentStub(page, { accounts: [A, B] });
+  await residentStub(page, { nativeSignIn:true, accounts: [A, B] });
   // Account A left a Cloud personal-setup intent on this phone; the renderer records who reads it.
   await page.addInitScript(key => {
     if (!sessionStorage.getItem('replacement-seeded')) { sessionStorage.setItem('replacement-seeded', '1'); localStorage.setItem(key, JSON.stringify({ version: 1, credentialId: 'a-credential', phase: 'activation', personalElizaId: 'personal-a', state: 'attempting' })); }
@@ -58,7 +58,7 @@ test('signing out of account A and into account B stops the resident before A is
   const signOut = await stub(page, s => s.order.length) as number;
   // Sign in as B.
   await setStub(page, { nextToken: B.token });
-  await dialog.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();await enterNativeEmailCode(page);
   await expect(page.getByRole('main',{name:'Sign in',exact:true})).toHaveCount(0, { timeout: 30_000 });
   await completeAccessSetup(page);
 
@@ -118,17 +118,17 @@ test('signing out of account A and into account B stops the resident before A is
   expect(foreign).toEqual([]);
 });
 
-test('a second sign-in over a saved key revokes that key once, before the new key is stored', async ({ page }) => {
+test('a second sign-in over a saved key uses the native replacement result without revoking the new key', async ({ page }) => {
   test.setTimeout(150_000);
   await fenceNetwork(page);
   await flagOffAndroid(page);
-  await residentStub(page, { emptyKeystore: true, accounts: [A, B] });
+  await residentStub(page, { nativeSignIn:true, emptyKeystore: true, accounts: [A, B] });
   await page.goto('/');
   await setStub(page, { nextToken: A.token });
   // P-43: the resident starts signed out; sign-in is offered from Settings › Agent connection.
   await expect.poll(() => harness(page, f => f.calls.includes('Agent.start')), { timeout: 30_000 }).toBe(true);
   let welcome = await openYourAgent(page);
-  await welcome.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();
+  await welcome.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();await enterNativeEmailCode(page);
   await expect(page.getByRole('main',{name:'Sign in',exact:true})).toHaveCount(0, { timeout: 30_000 });
   await completeAccessSetup(page);
   expect(await stub(page, s => s.order.filter((entry: string) => entry.startsWith('revoke')))).toEqual([]);
@@ -138,15 +138,15 @@ test('a second sign-in over a saved key revokes that key once, before the new ke
   // The resident starts again with AI off; Your agent says the saved sign-in is no longer valid.
   await expect.poll(() => harness(page, f => f.calls.includes('Agent.start')), { timeout: 30_000 }).toBe(true);
   welcome = await openYourAgent(page);
-  await expect(welcome.getByText('Your Eliza Cloud sign-in has expired. Sign in with Eliza Cloud again.', { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(welcome.getByText('Your Cloud sign-in has expired. Sign in with Cloud again.', { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(welcome).not.toContainText(/pair/i);
-  await welcome.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();
+  await welcome.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();await enterNativeEmailCode(page);
   await expect(page.getByRole('main',{name:'Sign in',exact:true})).toHaveCount(0, { timeout: 30_000 });
   await completeAccessSetup(page);
   const order = await stub(page, s => s.order) as string[];
   expect(order.filter(entry => entry.startsWith('revoke'))).toEqual(['revoke Bearer ' + A.token]);
-  expect(order.indexOf('revoke Bearer ' + A.token)).toBeLessThan(order.indexOf('store ' + B.token));
-  expect(order.indexOf('revoke Bearer ' + A.token)).toBeGreaterThan(order.indexOf('poll authenticated', order.indexOf('store ' + A.token)));
+  expect(order.indexOf('revoke Bearer ' + A.token)).toBeGreaterThan(order.indexOf('store ' + B.token));
+  expect(order.filter(entry=>entry==='store '+B.token)).toHaveLength(1);
   expect(JSON.parse(await harness(page, f => f.slots['cloud:production'])).token).toBe(B.token);
 });
 

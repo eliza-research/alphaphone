@@ -1,3 +1,4 @@
+import {productionCloud,stagingCloud} from '../runtime/cloud-deployment.generated';
 import {anyAbortSignal} from '../runtime/abort-signal';
 import {googleAuthorizationUrlAllowed} from '../runtime/google-authorization';
 import {WebPlugin} from '@capacitor/core';
@@ -12,7 +13,7 @@ async function rpc(data:Record<string,unknown>,signal?:AbortSignal){const respon
 /** Development host storage references only. Cloud bearers never enter browser storage. */
 export class BrowserCloudConnection extends WebPlugin {
  async request(input:{requestId:string;url:string;method:string;headers:Record<string,string>;body?:string;credentialReference?:string}){
-  const host=new URL(input.url).hostname,environment=host==='api.eliza.app'?'production':host==='api-staging.eliza.app'?'staging':undefined;
+  const origin=new URL(input.url).origin,environment=origin===productionCloud.api?'production':origin===stagingCloud.api?'staging':undefined;
   if(!environment)throw Error('Cloud development authority unavailable');
   const response=await browserCloudCall({operation:'request',requestId:input.requestId,environment,input}),data=await response.json();
   return response.ok?data:{status:response.status,data};
@@ -31,8 +32,8 @@ export class BrowserCloudConnection extends WebPlugin {
  }
  async openExternal(input:{url:string;requestId:string}){
   const url=new URL(input.url),sessions=url.searchParams.getAll('session'),apps=url.searchParams.getAll('app');
-  const login=['eliza.app','staging.eliza.app'].includes(url.hostname)&&url.pathname==='/auth/cli-login'&&sessions.length===1&&/^[0-9a-f-]{36}$/i.test(sessions[0])&&(apps.length===0||apps.length===1&&apps[0]==='alpha')&&[...url.searchParams.keys()].every(k=>k==='session'||k==='app');
-  const billing=['cloud.eliza.app','cloud-staging.eliza.app'].includes(url.hostname)&&url.pathname==='/cloud/billing'&&!url.search;
+  const login=[productionCloud.web,stagingCloud.web].some(origin=>origin===url.origin)&&url.pathname==='/auth/cli-login'&&sessions.length===1&&/^[0-9a-f-]{36}$/i.test(sessions[0])&&(apps.length===0||apps.length===1&&apps[0]==='alpha')&&[...url.searchParams.keys()].every(k=>k==='session'||k==='app');
+  const billing=[productionCloud.agents,stagingCloud.agents].some(host=>host===url.host)&&url.pathname==='/cloud/billing'&&!url.search;
   if(url.protocol!=='https:'||url.username||url.password||url.hash||url.port||!login&&!billing&&!googleAuthorizationUrlAllowed(url.href))throw Error('Unsupported Cloud browser destination');
   const opened=window.open(url.href,'_blank');if(!opened)throw Error('Allow the Cloud sign-in window, then try again.');opened.opener=null;
  }
@@ -49,7 +50,7 @@ export async function clearBrowserCloudCredentialIfCurrent(environment:CloudEnvi
 /** Binds native-compatible voice calls to the current host reference and account generation. */
 export async function browserCloudCredential(environment:string,credentialId:string,signal:AbortSignal){
  const stored=await rpc({operation:'secureRead',slot:'cloud:'+environment},signal),credential=stored.value===null?null:JSON.parse(stored.value);signal.throwIfAborted();
- if(!credential?.credentialReference)throw Object.assign(Error('Sign in to Eliza Cloud before using voice.'),{code:'voice-http-401',status:401});
+ if(!credential?.credentialReference)throw Object.assign(Error('Sign in to Cloud before using voice.'),{code:'voice-http-401',status:401});
  if(credential.credentialId!==credentialId)throw new DOMException('Cloud account changed','AbortError');return credential;
 }
 export async function browserCloudVoice(input:{environment:string;credentialId:string;requestId:string},operation:'stt'|'tts',payload:Blob|string,signal:AbortSignal):Promise<Response>{

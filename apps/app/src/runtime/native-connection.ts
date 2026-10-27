@@ -1,3 +1,4 @@
+import {cloudStorageSlot} from './cloud-deployment.generated.ts';
 import {browserCloudResidentEnabled,browserCloudManagedServiceAllowed} from './browser-cloud-resident';
 import {managedServiceRequest} from './managed-service-routes';
 import {automationsRouteAllowed} from './automations-route-policy';
@@ -20,6 +21,7 @@ const nativeSignInHeader=(Capacitor as typeof Capacitor&{PluginHeaders?:{name:st
  */
 /** Google sign-in needs the phone's App Link return; the browser bridge offers email only. */
 export const cloudSignInGoogle=nativeSignInHeader;
+export const cloudSignInPhone=(Capacitor as typeof Capacitor&{PluginHeaders?:{name:string;methods?:{name:string}[]}[]}).PluginHeaders?.some(header=>header.name==='AlphaCloudSignIn'&&header.methods?.some(method=>method.name==='startPhone')&&header.methods?.some(method=>method.name==='verifyPhone'))??false;
 export const cloudSignIn:CloudSignInPort|undefined=nativeSignInHeader?registerPlugin<CloudSignInPort>('AlphaCloudSignIn')
   :browserCloudHost?registerPlugin<CloudSignInPort>('AlphaCloudSignIn',{web:()=>new BrowserCloudSignIn()}):undefined;
 
@@ -115,7 +117,7 @@ function webSecrets():BrowserSecretBackend{
   let degraded=false;
   // Private windows can refuse IndexedDB. Keep this page usable without claiming persistence.
   const use=async<T>(work:(backend:BrowserSecretBackend)=>Promise<T>)=>{if(degraded)return work(fallback);try{return await work(durable);}catch(error){if(error instanceof DOMException&&['InvalidStateError','UnknownError','SecurityError','NotSupportedError'].includes(error.name)){degraded=true;return work(fallback);}throw error;}};
-  return {read:slot=>use(backend=>backend.read(slot)),compareExchange:(slot,expected,value)=>use(backend=>backend.compareExchange(slot,expected,value))};
+  return {read:slot=>use(backend=>backend.read(cloudStorageSlot(slot))),compareExchange:(slot,expected,value)=>use(backend=>backend.compareExchange(cloudStorageSlot(slot),expected,value))};
 }
 /** Plain-HTTP loopback agents are a test-mocks surface; flag-off bundles accept HTTPS only. */
 const webDevelopmentHttp:boolean=import.meta.env!==undefined&&import.meta.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS==='1';
@@ -169,7 +171,7 @@ export function createBrowserConnection(options:{fetch?:typeof fetch;secrets?:Br
       if(url.protocol!=='https:')throw new Error('Only HTTPS sign-in pages can be opened.');
       // A new tab keeps this page polling. A blocked pop-up is reported instead of navigating away.
       const opened=options.open?options.open(url.href):(()=>{const target=window.open(url.href,'_blank');if(target)target.opener=null;return !!target;})();
-      if(!opened)throw new Error('Allow pop-ups for Alpha Phone, then select Sign in with Eliza Cloud again.');
+      if(!opened)throw new Error('Allow pop-ups for Alpha Phone, then try Cloud sign-in again.');
     },
   };
 }

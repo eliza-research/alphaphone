@@ -7,8 +7,8 @@ final class CloudSpeechPolicy {
  private CloudSpeechPolicy() {}
  static String host(String profile, boolean mocks, String environment) throws IOException {
   if (!mocks && !"cloud".equals(profile)) throw new IOException("Network speech is not enabled");
-  if ("production".equals(environment)) return "api.eliza.app";
-  if (mocks && "staging".equals(environment)) return "api-staging.eliza.app";
+  if ("production".equals(environment)) return CloudDeployment.PRODUCTION_API_HOST;
+  if (mocks && "staging".equals(environment)) return CloudDeployment.STAGING_API_HOST;
   throw new IOException("Cloud speech environment is unavailable");
  }
  static void requireProvider(String profile, String provider) throws IOException {

@@ -11,8 +11,8 @@ import { connectionController } from './connection-ui';
 export function cloudVoiceFailure(error: unknown): string | null {
   const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
   if(developmentCloudVoiceEnabled&&!browserCloudResidentEnabled&&(code==='voice-http-401'||code==='voice-http-403'))return 'The developer agent’s Cloud speech authorization was refused. Check its server-side Cloud configuration, then retry.';
-  if (code === 'voice-http-401' || code === 'voice-http-403') return 'Sign in to Eliza Cloud again in Settings, then retry voice.';
-  if (code === 'voice-http-402') return 'Eliza Cloud declined cloud voice for your account\'s billing. Check your account in Settings, then retry.';
+  if (code === 'voice-http-401' || code === 'voice-http-403') return 'Sign in to Cloud again in Settings, then retry voice.';
+  if (code === 'voice-http-402') return 'Cloud declined cloud voice for your account\'s billing. Check your account in Settings, then retry.';
   if (typeof code === 'string' && /^voice-http-[45][0-9]{2}$/.test(code)) return `Cloud voice could not complete this request (${code.slice(-3)}). Try again later.`;
   if (code === 'voice-stt-decode') return 'This recording could not be prepared for transcription. Choose Record again.';
   if (code === 'voice-stt-connect') return 'Cloud voice could not use your saved account. Sign in again in Settings. Your recording is kept.';
@@ -49,7 +49,7 @@ export function createCloudVoice(readAloudRoute:'cloud'|'direct'='cloud') {
   const sessionId = binding?.sessionId, credentialId = binding?.credentialId;
   const agent=developerSpeech?connectionController.getBrowserSpeechAgent():null,agentSession=agent?.session;
   if(developerSpeech&&!agentSession)throw Error('Connect the developer agent first.');
-  if (!developerSpeech&&(!environment || !sessionId || !credentialId)) throw new Error('Sign in to Eliza Cloud to use Cloud voice.');
+  if (!developerSpeech&&(!environment || !sessionId || !credentialId)) throw new Error('Sign in to Cloud to use Cloud voice.');
   const check = () => {
     if(developerSpeech){if(agent!==connectionController.getBrowserSpeechAgent()||agent?.session!==agentSession)throw new DOMException('Voice agent changed','AbortError');return;}
     if (environment !== connectionController.getCloudEnvironment() || sessionId !== connectionController.getCloudClient()?.sessionId || credentialId !== connectionController.getCloudClient()?.credentialId) throw new DOMException('Voice account changed', 'AbortError');
@@ -61,9 +61,9 @@ export function createCloudVoice(readAloudRoute:'cloud'|'direct'='cloud') {
     async stopRecording() { check(); const result = await native.stopRecording(); check(); return result; },
     async transcribeRecording(input: { recordingId: string; requestId: string }) {
       check(); const result = await (developmentCloudVoiceEnabled?native.transcribeDevelopmentCloudRecording(input):native.transcribeRecording({ ...input, environment:environment!, credentialId:credentialId! })); check();
-      if (typeof result.text !== 'string' || result.local !== false) throw new Error('Eliza Cloud returned no usable transcript.');
+      if (typeof result.text !== 'string' || result.local !== false) throw new Error('Cloud returned no usable transcript.');
       // An empty transcript is silence, not a microphone, account or connection failure.
-      if (!result.text.trim()) throw Object.assign(new Error('Eliza Cloud heard no speech in this recording.'), { code: 'no-speech' });
+      if (!result.text.trim()) throw Object.assign(new Error('Cloud heard no speech in this recording.'), { code: 'no-speech' });
       return result;
     },
     cancel: (input: { requestId: string }) => native.cancel(input),
@@ -93,7 +93,7 @@ export async function speakCloudText(text:string,signal:AbortSignal,onStarted?:(
   if(signal.aborted)cancel();
   const current=()=>{owned.signal.throwIfAborted();assertCurrent?.();if(environment!==connectionController.getCloudEnvironment()||sessionId!==connectionController.getCloudClient()?.sessionId||credentialId!==connectionController.getCloudClient()?.credentialId||document.hidden||document.documentElement.dataset.devBackground==='true'||connectionController.getSnapshot().open||Array.from(document.querySelectorAll('[aria-label="Unlock with fingerprint"], [aria-label="Wake"]')).some(element=>element.getClientRects().length))throw new DOMException('Voice review changed','AbortError');};
   current();
-  if(!environment||!sessionId||!credentialId){connectionController.openCloudAccount();throw Error('Sign in to Eliza Cloud to use Cloud voice.');}
+  if(!environment||!sessionId||!credentialId){connectionController.openCloudAccount();throw Error('Sign in to Cloud to use Cloud voice.');}
   const voice=createCloudVoice(),previous=appSpeechRetirement;
   let admitted=false;
   const interrupted=new Promise<never>((_,reject)=>{owned.signal.addEventListener('abort',()=>{if(!admitted)reject(owned.signal.reason);},{once:true});});void interrupted.catch(()=>{});

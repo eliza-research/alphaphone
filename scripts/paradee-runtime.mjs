@@ -3,7 +3,7 @@ import {execFileSync} from 'node:child_process';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-export const PARADEE_SOURCE='vendor/eliza/packages/app/platforms/android/paradee-voice';
+export const PARADEE_SOURCE='vendor/eliza/plugins/plugin-local-inference/native/android';
 export const PARADEE_NATIVE='.eliza/paradee-voice/native';
 export const usesParadee=root=>fs.existsSync(path.join(root,PARADEE_SOURCE,'consumer.gradle'));
 const digest=value=>createHash('sha256').update(value).digest('hex');

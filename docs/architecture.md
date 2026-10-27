@@ -5,6 +5,34 @@ navigation, presentation, capability policy and storage configuration. Shared
 runtime, browser features, native plugins and OS tooling come from the exact
 revision in `upstream.lock.json` and `vendor/eliza`.
 
+## Cloud deployment configuration
+
+`config/cloud-deployment.json` owns the public production and staging API, web,
+services origins, tenant identifiers, entitlement audiences and optional public service names. A deployment
+without a name displays its API hostname until its public metadata loads. Names
+do not change credential authority or its storage namespace. `entitlementAudience`
+selects the signed plan contract the client verifies; its default is
+`cloud-subscription`. The Eliza records explicitly retain `eliza-alpha-phone`
+for compatibility with the deployed signer. Eliza Cloud remains the default. Run
+`node scripts/cloud-deployment.mjs` after changing it; renderer and Android builds
+reject stale generated TypeScript or Java. The current configuration accepts
+canonical HTTPS origins on the default port, without base paths or credentials.
+
+Alpha retains its own package/client ID and `/alphaphone/auth/callback` return
+path. The configured deployment must register that client, approve its callback
+and publish the app's signing certificate in its web host's assetlinks document.
+`ELIZAOS_APP_LINK_HOST`, when enabled, must equal the configured production web
+host. The staging return uses the configured staging web host in test-mocks
+builds only. Changing the backend does not import another product's identity.
+
+Cloud credentials, pending sign-in state, acknowledgments and the local agent's
+provider binding are scoped to a fingerprint of both deployment records.
+Changing an authority, tenant or entitlement audience requires a fresh sign-in; credentials from the
+old configuration are never implicitly adopted. Local notes keep their existing
+storage names. The development browser bridge scopes its private profile by the
+same fingerprint. These source checks do not prove authenticated login or device
+acceptance against a configured deployment.
+
 ## October 12 approved runtime and distribution policy
 
 [Owner decisions](decisions.md#october-12-owner-decisions) and the
@@ -142,24 +170,24 @@ production authentication.
 
 ### Eliza Cloud sign-in ownership (in-app, 2026-10-14)
 
-Sign-in happens on Alpha's own screens once Cloud is ready for it; no Eliza Cloud web page is part
-of a successful in-app sign-in. Until the readiness probe passes, the Cloud sign-in hand-off stays
-the product path, so shipping Alpha before Cloud is configured never leaves a phone unable to sign in.
+Native sign-in stays on Alpha's own screens. Email remains available when the optional Google
+readiness probe fails or times out; its native request reports any service configuration failure.
+There is no automatic Eliza Cloud website sign-in fallback.
 
-- **Readiness (`CloudSignInReadiness`, `AlphaCloudSignInPlugin.status`)**: in-app sign-in is offered
-  only when all of these hold, checked with a few short requests and cached (6 hours when ready,
+- **Readiness (`CloudSignInReadiness`, `AlphaCloudSignInPlugin.status`)**: readiness reports email and optional Google separately, checked with a few short requests and cached (6 hours when ready,
   10 minutes when not; any error, timeout or unexpected answer is "not ready"):
   - `GET /api/v1/app-auth/mobile/config` confirms the registration for client
     `ai.elizaresearch.alphaphone`, this environment and the return URL;
-  - Steward's Google authorize route redirects to Google for the return URL (the tenant redirect
-    allowlist admits it; nothing is followed);
-  - `/.well-known/assetlinks.json` on the return host grants `handle_all_urls` to this package and
-    the certificate this APK is signed with;
+  - For Google only, Steward's authorize route redirects to Google for the return URL (the tenant
+    redirect allowlist admits it; nothing is followed);
+  - For Google only, `/.well-known/assetlinks.json` on the return host grants `handle_all_urls`
+    to this package and the certificate this APK is signed with;
   - `GET /steward/auth/providers` offers email without a captcha for `email_otp`, and the email code
     route exists (an empty-object POST is refused as invalid, not as unknown; no email is sent).
   Google is offered on top only when Steward offers it and Android reports the return host verified
   for this package. A refusal from Cloud during an in-app sign-in clears the cache so the next
-  attempt re-checks. The renderer waits at most 6 seconds for the answer, then uses the hand-off.
+  attempt re-checks. The renderer waits at most 6 seconds, then offers email alone. A late result cannot
+  change the already opened attempt.
 - **Native (`AlphaCloudSignInPlugin`, `CloudSignInFlow`, `CloudEmailCode`)** holds the Steward
   session, codes and PKCE verifiers and makes every sign-in request, using fixed URLs on the Cloud API
   origin (`ConnectionRoutes.signInRoute`; the renderer transport admits none of them):
@@ -198,8 +226,8 @@ the product path, so shipping Alpha before Cloud is configured never leaves a ph
   (`login-active`). It then runs the unchanged identity, entitlement, redeem and resident-binding
   path on the stored key, and says so when `accountCreated` is true.
 - **Cloud sign-in hand-off (`CloudProtocol.login`, `/api/auth/cli-session`, the `cli-login` page)**:
-  the product path until the readiness probe passes, and a **Browser sign-in (diagnostic)** button
-  on the in-app screen in test-mocks builds afterwards.
+  the explicit browser development profile and a **Browser sign-in (diagnostic)** button
+  in test-mocks builds only; it is not the native readiness fallback.
 - **Cloud (elizaOS/eliza `packages/cloud`, `packages/auth`, `packages/app`)** owns the accounts:
   - Steward links Google and email to the existing user by verified email.
   - Mobile App Auth mints the key, valid for 30 days.

@@ -336,7 +336,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
   }
   async function clearBrowsingData() {
     if (clearingData) return;
-    const ok = await confirmBrowser('browser-clear-data', 'Clear browsing data?', 'Deletes cookies and site data, so you will be signed out of websites. Also deletes browsing history and cached files, and closes open tabs. Bookmarks and private tabs are kept.');
+    const ok = await confirmBrowser('browser-clear-data', 'Clear browsing data?', Capacitor.isNativePlatform() ? 'Deletes cookies and site data, so you will be signed out of websites. Also deletes browsing history and cached files, and closes open tabs. Bookmarks and private tabs are kept.' : 'Clears Alpha browsing history and closes normal tabs. Bookmarks and private tabs are kept. Website cookies and sign-ins are managed in your browser settings.');
     if (!ok || disposed) return;
     clearingData = true;
     try {
@@ -346,10 +346,11 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
       forgetTabs([...new Set([...normal, ...(Array.isArray(result?.closed) ? result.closed : [])])]);
       shell.vset('browser', { visits: [] });
       sessionHydrated = true; lastSaved = JSON.stringify(savedSnapshot());
-      shell.toast('Browsing data cleared');
+      shell.toast(Capacitor.isNativePlatform() ? 'Browsing data cleared' : 'Alpha tabs and history cleared');
     } catch (error) { report(error); } finally { clearingData = false; }
   }
   async function clearSiteData() {
+    if (!Capacitor.isNativePlatform()) return;
     const id = state()?.cur, info = metadata.get(id);
     let host = '';
     try { host = new URL(info?.url).hostname; } catch {}
@@ -384,7 +385,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     const priv = !!s.tabs.find((tab: Bag) => tab.id === s.cur)?.priv;
     const known = (id: string) => metadata.get(id) || restored.get(id);
     return { ...out, profileUnsupportedPage:profileUnsupportedTab===s.cur&&!s.editing,profileUnsupportedEditing:profileUnsupportedTab===s.cur&&!!s.editing,profileUnsupportedMessage:PROFILE_UNSUPPORTED_MESSAGE,isNews:false,isEnc:false,isBook:false,isSearch:false,isGeneric:false,isNew:!info,
-      isPrivate:priv,openPrivate:()=>openNew(true),clearData:()=>void clearBrowsingData(),clearSite:()=>void clearSiteData(),canClearSite:!!info?.committed&&!info?.error&&!!url,
+      privateNotice:Capacitor.isNativePlatform()?'Private tab. Its cookies, sign-ins, site data and pages are deleted when you close it, and it is not saved in history.':'This tab is not saved in Alpha history. Website cookies and sign-ins are managed by your browser.',isPrivate:priv,openPrivate:()=>openNew(true),clearData:()=>void clearBrowsingData(),clearSite:()=>void clearSiteData(),canClearSite:Capacitor.isNativePlatform()&&!!info?.committed&&!info?.error&&!!url,
       recents:[],sugg:[],people:[],agOn:false,confirm:false,
       // Find in page is native findAllAsync. A web build's page is an opaque-origin sandboxed frame the host
       // cannot search, so the menu offers no Find there (the template keys on openFind).

@@ -37,7 +37,7 @@ test('a private tab is labelled, created ephemeral and never enters saved tabs o
  await menu(page,'New private tab');
  await page.getByRole('button',{name:'Cancel editing',exact:true}).click();
  await expect(page.getByRole('img',{name:'Private tab',exact:true})).toBeVisible();
- await expect(page.getByRole('note',{name:'Private tab notice'})).toContainText('deleted when you close it');
+ await expect(page.getByRole('note',{name:'Private tab notice'})).toContainText('not saved in Alpha history');
  await navigate(page,'secret');await expect(page.getByRole('img',{name:'Private tab',exact:true})).toBeVisible();
  await expect.poll(()=>page.evaluate(()=>(window as any).privateEvents.some((e:any)=>e.private===true))).toBe(true);
  await page.getByRole('button',{name:'Tabs',exact:true}).click();
@@ -56,11 +56,11 @@ test('Clear browsing data asks first, then clears history and saved tabs but kee
  await openBrowser(page);await navigate(page,'kept-mark');await menu(page,'Bookmark');await navigate(page,'visited');
  await menu(page,'New private tab');await navigate(page,'private-open');
  await menu(page,'Clear browsing data');
- const dialog=page.getByRole('dialog',{name:'Clear browsing data?'});await expect(dialog).toBeVisible();await expect(dialog).toContainText('signed out of websites');
+ const dialog=page.getByRole('dialog',{name:'Clear browsing data?'});await expect(dialog).toBeVisible();await expect(dialog).toContainText('Website cookies and sign-ins are managed in your browser settings');
  await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(dialog).toHaveCount(0);
  await expect.poll(async()=>(await saved(page)).history.length).toBe(2);
  await menu(page,'Clear browsing data');await page.getByRole('dialog',{name:'Clear browsing data?'}).getByRole('button',{name:'Clear data',exact:true}).click();
- await expect(page.getByText('Browsing data cleared',{exact:true})).toBeVisible();
+ await expect(page.getByText('Alpha tabs and history cleared',{exact:true})).toBeVisible();
  // The private tab stays open; the normal tabs are closed.
  await expect(page.getByRole('button',{name:'Tabs',exact:true})).toHaveText('1');await expect(page.getByRole('img',{name:'Private tab',exact:true})).toBeVisible();
  await expect.poll(async()=>await saved(page)).toEqual({history:[],tabs:[],cur:''});
@@ -70,13 +70,16 @@ test('Clear browsing data asks first, then clears history and saved tabs but kee
  await expect(page.locator('[data-browser-surface]')).toHaveCount(0);
 });
 
-test('Clear data for this site confirms with the site name and reports the cleared site',async({page})=>{
- await openBrowser(page);
- await page.getByRole('button',{name:'Menu',exact:true}).click();await expect(page.getByRole('button',{name:'Clear data for this site',exact:true})).toHaveCount(0);await page.getByRole('button',{name:'Close menu',exact:true}).click({position:{x:8,y:8}});
- await navigate(page,'account');await menu(page,'Clear data for this site');
- const dialog=page.getByRole('dialog',{name:'Clear data for signins.example?'});await expect(dialog).toContainText('signed out of this site');
- await dialog.getByRole('button',{name:'Clear data',exact:true}).click();
- await expect(page.getByText('Cleared data for signins.example. Reload the page to continue.',{exact:true})).toBeVisible();
+test('web site-data deletion is unavailable and direct calls cannot claim success',async({page})=>{
+ await openBrowser(page);await navigate(page,'account');
+ await page.getByRole('button',{name:'Menu',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Clear data for this site',exact:true})).toHaveCount(0);
+ expect(await page.evaluate(async()=>{
+  const {BrowserSurface}=await import('/src/browser/browser-surface.ts');
+  try { await new BrowserSurface().clearSiteData({session:'test',id:'test',url:'https://signins.example/account'}); return 'success'; }
+  catch(error){return (error as Error).message;}
+ })).toBe('Clear website data in your browser settings.');
+ await page.getByRole('button',{name:'Close menu',exact:true}).click({position:{x:8,y:8}});
  await expect(heading(page,'account')).toBeVisible();
 });
 

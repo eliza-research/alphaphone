@@ -17,8 +17,8 @@
     {
       "path": "asr/phonon-2-fv5.gguf",
       "role": "asr-model",
-      "bytes": 330632256,
-      "sha256": "dc552eb786486167dde3ac80bbe49a6088c8ef39c03c257d5a090fc57b2c47b3",
+      "bytes": 208932352,
+      "sha256": "c0f6ad42f0a5b481904416077dde0a1a78e5b8642295fdf2356ace822588c3df",
       "architecture": "parakeet-tdt",
       "source": "Converted by elizaOS/llama.cpp tools/parakeet/convert_phonon2_to_gguf.py --archive phonon-2.bps.tar.zst --output phonon-2-fv5.gguf --verify from huggingface.co/FermionResearch/Phonon-2@7e153e4054c0a10db6d47d6fff5c062d4c77c154 (archive sha256 98125795b6dda72f5c6eee9ba33d19815df65dcb18b50a357bf9f73c9935309e); byte-reproducible, equal to the mobile-voice@1.1.0 catalog pin (status unpublished: built locally, never downloaded)"
     }

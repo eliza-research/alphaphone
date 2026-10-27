@@ -23,7 +23,7 @@ public final class AlphaResetPlugin extends Plugin {
   try{token=authorization.begin();}catch(IllegalStateException busy){result(call,"unavailable","A reset review is already open.");return;}
   final long owner=token;
   review=new AlertDialog.Builder(getActivity()).setTitle("Reset Alpha data?")
-   .setMessage("Permanently delete Alpha's local conversations, Notes and drafts, passwords, settings, downloads in Alpha's private storage, and sign-ins. Stop its agent and pending work. There is no backup or undo.\n\nAlpha also asks Eliza Cloud to revoke this phone's sign-in when Cloud can be reached. Device-wide photos and files, remote Gmail and Cloud data, and your Eliza Cloud plan are not deleted or cancelled. Other apps are not reset. Alpha will close; open it again to start fresh.\n\nConfirm, then unlock your device to continue.")
+   .setMessage("Permanently delete Alpha's local conversations, Notes and drafts, passwords, settings, downloads in Alpha's private storage, and sign-ins. Stop its agent and pending work. There is no backup or undo.\n\nAlpha also asks Cloud to revoke this phone's sign-in when Cloud can be reached. Device-wide photos and files, remote Gmail and Cloud data, and your Cloud plan are not deleted or cancelled. Other apps are not reset. Alpha will close; open it again to start fresh.\n\nConfirm, then unlock your device to continue.")
    .setNegativeButton("Cancel",(dialog,which)->{authorization.retire();result(call,"cancelled","Nothing reset.");})
    .setOnCancelListener(dialog->{authorization.retire();result(call,"cancelled","Nothing reset.");})
    .setPositiveButton("Continue to unlock",(dialog,which)->{
@@ -47,7 +47,7 @@ public final class AlphaResetPlugin extends Plugin {
  }
  /** Keep the confirmed reset visible until Android dispatches it. */
  private void showRevocationNotice(){
-  try{if(review!=null)review.dismiss();new AlertDialog.Builder(getActivity()).setTitle("Resetting Alpha").setMessage("Signing out of Eliza Cloud… Alpha closes in a few seconds.").setCancelable(false).create().show();}
+  try{if(review!=null)review.dismiss();new AlertDialog.Builder(getActivity()).setTitle("Resetting Alpha").setMessage("Signing out of Cloud… Alpha closes in a few seconds.").setCancelable(false).create().show();}
   catch(RuntimeException unavailable){/* The reset proceeds either way. */}
  }
  /** Best effort, bounded and off the main thread: revoke this phone's Eliza Cloud sign-in key(s),

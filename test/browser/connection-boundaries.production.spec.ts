@@ -1,3 +1,4 @@
+import { cloudStorageSlot } from '../../apps/app/src/runtime/cloud-deployment.generated';
 import {seedCompletedAccessSetup} from './flag-off-android';
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { openYourAgent, completeAccessSetup } from './flag-off-android';
@@ -264,7 +265,7 @@ for (const mode of ['revoked', 'unsupported', 'failed', 'refused-in-body', 'not-
     expect(await secureValues(page)).not.toHaveProperty('cloud:production');
     await expect(page.getByRole('main', { name: 'Sign in', exact: true }).getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true })).toBeVisible();
     // P-43: sign-out unbinds inference only; the resident restarted and the outcome says so.
-    if (mode !== 'cancelled') await expect(status).toContainText('Your agent is running. Sign in to Eliza Cloud to turn AI back on.');
+    if (mode !== 'cancelled') await expect(status).toContainText('Your agent is running. Sign in to Cloud to turn AI back on.');
     await expect.poll(async () => (await nativeCalls(page)).slice(before).filter(call => call.plugin === 'Agent' && call.method === 'start').length).toBeGreaterThan(0);
     await page.reload();
     // Signed out after a restart: the sign-in dialog opens by itself while the resident runs.
@@ -328,7 +329,8 @@ const slotRecords = (page: Page) => page.evaluate(async name => {
     return Object.fromEntries(keys.map((key, index) => [String(key), [...new Uint8Array(values[index].iv), ...new Uint8Array(values[index].data)].join(',')]));
   } finally { db.close(); }
 }, SECRETS);
-const KEPT_SLOTS = [`remote:${origin}`, 'remote:https://second-agent.example.test', 'device:installation', 'cloud-runtime:synthetic', 'cloud:staging'];
+const CURRENT_CLOUD_SLOT = cloudStorageSlot('cloud:production');
+const KEPT_SLOTS = [`remote:${origin}`, 'remote:https://second-agent.example.test', 'device:installation', 'cloud-runtime:synthetic', 'cloud:production', 'cloud:staging', cloudStorageSlot('cloud:staging'), 'cloud-deployment:other:cloud:production'];
 // Stand-ins for other data this origin holds (notes, unsent drafts); the keys are synthetic so the app does not interpret them.
 const LOCAL_DATA = { 'synthetic.notes': '{"notes":[{"id":"n1","text":"Synthetic note"}]}', 'synthetic.assistant-draft': 'Synthetic unsent draft', 'synthetic.workflow-draft': '{"prompt":"Synthetic workflow draft"}' };
 for (const saved of [
@@ -343,7 +345,7 @@ for (const saved of [
     const foreign = await fenceNetwork(page);
     // Seed from a static file of the same origin, before the app has run.
     await page.goto('/build-flags.json');
-    await page.evaluate(async ({ saved, SELECTION, CLOUD_SERVICE, SECRETS, KEPT_SLOTS, LOCAL_DATA }) => {
+    await page.evaluate(async ({ saved, SELECTION, CLOUD_SERVICE, SECRETS, CURRENT_CLOUD_SLOT, KEPT_SLOTS, LOCAL_DATA }) => {
       localStorage.setItem(SELECTION, JSON.stringify(saved.selection));
       if (saved.service) localStorage.setItem(CLOUD_SERVICE, saved.service);
       for (const [key, value] of Object.entries(LOCAL_DATA)) localStorage.setItem(key, value);
@@ -353,12 +355,12 @@ for (const saved of [
         open.onsuccess = () => resolve(open.result); open.onerror = () => reject(open.error);
       });
       const tx = db.transaction('slots', 'readwrite');
-      ['cloud:production', ...KEPT_SLOTS].forEach((slot, index) => tx.objectStore('slots').put({ iv: new Uint8Array(12).fill(index + 1), data: new Uint8Array(24).fill(index + 101).buffer }, slot));
+      [CURRENT_CLOUD_SLOT, ...KEPT_SLOTS].forEach((slot, index) => tx.objectStore('slots').put({ iv: new Uint8Array(12).fill(index + 1), data: new Uint8Array(24).fill(index + 101).buffer }, slot));
       await new Promise<void>((resolve, reject) => { tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); });
       db.close();
-    }, { saved, SELECTION, CLOUD_SERVICE, SECRETS, KEPT_SLOTS, LOCAL_DATA });
+    }, { saved, SELECTION, CLOUD_SERVICE, SECRETS, CURRENT_CLOUD_SLOT, KEPT_SLOTS, LOCAL_DATA });
     const before = (await slotRecords(page))!;
-    expect(Object.keys(before).sort()).toEqual(['cloud:production', ...KEPT_SLOTS].sort());
+    expect(Object.keys(before).sort()).toEqual([CURRENT_CLOUD_SLOT, ...KEPT_SLOTS].sort());
     await page.goto('/');
     const chooser = page.locator('.alpha-connection');
     const offline = 'offline' in saved;
@@ -366,7 +368,7 @@ for (const saved of [
     if (!offline) await expect(chooser.getByText('Your agent runs locally in the Android app. Remote agents and pairing are unavailable.', { exact: true })).toBeVisible();
     await expect.poll(async () => Object.keys((await slotRecords(page))!).sort()).toEqual([...KEPT_SLOTS].sort());
     // Remote-agent, device and other slots keep their exact bytes; notes and drafts are untouched.
-    const { 'cloud:production': removed, ...kept } = before;
+    const { [CURRENT_CLOUD_SLOT]: removed, ...kept } = before;
     expect(removed).toBeTruthy();
     expect(await slotRecords(page)).toEqual(kept);
     expect(await page.evaluate(keys => Object.fromEntries(keys.map(key => [key, localStorage.getItem(key)])), Object.keys(LOCAL_DATA))).toEqual(LOCAL_DATA);

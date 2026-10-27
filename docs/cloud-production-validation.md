@@ -133,3 +133,27 @@ neither explains Google's401 nor grants Cloudflare historical-log permission.
 A fresh normal Google sign-in selected the user-requested shawmakesmagic@gmail.com account and successfully completed the Cloud callback. The browser proceeded through “Connecting to the Eliza app” to `https://cloud.eliza.app/join`, showing “Start your Dedicated Eliza”, an existing balance of $9,999.00, and a price of $0.24/day ($0.01/hour), minimum start $0.72. This supersedes the earlier unresolved browser-login state for this observed session; it does not establish phone token enrollment or Gmail authorization.
 
 No Start Dedicated action was submitted. Explicit bounded approval for one agent for up to24hours was requested because provisioning incurs ongoing hosting charges. The setup tab is retained for that decision. No API credential was extracted, no Google Gmail scope was granted, and no test email was sent. Cloud chat/voice, account-agent reuse or provisioning, phone login, and Gmail remain separately unverified.
+
+## October 23: integration completion probes
+
+Read-only production probes while preparing `codex/finish-integrations`:
+
+| Probe | Observed result | What it establishes |
+| --- | --- | --- |
+| `GET /api/v1/subscriptions/plans` | HTTP 200 | The public catalog is reachable; no authenticated entitlement or quota acceptance |
+| `GET /api/v1/maps/capabilities` without credentials | HTTP 401 | Authentication is required; coverage and route availability remain unverified |
+| `GET /api/v1/app-auth/mobile/config` with `clientId=ai.elizaresearch.alphaphone`, `environment=production`, and the exact HTTPS callback | HTTP 200, matching registration and S256 | Alpha mobile registration is deployed |
+| `GET /steward/auth/providers?tenantId=elizacloud` | HTTP 200; email and Google offered | Provider discovery is available; no sign-in attempted |
+| `GET https://eliza.app/.well-known/assetlinks.json` | HTTP 404 | The verified App Link readiness gate is not satisfied |
+
+The connected Pixel 10a had system-installed version code 6,
+`0.1.0-cloud-0296e2c929-e240ddab7`, and showed Cloud signed out. This is an older
+Cloud-profile image, not device acceptance for current main or this change.
+No account credentials, provider writes, calls, messages, installation or flashing
+were performed. No Cloud/Maps/signing environment references were configured in
+this execution environment.
+
+Completion still requires the release owner’s certificate binding at the App Link
+host, a designated test account and safe provider targets, deployed Maps coverage,
+and separate signed-artifact/device acceptance. Do not weaken the readiness gate
+or present the public registration response as a completed login.

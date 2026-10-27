@@ -13,11 +13,11 @@ import type { CloudEnvironment } from './cloud-protocol';
  * hand-off stores, because the renderer's Cloud requests send it as their Bearer. The port's
  * outcomes themselves carry no secret.
  *
- * Until the host's readiness probe reports Cloud ready for this phone (`status().inApp`), the
- * renderer keeps the Cloud sign-in hand-off (CloudProtocol.login) as the product path.
+ * Email remains in Alpha when readiness is unavailable. The readiness probe gates Google;
+ * it never selects hosted login as a fallback.
  */
 export type CloudSignInFailureCode =
-  | 'cancelled' | 'login-active' | 'invalid-email' | 'invalid-code' | 'cooldown' | 'expired' | 'rate-limited'
+  | 'cancelled' | 'login-active' | 'invalid-phone' | 'invalid-email' | 'invalid-code' | 'cooldown' | 'expired' | 'rate-limited'
   | 'offline' | 'unavailable' | 'account-check' | 'state-mismatch' | 'browser-closed' | 'browser-unavailable'
   | 'provider-refused' | 'mfa-browser' | 'mfa-unsupported' | 'activation-pending' | 'storage' | 'rejected' | 'invalid-request'
   | 'app-link-unverified' | 'attempts-exhausted';
@@ -32,25 +32,33 @@ export interface CloudSignInAuthenticated {
 }
 export interface CloudSignInEmailStarted { attemptId: string; expiresAt: number; resendAt: number }
 export interface CloudSignInMfaRequired { status: 'mfa'; method: 'totp' | 'sms' | 'passkey'; expiresAt: number }
+export interface CloudSignInGoogleMfaRequired extends CloudSignInMfaRequired { attemptId: string; environment: CloudEnvironment }
+export type CloudSignInGoogleOutcome = CloudSignInAuthenticated | CloudSignInGoogleMfaRequired;
 export interface CloudSignInPort {
+  serviceInfo?(input: { environment: CloudEnvironment }): Promise<unknown>;
   /** Opens Google's consent in a Custom Tab and resolves once the App Link return is exchanged. */
   startGoogle(input: { environment: CloudEnvironment }): Promise<unknown>;
   startEmail(input: { environment: CloudEnvironment; email: string }): Promise<unknown>;
+  startPhone?(input: { environment: CloudEnvironment; phone: string }): Promise<unknown>;
+  verifyPhone?(input: { attemptId: string; code: string }): Promise<unknown>;
   verifyEmail(input: { attemptId: string; code: string }): Promise<unknown>;
   verifyMfa(input: { attemptId: string; code: string }): Promise<unknown>;
+  /** Revalidates a retained MFA event against the current native attempt; no network or secrets. */
+  resumeMfa?(input: { attemptId: string; environment: CloudEnvironment }): Promise<unknown>;
   /** Ends the attempt and burns any pending Google record. Idempotent. */
   cancel(): Promise<void>;
   /** Which methods this host offers and whether Cloud is ready for in-app sign-in on this phone
    * (`inApp`, from the host's cached readiness probe). Hosts without Google (the browser bridge) say so. */
   status?(input?: { environment: CloudEnvironment }): Promise<unknown>;
   /** `signInCompleted`: a Google return that completed after Alpha restarted (no waiting call).
-   * `signInIncomplete`: a return without a sign-in result arrived with no waiting call. */
-  addListener?(event: 'signInCompleted' | 'signInIncomplete', listener: (outcome: unknown) => void): Promise<unknown>;
+   * `signInIncomplete`: a return without a sign-in result arrived with no waiting call.
+   * `signInMfaRequired`: a retained hint that must be revalidated through resumeMfa. */
+  addListener?(event: 'signInCompleted' | 'signInIncomplete' | 'signInMfaRequired', listener: (outcome: unknown) => void): Promise<unknown>;
 }
-const CODES = new Set<string>(['cancelled', 'login-active', 'invalid-email', 'invalid-code', 'cooldown', 'expired', 'rate-limited', 'offline', 'unavailable', 'account-check', 'state-mismatch', 'browser-closed', 'browser-unavailable', 'provider-refused', 'mfa-browser', 'mfa-unsupported', 'activation-pending', 'storage', 'rejected', 'invalid-request', 'app-link-unverified', 'attempts-exhausted']);
+const CODES = new Set<string>(['cancelled', 'login-active', 'invalid-phone', 'invalid-email', 'invalid-code', 'cooldown', 'expired', 'rate-limited', 'offline', 'unavailable', 'account-check', 'state-mismatch', 'browser-closed', 'browser-unavailable', 'provider-refused', 'mfa-browser', 'mfa-unsupported', 'activation-pending', 'storage', 'rejected', 'invalid-request', 'app-link-unverified', 'attempts-exhausted']);
 export class CloudSignInError extends Error {
   readonly code: CloudSignInFailureCode;
-  constructor(code: CloudSignInFailureCode) { super(`Eliza Cloud sign-in ${code}`); this.code = code; this.name = 'CloudSignInError'; }
+  constructor(code: CloudSignInFailureCode) { super(`Cloud sign-in ${code}`); this.code = code; this.name = 'CloudSignInError'; }
   static from(error: unknown): CloudSignInError {
     if (error instanceof CloudSignInError) return error;
     const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined;
@@ -58,29 +66,30 @@ export class CloudSignInError extends Error {
   }
 }
 /** Owner-facing copy. Never includes server text, codes or addresses. */
-export function signInFailureMessage(code: CloudSignInFailureCode): string {
+export function signInFailureMessage(code: CloudSignInFailureCode, serviceName: string): string {
   switch (code) {
     case 'cancelled': return 'Sign-in cancelled.';
     case 'login-active': return 'A sign-in is already in progress. Finish or cancel it first.';
+    case 'invalid-phone': return 'Enter your phone number with its country code, such as +14155550100.';
     case 'invalid-email': return 'Enter a valid email address.';
     case 'invalid-code': return 'That code did not work. Check it and try again, or send a new code.';
     case 'cooldown': return 'Wait a minute before sending another code.';
     case 'expired': return 'This sign-in expired. Start again.';
     case 'rate-limited': return 'Too many attempts. Wait a few minutes, then try again.';
-    case 'offline': return 'Alpha could not reach Eliza Cloud. Check your connection and try again.';
-    case 'account-check': return 'This account needs an extra check that Alpha cannot complete. Use account recovery or contact Eliza Cloud support.';
+    case 'offline': return `Alpha could not reach ${serviceName}. Check your connection and try again.`;
+    case 'account-check': return `This account needs an extra check that Alpha cannot complete. Use account recovery or contact ${serviceName} support.`;
     case 'state-mismatch': return 'That sign-in return did not match this phone’s request. Start again.';
     case 'browser-closed': return 'Google sign-in was closed before it finished. Start again when you are ready.';
     case 'browser-unavailable': return 'No browser that can show Google sign-in is available. Use your email instead.';
     case 'provider-refused': return 'Google did not complete the sign-in. Try again or use your email.';
     case 'mfa-browser': return 'This account needs a second verification step. Sign in with your email to complete it in Alpha.';
-    case 'mfa-unsupported': return 'This account’s second verification method is not available in Alpha yet. Use account recovery or contact Eliza Cloud support.';
-    case 'activation-pending': return 'Signed in, but Eliza Cloud has not confirmed this phone yet. Alpha retries when it starts again; you can also sign in again.';
+    case 'mfa-unsupported': return `This account’s second verification method is not available in Alpha yet. Use account recovery or contact ${serviceName} support.`;
+    case 'activation-pending': return `Signed in, but ${serviceName} has not confirmed this phone yet. Alpha retries when it starts again; you can also sign in again.`;
     case 'storage': return 'Alpha could not save the sign-in securely on this phone. Try again.';
     case 'app-link-unverified': return 'Alpha did not receive the sign-in from your browser, so you are not signed in yet. Start sign-in again in Alpha.';
     case 'attempts-exhausted': return 'Too many incorrect codes. Send a new code and try again.';
-    case 'rejected': case 'invalid-request': return 'Eliza Cloud refused this sign-in. Start again.';
-    default: return 'Eliza Cloud sign-in is unavailable right now. Try again.';
+    case 'rejected': case 'invalid-request': return `${serviceName} refused this sign-in. Start again.`;
+    default: return `${serviceName} sign-in is unavailable right now. Try again.`;
   }
 }
 function object(value: unknown): Record<string, unknown> {
@@ -113,16 +122,25 @@ export function verified(value: unknown, environment: CloudEnvironment): CloudSi
   }
   return authenticated(row, environment);
 }
+/** Google may require a native second factor before a credential exists. Bind it to this attempt/environment. */
+export function googleOutcome(value: unknown, environment: CloudEnvironment): CloudSignInGoogleOutcome {
+  const row = object(value);
+  const outcome = verified(row, environment);
+  if (outcome.status !== 'mfa') return outcome;
+  if (row.environment !== environment || typeof row.attemptId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.attemptId)) throw new CloudSignInError('unavailable');
+  if (Object.keys(row).some(key => !['status', 'method', 'expiresAt', 'attemptId', 'environment'].includes(key))) throw new CloudSignInError('unavailable');
+  if (outcome.expiresAt <= Date.now()) throw new CloudSignInError('expired');
+  return { ...outcome, attemptId: row.attemptId, environment };
+}
 export const normalizeSignInCode = (value: string): string | null => { const digits = value.replace(/[\s-]/g, ''); return /^\d{6}$/.test(digits) ? digits : null; };
 export const validSignInEmail = (value: string): boolean => value.length <= 320 && /^[^\s@\p{Cc}\p{Cf}]+@[^\s@\p{Cc}\p{Cf}]+\.[^\s@\p{Cc}\p{Cf}]+$/u.test(value.trim());
-/**
- * The host's readiness answer. In-app sign-in is used only when the host says `inApp: true` and
- * offers email; anything else (absent, malformed, false) keeps the Cloud sign-in hand-off. Google is
- * offered only when the host also reports it.
- */
-export function signInReadiness(value: unknown): { google: boolean } | null {
+/** Explicit provider capabilities from the host. Unknown readiness keeps the existing email error/retry
+ * surface; known disabled methods stay hidden. Optional SMS is never inferred from an older host. */
+export function signInReadiness(value: unknown): { google: boolean; phone: boolean; email: boolean } | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
-  if (row.inApp !== true || row.email !== true) return null;
-  return { google: row.google === true };
+  if (row.inApp !== true && row.methodsKnown !== true) return null;
+  return { google: row.google === true, phone: row.phone === true, email: row.email === true };
 }
+
+export const validSignInPhone = (value: string): boolean => /^\+[1-9][0-9]{6,14}$/.test(value.trim());

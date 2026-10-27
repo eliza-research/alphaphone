@@ -26,7 +26,7 @@ for remaining product gates.
 
 | Surface | Browser implementation | Qualification boundary |
 | --- | --- | --- |
-| Browser | Isolated frames, navigation, bookmarks, downloads, reviewed reading and external-tab handoff | Same-origin and embedding restrictions remain intact; no Android bridge is exposed to remote frames |
+| Browser | Isolated frames, navigation, bookmarks, downloads, reviewed reading and external-tab handoff | Same-origin and embedding restrictions remain intact; no Android bridge is exposed to remote frames. Web clearing removes Alpha tabs/history only; site-data deletion is unavailable and private tabs do not promise browser-wide cookie erasure. |
 | Calendar | Local events, series/occurrence edits, civil dates, guest responses, meeting preview, alerts and reviewed agent actions | IndexedDB documents, cross-tab revisions and explicit recovery; no provider sync, real invitations or conferencing is implied |
 | Reminders and Clock | Local schedules, recurrence, Done/Snooze, foreground due checks and alert audio | Closed pages cannot promise delivery; native reboot, Doze and audibility require separate tests |
 | Files and Notes | Reviewed local imports, managed trees, text/audio/documents, exact-byte exports and attachment selection | Imported copies do not rewrite their source files; native SAF and secure storage remain separate |
@@ -100,3 +100,17 @@ before Gradle when an input is missing) for both standalone and launcher distrib
 consumer changes. APK assembly, emulator bridge/HOME-role tests, full AOSP image
 boots, real provider integrations and physical-device/user acceptance remain
 separate gates. Never use one as evidence for another.
+
+## Web capability policy — October 23
+
+The owner permits device-only operations to be omitted or disabled in web mode.
+A web fallback must report what it actually did. Browser site-data deletion is
+native-only; clearing Alpha history does not sign the owner out of remote sites.
+Private web tabs omit Alpha history persistence without claiming to erase cookies
+owned by the embedding browser. Android retains its native profile behavior.
+
+Maps remains foreground-only on web. On Android, an inactive or failed navigation
+service update immediately retires screen-off ownership and reports foreground-only
+guidance; late replies from a retired route cannot stop its replacement. Cloud
+place identifiers remain opaque, bounded strings; provider-specific validation
+belongs to the Cloud provider rather than the phone's generic adapter.

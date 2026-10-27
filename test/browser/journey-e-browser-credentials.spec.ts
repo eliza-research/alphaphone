@@ -191,7 +191,7 @@ test('browser navigation, tabs, private tab, reviewed reading and password manag
 
   await test.step('private tab is marked, kept out of history and gone after reload', async () => {
     await menu(page, 'New private tab');
-    await expect(page.getByRole('note', {name: 'Private tab notice'})).toContainText('deleted when you close it');
+    await expect(page.getByRole('note', {name: 'Private tab notice'})).toContainText('not saved in Alpha history');
     await enter(page, `${origin}/private`);
     await expect(heading(page, 'Page private')).toBeVisible();
     await expect(page.getByRole('img', {name: 'Private tab', exact: true})).toBeVisible();
