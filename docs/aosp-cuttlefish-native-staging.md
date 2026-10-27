@@ -34,7 +34,7 @@ substitute for missing or invalid x86 libraries. Unknown targets are rejected.
 The shared native admission verifies the payload. Alpha then converts its legacy
 install rules to a Soong `android_app_import` with required `prebuilt_app_native`
 modules, because this Cuttlefish product ignores `Android.mk`. Apply the exact
-recorded patch in `android/aosp/app-native` and pass its admission flag above.
+recorded patch in `vendor/eliza/packages/os/android/patches/soong-app-native` and pass its admission flag above.
 `config.fs`, included by the product fragment, makes Bun and both loader files
 0755 and the shared libraries 0644 under
 `/product/app/AlphaPhone/lib/x86_64`. The launcher ZIP is unchanged. Pixel's
