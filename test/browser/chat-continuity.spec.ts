@@ -135,7 +135,7 @@ test('an offline failure before the message is posted keeps the text and a later
   await expect(composer(page)).toHaveValue('Keep this while offline');
   // Nothing carrying the message left the phone, so no unknown-outcome claim and no reconciliation.
   await expect(page.getByText(UNKNOWN, { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /^Check for reply/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Check saved conversation/ })).toHaveCount(0);
   expect(await fixture(page, f => ({ posts: f.posts, creates: f.creates, reads: f.historyReads }))).toEqual({ posts: 0, creates: 1, reads: 0 });
   expect(await savedDraft(page, key)).toBe('Keep this while offline');
   // Back online: only the person's own second Send posts the message, exactly once.
@@ -279,7 +279,7 @@ test('disconnecting the agent mid-reply never shows the old reply or a recovery 
   // The message was posted before the owner changed: the notice says it may have arrived, so it is not blindly resent.
   await expect(conversation(page).getByText(/Your message may have reached the previous agent connection\. Check its saved conversations before sending it again\.$/)).toHaveCount(1);
   for (const text of ['Asked the first agent', 'Late reply for the old agent', UNKNOWN, MAY_FINISH]) await expect(conversation(page).getByText(text, { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /^Check for reply/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Check saved conversation/ })).toHaveCount(0);
   await expect(stop(page)).toHaveCount(0);
   expect(await fixture(page, f => ({ posts: f.posts, reads: f.historyReads }))).toEqual({ posts: 1, reads: 0 });
 });
@@ -333,7 +333,7 @@ test('a rate limit before the message is posted keeps the text instead of report
   await composer(page).press('Enter');
   await expect(composer(page)).toHaveValue('Rate limited before sending', { timeout: 15_000 });
   await expect(page.getByText(UNKNOWN, { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /^Check for reply/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Check saved conversation/ })).toHaveCount(0);
   expect(await fixture(page, f => ({ posts: f.posts, creates: f.creates }))).toEqual({ posts: 0, creates: 1 });
   expect(await savedDraft(page)).toBe('Rate limited before sending');
 });
@@ -386,14 +386,14 @@ test('a check that reported its result keeps that statement and its offer when a
   await expect.poll(() => fixture(page, f => f.posts), { timeout: 15_000 }).toBe(1);
   await stop(page).click();
   await expect(conversation(page).getByText(NOT_FINISHED, { exact: true })).toHaveCount(1, { timeout: 40_000 });
-  await expect(page.getByRole('button', { name: /^Check for reply/ })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /^Check saved conversation/ })).toHaveCount(1);
   await typeDraft(page, 'Another message');
   await composer(page).press('Enter');
   await expect.poll(() => fixture(page, f => f.posts), { timeout: 15_000 }).toBe(2);
   // The check did run; the chat must not now claim that it did not.
   await expect(conversation(page).getByText(NOT_CHECKED)).toHaveCount(0);
   await expect(conversation(page).getByText(NOT_FINISHED, { exact: true })).toHaveCount(1);
-  await expect(page.getByRole('button', { name: /^Check for reply/ })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /^Check saved conversation/ })).toHaveCount(1);
   expect(await fixture(page, f => f.historyReads)).toBe(1);
 });
 

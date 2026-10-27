@@ -1,15 +1,6 @@
 import { returnToApps } from './app-navigation';
 import {test,expect,type Page} from '@playwright/test';
-// Exercise the device Calendar renderer with its registered browser provider.
-// The platform projection changes only after boot; these are not Android plugin tests.
-async function openLocalCalendar(page:Page){
- await expect(page.getByRole('button',{name:'Calendar',exact:true})).toBeVisible();
- await page.evaluate(()=>{(window as any).Capacitor.getPlatform=()=> 'android';});
- await page.getByRole('button',{name:'Calendar',exact:true}).click();
- await page.locator('summary').filter({hasText:'Calendar sources'}).click();
- await page.getByRole('button',{name:'Android calendars',exact:true}).click();
- await page.locator('summary').filter({hasText:'Calendar sources'}).click();
-}
+import {openBrowserCalendar as openLocalCalendar} from './helpers/browser-calendar';
 async function start(page:Page){await page.addInitScript(()=>localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'})));await page.goto('/?mode=dev');await openLocalCalendar(page);}
 async function draft(page:Page,title:string){const replace=async(dialog:any)=>{expect(dialog.message()).toBe('Replace the retained unsaved form with a new event?');await dialog.accept();};page.on('dialog',replace);try{await page.getByRole('button',{name:'New event',exact:true}).click();}finally{page.off('dialog',replace);}await page.getByRole('textbox',{name:'Title',exact:true}).fill(title);}
 async function count(page:Page){return page.evaluate(async()=>JSON.parse((await (await import('/src/browser/calendar-store.ts')).calendarDocument.readRaw())||'{"events":[]}').events.length);}

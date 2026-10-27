@@ -101,7 +101,7 @@ test('launcher All apps keeps scroll clearance when a late draft status arrives'
       if (!dock) return;
       waiting.disconnect();
       const status = new MutationObserver(() => {
-        const list = document.querySelector<HTMLElement>('[data-alpha-app-scroll="drawer"]');
+        const list = document.querySelector<HTMLElement>('[data-alpha-layer="drawer"] [data-installed-apps-scroll]');
         const clock = list?.querySelector<HTMLElement>('[aria-label="Open Synthetic clock"]');
         if (!list || !clock || !dock.textContent?.includes('Local draft could not be read')) return;
         const box = clock.getBoundingClientRect(), dockBox = dock.getBoundingClientRect();

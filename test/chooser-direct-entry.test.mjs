@@ -22,13 +22,16 @@ test('ready choice renders usable email path and explicit unavailable Google not
  const html=render({signIn:{step:'choose',environment:'production'},busy:false,message:'',error:''});
  assert.match(html,/Google sign-in is unavailable/);assert.doesNotMatch(html,/Retry sign-in/);assert.match(html,/<input[^>]+type="email"(?![^>]*disabled)/);
 });
-test('automatic readiness is one attempt per signed-out cycle, defers while busy and never initiates Google or email',()=>{
+test('automatic readiness probes once per unresolved entry, rearms after a form closes and never initiates sign-in',()=>{
  const code=between(source,'  const automaticSignInProbe =','  const visible=');
  let ref,callback,count=0;
  const apply=new Function('useRef','useEffect','productionSignInRequired','snapshot','connectionController','residentEnvironment',transformSync(code,{loader:'tsx'}).code);
  const draw=(required,busy=false,signIn=null)=>{callback=null;apply(()=>ref??=( {current:false}),fn=>{callback=fn;},required,{busy,signIn},{beginSignIn(){count++;},signInGoogle(){throw Error('Unexpected Google');},signInEmail(){throw Error('Unexpected email');}},()=> 'production');callback();};
  draw(true,true);assert.equal(count,0);draw(true);draw(true);assert.equal(count,1);
- draw(true,false,{step:'choose'});assert.equal(count,1);draw(false);draw(true);assert.equal(count,2);
+ draw(true,false,{step:'choose'});assert.equal(count,1);
+ // Cloud can refuse a newly issued key after the form closes. Probe its fresh entry once.
+ draw(true,true);assert.equal(count,1);draw(true);draw(true);assert.equal(count,2);
+ draw(false);draw(true);assert.equal(count,3);
 });
 test('Cancel delegates in-flight readiness to the existing abort operation, without clearing saved credentials',()=>{
  const code=between(source,'  cancelSignIn() {','  async signInGoogle()');let aborted=0,changes=[];

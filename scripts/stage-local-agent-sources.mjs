@@ -60,6 +60,7 @@ for(const name of classes){
 // Record the same source provenance as the service adapters above.
 for(const relative of [
  'plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProcessSupervisor.java',
+ 'plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderAdmission.java',
  // JsonCredentialSlots is compiled from the :elizaos-capacitor-secure-store module (patched
  // source, byte-identical for that file); staging a second copy would duplicate the class.
 ]){

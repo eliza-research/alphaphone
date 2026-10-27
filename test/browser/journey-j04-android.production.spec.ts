@@ -16,6 +16,15 @@ test.beforeEach(({}, testInfo) => { test.skip(testInfo.project.name !== 'product
 const LOCATION = 'Pier 4, Harbour Road';
 const TITLE = 'Ferry inspection';
 
+/** This journey exercises CalendarProvider rows, so choose their explicit source. */
+async function openAndroidCalendars(page: Page) {
+  await button(page, 'Calendar').click();
+  const sources = page.locator('summary').filter({ hasText: 'Calendar sources' });
+  await sources.click();
+  await button(page, 'Android calendars').click();
+  await sources.click();
+}
+
 /** Adds the event location and an installed map app (DailyApps.capabilities/perform) to the stub. */
 async function mapsApp(page: Page, location: string) {
   await page.addInitScript(location => {
@@ -43,7 +52,7 @@ test('an event location opens unconfigured Maps, hands off to an installed map a
   await mapsApp(page, LOCATION);
   await residentHome(page);
 
-  await button(page, 'Calendar').click();
+  await openAndroidCalendars(page);
   await page.getByRole('button', { name: new RegExp(`^${TITLE},`) }).first().click();
   await expect(page.getByRole('heading', { name: TITLE, exact: true })).toBeVisible();
   await button(page, LOCATION).click();
@@ -101,7 +110,7 @@ test('an Android event draft from a note no longer says it will not link back; n
   const foreign = await fenceNetwork(page);
   await flagOffAndroid(page, { calendar: { access: 'granted', calendars: [{ id: '7', name: 'Harbour team', account: 'owner@example.invalid' }], events: [] } });
   await residentHome(page);
-  await button(page, 'Calendar').click();
+  await openAndroidCalendars(page);
   await expect(page.locator('html')).toHaveAttribute('data-active-view', 'calendar');
   const draft = (origin: boolean) => page.evaluate(origin => {
     const root = document.getElementById('root') as any, key = Object.keys(root).find(name => name.startsWith('__reactContainer$'))!;

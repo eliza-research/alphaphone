@@ -20,11 +20,19 @@
     ],
     "ignoreDeprecations": "6.0",
     "paths": {
+      "@elizaos/capacitor-system/sense": ["./.eliza/client-features/plugins/plugin-native-system/src/sense-bridge.ts"],
+      "@elizaos/contracts/device-action-execution": ["./.eliza/client-features/packages/contracts/src/device-action-execution.ts"],
+      "@elizaos/capacitor-system/launcher": [
+        "./.eliza/client-features/plugins/plugin-native-system/src/client/launcher.ts"
+      ],
       "@elizaos/contracts/native-notes-query": [
         "./.eliza/client-features/packages/contracts/src/native-notes-query.ts"
       ],
       "@elizaos/voice/turn": [
         "./.eliza/client-features/packages/voice/src/turn.ts"
+      ],
+      "@elizaos/core/read-memo": [
+        "./.eliza/client-features/packages/core/src/read-memo.ts"
       ],
       "@elizaos/core/speech": [
         "./.eliza/client-features/packages/core/src/speech.ts"
@@ -64,6 +72,9 @@
       ],
       "@elizaos/plugin-assistant/device-foreground-review": [
         "./.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/foreground-review-contract.ts"
+      ],
+      "@elizaos/ui/view-primitives": [
+        "./.eliza/client-features/packages/ui/src/view-primitives.ts"
       ]
     }
   },

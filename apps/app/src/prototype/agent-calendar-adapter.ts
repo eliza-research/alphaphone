@@ -2,7 +2,9 @@ import {browserDocuments} from '../browser/documents';
 import {presentCalendarIntervals} from './calendar-interval-presentation';
 import {calendarRange} from '../browser/calendar-records';
 import {Capacitor} from '@capacitor/core';
+import {testMocksEnabled} from '../build-flags';
 import {connectionController,agentPendingText} from '../runtime/connection-ui';
+
 import {legacyCalendarPreservation} from '../runtime/legacy-calendar-preservation';
 import {AgentCalendar,calendarOwnerKey,calendarEventKey,calendarSourceKey,type CalendarPreservation} from '../runtime/agent-calendar';
 import type {AppRecordPort} from '../runtime/app-record-route-policy';
@@ -11,6 +13,8 @@ import {getZonedDateParts,addDaysToLocalDate} from '../../../../.eliza/client-fe
 import {eventEditorMutability} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/components/event-editor-policy';
 type Bag=Record<string,any>;
 export const nativeCalendarScope=(shell:Bag|undefined)=>!!shell&&Capacitor.getPlatform()==='android'&&shell.vget('calendar').calendarAuthority==='android-native';
+export const browserCalendarScope=(shell:Bag|undefined)=>testMocksEnabled&&!!shell&&Capacitor.getPlatform()==='web'&&shell.vget('calendar').calendarAuthority==='browser-local';
+export const deviceCalendarScope=(shell:Bag|undefined)=>nativeCalendarScope(shell)||browserCalendarScope(shell);
 export const legacyGoogleCalendarScope=(shell:Bag|undefined)=>!!shell&&shell.vget('calendar').calendarAuthority==='legacy-google';
 /** Presentation adapter only: ordinary app records and all manual operations use CalendarService. */
 export function installAgentCalendarAdapter(Component:any,views:Bag,preservation?:CalendarPreservation){
@@ -49,14 +53,14 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
  p.componentDidUpdate=function(...args:any[]){update?.apply(this,args);if(owner===this)refresh();};
  p.componentWillUnmount=function(){this.canonicalCalendarConnection?.();window.removeEventListener('alpha:canonical-calendar-invalidated',this.canonicalCalendarInvalidated);this.canonicalCalendarDispose?.();if(owner===this){clearTimeout(nextEnded);document.removeEventListener('visibilitychange',resumed);controller?.retire();controller=undefined;owner=undefined;}unmount.call(this);};
  p.calendarSelection=function(){
-  if(nativeCalendarScope(this))return selection?.call(this);
+  if(deviceCalendarScope(this))return selection?.call(this);
   const state=this.vget('calendar'),model=this.agentCalendar as AgentCalendar|undefined;
   if(state.calendarAuthority==='legacy'||state.calendarAuthority==='legacy-google'||model&&['transition-required','legacy-recovery'].includes(model.state.status))return{kind:'legacy-app-calendar-source',id:state.calendarAuthority==='legacy-google'?'legacy-connected-calendar':'legacy-app-calendar',accountId:'device-local-legacy',revision:model?.state.legacy?.fingerprint};
   if(state.open?.startsWith('canonical-calendar:'))return model?.selection(state.open.slice('canonical-calendar:'.length));
   const key=model?.sourceKeyForHandle(state.form?.cal);return key?model?.sourceSelection(key):undefined;
  };
  const sourceRows=()=>controller?.state.calendars.map(c=>({id:controller!.sourceHandle(calendarSourceKey(c)),name:c.summary,sub:c.accountEmail??c.provider,color:'acc',on:true}))??[];
- views.calendar.displaySources=()=>nativeCalendarScope(owner)?displaySources?.():{native:false,canonical:true,status:controller?.state.status??'disconnected',ready:controller?.state.status==='ready',loading:controller?.state.status==='loading',error:controller?.state.status==='error',sources:sourceRows(),retry:()=>refresh(true)};
+ views.calendar.displaySources=()=>deviceCalendarScope(owner)?displaySources?.():{native:false,canonical:true,status:controller?.state.status??'disconnected',ready:controller?.state.status==='ready',loading:controller?.state.status==='loading',error:controller?.state.status==='error',sources:sourceRows(),retry:()=>refresh(true)};
  function newForm(api:Bag){
   const state=api.get('calendar');if(state.form){api.toast('Keep or finish the current form before creating another event.');return;}
   const target=port();if(!target?.current()){api.toast(agentPendingText(undefined,'Calendar is unavailable for this agent connection. Check Settings › Agent connection.'));return;}
@@ -68,8 +72,8 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
  p.reviewScannedCalendarDraft=function(draft:Bag){
   if(owner!==this||!this.live)return false;
   const state=this.vget('calendar');if(state.form)return false;
-  if(nativeCalendarScope(this)){
-   this.openView('calendar',{calendarAuthority:'android-native',form:draft,open:null,month:null,day:draft.off},'hidden');return true;
+  if(deviceCalendarScope(this)){
+   this.openView('calendar',{calendarAuthority:nativeCalendarScope(this)?'android-native':'browser-local',form:draft,open:null,month:null,day:draft.off},'hidden');return true;
   }
   const model=controller?.state,sources=sourceRows();
   if(state.calendarAuthority==='legacy'||legacyGoogleCalendarScope(this)||!model?.ownerKey||!['ready','partial','unavailable'].includes(model.status)||!sources.length)return false;
@@ -90,10 +94,10 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
  }
  const choices=(state:Bag,api:Bag)=>{const model=controller?.state;
   const chooseAuthority=(authority:string)=>{if(state.form){api.toast('The current draft is kept. Finish it or return to its source before switching.');return;}api.set({calendarAuthority:authority,open:null});};
-  return [{label:'Agent Calendar',go:()=>chooseAuthority('canonical')},...(model?.legacy?.present?[{label:'Saved app calendar · Read only',go:()=>chooseAuthority('legacy')}]:[]),...(Capacitor.getPlatform()==='android'?[{label:'Android calendars',go:()=>chooseAuthority('android-native')}]:[]),{label:'Previously connected calendars · Read only',go:()=>chooseAuthority('legacy-google')}];
+  return [{label:'Agent Calendar',go:()=>chooseAuthority('canonical')},...(model?.legacy?.present?[{label:'Saved app calendar · Read only',go:()=>chooseAuthority('legacy')}]:[]),...(Capacitor.getPlatform()==='android'?[{label:'Android calendars',go:()=>chooseAuthority('android-native')}]:[]),...(testMocksEnabled&&Capacitor.getPlatform()==='web'?[{label:'Browser calendar (development)',go:()=>chooseAuthority('browser-local')}]:[]),{label:'Previously connected calendars · Read only',go:()=>chooseAuthority('legacy-google')}];
  };
  views.calendar.render=function(state:Bag,api:Bag){
-  if(nativeCalendarScope(owner)||legacyGoogleCalendarScope(owner)){const native=nativeCalendarScope(owner),out=render(native?state:{...state,events:(state.events??[]).filter((row:Bag)=>!!row.alphaReminderId)},api);out.calendarAuthorityChoices=choices(state,api);out.calendarSourceLabel=native?'Android calendars':'Previously connected calendars · Read only';if(!native){out.newEvent=out.addAt=()=>api.toast('Choose Agent Calendar to create an event.');if(out.f){out.f.saveOff=true;out.f.save=()=>api.toast('These calendars are read only. Your draft is kept.');}}return out;}
+  if(deviceCalendarScope(owner)||legacyGoogleCalendarScope(owner)){const device=deviceCalendarScope(owner),out=render(device?state:{...state,events:(state.events??[]).filter((row:Bag)=>!!row.alphaReminderId)},api);out.calendarAuthorityChoices=choices(state,api);out.calendarSourceLabel=testMocksEnabled&&browserCalendarScope(owner)?'Browser calendar (development)':device?'Android calendars':'Previously connected calendars · Read only';if(!device){out.newEvent=out.addAt=()=>api.toast('Choose Agent Calendar to create an event.');if(out.f){out.f.saveOff=true;out.f.save=()=>api.toast('These calendars are read only. Your draft is kept.');}}return out;}
   const model=controller?.state,legacy=state.calendarAuthority==='legacy'||model&&['transition-required','legacy-recovery'].includes(model.status);
   let unresolvedCalendarSources=0;
   const rows:Bag[]=legacy?(model?.legacy?.readable?calendarRange(model.legacy.records as any[],{begin:Date.parse(range(state).timeMin),end:Date.parse(range(state).timeMax)}).events:[]).map((e:any)=>({id:'legacy-calendar:'+e.id,title:e.title,notes:e.body||'',where:e.location||'',off:Math.floor((new Date(e.begin).setHours(0,0,0,0)-new Date().setHours(0,0,0,0))/86400000),t:new Date(e.begin).getHours()+new Date(e.begin).getMinutes()/60,d:(e.end-e.begin)/3600000,cal:'legacy',who:[],repeat:'none',alert:null,legacyRecord:e,calendarInterval:true,calendarIntervalData:{begin:e.begin,end:e.end},allDay:!!e.allDay,allDayEndOff:Math.floor((e.end-new Date().setHours(0,0,0,0))/86400000)})):model?.feed?.events.flatMap(e=>{const row=canonicalCalendarRow(e,zone());const source=controller!.state.calendars.find(c=>c.provider===e.provider&&c.side===e.side&&c.grantId===e.grantId&&c.calendarId===e.calendarId);if(!source){unresolvedCalendarSources++;return [];}return[{...row,calendarInterval:true,calendarIntervalData:{begin:Date.parse(e.startAt),end:Date.parse(e.endAt)},cal:controller!.sourceHandle(calendarSourceKey(source))}];})??[];

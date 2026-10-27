@@ -1,3 +1,4 @@
+import {SingleFlightMemo} from "@elizaos/core/read-memo";
 import {parseCloudServiceInfo} from './cloud-service-info';
 import {productionCloud, stagingCloud} from './cloud-deployment.generated.ts';
 import {browserCloudResidentEnabled,browserCloudResidentEnvironment} from './browser-cloud-resident';
@@ -359,18 +360,21 @@ async function clockRepeatDaysSupported():Promise<boolean>{
  * local-record contracts plus each capability the agent offers that this phone supports. Clock
  * handoffs are Android-only; v2 (repeat days) also needs the native repeat-days support. */
 type CalendarAgendaSourceObservation={sourceId:string;sourceRevision:string};
-const calendarAgendaObservations=new WeakMap<DeviceActions,{epoch:number;value:Promise<CalendarAgendaSourceObservation|undefined>}>();
+const calendarAgendaObservations=new WeakMap<DeviceActions,SingleFlightMemo<CalendarAgendaSourceObservation>>();
 let calendarAgendaObservationEpoch=0;
 if(typeof window!=='undefined')for(const event of ['alpha:calendar-sync-source-changed','alpha:calendar-document-changed'])window.addEventListener(event,()=>{calendarAgendaObservationEpoch++;});
 /** Source observation cached per requesting owner session/source epoch; no event content is sent. */
 async function calendarAgendaObservation(actions:DeviceActions):Promise<CalendarAgendaSourceObservation|undefined>{
  if(Capacitor.isNativePlatform()||!actions.supportsCalendarAgenda)return;
- let cached=calendarAgendaObservations.get(actions);
- if(!cached||cached.epoch!==calendarAgendaObservationEpoch){
-  const value=Promise.resolve().then(()=>registerPlugin<{prepareAgentSource():Promise<CalendarAgendaSourceObservation>}>('AlphaCalendar').prepareAgentSource()).then(source=>({sourceId:source.sourceId,sourceRevision:source.sourceRevision})).catch(()=>undefined);
-  cached={epoch:calendarAgendaObservationEpoch,value};calendarAgendaObservations.set(actions,cached);
- }
- return cached.value;
+ const sourceEpoch=calendarAgendaObservationEpoch;
+ let memo=calendarAgendaObservations.get(actions);
+ if(!memo){memo=new SingleFlightMemo<CalendarAgendaSourceObservation>(Infinity,1);calendarAgendaObservations.set(actions,memo);}
+ const key=String(sourceEpoch);
+ const value=memo.peek(key)?.promise??memo.put(key,undefined,Promise.resolve().then(()=>registerPlugin<{prepareAgentSource():Promise<CalendarAgendaSourceObservation>}>('AlphaCalendar').prepareAgentSource()).then(source=>({sourceId:source.sourceId,sourceRevision:source.sourceRevision})));
+ try{
+  const source=await value;
+  return sourceEpoch===calendarAgendaObservationEpoch?source:undefined;
+ }catch{return undefined;}
 }
 async function deviceCapabilities(offered:unknown):Promise<string>{
   const agent:unknown[]=Array.isArray(offered)?offered:[],android=Capacitor.getPlatform()==='android';
@@ -691,10 +695,10 @@ function errorMessage(error: unknown): string {
 /** A resident start that does not open the dialog: Home shows the starting state (P-43). */
 let residentStartInBackground = false;
 /** `openOnError`: a background check (the quiet Cloud account restore) that opens the dialog only to report a failure. */
-async function work(message: string, action: (signal: AbortSignal) => Promise<void>, background = false, openOnError = false) {
+async function work(message: string, action: (signal: AbortSignal) => Promise<void>, background = false, openOnError = false, preserveError = false) {
   if (operation) return;
   const controller = new AbortController(); operation = controller; residentStartInBackground = background;
-  update({ busy: true, ...(background ? {} : { open: true }), message, error: '' });
+  update({ busy: true, ...(background ? {} : { open: true }), message, error: preserveError ? state.error : '' });
   try { await action(controller.signal); }
   catch (error) {
     const recovery=residentRecoveryReason(error);if(recovery&&!active)update({residentRecoveryReason:recovery});
@@ -2184,8 +2188,10 @@ export const connectionController = {
   async residentCloudLogin() { await connectionController.beginSignIn(residentEnvironment()); },
   /** Opens Alpha's own sign-in screen when ready. Nothing is sent until the owner chooses Google or
    * enters an email; no Eliza Cloud web page is opened. */
-  async beginSignIn(environment: CloudEnvironment = residentCloudFlow() ? residentEnvironment() : cloud.environment, refreshNegative = false) {
+  async beginSignIn(environment: CloudEnvironment = residentCloudFlow() ? residentEnvironment() : cloud.environment, refreshNegative = false, automatic = false) {
     if (operation || !cloudEnvironmentAllowed(environment)) return;
+    // An automatic readiness probe must not erase why the saved sign-in was refused.
+    // A new attempt explicitly started by the owner still clears the earlier error.
     // Readiness may take six seconds on a fresh install. Keep that wait cancellable and prevent
     // repeated taps from starting competing probes or opening a browser after the owner cancelled.
     await work(`Checking ${cloudServiceName(environment)} sign-in…`, async signal => {
@@ -2199,9 +2205,10 @@ export const connectionController = {
       inAppEmail = methods === null || methods.email !== false;
       if (cloud.environment !== environment) cloud = makeCloud(environment);
       cloud.cancelLogin();
-      update({ open: true, ...(residentCloudFlow() && state.purpose !== 'cloud-account' ? { purpose: 'agent' as const } : {}), signIn: { step: 'choose', environment }, message: '', error: '' });
-    });
-    await ensureResident();
+      update({ open: true, ...(residentCloudFlow() && state.purpose !== 'cloud-account' ? { purpose: 'agent' as const } : {}), signIn: { step: 'choose', environment }, message: '' });
+    }, false, false, automatic);
+    // Readiness does not stop the agent and must not retry a blocked startup.
+    if (!automatic) await ensureResident();
   },
   /** Leaves the sign-in screen for the chooser and burns the pending attempt. Stored sign-in stays unchanged. */
   cancelSignIn() {
@@ -2739,10 +2746,12 @@ export function ConnectionChooser() {
   const automaticSignInProbe = useRef(false);
   useEffect(() => {
     if (!signInEntryRequired) { automaticSignInProbe.current = false; return; }
-    if (automaticSignInProbe.current || snapshot.busy || snapshot.signIn || snapshot.startupResolved===false || snapshot.automaticRestore) return;
+    if (snapshot.signIn) { automaticSignInProbe.current = false; return; }
+    if (automaticSignInProbe.current || snapshot.busy || snapshot.startupResolved===false || snapshot.automaticRestore) return;
     automaticSignInProbe.current = true;
     // Readiness only: neither email nor Google starts until the owner chooses it.
-    void connectionController.beginSignIn(residentEnvironment());
+    // Automatic probes preserve a genuine saved-sign-in or startup refusal.
+    void connectionController.beginSignIn(residentEnvironment(), false, true);
   }, [signInEntryRequired, snapshot.busy, snapshot.signIn, snapshot.startupResolved, snapshot.automaticRestore]);
   const visible=connectionChooserVisible(snapshot,!!sending);
   const [developmentAction,setDevelopmentAction]=useState('{"type":"create_note","title":"Development note","body":"Reviewed local action"}');

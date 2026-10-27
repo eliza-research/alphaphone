@@ -377,15 +377,15 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
   function syncCanonicalNotes(shell:Shell):void {
     if(!shell.live||shell.notesSourceMode==='legacy')return;
     const port=connectionController.getAppRecordClient(),key=canonicalNotesKey(port);
-    if(shell.canonicalNotesKey===key&&(key===null||shell.canonicalNotesUi?.controller.current))return;
+    if(shell.canonicalNotesKey===key&&(key===null||shell.canonicalNotesUi?.current))return;
     const previous=shell.canonicalNotesUi;shell.canonicalNotesUi=null;shell.canonicalNotesKey=key;previous?.retire();
     shell.notesSelectionKey=null;shell.notesSelection=null;shell.notesStorageFailed=true;shell.notesPending=0;
     if(!port){shell.notesReady=Promise.resolve();originalSet.call(shell,'notes',{list:[],open:null,trash:[],trashOpen:false,storageStatus:agentAvailabilityNotice(undefined,'Notes is unavailable for this agent connection. Check Settings › Agent connection.')});return;}
     let binding:CanonicalNotesUi;
     const paint=()=>{if(shell.live&&shell.canonicalNotesUi===binding)shell.setState({},()=>context(shell));};
     binding=new CanonicalNotesUi(port,{paint,review:paint,committed:()=>paint()});
-    shell.canonicalNotesUi=binding;binding.listen(window);
-    shell.notesReady=binding.start().catch(()=>{if(shell.canonicalNotesUi===binding)paint();});
+    shell.canonicalNotesUi=binding;
+    shell.notesReady=binding.refresh().catch(()=>{if(shell.canonicalNotesUi===binding)paint();});
   }
   async function previousNotesObservation(store:Shell,current:()=>boolean):Promise<Shell>{
     const first=store.list[0],target=first?await store.target(first.id):null;
@@ -398,7 +398,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
   async function selectNotesSource(shell:Shell,source:'canonical'|'legacy'):Promise<boolean>{
     if(!shell.live||source===shell.notesSourceMode)return true;
     if(shell.notesSourceMode==='legacy'&&shell.vget('notes').rec){shell.toast('Finish the recording before switching notes.');return false;}
-    if(shell.notesPending||shell.canonicalNotesUi?.controller.pending||shell.canonicalNotesUi?.editor.draft?.version){shell.toast('Finish or review the current note before switching.');return false;}
+    if(shell.notesPending||shell.canonicalNotesUi?.pending||shell.canonicalNotesUi?.dirty){shell.toast('Finish or review the current note before switching.');return false;}
     shell.cancelReadReplyCompletions?.();shell.notesOpenAbort?.abort();shell.notesOpenAbort=new AbortController();
     const previous=shell.canonicalNotesUi;shell.canonicalNotesUi=null;shell.canonicalNotesKey=null;previous?.retire();
     shell.notesLegacySource=null;shell.notesSourceMode=source;shell.notesSourceEpoch=(shell.notesSourceEpoch??0)+1;shell.notesSelectionKey=null;shell.notesSelection=null;
@@ -423,7 +423,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     const selected = notes?.list?.find((note: Shell) => note.id === notes.open)?.id;
     const selectedRecord=notes?.list?.find((note:Shell)=>note.id===selected);
     const selectedKey=shell.notesSourceMode==='canonical'?null:selectedRecord?JSON.stringify(selectedRecord):null;
-    if(shell.notesSourceMode==='canonical'){shell.notesSelectionKey=null;shell.notesSelection=view==='notes'?shell.canonicalNotesUi?.editor.selection()??null:null;}
+    if(shell.notesSourceMode==='canonical'){shell.notesSelectionKey=null;shell.notesSelection=view==='notes'?shell.canonicalNotesUi?.selection()??null:null;}
     else if(shell.notesSelectionKey!==selectedKey||(selected&&!shell.notesSelection&&!shell.notesPending&&!shell.notesStorageFailed)){
       shell.notesSelectionKey=selectedKey;shell.notesSelection=null;
       if(selected&&shell.notesStore&&!shell.notesStorageFailed&&!shell.notesPending)void shell.notesStore.target(String(selected)).then((target:Shell)=>{
@@ -550,7 +550,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       originalSet.call(this,'notes',{...(update.list?{list:update.list}:{}),storageStatus:isAndroid?'Note text encrypted on this device':''});context(this);
     };
     window.addEventListener('alpha:notes-committed',this.notesCommittedHandler);
-    this.visibilityHandler = () => { if(document.hidden)connectionController.cancelViewNavigation();if (this.live) {if(!document.hidden&&this.notesSourceMode==='canonical'&&this.S().view==='notes')void this.canonicalNotesUi?.controller.refresh().catch(()=>{});context(this);} };
+    this.visibilityHandler = () => { if(document.hidden)connectionController.cancelViewNavigation();if (this.live) {if(!document.hidden&&this.notesSourceMode==='canonical'&&this.S().view==='notes')void this.canonicalNotesUi?.refresh().catch(()=>{});context(this);} };
     this.pageHideHandler = () => { notesRecovery?.abort();this.pageSuspended = true; if (this.live) context(this); };
     this.pageShowHandler = () => { this.pageSuspended = false; if (this.live) context(this); };
     document.addEventListener('visibilitychange', this.visibilityHandler);
@@ -634,32 +634,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
           else return { status: 'failed', summary: 'That screen is not available.' };
           return { status: 'succeeded', summary: `Opened ${target}.` };
         }
-      if (operation.type === 'create_reminder') {
-          if (!this.live || !Number.isSafeInteger(operation.at) || operation.at <= Date.now())
-            return { status: 'failed', summary: 'The reminder time has passed or this view closed. Request a new proposal.' };
-          const id = crypto.randomUUID();
-          try {
-            const result = await DailyApps.scheduleReminder({ id, title: operation.title, body: operation.body, at: operation.at });
-            if (result.status !== 'scheduled' || result.id !== id) {
-              const summary = result.status === 'permission-denied' ? 'Reminder was not scheduled: allow Alpha Phone notifications and its Local reminders channel.'
-                : result.status === 'past' ? 'Reminder was not scheduled: the selected time has passed.'
-                : 'Reminder scheduling was not confirmed. Check Calendar before trying again.';
-              return { status: 'failed', summary };
-            }
-            // Scheduling success is not notification-delivery evidence. Refresh
-            // the real native list only after a confirmed scheduling receipt.
-            if (this.live) await this.refreshReminders?.();
-            return { status: 'succeeded', summary: `Scheduled one reminder: ${operation.title} at ${new Date(operation.at).toLocaleString()}. Android may delay delivery.` };
-          } catch {
-            return { status: 'failed', summary: 'Reminder scheduling could not be confirmed. Check Calendar before requesting another; this action was not retried.' };
-          }
-        }
-        if (this.notesStorageFailed) return { status: 'failed', summary: 'Resolve the notes storage error before saving.' };
-        const note = { id: crypto.randomUUID(), kind: 'text', title: operation.title, body: operation.body, pinned: false, when: 'Now', createdAt:Date.now(), modifiedAt:Date.now() };
-        const current = this.vget('notes').list;
-        const list = [note, ...current];
-        if (!await this.vset('notes', { list })) return { status: 'failed', summary: 'The note save is unconfirmed. Reopen Notes to inspect before requesting another save.' };
-        return { status: 'succeeded', summary: `Saved note: ${note.title}` };
+        return { status:'failed', summary:'Development previews cannot write records.' };
       });
       if (this.live) { const send=transport.send.bind(transport);transport.send=input=>trackDispatch(this,()=>send(input));alphaClient.attachVerifiedTransport(transport); this.toast('Connected to the development agent'); }
       else transport.close?.();
@@ -902,7 +877,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     });
     context(this);
   };
-  p.componentDidUpdate = function (prev: Shell) { originalUpdate.call(this, prev); const notesView=this.S().view==='notes';if(notesView&&!this.wasCanonicalNotesView&&this.notesSourceMode==='canonical')void this.canonicalNotesUi?.controller.refresh().catch(()=>{});this.wasCanonicalNotesView=notesView; context(this); sizeComposer();this.composerDraft?.edit(String(this.S().draft||''));const shade=!!this.S().shade;if(shade&&!this.shadeWasOpen)this.refreshTileFacts();this.shadeWasOpen=shade;const selected=this.messageReplyTarget||this.messageEditTarget;if(selected&&(JSON.stringify(selected.session)!==JSON.stringify(connectionController.getSnapshot().session)||!this.S().msgs.some((m:Shell)=>m.id===selected.messageId&&m.text===selected.text))){cancelMessageContext(this);this.setState({});} };
+  p.componentDidUpdate = function (prev: Shell) { originalUpdate.call(this, prev); const notesView=this.S().view==='notes';if(notesView&&!this.wasCanonicalNotesView&&this.notesSourceMode==='canonical')void this.canonicalNotesUi?.refresh().catch(()=>{});this.wasCanonicalNotesView=notesView; context(this); sizeComposer();this.composerDraft?.edit(String(this.S().draft||''));const shade=!!this.S().shade;if(shade&&!this.shadeWasOpen)this.refreshTileFacts();this.shadeWasOpen=shade;const selected=this.messageReplyTarget||this.messageEditTarget;if(selected&&(JSON.stringify(selected.session)!==JSON.stringify(connectionController.getSnapshot().session)||!this.S().msgs.some((m:Shell)=>m.id===selected.messageId&&m.text===selected.text))){cancelMessageContext(this);this.setState({});} };
   p.componentWillUnmount = function () {
     const notes=this.canonicalNotesUi;this.canonicalNotesUi=null;notes?.retire();this.notesSourceEpoch=(this.notesSourceEpoch??0)+1;
     this.cancelReadReplyCompletions?.();
@@ -1250,27 +1225,27 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     if(this.stopVoiceConversation)context(this);const expectedContext=JSON.stringify(alphaClient.getState().context);
     const binding=this.stopVoiceConversation?sendBinding():undefined,draft=String(before.draft||''),view=before.view;
     const retiring=this.stopVoiceConversation?.();if(retiring){await retiring;context(this);const now=this.S();if(JSON.stringify(alphaClient.getState().context)!==expectedContext||!this.live||document.hidden||connectionController.getSnapshot().open||sendBinding()!==binding||now.view!==view||String(now.draft||'')!==draft||this.messageReplyTarget!==reply||this.messageEditTarget!==edit)return;}
-    let s = this.S(); const text = String(argument ?? s.draft).trim();
-    if (!text || s.typing || this.draftSendPending || this.composerDraft?.holding) return;
+    let s = this.S(); const text = String(argument ?? s.draft);
+    if (!text.trim() || s.typing || this.draftSendPending || this.composerDraft?.holding) return;
     const editTarget:ConversationMessageTarget|undefined=this.messageEditTarget,replyTarget:ConversationMessageTarget|undefined=this.messageReplyTarget,editView=s.view;
     if(editTarget){
       if(argument!==undefined||!connectionController.messageTargetCurrent(editTarget))return;
       this.draftSendPending=true;
       try {
         if(!await messageReviews.confirm('edit-message-'+editTarget.messageId,'Edit and resend message','This replaces the selected message and all later messages in this conversation. It does not undo actions that already ran.\n\nOriginal: '+editTarget.text+'\n\nReplacement: '+text,'Edit and resend'))return;
-        if(!this.live||document.hidden||String(this.S().draft).trim()!==text||!connectionController.messageTargetCurrent(editTarget))throw Error('The draft or conversation changed. Nothing was replaced.');
+        if(!this.live||document.hidden||String(this.S().draft)!==text||!connectionController.messageTargetCurrent(editTarget))throw Error('The draft or conversation changed. Nothing was replaced.');
         await connectionController.truncateMessage(editTarget);this.messageEditTarget=undefined;s=this.S();
-        if(!this.live||document.hidden||s.view!==editView||String(s.draft).trim()!==text)throw Error('History was replaced. Your draft changed, so nothing was resent.');
+        if(!this.live||document.hidden||s.view!==editView||String(s.draft)!==text)throw Error('History was replaced. Your draft changed, so nothing was resent.');
       } catch(error){if(error&&typeof error==='object'&&'historyChanged' in error)this.messageEditTarget=undefined;this.toast(error instanceof Error?error.message:'Message replacement failed.');return;}
       finally{this.draftSendPending=false;}
     }
-    const sourceDraft=this.reviewedSourceDraft?.draft.trim()===text?sourceOf(this.reviewedSourceDraft.source):undefined;
+    const sourceDraft=this.reviewedSourceDraft?.draft===text?sourceOf(this.reviewedSourceDraft.source):undefined;
     context(this);
     const revision=alphaClient.getState().context.revision,connection=connectionController.getSnapshot(),sessionId=connection.session?.sessionId,conversationId=connection.history?.conversationId;
     const current=()=>{const selected=connectionController.getSnapshot();return this.live&&!document.hidden&&!selected.busy&&!selected.open&&!document.querySelector('[data-alpha-chat-recorder],[data-alpha-pill-voice]')&&selected.session?.sessionId===sessionId&&selected.history?.conversationId===conversationId&&alphaClient.getState().context.revision===revision;};
     this.draftSendPending=true;
     // The durable draft keeps this text until the message is known to have been dispatched.
-    try{await this.draftBindingTask;await this.composerDraft.hold(String(s.draft||'').trim(),current);}catch(error){this.toast(error instanceof Error?error.message:'Draft could not be prepared. Nothing was sent.');return;}finally{this.draftSendPending=false;}
+    try{await this.draftBindingTask;await this.composerDraft.hold(String(s.draft||''),current);}catch(error){this.toast(error instanceof Error?error.message:'Draft could not be prepared. Nothing was sent.');return;}finally{this.draftSendPending=false;}
     const reviewedSource=this.reviewedSourceDraft;this.reviewedSourceDraft=null;
     // Everything this send later shows belongs to the agent connection it was sent on.
     const sameChat=()=>connectionController.getSnapshot().session?.sessionId===sessionId;

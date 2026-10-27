@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {verifyPixel10aSource} from '../scripts/pixel10a-source-contract.mjs';
+import {verifyPixel10aSource, defaultLockPath} from '../scripts/pixel10a-source-contract.mjs';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 function fixture(t) {
  const base=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'pixel-source-')));
@@ -49,7 +49,7 @@ test('unrecorded generated file and changed reviewed override fail',async t=>{
  fs.unlinkSync(extra);fs.writeFileSync(path.join(f.project.dir,'source.txt'),'malicious override');await assert.rejects(verifyPixel10aSource(f),/Source bytes differ/);
 });
 test('wrong device and unsafe source paths fail without staging outputs',async t=>{
- const f=fixture(t);f.contract.device.codename='grizzly';f.save();await assert.rejects(verifyPixel10aSource(f),/Not the Pixel 10a/);
+ const f=fixture(t);f.contract.device.codename='grizzly';f.save();await assert.rejects(verifyPixel10aSource(f),/source contract/);
  f.contract.device.codename='stallion';f.contract.projects[0].path='../outside';f.save();await assert.rejects(verifyPixel10aSource(f),/Unsafe source path/);
 });
 
@@ -91,4 +91,14 @@ test('applied patches cannot carry changed bytes, wrong preimages, extra files, 
  await assert.rejects(verifyPixel10aSource({...f,appliedPatches:[{...f.appliedPatches[0],manifest:{...f.manifest,baselineLockSha256:'0'.repeat(64)}}]}),/not reviewed against this source lock/);
  await assert.rejects(verifyPixel10aSource({...f,appliedPatches:[{...f.appliedPatches[0],manifest:{...f.manifest,revision:'0'.repeat(40)}}]}),/locked project revision/);
  await assert.rejects(verifyPixel10aSource({...f,appliedPatches:[{...f.appliedPatches[0],manifest:{...f.manifest,files:[{path:'source.txt',beforeSha256:null,afterSha256:sha('x')}]}}]}),/overlaps/);
+});
+
+
+test('the Alpha adapter uses the shared inventory and retains required-input rejection', async () => {
+  assert.equal(defaultLockPath, path.resolve('vendor/eliza/packages/os/android/sources/pixel10a-stallion.json'));
+  assert.equal(fs.existsSync('android/aosp/pixel10a-source.json'), false);
+  const product = JSON.parse(fs.readFileSync('android/aosp/pixel10a-product.json'));
+  assert.equal(product.sourceLock.file, 'vendor/eliza/packages/os/android/sources/pixel10a-stallion.json');
+  assert.equal(sha(fs.readFileSync(defaultLockPath)), product.sourceLock.sha256);
+  await assert.rejects(verifyPixel10aSource({}), /requires --aosp-source and --factory-image/);
 });

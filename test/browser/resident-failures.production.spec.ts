@@ -19,10 +19,10 @@ const bubble = (page: Page, text: string) => page.getByRole('button', { name: 'M
 const UNKNOWN = 'The reply stopped before it finished. Check the saved conversation before trying again.';
 const NOT_SENT = 'Not sent. Your message is back in the composer.';
 
-async function connected(page: Page) {
+async function connected(page: Page, nativeSignIn = true) {
   const foreign = await fenceNetwork(page);
   await flagOffAndroid(page);
-  await residentStub(page, { accounts: [owner] });
+  await residentStub(page, { accounts: [owner], nativeSignIn });
   await residentHome(page);
   return foreign;
 }
@@ -34,7 +34,7 @@ const KINDS = {
   provider_issue: 'Alpha’s AI service could not complete this reply. Nothing was resent.',
   generation_timeout: 'Alpha’s AI service could not complete this reply. Nothing was resent.',
   // Bound to an admitted plan, yet the agent ran without a provider: a recheck is offered.
-  no_provider: 'Your agent answered without its Cloud AI connection. Check Cloud again; nothing was retried.',
+  no_provider: 'Your agent answered without its AI connection. Check the connection again; nothing was retried.',
 } as const;
 
 for (const [kind, text] of Object.entries(KINDS)) for (const frame of ['done', 'error'] as const) {
@@ -50,6 +50,7 @@ for (const [kind, text] of Object.entries(KINDS)) for (const frame of ['done', '
     await expect(page.getByText(UNKNOWN, { exact: true })).toHaveCount(0);
     await expect(bubble(page, `Failing ${kind}`)).toHaveCount(1);
     if (kind === 'insufficient_credits') {
+      await button(page, 'Expand chat').click();
       // A billing refusal offers the billing page only when the owner asks; no purchase is started.
       const manage = page.getByRole('button', { name: /^Manage billing in Eliza Cloud/ });
       await expect(manage).toHaveCount(1);
@@ -219,12 +220,14 @@ test('a restart while the resident holds a reply posts nothing and shows the use
 
 test('a resident send the runtime no longer accepts (401) asks for an Eliza Cloud sign-in, never pairing', async ({ page }) => {
   test.setTimeout(120_000);
-  await connected(page);
+  await connected(page, true);
   await setStub(page, { stream: 'expired' });
   await send(page, 'Sent with an expired session');
-  const dialog = page.getByRole('main',{name:'Sign in',exact:true});
-  await expect(dialog.getByRole('alert')).toBeVisible({ timeout: 30_000 });
-  await expect(dialog.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true })).toBeVisible();
+  const dialog = page.getByRole('main',{name:'Welcome to Alpha.',exact:true});
+  await expect(dialog.getByRole('alert')).toHaveText('Your Cloud sign-in has expired. Sign in with Cloud again.', { timeout: 30_000 });
+  await expect(dialog.getByRole('button', { name: 'Continue with Google', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Email me a code', exact: true })).toBeEnabled();
+  expect(await harness(page, f => ({ streams: f.streams, posts: f.posts.length }))).toEqual({ streams: 1, posts: 0 });
   await expect(page.locator('body')).not.toContainText(/pair/i);
   expect(await stub(page, s => s.recoveries)).toEqual([]);
 });

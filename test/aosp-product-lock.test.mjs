@@ -40,7 +40,7 @@ test("the committed Cuttlefish product names its target, lock, host packages and
   assert.equal(brand.packageName, read("app.config.json").appId);
   assert.equal(brand.envPrefix, "ELIZA", "brand environment names stay on the upstream ELIZA_ prefix");
   // Pixel 10a (stallion) has its own source lock and production descriptor; the Cuttlefish product never stages against them.
-  assert.equal(product.separateLocks.pixel10a, "android/aosp/pixel10a-source.json");
+  assert.equal(product.separateLocks.pixel10a, "vendor/eliza/packages/os/android/sources/pixel10a-stallion.json");
   assert.notEqual(product.sourceLock.file, product.separateLocks.pixel10a);
   assert.equal(read(product.physicalProduct).product, "alpha_stallion_phone");
   assert.equal(fs.existsSync(path.join(root, "android/aosp/pixel10.lock.json")), false, "the unadmitted Pixel 10 placeholder lock is retired");
@@ -64,8 +64,8 @@ test("a fully populated fixture lock is complete; each unset, placeholder or for
   refuse(PRODUCT_DESCRIPTOR, { ...product, hostPackages: [{ ...product.hostPackages[0], sha256: "unset" }] }, /cuttlefish-base needs a version and a SHA-256/);
   refuse(PRODUCT_DESCRIPTOR, { ...product, hostPackages: [] }, /lists no Cuttlefish host package/);
   refuse(PRODUCT_DESCRIPTOR, { ...product, target: "pixel10a" }, /target must be one of/);
-  write("android/aosp/pixel10a-source.json", { schema: 1, target: "pixel10a" });
-  refuse(PRODUCT_DESCRIPTOR, { ...product, sourceLock: { file: "android/aosp/pixel10a-source.json", profile: "cuttlefish" } }, /separate product's lock; it is not admitted for the Cuttlefish product/);
+  write("vendor/eliza/packages/os/android/sources/pixel10a-stallion.json", { schema: 1, target: "pixel10a" });
+  refuse(PRODUCT_DESCRIPTOR, { ...product, sourceLock: { file: "vendor/eliza/packages/os/android/sources/pixel10a-stallion.json", profile: "cuttlefish" } }, /separate product's lock; it is not admitted for the Cuttlefish product/);
   refuse(PRODUCT_DESCRIPTOR, { ...product, signer: { ...product.signer, platformCertificateSha256: "UNSET" } }, /platformCertificateSha256/);
   refuse("android/release-signer.json", { ...read("android/release-signer.json"), signerSha256: "unset" }, /signerSha256 is "unset"/);
   refuse(product.brandConfig, { ...read(product.brandConfig), packageName: "ai.elizaos.app" }, /packageName ai\.elizaos\.app is not ai\.elizaresearch\.alphaphone/);

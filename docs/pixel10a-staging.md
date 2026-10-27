@@ -7,8 +7,8 @@ manifest's `build/soong` revision. From this repository, after setting `AOSP_SOU
 to the admitted source checkout:
 
 ```sh
-git -C "$AOSP_SOURCE/build/soong" apply --check "$PWD/android/aosp/app-native/soong-app-native.patch"
-git -C "$AOSP_SOURCE/build/soong" apply "$PWD/android/aosp/app-native/soong-app-native.patch"
+git -C "$AOSP_SOURCE/build/soong" apply --check "$PWD/vendor/eliza/packages/os/android/patches/soong-app-native/soong-app-native.patch"
+git -C "$AOSP_SOURCE/build/soong" apply "$PWD/vendor/eliza/packages/os/android/patches/soong-app-native/soong-app-native.patch"
 ```
 
 The following stages a new directory; it does not patch the source, build or flash
@@ -79,7 +79,7 @@ from the production descriptor `android/aosp/pixel10a-product.json`. Before any 
 factory archive or APK is read it refuses, naming each gap, while:
 
 - any descriptor value is `UNSET` or a placeholder;
-- `sourceLock.sha256` does not pin the exact bytes of `android/aosp/pixel10a-source.json`,
+- `sourceLock.sha256` does not pin the exact bytes of `vendor/eliza/packages/os/android/sources/pixel10a-stallion.json`,
   or that lock is still marked `developmentOnly` (admitting the inputs for release is a
   reviewed change to both files);
 - `android/release-signer.json` has no reviewed APK release signer, or

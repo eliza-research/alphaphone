@@ -6,12 +6,13 @@ import test from 'node:test';
 // Execute the complete adapter with only its platform/service dependencies
 // replaced. No Calendar write API is supplied: handoff must only open a form.
 const code=stripTypeScriptTypes(readFileSync('apps/app/src/prototype/agent-calendar-adapter.ts','utf8').replace(/^import .*;\n/gm,'').replace(/^export /gm,''),{mode:'transform'});
-function fixture({status='ready',sources=1,authority='canonical',platform='web',form=null,provider='eliza',recordPort=null,pendingText=()=> 'Synthetic pending'}={}){
+function fixture({status='ready',sources=1,authority='canonical',platform='web',form=null,provider='eliza',recordPort=null,pendingText=()=> 'Synthetic pending',testMocks=false}={}){
  const state={status,ownerKey:'owner-A',feed:{events:[]},calendars:Array.from({length:sources},(_,i)=>({summary:`Source ${i}`,provider,calendarId:String(i)}))};
  const refreshes=[],creates=[],listeners={};let published;
  class Calendar{state=state;subscribe(fn){published=fn;return()=>{};}refresh(window){refreshes.push(window);}create(_sourceKey,input){creates.push(input);return {outcome:'created',event:null};}invalidateNext(){state.nextFresh=false;if(state.next?.event&&Date.parse(state.next.event.endAt)<=Date.now())state.next=null;}retire(){}sourceHandle(key){return 'handle:'+key;}sourceKeyForHandle(handle){return handle.slice('handle:'.length);}}
  const connection={subscribe:()=>()=>{},getAppRecordClient:()=>recordPort};
- const install=new Function('AgentCalendar','Capacitor','connectionController','calendarSourceKey','presentCalendarIntervals','calendarFormCreate','getZonedDateParts','addDaysToLocalDate','calendarOwnerKey','agentPendingText',code+';return installAgentCalendarAdapter;')(Calendar,{getPlatform:()=>platform},connection,c=>c.calendarId,()=>{},draft=>draft,()=>({}),()=>({}),()=>state.ownerKey,pendingText);
+ const install=new Function('AgentCalendar','Capacitor','connectionController','calendarSourceKey','presentCalendarIntervals','calendarFormCreate','getZonedDateParts','addDaysToLocalDate','calendarOwnerKey','agentPendingText','testMocksEnabled',code+';return installAgentCalendarAdapter;')(Calendar,{getPlatform:()=>platform},connection,c=>c.calendarId,()=>{},draft=>draft,()=>({}),()=>({}),()=>state.ownerKey,pendingText,testMocks);
+
  const opened=[];const calendar={calendarAuthority:authority,form};
  class Shell{live=true;componentDidMount(){}componentWillUnmount(){}vget(){return calendar;}openView(...args){opened.push(args);}setState(){}}
  const views={calendar:{render:()=>({f:{cals:[],repeats:[{label:'Weekly'}],alerts:[{label:'10 min'}]}})}};install(Shell,views,{});
@@ -85,4 +86,16 @@ test('New Event with no current port explains pending state and does not replace
 test('an available private Mac canonical port can open New Event and preserves an existing draft',()=>{
  const f=fixture({platform:'web',recordPort:{current:()=>true,identity:{origin:'http://localhost:5229',ownerId:'mac-owner',agentId:'mac-agent'}}}),toasts=[],api={get:()=>f.calendar,set:patch=>Object.assign(f.calendar,patch),toast:x=>toasts.push(x)};
  f.views.calendar.render(f.calendar,api).newEvent();assert.equal(f.calendar.form.canonicalOwnerKey,'owner-A');assert.equal(f.creates.length,0);assert.deepEqual(toasts,[]);const draft=f.calendar.form;f.views.calendar.render(f.calendar,api).newEvent();assert.equal(f.calendar.form,draft);assert.match(toasts.at(-1),/Keep or finish/);
+});
+test('browser provider requires the test-mocks gate and a web platform',()=>{
+ for(const options of [{testMocks:false,platform:'web'},{testMocks:true,platform:'android'}]){
+  const f=fixture({...options,authority:'browser-local',status:'disconnected',sources:0});
+  assert.equal(f.shell.reviewScannedCalendarDraft(draft),false);
+  assert.deepEqual(f.opened,[]);
+ }
+ const f=fixture({testMocks:true,platform:'web',authority:'browser-local',status:'disconnected',sources:0});
+ assert.equal(f.shell.reviewScannedCalendarDraft(draft),true);
+ assert.equal(f.opened[0][1].form,draft);
+ assert.equal(f.opened[0][1].calendarAuthority,'browser-local');
+
 });

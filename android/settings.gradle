@@ -19,6 +19,7 @@ include ':video-fixture'
 include ':local-speech'
 // AOSP-image-only always-on listener APK (docs/adr/0001-privileged-listener.md); never a dependency of :app.
 include ':sense'
+include ':sense-speech'
 include ':eliza-network-policy'
 project(':eliza-network-policy').projectDir = new File('../vendor/eliza/plugins/plugin-native-network-policy/android')
 

@@ -494,6 +494,7 @@ nothing.
 | `licenses/font-licenses.json` | The owner-statement record for "Denton typeface", by exact hash |
 | `apps/app/public/licenses/` | Generated notice entry flagged `proprietary-licence-held-outside-repo` |
 | `scripts/generate-licenses.mjs` | Reads every font under `apps/app/public`; no Denton-specific code |
+| `apps/app/src/prototype/home-launcher.ts` | Supplies the Denton/Fraunces/Georgia serif stack to the shared launcher renderer |
 | `scripts/prototype-capture.mjs` line 111 | Records `document.fonts.check('300 30px Denton')` in capture output |
 | `test/licenses.test.mjs`, `test/font-license.test.mjs` | Use Denton as the proprietary-font example |
 
@@ -676,3 +677,11 @@ An actual `node scripts/dependency-audit.mjs --resident --write` refresh at `3e4
 Normal root and resident registry audits were refreshed after Alpha Vite8.3.3 and the reviewed SDK development-tool update ([Eliza #37226](https://github.com/elizaOS/eliza/pull/37226)). The root audit retains its three reviewed moderate findings. The new resident lock input has3691 package versions and104 findings:1 critical,45 high,44 moderate,14 low. This removes12 rows from the immediately preceding fresh116-row audit: the six newly reported Storybook/Vite rows plus six older Vite rows. Compared with the historical110-row snapshot, every retained104 row is identical. Three stale Vite exceptions were removed; the90 remaining exception objects and original dates/deadlines were preserved exactly. No new exception was added or renewed.
 
 The Bun lock and normalized input hash changed. The old raw/normalized input equality receipt is historical and is not reused. This is a full-source-lock registry audit, a superset of the mobile payload; it does not establish a freshly staged runtime, packaged-subset audit, APK, provider response or device acceptance. Fresh normal runtime preparation and installed qualification remain required. See [source admission](evidence/sdk-dev-tool-source-admission-20261021.json).
+
+### October 27 test dependency refresh
+
+The shared Notes consumer changes the npm lockfile, so the audit was regenerated. The fresh audit identified Undici 8.11.2 under the development-only jsdom dependency. The lockfile now resolves 8.12.3 within jsdom's existing `^8.11.2` range. The upstream patched threshold is 8.12.2 for [GHSA-4qv8-2p9j-2685](https://github.com/advisories/GHSA-4qv8-2p9j-2685), [GHSA-f72v-6w45-q472](https://github.com/advisories/GHSA-f72v-6w45-q472), and [GHSA-xjj6-f33q-929c](https://github.com/advisories/GHSA-xjj6-f33q-929c). The new audit contains the same three moderate findings covered by the existing Capacitor/xcode/uuid disposition and no high or critical findings. No exception or review deadline was expanded.
+The shared installed-app launcher receives Alpha's existing Denton/Fraunces/Georgia
+font stack from `apps/app/src/prototype/home-launcher.ts`. This adds no font file
+or download: `prototype.css` remains the sole Denton loading rule. The owner-stated
+commercial license record and the open/system fallback stack are unchanged.

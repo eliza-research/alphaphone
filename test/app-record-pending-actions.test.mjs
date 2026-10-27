@@ -8,11 +8,13 @@ const pending=(state,residentAlwaysPresent=false)=>new Function('state','residen
 const source=readFileSync('apps/app/src/prototype/canonical-notes-ui.ts','utf8');
 const code=stripTypeScriptTypes(source.replace(/^import .*;\n/gm,'').replace(/^export /gm,''),{mode:'transform'});
 function notesFixture({kind='offline',resident=false,status='',ready=false}={}){
- const reason=pending({kind},resident),install=new Function('agentPendingText','agentAvailabilityNotice',code+';return installCanonicalNotesView;')(reason.agentPendingText,reason.agentAvailabilityNotice),state={list:[{id:'retained',body:'Exact draft'}],open:'retained',draft:{body:'Unsaved exact draft'},storageStatus:status},before=structuredClone(state),calls=[],toasts=[];
- class Shell{vget(){return state;}api(){return{};}}
- const ui=ready?{renderState:s=>s,create:()=>calls.push('canonical-create'),trashView:v=>v}:undefined;
- const values={notesSourceMode:'canonical',canonicalNotes:ui,toast:x=>toasts.push(x),set:patch=>calls.push(patch)};
- const views={notes:{render:(_state,api)=>({storageStatus:_state.storageStatus,newNote:()=>{if(api.canonicalNotes)api.canonicalNotes.create();else{calls.push('placeholder');api.set({list:[]});}}})}};install(Shell,views);return{state,before,calls,toasts,render:()=>views.notes.render(state,values)};
+ const reason=pending({kind},resident),React={createElement:(type,props,...children)=>({type,props:props??{},children})};
+ const install=new Function('React','registerPlugin','agentPendingText','agentAvailabilityNotice',code+';return installCanonicalNotesView;')(React,()=>({}),reason.agentPendingText,reason.agentAvailabilityNotice);
+ const state={list:[{id:'retained',body:'Exact draft'}],open:'retained',draft:{body:'Unsaved exact draft'},storageStatus:status},before=structuredClone(state),calls=[],toasts=[];
+ class Shell{live=true;notesSourceMode='canonical';vget(){return state;}api(){return{toast:x=>toasts.push(x),set:patch=>calls.push(patch),notesSourceOptions:[]};}renderVals(){return{};}S(){return{screen:'home',view:'notes'};}goHome(){}}
+ const shell=new Shell();shell.canonicalNotesUi=ready?{list:state.list,open:state.open,create:()=>calls.push('canonical-create'),render:()=>null}:undefined;
+ const views={notes:{render:()=>({})}};install(Shell,views);
+ return{state,before,calls,toasts,render:()=>{const tree=shell.renderVals().canonicalNotesWorkspace;const find=(node)=>node?.type==='p'?node:(node?.children??[]).flat(Infinity).map(find).find(Boolean);const paragraph=find(tree);return{storageStatus:paragraph?.children[0]??'',newNote:()=>shell.api('notes').set({compose:true})};}};
 }
 test('attempted New Note explains starting, stopped or unavailable without a placeholder or draft mutation',()=>{
  for(const options of [{kind:'starting',resident:true},{kind:'recovering',resident:true},{kind:'cloud',resident:false}]){
@@ -28,8 +30,8 @@ test('an available private Mac canonical Notes binding keeps its normal create p
 test('actual Notes binding accepts the existing app-record port independently of phone-only session labels',async()=>{
  const adapter=readFileSync('apps/app/src/prototype/agent-adapter.ts','utf8'),a=adapter.indexOf('  function canonicalNotesKey('),b=adapter.indexOf('  async function previousNotesObservation(',a);assert(a>=0&&b>a);
  const bindCode=stripTypeScriptTypes(adapter.slice(a,b),{mode:'transform'}),port={identity:{ownerId:'mac-owner',agentId:'mac-agent',sessionId:'mac-session',origin:'http://localhost:5229'},sessionId:'mac-session',scope:'owner',current:()=>true};let selected=port,starts=0,bindings=0;
- class Binding{controller={current:true};constructor(actual){assert.equal(actual,port);bindings++;}listen(){}start(){starts++;return Promise.resolve();}retire(){}}
+ class Binding{current=true;constructor(actual){assert.equal(actual,port);bindings++;}refresh(){starts++;return Promise.resolve();}retire(){}}
  const updates=[],sync=new Function('connectionController','CanonicalNotesUi','originalSet','context','window','agentAvailabilityNotice',bindCode+';return syncCanonicalNotes;')({getAppRecordClient:()=>selected},Binding,function(_key,patch){updates.push(patch);},()=>{}, {},pending({kind:'cloud'}).agentAvailabilityNotice);
- const shell={live:true,notesSourceMode:'canonical',setState(){}};sync(shell);await shell.notesReady;assert.equal(bindings,1);assert.equal(starts,1);assert.equal(shell.canonicalNotesUi.controller.current,true);sync(shell);assert.equal(bindings,1);
+ const shell={live:true,notesSourceMode:'canonical',setState(){}};sync(shell);await shell.notesReady;assert.equal(bindings,1);assert.equal(starts,1);assert.equal(shell.canonicalNotesUi.current,true);sync(shell);assert.equal(bindings,1);
  selected=null;sync(shell);await shell.notesReady;assert.match(updates.at(-1).storageStatus,/unavailable for this agent connection/);assert.equal(bindings,1);
 });

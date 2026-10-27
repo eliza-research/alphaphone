@@ -4,10 +4,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {nativeSource,fixture,runJvm,jsonJarSkip} from './fixtures/jvm-tools.mjs';
+import {join} from 'node:path';
+import {root,nativeSource,runJvm,jsonJarSkip} from './fixtures/jvm-tools.mjs';
+
+const shared=join(root,'vendor/eliza/plugins/plugin-native-agent');
+const admissionSource=join(shared,'android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderAdmission.java');
 
 test('Cloud and direct environments, expiry, credential match, identity and rollback',{skip:jsonJarSkip},()=>{
- assert.match(runJvm([nativeSource('CloudDeployment.java'),nativeSource('LocalAgentProviderAdmission.java'),fixture('LocalAgentProviderAdmissionTest.java')],'ai.elizaresearch.alphaphone.LocalAgentProviderAdmissionTest',{json:true}),/^PASS local agent provider admission/);
+ assert.match(runJvm([admissionSource,nativeSource('LocalAgentProviderAdmission.java'),join(shared,'test/provider-admission/NativeProviderAdmissionTest.java')],'ai.eliza.plugins.agent.runtime.NativeProviderAdmissionTest',{json:true}),/^PASS local agent provider admission/);
 });
 
 test('the plugin delegates provider rules to the admission class and keeps the direct key a test-mocks route',()=>{
@@ -18,7 +22,10 @@ test('the plugin delegates provider rules to the admission class and keeps the d
  assert.match(source,/LocalAgentProviderAdmission\.providerStatus\(saved,cloud,System\.currentTimeMillis\(\)\)/);
  assert.doesNotMatch(source,/env\.put\("ELIZAOS_CLOUD_API_KEY"|env\.put\("CEREBRAS_API_KEY"/,'no provider environment is built in the plugin');
  assert.match(source,/static final String CLOUD_PROVIDER_MODEL=LocalAgentProviderAdmission\.CLOUD_PROVIDER_MODEL;/);
- const admission=readFileSync(nativeSource('LocalAgentProviderAdmission.java'),'utf8');
+ const wrapper=readFileSync(nativeSource('LocalAgentProviderAdmission.java'),'utf8');
+ assert.match(wrapper,/extends ai\.eliza\.plugins\.agent\.runtime\.NativeProviderAdmission/);
+ assert.match(wrapper,/PROVIDER_SLOT="local-agent-provider:v1"/);
+ const admission=readFileSync(admissionSource,'utf8');
  assert.doesNotMatch(admission,/com\.getcapacitor|android\./,'the admission class is host-testable');
  assert.match(admission,/CEREBRAS_PROVIDER_MODEL="qwen-3\.8-27b"/);
  assert.match(admission,/CLOUD_PROVIDER_MODEL="cerebras\/qwen-3\.8-27b"/);

@@ -48,6 +48,7 @@ export const DENYLIST = Object.freeze([
   // return host are test-mocks only. The Cloud sign-in hand-off stays in product builds as the
   // fallback until the in-app readiness probe passes, so its routes are not denied here.
   'Browser sign-in (diagnostic)', 'staging.eliza.app/alphaphone',
+  'Browser calendar (development)',
 ]);
 const TEXT = /\.(?:html?|js|mjs|cjs|css|json|txt|svg|xml|webmanifest)$/i;
 
