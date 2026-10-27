@@ -53,5 +53,14 @@ project(':eliza-owned-media').projectDir = new File(nativePatchSource.root, 'plu
 include ':eliza-contacts'
 project(':eliza-contacts').projectDir = new File('../vendor/eliza/plugins/plugin-native-contacts/android')
 
+// Shared reviewed SMS core and telephony plugin base for the Alpha AOSP image (AlphaTelephonyPlugin,
+// AlphaSmsSendReceiver). The upstream ElizaMessages Capacitor plugin class is not registered.
+include ':eliza-messages'
+project(':eliza-messages').projectDir = new File('../vendor/eliza/plugins/plugin-native-messages/android')
+// Shared dialer-role surfaces (TelecomCallService, TelecomCallActivity, TelecomDialPadActivity) for the
+// launcher's image-gated dialer components. The upstream ElizaPhone Capacitor plugin class is not registered.
+include ':eliza-phone'
+project(':eliza-phone').projectDir = new File('../vendor/eliza/plugins/plugin-native-phone/android')
+
 include ':eliza-action-journal'
 project(':eliza-action-journal').projectDir = new File(nativePatchSource.root, 'plugins/plugin-native-action-journal/android')

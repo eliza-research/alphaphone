@@ -159,6 +159,8 @@ dependencies {
  implementation project(':eliza-owned-media')
  implementation project(':eliza-action-journal')
  implementation project(':eliza-contacts')
+ implementation project(':eliza-messages')
+ implementation project(':eliza-phone')
  implementation project(':eliza-camera')
  implementation project(':eliza-calendar')
  implementation project(':eliza-reminders')

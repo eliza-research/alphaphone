@@ -1,4 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
  <!-- Alpha AOSP image only (P-36). The image stages this launcher build; the permissions are requested
       only by AlphaTelephonyPlugin, which MainActivity registers only after AlphaImageCapability verifies
       the image. A sideloaded launcher APK declares them but never asks for them. -->
@@ -9,6 +9,20 @@
       to a sideloaded launcher APK. AlphaTelephonyPlugin requests them only on the verified image. -->
  <uses-permission android:name="android.permission.READ_SMS" />
  <uses-permission android:name="android.permission.SEND_SMS" />
+ <!-- The shared messages module lists the SMS-role receive permissions. Alpha declares no SMS-role
+      receivers yet, so they are removal markers here; scripts/apk.mjs refuses them in every APK. -->
+ <uses-permission android:name="android.permission.RECEIVE_SMS" tools:node="remove" tools:ignore="PermissionImpliesUnsupportedChromeOsHardware" />
+ <uses-permission android:name="android.permission.RECEIVE_MMS" tools:node="remove" tools:ignore="PermissionImpliesUnsupportedChromeOsHardware" />
+ <uses-permission android:name="android.permission.RECEIVE_WAP_PUSH" tools:node="remove" tools:ignore="PermissionImpliesUnsupportedChromeOsHardware" />
+ <!-- Dialer role (#420): the role grants CALL_PHONE to its holder, and Alpha can hold the role only on
+      the verified image, where AlphaTelephonyRoles enables the components below. Alpha never asks for
+      CALL_PHONE at runtime. The shared phone module's call-log and self-managed-call permissions are
+      not used. -->
+ <uses-permission android:name="android.permission.CALL_PHONE" />
+ <uses-permission android:name="android.permission.READ_CALL_LOG" tools:node="remove" />
+ <uses-permission android:name="android.permission.WRITE_CALL_LOG" tools:node="remove" />
+ <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" tools:node="remove" />
+ <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" tools:node="remove" />
  <!-- SMS permissions imply telephony hardware; keep it optional so no install is filtered by it. -->
  <uses-feature android:name="android.hardware.telephony" android:required="false" />
  <queries>
@@ -24,5 +38,19 @@
   <!-- Sent and delivery results of reviewed native SMS sends: explicit PendingIntents only, no filter,
        not exported. The receiver ignores every broadcast unless the image capability holds. -->
   <receiver android:name=".AlphaSmsSendReceiver" android:exported="false" />
+  <!-- Dialer role surfaces (shared plugin-native-phone). Declared disabled: AlphaTelephonyRoles enables
+       them only while AlphaImageCapability verifies the image, so no other install can be offered the
+       role. Telecom binds the InCallService only for the role holder; emergency routing stays with
+       Telecom and the system emergency dialer. -->
+  <service android:name=".AlphaInCallService" android:enabled="false" android:exported="true" android:permission="android.permission.BIND_INCALL_SERVICE">
+   <meta-data android:name="android.telecom.IN_CALL_SERVICE_UI" android:value="true" />
+   <meta-data android:name="android.telecom.IN_CALL_SERVICE_RINGING" android:value="false" />
+   <intent-filter><action android:name="android.telecom.InCallService" /></intent-filter>
+  </service>
+  <activity android:name=".AlphaCallActivity" android:enabled="false" android:exported="false" android:launchMode="singleTop" android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+  <activity android:name=".AlphaDialPadActivity" android:enabled="false" android:exported="true" android:theme="@android:style/Theme.DeviceDefault.DayNight" android:label="Phone">
+   <intent-filter><action android:name="android.intent.action.DIAL" /><category android:name="android.intent.category.DEFAULT" /></intent-filter>
+   <intent-filter><action android:name="android.intent.action.DIAL" /><category android:name="android.intent.category.DEFAULT" /><data android:scheme="tel" /></intent-filter>
+  </activity>
  </application>
 </manifest>
