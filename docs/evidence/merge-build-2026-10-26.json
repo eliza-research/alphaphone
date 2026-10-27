@@ -36,14 +36,35 @@
       "passed": 32,
       "failed": 0
     },
-    "fullRepository": "Running; initial run includes stale metadata/harness failures since fixed. Latest resident dependency audit is not dispositioned and remains a blocker."
+    "fullRepository": "Running; initial run includes stale metadata/harness failures since fixed. Latest resident dependency audit is not dispositioned and remains a blocker.",
+    "imagePatchAdmission": {
+      "passed": 13,
+      "failed": 0
+    },
+    "nativeSourceLicensesAndReset": {
+      "passed": 16,
+      "failed": 0
+    },
+    "initialFullRepository": {
+      "tests": 1852,
+      "passed": 1836,
+      "failed": 10,
+      "skipped": 6,
+      "note": "Initial run preceded authentication, metadata, license and source-admission repairs; one reset test timed out under parallel build load and passed unchanged in the focused rerun. Resident dependency audit remains unreviewed."
+    }
   },
   "builds": {
     "android": "Running strict native distribution chain",
     "aosp": "Source verified; latest APK staging/build pending",
     "cuttlefish": "Latest APK staging/build pending",
     "flashed": false,
-    "deviceAcceptance": false
+    "deviceAcceptance": false,
+    "embedding": {
+      "status": "reproduced",
+      "abi": "arm64-v8a",
+      "record": "docs/evidence/merge-build-embedding-2026-10-26.json",
+      "deviceExecution": false
+    }
   },
   "sourceReuse": "Only recorded native bytes with unchanged committed build inputs were reused; no new native device qualification is claimed. A fresh ARM64 embedding reproduction is running."
 }

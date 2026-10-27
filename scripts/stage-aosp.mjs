@@ -1,5 +1,5 @@
 import { cuttlefishOptions, writeCuttlefishNatives } from './aosp-cuttlefish.mjs';
-import { verifyPixel10aSource, defaultLockPath } from './pixel10a-source-contract.mjs';
+import { verifyPixel10aSource, defaultLockPath, listenerSystemuiPatch } from './pixel10a-source-contract.mjs';
 import { pixel10aOptions, pixel10aProductProblems, writePixel10aProduct, PIXEL10A_PRODUCT } from './aosp-pixel10a.mjs';
 import { readReleaseSigner } from './build-android.mjs';
 import fs from "node:fs";
@@ -149,7 +149,15 @@ export function reviewedSourceOverrides({physicalSource = null, cuttlefish = fal
   return JSON.parse(lockBytes).overrides;
 }
 
+export function stagingSystemuiPatches(names, physical) {
+  if (!names.length) return [];
+  if (!physical) throw Error('--applied-systemui-patch requires --target pixel10a');
+  if (new Set(names).size !== names.length) throw Error('Duplicate applied SystemUI patch');
+  return names.map(listenerSystemuiPatch);
+}
+
 async function main(args) {
+const appliedPatchNames = [];
 const get = (key) => {
   const i = args.indexOf(key);
   return i < 0 ? null : args[i + 1];
@@ -157,13 +165,14 @@ const get = (key) => {
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--development" || args[i] === "--production") continue;
   if (
-    !["--apk", "--output", "--descriptor", "--apk-manifest", "--aosp-source", "--listener-apk", "--listener-descriptor", "--target", "--factory-image"].includes(args[i]) ||
+    !["--apk", "--output", "--descriptor", "--apk-manifest", "--aosp-source", "--listener-apk", "--listener-descriptor", "--target", "--factory-image", "--applied-systemui-patch"].includes(args[i]) ||
     !args[i + 1] ||
     args[i + 1].startsWith("--")
   )
     throw new Error(
-      "Use --apk FILE --output NEW_DIR [--descriptor FILE [--production] | --development] [--apk-manifest FILE] [--aosp-source PATH] [--target cuttlefish | --target pixel10a --factory-image FILE (--development | --production --descriptor FILE)] [--listener-apk FILE [--listener-descriptor FILE]]",
+      "Use --apk FILE --output NEW_DIR [--descriptor FILE [--production] | --development] [--apk-manifest FILE] [--aosp-source PATH] [--target cuttlefish | --target pixel10a --factory-image FILE (--development | --production --descriptor FILE)] [--listener-apk FILE [--listener-descriptor FILE]] [--applied-systemui-patch chip|ops ...]",
     );
+  if (args[i] === '--applied-systemui-patch') appliedPatchNames.push(args[i + 1]);
   i++;
 }
 const development = args.includes("--development");
@@ -182,7 +191,8 @@ if (production) {
   if (problems.length) throw new Error(`Refusing production staging: the ${name} is incomplete.\n${problems.map(item => `  - ${item}`).join("\n")}`);
 }
 const platformCertificateSha256 = production ? JSON.parse(fs.readFileSync(physical ? PIXEL10A_PRODUCT : PRODUCT_DESCRIPTOR, "utf8")).signer?.platformCertificateSha256 : undefined;
-const physicalSource = physical ? await verifyPixel10aSource({source:get('--aosp-source'), factory:get('--factory-image')}) : null;
+const appliedPatches = stagingSystemuiPatches(appliedPatchNames, physical);
+const physicalSource = physical ? await verifyPixel10aSource({source:get('--aosp-source'), factory:get('--factory-image'), appliedPatches}) : null;
 if (physical && production && physicalSource.sourceLockSha256 !== JSON.parse(fs.readFileSync(PIXEL10A_PRODUCT, "utf8")).sourceLock?.sha256)
   throw new Error(`Refusing production staging: the verified source lock is not the one pinned in ${PIXEL10A_PRODUCT}.`);
 // The always-on listener is part of the AOSP MVP (issue #424): production images must include it.

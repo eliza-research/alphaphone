@@ -6,9 +6,10 @@ import {preparePatchedNative} from '../scripts/prepare-patched-native.mjs';
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 test('pinned recovery and lifecycle sources match the reviewed upstream repair',()=>{
  for(const [name,expected] of [
- ['ElizaAgentService','f2377edd144e45365479783ad61acf47077519c6604ad0bf0c11862ad2a988a4'],
+ ['AndroidBunTarget','1ce791f9fbeeeea2a40bdf94b1b11e600df75c8fbee8649a5f47b3d919d7f675'],
+ ['ElizaAgentService','47878486961f044fc77e6c29f3acf6c06901d94065368ea2ab0adc98404dff1e'],
  ['IpcStartupRecovery','d77ea0883554991622a5a0b044a7cf373686eec15c5a705abbd69aaf5b94e80f'],
- ['WorkflowSurvivorInventory','72568e8f859c0453606100d0f94d26c4cec4c3b7811ad62b0eaea8ea76a66820'],
+ ['WorkflowSurvivorInventory','3270bebe7e125705eda25e91ba9996f99cb80fbcb7e534c0d1ea47672a0fc42b'],
  ])assert.equal(sha(fs.readFileSync(`vendor/eliza/packages/app/platforms/android/app/src/main/java/ai/elizaos/app/${name}.java`)),expected);
 });
 test('obsolete resident patch slot is refused rather than reapplied',()=>{
