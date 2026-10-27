@@ -54,7 +54,7 @@ test('host build patch admission is explicit, target-bound, and pinned to the so
   assert.throws(() => stagingBuildPatches(['soong-memory','soong-memory'], true), /Duplicate/);
   assert.throws(() => stagingBuildPatches(['arbitrary'], true), /Unknown AOSP build patch/);
   const [{name,manifest}] = stagingBuildPatches(['soong-memory'], true);
-  const lock = fs.readFileSync('android/aosp/pixel10a-source.json');
+  const lock = fs.readFileSync('vendor/eliza/packages/os/android/sources/pixel10a-stallion.json');
   assert.equal(name, 'soong-memory');
   assert.equal(manifest.baselineLockSha256, createHash('sha256').update(lock).digest('hex'));
   assert.equal(manifest.revision, JSON.parse(lock).projects.find(row => row.path === 'build/soong').commit);
@@ -64,7 +64,7 @@ test('host build patch admission is explicit, target-bound, and pinned to the so
 
 test('Soong app-native installation patch is independently pinned and has no guard bypass', () => {
   const [{manifest}] = stagingBuildPatches(['soong-app-native'], true);
-  const lock = fs.readFileSync('android/aosp/pixel10a-source.json');
+  const lock = fs.readFileSync('vendor/eliza/packages/os/android/sources/pixel10a-stallion.json');
   assert.equal(manifest.baselineLockSha256, createHash('sha256').update(lock).digest('hex'));
   assert.equal(manifest.revision, JSON.parse(lock).projects.find(row => row.path === 'build/soong').commit);
   assert.deepEqual(manifest.files.map(row => row.path), ['etc/prebuilt_etc.go', 'etc/prebuilt_etc_test.go']);

@@ -40,7 +40,7 @@ The goal is incomplete while either app retains a separate behavioral implementa
 
 ## Implementation ledger
 
-The following changes are reviewed and merged upstream. Alpha's current candidate pin is `2d1d8797bc185cf6fe9d29c1ed7d5db4c8cae82a`; this is an implementation checkpoint, not completion of the migration.
+The following changes are reviewed and merged upstream. Alpha's current candidate pin is `4e617a0c15080df16391ced88dbbc73b818a7af5`; this is an implementation checkpoint, not completion of the migration.
 
 | Upstream PR | Result |
 | --- | --- |
@@ -59,6 +59,8 @@ The following changes are reviewed and merged upstream. Alpha's current candidat
 | [#37908](https://github.com/elizaOS/eliza/pull/37908) | Shared installed-app launcher controller and React view; both host adapters use it and cancel obsolete reads on retirement. |
 | [#37909](https://github.com/elizaOS/eliza/pull/37909) | Incremental SSE framing shared by both clients; host decoding, cancellation and terminal receipt validation remain separate. |
 | [#37911](https://github.com/elizaOS/eliza/pull/37911) | Shared Sense listener and parameterized SystemUI lease, with Alpha's installed component and preference identities preserved. Host invocation/control parity is a subsequent change. |
+| [#37912](https://github.com/elizaOS/eliza/pull/37912) | Host-owned speech modules exclude both the inference engine and its C++ runtime; separate Sense modules still package the complete runtime. Both ownership modes were inspected in real AARs. |
+| [#37913](https://github.com/elizaOS/eliza/pull/37913) | Shared immutable device-action identity and dispatch/retirement guard. The Alpha consumer is queued; native journals remain the durable authority. |
 
 Alpha's stacked [#625](https://github.com/AlphaCompute/alphaphone/pull/625) consumes these APIs, uses the shared PCM encoder and Clock handoff validator/executor, and refuses silent Cloud embedding fallback when the native profile lacks local embedding assets. Clock remains an external handoff until the common native alarm implementation and its acceptance tests are migrated; reusing its contract does not establish that an alarm was scheduled.
 
@@ -66,7 +68,7 @@ At the `2d1d8797` checkpoint, full `npm run verify` passed: 2,106 tests passed, 
 
 Strict `npm run android:build:local` then passed at Alpha `403661898`, with all four standalone/launcher debug/release APKs verified, `testMocks:false`, `allowUnpackagedRuntime:false` and native runtime profile. The release APKs are unsigned; model qualification remains false. The snapshot manifests and logs are retained under `artifacts/unification-checkpoints/2d1d8797/`. This is APK packaging evidence only: no installation, HOME-role test, image boot, real-provider or physical-device acceptance is claimed. License inventory flags and known dependency advisories remain reported; passing the build is not a license or security clearance. The final integrated pin must repeat the required verification and packaging.
 
-The merged Pixel, launcher, native-admission, SSE and Sense changes above are queued for the next Alpha pin. Shared editable Notes is under integration review, including hidden-view context suppression and explicit saves from other views. The larger shell, account/context composition, native service migration, shared invocation/control bridge and common interactive voice route remain open. The independent domain audits below remain historical findings, rather than claims that their listed work is complete.
+The Pixel, launcher, native-admission, SSE and Sense changes are integrated in the current Alpha candidate. Focused checks passed (88 passed, one optional skip), and TypeScript passed. The shared Sense debug and release APKs build and pass exact engine, C++ runtime, model-byte, permission and 16 KiB alignment inspection. During inspection, the separate Sense APK was found to lack its C++ runtime; it now owns a dedicated complete speech module. Evidence is retained under `artifacts/unification-checkpoints/4e617a0c-sense/`. These are component packaging checks; the final combined candidate still needs full verification and both distribution builds. Shared editable Notes is under integration review, including hidden-view context suppression and explicit saves from other views. The larger shell, account/context composition, native service migration, shared invocation/control bridge and common interactive voice route remain open. The independent domain audits below remain historical findings, rather than claims that their listed work is complete.
 
 Two audit clarifications matter for migration: Alpha's Older notes source is writable, with encrypted edits, recording and Trash support; preserve that functionality when introducing the shared interface. The currently integrated Pixel source record has `developmentOnly:false` and `releaseQualified:false`; its exact 1,715,781-byte inventory hash is `760a7184c62c93aeac40595cf5733f8089aa16ccd28eb7a5f5ce41d4dae741d3`. Source provenance does not establish signing, boot or device qualification.
 

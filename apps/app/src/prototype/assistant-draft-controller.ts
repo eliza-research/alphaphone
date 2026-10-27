@@ -73,7 +73,7 @@ export class AssistantDraftController {
  async hold(expectedText:string,current:()=>boolean=()=>true){
   const b=this.active;if(!b?.ready||b.failed||this.state.consuming||this.held)throw Error('Review local draft storage before sending.');
   this.edit(this.text());await b.queue;
-  if(this.active!==b||b.failed||!current()||this.text().trim()!==expectedText)throw Error('The draft changed. Review it before sending.');
+  if(this.active!==b||b.failed||!current()||this.text()!==expectedText)throw Error('The draft changed. Review it before sending.');
   this.held={binding:b,text:this.text()};
  }
  get holding(){return !!this.held;}

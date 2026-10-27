@@ -1250,27 +1250,27 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     if(this.stopVoiceConversation)context(this);const expectedContext=JSON.stringify(alphaClient.getState().context);
     const binding=this.stopVoiceConversation?sendBinding():undefined,draft=String(before.draft||''),view=before.view;
     const retiring=this.stopVoiceConversation?.();if(retiring){await retiring;context(this);const now=this.S();if(JSON.stringify(alphaClient.getState().context)!==expectedContext||!this.live||document.hidden||connectionController.getSnapshot().open||sendBinding()!==binding||now.view!==view||String(now.draft||'')!==draft||this.messageReplyTarget!==reply||this.messageEditTarget!==edit)return;}
-    let s = this.S(); const text = String(argument ?? s.draft).trim();
-    if (!text || s.typing || this.draftSendPending || this.composerDraft?.holding) return;
+    let s = this.S(); const text = String(argument ?? s.draft);
+    if (!text.trim() || s.typing || this.draftSendPending || this.composerDraft?.holding) return;
     const editTarget:ConversationMessageTarget|undefined=this.messageEditTarget,replyTarget:ConversationMessageTarget|undefined=this.messageReplyTarget,editView=s.view;
     if(editTarget){
       if(argument!==undefined||!connectionController.messageTargetCurrent(editTarget))return;
       this.draftSendPending=true;
       try {
         if(!await messageReviews.confirm('edit-message-'+editTarget.messageId,'Edit and resend message','This replaces the selected message and all later messages in this conversation. It does not undo actions that already ran.\n\nOriginal: '+editTarget.text+'\n\nReplacement: '+text,'Edit and resend'))return;
-        if(!this.live||document.hidden||String(this.S().draft).trim()!==text||!connectionController.messageTargetCurrent(editTarget))throw Error('The draft or conversation changed. Nothing was replaced.');
+        if(!this.live||document.hidden||String(this.S().draft)!==text||!connectionController.messageTargetCurrent(editTarget))throw Error('The draft or conversation changed. Nothing was replaced.');
         await connectionController.truncateMessage(editTarget);this.messageEditTarget=undefined;s=this.S();
-        if(!this.live||document.hidden||s.view!==editView||String(s.draft).trim()!==text)throw Error('History was replaced. Your draft changed, so nothing was resent.');
+        if(!this.live||document.hidden||s.view!==editView||String(s.draft)!==text)throw Error('History was replaced. Your draft changed, so nothing was resent.');
       } catch(error){if(error&&typeof error==='object'&&'historyChanged' in error)this.messageEditTarget=undefined;this.toast(error instanceof Error?error.message:'Message replacement failed.');return;}
       finally{this.draftSendPending=false;}
     }
-    const sourceDraft=this.reviewedSourceDraft?.draft.trim()===text?sourceOf(this.reviewedSourceDraft.source):undefined;
+    const sourceDraft=this.reviewedSourceDraft?.draft===text?sourceOf(this.reviewedSourceDraft.source):undefined;
     context(this);
     const revision=alphaClient.getState().context.revision,connection=connectionController.getSnapshot(),sessionId=connection.session?.sessionId,conversationId=connection.history?.conversationId;
     const current=()=>{const selected=connectionController.getSnapshot();return this.live&&!document.hidden&&!selected.busy&&!selected.open&&!document.querySelector('[data-alpha-chat-recorder],[data-alpha-pill-voice]')&&selected.session?.sessionId===sessionId&&selected.history?.conversationId===conversationId&&alphaClient.getState().context.revision===revision;};
     this.draftSendPending=true;
     // The durable draft keeps this text until the message is known to have been dispatched.
-    try{await this.draftBindingTask;await this.composerDraft.hold(String(s.draft||'').trim(),current);}catch(error){this.toast(error instanceof Error?error.message:'Draft could not be prepared. Nothing was sent.');return;}finally{this.draftSendPending=false;}
+    try{await this.draftBindingTask;await this.composerDraft.hold(String(s.draft||''),current);}catch(error){this.toast(error instanceof Error?error.message:'Draft could not be prepared. Nothing was sent.');return;}finally{this.draftSendPending=false;}
     const reviewedSource=this.reviewedSourceDraft;this.reviewedSourceDraft=null;
     // Everything this send later shows belongs to the agent connection it was sent on.
     const sameChat=()=>connectionController.getSnapshot().session?.sessionId===sessionId;
