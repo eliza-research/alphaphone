@@ -6,7 +6,13 @@ const roots=['apps/app/src','apps/app/public','android/app/src/main/java','andro
 // Record flavor manifests and build policy as well as renderer/bridge sources.
 // Generated web assets and Gradle output remain outputs, not source inputs.
 roots.push('android/app/src/launcher','android/app/src/standalone','android/app/src/release',
- 'android/build.gradle','android/variables.gradle','android/gradle.properties',
+ // The Gradle host the pinned upstream generator writes from android/consumer-host.json.
+ 'android/consumer-host.json','android/app/product.gradle','scripts/android-host.mjs',
+ 'android/.eliza-consumer-profile.json','android/eliza-consumer-host',
+ 'vendor/eliza/packages/app/scripts/mobile/android/consumer-host.mjs',
+ 'vendor/eliza/packages/app/scripts/mobile/android/consumer-host',
+ 'vendor/eliza/packages/app/scripts/mobile/android/resident-host-sources.mjs',
+ 'android/build.gradle','android/gradle.properties',
  // Which dependency and plugin artifacts Gradle accepts (SHA-256); absent means unverified.
  'android/gradle/verification-metadata.xml',
  'android/gradle/wrapper/gradle-wrapper.properties','android/gradle/wrapper/gradle-wrapper.jar',

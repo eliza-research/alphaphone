@@ -35,7 +35,7 @@ import {
   auditBundle, distributionProblems, extractWebPayload, readBuildFlags, signerDigest, validateApk, verifyOwnerRouteTable,
 } from "./apk.mjs";
 import { androidEnv, tool } from "./toolchain.mjs";
-import { readReleaseSigner, releaseAdmission, RELEASE_SIGNER_FILE } from "./build-android.mjs";
+import { readReleaseSigner, releaseAdmission, RELEASE_SIGNER_FILE, SIGNING_ENV } from "./build-android.mjs";
 import { BUN_ENTRY } from "./generate-licenses.mjs";
 import { fontLicenceCheck, fontLicenceLine } from "./font-license-blockers.mjs";
 import { licenceFlagLines, licenceFlagRecords } from "./licence-policy.mjs";
@@ -347,5 +347,5 @@ const fontItems = new Map(release.flatMap(row => [...row.fontLicenceCheck.items,
 for (const [item, blocks] of fontItems) console.warn(fontLicenceLine(item, blocks));
 const unsigned = release.filter(row => !row.signed);
 if (unsigned.length)
-  console.warn(`Unsigned releases (set ELIZAOS_KEYSTORE_PATH, ELIZAOS_KEYSTORE_PASSWORD, ELIZAOS_KEY_ALIAS and ELIZAOS_KEY_PASSWORD to sign): ${unsigned.map(row => row.file).join(", ")}`);
+  console.warn(`Unsigned releases (set ${SIGNING_ENV.join(", ")} to sign; android/consumer-host.json names them): ${unsigned.map(row => row.file).join(", ")}`);
 console.log(`Verified ${results.length} APKs in ${directory} (APK-build evidence only; not an install, emulator or device result).`);

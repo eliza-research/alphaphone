@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import {canonicalNativeGradleSettings} from './native-gradle-descriptors.mjs';
+import {HOST_DESCRIPTOR, readHostDescriptor} from './android-host.mjs';
 /**
  * Gradle dependency verification metadata (android/gradle/verification-metadata.xml).
  *
@@ -8,8 +8,8 @@ import {canonicalNativeGradleSettings} from './native-gradle-descriptors.mjs';
  *                                                                # npm run android:deps:write-verification
  *
  * While the file exists Gradle refuses any plugin or dependency artifact whose SHA-256 is not
- * listed in it, in every build of the android/ project: nothing has to opt in and no build step
- * is added. `--check` reads the committed file only. `--write` is the one command that uses the
+ * listed in it, in every build of the generated android/ host: nothing has to opt in and no
+ * build step is added. `--check` reads committed files only. `--write` is the one command that uses the
  * network: it runs the real build tasks with `--write-verification-metadata sha256` (Gradle adds
  * what they resolve and never removes an entry), then records the Linux and Windows builds of
  * aapt2, which a macOS build never resolves, from Google's Maven repository. Review the diff
@@ -46,7 +46,10 @@ export const ALLOWED_REPOSITORY_URLS = ['https://repo.maven.apache.org/maven2', 
  * pass it to Gradle as a property; the SHA-256 of every artifact is what is enforced.)
  */
 export const MIRROR_PROPERTY = 'mavenCentralMirrorUrl';
-const MIRROR_FREE = ['android/build.gradle', 'android/settings.gradle', 'android/variables.gradle', 'android/gradle.properties',
+/** The pinned upstream templates the generated android/ host is written from. */
+export const HOST_TEMPLATES = 'vendor/eliza/packages/app/scripts/mobile/android/consumer-host';
+const MIRROR_FREE = [HOST_DESCRIPTOR, 'android/app/product.gradle', `${HOST_TEMPLATES}/settings.gradle`, `${HOST_TEMPLATES}/build.gradle`,
+  `${HOST_TEMPLATES}/app.gradle`, `${HOST_TEMPLATES}/toolchain.json`, 'scripts/android-host.mjs',
   'scripts/build-android.mjs', 'scripts/build-notification-fixture.mjs', 'scripts/generate-licenses.mjs', 'scripts/toolchain.mjs'];
 /**
  * Publisher groups reviewed for this build, with the date and what was looked at. A component in
@@ -130,21 +133,27 @@ export function repositoryProblem(entry) {
   return 'is not a reviewed form';
 }
 
+/** A descriptor reference as a checkout-relative path. Staged patched modules read their unchanged pinned descriptors. */
+export function referencePath({root, path: relative}) {
+  if (root === 'consumer') return relative;
+  if (root === 'upstream' || root === 'patchedNative') return path.posix.join('vendor/eliza', relative);
+  if (root === 'dependencies') return path.posix.join('node_modules', relative);
+  throw new Error(`${HOST_DESCRIPTOR} names unknown root ${root}`);
+}
+
 /**
- * Every Gradle script that can declare a repository for the android/ build: the root scripts and
- * the build.gradle of each project android/settings.gradle includes (the app, the fixtures, the
- * speech module, Capacitor from node_modules and the plugins from the pinned upstream checkout).
+ * Every Gradle script that can declare a repository for the android/ build: the upstream host
+ * templates the generated root, settings and app scripts come from, Alpha's product script and
+ * the build.gradle of each module android/consumer-host.json includes (the fixtures, the speech
+ * and listener modules, Capacitor from node_modules and the plugins from the pinned upstream checkout).
+ * Native patch admission permits only Java/Kotlin edits, so a staged module's descriptor is the pinned one.
  */
 export function buildScripts(root) {
-  const settings = canonicalNativeGradleSettings(fs.readFileSync(path.join(root, 'android/settings.gradle'), 'utf8'));
-  const directories = new Map();
-  for (const include of settings.matchAll(/^\s*include\s+(.+)$/gm))
-    for (const name of include[1].matchAll(/['"](:[^'"]+)['"]/g)) directories.set(name[1], name[1].slice(1).replaceAll(':', '/'));
-  for (const moved of settings.matchAll(/project\(\s*['"](:[^'"]+)['"]\s*\)\.projectDir\s*=\s*new File\(\s*['"]([^'"]+)['"]\s*\)/g)) {
-    if (!directories.has(moved[1])) throw new Error(`android/settings.gradle relocates ${moved[1]} without including it`);
-    directories.set(moved[1], moved[2]);
-  }
-  return ['android/settings.gradle', 'android/build.gradle', ...[...directories.values()].map(directory => path.posix.normalize(`android/${directory}/build.gradle`)).sort()];
+  const {profile} = readHostDescriptor(root);
+  const modules = profile.modules.map(module => path.posix.join(referencePath(module.source), 'build.gradle'));
+  if (new Set(modules).size !== modules.length) throw new Error(`${HOST_DESCRIPTOR} includes one module directory twice`);
+  return [`${HOST_TEMPLATES}/settings.gradle`, `${HOST_TEMPLATES}/build.gradle`, `${HOST_TEMPLATES}/app.gradle`,
+    ...(profile.appScripts ?? []).map(referencePath), ...modules.sort()];
 }
 
 export function checkVerification(root) {
@@ -237,6 +246,7 @@ async function write(root, {allowUnpackagedRuntime}) {
   for (const name of ['ELIZA_DEV_ALLOW_TEST_MOCKS', 'VITE_ELIZA_DEV_ALLOW_TEST_MOCKS', 'ORG_GRADLE_PROJECT_ELIZA_DEV_ALLOW_TEST_MOCKS']) delete env[name];
   const preflight = [path.join(root, 'scripts/android-build-preflight.mjs'), ...(allowUnpackagedRuntime ? ['--allow-unpackaged-runtime'] : [])];
   execFileSync(process.execPath, preflight, {cwd: root, stdio: 'inherit', env});
+  execFileSync(process.execPath, [path.join(root, 'scripts/android-host.mjs')], {cwd: root, stdio: 'inherit', env});
   execFileSync('npm', ['run', 'android:sync'], {cwd: root, stdio: 'inherit', env});
   // No ALPHA_NOTIFICATION_FIXTURE_KEYSTORE here: the fixture then takes the default debug key, and
   // its dependencies resolve exactly as in scripts/build-notification-fixture.mjs.

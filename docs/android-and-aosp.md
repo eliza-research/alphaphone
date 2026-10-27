@@ -70,7 +70,9 @@ AOSP checks to accommodate a compressed APK.
 
 After the normal packaged-runtime build and APK verification have passed, build an
 unsigned **debug** launcher with the same runtime profile, version overrides and
-web assets. The init script changes only debug signing. For an explicit Cloud QA
+web assets. The init script changes only debug signing. The Gradle wrapper and build
+files are generated from `android/consumer-host.json` (`npm run android:host`; the
+packaged-runtime build has already done this). For an explicit Cloud QA
 build, run from the repository root:
 
 ```sh

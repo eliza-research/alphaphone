@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {VOICE_HOST_MANIFEST, voiceHostProblems} from './voice-host.mjs';
-import {canonicalNativeGradleSettings} from './native-gradle-descriptors.mjs';
+import {HOST_DESCRIPTOR, generateAlphaAndroidHost, readHostDescriptor} from './android-host.mjs';
+import {HOST_TEMPLATES, referencePath} from './gradle-verification.mjs';
 import {readAgentBundleDependencies} from './agent-bundle-dependencies.mjs';
 // Generates the third-party notices shipped in the web bundle and in every APK payload.
 //
@@ -533,17 +534,23 @@ export function parseGradleTree(output) {
   return [...coords].sort();
 }
 
-/** Fingerprint only Gradle inputs that can change the resolved runtime classpath. */
+/**
+ * Fingerprint only inputs that can change the resolved runtime classpath: the host descriptor's
+ * dependencies and app modules, the pinned generator toolchain and template, and each linked
+ * module's own declarations (a staged patched module reads its unchanged pinned descriptor).
+ */
 export function androidDependencyFingerprint(root) {
-  const settings = canonicalNativeGradleSettings(read(root, 'android/settings.gradle'));
-  const modules = new Map([...settings.matchAll(/project\('(:[^']+)'\)\.projectDir\s*=\s*new File\('([^']+)'\)/g)].map(m => [m[1], path.posix.join('android', m[2])]));
-  const files = ['android/variables.gradle', 'android/build.gradle', 'android/app/build.gradle'];
-  const app = read(root, 'android/app/build.gradle');
-  for (const [, name] of app.matchAll(/^\s*implementation\s+project\('(:[^']+)'\)/gm)) {
-    if (modules.has(name)) files.push(path.posix.join(modules.get(name), 'build.gradle'));
-    // A module included without a projectDir lives at android/<name>; only an existing one is read.
-    else if (exists(root, path.posix.join('android', name.slice(1), 'build.gradle'))) files.push(path.posix.join('android', name.slice(1), 'build.gradle'));
-  }
+  const {profile} = readHostDescriptor(root);
+  const modules = profile.modules.filter(module => module.appDependency !== false)
+    .map(module => [module.name, referencePath(module.source)]).sort(([a], [b]) => a.localeCompare(b));
+  const toolchain = readJson(root, `${HOST_TEMPLATES}/toolchain.json`);
+  const template = read(root, `${HOST_TEMPLATES}/app.gradle`).split('\n').map(line => line.trim()).filter(line => /\b(implementation|add)\b.*(module|dependency)/.test(line));
+  const declared = [
+    `${HOST_DESCRIPTOR}:\n${JSON.stringify({dependencies: profile.dependencies, modules})}`,
+    `${HOST_TEMPLATES}/toolchain.json:\n${JSON.stringify({androidGradlePlugin: toolchain.androidGradlePlugin, kotlin: toolchain.kotlin, versions: toolchain.versions})}`,
+    `${HOST_TEMPLATES}/app.gradle:\n${template.join('\n')}`,
+  ];
+  const files = modules.map(([, directory]) => path.posix.join(directory, 'build.gradle'));
   // A module that applies a shared script (`ext.<dir> = file('…')` then `apply from: new File(ext.<dir>, '<file>')`) declares its dependencies there.
   for (const file of [...files]) {
     if (!exists(root, file)) continue;
@@ -556,10 +563,10 @@ export function androidDependencyFingerprint(root) {
   // The shared paradee-voice library (:local-speech) declares its build in the pinned consumer script.
   const paradeeConsumer = 'vendor/eliza/plugins/plugin-local-inference/native/android/consumer.gradle';
   if (exists(root, paradeeConsumer) && !files.includes(paradeeConsumer)) files.push(paradeeConsumer);
-  const lines = [];
+  const lines = [...declared];
   for (const file of [...new Set(files)].sort()) {
     if (!exists(root, file)) { lines.push(`${file}: missing`); continue; }
-    const relevant = (file === 'android/settings.gradle' ? settings : read(root, file)).split('\n').map(line => line.trim())
+    const relevant = read(root, file).split('\n').map(line => line.trim())
       .filter(line => /^(implementation|api|runtimeOnly)\b/.test(line) || /Version\s*=/.test(line) || /^include\b|projectDir\s*=/.test(line));
     lines.push(`${file}:\n${relevant.join('\n')}`);
   }
@@ -568,6 +575,7 @@ export function androidDependencyFingerprint(root) {
 
 export function refreshAndroidClasspath(root, env) {
   const configurations = ['standaloneReleaseRuntimeClasspath', 'launcherReleaseRuntimeClasspath', 'standaloneDebugRuntimeClasspath', 'launcherDebugRuntimeClasspath'];
+  generateAlphaAndroidHost(root);
   const coords = new Set();
   for (const configuration of configurations) {
     const output = execFileSync('./gradlew', ['-q', ':app:dependencies', '--configuration', configuration], {cwd: path.join(root, 'android'), env, encoding: 'utf8', maxBuffer: 64 << 20});

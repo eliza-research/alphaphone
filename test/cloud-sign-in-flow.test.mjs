@@ -136,7 +136,7 @@ test('shared callback contract vectors (fixture shared with elizaOS/eliza) throu
 
 test('the sign-in App Link is build-gated with the delegation return; staging lives in the test-mocks overlay',()=>{
  const strip=text=>text.replace(/<!--[\s\S]*?-->/g,'');
- const main=strip(read('android/app/src/main/AndroidManifest.xml')),mocks=strip(read('android/app/src/testMocks/AndroidManifest.xml')),gradle=read('android/app/build.gradle');
+ const main=strip(read('android/app/src/main/AndroidManifest.xml')),mocks=strip(read('android/app/src/testMocks/AndroidManifest.xml')),gradle=read('android/app/product.gradle');
  const filter=host=>`<intent-filter android:autoVerify="true"><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="https" android:host="${host}" android:path="/alphaphone/auth/callback"/></intent-filter>`;
  assert.ok(!main.includes('autoVerify'),'a default build declares no https App Link');
  assert.ok(gradle.includes(filter('\\${appLinkHost}')),'ELIZAOS_APP_LINK_HOST adds the sign-in return beside the delegation return');

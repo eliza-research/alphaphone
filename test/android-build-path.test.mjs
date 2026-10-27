@@ -89,6 +89,8 @@ test('preflight rejects an unpinned checkout and android:build stops before sync
   // The real entry point exits with status 2 and the guidance, without starting the build.
   for (const file of ['android-abis.mjs', 'embedding-native-contract.mjs', 'paradee-runtime.mjs', 'voice-host.mjs', 'build-android.mjs', 'android-build-preflight.mjs', 'stage-embedding-host.mjs', 'build-embedding-host.mjs', 'toolchain.mjs', 'copy-file-clone.mjs'])
     f.write('scripts/' + file, read('scripts/' + file));
+  // build-android.mjs reads the release-signing environment names from the host descriptor.
+  f.write('android/consumer-host.json', read('android/consumer-host.json'));
   const result = spawnSync(process.execPath, ['scripts/build-android.mjs'], {cwd: f.root, encoding: 'utf8'});
   assert.equal(result.status, 2, result.stderr);
   assert.match(result.stderr, /Android build prerequisites are missing/);

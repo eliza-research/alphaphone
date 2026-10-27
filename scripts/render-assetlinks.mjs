@@ -11,7 +11,7 @@
  * --debug-fingerprint given. Writes artifacts/assetlinks.json by default. The file holds no secret;
  * publishing it is the release owner's step (docs/mvp-owner-actions.md action 6). The https
  * autoVerify filter itself is emitted only by a build with ELIZAOS_APP_LINK_HOST set
- * (android/app/build.gradle); appLinkFilters() reads it back from an APK manifest dump.
+ * (android/app/product.gradle); appLinkFilters() reads it back from an APK manifest dump.
  */
 import fs from "node:fs";
 import path from "node:path";

@@ -98,7 +98,7 @@ Gmail attachments and PDF file creation remain available.
 | Path | Responsibility |
 | --- | --- |
 | `apps/app/src` | Alpha UI, product policy and adapters to shared features |
-| `android` | Product identity, Activity, permissions, resources and standalone/HOME packaging |
+| `android` | Product identity, Activity, permissions, resources and standalone/HOME packaging. `android/consumer-host.json` is the descriptor the pinned upstream consumer-host generator turns into the git-ignored Gradle host; `android/app/product.gradle` holds Gradle-time product admission |
 | `android/sense` | Product identity wrappers for the upstream Sense listener; shared implementation and SystemUI policy live in `vendor/eliza/packages/app/platforms/android/sense` and `vendor/eliza/packages/os/android/sense` ([ADR 0001](adr/0001-privileged-listener.md)); never in the standalone or launcher APK |
 | `app.config.json` | Package ID, display name, version and orientation |
 | `backend` | Development runtime composition, character and permitted model/actions |
@@ -125,6 +125,13 @@ and generated hashes across host identity/resource/environment configuration; CI
 requires both recovery files and refuses resident patches. The retired patch and
 source equivalence are recorded in `patches/eliza/resident-ipc-recovery.md`.
 The vendor checkout and prepared resident runtime stay unchanged.
+
+The Android Gradle setup itself is generated: the upstream consumer-host generator
+owns toolchain, SDK levels, variants, build types, signing and version policy, test-mocks
+source sets and admission wiring, and stages the resident runtime classes into Alpha's
+package from the descriptor's installed identities (socket namespaces, notification
+resources, environment hook). Upstream build orchestration collects the four APKs.
+Alpha keeps only data and its product admission and APK verification.
 
 Generic behavior belongs upstream with configurable host inputs. Product names,
 package IDs, storage namespaces, view allowlists and approval policy stay here.
