@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {calendarSyncFixture as fixture} from './calendar-sync-fixture';
-test('Settings reviews the destination before opt-in, then syncs actual local data in both directions',async({page})=>{
+test('Settings reviews the destination before opt-in, then explicitly syncs actual local data in both directions',async({page})=>{
  const dialog=await fixture(page);await expect(dialog.getByRole('button',{name:'Enable sync',exact:true})).toBeHidden();
  await dialog.getByRole('button',{name:'Review sync',exact:true}).click();await expect(dialog.getByText(/owner@example.invalid.*Personal.*1 Alpha events/)).toBeVisible();
  expect(await page.evaluate(()=>(window as any).calendarSyncFixture.writes)).toBe(0);
@@ -10,7 +10,7 @@ test('Settings reviews the destination before opt-in, then syncs actual local da
  await page.evaluate(()=>{const f=(window as any).calendarSyncFixture;f.remote.event.title='Changed at Google';f.remote.event.attendees=[{email:'guest@example.invalid',optional:false},{email:'new@example.invalid',optional:true}];f.remote.etag='"2"';});
  await dialog.getByRole('button',{name:'Sync now',exact:true}).click();await expect(dialog.getByRole('status')).toHaveText(/1 received/);
  const local=await page.evaluate(async()=>{const {calendarDocument,initialCalendarState}=await import('/src/browser/calendar-store.ts');return (await calendarDocument.read(initialCalendarState)).events[0];});expect(local.title).toBe('Changed at Google');expect(local.alert).toBe(10);expect(local.repeat).toBe('weekdays');expect(local.attendeeOptions).toEqual({'guest@example.invalid':{optional:false},'new@example.invalid':{optional:true}});
- await page.evaluate(async()=>{const {calendarDocument,initialCalendarState}=await import('/src/browser/calendar-store.ts');await calendarDocument.edit(initialCalendarState,data=>{data.events[0].title='Saved locally again';data.events[0].revision='local-edit';});});await expect.poll(()=>page.evaluate(()=>(window as any).calendarSyncFixture.remote.event.title)).toBe('Saved locally again');
+ await page.evaluate(async()=>{const {calendarDocument,initialCalendarState}=await import('/src/browser/calendar-store.ts');await calendarDocument.edit(initialCalendarState,data=>{data.events[0].title='Saved locally again';data.events[0].revision='local-edit';});});await dialog.getByRole('button',{name:'Sync now',exact:true}).click();await expect.poll(()=>page.evaluate(()=>(window as any).calendarSyncFixture.remote.event.title)).toBe('Saved locally again');
  await dialog.getByRole('button',{name:'Pause sync',exact:true}).click();await expect(dialog.getByRole('status')).toHaveText(/Sync is off/);const writes=await page.evaluate(()=>(window as any).calendarSyncFixture.writes);await expect(dialog.getByRole('button',{name:'Sync now',exact:true})).toBeHidden();await page.evaluate(async()=>{const {calendarSyncHost}=await import('/src/runtime/calendar-sync-host.ts');try{await calendarSyncHost.sync();}catch{}});expect(await page.evaluate(()=>(window as any).calendarSyncFixture.writes)).toBe(writes);
 });
 test('lost create responses recover from the retained event key without a second provider write',async({page})=>{
