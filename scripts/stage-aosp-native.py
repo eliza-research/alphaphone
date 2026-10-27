@@ -4,13 +4,20 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SHARED = ROOT / 'vendor/eliza/packages/os/scripts/android/stage-android-native.py'
 spec = importlib.util.spec_from_file_location('eliza_android_native', SHARED)
 shared = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(shared)
+# Keep the pinned upstream checkout immutable when importing its adapter.
+_previous_bytecode = sys.dont_write_bytecode
+try:
+    sys.dont_write_bytecode = True
+    spec.loader.exec_module(shared)
+finally:
+    sys.dont_write_bytecode = _previous_bytecode
 RUNTIME_MODES = shared.RUNTIME_MODES
 TARGETS = shared.TARGETS
 CLOUD_OMITTED_MODEL = shared.CLOUD_OMITTED_MODEL
