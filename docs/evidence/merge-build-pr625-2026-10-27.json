@@ -17,5 +17,22 @@
   "requestedDevelopSnapshot": "e5316af35b827fa26a52b8bc2402cce4405bf5db",
   "developReview": "Additional shared launcher/Sense/OS modules do not replace Alpha renderer automatically. Shared SSE framing and weather output changes inspected. Final source preparation and runtime build required.",
   "mainMerged": false,
-  "deviceAcceptance": false
+  "deviceAcceptance": false,
+  "integratedCommit": "664c97245ed4ef67b6d5592a749a739501e3b1fc",
+  "finalDevelopSnapshot": "4e617a0c15080df16391ced88dbbc73b818a7af5",
+  "finalDevelopObservedAt": "2026-10-27T08:13:00Z",
+  "finalDevelopReachability": {
+    "ahead_by": 0,
+    "base": "4e617a0c15080df16391ced88dbbc73b818a7af5",
+    "behind_by": 0,
+    "mergeBase": "4e617a0c15080df16391ced88dbbc73b818a7af5",
+    "status": "identical"
+  },
+  "packagingFixVerification": {
+    "passed": 2102,
+    "skipped": 6,
+    "failed": 0,
+    "total": 2108,
+    "log": "/tmp/alphaphone-soong-packaging-verify.log"
+  }
 }
