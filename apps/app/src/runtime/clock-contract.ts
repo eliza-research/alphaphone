@@ -1,6 +1,5 @@
 /** Android Clock intent handoffs only: never evidence that an alarm exists or rang. */
 import {
-  assertClockObservation as upstreamAssertClockObservation,
   clockDays as upstreamClockDays,
   clockTimeZone,
   validateClockOperation as upstreamValidateClockOperation,
@@ -9,7 +8,7 @@ import {
   type ClockHandoffOperation as ClockOperation,
   type ClockHandoffResult as ClockResult,
 } from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/clock-contract.ts';
-export {CLOCK_CAPABILITY, clockTimeZone} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/clock-contract.ts';
+export {clockTimeZone} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/clock-contract.ts';
 export type {ClockDay, ClockHandoffOperation as ClockOperation, ClockHandoffResult as ClockResult, ClockHandoffResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/clock-contract.ts';
 
 export const CLOCK_DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
@@ -44,10 +43,6 @@ export function validateClockOperation(value: unknown): ClockOperation {
   const {days, ...oneOff} = operation;
   // Explicit [] remains a one-off; never send an empty EXTRA_DAYS to Clock.
   return days.length ? {...oneOff, days: days.sort((a, b) => a - b)} : oneOff;
-}
-export function assertClockObservation(operation: ClockOperation, value: unknown) {
-  if (!isClockOperation(operation)) throw Error("Invalid Clock operation");
-  upstreamAssertClockObservation(operation, value);
 }
 export function validateClockOutcome(
   operation: ClockOperation,

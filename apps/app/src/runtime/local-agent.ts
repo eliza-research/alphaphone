@@ -28,7 +28,6 @@ export interface LocalAgentBridge {
   configureProvider?(input:{apiKey:string;model:string}):Promise<unknown>;
   providerStatus?():Promise<{provider?:unknown;configured?:unknown;model?:unknown}>;
   clearProvider?():Promise<{configured?:unknown}>;
-  launchSurface?():Promise<{assistant?:unknown}>;
   /** Read-only native query; see residentAttachable. */
   residentAttachment?(input:{credentialId?:string}):Promise<{attachable?:unknown;reason?:unknown}>;
   configureCloudProvider?(input:{credentialId:string;model:string}):Promise<unknown>;
@@ -415,12 +414,6 @@ export async function clearLocalProvider():Promise<LocalProviderStatus> {
   const status=await localProviderStatus();
   if(status.configured)throw Error('The provider key could not be confirmed removed.');
   return status;
-}
-
-/** True only in the Android ACTION_ASSIST surface (native alpha.assistant launch flag). */
-export async function launchedAsAssistant():Promise<boolean> {
-  if(!Capacitor.isNativePlatform()||!Capacitor.isPluginAvailable('Agent')||!native.launchSurface)return false;
-  try{return (await native.launchSurface()).assistant===true;}catch{return false;}
 }
 
 /** True only when native confirms an admitted, running, enrolled resident whose stored provider

@@ -62,7 +62,6 @@ export function createFilesIndex(store:Store|undefined=defaultStore(),now:()=>nu
     revokeTree(){write(read().map(row=>row.kind==='tree'&&row.status==='ready'?{...row,status:'revoked' as const}:row));},
   };
 }
-export type FilesIndex=ReturnType<typeof createFilesIndex>;
 export const filesIndex=createFilesIndex();
 
 const words=(value:string)=>value.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'').split(/[^a-z0-9]+/).filter(Boolean);

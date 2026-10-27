@@ -17,8 +17,6 @@ export const ENABLED_MVP_VIEWS = new Set([
   // "wallet", // Removed from MVP in both distributions and AOSP; no payment flow.
   "workflows", "settings",
 ]);
-/** Views limited to the Alpha AOSP image (P-36). */
-export const AOSP_ONLY_VIEWS: ReadonlySet<string> = new Set(["phone", "messages", "contacts"]);
 const IMAGE_VIEWS: ReadonlySet<string> = new Set(admittedAospViews(aospImage));
 for (const view of IMAGE_VIEWS) ENABLED_MVP_VIEWS.add(view);
 /** Views unavailable in this install: deferred, or image-only without the verified image and an admitted adapter. */

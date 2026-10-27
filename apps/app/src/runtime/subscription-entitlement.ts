@@ -48,8 +48,6 @@ export interface CountAllowance {
  */
 export interface PeriodAllowance { unit: 'usd_micros'; granted: number; remaining: number; periodStart: number; resetsAt: number }
 export type PlanAllowance = CountAllowance | PeriodAllowance;
-/** Entitlement claim-set versions the phone reads. Tokens without `ver` are v1; later versions only add claims. */
-export const ENTITLEMENT_FORMAT_VERSION = 2;
 export interface SubscriptionEntitlement {
   id: string; keyId: string; issuer: string;
   userId: string; organizationId: string | null;
@@ -615,7 +613,4 @@ export function membershipCreditDetailsFromLimits(payload: unknown, now=Date.now
   if(!Number.isFinite(at)||at>now+60000||now-at>300000||typeof row?.revision!=='string'||!/^\d+$/.test(row.revision))return unavailable;
   if(amount?.unit!=='usd'||amount.currency!=='USD'||typeof amount.value!=='string'||!/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/.test(amount.value))return unavailable;
   return {state:/^0(?:\.0+)?$/.test(amount.value)?'zero':'funded',usd:amount.value,observedAt:at};
-}
-export function membershipBalanceFromLimits(payload:unknown,now=Date.now()):'zero'|'funded'|'unavailable' {
- return membershipCreditDetailsFromLimits(payload,now).state;
 }
