@@ -1,3 +1,4 @@
+import {openLegacyNotes} from './helpers/legacy-notes';
 import {returnToApps} from './app-navigation';
 import {guardCalendarFixture as guardNoMedia} from './calendar-draft-readiness';
 import {test,expect,type Page} from '@playwright/test';
@@ -75,7 +76,7 @@ for(const scenario of ['connected','empty','error','restored'] as const)test(`Sh
    cache.get=async function<T>(key:string){const row=await read<T>(key);if(key==='gmail:mailbox'){f.restoreReads++;await f.restoreGate;}return row;};
   }else f.accountGate=new Promise<void>(resolve=>f.releaseAccounts=resolve);
  },scenario);
- await page.getByRole('button',{name:'Notes',exact:true}).click();await page.getByRole('button',{name:'New note',exact:true}).click();
+ await openLegacyNotes(page);await page.getByRole('button',{name:'New note',exact:true}).click();
  await page.getByRole('textbox',{name:'Title',exact:true}).fill('Waiting shared note');await page.getByRole('textbox',{name:'Note',exact:true}).fill('Exact retained shared body');
  await page.getByRole('button',{name:'Share note',exact:true}).click();await page.getByRole('button',{name:'Share to email',exact:true}).click();
  await expect.poll(async()=>{const f=await gm(page);return scenario==='restored'?f.restoreReads:f.accountReads;}).toBeGreaterThan(0);
@@ -213,7 +214,7 @@ test('Settings Connections disconnects one confirmed account and reports the rea
 
 test('Share by email from Notes opens a prefilled local draft without sending',async({page})=>{
  await setup(page);
- await page.getByRole('button',{name:'Notes',exact:true}).click();
+ await openLegacyNotes(page);
  await page.getByRole('button',{name:'New note',exact:true}).click();
  await page.getByRole('textbox',{name:'Title',exact:true}).fill('Shared plan');
  await page.getByRole('textbox',{name:'Note',exact:true}).fill('First line\nSecond line');
@@ -323,7 +324,7 @@ for(const saved of [false,true])test(`Share to email opens a new populated draft
  await page.getByRole('textbox',{name:'Message',exact:true}).fill('Earlier exact body');
  if(saved){await page.getByRole('button',{name:'Save draft locally',exact:true}).click();await expect(page.getByText('Saved locally on this device',{exact:true}).first()).toBeVisible();}
  await page.getByRole('button',{name:'Back from draft',exact:true}).click();await returnToApps(page);
- await page.getByRole('button',{name:'Notes',exact:true}).click();await page.getByRole('button',{name:'New note',exact:true}).click();
+ await openLegacyNotes(page);await page.getByRole('button',{name:'New note',exact:true}).click();
  await page.getByRole('textbox',{name:'Title',exact:true}).fill('Shared selected note');
  await page.getByRole('textbox',{name:'Note',exact:true}).fill('First line\nSecond line');
  await page.getByRole('button',{name:'Share note',exact:true}).click();await page.getByRole('button',{name:'Share to email',exact:true}).click();
@@ -342,7 +343,7 @@ for(const destination of ['another account','Home'] as const)test(`Shared email 
  await expect(page.getByRole('button',{name:'Compose',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Compose',exact:true}).click();
  await page.getByRole('textbox',{name:'Subject',exact:true}).fill('Keep earlier email');await page.getByRole('textbox',{name:'Message',exact:true}).fill('Keep earlier body');
  await page.getByRole('button',{name:'Back from draft',exact:true}).click();await returnToApps(page);
- await page.getByRole('button',{name:'Notes',exact:true}).click();await page.getByRole('button',{name:'New note',exact:true}).click();
+ await openLegacyNotes(page);await page.getByRole('button',{name:'New note',exact:true}).click();
  await page.getByRole('textbox',{name:'Title',exact:true}).fill('Retired share');await page.getByRole('textbox',{name:'Note',exact:true}).fill('Must not insert later');
  await page.evaluate(async()=>{
   const {inboxLocalStore:s}=await import('/src/runtime/inbox-local-store.ts');const cas=s.compareExchange.bind(s),w=window as any;
@@ -369,7 +370,7 @@ for(const destination of ['another account','Home'] as const)test(`Shared email 
 test('Share to email preserves earlier edits when local preservation conflicts',async({page})=>{
  await setup(page);await page.getByRole('button',{name:'Inbox',exact:true}).click();await expect(page.getByRole('button',{name:'Compose',exact:true})).toBeEnabled();
  await page.getByRole('button',{name:'Compose',exact:true}).click();await page.getByRole('textbox',{name:'Subject',exact:true}).fill('Conflict protected email');await page.getByRole('textbox',{name:'Message',exact:true}).fill('Protected exact body');
- await page.getByRole('button',{name:'Back from draft',exact:true}).click();await returnToApps(page);await page.getByRole('button',{name:'Notes',exact:true}).click();await page.getByRole('button',{name:'New note',exact:true}).click();
+ await page.getByRole('button',{name:'Back from draft',exact:true}).click();await returnToApps(page);await openLegacyNotes(page);await page.getByRole('button',{name:'New note',exact:true}).click();
  await page.getByRole('textbox',{name:'Title',exact:true}).fill('Refused share');await page.getByRole('textbox',{name:'Note',exact:true}).fill('Never replaces earlier email');
  await page.evaluate(async()=>{const {inboxLocalStore:s}=await import('/src/runtime/inbox-local-store.ts');const cas=s.compareExchange.bind(s);s.compareExchange=async(key,prior,next)=>key.startsWith('inbox-drafts:v1:shelf:')?{status:'conflict'}:cas(key,prior,next);});
  await page.getByRole('button',{name:'Share note',exact:true}).click();await page.getByRole('button',{name:'Share to email',exact:true}).click();
