@@ -258,21 +258,21 @@ def stage(apk, output, module, target='stallion'):
     (output / 'config.fs').write_text(''.join(
         f'[{record["installPath"].lstrip("/")}]\nmode: {record["mode"]}\nuser: AID_ROOT\ngroup: AID_ROOT\ncaps: 0\n\n'
         for record in records))
-    # AOSP's supported prebuilt app rule installs LOCAL_PREBUILT_JNI_LIBS beside
-    # the APK. SDK >= 30 + PRESIGNED preserves the APK and checks compression and
-    # alignment. Do not use prebuilt_any: that type is reserved for generated rules.
-    (output / 'Android.mk').write_text(
-        f'# Generated Alpha {target} APK and bundled JNI installation.\n'
-        'LOCAL_PATH := $(call my-dir)\ninclude $(CLEAR_VARS)\n' +
-        f'LOCAL_MODULE := {module}\n' +
-        'LOCAL_MODULE_CLASS := APPS\nLOCAL_MODULE_SUFFIX := .apk\n'
-        'LOCAL_SRC_FILES := Launcher.apk\nLOCAL_CERTIFICATE := PRESIGNED\n'
-        'LOCAL_SDK_VERSION := 36\nLOCAL_PRODUCT_MODULE := true\n'
-        f'LOCAL_MULTILIB := 64\nLOCAL_MODULE_TARGET_ARCH := {arch}\n'
-        'LOCAL_DEX_PREOPT := false\nLOCAL_PREBUILT_JNI_LIBS := ' +
-        ' '.join(native_name + '/' + name for name, _ in payloads) +
-        '\ninclude $(BUILD_PREBUILT)\n')
-    (output / 'Android.bp').write_text('// AlphaPhone is defined in Android.mk for bundled JNI installation.\n')
+    # Modern image products ignore Android.mk. Keep the APK byte-identical and
+    # require explicit Soong modules for its admitted native payloads. The recorded
+    # soong-app-native patch supplies the app-relative installation rule.
+    native_modules = [f'{module}_native_{index}' for index in range(len(records))]
+    app_bp = expected_bp.replace('    dex_preopt:',
+        '    required: ' + json.dumps(native_modules) + ',\n    dex_preopt:')
+    library_bp = []
+    for name, record in zip(native_modules, records):
+        library_bp.append('prebuilt_app_native {\n' +
+            f'    name: "{name}",\n' +
+            f'    src: "{record["path"]}",\n' +
+            f'    filename: "{Path(record["path"]).name}",\n' +
+            f'    relative_install_path: "{module}/lib/{arch}",\n' +
+            '    product_specific: true,\n}\n')
+    (output / 'Android.bp').write_text(app_bp + '\n' + '\n'.join(library_bp))
     report = {'schemaVersion': 1, 'apkSha256': hashlib.sha256(apk.read_bytes()).hexdigest(),
               'target': target, 'libraries': records, 'residentAgentIncluded': runtime is not None,
               'runtimeAdmission': runtime, 'fsConfigRequired': True,

@@ -61,3 +61,15 @@ test('host build patch admission is explicit, target-bound, and pinned to the so
   assert.deepEqual(manifest.files.map(row => row.path), ['ui/build/soong.go']);
   assert.ok(manifest.files.every(row => /^[a-f0-9]{64}$/.test(row.beforeSha256) && /^[a-f0-9]{64}$/.test(row.afterSha256)));
 });
+
+test('Soong app-native installation patch is independently pinned and has no guard bypass', () => {
+  const [{manifest}] = stagingBuildPatches(['soong-app-native'], true);
+  const lock = fs.readFileSync('android/aosp/pixel10a-source.json');
+  assert.equal(manifest.baselineLockSha256, createHash('sha256').update(lock).digest('hex'));
+  assert.equal(manifest.revision, JSON.parse(lock).projects.find(row => row.path === 'build/soong').commit);
+  assert.deepEqual(manifest.files.map(row => row.path), ['etc/prebuilt_etc.go', 'etc/prebuilt_etc_test.go']);
+  const patch = fs.readFileSync('android/aosp/app-native/' + manifest.patch, 'utf8');
+  assert.match(patch, /InitPrebuiltEtcModule\(module, "app"\)/);
+  assert.doesNotMatch(patch, /BUILD_BROKEN|Check_elf_files|check_elf_files|prebuilt_any/);
+  assert.equal(stagingBuildPatches(['soong-memory', 'soong-app-native'], true).length, 2);
+});

@@ -149,8 +149,8 @@ export function listenerSystemuiPatch(bundle) {
 
 /** Explicit host-build patches; defaults and device source remain unchanged. */
 export function aospBuildPatch(bundle) {
-  if (bundle !== 'soong-memory') throw Error(`Unknown AOSP build patch: ${bundle}`);
-  const directory = fileURLToPath(new URL('../android/aosp/build-host/', import.meta.url));
+  if (!['soong-memory', 'soong-app-native'].includes(bundle)) throw Error(`Unknown AOSP build patch: ${bundle}`);
+  const directory = fileURLToPath(new URL(bundle === 'soong-memory' ? '../android/aosp/build-host/' : '../android/aosp/app-native/', import.meta.url));
   const bytes = fs.readFileSync(path.join(directory, 'manifest.json')), manifest = JSON.parse(bytes);
   if (digest(fs.readFileSync(path.join(directory, manifest.patch))) !== manifest.patchSha256) throw Error(`AOSP build patch ${bundle} hash mismatch`);
   return {name:bundle, manifest, manifestSha256:digest(bytes)};

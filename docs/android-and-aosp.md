@@ -493,3 +493,16 @@ and a separate systemd user service with a 22-GiB RAM and 32-GiB swap limit.
 These settings are build-host controls, not device qualification. The first
 unbounded-heap attempt was killed by systemd-oomd during graph generation; its
 logs remain in the campaign artifacts and do not count as a completed image.
+
+## Soong-only image packaging
+
+Cuttlefish's Android 17 product ignores all legacy `Android.mk` modules. Image
+staging therefore emits an `android_app_import` plus required `prebuilt_app_native`
+modules. The recorded `android/aosp/app-native/soong-app-native.patch` adds that
+module type to install the admitted ABI payloads under
+`/product/app/AlphaPhone/lib/<arch>`; `config.fs` preserves executable modes for
+the runtime and loader. APK bytes remain unchanged. Apply this exact patch and
+include `--applied-build-patch soong-app-native` for either image target. Staging
+refuses to proceed without that explicit source admission. ELF-copy checks are
+not disabled. Verify the built APK and each native payload against the staging
+hashes before treating a successful image build as a candidate.

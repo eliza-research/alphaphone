@@ -205,7 +205,7 @@ for (let i = 0; i < args.length; i++) {
     args[i + 1].startsWith("--")
   )
     throw new Error(
-      "Use --apk FILE --output NEW_DIR [--descriptor FILE [--production] | --development] [--apk-manifest FILE] [--aosp-source PATH] [--target cuttlefish | --target pixel10a --factory-image FILE (--development | --production --descriptor FILE)] [--listener-apk FILE [--listener-descriptor FILE]] [--applied-systemui-patch chip|ops ...] [--applied-build-patch soong-memory]",
+      "Use --apk FILE --output NEW_DIR [--descriptor FILE [--production] | --development] [--apk-manifest FILE] [--aosp-source PATH] [--target cuttlefish | --target pixel10a --factory-image FILE (--development | --production --descriptor FILE)] [--listener-apk FILE [--listener-descriptor FILE]] [--applied-systemui-patch chip|ops ...] [--applied-build-patch soong-memory|soong-app-native ...]",
     );
   if (args[i] === '--applied-systemui-patch') appliedPatchNames.push(args[i + 1]);
   if (args[i] === '--applied-build-patch') appliedBuildNames.push(args[i + 1]);
@@ -228,6 +228,8 @@ if (production) {
 }
 const platformCertificateSha256 = production ? JSON.parse(fs.readFileSync(physical ? PIXEL10A_PRODUCT : PRODUCT_DESCRIPTOR, "utf8")).signer?.platformCertificateSha256 : undefined;
 const appliedPatches = [...stagingSystemuiPatches(appliedPatchNames, physical || cuttlefish), ...stagingBuildPatches(appliedBuildNames, physical || cuttlefish)];
+if ((physical || cuttlefish) && !appliedBuildNames.includes('soong-app-native'))
+  throw Error('Image staging requires --applied-build-patch soong-app-native for Soong-only APK and JNI installation.');
 const physicalSource = physical ? await verifyPixel10aSource({source:get('--aosp-source'), factory:get('--factory-image'), appliedPatches}) : null;
 if (physical && production && physicalSource.sourceLockSha256 !== JSON.parse(fs.readFileSync(PIXEL10A_PRODUCT, "utf8")).sourceLock?.sha256)
   throw new Error(`Refusing production staging: the verified source lock is not the one pinned in ${PIXEL10A_PRODUCT}.`);
