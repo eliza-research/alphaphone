@@ -2,9 +2,9 @@ import {browserDocuments} from '../browser/documents';
 import {presentCalendarIntervals} from './calendar-interval-presentation';
 import {calendarRange} from '../browser/calendar-records';
 import {Capacitor} from '@capacitor/core';
-import {connectionController} from '../runtime/connection-ui';
+import {connectionController,agentPendingText} from '../runtime/connection-ui';
 import {legacyCalendarPreservation} from '../runtime/legacy-calendar-preservation';
-import {AgentCalendar,calendarEventKey,calendarSourceKey,type CalendarPreservation} from '../runtime/agent-calendar';
+import {AgentCalendar,calendarOwnerKey,calendarEventKey,calendarSourceKey,type CalendarPreservation} from '../runtime/agent-calendar';
 import type {AppRecordPort} from '../runtime/app-record-route-policy';
 import {canonicalCalendarRow,calendarFormCreate,calendarFormPatch,canonicalHomeCalendar,type CanonicalCalendarForm} from '../runtime/agent-calendar-view';
 import {getZonedDateParts,addDaysToLocalDate} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/internal/time';
@@ -59,7 +59,8 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
  views.calendar.displaySources=()=>nativeCalendarScope(owner)?displaySources?.():{native:false,canonical:true,status:controller?.state.status??'disconnected',ready:controller?.state.status==='ready',loading:controller?.state.status==='loading',error:controller?.state.status==='error',sources:sourceRows(),retry:()=>refresh(true)};
  function newForm(api:Bag){
   const state=api.get('calendar');if(state.form){api.toast('Keep or finish the current form before creating another event.');return;}
-  const model=controller?.state,sources=sourceRows();if(!model?.ownerKey||!['ready','partial','unavailable'].includes(model.status)){api.toast('Wait for the agent Calendar source and preservation review.');return;}
+  const target=port();if(!target?.current()){api.toast(agentPendingText(undefined,'Calendar is unavailable for this agent connection. Check Settings › Agent connection.'));return;}
+  const model=controller?.state,sources=sourceRows();if(!model?.ownerKey||model.ownerKey!==calendarOwnerKey(target)||!['ready','partial','unavailable'].includes(model.status)){api.toast('Wait for the agent Calendar source and preservation review.');return;}
   api.set({open:null,form:{id:null,canonicalOwnerKey:model.ownerKey,creationId:crypto.randomUUID(),title:'',notes:'',where:'',off:state.day||0,t:17,d:1,zone:zone(),who:[],video:false,repeat:'none',alert:null,cal:sources.length===1?sources[0].id:''}});
  }
  // A scan is only a draft. Admit it to the current source without writing or
