@@ -18,7 +18,15 @@
     "clientPreparation": "passed",
     "focusedConsumerTests": 34,
     "focusedFailures": 0,
-    "fullVerification": "pending",
+    "fullVerification": {
+      "passed": true,
+      "tests": 2089,
+      "passedTests": 2085,
+      "skippedTests": 4,
+      "failedTests": 0,
+      "productionAuditFiles": 419,
+      "testMocks": false
+    },
     "androidVersion": 17,
     "androidBuild": "passed all four version 17 native APKs, instrumentation builds, lint and packaged dependency audit",
     "imageBuilds": "pending",
