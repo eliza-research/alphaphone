@@ -9,6 +9,33 @@
       "fixedIn": "1.2.2",
       "change": "lockfile-only; postcss declares ^1.2.1",
       "fixedOn": "2026-10-10"
+    },
+    {
+      "advisory": "GHSA-4qv8-2p9j-2685",
+      "package": "undici",
+      "severity": "moderate",
+      "from": "8.11.2",
+      "fixedIn": "8.12.2",
+      "change": "lockfile-only upgrade to 8.12.3 within jsdom 30.1.2 declared ^8.11.2 range",
+      "fixedOn": "2026-10-27"
+    },
+    {
+      "advisory": "GHSA-f72v-6w45-q472",
+      "package": "undici",
+      "severity": "moderate",
+      "from": "8.11.2",
+      "fixedIn": "8.12.2",
+      "change": "lockfile-only upgrade to 8.12.3 within jsdom 30.1.2 declared ^8.11.2 range",
+      "fixedOn": "2026-10-27"
+    },
+    {
+      "advisory": "GHSA-xjj6-f33q-929c",
+      "package": "undici",
+      "severity": "high",
+      "from": "8.11.2",
+      "fixedIn": "8.12.2",
+      "change": "lockfile-only upgrade to 8.12.3 within jsdom 30.1.2 declared ^8.11.2 range",
+      "fixedOn": "2026-10-27"
     }
   ],
   "exceptions": [
