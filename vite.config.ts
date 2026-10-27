@@ -114,6 +114,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@elizaos/capacitor-system/sense": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/sense-bridge.ts", import.meta.url)),
+      "@elizaos/capacitor-system/reset": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/reset.ts", import.meta.url)),
       "@elizaos/contracts/device-action-execution": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/device-action-execution.ts", import.meta.url)),
       "@elizaos/ui/view-primitives": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/view-primitives.ts",import.meta.url)),
       "@elizaos/capacitor-system/launcher": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/client/launcher.ts",import.meta.url)),

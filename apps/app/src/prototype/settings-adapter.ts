@@ -27,6 +27,7 @@ import {planAdmission} from '../runtime/subscription-entitlement';
 import { exportVoiceTiming } from '../runtime/voice-timing';
 import { readNativeVoiceTiming } from '../runtime/native-voice-turn';
 import { listenerStatus, openListenerSettings, pauseListener, turnOffListener, type ListenerStatus } from '../runtime/always-on-listener';
+import { reviewDataReset, type DataResetPlugin } from '@elizaos/capacitor-system/reset';
 import { leavePasswordManager, passwordEntryPage, passwordManagerGroups, passwordManagerLifecycle, refreshPasswordManager, PASSWORD_PAGES } from '../passwords/password-manager';
 
 type Bag = Record<string, any>;
@@ -622,8 +623,8 @@ export function installSettingsAdapter(Component: any, views: Bag) {
           out.stack.push({isTop:false,notTop:true,cls:'enter',z:4,title:'Agent connection',hasTitle:true,backLabel:'Back to Settings',back:()=>api.set({page:null}),hero:{},groups});
         }
         if(native)page.groups.push(group([{kNav:true,label:'Reset Alpha data',lbl:'Reset Alpha data',sub:'Erase local Alpha data · device unlock required',hasSub:true,chev:true,noAB:true,go:async()=>{
-          try{const result=await registerPlugin<{review():Promise<{status:string;message:string}>}>('AlphaReset').review();api.toast(result.message);}
-          catch{api.toast('Reset could not be opened. No completed reset is confirmed.');}
+          // Shared native review (@elizaos/capacitor-system/reset): only cancelled or unavailable reach here.
+          api.toast((await reviewDataReset(registerPlugin<DataResetPlugin>('AlphaReset'))).message);
         }}]));
         if(testMocksEnabled)page.groups.push(group([{kNav:true,label:'Try mock mode',lbl:'Try mock mode',chev:true,noAB:true,go:()=>connectionController.mock()}]));
         if(testMocksEnabled&&recovery.length)page.groups.push(group([info('Saved data needs recovery','Back up before resetting'),...recovery.map(name=>({kNav:true,label:recoveryActions[name].label,lbl:recoveryActions[name].label,chev:true,noAB:true,go:()=>recoveryActions[name].open()}))]));

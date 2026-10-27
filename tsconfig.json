@@ -21,6 +21,7 @@
     "ignoreDeprecations": "6.0",
     "paths": {
       "@elizaos/capacitor-system/sense": ["./.eliza/client-features/plugins/plugin-native-system/src/sense-bridge.ts"],
+      "@elizaos/capacitor-system/reset": ["./.eliza/client-features/plugins/plugin-native-system/src/reset.ts"],
       "@elizaos/contracts/device-action-execution": ["./.eliza/client-features/packages/contracts/src/device-action-execution.ts"],
       "@elizaos/capacitor-system/launcher": [
         "./.eliza/client-features/plugins/plugin-native-system/src/client/launcher.ts"

@@ -1,8 +1,8 @@
 package ai.elizaresearch.alphaphone;
 
-/** Best-effort key revocation bounded independently of network and credential-store latency. */
+/** Best-effort key revocation bounded independently of network and credential-store latency. Runs as
+ * the shared reset coordinator's before-dispatch step (AlphaDataReset), only for a durable reset. */
 final class ResetCloudRevocation {
- static final long PENDING_DEADLINE_MS=4000;
  private ResetCloudRevocation(){}
  static void revoke(android.content.Context context,long timeoutMs){
   if(timeoutMs<=0||!AlphaDataReset.pending(context))return;
