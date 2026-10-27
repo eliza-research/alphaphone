@@ -1,0 +1,26 @@
+{
+  "productBase": "a5996123596dcf1494d001b33dea1a282f1ca2c5",
+  "SDK": "45e8647ae0ad1dfda75a4f8c74b6589cf073bf95",
+  "priorSDK": "b3867a4805626e39c268c13df452a797b69c6e6a",
+  "SDKTree": "b68bdad1380d51981945ee716476b5ee7ecac8c1",
+  "reviewedSourceFiles": {
+    "plugins/plugin-notes/src/provider.ts": "fd55c8054cb83e7b0131473f34c6caffe7a1c2f374780d2698358823e28c6455",
+    "plugins/plugin-notes/src/action.ts": "41a652498184beb3e6f87276b0bc63f5f78bb827973f2fada3cebec4b0e42109",
+    "plugins/plugin-notes/src/provider.test.ts": "a99a70da343a9de2562cfd4d14348cf6c5a005cb4ac4b59eb93ce0728e7dd47a",
+    "plugins/plugin-notes/src/action.test.ts": "edd6cbe74abfad3cc743eb65ef5b764f2171c7cf8c79c591cafb642c65002252",
+    "plugins/plugin-assistant/src/runtime/planner-loop.ts": "84bce26d015f3983c270e83437fa0fe0d3c2f01e35923d53f48f49e7c9b854b5",
+    "plugins/plugin-assistant/src/services/message/planned-tool.ts": "6099c671f7ef388336ab8345a6db11f97b05f9cd41a8e30ad08c5ce17d7f93c2",
+    "plugins/plugin-assistant/src/runtime/planner-long-trajectory.test.ts": "7405386472ef2e07ddf77d0d2f9170610963d62fee23ab3a23a64ea1c9b7856c"
+  },
+  "reviewedNotesOwningCasesPassed": 3,
+  "reviewedPlannerSourceCasesPassed": 6,
+  "reviewedPlannerOwningCasesPassed": 3,
+  "localOnly": true,
+  "published": false,
+  "MacModelAcceptance": false,
+  "AndroidAcceptance": false,
+  "packageLockUnchanged": true,
+  "SDKLockUnchanged": true,
+  "engineModelProviderABIChanges": false,
+  "canonicalNewBaseQualification": "Separate, not claimed"
+}

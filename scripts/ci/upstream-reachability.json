@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "b3867a4805626e39c268c13df452a797b69c6e6a",
+  "head": "45e8647ae0ad1dfda75a4f8c74b6589cf073bf95",
   "recordedAt": "2026-10-27",
-  "command": "git -C vendor/eliza rev-list --left-right --count 04658de1b942510e0d37efc777c154530f5c0ef1...b3867a4805626e39c268c13df452a797b69c6e6a",
+  "command": "git -C vendor/eliza rev-list --left-right --count 04658de1b942510e0d37efc777c154530f5c0ef1...45e8647ae0ad1dfda75a4f8c74b6589cf073bf95",
   "status": "diverged",
-  "aheadBy": 72,
+  "aheadBy": 74,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -294,6 +294,14 @@
     {
       "sha": "b3867a4805626e39c268c13df452a797b69c6e6a",
       "subject": "chore(diagnostics): name the slowest existing action validation"
+    },
+    {
+      "sha": "7a59b72877dba56dc1cca9fe0c3364188deb0387",
+      "subject": "fix(notes): ground deletion recall in committed Trash timestamps"
+    },
+    {
+      "sha": "45e8647ae0ad1dfda75a4f8c74b6589cf073bf95",
+      "subject": "fix(planner): respect canonical nonretryable failure receipts"
     }
   ],
   "pullRequests": [
@@ -387,7 +395,7 @@
     }
   ],
   "provenance": {
-    "method": "Local immutable graph against retained develop baseCommit; no fresh GitHub/develop query",
-    "priorHead": "a681dc583ffb7c7c6ecec9e6bcee944ea49f20b2"
+    "method": "Local immutable graph against retained develop snapshot, not current published develop qualification",
+    "priorHead": "b3867a4805626e39c268c13df452a797b69c6e6a"
   }
 }
