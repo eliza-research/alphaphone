@@ -93,7 +93,7 @@
 
 
 
-<sc-if value="{{isView}}">
+<sc-if value="{{showAppLayer}}">
 <div data-alpha-layer="app" onFocusCapture="{{focusAppContent}}" role="region" aria-label="{{activeViewLabel}}" aria-hidden="{{appHidden}}" inert="{{appHidden}}" class="enter" style="position: absolute; inset: 0; z-index: 20; background: {{viewBg}}; color: {{viewFg}}; display: flex; flex-direction: column">
 <sc-if value="{{storageAccessWarning}}"><p role="alert" class="storage-access-warning">{{storageAccessWarning}}</p></sc-if>
 

@@ -3267,6 +3267,7 @@ registerView("notes", {
 
     var shareSheet = st.sheet === "share" && !!n;
     return {
+      legacyNotes: true, notesTitle: "Notes", primaryNotes: true,
       searching: st.q !== null && st.q !== undefined, notSearching: st.q === null || st.q === undefined,
       q: st.q || "",
       onQ: function (e) { api.set({ q: e.target.value }); },
@@ -5638,7 +5639,7 @@ class Component extends DCLogic {
       assistantSurface: assistantOnly, notAssistantSurface: !assistantOnly, closeAssistant: closeAssistant,
       mvpMessages: isMvpView("messages"),
       ic: IC, iconAssets: ICON_ASSETS, vars: vars, rootRef: rootRef, frame: th.frame, clock: clock, dateStr: dateStr, name: name,
-      isBoot: S.screen === "boot", isOff: S.screen === "off", isLock: S.screen === "lock", isOn: isOn, isView: isView,
+      isBoot: S.screen === "boot", isOff: S.screen === "off", isLock: S.screen === "lock", isOn: isOn, isView: isView, showAppLayer: isView,
       viewBg: imm.dark ? "#000000" : "var(--bg)", viewFg: imm.dark ? "#ffffff" : "var(--fg)", sbColor: sbColor, homeIndicatorColor: out.photos && out.photos.albumManager ? "var(--fg)" : sbColor,
       systemShell: P.systemShell !== false,
       showAppBack: P.systemShell === false && isOn && isView && !S.shade,

@@ -911,13 +911,16 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       if(!options?.exact)patch={...patch,list:stampNoteChanges(this.notesStore.list,patch.list)};
       if(this.notesRaw!==this.notesStore.raw)throw Error('Notes changed while this editor had unsaved text. Review recovery before saving.');
       const pending=this.notesStore.replace(patch.list);
+      // replace accepts the local draft synchronously, then serializes its durable
+      // commits. Further keystrokes belong to that draft, not a foreign revision.
+      this.notesRaw=this.notesStore.raw;
       this.notesPending++;
       this.notesSelectionKey=null;this.notesSelection=null;
       // Text remains visible while the native commit is pending; this is not a saved receipt.
       originalSet.call(this,key,{...patch,storageStatus:'Saving on this device…'});
       context(this);
       return Promise.resolve(pending).then(()=>{
-        this.notesPending--;this.notesRaw=this.notesStore.raw;
+        this.notesPending--;
         if(this.live&&!this.notesPending&&!this.notesStorageFailed){originalSet.call(this,'notes',{storageStatus:''});context(this);}
         // A change was saved, so space may have been freed: retry a draft kept from a full collection.
         const deferred=this.notesDraftDeferred;if(deferred&&!this.notesPending){this.notesDraftDeferred=null;setTimeout(()=>{if(this.live)void resumeNotesDraft(this,deferred);},0);}
