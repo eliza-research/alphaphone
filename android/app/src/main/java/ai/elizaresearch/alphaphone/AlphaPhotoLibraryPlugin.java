@@ -1,5 +1,7 @@
 package ai.elizaresearch.alphaphone;
 
+import ai.eliza.plugins.media.PermittedMediaCatalog;
+import ai.eliza.plugins.media.PermittedMediaReview;
 import android.content.*;
 import android.net.Uri;
 import android.os.Build;

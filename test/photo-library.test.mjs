@@ -39,9 +39,8 @@ test('agent album delegates reads and reviewed mutations to the canonical catalo
  assert.match(java,/catalog\.list\(/);assert.match(java,/catalog\.read\(/);assert.match(java,/review\.request\(/);
  assert.doesNotMatch(java,/MediaStore\.Files|createDeleteRequest|createTrashRequest|createFavoriteRequest/);
  assert.match(java,/LIBRARY_LOCKED/);assert.match(java,/LIBRARY_DENIED/);
- const catalog=readFileSync('android/app/src/main/java/ai/elizaresearch/alphaphone/PermittedMediaCatalog.java','utf8');
- assert.match(catalog,/generation_modified=\? AND generation_added=\?/);
- assert.match(catalog,/date_added>=\?/);assert.match(catalog,/date_added<=\?/);
+ // The catalog's generation fences and date bounds are the shared native media module's (tested there).
+ assert.match(java,/import ai\.eliza\.plugins\.media\.PermittedMediaCatalog;/);
 });
 
 test('scope parsing and honest scope copy',()=>{
@@ -206,8 +205,7 @@ test('agent album observes only while open and falls back to a bounded fresh cat
  assert.match(photos,/permitted\.watch\("photos",active\)/);
  const camera=readFileSync('apps/app/src/prototype/camera-adapter.ts','utf8');
  assert.match(camera,/watchLibrary\(!disposed&&!document\.hidden&&!!photosApi\?\.isActive\(\)&&permittedLibrary\(\)\)/);
- const catalogSource=readFileSync('android/app/src/main/java/ai/elizaresearch/alphaphone/PermittedMediaCatalog.java','utf8');
- assert.match(catalogSource,/boolean wanted=!watchers\.isEmpty\(\)&&!closed;/,'the observer is registered only while some view watches');
+ // The shared catalog registers its MediaStore observer only while some view watches (tested upstream).
  assert.match(java,/out\.put\("reset",true\)/);
  assert.match(adapter,/watch\(!!scope && scope.scope !== 'denied' && !scope.locked\)/);
  const agent=adapter.slice(adapter.indexOf('const agent: LibraryAgent'),adapter.indexOf('mountedAgent = agent;'));

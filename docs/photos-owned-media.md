@@ -166,7 +166,8 @@ and both-variant execution are pending.
 The Device library album retains the agent proposal, selection, review and receipt
 contract from #442. Its native facade (`AlphaPhotoLibraryPlugin`) uses the
 `AlphaPhotos` plugin's own `PermittedMediaCatalog` and `PermittedMediaReview`
-instances rather than constructing its own: one read epoch, one grant-change
+instances (the shared engines in elizaOS `plugins/plugin-native-media`, configured
+with Alpha's installed names in `AlphaMediaConfig`) rather than constructing its own: one read epoch, one grant-change
 invalidation, one MediaStore observer and one Android review at a time across both
 surfaces. Both use the same permission grants, typed per-volume collections,
 volume-qualified identities, provider-version/generation revisions and exact

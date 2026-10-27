@@ -1,4 +1,6 @@
 package ai.elizaresearch.alphaphone;
+import ai.eliza.plugins.media.DocumentBytes;
+import ai.eliza.plugins.media.MediaBytes;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
@@ -31,7 +33,7 @@ public final class AlphaNoteDocumentsPlugin extends Plugin {
    choose(call,new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("text/plain").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,title+".txt").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION),"exported");
   }catch(Exception error){call.resolve(result("too-large","Export requires valid UTF-8 text of at most 64 KiB."));}
  }
- private byte[] pdfBytes(PluginCall call){return DocumentExportBytes.pdf(call.getString("dataBase64"));}
+ private byte[] pdfBytes(PluginCall call){return DocumentBytes.pdf(call.getString("dataBase64"));}
  @PluginMethod public void exportPdf(PluginCall call){
   try{pdfBytes(call);String title=call.getString("title","Alpha scan").replaceAll("[\\\\/\\p{Cntrl}]","_");if(title.length()>100)title=title.substring(0,100);if(title.isBlank())title="Alpha scan";
    choose(call,new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/pdf").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,title+".pdf").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION),"exportedPdf");
@@ -40,7 +42,7 @@ public final class AlphaNoteDocumentsPlugin extends Plugin {
  @ActivityCallback private void exportedPdf(PluginCall call,ActivityResult response){Uri uri=chosen(call,response);if(uri==null)return;run(call,()->{
   boolean opened=false;try{
    byte[] content=pdfBytes(call);try(OutputStream out=getContext().getContentResolver().openOutputStream(uri,"wt")){if(out==null)throw new IOException();opened=true;out.write(content);out.flush();}
-   try(InputStream in=getContext().getContentResolver().openInputStream(uri)){DocumentExportBytes.verify(in,content);}
+   try(InputStream in=getContext().getContentResolver().openInputStream(uri)){MediaBytes.verify(in,content);}
    JSObject value=result("exported","PDF saved and exact bytes verified.");value.put("bytes",content.length);call.resolve(value);
   }catch(Exception error){call.resolve(result(opened?"unverified":"failed",opened?"The provider may have saved some or all PDF bytes. Inspect the destination before retrying.":"The selected destination could not be written."));}
  });}

@@ -53,20 +53,16 @@ test('both notice owner fences are written even when workflow cancellation fails
  assert.match(method,/if\(failed!=null\)throw failed;/);
 });
 
-test('an approved write request is applied only after the activity resumes',()=>{
- const review=java('PermittedMediaReview');
- assert.match(review,/afterResume\(request\);/);
- assert.match(review,/if\(lifecycle\.getCurrentState\(\)\.isAtLeast\(androidx\.lifecycle\.Lifecycle\.State\.RESUMED\)\)\{dispatch\(request\);return;\}/);
- assert.match(review,/event==androidx\.lifecycle\.Lifecycle\.Event\.ON_RESUME/);
- const launcher=body(review,'launcher=bridge.registerForActivityResult',' private void afterResume(');
- assert.doesNotMatch(launcher,/worker\.execute/,'the result callback never dispatches before resume');
- for(const code of ['DECLINED','STALE'])assert.match(review,new RegExp(`,${code}\\)`),`${code} rejections carry their code`);
+test('reviewed photo changes use the shared resume-gated review with Alpha\'s launch gate',()=>{
+ // Resume gating and rejection codes are the shared native media module's PermittedMediaReview (tested there).
+ const photos=java('AlphaPhotosPlugin');
+ assert.match(photos,/mediaReview=new PermittedMediaReview\(getBridge\(\),permitted,worker,LateLaunch::ask\);/);
+ assert.match(photos,/import ai\.eliza\.plugins\.media\.PermittedMediaReview;/);
 });
 
 test('album listing reads permitted members in batches and fences only the metadata',()=>{
- const photos=java('AlphaPhotosPlugin'),catalog=java('PermittedMediaCatalog');
- assert.match(catalog,/Map<String,JSObject> albumItems\(List<String\[\]> members\)/);
- assert.match(catalog,/AND _id IN \(/);
+ // Batched member reads are the shared PermittedMediaCatalog.albumItems (tested there).
+ const photos=java('AlphaPhotosPlugin');
  const rows=body(photos,' private JSArray permittedAlbumRows(',' private boolean hasPermittedMembers(');
  assert.match(rows,/permitted\.albumItems\(wanted\)/);assert.doesNotMatch(rows,/albumItem\(/,'no per-member fenced read');
  const custom=body(photos,' private void listCustomAlbum(','@PluginMethod public void albums(');

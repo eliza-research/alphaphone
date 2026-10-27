@@ -1,7 +1,12 @@
 package ai.elizaresearch.alphaphone;
-import ai.eliza.plugins.media.OwnedPhotoEdits;
-import ai.eliza.plugins.media.OwnedMediaConfig;
+import ai.eliza.plugins.media.MediaLibraryKey;
 import ai.eliza.plugins.media.OwnedCaptures;
+import ai.eliza.plugins.media.OwnedMediaConfig;
+import ai.eliza.plugins.media.OwnedPhotoEdits;
+import ai.eliza.plugins.media.OwnedVideoPlayback;
+import ai.eliza.plugins.media.PermittedMediaCatalog;
+import ai.eliza.plugins.media.PermittedMediaReview;
+import ai.eliza.plugins.media.VideoCopyEdits;
 
 import android.content.ContentResolver;
 import android.content.ContentUris;
@@ -22,7 +27,12 @@ import java.io.ByteArrayOutputStream;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Permission-filtered library reads and explicitly reviewed media management. */
+/**
+ * Permission-filtered library reads and explicitly reviewed media management. The catalog, review,
+ * edit-as-copy and playback engines are the shared native media module's; this plugin keeps Alpha's
+ * installed names (preference files, MediaStore folders, display-name prefixes, playback path) and
+ * its owned-media albums.
+ */
 @CapacitorPlugin(name="AlphaPhotos",permissions={
  @Permission(alias="libraryLegacy",strings={"android.permission.READ_EXTERNAL_STORAGE"}),
  @Permission(alias="libraryImages",strings={"android.permission.READ_MEDIA_IMAGES"}),
@@ -40,8 +50,7 @@ public class AlphaPhotosPlugin extends Plugin {
  private PermittedMediaCatalog permitted;
  private PermittedMediaReview mediaReview;
  private OwnedVideoPlayback playback;
- static final OwnedMediaConfig MEDIA_CONFIG=OwnedMediaConfig.builder("alpha")
-   .edits("Pictures/Alpha Phone/Edits/", "Alpha-edit-").captures("Pictures/", "SCAN_").build();
+ static final OwnedMediaConfig MEDIA_CONFIG=AlphaMediaConfig.MEDIA;
  private OwnedPhotoEdits edits;
  private VideoCopyEdits videoCopies;
  private OwnedCaptures captures;
@@ -54,11 +63,11 @@ public class AlphaPhotosPlugin extends Plugin {
  @Override public void load(){
   // Observation starts only while the Photos grid is open (watchLibrary). Playback grants recheck
   // their item's revision on every byte request, so unrelated media writes do not revoke them.
-  permitted=new PermittedMediaCatalog(getContext(),false,()->{if(!destroyed){diagnostic(Diagnostic.LIBRARY_CHANGED_CATALOG);notifyListeners("libraryChanged",new JSObject());}});mediaReview=new PermittedMediaReview(getBridge(),permitted,worker);edits=new OwnedPhotoEdits(getContext(), MEDIA_CONFIG,new OwnedPhotoEdits.SourceAccess(){
+  permitted=new PermittedMediaCatalog(getContext(),false,()->{if(!destroyed){diagnostic(Diagnostic.LIBRARY_CHANGED_CATALOG);notifyListeners("libraryChanged",new JSObject());}});mediaReview=new PermittedMediaReview(getBridge(),permitted,worker,LateLaunch::ask);edits=new OwnedPhotoEdits(getContext(), MEDIA_CONFIG,new OwnedPhotoEdits.SourceAccess(){
   public boolean accepts(String id){return id!=null&&id.startsWith("m:");}
   public Uri source(String id)throws Exception{revision(id);return permitted.uri(MediaLibraryKey.parse(id));}
   public String revision(String id)throws Exception{MediaLibraryKey key=MediaLibraryKey.parse(id);if(key.video)throw new IllegalArgumentException("Only still photos support edit copies");JSObject item=permitted.read(id,null,false);if(item.getLong("size")>32L*1024*1024)throw new IllegalArgumentException("Edit copies support source files up to 32 MB");return item.getString("mutationRevision");}
- });captures=new OwnedCaptures(getContext(), MEDIA_CONFIG);mediaVersions=getContext().getSharedPreferences("alpha-owned-media-versions",0);playback=new OwnedVideoPlayback(getBridge());getBridge().setWebViewClient(playback);}
+ });captures=new OwnedCaptures(getContext(), MEDIA_CONFIG);mediaVersions=getContext().getSharedPreferences("alpha-owned-media-versions",0);playback=new OwnedVideoPlayback(getBridge(),AlphaMediaConfig.PLAYBACK_PATH);getBridge().setWebViewClient(playback);}
  @PluginMethod public void libraryAccess(PluginCall call){call.resolve(permitted.access());}
  /** Photos grid enter/leave. The Device library album watches the same catalog under its own name. */
  @PluginMethod public void watchLibrary(PluginCall call){boolean active=call.getBoolean("active",false)&&!destroyed;permitted.watch("photos",active);JSObject out=new JSObject();out.put("active",active);call.resolve(out);}
@@ -128,7 +137,7 @@ public class AlphaPhotosPlugin extends Plugin {
  @PluginMethod public void saveEdit(PluginCall call){submit(call,()->{try{call.resolve(edits.save(call.getString("sessionId"),call.getInt("rotation",0),call.getBoolean("crop",false),call.getString("filter","none")));}catch(Exception e){call.reject(e.getMessage()==null?"Save outcome unknown; inspect Photos before retrying":e.getMessage());}});}
  @PluginMethod public void editResult(PluginCall call){if(VideoCopyEdits.isVideoOperation(call.getString("operationId"))){try{videoCopies().result(call.getString("operationId"),call);}catch(Exception unavailable){call.reject("Saved-copy outcome could not be confirmed");}return;}submit(call,()->{try{call.resolve(edits.result(call.getString("operationId")));}catch(Exception e){call.reject("Saved-copy outcome could not be confirmed");}});}
  @PluginMethod public void cancelEdit(PluginCall call){edits.cancel(call.getString("sessionId"));submit(call,()->{edits.releaseCancelled();call.resolve();});}
- private synchronized VideoCopyEdits videoCopies()throws java.io.IOException{if(destroyed)throw new java.io.IOException("Photo library closed");if(videoCopies==null)videoCopies=new VideoCopyEdits(getContext(),new VideoCopyEdits.Sources(){@Override public VideoCopyEdits.Source read(String key,String expected)throws Exception{return videoSource(key,expected,true);}@Override public VideoCopyEdits.Source recheck(String key,String expected)throws Exception{return videoSource(key,expected,false);}},()->!destroyed&&getActivity()!=null&&getActivity().hasWindowFocus());return videoCopies;}
+ private synchronized VideoCopyEdits videoCopies()throws java.io.IOException{if(destroyed)throw new java.io.IOException("Photo library closed");if(videoCopies==null)videoCopies=new VideoCopyEdits(getContext(),MEDIA_CONFIG,new VideoCopyEdits.Sources(){@Override public VideoCopyEdits.Source read(String key,String expected)throws Exception{return videoSource(key,expected,true);}@Override public VideoCopyEdits.Source recheck(String key,String expected)throws Exception{return videoSource(key,expected,false);}},()->!destroyed&&getActivity()!=null&&getActivity().hasWindowFocus());return videoCopies;}
  // Native-only reviewed recovery; deliberately absent from the Capacitor/JS API.
  void preserveClosedVideoCopy(String operationId,String expectedRecordHash,PluginCall call){
   if(destroyed||getActivity()==null||!getActivity().hasWindowFocus()){call.reject("Video copy preservation refused");return;}
