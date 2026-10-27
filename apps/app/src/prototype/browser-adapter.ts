@@ -472,7 +472,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     if(reading && event.id===state()?.cur && (event.loading || event.error || event.navigation!==previous?.navigation || event.url!==previous?.url)) stopReading();
     if ((event.url && event.url !== previous?.url) || (event.loading && !previous?.loading))
       documentRevisions.set(event.id, (documentRevisions.get(event.id) || 0) + 1);
-    const committedPage = Capacitor.isNativePlatform() && !!event.url && !!event.committed && !event.loading && !event.error;
+    const committedPage = !!event.url && !!event.committed && !event.loading && !event.error && !event.externalOnly;
     // Embedded web pages report real commits too; an external-only fallback never gains reading authority.
     metadata.set(event.id,{...metadata.get(event.id),...event,...(event.externalOnly?{committed:false}:{}),...(committedPage?{savedUrl:event.url}:{})});
     // Private tabs never enter history or saved tabs.

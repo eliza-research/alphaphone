@@ -66,7 +66,8 @@ test('every subview of a retained view is opened by a state that asserts it is t
   // Menus, search fields, sheets and the Undo toast are states of their own.
   for (const step of ["['New automation', 'Edit When step']", "['Add Read step']", "['Connections', 'Slack']", "['Browser', 'Menu']", "['Photos', 'Search photos']", "['Files', 'Search files']", "['Search email']", "['Menu', 'Share']", "['Share photo']", "['View and sort']", "['Move file']", "['Delete file']"])
     assert.ok(states.includes(step), `${step} is swept`);
-  assert.match(states, /legacyNotes\('Notes search', \['Search notes'\]\)/, 'retained Notes search is swept after explicit source selection');
+  assert.ok(states.includes("legacyNotes('Notes search', ['Search notes'])"), 'retained Notes search is swept');
+  assert.match(states, /const legacyNotes = [\s\S]*?await openLegacyNotes\(page\);[\s\S]*?await press\(page, steps\)/, 'retained Notes states select their source before opening controls');
   for (const page of ['Character', 'Accounts', 'Connections', 'Notifications', 'Calendar', 'Password manager', 'Models', 'Display', 'Privacy & data', 'About', 'Scheduled digests', 'Agent connection'])
     assert.ok(states.includes(`['Settings', '${page}']`), `Settings > ${page} is swept`);
 });

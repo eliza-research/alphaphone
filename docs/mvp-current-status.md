@@ -2,6 +2,8 @@
 
 Current source admission: SDK `6497825b38cbe41b3677c0a445341fec900f0dd2` is the reviewed Eliza develop snapshot admitted on October 27 UTC, following the develop merge of elizaOS/eliza#37971. All six original open PR heads are integrated in the candidate branch; main still requires independent review. Exact native and voice source comparisons are recorded in `docs/evidence/merge-build-native-source-2026-10-26.json`; current build evidence remains bound to its recorded source and artifact hashes. No new device or user acceptance is claimed.
 
+Final local validation for this snapshot passed `npm run verify` (2,089 tests: 2,085 passed, four skipped), all 305 production browser tests without retries, and strict `npm run android:build:local` for standalone and launcher debug/release APKs. The [final evidence record](evidence/pr624-final-2026-10-27/summary.json) binds the build inputs, APK hashes, complete packaged notices and independent inspection. Release APKs remain unsigned and native voice remains unqualified; these results do not establish emulator, image, real-provider or physical-device acceptance.
+
 
 Previous source admission: SDK `00ee639798a02f3d7f2fae61ea8b902160e85d72` is the October 24 upstream main snapshot. It relocates Android local inference into the shared plugin and changes the native engine to `0d9fd4b9db239bbf851068f98c99f4263f8c05c5` and the Phonon model layout. Fresh native builds and component execution are recorded in [native-c95a evidence](evidence/native-c95a/README.md); prior evidence remains historical. Complete native/device qualification and user acceptance remain false.
 
