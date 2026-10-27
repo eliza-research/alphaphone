@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "a681dc583ffb7c7c6ecec9e6bcee944ea49f20b2",
+  "head": "b3867a4805626e39c268c13df452a797b69c6e6a",
   "recordedAt": "2026-10-27",
-  "command": "git -C vendor/eliza rev-list --left-right --count 04658de1b942510e0d37efc777c154530f5c0ef1...a681dc583ffb7c7c6ecec9e6bcee944ea49f20b2",
+  "command": "git -C vendor/eliza rev-list --left-right --count 04658de1b942510e0d37efc777c154530f5c0ef1...b3867a4805626e39c268c13df452a797b69c6e6a",
   "status": "diverged",
-  "aheadBy": 70,
+  "aheadBy": 72,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -286,6 +286,14 @@
     {
       "sha": "a681dc583ffb7c7c6ecec9e6bcee944ea49f20b2",
       "subject": "fix(android): bound executable hashing during resident shutdown"
+    },
+    {
+      "sha": "e6b30fa9e6c758a9dd1cdc48be41c776f880eb03",
+      "subject": "fix(context): retain historical dates at the model wire boundary"
+    },
+    {
+      "sha": "b3867a4805626e39c268c13df452a797b69c6e6a",
+      "subject": "chore(diagnostics): name the slowest existing action validation"
     }
   ],
   "pullRequests": [
@@ -379,8 +387,7 @@
     }
   ],
   "provenance": {
-    "method": "Local immutable graph comparison against retained develop baseCommit; no GitHub API or develop refresh performed",
-    "priorHead": "1e4a4a274cb1712eb733ab1b4e1f96adc0bfa703",
-    "currentParent": "1e4a4a274cb1712eb733ab1b4e1f96adc0bfa703"
+    "method": "Local immutable graph against retained develop baseCommit; no fresh GitHub/develop query",
+    "priorHead": "a681dc583ffb7c7c6ecec9e6bcee944ea49f20b2"
   }
 }
