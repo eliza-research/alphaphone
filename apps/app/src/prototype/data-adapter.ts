@@ -180,9 +180,8 @@ export const HOME_SOURCES_CHANGED = 'alpha:home-sources-changed';
  * latestRetainedDigest()); until one does, Home shows the honest not-connected / no-brief state. */
 const homeSources: {attention: () => HomeAttentionSummary | null; brief: () => HomeBriefSummary | null} = {attention: () => null, brief: () => null};
 export function setHomeSources(next: Partial<typeof homeSources>) {
-  const safe = <T,>(read: () => T | null) => () => { try { return read(); } catch { return null; } };
-  if (next.attention) homeSources.attention = safe(next.attention);
-  if (next.brief) homeSources.brief = safe(next.brief);
+  if (next.attention) homeSources.attention = next.attention;
+  if (next.brief) homeSources.brief = next.brief;
   window.dispatchEvent(new Event(HOME_SOURCES_CHANGED));
 }
 

@@ -43,7 +43,7 @@ function setAttention(next: Partial<InboxAttention>) {
   const value = { ...attention, ...next };
   if (JSON.stringify(value) === JSON.stringify(attention)) return;
   attention = value;
-  for (const listener of [...attentionListeners]) { try { listener(); } catch { /* a listener failure never blocks Inbox */ } }
+  for (const listener of [...attentionListeners]) listener();
 }
 /** Home attention summary, computed from the connected account and the last explicitly loaded Inbox page. */
 export function inboxAttention(): InboxAttention { return { ...attention }; }
