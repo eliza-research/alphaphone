@@ -140,7 +140,7 @@ test("permissions: standalone has none, the launcher declares read access only, 
 
 test("telephony shares the bounded Contacts provider adapter", () => {
   const plugin=read(`${JAVA}/AlphaTelephonyPlugin.java`);
-  assert.match(plugin,/new AlphaContactsCatalog\(getContext\(\)\)\.list\(query, limit, cancel\)/);
+  assert.match(plugin,/new ContactsCatalog\(getContext\(\)\)\.list\(query, limit, cancel\)/);
   assert.doesNotMatch(plugin,/ContactsReader/);
 });
 test("queued contacts cannot return data after access or lifecycle changes", () => {

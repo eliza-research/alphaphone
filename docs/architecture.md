@@ -284,10 +284,26 @@ capability is decided natively by `AlphaImageCapability`: the launcher build wit
 mocks, installed from a system partition (`FLAG_SYSTEM`), with the `<package>.aosp_image`
 system feature that `scripts/stage-aosp.mjs` declares in the image product. The launcher
 flavor, test mocks, URLs and saved state never establish it. Only then does `MainActivity`
-register `AlphaTelephonyPlugin` (read-only contacts through upstream `ContactsReader`, role
+register `AlphaTelephonyPlugin` (read-only contacts through the shared `ContactsCatalog`, role
 and SIM status, dialer and SMS handoffs, SMS/MMS provider reads and reviewed native sends); the
-renderer reads its presence from the injected plugin headers (`apps/app/src/runtime/aosp-image.ts`). Standalone APKs declare no contacts or
-phone-state permission. Gmail is available in both distributions through Eliza Cloud, with
+renderer reads its presence from the injected plugin headers (`apps/app/src/runtime/aosp-image.ts`,
+using the shared `detectTelephonyProfile`). Standalone APKs declare no contacts or
+phone-state permission.
+
+Since the October 27 consolidation the telephony behaviour is shared upstream and Alpha keeps
+only identity: `AlphaTelephonyPlugin` subclasses `TelephonyPlugin` (plugin-native-messages);
+`AlphaTelephony` supplies the installed journal slot, legacy plaintext journal, retired-ID
+namespace, callback actions, data scheme, extras and receiver; the renderer client is
+`@elizaos/contracts/native-telephony` and the send contract `@elizaos/contracts/sms-send`.
+The launcher declares the dialer-role components (`AlphaInCallService`, `AlphaCallActivity`,
+`AlphaDialPadActivity`, shared from plugin-native-phone) and the SMS-role components
+(`AlphaSmsDeliverReceiver`, `AlphaMmsWapPushReceiver`, `AlphaMmsResultReceiver`,
+`AlphaRespondViaMessageService`, `AlphaSmsComposeActivity` and the shared `MmsFileProvider`)
+disabled. `AlphaTelephonyRoles` enables them only while `AlphaImageCapability` verifies the image,
+so Android can offer the roles nowhere else and the owner still chooses them in Android's dialog.
+As SMS role holder Alpha stores incoming SMS and MMS before notifying, and every outgoing text,
+quick replies included, is a reviewed, journaled send. Telecom owns emergency routing; the
+system emergency dialer does not depend on Alpha. Gmail is available in both distributions through Eliza Cloud, with
 read access first and one incremental change grant (`apps/app/src/runtime/gmail-grants.ts`).
 
 Native reminders use the shared `plugin-native-reminders` engine and bridge.
@@ -326,15 +342,17 @@ pin rollback does not by itself establish APK or OS rollback compatibility.
 The AOSP telephony contract additionally requires the canonical production image admission
 (`AlphaImageCapabilities`): release launcher, system install and the product-partition RRO.
 The feature XML is an additional telephony contract marker, never an alternative admission path.
-Contacts uses the bounded AlphaContacts adapter and its native capability response; Phone and SMS
-views remain deferred. Telephony contact reads recheck permission, unlock and lifecycle state
+Contacts uses the bounded AlphaContacts adapter (shared `ContactsCatalog`) and its native capability
+response. The Phone view stays deferred in the renderer; on the image the dialer role surfaces are
+native (shared call screen and dial pad). Telephony contact reads recheck permission, unlock and lifecycle state
 before and after asynchronous provider reads.
 
 ### SMS/MMS on the image (#421)
 
 Text messaging has no account or OAuth grant: identity is the device's active subscriptions and
-Android roles. Only the launcher manifest declares `READ_SMS` and `SEND_SMS` (both hard-restricted,
-so an ordinary sideloaded install cannot hold them) and the non-exported `AlphaSmsSendReceiver`;
+Android roles. Only the launcher manifest declares `READ_SMS`, `SEND_SMS` and the SMS-role
+`RECEIVE_*` permissions (all hard-restricted, so an ordinary sideloaded install cannot hold them)
+and the non-exported `AlphaSmsSendReceiver`;
 the standalone manifest removes them and `scripts/apk.mjs` checks the packaged permissions per flavor.
 `AlphaTelephonyPlugin` adds, behind the same image capability and unlocked-foreground check:
 
@@ -363,9 +381,12 @@ Delivery outcome is read from the provider row the platform writes for a non-def
 (matched by address, Alpha as creator, a date after the journal entry and body hash), because an
 immutable delivery PendingIntent cannot carry the status-report PDU. Each part's report overwrites the
 one row of a multipart message, so multipart delivery stays "unknown" and only single-part messages can
-read "delivered". The Messages
-view, agent `sms_send` proposals and the `sms.send.v1` device capability stay unavailable until the
-shared contract is in the reviewed pin. JVM and renderer tests cover the journal, mapping and contract;
+read "delivered". The journal,
+provider reads, dispatch and delivery reconciliation described here are the shared
+plugin-native-messages implementation (`SmsSendJournal`, `SmsProviderReader`, `SmsTelephony`);
+Alpha's earlier copies are deleted. MMS notifications are downloaded and stored by the shared
+`MmsWapPushReceiver`/`MmsResultReceiver` only while Alpha holds the SMS role; outgoing user MMS
+is not offered yet. JVM and renderer tests cover the journal, mapping and contract;
 grants on the image, real provider rows, carrier delivery reports and owned SMS/MMS endpoints remain
 image/device qualification for #421.
 

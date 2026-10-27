@@ -208,7 +208,8 @@ function launches(name, code) {
     if (method === "launch" ? !launchers.has(receiver) : receiver !== undefined && receiver !== "super" && receiver !== "this") continue;
     // A declaration of the method, not a call of it.
     if (/\b(?:void|boolean)\s+$/.test(code.slice(Math.max(0, at - 12), at))) continue;
-    let guarded = /LateLaunch\.ask\(\s*\w+\s*,\s*\(\)\s*->\s*$/.test(code.slice(Math.max(0, at - 80), at));
+    // LateLaunch.ask in Alpha; the shared TelephonyPlugin base has the same guard as its launch(call, ...) helper.
+    let guarded = /(?:LateLaunch\.ask|(?<![\w.])launch)\(\s*\w+\s*,\s*\(\)\s*->\s*$/.test(code.slice(Math.max(0, at - 80), at));
     for (const block of all.filter(block => block.start < at && at < block.end).sort((a, b) => b.start - a.start)) {
       if (guarded || block.kind === "deferred") break;
       if (block.kind === "try" && block.catches.some(type => ANSWERS_A_MISSING_LAUNCHER.has(type))) guarded = true;
@@ -257,6 +258,11 @@ test("Capacitor's own permission request, and the shared plugins' requests an ap
       // for the obsolete legacy permission together with the current media grants.
       assert.match(read(name),/@Override @PluginMethod public void requestPermissions\(PluginCall call\)\{(?:requestLibraryAccess|requestAccess)\(call\);\}/);
       assert.match(read(name),/LateLaunch\.ask\(call,\(\)->requestPermissionForAliases\(aliases,call,"libraryPermissionResult"\)\)/);
+    } else if(name==='AlphaTelephonyPlugin.java') {
+      // The shared TelephonyPlugin base answers a late request the same way (its launch helper rejects with CLOSED).
+      const base=fs.readFileSync("vendor/eliza/plugins/plugin-native-messages/android/src/main/java/ai/eliza/plugins/messages/TelephonyPlugin.java","utf8");
+      assert.match(base,/@Override @PluginMethod public void requestPermissions\(PluginCall call\) \{ if \(refused\(call\)\) return; launch\(call, \(\) -> super\.requestPermissions\(call\)\); \}/);
+      assert.match(base,/protected static boolean launch\(PluginCall call, Runnable start\) \{\n  try \{ start\.run\(\); return true; \} catch \(IllegalStateException gone\) \{ call\.reject\(CLOSED\); return false; \}/);
     } else assert.ok(guardedOverride(read(name), "requestPermissions"), `${name}: requestPermissions is overridden with the guard`);
   }
 

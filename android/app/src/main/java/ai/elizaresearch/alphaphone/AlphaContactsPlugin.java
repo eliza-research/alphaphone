@@ -1,5 +1,6 @@
 package ai.elizaresearch.alphaphone;
 
+import ai.eliza.plugins.contacts.ContactsCatalog;
 import android.Manifest;
 import android.app.KeyguardManager;
 import android.content.Intent;
@@ -36,7 +37,7 @@ public final class AlphaContactsPlugin extends Plugin {
   long ticket=generation.get();android.os.CancellationSignal cancel=new android.os.CancellationSignal();reads.add(cancel);
   try{worker.execute(()->{try{
    if(!readable()||cancel.isCanceled()||!generation.current(ticket,"contacts","contacts",true))throw new SecurityException();
-   JSObject result=new AlphaContactsCatalog(getContext()).list(call.getString("query",""),call.getInt("limit",50),cancel);
+   JSObject result=new ContactsCatalog(getContext()).list(call.getString("query",""),call.getInt("limit",50),cancel);
    getActivity().runOnUiThread(()->{if(readable()&&!cancel.isCanceled()&&generation.current(ticket,"contacts","contacts",true))call.resolve(result);else call.reject("Contacts access changed. Refresh after unlocking.");});
   }catch(Exception unavailable){call.reject("Contacts could not be read. Check access and refresh.");}finally{reads.remove(cancel);}});}catch(java.util.concurrent.RejectedExecutionException retired){reads.remove(cancel);call.reject("Contacts closed");}
  }
@@ -47,7 +48,7 @@ public final class AlphaContactsPlugin extends Plugin {
  @PluginMethod public void edit(PluginCall call){
   if(!foreground()||!readable()){call.reject("Contacts access is unavailable");return;}
   try{worker.execute(()->{try{
-   android.net.Uri uri=new AlphaContactsCatalog(getContext()).reviewed(call.getString("id"),call.getString("lookup"),call.getString("revision"));
+   android.net.Uri uri=new ContactsCatalog(getContext()).reviewed(call.getString("id"),call.getString("lookup"),call.getString("revision"));
    getActivity().runOnUiThread(()->{if(!foreground()||!readable()){call.reject("Return to Contacts before editing");return;}launch(call,new Intent(Intent.ACTION_EDIT).setDataAndType(uri,ContactsContract.Contacts.CONTENT_ITEM_TYPE));});
   }catch(Exception unavailable){call.reject("Contact changed or is unavailable. Refresh before editing.");}});}catch(java.util.concurrent.RejectedExecutionException retired){call.reject("Contacts closed");}
  }

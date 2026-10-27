@@ -1,5 +1,6 @@
 package ai.elizaresearch.alphaphone;
 
+import ai.eliza.plugins.contacts.ContactsCatalog;
 import ai.eliza.plugins.messages.SmsTelephonyConfiguration;
 import ai.eliza.plugins.messages.TelephonyPlugin;
 import android.Manifest;
@@ -14,7 +15,7 @@ import com.getcapacitor.annotation.Permission;
  * Contacts, Telecom and SMS on the Alpha AOSP image only (issues #420 and #421). The behaviour is the
  * shared {@link TelephonyPlugin}: roles and SIMs, dialer and SMS handoffs, bounded SMS/MMS provider
  * reads and reviewed native sends journaled by the shared core. Alpha supplies its installed identity
- * ({@link AlphaTelephony}) and the bounded contact search over {@link AlphaContactsCatalog}.
+ * ({@link AlphaTelephony}) and the bounded contact search over {@link ContactsCatalog} (shared plugin-native-contacts).
  *
  * MainActivity registers this plugin only when {@link AlphaImageCapability} verifies the image, so a
  * standalone APK or a sideloaded launcher APK has no such plugin; each method checks the capability
@@ -36,7 +37,7 @@ public class AlphaTelephonyPlugin extends TelephonyPlugin {
   String query = call.getString("query", ""); Integer limit = call.getInt("limit", 25);
   if (query == null || query.length() > 128 || limit == null || limit < 1 || limit > 100) { call.reject("Invalid contact search", "invalid"); return; }
   fencedRead(call, "contacts", "Contacts", cancel -> {
-   JSObject bounded = new AlphaContactsCatalog(getContext()).list(query, limit, cancel);
+   JSObject bounded = new ContactsCatalog(getContext()).list(query, limit, cancel);
    JSArray records = new JSArray(); org.json.JSONArray rows = bounded.getJSONArray("contacts");
    for (int i = 0; i < rows.length(); i++) {
     org.json.JSONObject row = rows.getJSONObject(i); JSObject item = new JSObject();
