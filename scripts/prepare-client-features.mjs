@@ -170,6 +170,7 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/contracts/src/calendar-linked-sync.ts',
   'plugins/plugin-assistant/src/services/device-actions/camera-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/notes-query-result.ts',
+  'plugins/plugin-assistant/src/services/device-actions/sms-contract.ts',
   'packages/contracts/src/sms-send.ts',
   'packages/contracts/src/native-telephony.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-contract.ts',
