@@ -1,6 +1,6 @@
 import {developmentWorkflowRequest} from './development-workflows';
 import {devSurfacesEnabled} from '../build-flags';
-import {developmentIdentity,readDevelopmentIdentity,verifyDevelopmentIdentity,assertDevelopmentIdentity,type DevelopmentIdentity} from './development-identity';
+import {developmentIdentity,readDevelopmentIdentity,verifyDevelopmentIdentity,assertDevelopmentIdentity} from './development-identity';
 import {developmentActionRequest} from './development-actions';
 import {browserDevProfile} from './dev-profile';
 import {readDevelopmentAgent,editDevelopmentAgent,type DevelopmentConversation as Conversation} from './development-agent-document';
