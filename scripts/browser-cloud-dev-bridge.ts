@@ -2,6 +2,7 @@ import {productionCloud, stagingCloud, cloudStorageNamespace} from '../apps/app/
 import {createCloudResidentHost} from './cloud-resident-host.mjs';
 import {managedGoogleRequest,boundedServiceJson,object} from '../backend/managed-google-route-policy.ts';
 import {CLOUD_EMAIL_CODE,emailCodeExpiresAt,emailCodeResendAt,emailCodeSendBody,emailCodeVerifyBody} from './cloud-email-code.ts';
+import {parseCloudServiceInfo} from '../apps/app/src/runtime/cloud-service-info.ts';
 import {randomUUID,createHash,randomBytes} from 'node:crypto';
 import {mkdir,readFile,writeFile,rename,lstat} from 'node:fs/promises';
 import path from 'node:path';
@@ -88,6 +89,14 @@ export function createBrowserCloudDevHandler(options:{profile:string;request?:ty
   }finally{void signInCall(env,'/steward/auth/logout',typeof refresh==='string'?{refreshToken:refresh}:{},AbortSignal.timeout(10000),token).catch(()=>{});}
  }
  async function signInOperation(data:Record<string,any>,signal:AbortSignal){
+  if(data.operation==='signInServiceInfo'){
+   if(Object.keys(data).some(key=>key!=='operation'&&key!=='environment'))throw signInFailure('invalid-request');
+   const env=environment(data.environment);if(options.environment&&env!==options.environment)throw signInFailure('invalid-request');
+   const bounded=AbortSignal.any([signal,AbortSignal.timeout(15000)]),response=await canonical(env,'/api/public/service',bounded,{method:'GET'});
+   if(response.status!==200){await response.body?.cancel();throw signInFailure('unavailable');}
+   const result=await boundedServiceJson(response);bounded.throwIfAborted();
+   return {success:true,version:1,service:parseCloudServiceInfo(result)};
+  }
   if(data.operation==='signInCancel'){signIn?.controller.abort();signIn=null;await serial(async()=>{});return {};}
   if(data.operation==='signInStatus')return {active:!!signIn,inApp:true,google:false,email:true};
   if(data.operation==='signInStartEmail'){
