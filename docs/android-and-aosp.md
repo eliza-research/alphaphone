@@ -498,7 +498,7 @@ logs remain in the campaign artifacts and do not count as a completed image.
 
 Cuttlefish's Android 17 product ignores all legacy `Android.mk` modules. Image
 staging therefore emits an `android_app_import` plus required `prebuilt_app_native`
-modules. The recorded `android/aosp/app-native/soong-app-native.patch` adds that
+modules. The recorded `vendor/eliza/packages/os/android/patches/soong-app-native/soong-app-native.patch` adds that
 module type to install the admitted ABI payloads under
 `/product/app/AlphaPhone/lib/<arch>`; `config.fs` preserves executable modes for
 the runtime and loader. APK bytes remain unchanged. Apply this exact patch and

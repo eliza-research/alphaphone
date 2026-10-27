@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { agentBundlePackageDirs, BUN_ENTRY, collectNotices, finishEntry, loadTemplates, packagedRuntimePresent, runtimeEntries, ROOT, shippedPackagedRuntime, UNKNOWN, UNVERIFIED } from '../scripts/generate-licenses.mjs';
+import { BUN_ENTRY, collectNotices, finishEntry, loadTemplates, packagedRuntimePresent, runtimeEntries, ROOT, shippedPackagedRuntime, UNKNOWN, UNVERIFIED } from '../scripts/generate-licenses.mjs';
 import {AGENT_BUNDLE_DEPENDENCIES, readAgentBundleDependencies, stageAgentBundleDependencies} from '../scripts/agent-bundle-dependencies.mjs';
 import {createHash} from 'node:crypto';
 import { licenceFlagLines } from '../scripts/licence-policy.mjs';
@@ -57,13 +57,6 @@ function stagedRuntime(t) {
   recordDependencies();
   return { root, agent, source, recordDependencies };
 }
-
-test('legacy bundle path comments retain their scoped-package fixture API', () => {
-  assert.deepEqual(agentBundlePackageDirs([
-    '// ../../node_modules/.bun/a@1.0.0/node_modules/a/x.js', '// ../../node_modules/.bun/a@1.0.0/node_modules/a/y.js',
-    '// node_modules/.bun/@s+b@2.0.0/node_modules/@s/b/z.js', '// ../../plugins/plugin-sql/src/index.ts', 'var s = "// ../../node_modules/fake/x.js";',
-  ].join('\n')), ['node_modules/.bun/@s+b@2.0.0/node_modules/@s/b', 'node_modules/.bun/a@1.0.0/node_modules/a']);
-});
 
 test('staging retains the producer inventory independently of compact bundle text', t => {
   const {agent, source} = stagedRuntime(t);

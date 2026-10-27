@@ -337,3 +337,12 @@ therefore must not substitute for the output hash check on either platform.
 The attached rebuild workspace retains receipts, conversion scripts, logs and
 model hashes under `test-results/rebuild-oct14` and `.eliza/native-oct14`.
 These are development build inputs, not a production qualification declaration.
+
+### Owner-bound wake invocation
+
+The shared ElizaSense bridge binds wake invocations to the active authenticated
+owner, agent and session. AlphaListener remains a compatibility alias for status
+and settings. Cold process starts open the assistant with the microphone closed;
+a wake starts voice automatically only when the native process already had the
+same authenticated owner binding. Locked, stale, consumed or changed-owner wakes
+never start capture.

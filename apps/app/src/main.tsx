@@ -2,7 +2,7 @@
 import './browser/register';
 import {installCanonicalNotesView} from './prototype/canonical-notes-ui';
 import {installCanonicalCalendarDrafts} from './prototype/canonical-calendar-drafts';
-import {installAgentCalendarAdapter,nativeCalendarScope,legacyGoogleCalendarScope} from './prototype/agent-calendar-adapter';
+import {installAgentCalendarAdapter,deviceCalendarScope,legacyGoogleCalendarScope} from './prototype/agent-calendar-adapter';
 import {Capacitor} from '@capacitor/core';
 import {ownerReminderNotifications} from './runtime/owner-reminder-notification-port';
 import type {ReminderNotificationBinding} from './runtime/owner-reminder-notification-protocol';
@@ -115,10 +115,10 @@ if (!fixture) {
   installPrototypeCameraAdapter(Component, VIEWS);
   installAgentAdapter(Component, VIEWS);
   installReminderAdapter(Component, VIEWS);
-  installCalendarAdapter(Component, VIEWS, {active:nativeCalendarScope});
+  installCalendarAdapter(Component, VIEWS, {active:deviceCalendarScope});
   if(isAndroid){installContactsAdapter(Component,VIEWS);installSmsAdapter(Component,VIEWS);}
-  installCalendarFormDraftAdapter(Component, VIEWS, {active:shell=>nativeCalendarScope(shell)||shell?.vget('calendar').form?.cal==='alpha-reminders'});
-  installCalendarEditDraftAdapter(Component, VIEWS, {active:shell=>nativeCalendarScope(shell)||shell?.vget('calendar').form?.cal==='alpha-reminders'});
+  installCalendarFormDraftAdapter(Component, VIEWS, {active:shell=>deviceCalendarScope(shell)||shell?.vget('calendar').form?.cal==='alpha-reminders'});
+  installCalendarEditDraftAdapter(Component, VIEWS, {active:shell=>deviceCalendarScope(shell)||shell?.vget('calendar').form?.cal==='alpha-reminders'});
   installGoogleCalendarViewAdapter(Component, VIEWS, {active:legacyGoogleCalendarScope,preserveReadOnly:true});
   installNoteOriginAdapter(Component, VIEWS);
   installPrototypeDataAdapter(Component, VIEWS);
@@ -320,6 +320,6 @@ async function mountPhone() {
   }
   createRoot(document.getElementById('root')!).render(<RootErrorBoundary><Phone /></RootErrorBoundary>);
   // The image's always-on listener heard the wake phrase: start the on-device voice assistant.
-  if (isAndroid && assistantSurface) installListenerInvocation(() => shell, { connectionOpen: () => connectionController.getSnapshot().open, connected: () => !!connectionController.getSnapshot().session && !connectionController.getSnapshot().busy, voiceActive: () => !!document.querySelector('[data-alpha-chat-recorder]'), subscribe: listener => connectionController.subscribe(listener) });
+  if (isAndroid && assistantSurface) installListenerInvocation(() => shell, { authority: () => { const port=connectionController.getAppRecordClient(); if(!port)return null; try{if(!port.current())return null;return JSON.stringify([port.sessionId,port.scope??null,port.identity.ownerId,port.identity.agentId,port.identity.sessionId,port.identity.origin]);}catch{return null;} }, connectionOpen: () => connectionController.getSnapshot().open, connected: () => !!connectionController.getSnapshot().session && !connectionController.getSnapshot().busy, voiceActive: () => !!document.querySelector('[data-alpha-chat-recorder]'), subscribe: listener => connectionController.subscribe(listener) });
 }
 void mountPhone();

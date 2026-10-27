@@ -3,6 +3,7 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {verifyDeviceSource} from '../vendor/eliza/packages/os/scripts/android/verify-device-source.mjs';
+import {soongAppNativePatch} from '../vendor/eliza/packages/os/scripts/android/soong-app-native.mjs';
 import {loadProfile, verifyProfileSource} from '../vendor/eliza/packages/os/scripts/android/verify-source-lock.ts';
 
 export const defaultLockPath = fileURLToPath(new URL('../vendor/eliza/packages/os/android/sources/pixel10a-stallion.json', import.meta.url));
@@ -27,8 +28,9 @@ export {senseSystemuiPatch as listenerSystemuiPatch} from '../vendor/eliza/packa
 
 /** Explicit host-build patches; defaults and device source remain unchanged. */
 export function aospBuildPatch(bundle) {
-  if (!['soong-memory', 'soong-app-native'].includes(bundle)) throw Error(`Unknown AOSP build patch: ${bundle}`);
-  const directory = fileURLToPath(new URL(bundle === 'soong-memory' ? '../android/aosp/build-host/' : '../android/aosp/app-native/', import.meta.url));
+  if (bundle === 'soong-app-native') return soongAppNativePatch();
+  if (bundle !== 'soong-memory') throw Error(`Unknown AOSP build patch: ${bundle}`);
+  const directory = fileURLToPath(new URL('../android/aosp/build-host/', import.meta.url));
   const bytes = fs.readFileSync(path.join(directory, 'manifest.json')), manifest = JSON.parse(bytes);
   if (digest(fs.readFileSync(path.join(directory, manifest.patch))) !== manifest.patchSha256) throw Error(`AOSP build patch ${bundle} hash mismatch`);
   return {name:bundle, manifest, manifestSha256:digest(bytes)};

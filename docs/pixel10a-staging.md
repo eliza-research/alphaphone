@@ -7,8 +7,8 @@ manifest's `build/soong` revision. From this repository, after setting `AOSP_SOU
 to the admitted source checkout:
 
 ```sh
-git -C "$AOSP_SOURCE/build/soong" apply --check "$PWD/android/aosp/app-native/soong-app-native.patch"
-git -C "$AOSP_SOURCE/build/soong" apply "$PWD/android/aosp/app-native/soong-app-native.patch"
+git -C "$AOSP_SOURCE/build/soong" apply --check "$PWD/vendor/eliza/packages/os/android/patches/soong-app-native/soong-app-native.patch"
+git -C "$AOSP_SOURCE/build/soong" apply "$PWD/vendor/eliza/packages/os/android/patches/soong-app-native/soong-app-native.patch"
 ```
 
 The following stages a new directory; it does not patch the source, build or flash

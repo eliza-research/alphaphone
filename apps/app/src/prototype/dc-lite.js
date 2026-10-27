@@ -94,7 +94,7 @@ import templateHtml from "./template.html?raw";
     if (n.nodeType === 3) {
       var t = n.nodeValue;
       if (!t.trim() && /\n/.test(t)) return null;
-      var whole = t.match(WHOLE);
+      var whole = t.trim().match(WHOLE);
       var value = whole ? lookup(whole[1], scope) : null;
       if (React.isValidElement(value)) return h(React.Fragment, { key: key }, value);
       return t.indexOf("{{") >= 0 ? interp(t, scope) : t;

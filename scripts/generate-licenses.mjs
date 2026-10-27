@@ -676,14 +676,6 @@ export function packagedRuntimePresent(root = ROOT, agentDir = path.join(root, A
   return fs.existsSync(path.join(agentDir, 'agent-bundle.js')) && fs.existsSync(path.join(agentDir, 'android-agent-runtime-provenance.json'));
 }
 
-/** Legacy unminified-bundle fixture parser; packaged notice generation uses the inventory. */
-export function agentBundlePackageDirs(bundleText) {
-  const dirs = new Set();
-  for (const match of bundleText.matchAll(/^\/\/ (?:\.\.\/)*(node_modules\/(?:\.bun\/[^/\s]+\/node_modules\/)?(?:@[^/\s]+\/)?[^/\s@][^/\s]*)\//gm))
-    dirs.add(match[1]);
-  return [...dirs].sort();
-}
-
 function runtimePackageEntry(dir, bundle, templates, errors) {
   if (!fs.existsSync(path.join(dir, 'package.json'))) { errors.push(`${bundle}: ${dir} is not in the prepared runtime source; run npm run agent:prepare`); return null; }
   const manifest = readManifest(dir, `${bundle}: ${dir}`, errors);

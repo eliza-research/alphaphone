@@ -32,8 +32,42 @@ function matches(actual, expected) {
     Object.entries(expected).every(([file, digest]) => actual[file] === digest);
 }
 export const CLIENT_FEATURE_PATHS = [
+  'packages/contracts/src/device-action-execution.ts',
+  'packages/ui/src/agent-surface/AgentSurfaceContext.hooks.ts',
+  'packages/ui/src/agent-surface/registry.ts',
+  'packages/ui/src/agent-surface/sensitive.ts',
+  'packages/ui/src/agent-surface/types.ts',
+  'packages/ui/src/agent-surface/useAgentElement.ts',
+  'packages/ui/src/api/api-error.ts',
+  'packages/ui/src/components/composites/page-panel/content-state.tsx',
+  'packages/ui/src/components/composites/page-panel/index.ts',
+  'packages/ui/src/components/composites/page-panel/page-panel-collapsible-section.tsx',
+  'packages/ui/src/components/composites/page-panel/page-panel-feature-empty.tsx',
+  'packages/ui/src/components/composites/page-panel/page-panel-header.tsx',
+  'packages/ui/src/components/composites/page-panel/page-panel-layout.tsx',
+  'packages/ui/src/components/composites/page-panel/page-panel-types.ts',
+  'packages/ui/src/components/ui/badge.tsx',
+  'packages/ui/src/components/ui/button.tsx',
+  'packages/ui/src/components/ui/card.tsx',
+  'packages/ui/src/components/ui/empty-state.tsx',
+  'packages/ui/src/components/ui/skeleton-layouts.tsx',
+  'packages/ui/src/components/ui/skeleton.tsx',
+  'packages/ui/src/components/ui/spinner.tsx',
+  'packages/ui/src/utils/cn.ts',
+  'packages/ui/src/view-primitives.ts',
+  'plugins/plugin-notes/src/client/notes-controller.ts',
+  'plugins/plugin-notes/src/client/notes-editor.ts',
+  'plugins/plugin-notes/src/client/notes-snapshot-state.ts',
+  'plugins/plugin-notes/src/components/NotesSurface.tsx',
+  'plugins/plugin-notes/src/components/NotesWorkspace.tsx',
+  'plugins/plugin-notes/src/components/viewPrimitives.tsx',
+  'plugins/plugin-notes/src/workspace.ts',
+
   'packages/ui/src/api/transport.ts',
   'plugins/plugin-native-system/src/client/launcher.ts',
+  'plugins/plugin-native-system/src/sense.ts',
+  'plugins/plugin-native-system/src/sense-bridge.ts',
+  'plugins/plugin-native-system/src/sense-web.ts',
   'plugins/plugin-native-system/src/definitions.ts',
   'packages/ui/src/components/pages/InstalledAppsLauncher.tsx',
   'packages/ui/src/voice/pcm-wave.ts',
@@ -94,6 +128,8 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/ui/src/voice/worklets',
   'packages/ui/src/logger.ts',
   'packages/core/src/logging.ts',
+  'packages/core/src/read-memo.ts',
+  'packages/core/src/runtime/single-flight-memo.ts',
   'packages/core/src/view-interaction.ts',
   'packages/core/src/security/log-redaction.ts',
   'packages/host/src/voice/ui-context.ts',
@@ -131,7 +167,6 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/ui/src/platform/browser-document-store.ts',
   'packages/contracts/src/native-notes-query.ts',
   'packages/contracts/src/device-reviews.ts',
-  'packages/contracts/src/device-action-execution.ts',
   'packages/contracts/src/calendar-linked-sync.ts',
   'plugins/plugin-assistant/src/services/device-actions/camera-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/notes-query-result.ts',
@@ -194,7 +229,7 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   source.delete('packages/core/src/types/primitives.ts');
   source.delete(clientName);
 
-  project('alpha-voice-core-protocol.ts','export {ElizaError} from "./packages/core/src/errors";\nexport {redactTrailingArgs} from "./packages/core/src/security/log-redaction";\nexport {parseViewInteractionClientId} from "./packages/core/src/views/view-interact-protocol";\nexport {findViewActionHandoff, type ViewActionHandoff} from "./packages/core/src/views/view-action-handoff";\nexport type {PermissionState} from "./packages/core/src/types/permissions";\n');
+  project('alpha-voice-core-protocol.ts','export {ElizaError} from "./packages/core/src/errors";\nexport {redactTrailingArgs} from "./packages/core/src/security/log-redaction";\nexport {parseViewInteractionClientId, AGENT_SURFACE_CAPABILITY_IDS} from "./packages/core/src/views/view-interact-protocol";\nexport {findViewActionHandoff, type ViewActionHandoff} from "./packages/core/src/views/view-action-handoff";\nexport type {PermissionState} from "./packages/core/src/types/permissions";\n');
 
 
   }

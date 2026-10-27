@@ -1,3 +1,4 @@
+import {createDeviceActionExecution} from '../../../../.eliza/client-features/packages/contracts/src/device-action-execution.ts';
 import {browserNavigationSummary} from './action-message-presentation';
 import {namedCalendarReadTarget} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/client/named-read.ts';
 import {foregroundReviewOperationAvailable} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/foreground-review-contract.ts';
@@ -363,21 +364,24 @@ export class DeviceActions {
     if(isNativeNotesQuery(reviewed.proposal.operation))assertNotesQueryContext(context);
     this.busy = true; this.proposals.delete(proposalId);
     const p = reviewed.proposal, operationId = isSmsSend(p.operation)?p.id:crypto.randomUUID();
+    let execution:ReturnType<typeof createDeviceActionExecution>|undefined;
     try {
+      execution=createDeviceActionExecution({scope:this.scope,proposalId,operationId},signal,()=>assertProposalContext(p.operation,context));
       if(p.workflow){if(!reviewed.workflowReview)throw new Error('Workflow step must be reviewed from its execution');assertWorkflowOperation(reviewed.workflowReview,p.workflow,{installationId:this.credential.installationId,enrollmentId:this.credential.enrollmentId!},p.operation);}
-      signal.throwIfAborted();
-      assertProposalContext(p.operation,context);
+      execution.assertPrepared();
       const reserved = await this.journal.reserve({ scope: this.scope, proposalId, operationId, operationHash: await actionScope(JSON.stringify(p.operation)), record: { digest: p.digest, operation: p.operation, context, expiresAt: p.expiresAt, installationId: this.credential.installationId, enrollmentId: this.credential.enrollmentId, sessionId:this.session.sessionId,ownerId:this.session.ownerId,agentId:this.session.agentId,origin:this.session.origin,...(p.workflow?{workflow:p.workflow}:{}) } });
       if (!reserved.created) return { proposalId, status: 'unknown', summary: 'This action already has a device journal entry. Review action history; it was not repeated.' };
-      signal.throwIfAborted();
+      execution.assertIdentity(reserved.entry);
+      execution.assertPrepared();
       await this.mutation(p, 'decision', { decision: 'approve' }, signal);
       const claimed = await this.mutation(p, 'claim', {}, signal);
       if(isSmsSend(p.operation)&&claimed.providerIdempotencyKey!==operationId)throw Error('SMS execution claim identity changed');
       if (!claimed.attemptId || claimed.state !== 'executing') throw new Error('The server did not grant an execution claim');
-      signal.throwIfAborted();
+      execution.assertPrepared();
       await this.journal.markApplying({ scope: this.scope, proposalId, attemptId: claimed.attemptId });
       let result: Awaited<ReturnType<DeviceExecutor>> & { foregroundResult?: ForegroundReviewResult };
       try { signal.throwIfAborted(); if (p.expiresAt <= Date.now()) throw new Error('Expired action'); const bindingHash=await actionScope(JSON.stringify([this.scope,this.session.ownerId,this.session.agentId,this.session.sessionId,this.session.origin,this.credential.installationId,this.credential.enrollmentId,p.id,p.digest,operationId]));
+        execution.markDispatched(reserved.entry);
         if(isForegroundReview(p.operation)){if(!this.executeForeground)throw Error('Foreground review is unavailable');result=await this.executeForeground(p.operation,operationId,context,signal,bindingHash,{scope:this.scope,proposalId:p.id},this.credential.capabilities??[]);}
         else result = await this.execute(p.operation, operationId, context, signal, bindingHash,p.workflow?{scope:this.scope,origin:this.session.origin,ownerId:this.session.ownerId,agentId:this.session.agentId,workflowId:p.workflow.workflowId,runId:p.workflow.runId,versionId:p.workflow.versionId}:undefined,{scope:this.scope,proposalId:p.id},p.calendarAgendaSource); }
       catch { result = { status: 'unknown', summary: 'Action outcome needs review. It will not be repeated automatically.' }; }
@@ -410,6 +414,7 @@ export class DeviceActions {
         else if(result.readResult!==undefined)throw new Error('Failed read cannot return content');
       }else if(result.readResult!==undefined)throw new Error('Unexpected read content');
       await this.journal.finish({ scope: this.scope, proposalId, status:result.status, summary:result.summary, result: { operationId,...(smsResult?{smsResult}:{}),...(clockResult?{clockResult}:{}),...(mapsResult?{mapsResult}:{}),...(photoLibraryResult?{photoLibraryResult}:{}),...(cameraResult?{cameraResult}:{}),...(readResult?{readResult}:{}),...(calendarResult?{calendarResult}:{}),...(notesResult?{notesResult}:{}),...(reminderResult?{reminderResult}:{}),...(foregroundResult?{foregroundResult}:{}) } });
+      if(execution.dispatched)execution.settle(reserved.entry);
       // A completed device effect is journaled even if the UI epoch was cancelled.
       // Receipt upload is retried only by the explicit history control.
       const committedChanges:Array<'calendar'|'notes'|'reminders'>=[];
@@ -436,7 +441,7 @@ export class DeviceActions {
       return { proposalId, status:result.status, summary:result.summary,committedChanges,...(readReply?{readReply}:{}) };
     } catch {
       return { proposalId, status: 'unknown', summary: 'Action did not reach a confirmed result. Check action history before requesting it again.' };
-    } finally { this.busy = false; }
+    } finally { execution?.retire(); this.busy = false; }
   }
   async completeReadReply(hint:NativeNotesReadReplyHint,signal:AbortSignal):Promise<NativeNotesReadReply>{
     const valid=validateNativeNotesReadReplyHint(hint),retained=this.readReplies.get(valid.proposalId);

@@ -10,8 +10,10 @@ export async function openLegacyNotes(page:Page){
  await page.getByRole('button',{name:'Notes',exact:true}).click();
  const menu=page.getByLabel('Notes options',{exact:true});
  if(await menu.count()){
-  await menu.click();await page.getByRole('button',{name:'Older notes',exact:true}).click();
+  await menu.click();
  }
+ const older=page.getByRole('button',{name:/^(Older|Previous) notes$/});
+ if(await older.count())await older.click();
  await expect(page.getByRole('heading',{name:'Older notes',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'New note',exact:true})).toBeEnabled();
  await expect(page.getByText('Previous notes need a recovery review. Nothing was moved or changed.',{exact:true})).toHaveCount(0);

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {stripTypeScriptTypes} from 'node:module';
 import {randomUUID} from 'node:crypto';
+import {createDeviceActionExecution} from '../vendor/eliza/packages/contracts/src/device-action-execution.ts';
 const root=process.env.ALPHA_RECEIPT_SOURCE_ROOT||'.';
 const read=p=>fs.readFileSync(root+'/'+p,'utf8');
 const agent=read('apps/app/src/prototype/agent-adapter.ts'),browser=read('apps/app/src/prototype/browser-adapter.ts'),device=read('apps/app/src/runtime/device-actions.ts');
@@ -29,11 +30,11 @@ function harness({native=false,origin='notes',receiptFailure=false,dispatchFailu
  const browserNavigateApproved=vm.runInNewContext('(function(){'+navigateCode+'\n'+browserCode+';return this.browserNavigateApproved;}).call({})',browserContext);
  const executor=vm.runInNewContext(ts('(async function(operation,signal,expectedContext){'+executorCode+'})'),{connectionController,alphaClient,document,browserNavigationSummary}).bind({browserNavigateApproved,get live(){return live;}});
  const p={id:'proposal',digest:'digest',operation:{type:'browser_navigate',url:'https://example.com'},expiresAt:Date.now()+60000};
- const globals={Error,Date,JSON,crypto:{randomUUID},contextKey:JSON.stringify,actionScope:async()=> 'hash',assertProposalContext(){}};
+ const globals={Error,Date,JSON,createDeviceActionExecution,crypto:{randomUUID},contextKey:JSON.stringify,actionScope:async()=> 'hash',assertProposalContext(){}};
  for(const name of ['isClockOperation','isNativeNotesQuery','isSmsSend','isMapsOperation','isCameraCapture','isLibraryOperation','isReminderCreate','isReminderOperation','isNotesOperation','isCalendarOperation','isForegroundReview','isOriginalDeviceReadOperationType'])globals[name]=()=>false;
  const approve=vm.runInNewContext(approveCode,globals).approve;
- const journal={async reserve(){events.push('reserve');return {created:true};},async markApplying(){events.push('applying');},async finish(record){journalResults.push(record);events.push('finish');if(finishFailure)throw Error('journal failed');}};
- const owner={busy:false,scope:'scope',session,credential:{installationId:'i',enrollmentId:'e'},proposals:new Map([[p.id,{proposal:p,context:initial}]]),readReplies:new Map(),journal,
+ const journal={async reserve(input){events.push('reserve');return {created:true,entry:{...input,phase:'reserved'}};},async markApplying(){events.push('applying');},async finish(record){journalResults.push(record);events.push('finish');if(finishFailure)throw Error('journal failed');}};
+ const owner={busy:false,scope:'c'.repeat(64),session,credential:{installationId:'i',enrollmentId:'e'},proposals:new Map([[p.id,{proposal:p,context:initial}]]),readReplies:new Map(),journal,
   execute:async(op,_id,context,signal)=>executor(op,signal,context),
   async mutation(proposal,suffix,body){if(suffix==='receipt')receiptBodies.push(body);events.push(suffix);if(suffix==='receipt')await beforeReceipt?.({controller,document,session:connection,externalView(){currentContext={view:'calendar',sensitive:false,revision:3};cancel();}});controller.signal.throwIfAborted();if(suffix==='receipt'&&receiptFailure)throw Error('network unavailable');return {...proposal,state:suffix==='claim'?'executing':'done',attemptId:'attempt'};}};
  return {journalResults,receiptBodies,events,controller,document,owner,async run(){return approve.call(owner,p.id,initial,controller.signal);},setLive:v=>live=v};

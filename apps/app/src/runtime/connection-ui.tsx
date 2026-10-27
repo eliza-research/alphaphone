@@ -1,3 +1,4 @@
+import {SingleFlightMemo} from "@elizaos/core/read-memo";
 import {parseCloudServiceInfo} from './cloud-service-info';
 import {productionCloud, stagingCloud} from './cloud-deployment.generated.ts';
 import {browserCloudResidentEnabled,browserCloudResidentEnvironment} from './browser-cloud-resident';
@@ -359,18 +360,21 @@ async function clockRepeatDaysSupported():Promise<boolean>{
  * local-record contracts plus each capability the agent offers that this phone supports. Clock
  * handoffs are Android-only; v2 (repeat days) also needs the native repeat-days support. */
 type CalendarAgendaSourceObservation={sourceId:string;sourceRevision:string};
-const calendarAgendaObservations=new WeakMap<DeviceActions,{epoch:number;value:Promise<CalendarAgendaSourceObservation|undefined>}>();
+const calendarAgendaObservations=new WeakMap<DeviceActions,SingleFlightMemo<CalendarAgendaSourceObservation>>();
 let calendarAgendaObservationEpoch=0;
 if(typeof window!=='undefined')for(const event of ['alpha:calendar-sync-source-changed','alpha:calendar-document-changed'])window.addEventListener(event,()=>{calendarAgendaObservationEpoch++;});
 /** Source observation cached per requesting owner session/source epoch; no event content is sent. */
 async function calendarAgendaObservation(actions:DeviceActions):Promise<CalendarAgendaSourceObservation|undefined>{
  if(Capacitor.isNativePlatform()||!actions.supportsCalendarAgenda)return;
- let cached=calendarAgendaObservations.get(actions);
- if(!cached||cached.epoch!==calendarAgendaObservationEpoch){
-  const value=Promise.resolve().then(()=>registerPlugin<{prepareAgentSource():Promise<CalendarAgendaSourceObservation>}>('AlphaCalendar').prepareAgentSource()).then(source=>({sourceId:source.sourceId,sourceRevision:source.sourceRevision})).catch(()=>undefined);
-  cached={epoch:calendarAgendaObservationEpoch,value};calendarAgendaObservations.set(actions,cached);
- }
- return cached.value;
+ const sourceEpoch=calendarAgendaObservationEpoch;
+ let memo=calendarAgendaObservations.get(actions);
+ if(!memo){memo=new SingleFlightMemo<CalendarAgendaSourceObservation>(Infinity,1);calendarAgendaObservations.set(actions,memo);}
+ const key=String(sourceEpoch);
+ const value=memo.peek(key)?.promise??memo.put(key,undefined,Promise.resolve().then(()=>registerPlugin<{prepareAgentSource():Promise<CalendarAgendaSourceObservation>}>('AlphaCalendar').prepareAgentSource()).then(source=>({sourceId:source.sourceId,sourceRevision:source.sourceRevision})));
+ try{
+  const source=await value;
+  return sourceEpoch===calendarAgendaObservationEpoch?source:undefined;
+ }catch{return undefined;}
 }
 async function deviceCapabilities(offered:unknown):Promise<string>{
   const agent:unknown[]=Array.isArray(offered)?offered:[],android=Capacitor.getPlatform()==='android';

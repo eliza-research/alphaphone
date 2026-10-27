@@ -11,12 +11,6 @@ allprojects { repositories { google(); mavenCentral() } }
 
 // Shared checkouts are immutable; keep every included library's generated files in this host.
 subprojects {
- if (project.path == ':eliza-system') {
-  plugins.withId('com.android.library') {
-   // Sense uses Capacitor's AppCompatActivity return type on its production path.
-   dependencies { implementation "androidx.appcompat:appcompat:$rootProject.ext.androidxAppCompatVersion" }
-  }
- }
  def source = projectDir.canonicalFile.toPath()
  if (source.startsWith(rootProject.file('../vendor/eliza').canonicalFile.toPath()) ||
      source.startsWith(rootProject.file('../.eliza').canonicalFile.toPath())) {

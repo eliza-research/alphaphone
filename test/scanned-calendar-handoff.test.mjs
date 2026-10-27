@@ -6,11 +6,11 @@ import test from 'node:test';
 // Execute the complete adapter with only its platform/service dependencies
 // replaced. No Calendar write API is supplied: handoff must only open a form.
 const code=stripTypeScriptTypes(readFileSync('apps/app/src/prototype/agent-calendar-adapter.ts','utf8').replace(/^import .*;\n/gm,'').replace(/^export /gm,''),{mode:'transform'});
-function fixture({status='ready',sources=1,authority='canonical',platform='web',form=null}={}){
+function fixture({status='ready',sources=1,authority='canonical',platform='web',form=null,testMocks=false}={}){
  const state={status,ownerKey:'owner-A',calendars:Array.from({length:sources},(_,i)=>({summary:`Source ${i}`,provider:'eliza',calendarId:String(i)}))};
  class Calendar{state=state;subscribe(){return()=>{};}refresh(){}sourceHandle(key){return 'handle:'+key;}}
  const connection={subscribe:()=>()=>{},getAppRecordClient:()=>null};
- const install=new Function('AgentCalendar','Capacitor','connectionController','calendarSourceKey',code+';return installAgentCalendarAdapter;')(Calendar,{getPlatform:()=>platform},connection,c=>c.calendarId);
+ const install=new Function('AgentCalendar','Capacitor','connectionController','calendarSourceKey','testMocksEnabled',code+';return installAgentCalendarAdapter;')(Calendar,{getPlatform:()=>platform},connection,c=>c.calendarId,testMocks);
  const opened=[];const calendar={calendarAuthority:authority,form};
  class Shell{live=true;componentDidMount(){}vget(){return calendar;}openView(...args){opened.push(args);}setState(){}}
  install(Shell,{calendar:{render(){}}},{});
@@ -36,4 +36,15 @@ test('unavailable sources, preservation review and existing drafts retain camera
 });
 test('explicit Android Calendar handoff preserves the native draft',()=>{
  const f=fixture({authority:'android-native',platform:'android',status:'disconnected',sources:0});assert.equal(f.shell.reviewScannedCalendarDraft(draft),true);assert.equal(f.opened[0][1].form,draft);assert.equal(f.opened[0][1].calendarAuthority,'android-native');
+});
+test('browser provider requires the test-mocks gate and a web platform',()=>{
+ for(const options of [{testMocks:false,platform:'web'},{testMocks:true,platform:'android'}]){
+  const f=fixture({...options,authority:'browser-local',status:'disconnected',sources:0});
+  assert.equal(f.shell.reviewScannedCalendarDraft(draft),false);
+  assert.deepEqual(f.opened,[]);
+ }
+ const f=fixture({testMocks:true,platform:'web',authority:'browser-local',status:'disconnected',sources:0});
+ assert.equal(f.shell.reviewScannedCalendarDraft(draft),true);
+ assert.equal(f.opened[0][1].form,draft);
+ assert.equal(f.opened[0][1].calendarAuthority,'browser-local');
 });

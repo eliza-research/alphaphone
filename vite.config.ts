@@ -113,9 +113,13 @@ export default defineConfig({
   worker: { format: 'es' },
   resolve: {
     alias: {
+      "@elizaos/capacitor-system/sense": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/sense-bridge.ts", import.meta.url)),
+      "@elizaos/contracts/device-action-execution": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/device-action-execution.ts", import.meta.url)),
+      "@elizaos/ui/view-primitives": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/view-primitives.ts",import.meta.url)),
       "@elizaos/capacitor-system/launcher": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/client/launcher.ts",import.meta.url)),
       "@elizaos/ui/voice/voice-session-client": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/voice/voice-session-client-core.ts",import.meta.url)),
       "@elizaos/host/voice/ui-context": fileURLToPath(new URL("./.eliza/client-features/packages/host/src/voice/ui-context.ts",import.meta.url)),
+      "@elizaos/core/read-memo": fileURLToPath(new URL("./.eliza/client-features/packages/core/src/read-memo.ts",import.meta.url)),
       "@elizaos/core/logging": fileURLToPath(new URL("./.eliza/client-features/packages/core/src/logging.ts",import.meta.url)),
       "@elizaos/core/view-interaction": fileURLToPath(new URL("./.eliza/client-features/packages/core/src/view-interaction.ts",import.meta.url)),
       "@elizaos/core/protocol": fileURLToPath(new URL("./.eliza/client-features/alpha-voice-core-protocol.ts",import.meta.url)),
@@ -123,7 +127,6 @@ export default defineConfig({
       "@elizaos/core/speech": fileURLToPath(new URL("./.eliza/client-features/packages/core/src/speech.ts",import.meta.url)),
       "@elizaos/ui/voice/batch-conversation": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/voice/batch-conversation.ts",import.meta.url)),
       "@elizaos/ui/voice/voice-chat-playback": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/voice/voice-chat-playback.ts",import.meta.url)),
-      "@elizaos/contracts/device-action-execution": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/device-action-execution.ts",import.meta.url)),
       "@elizaos/contracts/native-notes-query": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/native-notes-query.ts",import.meta.url)),
       "@elizaos/contracts": fileURLToPath(new URL("./.eliza/client-features/client-contracts.ts",import.meta.url)),
       "@elizaos/plugin-assistant/device-calendar-contract": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts",import.meta.url)),
