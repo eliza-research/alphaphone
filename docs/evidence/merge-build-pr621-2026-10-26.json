@@ -56,8 +56,34 @@
       "high": 0,
       "critical": 0,
       "disposition": "Existing unexpired UUID exception; no new exception. Full-lock pending findings do not become exceptions."
-    }
+    },
+    "latestHeadFullRepository": {
+      "tests": 2106,
+      "passed": 2100,
+      "skipped": 6,
+      "failed": 0,
+      "typecheck": "passed",
+      "productionBundleAudit": "passed"
+    },
+    "phoneVersionBuild": {
+      "versionCode": 10,
+      "versionName": "0.1.0-native-4b928290",
+      "variants": 4,
+      "status": "passed",
+      "signedRelease": false,
+      "manifest": "docs/evidence/merge-build-phone-apks-v10-2026-10-27.json"
+    },
+    "imageStaging": {
+      "cuttlefish": "passed",
+      "pixel10a": "passed",
+      "source": "android-17.0.0_r1",
+      "sameDevelopmentSigner": true,
+      "payloadUnchanged": true,
+      "deployReady": false
+    },
+    "latestBrowserChecks": "In progress. Initial CAS race in fixture fixed and passed targeted rerun; production fixture updated for collapsed details and canonical Notes state. Resource-related timeouts must be rerun, not counted as passes."
   },
   "mainUpdated": false,
-  "deviceAcceptance": false
+  "deviceAcceptance": false,
+  "latestReviewedHead": "f7fb45c50002c72f8a822c3481ba33eeeef79ed8"
 }

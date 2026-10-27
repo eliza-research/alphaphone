@@ -88,6 +88,7 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
     const ok = (value: unknown) => ({ status: 200, data: value });
     const request = async (method: string, path: string, body: any, headers: Record<string, string>): Promise<{ status: number; data: unknown }> => {
       if (path === '/api/auth/me') return ok({ identity: { id, kind: 'owner' }, access: { role: 'OWNER', mode: 'local' } });
+      if (path === '/api/notes/state' && method === 'GET') return ok({success:true,data:{notes:[],trash:[],revision:0}});
       if (path === '/api/agents') return ok({ agents: [{ id: agentId, name: agentName, status: 'running' }] });
       if (path === '/api/client-devices/register') { f.installationId = headers['X-Eliza-Device-Id']; }
       if (path === '/api/client-devices/register') return ok({ installationId: headers['X-Eliza-Device-Id'], enrollmentId: 'fixture-enrollment', capabilities: [] });
