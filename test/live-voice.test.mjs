@@ -137,13 +137,18 @@ test('Android: Silero VAD runs in the app process and only the live ASR and end-
   const plugin = fs.readFileSync(new URL('../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaLocalAgentPlugin.java', import.meta.url), 'utf8');
   // The end-of-turn route (#423, elizaOS #36546) carries text only; the heard route is covered in voice-turn-routes.test.mjs.
   assert.match(plugin, /\|asr\/local-inference\/\(live\(\/status\)\?\|end-of-turn\)\)\$"/);
-  const capture = fs.readFileSync(new URL('../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaLiveVoiceCapture.java', import.meta.url), 'utf8');
-  assert.match(capture, /ElizaVoiceNative\.nativeVadProcessBatch/);
+  // Capture and VAD are the shared ai.eliza.voice pipeline on the process-wide inference session.
+  const capture = fs.readFileSync(new URL('../vendor/eliza/plugins/plugin-local-inference/native/android/src/main/java/ai/eliza/voice/LiveVoiceCapture.java', import.meta.url), 'utf8');
+  assert.match(capture, /InferenceSession\.Vad vad=inference\.openVad\(\);/);
+  assert.match(capture, /float\[\] probability=vad\.process\(pcm\);/);
+  const voicePlugin = fs.readFileSync(new URL('../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaVoiceCloudPlugin.java', import.meta.url), 'utf8');
+  assert.match(voicePlugin, /new LiveVoiceCapture\(getContext\(\),inference,id,new LiveVoiceCapture\.Sink\(\)\{/);
+  assert.match(voicePlugin, /inference=VoiceAssets\.sharedInference\(getContext\(\)\)/);
   assert.match(capture, /AudioFormat\.ENCODING_PCM_16BIT/);
   assert.doesNotMatch(capture, /FileOutputStream|openFileOutput|Log\./, 'no audio file and no log of audio or text');
 });
 
 test('the app-process VAD gate opens and closes segments on Silero probabilities (host JVM)', async () => {
-  const {nativeSource, fixture, runJvm} = await import('./fixtures/jvm-tools.mjs');
-  assert.match(runJvm([nativeSource('LiveVadGate.java'), fixture('LiveVadGateTest.java')], 'ai.elizaresearch.alphaphone.LiveVadGateTest'), /^PASS live vad gate/);
+  const {runJvm, upstreamVoiceFixture, upstreamVoiceSource} = await import('./fixtures/jvm-tools.mjs');
+  assert.match(runJvm([upstreamVoiceSource('LiveVadGate.java'), upstreamVoiceFixture('LiveVadGateTest.java')], 'ai.eliza.voice.LiveVadGateTest'), /^PASS live vad gate/);
 });

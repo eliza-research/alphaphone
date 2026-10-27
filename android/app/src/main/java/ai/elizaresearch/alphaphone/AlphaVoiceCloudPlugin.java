@@ -1,5 +1,17 @@
 package ai.elizaresearch.alphaphone;
 
+import ai.eliza.voice.AudioTrackSpeechOutput;
+import ai.eliza.voice.InferenceSession;
+import ai.eliza.voice.LiveCaptureAdmission;
+import ai.eliza.voice.LiveVoiceCapture;
+import ai.eliza.voice.LocalSpeechEngine;
+import ai.eliza.voice.SessionSpeech;
+import ai.eliza.voice.SpeechAudioFocus;
+import ai.eliza.voice.SpeechAudioFocusPolicy;
+import ai.eliza.voice.StreamingSpeechPlayback;
+import ai.eliza.voice.VoiceAssets;
+import ai.eliza.voice.VoiceLatencyProbe;
+import ai.eliza.voice.VoiceLatencyTrials;
 import android.media.MediaPlayer;
 import android.os.Handler;
 import android.os.Looper;
@@ -12,9 +24,15 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** Foreground speech: on-device by default, credential-bound Cloud in the explicit Cloud profile. */
+/**
+ * Foreground speech bridge: on-device by default, credential-bound Cloud in the explicit Cloud
+ * profile. The speech engine, streamed playback, audio focus, live capture with VAD and latency
+ * trials are the shared ai.eliza.voice pipeline on the process-wide inference session; this class
+ * keeps Alpha's bridge, owner/account binding, recordings and resident transport wiring.
+ */
 @CapacitorPlugin(name="AlphaVoiceCloud", permissions={@Permission(alias="microphone",strings={android.Manifest.permission.RECORD_AUDIO})})
 public final class AlphaVoiceCloudPlugin extends Plugin {
  private AlphaCloudVoiceCapture capture;
@@ -36,12 +54,12 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
  private PluginCall preparingPlayback;
  // Issue #397: the streamed local utterance (main thread, like player) and assistant-speech audio focus.
  private StreamingSpeechPlayback streamPlayback;
- private AlphaSpeechAudioFocus focus;
+ private SpeechAudioFocus focus;
  /** Bounded streamed PCM per utterance: 30 s at 24 kHz (about 2.9 MB of floats), never more. */
- static final int STREAM_CAPACITY=AlphaLocalSpeechEngine.STREAM_RATE*30;
+ static final int STREAM_CAPACITY=LocalSpeechEngine.STREAM_RATE*30;
  private volatile boolean destroyed;
  private volatile boolean speechForeground=true;
- private final AlphaLocalSpeechEngine localEngine=new AlphaLocalSpeechEngine(()->new AlphaParadeeSpeech(getContext()));
+ private final LocalSpeechEngine localEngine=new LocalSpeechEngine(()->SessionSpeech.shared(getContext()));
  private final Object localCancellationGate=new Object();
  private Pending localActiveRequest; // Guarded by localCancellationGate.
  private final java.util.concurrent.atomic.AtomicBoolean localReleaseQueued=new java.util.concurrent.atomic.AtomicBoolean();
@@ -66,7 +84,7 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
  String instrumentationCredentialSlot;
  private static final int AUDIO_LIMIT=8*1024*1024;
  private static final class Pending { volatile boolean cancelled,resolvedEarly,keepEngine; volatile Runnable cancelNative,deadline; volatile HttpURLConnection connection; volatile JSObject result; volatile String failure,failureCode; void cancel(){cancelled=true;if(connection!=null)connection.disconnect();Runnable nativeCancel=cancelNative;if(nativeCancel!=null)try{nativeCancel.run();}catch(RuntimeException ignored){/* Late output remains fenced even if native cancellation fails. */}} }
- @Override public void load(){focus=new AlphaSpeechAudioFocus(getContext(),main,this::speechFocusChanged);focus.watchCalls(main::post,()->main.post(this::callStarted));getContext().registerComponentCallbacks(localMemoryCallbacks);capture=new AlphaCloudVoiceCapture(getContext(),v->notifyListeners("recordingStopped",v));File[] stale=getContext().getCacheDir().listFiles((d,n)->n.startsWith("alpha-cloud-tts-"));if(stale!=null)for(File f:stale)f.delete();}
+ @Override public void load(){focus=new SpeechAudioFocus(getContext(),main,this::speechFocusChanged);focus.watchCalls(main::post,()->main.post(this::callStarted));getContext().registerComponentCallbacks(localMemoryCallbacks);capture=new AlphaCloudVoiceCapture(getContext(),v->notifyListeners("recordingStopped",v));File[] stale=getContext().getCacheDir().listFiles((d,n)->n.startsWith("alpha-cloud-tts-"));if(stale!=null)for(File f:stale)f.delete();}
  @PluginMethod public void startRecording(PluginCall call){
   if(isDraining()){call.reject("Voice cancellation is still draining");return;}
   if(focus!=null&&focus.callActive()){call.reject(CALL_MESSAGE,SpeechAudioFocusPolicy.CALL_ACTIVE);return;}
@@ -206,7 +224,7 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
  });}
  @PluginMethod public void transcribeLocalRecording(PluginCall call){submitLocal(call,request->{
   File file=capture.selected(required(call.getString("recordingId"),256));if(file==null)throw new IOException();byte[] wav=AlphaVoicePcm.decode(file,()->request.cancelled||destroyed);float[] samples;
-  try{samples=AlphaLocalSpeechEngine.readMono16kWav(wav);}finally{Arrays.fill(wav,(byte)0);}
+  try{samples=LocalSpeechEngine.readMono16kWav(wav);}finally{Arrays.fill(wav,(byte)0);}
   String text;try{text=localEngine.use(engine->{if(request.cancelled||destroyed)throw new IOException();return engine.transcribe(samples);});}finally{Arrays.fill(samples,0);}
   if(request.cancelled||destroyed)throw new IOException();JSObject out=new JSObject();out.put("text",text);out.put("local",true);out.put("execution","device");out.put("provider","fused-paradee-asr");request.result=out;
  });}
@@ -218,18 +236,18 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
   // Bind before the worker queues: only the reply to the named live turn acquires its stage/playback
   // marks (issue #395); a missing or stale voiceTurnId leaves this utterance unattributed.
   final boolean reply=reviewed==null;
-  final VoiceLatencyTrials.Trial trial=reply?AlphaVoiceLatencyProbe.TRIALS.forTurn(call.getString("voiceTurnId")):null;
+  final VoiceLatencyTrials.Trial trial=reply?VoiceLatencyProbe.TRIALS.forTurn(call.getString("voiceTurnId")):null;
   submitLocal(call,request->{
   String text=reviewed==null?required(call.getString("text"),500):reviewed;byte[] audio;
   int[] clip={-1,0,0};
   int loadsBefore=localEngine.loads();
-  if(reply)AlphaVoiceLatencyProbe.TRIALS.mark(trial,"tts-start",System.nanoTime());
+  if(reply)VoiceLatencyProbe.TRIALS.mark(trial,"tts-start",System.nanoTime());
   // Streaming engines play each chunk as it is synthesized; only an engine without streaming uses the
   // whole-sentence path below. A streaming failure is a failure, never a fallback.
   Boolean streamed=localEngine.use(engine->{if(request.cancelled||destroyed)throw new IOException();if(!engine.supportsStreaming())return false;streamLocal(call,request,engine,text,reply,trial,loadsBefore);return true;});
   if(streamed)return;
-  audio=localEngine.use(engine->{if(request.cancelled||destroyed)throw new IOException();if(reviewed!=null)return engine.synthesizePassage(text,()->request.cancelled||destroyed);AlphaLocalSpeechEngine.Audio generated=engine.synthesize(text,()->request.cancelled||destroyed);try{clip[0]=AlphaVoiceLatencyProbe.leadInFrames(generated.samples);clip[1]=generated.samples.length;clip[2]=generated.sampleRate;return generated.wav();}finally{Arrays.fill(generated.samples,0);}});
-  if(reply){AlphaVoiceLatencyProbe.TRIALS.mark(trial,"tts-ready",System.nanoTime());if(localEngine.loads()!=loadsBefore)AlphaVoiceLatencyProbe.TRIALS.engineLoaded(trial,"tts-load");}
+  audio=localEngine.use(engine->{if(request.cancelled||destroyed)throw new IOException();if(reviewed!=null)return engine.synthesizePassage(text,()->request.cancelled||destroyed);LocalSpeechEngine.Audio generated=engine.synthesize(text,()->request.cancelled||destroyed);try{clip[0]=VoiceLatencyProbe.leadInFrames(generated.samples);clip[1]=generated.samples.length;clip[2]=generated.sampleRate;return generated.wav();}finally{Arrays.fill(generated.samples,0);}});
+  if(reply){VoiceLatencyProbe.TRIALS.mark(trial,"tts-ready",System.nanoTime());if(localEngine.loads()!=loadsBefore)VoiceLatencyProbe.TRIALS.engineLoaded(trial,"tts-load");}
   if(request.cancelled||destroyed){Arrays.fill(audio,(byte)0);throw new IOException();}
   File file=File.createTempFile("alpha-cloud-tts-",".wav",getContext().getCacheDir());CountDownLatch completed=new CountDownLatch(1);
   try{try(OutputStream out=new FileOutputStream(file)){out.write(audio);}main.post(()->{try{if(request.cancelled||destroyed){file.delete();request.failure="Voice request cancelled";return;}if(Boolean.FALSE.equals(call.getBoolean("replace",true))&&(playbackFile!=null||streamPlayback!=null)){file.delete();request.failure="Speaker is in use";request.failureCode="playback-busy";return;}clearPlayback();playbackFile=file;playbackRequestId=call.getString("requestId");playbackId=UUID.randomUUID().toString();playbackLocalReply=reply;playbackTrial=trial;playbackLeadIn=clip[0];playbackFrames=clip[1];playbackRate=clip[2];JSObject out=new JSObject();out.put("playbackId",playbackId);out.put("execution","device");request.result=out;}catch(RuntimeException error){request.failure="Playback preparation failed";file.delete();}finally{completed.countDown();}});if(!completed.await(10,TimeUnit.SECONDS)){request.cancel();file.delete();throw new IOException("Playback preparation timed out");}}catch(Exception error){file.delete();throw error;}finally{Arrays.fill(audio,(byte)0);}
@@ -240,11 +258,11 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
   * play() then starts an AudioTrack writer. Chunks are held in memory only, in a bounded queue whose
   * backpressure paces synthesis to playback. A failure after publication is reported as playbackFailed.
   */
- private void streamLocal(PluginCall call,Pending request,AlphaLocalSpeechEngine.Backend engine,String text,boolean reply,VoiceLatencyTrials.Trial trial,int loadsBefore)throws Exception{
+ private void streamLocal(PluginCall call,Pending request,LocalSpeechEngine.Backend engine,String text,boolean reply,VoiceLatencyTrials.Trial trial,int loadsBefore)throws Exception{
   request.keepEngine=true;
   final String id=UUID.randomUUID().toString();
   final StreamingSpeechPlayback[] self=new StreamingSpeechPlayback[1];
-  final StreamingSpeechPlayback playback=new StreamingSpeechPlayback(STREAM_CAPACITY,AlphaLocalSpeechEngine.STREAM_RATE,AlphaVoiceLatencyProbe.AUDIBLE_LEVEL,()->AudioTrackSpeechOutput.open(AlphaLocalSpeechEngine.STREAM_RATE),streamListener(id,reply?trial:null,self),System::nanoTime);
+  final StreamingSpeechPlayback playback=new StreamingSpeechPlayback(STREAM_CAPACITY,LocalSpeechEngine.STREAM_RATE,VoiceLatencyProbe.AUDIBLE_LEVEL,()->AudioTrackSpeechOutput.open(LocalSpeechEngine.STREAM_RATE),streamListener(id,reply?trial:null,self),System::nanoTime);
   self[0]=playback;
   // Cancelling the request also wakes a synthesis callback blocked on the full queue.
   final Runnable nativeCancel=request.cancelNative;
@@ -254,7 +272,7 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
    engine.synthesizeStream(text,()->request.cancelled||destroyed||playback.stopped(),(samples,complete)->{
     if(request.cancelled||destroyed)return false;
     if(!request.resolvedEarly){
-     if(reply){AlphaVoiceLatencyProbe.TRIALS.mark(trial,"tts-ready",System.nanoTime());if(localEngine.loads()!=loadsBefore)AlphaVoiceLatencyProbe.TRIALS.engineLoaded(trial,"tts-load");}
+     if(reply){VoiceLatencyProbe.TRIALS.mark(trial,"tts-ready",System.nanoTime());if(localEngine.loads()!=loadsBefore)VoiceLatencyProbe.TRIALS.engineLoaded(trial,"tts-load");}
      refused[0]=publishStream(call,request,playback,id,reply,trial);
      if(refused[0]!=null){Arrays.fill(samples,0);return false;}
     }
@@ -290,14 +308,14 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
  private StreamingSpeechPlayback.Listener streamListener(String id,VoiceLatencyTrials.Trial trial,StreamingSpeechPlayback[] self){
   android.content.Context app=getContext().getApplicationContext();
   return new StreamingSpeechPlayback.Listener(){
-   public void firstFrame(long nanos){if(trial==null)return;VoiceLatencyTrials.Trial owned=AlphaVoiceLatencyProbe.TRIALS.firstPcm(trial,nanos);if(owned!=null)AlphaVoiceLatencyProbe.stampEnvironment(app,owned);}
-   public void audible(long nanos,String clock){if(trial!=null)AlphaVoiceLatencyProbe.TRIALS.audible(trial,nanos,clock);}
+   public void firstFrame(long nanos){if(trial==null)return;VoiceLatencyTrials.Trial owned=VoiceLatencyProbe.TRIALS.firstPcm(trial,nanos);if(owned!=null)VoiceLatencyProbe.stampEnvironment(app,owned);}
+   public void audible(long nanos,String clock){if(trial!=null)VoiceLatencyProbe.TRIALS.audible(trial,nanos,clock);}
    public void ended(boolean silent){
-    if(trial!=null)AlphaVoiceLatencyProbe.TRIALS.failed(trial,silent?"silent-response":"no-audible-time"); // No-op once audible passed it.
+    if(trial!=null)VoiceLatencyProbe.TRIALS.failed(trial,silent?"silent-response":"no-audible-time"); // No-op once audible passed it.
     main.post(()->{if(streamPlayback!=self[0])return;clearPlayback(false);JSObject event=new JSObject();event.put("playbackId",id);notifyListeners("playbackEnded",event);});
    }
    public void failed(String reason){
-    if(trial!=null)AlphaVoiceLatencyProbe.TRIALS.failed(trial,reason);
+    if(trial!=null)VoiceLatencyProbe.TRIALS.failed(trial,reason);
     main.post(()->{if(streamPlayback!=self[0])return;clearPlayback(false);JSObject event=new JSObject();event.put("playbackId",id);notifyListeners("playbackFailed",event);});
    }
   };
@@ -311,7 +329,7 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
   CountDownLatch completed=new CountDownLatch(1);
   File file=File.createTempFile("alpha-cloud-tts-",".audio",getContext().getCacheDir());try{try(FileOutputStream out=new FileOutputStream(file)){out.write(audio);}if(request.cancelled||destroyed)throw new IOException();main.post(()->{try{if(request.cancelled||destroyed){file.delete();request.failure="Voice request cancelled";return;}if(Boolean.FALSE.equals(call.getBoolean("replace",true))&&playbackFile!=null){file.delete();request.failure="Speaker is in use";request.failureCode="playback-busy";return;}clearPlayback();playbackFile=file;playbackRequestId=call.getString("requestId");playbackId=UUID.randomUUID().toString();JSObject value=new JSObject();value.put("playbackId",playbackId);request.result=value;}catch(RuntimeException error){request.failure="Playback preparation failed";file.delete();}finally{completed.countDown();}});completed.await();}catch(Exception error){file.delete();throw error;}finally{Arrays.fill(audio,(byte)0);}
  });}
- @PluginMethod public void play(PluginCall call){main.post(()->{try{if(streamPlayback!=null&&Objects.equals(playbackId,call.getString("playbackId"))){playStream(call);return;}if(playbackFile==null||!Objects.equals(playbackId,call.getString("playbackId"))){call.reject("Playback unavailable");return;}if(player!=null){player.release();player=null;}if(preparingPlayback!=null)preparingPlayback.reject("Playback replaced");preparingPlayback=call;MediaPlayer next=new MediaPlayer();player=next;next.setAudioAttributes(AlphaSpeechAudioFocus.ATTRIBUTES);next.setDataSource(playbackFile.getAbsolutePath());final String activePlaybackId=playbackId;next.setOnCompletionListener(p->{if(player==p){clearPlayback(false);JSObject event=new JSObject();event.put("playbackId",activePlaybackId);notifyListeners("playbackEnded",event);}});next.setOnErrorListener((p,w,e)->{if(player==p){clearPlayback(false);JSObject event=new JSObject();event.put("playbackId",activePlaybackId);notifyListeners("playbackFailed",event);}return true;});next.setOnPreparedListener(p->{if(player==p&&!destroyed){try{String refusal=focus.acquire();if(refusal!=null){preparingPlayback=null;clearPlayback();call.reject(refusalMessage(refusal),refusal);return;}p.start();if(playbackLocalReply)AlphaVoiceLatencyProbe.playbackStarted(playbackTrial,getContext(),p,main,playbackLeadIn,playbackFrames,playbackRate,()->player==p&&!destroyed);preparingPlayback=null;call.resolve();}catch(RuntimeException error){clearPlayback();}}else call.reject("Playback cancelled");});next.prepareAsync();}catch(Exception error){clearPlayback();call.reject("Playback unavailable");}});}
+ @PluginMethod public void play(PluginCall call){main.post(()->{try{if(streamPlayback!=null&&Objects.equals(playbackId,call.getString("playbackId"))){playStream(call);return;}if(playbackFile==null||!Objects.equals(playbackId,call.getString("playbackId"))){call.reject("Playback unavailable");return;}if(player!=null){player.release();player=null;}if(preparingPlayback!=null)preparingPlayback.reject("Playback replaced");preparingPlayback=call;MediaPlayer next=new MediaPlayer();player=next;next.setAudioAttributes(SpeechAudioFocus.ATTRIBUTES);next.setDataSource(playbackFile.getAbsolutePath());final String activePlaybackId=playbackId;next.setOnCompletionListener(p->{if(player==p){clearPlayback(false);JSObject event=new JSObject();event.put("playbackId",activePlaybackId);notifyListeners("playbackEnded",event);}});next.setOnErrorListener((p,w,e)->{if(player==p){clearPlayback(false);JSObject event=new JSObject();event.put("playbackId",activePlaybackId);notifyListeners("playbackFailed",event);}return true;});next.setOnPreparedListener(p->{if(player==p&&!destroyed){try{String refusal=focus.acquire();if(refusal!=null){preparingPlayback=null;clearPlayback();call.reject(refusalMessage(refusal),refusal);return;}p.start();if(playbackLocalReply)VoiceLatencyProbe.playbackStarted(playbackTrial,getContext(),p,main,playbackLeadIn,playbackFrames,playbackRate,()->player==p&&!destroyed);preparingPlayback=null;call.resolve();}catch(RuntimeException error){clearPlayback();}}else call.reject("Playback cancelled");});next.prepareAsync();}catch(Exception error){clearPlayback();call.reject("Playback unavailable");}});}
  static final String CALL_MESSAGE="Speech is paused while a phone call is active";
  private static String refusalMessage(String refusal){return SpeechAudioFocusPolicy.CALL_ACTIVE.equals(refusal)?CALL_MESSAGE:"Another app is using the speaker";}
  /** Starts a published streamed utterance: audio focus first, never during a call (issue #397). */
@@ -335,12 +353,12 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
  /** The audio mode entered a call (Android 12+ watcher): stop speech and assistant capture honestly. */
  private void callStarted(){if(destroyed)return;stopSpeechFor(SpeechAudioFocusPolicy.CALL_ACTIVE);stopCaptureForCall();}
  private void stopCaptureForCall(){
-  AlphaLiveVoiceCapture active=liveCurrent;
+  LiveVoiceCapture active=liveCurrent;
   if(active!=null)PluginWorkers.submit(liveStopWorker,()->active.interrupt(SpeechAudioFocusPolicy.CALL_ACTIVE),()->{/* Shut down: the capture already stopped. */});
   if(capture!=null)capture.stopAutomatically();
  }
  private void clearPlayback(){clearPlayback(true);}
- private void clearPlayback(boolean stopped){String previous=playbackId;if(preparingPlayback!=null){preparingPlayback.reject("Playback cancelled");preparingPlayback=null;}if(player!=null){player.release();player=null;}if(streamPlayback!=null){streamPlayback.stop();streamPlayback=null;AlphaVoiceLatencyProbe.TRIALS.stopped(playbackTrial);}if(focus!=null)focus.release();if(playbackFile!=null)playbackFile.delete();playbackFile=null;playbackId=null;playbackRequestId=null;playbackLocalReply=false;playbackTrial=null;playbackLeadIn=-1;if(stopped&&previous!=null){JSObject event=new JSObject();event.put("playbackId",previous);notifyListeners("playbackStopped",event);}}
+ private void clearPlayback(boolean stopped){String previous=playbackId;if(preparingPlayback!=null){preparingPlayback.reject("Playback cancelled");preparingPlayback=null;}if(player!=null){player.release();player=null;}if(streamPlayback!=null){streamPlayback.stop();streamPlayback=null;VoiceLatencyProbe.TRIALS.stopped(playbackTrial);}if(focus!=null)focus.release();if(playbackFile!=null)playbackFile.delete();playbackFile=null;playbackId=null;playbackRequestId=null;playbackLocalReply=false;playbackTrial=null;playbackLeadIn=-1;if(stopped&&previous!=null){JSObject event=new JSObject();event.put("playbackId",previous);notifyListeners("playbackStopped",event);}}
  @PluginMethod public void stopPlayback(PluginCall call){String requestId=call.getString("requestId");main.post(()->{if(requestId==null||Objects.equals(playbackRequestId,requestId))clearPlayback();call.resolve();});}
  /**
   * Issue #395: the finished native latency trials (alpha-native-voice-timing-v3, numbers, fixed
@@ -349,7 +367,7 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
  @PluginMethod public void nativeVoiceTiming(PluginCall call){
   // Off the live capture worker: the first export may still be hashing the engine.
   android.content.Context app=getContext().getApplicationContext();
-  Thread export=new Thread(()->{try{call.resolve(JSObject.fromJSONObject(AlphaVoiceLatencyProbe.export(app)));}catch(Exception error){call.reject("Voice timing unavailable");}},"alpha-voice-timing-export");
+  Thread export=new Thread(()->{try{call.resolve(JSObject.fromJSONObject(VoiceLatencyProbe.export(app)));}catch(Exception error){call.reject("Voice timing unavailable");}},"alpha-voice-timing-export");
   export.setDaemon(true);export.start();
  }
  /**
@@ -363,18 +381,19 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
   String stage=call.getString("stage","");
   if(!VoiceLatencyTrials.rendererStage(stage)){call.reject("Invalid voice turn stage");return;}
   String turnId=call.getString("voiceTurnId");
-  VoiceLatencyTrials.Trial trial=turnId==null?AlphaVoiceLatencyProbe.TRIALS.pending():AlphaVoiceLatencyProbe.TRIALS.forTurn(turnId);
-  JSObject out=new JSObject();out.put("marked",trial!=null&&AlphaVoiceLatencyProbe.TRIALS.mark(trial,stage,at));
+  VoiceLatencyTrials.Trial trial=turnId==null?VoiceLatencyProbe.TRIALS.pending():VoiceLatencyProbe.TRIALS.forTurn(turnId);
+  JSObject out=new JSObject();out.put("marked",trial!=null&&VoiceLatencyProbe.TRIALS.mark(trial,stage,at));
   if(trial!=null)out.put("voiceTurnId",trial.turnId);
   call.resolve(out);
  }
- @PluginMethod public void clearNativeVoiceTiming(PluginCall call){AlphaVoiceLatencyProbe.TRIALS.clear();call.resolve();}
+ @PluginMethod public void clearNativeVoiceTiming(PluginCall call){VoiceLatencyProbe.TRIALS.clear();call.resolve();}
  @PluginMethod public void cancel(PluginCall call){Pending request=pending.get(call.getString("requestId",""));if(request!=null)request.cancel();call.resolve();}
  @Override protected void handleOnResume(){speechForeground=true;scheduleLocalRelease(120000);super.handleOnResume();}
- // Live voice (live-voice.ts / native-live-voice.ts): app-process capture with Silero VAD. One capture at a time.
+ // Live voice (live-voice.ts / native-live-voice.ts): shared app-process capture with Silero VAD on the
+ // process-wide inference session. One capture at a time.
  private final ExecutorService liveWorker=Executors.newSingleThreadExecutor();
- private AlphaLiveVoiceCapture live; // Guarded by liveWorker (all access runs on it).
- private volatile AlphaLiveVoiceCapture liveCurrent; // The running capture, for call interruption off liveWorker.
+ private LiveVoiceCapture live; // Guarded by liveWorker (all access runs on it).
+ private volatile LiveVoiceCapture liveCurrent; // The running capture, for call interruption off liveWorker.
  private final ExecutorService nativeVoiceWorker=new ThreadPoolExecutor(1,1,30,TimeUnit.SECONDS,new SynchronousQueue<>());
  private final Map<String,NativeLiveVoicePipe> livePipes=new ConcurrentHashMap<>();
  private final LiveCaptureAdmission liveAdmission=new LiveCaptureAdmission();
@@ -382,8 +401,10 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
  private final Map<String,LiveCaptureAdmission.Ticket> livePermissionEpochs=new ConcurrentHashMap<>();
  @PluginMethod public void liveCaptureStatus(PluginCall call){
   boolean permitted=getPermissionState("microphone")==PermissionState.GRANTED;
-  PluginWorkers.submit(liveWorker,()->{JSObject result=new JSObject();result.put("permission",permitted);result.put("nativeTransport",true);result.put("available",!destroyed&&AlphaLiveVoiceCapture.vadAvailable(getContext()));call.resolve(result);},()->call.resolve(new JSObject().put("permission",permitted).put("available",false)));
+  PluginWorkers.submit(liveWorker,()->{JSObject result=new JSObject();result.put("permission",permitted);result.put("nativeTransport",true);result.put("available",!destroyed&&vadAvailable());call.resolve(result);},()->call.resolve(new JSObject().put("permission",permitted).put("available",false)));
  }
+ /** The shared VAD opens on this process's inference session (verifies the bundle once; liveWorker only). */
+ private boolean vadAvailable(){try{return LiveVoiceCapture.vadAvailable(VoiceAssets.sharedInference(getContext()));}catch(Exception|Error unavailable){return false;}}
  @PluginMethod public void startLiveCapture(PluginCall call){
   String id=call.getString("captureId","");
   if(!id.matches("[0-9a-fA-F-]{36}")){call.reject("Invalid live capture");return;}
@@ -408,9 +429,11 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
      },id,call.getString("roomId",null)):null;
     if(pipe!=null){livePipes.put(id,pipe);if(!pipe.start(nativeVoiceWorker)){livePipes.remove(id,pipe);call.reject("Native voice transport busy");return;}if(!pipe.ready().get(10000,TimeUnit.MILLISECONDS))throw new IllegalStateException("Native voice startup unavailable");}
    }catch(Exception unavailable){closeNativePipe(id,true,System.currentTimeMillis());call.reject("Native voice enrollment unavailable");return;}
-   AlphaLiveVoiceCapture next=new AlphaLiveVoiceCapture(getContext(),id,new AlphaLiveVoiceCapture.Sink(){
+   final InferenceSession inference;
+   try{inference=VoiceAssets.sharedInference(getContext());}catch(Exception|Error unavailable){closeNativePipe(id,true,System.currentTimeMillis());call.reject("Live capture could not start","capture");return;}
+   LiveVoiceCapture next=new LiveVoiceCapture(getContext(),inference,id,new LiveVoiceCapture.Sink(){
     private boolean admitted(){return !destroyed&&speechForeground&&e==epoch.get()&&liveAdmission.events(ticket);}
-    public void frames(String captureId,JSArray frames,JSArray vad,float peak){if(!admitted())return;notifyListeners("liveCaptureFrames",new JSObject().put("captureId",captureId).put("frames",pipe==null?frames:new JSArray()).put("vad",vad).put("peak",peak));if(pipe!=null)pipe.offer(frames,vad);}
+    public void frames(String captureId,JSONArray frames,JSONArray vad,float peak){if(!admitted())return;notifyListeners("liveCaptureFrames",new JSObject().put("captureId",captureId).put("frames",pipe==null?frames:new JSArray()).put("vad",vad).put("peak",peak));if(pipe!=null)pipe.offer(frames,vad);}
     public void ended(String captureId,String error){if(!admitted())return;JSObject event=new JSObject().put("captureId",captureId);if(error!=null)event.put("error",error);notifyListeners("liveCaptureEnded",event);if(error!=null&&pipe!=null)pipe.close(true,System.currentTimeMillis());}
    },Boolean.TRUE.equals(call.getBoolean("echoCancel",false)));
    // Publish cancellation before native startup. The callback only marks and schedules: no UI join/AudioRecord.stop.
@@ -418,7 +441,7 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
    try{
     next.start();
     if(destroyed||!speechForeground||e!=epoch.get()||!liveAdmission.current(ticket)){next.stop();closeNativePipe(id,true,System.currentTimeMillis());call.reject("Recording cancelled");return;}
-    live=next;liveCurrent=next;call.resolve(new JSObject().put("captureId",id).put("sampleRate",AlphaLiveVoiceCapture.SAMPLE_RATE).put("echoCancelled",next.echoCancelled()).put("nativeAsr",pipe!=null));
+    live=next;liveCurrent=next;call.resolve(new JSObject().put("captureId",id).put("sampleRate",LiveVoiceCapture.SAMPLE_RATE).put("echoCancelled",next.echoCancelled()).put("nativeAsr",pipe!=null));
    }catch(Exception|Error error){next.stop();closeNativePipe(id,true,System.currentTimeMillis());call.reject("Live capture could not start","capture");}
   },()->call.reject("Voice unavailable"));
  }

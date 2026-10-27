@@ -85,7 +85,7 @@ android {
   // Decode threads may be supplied by the host; empty means one per big core.
   def elizaAsrThreads = (System.getenv('ELIZA_ASR_THREADS') ?: '').trim()
   buildConfigField 'String', 'ELIZA_ASR_THREADS', "\"${elizaAsrThreads ==~ /[0-9]{1,2}/ ? elizaAsrThreads : ''}\""
-  // The source commit each voice latency trial records (issue #395, AlphaVoiceLatencyProbe).
+  // The source commit each voice latency trial records (issue #395, shared VoiceLatencyProbe via AlphaApplication).
   // A tree with tracked changes is recorded as dirty; the aggregator never accepts dirty trials.
   def sourceGit = { List<String> command ->
    try { providers.exec { commandLine(['git', '-C', rootProject.projectDir.parentFile.absolutePath] + command); ignoreExitValue = true }.standardOutput.asText.get().trim() }

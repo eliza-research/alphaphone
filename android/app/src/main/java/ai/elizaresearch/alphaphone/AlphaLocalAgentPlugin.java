@@ -86,6 +86,13 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   if(refusal==null)invalidateOwnCalls();
   return refusal;
  }
+ /**
+  * The native owner a cold listener wake is bound to (SenseListenerClient.admitOwner): the stored
+  * provider admission generation, a random UUID or NO_PROVIDER_GENERATION and never a credential.
+  * A Cloud account change between the wake and the renderer's first authenticated binding changes
+  * it, so that wake only opens the assistant. Null when the stored admission is invalid.
+  */
+ static String invocationOwner(Context context){return storedProviderGeneration(new AlphaCredentialStore(context));}
  /** Stored provider admission generation; NO_PROVIDER_GENERATION when no provider is stored (the agent runs unbound and surfaces attach to it as to a bound one); null when legacy or no longer valid. Never writes. */
  private static String storedProviderGeneration(AlphaCredentialStore store){
   try{

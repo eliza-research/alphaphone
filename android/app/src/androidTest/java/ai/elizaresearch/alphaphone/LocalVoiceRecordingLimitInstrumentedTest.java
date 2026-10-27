@@ -1,5 +1,6 @@
 package ai.elizaresearch.alphaphone;
 
+import ai.eliza.voice.LocalSpeechEngine;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -29,7 +30,7 @@ public final class LocalVoiceRecordingLimitInstrumentedTest {
    JSObject stopped=events.poll(36,TimeUnit.SECONDS);assertNotNull("Native deadline fires without any renderer timer",stopped);assertEquals("recorded",stopped.getString("status"));
    File selected=capture.selected(started.getString("recordingId"));assertNotNull(selected);
    byte[] wav=AlphaVoicePcm.decode(selected,()->false);float[] full;
-   try{full=AlphaLocalSpeechEngine.readMono16kWav(new ByteArrayInputStream(wav));}finally{Arrays.fill(wav,(byte)0);}
+   try{full=LocalSpeechEngine.readMono16kWav(new ByteArrayInputStream(wav));}finally{Arrays.fill(wav,(byte)0);}
    evidence.put("fullDecodedSamples",full.length).put("fullDecodedDurationMs",full.length/16).put("nativeReportedDurationMs",stopped.getLong("durationMs"));
    assertTrue("Captured a real near-limit recording",full.length>=16000*27);assertTrue("Entire decoded recording fits local ASR",full.length<=16000*30);Arrays.fill(full,0);
    evidence.put("pass",true).put("rendererTimerUsed",false).put("audioTruncated",false);
