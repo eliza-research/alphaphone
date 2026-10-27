@@ -1,0 +1,43 @@
+{
+  "observedAt": "2026-10-27T06:46:54.973492+00:00",
+  "historicalVersion11": {
+    "imageBuilt": true,
+    "flashExitCode": 0,
+    "bootCompleted": "1",
+    "archiveSha256": "053dcde1cfdea6c8a305fd0c0eec1f6ef02276a27d607c9275e9973fb79d401e",
+    "vbmetaMatched": true,
+    "residentAgent": {
+      "running": false,
+      "reason": "ipc-recovery-retention-limit (8 ipc-recovery-* directories retained; no bun child)",
+      "recoveryReviewPerformed": false
+    },
+    "receiptDigests": {
+      "build-result.json": "ccf8e2fb9c2b5159dafd82f63f1e35b77ba7d424048b3bf0c5a9bbdbe00ff54b",
+      "image-verification.json": "b2a326a1b387415e98779c2296dace233be712a79ed522e2e2c727c839dc92ec",
+      "flash-result.json": "15b4378277e9d67a914874f8fd42ec94279ce4ce5b36e973df2388acc139aebd",
+      "postboot.json": "cb0c7875eb01cc384ca00d159aa4dc72017fa3c962328fc04c5d6d67f9a9d67f"
+    }
+  },
+  "currentPixelConnected": false,
+  "latestIntegration": {
+    "pr": 624,
+    "commit": "d1487df60f634a3fdf915fedd9a41f4a2a2ffa96",
+    "runtime": "6293e29bf398603d0ea233871edbdeb57e5c2405",
+    "approval": "required",
+    "notInstalledByThisReview": true
+  },
+  "managedSigningReview": {
+    "pr": 622,
+    "integrationTested": "d1487df60f634a3fdf915fedd9a41f4a2a2ffa96",
+    "command": "node --test test/aosp-release-signing.test.mjs",
+    "passed": 25,
+    "failed": 0,
+    "realManagedTokenSigning": false,
+    "otaAndRecoveryDrills": false
+  },
+  "upstreamZodFix": {
+    "pr": 37596,
+    "mergedAt": "2026-10-25T03:57:24Z"
+  },
+  "goalComplete": false
+}
