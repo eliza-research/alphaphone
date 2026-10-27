@@ -146,7 +146,7 @@ const WITH_RESIDENT_RUNTIME = 'apk (only one that packages the resident runtime)
 function embeddingHostComponents(root) {
   if (!exists(root, EMBEDDING_HOST)) return [];
   const host = readJson(root, EMBEDDING_HOST);
-  const hostScope = exists(root, 'vendor/eliza/packages/app/platforms/android/paradee-voice/consumer.gradle') ? 'legacy qualification record; incompatible with current Paradee engine; not current packaged bytes' : WITH_RESIDENT_RUNTIME;
+  const hostScope = exists(root, 'vendor/eliza/plugins/plugin-local-inference/native/android/consumer.gradle') ? 'legacy qualification record; incompatible with current Paradee engine; not current packaged bytes' : WITH_RESIDENT_RUNTIME;
   const source = `${EMBEDDING_HOST} (elizaOS ${host.pin}, engine ${host.forkPin}, qualification receipt sha256 ${host.qualificationReceiptSha256})`;
   return [
     ...host.libraries.map(library => ({

@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 // This receipt is authenticated by the current embedding admission record. Its SDK
 // root is part of the reviewed bytes: NDK header paths survive in JNI debug data
 // and also affect the engine's build ID before its debug sections are stripped.
-export const SDK_PROVENANCE_RECEIPT = 'docs/evidence/native-58df/embedding-58df-QUALIFICATION.json';
+export const SDK_PROVENANCE_RECEIPT = 'docs/evidence/native-c95a/embedding-QUALIFICATION.json';
 export function embeddingBuildRemap(productRoot, {sdk, staging, fork, build}) {
  const manifest=JSON.parse(fs.readFileSync(path.join(productRoot,'android/embedding-host/qualified-host.json'),'utf8'));
  const bytes=fs.readFileSync(path.join(productRoot,SDK_PROVENANCE_RECEIPT));

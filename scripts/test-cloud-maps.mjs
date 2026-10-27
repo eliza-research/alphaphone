@@ -168,3 +168,20 @@ assert.equal(cloudMapsFailure(Object.assign(cloudError(429,'rate_limited'),{data
    assert.equal(cloudMapsFailure(refusal(reset)).message,'Maps request limit reached. Try again later.');
  } finally {Date.now=originalNow;}
 }
+
+// Cloud place IDs are opaque; provider syntax belongs to the Cloud adapter.
+{
+ let provider;
+ const calls = [];
+ const maps = createCloudMaps(() => async (path, _signal, body) => {
+  if (path === 'capabilities') return coverage;
+  calls.push(body.id);
+  return {place:{...place, id:body.id}};
+ }, (_config, next) => {provider = next;});
+ await maps.initializeCloudMaps();
+ for (const id of ['provider:opaque/place-42', 'N0001234']) {
+  assert.equal((await provider.detail(id, new AbortController().signal)).id, id);
+ }
+ for (const id of ['', 'x'.repeat(513)]) assert.equal(await provider.detail(id, new AbortController().signal), null);
+ assert.deepEqual(calls, ['provider:opaque/place-42', 'N0001234']);
+}

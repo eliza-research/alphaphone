@@ -7,7 +7,7 @@ import {readFileSync} from 'node:fs';
 import {nativeSource,fixture,runJvm,jsonJarSkip} from './fixtures/jvm-tools.mjs';
 
 test('Cloud and direct environments, expiry, credential match, identity and rollback',{skip:jsonJarSkip},()=>{
- assert.match(runJvm([nativeSource('LocalAgentProviderAdmission.java'),fixture('LocalAgentProviderAdmissionTest.java')],'ai.elizaresearch.alphaphone.LocalAgentProviderAdmissionTest',{json:true}),/^PASS local agent provider admission/);
+ assert.match(runJvm([nativeSource('CloudDeployment.java'),nativeSource('LocalAgentProviderAdmission.java'),fixture('LocalAgentProviderAdmissionTest.java')],'ai.elizaresearch.alphaphone.LocalAgentProviderAdmissionTest',{json:true}),/^PASS local agent provider admission/);
 });
 
 test('the plugin delegates provider rules to the admission class and keeps the direct key a test-mocks route',()=>{

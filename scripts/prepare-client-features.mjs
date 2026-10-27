@@ -110,14 +110,14 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   if(projectVoice){
   // Browser consumer projections retain the canonical implementations and exact type declarations.
   // The dashboard transport is unavailable here: Alpha must inject its owned, private fetch.
-  if (upstream.pin !== '58dfddf87ee5adec414746a86a23dada124fbbae') throw Error('Review voice projections for the new upstream pin.');
+  if (upstream.pin !== '04658de1b942510e0d37efc777c154530f5c0ef1') throw Error('Review voice projections for the new upstream pin.');
   // The camera contract is upstream at this pin; carry it with the other device-action contracts.
   for(const [name,file] of upstream.read('plugins/plugin-assistant/src/services/device-actions/camera-contract.ts'))source.set(name,file);
 
   const projectionInputs={
     'packages/host/src/voice.ts':'19b5c0e5bbe03a27d3641e6edb4ab40bc989084a2bdd5aa9308e9494843aa0b1',
     'packages/ui/src/voice/voice-session-client.ts':'0692de311d8231262af1ca2113563628836faf01c2ac7bb96f16c51ad22fd6b1',
-    'packages/ui/src/voice/voice-chat-types.ts':'043e9a3cd224bc78c67e460070f4e3006120d87db50149f5e2515572eab1cd21',
+    'packages/ui/src/voice/voice-chat-types.ts':'bb3eb85d76fb4766c91221c3964347c0284ddb9bbdaba765944cc4ea8e96f745',
     'packages/core/src/logger.ts':'8c2401ba44a79b94a11095bdce3568f65374d2d7b1421c5894b08753feafb7d1',
   };
   for(const [name,digest] of Object.entries(projectionInputs))if(sourceFiles[name]!==digest)throw Error('Review changed voice projection input: '+name);

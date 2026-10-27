@@ -169,9 +169,10 @@ export function checkListenerDescriptor(descriptor, { appId, apkSha256, signer }
 export function listenerProductMakefile({ systemuiChip = true } = {}) {
   return `
 # Alpha Phone always-on listener (scripts/stage-aosp.mjs --listener-apk).
-include $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))/listener/listener.mk
+alphaphone_listener_product_dir := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
+include $(alphaphone_listener_product_dir)/listener/listener.mk
 ` + (systemuiChip ? `# The listener captures only with SystemUI's Listening chip lease: the image's SystemUI must carry the chip patch.
-include $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))/listener/systemui/chip/chip.mk
+include $(alphaphone_listener_product_dir)/listener/systemui/chip/chip.mk
 ` : "");
 }
 

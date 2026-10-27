@@ -20,12 +20,12 @@ export function notifyGoogleAccountsChanged(): void {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(GOOGLE_ACCOUNTS_CHANGED));
 }
 
-export function googleDisconnectConfirmation(label: string): string {
-  return `Disconnect ${label} from Alpha Phone?\n\nThis removes Eliza Cloud's stored Google connection, including Gmail and Calendar access granted through it. Your Google account, mail and calendar events are not deleted. Local drafts stay in this app until you discard them.`;
+export function googleDisconnectConfirmation(label: string, serviceName = 'Cloud'): string {
+  return `Disconnect ${label} from Alpha Phone?\n\nThis removes ${serviceName}'s stored Google connection, including Gmail and Calendar access granted through it. Your Google account, mail and calendar events are not deleted. Local drafts stay in this app until you discard them.`;
 }
 
-export function googleDisconnectMessage(outcome: GmailDisconnectOutcome, label: string): string {
-  if (outcome === 'disconnected') return `${label} is disconnected from Alpha. Eliza Cloud no longer holds this Google connection's Gmail or Calendar access. Your Google account, mail and events were not deleted; local drafts stay in this app. Google may still list the app in your Google Account permissions.`;
+export function googleDisconnectMessage(outcome: GmailDisconnectOutcome, label: string, serviceName = 'Cloud'): string {
+  if (outcome === 'disconnected') return `${label} is disconnected from Alpha. ${serviceName} no longer holds this Google connection's Gmail or Calendar access. Your Google account, mail and events were not deleted; local drafts stay in this app. Google may still list the app in your Google Account permissions.`;
   if (outcome === 'still-connected') return `Disconnect was requested, but Google still reports ${label} as connected to Alpha. Check the connection again.`;
   return `Disconnect of ${label} was not confirmed. Check the connection before trying again.`;
 }

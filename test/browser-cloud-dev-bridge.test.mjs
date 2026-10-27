@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtemp,writeFile,readFile,rm,stat} from 'node:fs/promises';
+import {mkdtemp,writeFile,readFile,rm,stat,mkdir} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
@@ -9,6 +9,8 @@ import {createServer} from 'node:http';
 if(!process.execArgv.some((arg,i)=>arg==='--import'&&process.execArgv[i+1]==='tsx')){const child=spawnSync(process.execPath,['--import','tsx',process.argv[1]],{stdio:'inherit',timeout:60000});if(child.error)throw child.error;process.exit(child.status??1);}
 const {createBrowserCloudDevHandler}=await import('../scripts/browser-cloud-dev-bridge.ts');
 const {CloudProtocol}=await import('../apps/app/src/runtime/cloud-protocol.ts');
+const {cloudStorageNamespace,productionCloud}=await import('../apps/app/src/runtime/cloud-deployment.generated.ts');
+const profileFile=(profile,name)=>join(profile,cloudStorageNamespace.replaceAll(':','-'),name);
 const {BrowserCloudConnection}=await import('../apps/app/src/browser/cloud-connection.ts');
 const owner='11111111-1111-4111-8111-111111111111',org='22222222-2222-4222-8222-222222222222',credentialId='33333333-3333-4333-8333-333333333333',reference='browser-cloud-reference:44444444-4444-4444-8444-444444444444';
 const secret='synthetic-cloud-credential-not-a-real-key';
@@ -36,7 +38,8 @@ test('Cloud browser login admits only one session and the optional fixed Alpha h
 });
 async function fixture(resident,environment){
  const profile=await mkdtemp(join(tmpdir(),'alpha-browser-cloud-')),file=join(profile,'existing-secret');await writeFile(file,secret,{mode:0o600});
- const seed={environment:'production',credentialFile:file,credentialSha256:createHash('sha256').update(secret).digest('hex'),userId:owner,organizationId:org,credentialReference:reference,credentialId};await writeFile(join(profile,'initial-credential.json'),JSON.stringify(seed),{mode:0o600});
+ await mkdir(join(profile,cloudStorageNamespace.replaceAll(':','-')),{recursive:true,mode:0o700});
+ const seed={environment:'production',credentialFile:file,credentialSha256:createHash('sha256').update(secret).digest('hex'),userId:owner,organizationId:org,credentialReference:reference,credentialId};await writeFile(profileFile(profile,'initial-credential.json'),JSON.stringify(seed),{mode:0o600});
  const calls=[],diagnostics=[];let signIn=null,response=async()=>new Response('{}'),pollResponse=async()=>Response.json({status:'authenticated',apiKey:secret});const session=randomUUID();
  const request=async(url,input={})=>{
   const path=new URL(url).pathname;calls.push({url,input});
@@ -83,7 +86,7 @@ test('normal canonical CLI poll claims stay server-private and commit by referen
    const store={acceptsReferences:true,read:async()=>{const r=await account.secureRead({slot:'cloud:production'});return r.value?JSON.parse(r.value):null;},write:async(_env,value)=>account.secureWrite({slot:'cloud:production',value:JSON.stringify({...value,credentialId:randomUUID()})}),clear:async()=>account.secureRemove({slot:'cloud:production'})};
    const client=new CloudProtocol('production',input=>account.request({...input,requestId:randomUUID(),body:input.body===undefined?undefined:JSON.stringify(input.body)}),store,async()=>{});
    await client.login(new AbortController().signal);const credential=await store.read();assert.equal(credential.token,undefined);assert.match(credential.credentialReference,/^browser-cloud-reference:/);assert.notEqual(credential.credentialReference,reference);assert.deepEqual(await client.identity(new AbortController().signal),{userId:owner,organizationId:org,email:'owned@example.invalid'});
-   assert.equal(JSON.stringify(credential).includes(secret),false);const privateState=JSON.parse(await readFile(join(f.profile,'credentials.json'),'utf8'));assert.equal(privateState.production.token,secret);assert.equal((await stat(join(f.profile,'credentials.json'))).mode&0o077,0);
+   assert.equal(JSON.stringify(credential).includes(secret),false);const privateState=JSON.parse(await readFile(profileFile(f.profile,'credentials.json'),'utf8'));assert.equal(privateState.production.token,secret);assert.equal((await stat(profileFile(f.profile,'credentials.json'))).mode&0o077,0);
    await client.disconnect();await f.restart();assert.equal((await f.rpc({operation:'secureRead',slot:'cloud:production'})).data.value,null);
   }finally{globalThis.fetch=original;}
  }finally{await f.close();}
@@ -155,7 +158,7 @@ for(const change of ['logout','replacement'])test('in-flight login poll cannot p
   const pending=claim(f);await entered.promise;
   let replacement;
   if(change==='logout')await f.rpc({operation:'secureRemove',slot:'cloud:production',previousReference:reference});
-  else{replacement={credentialReference:'browser-cloud-reference:'+randomUUID(),credentialId:randomUUID(),token:secret,userId:owner,organizationId:org};await writeFile(join(f.profile,'credentials.json'),JSON.stringify({production:replacement}),{mode:0o600});}
+  else{replacement={credentialReference:'browser-cloud-reference:'+randomUUID(),credentialId:randomUUID(),token:secret,userId:owner,organizationId:org};await writeFile(profileFile(f.profile,'credentials.json'),JSON.stringify({production:replacement}),{mode:0o600});}
   release.resolve();const result=await pending;assert.equal(result.status,409);assert.equal(result.data.credentialReference,undefined);
   const current=(await f.rpc({operation:'secureRead',slot:'cloud:production'})).data.value;assert.equal(current===null?null:JSON.parse(current).credentialReference,replacement?.credentialReference??null);
  }finally{await f.close();}
@@ -201,7 +204,7 @@ test('managed Google bridge admits combined consent and encoded owner reads with
   const search=new URLSearchParams({side:'owner',grantId:grant,query:'from:owner@example.invalid after:2026/10/01',maxResults:'25',pageToken:'opaque+/cursor='});
   assert.equal((await call('/api/v1/eliza/google/gmail/search?'+search)).data.data.query.pageToken,'opaque+/cursor=');
   for(const route of [`calendar/calendars?side=owner&grantId=${grant}`,`gmail/read?side=owner&grantId=${grant}&messageId=mail%2Fid`,`gmail/inbox-v1/capabilities?grantId=${grant}`,`gmail/inbox-v1/thread?grantId=${grant}&threadId=one&offset=25&historyId=old`,`gmail/inbox-v1/attachment?grantId=${grant}&messageId=one&partId=0.1&historyId=old`,`gmail/inbox-v1/drafts?grantId=${grant}`,`gmail/inbox-v1/draft?grantId=${grant}&draftId=one&content=1`])assert.equal((await call('/api/v1/eliza/google/'+route)).status,200,route);
-  const seed=JSON.parse(await readFile(join(f.profile,'initial-credential.json'),'utf8'));await writeFile(join(f.profile,'credentials.json'),JSON.stringify({staging:seed}),{mode:0o600});
+  const seed=JSON.parse(await readFile(profileFile(f.profile,'initial-credential.json'),'utf8'));await writeFile(profileFile(f.profile,'credentials.json'),JSON.stringify({staging:seed}),{mode:0o600});
   assert.equal((await call(`/api/v1/eliza/google/calendar/calendars?side=owner&grantId=${grant}`,'GET',undefined,'staging')).status,200);
   assert.equal(new URL(f.calls.at(-1).url).origin,'https://api-staging.eliza.app');
  }finally{await f.close();}
@@ -300,7 +303,7 @@ test('development host email sign-in mints a mobile key server-side and commits 
    for(let wait=0;wait<50&&!order.includes('/steward/auth/logout');wait++)await new Promise(resolve=>setTimeout(resolve,10));
    assert.ok(order.includes('/steward/auth/logout'),'the Steward session is revoked, best effort');
    const credential=await store.read();assert.equal(credential.token,undefined);assert.match(credential.credentialReference,/^browser-cloud-reference:/);assert.equal(JSON.stringify(credential).includes(minted),false);
-   const privateState=JSON.parse(await readFile(join(f.profile,'credentials.json'),'utf8'));assert.equal(privateState.production.token,minted);assert.equal(privateState.production.userId,newOwner);
+   const privateState=JSON.parse(await readFile(profileFile(f.profile,'credentials.json'),'utf8'));assert.equal(privateState.production.token,minted);assert.equal(privateState.production.userId,newOwner);
    assert.equal(JSON.stringify(outcome).includes(steward)||JSON.stringify(outcome).includes(minted),false,'no secret reaches the page');
    await assert.rejects(client.verifyEmailSignIn(started.attemptId,'123456',new AbortController().signal),error=>error.code==='expired','an attempt is single use');
   }finally{globalThis.fetch=original;}
@@ -350,7 +353,7 @@ test('a Cloud account change while the agent Gmail read is in flight drops the o
   let enter,release;const entered=new Promise(r=>{enter=r}),held=new Promise(r=>{release=r});
   f.setResponse(async()=>{enter();await held;return Response.json({messages:[{subject:'Old owner content'}]});});
   const pending=f.host().agentRead({url:'https://api.eliza.app/api/v1/eliza/google/gmail/search?side=owner&grantId='+credentialId+'&query=in%3Ainbox&maxResults=10',method:'GET',credentialReference:reference,signal:new AbortController().signal});
-  await entered;await writeFile(join(f.profile,'credentials.json'),JSON.stringify({production:{credentialReference:'browser-cloud-reference:'+randomUUID(),credentialId:randomUUID(),userId:owner,organizationId:org,token:secret}}),{mode:0o600});release();
+  await entered;await writeFile(profileFile(f.profile,'credentials.json'),JSON.stringify({production:{credentialReference:'browser-cloud-reference:'+randomUUID(),credentialId:randomUUID(),userId:owner,organizationId:org,token:secret}}),{mode:0o600});release();
   await assert.rejects(pending,error=>error.code==='account-changed');
  }finally{await f.close();}
 });
@@ -431,7 +434,7 @@ test('Maps data returning after a Cloud owner switch is discarded',async()=>{
   let enter;const entered=new Promise(r=>{enter=r}),held=new Promise(r=>{release=r});
   f.setResponse(async()=>{enter();await held;return Response.json({places:[{name:'Previous owner result'}]});});
   const pending=f.rpc({operation:'request',environment:'production',requestId:randomUUID(),input:{url:'https://api.eliza.app/api/v1/maps/places/search',method:'POST',credentialReference:reference,headers:{'Idempotency-Key':randomUUID()},body:JSON.stringify({query:'coffee'})}});
-  await entered;await writeFile(join(f.profile,'credentials.json'),JSON.stringify({production:{credentialReference:'browser-cloud-reference:'+randomUUID(),credentialId:randomUUID(),userId:owner,organizationId:org,token:secret}}),{mode:0o600});release();
+  await entered;await writeFile(profileFile(f.profile,'credentials.json'),JSON.stringify({production:{credentialReference:'browser-cloud-reference:'+randomUUID(),credentialId:randomUUID(),userId:owner,organizationId:org,token:secret}}),{mode:0o600});release();
   const result=await pending;assert.notEqual(result.status,200);assert.equal(JSON.stringify(result).includes('Previous owner result'),false);
  }finally{release?.();await f.close();}
 });
@@ -465,11 +468,11 @@ test('explicit Cloud resident rejects a different issuer before dispatch',async(
 });
 
 test('real CloudProtocol verifies a signed plan through public host keys without a credential reference',async()=>{
- const {checkEntitlement,ENTITLEMENT_TYPE,ENTITLEMENT_AUDIENCE}=await import('../apps/app/src/runtime/subscription-entitlement.ts');
+ const {checkEntitlement,ENTITLEMENT_TYPE}=await import('../apps/app/src/runtime/subscription-entitlement.ts');
  const pair=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
  const key={...await crypto.subtle.exportKey('jwk',pair.publicKey),kid:'host-public-keys-regression'};
  const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');const now=Math.floor(Date.now()/1000);
- const unsigned=encode({alg:'ES256',typ:ENTITLEMENT_TYPE,kid:key.kid})+'.'+encode({iss:'https://api.eliza.app',aud:ENTITLEMENT_AUDIENCE,sub:owner,org,jti:'synthetic-plan',iat:now-1,exp:now+300,plan:{id:'none',name:'No plan',status:'none'}});
+ const unsigned=encode({alg:'ES256',typ:ENTITLEMENT_TYPE,kid:key.kid})+'.'+encode({iss:productionCloud.api,aud:productionCloud.entitlementAudience,sub:owner,org,jti:'synthetic-plan',iat:now-1,exp:now+300,plan:{id:'none',name:'No plan',status:'none'}});
  const token=unsigned+'.'+Buffer.from(await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},pair.privateKey,Buffer.from(unsigned))).toString('base64url');
  const f=await fixture();try{
   let publicRead=false;f.setResponse(async(url,input)=>{if(new URL(url).pathname==='/api/v1/subscription/entitlement-keys'){assert.equal(new Headers(input.headers).get('Authorization'),null);publicRead=true;return Response.json({keys:[key]});}if(new URL(url).pathname==='/api/v1/subscription/entitlement')return Response.json({entitlement:token});return Response.json({},{status:404});});
@@ -482,8 +485,8 @@ test('real CloudProtocol verifies a signed plan through public host keys without
 
 for(const environment of ['production','staging'])test(`real Cloud client self-revokes its ${environment} host credential before local removal`,async()=>{
  const events=[],f=await fixture({clear:async()=>events.push('resident-cleared')},environment);
- const initial=JSON.parse(await readFile(join(f.profile,'initial-credential.json'),'utf8'));
- await writeFile(join(f.profile,'credentials.json'),JSON.stringify({[environment]:initial}),{mode:0o600});
+ const initial=JSON.parse(await readFile(profileFile(f.profile,'initial-credential.json'),'utf8'));
+ await writeFile(profileFile(f.profile,'credentials.json'),JSON.stringify({[environment]:initial}),{mode:0o600});
  try{
   f.setResponse(async(url,input)=>{assert.equal(url,`https://${environment==='staging'?'api-staging':'api'}.eliza.app/api/v1/api-keys/current`);assert.equal(input.method,'DELETE');assert.equal(input.body,undefined);events.push('server-revoked');return Response.json({success:true,status:'revoked'});});
   const store={acceptsReferences:true,read:async()=>{const r=await f.rpc({operation:'secureRead',slot:'cloud:'+environment});return r.data.value?JSON.parse(r.data.value):null;},write:async()=>{throw Error('Unexpected write');},clear:async()=>{const r=await f.rpc({operation:'secureRemove',slot:'cloud:'+environment,previousReference:reference});assert.equal(r.status,200);}};
@@ -587,4 +590,16 @@ test('stale logout identity cannot revoke or disconnect a newer reference before
  const store={acceptsReferences:true,async read(){return replacement;},async write(){},async clear(){clears++;},async clearIfCurrent(_env,expected){if(expected.credentialReference===replacement.credentialReference)clears++;}};
  const protocol=new CloudProtocol('production',async()=>{requests++;throw Error('Must not dispatch');},store,async()=>{}, {deleteRequests:true});
  await assert.rejects(protocol.revokeSession(new AbortController().signal,captured),/Cloud account changed/);await protocol.disconnect(captured);assert.equal(requests,0);assert.equal(clears,0);
+});
+
+test('legacy profile credentials cannot authenticate the configured deployment',async()=>{
+ const f=await fixture();try{
+  const seed=await readFile(profileFile(f.profile,'initial-credential.json'),'utf8');
+  await writeFile(join(f.profile,'initial-credential.json'),seed,{mode:0o600});
+  await rm(profileFile(f.profile,'initial-credential.json'));
+  const stored=await f.rpc({operation:'secureRead',slot:'cloud:production'});
+  assert.equal(stored.status,200);assert.equal(stored.data.value,null);
+  const result=await f.rpc({operation:'request',environment:'production',requestId:randomUUID(),input:{url:'https://api.eliza.app/api/v1/user',method:'GET',headers:{Accept:'application/json'},credentialReference:reference}});
+  assert.equal(result.status,401);assert.equal(f.calls.length,0);
+ }finally{await f.close();}
 });

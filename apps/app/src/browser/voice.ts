@@ -67,7 +67,7 @@ export class BrowserVoice extends WebPlugin {
  private async cloudBinding(input:{environment:string;credentialId:string}) {
   if(!devSurfacesEnabled)throw Error('Cloud voice requires the native app or a development host.');
   const connection=await this.connection,binding=connection.getCloudClient();
-  if(!binding||connection.getCloudEnvironment()!==input.environment||binding.credentialId!==input.credentialId)throw Object.assign(Error('Sign in to Eliza Cloud before using voice.'),{code:'voice-http-401'});
+  if(!binding||connection.getCloudEnvironment()!==input.environment||binding.credentialId!==input.credentialId)throw Object.assign(Error('Sign in to Cloud before using voice.'),{code:'voice-http-401'});
   const current=()=>{const next=connection.getCloudClient();if(document.hidden||connection.getCloudEnvironment()!==input.environment||next?.sessionId!==binding.sessionId||next.credentialId!==binding.credentialId)throw new DOMException('Cloud account changed','AbortError');};
   current();return {sessionId:binding.sessionId,current};
  }
@@ -76,7 +76,7 @@ export class BrowserVoice extends WebPlugin {
   return this.withAgentSpeech(async signal=>{
    const binding=await this.cloudBinding(input),clip=this.capture.get(input.recordingId);if(!clip)throw Error('Record a clip first.');
    const response=await browserCloudVoice(input,'stt',clip.blob,signal),result=await response.json();signal.throwIfAborted();binding.current();
-   if(result.local!==false||typeof result.text!=='string'||!result.text.trim())throw Error('Eliza Cloud returned no usable transcript.');
+   if(result.local!==false||typeof result.text!=='string'||!result.text.trim())throw Error('Cloud returned no usable transcript.');
    return {text:result.text,local:false};
   },input.requestId);
  }
@@ -85,7 +85,7 @@ export class BrowserVoice extends WebPlugin {
   if(input.replace===false&&(this.activeSpeechId||this.audio||this.pendingAudioId||this.speechRequest))throw Object.assign(Error('Playback is busy.'),{code:'playback-busy'});
   return this.withAgentSpeech(async signal=>{
    const binding=await this.cloudBinding(input),response=await browserCloudVoice(input,'tts',input.text,signal),blob=await response.blob();signal.throwIfAborted();binding.current();
-   if(!blob.size||blob.size>8*1024*1024||!['audio/mpeg','audio/mp3','audio/wav'].includes(blob.type.split(';')[0]))throw Error('Eliza Cloud returned no usable speech.');
+   if(!blob.size||blob.size>8*1024*1024||!['audio/mpeg','audio/mp3','audio/wav'].includes(blob.type.split(';')[0]))throw Error('Cloud returned no usable speech.');
    const playbackId=crypto.randomUUID();this.agentAudio.set(playbackId,{blob,requestId:input.requestId,sessionId:binding.sessionId,cloud:{environment:input.environment,credentialId:input.credentialId}});
    while(this.agentAudio.size>8)this.agentAudio.delete(this.agentAudio.keys().next().value!);
    return {playbackId};
