@@ -18,16 +18,23 @@ test('action preference defaults to direct requests and persists old preferences
 test('Home native destinations remain discoverable before optional domain plugins load',()=>{const rows=JSON.parse(readFileSync('config/native-view-declarations.json','utf8'));for(const id of ['camera','maps','photos','notes','calendar','inbox']){const row=rows.find(row=>row.id===id);assert.equal(row.path,'/'+id);assert.ok(row.fallbackFor);assert.equal(row.capabilities,undefined,'Navigation declaration must not invent device capabilities');}assert.equal(new Set(rows.map(x=>x.id)).size,rows.length);});
 
 test('direct requests retain review for destructive, private and external operations',async()=>{
- const types=['sms_send','notes_delete','notes_update','notes_read_selected','notes_query','calendar_create_local','calendar_create','calendar_update','calendar_delete','calendar_named','reminder_create','create_reminder','reminder_update','reminder_delete','reminder_named','photo_library_review','browser_navigate','maps_read_selected','future_operation'];
+ const types=['sms_send','notes_delete','notes_update','notes_read_selected','notes_query','calendar_create_local','calendar_create','calendar_update','calendar_delete','calendar_named','reminder_create','create_reminder','reminder_update','reminder_delete','reminder_named','photo_library_review','maps_read_selected','future_operation'];
  const f=fixture(types.map(type=>[type,'request',undefined,type]));
  await f.performRequested('request',{},new AbortController().signal,async()=>true);
  assert.deepEqual(f.calls,[]);assert.equal(f.proposals.size,types.length,'protected proposals remain available for explicit review');
 });
 test('only the enumerated reversible local actions can run directly',async()=>{
- const types=['create_note','open_view','camera_capture_photo','photo_library_select'];
+ const types=['create_note','open_view','browser_navigate','camera_capture_photo','photo_library_select'];
  const f=fixture(types.map(type=>[type,'request',undefined,type]));
  await f.performRequested('request',{},new AbortController().signal,async()=>true);
- assert.deepEqual(f.calls,types);
+ assert.deepEqual(f.calls,types.slice(0,4),'the existing four-action batch cap remains in force');
+ const last=fixture([['photo_library_select','request',undefined,'photo_library_select']]);await last.performRequested('request',{},new AbortController().signal,async()=>true);assert.deepEqual(last.calls,['photo_library_select']);
 });
 
 test('navigation-only cards never auto-execute',async()=>{const f=fixture([['current','request']]);f.card=()=>({reviewDestination:'notes'});await f.performRequested('request',{},new AbortController().signal,async()=>true);assert.deepEqual(f.calls,[]);});
+
+test('ordinary browser navigation reuses current-request execution and still respects ask-first',async()=>{
+ const rows=[['old','old',undefined,'browser_navigate'],['unbound',undefined,undefined,'browser_navigate'],['current','request',undefined,'browser_navigate'],['workflow','request',{},'browser_navigate']];
+ const direct=fixture(rows);await direct.performRequested('request',{},new AbortController().signal,async()=>true);assert.deepEqual(direct.calls,['current']);
+ const reviewed=fixture(rows);await reviewed.performRequested('request',{},new AbortController().signal,async()=>false);assert.deepEqual(reviewed.calls,[]);
+});

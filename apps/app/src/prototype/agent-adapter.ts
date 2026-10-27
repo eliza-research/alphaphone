@@ -1,3 +1,4 @@
+import {browserNavigationSummary,projectActionMessages} from '../runtime/action-message-presentation';
 import {CanonicalNotesUi} from './canonical-notes-ui';
 import {openExistingBrowserNotes,openExistingDeviceNotes} from './legacy-notes-access';
 import {executeNamedCalendarRead,type NamedCalendarReadProvider} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/client/named-read.ts';
@@ -889,7 +890,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       if (!this.browserNavigateApproved) return { status: 'failed', summary: 'Approved browser navigation is unavailable. No page opened.' };
       const browserSession=connectionController.getSnapshot().session;
       const present=await this.browserNavigateApproved(operation.url, signal, true);
-      return { status: 'succeeded', summary: `Opened an approved HTTPS destination in a new browser tab. Page loading is not verified.`,presentBrowser:()=>{
+      return { status: 'succeeded', summary: browserNavigationSummary(operation.url),presentBrowser:()=>{
         if(!this.live||document.hidden||connectionController.getSnapshot().session!==browserSession||JSON.stringify(alphaClient.getState().context)!==JSON.stringify(expectedContext))return;
         present?.();
       } };
@@ -1110,6 +1111,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         {ini:'',who:this.decliningProposal===c.proposalId?'Cancelling…':'Cancel',text:'Keep things as they are.',icon:ic.x,open:()=>{if(!busy)void this.declineCard(message);}},
       ]};
     });
+    out.msgs=projectActionMessages(out.msgs||[],live);
     out.canStopReply=!!this.S().typing&&alphaClient.getState().pending;
     out.stopReply=()=>{connectionController.cancelViewNavigation();alphaClient.cancel();};
     if (isAndroid) {
@@ -1218,7 +1220,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       current();
       if(delivered&&reply.userMessageId){
         const results=await connectionController.continueRequestedCamera(reply.userMessageId,signal);
-        for(const result of results)this.agentSay(result.summary);
+        for(const result of results)this.agentSay(result.summary,undefined,{deviceReceipt:true});
       }
       const awaiting=reply.proposals?.filter(proposal=>proposal.readReply?.origin.requestId===turnId&&proposal.readReply.origin.conversationId===identity.conversationId&&proposal.readReply.origin.inReplyTo===reply.userMessageId);
       if(awaiting&&awaiting.length>1)throw Error('More than one Notes review was returned. Use action history.');
@@ -1227,7 +1229,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         current();retainReadReply(this,completed.proposal,identity,reply.userMessageId);
         await completeReadReply(this,completed.receipt);current();
       }
-      for(const receipt of reply.completedActions||[])if(!(reply.completedReads||[]).some(read=>read.receipt.proposalId===receipt.proposalId))this.agentSay(receipt.summary);
+      for(const receipt of reply.completedActions||[])if(!(reply.completedReads||[]).some(read=>read.receipt.proposalId===receipt.proposalId))this.agentSay(receipt.summary,undefined,{deviceReceipt:true});
       const completedActions=reply.completedActions;
       if(completedActions?.length)this.setState({},()=>{if(this.live&&connectionController.voiceConversationCurrent(binding,false))for(const receipt of completedActions)publishCommittedDeviceChanges(receipt,alphaClient,binding.session);});
       return {requestId:turnId,conversationId:identity.conversationId,userMessageId:reply.userMessageId,assistantMessageId:reply.messageId,text:reply.text,complete:!reply.proposals?.length,...(reply.proposals?.length?{reviewRequired:true}:{}),...(awaiting?.length?{awaitingUserInput:{proposalId:awaiting[0].id,digest:awaiting[0].readReply!.digest}}:{})};
@@ -1308,14 +1310,14 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         cameraOpened=delivered&&alphaClient.getState().context.view==='camera';
         if(delivered&&reply.userMessageId){
           const results=await connectionController.continueRequestedCamera(reply.userMessageId,new AbortController().signal);
-          for(const result of results)if(this.live)this.agentSay(result.summary);
+          for(const result of results)if(this.live)this.agentSay(result.summary,undefined,{deviceReceipt:true});
         }
       }catch(error){if(this.live)this.toast(error instanceof Error?error.message:'Could not confirm the screen change. Check your screen.');}
       for(const notice of replyNotices(reply)){
         if(cameraOpened&&alphaClient.getState().context.view==='camera'&&notice==='Take photo: '+CAMERA_CONTEXT_NOTICE)continue;
         this.agentSay(notice,{type:'generic',icon:'info',title:'Phone action not shown here',sub:notice,systemNotice:true,done:true});
       }
-      for(const receipt of reply.completedActions||[])if(!(reply.completedReads||[]).some(read=>read.receipt.proposalId===receipt.proposalId))this.agentSay(receipt.summary);
+      for(const receipt of reply.completedActions||[])if(!(reply.completedReads||[]).some(read=>read.receipt.proposalId===receipt.proposalId))this.agentSay(receipt.summary,undefined,{deviceReceipt:true});
       const completedActions=reply.completedActions;
       if(identity&&completedActions?.length)this.setState({},()=>{if(this.live&&sameChat())for(const receipt of completedActions)publishCommittedDeviceChanges(receipt,alphaClient,identity.session);});
     } catch (e) {
@@ -1360,7 +1362,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     }
     finally { if(this.sendAttempt===attempt)this.sendAttempt=null; if (this.live) this.setState({ typing: false }); }
   };
-  p.agentSay = function (text: string, card?: Shell, identity?:{id:string;messageBinding:{conversationId:string;session:unknown}},current?:()=>boolean) {
+  p.agentSay = function (text: string, card?: Shell, identity?:{id?:string;messageBinding?:{conversationId:string;session:unknown};deviceReceipt?:true},current?:()=>boolean) {
     this.setState((previous: Shell) => {
       if(current&&!current())return null;
       const chat = previous.chat === 'full' ? 'full' : 'sheet';
@@ -1480,7 +1482,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         }else {
           if(receipt.status!=='succeeded'){this.cancelReadReplyCompletions?.(receipt.proposalId);this.retireReadReplyVoice?.(receipt.proposalId);}
           if (this.S().view !== beforeView) this.toast(receipt.summary);
-          else this.agentSay(receipt.summary);
+          else this.agentSay(receipt.summary,undefined,{deviceReceipt:true});
         }
         if(session)this.setState({},()=>{if(this.live&&JSON.stringify(connectionController.getSnapshot().session)===JSON.stringify(session)){
           // The receipt has reached the UI; refreshing earlier would invalidate

@@ -1,3 +1,4 @@
+import {browserNavigationSummary} from './action-message-presentation';
 import {namedCalendarReadTarget} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/client/named-read.ts';
 import {foregroundReviewOperationAvailable} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/foreground-review-contract.ts';
 import {CAMERA_CAPTURE_CAPABILITY,isCameraCapture,validateCameraCapture,validateCameraCaptureResult,type CameraCaptureOperation,type CameraCaptureResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/camera-contract.ts';
@@ -321,7 +322,7 @@ export class DeviceActions {
    * reads and Calendar/reminder writes retain their recorded separate review policy.
    * Recovery, workflows and old hosts remain review-only; ordinary OS permissions still apply. */
   async performRequested(messageId:string,context:ContextEnvelope,signal:AbortSignal,allowed:()=>Promise<boolean>,operationType?:ReviewableDeviceOperation['type']):Promise<OperationReceipt[]> {
-    const directTypes:readonly ReviewableDeviceOperation['type'][]=['create_note','open_view','camera_capture_photo','photo_library_select'];
+    const directTypes:readonly ReviewableDeviceOperation['type'][]=['create_note','open_view','browser_navigate','camera_capture_photo','photo_library_select'];
     const results:OperationReceipt[]=[];
     for(const [id,entry] of [...this.proposals]) {
       if(results.length>=4||!directTypes.includes(entry.proposal.operation.type)||entry.proposal.workflow||entry.proposal.requestMessageId!==messageId||(operationType!==undefined&&entry.proposal.operation.type!==operationType))continue;
@@ -457,15 +458,15 @@ export class DeviceActions {
     await this.mutation(p, 'decision', { decision: 'reject' }, signal);
     this.proposals.delete(proposalId);
   }
-  /** Reconstruct only committed Notes-create and calendar-write acknowledgments for fetched user messages.
+  /** Reconstruct only committed Notes-create, calendar-write and browser-open acknowledgments for fetched user messages.
    * Both the authenticated server receipt and this device's exact journal must agree. */
-  async conversationReceipts(requestMessageIds:ReadonlySet<string>,signal:AbortSignal):Promise<Array<{id:string;requestMessageId:string;summary:string}>>{
+  async conversationReceipts(requestMessageIds:ReadonlySet<string>,signal:AbortSignal):Promise<Array<{id:string;requestMessageId:string;summary:string;browserDestination?:string}>>{
     if(!requestMessageIds.size)return [];
     const proposals=await this.list(signal);
     signal.throwIfAborted();
-    const results:Array<{id:string;requestMessageId:string;summary:string}>=[];
+    const results:Array<{id:string;requestMessageId:string;summary:string;browserDestination?:string}>=[];
     for(const p of proposals){
-      if(p.workflow||p.state!=='done'||!p.requestMessageId||!requestMessageIds.has(p.requestMessageId)||!(p.operation.type==='create_note'||['calendar_create','calendar_create_local','calendar_update','calendar_delete'].includes(p.operation.type)&&isCalendarOperation(p.operation)))continue;
+      if(p.workflow||p.state!=='done'||!p.requestMessageId||!requestMessageIds.has(p.requestMessageId)||!(p.operation.type==='create_note'||p.operation.type==='browser_navigate'||['calendar_create','calendar_create_local','calendar_update','calendar_delete'].includes(p.operation.type)&&isCalendarOperation(p.operation)))continue;
       try{
         const receipt=object(p.providerReceipt),{entry}=await this.journal.get({scope:this.scope,proposalId:p.id});
         signal.throwIfAborted();
@@ -473,12 +474,12 @@ export class DeviceActions {
         if(isCalendarOperation(p.operation)){
           const server=validateCalendarResult(p.operation,receipt.result),saved=validateCalendarResult(p.operation,entry.result?.calendarResult);
           if(JSON.stringify(server)!==JSON.stringify(saved))continue;
-        }else if(p.operation.type==='create_note'){
-          // Legacy Notes creation returns no typed record result. Restore only
-          // this exact terminal journal's acknowledgment, never infer a new save.
+        }else if(p.operation.type==='create_note'||p.operation.type==='browser_navigate'){
+          // These operations return no typed record result. Restore only
+          // this exact terminal journal's acknowledgment, never infer a new effect.
           if(JSON.stringify(entry.record.operation)!==JSON.stringify(p.operation)||receipt.result!==undefined||entry.result?.notesResult!==undefined)continue;
         }else continue;
-        results.push({id:`device-receipt:${p.id}:${p.attemptId}`,requestMessageId:p.requestMessageId,summary:text(entry.summary,2000)});
+        results.push({id:`device-receipt:${p.id}:${p.attemptId}`,requestMessageId:p.requestMessageId,summary:p.operation.type==='browser_navigate'?browserNavigationSummary(p.operation.url):text(entry.summary,2000),...(p.operation.type==='browser_navigate'?{browserDestination:p.operation.url}:{})});
       }catch{/* An incomplete, foreign or contradictory receipt is not a success. */}
     }
     signal.throwIfAborted();return results;

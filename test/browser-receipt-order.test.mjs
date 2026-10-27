@@ -8,6 +8,7 @@ const root=process.env.ALPHA_RECEIPT_SOURCE_ROOT||'.';
 const read=p=>fs.readFileSync(root+'/'+p,'utf8');
 const agent=read('apps/app/src/prototype/agent-adapter.ts'),browser=read('apps/app/src/prototype/browser-adapter.ts'),device=read('apps/app/src/runtime/device-actions.ts');
 const ts=s=>stripTypeScriptTypes(s,{mode:'transform'});
+const {browserNavigationSummary}=await import('data:text/javascript;base64,'+Buffer.from(ts(read('apps/app/src/runtime/action-message-presentation.ts'))).toString('base64'));
 const navigateCode=ts(browser.slice(browser.indexOf('  async function navigate('),browser.indexOf('  async function command(')));
 const browserCode=ts(browser.slice(browser.indexOf('    this.browserNavigateApproved ='),browser.indexOf('    // Identity only:')));
 const executorCode=agent.slice(agent.indexOf("      if (!this.browserNavigateApproved) return"),agent.indexOf('\n    });\n    context(this);',agent.indexOf("      if (!this.browserNavigateApproved) return")));
@@ -26,7 +27,7 @@ function harness({native=false,origin='notes',receiptFailure=false,dispatchFailu
  ensure(id){const promise=Promise.resolve();created.set(id,promise);return promise;},
  Browser:{async navigate(){controller.signal.throwIfAborted();events.push('dispatch');if(dispatchFailure)throw Error('dispatch failed');afterDispatch?.({controller,changeTab:()=>{created.set('foreign',Promise.resolve());state.cur='foreign';},dispose:()=>disposed=true});},async close(){}},refresh(){},report(){}};
  const browserNavigateApproved=vm.runInNewContext('(function(){'+navigateCode+'\n'+browserCode+';return this.browserNavigateApproved;}).call({})',browserContext);
- const executor=vm.runInNewContext(ts('(async function(operation,signal,expectedContext){'+executorCode+'})'),{connectionController,alphaClient,document}).bind({browserNavigateApproved,get live(){return live;}});
+ const executor=vm.runInNewContext(ts('(async function(operation,signal,expectedContext){'+executorCode+'})'),{connectionController,alphaClient,document,browserNavigationSummary}).bind({browserNavigateApproved,get live(){return live;}});
  const p={id:'proposal',digest:'digest',operation:{type:'browser_navigate',url:'https://example.com'},expiresAt:Date.now()+60000};
  const globals={Error,Date,JSON,crypto:{randomUUID},contextKey:JSON.stringify,actionScope:async()=> 'hash',assertProposalContext(){}};
  for(const name of ['isClockOperation','isNativeNotesQuery','isSmsSend','isMapsOperation','isCameraCapture','isLibraryOperation','isReminderCreate','isReminderOperation','isNotesOperation','isCalendarOperation','isForegroundReview','isOriginalDeviceReadOperationType'])globals[name]=()=>false;
@@ -41,7 +42,7 @@ for(const native of [false,true])for(const origin of ['notes','browser']){
  const label=(native?'native':'web')+' from '+origin;
  test(`${label}: exact action journals and uploads its receipt before Browser presentation`,async()=>{
   const h=harness({native,origin}),r=await h.run();
-  assert.equal(r.status,'succeeded');assert.doesNotMatch(r.summary,/pending/);
+  assert.equal(r.status,'succeeded');assert.equal(r.summary,'Opened example.com.');
   assert.deepEqual(h.events,['reserve','decision','claim','applying','dispatch','finish','receipt','present']);
   assert.equal(h.controller.signal.aborted,true,'self-presentation may retire context only after receipt');
   assert.equal(h.events.filter(e=>e==='dispatch').length,1);

@@ -72,7 +72,7 @@ type Selection = {kind:'development';profile:DevelopmentProfile;account?:string}
 export interface CloudServiceSession { environment: CloudEnvironment; userId: string; organizationId?: string; sessionId: string; credentialId: string; email?: string;
   /** When this phone's Cloud sign-in key expires (from the in-app sign-in), if Cloud reported it. */
   expiresAt?: number }
-export interface RestoredMessage { id: string; from: 'user' | 'agent'; text: string; deviceReceipt?:true }
+export interface RestoredMessage { id: string; from: 'user' | 'agent'; text: string; deviceReceipt?:true; browserDestination?:string }
 export interface ConnectionSnapshot {
   /** Automatic session restoration has completed; null is now a resolved no-session state. */
   startupResolved?: boolean;
@@ -1375,7 +1375,7 @@ async function restoreConversationHistory(id:string,signal:AbortSignal,automatic
         const request=messages.findIndex(m=>m.from==='user'&&m.id===receipt.requestMessageId);
         if(request<0||messages.some(m=>m.id===receipt.id))continue;
         const next=messages.findIndex((m,index)=>index>request&&m.from==='user');
-        messages.splice(next<0?messages.length:next,0,{id:receipt.id,from:'agent',text:receipt.summary,deviceReceipt:true});
+        messages.splice(next<0?messages.length:next,0,{id:receipt.id,from:'agent',text:receipt.summary,deviceReceipt:true,...(receipt.browserDestination?{browserDestination:receipt.browserDestination}:{})});
       }
     }catch{assertCurrent();/* Canonical chat still loads when receipt history is unavailable. */}
   }
