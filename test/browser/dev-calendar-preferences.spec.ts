@@ -1,8 +1,9 @@
+import {openBrowserCalendar} from './helpers/browser-calendar';
 import {test,expect} from '@playwright/test';
 import {returnToApps} from './app-navigation';
-async function open(page:any){await page.goto('/?mode=dev');await page.getByRole('button',{name:'Calendar',exact:true}).click();await page.getByRole('button',{name:'Month view',exact:true}).click();}
-async function sources(page:any){await page.goto('/?mode=dev');await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Calendar',exact:true}).click();await expect(page.getByText('Agent access is reviewed separately',{exact:true})).toBeVisible();}
-async function timeline(page:any){await page.getByRole('button',{name:'Back to Settings',exact:true}).click();await returnToApps(page);await page.getByRole('button',{name:'Calendar',exact:true}).click();}
+async function open(page:any){await page.goto('/?mode=dev');await openBrowserCalendar(page);await page.getByRole('button',{name:'Month view',exact:true}).click();}
+async function sources(page:any){await page.goto('/?mode=dev');await openBrowserCalendar(page);await returnToApps(page);await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Calendar',exact:true}).click();await expect(page.getByText('Agent access is reviewed separately',{exact:true})).toBeVisible();}
+async function timeline(page:any){await page.getByRole('button',{name:'Back to Settings',exact:true}).click();await returnToApps(page);await openBrowserCalendar(page);}
 test.beforeEach(async({page})=>{await page.addInitScript(()=>{localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'}));if(!localStorage.getItem('alpha.browser.calendar.v1')){const start=new Date();start.setHours(12,0,0,0);(localStorage.getItem('alpha.browser.calendar.v1')===null&&localStorage.setItem('alpha.browser.calendar.v1',JSON.stringify({sourceRevision:'a'.repeat(64),events:[{id:'prefs-event',calendarId:'local',title:'Preference event',body:'',location:'',begin:+start,end:+start+3600000,revision:'b'.repeat(64)}]})));}});});
 test('calendar visibility and color affect the timeline and persist across reload',async({page})=>{
  await sources(page);const toggle=page.getByRole('switch',{name:'Show In this app calendar',exact:true});await expect(toggle).toHaveAttribute('aria-checked','true');await toggle.click();await expect(toggle).toHaveAttribute('aria-checked','false');await timeline(page);await expect(page.getByRole('button',{name:/^Preference event,/})).toHaveCount(0);
