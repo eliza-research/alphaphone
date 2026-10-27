@@ -48,7 +48,9 @@ export class AgentCalendar {
    this.current(port,epoch,signal);
    if(sourcesRead.status==='rejected')throw sourcesRead.reason;
    const sources=sourcesRead.value;
-   const ownsNext=(next:LifeOpsNextCalendarEventContext|null)=>{const event=next?.event;return !event||event.agentId===port.identity.agentId&&Date.parse(event.endAt)>Date.now()&&sources.calendars.some(source=>source.provider===event.provider&&source.side===event.side&&source.grantId===event.grantId&&source.calendarId===event.calendarId&&(!event.connectorAccountId||source.connectorAccountId===event.connectorAccountId));};
+   // Home next-context is aggregated with hidden calendars excluded, even when
+   // the separate visible feed query explicitly includes a hidden source.
+   const ownsNext=(next:LifeOpsNextCalendarEventContext|null)=>{const event=next?.event;return !event||event.agentId===port.identity.agentId&&Date.parse(event.endAt)>Date.now()&&sources.calendars.some(source=>source.includeInFeed===true&&['owner','writer','reader'].includes(source.accessRole)&&source.provider===event.provider&&source.side===event.side&&source.grantId===event.grantId&&source.calendarId===event.calendarId&&(!event.connectorAccountId||source.connectorAccountId===event.connectorAccountId));};
    let next=ownsNext(this.value.next)?this.value.next:null;
    if(nextRead.status==='fulfilled'){
     if(!ownsNext(nextRead.value))throw Error('Next Calendar event owner, source or end time could not be verified');

@@ -15,8 +15,8 @@ const defer=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{prom
 const flush=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
 async function fixture(){
  let active=true,capture=async()=>({fingerprint:'same',present:false,readable:true,pending:false,records:[]});
- const source={provider:'google',side:'owner',grantId:'grant',connectorAccountId:'account',calendarId:'primary',selectionVersion:1};
- const event={id:'event',agentId:'agent',provider:'google',side:'owner',grantId:'grant',connectorAccountId:'account',calendarId:'primary',endAt:'2999-01-01T10:00:00Z'};
+ const source={provider:'google',side:'owner',grantId:'grant',connectorAccountId:'account',accountEmail:null,calendarId:'primary',summary:'Owned calendar',description:null,primary:true,accessRole:'owner',backgroundColor:null,foregroundColor:null,timeZone:'UTC',selected:true,includeInFeed:true,selectionVersion:1};
+ const event={id:'event',externalId:'event',agentId:'agent',provider:'google',side:'owner',grantId:'grant',connectorAccountId:'account',calendarId:'primary',title:'Owned event',description:'',location:'',status:'confirmed',startAt:'2999-01-01T09:00:00Z',endAt:'2999-01-01T10:00:00Z',timezone:'UTC',isAllDay:false,htmlLink:null,conferenceLink:null,organizer:{self:true},attendees:[],metadata:{}};
  const next={event,calendarFeedState:'complete',readScope:{timeMin:'2026-01-01',timeMax:'2999-01-02'}};
  const port={identity:{origin:'https://fixture.invalid',ownerId:'owner',agentId:'agent'},sessionId:'session',scope:'owner',current:()=>active};
  const reads=[],writes=[],api={getLifeOpsCalendarFeed:async()=>{reads.push('feed');return{state:'complete',events:[]};},getLifeOpsCalendars:async()=>({calendars:[source]}),getLifeOpsNextCalendarEventContext:async()=>next,createLifeOpsCalendarEvent:async x=>{writes.push(x);return{outcome:'accepted_without_readback'};}};
@@ -55,4 +55,16 @@ test('retirement drops delayed replies and pending reads',async()=>{
 });
 test('event end invalidates the cached card without I/O',async()=>{
  const f=await fixture(),count=f.reads.length;f.event.endAt='2000-01-01T00:00:00Z';f.calendar.invalidateNext();assert.equal(f.calendar.state.next,null);assert.equal(f.calendar.state.nextFresh,false);assert.equal(f.reads.length,count);f.retire();
+});
+test('fresh opt-out clears a cached next event when the next read fails',async()=>{
+ const f=await fixture();assert.equal(f.calendar.state.nextFresh,true);f.source.includeInFeed=false;f.source.selectionVersion=2;f.api.getLifeOpsNextCalendarEventContext=async()=>{throw Error('Unavailable');};await f.calendar.refresh({});assert.equal(f.calendar.state.next,null);assert.equal(f.calendar.state.nextFresh,false);f.retire();
+});
+test('fresh next from an excluded or revoked source is never admitted, including an explicit hidden feed query',async()=>{
+ for(const change of [s=>s.includeInFeed=false,s=>s.accessRole='freeBusyReader',s=>s.accessRole='none']){const f=await fixture();change(f.source);f.source.selectionVersion=2;await f.calendar.refresh({includeHiddenCalendars:true});assert.equal(f.calendar.state.next,null);assert.equal(f.calendar.state.nextFresh,false);f.retire();}
+});
+test('a cached event is cleared when the source no longer grants readable event details',async()=>{
+ const f=await fixture();f.source.accessRole='freeBusyReader';f.api.getLifeOpsNextCalendarEventContext=async()=>{throw Error('Unavailable');};await f.calendar.refresh({});assert.equal(f.calendar.state.next,null);assert.equal(f.calendar.state.nextFresh,false);f.retire();
+});
+test('included readable source remains eligible; selectionVersion or provider selected flag is not feed opt-out',async()=>{
+ const f=await fixture();f.source.selectionVersion=2;f.source.selected=false;f.source.accessRole='reader';f.api.getLifeOpsNextCalendarEventContext=async()=>{throw Error('Unavailable');};await f.calendar.refresh({});assert.equal(f.calendar.state.next,f.next);assert.equal(f.calendar.state.nextFresh,false);f.retire();
 });
