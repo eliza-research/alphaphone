@@ -55,3 +55,31 @@ test('equal summaries never hide another proposal receipt or an unbound message'
   assert.deepEqual(shown.map(message=>message.id),rows.map(message=>message.id));
  }
 });
+
+test('a queued proposal and its later exact receipt show one result across the request turn',()=>{
+ const queued={id:'queued',from:'agent',text:'Clock action',card:{proposalId:'clock',title:'Completed',sub:'Alarm saved.',done:true}};
+ const receipt={id:'device-receipt:clock',from:'agent',text:'Alarm saved.',deviceReceipt:true};
+ const reply={id:'reply',from:'agent',text:'Development reply.'};
+ const rows=[queued,user,reply,receipt],original=structuredClone(rows);
+ const shown=projectActionMessages(render(rows),rows);
+ assert.deepEqual(shown.map(message=>message.id),['queued','user','reply']);
+ assert.equal(shown[0].displayText,'Alarm saved.');
+ assert.deepEqual(rows,original);
+});
+
+test('cross-turn collapse retains pending, foreign, quoted, different and offscreen results',()=>{
+ const queued={id:'queued',from:'agent',text:'Clock action',card:{proposalId:'clock',title:'Completed',sub:'Alarm saved.',done:true}};
+ const receipt={id:'device-receipt:clock',from:'agent',text:'Alarm saved.',deviceReceipt:true};
+ for(const [card,result] of [
+  [{...queued,card:{...queued.card,done:false}},receipt],
+  [queued,{...receipt,id:'device-receipt:another'}],
+  [queued,{...receipt,from:'user'}],
+  [queued,{...receipt,deviceReceipt:false}],
+  [queued,{...receipt,text:'Alarm was not saved.'}],
+ ]) {
+  const rows=[card,user,result];
+  assert.deepEqual(projectActionMessages(render(rows),rows).map(message=>message.id),rows.map(message=>message.id));
+ }
+ const rows=[queued,user,receipt],visible=render([user,receipt]);
+ assert.deepEqual(projectActionMessages(visible,rows).map(message=>message.id),['user','device-receipt:clock']);
+});
