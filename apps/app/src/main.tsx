@@ -5,7 +5,6 @@ import {installCanonicalCalendarDrafts} from './prototype/canonical-calendar-dra
 import {installAgentCalendarAdapter,deviceCalendarScope,legacyGoogleCalendarScope} from './prototype/agent-calendar-adapter';
 import {Capacitor} from '@capacitor/core';
 import {ownerReminderNotifications} from './runtime/owner-reminder-notification-port';
-import type {ReminderNotificationBinding} from './runtime/owner-reminder-notification-protocol';
 import {installCalendarApprovalAdapter} from './prototype/calendar-approval-adapter';
 import {bindBrowserDeletionOwner} from './runtime/deletion-owner';
 import {DEFAULT_PULL_DISTANCE,DEFAULT_PULL_VELOCITY} from "../../../.eliza/client-features/packages/ui/src/gestures/constants";
@@ -79,7 +78,7 @@ import './prototype/prototype.css';
 import './prototype/phone.css';
 installGlobalErrorRecovery();
 // Registration has completed; this injected source cannot form a register→connection cycle.
-if(!Capacitor.isNativePlatform()){const notices=connectionController as typeof connectionController & {getOwnerReminderNotificationBinding?:()=>ReminderNotificationBinding|null};ownerReminderNotifications.bind({binding:()=>notices.getOwnerReminderNotificationBinding?.()??null,subscribeBinding:listener=>connectionController.subscribe(listener)});}
+if(!Capacitor.isNativePlatform())ownerReminderNotifications.bind({binding:()=>connectionController.getOwnerReminderNotificationBinding(),subscribeBinding:listener=>connectionController.subscribe(listener)});
 // Developer surfaces are only reachable in an explicitly flagged development server.
 const browserDevProfile=devSurfacesEnabled&&devProfileQuery;
 const developmentAgentWorkflows=devSurfacesEnabled&&devAgentWorkflowsQuery;

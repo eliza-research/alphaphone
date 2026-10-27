@@ -1,6 +1,5 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { MapPlane as SharedMapPlane, type MapBasemap } from '../../../../.eliza/client-features/plugins/plugin-maps/src/client/map-plane.ts';
-export type { MapOverlay, MapPin, MapPosition } from '../../../../.eliza/client-features/plugins/plugin-maps/src/client/map-plane.ts';
 import fontUrl from '@fontsource/public-sans/files/public-sans-latin-400-normal.woff2?url';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { nativeRegion, nativeRegionRequest } from './regional-provider';

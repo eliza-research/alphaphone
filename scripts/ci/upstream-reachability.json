@@ -2,15 +2,24 @@
   "schema": 1,
   "repository": "elizaOS/eliza",
   "base": "develop",
-  "baseCommit": "fd5511ca1dacdccfadd93879bddff2038ebe8665",
-  "head": "fd5511ca1dacdccfadd93879bddff2038ebe8665",
+  "baseCommit": "1054dc48cd07d882355043648ed6761aef3c9cd1",
+  "head": "41d99bb4c86cb61bfa07d5e49b07603dbbe1080b",
   "recordedAt": "2026-10-27",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...fd5511ca1dacdccfadd93879bddff2038ebe8665",
-  "status": "identical",
-  "aheadBy": 0,
-  "behindBy": 0,
-  "mergeBase": "fd5511ca1dacdccfadd93879bddff2038ebe8665",
-  "pinOnlyCommits": [],
+  "command": "gh api repos/elizaOS/eliza/compare/develop...41d99bb4c86cb61bfa07d5e49b07603dbbe1080b",
+  "status": "diverged",
+  "aheadBy": 2,
+  "behindBy": 14,
+  "mergeBase": "9e1f765d5715c34e2ecf8822c17a0c6f53159213",
+  "pinOnlyCommits": [
+    {
+      "sha": "a05b75e3cc8f60339cc9bb0b45b2745aded316c3",
+      "subject": "fix(assistant): carry effective failure authority into parent verdicts"
+    },
+    {
+      "sha": "41d99bb4c86cb61bfa07d5e49b07603dbbe1080b",
+      "subject": "test(assistant): prove effective verdicts through coding completion"
+    }
+  ],
   "pullRequests": [
     {
       "url": "https://github.com/elizaOS/eliza/pull/37059",
@@ -228,5 +237,6 @@
       "url": "https://github.com/elizaOS/eliza/pull/37970",
       "status": "merged"
     }
-  ]
+  ],
+  "pendingPullRequest": "https://github.com/elizaOS/eliza/pull/37991"
 }

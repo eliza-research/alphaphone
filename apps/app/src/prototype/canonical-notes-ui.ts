@@ -1,4 +1,5 @@
 import React from 'react';
+import {agentPendingText,agentAvailabilityNotice} from '../runtime/connection-ui';
 import {NotesWorkspace,type NotesWorkspaceHandle} from '../../../../.eliza/client-features/plugins/plugin-notes/src/workspace.ts';
 import {createNotesClient} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-api.ts';
 import {projectNoteForModel,type StickyNote} from '../../../../.eliza/client-features/plugins/plugin-notes/src/types.ts';
@@ -92,6 +93,7 @@ export class CanonicalNotesUi {
 
 /** The disconnected state keeps the same opaque app surface and reachable controls. */
 function WaitingNotes({shell,storageAccessWarning}:{shell:Bag;storageAccessWarning?:string}){
+ const notice=shell.vget('notes').storageStatus||agentAvailabilityNotice(undefined,'Notes is unavailable for this agent connection. Check Settings › Agent connection.');
  const root=React.useRef<HTMLElement>(null);
  React.useLayoutEffect(()=>{
   const element=root.current;
@@ -104,7 +106,7 @@ function WaitingNotes({shell,storageAccessWarning}:{shell:Bag;storageAccessWarni
    React.createElement('h1',{'data-alpha-app-title':true,style:{margin:0,fontSize:24}},'Notes')),
   React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:16,minHeight:0,overflowY:'auto',padding:'16px 24px calc(var(--alpha-chat-clearance, 120px) + 24px)'}},
    storageAccessWarning?React.createElement('p',{role:'alert',className:'storage-access-warning'},storageAccessWarning):null,
-   React.createElement('p',{role:'status',style:{margin:0,lineHeight:1.5}},'Waiting for an agent connection to open Notes.'),
+   notice?React.createElement('p',{role:'status',style:{margin:0,lineHeight:1.5}},notice):null,
    ...(shell.api('notes').notesSourceOptions??[]).filter((source:Bag)=>!source.selected).map((source:Bag)=>React.createElement('button',{key:source.id,onClick:source.choose,style:{minHeight:48,padding:'12px 18px',borderRadius:16,background:'var(--s2)',color:'var(--fg)',font:'inherit'}},source.id==='legacy'?'Older notes':source.label))));
 }
 
@@ -112,7 +114,7 @@ function WaitingNotes({shell,storageAccessWarning}:{shell:Bag;storageAccessWarni
 export function installCanonicalNotesView(Component:any,views:Record<string,Bag>):void{
  const prototype=Component.prototype,renderVals=prototype.renderVals,get=prototype.vget,api=prototype.api;
  prototype.vget=function(key:string){const value=get.call(this,key),ui=this.canonicalNotesUi;return key==='notes'&&ui?{...value,list:ui.list,open:ui.open,rec:null,record:false}:value;};
- prototype.api=function(key:string){const value=api.call(this,key);if(key!=='notes')return value;const ui=this.canonicalNotesUi;if(!ui)return this.notesSourceMode==='canonical'?{...value,notesSourceMode:'canonical',notesTrash:undefined,moveNoteToTrash:()=>false}:value;return {...value,canonicalNotes:ui,notesSourceMode:'canonical',set:(patch:Bag)=>{if(Object.hasOwn(patch,'list'))return false;if(Object.hasOwn(patch,'open'))ui.select(patch.open);if(patch.compose)void ui.create();const rest={...patch};delete rest.open;delete rest.compose;return Object.keys(rest).length?value.set(rest):true;}};};
+ prototype.api=function(key:string){const value=api.call(this,key);if(key!=='notes')return value;const ui=this.canonicalNotesUi;if(!ui)return this.notesSourceMode==='canonical'?{...value,notesSourceMode:'canonical',notesTrash:undefined,moveNoteToTrash:()=>false,set:(patch:Bag)=>{if(patch.compose){value.toast(this.vget('notes').storageStatus||agentPendingText(undefined,'Notes is unavailable for this agent connection. Check Settings › Agent connection.'));return false;}return value.set(patch);}}:value;return {...value,canonicalNotes:ui,notesSourceMode:'canonical',set:(patch:Bag)=>{if(Object.hasOwn(patch,'list'))return false;if(Object.hasOwn(patch,'open'))ui.select(patch.open);if(patch.compose)void ui.create();const rest={...patch};delete rest.open;delete rest.compose;return Object.keys(rest).length?value.set(rest):true;}};};
  prototype.renderVals=function(){const value=renderVals.call(this),ui=this.canonicalNotesUi;return {...value,canonicalNotesWorkspace:ui?ui.render(this,this.live&&this.S().screen==='home'&&this.S().view==='notes',value.storageAccessWarning):this.notesSourceMode==='canonical'&&this.live&&this.S().screen==='home'&&this.S().view==='notes'?React.createElement(WaitingNotes,{shell:this,storageAccessWarning:value.storageAccessWarning}):null};};
  const notes=views.notes,render=notes.render,back=notes.back,leave=notes.onLeave;
  notes.render=(state:Bag,value:Bag)=>{if(value.notesSourceMode==='canonical'||value.canonicalNotes)return {legacyNotes:false};const result=render(state,value),main=(value.notesSourceOptions??[]).find((source:Bag)=>source.id==='canonical');return {...result,legacyNotes:true,notesTitle:'Older notes',primaryNotes:false,olderNotesAction:null,returnToNotesAction:main?.choose};};
