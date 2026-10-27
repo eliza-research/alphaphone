@@ -26,7 +26,7 @@ export function projectActionMessages(rendered: Message[], source: Message[]): M
       const index = turn.indexOf(action);
       // Only the exact following receipt of this resolved proposal is redundant.
       const following = turn[index + 1];
-      if (following?.from === 'agent' && !following.card && following.text === action.card.sub) hidden.add(following.id);
+      if (following?.from === 'agent' && following.deviceReceipt === true && following.id === `device-receipt:${action.card.proposalId}` && !following.card && following.text === action.card.sub) hidden.add(following.id);
     }
   };
   for (const message of source) { if (message.from === 'user') { finish(); turn = []; } turn.push(message); } finish();

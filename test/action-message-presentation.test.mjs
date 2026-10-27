@@ -7,14 +7,14 @@ const user={id:'user',from:'user',text:'Open example.com'};
 const action={id:'action',from:'agent',text:'Open browser destination https://example.com/path',card:{proposalId:'p',title:'Completed',sub:old,done:true}};
 const render=rows=>rows.map(m=>({...m,c:m.card,cGeneric:!!m.card,displayText:m.text,hasCalendarText:true}));
 test('completed action projects one truthful result without changing stored history',()=>{
- const rows=[user,{id:'notice',from:'agent',text:notice},action,{id:'duplicate',from:'agent',text:old}];const frozen=structuredClone(rows);const shown=projectActionMessages(render(rows),rows);
+ const rows=[user,{id:'notice',from:'agent',text:notice},action,{id:'device-receipt:p',from:'agent',text:old,deviceReceipt:true}];const frozen=structuredClone(rows);const shown=projectActionMessages(render(rows),rows);
  assert.deepEqual(shown.map(m=>m.id),['user','action']);assert.equal(shown[1].displayText,'Opened example.com.');assert.equal(shown[1].cGeneric,false);assert.deepEqual(rows,frozen);
 });
 test('pending review keeps its existing approve/cancel handlers and shows the destination once',()=>{
  const rows=[user,{...action,card:{...action.card,done:false}}];const approve=()=>{},cancel=()=>{};const projected=render(rows);projected[1]={...projected[1],cDigest:true,rows:[{open:approve},{open:cancel}]};const shown=projectActionMessages(projected,rows)[1];assert.equal(shown.hasCalendarText,false);assert.equal(shown.rows[0].who,'Open example.com?');assert.equal(shown.rows[0].open,approve);assert.equal(shown.rows[1].open,cancel);
 });
 test('failures remain visible once, user quotes and unrelated later messages are preserved',()=>{
- const failed={...action,card:{...action.card,title:'Not completed',sub:'The browser is unavailable.'}};const rows=[user,failed,{id:'failure',from:'agent',text:'The browser is unavailable.'},{id:'next',from:'user',text:notice},{id:'later',from:'agent',text:old}];const shown=projectActionMessages(render(rows),rows);assert.deepEqual(shown.map(m=>m.id),['user','action','next','later']);assert.equal(shown[1].displayText,'The browser is unavailable.');assert.equal(shown[2].text,notice);
+ const failed={...action,card:{...action.card,title:'Not completed',sub:'The browser is unavailable.'}};const rows=[user,failed,{id:'device-receipt:p',from:'agent',text:'The browser is unavailable.',deviceReceipt:true},{id:'next',from:'user',text:notice},{id:'later',from:'agent',text:old}];const shown=projectActionMessages(render(rows),rows);assert.deepEqual(shown.map(m=>m.id),['user','action','next','later']);assert.equal(shown[1].displayText,'The browser is unavailable.');assert.equal(shown[2].text,notice);
 });
 test('restored verified browser receipt hides only exact protocol instruction in its turn',()=>{
  const rows=[user,{id:'n',from:'agent',text:notice},{id:'receipt',from:'agent',text:old,deviceReceipt:true,browserDestination:'https://example.com/'}];const shown=projectActionMessages(render(rows),rows);assert.deepEqual(shown.map(m=>m.id),['user','receipt']);assert.equal(shown[1].displayText,'Opened example.com.');assert.equal(projectActionMessages(render([rows[1]]),[rows[1]]).length,1);
@@ -41,4 +41,17 @@ test('cold history refuses uncertain, foreign, changed or contradictory browser 
 
 test('automatic live receipt replaces the exact protocol pause without needing an approval card',()=>{
  const rows=[user,{id:'protocol',from:'agent',text:notice},{id:'result',from:'agent',text:'Opened example.com.',deviceReceipt:true}];const shown=projectActionMessages(render(rows),rows);assert.deepEqual(shown.map(m=>m.id),['user','result']);assert.equal(shown[1].displayText,'Opened example.com.');
+});
+
+
+test('equal summaries never hide another proposal receipt or an unbound message',()=>{
+ for(const following of [
+  {id:'device-receipt:other',from:'agent',text:old,deviceReceipt:true},
+  {id:'unbound',from:'agent',text:old},
+  {id:'device-receipt:p',from:'agent',text:old},
+ ]) {
+  const rows=[user,action,following];
+  const shown=projectActionMessages(render(rows),rows);
+  assert.deepEqual(shown.map(message=>message.id),rows.map(message=>message.id));
+ }
 });
