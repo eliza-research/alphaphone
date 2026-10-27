@@ -152,6 +152,16 @@ the current account. The `native` default and its native/AOSP qualification gate
 remain unchanged. This configuration does not prove native speech or release acceptance.
 See the [profile selection notes](../README.md#explicit-cloud-qa-profile--october-18).
 
+Both profiles are declared once upstream (`packages/app/src/runtime/native-runtime-profile.ts`
+at the pin). The resident boot selects one with `ELIZA_RUNTIME_PROFILE`; the shared profile
+writes the text, embedding and agent-speech routing, and a late scheduled workflow
+occurrence is recorded once as missed rather than replayed (the agent runs only while the
+phone is powered on, P-10). Alpha's admitted host module declares only its Cloud API base
+(`backend/native-cloud-runtime.ts`). Current-turn screen and selection identifiers travel
+only in `metadata.clientDevice.context` under the shared `client-turn-observation`
+contract; the older instruction envelope remains for unnegotiated development peers and
+for reading history stored by older builds.
+
 ## Build surfaces
 
 The web build (`npm run build` → `web-dist/`) is a development and preview surface and

@@ -39,6 +39,13 @@ test('Cloud profile keeps native speech and embeddings guards as default',()=>{
  assert.match(profile,/cloud: Object\.freeze\(\{[^}]*embeddings: "elizacloud"[^}]*localModels: false/s);
  assert.match(profile,/native: Object\.freeze\(\{[^}]*embeddings: "local"[^}]*localModels: true/s);
 });
+test('every resident launch selects a profile, so powered-on scheduling applies signed in or not',()=>{
+ const plugin=fs.readFileSync('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaLocalAgentPlugin.java','utf8');
+ assert.match(plugin,/static void configureEnvironment\(Context context,java\.util\.Map<String,String> env\) throws java\.io\.IOException \{\s*env\.put\("ELIZA_RUNTIME_PROFILE",BuildConfig\.ELIZA_RUNTIME_PROFILE\);/);
+ const profile=fs.readFileSync('vendor/eliza/packages/app/src/runtime/native-runtime-profile.ts','utf8');
+ assert.equal((profile.match(/missedOccurrences: "record",/g)||[]).length,2);
+ assert.match(fs.readFileSync('vendor/eliza/packages/app/src/mobile-agent-entry.ts','utf8'),/applyNativeRuntimeProfileEnvironment\(process\.env\)/);
+});
 
 // Exercise the real admission path with an authenticated tiny source tree. The
 // intentionally different Bun hash marks successful completion of database
