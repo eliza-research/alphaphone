@@ -40,7 +40,9 @@ test('explicit connection operations retain their visible dialog',async()=>{
 const startupStart=source.indexOf('  async initialize() {');
 const startupEnd=source.indexOf('  /** Test mocks and the flag-off web preview',startupStart);
 assert.ok(startupStart>=0&&startupEnd>startupStart);
-const startupCode=stripTypeScriptTypes(source.slice(startupStart,startupEnd).trim().replace(/^async initialize\(\)/,'async function initialize()').replace(/,$/,''),{mode:'transform'});
+const restoreStart=source.indexOf('async function restoreOptionalBrowserCloudAccount('),restoreEnd=source.indexOf('\nexport const connectionController',restoreStart);
+assert.ok(restoreStart>=0&&restoreEnd>restoreStart);
+const startupCode=stripTypeScriptTypes(source.slice(restoreStart,restoreEnd)+'\n'+source.slice(startupStart,startupEnd).trim().replace(/^async initialize\(\)/,'async function initialize()').replace(/,$/,''),{mode:'transform'});
 function startupFixture({resident=false,android=false,environment='production'}={}){
  const state={open:false,error:''},reads=[];let gates=0;
  const context=vm.createContext({startup:null,state,epoch:0,operation:null,browserDevProfile:false,privateLocalPreviewEnabled:false,browserCloudResidentEnabled:resident,isAndroid:android,URLSearchParams,location:{search:''},selection:()=>({kind:'resident'}),update:next=>Object.assign(state,next),cloudCredentialStore:{acceptsReferences:!android,read:async env=>{reads.push(env);if(env!==environment)throw Error('Cloud development connection unavailable.');return null;}},work:async(_label,run)=>{try{await run(new AbortController().signal);}catch(error){state.error=error.message;state.open=true;}},webCloudUnavailable:()=>false,residentQa:()=>true,startResidentGate:async()=>{gates++;await context.cloudCredentialStore.read(environment);},settleResidentAfterStartup:()=>{}});
