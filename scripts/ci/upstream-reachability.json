@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "ba65413a4da69b353a54014e3245f740ebfb9598",
+  "head": "8b33c02f61cc9811d95fd38cc55120381c095b86",
   "recordedAt": "2026-10-27",
-  "command": "git -C vendor/eliza rev-list --left-right --count 04658de1b942510e0d37efc777c154530f5c0ef1...ba65413a4da69b353a54014e3245f740ebfb9598",
+  "command": "git -C vendor/eliza rev-list --left-right --count 04658de1b942510e0d37efc777c154530f5c0ef1...8b33c02f61cc9811d95fd38cc55120381c095b86",
   "status": "diverged",
-  "aheadBy": 75,
+  "aheadBy": 76,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -306,6 +306,10 @@
     {
       "sha": "ba65413a4da69b353a54014e3245f740ebfb9598",
       "subject": "fix(calendar): join managed linked sync with reviewed planner source"
+    },
+    {
+      "sha": "8b33c02f61cc9811d95fd38cc55120381c095b86",
+      "subject": "fix(calendar): reject fresh capability protocol changes before dispatch"
     }
   ],
   "pullRequests": [

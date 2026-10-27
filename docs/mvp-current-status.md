@@ -1,6 +1,6 @@
 # Current MVP status
 
-Local source candidate 48568b5878d0b66de949c80df80e31a1f9a18464 consumes SDK ba65413a4da69b353a54014e3245f740ebfb9598 with the reviewed managed Calendar provider and the Alpha canonical sync adapter. The existing Notes date grounding and planner nonretryable-receipt fix are retained. Calendar controller, dialog, private broker and joined synthetic transport checks passed; native owner-route parity passed 504 cases. These source checks do not prove a real Calendar create, Google write, or device acceptance. The existing account and stored records must be preserved during local acceptance. No latency gain or complete release acceptance is claimed. Evidence: docs/evidence/source-calendar-joined-local-20261026.json.
+Local source candidate 48568b5878d0b66de949c80df80e31a1f9a18464 consumes SDK 8b33c02f61cc9811d95fd38cc55120381c095b86 with the reviewed managed Calendar provider and the Alpha canonical sync adapter. The existing Notes date grounding and planner nonretryable-receipt fix are retained. Calendar controller, dialog, private broker and joined synthetic transport checks passed; native owner-route parity passed 504 cases. These source checks do not prove a real Calendar create, Google write, or device acceptance. The existing account and stored records must be preserved during local acceptance. No latency gain or complete release acceptance is claimed. Evidence: docs/evidence/source-calendar-joined-local-20261026.json. Fresh raw capability protocol changes are rejected before dispatch.
 
 Previous source checkpoint: Local-only product a5996123596dcf1494d001b33dea1a282f1ca2c5 consumes SDK 45e8647ae0ad1dfda75a4f8c74b6589cf073bf95 with four canonical Notes deletion grounding files and three shared planner receipt-retry files. Exact reviewed source hashes are verified. Reviewed Notes owning cases passed 3; planner source contract cases passed 6 and targeted owning cases passed 3. The planner suppresses exact nonretryable receipt replay while corrected arguments remain eligible; the initial fabricated Calendar arguments remain unresolved. Existing qualification caveats, requirement rows, package locks, provider/model/engine and UI fixes are preserved. Two broader VOICE_CALL fixture failures previously reproduced unchanged remain unresolved. Mac real-model Calendar acceptance, Cloud parity, native build/device acceptance and canonical upstream-base qualification remain pending. No latency or token reduction is claimed. See docs/evidence/source-notes-45e-local-20261026.json.
 
@@ -78,9 +78,9 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-Current source projection: SDK `ba65413a4d` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
+Current source projection: SDK `8b33c02f61` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
 
-The current upstream source pin is `ba65413a4d` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
+The current upstream source pin is `8b33c02f61` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 
