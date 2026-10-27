@@ -1,4 +1,5 @@
 import {NOTE_ID_REGEXP} from '../../../../.eliza/client-features/plugins/plugin-notes/src/note-id.ts';
+import {parseClientTurnObservation} from '../../../../.eliza/client-features/packages/contracts/src/client-turn-observation.ts';
 import {clockTimeZone} from './clock-contract.ts';
 import {reminderTarget} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/reminder-contract.ts';
 import {notesTarget} from './notes-contract.ts';
@@ -86,10 +87,18 @@ export function sanitizePhoneContext(input: ContextEnvelope): ContextEnvelope {
       ...(selected.sourceRevision === undefined ? {} : { sourceRevision: opaque(selected.sourceRevision) }),
     };
   }
+  // Alpha's view and selection allowlists are narrower than the shared current-turn
+  // observation contract; every observation it sends must still satisfy that contract,
+  // so the agent shows it once from metadata rather than as unexplained JSON.
+  try { parseClientTurnObservation(result); } catch { throw new Error('This screen observation is not supported.'); }
   return result;
 }
-/** Text is the common model-visible contract across existing shared/dedicated
- * Eliza hosts. The user's original message follows the separator unchanged. */
+/** Legacy compatibility envelope. A peer that negotiates `userTextFormatVersion: 1`
+ * (every resident and local agent at the pin) receives the authored text unchanged and
+ * this observation only in `metadata.clientDevice.context`, where the shared contract
+ * renders it once per turn. The envelope remains for unnegotiated development peers and
+ * to recognize history stored by older builds; the user's message follows the separator
+ * unchanged. */
 export function phoneContextMessage(text: string, input: ContextEnvelope): { text: string; context: ContextEnvelope } {
   if (typeof text !== 'string' || !text.trim()) throw new Error('Enter a message.');
   const context = sanitizePhoneContext(input);
