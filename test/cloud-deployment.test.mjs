@@ -88,21 +88,36 @@ test('custom deployment reaches native inference configuration and Google transp
  config.production={api:'https://api.example.org',web:'https://login.example.org',services:'https://services.example.org',tenant:'example'};
  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'alpha-cloud-backend-'));
  const write=(name,text)=>{fs.mkdirSync(path.dirname(path.join(temp,name)),{recursive:true});fs.writeFileSync(path.join(temp,name),text);};
- const oldBase=process.env.ELIZAOS_CLOUD_BASE_URL,oldSmall=process.env.ELIZAOS_CLOUD_SMALL_MODEL,oldLarge=process.env.ELIZAOS_CLOUD_LARGE_MODEL;
+ const envKeys=['ELIZAOS_CLOUD_BASE_URL','ELIZAOS_CLOUD_SMALL_MODEL','ELIZAOS_CLOUD_LARGE_MODEL','ELIZA_RUNTIME_PROFILE','ELIZA_LOCAL_EMBEDDING_ENABLED','ELIZA_DISABLE_LOCAL_EMBEDDINGS'];
+ const previousEnv=Object.fromEntries(envKeys.map(name=>[name,process.env[name]]));
  try{
   write('package.json','{"type":"module"}');
   for(const [name,text] of Object.entries(deploymentOutputs(config)))write(name,text);
   for(const name of ['backend/managed-google-failure-stage.ts','backend/managed-google-route-policy.ts','backend/native-google-cloud-port.ts','backend/native-cloud-runtime-config.ts','apps/app/src/runtime/managed-service-routes.ts'])write(name,fs.readFileSync(name,'utf8'));
   write('vendor/eliza/packages/agent/src/config/config.ts','export const config={cloud:{apiKey:"stale-synthetic"}}; export function loadElizaConfig(){return config;} export function saveElizaConfig(value){Object.assign(config,value);}');
-  write('vendor/eliza/packages/host/src/contracts/service-routing.ts','export function buildElizaCloudServiceRoute(options={}){return options;}');
+  write('vendor/eliza/packages/host/src/contracts/service-routing.ts','export function buildElizaCloudServiceRoute(options={}){return {backend:"elizacloud",transport:"cloud-proxy",...options};}');
   write('vendor/eliza/plugins/plugin-native-inference/src/model-catalog/routing-preferences.ts','export async function updateRoutingPreferences(update){update({});}');
   const load=name=>import(pathToFileURL(path.join(temp,name)).href);
   const {prepareNativeCloudRuntime}=await load('backend/native-cloud-runtime-config.ts');
   process.env.ELIZAOS_CLOUD_SMALL_MODEL='synthetic-small';process.env.ELIZAOS_CLOUD_LARGE_MODEL='synthetic-large';
   process.env.ELIZAOS_CLOUD_BASE_URL=config.production.api+'/api/v1';
+  process.env.ELIZA_RUNTIME_PROFILE='cloud';
   await prepareNativeCloudRuntime();
   const saved=(await load('vendor/eliza/packages/agent/src/config/config.ts')).config;
   assert.equal(saved.cloud.baseUrl,config.production.api+'/api/v1');assert.equal(saved.cloud.apiKey,undefined);
+  assert.deepEqual(saved.serviceRouting.embeddings,{backend:'elizacloud',transport:'cloud-proxy'});
+  // Returning from Cloud QA must replace its saved embedding route even if
+  // native inputs are unavailable. Missing local assets never authorize Cloud.
+  process.env.ELIZA_RUNTIME_PROFILE='native';
+  process.env.ELIZA_LOCAL_EMBEDDING_ENABLED='0';process.env.ELIZA_DISABLE_LOCAL_EMBEDDINGS='true';
+  await prepareNativeCloudRuntime();
+  assert.deepEqual(saved.serviceRouting.embeddings,{backend:'eliza-local-inference',transport:'direct'});
+  process.env.ELIZA_LOCAL_EMBEDDING_ENABLED='1';process.env.ELIZA_DISABLE_LOCAL_EMBEDDINGS='false';
+  await prepareNativeCloudRuntime();
+  assert.deepEqual(saved.serviceRouting.embeddings,{backend:'eliza-local-inference',transport:'direct'});
+  assert.equal(saved.serviceRouting.llmText.backend,'elizacloud');
+  assert.equal(saved.serviceRouting.llmText.smallModel,'synthetic-small');
+  assert.equal(saved.serviceRouting.llmText.largeModel,'synthetic-large');
   process.env.ELIZAOS_CLOUD_BASE_URL=defaults.production.api+'/api/v1';
   await assert.rejects(prepareNativeCloudRuntime(),/binding is incomplete/);
   const {createNativeGoogleCloudPort}=await load('backend/native-google-cloud-port.ts');
@@ -112,7 +127,7 @@ test('custom deployment reaches native inference configuration and Google transp
   await port.agentRead(request);assert.deepEqual(calls,[request.url]);
   await assert.rejects(port.agentRead({...request,url:defaults.production.api+'/api/v1/eliza/google/accounts?side=owner'}),/refused/);
  }finally{
-  for(const [name,value] of Object.entries({ELIZAOS_CLOUD_BASE_URL:oldBase,ELIZAOS_CLOUD_SMALL_MODEL:oldSmall,ELIZAOS_CLOUD_LARGE_MODEL:oldLarge})){if(value===undefined)delete process.env[name];else process.env[name]=value;}
+  for(const [name,value] of Object.entries(previousEnv)){if(value===undefined)delete process.env[name];else process.env[name]=value;}
   fs.rmSync(temp,{recursive:true,force:true});
  }
 });
