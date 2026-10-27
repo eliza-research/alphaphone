@@ -5,11 +5,24 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {createHash} from 'node:crypto';
 import { agentBundlePackageDirs, BUN_ENTRY, collectNotices, finishEntry, loadTemplates, packagedRuntimePresent, runtimeEntries, ROOT, shippedPackagedRuntime, UNKNOWN, UNVERIFIED } from '../scripts/generate-licenses.mjs';
 import { licenceFlagLines } from '../scripts/licence-policy.mjs';
 
 const canonicalTexts = { MIT: 'MIT terms', ISC: 'ISC terms', 'Apache-2.0': 'Apache terms', 'BSD-3-Clause': 'BSD terms' };
 const templates = { mit: 'MIT terms', isc: 'ISC terms', apache: 'Apache terms', canonical: expression => canonicalTexts[expression] ?? '' };
+const sha = bytes => createHash('sha256').update(bytes).digest('hex');
+function recordFixtureInventory(agent, source) {
+  const bundle = fs.readFileSync(path.join(agent, 'agent-bundle.js'));
+  const packages = agentBundlePackageDirs(bundle.toString()).map(directory => {
+    const bytes = fs.readFileSync(path.join(source, directory, 'package.json'));
+    const {name, version} = JSON.parse(bytes);
+    return {directory, name, version, packageJsonSha256: sha(bytes)};
+  });
+  fs.writeFileSync(path.join(agent, 'plugins-manifest.json'), JSON.stringify({bundleDependencies: {
+    version: 1, bundleSha256: sha(bundle), packages,
+  }}));
+}
 
 function stagedRuntime(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'alpha-runtime-notices-'));
@@ -32,6 +45,7 @@ function stagedRuntime(t) {
   write(path.join(source, 'node_modules/.bun/zod@4.1.0/node_modules/zod/LICENSE'), 'zod license text');
   write(path.join(source, 'node_modules/.bun/@scope+pkg@2.0.0+abc/node_modules/@scope/pkg/package.json'), JSON.stringify({ name: '@scope/pkg', version: '2.0.0', license: { type: 'ISC' } }));
   write(path.join(source, 'node_modules/hoisted/package.json'), JSON.stringify({ name: 'hoisted', version: '0.1.0', license: 'Apache-2.0' }));
+  recordFixtureInventory(agent, source);
   write(path.join(agent, 'workflow-worker/dependencies.json'), JSON.stringify([
     { name: 'zod', version: '4.1.0', license: 'MIT', sourcePath: 'node_modules/zod', notices: ['licenses/1/LICENSE'] },
     { name: 'effect', version: '4.0.0', license: 'MIT', sourcePath: 'node_modules/effect', notices: [] },
@@ -113,6 +127,7 @@ test('copyleft, unknown, undeclared and text-less runtime packages are listed an
     pkg('custom-id', { license: 'Example-Custom-1.0' }, { LICENSE: 'Example custom terms.' }),
   ];
   fs.appendFileSync(path.join(agent, 'agent-bundle.js'), `\n${lines.join('\n')}\n`);
+  recordFixtureInventory(agent, source);
   write(path.join(agent, 'workflow-worker/dependencies.json'), JSON.stringify([
     { name: '@worker/undeclared', version: '0.35.0', license: null, sourcePath: 'node_modules/@worker/undeclared', notices: ['licenses/2/LICENSE'] },
   ]));
@@ -154,11 +169,11 @@ test('broken input still fails: a corrupted or nameless package manifest is an e
   let errors = [];
   runtimeEntries(root, templates, errors, { agentDir: agent, sourceDir: source });
   assert.equal(errors.length, 1);
-  assert.match(errors[0], /^agent bundle: .*node_modules\/zod: unreadable or corrupted package\.json/);
+  assert.match(errors[0], /^agent bundle dependency inventory: .*package\.json is unreadable or corrupted/);
   fs.writeFileSync(path.join(source, 'node_modules/.bun/zod@4.1.0/node_modules/zod/package.json'), JSON.stringify({ license: 'MIT' }));
   errors = [];
   runtimeEntries(root, templates, errors, { agentDir: agent, sourceDir: source });
-  assert.match(errors.join('\n'), /package\.json has no name and version/);
+  assert.match(errors.join('\n'), /package\.json has no package identity/);
 });
 
 test('a missing prepared package or worker inventory fails generation', t => {
@@ -167,8 +182,44 @@ test('a missing prepared package or worker inventory fails generation', t => {
   fs.rmSync(path.join(agent, 'workflow-worker/dependencies.json'));
   const errors = [];
   runtimeEntries(root, templates, errors, { agentDir: agent, sourceDir: source });
-  assert.ok(errors.some(error => /not in the prepared runtime source/.test(error)));
+  assert.ok(errors.some(error => /agent bundle dependency inventory: .*ENOENT/.test(error)));
   assert.ok(errors.some(error => /dependencies\.json is missing/.test(error)));
+});
+
+test('compact bundles enumerate the hash-bound inventory without path comments', t => {
+  const {root, agent, source} = stagedRuntime(t);
+  const file = path.join(agent, 'plugins-manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const compact = 'var x=1;export{x};';
+  fs.writeFileSync(path.join(agent, 'agent-bundle.js'), compact);
+  manifest.bundleDependencies.bundleSha256 = sha(compact);
+  fs.writeFileSync(file, JSON.stringify(manifest));
+  const errors = [];
+  const entries = runtimeEntries(root, templates, errors, {agentDir: agent, sourceDir: source});
+  assert.deepEqual(errors, []);
+  assert.ok(entries.some(entry => entry.name === '@scope/pkg'));
+  assert.ok(entries.some(entry => entry.name === 'hoisted'));
+});
+
+test('missing, stale or malformed inventory cannot fall back to bundle comments', async t => {
+  const mutations = {
+    missing: (agent) => fs.unlinkSync(path.join(agent, 'plugins-manifest.json')),
+    bundle: (agent) => fs.appendFileSync(path.join(agent, 'agent-bundle.js'), '\nchanged'),
+    metadata: (_agent, source) => fs.appendFileSync(path.join(source, 'node_modules/hoisted/package.json'), '\n'),
+    empty: (_agent, _source, manifest) => { manifest.bundleDependencies.packages = []; },
+    duplicate: (_agent, _source, manifest) => { manifest.bundleDependencies.packages.push(manifest.bundleDependencies.packages[0]); },
+    escape: (_agent, _source, manifest) => { manifest.bundleDependencies.packages[0].directory = '../outside'; },
+  };
+  for (const [name, mutate] of Object.entries(mutations)) await t.test(name, sub => {
+    const {root, agent, source} = stagedRuntime(sub);
+    const file = path.join(agent, 'plugins-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+    mutate(agent, source, manifest);
+    if (!['missing', 'bundle', 'metadata'].includes(name)) fs.writeFileSync(file, JSON.stringify(manifest));
+    const errors = [];
+    runtimeEntries(root, templates, errors, {agentDir: agent, sourceDir: source});
+    assert.ok(errors.some(error => error.startsWith('agent bundle dependency inventory:')), errors.join('\n'));
+  });
 });
 
 test('without a staged runtime only the umbrella payload entry is shipped', t => {

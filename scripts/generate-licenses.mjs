@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {VOICE_HOST_MANIFEST, voiceHostProblems} from './voice-host.mjs';
 import {canonicalNativeGradleSettings} from './native-gradle-descriptors.mjs';
+import {readMobileBundleDependencies} from '../vendor/eliza/packages/agent/scripts/mobile-bundle-dependencies.ts';
 // Generates the third-party notices shipped in the web bundle and in every APK payload.
 //
 //   node scripts/generate-licenses.mjs                    write apps/app/public/licenses/*
@@ -9,8 +10,8 @@ import {canonicalNativeGradleSettings} from './native-gradle-descriptors.mjs';
 //                                                         classpath into licenses/android-runtime-classpath.json
 //
 //   node scripts/generate-licenses.mjs --packaged-runtime  also list Bun and every npm package bundled
-//                                                         into the staged agent (from the bundle's module
-//                                                         paths, resolved in the prepared lockfile source)
+//                                                         into the staged agent (from its hash-bound
+//                                                         inventory and prepared package metadata)
 //                                                         and workflow worker (its dependencies.json)
 //
 // Runtime enumeration is explicit: a staged runtime in a development checkout never changes the
@@ -735,8 +736,15 @@ export function runtimeEntries(root, templates, errors, {agentDir = path.join(ro
     if (existing) existing._bundles = [...new Set([...existing._bundles, ...entry._bundles])];
     else byId.set(key, entry);
   };
-  for (const dir of agentBundlePackageDirs(fs.readFileSync(path.join(agentDir, 'agent-bundle.js'), 'utf8')))
-    add(runtimePackageEntry(path.join(sourceDir, dir), 'agent bundle', templates, errors));
+  try {
+    const bundle = fs.readFileSync(path.join(agentDir, 'agent-bundle.js'));
+    const manifest = JSON.parse(fs.readFileSync(path.join(agentDir, 'plugins-manifest.json'), 'utf8'));
+    const packages = readMobileBundleDependencies(manifest.bundleDependencies, bundle, sourceDir);
+    for (const item of packages)
+      add(runtimePackageEntry(path.join(sourceDir, item.directory), 'agent bundle', templates, errors));
+  } catch (error) {
+    errors.push(`agent bundle dependency inventory: ${error.message}`);
+  }
   const workerDir = path.join(agentDir, 'workflow-worker');
   if (fs.existsSync(path.join(workerDir, 'dependencies.json'))) {
     for (const dep of JSON.parse(fs.readFileSync(path.join(workerDir, 'dependencies.json'), 'utf8'))) {
