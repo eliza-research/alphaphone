@@ -8,6 +8,7 @@ import {browserReadingSource} from '../browser/reading-source';
 import {sensitiveReadingText} from '../browser/reading-sensitive';
 import {createReadingSupport, READING_UNSUPPORTED_MESSAGE} from '../browser/reading-capability';
 import {webSourceOf} from './summary-source';
+import {browserCalendarScope} from './agent-calendar-adapter';
 import { connectionController, agentPendingText } from '../runtime/connection-ui';
 import { BrowserReviews } from '../browser/review';
 import { browserErrorMessage } from '../browser/browser-errors';
@@ -509,7 +510,12 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     const next=JSON.stringify(payload);
     if(next!==lastGeometry){lastGeometry=next;return Browser.present(payload).catch(()=>{lastGeometry='';});}
   };
-  const openBrowserView = (event: Event) => shell?.openView((event as CustomEvent<string>).detail);
+  const openBrowserView = (event: Event) => {
+    const view=(event as CustomEvent<string>).detail;
+    // Browser-provider links keep a source the user already selected. Ordinary
+    // Calendar entry still starts at Agent Calendar; this scope is test-only.
+    shell?.openView(view,view==='calendar'&&browserCalendarScope(shell)?{calendarAuthority:'browser-local'}:undefined);
+  };
   window.addEventListener('alpha:browser-open-view', openBrowserView);
   window.addEventListener('alpha:bookmarks-document-changed',refreshBookmarks);
   const timer=window.setInterval(update,100);
