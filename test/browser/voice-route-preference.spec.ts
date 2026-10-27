@@ -1,4 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
+import {openLegacyNotes} from './helpers/legacy-notes';
 import {recorder} from './voice-fixture';
 
 // Main uses Cloud speech. Legacy persisted local preferences cannot silently select a
@@ -14,7 +15,7 @@ async function signedInCloud(page:Page){
  });
 }
 async function openRecorder(page:Page){
- await page.getByRole('button',{name:'Notes',exact:true}).click();
+ await openLegacyNotes(page);
  await page.getByRole('button',{name:'Record and transcribe',exact:true}).click();
  await expect(recorder(page)).toBeVisible();
 }
