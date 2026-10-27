@@ -41,6 +41,9 @@ include ':elizaos-capacitor-secure-store'
 project(':elizaos-capacitor-secure-store').projectDir = new File(nativePatchSource.root, 'plugins/plugin-native-secure-store/android')
 include ':eliza-passwords'
 project(':eliza-passwords').projectDir = new File('../vendor/eliza/plugins/plugin-native-passwords/android')
+// Native Eliza Cloud sign-in client (AlphaCloudSignInPlugin registers it) from the reviewed pin.
+include ':eliza-cloud-auth'
+project(':eliza-cloud-auth').projectDir = new File('../vendor/eliza/packages/auth/android')
 
 include ':eliza-notifications'
 project(':eliza-notifications').projectDir = new File(nativePatchSource.root, 'plugins/plugin-native-notifications/android')

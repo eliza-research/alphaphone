@@ -164,6 +164,7 @@ dependencies {
  implementation project(':eliza-reminders')
  implementation project(':eliza-location')
  implementation project(':eliza-passwords')
+ implementation project(':eliza-cloud-auth')
  implementation project(':elizaos-capacitor-secure-store')
  implementation "androidx.webkit:webkit:$rootProject.ext.androidxWebkitVersion"
  implementation "androidx.appcompat:appcompat:$rootProject.ext.androidxAppCompatVersion"

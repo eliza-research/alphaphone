@@ -4,8 +4,9 @@ import {readFileSync} from 'node:fs';
 
 /**
  * The development browser bridge's adapter for Eliza Cloud's in-app email sign-in code. Routes and
- * body shapes come only from config/cloud-email-code.json, which android CloudEmailCode.java mirrors
- * (test/cloud-sign-in-flow.test.mjs pins both). Tenant identity comes from the deployment.
+ * body shapes come only from config/cloud-email-code.json, which the shared native client's
+ * CloudEmailCode.java (vendor/eliza packages/auth/android) mirrors (test/cloud-sign-in-flow.test.mjs
+ * pins both). Tenant identity comes from the deployment.
  * No magic link, no hosted page.
  */
 export const CLOUD_EMAIL_CODE=JSON.parse(readFileSync(new URL('../config/cloud-email-code.json',import.meta.url),'utf8')) as {sendPath:string;verifyPath:string;client:string};

@@ -8,11 +8,12 @@ final class ResetCloudRevocation {
   if(timeoutMs<=0||!AlphaDataReset.pending(context))return;
   final long deadline=System.nanoTime()+Math.min(timeoutMs,8000)*1_000_000L;
   Thread worker=new Thread(()->{
-   for(String environment:CloudKeyRevocation.environments(BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS)){
+   ai.eliza.auth.cloud.CloudSignInConfig registration=AlphaCloudSignInPlugin.REGISTRATION;
+   for(ai.eliza.auth.cloud.CloudSignInEnvironment environment:registration.environments()){
     if(Thread.currentThread().isInterrupted()||System.nanoTime()>=deadline)return;
     try{
-     String saved=AlphaCredentialStore.readSlotBeforeAttach(context,"cloud:"+environment);
-     if(saved!=null&&System.nanoTime()<deadline)CloudKeyRevocation.revoke(environment,new org.json.JSONObject(saved).optString("token",null),BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS);
+     String saved=AlphaCredentialStore.readSlotBeforeAttach(context,registration.credentialSlot(environment));
+     if(saved!=null&&System.nanoTime()<deadline)ai.eliza.auth.cloud.CloudKeyRevocation.revoke(registration,environment,new org.json.JSONObject(saved).optString("token",null));
     }catch(Exception unavailable){/* Local reset must still proceed. */}
    }
   },"alpha-reset-key-revocation");
