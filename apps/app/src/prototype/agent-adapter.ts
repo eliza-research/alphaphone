@@ -50,6 +50,7 @@ import {NotesCommitUncertain,isStorageFull} from '../runtime/notes-store';
 import {isNotesOperation,validateNotesOperation,notesTarget} from '../runtime/notes-contract';
 import {isCalendarOperation,validateCalendarResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts';
 import { isMvpView } from "./mvp-features";
+import { alphaViewKey, alphaViewPaths } from "../product/alpha-product";
 import { workflowSha, validateWorkflowResult } from '../runtime/workflow-device-contract';
 import { getMapsSelectedObject, clearMapsSelection } from '../maps/agent-context';
 import { alphaClient, AlphaClientError, type AlphaView } from '../runtime/alpha-client';
@@ -350,9 +351,8 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     });
   }
   function openInternalView(shell:Shell,target:string,chat?:string):boolean {
-    if(!['home','reminders','notifications'].includes(target)&&!isMvpView(target))return false;
-    const view=target==='reminders'?'calendar':target;
-    if(view!=='home'&&!views[view])return false;
+    const view=alphaViewKey(target);
+    if(!view||view!=='home'&&!views[view])return false;
     if(view==='home')shell.goHome(chat);else shell.openView(view,undefined,chat);
     return true;
   }
@@ -1167,8 +1167,8 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
   // An authenticated voice socket carries only navigation targets, never record parameters.
   // Reuse the same shell projection and post-React context fence as completed chat actions.
   p.applyRealtimeVoiceNavigation = async function(input:import("../runtime/development-cartesia-conversation").RealtimeVoiceNavigation & {binding:import('../runtime/alpha-client').VoiceConversationBinding;assertCurrent:()=>void;navigation:import('../runtime/alpha-client').VoiceNavigationContinuation}){
-    input.assertCurrent();const target=input.viewId==='chat'?'home':input.viewId==='automations'?'workflows':input.viewId==='reminders'?'calendar':input.viewId;
-    if(input.subview||!['home','notifications'].includes(target)&&!isMvpView(target)||input.viewPath&&!['/'+input.viewId,'/apps/'+input.viewId,...(target==='home'?['/']:[])].includes(input.viewPath))throw Error('That voice screen is not available.');
+    input.assertCurrent();const target=alphaViewKey(input.viewId);
+    if(input.subview||!target||input.viewPath&&!alphaViewPaths(input.viewId).includes(input.viewPath))throw Error('That voice screen is not available.');
     const current=()=>{input.assertCurrent();if(!this.live||document.hidden||!connectionController.voiceConversationCurrent(input.binding))throw Error('The voice conversation changed.');};
     let delivered=false;try{
       const prepared=Object.hasOwn(input,'navigationPrepared')||Object.hasOwn(input,'navigationBinding')||Object.hasOwn(input,'completedActionHandoffId');

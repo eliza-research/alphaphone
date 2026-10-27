@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
+import {tsImport} from 'tsx/esm/api';
 
 // Synthetic transport callbacks only; no socket, microphone, provider, or model calls.
 const source=fs.readFileSync(new URL('../apps/app/src/runtime/development-cartesia-conversation.ts',import.meta.url),'utf8');
@@ -33,10 +34,13 @@ test('a replaced owner/session rejects UI context and event delivery',async()=>{
 const adapterSource=fs.readFileSync(new URL('../apps/app/src/prototype/agent-adapter.ts',import.meta.url),'utf8');
 const projectionSource=adapterSource.slice(adapterSource.indexOf('  p.applyRealtimeVoiceNavigation = async function('),adapterSource.indexOf('  p.sendVoiceTurn = async function('));
 const projectionJs=stripTypeScriptTypes(projectionSource,{mode:'transform'});
+const {alphaNavigation}=await tsImport('../apps/app/src/product/alpha-product.ts',import.meta.url);
+// Notes, Calendar and Workflows are available; the product registry resolves every other id.
+const projectionViews=alphaNavigation(view=>['notes','calendar','workflows'].includes(view));
 function projectionHarness(){
  let active=true,hidden=false,commits=0;globalThis.document={get hidden(){return hidden;}};
  const state={view:null,chat:'full'},alphaClient={getState:()=>({context:{view:state.view||'home',revision:1,sensitive:false}})},p={};
- new Function('p','isMvpView','connectionController','context','openInternalView','alphaClient',projectionJs)(p,view=>['notes','calendar','workflows'].includes(view),{voiceConversationCurrent:()=>active},()=>{},(shell,view,chat)=>{commits++;state.view=view==='home'?null:view;state.chat=chat;return true;},alphaClient);
+ new Function('p','alphaViewKey','alphaViewPaths','connectionController','context','openInternalView','alphaClient',projectionJs)(p,projectionViews.viewKey,projectionViews.viewPaths,{voiceConversationCurrent:()=>active},()=>{},(shell,view,chat)=>{commits++;state.view=view==='home'?null:view;state.chat=chat;return true;},alphaClient);
  const shell={live:true,S:()=>state,setState:(_patch,done)=>done()},observed=[];
  const navigation={apply:async(view,current,commit)=>{current();return commit(state.chat,context=>observed.push(context));},finish:value=>observed.push(value)};
  return {apply:event=>p.applyRealtimeVoiceNavigation.call(shell,{...event,binding:{},assertCurrent:()=>{if(!active)throw Error('changed');},navigation}),state,observed,get commits(){return commits;},replace:()=>active=false,background:()=>hidden=true};

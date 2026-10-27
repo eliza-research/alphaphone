@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {tsImport} from 'tsx/esm/api';
 
 const identity = JSON.parse(fs.readFileSync('app.config.json', 'utf8'));
 const gradle = fs.readFileSync('android/app/build.gradle', 'utf8');
@@ -84,4 +85,39 @@ test('the key scan would catch an unprefixed or foreign key', t => {
   t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
   fs.writeFileSync(path.join(dir, 'a.ts'), "const k='milady.theme';localStorage.getItem(k);localStorage.setItem('eliza:x','1');localStorage.getItem(`alpha.dev.${n}`);");
   assert.deepEqual(literalStorageKeys(dir).map(row => row.key).sort(), ['alpha.dev.', 'eliza:x', 'milady.theme']);
+});
+
+// Alpha is one registered product of the shared mobile shell (config/alpha-product.json). The
+// record is the product's identity, theme and installed-data compatibility input; the checks below
+// keep it equal to what the build and the renderer actually use.
+test('the product record validates and carries the same identity as app.config.json', async () => {
+  const {validateMobileProductRegistration} = await tsImport('../.eliza/client-features/packages/ui/src/mobile-shell/product-registration.ts', import.meta.url);
+  const record = JSON.parse(fs.readFileSync('config/alpha-product.json', 'utf8'));
+  assert.deepEqual(validateMobileProductRegistration(record), []);
+  assert.equal(record.identity.appId, identity.appId);
+  assert.equal(record.identity.appName, identity.appName);
+  assert.equal(record.storage.launcherBuiltinPrefix, 'alpha:');
+  assert.doesNotMatch(JSON.stringify(record.storage), FOREIGN);
+});
+
+test('every installed storage name in the product record is still read by the renderer', () => {
+  const record = JSON.parse(fs.readFileSync('config/alpha-product.json', 'utf8'));
+  const source = sources('apps/app/src').map(file => fs.readFileSync(file, 'utf8')).join('\n');
+  for (const key of Object.values(record.storage.retained)) assert.ok(source.includes(`'${key}'`) || source.includes(`"${key}"`), `${key} is no longer named in apps/app/src; keep it while installs may hold it`);
+  // The favorites name is read through the record itself.
+  assert.match(fs.readFileSync('apps/app/src/prototype/home-shell.ts', 'utf8'), /key: ALPHA_PRODUCT\.storage\.launcherFavorites/);
+});
+
+test('the product theme supplies every Alpha palette property the stylesheets read', async () => {
+  const {alphaThemeVariables} = await tsImport('../apps/app/src/product/alpha-product.ts', import.meta.url);
+  const used = new Set();
+  for (const file of sources('apps/app/src').concat(['apps/app/src/prototype/template.html', 'apps/app/src/prototype/phone.css', 'apps/app/src/prototype/prototype.css']))
+    for (const [, name] of fs.readFileSync(file, 'utf8').matchAll(/var\(\s*(--(?:bg|s1|s2|s3|line|fg|mut|acc|acct|scrim|shc))\b[,)]/g)) used.add(name);
+  assert.ok(used.size >= 10, `found only ${[...used]}`);
+  for (const appearance of ['light', 'dark']) {
+    const variables = alphaThemeVariables(appearance);
+    for (const name of used) assert.ok(variables[name], `${appearance} theme sets ${name}`);
+  }
+  assert.equal(alphaThemeVariables('light')['--acct'], '#0000FF');
+  assert.equal(alphaThemeVariables('dark')['--acct'], '#8A93FF');
 });

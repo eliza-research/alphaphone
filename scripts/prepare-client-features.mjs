@@ -70,6 +70,18 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-native-system/src/sense-web.ts',
   'plugins/plugin-native-system/src/definitions.ts',
   'packages/ui/src/components/pages/InstalledAppsLauncher.tsx',
+  'packages/contracts/src/contracts/theme.ts',
+  'packages/ui/src/config/theme.ts',
+  'packages/ui/src/mobile-shell/index.ts',
+  'packages/ui/src/mobile-shell/MobileAllAppsDrawer.tsx',
+  'packages/ui/src/mobile-shell/MobileHomeScreen.tsx',
+  'packages/ui/src/mobile-shell/MobileViewHost.tsx',
+  'packages/ui/src/mobile-shell/mobile-launcher.ts',
+  'packages/ui/src/mobile-shell/navigation.ts',
+  'packages/ui/src/mobile-shell/product-registration.ts',
+  'packages/ui/src/mobile-shell/view-id-migration.ts',
+  'packages/ui/src/mobile-shell/view-ids.ts',
+  'packages/ui/src/mobile-shell/view-registry.ts',
   'packages/ui/src/voice/pcm-wave.ts',
   "packages/ui/src/utils/reminder-presentation.ts",
   "plugins/plugin-browser/src/native-client-command.ts",
@@ -200,7 +212,7 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   const project = (name, text) => source.set(name, {bytes:Buffer.from(text),mode:'100644',sha256:hash(Buffer.from(text))});
   const text = name => source.get(name).bytes.toString();
 
-  project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\nexport * from "./packages/contracts/src/device-reviews";\n');
+  project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\nexport * from "./packages/contracts/src/device-reviews";\nexport * from "./packages/contracts/src/contracts/theme";\n');
   // Project only existing public type declarations; do not bundle host/client implementations.
   const declarations = (name, names) => names.map(declaration => {
     const escaped = declaration.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
