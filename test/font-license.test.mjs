@@ -275,7 +275,7 @@ test('choice (b): Denton is loaded by one rule, and upright Fraunces is not bund
   sources.push('apps/app/index.html');
   const text = Object.fromEntries(sources.map(file => [file, fs.readFileSync(path.join(ROOT, file), 'utf8')]));
   const referencing = sources.filter(file => /denton/i.test(text[file])).sort();
-  assert.deepEqual(referencing, ['apps/app/src/prototype/phone.css', 'apps/app/src/prototype/prototype.css', 'apps/app/src/prototype/scan-dialog.css', 'apps/app/src/prototype/template.html'], 'update docs/dependency-audit.md when Denton is referenced elsewhere');
+  assert.deepEqual(referencing, ['apps/app/src/prototype/home-launcher.ts', 'apps/app/src/prototype/phone.css', 'apps/app/src/prototype/prototype.css', 'apps/app/src/prototype/scan-dialog.css', 'apps/app/src/prototype/template.html'], 'update docs/dependency-audit.md when Denton is referenced elsewhere');
   const css = text['apps/app/src/prototype/prototype.css'];
   // The only rule that loads the file; removing it (and the file) drops every stack to its next family.
   assert.deepEqual(css.match(/@font-face\{[^}]*Denton[^}]*\}/g), ["@font-face{font-family:'Denton';src:url(/denton-300.woff2) format('woff2');font-weight:100 900;font-style:normal;font-display:swap}"]);

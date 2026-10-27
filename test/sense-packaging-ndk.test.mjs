@@ -16,6 +16,7 @@ const version = ndkVersion(senseConsumer);
 test('Sense packaging selects the same explicit NDK as the pinned voice consumer', () => {
   const consumer = read('vendor/eliza/plugins/plugin-local-inference/native/android/consumer.gradle');
   assert.match(read('android/sense/build.gradle'), /apply from: new File\(elizaSenseSourceDir, 'consumer\.gradle'\)/);
+  assert.match(read('android/sense/build.gradle'), /vendor\/eliza\/packages\/app\/platforms\/android\/sense/);
   assert.ok(version, 'an implicit AGP NDK can leave shared libraries unstripped');
   assert.equal(version, ndkVersion(consumer));
   assert.doesNotMatch(senseConsumer + read('android/sense/build.gradle'), /keepDebugSymbols|doNotStrip/,
