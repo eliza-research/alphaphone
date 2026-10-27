@@ -72,7 +72,7 @@ type Selection = {kind:'development';profile:DevelopmentProfile;account?:string}
 export interface CloudServiceSession { environment: CloudEnvironment; userId: string; organizationId?: string; sessionId: string; credentialId: string; email?: string;
   /** When this phone's Cloud sign-in key expires (from the in-app sign-in), if Cloud reported it. */
   expiresAt?: number }
-export interface RestoredMessage { id: string; from: 'user' | 'agent'; text: string; deviceReceipt?:true; browserDestination?:string }
+export interface RestoredMessage { id: string; from: 'user' | 'agent'; text: string; deviceReceipt?:true; browserDestination?:string; inReplyTo?:string }
 export interface ConnectionSnapshot {
   /** Automatic session restoration has completed; null is now a resolved no-session state. */
   startupResolved?: boolean;
@@ -287,6 +287,12 @@ function retireConversationEvents(){closeConversationEvents?.();closeConversatio
 function deliverConversationMessages(selected:Active,session:VerifiedSession,id:string,rows:Record<string,unknown>[]){
   if(active!==selected||state.session!==session||conversationMemory.get(conversationKey(session))!==id)return;
   const messages=restoredMessages(rows);if(messages.length)update({conversationDelivery:{sessionId:session.sessionId,conversationId:id,messages,revision:(state.conversationDelivery?.revision||0)+1}});
+}
+/** A journaled effect belongs to its conversation even when its own navigation retires chat. */
+function deliverRequestedActionReceipts(selected:Active,session:VerifiedSession,generation:number,id:string,requestMessageId:string,receipts:OperationReceipt[]){
+  if(generation!==epoch||active!==selected||state.session!==session||conversationMemory.get(conversationKey(session))!==id)return;
+  const messages:RestoredMessage[]=receipts.map(receipt=>({id:`device-receipt:${receipt.proposalId}`,from:'agent',text:receipt.summary,deviceReceipt:true,inReplyTo:requestMessageId}));
+  if(messages.length)update({conversationDelivery:{sessionId:session.sessionId,conversationId:id,messages,revision:(state.conversationDelivery?.revision||0)+1}});
 }
 /** Coalesced reconnect/foreground-settlement reconciliation through the existing history API. */
 async function flushConversationEvents(){
@@ -2589,6 +2595,8 @@ export const connectionController = {
         try { let items = await selected.actions.pendingReview(context, requestSignal);
           if(!responseFailure&&directRequestedActions&&typeof reply.userMessageId==='string'&&validateUuid(reply.userMessageId)){
             const performed=await selected.actions.performRequested(reply.userMessageId,context,requestSignal,async()=>!(await readDevicePreferences(requestSignal)).askBeforeAgentActions);
+            // Publish existing outcomes before self-navigation's cancelled foreground wait.
+            deliverRequestedActionReceipts(selected,session,generation,id,reply.userMessageId,performed);
             assertCurrent();
             if(performed.length){
               completedActions.push(...performed);

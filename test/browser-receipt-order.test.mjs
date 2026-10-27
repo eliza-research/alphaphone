@@ -8,7 +8,7 @@ const root=process.env.ALPHA_RECEIPT_SOURCE_ROOT||'.';
 const read=p=>fs.readFileSync(root+'/'+p,'utf8');
 const agent=read('apps/app/src/prototype/agent-adapter.ts'),browser=read('apps/app/src/prototype/browser-adapter.ts'),device=read('apps/app/src/runtime/device-actions.ts');
 const ts=s=>stripTypeScriptTypes(s,{mode:'transform'});
-const {browserNavigationSummary}=await import('data:text/javascript;base64,'+Buffer.from(ts(read('apps/app/src/runtime/action-message-presentation.ts'))).toString('base64'));
+const {browserNavigationSummary,projectActionMessages}=await import('data:text/javascript;base64,'+Buffer.from(ts(read('apps/app/src/runtime/action-message-presentation.ts'))).toString('base64'));
 const navigateCode=ts(browser.slice(browser.indexOf('  async function navigate('),browser.indexOf('  async function command(')));
 const browserCode=ts(browser.slice(browser.indexOf('    this.browserNavigateApproved ='),browser.indexOf('    // Identity only:')));
 const executorCode=agent.slice(agent.indexOf("      if (!this.browserNavigateApproved) return"),agent.indexOf('\n    });\n    context(this);',agent.indexOf("      if (!this.browserNavigateApproved) return")));
@@ -62,3 +62,30 @@ for(const native of [false,true])for(const origin of ['notes','browser']){
  test(`${label}: changed owner session before receipt completion cannot present`,async()=>{const h=harness({native,origin,beforeReceipt:({session})=>session.session={sessionId:'different'}}),r=await h.run();assert.equal(r.status,'succeeded');assert.ok(!h.events.includes('present'));});
  test(`${label}: hidden foreground cannot present after receipt`,async()=>{const h=harness({native,origin,beforeReceipt:({document})=>document.hidden=true}),r=await h.run();assert.equal(r.status,'succeeded');assert.ok(!h.events.includes('present'));});
 }
+
+const connectionSource=read('apps/app/src/runtime/connection-ui.tsx');
+const deliverySource=ts(connectionSource.slice(connectionSource.indexOf('function deliverRequestedActionReceipts('),connectionSource.indexOf('/** Coalesced reconnect/foreground-settlement')));
+const mergeSource=ts(connectionSource.slice(connectionSource.indexOf('export function mergeConversationDelivery'),connectionSource.indexOf('const actionReceipts =')).replace('export ',''));
+const directMethod=ts('({'+device.slice(device.indexOf('  async performRequested('),device.indexOf('  /** Notice restoration'))+'})');
+const deliveryStart=connectionSource.indexOf('            const performed=await selected.actions.performRequested(reply.userMessageId,context,requestSignal');
+const deliveryEnd=connectionSource.indexOf('            assertCurrent();',deliveryStart)+'            assertCurrent();'.length;
+const directDelivery=ts('(async function(){'+connectionSource.slice(deliveryStart,deliveryEnd)+'})');
+function deliveryHarness(selected,session,receipts,controller){
+ const state={session,conversationDelivery:undefined};const updates=[];const globals={active:selected,epoch:1,state,conversationMemory:new Map([['key','conversation']]),conversationKey:()=> 'key',update:patch=>{updates.push(patch);Object.assign(state,patch);},selected,session,generation:1,id:'conversation',reply:{userMessageId:'canonical-user'},context:{view:'notes',revision:1},requestSignal:controller.signal,readDevicePreferences:async()=>({askBeforeAgentActions:false}),assertCurrent:()=>controller.signal.throwIfAborted()};
+ vm.runInNewContext(deliverySource+';globalThis.deliver=deliverRequestedActionReceipts;',globals);return {globals,state,updates,run:()=>vm.runInNewContext(directDelivery,globals)(),deliver:()=>globals.deliver(selected,session,1,'conversation','canonical-user',receipts)};
+}
+test('direct navigation journals once, changes view and cancels chat, but its exact receipt survives reopening',async()=>{
+ const h=harness({native:true}),p=[...h.owner.proposals.values()][0].proposal;p.requestMessageId='canonical-user';h.owner.card=()=>({});h.owner.approve=()=>h.run();
+ h.owner.performRequested=vm.runInNewContext(directMethod,{}).performRequested;
+ const selected={actions:h.owner},d=deliveryHarness(selected,h.owner.session,[],h.controller);
+ await assert.rejects(d.run(),{name:'AbortError'});assert.equal(h.controller.signal.aborted,true);assert.equal(h.events.filter(e=>e==='dispatch').length,1);assert.equal(h.events.at(-1),'present');
+ const delivery=d.state.conversationDelivery;assert.equal(delivery.messages.length,1);assert.equal(delivery.messages[0].inReplyTo,'canonical-user');assert.equal(delivery.messages[0].text,'Opened example.com.');
+ const user={id:'optimistic-user',from:'user',text:'Open example.com.'},pause={id:'streamed-pause',from:'agent',text:'Review this request on your phone before it can run.'};const original=[user,pause];
+ const merge=vm.runInNewContext(mergeSource+';mergeConversationDelivery',{});const reopened=merge(original,delivery.messages);const shown=projectActionMessages(reopened.map(m=>({...m,displayText:m.text,hasCalendarText:true})),reopened);
+ assert.deepEqual(Array.from(shown,m=>m.id),['optimistic-user','device-receipt:proposal']);assert.equal(shown[1].displayText,'Opened example.com.');assert.equal(original[1].text,pause.text,'raw stored protocol remains intact');assert.equal(merge(reopened,delivery.messages).length,3,'redelivery is idempotent');
+});
+test('completed receipt delivery cannot cross owner, conversation or generation changes',()=>{
+ for(const retire of [d=>d.globals.active={},d=>d.state.session={sessionId:'foreign'},d=>d.globals.epoch=2,d=>d.globals.conversationMemory.set('key','different')]){
+  const selected={},session={sessionId:'owner'},d=deliveryHarness(selected,session,[{proposalId:'p',status:'succeeded',summary:'Opened example.com.'}],new AbortController());retire(d);d.deliver();assert.equal(d.updates.length,0);
+ }
+});

@@ -331,7 +331,7 @@ export class DeviceActions {
       if(!await allowed())break;
       signal.throwIfAborted();
       const result=await this.approve(id,context,signal);results.push(result);
-      if(result.status!=='succeeded')break;
+      if(result.status!=='succeeded'||signal.aborted)break;
     }
     return results;
   }
@@ -479,7 +479,7 @@ export class DeviceActions {
           // this exact terminal journal's acknowledgment, never infer a new effect.
           if(JSON.stringify(entry.record.operation)!==JSON.stringify(p.operation)||receipt.result!==undefined||entry.result?.notesResult!==undefined)continue;
         }else continue;
-        results.push({id:`device-receipt:${p.id}:${p.attemptId}`,requestMessageId:p.requestMessageId,summary:p.operation.type==='browser_navigate'?browserNavigationSummary(p.operation.url):text(entry.summary,2000),...(p.operation.type==='browser_navigate'?{browserDestination:p.operation.url}:{})});
+        results.push({id:`device-receipt:${p.id}`,requestMessageId:p.requestMessageId,summary:p.operation.type==='browser_navigate'?browserNavigationSummary(p.operation.url):text(entry.summary,2000),...(p.operation.type==='browser_navigate'?{browserDestination:p.operation.url}:{})});
       }catch{/* An incomplete, foreign or contradictory receipt is not a success. */}
     }
     signal.throwIfAborted();return results;
