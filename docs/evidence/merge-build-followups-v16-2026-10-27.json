@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-27",
+  "reviewedRemoteHead": "7f014b0e6",
+  "integrationCommit": "5d5fb2769168c09b8c6c74047d423ce0c4d08388",
+  "upstreamCommit": "6497825b38cbe41b3677c0a445341fec900f0dd2",
+  "userDirective": "Keep incorporating new pushes and rebuild as needed.",
+  "changesReviewed": [
+    "Confirmed committed embedded-page navigation may update ordinary saved tabs/history; private and unconfirmed events remain excluded.",
+    "Membership error appears once and is associated with its invalid input using unique React IDs.",
+    "Preserved complete packaged notices in a pinned archive while restoring independently verifiable source-only defaults.",
+    "Updated browser fixtures retain source selection, privacy, exact reservation, recovery and native provider assertions."
+  ],
+  "validation": {
+    "focusedNodeTests": {
+      "tests": 51,
+      "passed": 51,
+      "failed": 0
+    },
+    "currentFullVerification": "pending",
+    "currentAndroidBuild": "version 16 running",
+    "currentImageBuilds": "pending"
+  },
+  "limits": [
+    "Synthetic browser/native fixtures do not prove real integrations.",
+    "No current image boot, device flash or acceptance is claimed."
+  ]
+}
