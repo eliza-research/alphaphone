@@ -448,6 +448,14 @@ The initial complete run at `bcaaae4c2` finished with 2,074 passed, three skips 
 
 Eliza's native sideload debug APK at `9eef5dbd` built and passed its normal artifact audit. Independent ZIP inspection found the BGE model and the expected core/JNI libraries, but no Paradee, Phonon-2 or VAD model assets. That APK therefore does not establish native speech parity. The 464,654,577-byte APK has SHA-256 `f4e744709470e0ce183b9e6cc2c9f394c273b15b6a333d816f9fdaa9ae393df1`; its build overlay, source record and inspection are retained under `/home/shaw/Work/eliza-unification/artifacts/9eef-eliza-native/`. The next native change will share the offline model installer with the existing bionic host; it must preserve Alpha's installed model directory and avoid a second inference context.
 
+The complete rerun at Alpha `bec132174390f069bccc0fd0decc3a9ccf217b06` passed: 2,089 tests total, 2,086 passed, three declared skips, plus TypeScript, Notes query flow, production build and the 419-file mock-exclusion audit. That production source was used by the following notice-only clean APK checkpoint.
+
+### Validated 9eef consumer checkpoint
+
+Alpha `8ea44958e66ca9241fa767e92c1287e6ede068e6`, at Eliza `9eef5dbd7b381576aad0801b1fee424d1483c63c`, passed strict `npm run android:build:local`: all four app variants, both instrumentation APK builds, lint and final artifact inspection. The separate Sense debug and release APKs also built and passed combined inspection. All app BuildConfig sources bind to that clean Alpha commit. The preceding production-identical source checkpoint `bec132174390f069bccc0fd0decc3a9ccf217b06` passed full verification (2,086 passed, three skipped, zero failed).
+
+The exact APKs, generated source bindings and logs are retained under `artifacts/unification-checkpoints/9eef5dbd/`; the committed summary is [unification-9eef-checkpoint.json](evidence/unification-9eef-checkpoint.json). All 722 packaged notices are preserved under `licenses/packaged-runtime/9eef5dbd7b381576aad0801b1fee424d1483c63c/` before restoring the 118-entry source-only defaults. Releases remain unsigned; model, Sense and SystemUI qualification remain open. These results cover APK packaging, not installation, HOME role, image boot, live integrations or device acceptance. Later integration and upstream revisions need separate validation.
+
 ### Latest develop build candidate
 
 The build candidate now uses `fd5511ca1dacdccfadd93879bddff2038ebe8665`, observed as develop on October 27. Its only change from the reviewed `9eef5dbd` runtime is the Notes/Calendar end-to-end extraction fixture. The dependency lock, renderer, engine, model, JNI and Android build inputs are identical across these two commits. New version 17 APK and image builds are pending; the preceding 6497825b APK and browser evidence remains historical.
