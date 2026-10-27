@@ -29,12 +29,33 @@
       "productionBuild": "passed",
       "productionBundleAudit": "passed"
     },
-    "androidBuildLocal": "Runtime preparation interrupted; final rerun pending",
+    "androidBuildLocal": {
+      "command": "npm run android:build:local",
+      "status": "passed",
+      "upstream": "4b928290d388e8f9866b6c404a1b186c7bfe7f70",
+      "variants": [
+        "standaloneDebug",
+        "standaloneRelease",
+        "launcherDebug",
+        "launcherRelease"
+      ],
+      "testMocks": false,
+      "runtimeProfile": "native",
+      "releaseSigned": false,
+      "manifest": "docs/evidence/merge-build-all-prs-apks-2026-10-27.json"
+    },
     "finalUpstream": "4b928290d388e8f9866b6c404a1b186c7bfe7f70",
     "followUpGoogleChooserFixture": {
       "tests": 10,
       "passed": 10,
       "failed": 0
+    },
+    "packagedAudit": {
+      "packages": 603,
+      "moderate": 1,
+      "high": 0,
+      "critical": 0,
+      "disposition": "Existing unexpired UUID exception; no new exception. Full-lock pending findings do not become exceptions."
     }
   },
   "mainUpdated": false,
