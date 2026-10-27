@@ -5,11 +5,24 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { agentBundlePackageDirs, BUN_ENTRY, collectNotices, finishEntry, loadTemplates, packagedRuntimePresent, runtimeEntries, ROOT, shippedPackagedRuntime, UNKNOWN, UNVERIFIED } from '../scripts/generate-licenses.mjs';
+import { BUN_ENTRY, collectNotices, finishEntry, loadTemplates, packagedRuntimePresent, runtimeEntries, ROOT, shippedPackagedRuntime, UNKNOWN, UNVERIFIED } from '../scripts/generate-licenses.mjs';
 import { licenceFlagLines } from '../scripts/licence-policy.mjs';
+import {createMobileBundleDependencies} from '../vendor/eliza/packages/agent/scripts/mobile-bundle-dependencies.ts';
 
 const canonicalTexts = { MIT: 'MIT terms', ISC: 'ISC terms', 'Apache-2.0': 'Apache terms', 'BSD-3-Clause': 'BSD terms' };
 const templates = { mit: 'MIT terms', isc: 'ISC terms', apache: 'Apache terms', canonical: expression => canonicalTexts[expression] ?? '' };
+
+function inventoryFixture(agent, source) {
+  const inputs = {'packages/core/src/index.ts': {bytesInOutput: 10}};
+  for (const file of fs.readdirSync(path.join(source, 'node_modules'), {recursive: true}).filter(file => file.endsWith('package.json')).map(file => path.join('node_modules', file))) {
+    const input = path.posix.join(path.dirname(file), 'index.js');
+    fs.writeFileSync(path.join(source, input), 'export const fixture = true;');
+    inputs[input] = {bytesInOutput: 1};
+  }
+  const bundleDependencies = createMobileBundleDependencies({inputs, resolveDirectory: source, repositoryRoot: source, bundleBytes: fs.readFileSync(path.join(agent, 'agent-bundle.js'))});
+  fs.writeFileSync(path.join(agent, 'plugins-manifest.json'), JSON.stringify({bundleDependencies}));
+  return bundleDependencies;
+}
 
 function stagedRuntime(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'alpha-runtime-notices-'));
@@ -37,14 +50,30 @@ function stagedRuntime(t) {
     { name: 'effect', version: '4.0.0', license: 'MIT', sourcePath: 'node_modules/effect', notices: [] },
   ]));
   write(path.join(agent, 'workflow-worker/licenses/1/LICENSE'), 'zod license text');
+  inventoryFixture(agent, source);
   return { root, agent, source };
 }
 
-test('bundle path comments name each contributing npm package once, never workspace sources', () => {
-  assert.deepEqual(agentBundlePackageDirs([
-    '// ../../node_modules/.bun/a@1.0.0/node_modules/a/x.js', '// ../../node_modules/.bun/a@1.0.0/node_modules/a/y.js',
-    '// node_modules/.bun/@s+b@2.0.0/node_modules/@s/b/z.js', '// ../../plugins/plugin-sql/src/index.ts', 'var s = "// ../../node_modules/fake/x.js";',
-  ].join('\n')), ['node_modules/.bun/@s+b@2.0.0/node_modules/@s/b', 'node_modules/.bun/a@1.0.0/node_modules/a']);
+test('a compact bundle without source comments retains every emitted npm notice', t => {
+  const {root, agent, source} = stagedRuntime(t);
+  fs.writeFileSync(path.join(agent, 'agent-bundle.js'), 'console.log("compact");');
+  const inventory = inventoryFixture(agent, source);
+  assert.deepEqual(inventory.packages.map(entry => entry.name).sort(), ['@scope/pkg', 'hoisted', 'zod']);
+  const errors = [];
+  const entries = runtimeEntries(root, templates, errors, {agentDir: agent, sourceDir: source});
+  assert.deepEqual(errors, []);
+  for (const name of ['@scope/pkg', 'hoisted', 'zod']) assert(entries.some(entry => entry.name === name), name);
+  for (const mutation of [
+    () => fs.rmSync(path.join(agent, 'plugins-manifest.json')),
+    () => fs.writeFileSync(path.join(agent, 'plugins-manifest.json'), JSON.stringify({bundleDependencies: {...inventory, packages: []}})),
+    () => fs.appendFileSync(path.join(agent, 'agent-bundle.js'), 'changed'),
+  ]) {
+    inventoryFixture(agent, source);
+    mutation();
+    const failures = [];
+    runtimeEntries(root, templates, failures, {agentDir: agent, sourceDir: source});
+    assert(failures.some(error => error.startsWith('agent bundle: ')), 'invalid inventory fails generation');
+  }
 });
 
 test('a PACKAGED runtime lists Bun with its LGPL notice and every bundled agent and worker package', t => {
@@ -113,6 +142,7 @@ test('copyleft, unknown, undeclared and text-less runtime packages are listed an
     pkg('custom-id', { license: 'Example-Custom-1.0' }, { LICENSE: 'Example custom terms.' }),
   ];
   fs.appendFileSync(path.join(agent, 'agent-bundle.js'), `\n${lines.join('\n')}\n`);
+  inventoryFixture(agent, source);
   write(path.join(agent, 'workflow-worker/dependencies.json'), JSON.stringify([
     { name: '@worker/undeclared', version: '0.35.0', license: null, sourcePath: 'node_modules/@worker/undeclared', notices: ['licenses/2/LICENSE'] },
   ]));
@@ -154,11 +184,11 @@ test('broken input still fails: a corrupted or nameless package manifest is an e
   let errors = [];
   runtimeEntries(root, templates, errors, { agentDir: agent, sourceDir: source });
   assert.equal(errors.length, 1);
-  assert.match(errors[0], /^agent bundle: .*node_modules\/zod: unreadable or corrupted package\.json/);
+  assert.match(errors[0], /^agent bundle: .*node_modules\/zod\/package\.json is unreadable or corrupted/);
   fs.writeFileSync(path.join(source, 'node_modules/.bun/zod@4.1.0/node_modules/zod/package.json'), JSON.stringify({ license: 'MIT' }));
   errors = [];
   runtimeEntries(root, templates, errors, { agentDir: agent, sourceDir: source });
-  assert.match(errors.join('\n'), /package\.json has no name and version/);
+  assert.match(errors.join('\n'), /no package identity/);
 });
 
 test('a missing prepared package or worker inventory fails generation', t => {
@@ -167,7 +197,7 @@ test('a missing prepared package or worker inventory fails generation', t => {
   fs.rmSync(path.join(agent, 'workflow-worker/dependencies.json'));
   const errors = [];
   runtimeEntries(root, templates, errors, { agentDir: agent, sourceDir: source });
-  assert.ok(errors.some(error => /not in the prepared runtime source/.test(error)));
+  assert.ok(errors.some(error => /^agent bundle: .*node_modules\/hoisted/.test(error)));
   assert.ok(errors.some(error => /dependencies\.json is missing/.test(error)));
 });
 
