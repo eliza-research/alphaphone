@@ -27,6 +27,7 @@
  * anything.
  */
 import fs from "node:fs";
+import {renderSensePermissions} from "../vendor/eliza/packages/os/scripts/android/pixel10a-product.ts";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -271,7 +272,7 @@ function listenerFacts(file, mode, signed) {
   }
   const dump = execFileSync(tool("aapt"), ["dump", "permissions", file], { encoding: "utf8", env: androidEnv(), maxBuffer: 16 << 20 });
   Object.assign(facts, apkPermissions(dump));
-  try { checkListenerPermissions(dump, fs.readFileSync("android/aosp/listener/permissions/privapp-permissions-ai.elizaresearch.alphaphone.sense.xml", "utf8"), listenerPackage(identity.appId)); }
+  try { checkListenerPermissions(dump, renderSensePermissions(identity.appId), listenerPackage(identity.appId)); }
   catch (error) { facts.permissionProblem ??= error.message; }
   const entries = execFileSync("unzip", ["-Z1", file], { encoding: "utf8", maxBuffer: 64 << 20 }).split("\n").filter(Boolean);
   try {

@@ -85,3 +85,10 @@ test('queued draft restore preserves both saved text and newer typing for review
  const f=queuedRestoreFixture('Previously saved draft'),opening=f.c.open('one');await tick();f.type('New unsent words');f.commit();await opening;await tick();
  assert.equal(f.get(),'New unsent words');assert.equal(f.saved().text,'Previously saved draft');assert.equal(f.c.state.conflict,true);assert.equal(f.c.state.savedText,'Previously saved draft');
 });
+
+test('hold binds exact authored whitespace and preserves it through a failed dispatch',async()=>{
+ const f=fixture(),authored='  Indented.\n\nTrailing.  \n';f.external(authored);await f.c.open('one');
+ await assert.rejects(f.c.hold(authored.trim()),/draft changed/);
+ await f.c.hold(authored);f.set('');await tick();f.c.release();await tick();
+ assert.equal(f.get(),authored);assert.equal(f.saved().text,authored);
+});

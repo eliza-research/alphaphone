@@ -18,7 +18,7 @@
     "decision": "A-06"
   },
   "separateLocks": {
-    "pixel10a": "android/aosp/pixel10a-source.json"
+    "pixel10a": "vendor/eliza/packages/os/android/sources/pixel10a-stallion.json"
   },
   "physicalProduct": "android/aosp/pixel10a-product.json"
 }

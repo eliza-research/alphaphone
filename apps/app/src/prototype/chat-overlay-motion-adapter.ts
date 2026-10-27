@@ -236,7 +236,7 @@ export function installChatOverlayMotion(Component: Shell) {
 			)
 				return;
 			const scroll = target.closest<HTMLElement>(
-				'[data-alpha-app-scroll],[data-alpha-layer="home"],.calendar-timeline,.calendar-draft-fields',
+				'[data-alpha-app-scroll],[data-installed-apps-scroll],[data-alpha-layer="home"],.calendar-timeline,.calendar-draft-fields',
 			) ?? scrollParent(target);
 			if (!scroll || target === scroll) return;
 			const box = target.getBoundingClientRect();
