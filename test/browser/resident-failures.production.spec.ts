@@ -34,7 +34,7 @@ const KINDS = {
   provider_issue: 'Alpha’s AI service could not complete this reply. Nothing was resent.',
   generation_timeout: 'Alpha’s AI service could not complete this reply. Nothing was resent.',
   // Bound to an admitted plan, yet the agent ran without a provider: a recheck is offered.
-  no_provider: 'Your agent answered without its Cloud AI connection. Check Cloud again; nothing was retried.',
+  no_provider: 'Your agent answered without its AI connection. Check the connection again; nothing was retried.',
 } as const;
 
 for (const [kind, text] of Object.entries(KINDS)) for (const frame of ['done', 'error'] as const) {
@@ -50,6 +50,7 @@ for (const [kind, text] of Object.entries(KINDS)) for (const frame of ['done', '
     await expect(page.getByText(UNKNOWN, { exact: true })).toHaveCount(0);
     await expect(bubble(page, `Failing ${kind}`)).toHaveCount(1);
     if (kind === 'insufficient_credits') {
+      await button(page, 'Expand chat').click();
       // A billing refusal offers the billing page only when the owner asks; no purchase is started.
       const manage = page.getByRole('button', { name: /^Manage billing in Eliza Cloud/ });
       await expect(manage).toHaveCount(1);
