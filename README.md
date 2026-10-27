@@ -416,8 +416,10 @@ one APK at a time and removes only reproducible packaging intermediates between
 variants. Source, generated provenance and finished APKs are retained.
 
 When a resident runtime is staged, APK verification checks its source stamp,
-agent bundle, complete workflow-worker inventory and both native runtime ABIs
-against the staged inputs. A stale stamp requires fresh preparation and staging.
+agent bundle, hash-bound agent dependency inventory, complete workflow-worker inventory
+and both native runtime ABIs against the staged inputs. Packaged notices use that
+inventory and verify package metadata in the prepared source; compact bundle text
+is not a dependency list. A stale stamp requires fresh preparation and staging.
 A developer APK without runtime payload is reported as `NOT_PACKAGED`; this is
 not proof of resident runtime execution or device acceptance.
 

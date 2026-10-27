@@ -39,6 +39,10 @@ class PackagedRuntimeTest(unittest.TestCase):
         self.entries = {'assets/agent/native-view-declarations.json': b'[]',
                         'assets/agent/alpha-source.json': stamp_bytes,
                         'assets/agent/agent-bundle.js': b'agent payload',
+                        'assets/agent/agent-bundle-dependencies.json': json.dumps({
+                            'version': 1, 'bundleSha256': sha(b'agent payload'),
+                            'packages': [{'directory': 'node_modules/example', 'name': 'example', 'version': '1.0.0', 'packageJsonSha256': 'b' * 64}]
+                        }).encode(),
                         'assets/agent/workflow-worker/worker.js': worker,
                         'assets/agent/workflow-worker/manifest.json': manifest,
                         'assets/agent/workflow-worker/files.sha256': index,
@@ -68,8 +72,18 @@ class PackagedRuntimeTest(unittest.TestCase):
     def test_valid_payload_is_byte_verified_without_execution_claim(self):
         result = verifier.verify(self.package())
         self.assertEqual(result['upstreamCommit'], self.pin)
-        self.assertEqual(result['verifiedEntries'], 8)
+        self.assertEqual(result['verifiedEntries'], 9)
         self.assertFalse(result['runtimeExecution'])
+
+    def test_inventory_must_describe_the_packaged_bundle_even_if_staging_matches(self):
+        name = 'assets/agent/agent-bundle-dependencies.json'
+        original = json.loads(self.entries[name])
+        for changes in [{'bundleSha256': 'c' * 64}, {'version': 2}, {'packages': []}]:
+            with self.subTest(changes=changes):
+                self.entries[name] = json.dumps({**original, **changes}).encode()
+                self.write('android/app/src/main/' + name, self.entries[name])
+                with self.assertRaisesRegex(ValueError, 'dependency inventory does not match bundle'):
+                    verifier.verify(self.package())
 
     def test_each_payload_byte_and_required_entry_is_checked(self):
         for name in self.entries:
