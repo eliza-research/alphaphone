@@ -529,7 +529,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
             if(authority==='android-native'){openCalendarSyncSettings();return;}
             if(authority==='legacy'||authority==='legacy-google'){api.toast('Choose Agent Calendar before reviewing sync. Retained calendars stay read only.');return;}
             const calendar=shell?.agentCalendar,ownerKey=calendar?.state.ownerKey;
-            if(!calendar||!ownerKey){api.toast('Connect to Agent Calendar before reviewing sync.');return;}
+            if(!calendar||!ownerKey){if(native&&!testMocksEnabled)api.set({page:'agent-connection'});else connectionController.open();return;}
             openCalendarSyncSettings({calendar,current:()=>owner===shell&&shell.live&&shell.agentCalendar===calendar&&calendar.state.ownerKey===ownerKey&&!['android-native','legacy','legacy-google'].includes(shell.vget('calendar').calendarAuthority),canChange:()=>!shell.vget('calendar').form&&!shell.canonicalDraftText&&!shell.canonicalDraftInvalid&&!shell.canonicalDraft?.state.opening&&!shell.canonicalDraft?.state.consuming});
           }}]),cap:'Sync',hasCap:true});
           if(testMocksEnabled&&!Capacitor.isNativePlatform())groups.push({...group([{kNav:true,label:'Calendar backups',lbl:'Calendar backups',sub:'Events saved in this app',hasSub:true,chev:true,noAB:true,go:()=>openCalendarRecovery()}]),cap:'Saved data',hasCap:true});

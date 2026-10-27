@@ -59,3 +59,19 @@ async function canonicalFixture({draft=false,delay=false}={}){
  const f=await canonicalFixture({delay:true});f.retire();f.resolve();await f.flush();assert.equal(f.env.window.document.querySelector('dialog'),null);assert.equal(f.calls.changes.length,0);assert.equal(f.calls.legacy,0);f.env.window.close();
 }
 console.log('PASS 3 canonical sync dialog cases: same-source review/select/resume, retained draft blocks changes, owner retirement drops stale review; zero legacy host reads.');
+// Execute the real Settings row callback, leaving the connected/native/legacy fences intact.
+{
+ const settings=fs.readFileSync(new URL('../apps/app/src/prototype/settings-adapter.ts',import.meta.url),'utf8');
+ const start=settings.indexOf("label:'Google Calendar sync'");assert(start>=0);
+ const begin=settings.indexOf('go:()=>{',start)+'go:'.length,end=settings.indexOf("}}]),cap:'Sync'",begin)+1;
+ const callback=settings.slice(begin,end);assert(callback.startsWith('()=>{')&&callback.endsWith('}'));
+ function row({native=false,mocks=false,authority='canonical',calendar=null}={}){
+  const calls={pages:[],connections:0,sync:[],toasts:[]};const api={set:x=>calls.pages.push(x),toast:x=>calls.toasts.push(x)};const shell={live:true,agentCalendar:calendar,vget:()=>({calendarAuthority:authority}),canonicalDraftText:'',canonicalDraftInvalid:false};
+  const go=new Function('owner','api','native','testMocksEnabled','connectionController','openCalendarSyncSettings',`return (${callback});`)(shell,api,native,mocks,{open:()=>calls.connections++},x=>calls.sync.push(x));return{go,calls,shell};
+ }
+ for(const native of [false,true]){const f=row({native});f.go();assert.deepEqual(f.calls.toasts,[]);assert.equal(f.calls.sync.length,0);assert.equal(f.calls.connections,native?0:1);assert.deepEqual(f.calls.pages,native?[{page:'agent-connection'}]:[]);}
+ const native=row({authority:'android-native'});native.go();assert.equal(native.calls.sync.length,1);assert.equal(native.calls.connections,0);
+ for(const authority of ['legacy','legacy-google']){const f=row({authority});f.go();assert.match(f.calls.toasts[0],/read only/);assert.equal(f.calls.sync.length,0);assert.equal(f.calls.connections,0);}
+ const calendar={state:{ownerKey:'owner'}};const f=row({calendar});f.go();assert.equal(f.calls.sync.length,1);const review=f.calls.sync[0];assert.equal(review.calendar,calendar);assert(review.current());assert(review.canChange());f.shell.canonicalDraftText='unsent';assert.equal(review.canChange(),false);calendar.state.ownerKey='other';assert.equal(review.current(),false);assert.equal(f.calls.connections,0);
+ console.log('PASS real Settings sync row: offline connection recovery, native/legacy routing, connected owner and draft fences');
+}
