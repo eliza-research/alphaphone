@@ -16,8 +16,6 @@ function fixture(run) {
    const file=path.join(vendor,path.extname(prefix)?prefix:prefix+'/fixture.ts');
    fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,'export const value = 1;\n');
   }
-  // The voice projection also reads this explicitly pinned companion before checking hashes.
-  const camera=path.join(vendor,'plugins/plugin-assistant/src/services/device-actions/camera-contract.ts');fs.mkdirSync(path.dirname(camera),{recursive:true});fs.writeFileSync(camera,'export const value = 1;\n');
   // The development launcher imports the shared verifier through its product adapter.
   for(const name of ['immutable-workspace-source.mjs','committed-source.mjs']) {
    const relative=`packages/app/scripts/lib/${name}`,target=path.join(vendor,relative);
@@ -65,13 +63,13 @@ test('direct local development launcher prepares a clean client tree before star
  assert.equal(fs.existsSync(path.join(root,'.eliza/patched')),false);
 }));
 
-test('voice projection refuses an unreviewed pin by default',()=>fixture(({root})=>{
- assert.throws(()=>prepareClientFeatures({root}),/Review changed voice projection input/);
+test('client type projection rejects unsupported declarations without writing its cache',()=>fixture(({root})=>{
+ assert.throws(()=>prepareClientFeatures({root}),/Review changed client type declaration/);
  assert.equal(fs.existsSync(path.join(root,'.eliza/client-features')),false);
 }));
-test('actual pinned host projections authenticate source/output hashes and exclude dashboard transport',()=>{
+test('actual pinned client features retain shared voice source unchanged and exclude dashboard transport',()=>{
  const source=prepareClientFeatures(),stamp=JSON.parse(fs.readFileSync(path.join(source,'.source.json')));
-assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','utf8')).commit);assert.equal(stamp.projectionVersion,9);
+assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','utf8')).commit);assert.equal(stamp.projectionVersion,10);
  const coreTypes=fs.readFileSync(path.join(source,'alpha-voice-core-types.ts'),'utf8');
  for(const [file,names]of Object.entries({'components.ts':['ActionParameterSchema'],'model.ts':['JSONSchema'],'primitives.ts':['JsonPrimitive','JsonValue']})){
   const input='packages/core/src/types/'+file,original=fs.readFileSync(path.join('vendor/eliza',input),'utf8');
@@ -93,13 +91,23 @@ assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','u
  assert.equal(stamp.sourceFiles[calendarPath],stamp.files[calendarPath]);
  const calendarBundle=buildSync({entryPoints:[path.join(source,calendarPath)],bundle:true,write:false,platform:'browser',format:'esm',metafile:true});
  assert.equal(Object.keys(calendarBundle.metafile.inputs).length,1,'shared Calendar reconciliation has no Node, SQL, or runtime dependency');
- const client='packages/ui/src/voice/voice-session-client.ts',text=fs.readFileSync(path.join(source,client),'utf8');
- assert.match(text,/requires an injected session fetch/);assert.doesNotMatch(text,/import\("\.\/voice-session-fetch"\)/);
- assert.notEqual(stamp.sourceFiles[client],stamp.files[client]);
- assert.ok(stamp.sourceFiles['packages/core/src/logger.ts']);assert.equal(stamp.files['packages/core/src/logger.ts'],undefined);
- assert.equal(fs.existsSync(path.join(source,'packages/ui/src/voice/voice-session-fetch.ts')),false);
+ const voiceFiles=['packages/ui/src/voice/voice-session-client-core.ts','packages/ui/src/voice/voice-session-status.ts','packages/core/src/logging.ts','packages/core/src/view-interaction.ts','packages/host/src/voice/ui-context.ts'];
+ for(const file of voiceFiles){
+  assert.equal(stamp.sourceFiles[file],stamp.files[file],file+' is not projected');
+  assert.deepEqual(fs.readFileSync(path.join(source,file)),fs.readFileSync(path.join('vendor/eliza',file)),file+' is copied exactly');
+ }
+ const client=voiceFiles[0],text=fs.readFileSync(path.join(source,client),'utf8');
+ assert.doesNotMatch(text,/import\("\.\/voice-session-fetch"\)/);
+ for(const file of ['packages/core/src/logger.ts','packages/host/src/voice.ts','packages/ui/src/voice/voice-chat-types.ts','packages/ui/src/voice/voice-session-client.ts','packages/ui/src/voice/voice-session-fetch.ts']){
+  assert.equal(stamp.sourceFiles[file],undefined);assert.equal(stamp.files[file],undefined);
+  assert.equal(fs.existsSync(path.join(source,file)),false,file+' is not staged');
+ }
+
  const bundle=buildSync({entryPoints:[path.join(source,client)],bundle:true,write:false,platform:'browser',format:'esm',metafile:true,alias:{
-  '@elizaos/host/protocol':path.join(source,'packages/host/src/voice.ts'),
+  '@elizaos/host/voice/ui-context':path.join(source,'packages/host/src/voice/ui-context.ts'),
+  '@elizaos/core/view-interaction':path.join(source,'packages/core/src/view-interaction.ts'),
+  '@elizaos/core/logging':path.join(source,'packages/core/src/logging.ts'),
+  '@elizaos/core/speech':path.join(source,'packages/core/src/speech.ts'),
   '@elizaos/core/protocol':path.join(source,'alpha-voice-core-protocol.ts'),
   '@elizaos/core':path.join(source,'alpha-voice-core-types.ts'),
  }});

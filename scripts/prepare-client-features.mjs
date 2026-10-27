@@ -77,7 +77,8 @@ export const CLIENT_FEATURE_PATHS = [
 
   'packages/contracts/src/calendar-linked-sync.ts',
   'packages/ui/src/voice/batch-conversation.ts',
-  'packages/ui/src/voice/voice-session-client.ts',
+  'packages/ui/src/voice/voice-session-client-core.ts',
+  'packages/ui/src/voice/voice-session-status.ts',
   'packages/ui/src/voice/voice-session-protocol.ts',
   'packages/ui/src/voice/voice-session-state.ts',
   'packages/ui/src/voice/voice-session-ownership.ts',
@@ -88,10 +89,10 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/ui/src/voice/audio-worklet-module-urls.ts',
   'packages/ui/src/voice/worklets',
   'packages/ui/src/logger.ts',
-  'packages/ui/src/voice/voice-chat-types.ts',
-  'packages/core/src/logger.ts',
+  'packages/core/src/logging.ts',
+  'packages/core/src/view-interaction.ts',
   'packages/core/src/security/log-redaction.ts',
-  'packages/host/src/voice.ts',
+  'packages/host/src/voice/ui-context.ts',
 
   'packages/ui/src/voice/voice-activity.ts',
   'packages/ui/src/voice/tts-playback-activity.ts',
@@ -127,6 +128,7 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/contracts/src/native-notes-query.ts',
   'packages/contracts/src/device-reviews.ts',
   'packages/contracts/src/calendar-linked-sync.ts',
+  'plugins/plugin-assistant/src/services/device-actions/camera-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/notes-query-result.ts',
   'plugins/plugin-assistant/src/services/device-actions/sms-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts',
@@ -151,32 +153,11 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
 
 
   if(projectVoice){
-  // Browser consumer projections retain the canonical implementations and exact type declarations.
-  // The dashboard transport is unavailable here: Alpha must inject its owned, private fetch.
-  // The locked commit authenticates source; reviewed per-file hashes below bind voice projections across SDK updates.
-  // The camera contract is upstream at this pin; carry it with the other device-action contracts.
-  for(const [name,file] of upstream.read('plugins/plugin-assistant/src/services/device-actions/camera-contract.ts'))source.set(name,file);
-
-  const projectionInputs={
-    'packages/host/src/voice.ts':'19b5c0e5bbe03a27d3641e6edb4ab40bc989084a2bdd5aa9308e9494843aa0b1',
-    'packages/ui/src/voice/voice-session-client.ts':'0692de311d8231262af1ca2113563628836faf01c2ac7bb96f16c51ad22fd6b1',
-    'packages/ui/src/voice/voice-chat-types.ts':'bb3eb85d76fb4766c91221c3964347c0284ddb9bbdaba765944cc4ea8e96f745',
-    'packages/core/src/logger.ts':'8c2401ba44a79b94a11095bdce3568f65374d2d7b1421c5894b08753feafb7d1',
-  };
-  for(const [name,digest] of Object.entries(projectionInputs))if(sourceFiles[name]!==digest)throw Error('Review changed voice projection input: '+name);
+  // Only non-voice client types need a consumer projection. The voice client,
+  // logger contracts and renderer observations are browser-safe upstream entries.
   const project = (name, text) => source.set(name, {bytes:Buffer.from(text),mode:'100644',sha256:hash(Buffer.from(text))});
   const text = name => source.get(name).bytes.toString();
 
-  const clientPath='packages/ui/src/voice/voice-session-client.ts';
-  const fallback='      const { fetchVoiceSession } = await import("./voice-session-fetch");\n      return fetchVoiceSession(url, init);';
-  if(text(clientPath).split(fallback).length!==2)throw Error('Voice fetch projection source changed.');
-  project(clientPath,text(clientPath).replace(fallback,'      void url; void init;\n      throw new Error("Alpha voice requires an injected session fetch.");'));
-  const status=text('packages/ui/src/voice/voice-chat-types.ts').match(/export type VoiceContinuousStatus =[\s\S]*?;/)?.[0];
-  const loggerTypes=text('packages/core/src/logger.ts');
-  const start=loggerTypes.indexOf('type LogFn ='),end=loggerTypes.indexOf('/**\n * Log entry structure',start);
-  if(!status||start<0||end<start)throw Error('Voice type projection source changed.');
-  project('packages/ui/src/voice/voice-chat-types.ts',status+'\n');
-  source.delete('packages/core/src/logger.ts');
   project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\nexport * from "./packages/contracts/src/device-reviews";\n');
   // Project only existing public type declarations; do not bundle host/client implementations.
   const declarations = (name, names) => names.map(declaration => {
@@ -188,7 +169,7 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
     if (matches.length !== 1) throw Error('Review changed client type declaration: ' + name + ':' + declaration);
     return matches[0][0];
   }).join('\n') + '\n';
-  project('alpha-voice-core-types.ts',loggerTypes.slice(start,end) + '\n' + declarations(
+  project('alpha-voice-core-types.ts',declarations(
     'packages/core/src/types/plugin.ts', ['ViewCapabilityParameter', 'ViewCapability']) + declarations(
     'packages/core/src/types/primitives.ts', ['JsonPrimitive', 'JsonValue']) + declarations(
     'packages/core/src/types/components.ts', ['ActionParameterSchema']) + declarations(
@@ -207,12 +188,11 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   source.delete(clientName);
 
   project('alpha-voice-core-protocol.ts','export {ElizaError} from "./packages/core/src/errors";\nexport {redactTrailingArgs} from "./packages/core/src/security/log-redaction";\nexport {parseViewInteractionClientId} from "./packages/core/src/views/view-interact-protocol";\nexport {findViewActionHandoff, type ViewActionHandoff} from "./packages/core/src/views/view-action-handoff";\nexport type {PermissionState} from "./packages/core/src/types/permissions";\n');
-  // The pinned upstream global renderer is byte-identical to the carried projection.
 
 
   }
   const files = Object.fromEntries([...source].map(([name, file]) => [name, file.sha256]));
-  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?9:0, files };
+  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?10:0, files };
   const parent = path.join(root, '.eliza'), destination = path.join(parent, 'client-features');
   regularPath(parent, true);
   const exists = regularPath(destination, true), stamp = path.join(destination, '.source.json');

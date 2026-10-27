@@ -201,7 +201,7 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
  // (read-aloud) needs Paradee-8M only, so a bundle without a qualified ASR pair still reads aloud.
  // A build without the voice bundle answers "unavailable" without loading any native library.
  @PluginMethod public void localSpeechStatus(PluginCall call){submitLocal(call,request->{
-  localEngine.use(engine->{if(request.cancelled||destroyed)throw new IOException();return null;});
+  localEngine.use(engine->{if(request.cancelled||destroyed)throw new IOException();engine.prepare();return null;});
   if(request.cancelled||destroyed)throw new IOException();JSObject out=new JSObject();out.put("ready",true);out.put("execution","device");out.put("provider","fused-paradee-asr");request.result=out;
  });}
  @PluginMethod public void transcribeLocalRecording(PluginCall call){submitLocal(call,request->{

@@ -24,6 +24,9 @@ test('local speech streams through AudioTrack when the engine supports it and fa
   assert.match(paradee, /return inference\.supportsStreaming\(\);/);
   assert.match(paradee, /VoiceAssets\.install\(context\)\.openInference\(\)/);
   assert.doesNotMatch(paradee, /\.open(?:Asr|Voice)\(/);
+  assert.match(paradee, /prepare\(\)throws IOException\{inference\.prepareSpeech\(\);\}/);
+  assert.match(paradee, /speechLoaded\(\)\{return inference\.isSpeechLoaded\(\);\}/);
+  assert.match(plugin, /engine\.prepare\(\);return null;/);
   // AudioTrack MODE_STREAM, float mono, assistant speech attributes.
   assert.match(output, /setTransferMode\(AudioTrack\.MODE_STREAM\)/);
   assert.match(output, /ENCODING_PCM_FLOAT/);

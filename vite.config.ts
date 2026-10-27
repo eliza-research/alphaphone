@@ -113,8 +113,10 @@ export default defineConfig({
   worker: { format: 'es' },
   resolve: {
     alias: {
-      "@elizaos/ui/voice/voice-session-client": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/voice/voice-session-client.ts",import.meta.url)),
-      "@elizaos/host/protocol": fileURLToPath(new URL("./.eliza/client-features/packages/host/src/voice.ts",import.meta.url)),
+      "@elizaos/ui/voice/voice-session-client": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/voice/voice-session-client-core.ts",import.meta.url)),
+      "@elizaos/host/voice/ui-context": fileURLToPath(new URL("./.eliza/client-features/packages/host/src/voice/ui-context.ts",import.meta.url)),
+      "@elizaos/core/logging": fileURLToPath(new URL("./.eliza/client-features/packages/core/src/logging.ts",import.meta.url)),
+      "@elizaos/core/view-interaction": fileURLToPath(new URL("./.eliza/client-features/packages/core/src/view-interaction.ts",import.meta.url)),
       "@elizaos/core/protocol": fileURLToPath(new URL("./.eliza/client-features/alpha-voice-core-protocol.ts",import.meta.url)),
       "@elizaos/voice/turn": fileURLToPath(new URL("./.eliza/client-features/packages/voice/src/turn.ts",import.meta.url)),
       "@elizaos/core/speech": fileURLToPath(new URL("./.eliza/client-features/packages/core/src/speech.ts",import.meta.url)),

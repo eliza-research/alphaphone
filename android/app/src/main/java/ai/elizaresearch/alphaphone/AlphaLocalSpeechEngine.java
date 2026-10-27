@@ -13,6 +13,8 @@ final class AlphaLocalSpeechEngine implements AutoCloseable {
   Audio synthesize(String text, BooleanSupplier cancelled) throws Exception;
   void cancel();
   void close();
+  /** Explicit readiness checks must initialize their native models before reporting ready. */
+  default void prepare()throws Exception{}
   /** Native streaming synthesis is available (issue #397); otherwise speech is synthesized whole. */
   default boolean supportsStreaming(){return false;}
   /** Whether this backend has loaded speech output; lazy session probes do not load it. */

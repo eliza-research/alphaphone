@@ -36,10 +36,16 @@
         "./.eliza/client-features/packages/ui/src/voice/voice-chat-playback.ts"
       ],
       "@elizaos/ui/voice/voice-session-client": [
-        "./.eliza/client-features/packages/ui/src/voice/voice-session-client.ts"
+        "./.eliza/client-features/packages/ui/src/voice/voice-session-client-core.ts"
       ],
-      "@elizaos/host/protocol": [
-        "./.eliza/client-features/packages/host/src/voice.ts"
+      "@elizaos/host/voice/ui-context": [
+        "./.eliza/client-features/packages/host/src/voice/ui-context.ts"
+      ],
+      "@elizaos/core/logging": [
+        "./.eliza/client-features/packages/core/src/logging.ts"
+      ],
+      "@elizaos/core/view-interaction": [
+        "./.eliza/client-features/packages/core/src/view-interaction.ts"
       ],
       "@elizaos/core/protocol": [
         "./.eliza/client-features/alpha-voice-core-protocol.ts"

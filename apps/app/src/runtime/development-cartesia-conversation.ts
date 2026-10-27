@@ -1,6 +1,6 @@
 import {validateUuid} from '../../../../vendor/eliza/packages/core/src/utils/uuid';
 import {readDevicePreferences} from '../browser/device-preferences';
-import type { ViewActionHandoff } from "@elizaos/core/protocol";
+import type { ViewActionHandoff } from "@elizaos/core/view-interaction";
 import {developmentCloudRealtimeVoiceEnabled} from './development-cloud-voice';
 import {developmentCartesiaVoiceEnabled} from './development-cartesia-flag';
 export {developmentCartesiaVoiceEnabled} from './development-cartesia-flag';
@@ -8,7 +8,7 @@ import {connectionController} from './connection-ui';
 import type {VoiceConversationBinding} from './alpha-client';
 export type RealtimeVoiceNavigation = Pick<ViewActionHandoff, "viewId" | "viewPath" | "subview" | "navigationPrepared" | "navigationBinding" | "completedActionHandoffId"> & {traceId:string};
 /** Canonical self-hosted voice owns the runtime turn; this adapter never sends its transcript twice. */
-export async function developmentCartesiaConversation(input:{binding:VoiceConversationBinding;assertCurrent:()=>void;onState:(phase:string)=>void;onTranscript:(text:string)=>void;onError:(error:Error)=>void;onPlaybackUnlockChange?:()=>void;onActionResult?:(summary:string)=>void;getUiContext?:()=>import('@elizaos/host/protocol').VoiceUiContext;onNavigate?:(event:RealtimeVoiceNavigation)=>Promise<void>}){
+export async function developmentCartesiaConversation(input:{binding:VoiceConversationBinding;assertCurrent:()=>void;onState:(phase:string)=>void;onTranscript:(text:string)=>void;onError:(error:Error)=>void;onPlaybackUnlockChange?:()=>void;onActionResult?:(summary:string)=>void;getUiContext?:()=>import('@elizaos/host/voice/ui-context').VoiceUiContext;onNavigate?:(event:RealtimeVoiceNavigation)=>Promise<void>}){
  if(developmentCartesiaVoiceEnabled&&developmentCloudRealtimeVoiceEnabled)throw Error('Choose direct or Cloud realtime speech, not both.');
  if(!developmentCartesiaVoiceEnabled&&!developmentCloudRealtimeVoiceEnabled)throw Error('Developer realtime speech is disabled.');
  const agent=connectionController.getBrowserSpeechAgent();if(!agent)throw Error('Connect the local developer agent first.');

@@ -12,10 +12,10 @@ import java.util.function.BooleanSupplier;
 /** Product lifecycle adapter over the shared on-device ASR and Paradee engine. */
 final class AlphaParadeeSpeech implements AlphaLocalSpeechEngine.Backend {
  private final InferenceSession inference;
- private volatile boolean speechLoaded;
  AlphaParadeeSpeech(Context context)throws Exception{
   inference=VoiceAssets.install(context).openInference();
  }
+ @Override public void prepare()throws IOException{inference.prepareSpeech();}
  public String transcribe(float[] samples)throws IOException{
   if(samples==null||samples.length<1600||samples.length>16000*60)throw new IllegalArgumentException("Expected 0.1 to 60 seconds of audio");
   double energy=0;for(float sample:samples){if(!Float.isFinite(sample)||Math.abs(sample)>1)throw new IllegalArgumentException("Invalid PCM");energy+=(double)sample*sample;}
@@ -26,7 +26,7 @@ final class AlphaParadeeSpeech implements AlphaLocalSpeechEngine.Backend {
  public AlphaLocalSpeechEngine.Audio synthesize(String text,BooleanSupplier cancelled)throws IOException{
   if(text==null||text.isBlank()||text.length()>5000||text.indexOf('\0')>=0)throw new IllegalArgumentException("Invalid reviewed speech text");
   if(cancelled.getAsBoolean())throw new CancellationException();
-  ParadeeVoice.Audio audio=inference.synthesize(text,1f);speechLoaded=true;boolean accepted=false;
+  ParadeeVoice.Audio audio=inference.synthesize(text,1f);boolean accepted=false;
   try{
    if(cancelled.getAsBoolean())throw new CancellationException();
    if(audio.sampleRate!=24000||audio.samples.length<2400||audio.samples.length>(8*1024*1024-44)/2)throw new IllegalStateException("Invalid speech output");
@@ -36,7 +36,7 @@ final class AlphaParadeeSpeech implements AlphaLocalSpeechEngine.Backend {
   }finally{if(!accepted)Arrays.fill(audio.samples,0);}
  }
  @Override public boolean supportsStreaming(){try{return inference.supportsStreaming();}catch(LinkageError|RuntimeException unavailable){return false;}}
- @Override public boolean speechLoaded(){return speechLoaded;}
+ @Override public boolean speechLoaded(){return inference.isSpeechLoaded();}
  /**
   * Issue #397: per-chunk validation of the shared Paradee stream. The sink never reenters the voice;
   * its exceptions are held and rethrown after the native call returns, so nothing propagates through
@@ -46,7 +46,6 @@ final class AlphaParadeeSpeech implements AlphaLocalSpeechEngine.Backend {
   if(text==null||text.isBlank()||text.length()>5000||text.indexOf('\0')>=0)throw new IllegalArgumentException("Invalid reviewed speech text");
   if(cancelled.getAsBoolean())throw new CancellationException();
   if(inference.speechSampleRate()!=AlphaLocalSpeechEngine.STREAM_RATE)throw new IllegalStateException("Invalid speech output");
-  speechLoaded=true;
   SpeechStreamValidation state=new SpeechStreamValidation();
   inference.synthesizeStream(text,1f,(samples,complete)->{
    try{
