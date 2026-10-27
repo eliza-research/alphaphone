@@ -1,9 +1,11 @@
 import {test,expect,type Page} from '@playwright/test';
+import {openLegacyNotes} from './helpers/legacy-notes';
+import {returnToApps} from './app-navigation';
 test.use({timezoneId:'America/New_York'});
 const initial=Date.parse('2026-10-02T06:59:50-04:00'),due=Date.parse('2026-10-02T07:00:01-04:00');
 const state=(page:Page)=>page.evaluate(()=>JSON.parse(localStorage.getItem('alpha.dev.app.workflows')!));
 async function setup(page:Page,trig:any,steps:any[]=[{k:'Do',t:'Turn on Do Not Disturb',apps:['Settings']}]){
- await page.clock.setFixedTime(new Date(initial));await page.addInitScript(({trig,steps})=>{if(localStorage.getItem('triggerTestSeeded'))return;localStorage.setItem('triggerTestSeeded','yes');localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'}));localStorage.setItem('alpha.dev.app.workflows',JSON.stringify({flows:[{id:960,name:'Automatic test',on:true,trig,steps,runs:[]}],localRuns:{}}));localStorage.setItem('alpha.dev.app.messages',JSON.stringify({threads:{maya:[]},unread:{}}));localStorage.setItem('alpha.dev.app.inbox',JSON.stringify({mails:[],sent:[]}));},{trig,steps});await page.goto('/?mode=dev&tools=1');
+ await page.clock.setFixedTime(new Date(initial));await page.addInitScript(({trig,steps})=>{if(localStorage.getItem('triggerTestSeeded'))return;localStorage.setItem('triggerTestSeeded','yes');localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'}));localStorage.setItem('alpha.dev.app.workflows',JSON.stringify({flows:[{id:960,name:'Automatic test',on:true,trig,steps,runs:[]}],localRuns:{}}));localStorage.setItem('alpha.dev.app.messages',JSON.stringify({threads:{maya:[]},unread:{}}));localStorage.setItem('alpha.dev.app.inbox',JSON.stringify({mails:[],sent:[]}));},{trig,steps});await page.goto('/?mode=dev&tools=1');await openLegacyNotes(page);await returnToApps(page);
  await page.evaluate(async()=>{const {Component}=await import('/src/prototype/model.js');const original=Component.prototype.api;Component.prototype.api=function(key:string){const api=original.call(this,key);if(key==='workflows')(window as any).triggerApi=api;return api;};});await expect.poll(async()=>(await state(page)).triggerState?.cursors.length).toBe(1);await expect.poll(()=>page.evaluate(()=>!!(window as any).triggerApi)).toBe(true);
 }
 const completed=async(page:Page)=>{await expect.poll(async()=>Object.values((await state(page)).localRuns).map((r:any)=>r.status)).toEqual(['ok']);return Object.values((await state(page)).localRuns)[0] as any;};
