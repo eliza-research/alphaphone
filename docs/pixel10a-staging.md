@@ -238,7 +238,7 @@ an image boot, an applied OTA, or a rollback or recovery drill.
 When the source tree already carries the reviewed SystemUI listener chip, pass
 `--applied-systemui-patch chip` to Pixel `aosp:stage`. Use `ops` for the other
 reviewed bundle. The option is repeatable, rejects duplicates and unknown names,
-and is restricted to the Pixel source verifier. Each patch still requires the
+and requires an explicit Pixel or Cuttlefish target. Each patch still requires the
 locked project revision, exact preimages and exact installed postimages; unrelated
 source changes remain rejected. This only admits staging and is not image or
 device acceptance.

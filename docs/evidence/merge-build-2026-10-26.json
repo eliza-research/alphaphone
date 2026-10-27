@@ -12,7 +12,17 @@
   "heldPullRequests": [
     {
       "number": 621,
-      "reason": "Draft; conflicts with later authentication, native admission and source metadata. Its description retains unresolved Calendar/provider behavior and asks that it remain draft."
+      "reason": "Draft; conflicts with later authentication, native admission and source metadata. Its description retains unresolved Calendar/provider behavior and asks that it remain draft.",
+      "ci": {
+        "run": 40456696864,
+        "job": 122031901582,
+        "tests": 2062,
+        "failed": 2,
+        "failures": [
+          "a spoken reply can be cancelled from its Stop reading control and by the next turn",
+          "Listen on an earlier reply is not stopped by user messages that were already there"
+        ]
+      }
     }
   ],
   "mainUpdated": false,
@@ -36,7 +46,16 @@
       "passed": 32,
       "failed": 0
     },
-    "fullRepository": "Running; initial run includes stale metadata/harness failures since fixed. Latest resident dependency audit is not dispositioned and remains a blocker.",
+    "fullRepository": {
+      "command": "npm run verify",
+      "tests": 1854,
+      "passed": 1849,
+      "skipped": 5,
+      "failed": 0,
+      "typecheck": "passed",
+      "productionBundleAudit": "passed",
+      "laterImageStagingFix": "25 focused tests passed"
+    },
     "imagePatchAdmission": {
       "passed": 13,
       "failed": 0
@@ -51,10 +70,30 @@
       "failed": 10,
       "skipped": 6,
       "note": "Initial run preceded authentication, metadata, license and source-admission repairs; one reset test timed out under parallel build load and passed unchanged in the focused rerun. Resident dependency audit remains unreviewed."
+    },
+    "packagedAudit": {
+      "packages": 603,
+      "high": 0,
+      "critical": 0,
+      "moderate": 1,
+      "disposition": "Existing unexpired UUID exception; no new exception. Full-lock unresolved findings remain pending upstream fixes."
     }
   },
   "builds": {
-    "android": "Running strict native distribution chain",
+    "android": {
+      "command": "npm run android:build:local",
+      "status": "passed",
+      "variants": [
+        "standaloneDebug",
+        "standaloneRelease",
+        "launcherDebug",
+        "launcherRelease"
+      ],
+      "testMocks": false,
+      "runtimeProfile": "native",
+      "releaseSigned": false,
+      "manifest": "docs/evidence/merge-build-apks-2026-10-26.json"
+    },
     "aosp": "Source verified; latest APK staging/build pending",
     "cuttlefish": "Latest APK staging/build pending",
     "flashed": false,
@@ -64,6 +103,11 @@
       "abi": "arm64-v8a",
       "record": "docs/evidence/merge-build-embedding-2026-10-26.json",
       "deviceExecution": false
+    },
+    "listener": {
+      "task": ":sense:assembleDebug",
+      "status": "passed",
+      "deviceQualified": false
     }
   },
   "sourceReuse": "Only recorded native bytes with unchanged committed build inputs were reused; no new native device qualification is claimed. A fresh ARM64 embedding reproduction is running."
