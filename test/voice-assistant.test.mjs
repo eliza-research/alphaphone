@@ -573,7 +573,7 @@ test('one result per closed segment: an unavailable route (503) is fatal after a
 });
 
 test('sources: no Web Speech, storage or logging in the assistant path; the adapter keeps dictation separate behind one chat voice launcher', () => {
-  const files = ['apps/app/src/runtime/voice-assistant.ts', 'apps/app/src/runtime/live-segment-stream.ts', 'apps/app/src/runtime/native-live-voice.ts'];
+  const files = ['apps/app/src/runtime/voice-assistant.ts', '.eliza/client-features/packages/voice/src/voice-assistant-session.ts', 'apps/app/src/runtime/live-segment-stream.ts', 'apps/app/src/runtime/native-live-voice.ts'];
   for (const file of files) {
     const source = fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
     assert.doesNotMatch(source, /console\.|localStorage|sessionStorage|indexedDB|speechSynthesis|SpeechRecognition|onnx/i, file);
@@ -595,9 +595,9 @@ test('sources: no Web Speech, storage or logging in the assistant path; the adap
 });
 
 test('the capture source policy picks the echo-cancelled source only for full duplex with a canceller (host JVM)', async () => {
-  const {nativeSource, fixture, runJvm} = await import('./fixtures/jvm-tools.mjs');
-  assert.match(runJvm([nativeSource('LiveCaptureSource.java'), fixture('LiveCaptureSourceTest.java')], 'ai.elizaresearch.alphaphone.LiveCaptureSourceTest'), /^PASS live capture source/);
-  const capture = fs.readFileSync(new URL('../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaLiveVoiceCapture.java', import.meta.url), 'utf8');
+  const {runJvm, upstreamVoiceFixture, upstreamVoiceSource} = await import('./fixtures/jvm-tools.mjs');
+  assert.match(runJvm([upstreamVoiceSource('LiveCaptureSource.java'), upstreamVoiceFixture('LiveCaptureSourceTest.java')], 'ai.eliza.voice.LiveCaptureSourceTest'), /^PASS live capture source/);
+  const capture = fs.readFileSync(upstreamVoiceSource('LiveVoiceCapture.java'), 'utf8');
   assert.match(capture, /LiveCaptureSource\.select\(echoCancel,AcousticEchoCanceler\.isAvailable\(\)/);
   assert.match(capture, /if\(frames\.length\(\)>0\|\|edges\.length\(\)>0\)sink\.frames/, 'the stop flushes the last frames read before it');
 });
