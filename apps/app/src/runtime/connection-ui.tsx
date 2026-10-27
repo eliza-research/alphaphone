@@ -130,6 +130,8 @@ export interface ConnectionSnapshot {
   accountCreated?: boolean;
   purpose?:'agent'|'cloud-account'|'plan';
   open: boolean; busy: boolean; message: string; error: string;
+  /** Completed sign-out outcome survives automatic readiness probes until another account is verified. */
+  signOutNotice?: string;
   /** Android production and browser development: `starting`/`recovering` while the resident has
    * no session (P-43); `offline` only where no resident runs (test mocks, flag-off web preview). */
   kind: 'starting' | 'recovering' | 'offline' | 'remote' | 'local' | 'resident' | 'cloud'; name: string;
@@ -418,7 +420,7 @@ async function verifyService(client: CloudProtocol, signal: AbortSignal, expecte
   const account = { ...identity, credentialId: credential.credentialId, environment: client.environment, sessionId: same ? service!.identity.sessionId : crypto.randomUUID(), ...(Number.isFinite(credential.expiresAt) ? { expiresAt: credential.expiresAt } : {}) };
   localStorage.setItem(CLOUD_SERVICE, client.environment);
   if(!same){membershipRead?.abort();membershipRead=null;pendingBillingReview=null;}
-  service = { client, identity: account, credentialReference:credential.credentialReference }; update({ cloudAccount: account,...(!same?{membershipBalance:'checking' as const,membershipCredits:null,membershipPlan:null,planEndsAt:null,billingReviewEmail:undefined,membershipDismissed:false}:{}) });
+  service = { client, identity: account, credentialReference:credential.credentialReference }; update({ cloudAccount: account,signOutNotice:undefined,...(!same?{membershipBalance:'checking' as const,membershipCredits:null,membershipPlan:null,planEndsAt:null,billingReviewEmail:undefined,membershipDismissed:false}:{}) });
   if(!same||membershipRead)void refreshMembershipBalance();
   return identity;
 }
@@ -2447,7 +2449,7 @@ export const connectionController = {
       if (typeof client.revokeSession === 'function') { try { const result = await client.revokeSession(signal, expected); revoked = result?.supported === true && result.revoked === true; } catch { /* Unconfirmed. A cancelled or failed revocation still removes the local token below. */ } }
       await client.disconnect(expected);
       const message = (revoked ? 'Signed out of Eliza Cloud. This sign-in was revoked.' : 'Signed out of Eliza Cloud on this phone. The sign-in token was removed here; Eliza Cloud did not confirm revoking it.')+(isAndroid&&!testMocksEnabled?' '+AI_OFF_MESSAGE:'');
-      update({ agents: [], residentSavedCredential:false, ...(residentCloudFlow()?{purpose:'agent' as const}:{}), message });
+      update({ agents: [], residentSavedCredential:false, ...(residentCloudFlow()?{purpose:'agent' as const}:{}), message, signOutNotice:message });
       // The agent keeps running: reconnected (or restarted) without Cloud inference, and the
       // sign-in dialog asks for an account again.
       // A cancelled sign-out still removed the local key above; the agent is then started by the queued rebind.
@@ -2832,6 +2834,7 @@ export function ConnectionChooser() {
       extra={productionSignInRequired && !snapshot.signIn && !snapshot.busy
         ? <button onClick={()=>void connectionController.beginSignIn(residentEnvironment(),true)}>Retry sign-in</button>
         : browserCloudResidentEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Sign in with browser</button>:testMocksEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Browser sign-in (diagnostic)</button>:undefined}/>
+    {snapshot.signOutNotice && snapshot.signOutNotice!==snapshot.message && <p role="status">{snapshot.signOutNotice}</p>}
     {productionSignInRequired && <ResidentRecoveryPanel snapshot={snapshot}/>}
   </div></div>;
   const accountCreatedNotice=snapshot.accountCreated&&snapshot.cloudAccount&&<p role="status" className="alpha-cloud-account-created">This sign-in created a new Eliza Cloud account{snapshot.cloudAccount.email?` (${snapshot.cloudAccount.email})`:''}. If you meant to use an existing account, sign out and sign in with that account’s email or Google.</p>;
