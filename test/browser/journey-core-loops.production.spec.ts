@@ -1,3 +1,4 @@
+import {selectLegacyNotes} from './helpers/legacy-notes';
 import {seedCompletedAccessSetup} from './flag-off-android';
 // Core loops A–F and J01–J05 on the FLAG-OFF bundle (the bytes the distribution APKs package).
 //
@@ -494,7 +495,7 @@ test('loops D and F in the web build: digests and mail name the missing account 
   expect(foreign).toEqual([]);
 });
 
-test('loops E and J05 in the web build: framed browsing does not certify page content and no development vault is offered', async ({ page }) => {
+test('loops E and J05 in the web build: page content requires review and no development vault is offered', async ({ page }) => {
   test.setTimeout(120_000);
   const foreign = await fenceNetwork(page, ['public-fixture.test']);
   const url = 'https://public-fixture.test/harbour';
@@ -509,10 +510,15 @@ test('loops E and J05 in the web build: framed browsing does not certify page co
   // The web build cannot verify TLS for the framed page and does not claim it.
   await expect(page.getByRole('img', { name: 'Secure connection', exact: true })).toHaveCount(0);
   await button(page, 'Menu').click();
-  // A framed web page has no native committed-navigation receipt. It cannot be
-  // certified as agent context, even when its synthetic HTML is readable.
-  await expect(button(page, 'Ask about page')).toHaveCount(0);
-  await expect(page.getByRole('dialog', { name: 'Ask about selected content' })).toHaveCount(0);
+  // A committed web page offers an explicit review of a separately fetched copy;
+  // the frame itself is never certified as TLS or silently added to agent context.
+  await expect(button(page, 'Share')).toHaveCount(0);
+  await button(page, 'Ask about page').click();
+  const review = page.getByRole('dialog', { name: 'Ask about selected content' });
+  await expect(review).toBeVisible();
+  await expect(review.getByRole('textbox', { name: 'Content excerpt' })).toHaveValue(/The ferry leaves at nine from pier four/);
+  await review.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(review).toHaveCount(0);
   await page.goto('/');
   await button(page, 'Settings').click();
   await button(page, 'Password manager').click();
@@ -588,7 +594,7 @@ test('loop J03 in the web build: a chosen document can be reviewed for a questio
   await page.goto('/');
   await button(page, 'Notes').click();
   await expect(page.locator('[data-screen]')).toContainText('Waiting for an agent connection to open Notes.');
-  await button(page, 'New note').click();
+  await expect(button(page, 'New note')).toHaveCount(0);
   await expect(page.getByRole('textbox', {name:'Note', exact:true})).toHaveCount(0);
   // The development Inbox simulator that feeds journey J03 does not exist here.
   await expect(button(page, 'Incoming email')).toHaveCount(0);
@@ -623,9 +629,7 @@ async function openRetainedNativeNotes(page:Page){
   const key='notes-records:v1:device';
   if(!f.slots[key])f.slots[key]=JSON.stringify({version:1,archive:{v1:null,v2:null,daily:null},currentRaw:JSON.stringify({version:2,collectionId:crypto.randomUUID(),records:[],deleted:[]})});
  });
- await button(page,'Notes').click();
- await page.getByLabel('Notes options',{exact:true}).click();
- await button(page,'Older notes').click();
+ await selectLegacyNotes(page);
  await expect(page.getByRole('heading',{name:'Older notes',exact:true})).toBeVisible();
  await expect(page.getByText('Note text encrypted on this device',{exact:true})).toBeVisible();
 }
