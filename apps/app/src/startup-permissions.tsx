@@ -38,11 +38,12 @@ function savedProgress(native = false): Progress | null {
   try {
     const durable = readStartupPermissionProgress(localStorage, native);
     if (durable.status === 'completed') return null;
+    // Session progress from before the durable marker is only read as a fallback, never written.
     const raw = localStorage.getItem(startupPermissionProgressKey) === null ? sessionStorage.getItem(progressKey) : null;
     if (!raw) return {version: 3, step: durable.step, choices: Array(durable.step).fill('continued')};
     const value = JSON.parse(raw);
     if (![1, 2, 3].includes(value.version) || !Number.isInteger(value.step) || value.step < 0 || value.step >= keys.length || !Array.isArray(value.choices) || value.choices.length !== value.step || value.choices.some((choice: unknown) => typeof choice !== 'string' || !['allowed', 'skipped', 'continued'].includes(choice))) return {version: 3, step: 0, choices: []};
-    // Old optional choices cannot bypass the now-required walkthrough.
+    // Old optional choices cannot bypass the required walkthrough.
     if (value.choices.includes('skipped')) return {version: 3, step: 0, choices: []};
     return {version: 3, step: value.step, choices: value.choices};
   } catch { return {version: 3, step: 0, choices: []}; }
@@ -92,7 +93,6 @@ export function StartupPermissions({active:enabled = true}: {active?: boolean} =
       writeStartupPermissionProgress(localStorage, {version: native ? 3 : 1, status: value ? 'pending' : 'completed', step: value?.step ?? keys.length}, native);
     } catch { setProgressError(true); return false; }
     setProgressError(false); progressRef.current = value; setProgress(value);
-    // Legacy session progress is a read-only migration source; the durable marker now owns continuation.
     return true;
   };
   const changed = () => window.dispatchEvent(new Event('alpha:permissions-changed'));

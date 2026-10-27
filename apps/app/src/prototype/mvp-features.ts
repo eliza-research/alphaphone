@@ -39,5 +39,5 @@ export function deferredMvpPrompt(text: unknown) {
   return !view || !(view === "contacts" ? !browserDevProfile && isMvpView("contacts") : IMAGE_VIEWS.has(view));
 }
 
-/** Native image admission enables only implemented adapters; Phone/SMS remain unavailable. */
+/** Admits Contacts from the native image capability at runtime; other image views are fixed at load (IMAGE_VIEWS). */
 export function admitImageContacts(admitted:boolean){if(browserDevProfile)return;if(admitted){ENABLED_MVP_VIEWS.add("contacts");DEFERRED_MVP_VIEWS.delete("contacts");}else{ENABLED_MVP_VIEWS.delete("contacts");DEFERRED_MVP_VIEWS.add("contacts");}}
