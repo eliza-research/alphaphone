@@ -409,7 +409,7 @@ export async function residentHome(page: Page) {
 }
 /** Production sign-in is a page; signed-in agent controls live in Settings. */
 export async function openYourAgent(page: Page) {
-  const gate = page.getByRole('main', { name: 'Sign in', exact: true });
+  const gate = page.locator('[role="main"].alpha-cloud-sign-in');
   if (await gate.isVisible()) return gate;
   await button(page, 'Settings').click();
   await page.getByRole('button', { name: 'Agent connection', exact: true }).click();

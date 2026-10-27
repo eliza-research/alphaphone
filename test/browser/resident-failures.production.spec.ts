@@ -22,7 +22,7 @@ const NOT_SENT = 'Not sent. Your message is back in the composer.';
 async function connected(page: Page) {
   const foreign = await fenceNetwork(page);
   await flagOffAndroid(page);
-  await residentStub(page, { accounts: [owner] });
+  await residentStub(page, { nativeSignIn: true, accounts: [owner] });
   await residentHome(page);
   return foreign;
 }
@@ -223,9 +223,9 @@ test('a resident send the runtime no longer accepts (401) asks for an Eliza Clou
   await connected(page);
   await setStub(page, { stream: 'expired' });
   await send(page, 'Sent with an expired session');
-  const dialog = page.getByRole('main',{name:'Sign in',exact:true});
+  const dialog = page.locator('[role="main"].alpha-cloud-sign-in');
   await expect(dialog.getByRole('alert')).toBeVisible({ timeout: 30_000 });
-  await expect(dialog.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Email me a code', exact: true })).toBeVisible();
   await expect(page.locator('body')).not.toContainText(/pair/i);
   expect(await stub(page, s => s.recoveries)).toEqual([]);
 });
