@@ -66,7 +66,7 @@ async function boot(page:Page,initial:Fixture&{tokens?:Record<string,string>;key
   if(!sessionStorage.getItem('plan-fixture-seeded')){sessionStorage.setItem('plan-fixture-seeded','1');for(const [key,value] of Object.entries(initial.storage||{}))localStorage.setItem(key,value as string);}
   const f=w.planFixture={plan:'active',route:'signed',limits:'absent',identity:'ok',redeem:'ok',redeemPlan:'active',saved:true,holdProvider:true,cashBalance:0,...initial,calls:[]as any[],bodies:[]as any[],releaseProvider:null as null|(()=>void)};
   const credential={credentialId:'11111111-1111-4111-8111-111111111111',token:'synthetic-plan-token',expiresAt:initial.expiresAt??Date.now()+60*24*3600*1000};
-  const names={AlphaCloudSignIn:['status','startEmail','verifyEmail','cancel','addListener','removeListener'],AlphaConnection:['secureRead','secureWrite','secureRemove','request','cancel','openExternal'],Agent:['stop','getStatus','configureCloudProvider','clearProvider','providerStatus','start','request'],AlphaHostedResults:['disableBackground'],DailyApps:['addListener','removeListener'],AlphaNotifications:['status'],AlphaVoiceCloud:['checkPermissions']};
+  const names={AlphaCloudSignIn:['status','startEmail','verifyEmail','cancel','addListener','removeListener'],AlphaConnection:['secureRead','secureWrite','secureRemove','request','cancel','openExternal','addListener','removeListener'],Agent:['stop','getStatus','configureCloudProvider','clearProvider','providerStatus','start','request'],AlphaHostedResults:['disableBackground','addListener','removeListener'],DailyApps:['addListener','removeListener'],AlphaNotifications:['status','addListener','removeListener'],AlphaVoiceCloud:['checkPermissions']};
   w.Capacitor={PluginHeaders:Object.entries(names).map(([name,methods])=>({name,methods:methods.map(name=>({name,rtype:'promise'}))})),nativePromise:async(plugin:string,method:string,input:any)=>{
    f.calls.push({plugin,method,path:input?.url?new URL(input.url).pathname:undefined,url:input?.url,httpMethod:input?.method});
    if(plugin==='AlphaCloudSignIn'){
@@ -84,7 +84,7 @@ async function boot(page:Page,initial:Fixture&{tokens?:Record<string,string>;key
     if(method==='request'){const id='9f1dc45a-4011-4e44-947a-30d999d24fa5';const body=input.path==='/api/auth/me'?{identity:{id,kind:'owner'},access:{role:'OWNER',mode:'local'}}:input.path==='/api/agents'?{agents:[{id,name:'Alpha',status:'running'}]}:input.path==='/api/conversations'?{conversations:[]}:{};return {status:200,body:JSON.stringify(body)};}
     return {};
    }
-   if(plugin==='AlphaNotifications')return {permissionGranted:false,appEnabled:false};
+   if(plugin==='AlphaNotifications')return method==='status'?{permissionGranted:false,appEnabled:false}:{};
    // Retiring a running agent pauses its hosted background delivery.
    if(plugin==='AlphaHostedResults')return {};
    if(plugin==='AlphaVoiceCloud')return {microphone:'prompt'};
@@ -628,6 +628,7 @@ test.describe('account, plan and sign-in expiry',()=>{
 });
 
 test('failed native provider binding reports AI off and exposes the error before history',async({page})=>{
+ const pageErrors:string[]=[];page.on('pageerror',error=>pageErrors.push(error.message));
  await boot(page,{...await entitlements(),holdProvider:false,providerFailure:'Synthetic account verification failure',fullApp:true});await started(page);await idle(page);
  await page.getByRole('button',{name:'Settings',exact:true}).click();
  await page.getByRole('button',{name:'Agent connection',exact:true}).click();
@@ -638,6 +639,7 @@ test('failed native provider binding reports AI off and exposes the error before
  expect(await error.evaluate((node,other)=>(node.compareDocumentPosition(other!)&Node.DOCUMENT_POSITION_FOLLOWING)!==0,await history.elementHandle())).toBe(true);
  expect(await configured(page)).toBe(1);
  expect(await page.evaluate(()=>(window as any).planController.getSnapshot().residentInference)).toBe('unavailable');
+ expect(pageErrors).toEqual([]);
 });
 
 // UI progress only: this feature fixture does not manufacture OS/provider grants.
