@@ -253,7 +253,7 @@ test('browser resident sign-in exposes the existing hosted hand-off only in its 
  const ui=read('apps/app/src/runtime/connection-ui.tsx');
  const expression=between(ui,'      extra={','}/>\n').slice('      extra={'.length);
  const compiled=transformSync('const extra='+expression+';',{loader:'tsx',jsxFactory:'React.createElement'}).code;
- const render=new Function('React','browserCloudResidentEnabled','testMocksEnabled','snapshot','connectionController','productionSignInRequired','residentEnvironment',compiled+'return extra;');
+ const render=new Function('React','browserCloudResidentEnabled','testMocksEnabled','snapshot','connectionController','signInEntryRequired','residentEnvironment',compiled+'return extra;');
  let calls=0;const controller={signInBrowser(){calls++;}};
  assert.equal(render(React,false,false,{busy:false},controller,false,()=>'production'),undefined,'ordinary browser and packaged views have no extra entry');
  const browser=render(React,true,false,{busy:false},controller,false,()=>'production');

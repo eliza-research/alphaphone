@@ -197,3 +197,24 @@ test('explicit account chooser preserves newer in-app email/phone readiness and 
 });
 
 test('Back from optional explicit sign-in returns to Settings through the existing close fence',()=>{const f=controllerFixture();Object.assign(f.state,{signIn:{...choose},purpose:'cloud-account',cloudAccount:null});f.connectionController.cancelSignIn();assert.equal(f.state.signIn,null);assert.equal(f.state.open,false);assert.equal(f.state.purpose,'agent');assert.ok(!f.events.some(event=>event.authenticated));});
+
+test('initial chooser visibly presents email alongside Google without another disclosure',async()=>panel(async({document,window,render})=>{
+  const visible=element=>{
+    if(!element)return false;
+    for(let node=element;node;node=node.parentElement){
+      const style=window.getComputedStyle(node);
+      if(node.hidden||node.getAttribute('aria-hidden')==='true'||style.display==='none'||style.visibility==='hidden')return false;
+    }
+    return true;
+  };
+  for(const google of [true,false]){
+    await render({view:choose,google,phone:true,emailEnabled:true,ready:true,busy:false});
+    const email=document.querySelector('form[aria-label="Sign in with email"]');
+    const googleButton=[...document.querySelectorAll('button')].find(button=>button.textContent==='Continue with Google');
+    assert.equal(visible(email),true,`email is visible immediately when Google availability is ${google}`);
+    assert.equal(visible(googleButton),true,'Google entry remains visible');
+    assert.equal(googleButton.disabled,!google,'provider readiness still controls Google');
+    assert.equal(visible(document.querySelector('form[aria-label="Sign in with phone"]')),true,'offered phone entry is retained');
+    assert.equal([...document.querySelectorAll('button')].some(button=>/Other sign-in methods|Hide other sign-in methods/.test(button.textContent)),false);
+  }
+}));
