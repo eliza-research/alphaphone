@@ -117,11 +117,21 @@ final class AlphaCredentialStore {
   });
  }
  private LegacyCloudRecovery legacyRecovery(){return new LegacyCloudRecovery(slots,CloudDeployment.STORAGE_NAMESPACE,assertOwner);}
- boolean legacyCloudRecoveryEligible()throws Exception{return legacyRecovery().eligible();}
+ /** Reads and commits use the SAME lifecycle→vault order as all credential mutations. */
+ private <T>T recoveryStep(java.util.concurrent.Callable<T> step)throws Exception{
+  return AlphaLocalAgentPlugin.mutateCredentials(context,assertOwner,new AlphaLocalAgentPlugin.CredentialMutation<T>(){
+   public boolean requiresShutdown(){return false;}
+   public T commit()throws Exception{return step.call();}
+  });
+ }
+ boolean legacyCloudRecoveryEligible()throws Exception{return recoveryStep(()->legacyRecovery().eligible());}
  boolean restoreLegacyCloudCredential()throws Exception{
-  // This path cannot replace a configured/running provider. The explicit native intent and
-  // shared slot lock fence a concurrent sign-out/provider change across identity verification.
-  return legacyRecovery().restore(token->{AlphaConnectionPlugin.readCloudIdentity(token);assertOwner.run();});
+  LegacyCloudRecovery.Snapshot before=recoveryStep(()->legacyRecovery().snapshot());
+  if(before==null)return false;
+  // Never hold lifecycle or vault locks across HTTP. The second critical section rechecks
+  // intent/owner, exact old bytes, journal and absent targets before committing.
+  AlphaConnectionPlugin.readCloudIdentity(before.token());
+  return recoveryStep(()->legacyRecovery().commit(before));
  }
  void assertCurrent(){assertOwner.run();}
  private void invalidateProviderAdmission(String changedSlot,String replacement)throws Exception{

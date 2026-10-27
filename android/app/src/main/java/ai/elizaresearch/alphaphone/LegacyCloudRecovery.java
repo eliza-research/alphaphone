@@ -10,7 +10,6 @@ final class LegacyCloudRecovery {
  static final String JOURNAL="cloud:legacy-recovery:v1";
  static final String CLOUD="cloud:production";
  static final String PROVIDER="local-agent-provider:v1";
- interface IdentityCheck {void verify(String token)throws Exception;}
  private final JsonCredentialSlots slots;
  private final String namespace;
  private final Runnable current;
@@ -23,7 +22,7 @@ final class LegacyCloudRecovery {
   if(journal==null)return true;
   return "pending".equals(new JSONObject(journal).getString("status"));
  }
- /** Metadata only. Missing journal is not consent: restore() must be explicitly invoked. */
+ /** Metadata only. Missing journal is not consent: snapshot/commit must be explicitly invoked. */
  boolean eligible()throws Exception {
   synchronized(JsonCredentialSlots.LOCK){
    current.run();
@@ -31,26 +30,28 @@ final class LegacyCloudRecovery {
      &&pending(slots.read(scoped(JOURNAL)))&&slots.read(CLOUD)!=null;
   }
  }
- /** No OAuth attempts/provider proof are copied. Failed verification/writes keep the old slot. */
- boolean restore(IdentityCheck identity)throws Exception {
+ /** Kept only in native memory across the canonical identity read. */
+ static final class Snapshot {
   final String legacy,journal;
+  Snapshot(String legacy,String journal){this.legacy=legacy;this.journal=journal;}
+  String token()throws Exception{return LocalAgentProviderAdmission.cloudProviderToken(legacy,new JSONObject(legacy).getString("credentialId"),System.currentTimeMillis());}
+ }
+ /** Caller owns the existing lifecycle→vault critical section; no network occurs here. */
+ Snapshot snapshot()throws Exception {
   synchronized(JsonCredentialSlots.LOCK){
-   if(!eligible())return false;
-   legacy=slots.read(CLOUD);journal=slots.read(scoped(JOURNAL));
+   if(!eligible())return null;
+   return new Snapshot(slots.read(CLOUD),slots.read(scoped(JOURNAL)));
   }
-  JSONObject saved=new JSONObject(legacy);
-  // Reuse current credential parsing/expiry checks before the canonical identity read.
-  String token=LocalAgentProviderAdmission.cloudProviderToken(legacy,saved.getString("credentialId"),System.currentTimeMillis());
-  identity.verify(token);
+ }
+ /** Same critical section on return from HTTP. No legacy provider or pending attempt is copied. */
+ boolean commit(Snapshot before)throws Exception {
   synchronized(JsonCredentialSlots.LOCK){
    current.run();
-   if(!eligible()||!Objects.equals(legacy,slots.read(CLOUD))||!Objects.equals(journal,slots.read(scoped(JOURNAL))))return false;
-   LocalAgentProviderAdmission.cloudProviderToken(legacy,saved.getString("credentialId"),System.currentTimeMillis());
-   // Journal first. A failed credential write remains explicitly retryable; a committed target
-   // always wins, even if the final marker write fails. The old encrypted copy is never removed.
+   if(!eligible()||!Objects.equals(before.legacy,slots.read(CLOUD))||!Objects.equals(before.journal,slots.read(scoped(JOURNAL))))return false;
+   before.token();
    slots.write(scoped(JOURNAL),"{\"status\":\"pending\"}");
    current.run();
-   slots.write(scoped(CLOUD),legacy);
+   slots.write(scoped(CLOUD),before.legacy);
    slots.write(scoped(JOURNAL),"{\"status\":\"complete\"}");
    return true;
   }
