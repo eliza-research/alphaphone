@@ -209,7 +209,10 @@ update and recovery gates below.
    recovery. Record image/APK/source hashes. Image signing, the OTA package and its
    version/hash compatibility record come from `scripts/sign-aosp-release.mjs` on the image
    host ([Pixel 10a staging and release signing](pixel10a-staging.md)); the one update channel
-   is `android/aosp/pixel10a-ota-channel.json`. No release key, signed image, applied OTA,
+   is `android/aosp/pixel10a-ota-channel.json`. The operator update client, interrupted-update
+   resume, slot fallback and stock-recovery checks are `scripts/aosp-ota-update.mjs`, and
+   `scripts/verify-pixel10a-image.mjs` checks a booted image; all are bindings of shared
+   Pixel 10a tooling. No release key, signed image, applied OTA,
    interrupted-update, rollback or stock-recovery drill exists yet, and
    `scripts/pilot-update.mjs` still refuses a lower APK versionCode.
 
