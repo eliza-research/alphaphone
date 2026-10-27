@@ -1670,6 +1670,31 @@ async function browserCloudLoginAction(environment: CloudEnvironment, signal: Ab
 
 
 let ownerReminderBindingCache:{selected:Active;session:VerifiedSession;generation:number;port:ReminderNotificationBinding}|undefined;
+async function restoreOptionalBrowserCloudAccount():Promise<boolean>{
+ // A selected development host can restore its existing Mac-owned Cloud account.
+ // The server returns only a reference; canonical identity still owns readiness.
+ if(cloudCredentialStore.acceptsReferences&&!isAndroid&&!browserDevProfile&&!browserCloudResidentEnabled&&selection()?.kind!=='offline'&&new URLSearchParams(location.search).get('mode')!=='mock'){
+   const restoreEpoch=epoch;
+   const canRestore=()=>restoreEpoch===epoch&&!operation&&!state.open&&selection()?.kind!=='offline';
+   try{
+     const credential=await cloudCredentialStore.read('production');
+     // A user choice retires this automatic account check.
+     if(!canRestore())return false;
+     // An optional empty host store is not an account onboarding action.
+     if(credential?.credentialReference&&credential.credentialId){
+       const expected={credentialId:credential.credentialId,credentialReference:credential.credentialReference};
+       await work('Checking your Cloud account…',async signal=>{
+         const current=await cloudCredentialStore.read('production');signal.throwIfAborted();
+         if(restoreEpoch!==epoch||current?.credentialId!==expected.credentialId||current?.credentialReference!==expected.credentialReference)throw Error('Cloud account changed. Try again.');
+         await verifyService(makeCloud('production'),signal,expected);
+       },true,true);
+       if(restoreEpoch!==epoch||state.error||service?.identity.credentialId!==expected.credentialId)return false;
+     }
+   }catch(error){if(canRestore())await work('Checking your Cloud account…',async()=>{throw error;},true,true);return false;}
+ }
+ return true;
+}
+
 export const connectionController = {
   subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
   getSnapshot() { return state; },
@@ -2029,33 +2054,15 @@ export const connectionController = {
       // Attach to the existing host-paired owner before unrelated Cloud discovery or
       // legacy selection migrations. A transient reconnect stays out of the user's way.
       if(privateLocalPreviewEnabled){
-        await work('Connecting to Alpha…',async signal=>{try{await connectResident(signal);}catch(error){if(!active)update({kind:'recovering'});throw error;}},true);
+        let attached=false;
+        await work('Connecting to Alpha…',async signal=>{try{await connectResident(signal);attached=true;}catch(error){if(!active)update({kind:'recovering'});throw error;}},true);
+        if(attached)await restoreOptionalBrowserCloudAccount();
         return;
       }
       // A development profile whose account changed is not restored; where the resident is always
       // present, startup continues to it (P-43) instead of leaving no agent.
       if(browserDevProfile){const saved=selection();if(saved?.kind==='development'){if(saved.account!==(await readDevelopmentIdentity(saved.profile)).account){save({kind:'none'});if(!residentAlwaysPresent)return;}else{await work('Restoring development agent…',signal=>connectDevelopment(saved.profile,signal));return;}}}
-      // A selected development host can restore its existing Mac-owned Cloud account.
-      // The server returns only a reference; canonical identity still owns readiness.
-      if(cloudCredentialStore.acceptsReferences&&!isAndroid&&!browserDevProfile&&!browserCloudResidentEnabled&&selection()?.kind!=='offline'&&new URLSearchParams(location.search).get('mode')!=='mock'){
-        const restoreEpoch=epoch;
-        const canRestore=()=>restoreEpoch===epoch&&!operation&&!state.open&&selection()?.kind!=='offline';
-        try{
-          const credential=await cloudCredentialStore.read('production');
-          // A user choice during discovery also retires automatic agent startup.
-          if(!canRestore())return;
-          // An optional empty host store is not an account onboarding action.
-          if(credential?.credentialReference&&credential.credentialId){
-            const expected={credentialId:credential.credentialId,credentialReference:credential.credentialReference};
-            await work('Checking your Cloud account…',async signal=>{
-              const current=await cloudCredentialStore.read('production');signal.throwIfAborted();
-              if(restoreEpoch!==epoch||current?.credentialId!==expected.credentialId||current?.credentialReference!==expected.credentialReference)throw Error('Cloud account changed. Try again.');
-              await verifyService(makeCloud('production'),signal,expected);
-            },true,true);
-            if(restoreEpoch!==epoch||state.error||service?.identity.credentialId!==expected.credentialId)return;
-          }
-        }catch(error){if(canRestore())await work('Checking your Cloud account…',async()=>{throw error;},true,true);return;}
-      }
+      if(!await restoreOptionalBrowserCloudAccount())return;
       // A build that cannot use Eliza Cloud signs a saved Cloud service out on every start, whatever is selected
       // (an offline choice included): the marker and, best effort and unawaited, the stored Cloud key. Only that
       // slot; it is not read. No request is made.
