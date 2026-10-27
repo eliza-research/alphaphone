@@ -549,6 +549,8 @@ function prepareSignInReplacement() {
 }
 /** How long sign-in waits for optional Google readiness before offering email alone. */
 const SIGN_IN_READINESS_WAIT_MS = 6000;
+/** A later operation retires the optional result even when it leaves the chooser mounted. */
+let signInReadinessOwner: AbortSignal | null = null;
 /** Whether the last ready host offered Google (it needs this phone's verified App Link return). */
 let inAppGoogle = false, inAppPhone = false, inAppEmail = true;
 /**
@@ -556,17 +558,25 @@ let inAppGoogle = false, inAppPhone = false, inAppEmail = true;
  * (AlphaCloudSignInPlugin) runs a cheap, cached readiness probe: the native client registration,
  * Steward's redirect allowlist and providers, /.well-known/assetlinks.json listing this app's
  * package and signing certificate, and Android's verification of the return host. Fail-safe: no
- * host, an error, a slow or malformed answer, or `inApp` not exactly true hides Google.
+ * host, an error or a malformed answer hides Google. A slow answer initially offers email;
+ * a validated late answer can update only the same still-current chooser.
  */
-async function inAppSignInMethods(environment: CloudEnvironment, signal: AbortSignal, refreshNegative = false): Promise<{ google: boolean; phone: boolean; email: boolean } | null> {
+async function inAppSignInMethods(environment: CloudEnvironment, signal: AbortSignal, refreshNegative = false, onLateReady?: (methods: NonNullable<ReturnType<typeof signInReadiness>>) => void): Promise<{ google: boolean; phone: boolean; email: boolean } | null> {
   const port = cloudSignIn;
   if (!port?.status) return null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let abort: (() => void) | undefined;
+  let timedOut = false;
   try {
     signal.throwIfAborted();
     const cancelled = new Promise<null>(resolve => { abort = () => resolve(null); signal.addEventListener('abort', abort, { once: true }); });
-    const value = await Promise.race([port.status({ environment, ...(refreshNegative ? { refreshNegative: true } : {}) }), cancelled, new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), SIGN_IN_READINESS_WAIT_MS); })]);
+    const pending = port.status({ environment, ...(refreshNegative ? { refreshNegative: true } : {}) });
+    const value = await Promise.race([pending, cancelled, new Promise<null>(resolve => { timer = setTimeout(() => { timedOut = true; resolve(null); }, SIGN_IN_READINESS_WAIT_MS); })]);
+    if (timedOut) void pending.then(result => {
+      if (signal.aborted) return;
+      const methods = signInReadiness(result);
+      if (methods) onLateReady?.(methods);
+    }).catch(() => { /* Optional readiness remains unavailable; email is still offered. */ });
     return signInReadiness(value);
   } catch { return null; }
   finally { clearTimeout(timer); if (abort) signal.removeEventListener('abort', abort); }
@@ -697,7 +707,7 @@ let residentStartInBackground = false;
 /** `openOnError`: a background check (the quiet Cloud account restore) that opens the dialog only to report a failure. */
 async function work(message: string, action: (signal: AbortSignal) => Promise<void>, background = false, openOnError = false, preserveError = false) {
   if (operation) return;
-  const controller = new AbortController(); operation = controller; residentStartInBackground = background;
+  const controller = new AbortController(); signInReadinessOwner = null; operation = controller; residentStartInBackground = background;
   update({ busy: true, ...(background ? {} : { open: true }), message, error: preserveError ? state.error : '' });
   try { await action(controller.signal); }
   catch (error) {
@@ -984,7 +994,7 @@ function residentRefreshRefused(account:NonNullable<typeof service>,error:unknow
 async function recheckResidentPlan(){
   if(operation)return;
   if(!state.session||active?.kind!=='resident'){queueResidentRebind();return;}
-  const controller=new AbortController();operation=controller;
+  const controller=new AbortController();signInReadinessOwner=null;operation=controller;
   try{
     const admission=await admitCloudResident(controller.signal);
     const target=residentBindable()?admission.binding:residentBinding;
@@ -2201,8 +2211,21 @@ export const connectionController = {
     // A new attempt explicitly started by the owner still clears the earlier error.
     // Readiness may take six seconds on a fresh install. Keep that wait cancellable and prevent
     // repeated taps from starting competing probes or opening a browser after the owner cancelled.
+    const readinessEpoch = epoch;
+    let chooser: SignInView | null = null, probeSignal: AbortSignal | undefined;
+    let lateMethods: NonNullable<ReturnType<typeof signInReadiness>> | null = null;
+    const adoptLate = () => {
+      if (!lateMethods || !probeSignal || probeSignal.aborted || signInReadinessOwner !== probeSignal
+        || epoch !== readinessEpoch || operation || !state.open || state.cloudAccount
+        || !chooser || state.signIn !== chooser || chooser.step !== 'choose'
+        || chooser.environment !== environment || cloud.environment !== environment) return;
+      inAppGoogle = lateMethods.google; inAppPhone = lateMethods.phone; inAppEmail = lateMethods.email;
+      lateMethods = null;
+      update({});
+    };
     await work(`Checking ${cloudServiceName(environment)} sign-in…`, async signal => {
-      const methods = await inAppSignInMethods(environment, signal, refreshNegative);
+      probeSignal = signal; signInReadinessOwner = signal;
+      const methods = await inAppSignInMethods(environment, signal, refreshNegative, ready => { lateMethods = ready; adoptLate(); });
       signal.throwIfAborted();
       // Email stays inside Alpha even when readiness is unavailable. Its native request
       // reports the actual failure; missing Google/App Link setup never opens hosted login.
@@ -2212,8 +2235,10 @@ export const connectionController = {
       inAppEmail = methods === null || methods.email !== false;
       if (cloud.environment !== environment) cloud = makeCloud(environment);
       cloud.cancelLogin();
-      update({ open: true, ...(residentCloudFlow() && state.purpose !== 'cloud-account' ? { purpose: 'agent' as const } : {}), signIn: { step: 'choose', environment }, message: '' });
+      chooser = { step: 'choose', environment };
+      update({ open: true, ...(residentCloudFlow() && state.purpose !== 'cloud-account' ? { purpose: 'agent' as const } : {}), signIn: chooser, message: '' });
     }, false, false, automatic);
+    adoptLate();
     // Readiness does not stop the agent and must not retry a blocked startup.
     if (!automatic) await ensureResident();
   },
@@ -2539,7 +2564,7 @@ export const connectionController = {
   canEditMessages(){return !!active&&active.kind!=='cloud';},
   async truncateMessage(target:ConversationMessageTarget):Promise<void> {
     if(!this.messageTargetCurrent(target)||target.from!=='user'||!active||active.kind==='cloud'||document.hidden)throw Error('This message cannot be edited in the current connection.');
-    const selected=active,session=state.session!,generation=epoch,controller=new AbortController(),contextKey=JSON.stringify(navigationContext?.());operation=controller;update({busy:true});let dispatched=false;
+    const selected=active,session=state.session!,generation=epoch,controller=new AbortController(),contextKey=JSON.stringify(navigationContext?.());signInReadinessOwner=null;operation=controller;update({busy:true});let dispatched=false;
     const current=()=>{controller.signal.throwIfAborted();if(document.hidden||state.open||generation!==epoch||selected!==active||JSON.stringify(state.session)!==JSON.stringify(session)||conversationMemory.get(conversationKey(session))!==target.conversationId)throw Error('The conversation changed.');};
     try {
       const history=await selected.remote.messages(target.conversationId,controller.signal);current();
@@ -2562,7 +2587,7 @@ export const connectionController = {
     const selected=active,session=state.session,generation=epoch;
     if(!selected||!session)throw noSessionError(NO_AGENT_VOICE);
     if((selected.kind==='remote'||selected.kind==='local')&&(!selected.remote.session||selected.remote.session.expiresAt<=Date.now()))throw Error('Your session expired. Pair again before starting voice.');
-    const controller=new AbortController(),cancel=()=>controller.abort(signal.reason);signal.addEventListener('abort',cancel,{once:true});if(signal.aborted)cancel();operation=controller;
+    const controller=new AbortController(),cancel=()=>controller.abort(signal.reason);signal.addEventListener('abort',cancel,{once:true});if(signal.aborted)cancel();signInReadinessOwner=null;operation=controller;
     const current=()=>{controller.signal.throwIfAborted();if(document.hidden||state.open||generation!==epoch||selected!==active||JSON.stringify(state.session)!==JSON.stringify(session))throw Error('The voice conversation changed.');};
     try{current();const conversationId=await ensureSelectedConversation(selected,session,controller.signal,current);current();return {conversationId,session:{...session},connectionEpoch:generation};}
     finally{signal.removeEventListener('abort',cancel);if(operation===controller)operation=null;}
