@@ -12,7 +12,7 @@ import java.util.Set;
  */
 final class CloudSignInReadiness {
  private CloudSignInReadiness() {}
- /** A positive answer is reused for six hours; a negative one is re-checked after ten minutes. */
+ /** Both methods ready: six hours. Partial or unavailable methods: re-check after ten minutes. */
  static final long READY_TTL_MS = 6 * 60 * 60 * 1000L;
  static final long NOT_READY_TTL_MS = 10 * 60 * 1000L;
  /** Each probe request is short; the renderer waits at most a few seconds before offering email alone. */
@@ -92,6 +92,6 @@ final class CloudSignInReadiness {
  static Result combine(boolean registered, boolean redirectAllowed, boolean assetLinks, boolean emailOffered, boolean emailRoute,
                        boolean googleOffered, boolean deviceVerified, long now) {
   boolean inApp = registered && emailOffered && emailRoute;
-  return new Result(inApp, googleOffered && redirectAllowed && assetLinks && deviceVerified, now + (inApp ? READY_TTL_MS : NOT_READY_TTL_MS));
+  return new Result(inApp, googleOffered && redirectAllowed && assetLinks && deviceVerified, now + (inApp && googleOffered && redirectAllowed && assetLinks && deviceVerified ? READY_TTL_MS : NOT_READY_TTL_MS));
  }
 }

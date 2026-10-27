@@ -24,6 +24,86 @@ test('PKCE, state, authorize URL, strict App Link return, pending record, readin
  }finally{rmSync(temporary,{recursive:true,force:true});}
 });
 
+test('actual native probe keeps email ready with missing DAL, unverified links or unavailable Google (plain JVM)',()=>{
+ const temporary=mkdtempSync(join(tmpdir(),'cloud-sign-in-probe-'));
+ try{
+  const measure=between(read(native+'AlphaCloudSignInPlugin.java'),' private CloudSignInReadiness.Result measure(', ' private boolean assetLinksGrant(');
+  const harness=`package ai.elizaresearch.alphaphone;
+import java.util.*;
+public class CloudSignInProbeTest {
+ boolean google=true, dal=true, device=true, registered=true, email=true;
+ String mode="ready"; int authorizeCalls=0;
+ static class JSONObject {
+  final Map<String,Object> values=new HashMap<>();
+  JSONObject put(String key,Object value){values.put(key,value);return this;}
+  Object opt(String key){return values.get(key);}
+  String optString(String key,String fallback){Object value=opt(key);return value instanceof String?(String)value:fallback;}
+  JSONObject optJSONObject(String key){return null;}
+  JSONArray optJSONArray(String key){return null;}
+ }
+ static class JSONArray {int length(){return 0;} String optString(int index){return "";}}
+ static class Uri {static String encode(String value){return java.net.URLEncoder.encode(value,java.nio.charset.StandardCharsets.UTF_8);}}
+ static class CloudEmailCode {static final String SEND_PATH="/steward/auth/email/code/send";}
+ static class Response {
+  final int status; final JSONObject data; final String location;
+  Response(int s,JSONObject d,String l){status=s;data=d;location=l;}
+ }
+ Response get(String url)throws Exception{
+  if(url.contains("/mobile/config?"))return new Response(registered?200:503,new JSONObject().put("success",true).put("clientId",CloudSignInFlow.CLIENT_ID).put("environment","production").put("redirectUri","https://eliza.app/alphaphone/auth/callback").put("codeChallengeMethod","S256"),null);
+  if(url.contains("/steward/auth/providers?"))return new Response(200,new JSONObject().put("email",email).put("google",google),null);
+  authorizeCalls++;
+  if(mode.equals("timeout"))throw new java.net.SocketTimeoutException();
+  return new Response(mode.equals("refused")?400:302,new JSONObject(),mode.equals("refused")?null:"https://accounts.google.com/o/oauth2/v2/auth");
+ }
+ int probePost(CloudSignInFlow.Environment e,String path){return 400;}
+ boolean assetLinksGrant(CloudSignInFlow.Environment e){return dal;}
+ boolean appLinkVerified(CloudSignInFlow.Environment e){return device;}
+ ${measure}
+ void check(boolean expectedEmail,boolean expectedGoogle)throws Exception{
+  CloudSignInReadiness.Result result=measure(CloudSignInFlow.environment("production",false));
+  if(result.inApp!=expectedEmail||result.google!=expectedGoogle)throw new AssertionError(mode);
+ }
+ public static void main(String[] args)throws Exception{
+  CloudSignInProbeTest p=new CloudSignInProbeTest();p.google=false;p.check(true,false);
+  if(p.authorizeCalls!=0)throw new AssertionError("disabled Google must not be probed");
+  p.google=true;p.mode="timeout";p.check(true,false);
+  p.mode="refused";p.check(true,false);
+  p.mode="ready";p.device=false;p.check(true,false);
+  p.device=true;p.dal=false;p.check(true,false);
+  p.dal=true;p.registered=false;p.check(false,false);
+  p.registered=true;p.email=false;p.check(false,false);
+  p.email=true;p.check(true,true);
+  System.out.println("PASS optional Google probe (8 scenarios)");
+ }
+}`;
+  const source=join(temporary,'CloudSignInProbeTest.java');writeFileSync(source,harness);
+  execFileSync(binary('javac'),['--release','11','-d',temporary,join(root,native,'CloudSignInFlow.java'),join(root,native,'CloudSignInReadiness.java'),source],{timeout:60000});
+  assert.match(execFileSync(binary('java'),['-cp',temporary,'ai.elizaresearch.alphaphone.CloudSignInProbeTest'],{encoding:'utf8',timeout:60000}),/^PASS optional Google probe \(8 scenarios\)/);
+ }finally{rmSync(temporary,{recursive:true,force:true});}
+});
+
+test('exact native email verify/connect/token/ack chain retains failures and custody without a browser return (plain JVM)',()=>{
+ const temporary=mkdtempSync(join(tmpdir(),'cloud-email-chain-'));
+ try{
+  const plugin=read(native+'AlphaCloudSignInPlugin.java');
+  const methods={
+   ACTUAL_VERIFY:between(plugin,' private void verify(PluginCall call, boolean mfa)',' private void release('),
+   ACTUAL_RELEASE:between(plugin,' private void release(',' @PluginMethod public void cancel('),
+   ACTUAL_COMPLETE:between(plugin,' private void complete(',' /** The saved key'),
+   ACTUAL_PREVIOUS_TOKEN:between(plugin,' private static String previousToken(',' /** Bounded retry'),
+   ACTUAL_ACK:between(plugin,' private boolean acknowledge(',' /** A key stored before'),
+   ACTUAL_OUTCOMES:between(plugin,' private void finish(',' /** Cloud refusing'),
+   ACTUAL_INSTANT:between(plugin,' private static long instant(',' private Response post('),
+   ACTUAL_RECEIPT_SLOT:plugin.match(/^ static String receiptSlot\(.*$/m)?.[0],
+  };
+  let harness=read('test/fixtures/CloudEmailNativeChainTest.java.txt');
+  for(const [name,source]of Object.entries(methods)){assert(source,name);harness=harness.replace('/* '+name+' */',source);}
+  const source=join(temporary,'CloudEmailNativeChainTest.java');writeFileSync(source,harness);
+  execFileSync(binary('javac'),['--release','11','-d',temporary,join(root,native,'CloudSignInFlow.java'),join(root,native,'CloudEmailCode.java'),join(root,'test/fixtures/native-email/org/json/JSONObject.java'),source],{timeout:60000});
+  assert.match(execFileSync(binary('java'),['-cp',temporary,'ai.elizaresearch.alphaphone.CloudEmailNativeChainTest'],{encoding:'utf8',timeout:60000}),/^PASS native email chain \(13 scenarios; no browser\/DAL facilities\)/);
+ }finally{rmSync(temporary,{recursive:true,force:true});}
+});
+
 // Shared callback contract: the same fixture JSON is committed in elizaOS/eliza, whose fallback page
 // and Steward redirect tests read it. Here every vector goes through the native parser.
 test('shared callback contract vectors (fixture shared with elizaOS/eliza) through the native parser',()=>{
