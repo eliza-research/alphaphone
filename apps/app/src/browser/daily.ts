@@ -4,7 +4,7 @@ import {stageReminderDeletion,settleReminderDeletions,undoReminderDeletion,type 
 import {isReminderCreate,validateReminderCreate,validateReminderCreateResult,type ReminderCreateOperation,type ReminderCreateResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/reminder-create-contract.ts';
 import { validateReminderOperation, reminderFields, reminderTiming, type ReminderOperation, type ReminderResult, type ReminderTarget } from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/reminder-contract.ts';
 import { BrowserFiles } from './files';
-import { initialReminderDue, nextReminderOccurrence } from './reminder-recurrence';
+import { initialReminderDue, completeReminderOccurrence, snoozeReminderOccurrence } from '../../../../.eliza/client-features/plugins/plugin-native-reminders/src/occurrence.ts';
 import { WebPlugin } from '@capacitor/core';
 import { devSurfacesEnabled } from '../build-flags';
 import type { Reminder, ClockRequest } from '../daily';
@@ -21,19 +21,11 @@ function operationBinding(input:{operationId:string;bindingHash:string},operatio
   if(!/^[A-Za-z0-9_-]{1,128}$/.test(input.operationId)||!/^[a-f0-9]{64}$/.test(input.bindingHash))throw Error('Invalid reminder operation binding.');
   return JSON.stringify([input.bindingHash,operation]);
 }
+/** Done and Snooze use the shared reminder engine's decisions: a one-off completes, a repeat
+ * advances to its next civil occurrence. This browser owns storage, delivery state and revisions. */
 async function decide(row:Row,action:'done'|'snooze') {
-  const now=Date.now();
-  if(action==='snooze'){
-    if(row.alertMinutes===null)throw Error('No-alert reminders cannot be snoozed. Edit the alert first.');
-    if(row.status==='scheduled'&&row.snoozedAt!==undefined)return 'unchanged';
-    row.at=now+600000;row.snoozedAt=now;row.status=await scheduledStatus();
-  } else {
-    const next=row.recurrence?nextReminderOccurrence(row.recurrence,now):undefined;
-    row.history=[...(row.history||[]),{occurrenceId:row.occurrenceId!,dueAt:row.dueAt||row.at,completedAt:now,skippedDates:next?.skippedDates||0}].slice(-32);
-    if(next){row.recurrence!.date=next.date;row.dueAt=next.dueAt;row.at=next.at;row.occurrenceId=crypto.randomUUID();row.status=row.alertMinutes===null?'pending':await scheduledStatus();delete row.completedAt;}
-    else {row.status='completed';row.completedAt=now;}
-    delete row.snoozedAt;delete row.postedAt;
-  }
+  const host={now:Date.now(),alertStatus:await scheduledStatus(),nextOccurrenceId:()=>crypto.randomUUID()};
+  if((action==='snooze'?snoozeReminderOccurrence(row,host):completeReminderOccurrence(row,host))==='unchanged')return 'unchanged';
   row.revision=revision();return row.status;
 }
 export class BrowserDaily extends WebPlugin {
