@@ -3,7 +3,14 @@ import {test,expect,type Page} from '@playwright/test';
 import {button} from './flag-off-android';
 import {setupNativeSpeech as setup} from './native-speech-fixture';
 const voice=(page:Page)=>page.getByRole('region',{name:'Voice conversation',exact:true});
-async function utterance(page:Page){await page.evaluate(()=>(window as any).nativeSpeech.peak=.25);await page.waitForTimeout(950);await page.evaluate(()=>(window as any).nativeSpeech.peak=0);}
+async function utterance(page:Page){
+ // Wait for capture to sample its quiet warmup, then hold the synthetic speech until
+ // the renderer has actually sampled a sustained pulse, even on a busy test worker.
+ await expect.poll(()=>page.evaluate(()=>{const f=(window as any).nativeSpeech;return f.sampledActivity.some((sample:any)=>sample.at-f.captureStartedAt>=300);})).toBe(true);
+ await page.evaluate(()=>{const f=(window as any).nativeSpeech;f.sampledActivity=[];f.peak=.25;});
+ await expect.poll(()=>page.evaluate(()=>{const samples=(window as any).nativeSpeech.sampledActivity.filter((sample:any)=>sample.peak===.25);return samples.length>1?samples.at(-1).at-samples[0].at:0;})).toBeGreaterThanOrEqual(750);
+ await page.evaluate(()=>(window as any).nativeSpeech.peak=0);
+}
 async function noCloud(page:Page,foreign:string[]){expect(await page.evaluate(()=>(window as any).nativeSpeech.forbidden)).toEqual([]);expect(foreign).toEqual([]);}
 test('production chat captures locally, transcribes locally, plays local reply and cancels playback',async({page})=>{
  const foreign=await setup(page);await button(page,'Talk').click();await expect(voice(page)).toHaveAttribute('data-voice-state','listening');await expect(voice(page)).toContainText('transcribed on this device');await utterance(page);await expect(voice(page)).toHaveAttribute('data-voice-state','speaking');

@@ -87,12 +87,23 @@ export class CanonicalNotesUi {
  }
 }
 
+/** The disconnected state keeps the same opaque app surface and reachable controls. */
+function waitingNotes(shell:Bag){
+ return React.createElement('section',{className:'notes-layout',role:'region','aria-label':'Notes',style:{position:'absolute',inset:0,zIndex:21,background:'var(--bg)',color:'var(--fg)',paddingTop:44,boxSizing:'border-box',display:'flex',flexDirection:'column'} as React.CSSProperties},
+  React.createElement('header',{'data-alpha-app-header':'main',style:{display:'flex',alignItems:'center',height:56,flexShrink:0,gap:12,padding:'0 16px'}},
+   React.createElement('button',{className:'app-header-back','aria-label':'Back to apps',onClick:()=>shell.goHome()},React.createElement('span',{'aria-hidden':true,style:{fontSize:28}},'‹')),
+   React.createElement('h1',{'data-alpha-app-title':true,style:{margin:0,fontSize:24}},'Notes')),
+  React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:16,minHeight:0,overflowY:'auto',padding:'16px 24px calc(var(--alpha-chat-clearance, 120px) + 24px)'}},
+   React.createElement('p',{role:'status',style:{margin:0,lineHeight:1.5}},'Waiting for an agent connection to open Notes.'),
+   ...(shell.api('notes').notesSourceOptions??[]).filter((source:Bag)=>!source.selected).map((source:Bag)=>React.createElement('button',{key:source.id,onClick:source.choose,style:{minHeight:48,padding:'12px 18px',borderRadius:16,background:'var(--s2)',color:'var(--fg)',font:'inherit'}},source.id==='legacy'?'Older notes':source.label))));
+}
+
 /** The stable screen-level React hole stays mounted across Home/app changes. */
 export function installCanonicalNotesView(Component:any,views:Record<string,Bag>):void{
  const prototype=Component.prototype,renderVals=prototype.renderVals,get=prototype.vget,api=prototype.api;
  prototype.vget=function(key:string){const value=get.call(this,key),ui=this.canonicalNotesUi;return key==='notes'&&ui?{...value,list:ui.list,open:ui.open,rec:null,record:false}:value;};
  prototype.api=function(key:string){const value=api.call(this,key);if(key!=='notes')return value;const ui=this.canonicalNotesUi;if(!ui)return this.notesSourceMode==='canonical'?{...value,notesSourceMode:'canonical',notesTrash:undefined,moveNoteToTrash:()=>false}:value;return {...value,canonicalNotes:ui,notesSourceMode:'canonical',set:(patch:Bag)=>{if(Object.hasOwn(patch,'list'))return false;if(Object.hasOwn(patch,'open'))ui.select(patch.open);if(patch.compose)void ui.create();const rest={...patch};delete rest.open;delete rest.compose;return Object.keys(rest).length?value.set(rest):true;}};};
- prototype.renderVals=function(){const value=renderVals.call(this),ui=this.canonicalNotesUi;return {...value,canonicalNotesWorkspace:ui?ui.render(this,this.live&&this.S().screen==='home'&&this.S().view==='notes'):this.notesSourceMode==='canonical'&&this.live&&this.S().screen==='home'&&this.S().view==='notes'?React.createElement('div',{role:'status',className:'notes-layout',style:{position:'absolute',inset:0,zIndex:21,paddingTop:88,paddingInline:24}},React.createElement('p',null,'Waiting for an agent connection to open Notes.'),React.createElement('button',{'aria-label':'Back to apps',onClick:()=>this.goHome()},'Back'),...(this.api('notes').notesSourceOptions??[]).filter((source:Bag)=>!source.selected).map((source:Bag)=>React.createElement('button',{key:source.id,onClick:source.choose},source.id==='legacy'?'Older notes':source.label))):null};};
+ prototype.renderVals=function(){const value=renderVals.call(this),ui=this.canonicalNotesUi;return {...value,canonicalNotesWorkspace:ui?ui.render(this,this.live&&this.S().screen==='home'&&this.S().view==='notes'):this.notesSourceMode==='canonical'&&this.live&&this.S().screen==='home'&&this.S().view==='notes'?waitingNotes(this):null};};
  const notes=views.notes,render=notes.render,back=notes.back,leave=notes.onLeave;
  notes.render=(state:Bag,value:Bag)=>{if(value.notesSourceMode==='canonical'||value.canonicalNotes)return {legacyNotes:false};const result=render(state,value),main=(value.notesSourceOptions??[]).find((source:Bag)=>source.id==='canonical');return {...result,legacyNotes:true,notesTitle:'Older notes',primaryNotes:false,olderNotesAction:null,returnToNotesAction:main?.choose};};
  notes.back=(state:Bag,value:Bag)=>{const ui=value.canonicalNotes;if(!ui)return back?.(state,value);if(!ui.editing)return false;void ui.leave();return true;};
