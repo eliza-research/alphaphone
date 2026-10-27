@@ -239,8 +239,8 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   return null;
  }
  /** Deletes the provider slot and confirms by reading it back. */
- static JSObject clearProviderSlot(AlphaCredentialStore store) throws Exception {
-  store.removeCredentialSlot("local-agent-provider:v1");
+ static JSObject clearProviderSlot(AlphaCredentialStore store,boolean onlyIfPresent) throws Exception {
+  if(onlyIfPresent)store.removeProviderIfPresent();else store.removeCredentialSlot("local-agent-provider:v1");
   if(store.readCredentialSlot("local-agent-provider:v1")!=null)throw new IllegalStateException("Provider key still present");
   return providerIdentity(null);
  }
@@ -302,9 +302,10 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  }
  /** Deletes the provider slot and reads it back; resolves only when the slot is gone. */
  @PluginMethod public void clearProvider(PluginCall call) {
+  final boolean onlyIfPresent=Boolean.TRUE.equals(call.getBoolean("onlyIfPresent"));
   final long configuration=reserveCredentialIntent();
   PluginWorkers.submit(workers,()->{try{
-   call.resolve(clearProviderSlot(new AlphaCredentialStore(getContext(),()->{if(disposed)throw new IllegalStateException("Local agent bridge closed");requireCredentialIntent(configuration);})));
+   call.resolve(clearProviderSlot(new AlphaCredentialStore(getContext(),()->{if(disposed)throw new IllegalStateException("Local agent bridge closed");requireCredentialIntent(configuration);}),onlyIfPresent));
   }catch(Exception error){call.reject("The provider key could not be removed.");}},()->{call.reject("Local agent bridge is closed.");});
  }
  static final String CLOUD_PROVIDER_MODEL=LocalAgentProviderAdmission.CLOUD_PROVIDER_MODEL;
