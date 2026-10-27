@@ -1,0 +1,20 @@
+{
+  "productBase": "1f83aef1a5ea6e1328fbb4bf34d7882d13a1057b",
+  "SDK": "89d8ca03bf4ceb18418cad813c75287183482b37",
+  "priorSDK": "3de03adb2d88f566e5d4fa9ba9b6294d9867aeb0",
+  "SDKTree": "d90076ab16b659fcfdb8b0a896216375769969fe",
+  "reviewedSourceFiles": {
+    "packages/core/src/runtime/execute-planned-tool-call.ts": "b394f2f7d96f51639c4b3a23d737536feec786d9030f77d07af2855dbe34b7ad",
+    "plugins/plugin-assistant/src/runtime/planner-schema-recovery.test.ts": "ea1b95d1270de3669fdd391e08019ca21f7c5430675181e63dc0cf1059c29f1b"
+  },
+  "owningFocusedCasesPassed": 5,
+  "baselineSameCaseFailed": true,
+  "SDKLockUnchanged": true,
+  "packageLockUnchanged": true,
+  "engineModelProviderABIChanges": false,
+  "historyContextPolicyChanged": false,
+  "MacModelAcceptance": false,
+  "AndroidAcceptance": false,
+  "localOnly": true,
+  "published": false
+}

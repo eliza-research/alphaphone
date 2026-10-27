@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "04658de1b942510e0d37efc777c154530f5c0ef1",
-  "head": "3de03adb2d88f566e5d4fa9ba9b6294d9867aeb0",
+  "head": "89d8ca03bf4ceb18418cad813c75287183482b37",
   "recordedAt": "2026-10-27",
-  "command": "git -C vendor/eliza rev-list --left-right --count 04658de1b942510e0d37efc777c154530f5c0ef1...3de03adb2d88f566e5d4fa9ba9b6294d9867aeb0",
+  "command": "git -C vendor/eliza rev-list --left-right --count 04658de1b942510e0d37efc777c154530f5c0ef1...89d8ca03bf4ceb18418cad813c75287183482b37",
   "status": "diverged",
-  "aheadBy": 82,
+  "aheadBy": 83,
   "behindBy": 208,
   "mergeBase": "58dfddf87ee5adec414746a86a23dada124fbbae",
   "pinOnlyCommits": [
@@ -326,6 +326,10 @@
     {
       "sha": "3de03adb2d88f566e5d4fa9ba9b6294d9867aeb0",
       "subject": "fix(calendar): return typed native creation clarifications"
+    },
+    {
+      "sha": "89d8ca03bf4ceb18418cad813c75287183482b37",
+      "subject": "fix(core): classify schema-rejected actions before dispatch"
     }
   ],
   "pullRequests": [
@@ -420,6 +424,6 @@
   ],
   "provenance": {
     "method": "Local immutable graph against retained develop snapshot, not current published develop qualification",
-    "priorHead": "8b33c02f61cc9811d95fd38cc55120381c095b86"
+    "priorHead": "3de03adb2d88f566e5d4fa9ba9b6294d9867aeb0"
   }
 }
