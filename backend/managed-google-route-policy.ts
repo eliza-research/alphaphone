@@ -1,6 +1,6 @@
 import {productionCloud} from '../apps/app/src/runtime/cloud-deployment.generated.ts';
 import {managedServiceRequest} from '../apps/app/src/runtime/managed-service-routes.ts';
-function object(value:unknown):Record<string,any>{if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid Cloud request');return value as Record<string,any>;}
+export function object(value:unknown):Record<string,any>{if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid Cloud request');return value as Record<string,any>;}
 const GOOGLE_UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 /** Narrow owner-service surface. URL queries carry opaque provider IDs; paths never do. */
 export function managedGoogleRequest(url:URL,method:string,body:unknown):boolean {
