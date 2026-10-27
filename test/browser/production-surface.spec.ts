@@ -4,6 +4,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { FORBIDDEN_ENGINE_PATH, engineFindings } from '../../scripts/audit-production-bundle.mjs';
+import { openLegacyNotes } from './helpers/legacy-notes';
 // Runs only in the `production` project: a flag-off `vite build` served by `vite preview`.
 // It proves the shipped web bundle exposes no mock, fixture or developer surface.
 // It does not prove Android packaging, which is audited separately per APK.
@@ -190,7 +191,7 @@ test('deferred apps are absent and root views show honest unconnected states', a
   await page.goto('/?tools=1');
   for (const deferred of ['Phone', 'Messages', 'Contacts', 'Wallet']) await expect(page.getByRole('button', { name: deferred, exact: true })).toHaveCount(0);
   const states: Record<string, RegExp> = {
-    Inbox: /Connect Eliza Cloud/, Workflows: /Your agent runs on your phone, not here\. Open Alpha on your Android phone to use it\. Reminders on this phone stay available\./, Notes: /No notes yet/,
+    Inbox: /Connect Eliza Cloud/, Workflows: /Your agent runs on your phone, not here\. Open Alpha on your Android phone to use it\. Reminders on this phone stay available\./, Notes: /Waiting for an agent connection to open Notes\./,
     Photos: /No photos/, Maps: /Add a location/, Calendar: /\d/, Files: /Choose a document/, Settings: /Agent connection/,
   };
   for (const [view, expected] of Object.entries(states)) {
@@ -222,11 +223,12 @@ test('the CSP admits Home, Notes, Maps, Scan and PDF without violations', async 
   await page.addInitScript(offline);
   await page.goto('/?tools=1');
   await expect(page.getByRole('button', { name: 'Notes', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Notes', exact: true }).click();
+  await openLegacyNotes(page);
   await page.getByRole('button', { name: 'New note', exact: true }).click();
   await page.getByRole('textbox', { name: 'Title', exact: true }).fill('CSP note');
   await page.getByRole('button', { name: 'Back to notes', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Open CSP note', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Return to Notes', exact: true }).click();
   await page.getByRole('button', { name: 'Back to apps', exact: true }).click();
   await page.getByRole('button', { name: 'Maps', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-active-view', 'maps');
@@ -307,7 +309,7 @@ test('production signed-out voice stays on-device with no capture, upload or Clo
     HTMLMediaElement.prototype.play=async function(){counts.playback++;throw Error('Unsigned voice must not play audio');};
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Notes', exact: true }).click();
+  await openLegacyNotes(page);
   await page.getByRole('button', { name: 'Record and transcribe', exact: true }).click();
   // A browser production build has no local agent here: local speech is unavailable, never Cloud.
   await expect(page.getByText('Local speech needs the local agent on this computer. Connect it, or use the keyboard.',{exact:true})).toBeVisible();
