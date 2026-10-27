@@ -1,3 +1,5 @@
+import {openBrowserCalendar} from './helpers/browser-calendar';
+import {openLegacyNotes} from './helpers/legacy-notes';
 import {test,expect} from '@playwright/test';
 const cases=[['calendar','event','detail'],['calendar','new','form'],['calendar','invite','detail'],['calendar','add','detail'],['browser','tabs','tabs'],['photos','viewer','viewer'],['notes','editor','editor'],['notes','voice','voice'],['notes','rec','recording'],['files','folder','folder'],['files','preview','preview']];
 for(const theme of ['light','dark'])for(const [view,sub,layer] of cases)test(`${view} ${sub} retires covered controls ${theme}`,async({page},info)=>{
@@ -9,7 +11,7 @@ for(const theme of ['light','dark'])for(const [view,sub,layer] of cases)test(`${
  await page.screenshot({path:info.outputPath('subview.png')});
 });
 for(const [app,open,close] of [['Calendar','New event','Back to calendar'],['Browser','Tabs','Back to page'],['Notes','New note','Back to notes']])test(`${app} returns focus to the opener in development`,async({page})=>{
- await page.goto('/?mode=dev');await page.getByRole('button',{name:app,exact:true}).click();
+ await page.goto('/?mode=dev');if(app==='Calendar')await openBrowserCalendar(page);else if(app==='Notes')await openLegacyNotes(page);else await page.getByRole('button',{name:app,exact:true}).click();
  const opener=page.getByRole('button',{name:open,exact:true});await opener.click();
  const back=page.getByRole('button',{name:close,exact:true});await expect(back).toBeFocused();await back.click();await expect(opener).toBeFocused();
 });
