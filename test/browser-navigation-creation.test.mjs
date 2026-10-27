@@ -27,7 +27,7 @@ function approvedHarness({native=false,deferred=false,failNavigate=false}={}){
  const pending=deferred?new Promise(resolve=>{release=resolve;}):Promise.resolve();
  const state={cur:'existing',tabs:[{id:'existing',hist:['newtab'],pos:0}],editing:true,tabsOpen:true,menu:true};
  const calls=[],closed=[],opened=[],created=new Map(),metadata=new Map();
- const context={URL,Error,Capacitor:{isNativePlatform:()=>native},session:'reviewed-session',get disposed(){return disposed;},profileUnsupportedTab:undefined,state:()=>state,isPrivate:()=>false,newTabId:()=> 'approved-tab',restored:new Map(),metadata,created,documentRevisions:new Map(),restoreAttempts:new Map(),
+ const context={URL,Error,document:{hidden:false},Capacitor:{isNativePlatform:()=>native},session:'reviewed-session',get disposed(){return disposed;},profileUnsupportedTab:undefined,state:()=>state,isPrivate:()=>false,newTabId:()=> 'approved-tab',restored:new Map(),metadata,created,documentRevisions:new Map(),restoreAttempts:new Map(),
   ensure(id){creations++;created.set(id,pending);return pending;},
   shell:{vset(_key,patch){Object.assign(state,patch);},openView(...args){opened.push({args,tab:state.cur,bridgeCalls:calls.length});}},
   Browser:{async navigate(input){calls.push(input);if(failNavigate)throw Error('Bridge navigation failed');},async close(input){closed.push(input);}},refresh(){},report(){}};
@@ -74,5 +74,22 @@ for(const native of [false,true]){
   const h=approvedHarness({native,deferred:true});assert.equal(typeof h.approved,'function');
   const task=h.approved('https://example.com',new AbortController().signal);h.dispose();h.release();
   await assert.rejects(task,/Browser closed/);assert.equal(h.calls.length,0);assert.equal(h.closed.length,1);assert.equal(h.opened.length,0);
+ });
+}
+
+for(const native of [false,true]){
+ const platform=native?'native':'web preview';
+ test(`${platform} deferred approved dispatch preserves the original selected tab until presentation`,async()=>{
+  const h=approvedHarness({native}),present=await h.approved('https://example.com',new AbortController().signal,true);
+  assert.equal(h.calls.length,1);assert.equal(h.state.cur,'existing');assert.equal(h.opened.length,0);assert.equal(typeof present,'function');
+  present();assert.equal(h.state.cur,'approved-tab');assert.equal(h.opened.length,1);assert.equal(h.calls.length,1);
+ });
+ test(`${platform} deferred approval still refuses a tab change before dispatch`,async()=>{
+  const h=approvedHarness({native,deferred:true}),task=h.approved('https://example.com',new AbortController().signal,true);
+  h.state.cur='foreign';h.release();await assert.rejects(task,/Browser tab changed/);assert.equal(h.calls.length,0);assert.equal(h.closed.length,1);assert.equal(h.opened.length,0);
+ });
+ test(`${platform} cancelling a dispatched deferred presentation never navigates again`,async()=>{
+  const h=approvedHarness({native}),c=new AbortController(),present=await h.approved('https://example.com',c.signal,true);
+  c.abort();assert.throws(present);assert.equal(h.calls.length,1);assert.equal(h.opened.length,0);assert.equal(h.state.cur,'existing');
  });
 }

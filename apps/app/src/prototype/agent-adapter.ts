@@ -887,8 +887,12 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         return { status: 'succeeded', summary: `Opened ${operation.view} on this phone.` };
       }
       if (!this.browserNavigateApproved) return { status: 'failed', summary: 'Approved browser navigation is unavailable. No page opened.' };
-      await this.browserNavigateApproved(operation.url, signal);
-      return { status: 'succeeded', summary: `Opened an approved HTTPS destination in a new browser tab. Page loading is not verified.` };
+      const browserSession=connectionController.getSnapshot().session;
+      const present=await this.browserNavigateApproved(operation.url, signal, true);
+      return { status: 'succeeded', summary: `Opened an approved HTTPS destination in a new browser tab. Page loading is not verified.`,presentBrowser:()=>{
+        if(!this.live||document.hidden||connectionController.getSnapshot().session!==browserSession||JSON.stringify(alphaClient.getState().context)!==JSON.stringify(expectedContext))return;
+        present?.();
+      } };
     });
     context(this);
   };

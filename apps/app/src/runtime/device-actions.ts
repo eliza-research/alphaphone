@@ -71,7 +71,7 @@ export interface ActionJournal {
 }
 export interface WorkflowNoticeRoute {scope:string;origin:string;ownerId:string;agentId:string;workflowId:string;runId:string;versionId:string}
 export interface DeviceJournalIdentity {scope:string;proposalId:string}
-export type DeviceExecutor = (operation: DeviceOperation, operationId: string, context: ContextEnvelope, signal: AbortSignal, bindingHash: string, workflowRoute?:WorkflowNoticeRoute,journalIdentity?:DeviceJournalIdentity,agendaSource?:CalendarSource) => Promise<{ status: 'succeeded' | 'failed' | 'unknown'; summary: string; readResult?: WorkflowReadResult; calendarResult?:CalendarResult; notesResult?:NotesResult|NotesQueryResult; reminderResult?:ReminderResult|ReminderCreateResult; mapsResult?:MapsResult;clockResult?:ClockHandoffResult;photoLibraryResult?:LibraryAgentResult;cameraResult?:CameraCaptureResult;smsResult?:SmsSendResult }>;
+export type DeviceExecutor = (operation: DeviceOperation, operationId: string, context: ContextEnvelope, signal: AbortSignal, bindingHash: string, workflowRoute?:WorkflowNoticeRoute,journalIdentity?:DeviceJournalIdentity,agendaSource?:CalendarSource) => Promise<{ status: 'succeeded' | 'failed' | 'unknown'; summary: string; readResult?: WorkflowReadResult; calendarResult?:CalendarResult; notesResult?:NotesResult|NotesQueryResult; reminderResult?:ReminderResult|ReminderCreateResult; mapsResult?:MapsResult;clockResult?:ClockHandoffResult;photoLibraryResult?:LibraryAgentResult;cameraResult?:CameraCaptureResult;smsResult?:SmsSendResult;/** Local Browser presentation only; never persisted or uploaded. */presentBrowser?:()=>void }>;
 export type DeviceRecovery = (operation:DeviceOperation,operationId:string,bindingHash:string,signal:AbortSignal)=>Promise<{status:string;reminderResult?:ReminderResult|ReminderCreateResult;smsResult?:SmsSendResult}>;
 interface Proposal { calendarAgendaSource?:CalendarSource; providerReceipt?:unknown; requestMessageId?: string; id: string; digest: string; state: string; expiresAt: number; operation: ReviewableDeviceOperation; workflow?:WorkflowDeviceBinding; attemptId?: string;providerIdempotencyKey?:string;readReplyOrigin?:NativeNotesReadReplyOrigin }
 const views = new Set(['home','notes','reminders','browser','calendar','files','photos','camera','maps','inbox','settings','workflows']);
@@ -418,9 +418,17 @@ export class DeviceActions {
        if(isReminderOperation(p.operation)||isReminderCreate(p.operation)||p.operation.type==='create_reminder')committedChanges.push('reminders');
        if(foregroundResult&&'operation'in foregroundResult&&!(foregroundResult.kind==='calendar_named'&&foregroundResult.action==='read'))committedChanges.push(foregroundResult.kind==='notes_named'?'notes':foregroundResult.kind==='calendar_named'?'calendar':'reminders');
       }
+      // Presentation changes the foreground context and cancels its approval.
+      // Run it only after this exact action's receipt attempt, never as a retry.
+      const presentBrowser=()=>{
+        if(p.operation.type==='browser_navigate'&&result.status==='succeeded'){
+          try{result.presentBrowser?.();}catch{/* A retired foreground must not replace a journaled outcome. */}
+        }
+      };
       let confirmed:Proposal;
       try { if(isMapsOperation(p.operation))assertMapsContext(p.operation,context); confirmed=await this.mutation(p, 'receipt', { attemptId: claimed.attemptId, receipt: { outcome: result.status === 'succeeded' ? 'applied' : result.status === 'failed' ? 'failed' : 'unknown', operationId,...(smsResult?{result:smsResult}:foregroundResult?{result:foregroundResult}:clockResult?{result:clockResult}:mapsResult?{result:mapsResult}:cameraResult?{result:cameraResult}:photoLibraryResult?{result:photoLibraryResult}:readResult?{result:readResult}:calendarResult?{result:calendarResult}:notesResult?{result:notesResult}:reminderResult?{result:reminderResult}:{}) } }, signal); }
-      catch { return { proposalId, status: result.status, summary: `${result.summary} Server receipt is pending; check action history.`,committedChanges }; }
+      catch { presentBrowser();return { proposalId, status: result.status, summary: `${result.summary} Server receipt is pending; check action history.`,committedChanges }; }
+      presentBrowser();
       const retained=this.readReplies.get(proposalId);
       const readReply=result.status==='succeeded'&&isOriginalDeviceReadOperationType(p.operation.type)&&(notesResult||calendarResult||reminderResult||mapsResult||readResult||foregroundResult?.kind==='calendar_availability'||foregroundResult?.kind==='calendar_named'&&foregroundResult.action==='read')&&p.readReplyOrigin&&confirmed.state==='done'&&confirmed.attemptId===claimed.attemptId&&retained&&!retained.consumed&&retained.digest===p.digest&&JSON.stringify(retained.origin)===JSON.stringify(p.readReplyOrigin)?validateNativeNotesReadReplyHint({...p.readReplyOrigin,proposalId,digest:p.digest,attemptId:claimed.attemptId}):undefined;
       if(readReply)retained!.hint=readReply;

@@ -199,8 +199,8 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
       if (disposed) { if (approvedSignal) throw new Error('Browser closed'); return; }
       const current=state();
       if(created.get(id)!==creation||!current||(!newTab&&!current.tabs.some((tab:Bag)=>tab.id===id))){void Browser.close({session,id}).catch(report);if(approvedSignal)throw new Error('Browser tab closed');return;}
-      if(!background&&current.cur!==selectedTab){if(newTab){created.delete(id);void Browser.close({session,id}).catch(report);}if(approvedSignal)throw new Error('Browser tab changed');return;}
-      if (newTab) shell.vset('browser', { tabs: [...state().tabs, { id, hist: ['newtab'], pos: 0, ...(priv ? {priv: true} : {}) }], cur: id });
+      if((!background||approvedSignal)&&current.cur!==selectedTab){if(newTab){created.delete(id);void Browser.close({session,id}).catch(report);}if(approvedSignal)throw new Error('Browser tab changed');return;}
+      if (newTab) shell.vset('browser', { tabs: [...state().tabs, { id, hist: ['newtab'], pos: 0, ...(priv ? {priv: true} : {}) }], ...(!background ? {cur: id} : {}) });
       metadata.set(id, { ...metadata.get(id), url: url.href, loading: true, committed: false, error: '' });
       documentRevisions.set(id, (documentRevisions.get(id) || 0) + 1);
       // A background (restored-tab) load must not close a menu or switcher the
@@ -209,6 +209,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
       await Browser.navigate({ session, id, url: url.href });
       refresh();
       restoreAttempts.delete(id);
+      return id;
     } catch (error) {
       if (approvedSignal) throw error;
       // A restored tab whose native creation failed transiently (for example while the
@@ -421,14 +422,25 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
       signal.throwIfAborted();if(disposed||shell.S().view!=='browser'||state()?.cur!==id||receipt?.session!==session||receipt?.id!==id)throw Error('Native browser result belongs to another tab or session');
       return {ok:true,data:{dispatched:true,completed:false,requiresReadback:true}};
     };
-    this.browserNavigateApproved = async (raw: string, signal: AbortSignal) => {
+    this.browserNavigateApproved = async (raw: string, signal: AbortSignal, deferPresentation = false) => {
       const url = new URL(raw);
       if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Only HTTPS destinations may be approved');
       signal.throwIfAborted();
-      await navigate(url.href, true, signal);
-      // The native tab was created before this view transition. A normal
-      // openView resets the destination state and loses its current-tab ID.
-      if (!disposed) shell.openView('browser', null, null, { restore: true });
+      const selected = state()?.cur;
+      const id = await navigate(url.href, true, signal, false, deferPresentation);
+      const present = () => {
+        signal.throwIfAborted();
+        if (!id || disposed || document.hidden || state()?.cur !== (deferPresentation ? selected : id) || !created.has(id)) return;
+        // Select only after completion; even Browser-origin requests keep their
+        // original document context throughout journal and receipt handling.
+        if (deferPresentation) shell.vset('browser', {cur: id, editing: false, tabsOpen: false, menu: false, lib: null, share: false});
+        // Keep the exact dispatched tab; a normal openView resets its identity.
+        shell.openView('browser', null, null, { restore: true });
+      };
+      // Device actions present only after their durable journal and receipt attempt.
+      // Ordinary reviewed web sources keep their immediate presentation.
+      if (deferPresentation) return present;
+      present();
     };
     // Identity only: visible page content, URL and browsing history are not
     // transmitted merely by opening the agent. Navigation changes the revision
