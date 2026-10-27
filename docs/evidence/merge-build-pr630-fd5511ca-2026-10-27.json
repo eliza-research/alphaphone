@@ -20,8 +20,10 @@
     "focusedFailures": 0,
     "fullVerification": "pending",
     "androidVersion": 17,
-    "androidBuild": "pending",
-    "imageBuilds": "pending"
+    "androidBuild": "passed all four version 17 native APKs, instrumentation builds, lint and packaged dependency audit",
+    "imageBuilds": "pending",
+    "additionalMapsVoiceTests": 23,
+    "additionalMapsVoiceFailures": 0
   },
   "previousPinBrowserRuns": {
     "firstRun": {
