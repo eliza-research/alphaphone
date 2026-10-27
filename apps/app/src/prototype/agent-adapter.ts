@@ -387,13 +387,10 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     shell.canonicalNotesUi=binding;
     shell.notesReady=binding.refresh().catch(()=>{if(shell.canonicalNotesUi===binding)paint();});
   }
-  async function previousNotesObservation(store:Shell,current:()=>boolean):Promise<Shell>{
+  /** Empty or untargeted previous notes share no selection: the agent routes only a native source. */
+  async function previousNotesObservation(store:Shell):Promise<Shell|null>{
     const first=store.list[0],target=first?await store.target(first.id):null;
-    if(!current())throw new DOMException('Notes source changed.','AbortError');
-    if(target)return {kind:'note-source',id:target.sourceId,revision:target.sourceRevision,accountId:target.sourceId,sourceRevision:target.sourceRevision};
-    // A viewport namespace/fingerprint, never a made-up native source identity.
-    const revision=await notesDraftBase(store.raw);if(!current())throw new DOMException('Notes source changed.','AbortError');
-    return {kind:'legacy-app-notes-source',id:'previous-notes',accountId:'device-local-legacy',revision};
+    return target?{kind:'note-source',id:target.sourceId,revision:target.sourceRevision,accountId:target.sourceId,sourceRevision:target.sourceRevision}:null;
   }
   async function selectNotesSource(shell:Shell,source:'canonical'|'legacy'):Promise<boolean>{
     if(!shell.live||source===shell.notesSourceMode)return true;
@@ -408,7 +405,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     shell.notesStorageFailed=true;shell.notesPending=0;
     shell.notesReady=(async()=>{
       const store=isAndroid?await openExistingDeviceNotes(secureConnectionStore,localStorage,signal,current):await openExistingBrowserNotes(browserNotesPort,signal,current);
-      if(!current())return;const observation=await previousNotesObservation(store,current);if(!current())return;shell.notesStore=store;shell.notesRaw=store.raw;shell.notesLegacySource=observation;shell.notesStorageFailed=false;
+      if(!current())return;const observation=await previousNotesObservation(store);if(!current())return;shell.notesStore=store;shell.notesRaw=store.raw;shell.notesLegacySource=observation;shell.notesStorageFailed=false;
       originalSet.call(shell,'notes',{list:store.list,storageStatus:isAndroid?'Note text encrypted on this device':''});context(shell);
       // Existing unsaved device drafts remain in their original slot. Recovery
       // stays an explicit existing action; source selection never applies them.
@@ -431,7 +428,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       }).catch(()=>{});
     }
 
-    const previousNotesScope=view==='notes'&&shell.notesSourceMode==='legacy'?(shell.notesLegacySource??{kind:'legacy-app-notes-source',id:'previous-notes',accountId:'device-local-legacy'}):undefined;
+    const previousNotesScope=view==='notes'&&shell.notesSourceMode==='legacy'?shell.notesLegacySource:undefined;
     let providerSelection = view === 'browser' ? shell.browserSelection?.() : undefined;
     if (view === 'workflows') providerSelection = shell.workflowSelection?.();
     if (view === 'maps') providerSelection = getMapsSelectedObject();
@@ -538,7 +535,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     this.notesCommittedHandler=()=>{
       if(this.notesSourceMode!=='legacy')return;
       const store=this.notesStore,epoch=this.notesSourceEpoch,current=()=>this.live&&this.notesSourceMode==='legacy'&&this.notesSourceEpoch===epoch&&this.notesStore===store;
-      if(store&&!this.notesPending&&!this.notesStorageFailed)void previousNotesObservation(store,current).then(value=>{if(current()){this.notesLegacySource=value;context(this);}}).catch(()=>{});
+      if(store&&!this.notesPending&&!this.notesStorageFailed)void previousNotesObservation(store).then(value=>{if(current()){this.notesLegacySource=value;context(this);}}).catch(()=>{});
       if(!this.live||!this.notesStore||this.notesStorageFailed||this.notesPending||this.notesStore.needsRecovery)return;
       const update=notesEditorRefresh(this.notesRaw,this.vget('notes').list,this.notesStore.raw,this.notesStore.list);
       if(update.kind==='unchanged')return;

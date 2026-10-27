@@ -7,7 +7,7 @@ import { validateMapsSelectedObject } from '../maps/agent-context.ts';
 import type { ContextEnvelope } from './alpha-client';
 
 const views = new Set(['home', 'assistant', 'apps', 'maps', 'camera', 'photos', 'notes', 'calendar', 'notifications', 'reminders', 'workflows', 'files', 'inbox', 'browser', 'phone', 'messages', 'contacts', 'settings']);
-const kinds = new Set(['legacy-app-notes-source','note-source','canonical-note','canonical-calendar-event','canonical-calendar-source','note', 'document', 'photo', 'video', 'browser-tab', 'calendar-event', 'calendar-source', 'event', 'reminder', 'contact', 'email', 'file', 'workflow', 'workflow-run', 'map-place', 'map-route', 'map-search','folder','notification','settings','sms-subscription']);
+const kinds = new Set(['note-source','canonical-note','canonical-calendar-event','canonical-calendar-source','note', 'document', 'photo', 'video', 'browser-tab', 'calendar-event', 'calendar-source', 'event', 'reminder', 'contact', 'email', 'file', 'workflow', 'workflow-run', 'map-place', 'map-route', 'map-search','folder','notification','settings','sms-subscription']);
 /** Marker for Alpha Phone's own notifications; other apps' and hosted notices never become context. */
 export const OWN_NOTIFICATION_SOURCE = 'own';
 const SETTINGS_SECTION = /^[a-z][a-z0-9-]{0,63}$/;
@@ -66,9 +66,6 @@ export function sanitizePhoneContext(input: ContextEnvelope): ContextEnvelope {
     // fields or rich note data are part of this observation or effect authority.
     if(selected.kind==='note-source'){
       if(input.view!=='notes'||selected.accountId!==selected.id||selected.sourceRevision!==selected.revision||typeof selected.revision!=='string'||!/^[a-f0-9]{64}$/.test(selected.revision)||selected.occurrenceId!==undefined||selected.timingVersion!==undefined)throw Error('The previous Notes source changed.');
-    }
-    if(selected.kind==='legacy-app-notes-source'){
-      if(input.view!=='notes'||selected.id!=='previous-notes'||selected.accountId!=='device-local-legacy'||selected.sourceRevision!==undefined||selected.occurrenceId!==undefined||selected.timingVersion!==undefined||selected.revision!==undefined&&(typeof selected.revision!=='string'||!/^[a-f0-9]{64}$/.test(selected.revision)))throw Error('The previous Notes namespace changed.');
     }
     if(selected.kind==='canonical-note'){
       if(input.view!=='notes'||typeof selected.id!=='string'||!NOTE_ID_REGEXP.test(selected.id)||typeof selected.revision!=='string'||!Number.isSafeInteger(Number(selected.revision))||Number(selected.revision)<0||String(Number(selected.revision))!==selected.revision||selected.accountId!==undefined||selected.sourceRevision!==undefined||selected.occurrenceId!==undefined||selected.timingVersion!==undefined)throw Error('The canonical Notes observation is no longer current.');

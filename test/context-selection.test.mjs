@@ -265,3 +265,6 @@ test('Calendar shares only selections the agent routes; legacy and Clock draft k
  for(const selectedObject of [{kind:'legacy-app-calendar-source',id:'legacy-app-calendar',accountId:'device-local-legacy',revision:'a'.repeat(64)},{kind:'clock-draft',id:'draft',revision:'1'}])
   assert.throws(()=>sanitizePhoneContext({view:'calendar',revision:1,sensitive:false,selectedObject}),/cannot share agent context/);
 });
+test('Notes never sends the previous-notes namespace the agent cannot route',()=>{
+ assert.throws(()=>sanitizePhoneContext({view:'notes',revision:1,sensitive:false,selectedObject:{kind:'legacy-app-notes-source',id:'previous-notes',accountId:'device-local-legacy'}}),/cannot share agent context/);
+});
