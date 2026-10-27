@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {nativeViewPolicyPath} from './native-view-policy.mjs';
 import {verifyNativeGoogleHostArtifact} from './native-google-host-artifact.mjs';
+import {stageAgentBundleDependencies} from './agent-bundle-dependencies.mjs';
 const root=path.resolve(import.meta.dirname,'..');
 
 /** Explicit producer inputs; native Android never falls back to a musl archive or another ABI. */
@@ -53,6 +54,7 @@ execFileSync(process.execPath,[path.join(root,'scripts/prepare-local-agent.mjs')
 const runner=path.join(source,'.alpha-stage-runtime.ts');
 fs.writeFileSync(runner,`import {stageAndroidAgentRuntime} from './packages/app/scripts/lib/stage-android-agent.ts';\nawait stageAndroidAgentRuntime({androidDir:${JSON.stringify(path.join(root,'android'))},spikeDir:${JSON.stringify(path.join(source,'packages/app/scripts'))},bunTarget:${JSON.stringify(selection.bunTarget)}});\n`);
 try{execFileSync(process.env.ALPHA_BUN||'bun',[runner],{cwd:source,env,stdio:'inherit'});}finally{fs.unlinkSync(runner);}
+stageAgentBundleDependencies(source,path.join(root,'android/app/src/main/assets/agent'));
 fs.copyFileSync(path.join(source,'.alpha-runtime-source.json'),path.join(root,'android/app/src/main/assets/agent/alpha-source.json'));
 // Host configuration is separate from the authenticated, unmodified producer source.
 fs.copyFileSync(nativeViewPolicyPath,path.join(root,'android/app/src/main/assets/agent/native-view-declarations.json'));
