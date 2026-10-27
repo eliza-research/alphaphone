@@ -6,7 +6,7 @@ import {residentStub} from './resident-stub';
 const token='d32f7f34-962b-47b7-8f0d-f2fe7f12610a';
 type Mode='success'|'review-unavailable'|'changed'|'partial'|'transient';
 async function boot(page:Page,mode:Mode='success',signedOut=false){
- await fenceNetwork(page);await flagOffAndroid(page);await residentStub(page,{emptyKeystore:signedOut,accounts:[{token:'synthetic-cloud-key',userId:'9f1dc45a-4011-4e44-947a-30d999d24fa5',email:'owner@example.invalid',balance:5}]});
+ await fenceNetwork(page);await flagOffAndroid(page);await residentStub(page,{nativeSignIn:true,emptyKeystore:signedOut,accounts:[{token:'synthetic-cloud-key',userId:'9f1dc45a-4011-4e44-947a-30d999d24fa5',email:'owner@example.invalid',balance:5}]});
  await page.addInitScript(({mode,token})=>{
   const w=window as any,c=w.Capacitor,previous=c.nativePromise;let archived=false;
   const calls=w.recoveryCalls={starts:0,reviews:0,archives:[] as unknown[]};
@@ -27,7 +27,7 @@ async function boot(page:Page,mode:Mode='success',signedOut=false){
   };
  },{mode,token});
  await page.goto('/');await expect.poll(()=>page.evaluate(()=>(window as any).recoveryCalls.starts)).toBe(1);
- if(signedOut){const gate=page.getByRole('main',{name:'Sign in',exact:true});await expect(gate).toBeVisible();return gate;}
+ if(signedOut){const gate=page.locator('[role="main"].alpha-cloud-sign-in');await expect(gate).toBeVisible();return gate;}
  await expect(button(page,'Settings')).toBeVisible();await completeAccessSetup(page);await button(page,'Settings').click();await page.getByRole('button',{name:'Agent connection',exact:true}).click();
  const panel=page.getByRole('region',{name:'Settings',exact:true});await expect(panel.getByRole('heading',{name:'Agent connection',exact:true})).toBeVisible();return panel;
 }
@@ -59,7 +59,7 @@ test('a signed-out startup refusal keeps recovery review reachable on the mandat
  await expect(gate.getByText('Alpha will keep 8 old startup records, then restart your agent.',{exact:true})).toBeVisible();
  await gate.getByRole('button',{name:'Cancel',exact:true}).click();
  expect(await calls(page)).toEqual({starts:1,reviews:1,archives:[]});
- await expect(gate.getByRole('button',{name:'Sign in with Eliza Cloud',exact:true})).toBeEnabled();
+ await expect(gate.getByRole('button',{name:'Email me a code',exact:true})).toBeEnabled();
  expect(await harness(page,f=>f.slots['cloud:production']??null)).toBeNull();
 });
 

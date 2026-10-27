@@ -8,7 +8,7 @@ test.beforeEach(({}, testInfo) => { test.skip(testInfo.project.name !== 'product
 
 const id = '9f1dc45a-4011-4e44-947a-30d999d24fa5';
 const account: StubAccount = { token: 'first-run-key', userId: id, email: 'new-owner@example.invalid', balance: 5 };
-const WAITING = 'Checking your code…';
+const WAITING = 'Checking code…';
 const starts = (page: Page) => stub(page, s => s.order.filter((entry: string) => entry === 'Agent.start').length) as Promise<number>;
 
 async function firstRun(page: Page, overrides: Partial<StubAccount> = {}) {
@@ -43,14 +43,14 @@ async function firstRun(page: Page, overrides: Partial<StubAccount> = {}) {
   await page.goto('/');
   await setStub(page, { nextToken: account.token });
   // P-43: the resident starts by itself, signed out. Every Alpha Phone needs an Eliza Cloud account,
-  // so the sign-in dialog opens by itself and cannot be dismissed while the agent runs.
+  // so the sign-in page opens by itself and cannot be dismissed while the agent runs.
   await expect.poll(() => starts(page), { timeout: 30_000 }).toBe(1);
-  const welcome = page.getByRole('main', { name: 'Sign in', exact: true });
+  const welcome = page.locator('[role="main"].alpha-cloud-sign-in');
   await expect(welcome).toBeVisible();
   await expect(welcome.getByRole('button', { name: 'Close connection settings', exact: true })).toHaveCount(0);
   expect(await harness(page, f => f.slots['cloud:production'] ?? null)).toBeNull();
   expect(await stub(page, s => s.order.some((entry: string) => entry.startsWith('configureCloudProvider')))).toBe(false);
-  await expect(welcome.getByText('Sign in to Eliza Cloud to use Alpha Phone.', { exact: true })).toBeVisible();
+  await expect(welcome.getByRole('note')).toHaveText('Sign in to verify your account. You’ll review access before authorizing Alpha Phone.');
   await expect(welcome.getByRole('button', { name: 'Use local apps without AI', exact: true })).toHaveCount(0);
   await expect(welcome.getByRole('button',{name:'Reconnect agent',exact:true})).toHaveCount(0);
   await expect(welcome.getByText('Your agent runs with AI off until you sign in to Eliza Cloud.',{exact:true})).toHaveCount(0);
@@ -63,7 +63,7 @@ async function firstRun(page: Page, overrides: Partial<StubAccount> = {}) {
 async function nothingLeft(page: Page, welcome: ReturnType<Page['getByRole']>, untouched = false) {
   await expect.poll(()=>harness(page,f=>f.calls.filter((call:string)=>call==='Agent.start').length)).toBeGreaterThan(0);
   await expect(welcome).toBeVisible();
-  await expect(welcome.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true })).toBeEnabled();
+  await expect(welcome.getByRole('button', { name: 'Email me a code', exact: true })).toBeEnabled();
   expect(await harness(page, f => f.slots['cloud:production'] ?? null)).toBeNull();
   expect(await stub(page, s => s.order.some((entry: string) => entry.startsWith('configureCloudProvider')))).toBe(false);
   if (untouched) {
@@ -76,7 +76,7 @@ async function nothingLeft(page: Page, welcome: ReturnType<Page['getByRole']>, u
 test('first run: native email sign-in, credits, provider binding, then the resident agent answers', async ({ page }) => {
   test.setTimeout(120_000);
   const { foreign, welcome } = await firstRun(page);
-  await welcome.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();await enterNativeEmailCode(page);
+  await enterNativeEmailCode(page);
   await expect(welcome).toHaveCount(0, { timeout: 30_000 });
   // Fresh sign-in owns the original required sequence, with no Skip or automatic requests.
   const access=page.locator('dialog.alpha-startup-permissions');
@@ -132,10 +132,10 @@ test('first run: Cancel while verifying the email code keeps no key and the resi
   test.setTimeout(90_000);
   const { foreign, welcome } = await firstRun(page);
   await setStub(page, { login: 'hold' });
-  await welcome.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();await enterNativeEmailCode(page);
+  await enterNativeEmailCode(page);
   await expect(page.getByText(WAITING, { exact: true })).toBeVisible();
   await expect.poll(() => stub(page, s => s.order.includes('native sign-in verifyEmail'))).toBe(true);
-  await page.getByRole('button', { name: 'Cancel sign-in', exact: true }).click();await page.getByRole('button',{name:'Back',exact:true}).click();
+  await page.getByRole('button', { name: 'Cancel sign-in', exact: true }).click();
   const polls = await stub(page, s => s.polls);
   await page.waitForTimeout(2000);
   expect(await stub(page, s => s.polls)).toBe(polls);
@@ -147,16 +147,15 @@ test('first run: an expired sign-in session keeps no key and the resident runs w
   test.setTimeout(90_000);
   const { welcome } = await firstRun(page);
   await setStub(page, { login: 'expired' });
-  await welcome.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();await enterNativeEmailCode(page);
+  await enterNativeEmailCode(page);
   await expect(page.getByRole('alert')).toContainText('expired');
-  await page.getByRole('button',{name:'Back',exact:true}).click();
   await nothingLeft(page, welcome, true);
 });
 
 test('first run: Cloud refusing the new key (401 on the account read) removes it and the resident runs without AI', async ({ page }) => {
   test.setTimeout(90_000);
   const { welcome } = await firstRun(page, { userStatus: 401 });
-  await welcome.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();await enterNativeEmailCode(page);
+  await enterNativeEmailCode(page);
   await expect(welcome.getByRole('alert')).toBeVisible({ timeout: 30_000 });
   await expect(welcome).not.toContainText(/pair/i);
   expect(await stub(page, s => s.order.filter((entry: string) => entry.startsWith('store') || entry === 'remove cloud key'))).toEqual(['store first-run-key', 'remove cloud key']);
@@ -177,7 +176,7 @@ test('first run: recovered provider restart clears its stale startup error', asy
   test.setTimeout(120_000);
   const { foreign, welcome } = await firstRun(page);
   await setStub(page, { start: 'reject-once' });
-  await welcome.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true }).click();await enterNativeEmailCode(page);
+  await enterNativeEmailCode(page);
   // Successful sign-in now continues into access setup; the recovered start must leave no error anywhere.
   await expect(welcome).toHaveCount(0, { timeout: 30_000 });
   await expect(page.locator('dialog.alpha-startup-permissions')).toBeVisible();
