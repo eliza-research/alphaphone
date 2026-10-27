@@ -2903,6 +2903,7 @@ export function ConnectionChooser() {
   const savedSignInRejected=snapshot.error===errorMessage({status:401});
   const savedSignInOffered=residentCloudFlow()&&!snapshot.cloudAccount&&snapshot.residentSavedCredential===true&&!savedSignInRejected;
   const membershipControls=snapshot.cloudAccount&&<CloudMembershipControls key={`${snapshot.cloudAccount.environment}:${snapshot.cloudAccount.userId}:${snapshot.cloudAccount.organizationId}:${snapshot.cloudAccount.credentialId}`} email={snapshot.cloudAccount.email} credits={snapshot.membershipCredits} plan={snapshot.membershipPlan} endsAt={snapshot.planEndsAt} balance={snapshot.membershipBalance??'unavailable'} busy={snapshot.busy} error={snapshot.redeemError} connectionError={snapshot.error} notice={snapshot.redeemNotice} onRedeem={code=>connectionController.residentRedeem(code)} onAddFunds={()=>void connectionController.residentManagePlan()} onRefresh={()=>void connectionController.refreshMembershipBalance()}/>;
+
   const fundingRequired=!!snapshot.cloudAccount&&snapshot.membershipBalance==='zero';
   if((fundingRequired||snapshot.purpose==='plan')&&snapshot.cloudAccount)return <div className="alpha-connection-scrim" data-alpha-billing-overlay="true" data-alpha-membership-sheet="true"><div className="alpha-connection" role="dialog" aria-modal="true" aria-labelledby="alpha-membership-title" tabIndex={-1} ref={panel} data-alpha-membership-panel="true"><div className="alpha-membership-drag-handle" aria-hidden="true"/><header><h1 id="alpha-membership-title" className="serif">Membership &amp; credits</h1><button aria-label="Close membership settings" disabled={snapshot.busy} onClick={()=>connectionController.close()}><span aria-hidden="true" data-alpha-icon="/icons/lucide/x.svg" style={iconStyle("x")}/></button></header>{accountCreatedNotice}{membershipControls}<footer className="alpha-membership-footer"><button type="button" disabled={snapshot.busy} onClick={()=>void connectionController.cloudSignOut()}>Use another account</button></footer>{snapshot.busy&&<button onClick={()=>connectionController.cancel()}>Cancel</button>}</div></div>;
   if(snapshot.purpose==='cloud-account')return <div className="alpha-connection-scrim" {...(snapshot.cloudAccount?{'data-alpha-billing-overlay':'true','data-alpha-membership-sheet':'true'}:{})}><div className="alpha-connection" role="dialog" aria-modal="true" aria-labelledby="cloud-account-title" tabIndex={-1} ref={panel} data-alpha-membership-panel={snapshot.cloudAccount?'true':undefined}>
@@ -2916,6 +2917,7 @@ export function ConnectionChooser() {
     {membershipControls}
     {snapshot.cloudAccount&&<footer className="alpha-membership-footer"><button type="button" disabled={snapshot.busy} onClick={()=>void connectionController.cloudSignOut()}>Use another account</button></footer>}
     {snapshot.message&&<p role="status">{snapshot.message}</p>}{!membershipControls&&snapshot.error&&<p role="alert" className="alpha-connection-error">{residentCloudFlow()&&savedSignInRejected?'Your saved Cloud sign-in is no longer valid.':snapshot.error}</p>}
+
     {snapshot.busy&&<button className="alpha-connection-cancel" onClick={()=>connectionController.cancel()}>Cancel</button>}
   </div></div>;
 
@@ -2931,6 +2933,7 @@ export function ConnectionChooser() {
   // Required sign-in stays focused; a recovery error retains the full connection controls.
   const residentFirstSignIn=residentMustSignIn&&!snapshot.residentSavedCredential&&!residentSignInRejected&&!snapshot.residentRecoveryReason&&!snapshot.error;
   const planPanel=snapshot.purpose==='plan';
+  const residentMembershipVisible=!!snapshot.cloudAccount&&!residentSignInRejected&&(residentNeedsPlan||planPanel);
   // A check that ended without a view (identity or transport failure) is "unavailable", never a stale gate.
   const residentPlanView=snapshot.residentSubscription;
   const residentPlanUnchecked=!residentPlanView||residentPlanView.kind==='checking';
@@ -2956,9 +2959,10 @@ export function ConnectionChooser() {
         <section aria-label={`${serviceName} plan`}><p><strong>{residentPlan.headline}</strong></p>{residentPlan.detail&&<p>{residentPlan.detail}</p>}{snapshot.planEndsAt&&!residentNeedsPlan?<p>Plan runs until {day(snapshot.planEndsAt)}.</p>:null}</section>
         {residentNeedsPlan&&<p role="status">{NEEDS_PLAN_NOTICE}</p>}
         {keyExpiring&&<section aria-label={`${serviceName} sign-in`}><p role="status">{keyExpiresAt<=Date.now()?`Your ${serviceName} sign-in on this phone has expired.`:`Your ${serviceName} sign-in on this phone expires ${day(keyExpiresAt)}.`} Approve this phone again to keep AI available.</p><button disabled={snapshot.busy} onClick={()=>void connectionController.residentCloudLogin()}>Approve this phone again</button></section>}
-        {(residentNeedsPlan||planPanel)&&membershipControls}
-        {!((residentNeedsPlan||planPanel)&&membershipControls)&&snapshot.redeemError&&<p id="alpha-redeem-error" role="alert" className="alpha-connection-error">{snapshot.redeemError}</p>}
-        {snapshot.redeemNotice&&<p role="status">{snapshot.redeemNotice}</p>}
+        {residentMembershipVisible&&membershipControls}
+        {!residentMembershipVisible&&snapshot.redeemError&&<p id="alpha-redeem-error" role="alert" className="alpha-connection-error">{snapshot.redeemError}</p>}
+        {!residentMembershipVisible&&snapshot.redeemNotice&&<p role="status">{snapshot.redeemNotice}</p>}
+
       </>:<p>{residentSignInRejected?(snapshot.error?`Sign in to ${serviceName} again to turn AI back on.`:'Your saved Cloud sign-in is no longer valid.'):residentAiOff}</p>}
       {residentOffline&&<p role="status">{OFFLINE_NOTICE}</p>}
       <div className="alpha-connection-actions">
@@ -2976,6 +2980,7 @@ export function ConnectionChooser() {
     {snapshot.replyNotice&&<p role="status">{snapshot.replyNotice}</p>}
     {snapshot.message&&<p role="status">{snapshot.message}</p>}
     {!(snapshot.cloudAccount&&!residentSignInRejected&&(residentNeedsPlan||planPanel))&&snapshot.error&&<p role="alert">{snapshot.error===errorMessage({status:401})?'Your saved Cloud sign-in is no longer valid.':snapshot.error}</p>}
+
     {snapshot.historyError&&<><p role="status">{snapshot.historyError}</p><button disabled={snapshot.busy} onClick={()=>void connectionController.retrySavedHistory()}>Retry saved conversation</button></>}
     {!residentFirstSignIn&&conversations}
     {!residentFirstSignIn&&actionReview}

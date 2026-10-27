@@ -32,5 +32,18 @@
   "currentPinVerification": "pending",
   "imageBuilt": false,
   "bootTested": false,
-  "deviceAccepted": false
+  "deviceAccepted": false,
+  "finalReviewedHead": "ec71a6856d426a608c1c29beea6183359f710d42",
+  "mergedAs": "23a3234334db7ee5d569ef8f705c11d330b51642",
+  "finalFocusedChecks": {
+    "passed": 20,
+    "failed": 0,
+    "typecheckPassed": true
+  },
+  "finalReviewNotes": [
+    "Cross-turn deduplication only hides exact text for the same completed proposal while its card is in the rendered history; pending, foreign, quoted and offscreen receipts stay visible.",
+    "Browser Calendar links preserve only an already selected test-mocks source; production and native links retain normal authority.",
+    "Native page sharing remains distinct from explicit reading of committed web pages.",
+    "Shared Notes retains storage-access warnings and registers its browser document provider before use."
+  ]
 }

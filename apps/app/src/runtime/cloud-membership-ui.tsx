@@ -13,7 +13,7 @@ function endLabel(endsAt:number):string {
 }
 /** Approved bottom-sheet content; balances and actions remain bound to the current Cloud account. */
 export function CloudMembershipControls({balance,busy,error,connectionError,notice,email,credits,plan,endsAt,onRedeem,onAddFunds,onRefresh}:{balance:MembershipBalance;busy:boolean;error?:string;connectionError?:string;notice?:string;email?:string;credits?:{usd:string;observedAt:number}|null;plan?:SubscriptionView|null;endsAt?:number|null;onRedeem:(code:string)=>Promise<boolean>;onAddFunds:()=>void;onRefresh:()=>void}){
- const code=useRef<HTMLInputElement>(null),pending=useRef(false),codeEntryId=useId();
+ const code=useRef<HTMLInputElement>(null),pending=useRef(false),codeEntryId=useId(),errorId=useId();
  const [codeVisible,setCodeVisible]=useState(false),[submitting,setSubmitting]=useState(false),[submissionError,setSubmissionError]=useState(''),[codeValue,setCodeValue]=useState('');
  const active=plan?.kind==='active',disabled=busy||submitting;
  useEffect(()=>{if(codeVisible)code.current?.focus();},[codeVisible]);
@@ -37,10 +37,10 @@ export function CloudMembershipControls({balance,busy,error,connectionError,noti
    <p className="alpha-membership-support" role="status">{balance==='checking'?'Checking your account…':balance==='unavailable'?'Account details could not be refreshed. You can still redeem a code or check again.':balance==='zero'?'Add funds or use a membership code to ask Alpha.':''}</p>
    <div className="alpha-membership-main-actions"><button type="button" className="alpha-membership-primary" disabled={disabled} onClick={onAddFunds}>Add funds</button>{!codeVisible&&<button type="button" className="alpha-membership-secondary" aria-expanded={false} aria-controls={codeEntryId} disabled={disabled} onClick={()=>setCodeVisible(true)}>Use membership code</button>}</div>
    {codeVisible&&<div id={codeEntryId} className="alpha-membership-code-entry"><form aria-label="Redeem a membership code" onSubmit={event=>void redeem(event)}>
-     <label>Membership code<input ref={code} name="membership-code" value={codeValue} onChange={event=>setCodeValue(event.target.value)} placeholder="Enter code" autoComplete="one-time-code" autoCapitalize="characters" autoCorrect="off" spellCheck={false} data-autofill-ignore="true" maxLength={64} disabled={disabled} required aria-invalid={!!error||!!submissionError||undefined}/></label>
+     <label>Membership code<input ref={code} name="membership-code" value={codeValue} onChange={event=>setCodeValue(event.target.value)} placeholder="Enter code" autoComplete="one-time-code" autoCapitalize="characters" autoCorrect="off" spellCheck={false} data-autofill-ignore="true" maxLength={64} disabled={disabled} required aria-invalid={!!error||!!submissionError||undefined} aria-describedby={error||submissionError?errorId:undefined}/></label>
      <button type="submit" disabled={disabled||!codeValue.trim()}>{submitting?'Redeeming…':'Redeem'}</button>
    </form></div>}
-   {[...new Set([error||submissionError,connectionError].filter((value):value is string=>!!value))].map(value=><p key={value} role="alert">{value}</p>)}{notice&&<p role="status">{notice}</p>}
+   {[...new Set([error||submissionError,connectionError].filter((value):value is string=>!!value))].map((value,index)=><p key={value} id={index===0?errorId:undefined} role="alert">{value}</p>)}{notice&&<p role="status">{notice}</p>}
  </section>;
 }
 

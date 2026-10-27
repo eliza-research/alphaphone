@@ -8,6 +8,7 @@ import {browserReadingSource} from '../browser/reading-source';
 import {sensitiveReadingText} from '../browser/reading-sensitive';
 import {createReadingSupport, READING_UNSUPPORTED_MESSAGE} from '../browser/reading-capability';
 import {webSourceOf} from './summary-source';
+import {browserCalendarScope} from './agent-calendar-adapter';
 import { connectionController, agentPendingText } from '../runtime/connection-ui';
 import { BrowserReviews } from '../browser/review';
 import { browserErrorMessage } from '../browser/browser-errors';
@@ -398,7 +399,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
         onKey:(e:KeyboardEvent)=>{if(e.key==='Enter'){e.preventDefault();findStep(!e.shiftKey);}else if(e.key==='Escape'){e.preventDefault();closeFind();}},
         next:()=>findStep(true),prev:()=>findStep(false),close:()=>closeFind(),nextOp:s.findCount?1:0.3,prevOp:s.findCount?1:0.3},
       host:url?.host || 'Search or type address',path:url ? url.pathname + url.search : '', hasLock:Capacitor.isNativePlatform() && !!url && url.protocol==='https:' && !!info?.committed && !info?.loading && !info?.error,
-      pageContentAvailable:Capacitor.isNativePlatform()||!!info?.committed&&!info.loading&&!info.error&&!info.externalOnly,nativeControls:true,externalBrowserAvailable:Capacitor.isNativePlatform(),openExternalBrowser:()=>void openExternalBrowser(),openPasswordProvider:()=>{api.set({menu:false});api.open('settings',{page:'password-provider'});},openDownloads:()=>{api.set({menu:false});void Browser.downloads({session}).catch(report);},reload:()=>{api.set({menu:false});void command('reload');},stopLoading:()=>{api.set({menu:false});void command('stop');},loading:!!info?.loading,goBack:()=>void command('back'),goFwd:()=>void command('forward'),backOp:info?.canBack?1:0.3,fwdOp:info?.canForward?1:0.3,
+      pageShareAvailable:Capacitor.isNativePlatform(),pageContentAvailable:Capacitor.isNativePlatform()||!!info?.committed&&!info.loading&&!info.error&&!info.externalOnly,nativeControls:true,externalBrowserAvailable:Capacitor.isNativePlatform(),openExternalBrowser:()=>void openExternalBrowser(),openPasswordProvider:()=>{api.set({menu:false});api.open('settings',{page:'password-provider'});},openDownloads:()=>{api.set({menu:false});void Browser.downloads({session}).catch(report);},reload:()=>{api.set({menu:false});void command('reload');},stopLoading:()=>{api.set({menu:false});void command('stop');},loading:!!info?.loading,goBack:()=>void command('back'),goFwd:()=>void command('forward'),backOp:info?.canBack?1:0.3,fwdOp:info?.canForward?1:0.3,
       startEdit:()=>api.set({editing:true,addr:info?.url||'',menu:false}),onAddrKey:(e:KeyboardEvent)=>{ if(e.key==='Enter'){e.preventDefault();void navigate((e.target as HTMLInputElement).value);} else if(e.key==='Escape')api.set({editing:false}); },
       toggleMark:()=>{if((!info?.committed&&!(info?.externalOnly&&!Capacitor.isNativePlatform())) || info.loading || info.error || url?.protocol!=='https:'){api.toast('Load an HTTPS page before bookmarking it.');return;}saveBookmark(info.url);},markLabel:s.marks.includes(info?.url)?'Bookmarked':'Bookmark',markFill:s.marks.includes(info?.url)?'currentColor':'none',libRows:[...(bookmarkRecovery&&s.lib!=='history'?[{title:'Recover saved bookmarks',host:'Saved bookmarks could not be opened. Their original data is retained.',ini:'!',go:openBookmarkRecovery,canRemove:false,removeAria:'',remove:()=>{}}]:[]),...(s.lib==='history'?s.visits:s.marks).map((u:string)=>({title:u,host:u,ini:new URL(u).hostname[0],go:()=>void navigate(u),canRemove:s.lib!=='history',removeAria:'Remove bookmark',remove:()=>saveBookmark(u,false)}))],libEmpty:!(bookmarkRecovery&&s.lib!=='history')&&!(s.lib==='history'?s.visits:s.marks).length,newTab:()=>openNew(false),askPage:()=>void askPage(),readAloud:()=>void readPage(),readingUnavailable:readingSupport?.state==='unavailable',readingNote:READING_UNSUPPORTED_MESSAGE,bookNow:unavailable,cfOk:unavailable,openShare:()=>void sharePage(),shareEmail:()=>sharePageEmail(),
       tabCards:s.tabs.map((tab:Bag)=>{const page=known(tab.id),label=page?.title||(tab.priv?'New private tab':'New tab');return {title:page?.title || page?.url || (tab.priv?'New private tab':'New tab'),host:(tab.priv?'Private · ':'')+(page?.url||''),css:tab.id===s.cur?'box-shadow:inset 0 0 0 2px var(--acc)':'',prev:tab.priv?'background:var(--fg);opacity:.85':'background:var(--s2)',aria:'Switch to '+(tab.priv?'private tab ':'')+label,closeAria:tab.priv?'Close private tab':'Close tab',pick:()=>api.set({cur:tab.id,tabsOpen:false}),close:()=>{ const rest=state().tabs.filter((t:Bag)=>t.id!==tab.id); const fallback=newTabId();if(created.has(tab.id))void Browser.close({session,id:tab.id}).catch(report);created.delete(tab.id);metadata.delete(tab.id);restored.delete(tab.id);api.set({tabs:rest.length?rest:[{id:fallback,hist:['newtab'],pos:0}],cur:state().cur===tab.id?(rest[0]?.id||fallback):state().cur}); }};}),
@@ -471,7 +472,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     if(reading && event.id===state()?.cur && (event.loading || event.error || event.navigation!==previous?.navigation || event.url!==previous?.url)) stopReading();
     if ((event.url && event.url !== previous?.url) || (event.loading && !previous?.loading))
       documentRevisions.set(event.id, (documentRevisions.get(event.id) || 0) + 1);
-    const committedPage = Capacitor.isNativePlatform() && !!event.url && !!event.committed && !event.loading && !event.error;
+    const committedPage = !!event.url && !!event.committed && !event.loading && !event.error && !event.externalOnly;
     // Embedded web pages report real commits too; an external-only fallback never gains reading authority.
     metadata.set(event.id,{...metadata.get(event.id),...event,...(event.externalOnly?{committed:false}:{}),...(committedPage?{savedUrl:event.url}:{})});
     // Private tabs never enter history or saved tabs.
@@ -509,7 +510,12 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     const next=JSON.stringify(payload);
     if(next!==lastGeometry){lastGeometry=next;return Browser.present(payload).catch(()=>{lastGeometry='';});}
   };
-  const openBrowserView = (event: Event) => shell?.openView((event as CustomEvent<string>).detail);
+  const openBrowserView = (event: Event) => {
+    const view=(event as CustomEvent<string>).detail;
+    // Browser-provider links keep a source the user already selected. Ordinary
+    // Calendar entry still starts at Agent Calendar; this scope is test-only.
+    shell?.openView(view,view==='calendar'&&browserCalendarScope(shell)?{calendarAuthority:'browser-local'}:undefined);
+  };
   window.addEventListener('alpha:browser-open-view', openBrowserView);
   window.addEventListener('alpha:bookmarks-document-changed',refreshBookmarks);
   const timer=window.setInterval(update,100);
