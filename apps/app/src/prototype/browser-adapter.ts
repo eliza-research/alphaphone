@@ -1,4 +1,6 @@
 import {parseNativeHistoryCommand} from "../../../../.eliza/client-features/plugins/plugin-browser/src/native-client-command.ts";
+import {parseBrowserAddressInput} from "../../../../.eliza/client-features/plugins/plugin-native-browser-surface/src/address-input.ts";
+import {browsingSnapshot, restoreBrowsing, DEFAULT_BROWSING_LIMITS} from "../../../../.eliza/client-features/plugins/plugin-native-browser-surface/src/browsing-session.ts";
 import { registerPlugin } from '../platform-plugins';
 import { Capacitor } from '@capacitor/core';
 import { DailyApps } from '../daily';
@@ -11,7 +13,7 @@ import {webSourceOf} from './summary-source';
 import { connectionController, agentPendingText } from '../runtime/connection-ui';
 import { BrowserReviews } from '../browser/review';
 import { browserErrorMessage } from '../browser/browser-errors';
-import { browsingSnapshot, restoreBrowsing, MAX_SAVED_TABS as MAX_TABS, MAX_SAVED_HISTORY as MAX_HISTORY } from '../browser/browsing-session';
+const {tabs: MAX_TABS, history: MAX_HISTORY} = DEFAULT_BROWSING_LIMITS;
 type Bag = Record<string, any>;
 const Browser = registerPlugin<any>('AlphaBrowser');
 const PROFILE_UNSUPPORTED_NATIVE_MESSAGE='This Android WebView does not support isolated browser profiles';
@@ -169,18 +171,15 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
   async function navigate(raw: string, newTab = false, approvedSignal?: AbortSignal, privateTab = false, background = false) {
     let url: URL;
     try {
-      const input = raw.trim();
-      if (!input || input.length > 4096 || /[\u0000-\u001f\u007f]/.test(input)) throw new Error();
-      const scheme = /^[a-z][a-z0-9+.-]*:/i.test(input);
-      const address = !/\s/.test(input) && (/^(?:localhost|\[[0-9a-f:]+\]|[^/?#]+\.[^/?#]+)(?::\d+)?(?:[/?#]|$)/i.test(input));
-      if (scheme || address) {
-        const hostPort = address && /^[^/?#]+:\d+(?:[/?#]|$)/.test(input);
-        url = new URL(scheme && !hostPort ? input : 'https://' + input);
-        if (!['https:', 'http:'].includes(url.protocol) || !url.hostname || url.username || url.password || /\s/.test(input)) throw new Error();
-      } else {
+      // The shared address-bar classification; Alpha keeps its length bound, HTTPS default and search provider.
+      if (raw.trim().length > 4096) throw new Error();
+      const input = parseBrowserAddressInput(raw, {defaultProtocol: 'https:'});
+      if (input.kind === 'rejected') throw new Error();
+      if (input.kind === 'url') { url = new URL(input.href); if (!url.hostname) throw new Error(); }
+      else {
         // Submit only on Enter. No suggestions, background query traffic or agent upload.
         url = new URL('https://www.google.com/search');
-        url.searchParams.set('q', input);
+        url.searchParams.set('q', input.query);
       }
     } catch { if (approvedSignal) throw new Error('Invalid approved browser destination'); report(new Error('Enter search words or a valid HTTP or HTTPS address without credentials.')); return; }
     const s = state(); if (!s) { if (approvedSignal) throw new Error('Browser unavailable'); return; }
@@ -322,7 +321,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
       // Restored tabs load (an ordinary GET of the last committed address)
       // only when the tab is shown; nothing is resubmitted.
       for (const tab of next.restored) restored.set(tab.id, { url: tab.url, title: tab.title });
-      if (next.tabs) shell.vset('browser', { tabs: next.tabs, cur: next.cur, visits: next.visits });
+      if (next.restored.length) shell.vset('browser', { tabs: next.restored.map(tab => ({ id: tab.id, hist: ['newtab'], pos: 0 })), cur: next.cur, visits: next.visits });
       else if (next.visits.length !== s.visits.length) shell.vset('browser', { visits: next.visits });
       sessionHydrated = true;
       lastSaved = JSON.stringify(savedSnapshot());

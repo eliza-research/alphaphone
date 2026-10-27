@@ -73,6 +73,8 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/ui/src/voice/pcm-wave.ts',
   "packages/ui/src/utils/reminder-presentation.ts",
   "plugins/plugin-browser/src/native-client-command.ts",
+  'plugins/plugin-native-browser-surface/src/address-input.ts',
+  'plugins/plugin-native-browser-surface/src/browsing-session.ts',
   'packages/core/src/types/plugin.ts',
   'packages/core/src/types/components.ts',
   'packages/core/src/types/model.ts',
