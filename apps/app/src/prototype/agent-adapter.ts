@@ -375,7 +375,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     if(shell.canonicalNotesKey===key&&(key===null||shell.canonicalNotesUi?.controller.current))return;
     const previous=shell.canonicalNotesUi;shell.canonicalNotesUi=null;shell.canonicalNotesKey=key;previous?.retire();
     shell.notesSelectionKey=null;shell.notesSelection=null;shell.notesStorageFailed=true;shell.notesPending=0;
-    if(!port){shell.notesReady=Promise.resolve();originalSet.call(shell,'notes',{list:[],open:null,trash:[],trashOpen:false,storageStatus:'Opening Notes…'});return;}
+    if(!port){shell.notesReady=Promise.resolve();originalSet.call(shell,'notes',{list:[],open:null,trash:[],trashOpen:false,storageStatus:'Waiting for an agent connection to open Notes.'});return;}
     let binding:CanonicalNotesUi;
     const paint=()=>{if(shell.live&&shell.canonicalNotesUi===binding)shell.setState({},()=>context(shell));};
     binding=new CanonicalNotesUi(port,{paint,review:paint,committed:()=>paint()});
