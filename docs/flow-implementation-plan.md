@@ -120,6 +120,24 @@ Controller/storage and rendered browser campaigns cover the implemented boundari
 full repository verification is tracked on the PR. No APK build or physical keyboard,
 process-death, encrypted-storage or device acceptance is implied by browser evidence.
 
+October 27 source move: the controller, the draft row and its compare-and-exchange stores
+are shared Eliza code (`packages/ui/src/state/durable-draft-controller.ts` and
+`durable-draft.ts`, consumed through the pin's client projection). Alpha keeps only its
+installed identities and adapters: `assistant-draft:v1:` plus the binding hash as the
+Android secure slot, `alpha.browser.` documents in the browser, and the recovery dialog's
+capture shape (`runtime/assistant-draft-store.ts`, `native-assistant-draft-recovery.ts`).
+`prototype/assistant-draft-controller.ts` and `runtime/assistant-draft-record.ts` only
+re-export the shared code under their existing names. The send protocol is unchanged:
+hold keeps the saved copy while a message is in flight, release returns it only when
+dispatch certainly did not happen, and commit clears it after a dispatch or an unknown
+outcome, so an uncertain message is never offered for a second send.
+`test/browser/chat-continuity.production.spec.ts` runs the flag-off bundle with the
+resident stub: the device draft slot survives HOME, Back, a keyboard-sized resize (same
+field, focus and selection) and a restart; a held reply survives Back from full to sheet
+and HOME on Home and is shown once; the transcript keeps its reading position through the
+same steps. That is renderer source evidence only (class S), not IME, Android Back/HOME or
+device acceptance.
+
 ## Upstream extraction and native integration packages
 
 Do not modify `vendor/eliza` as a shortcut or activate `base/eliza-app` as the product. Generic additions are reviewed upstream commits that reach this repository through a reviewed pin move in `upstream.lock.json` (the `patches/eliza` series is historical, retired in `34b3c82a`). Keep `upstream.lock.json` consistent with an intentional submodule upgrade. The local DailyApps intent dispatcher is an interim product handoff adapter; avoid expanding it into a second shared platform implementation.

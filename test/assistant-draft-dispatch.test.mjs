@@ -1,6 +1,11 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {stripTypeScriptTypes} from 'node:module';
-const code=stripTypeScriptTypes(readFileSync('apps/app/src/prototype/assistant-draft-controller.ts','utf8'),{mode:'transform'});
-const {AssistantDraftController}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+// Alpha's composer contract, run against the shared controller exactly as the pin projects it
+// (apps/app/src/prototype/assistant-draft-controller.ts only re-exports it under Alpha's name).
+const code=stripTypeScriptTypes(readFileSync(new URL('../.eliza/client-features/packages/ui/src/state/durable-draft-controller.ts',import.meta.url),'utf8'),{mode:'transform'});
+const {DurableDraftController:AssistantDraftController}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+test('Alpha binds its draft controller name to the shared implementation',()=>{
+ assert.match(readFileSync(new URL('../apps/app/src/prototype/assistant-draft-controller.ts',import.meta.url),'utf8'),/export \{DurableDraftController as AssistantDraftController\} from '\.\.\/\.\.\/\.\.\/\.\.\/\.eliza\/client-features\/packages\/ui\/src\/state\/durable-draft-controller\.ts';/);
+});
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const record=(text,revision='1')=>({version:1,binding:'test',revision,text});
 function fixture(){let text='',saved=null;const store={async read(){return saved;},async save(expected,value){assert.deepEqual(expected,saved);return saved=record(value,String(Number(saved?.revision||0)+1));}};const c=new AssistantDraftController(async()=>store,()=>text,value=>{text=value;},()=>{});return {c,store,set:value=>{text=value;c.edit(value);},get:()=>text,saved:()=>saved,external:value=>{saved=record(value,'external');}};}

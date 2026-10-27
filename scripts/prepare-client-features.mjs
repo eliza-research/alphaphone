@@ -165,6 +165,8 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/core/src/views/view-action-handoff.ts',
   'packages/core/src/views/completed-action-navigation.ts',
   'packages/ui/src/platform/browser-document-store.ts',
+  'packages/ui/src/state/durable-draft.ts',
+  'packages/ui/src/state/durable-draft-controller.ts',
   'packages/contracts/src/native-notes-query.ts',
   'packages/contracts/src/device-reviews.ts',
   'packages/contracts/src/calendar-linked-sync.ts',
