@@ -9,7 +9,9 @@ import {DailyApps} from '../daily';
 import {registerPlugin} from '../platform-plugins';
 import {speakNote,stopSpeaking} from './local-speech-playback';
 type Bag=Record<string,any>;
-const documents=registerPlugin<{exportText(input:{title:string;text:string}):Promise<{status:string;message:string}>}>('AlphaNoteDocuments');
+const documents=registerPlugin<{exportText(input:{title:string;text:string}):Promise<{status:string;message:string}>}>('AlphaNoteDocuments',{
+ web:()=>import('../runtime/browser-note-documents').then(module=>new module.BrowserNoteDocuments()),
+});
 const identity=(port:AppRecordPort)=>JSON.stringify([port.sessionId,port.scope??null,port.identity.ownerId,port.identity.agentId,port.identity.sessionId,port.identity.origin]);
 const row=(note:StickyNote)=>({...structuredClone(note.format?.data??{}),...projectNoteForModel(note),id:note.id,kind:note.format?.kind??'text'});
 
