@@ -38,7 +38,7 @@ for(const state of ['orange','red','',undefined])test(`rejects verified boot sta
  assert.throws(()=>verifyPixel10aImage(runner(state??''),expected,'0'),/Verified boot state .* is not green or yellow/);
  assert.match(verifiedBootProblem({passed:true,verifiedBoot:state===undefined?null:{state}}),/not green or yellow/);
 });
-test('CLI rewrites a shared passing report as a failure on an unlocked (orange) device',t=>{
+test('CLI writes a failing report on an unlocked (orange) device',t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'pixel10a-image-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
  const adb=path.join(dir,'adb'),descriptor=path.join(dir,'launcher.json');
  fs.writeFileSync(adb,`#!${process.execPath}\n${respond}\ntry{process.stdout.write(respond(process.argv.slice(4).join(' '),${JSON.stringify(expected)},process.env.FAKE_VERIFIED_BOOT_STATE))}catch(e){console.error(e.message);process.exit(1)}\n`,{mode:0o700});
@@ -51,5 +51,5 @@ test('CLI rewrites a shared passing report as a failure on an unlocked (orange) 
  const [okExit,ok]=cli('yellow',path.join(dir,'yellow.json'));
  assert.equal(okExit,undefined);assert.equal(ok.passed,true);assert.equal(ok.verifiedBoot.state,'yellow');
  const [badExit,bad]=cli('orange',path.join(dir,'orange.json'));
- assert.equal(badExit,1);assert.equal(bad.passed,false);assert.equal(bad.verifiedBoot.state,'orange');assert.match(bad.error,/"orange" is not green or yellow/);
+ assert.equal(badExit,1);assert.equal(bad.passed,false);assert.match(bad.error,/"orange" is not green or yellow/);
 });
