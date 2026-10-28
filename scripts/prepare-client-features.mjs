@@ -187,6 +187,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-notes/test/notes-trash-maintenance.test.mjs',
   'plugins/plugin-notes/test/notes-trash-schedule.test.mjs',
   'packages/cloud/sdk/src/subscription-entitlement.ts',
+  'packages/auth/src/auth/native-cloud-sign-in.ts',
 ];
 /** Copy authenticated upstream source outside the immutable vendor checkout. */
 export function prepareClientFeatures({ root = projectRoot, projectVoice = true } = {}) {
