@@ -1,6 +1,8 @@
 # Current MVP status
 
-Current local integration candidate: SDK `8cc623855ce49cab68f9ed321b206abcad4d5c0b` on the independently qualified account-restore product c27544f5. This small causal successor exposes existing exclusive Calendar read-window metadata to promoted tools. Native input Git objects and dependency lock input are unchanged. Product typechecking, production bundling, the 419-file audit and 85 owning/source checks pass with no skips. A fresh full-lock registry audit reports 140 unresolved/dispositioned findings, including 16 new rows; no new exception or release clearance is granted. Actual Calendar performance, Android account/provider restoration and phone acceptance retain separate receipts.
+Current local integration candidate: SDK `ea0899fd7f19b2bf3552127d6566c15e23b4c303` joins the reviewed public SDK, recovery, Power and Calendar alias/diagnostic source. Product types, bundle and browser qualification are in progress. Actual Calendar database effects, live browser behavior, final native artifact/image acceptance and independent final approval remain open. Existing native binary records remain unqualified; the small 9a/8cc APK is separate. Retained full-lock audit findings are rebound after exact lock identity, with no fresh registry query or exception changes.
+
+Previous source checkpoint: Current local integration candidate: SDK `8cc623855ce49cab68f9ed321b206abcad4d5c0b` on the independently qualified account-restore product c27544f5. This small causal successor exposes existing exclusive Calendar read-window metadata to promoted tools. Native input Git objects and dependency lock input are unchanged. Product typechecking, production bundling, the 419-file audit and 85 owning/source checks pass with no skips. A fresh full-lock registry audit reports 140 unresolved/dispositioned findings, including 16 new rows; no new exception or release clearance is granted. Actual Calendar performance, Android account/provider restoration and phone acceptance retain separate receipts.
 
 Previous source admission: SDK `6497825b38cbe41b3677c0a445341fec900f0dd2` is the reviewed Eliza develop snapshot admitted on October 27 UTC, following the develop merge of elizaOS/eliza#37971. All six original open PR heads are integrated in the candidate branch; main still requires independent review. Exact native and voice source comparisons are recorded in `docs/evidence/merge-build-native-source-2026-10-26.json`; current build evidence remains bound to its recorded source and artifact hashes. No new device or user acceptance is claimed.
 
@@ -79,9 +81,9 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-Current source projection: SDK `8cc623855c` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
+Current source projection: SDK `ea0899fd7f` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
 
-The current upstream source pin is `8cc623855c` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
+The current upstream source pin is `ea0899fd7f` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 
