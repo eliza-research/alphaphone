@@ -1,6 +1,7 @@
 import {seedCompletedAccessSetup} from './flag-off-android';
 import { completeAccessSetup } from './flag-off-android';
 import { test, expect, type Page } from '@playwright/test';
+import { installResidentAgentPlugin } from './helpers/resident-agent-plugin';
 
 // B-13 on the FLAG-OFF bundle with the Android bridge stubbed (docs/core-loop-audit.md).
 //
@@ -31,6 +32,7 @@ const card = [
 ];
 
 async function residentAgent(page: Page, operation: unknown, capabilities: string[]) {
+  await installResidentAgentPlugin(page);
   await page.addInitScript(({ agentId, operation, capabilities }) => {
     const w = window as any;
     w.androidBridge = {};
@@ -38,6 +40,7 @@ async function residentAgent(page: Page, operation: unknown, capabilities: strin
     const future = Date.now() + 86_400_000, account = '9f1dc45a-4011-4e44-947a-30d999d24fa5';
     store.set('cloud:production', JSON.stringify({ token: 'synthetic-cloud-key', credentialId: account, expiresAt: future }));
     const f = w.declineFixture = { decisions: [] as string[], reconciliations: [] as unknown[], effects: 0, journal: [] as string[], unexpected: [] as string[], proposals: [] as any[], installationId: '', calendar: [] as any[], receipts: [] as any[], entry: null as any, lists: 0 };
+    const resident = w.residentAgent = w.createResidentAgentPlugin({ owner: () => 'fixture-owner', agentId, unexpected: f.unexpected });
     const proposal = (id: string, state: string, extra: Record<string, unknown> = {}) => ({
       id, digest: 'a'.repeat(64), state, expiresAt: new Date(future).toISOString(),
       subjectUserId: 'fixture-owner', requestedBy: agentId, action: 'device_action',
@@ -82,13 +85,14 @@ async function residentAgent(page: Page, operation: unknown, capabilities: strin
       PluginHeaders: [
         { name: 'AlphaDeletions', methods: methods(['pending']) },
         { name: 'DeviceApps', methods: methods(['buildInfo']) },
-        { name: 'Agent', methods: methods(['getStatus', 'start', 'stop', 'configureCloudProvider', 'request', 'providerStatus']) },
+        { name: 'Agent', methods: resident.methods(['getStatus', 'start', 'stop', 'configureCloudProvider', 'request', 'providerStatus']) },
         { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite', 'secureRemove', 'secureCompareExchange', 'request', 'cancel', 'openExternal', 'addListener', 'removeListener', 'pauseNotificationCollection']) },
         { name: 'AlphaActionJournal', methods: methods(['reserve', 'markApplying', 'finish', 'list', 'get']) },
         { name: 'AlphaNotifications', methods: methods(['status', 'crossAppStatus', 'addListener', 'removeListener']) },
         { name: 'AlphaVoiceCloud', methods: methods(['checkPermissions']) },
         { name: 'AlphaCalendar', methods: methods(['requestAccess', 'executeAgent', 'cancelAgent', 'calendars', 'range', 'listAlerts', 'prepareAgentSource', 'addListener', 'removeListener']) },
       ],
+      nativeCallback: resident.nativeCallback,
       nativePromise: async (plugin: string, method: string, input: any) => {
         if (plugin === 'AlphaDeletions' && method === 'pending') return { deletions: [] };
         if (plugin === 'DeviceApps') return { launcher: false, version: 'decline-fixture' };
@@ -115,6 +119,7 @@ async function residentAgent(page: Page, operation: unknown, capabilities: strin
           return {};
         }
         if (plugin === 'Agent') {
+          const owned = resident.answer(method, input); if (owned) return owned;
           if (method === 'getStatus') return { packaged: true, state: 'stopped', serviceActive: false, socketListening: false };
           if (method === 'providerStatus') return { provider: 'cerebras', configured: true, model: 'qwen-3.8-27b' };
           if (method === 'request') {

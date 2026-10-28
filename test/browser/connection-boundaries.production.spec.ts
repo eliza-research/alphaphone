@@ -1,6 +1,7 @@
 import { cloudStorageSlot } from '../../apps/app/src/runtime/cloud-deployment.generated';
 import {seedCompletedAccessSetup} from './flag-off-android';
 import { test, expect, type Page, type Route } from '@playwright/test';
+import {installResidentAgentPlugin} from './helpers/resident-agent-plugin';
 import { openYourAgent, completeAccessSetup } from './flag-off-android';
 // Flag-off production bundle only. Android cases stub the Capacitor bridge in a desktop browser and
 // saved remote selections must never reconnect. Nothing here contacts
@@ -31,9 +32,11 @@ interface NativeCall { plugin: string; method: string; slot?: string; url?: stri
 interface AndroidOptions { selection?: unknown; remoteCredential?: boolean; cloudCredential?: boolean; balance?: number; revoke?: RevokeMode; packaged?: boolean; start?: 'reject' | 'starting' }
 /** Production Android as the renderer sees it: resident Agent plugin plus AlphaConnection storage and transport. */
 async function android(page: Page, options: AndroidOptions) {
+  await installResidentAgentPlugin(page);
   await page.addInitScript(({ options, SELECTION, origin, owner, token }) => {
     const w = window as any; w.androidBridge = {}; w.nativeCalls = [];
     const id = '9f1dc45a-4011-4e44-947a-30d999d24fa5';
+    const resident = w.residentAgent = w.createResidentAgentPlugin({ owner: () => id, agentId: id });
     // Secure slots survive reload like Keystore-backed storage; the selection is seeded once.
     const values: Record<string, string> = JSON.parse(sessionStorage.getItem('secure-fixture') || 'null') ?? {
       ...(options.remoteCredential ? { [`remote:${origin}`]: JSON.stringify({ origin, token, identityId: owner, sessionId: token, expiresAt: Date.now() + 3_600_000 }) } : {}),
@@ -46,14 +49,14 @@ async function android(page: Page, options: AndroidOptions) {
     w.Capacitor = { PluginHeaders: [
         { name: 'AlphaDeletions', methods: methods(['pending']) },
       { name: 'DeviceApps', methods: methods(['buildInfo']) },
-      { name: 'Agent', methods: methods(['getStatus', 'start', 'stop', 'configureCloudProvider', 'clearProvider', 'providerStatus', 'request']) },
+      { name: 'Agent', methods: resident.methods(['getStatus', 'start', 'stop', 'configureCloudProvider', 'clearProvider', 'providerStatus', 'request']) },
       { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite', 'secureRemove', 'secureCompareExchange', 'request', 'cancel', 'openExternal']) },
       { name: 'AlphaNotifications', methods: methods(['status', 'crossAppStatus', 'addListener', 'removeListener']) },
       { name: 'AlphaHostedResults', methods: methods(['disableBackground']) },
       { name: 'AlphaVoiceCloud', methods: methods(['checkPermissions']) },
       // P-43: a running resident's hosted background delivery is retired on sign-out.
       { name: 'AlphaHostedResults', methods: methods(['disableBackground']) },
-    ], nativePromise: async (plugin: string, method: string, input: any) => {
+    ], nativeCallback: resident.nativeCallback, nativePromise: async (plugin: string, method: string, input: any) => {
         if (plugin === 'AlphaDeletions' && method === 'pending') return { deletions: [] };
       w.nativeCalls.push({ plugin, method, slot: input?.slot, url: input?.url, http: input?.method, authorization: input?.headers?.Authorization, path: input?.path });
       if (plugin === 'AlphaHostedResults') return {};
@@ -62,6 +65,7 @@ async function android(page: Page, options: AndroidOptions) {
       if (plugin === 'AlphaVoiceCloud') return { microphone: 'granted' };
       if (plugin === 'AlphaHostedResults' && method === 'disableBackground') return {};
       if (plugin === 'Agent') {
+        const owned = resident.answer(method, input); if (owned) return owned;
         if (method === 'getStatus') return { packaged: options.packaged !== false, state: 'stopped', serviceActive: false, socketListening: false };
         // A held unbind lets a test cancel sign-out before any revocation request is issued.
         if (method === 'clearProvider') { if (w.holdStop) await new Promise<void>(resolve => { w.releaseStop = resolve; }); return { configured: false }; }

@@ -1,6 +1,7 @@
 import {seedCompletedAccessSetup} from './flag-off-android';
 import {completeAccessSetup, openYourAgent} from './flag-off-android';
 import { test, expect, type Page } from '@playwright/test';
+import {installResidentAgentPlugin} from './helpers/resident-agent-plugin';
 
 // A Cloud sign-in kept on the phone after a restart, under decision P-43 (resident agent always
 // present). An older build's "local apps without AI" choice is stored; it now reads as the resident.
@@ -16,27 +17,30 @@ type Mode = 'offline' | 'rejected' | 'funded';
 type Call = { plugin: string; method: string; path?: string; url?: string; slot?: string };
 
 async function boot(page: Page, mode: Mode) {
+  await installResidentAgentPlugin(page);
   await page.addInitScript(mode => {
     const w = window as any; w.androidBridge = {}; w.residentCalls = [];
     const id = '9f1dc45a-4011-4e44-947a-30d999d24fa5';
+    const resident = w.residentAgent = w.createResidentAgentPlugin({ owner: () => id, agentId: id });
     // The state an older build's restart leaves: local apps chosen, and a sign-in still in the keystore.
     if (!sessionStorage.getItem('saved-signin-fixture')) { sessionStorage.setItem('saved-signin-fixture', '1'); localStorage.setItem('alpha.connection.selection.v1', JSON.stringify({ kind: 'offline', localApps: true })); }
     const values: Record<string, string> = { 'cloud:production': JSON.stringify({ token: 'synthetic-cloud-key', credentialId: id, expiresAt: Date.now() + 600000 }) };
     const methods = (names: string[]) => names.map(name => ({ name, rtype: 'promise' }));
     w.Capacitor = { PluginHeaders: [
       { name: 'DeviceApps', methods: methods(['buildInfo']) },
-      { name: 'Agent', methods: methods(['getStatus', 'start', 'stop', 'configureCloudProvider', 'clearProvider', 'providerStatus', 'request']) },
+      { name: 'Agent', methods: resident.methods(['getStatus', 'start', 'stop', 'configureCloudProvider', 'clearProvider', 'providerStatus', 'request']) },
       { name: 'AlphaCloudSignIn', methods: methods(['status']) },
       { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite', 'secureRemove', 'secureCompareExchange', 'request', 'cancel', 'openExternal']) },
       { name: 'AlphaNotifications', methods: methods(['status', 'crossAppStatus', 'addListener', 'removeListener']) },
       { name: 'AlphaVoiceCloud', methods: methods(['checkPermissions']) },
-    ], nativePromise: async (plugin: string, method: string, input: any) => {
+    ], nativeCallback: resident.nativeCallback, nativePromise: async (plugin: string, method: string, input: any) => {
       w.residentCalls.push({ plugin, method, path: input?.path, url: input?.url, slot: input?.slot });
       if (plugin === 'AlphaCloudSignIn' && method === 'status') return { active: false, inApp: true, email: true, google: false };
       if (plugin === 'DeviceApps') return { launcher: false, version: 'saved-signin-fixture' };
       if (plugin === 'AlphaNotifications') return { permissionGranted: true, appEnabled: true };
       if (plugin === 'AlphaVoiceCloud') return { microphone: 'granted' };
       if (plugin === 'Agent') {
+        const owned = resident.answer(method, input); if (owned) return owned;
         if (method === 'getStatus') return { packaged: true, state: 'stopped', serviceActive: false, socketListening: false };
         if (method === 'clearProvider') return { configured: false };
         if (method === 'providerStatus') return { provider: 'elizacloud', configured: false };
