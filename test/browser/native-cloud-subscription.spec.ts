@@ -644,3 +644,46 @@ test('failed native provider binding reports AI off and exposes the error before
 
 // UI progress only: this feature fixture does not manufacture OS/provider grants.
 test.beforeEach(async({page})=>seedCompletedAccessSetup(page));
+
+
+test.describe('explicit membership code entry',()=>{
+ async function notice(page:Page){
+  await boot(page,{...await entitlements(),plan:'none',cashBalance:5,holdProvider:false});await started(page);await idle(page);
+  const startup=page.locator('dialog.alpha-startup-permissions');if(await startup.isVisible().catch(()=>false))await completeAccessSetup(page);
+  const notice=page.getByRole('region',{name:'Eliza Cloud plan notice'});await expect(notice).toBeVisible();return notice;
+ }
+ const sheet=(page:Page)=>page.getByRole('dialog',{name:'Membership & credits',exact:true});
+ async function noEffects(page:Page){expect((await calls(page)).filter(c=>c.path==='/api/v1/subscription/redeem'||c.method==='openExternal')).toEqual([]);}
+ test('one explicit Redeem code click reveals and focuses the current account input',async({page},info)=>{
+  const entry=await notice(page);await entry.getByRole('button',{name:'Redeem code',exact:true}).click();
+  const input=sheet(page).getByRole('textbox',{name:'Membership code',exact:true});await expect(input).toBeVisible();await expect(input).toBeFocused();
+  await page.screenshot({path:info.outputPath('explicit-code-mobile.png'),animations:'disabled'});await page.setViewportSize({width:1280,height:900});await expect(input).toBeVisible();await page.screenshot({path:info.outputPath('explicit-code-desktop.png'),animations:'disabled'});
+  await input.fill('SYNTHETIC-UNSUBMITTED');await sheet(page).getByRole('button',{name:'Refresh',exact:true}).click();await expect(input).toHaveValue('SYNTHETIC-UNSUBMITTED');
+  await noEffects(page);
+ });
+ test('closing explicit entry retires its draft and ordinary plan entry stays collapsed',async({page})=>{
+  const entry=await notice(page);await entry.getByRole('button',{name:'Redeem code',exact:true}).click();
+  const input=sheet(page).getByRole('textbox',{name:'Membership code',exact:true});await expect(input).toBeFocused();await input.fill('SYNTHETIC-OLD-DRAFT');
+  await sheet(page).getByRole('button',{name:'Close membership settings',exact:true}).click();
+  await page.evaluate(()=>(window as any).planController.openPlan());await expect(sheet(page)).toBeVisible();await expect(sheet(page).getByRole('textbox',{name:'Membership code',exact:true})).toHaveCount(0);
+  await sheet(page).getByRole('button',{name:'Use membership code',exact:true}).click();const fresh=sheet(page).getByRole('textbox',{name:'Membership code',exact:true});await expect(fresh).toHaveValue('');await expect(fresh).toBeFocused();await noEffects(page);
+ });
+ test('cancelling current controller work retires the explicit draft',async({page})=>{
+  const entry=await notice(page);await entry.getByRole('button',{name:'Redeem code',exact:true}).click();
+  const input=sheet(page).getByRole('textbox',{name:'Membership code',exact:true});await input.fill('SYNTHETIC-CANCELLED');
+  await page.evaluate(()=>(window as any).planController.cancel());await expect(input).toHaveCount(0);
+  await sheet(page).getByRole('button',{name:'Use membership code',exact:true}).click();await expect(input).toHaveValue('');await expect(input).toBeFocused();await noEffects(page);
+ });
+ test('Settings Redeem code opens the existing field directly',async({page})=>{
+  await boot(page,{...await entitlements(),plan:'none',cashBalance:5,holdProvider:false,fullApp:true});await started(page);await idle(page);
+  await page.getByRole('button',{name:'Settings',exact:true}).click();
+  await page.getByRole('button',{name:'Eliza Cloud account & plan',exact:true}).click();
+  await page.getByRole('region',{name:'Settings',exact:true}).getByRole('button',{name:'Redeem code',exact:true}).click();
+  const input=sheet(page).getByRole('textbox',{name:'Membership code',exact:true});await expect(input).toBeVisible();await expect(input).toBeFocused();await noEffects(page);
+ });
+ test('changing account retires explicit entry without submitting or opening billing',async({page})=>{
+  const entry=await notice(page);await entry.getByRole('button',{name:'Redeem code',exact:true}).click();
+  const input=sheet(page).getByRole('textbox',{name:'Membership code',exact:true});await expect(input).toBeFocused();await input.fill('SYNTHETIC-OLD-ACCOUNT');
+  await sheet(page).getByRole('button',{name:'Use another account',exact:true}).click();await expect(input).toHaveCount(0);await expect.poll(()=>page.evaluate(()=>(window as any).planController.getSnapshot().membershipCodeEntry===true)).toBe(false);await noEffects(page);
+ });
+});

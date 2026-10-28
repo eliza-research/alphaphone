@@ -1074,7 +1074,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         const ic=out.ic||{};
         return {...m,cGeneric:false,cDigest:true,actionReviewClass:'alpha-action-review',rows:[
           {ini:'',who:c.title,text:c.sub,icon:ic.right,open:()=>void connectionController.residentManagePlan()},
-          {ini:'',who:'Use a membership code',text:`Opens the code form for your ${selectedCloudName()} account.`,icon:ic.right,open:()=>connectionController.openPlan()},
+          {ini:'',who:'Use a membership code',text:`Opens the code form for your ${selectedCloudName()} account.`,icon:ic.right,open:()=>connectionController.openPlan({codeEntry:true})},
         ]};
       }
       if(!c.proposalId||c.done||c.reviewUnavailable||!m.cGeneric)return m;
