@@ -127,6 +127,23 @@ compiles the generated copy under `.eliza/patched-native`, never a modified subm
 No source patch is applied during client, worker or resident-runtime builds. Photo edits, capture publication, the opt-in notification mirror and the delivery-receipt
 ledger for Alpha's own workflow and approval notices (`NoticeDelivery`, configured by
 `WorkflowNoticeDelivery`) also use shared native modules. Alpha wrappers retain installed storage names, media paths and Android components.
+The workflow notice tap routes, tap capture, owner fence, approval coordination, journal recovery and poster are the
+shared `NoticeRoutes`, `NoticeTapInbox`, `NoticeOwner`, `NoticeCoordinator`, `NoticeRecovery` and `HostNoticePoster`;
+`WorkflowNoticeTaps`, `WorkflowNoticeDelivery`, `WorkflowNoticePoster` and `AlphaNotificationsPlugin` only supply the
+deployed slot names, channels, icon, tag prefix, launch actions and the foreground and question-excerpt checks. The renderer's notice owner fence, tap resolution, approval notice identity and owner-return
+revalidation are the shared `@elizaos/contracts/notice-routes`. Typed workflows use the shared
+`@elizaos/contracts/phone-workflow` normalizer, and their reviewed local-time triggers run on the resident agent's
+durable task scheduler only while the phone is on (a missed occurrence is recorded, never run late, and its
+receipt offers an explicit Run now through the workflow's reviewed run confirmation); there is no Alpha scheduler. The receipt-checked workflow route client (exact-version activation and runs, approval
+receipts, metadata, removal and restore, typed saves, and reconciliation by submission or mutation identity) is
+the shared `@elizaos/contracts/workflow-client`; `runtime/workflow-protocol.ts` only adds the phone-step review read,
+the digest result routes and the test-mocks development enrollment labels, and always supplies the local transport.
+Modules named `hosted-*` are not Cloud-only and none is dead: `hosted-digests`, `hosted-background`,
+`hosted-digest-ui`, `hosted-live-source-ui`, `hosted-notice-question` and `hosted-result-notices`, with the native
+`Hosted*` classes and `SourceRenewalNotices`, carry the resident digest schedule, its retained results, the
+content-free result and source-renewal notices and their Ask taps. The agent half is upstream
+(`plugin-workflow` `services/hosted-digest.ts`). They belong to the brief and overview path, keep their installed
+channel, tag, action and storage names, and are moved only with that path, not removed because of their names.
 Browser policy helpers are staged from the same authenticated pin. Gradle writes shared
 library outputs under the host build directory, outside the immutable vendor checkout.
 Product wrappers inject presentation, device configuration and installed storage identities. Resident

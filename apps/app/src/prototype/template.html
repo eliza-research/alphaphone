@@ -3621,7 +3621,7 @@
             <sc-if value="{{workflows.b.tr.isTime}}">
               <div style="display: flex; flex-wrap: wrap; gap: 8px">
                 <sc-for list="{{workflows.b.tr.days}}" as="c">
-                  <button onClick="{{c.pick}}" style="height: 38px; padding: 0 14px; border-radius: 19px; font-size: 13.5px; font-weight: 600; {{c.css}}">{{c.label}}</button>
+                  <button onClick="{{c.pick}}" aria-pressed="{{c.pressed}}" style="height: 38px; padding: 0 14px; border-radius: 19px; font-size: 13.5px; font-weight: 600; {{c.css}}">{{c.label}}</button>
                 </sc-for>
               </div>
               <div style="display: flex; align-items: center; gap: 12px; margin-top: 14px">
