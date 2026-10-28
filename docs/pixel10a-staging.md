@@ -280,11 +280,17 @@ node scripts/aosp-ota-update.mjs verify-stock --serial SERIAL
 rollback index, changes the OTA certificate or AVB key, or (incremental) does not start from the
 installed build. `apply` verifies the package against the candidate record and the device
 against the installed record, then sends the package through the device's own recovery
-(`adb reboot sideload`, `adb sideload`; a locked user build verifies it against its otacerts),
-reboots and verifies the candidate on the other slot. Each step is journaled. An interrupted
-run keeps the journal and the device lock; `status` classifies the observed device and a
-repeated `apply` resumes from it without assuming success. `fallback` returns to the original
-slot only before the updated slot is marked successful. `stock-archive` verifies the locked
+(`adb reboot recovery`, then `adb sideload`; a locked user build verifies it against its
+otacerts) and verifies the candidate on the other slot, with verified boot no weaker than
+before. A user build's adbd cannot enter sideload itself (`adb reboot sideload` needs
+`adb root`), so the operator chooses "Apply update from ADB" in recovery when asked, and
+"Reboot system now" if recovery stays in its menu after the installation. Each step is
+journaled. An interrupted run keeps the journal and the device lock; `status` classifies the
+observed device and a repeated `apply` resumes from it without assuming success. `fallback`
+returns to the original slot only before the updated slot is marked successful and, because
+Pixel 10a uses Virtual A/B, only while the bootloader reports a `snapshotted` update (a
+recovery that could not create snapshots overwrites the original slot's dynamic partitions;
+then a compatible release or stock recovery restores the device). `stock-archive` verifies the locked
 factory archive and prints the fastboot plan, which unlocks the bootloader and wipes data and
 is run by the operator; `verify-stock` checks the restored stock build.
 `scripts/verify-pixel10a-image.mjs` checks a booted image read-only (exact fingerprint, Alpha's

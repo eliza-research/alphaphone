@@ -13,8 +13,10 @@
  *   node scripts/aosp-ota-update.mjs stock-archive --archive FACTORY.zip
  *   node scripts/aosp-ota-update.mjs verify-stock --serial S
  *
- * Results are observations for the release owner's drill record; the channel's drills are
- * recorded from executed drills, never by this tool.
+ * `apply` enters recovery with `adb reboot recovery`; the operator chooses "Apply update from
+ * ADB" when asked (a user build's adbd cannot enter sideload itself). Results are observations
+ * for the release owner's drill record; the channel's drills are recorded from executed
+ * drills, never by this tool.
  */
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';

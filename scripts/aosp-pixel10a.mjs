@@ -10,10 +10,12 @@ export {placeholderFields};
 export const PIXEL10A_PRODUCT = 'android/aosp/pixel10a-product.json';
 export const PIXEL10A_COMPOSITION = 'vendor/eliza/packages/os/android/products/pixel10a-alpha.json';
 /**
- * Alpha's binding of the shared Pixel 10a release inputs: its descriptor, the vendored
- * path of the shared source lock and its APK release signer.
+ * Alpha's binding of the shared Pixel 10a release inputs: its product (the
+ * alpha_stallion_phone composition), its descriptor, the vendored path of the shared
+ * source lock and its APK release signer. A descriptor naming another product is refused.
  */
 export const PIXEL10A_RELEASE = Object.freeze({
+  productName: 'alpha_stallion_phone',
   descriptorFile: PIXEL10A_PRODUCT,
   sourceLockPath: 'vendor/eliza/packages/os/android/sources/pixel10a-stallion.json',
   applicationSignerFile: 'android/release-signer.json',
@@ -48,7 +50,7 @@ export function pixel10aProductProblems(root = process.cwd()) {
   if (!fs.existsSync(at(PIXEL10A_PRODUCT))) return [`${PIXEL10A_PRODUCT} is missing`];
   let product;
   try { product = JSON.parse(fs.readFileSync(at(PIXEL10A_PRODUCT), 'utf8')); } catch (error) { return [`${PIXEL10A_PRODUCT} is unreadable: ${error.message}`]; }
-  return releaseDescriptorProblems(product, {root, file: PIXEL10A_PRODUCT, sourceLockPath: PIXEL10A_RELEASE.sourceLockPath, applicationSignerFile: PIXEL10A_RELEASE.applicationSignerFile});
+  return releaseDescriptorProblems(product, {root, file: PIXEL10A_PRODUCT, productName: PIXEL10A_RELEASE.productName, sourceLockPath: PIXEL10A_RELEASE.sourceLockPath, applicationSignerFile: PIXEL10A_RELEASE.applicationSignerFile});
 }
 
 export function writePixel10aProduct({root, output, apk, identity, launcher, sourceEvidence, production = false, bootAnimation = null}) {

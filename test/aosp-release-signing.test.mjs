@@ -128,6 +128,8 @@ test("a complete copy of Alpha's descriptors admits Pixel 10a production staging
   refuse(PIXEL10A_PRODUCT, p => ({ ...p, releaseQualified: true }), /releaseQualified must stay false/);
   refuse(PIXEL10A_PRODUCT, p => ({ ...p, signer: { ...p.signer, apkDescriptor: "android/other-signer.json" } }), /signer\.apkDescriptor must be android\/release-signer\.json/);
   refuse(PIXEL10A_PRODUCT, p => ({ ...p, lunch: { ...p.lunch, production: "alpha_stallion_phone-cp2a-userdebug" } }), /user build/);
+  // Alpha's descriptor cannot name another brand's shared composition.
+  refuse(PIXEL10A_PRODUCT, p => ({ ...p, product: "eliza_stallion_phone", lunch: { development: "eliza_stallion_phone-cp2a-userdebug", production: "eliza_stallion_phone-cp2a-user" } }), /product must be alpha_stallion_phone/);
   refuse("android/release-signer.json", s => ({ ...s, signerSha256: "unset" }), /signerSha256 is "unset"/);
   refuse(LOCK, l => ({ ...l, developmentOnly: true }), /still marked developmentOnly|differs from the pinned/);
   assert.match(pixel10aProductProblems(temporary(t, "alpha-empty-")).join("\n"), /pixel10a-product\.json is missing/);
@@ -162,8 +164,8 @@ test("Alpha's signing binding signs with its descriptor, channel and APK signer 
   const key = keyDirectory(t), repo = completeRoot(t, key), tf = targetFiles(t), bin = releasetools(t);
   const out = path.join(temporary(t, "alpha-release-out-"), "release");
   const options = { root: repo.dir, targetFiles: tf.file, targetFilesSha256: tf.sha256, keysDir: key.keys, releasetools: bin, out };
-  // The binding cannot be redirected to another product's descriptor.
-  const dry = await signRelease({ ...options, descriptorFile: "android/releases/pixel10a-eliza.json", dryRun: true });
+  // The binding cannot be redirected to another product or its descriptor.
+  const dry = await signRelease({ ...options, productName: "eliza_stallion_phone", descriptorFile: "android/releases/pixel10a-eliza.json", dryRun: true });
   assert.deepEqual(dry.problems, []);
   const apkManifest = path.join(path.dirname(out), "apk-manifest.json");
   fs.writeFileSync(apkManifest, JSON.stringify({ results: [{ file: "launcher-release.apk", mode: "release", sha256: "a".repeat(64), signerSha256: "d".repeat(64), versionCode: 12, distributable: false }] }));
