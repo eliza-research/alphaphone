@@ -9,16 +9,19 @@ import {javaBinary} from './fixtures/jvm-tools.mjs';
 const root=resolve(import.meta.dirname,'..');
 const read=path=>readFileSync(join(root,path),'utf8');
 const tilePath='android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaQuickSettingsTile.java';
+// Alpha's tile is a registration of the shared AssistantEntryTile in the pinned plugin-native-system.
+const sharedTilePath='vendor/eliza/plugins/plugin-native-system/android/src/main/java/ai/eliza/plugins/system/AssistantEntryTile.java';
 const strings=read('android/app/src/main/res/values/alpha-system-entry.xml');
 const names=[...strings.matchAll(/<string name="([^"]+)"/g)].map(m=>m[1]);
 const rClass='package ai.elizaresearch.alphaphone; public class R { public static class drawable { public static final int notification_icon=1; } public static class string {'+names.map((n,i)=>`public static final int ${n}=${i+10};`).join('')+'}}';
 const stubs={
  'android/annotation/SuppressLint.java':'package android.annotation; public @interface SuppressLint { String[] value(); }',
+ 'android/annotation/TargetApi.java':'package android.annotation; public @interface TargetApi { int value(); }',
  'android/content/Context.java':'package android.content; public class Context { public String getString(int id){return String.valueOf(id);} }',
  'android/content/Intent.java':'package android.content; public class Intent { public static final String ACTION_ASSIST="android.intent.action.ASSIST"; public static final int FLAG_ACTIVITY_NEW_TASK=0x10000000, FLAG_ACTIVITY_CLEAR_TOP=0x04000000; public Class<?> target; public String action; public int flags; public Intent(Context context,Class<?> cls){target=cls;} public Intent setAction(String a){action=a;return this;} public Intent addFlags(int f){flags|=f;return this;} }',
- 'android/app/PendingIntent.java':'package android.app; public class PendingIntent { public static final int FLAG_UPDATE_CURRENT=0x08000000, FLAG_IMMUTABLE=0x04000000; public android.content.Intent intent; public int flags; public static PendingIntent getActivity(android.content.Context c,int request,android.content.Intent i,int f){PendingIntent p=new PendingIntent();p.intent=i;p.flags=f;return p;} }',
+ 'android/app/PendingIntent.java':'package android.app; public class PendingIntent { public static final int FLAG_UPDATE_CURRENT=0x08000000, FLAG_IMMUTABLE=0x04000000; public android.content.Intent intent; public int flags; public int requestCode; public static PendingIntent getActivity(android.content.Context c,int request,android.content.Intent i,int f){PendingIntent p=new PendingIntent();p.intent=i;p.flags=f;p.requestCode=request;return p;} }',
  'android/graphics/drawable/Icon.java':'package android.graphics.drawable; public class Icon { public static Icon createWithResource(android.content.Context c,int id){return new Icon();} }',
- 'android/os/Build.java':'package android.os; public class Build { public static class VERSION { public static int SDK_INT=36; } public static class VERSION_CODES { public static final int UPSIDE_DOWN_CAKE=34; } }',
+ 'android/os/Build.java':'package android.os; public class Build { public static class VERSION { public static int SDK_INT=36; } public static class VERSION_CODES { public static final int N=24, Q=29, UPSIDE_DOWN_CAKE=34; } }',
  'android/service/quicksettings/Tile.java':'package android.service.quicksettings; public class Tile { public static final int STATE_INACTIVE=1; public int state,updates; public String subtitle,label,description; public void setIcon(android.graphics.drawable.Icon i){} public void setLabel(CharSequence s){label=s.toString();} public void setSubtitle(CharSequence s){subtitle=s.toString();} public void setContentDescription(CharSequence s){description=s.toString();} public void setState(int s){state=s;} public void updateTile(){updates++;} }',
  'android/service/quicksettings/TileService.java':'package android.service.quicksettings; public class TileService extends android.content.Context { public boolean locked; public Runnable unlock; public Tile tile=new Tile(); public int launched; public android.content.Intent lastIntent; public android.app.PendingIntent lastPending; public void onStartListening(){} public void onClick(){} public Tile getQsTile(){return tile;} public boolean isLocked(){return locked;} public void unlockAndRun(Runnable r){unlock=r;} public void startActivityAndCollapse(android.content.Intent i){lastIntent=i;launched++;} public void startActivityAndCollapse(android.app.PendingIntent p){lastPending=p;lastIntent=p.intent;launched++;} }',
  'ai/elizaresearch/alphaphone/AlphaAssistActivity.java':'package ai.elizaresearch.alphaphone; public class AlphaAssistActivity {}',
@@ -43,11 +46,12 @@ public class TileTest {
   check(t.lastIntent.target==AlphaAssistActivity.class,"explicit existing assistant");
   check(android.content.Intent.ACTION_ASSIST.equals(t.lastIntent.action),"existing assist route");
   check((t.lastPending.flags&android.app.PendingIntent.FLAG_IMMUTABLE)!=0,"immutable pending intent");
+  check(t.lastPending.requestCode==41,"Alpha request code");
   AlphaQuickSettingsTile legacy=new AlphaQuickSettingsTile();android.os.Build.VERSION.SDK_INT=33;
   legacy.onClick();check(legacy.launched==1&&legacy.lastPending==null,"supported older Android intent path");
   android.os.Build.VERSION.SDK_INT=36;
   try {
-   java.lang.reflect.Method method=AlphaQuickSettingsTile.class.getDeclaredMethod("openLegacyAssistant",android.content.Intent.class);method.setAccessible(true);
+   java.lang.reflect.Method method=ai.eliza.plugins.system.AssistantEntryTile.class.getDeclaredMethod("openLegacy",android.content.Intent.class);method.setAccessible(true);
    method.invoke(legacy,legacy.lastIntent);throw new AssertionError("legacy path accepted modern Android");
   } catch(java.lang.reflect.InvocationTargetException expected){check(expected.getCause() instanceof IllegalStateException,"modern OS must fail closed");}
   catch(ReflectiveOperationException broken){throw new AssertionError(broken);}
@@ -57,7 +61,7 @@ public class TileTest {
   System.out.println("PASS actual Alpha tile lock/unlock and Android entry contracts");
  }
 }`);
-  files.push(harness,join(root,tilePath));
+  files.push(harness,join(root,sharedTilePath),join(root,tilePath));
   execFileSync(javaBinary('javac'),['--release','11','-d',dir,...files],{timeout:60000});
   assert.match(execFileSync(javaBinary('java'),['-cp',dir,'ai.elizaresearch.alphaphone.TileTest'],{encoding:'utf8',timeout:60000}),/^PASS actual Alpha tile/);
  }finally{rmSync(dir,{recursive:true,force:true});}
@@ -71,7 +75,7 @@ test('production tile compiles against the real Android API and existing identit
  try{
   const stub=join(dir,'AlphaAssistActivity.java'),r=join(dir,'R.java');
   writeFileSync(stub,'package ai.elizaresearch.alphaphone; public class AlphaAssistActivity extends android.app.Activity {}');writeFileSync(r,rClass);
-  execFileSync(javaBinary('javac'),['--release','17','-classpath',api,'-d',dir,stub,r,join(root,tilePath)],{timeout:60000,stdio:'pipe'});
+  execFileSync(javaBinary('javac'),['--release','17','-classpath',api,'-d',dir,stub,r,join(root,sharedTilePath),join(root,tilePath)],{timeout:60000,stdio:'pipe'});
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
@@ -80,7 +84,8 @@ test('tile service is protected by Android and introduces no permission, listene
  const entry=manifest.match(/<service android:name="\.AlphaQuickSettingsTile"[\s\S]*?<\/service>/)?.[0];assert.ok(entry);
  assert.match(entry,/android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"/);
  assert.match(entry,/android.service.quicksettings.TOGGLEABLE_TILE" android:value="false"/);
- const source=read(tilePath);
+ const source=read(tilePath)+read(sharedTilePath);
+ assert.match(read(tilePath),/class AlphaQuickSettingsTile extends AssistantEntryTile/);
  for(const text of ['getUserMedia','requestPermissions','startForegroundService','setShowWhenLocked','setTurnScreenOn','requestDismissKeyguard','setData(','putExtra(','CloudProtocol','startGoogle'])assert.ok(!source.includes(text),text);
 });
 

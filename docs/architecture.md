@@ -93,7 +93,9 @@ Cloud key revocation before dispatch (`AlphaDataReset`). Settings and tile syste
 launcher's shade request and Android role wording are likewise the shared ElizaSystem
 bridge (`SystemFacts`, `SystemSettingsPages`, `SystemShade`) and
 `@elizaos/capacitor-system/settings`; Alpha keeps its row and tile labels, theme and the
-existing `AlphaDevice` method names its renderer calls.
+existing `AlphaDevice` method names its renderer calls. The Quick Settings assistant tile is
+the shared `AssistantEntryTile` (inactive action tile, unlock before opening); Alpha keeps
+the `AlphaQuickSettingsTile` component name, its assist entry, wording and icon.
 
 Production Notes and vault migration controls are disabled, including their native
 entry points. Damaged-data notices retain saved bytes and drafts without backup or

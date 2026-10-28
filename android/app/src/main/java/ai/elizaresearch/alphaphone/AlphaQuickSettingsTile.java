@@ -1,61 +1,42 @@
 package ai.elizaresearch.alphaphone;
 
-import android.app.PendingIntent;
-import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.graphics.drawable.Icon;
-import android.os.Build;
-import android.service.quicksettings.Tile;
-import android.service.quicksettings.TileService;
 
-/** An explicit assistant entry, not a connection indicator or a microphone toggle. */
-public final class AlphaQuickSettingsTile extends TileService {
-    @Override public void onStartListening() {
-        super.onStartListening();
-        Tile tile = getQsTile();
-        if (tile == null) return;
-        tile.setIcon(Icon.createWithResource(this, R.drawable.notification_icon));
-        tile.setLabel(getString(R.string.alpha_quick_settings_label));
-        tile.setSubtitle(getString(isLocked()
-                ? R.string.alpha_quick_settings_locked
-                : R.string.alpha_quick_settings_open));
-        tile.setContentDescription(getString(R.string.alpha_quick_settings_description));
-        // An action tile is not an on/off state. Never imply that inference or capture is active.
-        tile.setState(Tile.STATE_INACTIVE);
-        tile.updateTile();
-    }
+import ai.eliza.plugins.system.AssistantEntryTile;
 
-    @Override public void onClick() {
-        super.onClick();
-        if (isLocked()) {
-            unlockAndRun(this::openAssistant);
-            return;
-        }
-        openAssistant();
-    }
-
-    private void openAssistant() {
-        // The existing assist entry sanitizes all incoming context and retains account and
-        // microphone admission. Opening it does not grant permissions or start voice capture.
-        Intent intent = new Intent(this, AlphaAssistActivity.class)
+/**
+ * An explicit assistant entry, not a connection indicator or a microphone toggle. The shared
+ * AssistantEntryTile (plugin-native-system) keeps the tile inactive, waits for unlock on a locked
+ * device and opens one immutable entry; Alpha supplies only its entry, wording and icon under
+ * this installed component name.
+ */
+public final class AlphaQuickSettingsTile extends AssistantEntryTile {
+    /** The existing assist entry sanitizes all incoming context and retains account and microphone
+     * admission. Opening it does not grant permissions or start voice capture. */
+    @Override protected Intent entryIntent() {
+        return new Intent(this, AlphaAssistActivity.class)
                 .setAction(Intent.ACTION_ASSIST)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            PendingIntent pending = PendingIntent.getActivity(this, 41, intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            startActivityAndCollapse(pending);
-        } else {
-            openLegacyAssistant(intent);
-        }
     }
 
-    /** Android's Intent overload is the supported API before 34; the PendingIntent overload
-     * does not exist there. Lint's target-SDK rule does not account for this OS-version guard. */
-    @SuppressLint("StartActivityAndCollapseDeprecated")
-    private void openLegacyAssistant(Intent intent) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            throw new IllegalStateException("Use the PendingIntent tile entry on Android 14 and later");
-        }
-        startActivityAndCollapse(intent);
+    @Override protected CharSequence label() {
+        return getString(R.string.alpha_quick_settings_label);
+    }
+
+    @Override protected CharSequence subtitle(boolean locked) {
+        return getString(locked ? R.string.alpha_quick_settings_locked : R.string.alpha_quick_settings_open);
+    }
+
+    @Override protected CharSequence contentDescription() {
+        return getString(R.string.alpha_quick_settings_description);
+    }
+
+    @Override protected Icon icon() {
+        return Icon.createWithResource(this, R.drawable.notification_icon);
+    }
+
+    @Override protected int requestCode() {
+        return 41;
     }
 }
