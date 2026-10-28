@@ -32,6 +32,7 @@ for(const [theme,size,kind] of [
  ['dark',{width:412,height:915},'empty'],
  ['light',{width:960,height:1020},'long'],
 ] as const)test(`Home Calendar keeps complete line boxes and its time footer: ${theme} ${size.width} ${kind}`,async({page},info)=>{
+ test.slow(); // Chooses the browser calendar in Calendar after the load.
  const {card,expected}=await openHome(page,theme,size,kind);
  const geometry=await card.evaluate(element=>{
   const box=element.getBoundingClientRect(),title=element.querySelector<HTMLElement>('.home-calendar-title')!,r=title.getBoundingClientRect(),style=getComputedStyle(title),scale=box.width/(element as HTMLElement).offsetWidth,footerElement=element.querySelector('.home-calendar-footer'),footer=footerElement?.getBoundingClientRect();

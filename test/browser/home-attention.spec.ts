@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { returnToApps } from './app-navigation';
+import { openBrowserCalendar } from './helpers/browser-calendar';
 // Development lane. The development profile's inbox reports through the same attention summary a
 // mail provider adapter uses, which exercises the connected Home state; the calendar failure is a
 // real browser-calendar read failure. home-attention.production.spec.ts covers the flag-off build.
@@ -12,7 +14,12 @@ test('the explicit development fixture reports unread email and opens Inbox', as
 });
 
 test('a failed calendar read shows the retry state instead of neutral copy, then recovers', async ({ page }) => {
+  test.slow(); // Chooses the browser calendar in Calendar first.
   await page.goto('/');
+  // Home's agenda reads the calendar chosen in Calendar (Agent Calendar by default); this case is
+  // about a device-calendar read failure, so it chooses the test-mocks browser calendar first.
+  await openBrowserCalendar(page);
+  await returnToApps(page);
   const card = page.locator('[data-alpha-layer="home"] .scr > button').first();
   await expect(card).toContainText('No upcoming events');
   await page.evaluate(async () => {
