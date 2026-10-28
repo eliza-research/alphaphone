@@ -1751,6 +1751,7 @@ export const connectionController = {
   },
   voiceRendererClientId(){return boundNavigation()?.clientId;},
   voiceRendererMetadata(context:ContextEnvelope){return boundNavigation()?.metadata(context)??{};},
+  observeCommittedView(){return boundNavigation()?.observeCommittedView()??Promise.resolve(false);},
   captureViewNavigation(context:ContextEnvelope){const client=boundNavigation();return client?{client,attempt:client.capture(context)}:undefined;},
   setViewInteractionExecutor(executor:typeof viewInteractionExecutor){viewInteractionExecutor=executor;},
   setDeviceExecutor(executor: DeviceExecutor) { deviceExecutor = executor; },
@@ -2655,6 +2656,8 @@ export const connectionController = {
       const actionPreferences=await readDevicePreferences(requestSignal).catch(()=>{requestSignal.throwIfAborted();return {askBeforeAgentActions:true};});assertCurrent();
       const directRequestedActions=!actionPreferences.askBeforeAgentActions;
       const calendarAgendaSource=!message.context.sensitive&&selected.actions?await calendarAgendaObservation(selected.actions):undefined;
+      requestSignal.throwIfAborted();assertCurrent();
+      await boundNavigation()?.observeCommittedView();
       requestSignal.throwIfAborted();assertCurrent();
       const options = { signal: requestSignal, clientMessageId: requestId, channelType, metadata: { ...(directRequestedActions?{agentActionMode:'direct-request-v1'}:{}), ...(channelType==='VOICE_DM'&&voiceTurnSignal?{voiceTurnSignal}:{}), ...(replyTo?{replyToMessageId:replyTo.messageId}:{}), ...(message.context.timeZone===undefined?{}:{uiTimeZone:message.context.timeZone}), clientDevice: { context: message.context,...(calendarAgendaSource?{calendarAgendaSource:{sourceId:calendarAgendaSource.sourceId,sourceRevision:calendarAgendaSource.sourceRevision}}:{}) }, ...boundNavigation()?.metadata(context), ...(canonicalProse?{userTextFormat:'plain-v1'}:{alphaPhone:{context:message.context}}) } };
       dispatched = { conversationId: id, at: Date.now() };
