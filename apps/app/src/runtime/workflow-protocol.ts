@@ -1,11 +1,25 @@
 import {HostedDigestProtocol} from './hosted-digests';
 import { normalizePhoneSpec, assertPhoneCapabilities, parsePhoneCatalog, verifyPhoneValidation, parsePhoneReceipt, type PhoneSpec, type PhoneCatalog } from './phone-workflow-authoring';
 import { parseWorkflowPhoneReview, workflowBytes, type WorkflowDeviceTarget } from './workflow-device-contract';
+import { parsePhoneScheduledOccurrence } from '../../../../.eliza/client-features/packages/contracts/src/phone-workflow.ts';
 /** Source: plugin-workflow routes/workflow-routes.ts. Remote OWNER session only. */
 export interface RemoteWorkflow { id: string; name: string; description: string; active: boolean; removed?:boolean; triggerCleanup?:'pending'|'complete'; versionId: string; steps: Array<{label:string;description?:string}>;phoneSpec?:unknown;hostedDigest?:boolean }
 /** Upstream host-process reconciliation (plugin-workflow WorkflowExecution.reconciliation). It never replaces the canonical receipt. */
 export type WorkflowRunReconciliation={state:'worker-running'|'outcome-unknown';message:string};
-export interface WorkflowRun { id:string; workflowId:string; status:string; startedAt:string; finished:boolean; versionId:string; stoppedAt?:string; error?:string; output?:string; reconciliation?:WorkflowRunReconciliation; events:Array<{type:string;at:string;node?:string}> }
+/** A run admitted by a typed workflow's local-time schedule. `missed` and `overlap` record an occurrence that did not run. */
+export interface WorkflowRunOccurrence {scheduledAt:string;status:'ready'|'missed'|'overlap'}
+export interface WorkflowRun { id:string; workflowId:string; status:string; startedAt:string; finished:boolean; versionId:string; stoppedAt?:string; error?:string; output?:string; reconciliation?:WorkflowRunReconciliation; occurrence?:WorkflowRunOccurrence; events:Array<{type:string;at:string;node?:string}> }
+/** The agent's settlement of a scheduled occurrence that did not run (`{status,scheduledAt,text}`). */
+function occurrenceSettlement(value:unknown):{status:'missed'|'overlap';text:string}|undefined{
+ if(!value||typeof value!=='object'||Array.isArray(value))return undefined;const p=value as Record<string,unknown>;
+ return (p.status==='missed'||p.status==='overlap')&&typeof p.text==='string'&&typeof p.scheduledAt==='string'?{status:p.status,text:p.text.slice(0,1000)}:undefined;
+}
+function runOccurrence(input:unknown,output:unknown):WorkflowRunOccurrence|undefined{
+ const record=input&&typeof input==='object'&&!Array.isArray(input)?(input as Record<string,unknown>).typedSchedule:undefined;
+ if(record===undefined)return undefined;
+ const admitted=parsePhoneScheduledOccurrence(record)!,settled=occurrenceSettlement(output);
+ return {scheduledAt:admitted.scheduledAt,status:settled?.status??admitted.status};
+}
 function reconciliation(value:unknown):WorkflowRunReconciliation|undefined{
  if(value===undefined||value===null)return undefined;
  if(typeof value!=='object'||Array.isArray(value))throw new Error('Invalid execution reconciliation');
@@ -28,10 +42,13 @@ export class WorkflowTypedRejected extends Error {constructor(){super('This work
 export class WorkflowMetadataRejected extends Error {constructor(){super('Workflow changed before saving. Reopen Change and review the current name and description.');}}
 export interface WorkflowMetadataReceipt {mutationId:string;workflowId:string;previousVersionId:string;versionId:string;name:string;description:string;active:boolean;appliedAt:string}
 export class WorkflowLifecycleRejected extends Error {constructor(){super('Removal or restore was not applied. Refresh the workflow and review its version, cleanup and any ongoing executions.');}}
+/** The agent refused to turn on this schedule because the workflow changed after review. Nothing was enabled. */
+export class WorkflowActivationRejected extends Error {constructor(){super('This workflow changed before its schedule was turned on. Nothing was enabled. Review the current version first.');}}
 export interface WorkflowLifecycleReceipt {mutationId:string;workflowId:string;previousVersionId:string;versionId:string;operation:'remove'|'restore';appliedAt:string}
 /** Present the typed worker's final text; intermediate step inputs remain in the agent receipt. */
 function workflowOutput(value:unknown,runId:string):string {
  if(typeof value==='string')return value.slice(0,4000);
+ const settled=occurrenceSettlement(value);if(settled)return settled.text;
  if(Array.isArray(value)&&value.length===1){const item=value[0];if(item&&typeof item==='object'&&item.nodeId==='typed-steps'&&item.runId===runId&&typeof item.text==='string')return item.text.slice(0,4000);}
  return JSON.stringify(value).slice(0,4000);
 }
@@ -54,7 +71,10 @@ export class WorkflowProtocol {
   try{response=await this.request('/api/workflow/phone/generate',{prompt,operations,...(existing?{existing}:{}),...(device?{device}:{}),catalogRevision:catalog.catalogRevision,compilerRevision:catalog.compilerRevision},signal);}
   catch(error){if(error instanceof WorkflowHttpError)throw new Error(error.status===422?error.clarification??'The request needs clarification. Select any Notes or Calendar scope first, and describe a manual workflow using the available steps.':'The agent could not generate a valid draft. Your current draft is unchanged.');throw error;}
   signal.throwIfAborted();if(workflowBytes(response)>75000)throw new Error('Generated draft exceeds the response limit');
-  const spec=normalizePhoneSpec(obj(response).spec);assertPhoneCapabilities(spec,catalog);
+  const spec=normalizePhoneSpec(obj(response).spec);
+  // The schedule is owner-set: a generated draft keeps the trigger the owner chose.
+  if(JSON.stringify(spec.trigger)!==JSON.stringify(existing?.trigger??{kind:'manual'}))throw new Error('Generated draft changed when this workflow runs');
+  assertPhoneCapabilities(spec,catalog);
   if(JSON.stringify(spec.device)!==JSON.stringify(device??existing?.device)||spec.steps.some(s=>!operations.includes(s.operation)))throw new Error('Generated draft changed the available device or operations');
   for(const step of spec.steps){if(step.operation!=='selected_notes'&&step.operation!=='calendar_range')continue;const scope=(s:typeof step)=>JSON.stringify(s.operation==='selected_notes'?s.notes:s.range);if(!existing?.steps.some(s=>s.operation===step.operation&&scope(s)===scope(step)))throw new Error('Generated draft changed a selected read scope');}
   return (await verifyPhoneValidation(response,spec,catalog)).spec;
@@ -75,6 +95,7 @@ export class WorkflowProtocol {
    ...(typeof p.error?.message==='string'?{error:p.error.message.slice(0,2000)}:{}),
    ...(p.output===undefined?{}:{output:workflowOutput(p.output,id)}),
    ...(()=>{const r=reconciliation(p.reconciliation);return r?{reconciliation:r}:{};})(),
+   ...(()=>{const o=runOccurrence(p.input,p.output);return o?{occurrence:o}:{};})(),
    events:events.slice(-100).map((event:unknown)=>{const e=obj(event);if(e.runId!==id||e.workflowId!==workflowId)throw new Error('Execution event identity mismatch');return {type:str(e.type).slice(0,120),at:str(e.timestamp),...(typeof e.nodeId==='string'?{node:e.nodeId.slice(0,200)}:{})};})};
  }
 
@@ -93,7 +114,10 @@ export class WorkflowProtocol {
  async list(signal:AbortSignal){const status=obj(await this.request('/api/workflow/status',undefined,signal));if(status.engine!=='smthrs'||status.status!=='ready')throw new Error('Workflow capability unavailable');const data=obj(await this.request('/api/workflow/workflows',undefined,signal));if(!Array.isArray(data.workflows))throw new Error('Invalid workflow list');return data.workflows.map((x:unknown)=>this.workflow(x));}
  async detail(id:string,signal:AbortSignal){const workflow=this.workflow(await this.request(`/api/workflow/workflows/${encodeURIComponent(str(id))}`,undefined,signal));if(workflow.id!==id)throw new Error('Workflow identity changed');return workflow;}
  async pause(id:string,signal:AbortSignal){const workflow=this.workflow(await this.request(`/api/workflow/workflows/${encodeURIComponent(str(id))}/deactivate`,{},signal));if(workflow.id!==id||workflow.active)throw new Error('Pause was not confirmed');return workflow;}
- async activate(id:string,version:string,signal:AbortSignal){const current=await this.detail(id,signal);if(current.versionId!==version)throw new Error('Workflow changed. Review it again before enabling.');const workflow=this.workflow(await this.request(`/api/workflow/workflows/${encodeURIComponent(id)}/activate`,{},signal));if(workflow.id!==id||!workflow.active)throw new Error('Activation was not confirmed');return workflow;}
+ /** Typed local-time schedules: armed per reviewed version, admitted at exact occurrences while the agent runs. */
+ async typedSchedulesSupported(signal:AbortSignal){const p=obj(await this.request('/api/workflow/status',undefined,signal));return p.engine==='smthrs'&&p.status==='ready'&&p.typedScheduleProtocol===1;}
+ /** Enables exactly the reviewed version: an agent with exact activation refuses a changed workflow atomically. */
+ async activate(id:string,version:string,signal:AbortSignal){const current=await this.detail(id,signal);if(current.versionId!==version)throw new Error('Workflow changed. Review it again before enabling.');const exact=await this.typedSchedulesSupported(signal);let response:unknown;try{response=await this.request(`/api/workflow/workflows/${encodeURIComponent(id)}/activate`,exact?{expectedVersionId:version}:{},signal);}catch(error){if(exact&&error instanceof WorkflowHttpError&&error.status===409&&error.code==='WORKFLOW_ACTIVATION_NOT_APPLIED'&&error.workflowId===id&&error.expectedVersionId===version)throw new WorkflowActivationRejected();throw error;}const workflow=this.workflow(response);if(workflow.id!==id||!workflow.active)throw new Error('Activation was not confirmed');return workflow;}
  private async submit(id:string,version:string,submissionId:string|undefined,signal:AbortSignal){let response:Record<string,any>;try{response=obj(await this.request(`/api/workflow/workflows/${encodeURIComponent(id)}/run`,{input:{},...(submissionId?{submissionId,expectedVersionId:version}:{})},signal));}catch(error){if(submissionId&&error instanceof WorkflowHttpError&&error.status===409&&error.code==='WORKFLOW_VERSION_NOT_ADMITTED'&&error.workflowId===id&&error.submissionId===submissionId&&error.expectedVersionId===version)throw new WorkflowAdmissionRejected();throw error;}if(submissionId&&response.submissionId!==submissionId)throw new Error('Submission identity mismatch');const run=this.runResult(response.execution);if(run.workflowId!==id||(submissionId&&run.versionId!==version))throw new Error('Execution identity or reviewed version changed');return run;}
  async run(id:string,version:string,signal:AbortSignal,beforeSubmit?:(submissionId?:string)=>void|Promise<void>){const current=await this.detail(id,signal);if(current.versionId!==version)throw new Error('Workflow changed. Review it again before running.');signal.throwIfAborted();const submissionId=await this.supportsSubmissionReconciliation(signal)?crypto.randomUUID():undefined;signal.throwIfAborted();await beforeSubmit?.(submissionId);signal.throwIfAborted();return this.submit(id,version,submissionId,signal);}
  /** Sends one retained reviewed submission again under its original identity. The agent admits a submission ID at most once, so this returns the run it already started or starts that one run; it can never start a second. */
