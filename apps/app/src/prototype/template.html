@@ -2044,6 +2044,7 @@
           <sc-if value="{{maps.nativePositionDetails}}"><p>{{maps.nativePositionDetails}}</p></sc-if>
           <button class="tap" onClick="{{maps.nativeManualLocation}}">Enter coordinates</button>
           <sc-if value="{{maps.globalBasemap}}"><p>OpenFreeMap receives your IP address and viewed map area. Location is used only when you request it.</p></sc-if>
+          <sc-if value="{{maps.searchDisclosure}}"><p data-maps-disclosure>{{maps.searchDisclosure}}</p></sc-if>
         </div>
       </details>
     </div>
