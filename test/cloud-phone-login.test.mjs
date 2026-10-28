@@ -27,7 +27,8 @@ test('phone sign-in and code entry stay in the app and are absent without native
 });
 
 test('phone codes use the native host, retain MFA, and never reach renderer HTTP',async()=>{
- const server=await createServer({configFile:false,logLevel:'silent',server:{middlewareMode:true,hmr:false,ws:false,watch:null}});
+ // cloud-protocol reaches the shared linked-sync modules, which import the app's @elizaos/contracts alias.
+ const server=await createServer({configFile:false,logLevel:'silent',resolve:{alias:[{find:/^@elizaos\/contracts$/,replacement:new URL('../.eliza/client-features/client-contracts.ts',import.meta.url).pathname}]},server:{middlewareMode:true,hmr:false,ws:false,watch:null}});
  try {
   const {CloudProtocol}=await server.ssrLoadModule('/apps/app/src/runtime/cloud-protocol.ts');
   const calls=[];const attemptId='00000000-0000-4000-8000-000000000001';
