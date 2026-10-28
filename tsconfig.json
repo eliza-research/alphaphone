@@ -25,6 +25,12 @@
       "@elizaos/capacitor-system/launcher": [
         "./.eliza/client-features/plugins/plugin-native-system/src/client/launcher.ts"
       ],
+      "@elizaos/ui/mobile-shell": [
+        "./.eliza/client-features/packages/ui/src/mobile-shell/index.ts"
+      ],
+      "@elizaos/ui/mobile-shell/core": [
+        "./.eliza/client-features/packages/ui/src/mobile-shell/core.ts"
+      ],
       "@elizaos/contracts/native-notes-query": [
         "./.eliza/client-features/packages/contracts/src/native-notes-query.ts"
       ],
@@ -80,6 +86,7 @@
   },
   "include": [
     "apps/app/src",
+    ".eliza/client-features/packages/ui/src/mobile-shell",
     "vite.config.ts",
     "capacitor.config.ts"
   ]

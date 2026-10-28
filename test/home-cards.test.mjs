@@ -180,7 +180,8 @@ test('workflow freshness: a load time only after a list was actually loaded', ()
 });
 test('Home template renders source, freshness and the brief card only from live values', () => {
   const template = readFileSync(new URL('../apps/app/src/prototype/template.html', import.meta.url), 'utf8');
-  const home = template.slice(template.indexOf('data-alpha-home-layout'), template.indexOf('{{apps}}'));
+  const home = template.slice(template.indexOf('<sc-element value="{{homeShell}}">'), template.indexOf('</sc-element>'));
+  assert.ok(home.includes('<sc-slot name="cards">'), 'Home cards fill the shared shell\'s card slot');
   assert.match(home, /data-alpha-home-calendar-source>\{\{homeCalendarSource\}\}</);
   assert.match(home, /data-alpha-home-calendar-origin>\{\{homeCalendarOrigin\}\}</);
   assert.match(home, /aria-description="\{\{homeCalendarDescription\}\}"/);

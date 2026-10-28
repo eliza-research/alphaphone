@@ -6,7 +6,7 @@ import {
 } from "../../../../.eliza/client-features/packages/core/src/events.ts";
 import { createCompletedActionNavigationState } from "../../../../.eliza/client-features/packages/core/src/views/completed-action-navigation.ts";
 import { findViewActionHandoff } from "../../../../.eliza/client-features/packages/core/src/views/view-action-handoff.ts";
-import { ENABLED_MVP_VIEWS } from "../prototype/mvp-features";
+import { alphaCanonicalViewId, alphaViewKey, alphaViewPaths } from "../product/alpha-product";
 import { AlphaClientError, type ContextEnvelope } from "./alpha-client";
 
 type Request = (
@@ -24,14 +24,6 @@ const object = (value: unknown): Record<string, unknown> => {
 		throw Error("Navigation reply was not verified");
 	return value as Record<string, unknown>;
 };
-const localView = (id: string) =>
-	id === "chat"
-		? "home"
-		: id === "reminders"
-			? "calendar"
-			: id === "automations"
-				? "workflows"
-				: id;
 export class ViewNavigationClient {
 	readonly clientId = crypto.randomUUID();
 	private disposed = false;
@@ -65,12 +57,7 @@ export class ViewNavigationClient {
 			? {
 					viewClientId: this.clientId,
 					viewDelivery: "completed-action",
-					uiView:
-						context.view === "home"
-							? "chat"
-							: context.view === "workflows"
-								? "automations"
-								: context.view,
+					uiView: alphaCanonicalViewId(context.view),
 				}
 			: {};
 	}
@@ -231,19 +218,16 @@ export class ViewNavigationClient {
 		const handoff = findViewActionHandoff(views);
 		if (!handoff?.navigationPrepared || !handoff.navigationBinding)
 			return { status: "none" };
+		// The product view registry resolves canonical, served and older ids and applies the
+		// install's view availability; an unavailable view is refused before any claim.
 		const binding = handoff.navigationBinding,
-			target = localView(handoff.viewId);
+			target = alphaViewKey(handoff.viewId);
 		if (
 			binding.clientId !== this.clientId ||
 			handoff.subview ||
-			(!["home", "notifications"].includes(target) &&
-				!ENABLED_MVP_VIEWS.has(target)) ||
+			!target ||
 			(handoff.viewPath &&
-				![
-					`/${handoff.viewId}`,
-					`/apps/${handoff.viewId}`,
-					...(target === "home" ? ["/"] : []),
-				].includes(handoff.viewPath))
+				!alphaViewPaths(handoff.viewId).includes(handoff.viewPath))
 		)
 			throw new AlphaClientError(
 				"proposal-unavailable",

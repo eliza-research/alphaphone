@@ -171,7 +171,11 @@ test('the layout fixes the sweep depends on stay in the stylesheet and template'
   assert.match(css, /\.home-calendar-card \{[^}]*min-height:196px/);
   assert.doesNotMatch(css, /\.home-calendar-title \{[^}]*max-height/);
   assert.match(css, /\.alpha-fit-grid\{[^}]*repeat\(auto-fill,[^}]*var\(--alpha-text-scale,1\)/);
-  assert.match(template, /class="alpha-fit-grid" data-alpha-home-apps style="--fit-columns: 4; --fit-min: 62px/);
+  // Home's app grid is the shared mobile shell's: four columns of at least 62px times its text scale,
+  // which Alpha maps to the measured text size.
+  assert.match(read('.eliza/client-features/packages/ui/src/mobile-shell/MobileHomeScreen.tsx'), /\[data-mobile-shell-apps\]\{display:grid;grid-template-columns:repeat\(auto-fill,[^}]*var\(--mobile-shell-grid-columns,4\)[^}]*var\(--mobile-shell-grid-min,62px\) \* var\(--mobile-shell-text-scale,1\)/);
+  assert.match(css, /\[data-alpha-layer="home"\] \{ --mobile-shell-text-scale:var\(--alpha-text-scale,1\); \}/);
+  assert.match(read('apps/app/src/prototype/home-shell.ts'), /gridProps: \{'data-alpha-home-apps': ''\}/);
   assert.doesNotMatch(template, /data-alpha-home-(calendar|workflows|inbox)\b[^>]*height: 196px/);
   assert.match(read('apps/app/src/main.tsx'), /installTextScale\(\)/);
   assert.match(read('apps/app/src/runtime/text-scale.ts'), /font-size:100px;line-height:1/);
