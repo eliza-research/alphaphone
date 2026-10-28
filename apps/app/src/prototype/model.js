@@ -3267,6 +3267,9 @@ registerView("notes", {
 
     var shareSheet = st.sheet === "share" && !!n;
     return {
+      // The prototype Notes surface is the primary Notes view unless a source adapter (canonical
+      // Notes, which retains this surface only as Older notes) replaces these defaults.
+      legacyNotes: true, notesTitle: "Notes", primaryNotes: true, canRecord: true,
       searching: st.q !== null && st.q !== undefined, notSearching: st.q === null || st.q === undefined,
       q: st.q || "",
       onQ: function (e) { api.set({ q: e.target.value }); },
