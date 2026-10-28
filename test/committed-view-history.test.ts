@@ -2,9 +2,9 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ViewNavigationClient } from '../apps/app/src/runtime/view-navigation';
-import { handleViewsRoutes, getCurrentViewState } from '../.eliza/client-features/packages/agent/src/api/views-routes';
-import { registerBuiltinViews, registerPluginViews, closeRuntimeViewRegistry } from '../.eliza/client-features/packages/agent/src/api/views-registry';
-import { closeViewInteractionHost } from '../.eliza/client-features/packages/agent/src/api/view-interaction-host';
+import { handleViewsRoutes, getCurrentViewState } from '../vendor/eliza/packages/agent/src/api/views-routes';
+import { registerBuiltinViews, registerPluginViews, closeRuntimeViewRegistry } from '../vendor/eliza/packages/agent/src/api/views-registry';
+import { closeViewInteractionHost } from '../vendor/eliza/packages/agent/src/api/view-interaction-host';
 import type { IAgentRuntime } from '@elizaos/core';
 
 const cleanups: Array<() => Promise<void>> = [];
