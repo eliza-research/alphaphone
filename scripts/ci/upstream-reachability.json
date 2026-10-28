@@ -514,17 +514,9 @@
     }
   ],
   "localCandidate": {
-    "head": "de16c240f8ef77779edd3aa411e407018d2be209",
-    "parentPublicComparisonHead": "ea0899fd7f19b2bf3552127d6566c15e23b4c303",
-    "scope": "Local preservation chain only; published/develop reachability has not been queried for this unpublished candidate. Original compare remains historical and normal verification will truthfully warn it is stale until authorized publication/refresh.",
-    "localCommitsAfterEA": [
-      "de16c240f8ef77779edd3aa411e407018d2be209 Type named Notes routing test outputs and assert provider presence",
-      "5f502a2891db9fe069bf689c0f3cf452c68d55ab Preserve reviewed body-free Notes availability routing in the combined SDK",
-      "7e85d9536dbe237964ef5bc71a6ac4b2f88a0b1c Preserve reviewed nonempty planner reply and held-finish schema handling",
-      "91953e99e0dc564a070910edada7afb044f54b8b Preserve reviewed private Calendar meeting guidance alongside existing diagnostics",
-      "be0582982b694302e4933e1d695b57e1cb083b7e Preserve reviewed Cloud model identity matching on the joined SDK",
-      "90dbfb20406d4e66913e84626465200035e5a5e9 fix(calendar): preserve existing event duration in move proposals",
-      "a53ce9d7818d5493163be61423075cbc65d6f2b4 fix(calendar): bind slot proposals to their canonical read outcome"
-    ]
+    "head": "2f664cc6dc223cf12002120576357114f8cb9763",
+    "priorLocalHead": "de16c240f8ef77779edd3aa411e407018d2be209",
+    "evidence": "docs/evidence/notes-restore-guidance-20261028.json",
+    "scope": "Local unpublished followup; historical remote comparison unchanged"
   }
 }
