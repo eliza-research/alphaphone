@@ -133,8 +133,9 @@ export function installPrototypeDataAdapter(Component: any, views: Record<string
       ...out, shadeN: [],
       sugg: suggestions.map(label => ({ label, go: () => this.send(label) })),
       ...homeCalendarValues(presentHomeAgendaCard(agendaInput)),
-      // The agent calendar adapter presents the card again with the agent's next event under an overdue reminder.
-      homeAgendaInput: agendaInput,
+      // The agent calendar adapter presents the card again with the agent's next event under an overdue
+      // reminder, and lets an upcoming reminder lead when it comes first.
+      homeAgendaInput: agendaInput, homeAgendaReminder: !!agenda?.event.alphaReminderId && !overdue,
       homeAttentionLabel: attention.label,
       homeAttentionPeople: [], homeAttentionPeopleVisibility: 'hidden',
       ...(browserDevProfile?{homeInboxCount:attention.count,homeInboxRows:unreadRows.slice(0,2).map(mail=>({subject:mail.subj||'(no subject)',from:mail.name||mail.email||''})),homeInboxHasRows:unread>0,homeInboxTitle:unread?'':'No unread email',homeInboxStatus:'Development inbox'}:{}),

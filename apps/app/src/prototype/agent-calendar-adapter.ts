@@ -149,6 +149,10 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
   const item=event?{title:String(event.title||''),begin:event.isAllDay?day(event.startAt):Date.parse(event.startAt),end:event.isAllDay?day(event.endAt):Date.parse(event.endAt),allDay:!!event.isAllDay,video:!!event.conferenceLink}:null;
   // An overdue reminder keeps Home's own selection and source; the agent's next event shows on the Next line.
   if(out.homeCalendarOverdue===true&&out.homeAgendaInput){const input=out.homeAgendaInput as HomeAgendaCardInput;return{...out,...homeCalendarValues(presentHomeAgendaCard(item?{...input,next:{item,provenance}}:input))};}
+  // A reminder saved on this phone that comes before the agent's next event leads the card with the
+  // reminder store's own source, as it does with device calendars.
+  const local=out.homeAgendaInput as HomeAgendaCardInput|undefined;
+  if(out.homeAgendaReminder===true&&local?.item&&(!item||local.item.begin<item.begin))return{...out,...homeCalendarValues(presentHomeAgendaCard(local))};
   return{...out,...homeCalendarValues(presentHomeAgendaCard({now,item,provenance,stale:feed.stale,emptyTitle:feed.title,sourceName:'Agent Calendar'})),
    goCalendar:()=>{if(feed.state==='error'||feed.state==='stale')refresh(true);this.openView('calendar',{calendarAuthority:'canonical',...(event?{open:'canonical-calendar:'+calendarEventKey(event),day:canonicalCalendarRow(event,zone()).off}:{} )});}};
  };

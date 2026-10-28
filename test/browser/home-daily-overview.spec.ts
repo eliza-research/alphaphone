@@ -158,20 +158,26 @@ test('an overdue reminder stays on Home, marked overdue with its own source, and
 
 test('an upcoming reminder is attributed to the reminder store, not to a calendar',async({page,context})=>{
  await context.grantPermissions(['notifications']);
- await page.addInitScript(offline);await page.goto('/');await browserCalendarHome(page);
+ await page.addInitScript(offline);await page.goto('/');
  expect(await page.evaluate(async()=>{
   const {DailyApps}=await import('/src/daily.ts');
   return (await DailyApps.scheduleReminder({id:'overview-upcoming',title:'Synthetic upcoming reminder',body:'',at:Date.now()+3600000})).status;
  })).toBe('scheduled');
- await page.reload();await browserCalendarHome(page);
  const card=calendarCard(page);
- await expect(card).toContainText('Synthetic upcoming reminder');
- await expect(card).toHaveAttribute('data-alpha-home-calendar-overdue','false');
- await expect(card.locator('[data-alpha-home-calendar-origin]')).toHaveText('Reminder');
- await expect(card.locator('[data-alpha-home-calendar-source]')).toHaveCount(0);
- await expect(card).toHaveAttribute('aria-description',/^Reminder saved on this browser, read .+/);
- await expect(card).not.toContainText(/In this app|This app/);
+ const attributed=async()=>{
+  await expect(card).toContainText('Synthetic upcoming reminder');
+  await expect(card).toHaveAttribute('data-alpha-home-calendar-overdue','false');
+  await expect(card.locator('[data-alpha-home-calendar-origin]')).toHaveText('Reminder');
+  await expect(card.locator('[data-alpha-home-calendar-source]')).toHaveCount(0);
+  await expect(card).toHaveAttribute('aria-description',/^Reminder saved on this browser, read .+/);
+  await expect(card).not.toContainText(/In this app|This app|Calendar has not been verified/);
+ };
+ // Agent Calendar (the default source, not connected here) has no event before it: the reminder leads.
+ await page.reload();await attributed();
+ // The same reminder leads when the owner chose the browser calendar instead.
+ await browserCalendarHome(page);await attributed();
 });
+
 
 async function mailFixture(page:Page){
  await page.addInitScript(offline);await page.goto('/');
