@@ -41,7 +41,6 @@ final class NativeOwnerReminderHost {
   * Android JSONArray escapes slashes, so it cannot define this shared key. */
  static String deviceSlot(String owner,String agent)throws Exception{
   HostedInbox.id(owner);HostedInbox.id(agent);
-  if(!owner.matches("[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")||!agent.matches("[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"))throw new SecurityException("Invalid device enrollment identity");
   return "device:"+HostedResultNotices.hash("[\"https://device.alpha.invalid\",\""+owner+"\",\""+agent+"\"]");
  }
 

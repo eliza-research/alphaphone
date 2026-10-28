@@ -20,15 +20,15 @@ test('native staging fence binds full session/provider/enrollment versions witho
  static JSONObject provider,session,device;static JSONObject copy(JSONObject x)throws Exception{return new JSONObject(x.toString());}
  public static void main(String[] args)throws Exception{
  provider=new JSONObject().put("accountRef","native-local").put("environment","fixture").put("sessionGeneration","g1").put("providerVersion",1);
- session=new JSONObject().put("ownerId","10000000-0000-4000-8000-000000000001").put("token","synthetic-token").put("expiresAt",System.currentTimeMillis()+60000);
+ session=new JSONObject().put("ownerId","owner").put("token","synthetic-token").put("expiresAt",System.currentTimeMillis()+60000);
  device=new JSONObject().put("installationId","install").put("enrollmentId","enroll").put("key","synthetic-key");
- JSONObject expected=new JSONObject().put("subjectUserId","10000000-0000-4000-8000-000000000001").put("agentId","20000000-0000-4000-8000-000000000002").put("accountRef","native-local:10000000-0000-4000-8000-000000000001").put("environment","fixture").put("sessionGeneration","g1").put("installationId","install").put("enrollmentId","enroll");
+ JSONObject expected=new JSONObject().put("subjectUserId","owner").put("agentId","agent").put("accountRef","native-local:owner").put("environment","fixture").put("sessionGeneration","g1").put("installationId","install").put("enrollmentId","enroll");
  NativeOwnerReminderHost host=new NativeOwnerReminderHost(new NativeOwnerReminderHost.Ports(){public JSONObject provider()throws Exception{return copy(provider);}public JSONObject ownerSession()throws Exception{return copy(session);}public String device(String slot){return device.toString();}public JSONObject exchange(JSONObject s,String p,JSONObject h){throw new AssertionError("No HTTP during confirmation");}});
  String initial=host.reviewFence(expected);if(!initial.equals(host.reviewFence(expected)))throw new AssertionError();
  session.put("token","replacement-token");if(initial.equals(host.reviewFence(expected)))throw new AssertionError("Session token not bound");session.put("token","synthetic-token");
  device.put("key","replacement-key");if(initial.equals(host.reviewFence(expected)))throw new AssertionError("Enrollment key not bound");device.put("key","synthetic-key");
  provider.put("providerVersion",2);if(initial.equals(host.reviewFence(expected)))throw new AssertionError("Provider version not bound");provider.put("providerVersion",1);
- session.put("ownerId","foreign");try{host.reviewFence(expected);throw new AssertionError("Wrong owner accepted");}catch(SecurityException good){}session.put("ownerId","10000000-0000-4000-8000-000000000001");
+ session.put("ownerId","foreign");try{host.reviewFence(expected);throw new AssertionError("Wrong owner accepted");}catch(SecurityException good){}session.put("ownerId","owner");
  provider.put("sessionGeneration","g2");try{host.reviewFence(expected);throw new AssertionError("Wrong generation accepted");}catch(SecurityException good){}
  System.out.println("PASS full native review fence without network");
  }} `);
