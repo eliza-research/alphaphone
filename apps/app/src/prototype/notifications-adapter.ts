@@ -1,3 +1,4 @@
+import {alphaClient} from '../runtime/alpha-client';
 import {connectionController} from '../runtime/connection-ui';
 import { registerPlugin } from '../platform-plugins';
 import { Capacitor } from '@capacitor/core';
@@ -21,22 +22,29 @@ export function installNotificationsAdapter(Component: any) {
   this.alphaCanonicalTap=async()=>{
    if(!Capacitor.isNativePlatform()||!this.alphaNoticesLive||document.hidden||this.alphaCanonicalOpening||this.S().typing||this.S().recording||String(this.S().draft||'').trim())return;
    const current=connectionController.getSnapshot(),session=current.session;if(!session||current.busy||current.open)return;
+   const origin={view:this.S().view,revision:alphaClient.getState().context.revision,conversation:connectionController.getSelectedConversationId(),history:current.history};
    this.alphaCanonicalOpening=true;this.alphaCanonicalDrainRequested=false;
    try{
     const tap=await native.canonicalPending();
     if(!tap.token||tap.ownerId!==session.ownerId||tap.agentId!==session.agentId||document.hidden||String(this.S().draft||'').trim()||connectionController.getSnapshot().session!==session)return;
-    const canCommit=()=>this.alphaNoticesLive&&!document.hidden&&!this.S().typing&&!this.S().recording&&!String(this.S().draft||'').trim()&&connectionController.getSnapshot().session===session;
-    if(tap.view==='chat'&&tap.conversationId&&tap.messageId){
-     await connectionController.restoreHistory(tap.conversationId,canCommit);
+    const canCommit=()=>this.alphaNoticesLive&&!document.hidden&&!this.S().typing&&!this.S().recording&&!String(this.S().draft||'').trim()&&connectionController.getSnapshot().session===session&&!connectionController.getSnapshot().open;
+    const originCurrent=()=>canCommit()&&this.S().view===origin.view&&alphaClient.getState().context.revision===origin.revision&&connectionController.getSelectedConversationId()===origin.conversation&&connectionController.getSnapshot().history===origin.history;
+    if(!originCurrent())return;
+    if(tap.view==='chat'){
+     if(!tap.conversationId||!tap.messageId)return;
+     await connectionController.restoreHistory(tap.conversationId,originCurrent);
      const after=connectionController.getSnapshot();
      if(after.session!==session||after.history?.conversationId!==tap.conversationId||!after.history.messages.some(row=>row.id===tap.messageId)||document.hidden)return;
     }
     if(!canCommit())return;
+    const restored=connectionController.getSnapshot().history;
+    const exactChat=()=>this.S().view===origin.view&&alphaClient.getState().context.revision===origin.revision&&connectionController.getSelectedConversationId()===tap.conversationId&&connectionController.getSnapshot().history===restored&&restored?.conversationId===tap.conversationId&&restored.messages.some(row=>row.id===tap.messageId);
+    if(tap.view==='chat'&&!exactChat())return;
     const views:Record<string,string>={calendar:'calendar',notes:'notes',automations:'workflows'};
     const targetView=tap.view!=='chat'&&tap.view?views[tap.view]:undefined;
     if(tap.view!=='chat'){if(!targetView)return;this.openView(targetView);}
     this.setState(tap.view==='chat'?{chat:'full'}:{},()=>{
-     if(canCommit()&&(!targetView||this.S().view===targetView))void native.acknowledgeCanonical({token:tap.token!}).catch(()=>{});
+     if(canCommit()&&(tap.view==='chat'?exactChat():!!targetView&&this.S().view===targetView))void native.acknowledgeCanonical({token:tap.token!}).catch(()=>{});
     });
    }catch{/* Native custody retains or retires the tap; never replay a read acknowledgement. */}
    finally{this.alphaCanonicalOpening=false;if(this.alphaCanonicalDrainRequested&&this.alphaNoticesLive)queueMicrotask(this.alphaCanonicalTap);}
