@@ -189,11 +189,50 @@ async function main() {
 }
 
 /**
- * The upstream consumer build owns the Gradle invocation and artifact collection: the four
- * distribution APKs (signed releases keep `<variant>-release.apk`), instrumentation APKs,
- * R8 mappings and the optional sequential low-disk mode (ALPHA_ANDROID_LOW_DISK=1).
- * Alpha supplies the flags, output directory, build record and its own APK verification.
+ * What the upstream consumer build receives for one Alpha build. Upstream owns the Gradle
+ * invocation and artifact collection: the four distribution APKs (signed releases keep
+ * `<variant>-release.apk`), instrumentation APKs, R8 mappings and the optional sequential
+ * low-disk mode (ALPHA_ANDROID_LOW_DISK=1). Alpha supplies the flags, output directory,
+ * signing variable names, build record and its own APK verification.
  */
+export function consumerBuildOptions(options, env, root) {
+  return {
+    root,
+    environment: env,
+    variants: ["standalone", "launcher"],
+    project: "android",
+    output: outputDirectory(options),
+    gradleArguments: gradleFlagArgs(options),
+    androidTest: !options.skipInstrumentation,
+    // Distribution instrumentation APKs live in a subdirectory so artifacts/*.apk stays the four
+    // distribution APKs (scripts/android-instrumentation.mjs); test-mocks keeps them beside its APKs.
+    androidTestOutput: options.testMocks ? "" : "instrumentation",
+    lint: !options.testMocks,
+    signing: { environment: [...SIGNING_ENV] },
+    mappings: true,
+    // Opt-in for constrained builders; retained APKs and source evidence are never cleaned.
+    sequential: env.ALPHA_ANDROID_LOW_DISK === "1",
+    // verify-apks compares this record with the APKs it verifies. Upstream writes it only after
+    // every APK of this build is in place, so a failed build keeps the previous APKs and record.
+    record: {
+      name: "build-config.json",
+      metadata: {
+        createdAt: new Date().toISOString(),
+        testMocks: options.testMocks,
+        runtimeProfile: options.runtimeProfile || "native",
+        mapsConfigured: Boolean(env.VITE_MAPS_BASE_URL),
+        signingRequested: signingRequested(env),
+        versionOverride: { code: env.ELIZAOS_VERSION_CODE ?? null, name: env.ELIZAOS_VERSION_NAME ?? null },
+      },
+    },
+    verify: { command: "node", args: ["scripts/verify-apks.mjs",
+      ...(options.testMocks ? ["--test-mocks"] : []),
+      ...(options.allowUnpackagedRuntime ? ["--allow-unpackaged-runtime"] : []),
+      ...(options.runtimeProfile === "cloud" ? ["--runtime-profile=cloud"] : [])] },
+    archive: null,
+  };
+}
+
 function build(options, baseEnv, run, buildAndroidConsumer) {
   const env = buildEnv(baseEnv, options);
   const outDir = outputDirectory(options);
@@ -213,41 +252,7 @@ function build(options, baseEnv, run, buildAndroidConsumer) {
   }
 
   const root = fs.realpathSync(path.resolve(import.meta.dirname, ".."));
-  const requested = signingRequested(env);
-  buildAndroidConsumer({
-    root,
-    environment: env,
-    variants: ["standalone", "launcher"],
-    project: "android",
-    output: outDir,
-    gradleArguments: gradleFlagArgs(options),
-    androidTest: !options.skipInstrumentation,
-    // Distribution instrumentation APKs live in a subdirectory so artifacts/*.apk stays the four
-    // distribution APKs (scripts/android-instrumentation.mjs); test-mocks keeps them beside its APKs.
-    androidTestOutput: options.testMocks ? "" : "instrumentation",
-    lint: !options.testMocks,
-    signing: { environment: [...SIGNING_ENV] },
-    mappings: true,
-    // Opt-in for constrained builders; retained APKs and source evidence are never cleaned.
-    sequential: process.env.ALPHA_ANDROID_LOW_DISK === "1",
-    // verify-apks compares this record with the APKs it verifies.
-    prepare: [() => {
-      fs.mkdirSync(path.join(root, outDir), { recursive: true });
-      fs.writeFileSync(path.join(root, outDir, "build-config.json"), JSON.stringify({
-        createdAt: new Date().toISOString(),
-        testMocks: options.testMocks,
-        runtimeProfile: options.runtimeProfile || "native",
-        mapsConfigured: Boolean(env.VITE_MAPS_BASE_URL),
-        signingRequested: requested,
-        versionOverride: { code: env.ELIZAOS_VERSION_CODE ?? null, name: env.ELIZAOS_VERSION_NAME ?? null },
-      }, null, 2) + "\n");
-    }],
-    verify: { command: "node", args: ["scripts/verify-apks.mjs",
-      ...(options.testMocks ? ["--test-mocks"] : []),
-      ...(options.allowUnpackagedRuntime ? ["--allow-unpackaged-runtime"] : []),
-      ...(options.runtimeProfile === "cloud" ? ["--runtime-profile=cloud"] : [])] },
-    archive: null,
-  });
+  buildAndroidConsumer(consumerBuildOptions(options, env, root));
   if (options.testMocks)
     console.log("Test-mocks APKs are for mock-isolation instrumentation only and are never distributable.");
   else run("node", ["scripts/generate-sbom.mjs", ...sbomArgs(outDir, root)]);
