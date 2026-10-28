@@ -191,6 +191,11 @@ Later changes to retired Notes sources stop normal access. Unrelated daily
 receipts do not invalidate Notes. Confirmed reset creates a new empty collection
 without reimporting retained sources or deleting recording bytes.
 
+Browser recording bytes and transcripts use the shared elizaOS Notes client
+`createNotesAudioStore` (one-note ownership, per-operation deletion receipts, purge
+and 30-day expiry); `browser/note-audio-store.ts` binds it to Alpha's existing
+`alpha.browser.audio.v1` IndexedDB database.
+
 Audio-deletion pending records use a separate canonical document, and recovery
 reads the same authoritative Notes envelope as the editor. The independent
 `alpha.notes-audio-effects.v1` lock still serializes deletion, restoration and
