@@ -131,7 +131,12 @@ owns toolchain, SDK levels, variants, build types, signing and version policy, t
 source sets and admission wiring, and stages the resident runtime classes into Alpha's
 package from the descriptor's installed identities (socket namespaces, notification
 resources, environment hook). Upstream build orchestration collects the four APKs.
-Alpha keeps only data and its product admission and APK verification.
+Alpha keeps only data and its product admission and APK verification. The APK inspection
+itself (aapt/unzip facts, dex markers, signer digests, backup/cleartext/export/test-only/
+source-map/version checks) is upstream `artifact-inspection/apk-distribution.mjs`; Alpha's
+`scripts/apk.mjs` supplies `DISTRIBUTION_POLICY` as data (exported-component allowlist,
+development hooks, removed speech runtimes) plus the Quick Settings tile and per-flavor
+permission checks.
 
 Generic behavior belongs upstream with configurable host inputs. Product names,
 package IDs, storage namespaces, view allowlists and approval policy stay here.
