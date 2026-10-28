@@ -39,7 +39,7 @@ test('the renderer leases each step and every row it shows, and lease lengths ag
  // The status pass, the interrupted-deletion settlement and lease renewal are the shared recording
  // effects (plugins/plugin-notes/test/notes-recording-effects.test.mjs); Alpha wires its rows to them.
  assert.match(voice,/createNotesRecordingEffects\(\{recordings:noteAudio,journal:audioDeletionJournal,savedNotes,now:\(\)=>Date\.now\(\)\}\)/,'the native recording store backs the shared effects');
- assert.match(voice,/await recordingEffects\.renewLeases\(\);/,'rows shown under review stay leased');
- assert.match(voice,/const startedHere=sessionDeletions\.has\(row\.id\);\s*const retired=await recordingEffects\.reconcile\(row,\{startedHere,claimedElsewhere:\(\)=>deletionClaimedElsewhere\(row\.id\)/,'another live view\'s row is not settled');
+ assert.match(voice,/await recordingEffects\(\)\.renewLeases\(\);/,'rows shown under review stay leased');
+ assert.match(voice,/const startedHere=sessionDeletions\.has\(row\.id\);\s*const retired=await recordingEffects\(\)\.reconcile\(row,\{startedHere,claimedElsewhere:\(\)=>deletionClaimedElsewhere\(row\.id\)/,'another live view\'s row is not settled');
  assert.match(voice,/sessionDeletions\.add\(row\.id\);claimDeletion\(row\.id\);/);
 });

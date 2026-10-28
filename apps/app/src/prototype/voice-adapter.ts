@@ -11,7 +11,7 @@ import {reviewContentQuestion} from '../browser/content-question';
 import {recordingLevels} from '../browser/audio-levels';
 import {browserDevProfile} from '../browser/dev-profile';
 import {pendingAudioDeletions,withAudioDeletionLock,changeAudioDeletion,audioDeletionNoteState,audioDeletionJournal,type AudioDeletion} from '../runtime/note-audio-deletions';
-import {createNotesRecordingEffects} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-recording-effects.ts';
+import {createNotesRecordingEffects,type NotesRecordingEffects} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-recording-effects.ts';
 import {addNotesTrashEntry,editNotesTrash,isNotesTrashFull,notesTrashExpired,readNotesTrash,removeNotesTrashEntries,savedNotes,type NotesTrashEntry} from '../runtime/notes-trash';
 import type {NotesTarget} from '../runtime/notes-contract';
 import {sameDeletionRow,leasedDeletionRow,claimDeletion,releaseDeletionClaim,deletionClaimedElsewhere} from '../runtime/permanent-voice-deletion';
@@ -85,7 +85,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
       };
       // Notes Trash hooks. Voice notes share one Trash with text notes; the recording follows its note.
       value.restoreTrashedVoice=(entry:NotesTrashEntry)=>restoreDeletion(trashRow(entry),value,entry.index);
-      value.purgeTrashedVoice=(entry:NotesTrashEntry)=>recordingEffects.purgeTrashed(entry);
+      value.purgeTrashedVoice=(entry:NotesTrashEntry)=>recordingEffects().purgeTrashed(entry);
       value.trashVoiceNoteWithRecording=<T,>(note:Bag,target:NotesTarget,operationId:string,index:number,commit:()=>Promise<T>)=>trashVoiceNoteWithRecording(note,target,operationId,index,commit);
       // Offered only after a full Trash refused this exact voice note, and confirmed separately.
       value.deleteVoiceNoteForever=(noteId:string)=>{const note=refusedVoice;if(note&&note.id===noteId)void deleteVoiceNote(value,note,true);};
@@ -664,8 +664,11 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
    * deletion, the interrupted-deletion backstop, status passes and leases) is the shared
    * plugin-notes recording effects over AlphaNoteAudio. Callers hold the deletion-effects lock.
    */
-  const recordingEffects=createNotesRecordingEffects({recordings:noteAudio,journal:audioDeletionJournal,savedNotes,now:()=>Date.now()});
-  const deletionReceipt=recordingEffects.confirmReceipt,eraseForever=recordingEffects.eraseForever;
+  let sharedRecordingEffects:NotesRecordingEffects|undefined;
+  // Created on first use, so installing the voice views needs no Notes storage.
+  const recordingEffects=()=>sharedRecordingEffects??=createNotesRecordingEffects({recordings:noteAudio,journal:audioDeletionJournal,savedNotes,now:()=>Date.now()});
+  const deletionReceipt=(row:AudioDeletion,status:'removed'|'restored')=>recordingEffects().confirmReceipt(row,status);
+  const eraseForever=(row:AudioDeletion)=>recordingEffects().eraseForever(row);
   const trashRow=(entry:NotesTrashEntry):AudioDeletion=>{
     if(!entry.audio||!entry.target)throw Error('This Trash entry has no recording');
     return {id:entry.id,target:entry.target,note:entry.note,audioId:entry.audio.audioId};
@@ -676,7 +679,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
    * the same operation id, so Trash restores or purges note and recording together.
    */
   function trashVoiceNoteWithRecording<T>(note:Bag,target:NotesTarget,operationId:string,index:number,commit:()=>Promise<T>):Promise<T>{
-    return recordingEffects.trashWithRecording({note:note as AudioDeletion['note'],target,operationId,commit,
+    return recordingEffects().trashWithRecording({note:note as AudioDeletion['note'],target,operationId,commit,
       addTrashEntry:async audio=>{await editNotesTrash(doc=>addNotesTrashEntry(doc,{id:operationId,note:note as NotesTrashEntry['note'],target,index,deletedAt:Date.now(),...(audio?{audio}:{})}));}});
   }
   async function dropTrashEntry(id:string){
@@ -812,11 +815,11 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         // while another live view claims them: their effects may still be in flight. Rows this process
         // started only finish their erase or confirm their receipt.
         const startedHere=sessionDeletions.has(row.id);
-        const retired=await recordingEffects.reconcile(row,{startedHere,claimedElsewhere:()=>deletionClaimedElsewhere(row.id),commitDeletion:settled=>current.commitAudioNoteDeletion(settled,()=>{})});
+        const retired=await recordingEffects().reconcile(row,{startedHere,claimedElsewhere:()=>deletionClaimedElsewhere(row.id),commitDeletion:settled=>current.commitAudioNoteDeletion(settled,()=>{})});
         if(retired&&row.permanent&&!startedHere)window.dispatchEvent(new Event('alpha:notes-trash-changed'));
       }catch{/* Readback only. Preserve unknown operations. */}}
       // Rows still shown under review stay leased, so the native passes never erase what Restore offers.
-      await recordingEffects.renewLeases();
+      await recordingEffects().renewLeases();
       current.setView('notes',{audioDeletionPending:Object.values(await pendingAudioDeletions()),audioDeletionChecked:true});
     });}catch{current.setView('notes',{audioDeletionRecoveryFailed:true,audioDeletionChecked:true});}finally{deletionRefresh=null;}
     })();
