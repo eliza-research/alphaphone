@@ -7,14 +7,21 @@
  * adapter, native transport and tests; it adds no behavior of its own.
  */
 export {
+  createLiveDictation,
   createLiveVoiceSession,
   encodeLiveFrame,
   LIVE_ASR_PATH,
   LIVE_ASR_STATUS_PATH,
   LIVE_SAMPLE_RATE,
   parseLiveFinal,
+  liveAssistantListener,
   parseVoiceTranscriptEnvelope,
   webSocketAgentEvents,
+  type LiveCaptureOpener,
+  type LiveCaptureOpenOptions,
+  type LiveCaptureStream,
+  type LiveDictation,
+  type LiveDictationClip,
   type LiveAudioFrame,
   type LiveFinal,
   type LiveMode,
