@@ -2,9 +2,9 @@ import {test,expect,type Page} from '@playwright/test';
 // Product decision: normal tabs keep sign-ins, tabs and history; private tabs are
 // ephemeral and never saved. These native-renderer contract tests use the
 // registered sandboxed BrowserSurface as a closed stand-in for native events.
-// They explicitly select native presentation; the web fallback does not certify
-// iframe loads as committed pages. Android instrumentation covers actual
-// persistent/private WebView profiles and cookies.
+// They explicitly select native presentation while the closed frame supplies navigation
+// events. Android instrumentation covers actual persistent/private WebView profiles
+// and cookies; the final case separately checks the web-only refusal.
 test.beforeEach(async({page})=>{
  await page.addInitScript(()=>localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'})));
  await page.route('https://signins.example/**',route=>route.fulfill({contentType:'text/html',body:`<title>${new URL(route.request().url()).pathname.slice(1)}</title><h1>${new URL(route.request().url()).pathname.slice(1)}</h1>`}));
@@ -61,11 +61,11 @@ test('Clear browsing data asks first, then clears history and saved tabs but kee
  await menu(page,'New private tab');await navigate(page,'private-open');
  await webPresentation(page);
  await menu(page,'Clear browsing data');
- const dialog=page.getByRole('dialog',{name:'Clear browsing data?'});await expect(dialog).toBeVisible();await expect(dialog).toContainText('Website cookies and sign-ins are managed in your browser settings');
+ const dialog=page.getByRole('dialog',{name:'Clear browsing data?'});await expect(dialog).toBeVisible();await expect(dialog).toContainText('Deletes cookies and site data, so you will be signed out of websites.');await expect(dialog).toContainText('Bookmarks and private tabs are kept.');
  await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(dialog).toHaveCount(0);
  await expect.poll(async()=>(await saved(page)).history.length).toBe(2);
  await menu(page,'Clear browsing data');await page.getByRole('dialog',{name:'Clear browsing data?'}).getByRole('button',{name:'Clear data',exact:true}).click();
- await expect(page.getByText('Alpha tabs and history cleared',{exact:true})).toBeVisible();
+ await expect(page.getByText('Browsing data cleared',{exact:true})).toBeVisible();
  // The private tab stays open; the normal tabs are closed.
  await expect(page.getByRole('button',{name:'Tabs',exact:true})).toHaveText('1');await expect(page.getByRole('img',{name:'Private tab',exact:true})).toBeVisible();
  await expect.poll(async()=>await saved(page)).toEqual({history:[],tabs:[],cur:''});

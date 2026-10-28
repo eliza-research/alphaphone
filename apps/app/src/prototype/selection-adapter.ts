@@ -9,8 +9,6 @@ import { installFilesTreeAdapter } from './files-tree-adapter';
 import { Capacitor } from '@capacitor/core';
 import { DailyApps, type NativeResult } from '../daily';
 import { filesIndex } from './files-index';
-/** Native-only reopen of one recorded selection while Android still holds its grant. */
-const selectedFiles=registerPlugin<{describeSelected(input:{selectionId:string}):Promise<NativeResult>}>('DailyApps');
 
 type Bag = Record<string, any>;
 type Selection = { result: NativeResult; status: string; text?: string; pdf?: {page:number;count:number;image:string}; epoch: number; renames?: number };
@@ -107,7 +105,7 @@ export function installSelectedDocumentAdapter(_Component: unknown, views: Recor
       const data = render(st, api);
       if(module === 'files' && api.active && !restoreAttempted && Capacitor.isNativePlatform()) {
         restoreAttempted = true; const requestedEpoch = epoch;
-        const openId = filesIndex.open(); if (openId) void selectedFiles.describeSelected({ selectionId: openId }).then(result => {if(epoch === requestedEpoch && !current && result.status === 'selected')void accept('files',result,api);}).catch(()=>{});
+        const openId = filesIndex.open(); if (openId) void DailyApps.describeSelected({ selectionId: openId }).then(result => {if(epoch === requestedEpoch && !current && result.status === 'selected')void accept('files',result,api);}).catch(()=>{});
       }
       if (st.open !== marker || !current) return data;
       const selected = current;

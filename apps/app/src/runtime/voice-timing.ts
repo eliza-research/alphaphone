@@ -1,3 +1,5 @@
+import type { VoiceSendPolicy } from './voice-selection';
+import type { HeardOutcome } from './voice-turn-routes';
 /**
  * Per-turn voice latency records, kept only on this device. A record holds a random turn
  * id, the speech route, whether the turn was cold, and millisecond offsets from the end of
@@ -32,11 +34,9 @@
  */
 type VoiceTimingMark = 'recording-end' | 'transcript-ready' | 'send' | 'first-token' | 'final-reply' | 'first-audio';
 type VoiceTimingEntry = 'conversation' | 'notes';
-type VoiceTimingPolicy = 'auto-send' | 'review';
-type VoiceTimingLive = { mode: 'stream' | 'batch' | 'unknown'; partials: number; firstPartialMs?: number; finalFromSpeechEndMs?: number; asrFinalFromSpeechEndMs?: number };
-type VoiceTimingEndpoint = { by: 'semantic' | 'gap'; semantic: 'complete' | 'incomplete' | 'unavailable' | 'timeout' | 'error' | 'not-asked'; reason?: string; latencyMs?: number };
-type VoiceTimingHeard = 'recorded' | 'unchanged' | 'not-needed' | 'nothing-heard' | 'conflict' | 'not-found' | 'unavailable' | 'rejected' | 'stale' | 'invalid';
-type VoiceTimingRecord = { version: 1; id: string; recordedAt: number; route: string; cold: boolean; entry?: VoiceTimingEntry; policy?: VoiceTimingPolicy; marks: Partial<Record<VoiceTimingMark, number>>; live?: VoiceTimingLive; endpoint?: VoiceTimingEndpoint; heard?: VoiceTimingHeard; nativeTurn?: string; outcome?: 'abandoned' };
+export type VoiceTimingLive = { mode: 'stream' | 'batch' | 'unknown'; partials: number; firstPartialMs?: number; finalFromSpeechEndMs?: number; asrFinalFromSpeechEndMs?: number };
+export type VoiceTimingEndpoint = { by: 'semantic' | 'gap'; semantic: 'complete' | 'incomplete' | 'unavailable' | 'timeout' | 'error' | 'not-asked'; reason?: string; latencyMs?: number };
+type VoiceTimingRecord = { version: 1; id: string; recordedAt: number; route: string; cold: boolean; entry?: VoiceTimingEntry; policy?: VoiceSendPolicy; marks: Partial<Record<VoiceTimingMark, number>>; live?: VoiceTimingLive; endpoint?: VoiceTimingEndpoint; heard?: HeardOutcome; nativeTurn?: string; outcome?: 'abandoned' };
 /** Native collector stages (VoiceLatencyTrials) fed by renderer marks. */
 type NativeVoiceStage = 'asr-final' | 'request' | 'first-token';
 const nativeVoiceStages: Partial<Record<VoiceTimingMark, NativeVoiceStage>> = { 'transcript-ready': 'asr-final', send: 'request', 'first-token': 'first-token' };
@@ -107,7 +107,7 @@ function voiceTimingSave(row: VoiceTimingRecord) {
   } catch { /* Timing is diagnostic; it never blocks a voice turn. */ }
 }
 /** Start a conversation turn at the end of recording. Any unfinished turn is abandoned. */
-export function beginVoiceTurn(input: { route: string; cold: boolean; entry?: VoiceTimingEntry; policy?: VoiceTimingPolicy }): string | undefined {
+export function beginVoiceTurn(input: { route: string; cold: boolean; entry?: VoiceTimingEntry; policy?: VoiceSendPolicy }): string | undefined {
   abandonVoiceTurn();
   if (!voiceTimingRoutes.includes(input.route) || typeof crypto === 'undefined' || typeof crypto.randomUUID !== 'function') return undefined;
   const id = crypto.randomUUID();
@@ -178,7 +178,7 @@ export function recordHeardVoiceTiming(turn: string | undefined, heard: unknown)
   if (typeof turn !== 'string' || !voiceTimingHeard.includes(heard as string)) return false;
   const row = voiceTimingRecords().find(item => item.id === turn);
   if (!row || row.heard) return false;
-  row.heard = heard as VoiceTimingHeard; voiceTimingSave(row);
+  row.heard = heard as HeardOutcome; voiceTimingSave(row);
   return true;
 }
 /** The turn ended without a reply (cancelled, discarded, typed instead). Kept as abandoned. */
@@ -197,8 +197,8 @@ export function activeVoiceTurn() { return voiceTimingActive?.id; }
  * recorded between transcript-ready and send. A discarded or failed send abandons the turn.
  * Returns null when nothing was sent.
  */
-export function sendVoiceEntry<T>(input: { policy: VoiceTimingPolicy; transcript: string; review: (text: string) => Promise<string | null>; send: (text: string) => Promise<T> }): Promise<{ text: string; result: T } | null> { return voiceEntrySend(input); }
-async function voiceEntrySend<T>(input: { policy: VoiceTimingPolicy; transcript: string; review: (text: string) => Promise<string | null>; send: (text: string) => Promise<T> }): Promise<{ text: string; result: T } | null> {
+export function sendVoiceEntry<T>(input: { policy: VoiceSendPolicy; transcript: string; review: (text: string) => Promise<string | null>; send: (text: string) => Promise<T> }): Promise<{ text: string; result: T } | null> { return voiceEntrySend(input); }
+async function voiceEntrySend<T>(input: { policy: VoiceSendPolicy; transcript: string; review: (text: string) => Promise<string | null>; send: (text: string) => Promise<T> }): Promise<{ text: string; result: T } | null> {
   // Bound to the turn active now; a later turn is never marked or abandoned by this one.
   const turn = voiceTimingActive?.id, retire = () => { if (turn !== undefined && turn === voiceTimingActive?.id) abandonVoiceTurn(); };
   let text: string | null = input.transcript;

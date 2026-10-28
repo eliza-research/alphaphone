@@ -1,3 +1,4 @@
+import {openLegacyNotes} from './helpers/legacy-notes';
 // Journey J05: Web research -> note, driven through rendered controls in the browser build
 // (development profile, /?mode=dev, with the development agent profile connected).
 //
@@ -44,9 +45,7 @@ async function begin(page: Page, external: string[], crossOriginReadable: boolea
   await page.getByRole('button', {name: 'Save development reply'}).click();
   await expect(page.getByRole('status').filter({hasText: 'Development reply saved.'})).toBeVisible();
   await page.getByRole('button', {name: 'Connect development profile'}).click();
-  await returnToApps(page);
-  await openLegacyNotes(page);
-  await returnToApps(page);
+  await returnToApps(page);await openLegacyNotes(page);await returnToApps(page);
   await button(page, 'Browser').click();
   await button(page, 'Search or type address').click();
   await page.getByRole('textbox', {name: 'Address', exact: true}).fill(url);

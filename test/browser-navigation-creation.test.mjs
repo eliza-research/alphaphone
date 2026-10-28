@@ -26,6 +26,30 @@ for(const subaction of ['back','forward','reload'])test(`agent ${subaction} bind
 test('foreign selected tab, view, owner and unsupported command cannot reach native Browser',async()=>{for(const change of ['tab','view','dispose','owner','command']){const h=commandHarness();if(['tab','view','dispose'].includes(change))h[change]();await assert.rejects(h.execute(change==='command'?{subaction:'back',id:'server-tab'}:{subaction:'back'},new AbortController().signal,()=>{if(change==='owner')throw Error('Owner changed');}));assert.equal(h.calls.length,0);}});
 test('cancellation never repeats a native browser command',async()=>{const h=commandHarness(),c=new AbortController();c.abort();await assert.rejects(h.execute({subaction:'reload'},c.signal,()=>{}));assert.equal(h.calls.length,0);});
 
+const stateChangedStart="  void Browser.addListener('stateChanged',";
+const stateChangedSource=stripTypeScriptTypes(source.slice(source.indexOf(stateChangedStart)+stateChangedStart.length,source.indexOf(').then((value:any)=>{listener=value;})',source.indexOf(stateChangedStart))),{mode:'transform'});
+function committedPageHarness({native=false,privateTab=false}={}){
+ const current={cur:'owned',visits:[]},metadata=new Map(),created=new Map([['owned',Promise.resolve()]]);
+ const context={session:'session',created,metadata,reading:false,documentRevisions:new Map(),lastGeometry:'',MAX_HISTORY:100,Capacitor:{isNativePlatform:()=>native},state:()=>current,isPrivate:()=>privateTab,shell:{vset(_key,patch){Object.assign(current,patch);}},refresh(){}};
+ const receive=vm.runInNewContext('const receive = '+stateChangedSource+';receive',context);
+ const event={session:'session',id:'owned',sequence:1,navigation:1,url:'http://127.0.0.1/article',committed:true,loading:false,error:''};
+ return {current,metadata,receive,event};
+}
+test('confirmed embedded and native pages retain normal tabs and bounded history',()=>{
+ for(const native of [false,true]){
+  const h=committedPageHarness({native});h.receive(h.event);h.receive({...h.event,sequence:2});
+  assert.equal(h.metadata.get('owned').savedUrl,h.event.url);
+  assert.deepEqual(Array.from(h.current.visits),[h.event.url]);
+ }
+});
+test('private and unconfirmed page events never add browsing history',()=>{
+ const privatePage=committedPageHarness({privateTab:true});privatePage.receive(privatePage.event);assert.equal(privatePage.current.visits.length,0);
+ for(const change of [{externalOnly:true},{committed:false},{loading:true},{error:'Navigation failed'}]){
+  const h=committedPageHarness();h.receive({...h.event,...change});
+  assert.equal(h.current.visits.length,0);assert.equal(h.metadata.get('owned').savedUrl,undefined);
+ }
+});
+
 // Both the manual and approved paths execute the adapter's existing navigate().
 // The bridge is deterministic here; no website, model or device is contacted.
 const approvedSource=stripTypeScriptTypes(source.slice(source.indexOf('    this.browserNavigateApproved ='),source.indexOf('    // Identity only:')),{mode:'transform'});
