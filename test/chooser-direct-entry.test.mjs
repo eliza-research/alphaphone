@@ -24,9 +24,9 @@ test('ready choice renders usable email path and explicit unavailable Google not
 });
 test('automatic readiness probes once per unresolved entry, rearms after a form closes and never initiates sign-in',()=>{
  const code=between(source,'  const automaticSignInProbe =','  const visible=');
- let ref,callback,count=0;
- const apply=new Function('useRef','useEffect','signInEntryRequired','snapshot','connectionController','residentEnvironment',transformSync(code,{loader:'tsx'}).code);
- const draw=(required,busy=false,signIn=null,rest={})=>{callback=null;apply(()=>ref??=( {current:false}),fn=>{callback=fn;},required,{busy,signIn,...rest},{beginSignIn(...args){assert.deepEqual(args,['production',false,true]);count++;},signInGoogle(){throw Error('Unexpected Google');},signInEmail(){throw Error('Unexpected email');}},()=> 'production');callback();};
+ let ref,effects=[],count=0;
+ const apply=new Function('useRef','useEffect','signInEntryRequired','snapshot','connectionController','residentEnvironment','isAndroid','cloudSignIn','update',transformSync(code,{loader:'tsx'}).code);
+ const draw=(required,busy=false,signIn=null,rest={})=>{effects=[];apply(()=>ref??=( {current:false}),fn=>{effects.push(fn);},required,{busy,signIn,...rest},{beginSignIn(...args){assert.deepEqual(args,['production',false,true]);count++;},signInGoogle(){throw Error('Unexpected Google');},signInEmail(){throw Error('Unexpected email');}},()=> 'production',false,undefined,()=>{throw Error('Unexpected native recovery update in browser');});assert.equal(effects.length,2,'execute both real startup effects in React order');for(const effect of effects)effect();};
  draw(true,false,null,{startupResolved:false});assert.equal(count,0);
  draw(true,false,null,{automaticRestore:true});assert.equal(count,0);
  draw(true,true);assert.equal(count,0);draw(true);draw(true);assert.equal(count,1);
