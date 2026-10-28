@@ -9,6 +9,8 @@
  */
 import {
   allowanceText as sharedAllowanceText,
+  organizationCreditFromLimits,
+  type OrganizationCreditBalance,
   describeSubscription as sharedDescribeSubscription,
   redeemFailureMessage as sharedRedeemFailureMessage,
   serviceLimitMessage as sharedServiceLimitMessage,
@@ -44,23 +46,11 @@ export function subscriptionSummary(view: SubscriptionView | null | undefined, o
   return sharedSubscriptionSummary(view, { ...rest, copy: alphaSubscriptionCopy(serviceName) });
 }
 
-type Bag = Record<string, unknown>;
-const bag = (value: unknown): Bag | null => value && typeof value === 'object' && !Array.isArray(value) ? value as Bag : null;
 /**
- * The organization credit balance from Cloud's exact billing snapshot, shown only in Cloud's
- * explicit organization-credit billing mode (October 16 decision), never as a top-up meter and
- * never used to admit AI. Missing, stale, negative or malformed authority is unavailable.
+ * The organization credit balance shown in the approved Membership & credits sheet, read by the
+ * shared `organizationCreditFromLimits` from Cloud's exact billing snapshot in its explicit
+ * organization-credit billing mode (October 16 decision). It is never a top-up meter and never
+ * admits AI.
  */
-export interface MembershipCreditDetails { state: 'zero' | 'funded' | 'unavailable'; usd: string | null; observedAt: number | null }
-export function membershipCreditDetailsFromLimits(payload: unknown, now = Date.now()): MembershipCreditDetails {
-  const unavailable: MembershipCreditDetails = { state: 'unavailable', usd: null, observedAt: null };
-  const root = bag(payload), data = bag(root?.data), v2 = bag(data?.v2), observation = bag(v2?.balance), row = bag(observation?.value), amount = bag(row?.balance);
-  if (root?.success !== true || data?.schemaVersion !== 2 || observation?.status !== 'available' || observation.source !== 'organizations' || typeof observation.observedAt !== 'string') return unavailable;
-  const at = Date.parse(observation.observedAt);
-  if (!Number.isFinite(at) || at > now + 60000 || now - at > 300000 || typeof row?.revision !== 'string' || !/^\d+$/.test(row.revision)) return unavailable;
-  if (amount?.unit !== 'usd' || amount.currency !== 'USD' || typeof amount.value !== 'string' || !/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/.test(amount.value)) return unavailable;
-  return { state: /^0(?:\.0+)?$/.test(amount.value) ? 'zero' : 'funded', usd: amount.value, observedAt: at };
-}
-export function membershipBalanceFromLimits(payload: unknown, now = Date.now()): 'zero' | 'funded' | 'unavailable' {
-  return membershipCreditDetailsFromLimits(payload, now).state;
-}
+export type MembershipCreditDetails = OrganizationCreditBalance;
+export const membershipCreditDetailsFromLimits = organizationCreditFromLimits;

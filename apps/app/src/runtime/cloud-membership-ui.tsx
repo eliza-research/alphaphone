@@ -1,7 +1,7 @@
 import React,{useEffect,useId,useRef,useState} from 'react';
 import './cloud-membership-ui.css';
 export type MembershipBalance='checking'|'zero'|'funded'|'member'|'unavailable';
-import {subscriptionSummary,type ServiceLimit,type SubscriptionView} from './subscription-entitlement';
+import {serviceLimitNextChange,subscriptionSummary,type ServiceLimit,type SubscriptionView} from './subscription-entitlement';
 function creditLabel(usd:string):string {
  const [whole,fraction='']=usd.split('.');
  return `$${whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')}.${fraction.replace(/0+$/,'').padEnd(2,'0')}`;
@@ -10,12 +10,6 @@ function endLabel(endsAt:number):string {
  const date=new Date(endsAt).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
  const days=Math.ceil((endsAt-Date.now())/86400000);
  return days>0?`Ends ${date} · ${days} ${days===1?'day':'days'} left`:`Ended ${date}`;
-}
-/** Milliseconds until a shown Cloud limit's text changes or lapses (between 1 s and 1 h), or null. */
-function nextLimitChange(limit:ServiceLimit&{observedAt:number},now:number):number|null {
- const points=[limit.retryAfterMs!==null?limit.observedAt+limit.retryAfterMs:null,limit.resetsAt,limit.retryAfterMs===null&&limit.resetsAt===null?limit.observedAt+60_000:null]
-  .filter((at):at is number=>at!==null&&at>now);
- return points.length?Math.min(3_600_000,Math.max(1000,Math.min(...points)-now)):null;
 }
 /**
  * Approved "Membership & credits" bottom-sheet content (decision: NubsCarson 7a44d7038); balances and
@@ -33,7 +27,7 @@ export function CloudMembershipControls({balance,busy,error,connectionError,noti
  // Render again when the shown limit's wait ends or its reset passes, so a lapsed retry time is not
  // left on screen. Only those moments change the line; it is not a per-second countdown.
  const [,tick]=useState(0);
- const limitChange=summary.limit&&lastLimit?nextLimitChange(lastLimit,Date.now()):null;
+ const limitChange=summary.limit&&lastLimit?serviceLimitNextChange(lastLimit,lastLimit.observedAt,Date.now()):null;
  useEffect(()=>{if(limitChange===null)return;const timer=setTimeout(()=>tick(value=>value+1),limitChange);return ()=>clearTimeout(timer);});
  useEffect(()=>{if(codeVisible)code.current?.focus();},[codeVisible]);
  async function redeem(event:React.FormEvent){
