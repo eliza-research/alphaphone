@@ -119,7 +119,11 @@ for (const frame of ['done', 'error'] as const) test(`a provider-less turn witho
   const plan = page.getByRole('button', { name: /^Redeem code or choose a plan/ });
   await expect(plan).toHaveCount(1);
   await plan.click();
-  await expect(page.getByRole('dialog', { name: 'Membership & credits', exact: true })).toBeVisible();
+  // On the phone's own agent the plan action opens the resident account & plan panel (plan headline,
+  // Check plan again, Approve this phone again); it carries the Membership & credits controls.
+  const account = page.getByRole('dialog', { name: 'Eliza Cloud account & plan', exact: true });
+  await expect(account).toBeVisible();
+  await expect(account.getByRole('region', { name: 'Membership and credits', exact: true })).toBeVisible();
   // Nothing was purchased or opened, and the message was sent once.
   expect(await stub(page, s => s.opened)).toEqual([]);
   expect(await harness(page, f => f.streams)).toBe(1);
