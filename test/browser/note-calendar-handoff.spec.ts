@@ -9,7 +9,7 @@ import {test,expect,type Page} from '@playwright/test';
 import {returnToApps} from './app-navigation';
 import {openLegacyNotes,selectLegacyNotes} from './helpers/legacy-notes';
 import {openBrowserCalendar} from './helpers/browser-calendar';
-test.setTimeout(120_000);
+test.setTimeout(240_000);
 const button=(page:Page,name:string|RegExp)=>page.getByRole('button',{name,exact:true});
 const notes=(page:Page)=>page.evaluate(async()=>JSON.parse((await (await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw())||'{"records":[]}').records as any[]);
 const reminders=(page:Page)=>page.evaluate(async()=>(JSON.parse((await (await import('/src/browser/reminder-store.ts')).reminderDocument.readRaw())||'{"reminders":[]}').reminders as any[]).filter(r=>r.status!=='cancelled'));

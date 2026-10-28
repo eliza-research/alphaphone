@@ -13,6 +13,7 @@ const cloudSignInModule = await import('../apps/app/src/runtime/cloud-sign-in.ts
 if (!process.execArgv.includes('--experimental-transform-types')) {
   process.exit(spawnSync(process.execPath, ['--import','tsx','--experimental-transform-types', process.argv[1]], { stdio: 'inherit' }).status ?? 1);
 }
+const {clockHandoffCapabilities}=await import('../apps/app/src/runtime/clock-contract.ts');
 const {appRecordInvalidations}=await import('../apps/app/src/runtime/app-record-completion.ts');
 const {AUTOMATIONS_COMMITTED_EVENT,automationsCommitted}=await import('../apps/app/src/runtime/automation-completion.ts');
 const { cloudServiceName, CloudProtocol, CloudProvisionAcceptedError } = await import('../apps/app/src/runtime/cloud-protocol.ts');
@@ -112,7 +113,7 @@ let clockRetirements=0,heldClockRetirement=null,clockRetirementStarted=null;
 const retireClockReviews=async()=>{clockRetirements++;clockRetirementStarted?.();if(heldClockRetirement)await heldClockRetirement;};
 // This controller fixture models a host whose transport reaches Eliza Cloud. The flag-off web page
 // has none and starts no Cloud route; test/browser/connection-boundaries.production.spec.ts covers it.
-const sandbox = { validateUuid, isCalendarReadFailureCode, appRecordInvalidations,AUTOMATIONS_COMMITTED_EVENT,automationsCommitted, browserCloudResidentEnabled:false,browserCloudResidentEnvironment:'production',...residentRecovery,CAMERA_CAPTURE_CAPABILITY:'camera.capture-photo.v1',readDevicePreferences:async()=>({askBeforeAgentActions:true}),  resolveCloudEnvironment,fixtureViteEnv:{DEV:true},...subscriptionEntitlement, ...cloudSignInModule, cloudSignIn:undefined, cloudSignInGoogle:false, AlphaClientError, browserLocalAgentEnabled:true, retireClockReviews, workflowPresentationProtocol:async()=>2, browserDevProfile:false,privateLocalPreviewEnabled:false, devProfileQuery:false, testMocksEnabled:true, devSurfacesEnabled:true, secureConnectionStore:{read:async slot=>deviceSlots.get(slot)??null,write:async(slot,value)=>{deviceSlots.set(slot,value);},remove:async slot=>{deviceSlots.delete(slot);}},
+const sandbox = { validateUuid, isCalendarReadFailureCode, appRecordInvalidations,AUTOMATIONS_COMMITTED_EVENT,automationsCommitted, browserCloudResidentEnabled:false,browserCloudResidentEnvironment:'production',...residentRecovery,CAMERA_CAPTURE_CAPABILITY:'camera.capture-photo.v1',clockHandoffCapabilities,readDevicePreferences:async()=>({askBeforeAgentActions:true}),  resolveCloudEnvironment,fixtureViteEnv:{DEV:true},...subscriptionEntitlement, ...cloudSignInModule, cloudSignIn:undefined, cloudSignInGoogle:false, AlphaClientError, browserLocalAgentEnabled:true, retireClockReviews, workflowPresentationProtocol:async()=>2, browserDevProfile:false,privateLocalPreviewEnabled:false, devProfileQuery:false, testMocksEnabled:true, devSurfacesEnabled:true, secureConnectionStore:{read:async slot=>deviceSlots.get(slot)??null,write:async(slot,value)=>{deviceSlots.set(slot,value);},remove:async slot=>{deviceSlots.delete(slot);}},
   PersonalProtocolError, personalIntent:async()=>null, savePersonalIntent:async(_owner,intent)=>intent, clearPersonalIntent:async()=>{},
   RemoteProtocol, remoteCredentialStore, nativeRemoteRequest, DeviceActions, presentDeviceRecordOperation, actionScope:async value=>Buffer.from(value).toString('base64url').slice(0,32), negotiateEnabledViews:async()=>'',
   Capacitor:{getPlatform:()=>'web',isNativePlatform:()=>false},aospImage:false,SMS_SEND_CAPABILITY:'sms.send.v1', setTimeout:(callback,ms)=>setTimeout(callback,ms===15000?20:ms), clearTimeout, Intl, Date, Buffer, pauseHostedBackground:async()=>{}, configureHostedBackground:async()=>{}, registerPlugin: () => ({}), cloudServiceName, CloudProtocol, DevelopmentCloudAgentProtocol, CloudProvisionAcceptedError, phoneContextMessage, findStoppedUserTurn, nativeCloudRequest,
@@ -173,6 +174,10 @@ try {
     await controller.cloudPersonalConnect();
     assert.ok(controller.getSnapshot().session,'registered Cloud connection succeeds');
     assert.equal(controller.getSnapshot().error,'');
+    // A device-registration fault is swallowed into the legacy text path; prove the
+    // registration (and its negotiated text format) actually completed.
+    assert.equal(controller.getSnapshot().phoneCapabilityReason,'','Cloud device registration completes');
+    assert.equal(controller.getSnapshot().phoneActionsAvailable,true,'Cloud device actions are enrolled');
     const literal=phoneContextMessage('literal authored envelope',{view:'notes',revision:9,sensitive:false}).text;
     await controller.send(literal,{view:'notes',revision:10,sensitive:false},'format-'+String(version),new AbortController().signal);
     const sent=sentBodies.at(-1);
