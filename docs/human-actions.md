@@ -154,7 +154,9 @@ These are the values approved policy deliberately leaves open. None reopens a de
 - Do: the [dependency audit](dependency-audit.md#licence-flags-p-09) flags `@metamask/sdk` 0.33.1
   in the resident runtime: its licence grants non-commercial use only, with a monthly-user limit.
   P-09 covers open-source licences only, so whether the product may ship it is open. The audit
-  names the alternative: removing it from the agent bundle is an upstream elizaOS change.
+  names the alternative: removing it from the agent bundle is an upstream elizaOS change. In the
+  pinned lock only `@wagmi/connectors` requires it (through `wagmi`, a dependency of the shared
+  `packages/ui`), a wallet-connector closure; Wallet is outside the MVP (P-38).
 - Seam: the notices flag it `non-open-source-terms`; nothing blocks a build (P-09).
 - Verify: the decision is recorded in decisions.md.
 - Unblocks: licence clearance for distribution.

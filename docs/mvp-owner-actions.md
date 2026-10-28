@@ -8,8 +8,8 @@ retains earlier campaign details. Policy approval is not evidence of qualificati
 
 The single ordered checklist of every step only a person can take, with the file, setting,
 script or runbook that waits for it and how to verify it, is [human actions](human-actions.md)
-(`npm run human:status` prints the steps this repository records). This page keeps the
-inventory coverage below.
+(`npm run human:status` prints the steps this repository records). The groups below summarise
+the same steps by role; this page also keeps the resolved-choice and inventory coverage notes.
 
 ## Resolved choices
 
