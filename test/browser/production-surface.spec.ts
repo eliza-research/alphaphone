@@ -380,10 +380,11 @@ for (const mode of ['signed-out','empty','credits','unavailable','funded','repla
   for(const retired of ['without AI','Continue offline','Connect an agent'])expect(await page.locator('body').innerText()).not.toContain(retired);
   // Every Alpha Phone needs an Eliza Cloud account for AI: signed out, the sign-in dialog opens
   // by itself and cannot be dismissed. Without an admissible plan a non-blocking notice beside the
-  // running agent offers Redeem code and Choose a plan; its Redeem code opens the plan panel. A
-  // sign-in that changed underneath admission is reported in the dialog. Otherwise nothing opens.
+  // running agent offers Redeem code and Choose a plan; its Redeem code opens the approved
+  // Membership & credits sheet. A sign-in that changed underneath admission is reported in the
+  // dialog. Otherwise nothing opens.
   const signedOut=mode==='signed-out'||mode==='legacy-offline'||mode==='unpackaged',needsPlan=mode==='empty'||mode==='unavailable';
-  const dialog=signedOut?page.locator('[role="main"].alpha-cloud-sign-in'):needsPlan?page.getByRole('dialog',{name:/^Eliza Cloud account(?: & plan)?$/}):page.getByRole('region',{name:'Settings',exact:true});
+  const dialog=signedOut?page.locator('[role="main"].alpha-cloud-sign-in'):needsPlan?page.getByRole('dialog',{name:'Membership & credits',exact:true}):page.getByRole('region',{name:'Settings',exact:true});
   if(needsPlan){
    const notice=page.getByRole('region',{name:'Eliza Cloud plan notice'});
    await expect(notice).toContainText('Your agent is running on this device. AI replies aren’t available right now');
@@ -402,7 +403,7 @@ for (const mode of ['signed-out','empty','credits','unavailable','funded','repla
    // A developer build without the runtime says so and offers Retry; it never offers an offline mode.
    await expect(dialog.getByRole('button',{name:'Email me a code',exact:true})).toBeVisible();
    await expect(dialog.getByRole('status').filter({hasText:'This developer build does not include the on-device agent.'})).toHaveText('This developer build does not include the on-device agent.');
-  }else if(!signedOut&&mode!=='replaced')await expect(dialog.getByText(needsPlan?'Running on this device':'On this device',{exact:true})).toBeVisible();
+  }else if(!signedOut&&mode!=='replaced'&&!needsPlan)await expect(dialog.getByText('On this device',{exact:true})).toBeVisible();
   if(signedOut){
    await expect(dialog.getByText('Sign in to verify your account. You’ll review access before authorizing Alpha Phone.',{exact:true})).toBeVisible();
    await expect(dialog.getByRole('button',{name:'Email me a code',exact:true})).toBeVisible();
@@ -413,16 +414,25 @@ for (const mode of ['signed-out','empty','credits','unavailable','funded','repla
   // running agent; nothing is bound. Cloud refuses AI requests without a plan.
   const admitted=mode==='funded'||mode==='credits';
   if(needsPlan){
-   await expect(dialog.getByRole('button',{name:'Redeem code',exact:true})).toBeVisible();
-   await expect(dialog.getByRole('button',{name:'Choose a plan',exact:true})).toBeVisible();
-   await expect(dialog.getByText(mode==='empty'?'No active plan':'Plan status unavailable',{exact:true})).toBeVisible();
+   // The sheet's code entry and Add funds (the billing review) replace its earlier Redeem code
+   // and Choose a plan buttons; the Membership fact never claims a plan.
+   await expect(dialog.getByRole('button',{name:'Use membership code',exact:true})).toBeVisible();
+   await expect(dialog.getByRole('button',{name:'Add funds',exact:true})).toBeVisible();
+   await expect(dialog.locator('.alpha-membership-plan-fact dd')).toHaveText(mode==='empty'?'No active membership':'Not confirmed');
   }
   if(mode==='replaced')await expect(dialog.getByText(/account changed/i)).toBeVisible();
   if(admitted)await expect(dialog.getByRole('button',{name:'Sign out of Eliza Cloud',exact:true})).toBeVisible();
   if(mode==='credits'){await expect(dialog.getByText('Eliza Cloud credits',{exact:true})).toBeVisible();await expect(dialog.getByRole('button',{name:'Redeem code',exact:true})).toHaveCount(0);}
   for(const retired of ['Use local apps without AI','Continue offline'])await expect(dialog.getByRole('button',{name:retired,exact:true})).toHaveCount(0);
   // Every dialog but the required sign-in closes; the agent keeps running.
-  if(needsPlan){await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);}else if(!signedOut){await dialog.getByRole('button',{name:'Back to Settings',exact:true}).click();}
+  if(needsPlan){
+   await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);
+   // The plan headline remains Settings › Eliza Cloud account & plan.
+   await page.getByRole('button',{name:'Settings',exact:true}).click();
+   const settings=page.getByRole('region',{name:'Settings',exact:true});
+   await settings.getByRole('button',{name:/^Eliza Cloud account & plan/}).click();
+   await expect(settings.getByText(mode==='empty'?'No active plan':'Plan status unavailable',{exact:true})).toBeVisible();
+  }else if(!signedOut){await dialog.getByRole('button',{name:'Back to Settings',exact:true}).click();}
   if(mode==='legacy-offline'||mode==='signed-out')expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('alpha.connection.selection.v1')!))).toEqual({kind:'resident'});
   const calls=await page.evaluate(()=>(window as any).residentCalls);
   expect(calls.some((c:any)=>c.url?.includes('/personal/')||c.url?.includes('/upgrade-tier')||c.url?.includes('/credits/'))).toBe(false);

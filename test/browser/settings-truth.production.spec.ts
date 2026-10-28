@@ -421,7 +421,10 @@ test('Settings › Eliza Cloud account & plan reports the verified plan and open
  await expect(plan.getByText('synthetic-settings@example.invalid',{exact:true})).toBeVisible();
  await expect(plan.getByText('Plus',{exact:true})).toBeVisible();
  await plan.getByRole('button',{name:'Redeem code',exact:true}).click();
- await expect(page.getByRole('dialog',{name:'Eliza Cloud account & plan',exact:true}).getByRole('textbox',{name:'Membership code',exact:true})).toBeVisible();
+ // The Settings row opens the approved Membership & credits sheet; its code form is explicit.
+ const sheet=page.getByRole('dialog',{name:'Membership & credits',exact:true});
+ await sheet.getByRole('button',{name:'Use membership code',exact:true}).click();
+ await expect(sheet.getByRole('textbox',{name:'Membership code',exact:true})).toBeVisible();
  expect(await page.evaluate(()=>(window as any).truth.calls.filter((c:any)=>c.plugin==='AlphaConnection'&&c.method==='request'&&new URL(c.input.url).pathname==='/api/v1/subscription/redeem').length)).toBe(0);
 });
 
@@ -439,8 +442,11 @@ for(const subscription of ['credits','active','canceled'] as const)test(`Setting
   await expect(plan.getByRole('button',{name:'Manage plan',exact:true})).toBeVisible();
  }else{
   await expect(redeem).toBeVisible();await redeem.click();
+  const sheet=page.getByRole('dialog',{name:'Membership & credits',exact:true});
+  await sheet.getByRole('button',{name:'Use membership code',exact:true}).click();
   await expect(page.getByLabel('Membership code',{exact:true})).toBeVisible();
-  await expect(page.getByRole('dialog',{name:'Eliza Cloud account & plan',exact:true}).getByRole('button',{name:'Redeem code',exact:true})).toBeVisible();
+  // Redeem stays disabled until a code is typed; opening the form sends nothing.
+  await expect(sheet.getByRole('button',{name:'Redeem',exact:true})).toBeDisabled();
  }
  expect(await page.evaluate(()=>(window as any).truth.calls.filter((c:any)=>c.plugin==='AlphaConnection'&&c.method==='request'&&new URL(c.input.url).pathname==='/api/v1/subscription/redeem').length)).toBe(0);
 });
