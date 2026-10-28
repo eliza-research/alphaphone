@@ -1,3 +1,4 @@
+import {installNativeNavigationFixture} from './helpers/native-navigation-protocol';
 // Production Android as the FLAG-OFF renderer sees it, for the *.production.spec.ts files that
 // need mail, an agent conversation, scheduled-digest results or device calendars together.
 //
@@ -52,6 +53,7 @@ export interface FlagOffSchedules {
 export const AGENT_NAME = 'Alpha';
 
 export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
+  await page.addInitScript(installNativeNavigationFixture);
   await page.addInitScript(({ options, agentName }) => {
     const w = window as any; w.androidBridge = {};
     if(!options.freshAccess)localStorage.setItem('alpha:startup-permission-walkthrough:v1',JSON.stringify({version:1,status:'completed',step:4}));
@@ -86,44 +88,16 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
     const emitStream = (streamId: string, event: unknown) => f.emit('Agent', 'alphaAgentStream', { streamId, event });
     const data = (streamId: string, value: unknown) => emitStream(streamId, { type: 'chunk', dataBase64: btoa('data: ' + JSON.stringify(value) + '\n\n') });
     const ok = (value: unknown) => ({ status: 200, data: value });
-    // Canonical renderer preparation is owner/client/view bound and needs claim + ack.
-    const navigationPrepared = new Map<string, {binding: any; claimId?: string}>();
-    const navigationViews = new Set(['chat','inbox','calendar','browser','camera','photos','maps','notes','files','automations','settings']);
-    let registeredDeviceKey = '';
-    const navigationRequest = (method: string, path: string, body: any, owner: unknown) => {
-      const reject = () => { f.unexpected.push(method + ' ' + path); return {status:409,data:{error:'Invalid fixture navigation contract'}}; };
-      if (owner !== id || method !== 'POST' || !body || typeof body !== 'object' || Array.isArray(body)) return reject();
-      const exact = (keys: string[]) => Object.keys(body).length === keys.length && Object.keys(body).every(key => keys.includes(key));
-      const safe = (value: unknown, pattern: RegExp) => typeof value === 'string' && pattern.exec(value)?.[0] === value;
-      const prepare = /^\/api\/views\/([A-Za-z0-9_-]+)\/navigate$/.exec(path);
-      if (prepare?.[0] === path) {
-        const viewId=prepare[1];
-        if (!navigationViews.has(viewId) || !exact(['clientId','delivery','prepareOnly','viewType','completedActionHandoffId']) || body.delivery !== 'completed-action' || body.prepareOnly !== true || body.viewType !== 'gui' || !safe(body.clientId,/^[A-Za-z0-9._-]{1,128}$/) || !safe(body.completedActionHandoffId,/^[A-Za-z0-9._:-]{1,128}$/) || navigationPrepared.has(body.completedActionHandoffId)) return reject();
-        const binding={requestId:body.completedActionHandoffId,clientId:body.clientId,viewId,viewType:'gui',installationId:'fixture-view-'+viewId};
-        navigationPrepared.set(binding.requestId,{binding});
-        return ok({ok:true,status:'prepared',viewId,navigationBinding:binding,completedActionHandoffId:binding.requestId});
-      }
-      const saved=navigationPrepared.get(body.requestId);
-      if (!saved || Object.entries(saved.binding).some(([key,value])=>body[key]!==value)) return reject();
-      if (path === '/api/views/interact-claim') {
-        if (!exact(['requestId','clientId','viewId','viewType','installationId']) || saved.claimId) return reject();
-        saved.claimId=crypto.randomUUID();return ok({claimId:saved.claimId});
-      }
-      if (path === '/api/views/interact-result') {
-        if (!exact(['requestId','clientId','viewId','viewType','installationId','claimId','success','result']) || !saved.claimId || body.claimId!==saved.claimId || typeof body.success!=='boolean' || !body.result || Object.keys(body.result).length!==1 || body.result.switched!==body.success) return reject();
-        navigationPrepared.delete(body.requestId);return ok({ok:true,accepted:true});
-      }
-      return reject();
-    };
+    let fixtureNavigation: any;
+    const navigation=()=>fixtureNavigation??=(window as any).createNativeNavigationFixture(id,agentId,f);
     const request = async (method: string, path: string, body: any, headers: Record<string, string>, owner?: unknown): Promise<{ status: number; data: unknown }> => {
-      if (path.startsWith('/api/views/') && (path.endsWith('/navigate') || path === '/api/views/interact-claim' || path === '/api/views/interact-result')) return navigationRequest(method,path,body,owner);
+      const navigationResult=navigation().request(method,path,body,headers,owner);if(navigationResult)return navigationResult;
       // Mounted canonical views probe these sources; this native fixture provides none.
       if (method === 'GET' && ['/api/notes/state', '/api/lifeops/calendar/feed', '/api/lifeops/calendar/calendars', '/api/lifeops/calendar/next-context'].includes(path.split('?')[0])) return { status: 503, data: { error: 'Canonical records unavailable in this fixture' } };
       if (path === '/api/auth/me') return ok({ identity: { id, kind: 'owner' }, access: { role: 'OWNER', mode: 'local' } });
       if (path === '/api/notes/state' && method === 'GET') return ok({success:true,data:{notes:[],trash:[],revision:0}});
       if (path === '/api/agents') return ok({ agents: [{ id: agentId, name: agentName, status: 'running' }] });
-      if (path === '/api/client-devices/register') { f.installationId = headers['X-Eliza-Device-Id']; registeredDeviceKey=headers['X-Eliza-Device-Key']; }
-      if (path === '/api/client-devices/context' && method === 'GET' && owner === id && f.installationId && headers['X-Eliza-Device-Id'] === f.installationId && headers['X-Eliza-Device-Key'] === registeredDeviceKey) return ok({subjectUserId:id,agentId,installationId:f.installationId,enrollmentId:'fixture-enrollment'});
+      if (path === '/api/client-devices/register') { f.installationId = headers['X-Eliza-Device-Id']; navigation().register(headers); }
       if (path === '/api/client-devices/register') return ok({ installationId: headers['X-Eliza-Device-Id'], enrollmentId: 'fixture-enrollment', capabilities: [] });
       if (path === '/api/client-devices/proposals') return ok({ proposals: [] });
       // The agent advertises scheduled digests only; the workflow engine itself is not offered here.

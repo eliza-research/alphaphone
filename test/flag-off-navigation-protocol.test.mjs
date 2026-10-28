@@ -2,11 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-const source=readFileSync(new URL('./browser/flag-off-android.ts',import.meta.url),'utf8');
-const start=source.indexOf('    const navigationPrepared ='),end=source.indexOf('    // The phone enrollment',start);
-assert(start>=0&&end>start);
-const code=stripTypeScriptTypes(source.slice(start,end),{mode:'transform'});
-function fixture(){const f={unexpected:[],installationId:''};const request=new Function('f','id','agentId','ok','options','agent','persist',code+';return request;')(f,'owner','agent',data=>({status:200,data}),{}, {},()=>{});return{f,request};}
+const source=readFileSync(new URL('./browser/helpers/native-navigation-protocol.ts',import.meta.url),'utf8');
+const code=stripTypeScriptTypes(source,{mode:'transform'}).replace(/^export /gm,'');
+function fixture(){const f={unexpected:[]},window={};new Function('window',code+';installNativeNavigationFixture();')(window);const protocol=window.createNativeNavigationFixture('owner','agent',f);return{f,request:async(method,path,body,headers,owner)=>{if(path==='/api/client-devices/register'){protocol.register(headers);return{status:200,data:{}};}const result=protocol.request(method,path,body,headers,owner);if(result)return result;f.unexpected.push(method+' '+path);return{status:404,data:{}};}};}
 const prepare={clientId:'renderer',delivery:'completed-action',prepareOnly:true,viewType:'gui',completedActionHandoffId:'manual-1'};
 test('actual flag-off fixture requires owner-bound preparation, claim and exact acknowledgment',async()=>{
  const {f,request}=fixture();const post=(path,body)=>request('POST',path,body,{},'owner');
