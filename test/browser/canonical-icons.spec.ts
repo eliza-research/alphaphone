@@ -11,7 +11,9 @@ test('published assets retain their recorded provenance',()=>{
  expect(createHash('sha256').update(readFileSync(new URL('LICENSE.txt',root))).digest('hex')).toBe(source.licenseSha256);
  const catalog=JSON.parse(readFileSync(new URL('../../apps/app/src/icon-catalog.json',import.meta.url),'utf8'));
  const model=readFileSync(new URL('../../apps/app/src/prototype/model.js',import.meta.url),'utf8');
- const initial=model.slice(model.indexOf('var IC = {'),model.indexOf('var DARK'));
+ // The IC literal alone: from its declaration to its closing brace (model.js is an ES module).
+ const icStart=model.indexOf('var IC = {'),icEnd=model.indexOf('\n};',icStart);expect(icStart).toBeGreaterThanOrEqual(0);expect(icEnd).toBeGreaterThan(icStart);
+ const initial=model.slice(icStart,icEnd+3);
  const extensions=[...model.matchAll(/IC\.([A-Za-z0-9_]+)\s*=\s*IC\.\1\s*\|\|\s*"([^"\n]+)";/g)].map(match=>match[0]).join('\n');
  const box:any={};vm.runInNewContext(initial+'\n'+extensions+'\nglobalThis.icons=IC;',box);
  expect(Object.keys(catalog.ic).sort()).toEqual(Object.keys(box.icons).sort());expect(Object.keys(catalog.ic)).toHaveLength(148);
@@ -25,9 +27,15 @@ for(const theme of ['light','dark'])test(`canonical launcher, dock and Files ass
  await page.addInitScript(()=>localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'})));
  await page.goto('/?mode=dev&theme='+theme);
  const camera=page.getByRole('button',{name:'Camera',exact:true});
- // Camera stays an ordinary named button; inspecting it never starts a device capture.
- await expect(camera.first().locator('[data-alpha-icon]')).toHaveAttribute('data-alpha-icon','/icons/lucide/camera.svg');
- await expect(page.getByRole('button',{name:'Workflows',exact:true}).locator('[data-alpha-icon]')).toHaveAttribute('data-alpha-icon','/icons/lucide/workflow.svg');
+ // Home's app grid is the shared mobile shell's (prototype/home-shell.ts): each tile draws its
+ // published asset as a single-color mask. Camera stays an ordinary named button; inspecting it
+ // never starts a device capture.
+ const tileGlyph=(name:string)=>page.getByRole('region',{name:'Home',exact:true}).getByRole('button',{name,exact:true}).locator('[data-mobile-shell-tile-face] > span[aria-hidden="true"]');
+ for(const [name,asset] of [['Camera','camera'],['Workflows','workflow']]){
+  await expect(tileGlyph(name)).toHaveCount(1);
+  expect(await tileGlyph(name).evaluate(el=>getComputedStyle(el).maskImage)).toMatch(new RegExp('/icons/lucide/'+asset+'\\.svg"?\\)$'));
+ }
+ await expect(camera.first()).toBeVisible();
  await page.screenshot({animations:'disabled',path:info.outputPath('launcher-'+theme+'.png')});
  await page.getByRole('button',{name:'Files',exact:true}).click();
  const type=page.getByRole('button',{name:'Type',exact:true});await expect(type.locator('[data-alpha-icon]')).toHaveAttribute('data-alpha-icon','/icons/lucide/keyboard.svg');
