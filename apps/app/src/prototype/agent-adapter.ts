@@ -76,6 +76,55 @@ class NotDispatched extends Error {}
 // A page entering the back/forward cache (`persisted`) is restored later, so it is not leaving.
 let pageLeaving=false;
 if(typeof window!=='undefined'){window.addEventListener('pagehide',(event:PageTransitionEvent)=>{if(!event.persisted)pageLeaving=true;});window.addEventListener('pageshow',()=>{pageLeaving=false;});}
+/**
+ * A new chat's first message is held (marked as sending) in the owner and agent's "no conversation
+ * yet" draft slot; its send then creates the conversation and saves it as the restart selection.
+ * If the page goes away mid-send, the next start opens that conversation, so the mark would only be
+ * offered when a later new chat opens. While nothing is held here, a conversation binding whose
+ * owner and agent have such a mark opens that slot first: the message is offered for review
+ * ("may already have been sent"), never restored as a draft and never resent; sending stays
+ * refused until it is reviewed. `open` is the slot to open instead of `key`. Once the review is
+ * resolved, `moved` names the slot so its resolved text can follow the composer into the
+ * conversation's own draft.
+ */
+async function firstSendReview(shell:Shell,key:string,signal:AbortSignal):Promise<{open?:string;moved?:string}>{
+  let identity:unknown;try{identity=JSON.parse(key);}catch{return {};}
+  if(!Array.isArray(identity)||identity.length!==4||typeof identity[3]!=='string'||!identity[3])return {};
+  const slot=JSON.stringify([...identity.slice(0,3),null]),draft=shell.composerDraft;
+  if(shell.firstSendReview===slot&&draft.binding===slot){
+    if(draft.state.conflict||draft.state.opening)return {open:slot};
+    shell.firstSendReview=undefined;return {moved:slot};
+  }
+  shell.firstSendReview=undefined;
+  // Checked when the composer moves to this conversation, not on every connection update.
+  if(draft.holding||draft.binding===key)return {};
+  // An unreadable slot keeps its own recovery for when a new chat opens it.
+  let saved;try{saved=await(await assistantDraftStore(slot)).read(signal);}catch{return {};}
+  signal.throwIfAborted();
+  if(saved?.sending!==true||draft.holding)return {};
+  shell.firstSendReview=slot;return {open:slot};
+}
+/**
+ * After a first-send review is resolved, the composer's text is saved in the conversation's slot
+ * (by the binding that just opened). Only then is the same text cleared from the "no conversation
+ * yet" slot, by compare-and-exchange, so a later new chat does not offer it again. Unconfirmed,
+ * both copies stay: nothing is lost and nothing is sent.
+ */
+async function settleFirstSendSlot(slot:string,conversation:string,text:string,current:()=>boolean){
+  if(!text)return;// Replaced with an empty composer: the review itself cleared the slot.
+  try{
+    const from=await assistantDraftStore(slot),to=await assistantDraftStore(conversation);
+    for(const delay of [0,150,600,1500]){
+      if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
+      if(!current())return;
+      if((await to.read())?.text!==text)continue;
+      const saved=await from.read();
+      if(!saved||saved.text!==text)return;
+      if(saved.sending===true)continue;
+      try{await from.save(saved,'');return;}catch{/* A newer write won; read it again. */}
+    }
+  }catch{/* Storage review stays with the slot's own recovery. */}
+}
 const preDispatchRefusals=new Set(['Finish the connection or history operation before sending.','Wait for the current reply before sending another message.',NO_AGENT_SEND,RESIDENT_STARTING_NOTICE,RESIDENT_RECOVERING_NOTICE]);
 // It also marks every failure that happened before it posted the message (`notDispatched`).
 function isPreDispatchError(error:unknown){return !!error&&typeof error==='object'&&((error as {notDispatched?:unknown}).notDispatched===true||error instanceof Error&&(preDispatchRefusals.has(error.message)||(error as {code?:unknown}).code==='session_expired'));}
@@ -488,7 +537,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     this.dialogBackObserver = new MutationObserver(() => updateBackAvailability(this));
     this.dialogBackObserver.observe(document.body, {subtree:true, childList:true, attributes:true, attributeFilter:['open']});
     this.composerDraft=new AssistantDraftController(assistantDraftStore,()=>String(this.S().draft||''),(text,expected,current)=>new Promise<void>(resolve=>{if(!this.live||current&&!current()){resolve();return;}this.setState((previous:Shell)=>{if(current&&!current()||expected!==undefined&&String(previous.draft||'')!==expected)return null;if(this.startupDraft!==null)this.startupDraft=undefined;this.reviewedSourceDraft=null;return {draft:text};},resolve);}),()=>{if(this.live)this.setState({});});
-    this.refreshDraftBinding=()=>{this.draftBindingAbort?.abort();if(residentAlwaysPresent&&!connectionController.getSnapshot().session){this.draftBindingTask=Promise.resolve();return;}const controller=this.draftBindingAbort=new AbortController();this.draftBindingTask=connectionController.assistantDraftBinding(controller.signal).then(key=>{if(this.live&&!controller.signal.aborted)return this.composerDraft.open(key);}).catch(()=>{if(this.live&&!controller.signal.aborted)this.composerDraft.unavailable();});};
+    this.refreshDraftBinding=()=>{this.draftBindingAbort?.abort();if(residentAlwaysPresent&&!connectionController.getSnapshot().session){this.draftBindingTask=Promise.resolve();return;}const controller=this.draftBindingAbort=new AbortController();this.draftBindingTask=connectionController.assistantDraftBinding(controller.signal).then(async key=>{if(!this.live||controller.signal.aborted)return;const review=await firstSendReview(this,key,controller.signal);if(!this.live||controller.signal.aborted)return;await this.composerDraft.open(review.open??key);if(review.moved&&this.composerDraft.binding===key)void settleFirstSendSlot(review.moved,key,String(this.S().draft||''),()=>this.live&&this.composerDraft.binding===key);}).catch(()=>{if(this.live&&!controller.signal.aborted)this.composerDraft.unavailable();});};
     this.refreshDraftBinding();
     this.connectionSession = connectionController.getSnapshot().session?.sessionId;
     // Only fresh typing before the first verified session can cross startup admission.
@@ -1058,7 +1107,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     // attempted send still explains why it cannot dispatch before readiness.
     const residentPending=residentAlwaysPresent&&!connection.session&&connection.kind==='recovering'?agentPendingText(connection):'';
     out.draftRetry=!!draft?.error;out.draftStatus=[draft?.message,offline?INFERENCE_OFFLINE_NOTICE:'',residentPending].filter(Boolean).join(' ');out.draftConflict=!!draft?.conflict;out.draftSavedText=draft?.savedText||'(Empty saved draft)';out.draftOpening=!!draft?.consuming;
-    out.restoreSavedDraft=()=>this.composerDraft?.restoreSaved();out.keepCurrentDraft=()=>this.composerDraft?.keepCurrent();out.retryDraft=()=>{this.composerDraft?.retire();this.refreshDraftBinding();};
+    out.restoreSavedDraft=()=>{this.composerDraft?.restoreSaved();if(this.firstSendReview)this.refreshDraftBinding();};out.keepCurrentDraft=()=>{this.composerDraft?.keepCurrent();if(this.firstSendReview)this.refreshDraftBinding();};out.retryDraft=()=>{this.composerDraft?.retire();this.refreshDraftBinding();};
     const onDraft=out.onDraft;
     out.onDraft=(event:Event&{target:HTMLTextAreaElement})=>{
       const connection=connectionController.getSnapshot(),current=String(this.S().draft||'');

@@ -142,8 +142,8 @@ for (const step of ['Back from full to sheet', 'HOME on Home', 'a rotation and t
 // A restart while a sent message is in flight (the process dies before the reply): the device copy
 // of the sent text is marked as sending, so the next start never puts it back in the composer as
 // a draft. It is offered for review, sending waits for that review, and nothing is posted again.
-// The conversation already exists, so the restart reopens the same draft slot (a first message
-// moves the draft to the conversation it creates).
+// The conversation already exists, so the restart reopens the same draft slot (a new chat's
+// first message is covered after these two tests).
 async function restartDuringSend(page: Page, asked: string) {
   const foreign = await connected(page);
   await composer(page).fill('Start the conversation');
@@ -206,6 +206,37 @@ test('replacing the reviewed message after a restart clears only its copy, and t
   expect(posts[0].endsWith('[USER MESSAGE]\n' + next)).toBe(true);
   await expect.poll(() => keptRows(page)).toEqual([]);
   await noResend(page, foreign, 1);
+});
+
+// A new chat's first message, with no warmup send: its text is held in the "no conversation yet"
+// slot while the send creates and selects the conversation. The restart opens that conversation,
+// and the held message is offered for review there, not only when a later new chat opens.
+// Sending waits for the review, and nothing is posted again.
+test('a restart during a new chat\'s first message offers it for review on the conversation it created', async ({ page }) => {
+  test.setTimeout(180_000);
+  const foreign = await connected(page);
+  const asked = 'First message just before the app stopped';
+  await setStub(page, { stream: 'hold' });
+  await composer(page).fill(asked);
+  await composer(page).press('Enter');
+  await expect.poll(() => stub(page, s => typeof s.release), { timeout: 15_000 }).toBe('function');
+  await expect.poll(() => keptRows(page)).toEqual([{ text: asked, sending: true }]);
+  expect(await harness(page, f => f.posts)).toHaveLength(1);
+  await setStub(page, { stream: null });
+  await residentHome(page);
+  await expect(draftStatus(page)).toHaveText(UNSETTLED, { timeout: 30_000 });
+  await expect(composer(page)).toHaveValue('');
+  await expect(page.getByText(`Saved copy: ${asked}`, { exact: true })).toBeVisible();
+  await composer(page).fill('A different question');
+  await composer(page).press('Enter');
+  await expect(page.getByText(REVIEW_UNSETTLED, { exact: true })).toBeVisible();
+  expect(await harness(page, f => f.posts)).toEqual([]);
+  await composer(page).fill('');
+  await button(page, 'Replace saved draft with this text').click();
+  await expect(draftStatus(page)).toHaveCount(0);
+  await expect.poll(() => keptRows(page)).toEqual([]);
+  expect(await harness(page, f => f.posts)).toEqual([]);
+  await noResend(page, foreign, 0);
 });
 
 test('the transcript keeps its reading position through a keyboard resize, Back from full and HOME, and follows the newest message at the bottom', async ({ page }) => {

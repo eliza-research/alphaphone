@@ -133,8 +133,8 @@ const UNSETTLED = 'This message may already have been sent. Check the conversati
 // A restart (the process dies) while a posted message waits for its reply: the device copy of the
 // sent text is marked as sending, so the next start never offers it as a draft. It is shown for
 // review, and keeping the empty composer clears only that copy. Nothing is posted again. The
-// conversation already exists, so the restart reopens the same draft slot (a first message
-// moves the draft to the conversation it creates).
+// conversation already exists, so the restart reopens the same draft slot (a new chat's first
+// message is covered by the next two tests).
 test('a restart while a message is in flight offers it for review, never as a draft, and posts nothing', async ({ page }) => {
   test.setTimeout(120_000);
   await connected(page);
@@ -160,6 +160,60 @@ test('a restart while a message is in flight offers it for review, never as a dr
   await expect(status).toHaveCount(0);
   await expect.poll(() => savedDraft(page, key)).toBe('');
   await expect(composer(page)).toHaveValue('');
+  await page.waitForTimeout(1_000);
+  expect(await fixture(page, f => ({ posts: f.posts, creates: f.creates }))).toEqual({ posts: 0, creates: 0 });
+});
+
+// A new chat's first message is held in the "no conversation yet" slot, and its send creates and
+// selects the conversation. No warmup send: the restart opens that new conversation, and the held
+// message is offered for review there (not only when a later new chat opens). Sending stays
+// refused until it is reviewed, and nothing is posted or created again.
+async function firstSendRestart(page: Page, text: string) {
+  await connected(page);
+  await typeDraft(page, text);
+  const slot = await bindingKey(page);
+  expect(JSON.parse(slot)[3]).toBeNull();
+  await composer(page).press('Enter');
+  await expect.poll(() => fixture(page, f => ({ posts: f.posts, creates: f.creates })), { timeout: 15_000 }).toEqual({ posts: 1, creates: 1 });
+  await page.reload();
+  await expect.poll(() => fixture(page, f => f.ready), { timeout: 30_000 }).toBe(true);
+  await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0, { timeout: 20_000 });
+  const status = page.getByRole('status', { name: 'Assistant draft status', exact: true });
+  await expect(status).toHaveText(UNSETTLED, { timeout: 20_000 });
+  await expect(composer(page)).toHaveValue('');
+  const key = await bindingKey(page);
+  expect(JSON.parse(key)[3]).toBe('fixture-chat');
+  expect(await savedDraft(page, slot)).toBe(text);
+  // Enter while the review is open sends nothing.
+  await composer(page).fill('Not before the review');
+  await composer(page).press('Enter');
+  await composer(page).fill('');
+  return { slot, key, status };
+}
+
+test('a restart during a new chat\'s first message offers it on the conversation it created and posts nothing', async ({ page }) => {
+  test.setTimeout(120_000);
+  const { slot, key, status } = await firstSendRestart(page, 'First message when the app stopped');
+  await page.getByRole('button', { name: 'Replace saved draft with this text', exact: true }).click();
+  await expect(status).toHaveCount(0);
+  await expect.poll(() => savedDraft(page, slot)).toBe('');
+  // The composer is now the conversation's own draft.
+  await typeDraft(page, 'Next words for the conversation');
+  expect(await savedDraft(page, key)).toBe('Next words for the conversation');
+  expect(await savedDraft(page, slot)).toBe('');
+  await page.waitForTimeout(1_000);
+  expect(await fixture(page, f => ({ posts: f.posts, creates: f.creates }))).toEqual({ posts: 0, creates: 0 });
+});
+
+test('restoring a new chat\'s first message after a restart moves it into the conversation\'s draft without sending it', async ({ page }) => {
+  test.setTimeout(120_000);
+  const { slot, key, status } = await firstSendRestart(page, 'Restore this first message');
+  await page.getByRole('button', { name: 'Restore saved draft', exact: true }).click();
+  await expect(composer(page)).toHaveValue('Restore this first message');
+  await expect(page.getByRole('button', { name: 'Restore saved draft', exact: true })).toHaveCount(0);
+  await expect.poll(() => savedDraft(page, key), { timeout: 15_000 }).toBe('Restore this first message');
+  // Only once the conversation holds it is the "no conversation yet" copy cleared.
+  await expect.poll(() => savedDraft(page, slot), { timeout: 15_000 }).toBe('');
   await page.waitForTimeout(1_000);
   expect(await fixture(page, f => ({ posts: f.posts, creates: f.creates }))).toEqual({ posts: 0, creates: 0 });
 });
