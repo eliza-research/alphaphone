@@ -69,7 +69,13 @@ test('client type projection rejects unsupported declarations without writing it
 }));
 test('actual pinned client features retain shared voice source unchanged and exclude dashboard transport',()=>{
  const source=prepareClientFeatures(),stamp=JSON.parse(fs.readFileSync(path.join(source,'.source.json')));
-assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','utf8')).commit);assert.equal(stamp.projectionVersion,10);
+assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','utf8')).commit);assert.equal(stamp.projectionVersion,11);
+ // Node consumers (the Vite config bundle and backend hosts) load linked-sync through cloud-protocol.
+ for(const file of ['google-sync-port.ts','sync-controller.ts','linked-store.ts']){
+  const name='plugins/plugin-calendar/src/linked-sync/'+file,projected=fs.readFileSync(path.join(source,name),'utf8'),original=fs.readFileSync(path.join('vendor/eliza',name),'utf8');
+  assert.doesNotMatch(projected,/["']@elizaos\/contracts["']/,name+' has no package-name contracts import');
+  assert.equal(projected,original.replace('} from "@elizaos/contracts";','} from "../../../../packages/contracts/src/calendar-linked-sync.ts";'),name+' differs from the pinned SDK only in that specifier');
+ }
  const coreTypes=fs.readFileSync(path.join(source,'alpha-voice-core-types.ts'),'utf8');
  for(const [file,names]of Object.entries({'components.ts':['ActionParameterSchema'],'model.ts':['JSONSchema'],'primitives.ts':['JsonPrimitive','JsonValue']})){
   const input='packages/core/src/types/'+file,original=fs.readFileSync(path.join('vendor/eliza',input),'utf8');
