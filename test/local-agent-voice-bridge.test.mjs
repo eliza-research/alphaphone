@@ -171,7 +171,7 @@ test('actual browser bridge refuses malformed or unowned preparation before forw
    ...[{delivery:'originating-client'},{viewType:'tui'},{payload:{}},{action:'close'},{clientId:'bad id'}].map(change=>({body:JSON.stringify({...preparedView,...change})})),
    {body:'not-json'},{body:JSON.stringify(preparedView),method:'GET'},
    {body:JSON.stringify(preparedView),ownerId:undefined},
-   ...['/api/views/../settings/navigate','/api/views/%73ettings/navigate','/api/views/settings/navigate?other=1'].map(path=>({path,body:JSON.stringify(preparedView)})),
+   ...['/api/views/../settings/navigate','/api/views/%73ettings/navigate','/api/views/settings/navigate?other=1','/api/views/settings/navigate\n','/api/views/settings/navigate\r\n','/api/views/settings/navigate\t','/api/views/settings/navigate\u0000'].map(path=>({path,body:JSON.stringify(preparedView)})),
   ];
   for(const input of inputs){const result=await f.call({path,method:'POST',...input});assert.equal(result.status,400,JSON.stringify(input));}
   assert.equal(f.calls.length,0);

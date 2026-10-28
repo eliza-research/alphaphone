@@ -5,7 +5,7 @@ import org.json.JSONObject;
 /** Narrow preparation route; the existing bridge still requires its current owner. */
 final class PreparedViewNavigation {
  static boolean allowed(String path,String method,String body) {
-  if(!"POST".equals(method)||path==null||!path.matches("^/api/views/[A-Za-z0-9_-]+/navigate$")||body==null||body.length()>4096)return false;
+  if(!"POST".equals(method)||path==null||path.chars().anyMatch(c->c<=0x20||c==0x7f||c=='%'||c=='?'||c=='#'||c=='\\')||!path.matches("^/api/views/[A-Za-z0-9_-]+/navigate$")||body==null||body.length()>4096)return false;
   try {
    JSONObject value=new JSONObject(body);
    if(value.length()!=5)return false;
