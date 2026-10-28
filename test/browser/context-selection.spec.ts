@@ -232,6 +232,8 @@ test.describe('mail',()=>{
   await expect(chatComposer()).toHaveValue(typed);
   await page.waitForTimeout(500);
   await expect(chatComposer()).toHaveValue(typed);
+  // The composer's saved copy still holds the typed words: the email's dispatch does not clear it.
+  await expect.poll(()=>page.evaluate(async()=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');const binding=await c.assistantDraftBinding(new AbortController().signal);return (await(await(await import('/src/runtime/assistant-draft-store.ts')).assistantDraftStore(binding)).read())?.text??null;})).toBe(typed);
   expect(await sent(page)).toHaveLength(1);
  });
  test('a message switched under the open review is refused and the neighbor is never sent',async({page})=>{

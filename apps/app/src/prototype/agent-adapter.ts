@@ -73,8 +73,9 @@ class NotDispatched extends Error {}
 // connectionController.send refuses these before creating a conversation or posting the message.
 // Set while the page is being torn down (reload, Activity teardown). A send that fails then has
 // shown its outcome to no one, so its saved copy keeps the sending mark for review at the next start.
+// A page entering the back/forward cache (`persisted`) is restored later, so it is not leaving.
 let pageLeaving=false;
-if(typeof window!=='undefined'){window.addEventListener('pagehide',()=>{pageLeaving=true;});window.addEventListener('pageshow',()=>{pageLeaving=false;});}
+if(typeof window!=='undefined'){window.addEventListener('pagehide',(event:PageTransitionEvent)=>{if(!event.persisted)pageLeaving=true;});window.addEventListener('pageshow',()=>{pageLeaving=false;});}
 const preDispatchRefusals=new Set(['Finish the connection or history operation before sending.','Wait for the current reply before sending another message.',NO_AGENT_SEND,RESIDENT_STARTING_NOTICE,RESIDENT_RECOVERING_NOTICE]);
 // It also marks every failure that happened before it posted the message (`notDispatched`).
 function isPreDispatchError(error:unknown){return !!error&&typeof error==='object'&&((error as {notDispatched?:unknown}).notDispatched===true||error instanceof Error&&(preDispatchRefusals.has(error.message)||(error as {code?:unknown}).code==='session_expired'));}
