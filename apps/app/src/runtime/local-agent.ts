@@ -1,4 +1,4 @@
-import { isPreparedViewNavigationRequest } from './prepared-view-navigation';
+import { isPreparedViewNavigationRequest } from './prepared-view-navigation.ts';
 import {subscribeNativeViewEvents,type NativeViewEventPort} from "./native-view-events";
 import {browserCloudResidentEnabled,browserResidentCall} from './browser-cloud-resident';
 import type {AppRecordMethod} from './app-record-route-policy';
