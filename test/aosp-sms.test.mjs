@@ -179,7 +179,8 @@ test("native boundary: image-only plugin methods, immutable explicit callbacks, 
   assert.match(alpha, /alias = "sendSms", strings = \{ Manifest\.permission\.SEND_SMS \}/);
   assert.match(alpha, /public class AlphaTelephonyPlugin extends TelephonyPlugin/);
   assert.match(plugin, /if \(!current\(access, cancel, alias\)\) throw new SecurityException\(\);/);
-  assert.match(plugin, /if \(!current\(access, cancel, alias\)\) call\.reject\(noun \+ " access changed/);
+  assert.match(plugin, /if \(fenceResult && !current\(access, cancel, alias\)\) call\.reject\(noun \+ " access changed/);
+  assert.match(plugin, /fencedRead\(PluginCall call, String alias, String noun, Read read\) \{ fenced\(call, alias, noun, read, true\); \}/, "every read is re-fenced before its result is published");
   assert.match(plugin, /return !cancel\.isCanceled\(\) && access == generation\.get\(\) && unlockedForeground\(\) && admitted\(\) && getPermissionState\(alias\) == PermissionState\.GRANTED;/);
   assert.match(alpha, /fencedRead\(call, "contacts", "Contacts", cancel ->/, "contact search uses the same fence");
   // Observation is coalesced, content-free and stops on pause, lock and screen-off.
@@ -235,8 +236,9 @@ test("native boundary: image-only plugin methods, immutable explicit callbacks, 
   assert.match(sms, /receiver\.getResultCode\(\) == Activity\.RESULT_OK/, "sent only from a successful sent callback");
   assert.match(plugin, /main.post\(\(\) -> reviewSmsOnMain\(call\)\);/, "review is marshalled from Capacitor's plugin thread to main");
   assert.match(plugin, /private void reviewSmsOnMain\(PluginCall call\) \{\n  if \(refused\(call\)\) return;/, "admission is rechecked on main before review");
-  // Read state: only the default SMS app's write counts, only received messages through the shown one, behind the read fence.
-  assert.match(plugin, /fencedRead\(call, "sms", "Messages", cancel -> \{\n   JSObject value = new JSObject\(\);\n   boolean holder = MmsStore\.isDefaultSmsApp\(getContext\(\)\);/);
+  // Read state: only the default SMS app's write counts, only received messages through the shown one, behind the
+  // entry fence; the write's count is still reported if access changes afterwards (the rows were already marked).
+  assert.match(plugin, /fencedWrite\(call, "sms", "Messages", cancel -> \{\n   JSObject value = new JSObject\(\);\n   boolean holder = MmsStore\.isDefaultSmsApp\(getContext\(\)\);/);
   assert.match(plugin, /value\.put\("updated", holder \? MmsStore\.markThreadRead\(getContext\(\), thread, through\) : 0\);/);
   const marker = store.slice(store.indexOf("public static int markThreadRead("), store.indexOf("public static boolean hasTransaction("));
   assert.match(marker, /Telephony\.Sms\.TYPE \+ " = \? AND " \+ Telephony\.Sms\.DATE \+ " <= \?/, "only received texts up to the shown one");

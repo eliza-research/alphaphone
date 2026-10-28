@@ -158,7 +158,7 @@ test("queued contacts cannot return data after access or lifecycle changes", () 
   const shared=read('vendor/eliza/plugins/plugin-native-messages/android/src/main/java/ai/eliza/plugins/messages/TelephonyPlugin.java');
   assert.match(shared,/handleOnResume/);assert.match(shared,/ACTION_SCREEN_OFF/);
   assert.match(shared,/handleOnPause/);assert.match(shared,/handleOnDestroy/);
-  assert.match(shared,/main\.post\(\(\) -> \{\n      if \(!current\(access, cancel, alias\)\)/);assert.match(shared,/access == generation\.get\(\)/);
+  assert.match(shared,/main\.post\(\(\) -> \{\n      if \(fenceResult && !current\(access, cancel, alias\)\)/);assert.match(shared,/protected final void fencedRead\(PluginCall call, String alias, String noun, Read read\) \{ fenced\(call, alias, noun, read, true\); \}/,'reads are fenced again before their result is published');assert.match(shared,/access == generation\.get\(\)/);
   assert.match(read(`${JAVA}/AlphaTelephonyPlugin.java`),/fencedRead\(call, "contacts", "Contacts"/);
 });
 
