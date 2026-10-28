@@ -1,3 +1,5 @@
+import {openBrowserCalendar} from './helpers/browser-calendar';
+import {returnToApps} from './app-navigation';
 /*
  * Journey J01: Poster -> Calendar, driven start to finish through rendered controls in the
  * browser build (development profile, no agent needed).
@@ -64,8 +66,8 @@ test('J01 poster scan becomes exactly one reviewed Calendar event; suggestions a
   const mediaDevices=navigator.mediaDevices;Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:mediaDevices});
   mediaDevices.getUserMedia=async()=>{const canvas=document.createElement('canvas');canvas.width=1000;canvas.height=700;const c=canvas.getContext('2d')!;const draw=()=>{c.fillStyle='white';c.fillRect(0,0,1000,700);c.fillStyle='black';c.font='58px Arial';c.fillText('Open studio',60,140);c.fillText('October 10, 2026',60,260);c.fillText('Time: 6:30 PM - 8:00 PM',60,380);c.fillText('Venue: Main hall',60,500);};draw();const stream=canvas.captureStream(10);const timer=setInterval(draw,100);stream.getTracks()[0].addEventListener('ended',()=>clearInterval(timer));return stream;};
  });
- await page.goto('/?mode=dev');await ready(page);
- await expect(page.getByRole('button',{name:'Open your calendar',exact:true})).toContainText('No upcoming events');
+ await page.goto('/?mode=dev');await ready(page);await openBrowserCalendar(page);await returnToApps(page);
+ await expect(page.getByRole('button',{name:'Open Agent Calendar',exact:true})).toBeVisible();
  expect(await events(page)).toHaveLength(0);
 
  // 1. Scan, review suggestions, then cancel from the scan review: nothing is saved.
@@ -92,11 +94,11 @@ test('J01 poster scan becomes exactly one reviewed Calendar event; suggestions a
  expect(await events(page)).toHaveLength(0);
  await page.reload();await ready(page);
  expect(await events(page)).toHaveLength(0);
- await expect(page.getByRole('button',{name:'Open your calendar',exact:true})).toContainText('No upcoming events');
+ await expect(page.getByRole('button',{name:'Open Agent Calendar',exact:true})).toBeVisible();
 
  // 3. The scan draft carries a creationId, so Calendar retained the reviewed form across the
  //    reload: New event restores it through form recovery, still unsaved, and Save writes one event.
- await page.getByRole('button',{name:'Calendar',exact:true}).click();
+ await openBrowserCalendar(page);
  await page.getByRole('button',{name:'New event',exact:true}).click();
  await expect(page.getByRole('textbox',{name:'Title',exact:true})).toHaveValue('Reviewed studio visit');
  await expect(page.getByRole('textbox',{name:'Location',exact:true})).toHaveValue('Main hall');
@@ -113,10 +115,12 @@ test('J01 poster scan becomes exactly one reviewed Calendar event; suggestions a
  expect(saved).toHaveLength(1);
  expect(saved[0]).toMatchObject({calendarId:'local',title:'Reviewed studio visit',location:'Main hall',body:poster,begin:Date.parse('2026-10-10T18:30:00-04:00'),end:Date.parse('2026-10-10T20:00:00-04:00')});
 
- // 5. The Home agenda card shows it (tomorrow is in range) and opens the same event.
- const card=page.getByRole('button',{name:'Open calendar event: Reviewed studio visit, Sat, Oct 10, 6:30 PM – 8:00 PM',exact:true});
- await expect(card).toBeVisible();
- await card.click();
+ // 5. Agent Calendar on Home does not silently read the retained browser source.
+ // Reopen that explicitly selected source and choose the exact saved event.
+ await expect(page.getByRole('region',{name:'Home',exact:true})).not.toContainText('Reviewed studio visit');
+ await openBrowserCalendar(page);
+ await page.getByRole('button',{name:'Day 10',exact:true}).click();
+ await page.getByRole('button',{name:/^Reviewed studio visit,/}).click();
  await expect(page.getByRole('heading',{name:'Reviewed studio visit',level:1})).toBeVisible();
  await expect(page.getByRole('button',{name:'Main hall',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Back to calendar',exact:true}).last().click();

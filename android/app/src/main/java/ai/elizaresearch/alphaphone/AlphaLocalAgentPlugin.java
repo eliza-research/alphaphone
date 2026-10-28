@@ -19,7 +19,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  private final ExecutorService rendererWorkers=new java.util.concurrent.ThreadPoolExecutor(1,1,0L,java.util.concurrent.TimeUnit.MILLISECONDS,new java.util.concurrent.SynchronousQueue<>());
  // Set only from in-process debug instrumentation; no route, intent or preference activation.
  static volatile java.net.ServerSocket instrumentationRecoveryEndpoint;
- private static String rootToken,ownerToken,ownerIdentity;
+ private static String rootToken,ownerToken,ownerIdentity,notificationAgent;
  private static long expiresAt;
  private static final Object lifecycleLock=new Object(), enrollmentLock=new Object();
  private static long lifecycleEpoch;
@@ -30,6 +30,30 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  private static long startRequestEpoch;
  private static boolean startOwnsLaunch;
  private static long credentialIntentEpoch;
+ private static long powerAuthorizationMutationEpoch;
+ /** Native-only authorization mutation marker. Both locks are already held by credential commit. */
+ static void powerAuthorizationChanged(){
+  if(!Thread.holdsLock(lifecycleLock)||!Thread.holdsLock(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK))throw new IllegalStateException("Credential lock order required");
+  powerAuthorizationMutationEpoch++;
+ }
+ /** A protected launch constraint, never authority minted by stored account correlation alone. */
+ static final class PowerLaunchPin implements ai.eliza.plugins.system.SenseListenerClient.PowerLaunchValidator {
+  private final Context context;private final long mutation;private final String account,generation;
+  private PowerLaunchPin(Context context,long mutation,JSONObject admitted)throws Exception{this.context=context.getApplicationContext();this.mutation=mutation;account=admitted.getString("accountRef");generation=admitted.getString("sessionGeneration");}
+  public boolean isCurrent(){synchronized(lifecycleLock){
+   if(mutation!=powerAuthorizationMutationEpoch||stopping||credentialMutationEpoch>=0||credentialShutdownRequest!=-1||context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return false;
+   try{JSONObject now=new AlphaCredentialStore(context).providerAdmissionSnapshot();return "elizacloud".equals(now.optString("provider"))&&"production".equals(now.optString("environment"))&&account.equals(now.getString("accountRef"))&&generation.equals(now.getString("sessionGeneration"));}catch(Exception unavailable){return false;}
+  }}
+  public boolean authorize(String candidate,java.util.function.BooleanSupplier consume){synchronized(lifecycleLock){synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){
+   // Native credential commit and grant issuance are one atomic authorization point. SDK
+   // enters without its own locks; callback checks its current lease under app -> SDK order.
+   return account.equals(candidate)&&isCurrent()&&consume.getAsBoolean();
+  }}}
+ }
+ static PowerLaunchPin capturePowerLaunchPin(Context context){synchronized(lifecycleLock){
+  if(stopping||credentialMutationEpoch>=0||credentialShutdownRequest!=-1||context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return null;
+  try{JSONObject admitted=new AlphaCredentialStore(context).providerAdmissionSnapshot();if(!"elizacloud".equals(admitted.optString("provider"))||!"production".equals(admitted.optString("environment")))return null;return new PowerLaunchPin(context,powerAuthorizationMutationEpoch,admitted);}catch(Exception unavailable){return null;}
+ }}
  private final java.util.Set<String> cancelledStarts=new java.util.HashSet<>();
  private static boolean accepting=true,stopping;
  private volatile boolean disposed;
@@ -107,7 +131,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  private void rejectPending(PluginCall call,String message){synchronized(lifecycleLock){if(pending.remove(call))call.reject(message);}}
 
  private static final class Superseded extends Exception {}
- private static void clearEnrollment(){rootToken=null;ownerToken=null;ownerIdentity=null;expiresAt=0;}
+ private static void clearEnrollment(){AlphaCanonicalNotifications.stop();rootToken=null;ownerToken=null;ownerIdentity=null;notificationAgent=null;expiresAt=0;}
  static long reserveCredentialIntent(){synchronized(lifecycleLock){return ++credentialIntentEpoch;}}
  static void requireCredentialIntent(long intent){synchronized(lifecycleLock){if(intent!=credentialIntentEpoch)throw new IllegalStateException("Credential intent changed");}}
  interface CredentialMutation<T> {
@@ -123,6 +147,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
     if(!mutation.requiresShutdown())return mutation.commit();
    }
    startRequestId=null;startOwnsLaunch=false;
+   AlphaCanonicalNotifications.forget(context);
    invalidateCalls();epoch=++lifecycleEpoch;credentialMutationEpoch=epoch;accepting=false;stopping=true;clearEnrollment();
   }
   try{
@@ -215,8 +240,8 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   return null;
  }
  /** Deletes the provider slot and confirms by reading it back. */
- static JSObject clearProviderSlot(AlphaCredentialStore store) throws Exception {
-  store.removeCredentialSlot("local-agent-provider:v1");
+ static JSObject clearProviderSlot(AlphaCredentialStore store,boolean onlyIfPresent) throws Exception {
+  if(onlyIfPresent)store.removeProviderIfPresent();else store.removeCredentialSlot("local-agent-provider:v1");
   if(store.readCredentialSlot("local-agent-provider:v1")!=null)throw new IllegalStateException("Provider key still present");
   return providerIdentity(null);
  }
@@ -278,9 +303,10 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  }
  /** Deletes the provider slot and reads it back; resolves only when the slot is gone. */
  @PluginMethod public void clearProvider(PluginCall call) {
+  final boolean onlyIfPresent=Boolean.TRUE.equals(call.getBoolean("onlyIfPresent"));
   final long configuration=reserveCredentialIntent();
   PluginWorkers.submit(workers,()->{try{
-   call.resolve(clearProviderSlot(new AlphaCredentialStore(getContext(),()->{if(disposed)throw new IllegalStateException("Local agent bridge closed");requireCredentialIntent(configuration);})));
+   call.resolve(clearProviderSlot(new AlphaCredentialStore(getContext(),()->{if(disposed)throw new IllegalStateException("Local agent bridge closed");requireCredentialIntent(configuration);}),onlyIfPresent));
   }catch(Exception error){call.reject("The provider key could not be removed.");}},()->{call.reject("Local agent bridge is closed.");});
  }
  static final String CLOUD_PROVIDER_MODEL=LocalAgentProviderAdmission.CLOUD_PROVIDER_MODEL;
@@ -671,7 +697,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  @PluginMethod public void stop(PluginCall call) {
   synchronized(lifecycleLock){
    startRequestId=null;startOwnsLaunch=false;
-   invalidateCalls();++lifecycleEpoch;accepting=false;stopping=true;clearEnrollment();
+   AlphaCanonicalNotifications.forget(getContext());invalidateCalls();++lifecycleEpoch;accepting=false;stopping=true;clearEnrollment();
    try{ElizaAgentService.stop(getContext());call.resolve(new JSObject().put("state","stopping"));}
    catch(Exception unavailable){call.reject("Stop requested locally, but native shutdown could not be confirmed. Check runtime status.");}
   }
@@ -725,6 +751,107 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   if(!captureReminderOwnerSession().toString().equals(expected.toString()))throw new SecurityException("Native owner session changed");
   return result;
  }
+ /** Canonical service publication and old observer suspension share the same authority lock. */
+ static void publishNotificationRoot(Runnable publish){
+  synchronized(lifecycleLock){
+   AlphaCanonicalNotifications.suspendForRestart();
+   if(rootToken!=null){invalidateCalls();++lifecycleEpoch;rootToken=null;ownerToken=null;ownerIdentity=null;notificationAgent=null;expiresAt=0;}
+   publish.run();
+  }
+ }
+ static String notificationInstallation(Context context)throws Exception{
+  java.nio.file.Path directory=new java.io.File(context.getFilesDir(),".eliza").toPath();
+  java.nio.file.Path file=directory.resolve("runtime-installation-id");
+  if(!directory.toRealPath().equals(directory.toAbsolutePath().normalize())||java.nio.file.Files.isSymbolicLink(file)||!java.nio.file.Files.isRegularFile(file,java.nio.file.LinkOption.NOFOLLOW_LINKS))throw new SecurityException("Notification installation unavailable");
+  String id=new String(java.nio.file.Files.readAllBytes(file),java.nio.charset.StandardCharsets.UTF_8).trim();HostedInbox.id(id);return id;
+ }
+ static void rememberNotificationOwner(Context context,JSONObject expected,JSONObject identity)throws Exception{
+  synchronized(lifecycleLock){synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){
+   NativeNotificationDiagnostics.Persist stage=NativeNotificationDiagnostics.Persist.SESSION;
+   try{
+    checkNotificationSession(expected);AlphaCredentialStore store=new AlphaCredentialStore(context);
+    stage=NativeNotificationDiagnostics.Persist.AGENT;
+    if(notificationAgent!=null&&!notificationAgent.equals(identity.getString("agentId")))throw new SecurityException("Notification agent changed after validation");
+    stage=NativeNotificationDiagnostics.Persist.INSTALLATION;
+    String installation=notificationInstallation(context);
+    stage=NativeNotificationDiagnostics.Persist.PROVIDER;
+    String provider=store.providerAdmissionSnapshot().toString();
+    stage=NativeNotificationDiagnostics.Persist.RECORD;
+    JSONObject record=NativeNotificationSession.record(expected,identity,installation,provider);
+    stage=NativeNotificationDiagnostics.Persist.PREVIOUS;
+    String previous=store.readCredentialSlot(NativeNotificationSession.SLOT);
+    if(previous!=null){String old=new JSONObject(previous).optString("projectionOwner","");if(old.matches("[a-f0-9]{64}")&&!old.equals(record.getString("projectionOwner")))NativeNotificationProjector.retireOwner(context,old);}
+    stage=NativeNotificationDiagnostics.Persist.STORE;
+    notificationAgent=identity.getString("agentId");
+    store.writeCredentialSlot(NativeNotificationSession.SLOT,record.toString());
+    stage=NativeNotificationDiagnostics.Persist.FINAL;
+    checkNotificationSession(expected);
+   }catch(Exception failure){NativeNotificationDiagnostics.persistFailure(stage,failure);throw failure;}
+  }}
+ }
+ static void retireRejectedNotificationSession(Context context,String expected)throws Exception{
+  synchronized(lifecycleLock){synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){
+   if(enrollmentPresent())return;
+   if(expected!=null&&new AlphaCredentialStore(context).compareExchangeCredentialSlot(NativeNotificationSession.SLOT,expected,null)){
+    String prior=new JSONObject(expected).optString("projectionOwner","");
+    if(prior.matches("[a-f0-9]{64}"))NativeNotificationProjector.retireOwner(context,prior);
+   }
+  }}
+ }
+ /** Returns only after private IPC has revalidated the saved machine owner. */
+ static boolean restoreNotificationOwner(Context context)throws Exception{
+  final long epoch; synchronized(lifecycleLock){
+   if(!accepting||stopping||credentialMutationEpoch>=0)return false;
+   if(enrollmentPresent()){
+    try{captureReminderOwnerSession();return true;}
+    catch(SecurityException changed){
+     // A new process bearer retires old calls, not the existing owner's NMS receipts.
+     invalidateCalls();++lifecycleEpoch;AlphaCanonicalNotifications.suspendForRestart();rootToken=null;ownerToken=null;ownerIdentity=null;notificationAgent=null;expiresAt=0;
+    }
+   }
+   epoch=lifecycleEpoch;
+  }
+  AlphaCredentialStore store=new AlphaCredentialStore(context);
+  NativeNotificationSession.Ports ports=new NativeNotificationSession.Ports(){
+   public String saved()throws Exception{return store.readCredentialSlot(NativeNotificationSession.SLOT);}
+   public String provider()throws Exception{return store.providerAdmissionSnapshot().toString();}
+   public String installation()throws Exception{return notificationInstallation(context);}
+   public String root()throws Exception{return ElizaAgentService.localAgentToken(context);}
+   public void current()throws Exception{synchronized(lifecycleLock){if(epoch!=lifecycleEpoch||!accepting||stopping||credentialMutationEpoch>=0||enrollmentPresent())throw new NativeNotificationSession.Superseded();}}
+   public JSONObject get(String path,String bearer)throws Exception{
+    if(!java.util.Arrays.asList("/api/auth/me","/api/agents").contains(path))throw new SecurityException("Notification restore route refused");
+    current();JSONObject response=raw(path,"GET",null,bearer,null,3000);current();int status=response.getInt("status");
+    if(status==401||status==403)throw new SecurityException("Notification session revoked");
+    if(status!=200)throw new java.io.IOException("Notification runtime unavailable");
+    String body=response.getString("body");if(body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>65536)throw new SecurityException("Notification identity response invalid");return new JSONObject(body);
+   }
+  };
+  JSONObject restored=NativeNotificationSession.restore(ports,System.currentTimeMillis());if(restored==null)return false;
+  synchronized(lifecycleLock){synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){
+   ports.current();if(!restored.getString("saved").equals(ports.saved())||!restored.getString("provider").equals(ports.provider())||!restored.getString("installationId").equals(ports.installation())||!restored.getString("rootDigest").equals(HostedResultNotices.hash(ports.root())))throw new SecurityException("Notification restoration changed");
+   JSONObject session=restored.getJSONObject("session");rootToken=ports.root();ownerToken=session.getString("token");ownerIdentity=session.getString("ownerId");notificationAgent=restored.getString("agentId");expiresAt=session.getLong("expiresAt");return true;
+  }}
+ }
+ /** Native-only canonical inbox transport, bound to an existing machine session. */
+ static void checkNotificationSession(JSONObject expected)throws Exception{
+  synchronized(lifecycleLock){if(!captureReminderOwnerSession().toString().equals(expected.toString()))throw new SecurityException("Notification session changed");}
+ }
+ static <T>T withNotificationSession(JSONObject expected,java.util.concurrent.Callable<T> work)throws Exception{
+  synchronized(lifecycleLock){synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){checkNotificationSession(expected);T result=work.call();checkNotificationSession(expected);return result;}}
+ }
+ static JSONObject readNotificationPage(JSONObject expected,JSONObject cursor)throws Exception{
+  String path=NativeNotificationWire.pagePath(cursor);checkNotificationSession(expected);
+  JSONObject result=raw(path,"GET",null,expected.getString("token"),null,10000);checkNotificationSession(expected);return result;
+ }
+ static JSONObject markNotificationRead(JSONObject expected,String id)throws Exception{
+  if(id==null||!id.matches("[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"))throw new SecurityException("Invalid notification identity");
+  checkNotificationSession(expected);JSONObject result=raw("/api/notifications/"+id+"/read","POST","{}",expected.getString("token"),null,10000);checkNotificationSession(expected);return result;
+ }
+ static void subscribeNotificationEvents(JSONObject expected,java.util.function.Consumer<String> events,ElizaAgentService.LocalStreamHandle handle)throws Exception{
+  checkNotificationSession(expected);
+  JSONObject input=new JSONObject().put("streams",new org.json.JSONArray().put("notification"));
+  ElizaAgentService.subscribeLocalAgentEvents(input.toString(),event->{try{checkNotificationSession(expected);events.accept(event);}catch(Exception changed){handle.cancel();}},handle);
+ }
  private static JSONObject raw(String path,String method,String body,String token,JSONObject supplied,int timeoutMs) throws Exception {
   JSONObject headers=new JSONObject();headers.put("Accept","application/json");headers.put("Content-Type","application/json");
   if(token!=null)headers.put("Authorization","Bearer "+token);
@@ -760,7 +887,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   requireCurrent(epoch);
   String root=ElizaAgentService.localAgentToken();
   if(root==null||root.isEmpty())throw new IllegalStateException();
-  synchronized(lifecycleLock){requireEnrollmentRoot(epoch,root);if(root.equals(rootToken)&&ownerToken!=null&&expiresAt>System.currentTimeMillis()+30000)return ownerToken;}
+  synchronized(lifecycleLock){requireEnrollmentRoot(epoch,root);if(root.equals(rootToken)&&ownerToken!=null&&expiresAt>System.currentTimeMillis()+30000){AlphaCanonicalNotifications.ensure(getContext());return ownerToken;}}
   JSONObject status=authenticatedStatus(epoch,root);
   JSONObject code=enrollmentJson(epoch,"/api/auth/pair-code","GET",null,root,root);
   JSONObject paired=enrollmentJson(epoch,"/api/auth/pair","POST",new JSONObject().put("code",code.getString("code")).put("instanceId",status.getString("instanceId")),root,root);
@@ -768,7 +895,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   String token=paired.getString("token");JSONObject who=enrollmentJson(epoch,"/api/auth/me","GET",null,token,root);
   if(!"OWNER".equals(who.getJSONObject("access").getString("role"))||!paired.getString("identityId").equals(who.getJSONObject("identity").getString("id"))||!token.equals(who.getJSONObject("session").getString("id")))throw new IllegalStateException();
   long expiry=who.getJSONObject("session").getLong("expiresAt");if(expiry<=System.currentTimeMillis())throw new IllegalStateException();
-  synchronized(lifecycleLock){requireEnrollmentRoot(epoch,root);rootToken=root;ownerToken=token;ownerIdentity=paired.getString("identityId");expiresAt=expiry;return token;}
+  synchronized(lifecycleLock){requireEnrollmentRoot(epoch,root);AlphaCanonicalNotifications.suspendForRestart();rootToken=root;ownerToken=token;ownerIdentity=paired.getString("identityId");notificationAgent=null;expiresAt=expiry;AlphaCanonicalNotifications.ensure(getContext());return token;}
   }
  }
  private static void logRequestFailure(String category,String method,int status,String reason) {
@@ -777,10 +904,11 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  }
  @PluginMethod public void request(PluginCall call) {
   String path=call.getString("path",""),method=call.getString("method","GET"),body=call.getString("body"),expectedOwner=call.getString("ownerId");
+  if(path.endsWith("/navigate")&&!PreparedViewNavigation.allowed(path,method,body)){call.reject("Unsupported navigation preparation.");return;}
   OwnerRoutes routes;
   try{routes=OwnerRoutes.shipped(getContext().getAssets()::open);}catch(IllegalStateException unavailable){logRequestFailure("other",method,0,"route-table");call.reject("Unsupported local agent request.");return;}
   String group=routes.group(path);
-  if((group!=null? !routes.allowed(group,path,method)||expectedOwner==null||expectedOwner.trim().isEmpty() : ((path.startsWith("/api/views/")||path.endsWith("/messages/truncate")||path.endsWith("/heard"))&&(!method.equals("POST")||expectedOwner==null||expectedOwner.trim().isEmpty()))||(path.equals("/api/asr/local-inference/end-of-turn")&&!method.equals("POST"))||(path.contains("?before=")&&!method.equals("GET"))||(path.startsWith("/api/turns/")&&!method.equals("POST"))||path.contains("..")||path.contains("%")||path.contains("\\")||!path.matches("^/api/(auth/me|agents|status|conversations(/[A-Za-z0-9_-]+(/messages(/truncate|/[0-9a-fA-F-]{36}/heard|\\?before=[0-9]{1,16}(&beforeId=[0-9a-fA-F-]{36})?(&limit=[0-9]{1,3})?)?)?)?|turns/[0-9a-fA-F-]{36}/abort|views/interact-(claim|result)|client-devices/[A-Za-z0-9_/-]+|workflow(/[A-Za-z0-9_/?=&-]+)?|asr/local-inference/(live(/status)?|end-of-turn))$")||!(method.equals("GET")||method.equals("POST")))||((method.equals("GET")||method.equals("DELETE"))&&body!=null)||(body!=null&&body.length()>2*1024*1024)){
+  if((group!=null? !routes.allowed(group,path,method)||expectedOwner==null||expectedOwner.trim().isEmpty() : ((path.startsWith("/api/views/")||path.endsWith("/messages/truncate")||path.endsWith("/heard"))&&(!method.equals("POST")||expectedOwner==null||expectedOwner.trim().isEmpty()))||(path.equals("/api/asr/local-inference/end-of-turn")&&!method.equals("POST"))||(path.contains("?before=")&&!method.equals("GET"))||(path.startsWith("/api/turns/")&&!method.equals("POST"))||path.contains("..")||path.contains("%")||path.contains("\\")||!path.matches("^/api/(auth/me|agents|status|conversations(/[A-Za-z0-9_-]+(/messages(/truncate|/[0-9a-fA-F-]{36}/heard|\\?before=[0-9]{1,16}(&beforeId=[0-9a-fA-F-]{36})?(&limit=[0-9]{1,3})?)?)?)?|turns/[0-9a-fA-F-]{36}/abort|views/(interact-(claim|result)|[A-Za-z0-9_-]+/navigate)|client-devices/[A-Za-z0-9_/-]+|workflow(/[A-Za-z0-9_/?=&-]+)?|asr/local-inference/(live(/status)?|end-of-turn))$")||!(method.equals("GET")||method.equals("POST")))||((method.equals("GET")||method.equals("DELETE"))&&body!=null)||(body!=null&&body.length()>2*1024*1024)){
    logRequestFailure(group==null?"other":group,method,0,"gate");
    call.reject("Unsupported local agent request.");return;
   }
@@ -887,5 +1015,5 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   * calls and streams. The shared runtime, its epoch and the owner enrollment stay valid for
   * other surfaces. When the last surface goes away (the app is closed or recreated) the epoch
   * advances and the enrollment is cleared, as before; the next surface enrolls again. */
- @Override protected void handleOnDestroy(){synchronized(lifecycleLock){disposed=true;invalidateOwnCalls();instances.remove(this);if(instances.isEmpty()){++lifecycleEpoch;clearEnrollment();}}workers.shutdownNow();voiceWorkers.shutdownNow();rendererWorkers.shutdownNow();super.handleOnDestroy();}
+ @Override protected void handleOnDestroy(){synchronized(lifecycleLock){disposed=true;invalidateOwnCalls();instances.remove(this);if(instances.isEmpty()&&!AlphaCanonicalNotifications.ownsSession()){++lifecycleEpoch;clearEnrollment();}}workers.shutdownNow();voiceWorkers.shutdownNow();rendererWorkers.shutdownNow();super.handleOnDestroy();}
 }

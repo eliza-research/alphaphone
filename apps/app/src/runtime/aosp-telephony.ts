@@ -76,12 +76,6 @@ const nullableText = (value: unknown, what: string) => value === null || value =
 const PERMISSIONS: readonly PermissionState[] = ['granted', 'denied', 'prompt', 'prompt-with-rationale'];
 const permission = (value: unknown, what: string): PermissionState => { if (!PERMISSIONS.includes(value as PermissionState)) throw invalid(what); return value as PermissionState; };
 
-export function parseImageCapability(value: unknown): { version: 1; image: true; feature: string } {
-  const data = object(value, 'image capability');
-  if (data.version !== 1 || data.image !== true) throw invalid('image capability');
-  return { version: 1, image: true, feature: text(data.feature, 'image feature') };
-}
-
 export function parseTelephonyStatus(value: unknown): TelephonyStatus {
   const data = object(value, 'status');
   if (data.version !== 2) throw invalid('status version');
@@ -252,7 +246,6 @@ export function parseMessages(value: unknown, threadId: string, limit: number): 
 
 // ---- Messages: reviewed native sends (shared `sms.send.v1` contract) ---------------------------
 
-export const SMS_SEND_CAPABILITY = 'sms.send.v1';
 export type SmsPartState = 'unknown' | 'success' | 'failed';
 export interface SmsSendResult {
   kind: 'sms-send'; operationId: string; subscriptionId: number; bindingHash: string;
@@ -308,8 +301,6 @@ export function parseSmsJournal(value: unknown): SmsSendResult[] {
   return parseSmsSendResult(row,{recipients:Array(recipients).fill('display-only'),body:'',subscriptionId:row.subscriptionId as number},row.operationId,row.bindingHash);
  });
 }
-/** No send result permits an automatic repeat: only a new owner review with a new operation ID. */
-export function smsSendMayRetryAutomatically(_: SmsSendResult): false { return false; }
 
 /** The renderer client. Off the verified image every method rejects without reaching native code. */
 export function createAospTelephony(plugin: AlphaTelephonyPlugin | null, image: boolean) {

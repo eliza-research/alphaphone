@@ -1,3 +1,4 @@
+import {selectCalendarSource} from './helpers/browser-calendar';
 import {test,expect} from '@playwright/test';
 // Rendered production navigation with a controlled encrypted-native boundary.
 // OS delivery/process death are exercised separately by Android instrumentation.
@@ -56,8 +57,7 @@ for(const mode of ['recover','stale','read-failure','draft-race','navigation-rac
  }
  await page.getByRole('button',{name:'Calendar',exact:true}).click();
  if(mode==='draft-race'){
-  const sources=page.locator('summary').filter({hasText:'Calendar sources'});
-  await sources.click();await page.getByRole('button',{name:'Android calendars',exact:true}).click();await sources.click();
+  await selectCalendarSource(page, 'Android calendars');
  }
  await page.evaluate(()=>{(window as any).reminderTapFixture.allow=true;document.dispatchEvent(new Event('visibilitychange'));});
  if(mode==='reload-recovery'){

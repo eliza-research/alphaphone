@@ -70,6 +70,7 @@ export class BrowserCloudSignIn extends WebPlugin {
   if(!response.ok)throw Object.assign(Error('Cloud development sign-in failed'),{code:typeof body.code==='string'?body.code:'unavailable'});
   return body;
  }
+ async serviceInfo(input:{environment:CloudEnvironment}){return this.signIn({operation:'signInServiceInfo',environment:input.environment});}
  async startGoogle(){throw Object.assign(Error('Google sign-in needs the Android app'),{code:'browser-unavailable'});}
  async startEmail(input:{environment:string;email:string}){return this.signIn({operation:'signInStartEmail',environment:input.environment,email:input.email});}
  async verifyEmail(input:{attemptId:string;code:string}){return this.signIn({operation:'signInVerifyEmail',attemptId:input.attemptId,code:input.code});}
