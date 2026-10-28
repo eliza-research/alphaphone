@@ -97,3 +97,22 @@ test('hold binds exact authored whitespace and preserves it through a failed dis
  await f.c.hold(authored);f.set('');await tick();f.c.release();await tick();
  assert.equal(f.get(),authored);assert.equal(f.saved().text,authored);
 });
+// The device slot keeps a message's saved copy marked as sending until its dispatch settles, so a
+// restart (or another window) never offers it again as a draft; the owner reviews it instead.
+const rowsCode=stripTypeScriptTypes(readFileSync(new URL('../.eliza/client-features/packages/ui/src/state/durable-draft.ts',import.meta.url),'utf8'),{mode:'transform'});
+const {compareExchangeDraftStore}=await import('data:text/javascript;base64,'+Buffer.from(rowsCode).toString('base64'));
+test('a restart during a send offers the message for review and never restores it as a draft',async()=>{
+ let raw=null;const slot={async read(){return raw;},async compareExchange(expected,value){if(raw!==expected)return {status:'conflict'};raw=value;return {status:'saved'};}};
+ const run=()=>{let text='';const c=new AssistantDraftController(async binding=>compareExchangeDraftStore(binding,slot),()=>text,value=>{text=value;},()=>{});return {c,get:()=>text,set:value=>{text=value;c.edit(value);}};};
+ const first=run(),key=JSON.stringify(['origin','owner','agent','conversation']);
+ await first.c.open(key);first.set('Sent before the app stopped');
+ await first.c.hold('Sent before the app stopped');first.set('');
+ assert.deepEqual(JSON.parse(raw),{version:1,binding:key,revision:JSON.parse(raw).revision,text:'Sent before the app stopped',sending:true});
+ const next=run();await next.c.open(key);
+ assert.equal(next.get(),'');assert.equal(next.c.state.unsettled,true);assert.equal(next.c.state.savedText,'Sent before the app stopped');
+ await assert.rejects(next.c.hold(''),/may already have been sent/);
+ next.c.keepCurrent();await tick();
+ assert.deepEqual(Object.keys(JSON.parse(raw)).sort(),['binding','revision','text','version']);assert.equal(JSON.parse(raw).text,'');
+ // The previous run's commit, if it ever came, finds a newer copy and clears nothing else.
+ await first.c.commit();assert.equal(JSON.parse(raw).text,'');
+});
