@@ -32,6 +32,8 @@ async function connected(page: Page) {
 const savedDrafts = (page: Page) => harness(page, f => Object.entries(f.slots as Record<string, string>).filter(([slot]) => slot.startsWith('assistant-draft:v1:')).map(([, raw]) => JSON.parse(raw).text as string));
 /** The same slots with the mark a send in flight leaves on its saved text. */
 const savedRows = (page: Page) => harness(page, f => Object.entries(f.slots as Record<string, string>).filter(([slot]) => slot.startsWith('assistant-draft:v1:')).map(([, raw]) => { const row = JSON.parse(raw); return { text: row.text as string, sending: row.sending === true }; }));
+/** The slots that still hold text: a slot cleared after its message was sent keeps an empty row. */
+const keptRows = async (page: Page) => (await savedRows(page)).filter(row => row.text);
 const UNSETTLED = 'This message may already have been sent. Check the conversation before sending it again.';
 const REVIEW_UNSETTLED = 'Review the message that may already have been sent before sending another.';
 const draftStatus = (page: Page) => page.getByRole('status', { name: 'Assistant draft status', exact: true });
@@ -140,14 +142,20 @@ for (const step of ['Back from full to sheet', 'HOME on Home', 'a rotation and t
 // A restart while a sent message is in flight (the process dies before the reply): the device copy
 // of the sent text is marked as sending, so the next start never puts it back in the composer as
 // a draft. It is offered for review, sending waits for that review, and nothing is posted again.
+// The conversation already exists, so the restart reopens the same draft slot (a first message
+// moves the draft to the conversation it creates).
 async function restartDuringSend(page: Page, asked: string) {
   const foreign = await connected(page);
+  await composer(page).fill('Start the conversation');
+  await composer(page).press('Enter');
+  await expect(conversation(page).getByText('Resident reply 1', { exact: true })).toHaveCount(1, { timeout: 30_000 });
+  await expect(button(page, 'Stop reply')).toHaveCount(0);
   await setStub(page, { stream: 'hold' });
   await composer(page).fill(asked);
   await composer(page).press('Enter');
   await expect.poll(() => stub(page, s => typeof s.release), { timeout: 15_000 }).toBe('function');
-  await expect.poll(() => savedRows(page)).toEqual([{ text: asked, sending: true }]);
-  expect(await harness(page, f => f.posts)).toHaveLength(1);
+  await expect.poll(() => keptRows(page)).toEqual([{ text: asked, sending: true }]);
+  expect(await harness(page, f => f.posts)).toHaveLength(2);
   await setStub(page, { stream: null });
   await residentHome(page);
   await expect(draftStatus(page)).toHaveText(UNSETTLED, { timeout: 30_000 });
@@ -167,12 +175,12 @@ test('a restart during a send offers the message for review, never as a draft; r
   await composer(page).press('Enter');
   await expect(page.getByText(REVIEW_UNSETTLED, { exact: true })).toBeVisible();
   expect(await harness(page, f => f.posts)).toEqual([]);
-  expect(await savedRows(page)).toEqual([{ text: asked, sending: true }]);
+  expect(await keptRows(page)).toEqual([{ text: asked, sending: true }]);
 
   // Restoring puts the saved words back to edit; the copy is an ordinary draft from then on.
   await button(page, 'Restore saved draft').click();
   await expect(composer(page)).toHaveValue(asked);
-  await expect.poll(() => savedRows(page)).toEqual([{ text: asked, sending: false }]);
+  await expect.poll(() => keptRows(page)).toEqual([{ text: asked, sending: false }]);
   await residentHome(page);
   await expect(composer(page)).toHaveValue(asked, { timeout: 30_000 });
   await expect(draftStatus(page)).toHaveCount(0);
@@ -185,15 +193,18 @@ test('replacing the reviewed message after a restart clears only its copy, and t
   const foreign = await restartDuringSend(page, 'Already answered before the restart');
   await button(page, 'Replace saved draft with this text').click();
   await expect(draftStatus(page)).toHaveCount(0);
-  await expect.poll(() => savedRows(page)).toEqual([{ text: '', sending: false }]);
+  await expect.poll(() => keptRows(page)).toEqual([]);
   const next = 'The next question';
   await composer(page).fill(next);
   await composer(page).press('Enter');
-  await expect(conversation(page).getByText('Resident reply 1', { exact: true })).toHaveCount(1, { timeout: 30_000 });
+  // The restored conversation already shows the first reply; wait for this message's post and turn.
+  await expect.poll(() => harness(page, f => (f.posts as string[]).length), { timeout: 30_000 }).toBe(1);
+  await expect(conversation(page).getByText(next, { exact: true })).toHaveCount(1, { timeout: 30_000 });
+  await expect(button(page, 'Stop reply')).toHaveCount(0, { timeout: 30_000 });
   const posts = await harness(page, f => f.posts as string[]);
   expect(posts).toHaveLength(1);
   expect(posts[0].endsWith('[USER MESSAGE]\n' + next)).toBe(true);
-  await expect.poll(() => savedRows(page)).toEqual([{ text: '', sending: false }]);
+  await expect.poll(() => keptRows(page)).toEqual([]);
   await noResend(page, foreign, 1);
 });
 
