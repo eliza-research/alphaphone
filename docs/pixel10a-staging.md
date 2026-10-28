@@ -306,7 +306,7 @@ unless OEM unlocking was enabled from the running image's developer options, whi
 no longer boots cannot do: whether released units keep it enabled is a release decision that the
 stock-recovery drill must exercise.
 `scripts/verify-pixel10a-image.mjs` checks a booted image read-only (exact fingerprint, Alpha's
-system launcher bytes as HOME, recovery HOME, Clock handlers, WebView, verified boot state and,
+system launcher bytes as HOME, recovery HOME, Clock handlers, WebView, a green or yellow verified boot state and,
 with `--listener`, the listener's privileges). These are drill tools: drill results and the
 known-good release are recorded in the channel by the release owner from executed drills.
 
