@@ -38,7 +38,7 @@ export function installNotificationsAdapter(Component: any) {
     }
     if(!canCommit())return;
     const restored=connectionController.getSnapshot().history;
-    const exactChat=()=>this.S().view===origin.view&&alphaClient.getState().context.revision===origin.revision&&connectionController.getSelectedConversationId()===tap.conversationId&&connectionController.getSnapshot().history===restored&&restored?.conversationId===tap.conversationId&&restored.messages.some(row=>row.id===tap.messageId);
+    const exactChat=()=>!!restored&&this.S().view===origin.view&&alphaClient.getState().context.revision===origin.revision&&connectionController.getSelectedConversationId()===tap.conversationId&&connectionController.getSnapshot().history===restored&&restored.conversationId===tap.conversationId&&restored.messages.some(row=>row.id===tap.messageId);
     if(tap.view==='chat'&&!exactChat())return;
     const views:Record<string,string>={calendar:'calendar',notes:'notes',automations:'workflows'};
     const targetView=tap.view!=='chat'&&tap.view?views[tap.view]:undefined;
