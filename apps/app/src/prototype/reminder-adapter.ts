@@ -9,8 +9,6 @@ import { pendingReminderDeletions,retainReminderDeletion,acknowledgeReminderDele
 import { Capacitor } from '@capacitor/core';
 import {rememberNoteOrigin,forgetNoteOrigin} from './note-origin-adapter';
 type Bag = any;
-type TodoBridge={saveTodo(options:{id:string;title:string;body?:string}):Promise<{status:string;id:string;message?:string}>;todoDecision(options:{target:NonNullable<Reminder['target']>;action:'done'|'reopen'|'cancel'}):Promise<{status:string;id:string}>};
-const todoBridge=()=>DailyApps as unknown as TodoBridge;
 /** Native reminders use the reference calendar form, timeline and detail sheet. */
 export function installReminderAdapter(Component: Bag, views: Bag) {
   const p = Component.prototype, mount = p.componentDidMount, unmount = p.componentWillUnmount;
@@ -171,7 +169,7 @@ export function installReminderAdapter(Component: Bag, views: Bag) {
       if(action==='cancel'&&!window.confirm(`Delete the to-do “${r.title}”?`))return;
       todoOwner.reminderSaving=true;
       try{
-        const result=await todoBridge().todoDecision({target:r.target,action});
+        const result=await DailyApps.todoDecision({target:r.target,action});
         const saved=(await DailyApps.listReminders()).reminders.find(row=>row.id===r.id);
         const expected=action==='done'?'completed':action==='reopen'?'todo':'cancelled';
         if(result.status!==expected||(expected!=='cancelled'&&(saved?.status as string)!==expected)||(expected==='cancelled'&&saved))throw Error('To-do readback mismatch');
@@ -189,7 +187,7 @@ export function installReminderAdapter(Component: Bag, views: Bag) {
       todoOwner.todoAttempt=attempt;todoOwner.reminderSaving=true;
       try{
         let response:{status:string}|undefined;
-        try{response=await todoBridge().saveTodo({id:attempt.id,title:text,body});}catch{/* Readback decides. */}
+        try{response=await DailyApps.saveTodo({id:attempt.id,title:text,body});}catch{/* Readback decides. */}
         const saved=(await DailyApps.listReminders()).reminders.find(r=>r.id===attempt.id);
         if(!saved&&isReminderRefusal(response?.status)){todoOwner.todoAttempt=undefined;if(owner===todoOwner)api.toast(reminderRefusalMessage(response.status as ReminderRefusal).replace('This reminder','This to-do'));return;}
         if(!saved||!isUndatedReminder(saved))throw Error('To-do save unconfirmed');

@@ -3,7 +3,7 @@ import {devSurfacesEnabled} from '../build-flags';
 import {browserCloudVoice,browserCloudCredential} from './cloud-connection';
 import type {LocalAgentProtocol} from '../runtime/local-agent';
 import {browserSpeechConnection as connectionController} from './agent-speech';
-import {recordingPcmWav} from './recording-pcm';
+import {recordingPcmWav} from '../../../../.eliza/client-features/packages/voice/src/browser-capture/recording-pcm.ts';
 import {browserMediaVolume} from './audio-settings';
 import {audioRecord,audioMetadata,retainAudio,changeAudioDeleted,audioDeletionStatus,migrateAudio,purgeAudio} from './note-audio-store';
 import { speechError } from './speech-errors';

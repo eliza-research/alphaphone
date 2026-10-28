@@ -1,3 +1,4 @@
+import {selectCalendarSource} from './helpers/browser-calendar';
 // J04 on the FLAG-OFF bundle with the Android bridge stubbed: an event read from the device
 // calendar, its location handed to Maps with no Maps provider configured, an explicit hand-off to
 // an installed map app, and Back to event restoring that same event.
@@ -18,11 +19,7 @@ const TITLE = 'Ferry inspection';
 
 /** This journey exercises CalendarProvider rows, so choose their explicit source. */
 async function openAndroidCalendars(page: Page) {
-  await button(page, 'Calendar').click();
-  const sources = page.locator('summary').filter({ hasText: 'Calendar sources' });
-  await sources.click();
-  await button(page, 'Android calendars').click();
-  await sources.click();
+  await selectCalendarSource(page, 'Android calendars');
 }
 
 /** Adds the event location and an installed map app (DailyApps.capabilities/perform) to the stub. */

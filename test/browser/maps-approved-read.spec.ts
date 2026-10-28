@@ -18,7 +18,7 @@ for (const mode of ['place', 'route', 'stale-before-approval', 'stale-after-read
         nativePromise: async (plugin: string, method: string, input: any) => {
           if (plugin === 'AlphaActionJournal') {
             fixture.journal.push(method);
-            if (method === 'reserve') { w.mapsEntry={...structuredClone(input),phase:'reserved'}; return { created: true }; }
+            if (method === 'reserve') { w.mapsEntry={...structuredClone(input),phase:'reserved'}; return { created: true, entry: structuredClone(w.mapsEntry) }; }
             if (method === 'markApplying') { Object.assign(w.mapsEntry,{phase:'applying',attemptId:input.attemptId});return {}; }
             if(method==='get')return {entry:structuredClone(w.mapsEntry)};
             if(method==='list')return {entries:w.mapsEntry?[structuredClone(w.mapsEntry)]:[]};

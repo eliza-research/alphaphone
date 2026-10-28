@@ -12,11 +12,27 @@ import java.util.*;
 /** Own notifications plus explicitly allowed, Android-authorized external rows. */
 @CapacitorPlugin(name="AlphaNotifications")
 public class AlphaNotificationsPlugin extends Plugin {
+ private static java.lang.ref.WeakReference<AlphaNotificationsPlugin> canonicalLive=new java.lang.ref.WeakReference<>(null);
+ static void canonicalTapReady(){AlphaNotificationsPlugin plugin=canonicalLive.get();if(plugin!=null)plugin.notifyListeners("canonicalNotificationTap",new JSObject(),true);}
+ @PluginMethod public void canonicalPending(PluginCall call){
+  noticeWork(call,"Notification owner is unavailable.",()->{
+   AlphaCanonicalNotifications.ensure(getContext());org.json.JSONObject pending=AlphaCanonicalNotifications.pending();
+   requireNoticeForeground();call.resolve(JSObject.fromJSONObject(pending));
+  });
+ }
+ @PluginMethod public void acknowledgeCanonical(PluginCall call){
+  String token=call.getString("token","");
+  noticeWork(call,"Notification read status is unconfirmed; it will not be retried.",()->{
+   AlphaCanonicalNotifications.acknowledge(token,this::requireNoticeForeground);
+   requireNoticeForeground();call.resolve(new JSObject().put("ok",true));
+  });
+ }
+
  private static final WorkflowNoticeIo NOTICE_IO=new WorkflowNoticeIo();
  private final android.os.Handler noticeMain=new android.os.Handler(android.os.Looper.getMainLooper());
  private volatile boolean noticeDestroyed;
  private interface NoticeWork {void run()throws Exception;}
- @Override protected void handleOnDestroy(){noticeDestroyed=true;super.handleOnDestroy();}
+ @Override protected void handleOnDestroy(){noticeDestroyed=true;if(canonicalLive.get()==this)canonicalLive.clear();super.handleOnDestroy();}
  private void requireNoticeForeground()throws Exception {
   if(android.os.Looper.myLooper()==android.os.Looper.getMainLooper())throw new IllegalStateException("Storage must not run on main thread");
   java.util.concurrent.CountDownLatch checked=new java.util.concurrent.CountDownLatch(1);
@@ -40,7 +56,7 @@ public class AlphaNotificationsPlugin extends Plugin {
  private volatile NoticeTapInbox<android.content.Intent> workflowInbox;
  /** A capture committed: clear exactly that route from its Intent on main, then forget the Intent. */
  private final NoticeTapInbox.Captured<android.content.Intent> clearCapturedIntent=(intent,token)->noticeMain.post(()->{if(workflowInbox.data(token).equals(intent.getDataString()))intent.setData(null);workflowInbox.release(intent,token);});
- @Override public void load(){workflowInbox=new NoticeTapInbox<>(workflowTaps(),WorkflowNoticeTaps.ACTION,WorkflowNoticeTaps.ASK_ACTION,WorkflowNoticeTaps.PREFIX);captureWorkflowTap(getActivity().getIntent());}
+ @Override public void load(){super.load();canonicalLive=new java.lang.ref.WeakReference<>(this);workflowInbox=new NoticeTapInbox<>(workflowTaps(),WorkflowNoticeTaps.ACTION,WorkflowNoticeTaps.ASK_ACTION,WorkflowNoticeTaps.PREFIX);captureWorkflowTap(getActivity().getIntent());}
  @Override protected void handleOnNewIntent(android.content.Intent intent){captureWorkflowTap(intent);}
  @Override protected void handleOnResume(){PluginWorkers.submit(NOTICE_IO,()->{workflowInbox.drain(clearCapturedIntent);noticeChanged();},()->{/* Intents remain retained for retry. */});}
  private void captureWorkflowTap(android.content.Intent intent){
