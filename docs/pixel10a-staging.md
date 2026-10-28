@@ -292,7 +292,10 @@ Pixel 10a uses Virtual A/B, only while the bootloader reports a `snapshotted` up
 recovery that could not create snapshots overwrites the original slot's dynamic partitions;
 then a compatible release or stock recovery restores the device). `stock-archive` verifies the locked
 factory archive and prints the fastboot plan, which unlocks the bootloader and wipes data and
-is run by the operator; `verify-stock` checks the restored stock build.
+is run by the operator; `verify-stock` checks the restored stock build. The unlock is refused
+unless OEM unlocking was enabled from the running image's developer options, which a device that
+no longer boots cannot do: whether released units keep it enabled is a release decision that the
+stock-recovery drill must exercise.
 `scripts/verify-pixel10a-image.mjs` checks a booted image read-only (exact fingerprint, Alpha's
 system launcher bytes as HOME, recovery HOME, Clock handlers, WebView, verified boot state and,
 with `--listener`, the listener's privileges). These are drill tools: drill results and the
