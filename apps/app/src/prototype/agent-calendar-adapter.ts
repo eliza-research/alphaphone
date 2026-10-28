@@ -9,6 +9,7 @@ import {legacyCalendarPreservation} from '../runtime/legacy-calendar-preservatio
 import {AgentCalendar,calendarOwnerKey,calendarEventKey,calendarSourceKey,type CalendarPreservation} from '../runtime/agent-calendar';
 import type {AppRecordPort} from '../runtime/app-record-route-policy';
 import {canonicalCalendarRow,calendarFormCreate,calendarFormPatch,canonicalHomeCalendar,type CanonicalCalendarForm} from '../runtime/agent-calendar-view';
+import {agentReminderLead,homeCalendarValues,overdueAgendaNext,presentAgentAgendaFeed,presentHomeAgendaCard,type HomeAgendaCardInput} from './home-cards';
 import {getZonedDateParts,addDaysToLocalDate} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/internal/time';
 import {eventEditorMutability} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/components/event-editor-policy';
 type Bag=Record<string,any>;
@@ -148,8 +149,28 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
   else if(!rows.length)out.emptyText=model?.status==='ready'?'No events in this Calendar window':out.calendarSourceText;
   return out;
  };
- p.renderVals=function(){const out=renderVals.call(this);const home=canonicalHomeCalendar(controller?.state.next??null,controller?.state.nextFresh===true),event=home.event;
-  const overdue=out.homeCalendarOverdue===true;const projected={...out,homeCalendarTitle:event?.title??home.emptyLabel,homeCalendarTime:event?new Date(event.startAt).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',timeZone:event.isAllDay?'UTC':zone()}):'Calendar',homeCalendarLabel:event?'Open agent Calendar event '+event.title:'Open Agent Calendar',homeCalendarVideo:!!event?.conferenceLink,homeCalendarPeople:[],homePeopleVisibility:'hidden',homeCalendarOverdue:false,homeCalendarHasEvent:!!event,homeCalendarSource:'Agent Calendar',homeCalendarOrigin:'',homeCalendarHasMeta:!!event,homeCalendarFooter:event?.isAllDay?'All day':event?new Date(event.startAt).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}):'',homeCalendarDescription:controller?.state.error??(controller?.state.status==='transition-required'?'Saved app calendar is retained separately; review the transition.':home.verified?'':'Calendar sources are not fully verified.'),homeCalendarNext:'',homeCalendarHasNext:false,goCalendar:()=>this.openView('calendar',{calendarAuthority:'canonical',...(event?{open:'canonical-calendar:'+calendarEventKey(event),day:canonicalCalendarRow(event,zone()).off}:{} )})};
-  return overdue?{...projected,homeCalendarTitle:out.homeCalendarTitle,homeCalendarFooter:out.homeCalendarFooter,homeCalendarTime:out.homeCalendarTime,homeCalendarOverdue:true,homeCalendarHasEvent:true,homeCalendarSource:out.homeCalendarSource,homeCalendarDescription:out.homeCalendarItemDescription,homeCalendarLabel:out.homeCalendarLabel,goCalendar:out.goCalendar}:projected;
+ p.renderVals=function(){const out=renderVals.call(this);
+  // Home's agenda reads the calendar the owner chose: Agent Calendar unless device calendars were
+  // chosen explicitly in Calendar, whose read Home then shows with its own states and read times.
+  if(deviceCalendarScope(this))return out;
+  const home=canonicalHomeCalendar(controller?.state.next??null,controller?.state.nextFresh===true),event=home.event,now=Date.now();
+  // Shared daily-overview states for the agent calendar feed: reading, not connected, failed, stale and fresh.
+  // A next event that is not verified (failed next read, partial feed, ended event) is never fresh or empty.
+  const feed=presentAgentAgendaFeed(controller?.state,!!event,now,home.emptyLabel);
+  const provenance={origin:'',read:feed.read,description:feed.description};
+  // The agent's next event as an agenda item; an all-day event starts at local midnight of its first day.
+  const day=(at:string)=>{const d=new Date(at);return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()).getTime();};
+  const item=event?{title:String(event.title||''),begin:event.isAllDay?day(event.startAt):Date.parse(event.startAt),end:event.isAllDay?day(event.endAt):Date.parse(event.endAt),allDay:!!event.isAllDay,video:!!event.conferenceLink}:null;
+  // An overdue reminder keeps Home's own selection and source; the Next line shows whichever comes
+  // first of the agent's next event and Home's own next item (an upcoming reminder on this phone).
+  if(out.homeCalendarOverdue===true&&out.homeAgendaInput){const input=out.homeAgendaInput as HomeAgendaCardInput;return{...out,...homeCalendarValues(presentHomeAgendaCard(overdueAgendaNext(input,out.homeAgendaNextReminder===true,item?{item,provenance}:null)))};}
+  // A reminder saved on this phone that comes before the agent's next event leads the card with the
+  // reminder store's own source, as it does with device calendars.
+  const local=out.homeAgendaInput as HomeAgendaCardInput|undefined;
+  // A failed or out-of-date agent read stays visible above it, and opening the card reads it again.
+  if(out.homeAgendaReminder===true&&local?.item&&(!item||local.item.begin<item.begin)){const retry=feed.state==='error'||feed.state==='stale';
+   return{...out,...homeCalendarValues(presentHomeAgendaCard(agentReminderLead(local,feed))),...(retry&&typeof out.goCalendar==='function'?{goCalendar:()=>{refresh(true);out.goCalendar();}}:{})};}
+  return{...out,...homeCalendarValues(presentHomeAgendaCard({now,item,provenance,stale:feed.stale,emptyTitle:feed.title,sourceName:'Agent Calendar'})),
+   goCalendar:()=>{if(feed.state==='error'||feed.state==='stale')refresh(true);this.openView('calendar',{calendarAuthority:'canonical',...(event?{open:'canonical-calendar:'+calendarEventKey(event),day:canonicalCalendarRow(event,zone()).off}:{} )});}};
  };
 }

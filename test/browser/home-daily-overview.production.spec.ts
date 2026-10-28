@@ -16,7 +16,9 @@ test('fresh Home shows unverified Agent Calendar state, no brief card, no fixtur
  await expect(calendar).not.toContainText('No upcoming events');
  await expect(calendar.locator('[data-alpha-home-calendar-source]')).toHaveCount(0);
  await expect(calendar.locator('[data-alpha-home-calendar-origin]')).toHaveText('');
- await expect(calendar).toHaveAttribute('aria-description','Calendar sources are not fully verified.');
+ // No agent calendar is connected on a fresh profile: the card says so instead of claiming a read.
+ await expect(calendar).toHaveAttribute('aria-description','Connect to view Agent Calendar.');
+ await expect(calendar).toHaveAttribute('data-overview-state','empty');
  await expect(calendar).toHaveAccessibleName('Open Agent Calendar');
  await expect(calendar).toHaveAttribute('data-alpha-home-calendar-overdue','false');
  await expect(home.locator('[data-alpha-home-brief]')).toHaveCount(0);

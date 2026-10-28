@@ -99,7 +99,9 @@ test('attendee initials come only from event names, capped with an overflow coun
   const template = readFileSync(new URL('../apps/app/src/prototype/template.html', import.meta.url), 'utf8');
   assert.doesNotMatch(template, />(MC|JP|\+2)<\/span>/, 'no hard-coded avatar initials');
   assert.doesNotMatch(template, /\{\{lockSum\}\}|\{\{showHeads\}\}/, 'no fixture lock summary or heads-up banner');
-  assert.match(template, /<sc-if value="\{\{homeCalendarVideo\}\}"[^>]*><svg[^>]*><path d="\{\{ic\.video\}\}">/, 'video icon only with a meeting link');
+  // The agenda card is the shared upstream card; its video icon is passed only with a meeting link.
+  const cards = readFileSync(new URL('../apps/app/src/prototype/home-overview-cards.ts', import.meta.url), 'utf8');
+  assert.match(cards, /videoIcon: out\.homeCalendarVideo \? createElement\('svg'[^\n]*out\.ic\?\.video[^\n]*: undefined,/, 'video icon only with a meeting link');
 });
 test('brief card: shown only for a retained result, with agent, run time and failure state', () => {
   assert.deepEqual(H.presentHomeBriefCard(null, now), {has: false, title: '', status: '', failed: false, label: ''});
@@ -157,8 +159,67 @@ test('next item: an overdue reminder does not hide the next event, which keeps i
   const reminder = H.presentHomeCalendarSource({state: 'ready', overdue: false, reminder: true, reminderReadAt: at(14, 50), readAt: at(15, 4), now, native: false});
   assert.deepEqual(H.presentHomeNext({title: '  ', begin: at(17), allDay: false, now, provenance: reminder}),
     {text: 'Next: Untitled event 5:00 PM', source: 'Reminder', description: 'Next: Untitled event, 5:00 PM. Reminder saved on this browser, read 2:50 PM'});
-  const template = readFileSync(new URL('../apps/app/src/prototype/template.html', import.meta.url), 'utf8');
-  assert.match(template, /data-alpha-home-calendar-next-line>.*\{\{homeCalendarNext\}\}.*\{\{homeCalendarNextSource\}\}/);
+  const cards = readFileSync(new URL('../apps/app/src/prototype/home-overview-cards.ts', import.meta.url), 'utf8');
+  assert.match(cards, /out\.homeCalendarHasNext \? \{text: String\(out\.homeCalendarNext \|\| ''\), source: String\(out\.homeCalendarNextSource \|\| ''\)\}/);
+  assert.match(cards, /next: \{'data-alpha-home-calendar-next-line': ''\}, nextSource: \{'data-alpha-home-calendar-next-source': ''\}/);
+});
+test('next item under Agent Calendar: an overdue reminder shows whichever comes first of an upcoming phone reminder and the agent event', () => {
+  const provenance = {origin: '', read: '', description: 'Agent Calendar'};
+  const overdue = {title: 'Pay rent', begin: at(9), allDay: false, video: false};
+  const reminderNext = {item: {title: 'Call mom', begin: at(16), allDay: false, video: false}, provenance: {origin: 'Reminder', read: '', description: 'Reminder'}};
+  const agentEarly = {item: {title: 'Standup', begin: at(15, 45), allDay: false, video: false}, provenance};
+  const agentLate = {item: {title: 'Review', begin: at(17), allDay: false, video: false}, provenance};
+  const input = {now, item: overdue, provenance, next: reminderNext};
+  assert.equal(H.overdueAgendaNext(input, true, agentLate).next, reminderNext, 'an earlier phone reminder is not hidden by a later agent event');
+  assert.equal(H.overdueAgendaNext(input, true, agentEarly).next, agentEarly, 'an earlier agent event leads the Next line');
+  assert.equal(H.overdueAgendaNext(input, true, null).next, reminderNext, 'no agent event keeps the phone reminder');
+  assert.equal(H.overdueAgendaNext(input, false, agentLate).next, agentLate, "Home's own non-reminder next item yields to the chosen Agent Calendar");
+  assert.equal(H.overdueAgendaNext(input, false, null).next, null, 'a device calendar event is never shown under Agent Calendar');
+  assert.equal(H.overdueAgendaNext(input, true, agentLate).item, overdue, 'the overdue reminder still leads the card');
+});
+test('a phone reminder leading under Agent Calendar keeps a failed or out-of-date agent read visible above it', () => {
+  const local = {now, item: {title: 'Call mom', begin: at(16), allDay: false, video: false}, provenance: {origin: 'Reminder', read: '', description: 'Reminder saved on this browser'}};
+  const feed = state => H.presentHomeAgendaFeed({status: state === 'error' ? 'error' : 'ready', hasItem: state === 'stale', feedState: state === 'stale' ? 'partial' : 'complete', asOf: at(15), now, source: 'Agent Calendar'});
+  assert.equal(H.agentReminderLead(local, feed('ready')), local, 'a fresh agent read leaves the reminder its own source');
+  for (const status of ['loading', 'disconnected']) assert.equal(H.agentReminderLead(local, H.presentHomeAgendaFeed({status, hasItem: false, asOf: null, now, source: 'Agent Calendar'})), local, status + ' keeps the reminder source');
+  const failed = H.presentHomeAgendaCard(H.agentReminderLead(local, feed('error')));
+  assert.equal(failed.title, 'Call mom');
+  assert.equal(failed.source, 'Open Calendar to retry');
+  assert.match(failed.description, /Agent Calendar could not be read\. Open Calendar to retry/);
+  assert.equal(failed.stale, false);
+  const stale = H.presentHomeAgendaCard(H.agentReminderLead(local, feed('stale')));
+  assert.equal(stale.title, 'Call mom');
+  assert.match(stale.source, /^Not updated since /);
+  assert.equal(stale.stale, true);
+  const adapter = readFileSync(new URL('../apps/app/src/prototype/agent-calendar-adapter.ts', import.meta.url), 'utf8');
+  assert.match(adapter, /presentHomeAgendaCard\(agentReminderLead\(local,feed\)\)/);
+});
+test('Agent Calendar freshness: an unverified next event is never fresh or an empty schedule', () => {
+  const next = {calendarFeedState: 'complete', timeReference: {asOf: new Date(at(15)).toISOString()}};
+  const fresh = H.presentAgentAgendaFeed({status: 'ready', next, nextFresh: true, error: null}, true, now, 'No upcoming events in this window');
+  assert.equal(fresh.state, 'ready'); assert.equal(fresh.read, 'Agent Calendar'); assert.equal(fresh.stale, false);
+  assert.equal(H.presentAgentAgendaFeed({status: 'ready', next: {...next}, nextFresh: true, error: null}, false, now, 'No upcoming events in this window').title, 'No upcoming events in this window');
+  // A failed next read keeps the same-source cached event, shown stale with the failure.
+  const failed = H.presentAgentAgendaFeed({status: 'ready', next, nextFresh: false, error: 'Next event could not be refreshed. Saved event is unverified.'}, true, now, 'Calendar has not been verified');
+  assert.equal(failed.state, 'stale'); assert.equal(failed.stale, true); assert.match(failed.read, /^Not updated since /);
+  assert.equal(failed.description, 'Next event could not be refreshed. Saved event is unverified. Open Calendar to retry.');
+  // An event that ended (or a partial feed) with nothing verified since is unverified, not empty.
+  for (const status of ['ready', 'partial']) {
+    const ended = H.presentAgentAgendaFeed({status, next: null, nextFresh: false, error: null}, false, now, 'Calendar has not been verified');
+    assert.equal(ended.state, 'error'); assert.equal(ended.title, 'Calendar has not been verified'); assert.equal(ended.read, 'Open Calendar to retry');
+    assert.doesNotMatch(ended.title, /No upcoming/);
+    assert.equal(ended.description, 'Agent Calendar has not been verified. Open Calendar to retry.');
+  }
+  // Reading again after the failure, and other controller states, keep the shared presentation.
+  assert.equal(H.presentAgentAgendaFeed({status: 'loading', next, nextFresh: false, error: null}, true, now, '').state, 'loading');
+  assert.equal(H.presentAgentAgendaFeed(undefined, false, now, '').state, 'not-connected');
+  assert.equal(H.presentAgentAgendaFeed({status: 'error', next: null, nextFresh: false, error: 'Calendar service unavailable'}, false, now, '').description, 'Calendar service unavailable. Open Calendar to retry.');
+  // A stale feed with a failed retry leads a phone reminder with the agent's read line.
+  const local = {now, item: {title: 'Call mom', begin: at(16), allDay: false, video: false}, provenance: {origin: 'Reminder', read: '', description: 'Reminder saved on this browser'}};
+  assert.equal(H.presentHomeAgendaCard(H.agentReminderLead(local, failed)).stale, true);
+  const adapter = readFileSync(new URL('../apps/app/src/prototype/agent-calendar-adapter.ts', import.meta.url), 'utf8');
+  assert.match(adapter, /canonicalHomeCalendar\(controller\?\.state\.next\?\?null,controller\?\.state\.nextFresh===true\)/);
+  assert.match(adapter, /presentAgentAgendaFeed\(controller\?\.state,!!event,now,home\.emptyLabel\)/);
 });
 test('inbox status: readable freshness and every non-ready state', () => {
   const base = {failure: false, pending: false, cached: null, connected: false, unchecked: false, now};
@@ -182,13 +243,19 @@ test('Home template renders source, freshness and the brief card only from live 
   const template = readFileSync(new URL('../apps/app/src/prototype/template.html', import.meta.url), 'utf8');
   const home = template.slice(template.indexOf('<sc-element value="{{homeShell}}">'), template.indexOf('</sc-element>'));
   assert.ok(home.includes('<sc-slot name="cards">'), 'Home cards fill the shared shell\'s card slot');
-  assert.match(home, /data-alpha-home-calendar-source>\{\{homeCalendarSource\}\}</);
-  assert.match(home, /data-alpha-home-calendar-origin>\{\{homeCalendarOrigin\}\}</);
-  assert.match(home, /aria-description="\{\{homeCalendarDescription\}\}"/);
-  assert.match(home, /aria-description="\{\{homeInboxDescription\}\}"/);
+  // The agenda, mail and brief cards are the shared upstream cards (home-overview-cards.ts); the
+  // template only places them, in this order around the workflows card. Their DOM is asserted in
+  // test/home-overview-cards.test.mjs.
+  assert.match(home, /^\s*\{\{homeAgendaCard\}\}$/m);
+  assert.match(home, /^\s*\{\{homeAttentionCard\}\}$/m);
+  assert.match(home, /^\s*\{\{homeBriefCard\}\}$/m);
+  assert.ok(home.indexOf('{{homeAgendaCard}}') < home.indexOf('data-alpha-home-workflows') && home.indexOf('data-alpha-home-workflows') < home.indexOf('{{homeAttentionCard}}') && home.indexOf('{{homeAttentionCard}}') < home.indexOf('{{homeBriefCard}}'), 'agenda, workflows, mail, brief');
+  // dc-lite renders a text node that is exactly one {{hole}} as an element; two holes in one text node
+  // would be interpolated as text ("[object Object]").
+  assert.doesNotMatch(home, /\}\}\s+\{\{/, 'each card placeholder is alone in its text node');
+  assert.doesNotMatch(home, /home-calendar-card|home-brief-card|data-alpha-home-inbox|\{\{homeCalendarTitle\}\}|\{\{homeBriefTitle\}\}|\{\{homeInboxTitle\}\}/, 'no second copy of the shared card markup');
   assert.match(home, /aria-description="\{\{homeWorkflowDescription\}\}"/);
   assert.match(home, /<sc-if value="\{\{homeWorkflowFreshness\}\}"><span data-alpha-home-workflow-freshness>/);
-  assert.match(home, /<sc-if value="\{\{homeBriefHas\}\}"><button[^>]*data-alpha-home-brief[^>]*aria-label="\{\{homeBriefLabel\}\}"/, 'no brief card without a retained brief');
   assert.doesNotMatch(home, /Morning brief|Design review|7:02 AM/, 'no fixture brief or agenda text in the template');
   const adapter = readFileSync(new URL('../apps/app/src/prototype/data-adapter.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(adapter, /gmailSearch|gmailThread|\.sync\(|fetch\(/, 'the Home adapter starts no mail read, digest sync or network request');

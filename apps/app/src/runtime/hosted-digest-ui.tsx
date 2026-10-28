@@ -30,6 +30,7 @@ import {
  missedRunNowOffers,
  type MissedRunNow,
  rememberRetainedDigests,
+ bindRetainedDigestScope,
  DIGEST_SOURCE_MAX_HOURS,
 	type DigestCapabilities,
 	type DigestSource,
@@ -183,7 +184,7 @@ export function HostedDigestPanel({composeQuestion,canComposeQuestion}:{composeQ
 			if (binding.current !== b || document.hidden) return;
 			setSources(ss);
 			setLoops(ll);
-			setResults(rr);rememberRetainedDigests(rr,connection.name||undefined);
+			setResults(rr);rememberRetainedDigests(rr,connection.name||undefined,b.notices.scope);
 			setPending(pp);
 			setMessage("Synced with this agent.");
             try {const status=await hostedResultNative.status();if(binding.current===b){setNoticeEnabled(status.enabled);setBackgroundEnabled(status.backgroundEnabled===true);}}catch{}
@@ -208,7 +209,7 @@ export function HostedDigestPanel({composeQuestion,canComposeQuestion}:{composeQ
         questionClose.current?.();
 		binding.current = null;
 		setAvailable(false);setNativeReady(false);setBackgroundEnabled(false);setNoticeEnabled(false);setFeatures({nativeEvening:false,sourcePause:false,dossier:false});
-		setResults([]);rememberRetainedDigests(null);setFocusedRun(null);setTap(null);setRenewing(null);
+		setResults([]);bindRetainedDigestScope(null);setFocusedRun(null);setTap(null);setRenewing(null);
 		setSources([]);
 		setLoops([]);
 		setPending(null);
@@ -256,11 +257,13 @@ export function HostedDigestPanel({composeQuestion,canComposeQuestion}:{composeQ
 				controller,
 			};
 			binding.current = b;
+            // Home's retained brief belongs to this account and agent only; a late read for another is ignored.
+            bindRetainedDigestScope(notices.scope);
             if(development){const {startDevelopmentDigestScheduler}=await import('../browser/development-digests');if(!disposed)releaseScheduler=startDevelopmentDigestScheduler(notices.current,controller.signal);}
             if(!isAndroid)releaseBrowser=browserHostedResults.bind(session.sessionId,notices);
 			try {
 				const old = await b.inbox.history();
-				if (binding.current === b) {setResults(old);rememberRetainedDigests(old,connection.name||undefined);}
+				if (binding.current === b) {setResults(old);rememberRetainedDigests(old,connection.name||undefined,b.notices.scope);}
 			} catch {}
 			await refreshFlight.current?.promise;
 			if (!disposed && binding.current === b) await refresh();
