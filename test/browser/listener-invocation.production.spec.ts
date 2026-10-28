@@ -9,11 +9,11 @@ async function setup(page:Page,options:Options={}){
  const foreign=await fenceNetwork(page);await flagOffAndroid(page);
  await page.addInitScript((options:Options)=>{
   const w=window as any,c=w.Capacitor,prior=c.nativePromise;
-  const f=w.live={captures:[] as any[],stops:[] as string[],active:null as string|null,routes:[] as any[],invocations:0,binding:null as any,bindings:[] as any[],claims:[] as any[],listenerCalls:[] as string[],listener:options.listener??null,forbidden:[] as string[]};
+  const f=w.live={captures:[] as any[],stops:[] as string[],active:null as string|null,routes:[] as any[],invocations:0,binding:null as any,bindings:[] as any[],claims:[] as any[],listenerCalls:[] as string[],power:[] as string[],listener:options.listener??null,forbidden:[] as string[]};
   const events:Array<{event:string;callback:(value:any)=>void}>=[];
   const header=(name:string)=>c.PluginHeaders.find((p:any)=>p.name===name);
   header('AlphaVoiceCloud').methods=[...['checkPermissions','localSpeechStatus','liveCaptureStatus','startLiveCapture','stopLiveCapture','synthesizeLocal','play','stopPlayback','cancel','releaseLocalSpeech','cancelRecording'].map(name=>({name,rtype:'promise'})),{name:'addListener',rtype:'callback'},{name:'removeListener',rtype:'callback'}];
-  c.PluginHeaders.push({name:'ElizaSense',methods:['status','pause','turnOff','openSettings','bindInvocationSession','takeInvocation'].map(name=>({name,rtype:'promise'}))});
+  c.PluginHeaders.push({name:'ElizaSense',methods:['status','pause','turnOff','openSettings','bindInvocationSession','takeInvocation','claimProtectedPowerLaunch','discardProtectedPowerLaunch','discardProtectedPowerInvocation'].map(name=>({name,rtype:'promise'}))});
   const callback=c.nativeCallback;c.nativeCallback=(plugin:string,method:string,input:any,fn:any)=>{if(plugin==='AlphaVoiceCloud'&&method==='addListener'){events.push({event:input.eventName,callback:fn});return String(events.length);}return callback(plugin,method,input,fn);};
   c.nativePromise=async(plugin:string,method:string,input:any)=>{
    if(plugin==='DailyApps'&&method==='surfaceInfo')return {developmentBuild:false,assistant:options.assistant===true};
@@ -28,6 +28,11 @@ async function setup(page:Page,options:Options={}){
      // One-shot like AlphaAssistActivity: the listener origin is reported once, then "assist".
      const first=f.invocations++===0;
      return options.assistant?{assistant:true,invocation:first?options.invocation??'assist':'assist',locked:options.locked===true}:{assistant:false,invocation:null,locked:false};
+    }
+    // The pinned ElizaSense also offers protected power launches; this stub never grants one.
+    if(method==='claimProtectedPowerLaunch'||method==='discardProtectedPowerLaunch'||method==='discardProtectedPowerInvocation'){
+     if(!f.binding||input.generation!==f.binding.generation||input.bindingId!==f.binding.bindingId)throw Error('Power launch was not bound to the current owner');
+     f.power.push(method);return method==='claimProtectedPowerLaunch'?{assistant:false,invocation:null,locked:true}:{};
     }
     f.listenerCalls.push(method);
     if(method==='status')return f.listener??{available:false};
