@@ -140,6 +140,14 @@ function selectedMedia(items:SelectedMedia[]){
  if(!Array.isArray(items)||items.length<1||items.length>20||items.some(item=>!item||typeof item.id!=='string'||!item.id||typeof item.revision!=='string'||!item.revision)||new Set(items.map(item=>item.id)).size!==items.length)throw Error('Select between 1 and 20 distinct items again.');
  return items.map(item=>({id:item.id,revision:item.revision}));
 }
+// Same rule as the shared TrashDeleteRequest: emptying the trash is only the explicit {all:true}
+// intent; no intent, both, items:null or a non-list items value is refused, never read as all trash.
+function trashSelection(input:unknown):SelectedMedia[]|null{
+ const value=input as {items?:unknown;all?:unknown}|null|undefined;
+ if(!value||typeof value!=='object'||('all' in value)===('items' in value))throw Error('Select deleted items again.');
+ if('all' in value){if(value.all!==true)throw Error('Select deleted items again.');return null;}
+ return selectedMedia(value.items as SelectedMedia[]);
+}
 async function selectedMediaRows(items:SelectedMedia[]){
  return transaction<Row[]>('readonly',(store,set,fail)=>{const result:Row[]=[];set(result);for(const item of items){const request=store.get(item.id);request.onsuccess=()=>{const row=request.result as Row|undefined;if(!row||!['image','video'].includes(row.kind)||row.mutationRevision!==item.revision||row.trashed){fail(Error('Selection changed. Reselect the items.'));return;}result.push(row);};}});
 }
@@ -226,7 +234,7 @@ export const browserPhotoLibrary={
   });
  },
  async share(input:{id:string;revision?:string},current:()=>boolean){const row=await read(input.id);return browserPhotoLibrary.shareMany({items:[{id:input.id,revision:input.revision??row.mutationRevision}]},current);},
- async prepareDeleteTrash(input?:{items:SelectedMedia[]}){const wanted=input?selectedMedia(input.items):null;const all=(await rows({},true)).filter(r=>r.trashed);if(wanted&&wanted.some(item=>!all.some(row=>row.id===item.id&&row.mutationRevision===item.revision)))throw Error('Selected deleted items changed. Select them again.');const selected=wanted||all.map(r=>({id:r.id,revision:r.mutationRevision}));const confirmation=revision();prepared.clear();prepared.set(confirmation,selected);return {confirmation,count:selected.length};},
+ async prepareDeleteTrash(input:{items:SelectedMedia[]}|{all:true}){const wanted=trashSelection(input);const all=(await rows({},true)).filter(r=>r.trashed);if(wanted&&wanted.some(item=>!all.some(row=>row.id===item.id&&row.mutationRevision===item.revision)))throw Error('Selected deleted items changed. Select them again.');const selected=wanted||all.map(r=>({id:r.id,revision:r.mutationRevision}));const confirmation=revision();prepared.clear();prepared.set(confirmation,selected);return {confirmation,count:selected.length};},
  async cancelDeleteTrash(input:{confirmation:string}){prepared.delete(input.confirmation);},
  async deletePreparedTrash(input:{confirmation:string}){const selected=prepared.get(input.confirmation);if(!selected)throw Error('Review the trash again.');prepared.delete(input.confirmation);
   return transaction<{status:string;deletedIds:string[];skippedIds:string[];failedIds:string[]}>('readwrite',(store,set)=>{const result={status:'complete',deletedIds:[] as string[],skippedIds:[] as string[],failedIds:[] as string[]};set(result);for(const item of selected){const r=store.get(item.id);r.onsuccess=()=>{const row=r.result as Row|undefined;if(row?.trashed&&row.mutationRevision===item.revision){store.delete(item.id);result.deletedIds.push(item.id);}else result.skippedIds.push(item.id);};}});
