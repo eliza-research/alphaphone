@@ -24,7 +24,7 @@ test('explicit Calendar rejection survives the private transport; uncertain repl
   }}]});
   const bundle=await buildPort(readFileSync(entry,'utf8'));
   const {createManagedCalendarMutationPort,CalendarMutationNotAcceptedError}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
-  const source='alpha-google:'+'a'.repeat(64),caps={grantId:source,calendarId:'calendar',accountId:'account',read:true,write:true,idempotentCreate:true,conditionalWrites:true,providerExactlyOnce:false};
+  const source='alpha-google:'+'a'.repeat(64),caps={version:1,grantId:source,calendarId:'calendar',accountId:'account',read:true,write:true,idempotentCreate:true,conditionalWrites:true,providerExactlyOnce:false};
   const approval={payload:{action:'schedule_event',side:'owner',grantId:source,calendarId:'calendar'}};
   for(const kind of ['not_accepted','precondition_failed','wrong-account','unknown','generic-http','timeout']){
    let mutations=0;
