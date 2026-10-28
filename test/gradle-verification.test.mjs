@@ -65,6 +65,21 @@ test('every coordinate that ships in the APKs is pinned, and the build tools are
     assert.ok(metadata.components.some(item => item.group === group && item.name === name), `${group}:${name}`);
 });
 
+test('archives that only a library module compiles against are pinned too', () => {
+  // The shared Cloud sign-in module (eliza-cloud-auth, packages/auth/android) compiles against
+  // androidx.credentials 1.6.0, which pulls kotlin-stdlib 2.1.20 and older Kotlin/annotation jars.
+  // The app's runtime classpath resolves newer versions, so CLASSPATH never lists these and the
+  // runtime check above cannot see them; Gradle still verifies them in :eliza-cloud-auth:compile*.
+  // Only the module metadata of kotlin-stdlib 2.1.20 was once recorded, which failed the
+  // flag-off distribution build with "kotlin-stdlib-2.1.20.jar ... failed verification".
+  assert.ok(read(HOST_DESCRIPTOR).includes('"packages/auth/android"'), 'eliza-cloud-auth is an included module');
+  for (const [group, name, version] of [
+    ['org.jetbrains.kotlin', 'kotlin-stdlib', '2.1.20'], ['org.jetbrains.kotlin', 'kotlin-stdlib', '1.7.10'],
+    ['org.jetbrains.kotlin', 'kotlin-stdlib-common', '1.7.10'], ['androidx.annotation', 'annotation', '1.2.0'],
+    ['com.google.android.libraries.identity.googleid', 'googleid', '1.1.1'],
+  ]) assert.equal(coordinateChecksum(metadata, group, name, version)?.archive, true, `${group}:${name}:${version} archive`);
+});
+
 test('the check rejects a missing pin, a weaker checksum, a trust exception, an unreviewed publisher and a new repository', t => {
   const without = text.replace(/<component group="androidx\.webkit" name="webkit"[\s\S]*?<\/component>\s*/, '');
   assert.notEqual(without, text);

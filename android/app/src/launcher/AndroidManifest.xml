@@ -40,6 +40,12 @@
  <application><activity android:name=".MainActivity" android:exported="true">
   <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.HOME"/><category android:name="android.intent.category.DEFAULT"/></intent-filter>
  </activity>
+  <!-- The two foreground services of src/main, restated with the same types. Android lint's
+       ForegroundServiceType check reads this flavor's own manifest, which declares services
+       (the role services below), and requires a foregroundServiceType among them. tools:replace
+       keeps the merged value equal to src/main's (the merger would otherwise OR the flags). -->
+  <service android:name=".ElizaAgentService" android:foregroundServiceType="specialUse" tools:replace="android:foregroundServiceType" />
+  <service android:name=".AlphaNavigationService" android:foregroundServiceType="location" tools:replace="android:foregroundServiceType" />
   <!-- Sent and delivery results of reviewed native SMS sends: explicit PendingIntents only, no filter,
        not exported. The receiver ignores every broadcast unless the image capability holds. -->
   <receiver android:name=".AlphaSmsSendReceiver" android:exported="false" />
