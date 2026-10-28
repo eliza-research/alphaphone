@@ -101,7 +101,7 @@ test('a resident turn failure forwards its own reset fields and records the late
   // A limit seen on one account never appears for another, and it ends once AI gets through again.
   assert.match(ui.slice(ui.indexOf('async function verifyService'), ui.indexOf('let pendingBillingReview')), /\.\.\.\(!same\?\{[^}]*lastServiceLimit:null/);
   assert.match(ui.slice(ui.indexOf('  async residentRedeem('), ui.indexOf("update({redeemNotice:redeemSuccessMessage(result)});")), /redeemed=true;[\s\S]*lastServiceLimit:null/);
-  assert.match(ui.slice(ui.indexOf('  async send('), ui.indexOf('export function ConnectionChooser')), /if\(!responseFailure&&state\.lastServiceLimit\)update\(\{lastServiceLimit:null\}\);/);
+  assert.match(ui.slice(ui.indexOf('  async send('), ui.indexOf('export function ConnectionChooser')), /if\(!failed&&state\.lastServiceLimit\)update\(\{lastServiceLimit:null\}\);/);
   // A request-level 429 that reads as a Cloud limit is recorded too; a refusal before the turn is the agent being busy.
   assert.match(ui.slice(ui.indexOf('  async send('), ui.indexOf('export function ConnectionChooser')), /const limit = refused \? null : readServiceLimit\(error\);\s+if \(limit\) update\(\{ lastServiceLimit: \{ \.\.\.limit, observedAt: Date\.now\(\) \} \}\);/);
 });

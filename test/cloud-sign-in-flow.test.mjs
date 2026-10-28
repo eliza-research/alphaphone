@@ -30,7 +30,11 @@ test('Alpha registers the shared native sign-in client with its own identity, de
  assert.match(plugin,/if \(testMocks\) builder\.environment\(new CloudSignInEnvironment\("staging"/,'staging only in test-mocks builds');
  assert.match(plugin,/AlphaCredentialStore store = new AlphaCredentialStore\(getContext\(\), guard\);/,'the Keystore store runs the client guard before every write');
  assert.match(plugin,/long intent = AlphaLocalAgentPlugin\.reserveCredentialIntent\(\);\s+return \(\) -> AlphaLocalAgentPlugin\.requireCredentialIntent\(intent\);/,'the minted key follows the credential-intent rule');
- assert.doesNotMatch(plugin,/@PluginMethod|HttpURLConnection|\/steward\/|app-auth/,'no protocol code remains in Alpha');
+ assert.doesNotMatch(plugin,/HttpURLConnection|\/steward\/|app-auth/,'no protocol code remains in Alpha');
+ // The only Alpha methods are the explicit Restore saved sign-in extension and the shared entry points it
+ // wraps to supersede a restore; each wrapper delegates to the shared client.
+ assert.deepEqual([...plugin.matchAll(/@PluginMethod public void (\w+)\(/g)].map(m=>m[1]),['savedSignInRecoveryStatus','restoreSavedSignIn','startGoogle','startEmail','startPhone','cancel']);
+ for(const entry of ['startGoogle','startEmail','startPhone','cancel'])assert.match(plugin,new RegExp(`public void ${entry}\\(PluginCall call\\) \\{ supersedeRecovery\\(\\); super\\.${entry}\\(call\\); \\}`));
  for(const moved of ['CloudSignInFlow.java','CloudEmailCode.java','CloudSmsCode.java','CloudSignInReadiness.java','CloudKeyRevocation.java','NativeGoogleCredential.java'])
   assert.equal(existsSync(join(root,native,moved)),false,`${moved} lives only in the shared client`);
  assert.match(read('android/settings.gradle'),/include ':eliza-cloud-auth'\nproject\(':eliza-cloud-auth'\)\.projectDir = new File\('\.\.\/vendor\/eliza\/packages\/auth\/android'\)/);
