@@ -1,6 +1,8 @@
 # Current MVP status
 
-Current local source candidate: Notes restoration guidance `2f664cc6dc223cf12002120576357114f8cb9763`; existing source and native evidence below retain their original revisions. Performance and device acceptance remain pending.
+Current source candidate: notification lint correction `e40497d5d0111d557aef022eb01d4f03023c9fc8` (draft elizaOS/eliza#38069), following `6f91e22e6b` (Calendar coverage diagnostics) and `96c560ec9c` (native notification channel policy). Native inputs are object-equal to the prior candidate ([source binding](evidence/v17-notification-lint-source-binding-20261028.json)); no runtime, artifact or device qualification transfers. Performance and device acceptance remain pending.
+
+Previous source checkpoint: Notes restoration guidance `2f664cc6dc223cf12002120576357114f8cb9763`; existing source and native evidence below retain their original revisions.
 
 Previous source checkpoint: Current local integration candidate: clean coherent SDK `de16c240f8ef77779edd3aa411e407018d2be209` with preserved public/native/recovery/Power and current Calendar/catalog/planner/Notes fixes. Shared source qualification is recorded at exact component/joined heads; product preparation/current-head checks and live Notes/Calendar semantics remain pending. Native/model/ABI history and qualified=false are unchanged; current APK/simulator/physical acceptance is separate. No GitHub publication or cleanup was performed.
 
@@ -85,9 +87,9 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-Current source projection: SDK `de16c240f8` with source metadata refreshed for this behavioral repair; runtime, artifact and device qualification remains separate as recorded above.
+Current source projection: SDK `e40497d5d0` (previously `de16c240f8`) with source metadata refreshed for each repin; runtime, artifact and device qualification remains separate as recorded above.
 
-The current upstream source pin is `de16c240f8` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
+The current upstream source pin is `e40497d5d0` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 
