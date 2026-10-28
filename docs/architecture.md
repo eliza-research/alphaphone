@@ -84,7 +84,18 @@ is not a guarantee of atomic filesystem deletion or recovery from power loss mid
 through Android's clear operation. Installed self-clear acceptance must be observed
 externally on a disposable package/user, since the reset kills its own instrumentation.
 The separate AOSP listener uses the reset contract below; native image qualification
-remains required before shipping it.
+remains required before shipping it. The coordinator, native review, authorization and
+recovery surface are the shared `plugin-native-system` `reset` package (`DataReset`,
+`DataResetPlugin`, `DataResetRecoveryActivity`); Alpha registers only its installed names
+(`AlphaReset`, `reset-alpha` marker, `:reset_recovery` process), copy and the bounded
+Cloud key revocation before dispatch (`AlphaDataReset`). Settings and tile system facts
+(switch states, transport, battery), the allowlisted Android settings handoffs, the
+launcher's shade request and Android role wording are likewise the shared ElizaSystem
+bridge (`SystemFacts`, `SystemSettingsPages`, `SystemShade`) and
+`@elizaos/capacitor-system/settings`; Alpha keeps its row and tile labels, theme and the
+existing `AlphaDevice` method names its renderer calls. The Quick Settings assistant tile is
+the shared `AssistantEntryTile` (inactive action tile, unlock before opening); Alpha keeps
+the `AlphaQuickSettingsTile` component name, its assist entry, wording and icon.
 
 Production Notes and vault migration controls are disabled, including their native
 entry points. Damaged-data notices retain saved bytes and drafts without backup or

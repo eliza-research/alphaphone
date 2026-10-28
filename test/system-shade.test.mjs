@@ -90,13 +90,16 @@ test('the launcher flavor alone requests EXPAND_STATUS_BAR and the plugin report
   const main = read('android/app/src/main/AndroidManifest.xml');
   assert.match(launcher, /<uses-permission android:name="android\.permission\.EXPAND_STATUS_BAR" \/>/);
   assert.doesNotMatch(main, /EXPAND_STATUS_BAR/, 'the standalone app does not drive the system shade');
-  const shade = read('android/app/src/main/java/ai/elizaresearch/alphaphone/SystemShade.java');
+  // The shared outcome mapping (plugin-native-system SystemShade, tested there) at the pin.
+  const shade = read('vendor/eliza/plugins/plugin-native-system/android/src/main/java/ai/eliza/plugins/system/SystemShade.java');
   assert.match(shade, /if \(!launcher\) return STANDALONE;\s*if \(!platform\.granted\(PERMISSION\)\) return PERMISSION_MISSING;/);
   assert.match(shade, /getMethod\("expandNotificationsPanel"\)\.invoke\(service\);\s*return OPENED;/);
   assert.match(shade, /catch \(ReflectiveOperationException \| RuntimeException refused\) \{[\s\S]*?return UNSUPPORTED;/);
   const plugin = read('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaDevicePlugin.java');
   assert.match(plugin, /@PluginMethod public void openNotificationShade\(PluginCall call\)\{/);
-  assert.match(plugin, /!activity\.hasWindowFocus\(\)\)out\.put\("status","not-in-front"\);\s*else out\.put\("status",SystemShade\.expand\(getContext\(\),BuildConfig\.IS_LAUNCHER\)\);/);
+  assert.match(plugin, /!activity\.hasWindowFocus\(\)\)out\.put\("status",SystemShade\.NOT_IN_FRONT\);\s*else out\.put\("status",SystemShade\.expand\(getContext\(\),BuildConfig\.IS_LAUNCHER\)\);/);
+  // The shared bridge method follows the same flavor policy.
+  assert.match(read('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaSystemPlugin.java'), /protected boolean canExpandNotificationShade\(\)\{return BuildConfig\.IS_LAUNCHER;\}/);
 });
 
 test('an overflowing Home takes only a clearly downward drag at its top from the WebView', () => {

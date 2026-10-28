@@ -68,6 +68,8 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-native-system/src/sense.ts',
   'plugins/plugin-native-system/src/sense-bridge.ts',
   'plugins/plugin-native-system/src/sense-web.ts',
+  'plugins/plugin-native-system/src/reset.ts',
+  'plugins/plugin-native-system/src/settings.ts',
   'plugins/plugin-native-system/src/definitions.ts',
   'packages/ui/src/components/pages/InstalledAppsLauncher.tsx',
   'packages/contracts/src/contracts/theme.ts',

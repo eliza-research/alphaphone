@@ -6,9 +6,10 @@ public final class AlphaApplication extends android.app.Application {
   super.attachBaseContext(base);
   // Runs before ContentProvider/AndroidX Startup initialization, including WorkManager.
   // The provider-free reset recovery process shows the unfinished reset and must not stop itself.
-  if(!android.os.Process.isIsolated()&&!resetRecoveryProcess()&&AlphaDataReset.pending(this)){ResetCloudRevocation.revoke(base,ResetCloudRevocation.PENDING_DEADLINE_MS);AlphaDataReset.admitAndExit(this);}
+  // A pending reset revokes Cloud keys (bounded), retries and stops this process (shared DataReset).
+  AlphaDataReset.RESET.admitBeforeStartup(base,getProcessName());
  }
- private boolean resetRecoveryProcess(){return (getPackageName()+ResetRecoveryActivity.PROCESS_SUFFIX).equals(getProcessName());}
+ private boolean resetRecoveryProcess(){return AlphaDataReset.RESET.isRecoveryProcess(this,getProcessName());}
  @Override public void onCreate(){
   super.onCreate();
   if(resetRecoveryProcess())return;NativeDigestHost host=new NativeDigestHost(this);NativeSourceHost.configure(host::read);NativeOwnerReminderHost owner=new NativeOwnerReminderHost(this);NativeSourceHost.configureOwnerReminderContext(owner::read);
