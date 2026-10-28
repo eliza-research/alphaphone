@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.service.notification.StatusBarNotification;
 import com.getcapacitor.*;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import ai.eliza.plugins.notifications.ForegroundNoticeGate;
 import ai.eliza.plugins.notifications.NoticeTapInbox;
 import java.util.*;
 
@@ -30,22 +31,18 @@ public class AlphaNotificationsPlugin extends Plugin {
 
  private static final WorkflowNoticeIo NOTICE_IO=new WorkflowNoticeIo();
  private final android.os.Handler noticeMain=new android.os.Handler(android.os.Looper.getMainLooper());
- private volatile boolean noticeDestroyed;
+ /** Shared foreground fence (plugin-native-notifications): notice work runs on NOTICE_IO only while
+  * this activity is focused, unlocked and not destroyed, checked on main with a bounded wait. */
+ private final ForegroundNoticeGate noticeGate=new ForegroundNoticeGate(new ForegroundNoticeGate.MainThread(){
+  public boolean isCurrent(){return android.os.Looper.myLooper()==android.os.Looper.getMainLooper();}
+  public boolean post(Runnable check){return noticeMain.post(check);}
+  public void remove(Runnable check){noticeMain.removeCallbacks(check);}
+ },this::foreground,NOTICE_IO);
  private interface NoticeWork {void run()throws Exception;}
- @Override protected void handleOnDestroy(){noticeDestroyed=true;if(canonicalLive.get()==this)canonicalLive.clear();super.handleOnDestroy();}
- private void requireNoticeForeground()throws Exception {
-  if(android.os.Looper.myLooper()==android.os.Looper.getMainLooper())throw new IllegalStateException("Storage must not run on main thread");
-  java.util.concurrent.CountDownLatch checked=new java.util.concurrent.CountDownLatch(1);
-  java.util.concurrent.atomic.AtomicBoolean admitted=new java.util.concurrent.atomic.AtomicBoolean();
-  Runnable check=()->{try{if(!noticeDestroyed){foreground();admitted.set(true);}}catch(Exception unavailable){}finally{checked.countDown();}};
-  if(!noticeMain.post(check))throw new IllegalStateException("Activity unavailable");
-  if(!checked.await(5,java.util.concurrent.TimeUnit.SECONDS)){noticeMain.removeCallbacks(check);throw new IllegalStateException("Activity check timed out");}
-  if(!admitted.get()||noticeDestroyed)throw new IllegalStateException("Activity inactive");
- }
- private void noticeWork(PluginCall call,String failure,NoticeWork work){
-  PluginWorkers.submit(NOTICE_IO,()->{try{requireNoticeForeground();work.run();}catch(InterruptedException interrupted){Thread.currentThread().interrupt();call.reject(failure);}catch(Exception unavailable){call.reject(failure);}},()->call.reject(failure));
- }
- private void noticeChanged(){noticeMain.post(()->{if(!noticeDestroyed)notifyListeners("pendingWorkflowTap",new JSObject(),true);});}
+ @Override protected void handleOnDestroy(){noticeGate.destroy();if(canonicalLive.get()==this)canonicalLive.clear();super.handleOnDestroy();}
+ private void requireNoticeForeground()throws Exception {noticeGate.require();}
+ private void noticeWork(PluginCall call,String failure,NoticeWork work){noticeGate.submit(failure,call::reject,work::run);}
+ private void noticeChanged(){noticeMain.post(()->{if(!noticeGate.destroyed())notifyListeners("pendingWorkflowTap",new JSObject(),true);});}
  /** Alpha's launch intents for the shared notice tap inbox (open and Ask actions, route prefix). */
  private static final NoticeTapInbox.Intents<android.content.Intent> INTENTS=new NoticeTapInbox.Intents<android.content.Intent>(){
   public String action(android.content.Intent intent){return intent.getAction();}
