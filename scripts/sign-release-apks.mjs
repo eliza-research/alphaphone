@@ -22,8 +22,10 @@
  * Every signed APK must verify against android/release-signer.json signerSha256, so enrollment
  * (H-09) comes first; a mismatch leaves no signed file behind. Key files are passed to apksigner by
  * path and never read here: the key directory must be absolute, outside every Git working tree,
- * owner-only (no group or other permission) and not a symbolic link, and each key file a regular
- * file with mode 0600 or stricter. In PKCS#11 mode apksigner loads the key labelled --key-label
+ * owner-only (no group or other permission) and not a symbolic link, and both files regular files;
+ * the private <name>.pk8 must have mode 0600 or stricter. The public <name>.x509.pem may keep the
+ * default mode decrypt-release-keys.ts gives it: a substituted certificate cannot pass the signer
+ * check above. In PKCS#11 mode apksigner loads the key labelled --key-label
  * through SunPKCS11 with the --pkcs11-config file; a token PIN is read by apksigner from the
  * environment variable ELIZAOS_PKCS11_PIN when it is set and never appears on a command line.
  * --dry-run prints the apksigner command lines and changes nothing.
@@ -36,6 +38,12 @@ import { fileURLToPath } from "node:url";
 export const DEFAULT_KEY_NAME = "alphaphone_app";
 export const PIN_ENV = "ELIZAOS_PKCS11_PIN";
 export const VARIANTS = Object.freeze(["standalone", "launcher"]);
+/**
+ * JDK 9+ keeps sun.security.pkcs11 unexported, so apksigner cannot construct SunPKCS11 from
+ * --provider-class without this export. apksigner's launcher script forwards "-J<x>" to java as
+ * "-<x>", so the JVM option --add-exports is written with one dash after -J.
+ */
+export const PKCS11_JVM_OPTION = "-J-add-exports=jdk.crypto.cryptoki/sun.security.pkcs11=ALL-UNNAMED";
 const PLAIN = /^[A-Za-z0-9._/@:+=-]+$/;
 const USAGE = [
   "Usage: node scripts/sign-release-apks.mjs --keys-dir DIR [--key-name alphaphone_app] [OPTIONS]",
@@ -65,12 +73,13 @@ export function keyFileProblems(directory, name) {
   const tree = insideGitWorkTree(real);
   if (tree) problems.push(`--keys-dir ${real} is inside the Git working tree ${tree}`);
   if ((stat.mode & 0o077) !== 0) problems.push(`--keys-dir ${real} must be owner-only (mode 0700)`);
-  for (const file of [`${name}.pk8`, `${name}.x509.pem`]) {
+  for (const [file, secret] of [[`${name}.pk8`, true], [`${name}.x509.pem`, false]]) {
     const full = path.join(real, file);
     let entry;
     try { entry = fs.lstatSync(full); } catch { problems.push(`${full} is missing`); continue; }
     if (!entry.isFile()) problems.push(`${full} is not a regular file`);
-    else if ((entry.mode & 0o077) !== 0) problems.push(`${full} must have mode 0600 or stricter`);
+    // Only the private key is secret; the certificate is public and checked by its digest after signing.
+    else if (secret && (entry.mode & 0o077) !== 0) problems.push(`${full} must have mode 0600 or stricter`);
   }
   return problems;
 }
@@ -80,9 +89,15 @@ export function signArguments({ mode, keysDir, keyName = DEFAULT_KEY_NAME, pkcs1
   const tail = ["--v4-signing-enabled", "false", "--out", output, input];
   if (mode === "key-files")
     return ["sign", "--key", path.join(keysDir, `${keyName}.pk8`), "--cert", path.join(keysDir, `${keyName}.x509.pem`), ...tail];
-  return ["-J--add-exports=jdk.crypto.cryptoki/sun.security.pkcs11=ALL-UNNAMED", "sign",
+  return [PKCS11_JVM_OPTION, "sign",
     "--provider-class", "sun.security.pkcs11.SunPKCS11", "--provider-arg", pkcs11Config,
     "--ks", "NONE", "--ks-type", "PKCS11", "--ks-key-alias", keyLabel, "--ks-pass", pin ? `env:${PIN_ENV}` : "pass:", ...tail];
+}
+
+/** apksigner's own message: the last lines that are not Java stack frames (an exception keeps its first line). */
+export function toolMessage({ stderr, stdout, error }) {
+  const lines = String(stderr || stdout || error?.message || "").trim().split("\n").filter(line => !/^\s+at |^\s*\.\.\. \d+ more$/.test(line));
+  return lines.slice(-3).join(" ") || "no output";
 }
 
 /** The APKs to sign: the two unsigned releases in the artifacts directory, or one explicit pair. */
@@ -145,6 +160,8 @@ export async function main(argv, { root = process.cwd(), env = process.env, log 
   const toolchain = options.apksigner ? null : await import("./toolchain.mjs");
   const apksigner = options.apksigner ?? toolchain.tool("apksigner");
   const toolEnv = { ...(toolchain ? toolchain.androidEnv() : env) };
+  // The apksigner launcher runs `java` from PATH; use the JDK the toolchain checked (Java 8 has no --add-exports).
+  if (toolEnv.JAVA_HOME) toolEnv.PATH = [path.join(toolEnv.JAVA_HOME, "bin"), toolEnv.PATH].filter(Boolean).join(path.delimiter);
   const keysDir = options.mode === "key-files" ? fs.realpathSync(options.keysDir) : null;
   const pin = options.mode === "pkcs11" && typeof env[PIN_ENV] === "string" && env[PIN_ENV] !== "";
   if (pin) toolEnv[PIN_ENV] = env[PIN_ENV];
@@ -161,7 +178,7 @@ export async function main(argv, { root = process.cwd(), env = process.env, log 
       const partial = `${target.output}.partial`;
       fs.rmSync(partial, { force: true });
       const result = spawnSync(apksigner, args, { env: toolEnv, encoding: "utf8" });
-      if (result.status !== 0) throw new Error(`apksigner could not sign ${target.input}: ${(result.stderr || result.stdout || result.error?.message || "").trim().split("\n").slice(-3).join(" ")}`);
+      if (result.status !== 0) throw new Error(`apksigner could not sign ${target.input}: ${toolMessage(result)}`);
       const actual = await signerOf(partial);
       if (actual !== signer) throw new Error(`${target.input} was signed by ${actual}, not the recorded release certificate ${signer}; check the key or token label`);
       signed.push({ target, partial });
