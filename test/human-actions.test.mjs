@@ -4,6 +4,7 @@
 // check the recorded states against fixture records. They establish nothing about the steps themselves.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -52,6 +53,16 @@ test("every repository path and document link on the page exists", () => {
   const scripts = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).scripts;
   assert.deepEqual(npm.filter(name => !Object.hasOwn(scripts, name)), []);
   assert.equal(scripts["human:status"], "node scripts/human-actions.mjs");
+});
+
+test("every upstream elizaOS path the page names exists at the pinned commit", t => {
+  // packages/cloud is not checked out in vendor/eliza, so these are read from the pinned commit's objects.
+  const upstream = [...new Set([...text.matchAll(/`((?:packages|plugins)\/[^`\s]+)`/g)].map(match => match[1]))];
+  assert.ok(upstream.length >= 4);
+  const pin = JSON.parse(fs.readFileSync(path.join(root, "upstream.lock.json"), "utf8")).commit;
+  const has = object => spawnSync("git", ["-C", path.join(root, "vendor/eliza"), "cat-file", "-e", object], { stdio: "ignore" }).status === 0;
+  if (!has(`${pin}^{commit}`)) { t.skip("the pinned elizaOS commit is not available in vendor/eliza"); return; }
+  assert.deepEqual(upstream.filter(file => !has(`${pin}:${file}`)), []);
 });
 
 test("every repository check belongs to a step on the page", () => {
