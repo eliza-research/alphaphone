@@ -8,7 +8,9 @@ export async function selectCalendarSource(page: Page, name: string) {
   await page.getByRole('button', {name: 'Calendar', exact: true}).click();
   await page.locator('[data-settings-page="Calendar"]').getByRole('button', {name, exact: true}).click();
   await page.getByRole('button', {name: 'Back to Settings', exact: true}).click();
-  await page.getByRole('button', {name: 'Back to apps', exact: true}).click();
+  if (await back.isVisible()) await back.click();
+  else await page.evaluate(() => window.dispatchEvent(new Event('launcher-home')));
+  await expect(page.getByRole('button', {name: 'Calendar', exact: true})).toBeVisible();
   await page.getByRole('button', {name: 'Calendar', exact: true}).click();
 }
 
