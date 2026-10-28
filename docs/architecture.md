@@ -154,13 +154,18 @@ See the [profile selection notes](../README.md#explicit-cloud-qa-profile--octobe
 
 Both profiles are declared once upstream (`packages/app/src/runtime/native-runtime-profile.ts`
 at the pin). The resident boot selects one with `ELIZA_RUNTIME_PROFILE`; the shared profile
-writes the text, embedding and agent-speech routing, and a late scheduled workflow
-occurrence is recorded once as missed rather than replayed (the agent runs only while the
-phone is powered on, P-10). Alpha's admitted host module declares only its Cloud API base
-(`backend/native-cloud-runtime.ts`). Current-turn screen and selection identifiers travel
-only in `metadata.clientDevice.context` under the shared `client-turn-observation`
-contract; the older instruction envelope remains for unnegotiated development peers and
-for reading history stored by older builds.
+writes the text, embedding and agent-speech routing and selects the shared powered-on
+scheduling policy (`ELIZA_MISSED_SCHEDULED_OCCURRENCES=record`, P-10). A scheduled workflow
+or prompt-automation occurrence that passed while the agent was not running (phone off or
+resident stopped) and is reached more than 120 seconds late is recorded once as missed and
+never replayed; the workflow history labels it "Missed — not run", and a missed one-time
+prompt stays listed, disabled, for an explicit Run now. A delay while the resident was running
+(Doze, a busy scheduler) still runs the occurrence late, since Doze is a separate constraint.
+Resident digests keep their own 120-second admission. Alpha's admitted host module declares
+only its Cloud API base (`backend/native-cloud-runtime.ts`). Current-turn screen and
+selection identifiers travel only in `metadata.clientDevice.context` under the shared
+`client-turn-observation` contract; the older instruction envelope remains for unnegotiated
+development peers and for reading history stored by older builds.
 
 ## Build surfaces
 

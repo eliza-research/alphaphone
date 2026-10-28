@@ -5,7 +5,7 @@ import { parseWorkflowPhoneReview, workflowBytes, type WorkflowDeviceTarget } fr
 export interface RemoteWorkflow { id: string; name: string; description: string; active: boolean; removed?:boolean; triggerCleanup?:'pending'|'complete'; versionId: string; steps: Array<{label:string;description?:string}>;phoneSpec?:unknown;hostedDigest?:boolean }
 /** Upstream host-process reconciliation (plugin-workflow WorkflowExecution.reconciliation). It never replaces the canonical receipt. */
 export type WorkflowRunReconciliation={state:'worker-running'|'outcome-unknown';message:string};
-export interface WorkflowRun { id:string; workflowId:string; status:string; startedAt:string; finished:boolean; versionId:string; stoppedAt?:string; error?:string; output?:string; reconciliation?:WorkflowRunReconciliation; events:Array<{type:string;at:string;node?:string}> }
+export interface WorkflowRun { id:string; workflowId:string; status:string; startedAt:string; finished:boolean; versionId:string; stoppedAt?:string; error?:string; output?:string; /** The agent recorded a scheduled occurrence that passed while it was not running; no step ran. */ missed?:true; reconciliation?:WorkflowRunReconciliation; events:Array<{type:string;at:string;node?:string}> }
 function reconciliation(value:unknown):WorkflowRunReconciliation|undefined{
  if(value===undefined||value===null)return undefined;
  if(typeof value!=='object'||Array.isArray(value))throw new Error('Invalid execution reconciliation');
@@ -74,6 +74,7 @@ export class WorkflowProtocol {
    ...(typeof p.stoppedAt==='string'?{stoppedAt:p.stoppedAt}:{}),
    ...(typeof p.error?.message==='string'?{error:p.error.message.slice(0,2000)}:{}),
    ...(p.output===undefined?{}:{output:workflowOutput(p.output,id)}),
+   ...(p.finished&&p.output&&typeof p.output==='object'&&!Array.isArray(p.output)&&p.output.status==='missed'?{missed:true as const}:{}),
    ...(()=>{const r=reconciliation(p.reconciliation);return r?{reconciliation:r}:{};})(),
    events:events.slice(-100).map((event:unknown)=>{const e=obj(event);if(e.runId!==id||e.workflowId!==workflowId)throw new Error('Execution event identity mismatch');return {type:str(e.type).slice(0,120),at:str(e.timestamp),...(typeof e.nodeId==='string'?{node:e.nodeId.slice(0,200)}:{})};})};
  }
