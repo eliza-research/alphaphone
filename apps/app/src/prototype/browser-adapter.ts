@@ -1,18 +1,19 @@
 import {parseNativeHistoryCommand} from "../../../../.eliza/client-features/plugins/plugin-browser/src/native-client-command.ts";
+import {parseBrowserAddressInput} from "../../../../.eliza/client-features/plugins/plugin-native-browser-surface/src/address-input.ts";
+import {browsingSnapshot, restoreBrowsing, DEFAULT_BROWSING_LIMITS} from "../../../../.eliza/client-features/plugins/plugin-native-browser-surface/src/browsing-session.ts";
 import { registerPlugin } from '../platform-plugins';
 import { Capacitor } from '@capacitor/core';
 import { DailyApps } from '../daily';
 import { createNativeReadingVoice } from '../runtime/native-reading-voice';
 import {reviewContentQuestion} from '../browser/content-question';
-import {browserReadingSource} from '../browser/reading-source';
-import {sensitiveReadingText} from '../browser/reading-sensitive';
-import {createReadingSupport, READING_UNSUPPORTED_MESSAGE} from '../browser/reading-capability';
+import {readPublicPageSource as browserReadingSource} from '../../../../.eliza/client-features/plugins/plugin-native-browser-surface/src/page-source.ts';
+import {createReadingSupport, pageQuestionExcerpt, READING_UNSUPPORTED_MESSAGE, sensitiveReadingText} from '../../../../.eliza/client-features/plugins/plugin-native-browser-surface/src/page-reading.ts';
 import {webSourceOf} from './summary-source';
 import {browserCalendarScope} from './agent-calendar-adapter';
 import { connectionController, agentPendingText } from '../runtime/connection-ui';
 import { BrowserReviews } from '../browser/review';
 import { browserErrorMessage } from '../browser/browser-errors';
-import { browsingSnapshot, restoreBrowsing, MAX_SAVED_TABS as MAX_TABS, MAX_SAVED_HISTORY as MAX_HISTORY } from '../browser/browsing-session';
+const {tabs: MAX_TABS, history: MAX_HISTORY} = DEFAULT_BROWSING_LIMITS;
 type Bag = Record<string, any>;
 const Browser = registerPlugin<any>('AlphaBrowser');
 const PROFILE_UNSUPPORTED_NATIVE_MESSAGE='This Android WebView does not support isolated browser profiles';
@@ -141,15 +142,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
         // Android may be unable to read the page in its isolated world (an old System WebView) or return
         // nothing usable. Then the review opens with an empty excerpt, as the web CORS-denied path does,
         // and Continue stays disabled until the user pastes text. A sensitive page never opens a review.
-        const result=await Browser.reviewQuestion({session,id,url:info.url,navigation:info.navigation}).catch((error:unknown)=>{
-          const {code,message}=(error||{}) as {code?:unknown;message?:unknown};
-          if(code==='sensitive-page')throw error;
-          if(code==='isolated-world-unavailable'||/^Isolated page reading is unavailable/.test(String(message||'')))return null;
-          throw error;
-        });
-        const excerpt=typeof result?.text==='string'?result.text:'';
-        if(excerpt&&sensitiveReadingText(excerpt))throw Error('This page may contain credentials or verification codes. Open a different page.');
-        text=excerpt.trim()&&excerpt.length<=5000?excerpt:'';
+        text=await pageQuestionExcerpt(()=>Browser.reviewQuestion({session,id,url:info.url,navigation:info.navigation}));
       }else{
         const result=await browserReadingSource(source.url,controller.signal);if(result?.blocked)throw Error('This page may contain credentials or verification codes. Open a different page.');text=result?.text||'';
       }
@@ -170,18 +163,19 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
   async function navigate(raw: string, newTab = false, approvedSignal?: AbortSignal, privateTab = false, background = false) {
     let url: URL;
     try {
-      const input = raw.trim();
-      if (!input || input.length > 4096 || /[\u0000-\u001f\u007f]/.test(input)) throw new Error();
-      const scheme = /^[a-z][a-z0-9+.-]*:/i.test(input);
-      const address = !/\s/.test(input) && (/^(?:localhost|\[[0-9a-f:]+\]|[^/?#]+\.[^/?#]+)(?::\d+)?(?:[/?#]|$)/i.test(input));
-      if (scheme || address) {
-        const hostPort = address && /^[^/?#]+:\d+(?:[/?#]|$)/.test(input);
-        url = new URL(scheme && !hostPort ? input : 'https://' + input);
-        if (!['https:', 'http:'].includes(url.protocol) || !url.hostname || url.username || url.password || /\s/.test(input)) throw new Error();
-      } else {
+      // The shared address-bar classification; Alpha keeps its length bound, HTTPS default and search provider.
+      if (raw.trim().length > 4096) throw new Error();
+      let input = parseBrowserAddressInput(raw, {defaultProtocol: 'https:'});
+      // The shared parser reads any word:digits as host:port; an all-digit, dotless host (10:30, 3:16) is a search, not 0.0.0.10:30.
+      if (input.kind === 'url' && /^\d+:\d+(?:[/?#]|$)/.test(raw.trim())) input = {kind: 'search', query: raw.trim()};
+      if (input.kind === 'rejected') throw new Error();
+      if (input.kind === 'url') { url = new URL(input.href); if (!url.hostname) throw new Error(); }
+      // Alpha's alias: a bare localhost (with an optional path) stays an address, as it was before the shared parser.
+      else if (/^localhost(?:[/?#]\S*)?$/i.test(input.query)) { url = new URL('https://' + input.query); if (url.hostname !== 'localhost') throw new Error(); }
+      else {
         // Submit only on Enter. No suggestions, background query traffic or agent upload.
         url = new URL('https://www.google.com/search');
-        url.searchParams.set('q', input);
+        url.searchParams.set('q', input.query);
       }
     } catch { if (approvedSignal) throw new Error('Invalid approved browser destination'); report(new Error('Enter search words or a valid HTTP or HTTPS address without credentials.')); return; }
     const s = state(); if (!s) { if (approvedSignal) throw new Error('Browser unavailable'); return; }
@@ -323,7 +317,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
       // Restored tabs load (an ordinary GET of the last committed address)
       // only when the tab is shown; nothing is resubmitted.
       for (const tab of next.restored) restored.set(tab.id, { url: tab.url, title: tab.title });
-      if (next.tabs) shell.vset('browser', { tabs: next.tabs, cur: next.cur, visits: next.visits });
+      if (next.restored.length) shell.vset('browser', { tabs: next.restored.map(tab => ({ id: tab.id, hist: ['newtab'], pos: 0 })), cur: next.cur, visits: next.visits });
       else if (next.visits.length !== s.visits.length) shell.vset('browser', { visits: next.visits });
       sessionHydrated = true;
       lastSaved = JSON.stringify(savedSnapshot());
@@ -472,10 +466,11 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     if(reading && event.id===state()?.cur && (event.loading || event.error || event.navigation!==previous?.navigation || event.url!==previous?.url)) stopReading();
     if ((event.url && event.url !== previous?.url) || (event.loading && !previous?.loading))
       documentRevisions.set(event.id, (documentRevisions.get(event.id) || 0) + 1);
-    const committedPage = !!event.url && !!event.committed && !event.loading && !event.error && !event.externalOnly;
+    const committedPage = !!event.url && !!event.committed && !event.externalOnly && !event.loading && !event.error;
     // Embedded web pages report real commits too; an external-only fallback never gains reading authority.
     metadata.set(event.id,{...metadata.get(event.id),...event,...(event.externalOnly?{committed:false}:{}),...(committedPage?{savedUrl:event.url}:{})});
-    // Private tabs never enter history or saved tabs.
+    // Private tabs never enter history or saved tabs. The web build's frame surface reports a
+    // committed load, and a page that navigated inside its frame reports an error instead.
     if(committedPage && state() && !isPrivate(event.id) && !event.private)shell.vset('browser',{visits:[event.url,...state().visits.filter((u:string)=>u!==event.url)].slice(0,MAX_HISTORY)});refresh();
   }).then((value:any)=>{listener=value;}).catch(()=>{});
   // target=_blank links and pop-ups that the native browser opened as a tab.

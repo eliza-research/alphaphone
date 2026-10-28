@@ -11,6 +11,8 @@ test.beforeEach(async({page})=>{
  await page.goto('/');
 });
 const heading=(page:Page,name:string)=>page.frameLocator('[data-browser-surface]:visible iframe').getByRole('heading',{name,exact:true});
+// Cases that check the web fallback load pages through the native contract, then select web presentation.
+const webPresentation=(page:Page)=>page.evaluate(()=>{(window as any).Capacitor.isNativePlatform=()=>false;});
 async function openBrowser(page:Page){await page.evaluate(()=>{(window as any).Capacitor.isNativePlatform=()=>true;});await page.getByRole('button',{name:'Browser',exact:true}).click();await expect(page.getByRole('button',{name:'Menu',exact:true})).toBeVisible();}
 async function navigate(page:Page,path:string){
  if(!await page.getByRole('textbox',{name:'Address',exact:true}).isVisible())await page.getByRole('button',{name:'Edit address',exact:true}).click();
@@ -22,6 +24,8 @@ async function history(page:Page){await menu(page,'Bookmarks and history');await
 const saved=(page:Page)=>page.evaluate(async()=>{const {browsingSessionDocument}=await import('/src/browser/preference-documents.ts');return browsingSessionDocument.read<any>(()=>({history:[],tabs:[],cur:''}));});
 
 test('normal tabs and history survive a cold start and the selected tab reloads its page',async({page})=>{
+ // Each case cold-starts the app again; under a parallel run that can exceed the default budget.
+ test.slow();
  await openBrowser(page);await navigate(page,'first');await navigate(page,'second');
  await page.getByRole('button',{name:'Tabs',exact:true}).click();await page.getByRole('button',{name:'New tab',exact:true}).click();await navigate(page,'third');
  await expect.poll(async()=>(await saved(page)).tabs.map((tab:any)=>tab.url)).toEqual(['https://signins.example/second','https://signins.example/third']);
@@ -34,12 +38,14 @@ test('normal tabs and history survive a cold start and the selected tab reloads 
 });
 
 test('a private tab is labelled, created ephemeral and never enters saved tabs or history',async({page})=>{
+ // Each case cold-starts the app again; under a parallel run that can exceed the default budget.
+ test.slow();
  await page.evaluate(async()=>{const {registerPlugin}=await import('/src/platform-plugins.ts');(window as any).privateEvents=[];await registerPlugin<any>('AlphaBrowser').addListener('stateChanged',(e:any)=>(window as any).privateEvents.push({id:e.id,private:e.private}));});
  await openBrowser(page);await navigate(page,'normal');
  await menu(page,'New private tab');
  await page.getByRole('button',{name:'Cancel editing',exact:true}).click();
  await expect(page.getByRole('img',{name:'Private tab',exact:true})).toBeVisible();
- await expect(page.getByRole('note',{name:'Private tab notice'})).toContainText('not saved in history');
+ await expect(page.getByRole('note',{name:'Private tab notice'})).toContainText('deleted when you close it, and it is not saved in history');
  await navigate(page,'secret');await expect(page.getByRole('img',{name:'Private tab',exact:true})).toBeVisible();
  await expect.poll(()=>page.evaluate(()=>(window as any).privateEvents.some((e:any)=>e.private===true))).toBe(true);
  await page.getByRole('button',{name:'Tabs',exact:true}).click();
@@ -55,6 +61,8 @@ test('a private tab is labelled, created ephemeral and never enters saved tabs o
 });
 
 test('Clear browsing data asks first, then clears history and saved tabs but keeps bookmarks and private tabs',async({page})=>{
+ // Each case cold-starts the app again; under a parallel run that can exceed the default budget.
+ test.slow();
  await openBrowser(page);await navigate(page,'kept-mark');await menu(page,'Bookmark');await navigate(page,'visited');
  await menu(page,'New private tab');await navigate(page,'private-open');
  await menu(page,'Clear browsing data');
@@ -73,7 +81,7 @@ test('Clear browsing data asks first, then clears history and saved tabs but kee
 });
 
 test('web site-data deletion is unavailable and direct calls cannot claim success',async({page})=>{
- await page.getByRole('button',{name:'Browser',exact:true}).click();await navigate(page,'account');
+ await openBrowser(page);await navigate(page,'account');await webPresentation(page);
  await page.getByRole('button',{name:'Menu',exact:true}).click();
  await expect(page.getByRole('button',{name:'Clear data for this site',exact:true})).toHaveCount(0);
  expect(await page.evaluate(async()=>{
@@ -107,6 +115,8 @@ test('native pop-up tabs, window closes and notices reach the rendered browser',
 
 
 test('a restored tab keeps its committed address while a reload is interrupted',async({page})=>{
+ // Each case cold-starts the app again; under a parallel run that can exceed the default budget.
+ test.slow();
  await openBrowser(page);await navigate(page,'retained');
  await expect.poll(async()=>(await saved(page)).tabs.map((tab:any)=>tab.url)).toEqual(['https://signins.example/retained']);
  let requested=false;

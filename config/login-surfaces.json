@@ -15,10 +15,10 @@
       "id": "browser-website-login",
       "kind": "website",
       "eligible": true,
-      "file": "android/app/src/main/java/ai/elizaresearch/alphaphone/BrowserLoginFields.java",
+      "file": "vendor/eliza/plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface/BrowserLoginFields.java",
       "pattern": "child\\.set(?:AutofillHints|InputType)\\(",
       "count": 2,
-      "owner": "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaBrowserPlugin.java (tabs), BrowserLoginFields.java (engine-attested field adapter), BrowserFieldOrigin.java (binding rule), res/raw/browser_login_fields.js (isolated-world reporter)",
+      "owner": "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaBrowserPlugin.java (tabs; passes the integrated vault extras keys), shared plugin-native-browser-surface BrowserLoginFields (engine-attested field adapter and isolated-world reporter) and BrowserFieldOrigin (binding rule) at the reviewed pin",
       "binding": "websiteBinding",
       "providers": {
         "integrated": {
@@ -111,10 +111,10 @@
       "id": "browser-http-auth-prompt",
       "kind": "alpha-owned-native",
       "eligible": false,
-      "file": "android/app/src/main/java/ai/elizaresearch/alphaphone/BrowserHttpAuthAutofill.java",
+      "file": "vendor/eliza/plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface/BrowserHttpAuthAutofill.java",
       "pattern": "TYPE_TEXT_VARIATION_PASSWORD|setAutofillHints|AUTOFILL_HINT_(?:PASSWORD|USERNAME)",
       "count": 5,
-      "owner": "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaBrowserPlugin.java (httpAuth)",
+      "owner": "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaBrowserPlugin.java (httpAuth), shared plugin-native-browser-surface BrowserHttpAuthAutofill and BrowserHttpAuthOrigin at the reviewed pin",
       "binding": "httpAuthBinding",
       "fillRoute": "Engine-bound only (BrowserHttpAuthOrigin.bind). AlphaBrowserPlugin uses BrowserHttpAuthOrigin.STANDARD_WEBVIEW, which reports no challenge, so production refuses provider fill/save and the prompt states the reason; native fields are then IMPORTANT_FOR_AUTOFILL_NO with no hints. Manual entry remains available; every browser tab is excluded from Autofill while the prompt is open.",
       "providers": {

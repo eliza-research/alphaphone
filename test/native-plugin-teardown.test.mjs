@@ -16,8 +16,11 @@ import path from "node:path";
 import test from "node:test";
 
 const root = "android/app/src/main/java/ai/elizaresearch/alphaphone";
-const files = fs.readdirSync(root).filter(name => name.endsWith(".java")).sort();
-const read = name => fs.readFileSync(path.join(root, name), "utf8");
+// Shared browser classes the app compiles from the reviewed pin (scripts/stage-local-agent-sources.mjs).
+const shared = "vendor/eliza/plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface";
+const sharedFiles = ["BrowserBlobCapture.java", "BrowserDownloads.java", "BrowserLoginFields.java", "BrowserReadingWorld.java"];
+const files = [...fs.readdirSync(root).filter(name => name.endsWith(".java")), ...sharedFiles].sort();
+const read = name => fs.readFileSync(path.join(sharedFiles.includes(name) ? shared : root, name), "utf8");
 
 /** Blanks comments, strings, text blocks and character literals, keeping every offset. */
 function mask(source) {
@@ -180,8 +183,9 @@ test("the workers that plugins stop on destroy are reached through one rejecting
   assert.match(journal, /public void reviewClock\(PluginCall call\)\{\s*clockWork\(call,/);
   assert.match(journal, /public void confirmClock\(PluginCall call\)\{[\s\S]{0,400}?\n\s*clockWork\(call,/);
 
+  // The shared download list stops its workers on destroy; every hand-off answers a stopped worker.
   const downloads = read("BrowserDownloads.java");
-  assert.match(helper("BrowserDownloads.java", "private void work(ExecutorService worker,Runnable task,Runnable dropped){"), /try\{worker\.execute\(task\);\}\s*catch\(java\.util\.concurrent\.RejectedExecutionException \w+\)\{dropped\.run\(\);\}/);
+  assert.match(downloads, /private void work\(ExecutorService worker, Runnable task, Runnable dropped\) \{\s*try \{\s*worker\.execute\(task\);\s*\} catch \(RejectedExecutionException \w+\) \{\s*dropped\.run\(\);\s*\}/);
   assert.equal([...downloads.matchAll(/\b(?:io|network)\.execute\(/g)].length, 0, "download workers are reached only through the helper");
 });
 
@@ -196,11 +200,11 @@ test("nothing is shown or created on a destroyed activity by a late browser call
 
   // The download dialogs: a completion posted from a worker can land after destroy().
   const downloads = read("BrowserDownloads.java");
-  assert.match(downloads, /void destroy\(\)\{closed=true;dismissDialogs\(\);/);
-  assert.match(downloads, /private void message\(String text\)\{if\(closed\)return;new AlertDialog\.Builder/);
-  assert.match(downloads, /void show\(\)\{\n\s*if\(closed\)return;/);
-  assert.match(downloads, /private void review\(String tab,String title,String details,Runnable confirm\)\{\n\s*if\(closed\)return;/);
-  assert.match(downloads, /private boolean reviewable\(\)\{\n\s*if\(closed\)return false;/);
+  assert.match(downloads, /public void destroy\(\) \{\s*closed = true;\s*dismissDialogs\(\);/);
+  assert.match(downloads, /private void message\(String text\) \{\s*if \(closed\)\s*return;\s*new AlertDialog\.Builder/);
+  assert.match(downloads, /public void show\(\) \{\s*if \(closed\)\s*return;/);
+  assert.match(downloads, /private void review\(String tab, String title, String details, Runnable confirm\) \{\s*if \(closed\)\s*return;/);
+  assert.match(downloads, /private boolean reviewable\(\) \{\s*if \(closed\)\s*return false;/);
 });
 
 test("receivers and callbacks a plugin registers are released when it is destroyed", () => {

@@ -120,18 +120,23 @@ Keystore, process death or real Clock behavior.
 The Android browser's camera, microphone and location decisions are decided by
 upstream `BrowserSitePermissions` at the pin: the persistent profile only (a private
 tab asks every time and stores nothing), at most 200 origins with the oldest dropped
-first, and decisions cleared with the site's data or all browsing data. Alpha keeps
-its own sealed storage: `BrowserSessionStore` seals the record with the session
-Keystore key under the `permissions` preference, and `BrowserPermissionRecords` reads
-and writes it through the upstream class. The stored format did not change
-(`{"https://host[:port]":{"camera":true,...}}`, oldest origin first), so records
-written by earlier builds are read as they are; an origin or kind the upstream class
-does not recognize, or a damaged record, grants nothing and the site is asked again.
-Two Alpha rules stay in `AlphaBrowserPlugin.sitePermission`: only the selected,
-shown page may prompt or use a stored Allow, and an Allow is chained to Android's
-runtime permission. `test/browser-site-permissions.test.mjs` reads old-format records
-(allow, deny, a damaged store, the 200-origin bound) through the new path on the
-host JVM; it does not exercise WebView prompts or the Keystore.
+first, and decisions cleared with the site's data or all browsing data. The prompt plan
+is upstream `BrowserSitePrompt`: only a secure top-level page asks, for its own origin;
+only the selected, shown page may prompt or use a stored Allow; a kind the app cannot
+hold is refused with a notice. The sealed records are upstream `BrowserSessionStore`
+(session and `permissions` preferences, `BrowserSitePermissionRecord` format) and
+`BrowserBookmarkStore`. Alpha supplies only its installed-data names in
+`AlphaBrowserStores`: the `alpha-browser-session` and `alpha-browser-bookmarks`
+preference files and their `-v1` Android Keystore aliases, so records written by
+earlier builds are read as they are. The stored format did not change
+(`{"https://host[:port]":{"camera":true,...}}`, oldest origin first); an origin or kind
+the upstream class does not recognize, or a damaged record, grants nothing and the site
+is asked again. Alpha keeps the prompt dialog, the single open-prompt slot and the chain
+from an Allow to Android's runtime permission in `AlphaBrowserPlugin.sitePermission`.
+`test/browser-site-permissions.test.mjs` runs the upstream record test (allow, deny, a
+damaged store, the 200-origin bound) on the host JVM against the pinned sources; it does
+not exercise WebView prompts or the Keystore. `BrowserStorageFormatInstrumentedTest`
+checks installed records on Android and needs a device run.
 
 ## Storage and recovery rules
 
