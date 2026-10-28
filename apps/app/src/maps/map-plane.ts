@@ -10,7 +10,9 @@ export class MapPlane extends SharedMapPlane {
  private readonly layoutObserver?:MutationObserver;
  private layoutFrame=0;
  private requestedUpdate?:Parameters<SharedMapPlane['update']>;
- private selectionLayout='';
+ // Distinct from the shared plane's private `selectionLayout` (plugin-maps 5176c4523c), which
+ // reflows the selection itself; this override can go once the pin includes that commit.
+ private productSelectionLayout='';
  constructor(container:HTMLElement,region:MapBasemap,onError:()=>void,colors:Record<string,string>,onPin?:(id:string)=>void) {
   const selectionSpace=region.kind==='global'?()=>{
    const bounds=container.getBoundingClientRect();
@@ -41,8 +43,8 @@ export class MapPlane extends SharedMapPlane {
   const layout=this.selectionSpace?Object.values(this.selectionSpace()).map(Math.round).join(','):'';
   // Alpha moves the sheet on rotation while the selected coordinates stay the same.
   // Reapply selection space without disturbing route or navigation camera ownership.
-  const changed=this.selectionLayout&&layout!==this.selectionLayout;
-  this.selectionLayout=layout;
+  const changed=this.productSelectionLayout&&layout!==this.productSelectionLayout;
+  this.productSelectionLayout=layout;
   if(!changed||!selected||route||overlay?.follow)return;
   super.update(undefined,route,overlay);
   super.update(...this.requestedUpdate);

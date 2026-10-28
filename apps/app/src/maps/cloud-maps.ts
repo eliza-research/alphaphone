@@ -2,9 +2,14 @@ import { createCloudMaps } from './cloud-provider';
 import { captureMapsSession } from './cloud-session';
 import { configureMapsProvider } from './runtime';
 import { connectionController } from '../runtime/connection-ui';
+import { readServiceLimit } from '../runtime/subscription-entitlement.ts';
 
-/** Cloud supplies data only; retained routes belong to the session that requested them. */
-const maps = createCloudMaps(() => captureMapsSession(() => connectionController.getCloudClient()), configureMapsProvider);
+/**
+ * Cloud supplies data only; retained routes belong to the session that requested them.
+ * Limits are read with the app's shared subscription reader, which also honours the
+ * Retry-After header and nested terminal-failure rate limits.
+ */
+const maps = createCloudMaps(() => captureMapsSession(() => connectionController.getCloudClient()), configureMapsProvider, { serviceLimit: readServiceLimit });
 export const { initializeCloudMaps, cloudMapsCoverage, cloudMapsDiagnostics } = maps;
 let previous = connectionController.getCloudClient();
 connectionController.subscribe(() => {
