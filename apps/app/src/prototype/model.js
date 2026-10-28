@@ -5277,9 +5277,8 @@ class Component extends DCLogic {
   }
   goHome(chat) {
     this.clear("hint"); this.leave();
-    var home = this.shellNavigate({ type: "home" });
-    if (this.S().secure) return this.setState(Object.assign(home, { secure: false, screen: "lock", shade: false, chat: "input", hint: false, heads: false }));
-    this.setState(Object.assign(home, { shade: false, chat: chat === "sheet" || chat === "full" ? chat : "input", hint: false, heads: false }));
+    if (this.S().secure) return this.setState(Object.assign(this.shellNavigate({ type: "home" }), { secure: false, screen: "lock", shade: false, hint: false, heads: false }));
+    this.setState(Object.assign(this.shellNavigate({ type: "home", assistant: chat === "sheet" || chat === "full" ? chat : "input" }), { shade: false, hint: false, heads: false }));
   }
   openView(k, patch, chat, opts) {
     if (!isMvpView(k)) return this.toast("This app is deferred from the MVP");
@@ -5288,33 +5287,39 @@ class Component extends DCLogic {
     // keepState returns to a view exactly as it was left (open note, event, email or tab and its
     // selection revision): the target's state is not reset. A different current view still gets
     // its onLeave, so its camera, recording or timers stop exactly as on any other switch.
-    if (opts && opts.keepState && VIEWS[k]) { if (this.S().view !== k) this.leave(); if (patch) this.vset(k, patch); this.setState(Object.assign(this.shellNavigate({ type: "open", view: k, history: "keep" }), { screen: "home", shade: false, heads: false, chat: chat || this.defaultChat(k) })); return; }
+    if (opts && opts.keepState && VIEWS[k]) { if (this.S().view !== k) this.leave(); if (patch) this.vset(k, patch); this.setState(Object.assign(this.shellNavigate({ type: "open", view: k, history: "keep", assistant: this.shellDetent(chat) }), { screen: "home", shade: false, heads: false })); return; }
     // Back's stack pop: the caller already set the stack; only the view changes here.
     if (opts && opts.keepStack) { var S0 = this.S(); if (S0.view !== k) { this.leave(); } this.setState({ screen: "home", view: k, shade: false, heads: false, chat: chat || this.defaultChat(k) }); return; }
     if (!VIEWS[k]) return;
     var S = this.S(); opts = opts || {};
     if (S.secure && ["camera", "photos", "wallet"].indexOf(k) < 0) { this.leave(); this.setState(Object.assign(this.shellNavigate({ type: "home" }), { secure: false, screen: "lock", shade: false })); return this.toast("Unlock to continue"); }
-    var nav = this.shellNavigate({ type: "open", view: k, history: opts.push ? "push" : "reset" });
+    var nav = this.shellNavigate({ type: "open", view: k, history: opts.push ? "push" : "reset", assistant: this.shellDetent(chat) });
     if (S.view !== k) {
       this.leave();
       var m = this.mod(k), cur = this.vget(k);
       var busy = m.ongoing && m.ongoing(cur, this.api(k));
       if (busy || opts.restore) { if (patch) this.vset(k, patch); } else this.vreset(k, patch);
     } else if (patch) { this.vset(k, patch); }
-    this.setState(Object.assign(nav, { screen: "home", shade: false, heads: false, chat: chat || this.defaultChat(k) }));
+    this.setState(Object.assign(nav, { screen: "home", shade: false, heads: false }));
     this.homeHint();
   }
-  /* ---- navigation: the shared mobile shell reducer owns view, Back stack and drawer ---- */
-  shellNav() { var S = this.S(); return { view: S.view || null, stack: S.stack || [], drawer: !!S.drawer, drawerQuery: S.drawerQ || "" }; }
-  shellNavigate(action) { var next = navigateMobileShell(this.shellNav(), action); return { view: next.view, stack: next.stack.slice(), drawer: next.drawer, drawerQ: next.drawerQuery }; }
+  /* ---- navigation: the shared mobile shell reducer owns view, Back stack, drawer and the
+     assistant detent (Alpha's "hidden" chat is the shell's pill) ---- */
+  shellNav() { var S = this.S(); return { view: S.view || null, stack: S.stack || [], drawer: !!S.drawer, drawerQuery: S.drawerQ || "", assistant: this.shellDetent(S.chat) || "input" }; }
+  /** A chat state as a shell assistant detent; none for an absent request (the surface's rest). */
+  shellDetent(chat) { return chat === "hidden" ? "pill" : chat === "input" || chat === "sheet" || chat === "full" ? chat : undefined; }
+  shellNavigate(action) {
+    var self = this, next = navigateMobileShell(this.shellNav(), action, { assistantRest: function (k) { return self.defaultChat(k) === "input" ? "input" : "pill"; } });
+    return { view: next.view, stack: next.stack.slice(), drawer: next.drawer, drawerQ: next.drawerQuery, chat: next.assistant === "pill" ? "hidden" : next.assistant };
+  }
   back() {
     var S = this.S();
     if (S.shade) return this.setState({ shade: false });
     if (this.props && this.props.assistantSurface && !S.view && S.voice === "off") return this.closeAssistant();
     if (S.drawer && !S.view) return this.setState(this.shellNavigate({ type: "back" }));
     if (S.voice !== "off") return this.stopVoice();
-    if (S.chat === "full") return this.setState({ chat: "sheet" });
-    if (S.chat === "sheet") return this.setState({ chat: this.rest() });
+    // An open conversation lowers one detent (full, sheet, rest) before Back leaves the view.
+    if (S.chat === "full" || S.chat === "sheet") return this.setState(this.shellNavigate({ type: "back" }));
     if (S.view) {
       var m = this.mod(S.view);
       if (m.back && m.back(this.vget(S.view), this.api(S.view))) return;
