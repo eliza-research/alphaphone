@@ -99,14 +99,19 @@ public final class AlphaCloudSignInPlugin extends CloudSignInPlugin {
   }
   final long intent = AlphaLocalAgentPlugin.reserveCredentialIntent();
   recovery(() -> {
+   JSObject answer = null;
    try {
     AlphaCredentialStore kept = new AlphaCredentialStore(getContext(), () -> {
      synchronized (recoveryLock) { if (closed || recoveryEpoch != owner) throw new IllegalStateException("Sign-in closed"); }
      AlphaLocalAgentPlugin.requireCredentialIntent(intent);
     });
-    call.resolve(new JSObject().put("restored", kept.restoreLegacyCloudCredential()));
-   } catch (Exception failure) { call.reject("Saved sign-in could not be restored. Your saved data is retained.", "unavailable"); }
+    answer = new JSObject().put("restored", kept.restoreLegacyCloudCredential());
+   } catch (Exception failure) { answer = null; }
    finally { endRecovery(); }
+   // The single-flight guard is released before the call settles, so a caller that retries as soon
+   // as it has the answer is never refused as "login-active" by the restore that just finished.
+   if (answer != null) call.resolve(answer);
+   else call.reject("Saved sign-in could not be restored. Your saved data is retained.", "unavailable");
   }, call, this::endRecovery);
  }
  private void endRecovery() { synchronized (recoveryLock) { recoveringLegacy = false; } }

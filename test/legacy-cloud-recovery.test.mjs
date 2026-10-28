@@ -148,8 +148,10 @@ test('Restore saved sign-in around the shared sign-in client: eligible restore, 
     interface Step{void run(AlphaCloudSignInPlugin p)throws Exception;}
     /** Starts a restore, holds it inside the store before its write, runs the step, then releases it. */
     static PluginCall interrupted(AlphaCloudSignInPlugin p,Step step)throws Exception{reset();PluginCall restore=new PluginCall();p.restoreSavedSignIn(restore);check(AlphaCredentialStore.entered.await(5,TimeUnit.SECONDS),"restore started");step.run(p);AlphaCredentialStore.release.countDown();return await(restore);}
-    public static void main(String[] a)throws Exception{int n=0;
-     AlphaCloudSignInPlugin p=new AlphaCloudSignInPlugin();
+    public static void main(String[] a)throws Exception{AlphaCloudSignInPlugin p=new AlphaCloudSignInPlugin();
+     // The recovery worker is a non-daemon thread: always shut it down so a failed assertion ends the JVM instead of hanging it.
+     try{run(p);}finally{p.handleOnDestroy();}}
+    static void run(AlphaCloudSignInPlugin p)throws Exception{int n=0;
      reset();AlphaCredentialStore.release=null;PluginCall status=await(newCall(p::savedSignInRecoveryStatus));check(Boolean.TRUE.equals(status.result.get("eligible"))&&status.result.size()==1,"eligible metadata only");n++;
      PluginCall restored=await(newCall(p::restoreSavedSignIn));check(Boolean.TRUE.equals(restored.result.get("restored"))&&restored.result.size()==1,"eligible restore resolves restored only");check("legacy".equals(AlphaCredentialStore.slots.get("cloud:production"))&&!AlphaCredentialStore.legacy,"eligible saved sign-in restored");n++;
      check(Boolean.FALSE.equals(await(newCall(p::savedSignInRecoveryStatus)).result.get("eligible")),"no longer eligible after restore");n++;
@@ -161,6 +163,11 @@ test('Restore saved sign-in around the shared sign-in client: eligible restore, 
      PluginCall[] second=new PluginCall[1];PluginCall first=interrupted(p,x->{second[0]=new PluginCall();x.restoreSavedSignIn(second[0]);await(second[0]);});check("login-active".equals(second[0].code),"one restore at a time");check(Boolean.TRUE.equals(first.result.get("restored")),"the first restore completes");n++;
      reset();AlphaCredentialStore.release=null;AlphaCredentialStore.failRestore=true;PluginCall failed=await(newCall(p::restoreSavedSignIn));check("unavailable".equals(failed.code)&&AlphaCredentialStore.legacy&&AlphaCredentialStore.slots.isEmpty(),"unconfirmed recovery retains the saved data");n++;
      AlphaCredentialStore.failRestore=false;check(Boolean.TRUE.equals(await(newCall(p::restoreSavedSignIn)).result.get("restored")),"a failed restore releases the single-flight guard");n++;
+     // A caller that retries from inside the answer itself (resolve or reject) must not be refused by the restore that just finished.
+     for(boolean fail:new boolean[]{true,false}){reset();AlphaCredentialStore.release=null;AlphaCredentialStore.failRestore=fail;String[] immediate={"unset"};PluginCall[] retry=new PluginCall[1];
+      PluginCall chained=new PluginCall(){void again(){retry[0]=new PluginCall();p.restoreSavedSignIn(retry[0]);immediate[0]=retry[0].code;}
+       @Override public void resolve(JSObject v){again();super.resolve(v);}@Override public void reject(String m,String c){again();super.reject(m,c);}};
+      p.restoreSavedSignIn(chained);await(chained);check(immediate[0]==null,(fail?"a failed":"a completed")+" restore releases the single-flight guard before it answers");await(retry[0]);AlphaCredentialStore.failRestore=false;n++;}
      p.handleOnDestroy();reset();PluginCall closed=await(newCall(p::restoreSavedSignIn));check("login-active".equals(closed.code)&&AlphaCredentialStore.legacy,"closed plugin refuses restore");PluginCall closedStatus=await(newCall(p::savedSignInRecoveryStatus));check("unavailable".equals(closedStatus.code),"closed plugin answers status");n++;
      System.out.println("PASS "+n+" Restore saved sign-in assertions around the shared client");}
     interface Method{void call(PluginCall c);}static PluginCall newCall(Method m){PluginCall c=new PluginCall();m.call(c);return c;}}`),
