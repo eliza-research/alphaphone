@@ -1,7 +1,6 @@
 import { SecureNotesStore as SharedSecureNotesStore, readLegacyDailyNotes as readLegacy, type NotesVault, type NotesOpenStage } from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-secure-store.ts';
 import { NotesDocumentConflict } from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-document-store.ts';
 import { notesStorageKeys, isStorageFull, STORAGE_FULL_CODE, type NoteRecord } from './notes-store';
-export type { NotesVault, NotesOpenStage } from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-secure-store.ts';
 export const SECURE_NOTES_SLOT = 'notes-records:v1:device';
 /** Encrypted Keystore slot for edits whose collection commit failed or is uncertain. */
 export const SECURE_NOTES_DRAFT_SLOT = 'notes-draft:v1:device';

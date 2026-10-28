@@ -1,3 +1,5 @@
+import {installNativeNavigationFixture} from './helpers/native-navigation-protocol';
+import {selectCalendarSource} from './helpers/browser-calendar';
 import {selectLegacyNotes} from './helpers/legacy-notes';
 import {seedCompletedAccessSetup} from './flag-off-android';
 // Core loops A–F and J01–J05 on the FLAG-OFF bundle (the bytes the distribution APKs package).
@@ -47,6 +49,7 @@ async function fenceNetwork(page: Page, allowed: string[] = []) {
  * Cloud transcription returns that text, retained note audio, native reminders and one writable
  * device calendar; `signedOut` starts with no Cloud sign-in. */
 async function android(page: Page, options: { clock?: 'opened' | 'unavailable' | 'unknown'; voice?: string; signedOut?: boolean } = {}) {
+  await page.addInitScript(installNativeNavigationFixture);
   await page.addInitScript(({ options }) => {
     const w = window as any; w.androidBridge = {};
     const id = '9f1dc45a-4011-4e44-947a-30d999d24fa5', agentId = '6f1d3c3e-8c55-4c1b-9d1f-2b6f0b0d3a11';
@@ -73,12 +76,16 @@ async function android(page: Page, options: { clock?: 'opened' | 'unavailable' |
       listeners.filter(l => l.plugin === 'AlphaBrowser' && l.event === 'stateChanged').forEach(l => l.callback(state));
     };
     const data = (streamId: string, value: unknown) => emit(streamId, { type: 'chunk', dataBase64: btoa('data: ' + JSON.stringify(value) + '\n\n') });
-    const request = (method: string, path: string, body: any, headers: Record<string, string>): { status: number; data: unknown } => {
+    let fixtureNavigation: any;
+    const navigation=()=>fixtureNavigation??=(window as any).createNativeNavigationFixture(id,agentId,f);
+    const request = (method: string, path: string, body: any, headers: Record<string, string>, owner?: unknown): { status: number; data: unknown } => {
       const ok = (value: unknown) => ({ status: 200, data: value });
+      const navigationResult=navigation().request(method,path,body,headers,owner);if(navigationResult)return navigationResult;
       // Mounted canonical views probe these sources; this native fixture provides none.
       if (method === 'GET' && ['/api/notes/state', '/api/lifeops/calendar/feed', '/api/lifeops/calendar/calendars', '/api/lifeops/calendar/next-context'].includes(path.split('?')[0])) return { status: 503, data: { error: 'Canonical records unavailable in this fixture' } };
       if (path === '/api/auth/me') return ok({ identity: { id, kind: 'owner' }, access: { role: 'OWNER', mode: 'local' } });
       if (path === '/api/agents') return ok({ agents: [{ id: agentId, name: 'Alpha', status: 'running' }] });
+      if (path === '/api/client-devices/register') navigation().register(headers);
       if (path === '/api/client-devices/register') return ok({ installationId: headers['X-Eliza-Device-Id'], enrollmentId: 'fixture-enrollment', capabilities: [] });
       if (path === '/api/client-devices/proposals') return ok({ proposals: [] });
       if (path === '/api/workflow/status') return ok({ status: 'unavailable' });
@@ -158,7 +165,7 @@ async function android(page: Page, options: { clock?: 'opened' | 'unavailable' |
         if (plugin === 'Agent') {
           if (method === 'getStatus') return { packaged: true, state: 'stopped', serviceActive: false, socketListening: false };
           if (method === 'providerStatus') return { provider: 'elizacloud', configured: true, model: 'cerebras/qwen-3.8-27b' };
-          if (method === 'request') { const result = request(input.method || 'GET', input.path, input.body ? JSON.parse(input.body) : {}, input.headers || {}); return { status: result.status, body: JSON.stringify(result.data) }; }
+          if (method === 'request') { const result = request(input.method || 'GET', input.path, input.body ? JSON.parse(input.body) : {}, input.headers || {}, input.ownerId); return { status: result.status, body: JSON.stringify(result.data) }; }
           if (method === 'cancelStream') { f.cancelled++; return {}; }
           if (method === 'requestStream') {
             // The resident agent records the user turn, then streams its reply over native IPC.
@@ -593,7 +600,7 @@ test('loop J03 in the web build: a chosen document can be reviewed for a questio
   await page.evaluate(() => window.dispatchEvent(new Event('launcher-home')));
   await page.goto('/');
   await button(page, 'Notes').click();
-  await expect(page.locator('[data-screen]')).toContainText('Waiting for an agent connection to open Notes.');
+  await expect(page.locator('[data-screen]')).toContainText('Notes is unavailable for this agent connection. Check Settings › Agent connection.');
   await expect(button(page, 'New note')).toHaveCount(0);
   await expect(page.getByRole('textbox', {name:'Note', exact:true})).toHaveCount(0);
   // The development Inbox simulator that feeds journey J03 does not exist here.
@@ -791,10 +798,7 @@ const SUMMARY = 'The team agreed to book the venue.';
 const ACTIONS = 'Book the venue\nEmail the caterer';
 
 async function openAndroidCalendar(page:Page){
- await button(page,'Calendar').click();
- await page.locator('summary').filter({hasText:'Calendar sources'}).click();
- await button(page,'Android calendars').click();
- await page.locator('summary').filter({hasText:'Calendar sources'}).click();
+ await selectCalendarSource(page, 'Android calendars');
 }
 
 test('loop B / J02 on Android: a recorded note, a resident summary and reviewed hand-offs save one reminder and one device event, each only on Save', async ({ page }) => {

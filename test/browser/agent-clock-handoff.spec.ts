@@ -42,7 +42,7 @@ for (const mode of ['confirm','transcribed','zone','modal','unknown','receipt-lo
               return {result:{kind:'clock-handoff',action:w.calendarEntry.record.operation.action,status:mode==='unavailable'?'unavailable':mode==='denied'?'denied':mode==='failed'?'failed':'opened'}};
             }
 
-            if (method === 'reserve') { if(w.calendarEntry)return {created:false,entry:structuredClone(w.calendarEntry)};w.calendarEntry={...structuredClone(input),phase:'reserved'}; localStorage.setItem('fixture-journal',JSON.stringify(w.calendarEntry));return { created: true }; }
+            if (method === 'reserve') { if(w.calendarEntry)return {created:false,entry:structuredClone(w.calendarEntry)};w.calendarEntry={...structuredClone(input),phase:'reserved'}; localStorage.setItem('fixture-journal',JSON.stringify(w.calendarEntry));return { created: true, entry: structuredClone(w.calendarEntry) }; }
             if (method === 'markApplying') { Object.assign(w.calendarEntry,{phase:'applying',attemptId:input.attemptId});return {}; }
             if(method==='get')return {entry:structuredClone(w.calendarEntry)};
             if(method==='list')return {entries:w.calendarEntry?[structuredClone(w.calendarEntry)]:[]};

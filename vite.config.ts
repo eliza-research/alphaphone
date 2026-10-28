@@ -112,6 +112,7 @@ export default defineConfig({
   // inference runtime: local speech runs on the local agent's native libelizainference.
   worker: { format: 'es' },
   resolve: {
+    dedupe: ['react', 'react-dom'],
     alias: {
       "@elizaos/capacitor-system/sense": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/sense-bridge.ts", import.meta.url)),
       "@elizaos/capacitor-system/reset": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/reset.ts", import.meta.url)),

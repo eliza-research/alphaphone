@@ -9,18 +9,11 @@ import {calendarFormTimeProblem} from '../runtime/calendar-form-draft';
 import {calendarAgenda,calendarAgendaRows,calendarDayColumns,calendarDayCount,calendarDayLabel,calendarReturnDay,visibleCalendarDays} from './calendar-days';
 import {mapsEventOriginFor} from '../runtime/maps-event-return';
 import {rememberNoteOrigin,forgetNoteOrigin,noteOriginSupported,eventNoteOriginId} from './note-origin-adapter';
+import {reminderWallTime} from '../runtime/reminder-creations';
 type Bag = Record<string, any>;
 const calendar = registerPlugin<any>('AlphaCalendar');
 const DAY=86400000;
 const civilDay=(date:Date,utc=false)=>Date.UTC(utc?date.getUTCFullYear():date.getFullYear(),utc?date.getUTCMonth():date.getMonth(),utc?date.getUTCDate():date.getDate());
-/** Date setters normalize missing DST wall times; reject that normalization. */
-function wallTime(off:number,hours:number):Date|null {
-  if(!Number.isSafeInteger(off)||!Number.isFinite(hours))return null;
-  const minutes=Math.round(hours*60),today=new Date();
-  const target=new Date(Date.UTC(today.getFullYear(),today.getMonth(),today.getDate()+off,0,minutes));
-  const date=new Date(target.getUTCFullYear(),target.getUTCMonth(),target.getUTCDate(),target.getUTCHours(),target.getUTCMinutes());
-  return date.getFullYear()===target.getUTCFullYear()&&date.getMonth()===target.getUTCMonth()&&date.getDate()===target.getUTCDate()&&date.getHours()===target.getUTCHours()&&date.getMinutes()===target.getUTCMinutes()?date:null;
-}
 
 /** Instant of a civil wall time in an IANA zone; undefined when it does not exist or occurs twice. */
 export function zonedInstant(date:{year:number;month:number;day:number},minutes:number,zone:string):number|undefined{
@@ -189,7 +182,7 @@ export function installCalendarAdapter(Component: any, views: Bag, options:{acti
     };
     if(out.f&&state.form){
       const f=state.form;
-      const reviewedDate=wallTime(Number(f.off||0),12);
+      const reviewedDate=reminderWallTime(Number(f.off||0),12);
       // Android events have no stable identity for a note link yet, so say so before Save rather than drop it silently.
       // An event Android Calendar saves (the guests, video or alert hand-off) carries no Alpha creationId,
       // so it cannot be linked back to its note.
@@ -257,7 +250,7 @@ export function installCalendarAdapter(Component: any, views: Bag, options:{acti
           if(current.alphaCalendarId){api.toast('Edit all-day, time-zone and repeating events in Android Calendar.');return;}
           await saveOptions(current,currentOwner);return;
         }
-        const date=wallTime(Number(current.off||0),Number(current.t)),end=wallTime(Number(current.off||0),Number(current.t)+Number(current.d));
+        const date=reminderWallTime(Number(current.off||0),Number(current.t)),end=reminderWallTime(Number(current.off||0),Number(current.t)+Number(current.d));
         const timeProblem=calendarFormTimeProblem(date,end,Number(current.d));if(timeProblem||!date||!end){api.toast(timeProblem);return;}
         const epoch=creationDraftEpoch;let submittedForm=current;
         const ownsForm=()=>owner===currentOwner&&!document.hidden&&api.isActive()&&creationDraftEpoch===epoch&&api.get('calendar').form===submittedForm;
@@ -329,7 +322,7 @@ export function installCalendarAdapter(Component: any, views: Bag, options:{acti
       out.ev.edit=async()=>{
         const event=selected.nativeEvent,source=calendars.find(c=>c.id===event.calendarId);
         const begin=new Date(event.begin),end=new Date(event.end);
-        const representedBegin=wallTime(selected.off,selected.t),representedEnd=wallTime(selected.off,selected.t+selected.d);
+        const representedBegin=reminderWallTime(selected.off,selected.t),representedEnd=reminderWallTime(selected.off,selected.t+selected.d);
         const complex=civilDay(begin)!==civilDay(end)||begin.getTimezoneOffset()!==end.getTimezoneOffset()||representedBegin?.getTime()!==event.begin||representedEnd?.getTime()!==event.end;
         if(!Capacitor.isNativePlatform()&&(event.seriesId||event.allDay||complex)){
           try{const result=await calendar.edit({id:event.id,revision:event.revision,people:out.attendeeChoices||[]});if(result.status==='saved'){api.set({open:null,openDay:null});await refresh(false,true);api.toast('Event saved.');}}catch{api.toast('This event changed or could not be opened. Refresh and try again.');}return;
