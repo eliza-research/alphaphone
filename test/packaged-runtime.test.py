@@ -114,6 +114,44 @@ class PackagedRuntimeTest(unittest.TestCase):
         del entries['lib/x86_64/libeliza_bun.so']
         self.assertEqual(verifier.verify(self.package(entries), release=True)['runtime'], 'PACKAGED')
 
+    def android_entries(self):
+        entries = dict(self.entries)
+        del entries['lib/x86_64/libeliza_bun.so']
+        provenance = {'schema': 'eliza.android_agent_runtime_provenance.v1',
+                      'bun': {'target': 'android', 'architectures': ['arm64-v8a']}, 'files': []}
+        entries['assets/agent/android-agent-runtime-provenance.json'] = json.dumps(provenance).encode()
+        self.write('android/app/src/main/assets/agent/android-agent-runtime-provenance.json', entries['assets/agent/android-agent-runtime-provenance.json'])
+        return entries
+
+    def test_android_arm64_debug_and_release_match_admitted_runtime(self):
+        entries = self.android_entries()
+        for release in [False, True]:
+            self.assertEqual(verifier.verify(self.package(entries), release=release)['runtime'], 'PACKAGED')
+
+    def test_android_runtime_rejects_foreign_abi_missing_bun_and_missing_provenance(self):
+        entries = self.android_entries()
+        for abi in ['x86_64', 'armeabi-v7a', 'riscv64']:
+            with self.subTest(abi=abi), self.assertRaisesRegex(ValueError, 'Unexpected packaged ABI'):
+                verifier.verify(self.package({**entries, f'lib/{abi}/libcamera.so': b'foreign'}))
+        for missing in ['lib/arm64-v8a/libeliza_bun.so', 'assets/agent/android-agent-runtime-provenance.json']:
+            changed = dict(entries)
+            del changed[missing]
+            with self.subTest(missing=missing), self.assertRaises((ValueError, KeyError)):
+                verifier.verify(self.package(changed))
+
+    def test_android_provenance_rejects_invalid_targets_and_architectures(self):
+        entries = self.android_entries()
+        for bun in [{'target': 'other'}, {'target': 'android'}, {'target': 'android', 'architectures': []},
+                    {'target': 'android', 'architectures': ['x86_64']},
+                    {'target': 'android', 'architectures': ['arm64-v8a', 'arm64-v8a']},
+                    {'target': 'android', 'architectures': ['arm64-v8a', 'x86_64']}]:
+            changed = dict(entries)
+            changed['assets/agent/android-agent-runtime-provenance.json'] = json.dumps({
+                'schema': 'eliza.android_agent_runtime_provenance.v1', 'bun': bun, 'files': []}).encode()
+            self.write('android/app/src/main/assets/agent/android-agent-runtime-provenance.json', changed['assets/agent/android-agent-runtime-provenance.json'])
+            with self.subTest(bun=bun), self.assertRaises(ValueError):
+                verifier.verify(self.package(changed))
+
     def test_changed_source_guard_rejects_otherwise_identical_apk(self):
         self.write('scripts/local-agent-source.mjs', b'new guard')
         with self.assertRaisesRegex(ValueError, 'manifest mismatch'):
