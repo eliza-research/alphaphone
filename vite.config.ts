@@ -130,6 +130,7 @@ export default defineConfig({
       "@elizaos/voice/turn": fileURLToPath(new URL("./.eliza/client-features/packages/voice/src/turn.ts",import.meta.url)),
       "@elizaos/core/speech": fileURLToPath(new URL("./.eliza/client-features/packages/core/src/speech.ts",import.meta.url)),
       "@elizaos/ui/voice/batch-conversation": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/voice/batch-conversation.ts",import.meta.url)),
+      "@elizaos/ui/accessibility/screen-focus": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/accessibility/screen-focus.ts",import.meta.url)),
       "@elizaos/ui/voice/voice-chat-playback": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/voice/voice-chat-playback.ts",import.meta.url)),
       "@elizaos/contracts/sms-send": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/sms-send.ts",import.meta.url)),
       "@elizaos/contracts/native-notes-query": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/native-notes-query.ts",import.meta.url)),

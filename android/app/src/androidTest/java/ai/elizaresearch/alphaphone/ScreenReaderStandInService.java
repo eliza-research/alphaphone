@@ -17,6 +17,14 @@ import android.view.accessibility.AccessibilityEvent;
  *
  * Binding this service puts WebView in the mode TalkBack and Switch Access get, so the click the
  * test performs is the click those services perform. See AccessibilityInstrumentedTest.
+ *
+ * Checked against Chromium 133.0.6943.137, the WebView of the API 36 image that failed: the mode
+ * is chosen in WebContentsAccessibilityImpl.refreshNativeState, which passes
+ * AccessibilityState.isScreenReaderEnabled() to setBrowserAXMode; AccessibilityState
+ * (ui/accessibility/android) sets that flag when the running services' event types include
+ * TYPE_VIEW_SELECTED, TYPE_VIEW_SCROLLED or TYPE_ANNOUNCEMENT (SCREEN_READER_EVENT_TYPE_MASK).
+ * res/xml/screen_reader_stand_in.xml declares typeAllMask, which includes all three. A source
+ * reading, not a run: the emulator run of the stand-in on that WebView is still open.
  */
 public final class ScreenReaderStandInService extends AccessibilityService {
  @Override public void onAccessibilityEvent(AccessibilityEvent event) {}

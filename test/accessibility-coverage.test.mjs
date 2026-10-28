@@ -112,6 +112,50 @@ test('the sweep applies every dimension and cannot be narrowed silently', () => 
   assert.match(production, /auditPage\(page, \{ contrast: true, targetSize: 24, clipping: true, overlap: true, dock: true \}\)/);
 });
 
+test('TalkBack reading order is checked in every lane, as Android checks it, across views and the lifecycle', () => {
+  // Every lane of both sweeps reads the order (the light theme once; it does not depend on the theme).
+  assert.match(sweep, /\.\.\.theme === 'light' \? await auditReadingOrder\(page\) : \[\]/);
+  assert.match(sweep, /200% text is not clipped[\s\S]*?const order = format\(await auditReadingOrder\(page\)\);\s*expect\(order, order\.join\('\\n'\)\)\.toEqual\(\[\]\);/);
+  assert.equal([...sweep.matchAll(/auditReadingOrder\(page\)/g)].length, 5, 'all five sweep lanes read the order');
+  assert.equal([...production.matchAll(/auditReadingOrder\(page\)/g)].length, 2, 'both production lanes read the order');
+  // The browser rule is the Android rule: the same geometry, the same assistant group, the same bars.
+  const audit = read('test/browser/accessibility-audit.ts');
+  const order = read('android/app/src/androidTest/java/ai/elizaresearch/alphaphone/TalkBackOrder.java');
+  assert.match(audit, /r\.top < p\.top - tallest \/ 2 && r\.left < p\.right/);
+  assert.match(order, /r\.top < p\.top - Math\.max\(p\.height\(\), r\.height\(\)\) \/ 2 && r\.left < p\.right/);
+  assert.match(audit, /export const ASSISTANT_GROUP = 'Assistant controls';/);
+  assert.match(order, /ASSISTANT_GROUP = "Assistant controls";/);
+  const groups = audit.match(/export const READING_GROUPS = '([^']+)';/)?.[1];
+  assert.ok(groups, 'the bars are declared once in the audit');
+  assert.ok(order.includes(groups.replaceAll('"', '\\"')), 'the Android rule reads the same bars');
+  // Every retained view is visited on the emulator and in the lifecycle spec, by its Home tile name.
+  const titles = enabledViews().map(view => view[0].toUpperCase() + view.slice(1)).sort();
+  const views = read('android/app/src/androidTest/java/ai/elizaresearch/alphaphone/AccessibilityViewsInstrumentedTest.java').match(/static final String\[\] VIEWS = \{([^}]*)\};/)?.[1];
+  assert.deepEqual([...views.matchAll(/"([A-Za-z]+)"/g)].map(match => match[1]).sort(), titles);
+  const lifecycle = read('test/browser/accessibility-lifecycle.spec.ts').match(/const VIEWS = \[([^\]]*)\] as const;/)?.[1];
+  assert.deepEqual([...lifecycle.matchAll(/'([A-Za-z]+)'/g)].map(match => match[1]).sort(), titles);
+  for (const name of ['AccessibilityLifecycleInstrumentedTest', 'AccessibilityHomeRoleInstrumentedTest'])
+    assert.match(read(`android/app/src/androidTest/java/ai/elizaresearch/alphaphone/${name}.java`), /AccessibilityViewsInstrumentedTest\.VIEWS/, `${name} visits every view`);
+  // What the order check found stays fixed. Maps reads what is drawn over the top of the map
+  // (search, Back to event, chips, status, the route card, the turn banner) before the map, its
+  // credits and Recenter; the browser page leaves the order while address suggestions cover it.
+  const template = read('apps/app/src/prototype/template.html');
+  const maps = template.slice(template.indexOf('data-alpha-maps-root'), template.indexOf('data-alpha-maps-sheet="results"'));
+  const stack = ['maps.showSearch', 'maps.eventReturnFloating', 'maps.isBase', 'maps.nativeStatusVisible', 'data-alpha-maps-directions', 'maps.dr.nav.hasThen', 'data-alpha-map-plane', 'alpha-map-credits', 'aria-label="Recenter"'].map(hook => [hook, maps.indexOf(hook)]);
+  for (const [hook, at] of stack) assert.ok(at > 0, `${hook} is in the Maps layer stack`);
+  for (let index = 1; index < stack.length; index++) assert.ok(stack[index - 1][1] < stack[index][1], `Maps reads ${stack[index - 1][0]} before ${stack[index][0]}`);
+  assert.match(template, /<div inert="\{\{browser\.pageCovered\}\}" aria-hidden="\{\{browser\.pageCovered\}\}"/);
+  assert.match(read('apps/app/src/prototype/subview-accessibility.ts'), /pageCovered:!!out\.editing/);
+  // Focus follows the screen: installed by the renderer, and asserted by the lifecycle spec and the emulator.
+  assert.match(read('apps/app/src/main.tsx'), /installViewFocus\(\)/);
+  // The behaviour is Eliza's shared screen focus; Alpha keeps only its selectors and screen-change wiring.
+  const viewFocus = read('apps/app/src/runtime/view-focus.ts');
+  assert.match(viewFocus, /from '@elizaos\/ui\/accessibility\/screen-focus'/);
+  assert.match(viewFocus, /createScreenFocus\(/);
+  assert.doesNotMatch(viewFocus, /setAttribute\('tabindex'|requestAnimationFrame/, 'no local copy of the focus mover');
+  assert.match(read('scripts/prepare-client-features.mjs'), /'packages\/ui\/src\/accessibility\/screen-focus\.ts'/);
+});
+
 test('provider-connected screens are swept, against a synthetic mailbox only', () => {
   const block = states.slice(states.indexOf('export const CONNECTED_STATES'), states.indexOf('export const DEVELOPMENT_STATES'));
   for (const state of ["connected('Home'", "connected('Inbox')", "connected('Inbox sent (empty)'", "connected('Inbox search'", "connected('Inbox message'", "connected('Inbox long subject'", "connected('Inbox compose'", "connected('Settings',", "connected('Settings accounts'", "connected('Settings connections'"])
