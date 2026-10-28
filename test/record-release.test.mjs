@@ -86,7 +86,7 @@ test("a release that is not distributable, differs between variants or does not 
 });
 
 test("usage errors and an unset signer are refused", t => {
-  for (const argv of [[], ["--write"], ["--apk-manifest"], ["--apk-manifest", "m.json", "--date", "11/03/2026"], ["--apk-manifest", "m.json", "--extra"]]) {
+  for (const argv of [[], ["--write"], ["--apk-manifest"], ["--apk-manifest", "m.json", "--date", "11/03/2026"], ["--apk-manifest", "m.json", "--date", "2026-02-30"], ["--apk-manifest", "m.json", "--extra"]]) {
     const run = io();
     assert.equal(main(argv, { root, ...run }), 2, argv.join(" "));
   }

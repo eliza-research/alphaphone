@@ -25,6 +25,13 @@ import { admitUnitApk } from "./provision-unit.mjs";
 export const VARIANTS = Object.freeze(["standalone", "launcher"]);
 const USAGE = "Usage: node scripts/record-release.mjs --apk-manifest FILE [--date YYYY-MM-DD] [--write]";
 
+/** A real YYYY-MM-DD day: Date.parse alone rolls 2026-02-30 over to March 2. */
+export function isCalendarDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const time = Date.parse(`${value}T00:00:00Z`);
+  return !Number.isNaN(time) && new Date(time).toISOString().slice(0, 10) === value;
+}
+
 function parseArgs(argv) {
   const options = { write: false, date: null, apkManifest: null };
   for (let i = 0; i < argv.length; i++) {
@@ -34,7 +41,7 @@ function parseArgs(argv) {
     else return null;
   }
   if (!options.apkManifest) return null;
-  if (options.date !== null && !(/^\d{4}-\d{2}-\d{2}$/.test(options.date) && !Number.isNaN(Date.parse(`${options.date}T00:00:00Z`)))) return null;
+  if (options.date !== null && !isCalendarDate(options.date)) return null;
   return options;
 }
 
