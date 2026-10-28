@@ -49,6 +49,8 @@ public class AlphaPhotosPlugin extends Plugin {
  private OwnedCaptures captures;
  private OwnedMediaLibrary owned;
  private OwnedAlbums albums;
+ /** The shared album write gate; instrumentation tests hold it to stall real album writers. */
+ static final Object ALBUMS_LOCK=OwnedAlbums.LOCK;
  private volatile boolean destroyed;
  private void submit(PluginCall call,Runnable action){
   if(destroyed){call.reject("Photo library closed");return;}

@@ -69,4 +69,8 @@ test('album listing reads permitted members in batches and fences only the metad
  assert.match(rows,/permitted\.albumItems\(wanted\)/);assert.doesNotMatch(rows,/albumItem\(/,'no per-member fenced read');
  const custom=body(albums,'  public JSObject list(','  public JSObject change(');
  assert.ok(custom.indexOf('permitted.requireCurrent(fence);')>0&&custom.indexOf('permitted.requireCurrent(fence);')<custom.indexOf('permitted.albumItem(key, row.getString("identity"), true)'),'thumbnails load after the metadata fence');
+ // PhotosTrashInstrumentedTest stalls real album writers on the plugin's gate: it must be the shared write lock.
+ assert.match(photos,/static final Object ALBUMS_LOCK=OwnedAlbums\.LOCK;/);
+ assert.match(albums,/public static final Object LOCK = new Object\(\);/);
+ assert.match(body(albums,'  public JSObject change(','\n}\n'),/synchronized \(LOCK\)/);
 });
