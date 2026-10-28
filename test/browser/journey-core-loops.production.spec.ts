@@ -593,7 +593,8 @@ test('loop J03 in the web build: a chosen document can be reviewed for a questio
   await page.evaluate(() => window.dispatchEvent(new Event('launcher-home')));
   await page.goto('/');
   await button(page, 'Notes').click();
-  await expect(page.locator('[data-screen]')).toContainText('Waiting for an agent connection to open Notes.');
+  // Reviewed unavailable-agent wording for Notes (e5b49c950); no list, editor or New note.
+  await expect(page.getByRole('region',{name:'Notes',exact:true}).getByRole('status')).toHaveText('Notes is unavailable for this agent connection. Check Settings › Agent connection.');
   await expect(button(page, 'New note')).toHaveCount(0);
   await expect(page.getByRole('textbox', {name:'Note', exact:true})).toHaveCount(0);
   // The development Inbox simulator that feeds journey J03 does not exist here.
