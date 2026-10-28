@@ -12,6 +12,9 @@ test('unchanged tab still navigates once and exits its own address editor',async
 
 test('address bar keeps the localhost alias and the shared classification',async()=>{for(const [typed,expected] of [['localhost','https://localhost/'],['localhost/notes?a=1','https://localhost/notes?a=1'],['localhost:3000','https://localhost:3000/'],['example.com','https://example.com/']]){const h=harness(),task=h.navigate(typed);h.release();await task;assert.equal(h.navigations.length,1,typed);assert.equal(h.navigations[0].url,expected,typed);}
  const search=harness(),task=search.navigate('localhost tips');search.release();await task;assert.equal(new URL(search.navigations[0].url).searchParams.get('q'),'localhost tips');});
+test('time-like digit:digit input searches while real host:port, IPv4 and IPv6 stay addresses',async()=>{
+ for(const typed of ['10:30','3:16','1:1',' 12:00 ']){const h=harness(),task=h.navigate(typed);h.release();await task;assert.equal(h.navigations.length,1,typed);const url=new URL(h.navigations[0].url);assert.equal(url.origin+url.pathname,'https://www.google.com/search',typed);assert.equal(url.searchParams.get('q'),typed.trim(),typed);}
+ for(const [typed,expected] of [['nas:8080','https://nas:8080/'],['127.0.0.1:8080','https://127.0.0.1:8080/'],['192.168.1.1','https://192.168.1.1/'],['[::1]:8080','https://[::1]:8080/'],['[::1]','https://[::1]/'],['example.com:8443/x','https://example.com:8443/x']]){const h=harness(),task=h.navigate(typed);h.release();await task;assert.equal(h.navigations.length,1,typed);assert.equal(h.navigations[0].url,expected,typed);}});
 
 test('cancelled approved new-tab creation closes its orphan and never navigates',async()=>{const h=harness(),abort=new AbortController();const task=h.navigate('https://example.com',true,abort.signal);abort.abort();h.release();await assert.rejects(task);assert.equal(h.navigations.length,0);assert.equal(h.closed.length,1);assert.equal(h.created.size,0);});
 

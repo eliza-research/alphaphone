@@ -164,7 +164,9 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     try {
       // The shared address-bar classification; Alpha keeps its length bound, HTTPS default and search provider.
       if (raw.trim().length > 4096) throw new Error();
-      const input = parseBrowserAddressInput(raw, {defaultProtocol: 'https:'});
+      let input = parseBrowserAddressInput(raw, {defaultProtocol: 'https:'});
+      // The shared parser reads any word:digits as host:port; an all-digit, dotless host (10:30, 3:16) is a search, not 0.0.0.10:30.
+      if (input.kind === 'url' && /^\d+:\d+(?:[/?#]|$)/.test(raw.trim())) input = {kind: 'search', query: raw.trim()};
       if (input.kind === 'rejected') throw new Error();
       if (input.kind === 'url') { url = new URL(input.href); if (!url.hostname) throw new Error(); }
       // Alpha's alias: a bare localhost (with an optional path) stays an address, as it was before the shared parser.
