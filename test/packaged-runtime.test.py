@@ -197,6 +197,18 @@ class PackagedRuntimeTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'differs from admitted staged provenance'):
             verifier.verify(self.package(entries), runtime_profile='cloud')
 
+    def test_cloud_android_arm64_debug_and_release_match_provenance(self):
+        entries = dict(self.cloud_entries())
+        del entries['lib/x86_64/libeliza_bun.so']
+        name = 'assets/agent/android-agent-runtime-provenance.json'
+        provenance = json.loads(entries[name])
+        provenance['bun'] = {'target': 'android', 'architectures': ['arm64-v8a']}
+        provenance['files'] = [row for row in provenance['files'] if not row['path'].startswith('lib/x86_64/')]
+        entries[name] = json.dumps(provenance).encode()
+        self.write('android/app/src/main/' + name, entries[name])
+        for release in [False, True]:
+            self.assertEqual(verifier.verify(self.package(entries), release=release, runtime_profile='cloud')['runtime'], 'PACKAGED')
+
     def test_cloud_apk_rejects_local_inference_and_models(self):
         original = dict(self.cloud_entries())
         for name in ['lib/x86_64/libggml-cpu.so', 'lib/arm64-v8a/libparadeevoicejni.so', 'assets/agent/models/extra.gguf']:
