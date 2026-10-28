@@ -14,12 +14,15 @@ const run=script=>JSON.parse(execFileSync(process.execPath,['--import=tsx','--in
 // One bundle with the app's JSX settings (automatic runtime, as Vite builds it) and a single React.
 const bundled=await build({stdin:{contents:`export {renderToStaticMarkup} from 'react-dom/server';
 export * as c from ${JSON.stringify(resolve(root,'apps/app/src/prototype/home-overview-cards.ts'))};
-export * as h from ${JSON.stringify(resolve(root,'apps/app/src/prototype/home-cards.ts'))};`,resolveDir:root,loader:'js'},
+export * as h from ${JSON.stringify(resolve(root,'apps/app/src/prototype/home-cards.ts'))};
+export * as l from ${JSON.stringify(resolve(root,'apps/app/src/prototype/locale-time.ts'))};`,resolveDir:root,loader:'js'},
   bundle:true,format:'esm',platform:'node',jsx:'automatic',write:false,logLevel:'silent',
   banner:{js:"import {createRequire as __createRequire} from 'node:module';const require=__createRequire(import.meta.url);"}});
 const directory=mkdtempSync(resolve(tmpdir(),'home-overview-cards-'));
 writeFileSync(resolve(directory,'cards.mjs'),bundled.outputFiles[0].text);
-const {renderToStaticMarkup,c,h}=await import(resolve(directory,'cards.mjs'));
+const {renderToStaticMarkup,c,h,l}=await import(resolve(directory,'cards.mjs'));
+// Times and dates in these expectations are en-US, as in test/home-cards.test.mjs.
+l.setLocalePreferences({locale:'en-US'});
 rmSync(directory,{recursive:true,force:true});
 const html=element=>element?renderToStaticMarkup(element):null;
 test('agenda card keeps the installed selectors for an event, an overdue reminder with its next item, and an empty state', () => {
@@ -46,7 +49,6 @@ test('agenda card keeps the installed selectors for an event, an overdue reminde
 });
 
 test('a calendar read from an earlier day is presented as stale on the agenda card', () => {
-  h.setLocalePreferences?.({locale:'en-US'});
   const now=new Date(2026,9,7,15,30).getTime(),readAt=new Date(2026,9,6,21,5).getTime(),out={};
   out.stale=h.homeReadIsStale(readAt,now);out.fresh=h.homeReadIsStale(new Date(2026,9,7,9).getTime(),now);
   out.provenance=h.presentHomeCalendarSource({state:'stale',overdue:false,readAt,now,native:true,calendar:'Work'});
@@ -92,7 +94,6 @@ console.log(JSON.stringify(out));`);
 });
 
 test('mail card keeps the installed selectors, styles and order of the Home Inbox card in every state', () => {
-  h.setLocalePreferences?.({locale:'en-US'});
   const now=new Date(2026,9,7,15,30).getTime(),base={now,loaded:null,failure:null,pending:false,connected:true,disconnected:false,unchecked:false};
   const values=card=>({homeAttentionLabel:card.label,homeInboxCount:card.count,homeInboxRows:card.rows.map(row=>({subject:row.title,from:row.detail})),homeInboxHasRows:card.rows.length>0,
     homeInboxTitle:card.title,homeInboxStatus:card.status,homeInboxDescription:card.description,homeInboxState:card.state,homeAttentionPeople:[],goTriage:()=>{}});
@@ -124,7 +125,6 @@ test('mail card keeps the installed selectors, styles and order of the Home Inbo
 });
 
 test('the Home agenda values come from the shared card model for an event, an overdue reminder with its next item, and no item', () => {
-  h.setLocalePreferences?.({locale:'en-US'});
   const now=new Date(2026,9,7,15,30).getTime(),at=(hour,minute=0,day=7)=>new Date(2026,9,day,hour,minute).getTime();
   const read=h.presentHomeCalendarSource({state:'ready',overdue:false,readAt:at(15,4),now,native:true,calendar:'Work'});
   const review={title:'Design review',begin:at(16),end:at(17),allDay:false,video:true,people:['Ada Lovelace']};
