@@ -61,10 +61,12 @@ test('reviewed photo changes use the shared resume-gated review with Alpha\'s la
 });
 
 test('album listing reads permitted members in batches and fences only the metadata',()=>{
- // Batched member reads are the shared PermittedMediaCatalog.albumItems (tested there).
+ // Custom albums are the shared OwnedAlbums; batched member reads are PermittedMediaCatalog.albumItems.
  const photos=java('AlphaPhotosPlugin');
- const rows=body(photos,' private JSArray permittedAlbumRows(',' private boolean hasPermittedMembers(');
+ assert.match(photos,/albums=new OwnedAlbums\(getContext\(\),MEDIA_CONFIG,owned,permitted\);/);
+ const albums=readFileSync(new URL('../vendor/eliza/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/OwnedAlbums.java',import.meta.url),'utf8');
+ const rows=body(albums,'  private JSArray permittedRows(','  private static boolean hasPermitted(');
  assert.match(rows,/permitted\.albumItems\(wanted\)/);assert.doesNotMatch(rows,/albumItem\(/,'no per-member fenced read');
- const custom=body(photos,' private void listCustomAlbum(','@PluginMethod public void albums(');
- assert.ok(custom.indexOf('permitted.requireCurrent(fence);')<custom.indexOf('permitted.albumItem(key,row.getString("identity"),true)'),'thumbnails load after the metadata fence');
+ const custom=body(albums,'  public JSObject list(','  public JSObject change(');
+ assert.ok(custom.indexOf('permitted.requireCurrent(fence);')>0&&custom.indexOf('permitted.requireCurrent(fence);')<custom.indexOf('permitted.albumItem(key, row.getString("identity"), true)'),'thumbnails load after the metadata fence');
 });

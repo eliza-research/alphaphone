@@ -1,5 +1,12 @@
 # Owned Photos collections and trash
 
+Ownership (October 2026): the owned collection, its favorite/trash fences, batches,
+counts and two-step permanent removal are elizaOS `OwnedMediaLibrary`, and custom
+albums are `OwnedAlbums` (`plugins/plugin-native-media`). `AlphaPhotosPlugin` binds
+them to the `AlphaPhotos` Capacitor plugin with Alpha's `alpha` namespace, so the
+installed preferences `alpha-owned-media-versions` and `alpha-owned-albums` keep
+resolving after an upgrade. The behaviour below is unchanged by that move.
+
 The owned collection operations below manage this package's published images and
 videos. The #408 branch additionally requests photo/video library access only from
 the explicit Photos control. Android 14 selected-only access is reported separately
