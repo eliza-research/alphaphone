@@ -9,8 +9,7 @@ import {
   mmsReceiptLabel,
   smsReceiptLabel,
 } from '../../../../.eliza/client-features/packages/contracts/src/native-telephony-session.ts';
-import type {AospTelephony, MmsReviewProblem, SmsSendResult} from './aosp-telephony';
-export type SmsReceipt = SmsSendResult;
+import type {AospTelephony, MmsReviewProblem} from './aosp-telephony';
 export {mmsReceiptLabel};
 export const receiptLabel = smsReceiptLabel;
 export const mmsProblemLabel = (problem: MmsReviewProblem) => sharedMmsProblemLabel(problem, 'Alpha');

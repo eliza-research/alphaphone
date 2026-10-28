@@ -1,3 +1,4 @@
+import {openLegacyNotes} from './helpers/legacy-notes';
 import { returnToApps } from './app-navigation';
 import {test,expect,type Page} from '@playwright/test';
 // MVP-15: full-Trash recovery, lowered host limits, and expiry across restarts and clock changes.
@@ -7,7 +8,7 @@ const savedRecords=(page:Page)=>page.evaluate(async()=>JSON.parse(await (await i
 const trashEntries=(page:Page)=>page.evaluate(async()=>(await (await import('/src/runtime/notes-trash.ts')).readNotesTrash()).entries);
 const pendingDeletions=(page:Page)=>page.evaluate(async()=>Object.values(await (await import('/src/runtime/note-audio-deletions.ts')).pendingAudioDeletions()));
 const describeAudio=(page:Page,audioId:string)=>page.evaluate(async audioId=>{const {registerPlugin}=await import('/src/platform-plugins.ts');return registerPlugin<any>('AlphaNoteAudio').describe({audioId});},audioId);
-async function openNotes(page:Page){await page.getByRole('button',{name:'Notes',exact:true}).click();await expect(page.locator('html')).toHaveAttribute('data-notes-storage-state','ready');}
+async function openNotes(page:Page){await openLegacyNotes(page);await expect(page.getByRole('button',{name:'New note',exact:true})).toBeEnabled();}
 async function createNote(page:Page,title:string,body:string){
  await page.getByRole('button',{name:'New note',exact:true}).click();
  await page.getByRole('textbox',{name:'Title',exact:true}).fill(title);
@@ -330,13 +331,18 @@ test('a clock moved backwards never purges early or extends the label, and the p
  expect(await savedRecords(page)).toEqual([original]);
  await trash.getByRole('button',{name:'Close Trash',exact:true}).click();
 
- // Deleted again, then the app is closed across the deadline: startup alone purges, once.
+ // Deleted again across the deadline: canonical Home preserves the old source.
+ // Selecting Older notes activates expiry exactly once at the original deadline.
  await page.clock.setSystemTime(entry.deletedAt+DAY);
  await deleteNote(page,'Clock note');
  const second=(await trashEntries(page))[0];
  expect(second.id).not.toBe(entry.id);
  await page.clock.setSystemTime(second.deletedAt+3*DAY);
  await page.reload();
+ await expect(page.getByRole('button',{name:'Notes',exact:true})).toBeVisible();
+ expect(await trashEntries(page)).toEqual([second]);
+ expect(await savedRecords(page)).toEqual([]);
+ await openNotes(page);
  await expect.poll(()=>trashEntries(page)).toEqual([]);
  expect(await savedRecords(page)).toEqual([]);
 });
@@ -358,14 +364,18 @@ test('process death between the write-ahead Trash row and the deletion commit ke
   void store;
  },live);
  expect((await trashEntries(page)).map((e:any)=>e.note.id)).toEqual([live.id]);
+ const uncommittedTrash=await trashEntries(page);
  // Even long after the retention, a row whose note is saved is only dropped; the note is never purged.
  await page.clock.setSystemTime(t0+5*DAY);
  await page.reload();
+ await expect(page.getByRole('button',{name:'Notes',exact:true})).toBeVisible();
+ expect(await trashEntries(page)).toEqual(uncommittedTrash);
+ expect((await savedRecords(page)).find((n:any)=>n.id===live.id)).toEqual(live);
+ await openNotes(page);
  await expect.poll(()=>trashEntries(page)).toEqual([]);
  expect((await savedRecords(page)).find((n:any)=>n.id===live.id)).toEqual(live);
 
  // 2. A voice entry expires; the recording was erased but the process died before its row was removed.
- await openNotes(page);
  await page.getByRole('button',{name:'Open Dead memo',exact:true}).click();
  await page.getByRole('button',{name:'Delete note',exact:true}).click();
  await expect(page.getByText('Voice note moved to Trash',{exact:true})).toBeVisible();
@@ -375,6 +385,9 @@ test('process death between the write-ahead Trash row and the deletion commit ke
  expect((await trashEntries(page)).map((e:any)=>e.id)).toEqual([entry.id]);
  await page.clock.setSystemTime(entry.deletedAt+3*DAY+1000);
  await page.reload();
+ await expect(page.getByRole('button',{name:'Notes',exact:true})).toBeVisible();
+ expect(await trashEntries(page)).toEqual([entry]);
+ await openNotes(page);
  await expect.poll(()=>trashEntries(page)).toEqual([]);
  const erased=await describeAudio(page,'dead-audio');
  expect(erased.expired).toBe(true);expect(erased.transcript).toBe('');expect(erased.deletionOperations[entry.id]).toBe('purged');

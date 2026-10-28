@@ -72,7 +72,7 @@ export function cloudVoiceAvailable(): boolean {
 }
 
 /** Explicit local/manual routes are available only in test-mocks builds. */
-export function selectVoiceRoute(preference: 'default' | 'device' | 'agent' | 'manual' = 'default'): 'device' | 'cloud' | 'agent' | 'manual' {
+export function selectVoiceRoute(preference: VoicePreference = 'default'): 'device' | 'cloud' | 'agent' | 'manual' {
   if (cloudRuntimeEnabled) return 'cloud';
   if (!testMocksEnabled) return 'device';
   if (testMocksEnabled && (preference === 'device' || preference === 'manual')) return preference;

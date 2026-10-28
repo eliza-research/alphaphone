@@ -2,7 +2,7 @@ import {registerPlugin} from '../platform-plugins';
 import {aospImage} from '../runtime/aosp-image';
 import {createSmsSession,mmsProblemLabel,mmsReceiptLabel,receiptLabel} from '../runtime/image-sms';
 import {smsSubscriptionRevision} from '../runtime/sms-subscription-revision';
-import {createAospTelephony,MMS_MAX_ATTACHMENTS,reviewMms,type AlphaTelephonyPlugin,type MmsAttachmentDraft,type MmsReview,type SmsSendResult} from '../runtime/aosp-telephony';
+import {createAospTelephony,registerTelephonyProfile,MMS_MAX_ATTACHMENTS,reviewMms,type AlphaTelephonyPlugin,type MmsAttachmentDraft,type MmsReview,type SmsSendResult} from '../runtime/aosp-telephony';
 import {watchReturnToApp} from './native-adapter';
 type Bag=Record<string,any>;
 const MMS_PICTURES:Record<string,string>={'image/jpeg':'jpg','image/png':'png','image/gif':'gif'};
@@ -15,6 +15,9 @@ export function installSmsAdapter(Component:any,views:Bag){
   * content, so a result is read back only for what the owner reviewed. */
  let attachments:MmsAttachmentDraft[]=[],pictureSeq=0,mmsOperationId='',mmsReview:MmsReview|null=null;
  const changed=()=>owner?.setState({smsNativeRevision:Date.now()});
+ /* The verified image's reviewed client is the shared Messages and Phone profile while this shell
+  * is installed; off the image this adapter returns above, so nothing is registered. */
+ registerTelephonyProfile(client);
  const session=createSmsSession(client,true,changed,id=>{if(id===operationId)void reconcile();},id=>{if(id===mmsOperationId)void reconcileMms();});
  const sync=()=>{const next=!!owner&&owner.S().view==='messages'&&!document.hidden;if(next===active)return;active=next;lifecycle++;session.setActive(next);if(!next){busy=false;draftRevision++;recipients='';body='';sim='';operationId='';notice='';receipt=null;resetMms(true);}};
  const resetMms=(pictures:boolean)=>{mmsOperationId='';mmsReview=null;if(pictures){attachments=[];pictureSeq=0;}};

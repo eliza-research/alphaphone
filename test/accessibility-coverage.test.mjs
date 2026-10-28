@@ -64,8 +64,11 @@ test('every subview of a retained view is opened by a state that asserts it is t
     assert.ok(asserted.has(id), `a state opens and asserts the ${id} subview`);
   }
   // Menus, search fields, sheets and the Undo toast are states of their own.
-  for (const step of ["['New automation', 'Edit When step']", "['Add Read step']", "['Connections', 'Slack']", "['Browser', 'Menu']", "['Photos', 'Search photos']", "['Notes', 'Search notes']", "['Files', 'Search files']", "['Search email']", "['Menu', 'Share']", "['Share photo']", "['View and sort']", "['Move file']", "['Delete file']"])
+  for (const step of ["['New automation', 'Edit When step']", "['Add Read step']", "['Connections', 'Slack']", "['Browser', 'Menu']", "['Photos', 'Search photos']", "['Files', 'Search files']", "['Search email']", "['Menu', 'Share']", "['Share photo']", "['View and sort']", "['Move file']", "['Delete file']"])
     assert.ok(states.includes(step), `${step} is swept`);
+  assert.ok(states.includes("legacyNotes('Notes search', ['Search notes'])"), 'retained Notes search is swept');
+  assert.match(states, /const legacyNotes = [\s\S]*?await openLegacyNotes\(page\);[\s\S]*?await press\(page, steps\)/, 'retained Notes states select their source before opening controls');
+
   for (const page of ['Character', 'Accounts', 'Connections', 'Notifications', 'Calendar', 'Password manager', 'Models', 'Display', 'Privacy & data', 'About', 'Scheduled digests', 'Agent connection'])
     assert.ok(states.includes(`['Settings', '${page}']`), `Settings > ${page} is swept`);
 });
@@ -193,7 +196,7 @@ test('the layout fixes the sweep depends on stay in the stylesheet and template'
     assert.match(lines[index - 1], /<div ref="\{\{[a-zA-Z.]+\}\}"/, `scrim on line ${index + 1} sits in a focus-owning container`);
     assert.match(lines[index + 1], /role="dialog"[^>]* aria-label="[^"]+"/, `panel on line ${index + 2} is a named dialog`);
   });
-  // Notes sharing now uses the common native dialog, covered by share-panel.test.mjs.
+  // Notes sharing uses the common native dialog (share-panel.test.mjs), not a scrim popup.
   assert.ok(scrims >= 12, `the template still marks its remaining scrim popups (${scrims})`);
   const access = read('apps/app/src/prototype/subview-accessibility.ts');
   for (const ref of [...template.matchAll(/<div ref="\{\{([a-z]+)\.([a-zA-Z]+)\}\}" data-alpha-popup/g)])

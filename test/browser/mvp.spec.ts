@@ -1,3 +1,4 @@
+import {openLegacyNotes} from './helpers/legacy-notes';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 const views = ['Inbox', 'Calendar', 'Browser', 'Camera', 'Photos', 'Maps', 'Notes', 'Files', 'Workflows', 'Settings'];
@@ -27,14 +28,14 @@ for (const theme of ['light', 'dark']) {
 }
 test('Notes create, edit, reload, search and delete to Trash', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Notes', exact: true }).click();
+  await openLegacyNotes(page);
   await expect(page.getByText('No notes yet. Create a note to get started.')).toBeVisible();
   await page.getByRole('button', { name: 'New note', exact: true }).click();
   await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Browser audit note');
   await page.getByRole('textbox', { name: 'Note', exact: true }).fill('A real local draft.\nSecond line.');
   await page.getByRole('button', { name: 'Back to notes', exact: true }).click();
   await page.reload();
-  await page.getByRole('button', { name: 'Notes', exact: true }).click();
+  await openLegacyNotes(page);
   await page.getByRole('button', { name: 'Open Browser audit note', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Note', exact: true })).toHaveValue('A real local draft.\nSecond line.');
   await page.getByRole('button', { name: 'Back to notes', exact: true }).click();
@@ -52,7 +53,7 @@ test('Notes create, edit, reload, search and delete to Trash', async ({ page }) 
 });
 for (const [label, text] of [['unicode CRLF', 'Local 🧪 file\r\nExact bytes\n'], ['UTF-8 BOM', '\ufeffLocal 🧪 file\r\nExact bytes\n'], ['empty', '']]) test(`Local text import and complete selected-note download: ${label}`, async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', {name:'Notes',exact:true}).click();
+  await openLegacyNotes(page);
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', {name:'Import text note',exact:true}).click();
   await (await chooser).setFiles({ name:'Owned browser note.txt', mimeType:'text/plain', buffer:Buffer.from(text) });
@@ -70,12 +71,12 @@ test('Mock is explicit, its banner does not cover the phone, and exit restores l
   const banner=await page.locator('.mock-mode-banner').boundingBox();
   const phone=await page.locator('[data-screen]').boundingBox();
   expect(phone!.y).toBeGreaterThanOrEqual(banner!.y+banner!.height);
-  await page.getByRole('button',{name:'Exit mock mode',exact:true}).click();
+  await Promise.all([page.waitForURL(url=>!url.searchParams.has('mode')),page.getByRole('button',{name:'Exit mock mode',exact:true}).click()]);
   await expect(page.locator('html')).toHaveAttribute('data-connection-mode','live');
   await expect(page.locator('.mock-mode-banner')).toHaveCount(0);
 });
 test('Notes rejects invalid text and cancels an empty file selection without creating records', async ({page})=>{
-  await page.goto('/');await page.getByRole('button',{name:'Notes',exact:true}).click();
+  await page.goto('/');await openLegacyNotes(page);
   for(const files of [[{name:'invalid.txt',mimeType:'text/plain',buffer:Buffer.from([0xff,0xfe,0])}],[]]) {
     const chooser=page.waitForEvent('filechooser');
     await page.getByRole('button',{name:'Import text note',exact:true}).click();
@@ -103,7 +104,7 @@ test('Scheduled digests traps focus, closes on native Back, and restores the tri
 });
 test('Unsigned recorder offers Cloud sign-in before any recording',async({page})=>{
   await page.addInitScript(()=>{localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'}));(window as any).microphoneRequests=0;Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{(window as any).microphoneRequests++;throw Error('Unexpected microphone request');}}});});
-  await page.goto('/');await page.getByRole('button',{name:'Notes',exact:true}).click();
+  await page.goto('/');await openLegacyNotes(page);
   await page.getByRole('button',{name:'Record and transcribe',exact:true}).click();
   await expect(page.getByRole('button',{name:'Connect Eliza Cloud',exact:true})).toBeEnabled();
   await expect(page.getByRole('button',{name:'Record without transcription',exact:true})).toHaveCount(0);
@@ -171,7 +172,7 @@ test('MVP mock digest and fallback advertise only retained views', async ({page}
 });
 
 test('MVP Notes sharing keeps email and export without a deferred SMS dead end',async({page})=>{
-  await page.goto('/');await page.getByRole('button',{name:'Notes',exact:true}).click();
+  await page.goto('/');await openLegacyNotes(page);
   await page.getByRole('button',{name:'New note',exact:true}).click();
   await page.getByRole('textbox',{name:'Title',exact:true}).fill('MVP share scope');
   await page.getByRole('textbox',{name:'Note',exact:true}).fill('Local test note');

@@ -17,6 +17,8 @@ export const DEVELOPMENT_CLASSES = Object.freeze([
 export const EXPORTED_COMPONENTS = Object.freeze({
   "ai.elizaresearch.alphaphone.MainActivity": null,
   "ai.elizaresearch.alphaphone.AlphaAssistActivity": null,
+  // Power entry is reserved for platform status-bar callers.
+  "ai.elizaresearch.alphaphone.AlphaPowerVoiceActivity": "android.permission.STATUS_BAR_SERVICE",
   "ai.elizaresearch.alphaphone.AlphaNotificationListener": "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE",
   "ai.elizaresearch.alphaphone.AlphaQuickSettingsTile": "android.permission.BIND_QUICK_SETTINGS_TILE",
   // Alpha's password vault as an Android Autofill provider (shared plugin-native-passwords).
@@ -77,6 +79,8 @@ export function distributionProblems(apk, { mode, testMocks = false } = {}) {
       problems.push(`Unexpected exported ${component.tag} ${component.name}`);
       continue;
     }
+    if (component.name === "ai.elizaresearch.alphaphone.AlphaPowerVoiceActivity" && component.tag !== "activity")
+      problems.push("AlphaPowerVoiceActivity must be an activity");
     const required = EXPORTED_COMPONENTS[component.name];
     if (required && component.permission !== required)
       problems.push(`Exported ${component.name} must require ${required}`);
