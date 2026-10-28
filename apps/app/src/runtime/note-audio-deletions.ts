@@ -32,6 +32,8 @@ const journal=createNotesRecordingDeletionJournal({
   return raw;
  },
 });
+/** The journal the shared recording effects use. */
+export const audioDeletionJournal=journal;
 /** Rows still awaiting confirmation, each bound to its exact reviewed revision. */
 export const pendingAudioDeletions=journal.pending;
 /** Add, replace (expected row first) or retire one row, with readback. */
