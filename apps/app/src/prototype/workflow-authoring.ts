@@ -4,7 +4,7 @@ import { registerPlugin } from '../platform-plugins';
 import { browserLocalAgentEnabled } from '../runtime/local-agent';
 import { developmentWorkflowDraftStore } from '../runtime/local-agent-storage';
 import { connectionController } from '../runtime/connection-ui';
-import { normalizePhoneSpec, assertPhoneCapabilities, describePhoneTrigger, type PhoneSpec, type PhoneStep, type PhoneCatalog, type PhoneTimeTrigger } from '../runtime/phone-workflow-authoring';
+import { normalizePhoneSpec, assertPhoneCapabilities, describePhoneTrigger, phoneTriggerClockChangeNote, type PhoneSpec, type PhoneStep, type PhoneCatalog, type PhoneTimeTrigger } from '../runtime/phone-workflow-authoring';
 import { workflowSha, workflowBytes } from '../runtime/workflow-device-contract';
 import { checkWorkflowScope, WORKFLOW_OPERATION_LABELS } from './workflow-scope';
 import { WorkflowTypedRejected, type RemoteWorkflow } from '../runtime/workflow-protocol';
@@ -24,7 +24,7 @@ const TRIGGER_LABELS:Record<string,string>={manual:'Manual',time:'Time'};
 const deviceTimeZone=()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';}catch{return 'UTC';}};
 const shiftLocalTime=(value:string,minutes:number)=>{const [h,m]=value.split(':').map(Number);const total=Math.min(23*60+59,Math.max(0,h*60+m+minutes));return String(Math.floor(total/60)).padStart(2,'0')+':'+String(total%60).padStart(2,'0');};
 /** Owner-facing policy for a scheduled typed workflow; the agent enforces each part. */
-const SCHEDULE_POLICY='Runs only while this phone is on and the agent is running. A time missed while it is off is recorded as missed and never run later. Each phone step still waits for your approval.';
+const SCHEDULE_POLICY='Runs only while this phone is on and the agent is running. A time that passes without a run (the phone or agent was off, or Android delayed it) is recorded as missed and never run later. Each phone step still waits for your approval.';
 /** Typed local authoring. No prototype natural-language parser or arbitrary source is executed. */
 export function createWorkflowAuthoring(owner:()=>any,publish:()=>void,onSaved:(id:string)=>Promise<unknown>){
  let active=false,draft:Draft|null=null,catalog:PhoneCatalog|null=null,sheet:string|null=null,busy=false,status='',review:string|null=null,discard=false,generation=0,controller:AbortController|null=null;
@@ -121,7 +121,7 @@ export function createWorkflowAuthoring(owner:()=>any,publish:()=>void,onSaved:(
  function toggleDay(day:number){editTime(trigger=>{const days=trigger.days.includes(day)?trigger.days.filter(d=>d!==day):[...trigger.days,day].sort((a,b)=>a-b);if(!days.length){toast('Choose at least one day');return null;}return {...trigger,days};});}
  function triggerSheet(api:Bag){const trigger=draft?.spec.trigger??{kind:'manual' as const};const time=trigger.kind==='time'?trigger:null;
   return {kinds:(catalog?.triggers??[]).filter(t=>t.available).map(t=>{const on=trigger.kind===t.kind;return {label:TRIGGER_LABELS[t.kind]??t.kind,d:t.kind==='time'?api.ic.clock:api.ic.play,pressed:on,css:on?'background:var(--acc);color:#fff':'background:var(--s2)',pick:()=>t.kind==='manual'&&on?toast('This workflow runs only when you explicitly start it'):chooseTrigger(t.kind)};}),
-   text:time?describePhoneTrigger(time)+'. '+SCHEDULE_POLICY:'Run manually after reviewing the workflow',isTime:!!time,isEvent:false,isPlace:false,isMsg:false,isEmail:false,
+   text:time?describePhoneTrigger(time)+'. '+(note=>note?note+' ':'')(phoneTriggerClockChangeNote(time))+SCHEDULE_POLICY:'Run manually after reviewing the workflow',isTime:!!time,isEvent:false,isPlace:false,isMsg:false,isEmail:false,
    days:time?WEEKDAYS.map(([day,label])=>{const on=time.days.includes(day);return {label,pressed:on,css:on?'background:var(--fg);color:var(--bg)':'background:var(--s2)',pick:()=>toggleDay(day)};}):[],
    time:time?.localTime??'',tMinus:()=>editTime(t=>({...t,localTime:shiftLocalTime(t.localTime,-15)})),tPlus:()=>editTime(t=>({...t,localTime:shiftLocalTime(t.localTime,15)}))};}
  function field(label:string,value:string,onChange:(value:string)=>void,type='text',multiline=false){return {label,value,type,multiline,single:!multiline,change:(event:Bag)=>change(()=>onChange(String(event.target.value)))};}
