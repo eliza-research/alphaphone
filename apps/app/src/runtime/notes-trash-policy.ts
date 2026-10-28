@@ -27,7 +27,6 @@ export type NotesTrashPlan=SharedPlan<NoteRecord,NotesTarget>;
 
 export function emptyNotesTrash():NotesTrashDocument{return policy.empty();}
 export function validateNotesTrash(value:unknown):NotesTrashDocument{return policy.validate(value);}
-export function notesTrashExpiresAt(entry:Pick<NotesTrashEntry,'deletedAt'>){return policy.expiresAt(entry);}
 /**
  * Expired exactly when three full days of wall-clock time have elapsed since deletion
  * (epoch milliseconds, so time-zone and DST changes have no effect). A clock moved

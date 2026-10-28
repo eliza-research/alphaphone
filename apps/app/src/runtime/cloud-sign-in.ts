@@ -34,6 +34,9 @@ export interface CloudSignInMfaRequired { attemptId?: string; status: 'mfa'; met
 export interface CloudSignInGoogleMfaRequired extends CloudSignInMfaRequired { attemptId: string; environment: CloudEnvironment }
 export type CloudSignInGoogleOutcome = CloudSignInAuthenticated | CloudSignInGoogleMfaRequired;
 export interface CloudSignInPort {
+  /** Native-only explicit recovery of the same product's saved pre-namespace credential. */
+  savedSignInRecoveryStatus?(): Promise<{eligible: boolean}>;
+  restoreSavedSignIn?(): Promise<{restored: boolean}>;
   serviceInfo?(input: { environment: CloudEnvironment }): Promise<unknown>;
   /** Opens Android's native Google account picker; returns only authenticated or MFA metadata. */
   startGoogle(input: { environment: CloudEnvironment }): Promise<unknown>;

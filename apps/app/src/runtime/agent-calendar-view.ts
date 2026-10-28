@@ -1,5 +1,5 @@
 import {calendarEditorCommand} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/components/event-editor-command';
-import type {LifeOpsCalendarEvent,LifeOpsCalendarEventUpdate,LifeOpsCalendarSummary,CreateLifeOpsCalendarEventRequest} from '../../../../.eliza/client-features/packages/contracts/src/calendar';
+import type {LifeOpsCalendarEvent,LifeOpsCalendarEventUpdate,CreateLifeOpsCalendarEventRequest} from '../../../../.eliza/client-features/packages/contracts/src/calendar';
 import {getZonedDateParts,addDaysToLocalDate,buildUtcDateFromLocalParts} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/internal/time';
 import {calendarEventKey,calendarSourceKey} from './agent-calendar';
 const DAY=86400000;
@@ -21,4 +21,4 @@ export function calendarFormRange(form:CanonicalCalendarForm){
 export function calendarFormCreate(form:CanonicalCalendarForm):Omit<CreateLifeOpsCalendarEventRequest,'side'|'grantId'|'calendarId'> & {idempotencyKey:string}{return calendarEditorCommand({kind:'create',fields:form,range:calendarFormRange(form),operationKey:form.operationKey});}
 /** UI conversion only; shared command helper owns field/range/recurrence diffing. */
 export function calendarFormPatch(form:CanonicalCalendarForm,event:LifeOpsCalendarEvent,changed:{timing?:boolean;zone?:boolean}={timing:true,zone:true}):LifeOpsCalendarEventUpdate & {idempotencyKey:string}{return calendarEditorCommand({kind:'update',fields:form,event,changed:{timing:!!changed.timing,zone:!!changed.zone},...(changed.timing?{range:calendarFormRange(form)}:{}),operationKey:form.operationKey});}
-export function canonicalHomeCalendar(next:{event:LifeOpsCalendarEvent|null;calendarFeedState:string;readScope:{timeMin:string;timeMax:string}}|null){return{kind:'canonical-calendar' as const,event:next?.event??null,verified:next?.calendarFeedState==='complete',emptyLabel:next?.calendarFeedState==='complete'?'No upcoming events in this window':'Calendar has not been verified',window:next?.readScope??null};}
+export function canonicalHomeCalendar(next:{event:LifeOpsCalendarEvent|null;calendarFeedState:string;readScope:{timeMin:string;timeMax:string}}|null,fresh=true){return{kind:'canonical-calendar' as const,event:next?.event??null,verified:fresh&&next?.calendarFeedState==='complete',emptyLabel:fresh&&next?.calendarFeedState==='complete'?'No upcoming events in this window':'Calendar has not been verified',window:next?.readScope??null};}

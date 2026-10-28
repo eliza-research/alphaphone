@@ -1,3 +1,5 @@
+import {validateUuid} from '../vendor/eliza/packages/core/src/utils/uuid.ts';
+import {isCalendarReadFailureCode} from '../.eliza/client-features/packages/contracts/src/calendar.ts';
 import * as residentRecovery from '../apps/app/src/runtime/resident-recovery.ts';
 import {resolveCloudEnvironment} from '../apps/app/src/runtime/cloud-environment-selection.ts';
 // Non-product development controller + shared Cloud protocol over synthetic loopback HTTP. No live account.
@@ -79,7 +81,7 @@ const remoteServer=http.createServer(async(req,res)=>{
   if(url.pathname===`/api/conversations/${remoteConversation}/messages`&&req.method==='POST'){
     if(remote.failPost){remote.failPost=false;remote.failedPosts=(remote.failedPosts||0)+1;return reply(500,{});}
     // Upstream reply shape for a refused turn: ChatTerminalFailure carries only kind/message/transient/code.
-    if(remote.failureReply){const failure=remote.failureReply;remote.failureReply=null;remote.failureReplies=(remote.failureReplies||0)+1;return reply(200,{text:'',agentName:'Remote fixture',failureKind:failure.kind,terminalFailure:failure});}
+    if(remote.failureReply){const failure=remote.failureReply;remote.failureReply=null;remote.failureReplies=(remote.failureReplies||0)+1;return reply(200,{text:remote.failureText??'',agentName:'Remote fixture',messageId:remote.failureMessageId,userMessageId:remote.failureUserMessageId,failureKind:failure.kind,terminalFailure:failure});}
     // Held: the phone stops waiting; the agent still finishes and persists the reply.
     remote.sends=(remote.sends||0)+1;const user={id:`88888888-8888-4888-8888-${String(remote.sends*2-1).padStart(12,'0')}`,role:'user',text:body.text,timestamp:Date.now()};
     remoteMessages.push(user);
@@ -110,7 +112,7 @@ let clockRetirements=0,heldClockRetirement=null,clockRetirementStarted=null;
 const retireClockReviews=async()=>{clockRetirements++;clockRetirementStarted?.();if(heldClockRetirement)await heldClockRetirement;};
 // This controller fixture models a host whose transport reaches Eliza Cloud. The flag-off web page
 // has none and starts no Cloud route; test/browser/connection-boundaries.production.spec.ts covers it.
-const sandbox = { appRecordInvalidations,AUTOMATIONS_COMMITTED_EVENT,automationsCommitted, browserCloudResidentEnabled:false,browserCloudResidentEnvironment:'production',...residentRecovery,CAMERA_CAPTURE_CAPABILITY:'camera.capture-photo.v1',readDevicePreferences:async()=>({askBeforeAgentActions:true}),  resolveCloudEnvironment,fixtureViteEnv:{DEV:true},...subscriptionEntitlement, ...cloudSignInModule, cloudSignIn:undefined, cloudSignInGoogle:false, AlphaClientError, browserLocalAgentEnabled:true, retireClockReviews, workflowPresentationProtocol:async()=>2, browserDevProfile:false,privateLocalPreviewEnabled:false, devProfileQuery:false, testMocksEnabled:true, devSurfacesEnabled:true, secureConnectionStore:{read:async slot=>deviceSlots.get(slot)??null,write:async(slot,value)=>{deviceSlots.set(slot,value);},remove:async slot=>{deviceSlots.delete(slot);}},
+const sandbox = { validateUuid, isCalendarReadFailureCode, appRecordInvalidations,AUTOMATIONS_COMMITTED_EVENT,automationsCommitted, browserCloudResidentEnabled:false,browserCloudResidentEnvironment:'production',...residentRecovery,CAMERA_CAPTURE_CAPABILITY:'camera.capture-photo.v1',readDevicePreferences:async()=>({askBeforeAgentActions:true}),  resolveCloudEnvironment,fixtureViteEnv:{DEV:true},...subscriptionEntitlement, ...cloudSignInModule, cloudSignIn:undefined, cloudSignInGoogle:false, AlphaClientError, browserLocalAgentEnabled:true, retireClockReviews, workflowPresentationProtocol:async()=>2, browserDevProfile:false,privateLocalPreviewEnabled:false, devProfileQuery:false, testMocksEnabled:true, devSurfacesEnabled:true, secureConnectionStore:{read:async slot=>deviceSlots.get(slot)??null,write:async(slot,value)=>{deviceSlots.set(slot,value);},remove:async slot=>{deviceSlots.delete(slot);}},
   PersonalProtocolError, personalIntent:async()=>null, savePersonalIntent:async(_owner,intent)=>intent, clearPersonalIntent:async()=>{},
   RemoteProtocol, remoteCredentialStore, nativeRemoteRequest, DeviceActions, presentDeviceRecordOperation, actionScope:async value=>Buffer.from(value).toString('base64url').slice(0,32), negotiateEnabledViews:async()=>'',
   Capacitor:{getPlatform:()=>'web',isNativePlatform:()=>false},aospImage:false,SMS_SEND_CAPABILITY:'sms.send.v1', setTimeout:(callback,ms)=>setTimeout(callback,ms===15000?20:ms), clearTimeout, Intl, Date, Buffer, pauseHostedBackground:async()=>{}, configureHostedBackground:async()=>{}, registerPlugin: () => ({}), cloudServiceName, CloudProtocol, DevelopmentCloudAgentProtocol, CloudProvisionAcceptedError, phoneContextMessage, findStoppedUserTurn, nativeCloudRequest,
@@ -284,6 +286,28 @@ try {
     assert.ok(refused,'a refused turn rejects: '+failure.kind);assert.match(refused.message,expected,failure.kind);
     assert.equal(remote.failureReplies,before+1,'the refused turn is posted once and never retried');
   }
+  // Only a recognized, non-transient Calendar coverage refusal keeps its
+  // one existing human reply. Unknown diagnostics and empty replies still fail.
+  const calendarText="I couldn't confirm that Calendar request.";
+  const calendarFailure={kind:'reply_generation_error',transient:false,code:'CALENDAR_READ_RECEIPT_MISMATCH',message:calendarText};
+  const beforeCalendar=remote.failureReplies||0;
+  remote.failureReply=calendarFailure;remote.failureText=calendarText;
+  remote.failureMessageId='11111111-1111-4111-8111-111111111112';remote.failureUserMessageId='11111111-1111-4111-8111-111111111113';
+  const kept=await controller.send('Calendar availability',{view:'home',revision:14,sensitive:false},'calendar-failure',new AbortController().signal);
+  assert.equal(kept.text,calendarText);assert.equal(kept.messageId,remote.failureMessageId);
+  assert.equal(kept.userMessageId,remote.failureUserMessageId);assert.equal(kept.messageBinding.conversationId,remoteConversation);
+  assert.equal(kept.planAction,undefined);assert.deepEqual(Array.from(kept.proposals||[]),[]);
+  assert.equal(remote.failureReplies,beforeCalendar+1,'semantic failure does not retry');
+  remoteMessages.push({id:remote.failureMessageId,role:'assistant',text:calendarText,timestamp:2000,failureKind:calendarFailure.kind,terminalFailure:calendarFailure});
+  await controller.restoreHistory(remoteConversation);
+  const savedCalendar=controller.getSnapshot().history.messages.filter(row=>row.id===remote.failureMessageId);
+  assert.equal(savedCalendar.length,1);assert.equal(savedCalendar[0].text,calendarText);
+  assert.equal(remote.failureReplies,beforeCalendar+1,'restoring the saved refusal never resends it');
+  for(const [code,transient,text] of [['UNKNOWN_CODE',false,calendarText],['CALENDAR_READ_RECEIPT_MISMATCH',true,calendarText],['CALENDAR_READ_RECEIPT_MISMATCH',false,'']]){
+    remote.failureReply={...calendarFailure,code,transient};remote.failureText=text;
+    await assert.rejects(controller.send('Refused Calendar',{view:'home',revision:15,sensitive:false},'refused-calendar-'+code+transient+text,new AbortController().signal),/could not complete/);
+  }
+  delete remote.failureText;delete remote.failureMessageId;delete remote.failureUserMessageId;
   await controller.disconnect();
   console.log('PASS: Cloud refusal reply shapes (insufficient_credits, rate_limited, provider_issue) map to owner copy without retry; real Cloud protocol/controller HTTP history membership, context stripping, action exclusion, next-send binding, current device timezone metadata and omission, separate service disconnect and scoped rejection; remote pairing, keyset history paging over 260 messages, restore on reconnect, device/session revocation with old-bearer 401, plain action presentation, reject/reconcile controller API, single Stop reconciliation and explicit turn abort. Synthetic only.');
 } finally { server.closeAllConnections(); remoteServer.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await new Promise(resolve => remoteServer.close(resolve)); }

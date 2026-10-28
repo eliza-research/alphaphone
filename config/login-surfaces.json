@@ -97,7 +97,7 @@
       "kind": "alpha-owned",
       "eligible": false,
       "file": "apps/app/src/runtime/cloud-membership-ui.tsx",
-      "pattern": "name=\"membership-code\" autoComplete=\"one-time-code\"",
+      "pattern": "name=\"membership-code\"(?:(?!<input).)*?autoComplete=\"one-time-code\"",
       "reason": "A subscription grant redemption code, not a username or reusable password. It remains only in the input after a refused attempt and is cleared after successful redemption; Alpha never persists it. This privileged renderer WebView is excluded from Android Autofill, and the field is not an integrated-vault or password-provider fill target."
     },
     {
