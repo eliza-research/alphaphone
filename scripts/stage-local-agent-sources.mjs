@@ -14,7 +14,7 @@ const digest=value=>createHash('sha256').update(value).digest('hex');
 const runtimeSource=sourceDirectory(root);
 if(!fs.existsSync(path.join(runtimeSource,'.alpha-runtime-source.json')))throw Error(`Prepared runtime source ${path.relative(root,runtimeSource)} is missing. Run npm run android:build:local (distributable APKs) or npm run agent:prepare first.`);
 verifySource(runtimeSource,pin);
-const classes=['SecureStoreFrameInput','AgentSecureStore','DeviceRamTierPolicy','AndroidBunTarget','ElizaAgentService','IpcStartupRecovery','WorkflowSurvivorInventory','ElizaAgentWatchdogPolicy','ElizaAssetExtractionPolicy','ElizaBionicInferenceServer','NativeSourceHost','ElizaStartupTrace','ElizaWorkScheduler','ElizaTasksWorker','InferenceMemoryPolicy','RuntimeInstallationIdentity','BionicDecodeLoop','BionicAsrStreams','ElizaAsrNativeEnv','ElizaVoiceNative','BgeEmbeddingSession'];
+const classes=['SecureStoreFrameInput','AgentSecureStore','DeviceRamTierPolicy','AndroidBunTarget','ElizaAgentService','IpcStartupRecovery','WorkflowSurvivorInventory','ElizaAgentWatchdogPolicy','ElizaAssetExtractionPolicy','ElizaBionicInferenceServer','NativeSourceHost','ElizaStartupTrace','ElizaWorkScheduler','ElizaTasksWorker','InferenceMemoryPolicy','RuntimeInstallationIdentity','BionicDecodeLoop','BionicAsrStreams','ElizaAsrNativeEnv','ElizaVoiceNative','BgeEmbeddingSession','NativeNotificationInbox','NativeNotificationWire','NativeNotificationRoute','NativeNotificationChannels','NativeNotificationProjector'];
 const output=path.join(root,'android/app/build/generated/local-agent/java');
 fs.rmSync(output,{recursive:true,force:true});
 const target=path.join(output,...identity.split('.'));fs.mkdirSync(target,{recursive:true});
@@ -25,7 +25,18 @@ for(const name of classes){
   let value=input.replaceAll('ai.elizaos.app',identity).replaceAll('R.mipmap.ic_launcher','R.drawable.notification_icon');
   // Abstract sockets are device-global. Give the consumer its own namespace.
   value=value.replaceAll('"eliza_local_agent_v1"',`"${identity}.agent.v1"`).replaceAll('"eliza_bionic_infer_v1"',`"${identity}.inference.v1"`);
+  if(name==='NativeNotificationChannels')value=value.replaceAll('Eliza alerts','Alpha alerts').replaceAll('Eliza updates','Alpha updates').replaceAll('Eliza background','Alpha background').replaceAll('name = "Eliza"','name = "Alpha"');
+  if(name==='NativeNotificationProjector')value=value.replaceAll('android.R.drawable.ic_dialog_info','R.drawable.notification_icon');
   if(name==='ElizaAgentService'){
+    // Suspend the previous transport atomically before exposing a rotated root.
+    const nativeRoot='            currentLocalAgentToken = token;';
+    if(value.split(nativeRoot).length!==2)throw Error('Review changed resident root publication');
+    value=value.replace(nativeRoot,'            AlphaLocalAgentPlugin.publishNotificationRoot(() -> { currentLocalAgentToken = token; });');
+    // All four canonical running paths include detached adoption and normal ready
+    // probes. Recovery starts after readiness, not before a 60-90s cold boot.
+    const notificationReady='currentStatus = "running";';
+    if(value.split(notificationReady).length!==5)throw Error('Review changed resident ready lifecycle');
+    value=value.replaceAll(notificationReady,notificationReady+' AlphaCanonicalNotifications.resumeExisting(getApplicationContext());');
     // Product presentation over the canonical runtime. Keep the state machine, notification
     // timing, Stop action and bootstrap's binder-free path unchanged. Each reviewed source
     // anchor fails closed if an upstream update changes it; generated hashes record the result.

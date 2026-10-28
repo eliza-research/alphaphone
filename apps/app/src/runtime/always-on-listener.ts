@@ -43,10 +43,10 @@ export const INVOCATION_EVENT = 'alpha:assist-invocation';
  * one conversation. Runs on the first render and whenever the surface returns to the foreground
  * (a new invocation of the single-task activity).
  */
-export function installListenerInvocation(shell: () => { startVoice?: () => unknown; live?: boolean } | undefined, state: { authority: () => string | null; connectionOpen: () => boolean; connected: () => boolean; voiceActive: () => boolean; subscribe: (listener: () => void) => () => void }) {
+export function installListenerInvocation(shell: () => { startVoice?: () => unknown; live?: boolean } | undefined, state: { authority: () => string | null; initialRestorePending?: () => boolean; powerAccountRef?: () => string | null; connectionOpen: () => boolean; connected: () => boolean; voiceActive: () => boolean; subscribe: (listener: () => void) => () => void }) {
   if(!nativeListener())return ()=>{};
   const ready=()=>!!shell()?.startVoice&&shell()?.live!==false&&!state.connectionOpen()&&state.connected();
-  const owner=createSenseInvocationController(Sense,{authority:state.authority,ready,voiceActive:state.voiceActive,
+  const owner=createSenseInvocationController(Sense,{authority:state.authority,initialRestorePending:state.initialRestorePending,powerAccountRef:state.powerAccountRef,ready,voiceActive:state.voiceActive,
     startVoice:()=>{const current=shell();if(ready())void current?.startVoice?.();},subscribe:state.subscribe,events:[INVOCATION_EVENT]});
   return ()=>owner.dispose();
 }

@@ -110,8 +110,13 @@ test('Cloud inference is bound only for an admitted plan and unbound otherwise',
   const cloud = bind.indexOf("if(admission.binding==='cloud'&&admission.credentialId&&admission.account){");
   assert.ok(cloud > 0 && bind.indexOf('bindResidentCloudProvider(') > cloud, 'binding happens only in the admitted branch');
   assert.equal(bind.split('bindResidentCloudProvider(').length, 2, 'one bind call');
-  // Every other outcome clears the stored provider before the agent starts.
-  assert.ok(bind.split('await clearLocalProvider()').length >= 3);
+  // Failed admitted binding explicitly clears. Ordinary unbound startup only removes a
+  // genuinely present provider, preserving legacy recovery when native observes absence.
+  const unbound=bind.indexOf('// Unbound:');assert.ok(unbound>cloud);
+  assert.equal((bind.slice(0,unbound).match(/await clearLocalProvider\(\)/g)||[]).length,1,'failed binding retains explicit clear/tombstone semantics');
+  assert.doesNotMatch(bind.slice(0,unbound),/clearLocalProvider\(true\)/,'admitted binding never silently changes to presence-only removal');
+  assert.equal((bind.slice(unbound).match(/await clearLocalProvider\(true\)/g)||[]).length,1,'one native-observed absence-safe automatic unbind');
+  assert.doesNotMatch(bind.slice(unbound),/await clearLocalProvider\(\)/,'empty automatic startup must not manufacture sign-out');
   // The running state the UI and tests read is derived from the binding actually applied.
   assert.match(between(ui, 'async function connectResident(', 'async function connectCloud('), /residentBinding=bound\.binding;\n\s+update\(\{residentInference:bound\.binding==='cloud'\?'cloud':bound\.binding==='unbound'\?'unavailable':'unknown'\}\);/);
 });
