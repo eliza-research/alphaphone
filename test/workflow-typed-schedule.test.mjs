@@ -49,6 +49,12 @@ const rows=[
  execution('overlap',{typedSchedule:{...occurrence('overlap'),text:'An earlier run was still active.'}},{status:'overlap',scheduledAt:'2026-10-26T07:30:00.000Z',text:'An earlier run was still active.'}),
  execution('late-start',{typedSchedule:occurrence('ready')},{status:'missed',scheduledAt:'2026-10-26T07:30:00.000Z',text:'The agent stopped before this scheduled run started.'}),
  execution('manual',{},[{nodeId:'typed-steps',runId:'manual',text:'Manual'}]),
+ // A generic schedule's missed occurrence is read only from the engine-written missedOccurrenceAt; a
+ // workflow whose own output has the missed-record shape ran, and an unfinished or malformed marker is ignored.
+ execution('generic-missed',{},{status:'missed',scheduledAt:'2026-10-26T07:30:00.000Z',text:'Not run'},{missedOccurrenceAt:'2026-10-26T07:30:00.000Z'}),
+ execution('generic-forged',{},{status:'missed',scheduledAt:'2026-10-26T07:30:00.000Z',text:'Forged'}),
+ execution('generic-bad-marker',{},{status:'missed',scheduledAt:'2026-10-26T07:30:00.000Z',text:'Bad marker'},{missedOccurrenceAt:'soon'}),
+ execution('generic-overlap',{},{status:'overlap',scheduledAt:'2026-10-26T07:30:00.000Z',text:'Skipped'}),
 ];
 const client=new P.WorkflowProtocol(async path=>{if(path==='/api/workflow/workflows/flow/executions')return {executions:rows};throw Error(path);});
 const runs=await client.executions('flow',signal);out.rows=runs.map(r=>[r.id,r.occurrence?.status??null,r.output]);
@@ -60,6 +66,10 @@ console.log(JSON.stringify(out));`);
   ['overlap','overlap','An earlier run was still active.'],
   ['late-start','missed','The agent stopped before this scheduled run started.'],
   ['manual',null,'Manual'],
+  ['generic-missed','missed','Not run'],
+  ['generic-forged',null,'Forged'],
+  ['generic-bad-marker',null,'Bad marker'],
+  ['generic-overlap','overlap','Skipped'],
  ]);
  assert.equal(out.bad,'PhoneWorkflowSpecError: Invalid scheduled occurrence');
 });
