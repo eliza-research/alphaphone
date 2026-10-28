@@ -25,6 +25,9 @@ class HostedResultNotices {static String hash(String text)throws Exception{retur
   put('DeviceKeyTest.java',`package ai.elizaresearch.alphaphone;import org.json.*;
 public class DeviceKeyTest {public static void main(String[]args)throws Exception{
  String owner="${owner}",agent="${agent}",expected="${expected}";
+ if(!NativeDeviceEnrollmentKey.local("https://remote.example.test/api",owner,agent).equals("device:${createHash('sha256').update(JSON.stringify(['https://remote.example.test/api',owner,agent])).digest('hex')}"))throw new AssertionError("Remote key differs");
+ if(!NativeDeviceEnrollmentKey.cloud("https://cloud.example.test/api","user_alias",agent).equals("device:${createHash('sha256').update(JSON.stringify(['cloud','https://cloud.example.test/api','user_alias',agent])).digest('hex')}"))throw new AssertionError("Cloud key differs");
+
  if(!expected.equals(NativeOwnerReminderHost.deviceSlot(owner,agent)))throw new AssertionError("Producer key differs");
  if(!NativeOwnerReminderHost.deviceSlot("owner_alias","agent-2").equals("device:${createHash('sha256').update(JSON.stringify(['https://device.alpha.invalid','owner_alias','agent-2'])).digest('hex')}"))throw new AssertionError("Existing opaque owner IDs refused");
  JSONObject provider=new JSONObject().put("accountRef","native-local").put("environment","fixture").put("sessionGeneration","generation");
@@ -46,6 +49,7 @@ public class DeviceKeyTest {public static void main(String[]args)throws Exceptio
 
  System.out.println("PASS renderer-derived native read and review fence verified");}}
 `);
+  put('NativeDeviceEnrollmentKey.java',readFileSync(nativeSource('NativeDeviceEnrollmentKey.java'),'utf8'));
   put('NativeOwnerReminderHost.java',readFileSync(process.env.ALPHA_NOTIFICATION_HOST_SOURCE||nativeSource('NativeOwnerReminderHost.java'),'utf8'));
   execFileSync(javaBinary('javac'),['--release','17','-cp',jsonJar,'-d',dir,...files],{timeout:30000,stdio:'pipe'});
   assert.match(execFileSync(javaBinary('java'),['-cp',dir+':'+jsonJar,'ai.elizaresearch.alphaphone.DeviceKeyTest'],{encoding:'utf8',timeout:30000,stdio:'pipe'}),/^PASS renderer-derived native read/);

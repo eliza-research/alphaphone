@@ -32,7 +32,7 @@ test('native staging fence binds full session/provider/enrollment versions witho
  provider.put("sessionGeneration","g2");try{host.reviewFence(expected);throw new AssertionError("Wrong generation accepted");}catch(SecurityException good){}
  System.out.println("PASS full native review fence without network");
  }} `);
- execFileSync('javac',['--release','17','-cp',jar,'-d',dir,...files,'android/app/src/main/java/ai/elizaresearch/alphaphone/NativeOwnerReminderHost.java']);
+ execFileSync('javac',['--release','17','-cp',jar,'-d',dir,...files,'android/app/src/main/java/ai/elizaresearch/alphaphone/NativeOwnerReminderHost.java','android/app/src/main/java/ai/elizaresearch/alphaphone/NativeDeviceEnrollmentKey.java']);
  assert.match(execFileSync('java',['-cp',dir+':'+jar,'ai.elizaresearch.alphaphone.FenceTest'],{encoding:'utf8'}),/^PASS full native/);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });

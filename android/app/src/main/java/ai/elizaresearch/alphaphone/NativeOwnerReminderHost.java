@@ -40,8 +40,7 @@ final class NativeOwnerReminderHost {
  /** Exact JSON.stringify bytes used by the renderer's device enrollment key.
   * Android JSONArray escapes slashes, so it cannot define this shared key. */
  static String deviceSlot(String owner,String agent)throws Exception{
-  owner=HostedInbox.id(owner);agent=HostedInbox.id(agent);
-  return "device:"+HostedResultNotices.hash("[\"https://device.alpha.invalid\",\""+owner+"\",\""+agent+"\"]");
+  return NativeDeviceEnrollmentKey.local("https://device.alpha.invalid",owner,agent);
  }
 
  static JSONObject read(Ports ports)throws Exception{
