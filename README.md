@@ -314,9 +314,12 @@ Three inputs of a distributable build cannot come from a script, and
 - **A qualified speech runtime** (decision A-24). A local rebuild installs only with
   `--allow-unqualified-runtime`. The chain still completes with it; `verify-apks` records
   the releases `distributable:false` and names the speech reasons.
-- **The release signer** (decision A-06). Without the `ELIZAOS_*` signing values and a
-  certificate digest in `android/release-signer.json` the chain completes with unsigned,
-  non-distributable releases.
+- **The release signer** (decision P-16; [human actions](docs/human-actions.md) H-08 to H-10).
+  `node scripts/enroll-release-keys.mjs` records the key ceremony's certificate digest in
+  `android/release-signer.json`; releases are then signed by Gradle with the `ELIZAOS_KEYSTORE_*`
+  values or afterwards with `node scripts/sign-release-apks.mjs` (ceremony key files or a PKCS#11
+  token). Without either the chain completes with unsigned, non-distributable releases.
+  `npm run human:status` lists every step only a person can take and what this checkout records.
 
 Gradle verifies every plugin and dependency artifact against
 `android/gradle/verification-metadata.xml` (SHA-256) in every build of the `android/`
