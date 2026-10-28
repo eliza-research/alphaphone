@@ -92,14 +92,18 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   * A Cloud account change between the wake and the renderer's first authenticated binding changes
   * it, so that wake only opens the assistant. Null when the stored admission is invalid.
   */
- static String invocationOwner(Context context){return storedProviderGeneration(new AlphaCredentialStore(context));}
+ static String invocationOwner(Context context){return INVOCATION_OWNER.get(()->readProviderOwner(new AlphaCredentialStore(context)),System.currentTimeMillis());}
+ /** Cached invocationOwner: mutateCredentials invalidates it around every provider/Cloud commit, and it is read again once the Cloud credential's expiresAt passes. */
+ private static final InvocationOwnerCache INVOCATION_OWNER=new InvocationOwnerCache();
  /** Stored provider admission generation; NO_PROVIDER_GENERATION when no provider is stored (the agent runs unbound and surfaces attach to it as to a bound one); null when legacy or no longer valid. Never writes. */
- private static String storedProviderGeneration(AlphaCredentialStore store){
-  try{
-   String saved=store.readCredentialSlot("local-agent-provider:v1");if(saved==null)return LocalAgentProviderAdmission.NO_PROVIDER_GENERATION;
-   String cloud="elizacloud".equals(new JSONObject(saved).optString("provider"))?store.readCredentialSlot("cloud:production"):null;
-   return LocalAgentProviderAdmission.currentGeneration(saved,cloud);
-  }catch(Exception unavailable){return null;}
+ private static String storedProviderGeneration(AlphaCredentialStore store){try{return readProviderOwner(store).value;}catch(Exception unavailable){return null;}}
+ /** The stored generation and when it may stop holding with no write: an elizacloud generation fails once its credential's expiresAt passes (NativeProviderAdmission.cloudProviderToken). */
+ private static InvocationOwnerCache.Owner readProviderOwner(AlphaCredentialStore store)throws Exception{
+  String saved=store.readCredentialSlot("local-agent-provider:v1");if(saved==null)return new InvocationOwnerCache.Owner(LocalAgentProviderAdmission.NO_PROVIDER_GENERATION,Long.MAX_VALUE);
+  String cloud="elizacloud".equals(new JSONObject(saved).optString("provider"))?store.readCredentialSlot("cloud:production"):null;
+  long validUntil=Long.MAX_VALUE;
+  if(cloud!=null){try{JSONObject credential=new JSONObject(cloud);if(credential.has("expiresAt"))validUntil=InvocationOwnerCache.deadline(credential.opt("expiresAt"));}catch(Exception unreadable){validUntil=Long.MIN_VALUE;}}
+  return new InvocationOwnerCache.Owner(LocalAgentProviderAdmission.currentGeneration(saved,cloud),validUntil);
  }
  /**
   * A system broadcast starts the resident only while no surface is stopping it or changing its
@@ -127,7 +131,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   synchronized(lifecycleLock){
    assertOwner.run();
    synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){
-    if(!mutation.requiresShutdown())return mutation.commit();
+    if(!mutation.requiresShutdown())return commitCredentials(mutation);
    }
    startRequestId=null;startOwnsLaunch=false;
    invalidateCalls();epoch=++lifecycleEpoch;credentialMutationEpoch=epoch;accepting=false;stopping=true;clearEnrollment();
@@ -142,7 +146,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
     synchronized(lifecycleLock){
      assertOwner.run();if(epoch!=lifecycleEpoch||credentialMutationEpoch!=epoch)throw new Superseded();
      if(shutdownConfirmed(status)&&ElizaAgentService.isCredentialShutdownConfirmed(stopRequest)){
-      synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){return mutation.commit();}
+      synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){return commitCredentials(mutation);}
      }
     }
     if(android.os.SystemClock.elapsedRealtime()>=deadline)throw new IllegalStateException("Native shutdown unconfirmed");
@@ -152,6 +156,8 @@ public final class AlphaLocalAgentPlugin extends Plugin {
    synchronized(lifecycleLock){if(credentialMutationEpoch==epoch)credentialMutationEpoch=-1;}
   }
  }
+ /** Every provider and Cloud credential write commits here; the cached listener owner never outlives one. */
+ private static <T> T commitCredentials(CredentialMutation<T> mutation)throws Exception{INVOCATION_OWNER.invalidate();try{return mutation.commit();}finally{INVOCATION_OWNER.invalidate();}}
  static boolean providerAdmissionReadable(){return credentialMutationEpoch<0;}
  private void requireCurrent(long epoch) throws Superseded {
   synchronized(lifecycleLock){if(disposed||!accepting||epoch!=lifecycleEpoch)throw new Superseded();}

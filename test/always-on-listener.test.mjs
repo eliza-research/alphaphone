@@ -48,7 +48,7 @@ test('a cold listener wake is bound to Alpha native owner state, never renderer 
  const admission=app.indexOf('admitOwner(()->AlphaLocalAgentPlugin.invocationOwner(this))'),mainOnly=app.indexOf('if(android.os.Process.isIsolated()||!getPackageName().equals(getProcessName()))return;');
  assert.ok(admission>mainOnly&&mainOnly>0,'admission is registered in the main process only');
  // The owner is the stored provider admission generation (a UUID or no-provider), never a token.
- assert.match(agent,/static String invocationOwner\(Context context\)\{return storedProviderGeneration\(new AlphaCredentialStore\(context\)\);\}/);
+ assert.match(agent,/static String invocationOwner\(Context context\)\{return INVOCATION_OWNER\.get\(\(\)->readProviderOwner\(new AlphaCredentialStore\(context\)\),System\.currentTimeMillis\(\)\);\}/);
  const shared=strip(fs.readFileSync(path.join(root,'vendor/eliza/plugins/plugin-native-system/android/src/main/java/ai/eliza/plugins/system/SenseInvocation.java'),'utf8'));
  assert.match(shared,/COLD_WINDOW_MS = 15000/);
  assert.match(shared,/if \(!waitingOwner\.equals\(admittedOwner\(\)\)\) \{ clear\(\); return; \}/);
