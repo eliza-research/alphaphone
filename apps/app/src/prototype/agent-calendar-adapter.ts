@@ -8,7 +8,7 @@ import {legacyCalendarPreservation} from '../runtime/legacy-calendar-preservatio
 import {AgentCalendar,calendarEventKey,calendarSourceKey,type CalendarPreservation} from '../runtime/agent-calendar';
 import type {AppRecordPort} from '../runtime/app-record-route-policy';
 import {canonicalCalendarRow,calendarFormCreate,calendarFormPatch,canonicalHomeCalendar,type CanonicalCalendarForm} from '../runtime/agent-calendar-view';
-import {homeCalendarValues,overdueAgendaNext,presentHomeAgendaCard,presentHomeAgendaFeed,type HomeAgendaCardInput} from './home-cards';
+import {agentReminderLead,homeCalendarValues,overdueAgendaNext,presentHomeAgendaCard,presentHomeAgendaFeed,type HomeAgendaCardInput} from './home-cards';
 import {getZonedDateParts,addDaysToLocalDate} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/internal/time';
 import {eventEditorMutability} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/components/event-editor-policy';
 type Bag=Record<string,any>;
@@ -153,7 +153,9 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
   // A reminder saved on this phone that comes before the agent's next event leads the card with the
   // reminder store's own source, as it does with device calendars.
   const local=out.homeAgendaInput as HomeAgendaCardInput|undefined;
-  if(out.homeAgendaReminder===true&&local?.item&&(!item||local.item.begin<item.begin))return{...out,...homeCalendarValues(presentHomeAgendaCard(local))};
+  // A failed or out-of-date agent read stays visible above it, and opening the card reads it again.
+  if(out.homeAgendaReminder===true&&local?.item&&(!item||local.item.begin<item.begin)){const retry=feed.state==='error'||feed.state==='stale';
+   return{...out,...homeCalendarValues(presentHomeAgendaCard(agentReminderLead(local,feed))),...(retry&&typeof out.goCalendar==='function'?{goCalendar:()=>{refresh(true);out.goCalendar();}}:{})};}
   return{...out,...homeCalendarValues(presentHomeAgendaCard({now,item,provenance,stale:feed.stale,emptyTitle:feed.title,sourceName:'Agent Calendar'})),
    goCalendar:()=>{if(feed.state==='error'||feed.state==='stale')refresh(true);this.openView('calendar',{calendarAuthority:'canonical',...(event?{open:'canonical-calendar:'+calendarEventKey(event),day:canonicalCalendarRow(event,zone()).off}:{} )});}};
  };

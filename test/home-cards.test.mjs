@@ -177,6 +177,23 @@ test('next item under Agent Calendar: an overdue reminder shows whichever comes 
   assert.equal(H.overdueAgendaNext(input, false, null).next, null, 'a device calendar event is never shown under Agent Calendar');
   assert.equal(H.overdueAgendaNext(input, true, agentLate).item, overdue, 'the overdue reminder still leads the card');
 });
+test('a phone reminder leading under Agent Calendar keeps a failed or out-of-date agent read visible above it', () => {
+  const local = {now, item: {title: 'Call mom', begin: at(16), allDay: false, video: false}, provenance: {origin: 'Reminder', read: '', description: 'Reminder saved on this browser'}};
+  const feed = state => H.presentHomeAgendaFeed({status: state === 'error' ? 'error' : 'ready', hasItem: state === 'stale', feedState: state === 'stale' ? 'partial' : 'complete', asOf: at(15), now, source: 'Agent Calendar'});
+  assert.equal(H.agentReminderLead(local, feed('ready')), local, 'a fresh agent read leaves the reminder its own source');
+  for (const status of ['loading', 'disconnected']) assert.equal(H.agentReminderLead(local, H.presentHomeAgendaFeed({status, hasItem: false, asOf: null, now, source: 'Agent Calendar'})), local, status + ' keeps the reminder source');
+  const failed = H.presentHomeAgendaCard(H.agentReminderLead(local, feed('error')));
+  assert.equal(failed.title, 'Call mom');
+  assert.equal(failed.source, 'Open Calendar to retry');
+  assert.match(failed.description, /Agent Calendar could not be read\. Open Calendar to retry/);
+  assert.equal(failed.stale, false);
+  const stale = H.presentHomeAgendaCard(H.agentReminderLead(local, feed('stale')));
+  assert.equal(stale.title, 'Call mom');
+  assert.match(stale.source, /^Not updated since /);
+  assert.equal(stale.stale, true);
+  const adapter = readFileSync(new URL('../apps/app/src/prototype/agent-calendar-adapter.ts', import.meta.url), 'utf8');
+  assert.match(adapter, /presentHomeAgendaCard\(agentReminderLead\(local,feed\)\)/);
+});
 test('inbox status: readable freshness and every non-ready state', () => {
   const base = {failure: false, pending: false, cached: null, connected: false, unchecked: false, now};
   assert.equal(H.presentHomeInboxStatus({...base, cached: {more: false, label: 'work@example.test', readAt: at(15, 4)}}), 'work@example.test · Updated 3:04 PM');

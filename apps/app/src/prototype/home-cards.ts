@@ -83,6 +83,16 @@ export function overdueAgendaNext(input: HomeAgendaCardInput, ownIsReminder: boo
   if (agent && !(own && own.item.begin <= agent.item.begin)) return {...input, next: agent};
   return {...input, next: own};
 }
+/**
+ * A reminder saved on this phone that leads Home's agenda while the agenda source is the agent's
+ * calendar. When that calendar could not be read, or its last read is out of date, the card says so
+ * above the reminder (agent events may be missing before it), as a failed or stale device-calendar
+ * read does; otherwise the reminder keeps the reminder store's own source.
+ */
+export function agentReminderLead(local: HomeAgendaCardInput, feed: {state: string; read: string; description: string}): HomeAgendaCardInput {
+  if (feed.state !== 'error' && feed.state !== 'stale') return local;
+  return {...local, provenance: {origin: '', read: feed.read, description: feed.description}, stale: feed.state === 'stale'};
+}
 /** The Home template values of an agenda card (read by home-overview-cards.ts and the Home adapters). */
 export function homeCalendarValues(card: OverviewAgendaCardModel) {
   return {

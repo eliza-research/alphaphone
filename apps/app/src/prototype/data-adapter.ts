@@ -120,8 +120,9 @@ export function installPrototypeDataAdapter(Component: any, views: Record<string
     // app read it, or the reminder store for an overdue reminder.
     const sourceState = stale ? 'stale' as const : cardState === 'error' && !calendarSource?.error ? 'other' as const : cardState;
     const native = Capacitor.isNativePlatform();
-    const provenanceOf = (event: Bag | undefined, shownOverdue: boolean) => presentHomeCalendarSource({state: sourceState, overdue: shownOverdue, reminder: !!event?.alphaReminderId, reminderReadAt, readAt, now, native,
+    const provenanceIn = (state: typeof sourceState) => (event: Bag | undefined, shownOverdue: boolean) => presentHomeCalendarSource({state, overdue: shownOverdue, reminder: !!event?.alphaReminderId, reminderReadAt, readAt, now, native,
       calendar: event && !shownOverdue ? homeCalendarName(calendarSource?.sources, event.nativeEvent?.calendarId) : null, truncated: !!calendarSource?.truncated});
+    const provenanceOf = provenanceIn(sourceState);
     const itemOf = (candidate: {event: Bag; begin: number; end: number; allDay: boolean}) => ({title: String(candidate.event.title || ''), begin: candidate.begin, end: candidate.end, allDay: candidate.allDay,
       overdue: !!candidate.event.overdue, video: meeting(candidate.event), people: candidate.event.nativeEvent?.attendees ?? candidate.event.who ?? []});
     // The shared agenda card: the item's day or the overdue count, its time, accessible name and
@@ -129,13 +130,20 @@ export function installPrototypeDataAdapter(Component: any, views: Record<string
     const agendaInput: HomeAgendaCardInput = {now, item: agenda ? itemOf(agenda) : null, provenance: provenanceOf(agenda?.event, overdue),
       next: following ? {item: itemOf(following), provenance: provenanceOf(following.event, false)} : null,
       overdueCount: overdueRows.length, stale, emptyTitle: homeCalendarEmptyTitle(calendarSource, calendarHidden)};
+    // The agent calendar adapter (Agent Calendar chosen in Calendar) re-presents reminders from this
+    // input. Home's own read-time staleness does not apply there: it stands for the first render that
+    // saw the rows, or a device read left over from device calendars chosen earlier, while the agent
+    // feed reports its own freshness (agentReminderLead in home-cards.ts).
+    const deviceFresh = provenanceIn(stale ? 'ready' : sourceState);
+    const agentAgendaInput: HomeAgendaCardInput = stale ? {...agendaInput, stale: false, provenance: deviceFresh(agenda?.event, overdue),
+      next: following ? {item: itemOf(following), provenance: deviceFresh(following.event, false)} : null} : agendaInput;
     return {
       ...out, shadeN: [],
       sugg: suggestions.map(label => ({ label, go: () => this.send(label) })),
       ...homeCalendarValues(presentHomeAgendaCard(agendaInput)),
       // The agent calendar adapter presents the card again with the agent's next event under an overdue
       // reminder, and lets an upcoming reminder lead when it comes first.
-      homeAgendaInput: agendaInput, homeAgendaReminder: !!agenda?.event.alphaReminderId && !overdue,
+      homeAgendaInput: agentAgendaInput, homeAgendaReminder: !!agenda?.event.alphaReminderId && !overdue,
       homeAgendaNextReminder: !!following?.event.alphaReminderId,
       homeAttentionLabel: attention.label,
       homeAttentionPeople: [], homeAttentionPeopleVisibility: 'hidden',

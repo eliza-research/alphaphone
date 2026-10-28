@@ -183,6 +183,37 @@ test('an upcoming reminder is attributed to the reminder store, not to a calenda
  await browserCalendarHome(page);await attributed();
 });
 
+// The development lane has no connected agent, so Agent Calendar is not connected here. This guards the
+// reminder's own attribution after a browser-calendar read and local midnight; the connected case (a
+// ready agent feed with a device read time from an earlier day) is not reproduced in this lane.
+test('after a browser calendar read and local midnight, a reminder under Agent Calendar keeps its own source',async({page,context})=>{
+ test.slow(); // Chooses the browser calendar, then Agent Calendar, and crosses local midnight.
+ await context.grantPermissions(['notifications']);
+ const evening=new Date();evening.setHours(23,50,0,0);
+ await page.clock.install({time:evening});
+ await page.addInitScript(offline);await page.goto('/');
+ expect(await page.evaluate(async()=>{
+  const {DailyApps}=await import('/src/daily.ts');
+  return (await DailyApps.scheduleReminder({id:'overview-agent-after-device',title:'Synthetic agent-scope reminder',body:'',at:Date.now()+3600000})).status;
+ })).toBe('scheduled');
+ await page.reload();
+ // The browser calendar is read once, then the owner chooses Agent Calendar in the same Calendar view.
+ await openBrowserCalendar(page);
+ const sources=page.locator('summary').filter({hasText:'Calendar sources'});
+ await sources.click();await page.getByRole('button',{name:'Agent Calendar',exact:true}).click();await sources.click();
+ await returnToApps(page);
+ const card=calendarCard(page);
+ await expect(card).toContainText('Synthetic agent-scope reminder');
+ // Past midnight the old browser-calendar read is from an earlier day; the reminder store is not.
+ await page.clock.fastForward(20*60000);
+ await returnToApps(page);
+ await expect(card).toContainText('Synthetic agent-scope reminder');
+ await expect(card).toHaveAttribute('data-alpha-home-calendar-stale','false');
+ await expect(card.locator('[data-alpha-home-calendar-origin]')).toHaveText('Reminder');
+ await expect(card).toHaveAttribute('aria-description',/^Reminder saved on this browser, read .+/);
+ await expect(card).not.toContainText(/Not updated since/);
+});
+
 
 async function mailFixture(page:Page){
  await page.addInitScript(offline);await page.goto('/');
