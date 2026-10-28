@@ -1,6 +1,6 @@
-import {assertPhoneWorkflowCapabilities,describePhoneWorkflowTrigger,parsePhoneWorkflowCatalog,parsePhoneWorkflowSaveReceipt,validatePhoneWorkflowSpec,type PhoneTimeTrigger,type PhoneWorkflowCatalog,type PhoneWorkflowSaveReceipt,type PhoneWorkflowTrigger} from '../../../../.eliza/client-features/packages/contracts/src/phone-workflow.ts';
+import {assertPhoneWorkflowCapabilities,describePhoneWorkflowTrigger,parsePhoneWorkflowCatalog,validatePhoneWorkflowSpec,type PhoneTimeTrigger,type PhoneWorkflowCatalog,type PhoneWorkflowSaveReceipt,type PhoneWorkflowTrigger} from '../../../../.eliza/client-features/packages/contracts/src/phone-workflow.ts';
 import {browserDevProfile} from '../browser/dev-profile';
-import {workflowObject,workflowSha,type WorkflowDeviceTarget} from './workflow-device-contract';
+import type {WorkflowDeviceTarget} from './workflow-device-contract';
 /** Typed phone workflows use the shared upstream contract (`@elizaos/contracts/phone-workflow`): the agent
  * normalizes, digests and compiles exactly the bytes this phone reviews. Only editor typing and the
  * development-profile enrollment label stay here. */
@@ -24,5 +24,3 @@ export function normalizePhoneSpec(value:unknown):PhoneSpec{
 export const parsePhoneCatalog=(value:unknown):PhoneCatalog=>parsePhoneWorkflowCatalog(value);
 export function assertPhoneCapabilities(spec:PhoneSpec,catalog:PhoneCatalog){assertPhoneWorkflowCapabilities(spec as Parameters<typeof assertPhoneWorkflowCapabilities>[0],catalog);}
 export const describePhoneTrigger=(trigger:PhoneTrigger):string=>describePhoneWorkflowTrigger(trigger);
-export async function verifyPhoneValidation(value:unknown,spec:PhoneSpec,catalog:PhoneCatalog){const p=workflowObject(value),canonical=normalizePhoneSpec(p.spec);if(JSON.stringify(canonical)!==JSON.stringify(spec)||p.specDigest!==await workflowSha(spec)||p.compilerRevision!==catalog.compilerRevision||p.catalogRevision!==catalog.catalogRevision||p.active!==false)throw new Error('Agent validation changed the reviewed workflow');return {spec:canonical,specDigest:p.specDigest as string};}
-export const parsePhoneReceipt=(value:unknown,expected:{mutationId:string;specDigest:string;compilerRevision:string;workflowId?:string;versionId?:string}):PhoneSaveReceipt=>parsePhoneWorkflowSaveReceipt(value,expected);

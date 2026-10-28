@@ -35,6 +35,7 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/contracts/src/device-action-execution.ts',
   'packages/contracts/src/notice-routes.ts',
   'packages/contracts/src/phone-workflow.ts',
+  'packages/contracts/src/workflow-client.ts',
   'packages/ui/src/agent-surface/AgentSurfaceContext.hooks.ts',
   'packages/ui/src/agent-surface/registry.ts',
   'packages/ui/src/agent-surface/sensitive.ts',
