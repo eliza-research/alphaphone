@@ -20,6 +20,8 @@ export const legacyGoogleCalendarScope=(shell:Bag|undefined)=>!!shell&&shell.vge
 export function installAgentCalendarAdapter(Component:any,views:Bag,preservation?:CalendarPreservation){
  const p=Component.prototype,mount=p.componentDidMount,update=p.componentDidUpdate,unmount=p.componentWillUnmount,render=views.calendar.render,renderVals=p.renderVals,selection=p.calendarSelection,displaySources=views.calendar.displaySources;
  let owner:Bag|undefined,controller:AgentCalendar|undefined,requestKey='',boundKey='',invalidating=false,nextEnded:ReturnType<typeof setTimeout>|undefined;
+ // Source selection is made in Settings and survives the existing view reset.
+ views.calendar.persist=Array.from(new Set([...(views.calendar.persist??[]),'calendarAuthority']));
  const markerKey=async(ownerKey:string)=>'alpha.calendar.retention.v1.'+Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(ownerKey)))).map(n=>n.toString(16).padStart(2,'0')).join('');
  const retention=preservation??legacyCalendarPreservation({
   has:async(ownerKey,fingerprint,signal)=>{
