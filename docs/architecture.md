@@ -294,7 +294,14 @@ Native reminders use the shared `plugin-native-reminders` engine and bridge. The
 build's reminder store applies the same engine's Done and Snooze decisions through the
 shared `@elizaos/macosreminders/occurrence` module: a one-off Done completes the reminder,
 and a repeat records the finished occurrence and advances to its next civil occurrence
-in the saved zone. Alpha keeps only storage, delivery state and revisions.
+in the saved zone. Alpha keeps only storage, delivery state and revisions. The device-local
+write-ahead journals for reminder creations and selected-reminder actions (cancel, complete,
+snooze, edit), their readback match, refusal retirement, reviewed outcome checks and the
+overdue, undated to-do, reopen and refusal-message decisions are `plugin-assistant`'s
+`reminder-journal.ts` (`@elizaos/plugin-assistant/device-reminder-journal`).
+`apps/app/src/runtime/reminder-creations.ts` and `reminder-deletions.ts` bind it to Alpha's
+installed slots (`reminder-creations:v1:device`, `reminder-deletions:v1:device`) and browser
+documents through `reminder-journal-store.ts`; reconciliation reads rows and receipts only.
 
 The Clock hand-off contract is shared: `plugin-assistant`'s `clock-handoff.ts` (exported
 from `device-clock-review`) owns handoff validation, the capability policy, review text and
