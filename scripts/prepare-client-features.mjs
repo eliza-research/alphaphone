@@ -169,6 +169,7 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/contracts/src/device-reviews.ts',
   'packages/contracts/src/calendar-linked-sync.ts',
   'plugins/plugin-assistant/src/services/device-actions/camera-contract.ts',
+  'plugins/plugin-assistant/src/services/device-actions/photo-library-contract.ts',
   'plugins/plugin-native-camera/src/definitions.ts',
   'plugins/plugin-native-camera/src/host-ports.ts',
   'plugins/plugin-assistant/src/services/device-actions/notes-query-result.ts',

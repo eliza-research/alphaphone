@@ -270,3 +270,12 @@ test('mixed full and selected media grants are not represented as full access',(
  assert.match(m.scopePresentation(mixed).detail,/Videos: selected/);
  assert.equal(m.validateLibraryResult({type:'photo_library_search'},{kind:'photo_library_search',scope:'partial',items:[],more:false}).scope,'partial');
 });
+
+test('the library contract is the shared elizaOS module, with Alpha named only in owner-facing text',()=>{
+ const wrapper=readFileSync('apps/app/src/runtime/photo-library.ts','utf8');
+ assert.match(wrapper,/export \* from '\.\.\/\.\.\/\.\.\/\.\.\/\.eliza\/client-features\/plugins\/plugin-assistant\/src\/services\/device-actions\/photo-library-contract\.ts';/);
+ assert.ok(wrapper.split('\n').length<20&&!/class LibraryCatalog|function validateLibraryOperation/.test(wrapper),'a wrapper, not a copy');
+ assert.match(m.scopePresentation(scope({scope:'denied'})).detail,/^Alpha cannot read your photo library\. Captures you make in Alpha/);
+ assert.match(m.reviewText('delete',1).detail,/cannot be undone by Alpha\.$/);
+ assert.match(m.describeLibraryOperation({type:'photo_library_search'}).description,/Android lets Alpha read/);
+});
