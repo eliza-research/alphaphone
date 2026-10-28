@@ -17,6 +17,8 @@ final class AlphaCanonicalNotifications {
  private static volatile AlphaCanonicalNotifications active;
  private static Intent waitingTap;
  private static JSONObject pendingTap;
+ private static final AtomicInteger restoration=new AtomicInteger();
+ private static boolean restoring;
  private final Context context;
  private volatile boolean stopped;
  private volatile ElizaAgentService.LocalStreamHandle stream;
@@ -27,6 +29,35 @@ final class AlphaCanonicalNotifications {
  private long attempt;
  private int failures;
  private AlphaCanonicalNotifications(Context context){this.context=context.getApplicationContext();}
+ /** Called by the canonical resident service after provisioning its new private boot token. */
+ static void resumeExisting(Context context){
+  if(ownsSession()||(android.os.Build.VERSION.SDK_INT>=33&&context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED))return;
+  NotificationManager manager=context.getSystemService(NotificationManager.class);if(manager==null||!manager.areNotificationsEnabled())return;
+  Context app=context.getApplicationContext();final int ticket;
+  synchronized(AlphaCanonicalNotifications.class){if(restoring||ownsSession())return;restoring=true;ticket=restoration.incrementAndGet();}
+  long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(60);SERIAL.execute(()->restore(app,ticket,deadline));
+ }
+ private static void restorationDone(int ticket){synchronized(AlphaCanonicalNotifications.class){if(ticket==restoration.get())restoring=false;}}
+ private static void restore(Context context,int ticket,long deadline){
+  if(ticket!=restoration.get())return;if(System.nanoTime()>=deadline){restorationDone(ticket);return;}
+  String saved=null;
+  try{
+   saved=new AlphaCredentialStore(context).readCredentialSlot(NativeNotificationSession.SLOT);if(saved==null){restorationDone(ticket);return;}
+   if(AlphaLocalAgentPlugin.restoreNotificationOwner(context)){restorationDone(ticket);ensure(context);return;}
+  }catch(NativeNotificationSession.Superseded replaced){restorationDone(ticket);return;}
+  catch(SecurityException|JSONException|IllegalArgumentException retired){try{if(ticket==restoration.get())AlphaLocalAgentPlugin.retireRejectedNotificationSession(context,saved);}catch(Exception ignored){}restorationDone(ticket);return;}
+  catch(Exception notReady){/* Read-only startup retry; never pairs or mints a session. */}
+  if(ticket==restoration.get())SERIAL.schedule(()->restore(context,ticket,deadline),2,TimeUnit.SECONDS);
+ }
+ static void forget(Context context){
+  restoration.incrementAndGet();stop();
+  try{
+   AlphaCredentialStore store=new AlphaCredentialStore(context);String saved=store.readCredentialSlot(NativeNotificationSession.SLOT),owner=null;
+   if(saved!=null)try{String value=new JSONObject(saved).optString("projectionOwner","");if(value.matches("[a-f0-9]{64}"))owner=value;}catch(JSONException invalid){}
+   store.removeCredentialSlot(NativeNotificationSession.SLOT);
+   if(owner!=null)NativeNotificationProjector.retireOwner(context,owner);
+  }catch(Exception unavailable){throw new IllegalStateException("Notification recovery authority could not be retired");}
+ }
  static boolean ownsSession(){AlphaCanonicalNotifications a=active;return a!=null&&!a.stopped;}
  static void ensure(Context context){
   if(!AlphaLocalAgentPlugin.enrollmentPresent()||(android.os.Build.VERSION.SDK_INT>=33&&context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED))return;
@@ -37,13 +68,16 @@ final class AlphaCanonicalNotifications {
    AlphaCanonicalNotifications next=new AlphaCanonicalNotifications(context);active=next;SERIAL.execute(next::connect);
   }
  }
- static void stop(){
+ static void stop(){detach(true);}
+ static void suspendForRestart(){detach(false);}
+ private static void detach(boolean retire){
+  synchronized(AlphaCanonicalNotifications.class){restoration.incrementAndGet();restoring=false;}
   AlphaCanonicalNotifications previous=active;active=null;
   // Unverified taps survive cold startup; the eventual owner/token check decides them.
-  synchronized(AlphaCanonicalNotifications.class){pendingTap=null;}
+  synchronized(AlphaCanonicalNotifications.class){if(retire)pendingTap=null;}
   if(previous==null)return;previous.stopped=true;
   ElizaAgentService.LocalStreamHandle h=previous.stream;if(h!=null)h.cancel();
-  SERIAL.execute(()->{if(previous.owner!=null)try{NativeNotificationProjector.retireOwner(previous.context,previous.owner);}catch(Exception ignored){}});
+  SERIAL.execute(()->{if(retire&&previous.owner!=null)try{NativeNotificationProjector.retireOwner(previous.context,previous.owner);}catch(Exception ignored){}});
  }
  private void check()throws Exception{
   if(stopped||active!=this)throw new SecurityException("Notification connection retired");
@@ -60,6 +94,7 @@ final class AlphaCanonicalNotifications {
    if(owner!=null&&!owner.equals(nextOwner))throw new SecurityException("Notification owner changed");
    owner=nextOwner;
    fence=new NativeOwnerReminderHost(context).reviewFence(identity);check();
+   AlphaLocalAgentPlugin.rememberNotificationOwner(context,session,identity);
    if(inbox==null)inbox=new NativeNotificationInbox(context.getNoBackupFilesDir().getCanonicalFile().toPath(),owner,record->{
     check();return AlphaLocalAgentPlugin.withNotificationSession(session,()->{
      check();boolean accepted=NativeNotificationProjector.post(context,owner,record);check();return accepted;
@@ -139,7 +174,7 @@ final class AlphaCanonicalNotifications {
  }
  static JSONObject pending()throws Exception{
   AlphaCanonicalNotifications a=active;if(a==null)return new JSONObject();a.check();
-  synchronized(AlphaCanonicalNotifications.class){if(pendingTap==null||pendingTap.getLong("expiresAt")<System.currentTimeMillis())return new JSONObject();return new JSONObject(pendingTap.toString());}
+  synchronized(AlphaCanonicalNotifications.class){if(pendingTap==null||pendingTap.getLong("expiresAt")<System.currentTimeMillis()||!a.identity.getString("subjectUserId").equals(pendingTap.getString("ownerId"))||!a.identity.getString("agentId").equals(pendingTap.getString("agentId")))return new JSONObject();return new JSONObject(pendingTap.toString());}
  }
  static void acknowledge(String token)throws Exception{
   AlphaCanonicalNotifications a=active;if(a==null)throw new SecurityException("Notification owner unavailable");a.check();JSONObject pending;
