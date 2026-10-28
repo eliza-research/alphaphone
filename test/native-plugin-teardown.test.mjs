@@ -313,4 +313,10 @@ test("shared Kotlin System activity launch methods have guarded product override
   for(const method of inherited) assert.ok(wrapper.includes(`@Override @PluginMethod public void ${method}(PluginCall call){LateLaunch.ask(call,()->super.${method}(call));}`),method);
 });
 
-test("Contacts generic permission requests remain image and foreground gated",()=>{const source=read("AlphaContactsPlugin.java");assert.match(source,/public void requestPermissions\(PluginCall call\)\{\s*if\(!foreground\(\)\)/);assert.match(source,/LateLaunch.ask\(call,\(\)->requestPermissionForAlias\("contacts",call,"permissionResult"\)\)/);});
+test("Contacts generic permission requests remain image and foreground gated",()=>{
+  // AlphaContactsPlugin is the shared AOSP-profile address book under Alpha's plugin name and image admission.
+  const alpha=read("AlphaContactsPlugin.java");assert.match(alpha,/public final class AlphaContactsPlugin extends AddressBookPlugin \{/);assert.match(alpha,/protected boolean admitted\(\)\{return AlphaImageCapabilities\.aospImage\(getContext\(\)\);\}/);assert.match(alpha,/protected String closedMessage\(\)\{return LateLaunch\.CLOSED;\}/);
+  const base=fs.readFileSync("vendor/eliza/plugins/plugin-native-contacts/android/src/main/java/ai/eliza/plugins/contacts/AddressBookPlugin.java","utf8");
+  assert.match(base,/public void requestPermissions\(PluginCall call\) \{\n    if \(!foreground\(\)\) \{/);assert.match(base,/launch\(call, \(\) -> requestPermissionForAlias\("contacts", call, "permissionResult"\)\)/);
+  assert.match(base,/launch\(call, \(\) -> startActivityForResult\(call, intent, "editorResult"\)\)/);assert.match(base,/catch \(IllegalStateException gone\) \{\n      call\.reject\(closedMessage\(\)\);/);
+});

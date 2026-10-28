@@ -148,10 +148,12 @@ test("telephony shares the bounded Contacts provider adapter", () => {
   assert.doesNotMatch(plugin,/ContactsReader/);
 });
 test("queued contacts cannot return data after access or lifecycle changes", () => {
-  const contacts=read(`${JAVA}/AlphaContactsPlugin.java`);
+  // AlphaContactsPlugin inherits the shared AOSP-profile address book's fence.
+  assert.match(read(`${JAVA}/AlphaContactsPlugin.java`),/extends AddressBookPlugin/);
+  const contacts=read('vendor/eliza/plugins/plugin-native-contacts/android/src/main/java/ai/eliza/plugins/contacts/AddressBookPlugin.java');
   assert.match(contacts,/handleOnResume/);assert.match(contacts,/ACTION_SCREEN_OFF/);
   assert.match(contacts,/handleOnPause/);assert.match(contacts,/handleOnDestroy/);
-  assert.match(contacts,/runOnUiThread/);assert.match(contacts,/generation\.current/);
+  assert.match(contacts,/runOnUiThread/);assert.match(contacts,/ticket == generation\.get\(\)/);
   // AlphaTelephonyPlugin's reads (contact search included) use the shared base's fence.
   const shared=read('vendor/eliza/plugins/plugin-native-messages/android/src/main/java/ai/eliza/plugins/messages/TelephonyPlugin.java');
   assert.match(shared,/handleOnResume/);assert.match(shared,/ACTION_SCREEN_OFF/);

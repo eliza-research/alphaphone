@@ -346,8 +346,10 @@ pin rollback does not by itself establish APK or OS rollback compatibility.
 The AOSP telephony contract additionally requires the canonical production image admission
 (`AlphaImageCapabilities`): release launcher, system install and the product-partition RRO.
 The feature XML is an additional telephony contract marker, never an alternative admission path.
-Contacts uses the bounded AlphaContacts adapter (shared `ContactsCatalog`) and its native capability
-response. The Phone view stays deferred in the renderer; on the image the dialer role surfaces are
+Contacts uses AlphaContacts, the shared AOSP-profile address book (`AddressBookPlugin` over
+`ContactsCatalog` in plugin-native-contacts) under Alpha's plugin name and image admission, and its
+native capability response. The Messages session (foreground-only provider rows, observer, read
+marking) and receipt labels are the shared `@elizaos/contracts/native-telephony-session`. The Phone view stays deferred in the renderer; on the image the dialer role surfaces are
 native (shared call screen and dial pad). Telephony contact reads recheck permission, unlock and lifecycle state
 before and after asynchronous provider reads.
 
