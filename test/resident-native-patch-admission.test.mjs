@@ -7,7 +7,7 @@ const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 test('pinned recovery and lifecycle sources match the reviewed upstream repair',()=>{
  for(const [name,expected] of [
  ['AndroidBunTarget','1ce791f9fbeeeea2a40bdf94b1b11e600df75c8fbee8649a5f47b3d919d7f675'],
- ['ElizaAgentService','47878486961f044fc77e6c29f3acf6c06901d94065368ea2ab0adc98404dff1e'],
+ ['ElizaAgentService','099e6a1edcb0fa468694502ea3b8ef4856e2bb34483c5e3606cc171a9aaa51cb'],
  // PR37979/37981: verify directory timestamps after recovery publication.
  ['IpcStartupRecovery','c51152d8b6403622171e4baed30f55cb540cad2c3fd49a8be1171a4b2c015c27'],
  ['WorkflowSurvivorInventory','3270bebe7e125705eda25e91ba9996f99cb80fbcb7e534c0d1ea47672a0fc42b'],

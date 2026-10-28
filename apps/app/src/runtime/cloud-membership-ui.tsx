@@ -14,7 +14,8 @@ function endLabel(endsAt:number):string {
 /** Approved bottom-sheet content; balances and actions remain bound to the current Cloud account. */
 export function CloudMembershipControls({balance,busy,error,connectionError,notice,email,credits,plan,endsAt,onRedeem,onAddFunds,onRefresh}:{balance:MembershipBalance;busy:boolean;error?:string;connectionError?:string;notice?:string;email?:string;credits?:{usd:string;observedAt:number}|null;plan?:SubscriptionView|null;endsAt?:number|null;onRedeem:(code:string)=>Promise<boolean>;onAddFunds:()=>void;onRefresh:()=>void}){
  const code=useRef<HTMLInputElement>(null),pending=useRef(false),codeEntryId=useId(),errorId=useId();
- const [codeVisible,setCodeVisible]=useState(false),[submitting,setSubmitting]=useState(false),[submissionError,setSubmissionError]=useState(''),[codeValue,setCodeValue]=useState('');
+ // A retained redemption error must keep its associated input exposed.
+ const [codeVisible,setCodeVisible]=useState(Boolean(error)),[submitting,setSubmitting]=useState(false),[submissionError,setSubmissionError]=useState(''),[codeValue,setCodeValue]=useState('');
  const active=plan?.kind==='active',disabled=busy||submitting;
  useEffect(()=>{if(codeVisible)code.current?.focus();},[codeVisible]);
  async function redeem(event:React.FormEvent){
