@@ -1280,7 +1280,8 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         if(streamed)replaceStream(value);
         else{streamed=true;this.setState((previous:Shell)=>({msgs:[...previous.msgs,{id:streamedId,from:'agent',text:value,card:null,streaming:true}]}));}
       },replyTarget,results=>{readyNavigation=results;});
-      await this.composerDraft?.commit();
+      // Only the composer's own send holds its draft; a prompt from elsewhere never settles it.
+      if(fromComposer)await this.composerDraft?.commit();
       if (!this.live||!sameChat()) return;
       const identity=reply.messageBinding;
       const planCard=planActionCard(reply.planAction);
@@ -1316,11 +1317,11 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       await transportSettled(attempt);
       if(!dispatched(attempt,e)){
         // Nothing reached the agent: put the text back and drop the unsent bubble. Never resend.
-        if(this.live){const inlineNotice=privateLocalPreviewEnabled&&this.composerDraft?.holding===true;this.setState((previous:Shell)=>({msgs:previous.msgs.filter((item:Shell)=>item.id!==userId)}));this.composerDraft?.release();if(reviewedSource&&!this.reviewedSourceDraft)this.reviewedSourceDraft=reviewedSource;if(!inlineNotice)this.toast(e instanceof NotDispatched?message:e instanceof AlphaClientError&&(['unconfigured','sensitive','busy'].includes(e.code)||(e as {refusedBeforeTurn?:unknown}).refusedBeforeTurn===true)?'Not sent. '+message:fromComposer?'Not sent. Your message is back in the composer.':'Not sent.');}
-        else this.composerDraft?.release();
+        if(this.live){const inlineNotice=fromComposer&&privateLocalPreviewEnabled&&this.composerDraft?.holding===true;this.setState((previous:Shell)=>({msgs:previous.msgs.filter((item:Shell)=>item.id!==userId)}));if(fromComposer)this.composerDraft?.release();if(reviewedSource&&!this.reviewedSourceDraft)this.reviewedSourceDraft=reviewedSource;if(!inlineNotice)this.toast(e instanceof NotDispatched?message:e instanceof AlphaClientError&&(['unconfigured','sensitive','busy'].includes(e.code)||(e as {refusedBeforeTurn?:unknown}).refusedBeforeTurn===true)?'Not sent. '+message:fromComposer?'Not sent. Your message is back in the composer.':'Not sent.');}
+        else if(fromComposer)this.composerDraft?.release();
       }else{
-        if(pageLeaving){this.composerDraft?.abandon();return;}
-        await this.composerDraft?.commit();
+        if(pageLeaving){if(fromComposer)this.composerDraft?.abandon();return;}
+        if(fromComposer)await this.composerDraft?.commit();
         // After Stop the controller cancels, announces and reconciles once; its notice is the one shown.
         const reconciling=!!connectionController.getSnapshot().replyNotice&&e instanceof AlphaClientError&&e.code==='cancelled';
         // The owner changed mid-turn: say it was interrupted, but never show the previous agent's partial
