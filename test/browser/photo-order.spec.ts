@@ -35,7 +35,7 @@ test('migrated mixed media pages use capture date and stable identity ties witho
 test('page boundary survives deletion and newer captures without repeating or skipping remaining media',async({page})=>{
  const result=await page.evaluate(async()=>{
   const {browserPhotoLibrary:p}=await import('/src/prototype/browser-camera.ts');const first=await p.list(),expected=await p.list({before:first.next}),boundary=first.items.at(-1)!;
-  await p.setTrashed({id:boundary.id,revision:boundary.mutationRevision,trashed:true});await p.deletePreparedTrash(await p.prepareDeleteTrash());
+  await p.setTrashed({id:boundary.id,revision:boundary.mutationRevision,trashed:true});await p.deletePreparedTrash(await p.prepareDeleteTrash({all:true}));
   await new Promise<void>((resolve,reject)=>{const r=indexedDB.open('alpha.browser.photos.v1');r.onsuccess=()=>{const db=r.result,tx=db.transaction('photos','readwrite');tx.objectStore('photos').put({...first.items[0],id:'new-photo',kind:'image',date:Date.now()});tx.oncomplete=()=>{db.close();resolve();};tx.onabort=()=>reject(tx.error);};r.onerror=()=>reject(r.error);});
   const actual=await p.list({before:first.next});let rejected=false;try{await p.list({before:'date:[null,"x"]'});}catch{rejected=true;}
   return {expected:expected.items.map(i=>i.id),actual:actual.items.map(i=>i.id),rejected};

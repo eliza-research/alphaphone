@@ -50,7 +50,7 @@ test('browser camera persists a real encoded frame, releases capture and restore
   let staleRejected=false;try{await library.setTrashed({id:row.id,revision:row.mutationRevision,trashed:true});}catch{staleRejected=true;}
   const current=await library.read({id:row.id});
   const trashed=await library.setTrashed({id:row.id,revision:current.mutationRevision,trashed:true});
-  const confirmation=await library.prepareDeleteTrash();
+  const confirmation=await library.prepareDeleteTrash({all:true});
   await library.setTrashed({id:row.id,revision:trashed.mutationRevision,trashed:false});
   const receipt=await library.deletePreparedTrash(confirmation);
   return {staleRejected,deleted:receipt.deletedIds.length,skipped:receipt.skippedIds.length,retained:(await library.list()).items.length};

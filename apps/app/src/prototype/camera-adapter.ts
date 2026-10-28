@@ -1,4 +1,8 @@
 import {validateCameraCaptureResult,type CameraCaptureResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/camera-contract.ts';
+// Shared camera host rules: explicit-denial classification and resume recovery that never re-prompts.
+import {cameraAccessDenied,restartAfterResume,type CameraAccessKind as AccessKind} from '../../../../.eliza/client-features/plugins/plugin-native-camera/src/host-ports.ts';
+// The shared camera session owns the preview/capture/recording lifecycle; this adapter presents it.
+import {createCameraSession} from '../../../../.eliza/client-features/plugins/plugin-native-camera/src/session.ts';
 import {reviewFileEmail} from './file-email-review';
 import {connectionController} from '../runtime/connection-ui';
 import type {MailAttachment} from '../runtime/inbox-attachment';
@@ -43,21 +47,7 @@ const nativeCamera = registerPlugin<{
 }>('ElizaCamera');
 /** A read of the current grant; it never shows Android's permission dialog. */
 const cameraAccess = registerPlugin<{ checkPermissions(): Promise<{ camera?: string }> }>('ElizaCamera');
-// camera-resume:begin
-/**
- * Whether a resume may restart a preview that stopped on a camera denial. Closing Android's own
- * permission dialog resumes the app too, so restarting on every resume asked for the camera again
- * straight after "Don't allow". Only an actual grant (made in Android settings) restarts the preview;
- * the read never prompts, and an unreadable state restarts nothing.
- */
-export async function restartAfterResume(state: () => { denied?: string; phase: string; disposed: boolean }, check: () => Promise<{ camera?: string }>): Promise<boolean> {
-  const stopped = () => { const now = state(); return now.denied === 'camera' && now.phase === 'error' && !now.disposed; };
-  if (!stopped()) return false;
-  let granted = false;
-  try { granted = (await check()).camera === 'granted'; } catch { /* Unknown access never restarts. */ }
-  return granted && stopped();
-}
-// camera-resume:end
+export {restartAfterResume};
 type LibraryAccess = {scope:'full'|'partial'|'selected'|'denied';images:'full'|'selected'|'denied';videos:'full'|'selected'|'denied'};
 type SavedPhoto = { name?:string;owned?:boolean;kind?: 'image' | 'video'; duration?: number; path?: string; id: string; image: string; width: number; height: number; date: number; revision: string; mutationRevision?: string; contentRevision?: string; trashed?: boolean; expiresAt?: number; favorite?: boolean };
 const nativeLibrary = registerPlugin<{
@@ -87,23 +77,15 @@ const nativeLibrary = registerPlugin<{
   albums(): Promise<{items:OwnedAlbum[]}>;
   changeAlbum(options:Record<string,unknown>): Promise<{status:string;id:string;revision:string}>;
   summary(): Promise<{favorites:number;videos:number;trash:number;canFavorite:boolean}>;
-  prepareDeleteTrash(options?:{items:{id:string;revision:string}[]}): Promise<{confirmation:string;count:number}>;
+  prepareDeleteTrash(options:{items:{id:string;revision:string}[]}|{all:true}): Promise<{confirmation:string;count:number}>;
   cancelDeleteTrash(options:{confirmation:string}): Promise<void>;
   deletePreparedTrash(options:{confirmation:string}): Promise<{status:string;deletedIds:string[];skippedIds:string[];failedIds:string[]}>;
   keepCapture(options:{dataBase64:string;operationId:string}): Promise<{status:string;id?:string;message?:string}>;
 }>('AlphaPhotos');
 const photoAttachments=registerPlugin<{readPhotoSelected(input:{id:string;revision:string}):Promise<MailAttachment&{size:number;sha256:string}>;cancelPhotoSelected():Promise<void>}>('AlphaMailAttachments');
 const device=registerPlugin<{openSettings(options:{page:'privacy'}):Promise<{status:string}>}>('AlphaDevice');
-type AccessKind='camera'|'microphone';
-/** Only an explicit permission denial gets settings recovery. Every other
- * failure keeps the generic retry message; nothing is inferred from timing. */
-export function mediaAccessDenied(error:unknown):AccessKind|undefined{
-  const value=error as {code?:unknown;name?:unknown;message?:unknown}|null;
-  const code=typeof value?.code==='string'?value.code:'',name=typeof value?.name==='string'?value.name:'',message=typeof value?.message==='string'?value.message:'';
-  if(code==='MICROPHONE_DENIED'||/microphone permission denied/i.test(message))return 'microphone';
-  if(code==='CAMERA_PERMISSION_DENIED'||name==='NotAllowedError'||name==='PermissionDeniedError'||/camera permission denied/i.test(message))return 'camera';
-  return undefined;
-}
+/** Only an explicit permission denial gets settings recovery (shared camera host rule). */
+export const mediaAccessDenied=cameraAccessDenied;
 /** Describe or extract text from a capture before anything reaches the
  * conversation draft. Pixels never leave the device; only reviewed text does. */
 const CAPTURE_STOP=new Set(['of','at','the','in','on','from','with','and','my','a','an','me','show','find']);
@@ -160,15 +142,12 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
   let closeScan:(()=>void)|undefined;
   const cancelScan=()=>{closeScan?.();closeScan=undefined;};
   let api: Bag | undefined;
-  let phase: 'off' | 'starting' | 'ready' | 'error' = 'off';
-  let epoch = 0, controlBusy = false, capturing = false, direction: 'front' | 'back' = 'back';
-  let flash = false, disposed = false, denied: AccessKind | undefined;
+  let direction: 'front' | 'back' = 'back';
+  let flash = false, disposed = false;
   let accessPanel: HTMLElement | undefined;
-  let recording = false, recordingStarting = false, duration = 0;
-  let finalizing: Promise<void> | undefined;
+  let duration = 0;
   let video: HTMLVideoElement | undefined, videoId = '';
   function closeVideo() { if (video) { video.pause(); video.removeAttribute('src'); video.load(); video.remove(); } video = undefined; videoId = ''; }
-  let stopping: Promise<void> = Promise.resolve();
   let captures: SavedPhoto[] = [];
   let photosApi: Bag | undefined, loaded = false, loading = false, next = '', libraryEpoch = 0;
   let libraryAccess:LibraryAccess|undefined,requestingLibraryAccess=false,libraryQuery='';
@@ -431,7 +410,7 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
     try {
       const selected=items?.map(row=>({id:nativeId(row.id),revision:row.mutationRevision||''}));
       if(permittedLibrary()&&(!selected?.length||selected.length>20)){owner.toast('Select up to 20 deleted items first.');return;}
-      const result=permittedLibrary()?{confirmation:'',count:selected!.length,items:selected}:await library.prepareDeleteTrash(selected?{items:selected}:undefined);
+      const result=permittedLibrary()?{confirmation:'',count:selected!.length,items:selected}:await library.prepareDeleteTrash(selected?{items:selected}:{all:true});
       if(disposed||!owner.isActive()||owner.get('photos').album!=='trash'){if(result.confirmation)void library.cancelDeleteTrash({confirmation:result.confirmation}).catch(()=>{});return;}
       if(result.count===0){void library.cancelDeleteTrash({confirmation:result.confirmation}).catch(()=>{});owner.toast('Recently deleted is empty.');return;}
       if(prepared?.confirmation)void library.cancelDeleteTrash({confirmation:prepared.confirmation}).catch(()=>{});
@@ -558,9 +537,19 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
   let requestedCaptureActive=false;
   const cameraViewVisible = () => !disposed && !document.hidden && !!api?.isActive() && !!document.querySelector(finder);
   const active = () => cameraViewVisible() && (requestedCaptureActive || !['sheet', 'full'].includes(api?.S.chat));
+  const session=createCameraSession({
+    camera,active,available:()=>browserMode||Capacitor.isPluginAvailable('ElizaCamera'),
+    preview:()=>({direction,resolution:{width:1280,height:720},mirror:direction==='front'}),
+    recording:()=>({audio:true,saveToGallery:true,quality:'medium',maxDuration:300,maxFileSize:104857600}),
+    hooks:{
+      recordingFinishing(){api?.set({rec:false});message('Saving video…',true);},
+      recordingSaved:adoptVideo,
+      recordingFailed(){if(!disposed)message('Video could not be finalized. No successful recording was confirmed.');},
+    },
+  });
   function hideAccess(){accessPanel?.remove();accessPanel=undefined;}
   function showAccess(kind:AccessKind|'unavailable'){
-    denied=kind==='unavailable'?undefined:kind;hideAccess();
+    hideAccess();
     const vf=document.querySelector<HTMLElement>(finder),screen=vf?.closest<HTMLElement>('[data-alpha-camera-root]')||vf?.closest<HTMLElement>('[data-alpha-layer]')||vf?.closest<HTMLElement>('[data-screen]');if(!screen)return;
     const panel=document.createElement('div');panel.setAttribute('role','alert');panel.setAttribute('aria-label',kind==='unavailable'?'Camera unavailable':kind==='camera'?'Camera access is off':'Microphone access is off');panel.dataset.alphaCameraAccess=kind;
     panel.style.cssText='position:absolute;left:16px;right:16px;top:38%;z-index:50;padding:16px;border-radius:20px;background:#1c1c1e;color:#fff;font:inherit;display:flex;flex-direction:column;gap:10px;text-align:center';
@@ -570,7 +559,7 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
     const actions=document.createElement('div');actions.style.cssText='display:flex;gap:8px;justify-content:center;flex-wrap:wrap';
     const action=(label:string,go:()=>void)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.style.cssText='min-height:44px;padding:0 16px;border-radius:22px;background:rgba(255,255,255,.16);color:#fff;font:inherit';b.onclick=go;actions.append(b);return b;};
     if(!browserMode&&kind!=='unavailable')action('Open Android settings',()=>{void device.openSettings({page:'privacy'}).catch(()=>message('Android settings could not open. Open Settings › Apps › Alpha › Permissions.'));});
-    action('Try again',()=>{if(kind==='camera'||kind==='unavailable'){hideAccess();void start(true);}else{hideAccess();denied=undefined;message('');}});
+    action('Try again',()=>{if(kind==='camera'||kind==='unavailable'){hideAccess();void start(true);}else{hideAccess();session.clearDenied('microphone');message('');}});
     if(kind==='unavailable'){
       panel.style.top='calc(var(--alpha-camera-top,52px) + 20px)';panel.style.padding='12px';panel.style.flexDirection='row';panel.style.alignItems='center';panel.style.textAlign='left';
       title.style.cssText='display:block;font-size:16px;line-height:1.25';detail.style.cssText='display:block;font-size:12px;line-height:1.3;color:rgba(255,255,255,.8)';detail.textContent='Try again when the camera is free.';
@@ -586,66 +575,43 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
   };
   async function stop() {
     // A scan review that opened a system picker stays open while Android covers the WebView.
-    closeQuestion?.();closeQuestion=undefined;if(!systemPickerActive())cancelScan(); ++epoch; phase = 'off'; controlBusy = false; mask(false); hideAccess();
-    if (recording || finalizing) await finishVideo();
-    stopping = stopping.then(async () => { try { if (browserMode || Capacitor.isPluginAvailable('ElizaCamera')) await camera.stopPreview(); } catch { /* startPreview resets native state before retrying. */ } });
-    await stopping;
+    closeQuestion?.();closeQuestion=undefined;if(!systemPickerActive())cancelScan(); mask(false); hideAccess();
+    await session.stop();
   }
   async function start(retry = false) {
-    if (recordingStarting || finalizing || !active() || phase === 'starting' || phase === 'ready' || (phase === 'error' && !retry)) return;
-    if (!browserMode && !Capacitor.isPluginAvailable('ElizaCamera')) { phase = 'error'; message('In-app camera is unavailable in this build.'); return; }
-    const token = ++epoch; phase = 'starting'; message('Starting camera…');
-    try {
-      await stopping;
-      if (token !== epoch || !active()) return;
-      await camera.startPreview({ direction, resolution: { width: 1280, height: 720 }, mirror: direction === 'front' });
-      if (token !== epoch || !active()) return;
-      phase = 'ready';hideAccess();if(denied==='camera')denied=undefined;if(browserMode){flash=false;api?.set({zoom:1,flash:false});}mask(true); message('');
-    } catch (error) {
-      if (token !== epoch) return;
-      phase = 'error'; mask(false);
-      if(mediaAccessDenied(error)==='camera'){message('');showAccess('camera');}
-      else {message('');showAccess('unavailable');}
-    }
+    const before=session.phase,starting=session.start(retry);
+    if(before!=='starting'&&session.phase==='starting')message('Starting camera…');
+    const outcome=await starting;
+    if(outcome.status==='ready'){hideAccess();if(browserMode){flash=false;api?.set({zoom:1,flash:false});}mask(true);message('');}
+    else if(outcome.status==='denied'){mask(false);message('');showAccess('camera');}
+    else if(outcome.status==='unavailable'){if(outcome.reason==='missing')message('In-app camera is unavailable in this build.');else{mask(false);message('');showAccess('unavailable');}}
   }
   async function control(task: () => Promise<unknown>, completed: () => void) {
-    if (phase !== 'ready' || controlBusy || capturing || recording || recordingStarting || finalizing) return;
-    controlBusy = true; const token = epoch;
-    try { await task(); if (token === epoch && active()) completed(); }
-    catch { if (token === epoch) message('This camera does not support that control, or the operation was cancelled.'); }
-    finally { if (token === epoch) controlBusy = false; }
+    const outcome=await session.control(task);
+    if(outcome==='done')completed();
+    else if(outcome==='failed')message('This camera does not support that control, or the operation was cancelled.');
   }
-  async function finishVideo() {
-    if (finalizing) return finalizing;
-    recording = false; api?.set({ rec: false });
-    finalizing = (async () => {
-      message('Saving video…',true);
-      try {
-        const receipt = await camera.stopRecording();
-        if (!/^(content:\/\/media\/|browser-video:\/\/\/)/.test(receipt.path) || receipt.duration <= 0 || receipt.fileSize <= 0) throw new Error('Incomplete recording');
-        const id = receipt.path.split('/').pop();
-        if (!id || !/^\d+$/.test(id)) throw new Error('Missing video identity');
-        const item = normalize(await library.read({ id: 'v:' + id }));
-        if (disposed) return;
-        captures = [item, ...captures.filter(row => row.id !== item.id)]; loaded = false;
-        api?.setView('photos', { nativeCaptureRevision: item.id });
-        message('');
-      } catch { if (!disposed) message('Video could not be finalized. No successful recording was confirmed.'); }
-      finally { finalizing = undefined; }
-    })();
-    return finalizing;
+  /** The session's recordingSaved hook: only a MediaStore (or browser) receipt read back from the library is kept. */
+  async function adoptVideo(receipt:VideoReceipt) {
+    if (!/^(content:\/\/media\/|browser-video:\/\/\/)/.test(receipt.path)) throw new Error('Incomplete recording');
+    const id = receipt.path.split('/').pop();
+    if (!id || !/^\d+$/.test(id)) throw new Error('Missing video identity');
+    const item = normalize(await library.read({ id: 'v:' + id }));
+    if (disposed) return;
+    captures = [item, ...captures.filter(row => row.id !== item.id)]; loaded = false;
+    api?.setView('photos', { nativeCaptureRevision: item.id });
+    message('');
   }
+  const finishVideo=()=>session.finishRecording();
   async function record() {
-    if (recording || finalizing) { await finishVideo(); return; }
-    if (recordingStarting || capturing || controlBusy || phase !== 'ready') return;
-    recordingStarting = true; const token = epoch; message('Starting video with microphone…',true);
-    try {
-      await camera.startRecording({ audio: true, saveToGallery: true, quality: 'medium', maxDuration: 300, maxFileSize: 104857600 });
-      recording = true; duration = 0;
-      if (token !== epoch || !active()) { await finishVideo(); return; }
-      api?.set({ rec: true }); message('');
-    } catch (error) { if (token === epoch && active()) { if(mediaAccessDenied(error)==='microphone'){message('');showAccess('microphone');} else message('Video could not start. Allow microphone access and tap the shutter to retry.'); } }
-    finally { recordingStarting = false; schedule(); }
+    if (session.recording || session.finalizing) { await finishVideo(); return; }
+    if (session.busy || session.phase !== 'ready') return;
+    message('Starting video with microphone…',true);
+    const outcome=await session.startRecording();
+    if(outcome==='recording'){duration=0;api?.set({ rec: true });message('');}
+    else if(outcome==='denied'){message('');showAccess('microphone');}
+    else if(outcome==='failed')message('Video could not start. Allow microphone access and tap the shutter to retry.');
+    schedule();
   }
   async function saveCameraPhoto(owner:Bag,showSaved:boolean):Promise<SavedPhoto>{
     // The pinned plugin scales width/height independently. Supplying only a
@@ -666,51 +632,55 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
     return item;
   }
   async function capture() {
-    if (phase !== 'ready') { await start(true); return; }
-    if (!api || capturing || controlBusy) return;
+    if (session.phase !== 'ready') { await start(true); return; }
+    if (!api || session.capturing || session.controlBusy) return;
     if (api.get('camera').mode === 'video') { await record(); return; }
     const scanning=api.get('camera').mode==='scan';
     cancelScan();
-    capturing = true; const token = epoch; const owner = api;
-    if(scanning){
-      // Scan mode keeps the frame in memory. Photos receives it only through Keep photo.
-      message('Capturing page…');
-      try{
-        const photo=await camera.capturePhoto({format:'jpeg',quality:85,saveToGallery:false});
-        if(photo.format!=='jpeg'||!photo.base64||photo.width<=0||photo.height<=0)throw new Error('Incomplete photo receipt');
-        if(disposed||token!==epoch||!active())return;
-        const bytes=Uint8Array.from(atob(photo.base64),char=>char.charCodeAt(0));
-        closeScan=openScanReview(new Blob([bytes],{type:'image/jpeg'}),(text,id)=>owner.saveScannedNote?.(text,id)??Promise.resolve(false),draft=>{if(disposed||!active())return false;return owner.reviewScannedCalendarDraft?.(draft)??false;},'unsaved',(_image,signal)=>keepScan(photo,signal,owner));
-        message('Page captured. It is not saved to Photos unless you keep it.');
-      }catch{if(token===epoch&&active())message('Page could not be captured. Nothing was saved.');}
-      finally{capturing=false;}
-      return;
-    }
-    message('Saving photo…',true);
-    try {
-      await saveCameraPhoto(owner,true);
-      if (token === epoch && active()) {
-        message('');
+    const owner = api;
+    await session.exclusive(async token=>{
+      if(scanning){
+        // Scan mode keeps the frame in memory. Photos receives it only through Keep photo.
+        message('Capturing page…');
+        try{
+          const photo=await camera.capturePhoto({format:'jpeg',quality:85,saveToGallery:false});
+          if(photo.format!=='jpeg'||!photo.base64||photo.width<=0||photo.height<=0)throw new Error('Incomplete photo receipt');
+          if(disposed||!session.current(token))return;
+          const bytes=Uint8Array.from(atob(photo.base64),char=>char.charCodeAt(0));
+          closeScan=openScanReview(new Blob([bytes],{type:'image/jpeg'}),(text,id)=>owner.saveScannedNote?.(text,id)??Promise.resolve(false),draft=>{if(disposed||!active())return false;return owner.reviewScannedCalendarDraft?.(draft)??false;},'unsaved',(_image,signal)=>keepScan(photo,signal,owner));
+          message('Page captured. It is not saved to Photos unless you keep it.');
+        }catch{if(session.current(token))message('Page could not be captured. Nothing was saved.');}
+        return;
       }
-    } catch { if (token === epoch && active()) message('Photo could not be saved. No successful capture was confirmed.'); }
-    finally { capturing = false; }
+      message('Saving photo…',true);
+      try {
+        await saveCameraPhoto(owner,true);
+        if (session.current(token)) message('');
+      } catch { if (session.current(token)) message('Photo could not be saved. No successful capture was confirmed.'); }
+    });
   }
   const takeRequestedPhoto=async(operationId:string,signal:AbortSignal,current:()=>void):Promise<CameraCaptureAttempt>=>{
-    let dispatched=false,ownsCapture=false;
+    const busy:CameraCaptureAttempt={status:'failed',summary:'Open Camera and finish the current capture before taking another photo.'};
+    let dispatched=false;
     try{
       signal.throwIfAborted();current();
-      if(!cameraViewVisible()||!api||capturing||controlBusy||recording||recordingStarting||finalizing)return {status:'failed',summary:'Open Camera and finish the current capture before taking another photo.'};
-      capturing=true;ownsCapture=true;requestedCaptureActive=true;
-      if(phase!=='ready')await start(true);
-      signal.throwIfAborted();current();
-      if(!active()||phase!=='ready')return {status:'failed',summary:'Camera access or preview is unavailable. No photo was taken.'};
-      const owner=api;dispatched=true;message('Taking photo…',true);
-      const item=await saveCameraPhoto(owner,false);
-      const cameraResult=validateCameraCaptureResult({version:1,kind:'camera_capture_photo',operationId,mediaId:nativeId(item.id),width:item.width,height:item.height,mime:'image/jpeg'},operationId);
-      if(active())message('');
-      return {status:'succeeded',summary:'Photo saved in Photos.',cameraResult};
+      const owner=api;
+      if(!cameraViewVisible()||!owner||session.busy)return busy;
+      const attempt=await session.exclusive(async():Promise<CameraCaptureAttempt>=>{
+        requestedCaptureActive=true;
+        try{
+          if(session.phase!=='ready')await start(true);
+          signal.throwIfAborted();current();
+          if(!active()||session.phase!=='ready')return {status:'failed',summary:'Camera access or preview is unavailable. No photo was taken.'};
+          dispatched=true;message('Taking photo…',true);
+          const item=await saveCameraPhoto(owner,false);
+          const cameraResult=validateCameraCaptureResult({version:1,kind:'camera_capture_photo',operationId,mediaId:nativeId(item.id),width:item.width,height:item.height,mime:'image/jpeg'},operationId);
+          if(active())message('');
+          return {status:'succeeded',summary:'Photo saved in Photos.',cameraResult};
+        }finally{requestedCaptureActive=false;schedule();}
+      });
+      return attempt.status==='busy'?busy:attempt.value;
     }catch{return {status:dispatched?'unknown':'failed',summary:dispatched?'The photo outcome is unconfirmed. Check Photos before taking another.':'The Camera request changed. No photo was taken.'};}
-    finally{if(ownsCapture){capturing=false;requestedCaptureActive=false;schedule();}}
   };
   requestedPhoto=takeRequestedPhoto;
   async function keepScan(photo:Photo,signal:AbortSignal,owner:Bag):Promise<string>{
@@ -734,21 +704,21 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
     }catch(error){if(!disposed&&owner.isActive())message(error instanceof Error&&error.message?error.message:'The selected image could not be read.');}
   }
   function chooseImage(){
-    if(!api||!active()||recording||recordingStarting||finalizing||capturing)return;
+    if(!api||!active()||session.recording||session.recordingStarting||session.finalizing||session.capturing)return;
     if(!browserMode){cancelScan();void chooseNativeImage(api);return;}
-    cancelScan();const owner=api,token=epoch;
+    cancelScan();const owner=api,token=session.token();
     closeScan=openCameraImageImport(async(image,signal)=>{
-      if(token!==epoch||!active())throw Error('Camera closed.');const row=await importBrowserPhoto(image,signal);loaded=false;
-      if(token===epoch&&active()){captures=[normalize(row),...captures.filter(item=>nativeId(item.id)!==row.id)];owner.setView('photos',{nativeCaptureRevision:row.id});message('');}
+      if(!session.current(token))throw Error('Camera closed.');const row=await importBrowserPhoto(image,signal);loaded=false;
+      if(session.current(token)){captures=[normalize(row),...captures.filter(item=>nativeId(item.id)!==row.id)];owner.setView('photos',{nativeCaptureRevision:row.id});message('');}
     },image=>{
-      if(token!==epoch||!active())return;
+      if(!session.current(token))return;
       closeScan=openScanReview(image,(text,id)=>owner.saveScannedNote?.(text,id)??Promise.resolve(false),draft=>{if(disposed||!active())return false;return owner.reviewScannedCalendarDraft?.(draft)??false;},'selected');
     });
   }
   function askCameraFrame(owner:Bag):boolean{
-    if(recording||recordingStarting||finalizing||capturing||phase!=='ready')return false;
-    closeQuestion?.();const token=epoch;
-    closeQuestion=reviewContentQuestion({name:'Camera frame',text:'',current:()=>token===epoch&&active(),compose:draft=>owner.composeContentQuestion(draft),image:async signal=>{const photo=await camera.capturePhoto({format:'jpeg',quality:85,saveToGallery:false});signal.throwIfAborted();if(!photo.base64)throw Error('Camera frame unavailable.');return new Blob([Uint8Array.from(atob(photo.base64),char=>char.charCodeAt(0))],{type:'image/jpeg'});}});
+    if(session.recording||session.recordingStarting||session.finalizing||session.capturing||session.phase!=='ready')return false;
+    closeQuestion?.();const token=session.token();
+    closeQuestion=reviewContentQuestion({name:'Camera frame',text:'',current:()=>session.current(token),compose:draft=>owner.composeContentQuestion(draft),image:async signal=>{const photo=await camera.capturePhoto({format:'jpeg',quality:85,saveToGallery:false});signal.throwIfAborted();if(!photo.base64)throw Error('Camera frame unavailable.');return new Blob([Uint8Array.from(atob(photo.base64),char=>char.charCodeAt(0))],{type:'image/jpeg'});}});
     return true;
   }
   /** The reviewed item is still the listed one at the revision the review started with:
@@ -799,12 +769,12 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
     queueMicrotask(schedule);
     if (!loaded && !loading) queueMicrotask(() => { void refresh(); });
     const data = render(st, currentApi);
-    data.bg = 'transparent'; data.vfBg = phase === 'ready' ? 'transparent' : '#000000';
-    data.drift = ''; data.zoomCss = ''; data.scanFound = false; data.scanning = false; data.rec = recording; data.recTime = `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}`; data.flOp = 0;
+    data.bg = 'transparent'; data.vfBg = session.phase === 'ready' ? 'transparent' : '#000000';
+    data.drift = ''; data.zoomCss = ''; data.scanFound = false; data.scanning = false; data.rec = session.recording; data.recTime = `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}`; data.flOp = 0;
     data.shutterHint=st.mode==='video'?'Stops and saves when you leave. Maximum 5 minutes or 100 MB.':'';
     if(st.mode==='scan')data.shutterLabel='Scan text';
     data.shutter = () => { void capture(); };
-    data.importAvailable=(browserMode||Capacitor.isPluginAvailable('DailyApps'))&&!recording&&!recordingStarting&&!finalizing;data.importImage=chooseImage;data.scanDocument=()=>{cancelScan();closeScan=openScanDocument();};
+    data.importAvailable=(browserMode||Capacitor.isPluginAvailable('DailyApps'))&&!session.recording&&!session.recordingStarting&&!session.finalizing;data.importImage=chooseImage;data.scanDocument=()=>{cancelScan();closeScan=openScanDocument();};
     data.flip = () => { const next = direction === 'back' ? 'front' : 'back'; void control(() => camera.switchCamera({ direction: next }), () => { direction = next; flash = false; currentApi.set({ front: next === 'front', flash: false, ...(browserMode?{zoom:1}:{}) }); }); };
     data.flashAvailable=!browserMode||browserCamera.flashAvailable();if(browserMode)data.flashLabel=browserCamera.lightingLabel(flash);
     data.toggleFlash = () => { const next = !flash; void control(() => camera.setSettings({ settings: { flash: next ? 'on' : 'off' } }), () => { flash = next; currentApi.set({ flash: next }); }); };
@@ -812,8 +782,8 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
     data.vfDown = () => {};
     data.vfUp = (event: PointerEvent) => { const bounds=browserMode?document.querySelector(finder)?.getBoundingClientRect():undefined;void control(() => camera.setFocusPoint({ x: Math.max(0, Math.min(1, (event.clientX-(bounds?.left??0)) / (bounds?.width||window.innerWidth))), y: Math.max(0, Math.min(1, (event.clientY-(bounds?.top??0)) / (bounds?.height||window.innerHeight))) }), () => message('')); };
     data.vfLeave = () => {};
-    data.modes = (data.modes || []).map((m: Bag) => ({ ...m, pick: () => { if (recording || recordingStarting || finalizing || capturing) return; const mode = m.label.toLowerCase(); if (['photo','video','scan'].includes(mode)){cancelScan();currentApi.set({ mode, rec: false, found: false });if(mode==='scan')message('Hold text steady, then tap Scan text. English recognition runs locally.');} } }));
-    data.ask = () => { if(!askCameraFrame(currentApi))message(phase==='ready'?'Finish the current capture, then ask again.':'Start the camera to ask about what it sees.'); };
+    data.modes = (data.modes || []).map((m: Bag) => ({ ...m, pick: () => { if (session.recording || session.recordingStarting || session.finalizing || session.capturing) return; const mode = m.label.toLowerCase(); if (['photo','video','scan'].includes(mode)){cancelScan();currentApi.set({ mode, rec: false, found: false });if(mode==='scan')message('Hold text steady, then tap Scan text. English recognition runs locally.');} } }));
+    data.ask = () => { if(!askCameraFrame(currentApi))message(session.phase==='ready'?'Finish the current capture, then ask again.':'Start the camera to ask about what it sees.'); };
     data.lastLabel=captures[0]?.kind==='video'?'Open last video':'Open last photo';
     if (captures[0]) {
       data.hasLast = true; data.noLast = false; data.lastBg = `url("${captures[0].image}") center / cover no-repeat`; data.lastTf = ''; data.lastFlt = '';
@@ -821,7 +791,7 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
     } else { data.hasLast = false; data.noLast = true; data.openLast = () => message('Take a photo first.'); }
     return data;
   };
-  module.back = () => { if (recording || recordingStarting || finalizing) { void stop(); return true; } return false; };
+  module.back = () => { if (session.recording || session.recordingStarting || session.finalizing) { void stop(); return true; } return false; };
   module.onLeave = () => { void stop(); };
   if (photosRender) views.photos.render = (st: Bag, currentApi: Bag) => {
     photosApi = currentApi;
@@ -945,19 +915,19 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
   }
   let polling = false;
   const timer = window.setInterval(async () => {
-    if (!recording || polling || finalizing) return;
+    if (!session.recording || polling || session.finalizing) return;
     polling = true;
-    try { const state = await camera.getRecordingState(); if (recording) { duration = state.duration; if (!state.isRecording) void finishVideo(); else api?.set({ nativeRecordingTick: duration }); } }
-    catch { if (recording) void finishVideo(); }
+    try { const state = await camera.getRecordingState(); if (session.recording) { duration = state.duration; if (!state.isRecording) void finishVideo(); else api?.set({ nativeRecordingTick: duration }); } }
+    catch { if (session.recording) void finishVideo(); }
     finally { polling = false; }
   }, 500);
   let queued = false;
   let libraryWatching=false;
   const watchLibrary=(want:boolean)=>{if(browserMode||want===libraryWatching)return;libraryWatching=want;void nativeLibrary.watchLibrary({active:want}).catch(()=>{libraryWatching=false;});};
-  const sync = () => { queued = false;watchLibrary(!disposed&&!document.hidden&&!!photosApi?.isActive()&&permittedLibrary());if((edit||videoEditSource)&&(!photosApi?.isActive()||photosApi.get('photos').open!==(edit?.source??videoEditSource)))cancelEdit(); mountVideo(); if (active()) { if (phase === 'off') void start(); else if (phase === 'ready') mask(true); } else if (phase !== 'off') void stop(); };
+  const sync = () => { queued = false;watchLibrary(!disposed&&!document.hidden&&!!photosApi?.isActive()&&permittedLibrary());if((edit||videoEditSource)&&(!photosApi?.isActive()||photosApi.get('photos').open!==(edit?.source??videoEditSource)))cancelEdit(); mountVideo(); if (active()) { if (session.phase === 'off') void start(); else if (session.phase === 'ready') mask(true); } else if (session.phase !== 'off') void stop(); };
   const schedule = () => { if (!queued && !disposed) { queued = true; requestAnimationFrame(sync); } };
   const observer = new MutationObserver(schedule); observer.observe(document.body, { childList: true, subtree: true });
-  const resize = () => { if (phase === 'ready') mask(true); schedule(); };
+  const resize = () => { if (session.phase === 'ready') mask(true); schedule(); };
   const visibility = () => { if (document.hidden) { retirePhotoRead();watchLibrary(false);cancelEdit();closeVideo();if(permittedLibrary()){++libraryEpoch;captures=[];albumRows=[];trash=[];albumNext='';trashNext='';albumKey='';counts=undefined;++countsEpoch;countsBusy=false;++albumsEpoch;albumsBusy=false;albumsLoaded=false;customAlbums=[];++albumEpoch;++trashEpoch;preview=undefined;selection=undefined;next='';loaded=false;photosApi?.set({open:null,nativePhotoSelection:null,nativeCaptureRevision:Date.now()});}void stop(); } else { loaded = false; if (photosApi?.isActive()) void refresh(); schedule(); } };
   let libraryChangeHandle:{remove():Promise<void>}|undefined;
   function invalidateLibrary(preserveViewer=false){
@@ -994,7 +964,7 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
   const pageHide=()=>{cancelEdit();closeVideo();void stop();};
   document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', pageHide); window.addEventListener('resize', resize); schedule();
   // Returning from Android settings: a camera grant restarts the preview without another tap.
-  const resumed=()=>{void restartAfterResume(()=>({denied,phase,disposed}),()=>cameraAccess.checkPermissions()).then(restart=>{if(restart){phase='off';schedule();}});};
+  const resumed=()=>{void restartAfterResume(()=>({denied:session.denied,phase:session.phase,disposed}),()=>cameraAccess.checkPermissions()).then(restart=>{if(restart){session.rearm();schedule();}});};
   let resumeHandle:{remove():Promise<void>}|undefined;
   void DailyApps.addListener('appResumed',resumed).then(handle=>{if(disposed)void handle.remove();else resumeHandle=handle;}).catch(()=>{});
   return () => { if(requestedPhoto===takeRequestedPhoto)requestedPhoto=undefined;window.clearTimeout(noticeTimer);noticeGeneration++;watchLibrary(false);deviceLibrary.dispose();captureQuestion=undefined;void libraryChangeHandle?.remove();hideAccess();void resumeHandle?.remove();window.removeEventListener('alpha:albums-document-changed',albumsChanged);if(scanApi&&prototype.api===scanApi)prototype.api=originalApi;disposed = true;cancelEdit();endHold();selection=undefined; clearInterval(timer); closeVideo(); observer.disconnect(); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', pageHide); window.removeEventListener('resize', resize); void stop(); style.remove(); captures = []; module.render = render; module.onLeave = leave; module.back = cameraBack; if (views.photos) { views.photos.render = photosRender; views.photos.back = photosBack; views.photos.onLeave = photosLeave; } };

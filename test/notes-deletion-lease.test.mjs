@@ -13,9 +13,10 @@ test('the native passes leave a leased row untouched and finish one whose lease 
 
 test('finishPermanentDeletions consults the lease before any recording or Notes readback is acted on',()=>{
  const source=readFileSync(nativeSource('AlphaNoteAudioPlugin.java'),'utf8');
- const finish=source.slice(source.indexOf('static int finishPermanentDeletions('),source.indexOf('private static boolean finishPermanentLocked('));
+ const finish=source.slice(source.indexOf('static int finishPermanentDeletions('),source.indexOf('static List<String> trashEntrySpans('));
  const bound=finish.indexOf('boolean bound=Boolean.TRUE.equals(row.opt("permanent"))&&!NotesDeletionLease.held(row,now)&&');
- assert.ok(bound>0&&bound<finish.indexOf('finishPermanentLocked(context'),'a held row is never bound, so it is kept byte for byte');
+ // The recording steps are the shared store's (elizaOS plugin-native-media RecordingStore.finishPermanent).
+ assert.ok(bound>0&&bound<finish.indexOf('recordings(context).finishPermanent('),'a held row is never bound, so it is kept byte for byte');
  // Both native entry points run the same pass; Trash expiry already skips every row with a recovery row.
  assert.match(source,/private void sweepTrashOnStart\(\)\{[\s\S]*?finishPermanentDeletions\(getContext\(\),System\.currentTimeMillis\(\)\)/);
  assert.match(source,/public Result doWork\(\)\{[\s\S]*?finishPermanentDeletions\(getApplicationContext\(\),System\.currentTimeMillis\(\)\)/);
