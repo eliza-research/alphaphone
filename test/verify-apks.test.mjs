@@ -199,6 +199,8 @@ for (const mode of ['native', 'test-mocks', 'cloud', 'wrong-cloud-profile']) tes
   for (const name of ['scripts', 'bin']) fs.mkdirSync(path.join(dir, name));
   fs.symlinkSync(path.join(root, 'scripts/audit-production-bundle.mjs'), path.join(dir, 'scripts/audit-production-bundle.mjs'));
   fs.writeFileSync(path.join(dir, 'scripts/stage-local-agent-sources.mjs'), '');
+  // The generated Gradle host is written before the source snapshot; the stub stands in for it.
+  fs.writeFileSync(path.join(dir, 'scripts/android-host.mjs'), '');
   fs.writeFileSync(path.join(dir, 'scripts/source-snapshot.mjs'), 'console.log(JSON.stringify({digest:"synthetic-stable-source"}));');
   fs.writeFileSync(path.join(dir, 'bin/npm'), `#!/usr/bin/env node
 import fs from 'node:fs';

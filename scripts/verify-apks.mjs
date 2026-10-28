@@ -35,7 +35,8 @@ import {
   auditBundle, distributionProblems, extractWebPayload, readBuildFlags, signerDigest, validateApk, verifyOwnerRouteTable,
 } from "./apk.mjs";
 import { androidEnv, tool } from "./toolchain.mjs";
-import { readReleaseSigner, releaseAdmission, RELEASE_SIGNER_FILE } from "./build-android.mjs";
+import { readApkEntries } from "../vendor/eliza/packages/app/scripts/mobile/artifact-inspection/apk-distribution.mjs";
+import { readReleaseSigner, releaseAdmission, RELEASE_SIGNER_FILE, SIGNING_ENV } from "./build-android.mjs";
 import { BUN_ENTRY } from "./generate-licenses.mjs";
 import { fontLicenceCheck, fontLicenceLine } from "./font-license-blockers.mjs";
 import { licenceFlagLines, licenceFlagRecords } from "./licence-policy.mjs";
@@ -87,7 +88,7 @@ function releaseFile(dir, variant) {
  * Records whether on-device voice is packaged; qualification is never inferred from bytes.
  */
 function voiceHostAdmission(file) {
-  const names = execFileSync("unzip", ["-Z1", file], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\n").filter(Boolean);
+  const names = readApkEntries(file);
   const root = `${VOICE_BUNDLE_ASSETS}/`, manifestEntry = `${root}manifest.json`;
   const bundle = names.filter(name => name.startsWith(root));
   if (!bundle.length) return { packaged: false, asr: false, differences: [], qualified: false };
@@ -274,7 +275,7 @@ function listenerFacts(file, mode, signed) {
   Object.assign(facts, apkPermissions(dump));
   try { checkListenerPermissions(dump, renderSensePermissions(identity.appId), listenerPackage(identity.appId)); }
   catch (error) { facts.permissionProblem ??= error.message; }
-  const entries = execFileSync("unzip", ["-Z1", file], { encoding: "utf8", maxBuffer: 64 << 20 }).split("\n").filter(Boolean);
+  const entries = readApkEntries(file);
   try {
     const abis = checkListenerSpeechBundle(entries, readVoiceHost("."), entry => execFileSync("unzip", ["-p", file, entry], { encoding: "utf8", maxBuffer: 1 << 20 }));
     facts.voiceBundle = { packaged: true, abis };
@@ -347,5 +348,5 @@ const fontItems = new Map(release.flatMap(row => [...row.fontLicenceCheck.items,
 for (const [item, blocks] of fontItems) console.warn(fontLicenceLine(item, blocks));
 const unsigned = release.filter(row => !row.signed);
 if (unsigned.length)
-  console.warn(`Unsigned releases (set ELIZAOS_KEYSTORE_PATH, ELIZAOS_KEYSTORE_PASSWORD, ELIZAOS_KEY_ALIAS and ELIZAOS_KEY_PASSWORD to sign): ${unsigned.map(row => row.file).join(", ")}`);
+  console.warn(`Unsigned releases (set ${SIGNING_ENV.join(", ")} to sign; android/consumer-host.json names them): ${unsigned.map(row => row.file).join(", ")}`);
 console.log(`Verified ${results.length} APKs in ${directory} (APK-build evidence only; not an install, emulator or device result).`);

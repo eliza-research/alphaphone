@@ -1,4 +1,7 @@
-"""Execute the production Groovy ABI selection and build-type filters without Gradle tasks."""
+"""Execute the production Groovy ABI selection and build-type filters without Gradle tasks.
+
+Debug filters come from the runtime selection in android/app/product.gradle (the generated
+host applies it after its own policy); release filters are the descriptor's fixed list."""
 import json, os, shutil, subprocess, tempfile, unittest
 from pathlib import Path
 
@@ -23,9 +26,12 @@ class AndroidAppAbis(unittest.TestCase):
         groovy_json = GROOVY_JARS[0].with_name(GROOVY_JARS[0].name.replace('groovy-', 'groovy-json-'))
         self.assertTrue(groovy_json.is_file(), 'Matching Groovy JSON library is required')
         classpath = os.pathsep.join([str(GROOVY_JARS[0]), str(groovy_json)])
-        source = (ROOT/'android/app/build.gradle').read_text()
-        selection = source[source.index('// Use the same explicit target'):].split('android {', 1)[0]
+        source = (ROOT/'android/app/product.gradle').read_text()
+        selection = source[source.index('// Debug ABIs use the same explicit target'):].split('def envValue', 1)[0]
         build_types = block(source, ' buildTypes {')
+        descriptor = json.loads((ROOT/'android/consumer-host.json').read_text())['profile']['buildTypes']
+        release_filters = descriptor['release']['abiFilters']
+        self.assertNotIn('abiFilters', descriptor.get('debug', {}), 'the descriptor must leave debug ABIs to the runtime selection')
         driver = """class GradleException extends RuntimeException { GradleException(String s) { super(s) } }
 class TypeConfig {
   List abiFilters = []
@@ -40,7 +46,7 @@ def testMocksEnabled = false
 def releaseSigningReady = false
 def getDefaultProguardFile = { name -> name }
 def debug = { Closure body -> def config = new TypeConfig(); body.delegate = config; body.resolveStrategy = Closure.DELEGATE_FIRST; body(); observed.debug = config.abiFilters }
-def release = { Closure body -> def config = new TypeConfig(); body.delegate = config; body.resolveStrategy = Closure.DELEGATE_FIRST; body(); observed.release = config.abiFilters }
+observed.release = new groovy.json.JsonSlurper().parseText(args[1])
 """ + build_types + """
 println(observed.debug.join(',') + '|' + observed.release.join(','))
 """
@@ -48,7 +54,7 @@ println(observed.debug.join(',') + '|' + observed.release.join(','))
         clean.update(env)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)/'selection.groovy'; path.write_text(driver)
-            return subprocess.run([str(JAVA), '-Xmx128m', '-cp', classpath, 'groovy.ui.GroovyMain', str(path), json.dumps(props or {})], env=clean, capture_output=True, text=True)
+            return subprocess.run([str(JAVA), '-Xmx128m', '-cp', classpath, 'groovy.ui.GroovyMain', str(path), json.dumps(props or {}), json.dumps(release_filters)], env=clean, capture_output=True, text=True)
 
     def test_default_dual_and_explicit_android_arm64(self):
         for env, expected in [({}, 'arm64-v8a,x86_64|arm64-v8a'), ({'ELIZA_ANDROID_BUN_TARGET':'android', 'ELIZA_ANDROID_TARGET_ABIS':'arm64-v8a'}, 'arm64-v8a|arm64-v8a'), ({'ELIZA_ANDROID_TARGET_ABIS':'arm64-v8a,x86_64'}, 'arm64-v8a,x86_64|arm64-v8a')]:

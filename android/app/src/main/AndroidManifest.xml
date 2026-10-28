@@ -113,7 +113,7 @@
    <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
    <intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="alphaphone" android:host="cloud-delegation"/></intent-filter>
    <!-- Verified App Links are build-gated: with the Gradle property ELIZAOS_APP_LINK_HOST set,
-        android/app/build.gradle overlays https autoVerify filters for ${appLinkHost} with pathPrefix
+        android/app/product.gradle overlays https autoVerify filters for ${appLinkHost} with pathPrefix
         /alphaphone/cloud-delegation and path /alphaphone/auth/callback (the in-app Eliza Cloud sign-in
         return, AlphaCloudSignInPlugin). Unset (the default), no such filter exists. Set it only after
         scripts/render-assetlinks.mjs output (release signer, never a debug or placeholder fingerprint)

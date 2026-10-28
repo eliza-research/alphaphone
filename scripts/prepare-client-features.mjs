@@ -73,12 +73,10 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/ui/src/voice/pcm-wave.ts',
   "packages/ui/src/utils/reminder-presentation.ts",
   "plugins/plugin-browser/src/native-client-command.ts",
-  'packages/core/src/types/view-capability.ts',
+  'packages/core/src/schema-types.ts',
   'packages/core/src/types/json.ts',
   'packages/core/src/types/schema.ts',
-  'packages/core/src/schema-types.ts',
-  'packages/ui/src/api/transport.ts',
-  'packages/ui/src/api/client-base.ts',
+  'packages/core/src/types/view-capability.ts',
   'plugins/plugin-calendar/src/meetings/auto-join-types.ts',
   'packages/core/src/types/permissions.ts',
   'packages/contracts/src/lifeops/gmail.ts',
@@ -199,39 +197,16 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
 
 
   if(projectVoice){
-  // Only non-voice client types need a consumer projection. The voice client,
-  // logger contracts and renderer observations are browser-safe upstream entries.
+  // Upstream publishes every renderer type as a leaf entry (@elizaos/core/schema-types,
+  // @elizaos/ui/api/transport, plugin-calendar auto-join-types); copied files stay byte-exact.
+  // Only two re-export maps remain: they select upstream leaves for bare package specifiers
+  // and carry no declarations of their own.
   const project = (name, text) => source.set(name, {bytes:Buffer.from(text),mode:'100644',sha256:hash(Buffer.from(text))});
-  const text = name => source.get(name).bytes.toString();
-
   project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\nexport * from "./packages/contracts/src/device-reviews";\n');
-  // Project only existing public type declarations; do not bundle host/client implementations.
-  const declarations = (name, names) => names.map(declaration => {
-    const escaped = declaration.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const content = text(name);
-    const interfaces = [...content.matchAll(new RegExp('^export interface ' + escaped + '\\s*\\{[\\s\\S]*?^\\}', 'gm'))];
-    const aliases = [...content.matchAll(new RegExp('^export type ' + escaped + '\\s*=[\\s\\S]*?;', 'gm'))];
-    const matches = [...interfaces, ...aliases];
-    if (matches.length !== 1) throw Error('Review changed client type declaration: ' + name + ':' + declaration);
-    return matches[0][0];
-  }).join('\n') + '\n';
-  project('alpha-voice-core-types.ts',declarations(
-    'packages/core/src/types/view-capability.ts', ['ViewCapabilityParameter', 'ViewCapability']) + declarations(
-    'packages/core/src/types/json.ts', ['JsonPrimitive', 'JsonValue']) + declarations(
-    'packages/core/src/types/schema.ts', ['ActionParameterSchema', 'JSONSchema']));
-  const clientName = 'packages/ui/src/api/client-base.ts';
-  const fetchMatches = [...text(clientName).matchAll(/^  async fetch<T>\([\s\S]*?^  \): Promise<T> \{/gm)];
-  if (fetchMatches.length !== 1) throw Error('Review changed ElizaClient fetch declaration.');
-  const fetchSignature = fetchMatches[0][0].replace(/^  async /, '').replace(/ \{$/, '').trim();
-  project('alpha-client-fetch-types.ts', 'export interface ElizaClient { ' + fetchSignature + '; }\n');
-  source.delete(clientName);
-
   project('alpha-voice-core-protocol.ts','export {ElizaError} from "./packages/core/src/errors";\nexport {redactTrailingArgs} from "./packages/core/src/security/log-redaction";\nexport {parseViewInteractionClientId, AGENT_SURFACE_CAPABILITY_IDS} from "./packages/core/src/views/view-interact-protocol";\nexport {findViewActionHandoff, type ViewActionHandoff} from "./packages/core/src/views/view-action-handoff";\nexport type {PermissionState} from "./packages/core/src/types/permissions";\n');
-
-
   }
   const files = Object.fromEntries([...source].map(([name, file]) => [name, file.sha256]));
-  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?10:0, files };
+  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?11:0, files };
   const parent = path.join(root, '.eliza'), destination = path.join(parent, 'client-features');
   regularPath(parent, true);
   const exists = regularPath(destination, true), stamp = path.join(destination, '.source.json');

@@ -25,7 +25,7 @@
  *
  * Publishing is the operator's step (docs/human-actions.md H-13). The https
  * autoVerify filter itself is emitted only by a build with ELIZAOS_APP_LINK_HOST set
- * (android/app/build.gradle); appLinkFilters() reads it back from an APK manifest dump.
+ * (android/app/product.gradle); appLinkFilters() reads it back from an APK manifest dump.
  */
 import fs from "node:fs";
 import path from "node:path";

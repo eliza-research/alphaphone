@@ -6,8 +6,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import {hostIdentity, readHostDescriptor} from '../scripts/android-host.mjs';
+
 const identity = JSON.parse(fs.readFileSync('app.config.json', 'utf8'));
-const gradle = fs.readFileSync('android/app/build.gradle', 'utf8');
+// The generated host's app script comes from the pinned upstream template.
+const gradle = fs.readFileSync('vendor/eliza/packages/app/scripts/mobile/android/consumer-host/app.gradle', 'utf8');
 const manifest = fs.readFileSync('android/app/src/main/AndroidManifest.xml', 'utf8');
 
 function sources(dir, out = []) {
@@ -49,10 +52,15 @@ test('app.config.json carries the Alpha Phone identity', () => {
 });
 
 test('the Android build derives namespace, applicationId and app_name from app.config.json', () => {
-  assert.match(gradle, /def identity = new groovy\.json\.JsonSlurper\(\)\.parse\(file\('\.\.\/\.\.\/app\.config\.json'\)\)/);
+  // scripts/android-host.mjs hands app.config.json to the generator; the descriptor carries no identity.
+  assert.deepEqual(hostIdentity('.'), {appId: identity.appId, appName: identity.appName, version: identity.version, versionCode: identity.versionCode});
+  const {profile} = readHostDescriptor('.');
+  assert.doesNotMatch(JSON.stringify(profile), /applicationId|appName|"identity"/);
+  assert.match(gradle, /^def identity = profile\.identity$/m);
   assert.match(gradle, /^\s*namespace identity\.appId\s*$/m);
   assert.match(gradle, /^\s*applicationId identity\.appId\s*$/m);
-  assert.match(gradle, /resValue 'string', 'app_name', identity\.appName/);
+  // The generator writes the non-translatable app_name from identity.appName.
+  assert.match(fs.readFileSync('vendor/eliza/packages/app/scripts/mobile/android/consumer-host.mjs', 'utf8'), /<string name="app_name" formatted="false" translatable="false">/);
   assert.doesNotMatch(gradle, /applicationId\s+['"]/, 'no hard-coded applicationId');
   assert.doesNotMatch(gradle, /applicationIdSuffix/);
 });

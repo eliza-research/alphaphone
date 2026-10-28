@@ -33,7 +33,11 @@ const snapshot=()=>JSON.parse(execFileSync(process.execPath,['scripts/source-sna
 // before freezing the baseline. Gradle repeats this stage; final equality below
 // still rejects any non-deterministic regeneration or later source drift.
 const nativeStageLog=fs.openSync(path.join(destination,'native-source-prestage.log'),'wx');
-try{execFileSync(process.execPath,['scripts/stage-local-agent-sources.mjs'],{stdio:['ignore',nativeStageLog,nativeStageLog],timeout:180000,env:buildEnv});}
+try{
+ // The generated Gradle host is a build input too; android:build regenerates identical bytes.
+ execFileSync(process.execPath,['scripts/android-host.mjs'],{stdio:['ignore',nativeStageLog,nativeStageLog],timeout:180000,env:buildEnv});
+ execFileSync(process.execPath,['scripts/stage-local-agent-sources.mjs'],{stdio:['ignore',nativeStageLog,nativeStageLog],timeout:180000,env:buildEnv});
+}
 finally{fs.closeSync(nativeStageLog);}
 // Capacitor generates res/xml/config.xml, an authenticated native build input.
 // Complete normal sync before freezing; the build repeats sync and equality

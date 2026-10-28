@@ -70,7 +70,9 @@ AOSP checks to accommodate a compressed APK.
 
 After the normal packaged-runtime build and APK verification have passed, build an
 unsigned **debug** launcher with the same runtime profile, version overrides and
-web assets. The init script changes only debug signing. For an explicit Cloud QA
+web assets. The init script changes only debug signing. The Gradle wrapper and build
+files are generated from `android/consumer-host.json` (`npm run android:host`; the
+packaged-runtime build has already done this). For an explicit Cloud QA
 build, run from the repository root:
 
 ```sh
@@ -139,7 +141,7 @@ privileged permission whitelist is fabricated for a thin launcher.
 ## App Links
 
 **Build gate.** A default build declares no https `autoVerify` filter. With the Gradle property
-`ELIZAOS_APP_LINK_HOST` set, `android/app/build.gradle` overlays verified filters on that host for
+`ELIZAOS_APP_LINK_HOST` set, `android/app/product.gradle` overlays verified filters on that host for
 `/alphaphone/cloud-delegation` (prefix) and `/alphaphone/auth/callback` (exact path, the in-app
 Eliza Cloud sign-in return). Steward returns sign-in only to `eliza.app`, so the sign-in return
 works with `ELIZAOS_APP_LINK_HOST=eliza.app`. Test-mocks builds always add

@@ -54,7 +54,7 @@
       "evidence": [
         "scripts/build-android.mjs",
         "scripts/verify-apks.mjs",
-        "android/app/build.gradle",
+        "android/consumer-host.json",
         "apps/app/src/runtime/connection-ui.tsx",
         "scripts/android-build-preflight.mjs",
         "scripts/release-blockers.mjs",

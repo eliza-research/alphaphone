@@ -13,17 +13,12 @@ pull an upstream workspace dependency graph into the renderer.
 
 ## Android wiring for the build owner
 
-In `android/settings.gradle`:
+The Gradle host is generated from `android/consumer-host.json` by the pinned upstream
+consumer-host generator (`npm run android:host`). The camera module is one of its
+`profile.modules` entries, linked into the app:
 
-```groovy
-include ':eliza-camera'
-project(':eliza-camera').projectDir = new File('../vendor/eliza/plugins/plugin-native-camera/android')
-```
-
-In `android/app/build.gradle` dependencies:
-
-```groovy
-implementation project(':eliza-camera')
+```json
+{ "name": "eliza-camera", "source": { "root": "upstream", "path": "plugins/plugin-native-camera/android" } }
 ```
 
 In `MainActivity.java`, alongside the existing plugin registration before
@@ -33,7 +28,8 @@ In `MainActivity.java`, alongside the existing plugin registration before
 registerPlugin(ai.eliza.plugins.camera.CameraPlugin.class);
 ```
 
-The current root build already declares Kotlin 2.2.20 and AGP 8.13.0. Upstream
+The generated root build declares Kotlin 2.2.20 and AGP 8.13.0 (the generator's
+reviewed toolchain). Upstream
 applies `org.jetbrains.kotlin.android`, targets Java/Kotlin 21 and declares
 CameraX 1.5.3 and ExifInterface 1.4.2. Its manifest merges CAMERA, RECORD_AUDIO
 and WRITE_EXTERNAL_STORAGE (maximum API 28). This adapter does not request

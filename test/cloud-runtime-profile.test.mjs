@@ -27,7 +27,7 @@ test('Cloud profile checks the explicitly selected prepared source even when ano
  assert.notDeepEqual(preparedRuntimeProblems(process.cwd(),missing,{runtimeProfile:'cloud'}),[]);
 });
 test('Cloud profile keeps native speech and embeddings guards as default',()=>{
- const gradle=fs.readFileSync('android/app/build.gradle','utf8');
+ const gradle=fs.readFileSync('android/app/product.gradle','utf8');
  assert.match(gradle,/ELIZA_RUNTIME_PROFILE.*native/);
  assert.match(gradle,/runtimeProfile == 'cloud'.*runtime-profile.mjs/);
  assert.match(fs.readFileSync('android/local-speech/build.gradle','utf8'),/unpackaged \|\| cloudProfile/);

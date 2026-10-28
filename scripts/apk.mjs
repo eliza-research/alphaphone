@@ -1,10 +1,15 @@
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { androidEnv, tool } from "./toolchain.mjs";
+import {
+  apkDistributionProblems, extractApkWebPayload, parseApkSignerDigest, readApk, readApkSignerDigest,
+} from "../vendor/eliza/packages/app/scripts/mobile/artifact-inspection/apk-distribution.mjs";
+import { parseXmlTree } from "../vendor/eliza/packages/app/scripts/lib/android-manifest-facts.mjs";
+export { manifestFacts, parseXmlTree } from "../vendor/eliza/packages/app/scripts/lib/android-manifest-facts.mjs";
 
+// Alpha's distribution policy as data for the upstream APK inspection
+// (vendor/eliza/packages/app/scripts/mobile/artifact-inspection/apk-distribution.mjs).
 // Debug-only native hooks that may exist only in an explicit test-mocks build
 // (src/testMocks attached to debug variants when ELIZA_DEV_ALLOW_TEST_MOCKS=1).
 export const DEVELOPMENT_CLASSES = Object.freeze([
@@ -36,45 +41,34 @@ export const EXPORTED_COMPONENTS = Object.freeze({
 // in-browser model directory public/browser-speech/) never ship.
 export const REMOVED_SPEECH_ENTRY = /(?:\.on{2}x$|libon{2}xruntime|libsherpa|k2fsa|ort-wasm|^assets\/public\/browser-speech\/)/i;
 export const REMOVED_SPEECH_CLASSES = Object.freeze(["Lcom/k2fsa/", "Lai/eliza/speech/"]);
-import { manifestFacts, parseXmlTree } from "../vendor/eliza/packages/app/scripts/lib/android-manifest-facts.mjs";
-export { manifestFacts, parseXmlTree } from "../vendor/eliza/packages/app/scripts/lib/android-manifest-facts.mjs";
-const isFalse = value => value === "0x0";
+export const DISTRIBUTION_POLICY = Object.freeze({
+  developmentClasses: DEVELOPMENT_CLASSES,
+  developmentManifestText: ["peerfixture"],
+  developmentEntries: [/^res\/xml\/development_network_security_config\.xml$/],
+  exportedComponents: EXPORTED_COMPONENTS,
+  forbiddenPermissions: ["android.permission.WRITE_EXTERNAL_STORAGE"],
+  forbiddenEntries: REMOVED_SPEECH_ENTRY,
+  forbiddenEntriesLabel: "Removed speech runtime entries are packaged",
+  forbiddenDexPrefixes: REMOVED_SPEECH_CLASSES,
+  forbiddenDexLabel: "Removed speech runtime classes are packaged",
+  requiredEntries: ["assets/public/licenses/third-party-notices.json"],
+});
 
 /**
  * Pure release-policy assessment. `apk` holds aapt dumps, zip entry names and
- * the development class names found in dex. Returns a list of problems.
+ * the development class names found in dex. Returns `{ facts, problems }`.
+ * The upstream inspection applies DISTRIBUTION_POLICY; the Power entry's
+ * component kind and the Quick Settings tile shape are Alpha's own checks.
  */
 export function distributionProblems(apk, { mode, testMocks = false } = {}) {
-  const facts = manifestFacts(apk.xml, apk.badging);
-  const problems = [];
-  const debugHooksAllowed = testMocks && mode === "debug";
-  if (!debugHooksAllowed) {
-    for (const name of DEVELOPMENT_CLASSES) {
-      if (apk.xml.includes(name) || apk.dexClasses?.includes(name))
-        problems.push(`Development class ${name} is packaged`);
-    }
-    if (/peerfixture/.test(apk.xml)) problems.push("peerfixture permission or package query is packaged");
-    if (apk.names.some(name => /^res\/xml\/development_network_security_config\.xml$/.test(name)))
-      problems.push("Development network security config is packaged");
-    if (!isFalse(facts.application.usesCleartextTraffic))
-      problems.push(`usesCleartextTraffic must be false (found ${facts.application.usesCleartextTraffic ?? "unset"})`);
-  }
-  if (mode === "release" && !facts.application.networkSecurityConfig)
-    problems.push("Release manifest has no networkSecurityConfig");
-  if (!isFalse(facts.application.allowBackup))
-    problems.push(`allowBackup must be false (found ${facts.application.allowBackup ?? "unset"})`);
-  for (const component of facts.exported) {
-    if (debugHooksAllowed && DEVELOPMENT_CLASSES.some(name => component.name.endsWith("." + name))) continue;
-    if (!(component.name in EXPORTED_COMPONENTS)) {
-      problems.push(`Unexpected exported ${component.tag} ${component.name}`);
-      continue;
-    }
-    if (component.name === "ai.elizaresearch.alphaphone.AlphaPowerVoiceActivity" && component.tag !== "activity")
-      problems.push("AlphaPowerVoiceActivity must be an activity");
-    const required = EXPORTED_COMPONENTS[component.name];
-    if (required && component.permission !== required)
-      problems.push(`Exported ${component.name} must require ${required}`);
-  }
+  const { facts, problems } = apkDistributionProblems(
+    { ...apk, forbiddenDex: apk.forbiddenDex ?? apk.removedSpeechClasses },
+    DISTRIBUTION_POLICY,
+    { mode, testMocks },
+  );
+  const powerName = "ai.elizaresearch.alphaphone.AlphaPowerVoiceActivity";
+  if (facts.exported.some(component => component.name === powerName && component.tag !== "activity"))
+    problems.push("AlphaPowerVoiceActivity must be an activity");
   const tileName = "ai.elizaresearch.alphaphone.AlphaQuickSettingsTile";
   const tile = facts.components.find(component => component.name === tileName);
   if (tile) {
@@ -89,75 +83,17 @@ export function distributionProblems(apk, { mode, testMocks = false } = {}) {
         actions.length !== 1 || actions[0] !== "android.service.quicksettings.action.QS_TILE")
       problems.push("Alpha Quick Settings tile must be one exported, permission-protected QS_TILE service");
   }
-  // Test-only names (mock providers, fixture peers) never ship in a flag-off build.
-  if (!debugHooksAllowed) {
-    const named = [
-      ...facts.components.map(component => component.name),
-      ...facts.permissions,
-      ...facts.queriedPackages,
-    ];
-    for (const name of named.filter(value => /mock|fixture/i.test(value)))
-      problems.push(`Test-only manifest entry ${name}`);
-  }
-  if (facts.permissions.includes("android.permission.WRITE_EXTERNAL_STORAGE"))
-    problems.push("WRITE_EXTERNAL_STORAGE is requested");
-  const maps = apk.names.filter(name => name.startsWith("assets/") && name.endsWith(".map"));
-  if (maps.length) problems.push(`Source maps are packaged: ${maps.slice(0, 3).join(", ")}`);
-  const removedSpeech = apk.names.filter(name => REMOVED_SPEECH_ENTRY.test(name));
-  if (removedSpeech.length) problems.push(`Removed speech runtime entries are packaged: ${removedSpeech.slice(0, 3).join(", ")}`);
-  if (apk.removedSpeechClasses?.length) problems.push(`Removed speech runtime classes are packaged: ${apk.removedSpeechClasses.join(", ")}`);
-  if (!apk.names.includes("assets/public/licenses/third-party-notices.json"))
-    problems.push("assets/public/licenses/third-party-notices.json is missing");
-  if (facts.versionCode === null)
-    problems.push(`versionCode must be a positive integer (found ${facts.versionCodeText ?? "none"})`);
-  if (!facts.versionName || facts.versionName === "0")
-    problems.push(`versionName must be set (found ${facts.versionName ?? "none"})`);
   return { facts, problems };
 }
 
-function dexClassNames(file, names) {
-  const found = new Set(), removed = new Set();
-  for (const entry of names.filter(name => /^classes\d*\.dex$/.test(name))) {
-    const bytes = execFileSync("unzip", ["-p", file, entry], { maxBuffer: 512 * 1024 * 1024 });
-    for (const name of DEVELOPMENT_CLASSES) if (bytes.includes(`/${name};`)) found.add(name);
-    for (const prefix of REMOVED_SPEECH_CLASSES) if (bytes.includes(prefix)) removed.add(prefix);
-  }
-  return { development: [...found], removedSpeech: [...removed] };
-}
-
 export function inspectApk(file) {
-  const badging = execFileSync(tool("aapt"), ["dump", "badging", file], {
-    encoding: "utf8",
-  });
-  const xml = execFileSync(
-    tool("aapt"),
-    ["dump", "xmltree", file, "AndroidManifest.xml"],
-    { encoding: "utf8" },
-  );
-  const names = execFileSync("unzip", ["-Z1", file], {
-    encoding: "utf8", maxBuffer: 64 * 1024 * 1024,
-  }).split("\n").filter(Boolean);
-  const pkg = /package: name='([^']+)'/.exec(badging)?.[1];
-  return {
-    file,
-    packageName: pkg,
-    home: xml.includes("android.intent.category.HOME"),
-    launcher: xml.includes("android.intent.category.LAUNCHER"),
-    debuggable: /android:debuggable[^\n]*0xffffffff/.test(xml),
-    sha256: createHash("sha256").update(fs.readFileSync(file)).digest("hex"),
-    webPayload: names.includes("assets/public/index.html"),
-    badging,
-    xml,
-    names,
-    ...(({ development, removedSpeech }) => ({ dexClasses: development, removedSpeechClasses: removedSpeech }))(dexClassNames(file, names)),
-  };
+  const { forbiddenDex, ...apk } = readApk(file, { aapt: tool("aapt"), policy: DISTRIBUTION_POLICY });
+  return { ...apk, removedSpeechClasses: forbiddenDex };
 }
 
 /** Extract assets/public into a fresh temporary directory; caller removes it. */
 export function extractWebPayload(file) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "alpha-apk-public-"));
-  execFileSync("unzip", ["-q", file, "assets/public/*", "-d", directory]);
-  return { root: directory, public: path.join(directory, "assets/public") };
+  return extractApkWebPayload(file, { prefix: "alpha-apk-public-" });
 }
 
 /** Read the build-time flag record that vite writes beside the web bundle. */
@@ -192,26 +128,11 @@ export function auditBundle(directory, { testMocks = false, script = AUDIT_SCRIP
   }
 }
 
-/** apksigner certificate digest of the first signer, or null when unsigned. */
+/** apksigner certificate digest of the first signer (upstream parser), or a thrown error. */
 export function signerDigest(file, { apiLevel } = {}) {
-  if (apiLevel !== undefined && (!Number.isInteger(apiLevel) || apiLevel < 1)) throw new Error("Invalid Android API level");
-  const output = execFileSync(tool("apksigner"), ["verify", "--print-certs", ...(apiLevel === undefined ? [] : ["--min-sdk-version", String(apiLevel), "--max-sdk-version", String(apiLevel)]), file], {
-    encoding: "utf8", env: androidEnv(),
-  });
-  return parseSignerDigest(output, { apiLevel });
+  return readApkSignerDigest(file, { apksigner: tool("apksigner"), apiLevel, env: androidEnv() });
 }
-export function parseSignerDigest(output, { apiLevel } = {}) {
-  const legacy = [...output.matchAll(/Signer #([0-9]+) certificate SHA-256 digest:\s*([a-fA-F0-9]{64})/g)];
-  const ranged = [...output.matchAll(/Signer \(minSdkVersion=([0-9]+), maxSdkVersion=([0-9]+)\) certificate SHA-256 digest:\s*([a-fA-F0-9]{64})/g)];
-  if (legacy.length && ranged.length) throw new Error('Ambiguous APK signer output');
-  if (legacy.length === 1 && legacy[0][1] === '1') return legacy[0][2].toLowerCase();
-  if (legacy.length) throw new Error('Multiple or unrecognized APK signers are not supported');
-  if (!ranged.length) throw new Error('apksigner reported no SHA-256 signer digest');
-  if (!Number.isInteger(apiLevel) || apiLevel < 1) throw new Error('Rotated APK signer requires an explicit Android API level');
-  const matches = ranged.filter(row => Number(row[1]) <= apiLevel && apiLevel <= Number(row[2]));
-  if (matches.length !== 1) throw new Error('No unique APK signer for the requested Android API level');
-  return matches[0][3].toLowerCase();
-}
+export const parseSignerDigest = parseApkSignerDigest;
 
 export function validateApk(file, identity, wantsHome) {
   const data = inspectApk(file);
