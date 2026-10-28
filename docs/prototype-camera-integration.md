@@ -7,9 +7,18 @@ selected-document adapters using
 The return value removes listeners, restores module methods and stops preview.
 
 The native dependency remains pinned at the commit in `upstream.lock.json`.
-No upstream checkout changes or patches are required for this initial adapter.
 The adapter registers only the Android wire subset as `ElizaCamera`; it does not
 pull an upstream workspace dependency graph into the renderer.
+
+The preview/capture/recording lifecycle is upstream's shared camera session
+(`plugin-native-camera/src/session.ts`, projected into
+`.eliza/client-features`), the same one `CameraPageView` drives. The adapter
+supplies only Alpha's presentation and destinations: the access panel and
+notices, the preview mask, preview and recording options, and the
+`recordingSaved` hook that reads a finished recording back from Photos. Epoch
+fencing, chained releases, the one-capture-at-a-time lock and single-flight
+recording finalization are not reimplemented here. Explicit-denial
+classification and resume recovery come from the shared host ports.
 
 ## Android wiring for the build owner
 

@@ -27,6 +27,16 @@ test('nothing restarts unless the preview stopped on a camera denial, and a stat
 test('the adapter resumes only through that decision',()=>{
  assert.match(source,/import \{cameraAccessDenied,restartAfterResume,type CameraAccessKind as AccessKind\} from '\.\.\/\.\.\/\.\.\/\.\.\/\.eliza\/client-features\/plugins\/plugin-native-camera\/src\/host-ports\.ts';/);
  assert.doesNotMatch(source,/async function restartAfterResume\(/,'no second copy of the shared rule');
- assert.match(source,/const resumed=\(\)=>\{void restartAfterResume\(\(\)=>\(\{denied,phase,disposed\}\),\(\)=>cameraAccess\.checkPermissions\(\)\)\.then\(restart=>\{if\(restart\)\{phase='off';schedule\(\);\}\}\);\};/);
+ assert.match(source,/const resumed=\(\)=>\{void restartAfterResume\(\(\)=>\(\{denied:session\.denied,phase:session\.phase,disposed\}\),\(\)=>cameraAccess\.checkPermissions\(\)\)\.then\(restart=>\{if\(restart\)\{session\.rearm\(\);schedule\(\);\}\}\);\};/);
  assert.doesNotMatch(source,/const resumed=\(\)=>\{if\(denied==='camera'/);
+});
+test('the camera lifecycle is the shared session, not an adapter copy',()=>{
+ assert.match(source,/import \{createCameraSession\} from '\.\.\/\.\.\/\.\.\/\.\.\/\.eliza\/client-features\/plugins\/plugin-native-camera\/src\/session\.ts';/);
+ assert.match(source,/const session=createCameraSession\(\{/);
+ // No second preview epoch, phase, capture lock or recording state in the adapter.
+ for(const copy of [/let phase\b/,/let epoch\b/,/\bcapturing ?= ?true/,/\brecordingStarting ?= ?true/,/let stopping\b/,/let finalizing\b/])assert.doesNotMatch(source,copy,String(copy));
+ // Captures and recordings go through the session's exclusive capture and single-flight finalization.
+ assert.match(source,/await session\.exclusive\(async token=>\{/);
+ assert.match(source,/const finishVideo=\(\)=>session\.finishRecording\(\);/);
+ assert.match(source,/recordingSaved:adoptVideo,/);
 });

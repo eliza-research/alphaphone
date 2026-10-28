@@ -172,6 +172,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-assistant/src/services/device-actions/photo-library-contract.ts',
   'plugins/plugin-native-camera/src/definitions.ts',
   'plugins/plugin-native-camera/src/host-ports.ts',
+  'plugins/plugin-native-camera/src/session.ts',
   'plugins/plugin-assistant/src/services/device-actions/notes-query-result.ts',
   'plugins/plugin-assistant/src/services/device-actions/sms-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-contract.ts',
