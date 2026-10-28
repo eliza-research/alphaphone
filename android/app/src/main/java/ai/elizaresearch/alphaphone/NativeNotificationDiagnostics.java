@@ -7,6 +7,11 @@ final class NativeNotificationDiagnostics {
   String family=failure instanceof SecurityException?"security":failure instanceof org.json.JSONException?"json":failure instanceof java.io.IOException?"io":"other";
   android.util.Log.w("AlphaNotification","stage="+stage.name()+" family="+family);
  }
+ enum Persist { SESSION, AGENT, INSTALLATION, PROVIDER, RECORD, PREVIOUS, STORE, FINAL }
+ static void persistFailure(Persist stage,Exception failure) {
+  String family=failure instanceof SecurityException?"security":failure instanceof org.json.JSONException?"json":failure instanceof java.io.IOException?"io":"other";
+  android.util.Log.w("AlphaNotification","persist="+stage.name()+" family="+family);
+ }
  static void ownerRead(String path,int status) {
   String stage;
   switch(path){
