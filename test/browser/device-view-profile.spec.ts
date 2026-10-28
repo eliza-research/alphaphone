@@ -14,7 +14,7 @@ for(const scenario of ['supported','legacy','unsupported','malformed','lost','re
    w.Capacitor={PluginHeaders:[
     {name:'AlphaNotifications',methods:methods(['status','crossAppStatus','addListener','removeListener'])},
     {name:'AlphaVoiceCloud',methods:methods(['checkPermissions'])},
-    {name:'Agent',methods:methods(['getStatus','start','request'])},
+    {name:'Agent',methods:methods(['getStatus','start','request','subscribeViewEvents','unsubscribeViewEvents','addListener','removeListener'])},
     {name:'AlphaConnection',methods:methods(['secureRead','secureWrite','secureCompareExchange','secureRemove','cancel','addListener','removeListener','pauseNotificationCollection'])},
     {name:'AlphaActionJournal',methods:methods(['list'])},
     {name:'DeviceApps',methods:methods(['buildInfo'])},
@@ -25,6 +25,9 @@ for(const scenario of ['supported','legacy','unsupported','malformed','lost','re
     if(plugin==='Agent'){
      if(method==='getStatus')return {packaged:true,state:'ready'};
      if(method==='start')return {state:'ready'};
+     // Every Capacitor plugin has listeners; the renderer command channel subscribes once per foreground session.
+     if(method==='addListener'||method==='removeListener'||method==='unsubscribeViewEvents')return {};
+     if(method==='subscribeViewEvents')return {subscriptionId:input.subscriptionId};
      const path=input.path;let body:any;
      if(path==='/api/auth/me')body={identity:{kind:'owner',id:'fixture-owner'},access:{role:'OWNER',mode:'session'}};
      else if(path==='/api/agents')body={agents:[{id:'fixture-agent',name:'Profile fixture',status:'running'}]};
