@@ -169,6 +169,11 @@ test('actual browser bridge refuses malformed or unowned preparation before forw
   const inputs=[
    ...[undefined,false,'true'].map(prepareOnly=>({body:JSON.stringify({...preparedView,prepareOnly})})),
    ...[{delivery:'originating-client'},{viewType:'tui'},{payload:{}},{action:'close'},{clientId:'bad id'}].map(change=>({body:JSON.stringify({...preparedView,...change})})),
+   ...['\n','\r','\u2028','\u2029'].flatMap(end=>[
+    {path:'/api/views/settings/navigate'+end,body:JSON.stringify(preparedView)},
+    {body:JSON.stringify({...preparedView,clientId:'renderer-1'+end})},
+    {body:JSON.stringify({...preparedView,completedActionHandoffId:'manual-view-1'+end})},
+   ]),
    {body:'not-json'},{body:JSON.stringify(preparedView),method:'GET'},
    {body:JSON.stringify(preparedView),ownerId:undefined},
    ...['/api/views/../settings/navigate','/api/views/%73ettings/navigate','/api/views/settings/navigate?other=1','/api/views/settings/navigate\n','/api/views/settings/navigate\r\n','/api/views/settings/navigate\t','/api/views/settings/navigate\u0000'].map(path=>({path,body:JSON.stringify(preparedView)})),

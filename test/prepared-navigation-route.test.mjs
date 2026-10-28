@@ -13,6 +13,11 @@ const cases=[
  ...[undefined,false,'true'].map(prepareOnly=>({body:{...valid,prepareOnly},allowed:false})),
  ...[{delivery:'originating-client'},{viewType:'tui'},{action:'close'},{clientId:'bad id'},{completedActionHandoffId:''}].map(change=>({body:{...valid,...change},allowed:false})),
  ...['/api/views/../calendar/navigate','/api/views/%63alendar/navigate','/api/views/calendar/navigate?x=1','/api/views/calendar/navigate\n','/api/views/calendar/navigate\r\n','/api/views/calendar/navigate\t','/api/views/calendar/navigate\u0000'].map(path=>({path,allowed:false})),
+ ...['\n','\r','\u2028','\u2029'].flatMap(end=>[
+  {path:'/api/views/calendar/navigate'+end,allowed:false},
+  {body:{...valid,clientId:'renderer-1'+end},allowed:false},
+  {body:{...valid,completedActionHandoffId:'observed-1'+end},allowed:false},
+ ]),
  {method:'GET',allowed:false},{owner:null,allowed:false},
 ].map(row=>({path:'/api/views/calendar/navigate',body:valid,method:'POST',owner:'owner',...row}));
 test('local and remote navigation entrypoints admit only exact preparation, retaining claim/result',async()=>{
