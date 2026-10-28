@@ -1,11 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { auditPage, auditTabOrder, auditTree, format } from './accessibility-audit';
+import { auditPage, auditReadingOrder, auditTabOrder, auditTree, format } from './accessibility-audit';
 import { CONNECTED_STATES, DEVELOPMENT_STATES, FAILURE_STATES, FIXTURE_STATES, LAUNCHER_STATES, LIVE_STATES, MOCK_STATES, setTextScale } from './accessibility-states';
 
 // MVP-48, renderer part. Every retained primary view, subview and failure screen is checked for
 // accessible names and roles, keyboard reachability, focus order and traps, contrast, pointer
-// target size, 200% text and landscape. This is Chromium on a development server. It is not a
-// TalkBack, Switch Access, physical large-font, rotation or device pass; those remain open.
+// target size, TalkBack reading order (the rule AccessibilityInstrumentedTest applies on Android),
+// 200% text and landscape. This is Chromium on a development server. It is not a TalkBack, Switch
+// Access, physical large-font, rotation or device pass; those remain open.
 test.describe.configure({ mode: 'parallel' });
 
 const STATES = [...LIVE_STATES, ...DEVELOPMENT_STATES, ...MOCK_STATES, ...CONNECTED_STATES, ...FAILURE_STATES];
@@ -23,6 +24,8 @@ for (const theme of ['light', 'dark'] as const) {
         ...await auditTree(page),
         ...await auditPage(page, { contrast: true, targetSize: 24, clipping: true, overlap: true, dock: true }),
         ...await auditTabOrder(page),
+        // Reading order does not depend on the theme; it is read once, in the light one.
+        ...theme === 'light' ? await auditReadingOrder(page) : [],
       ]);
       expect(blocking(found), blocking(found).join('\n')).toEqual([]);
     });
@@ -45,6 +48,9 @@ for (const state of STATES) {
     // The tab order survives it as well, and no stop is left partly under the composer.
     const focus = format(await auditTabOrder(page));
     expect(focus, focus.join('\n')).toEqual([]);
+    // So does TalkBack's reading order: the round 8 emulator failure was this check at 200% text.
+    const order = format(await auditReadingOrder(page));
+    expect(order, order.join('\n')).toEqual([]);
   });
 }
 
@@ -56,7 +62,7 @@ test.describe('landscape', () => {
       await state.open(page, 'light');
       // The landscape layout is what is being checked, not a scaled-down portrait canvas.
       await expect(page.locator('html')).toHaveClass(/alpha-landscape/);
-      const found = blocking(format([...await auditPage(page, { clipping: true, overlap: true, dock: true }), ...await auditTree(page), ...await auditTabOrder(page)]));
+      const found = blocking(format([...await auditPage(page, { clipping: true, overlap: true, dock: true }), ...await auditTree(page), ...await auditTabOrder(page), ...await auditReadingOrder(page)]));
       expect(blocking(found), blocking(found).join('\n')).toEqual([]);
     });
   }
@@ -66,7 +72,7 @@ test.describe('landscape', () => {
       await state.open(page, 'light');
       await expect(page.locator('html')).toHaveClass(/alpha-landscape/);
       await setTextScale(page, 2);
-      const found = blocking(format([...await auditPage(page, { clipping: true, overlap: true, dock: true }), ...await auditTree(page), ...await auditTabOrder(page)]));
+      const found = blocking(format([...await auditPage(page, { clipping: true, overlap: true, dock: true }), ...await auditTree(page), ...await auditTabOrder(page), ...await auditReadingOrder(page)]));
       expect(found, found.join('\n')).toEqual([]);
     });
   }
@@ -83,6 +89,7 @@ for (const state of [...FIXTURE_STATES, ...LAUNCHER_STATES]) {
         ...await auditTree(page),
         ...await auditPage(page, scale === 1 ? { contrast: true, targetSize: 24, clipping: true, overlap: true, dock: true } : { clipping: true, overlap: true, dock: true }),
         ...await auditTabOrder(page),
+        ...await auditReadingOrder(page),
       ]));
       expect(found, found.join('\n')).toEqual([]);
     });
