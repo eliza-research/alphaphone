@@ -30,11 +30,19 @@ final class NativeOwnerReminderHost {
   if(!subject.equals(session.getString("ownerId"))||session.getLong("expiresAt")<=System.currentTimeMillis()+30000)throw new SecurityException("Native review authority changed");
   String account=provider.getString("accountRef");if("native-local".equals(account))account+=":"+subject;
   if(!account.equals(expected.getString("accountRef"))||!provider.getString("environment").equals(expected.getString("environment"))||!provider.getString("sessionGeneration").equals(expected.getString("sessionGeneration")))throw new SecurityException("Native review authority changed");
-  String slot="device:"+HostedResultNotices.hash(new JSONArray().put("https://device.alpha.invalid").put(subject).put(agent).toString()),raw=ports.device(slot);
+  String slot=deviceSlot(subject,agent),raw=ports.device(slot);
   if(raw==null)throw new SecurityException("Native review authority changed");JSONObject device=new JSONObject(raw);
   if(!expected.getString("installationId").equals(device.getString("installationId"))||!expected.getString("enrollmentId").equals(device.getString("enrollmentId")))throw new SecurityException("Native review enrollment changed");
   if(!provider.toString().equals(ports.provider().toString())||!session.toString().equals(ports.ownerSession().toString())||!raw.equals(ports.device(slot)))throw new SecurityException("Native review authority changed");
   return HostedResultNotices.hash(new JSONArray().put(provider).put(session).put(device).toString());
+ }
+
+ /** Exact JSON.stringify bytes used by the renderer's device enrollment key.
+  * Android JSONArray escapes slashes, so it cannot define this shared key. */
+ static String deviceSlot(String owner,String agent)throws Exception{
+  HostedInbox.id(owner);HostedInbox.id(agent);
+  if(!owner.matches("[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")||!agent.matches("[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"))throw new SecurityException("Invalid device enrollment identity");
+  return "device:"+HostedResultNotices.hash("[\"https://device.alpha.invalid\",\""+owner+"\",\""+agent+"\"]");
  }
 
  static JSONObject read(Ports ports)throws Exception{
@@ -70,7 +78,7 @@ final class NativeOwnerReminderHost {
   JSONArray agents=current.get("/api/agents",null).getJSONArray("agents");
   if(agents.length()!=1||!"running".equals(agents.getJSONObject(0).getString("status")))throw new SecurityException("Native agent unavailable");
   String agent=HostedInbox.id(agents.getJSONObject(0).getString("id"));
-  current.deviceSlot="device:"+HostedResultNotices.hash(new JSONArray().put("https://device.alpha.invalid").put(subject).put(agent).toString());
+  current.deviceSlot=deviceSlot(subject,agent);
   String raw=ports.device(current.deviceSlot);if(raw==null)throw new SecurityException("Native device enrollment unavailable");
   current.device=new JSONObject(raw);String installation=current.device.getString("installationId"),enrollment=current.device.getString("enrollmentId"),key=current.device.getString("key");
   if(!installation.matches("[a-f0-9-]{36}")||!key.matches("[a-f0-9]{64}"))throw new SecurityException("Native device enrollment unavailable");
