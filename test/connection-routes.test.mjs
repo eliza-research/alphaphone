@@ -8,7 +8,7 @@ import {nativeSource,fixture,runJvm} from './fixtures/jvm-tools.mjs';
 // APK, run on Android, or contact Eliza Cloud or any agent.
 // The JDK is JAVA_HOME, else the Homebrew openjdk@21 on darwin when it is installed, else javac on PATH.
 test('native transport refuses production pairing and non-Cloud origins and admits DELETE only for Cloud self-revocation',()=>{
- assert.match(runJvm([nativeSource('CloudDeployment.java'),nativeSource('ConnectionRoutes.java'),nativeSource('CloudKeyRevocation.java'),fixture('ConnectionRoutesTest.java')],'ai.elizaresearch.alphaphone.ConnectionRoutesTest'),/^PASS connection routes/);
+ assert.match(runJvm([nativeSource('CloudDeployment.java'),nativeSource('ConnectionRoutes.java'),fixture('ConnectionRoutesTest.java')],'ai.elizaresearch.alphaphone.ConnectionRoutesTest'),/^PASS connection routes/);
 });
 
 // Source-order check of the plugin that applies the policy; the policy itself is run on the JVM above.
@@ -49,8 +49,9 @@ test('Reset Alpha data records the reset, revokes Cloud keys best effort within 
  const registration=readFileSync(resolve(import.meta.dirname,'../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaDataReset.java'),'utf8');
  assert.match(registration,/\.beforeDispatch\(ResetCloudRevocation::revoke\)/,'the live and startup paths use bounded shared revocation');
  const shared=readFileSync(resolve(import.meta.dirname,'../android/app/src/main/java/ai/elizaresearch/alphaphone/ResetCloudRevocation.java'),'utf8');
- assert.match(shared,/CloudKeyRevocation\.revoke\(environment,/,'revocation goes through the exact self-revocation policy');
- assert.match(shared,/AlphaCredentialStore\.readSlotBeforeAttach\(context,"cloud:"\+environment\)/);
+ assert.match(shared,/ai\.eliza\.auth\.cloud\.CloudKeyRevocation\.revoke\(registration,environment,/,'revocation goes through the shared exact self-revocation policy');
+ assert.match(shared,/AlphaCredentialStore\.readSlotBeforeAttach\(context,registration\.credentialSlot\(environment\)\)/);
+ assert.match(shared,/AlphaCloudSignInPlugin\.REGISTRATION/,'only the deployments this build admits are revoked');
  const application=readFileSync(resolve(import.meta.dirname,'../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaApplication.java'),'utf8');
  assert.match(application,/AlphaDataReset\.RESET\.admitBeforeStartup\(base,getProcessName\(\)\);/,'interrupted reset revokes before bounded reset admission');
 });

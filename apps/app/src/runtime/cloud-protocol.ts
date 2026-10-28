@@ -7,7 +7,7 @@ import { reviewOpaqueAttachment, type OpaqueMailAttachment } from './inbox-opera
 import { gmailCapabilitiesFor } from './gmail-grants.ts';
 import type { CloudMapsRoute } from '../maps/cloud-provider.ts';
 import { authenticated as signInAuthenticated, googleOutcome, type CloudSignInGoogleOutcome, CloudSignInError, emailStarted, verified as signInVerified, type CloudSignInAuthenticated, type CloudSignInEmailStarted, type CloudSignInMfaRequired, type CloudSignInPort } from './cloud-sign-in.ts';
-import { BILLING_LIMITS_PATH, ENTITLEMENT_KEYS_PATH, ENTITLEMENT_PATH, REDEEM_PATH, fallbackPlanFromLimits, membershipCreditDetailsFromLimits, type MembershipCreditDetails, normalizeSubscriptionCode, readServiceLimit, SubscriptionRedeemError, type EntitlementSource, type FallbackPlan, type RedeemResult } from './subscription-entitlement.ts';
+import { BILLING_LIMITS_PATH, ENTITLEMENT_KEYS_PATH, ENTITLEMENT_PATH, REDEEM_PATH, entitlementFromResponse, entitlementKeysFromResponse, fallbackPlanFromLimits, membershipCreditDetailsFromLimits, type MembershipCreditDetails, normalizeSubscriptionCode, redeemFailureForStatus, redeemResultFromResponse, SubscriptionRedeemError, type EntitlementSource, type FallbackPlan, type RedeemResult } from './subscription-entitlement.ts';
 /** Narrow Alpha adapter for Eliza Cloud managed services: sign-in, identity, subscription plan and
  * the connected Google services. Sign-in is in-app (cloud-sign-in.ts) once the native host reports
  * Cloud ready for this phone: the host signs in with Steward and mints an `eliza_mobile_` key through
@@ -297,13 +297,8 @@ export class CloudProtocol {
         signal.throwIfAborted();
         if (error instanceof CloudProtocolError) {
           if (error.code !== "http") throw error;
-          const status = error.status ?? 0, body = error.data && typeof error.data === "object" ? error.data as ObjectValue : {};
-          if (status === 401) throw error;
-          if (status === 400) throw new SubscriptionRedeemError("invalid");
-          if (status === 409) throw new SubscriptionRedeemError(body.code === "subscription_grant_already_redeemed" ? "already-redeemed" : "invalid");
-          if (status === 429) throw new SubscriptionRedeemError("rate-limited", readServiceLimit({ status, data: error.data, retryAfter: error.retryAfter })?.retryAfterMs ?? null);
-          if (status === 403) throw new SubscriptionRedeemError("account");
-          throw new SubscriptionRedeemError("unavailable");
+          // 401 is a rejected sign-in; every other refusal maps to the owner's redemption copy.
+          throw redeemFailureForStatus(error.status ?? 0, error.data, error.retryAfter) ?? error;
         }
         if (error instanceof Error && error.message === "Cloud account changed") throw error;
         // Transport failure: the request may have reached Cloud. One replay with the same key.
@@ -312,15 +307,7 @@ export class CloudProtocol {
       }
     }
     await this.assertSameCredential(credential.credentialId, signal);
-    const grant = data.grant && typeof data.grant === "object" && !Array.isArray(data.grant) ? data.grant as ObjectValue : null;
-    if (data.success !== true || !grant || typeof data.replayed !== "boolean") throw new SubscriptionRedeemError("unavailable");
-    if (grant.revoked === true) throw new SubscriptionRedeemError("invalid");
-    const endsAt = typeof grant.endsAt === "string" ? Date.parse(grant.endsAt) : NaN;
-    const summary = data.entitlement && typeof data.entitlement === "object" ? data.entitlement as ObjectValue : null;
-    const plan = summary?.plan && typeof summary.plan === "object" ? summary.plan as ObjectValue : null;
-    const planName = typeof plan?.name === "string" && plan.name.trim() && plan.name.length <= 80 && !/[\x00-\x1f\x7f]/.test(plan.name) ? plan.name.trim() : null;
-    const until = typeof summary?.effectiveUntil === "string" ? Date.parse(summary.effectiveUntil) : NaN;
-    return { planEndsAt: Number.isFinite(until) ? until : grant.paidPlanTakesPrecedence === true || !Number.isFinite(endsAt) ? null : endsAt, replayed: data.replayed, grantEndsAt: Number.isFinite(endsAt) ? endsAt : null, paidPlanTakesPrecedence: grant.paidPlanTakesPrecedence === true, planName };
+    return redeemResultFromResponse(data);
   }
   private async assertSameCredential(credentialId: string, signal: AbortSignal) {
     const current = await this.credentials.read(this.environment);
@@ -345,16 +332,15 @@ export class CloudProtocol {
       throw error;
     }
     await this.assertSameCredential(credential.credentialId, signal);
-    if (typeof data.entitlement !== "string" || !data.entitlement || data.entitlement.length > 8192) throw new CloudProtocolError("invalid-response");
-    return data.entitlement;
+    const entitlement = entitlementFromResponse(data);
+    if (entitlement === null) throw new CloudProtocolError("invalid-response");
+    return entitlement;
   }
   /** Public ES256 verification keys for entitlements. Never private material. */
   async subscriptionEntitlementKeys(signal: AbortSignal): Promise<JsonWebKey[]> {
-    const data = await this.call(ENTITLEMENT_KEYS_PATH, signal);
-    if (!Array.isArray(data.keys) || data.keys.length > 16) throw new CloudProtocolError("invalid-response");
-    return data.keys.filter((key): key is JsonWebKey => !!key && typeof key === "object" && !Array.isArray(key)
-      && (key as ObjectValue).kty === "EC" && (key as ObjectValue).crv === "P-256" && (key as ObjectValue).d === undefined
-      && typeof (key as ObjectValue).kid === "string" && typeof (key as ObjectValue).x === "string" && typeof (key as ObjectValue).y === "string");
+    const keys = entitlementKeysFromResponse(await this.call(ENTITLEMENT_KEYS_PATH, signal));
+    if (keys === null) throw new CloudProtocolError("invalid-response");
+    return keys;
   }
   /** Entitlement ports for checkEntitlement, bound to this client. */
   entitlementSource(): EntitlementSource {

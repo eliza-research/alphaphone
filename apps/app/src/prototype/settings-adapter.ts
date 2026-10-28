@@ -572,6 +572,9 @@ export function installSettingsAdapter(Component: any, views: Bag) {
             // Runtime location and Cloud inference are separate facts.
             const rows:Bag[]=[info('Account',plan.account??(plan.offline?`${serviceName} unreachable`:'Not signed in')),info('Plan',plan.plan),info('Agent execution',runtimeLocation),info('AI replies',plan.inference)];
             if(plan.endsAt)rows.push(info(plan.status==='active'||plan.status==='trialing'||plan.status==='past_due'?'Plan runs until':'Plan ended',day(plan.endsAt)));
+            // Plan state, not a balance: the allowance Cloud reports and the latest limit with its retry time.
+            if(plan.allowance)rows.push(info('Plan allowance',plan.allowance));
+            if(plan.limit)rows.push(info('AI requests',plan.limit));
             if(plan.keyExpiresAt)rows.push(info(plan.keyExpiring?'Sign-in expires soon':'Sign-in expires',day(plan.keyExpiresAt)));
             if(connection.busy)rows.push(info('Status',connection.message||'Please wait…'));
             const actions:Bag[]=connection.busy?[action('Cancel',()=>connectionController.cancel())]:plan.signedIn?[

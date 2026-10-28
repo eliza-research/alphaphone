@@ -207,7 +207,9 @@ test('External authorization uses the browser and Google sign-in uses the native
   }
   assert.deepEqual(returns.sort(), ['android/app/src/testMocks/AndroidManifest.xml:${stagingCloudWebHost}'], 'the production return comes only from the ELIZAOS_APP_LINK_HOST overlay (android/app/product.gradle); the staging return exists only in the test-mocks overlay');
   assert.match(read('android/app/product.gradle'), /android:host="\\\$\{appLinkHost\}" android:path="\/alphaphone\/auth\/callback"\/><\/intent-filter>/, 'the build-gated sign-in return is one exact path');
-  const signIn = read('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaCloudSignInPlugin.java');
+  // The shared native client (vendor/eliza packages/auth/android) that AlphaCloudSignInPlugin registers.
+  const signIn = read('vendor/eliza/packages/auth/android/src/main/java/ai/eliza/auth/cloud/CloudSignInPlugin.java');
+  assert.match(read('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaCloudSignInPlugin.java'), /extends CloudSignInPlugin/);
   assert.equal(inventory.surfaces.find(s=>s.id==='eliza-cloud-sign-in-google').kind,'native-account-picker');
   assert.doesNotMatch(signIn,/CustomTabsIntent/, 'Google sign-in does not open a browser consent flow');
   assert.match(signIn,/NativeGoogleCredential\.request\(getActivity\(\), clientId, nonce, next\.googleCancellation/,'system picker remains bound to server client, nonce and cancellation');

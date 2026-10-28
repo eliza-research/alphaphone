@@ -159,15 +159,13 @@ not reuse production codes.
   - offline.
 
   The native sign-in host is synthetic.
-- `test/cloud-sign-in-flow.test.mjs` with `test/fixtures/CloudSignInFlowTest.java`:
-  - PKCE and state;
-  - the exact authorize URL;
-  - strict App Link return validation (host, path, port, userinfo, query and fragment,
-    duplicated or extra parameters, unknown or expired state);
-  - the pending record;
-  - the ack retry policy and the route allowlist;
-  - source checks: store before ack, pending burned before exchange, nothing logged, legacy flow
-    gated.
+- elizaOS/eliza `packages/auth/android` (`test:native-android`), the shared native client:
+  - PKCE and state, the pending record, the ack retry policy and the route allowlist;
+  - strict App Link return validation through the callback contract vectors;
+  - the exact plugin verify/connect/token/ack chain and readiness probe on a plain JVM;
+  - source checks: store before ack, pending burned before exchange, nothing logged.
+- `test/cloud-sign-in-flow.test.mjs`: Alpha's registration (client, callback, deployments,
+  installed names), its callback contract through the shared parser, and the renderer wiring.
 - `scripts/test-cloud-protocol.mjs`, `test/browser-cloud-dev-bridge.test.mjs`: renderer sign-in
   contract and the development bridge's email sign-in.
 - `CloudSignInCallbackInstrumentedTest` (emulator, `-e cloudSignInNative 1`):

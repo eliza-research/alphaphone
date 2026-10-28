@@ -152,15 +152,11 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
   const dialog=signInDialog(page);await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toBeVisible();
   await expect(dialog.getByText(/in your browser/)).toHaveCount(0);
-  await expect(dialog.getByRole('textbox',{name:'Email',exact:true})).toBeHidden();
-  await expect(dialog.getByLabel('Phone number with country code')).toBeHidden();
-  const disclosure=dialog.getByRole('button',{name:'Other sign-in methods',exact:true});
-  await expect(disclosure).toHaveAttribute('aria-expanded','false');
-  await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:info.outputPath('sign-in-choose.png'),animations:'disabled'});
-  await disclosure.focus();await disclosure.press('Enter');
-  await expect(dialog.getByRole('textbox',{name:'Email',exact:true})).toBeFocused();
+  // The chooser shows Google, email and phone together (#651 removed the "Other sign-in methods" disclosure).
+  await expect(dialog.getByRole('button',{name:'Other sign-in methods',exact:true})).toHaveCount(0);
+  await expect(dialog.getByRole('textbox',{name:'Email',exact:true})).toBeVisible();
   await expect(dialog.getByLabel('Phone number with country code')).toBeVisible();
-  await page.screenshot({path:info.outputPath('sign-in-other-methods.png'),animations:'disabled'});
+  await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:info.outputPath('sign-in-choose.png'),animations:'disabled'});
  await revealOtherMethods(page);
   await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('not-an-address');await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
   expect((await calls(page)).filter(c=>c.method==='startEmail')).toHaveLength(0);
@@ -259,9 +255,11 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
    await expect(dialog).toBeVisible();
    await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toBeDisabled();
    expect(await fixture(page)).toMatchObject({saved:false,bound:false,running:true});
-   if(mode==='readiness-hold')await page.evaluate(()=>(window as any).signInFixture.releaseReadiness());
-   // A late readiness answer cannot add Google to an already opened attempt.
-   await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toBeDisabled();
+   if(mode==='readiness-hold'){
+    // A validated late answer updates only the same still-current chooser (cloud-sign-in-late-readiness).
+    await page.evaluate(()=>(window as any).signInFixture.releaseReadiness());
+    await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toBeEnabled();
+   }else await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toBeDisabled();
    await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('synthetic-signin@example.invalid');
    await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
    await dialog.getByLabel('Six-digit code').fill('123456');

@@ -83,15 +83,85 @@ test('chooser recovery continues through normal resident admission only after na
 });
 test('native recovery metadata stays private and cancellation invalidates its continuation',()=>{
  const source=readFileSync(nativeSource('AlphaCloudSignInPlugin.java'),'utf8');
- const start=source.indexOf('@PluginMethod public void savedSignInRecoveryStatus'),end=source.indexOf('// ── Readiness:',start);assert.ok(start>0&&end>start);
+ const start=source.indexOf('@PluginMethod public void savedSignInRecoveryStatus'),end=source.indexOf('@Override @PluginMethod public void startGoogle',start);assert.ok(start>0&&end>start);
  const methods=source.slice(start,end);
- assert.match(methods,/\.put\("eligible",store\(\)\.legacyCloudRecoveryEligible\(\)\)/);
+ assert.match(methods,/\.put\("eligible",\s*store\.legacyCloudRecoveryEligible\(\)\)/);
  assert.match(methods,/AlphaLocalAgentPlugin\.reserveCredentialIntent\(\)/);
- assert.match(methods,/recoveryEpoch!=owner/);assert.match(methods,/AlphaLocalAgentPlugin\.requireCredentialIntent\(intent\)/);
- assert.match(methods,/\.put\("restored",restored\)/);
+ assert.match(methods,/recoveryEpoch\s*!=\s*owner/);assert.match(methods,/AlphaLocalAgentPlugin\.requireCredentialIntent\(intent\)/);
+ assert.match(methods,/\.put\("restored",\s*kept\.restoreLegacyCloudCredential\(\)\)/);
  assert.doesNotMatch(methods,/put\("(?:token|credentialId|userId|organizationId|value)"/);
- const cancel=source.slice(source.indexOf('@PluginMethod public void cancel('),source.indexOf('private void requireAuthorization('));assert.match(cancel,/recoveryEpoch\+\+/);
+ // Every shared sign-in entry point, the cancel, a browser return and each shared commit supersede a restore.
+ for(const entry of ['startGoogle','startEmail','startPhone','cancel'])assert.match(source,new RegExp(`@Override @PluginMethod public void ${entry}\\(PluginCall call\\) \\{ supersedeRecovery\\(\\); super\\.${entry}\\(call\\); \\}`),entry);
+ assert.match(source,/protected void handleOnNewIntent\(Intent intent\) \{ supersedeRecovery\(\);/);
+ assert.match(source,/protected Runnable reserveCredentialCommit\(\) \{\s+supersedeRecovery\(\);/);
  const slots=readFileSync(nativeSource('RendererCredentialSlots.java'),'utf8');assert.doesNotMatch(slots,/legacy-recovery|JOURNAL/);
+});
+test('Restore saved sign-in around the shared sign-in client: eligible restore, cancellation, account change and retained data',()=>{
+ // Host JVM: the ACTUAL AlphaCloudSignInPlugin and PluginWorkers, and the actual credential-intent
+ // methods of AlphaLocalAgentPlugin, against stubs of Capacitor, the shared CloudSignInPlugin
+ // (vendor/eliza packages/auth/android) and the encrypted store. No Android, Cloud or credentials.
+ const dir=mkdtempSync(join(tmpdir(),'alpha-recovery-plugin-'));
+ const file=(name,text)=>{const path=join(dir,name);writeFileSync(path,text);return path;};
+ try{
+  const lifecycle=readFileSync(nativeSource('AlphaLocalAgentPlugin.java'),'utf8');
+  const intent=lifecycle.match(/^ static long reserveCredentialIntent\(\)\{.*\}$/m)?.[0],require=lifecycle.match(/^ static void requireCredentialIntent\(long intent\)\{.*\}$/m)?.[0];
+  assert.ok(intent&&require,'actual credential-intent methods');
+  const sources=[
+   nativeSource('AlphaCloudSignInPlugin.java'),nativeSource('PluginWorkers.java'),nativeSource('CloudDeployment.java'),
+   file('Capacitor.java',`package com.getcapacitor;public class Capacitor{}`),
+   file('Plugin.java',`package com.getcapacitor;public class Plugin{public android.content.Context getContext(){return new android.content.Context();}protected void handleOnNewIntent(android.content.Intent intent){}protected void handleOnDestroy(){}}`),
+   file('PluginMethod.java',`package com.getcapacitor;@java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)public @interface PluginMethod{}`),
+   file('CapacitorPlugin.java',`package com.getcapacitor.annotation;public @interface CapacitorPlugin{String name();}`),
+   file('JSObject.java',`package com.getcapacitor;public class JSObject extends java.util.HashMap<String,Object>{public JSObject put(String k,Object v){super.put(k,v);return this;}}`),
+   file('PluginCall.java',`package com.getcapacitor;public class PluginCall{public final java.util.concurrent.CountDownLatch done=new java.util.concurrent.CountDownLatch(1);public volatile JSObject result;public volatile String code;public void resolve(JSObject v){result=v;done.countDown();}public void resolve(){done.countDown();}public void reject(String message,String c){code=c;done.countDown();}}`),
+   file('Context.java',`package android.content;public class Context{}`),
+   file('Intent.java',`package android.content;public class Intent{}`),
+   file('CloudCredentialSlots.java',`package ai.eliza.auth.cloud;public interface CloudCredentialSlots{String read(String s)throws Exception;void write(String s,String v)throws Exception;void remove(String s)throws Exception;}`),
+   file('CloudSignInEnvironment.java',`package ai.eliza.auth.cloud;public final class CloudSignInEnvironment{public final String name;public CloudSignInEnvironment(String name,String api,String web,String tenant,String service,String callback){this.name=name;}}`),
+   file('CloudSignInConfig.java',`package ai.eliza.auth.cloud;public final class CloudSignInConfig{public static Builder builder(){return new Builder();}public String receiptSlot(CloudSignInEnvironment e){return "cloud-signin:v1:ack:"+e.name;}
+    public static final class Builder{public Builder clientId(String v){return this;}public Builder deviceName(String v){return this;}public Builder productName(String v){return this;}public Builder googleClientId(String v){return this;}public Builder logTag(String v){return this;}public Builder readinessPreferences(String v){return this;}public Builder pendingSlot(String v){return this;}public Builder receiptSlotPrefix(String v){return this;}public Builder credentialSlotPrefix(String v){return this;}public Builder environment(CloudSignInEnvironment v){return this;}public CloudSignInConfig build(){return new CloudSignInConfig();}}}`),
+   file('CloudSignInPlugin.java',`package ai.eliza.auth.cloud;import com.getcapacitor.*;public abstract class CloudSignInPlugin extends Plugin{public final java.util.List<String> calls=new java.util.concurrent.CopyOnWriteArrayList<>();
+    protected abstract CloudSignInConfig registration();protected abstract CloudCredentialSlots credentials(Runnable guard);protected Runnable reserveCredentialCommit(){return()->{};}
+    /** Stands in for the shared client's commit of a minted key: reserve, then write under the guard. */
+    public void commitSignIn()throws Exception{Runnable check=reserveCredentialCommit();credentials(check).write("cloud:production","minted");}
+    @PluginMethod public void startGoogle(PluginCall c){calls.add("startGoogle");c.resolve();}@PluginMethod public void startEmail(PluginCall c){calls.add("startEmail");c.resolve();}@PluginMethod public void startPhone(PluginCall c){calls.add("startPhone");c.resolve();}@PluginMethod public void cancel(PluginCall c){calls.add("cancel");c.resolve();}
+    @Override protected void handleOnNewIntent(android.content.Intent i){calls.add("intent");}@Override protected void handleOnDestroy(){calls.add("destroy");}}`),
+   file('BuildConfig.java',`package ai.elizaresearch.alphaphone;final class BuildConfig{static final boolean ELIZA_DEV_ALLOW_TEST_MOCKS=false;}`),
+   file('AlphaLocalAgentPlugin.java',`package ai.elizaresearch.alphaphone;final class AlphaLocalAgentPlugin{static final Object lifecycleLock=new Object();static long credentialIntentEpoch;\n${intent}\n${require}\n}`),
+   file('AlphaCredentialStore.java',`package ai.elizaresearch.alphaphone;import java.util.concurrent.*;final class AlphaCredentialStore{
+    /** Synthetic encrypted vault: a retained legacy credential, and the scoped slot a restore copies it to. */
+    static volatile boolean legacy=true,failRestore;static final java.util.Map<String,String> slots=new ConcurrentHashMap<>();static volatile CountDownLatch entered,release;
+    final Runnable guard;AlphaCredentialStore(android.content.Context c,Runnable guard){this.guard=guard;}
+    boolean legacyCloudRecoveryEligible(){guard.run();return legacy&&!slots.containsKey("cloud:production");}
+    boolean restoreLegacyCloudCredential()throws Exception{if(entered!=null)entered.countDown();if(release!=null&&!release.await(5,TimeUnit.SECONDS))throw new AssertionError("release");if(failRestore)throw new Exception("identity unconfirmed");if(!legacy)return false;guard.run();slots.put("cloud:production","legacy");legacy=false;return true;}
+    String readCredentialSlot(String s){return slots.get(s);}void writeCredentialSlot(String s,String v){guard.run();slots.put(s,v);}void removeCredentialSlot(String s){guard.run();slots.remove(s);}}`),
+   file('RecoveryHarness.java',`package ai.elizaresearch.alphaphone;import com.getcapacitor.*;import java.util.concurrent.*;public class RecoveryHarness{
+    static void check(boolean v,String why){if(!v)throw new AssertionError(why);}
+    static PluginCall await(PluginCall c)throws Exception{check(c.done.await(5,TimeUnit.SECONDS),"call answered");return c;}
+    static void reset(){AlphaCredentialStore.slots.clear();AlphaCredentialStore.legacy=true;AlphaCredentialStore.failRestore=false;AlphaCredentialStore.entered=new CountDownLatch(1);AlphaCredentialStore.release=new CountDownLatch(1);}
+    interface Step{void run(AlphaCloudSignInPlugin p)throws Exception;}
+    /** Starts a restore, holds it inside the store before its write, runs the step, then releases it. */
+    static PluginCall interrupted(AlphaCloudSignInPlugin p,Step step)throws Exception{reset();PluginCall restore=new PluginCall();p.restoreSavedSignIn(restore);check(AlphaCredentialStore.entered.await(5,TimeUnit.SECONDS),"restore started");step.run(p);AlphaCredentialStore.release.countDown();return await(restore);}
+    public static void main(String[] a)throws Exception{int n=0;
+     AlphaCloudSignInPlugin p=new AlphaCloudSignInPlugin();
+     reset();AlphaCredentialStore.release=null;PluginCall status=await(newCall(p::savedSignInRecoveryStatus));check(Boolean.TRUE.equals(status.result.get("eligible"))&&status.result.size()==1,"eligible metadata only");n++;
+     PluginCall restored=await(newCall(p::restoreSavedSignIn));check(Boolean.TRUE.equals(restored.result.get("restored"))&&restored.result.size()==1,"eligible restore resolves restored only");check("legacy".equals(AlphaCredentialStore.slots.get("cloud:production"))&&!AlphaCredentialStore.legacy,"eligible saved sign-in restored");n++;
+     check(Boolean.FALSE.equals(await(newCall(p::savedSignInRecoveryStatus)).result.get("eligible")),"no longer eligible after restore");n++;
+     for(String entry:new String[]{"cancel","startEmail","startGoogle","startPhone","intent"}){
+      PluginCall r=interrupted(p,x->{if(entry.equals("intent"))x.handleOnNewIntent(new android.content.Intent());else{PluginCall c=new PluginCall();AlphaCloudSignInPlugin.class.getMethod(entry,PluginCall.class).invoke(x,c);await(c);}});
+      check("unavailable".equals(r.code)&&r.result==null,entry+" supersedes the restore");check(AlphaCredentialStore.legacy&&AlphaCredentialStore.slots.isEmpty(),entry+": saved data retained, nothing written");check(p.calls.contains(entry),entry+" still reaches the shared client");n++;}
+     PluginCall committed=interrupted(p,x->x.commitSignIn());check("unavailable".equals(committed.code),"a newer shared sign-in commit wins");check("minted".equals(AlphaCredentialStore.slots.get("cloud:production"))&&AlphaCredentialStore.legacy,"newer account kept, saved data retained");n++;
+     PluginCall rebound=interrupted(p,x->AlphaLocalAgentPlugin.reserveCredentialIntent());check("unavailable".equals(rebound.code)&&AlphaCredentialStore.legacy&&AlphaCredentialStore.slots.isEmpty(),"another credential writer (resident rebind) supersedes the restore");n++;
+     PluginCall[] second=new PluginCall[1];PluginCall first=interrupted(p,x->{second[0]=new PluginCall();x.restoreSavedSignIn(second[0]);await(second[0]);});check("login-active".equals(second[0].code),"one restore at a time");check(Boolean.TRUE.equals(first.result.get("restored")),"the first restore completes");n++;
+     reset();AlphaCredentialStore.release=null;AlphaCredentialStore.failRestore=true;PluginCall failed=await(newCall(p::restoreSavedSignIn));check("unavailable".equals(failed.code)&&AlphaCredentialStore.legacy&&AlphaCredentialStore.slots.isEmpty(),"unconfirmed recovery retains the saved data");n++;
+     AlphaCredentialStore.failRestore=false;check(Boolean.TRUE.equals(await(newCall(p::restoreSavedSignIn)).result.get("restored")),"a failed restore releases the single-flight guard");n++;
+     p.handleOnDestroy();reset();PluginCall closed=await(newCall(p::restoreSavedSignIn));check("login-active".equals(closed.code)&&AlphaCredentialStore.legacy,"closed plugin refuses restore");PluginCall closedStatus=await(newCall(p::savedSignInRecoveryStatus));check("unavailable".equals(closedStatus.code),"closed plugin answers status");n++;
+     System.out.println("PASS "+n+" Restore saved sign-in assertions around the shared client");}
+    interface Method{void call(PluginCall c);}static PluginCall newCall(Method m){PluginCall c=new PluginCall();m.call(c);return c;}}`),
+  ];
+  const result=runJvm(sources,'ai.elizaresearch.alphaphone.RecoveryHarness');
+  assert.match(result,/^PASS \d+ Restore saved sign-in assertions/);
+ }finally{rmSync(dir,{recursive:true,force:true});}
 });
 test('automatic startup requests presence-only unbind; explicit provider clear retains default semantics',async()=>{
  const {transformSync}=await import('esbuild');
