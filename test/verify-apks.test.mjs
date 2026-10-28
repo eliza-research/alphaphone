@@ -16,9 +16,7 @@ function completeAospLock(dir) {
   write("android/aosp/product.json", { ...product, hostPackages: product.hostPackages.map(pkg => ({ ...pkg, version: "1.0.0", sha256: "e".repeat(64) })),
     signer: { ...product.signer, platformCertificateSha256: "c".repeat(64) } });
   write(product.brandConfig, read(product.brandConfig));
-  const lock = read(product.sourceLock.file);
-  Object.assign(lock.profiles.cuttlefish.manifest, { tag: "android-17.0.0_r1", tagObject: "a".repeat(40), commit: "b".repeat(40) });
-  write(product.sourceLock.file, lock);
+  write(product.sourceLock.file, read(product.sourceLock.file));
   write("android/release-signer.json", { ...read("android/release-signer.json"), signerSha256: "d".repeat(64) });
 }
 function zip(file, entries) {
