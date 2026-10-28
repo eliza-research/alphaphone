@@ -13,7 +13,7 @@ test('pending reset retries, shows bounded recovery instead of a launcher restar
  const put=(name,body)=>{const path=join(dir,name);mkdirSync(dirname(path),{recursive:true});writeFileSync(path,body);sources.push(path);};
  const bin=name=>process.env.JAVA_HOME?join(process.env.JAVA_HOME,'bin',name):name;
  try{
-  put('ai/elizaresearch/alphaphone/ResetCloudRevocation.java',`package ai.elizaresearch.alphaphone; final class ResetCloudRevocation {static int calls;static long budget;static void revoke(android.content.Context c,long ms){if(!AlphaDataReset.pending(c))throw new AssertionError("Revocation must follow durable reset authorization");calls++;budget=ms;}}`);
+  put('ai/elizaresearch/alphaphone/ResetCloudRevocation.java',`package ai.elizaresearch.alphaphone; final class ResetCloudRevocation {static int calls;static long budget;static void revoke(android.content.Context c,long ms){if(!AlphaDataReset.RESET.pending(c))throw new AssertionError("Revocation must follow durable reset authorization");calls++;budget=ms;}}`);
   put('android/app/Activity.java',`package android.app; public class Activity extends android.content.Context {}`);
   put('ai/eliza/plugins/system/SenseListenerClient.java',`package ai.eliza.plugins.system; public final class SenseListenerClient {public static boolean resetSaved=true;public static int calls;public SenseListenerClient(android.content.Context c){}public boolean resetForData(){calls++;return resetSaved;}}`);
   put('android/content/Context.java',`package android.content; public class Context { public static java.io.File data; public static android.app.ActivityManager manager=new android.app.ActivityManager(); public Context createDeviceProtectedStorageContext(){return this;} public java.io.File getNoBackupFilesDir(){data.mkdirs();return data;} public <T>T getSystemService(Class<T> type){return type.cast(manager);} public String getPackageName(){return "fixture.alpha";} public static int recoveries; public void startActivity(Intent intent){if(!"ai.elizaresearch.alphaphone.ResetRecoveryActivity".equals(intent.target.getName())||intent.flags!=(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK))throw new AssertionError("unexpected start");recoveries++;} }`);
@@ -43,20 +43,20 @@ public class ResetStartupTest {
  static void check(boolean ok){if(!ok)throw new AssertionError();}
  public static void main(String[] args)throws Exception {
   android.content.Context.data=new java.io.File(args[0]);AlphaApplication app=new AlphaApplication();
-  check(!AlphaDataReset.pending(app));
+  check(!AlphaDataReset.RESET.pending(app));
   // A late failure result from a stale recovery attempt cannot recreate reset state in fresh data.
   SenseListenerClient.resetSaved=false;check(AlphaDataReset.RESET.attempt(app,System.currentTimeMillis())==DataReset.Outcome.LISTENER_UNACKNOWLEDGED);check(android.content.Context.data.listFiles().length==0);SenseListenerClient.resetSaved=true;
   app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==7);
   // Package-scoped: Android's own-package clear only; the sibling app's fixture data is untouched.
   check(new java.io.File(args[1],"keep").isFile());NativeSourceHost.started=0;
-  AlphaDataReset.record(app);check(AlphaDataReset.pending(new AlphaApplication()));
-  for(int mode=0;mode<3;mode++){android.app.ActivityManager.mode=mode;try{AlphaApplication restarted=new AlphaApplication();restarted.attachBaseContext(app);throw new AssertionError("Providers would initialize before onCreate");}catch(android.os.Process.Exit stopped){}check(NativeSourceHost.started==0);check(AlphaDataReset.pending(app));}
+  AlphaDataReset.RESET.record(app);check(AlphaDataReset.RESET.pending(new AlphaApplication()));
+  for(int mode=0;mode<3;mode++){android.app.ActivityManager.mode=mode;try{AlphaApplication restarted=new AlphaApplication();restarted.attachBaseContext(app);throw new AssertionError("Providers would initialize before onCreate");}catch(android.os.Process.Exit stopped){}check(NativeSourceHost.started==0);check(AlphaDataReset.RESET.pending(app));}
   check(android.app.ActivityManager.calls==3);
   // Each interrupted reset revokes Cloud keys first, bounded by the startup budget, only while the marker is durable.
   check(ResetCloudRevocation.calls==3&&ResetCloudRevocation.budget==DataReset.STARTUP_BEFORE_DISPATCH_MS&&ResetCloudRevocation.budget==4000);
   SenseListenerClient.resetSaved=false;
   try{app.attachBaseContext(app);throw new AssertionError("Unacknowledged listener reset resumed");}catch(android.os.Process.Exit stopped){}
-  check(android.app.ActivityManager.calls==3);check(AlphaDataReset.pending(app));check(NativeSourceHost.started==0);
+  check(android.app.ActivityManager.calls==3);check(AlphaDataReset.RESET.pending(app));check(NativeSourceHost.started==0);
   // #409 launcher loop: an installed listener that never acknowledges. Android relaunches HOME each
   // time the process stops. Every launch must stop without clearing or initializing, must show the
   // recovery surface, and automatic listener attempts must be bounded rather than repeated forever.
@@ -64,17 +64,17 @@ public class ResetStartupTest {
   android.content.Context.recoveries=0;SenseListenerClient.calls=0;int clears=android.app.ActivityManager.calls;
   for(int relaunch=0;relaunch<25;relaunch++){try{new AlphaApplication().attachBaseContext(app);throw new AssertionError("Unacknowledged reset resumed on relaunch "+relaunch);}catch(android.os.Process.Exit stopped){}}
   check(android.content.Context.recoveries==25);check(SenseListenerClient.calls==DataReset.AUTOMATIC_ATTEMPTS);
-  check(android.app.ActivityManager.calls==clears);check(AlphaDataReset.pending(app));check(NativeSourceHost.started==0);
+  check(android.app.ActivityManager.calls==clears);check(AlphaDataReset.RESET.pending(app));check(NativeSourceHost.started==0);
   // The recovery process neither stops itself nor starts Alpha's runtime.
   android.app.Application.process="fixture.alpha:reset_recovery";AlphaApplication recovery=new AlphaApplication();recovery.attachBaseContext(app);recovery.onCreate();
   check(NativeSourceHost.started==0);check(android.content.Context.recoveries==25);android.app.Application.process="fixture.alpha";
   // A user's Try again is always a fresh attempt; still fail-closed while unacknowledged.
-  check(AlphaDataReset.RESET.attempt(app,System.currentTimeMillis())==DataReset.Outcome.LISTENER_UNACKNOWLEDGED);check(SenseListenerClient.calls==DataReset.AUTOMATIC_ATTEMPTS+1);check(android.app.ActivityManager.calls==clears);check(AlphaDataReset.pending(app));
+  check(AlphaDataReset.RESET.attempt(app,System.currentTimeMillis())==DataReset.Outcome.LISTENER_UNACKNOWLEDGED);check(SenseListenerClient.calls==DataReset.AUTOMATIC_ATTEMPTS+1);check(android.app.ActivityManager.calls==clears);check(AlphaDataReset.RESET.pending(app));
   // Window policy: budget returns after the window or a clock change; unreadable state defers automatic attempts.
   long t=1_000_000;check(DataReset.automaticAttemptAllowed(new long[]{0,0},t));check(!DataReset.automaticAttemptAllowed(new long[]{DataReset.AUTOMATIC_ATTEMPTS,t},t+1));
   check(DataReset.automaticAttemptAllowed(new long[]{DataReset.AUTOMATIC_ATTEMPTS,t},t+DataReset.AUTOMATIC_WINDOW_MS));check(DataReset.automaticAttemptAllowed(new long[]{DataReset.AUTOMATIC_ATTEMPTS,t},t-1));
   java.nio.file.Files.write(failures.toPath(),"garbage".getBytes());check(!DataReset.automaticAttemptAllowed(AlphaDataReset.RESET.failureState(app),System.currentTimeMillis()));
-  SenseListenerClient.calls=0;try{new AlphaApplication().attachBaseContext(app);throw new AssertionError();}catch(android.os.Process.Exit stopped){}check(SenseListenerClient.calls==0);check(AlphaDataReset.pending(app));
+  SenseListenerClient.calls=0;try{new AlphaApplication().attachBaseContext(app);throw new AssertionError();}catch(android.os.Process.Exit stopped){}check(SenseListenerClient.calls==0);check(AlphaDataReset.RESET.pending(app));
   // Corrupt counts or times cannot grant unbounded automatic attempts.
   for(String corrupt:new String[]{"-1000000:"+System.currentTimeMillis(),"1:-5","1:2:3","99999999999:"+System.currentTimeMillis()}){java.nio.file.Files.write(failures.toPath(),corrupt.getBytes());check(!DataReset.automaticAttemptAllowed(AlphaDataReset.RESET.failureState(app),System.currentTimeMillis()));}
   // A user's Try again from unreadable state starts a fresh window, so automatic attempts can resume later.
@@ -89,21 +89,21 @@ public class ResetStartupTest {
    android.app.ActivityManager.starts=java.util.List.of(new android.app.ApplicationStartInfo((Integer)start[0],(Integer)start[1]));android.os.Build.VERSION.SDK_INT=(Integer)start[3];android.app.ActivityManager.startsFail=(Boolean)start[4];
    int shown=android.content.Context.recoveries;
    try{new AlphaApplication().attachBaseContext(app);throw new AssertionError("Background start resumed");}catch(android.os.Process.Exit stopped){}
-   check(android.content.Context.recoveries==shown+((Boolean)start[2]?1:0));check(NativeSourceHost.started==0);check(AlphaDataReset.pending(app));check(android.app.ActivityManager.calls==clears);
+   check(android.content.Context.recoveries==shown+((Boolean)start[2]?1:0));check(NativeSourceHost.started==0);check(AlphaDataReset.RESET.pending(app));check(android.app.ActivityManager.calls==clears);
   }
   // The interactive path follows the user's own confirmation, so it shows recovery whatever started the process.
   android.os.Build.VERSION.SDK_INT=36;android.app.ActivityManager.startsFail=false;android.app.ActivityManager.starts=java.util.List.of(new android.app.ApplicationStartInfo(123,android.app.ApplicationStartInfo.START_REASON_JOB));
   int shown=android.content.Context.recoveries;try{AlphaDataReset.RESET.dispatchAndExit(app);throw new AssertionError();}catch(android.os.Process.Exit stopped){}check(android.content.Context.recoveries==shown+1);
   android.app.ActivityManager.starts=new java.util.ArrayList<>();
   // A new confirmation starts a fresh budget, so the interactive attempt is never silently deferred.
-  AlphaDataReset.record(app);check(!failures.exists());check(DataReset.automaticAttemptAllowed(AlphaDataReset.RESET.failureState(app),System.currentTimeMillis()));
+  AlphaDataReset.RESET.record(app);check(!failures.exists());check(DataReset.automaticAttemptAllowed(AlphaDataReset.RESET.failureState(app),System.currentTimeMillis()));
   // Interrupted between acknowledgement and dispatch: the listener acknowledges, Android refuses; the next launch completes.
-  SenseListenerClient.resetSaved=true;android.app.ActivityManager.mode=2;try{new AlphaApplication().attachBaseContext(app);throw new AssertionError();}catch(android.os.Process.Exit stopped){}check(AlphaDataReset.pending(app));
+  SenseListenerClient.resetSaved=true;android.app.ActivityManager.mode=2;try{new AlphaApplication().attachBaseContext(app);throw new AssertionError();}catch(android.os.Process.Exit stopped){}check(AlphaDataReset.RESET.pending(app));
   android.app.ActivityManager.mode=0;int recoveriesBefore=android.content.Context.recoveries;
   try{new AlphaApplication().attachBaseContext(app);throw new AssertionError();}catch(android.os.Process.Exit stopped){}check(android.content.Context.recoveries==recoveriesBefore);
   // Simulated system completion: only this fixture directory is erased. Fresh launch initializes.
   for(java.io.File f:android.content.Context.data.listFiles())check(f.delete());
-  check(!AlphaDataReset.pending(app));
+  check(!AlphaDataReset.RESET.pending(app));
   // A late failure result from a stale recovery attempt cannot recreate reset state in fresh data.
   SenseListenerClient.resetSaved=false;check(AlphaDataReset.RESET.attempt(app,System.currentTimeMillis())==DataReset.Outcome.LISTENER_UNACKNOWLEDGED);check(android.content.Context.data.listFiles().length==0);SenseListenerClient.resetSaved=true;
   app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==7);

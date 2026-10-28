@@ -2,7 +2,6 @@ package ai.elizaresearch.alphaphone;
 
 import ai.eliza.plugins.system.reset.DataReset;
 import ai.eliza.plugins.system.reset.DataResetCopy;
-import android.content.Context;
 
 /**
  * Alpha's registration of the shared reset coordinator (plugin-native-system reset.DataReset):
@@ -22,7 +21,5 @@ final class AlphaDataReset {
   .disclosure("Permanently delete Alpha's local conversations, Notes and drafts, passwords, settings, downloads in Alpha's private storage, and sign-ins. Stop its agent and pending work. There is no backup or undo.\n\nAlpha also asks Cloud to revoke this phone's sign-in when Cloud can be reached. Device-wide photos and files, remote Gmail and Cloud data, and your Cloud plan are not deleted or cancelled. Other apps are not reset. Alpha will close; open it again to start fresh.\n\nConfirm, then unlock your device to continue.")
   .progressMessage("Signing out of Cloud… Alpha closes in a few seconds.")
   .recoveryRemoteNote("(Alpha may already have asked Cloud to revoke this phone's sign-in.)").build();
- static boolean pending(Context context){return RESET.pending(context);}
- static void record(Context context)throws Exception{RESET.record(context);}
  private AlphaDataReset(){}
 }

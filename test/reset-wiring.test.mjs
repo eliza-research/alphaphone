@@ -37,8 +37,8 @@ public final class WiringCheck {
   check(copy.disclosure.contains("There is no backup or undo")&&copy.disclosure.contains("not deleted or cancelled")&&copy.disclosure.contains("Other apps are not reset"),"disclosure scope");
   check(copy.credentialDescription.equals("Unlock to permanently erase Alpha's local data."),"credential prompt");
   check(copy.progressMessage.startsWith("Signing out of Cloud"),"progress covers the Cloud revocation window");
-  for(boolean installed:new boolean[]{false,true})for(boolean controllable:new boolean[]{false,true}){
-   String body=copy.recoveryBody(installed,controllable);
+  for(DataReset.Outcome last:new DataReset.Outcome[]{null,DataReset.Outcome.ANDROID_REFUSED,DataReset.Outcome.LISTENER_UNACKNOWLEDGED})for(boolean installed:new boolean[]{false,true})for(boolean controllable:new boolean[]{false,true}){
+   String body=copy.recoveryBody(last,installed,controllable);
    check(body.contains("Alpha's local data has not been deleted yet. (Alpha may already have asked Cloud to revoke this phone's sign-in.)"),"recovery never claims deletion");
    check(!body.matches("(?is).*(reset (is )?complete|data (was|has been) deleted\\\\.).*"),"no completion claim");
   }

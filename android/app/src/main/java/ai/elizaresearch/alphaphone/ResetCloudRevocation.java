@@ -5,7 +5,7 @@ package ai.elizaresearch.alphaphone;
 final class ResetCloudRevocation {
  private ResetCloudRevocation(){}
  static void revoke(android.content.Context context,long timeoutMs){
-  if(timeoutMs<=0||!AlphaDataReset.pending(context))return;
+  if(timeoutMs<=0||!AlphaDataReset.RESET.pending(context))return;
   final long deadline=System.nanoTime()+Math.min(timeoutMs,8000)*1_000_000L;
   Thread worker=new Thread(()->{
    for(String environment:CloudKeyRevocation.environments(BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS)){
