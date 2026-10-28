@@ -2111,9 +2111,9 @@
       }
     ],
     "sourceBinding": {
-      "priorUpstreamCommit": "ea0899fd7f19b2bf3552127d6566c15e23b4c303",
-      "evidence": "docs/evidence/source-clean-coherent-final-20261028.json",
-      "note": "Source binding only: exact raw lock Git object/bytes unchanged. Retained dated registry findings, exceptions/deadlines/pending fixes and historical packaged evidence; no fresh registry query or release clearance."
+      "priorUpstreamCommit": "de16c240f8ef77779edd3aa411e407018d2be209",
+      "evidence": "docs/evidence/notes-restore-guidance-20261028.json",
+      "note": "Same exact dependency lock; previous dated advisory findings retained, no fresh audit claim."
     }
   }
 }

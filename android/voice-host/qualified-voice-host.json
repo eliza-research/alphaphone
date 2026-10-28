@@ -338,7 +338,7 @@
       "note": "Recorded engine, model and JNI build inputs are unchanged. The optional Capacitor transcription transport and its contract tests now use the admitted native Phonon session exclusively. Native bytes and prior component evidence are retained; device and user acceptance are not extended."
     },
     "currentSourceComparison": {
-      "priorAdmittedAt": "ea0899fd7f19b2bf3552127d6566c15e23b4c303",
+      "priorAdmittedAt": "de16c240f8ef77779edd3aa411e407018d2be209",
       "admittedAt": "2f664cc6dc223cf12002120576357114f8cb9763",
       "unchangedPaths": [
         "plugins/plugin-local-inference/native/llama.cpp",
@@ -367,8 +367,8 @@
         "package.json",
         "bun.lock"
       ],
-      "evidence": "docs/evidence/source-clean-coherent-final-20261028.json",
-      "note": "Only shared Calendar/Assistant/Notes/Cloud source changed from EA. Compared native/model/JNI/Bun/Core/workflow inputs are exact EA objects. Earlier native consumer/Power changes still need current compilation and exact artifact acceptance. Historical binary/model/ABI facts and false qualification flags are retained; no hardware/voice acceptance transfers."
+      "evidence": "docs/evidence/notes-restore-guidance-20261028.json",
+      "note": "One Assistant tool description changed; recorded native qualification remains unchanged. Source-only binding, not hardware or model acceptance."
     },
     "sourceComparisonHistory": [
       {
@@ -483,6 +483,39 @@
         ],
         "evidence": "docs/evidence/voice-source-admission-final-ea-20261028.json",
         "note": "Only Calendar schema/diagnostic source changes from A2; listed native input objects remain identical to A2. The earlier 8cc-to-A2 consumer/Power changes still require fresh compilation and exact artifact/image acceptance. Historical binary/model/ABI records and qualified=false remain unchanged."
+      },
+      {
+        "priorAdmittedAt": "ea0899fd7f19b2bf3552127d6566c15e23b4c303",
+        "admittedAt": "de16c240f8ef77779edd3aa411e407018d2be209",
+        "unchangedPaths": [
+          "plugins/plugin-local-inference/native/llama.cpp",
+          "plugins/plugin-local-inference/native/android/inputs.json",
+          "packages/app/scripts/paradee-voice",
+          "packages/app/scripts/stage-elizavoice-lib.ts",
+          "packages/app/platforms/android/app/src/main/elizavoice-jni",
+          "packages/app/platforms/android/app/src/main/java/ai/elizaos/app/ElizaVoiceNative.java",
+          "packages/app/scripts/lib/android-bun-artifacts.lock.json",
+          "plugins/plugin-local-inference/native",
+          "plugins/plugin-native-system/android",
+          "packages/app/platforms/android",
+          "plugins/plugin-native-action-journal/android",
+          "plugins/plugin-native-calendar/android",
+          "plugins/plugin-native-media/android",
+          "plugins/plugin-native-notifications/android",
+          "plugins/plugin-native-reminders/android",
+          "plugins/plugin-native-secure-store/android",
+          "packages/core",
+          "plugins/plugin-workflow",
+          "packages/agent",
+          "packages/contracts/src/lifeops/workflows.ts",
+          "packages/host",
+          "plugins/plugin-pdf",
+          "LICENSE",
+          "package.json",
+          "bun.lock"
+        ],
+        "evidence": "docs/evidence/source-clean-coherent-final-20261028.json",
+        "note": "Only shared Calendar/Assistant/Notes/Cloud source changed from EA. Compared native/model/JNI/Bun/Core/workflow inputs are exact EA objects. Earlier native consumer/Power changes still need current compilation and exact artifact acceptance. Historical binary/model/ABI facts and false qualification flags are retained; no hardware/voice acceptance transfers."
       }
     ],
     "consumerSourceComparisonHistory": [

@@ -1,6 +1,8 @@
 # Current MVP status
 
-Current local integration candidate: clean coherent SDK `2f664cc6dc223cf12002120576357114f8cb9763` with preserved public/native/recovery/Power and current Calendar/catalog/planner/Notes fixes. Shared source qualification is recorded at exact component/joined heads; product preparation/current-head checks and live Notes/Calendar semantics remain pending. Native/model/ABI history and qualified=false are unchanged; current APK/simulator/physical acceptance is separate. No GitHub publication or cleanup was performed.
+Current local source candidate: Notes restoration guidance `2f664cc6dc223cf12002120576357114f8cb9763`; existing source and native evidence below retain their original revisions. Performance and device acceptance remain pending.
+
+Previous source checkpoint: Current local integration candidate: clean coherent SDK `de16c240f8ef77779edd3aa411e407018d2be209` with preserved public/native/recovery/Power and current Calendar/catalog/planner/Notes fixes. Shared source qualification is recorded at exact component/joined heads; product preparation/current-head checks and live Notes/Calendar semantics remain pending. Native/model/ABI history and qualified=false are unchanged; current APK/simulator/physical acceptance is separate. No GitHub publication or cleanup was performed.
 
 Previous source checkpoint: Current local integration candidate: SDK `ea0899fd7f19b2bf3552127d6566c15e23b4c303` joins the reviewed public SDK, recovery, Power and Calendar alias/diagnostic source. Product types, bundle and browser qualification are in progress. Actual Calendar database effects, live browser behavior, final native artifact/image acceptance and independent final approval remain open. Existing native binary records remain unqualified; the small 9a/8cc APK is separate. Retained full-lock audit findings are rebound after exact lock identity, with no fresh registry query or exception changes.
 
