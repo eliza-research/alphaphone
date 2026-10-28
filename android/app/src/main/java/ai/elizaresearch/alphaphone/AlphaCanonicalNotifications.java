@@ -35,7 +35,12 @@ final class AlphaCanonicalNotifications {
   NotificationManager manager=context.getSystemService(NotificationManager.class);if(manager==null||!manager.areNotificationsEnabled())return;
   Context app=context.getApplicationContext();final int ticket;
   synchronized(AlphaCanonicalNotifications.class){if(restoring||ownsSession())return;restoring=true;ticket=restoration.incrementAndGet();}
-  long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(60);SERIAL.execute(()->restore(app,ticket,deadline));
+  long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(60);if(!serial(()->restore(app,ticket,deadline)))restorationDone(ticket);
+ }
+ /** SERIAL lives for the process, but a refused hand-off is answered here and never thrown on a caller's thread. */
+ private static boolean serial(Runnable work){return PluginWorkers.submit(SERIAL,work,()->{});}
+ private static boolean serialAfter(Runnable work,long delay,TimeUnit unit){
+  try{SERIAL.schedule(work,delay,unit);return true;}catch(RejectedExecutionException refused){return false;}
  }
  private static void restorationDone(int ticket){synchronized(AlphaCanonicalNotifications.class){if(ticket==restoration.get())restoring=false;}}
  private static void restore(Context context,int ticket,long deadline){
@@ -47,7 +52,7 @@ final class AlphaCanonicalNotifications {
   }catch(NativeNotificationSession.Superseded replaced){restorationDone(ticket);return;}
   catch(SecurityException|JSONException|IllegalArgumentException retired){try{if(ticket==restoration.get())AlphaLocalAgentPlugin.retireRejectedNotificationSession(context,saved);}catch(Exception ignored){}restorationDone(ticket);return;}
   catch(Exception notReady){/* Read-only startup retry; never pairs or mints a session. */}
-  if(ticket==restoration.get())SERIAL.schedule(()->restore(context,ticket,deadline),2,TimeUnit.SECONDS);
+  if(ticket==restoration.get()&&!serialAfter(()->restore(context,ticket,deadline),2,TimeUnit.SECONDS))restorationDone(ticket);
  }
  static void forget(Context context){
   restoration.incrementAndGet();stop();
@@ -65,7 +70,8 @@ final class AlphaCanonicalNotifications {
   if(manager==null||!manager.areNotificationsEnabled())return;
   synchronized(AlphaCanonicalNotifications.class){
    if(ownsSession())return;
-   AlphaCanonicalNotifications next=new AlphaCanonicalNotifications(context);active=next;SERIAL.execute(next::connect);
+   AlphaCanonicalNotifications next=new AlphaCanonicalNotifications(context);active=next;
+   if(!serial(next::connect)){next.stopped=true;active=null;}
   }
  }
  static void stop(){detach(true);}
@@ -77,7 +83,7 @@ final class AlphaCanonicalNotifications {
   synchronized(AlphaCanonicalNotifications.class){if(retire)pendingTap=null;}
   if(previous==null)return;previous.stopped=true;
   ElizaAgentService.LocalStreamHandle h=previous.stream;if(h!=null)h.cancel();
-  SERIAL.execute(()->{if(retire&&previous.owner!=null)try{NativeNotificationProjector.retireOwner(previous.context,previous.owner);}catch(Exception ignored){}});
+  serial(()->{if(retire&&previous.owner!=null)try{NativeNotificationProjector.retireOwner(previous.context,previous.owner);}catch(Exception ignored){}});
  }
  private void check()throws Exception{
   if(stopped||active!=this)throw new SecurityException("Notification connection retired");
@@ -106,7 +112,7 @@ final class AlphaCanonicalNotifications {
     try{AlphaLocalAgentPlugin.subscribeNotificationEvents(session,event->{
      if(stopped||generation!=attempt)return;
      if(queued.incrementAndGet()>128){queued.decrementAndGet();handle.cancel();return;}
-     SERIAL.execute(()->{try{
+     PluginWorkers.submit(SERIAL,()->{try{
       check();if(generation!=attempt)return;
       JSONObject frame=new JSONObject(event);String type=frame.optString("type");
       if("subscribed".equals(type)){hydrate(generation);return;}
@@ -117,9 +123,9 @@ final class AlphaCanonicalNotifications {
       try{notification=NativeNotificationWire.notification(envelope.toString());}
       catch(JSONException|IllegalArgumentException invalid){return;}
       if(notification!=null)inbox.acceptLive(notification);
-     }catch(Exception failure){fail(generation,failure);}finally{queued.decrementAndGet();}});
-    },handle);}catch(Exception failure){SERIAL.execute(()->fail(generation,failure));}
-    finally{SERIAL.execute(()->fail(generation,new IllegalStateException("Notification event stream ended")));}
+     }catch(Exception failure){fail(generation,failure);}finally{queued.decrementAndGet();}},()->{queued.decrementAndGet();handle.cancel();});
+    },handle);}catch(Exception failure){serial(()->fail(generation,failure));}
+    finally{serial(()->fail(generation,new IllegalStateException("Notification event stream ended")));}
    });
    SERIAL.schedule(()->verify(generation),20,TimeUnit.SECONDS);
   }catch(Exception unavailable){fail(generation,unavailable);}
@@ -147,7 +153,7 @@ final class AlphaCanonicalNotifications {
   ++attempt;ElizaAgentService.LocalStreamHandle h=stream;stream=null;if(h!=null)h.cancel();
   // An authority change cannot authorize background enrollment or a retry.
   if(failure instanceof SecurityException){stop();return;}
-  long delay=Math.min(60000L,1000L<<Math.min(failures++,6));SERIAL.schedule(this::connect,delay,TimeUnit.MILLISECONDS);
+  long delay=Math.min(60000L,1000L<<Math.min(failures++,6));if(!serialAfter(this::connect,delay,TimeUnit.MILLISECONDS))stop();
  }
  /** Capture only our private-token tap. Strip it before Capacitor can treat it as an external URL. */
  static void captureTap(Context context,Intent intent){
@@ -155,7 +161,7 @@ final class AlphaCanonicalNotifications {
   synchronized(AlphaCanonicalNotifications.class){waitingTap=new Intent(intent);}
   intent.setData(null).setAction(Intent.ACTION_MAIN);
   intent.removeExtra("deepLink");intent.removeExtra("conversationId");intent.removeExtra("messageId");
-  AlphaCanonicalNotifications a=active;if(a!=null)SERIAL.execute(a::consumeWaitingTap);
+  AlphaCanonicalNotifications a=active;if(a!=null)serial(a::consumeWaitingTap);
  }
  private void consumeWaitingTap(){
   Intent tap;synchronized(AlphaCanonicalNotifications.class){tap=waitingTap;}
