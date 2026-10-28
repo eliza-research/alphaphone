@@ -121,8 +121,8 @@ shared `NoticeRoutes`, `NoticeTapInbox`, `NoticeOwner`, `NoticeCoordinator`, `No
 deployed slot names, channels, icon, tag prefix, launch actions and the foreground and question-excerpt checks. The renderer's notice owner fence, tap resolution, approval notice identity and owner-return
 revalidation are the shared `@elizaos/contracts/notice-routes`. Typed workflows use the shared
 `@elizaos/contracts/phone-workflow` normalizer, and their reviewed local-time triggers run on the resident agent's
-durable task scheduler only while the phone is on (a missed occurrence is recorded, never run late); there is no
-Alpha scheduler. The receipt-checked workflow route client (exact-version activation and runs, approval
+durable task scheduler only while the phone is on (a missed occurrence is recorded, never run late, and its
+receipt offers an explicit Run now through the workflow's reviewed run confirmation); there is no Alpha scheduler. The receipt-checked workflow route client (exact-version activation and runs, approval
 receipts, metadata, removal and restore, typed saves, and reconciliation by submission or mutation identity) is
 the shared `@elizaos/contracts/workflow-client`; `runtime/workflow-protocol.ts` only adds the phone-step review read,
 the digest result routes and the test-mocks development enrollment labels, and always supplies the local transport.
