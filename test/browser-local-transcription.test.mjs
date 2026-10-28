@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {browserLocalSpeechStatus,transcribeWithSelectedBrowserAgent} from '../apps/app/src/browser/local-transcription.ts';
-import {recordingPcmSamples,recordingPcmWav} from '../apps/app/src/browser/recording-pcm.ts';
+import {decodeRecordingPcm,recordingPcmWav} from '../.eliza/client-features/packages/voice/src/browser-capture/recording-pcm.ts';
 const signal=()=>new AbortController().signal;
 test('no selected agent means unavailable without decoding or network fallback',async()=>{
  assert.equal((await browserLocalSpeechStatus(()=>null,signal())).ready,false);
@@ -59,13 +59,13 @@ test('owned browser recording reaches the selected agent as 16 kHz mono PCM WAV'
 test('browser recording keeps input, duration and cancellation admission before upload',async t=>{
  const controller=new AbortController();
  const contexts=decodedRecording(t,{duration:61});
- await assert.rejects(recordingPcmSamples(new Blob(),signal()),/Recording size is invalid/);
- await assert.rejects(recordingPcmSamples({size:16_000_001},signal()),/Recording size is invalid/);
+ await assert.rejects(decodeRecordingPcm(new Blob(),signal()),/Recording size is invalid/);
+ await assert.rejects(decodeRecordingPcm({size:16_000_001},signal()),/Recording size is invalid/);
  assert.equal(contexts.length,0);
- await assert.rejects(recordingPcmSamples(new Blob(['audio']),signal()),/under 60 seconds/);
+ await assert.rejects(decodeRecordingPcm(new Blob(['audio']),signal()),/under 60 seconds/);
  assert.equal(contexts.length,1,'oversized duration never starts rendering');
  controller.abort();
- await assert.rejects(recordingPcmSamples(new Blob(['audio']),controller.signal),{name:'AbortError'});
+ await assert.rejects(decodeRecordingPcm(new Blob(['audio']),controller.signal),{name:'AbortError'});
  assert.equal(contexts.length,1,'cancelled capture never starts decoding');
 });
 

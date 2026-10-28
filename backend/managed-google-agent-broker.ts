@@ -4,7 +4,7 @@ import type {IncomingMessage,ServerResponse} from 'node:http';
 import {CloudProtocolError} from '../apps/app/src/runtime/cloud-protocol.ts';
 import {CalendarAgentWriteRefused} from '../vendor/eliza/plugins/plugin-calendar/src/service/managed-calendar-host.ts';
 import type {createManagedGoogleAgentHost} from './managed-google-agent-host.ts';
-type BrokerOperation='request'|'gmail.list'|'gmail.message'|'gmail.mailbox'|'gmail.send.prepare'|'gmail.send.dispatch'|'gmail.send.receipt'|'calendar.sources'|'calendar.feed'|'calendar.write-capabilities'|'calendar.write-target'|'calendar.write-execute';
+type BrokerOperation='request'|'gmail.list'|'gmail.message'|'gmail.mailbox'|'gmail.send.prepare'|'gmail.send.dispatch'|'gmail.send.receipt'|'calendar.sources'|'calendar.feed'|'calendar.write-capabilities'|'calendar.write-target'|'calendar.write-execute'|'calendar.linked-sync';
 export type ManagedGoogleBrokerDiagnostic={operation:BrokerOperation;errorClass:'CloudProtocolError'|'CalendarAgentWriteRefused'|'AbortError'|'TypeError'|'Error'|'unknown';code:'invalid-response'|'http'|'expired'|'credentials-missing'|'credential-consumed'|'login-active'|'account-changed'|'unclassified';status?:number;stage?:ManagedGoogleFailureStage;transportCode?:ManagedGoogleTransportCode;causeTransportCode?:ManagedGoogleTransportCode;transportMessageFamily?:ManagedGoogleTransportMessageFamily;causeTransportMessageFamily?:ManagedGoogleTransportMessageFamily;capabilities:{abortAny:boolean;abortTimeout:boolean;fetch:boolean}};
 function reportBrokerFailure(error:unknown,operation:BrokerOperation,report:(value:ManagedGoogleBrokerDiagnostic)=>void){
  try{
@@ -45,7 +45,7 @@ export function createManagedGoogleAgentBroker(options:{host:ReturnType<typeof c
    }else if(input.calendar!==undefined){
     if(Object.keys(input).length!==1||!input.calendar||typeof input.calendar!=='object'||Array.isArray(input.calendar))throw Error('Invalid Calendar read');
     const c=input.calendar;
-    if(['write-capabilities','write-target','write-execute'].includes(c.operation)){operation=('calendar.'+c.operation) as BrokerOperation;result=await reader.calendarWrite(c,controller.signal);}
+    if(['write-capabilities','write-target','write-execute','linked-sync'].includes(c.operation)){operation=('calendar.'+c.operation) as BrokerOperation;result=await reader.calendarWrite(c,controller.signal);}
     else if(c.operation==='sources'&&Object.keys(c).length===1){operation='calendar.sources';result={calendars:await reader.calendarSources(controller.signal)};}
     else if(c.operation==='feed'&&Object.keys(c).sort().join()===['operation','grantId','calendarId','timeMin','timeMax','timeZone'].sort().join()&&['grantId','calendarId','timeMin','timeMax','timeZone'].every(key=>typeof c[key]==='string'&&c[key].length<=1024)){operation='calendar.feed';result={feed:await reader.calendarFeed(c,controller.signal)};}
     else throw Error('Unsupported Calendar operation');

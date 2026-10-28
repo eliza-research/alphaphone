@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
-import {openLegacyAttachment} from './helpers/legacy-notes';
+import {openLegacyAttachment,openLegacyNotes} from './helpers/legacy-notes';
 import { setTextScale } from './accessibility-states';
 import {canonicalNotesFixture,openCanonicalNotes} from './helpers/canonical-notes';
 import {openOwnedPhotoViewer} from './helpers/owned-photo';
@@ -101,8 +101,9 @@ test('the note editor keeps Delete on screen beside the other header actions', a
   const {foreign,errors}=await canonicalNotesFixture(page);
   await openCanonicalNotes(page);
   await page.getByRole('button', { name: 'New note', exact: true }).click();
-  for (const name of ['Back to notes', 'Share note', 'Delete note']) await reachable(page, page.getByRole('button', { name, exact: true }));
-  const sizes = await page.locator('.note-editor [data-alpha-app-header] button').evaluateAll(list => list.map(el => el.getBoundingClientRect().width));
+  // The shared Notes workspace editor: its first action row is the header; Share is in the later row.
+  for (const name of ['Back to notes', 'Pin', 'Delete note']) await reachable(page, page.getByRole('button', { name, exact: true }));
+  const sizes = await page.locator('section[aria-label="Note editor"] > .notes-workspace-actions').first().locator('button').evaluateAll(list => list.map(el => el.getBoundingClientRect().width));
   for (const width of sizes) expect(width).toBeGreaterThanOrEqual(44);
   expect(sizes.length).toBeGreaterThanOrEqual(3);
   expect(foreign).toEqual([]);
@@ -172,7 +173,8 @@ test.describe('menus and sheets over a scrim own focus', () => {
       const ownedInfo=start==='photos:viewer'&&name==='Photo info';
       const nativeShare=start==='notes:editor'&&name==='Share';
       if(nativeShare){
-        await canonicalNotesFixture(page);await openCanonicalNotes(page);
+        // The shared Notes workspace hands Share straight to the OS; the share panel is the Older notes editor's.
+        await page.addInitScript(offline);await page.goto('/');await openLegacyNotes(page);
         await page.getByRole('button',{name:'New note',exact:true}).click();
         await page.getByRole('textbox',{name:'Title',exact:true}).fill('Owned share focus note');
         await page.getByRole('textbox',{name:'Note',exact:true}).fill('Exact locally created content.');

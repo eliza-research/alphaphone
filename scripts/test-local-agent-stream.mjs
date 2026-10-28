@@ -11,6 +11,13 @@ function response(text,size=1){const bytes=encoder.encode(text);return new Respo
 const progress=[];
 const terminal=await readLocalAgentStream(response(': heartbeat\r\n\r\n'+event({type:'token',text:'Hé'}).replaceAll('\n','\r\n')+event({type:'token',text:'llo'})+event({type:'token',fullText:'Hello revised'})+event({type:'tool',action:'execute',proposal:{id:'untrusted'}})+event({type:'done',fullText:'Final',agentName:'Fixture'})),signal,text=>progress.push(text));
 assert.deepEqual(progress,['Hé','Héllo','Hello revised']);assert.equal(terminal.text,'Final');assert.equal(terminal.proposals,undefined);
+// A settled semantic refusal carries its diagnostic without a second display,
+// early navigation, a thrown transport error, or an invented retry.
+const calendarFailure={kind:'reply_generation_error',code:'CALENDAR_READ_RECEIPT_MISMATCH',transient:false,message:"I couldn't confirm that Calendar request."};
+const readiness=[];
+const calendarReply=await readLocalAgentStream(response(event({type:'done',fullText:calendarFailure.message,agentName:'Fixture',messageId:'calendar-reply',failureKind:calendarFailure.kind,terminalFailure:calendarFailure})),signal,()=>{throw Error('Unexpected extra prose frame');},value=>readiness.push(value));
+assert.equal(calendarReply.text,calendarFailure.message);assert.deepEqual(calendarReply.terminalFailure,calendarFailure);assert.equal(calendarReply.failureKind,calendarFailure.kind);assert.deepEqual(readiness,[undefined]);
+
 await assert.rejects(readLocalAgentStream(response(event({type:'token',text:'Partial'})),signal,()=>{}),/without a completed reply/);
 await assert.rejects(readLocalAgentStream(response(event({type:'error',message:'untrusted provider secret'})),signal,()=>{}),error=>!error.message.includes('secret')&&error.message.includes('interrupted'));
 await assert.rejects(readLocalAgentStream(response(event({type:'done',fullText:'not enough'})),signal,()=>{}),/Invalid terminal/);

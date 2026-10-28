@@ -1,3 +1,4 @@
+import {selectCalendarSource} from './helpers/browser-calendar';
 import {flagOffAndroid,residentHome,fenceNetwork} from './flag-off-android';
 import { openLegacyNotes } from './helpers/legacy-notes';
 import { test, expect, type Page, type Locator } from '@playwright/test';
@@ -27,11 +28,7 @@ async function open(page: Page, app: string) {
         :base(plugin,method,input);
     });
     await residentHome(page);
-    await page.getByRole('button',{name:app,exact:true}).click();
-    const sources=page.locator('summary').filter({hasText:'Calendar sources'});
-    await sources.click();
-    await page.getByRole('button',{name:'Android calendars',exact:true}).click();
-    await sources.click();
+    await selectCalendarSource(page, 'Android calendars');
     return;
   }
   await page.addInitScript(() => localStorage.setItem('alpha.connection.selection.v1', JSON.stringify({ kind: 'offline', localApps: true })));

@@ -102,6 +102,10 @@ function handOffs(name, code) {
 
 // Hand-offs that are safe for a reason the scanner cannot see. Each entry is one exact place.
 const REVIEWED = [
+  { file: "AlphaCanonicalNotifications.java", receiver: "SERIAL", method: "execute", count: 7,
+    why: "private static final process dispatcher; stop retires sessions, never the executor; lifetime and non-escape checked below" },
+  { file: "AlphaCanonicalNotifications.java", receiver: "SERIAL", method: "schedule", count: 2,
+    why: "same process dispatcher; queued retries check session generation and the dispatcher is never shut down" },
   { file: "HostedTransport.java", receiver: "timer", method: "schedule", count: 1,
     why: "runs in the constructor, on a timer created by that same object's field initialiser; nothing can have stopped it yet" },
   { file: "IsolatedPdfService.java", receiver: "worker", method: "execute", count: 1,
@@ -110,7 +114,29 @@ const REVIEWED = [
     why: "the wrapper itself; it deliberately lets the rejection reach its callers, and every NOTICE_IO.execute call is scanned here" },
 ];
 
+/** A lifetime exception is safe only while the executor cannot escape or be stopped. */
+function assertNotificationDispatcherLifetime(source) {
+  const code = mask(source);
+  const declaration = /\bprivate\s+static\s+final\s+ScheduledExecutorService\s+SERIAL\s*=\s*Executors\.newSingleThreadScheduledExecutor\(\s*\)\s*;/g;
+  const declarations = [...code.matchAll(declaration)];
+  assert.equal(declarations.length, 1, "notification dispatcher must remain privately owned and immutable");
+  const start = declarations[0].index, end = start + declarations[0][0].length;
+  for (const reference of code.matchAll(/\bSERIAL\b/g)) {
+    if (reference.index >= start && reference.index < end) continue;
+    assert.match(code.slice(reference.index), /^SERIAL\s*\.\s*(?:execute|schedule)\s*\(/,
+      "notification dispatcher must not escape, be reassigned or be shut down");
+  }
+}
+
 const sites = files.flatMap(name => handOffs(name, mask(read(name))));
+
+test("notification dispatcher outlives sessions and cannot escape to a shutdown owner", () => {
+  const source = read("AlphaCanonicalNotifications.java");
+  assertNotificationDispatcherLifetime(source);
+  assert.throws(() => assertNotificationDispatcherLifetime(source.replace("static final ScheduledExecutorService SERIAL", "static ScheduledExecutorService SERIAL")));
+  assert.throws(() => assertNotificationDispatcherLifetime(source.replace("SERIAL.execute(", "SERIAL.shutdown(); SERIAL.execute(")));
+  assert.throws(() => assertNotificationDispatcherLifetime(source.replace("SERIAL.execute(", "ExecutorService alias = SERIAL; SERIAL.execute(")));
+});
 
 test("the scanner sees the executors the app really has", () => {
   // A scanner that silently finds nothing would pass every assertion below.
