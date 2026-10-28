@@ -176,14 +176,16 @@ final class AlphaCanonicalNotifications {
   AlphaCanonicalNotifications a=active;if(a==null)return new JSONObject();a.check();
   synchronized(AlphaCanonicalNotifications.class){if(pendingTap==null||pendingTap.getLong("expiresAt")<System.currentTimeMillis()||!a.identity.getString("subjectUserId").equals(pendingTap.getString("ownerId"))||!a.identity.getString("agentId").equals(pendingTap.getString("agentId")))return new JSONObject();return new JSONObject(pendingTap.toString());}
  }
- static void acknowledge(String token)throws Exception{
+ interface ForegroundCheck{void current()throws Exception;}
+ static void acknowledge(String token,ForegroundCheck foreground)throws Exception{
   AlphaCanonicalNotifications a=active;if(a==null)throw new SecurityException("Notification owner unavailable");a.check();JSONObject pending;
+  foreground.current();
   // Compare-and-clear atomically: acknowledging A must never erase a newer tap B.
   synchronized(AlphaCanonicalNotifications.class){
    if(active!=a||pendingTap==null||!token.equals(pendingTap.optString("token"))||pendingTap.getLong("expiresAt")<System.currentTimeMillis())throw new SecurityException("Notification tap changed");
    pending=new JSONObject(pendingTap.toString());pendingTap=null;
   }
-  a.check();JSONObject response=AlphaLocalAgentPlugin.markNotificationRead(a.session,pending.getString("notificationId"));a.check();
+  a.check();foreground.current();JSONObject response=AlphaLocalAgentPlugin.markNotificationRead(a.session,pending.getString("notificationId"));a.check();
   if(response.getInt("status")!=200)throw new IllegalStateException("Notification read receipt unconfirmed");
  }
 }

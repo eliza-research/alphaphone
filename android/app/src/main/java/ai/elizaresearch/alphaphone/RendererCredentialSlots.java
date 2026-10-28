@@ -3,7 +3,7 @@ package ai.elizaresearch.alphaphone;
 /** Public credential storage must not bypass native journal/provider state machines. */
 final class RendererCredentialSlots {
  private static final String[] NATIVE_NAMESPACES = {
-  "gmail-background", "native-calendar-sync", "native-delete-journal", "native-delete-installation", "native-digest-source", "resident-results", "local-agent-provider", "workflow-notice-taps",
+  "canonical-notification-owner", "gmail-background", "native-calendar-sync", "native-delete-journal", "native-delete-installation", "native-digest-source", "resident-results", "local-agent-provider", "workflow-notice-taps",
   "workflow-notice-delivery", "workflow-notice-owner", "workflow-approval-notices", "action-journal", "hosted-background",
   "hosted-digests", "hosted-notices", "note-audio-metadata", "reminder-taps",
   // In-app Cloud sign-in: the pending Google PKCE record and the key acknowledgement receipt.
