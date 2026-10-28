@@ -63,6 +63,23 @@ test('page-created files are captured in an isolated world and saved only after 
   assert.match(plugin, /t\.capture=new BrowserBlobCapture\(t\.web,downloads\.captureDirectory\(\)\);/);
 });
 
+test('the instrumented witnesses read the shared download list and name the shared isolated-world channels', () => {
+  // BrowserWebFeaturesInstrumentedTest reads private native state by reflection and probes the page
+  // world for channel names. A field or channel renamed upstream would otherwise fail only on a
+  // device, or let the page-world check pass without testing anything.
+  const instrumented = read('android/app/src/androidTest/java/ai/elizaresearch/alphaphone/BrowserWebFeaturesInstrumentedTest.java');
+  const login = read(shared + 'BrowserLoginFields.java');
+  assert.match(plugin, /private BrowserDownloads downloads;/);
+  assert.match(downloads, /private final BrowserDownloadPolicy\.History history = new BrowserDownloadPolicy\.History\(\);/);
+  assert.match(instrumented, /\(BrowserDownloadPolicy\.History\)field\(downloads,"history"\)\)\.all\(\)/);
+  assert.doesNotMatch(instrumented, /field\(downloads,"owned"\)/, 'the former JSON map is gone');
+  const channels = [/CHANNEL = "(__\w+)"/.exec(capture)?.[1], /CHANNEL = "(__\w+)"/.exec(login)?.[1]];
+  assert.deepEqual(channels, ['__elizaBrowserCapture', '__elizaLoginFields']);
+  const probe = /Child page retains no app bridge","true",browser\.child\("([^"]+)"\)/.exec(instrumented)?.[1] ?? '';
+  for (const channel of channels) assert.ok(probe.includes(`typeof ${channel}==='undefined'`), `the page world is probed for ${channel}`);
+  assert.doesNotMatch(probe, /__alpha(?:BrowserCapture|LoginFields)/, 'no retired channel name');
+});
+
 test('site permissions are origin-bound prompts, stored only for normal tabs and never retained by WebView', () => {
   assert.doesNotMatch(plugin, /onPermissionRequest\(PermissionRequest request\) \{ request\.deny\(\); \}/);
   assert.match(plugin, /if\(!t\.priv\)try\{stored=sessionStore\.permission\(origin,kind\);\}/, 'private tabs never read decisions');
