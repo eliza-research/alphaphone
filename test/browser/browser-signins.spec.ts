@@ -11,6 +11,8 @@ test.beforeEach(async({page})=>{
  await page.goto('/');
 });
 const heading=(page:Page,name:string)=>page.frameLocator('[data-browser-surface]:visible iframe').getByRole('heading',{name,exact:true});
+// Cases that check the web fallback load pages through the native contract, then select web presentation.
+const webPresentation=(page:Page)=>page.evaluate(()=>{(window as any).Capacitor.isNativePlatform=()=>false;});
 async function openBrowser(page:Page){await page.evaluate(()=>{(window as any).Capacitor.isNativePlatform=()=>true;});await page.getByRole('button',{name:'Browser',exact:true}).click();await expect(page.getByRole('button',{name:'Menu',exact:true})).toBeVisible();}
 async function navigate(page:Page,path:string){
  if(!await page.getByRole('textbox',{name:'Address',exact:true}).isVisible())await page.getByRole('button',{name:'Edit address',exact:true}).click();
@@ -39,7 +41,7 @@ test('a private tab is labelled, created ephemeral and never enters saved tabs o
  await menu(page,'New private tab');
  await page.getByRole('button',{name:'Cancel editing',exact:true}).click();
  await expect(page.getByRole('img',{name:'Private tab',exact:true})).toBeVisible();
- await expect(page.getByRole('note',{name:'Private tab notice'})).toContainText('not saved in Alpha history');
+ await expect(page.getByRole('note',{name:'Private tab notice'})).toContainText('deleted when you close it, and it is not saved in history');
  await navigate(page,'secret');await expect(page.getByRole('img',{name:'Private tab',exact:true})).toBeVisible();
  await expect.poll(()=>page.evaluate(()=>(window as any).privateEvents.some((e:any)=>e.private===true))).toBe(true);
  await page.getByRole('button',{name:'Tabs',exact:true}).click();
@@ -57,6 +59,7 @@ test('a private tab is labelled, created ephemeral and never enters saved tabs o
 test('Clear browsing data asks first, then clears history and saved tabs but keeps bookmarks and private tabs',async({page})=>{
  await openBrowser(page);await navigate(page,'kept-mark');await menu(page,'Bookmark');await navigate(page,'visited');
  await menu(page,'New private tab');await navigate(page,'private-open');
+ await webPresentation(page);
  await menu(page,'Clear browsing data');
  const dialog=page.getByRole('dialog',{name:'Clear browsing data?'});await expect(dialog).toBeVisible();await expect(dialog).toContainText('Website cookies and sign-ins are managed in your browser settings');
  await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(dialog).toHaveCount(0);
@@ -73,7 +76,7 @@ test('Clear browsing data asks first, then clears history and saved tabs but kee
 });
 
 test('web site-data deletion is unavailable and direct calls cannot claim success',async({page})=>{
- await openBrowser(page);await navigate(page,'account');
+ await openBrowser(page);await navigate(page,'account');await webPresentation(page);
  await page.getByRole('button',{name:'Menu',exact:true}).click();
  await expect(page.getByRole('button',{name:'Clear data for this site',exact:true})).toHaveCount(0);
  expect(await page.evaluate(async()=>{

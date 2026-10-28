@@ -92,7 +92,7 @@ for(const available of [false,true])test(`browser UI does not offer native page 
  expect(await page.evaluate(()=>(window as any).shareCalls)).toEqual([]);
  expect(await page.evaluate(()=>(window as any).copiedUrls)).toEqual([]);
  expect(externalRequests).toEqual([url]);expect(popups).toBe(0);
- await page.getByRole('button',{name:'Close menu',exact:true}).click();
+ await page.getByRole('button',{name:'Close menu',exact:true}).click({position:{x:8,y:8}});
  await expect(page.frameLocator('iframe[title="Website"]').getByRole('heading',{name:'Share this page'})).toBeVisible();
 });
 
