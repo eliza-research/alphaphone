@@ -463,11 +463,13 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     if(reading && event.id===state()?.cur && (event.loading || event.error || event.navigation!==previous?.navigation || event.url!==previous?.url)) stopReading();
     if ((event.url && event.url !== previous?.url) || (event.loading && !previous?.loading))
       documentRevisions.set(event.id, (documentRevisions.get(event.id) || 0) + 1);
-    const committedPage = Capacitor.isNativePlatform() && !!event.url && !!event.committed && !event.loading && !event.error;
+    const committedPage = !!event.url && !!event.committed && !event.externalOnly && !event.loading && !event.error;
     // Embedded web pages report real commits too; an external-only fallback never gains reading authority.
     metadata.set(event.id,{...metadata.get(event.id),...event,...(event.externalOnly?{committed:false}:{}),...(committedPage?{savedUrl:event.url}:{})});
-    // Private tabs never enter history or saved tabs.
-    if(committedPage && state() && !isPrivate(event.id) && !event.private)shell.vset('browser',{visits:[event.url,...state().visits.filter((u:string)=>u!==event.url)].slice(0,MAX_HISTORY)});refresh();
+    // Private tabs never enter history or saved tabs. The web build also records an address it
+    // could only open externally; a page that navigated inside its frame reports an error instead.
+    const historyPage = Capacitor.isNativePlatform() ? committedPage : !!event.url && !event.loading && !event.error;
+    if(historyPage && state() && !isPrivate(event.id) && !event.private)shell.vset('browser',{visits:[event.url,...state().visits.filter((u:string)=>u!==event.url)].slice(0,MAX_HISTORY)});refresh();
   }).then((value:any)=>{listener=value;}).catch(()=>{});
   // target=_blank links and pop-ups that the native browser opened as a tab.
   void Browser.addListener('tabOpened',(event:Bag)=>{
