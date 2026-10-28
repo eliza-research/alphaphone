@@ -4,12 +4,12 @@
 // where the Android SDK is installed, one case signs a real APK with a throwaway key.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { X509Certificate } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { PIN_ENV, keyFileProblems, main, signArguments } from "../scripts/sign-release-apks.mjs";
+import { PIN_ENV, PKCS11_JVM_OPTION, keyFileProblems, main, signArguments, toolMessage } from "../scripts/sign-release-apks.mjs";
 
 const RELEASE = "e5".repeat(32);
 
@@ -29,11 +29,18 @@ function product(t, signer = RELEASE) {
   return root;
 }
 
-/** Decrypted ceremony layout for one signing job: owner-only directory and key files (contents unused by the stub). */
-function keys(t, { dirMode = 0o700, fileMode = 0o600 } = {}) {
+/**
+ * Decrypted ceremony layout for one signing job (contents unused by the stub): an owner-only
+ * directory, the private key 0600 and the certificate with the default mode decrypt-release-keys.ts
+ * gives it (it writes the public certificate without a mode).
+ */
+function keys(t, { dirMode = 0o700, keyMode = 0o600, certMode = 0o644 } = {}) {
   const dir = scratch(t, "alpha-sign-keys-");
   fs.chmodSync(dir, dirMode);
-  for (const file of ["alphaphone_app.pk8", "alphaphone_app.x509.pem"]) fs.writeFileSync(path.join(dir, file), "public-or-throwaway", { mode: fileMode });
+  for (const [file, mode] of [["alphaphone_app.pk8", keyMode], ["alphaphone_app.x509.pem", certMode]]) {
+    fs.writeFileSync(path.join(dir, file), "public-or-throwaway");
+    fs.chmodSync(path.join(dir, file), mode);
+  }
   return dir;
 }
 
@@ -104,7 +111,9 @@ test("PKCS#11 signing names the token key by label and passes a PIN only through
   const withPin = await sign(root, ["--pkcs11-config", config, "--key-label", "alpha-release-app", "--apksigner", tool, "--no-verify"], { env: { [PIN_ENV]: "123456" } });
   assert.equal(withPin.code, 0, withPin.err);
   const [first] = calls();
-  assert.deepEqual(first.argv.slice(0, 14), ["-J--add-exports=jdk.crypto.cryptoki/sun.security.pkcs11=ALL-UNNAMED", "sign", "--provider-class", "sun.security.pkcs11.SunPKCS11",
+  // apksigner's launcher turns "-J-x" into the JVM option "--x"; "-J--x" would reach java as "---x" and stop it.
+  assert.equal(PKCS11_JVM_OPTION, "-J-add-exports=jdk.crypto.cryptoki/sun.security.pkcs11=ALL-UNNAMED");
+  assert.deepEqual(first.argv.slice(0, 14), [PKCS11_JVM_OPTION, "sign", "--provider-class", "sun.security.pkcs11.SunPKCS11",
     "--provider-arg", config, "--ks", "NONE", "--ks-type", "PKCS11", "--ks-key-alias", "alpha-release-app", "--ks-pass", `env:${PIN_ENV}`]);
   assert.equal(first.pin, "123456", "the PIN reaches apksigner through its environment");
   assert.ok(!first.argv.join(" ").includes("123456"), "the PIN is never on the command line");
@@ -112,11 +121,30 @@ test("PKCS#11 signing names the token key by label and passes a PIN only through
   assert.deepEqual(signArguments({ mode: "pkcs11", pkcs11Config: config, keyLabel: "x", pin: false, input: "in.apk", output: "out.apk" }).slice(12, 14), ["--ks-pass", "pass:"]);
 });
 
-test("the key directory and files must be owner-only, outside Git and real files", t => {
+test("an apksigner failure is reported by its message, not by Java stack frames", () => {
+  const trace = ["Exception in thread \"main\" java.lang.IllegalAccessException: cannot access class sun.security.pkcs11.SunPKCS11",
+    "\tat java.base/jdk.internal.reflect.Reflection.newIllegalAccessException(Reflection.java:394)", "\tat com.android.apksigner.ApkSignerTool.sign(ApkSignerTool.java:358)", "\t... 2 more"].join("\n");
+  assert.equal(toolMessage({ stderr: trace }), "Exception in thread \"main\" java.lang.IllegalAccessException: cannot access class sun.security.pkcs11.SunPKCS11");
+  assert.equal(toolMessage({ stderr: "", stdout: "Failed to load signer \"signer #1\": NONE entry \"x\" does not contain a key\n" }), "Failed to load signer \"signer #1\": NONE entry \"x\" does not contain a key");
+  assert.equal(toolMessage({ error: new Error("spawn apksigner ENOENT") }), "spawn apksigner ENOENT");
+  assert.equal(toolMessage({}), "no output");
+});
+
+test("the key directory and private key must be owner-only, outside Git and real files; the public certificate keeps its mode", t => {
   assert.match(keyFileProblems("relative/keys", "alphaphone_app").join(), /absolute path/);
   assert.match(keyFileProblems(path.join(os.tmpdir(), "alpha-missing-keys-dir"), "alphaphone_app").join(), /does not exist/);
   assert.match(keyFileProblems(keys(t, { dirMode: 0o750 }), "alphaphone_app").join(), /owner-only/);
-  assert.match(keyFileProblems(keys(t, { fileMode: 0o640 }), "alphaphone_app").join(), /mode 0600 or stricter/);
+  const readable = keyFileProblems(keys(t, { keyMode: 0o640 }), "alphaphone_app");
+  assert.equal(readable.length, 1);
+  assert.match(readable[0], /alphaphone_app\.pk8 must have mode 0600 or stricter/);
+  // decrypt-release-keys.ts writes the certificate with the default mode; that layout is accepted as is.
+  assert.deepEqual(keyFileProblems(keys(t, { certMode: 0o644 }), "alphaphone_app"), []);
+  assert.deepEqual(keyFileProblems(keys(t, { certMode: 0o600 }), "alphaphone_app"), []);
+  const linkedCertificate = keys(t);
+  const elsewhere = path.join(scratch(t, "alpha-sign-cert-"), "alphaphone_app.x509.pem");
+  fs.renameSync(path.join(linkedCertificate, "alphaphone_app.x509.pem"), elsewhere);
+  fs.symlinkSync(elsewhere, path.join(linkedCertificate, "alphaphone_app.x509.pem"));
+  assert.match(keyFileProblems(linkedCertificate, "alphaphone_app").join(), /alphaphone_app\.x509\.pem is not a regular file/);
   const tree = scratch(t, "alpha-sign-tree-");
   fs.mkdirSync(path.join(tree, ".git"));
   const inside = path.join(tree, "keys");
@@ -176,7 +204,7 @@ test("a real apksigner signs an APK with ceremony-layout key files, and the resu
   execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-subj", "/O=Example Release Test/CN=alphaphone_app", "-days", "1", "-keyout", path.join(work, "key.pem"), "-out", path.join(dir, "alphaphone_app.x509.pem")], { stdio: "ignore" });
   execFileSync("openssl", ["pkcs8", "-topk8", "-nocrypt", "-outform", "DER", "-in", path.join(work, "key.pem"), "-out", path.join(dir, "alphaphone_app.pk8")], { stdio: "ignore" });
   fs.chmodSync(path.join(dir, "alphaphone_app.pk8"), 0o600);
-  fs.chmodSync(path.join(dir, "alphaphone_app.x509.pem"), 0o600);
+  fs.chmodSync(path.join(dir, "alphaphone_app.x509.pem"), 0o644); // as decrypt-release-keys.ts leaves it
   const certificate = new X509Certificate(fs.readFileSync(path.join(dir, "alphaphone_app.x509.pem"))).fingerprint256.replaceAll(":", "").toLowerCase();
   const root = product(t, certificate);
   const out = [], err = [];
@@ -190,4 +218,37 @@ test("a real apksigner signs an APK with ceremony-layout key files, and the resu
   const other = product(t, "0".repeat(64));
   assert.equal(await main(["--keys-dir", dir, "--apksigner", apksigner, "--apk", unsigned, "--out", path.join(work, "other.apk")], { root: other, env: process.env, log() {}, error() {} }), 1);
   assert.equal(fs.existsSync(path.join(work, "other.apk")), false);
+});
+
+test("the real apksigner launcher accepts the PKCS#11 JVM option, and with a PKCS#11 module present SunPKCS11 loads", async t => {
+  let toolchain;
+  try { toolchain = await import("../scripts/toolchain.mjs"); toolchain.androidEnv(); } catch { t.skip("Android SDK and JDK 21 are not installed here"); return; }
+  const apksigner = toolchain.tool("apksigner"), aapt2 = path.join(path.dirname(apksigner), "aapt2");
+  const androidJar = path.join(toolchain.androidEnv().ANDROID_HOME, "platforms/android-36/android.jar");
+  if (![apksigner, aapt2, androidJar].every(file => fs.existsSync(file))) { t.skip("build-tools 36.0.0 or platform android-36 is missing"); return; }
+  const env = toolchain.androidEnv();
+  env.PATH = [path.join(env.JAVA_HOME, "bin"), env.PATH].filter(Boolean).join(path.delimiter);
+  // The launcher forwards the option to java; the JVM must accept it (the "-J--" form fails here with "Unrecognized option").
+  const version = spawnSync(apksigner, [PKCS11_JVM_OPTION, "version"], { env, encoding: "utf8" });
+  assert.equal(version.status, 0, `${version.stdout}${version.stderr}`);
+  assert.doesNotMatch(`${version.stdout}${version.stderr}`, /Unrecognized option/);
+  // A read-only system PKCS#11 module (trust anchors, no private key) shows that the provider is constructed and the
+  // token opened; the missing key is then refused and nothing is written. Hosts without such a module skip this part.
+  const module = ["/usr/lib/pkcs11/p11-kit-trust.so", "/usr/lib/x86_64-linux-gnu/pkcs11/p11-kit-trust.so", "/usr/lib64/pkcs11/p11-kit-trust.so"].find(file => fs.existsSync(file));
+  if (!module) { t.diagnostic("no PKCS#11 module on this host: the token path was not exercised"); return; }
+  const work = scratch(t, "alpha-sign-p11-real-");
+  fs.writeFileSync(path.join(work, "AndroidManifest.xml"), '<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.example.signingtest"><uses-sdk android:minSdkVersion="28" android:targetSdkVersion="36"/><application android:hasCode="false"/></manifest>');
+  const unsigned = path.join(work, "app-unsigned.apk");
+  execFileSync(aapt2, ["link", "-o", unsigned, "-I", androidJar, "--manifest", path.join(work, "AndroidManifest.xml")], { stdio: "ignore" });
+  const config = path.join(work, "sunpkcs11.cfg");
+  fs.writeFileSync(config, `name = alpha-signing-test\nlibrary = ${module}\n`);
+  const err = [];
+  const code = await main(["--pkcs11-config", config, "--key-label", "alpha-no-such-key", "--apksigner", apksigner, "--apk", unsigned, "--out", path.join(work, "p11.apk")],
+    { root: product(t), env, log() {}, error: line => err.push(line) });
+  assert.equal(code, 1);
+  assert.doesNotMatch(err.join("\n"), /IllegalAccessException|Unrecognized option|Could not create the Java Virtual Machine|ClassNotFoundException/);
+  // apksigner opened the token's key store and looked the label up: it names the entry it could not use.
+  assert.match(err.join("\n"), /"alpha-no-such-key"/);
+  assert.equal(fs.existsSync(path.join(work, "p11.apk")), false);
+  assert.equal(fs.existsSync(path.join(work, "p11.apk.partial")), false);
 });
