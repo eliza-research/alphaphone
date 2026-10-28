@@ -12,6 +12,10 @@ import ai.eliza.plugins.messages.SmsTelephonyConfiguration;
  * The capability profile is {@link AlphaImageCapability}: the release launcher installed on the
  * Alpha AOSP image with the product overlay and image feature (P-36, #420), never the launcher flavor
  * alone.
+ *
+ * Reviewed MMS sends hand their PDU to the platform through the shared MmsFileProvider the launcher
+ * manifest declares at {@code <applicationId>.mms}, enabled only on the verified image while Alpha may
+ * hold the SMS role; elsewhere the shared plugin reports MMS sends unavailable.
  */
 final class AlphaTelephony {
  private AlphaTelephony() {}
@@ -26,5 +30,5 @@ final class AlphaTelephony {
     @Override public String read(String slot) throws Exception { return store.readCredentialSlot(slot); }
     @Override public void write(String slot, String value) throws Exception { store.writeCredentialSlot(slot, value); }
    };
-  });
+  }).withMmsFiles(BuildConfig.APPLICATION_ID + ".mms");
 }
