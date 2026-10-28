@@ -1,10 +1,10 @@
+import {openBrowserCalendar} from './helpers/browser-calendar';
 // Maps "Back to event": shown only when Maps was opened from a calendar event's location, returns to
 // exactly that event, never replays the hand-off and fails closed when the event is gone.
 // Also: the travel-mode buttons expose their selected state (aria-pressed).
 //
 // Evidence boundary: browser build, development profile, synthetic Maps provider. Source/test only.
 import {test, expect, type Page} from '@playwright/test';
-import {openBrowserCalendar} from './helpers/browser-calendar';
 import {returnToApps} from './app-navigation';
 
 test.setTimeout(120_000);

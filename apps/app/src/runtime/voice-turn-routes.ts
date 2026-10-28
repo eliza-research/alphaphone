@@ -21,7 +21,6 @@ export const END_OF_TURN_PATH = '/api/asr/local-inference/end-of-turn';
 /** Upstream refuses longer transcripts with 400 (END_OF_TURN_MAX_TRANSCRIPT_CHARS). */
 export const END_OF_TURN_MAX_CHARS = 4096;
 const unavailableReasons = ['voice-not-started', 'ffi-context-unloaded', 'scorer-unsupported', 'ram-pressure', 'unscored', 'timeout'] as const;
-export type EndOfTurnUnavailableReason = typeof unavailableReasons[number] | 'too-long' | 'invalid-response' | 'unknown';
 /** The resident's request port: resolves with the parsed JSON body, rejects with `{ status }` on non-2xx. */
 export type ResidentRequest = (path: string, body: unknown, signal: AbortSignal) => Promise<unknown>;
 

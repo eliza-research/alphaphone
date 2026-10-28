@@ -1,12 +1,10 @@
+import {openBrowserCalendar} from './helpers/browser-calendar';
 import { returnToApps } from './app-navigation';
 import {test,expect,type Page} from '@playwright/test';
-import {openBrowserCalendar} from './helpers/browser-calendar';
 const address='12 Market Street, Test Town';
 async function event(page:Page,configured=true,deferred=false){
  await page.addInitScript(()=>localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'})));
- await page.goto('/?mode=dev');
- // The event lives in the development browser calendar, an explicit source (test-mocks only).
- await openBrowserCalendar(page);
+ await page.goto('/?mode=dev');await openBrowserCalendar(page);
  await page.evaluate(async({address,configured,deferred})=>{
   const row={id:'travel-source',calendarId:'local',title:'Travel appointment',body:'Return to this exact event',location:address,begin:Date.parse('2028-04-02T12:00:00Z'),end:Date.parse('2028-04-02T13:00:00Z'),revision:'b'.repeat(64)};
   await (async(raw:string)=>{const {browserDocuments}=await import('/src/browser/documents.ts');await browserDocuments.edit('alpha.browser.calendar.v1',async before=>({raw:JSON.stringify({...before?JSON.parse(before.raw!):{version:1,legacy:localStorage.getItem('alpha.browser.calendar.v1')},value:raw}),result:undefined}));})(JSON.stringify({sourceRevision:'a'.repeat(64),events:[row]}));

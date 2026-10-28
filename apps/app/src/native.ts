@@ -8,8 +8,6 @@ export type InstalledAppProfile = 'work' | 'private' | 'clone' | 'other';
  * `activityName` names the exact launcher activity; `user` is the Android user serial of another
  * profile; `locked` marks a profile that is paused or not yet unlocked. */
 export type InstalledApp = { packageName: string; label: string; icon?: string; activityName?: string; user?: string; profile?: InstalledAppProfile; locked?: boolean };
-/** Why native refused a launch; carried as the rejection `code`. */
-export type LaunchRefusal = 'not-installed' | 'disabled' | 'no-launcher' | 'profile-locked' | 'profile-unavailable' | 'failed';
 /** Default-handler roles Alpha hands off to instead of implementing itself. */
 export type DefaultAppRole = 'dial';
 export type DefaultApp = { role: DefaultAppRole; available: boolean; packageName?: string; label?: string; icon?: string };

@@ -191,7 +191,7 @@ test('deferred apps are absent and root views show honest unconnected states', a
   await page.goto('/?tools=1');
   for (const deferred of ['Phone', 'Messages', 'Contacts', 'Wallet']) await expect(page.getByRole('button', { name: deferred, exact: true })).toHaveCount(0);
   const states: Record<string, RegExp> = {
-    Inbox: /Connect Eliza Cloud/, Workflows: /Your agent runs on your phone, not here\. Open Alpha on your Android phone to use it\. Reminders on this phone stay available\./, Notes: /Waiting for an agent connection to open Notes\./,
+    Inbox: /Connect Eliza Cloud/, Workflows: /Your agent runs on your phone, not here\. Open Alpha on your Android phone to use it\. Reminders on this phone stay available\./, Notes: /Notes is unavailable for this agent connection\. Check Settings › Agent connection\./,
     Photos: /No photos/, Maps: /Add a location/, Calendar: /\d/, Files: /Choose a document/, Settings: /Agent connection/,
   };
   for (const [view, expected] of Object.entries(states)) {
@@ -383,7 +383,7 @@ for (const mode of ['signed-out','empty','credits','unavailable','funded','repla
   // running agent offers Redeem code and Choose a plan; its Redeem code opens the plan panel. A
   // sign-in that changed underneath admission is reported in the dialog. Otherwise nothing opens.
   const signedOut=mode==='signed-out'||mode==='legacy-offline'||mode==='unpackaged',needsPlan=mode==='empty'||mode==='unavailable';
-  const dialog=signedOut?page.locator('[role="main"].alpha-cloud-sign-in'):needsPlan?page.getByRole('dialog',{name:/^Eliza Cloud account(?: & plan)?$/}):page.getByRole('region',{name:'Settings',exact:true});
+  const dialog=signedOut?page.locator('[role="main"].alpha-cloud-sign-in'):needsPlan?page.getByRole('dialog',{name:'Membership & credits',exact:true}):page.getByRole('region',{name:'Settings',exact:true});
   if(needsPlan){
    const notice=page.getByRole('region',{name:'Eliza Cloud plan notice'});
    await expect(notice).toContainText('Your agent is running on this device. AI replies aren’t available right now');
@@ -402,7 +402,8 @@ for (const mode of ['signed-out','empty','credits','unavailable','funded','repla
    // A developer build without the runtime says so and offers Retry; it never offers an offline mode.
    await expect(dialog.getByRole('button',{name:'Email me a code',exact:true})).toBeVisible();
    await expect(dialog.getByRole('status').filter({hasText:'This developer build does not include the on-device agent.'})).toHaveText('This developer build does not include the on-device agent.');
-  }else if(!signedOut&&mode!=='replaced')await expect(dialog.getByText(needsPlan?'Running on this device':'On this device',{exact:true})).toBeVisible();
+  }else if(needsPlan)await expect(dialog.getByRole('region',{name:'Membership and credits',exact:true})).toBeVisible();
+  else if(!signedOut&&mode!=='replaced')await expect(dialog.getByText('On this device',{exact:true})).toBeVisible();
   if(signedOut){
    await expect(dialog.getByText('Sign in to verify your account. You’ll review access before authorizing Alpha Phone.',{exact:true})).toBeVisible();
    await expect(dialog.getByRole('button',{name:'Email me a code',exact:true})).toBeVisible();
@@ -413,9 +414,10 @@ for (const mode of ['signed-out','empty','credits','unavailable','funded','repla
   // running agent; nothing is bound. Cloud refuses AI requests without a plan.
   const admitted=mode==='funded'||mode==='credits';
   if(needsPlan){
-   await expect(dialog.getByRole('button',{name:'Redeem code',exact:true})).toBeVisible();
-   await expect(dialog.getByRole('button',{name:'Choose a plan',exact:true})).toBeVisible();
-   await expect(dialog.getByText(mode==='empty'?'No active plan':'Plan status unavailable',{exact:true})).toBeVisible();
+   await expect(dialog.getByRole('textbox',{name:'Membership code',exact:true})).toBeFocused();
+   await expect(dialog.getByRole('button',{name:'Redeem',exact:true})).toBeVisible();
+   await expect(dialog.getByRole('button',{name:'Add funds',exact:true})).toBeVisible();
+   await expect(dialog.getByText(mode==='empty'?'No active membership':'Not confirmed',{exact:true})).toBeVisible();
   }
   if(mode==='replaced')await expect(dialog.getByText(/account changed/i)).toBeVisible();
   if(admitted)await expect(dialog.getByRole('button',{name:'Sign out of Eliza Cloud',exact:true})).toBeVisible();

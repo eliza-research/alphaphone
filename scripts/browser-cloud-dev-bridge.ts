@@ -1,7 +1,8 @@
 import {productionCloud, stagingCloud, cloudStorageNamespace} from '../apps/app/src/runtime/cloud-deployment.generated.ts';
 import {createCloudResidentHost} from './cloud-resident-host.mjs';
-import {managedGoogleRequest,boundedServiceJson} from '../backend/managed-google-route-policy.ts';
+import {managedGoogleRequest,boundedServiceJson,object} from '../backend/managed-google-route-policy.ts';
 import {CLOUD_EMAIL_CODE,emailCodeExpiresAt,emailCodeResendAt,emailCodeSendBody,emailCodeVerifyBody} from './cloud-email-code.ts';
+import {parseCloudServiceInfo} from '../apps/app/src/runtime/cloud-service-info.ts';
 import {randomUUID,createHash,randomBytes} from 'node:crypto';
 import {mkdir,readFile,writeFile,rename,lstat} from 'node:fs/promises';
 import path from 'node:path';
@@ -18,7 +19,6 @@ const publicCredential=(c:Credential)=>({credentialReference:c.credentialReferen
 function environment(value:unknown):Environment{if(value!=='production'&&value!=='staging')throw Error('Unsupported Cloud environment');return value;}
 function refusal(status:number,code:string){return Object.assign(Error(code),{status,code});}
 function requestId(value:unknown):string{if(typeof value!=='string'||!UUID.test(value))throw Error('Invalid request identity');return value;}
-function object(value:unknown):Record<string,any>{if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid Cloud request');return value as Record<string,any>;}
 /** DEV transport only. Canonical Cloud owns login, identity, plan entitlement and speech authorization. */
 export function createBrowserCloudDevHandler(options:{profile:string;request?:typeof fetch;environment?:Environment;diagnostic?:(event:{environment:Environment;operation:string;status:number;code?:string})=>void;resident?:{bind:(credential:{token:string;credentialId:string;reference:string;expiresAt?:number})=>Promise<unknown>;clear:()=>Promise<unknown>;status:(id?:string)=>unknown;ready:(signal:AbortSignal)=>Promise<unknown>}}){
  const profile=path.resolve(options.profile,cloudStorageNamespace.replaceAll(':','-')),stateFile=path.join(profile,'credentials.json'),initialFile=path.join(profile,'initial-credential.json'),fetchCloud=options.request??fetch;
@@ -89,6 +89,14 @@ export function createBrowserCloudDevHandler(options:{profile:string;request?:ty
   }finally{void signInCall(env,'/steward/auth/logout',typeof refresh==='string'?{refreshToken:refresh}:{},AbortSignal.timeout(10000),token).catch(()=>{});}
  }
  async function signInOperation(data:Record<string,any>,signal:AbortSignal){
+  if(data.operation==='signInServiceInfo'){
+   if(Object.keys(data).some(key=>key!=='operation'&&key!=='environment'))throw signInFailure('invalid-request');
+   const env=environment(data.environment);if(options.environment&&env!==options.environment)throw signInFailure('invalid-request');
+   const bounded=AbortSignal.any([signal,AbortSignal.timeout(15000)]),response=await canonical(env,'/api/public/service',bounded,{method:'GET'});
+   if(response.status!==200){await response.body?.cancel();throw signInFailure('unavailable');}
+   const result=await boundedServiceJson(response);bounded.throwIfAborted();
+   return {success:true,version:1,service:parseCloudServiceInfo(result)};
+  }
   if(data.operation==='signInCancel'){signIn?.controller.abort();signIn=null;await serial(async()=>{});return {};}
   if(data.operation==='signInStatus')return {active:!!signIn,inApp:true,google:false,email:true};
   if(data.operation==='signInStartEmail'){
@@ -253,7 +261,8 @@ export function createBrowserCloudDevHandler(options:{profile:string;request?:ty
 export function browserCloudDevBridge():Plugin {
  return {name:'alpha-browser-cloud-dev-bridge',apply:'serve',async configureServer(server){
   const cloudResident=process.env.VITE_ALPHA_CLOUD_RESIDENT==='1';
-  if(process.env.ELIZA_DEV_ALLOW_TEST_MOCKS!=='1'&&!cloudResident)return;
+  const privatePreview=process.env.ALPHA_PRIVATE_LOCAL_PREVIEW==='1'&&process.env.VITE_ALPHA_PRIVATE_LOCAL_PREVIEW==='1'&&process.env.VITE_LOCAL_AGENT==='1'&&!!process.env.ALPHA_BROWSER_CLOUD_PROFILE;
+  if(process.env.ELIZA_DEV_ALLOW_TEST_MOCKS!=='1'&&!cloudResident&&!privatePreview)return;
   if(cloudResident&&(process.env.ELIZA_DEV_ALLOW_TEST_MOCKS==='1'||process.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS==='1'||process.env.VITE_LOCAL_AGENT!=='1'||!process.env.ALPHA_ELIZA_SOURCE||!process.env.ALPHA_REMOTE_PROFILE))throw Error('Cloud resident requires real local source and mocks off');
   const profile=path.resolve(process.env.ALPHA_BROWSER_CLOUD_PROFILE??path.join(homedir(),'.local/share/alphaphone/browser-cloud'));
   const selected=environment(process.env.VITE_ALPHA_CLOUD_ENVIRONMENT??'production');

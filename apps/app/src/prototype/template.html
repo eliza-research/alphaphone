@@ -836,8 +836,6 @@
   <sc-if value="{{calendar.reminderRecovery}}"><button aria-label="Recover browser reminder creation history" onClick="{{calendar.openReminderCreationRecovery}}" style="margin:0 16px 8px;padding:12px;border-radius:12px;background:var(--s2);color:var(--fg)">Reminder creation recovery</button></sc-if>
   <sc-if value="{{calendar.reminderRecovery}}"><button aria-label="Recover browser reminder action history" onClick="{{calendar.openReminderActionRecovery}}" style="margin:0 16px 8px;padding:12px;border-radius:12px;background:var(--s2);color:var(--fg)">Reminder action recovery</button></sc-if>
   <sc-if value="{{calendar.creationRecovery}}"><div role="status" style="margin: 0 16px 8px; padding: 12px; border-radius: 12px; background: var(--s2); font-size: 13px"><p>{{calendar.creationRecoveryText}}</p><button onClick="{{calendar.checkCreations}}" style="padding: 8px">Check event creation receipts</button><button onClick="{{calendar.separateCreation}}" style="padding: 8px">Create a separate event</button></div></sc-if>
-  <sc-if value="{{calendar.calendarAuthorityChoices}}"><details style="margin:8px 24px"><summary style="min-height:44px;align-content:center;cursor:pointer">Calendar sources</summary><p role="status">{{calendar.calendarSourceLabel}}</p><p>{{calendar.calendarSourceText}}</p><sc-for list="{{calendar.calendarAuthorityChoices}}" as="choice"><button onClick="{{choice.go}}" style="display:block;min-height:44px;padding:10px;text-align:left">{{choice.label}}</button></sc-for></details></sc-if>
-  <sc-if value="{{calendar.canConfirmCalendarTransition}}"><button onClick="{{calendar.confirmCalendarTransition}}" style="margin:8px 24px;padding:12px;border-radius:16px;background:var(--s2)">Keep saved app records read only and use Agent Calendar</button></sc-if>
   <sc-if value="{{calendar.nativeStatusLabel}}"><button aria-label="Retry calendar and reminders" onClick="{{calendar.nativeStatusRetry}}" style="margin: 0 16px 8px; padding: 10px 12px; border-radius: 12px; background: var(--s2); color: var(--fg); text-align: left; font-size: 13px">{{calendar.nativeStatusLabel}}</button></sc-if>
   <sc-if value="{{calendar.googleCalendarNotice}}"><p role="status" style="margin:0;padding:4px 24px 8px;font-size:13px;color:var(--mut)">{{calendar.googleCalendarNotice}}</p></sc-if>
   <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); padding: 4px 12px 8px; flex-shrink: 0">
@@ -891,9 +889,9 @@
         <div style="position: absolute; left: 60px; right: 16px; top: 120px; text-align: center; color: var(--mut); font-size: 14px">{{calendar.emptyText}}</div>
       </sc-if>
       <sc-for list="{{calendar.events}}" as="e">
-        <button onClick="{{e.open}}" aria-label="{{e.title}}, {{e.time}}" style="position: absolute; left: {{e.left}}px; width: {{e.w}}px; top: calc({{e.top}}px * var(--calendar-timeline-scale)); height: calc({{e.h}}px * var(--calendar-timeline-scale)); border-radius: 14px; padding: 8px 12px 8px 16px; box-sizing: border-box; display: flex; align-items: flex-start; gap: 8px; overflow: hidden; text-align: left; {{e.css}}">
+        <button onClick="{{e.open}}" aria-label="{{e.title}}, {{e.time}}" style="position: absolute; left: {{e.left}}px; width: {{e.w}}px; top: calc({{e.top}}px * var(--calendar-timeline-scale)); height: calc({{e.h}}px * var(--calendar-timeline-scale)); border-radius: 14px; padding: 8px 12px 8px 16px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; overflow: hidden; text-align: left; {{e.css}}">
           <span style="position: absolute; left: 6px; top: 6px; bottom: 6px; width: 3px; border-radius: 2px; background: {{e.stripe}}"></span>
-          <span class="calendar-block-text" style="flex-grow: 1; min-width: 0"><span style="display: block; font-size: 14px; font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{e.title}}</span><span style="display: block; font-size: 12px; opacity: .85; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{e.sub}}</span></span>
+          <span class="calendar-block-text" style="flex-grow: 1; min-width: 0"><span style="font-size: 14px; font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{e.title}}</span><span style="font-size: 12px; opacity: .85; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{e.sub}}</span></span>
           <sc-if value="{{e.showTime}}"><span style="font-size: 12px; opacity: .75; white-space: nowrap">{{e.time}}</span></sc-if>
         </button>
       </sc-for>
@@ -902,9 +900,9 @@
           <sc-for list="{{calendar.dayColumns}}" as="c">
             <div role="group" aria-label="{{c.label}}" aria-current="{{c.current}}" data-alpha-calendar-day style="position: relative; box-shadow: inset 1px 0 0 var(--line)">
               <sc-for list="{{c.events}}" as="e">
-                <button onClick="{{e.open}}" aria-label="{{e.title}}, {{e.time}}" style="position: absolute; left: {{e.x}}%; width: calc({{e.wp}}% - 4px); top: calc({{e.top}}px * var(--calendar-timeline-scale)); height: calc({{e.h}}px * var(--calendar-timeline-scale)); border-radius: 14px; padding: 8px 12px 8px 16px; box-sizing: border-box; display: flex; align-items: flex-start; gap: 8px; overflow: hidden; text-align: left; {{e.css}}">
+                <button onClick="{{e.open}}" aria-label="{{e.title}}, {{e.time}}" style="position: absolute; left: {{e.x}}%; width: calc({{e.wp}}% - 4px); top: calc({{e.top}}px * var(--calendar-timeline-scale)); height: calc({{e.h}}px * var(--calendar-timeline-scale)); border-radius: 14px; padding: 8px 12px 8px 16px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; overflow: hidden; text-align: left; {{e.css}}">
           <span style="position: absolute; left: 6px; top: 6px; bottom: 6px; width: 3px; border-radius: 2px; background: {{e.stripe}}"></span>
-          <span class="calendar-block-text" style="flex-grow: 1; min-width: 0"><span style="display: block; font-size: 14px; font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{e.title}}</span><span style="display: block; font-size: 12px; opacity: .85; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{e.sub}}</span></span>
+          <span class="calendar-block-text" style="flex-grow: 1; min-width: 0"><span style="font-size: 14px; font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{e.title}}</span><span style="font-size: 12px; opacity: .85; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{e.sub}}</span></span>
           <sc-if value="{{e.showTime}}"><span style="font-size: 12px; opacity: .75; white-space: nowrap">{{e.time}}</span></sc-if>
         </button>
               </sc-for>
@@ -1168,6 +1166,7 @@
                 </sc-for>
               </div>
             </div>
+            <sc-if value="{{calendar.f.repeats}}">
             <div style="display: flex; align-items: center; gap: 14px; min-height: 48px">
               <svg class="i" viewBox="0 0 24 24" style="color: var(--mut); flex-shrink: 0"><path d="{{ic.calRepeat}}"></path></svg>
               <div style="display: flex; gap: 6px; flex-wrap: wrap">
@@ -1176,6 +1175,8 @@
                 </sc-for>
               </div>
             </div>
+            </sc-if>
+            <sc-if value="{{calendar.f.alerts}}">
             <div style="display: flex; align-items: center; gap: 14px; min-height: 48px">
               <svg class="i" viewBox="0 0 24 24" style="color: var(--mut); flex-shrink: 0"><path d="{{ic.bell}}"></path></svg>
               <div style="display: flex; gap: 6px; flex-wrap: wrap">
@@ -1184,6 +1185,7 @@
                 </sc-for>
               </div>
             </div>
+            </sc-if>
           </div>
 
           <div style="display: flex; align-items: flex-start; gap: 14px; min-height: 56px; padding: 12px 16px; border-radius: 16px; background: var(--s2)">

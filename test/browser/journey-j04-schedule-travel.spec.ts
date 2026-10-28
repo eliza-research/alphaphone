@@ -1,3 +1,4 @@
+import {openBrowserCalendar} from './helpers/browser-calendar';
 // Journey J04: Schedule -> travel, driven through rendered controls in the browser build
 // (development profile with the development device controls, /?mode=dev&tools=1).
 //
@@ -22,7 +23,6 @@
 // Maps offers an explicit "Back to event" control when it was opened from an event's location; it
 // returns to that exact event and never replays the hand-off. System Back still works as before.
 import {test, expect, type Page} from '@playwright/test';
-import {openBrowserCalendar} from './helpers/browser-calendar';
 
 const address = '12 Market Street, Test Town';
 const LOG = 'journey-j04-maps';
