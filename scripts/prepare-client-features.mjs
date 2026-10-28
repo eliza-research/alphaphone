@@ -241,7 +241,9 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-notes/test/notes-trash-policy.test.mjs',
   'plugins/plugin-notes/test/notes-trash-maintenance.test.mjs',
   'plugins/plugin-notes/test/notes-trash-schedule.test.mjs',
+  'plugins/plugin-notes/test/notes-trash-store.test.mjs',
   'packages/cloud/sdk/src/subscription-entitlement.ts',
+  'packages/ui/src/components/settings/cloud-subscription-summary.tsx',
   'packages/auth/src/auth/native-cloud-sign-in.ts',
 ];
 /** Copy authenticated upstream source outside the immutable vendor checkout. */
