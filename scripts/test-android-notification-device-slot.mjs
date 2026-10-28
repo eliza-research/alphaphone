@@ -6,7 +6,8 @@ import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {nativeSource,javaBinary} from '../test/fixtures/jvm-tools.mjs';
-const android=process.env.ALPHA_ANDROID_JSON_SOURCE||'/Users/nubs/Library/Android/sdk/sources/android-36.1';
+const android=process.env.ALPHA_ANDROID_JSON_SOURCE;
+assert.ok(android,'Set ALPHA_ANDROID_JSON_SOURCE to the reviewed Android SDK source directory for this diagnostic');
 // Actual Android JSON serializers; only unavailable annotation types are stubbed.
 // Expected key is independently computed with the renderer's JSON.stringify bytes.
 test('Android native owner lookup matches the renderer device key and rejects escaped legacy bytes',()=>{
