@@ -903,8 +903,11 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     try {
       // A Trash restore reinstates the exact saved record; it is not a content modification.
       if(!options?.exact)patch={...patch,list:stampNoteChanges(this.notesStore.list,patch.list)};
-      if(this.notesRaw!==this.notesStore.raw)throw Error('Notes changed while this editor had unsaved text. Review recovery before saving.');
+      // While this editor's own write is still settling, the store already holds that write's
+      // revision; only a revision that is neither confirmed nor ours is a concurrent change.
+      if((this.notesPending?this.notesLocalRaw:this.notesRaw)!==this.notesStore.raw)throw Error('Notes changed while this editor had unsaved text. Review recovery before saving.');
       const pending=this.notesStore.replace(patch.list);
+      this.notesLocalRaw=this.notesStore.raw;
       this.notesPending++;
       this.notesSelectionKey=null;this.notesSelection=null;
       // Text remains visible while the native commit is pending; this is not a saved receipt.
