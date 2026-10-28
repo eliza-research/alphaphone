@@ -1,8 +1,9 @@
 // AP-05 continuity on the flag-off renderer with the resident agent: the composer draft lives in
 // the device's secure slot (the shared durable draft controller over a compare-and-exchange slot)
 // and survives HOME, Back, a keyboard-sized resize and a restart; a reply in flight survives Back
-// from full to sheet and HOME on Home; the transcript keeps its reading position through the same
-// steps. Nothing is ever sent twice.
+// from full to sheet and HOME on Home; a message in flight when the app stops is offered for review
+// after the restart, never restored as a draft; the transcript keeps its reading position through
+// the same steps. Nothing is ever sent twice.
 //
 // Evidence boundary: source/test evidence for the flag-off renderer only. The Capacitor bridge is
 // the stub in flag-off-android.ts plus resident-stub.ts; viewport changes stand in for the soft
@@ -29,6 +30,11 @@ async function connected(page: Page) {
 }
 /** Draft texts held in the device's secure draft slots (the installed `assistant-draft:v1:` names). */
 const savedDrafts = (page: Page) => harness(page, f => Object.entries(f.slots as Record<string, string>).filter(([slot]) => slot.startsWith('assistant-draft:v1:')).map(([, raw]) => JSON.parse(raw).text as string));
+/** The same slots with the mark a send in flight leaves on its saved text. */
+const savedRows = (page: Page) => harness(page, f => Object.entries(f.slots as Record<string, string>).filter(([slot]) => slot.startsWith('assistant-draft:v1:')).map(([, raw]) => { const row = JSON.parse(raw); return { text: row.text as string, sending: row.sending === true }; }));
+const UNSETTLED = 'This message may already have been sent. Check the conversation before sending it again.';
+const REVIEW_UNSETTLED = 'Review the message that may already have been sent before sending another.';
+const draftStatus = (page: Page) => page.getByRole('status', { name: 'Assistant draft status', exact: true });
 /** Let the panel's height and transform animations finish, then two frames for layout and scroll. */
 const settle = async (page: Page) => {
   await conversation(page).evaluate(element => Promise.all(element.getAnimations({ subtree: true }).filter(animation => animation.timeline === document.timeline && Number.isFinite(animation.effect?.getTiming().iterations)).map(animation => animation.finished.catch(() => {}))));
@@ -129,6 +135,66 @@ for (const step of ['Back from full to sheet', 'HOME on Home', 'a rotation and t
     await noResend(page, foreign, 1);
   });
 }
+
+// A restart while a sent message is in flight (the process dies before the reply): the device copy
+// of the sent text is marked as sending, so the next start never puts it back in the composer as
+// a draft. It is offered for review, sending waits for that review, and nothing is posted again.
+async function restartDuringSend(page: Page, asked: string) {
+  const foreign = await connected(page);
+  await setStub(page, { stream: 'hold' });
+  await composer(page).fill(asked);
+  await composer(page).press('Enter');
+  await expect.poll(() => stub(page, s => typeof s.release), { timeout: 15_000 }).toBe('function');
+  await expect.poll(() => savedRows(page)).toEqual([{ text: asked, sending: true }]);
+  expect(await harness(page, f => f.posts)).toHaveLength(1);
+  await setStub(page, { stream: null });
+  await residentHome(page);
+  await expect(draftStatus(page)).toHaveText(UNSETTLED, { timeout: 30_000 });
+  await expect(composer(page)).toHaveValue('');
+  await expect(page.getByText(`Saved copy: ${asked}`, { exact: true })).toBeVisible();
+  return foreign;
+}
+
+test('a restart during a send offers the message for review, never as a draft; restoring it makes it a draft again', async ({ page }) => {
+  test.setTimeout(180_000);
+  const asked = 'Sent just before the app stopped';
+  const foreign = await restartDuringSend(page, asked);
+  // The conversation the agent kept shows the message once; the phone posted nothing after the restart.
+  await button(page, 'Open conversation').click();
+  await expect(conversation(page).getByText(asked, { exact: true })).toHaveCount(1, { timeout: 30_000 });
+  await composer(page).fill('A different question');
+  await composer(page).press('Enter');
+  await expect(page.getByText(REVIEW_UNSETTLED, { exact: true })).toBeVisible();
+  expect(await harness(page, f => f.posts)).toEqual([]);
+  expect(await savedRows(page)).toEqual([{ text: asked, sending: true }]);
+
+  // Restoring puts the saved words back to edit; the copy is an ordinary draft from then on.
+  await button(page, 'Restore saved draft').click();
+  await expect(composer(page)).toHaveValue(asked);
+  await expect.poll(() => savedRows(page)).toEqual([{ text: asked, sending: false }]);
+  await residentHome(page);
+  await expect(composer(page)).toHaveValue(asked, { timeout: 30_000 });
+  await expect(draftStatus(page)).toHaveCount(0);
+  expect(await harness(page, f => f.posts)).toEqual([]);
+  await noResend(page, foreign, 0);
+});
+
+test('replacing the reviewed message after a restart clears only its copy, and the next message is sent once', async ({ page }) => {
+  test.setTimeout(180_000);
+  const foreign = await restartDuringSend(page, 'Already answered before the restart');
+  await button(page, 'Replace saved draft with this text').click();
+  await expect(draftStatus(page)).toHaveCount(0);
+  await expect.poll(() => savedRows(page)).toEqual([{ text: '', sending: false }]);
+  const next = 'The next question';
+  await composer(page).fill(next);
+  await composer(page).press('Enter');
+  await expect(conversation(page).getByText('Resident reply 1', { exact: true })).toHaveCount(1, { timeout: 30_000 });
+  const posts = await harness(page, f => f.posts as string[]);
+  expect(posts).toHaveLength(1);
+  expect(posts[0].endsWith('[USER MESSAGE]\n' + next)).toBe(true);
+  await expect.poll(() => savedRows(page)).toEqual([{ text: '', sending: false }]);
+  await noResend(page, foreign, 1);
+});
 
 test('the transcript keeps its reading position through a keyboard resize, Back from full and HOME, and follows the newest message at the bottom', async ({ page }) => {
   test.setTimeout(180_000);

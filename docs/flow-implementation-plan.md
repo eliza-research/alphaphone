@@ -138,6 +138,15 @@ and HOME on Home and is shown once; the transcript keeps its reading position th
 same steps. That is renderer source evidence only (class S), not IME, Android Back/HOME or
 device acceptance.
 
+The in-flight copy is also durable across process death: hold writes the saved row with
+`sending: true` (rows without the mark, including every installed one, read as before), and
+release and commit write it without the mark. A start that finds a marked row it did not
+write (after the app was killed during a send, or in another window) never restores it into
+the composer; it shows "This message may already have been sent. Check the conversation
+before sending it again." with the saved copy, Restore saved draft and Replace saved draft
+with this text, and refuses to send until one is chosen. The production and development
+continuity specs restart during a held reply and check that nothing is posted again.
+
 The phone canvas's keyboard-free height, its soft-keyboard test and the list-detail and
 calendar layout decisions (`runtime/canvas-geometry.ts`) and the dock-clearance publisher
 (`runtime/dock-clearance.ts`) are shared Eliza code as well

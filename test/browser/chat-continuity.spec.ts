@@ -124,6 +124,33 @@ async function typeDraft(page: Page, text: string) {
 }
 const MAY_FINISH = 'The agent may still finish this reply. Alpha Phone will check once and show it here if it does.';
 const UNKNOWN = 'Your message may have reached the agent. Check before sending it again.';
+const UNSETTLED = 'This message may already have been sent. Check the conversation before sending it again.';
+
+// A restart (the process dies) while a posted message waits for its reply: the device copy of the
+// sent text is marked as sending, so the next start never offers it as a draft. It is shown for
+// review, and keeping the empty composer clears only that copy. Nothing is posted again.
+test('a restart while a message is in flight offers it for review, never as a draft, and posts nothing', async ({ page }) => {
+  test.setTimeout(120_000);
+  await connected(page);
+  await typeDraft(page, 'In flight when the app stopped');
+  const key = await bindingKey(page);
+  await composer(page).press('Enter');
+  await expect.poll(() => fixture(page, f => f.posts), { timeout: 15_000 }).toBe(1);
+  await page.reload();
+  await expect.poll(() => fixture(page, f => f.ready), { timeout: 30_000 }).toBe(true);
+  await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0, { timeout: 20_000 });
+  const status = page.getByRole('status', { name: 'Assistant draft status', exact: true });
+  await expect(status).toHaveText(UNSETTLED, { timeout: 20_000 });
+  await expect(composer(page)).toHaveValue('');
+  expect(await bindingKey(page)).toBe(key);
+  expect(await savedDraft(page, key)).toBe('In flight when the app stopped');
+  await page.getByRole('button', { name: 'Replace saved draft with this text', exact: true }).click();
+  await expect(status).toHaveCount(0);
+  await expect.poll(() => savedDraft(page, key)).toBe('');
+  await expect(composer(page)).toHaveValue('');
+  await page.waitForTimeout(1_000);
+  expect(await fixture(page, f => ({ posts: f.posts, creates: f.creates }))).toEqual({ posts: 0, creates: 0 });
+});
 
 test('an offline failure before the message is posted keeps the text and a later send posts it once', async ({ page }) => {
   test.setTimeout(90_000);
