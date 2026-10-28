@@ -20,7 +20,6 @@ import {openLegacyNotes} from './helpers/legacy-notes';
 // - Encrypted native Notes storage; here the browser Notes document is read back.
 import {test, expect, type Page} from '@playwright/test';
 import {returnToApps} from './app-navigation';
-import {openLegacyNotes} from './helpers/legacy-notes';
 
 test.describe.configure({mode: 'serial'});
 const url = 'https://public-fixture.test/harbour';
