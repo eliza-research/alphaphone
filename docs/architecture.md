@@ -302,7 +302,9 @@ notice open the call screen over the lock screen) and the SMS-role components
 `AlphaRespondViaMessageService`, `AlphaSmsComposeActivity` and the shared `MmsFileProvider`)
 disabled. `AlphaTelephonyRoles` enables them only while `AlphaImageCapability` verifies the image,
 so Android can offer the roles nowhere else and the owner still chooses them in Android's dialog.
-As SMS role holder Alpha stores incoming SMS and MMS before notifying, and every outgoing text,
+As SMS role holder Alpha stores incoming SMS and MMS before notifying (one notice per conversation,
+titled with the contact name when Contacts access is granted), keeps read state (opening a conversation
+marks its shown received messages read through the shared `markThreadRead`), and every outgoing text,
 quick replies included, is a reviewed, journaled send that Alpha also writes to the provider, because
 Android writes no sent rows for the default SMS app. Telecom owns emergency routing; the
 system emergency dialer does not depend on Alpha. Gmail is available in both distributions through Eliza Cloud, with

@@ -223,7 +223,15 @@ test("native boundary: image-only plugin methods, immutable explicit callbacks, 
   assert.match(sms, /receiver\.getResultCode\(\) == Activity\.RESULT_OK/, "sent only from a successful sent callback");
   assert.match(plugin, /main.post\(\(\) -> reviewSmsOnMain\(call\)\);/, "review is marshalled from Capacitor's plugin thread to main");
   assert.match(plugin, /private void reviewSmsOnMain\(PluginCall call\) \{\n  if \(refused\(call\)\) return;/, "admission is rechecked on main before review");
-  for (const method of ["listThreads", "listMessages", "observeMessages", "smsSendHistory", "smsSendResult"])
+  // Read state: only the default SMS app's write counts, only received messages through the shown one, behind the read fence.
+  assert.match(plugin, /fencedRead\(call, "sms", "Messages", cancel -> \{\n   JSObject value = new JSObject\(\);\n   boolean holder = MmsStore\.isDefaultSmsApp\(getContext\(\)\);/);
+  assert.match(plugin, /value\.put\("updated", holder \? MmsStore\.markThreadRead\(getContext\(\), thread, through\) : 0\);/);
+  const marker = store.slice(store.indexOf("public static int markThreadRead("), store.indexOf("public static boolean hasTransaction("));
+  assert.match(marker, /Telephony\.Sms\.TYPE \+ " = \? AND " \+ Telephony\.Sms\.DATE \+ " <= \?/, "only received texts up to the shown one");
+  assert.match(marker, /Telephony\.Mms\.MESSAGE_BOX \+ " = \? AND " \+ Telephony\.Mms\.DATE \+ " <= \?/, "only received MMS up to the shown one");
+  assert.match(marker, /SmsRecords\.mmsSecondsThrough\(throughMillis\)/, "MMS dates are seconds");
+  assert.doesNotMatch(marker, /delete\(|insert\(/, "marking read never adds or removes messages");
+  for (const method of ["listThreads", "listMessages", "markThreadRead", "observeMessages", "smsSendHistory", "smsSendResult"])
     assert.match(plugin, new RegExp(`@PluginMethod public void ${method}\\(PluginCall call\\) \\{\\n  if \\(refused\\(call\\)\\) return;`), `${method} re-checks the image capability first`);
 });
 

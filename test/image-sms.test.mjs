@@ -24,4 +24,16 @@ test('SMS review completion cannot mutate a later visit and transport errors kee
  }finally{globalThis.document=priorDocument;delete globalThis.__smsFixturePort;rmSync(dir,{recursive:true,force:true});}
 });
 
+test('holding the SMS role, an opened conversation is marked read through the newest shown message only',async()=>{
+ const rows=[{id:'sms:9',direction:'incoming',read:false,date:1700000000900},{id:'mms:4',direction:'incoming',read:true,date:1700000000000},{id:'sms:8',direction:'outgoing',read:true,date:1699999999000}];
+ const run=async(held,page,answer=async()=>({defaultSmsApp:true,updated:1}))=>{const marks=[];const f=fake({status:async()=>({...status,roles:{sms:{held}}}),messagePage:async()=>({rows:page,next:null}),markThreadRead:async(thread,through)=>{marks.push([thread,through]);return answer();}}),s=createSmsSession(f.client,true,()=>{});s.setActive(true);await tick();s.openThread('thread:5');await tick();await tick();const shown=s.state.rows;s.setActive(false);await tick();return {marks,shown};};
+ assert.deepEqual((await run(true,rows)).marks,[['thread:5',1700000000900]],'the newest shown message bounds the mark');
+ assert.deepEqual((await run(false,rows)).marks,[],'another SMS app keeps read state');
+ assert.deepEqual((await run(true,rows.map(row=>({...row,read:true})))).marks,[],'nothing unread is shown: no write');
+ assert.deepEqual((await run(true,[])).marks,[],'an empty page marks nothing');
+ const failed=await run(true,rows,async()=>{throw Error('provider refused');});
+ assert.equal(failed.marks.length,1);assert.deepEqual(failed.shown.map(row=>row.id),['sms:9','mms:4','sms:8'],'a refused mark leaves the shown page intact');
+ const thread=createSmsSession(fake({status:async()=>({...status,roles:{sms:{held:true}}}),threadPage:async()=>({rows:[{id:'thread:5',unread:true}],next:null}),markThreadRead:async()=>{throw Error('thread list must not mark');}}).client,true,()=>{});thread.setActive(true);await tick();assert.equal(thread.state.threads.length,1,'listing conversations never marks them read');thread.setActive(false);
+});
+
 test('old observer cleanup finishes before a new visit enables observation',async()=>{let release;const calls=[];let attempt=0;const f=fake({observeMessages:async()=>{const id=++attempt;calls.push('start'+id);if(id===1)await new Promise(r=>release=r);return async()=>{calls.push('stop'+id);};}}),s=createSmsSession(f.client,true,()=>{});s.setActive(true);await tick();s.setActive(false);s.setActive(true);await tick();assert.deepEqual(calls,['start1']);release();await tick();await tick();assert.deepEqual(calls,['start1','stop1','start2']);s.setActive(false);await tick();});
