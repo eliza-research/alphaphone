@@ -50,31 +50,34 @@ test('the organization credit balance is read only from an exact, fresh billing 
   assert.equal(membershipCreditDetailsFromLimits(snapshot('5'), NOW + 400000).state, 'unavailable', 'a stale observation is not shown');
 });
 
-test('the account panel shows the plan, its allowance, its end and a current limit, never a top-up', async () => {
+test('the approved Membership & credits sheet adds the plan allowance and the latest Cloud limit read-only', async () => {
   const {subscriptionSummary: summary} = await import('../apps/app/src/runtime/subscription-entitlement.ts');
   const source = fs.readFileSync('apps/app/src/runtime/cloud-membership-ui.tsx', 'utf8');
   const compiled = transformSync(source.replace(/^import .*;\n/gm, '').replaceAll('export ', ''), {loader: 'tsx', jsxFactory: 'React.createElement'}).code;
-  const Controls = new Function('React', 'useEffect', 'useRef', 'useState', 'subscriptionSummary', compiled + ';return CloudMembershipControls;')(React, React.useEffect, React.useRef, React.useState, summary);
-  const render = props => renderToStaticMarkup(React.createElement(Controls, {balance: 'member', busy: false, email: 'owner@example.invalid', serviceName: 'Eliza Cloud', onRedeem: async () => true, onManage() {}, onRefresh() {}, ...props}));
+  const Controls = new Function('React', 'useEffect', 'useId', 'useRef', 'useState', 'subscriptionSummary', compiled + ';return CloudMembershipControls;')(React, React.useEffect, React.useId, React.useRef, React.useState, summary);
+  const render = props => renderToStaticMarkup(React.createElement(Controls, {balance: 'member', busy: false, email: 'owner@example.invalid', serviceName: 'Eliza Cloud', onRedeem: async () => true, onAddFunds() {}, onRefresh() {}, ...props}));
   const active = render({plan: {kind: 'active', planName: 'Synthetic plan', status: 'active', allowance: {unit: 'usd_micros', granted: 100, remaining: 25, periodStart: Date.now() - 1000, resetsAt: Date.now() + 86400000}, expiresAt: Date.now() + 1000, refreshFailed: false},
     endsAt: Date.now() + 10 * 86400000, lastLimit: {kind: 'rate-limited', retryAfterMs: 60000, resetsAt: null, observedAt: Date.now()}, credits: {usd: '9', observedAt: Date.now()}});
   assert.match(active, /Synthetic plan/);
   assert.match(active, /25% of this billing period&#x27;s plan allowance is left/);
   assert.match(active, /Ends .+ days left/);
-  assert.match(active, /The AI request rate limit was reached\. Try again in about (59|60) seconds\./);
-  assert.match(active, />Manage plan in Eliza Cloud</);
-  assert.doesNotMatch(active, /\$9|Add funds|Check balance|Available credits/, 'no balance or top-up beside a plan');
+  assert.match(active, /<dt>AI requests<\/dt><dd role="status">The AI request rate limit was reached\. Try again in about (59|60) seconds\./);
+  // The approved sheet: exact credits with Refresh, Add funds, then the code entry behind one action.
+  assert.match(active, /<dt>Available credits<\/dt>/);
+  assert.match(active, /\$9\.00<span class="alpha-membership-currency">USD/);
+  assert.match(active, />Add funds</);
+  assert.match(active, />Use membership code</);
   const credits = render({balance: 'funded', plan: {kind: 'credits', source: 'billing-limits'}, credits: {usd: '1234.5', observedAt: Date.now()}});
-  assert.match(credits, /<dd>Eliza Cloud credits<\/dd>/);
-  assert.match(credits, /<dt>Credit balance<\/dt><dd>\$1,234\.50 USD/, 'the read-only balance has its own label, not a second copy of the plan headline');
-  assert.match(credits, />Manage billing in Eliza Cloud</);
+  assert.match(credits, /\$1,234\.50/);
+  assert.match(credits, /No active membership/);
+  assert.doesNotMatch(credits, /plan allowance|AI requests/, 'no allowance or limit line without a reported allowance or a current limit');
   const none = render({balance: 'zero', plan: {kind: 'inactive', planName: null, status: 'none', source: 'billing-limits'}});
-  assert.match(none, /No active plan/);
-  assert.match(none, />Choose a plan</);
-  assert.match(none, /Redeem a membership code or choose a plan to ask Alpha\. Nothing is purchased automatically\./);
-  for (const html of [active, credits, none]) assert.doesNotMatch(html, /Add funds|Check balance|top.?up/i);
+  assert.match(none, /Add funds or use a membership code to ask Alpha\./);
+  // A lapsed limit is not shown.
+  const lapsed = render({plan: {kind: 'credits', source: 'billing-limits'}, lastLimit: {kind: 'rate-limited', retryAfterMs: 1000, resetsAt: null, observedAt: Date.now() - 120000}});
+  assert.doesNotMatch(lapsed, /AI requests/);
   // The section renders again only when a shown wait ends or a reset passes (bounded), never every second.
-  const change = new Function(`${transformSync(source.slice(source.indexOf('function nextLimitChange('), source.indexOf('function endLabel(')), {loader: 'ts'}).code};return nextLimitChange;`)();
+  const change = new Function(`${transformSync(source.slice(source.indexOf('function nextLimitChange('), source.indexOf('/**', source.indexOf('function nextLimitChange('))), {loader: 'ts'}).code};return nextLimitChange;`)();
   const at = 1_000_000_000_000;
   assert.equal(change({kind: 'rate-limited', retryAfterMs: 60000, resetsAt: null, observedAt: at - 20000}, at), 40000);
   assert.equal(change({kind: 'rate-limited', retryAfterMs: 60000, resetsAt: at + 5000, observedAt: at}, at), 5000);
@@ -82,28 +85,9 @@ test('the account panel shows the plan, its allowance, its end and a current lim
   assert.equal(change({kind: 'billing-refused', retryAfterMs: null, resetsAt: null, observedAt: at - 59900}, at), 1000);
   assert.equal(change({kind: 'rate-limited', retryAfterMs: 1000, resetsAt: at - 1, observedAt: at - 5000}, at), null, 'nothing is scheduled for a lapsed limit');
   assert.match(source, /const limitChange=summary\.limit&&lastLimit\?nextLimitChange\(lastLimit,Date\.now\(\)\):null;\s+useEffect\(\(\)=>\{if\(limitChange===null\)return;const timer=setTimeout\(\(\)=>tick\(value=>value\+1\),limitChange\);return \(\)=>clearTimeout\(timer\);\}\);/);
-  for (const file of ['apps/app/src/runtime/cloud-membership-ui.tsx', 'apps/app/src/runtime/connection-ui.tsx'])
-    assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /\bfunds\b/i, `${file}: the billing review speaks of a plan or payment, not a top-up`);
-  // In the resident agent dialog the host already shows the account, the plan with its allowance and
-  // end and the choose/manage and Check plan again actions: none appears twice. The code form keeps
-  // its own result there.
-  const hosted = render({planShownByHost: true, plan: {kind: 'active', planName: 'Synthetic plan', status: 'active', allowance: {unit: 'usd_micros', granted: 100, remaining: 25, periodStart: Date.now() - 1000, resetsAt: Date.now() + 86400000}, expiresAt: Date.now() + 1000, refreshFailed: false},
-    endsAt: Date.now() + 10 * 86400000, lastLimit: {kind: 'rate-limited', retryAfterMs: 60000, resetsAt: null, observedAt: Date.now()}, error: 'Synthetic redemption error', notice: 'Synthetic redemption notice'});
-  for (const repeated of [/owner@example\.invalid/, /Synthetic plan/, /plan allowance is left/, /Ends .+ days left/, /Manage plan/, /Check plan again/, /Checking your plan/])
-    assert.doesNotMatch(hosted, repeated);
-  assert.match(hosted, /The AI request rate limit was reached\./);
-  assert.match(hosted, />Redeem code</);
-  assert.match(hosted, /aria-invalid="true"/);
-  assert.match(hosted, /<p role="alert">Synthetic redemption error<\/p><p role="status">Synthetic redemption notice<\/p>/, 'the code form reports its own result');
-  const hostedCredits = render({planShownByHost: true, balance: 'funded', plan: {kind: 'credits', source: 'billing-limits'}, credits: {usd: '5', observedAt: Date.now()}});
-  assert.match(hostedCredits, /<dt>Credit balance<\/dt><dd>\$5\.00 USD/);
-  assert.doesNotMatch(hostedCredits, /Eliza Cloud credits|Manage billing/);
   const ui = fs.readFileSync('apps/app/src/runtime/connection-ui.tsx', 'utf8');
-  assert.match(ui, /\{\(residentNeedsPlan\|\|planPanel\)&&membershipControls\(true\)\}/, 'the resident dialog uses the host-shown variant');
-  assert.match(ui, /error=\{planShownByHost\?snapshot\.redeemError:snapshot\.redeemError\|\|snapshot\.error\}/, 'there the section reports only its own redemption error');
-  assert.match(ui, /\{!\(residentNeedsPlan\|\|planPanel\)&&snapshot\.redeemError&&/, 'the host repeats no redemption error the section shows');
-  assert.match(ui, /\{!\(residentNeedsPlan\|\|planPanel\)&&snapshot\.redeemNotice&&/, 'the host repeats no redemption notice the section shows');
-  assert.equal(ui.split('membershipControls()').length - 1, 2, 'the plan overlay and the Cloud account dialog keep the full section');
+  assert.match(ui, /lastLimit=\{snapshot\.lastServiceLimit\} serviceName=\{serviceName\}/, 'the sheet receives the latest Cloud limit');
+  assert.match(ui, /className="serif">Membership &amp; credits<\/h1>/);
 });
 
 test('a resident turn failure forwards its own reset fields and records the latest Cloud limit for the account panel', () => {

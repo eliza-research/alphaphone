@@ -114,7 +114,7 @@ for (const balance of ['zero', 'checking', 'unavailable', undefined, 'funded', '
       const f = preflightFixture(balance);
       if (balance === 'zero') {
         await assert.rejects(f[method](), error => {
-          assert.match(error.message, /Redeem a membership code or choose a plan in Settings/);
+          assert.match(error.message, /Add funds or an active membership in Settings/);
           if (method === 'send') assert.equal(error.notDispatched, true);
           return true;
         });

@@ -1,10 +1,15 @@
-import React,{useEffect,useRef,useState} from 'react';
+import React,{useEffect,useId,useRef,useState} from 'react';
 import './cloud-membership-ui.css';
 export type MembershipBalance='checking'|'zero'|'funded'|'member'|'unavailable';
 import {subscriptionSummary,type ServiceLimit,type SubscriptionView} from './subscription-entitlement';
 function creditLabel(usd:string):string {
  const [whole,fraction='']=usd.split('.');
- return `$${whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')}.${fraction.padEnd(2,'0')} USD`;
+ return `$${whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')}.${fraction.replace(/0+$/,'').padEnd(2,'0')}`;
+}
+function endLabel(endsAt:number):string {
+ const date=new Date(endsAt).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+ const days=Math.ceil((endsAt-Date.now())/86400000);
+ return days>0?`Ends ${date} · ${days} ${days===1?'day':'days'} left`:`Ended ${date}`;
 }
 /** Milliseconds until a shown Cloud limit's text changes or lapses (between 1 s and 1 h), or null. */
 function nextLimitChange(limit:ServiceLimit&{observedAt:number},now:number):number|null {
@@ -12,53 +17,55 @@ function nextLimitChange(limit:ServiceLimit&{observedAt:number},now:number):numb
   .filter((at):at is number=>at!==null&&at>now);
  return points.length?Math.min(3_600_000,Math.max(1000,Math.min(...points)-now)):null;
 }
-function endLabel(endsAt:number):string {
- const date=new Date(endsAt).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
- const days=Math.ceil((endsAt-Date.now())/86400000);
- return days>0?`Ends ${date} · ${days} ${days===1?'day':'days'} left`:`Ended ${date}`;
-}
 /**
- * The account and plan section shared by onboarding and Settings (#410, P-26): the plan state, the
- * plan allowance Cloud reports, the plan end and the retry time of the latest Cloud limit, all from
- * the shared subscription summary. A credit balance appears only in Cloud's explicit
- * organization-credit mode, read-only. Nothing is bought here: the manage action opens Cloud's own
- * billing page after the account review.
- *
- * `planShownByHost`: the resident agent dialog already shows the account, the plan with its
- * allowance and end and the plan actions (choose or manage, Check plan again). There this section
- * adds only the credit balance, the latest Cloud limit, the code form and its result, so no fact or
- * action appears twice.
+ * Approved "Membership & credits" bottom-sheet content (decision: NubsCarson 7a44d7038); balances and
+ * actions remain bound to the current Cloud account. The shared subscription summary
+ * (`@elizaos/cloud-sdk/subscription-entitlement`) adds, read-only, the plan allowance Cloud reports and
+ * the latest Cloud limit with its retry time (#410). Nothing is bought here: Add funds opens Cloud's
+ * own billing page after the account review.
  */
-export function CloudMembershipControls({balance,busy,error,notice,email,credits,plan,endsAt,lastLimit,serviceName='Cloud',planShownByHost=false,onRedeem,onManage,onRefresh}:{balance:MembershipBalance;busy:boolean;error?:string;notice?:string;email?:string;credits?:{usd:string;observedAt:number}|null;plan?:SubscriptionView|null;endsAt?:number|null;lastLimit?:(ServiceLimit&{observedAt:number})|null;serviceName?:string;planShownByHost?:boolean;onRedeem:(code:string)=>Promise<boolean>;onManage:()=>void;onRefresh:()=>void}){
- const code=useRef<HTMLInputElement>(null);
- const summary=subscriptionSummary(plan??(balance==='checking'?{kind:'checking'}:null),{planEndsAt:endsAt??null,lastLimit:lastLimit??null,lastLimitAt:lastLimit?.observedAt??null,serviceName});
+export function CloudMembershipControls({balance,busy,error,connectionError,notice,email,credits,plan,endsAt,lastLimit,serviceName='Cloud',onRedeem,onAddFunds,onRefresh}:{balance:MembershipBalance;busy:boolean;error?:string;connectionError?:string;notice?:string;email?:string;credits?:{usd:string;observedAt:number}|null;plan?:SubscriptionView|null;endsAt?:number|null;lastLimit?:(ServiceLimit&{observedAt:number})|null;serviceName?:string;onRedeem:(code:string)=>Promise<boolean>;onAddFunds:()=>void;onRefresh:()=>void}){
+ const code=useRef<HTMLInputElement>(null),pending=useRef(false),codeEntryId=useId(),errorId=useId();
+ // A retained redemption error must keep its associated input exposed.
+ const [codeVisible,setCodeVisible]=useState(Boolean(error)),[submitting,setSubmitting]=useState(false),[submissionError,setSubmissionError]=useState(''),[codeValue,setCodeValue]=useState('');
+ const active=plan?.kind==='active',disabled=busy||submitting;
+ const summary=subscriptionSummary(plan??null,{planEndsAt:endsAt??null,lastLimit:lastLimit??null,lastLimitAt:lastLimit?.observedAt??null,serviceName});
  // Render again when the shown limit's wait ends or its reset passes, so a lapsed retry time is not
- // left on screen. Only those moments change the status line; it is not a per-second countdown.
+ // left on screen. Only those moments change the line; it is not a per-second countdown.
  const [,tick]=useState(0);
  const limitChange=summary.limit&&lastLimit?nextLimitChange(lastLimit,Date.now()):null;
  useEffect(()=>{if(limitChange===null)return;const timer=setTimeout(()=>tick(value=>value+1),limitChange);return ()=>clearTimeout(timer);});
- const planEnd=typeof summary.planEndsAt==='number'&&Number.isFinite(summary.planEndsAt)?summary.planEndsAt:null;
- const facts=[
-  !planShownByHost&&<div key="account"><dt>Account</dt><dd>{email||`Signed in to ${serviceName}`}</dd></div>,
-  !planShownByHost&&<div key="plan"><dt>Plan</dt><dd>{plan?summary.headline:balance==='checking'?'Checking…':'Not confirmed'}{plan?.kind==='active'&&<small>{planEnd!==null?endLabel(planEnd):'End date not provided'}</small>}</dd></div>,
-  !planShownByHost&&summary.allowance&&<div key="allowance"><dt>Plan allowance</dt><dd>{summary.allowance}</dd></div>,
-  plan?.kind==='credits'&&<div key="credits"><dt>Credit balance</dt><dd>{credits?creditLabel(credits.usd):'Not available'}{credits&&<small>Checked {new Date(credits.observedAt).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})}</small>}</dd></div>,
-  summary.limit&&<div key="limit"><dt>AI requests</dt><dd role="status">{summary.limit}</dd></div>,
- ].filter(Boolean);
- return <section className="alpha-membership" aria-label="Plan and membership">
-   {facts.length>0&&<dl className="alpha-membership-facts">{facts}</dl>}
-   {!planShownByHost&&<p role="status">{balance==='checking'?'Checking your plan…':balance==='unavailable'?'Plan details could not be refreshed. You can still redeem a code or check again.':balance==='zero'?'Redeem a membership code or choose a plan to ask Alpha. Nothing is purchased automatically.':''}</p>}
-   <form aria-label="Redeem a membership code" onSubmit={event=>{event.preventDefault();const input=code.current;if(!input)return;void onRedeem(input.value).then(ok=>{if(ok&&code.current)code.current.value='';});}}>
-     <label>Membership code<input ref={code} name="membership-code" autoComplete="one-time-code" autoCapitalize="characters" autoCorrect="off" spellCheck={false} data-autofill-ignore="true" maxLength={64} disabled={busy} required aria-invalid={!!error||undefined}/></label>
-     <button type="submit" disabled={busy}>Redeem code</button>
-   </form>
-   {!planShownByHost&&<div className="alpha-membership-actions"><button type="button" disabled={busy} onClick={onManage}>{summary.manageLabel}</button><button type="button" disabled={busy||balance==='checking'} onClick={onRefresh}>Check plan again</button></div>}
-   {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
+ useEffect(()=>{if(codeVisible)code.current?.focus();},[codeVisible]);
+ async function redeem(event:React.FormEvent){
+  event.preventDefault();const input=code.current;
+  if(!input||!input.value.trim()||disabled||pending.current)return;
+  pending.current=true;setSubmitting(true);setSubmissionError('');
+  try{const ok=await onRedeem(input.value);if(ok&&code.current===input)setCodeValue('');}
+  catch{setSubmissionError('Code redemption could not be confirmed. Check your account before trying again.');}
+  finally{pending.current=false;setSubmitting(false);}
+ }
+ return <section className="alpha-membership" aria-label="Membership and credits">
+   <p className="alpha-membership-account">{email||'Signed in to Eliza Cloud'}</p>
+   <dl className="alpha-membership-facts">
+    <div className="alpha-membership-credit-fact"><dt>Available credits</dt><dd>
+     <div className="alpha-membership-balance"><span className={credits?'alpha-membership-amount':'alpha-membership-amount-unavailable'}>{credits?<>{creditLabel(credits.usd)}<span className="alpha-membership-currency">USD</span></>:balance==='checking'?'Checking…':'Not available'}</span><button type="button" className="alpha-membership-refresh" disabled={disabled||balance==='checking'} onClick={onRefresh}>{balance==='checking'?'Checking…':'Refresh'}</button></div>
+     {credits&&<small className="alpha-membership-fresh">Checked {new Date(credits.observedAt).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})}</small>}
+    </dd></div>
+    <div className="alpha-membership-plan-fact"><dt>Membership</dt><dd>{active?plan.planName:plan?.kind==='inactive'||plan?.kind==='credits'?'No active membership':balance==='checking'?'Checking…':'Not confirmed'}{active&&<small>{typeof endsAt==='number'&&Number.isFinite(endsAt)?endLabel(endsAt):'End date not provided'}</small>}{active&&summary.allowance&&<small className="alpha-membership-allowance">{summary.allowance}</small>}</dd></div>
+    {summary.limit&&<div className="alpha-membership-limit-fact"><dt>AI requests</dt><dd role="status">{summary.limit}</dd></div>}
+   </dl>
+   <p className="alpha-membership-support" role="status">{balance==='checking'?'Checking your account…':balance==='unavailable'?'Account details could not be refreshed. You can still redeem a code or check again.':balance==='zero'?'Add funds or use a membership code to ask Alpha.':''}</p>
+   <div className="alpha-membership-main-actions"><button type="button" className="alpha-membership-primary" disabled={disabled} onClick={onAddFunds}>Add funds</button>{!codeVisible&&<button type="button" className="alpha-membership-secondary" aria-expanded={false} aria-controls={codeEntryId} disabled={disabled} onClick={()=>setCodeVisible(true)}>Use membership code</button>}</div>
+   {codeVisible&&<div id={codeEntryId} className="alpha-membership-code-entry"><form aria-label="Redeem a membership code" onSubmit={event=>void redeem(event)}>
+     <label>Membership code<input ref={code} name="membership-code" value={codeValue} onChange={event=>setCodeValue(event.target.value)} placeholder="Enter code" autoComplete="one-time-code" autoCapitalize="characters" autoCorrect="off" spellCheck={false} data-autofill-ignore="true" maxLength={64} disabled={disabled} required aria-invalid={!!error||!!submissionError||undefined} aria-describedby={error||submissionError?errorId:undefined}/></label>
+     <button type="submit" disabled={disabled||!codeValue.trim()}>{submitting?'Redeeming…':'Redeem'}</button>
+   </form></div>}
+   {[...new Set([error||submissionError,connectionError].filter((value):value is string=>!!value))].map((value,index)=><p key={value} id={index===0?errorId:undefined} role="alert">{value}</p>)}{notice&&<p role="status">{notice}</p>}
  </section>;
 }
 
 /** Acknowledgment is not proof of the external browser session; the owner must check it there. */
 export function BillingAccountReview({email,busy,error,onOpen,onCancel}:{email:string;busy:boolean;error?:string;onOpen:()=>void;onCancel:()=>void}){
  const [acknowledged,setAcknowledged]=useState(false);
- return <section className="alpha-billing-review"><header><h1 className="serif">Check the billing account</h1></header><p>Alpha is signed in as <strong>{email}</strong>.</p><p>Your browser may be signed into a different account. Before paying, use the billing page’s account menu to check it shows <strong>{email}</strong>. A plan or payment there applies to the account shown.</p><form onSubmit={event=>{event.preventDefault();if(acknowledged&&!busy)onOpen();}}><label><input type="checkbox" checked={acknowledged} onChange={event=>setAcknowledged(event.target.checked)} disabled={busy} required/>I’ll check the account before paying.</label><div className="alpha-membership-actions"><button type="submit" disabled={!acknowledged||busy}>Open billing</button><button type="button" disabled={busy} onClick={onCancel}>Cancel</button></div></form>{error&&<p role="alert">{error}</p>}</section>;
+ return <section className="alpha-billing-review"><header><h1 className="serif">Check the billing account</h1></header><p>Alpha is signed in as <strong>{email}</strong>.</p><p>Your browser may be signed into a different account. Before paying, use the billing page’s account menu to check it shows <strong>{email}</strong>. Funds go to the account shown there.</p><form onSubmit={event=>{event.preventDefault();if(acknowledged&&!busy)onOpen();}}><label><input type="checkbox" checked={acknowledged} onChange={event=>setAcknowledged(event.target.checked)} disabled={busy} required/>I’ll check the account before paying.</label><div className="alpha-membership-actions"><button type="submit" disabled={!acknowledged||busy}>Open billing</button><button type="button" disabled={busy} onClick={onCancel}>Cancel</button></div></form>{error&&<p role="alert">{error}</p>}</section>;
 }

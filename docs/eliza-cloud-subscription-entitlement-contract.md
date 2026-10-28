@@ -10,17 +10,22 @@ Client source: the shared `@elizaos/cloud-sdk/subscription-entitlement` (elizaOS
 Alpha binds its copy in `apps/app/src/runtime/subscription-entitlement.ts` and uses it from
 `cloud-protocol.ts` (`subscriptionEntitlement`, `subscriptionEntitlementKeys`,
 `openSubscriptionManagement`), `connection-ui.tsx` (`admitCloudResident`), the account section
-(`cloud-membership-ui.tsx`: plan, plan allowance, plan end and the latest limit's retry time, which
-goes once it has passed) and the Settings plan page (`residentPlanSettings`, `settings-adapter.ts`: the same
+(`cloud-membership-ui.tsx`: the approved "Membership & credits" sheet, with the plan allowance and
+the latest limit's retry time added read-only from the shared summary; the limit line goes once it
+has passed) and the Settings plan page (`residentPlanSettings`, `settings-adapter.ts`: the same
 allowance and latest limit). Alpha tests: `test/subscription-entitlement.test.mjs` and
 `test/browser/native-cloud-subscription.spec.ts`.
 
 ## Principles (policy P-26)
 
 - Cloud billing uses subscription allowances or organization credits, with server-side admission.
-  Alpha supports the owner's credit-funded inference setup; the phone shows no top-up or
-  per-token meter and never grants credits. A read-only Cloud credit balance appears only in the
-  explicit organization-credit mode; beside a plan the phone shows plan state and allowance.
+  Alpha supports the owner's credit-funded inference setup and never grants credits or shows a
+  per-token meter. The account sheet is the approved "Membership & credits" design (product
+  decision recorded for the owner, NubsCarson 7a44d7038): the exact Cloud credit balance with
+  Refresh, the membership and its end, Add funds (which opens Cloud's own billing page only after
+  the account review) and the membership code entry. From the shared subscription summary it adds,
+  read-only, the plan allowance Cloud reports and the latest Cloud limit with its retry time.
+  Nothing is bought on the phone.
 - An assistant turn never waits on a billing service. Cloud authorises each inference or Maps
   request from its own cached quota or token bucket.
 - Every Alpha Phone signs in to Eliza Cloud. Admission accepts a valid active/trialing plan or
