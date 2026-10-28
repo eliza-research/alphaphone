@@ -9,9 +9,11 @@ Client source: the shared `@elizaos/cloud-sdk/subscription-entitlement` (elizaOS
 `packages/cloud/sdk/src/subscription-entitlement.ts` and its tests), projected from the pin.
 Alpha binds its copy in `apps/app/src/runtime/subscription-entitlement.ts` and uses it from
 `cloud-protocol.ts` (`subscriptionEntitlement`, `subscriptionEntitlementKeys`,
-`openSubscriptionManagement`), `connection-ui.tsx` (`admitCloudResident`) and the account section
-(`cloud-membership-ui.tsx`: plan, plan allowance, plan end and the latest limit's retry time). Alpha
-tests: `test/subscription-entitlement.test.mjs` and `test/browser/native-cloud-subscription.spec.ts`.
+`openSubscriptionManagement`), `connection-ui.tsx` (`admitCloudResident`), the account section
+(`cloud-membership-ui.tsx`: plan, plan allowance, plan end and the latest limit's retry time, which
+goes once it has passed) and the Settings plan page (`residentPlanSettings`, `settings-adapter.ts`: the same
+allowance and latest limit). Alpha tests: `test/subscription-entitlement.test.mjs` and
+`test/browser/native-cloud-subscription.spec.ts`.
 
 ## Principles (policy P-26)
 
