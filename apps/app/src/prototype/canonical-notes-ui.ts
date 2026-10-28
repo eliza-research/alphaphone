@@ -1,4 +1,5 @@
 import React from 'react';
+import {iconStyle} from '../icon-style';
 import {agentPendingText,agentAvailabilityNotice} from '../runtime/connection-ui';
 import {NotesWorkspace,type NotesWorkspaceHandle} from '../../../../.eliza/client-features/plugins/plugin-notes/src/workspace.ts';
 import {createNotesClient} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-api.ts';
@@ -9,6 +10,8 @@ import {noteShareText} from '../runtime/note-share-text';
 import {DailyApps} from '../daily';
 import {registerPlugin} from '../platform-plugins';
 import {speakNote,stopSpeaking} from './local-speech-playback';
+/** Back chevron from the shared icon pack, like every other Back control: it does not reflow as text at large font sizes. */
+const backIcon=()=>React.createElement('span',{'aria-hidden':'true','data-alpha-icon':'/icons/lucide/chevron-left.svg',style:{...iconStyle('chevron-left'),width:24,height:24}});
 type Bag=Record<string,any>;
 const documents=registerPlugin<{exportText(input:{title:string;text:string}):Promise<{status:string;message:string}>}>('AlphaNoteDocuments',{
  web:()=>import('../runtime/browser-note-documents').then(module=>new module.BrowserNoteDocuments()),
@@ -78,7 +81,7 @@ export class CanonicalNotesUi {
   this.elementKey=elementKey;
   const selected=(note:StickyNote,signal:AbortSignal)=>{signal.throwIfAborted();if(!this.active||!this.current||this.open!==note.id)throw new DOMException('The note changed.','AbortError');return noteShareText(row(note));};
   return this.element=React.createElement('div',{className:'notes-layout',hidden:!active,inert:!active||covered||undefined,'aria-hidden':!active||covered,'data-alpha-shared-notes':true,role:'region','aria-label':'Notes',style:{position:'absolute',inset:0,zIndex:21,background:'var(--bg)',paddingTop:44,boxSizing:'border-box',display:active?'flex':'none',flexDirection:'column','--text':'var(--fg)','--txt':'var(--fg)','--muted':'var(--mut)','--muted-strong':'var(--mut)','--card':'var(--bg)','--surface':'var(--s2)','--border':'var(--line)','--input':'var(--bg)','--eliza-chat-clearance':'var(--alpha-chat-clearance,0px)'} as React.CSSProperties},
-   React.createElement('header',{'data-alpha-app-header':'main',style:{display:'flex',alignItems:'center',height:56,flexShrink:0,gap:12,padding:'0 16px'}},React.createElement('button',{className:'app-header-back','aria-label':'Back to apps',onClick:()=>this.shell?.goHome()},React.createElement('span',{'aria-hidden':true,style:{fontSize:28}},'‹')),React.createElement('h1',{'data-alpha-app-title':true,style:{margin:0,fontSize:24}},'Notes')),
+   React.createElement('header',{'data-alpha-app-header':'main',style:{display:'flex',alignItems:'center',height:56,flexShrink:0,gap:12,padding:'0 16px'}},React.createElement('button',{className:'app-header-back','aria-label':'Back to apps',onClick:()=>this.shell?.goHome()},backIcon()),React.createElement('h1',{'data-alpha-app-title':true,style:{margin:0,fontSize:24}},'Notes')),
    storageAccessWarning?React.createElement('p',{role:'alert',className:'storage-access-warning'},storageAccessWarning):null,
    React.createElement(NotesWorkspace,{ref:this.attach,client:this.client,binding:this.binding,events:this.events,active,sourceNoteTarget:this.target,onSelectionChange:this.selectionChanged,sources:options.map((source:Bag)=>({id:source.id,label:source.label??(source.id==='legacy'?'Older notes':'Notes'),selected:source.selected,select:async()=>{await this.api?.notesSourceOptions?.find((option:Bag)=>option.id===source.id)?.choose();}})),ports:{
     copyText:async(note,signal)=>{const value=selected(note,signal);await copySelectedText(value.text);},
@@ -102,7 +105,7 @@ function WaitingNotes({shell,storageAccessWarning,covered=false}:{shell:Bag;stor
  },[covered]);
  return React.createElement('section',{ref:root,tabIndex:-1,inert:covered||undefined,'aria-hidden':covered,className:'notes-layout',role:'region','aria-label':'Notes',style:{position:'absolute',inset:0,zIndex:21,background:'var(--bg)',color:'var(--fg)',paddingTop:44,boxSizing:'border-box',display:'flex',flexDirection:'column'} as React.CSSProperties},
   React.createElement('header',{'data-alpha-app-header':'main',style:{display:'flex',alignItems:'center',height:56,flexShrink:0,gap:12,padding:'0 16px'}},
-   React.createElement('button',{className:'app-header-back','aria-label':'Back to apps',onClick:()=>shell.goHome()},React.createElement('span',{'aria-hidden':true,style:{fontSize:28}},'‹')),
+   React.createElement('button',{className:'app-header-back','aria-label':'Back to apps',onClick:()=>shell.goHome()},backIcon()),
    React.createElement('h1',{'data-alpha-app-title':true,style:{margin:0,fontSize:24}},'Notes')),
   React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:16,minHeight:0,overflowY:'auto',padding:'16px 24px calc(var(--alpha-chat-clearance, 120px) + 24px)'}},
    storageAccessWarning?React.createElement('p',{role:'alert',className:'storage-access-warning'},storageAccessWarning):null,
