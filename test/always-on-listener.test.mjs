@@ -54,7 +54,9 @@ test('a cold listener wake is bound to Alpha native owner state, never renderer 
  assert.match(shared,/if \(!waitingOwner\.equals\(admittedOwner\(\)\)\) \{ clear\(\); return; \}/);
  // The assist surface still records only Android caller identity; no extra or deep link reaches it.
  const assist=strip(fs.readFileSync(path.join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaAssistActivity.java'),'utf8'));
- assert.match(assist,/new ai\.eliza\.plugins\.system\.SenseListenerClient\(this\)\.recordInvocation\(caller\)/);
+ // An ordinary assist records the caller; a protected Power entry records no caller package.
+ assert.match(assist,/new ai\.eliza\.plugins\.system\.SenseListenerClient\(this\);/);
+ assert.match(assist,/sense\.recordInvocation\(isProtectedPowerEntry\(\) \? null : caller\);/);
  assert.doesNotMatch(assist,/getStringExtra|getData\(\)|getExtras\(\)/);
 });
 test('press-and-hold power starts voice only through SystemUI identity that Android reports',()=>{
