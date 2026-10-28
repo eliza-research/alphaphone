@@ -1,7 +1,7 @@
 import { SecureNotesStore as SharedSecureNotesStore, readLegacyDailyNotes as readLegacy, type NotesVault, type NotesOpenStage } from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-secure-store.ts';
 import { capacityAwareNotesVault, NotesStorageFull } from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-secure-store.ts';
 import { createNotesDraftSlot, type NotesDraft, type NotesDraftSaveInput } from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-draft.ts';
-import { notesStorageKeys, isStorageFull, type NoteRecord } from './notes-store';
+import { notesStorageKeys, type NoteRecord } from './notes-store';
 export type { NotesVault, NotesOpenStage } from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-secure-store.ts';
 /** Unsaved-edit recovery and its conflict merge are shared; Alpha keeps its installed slot names. */
 export { NotesStorageFull };
@@ -16,7 +16,7 @@ export function readLegacyDailyNotes(storage:Pick<LegacyStorage,'getItem'>){retu
 export type SecureNotesStore = SharedSecureNotesStore;
 export const SecureNotesStore = {
  open(vault:NotesVault,legacy:LegacyStorage,initial:NoteRecord[]|(()=>NoteRecord[])=[],onStage:(stage:NotesOpenStage)=>void=()=>{}){
-  return SharedSecureNotesStore.open(config,capacityAwareNotesVault(vault,isStorageFull),legacy,initial,onStage);
+  return SharedSecureNotesStore.open(config,capacityAwareNotesVault(vault),legacy,initial,onStage);
  },
  /** Read the encrypted unsaved draft. Throws for an unreadable or invalid slot (recovery). */
  readDraft(vault:NotesVault):Promise<NotesDraft|null>{return createNotesDraftSlot(vault,SECURE_NOTES_DRAFT_SLOT).read();},
