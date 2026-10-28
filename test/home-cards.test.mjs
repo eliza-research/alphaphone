@@ -191,6 +191,9 @@ test('Home template renders source, freshness and the brief card only from live 
   assert.match(home, /^\s*\{\{homeAttentionCard\}\}$/m);
   assert.match(home, /^\s*\{\{homeBriefCard\}\}$/m);
   assert.ok(home.indexOf('{{homeAgendaCard}}') < home.indexOf('data-alpha-home-workflows') && home.indexOf('data-alpha-home-workflows') < home.indexOf('{{homeAttentionCard}}') && home.indexOf('{{homeAttentionCard}}') < home.indexOf('{{homeBriefCard}}'), 'agenda, workflows, mail, brief');
+  // dc-lite renders a text node that is exactly one {{hole}} as an element; two holes in one text node
+  // would be interpolated as text ("[object Object]").
+  assert.doesNotMatch(home, /\}\}\s+\{\{/, 'each card placeholder is alone in its text node');
   assert.doesNotMatch(home, /home-calendar-card|home-brief-card|data-alpha-home-inbox|\{\{homeCalendarTitle\}\}|\{\{homeBriefTitle\}\}|\{\{homeInboxTitle\}\}/, 'no second copy of the shared card markup');
   assert.match(home, /aria-description="\{\{homeWorkflowDescription\}\}"/);
   assert.match(home, /<sc-if value="\{\{homeWorkflowFreshness\}\}"><span data-alpha-home-workflow-freshness>/);

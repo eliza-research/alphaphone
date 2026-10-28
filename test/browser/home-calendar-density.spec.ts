@@ -1,5 +1,7 @@
 import {test,expect,type Page} from '@playwright/test';
 import {writeFile} from 'node:fs/promises';
+import {returnToApps} from './app-navigation';
+import {openBrowserCalendar} from './helpers/browser-calendar';
 
 async function openHome(page:Page,theme:string,size:{width:number;height:number},kind:'long'|'unbroken'|'all-day'|'empty'){
  await page.setViewportSize(size);
@@ -15,6 +17,8 @@ async function openHome(page:Page,theme:string,size:{width:number;height:number}
   return {title,day:date.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}),footer:allDay?'All day':new Date(begin).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+' – '+new Date(end).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})};
  },kind);
  if(expected)await page.reload();
+ // Home's agenda reads the calendar chosen in Calendar; these layouts use the test-mocks browser calendar.
+ await openBrowserCalendar(page);await returnToApps(page);
  const card=page.locator('[data-alpha-home-calendar]');await expect(card).toBeVisible();await page.evaluate(()=>document.fonts.ready);
  if(expected){await expect(card).toHaveAccessibleName(`Open calendar event: ${expected.title}, ${expected.day}, ${expected.footer}`);await expect(card.locator('.home-calendar-footer')).toHaveText(expected.footer);}
  else await expect(card).toHaveAccessibleName('Open your calendar');
