@@ -1,5 +1,6 @@
 import {test,expect,type Page} from '@playwright/test';
 import {returnToApps} from './app-navigation';
+import {openBrowserCalendar} from './helpers/browser-calendar';
 // Daily overview contract on Home (development lane): every card names its source and when it was
 // read, shows loading/empty/error states honestly, keeps overdue reminders visible, and shows the
 // latest retained brief only when one exists. Mail and digest data here is synthetic and injected
@@ -11,11 +12,14 @@ const home=(page:Page)=>page.getByRole('region',{name:'Home',exact:true});
 const calendarCard=(page:Page)=>page.locator('[data-alpha-home-calendar]');
 const inboxCard=(page:Page)=>home(page).locator('[data-alpha-home-inbox]');
 const briefCard=(page:Page)=>home(page).locator('[data-alpha-home-brief]');
+/** Home's agenda reads the calendar chosen in Calendar (Agent Calendar by default). The device-calendar
+ * cases choose the test-mocks browser calendar, which is not remembered across reloads. */
+const browserCalendarHome=async(page:Page)=>{await openBrowserCalendar(page);await returnToApps(page);};
 /** The app's own time format for "now" and the neighbouring minutes, so a minute rollover cannot fail the comparison. */
 const nearNow=(page:Page)=>page.evaluate(async()=>{const {formatTime}=await import('/src/prototype/locale-time.ts'),now=Date.now();return [-60000,0,60000].map(offset=>formatTime(new Date(now+offset)));});
 
 test('calendar card keeps source and time accessible without generic app labels',async({page},info)=>{
- await page.addInitScript(offline);await page.goto('/');
+ await page.addInitScript(offline);await page.goto('/');await browserCalendarHome(page);
  const card=calendarCard(page);
  await expect(card).toContainText('No upcoming events');
  const source=card.locator('[data-alpha-home-calendar-source]');
@@ -31,7 +35,7 @@ test('calendar card keeps source and time accessible without generic app labels'
   const time=(value:number)=>new Date(value).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
   return {day:date.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}),footer:`${time(date.getTime())} – ${time(date.getTime()+1800000)}`};
  });
- await page.reload();
+ await page.reload();await browserCalendarHome(page);
  await expect(card).toHaveAccessibleName(`Open calendar event: Synthetic overview event, ${expected.day}, ${expected.footer}`);
  await expect(card.locator('.home-calendar-footer')).toHaveText(expected.footer);
  await expect(source).toHaveCount(0);
@@ -44,7 +48,7 @@ test('calendar card keeps source and time accessible without generic app labels'
 });
 
 test('events of an app calendar hidden in Calendar stay off Home until it is shown again',async({page})=>{
- await page.addInitScript(offline);await page.goto('/');
+ await page.addInitScript(offline);await page.goto('/');await browserCalendarHome(page);
  const card=calendarCard(page);
  await expect(card).toContainText('No upcoming events');
  const toggle=()=>page.evaluate(async()=>{const {BrowserCalendar}=await import('/src/browser/calendar.ts');await new BrowserCalendar().changePreferences({action:'visibility'});});
@@ -52,21 +56,21 @@ test('events of an app calendar hidden in Calendar stay off Home until it is sho
   const {BrowserCalendar}=await import('/src/browser/calendar.ts'),date=new Date(Date.now()+2*86400000);date.setHours(9,30,0,0);
   await new BrowserCalendar().save({calendarId:'local',title:'Synthetic hidden event',begin:date.getTime(),end:date.getTime()+1800000,allDay:false,creationId:crypto.randomUUID()});
  });
- await page.reload();
+ await page.reload();await browserCalendarHome(page);
  await expect(card).toContainText('Synthetic hidden event');
- await toggle();await page.reload();
+ await toggle();await page.reload();await browserCalendarHome(page);
  await expect(card).toContainText('No visible events');
  await expect(card).not.toContainText(/Synthetic hidden event|No upcoming events/);
  await expect(card).toHaveAccessibleName('Open your calendar');
  await expect(card).toHaveAttribute('data-alpha-home-calendar-event','false');
  // The calendar was still read; only its display is off.
  await expect(card.locator('[data-alpha-home-calendar-source]')).toHaveCount(0);
- await toggle();await page.reload();
+ await toggle();await page.reload();await browserCalendarHome(page);
  await expect(card).toContainText('Synthetic hidden event');
 });
 
 test('a failed calendar read shows the failure with no read time, and opening Calendar from the card reads it again',async({page})=>{
- await page.addInitScript(offline);await page.goto('/');
+ await page.addInitScript(offline);await page.goto('/');await browserCalendarHome(page);
  const card=calendarCard(page),source=card.locator('[data-alpha-home-calendar-source]');
  await expect(source).toHaveCount(0);
  await page.evaluate(async()=>{
@@ -99,7 +103,7 @@ test('a failed calendar read shows the failure with no read time, and opening Ca
 
 test('an overdue reminder stays on Home, marked overdue with its own source, and opens in Calendar',async({page,context},info)=>{
  await context.grantPermissions(['notifications']);
- await page.addInitScript(offline);await page.goto('/');
+ await page.addInitScript(offline);await page.goto('/');await browserCalendarHome(page);
  const scheduled=await page.evaluate(async()=>{
   const {DailyApps}=await import('/src/daily.ts'),at=Date.now()+1500;
   const a=await DailyApps.scheduleReminder({id:'overview-overdue-a',title:'Synthetic overdue reminder',body:'',at});
@@ -111,7 +115,7 @@ test('an overdue reminder stays on Home, marked overdue with its own source, and
  });
  expect(scheduled.statuses).toEqual(['scheduled','scheduled']);
  await expect.poll(()=>page.evaluate(at=>Date.now()>at+400,scheduled.at),{timeout:10000}).toBe(true);
- await page.reload();
+ await page.reload();await browserCalendarHome(page);
  const card=calendarCard(page);
  await expect(card).toHaveAttribute('data-alpha-home-calendar-overdue','true');
  await expect(card).toContainText('Synthetic overdue reminder');
@@ -131,7 +135,7 @@ test('an overdue reminder stays on Home, marked overdue with its own source, and
  // The next line stays inside the card without clipping its text.
  expect(await card.evaluate(element=>{const line=element.querySelector<HTMLElement>('.home-calendar-next-text')!,a=line.getBoundingClientRect(),box=element.getBoundingClientRect();return {clipped:line.scrollWidth>line.clientWidth,inside:a.bottom<=box.bottom&&a.right<=box.right};})).toEqual({clipped:false,inside:true});
  // It is still there after another render and a reload: nothing dismissed it.
- await page.reload();await expect(card).toHaveAttribute('data-alpha-home-calendar-overdue','true');
+ await page.reload();await browserCalendarHome(page);await expect(card).toHaveAttribute('data-alpha-home-calendar-overdue','true');
  await page.screenshot({path:info.outputPath('home-overdue.png'),animations:'disabled'});
  await card.click();
  await expect(page.locator('html')).toHaveAttribute('data-active-view','calendar');
@@ -139,12 +143,12 @@ test('an overdue reminder stays on Home, marked overdue with its own source, and
  // Handling the oldest one moves the next overdue reminder up; handling both returns the card to the calendar.
  const done=(id:string)=>page.evaluate(async id=>{const {DailyApps}=await import('/src/daily.ts'),row=(await DailyApps.listReminders()).reminders.find(reminder=>reminder.id===id)!;return (await DailyApps.reminderDecision({id,occurrenceId:row.occurrenceId!,action:'done'})).status;},id);
  expect(await done('overview-overdue-a')).toBe('completed');
- await page.reload();
+ await page.reload();await browserCalendarHome(page);
  await expect(card).toContainText('Synthetic second overdue');
  await expect(card).toContainText('Overdue reminder');await expect(card).not.toContainText('overdue reminders');
  await expect(card.locator('.home-calendar-next-text')).toHaveText('Next: Synthetic in-progress event Now');
  expect(await done('overview-overdue-b')).toBe('completed');
- await page.reload();
+ await page.reload();await browserCalendarHome(page);
  await expect(card).toHaveAttribute('data-alpha-home-calendar-overdue','false');
  await expect(card).toContainText('Synthetic in-progress event');
  await expect(card.locator('[data-alpha-home-calendar-next-line]')).toHaveCount(0);
@@ -154,12 +158,12 @@ test('an overdue reminder stays on Home, marked overdue with its own source, and
 
 test('an upcoming reminder is attributed to the reminder store, not to a calendar',async({page,context})=>{
  await context.grantPermissions(['notifications']);
- await page.addInitScript(offline);await page.goto('/');
+ await page.addInitScript(offline);await page.goto('/');await browserCalendarHome(page);
  expect(await page.evaluate(async()=>{
   const {DailyApps}=await import('/src/daily.ts');
   return (await DailyApps.scheduleReminder({id:'overview-upcoming',title:'Synthetic upcoming reminder',body:'',at:Date.now()+3600000})).status;
  })).toBe('scheduled');
- await page.reload();
+ await page.reload();await browserCalendarHome(page);
  const card=calendarCard(page);
  await expect(card).toContainText('Synthetic upcoming reminder');
  await expect(card).toHaveAttribute('data-alpha-home-calendar-overdue','false');

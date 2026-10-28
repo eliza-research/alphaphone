@@ -156,7 +156,7 @@ test('with only occurrences that did not run, Home shows no brief card', async (
   expect(await harness(page, f => f.unexpected)).toEqual([]);
 });
 
-// ---- Canonical Agent Calendar owns the Home card; device sources remain separate. ----
+// ---- Agent Calendar owns the Home card by default; device calendars only when chosen in Calendar. ----
 const calendarCard = (page: Page) => page.locator('[data-alpha-home-calendar]');
 const soon = () => { const begin = Date.now() + 3_600_000; return { begin, end: begin + 1_800_000 }; };
 async function canonicalHome(page: Page, mode: 'event' | 'empty' | 'wrong-owner') {
@@ -203,6 +203,35 @@ test('a verified empty Agent Calendar does not substitute device events', async 
   await expect(calendarCard(page)).toContainText('No upcoming events in this window');
   await expect(calendarCard(page)).not.toContainText(/Device-only event|Private device calendar/);
   expect(await harness(page, f => f.calendar.requests)).toBe(0);
+  expect(await harness(page, f => f.unexpected)).toEqual([]);
+});
+
+test('Home follows the device calendars the owner chose in Calendar, with that calendar’s name and this read', async ({ page }) => {
+  await canonicalHome(page, 'event');
+  const card = calendarCard(page);
+  await expect(card).toContainText('Agent calendar meeting');
+  // The owner chooses the source in Calendar; Home's agenda reads the same source.
+  const choose = async (source: string) => {
+    await button(page, 'Calendar').click();
+    await expect(page.locator('html')).toHaveAttribute('data-active-view', 'calendar');
+    const sources = page.locator('summary').filter({ hasText: 'Calendar sources' });
+    await sources.click();
+    await button(page, source).click();
+    await page.evaluate(() => window.dispatchEvent(new Event('launcher-home')));
+    await expect(page.locator('html')).toHaveAttribute('data-active-view', 'home');
+  };
+  const lists = await harness(page, f => f.calendar.lists);
+  await choose('Android calendars');
+  await expect(card).toContainText('Device-only event');
+  await expect(card).not.toContainText('Agent calendar meeting');
+  await expect(card.locator('[data-alpha-home-calendar-origin]')).toHaveText('Private device calendar');
+  await expect(card).toHaveAccessibleName(/^Open calendar event: Device-only event, \w{3}, \w{3} \d{1,2}, \d{1,2}:\d{2}/);
+  await expect(card).toHaveAttribute('aria-description', /^Private device calendar\. Read .+ from calendars on this device$/);
+  expect(await harness(page, f => f.calendar.lists)).toBeGreaterThan(lists);
+  // Choosing Agent Calendar again returns the card to the agent's next event; device names stay out.
+  await choose('Agent Calendar');
+  await expect(card).toContainText('Agent calendar meeting');
+  await expect(card).not.toContainText(/Device-only event|Private device calendar/);
   expect(await harness(page, f => f.unexpected)).toEqual([]);
 });
 

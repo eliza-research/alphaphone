@@ -136,7 +136,11 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
   else if(!rows.length)out.emptyText=model?.status==='ready'?'No events in this Calendar window':out.calendarSourceText;
   return out;
  };
- p.renderVals=function(){const out=renderVals.call(this);const home=canonicalHomeCalendar(controller?.state.next??null),event=home.event,now=Date.now();
+ p.renderVals=function(){const out=renderVals.call(this);
+  // Home's agenda reads the calendar the owner chose: Agent Calendar unless device calendars were
+  // chosen explicitly in Calendar, whose read Home then shows with its own states and read times.
+  if(deviceCalendarScope(this))return out;
+  const home=canonicalHomeCalendar(controller?.state.next??null),event=home.event,now=Date.now();
   // Shared daily-overview states for the agent calendar feed: reading, not connected, failed, stale and fresh.
   const state=controller?.state,feed=presentHomeAgendaFeed({status:state?.status??'disconnected',hasItem:!!event,feedState:(state?.next?.calendarFeedState as 'complete'|'partial'|'unavailable'|undefined)??null,asOf:Date.parse(state?.next?.timeReference?.asOf??'')||null,error:state?.error??null,now,source:'Agent Calendar',emptyLabel:home.emptyLabel});
   const provenance={origin:'',read:feed.read,description:feed.description};
