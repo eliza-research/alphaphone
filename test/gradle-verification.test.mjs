@@ -92,6 +92,9 @@ test('the check rejects a missing pin, a weaker checksum, a trust exception, an 
   // The upstream plugins swap Maven Central for a mirror when the root project names one; this repository never does.
   assert.match(read(SYSTEM_PLUGIN), new RegExp(`rootProject\\.ext\\.has\\('${MIRROR_PROPERTY}'\\)`));
   assert.match(mutated(t, {[PRODUCT]: `${read(PRODUCT)}\nrootProject.ext { ${MIRROR_PROPERTY} = 'https://mirror.example/maven2' }\n`}).join('\n'), /android\/app\/product\.gradle mentions mavenCentralMirrorUrl: a Maven Central mirror is not a reviewed source/);
+  // The generator writes the host's gradle.properties itself, so its script is held to the same rule.
+  const generator = `${HOST_TEMPLATES}.mjs`;
+  assert.match(mutated(t, {[generator]: `${read(generator)}\n// ${MIRROR_PROPERTY}=https://mirror.example/maven2\n`}).join('\n'), /consumer-host\.mjs mentions mavenCentralMirrorUrl/);
   const missing = fs.mkdtempSync(path.join(os.tmpdir(), 'alpha-gradle-none-'));
   t.after(() => fs.rmSync(missing, {recursive: true, force: true}));
   assert.match(checkVerification(missing).problems[0], /verification is off\. Run: npm run android:deps:write-verification/);

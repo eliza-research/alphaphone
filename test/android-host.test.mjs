@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {generateAndroidConsumerHost} from '../vendor/eliza/packages/app/scripts/mobile/android/consumer-host.mjs';
-import {RESIDENT_HOST_HELPERS, residentHostIdentity} from '../vendor/eliza/packages/app/scripts/mobile/android/resident-host-sources.mjs';
+import {residentHelperKind, residentHostIdentity} from '../vendor/eliza/packages/app/scripts/mobile/android/resident-host-sources.mjs';
 import {HOST_DESCRIPTOR, PATCHED_NATIVE_ROOT, hostIdentity, hostProfile, mapReferences, readHostDescriptor} from '../scripts/android-host.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -130,7 +130,10 @@ test('installed resident identities stay Alpha data-compatibility names', () => 
  assert.deepEqual(host.environmentHook, {className: 'AlphaLocalAgentPlugin', method: 'configureEnvironment', unavailableStatus: 'provider-unavailable'});
  for (const name of Object.values(host.notification.strings))
   assert.match(fs.readFileSync(path.join(ROOT, 'android/app/src/main/res/values/alpha-system-entry.xml'), 'utf8'), new RegExp(`<string name="${name}"`), name);
- assert.ok(descriptor.residentHost.helpers.every(helper => Object.hasOwn(RESIDENT_HOST_HELPERS, helper)));
+ // Shared helpers keep their packages; only the reviewed BuildConfig reader is rewritten for Alpha.
+ assert.equal(new Set(descriptor.residentHost.helpers).size, descriptor.residentHost.helpers.length);
+ assert.deepEqual(descriptor.residentHost.helpers.filter(helper => residentHelperKind(helper) !== 'verbatim').map(helper => path.posix.basename(helper)), ['ChromiumBrowserConnection.java']);
+ for (const helper of descriptor.residentHost.helpers) assert.ok(fs.statSync(path.join(ROOT, 'vendor/eliza', helper)).isFile(), helper);
 });
 
 test('patched-native references resolve to the staging or, for scanners, to the pinned descriptors', () => {

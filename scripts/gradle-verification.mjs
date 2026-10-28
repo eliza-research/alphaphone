@@ -48,8 +48,9 @@ export const ALLOWED_REPOSITORY_URLS = ['https://repo.maven.apache.org/maven2', 
 export const MIRROR_PROPERTY = 'mavenCentralMirrorUrl';
 /** The pinned upstream templates the generated android/ host is written from. */
 export const HOST_TEMPLATES = 'vendor/eliza/packages/app/scripts/mobile/android/consumer-host';
+// The generator script writes the host's gradle.properties and wrapper settings itself.
 const MIRROR_FREE = [HOST_DESCRIPTOR, 'android/app/product.gradle', `${HOST_TEMPLATES}/settings.gradle`, `${HOST_TEMPLATES}/build.gradle`,
-  `${HOST_TEMPLATES}/app.gradle`, `${HOST_TEMPLATES}/toolchain.json`, 'scripts/android-host.mjs',
+  `${HOST_TEMPLATES}/app.gradle`, `${HOST_TEMPLATES}/toolchain.json`, `${HOST_TEMPLATES}.mjs`, 'scripts/android-host.mjs',
   'scripts/build-android.mjs', 'scripts/build-notification-fixture.mjs', 'scripts/generate-licenses.mjs', 'scripts/toolchain.mjs'];
 /**
  * Publisher groups reviewed for this build, with the date and what was looked at. A component in

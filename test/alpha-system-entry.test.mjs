@@ -5,6 +5,7 @@ import {tmpdir,homedir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {javaBinary} from './fixtures/jvm-tools.mjs';
+import {rewriteResidentClass} from '../vendor/eliza/packages/app/scripts/mobile/android/resident-host-sources.mjs';
 
 const root=resolve(import.meta.dirname,'..');
 const read=path=>readFileSync(join(root,path),'utf8');
@@ -85,12 +86,16 @@ test('tile service is protected by Android and introduces no permission, listene
 });
 
 test('notification projection changes fixed product presentation while preserving lifecycle and provenance',()=>{
+ // The pinned upstream rewrite owns the anchors; android/consumer-host.json supplies Alpha's
+ // installed presentation names, exactly as scripts/stage-local-agent-sources.mjs passes them.
  const script=read('scripts/stage-local-agent-sources.mjs');
- const start=script.indexOf('    const notificationBranding = ['),end=script.indexOf('    const anchor=',start);assert.ok(start>=0&&end>start);
- const project=new Function('value',script.slice(start,end)+'return value;');
- const upstream=read('vendor/eliza/packages/app/platforms/android/app/src/main/java/ai/elizaos/app/ElizaAgentService.java');
- const original=upstream.replaceAll('R.mipmap.ic_launcher','R.drawable.notification_icon'),generated=project(original);
+ const {residentHost}=JSON.parse(read('android/consumer-host.json'));
+ const identity={packageName:JSON.parse(read('app.config.json')).appId,sockets:residentHost.sockets,notification:residentHost.notification,environmentHook:residentHost.environmentHook};
+ const project=value=>rewriteResidentClass('ElizaAgentService',value,identity);
+ const original=read('vendor/eliza/packages/app/platforms/android/app/src/main/java/ai/elizaos/app/ElizaAgentService.java'),generated=project(original);
  assert.ok(generated.includes('getString(R.string.alpha_runtime_running_detail)'));
+ assert.ok(generated.includes('.setSmallIcon(R.drawable.notification_icon)')&&!generated.includes('R.mipmap.ic_launcher'));
+ assert.doesNotMatch(generated,/"Eliza agent|"Eliza Agent"|"Local Eliza agent runtime status"|"On-device agent ready"/,'no upstream product text reaches Alpha notifications');
  assert.ok(generated.includes('case "running":')&&generated.includes('case "stop-failed":'));
  assert.ok(generated.includes('.addAction(0, "Stop", stopPending)'));
  assert.equal((generated.match(/\.setColor\(0xff0000ff\)/g)||[]).length,2);
@@ -98,7 +103,10 @@ test('notification projection changes fixed product presentation while preservin
  assert.ok(!bootstrap.includes('PendingIntent'),'preserve startup binder-free notification path');
  const nativeTitles=['alpha_runtime_title','alpha_runtime_running','alpha_runtime_starting','alpha_runtime_stopped','alpha_runtime_asset_error','alpha_runtime_missing_files','alpha_runtime_spawn_failed','alpha_runtime_restart_blocked'];
  for(const name of nativeTitles)assert.ok(names.includes(name));
+ // Every runtime notification string the descriptor names is an Alpha resource.
+ for(const name of Object.values(residentHost.notification.strings))assert.ok(names.includes(name),name);
  assert.ok(!strings.includes('Cloud connected')&&!strings.includes('AI ready')&&!strings.includes('Listening'));
  assert.throws(()=>project(original.replace('"Eliza agent · Running"','"Changed upstream title"')),/Review changed runtime notification presentation/);
- assert.ok(script.includes('sourceSha256:digest(input)')&&script.includes('generatedSha256:'));
+ // Provenance: the staged-source receipt records each file's source and generated digests.
+ assert.ok(script.includes('sourceSha256:row.sourceSha256')&&script.includes('generatedSha256:row.generatedSha256'));
 });

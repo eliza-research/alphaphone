@@ -544,7 +544,9 @@ hosts). `npm run android:host` writes the generated, git-ignored `settings.gradl
 `build.gradle`, `app/build.gradle`, `gradle.properties` and wrapper into `android/`; every
 `npm run android:build` regenerates them, and a host whose inputs changed refuses to
 configure. Run it before opening `android/` in Android Studio or invoking `./gradlew` directly.
-To add a module or dependency, edit the descriptor rather than a Gradle file.
+To add a module or dependency, edit the descriptor rather than a Gradle file; a shared native
+plugin Java source compiled beside the staged resident classes is a path in
+`residentHost.helpers` (staged verbatim from the pin unless upstream reviews a rewrite for it).
 
 For affected pull requests, GitHub Actions builds both variants and uploads artifacts. Repository verification runs once per change;
 main-branch pushes repeat only that inexpensive integration check. Full resident
