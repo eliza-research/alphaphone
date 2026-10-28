@@ -147,8 +147,9 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
   // The agent's next event as an agenda item; an all-day event starts at local midnight of its first day.
   const day=(at:string)=>{const d=new Date(at);return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()).getTime();};
   const item=event?{title:String(event.title||''),begin:event.isAllDay?day(event.startAt):Date.parse(event.startAt),end:event.isAllDay?day(event.endAt):Date.parse(event.endAt),allDay:!!event.isAllDay,video:!!event.conferenceLink}:null;
-  // An overdue reminder keeps Home's own selection and source; the agent's next event shows on the Next line.
-  if(out.homeCalendarOverdue===true&&out.homeAgendaInput){const input=out.homeAgendaInput as HomeAgendaCardInput;return{...out,...homeCalendarValues(presentHomeAgendaCard(item?{...input,next:{item,provenance}}:input))};}
+  // An overdue reminder keeps Home's own selection and source; the Next line shows whichever comes
+  // first of the agent's next event and Home's own next item (an upcoming reminder on this phone).
+  if(out.homeCalendarOverdue===true&&out.homeAgendaInput){const input=out.homeAgendaInput as HomeAgendaCardInput;const own=out.homeAgendaNextReminder===true?input.next:null;return{...out,...homeCalendarValues(presentHomeAgendaCard(item&&!(own&&own.item.begin<=item.begin)?{...input,next:{item,provenance}}:{...input,next:own}))};}
   // A reminder saved on this phone that comes before the agent's next event leads the card with the
   // reminder store's own source, as it does with device calendars.
   const local=out.homeAgendaInput as HomeAgendaCardInput|undefined;
