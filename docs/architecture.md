@@ -198,18 +198,16 @@ Native sign-in stays on Alpha's own screens. Email remains available when the op
 readiness probe fails or times out; its native request reports any service configuration failure.
 There is no automatic Eliza Cloud website sign-in fallback.
 
-- **Readiness (`CloudSignInReadiness`, `CloudSignInPlugin.status`)**: readiness reports email and optional Google separately, checked with a few short requests and cached (6 hours when ready,
-  10 minutes when not; any error, timeout or unexpected answer is "not ready"):
+- **Readiness (`CloudSignInReadiness`, `CloudSignInPlugin.status`)**: readiness reports email, SMS and optional native Google separately, checked with a few short requests and cached (6 hours when a method is ready,
+  10 minutes when none is; any error, timeout or unexpected answer is "not ready"):
   - `GET /api/v1/app-auth/mobile/config` confirms the registration for client
-    `ai.elizaresearch.alphaphone`, this environment and the return URL;
-  - For Google only, Steward's authorize route redirects to Google for the return URL (the tenant
-    redirect allowlist admits it; nothing is followed);
-  - For Google only, `/.well-known/assetlinks.json` on the return host grants `handle_all_urls`
-    to this package and the certificate this APK is signed with;
-  - `GET /steward/auth/providers` offers email without a captcha for `email_otp`, and the email code
-    route exists (an empty-object POST is refused as invalid, not as unknown; no email is sent).
-  Google is offered on top only when Steward offers it and Android reports the return host verified
-  for this package. A refusal from Cloud during an in-app sign-in clears the cache so the next
+    `ai.elizaresearch.alphaphone`, this environment and the return URL; without it no method is ready;
+  - `GET /steward/auth/providers` offers email (or SMS) without a captcha for `email_otp` (`sms_otp`),
+    and the email code route exists (an empty-object POST is refused as invalid, not as unknown; no
+    email is sent);
+  - native Google is offered only when Steward advertises `googleNative`. It uses no browser return,
+    so readiness reads no authorize redirect, App Link state or assetlinks document.
+  A refusal from Cloud during an in-app sign-in clears the cache so the next
   attempt re-checks. The renderer waits at most 6 seconds, then offers email alone. A late result cannot
   change the already opened attempt.
 - **Native (`CloudSignInPlugin` registered by `AlphaCloudSignInPlugin`, `CloudSignInFlow`, `CloudEmailCode`)** holds the Steward
@@ -218,23 +216,31 @@ There is no automatic Eliza Cloud website sign-in fallback.
   - Email: the six-digit code endpoints of elizaOS/eliza #36260, kept in one adapter
     (`CloudEmailCode`, `config/cloud-email-code.json`): `POST /steward/auth/email/code/send`, then
     the code typed into Alpha goes to `POST /steward/auth/email/code/verify` with a PKCE verifier.
-    No magic link is requested. Five wrong codes end an attempt; one code send a minute per phone.
-    A second verification uses `/steward/auth/mfa/{totp,sms}/complete`.
-  - Google: Alpha creates a PKCE verifier and state, keeps them in memory and in an encrypted,
-    single-use, ten-minute pending record (`cloud-signin:v1:pending`, a native-only slot), and opens
-    `{api}/steward/auth/oauth/google/authorize?...&prompt=select_account` in a Custom Tab (never a
-    WebView). Steward returns to the verified App Link `https://eliza.app/alphaphone/auth/callback`.
-  - Returns follow the shared callback contract
-    (`test/fixtures/alphaphone-auth-callback-contract.json`, the same file in elizaOS/eliza):
+    No magic link is requested. Five wrong codes end an attempt; one code send per 30 seconds per
+    phone, or longer when Cloud asks.
+    A second verification uses `/steward/auth/mfa/{totp,sms}/complete`. SMS codes use the
+    tenant-bound `/steward/auth/sms/{send,verify}` (`CloudSmsCode`) under the same send cooldown.
+  - Google: Android's account picker (Credential Manager), never a browser or WebView. Native sends
+    the S256 challenge of a fresh PKCE verifier to `POST /steward/auth/oauth/google/native/challenge`
+    (tenant and the Steward app client `alpha-phone`), shows the picker with the returned nonce and
+    Google server client, and sends the ID token with the verifier to
+    `POST /steward/auth/oauth/google/native/verify`. The ID token and verifier stay native.
+  - A browser return can still complete a sign-in started by an earlier build, which kept an
+    encrypted, single-use, ten-minute pending record (`cloud-signin:v1:pending`, a native-only slot)
+    for the verified App Link `https://eliza.app/alphaphone/auth/callback`. Returns follow the shared
+    callback contract
+    (Alpha's vectors `test/fixtures/alphaphone-auth-callback-contract.json`, run through the shared
+    parser; the shared client's own synthetic vectors are elizaOS/eliza
+    `packages/auth/android/test/fixtures/app-auth-callback-contract.json`):
     success is exactly `{code,state}` in the fragment; an error is exactly `{error,state}` (error
     from a fixed allowlist) in the query or fragment; anything else on the callback, including the
     parameterless hand-off from Cloud's fallback page, carries no result. The state is compared in
     constant time before anything is burned: a mismatching return is ignored and cannot cancel a
     sign-in; the matching return burns the record before the code goes to
-    `POST /steward/auth/oauth/exchange`. A return without a result, or coming back from the browser
-    without a return, ends the waiting step with a retry message but keeps the record until it
-    expires or the owner starts again (or cancels), so a late return still completes.
-  - Both paths then run the shared tail. The Steward session goes to
+    `POST /steward/auth/oauth/exchange`. A return without a result reports a retry message but keeps
+    the record until it expires or the owner starts again (or cancels), so a late return still
+    completes.
+  - Every path then runs the shared tail. The Steward session goes to
     `POST /api/v1/app-auth/connect` (`mobile_pkce`, a second independent state and PKCE pair), then
     `POST /mobile/token`. Native writes an ack receipt and then the `eliza_mobile_` key to
     `cloud:<environment>` (AlphaCredentialStore, Keystore AES-GCM, credential-intent rule) and
