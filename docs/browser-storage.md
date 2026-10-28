@@ -108,7 +108,11 @@ an uncertain result. The record represents the latest reviewed handoff, not an
 alarm database or proof that an alarm exists. The browser path opens its
 simulated Clock directly; mock requests do not write native history.
 
-`clock-handoff-history.test.mjs` covers competing admissions, lost writes,
+The record rules (exact validation, stale-snapshot refusal, the older-build legacy
+copy check and readback confirmation) are the shared
+`@elizaos/plugin-assistant/device-clock-review` Clock handoff history;
+`apps/app/src/runtime/clock-handoff-history.ts` binds it to Alpha's slot and
+legacy key. `scripts/test-clock-handoff-flow.mjs` covers competing admissions, lost writes,
 retained old bytes, late completion, duplicate clicks and retirement during an
 awaited save. Android Clock fixtures observe encrypted completion and refuse to
 delete changed or unobserved records. Those fixtures require current-source
