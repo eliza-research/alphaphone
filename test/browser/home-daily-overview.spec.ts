@@ -171,7 +171,9 @@ test('an upcoming reminder is attributed to the reminder store, not to a calenda
  })).toBe('scheduled');
  const card=calendarCard(page);
  const attributed=async()=>{
-  await expect(card).toContainText('Synthetic upcoming reminder');
+  // The reminder store is read after each load; with parallel workers on the dev server that read
+  // can take longer than the default wait (test.slow() does not extend expect timeouts).
+  await expect(card).toContainText('Synthetic upcoming reminder',{timeout:20_000});
   await expect(card).toHaveAttribute('data-alpha-home-calendar-overdue','false');
   await expect(card.locator('[data-alpha-home-calendar-origin]')).toHaveText('Reminder');
   await expect(card.locator('[data-alpha-home-calendar-source]')).toHaveCount(0);
