@@ -41,7 +41,8 @@ public final class SettingsSystemFactsInstrumentedTest {
  }
  @Test public void reportedFactsMatchThisAndroidImage()throws Exception{
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
-  JSObject facts=new JSObject();AlphaDevicePlugin.systemFacts(context,facts);
+  // The snapshot is the shared reader plus Alpha's own build facts, exactly as AlphaDevice.snapshot() merges them.
+  JSObject facts=new JSObject();for(java.util.Map.Entry<String,Object> fact:ai.eliza.plugins.system.SystemFacts.read(context).entrySet())facts.put(fact.getKey(),fact.getValue());AlphaDevicePlugin.appFacts(context,facts);
   // A fact may be absent (unknown). When present it must equal Android's own answer.
   // Bluetooth is checked below: its stored switch is the owner's choice, not the radio state.
   String[][] globals={{"wifiEnabled","wifi_on"},{"airplaneMode","airplane_mode_on"}};
@@ -62,18 +63,18 @@ public final class SettingsSystemFactsInstrumentedTest {
   assertEquals(BuildConfig.VERSION_CODE,facts.getInt("appVersionCode"));
   assertTrue("Android recorded an install time",facts.getLong("appUpdatedAt")>0);
   // Only these keys: the snapshot never carries a guessed or default switch.
-  java.util.Set<String> allowed=new java.util.HashSet<>(java.util.Arrays.asList("wifiEnabled","bluetoothEnabled","airplaneMode","locationEnabled","mobileDataEnabled","interruptionFilter","adaptiveBrightness","appVersionCode","appUpdatedAt"));
+  java.util.Set<String> allowed=new java.util.HashSet<>(java.util.Arrays.asList("wifiEnabled","bluetoothEnabled","airplaneMode","locationEnabled","mobileDataEnabled","interruptionFilter","adaptiveBrightness","wifiActive","cellularActive","internetValidated","batteryPercent","charging","powerSave","appVersionCode","appUpdatedAt"));
   for(java.util.Iterator<String> keys=facts.keys();keys.hasNext();)assertTrue(allowed.contains(keys.next()));
  }
  @Test public void everySettingsPageHasASpecificFirstChoice(){
   String[] pages={"accounts","wifi","bluetooth","mobile","airplane","location","display","sound","battery","about","developer","notifications","privacy","default-apps","dnd"};
   java.util.Set<String> first=new java.util.HashSet<>();
   for(String page:pages){
-   String[] actions=AlphaDevicePlugin.settingsActions(page);
+   String[] actions=ai.eliza.plugins.system.SystemSettingsPages.actions(page);
    assertNotNull(page,actions);assertTrue(page,actions.length>0);
    for(String action:actions)assertNotEquals(page,android.provider.Settings.ACTION_SETTINGS,action);
    assertTrue(page+" has its own page",first.add(actions[0]));
   }
-  assertNull(AlphaDevicePlugin.settingsActions("device"));assertNull(AlphaDevicePlugin.settingsActions(""));
+  assertNull(ai.eliza.plugins.system.SystemSettingsPages.actions("device"));assertNull(ai.eliza.plugins.system.SystemSettingsPages.actions(""));
  }
 }
