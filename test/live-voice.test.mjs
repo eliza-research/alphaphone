@@ -142,8 +142,8 @@ test('Android: Silero VAD runs in the app process and only the live ASR and end-
   assert.match(capture, /InferenceSession\.Vad vad=inference\.openVad\(\);/);
   assert.match(capture, /float\[\] probability=vad\.process\(pcm\);/);
   const voicePlugin = fs.readFileSync(new URL('../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaVoiceCloudPlugin.java', import.meta.url), 'utf8');
-  assert.match(voicePlugin, /new LiveVoiceCapture\(getContext\(\),inference,id,new LiveVoiceCapture\.Sink\(\)\{/);
-  assert.match(voicePlugin, /inference=VoiceAssets\.sharedInference\(getContext\(\)\)/);
+  assert.match(voicePlugin, /new LiveVoiceCapture\(getContext\(\),VoiceAssets\.sharedInference\(getContext\(\)\),id,sink,echoCancel\)/);
+  assert.match(voicePlugin, /private final LiveCaptureController live=new LiveCaptureController\(/);
   assert.match(capture, /AudioFormat\.ENCODING_PCM_16BIT/);
   assert.doesNotMatch(capture, /FileOutputStream|openFileOutput|Log\./, 'no audio file and no log of audio or text');
 });

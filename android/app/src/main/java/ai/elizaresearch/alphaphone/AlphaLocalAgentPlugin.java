@@ -700,28 +700,28 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   }
  }
  /** Native speech uses only the existing enrollment, bound to its exact token and runtime epoch. */
- static NativeLiveVoicePipe.Transport openNativeVoiceTransport(String expectedOwner)throws Exception{
+ static ai.eliza.voice.LiveSegmentPipe.Transport openNativeVoiceTransport(String expectedOwner)throws Exception{
   final String root,token,owner;final long epoch;
   synchronized(lifecycleLock){
    captureResultSession(expectedOwner);root=rootToken;token=ownerToken;owner=ownerIdentity;epoch=lifecycleEpoch;
   }
   final NativeVoiceBinding binding=new NativeVoiceBinding(epoch,root,token,owner);
   final java.util.concurrent.atomic.AtomicBoolean cancelled=new java.util.concurrent.atomic.AtomicBoolean();
-  final java.util.concurrent.atomic.AtomicReference<NativeVoiceIpc.Handle> active=new java.util.concurrent.atomic.AtomicReference<>();
-  class VoiceHandle implements NativeVoiceIpc.Handle {final ElizaAgentService.LocalStreamHandle handle=new ElizaAgentService.LocalStreamHandle();public void cancel(){handle.cancel();}}
-  final NativeVoiceIpc.Port port=new NativeVoiceIpc.Port(){
-   public NativeVoiceIpc.Handle open(){return new VoiceHandle();}
-   public void request(JSONObject input,java.util.function.Consumer<String> events,NativeVoiceIpc.Handle handle){ElizaAgentService.requestLocalAgentStream(input.toString(),events,((VoiceHandle)handle).handle);}
+  final java.util.concurrent.atomic.AtomicReference<ai.eliza.voice.BufferedStreamExchange.Handle> active=new java.util.concurrent.atomic.AtomicReference<>();
+  class VoiceHandle implements ai.eliza.voice.BufferedStreamExchange.Handle {final ElizaAgentService.LocalStreamHandle handle=new ElizaAgentService.LocalStreamHandle();public void cancel(){handle.cancel();}}
+  final ai.eliza.voice.BufferedStreamExchange.Port port=new ai.eliza.voice.BufferedStreamExchange.Port(){
+   public ai.eliza.voice.BufferedStreamExchange.Handle open(){return new VoiceHandle();}
+   public void request(JSONObject input,java.util.function.Consumer<String> events,ai.eliza.voice.BufferedStreamExchange.Handle handle){ElizaAgentService.requestLocalAgentStream(input.toString(),events,((VoiceHandle)handle).handle);}
   };
-  return new NativeLiveVoicePipe.Transport(){
+  return new ai.eliza.voice.LiveSegmentPipe.Transport(){
    public void check()throws Exception{synchronized(lifecycleLock){
     if(!binding.current(lifecycleEpoch,rootToken,ownerToken,ownerIdentity,ElizaAgentService.localAgentToken(),expiresAt,System.currentTimeMillis(),accepting&&!stopping))throw new SecurityException("Voice enrollment changed");
    }}
-   public void cancelInFlight(){cancelled.set(true);NativeVoiceIpc.Handle handle=active.get();if(handle!=null)handle.cancel();}
+   public void cancelInFlight(){cancelled.set(true);ai.eliza.voice.BufferedStreamExchange.Handle handle=active.get();if(handle!=null)handle.cancel();}
    public JSONObject post(JSONObject body)throws Exception{
     JSONObject headers=new JSONObject().put("Authorization","Bearer "+token).put("Content-Type","application/json").put("Accept","application/json");
     JSONObject input=new JSONObject().put("path","/api/asr/local-inference/live").put("method","POST").put("body",body.toString()).put("headers",headers).put("timeoutMs",8000);
-    return NativeVoiceIpc.exchange(port,input,active,()->{check();if(cancelled.get()&&!body.optBoolean("close"))throw new IllegalStateException("Voice capture cancelled");},8000);
+    return ai.eliza.voice.BufferedStreamExchange.exchange(port,input,active,()->{check();if(cancelled.get()&&!body.optBoolean("close"))throw new IllegalStateException("Voice capture cancelled");},8000);
    }
   };
  }

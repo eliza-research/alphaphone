@@ -61,6 +61,6 @@ test('speech holds transient duckable audio focus only while it plays and never 
   // Calls: synthesis, recording and live capture refuse with an honest code; a call stops speech and capture.
   assert.match(plugin, /if\(focus!=null&&focus\.callActive\(\)\)\{call\.reject\(CALL_MESSAGE,SpeechAudioFocusPolicy\.CALL_ACTIVE\);return;\}/);
   assert.match(plugin, /Voice is paused while a phone call is active/);
-  assert.match(plugin, /active\.interrupt\(SpeechAudioFocusPolicy\.CALL_ACTIVE\)/);
+  assert.match(plugin, /live\.interrupt\(SpeechAudioFocusPolicy\.CALL_ACTIVE\)/);
   assert.match(capture, /sink\.ended\(captureId,error!=null\?error:interruption\)/);
 });

@@ -28,7 +28,7 @@ const plugins={
  AlphaNoteDocumentsPlugin:['worker'],
  AlphaNotificationsPlugin:['NOTICE_IO'],
  AlphaPhotosPlugin:['worker'],
- AlphaVoiceCloudPlugin:['workers','liveWorker','liveStopWorker','nativeVoiceWorker'],
+ AlphaVoiceCloudPlugin:['workers'],
 };
 const escape=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 

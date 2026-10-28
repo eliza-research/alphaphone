@@ -15,8 +15,13 @@ test('capture cancellation unblocks a read and serializes source release', () =>
 
 test('native admission cancels permission/start before the serialized worker can finish', () => {
  assert.match(runJvm([upstreamVoiceSource('LiveCaptureAdmission.java'), upstreamVoiceFixture('LiveCaptureAdmissionTest.java')], 'ai.eliza.voice.LiveCaptureAdmissionTest'), /^PASS live capture admission/);
+ // Alpha's plugin delegates ordering to the shared controller, reserving before the permission prompt
+ // and gating events on its own lifecycle epoch (LiveCaptureControllerTest covers the ordering).
+ const controller=fs.readFileSync(upstreamVoiceSource('LiveCaptureController.java'),'utf8');
+ assert.match(controller,/admission\.attach\(ticket,[\s\S]*next\.start\(\)/);
+ assert.match(controller,/admission\.stop\(id\);\s*submit\(worker/);
+ assert.match(controller,/next\.start\(\);\s*if\(!host\.open\(epoch\)\|\|!admission\.current\(ticket\)\)/);
  const plugin=fs.readFileSync(nativeSource('AlphaVoiceCloudPlugin.java'),'utf8');
- assert.match(plugin,/liveAdmission\.attach\(ticket,[\s\S]*next\.start\(\)/);
- assert.match(plugin,/liveAdmission\.stop\(id\);\s*PluginWorkers\.submit\(liveWorker/);
- assert.match(plugin,/next\.start\(\);\s*if\(destroyed\|\|!speechForeground\|\|e!=epoch\.get\(\)\|\|!liveAdmission\.current\(ticket\)\)/);
+ assert.match(plugin,/LiveCaptureAdmission\.Ticket ticket=live\.reserve\(id,epoch\.get\(\)\);\s*if\(getPermissionState\("microphone"\)/);
+ assert.match(plugin,/public boolean open\(long e\)\{return !destroyed&&speechForeground&&e==epoch\.get\(\);\}/);
 });
