@@ -8,6 +8,7 @@ import {browserReadingSource} from '../browser/reading-source';
 import {sensitiveReadingText} from '../browser/reading-sensitive';
 import {createReadingSupport, READING_UNSUPPORTED_MESSAGE} from '../browser/reading-capability';
 import {webSourceOf} from './summary-source';
+import {browserCalendarScope} from './agent-calendar-adapter';
 import { connectionController, agentPendingText } from '../runtime/connection-ui';
 import { BrowserReviews } from '../browser/review';
 import { browserErrorMessage } from '../browser/browser-errors';
@@ -471,7 +472,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     if(reading && event.id===state()?.cur && (event.loading || event.error || event.navigation!==previous?.navigation || event.url!==previous?.url)) stopReading();
     if ((event.url && event.url !== previous?.url) || (event.loading && !previous?.loading))
       documentRevisions.set(event.id, (documentRevisions.get(event.id) || 0) + 1);
-    const committedPage = Capacitor.isNativePlatform() && !!event.url && !!event.committed && !event.loading && !event.error;
+    const committedPage = !!event.url && !!event.committed && !event.loading && !event.error && !event.externalOnly;
     // Embedded web pages report real commits too; an external-only fallback never gains reading authority.
     metadata.set(event.id,{...metadata.get(event.id),...event,...(event.externalOnly?{committed:false}:{}),...(committedPage?{savedUrl:event.url}:{})});
     // Private tabs never enter history or saved tabs.
@@ -509,7 +510,12 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     const next=JSON.stringify(payload);
     if(next!==lastGeometry){lastGeometry=next;return Browser.present(payload).catch(()=>{lastGeometry='';});}
   };
-  const openBrowserView = (event: Event) => shell?.openView((event as CustomEvent<string>).detail);
+  const openBrowserView = (event: Event) => {
+    const view=(event as CustomEvent<string>).detail;
+    // Browser-provider links keep a source the user already selected. Ordinary
+    // Calendar entry still starts at Agent Calendar; this scope is test-only.
+    shell?.openView(view,view==='calendar'&&browserCalendarScope(shell)?{calendarAuthority:'browser-local'}:undefined);
+  };
   window.addEventListener('alpha:browser-open-view', openBrowserView);
   window.addEventListener('alpha:bookmarks-document-changed',refreshBookmarks);
   const timer=window.setInterval(update,100);

@@ -16,18 +16,23 @@ function cardDestination(message: Message): string | undefined {
 export function projectActionMessages(rendered: Message[], source: Message[]): Message[] {
   const byId = new Map(source.map(message => [message.id, message]));
   const hidden = new Set<string>();
+  const renderedIds = new Set(rendered.map(message => message.id));
+  const completedResults = new Map<string, string>();
+  for (const message of source) {
+    if (renderedIds.has(message.id) && message.from === 'agent' && message.card?.proposalId && message.card.done && typeof message.card.sub === 'string' && message.card.sub.trim()) {
+      completedResults.set(`device-receipt:${message.card.proposalId}`, message.card.sub);
+    }
+  }
+  for (const message of source) {
+    // A queued proposal may precede the request and its receipt may follow the reply. Collapse
+    // only the same result already shown by that exact proposal in the current rendered history.
+    if (message.from === 'agent' && message.deviceReceipt === true && !message.card && completedResults.has(message.id) && completedResults.get(message.id) === message.text) hidden.add(message.id);
+  }
   let turn: Message[] = [];
   const finish = () => {
     const actions = turn.filter(message => message.from === 'agent' && (message.card?.proposalId || message.deviceReceipt));
     if (!actions.length) return;
     for (const message of turn) if (message.from === 'agent' && message.text === REVIEW_TEXT) hidden.add(message.id);
-    for (const action of actions) {
-      if (!action.card?.done || typeof action.card.sub !== 'string') continue;
-      const index = turn.indexOf(action);
-      // Only the exact following receipt of this resolved proposal is redundant.
-      const following = turn[index + 1];
-      if (following?.from === 'agent' && following.deviceReceipt === true && following.id === `device-receipt:${action.card.proposalId}` && !following.card && following.text === action.card.sub) hidden.add(following.id);
-    }
   };
   for (const message of source) { if (message.from === 'user') { finish(); turn = []; } turn.push(message); } finish();
   return rendered.filter(message => !hidden.has(message.id)).map(message => {

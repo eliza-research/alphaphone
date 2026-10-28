@@ -58,7 +58,7 @@ import { DailyApps } from '../daily';
 import { isAndroid } from '../native';
 import { registerPlugin } from '../platform-plugins';
 import { SystemBars, SystemBarsStyle } from '@capacitor/core';
-import {mergeConversationDelivery, connectionController, STOPPED_REPLY_NOTICE, STOPPED_CANCELLED_NOTICE, STOPPED_CONFIRMED_NOTICE, INFERENCE_OFFLINE_NOTICE, RESIDENT_STARTING_NOTICE, RESIDENT_RECOVERING_NOTICE, NO_AGENT_SEND, NO_AGENT_VOICE, residentAlwaysPresent, agentPendingText } from '../runtime/connection-ui';
+import {mergeConversationDelivery, connectionController, STOPPED_REPLY_NOTICE, STOPPED_CANCELLED_NOTICE, STOPPED_CONFIRMED_NOTICE, INFERENCE_OFFLINE_NOTICE, RESIDENT_STARTING_NOTICE, RESIDENT_RECOVERING_NOTICE, NO_AGENT_SEND, NO_AGENT_VOICE, residentAlwaysPresent, agentPendingText, agentAvailabilityNotice } from '../runtime/connection-ui';
 import { broaderPageNotice, honestTiles, handoffGate, watchReturnToApp, tileFactsFromSnapshot, tileSettingsPages, type TileFacts, type TileKey } from './native-adapter';
 const alphaDevice = registerPlugin<{ snapshot(): Promise<Record<string, unknown>>; openSettings(input: { page: string }): Promise<{ status: string; specific?: boolean }> }>('AlphaDevice');
 const elizaSystem = registerPlugin<{ setFlashlight(input: { enabled: boolean }): Promise<{ available: boolean; enabled: boolean }> }>('ElizaSystem');
@@ -104,19 +104,13 @@ function replyNotices(reply:unknown):string[]{
   const notices=reply&&typeof reply==='object'?(reply as {notices?:unknown}).notices:undefined;
   return Array.isArray(notices)?notices.filter((n):n is string=>typeof n==='string'&&!!n.trim()&&n.length<=500).slice(0,5):[];
 }
-type ProposalController=typeof connectionController&{rejectProposal?(id:string):Promise<unknown>;reconcile?(id:string,applied:boolean):Promise<unknown>};
-/** Decline one pending proposal without executing it. Prefers the shared controller entry point. */
+/** Decline one pending proposal without executing it. */
 export async function declineProposal(id:string):Promise<{ok:boolean;message:string}>{
-  const controller=connectionController as ProposalController,before=controller.getSnapshot(),wasOpen=before.open;
-  if(before.busy)return {ok:false,message:'Wait for the current connection step, then decline again. Nothing was performed.'};
-  try{if(controller.rejectProposal)await controller.rejectProposal(id);else await controller.rejectAction(id);}
+  if(connectionController.getSnapshot().busy)return {ok:false,message:'Wait for the current connection step, then decline again. Nothing was performed.'};
+  try{await connectionController.rejectProposal(id);}
   catch(error){return {ok:false,message:error instanceof Error?error.message:'The proposal could not be declined.'};}
-  const after=controller.getSnapshot();
+  const after=connectionController.getSnapshot();
   if(after.error)return {ok:false,message:after.error};
-  // The legacy path reports success only through its completion message.
-  if(!controller.rejectProposal&&after.message!=='Proposal rejected. No device action was performed.')return {ok:false,message:'The decline was not confirmed. Check phone action history.'};
-  // The legacy controller path opens the connection panel to show progress; return to the chat.
-  if(!wasOpen&&after.open)controller.close();
   return {ok:true,message:'Declined. No phone action was performed.'};
 }
 export function installAgentAdapter(Component: Shell, views: Shell) {
@@ -380,7 +374,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     if(shell.canonicalNotesKey===key&&(key===null||shell.canonicalNotesUi?.current))return;
     const previous=shell.canonicalNotesUi;shell.canonicalNotesUi=null;shell.canonicalNotesKey=key;previous?.retire();
     shell.notesSelectionKey=null;shell.notesSelection=null;shell.notesStorageFailed=true;shell.notesPending=0;
-    if(!port){shell.notesReady=Promise.resolve();originalSet.call(shell,'notes',{list:[],open:null,trash:[],trashOpen:false,storageStatus:'Waiting for an agent connection to open Notes.'});return;}
+    if(!port){shell.notesReady=Promise.resolve();originalSet.call(shell,'notes',{list:[],open:null,trash:[],trashOpen:false,storageStatus:agentAvailabilityNotice(undefined,'Notes is unavailable for this agent connection. Check Settings › Agent connection.')});return;}
     let binding:CanonicalNotesUi;
     const paint=()=>{if(shell.live&&shell.canonicalNotesUi===binding)shell.setState({},()=>context(shell));};
     binding=new CanonicalNotesUi(port,{paint,review:paint,committed:()=>paint()});
@@ -877,7 +871,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     });
     context(this);
   };
-  p.componentDidUpdate = function (prev: Shell) { originalUpdate.call(this, prev); const notesView=this.S().view==='notes';if(notesView&&!this.wasCanonicalNotesView&&this.notesSourceMode==='canonical')void this.canonicalNotesUi?.refresh().catch(()=>{});this.wasCanonicalNotesView=notesView; context(this); sizeComposer();this.composerDraft?.edit(String(this.S().draft||''));const shade=!!this.S().shade;if(shade&&!this.shadeWasOpen)this.refreshTileFacts();this.shadeWasOpen=shade;const selected=this.messageReplyTarget||this.messageEditTarget;if(selected&&(JSON.stringify(selected.session)!==JSON.stringify(connectionController.getSnapshot().session)||!this.S().msgs.some((m:Shell)=>m.id===selected.messageId&&m.text===selected.text))){cancelMessageContext(this);this.setState({});} };
+  p.componentDidUpdate = function (prev: Shell) { originalUpdate.call(this, prev); const notesView=this.S().view==='notes';if(notesView&&!this.wasCanonicalNotesView&&this.notesSourceMode==='canonical')void this.canonicalNotesUi?.refresh().catch(()=>{});this.wasCanonicalNotesView=notesView; context(this); void connectionController.observeCommittedView(); sizeComposer();this.composerDraft?.edit(String(this.S().draft||''));const shade=!!this.S().shade;if(shade&&!this.shadeWasOpen)this.refreshTileFacts();this.shadeWasOpen=shade;const selected=this.messageReplyTarget||this.messageEditTarget;if(selected&&(JSON.stringify(selected.session)!==JSON.stringify(connectionController.getSnapshot().session)||!this.S().msgs.some((m:Shell)=>m.id===selected.messageId&&m.text===selected.text))){cancelMessageContext(this);this.setState({});} };
   p.componentWillUnmount = function () {
     const notes=this.canonicalNotesUi;this.canonicalNotesUi=null;notes?.retire();this.notesSourceEpoch=(this.notesSourceEpoch??0)+1;
     this.cancelReadReplyCompletions?.();
@@ -909,8 +903,11 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     try {
       // A Trash restore reinstates the exact saved record; it is not a content modification.
       if(!options?.exact)patch={...patch,list:stampNoteChanges(this.notesStore.list,patch.list)};
-      if(this.notesRaw!==this.notesStore.raw)throw Error('Notes changed while this editor had unsaved text. Review recovery before saving.');
+      // While this editor's own write is still settling, the store already holds that write's
+      // revision; only a revision that is neither confirmed nor ours is a concurrent change.
+      if((this.notesPending?this.notesLocalRaw:this.notesRaw)!==this.notesStore.raw)throw Error('Notes changed while this editor had unsaved text. Review recovery before saving.');
       const pending=this.notesStore.replace(patch.list);
+      this.notesLocalRaw=this.notesStore.raw;
       this.notesPending++;
       this.notesSelectionKey=null;this.notesSelection=null;
       // Text remains visible while the native commit is pending; this is not a saved receipt.
@@ -1080,7 +1077,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         const ic=out.ic||{};
         return {...m,cGeneric:false,cDigest:true,actionReviewClass:'alpha-action-review',rows:[
           {ini:'',who:c.title,text:c.sub,icon:ic.right,open:()=>void connectionController.residentManagePlan()},
-          {ini:'',who:'Use a membership code',text:`Opens the code form for your ${selectedCloudName()} account.`,icon:ic.right,open:()=>connectionController.openPlan()},
+          {ini:'',who:'Use a membership code',text:`Opens the code form for your ${selectedCloudName()} account.`,icon:ic.right,open:()=>connectionController.openPlan({codeEntry:true})},
         ]};
       }
       if(!c.proposalId||c.done||c.reviewUnavailable||!m.cGeneric)return m;

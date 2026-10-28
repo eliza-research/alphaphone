@@ -32,6 +32,9 @@ for (const scenario of ['confirmed', 'incomplete-timeout'] as const) {
             if (method === 'start') { f.starts++; return { state: 'ready' }; }
             if (method === 'stop') { f.stops++; return { state: 'stopping' }; }
             if (method === 'request') {
+              // Connected Notes and Calendar mount read-only source checks alongside the agent.
+              // This shutdown fixture supplies no source data and admits no write operation.
+              if (input.method === 'GET' && (input.path === '/api/notes/state' || /^\/api\/lifeops\/calendar\/(feed|calendars|next-context)\?/.test(input.path))) return { status: 503, body: '{}' };
               let body: any;
               if (input.path === '/api/auth/me') body = { identity: { kind: 'owner', id: 'fixture-owner' }, access: { role: 'OWNER', mode: 'session' } };
               else if (input.path === '/api/agents') body = { agents: [{ id: 'fixture-agent', name: 'Resident fixture', status: 'running' }] };
