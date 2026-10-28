@@ -17,7 +17,7 @@ const steps = checklistSteps(text);
 const anchor = heading => heading.toLowerCase().replace(/[^a-z0-9 -]/g, "").replace(/ /g, "-");
 
 test("the checklist numbers its steps without gaps and gives each one who, what, seam, verification and what it unblocks", () => {
-  assert.equal(steps.length, 37);
+  assert.equal(steps.length, 38);
   steps.forEach((step, index) => assert.equal(step.id, `H-${String(index + 1).padStart(2, "0")}`));
   for (const section of text.split(/^### /m).slice(1)) {
     const id = section.slice(0, 4);
@@ -78,7 +78,7 @@ function fixture(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "alpha-human-actions-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   for (const file of [CHECKLIST, "android/release-signer.json", "android/aosp/pixel10a-product.json", "android/aosp/pixel10a-ota-channel.json", "android/aosp/pixel10a-qualification-gates.json",
-    "android/voice-host/qualified-voice-host.json", "android/sense/qualified-listener.json", "android/embedding-host/build-toolchain.json"]) {
+    "android/voice-host/qualified-voice-host.json", "android/sense/qualified-listener.json", "android/embedding-host/build-toolchain.json", "docs/app-qa-checklist.json"]) {
     fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
     fs.copyFileSync(path.join(root, file), path.join(dir, file));
   }
@@ -98,6 +98,7 @@ function fixture(t) {
   edit("android/voice-host/qualified-voice-host.json", value => { value.qualified = false; });
   edit("android/sense/qualified-listener.json", value => { value.qualified = false; });
   edit("android/embedding-host/build-toolchain.json", value => { value.remapBuildPath = true; });
+  edit("docs/app-qa-checklist.json", value => { for (const item of value.items) item.userApproval = "Pending"; });
   return { dir, edit };
 }
 
@@ -180,4 +181,24 @@ test("the report names every step and states the committed records as they are",
   assert.equal(state("H-22"), Object.values(channel.recovery.knownGoodRelease).some(unset) ? "open" : "done");
   assert.equal(state("H-34"), gates.userAcceptance.status === "passed" ? "done" : "open");
   for (const row of rows) assert.ok(["done", "open", "external", "not needed"].includes(row.state), `${row.id}: ${row.state}`);
+});
+
+test("H-38 stays open until the owner approves every MVP row of the app QA checklist", t => {
+  const { dir, edit } = fixture(t);
+  const h38 = () => humanActionStates(dir, {}).find(row => row.id === "H-38");
+  const mvp = JSON.parse(fs.readFileSync(path.join(dir, "docs/app-qa-checklist.json"), "utf8")).items.filter(item => item.scope === "MVP").length;
+  assert.ok(mvp > 0);
+  assert.equal(h38().state, "open");
+  assert.match(h38().detail, new RegExp(`^0 of ${mvp} MVP rows approved by the owner`));
+  // Out-of-scope rows (AOSP only, excluded, deferred) never hold the step open; one pending MVP row does.
+  edit("docs/app-qa-checklist.json", value => { value.items.forEach((item, index) => { if (item.scope === "MVP") item.userApproval = index === 0 ? "Pending" : "Approved 2026-11-02"; }); });
+  assert.equal(h38().state, "open");
+  assert.match(h38().detail, new RegExp(`^${mvp - 1} of ${mvp} MVP rows approved`));
+  // "Not approved" is not an approval.
+  edit("docs/app-qa-checklist.json", value => { value.items.forEach(item => { if (item.scope === "MVP") item.userApproval = "Not approved"; }); });
+  assert.equal(h38().state, "open");
+  edit("docs/app-qa-checklist.json", value => { value.items.forEach(item => { if (item.scope === "MVP") item.userApproval = "Approved"; }); });
+  assert.equal(h38().state, "done");
+  fs.rmSync(path.join(dir, "docs/app-qa-checklist.json"));
+  assert.match(h38().detail, /record unreadable/);
 });
