@@ -172,6 +172,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-assistant/src/services/device-actions/notes-query-result.ts',
   'plugins/plugin-assistant/src/services/device-actions/sms-contract.ts',
   'packages/contracts/src/sms-send.ts',
+  'packages/contracts/src/mms-send.ts',
   'packages/contracts/src/native-telephony.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-review-executor.ts',

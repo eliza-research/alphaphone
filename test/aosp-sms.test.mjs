@@ -202,8 +202,20 @@ test("native boundary: image-only plugin methods, immutable explicit callbacks, 
   assert.match(sms, /if \(sent\) settleOwnRow\(app, journal, operation, index\);/);
   const store = readFileSync(join(SHARED, "MmsStore.java"), "utf8");
   assert.match(store, /Telephony\.Sms\.TYPE \+ " = \? AND " \+ Telephony\.Sms\.CREATOR \+ " = \?"/, "only outbox rows Alpha created are settled");
-  assert.match(sms, /PendingIntent\.FLAG_IMMUTABLE \| PendingIntent\.FLAG_ONE_SHOT/);
-  assert.doesNotMatch(sms, /FLAG_MUTABLE/);
+  // SMS callbacks are immutable: the framework can only report the result code.
+  const smsCallback = sms.slice(sms.indexOf("private static PendingIntent callback("), sms.indexOf("public interface DispatchGuard"));
+  assert.match(smsCallback, /PendingIntent\.FLAG_IMMUTABLE \| PendingIntent\.FLAG_ONE_SHOT/);
+  assert.doesNotMatch(smsCallback, /FLAG_MUTABLE/);
+  // The one mutable callback is the MMS sent intent, which must carry the carrier's M-Send.conf; it stays
+  // explicit and one-shot, and its operation is accepted only when it matches the immutable data URI.
+  assert.equal((sms.match(/FLAG_MUTABLE/g) || []).length, 1);
+  const mmsDispatch = sms.slice(sms.indexOf("static SmsSendJournal.Record dispatchMms("), sms.indexOf("static boolean sendConfirmed("));
+  assert.match(mmsDispatch, /PendingIntent\.FLAG_MUTABLE : 0;\n\s*PendingIntent sent = PendingIntent\.getBroadcast\(context, 0, intent, mutable \| PendingIntent\.FLAG_ONE_SHOT\);/);
+  assert.match(mmsDispatch, /setClass\(context, config\.receiverClass\)\.setPackage\(context\.getPackageName\(\)\)/);
+  assert.ok(mmsDispatch.indexOf("journal.beginMmsDispatch(") < mmsDispatch.indexOf("manager.sendMultimediaMessage("), "MMS journaled before the platform call");
+  assert.match(sms, /if \(mmsFile != null && !Uri\.fromParts\(config\.callbackScheme, operation \+ "\/mms", null\)\.equals\(intent\.getData\(\)\)\) return;/);
+  assert.equal((plugin.match(/SmsTelephony\.dispatchMms\(/g) || []).length, 1, "one MMS dispatch site, inside the owner's Send decision");
+  assert.match(plugin, /if \(!admitted\(\) \|\| !unlockedForeground\(\) \|\| mmsBlocker\(sub\) != null\) \{ decideMms\(/);
   assert.match(sms, /setClass\(context, config\.receiverClass\)\.setPackage\(context\.getPackageName\(\)\)/);
   assert.match(sms, /createForSubscriptionId\(subscriptionId\)/);
   assert.match(sms, /getSmsManagerForSubscriptionId\(subscriptionId\)/);
