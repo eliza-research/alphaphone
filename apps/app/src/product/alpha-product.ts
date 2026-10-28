@@ -33,10 +33,13 @@ export function alphaNavigation(available: (hostKey: string) => boolean) {
     },
     /** Canonical id of a renderer key, as the agent's view metadata names it. */
     canonicalViewId: (view: string): string => views.canonicalId(view) ?? view,
-    /** Route paths a navigation handoff may name for a view id; none for an unknown id. */
+    /** Route paths a navigation handoff may name for a view id; none for an unknown id. A
+     * recognized older or served id (workflows, home, reminders) keeps accepting the paths it
+     * was accepted with before the shared registry, `/<id>` and `/apps/<id>`, beside the
+     * canonical paths, which stay the emitted form. */
     viewPaths(viewId: string): string[] {
       const id = views.canonicalId(viewId);
-      return id ? mobileShellViewPaths(id) : [];
+      return id ? [...new Set([...mobileShellViewPaths(id), `/${viewId}`, `/apps/${viewId}`])] : [];
     },
     /** Canonical route path of a renderer key (Home is /chat). */
     viewPath(view: string): string {

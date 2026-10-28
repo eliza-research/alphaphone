@@ -67,3 +67,10 @@ test('camera continuation gets a context only after the matching navigation ackn
   assert.equal(g.client.currentAttempt({view:'home',revision:1,sensitive:false}),undefined);
  }finally{g.close();}
 });
+
+test('realtime voice accepts older workflow and Home ids at their older paths',async()=>{
+ for(const [viewId,viewPath,localView] of [['workflows','/workflows','workflows'],['workflows','/apps/workflows','workflows'],['home','/home','home'],['home','/','home']]){const f=harness({viewId,localView});try{const pending=f.apply({...f.event,viewPath});await settle();assert.equal(f.requests.length,1,`${viewId} ${viewPath}`);f.flush();assert.equal(await pending,true);assert.equal(f.shell.S().view,localView==='home'?null:localView);assert.deepEqual(f.finishes,[true]);}finally{f.close();}}
+});
+test('realtime voice refuses a path of another view or an unknown id before any claim',async()=>{
+ for(const [viewId,viewPath] of [['workflows','/notes'],['automations','/workflows'],['chat','/home'],['unknown-view','/unknown-view']]){const f=harness({viewId,localView:'home'});try{await assert.rejects(f.apply({...f.event,viewPath}),/not available/);assert.equal(f.requests.length,0);assert.equal(f.commits,0);assert.equal(f.shell.S().view,null);}finally{f.close();}}
+});
