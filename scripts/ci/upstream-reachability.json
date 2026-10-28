@@ -514,10 +514,10 @@
     }
   ],
   "localCandidate": {
-    "head": "96c560ec9c57c6f98cafc523c1ddbb9cea8a3379",
-    "priorLocalHead": "6f91e22e6bfabdef67138b91c61ebf2929dad775",
-    "evidence": "docs/evidence/v17-notification-source-binding-20261028.json",
-    "scope": "Local unpublished notification candidate. Historical remote comparison unchanged; runtime and native qualification pending."
+    "head": "e40497d5d0111d557aef022eb01d4f03023c9fc8",
+    "priorLocalHead": "96c560ec9c57c6f98cafc523c1ddbb9cea8a3379",
+    "evidence": "docs/evidence/v17-notification-lint-source-binding-20261028.json",
+    "scope": "Local unpublished notification lint correction. Historical remote comparison unchanged; runtime and native qualification pending."
   },
   "previousLocalCandidates": [
     {
@@ -531,6 +531,12 @@
       "priorLocalHead": "2f664cc6dc223cf12002120576357114f8cb9763",
       "evidence": "docs/evidence/v17-diagnostic-source-binding-20261028.json",
       "scope": "Local unpublished diagnostic candidate; historical remote comparison unchanged. Runtime and native qualification pending."
+    },
+    {
+      "head": "96c560ec9c57c6f98cafc523c1ddbb9cea8a3379",
+      "priorLocalHead": "6f91e22e6bfabdef67138b91c61ebf2929dad775",
+      "evidence": "docs/evidence/v17-notification-source-binding-20261028.json",
+      "scope": "Local unpublished notification candidate. Historical remote comparison unchanged; runtime and native qualification pending."
     }
   ]
 }
