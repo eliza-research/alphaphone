@@ -3063,6 +3063,7 @@ export function ConnectionChooser() {
     <p role="status">{snapshot.session?'Connected to the agent on this computer.':snapshot.busy?'Connecting…':'Alpha couldn’t connect to the agent on this computer.'}</p>
     {snapshot.error&&<p role="alert" className="alpha-connection-error">{snapshot.error}</p>}
     <div className="alpha-connection-actions"><button disabled={snapshot.busy} onClick={()=>void connectionController.startLocal()}>{snapshot.session?'Reconnect':'Try again'}</button></div>
+    {conversations}
   </div></div>;
   if(browserDevProfile)return <div className="alpha-connection-scrim"><div className="alpha-connection" role="dialog" aria-modal="true" aria-labelledby="connection-title" tabIndex={-1} ref={panel}>
     <header><h1 id="connection-title">Development connections</h1><button aria-label="Close connection settings" disabled={snapshot.busy} onClick={()=>connectionController.close()}><span aria-hidden="true" data-alpha-icon="/icons/lucide/x.svg" style={iconStyle("x")}/></button></header>
