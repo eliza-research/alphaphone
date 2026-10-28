@@ -514,9 +514,17 @@
     }
   ],
   "localCandidate": {
-    "head": "2f664cc6dc223cf12002120576357114f8cb9763",
-    "priorLocalHead": "de16c240f8ef77779edd3aa411e407018d2be209",
-    "evidence": "docs/evidence/notes-restore-guidance-20261028.json",
-    "scope": "Local unpublished followup; historical remote comparison unchanged"
-  }
+    "head": "6f91e22e6bfabdef67138b91c61ebf2929dad775",
+    "priorLocalHead": "2f664cc6dc223cf12002120576357114f8cb9763",
+    "evidence": "docs/evidence/v17-diagnostic-source-binding-20261028.json",
+    "scope": "Local unpublished diagnostic candidate; historical remote comparison unchanged. Runtime and native qualification pending."
+  },
+  "previousLocalCandidates": [
+    {
+      "head": "2f664cc6dc223cf12002120576357114f8cb9763",
+      "priorLocalHead": "de16c240f8ef77779edd3aa411e407018d2be209",
+      "evidence": "docs/evidence/notes-restore-guidance-20261028.json",
+      "scope": "Local unpublished followup; historical remote comparison unchanged"
+    }
+  ]
 }

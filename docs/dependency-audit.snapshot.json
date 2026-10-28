@@ -103,7 +103,7 @@
   ],
   "resident": {
     "description": "Advisories for the resident runtime's npm packages at the pinned upstream commit, from the npm bulk advisory endpoint. Regenerate with: node scripts/dependency-audit.mjs --resident --write. Dispositions live in docs/dependency-audit.dispositions.json under \"resident\".",
-    "upstreamCommit": "2f664cc6dc223cf12002120576357114f8cb9763",
+    "upstreamCommit": "6f91e22e6bfabdef67138b91c61ebf2929dad775",
     "input": "vendor/eliza/bun.lock",
     "auditedOn": "2026-10-27",
     "inputSha256": "63509920ce413bb6fcb44fc7e5b1047cc22517eab2ea51a445203e29bd7c6201",
@@ -2111,9 +2111,16 @@
       }
     ],
     "sourceBinding": {
-      "priorUpstreamCommit": "de16c240f8ef77779edd3aa411e407018d2be209",
-      "evidence": "docs/evidence/notes-restore-guidance-20261028.json",
-      "note": "Same exact dependency lock; previous dated advisory findings retained, no fresh audit claim."
-    }
+      "priorUpstreamCommit": "2f664cc6dc223cf12002120576357114f8cb9763",
+      "evidence": "docs/evidence/v17-diagnostic-source-binding-20261028.json",
+      "note": "Exact same Bun lock input. Historical audit dates, advisory findings, exceptions and deadlines retained; no fresh audit or packaged-runtime acceptance claim."
+    },
+    "sourceBindingHistory": [
+      {
+        "priorUpstreamCommit": "de16c240f8ef77779edd3aa411e407018d2be209",
+        "evidence": "docs/evidence/notes-restore-guidance-20261028.json",
+        "note": "Same exact dependency lock; previous dated advisory findings retained, no fresh audit claim."
+      }
+    ]
   }
 }
