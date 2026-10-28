@@ -58,18 +58,19 @@ for (const [kind, text] of Object.entries(KINDS)) for (const frame of ['done', '
       const code = page.getByRole('button', { name: /^Use a membership code/ });
       await expect(code).toBeVisible();
       await code.click();
-      const account = page.getByRole('dialog', { name: /^Eliza Cloud account/ });
+      // The approved Membership & credits sheet: Add funds, and the code field behind Use membership code.
+      const account = page.getByRole('dialog', { name: 'Membership & credits', exact: true });
       await expect(account).toBeVisible();
+      await expect(account.getByRole('button', { name: 'Add funds', exact: true })).toBeVisible();
+      await account.getByRole('button', { name: 'Use membership code', exact: true }).click();
       await expect(account.getByRole('textbox', { name: 'Membership code' })).toBeVisible();
-      await expect(account.getByRole('button', { name: /^(Choose a plan|Manage (plan|billing) in Eliza Cloud)$/ })).toBeVisible();
-      await expect(account.getByRole('button', { name: /Add funds|Check balance/ })).toHaveCount(0);
       expect(await stub(page, s => s.opened)).toEqual([]);
       await page.screenshot({path:info.outputPath('membership-code-mobile.png'),animations:'disabled'});
       await page.setViewportSize({width:1024,height:768});
       await expect(account.getByRole('textbox',{name:'Membership code'})).toBeVisible();
       await page.screenshot({path:info.outputPath('membership-code-wide.png'),animations:'disabled'});
       await page.setViewportSize({width:412,height:915});
-      await account.getByRole('button', { name: 'Close connection settings', exact: true }).click();
+      await account.getByRole('button', { name: 'Close membership settings', exact: true }).click();
       await manage.click();
       await expect(page.getByRole('heading',{name:'Check the billing account',exact:true})).toBeVisible();
       await expect(page.getByRole('button',{name:'Open billing',exact:true})).toBeDisabled();
