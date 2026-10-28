@@ -760,9 +760,11 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   }
  }
  static String notificationInstallation(Context context)throws Exception{
-  java.nio.file.Path directory=new java.io.File(context.getFilesDir(),".eliza").toPath();
+  // Context supplies the app-owned root; Android may expose it through a lexical alias.
+  java.nio.file.Path root=context.getFilesDir().toPath().toRealPath();
+  java.nio.file.Path directory=root.resolve(".eliza");
   java.nio.file.Path file=directory.resolve("runtime-installation-id");
-  if(!directory.toRealPath().equals(directory.toAbsolutePath().normalize())||java.nio.file.Files.isSymbolicLink(file)||!java.nio.file.Files.isRegularFile(file,java.nio.file.LinkOption.NOFOLLOW_LINKS))throw new SecurityException("Notification installation unavailable");
+  if(java.nio.file.Files.isSymbolicLink(directory)||!java.nio.file.Files.isDirectory(directory,java.nio.file.LinkOption.NOFOLLOW_LINKS)||!directory.toRealPath().equals(directory)||java.nio.file.Files.isSymbolicLink(file)||!java.nio.file.Files.isRegularFile(file,java.nio.file.LinkOption.NOFOLLOW_LINKS))throw new SecurityException("Notification installation unavailable");
   String id=new String(java.nio.file.Files.readAllBytes(file),java.nio.charset.StandardCharsets.UTF_8).trim();HostedInbox.id(id);return id;
  }
  static void rememberNotificationOwner(Context context,JSONObject expected,JSONObject identity)throws Exception{
