@@ -17,21 +17,24 @@ test('bounded PCM queue, streamed writer, cancellation, focus policy and chunk v
 
 test('local speech streams through AudioTrack when the engine supports it and falls back only when it does not', () => {
   const plugin = strip(read('AlphaVoiceCloudPlugin.java')), output = strip(shared('AudioTrackSpeechOutput.java')), paradee = strip(shared('SessionSpeech.java'));
-  // One process-wide session owns speech output, recognition and VAD; releasing the engine trims it.
+  // One process-wide session owns speech output, recognition and VAD. The engine's backend is its own
+  // client of that session: its cancel and release never fence or unload another consumer's calls.
   assert.match(plugin, /new LocalSpeechEngine\(\(\)->SessionSpeech\.shared\(getContext\(\)\)\)/);
   assert.doesNotMatch(plugin, /ElizaVoiceNative|openInference\(\)|new ParadeeVoice|new NativeAsr/);
-  assert.match(paradee, /public void close\(\)\{if\(owned\)inference\.close\(\);else inference\.trimMemory\(\);\}/);
+  assert.match(paradee, /public void close\(\)\{if\(owned\)inference\.close\(\);else client\.release\(\);\}/);
+  assert.match(paradee, /public void cancel\(\)\{client\.cancel\(\);\}/);
+  assert.doesNotMatch(paradee, /inference\.(?:cancel|trimMemory|synthesize|transcribe|prepareSpeech|speechSampleRate)\(/);
   // Streaming is chosen by capability, never as an error fallback.
   assert.match(plugin, /if\(!engine\.supportsStreaming\(\)\)return false;streamLocal\(/);
   assert.match(plugin, /Boolean streamed=localEngine\.use\(/);
   assert.match(plugin, /if\(streamed\)return;/);
   assert.doesNotMatch(plugin.slice(plugin.indexOf('private void streamLocal('), plugin.indexOf('private static boolean settleRefusal(')), /File|createTempFile|FileOutputStream/, 'streamed audio is never written to storage');
-  assert.match(paradee, /inference\.synthesizeStream\(text,1f,/);
-  assert.match(paradee, /return inference\.supportsStreaming\(\);/);
+  assert.match(paradee, /client\.synthesizeStream\(text,1f,/);
+  assert.match(paradee, /return client\.supportsStreaming\(\);/);
   assert.match(paradee, /VoiceAssets\.sharedInference\(context\)/);
   assert.doesNotMatch(paradee, /\.open(?:Asr|Voice)\(/);
-  assert.match(paradee, /prepare\(\)throws IOException\{inference\.prepareSpeech\(\);\}/);
-  assert.match(paradee, /speechLoaded\(\)\{return inference\.isSpeechLoaded\(\);\}/);
+  assert.match(paradee, /prepare\(\)throws IOException\{client\.prepareSpeech\(\);\}/);
+  assert.match(paradee, /speechLoaded\(\)\{return client\.isSpeechLoaded\(\);\}/);
   assert.match(plugin, /engine\.prepare\(\);return null;/);
   // AudioTrack MODE_STREAM, float mono, assistant speech attributes.
   assert.match(output, /setTransferMode\(AudioTrack\.MODE_STREAM\)/);

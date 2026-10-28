@@ -24,7 +24,9 @@ focus, live capture with VAD (`LiveVoiceCapture`, `LiveVadGate`, `LiveCaptureSou
 `LiveCaptureResource`, `LiveCaptureAdmission`) and the latency trials (`VoiceLatencyTrials`,
 `VoiceLatencyProbe`) are the shared `ai.eliza.voice` classes in `plugin-local-inference`, compiled
 through `:local-speech`. Speech output, recognition and VAD share one process-wide
-`InferenceSession` (`VoiceAssets.sharedInference`); releasing the engine trims it, and VAD keeps a
+`InferenceSession` (`VoiceAssets.sharedInference`). The engine's backend is its own client of that
+session: cancelling a request fences only the engine's own calls, and an idle or memory-pressure
+release drops only its own hold (the models are freed once no consumer holds them). VAD keeps a
 small separate context so capture stays full duplex while a sentence is synthesized.
 `AlphaVoiceCloudPlugin` keeps only the bridge, owner/account binding, recordings and resident
 transport; `AlphaApplication` names the timing export `alpha-native-voice-timing-v3`. The class
@@ -80,10 +82,10 @@ libelizainference serves `eliza_inference_asr_*` and `asr_stream_*` from whateve
 files; `scripts/paradee-runtime.mjs` admits exactly the files that backend needs (one for
 parakeet, two for qwen3) and refuses any other file under `asr/`, because the library would load
 a stray parakeet GGUF first. The voice host record carries the same rows
-(`asrSlot.backend`, `scripts/voice-host.mjs`). The APK sets `ELIZA_ASR_BACKEND=parakeet` by
-default (`BuildConfig.ELIZA_ASR_BACKEND`, exported before the library loads by the pinned
-`ElizaVoiceNative`/`ElizaAsrNativeEnv` and by the shared `SessionSpeech` backend); a build environment value of
-`auto`, `parakeet` or `qwen3` overrides it.
+(`asrSlot.backend`, `scripts/voice-host.mjs`). At runtime `parakeet` names the model
+architecture, not a backend: the pinned `ElizaVoiceNative`/`ElizaAsrNativeEnv` and the shared
+paradee-voice `VoiceNative` (loaded by the `SessionSpeech` backend) export
+`ELIZA_ASR_BACKEND=ggml` before the library loads, so Phonon-2 runs on the in-tree ggml path.
 
 **Licence.** Phonon-2 by Fermion Research is CC-BY-4.0, derived from NVIDIA
 parakeet-tdt-0.6b-v3 (CC-BY-4.0). The attribution, Fermion's NOTICE
