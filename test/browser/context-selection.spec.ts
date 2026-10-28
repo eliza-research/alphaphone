@@ -217,8 +217,13 @@ test.describe('mail',()=>{
   const typed='Unrelated words I am still writing';
   // Whichever composer is on screen: the dock's while the chat is closed, the sheet's once it opens.
   const chatComposer=()=>page.locator('[data-alpha-layer="composer"][aria-hidden="false"], [data-alpha-layer="conversation"][aria-hidden="false"]').getByRole('textbox').first();
+  // The startup access walkthrough, finished earlier, would otherwise cover the review once the
+  // composer opens.
+  await page.addInitScript(()=>localStorage.setItem('alpha:startup-permission-walkthrough:v1',JSON.stringify({version:1,status:'completed',step:4})));
   const sharing=await setup(page,async()=>{
    await page.evaluate(async()=>{const {alphaClient}=await import('/src/runtime/alpha-client.ts');(alphaClient as any).send=async(text:string)=>{(window as any).mailFixture.sent.push(text);return {text:'Shared email summary'};};});
+   // An open app shows the dock's Type control; it opens the composer's textbox.
+   await page.getByRole('group',{name:'Assistant controls'}).getByRole('button',{name:'Type',exact:true}).click();
    await chatComposer().fill(typed);
   });
   await sharing.getByRole('button',{name:'Send reviewed email to agent',exact:true}).click();
