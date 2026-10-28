@@ -5,7 +5,8 @@ import {stripTypeScriptTypes} from 'node:module';
 const source=readFileSync(new URL('../apps/app/src/runtime/connection-ui.tsx',import.meta.url),'utf8');
 const start=source.indexOf('    credential.enrollmentId=registered.enrollmentId;await store.write(slot,credential);'),end=source.indexOf('    client.deviceHeaders=headers;',start);
 assert.ok(start>=0&&end>start);
-const run=new Function('store','slot','credential','registered','signal','request','session',`return(async()=>{${stripTypeScriptTypes(source.slice(start,end),{mode:'transform'})}})();`);
+const execute=new Function('store','slot','credential','registered','signal','request','session','isAndroid',`return(async()=>{${stripTypeScriptTypes(source.slice(start,end),{mode:'transform'})}})();`);
+const run=(...args)=>execute(...args,true);
 function fixture(){
  const committed=Promise.withResolvers(),entered=Promise.withResolvers(),order=[];
  const credential={installationId:'installation',key:'private-fixture'},registered={enrollmentId:'enrollment'},session={ownerId:'owner',agentId:'agent'};
@@ -26,4 +27,8 @@ test('changed committed identity is refused',async()=>{
 test('failed or canceled durable enrollment never wakes the observer',async()=>{
  const f=fixture();let reads=0;await assert.rejects(run({write:async()=>{throw Error('write failed');}},'device:fixture',f.credential,f.registered,new AbortController().signal,async()=>{reads++;},f.session),/write failed/);assert.equal(reads,0);
  const controller=new AbortController(),pending=run(f.store,'device:fixture',f.credential,f.registered,controller.signal,f.request,f.session);await f.entered;controller.abort();f.release();await assert.rejects(pending);assert.equal(f.reads(),0);
+});
+
+test('browser enrollment adds no native notification wake request',async()=>{
+ const f=fixture(),pending=execute(f.store,'device:fixture',f.credential,f.registered,new AbortController().signal,f.request,f.session,false);f.release();await pending;assert.equal(f.reads(),0);
 });
