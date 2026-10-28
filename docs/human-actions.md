@@ -50,7 +50,7 @@ Rules for every step:
 | [H-13](#h-13-app-links-association-on-the-cloud-web-host) | App Links association on the Cloud web host | Cloud operator | No enrolled release certificate listed |
 | [H-14](#h-14-keep-the-service-terms-and-privacy-text-approved) | Keep the service Terms and Privacy text approved | Service operator | Observed published |
 | [H-15](#h-15-subscription-operations) | Subscription operations | Cloud operator | Signing keys published; limits unset |
-| [H-16](#h-16-provision-the-maps-service) | Provision the Maps service | Cloud operator | Not checkable without an account |
+| [H-16](#h-16-provision-the-maps-service) | Provision the Maps service | Cloud operator | Not checkable without an account; production strong revocation is off at the pin |
 | [H-17](#h-17-google-connector-for-gmail-and-calendar) | Google connector for Gmail and Calendar | Cloud operator | Owner account worked in development; production verification open |
 | [H-18](#h-18-admit-the-on-device-voice-host) | Admit the on-device voice host | Named reviewer | Open: `qualified: false` |
 | [H-19](#h-19-embedding-host-libraries-only-when-reported) | Embedding host libraries, only when reported | Reviewer | Script-supplied at this pin |
@@ -75,7 +75,8 @@ Rules for every step:
 Dependencies: H-01 gates H-08; H-08 gates H-09; H-09 gates H-10, the release SHA-1 in H-12,
 H-13 and H-22; H-18 gates a distributable H-10; H-10, H-18 and H-20 gate production staging
 (H-21); H-03 and H-04 gate every Maps request (Cloud refuses Maps with
-`maps_allowance_unconfigured` until both are set); H-07 and H-26 to H-29 gate the pilot (H-32 to
+`maps_allowance_unconfigured` until both are set, and in production also until strong credential
+revocation is rolled out, H-16); H-07 and H-26 to H-29 gate the pilot (H-32 to
 H-34). A release is recorded as the last release (H-32) only after it is distributed: from then
 on that versionCode is refused and every later build must advance it.
 
@@ -211,7 +212,8 @@ These are the values approved policy deliberately leaves open. None reopens a de
   Sign either in Gradle (`ELIZAOS_KEYSTORE_PATH`, `ELIZAOS_KEYSTORE_PASSWORD`,
   `ELIZAOS_KEY_ALIAS`, `ELIZAOS_KEY_PASSWORD` for a keystore holding the `alphaphone_app` key) or,
   with those unset, afterwards with `node scripts/sign-release-apks.mjs --keys-dir /dev/shm/keys`
-  (the ceremony layout the upstream `decrypt-release-keys.ts` writes into tmpfs for one job) or
+  (the ceremony layout the upstream `decrypt-release-keys.ts` writes into tmpfs for one job, for
+  example with `--only alphaphone_app`; wipe it after signing) or
   `--pkcs11-config <file> --key-label <label>` (a PIN only through `ELIZAOS_PKCS11_PIN`). Sign the
   prepared Sense listener APK with the same certificate (`--apk <file> --out <file>`). Do not
   record `lastRelease` yet: the release that is recorded is refused from then on (H-32).
@@ -292,19 +294,22 @@ staging values.
 - Who: Cloud operator.
 - Do: apply H-03 in `ELIZA_CLOUD_PLAN_RATE_LIMITS`; keep `ELIZA_SUBSCRIPTION_GRANT_CODE_PEPPER`
   and the migrations through `0547_subscription_grant_calendar_terms` for grant codes; rotate
-  entitlement keys only by the documented `NEXT`, then sign, then `PREVIOUS` procedure. Measure
-  deployed admission latency under the normal, cache-miss, exhausted, expired and billing-outage
-  conditions with Cloud's deployed plan-admission latency harness (upstream
-  `packages/cloud/scripts/plan-admission-deployed-latency.ts`; its requests are real and counted,
-  so it runs only with the operator's confirmation), using one prepared account per condition from
-  H-26.
+  entitlement keys only by the documented `NEXT`, then sign, then `PREVIOUS` procedure. Deployed
+  admission latency under the normal, cache-miss, exhausted, expired and billing-outage conditions
+  is not measured yet, and no harness for it exists at the pin: upstream has only the local
+  lower-bound harness `packages/cloud/scripts/plan-request-limit-latency.ts` (in-process PGlite,
+  recorded in the [October 15 audit](evidence/subscription-acceptance-audit-2026-10-15.md)). A
+  deployed measurement makes real, counted requests, so it runs only with the operator's
+  confirmation, with one prepared account per condition from H-26; the billing-outage condition
+  can only be produced on the operator's side.
   The Cloud contract is in the upstream `packages/cloud/api/README.md` (Subscription grant codes
   and entitlements).
 - Seam: Alpha verifies ES256 entitlements for audience `eliza-alpha-phone`
   (`config/cloud-deployment.json`); [Cloud subscription QA](cloud-subscription-qa.md) has the
   staging end-to-end checklist.
 - Verify: the probe's entitlement keys gate (production `entitlement-production-2026-10` and
-  staging `entitlement-staging-2026-10` on October 27); the harness report.
+  staging `entitlement-staging-2026-10` on October 27); a deployed latency report once a harness
+  exists.
 - Unblocks: #410 completion.
 
 ### H-16 Provision the Maps service
@@ -316,13 +321,19 @@ staging values.
   `bike` profiles; optional `ELIZA_MAPS_ROUTER_API_KEY`; `ELIZA_MAPS_ROUTE_ALTERNATIVES=false`
   when alternatives are unavailable), `ELIZA_MAPS_COVERAGE_JSON`, `ELIZA_MAPS_DATASET_REVISION`
   and `ELIZA_CLOUD_MAPS_REQUEST_ALLOWANCES` (H-04), with `ELIZA_CLOUD_PLAN_RATE_LIMITS` selected
-  (H-03). Own the dataset refresh, monitoring (including Durable Object storage for the replay
-  records), capacity and the ODbL attribution and share-alike duties.
+  (H-03). The same section requires strong credential revocation and the organization Durable
+  Object binding: Cloud refuses every Maps request with `maps_allowance_unconfigured` while
+  `INFERENCE_STRONG_REVOCATION_ENABLED` is not `"true"`. The pinned `packages/cloud/api/wrangler.toml`
+  has it on for staging and off for production, behind the staged production canary that file
+  describes (staging soak, writer audit, a 5% canary, then the ramp); production Maps waits for
+  that rollout. Own the dataset refresh, monitoring (including Durable Object storage for the
+  replay records), capacity and the ODbL attribution and share-alike duties.
 - Seam: the upstream `packages/cloud/api/README.md` Maps section; Alpha's Maps client reads
   coverage, attribution and typed refusals and has no fallback provider.
 - Verify: with a signed-in plan, `GET /api/v1/maps/capabilities` returns the chosen regions and
-  dataset revision, and a search and a route inside a region succeed on a signed-in phone (H-32).
-  The probe cannot check this: it lists the Maps row as needing an account.
+  dataset revision, and a search and a route inside a region succeed on a signed-in phone (H-32)
+  rather than answering `maps_allowance_unconfigured`. The probe cannot check this: it lists the
+  Maps row as needing an account.
 - Unblocks: J04 and #412.
 
 ### H-17 Google connector for Gmail and Calendar
@@ -407,9 +418,12 @@ distinct gates are recorded in `android/aosp/pixel10a-qualification-gates.json`
 
 - Who: release owner.
 - Do: `node scripts/sign-aosp-release.mjs --target-files <zip> --target-files-sha256 <hex> --keys-dir <dir> --releasetools <otatools/bin> --apk-manifest <apk-manifest.json> --out <new dir>`,
-  adding the managed options when H-01 chose a token. Keep the signed release and its
-  `release-record.json` as the known-good recovery release, and record it in the channel's
-  `recovery.knownGoodRelease`.
+  adding the managed options when H-01 chose a token. The signing job requires mode 0600 for
+  every file it reads from the key directory, public certificates and `avb_pkmd.bin` included,
+  while the upstream `decrypt-release-keys.ts` writes the public files with the default mode: run
+  `chmod 600` on the decrypted files before signing, and wipe the directory afterwards. Keep the
+  signed release and its `release-record.json` as the known-good recovery release, and record it
+  in the channel's `recovery.knownGoodRelease`.
 - Seam: `android/aosp/pixel10a-ota-channel.json`; `node scripts/aosp-release-record.mjs` writes
   the compatibility record on its own.
 - Verify: `npm run human:status` shows a recorded known-good release.
