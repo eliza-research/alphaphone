@@ -5,18 +5,15 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {nativeSource,javaBinary} from './fixtures/jvm-tools.mjs';
-const android=process.env.ALPHA_ANDROID_JSON_SOURCE||'/Users/nubs/Library/Android/sdk/sources/android-36.1';
-// Actual Android JSON serializers; only unavailable annotation types are stubbed.
-// Expected key is independently computed with the renderer's JSON.stringify bytes.
-test('Android native owner lookup matches the renderer device key and rejects escaped legacy bytes',()=>{
+import {nativeSource,javaBinary,jsonJar} from './fixtures/jvm-tools.mjs';
+
+// Portable producer/consumer contract; Android serializer causal proof is kept
+// separately in scripts/test-android-notification-device-slot.mjs.
+test('native owner lookup matches the renderer device key exactly',()=>{
+ assert.ok(jsonJar,'Pinned JVM JSON dependency required');
  const dir=mkdtempSync(join(tmpdir(),'alpha-device-key-'));const files=[];
  const put=(name,text)=>{const p=join(dir,name);mkdirSync(join(p,'..'),{recursive:true});writeFileSync(p,text);files.push(p);};
  try{
-  for(const name of ['JSON','JSONArray','JSONObject','JSONStringer','JSONTokener','JSONException'])put('org/json/'+name+'.java',readFileSync(join(android,'org/json',name+'.java'),'utf8'));
-  put('android/compat/annotation/UnsupportedAppUsage.java','package android.compat.annotation; public @interface UnsupportedAppUsage {}');
-  put('android/annotation/SystemApi.java','package android.annotation; public @interface SystemApi {enum Client {MODULE_LIBRARIES} Client client();}');
-  for(const name of ['NonNull','Nullable'])put('libcore/util/'+name+'.java','package libcore.util; @java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE}) public @interface '+name+' {}');
   put('android/content/Context.java','package android.content; public class Context {public Context getApplicationContext(){return this;}}');
   put('Support.java',`package ai.elizaresearch.alphaphone; import org.json.*;
 class AlphaCredentialStore {AlphaCredentialStore(android.content.Context c){} JSONObject providerAdmissionSnapshot(){throw new AssertionError();}String readCredentialSlot(String key){throw new AssertionError();}}
@@ -28,8 +25,7 @@ class HostedResultNotices {static String hash(String text)throws Exception{retur
   put('DeviceKeyTest.java',`package ai.elizaresearch.alphaphone;import org.json.*;
 public class DeviceKeyTest {public static void main(String[]args)throws Exception{
  String owner="${owner}",agent="${agent}",expected="${expected}";
- String legacy="device:"+HostedResultNotices.hash(new JSONArray().put("https://device.alpha.invalid").put(owner).put(agent).toString());
- if(expected.equals(legacy))throw new AssertionError("Test did not reproduce Android slash escaping");
+ if(!expected.equals(NativeOwnerReminderHost.deviceSlot(owner,agent)))throw new AssertionError("Producer key differs");
  JSONObject provider=new JSONObject().put("accountRef","native-local").put("environment","fixture").put("sessionGeneration","generation");
  JSONObject session=new JSONObject().put("ownerId",owner).put("token","synthetic").put("expiresAt",System.currentTimeMillis()+60000);
  JSONObject device=new JSONObject().put("installationId","30000000-0000-4000-8000-000000000003").put("enrollmentId","40000000-0000-4000-8000-000000000004").put("key","a".repeat(64));
@@ -47,10 +43,10 @@ public class DeviceKeyTest {public static void main(String[]args)throws Exceptio
  session.put("ownerId",owner);identity.put("agentId","50000000-0000-4000-8000-000000000005");
  try{new NativeOwnerReminderHost(ports).reviewFence(identity);throw new AssertionError("Wrong agent accepted");}catch(SecurityException expectedRefusal){}
 
- System.out.println("PASS Android JSON mismatch reproduced; renderer-derived native read and review fence verified");}}
+ System.out.println("PASS renderer-derived native read and review fence verified");}}
 `);
   put('NativeOwnerReminderHost.java',readFileSync(process.env.ALPHA_NOTIFICATION_HOST_SOURCE||nativeSource('NativeOwnerReminderHost.java'),'utf8'));
-  execFileSync(javaBinary('javac'),['--release','17','-d',dir,...files],{timeout:30000,stdio:'pipe'});
-  assert.match(execFileSync(javaBinary('java'),['-cp',dir,'ai.elizaresearch.alphaphone.DeviceKeyTest'],{encoding:'utf8',timeout:30000,stdio:'pipe'}),/^PASS Android JSON mismatch reproduced/);
+  execFileSync(javaBinary('javac'),['--release','17','-cp',jsonJar,'-d',dir,...files],{timeout:30000,stdio:'pipe'});
+  assert.match(execFileSync(javaBinary('java'),['-cp',dir+':'+jsonJar,'ai.elizaresearch.alphaphone.DeviceKeyTest'],{encoding:'utf8',timeout:30000,stdio:'pipe'}),/^PASS renderer-derived native read/);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
