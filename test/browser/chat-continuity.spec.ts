@@ -5,7 +5,7 @@ import { test, expect, type Page } from '@playwright/test';
 // model is called. This is browser source evidence, not emulator or device acceptance.
 const REMOTE = 'https://agent.example.test';
 const ROOM = '99999999-8888-4777-8666-555555555555';
-type Options = { holdIdentity?: boolean; createFails?: boolean; createHangs?: boolean; createLimited?: boolean; abortRoute?: boolean; abortResult?: boolean; long?: boolean };
+type Options = { holdIdentity?: boolean; createFails?: boolean; createHangs?: boolean; createLimited?: boolean; abortRoute?: boolean; abortResult?: boolean; long?: boolean; assistantEntry?: boolean };
 
 async function remoteAgent(page: Page, options: Options = {}) {
   await page.addInitScript(({ remote, room, options }) => {
@@ -32,7 +32,7 @@ async function remoteAgent(page: Page, options: Options = {}) {
       ownerId: 'fixture-owner', posts: 0, creates: 0, aborts: 0, historyReads: 0, pageReads: 0, ready: false, messageIds: [] as unknown[],
       createFails: !!options.createFails, createHangs: !!options.createHangs, createLimited: !!options.createLimited, abortResult: !!options.abortResult,
       holdReads: false, identityReleased:false, heldIdentity:null as null|(()=>void), lists: 0, heldRead: null as null | (() => void), heldList: null as null | (() => void),
-      release: null as null | ((text: string) => void),
+      release: null as null | ((text: string) => void), assistantClosed: 0,
       /** The agent finishes the held turn and persists its reply, whether or not the phone still listens. */
       finish(text: string) { const user = [...agent.history].reverse().find(item => item.role === 'user'); agent.history.push({ id: crypto.randomUUID(), role: 'assistant', text, timestamp: Date.now() + 1, replyToMessageId: user?.id }); persist(); },
     };
@@ -44,11 +44,15 @@ async function remoteAgent(page: Page, options: Options = {}) {
         { name: 'AlphaNotifications', methods: methods(['status', 'crossAppStatus', 'addListener', 'removeListener']) },
         { name: 'AlphaVoiceCloud', methods: methods(['checkPermissions']) },
         { name: 'DeviceApps', methods: methods(['buildInfo']) },
+        // With `assistantEntry`, sessionStorage chooses whether this renderer is AlphaAssistActivity's.
+        ...(options.assistantEntry ? [{ name: 'DailyApps', methods: methods(['surfaceInfo', 'closeAssistant']) }] : []),
       ],
       nativePromise: async (plugin: string, method: string, input: any) => {
         if (plugin === 'AlphaNotifications') return { permissionGranted: true, appEnabled: true };
         if (plugin === 'AlphaVoiceCloud') return { microphone: 'granted' };
         if (plugin === 'DeviceApps') return { launcher: false, version: 'continuity-fixture' };
+        if (plugin === 'DailyApps' && method === 'surfaceInfo') return { developmentBuild: true, assistant: sessionStorage.getItem('continuity-assistant') === '1' };
+        if (plugin === 'DailyApps' && method === 'closeAssistant') { f.assistantClosed++; return {}; }
         if (plugin === 'AlphaActionJournal') return method === 'list' ? { entries: [] } : { entry: null };
         if (plugin !== 'AlphaConnection') throw Error('Unexpected native operation');
         if (method === 'secureRead') return { value: store.get(input.slot) ?? null };
@@ -150,6 +154,33 @@ test('a restart while a message is in flight offers it for review, never as a dr
   await expect(composer(page)).toHaveValue('');
   await page.waitForTimeout(1_000);
   expect(await fixture(page, f => ({ posts: f.posts, creates: f.creates }))).toEqual({ posts: 0, creates: 0 });
+});
+
+// The ACTION_ASSIST surface (AlphaAssistActivity) and the app are two renderers over the same device
+// draft slot of a conversation: words typed in either open in the other, Close keeps them, and
+// nothing is sent. A reload with the other entry stands in for the other Activity's renderer.
+test('the assistant surface and the app share the conversation draft through Close', async ({ page }) => {
+  test.setTimeout(120_000);
+  await connected(page, { assistantEntry: true });
+  await typeDraft(page, 'Started in the app');
+  const key = await bindingKey(page);
+  await page.evaluate(() => sessionStorage.setItem('continuity-assistant', '1'));
+  await page.reload();
+  await expect(page.locator('html')).toHaveClass(/alpha-assistant-surface/);
+  await expect.poll(() => fixture(page, f => f.ready), { timeout: 30_000 }).toBe(true);
+  await expect(composer(page)).toHaveValue('Started in the app', { timeout: 20_000 });
+  expect(await bindingKey(page)).toBe(key);
+  await composer(page).fill('Finished in the assistant');
+  await expect.poll(() => savedDraft(page, key)).toBe('Finished in the assistant');
+  await page.getByRole('button', { name: 'Close assistant', exact: true }).click();
+  await expect.poll(() => fixture(page, f => f.assistantClosed)).toBe(1);
+  expect(await savedDraft(page, key)).toBe('Finished in the assistant');
+  await page.evaluate(() => sessionStorage.setItem('continuity-assistant', '0'));
+  await page.reload();
+  await expect.poll(() => fixture(page, f => f.ready), { timeout: 30_000 }).toBe(true);
+  await expect(page.locator('html')).not.toHaveClass(/alpha-assistant-surface/);
+  await expect(composer(page)).toHaveValue('Finished in the assistant', { timeout: 20_000 });
+  expect(await fixture(page, f => f.posts)).toBe(0);
 });
 
 test('an offline failure before the message is posted keeps the text and a later send posts it once', async ({ page }) => {
