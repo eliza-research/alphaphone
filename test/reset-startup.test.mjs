@@ -44,8 +44,9 @@ public class ResetStartupTest {
  public static void main(String[] args)throws Exception {
   android.content.Context.data=new java.io.File(args[0]);AlphaApplication app=new AlphaApplication();
   check(!AlphaDataReset.RESET.pending(app));
-  // A late failure result from a stale recovery attempt cannot recreate reset state in fresh data.
-  SenseListenerClient.resetSaved=false;check(AlphaDataReset.RESET.attempt(app,System.currentTimeMillis())==DataReset.Outcome.LISTENER_UNACKNOWLEDGED);check(android.content.Context.data.listFiles().length==0);SenseListenerClient.resetSaved=true;
+  // A stale attempt without a confirmed request neither withdraws listener consent nor clears data,
+  // even with an acknowledging listener, and recreates no reset state in fresh data.
+  SenseListenerClient.resetSaved=true;check(AlphaDataReset.RESET.attempt(app,System.currentTimeMillis())==DataReset.Outcome.DEFERRED);check(SenseListenerClient.calls==0&&android.app.ActivityManager.calls==0);check(android.content.Context.data.listFiles().length==0);
   app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==7);
   // Package-scoped: Android's own-package clear only; the sibling app's fixture data is untouched.
   check(new java.io.File(args[1],"keep").isFile());NativeSourceHost.started=0;
@@ -104,8 +105,9 @@ public class ResetStartupTest {
   // Simulated system completion: only this fixture directory is erased. Fresh launch initializes.
   for(java.io.File f:android.content.Context.data.listFiles())check(f.delete());
   check(!AlphaDataReset.RESET.pending(app));
-  // A late failure result from a stale recovery attempt cannot recreate reset state in fresh data.
-  SenseListenerClient.resetSaved=false;check(AlphaDataReset.RESET.attempt(app,System.currentTimeMillis())==DataReset.Outcome.LISTENER_UNACKNOWLEDGED);check(android.content.Context.data.listFiles().length==0);SenseListenerClient.resetSaved=true;
+  // A stale attempt without a confirmed request neither withdraws listener consent nor clears data,
+  // even with an acknowledging listener, and recreates no reset state in fresh data.
+  SenseListenerClient.resetSaved=true;int listenerBefore=SenseListenerClient.calls,clearsBefore=android.app.ActivityManager.calls;check(AlphaDataReset.RESET.attempt(app,System.currentTimeMillis())==DataReset.Outcome.DEFERRED);check(SenseListenerClient.calls==listenerBefore&&android.app.ActivityManager.calls==clearsBefore);check(android.content.Context.data.listFiles().length==0);
   app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==7);
   // Package-scoped: Android's own-package clear only; the sibling app's fixture data is untouched.
   check(new java.io.File(args[1],"keep").isFile());
