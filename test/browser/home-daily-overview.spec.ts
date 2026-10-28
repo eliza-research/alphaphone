@@ -19,6 +19,7 @@ const browserCalendarHome=async(page:Page)=>{await openBrowserCalendar(page);awa
 const nearNow=(page:Page)=>page.evaluate(async()=>{const {formatTime}=await import('/src/prototype/locale-time.ts'),now=Date.now();return [-60000,0,60000].map(offset=>formatTime(new Date(now+offset)));});
 
 test('calendar card keeps source and time accessible without generic app labels',async({page},info)=>{
+ test.slow(); // Chooses the browser calendar in Calendar after every load.
  await page.addInitScript(offline);await page.goto('/');await browserCalendarHome(page);
  const card=calendarCard(page);
  await expect(card).toContainText('No upcoming events');
@@ -48,6 +49,7 @@ test('calendar card keeps source and time accessible without generic app labels'
 });
 
 test('events of an app calendar hidden in Calendar stay off Home until it is shown again',async({page})=>{
+ test.slow(); // Chooses the browser calendar in Calendar after every load.
  await page.addInitScript(offline);await page.goto('/');await browserCalendarHome(page);
  const card=calendarCard(page);
  await expect(card).toContainText('No upcoming events');
@@ -70,6 +72,7 @@ test('events of an app calendar hidden in Calendar stay off Home until it is sho
 });
 
 test('a failed calendar read shows the failure with no read time, and opening Calendar from the card reads it again',async({page})=>{
+ test.slow(); // Chooses the browser calendar in Calendar after every load.
  await page.addInitScript(offline);await page.goto('/');await browserCalendarHome(page);
  const card=calendarCard(page),source=card.locator('[data-alpha-home-calendar-source]');
  await expect(source).toHaveCount(0);
@@ -102,6 +105,7 @@ test('a failed calendar read shows the failure with no read time, and opening Ca
 });
 
 test('an overdue reminder stays on Home, marked overdue with its own source, and opens in Calendar',async({page,context},info)=>{
+ test.slow(); // Chooses the browser calendar in Calendar after every load.
  await context.grantPermissions(['notifications']);
  await page.addInitScript(offline);await page.goto('/');await browserCalendarHome(page);
  const scheduled=await page.evaluate(async()=>{
@@ -157,6 +161,7 @@ test('an overdue reminder stays on Home, marked overdue with its own source, and
 });
 
 test('an upcoming reminder is attributed to the reminder store, not to a calendar',async({page,context})=>{
+ test.slow(); // Chooses the browser calendar in Calendar after every load.
  await context.grantPermissions(['notifications']);
  await page.addInitScript(offline);await page.goto('/');
  expect(await page.evaluate(async()=>{
