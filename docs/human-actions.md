@@ -196,7 +196,9 @@ These are the values approved policy deliberately leaves open. None reopens a de
   (a dry run), then the same with `--write`, and commit the three records together. It refuses a
   test-key ceremony, a debug or reused certificate and any change to a recorded digest (key
   rotation needs `--replace` and its own review). It prints the application certificate's SHA-1
-  for H-12 and its colon-form SHA-256 for H-13.
+  for H-12 and its colon-form SHA-256 for H-13. It reads only public files: copy
+  `fingerprints.json`, the `*.x509.pem` certificates and `avb_pkmd.bin` from the ceremony media to
+  the machine that runs it, never the encrypted private files.
 - Seam: `android/release-signer.json` (`signerSha256`), `android/aosp/pixel10a-product.json`
   (platform, image and AVB digests) and `android/aosp/pixel10a-ota-channel.json` (OTA certificate
   and AVB key).
