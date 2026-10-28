@@ -1,6 +1,5 @@
 import type {AospTelephony, TelephonyStatus, SmsThread, SmsMessage, SmsSendResult} from './aosp-telephony';
-export type SmsReceipt = SmsSendResult;
-export const receiptLabel=(status:SmsReceipt['status'])=>({cancelled:'Cancelled — not sent',denied:'Access changed — not sent',failed:'Failure reported; some parts may have sent. Do not repeat automatically.',unknown:'Outcome unknown. Check the recipient before sending again.',submitted:'Submitted to Android; sending and delivery are not confirmed.',sent:'All parts sent; delivery is not confirmed.',delivered:'All parts have delivery confirmation.'}[status]);
+export const receiptLabel=(status:SmsSendResult['status'])=>({cancelled:'Cancelled — not sent',denied:'Access changed — not sent',failed:'Failure reported; some parts may have sent. Do not repeat automatically.',unknown:'Outcome unknown. Check the recipient before sending again.',submitted:'Submitted to Android; sending and delivery are not confirmed.',sent:'All parts sent; delivery is not confirmed.',delivered:'All parts have delivery confirmation.'}[status]);
 /** Provider content and page cursors exist only during the foreground Messages visit. */
 export function createSmsSession(client:AospTelephony,image:boolean,onChange:()=>void,onSendUpdated:(id:string)=>void=()=>{}){
  let epoch=0,visit=0,observing=false,active=false,stop:(()=>Promise<void>)|null=null;

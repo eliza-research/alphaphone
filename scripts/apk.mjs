@@ -22,6 +22,8 @@ export const DEVELOPMENT_CLASSES = Object.freeze([
 export const EXPORTED_COMPONENTS = Object.freeze({
   "ai.elizaresearch.alphaphone.MainActivity": null,
   "ai.elizaresearch.alphaphone.AlphaAssistActivity": null,
+  // Power entry is reserved for platform status-bar callers.
+  "ai.elizaresearch.alphaphone.AlphaPowerVoiceActivity": "android.permission.STATUS_BAR_SERVICE",
   "ai.elizaresearch.alphaphone.AlphaNotificationListener": "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE",
   "ai.elizaresearch.alphaphone.AlphaQuickSettingsTile": "android.permission.BIND_QUICK_SETTINGS_TILE",
   // Alpha's password vault as an Android Autofill provider (shared plugin-native-passwords).
@@ -55,8 +57,8 @@ export const DISTRIBUTION_POLICY = Object.freeze({
 /**
  * Pure release-policy assessment. `apk` holds aapt dumps, zip entry names and
  * the development class names found in dex. Returns `{ facts, problems }`.
- * The upstream inspection applies DISTRIBUTION_POLICY; the Quick Settings tile
- * shape is Alpha's own check.
+ * The upstream inspection applies DISTRIBUTION_POLICY; the Power entry's
+ * component kind and the Quick Settings tile shape are Alpha's own checks.
  */
 export function distributionProblems(apk, { mode, testMocks = false } = {}) {
   const { facts, problems } = apkDistributionProblems(
@@ -64,6 +66,9 @@ export function distributionProblems(apk, { mode, testMocks = false } = {}) {
     DISTRIBUTION_POLICY,
     { mode, testMocks },
   );
+  const powerName = "ai.elizaresearch.alphaphone.AlphaPowerVoiceActivity";
+  if (facts.exported.some(component => component.name === powerName && component.tag !== "activity"))
+    problems.push("AlphaPowerVoiceActivity must be an activity");
   const tileName = "ai.elizaresearch.alphaphone.AlphaQuickSettingsTile";
   const tile = facts.components.find(component => component.name === tileName);
   if (tile) {

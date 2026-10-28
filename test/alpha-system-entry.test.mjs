@@ -90,7 +90,8 @@ test('notification projection changes fixed product presentation while preservin
  // installed presentation names, exactly as scripts/stage-local-agent-sources.mjs passes them.
  const script=read('scripts/stage-local-agent-sources.mjs');
  const {residentHost}=JSON.parse(read('android/consumer-host.json'));
- const identity={packageName:JSON.parse(read('app.config.json')).appId,sockets:residentHost.sockets,notification:residentHost.notification,environmentHook:residentHost.environmentHook};
+ const identity={packageName:JSON.parse(read('app.config.json')).appId,sockets:residentHost.sockets,notification:residentHost.notification,environmentHook:residentHost.environmentHook,lifecycleHooks:residentHost.lifecycleHooks};
+ assert.ok(script.includes('lifecycleHooks:residentHost.lifecycleHooks')&&script.includes('classes:[...RESIDENT_HOST_CLASSES,...residentHost.classes]'));
  const project=value=>rewriteResidentClass('ElizaAgentService',value,identity);
  const original=read('vendor/eliza/packages/app/platforms/android/app/src/main/java/ai/elizaos/app/ElizaAgentService.java'),generated=project(original);
  assert.ok(generated.includes('getString(R.string.alpha_runtime_running_detail)'));
@@ -99,6 +100,11 @@ test('notification projection changes fixed product presentation while preservin
  assert.ok(generated.includes('case "running":')&&generated.includes('case "stop-failed":'));
  assert.ok(generated.includes('.addAction(0, "Stop", stopPending)'));
  assert.equal((generated.match(/\.setColor\(0xff0000ff\)/g)||[]).length,2);
+ // Suspend the previous transport atomically before exposing a rotated root, and resume
+ // canonical notification recovery on all four running paths, after readiness only.
+ assert.equal(generated.split('            AlphaLocalAgentPlugin.publishNotificationRoot(() -> { currentLocalAgentToken = token; });').length,2);
+ assert.equal(generated.split('currentStatus = "running"; AlphaCanonicalNotifications.resumeExisting(getApplicationContext());').length,5);
+ assert.equal(generated.split('currentStatus = "running";').length,5);
  const bootstrap=generated.slice(generated.indexOf('private Notification buildBootstrapNotification('),generated.indexOf('    private void pushNotification()'));
  assert.ok(!bootstrap.includes('PendingIntent'),'preserve startup binder-free notification path');
  const nativeTitles=['alpha_runtime_title','alpha_runtime_running','alpha_runtime_starting','alpha_runtime_stopped','alpha_runtime_asset_error','alpha_runtime_missing_files','alpha_runtime_spawn_failed','alpha_runtime_restart_blocked'];

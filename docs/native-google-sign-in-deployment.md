@@ -58,3 +58,28 @@ app admission require the corresponding deployed configuration to be repaired.
 Passing these probes still does not prove provider login, callback interception,
 MFA, mobile credential exchange, account binding or session persistence. Verify
 those through an explicitly initiated sign-in on the physical device.
+
+## Credential-free probe, October 27, 2026
+
+`node scripts/cloud-readiness.mjs probe` (and `--environment staging`) repeats these
+observations with the requests the phone makes, once each, and names the owning step in
+[human actions](human-actions.md). Recorded in
+[cloud-readiness-2026-10-27.json](evidence/cloud-readiness-2026-10-27.json):
+
+| Gate | Production | Staging |
+| --- | --- | --- |
+| Mobile App Auth registration for `ai.elizaresearch.alphaphone`, S256 | Passed (the October 24 503 is resolved) | Passed |
+| Email sign-in (offered without a captcha, code route present) | Passed | Passed |
+| Native Google (`googleNative` advertised) | Passed | Not advertised: no `STEWARD_GOOGLE_NATIVE_CLIENT_IDS` client for the staging app client |
+| Tenant allowlist admits the return URL | Passed (the October 24 400 is resolved) | Passed |
+| `assetlinks.json` grants the release certificate | No release certificate is enrolled; two other certificates are listed | One certificate is listed (staging serves debug-signed test-mocks builds) |
+| Hosted callback page, service documents, entitlement keys | Passed | Passed |
+| Maps and Google connector routes | Not checkable without an account | Not checkable without an account |
+
+Native Google on a release-signed build still needs an Android OAuth client for the release
+certificate's SHA-1 under `alpha-phone` in `STEWARD_GOOGLE_NATIVE_CLIENT_IDS` (H-12), and the
+release fingerprint in `ELIZA_ANDROID_ASSET_LINKS_JSON` (H-13). Cloud's global auth gate
+answers every protected `/api/` path that carries no credential with 401 before routing, so an
+unauthenticated request cannot show whether the Maps or Google connector routes are deployed;
+the probe lists them without requesting them. These probes are deployment configuration
+evidence only: no account signed in and nothing was verified on a device.

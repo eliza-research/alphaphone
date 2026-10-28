@@ -93,4 +93,3 @@ export function createLiveSegmentStream(input: { transport: LiveVoiceTransport; 
     },
   };
 }
-export type LiveSegmentStream = ReturnType<typeof createLiveSegmentStream>;

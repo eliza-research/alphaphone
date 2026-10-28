@@ -239,7 +239,7 @@ test('native sign-in never falls back to hosted login when readiness fails',asyn
  for(const methods of [null,{google:false},{google:true}]) {
   const updates=[];let ensured=false,checking='';
   const run=new Function('operation','cloudEnvironmentAllowed','work','inAppSignInMethods','cloudSignIn','CloudSignInError','cloud','residentCloudFlow','state','update','ensureResident','cloudServiceName',
-   'let inAppGoogle=false,inAppPhone=false,inAppEmail=true;'+compiled+';return controller.beginSignIn("production");');
+   'let epoch=0,signInReadinessOwner=null,inAppGoogle=false,inAppPhone=false,inAppEmail=true;'+compiled+';return controller.beginSignIn("production");');
   await run(false,()=>true,async(message,action)=>{checking=message;return action(new AbortController().signal);},async()=>methods,{},Error,{environment:'production',cancelLogin(){}},()=>true,{purpose:'agent'},v=>updates.push(v),async()=>{ensured=true;},()=> 'Independent Service');
   assert.equal(updates.at(-1).signIn.step,'choose');assert.equal(ensured,true);assert.equal(checking,'Checking Independent Service sign-in…');
  }
@@ -253,7 +253,7 @@ test('browser resident sign-in exposes the existing hosted hand-off only in its 
  const ui=read('apps/app/src/runtime/connection-ui.tsx');
  const expression=between(ui,'      extra={','}/>\n').slice('      extra={'.length);
  const compiled=transformSync('const extra='+expression+';',{loader:'tsx',jsxFactory:'React.createElement'}).code;
- const render=new Function('React','browserCloudResidentEnabled','testMocksEnabled','snapshot','connectionController','productionSignInRequired','residentEnvironment',compiled+'return extra;');
+ const render=new Function('React','browserCloudResidentEnabled','testMocksEnabled','snapshot','connectionController','signInEntryRequired','residentEnvironment',compiled+'return extra;');
  let calls=0;const controller={signInBrowser(){calls++;}};
  assert.equal(render(React,false,false,{busy:false},controller,false,()=>'production'),undefined,'ordinary browser and packaged views have no extra entry');
  const browser=render(React,true,false,{busy:false},controller,false,()=>'production');

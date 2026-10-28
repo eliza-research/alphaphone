@@ -10,6 +10,17 @@ if (runtimeProfile == 'cloud' && unpackagedRuntime) throw new GradleException('C
 // sources to DEBUG variants when it is exactly "1"; the Cloud QA profile never accepts them.
 def testMocksRaw = project.findProperty('ELIZA_DEV_ALLOW_TEST_MOCKS') ?: System.getenv('ELIZA_DEV_ALLOW_TEST_MOCKS')
 if (runtimeProfile == 'cloud' && testMocksRaw?.toString() == '1') throw new GradleException('Cloud profile forbids test mocks')
+// Debug ABIs use the same explicit target as resident staging (scripts/stage-local-agent-runtime.mjs);
+// dependency ABI flags do not filter the app. android/consumer-host.json therefore declares no debug
+// abiFilters: the default stays arm64-v8a + x86_64, and the Android Bun producer admits ARM64 only.
+def runtimeAbisRaw = project.findProperty('ELIZA_ANDROID_TARGET_ABIS')
+if (runtimeAbisRaw == null) runtimeAbisRaw = System.getenv('ELIZA_ANDROID_TARGET_ABIS')
+def runtimeAbis = runtimeAbisRaw == null ? ['arm64-v8a', 'x86_64'] : runtimeAbisRaw.toString().split(',', -1).collect { it.trim() }
+if (!runtimeAbis || runtimeAbis.toSet().size() != runtimeAbis.size() || runtimeAbis.any { !(it in ['arm64-v8a', 'x86_64']) })
+ throw new GradleException('Invalid ELIZA_ANDROID_TARGET_ABIS')
+def androidBunTarget = project.findProperty('ELIZA_ANDROID_BUN_TARGET') ?: System.getenv('ELIZA_ANDROID_BUN_TARGET') ?: 'linux-musl'
+if (!(androidBunTarget in ['android', 'linux-musl']) || androidBunTarget == 'android' && runtimeAbis != ['arm64-v8a'])
+ throw new GradleException('Android Bun requires the explicit arm64-v8a target')
 def envValue = { String name -> def value = System.getenv(name); value == null || value.trim().isEmpty() ? null : value.trim() }
 def cloudDeployment = new groovy.json.JsonSlurper().parse(file('../../config/cloud-deployment.json'))
 def cloudWebHost = new URI(cloudDeployment.production.web).host
@@ -40,6 +51,12 @@ if (appLinkHost) {
 """
 } else file(appLinksManifest).delete()
 android {
+ buildTypes {
+  debug {
+   // Match the resident runtime and reviewed native libraries; dependencies may also ship 32-bit ABIs.
+   ndk { abiFilters.addAll(runtimeAbis) }
+  }
+ }
  defaultConfig {
   manifestPlaceholders.put('appLinkHost', appLinkHost)
   manifestPlaceholders.put('stagingCloudWebHost', stagingCloudWebHost)

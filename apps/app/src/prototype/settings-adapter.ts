@@ -1,3 +1,4 @@
+import {browserCalendarScope} from './agent-calendar-adapter';
 import {cloudServiceName} from '../runtime/cloud-protocol';
 import {openCalendarSyncSettings} from '../runtime/calendar-sync-settings';
 import {browserDevProfile as devProfileQuery} from '../browser/dev-profile';
@@ -519,12 +520,29 @@ export function installSettingsAdapter(Component: any, views: Bag) {
         if(state.page==='calendar'){
           const display=views.calendar.displaySources?.(),rows:Bag[]=[info('Display only','Agent access is reviewed separately')];
           if(display){rows.push(info(display.native?'Device calendars':'In this app',display.loading?'Loading calendars…':display.status));
-            rows.push({kNav:true,label:display.native?'Connect or refresh device calendars':'Refresh calendar',lbl:display.native?'Connect or refresh device calendars':'Refresh calendar',busy:display.loading,chev:true,noAB:true,go:display.connect});
+            rows.push({kNav:true,label:display.native?'Connect or refresh device calendars':'Refresh calendar',lbl:display.native?'Connect or refresh device calendars':'Refresh calendar',busy:display.loading,chev:true,noAB:true,go:display.connect??display.retry});
             for(const source of display.sources||[])if(display.native)rows.push(info(source.name,source.account));else rows.push({kCalendarDisplay:true,label:source.name,sub:source.account,on:source.on,busy:display.loading,aria:`Show ${source.name} calendar`,track:api.track(source.on),kx:api.kx(source.on),toggle:()=>void source.change('visibility'),color:()=>void source.change('color'),colorLabel:`Change ${source.name} calendar color`,sw:({acc:'var(--acct)',fg:'var(--fg)',mut:'var(--mut)'} as Bag)[source.color]||'var(--acct)'});
             if(display.native)rows.push(info('Calendar visibility','Managed in Android Calendar'));
           }else rows.push(info('Calendar access','Not available in this version'));
           const groups=[{...group(rows),cap:'Calendars shown in Alpha',hasCap:true}];
-          groups.push({...group([{kNav:true,label:'Google Calendar sync',lbl:'Google Calendar sync',sub:'Review the destination and enable linked event sync',hasSub:true,chev:true,noAB:true,go:openCalendarSyncSettings}]),cap:'Sync',hasCap:true});
+          const calendarView=owner?views.calendar.render(owner.vget('calendar'),owner.api('calendar')):null;
+          if(calendarView?.calendarAuthorityChoices?.length){
+            const sourceRows:Bag[]=[info('Current source',calendarView.calendarSourceLabel)];
+            if(calendarView.calendarSourceText)sourceRows.push(info('Status',calendarView.calendarSourceText));
+            sourceRows.push(...calendarView.calendarAuthorityChoices.map((choice:Bag)=>({kNav:true,label:choice.label,lbl:choice.label,chev:true,noAB:true,go:choice.go})));
+            if(calendarView.canConfirmCalendarTransition)sourceRows.push({kNav:true,label:'Keep saved app records read only and use Agent Calendar',lbl:'Keep saved app records read only and use Agent Calendar',chev:true,noAB:true,go:calendarView.confirmCalendarTransition});
+            groups.unshift({...group(sourceRows),cap:'Calendar sources',hasCap:true});
+          }
+          const syncAuthority=owner?.vget('calendar').calendarAuthority;
+          const syncUnavailable=syncAuthority==='android-native'||browserCalendarScope(owner)?'':syncAuthority==='legacy'||syncAuthority==='legacy-google'?'Choose Agent Calendar to review sync. Retained calendars stay read only.':!owner?.agentCalendar?.state.ownerKey?'Connect to Agent Calendar to review sync.':'';
+          groups.push({...group([syncUnavailable?info('Google Calendar sync',syncUnavailable):{kNav:true,label:'Google Calendar sync',lbl:'Google Calendar sync',sub:'Review the destination and enable linked event sync',hasSub:true,chev:true,noAB:true,go:()=>{
+            const shell=owner,authority=shell?.vget('calendar').calendarAuthority;
+            if(authority==='android-native'||browserCalendarScope(shell)){openCalendarSyncSettings();return;}
+            if(authority==='legacy'||authority==='legacy-google'){api.toast('Choose Agent Calendar before reviewing sync. Retained calendars stay read only.');return;}
+            const calendar=shell?.agentCalendar,ownerKey=calendar?.state.ownerKey;
+            if(!calendar||!ownerKey){if(native&&!testMocksEnabled)api.set({page:'agent-connection'});else connectionController.open();return;}
+            openCalendarSyncSettings({calendar,current:()=>owner===shell&&shell.live&&shell.agentCalendar===calendar&&calendar.state.ownerKey===ownerKey&&!['android-native','legacy','legacy-google'].includes(shell.vget('calendar').calendarAuthority),canChange:()=>!shell.vget('calendar').form&&!shell.canonicalDraftText&&!shell.canonicalDraftInvalid&&!shell.canonicalDraft?.state.opening&&!shell.canonicalDraft?.state.consuming});
+          }}]),cap:'Sync',hasCap:true});
           if(testMocksEnabled&&!Capacitor.isNativePlatform())groups.push({...group([{kNav:true,label:'Calendar backups',lbl:'Calendar backups',sub:'Events saved in this app',hasSub:true,chev:true,noAB:true,go:()=>openCalendarRecovery()}]),cap:'Saved data',hasCap:true});
           out.stack.push({isTop:false,notTop:true,cls:'enter',z:4,title:'Calendar',hasTitle:true,backLabel:'Back to Settings',back:()=>api.set({page:null}),hero:{},groups});
         }
@@ -565,7 +583,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
             if(connection.busy)rows.push(info('Status',connection.message||'Please wait…'));
             const actions:Bag[]=connection.busy?[action('Cancel',()=>connectionController.cancel())]:plan.signedIn?[
               ...(plan.keyExpiring?[{kNav:true,label:'Approve this phone again',lbl:'Approve this phone again',chev:true,noAB:true,go:()=>void connectionController.residentCloudLogin()}]:[]),
-              ...(connection.residentSubscription?.kind!=='credits'?[{kNav:true,label:'Redeem code',lbl:'Redeem code',chev:true,noAB:true,go:()=>connectionController.openPlan()}]:[]),
+              ...(connection.residentSubscription?.kind!=='credits'?[{kNav:true,label:'Redeem code',lbl:'Redeem code',chev:true,noAB:true,go:()=>connectionController.openPlan({codeEntry:true})}]:[]),
               {kNav:true,label:'Manage plan',lbl:'Manage plan',chev:true,noAB:true,go:()=>void connectionController.residentManagePlan()},
               {kNav:true,label:'Sign out',lbl:`Sign out of ${serviceName}`,chev:true,noAB:true,go:()=>void connectionController.cloudSignOut()},
             ]:plan.offline?[{kNav:true,label:'Check plan again',lbl:'Check plan again',chev:true,noAB:true,go:()=>connectionController.recheckPlanOnReturn()}]

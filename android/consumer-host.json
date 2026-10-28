@@ -64,7 +64,6 @@
       { "name": "ELIZA_CHROMIUM_CERT_SHA256", "type": "String", "value": "" }
     ],
     "buildTypes": {
-      "debug": { "abiFilters": ["arm64-v8a", "x86_64"] },
       "release": {
         "abiFilters": ["arm64-v8a"],
         "shrinkResources": true,
@@ -116,9 +115,17 @@
       "inference": "ai.elizaresearch.alphaphone.inference.v1",
       "secureStore": "ai.elizaresearch.alphaphone.secure-store"
     },
+    "classes": [
+      "NativeNotificationInbox",
+      "NativeNotificationWire",
+      "NativeNotificationRoute",
+      "NativeNotificationChannels",
+      "NativeNotificationProjector"
+    ],
     "notification": {
       "smallIcon": "notification_icon",
       "color": "0xff0000ff",
+      "channelLabel": "Alpha",
       "strings": {
         "channelName": "alpha_runtime_channel_name",
         "channelDescription": "alpha_runtime_channel_description",
@@ -134,6 +141,10 @@
       }
     },
     "environmentHook": { "className": "AlphaLocalAgentPlugin", "method": "configureEnvironment", "unavailableStatus": "provider-unavailable" },
+    "lifecycleHooks": {
+      "rootPublication": { "className": "AlphaLocalAgentPlugin", "method": "publishNotificationRoot" },
+      "ready": { "className": "AlphaCanonicalNotifications", "method": "resumeExisting" }
+    },
     "helpers": [
       "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProcessSupervisor.java",
       "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderAdmission.java",

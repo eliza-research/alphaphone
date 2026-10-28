@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {generateAndroidConsumerHost} from '../vendor/eliza/packages/app/scripts/mobile/android/consumer-host.mjs';
-import {residentHelperKind, residentHostIdentity} from '../vendor/eliza/packages/app/scripts/mobile/android/resident-host-sources.mjs';
+import {RESIDENT_NOTIFICATION_CLASSES, residentHelperKind, residentHostIdentity} from '../vendor/eliza/packages/app/scripts/mobile/android/resident-host-sources.mjs';
 import {HOST_DESCRIPTOR, PATCHED_NATIVE_ROOT, hostIdentity, hostProfile, mapReferences, readHostDescriptor} from '../scripts/android-host.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -66,7 +66,9 @@ test('the pinned generator accepts the descriptor and owns identity, version and
  assert.equal(profile.releaseMinify, true);
  assert.equal(profile.buildTypes.release.shrinkResources, true);
  assert.deepEqual(profile.buildTypes.release.abiFilters, ['arm64-v8a']);
- assert.deepEqual(profile.buildTypes.debug.abiFilters, ['arm64-v8a', 'x86_64']);
+ // Debug ABIs follow the explicit runtime selection in android/app/product.gradle
+ // (ELIZA_ANDROID_TARGET_ABIS / ELIZA_ANDROID_BUN_TARGET), so the descriptor fixes none.
+ assert.deepEqual(profile.buildTypes.debug.abiFilters, []);
  assert.equal(profile.preserveRuntimeBytes, true, 'packaged resident runtime bytes keep their provenance');
  assert.equal(profile.kotlin, false);
  const gradle = fs.readFileSync(path.join(root, 'android/app/build.gradle'), 'utf8');
@@ -128,6 +130,10 @@ test('installed resident identities stay Alpha data-compatibility names', () => 
  assert.deepEqual(host.sockets, {agent: `${identity.appId}.agent.v1`, inference: `${identity.appId}.inference.v1`, secureStore: `${identity.appId}.secure-store`});
  assert.equal(host.notification.smallIcon, 'notification_icon');
  assert.deepEqual(host.environmentHook, {className: 'AlphaLocalAgentPlugin', method: 'configureEnvironment', unavailableStatus: 'provider-unavailable'});
+ assert.deepEqual(host.lifecycleHooks, {rootPublication: {className: 'AlphaLocalAgentPlugin', method: 'publishNotificationRoot'}, ready: {className: 'AlphaCanonicalNotifications', method: 'resumeExisting'}});
+ assert.equal(host.notification.channelLabel, 'Alpha');
+ // Alpha's notification session compiles every shared notification class in its own package.
+ assert.deepEqual([...descriptor.residentHost.classes].sort(), [...RESIDENT_NOTIFICATION_CLASSES].sort());
  for (const name of Object.values(host.notification.strings))
   assert.match(fs.readFileSync(path.join(ROOT, 'android/app/src/main/res/values/alpha-system-entry.xml'), 'utf8'), new RegExp(`<string name="${name}"`), name);
  // Shared helpers keep their packages; only the reviewed BuildConfig reader is rewritten for Alpha.

@@ -95,8 +95,8 @@ const LICENSE_FILE = /^(licen[cs]e|copying|notice)([.\-_].*)?$/i;
 // ---------------------------------------------------------------- helpers
 
 const read = (root, rel) => fs.readFileSync(path.join(root, rel), 'utf8');
-const readJson = (root, rel) => JSON.parse(read(root, rel));
-const exists = (root, rel) => fs.existsSync(path.join(root, rel));
+export const readJson = (root, rel) => JSON.parse(read(root, rel));
+export const exists = (root, rel) => fs.existsSync(path.join(root, rel));
 export const sha256 = data => createHash('sha256').update(data).digest('hex');
 const normalizeText = text => text.replace(/\r\n?/g, '\n').replace(/[ \t]+$/gm, '').replace(/^\n+|\n+$/g, '');
 
@@ -368,7 +368,7 @@ export function fontLicense(names) {
   return NO_FONT_LICENCE;
 }
 
-function listFonts(root, dir) {
+export function listFonts(root) {
   const out = [];
   const walk = rel => {
     for (const entry of fs.readdirSync(path.join(root, rel), {withFileTypes: true}).sort((a, b) => a.name.localeCompare(b.name))) {
@@ -376,7 +376,7 @@ function listFonts(root, dir) {
       if (entry.isDirectory()) { if (entry.name !== 'licenses') walk(child); } else if (/\.(woff2|ttf|otf)$/i.test(entry.name)) out.push(child);
     }
   };
-  walk(dir);
+  walk('apps/app/public');
   return out;
 }
 
@@ -451,7 +451,7 @@ function tesseractCoreEntries(root, errors) {
 function fontEntries(root, templates, errors) {
   const entries = [];
   const groups = new Map();
-  for (const rel of listFonts(root, 'apps/app/public')) {
+  for (const rel of listFonts(root)) {
     const bytes = fs.readFileSync(path.join(root, rel));
     let names;
     try { names = fontNames(bytes); } catch (error) { errors.push(`${rel}: cannot read font metadata (${error.message})`); continue; }
