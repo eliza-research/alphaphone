@@ -131,7 +131,8 @@ test('the Notes draft and note-origin slots are named, used by the renderer and 
  }
  // saveDraft, clearDraft and the Notes recovery reset all use the draft slot.
  const notes=readFileSync(join(root,'apps/app/src/runtime/notes-secure-store.ts'),'utf8'),agent=readFileSync(join(root,'apps/app/src/prototype/agent-adapter.ts'),'utf8');
- assert.equal([...notes.matchAll(/vault\.compareExchange\(SECURE_NOTES_DRAFT_SLOT,/g)].length,2,'saveDraft and clearDraft');
+ // The shared plugin-notes draft slot performs the compare-and-exchange on the slot Alpha names.
+ assert.equal([...notes.matchAll(/createNotesDraftSlot\(vault,SECURE_NOTES_DRAFT_SLOT\)\.(save|clear)\(/g)].length,2,'saveDraft and clearDraft');
  assert.match(agent,/\[SECURE_NOTES_SLOT,captured\.saved\]:\[SECURE_NOTES_DRAFT_SLOT,captured\.draft\]/,'the recovery reset');
 });
 
