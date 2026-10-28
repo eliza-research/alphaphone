@@ -2898,7 +2898,11 @@ export function ConnectionChooser() {
     const previous = document.activeElement as HTMLElement | null;
     const phone = document.querySelector<HTMLElement>('.os');
     const releaseInert = holdPhoneInert(phone);
-
+    return () => { releaseInert(); previous?.focus(); };
+  }, [visible]);
+  useEffect(() => {
+    if (!visible) return;
+    const phone = document.querySelector<HTMLElement>('.os');
     if (phone && panel.current) {
       const theme = getComputedStyle(phone);
       // The dialog's accent colours text and focus rings, so it takes the theme's text accent
@@ -2926,7 +2930,7 @@ export function ConnectionChooser() {
       }
     };
     document.addEventListener('keydown', key);
-    return () => { document.removeEventListener('keydown', key); window.removeEventListener('alpha-back', back, true); releaseInert(); previous?.focus(); };
+    return () => { document.removeEventListener('keydown', key); window.removeEventListener('alpha-back', back, true); };
   }, [visible, snapshot.busy,snapshot.purpose,snapshot.billingReviewEmail]);
   const env = (): CloudEnvironment => resolveCloudEnvironment(cloudEnvironmentPolicy, environment.current?.value ?? snapshot.signIn?.environment ?? cloud.environment);
   const serviceName=cloudServiceName(env());
