@@ -22,7 +22,7 @@ test('Android native owner lookup matches the renderer device key and rejects es
   put('Support.java',`package ai.elizaresearch.alphaphone; import org.json.*;
 class AlphaCredentialStore {AlphaCredentialStore(android.content.Context c){} JSONObject providerAdmissionSnapshot(){throw new AssertionError();}String readCredentialSlot(String key){throw new AssertionError();}}
 class AlphaLocalAgentPlugin {static JSONObject captureReminderOwnerSession(){throw new AssertionError();}static JSONObject readReminderOwnerRoute(JSONObject a,String b,JSONObject c){throw new AssertionError();}}
-class HostedInbox {static String id(String value){if(!value.matches("[a-fA-F0-9-]{36}"))throw new SecurityException();return value;}}
+class HostedInbox {static String id(String value){if(!value.matches("[A-Za-z0-9][A-Za-z0-9_-]{0,127}"))throw new SecurityException();return value;}}
 class HostedResultNotices {static String hash(String text)throws Exception{return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8)));}}`);
   const owner='10000000-0000-4000-8000-000000000001',agent='20000000-0000-4000-8000-000000000002';
   const expected='device:'+createHash('sha256').update(JSON.stringify(['https://device.alpha.invalid',owner,agent])).digest('hex');
