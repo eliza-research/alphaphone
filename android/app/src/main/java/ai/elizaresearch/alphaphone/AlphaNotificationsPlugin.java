@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.service.notification.StatusBarNotification;
 import com.getcapacitor.*;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import ai.eliza.plugins.notifications.NoticeTapInbox;
 import java.util.*;
 
 /** Own notifications plus explicitly allowed, Android-authorized external rows. */
@@ -29,51 +30,39 @@ public class AlphaNotificationsPlugin extends Plugin {
   PluginWorkers.submit(NOTICE_IO,()->{try{requireNoticeForeground();work.run();}catch(InterruptedException interrupted){Thread.currentThread().interrupt();call.reject(failure);}catch(Exception unavailable){call.reject(failure);}},()->call.reject(failure));
  }
  private void noticeChanged(){noticeMain.post(()->{if(!noticeDestroyed)notifyListeners("pendingWorkflowTap",new JSObject(),true);});}
- private final WorkflowNoticeIntentDedup<android.content.Intent> workflowIntentDedup=new WorkflowNoticeIntentDedup<>();
- private void clearCapturedIntent(android.content.Intent intent,String token){noticeMain.post(()->{if((WorkflowNoticeTaps.PREFIX+token).equals(intent.getDataString()))intent.setData(null);workflowIntentDedup.release(intent,token);});}
- private final LinkedHashMap<String,List<android.content.Intent>> uncapturedWorkflowTaps=new LinkedHashMap<>();
+ /** Alpha's launch intents for the shared notice tap inbox (open and Ask actions, route prefix). */
+ private static final NoticeTapInbox.Intents<android.content.Intent> INTENTS=new NoticeTapInbox.Intents<android.content.Intent>(){
+  public String action(android.content.Intent intent){return intent.getAction();}
+  public String data(android.content.Intent intent){return intent.getDataString();}
+ };
  private WorkflowNoticeTaps workflowTaps(){return WorkflowNoticeTapsFactory.create(getContext());}
- @Override public void load(){captureWorkflowTap(getActivity().getIntent());}
+ /** Created in load(); retained intents and the uncaptured queue live for this plugin instance. */
+ private volatile NoticeTapInbox<android.content.Intent> workflowInbox;
+ /** A capture committed: clear exactly that route from its Intent on main, then forget the Intent. */
+ private final NoticeTapInbox.Captured<android.content.Intent> clearCapturedIntent=(intent,token)->noticeMain.post(()->{if(workflowInbox.data(token).equals(intent.getDataString()))intent.setData(null);workflowInbox.release(intent,token);});
+ @Override public void load(){workflowInbox=new NoticeTapInbox<>(workflowTaps(),WorkflowNoticeTaps.ACTION,WorkflowNoticeTaps.ASK_ACTION,WorkflowNoticeTaps.PREFIX);captureWorkflowTap(getActivity().getIntent());}
  @Override protected void handleOnNewIntent(android.content.Intent intent){captureWorkflowTap(intent);}
- @Override protected void handleOnResume(){PluginWorkers.submit(NOTICE_IO,()->{drainWorkflowTaps();noticeChanged();},()->{/* Intents remain retained for retry. */});}
- private int drainWorkflowTaps(){
-  int failed=0;Iterator<Map.Entry<String,List<android.content.Intent>>> entries=uncapturedWorkflowTaps.entrySet().iterator();
-  while(entries.hasNext()){
-   Map.Entry<String,List<android.content.Intent>> entry=entries.next();
-   try{String token=entry.getKey().substring(0,36);workflowTaps().capture(token,entry.getKey().endsWith(":ask"));for(android.content.Intent intent:entry.getValue())clearCapturedIntent(intent,token);entries.remove();}
-   catch(WorkflowNoticeTaps.UnknownTap unknown){for(android.content.Intent intent:entry.getValue())clearCapturedIntent(intent,entry.getKey().substring(0,36));entries.remove();}
-   catch(Exception unavailable){failed++;/* Retain this exact token; another confirmed tap may still progress. */}
-  }
-  return failed;
- }
+ @Override protected void handleOnResume(){PluginWorkers.submit(NOTICE_IO,()->{workflowInbox.drain(clearCapturedIntent);noticeChanged();},()->{/* Intents remain retained for retry. */});}
  private void captureWorkflowTap(android.content.Intent intent){
-  if(intent==null||!(WorkflowNoticeTaps.ACTION.equals(intent.getAction())||WorkflowNoticeTaps.ASK_ACTION.equals(intent.getAction()))||intent.getData()==null)return;
-  String value=intent.getData().toString();if(!value.startsWith(WorkflowNoticeTaps.PREFIX))return;
-  String token=value.substring(WorkflowNoticeTaps.PREFIX.length());if(!token.matches("[a-f0-9-]{36}"))return;
+  NoticeTapInbox<android.content.Intent> inbox=workflowInbox;
+  if(inbox==null||inbox.token(intent,INTENTS)==null)return;
   // Capacitor forwards warm intents without Activity.setIntent. Retain the actual
   // intent until its encrypted capture commits. OS notices do not auto-cancel,
   // so failed persistence plus process death still leaves an explicit retry.
   getActivity().setIntent(intent);
   // load(), resume and renderer polling may observe the same Intent before the
   // worker's successful capture is cleared on main. Queue that object only once.
-  if(!workflowIntentDedup.retain(intent,token))return;
-  PluginWorkers.submit(NOTICE_IO,()->{uncapturedWorkflowTaps.computeIfAbsent(token+(WorkflowNoticeTaps.ASK_ACTION.equals(intent.getAction())?":ask":""),key->new ArrayList<>()).add(intent);drainWorkflowTaps();noticeChanged();},
-   ()->{workflowIntentDedup.release(intent,token);/* Intent and OS notice remain available for explicit retry. */});
+  String key=inbox.retain(intent,INTENTS);if(key==null)return;
+  PluginWorkers.submit(NOTICE_IO,()->{inbox.offer(key,intent,clearCapturedIntent);noticeChanged();},
+   ()->{inbox.release(intent,key.substring(0,36));/* Intent and OS notice remain available for explicit retry. */});
  }
- @PluginMethod public void pendingWorkflowTap(PluginCall call){noticeMain.post(()->{try{foreground();captureWorkflowTap(getActivity().getIntent());noticeWork(call,"Workflow notification link unavailable; retry after unlocking.",()->{int failed=drainWorkflowTaps();org.json.JSONObject pending=workflowTaps().pending();if(failed>0&&!pending.has("token"))throw new IllegalStateException("Uncaptured workflow notice retained");while(pending.optBoolean("question")){addQuestionNotice(pending);if(pending.has("notice"))break;
-    // Its own notice is gone (timed out, swiped or withdrawn): nothing is left to review, so it opens like the notice body.
-    workflowTaps().settleQuestion(pending.getString("token"),false);pending=workflowTaps().pending();}call.resolve(new JSObject(pending.toString()));});}catch(Exception unavailable){call.reject("Workflow notification link unavailable; retry after unlocking.");}});}
- @PluginMethod public void consumeWorkflowTap(PluginCall call){noticeWork(call,"Workflow notification link was retained; retry.",()->consumePendingWorkflowTap(call));}
- private void consumePendingWorkflowTap(PluginCall call)throws Exception{
-  org.json.JSONObject pending=workflowTaps().pending();String token=call.getString("token");
-  if(token==null||!token.equals(pending.optString("token")))throw new IllegalStateException("Pending tap changed");
-  if(Boolean.TRUE.equals(call.getBoolean("discard",false))){if(!pending.optBoolean("question"))throw new IllegalStateException("Tap purpose changed");workflowTaps().settleQuestion(token,true);call.resolve();return;}
-  if(pending.optBoolean("question")){addQuestionNotice(pending);org.json.JSONObject notice=pending.optJSONObject("notice");if(notice==null||!notice.getString("revision").equals(call.getString("noticeRevision")))throw new IllegalStateException("Question notice changed");}else if(call.getString("noticeRevision")!=null)throw new IllegalStateException("Tap purpose changed");
-  requireNoticeForeground();
-  // A completed approval Ask leaves the approval waiting: keep its notice and tap, only the question is settled.
-  if(pending.optBoolean("question")&&WorkflowNoticeDelivery.approvalId(pending.getString("operationId"))){workflowTaps().releaseApprovalQuestion(token);call.resolve();return;}
-  workflowTaps().consume(token);manager().cancel("alpha-workflow-"+pending.getString("operationId"),0);call.resolve();
- }
+ /** The newest pending tap. An Ask whose own notice is gone opens like the notice body (shared NoticeTapInbox). */
+ @PluginMethod public void pendingWorkflowTap(PluginCall call){noticeMain.post(()->{try{foreground();captureWorkflowTap(getActivity().getIntent());noticeWork(call,"Workflow notification link unavailable; retry after unlocking.",()->call.resolve(new JSObject(workflowInbox.pending(clearCapturedIntent,this::addQuestionNotice).toString())));}catch(Exception unavailable){call.reject("Workflow notification link unavailable; retry after unlocking.");}});}
+ /** Completes the renderer's handling of the exact pending tap; a completed approval Ask keeps its notice and tap. */
+ @PluginMethod public void consumeWorkflowTap(PluginCall call){noticeWork(call,"Workflow notification link was retained; retry.",()->{
+  String opened=workflowInbox.consume(call.getString("token"),Boolean.TRUE.equals(call.getBoolean("discard",false)),call.getString("noticeRevision"),this::addQuestionNotice,this::requireNoticeForeground);
+  if(opened!=null)manager().cancel("alpha-workflow-"+opened,0);call.resolve();
+ });}
  /** Question excerpts are read only while unlocked and only from the exact still-posted own notice. */
  private void addQuestionNotice(org.json.JSONObject pending)throws Exception{
   requireNoticeForeground();String tag="alpha-workflow-"+pending.getString("operationId");
