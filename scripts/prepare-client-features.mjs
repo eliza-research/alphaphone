@@ -174,6 +174,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-assistant/src/services/device-actions/clock-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-review-executor.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-handoff.ts',
+  'plugins/plugin-assistant/src/services/device-actions/clock-handoff-history.ts',
   'plugins/plugin-assistant/src/services/device-actions/reminder-journal.ts',
   'plugins/plugin-native-reminders/src/android-definitions.ts',
   'plugins/plugin-native-reminders/src/occurrence.ts',
