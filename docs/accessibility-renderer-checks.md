@@ -68,7 +68,9 @@ row drawn under the composer at 200% text, and TalkBack read the composer after 
 that sat lower on the screen. Since round 10:
 
 - Home and the app library end above the dock. The dock's footprint is measured
-  (`runtime/dock-clearance.ts`, published as `--alpha-dock-clearance`) rather than assumed
+  (`runtime/dock-clearance.ts`, published as `--alpha-dock-clearance`; the measuring and
+  publishing are Eliza's shared `packages/ui/src/components/shell/dock-clearance.ts`, to which
+  Alpha supplies its selectors and property names) rather than assumed
   to be 108px, because Android's navigation inset raises the dock and a status line or a
   longer draft makes it taller. 108px stays the minimum, so Home is unchanged wherever it
   already fitted. Home lays its rows out against the bar at rest (`--alpha-dock-rest`), so a

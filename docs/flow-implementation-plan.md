@@ -138,6 +138,12 @@ and HOME on Home and is shown once; the transcript keeps its reading position th
 same steps. That is renderer source evidence only (class S), not IME, Android Back/HOME or
 device acceptance.
 
+The phone canvas's keyboard-free height, its soft-keyboard test and the list-detail and
+calendar layout decisions (`runtime/canvas-geometry.ts`) and the dock-clearance publisher
+(`runtime/dock-clearance.ts`) are shared Eliza code as well
+(`packages/ui/src/components/shell/responsive-layout.ts` and `dock-clearance.ts`); Alpha
+supplies its breakpoints, selectors and installed custom-property names.
+
 ## Upstream extraction and native integration packages
 
 Do not modify `vendor/eliza` as a shortcut or activate `base/eliza-app` as the product. Generic additions are reviewed upstream commits that reach this repository through a reviewed pin move in `upstream.lock.json` (the `patches/eliza` series is historical, retired in `34b3c82a`). Keep `upstream.lock.json` consistent with an intentional submodule upgrade. The local DailyApps intent dispatcher is an interim product handoff adapter; avoid expanding it into a second shared platform implementation.
