@@ -349,7 +349,8 @@ writeSecureCameraOverlay(output, cameraSource);
 if (production) {
   const components = provisioningComponents(tree, identity.appId);
   writeProvisioningOverlay(output, identity.appId, components);
-  writeAospCapabilityOverlay(output, identity.appId);
+  // The shared Pixel 10a composition writes the same overlay from products/pixel10a-alpha.json.
+  if (!physical) writeAospCapabilityOverlay(output, identity.appId);
   console.log(`Provisioning overlay: HOME ${components.home}, assistant ${identity.appId}, Autofill ${components.autofill}.`);
 }
 if (listenerApk) {
