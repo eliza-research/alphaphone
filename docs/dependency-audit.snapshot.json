@@ -103,14 +103,14 @@
   ],
   "resident": {
     "description": "Advisories for the resident runtime's npm packages at the pinned upstream commit, from the npm bulk advisory endpoint. Regenerate with: node scripts/dependency-audit.mjs --resident --write. Dispositions live in docs/dependency-audit.dispositions.json under \"resident\".",
-    "upstreamCommit": "e40497d5d0111d557aef022eb01d4f03023c9fc8",
+    "upstreamCommit": "5794c8c0d18914b3564d5c6716e28c2a3587f5ed",
     "input": "vendor/eliza/bun.lock",
-    "auditedOn": "2026-10-27",
+    "auditedOn": "2026-10-28",
     "inputSha256": "63509920ce413bb6fcb44fc7e5b1047cc22517eab2ea51a445203e29bd7c6201",
     "packages": 3694,
     "counts": {
       "info": 0,
-      "low": 17,
+      "low": 18,
       "moderate": 61,
       "high": 61,
       "critical": 1
@@ -448,7 +448,7 @@
           "id": "GHSA-mghh-pgcx-3jjj",
           "severity": "high",
           "vulnerableRange": ">=1.15.0 <1.20.0",
-          "title": "Axios: ReDoS (O(N\u00b2)) in shouldBypassProxy host normalization, reachable via untrusted redirect Location",
+          "title": "Axios: ReDoS (O(N²)) in shouldBypassProxy host normalization, reachable via untrusted redirect Location",
           "url": "https://github.com/advisories/GHSA-mghh-pgcx-3jjj"
         }
       },
@@ -632,6 +632,20 @@
           "vulnerableRange": "<=0.4.2",
           "title": "decode-uri-component: Denial of service via exponential decoding of malformed percent-encoded input",
           "url": "https://github.com/advisories/GHSA-vcc3-ghjq-m6fr"
+        }
+      },
+      {
+        "package": "deepmerge",
+        "versions": [
+          "4.3.1"
+        ],
+        "severity": "low",
+        "advisory": {
+          "id": "GHSA-gcqx-w48m-w2h4",
+          "severity": "low",
+          "vulnerableRange": ">=4.2.0 <=4.3.1",
+          "title": "deepmerge mergeObject() allows prototype poisoning of returned objects",
+          "url": "https://github.com/advisories/GHSA-gcqx-w48m-w2h4"
         }
       },
       {
@@ -854,7 +868,7 @@
           "id": "GHSA-5p4m-2wfm-xmqj",
           "severity": "high",
           "vulnerableRange": ">=4.0.0 <4.3.1",
-          "title": "JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) \u2014 CVE-2026-59870 fix not backported",
+          "title": "JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) — CVE-2026-59870 fix not backported",
           "url": "https://github.com/advisories/GHSA-5p4m-2wfm-xmqj"
         }
       },
@@ -1108,7 +1122,7 @@
           "id": "GHSA-528h-pc64-c93x",
           "severity": "moderate",
           "vulnerableRange": "<=3.4.0",
-          "title": "stream-json: pick/ignore/filter/replace filters are O(depth\u00b2) on nested input \u2014 small crafted JSON blocks the event loop for seconds\u2192minutes (DoS)",
+          "title": "stream-json: pick/ignore/filter/replace filters are O(depth²) on nested input — small crafted JSON blocks the event loop for seconds→minutes (DoS)",
           "url": "https://github.com/advisories/GHSA-528h-pc64-c93x"
         }
       },
@@ -2108,28 +2122,6 @@
           "title": "Zod can exhaust memory while validating oversized constrained collections",
           "url": "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5"
         }
-      }
-    ],
-    "sourceBinding": {
-      "priorUpstreamCommit": "96c560ec9c57c6f98cafc523c1ddbb9cea8a3379",
-      "evidence": "docs/evidence/v17-notification-lint-source-binding-20261028.json",
-      "note": "Exact same Bun lock input. Historical advisory findings, dates, exceptions and deadlines retained; no fresh audit or packaged-runtime acceptance claim."
-    },
-    "sourceBindingHistory": [
-      {
-        "priorUpstreamCommit": "de16c240f8ef77779edd3aa411e407018d2be209",
-        "evidence": "docs/evidence/notes-restore-guidance-20261028.json",
-        "note": "Same exact dependency lock; previous dated advisory findings retained, no fresh audit claim."
-      },
-      {
-        "priorUpstreamCommit": "2f664cc6dc223cf12002120576357114f8cb9763",
-        "evidence": "docs/evidence/v17-diagnostic-source-binding-20261028.json",
-        "note": "Exact same Bun lock input. Historical audit dates, advisory findings, exceptions and deadlines retained; no fresh audit or packaged-runtime acceptance claim."
-      },
-      {
-        "priorUpstreamCommit": "6f91e22e6bfabdef67138b91c61ebf2929dad775",
-        "evidence": "docs/evidence/v17-notification-source-binding-20261028.json",
-        "note": "Exact same Bun lock input. Historical advisory findings, dates, exceptions and deadlines retained; no fresh audit or packaged-runtime acceptance claim."
       }
     ]
   }

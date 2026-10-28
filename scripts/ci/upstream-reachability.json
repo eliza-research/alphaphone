@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "6c227e5ff0d488843728c97684004dcfc760983c",
-  "head": "e40497d5d0111d557aef022eb01d4f03023c9fc8",
+  "head": "5794c8c0d18914b3564d5c6716e28c2a3587f5ed",
   "recordedAt": "2026-10-28",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...e40497d5d0111d557aef022eb01d4f03023c9fc8",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...5794c8c0d18914b3564d5c6716e28c2a3587f5ed",
   "status": "ahead",
-  "aheadBy": 24,
+  "aheadBy": 36,
   "behindBy": 0,
   "mergeBase": "6c227e5ff0d488843728c97684004dcfc760983c",
   "pinOnlyCommits": [
@@ -82,6 +82,46 @@
     {
       "sha": "e40497d5d0111d557aef022eb01d4f03023c9fc8",
       "subject": "fix(android): use compat visibility constant for native notification builder"
+    },
+    {
+      "sha": "5e16a3aafcd3a21152a853938f10841ff1669450",
+      "subject": "Honor exact Cloud catalog IDs before leaf-name fallback"
+    },
+    {
+      "sha": "aa5b7444efe0f8e3d1b06058a39cae44b4a5817d",
+      "subject": "fix(reminders): derive in-app read receipts from exact notification reads"
+    },
+    {
+      "sha": "d10e1bf453db091c5f873100c6db532312ac723b",
+      "subject": "fix(reminders): reject invalid timestamps in explicit read evidence"
+    },
+    {
+      "sha": "9ad00ce5a5738fdb2d5266e6ecf9f7d49368ad53",
+      "subject": "fix(reminders): await durable notification state before read receipts"
+    },
+    {
+      "sha": "4c2482eb68cd9de5baca7dd6ff0fca6046944f3d",
+      "subject": "fix(notifications): expose a durable read snapshot for receipt consumers"
+    },
+    {
+      "sha": "6eac3ec567ed0daa5cc2fefc23183ec611f1772e",
+      "subject": "test(reminders): align notification publication clock with due dispatch"
+    },
+    {
+      "sha": "f19a9db46233d51430acf1573f480c3427028cc6",
+      "subject": "test(reminders): isolate real PGlite services from app host bootstrap"
+    },
+    {
+      "sha": "fc811e4b1e01afc58aff3a9bbe81cdceee678b55",
+      "subject": "test(reminders): compose exact domain services without the full plugin registry"
+    },
+    {
+      "sha": "ce9e81f57d747672d507860642cfc78fca47c5bd",
+      "subject": "test(reminders): distinguish successful deliveries from coalesced inbox rows"
+    },
+    {
+      "sha": "4de8836b2e008158a2fdc33bc78e8e06515422a8",
+      "subject": "test(reminders): verify durable coalesced inbox and distinct delivery attempts"
     }
   ],
   "pullRequests": [
@@ -304,326 +344,6 @@
     {
       "url": "https://github.com/elizaOS/eliza/pull/37993",
       "status": "merged"
-    }
-  ],
-  "preservationBranch": "codex/final-preservation-calendar-alias-diagnostics-20261027",
-  "typeAnnotationEquivalentPublicFix": "a31318ca4ec50ced08650c2f1b6ec69adf06a936",
-  "previousSourceRecords": [
-    {
-      "schema": 1,
-      "repository": "elizaOS/eliza",
-      "base": "develop",
-      "baseCommit": "6c227e5ff0d488843728c97684004dcfc760983c",
-      "head": "8cc623855ce49cab68f9ed321b206abcad4d5c0b",
-      "recordedAt": "2026-10-27",
-      "command": "gh api repos/elizaOS/eliza/compare/develop...8cc623855ce49cab68f9ed321b206abcad4d5c0b",
-      "status": "diverged",
-      "aheadBy": 2,
-      "behindBy": 28,
-      "mergeBase": "18cc0cf2ee9f332afe8b6dffecc8f9b2fbcf8d47",
-      "pinOnlyCommits": [
-        {
-          "sha": "f983d68173f12b89af22f93502d81234c7112b7d",
-          "subject": "fix(assistant): retain context metadata type during reply recovery"
-        },
-        {
-          "sha": "8cc623855ce49cab68f9ed321b206abcad4d5c0b",
-          "subject": "fix(calendar): share exclusive read windows with owner promoted tools"
-        }
-      ],
-      "pullRequests": [
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37059",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37305",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37307",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37313",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37306",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37309",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37310",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37311",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37312",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37315",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37318",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37324",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37325",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37327",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37329",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37330",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37321",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37322",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37326",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37331",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37332",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37275",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37893",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37895",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37899",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37900",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37901",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37902",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37903",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37904",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37905",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37906",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37907",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37908",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37909",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37911",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37912",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37910",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37913",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37914",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37915",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37920",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37928",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37929",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37930",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37933",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37958",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37936",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37966",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37967",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37968",
-          "status": "open"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37969",
-          "status": "open"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37971",
-          "status": "open"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37970",
-          "status": "merged"
-        },
-        {
-          "url": "https://github.com/elizaOS/eliza/pull/37993",
-          "status": "merged"
-        }
-      ],
-      "preservationBranch": "codex/personal-calendar-read-schema-20261027",
-      "typeAnnotationEquivalentPublicFix": "a31318ca4ec50ced08650c2f1b6ec69adf06a936"
-    },
-    {
-      "schema": 1,
-      "repository": "elizaOS/eliza",
-      "base": "develop",
-      "baseCommit": "6c227e5ff0d488843728c97684004dcfc760983c",
-      "head": "ea0899fd7f19b2bf3552127d6566c15e23b4c303",
-      "recordedAt": "2026-10-28",
-      "command": "gh api repos/elizaOS/eliza/compare/6c227e5ff0d488843728c97684004dcfc760983c...ea0899fd7f19b2bf3552127d6566c15e23b4c303",
-      "status": "ahead",
-      "aheadBy": 13,
-      "behindBy": 0,
-      "mergeBase": "6c227e5ff0d488843728c97684004dcfc760983c",
-      "pinOnlyCommits": [
-        {
-          "sha": "f983d68173f12b89af22f93502d81234c7112b7d",
-          "subject": "fix(assistant): retain context metadata type during reply recovery"
-        },
-        {
-          "sha": "2c5697b3a9c717dba715dc9479f835a1a34bc68d",
-          "subject": "fix(native-system): bind warm power voice to current Sense activity"
-        },
-        {
-          "sha": "d7d939fa12b6a39019bdfd3aef9a77e15a19c4e5",
-          "subject": "fix(native-system): bind warm power voice to current Sense activity"
-        },
-        {
-          "sha": "101929293328ec85ae3b6aa264a3bb763b2a9bc2",
-          "subject": "feat(native-system): scope cold power launch to native account grant"
-        },
-        {
-          "sha": "8cc623855ce49cab68f9ed321b206abcad4d5c0b",
-          "subject": "fix(calendar): share exclusive read windows with owner promoted tools"
-        },
-        {
-          "sha": "f83548d61ff9f0ebac756e98cd94aaf775db3649",
-          "subject": "fix(calendar): preserve read aliases in promoted tool validation"
-        },
-        {
-          "sha": "3a11393467827978b4f33f330a894f86b4a92692",
-          "subject": "fix(calendar): classify correctable read preflight diagnostics"
-        }
-      ]
-    }
-  ],
-  "localCandidate": {
-    "head": "e40497d5d0111d557aef022eb01d4f03023c9fc8",
-    "priorLocalHead": "96c560ec9c57c6f98cafc523c1ddbb9cea8a3379",
-    "evidence": "docs/evidence/v17-notification-lint-source-binding-20261028.json",
-    "scope": "Local unpublished notification lint correction. Historical remote comparison unchanged; runtime and native qualification pending."
-  },
-  "previousLocalCandidates": [
-    {
-      "head": "2f664cc6dc223cf12002120576357114f8cb9763",
-      "priorLocalHead": "de16c240f8ef77779edd3aa411e407018d2be209",
-      "evidence": "docs/evidence/notes-restore-guidance-20261028.json",
-      "scope": "Local unpublished followup; historical remote comparison unchanged"
-    },
-    {
-      "head": "6f91e22e6bfabdef67138b91c61ebf2929dad775",
-      "priorLocalHead": "2f664cc6dc223cf12002120576357114f8cb9763",
-      "evidence": "docs/evidence/v17-diagnostic-source-binding-20261028.json",
-      "scope": "Local unpublished diagnostic candidate; historical remote comparison unchanged. Runtime and native qualification pending."
-    },
-    {
-      "head": "96c560ec9c57c6f98cafc523c1ddbb9cea8a3379",
-      "priorLocalHead": "6f91e22e6bfabdef67138b91c61ebf2929dad775",
-      "evidence": "docs/evidence/v17-notification-source-binding-20261028.json",
-      "scope": "Local unpublished notification candidate. Historical remote comparison unchanged; runtime and native qualification pending."
     }
   ]
 }
