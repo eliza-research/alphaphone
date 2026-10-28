@@ -46,7 +46,8 @@ test("the committed Cuttlefish product names its target, lock, host packages and
   assert.equal(fs.existsSync(path.join(root, "android/aosp/pixel10.lock.json")), false, "the unadmitted Pixel 10 placeholder lock is retired");
   // The source lock is the shared reviewed Cuttlefish profile; Alpha keeps no lock of its own.
   assert.equal(product.sourceLock.file, "vendor/eliza/packages/os/android/aosp.lock.json");
-  assert.equal(brand.aospLockPath, product.sourceLock.file);
+  // The OS build tools resolve aospLockPath against packages/os, so a brand on the shared lock omits it.
+  assert.equal(brand.aospLockPath, undefined);
   assert.equal(fs.existsSync(path.join(root, "android/aosp/aosp.lock.json")), false, "Alpha's unreviewed Cuttlefish lock is retired");
   const problems = aospProductLockProblems(root);
   assert.ok(!problems.some(problem => /manifest|aosp\.lock\.json/.test(problem)), problems.join("\n"));
