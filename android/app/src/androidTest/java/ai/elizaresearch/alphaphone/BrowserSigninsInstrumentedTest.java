@@ -84,7 +84,7 @@ public final class BrowserSigninsInstrumentedTest {
   assertEquals("A tel link only opens the dialer",Intent.ACTION_DIAL,tel.getAction());
   Intent market=BrowserExternalHandoff.intentFor("market://details?id=com.example.app",own,AlphaBrowserStores.HOST_SCHEMES);
   assertEquals(Intent.ACTION_VIEW,market.getAction());assertTrue(market.hasCategory(Intent.CATEGORY_BROWSABLE));
-  Intent parsed=BrowserExternalHandoff.intentFor("intent://scan/#Intent;scheme=zxing;package=com.example.scanner;component=com.example.scanner/.Private;launchFlags=0x10000001;S.secret=value;SEL;action=android.intent.action.MAIN;end",own);
+  Intent parsed=BrowserExternalHandoff.intentFor("intent://scan/#Intent;scheme=zxing;package=com.example.scanner;component=com.example.scanner/.Private;launchFlags=0x10000001;S.secret=value;SEL;action=android.intent.action.MAIN;end",own,AlphaBrowserStores.HOST_SCHEMES);
   assertNotNull(parsed);
   assertNull("Page-chosen component removed",parsed.getComponent());
   assertNull("Page-chosen selector removed",parsed.getSelector());

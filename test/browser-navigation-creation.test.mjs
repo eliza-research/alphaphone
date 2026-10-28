@@ -10,6 +10,9 @@ test('closing a tab while native creation is pending cannot resurrect or navigat
 test('switching while creation is pending keeps the new tab’s editor and switcher state',async()=>{const h=harness(),task=h.navigate('https://example.com');h.state.cur='other';h.release();await task;assert.equal(h.navigations.length,0);assert.equal(h.state.editing,true);assert.equal(h.state.tabsOpen,true);});
 test('unchanged tab still navigates once and exits its own address editor',async()=>{const h=harness(),task=h.navigate('https://example.com');h.release();await task;assert.equal(h.navigations.length,1);assert.equal(h.state.editing,false);});
 
+test('address bar keeps the localhost alias and the shared classification',async()=>{for(const [typed,expected] of [['localhost','https://localhost/'],['localhost/notes?a=1','https://localhost/notes?a=1'],['localhost:3000','https://localhost:3000/'],['example.com','https://example.com/']]){const h=harness(),task=h.navigate(typed);h.release();await task;assert.equal(h.navigations.length,1,typed);assert.equal(h.navigations[0].url,expected,typed);}
+ const search=harness(),task=search.navigate('localhost tips');search.release();await task;assert.equal(new URL(search.navigations[0].url).searchParams.get('q'),'localhost tips');});
+
 test('cancelled approved new-tab creation closes its orphan and never navigates',async()=>{const h=harness(),abort=new AbortController();const task=h.navigate('https://example.com',true,abort.signal);abort.abort();h.release();await assert.rejects(task);assert.equal(h.navigations.length,0);assert.equal(h.closed.length,1);assert.equal(h.created.size,0);});
 
 const commandSource=stripTypeScriptTypes(source.slice(source.indexOf('    this.browserCommand = async'),source.indexOf('    this.browserNavigateApproved =')),{mode:'transform'});

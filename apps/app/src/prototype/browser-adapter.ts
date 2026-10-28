@@ -167,6 +167,8 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
       const input = parseBrowserAddressInput(raw, {defaultProtocol: 'https:'});
       if (input.kind === 'rejected') throw new Error();
       if (input.kind === 'url') { url = new URL(input.href); if (!url.hostname) throw new Error(); }
+      // Alpha's alias: a bare localhost (with an optional path) stays an address, as it was before the shared parser.
+      else if (/^localhost(?:[/?#]\S*)?$/i.test(input.query)) { url = new URL('https://' + input.query); if (url.hostname !== 'localhost') throw new Error(); }
       else {
         // Submit only on Enter. No suggestions, background query traffic or agent upload.
         url = new URL('https://www.google.com/search');
