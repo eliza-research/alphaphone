@@ -1,4 +1,5 @@
 import React from 'react';
+import {iconStyle} from '../icon-style';
 import {agentPendingText,agentAvailabilityNotice} from '../runtime/connection-ui';
 import {NotesWorkspace,type NotesWorkspaceHandle} from '../../../../.eliza/client-features/plugins/plugin-notes/src/workspace.ts';
 import {createNotesClient} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-api.ts';
@@ -16,8 +17,8 @@ const documents=registerPlugin<{exportText(input:{title:string;text:string}):Pro
 const identity=(port:AppRecordPort)=>JSON.stringify([port.sessionId,port.scope??null,port.identity.ownerId,port.identity.agentId,port.identity.sessionId,port.identity.origin]);
 const row=(note:StickyNote)=>({...structuredClone(note.format?.data??{}),...projectNoteForModel(note),id:note.id,kind:note.format?.kind??'text'});
 
-/** Alpha's header back chevron as an icon, not text: it keeps its 52px target at 200% text. */
-const backIcon=()=>React.createElement('svg',{className:'i',viewBox:'0 0 24 24','aria-hidden':true},React.createElement('path',{d:'M15 5l-7 7 7 7'}));
+/** Alpha's header back chevron from the shared icon pack, not text: it keeps its 52px target at 200% text. */
+const backIcon=()=>React.createElement('span',{'aria-hidden':'true','data-alpha-icon':'/icons/lucide/chevron-left.svg',style:{...iconStyle('chevron-left'),width:24,height:24}});
 
 /** Authenticated transport and platform ports only; the upstream workspace owns UI and drafts. */
 export class CanonicalNotesUi {
