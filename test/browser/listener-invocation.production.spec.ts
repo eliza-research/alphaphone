@@ -4,7 +4,7 @@ import {flagOffAndroid,residentHome,fenceNetwork,button} from './flag-off-androi
 // starts the on-device voice assistant (#423); Settings shows the listener's status with Pause and
 // Turn off. Synthetic ports only (Agent.takeInvocation, AlphaListener, the AlphaVoiceCloud live
 // capture and the resident agent's live ASR route). Not image, listener, microphone or device evidence.
-type Options={assistant?:boolean;invocation?:'listener'|'assist';locked?:boolean;listener?:Record<string,unknown>|null};
+type Options={assistant?:boolean;invocation?:'listener'|'system'|'assist';locked?:boolean;listener?:Record<string,unknown>|null};
 async function setup(page:Page,options:Options={}){
  const foreign=await fenceNetwork(page);await flagOffAndroid(page);
  await page.addInitScript((options:Options)=>{
@@ -73,7 +73,22 @@ test('the listener wake phrase opens the assistant surface and starts the on-dev
  expect(await live(page,f=>f.forbidden)).toEqual([]);expect(foreign).toEqual([]);
 });
 
-for(const [name,options] of [['a locked keyguard',{assistant:true,invocation:'listener',locked:true}],['a plain assist entry',{assistant:true,invocation:'assist'}]] as const)
+// Press-and-hold power on the image: SystemUI launches the assistant with its identity shared and
+// native reports a "system" origin (shared SenseInvocation). It starts voice like a wake phrase.
+test('press-and-hold power opens the assistant surface and starts the on-device voice assistant once',async({page})=>{
+ const foreign=await setup(page,{assistant:true,invocation:'system'});await openSurface(page);
+ await expect(voice(page)).toHaveAttribute('data-voice-state','listening',{timeout:30_000});
+ expect(await live(page,f=>f.captures)).toEqual([{echoCancel:true}]);
+ await button(page,'Stop voice conversation').click();
+ await expect(voice(page)).toHaveCount(0);
+ await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));
+ await page.waitForTimeout(500);
+ await expect(voice(page)).toHaveCount(0);
+ expect(await live(page,f=>f.captures.length)).toBe(1);
+ expect(await live(page,f=>f.forbidden)).toEqual([]);expect(foreign).toEqual([]);
+});
+
+for(const [name,options] of [['a locked keyguard',{assistant:true,invocation:'listener',locked:true}],['a locked press-and-hold power',{assistant:true,invocation:'system',locked:true}],['a plain assist entry',{assistant:true,invocation:'assist'}]] as const)
  test(`${name} opens the assistant surface without opening the microphone`,async({page})=>{
   const foreign=await setup(page,options);await openSurface(page);
   await expect.poll(()=>live(page,f=>f.invocations),{timeout:15_000}).toBeGreaterThan(0);

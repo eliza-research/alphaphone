@@ -36,8 +36,9 @@ export const MODAL = 'dialog[open], [role="dialog"][aria-modal="true"], [role="a
 /** AlphaAssistActivity fires this when a new invocation reaches the surface already in front. */
 export const INVOCATION_EVENT = 'alpha:assist-invocation';
 /**
- * The listener's wake phrase opened the assistant surface: start the voice assistant (on-device
- * VAD, streaming ASR and speech, #423) once the shell is ready. The native origin is consumed when
+ * The listener's wake phrase, or a system assistant gesture such as press-and-hold power that
+ * SystemUI launched with its identity shared, opened the assistant surface: start the voice
+ * assistant (on-device VAD, streaming ASR and speech, #423) once the shell is ready. The native origin is consumed when
  * it is read, so it is read only when the shell can act on it, and one invocation starts at most
  * one conversation. Runs on the first render and whenever the surface returns to the foreground
  * (a new invocation of the single-task activity).

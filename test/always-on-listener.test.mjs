@@ -57,3 +57,25 @@ test('a cold listener wake is bound to Alpha native owner state, never renderer 
  assert.match(assist,/new ai\.eliza\.plugins\.system\.SenseListenerClient\(this\)\.recordInvocation\(caller\)/);
  assert.doesNotMatch(assist,/getStringExtra|getData\(\)|getExtras\(\)/);
 });
+test('press-and-hold power starts voice only through SystemUI identity that Android reports',()=>{
+ const root=path.resolve(import.meta.dirname,'..'),strip=text=>text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,'');
+ // The image routes press-and-hold power to the assistant role holder (Alpha's ACTION_ASSIST surface).
+ const overlay=fs.readFileSync(path.join(root,'vendor/eliza/packages/os/android/sense/config.xml'),'utf8');
+ assert.match(overlay,/<integer name="config_longPressOnPowerBehavior">5<\/integer>/);
+ // Alpha records only Android's caller APIs: the launching package on create and ComponentCaller on new intents.
+ const assist=strip(fs.readFileSync(path.join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaAssistActivity.java'),'utf8'));
+ assert.match(assist,/state == null && Build\.VERSION\.SDK_INT >= Build\.VERSION_CODES\.UPSIDE_DOWN_CAKE \? getLaunchedFromPackage\(\) : null/);
+ assert.match(assist,/newIntentCaller = caller == null \? null : caller\.getPackage\(\);/);
+ // Shared Sense marks a system gesture only for the platform-signed system UI; the shared renderer policy starts voice for it.
+ const client=strip(fs.readFileSync(path.join(root,'vendor/eliza/plugins/plugin-native-system/android/src/main/java/ai/eliza/plugins/system/SenseListenerClient.java'),'utf8'));
+ assert.match(client,/SYSTEM_UI_PACKAGE = "com\.android\.systemui"/);
+ assert.match(client,/checkSignatures\("android", callerPackage\) == PackageManager\.SIGNATURE_MATCH/);
+ const policy=fs.readFileSync(path.join(root,'vendor/eliza/plugins/plugin-native-system/src/sense.ts'),'utf8');
+ assert.match(policy,/\(input\.invocation === "listener" \|\| input.invocation === "system"\) &&/);
+ // SystemUI shares its identity only with the reviewed assist bundle applied to the exact pinned preimage.
+ const bundle=JSON.parse(fs.readFileSync(path.join(root,'vendor/eliza/packages/os/android/sense/systemui/assist/manifest.json'),'utf8'));
+ assert.deepEqual(bundle.files.map(file=>file.path),['packages/SystemUI/src/com/android/systemui/assist/AssistManager.java']);
+ assert.equal(bundle.imageBuilt,false);
+ const patch=fs.readFileSync(path.join(root,'vendor/eliza/packages/os/android/sense/systemui/assist',bundle.patch),'utf8');
+ assert.deepEqual(patch.split('\n').filter(line=>/^\+[^+]/.test(line)&&!/^\+\s*\/\//.test(line)).map(line=>line.slice(1).trim()),['opts.setShareIdentityEnabled(true);']);
+});
