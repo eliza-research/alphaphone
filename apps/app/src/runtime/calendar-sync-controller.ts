@@ -1,7 +1,6 @@
 import {
 	LinkedCalendarReconciler,
 	type LinkedCalendarLocalPort,
-	type LinkedCalendarEventRecord,
 } from "../../../../.eliza/client-features/packages/contracts/src/calendar-linked-sync";
 import {
 	CalendarLinkedStore,

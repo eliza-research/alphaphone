@@ -18,18 +18,20 @@ function endLabel(endsAt:number):string {
  * the latest Cloud limit with its retry time (#410). Nothing is bought here: Add funds opens Cloud's
  * own billing page after the account review.
  */
-export function CloudMembershipControls({balance,busy,error,connectionError,notice,email,credits,plan,endsAt,lastLimit,serviceName='Cloud',onRedeem,onAddFunds,onRefresh}:{balance:MembershipBalance;busy:boolean;error?:string;connectionError?:string;notice?:string;email?:string;credits?:{usd:string;observedAt:number}|null;plan?:SubscriptionView|null;endsAt?:number|null;lastLimit?:(ServiceLimit&{observedAt:number})|null;serviceName?:string;onRedeem:(code:string)=>Promise<boolean>;onAddFunds:()=>void;onRefresh:()=>void}){
+export function CloudMembershipControls({balance,busy,error,connectionError,notice,email,credits,plan,endsAt,lastLimit,serviceName='Cloud',codeEntry=false,onRedeem,onAddFunds,onRefresh}:{balance:MembershipBalance;busy:boolean;error?:string;connectionError?:string;notice?:string;email?:string;credits?:{usd:string;observedAt:number}|null;plan?:SubscriptionView|null;endsAt?:number|null;lastLimit?:(ServiceLimit&{observedAt:number})|null;serviceName?:string;codeEntry?:boolean;onRedeem:(code:string)=>Promise<boolean>;onAddFunds:()=>void;onRefresh:()=>void}){
  const code=useRef<HTMLInputElement>(null),pending=useRef(false),codeEntryId=useId(),errorId=useId();
  // A retained redemption error must keep its associated input exposed.
  const [codeVisible,setCodeVisible]=useState(Boolean(error)),[submitting,setSubmitting]=useState(false),[submissionError,setSubmissionError]=useState(''),[codeValue,setCodeValue]=useState('');
- const active=plan?.kind==='active',disabled=busy||submitting;
+ const active=plan?.kind==='active',disabled=busy||submitting,showCode=codeVisible||codeEntry,explicitEntry=useRef(codeEntry);
  const summary=subscriptionSummary(plan??null,{planEndsAt:endsAt??null,lastLimit:lastLimit??null,lastLimitAt:lastLimit?.observedAt??null,serviceName});
  // Render again when the shown limit's wait ends or its reset passes, so a lapsed retry time is not
  // left on screen. Only those moments change the line; it is not a per-second countdown.
  const [,tick]=useState(0);
  const limitChange=summary.limit&&lastLimit?serviceLimitNextChange(lastLimit,lastLimit.observedAt,Date.now()):null;
  useEffect(()=>{if(limitChange===null)return;const timer=setTimeout(()=>tick(value=>value+1),limitChange);return ()=>clearTimeout(timer);});
- useEffect(()=>{if(codeVisible)code.current?.focus();},[codeVisible]);
+ // Leaving an explicit code entry clears the code it held; a retained redemption error keeps the input.
+ useEffect(()=>{if(explicitEntry.current&&!codeEntry){setCodeValue('');setSubmissionError('');setCodeVisible(Boolean(error));}explicitEntry.current=codeEntry;},[codeEntry,error]);
+ useEffect(()=>{if(showCode)code.current?.focus();},[showCode]);
  async function redeem(event:React.FormEvent){
   event.preventDefault();const input=code.current;
   if(!input||!input.value.trim()||disabled||pending.current)return;
@@ -49,8 +51,8 @@ export function CloudMembershipControls({balance,busy,error,connectionError,noti
     {summary.limit&&<div className="alpha-membership-limit-fact"><dt>AI requests</dt><dd role="status">{summary.limit}</dd></div>}
    </dl>
    <p className="alpha-membership-support" role="status">{balance==='checking'?'Checking your account…':balance==='unavailable'?'Account details could not be refreshed. You can still redeem a code or check again.':balance==='zero'?'Add funds or use a membership code to ask Alpha.':''}</p>
-   <div className="alpha-membership-main-actions"><button type="button" className="alpha-membership-primary" disabled={disabled} onClick={onAddFunds}>Add funds</button>{!codeVisible&&<button type="button" className="alpha-membership-secondary" aria-expanded={false} aria-controls={codeEntryId} disabled={disabled} onClick={()=>setCodeVisible(true)}>Use membership code</button>}</div>
-   {codeVisible&&<div id={codeEntryId} className="alpha-membership-code-entry"><form aria-label="Redeem a membership code" onSubmit={event=>void redeem(event)}>
+   <div className="alpha-membership-main-actions"><button type="button" className="alpha-membership-primary" disabled={disabled} onClick={onAddFunds}>Add funds</button>{!showCode&&<button type="button" className="alpha-membership-secondary" aria-expanded={false} aria-controls={codeEntryId} disabled={disabled} onClick={()=>setCodeVisible(true)}>Use membership code</button>}</div>
+   {showCode&&<div id={codeEntryId} className="alpha-membership-code-entry"><form aria-label="Redeem a membership code" onSubmit={event=>void redeem(event)}>
      <label>Membership code<input ref={code} name="membership-code" value={codeValue} onChange={event=>setCodeValue(event.target.value)} placeholder="Enter code" autoComplete="one-time-code" autoCapitalize="characters" autoCorrect="off" spellCheck={false} data-autofill-ignore="true" maxLength={64} disabled={disabled} required aria-invalid={!!error||!!submissionError||undefined} aria-describedby={error||submissionError?errorId:undefined}/></label>
      <button type="submit" disabled={disabled||!codeValue.trim()}>{submitting?'Redeeming…':'Redeem'}</button>
    </form></div>}

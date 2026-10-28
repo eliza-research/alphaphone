@@ -41,7 +41,12 @@ export type CloudSignInEmailStarted = NativeCloudSignInCodeStarted;
 export type CloudSignInMfaRequired = NativeCloudSignInMfaRequired;
 export type CloudSignInGoogleMfaRequired = NativeCloudSignInGoogleMfaRequired<CloudEnvironment>;
 export type CloudSignInGoogleOutcome = NativeCloudSignInGoogleOutcome<CloudEnvironment>;
-export type CloudSignInPort = NativeCloudSignInPort<CloudEnvironment>;
+/** The shared native port plus Alpha's native-only explicit recovery of the same product's saved
+ * pre-namespace credential (AlphaCloudSignInPlugin). Never a startup migration. */
+export type CloudSignInPort = NativeCloudSignInPort<CloudEnvironment> & {
+  savedSignInRecoveryStatus?(): Promise<{eligible: boolean}>;
+  restoreSavedSignIn?(): Promise<{restored: boolean}>;
+};
 export const CloudSignInError = NativeCloudSignInError;
 export type CloudSignInError = NativeCloudSignInError;
 

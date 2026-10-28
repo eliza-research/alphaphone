@@ -1,6 +1,5 @@
 /** Android Clock intent handoffs only: never evidence that an alarm exists or rang. */
 import {
-  assertClockObservation as upstreamAssertClockObservation,
   clockDays as upstreamClockDays,
   clockTimeZone,
   validateClockOperation as upstreamValidateClockOperation,
@@ -9,7 +8,7 @@ import {
   type ClockHandoffOperation as ClockOperation,
   type ClockHandoffResult as ClockResult,
 } from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/clock-contract.ts';
-export {CLOCK_CAPABILITY, clockTimeZone} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/clock-contract.ts';
+export {clockTimeZone} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/clock-contract.ts';
 export type {ClockDay, ClockHandoffOperation as ClockOperation, ClockHandoffResult as ClockResult, ClockHandoffResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/clock-contract.ts';
 
 export const CLOCK_DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
@@ -45,10 +44,6 @@ export function validateClockOperation(value: unknown): ClockOperation {
   // Explicit [] remains a one-off; never send an empty EXTRA_DAYS to Clock.
   return days.length ? {...oneOff, days: days.sort((a, b) => a - b)} : oneOff;
 }
-export function assertClockObservation(operation: ClockOperation, value: unknown) {
-  if (!isClockOperation(operation)) throw Error("Invalid Clock operation");
-  upstreamAssertClockObservation(operation, value);
-}
 export function validateClockOutcome(
   operation: ClockOperation,
   value: unknown,
@@ -71,7 +66,7 @@ export function describeClockHandoff(op:ClockOperation):string{
  return op.action==='set'?`Ask Clock to set ${String(op.hour).padStart(2,'0')}:${String(op.minute).padStart(2,'0')} in ${op.timeZone}${op.days?`, repeating ${describeClockDays(op.days)}`:''}${op.label?` named “${op.label}”`:''}. Review the alarm in Clock; Alpha cannot confirm creation or ringing.`:op.action==='show'?'Open Clock’s alarms page.':op.action==='snooze'?`Open Clock so you can choose the intended alarm and snooze it yourself. Select the duration there; ${op.snoozeMinutes} minutes will not be applied automatically. Completion stays unverified.`:'Open Clock so you can choose the intended alarm and dismiss it yourself. Alpha will not dismiss or disable an alarm automatically. Completion stays unverified.';
 }
 
-export function validateClockResult(operation:ClockOperation,value:unknown):ClockResult{const status=(value as any)?.status;return validateClockOutcome(operation,value,status==='opened'?'applied':status==='unknown'?'unknown':'failed');}
+export function validateClockResult(operation:ClockOperation,value:unknown):ClockResult{const status=(value as {status?:unknown}|null)?.status;return validateClockOutcome(operation,value,status==='opened'?'applied':status==='unknown'?'unknown':'failed');}
 
 /** Reviewed set request with a repeat (AlarmClock.EXTRA_DAYS); renderer shape with `reviewed: true`. */
 export type ClockSetRequest={action:'set';hour:number;minute:number;label:string;timeZone:string;reviewed:true;days?:ClockDay[]};

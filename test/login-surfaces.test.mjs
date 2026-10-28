@@ -258,6 +258,13 @@ test('each registered Alpha-owned field still exists exactly as inventoried', ()
   }
 });
 
+test('membership inventory retains exact code semantics across controlled JSX props',()=>{
+  const surface=registered.find(entry=>entry.id==='eliza-cloud-subscription-code');
+  const pattern=new RegExp(surface.pattern);
+  assert.ok(pattern.test('name="membership-code" value={codeValue} onChange={event=>setCodeValue(event.target.value)} autoComplete="one-time-code"'));
+  for(const source of ['name="other-code" autoComplete="one-time-code"','name="membership-code" autoComplete="current-password"','name="membership-code"><input autoComplete="one-time-code"'])assert.equal(pattern.test(source),false,source);
+});
+
 test('native Alpha UI declares no unregistered credential fields', () => {
   // Every Android module's source sets (app, launcher, embedding-host, local-speech, fixtures), per line.
   const roots = fs.readdirSync('android', {withFileTypes: true}).filter(entry => entry.isDirectory()).map(entry => path.join('android', entry.name, 'src')).filter(dir => fs.existsSync(dir));

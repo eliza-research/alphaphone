@@ -95,6 +95,7 @@ final class AlphaCredentialStore {
     before=slots.read(CloudDeployment.storageSlot(name));provider=slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT));
     conflict=compare&&!java.util.Objects.equals(before,expected);
     if(conflict)return false;
+    legacyRecovery().block();
     if(LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name))return before!=null||value!=null;
     if(java.util.Objects.equals(before,value))return false;
     // No stored provider: the running agent was launched unbound (removing a provider stops it),
@@ -108,12 +109,42 @@ final class AlphaCredentialStore {
     if(!LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)&&java.util.Objects.equals(before,value))return true;
     if(!java.util.Objects.equals(before,slots.read(CloudDeployment.storageSlot(name)))||!java.util.Objects.equals(provider,slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT))))throw new IllegalStateException("Credential changed");
     if(LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)||"cloud:production".equals(name)&&!LocalAgentProviderAdmission.sameCloudCredential(before,value))cloudChange.changed();
+    String committed=LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)&&value!=null?LocalAgentProviderAdmission.withoutAdmission(value):value;
+    // Metadata/valid expiry refresh is not replacement; use the same canonical credential
+    // comparison that retains provider admission. Provider writes still strip admission.
+    boolean authorityChanged=LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)
+      ?!java.util.Objects.equals(before,committed):!LocalAgentProviderAdmission.sameCloudCredential(before,committed);
+    if(authorityChanged)AlphaLocalAgentPlugin.powerAuthorizationChanged();
     invalidateProviderAdmission(name,value);
     if(value==null)slots.remove(CloudDeployment.storageSlot(name));
-    else slots.write(CloudDeployment.storageSlot(name),LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)?LocalAgentProviderAdmission.withoutAdmission(value):value);
+    else slots.write(CloudDeployment.storageSlot(name),committed);
     return true;
    }
   });
+ }
+ private LegacyCloudRecovery legacyRecovery(){return new LegacyCloudRecovery(slots,CloudDeployment.STORAGE_NAMESPACE,assertOwner);}
+ /** Reads and commits use the SAME lifecycle→vault order as all credential mutations. */
+ private <T>T recoveryStep(java.util.concurrent.Callable<T> step)throws Exception{
+  return AlphaLocalAgentPlugin.mutateCredentials(context,assertOwner,new AlphaLocalAgentPlugin.CredentialMutation<T>(){
+   public boolean requiresShutdown(){return false;}
+   public T commit()throws Exception{return step.call();}
+  });
+ }
+ /** Automatic startup unbind is a no-op when native confirms there is no provider.
+  * Explicit clear still uses removeCredentialSlot and durably blocks legacy recovery. */
+ void removeProviderIfPresent()throws Exception{
+  String before=recoveryStep(()->slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT)));
+  if(before==null)return;
+  if(!compareExchangeCredentialSlot(LocalAgentProviderAdmission.PROVIDER_SLOT,before,null))throw new IllegalStateException("Provider changed");
+ }
+ boolean legacyCloudRecoveryEligible()throws Exception{return recoveryStep(()->legacyRecovery().eligible());}
+ boolean restoreLegacyCloudCredential()throws Exception{
+  LegacyCloudRecovery.Snapshot before=recoveryStep(()->legacyRecovery().snapshot());
+  if(before==null)return false;
+  // Never hold lifecycle or vault locks across HTTP. The second critical section rechecks
+  // intent/owner, exact old bytes, journal and absent targets before committing.
+  AlphaConnectionPlugin.readCloudIdentity(before.token());
+  return recoveryStep(()->legacyRecovery().commit(before));
  }
  void assertCurrent(){assertOwner.run();}
  private void invalidateProviderAdmission(String changedSlot,String replacement)throws Exception{
@@ -135,6 +166,7 @@ final class AlphaCredentialStore {
     conflict=credentialSlot!=null&&!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(credentialSlot)),expectedCredential)
       ||!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT)),expected);
     if(conflict)return false;
+    legacyRecovery().block();
     org.json.JSONObject requested=new org.json.JSONObject(selection);
     boolean cloud="elizacloud".equals(requested.optString("provider"));
     if(cloud?!"cloud:production".equals(credentialSlot):credentialSlot!=null||expectedCredential!=null||verifiedIdentity!=null)throw new IllegalArgumentException();
@@ -147,6 +179,11 @@ final class AlphaCredentialStore {
     if(credentialSlot!=null&&!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(credentialSlot)),expectedCredential)
       ||!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT)),expected))throw new IllegalStateException("Provider changed");
     if(LocalAgentProviderAdmission.currentGeneration(admitted,expectedCredential)==null)throw new IllegalStateException("Provider credential expired");
+    // admit() retains generation only when the native canonical fingerprint is unchanged.
+    // A fresh random request revision alone must not revoke a protected cold-start grant.
+    String previousGeneration=expected==null?null:LocalAgentProviderAdmission.currentGeneration(expected,expectedCredential);
+    String admittedGeneration=LocalAgentProviderAdmission.currentGeneration(admitted,expectedCredential);
+    if(previousGeneration==null||!previousGeneration.equals(admittedGeneration))AlphaLocalAgentPlugin.powerAuthorizationChanged();
     slots.write(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT),admitted);return admitted;
    }
   });
@@ -167,6 +204,7 @@ final class AlphaCredentialStore {
    public Void commit()throws Exception{
     if(!owned)return null;
     if(!java.util.Objects.equals(current,slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT))))throw new IllegalStateException("Provider changed");
+    AlphaLocalAgentPlugin.powerAuthorizationChanged();
     if(previous==null)slots.remove(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT));
     else slots.write(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT),LocalAgentProviderAdmission.withoutAdmission(previous));
     return null;

@@ -66,7 +66,7 @@ export function createStartupPermissionFlow(bridge: {
 }, options: {key?: string; store?: Store | null} = {}) {
   const store = options.store === undefined ? defaultStore() : options.store;
   let attempted = !!options.key && readStartupPermissionMemory(store).attempted[options.key] === true;
-  let pending = false;
+  let pending: number | null = null;
   let state: StartupPermissionState = 'checking';
   let generation = 0;
   async function check(current: number): Promise<StartupPermissionState | null> {
@@ -85,11 +85,14 @@ export function createStartupPermissionFlow(bridge: {
   return {
     // The owned prompt/settings transaction reads back access when it settles.
     // A resume check during that transaction must not retire its final read.
-    refresh: () => pending ? Promise.resolve(null) : check(++generation),
+    refresh: () => pending !== null ? Promise.resolve(null) : check(++generation),
+    // Retire UI ownership, not the platform permission prompt. A late response
+    // must neither advance another step nor clear a newer transaction's latch.
+    cancel() { ++generation; pending = null; },
     async enable(): Promise<StartupPermissionState | null> {
-      if (pending) return null;
-      pending = true;
+      if (pending !== null) return null;
       const current = ++generation;
+      pending = current;
       try {
         // Recheck before acting: access may have changed while this panel was open.
         if (await check(current) === null || current !== generation) return null;
@@ -102,7 +105,7 @@ export function createStartupPermissionFlow(bridge: {
         if (current !== generation) return null;
         return await check(current);
       } catch { return current === generation ? state = 'unavailable' : null; }
-      finally { pending = false; }
+      finally { if (pending === current) pending = null; }
     },
   };
 }

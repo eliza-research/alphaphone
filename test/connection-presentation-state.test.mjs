@@ -49,10 +49,10 @@ test('development and non-Android presentation retain their explicit review noti
 
 test('unresolved saved-session restore does not start the earlier automatic sign-in probe',()=>{
  const f=fixture({account:null});f.update({startupResolved:false,automaticRestore:true,busy:false});
- const a=source.indexOf('  useEffect(() => {\n    if (!productionSignInRequired)'),b=source.indexOf('  }, [productionSignInRequired, snapshot.busy, snapshot.signIn]);',a);assert.ok(a>=0&&b>a);
+ const gate=source.includes('const signInEntryRequired=')?'signInEntryRequired':'productionSignInRequired';const a=source.indexOf('  useEffect(() => {\n    if (!'+gate+')'),b=source.indexOf('  }, [',a);assert.ok(a>=0&&b>a);
  let probes=0,automaticSignInProbe={current:false};
  const callback=source.slice(a,b).replace('  useEffect(() => {','(()=>{')+'})';
- const evaluate=()=>{f.context.snapshot=f.snapshot();f.context.productionSignInRequired=f.context.productionCloudSignInRequired(f.snapshot());f.context.automaticSignInProbe=automaticSignInProbe;f.context.residentEnvironment=()=> 'production';f.context.connectionController={beginSignIn:()=>{probes++;}};vm.runInContext(stripTypeScriptTypes('var runProbe='+callback+';runProbe();',{mode:'transform'}),f.context);};
+ const evaluate=()=>{f.context.snapshot=f.snapshot();f.context.productionSignInRequired=f.context.productionCloudSignInRequired(f.snapshot());f.context.signInEntryRequired=f.context.productionSignInRequired||(typeof f.context.explicitSignedOutCloudEntry==='function'&&f.context.explicitSignedOutCloudEntry(f.snapshot()));f.context.automaticSignInProbe=automaticSignInProbe;f.context.residentEnvironment=()=> 'production';f.context.connectionController={beginSignIn:()=>{probes++;}};vm.runInContext(stripTypeScriptTypes('var runProbe='+callback+';runProbe();',{mode:'transform'}),f.context);};
  evaluate();assert.equal(probes,0,'the sign-in effect is declared first but must leave restore alone');assert.equal(f.context.connectionChooserVisible(f.snapshot()),false);
  f.update({cloudAccount:{expiresAt:Date.now()+60000},startupResolved:true,automaticRestore:false});evaluate();assert.equal(probes,0);assert.equal(f.context.connectionChooserVisible(f.snapshot()),false);
 });
@@ -290,3 +290,10 @@ test('retained offline exception cannot bypass missing, expired or revoked sign-
  for(const patch of [{residentSavedCredential:false,residentPlanNotice:'offline'},{residentSavedCredential:true,residentPlanNotice:null},{residentSavedCredential:true,residentPlanNotice:'offline',error:'Sign-in expired'},{residentSavedCredential:true,residentPlanNotice:'offline',cloudAccount:{expiresAt:Date.now()-1000}}]){const f=fixture({account:null});f.update({startupResolved:true,...patch});assert.equal(f.context.productionCloudSignInRequired(f.snapshot()),true);}
 });
 test('retained offline account controls still open explicitly without claiming verified identity',async()=>{const f=await offlineRestoreFixture();f.update({purpose:'cloud-account',open:true});assert.equal(f.snapshot().cloudAccount,null);assert.equal(f.context.productionCloudSignInRequired(f.snapshot()),false);assert.equal(f.context.connectionChooserVisible(f.snapshot()),true);});
+
+test('explicit signed-out entry waits for restore, probes once when settled, and never probes after close',()=>{
+ const f=fixture({account:null,purpose:'cloud-account',open:true,android:false});let probes=0;const ref={current:false};
+ const gate=source.includes('const signInEntryRequired=')?'signInEntryRequired':'productionSignInRequired',a=source.indexOf('  useEffect(() => {\n    if (!'+gate+')'),b=source.indexOf('  }, [',a);assert.ok(a>=0&&b>a);const callback=source.slice(a,b).replace('  useEffect(() => {','(()=>{')+'})';
+ const evaluate=()=>{f.context.snapshot=f.snapshot();f.context.productionSignInRequired=f.context.productionCloudSignInRequired(f.snapshot());f.context.signInEntryRequired=f.context.productionSignInRequired||(typeof f.context.explicitSignedOutCloudEntry==='function'&&f.context.explicitSignedOutCloudEntry(f.snapshot()));f.context.automaticSignInProbe=ref;f.context.residentEnvironment=()=> 'production';f.context.connectionController={beginSignIn:()=>{probes++;}};vm.runInContext(stripTypeScriptTypes('var runProbe='+callback+';runProbe();',{mode:'transform'}),f.context);};
+ f.update({startupResolved:false,automaticRestore:true});evaluate();assert.equal(probes,0);f.update({startupResolved:true,automaticRestore:false});evaluate();assert.equal(probes,1);evaluate();assert.equal(probes,1);f.update({open:false});evaluate();assert.equal(probes,1);assert.equal(ref.current,false);
+});
