@@ -14,6 +14,8 @@ test('native owner lookup matches the renderer device key exactly',()=>{
  const dir=mkdtempSync(join(tmpdir(),'alpha-device-key-'));const files=[];
  const put=(name,text)=>{const p=join(dir,name);mkdirSync(join(p,'..'),{recursive:true});writeFileSync(p,text);files.push(p);};
  try{
+  put('android/util/Log.java','package android.util;public class Log {public static int w(String tag,String value){return 0;}}');
+  put('NativeNotificationDiagnostics.java',readFileSync(nativeSource('NativeNotificationDiagnostics.java'),'utf8'));
   put('android/content/Context.java','package android.content; public class Context {public Context getApplicationContext(){return this;}}');
   put('Support.java',`package ai.elizaresearch.alphaphone; import org.json.*;
 class AlphaCredentialStore {AlphaCredentialStore(android.content.Context c){} JSONObject providerAdmissionSnapshot(){throw new AssertionError();}String readCredentialSlot(String key){throw new AssertionError();}}
