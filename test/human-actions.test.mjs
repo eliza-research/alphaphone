@@ -17,7 +17,7 @@ const steps = checklistSteps(text);
 const anchor = heading => heading.toLowerCase().replace(/[^a-z0-9 -]/g, "").replace(/ /g, "-");
 
 test("the checklist numbers its steps without gaps and gives each one who, what, seam, verification and what it unblocks", () => {
-  assert.equal(steps.length, 36);
+  assert.equal(steps.length, 37);
   steps.forEach((step, index) => assert.equal(step.id, `H-${String(index + 1).padStart(2, "0")}`));
   for (const section of text.split(/^### /m).slice(1)) {
     const id = section.slice(0, 4);
