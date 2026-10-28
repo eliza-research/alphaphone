@@ -74,7 +74,8 @@ export class WorkflowProtocol {
    ...(typeof p.stoppedAt==='string'?{stoppedAt:p.stoppedAt}:{}),
    ...(typeof p.error?.message==='string'?{error:p.error.message.slice(0,2000)}:{}),
    ...(p.output===undefined?{}:{output:workflowOutput(p.output,id)}),
-   ...(p.finished&&p.output&&typeof p.output==='object'&&!Array.isArray(p.output)&&p.output.status==='missed'?{missed:true as const}:{}),
+   // Only the agent's recorded missed occurrence (status, scheduled instant, explanation); a workflow's own output with this status ran.
+   ...(p.finished&&p.output&&typeof p.output==='object'&&!Array.isArray(p.output)&&p.output.status==='missed'&&typeof p.output.scheduledAt==='string'&&Number.isFinite(Date.parse(p.output.scheduledAt))&&typeof p.output.text==='string'?{missed:true as const}:{}),
    ...(()=>{const r=reconciliation(p.reconciliation);return r?{reconciliation:r}:{};})(),
    events:events.slice(-100).map((event:unknown)=>{const e=obj(event);if(e.runId!==id||e.workflowId!==workflowId)throw new Error('Execution event identity mismatch');return {type:str(e.type).slice(0,120),at:str(e.timestamp),...(typeof e.nodeId==='string'?{node:e.nodeId.slice(0,200)}:{})};})};
  }
