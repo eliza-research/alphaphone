@@ -122,6 +122,8 @@ recording a clip on the device:
    closes the current IPC read. See [native transport](native-live-pcm-transport.md).
    Older native packages retain the renderer-forwarding compatibility path through
    `live-segment-stream.ts` and `live-voice.ts`; errors do not silently replay on that path.
+   Both, and `voice-turn-routes.ts` below, re-export the shared `@elizaos/voice/live-session` and
+   `@elizaos/voice/turn-routes` clients projected from the pin; Alpha adds no behavior to them.
 3. **Agent.** The live route (elizaOS #36213, #36214) decodes with the Phonon-2 streaming decoder
    through the bionic host (`BionicAsrStreams`, staged from the pin) and returns
    `final.text` in the response to the request that carries `speech-end`.
