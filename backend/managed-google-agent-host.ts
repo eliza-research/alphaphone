@@ -45,7 +45,13 @@ export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort){
  }
  return {
   async mailbox(input:AgentMailboxChange,parent?:AbortSignal){return verified((client,grantId,scope,signal)=>gmailAgentMailbox(client,grantId,scope,input,signal),parent,'google.gmail.mailbox',true);},
-  async calendarWrite(input:Record<string,unknown>,parent?:AbortSignal){return verified((client,grantId,scope,signal)=>calendarAgentWrite(client,grantId,scope,input,signal,'alpha-google'),parent,'google.calendar.write','calendar');},
+  async calendarWrite(input:Record<string,unknown>,parent?:AbortSignal){
+   const {client,signal,accounts,confirm}=await ownerAccounts(parent,'google.calendar.write','calendar');
+   const selected=accounts.filter(account=>input.grantId===`alpha-google:${account.scope}`);
+   if(selected.length!==1)throw Error('Select a Calendar from the current owner connection.');
+   const account=selected[0],result=await calendarAgentWrite(client,account.grantId,account.scope,input,signal,'alpha-google');
+   await confirm([account.grantId]);return result;
+  },
   async prepareSend(input:AgentSendContent&{requestId:string},parent?:AbortSignal){
    const proposal=sendProposal(input);if(!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(input.requestId))throw Error('Invalid send request identity.');
    return verified(async(client,grantId,scope,signal)=>{

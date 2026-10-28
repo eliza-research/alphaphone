@@ -1,3 +1,4 @@
+import {isPreparedViewNavigationRequest} from '../apps/app/src/runtime/prepared-view-navigation.ts';
 import {parseViewInteractionClientId} from "../.eliza/client-features/packages/core/src/views/view-interact-protocol.ts";
 import {ownerRouteAllowed,ownerRouteGroup} from '../apps/app/src/runtime/owner-route-policy.ts';
 import {createGmailAgentDevBroker} from './gmail-agent-dev-broker.ts';
@@ -118,8 +119,12 @@ export function createLocalAgentDevHandler(options:{origin:string;tokenFile:stri
       const speech=asr||tts,ttsAudio=(directTts||cloudTts||input.path===TTS_PATH)&&input.method==='POST';
       if(size>LIMIT&&!((cloudAsr||input.path===ASR_PATH)&&input.method==='POST')){fail(413,'Request too large');return;}
       if(input.storage){const result=localAgentStorage(join(dirname(options.tokenFile),'browser-device'),input.storage);res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(result));return;}
+      let preparedNavigation=false;
+      if(typeof input.body==='string'){
+        try{preparedNavigation=isPreparedViewNavigationRequest(input.path,JSON.parse(input.body),input.method);}catch{/* Malformed preparation stays outside the route allowlist. */}
+      }
       const group=ownerRouteGroup(input.path);
-      if((!renderer&&!voice&&!cloudSpeech&&!directTts&&!localAgentPathAllowed(input.path))||(group?!ownerRouteAllowed(group,input.path,input.method)||typeof input.ownerId!=='string'||!input.ownerId.trim():!['GET','POST'].includes(input.method))||
+      if((!renderer&&!voice&&!cloudSpeech&&!directTts&&!localAgentPathAllowed(input.path)&&!preparedNavigation)||(group?!ownerRouteAllowed(group,input.path,input.method)||typeof input.ownerId!=='string'||!input.ownerId.trim():!['GET','POST'].includes(input.method))||
          (TRAJECTORY_READ.test(input.path)&&(input.method!=='GET'||typeof input.ownerId!=='string'||!input.ownerId.trim()))||
          ((input.path.startsWith('/api/views/')||input.path.endsWith('/messages/truncate'))&&(input.method!=='POST'||typeof input.ownerId!=='string'||!input.ownerId.trim()))||
          (input.body!==undefined&&typeof input.body!=='string')||

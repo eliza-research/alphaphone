@@ -372,16 +372,13 @@ export function installPrototypeNativeAdapters(
         const decide = (label: string, run: () => Promise<unknown>) => nav(label, () => {
           void run().finally(() => { actionHistoryRead = null; try { api.set({ actionHistoryReadAt: Date.now() }); } catch { /* view closed */ } });
         });
-        const controller = connectionController as typeof connectionController & { rejectProposal?(id: string): Promise<unknown>; reconcile?(id: string, applied: boolean): Promise<unknown> };
-        const decline = (id: string) => controller.rejectProposal ? controller.rejectProposal(id) : controller.rejectAction(id);
-        const reconcile = (id: string, applied: boolean) => controller.reconcile ? controller.reconcile(id, applied) : controller.reconcileAction(id, applied ? 'applied' : 'not_applied');
         const entryRows = (entry: ConnectionSnapshot['actionHistory'][number]): Bag[] => [
           info(entry.description, activityState(entry.state)),
-          ...(entry.state === 'pending' ? [decide('Decline', () => decline(entry.id))]
+          ...(entry.state === 'pending' ? [decide('Decline', () => connectionController.rejectProposal(entry.id))]
             : ['executing', 'reconciliation_required'].includes(entry.state) ? [
               info('Check this phone, then confirm whether this exact action happened. Nothing is repeated.', ''),
-              decide('It happened', () => reconcile(entry.id, true)),
-              decide('It did not happen', () => reconcile(entry.id, false)),
+              decide('It happened', () => connectionController.reconcile(entry.id, true)),
+              decide('It did not happen', () => connectionController.reconcile(entry.id, false)),
             ] : []),
         ];
         const groups: Bag[] = !connection.session

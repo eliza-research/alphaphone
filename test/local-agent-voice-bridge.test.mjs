@@ -148,3 +148,39 @@ test('ordinary conversation renderer lease works without enabling voice and stay
   assert.equal((await f.call(mint())).status,400);
  }finally{await f.close();}
 });
+
+
+const preparedView={clientId:'renderer-1',delivery:'completed-action',prepareOnly:true,viewType:'gui',completedActionHandoffId:'manual-view-1'};
+test('actual browser bridge forwards only strict owner-bound navigation preparation',async()=>{
+ const f=await fixture(false);try{
+  for(const view of ['settings','calendar','chat','automations']){
+   const path=`/api/views/${view}/navigate`,result=await f.call({path,method:'POST',body:JSON.stringify(preparedView)});
+   assert.equal(result.status,200);assert.equal(result.data.status,200);
+   const request=f.calls.findLast(row=>new URL(row.url).pathname===path);
+   assert.deepEqual(JSON.parse(request.input.body),preparedView);
+   assert.equal(request.input.headers.Authorization,'Bearer '+paired);
+  }
+  for(const path of ['/api/views/interact-claim','/api/views/interact-result'])assert.equal((await f.call({path,method:'POST',body:'{}'})).data.status,200);
+ }finally{await f.close();}
+});
+test('actual browser bridge refuses malformed or unowned preparation before forwarding',async()=>{
+ const f=await fixture(false);try{
+  const path='/api/views/settings/navigate';
+  const inputs=[
+   ...[undefined,false,'true'].map(prepareOnly=>({body:JSON.stringify({...preparedView,prepareOnly})})),
+   ...[{delivery:'originating-client'},{viewType:'tui'},{payload:{}},{action:'close'},{clientId:'bad id'}].map(change=>({body:JSON.stringify({...preparedView,...change})})),
+   ...['\n','\r','\u2028','\u2029'].flatMap(end=>[
+    {path:'/api/views/settings/navigate'+end,body:JSON.stringify(preparedView)},
+    {body:JSON.stringify({...preparedView,clientId:'renderer-1'+end})},
+    {body:JSON.stringify({...preparedView,completedActionHandoffId:'manual-view-1'+end})},
+   ]),
+   {body:'not-json'},{body:JSON.stringify(preparedView),method:'GET'},
+   {body:JSON.stringify(preparedView),ownerId:undefined},
+   ...['/api/views/../settings/navigate','/api/views/%73ettings/navigate','/api/views/settings/navigate?other=1','/api/views/settings/navigate\n','/api/views/settings/navigate\r\n','/api/views/settings/navigate\t','/api/views/settings/navigate\u0000'].map(path=>({path,body:JSON.stringify(preparedView)})),
+  ];
+  for(const input of inputs){const result=await f.call({path,method:'POST',...input});assert.equal(result.status,400,JSON.stringify(input));}
+  assert.equal(f.calls.length,0);
+  const wrong=await f.call({path,method:'POST',ownerId:randomUUID(),body:JSON.stringify(preparedView)});
+  assert.equal(wrong.status,409);assert.equal(f.calls.some(row=>new URL(row.url).pathname===path),false);
+ }finally{await f.close();}
+});
