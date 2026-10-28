@@ -7,7 +7,10 @@
 // same link store; native CalendarProvider events are not linked (see docs/core-loop-status.md).
 import {test,expect,type Page} from '@playwright/test';
 import {returnToApps} from './app-navigation';
-test.setTimeout(120_000);
+import {openLegacyNotes} from './helpers/legacy-notes';
+import {openBrowserCalendar} from './helpers/browser-calendar';
+// Each load now selects the retained Notes and browser Calendar sources explicitly.
+test.setTimeout(240_000);
 const button=(page:Page,name:string|RegExp)=>page.getByRole('button',{name,exact:true});
 const notes=(page:Page)=>page.evaluate(async()=>JSON.parse((await (await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw())||'{"records":[]}').records as any[]);
 const reminders=(page:Page)=>page.evaluate(async()=>(JSON.parse((await (await import('/src/browser/reminder-store.ts')).reminderDocument.readRaw())||'{"reminders":[]}').reminders as any[]).filter(r=>r.status!=='cancelled'));
@@ -21,7 +24,7 @@ const title=(page:Page)=>page.getByRole('textbox',{name:'Title',exact:true});
 async function setup(page:Page){
  await page.addInitScript(()=>{if(!localStorage.getItem('alpha.connection.selection.v1'))localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'}));});
  await page.goto('/?mode=dev&tools=1',{waitUntil:'domcontentloaded'});
- await button(page,'Notes').click();
+ await openLegacyNotes(page);
  for(const name of ['Venue meeting','Garden meeting']){
   await button(page,'New note').click();await title(page).fill(name);
   await page.getByRole('textbox',{name:'Note',exact:true}).fill(`Transcript of ${name}`);
@@ -41,11 +44,26 @@ async function setup(page:Page){
   await port.browserNotesPort.compareExchange((await port.browserNotesPort.read())!,JSON.stringify(store));
  });
  await page.reload({waitUntil:'domcontentloaded'});
+ await loadRetainedNotes(page);
 }
 async function openRecording(page:Page,name:string){
- await returnToApps(page);await button(page,'Notes').click();await button(page,`Open ${name}`).click();
+ await returnToApps(page);await openLegacyNotes(page);await button(page,`Open ${name}`).click();
  await expect(button(page,'Play recording')).toBeVisible();
 }
+/** Recordings with action items live in the retained Older notes source, and the in-app events
+ * and reminders they hand off to live in the browser calendar (development) source. A reload
+ * reopens neither, so select both as the owner would before Calendar resolves a note link. */
+async function loadRetainedNotes(page:Page){await returnToApps(page);await openLegacyNotes(page);await returnToApps(page);await openBrowserCalendar(page);await returnToApps(page);}
+/** Home's agenda card and a plain Calendar launch show Agent Calendar, so an in-app record is
+ * opened from the browser calendar's own list. Note drafts are timed for tomorrow: pick it from
+ * the week strip, or from the month picker when tomorrow starts a new week. */
+async function showTomorrow(page:Page){
+ const day=await page.evaluate(async()=>{const {WEEKDAYS,MONTHS}=await import('/src/prototype/locale-time.ts');const d=new Date();d.setDate(d.getDate()+1);return {strip:`Day ${d.getDate()}`,month:`${WEEKDAYS[d.getDay()]} ${MONTHS[d.getMonth()]} ${d.getDate()}`};});
+ const strip=button(page,day.strip);
+ if(await strip.count())await strip.first().click();
+ else{await button(page,'Month view').click();await page.getByRole('dialog',{name:'Choose calendar date'}).getByRole('button',{name:day.month,exact:true}).click();}
+}
+async function openCalendarEvent(page:Page,name:string){await returnToApps(page);await openBrowserCalendar(page);await showTomorrow(page);await button(page,new RegExp(`^${name},`)).first().click();}
 async function saveEventDraft(page:Page,name:string){
  await title(page).fill(name);await button(page,'Save event').click();
  await expect(page.getByRole('heading',{name,level:1})).toBeVisible();
@@ -92,7 +110,8 @@ test('an event draft writes nothing until Save, then links to exactly the note i
 
  // After a reload the link is still there and still opens the same note.
  await page.reload({waitUntil:'domcontentloaded'});
- await button(page,/^Open calendar event: Water the plants,/).click();
+ await loadRetainedNotes(page);
+ await openCalendarEvent(page,'Water the plants');
  await expect(page.getByText('From note: Garden meeting',{exact:true})).toBeVisible();
  await button(page,'Open note Garden meeting').click();
  await expect(page.locator('input[aria-label="Title"]:visible').last()).toHaveValue('Garden meeting');
@@ -114,8 +133,7 @@ test('a reminder from a note carries the same link; an unrelated event and remin
  await button(page,'Open note Venue meeting').click();
  await expect(page.locator('input[aria-label="Title"]:visible').last()).toHaveValue('Venue meeting');
  // Deleting the reminder removes its link.
- await returnToApps(page);
- await button(page,/^Open calendar event: Book the venue,/).click();
+ await openCalendarEvent(page,'Book the venue');
  await expect(page.getByText('From note: Venue meeting',{exact:true})).toBeVisible();
  await button(page,'Delete event').click();
  await page.getByRole('dialog',{name:'Delete reminder?',exact:true}).getByRole('button',{name:'Delete reminder',exact:true}).click();
@@ -135,7 +153,7 @@ test('the open-note action fails closed when the note was deleted or replaced, a
  await button(page,'Review calendar event draft').click();
  await saveEventDraft(page,'Venue walkthrough');
  const event=(await events(page))[0];
- const openEvent=async()=>{await returnToApps(page);await button(page,/^Open calendar event: Venue walkthrough,/).click();await expect(page.getByRole('heading',{name:'Venue walkthrough',level:1})).toBeVisible();};
+ const openEvent=async()=>{await loadRetainedNotes(page);await openCalendarEvent(page,'Venue walkthrough');await expect(page.getByRole('heading',{name:'Venue walkthrough',level:1})).toBeVisible();};
 
  // Edited after the hand-off (an action ticked): still the same note, opened with a notice.
  await openRecording(page,'Venue meeting');
@@ -210,7 +228,8 @@ test('double activation makes one draft; a reload mid hand-off keeps the draft a
  // Reload with the unsaved draft open: nothing was saved; New event restores it.
  await page.reload({waitUntil:'domcontentloaded'});
  expect(await events(page)).toEqual([]);expect(await links(page)).toEqual({});
- await button(page,'Calendar').click();await button(page,'New event').click();
+ await loadRetainedNotes(page);
+ await openBrowserCalendar(page);await button(page,'New event').click();
  await expect(title(page)).toHaveValue('Booked once');
  await expect(page.getByRole('textbox',{name:'Notes',exact:true})).toHaveValue('Book the venue\nEmail the caterer');
  // Two Save activations: exactly one event, linked to the note the draft came from.

@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
-import {openLegacyAttachment} from './helpers/legacy-notes';
+import {openLegacyAttachment,openLegacyNotes} from './helpers/legacy-notes';
 import { setTextScale } from './accessibility-states';
 import {canonicalNotesFixture,openCanonicalNotes} from './helpers/canonical-notes';
 import {openOwnedPhotoViewer} from './helpers/owned-photo';
@@ -97,14 +97,32 @@ test('a new browser tab shows no find bar until find is opened', async ({ page }
   await expect(page.getByRole('button', { name: 'Close find in page', exact: true })).toHaveCount(0);
 });
 
+// Alpha's own editor header is retained for Older notes; canonical Notes renders the shared
+// upstream workspace, whose editor is checked separately below.
 test('the note editor keeps Delete on screen beside the other header actions', async ({ page }) => {
-  const {foreign,errors}=await canonicalNotesFixture(page);
-  await openCanonicalNotes(page);
+  await page.addInitScript(offline);
+  await page.goto('/');
+  await openLegacyNotes(page);
   await page.getByRole('button', { name: 'New note', exact: true }).click();
   for (const name of ['Back to notes', 'Share note', 'Delete note']) await reachable(page, page.getByRole('button', { name, exact: true }));
   const sizes = await page.locator('.note-editor [data-alpha-app-header] button').evaluateAll(list => list.map(el => el.getBoundingClientRect().width));
   for (const width of sizes) expect(width).toBeGreaterThanOrEqual(44);
   expect(sizes.length).toBeGreaterThanOrEqual(3);
+});
+
+test('the shared Notes editor keeps Delete and Share reachable beside Back once the note is saved', async ({ page }) => {
+  const {foreign,errors}=await canonicalNotesFixture(page);
+  await openCanonicalNotes(page);
+  await page.getByRole('button', { name: 'New note', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Reachable actions');
+  await page.getByRole('textbox', { name: 'Note', exact: true }).fill('Synthetic body.');
+  const editor = page.getByRole('region', { name: 'Note editor', exact: true });
+  await expect(editor.getByRole('button', { name: 'Delete note', exact: true })).toBeEnabled();
+  for (const name of ['Back to notes', 'Delete note', 'Share']) {
+    const control = editor.getByRole('button', { name, exact: true });
+    await expect(control).toBeEnabled();
+    await reachable(page, control);
+  }
   expect(foreign).toEqual([]);
   expect(errors).toEqual([]);
 });
@@ -172,7 +190,9 @@ test.describe('menus and sheets over a scrim own focus', () => {
       const ownedInfo=start==='photos:viewer'&&name==='Photo info';
       const nativeShare=start==='notes:editor'&&name==='Share';
       if(nativeShare){
-        await canonicalNotesFixture(page);await openCanonicalNotes(page);
+        // Alpha's share panel belongs to its retained editor (Older notes). The shared canonical
+        // workspace hands Share directly to the platform and offers email and export separately.
+        await page.addInitScript(offline);await page.goto('/');await openLegacyNotes(page);
         await page.getByRole('button',{name:'New note',exact:true}).click();
         await page.getByRole('textbox',{name:'Title',exact:true}).fill('Owned share focus note');
         await page.getByRole('textbox',{name:'Note',exact:true}).fill('Exact locally created content.');
