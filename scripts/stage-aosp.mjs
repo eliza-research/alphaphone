@@ -1,6 +1,6 @@
 import { cuttlefishOptions, writeCuttlefishNatives } from './aosp-cuttlefish.mjs';
 import { verifyPixel10aSource, defaultLockPath, listenerSystemuiPatch, aospBuildPatch } from './pixel10a-source-contract.mjs';
-import { pixel10aOptions, pixel10aProductProblems, writePixel10aProduct, PIXEL10A_PRODUCT } from './aosp-pixel10a.mjs';
+import { pixel10aOptions, pixel10aProductProblems, pixel10aVendorApi, writePixel10aProduct, PIXEL10A_PRODUCT } from './aosp-pixel10a.mjs';
 import { readReleaseSigner } from './build-android.mjs';
 import fs from "node:fs";
 import { writeAospCapabilityOverlay } from "./aosp-capability-overlay.mjs";
@@ -232,6 +232,8 @@ const appliedPatches = [...stagingSystemuiPatches(appliedPatchNames, physical ||
 if ((physical || cuttlefish) && !appliedBuildNames.includes('soong-app-native'))
   throw Error('Image staging requires --applied-build-patch soong-app-native for Soong-only APK and JNI installation.');
 const physicalSource = physical ? await verifyPixel10aSource({source:get('--aosp-source'), factory:get('--factory-image'), appliedPatches}) : null;
+// The verified tree must also lunch a release carrying the stock stallion vendor API (shared check).
+const vendorApi = physical ? pixel10aVendorApi({root:process.cwd(), source:get('--aosp-source')}) : null;
 if (physical && production && physicalSource.sourceLockSha256 !== JSON.parse(fs.readFileSync(PIXEL10A_PRODUCT, "utf8")).sourceLock?.sha256)
   throw new Error(`Refusing production staging: the verified source lock is not the one pinned in ${PIXEL10A_PRODUCT}.`);
 // The always-on listener is part of the AOSP MVP (issue #424): production images must include it.
@@ -337,9 +339,12 @@ execFileSync(
 fs.appendFileSync(path.join(output, "product.mk"), clockProductRequirement);
 // The image system feature Alpha Phone requires, with a system-partition install, before it offers
 // Phone, Contacts or SMS (P-36). Development and production images both declare it; test-mocks APKs
-// were refused above, and a sideloaded APK never has the system-partition install.
-const capability = writeImageCapability(output, identity.appId);
-console.log(`Image capability: ${Object.keys(capability).find(name => name !== "productMakefile")}.`);
+// were refused above, and a sideloaded APK never has the system-partition install. The shared
+// Pixel 10a composition declares it for every brand, so only the other products write it here.
+if (!physical) {
+  const capability = writeImageCapability(output, identity.appId);
+  console.log(`Image capability: ${Object.keys(capability).find(name => name !== "productMakefile")}.`);
+}
 writeSecureCameraOverlay(output, cameraSource);
 if (production) {
   const components = provisioningComponents(tree, identity.appId);
@@ -380,7 +385,7 @@ if (listenerApk) {
 }
 if (cuttlefish) writeCuttlefishNatives({root:process.cwd(), output, apk, module:identity.moduleName});
 if (physical) {
-  writePixel10aProduct({root:process.cwd(), output, apk, identity, launcher:reviewed, sourceEvidence:physicalSource, production, bootAnimation:get('--boot-animation')});
+  writePixel10aProduct({root:process.cwd(), output, apk, identity, launcher:reviewed, sourceEvidence:physicalSource, production, bootAnimation:get('--boot-animation'), vendorApi});
 }
 if (physical || cuttlefish) {
   if (fs.existsSync(destination)) throw Error('Output appeared during staging: ' + destination);

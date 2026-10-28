@@ -61,6 +61,15 @@ profile still requires its original local model. This permits Cloud QA image sta
 it does not qualify offline speech, the image boot, Cloud services or release signing. A compressed or malformed native payload is refused. Failed physical
 staging removes its temporary output and leaves an existing destination untouched.
 
+After source admission and before any output is written, staging runs the shared
+stock-vendor check (`vendor/eliza/packages/os/scripts/android/vendor-api.mjs`): the
+composition's release configuration (`cp2a`) and the generated stallion vendor VINTF
+manifest must both carry the shared profile's locked `vendorApiLevel`. A mismatch is
+refused, never rewritten. The shared composition also declares the launcher's
+`<package>.aosp_image` system feature (`image-capability.mjs`); `physical-product.json`
+records both as `vendorApi` and `imageFeature`. Only an image boot shows Android
+reporting the feature.
+
 `physical-product.json`, `native-libraries.json` and the camera receipt distinguish
 source/staging evidence from execution. None asserts image build, runtime execution,
 release qualification or device acceptance. Full current APK verification, both
