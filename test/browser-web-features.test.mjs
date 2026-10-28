@@ -15,7 +15,9 @@ const shared = 'vendor/eliza/plugins/plugin-native-browser-surface/android/src/m
 const downloads = read(shared + 'BrowserDownloads.java');
 const capture = read(shared + 'BrowserBlobCapture.java');
 const downloadPolicy = read(shared + 'BrowserDownloadPolicy.java');
-const store = read(dir + 'BrowserSessionStore.java');
+const store = read(shared + 'BrowserSessionStore.java');
+const prompt = read(shared + 'BrowserSitePrompt.java');
+const stores = read(dir + 'AlphaBrowserStores.java');
 const adapter = read('apps/app/src/prototype/browser-adapter.ts');
 
 test('private-tab downloads never reach the persisted download list', () => {
@@ -82,15 +84,17 @@ test('the instrumented witnesses read the shared download list and name the shar
 
 test('site permissions are origin-bound prompts, stored only for normal tabs and never retained by WebView', () => {
   assert.doesNotMatch(plugin, /onPermissionRequest\(PermissionRequest request\) \{ request\.deny\(\); \}/);
-  assert.match(plugin, /if\(!t\.priv\)try\{stored=sessionStore\.permission\(origin,kind\);\}/, 'private tabs never read decisions');
-  assert.match(plugin, /if\(!promptable\(t\)\)\{result\.accept\(Collections\.emptySet\(\)\);return;\}\n  for\(String kind:kinds\)/, 'a stored Allow is used only by the selected, shown page');
-  assert.equal((plugin.match(/if\(!t\.priv\)for\(String kind:wanted\)try\{sessionStore\.setPermission/g) || []).length, 2, 'private tabs never store decisions');
+  assert.match(plugin, /BrowserSitePrompt\.plan\(origin,kinds,promptable\(t\),t\.priv,this::grantable,sessionStore::permission\)/, 'the shared plan gets the shown-page gate, the private flag and the stored decisions');
+  assert.match(prompt, /if \(!promptable \|\| origin == null \|\| kinds == null\)\s*return new Plan/, 'a stored Allow is used only by the selected, shown page');
+  assert.match(prompt, /if \(!ephemeral\)\s*try \{\s*decision = stored\.apply/, 'private tabs never read decisions');
+  assert.equal((plugin.match(/if\(!t\.priv\)for\(String kind:plan\.asked\)try\{sessionStore\.setPermission/g) || []).length, 2, 'private tabs never store decisions');
   assert.match(plugin, /callback\.invoke\(requested,granted\.contains\("location"\),false\)/, 'WebView never retains a geolocation grant');
-  assert.match(plugin, /if\(page==null\|\|!page\.equals\(asked\)/, 'embedded cross-origin requests are refused');
-  assert.match(plugin, /!page\.equals\(BrowserWebOrigin\.of\(t\.web\.getUrl\(\)\)\)\)return null;/, 'same-document navigations (pushState, fragments) keep the page origin');
+  assert.match(plugin, /BrowserSitePrompt\.origin\(t\.lastCommittedUrl,t\.web\.getUrl\(\),requested,BuildConfig\.ELIZA_DEV_ALLOW_TEST_MOCKS\)/, 'local test hosts only in developer builds');
+  assert.match(prompt, /if \(page == null \|\| !page\.equals\(asked\) \|\| !page\.equals\(BrowserWebOrigin\.of\(currentUrl\)\)\)/, 'embedded cross-origin requests are refused; same-document navigations keep the page origin');
   assert.match(plugin, /runtimePermissions\.launch\(missing\.toArray/, 'chained to the Android runtime permission');
   assert.match(plugin, /if\(!t\.priv\)try\{sessionStore\.clearPermissionsForSite\(cleared\);\}/);
-  assert.match(store, /seal\(bounded\)/, 'decisions are sealed with the Keystore key');
+  assert.match(store, /sealer\.seal\(bounded\)/, 'decisions are sealed by the host');
+  assert.match(stores, /SESSION_PREFERENCES="alpha-browser-session",SESSION_KEY_ALIAS="alpha-browser-session-v1"/, 'installed records keep their file and Keystore key');
 });
 
 test('HTTP authentication is a native prompt for the page host over a secure connection only', () => {

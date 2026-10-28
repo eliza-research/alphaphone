@@ -1,4 +1,5 @@
 package ai.elizaresearch.alphaphone;
+import ai.eliza.plugins.browsersurface.BrowserSessionStore;
 
 import ai.eliza.plugins.browsersurface.BrowserDownloadPolicy;
 import android.content.Context;
@@ -165,7 +166,7 @@ public final class BrowserWebFeaturesInstrumentedTest {
   // Remove only fixture-owned download history and permission decisions.
   android.content.SharedPreferences preferences=context.getSharedPreferences("alpha-browser-downloads",Context.MODE_PRIVATE);JSONArray kept=new JSONArray(),all=new JSONArray(preferences.getString("owned","[]"));
   for(int i=0;i<all.length();i++){JSONObject item=all.getJSONObject(i);if(!item.toString().contains(token)&&!item.optString("origin").contains(":"+(server==null?"":String.valueOf(server.getLocalPort()))))kept.put(item);}preferences.edit().putString("owned",kept.toString()).commit();
-  if(server!=null)new BrowserSessionStore(context).clearPermissionsForSite("127.0.0.1");
+  if(server!=null)AlphaBrowserStores.session(context).clearPermissionsForSite("127.0.0.1");
  }
  private void openFixture()throws Exception{address(base);page("Web features fixture");}
  private byte[] read(android.net.Uri uri)throws Exception{
@@ -252,7 +253,7 @@ public final class BrowserWebFeaturesInstrumentedTest {
  }
 
  @Test public void sitePermissionsAreOriginLabelledStoredPerProfileAndRevocable()throws Exception{
-  Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();BrowserSessionStore store=new BrowserSessionStore(context);
+  Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();BrowserSessionStore store=AlphaBrowserStores.session(context);
   // Pre-grant the Android runtime permission so only the site prompt is under test.
   InstrumentationRegistry.getInstrumentation().getUiAutomation().grantRuntimePermission(context.getPackageName(),android.Manifest.permission.CAMERA);
   String origin=base.substring(0,base.length()-1),request="(()=>{window.__perm='pending';navigator.mediaDevices.getUserMedia({video:true}).then(s=>{s.getTracks().forEach(t=>t.stop());window.__perm='granted'},e=>{window.__perm=e.name});return true})()";

@@ -1,4 +1,6 @@
 package ai.elizaresearch.alphaphone;
+import ai.eliza.plugins.browsersurface.BrowserExternalPage;
+import ai.eliza.plugins.browsersurface.BrowserExternalHandoff;
 
 import android.app.*;
 import android.content.*;
@@ -32,13 +34,13 @@ public final class BrowserExternalHandoffInstrumentedTest {
   void await()throws Exception{assertTrue("Native handoff settles",done.await(10,TimeUnit.SECONDS));assertEquals(1,settlements);}
  }
  @Test public void publicResolvedFiltersExcludeAppLinksAndConstrainedHandlers()throws Exception{
-  assertFalse(BrowserExternalResolver.genericHttps(null));
-  IntentFilter generic=browser("fixture.browser",true).filter;assertTrue(BrowserExternalResolver.genericHttps(generic));
-  assertFalse(BrowserExternalResolver.genericHttps(browser("fixture.link",false).filter));
-  IntentFilter path=new IntentFilter(generic);path.addDataPath("/account",android.os.PatternMatcher.PATTERN_PREFIX);assertFalse(BrowserExternalResolver.genericHttps(path));
-  IntentFilter ssp=new IntentFilter(generic);ssp.addDataSchemeSpecificPart("//accounts.example",android.os.PatternMatcher.PATTERN_PREFIX);assertFalse(BrowserExternalResolver.genericHttps(ssp));
-  IntentFilter mime=new IntentFilter(generic);mime.addDataType("text/html");assertFalse(BrowserExternalResolver.genericHttps(mime));
-  IntentFilter missing=new IntentFilter(Intent.ACTION_VIEW);missing.addDataScheme("https");assertFalse(BrowserExternalResolver.genericHttps(missing));
+  assertFalse(BrowserExternalHandoff.genericHttps(null));
+  IntentFilter generic=browser("fixture.browser",true).filter;assertTrue(BrowserExternalHandoff.genericHttps(generic));
+  assertFalse(BrowserExternalHandoff.genericHttps(browser("fixture.link",false).filter));
+  IntentFilter path=new IntentFilter(generic);path.addDataPath("/account",android.os.PatternMatcher.PATTERN_PREFIX);assertFalse(BrowserExternalHandoff.genericHttps(path));
+  IntentFilter ssp=new IntentFilter(generic);ssp.addDataSchemeSpecificPart("//accounts.example",android.os.PatternMatcher.PATTERN_PREFIX);assertFalse(BrowserExternalHandoff.genericHttps(ssp));
+  IntentFilter mime=new IntentFilter(generic);mime.addDataType("text/html");assertFalse(BrowserExternalHandoff.genericHttps(mime));
+  IntentFilter missing=new IntentFilter(Intent.ACTION_VIEW);missing.addDataScheme("https");assertFalse(BrowserExternalHandoff.genericHttps(missing));
  }
  private static ResolveInfo browser(String pkg,boolean browser){ResolveInfo info=new ResolveInfo();info.filter=new IntentFilter(Intent.ACTION_VIEW);info.filter.addCategory(Intent.CATEGORY_DEFAULT);info.filter.addCategory(Intent.CATEGORY_BROWSABLE);info.filter.addDataScheme("https");if(!browser)info.filter.addDataAuthority("accounts.example",null);info.activityInfo=new ActivityInfo();info.activityInfo.packageName=pkg;info.activityInfo.name=pkg+".Main";info.activityInfo.enabled=true;info.activityInfo.exported=true;info.activityInfo.applicationInfo=new ApplicationInfo();info.activityInfo.applicationInfo.enabled=true;return info;}
  @Test public void normalHandoffUsesOnlyExactPageAndRefusesStaleOrUnresolvableTargets()throws Exception{exercise(false);}
@@ -72,7 +74,7 @@ public final class BrowserExternalHandoffInstrumentedTest {
     AlphaBrowserPlugin p=plugin.get();Object t=tab.get();
     set(p,"session",session);set(p,"presentedId","handoff");set(t,"url",URL);set(t,"navigation",7L);set(t,"committed",true);set(t,"loading",false);set(t,"error","");
     FrameLayout frame=(FrameLayout)get(t,"frame");frame.setLayoutParams(new FrameLayout.LayoutParams(400,400));frame.setVisibility(View.VISIBLE);web.get().setVisibility(View.VISIBLE);
-    set(p,"externalBrowserResolver",(Function<Intent,List<ResolveInfo>>)intent->{assertEquals(Intent.ACTION_VIEW,intent.getAction());assertEquals("https://alpha-browser-handoff.invalid/",intent.getDataString());assertTrue(intent.hasCategory(Intent.CATEGORY_DEFAULT));assertTrue(intent.hasCategory(Intent.CATEGORY_BROWSABLE));return Arrays.asList(browser(instrumentation.getTargetContext().getPackageName(),true),browser("fixture.deep.link",false),browser("fixture.browser",true),browser("fixture.browser",true));});
+    set(p,"externalBrowserResolver",(Function<Intent,List<ResolveInfo>>)intent->{assertEquals(Intent.ACTION_VIEW,intent.getAction());assertEquals("https://browser-handoff.invalid/",intent.getDataString());assertTrue(intent.hasCategory(Intent.CATEGORY_DEFAULT));assertTrue(intent.hasCategory(Intent.CATEGORY_BROWSABLE));return Arrays.asList(browser(instrumentation.getTargetContext().getPackageName(),true),browser("fixture.deep.link",false),browser("fixture.browser",true),browser("fixture.browser",true));});
    }catch(Exception failure){throw new AssertionError(failure);}});
    instrumentation.waitForIdleSync();
    Instrumentation.ActivityMonitor monitor=new Instrumentation.ActivityMonitor(){@Override public Instrumentation.ActivityResult onStartActivity(Intent intent){outgoing.set(new Intent(intent));return new Instrumentation.ActivityResult(Activity.RESULT_CANCELED,null);}};
