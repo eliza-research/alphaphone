@@ -6,6 +6,7 @@ import { createCloudMaps, cloudMapsFailure, insideCloudCoverage } from '../apps/
 import { MapsController } from '../.eliza/client-features/plugins/plugin-maps/src/client/state.ts';
 import { SavedPlaces } from '../.eliza/client-features/plugins/plugin-maps/src/client/saved-places.ts';
 import { MapsFailure } from '../.eliza/client-features/plugins/plugin-maps/src/client/contracts.ts';
+import { readServiceLimit } from '../apps/app/src/runtime/subscription-entitlement.ts';
 
 const ATTRIBUTION = '© OpenStreetMap contributors (ODbL). Search: Nominatim. Routing: GraphHopper.';
 const CASINO = { latitude: 43.7397, longitude: 7.4276 }, PORT = { latitude: 43.7347, longitude: 7.4206 };
@@ -151,6 +152,18 @@ assert.match(cloudMapsFailure(cloudError(429,'allowance_exhausted')).message,/us
  await maps.initializeCloudMaps();
  await assert.rejects(provider.search('Port',new AbortController().signal),failure=>failure.code==='rate-limited'&&/42 seconds/.test(failure.message));
  assert.equal(calls,1,'A retry hint never schedules another provider request');
+}
+
+// The app passes its shared subscription reader (apps/app/src/maps/cloud-maps.ts): the raw
+// Retry-After header and a nested period allowance are honoured like every other Cloud refusal.
+{
+ const header=Object.assign(cloudError(429,'rate_limited'),{retryAfter:'42'});
+ assert.equal(cloudMapsFailure(header).message,'Maps request limit reached. Try again later.','the plugin default reads only the body');
+ assert.match(cloudMapsFailure(header,undefined,readServiceLimit).message,/Try again in about 42 seconds/);
+ const period=Object.assign(new Error('Eliza Cloud http (429)'),{name:'CloudProtocolError',code:'http',status:429,data:{terminalFailure:{rateLimit:{kind:'rate_limited',scope:'period',retryAfterMs:3_600_000}}}});
+ const text=cloudMapsFailure(period,undefined,readServiceLimit).message;
+ assert.match(text,/used your Maps allowance/);
+ assert.doesNotMatch(text,/resets in/,'an hour-capped period wait is not presented as the reset');
 }
 
 assert.equal(cloudMapsFailure(Object.assign(cloudError(429,'allowance_exhausted'),{data:{code:'allowance_exhausted',resetAt:'9999-01-01T00:00:00Z',error:'private provider detail'}})).message,'You have used your Maps allowance for this period.');
