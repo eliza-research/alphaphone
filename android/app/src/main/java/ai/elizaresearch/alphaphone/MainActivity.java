@@ -283,6 +283,7 @@ public class MainActivity extends BridgeActivity {
    try { registerPlugin(Class.forName("ai.elizaresearch.alphaphone.DevelopmentAgentPlugin").asSubclass(com.getcapacitor.Plugin.class)); }
    catch (ClassNotFoundException ignored) { /* Test-mocks overlay not attached to this build. */ }
   }
+  AlphaCanonicalNotifications.captureTap(this,getIntent());
   super.onCreate(state);
   // Capacitor displays its no-WebView fallback without creating a bridge when
   // the system provider cannot initialize. Preserve that screen and lifecycle.
@@ -336,6 +337,7 @@ public class MainActivity extends BridgeActivity {
   });
  }
  @Override public void onNewIntent(Intent intent) {
+  AlphaCanonicalNotifications.captureTap(this,intent);
   super.onNewIntent(intent);
   // Our own bring-to-front start (see handOff) carries nothing: the real intent was delivered first.
   if (hasFrontMarker(intent)) {
@@ -362,6 +364,7 @@ public class MainActivity extends BridgeActivity {
    getBridge().getWebView().evaluateJavascript("window.dispatchEvent(new Event('focus'))",null);
  }
  @Override public void onResume(){super.onResume();
+  AlphaCanonicalNotifications.ensure(this);
   // The page owner is in front again: whatever brought it there (the task move or the front start) worked.
   if(liveInstance.get()==this)unackedFrontStarts=0;
   if(getBridge()!=null&&getBridge().getWebView()!=null)AlphaDevicePlugin.applyTextScale(this);}

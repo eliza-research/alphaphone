@@ -186,6 +186,13 @@ measurement (speech candidate, Clef feasibility, subscription price/quotas, Clou
 provider coverage) are deliverables in their TODOs; they do not reopen the approved
 local-only agent/speech, subscription, AOSP scope or Wallet exclusion policies.
 
+The selections these policies leave to the owner are listed in order, each with the setting or
+record that waits for it, in [human actions](human-actions.md) H-01 to H-07: release key custody
+(P-16 names no service), confirming or replacing the server-published plan catalog (P-26), the
+plan request limits and the separate Maps allowance (P-56), Maps coverage (P-28), the
+`@metamask/sdk` terms that P-09 does not cover, and the pilot roles. Each is recorded here as a
+dated `P-` entry when made; none is chosen by software.
+
 ## Pending owner decisions
 
 No reviewed A-01–A-26/A-32–A-35/MVP-01/MVP-52/owner-notice item remains awaiting

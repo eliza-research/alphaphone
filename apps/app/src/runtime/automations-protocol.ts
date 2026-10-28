@@ -2,8 +2,8 @@ import {reminderDeliveryLabel,reminderDue} from "../../../../.eliza/client-featu
 import {formatSchedule} from '../../../../.eliza/client-features/packages/ui/src/utils/cron-format.ts';
 /** Alpha presentation over OG's canonical automation, ScheduledTask and LifeOps contracts.
  * No runner, mirroring, task storage or automatic execution lives in this client. */
-export type AutomationMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
-export type AutomationRequest = (path:string,method:AutomationMethod,body:unknown|undefined,signal:AbortSignal)=>Promise<unknown>;
+import type {AutomationsMethod} from './automations-route-policy.ts';
+export type AutomationRequest = (path:string,method:AutomationsMethod,body:unknown|undefined,signal:AbortSignal)=>Promise<unknown>;
 export type AutomationKind = 'workflow'|'prompt'|'schedule'|'reminder'|'device-reminder';
 type ObjectValue = Record<string,any>;
 export interface AutomationRow {

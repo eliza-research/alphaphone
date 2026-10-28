@@ -69,3 +69,31 @@ test('older device notes stay a separate explicit recovery source and are not op
  expect(await page.evaluate(async()=>(await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw())).toBe(before);
  expect((await snapshot(page)).notes).toEqual([]);expect(errors).toEqual([]);
 });
+
+test('canonical Notes editor stays focusable beside half chat and isolates without losing its draft under full chat',async({page})=>{
+ await page.setViewportSize({width:412,height:915});
+ const {foreign,errors}=await canonicalNotesFixture(page);await openCanonicalNotes(page);
+ await page.getByRole('button',{name:'New note',exact:true}).click();
+ const title=page.getByRole('textbox',{name:'Title',exact:true}),note=page.getByRole('textbox',{name:'Note',exact:true});
+ const body='Retained overlay draft.\n'+'Exact authored line.\n'.repeat(24);
+ await title.fill('Overlay draft');await note.fill(body);
+ const notes=page.locator('[data-alpha-shared-notes]'),panel=page.locator('[data-alpha-layer="conversation"]');
+ await page.getByRole('button',{name:'Open conversation',exact:true}).click();
+ await page.getByRole('textbox',{name:'Message Alpha',exact:true}).fill('Keep the unsent chat draft');
+ await panel.evaluate(el=>Promise.all(el.getAnimations().map(a=>a.finished.catch(()=>{}))));
+ await expect(notes).not.toHaveAttribute('inert','');
+ await note.focus();await expect(note).toBeFocused();
+ await expect.poll(async()=>{const n=await note.boundingBox(),p=await panel.boundingBox();return n&&p?n.y+n.height-p.y:999;}).toBeLessThanOrEqual(-8);
+ await page.getByRole('button',{name:'Expand chat',exact:true}).click();
+ await expect(notes).toHaveAttribute('inert','');await expect(notes).toHaveAttribute('aria-hidden','true');
+ await expect(notes.getByRole('textbox',{name:'Note',exact:true})).toHaveCount(0);
+ for(let i=0;i<8;i++){await page.keyboard.press('Tab');expect(await page.evaluate(()=>!!document.activeElement?.closest('[data-alpha-shared-notes]'))).toBe(false);}
+ await page.getByRole('button',{name:'Shrink chat',exact:true}).click();
+ await expect(notes).not.toHaveAttribute('inert','');await expect(notes).toHaveAttribute('aria-hidden','false');
+ await expect(title).toHaveValue('Overlay draft');await expect(note).toHaveValue(body);
+ await expect(page.getByRole('textbox',{name:'Message Alpha',exact:true})).toHaveValue('Keep the unsent chat draft');
+ await page.getByRole('button',{name:'Back to notes',exact:true}).click();
+ await expect.poll(()=>snapshot(page).then((s:any)=>s.notes.length)).toBe(1);
+ expect((await snapshot(page)).notes[0].body).toBe('\n'+body);
+ expect(foreign).toEqual([]);expect(errors).toEqual([]);
+});

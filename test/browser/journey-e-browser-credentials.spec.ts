@@ -150,11 +150,13 @@ test('browser navigation, tabs, private tab, reviewed reading and password manag
     await expect(page.getByRole('button', {name: 'Read locally', exact: true})).toHaveCount(0);
     expect(await page.evaluate(() => (window as any).speechCalls)).toEqual(['The ferry leaves at nine.']);
     // The host cannot see where a sandboxed page took itself, so it says so and offers no reading
-    // of that unknown document: Read aloud opens no review and nothing is spoken.
+    // or question action for that unknown document. Nothing is spoken.
     await expect(page.getByRole('status').filter({hasText: 'The website navigated inside'})).toBeVisible();
-    await menu(page, 'Read aloud');
-    await expect(page.getByText('Load a page before reading.', {exact: true}).first()).toBeVisible();
-    await expect(button(page, 'Close menu')).toHaveCount(0);
+    await button(page, 'Menu').click();
+    await expect(button(page, 'Read aloud')).toHaveCount(0);
+    await expect(button(page, 'Ask about page')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog',{name:'Browser menu',exact:true})).toHaveCount(0);
     await expect(review).toHaveCount(0);
     expect(await page.evaluate(() => (window as any).speechCalls)).toEqual(['The ferry leaves at nine.']);
     // Going to the new address explicitly restores a reviewable page: the review is of that page.

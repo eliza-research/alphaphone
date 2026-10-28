@@ -6,7 +6,6 @@ import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 export const PARADEE_SOURCE='vendor/eliza/plugins/plugin-local-inference/native/android';
 export const PARADEE_NATIVE='.eliza/paradee-voice/native';
-export const usesParadee=root=>fs.existsSync(path.join(root,PARADEE_SOURCE,'consumer.gradle'));
 const digest=value=>createHash('sha256').update(value).digest('hex');
 function checkedFile(root,entry){
  if(!entry||typeof entry.path!=='string'||!entry.path||path.isAbsolute(entry.path)||entry.path.split(/[\\/]/).some(part=>!part||part==='.'||part==='..')||!Number.isSafeInteger(entry.bytes)||entry.bytes<=0||!/^[a-f0-9]{64}$/.test(entry.sha256))throw Error('Invalid Paradee build record entry');

@@ -11,11 +11,27 @@ import java.util.*;
 /** Own notifications plus explicitly allowed, Android-authorized external rows. */
 @CapacitorPlugin(name="AlphaNotifications")
 public class AlphaNotificationsPlugin extends Plugin {
+ private static java.lang.ref.WeakReference<AlphaNotificationsPlugin> canonicalLive=new java.lang.ref.WeakReference<>(null);
+ static void canonicalTapReady(){AlphaNotificationsPlugin plugin=canonicalLive.get();if(plugin!=null)plugin.notifyListeners("canonicalNotificationTap",new JSObject(),true);}
+ @PluginMethod public void canonicalPending(PluginCall call){
+  noticeWork(call,"Notification owner is unavailable.",()->{
+   AlphaCanonicalNotifications.ensure(getContext());org.json.JSONObject pending=AlphaCanonicalNotifications.pending();
+   requireNoticeForeground();call.resolve(JSObject.fromJSONObject(pending));
+  });
+ }
+ @PluginMethod public void acknowledgeCanonical(PluginCall call){
+  String token=call.getString("token","");
+  noticeWork(call,"Notification read status is unconfirmed; it will not be retried.",()->{
+   AlphaCanonicalNotifications.acknowledge(token,this::requireNoticeForeground);
+   requireNoticeForeground();call.resolve(new JSObject().put("ok",true));
+  });
+ }
+
  private static final WorkflowNoticeIo NOTICE_IO=new WorkflowNoticeIo();
  private final android.os.Handler noticeMain=new android.os.Handler(android.os.Looper.getMainLooper());
  private volatile boolean noticeDestroyed;
  private interface NoticeWork {void run()throws Exception;}
- @Override protected void handleOnDestroy(){noticeDestroyed=true;super.handleOnDestroy();}
+ @Override protected void handleOnDestroy(){noticeDestroyed=true;if(canonicalLive.get()==this)canonicalLive.clear();super.handleOnDestroy();}
  private void requireNoticeForeground()throws Exception {
   if(android.os.Looper.myLooper()==android.os.Looper.getMainLooper())throw new IllegalStateException("Storage must not run on main thread");
   java.util.concurrent.CountDownLatch checked=new java.util.concurrent.CountDownLatch(1);
@@ -33,7 +49,7 @@ public class AlphaNotificationsPlugin extends Plugin {
  private void clearCapturedIntent(android.content.Intent intent,String token){noticeMain.post(()->{if((WorkflowNoticeTaps.PREFIX+token).equals(intent.getDataString()))intent.setData(null);workflowIntentDedup.release(intent,token);});}
  private final LinkedHashMap<String,List<android.content.Intent>> uncapturedWorkflowTaps=new LinkedHashMap<>();
  private WorkflowNoticeTaps workflowTaps(){return WorkflowNoticeTapsFactory.create(getContext());}
- @Override public void load(){captureWorkflowTap(getActivity().getIntent());}
+ @Override public void load(){super.load();canonicalLive=new java.lang.ref.WeakReference<>(this);captureWorkflowTap(getActivity().getIntent());}
  @Override protected void handleOnNewIntent(android.content.Intent intent){captureWorkflowTap(intent);}
  @Override protected void handleOnResume(){PluginWorkers.submit(NOTICE_IO,()->{drainWorkflowTaps();noticeChanged();},()->{/* Intents remain retained for retry. */});}
  private int drainWorkflowTaps(){

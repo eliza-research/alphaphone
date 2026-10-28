@@ -3267,6 +3267,7 @@ registerView("notes", {
 
     var shareSheet = st.sheet === "share" && !!n;
     return {
+      legacyNotes: true, notesTitle: "Notes", primaryNotes: true, canRecord: true,
       searching: st.q !== null && st.q !== undefined, notSearching: st.q === null || st.q === undefined,
       q: st.q || "",
       onQ: function (e) { api.set({ q: e.target.value }); },
