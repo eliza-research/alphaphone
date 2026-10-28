@@ -1,7 +1,7 @@
 import { calendarSyncHost } from "./calendar-sync-host";
 import { googleConnectionController } from "./google-connection-ui";
 import { holdPhoneInert } from "./modal-inert";
-import type { CalendarSyncReview } from "./calendar-sync-controller";
+import type { CalendarSyncReview } from "./calendar-sync-host";
 /** Explicit destination review. Opening Settings does not enable sync or dispatch provider writes. */
 export function openCalendarSyncSettings() {
 	const dialog = document.createElement("dialog");
