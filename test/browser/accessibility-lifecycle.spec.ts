@@ -143,6 +143,8 @@ test.describe('rotation across views', () => {
 
 test.describe('a reload (the renderer restarted)', () => {
   test('the chosen text size survives, and Home comes back announced and in reading order', async ({ page }) => {
+    // A reload plus three audited views: 5 s alone, past the 30 s default when run beside the 200% sweeps.
+    test.setTimeout(90_000);
     await start(page);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page.getByRole('button', { name: 'Display', exact: true }).click();
