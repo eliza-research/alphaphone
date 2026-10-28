@@ -1,4 +1,4 @@
-import {isPreparedViewNavigationRequest} from './prepared-view-navigation';
+import {isPreparedViewNavigationRequest} from './prepared-view-navigation.ts';
 import type {ChatChannel} from './alpha-client';
 import type {AutomationsMethod} from './automations-route-policy.ts';
 import {ownerRouteAllowed, ownerRouteGroup} from './owner-route-policy.ts';
