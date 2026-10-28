@@ -8,6 +8,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   CLOUD_ASSET_LINKS, cloudAssetLinksConfig, cloudEntryProblems, fingerprint, publishedAssetLinksCheck,
   readAssetLinksSource, renderAssetLinks, statementsToCloudEntries, TEMPLATE,
@@ -125,4 +126,44 @@ test("the CLI prints the Cloud value, checks a file and refuses unknown option m
   const out = path.join(dir, "out/assetlinks.json");
   assert.equal(cli(["--out", out]).status, 0);
   assert.deepEqual(JSON.parse(fs.readFileSync(out, "utf8"))[0].target.sha256_cert_fingerprints, [fingerprint(RELEASE)]);
+});
+
+test("the operator value is judged exactly as the pinned Cloud parser judges it", async t => {
+  // Cloud's own parser at the pin, read from the submodule's objects (no checkout of packages/cloud is needed).
+  const pin = JSON.parse(fs.readFileSync(path.join(root, "upstream.lock.json"), "utf8")).commit;
+  const shown = spawnSync("git", ["-C", path.join(root, "vendor/eliza"), "show", `${pin}:packages/cloud/shared/src/lib/auth/android-asset-links.ts`], { encoding: "utf8", maxBuffer: 1 << 22 });
+  if (shown.status !== 0) { t.skip("the pinned Cloud source is not available in vendor/eliza"); return; }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "alpha-cloud-asset-links-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, "android-asset-links.ts");
+  fs.writeFileSync(file, shown.stdout);
+  const cloud = await import(pathToFileURL(file).href);
+  assert.equal(CLOUD_ASSET_LINKS.variable, cloud.ANDROID_ASSET_LINKS_ENV);
+  assert.deepEqual([...CLOUD_ASSET_LINKS.relations], [...cloud.ANDROID_ASSET_LINKS_RELATIONS]);
+
+  const alpha = { package_name: packageName, sha256_cert_fingerprints: [fingerprint(RELEASE), fingerprint(DEV)] };
+  const prints = count => Array.from({ length: count }, (_, index) => fingerprint(index.toString(16).padStart(2, "0").repeat(32)));
+  const candidates = {
+    "two apps": [elizaEntry, alpha],
+    "default relations": [{ package_name: packageName, sha256_cert_fingerprints: [fingerprint(RELEASE)] }],
+    "duplicate package": [alpha, { ...alpha, sha256_cert_fingerprints: [fingerprint(OTHER)] }],
+    "lower-case fingerprint": [{ ...alpha, sha256_cert_fingerprints: [fingerprint(RELEASE).toLowerCase()] }],
+    "repeated fingerprint": [{ ...alpha, sha256_cert_fingerprints: [fingerprint(RELEASE), fingerprint(RELEASE)] }],
+    "eight fingerprints": [{ ...alpha, sha256_cert_fingerprints: prints(8) }],
+    "nine fingerprints": [{ ...alpha, sha256_cert_fingerprints: prints(9) }],
+    "no fingerprint": [{ ...alpha, sha256_cert_fingerprints: [] }],
+    "unknown relation": [{ ...alpha, relations: ["delegate_permission/common.use_as_origin"] }],
+    "empty relations": [{ ...alpha, relations: [] }],
+    "extra field": [{ ...alpha, namespace: "android_app" }],
+    "invalid package": [{ ...alpha, package_name: "alphaphone" }],
+    "sixteen apps": Array.from({ length: 16 }, (_, index) => ({ package_name: `ai.example.app${index}`, sha256_cert_fingerprints: [fingerprint(RELEASE)] })),
+    "seventeen apps": Array.from({ length: 17 }, (_, index) => ({ package_name: `ai.example.app${index}`, sha256_cert_fingerprints: [fingerprint(RELEASE)] })),
+    "too large": Array.from({ length: 16 }, (_, index) => ({ package_name: `ai.example.${"a".repeat(200)}${index}`, sha256_cert_fingerprints: prints(8) })),
+  };
+  for (const [name, entries] of Object.entries(candidates)) {
+    const parsed = cloud.parseAndroidAssetLinksConfig(JSON.stringify(entries));
+    assert.equal(cloudEntryProblems(entries).length === 0, parsed.ok, `${name}: Alpha says ${JSON.stringify(cloudEntryProblems(entries))}, Cloud says ${JSON.stringify(parsed)}`);
+    // What Cloud publishes for an accepted value reads back as the same entries.
+    if (parsed.ok) assert.deepEqual(statementsToCloudEntries(parsed.statements), entries.map(entry => ({ ...entry })), name);
+  }
 });
