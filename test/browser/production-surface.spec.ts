@@ -1,6 +1,7 @@
 import {seedCompletedAccessSetup} from './flag-off-android';
 import {completeAccessSetup} from './flag-off-android';
 import { test, expect, type Page } from '@playwright/test';
+import {installResidentAgentPlugin} from './helpers/resident-agent-plugin';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { FORBIDDEN_ENGINE_PATH, engineFindings } from '../../scripts/audit-production-bundle.mjs';
@@ -325,9 +326,11 @@ test('production signed-out voice stays on-device with no capture, upload or Clo
 });
 for (const mode of ['signed-out','empty','credits','unavailable','funded','replaced','unpackaged','legacy-offline'] as const) {
  test(`resident always present (P-43), Cloud admission only binds inference: ${mode}`,async({page})=>{
+  await installResidentAgentPlugin(page);
   await page.addInitScript(mode=>{
    const w=window as any;w.androidBridge={};w.residentCalls=[];
    const id='9f1dc45a-4011-4e44-947a-30d999d24fa5';
+   const resident=w.residentAgent=w.createResidentAgentPlugin({owner:()=>id,agentId:id});
    const values:Record<string,string>={};let credentialReads=0;
    // An older build's "Use local apps without AI" choice.
    if(mode==='legacy-offline')localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline',localApps:true}));
@@ -335,18 +338,19 @@ for (const mode of ['signed-out','empty','credits','unavailable','funded','repla
    const methods=(names:string[])=>names.map(name=>({name,rtype:'promise'}));
    w.Capacitor={PluginHeaders:[
     {name:'DeviceApps',methods:methods(['buildInfo'])},
-    {name:'Agent',methods:methods(['getStatus','start','stop','configureCloudProvider','clearProvider','providerStatus','request'])},
+    {name:'Agent',methods:resident.methods(['getStatus','start','stop','configureCloudProvider','clearProvider','providerStatus','request'])},
     {name:'AlphaCloudSignIn',methods:methods(['status'])},
     {name:'AlphaConnection',methods:methods(['secureRead','secureWrite','secureRemove','secureCompareExchange','request','cancel','openExternal'])},
     {name:'AlphaNotifications',methods:methods(['status','crossAppStatus','addListener','removeListener'])},
     {name:'AlphaVoiceCloud',methods:methods(['checkPermissions'])},
-   ],nativePromise:async(plugin:string,method:string,input:any)=>{
+   ],nativeCallback:resident.nativeCallback,nativePromise:async(plugin:string,method:string,input:any)=>{
     w.residentCalls.push({plugin,method,path:input?.path,url:input?.url});
     if(plugin==='AlphaCloudSignIn'&&method==='status')return{active:false,inApp:true,email:true,google:false};
     if(plugin==='DeviceApps')return{launcher:false,version:'billing-fixture'};
     if(plugin==='AlphaNotifications')return{permissionGranted:true,appEnabled:true};
     if(plugin==='AlphaVoiceCloud')return{microphone:'granted'};
     if(plugin==='Agent'){
+     const owned=resident.answer(method,input);if(owned)return owned;
      if(method==='getStatus')return{packaged:mode!=='unpackaged',state:'stopped',serviceActive:false,socketListening:false};
      if(method==='clearProvider')return{configured:false};
      if(method==='providerStatus')return{provider:'elizacloud',configured:false};
@@ -436,19 +440,22 @@ for (const mode of ['signed-out','empty','credits','unavailable','funded','repla
  });
 }
 test('resident always present (P-43): a kept local-apps choice and a saved sign-in with no network start the resident, AI off with Try again',async({page})=>{
+ await installResidentAgentPlugin(page);
  await page.addInitScript(()=>{
   const w=window as any;w.androidBridge={};w.residentCalls=[];
   const id='9f1dc45a-4011-4e44-947a-30d999d24fa5';
+  const resident=w.residentAgent=w.createResidentAgentPlugin({owner:()=>id,agentId:id});
   localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline',localApps:true}));
   const methods=(names:string[])=>names.map(name=>({name,rtype:'promise'}));
   w.Capacitor={PluginHeaders:[
    {name:'DeviceApps',methods:methods(['buildInfo'])},
-   {name:'Agent',methods:methods(['getStatus','start','stop','clearProvider','providerStatus','request'])},
+   {name:'Agent',methods:resident.methods(['getStatus','start','stop','clearProvider','providerStatus','request'])},
    {name:'AlphaConnection',methods:methods(['secureRead','secureWrite','secureRemove','secureCompareExchange','request','cancel','openExternal'])},
    {name:'AlphaNotifications',methods:methods(['status','crossAppStatus','addListener','removeListener'])},
    {name:'AlphaVoiceCloud',methods:methods(['checkPermissions'])},
-  ],nativePromise:async(plugin:string,method:string,input:any)=>{
+  ],nativeCallback:resident.nativeCallback,nativePromise:async(plugin:string,method:string,input:any)=>{
    w.residentCalls.push({plugin,method,slot:input?.slot,url:input?.url});
+   if(plugin==='Agent'){const owned=resident.answer(method,input);if(owned)return owned;}
    if(plugin==='AlphaVoiceCloud')return{microphone:'granted'};
    if(plugin==='DeviceApps')return{launcher:false,version:'resident-fixture'};
    if(plugin==='AlphaNotifications')return{permissionGranted:true,appEnabled:true};

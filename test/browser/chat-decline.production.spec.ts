@@ -1,6 +1,7 @@
 import {seedCompletedAccessSetup} from './flag-off-android';
 import { completeAccessSetup } from './flag-off-android';
 import { test, expect, type Page } from '@playwright/test';
+import { installResidentAgentPlugin } from './helpers/resident-agent-plugin';
 
 // Flag-off product surfaces: the packaged resident agent behind a funded Eliza Cloud account, over
 // a synthetic Android IPC boundary. The agent, its proposal store and the action journal are
@@ -8,6 +9,7 @@ import { test, expect, type Page } from '@playwright/test';
 const AGENT = '6f1d3c3e-8c55-4c1b-9d1f-2b6f0b0d3a11';
 
 async function residentAgent(page: Page, seed: 'pending' | 'reconcile') {
+  await installResidentAgentPlugin(page);
   await page.addInitScript(({ agentId, seed }) => {
     const w = window as any;
     w.androidBridge = {};
@@ -15,6 +17,7 @@ async function residentAgent(page: Page, seed: 'pending' | 'reconcile') {
     const future = Date.now() + 86_400_000, account = '9f1dc45a-4011-4e44-947a-30d999d24fa5';
     store.set('cloud:production', JSON.stringify({ token: 'synthetic-cloud-key', credentialId: account, expiresAt: future }));
     const f = w.declineFixture = { decisions: [] as string[], reconciliations: [] as unknown[], effects: 0, journal: [] as string[], unexpected: [] as string[], proposals: [] as any[], installationId: '' };
+    const resident = w.residentAgent = w.createResidentAgentPlugin({ owner: () => 'fixture-owner', agentId, unexpected: f.unexpected });
     const proposal = (id: string, state: string, extra: Record<string, unknown> = {}) => ({
       id, digest: (id === 'fixture-reconcile' ? 'b' : 'a').repeat(64), state, expiresAt: new Date(future).toISOString(),
       subjectUserId: 'fixture-owner', requestedBy: agentId, action: 'device_action',
@@ -56,12 +59,13 @@ async function residentAgent(page: Page, seed: 'pending' | 'reconcile') {
     w.Capacitor = {
       PluginHeaders: [
         { name: 'DeviceApps', methods: methods(['buildInfo']) },
-        { name: 'Agent', methods: methods(['getStatus', 'start', 'stop', 'configureCloudProvider', 'request', 'providerStatus']) },
+        { name: 'Agent', methods: resident.methods(['getStatus', 'start', 'stop', 'configureCloudProvider', 'request', 'providerStatus']) },
         { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite', 'secureRemove', 'secureCompareExchange', 'request', 'cancel', 'openExternal', 'addListener', 'removeListener', 'pauseNotificationCollection']) },
         { name: 'AlphaActionJournal', methods: methods(['reserve', 'markApplying', 'finish', 'list', 'get']) },
         { name: 'AlphaNotifications', methods: methods(['status', 'crossAppStatus', 'addListener', 'removeListener']) },
         { name: 'AlphaVoiceCloud', methods: methods(['checkPermissions']) },
       ],
+      nativeCallback: resident.nativeCallback,
       nativePromise: async (plugin: string, method: string, input: any) => {
         if (plugin === 'DeviceApps') return { launcher: false, version: 'decline-fixture' };
         if (plugin === 'AlphaNotifications') return { permissionGranted: true, appEnabled: true };
@@ -73,6 +77,7 @@ async function residentAgent(page: Page, seed: 'pending' | 'reconcile') {
           throw Error('Unexpected journal effect');
         }
         if (plugin === 'Agent') {
+          const owned = resident.answer(method, input); if (owned) return owned;
           if (method === 'getStatus') return { packaged: true, state: 'stopped', serviceActive: false, socketListening: false };
           if (method === 'providerStatus') return { provider: 'cerebras', configured: true, model: 'qwen-3.8-27b' };
           if (method === 'request') {

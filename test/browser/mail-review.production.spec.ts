@@ -1,6 +1,7 @@
 import {seedCompletedAccessSetup} from './flag-off-android';
 import {completeAccessSetup} from './flag-off-android';
 import { test, expect, type Page } from '@playwright/test';
+import { installResidentAgentPlugin } from './helpers/resident-agent-plugin';
 
 // Reviewed send on the FLAG-OFF bundle with the Android bridge stubbed (docs/core-loop-audit.md
 // F-5, F-10). The mailbox is a synthetic managed Gmail answered at the native HTTP boundary
@@ -16,6 +17,7 @@ test.beforeEach(({}, testInfo) => { test.skip(testInfo.project.name !== 'product
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
 
 async function androidWithMailbox(page: Page) {
+  await installResidentAgentPlugin(page);
   await page.addInitScript(({ agentId }) => {
     const w = window as any;
     w.androidBridge = {};
@@ -24,6 +26,7 @@ async function androidWithMailbox(page: Page) {
     store.set('cloud:production', JSON.stringify({ token: 'synthetic-cloud-key', credentialId: account, expiresAt: future }));
     const f = w.declineFixture = { decisions: [] as string[], reconciliations: [] as unknown[], effects: 0, journal: [] as string[], unexpected: [] as string[], proposals: [] as any[], installationId: '', calendar: [] as any[], receipts: [] as any[], entry: null as any, lists: 0,
       mail: { prepares: [] as { requestId: string; digest: string; proposal: string }[], dispatches: [] as { requestId: string; digest: string; proposal: string }[], operations: {} as Record<string, any>, sent: [] as string[], searches: 0 } };
+    const resident = w.residentAgent = w.createResidentAgentPlugin({ owner: () => 'fixture-owner', agentId, unexpected: f.unexpected });
     // One synthetic resident agent: authenticated identity, device enrollment and proposal store.
     const agent = (method: string, path: string, body: any, headers: Record<string, string>): { status: number; data: unknown } => {
       const ok = (data: unknown) => ({ status: 200, data });
@@ -60,13 +63,14 @@ async function androidWithMailbox(page: Page) {
     w.Capacitor = {
       PluginHeaders: [
         { name: 'DeviceApps', methods: methods(['buildInfo']) },
-        { name: 'Agent', methods: methods(['getStatus', 'start', 'stop', 'configureCloudProvider', 'request', 'providerStatus']) },
+        { name: 'Agent', methods: resident.methods(['getStatus', 'start', 'stop', 'configureCloudProvider', 'request', 'providerStatus']) },
         { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite', 'secureRemove', 'secureCompareExchange', 'request', 'cancel', 'openExternal', 'addListener', 'removeListener', 'pauseNotificationCollection']) },
         { name: 'AlphaActionJournal', methods: methods(['reserve', 'markApplying', 'finish', 'list', 'get']) },
         { name: 'AlphaNotifications', methods: methods(['status', 'crossAppStatus', 'addListener', 'removeListener']) },
         { name: 'AlphaVoiceCloud', methods: methods(['checkPermissions']) },
         { name: 'AlphaCalendar', methods: methods(['requestAccess', 'executeAgent', 'cancelAgent', 'calendars', 'range', 'listAlerts', 'prepareAgentSource', 'addListener', 'removeListener']) },
       ],
+      nativeCallback: resident.nativeCallback,
       nativePromise: async (plugin: string, method: string, input: any) => {
         if (plugin === 'DeviceApps') return { launcher: false, version: 'decline-fixture' };
         if (plugin === 'AlphaNotifications') return { permissionGranted: true, appEnabled: true };
@@ -92,6 +96,7 @@ async function androidWithMailbox(page: Page) {
           return {};
         }
         if (plugin === 'Agent') {
+          const owned = resident.answer(method, input); if (owned) return owned;
           if (method === 'getStatus') return { packaged: true, state: 'stopped', serviceActive: false, socketListening: false };
           if (method === 'providerStatus') return { provider: 'cerebras', configured: true, model: 'qwen-3.8-27b' };
           if (method === 'request') {
