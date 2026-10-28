@@ -2,7 +2,8 @@
  * Alpha Phone as a registered product of the shared mobile shell. Identity, theme,
  * icons, view order and labels, older view ids and installed storage names are the
  * versioned record in config/alpha-product.json; the shell, view registry,
- * navigation and launcher join are upstream (@elizaos/ui/mobile-shell).
+ * navigation and launcher join are upstream (@elizaos/ui/mobile-shell). This module
+ * reads only the React-free core entry, so agent navigation and voice never load Home.
  */
 import {
   createMobileViewRegistry,
@@ -12,7 +13,7 @@ import {
   mobileShellViewPaths,
   type MobileProductRegistration,
   type MobileShellAppearance,
-} from '@elizaos/ui/mobile-shell';
+} from '@elizaos/ui/mobile-shell/core';
 import record from '../../../../config/alpha-product.json' with {type: 'json'};
 import {isMvpView} from '../prototype/mvp-features';
 

@@ -92,4 +92,9 @@ test('installed favorites with older Alpha view ids are migrated to canonical id
   const shell=installHomeShell(shellClass([]),{},{list:async()=>({apps}),launch:async()=>{}},{storage});
   assert.deepEqual(JSON.parse(store.get('alpha.launcher.favorites.v1')),{version:2,keys:['alpha:notes','com.android.settings','alpha:automations'],defaultPolicy:'alpha-apps'});
   assert.deepEqual(shell.launcher.snapshot().favorites,['alpha:notes','com.android.settings','alpha:automations']);
+  assert.deepEqual(shell.migration,{status:'migrated',renamed:1},'the shared launcher join reports the one migration');
+  // A later start finds nothing left to rename; the record keeps Alpha's own format.
+  assert.deepEqual(installHomeShell(shellClass([]),{},{list:async()=>({apps}),launch:async()=>{}},{storage}).migration,{status:'unchanged'});
+  shell.launcher.toggleFavorite({packageName:'alpha:notes',label:'Notes'});
+  assert.deepEqual(JSON.parse(store.get('alpha.launcher.favorites.v1')),{version:2,keys:['com.android.settings','alpha:automations'],defaultPolicy:'alpha-apps'});
 });

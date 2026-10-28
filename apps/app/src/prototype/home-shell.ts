@@ -1,34 +1,30 @@
 import {createElement, type CSSProperties} from 'react';
-import {localFavorites, type FavoritesStore, type LauncherBridge} from '@elizaos/capacitor-system/launcher';
-import {createMobileShellLauncher, migrateLauncherViewIds, mobileShellIconUrl, MobileAllAppsDrawer, MobileHomeScreen, type MobileHomeEntry, type MobileHomeTile} from '@elizaos/ui/mobile-shell';
+import type {FavoritesStore, LauncherBridge} from '@elizaos/capacitor-system/launcher';
+import {createMobileShellLauncher, mobileShellIconUrl, MobileAllAppsDrawer, MobileHomeScreen, type MobileHomeEntry, type MobileHomeTile} from '@elizaos/ui/mobile-shell';
 import {ALPHA_PRODUCT, alphaViews} from '../product/alpha-product';
 type Bag = Record<string, any>;
 
-/** Installed favorites (keys kept across upgrades; product views are `alpha:<canonical id>`). */
-export const alphaFavorites = (storage: () => Storage = () => globalThis.localStorage) =>
-  localFavorites(storage, {key: ALPHA_PRODUCT.storage.launcherFavorites, defaultPolicy: 'alpha-apps'});
-
 /** Home, its app grid and All apps from the shared mobile shell, themed by the Alpha record.
  * The template fills Home's notice and card slots; open state and Back go through the shared
- * navigation reducer (Component.shellNavigate), so Back and Home close the drawer. */
+ * navigation reducer (Component.shellNavigate), so Back and Home close the drawer. The installed
+ * favorites are the record's (alpha.launcher.favorites.v1, product views as `alpha:<canonical
+ * id>`); the shell migrates their older view ids once before the launcher first reads them. */
 export function installHomeShell(Component: any, views: Record<string, Bag>, bridge: LauncherBridge, options: {
-  icons?: boolean; favorites?: FavoritesStore;
+  icons?: boolean;
+  /** Replaces the installed favorites record (tests only). */
+  favorites?: FavoritesStore;
   /** Exact browser device mirrors only; never inferred from labels. */
   aliases?: Record<string, string>;
   /** False when the bridge cannot report package changes; the drawer still re-reads on open and resume. */
   follow?: boolean;
-  /** Storage holding installed favorites; its older view ids are migrated once before the first read. */
+  /** Storage holding the installed favorites; localStorage by default. */
   storage?: () => Storage;
 } = {}) {
-  if (!options.favorites) {
-    try { migrateLauncherViewIds((options.storage ?? (() => globalThis.localStorage))(), ALPHA_PRODUCT); }
-    catch { /* Storage is unavailable: the launcher reads no saved favorites either. */ }
-  }
   const p = Component.prototype, mount = p.componentDidMount, unmount = p.componentWillUnmount, render = p.renderVals;
   let owner: any = null;
   const shell = createMobileShellLauncher({
     bridge, registry: alphaViews, icons: options.icons, aliases: options.aliases,
-    favorites: options.favorites || alphaFavorites(options.storage),
+    favorites: options.favorites, storage: options.storage,
     open: view => owner?.openView(alphaViews.hostKey(view)),
     changed: () => owner?.setState({launcherRevision: Date.now()}),
   });

@@ -117,6 +117,8 @@ export default defineConfig({
       "@elizaos/contracts/device-action-execution": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/device-action-execution.ts", import.meta.url)),
       "@elizaos/ui/view-primitives": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/view-primitives.ts",import.meta.url)),
       "@elizaos/capacitor-system/launcher": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/client/launcher.ts",import.meta.url)),
+      // The core entry precedes the shell entry: an alias also matches its own subpaths.
+      "@elizaos/ui/mobile-shell/core": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/mobile-shell/core.ts",import.meta.url)),
       "@elizaos/ui/mobile-shell": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/mobile-shell/index.ts",import.meta.url)),
       "@elizaos/ui/voice/voice-session-client": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/voice/voice-session-client-core.ts",import.meta.url)),
       "@elizaos/host/voice/ui-context": fileURLToPath(new URL("./.eliza/client-features/packages/host/src/voice/ui-context.ts",import.meta.url)),

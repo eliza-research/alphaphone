@@ -12,7 +12,7 @@ import {
 } from "./fixtures.js";
 import { isMvpView, DEFERRED_MVP_VIEWS, deferredMvpPrompt } from "./mvp-features";
 import { ALPHA_PRODUCT, alphaThemeVariables } from "../product/alpha-product";
-import { navigateMobileShell } from "@elizaos/ui/mobile-shell";
+import { navigateMobileShell } from "@elizaos/ui/mobile-shell/core";
 import { emptyHomeShadePull, pullStart, shadeFallback } from "./system-shade";
 import React from "react";
 import { DCLogic } from "./dc-lite.js";

@@ -96,7 +96,11 @@ test('the product record validates and carries the same identity as app.config.j
   assert.deepEqual(validateMobileProductRegistration(record), []);
   assert.equal(record.identity.appId, identity.appId);
   assert.equal(record.identity.appName, identity.appName);
+  // Installed-data compatibility: the favorites record, its product-view prefix and the
+  // default-favorites policy every existing install wrote.
+  assert.equal(record.storage.launcherFavorites, 'alpha.launcher.favorites.v1');
   assert.equal(record.storage.launcherBuiltinPrefix, 'alpha:');
+  assert.equal(record.storage.launcherDefaultPolicy, 'alpha-apps');
   assert.doesNotMatch(JSON.stringify(record.storage), FOREIGN);
 });
 
@@ -104,8 +108,13 @@ test('every installed storage name in the product record is still read by the re
   const record = JSON.parse(fs.readFileSync('config/alpha-product.json', 'utf8'));
   const source = sources('apps/app/src').map(file => fs.readFileSync(file, 'utf8')).join('\n');
   for (const key of Object.values(record.storage.retained)) assert.ok(source.includes(`'${key}'`) || source.includes(`"${key}"`), `${key} is no longer named in apps/app/src; keep it while installs may hold it`);
-  // The favorites name is read through the record itself.
-  assert.match(fs.readFileSync('apps/app/src/prototype/home-shell.ts', 'utf8'), /key: ALPHA_PRODUCT\.storage\.launcherFavorites/);
+  // The favorites record is read through the product registration by the shared launcher join;
+  // Alpha supplies a store of its own only in tests.
+  const shell = fs.readFileSync('apps/app/src/prototype/home-shell.ts', 'utf8');
+  assert.match(shell, /createMobileShellLauncher\(\{\s*bridge, registry: alphaViews,/);
+  const install = fs.readFileSync('apps/app/src/main.tsx', 'utf8').match(/installHomeShell\(Component,[\s\S]*?\n\}\);/);
+  assert.ok(install, 'main.tsx installs the shared Home');
+  assert.doesNotMatch(install[0], /\b(?:favorites|storage):/, 'the app keeps the installed favorites record');
 });
 
 test('the product theme supplies every Alpha palette property the stylesheets read', async () => {

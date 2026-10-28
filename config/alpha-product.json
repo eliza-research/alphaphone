@@ -102,6 +102,7 @@
   "storage": {
     "launcherFavorites": "alpha.launcher.favorites.v1",
     "launcherBuiltinPrefix": "alpha:",
+    "launcherDefaultPolicy": "alpha-apps",
     "retained": {
       "appearance": "alpha.appearance.v1",
       "connectionSelection": "alpha.connection.selection.v1",

@@ -62,3 +62,28 @@ test('a failed installed-app read shows an explicit failure with a manual retry'
   await drawer.getByRole('button', { name: 'Try again', exact: true }).click();
   await expect(drawer.getByRole('button', { name: 'Open Settings', exact: true })).toBeVisible();
 });
+
+// AP-01 installed-data compatibility: an install upgraded from a build that saved product views
+// under their older ids (alpha:workflows) keeps the same Home. The shared launcher join migrates the
+// record once, before its first read; installed apps, order and the record format are kept.
+test('an upgraded install keeps its Home favorites saved under older view ids', async ({ page }) => {
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('upgrade.seeded')) return;
+    sessionStorage.setItem('upgrade.seeded', '1');
+    localStorage.setItem('alpha.launcher.favorites.v1', JSON.stringify({ version: 2, keys: ['alpha:workflows', 'alpha:notes', 'alpha:workflows'], defaultPolicy: 'alpha-apps' }));
+  });
+  await page.goto('/');
+  const home = page.locator('[data-alpha-home-apps]');
+  await expect(home.getByRole('button', { name: 'All apps', exact: true })).toBeVisible();
+  const tiles = () => home.locator('[data-mobile-shell-tile]').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')));
+  await expect.poll(tiles).toEqual(['Workflows', 'Notes', 'All apps']);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('alpha.launcher.favorites.v1') || 'null'))).toEqual({ version: 2, keys: ['alpha:automations', 'alpha:notes'], defaultPolicy: 'alpha-apps' });
+  await home.getByRole('button', { name: 'Workflows', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-active-view', 'workflows');
+  // A reload finds nothing left to migrate and the same Home.
+  await page.evaluate(() => window.dispatchEvent(new Event('launcher-home')));
+  await page.reload();
+  await expect.poll(tiles).toEqual(['Workflows', 'Notes', 'All apps']);
+  expect(errors).toEqual([]);
+});
