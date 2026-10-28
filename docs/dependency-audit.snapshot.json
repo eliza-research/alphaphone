@@ -103,16 +103,16 @@
   ],
   "resident": {
     "description": "Advisories for the resident runtime's npm packages at the pinned upstream commit, from the npm bulk advisory endpoint. Regenerate with: node scripts/dependency-audit.mjs --resident --write. Dispositions live in docs/dependency-audit.dispositions.json under \"resident\".",
-    "upstreamCommit": "6c1a31f2331581e2bd148d7792c20f25276c0da7",
+    "upstreamCommit": "1f2a922f86e2a1f3d6cd62e097145492bd49ebfc",
     "input": "vendor/eliza/bun.lock",
     "auditedOn": "2026-10-28",
-    "inputSha256": "722511a3236f70a87b9ed88c784d1d6f385937f95f5b622f20856146700e0c89",
-    "packages": 3695,
+    "inputSha256": "7761f08dd9e9d140ddca0c6d3166ba9c083ee1d045200b2ff48a7e8aa5f79263",
+    "packages": 3678,
     "counts": {
       "info": 0,
       "low": 18,
       "moderate": 61,
-      "high": 61,
+      "high": 60,
       "critical": 1
     },
     "findings": [
@@ -590,20 +590,6 @@
           "vulnerableRange": ">=4.0.0 <5.0.11",
           "title": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion",
           "url": "https://github.com/advisories/GHSA-qhr7-859c-m2p7"
-        }
-      },
-      {
-        "package": "compression",
-        "versions": [
-          "1.8.1"
-        ],
-        "severity": "high",
-        "advisory": {
-          "id": "GHSA-vc2v-76pw-4v95",
-          "severity": "high",
-          "vulnerableRange": "<1.8.2",
-          "title": "compression vulnerable to Denial of Service via memory leak on premature response close",
-          "url": "https://github.com/advisories/GHSA-vc2v-76pw-4v95"
         }
       },
       {
@@ -1284,7 +1270,6 @@
         "package": "undici",
         "versions": [
           "8.10.0",
-          "8.10.2",
           "8.11.2"
         ],
         "severity": "high",
@@ -1442,7 +1427,6 @@
         "package": "undici",
         "versions": [
           "8.10.0",
-          "8.10.2",
           "8.11.2"
         ],
         "severity": "moderate",
@@ -1487,7 +1471,6 @@
         "package": "undici",
         "versions": [
           "8.10.0",
-          "8.10.2",
           "8.11.2"
         ],
         "severity": "high",
@@ -1518,7 +1501,6 @@
         "package": "undici",
         "versions": [
           "8.10.0",
-          "8.10.2",
           "8.11.2"
         ],
         "severity": "moderate",
@@ -1605,7 +1587,6 @@
         "package": "undici",
         "versions": [
           "8.10.0",
-          "8.10.2",
           "8.11.2"
         ],
         "severity": "moderate",
@@ -1651,7 +1632,6 @@
         "package": "undici",
         "versions": [
           "8.10.0",
-          "8.10.2",
           "8.11.2"
         ],
         "severity": "moderate",
@@ -1794,7 +1774,6 @@
         "package": "undici",
         "versions": [
           "8.10.0",
-          "8.10.2",
           "8.11.2"
         ],
         "severity": "high",
@@ -2050,7 +2029,6 @@
         "package": "undici",
         "versions": [
           "8.10.0",
-          "8.10.2",
           "8.11.2"
         ],
         "severity": "high",

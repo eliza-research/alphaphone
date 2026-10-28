@@ -431,7 +431,11 @@ document under the shared Trash policy), `runtime/browser-note-documents.ts` (th
 local text import and export for `AlphaNoteDocuments`) and `runtime/deleted-note-origin.ts`
 (which committed reminder and Calendar deletion receipts retire a From note link, read from
 Alpha's deletion documents). Moving them needs a shared storage and document-picker port in
-`plugin-notes`; until then this Notes cut-over is not complete. Note-origin links point only
+`plugin-notes`; until then this Notes cut-over is not complete. The Trash storage step itself
+(validate in and out, compare-and-exchange, confirm by readback) is now shared as
+`createNotesTrashStore` and `compareExchangeNotesTrashPort` in `plugin-notes/src/client`
+(elizaOS/eliza#38104, develop d2578cb4); once the pin includes it, `notes-trash.ts` keeps only its two slot
+ports and its slot names. Note-origin links point only
 at Older notes voice recordings: canonical Notes records have no Notes-to-Calendar handoff
 or origin link yet.
 
