@@ -115,6 +115,7 @@ export const CLIENT_FEATURE_PATHS = [
 
   'packages/contracts/src/calendar-linked-sync.ts',
   'packages/ui/src/voice/batch-conversation.ts',
+  'packages/ui/src/accessibility/screen-focus.ts',
   'packages/ui/src/voice/voice-session-client-core.ts',
   'packages/ui/src/voice/voice-session-status.ts',
   'packages/ui/src/voice/voice-session-protocol.ts',

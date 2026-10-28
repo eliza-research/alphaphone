@@ -95,6 +95,12 @@ labelled region, or the Home region. The target takes focus only programmaticall
 (`tabindex="-1"`), so Tab continues into the screen from there; focus a view put somewhere
 real, native dialogs, the conversation and the voice panel are left alone.
 
+The mover itself is Eliza's shared `createScreenFocus` (`@elizaos/ui/accessibility`, projected
+as `packages/ui/src/accessibility/screen-focus.ts`, with its own jsdom tests upstream);
+`runtime/view-focus.ts` keeps only what is Alpha's: the title, region and Home selectors, the
+surfaces that own their focus, and the `data-active-view` and `launcher-home` signals. It
+needs a pin that contains that module (eliza branch `claude/alpha-c1-a11y`).
+
 ## The floating dock
 
 The composer bar and the pill float over the page. Round 8's emulator run found Home's last

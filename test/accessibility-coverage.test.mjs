@@ -145,7 +145,12 @@ test('TalkBack reading order is checked in every lane, as Android checks it, acr
   assert.match(read('apps/app/src/prototype/subview-accessibility.ts'), /pageCovered:!!out\.editing/);
   // Focus follows the screen: installed by the renderer, and asserted by the lifecycle spec and the emulator.
   assert.match(read('apps/app/src/main.tsx'), /installViewFocus\(\)/);
-  assert.match(read('apps/app/src/runtime/view-focus.ts'), /target\.setAttribute\('tabindex', '-1'\)/);
+  // The behaviour is Eliza's shared screen focus; Alpha keeps only its selectors and screen-change wiring.
+  const viewFocus = read('apps/app/src/runtime/view-focus.ts');
+  assert.match(viewFocus, /from '@elizaos\/ui\/accessibility\/screen-focus'/);
+  assert.match(viewFocus, /createScreenFocus\(/);
+  assert.doesNotMatch(viewFocus, /setAttribute\('tabindex'|requestAnimationFrame/, 'no local copy of the focus mover');
+  assert.match(read('scripts/prepare-client-features.mjs'), /'packages\/ui\/src\/accessibility\/screen-focus\.ts'/);
 });
 
 test('provider-connected screens are swept, against a synthetic mailbox only', () => {
