@@ -394,8 +394,12 @@ rows. The journal,
 provider reads, dispatch and delivery reconciliation described here are the shared
 plugin-native-messages implementation (`SmsSendJournal`, `SmsProviderReader`, `SmsTelephony`);
 Alpha's earlier copies are deleted. MMS notifications are downloaded and stored by the shared
-`MmsWapPushReceiver`/`MmsResultReceiver` only while Alpha holds the SMS role; outgoing user MMS
-is not offered yet. JVM and renderer tests cover the journal, mapping and contract;
+`MmsWapPushReceiver`/`MmsResultReceiver` only while Alpha holds the SMS role. Outgoing group
+messages and pictures are one reviewed MMS (`sendMms`/`mmsSendResult`, the shared `mms.send.v1`
+contract): offered only while `status.mmsSend` holds (direct sends, the SMS role and the launcher's
+`MmsFileProvider`), shown again in the native dialog with recipients, SIM and picture previews,
+journaled before `sendMultimediaMessage`, stored as Alpha's own outbox row and settled from the
+carrier's M-Send.conf. MMS delivery is never claimed. JVM and renderer tests cover the journal, mapping and contract;
 grants on the image, real provider rows, carrier delivery reports and owned SMS/MMS endpoints remain
 image/device qualification for #421.
 
