@@ -23,6 +23,12 @@ function fixture(){
 {
  const f=fixture();await tick();f.setTap({ownerId:'other'});await f.shell.alphaCanonicalTap();assert.equal(f.acknowledgments.length,0);assert.equal(f.restores.length,0);
 }
+{
+ const f=fixture();await tick();f.connection.history=null;f.setTap({conversationId:undefined,messageId:undefined});await f.shell.alphaCanonicalTap();assert.equal(f.acknowledgments.length,0);assert.equal(f.restores.length,0);assert.equal(f.state.chat,false);
+ const guardSource=source.match(/const exactChat=\(\)=>[^;]+;/)?.[0];assert.ok(guardSource);
+ const nullGuard=vm.runInNewContext('(restored,tap)=>{'+guardSource+'return exactChat();}',{});
+ assert.equal(nullGuard(null,{conversationId:undefined,messageId:undefined}),false);
+}
 for(const active of ['draft','recording','typing']){
  const f=fixture();await tick();f.setTap();f.state[active]=active==='draft'?'Keep my draft':true;await f.shell.alphaCanonicalTap();assert.equal(f.restores.length,0);assert.equal(f.acknowledgments.length,0);
 }
