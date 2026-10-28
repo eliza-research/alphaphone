@@ -37,7 +37,10 @@ test("registration values come from the committed product configuration and matc
   assert.ok(javaSource.includes(`"${identity.appId}"`), "the App Auth client ID is the package");
   assert.ok(javaSource.includes(`"${CALLBACK_PATH}"`), "the callback path");
   assert.ok(javaSource.includes(`"${STEWARD_APP_CLIENT}"`), "the Steward app client for native Google");
-  assert.match(fs.readFileSync(path.join(root, "android/app/build.gradle"), "utf8"), new RegExp(`android:path="${CALLBACK_PATH}"`));
+  // The App Link filter lives in the app module's Gradle product script (build.gradle, or product.gradle
+  // where the Gradle host is generated from a descriptor).
+  const gradle = ["android/app/product.gradle", "android/app/build.gradle"].map(file => path.join(root, file)).filter(file => fs.existsSync(file)).map(file => fs.readFileSync(file, "utf8")).join("\n");
+  assert.match(gradle, new RegExp(`android:path="${CALLBACK_PATH}"`));
 
   const values = registrationValues(registration);
   assert.deepEqual(values.map(row => row.step), ["H-11", "H-12", "H-12", "H-13", "H-13", "H-15"]);
