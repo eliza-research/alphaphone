@@ -24,12 +24,12 @@ async function fixture(run){
 test('actual chooser effects retain focused input across busy, purpose and billing updates',async()=>fixture(async f=>{
  const input=document.querySelector('input');input.focus();
  for(const change of [{busy:true},{busy:false},{purpose:'plan'},{billingReviewEmail:'owner@example.invalid'},{billingReviewEmail:'other@example.invalid'}]){
-  await f.render(change);assert.equal(document.activeElement,input);assert.equal(f.restores,0);assert.equal(document.querySelector('.os').inert,true);
+  await f.render(change);assert.ok(document.activeElement===input,'Focused input must remain active');assert.equal(f.restores,0);assert.equal(document.querySelector('.os').inert,true);
  }
- await f.render({},false);assert.equal(document.activeElement,f.opener);assert.equal(f.restores,1);assert.notEqual(document.querySelector('.os').inert,true);
+ await f.render({},false);assert.ok(document.activeElement===f.opener,'Original opener must regain focus');assert.equal(f.restores,1);assert.notEqual(document.querySelector('.os').inert,true);
 }));
 test('unmount restores the opening control once and refreshed Escape handler uses current busy state',async()=>fixture(async f=>{
  document.querySelector('input').focus();await f.render({busy:true});
  document.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.deepEqual(f.calls,['cancel']);assert.equal(f.restores,0);
- await f.unmount();assert.equal(document.activeElement,f.opener);assert.equal(f.restores,1);
+ await f.unmount();assert.ok(document.activeElement===f.opener,'Original opener must regain focus');assert.equal(f.restores,1);
 }));
