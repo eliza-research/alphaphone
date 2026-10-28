@@ -93,21 +93,10 @@ export interface CloudAgent {
   runtimeUrl: string | null;
 }
 export type { GoogleConnection } from '../../../../.eliza/client-features/plugins/plugin-inbox/src/mailbox/types.ts';
-/** Managed Google Calendar wire data. Cloud enforces ownership of each grant. */
-export interface GoogleCalendarSummary {
-  calendarId:string; summary:string; description:string|null; primary:boolean; accessRole:string;
-  backgroundColor:string|null; foregroundColor:string|null; timeZone:string|null; selected:boolean;
-}
-export interface GoogleCalendarEvent {
-  externalId:string; calendarId:string; title:string; description:string; location:string; status:string;
-  startAt:string; endAt:string; isAllDay:boolean; timezone:string|null; htmlLink:string|null; conferenceLink:string|null;
-  organizer:Record<string,unknown>|null;
-  attendees:Array<{email:string|null;displayName:string|null;responseStatus:string|null;self:boolean;organizer:boolean;optional:boolean}>;
-  metadata:Record<string,unknown>;
-}
-/** Core exhausts provider pages before returning; no client cursor exists. */
-export interface GoogleCalendarFeed { calendarId:string; events:GoogleCalendarEvent[]; syncedAt:string }
-export interface GoogleCalendarRange { timeMin:string; timeMax:string; timeZone:string }
+/** Managed Google Calendar wire data (@elizaos/plugin-calendar/linked-sync). Cloud enforces ownership of each
+ * grant and exhausts provider pages before returning; no client cursor exists. */
+import type { GoogleCalendarEvent, GoogleCalendarFeed, GoogleCalendarRange, GoogleCalendarSummary } from '../../../../.eliza/client-features/plugins/plugin-calendar/src/linked-sync/google-reader.ts';
+export type { GoogleCalendarEvent, GoogleCalendarFeed, GoogleCalendarRange, GoogleCalendarSummary };
 export type { GmailAccount, GmailDraftContent, GmailDraftSummary, GmailInboxCapabilities, GmailInboxReceipt, GmailLink, GmailMessage } from '../../../../.eliza/client-features/plugins/plugin-inbox/src/mailbox/types.ts';
 /** Only absolute http(s) links without credentials are kept; anything else is dropped as untrusted. */
 export { safeMailLink } from '../../../../.eliza/client-features/plugins/plugin-inbox/src/mailbox/links.ts';
