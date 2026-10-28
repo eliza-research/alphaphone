@@ -8,7 +8,7 @@ import {legacyCalendarPreservation} from '../runtime/legacy-calendar-preservatio
 import {AgentCalendar,calendarEventKey,calendarSourceKey,type CalendarPreservation} from '../runtime/agent-calendar';
 import type {AppRecordPort} from '../runtime/app-record-route-policy';
 import {canonicalCalendarRow,calendarFormCreate,calendarFormPatch,canonicalHomeCalendar,type CanonicalCalendarForm} from '../runtime/agent-calendar-view';
-import {homeCalendarValues,presentHomeAgendaCard,presentHomeAgendaFeed,type HomeAgendaCardInput} from './home-cards';
+import {homeCalendarValues,overdueAgendaNext,presentHomeAgendaCard,presentHomeAgendaFeed,type HomeAgendaCardInput} from './home-cards';
 import {getZonedDateParts,addDaysToLocalDate} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/internal/time';
 import {eventEditorMutability} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/components/event-editor-policy';
 type Bag=Record<string,any>;
@@ -149,7 +149,7 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
   const item=event?{title:String(event.title||''),begin:event.isAllDay?day(event.startAt):Date.parse(event.startAt),end:event.isAllDay?day(event.endAt):Date.parse(event.endAt),allDay:!!event.isAllDay,video:!!event.conferenceLink}:null;
   // An overdue reminder keeps Home's own selection and source; the Next line shows whichever comes
   // first of the agent's next event and Home's own next item (an upcoming reminder on this phone).
-  if(out.homeCalendarOverdue===true&&out.homeAgendaInput){const input=out.homeAgendaInput as HomeAgendaCardInput;const own=out.homeAgendaNextReminder===true?input.next:null;return{...out,...homeCalendarValues(presentHomeAgendaCard(item&&!(own&&own.item.begin<=item.begin)?{...input,next:{item,provenance}}:{...input,next:own}))};}
+  if(out.homeCalendarOverdue===true&&out.homeAgendaInput){const input=out.homeAgendaInput as HomeAgendaCardInput;return{...out,...homeCalendarValues(presentHomeAgendaCard(overdueAgendaNext(input,out.homeAgendaNextReminder===true,item?{item,provenance}:null)))};}
   // A reminder saved on this phone that comes before the agent's next event leads the card with the
   // reminder store's own source, as it does with device calendars.
   const local=out.homeAgendaInput as HomeAgendaCardInput|undefined;

@@ -163,6 +163,20 @@ test('next item: an overdue reminder does not hide the next event, which keeps i
   assert.match(cards, /out\.homeCalendarHasNext \? \{text: String\(out\.homeCalendarNext \|\| ''\), source: String\(out\.homeCalendarNextSource \|\| ''\)\}/);
   assert.match(cards, /next: \{'data-alpha-home-calendar-next-line': ''\}, nextSource: \{'data-alpha-home-calendar-next-source': ''\}/);
 });
+test('next item under Agent Calendar: an overdue reminder shows whichever comes first of an upcoming phone reminder and the agent event', () => {
+  const provenance = {origin: '', read: '', description: 'Agent Calendar'};
+  const overdue = {title: 'Pay rent', begin: at(9), allDay: false, video: false};
+  const reminderNext = {item: {title: 'Call mom', begin: at(16), allDay: false, video: false}, provenance: {origin: 'Reminder', read: '', description: 'Reminder'}};
+  const agentEarly = {item: {title: 'Standup', begin: at(15, 45), allDay: false, video: false}, provenance};
+  const agentLate = {item: {title: 'Review', begin: at(17), allDay: false, video: false}, provenance};
+  const input = {now, item: overdue, provenance, next: reminderNext};
+  assert.equal(H.overdueAgendaNext(input, true, agentLate).next, reminderNext, 'an earlier phone reminder is not hidden by a later agent event');
+  assert.equal(H.overdueAgendaNext(input, true, agentEarly).next, agentEarly, 'an earlier agent event leads the Next line');
+  assert.equal(H.overdueAgendaNext(input, true, null).next, reminderNext, 'no agent event keeps the phone reminder');
+  assert.equal(H.overdueAgendaNext(input, false, agentLate).next, agentLate, "Home's own non-reminder next item yields to the chosen Agent Calendar");
+  assert.equal(H.overdueAgendaNext(input, false, null).next, null, 'a device calendar event is never shown under Agent Calendar');
+  assert.equal(H.overdueAgendaNext(input, true, agentLate).item, overdue, 'the overdue reminder still leads the card');
+});
 test('inbox status: readable freshness and every non-ready state', () => {
   const base = {failure: false, pending: false, cached: null, connected: false, unchecked: false, now};
   assert.equal(H.presentHomeInboxStatus({...base, cached: {more: false, label: 'work@example.test', readAt: at(15, 4)}}), 'work@example.test · Updated 3:04 PM');

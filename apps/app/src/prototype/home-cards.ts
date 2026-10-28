@@ -73,6 +73,16 @@ export const presentHomeInboxCard = (input: OverviewInboxCardInput): OverviewInb
 export type HomeAgendaCardInput = OverviewAgendaCardInput;
 /** The whole Home agenda card from the selected item and where it was read. */
 export const presentHomeAgendaCard = (input: HomeAgendaCardInput): OverviewAgendaCardModel => presentOverviewAgendaCard(input, format);
+/**
+ * Next line of an agenda card led by an overdue reminder while the agenda source is the agent's
+ * calendar: whichever comes first of Home's own next item, when it is an upcoming reminder saved on
+ * this phone, and the agent's next event. An overdue reminder never hides the next item.
+ */
+export function overdueAgendaNext(input: HomeAgendaCardInput, ownIsReminder: boolean, agent: HomeAgendaCardInput['next']): HomeAgendaCardInput {
+  const own = ownIsReminder ? input.next ?? null : null;
+  if (agent && !(own && own.item.begin <= agent.item.begin)) return {...input, next: agent};
+  return {...input, next: own};
+}
 /** The Home template values of an agenda card (read by home-overview-cards.ts and the Home adapters). */
 export function homeCalendarValues(card: OverviewAgendaCardModel) {
   return {
