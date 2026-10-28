@@ -14,7 +14,10 @@ async function setup(page:Page){
   const flows:any={morning:{id:'morning',name:'Morning notes digest',description:'Reads selected notes and drafts a digest',active:true,versionId:'morning-v1',steps:[{label:'Read selected Notes'},{label:'Draft digest'}],metadata:{elizaPhoneWorkflowSpec:spec}}};
   const scheduledAt='2026-10-28T07:30:00.000Z';
   const missed={id:'run-missed',workflowId:'morning',workflowVersionId:'morning-v1',status:'finished',startedAt:'2026-10-28T09:00:00Z',finished:true,stoppedAt:'2026-10-28T09:00:00Z',mode:'trigger',input:{typedSchedule:{scheduledAt,trigger,status:'ready',text:''}},output:{status:'missed',scheduledAt,text:'Not run: the agent was not running at the scheduled time'},events:[]};
-  const runs:any={morning:[missed]};
+  // A hosted digest is admitted only at its own scheduled occurrence; the agent refuses a manual run of it.
+  flows.digest={id:'digest',name:'Evening digest',description:'Hosted evening digest',active:true,versionId:'digest-v1',steps:[{label:'Read selected Notes'}],metadata:{elizaHostedDigestV1:'{}'}};
+  const digestMissed={id:'run-digest-missed',workflowId:'digest',workflowVersionId:'digest-v1',status:'finished',startedAt:'2026-10-28T09:00:00Z',finished:true,stoppedAt:'2026-10-28T09:00:00Z',mode:'trigger',input:{hostedDigest:{status:'missed'}},output:{status:'missed',scheduledAt,text:'The scheduled time was missed. No backlog was executed.'},events:[]};
+  const runs:any={morning:[missed],digest:[digestMissed]};
   const w=window as any;w.agentRequests=[];
   const request=async(path:string,body:any)=>{
    w.agentRequests.push({path,method:body===undefined?'GET':'POST',body});
@@ -53,4 +56,13 @@ test('a missed scheduled time says nothing ran and offers Run now only through t
  await expect(page.getByText('Synthetic digest text',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Back to Morning notes digest',exact:true}).click();
  // The missed record stays in history as not run; the new run is separate.
  await expect(page.getByRole('button',{name:'Missed — did not run execution',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'finished execution',exact:true})).toBeVisible();expect(await posts(page,'/run')).toBe(1);
+});
+
+test('a hosted digest\'s missed time offers no Run now, because only its own schedule admits it',async({page})=>{
+ await setup(page);await page.getByRole('region',{name:'Workflows',exact:true}).getByText('Evening digest',{exact:true}).first().click();
+ await page.getByRole('button',{name:'Missed — did not run execution',exact:true}).click();await page.getByText('Execution details',{exact:true}).click();
+ await expect(page.getByText(/so nothing ran\. It is never run later\. This digest runs again only at its next scheduled occurrence/)).toBeVisible();
+ await expect(page.getByRole('button',{name:'Back to workflow to review and start one new run now',exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Back to workflow',exact:true}).click();
+ await page.waitForTimeout(500);expect(await posts(page,'/run')).toBe(0);
 });
