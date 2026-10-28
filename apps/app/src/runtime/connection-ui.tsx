@@ -2195,7 +2195,6 @@ export const connectionController = {
   },
   async restoreSavedSignIn() {
     if(!isAndroid||!residentCloudFlow()||residentEnvironment()!=='production'||(state.signIn&&state.signIn.environment!=='production')||operation||state.cloudAccount||!cloudSignIn?.restoreSavedSignIn)return;
-    let restored=false;
     await work('Restoring saved sign-in…',async signal=>{
       signal.throwIfAborted();
       const cancel=()=>{void cloudSignIn!.cancel().catch(()=>{});};
@@ -2203,10 +2202,15 @@ export const connectionController = {
       try{
         const outcome=await cloudSignIn!.restoreSavedSignIn!();signal.throwIfAborted();
         if(outcome.restored!==true)throw Error('Saved sign-in is no longer available. Sign in to continue.');
-        restored=true;update({legacySignInRecovery:false,residentSavedCredential:true,signIn:null});
+        update({legacySignInRecovery:false,residentSavedCredential:true,signIn:null});
       }finally{signal.removeEventListener('abort',cancel);}
+      if(state.residentRecoveryReason){update({open:true,purpose:'agent',error:residentRecoveryMessage(state.residentRecoveryReason)});return;}
+      // Keep the same owned operation through normal admission. Releasing busy/operation
+      // between the native commit and this start lets automatic chooser readiness steal it.
+      retire();
+      await connectResident(signal);
     });
-    if(restored&&!operation)await connectionController.startLocal();
+    if(residentAlwaysPresent&&!active&&state.kind==='starting')update({kind:'recovering'});
   },
   async startLocal() { if(state.residentRecoveryReason){update({open:true,purpose:'agent',error:residentRecoveryMessage(state.residentRecoveryReason)});return;} if (residentAlwaysPresent) { if (!operation) { retire(); await startResident('Starting the local agent…', false); } return; } await work('Starting the local agent…', signal => { retire(); return connectResident(signal); }); },
   async pair(kind: 'remote' | 'local', origin: string, code: string) {
