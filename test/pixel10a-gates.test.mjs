@@ -39,6 +39,11 @@ test('development boot evidence cannot pass a gate, and passing needs evidence',
   assert.match(pixel10aGateProblems(copy(t, gate('userAcceptance', g => ({...g, status: 'accepted'})))).join('\n'), /status must be one of/);
 });
 
+test('the gates and descriptor record Alpha\'s product, never another brand\'s', t => {
+  const eliza = {[PIXEL10A_GATES]: record => ({...record, product: 'eliza_stallion_phone'}), 'android/aosp/pixel10a-product.json': product => ({...product, product: 'eliza_stallion_phone'})};
+  assert.match(pixel10aGateProblems(copy(t, eliza)).join('\n'), /must record alpha_stallion_phone/);
+});
+
 test('gates cannot be merged, dropped or passed out of order', t => {
   const dropped = {[PIXEL10A_GATES]: record => { const {cuttlefishBoot, ...rest} = record.gates; return {...record, gates: rest}; }};
   assert.match(pixel10aGateProblems(copy(t, dropped)).join('\n'), /gates must be exactly/);
