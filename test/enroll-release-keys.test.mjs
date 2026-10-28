@@ -24,15 +24,28 @@ function scratch(t, prefix) {
   return dir;
 }
 
-/** A copy of Alpha's three records and key list, so enrollment can write without touching the checkout. */
+/**
+ * A copy of Alpha's three records and key list, so enrollment can write without touching the
+ * checkout. Every enrolled field starts unset, as before the ceremony, whatever the checkout has
+ * recorded since (these cases must keep passing after the real enrollment is committed).
+ */
 function recordsFixture(t) {
   const dir = scratch(t, "alpha-enroll-root-");
   for (const file of [KEY_MANIFEST, RELEASE_SIGNER, PRODUCT, CHANNEL]) {
     fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
     fs.copyFileSync(path.join(root, file), path.join(dir, file));
   }
+  const records = new Map();
+  for (const row of ENROLLMENT) {
+    if (!records.has(row.file)) records.set(row.file, JSON.parse(fs.readFileSync(path.join(dir, row.file), "utf8")));
+    const parent = row.field.slice(0, -1).reduce((value, key) => value[key], records.get(row.file));
+    parent[row.field.at(-1)] = row.file === RELEASE_SIGNER ? "unset" : "UNSET";
+  }
+  for (const [file, value] of records) fs.writeFileSync(path.join(dir, file), formatRecord(value));
   return dir;
 }
+/** The record files' current text, to show that a refused or dry run wrote nothing. */
+const recordText = dir => Object.fromEntries([RELEASE_SIGNER, PRODUCT, CHANNEL].map(file => [file, fs.readFileSync(path.join(dir, file), "utf8")]));
 
 /** A release-like ceremony directory: throwaway EC certificates with neutral subjects, never real keys. */
 function ceremony(t, { subject = name => `/O=Example Release/CN=${name}` } = {}) {
@@ -88,6 +101,7 @@ test("a test-key ceremony from the pinned generator is refused, also when its te
     "--manifest", path.join(root, KEY_MANIFEST), "--output", path.join(dir, "keys"), "--passphrase-file", pass], { stdio: "ignore" });
   const file = path.join(dir, "keys/fingerprints.json");
   const fixture = recordsFixture(t);
+  const untouched = recordText(fixture);
   const refused = run(["--fingerprints", file, "--certificates", path.join(dir, "keys"), "--write"], fixture);
   assert.equal(refused.code, 1);
   assert.match(refused.err, /testKeys:true/);
@@ -98,18 +112,18 @@ test("a test-key ceremony from the pinned generator is refused, also when its te
   const still = run(["--fingerprints", file, "--write"], fixture);
   assert.equal(still.code, 1);
   assert.match(still.err, /releasekey has a test-key ceremony \(TEST ONLY subject\)/);
-  for (const record of [RELEASE_SIGNER, PRODUCT, CHANNEL])
-    assert.equal(fs.readFileSync(path.join(fixture, record), "utf8"), fs.readFileSync(path.join(root, record), "utf8"), `${record} must be untouched`);
+  assert.deepEqual(recordText(fixture), untouched, "the records must be untouched");
 });
 
 test("a release ceremony is recorded field by field, a dry run writes nothing and a repeat is a no-op", t => {
   const fixture = recordsFixture(t);
+  const unenrolled = recordText(fixture);
   const { dir, fingerprints, file } = ceremony(t);
   const digest = name => fingerprints.keys.find(key => key.name === name);
   const dry = run(["--fingerprints", file, "--certificates", dir], fixture);
   assert.equal(dry.code, 0, dry.err);
   assert.match(dry.out, /Dry run: nothing written/);
-  assert.equal(fs.readFileSync(path.join(fixture, RELEASE_SIGNER), "utf8"), fs.readFileSync(path.join(root, RELEASE_SIGNER), "utf8"));
+  assert.deepEqual(recordText(fixture), unenrolled);
   const certificate = new X509Certificate(fs.readFileSync(path.join(dir, `${APPLICATION_KEY}.x509.pem`)));
   assert.ok(dry.out.includes(certificate.fingerprint), "prints the SHA-1 for the Google Android OAuth client");
   assert.ok(dry.out.includes(certificate.fingerprint256), "prints the colon-form SHA-256 for the App Links association");
@@ -120,18 +134,18 @@ test("a release ceremony is recorded field by field, a dry run writes nothing an
   const product = JSON.parse(fs.readFileSync(path.join(fixture, PRODUCT), "utf8"));
   const channel = JSON.parse(fs.readFileSync(path.join(fixture, CHANNEL), "utf8"));
   assert.equal(signer.signerSha256, digest(APPLICATION_KEY).certificateSha256);
-  assert.deepEqual(signer.lastRelease, JSON.parse(fs.readFileSync(path.join(root, RELEASE_SIGNER), "utf8")).lastRelease, "lastRelease follows the first signed release, not enrollment");
+  assert.deepEqual(signer.lastRelease, JSON.parse(unenrolled[RELEASE_SIGNER]).lastRelease, "lastRelease follows a distributed release, not enrollment");
   assert.equal(product.signer.platformCertificateSha256, digest("platform").certificateSha256);
   for (const name of IMAGE_CERTIFICATES) assert.equal(product.signer.releaseCertificates[name], digest(name).certificateSha256);
   assert.equal(product.avb.publicKeySha256, digest("avb").avbPublicKeySha256);
   assert.equal(channel.otaCertificateSha256, digest("releasekey").certificateSha256);
   assert.equal(channel.avbPublicKeySha256, digest("avb").avbPublicKeySha256);
   assert.equal(product.releaseQualified, false);
-  assert.deepEqual(channel.drills, JSON.parse(fs.readFileSync(path.join(root, CHANNEL), "utf8")).drills, "drills are recorded from executed drills only");
+  assert.deepEqual(channel.drills, JSON.parse(unenrolled[CHANNEL]).drills, "drills are recorded from executed drills only");
   // Only digests change: the committed style (inline chainedPartitions) is kept.
   assert.match(fs.readFileSync(path.join(fixture, PRODUCT), "utf8"), /"chainedPartitions": \["vbmeta_system", "vbmeta_vendor"\]/);
   for (const record of [RELEASE_SIGNER, PRODUCT, CHANNEL]) {
-    const before = fs.readFileSync(path.join(root, record), "utf8").split("\n");
+    const before = unenrolled[record].split("\n");
     const after = fs.readFileSync(path.join(fixture, record), "utf8").split("\n");
     assert.equal(after.length, before.length, `${record} keeps its layout`);
     const changed = after.filter((line, index) => line !== before[index]);
@@ -160,6 +174,7 @@ test("a different recorded digest is a conflict unless a reviewed rotation passe
 
 test("reused, debug, mismatched, missing and unexpected keys are refused before anything is written", t => {
   const fixture = recordsFixture(t);
+  const unenrolled = recordText(fixture);
   const { dir, fingerprints, file } = ceremony(t);
   const clone = () => JSON.parse(JSON.stringify(fingerprints));
   const refuse = (value, pattern, options = {}) => {
@@ -198,7 +213,7 @@ test("reused, debug, mismatched, missing and unexpected keys are refused before 
   assert.equal(swapped.code, 1);
   assert.match(swapped.err, /media\.x509\.pem is [0-9a-f]{64}, not fingerprints\.json/);
   assert.match(swapped.err, /avb_pkmd\.bin does not hash to fingerprints\.json/);
-  assert.equal(fs.readFileSync(path.join(fixture, PRODUCT), "utf8"), fs.readFileSync(path.join(root, PRODUCT), "utf8"));
+  assert.deepEqual(recordText(fixture), unenrolled);
   assert.equal(run(["--write"], fixture).code, 2, "--fingerprints is required");
 });
 

@@ -62,7 +62,9 @@ test("registration values come from the committed product configuration and matc
 function cloud({ registration, overrides = {} }) {
   const calls = [];
   const json = (status, body, headers = {}) => ({ status, headers: new Headers({ "content-type": "application/json", ...headers }), text: async () => JSON.stringify(body) });
-  const statement = [{ relation: ["delegate_permission/common.handle_all_urls"], target: { namespace: "android_app", package_name: registration.packageName, sha256_cert_fingerprints: [fingerprint(RELEASE)] } }];
+  // The published association grants the release certificate the registration records (RELEASE while none is enrolled).
+  const granted = /^[0-9a-f]{64}$/.test(registration.signerSha256 ?? "") ? registration.signerSha256 : RELEASE;
+  const statement = [{ relation: ["delegate_permission/common.handle_all_urls"], target: { namespace: "android_app", package_name: registration.packageName, sha256_cert_fingerprints: [fingerprint(granted)] } }];
   const document = { title: "Terms", revision: "2026-10-01", sections: [{ title: "Use", paragraphs: ["Text."] }] };
   const answers = {
     "/api/v1/app-auth/mobile/config": () => json(200, { success: true, clientId: registration.clientId, environment: registration.environment, redirectUri: registration.callback, codeChallengeMethod: "S256" }),

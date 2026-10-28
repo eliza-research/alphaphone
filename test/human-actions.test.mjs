@@ -58,7 +58,11 @@ test("every repository check belongs to a step on the page", () => {
   for (const id of Object.keys(CHECKS)) assert.ok(steps.some(step => step.id === id), `${id} has a check but no step`);
 });
 
-/** A copy of the records the checks read, so states can be changed without touching the checkout. */
+/**
+ * A copy of the records the checks read, so states can be changed without touching the checkout.
+ * The person-recorded facts start as they were before any step was taken (unset digests, no release,
+ * nothing qualified, gates and drills not passed), whatever the checkout records since.
+ */
 function fixture(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "alpha-human-actions-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -68,6 +72,21 @@ function fixture(t) {
     fs.copyFileSync(path.join(root, file), path.join(dir, file));
   }
   const edit = (file, change) => { const value = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8")); change(value); fs.writeFileSync(path.join(dir, file), JSON.stringify(value)); };
+  edit("android/release-signer.json", value => { value.signerSha256 = "unset"; value.lastRelease = { versionCode: null, versionName: null, recordedAt: null }; });
+  edit("android/aosp/pixel10a-product.json", value => {
+    value.signer.platformCertificateSha256 = "UNSET";
+    for (const name of Object.keys(value.signer.releaseCertificates)) value.signer.releaseCertificates[name] = "UNSET";
+    value.avb.publicKeySha256 = "UNSET";
+  });
+  edit("android/aosp/pixel10a-ota-channel.json", value => {
+    value.otaCertificateSha256 = "UNSET"; value.avbPublicKeySha256 = "UNSET";
+    value.recovery.knownGoodRelease = { buildFingerprint: "UNSET", otaSha256: "UNSET", recordFile: "UNSET" };
+    for (const name of Object.keys(value.drills)) value.drills[name] = "not run";
+  });
+  edit("android/aosp/pixel10a-qualification-gates.json", value => { for (const name of ["cuttlefishBoot", "physicalDevice", "signedUpdateRecovery", "userAcceptance"]) value.gates[name].status = "not run"; });
+  edit("android/voice-host/qualified-voice-host.json", value => { value.qualified = false; });
+  edit("android/sense/qualified-listener.json", value => { value.qualified = false; });
+  edit("android/embedding-host/build-toolchain.json", value => { value.remapBuildPath = true; });
   return { dir, edit };
 }
 
@@ -134,11 +153,20 @@ test("a distributable build in this checkout shows H-10 done before any release 
   assert.equal(h10().state, "open");
 });
 
-test("the report names every step and the committed records leave the release steps open", () => {
+test("the report names every step and states the committed records as they are", () => {
   const rows = humanActionStates(root, {});
   const report = formatStates(rows);
   for (const step of steps) assert.ok(report.includes(`${step.id} `), step.id);
   assert.match(report, /recorded outside this repository/);
-  // The committed checkout has no release key, signed release, qualified voice host or passed drill.
-  for (const id of ["H-09", "H-10", "H-18", "H-22", "H-25", "H-34"]) assert.equal(rows.find(row => row.id === id).state, "open", id);
+  // Each recorded step follows its committed record, so the page stays right as people record their steps.
+  const read = file => JSON.parse(fs.readFileSync(path.join(root, file), "utf8"));
+  const state = id => rows.find(row => row.id === id).state;
+  const signer = read("android/release-signer.json"), channel = read("android/aosp/pixel10a-ota-channel.json"), gates = read("android/aosp/pixel10a-qualification-gates.json").gates;
+  const unset = value => value === "unset" || value === "UNSET";
+  if (unset(signer.signerSha256)) for (const id of ["H-09", "H-10"]) assert.equal(state(id), "open", id);
+  assert.equal(state("H-18"), read("android/voice-host/qualified-voice-host.json").qualified === true ? "done" : "open");
+  assert.equal(state("H-20"), read("android/sense/qualified-listener.json").qualified === true ? "done" : "open");
+  assert.equal(state("H-22"), Object.values(channel.recovery.knownGoodRelease).some(unset) ? "open" : "done");
+  assert.equal(state("H-34"), gates.userAcceptance.status === "passed" ? "done" : "open");
+  for (const row of rows) assert.ok(["done", "open", "external", "not needed"].includes(row.state), `${row.id}: ${row.state}`);
 });
