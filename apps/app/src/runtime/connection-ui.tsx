@@ -1391,12 +1391,12 @@ async function conversationList(selected: Active, signal: AbortSignal) {
   return list.map(item => ({ id: item.id, title: typeof item.title === 'string' && item.title ? item.title : 'Conversation' }));
 }
 
-async function restoreConversationHistory(id:string,signal:AbortSignal,automatic:boolean,afterConnect=false,fallbackExpected?:ConversationChoice) {
+async function restoreConversationHistory(id:string,signal:AbortSignal,automatic:boolean,afterConnect=false,fallbackExpected?:ConversationChoice,canCommit?:()=>boolean) {
   const selected=active,session=state.session,generation=epoch;
   if(!selected||!session)throw noSessionError(NO_SESSION_FALLBACK);
   const account=selected.kind==='resident'&&residentCloudFlow()?service:null;
   // P-43: a signed-out resident still owns its history and actions; a bound Cloud account must stay the same one.
-  const assertCurrent=()=>{signal.throwIfAborted();if(generation!==epoch||selected!==active||state.session?.sessionId!==session.sessionId||account&&(service!==account||state.cloudAccount?.sessionId!==account.identity.sessionId))throw Error('The agent or account changed.');};
+  const assertCurrent=()=>{signal.throwIfAborted();if(canCommit&&!canCommit())throw new DOMException('Notification navigation interrupted','AbortError');if(generation!==epoch||selected!==active||state.session?.sessionId!==session.sessionId||account&&(service!==account||state.cloudAccount?.sessionId!==account.identity.sessionId))throw Error('The agent or account changed.');};
   const assertAccount=async()=>{
     assertCurrent();
     if(account){const credential=await cloudCredentialStore.read(account.identity.environment);assertCurrent();if(credential?.credentialId!==account.identity.credentialId||credential.expiresAt!==undefined&&credential.expiresAt<=Date.now())throw Error('Cloud account changed or expired.');}
@@ -2577,9 +2577,12 @@ export const connectionController = {
       update({ conversations: list, message: list.length ? 'Choose a conversation to replace the visible chat. Your draft will be cleared.' : 'No saved conversations were returned.' });
     });
   },
-  async restoreHistory(id: string) {
+  async restoreHistory(id: string, canCommit?:()=>boolean) {
     if (sending) { update({ error: 'Wait for the current reply before restoring history.' }); return; }
-    await work('Verifying and restoring conversation…',signal=>restoreConversationHistory(id,signal,false));
+    await work('Verifying and restoring conversation…',async signal=>{
+      try{await restoreConversationHistory(id,signal,false,false,undefined,canCommit);}
+      catch(error){if(canCommit&&!canCommit()&&error instanceof DOMException&&error.name==='AbortError')return;throw error;}
+    },!!canCommit);
   },
   async retrySavedHistory(){if(sending)return;await work('Checking saved conversation…',signal=>restoreSavedHistory(signal));},
   messageTargetCurrent(target:ConversationMessageTarget) {

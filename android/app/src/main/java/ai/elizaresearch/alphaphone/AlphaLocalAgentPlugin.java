@@ -131,7 +131,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  private void rejectPending(PluginCall call,String message){synchronized(lifecycleLock){if(pending.remove(call))call.reject(message);}}
 
  private static final class Superseded extends Exception {}
- private static void clearEnrollment(){rootToken=null;ownerToken=null;ownerIdentity=null;expiresAt=0;}
+ private static void clearEnrollment(){AlphaCanonicalNotifications.stop();rootToken=null;ownerToken=null;ownerIdentity=null;expiresAt=0;}
  static long reserveCredentialIntent(){synchronized(lifecycleLock){return ++credentialIntentEpoch;}}
  static void requireCredentialIntent(long intent){synchronized(lifecycleLock){if(intent!=credentialIntentEpoch)throw new IllegalStateException("Credential intent changed");}}
  interface CredentialMutation<T> {
@@ -766,6 +766,26 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   if(!captureReminderOwnerSession().toString().equals(expected.toString()))throw new SecurityException("Native owner session changed");
   return result;
  }
+ /** Native-only canonical inbox transport, bound to an existing machine session. */
+ static void checkNotificationSession(JSONObject expected)throws Exception{
+  synchronized(lifecycleLock){if(!captureReminderOwnerSession().toString().equals(expected.toString()))throw new SecurityException("Notification session changed");}
+ }
+ static <T>T withNotificationSession(JSONObject expected,java.util.concurrent.Callable<T> work)throws Exception{
+  synchronized(lifecycleLock){synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){checkNotificationSession(expected);T result=work.call();checkNotificationSession(expected);return result;}}
+ }
+ static JSONObject readNotificationPage(JSONObject expected,JSONObject cursor)throws Exception{
+  String path=NativeNotificationWire.pagePath(cursor);checkNotificationSession(expected);
+  JSONObject result=raw(path,"GET",null,expected.getString("token"),null,10000);checkNotificationSession(expected);return result;
+ }
+ static JSONObject markNotificationRead(JSONObject expected,String id)throws Exception{
+  if(id==null||!id.matches("[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"))throw new SecurityException("Invalid notification identity");
+  checkNotificationSession(expected);JSONObject result=raw("/api/notifications/"+id+"/read","POST","{}",expected.getString("token"),null,10000);checkNotificationSession(expected);return result;
+ }
+ static void subscribeNotificationEvents(JSONObject expected,java.util.function.Consumer<String> events,ElizaAgentService.LocalStreamHandle handle)throws Exception{
+  checkNotificationSession(expected);
+  JSONObject input=new JSONObject().put("streams",new org.json.JSONArray().put("notification"));
+  ElizaAgentService.subscribeLocalAgentEvents(input.toString(),event->{try{checkNotificationSession(expected);events.accept(event);}catch(Exception changed){handle.cancel();}},handle);
+ }
  private static JSONObject raw(String path,String method,String body,String token,JSONObject supplied,int timeoutMs) throws Exception {
   JSONObject headers=new JSONObject();headers.put("Accept","application/json");headers.put("Content-Type","application/json");
   if(token!=null)headers.put("Authorization","Bearer "+token);
@@ -801,7 +821,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   requireCurrent(epoch);
   String root=ElizaAgentService.localAgentToken();
   if(root==null||root.isEmpty())throw new IllegalStateException();
-  synchronized(lifecycleLock){requireEnrollmentRoot(epoch,root);if(root.equals(rootToken)&&ownerToken!=null&&expiresAt>System.currentTimeMillis()+30000)return ownerToken;}
+  synchronized(lifecycleLock){requireEnrollmentRoot(epoch,root);if(root.equals(rootToken)&&ownerToken!=null&&expiresAt>System.currentTimeMillis()+30000){AlphaCanonicalNotifications.ensure(getContext());return ownerToken;}}
   JSONObject status=authenticatedStatus(epoch,root);
   JSONObject code=enrollmentJson(epoch,"/api/auth/pair-code","GET",null,root,root);
   JSONObject paired=enrollmentJson(epoch,"/api/auth/pair","POST",new JSONObject().put("code",code.getString("code")).put("instanceId",status.getString("instanceId")),root,root);
@@ -809,7 +829,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   String token=paired.getString("token");JSONObject who=enrollmentJson(epoch,"/api/auth/me","GET",null,token,root);
   if(!"OWNER".equals(who.getJSONObject("access").getString("role"))||!paired.getString("identityId").equals(who.getJSONObject("identity").getString("id"))||!token.equals(who.getJSONObject("session").getString("id")))throw new IllegalStateException();
   long expiry=who.getJSONObject("session").getLong("expiresAt");if(expiry<=System.currentTimeMillis())throw new IllegalStateException();
-  synchronized(lifecycleLock){requireEnrollmentRoot(epoch,root);rootToken=root;ownerToken=token;ownerIdentity=paired.getString("identityId");expiresAt=expiry;return token;}
+  synchronized(lifecycleLock){requireEnrollmentRoot(epoch,root);rootToken=root;ownerToken=token;ownerIdentity=paired.getString("identityId");expiresAt=expiry;AlphaCanonicalNotifications.ensure(getContext());return token;}
   }
  }
  private static void logRequestFailure(String category,String method,int status,String reason) {
@@ -928,5 +948,5 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   * calls and streams. The shared runtime, its epoch and the owner enrollment stay valid for
   * other surfaces. When the last surface goes away (the app is closed or recreated) the epoch
   * advances and the enrollment is cleared, as before; the next surface enrolls again. */
- @Override protected void handleOnDestroy(){synchronized(lifecycleLock){disposed=true;invalidateOwnCalls();instances.remove(this);if(instances.isEmpty()){++lifecycleEpoch;clearEnrollment();}}workers.shutdownNow();voiceWorkers.shutdownNow();rendererWorkers.shutdownNow();super.handleOnDestroy();}
+ @Override protected void handleOnDestroy(){synchronized(lifecycleLock){disposed=true;invalidateOwnCalls();instances.remove(this);if(instances.isEmpty()&&!AlphaCanonicalNotifications.ownsSession()){++lifecycleEpoch;clearEnrollment();}}workers.shutdownNow();voiceWorkers.shutdownNow();rendererWorkers.shutdownNow();super.handleOnDestroy();}
 }
