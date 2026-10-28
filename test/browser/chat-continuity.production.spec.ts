@@ -49,7 +49,7 @@ async function noResend(page: Page, foreign: string[], streams: number) {
   expect(foreign).toEqual([]);
 }
 
-test('the device draft survives HOME, Back, a keyboard resize with its selection, and a restart, and nothing is sent', async ({ page }) => {
+test('the device draft survives HOME, Back, a keyboard resize and rotation with its selection, and a restart, and nothing is sent', async ({ page }) => {
   test.setTimeout(150_000);
   const foreign = await connected(page);
   const text = 'Unsent words that must outlive every layout change';
@@ -66,11 +66,12 @@ test('the device draft survives HOME, Back, a keyboard resize with its selection
   await expect(button(page, 'Shrink chat')).toBeVisible();
   await expect(composer(page)).toHaveValue(text);
 
-  // The soft keyboard shortens the window while the composer has focus: the same field keeps its
-  // text, focus and selection and stays fully on screen; closing the keyboard changes nothing.
+  // The soft keyboard shortens the window while the composer has focus, and a rotation with the
+  // keyboard still up swaps the sides: the same field keeps its text, focus and selection and stays
+  // fully on screen; turning back and closing the keyboard changes nothing.
   const field = composer(page), original = await field.elementHandle();
   await field.evaluate((element: HTMLTextAreaElement) => { element.focus(); element.setSelectionRange(6, 11); });
-  for (const viewport of [{ width: 412, height: 520 }, { width: 412, height: 915 }]) {
+  for (const viewport of [{ width: 412, height: 520 }, { width: 915, height: 300 }, { width: 412, height: 520 }, { width: 412, height: 915 }]) {
     await page.setViewportSize(viewport);
     await expect(field).toHaveValue(text);
     await expect(field).toBeInViewport({ ratio: 1 });
