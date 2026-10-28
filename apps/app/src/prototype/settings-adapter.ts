@@ -1,3 +1,4 @@
+import {browserCalendarScope} from './agent-calendar-adapter';
 import {cloudServiceName} from '../runtime/cloud-protocol';
 import {openCalendarSyncSettings} from '../runtime/calendar-sync-settings';
 import {browserDevProfile as devProfileQuery} from '../browser/dev-profile';
@@ -519,7 +520,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
         if(state.page==='calendar'){
           const display=views.calendar.displaySources?.(),rows:Bag[]=[info('Display only','Agent access is reviewed separately')];
           if(display){rows.push(info(display.native?'Device calendars':'In this app',display.loading?'Loading calendars…':display.status));
-            rows.push({kNav:true,label:display.native?'Connect or refresh device calendars':'Refresh calendar',lbl:display.native?'Connect or refresh device calendars':'Refresh calendar',busy:display.loading,chev:true,noAB:true,go:display.connect});
+            rows.push({kNav:true,label:display.native?'Connect or refresh device calendars':'Refresh calendar',lbl:display.native?'Connect or refresh device calendars':'Refresh calendar',busy:display.loading,chev:true,noAB:true,go:display.connect??display.retry});
             for(const source of display.sources||[])if(display.native)rows.push(info(source.name,source.account));else rows.push({kCalendarDisplay:true,label:source.name,sub:source.account,on:source.on,busy:display.loading,aria:`Show ${source.name} calendar`,track:api.track(source.on),kx:api.kx(source.on),toggle:()=>void source.change('visibility'),color:()=>void source.change('color'),colorLabel:`Change ${source.name} calendar color`,sw:({acc:'var(--acct)',fg:'var(--fg)',mut:'var(--mut)'} as Bag)[source.color]||'var(--acct)'});
             if(display.native)rows.push(info('Calendar visibility','Managed in Android Calendar'));
           }else rows.push(info('Calendar access','Not available in this version'));
@@ -534,7 +535,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
           }
           groups.push({...group([{kNav:true,label:'Google Calendar sync',lbl:'Google Calendar sync',sub:'Review the destination and enable linked event sync',hasSub:true,chev:true,noAB:true,go:()=>{
             const shell=owner,authority=shell?.vget('calendar').calendarAuthority;
-            if(authority==='android-native'){openCalendarSyncSettings();return;}
+            if(authority==='android-native'||browserCalendarScope(shell)){openCalendarSyncSettings();return;}
             if(authority==='legacy'||authority==='legacy-google'){api.toast('Choose Agent Calendar before reviewing sync. Retained calendars stay read only.');return;}
             const calendar=shell?.agentCalendar,ownerKey=calendar?.state.ownerKey;
             if(!calendar||!ownerKey){if(native&&!testMocksEnabled)api.set({page:'agent-connection'});else connectionController.open();return;}
