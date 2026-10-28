@@ -28,3 +28,11 @@ test('invalid, duplicate and stale selection refuses preparation; cancel consume
  const {records,library}=await fixture();for(const items of [[],[{id:'a',revision:'old'}],[{id:'c',revision:'r-c'}],[{id:'a',revision:'r-a'},{id:'a',revision:'r-a'}]])await assert.rejects(library.prepareDeleteTrash({items}));
  const review=await library.prepareDeleteTrash({items:[{id:'b',revision:'r-b'}]});await library.cancelDeleteTrash(review);await assert.rejects(library.deletePreparedTrash(review));assert.equal(records.size,3);
 });
+test('native prepareDeleteTrash refuses a present but unusable items value instead of preparing all trash',()=>{
+ // The shared OwnedMediaLibrary reads null as every trashed item, so {items:"x"} or {items:null} must be refused first.
+ const java=readFileSync('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaPhotosPlugin.java','utf8');
+ const method=java.slice(java.indexOf('public void prepareDeleteTrash('),java.indexOf('public void cancelDeleteTrash('));
+ assert.doesNotMatch(method,/has\("items"\)\?call\.getArray\("items"\):null/,'an unusable items value never becomes the all-trash null');
+ assert.match(method,/if\(call\.getData\(\)\.has\("items"\)\)\{Object raw=call\.getData\(\)\.opt\("items"\);items=raw instanceof org\.json\.JSONArray\?call\.getArray\("items"\):null;if\(items==null\)\{call\.reject\("[^"]+"\);return;\}\}/);
+ assert.ok(method.indexOf('call.reject("Select deleted items again.')<method.indexOf('owned.prepareDeleteTrash(items)'),'refusal happens before the shared library is asked');
+});

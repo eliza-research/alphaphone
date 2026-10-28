@@ -199,7 +199,9 @@ public class AlphaPhotosPlugin extends Plugin {
  });}
  @PluginMethod public void prepareDeleteTrash(PluginCall call){submit(call,()->{
   if(Build.VERSION.SDK_INT<30){call.reject("Android trash requires Android 11 or later");return;}
-  try{call.resolve(owned.prepareDeleteTrash(call.getData().has("items")?call.getArray("items"):null));}
+  // A present but unusable items value must not fall through to null, which the shared library reads as every trashed item.
+  JSArray items=null;if(call.getData().has("items")){Object raw=call.getData().opt("items");items=raw instanceof org.json.JSONArray?call.getArray("items"):null;if(items==null){call.reject("Select deleted items again. The selection was not a list of items.");return;}}
+  try{call.resolve(owned.prepareDeleteTrash(items));}
   catch(OwnedMediaLibrary.TooManyTrashed tooMany){call.reject("More than 500 owned items are in trash. Manage a smaller batch in Android Photos.");}
   catch(Exception failure){call.reject("Trash could not be prepared for confirmation");}
  });}
