@@ -1,4 +1,4 @@
-import { isPreparedViewNavigationRequest } from './prepared-view-navigation';
+import { isPreparedViewNavigationRequest } from './prepared-view-navigation.ts';
 import { parseViewInteractionClientId } from "../../../../.eliza/client-features/packages/core/src/views/view-interact-protocol.ts";
 import type {ChatChannel} from './alpha-client';
 /** Eliza app-host REST protocol. Native composition owns network and secure storage.
