@@ -587,11 +587,12 @@ distinct gates are recorded in `android/aosp/pixel10a-qualification-gates.json`
 ### H-36 Required checks ruleset (owner's choice)
 
 - Who: repository owner.
-- Do: the "Main required checks" ruleset (MVP-46) is not installed; on October 27 the default
-  branch carried only the organization's "Require review before merge" rule. Whether and when to
-  require the checks is the repository owner's choice: install
-  `scripts/ci/required-checks-ruleset.json` and confirm it with
-  `node scripts/ci/read-required-checks.mjs`.
+- Do: the "Main required checks" ruleset (MVP-46) is not installed. Read back on October 28, the
+  default branch enforced no required status check: it carried the organization's "Require review
+  before merge" ruleset and classic protection that only blocks force pushes and deletion. Whether
+  and when to require the checks is the repository owner's choice: install
+  `scripts/ci/required-checks-ruleset.json` (the read-back prints the command) and confirm it with
+  `node scripts/ci/read-required-checks.mjs`, which needs a `gh` login.
 - Seam: `scripts/ci/required-checks-ruleset.json`.
 - Verify: `node scripts/ci/read-required-checks.mjs` reports the installed ruleset.
 - Unblocks: enforced checks on main.
