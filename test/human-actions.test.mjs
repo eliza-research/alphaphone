@@ -22,7 +22,10 @@ test("the checklist numbers its steps without gaps and gives each one who, what,
     const id = section.slice(0, 4);
     for (const field of ["Who", "Do", "Seam", "Verify", "Unblocks"]) assert.match(section, new RegExp(`^- ${field}: `, "m"), `${id} lacks "${field}"`);
   }
-  for (const step of steps) assert.ok(step.verify && step.verify.length > 10, `${step.id} needs a Verify line the status command can print`);
+  for (const step of steps) {
+    assert.ok(step.verify && step.verify.length > 10, `${step.id} needs a Verify line the status command can print`);
+    assert.doesNotMatch(step.verify, /\]\(/, `${step.id}: links print as their text`);
+  }
 });
 
 test("the order-at-a-glance table lists every step in order and links its section", () => {

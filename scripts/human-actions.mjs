@@ -32,7 +32,8 @@ export function checklistSteps(markdown) {
     const heading = /^(H-\d\d) (.+)$/m.exec(section.split("\n")[0]);
     if (!heading) continue;
     const verify = /^- Verify: ([\s\S]*?)(?=\n- |\n\n|\n#|(?![\s\S]))/m.exec(section);
-    steps.push({ id: heading[1], title: heading[2].trim(), verify: verify ? verify[1].replace(/\s*\n\s*/g, " ").trim() : null });
+    // Markdown links print as their text; the page itself keeps the link.
+    steps.push({ id: heading[1], title: heading[2].trim(), verify: verify ? verify[1].replace(/\s*\n\s*/g, " ").replace(/\[([^\]]+)\]\([^)\s]+\)/g, "$1").trim() : null });
   }
   return steps;
 }
