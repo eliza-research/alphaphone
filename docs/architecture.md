@@ -319,9 +319,11 @@ Device-local Notes recovery is shared too: unsaved-edit drafts and their conflic
 confirmed deletion after a full Trash) live in `plugin-notes/src/client`, as do the
 selected-note text serializer (`note-share-text.ts`), the voice-note recording deletion
 journal, its interrupted permanent-deletion plan, renderer lease, cross-view claims and
-deletion lock (`notes-recording-deletion.ts`) and the reviewed recording summary proposal
-(`notes-recording-summary.ts`). Alpha keeps its installed slot, document, lock and claim
-names, the native recording store and its effect order, and presentation. The renderer
+deletion lock (`notes-recording-deletion.ts`), the recording effects of approved, expired,
+permanent and interrupted deletions (`notes-recording-effects.ts`) and the reviewed
+recording summary proposal (`notes-recording-summary.ts`). Alpha keeps its installed slot,
+document, lock and claim names, the native recording store (`AlphaNoteAudio`), the editor
+deletion and restore flows, and presentation. The renderer
 lease must stay equal to `NotesDeletionLease.LEASE_MS` used by the Android native passes.
 The device-local Older notes collection still renders through Alpha's own Notes view; the
 shared `NotesWorkspace` serves only canonical agent notes until it gains a device-local
