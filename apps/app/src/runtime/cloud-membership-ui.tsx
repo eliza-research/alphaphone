@@ -17,8 +17,11 @@ function endLabel(endsAt:number):string {
  * (`@elizaos/cloud-sdk/subscription-entitlement`) adds, read-only, the plan allowance Cloud reports and
  * the latest Cloud limit with its retry time (#410). Nothing is bought here: Add funds opens Cloud's
  * own billing page after the account review.
+ *
+ * `planShownByHost`: the resident agent dialog already shows the plan with its allowance and end and
+ * the plan actions. There the sheet content leaves out its Membership row, so no plan fact appears twice.
  */
-export function CloudMembershipControls({balance,busy,error,connectionError,notice,email,credits,plan,endsAt,lastLimit,serviceName='Cloud',codeEntry=false,onRedeem,onAddFunds,onRefresh}:{balance:MembershipBalance;busy:boolean;error?:string;connectionError?:string;notice?:string;email?:string;credits?:{usd:string;observedAt:number}|null;plan?:SubscriptionView|null;endsAt?:number|null;lastLimit?:(ServiceLimit&{observedAt:number})|null;serviceName?:string;codeEntry?:boolean;onRedeem:(code:string)=>Promise<boolean>;onAddFunds:()=>void;onRefresh:()=>void}){
+export function CloudMembershipControls({balance,busy,error,connectionError,notice,email,credits,plan,endsAt,lastLimit,serviceName='Cloud',codeEntry=false,planShownByHost=false,onRedeem,onAddFunds,onRefresh}:{balance:MembershipBalance;busy:boolean;error?:string;connectionError?:string;notice?:string;email?:string;credits?:{usd:string;observedAt:number}|null;plan?:SubscriptionView|null;endsAt?:number|null;lastLimit?:(ServiceLimit&{observedAt:number})|null;serviceName?:string;codeEntry?:boolean;planShownByHost?:boolean;onRedeem:(code:string)=>Promise<boolean>;onAddFunds:()=>void;onRefresh:()=>void}){
  const code=useRef<HTMLInputElement>(null),pending=useRef(false),codeEntryId=useId(),errorId=useId();
  // A retained redemption error must keep its associated input exposed.
  const [codeVisible,setCodeVisible]=useState(Boolean(error)),[submitting,setSubmitting]=useState(false),[submissionError,setSubmissionError]=useState(''),[codeValue,setCodeValue]=useState('');
@@ -47,7 +50,7 @@ export function CloudMembershipControls({balance,busy,error,connectionError,noti
      <div className="alpha-membership-balance"><span className={credits?'alpha-membership-amount':'alpha-membership-amount-unavailable'}>{credits?<>{creditLabel(credits.usd)}<span className="alpha-membership-currency">USD</span></>:balance==='checking'?'Checking…':'Not available'}</span><button type="button" className="alpha-membership-refresh" disabled={disabled||balance==='checking'} onClick={onRefresh}>{balance==='checking'?'Checking…':'Refresh'}</button></div>
      {credits&&<small className="alpha-membership-fresh">Checked {new Date(credits.observedAt).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})}</small>}
     </dd></div>
-    <div className="alpha-membership-plan-fact"><dt>Membership</dt><dd>{active?plan.planName:plan?.kind==='inactive'||plan?.kind==='credits'?'No active membership':balance==='checking'?'Checking…':'Not confirmed'}{active&&<small>{typeof endsAt==='number'&&Number.isFinite(endsAt)?endLabel(endsAt):'End date not provided'}</small>}{active&&summary.allowance&&<small className="alpha-membership-allowance">{summary.allowance}</small>}</dd></div>
+    {!planShownByHost&&<div className="alpha-membership-plan-fact"><dt>Membership</dt><dd>{active?plan.planName:plan?.kind==='inactive'||plan?.kind==='credits'?'No active membership':balance==='checking'?'Checking…':'Not confirmed'}{active&&<small>{typeof endsAt==='number'&&Number.isFinite(endsAt)?endLabel(endsAt):'End date not provided'}</small>}{active&&summary.allowance&&<small className="alpha-membership-allowance">{summary.allowance}</small>}</dd></div>}
     {summary.limit&&<div className="alpha-membership-limit-fact"><dt>AI requests</dt><dd role="status">{summary.limit}</dd></div>}
    </dl>
    <p className="alpha-membership-support" role="status">{balance==='checking'?'Checking your account…':balance==='unavailable'?'Account details could not be refreshed. You can still redeem a code or check again.':balance==='zero'?'Add funds or use a membership code to ask Alpha.':''}</p>

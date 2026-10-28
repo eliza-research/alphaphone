@@ -175,7 +175,7 @@ test('the plan surface is a notice beside the running agent, not a gate', () => 
   // Plan and the post-redemption screen keep the resident plan headline, needs-plan notice, Check plan
   // again and Approve this phone again (the panel carries the sheet's controls itself).
   assert.ok(chooser.includes("if((fundingRequired||snapshot.purpose==='plan'&&!residentCloudFlow())&&snapshot.cloudAccount)return <div className=\"alpha-connection-scrim\" data-alpha-billing-overlay=\"true\" data-alpha-membership-sheet=\"true\">"), 'the resident plan panel stays reachable');
-  for (const control of ['>Approve this phone again<', '>Check plan again<', '{residentPlan.headline}', '{NEEDS_PLAN_NOTICE}', '{residentMembershipVisible&&membershipControls}']) assert.ok(resident.includes(control), control);
+  for (const control of ['>Approve this phone again<', '>Check plan again<', '{residentPlan.headline}', '{NEEDS_PLAN_NOTICE}', '{residentMembershipVisible&&membershipControls&&cloneElement(membershipControls,{planShownByHost:true})}']) assert.ok(resident.includes(control), control);
 });
 
 test('native starts the agent without a provider and never offers it a Cloud key without an admitted plan', () => {

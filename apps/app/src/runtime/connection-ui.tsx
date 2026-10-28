@@ -54,7 +54,7 @@ import { WorkflowProtocol, WorkflowHttpError } from './workflow-protocol';
 import { registerPlugin } from '../platform-plugins';
 import { DailyApps } from '../daily';
 import { DeviceActions, actionScope, type DeviceCredential, type DeviceExecutor, type ForegroundReviewExecutor, type ActionJournal } from './device-actions';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { cloneElement, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { isAndroid } from '../native';
 import type { AgentReply, ActionProposal, OperationReceipt, ContextEnvelope, VerifiedSession } from './alpha-client';
 import { cloudServiceName, CloudProtocol, CloudProtocolError, type CloudAgent, type CloudEnvironment } from './cloud-protocol';
@@ -3053,7 +3053,7 @@ export function ConnectionChooser() {
         <section aria-label={`${serviceName} plan`}><p><strong>{residentPlan.headline}</strong></p>{residentPlan.detail&&<p>{residentPlan.detail}</p>}{snapshot.planEndsAt&&!residentNeedsPlan?<p>Plan runs until {day(snapshot.planEndsAt)}.</p>:null}</section>
         {residentNeedsPlan&&<p role="status">{NEEDS_PLAN_NOTICE}</p>}
         {keyExpiring&&<section aria-label={`${serviceName} sign-in`}><p role="status">{keyExpiresAt<=Date.now()?`Your ${serviceName} sign-in on this phone has expired.`:`Your ${serviceName} sign-in on this phone expires ${day(keyExpiresAt)}.`} Approve this phone again to keep AI available.</p><button disabled={snapshot.busy} onClick={()=>void connectionController.residentCloudLogin()}>Approve this phone again</button></section>}
-        {residentMembershipVisible&&membershipControls}
+        {residentMembershipVisible&&membershipControls&&cloneElement(membershipControls,{planShownByHost:true})}
         {!residentMembershipVisible&&snapshot.redeemError&&<p id="alpha-redeem-error" role="alert" className="alpha-connection-error">{snapshot.redeemError}</p>}
         {!residentMembershipVisible&&snapshot.redeemNotice&&<p role="status">{snapshot.redeemNotice}</p>}
       </>:<p>{residentSignInRejected?(snapshot.error?`Sign in to ${serviceName} again to turn AI back on.`:'Your saved Cloud sign-in is no longer valid.'):residentAiOff}</p>}
