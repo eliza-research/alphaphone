@@ -524,7 +524,10 @@ export function installSettingsAdapter(Component: any, views: Bag) {
             if(display.native)rows.push(info('Calendar visibility','Managed in Android Calendar'));
           }else rows.push(info('Calendar access','Not available in this version'));
           const groups=[{...group(rows),cap:'Calendars shown in Alpha',hasCap:true}];
-          groups.push({...group([{kNav:true,label:'Google Calendar sync',lbl:'Google Calendar sync',sub:'Review the destination and enable linked event sync',hasSub:true,chev:true,noAB:true,go:()=>{
+          // A sync review that cannot open is shown as its reason, never as a control that only toasts.
+          const syncAuthority=owner?.vget('calendar').calendarAuthority;
+          const syncUnavailable=syncAuthority==='android-native'?'':syncAuthority==='legacy'||syncAuthority==='legacy-google'?'Choose Agent Calendar to review sync. Retained calendars stay read only.':!owner?.agentCalendar?.state.ownerKey?'Connect to Agent Calendar to review sync.':'';
+          groups.push({...group([syncUnavailable?info('Google Calendar sync',syncUnavailable):{kNav:true,label:'Google Calendar sync',lbl:'Google Calendar sync',sub:'Review the destination and enable linked event sync',hasSub:true,chev:true,noAB:true,go:()=>{
             const shell=owner,authority=shell?.vget('calendar').calendarAuthority;
             if(authority==='android-native'){openCalendarSyncSettings();return;}
             if(authority==='legacy'||authority==='legacy-google'){api.toast('Choose Agent Calendar before reviewing sync. Retained calendars stay read only.');return;}
