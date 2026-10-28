@@ -2772,6 +2772,10 @@ export function ConnectionChooser() {
   // The plan notice beside the running agent can be dismissed until the notice changes.
   const [dismissedNotice,setDismissedNotice]=useState<string|null>(null);
   const panel = useRef<HTMLDivElement>(null);
+  // The control that opened the panel. The trap below re-runs on busy/purpose changes, after a
+  // child (the sign-in form) may already have focused its own input, so the opener is kept here
+  // rather than re-read from document.activeElement on each run.
+  const opener = useRef<HTMLElement | null>(null);
   const remoteOrigin = useRef<HTMLInputElement>(null), remoteCode = useRef<HTMLInputElement>(null);
   const localOrigin = useRef<HTMLInputElement>(null), localCode = useRef<HTMLInputElement>(null);
   const environment = useRef<HTMLSelectElement>(null);
@@ -2821,8 +2825,10 @@ export function ConnectionChooser() {
     };
   },[]);
   useEffect(() => {
-    if (!visible) return;
-    const previous = document.activeElement as HTMLElement | null;
+    if (!visible) { opener.current = null; return; }
+    const active = document.activeElement as HTMLElement | null;
+    if (active && active !== document.body && !panel.current?.contains(active)) opener.current = active;
+    const previous = opener.current;
     const phone = document.querySelector<HTMLElement>('.os');
     const releaseInert = holdPhoneInert(phone);
 

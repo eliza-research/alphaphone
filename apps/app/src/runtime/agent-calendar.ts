@@ -53,7 +53,7 @@ export class AgentCalendar {
    const ownsNext=(next:LifeOpsNextCalendarEventContext|null)=>{const event=next?.event;return !event||event.agentId===port.identity.agentId&&Date.parse(event.endAt)>Date.now()&&sources.calendars.some(source=>source.includeInFeed===true&&['owner','writer','reader'].includes(source.accessRole)&&source.provider===event.provider&&source.side===event.side&&source.grantId===event.grantId&&source.calendarId===event.calendarId&&(!event.connectorAccountId||source.connectorAccountId===event.connectorAccountId));};
    let next=ownsNext(this.value.next)?this.value.next:null;
    if(nextRead.status==='fulfilled'){
-    if(!ownsNext(nextRead.value))throw Error('Next Calendar event owner, source or end time could not be verified');
+    if(!ownsNext(nextRead.value))throw Error(nextRead.value?.event&&nextRead.value.event.agentId!==port.identity.agentId?'Next Calendar event belongs to another agent':'Next Calendar event owner, source or end time could not be verified');
     next=nextRead.value;
    }
    const feed=feedRead.status==='fulfilled'?feedRead.value:null;

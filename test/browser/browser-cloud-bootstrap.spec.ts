@@ -23,7 +23,10 @@ test('choosing offline while optional credential discovery is held cannot restor
 });
 test('a changed credential during optional restore cannot verify or publish the old account',async({page})=>{
  const operations:string[]=[];let reads=0;
- await page.route(endpoint,async route=>{const data=route.request().postDataJSON();operations.push(data.operation);expect(data.operation).toBe('secureRead');const suffix=++reads===1?'11111111-1111-4111-8111-111111111111':'22222222-2222-4222-8222-222222222222';await route.fulfill({json:{value:JSON.stringify({credentialReference:'browser-cloud-reference:'+suffix,credentialId:suffix})}});});
+ // The refused restore opens Alpha's sign-in entry (7a44d7038), whose readiness probe may ask the
+ // bridge for sign-in service info and status, and closing it cancels that attempt. Those carry no credential; nothing else may run.
+ const readiness=['signInServiceInfo','signInStatus','signInCancel'];
+ await page.route(endpoint,async route=>{const data=route.request().postDataJSON();operations.push(data.operation);if(readiness.includes(data.operation)){await route.abort();return;}expect(data.operation).toBe('secureRead');const suffix=++reads===1?'11111111-1111-4111-8111-111111111111':'22222222-2222-4222-8222-222222222222';await route.fulfill({json:{value:JSON.stringify({credentialReference:'browser-cloud-reference:'+suffix,credentialId:suffix})}});});
  await page.goto('/');const snapshot=await page.evaluate(async()=>{const c=(await import('/src/runtime/connection-ui.tsx')).connectionController;await c.initialize();return {account:!!c.getSnapshot().cloudAccount,error:c.getSnapshot().error};});
- expect(snapshot.account).toBe(false);expect(snapshot.error).toContain('Cloud account changed');expect(operations).toEqual(['secureRead','secureRead']);
+ expect(snapshot.account).toBe(false);expect(snapshot.error).toContain('Cloud account changed');expect(operations.filter(operation=>!readiness.includes(operation))).toEqual(['secureRead','secureRead']);expect(reads).toBe(2);
 });

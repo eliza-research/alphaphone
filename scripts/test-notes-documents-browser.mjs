@@ -12,7 +12,9 @@ const browser=await chromium.launch({headless:true});try{
  });
  const openOlder=async()=>{
   await page.evaluate(async()=>{const m=await import('/src/runtime/browser-notes-document.ts');if(!await m.browserNotesPort.read())await m.openBrowserNotes();});
-  await page.getByRole('button',{name:'Notes',exact:true}).click();await page.getByLabel('Notes options',{exact:true}).click();await page.getByRole('button',{name:'Older notes',exact:true}).click();await page.getByRole('heading',{name:'Older notes',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Notes',exact:true}).click();
+  // Shared Notes offers Older notes directly; the retained list keeps it in its options menu.
+  const menu=page.getByLabel('Notes options',{exact:true}),older=page.getByRole('button',{name:'Older notes',exact:true});await older.or(menu).first().waitFor();if(await menu.isVisible())await menu.click();await older.click();await page.getByRole('heading',{name:'Older notes',exact:true}).waitFor();
  };
  await page.goto(url);await openOlder();
  const count=()=>page.evaluate(async ()=>(JSON.parse((await (await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw())||'{"records":[]}').records).length);const initial=await count();

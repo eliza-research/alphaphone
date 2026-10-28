@@ -15,7 +15,8 @@ const EMPTY: Record<View, RegExp> = {
   Camera: /^Camera unavailable$/,
   Photos: /^No photos$/,
   Maps: /Add a location/,
-  Notes: /Waiting for an agent connection to open Notes\./,
+  // Reviewed unavailable-agent wording (e5b49c950): an honest unconnected state, not an empty list.
+  Notes: /Notes is unavailable for this agent connection\./,
   Files: /No recent files/,
   Workflows: /Connect your remote agent in Settings\. Reminders on this phone stay available/,
   Settings: /Not signed in/,
