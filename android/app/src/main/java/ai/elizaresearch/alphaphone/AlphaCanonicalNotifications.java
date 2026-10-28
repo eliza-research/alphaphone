@@ -185,7 +185,7 @@ final class AlphaCanonicalNotifications {
    if(active!=a||pendingTap==null||!token.equals(pendingTap.optString("token"))||pendingTap.getLong("expiresAt")<System.currentTimeMillis())throw new SecurityException("Notification tap changed");
    pending=new JSONObject(pendingTap.toString());pendingTap=null;
   }
-  a.check();foreground.current();JSONObject response=AlphaLocalAgentPlugin.markNotificationRead(a.session,pending.getString("notificationId"));a.check();
+  JSONObject response=AlphaLocalAgentPlugin.markNotificationRead(a.session,pending.getString("notificationId"));a.check();
   if(response.getInt("status")!=200)throw new IllegalStateException("Notification read receipt unconfirmed");
  }
 }

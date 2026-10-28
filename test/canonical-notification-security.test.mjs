@@ -33,7 +33,6 @@ test('actual renderer read/write/remove/CAS methods reject every native notifica
 test('actual canonical renderer methods recheck foreground after queueing and before exposure or read dispatch',()=>{
  const source=readFileSync(nativeSource('AlphaNotificationsPlugin.java'),'utf8');
  const methods=['canonicalPending','acknowledgeCanonical'].map(name=>method(source,name)).join('\n');
- const actor=readFileSync(nativeSource('AlphaCanonicalNotifications.java'),'utf8');assert.match(actor,/a\.check\(\);foreground\.current\(\);JSONObject response=AlphaLocalAgentPlugin\.markNotificationRead/);
  const java=`package ai.elizaresearch.alphaphone;import java.util.*;import org.json.*;
  class JSObject extends JSONObject {public JSObject put(String key,boolean value)throws JSONException{super.put(key,value);return this;}static JSObject fromJSONObject(JSONObject value){return new JSObject();}}
  class PluginCall {boolean resolved,rejected;String getString(String key,String fallback){return "tap";}void resolve(JSObject x){resolved=true;}void reject(String text){rejected=true;}}
@@ -50,4 +49,23 @@ test('actual canonical renderer methods recheck foreground after queueing and be
  System.out.println("PASS queued native foreground boundary "+checks);
  }} `;
  assert.match(run([['ForegroundBoundaryTest.java',java]],'ai.elizaresearch.alphaphone.ForegroundBoundaryTest'),/^PASS queued native foreground boundary 10/);
+});
+
+test('actual acknowledgment body retains an undispatched tap and never revives an ambiguous POST',()=>{
+ const actor=readFileSync(nativeSource('AlphaCanonicalNotifications.java'),'utf8');const start=actor.indexOf(' static void acknowledge('),end=actor.indexOf('\n }\n}',start);assert.ok(start>=0&&end>start);const ack=actor.slice(start,end+3);
+ const java=`package ai.elizaresearch.alphaphone;import org.json.*;
+ class AlphaLocalAgentPlugin {static int posts;static boolean lose;static JSONObject markNotificationRead(JSONObject session,String id)throws Exception{posts++;if(lose)throw new java.io.IOException("Synthetic lost reply");return new JSONObject().put("status",200);}}
+ class AlphaCanonicalNotifications {interface ForegroundCheck{void current()throws Exception;}static AlphaCanonicalNotifications active;static JSONObject pendingTap;final JSONObject session=new JSONObject();void check(){if(active!=this)throw new SecurityException("Retired");}
+ ${ack}
+ }
+ public class ActualAcknowledgmentTest {static int checks;interface Work{void run()throws Exception;}static void rejected(Work work)throws Exception{try{work.run();}catch(Exception expected){checks++;return;}throw new AssertionError("Expected refusal");}static void reset()throws Exception{AlphaCanonicalNotifications.active=new AlphaCanonicalNotifications();AlphaCanonicalNotifications.pendingTap=new JSONObject().put("token","A").put("notificationId","notice-A").put("expiresAt",System.currentTimeMillis()+60000);AlphaLocalAgentPlugin.posts=0;AlphaLocalAgentPlugin.lose=false;}static void check(boolean ok){if(!ok)throw new AssertionError();checks++;}
+ public static void main(String[]args)throws Exception{
+ reset();rejected(()->AlphaCanonicalNotifications.acknowledge("A",()->{throw new SecurityException("Locked after queue");}));check(AlphaLocalAgentPlugin.posts==0);check("A".equals(AlphaCanonicalNotifications.pendingTap.getString("token")));
+ reset();rejected(()->AlphaCanonicalNotifications.acknowledge("A",()->{AlphaCanonicalNotifications.pendingTap=new JSONObject().put("token","B").put("notificationId","notice-B").put("expiresAt",System.currentTimeMillis()+60000);}));check(AlphaLocalAgentPlugin.posts==0);check("B".equals(AlphaCanonicalNotifications.pendingTap.getString("token")));
+ reset();rejected(()->AlphaCanonicalNotifications.acknowledge("A",()->{AlphaCanonicalNotifications.active=null;AlphaCanonicalNotifications.pendingTap=null;}));check(AlphaLocalAgentPlugin.posts==0);check(AlphaCanonicalNotifications.pendingTap==null);
+ reset();AlphaCanonicalNotifications.acknowledge("A",()->{});check(AlphaLocalAgentPlugin.posts==1);check(AlphaCanonicalNotifications.pendingTap==null);
+ reset();AlphaLocalAgentPlugin.lose=true;rejected(()->AlphaCanonicalNotifications.acknowledge("A",()->{}));check(AlphaLocalAgentPlugin.posts==1);check(AlphaCanonicalNotifications.pendingTap==null);
+ System.out.println("PASS actual native acknowledgment state "+checks);
+ }} `;
+ assert.match(run([['ActualAcknowledgmentTest.java',java]],'ai.elizaresearch.alphaphone.ActualAcknowledgmentTest'),/^PASS actual native acknowledgment state/);
 });
