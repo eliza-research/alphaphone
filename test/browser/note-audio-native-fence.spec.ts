@@ -1,11 +1,12 @@
+import {openLegacyNotes} from './helpers/legacy-notes';
 import {test,expect} from '@playwright/test';
 test('retired renderer delayed delete cannot undo explicit restored note',async({page,context})=>{
  await page.addInitScript(()=>localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'})));await page.goto('/');
  await page.evaluate(async()=>{const {openBrowserNotes,DocumentNotesStore:NotesStore}=await import('/src/runtime/browser-notes-document.ts');const {retainAudio}=await import('/src/browser/note-audio-store.ts');const audio=await retainAudio('late-audio','late-note','Text',{blob:new Blob(['synthetic']),durationMs:1000});await (await openBrowserNotes()).replace([{id:'late-note',kind:'voice',title:'Late recording',body:'Text',audio,dur:1,lines:[],summary:[],actions:[]}]);});
- await page.reload();await page.getByRole('button',{name:'Notes',exact:true}).click();await page.getByRole('button',{name:'Open Late recording',exact:true}).click();
+ await page.reload();await openLegacyNotes(page);await page.getByRole('button',{name:'Open Late recording',exact:true}).click();
  await page.evaluate(async()=>{const {BrowserVoice}=await import('/src/browser/voice.ts');BrowserVoice.prototype.remove=async function(input:any){(window as any).delayed=input;return new Promise(()=>{});};});
  await page.getByRole('button',{name:'Delete note',exact:true}).click();await expect.poll(()=>page.evaluate(()=>(window as any).delayed?.operationId)).toBeTruthy();const delayed=await page.evaluate(()=>(window as any).delayed);
- const next=await context.newPage();await page.close();await next.goto('/');await next.getByRole('button',{name:'Notes',exact:true}).click();await next.getByRole('button',{name:'Restore note and recording',exact:true}).click();await expect(next.getByRole('button',{name:'Open Late recording',exact:true})).toBeVisible();
+ const next=await context.newPage();await page.close();await next.goto('/');await openLegacyNotes(next);await next.getByRole('button',{name:'Restore note and recording',exact:true}).click();await expect(next.getByRole('button',{name:'Open Late recording',exact:true})).toBeVisible();
  const result=await next.evaluate(async(input)=>{const {BrowserVoice}=await import('/src/browser/voice.ts');const audio=new BrowserVoice();return {receipt:await audio.remove(input),metadata:await audio.describe({audioId:input.audioId}),status:await audio.deletionStatus(input)};},delayed);
  expect(result.receipt).toEqual({...delayed,status:'restored'});expect(result.status).toEqual(result.receipt);expect(result.metadata.deletedAt).toBeUndefined();await expect(next.getByRole('button',{name:'Open Late recording',exact:true})).toBeVisible();await next.close();
 });
