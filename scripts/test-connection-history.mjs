@@ -174,6 +174,10 @@ try {
     await controller.cloudPersonalConnect();
     assert.ok(controller.getSnapshot().session,'registered Cloud connection succeeds');
     assert.equal(controller.getSnapshot().error,'');
+    // A device-registration fault is swallowed into the legacy text path; prove the
+    // registration (and its negotiated text format) actually completed.
+    assert.equal(controller.getSnapshot().phoneCapabilityReason,'','Cloud device registration completes');
+    assert.equal(controller.getSnapshot().phoneActionsAvailable,true,'Cloud device actions are enrolled');
     const literal=phoneContextMessage('literal authored envelope',{view:'notes',revision:9,sensitive:false}).text;
     await controller.send(literal,{view:'notes',revision:10,sensitive:false},'format-'+String(version),new AbortController().signal);
     const sent=sentBodies.at(-1);
