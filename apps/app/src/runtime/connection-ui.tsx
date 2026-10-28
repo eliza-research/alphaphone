@@ -1094,6 +1094,10 @@ async function connectResident(signal: AbortSignal) {
     reason = await negotiateEnabledViews(registered.viewProfileVersion, request, signal);
     headers['X-Eliza-Device-Capabilities']=await deviceCapabilities(registered.capabilities);
     credential.enrollmentId=registered.enrollmentId;await store.write(slot,credential);signal.throwIfAborted();
+    // Cost: one authenticated read after durable enrollment, not per message.
+    // Its existing native enrollment entry wakes notifications only after the complete slot exists.
+    const committedDevice=await request('/api/client-devices/context',undefined,signal);signal.throwIfAborted();
+    if(committedDevice.subjectUserId!==session.ownerId||committedDevice.agentId!==session.agentId||committedDevice.installationId!==credential.installationId||committedDevice.enrollmentId!==credential.enrollmentId)throw Error('Committed device enrollment changed');
     client.deviceHeaders=headers;
     credential.capabilities=headers["X-Eliza-Device-Capabilities"].split(",");
     actions=new DeviceActions(session,credential,await actionScope(JSON.stringify([baseScope,credential.installationId])),request,journal,(op,id,context,effectSignal,bindingHash,workflowRoute,journalIdentity,agendaSource)=>deviceExecutor(op,id,context,effectSignal,bindingHash,workflowRoute,journalIdentity,agendaSource),(op,id,binding,recoverySignal)=>deviceRecovery?deviceRecovery(op,id,binding,recoverySignal):Promise.resolve({status:'unknown'}),headers["X-Eliza-Device-Capabilities"].split(",").includes("reminders.local-record.v2"),headers["X-Eliza-Device-Capabilities"].split(",").includes("reminders.create.v1"),runForegroundReview);
