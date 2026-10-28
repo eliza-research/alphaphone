@@ -11,6 +11,7 @@
 // native plugins, the resident runtime, Eliza Cloud, Google, Android CalendarProvider, a WebView
 // or a device. No account, grant, mail, calendar or digest here is real.
 import { expect, type Page } from '@playwright/test';
+import { committedViewResident } from './committed-view-resident';
 
 export interface FlagOffMessage { externalId: string; threadId: string; subject: string; from: string; fromEmail: string; to: string[]; snippet: string; bodyText: string; historyId: string }
 export interface FlagOffAccount { connectionId: string; email: string; connected: boolean; messages: FlagOffMessage[] }
@@ -52,6 +53,7 @@ export interface FlagOffSchedules {
 export const AGENT_NAME = 'Alpha';
 
 export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
+  await committedViewResident(page);
   await page.addInitScript(({ options, agentName }) => {
     const w = window as any; w.androidBridge = {};
     if(!options.freshAccess)localStorage.setItem('alpha:startup-permission-walkthrough:v1',JSON.stringify({version:1,status:'completed',step:4}));
@@ -115,6 +117,7 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
       if (path === '/api/conversations') return ok({ conversations: agent.conversations });
       const history = /^\/api\/conversations\/([^/]+)\/messages$/.exec(path.split('?')[0]);
       if (history && method === 'GET') return ok({ messages: (agent.history[history[1]] || []).slice(-200) });
+      const committed = w.committedViewResident.handle(method, path, body, f.installationId); if (committed) return committed;
       f.unexpected.push(method + ' ' + path); return { status: 404, data: {} };
     };
     // The phone enrollment the resident agent registered (the binding a phone-source consent names).

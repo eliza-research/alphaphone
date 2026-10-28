@@ -1,6 +1,7 @@
 import {selectCalendarSource} from './helpers/browser-calendar';
 import {selectLegacyNotes} from './helpers/legacy-notes';
 import {seedCompletedAccessSetup} from './flag-off-android';
+import {committedViewResident} from './committed-view-resident';
 // Core loops A–F and J01–J05 on the FLAG-OFF bundle (the bytes the distribution APKs package).
 //
 // The journey-*.spec.ts files run the development profile: development agent, development device
@@ -48,6 +49,7 @@ async function fenceNetwork(page: Page, allowed: string[] = []) {
  * Cloud transcription returns that text, retained note audio, native reminders and one writable
  * device calendar; `signedOut` starts with no Cloud sign-in. */
 async function android(page: Page, options: { clock?: 'opened' | 'unavailable' | 'unknown'; voice?: string; signedOut?: boolean } = {}) {
+  await committedViewResident(page);
   await page.addInitScript(({ options }) => {
     const w = window as any; w.androidBridge = {};
     const id = '9f1dc45a-4011-4e44-947a-30d999d24fa5', agentId = '6f1d3c3e-8c55-4c1b-9d1f-2b6f0b0d3a11';
@@ -88,6 +90,7 @@ async function android(page: Page, options: { clock?: 'opened' | 'unavailable' |
       const history = /^\/api\/conversations\/([^/]+)\/messages$/.exec(path.split('?')[0]);
       if (history && method === 'GET') return ok({ messages: (agent.history[history[1]] || []).slice(-200) });
       if (/^\/api\/turns\/[^/]+\/abort$/.test(path)) { f.aborts++; return { status: 404, data: {} }; }
+      const committed = w.committedViewResident.handle(method, path, body, headers['X-Eliza-Device-Id'] ?? ''); if (committed) return committed;
       f.unexpected.push(method + ' ' + path); return { status: 404, data: {} };
     };
     const promise = (names: string[]) => names.map(name => ({ name, rtype: 'promise' }));
