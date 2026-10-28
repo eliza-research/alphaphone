@@ -103,7 +103,7 @@
   ],
   "resident": {
     "description": "Advisories for the resident runtime's npm packages at the pinned upstream commit, from the npm bulk advisory endpoint. Regenerate with: node scripts/dependency-audit.mjs --resident --write. Dispositions live in docs/dependency-audit.dispositions.json under \"resident\".",
-    "upstreamCommit": "ea0899fd7f19b2bf3552127d6566c15e23b4c303",
+    "upstreamCommit": "de16c240f8ef77779edd3aa411e407018d2be209",
     "input": "vendor/eliza/bun.lock",
     "auditedOn": "2026-10-27",
     "inputSha256": "63509920ce413bb6fcb44fc7e5b1047cc22517eab2ea51a445203e29bd7c6201",
@@ -2111,9 +2111,9 @@
       }
     ],
     "sourceBinding": {
-      "priorUpstreamCommit": "8cc623855ce49cab68f9ed321b206abcad4d5c0b",
-      "evidence": "Exact raw bun.lock Git blob and bytes unchanged; retained 2026-10-27 registry findings, not a fresh registry query. Existing exceptions, expiry dates, pending fixes and historical packaged evidence unchanged.",
-      "lockGitObject": "0144b57346079d23998cede8993c55507fae24ab"
+      "priorUpstreamCommit": "ea0899fd7f19b2bf3552127d6566c15e23b4c303",
+      "evidence": "docs/evidence/source-clean-coherent-final-20261028.json",
+      "note": "Source binding only: exact raw lock Git object/bytes unchanged. Retained dated registry findings, exceptions/deadlines/pending fixes and historical packaged evidence; no fresh registry query or release clearance."
     }
   }
 }
