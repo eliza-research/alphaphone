@@ -73,12 +73,13 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/ui/src/voice/pcm-wave.ts',
   "packages/ui/src/utils/reminder-presentation.ts",
   "plugins/plugin-browser/src/native-client-command.ts",
-  'packages/core/src/types/plugin.ts',
-  'packages/core/src/types/components.ts',
-  'packages/core/src/types/model.ts',
-  'packages/core/src/types/primitives.ts',
+  'packages/core/src/types/view-capability.ts',
+  'packages/core/src/types/json.ts',
+  'packages/core/src/types/schema.ts',
+  'packages/core/src/schema-types.ts',
+  'packages/ui/src/api/transport.ts',
   'packages/ui/src/api/client-base.ts',
-  'plugins/plugin-calendar/src/meetings/auto-join-settings.ts',
+  'plugins/plugin-calendar/src/meetings/auto-join-types.ts',
   'packages/core/src/types/permissions.ts',
   'packages/contracts/src/lifeops/gmail.ts',
   'packages/contracts/src/lifeops/policy.ts',
@@ -170,8 +171,11 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/contracts/src/calendar-linked-sync.ts',
   'plugins/plugin-assistant/src/services/device-actions/camera-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/notes-query-result.ts',
+  'packages/contracts/src/sms-send.ts',
   'plugins/plugin-assistant/src/services/device-actions/sms-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-contract.ts',
+  'plugins/plugin-assistant/src/services/device-actions/clock-handoff.ts',
+  'plugins/plugin-assistant/src/services/device-actions/clock-handoff-history.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-review-executor.ts',
   'plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/device-record-presentation.ts',
@@ -212,21 +216,14 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
     return matches[0][0];
   }).join('\n') + '\n';
   project('alpha-voice-core-types.ts',declarations(
-    'packages/core/src/types/plugin.ts', ['ViewCapabilityParameter', 'ViewCapability']) + declarations(
-    'packages/core/src/types/primitives.ts', ['JsonPrimitive', 'JsonValue']) + declarations(
-    'packages/core/src/types/components.ts', ['ActionParameterSchema']) + declarations(
-    'packages/core/src/types/model.ts', ['JSONSchema']));
+    'packages/core/src/types/view-capability.ts', ['ViewCapabilityParameter', 'ViewCapability']) + declarations(
+    'packages/core/src/types/json.ts', ['JsonPrimitive', 'JsonValue']) + declarations(
+    'packages/core/src/types/schema.ts', ['ActionParameterSchema', 'JSONSchema']));
   const clientName = 'packages/ui/src/api/client-base.ts';
   const fetchMatches = [...text(clientName).matchAll(/^  async fetch<T>\([\s\S]*?^  \): Promise<T> \{/gm)];
   if (fetchMatches.length !== 1) throw Error('Review changed ElizaClient fetch declaration.');
   const fetchSignature = fetchMatches[0][0].replace(/^  async /, '').replace(/ \{$/, '').trim();
   project('alpha-client-fetch-types.ts', 'export interface ElizaClient { ' + fetchSignature + '; }\n');
-  project('plugins/plugin-calendar/src/meetings/auto-join-settings.ts', declarations(
-    'plugins/plugin-calendar/src/meetings/auto-join-settings.ts', ['MeetingAutoJoinPolicy', 'MeetingAutoJoinSettings']));
-  source.delete('packages/core/src/types/plugin.ts');
-  source.delete('packages/core/src/types/components.ts');
-  source.delete('packages/core/src/types/model.ts');
-  source.delete('packages/core/src/types/primitives.ts');
   source.delete(clientName);
 
   project('alpha-voice-core-protocol.ts','export {ElizaError} from "./packages/core/src/errors";\nexport {redactTrailingArgs} from "./packages/core/src/security/log-redaction";\nexport {parseViewInteractionClientId, AGENT_SURFACE_CAPABILITY_IDS} from "./packages/core/src/views/view-interact-protocol";\nexport {findViewActionHandoff, type ViewActionHandoff} from "./packages/core/src/views/view-action-handoff";\nexport type {PermissionState} from "./packages/core/src/types/permissions";\n');

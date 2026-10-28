@@ -25,6 +25,9 @@
       "@elizaos/capacitor-system/launcher": [
         "./.eliza/client-features/plugins/plugin-native-system/src/client/launcher.ts"
       ],
+      "@elizaos/contracts/sms-send": [
+        "./.eliza/client-features/packages/contracts/src/sms-send.ts"
+      ],
       "@elizaos/contracts/native-notes-query": [
         "./.eliza/client-features/packages/contracts/src/native-notes-query.ts"
       ],
@@ -58,11 +61,17 @@
       "@elizaos/core/protocol": [
         "./.eliza/client-features/alpha-voice-core-protocol.ts"
       ],
+      "@elizaos/core/schema-types": [
+        "./.eliza/client-features/packages/core/src/schema-types.ts"
+      ],
       "@elizaos/core": [
         "./.eliza/client-features/alpha-voice-core-types.ts"
       ],
       "@elizaos/contracts": [
         "./.eliza/client-features/client-contracts.ts"
+      ],
+      "@elizaos/ui/api/transport": [
+        "./.eliza/client-features/packages/ui/src/api/transport.ts"
       ],
       "@elizaos/ui": [
         "./.eliza/client-features/alpha-client-fetch-types.ts"

@@ -71,10 +71,11 @@ test('actual pinned client features retain shared voice source unchanged and exc
  const source=prepareClientFeatures(),stamp=JSON.parse(fs.readFileSync(path.join(source,'.source.json')));
 assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','utf8')).commit);assert.equal(stamp.projectionVersion,10);
  const coreTypes=fs.readFileSync(path.join(source,'alpha-voice-core-types.ts'),'utf8');
- for(const [file,names]of Object.entries({'components.ts':['ActionParameterSchema'],'model.ts':['JSONSchema'],'primitives.ts':['JsonPrimitive','JsonValue']})){
+ for(const [file,names]of Object.entries({'schema.ts':['ActionParameterSchema','JSONSchema'],'json.ts':['JsonPrimitive','JsonValue'],'view-capability.ts':['ViewCapabilityParameter','ViewCapability']})){
   const input='packages/core/src/types/'+file,original=fs.readFileSync(path.join('vendor/eliza',input),'utf8');
   assert.ok(stamp.sourceFiles[input],'canonical type input has provenance');
-  assert.equal(stamp.files[input],undefined,'unrelated core module is not shipped to the browser');
+  // The pinned SDK splits these declarations into browser-safe leaves behind @elizaos/core/schema-types.
+  assert.equal(stamp.files[input],stamp.sourceFiles[input],'browser-safe type leaf is shipped unchanged');
   for(const name of names){
    const declaration=original.match(new RegExp('^export interface '+name+'\\s*\\{[\\s\\S]*?^\\}','m'))?.[0]??original.match(new RegExp('^export type '+name+'\\s*=[\\s\\S]*?;','m'))?.[0];
    assert.ok(declaration&&coreTypes.includes(declaration),name+' is retained byte-for-byte from the pinned SDK');
