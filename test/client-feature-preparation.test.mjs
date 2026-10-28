@@ -63,23 +63,20 @@ test('direct local development launcher prepares a clean client tree before star
  assert.equal(fs.existsSync(path.join(root,'.eliza/patched')),false);
 }));
 
-test('client type projection rejects unsupported declarations without writing its cache',()=>fixture(({root})=>{
- assert.throws(()=>prepareClientFeatures({root}),/Review changed client type declaration/);
- assert.equal(fs.existsSync(path.join(root,'.eliza/client-features')),false);
-}));
 test('actual pinned client features retain shared voice source unchanged and exclude dashboard transport',()=>{
  const source=prepareClientFeatures(),stamp=JSON.parse(fs.readFileSync(path.join(source,'.source.json')));
-assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','utf8')).commit);assert.equal(stamp.projectionVersion,10);
- const coreTypes=fs.readFileSync(path.join(source,'alpha-voice-core-types.ts'),'utf8');
- for(const [file,names]of Object.entries({'components.ts':['ActionParameterSchema'],'model.ts':['JSONSchema'],'primitives.ts':['JsonPrimitive','JsonValue']})){
-  const input='packages/core/src/types/'+file,original=fs.readFileSync(path.join('vendor/eliza',input),'utf8');
-  assert.ok(stamp.sourceFiles[input],'canonical type input has provenance');
-  assert.equal(stamp.files[input],undefined,'unrelated core module is not shipped to the browser');
-  for(const name of names){
-   const declaration=original.match(new RegExp('^export interface '+name+'\\s*\\{[\\s\\S]*?^\\}','m'))?.[0]??original.match(new RegExp('^export type '+name+'\\s*=[\\s\\S]*?;','m'))?.[0];
-   assert.ok(declaration&&coreTypes.includes(declaration),name+' is retained byte-for-byte from the pinned SDK');
-  }
+assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','utf8')).commit);assert.equal(stamp.projectionVersion,11);
+ // Renderer types come from upstream leaf entries copied byte-for-byte; no declaration is extracted.
+ for(const name of ['alpha-voice-core-types.ts','alpha-client-fetch-types.ts']) assert.equal(fs.existsSync(path.join(source,name)),false,name+' is no longer projected');
+ for(const file of ['packages/core/src/schema-types.ts','packages/core/src/types/json.ts','packages/core/src/types/schema.ts','packages/core/src/types/view-capability.ts','packages/ui/src/api/transport.ts','plugins/plugin-calendar/src/meetings/auto-join-types.ts','plugins/plugin-calendar/src/api/calendar-api.ts','plugins/plugin-notes/src/types.ts','plugins/plugin-notes/src/capabilities.ts','plugins/plugin-notes/src/client/notes-api.ts']){
+  assert.equal(stamp.sourceFiles[file],stamp.files[file],file+' is not projected');
+  assert.deepEqual(fs.readFileSync(path.join(source,file)),fs.readFileSync(path.join('vendor/eliza',file)),file+' is copied exactly');
  }
+ for(const file of ['packages/core/src/types/plugin.ts','packages/core/src/types/components.ts','packages/core/src/types/model.ts','packages/core/src/types/primitives.ts','packages/ui/src/api/client-base.ts','plugins/plugin-calendar/src/meetings/auto-join-settings.ts']){
+  assert.equal(stamp.files[file],undefined,file+' (runtime or class module) is not shipped to the browser');
+ }
+ const leafBundle=buildSync({entryPoints:[path.join(source,'plugins/plugin-notes/src/client/notes-api.ts')],bundle:true,write:false,platform:'browser',format:'esm',metafile:true,alias:{'@elizaos/core/schema-types':path.join(source,'packages/core/src/schema-types.ts'),'@elizaos/ui/api/transport':path.join(source,'packages/ui/src/api/transport.ts')}});
+ assert.equal(Object.keys(leafBundle.metafile.inputs).some(file=>/client-base|core\/src\/types\/(plugin|components|model)\.ts/.test(file)),false,'Notes client loads no root core or ElizaClient module');
  const relayPath='plugins/plugin-maps/src/client/navigation-relay.ts';
  // The WebView signal shim is upstream (elizaOS/eliza#37315); the relay is carried unchanged.
  assert.equal(stamp.sourceFiles[relayPath],stamp.files[relayPath]);
@@ -109,7 +106,6 @@ assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','u
   '@elizaos/core/logging':path.join(source,'packages/core/src/logging.ts'),
   '@elizaos/core/speech':path.join(source,'packages/core/src/speech.ts'),
   '@elizaos/core/protocol':path.join(source,'alpha-voice-core-protocol.ts'),
-  '@elizaos/core':path.join(source,'alpha-voice-core-types.ts'),
  }});
  assert.ok(bundle.outputFiles[0].contents.length>10000);
  assert.equal(Object.keys(bundle.metafile.inputs).some(file=>/csrf-client|steward|persistence|core\/src\/logger|api\//.test(file)),false);

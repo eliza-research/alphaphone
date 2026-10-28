@@ -58,14 +58,14 @@
       "@elizaos/core/protocol": [
         "./.eliza/client-features/alpha-voice-core-protocol.ts"
       ],
-      "@elizaos/core": [
-        "./.eliza/client-features/alpha-voice-core-types.ts"
+      "@elizaos/core/schema-types": [
+        "./.eliza/client-features/packages/core/src/schema-types.ts"
       ],
       "@elizaos/contracts": [
         "./.eliza/client-features/client-contracts.ts"
       ],
-      "@elizaos/ui": [
-        "./.eliza/client-features/alpha-client-fetch-types.ts"
+      "@elizaos/ui/api/transport": [
+        "./.eliza/client-features/packages/ui/src/api/transport.ts"
       ],
       "@elizaos/plugin-assistant/device-calendar-contract": [
         "./.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts"
