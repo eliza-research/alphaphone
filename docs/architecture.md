@@ -335,6 +335,15 @@ lease must stay equal to `NotesDeletionLease.LEASE_MS` used by the Android nativ
 The device-local Older notes collection still renders through Alpha's own Notes view; the
 shared `NotesWorkspace` serves only canonical agent notes until it gains a device-local
 client and recording ports.
+Three Notes files remain Alpha's because they bind Alpha storage and platform surfaces rather
+than Notes rules: `runtime/notes-trash.ts` (the Trash slot `notes-trash:v1:device` and browser
+document under the shared Trash policy), `runtime/browser-note-documents.ts` (the browser's
+local text import and export for `AlphaNoteDocuments`) and `runtime/deleted-note-origin.ts`
+(which committed reminder and Calendar deletion receipts retire a From note link, read from
+Alpha's deletion documents). Moving them needs a shared storage and document-picker port in
+`plugin-notes`; until then this Notes cut-over is not complete. Note-origin links point only
+at Older notes voice recordings: canonical Notes records have no Notes-to-Calendar handoff
+or origin link yet.
 
 `AlphaReminders` supplies the product's existing encrypted store, preference and
 channel names, receiver/Activity identities and intent routes. `DailyApps` keeps
