@@ -76,6 +76,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-native-browser-surface/src/address-input.ts',
   'plugins/plugin-native-browser-surface/src/browsing-session.ts',
   'plugins/plugin-native-browser-surface/src/page-reading.ts',
+  'plugins/plugin-native-browser-surface/src/page-source.ts',
   'packages/core/src/types/plugin.ts',
   'packages/core/src/types/components.ts',
   'packages/core/src/types/model.ts',
