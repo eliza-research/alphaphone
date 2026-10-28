@@ -19,6 +19,9 @@ test('explicit native legacy recovery uses real encrypted slots and current toke
   writeFileSync(atomic,readFileSync(join(root,'test/fixtures/secure-store-memory/android/util/AtomicFile.java'),'utf8').replace('public static int corruptNextCommit;','public static int corruptNextCommit; public static int failAfterStarts=-1;').replace('return new FileOutputStream(file);','if(failAfterStarts==0){failAfterStarts=-1;throw new IOException("synthetic write failure");}if(failAfterStarts>0)failAfterStarts--;return new FileOutputStream(file);'));
   const context=join(dir,'Context.java');writeFileSync(context,`package android.content;public class Context {private final java.io.File directory;public Context(java.io.File directory){this.directory=directory;}public Context getApplicationContext(){return this;}public java.io.File getNoBackupFilesDir(){return directory;}}`);
   const nativeLifecycle=readFileSync(nativeSource('AlphaLocalAgentPlugin.java'),'utf8');
+  const powerEpoch=nativeLifecycle.match(/^ private static long powerAuthorizationMutationEpoch;$/m)?.[0];
+  const powerStart=nativeLifecycle.indexOf(' static void powerAuthorizationChanged(){'),powerEnd=nativeLifecycle.indexOf(' /** A protected launch constraint',powerStart);
+  assert.ok(powerEpoch&&powerStart>0&&powerEnd>powerStart);
   const fastStart=nativeLifecycle.indexOf(' static <T> T mutateCredentials('),fastEnd=nativeLifecycle.indexOf('   startRequestId=',fastStart);
   const intentStart=nativeLifecycle.indexOf(' static void requireCredentialIntent('),intentEnd=nativeLifecycle.indexOf('\n',intentStart);
   const bindingStart=nativeLifecycle.indexOf(' static void bindCloudProvider('),bindingEnd=nativeLifecycle.indexOf(' /** Direct configuration',bindingStart);
@@ -32,6 +35,8 @@ test('explicit native legacy recovery uses real encrypted slots and current toke
   // Process shutdown is fixture-only; these tests do not launch or stop an Android service.
   const lifecycle=join(dir,'AlphaLocalAgentPlugin.java');writeFileSync(lifecycle,`package ai.elizaresearch.alphaphone;import android.content.Context;import org.json.JSONObject;import com.getcapacitor.JSObject;class AlphaLocalAgentPlugin {
    static final Object lifecycleLock=new Object();static long credentialIntentEpoch=1;
+   ${powerEpoch}
+   ${nativeLifecycle.slice(powerStart,powerEnd)}
    ${nativeLifecycle.slice(intentStart,intentEnd)}
    interface CredentialMutation<T>{boolean requiresShutdown()throws Exception;T commit()throws Exception;}
    ${nativeLifecycle.slice(fastStart,fastEnd)}
