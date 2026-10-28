@@ -61,6 +61,8 @@ for(const name of classes){
 for(const relative of [
  'plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProcessSupervisor.java',
  'plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderAdmission.java',
+ // The shared native runtime profile's embedding route (AlphaLocalAgentPlugin calls it).
+ 'plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeRuntimeEmbeddings.java',
  // JsonCredentialSlots is compiled from the :elizaos-capacitor-secure-store module (patched
  // source, byte-identical for that file); staging a second copy would duplicate the class.
 ]){

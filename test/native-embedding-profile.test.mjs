@@ -8,6 +8,8 @@ test('Alpha selects embeddings only through the shared native runtime profile',(
  const calls=source.split('\n').filter(line=>line.includes('NativeRuntimeEmbeddings.apply('));
  assert.equal(calls.length,1);
  assert.match(calls[0],/NativeRuntimeEmbeddings\.apply\(BuildConfig\.ELIZA_RUNTIME_PROFILE,new File\(context\.getApplicationInfo\(\)\.nativeLibraryDir\),context\.getFilesDir\(\),env\);/);
+ // The shared class is compiled from the selected-source staging list, like NativeProviderAdmission.
+ assert.ok(fs.readFileSync('scripts/stage-local-agent-sources.mjs','utf8').includes("'plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeRuntimeEmbeddings.java'"),'NativeRuntimeEmbeddings.java must be staged for the APK compile');
 });
 test('the shared profile keeps native embeddings local and Cloud QA on Cloud',()=>{
  assert.ok(fs.existsSync(shared),'The eliza pin must include NativeRuntimeEmbeddings (plugin-native-agent)');
