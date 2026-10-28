@@ -145,6 +145,7 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/voice/src/voice-assistant-session.ts',
   'packages/voice/src/live-voice-session.ts',
   'packages/voice/src/voice-turn-routes.ts',
+  'packages/voice/src/voice-turn-timing.ts',
   'packages/voice/src/voice-eot.ts',
   'packages/core/src/speech.ts',
   'packages/core/src/utils/string-boundaries.ts',
