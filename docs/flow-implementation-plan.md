@@ -147,6 +147,11 @@ before sending it again." with the saved copy, Restore saved draft and Replace s
 with this text, and refuses to send until one is chosen. The production and development
 continuity specs restart during a held reply and check that nothing is posted again.
 
+A prompt sent from outside the composer (a suggestion, a Calendar decision, a reviewed
+email) no longer holds, clears or commits the composer's draft, reply target or reviewed
+source: the person's unsent words stay in the composer and in their saved copy
+(`context-selection.spec.ts`, mail).
+
 The phone canvas's keyboard-free height, its soft-keyboard test and the list-detail and
 calendar layout decisions (`runtime/canvas-geometry.ts`) and the dock-clearance publisher
 (`runtime/dock-clearance.ts`) are shared Eliza code as well

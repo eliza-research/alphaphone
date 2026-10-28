@@ -1227,7 +1227,10 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     const retiring=this.stopVoiceConversation?.();if(retiring){await retiring;context(this);const now=this.S();if(JSON.stringify(alphaClient.getState().context)!==expectedContext||!this.live||document.hidden||connectionController.getSnapshot().open||sendBinding()!==binding||now.view!==view||String(now.draft||'')!==draft||this.messageReplyTarget!==reply||this.messageEditTarget!==edit)return;}
     let s = this.S(); const text = String(argument ?? s.draft);
     if (!text.trim() || s.typing || this.draftSendPending || this.composerDraft?.holding) return;
-    const editTarget:ConversationMessageTarget|undefined=this.messageEditTarget,replyTarget:ConversationMessageTarget|undefined=this.messageReplyTarget,editView=s.view;
+    // A prompt sent from elsewhere (a suggestion, a Calendar decision, a reviewed email) is not the
+    // composer's text: the composer keeps its draft, its saved copy, its reply target and source.
+    const fromComposer=argument===undefined;
+    const editTarget:ConversationMessageTarget|undefined=this.messageEditTarget,replyTarget:ConversationMessageTarget|undefined=fromComposer?this.messageReplyTarget:undefined,editView=s.view;
     if(editTarget){
       if(argument!==undefined||!connectionController.messageTargetCurrent(editTarget))return;
       this.draftSendPending=true;
@@ -1239,26 +1242,28 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       } catch(error){if(error&&typeof error==='object'&&'historyChanged' in error)this.messageEditTarget=undefined;this.toast(error instanceof Error?error.message:'Message replacement failed.');return;}
       finally{this.draftSendPending=false;}
     }
-    const sourceDraft=this.reviewedSourceDraft?.draft===text?sourceOf(this.reviewedSourceDraft.source):undefined;
+    const sourceDraft=fromComposer&&this.reviewedSourceDraft?.draft===text?sourceOf(this.reviewedSourceDraft.source):undefined;
     context(this);
     const revision=alphaClient.getState().context.revision,connection=connectionController.getSnapshot(),sessionId=connection.session?.sessionId,conversationId=connection.history?.conversationId;
     const current=()=>{const selected=connectionController.getSnapshot();return this.live&&!document.hidden&&!selected.busy&&!selected.open&&!document.querySelector('[data-alpha-chat-recorder],[data-alpha-pill-voice]')&&selected.session?.sessionId===sessionId&&selected.history?.conversationId===conversationId&&alphaClient.getState().context.revision===revision;};
-    this.draftSendPending=true;
-    // The durable draft keeps this text until the message is known to have been dispatched.
-    try{await this.draftBindingTask;await this.composerDraft.hold(String(s.draft||''),current);}catch(error){this.toast(error instanceof Error?error.message:'Draft could not be prepared. Nothing was sent.');return;}finally{this.draftSendPending=false;}
-    const reviewedSource=this.reviewedSourceDraft;this.reviewedSourceDraft=null;
+    if(fromComposer){
+      this.draftSendPending=true;
+      // The durable draft keeps this text until the message is known to have been dispatched.
+      try{await this.draftBindingTask;await this.composerDraft.hold(String(s.draft||''),current);}catch(error){this.toast(error instanceof Error?error.message:'Draft could not be prepared. Nothing was sent.');return;}finally{this.draftSendPending=false;}
+    }
+    const reviewedSource=fromComposer?this.reviewedSourceDraft:null;if(fromComposer)this.reviewedSourceDraft=null;
     // Everything this send later shows belongs to the agent connection it was sent on.
     const sameChat=()=>connectionController.getSnapshot().session?.sessionId===sessionId;
     const attempt:SendAttempt=this.sendAttempt={transportCalled:false,preDispatch:false,streamed:false};
     const userId=crypto.randomUUID(),streamedId=crypto.randomUUID();let streamed=false;
     const replaceStream=(value:string,streaming=true)=>this.setState((previous:Shell)=>({msgs:previous.msgs.map((message:Shell)=>message.id===streamedId?{...message,text:value,streaming}:message)}));
-    this.setState({ msgs: [...s.msgs, { id: userId, from: 'user', text }], draft: '', typing: true, chat: s.chat === 'full' ? 'full' : 'sheet', shade: false },focusAfterCommit);
+    this.setState({ msgs: [...s.msgs, { id: userId, from: 'user', text }], ...(fromComposer?{draft:''}:{}), typing: true, chat: s.chat === 'full' ? 'full' : 'sheet', shade: false },focusAfterCommit);
     let navigation:ReturnType<typeof connectionController.captureViewNavigation>|undefined,readyNavigation:readonly unknown[]|undefined;
     const deliverNavigation=(results:readonly unknown[]|undefined)=>deliverChatNavigation(this,navigation,results);
     try {
       try{
         await this.connectAgent(); context(this);
-        if (alphaClient.getState().context.revision !== revision) throw new NotDispatched('The active screen changed. Your message is back in the composer.');
+        if (alphaClient.getState().context.revision !== revision) throw new NotDispatched(fromComposer?'The active screen changed. Your message is back in the composer.':'The active screen changed. Nothing was sent.');
         if(expectedSession&&(JSON.stringify(connectionController.getSnapshot().session)!==JSON.stringify(expectedSession)||document.hidden))throw new NotDispatched('Agent changed. Review this message again.');
       }catch(error){throw error instanceof NotDispatched?error:new NotDispatched(error instanceof Error?error.message:'The agent connection is unavailable. Nothing was sent.');}
       const sourceSession=connectionController.getSnapshot().session;
@@ -1307,7 +1312,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       await transportSettled(attempt);
       if(!dispatched(attempt,e)){
         // Nothing reached the agent: put the text back and drop the unsent bubble. Never resend.
-        if(this.live){const inlineNotice=privateLocalPreviewEnabled&&this.composerDraft?.holding===true;this.setState((previous:Shell)=>({msgs:previous.msgs.filter((item:Shell)=>item.id!==userId)}));this.composerDraft?.release();if(reviewedSource&&!this.reviewedSourceDraft)this.reviewedSourceDraft=reviewedSource;if(!inlineNotice)this.toast(e instanceof NotDispatched?message:e instanceof AlphaClientError&&(['unconfigured','sensitive','busy'].includes(e.code)||(e as {refusedBeforeTurn?:unknown}).refusedBeforeTurn===true)?'Not sent. '+message:'Not sent. Your message is back in the composer.');}
+        if(this.live){const inlineNotice=privateLocalPreviewEnabled&&this.composerDraft?.holding===true;this.setState((previous:Shell)=>({msgs:previous.msgs.filter((item:Shell)=>item.id!==userId)}));this.composerDraft?.release();if(reviewedSource&&!this.reviewedSourceDraft)this.reviewedSourceDraft=reviewedSource;if(!inlineNotice)this.toast(e instanceof NotDispatched?message:e instanceof AlphaClientError&&(['unconfigured','sensitive','busy'].includes(e.code)||(e as {refusedBeforeTurn?:unknown}).refusedBeforeTurn===true)?'Not sent. '+message:fromComposer?'Not sent. Your message is back in the composer.':'Not sent.');}
         else this.composerDraft?.release();
       }else{
         await this.composerDraft?.commit();
