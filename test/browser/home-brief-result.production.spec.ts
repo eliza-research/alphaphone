@@ -187,7 +187,8 @@ test('Home renders the canonical agent event without borrowing device names or i
   await canonicalHome(page, 'event');
   const card = calendarCard(page);
   await expect(card).toContainText('Agent calendar meeting');
-  await expect(card).toHaveAccessibleName('Open agent Calendar event Agent calendar meeting');
+  // The shared agenda card names the event, its day and its time, as it does for device calendars.
+  await expect(card).toHaveAccessibleName(/^Open calendar event: Agent calendar meeting, \w{3}, \w{3} \d{1,2}, (All day|\d{1,2}:\d{2})/);
   await expect(card).not.toContainText(/Device-only event|Private device calendar/);
   await expect(card).not.toHaveAttribute('aria-description', /Read|device/);
   await card.click();

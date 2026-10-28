@@ -90,3 +90,56 @@ console.log(JSON.stringify(out));`);
   assert.equal(out.cleared,null);
   assert.equal(out.events,2,'Home is told once when the brief appears and once when it is cleared');
 });
+
+test('mail card keeps the installed selectors, styles and order of the Home Inbox card in every state', () => {
+  h.setLocalePreferences?.({locale:'en-US'});
+  const now=new Date(2026,9,7,15,30).getTime(),base={now,loaded:null,failure:null,pending:false,connected:true,disconnected:false,unchecked:false};
+  const values=card=>({homeAttentionLabel:card.label,homeInboxCount:card.count,homeInboxRows:card.rows.map(row=>({subject:row.title,from:row.detail})),homeInboxHasRows:card.rows.length>0,
+    homeInboxTitle:card.title,homeInboxStatus:card.status,homeInboxDescription:card.description,homeInboxState:card.state,homeAttentionPeople:[],goTriage:()=>{}});
+  const out={};
+  out.ready=html(c.homeAttentionCard(values(h.presentHomeInboxCard({...base,loaded:{unread:[{subject:'Invoice',from:'Billing',body:'Private body'},{subject:'',from:'Ada'},{subject:'Third',from:'Grace'}],more:false,label:'work@example.test',readAt:new Date(2026,9,7,15,4).getTime()}}))));
+  out.idle=html(c.homeAttentionCard(values(h.presentHomeInboxCard(base))));
+  out.disconnected=html(c.homeAttentionCard(values(h.presentHomeInboxCard({...base,connected:false,disconnected:true}))));
+  out.failed=html(c.homeAttentionCard(values(h.presentHomeInboxCard({...base,failure:'revoked'}))));
+  out.stale=html(c.homeAttentionCard(values(h.presentHomeInboxCard({...base,stale:{state:'stale',unread:2,source:'work@example.test',updatedAt:new Date(2026,9,6,8,15).toISOString()}}))));
+  out.people=html(c.homeAttentionCard({...values(h.presentHomeInboxCard(base)),homeAttentionPeople:[{ini:'AL'}],homePeopleVisibility:'hidden'}));
+  assert.match(out.ready,/^<button type="button" data-overview-part="card" class="home-card" data-overview-card="attention" data-overview-state="ready" data-alpha-home-inbox=""/);
+  for(const attribute of ['aria-label="Open Inbox: 3 unread emails"','aria-description="work@example.test · Updated 3:04 PM"'])assert.ok(out.ready.includes(attribute),attribute);
+  // The inline styles are the ones the template carried, so the card looks and measures the same.
+  assert.ok(out.ready.includes('style="flex-shrink:0;scroll-snap-align:start;width:max-content;min-width:172px;max-width:calc(100% - 48px);border-radius:30px;background:var(--s2);padding:22px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between"'));
+  assert.match(out.ready,/<div data-overview-part="head" style="display:flex;justify-content:space-between;align-items:center;width:100%"><span data-overview-part="count" style="font-size:14px;font-weight:600;text-align:left">3 unread<\/span><span aria-hidden="true" data-overview-part="icon"><span style="[^"]*inbox\.svg[^"]*"><\/span><\/span><\/div>/);
+  assert.match(out.ready,/<div data-overview-part="rows" style="display:flex;flex-direction:column;gap:10px;max-width:260px;min-width:0;text-align:left" data-alpha-home-inbox-subjects="">/);
+  assert.match(out.ready,/<div data-overview-part="rowTitle" style="font-size:18px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Invoice<\/div><div data-overview-part="rowDetail" style="font-size:12px;line-height:1.4;color:var\(--mut\);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Billing<\/div>/);
+  assert.match(out.ready,/rowTitle"[^>]*>\(no subject\)</);
+  assert.doesNotMatch(out.ready,/Third|Private body|data-overview-part="title"/,'two rows, no body, no headline beside rows');
+  assert.match(out.ready,/<span data-overview-part="status" style="font-size:12px;line-height:1.4;min-height:17px;color:var\(--mut\);text-align:left">work@example.test · Updated 3:04 PM<\/span><\/button>$/);
+  assert.match(out.idle,/data-overview-state="idle"/);
+  assert.match(out.idle,/<span data-overview-part="title" class="serif" style="font-size:26px;line-height:1.1;min-width:0;max-width:260px;text-align:left;overflow-wrap:anywhere">Inbox<\/span>/);
+  assert.doesNotMatch(out.idle,/data-alpha-home-inbox-subjects/);
+  assert.ok(out.disconnected.includes('data-overview-state="not-connected"')&&out.disconnected.includes('>Connect email<')&&out.disconnected.includes('aria-label="Connect email"'));
+  assert.ok(out.failed.includes('data-overview-state="error"')&&out.failed.includes('>Reconnect email<')&&out.failed.includes('>Open to retry<'));
+  assert.ok(out.stale.includes('data-overview-state="stale"')&&out.stale.includes('>Not updated since Tue, Oct 6 8:15 AM<'));
+  assert.match(out.stale,/aria-label="Open Inbox: work@example.test has not updated since Tue, Oct 6 8:15 AM; 2 unread emails when last read"/);
+  assert.match(out.people,/<div aria-hidden="true" data-overview-part="people" style="display:flex;gap:2px;visibility:hidden"><span data-overview-part="person" style="width:28px;height:28px;border-radius:14px;background:var\(--s3\);font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var\(--s2\);white-space:nowrap">AL<\/span><\/div>/);
+});
+
+test('the Home agenda values come from the shared card model for an event, an overdue reminder with its next item, and no item', () => {
+  h.setLocalePreferences?.({locale:'en-US'});
+  const now=new Date(2026,9,7,15,30).getTime(),at=(hour,minute=0,day=7)=>new Date(2026,9,day,hour,minute).getTime();
+  const read=h.presentHomeCalendarSource({state:'ready',overdue:false,readAt:at(15,4),now,native:true,calendar:'Work'});
+  const review={title:'Design review',begin:at(16),end:at(17),allDay:false,video:true,people:['Ada Lovelace']};
+  const event=h.homeCalendarValues(h.presentHomeAgendaCard({now,item:review,provenance:read,emptyTitle:'No upcoming events'}));
+  assert.deepEqual(event,{homeCalendarHasEvent:true,homeCalendarFooter:'4:00 PM – 5:00 PM',homeCalendarLabel:'Open calendar event: Design review, Wed, Oct 7, 4:00 PM – 5:00 PM',homeCalendarTime:'Wed, Oct 7',
+    homeCalendarTitle:'Design review',homeCalendarHasMeta:true,homeCalendarSource:'',homeCalendarOrigin:'Work',homeCalendarOverdue:false,homeCalendarStale:false,
+    homeCalendarDescription:'Work. Read 3:04 PM from calendars on this device',homeCalendarItemDescription:'Work. Read 3:04 PM from calendars on this device',
+    homeCalendarNext:'',homeCalendarNextSource:'',homeCalendarHasNext:false,homeCalendarVideo:true,homeCalendarPeople:[{ini:'AL'}],homePeopleVisibility:'visible'});
+  const reminder=h.presentHomeCalendarSource({state:'ready',overdue:true,reminderReadAt:at(15,1),readAt:at(15,4),now,native:true});
+  const overdue=h.homeCalendarValues(h.presentHomeAgendaCard({now,item:{title:'Pay rent',begin:at(9),end:Infinity,allDay:false,overdue:true},provenance:reminder,next:{item:review,provenance:read},overdueCount:1,emptyTitle:''}));
+  assert.equal(overdue.homeCalendarTime,'Overdue reminder');assert.equal(overdue.homeCalendarFooter,'Due 9:00 AM');assert.equal(overdue.homeCalendarLabel,'Open overdue reminder: Pay rent, Due 9:00 AM');
+  assert.deepEqual([overdue.homeCalendarNext,overdue.homeCalendarNextSource,overdue.homeCalendarHasNext,overdue.homeCalendarVideo],['Next: Design review 4:00 PM','Work',true,false]);
+  // The rendered card carries those values into the installed selectors.
+  const markup=html(c.homeAgendaCard({...overdue,goCalendar:()=>{}}));
+  assert.ok(markup.includes('data-alpha-home-calendar-overdue="true"')&&markup.includes('data-alpha-home-calendar-next="true"')&&markup.includes('>Next: Design review 4:00 PM<'));
+  const none=h.homeCalendarValues(h.presentHomeAgendaCard({now,item:null,provenance:{origin:'',read:'',description:''},emptyTitle:'Calendar has not been verified',sourceName:'Agent Calendar'}));
+  assert.deepEqual([none.homeCalendarTitle,none.homeCalendarTime,none.homeCalendarLabel,none.homeCalendarHasEvent,none.homeCalendarHasMeta],['Calendar has not been verified','Wed, Oct 7','Open Agent Calendar',false,false]);
+});

@@ -184,12 +184,14 @@ test('workflow freshness: a load time only after a list was actually loaded', ()
 test('Home template renders source, freshness and the brief card only from live values', () => {
   const template = readFileSync(new URL('../apps/app/src/prototype/template.html', import.meta.url), 'utf8');
   const home = template.slice(template.indexOf('data-alpha-home-layout'), template.indexOf('{{apps}}'));
-  // The agenda and brief cards are the shared upstream cards (home-overview-cards.ts); the template
-  // only places them. Their DOM is asserted in test/home-overview-cards.test.mjs.
+  // The agenda, mail and brief cards are the shared upstream cards (home-overview-cards.ts); the
+  // template only places them, in this order around the workflows card. Their DOM is asserted in
+  // test/home-overview-cards.test.mjs.
   assert.match(home, /^\s*\{\{homeAgendaCard\}\}$/m);
+  assert.match(home, /^\s*\{\{homeAttentionCard\}\}$/m);
   assert.match(home, /^\s*\{\{homeBriefCard\}\}$/m);
-  assert.doesNotMatch(home, /home-calendar-card|home-brief-card|\{\{homeCalendarTitle\}\}|\{\{homeBriefTitle\}\}/, 'no second copy of the shared card markup');
-  assert.match(home, /aria-description="\{\{homeInboxDescription\}\}"/);
+  assert.ok(home.indexOf('{{homeAgendaCard}}') < home.indexOf('data-alpha-home-workflows') && home.indexOf('data-alpha-home-workflows') < home.indexOf('{{homeAttentionCard}}') && home.indexOf('{{homeAttentionCard}}') < home.indexOf('{{homeBriefCard}}'), 'agenda, workflows, mail, brief');
+  assert.doesNotMatch(home, /home-calendar-card|home-brief-card|data-alpha-home-inbox|\{\{homeCalendarTitle\}\}|\{\{homeBriefTitle\}\}|\{\{homeInboxTitle\}\}/, 'no second copy of the shared card markup');
   assert.match(home, /aria-description="\{\{homeWorkflowDescription\}\}"/);
   assert.match(home, /<sc-if value="\{\{homeWorkflowFreshness\}\}"><span data-alpha-home-workflow-freshness>/);
   assert.doesNotMatch(home, /Morning brief|Design review|7:02 AM/, 'no fixture brief or agenda text in the template');

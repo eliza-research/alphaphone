@@ -14,6 +14,7 @@ import {
   overviewOverdueDueLabel,
   overviewReadIsStale,
   overviewWhenLabel,
+  presentOverviewAgendaCard,
   presentOverviewAgendaFeed,
   presentOverviewAgendaNext,
   presentOverviewAgendaSource,
@@ -21,14 +22,19 @@ import {
   presentOverviewBrief,
   presentOverviewBriefCard,
   presentOverviewCalendar,
+  presentOverviewInboxCard,
   presentOverviewInboxStatus,
   presentOverviewWorkflowFreshness,
   selectOverviewAgenda,
+  type OverviewAgendaCardInput,
+  type OverviewAgendaCardModel,
   type OverviewAgendaPresentation,
   type OverviewAttentionSummary,
   type OverviewBriefSummary,
   type OverviewCalendarState,
   type OverviewFormat,
+  type OverviewInboxCardInput,
+  type OverviewInboxCardModel,
 } from '../../../../.eliza/client-features/packages/ui/src/overview/daily-overview.ts';
 import {formatTime, formatShortDate} from './locale-time.ts';
 
@@ -62,6 +68,21 @@ export const homeAgendaHeader = overviewAgendaHeader;
 export const overdueDueLabel = (at: number, now: number) => overviewOverdueDueLabel(at, now, format);
 export const presentHomeWorkflowFreshness = (input: Parameters<typeof presentOverviewWorkflowFreshness>[0]) => presentOverviewWorkflowFreshness(input, format);
 export const presentHomeInboxStatus = (input: Parameters<typeof presentOverviewInboxStatus>[0]) => presentOverviewInboxStatus(input, format);
+/** The whole Home mail card from the page the user loaded in Inbox (metadata only). */
+export const presentHomeInboxCard = (input: OverviewInboxCardInput): OverviewInboxCardModel => presentOverviewInboxCard(input, format);
+export type HomeAgendaCardInput = OverviewAgendaCardInput;
+/** The whole Home agenda card from the selected item and where it was read. */
+export const presentHomeAgendaCard = (input: HomeAgendaCardInput): OverviewAgendaCardModel => presentOverviewAgendaCard(input, format);
+/** The Home template values of an agenda card (read by home-overview-cards.ts and the Home adapters). */
+export function homeCalendarValues(card: OverviewAgendaCardModel) {
+  return {
+    homeCalendarHasEvent: card.hasItem, homeCalendarFooter: card.footer, homeCalendarLabel: card.label, homeCalendarTime: card.heading,
+    homeCalendarTitle: card.title, homeCalendarHasMeta: card.hasMeta, homeCalendarSource: card.source, homeCalendarOrigin: card.origin,
+    homeCalendarOverdue: card.overdue, homeCalendarStale: card.stale, homeCalendarDescription: card.description, homeCalendarItemDescription: card.itemDescription,
+    homeCalendarNext: card.next?.text || '', homeCalendarNextSource: card.next?.source || '', homeCalendarHasNext: !!card.next,
+    homeCalendarVideo: card.video, homeCalendarPeople: card.people.map(ini => ({ini})), homePeopleVisibility: card.people.length ? 'visible' : 'hidden',
+  };
+}
 export const calendarCardState = overviewCalendarState;
 export const homeCalendarEmptyTitle = overviewAgendaEmptyTitle;
 export const presentHomeCalendar = (input: Parameters<typeof presentOverviewCalendar>[0]) => presentOverviewCalendar(input, format);

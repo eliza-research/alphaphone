@@ -1,5 +1,5 @@
 import {createElement, type ReactElement} from 'react';
-import {OverviewAgendaCard, OverviewBriefCard} from '../../../../.eliza/client-features/packages/ui/src/overview/OverviewCards.tsx';
+import {OverviewAgendaCard, OverviewAttentionCard, OverviewBriefCard} from '../../../../.eliza/client-features/packages/ui/src/overview/OverviewCards.tsx';
 type Bag = Record<string, any>;
 
 const flag = (value: unknown) => (value === true ? 'true' : 'false');
@@ -32,6 +32,43 @@ export function homeAgendaCard(out: Bag): ReactElement {
   });
 }
 
+const INBOX_STATES = new Set(['not-connected', 'idle', 'loading', 'ready', 'stale', 'error']);
+/**
+ * The Home mail (attention) card: the shared upstream card with the values the Inbox adapter
+ * computed from the page the user loaded (presentHomeInboxCard), Alpha's styles and its installed
+ * selectors. It shows no message body and reads no mail.
+ */
+export function homeAttentionCard(out: Bag): ReactElement {
+  const rows = Array.isArray(out.homeInboxRows) && out.homeInboxHasRows !== false
+    ? out.homeInboxRows.map((row: Bag) => ({title: String(row?.subject ?? ''), detail: String(row?.from ?? '')})) : [];
+  const people = Array.isArray(out.homeAttentionPeople) ? out.homeAttentionPeople.map((person: Bag) => String(person?.ini ?? '')) : [];
+  return createElement(OverviewAttentionCard, {
+    count: String(out.homeInboxCount ?? ''), rows, title: String(out.homeInboxTitle ?? ''), status: String(out.homeInboxStatus ?? ''), people,
+    ...(INBOX_STATES.has(out.homeInboxState) ? {state: out.homeInboxState} : {}),
+    label: String(out.homeAttentionLabel ?? 'Open Inbox'), description: String(out.homeInboxDescription ?? ''),
+    onActivate: typeof out.goTriage === 'function' ? out.goTriage : undefined,
+    icon: maskIcon('inbox', 'var(--acct)'),
+    classNames: {card: 'home-card', title: 'serif'},
+    dataAttributes: {'data-alpha-home-inbox': ''},
+    partAttributes: {rows: {'data-alpha-home-inbox-subjects': ''}},
+    style: {flexShrink: 0, scrollSnapAlign: 'start', width: 'max-content', minWidth: 172, maxWidth: 'calc(100% - 48px)', borderRadius: 30, background: 'var(--s2)', padding: 22,
+      boxSizing: 'border-box', display: 'flex', flexDirection: 'column', justifyContent: 'space-between'},
+    styles: {
+      head: {display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%'},
+      count: {fontSize: 14, fontWeight: 600, textAlign: 'left'},
+      rows: {display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 260, minWidth: 0, textAlign: 'left'},
+      row: {minWidth: 0},
+      rowTitle: {fontSize: 18, fontWeight: 600, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'},
+      rowDetail: {fontSize: 12, lineHeight: 1.4, color: 'var(--mut)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'},
+      title: {fontSize: 26, lineHeight: 1.1, minWidth: 0, maxWidth: 260, textAlign: 'left', overflowWrap: 'anywhere'},
+      status: {fontSize: 12, lineHeight: 1.4, minHeight: 17, color: 'var(--mut)', textAlign: 'left'},
+      people: {display: 'flex', gap: 2, visibility: out.homePeopleVisibility === 'hidden' ? 'hidden' : 'visible'},
+      person: {width: 28, height: 28, borderRadius: 14, background: 'var(--s3)', fontSize: 9.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: '0 0 0 2px var(--s2)', whiteSpace: 'nowrap'},
+    },
+  });
+}
+
 /** The Home brief card, present only while a retained brief exists for this connection. */
 export function homeBriefCard(out: Bag): ReactElement | null {
   if (out.homeBriefHas !== true) return null;
@@ -45,14 +82,14 @@ export function homeBriefCard(out: Bag): ReactElement | null {
 }
 
 /**
- * Renders Home's agenda and brief cards with the shared upstream components from the values the
- * Home adapters computed. Install outermost among Home adapters (after the calendar, agent calendar
- * and digest bindings) so the cards show their final values. It reads and runs nothing.
+ * Renders Home's agenda, mail and brief cards with the shared upstream components from the values
+ * the Home adapters computed. Install outermost among Home adapters (after the calendar, agent
+ * calendar, Inbox and digest bindings) so the cards show their final values. It reads and runs nothing.
  */
 export function installHomeOverviewCards(Component: any) {
   const p = Component.prototype, render = p.renderVals;
   p.renderVals = function () {
     const out = render.call(this);
-    return {...out, homeAgendaCard: homeAgendaCard(out), homeBriefCard: homeBriefCard(out)};
+    return {...out, homeAgendaCard: homeAgendaCard(out), homeAttentionCard: homeAttentionCard(out), homeBriefCard: homeBriefCard(out)};
   };
 }
