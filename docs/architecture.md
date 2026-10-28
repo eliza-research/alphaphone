@@ -350,8 +350,9 @@ release provisioning owns default roles, signing, update compatibility and
 recovery policy.
 
 Phone, Contacts and SMS exist only on the Alpha AOSP image (decision P-36). The image
-capability is decided natively by `AlphaImageCapability`: the launcher build without test
-mocks, installed from a system partition (`FLAG_SYSTEM`), with the `<package>.aosp_image`
+capability is decided natively by the shared plugin-native-messages `ImageCapability`, which
+`AlphaImageCapability` feeds with Alpha's build flags and provisioning resource: the release
+launcher build without test mocks, installed from a system partition (`FLAG_SYSTEM`), with the `<package>.aosp_image`
 system feature that `scripts/stage-aosp.mjs` declares in the image product. The launcher
 flavor, test mocks, URLs and saved state never establish it. Only then does `MainActivity`
 register `AlphaTelephonyPlugin` (read-only contacts through the shared `ContactsCatalog`, role
@@ -461,7 +462,8 @@ and physical-device/user acceptance are separate gates. See
 pin rollback does not by itself establish APK or OS rollback compatibility.
 
 The AOSP telephony contract additionally requires the canonical production image admission
-(`AlphaImageCapabilities`): release launcher, system install and the product-partition RRO.
+(`ImageCapability.provisioned`, through `AlphaImageCapabilities`): release launcher, system install
+and the product-partition RRO.
 The feature XML is an additional telephony contract marker, never an alternative admission path.
 Contacts uses AlphaContacts, the shared AOSP-profile address book (`AddressBookPlugin` over
 `ContactsCatalog` in plugin-native-contacts) under Alpha's plugin name and image admission, and its

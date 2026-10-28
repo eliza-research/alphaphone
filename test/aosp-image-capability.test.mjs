@@ -71,14 +71,19 @@ test("staging, native check and feature declaration agree", () => {
   assert.match(stage, /if \(!physical\) \{\n  const capability = writeImageCapability\(output, identity\.appId\);/);
   assert.match(read("vendor/eliza/packages/os/scripts/android/pixel10a-product.ts"), /writeImageCapability\(output, launcher\.packageName\)/);
   assert.match(read("scripts/aosp-image-capability.mjs"), /from "\.\.\/vendor\/eliza\/packages\/os\/scripts\/android\/image-capability\.mjs"/);
+  // The on-device decision is the shared plugin-native-messages ImageCapability; Alpha passes only its build flags and resource.
+  const shared = read("vendor/eliza/plugins/plugin-native-messages/android/src/main/java/ai/eliza/plugins/messages/ImageCapability.java");
+  assert.match(shared, new RegExp(`public static final int FEATURE_VERSION = ${IMAGE_FEATURE_VERSION};`));
+  assert.match(shared, /return packageName \+ "\.aosp_image";/);
+  assert.match(shared, /return launcherBuild && !debugBuild && !testMocks && systemInstalled && provisioned && imageFeature;/, "every fact is required");
+  assert.match(shared, /if \(!provisioned\(context\)\) return false;/, "telephony cannot bypass the production RRO capability");
+  assert.match(shared, /ApplicationInfo\.FLAG_SYSTEM/);
+  assert.match(shared, /hasSystemFeature\(featureName\(app\.getPackageName\(\)\), FEATURE_VERSION\)/);
+  const capabilities = read(`${JAVA}/AlphaImageCapabilities.java`);
+  assert.match(capabilities, /new ImageCapability\(BuildConfig\.IS_LAUNCHER,BuildConfig\.DEBUG,\s*BuildConfig\.ELIZA_DEV_ALLOW_TEST_MOCKS,R\.bool\.alpha_aosp_image_capability\)/);
   const capability = read(`${JAVA}/AlphaImageCapability.java`);
-  assert.match(capability, new RegExp(`static final int FEATURE_VERSION = ${IMAGE_FEATURE_VERSION};`));
-  assert.match(capability, /return packageName \+ "\.aosp_image";/);
-  assert.match(capability, /return launcherBuild && !testMocks && systemInstalled && imageFeature;/, "every fact is required");
-  assert.match(capability, /if \(!AlphaImageCapabilities\.aospImage\(context\)\) return false;/, "telephony cannot bypass the production RRO capability");
-  assert.match(capability, /ApplicationInfo\.FLAG_SYSTEM/);
-  assert.match(capability, /hasSystemFeature\(featureName\(app\.getPackageName\(\)\), FEATURE_VERSION\)/);
-  assert.match(capability, /admitted\(BuildConfig\.IS_LAUNCHER, BuildConfig\.ELIZA_DEV_ALLOW_TEST_MOCKS, system, feature\)/);
+  assert.match(capability, /return AlphaImageCapabilities\.IMAGE\.admitted\(context\);/);
+  assert.doesNotMatch(capability + capabilities, /\.hasSystemFeature\(|ApplicationInfo\.FLAG_SYSTEM|getBoolean\(/, "Alpha keeps no copy of the decision");
 });
 
 test("the telephony plugin is registered and answers only on the verified image", () => {
