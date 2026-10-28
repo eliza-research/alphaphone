@@ -128,7 +128,8 @@ export function installNotesTrashAdapter(Component:Shell,views:Record<string,Bag
    shell.toast(outcome==='restored'?`${title} restored`:outcome==='live'?'This note is already in Notes.':outcome==='gone'?'This note is no longer in Trash.'
     :outcome==='expired'?'This note has expired and cannot be restored. Permanent deletion will be retried.'
     :'Restore is unconfirmed. Reopen Notes to check Trash. No newer note was replaced.');
-  }finally{busy=false;if(shell.live)shell.vset('notes',{trashBusy:false});await load(shell);}
+  }catch{shell.toast('Restore is unconfirmed. Reopen Notes to check Trash. No newer note was replaced.');}
+  finally{busy=false;if(shell.live)shell.vset('notes',{trashBusy:false});await load(shell);}
  }
 
  async function erase(shell:Shell,ids:'all'|string){

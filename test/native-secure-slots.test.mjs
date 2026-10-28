@@ -91,6 +91,8 @@ function rendererSlots(){
    if(where.endsWith('runtime/notes-secure-store.ts')&&match[2].trim()==='key')continue;
    // The Inbox local store passes its caller's slot through; its callers' slots are checked.
    if(where.endsWith('runtime/inbox-local-store.ts')&&match[2].trim()==='slot')continue;
+   // The reminder journal binding passes its caller's slot through; its callers' slots are checked below.
+   if(where.endsWith('runtime/reminder-journal-store.ts')&&match[2].trim()==='slot')continue;
    if(where.endsWith('runtime/service-read-cache-store.ts')&&match[2].trim()==='slot'){found.push({slot:'connected-read-cache:v1:'+SAMPLE,where});assert.ok(text.includes("slot='connected-read-cache:v1:'+hash"));continue;}
    // The Calendar adapter accepts only this exact owner/source-derived namespace.
    if(where.endsWith('runtime/calendar-linked-storage.ts')&&match[2].trim()==='slot'){
@@ -110,6 +112,20 @@ function rendererSlots(){
  const notes=readFileSync(join(root,'apps/app/src/runtime/notes-secure-store.ts'),'utf8');
  assert.match(notes,/secureSlot:SECURE_NOTES_SLOT/);
  found.push({slot:exported.get('SECURE_NOTES_SLOT'),where:'apps/app/src/runtime/notes-secure-store.ts (shared store)'});
+ // The shared Notes draft slot writes Alpha's named draft slot through the vault above.
+ assert.equal([...notes.matchAll(/createNotesDraftSlot\(vault,SECURE_NOTES_DRAFT_SLOT\)/g)].length,3,'read, save and clear use the draft slot');
+ found.push({slot:exported.get('SECURE_NOTES_DRAFT_SLOT'),where:'apps/app/src/runtime/notes-secure-store.ts (shared draft slot)'});
+ // The shared reminder journals write the slots their Alpha bindings name.
+ for(const name of ['reminder-creations','reminder-deletions']){
+  const where=`apps/app/src/runtime/${name}.ts`,text=readFileSync(join(root,where),'utf8');
+  const bound=[...text.matchAll(/reminderJournalStore<\w+>\((['"])([^'"]+)\1,/g)].map(match=>match[2]);
+  assert.equal(bound.length,1,`${where} binds one reminder journal slot`);
+  found.push({slot:bound[0],where});
+ }
+ // The shared latest-Clock-handoff record writes the slot Alpha's binding names.
+ const clock=readFileSync(join(root,'apps/app/src/runtime/clock-handoff-history.ts'),'utf8');
+ assert.match(clock,/createSharedClockHandoffHistory\(\{storage,slot:clockHandoffSlot,legacy\}\)/);
+ found.push({slot:exported.get('clockHandoffSlot'),where:'apps/app/src/runtime/clock-handoff-history.ts (shared record)'});
  return found;
 }
 
@@ -145,11 +161,12 @@ test('the parser fails closed: removing a slot from the allow-list is detected',
  }
 });
 
-test('the note-origin slot has its own native size bound above the renderer 200-link limit',()=>{
+test('the note-origin slot has its own native size bound above the renderer 200-link limit',async()=>{
  assert.match(credentialStore,/static final String NOTE_ORIGINS="note-origins:v1:device";/);
  assert.match(credentialStore,/if\(NOTE_ORIGINS\.equals\(name\)\)return 512\*1024;/);
- const origin=readFileSync(join(root,'apps/app/src/runtime/note-origin.ts'),'utf8');
- assert.match(origin,/200/,'the renderer keeps its 200-link bound');
+ // The bound is the shared Notes client's NOTE_ORIGIN_LIMIT, re-exported under Alpha's name.
+ const {noteOriginLimit}=await import('../apps/app/src/runtime/note-origin.ts');
+ assert.equal(noteOriginLimit,200,'the renderer keeps its 200-link bound');
 });
 
 test('browser Cloud conditional cleanup is isolated from the native credential CAS namespace',()=>{
