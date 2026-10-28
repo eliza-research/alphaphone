@@ -166,7 +166,7 @@ test.describe('mail',()=>{
  // MVP-13 re-audit of Inbox mail context. The mailbox is a synthetic provider at the Cloud client
  // boundary and the agent a fixed session; nothing is sent anywhere. Browser renderer only.
  const sent=(page:Page)=>page.evaluate(()=>(window as any).mailFixture.sent as string[]);
- async function setup(page:Page){
+ async function setup(page:Page,beforeReview?:()=>Promise<void>){
   await page.goto('/');
   await page.evaluate(async()=>{
    const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');
@@ -199,6 +199,7 @@ test.describe('mail',()=>{
   await page.getByRole('button',{name:'Show conversation',exact:true}).click();
   await expect(page.getByText('Fixture sender: Neighbor message',{exact:true})).toBeVisible();
   await expect(page.getByRole('region',{name:'Email message'})).toContainText('REVIEWED_BODY');
+  await beforeReview?.();
   await page.getByRole('button',{name:'Review email with agent',exact:true}).click();
   const sharing=page.getByRole('dialog',{name:'Review email sharing'});
   await expect(sharing).toContainText('REVIEWED_BODY');
@@ -209,6 +210,31 @@ test.describe('mail',()=>{
   await sharing.getByRole('button',{name:'Send reviewed email to agent',exact:true}).click();
   await expect.poll(()=>sent(page)).toHaveLength(1);
   const [text]=await sent(page);expect(text).toContain('REVIEWED_BODY');expect(text).not.toContain('NEIGHBOR_BODY_CANARY');
+ });
+ test('a reviewed email the agent receives leaves the chat draft being typed in the composer',async({page})=>{
+  // AP-05: the shared email is not the composer's text, so the person's own unsent words stay
+  // (they used to be cleared with the send and their saved copy with its dispatch).
+  const typed='Unrelated words I am still writing';
+  // Whichever composer is on screen: the dock's while the chat is closed, the sheet's once it opens.
+  const chatComposer=()=>page.locator('[data-alpha-layer="composer"][aria-hidden="false"], [data-alpha-layer="conversation"][aria-hidden="false"]').getByRole('textbox').first();
+  // The startup access walkthrough, finished earlier, would otherwise cover the review once the
+  // composer opens.
+  await page.addInitScript(()=>localStorage.setItem('alpha:startup-permission-walkthrough:v1',JSON.stringify({version:1,status:'completed',step:4})));
+  const sharing=await setup(page,async()=>{
+   await page.evaluate(async()=>{const {alphaClient}=await import('/src/runtime/alpha-client.ts');(alphaClient as any).send=async(text:string)=>{(window as any).mailFixture.sent.push(text);return {text:'Shared email summary'};};});
+   // An open app shows the dock's Type control; it opens the composer's textbox.
+   await page.getByRole('group',{name:'Assistant controls'}).getByRole('button',{name:'Type',exact:true}).click();
+   await chatComposer().fill(typed);
+  });
+  await sharing.getByRole('button',{name:'Send reviewed email to agent',exact:true}).click();
+  await expect.poll(()=>sent(page)).toHaveLength(1);
+  await expect(page.getByText('Shared email summary',{exact:true})).toBeVisible();
+  await expect(chatComposer()).toHaveValue(typed);
+  await page.waitForTimeout(500);
+  await expect(chatComposer()).toHaveValue(typed);
+  // The composer's saved copy still holds the typed words: the email's dispatch does not clear it.
+  await expect.poll(()=>page.evaluate(async()=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');const binding=await c.assistantDraftBinding(new AbortController().signal);return (await(await(await import('/src/runtime/assistant-draft-store.ts')).assistantDraftStore(binding)).read())?.text??null;})).toBe(typed);
+  expect(await sent(page)).toHaveLength(1);
  });
  test('a message switched under the open review is refused and the neighbor is never sent',async({page})=>{
   const sharing=await setup(page);

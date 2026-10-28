@@ -16,8 +16,11 @@ import path from "node:path";
 import test from "node:test";
 
 const root = "android/app/src/main/java/ai/elizaresearch/alphaphone";
-const files = fs.readdirSync(root).filter(name => name.endsWith(".java")).sort();
-const read = name => fs.readFileSync(path.join(root, name), "utf8");
+// Shared browser classes the app compiles from the reviewed pin (scripts/stage-local-agent-sources.mjs).
+const shared = "vendor/eliza/plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface";
+const sharedFiles = ["BrowserBlobCapture.java", "BrowserDownloads.java", "BrowserLoginFields.java", "BrowserReadingWorld.java"];
+const files = [...fs.readdirSync(root).filter(name => name.endsWith(".java")), ...sharedFiles].sort();
+const read = name => fs.readFileSync(path.join(sharedFiles.includes(name) ? shared : root, name), "utf8");
 
 /** Blanks comments, strings, text blocks and character literals, keeping every offset. */
 function mask(source) {
@@ -180,8 +183,9 @@ test("the workers that plugins stop on destroy are reached through one rejecting
   assert.match(journal, /public void reviewClock\(PluginCall call\)\{\s*clockWork\(call,/);
   assert.match(journal, /public void confirmClock\(PluginCall call\)\{[\s\S]{0,400}?\n\s*clockWork\(call,/);
 
+  // The shared download list stops its workers on destroy; every hand-off answers a stopped worker.
   const downloads = read("BrowserDownloads.java");
-  assert.match(helper("BrowserDownloads.java", "private void work(ExecutorService worker,Runnable task,Runnable dropped){"), /try\{worker\.execute\(task\);\}\s*catch\(java\.util\.concurrent\.RejectedExecutionException \w+\)\{dropped\.run\(\);\}/);
+  assert.match(downloads, /private void work\(ExecutorService worker, Runnable task, Runnable dropped\) \{\s*try \{\s*worker\.execute\(task\);\s*\} catch \(RejectedExecutionException \w+\) \{\s*dropped\.run\(\);\s*\}/);
   assert.equal([...downloads.matchAll(/\b(?:io|network)\.execute\(/g)].length, 0, "download workers are reached only through the helper");
 });
 
@@ -196,11 +200,11 @@ test("nothing is shown or created on a destroyed activity by a late browser call
 
   // The download dialogs: a completion posted from a worker can land after destroy().
   const downloads = read("BrowserDownloads.java");
-  assert.match(downloads, /void destroy\(\)\{closed=true;dismissDialogs\(\);/);
-  assert.match(downloads, /private void message\(String text\)\{if\(closed\)return;new AlertDialog\.Builder/);
-  assert.match(downloads, /void show\(\)\{\n\s*if\(closed\)return;/);
-  assert.match(downloads, /private void review\(String tab,String title,String details,Runnable confirm\)\{\n\s*if\(closed\)return;/);
-  assert.match(downloads, /private boolean reviewable\(\)\{\n\s*if\(closed\)return false;/);
+  assert.match(downloads, /public void destroy\(\) \{\s*closed = true;\s*dismissDialogs\(\);/);
+  assert.match(downloads, /private void message\(String text\) \{\s*if \(closed\)\s*return;\s*new AlertDialog\.Builder/);
+  assert.match(downloads, /public void show\(\) \{\s*if \(closed\)\s*return;/);
+  assert.match(downloads, /private void review\(String tab, String title, String details, Runnable confirm\) \{\s*if \(closed\)\s*return;/);
+  assert.match(downloads, /private boolean reviewable\(\) \{\s*if \(closed\)\s*return false;/);
 });
 
 test("receivers and callbacks a plugin registers are released when it is destroyed", () => {
@@ -234,7 +238,8 @@ function launches(name, code) {
     if (method === "launch" ? !launchers.has(receiver) : receiver !== undefined && receiver !== "super" && receiver !== "this") continue;
     // A declaration of the method, not a call of it.
     if (/\b(?:void|boolean)\s+$/.test(code.slice(Math.max(0, at - 12), at))) continue;
-    let guarded = /LateLaunch\.ask\(\s*\w+\s*,\s*\(\)\s*->\s*$/.test(code.slice(Math.max(0, at - 80), at));
+    // LateLaunch.ask in Alpha; the shared TelephonyPlugin base has the same guard as its launch(call, ...) helper.
+    let guarded = /(?:LateLaunch\.ask|(?<![\w.])launch)\(\s*\w+\s*,\s*\(\)\s*->\s*$/.test(code.slice(Math.max(0, at - 80), at));
     for (const block of all.filter(block => block.start < at && at < block.end).sort((a, b) => b.start - a.start)) {
       if (guarded || block.kind === "deferred") break;
       if (block.kind === "try" && block.catches.some(type => ANSWERS_A_MISSING_LAUNCHER.has(type))) guarded = true;
@@ -283,6 +288,11 @@ test("Capacitor's own permission request, and the shared plugins' requests an ap
       // for the obsolete legacy permission together with the current media grants.
       assert.match(read(name),/@Override @PluginMethod public void requestPermissions\(PluginCall call\)\{(?:requestLibraryAccess|requestAccess)\(call\);\}/);
       assert.match(read(name),/LateLaunch\.ask\(call,\(\)->requestPermissionForAliases\(aliases,call,"libraryPermissionResult"\)\)/);
+    } else if(name==='AlphaTelephonyPlugin.java') {
+      // The shared TelephonyPlugin base answers a late request the same way (its launch helper rejects with CLOSED).
+      const base=fs.readFileSync("vendor/eliza/plugins/plugin-native-messages/android/src/main/java/ai/eliza/plugins/messages/TelephonyPlugin.java","utf8");
+      assert.match(base,/@Override @PluginMethod public void requestPermissions\(PluginCall call\) \{ if \(refused\(call\)\) return; launch\(call, \(\) -> super\.requestPermissions\(call\)\); \}/);
+      assert.match(base,/protected static boolean launch\(PluginCall call, Runnable start\) \{\n  try \{ start\.run\(\); return true; \} catch \(IllegalStateException gone\) \{ call\.reject\(CLOSED\); return false; \}/);
     } else assert.ok(guardedOverride(read(name), "requestPermissions"), `${name}: requestPermissions is overridden with the guard`);
   }
 
@@ -333,4 +343,10 @@ test("shared Kotlin System activity launch methods have guarded product override
   for(const method of inherited) assert.ok(wrapper.includes(`@Override @PluginMethod public void ${method}(PluginCall call){LateLaunch.ask(call,()->super.${method}(call));}`),method);
 });
 
-test("Contacts generic permission requests remain image and foreground gated",()=>{const source=read("AlphaContactsPlugin.java");assert.match(source,/public void requestPermissions\(PluginCall call\)\{\s*if\(!foreground\(\)\)/);assert.match(source,/LateLaunch.ask\(call,\(\)->requestPermissionForAlias\("contacts",call,"permissionResult"\)\)/);});
+test("Contacts generic permission requests remain image and foreground gated",()=>{
+  // AlphaContactsPlugin is the shared AOSP-profile address book under Alpha's plugin name and image admission.
+  const alpha=read("AlphaContactsPlugin.java");assert.match(alpha,/public final class AlphaContactsPlugin extends AddressBookPlugin \{/);assert.match(alpha,/protected boolean admitted\(\)\{return AlphaImageCapabilities\.aospImage\(getContext\(\)\);\}/);assert.match(alpha,/protected String closedMessage\(\)\{return LateLaunch\.CLOSED;\}/);
+  const base=fs.readFileSync("vendor/eliza/plugins/plugin-native-contacts/android/src/main/java/ai/eliza/plugins/contacts/AddressBookPlugin.java","utf8");
+  assert.match(base,/public void requestPermissions\(PluginCall call\) \{\n    if \(!foreground\(\)\) \{/);assert.match(base,/launch\(call, \(\) -> requestPermissionForAlias\("contacts", call, "permissionResult"\)\)/);
+  assert.match(base,/launch\(call, \(\) -> startActivityForResult\(call, intent, "editorResult"\)\)/);assert.match(base,/catch \(IllegalStateException gone\) \{\n      call\.reject\(closedMessage\(\)\);/);
+});

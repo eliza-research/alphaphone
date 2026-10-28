@@ -1,3 +1,4 @@
+import { installDockClearance as installSharedDockClearance, visibleDocks as sharedVisibleDocks } from '../../../../.eliza/client-features/packages/ui/src/components/shell/dock-clearance.ts';
 /**
  * How much of the bottom of the phone the floating dock takes (the composer bar with whatever is
  * stacked on it, or the pill), measured, in the phone canvas's own pixels.
@@ -26,73 +27,18 @@ const DOCK = '[data-alpha-layer="composer"],[data-alpha-layer="pill"] > *';
 
 /** The dock elements on screen now: rendered, and not retired behind the shade or a voice session. */
 export function visibleDocks(root: ParentNode = document): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(DOCK)).filter(dock => dock.getClientRects().length > 0 && !dock.closest('[inert]'));
+  return sharedVisibleDocks(root, DOCK);
 }
 
 let installed: (() => void) | null = null;
-/** Installed once per document; a second call returns the same uninstaller. */
+/**
+ * Installed once per document; a second call returns the same uninstaller. The measuring and
+ * publishing are shared with Eliza (packages/ui/src/components/shell/dock-clearance.ts); Alpha
+ * supplies its screen, dock and bar selectors and its installed property names.
+ */
 export function installDockClearance(): () => void {
   if (installed) return installed;
-  let published = '', frame = 0, watched: HTMLElement[] = [];
-  const sizes = new ResizeObserver(() => readNow());
-  const read = () => {
-    frame = 0;
-    const screen = document.querySelector<HTMLElement>('[data-screen]');
-    if (!screen || !screen.offsetWidth) return;
-    const docks = visibleDocks(screen);
-    if (docks.length !== watched.length || docks.some((dock, index) => dock !== watched[index])) {
-      sizes.disconnect(); sizes.observe(screen); for (const dock of docks) sizes.observe(dock);
-      watched = docks;
-    }
-    if (!docks.length) return;
-    // offsetTop stays in canvas pixels and ignores the dock's transient transform.
-    // A bounding rect would reserve less room during its slide-in, then move
-    // Home's icons again when the animation ends.
-    const above = (element: Element) => {
-      let top = 0, node: HTMLElement | null = element as HTMLElement;
-      while (node && node !== screen) {
-        top += node.offsetTop;
-        node = node.offsetParent as HTMLElement | null;
-      }
-      return node === screen ? screen.clientHeight - top : 0;
-    };
-    const clearance = Math.ceil(Math.max(...docks.map(above)));
-    // The bar is the composer's last row; the pill is its own bar.
-    const rest = Math.ceil(Math.max(...docks.map(dock => above(dock.querySelector('[data-alpha-input-bar]') ?? dock))));
-    if (!Number.isFinite(clearance) || clearance <= 0 || !Number.isFinite(rest) || rest <= 0) return;
-    const next = `${clearance}/${rest}`;
-    if (next === published) return;
-    published = next;
-    document.documentElement.style.setProperty(DOCK_CLEARANCE_PROPERTY, `${clearance}px`);
-    document.documentElement.style.setProperty(DOCK_REST_PROPERTY, `${Math.min(rest, clearance)}px`);
-  };
-  // A new status row changes the dock before the next animation frame. Publish
-  // its measured footprint in the same observer delivery, before it can cover
-  // controls whose scroll range still uses the previous height.
-  const readNow = () => { if (frame) cancelAnimationFrame(frame); read(); };
-  const schedule = () => { if (!frame) frame = requestAnimationFrame(read); };
-  // The dock is rendered by the phone shell: it appears, changes kind and leaves with the view.
-  const changes = new MutationObserver(records => {
-    if (records.some(record => record.target instanceof Element && record.target.closest(DOCK))) readNow();
-    else schedule();
-  });
-  changes.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['inert'] });
-  // Android's bar insets and the phone's scale arrive as custom properties and classes on the root
-  // element (main.tsx); they move the dock without resizing it.
-  const root = new MutationObserver(schedule);
-  root.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
-  window.addEventListener('resize', schedule);
-  // The dock slides in: its resting place is known only once its entry animation has finished.
-  document.addEventListener('animationend', schedule, true);
-  document.addEventListener('transitionend', schedule, true);
-  read();
-  installed = () => {
-    installed = null;
-    changes.disconnect(); root.disconnect(); sizes.disconnect(); window.removeEventListener('resize', schedule);
-    document.removeEventListener('animationend', schedule, true); document.removeEventListener('transitionend', schedule, true);
-    if (frame) cancelAnimationFrame(frame);
-    document.documentElement.style.removeProperty(DOCK_CLEARANCE_PROPERTY);
-    document.documentElement.style.removeProperty(DOCK_REST_PROPERTY);
-  };
+  const uninstall = installSharedDockClearance({ screen: '[data-screen]', docks: DOCK, bar: '[data-alpha-input-bar]', clearanceProperty: DOCK_CLEARANCE_PROPERTY, restProperty: DOCK_REST_PROPERTY });
+  installed = () => { installed = null; uninstall(); };
   return installed;
 }

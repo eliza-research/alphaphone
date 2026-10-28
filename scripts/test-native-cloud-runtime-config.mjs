@@ -13,4 +13,4 @@ execFileSync(bun,['--conditions=eliza-source',path.join(root,'scripts/native-clo
 
 // These cases import the verified compiled host, after the normal producer has
 // installed the SDK graph; cheap repository verification has no such graph.
-execFileSync(process.execPath,['--test',path.join(root,'scripts/native-cloud-embedding-ownership.test.mjs')],{stdio:'inherit',cwd:root,env:{...process.env,BUN_BIN:bun,ALPHA_NATIVE_CLOUD_HOST_MODULE:path.join(output,'google-host.mjs')}});
+execFileSync(process.execPath,['--test',path.join(root,'scripts/native-cloud-embedding-ownership.test.mjs')],{stdio:'inherit',cwd:root,env:{...process.env,BUN_BIN:bun,ALPHA_NATIVE_CLOUD_HOST_MODULE:path.join(output,'google-host.mjs'),ALPHA_NATIVE_CLOUD_SDK:sdk}});

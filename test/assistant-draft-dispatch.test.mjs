@@ -1,6 +1,11 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {stripTypeScriptTypes} from 'node:module';
-const code=stripTypeScriptTypes(readFileSync('apps/app/src/prototype/assistant-draft-controller.ts','utf8'),{mode:'transform'});
-const {AssistantDraftController}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+// Alpha's composer contract, run against the shared controller exactly as the pin projects it
+// (apps/app/src/prototype/assistant-draft-controller.ts only re-exports it under Alpha's name).
+const code=stripTypeScriptTypes(readFileSync(new URL('../.eliza/client-features/packages/ui/src/state/durable-draft-controller.ts',import.meta.url),'utf8'),{mode:'transform'});
+const {DurableDraftController:AssistantDraftController}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+test('Alpha binds its draft controller name to the shared implementation',()=>{
+ assert.match(readFileSync(new URL('../apps/app/src/prototype/assistant-draft-controller.ts',import.meta.url),'utf8'),/export \{DurableDraftController as AssistantDraftController\} from '\.\.\/\.\.\/\.\.\/\.\.\/\.eliza\/client-features\/packages\/ui\/src\/state\/durable-draft-controller\.ts';/);
+});
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const record=(text,revision='1')=>({version:1,binding:'test',revision,text});
 function fixture(){let text='',saved=null;const store={async read(){return saved;},async save(expected,value){assert.deepEqual(expected,saved);return saved=record(value,String(Number(saved?.revision||0)+1));}};const c=new AssistantDraftController(async()=>store,()=>text,value=>{text=value;},()=>{});return {c,store,set:value=>{text=value;c.edit(value);},get:()=>text,saved:()=>saved,external:value=>{saved=record(value,'external');}};}
@@ -55,10 +60,15 @@ test('a reopened binding for the same conversation never offers the in-flight te
  await f.c.commit();assert.equal(f.saved().text,'');
  f.set('Next message');await tick();assert.equal(f.saved().text,'Next message','the reopened binding saves with the committed receipt');
 });
-test('a connection change before dispatch keeps the text saved with its conversation and returns it to an empty composer',async()=>{
+// A binding is an owner, agent and conversation identity: once the composer has moved to another
+// binding (or none), the unsent text stays saved, unmarked, with its own conversation and is never
+// put in this composer, where the next binding would adopt it. Reopening its binding restores it.
+test('a connection change before dispatch keeps the text saved with its own conversation, never in the next binding',async()=>{
  const f=fixture();f.external('Unsent words');await f.c.open('one');await f.c.hold('Unsent words');f.set('');await tick();
- f.c.retire();f.set('');f.c.release();
- assert.equal(f.get(),'Unsent words');assert.equal(f.saved().text,'Unsent words');assert.match(f.c.state.message,/back in the composer/);
+ f.c.retire();f.set('');f.c.release();await tick();
+ assert.equal(f.get(),'');assert.equal(f.saved().text,'Unsent words');assert.notEqual(f.saved().sending,true);
+ assert.match(f.c.state.message,/kept as a draft in its own conversation/);
+ await f.c.open('one');assert.equal(f.get(),'Unsent words');
 });
 test('typing as the reply arrives is queued after the commit, never racing it into a conflict',async()=>{
  const f=fixture();f.external('Sent text');await f.c.open('one');await f.c.hold('Sent text');f.set('');await tick();
@@ -91,4 +101,23 @@ test('hold binds exact authored whitespace and preserves it through a failed dis
  await assert.rejects(f.c.hold(authored.trim()),/draft changed/);
  await f.c.hold(authored);f.set('');await tick();f.c.release();await tick();
  assert.equal(f.get(),authored);assert.equal(f.saved().text,authored);
+});
+// The device slot keeps a message's saved copy marked as sending until its dispatch settles, so a
+// restart (or another window) never offers it again as a draft; the owner reviews it instead.
+const rowsCode=stripTypeScriptTypes(readFileSync(new URL('../.eliza/client-features/packages/ui/src/state/durable-draft.ts',import.meta.url),'utf8'),{mode:'transform'});
+const {compareExchangeDraftStore}=await import('data:text/javascript;base64,'+Buffer.from(rowsCode).toString('base64'));
+test('a restart during a send offers the message for review and never restores it as a draft',async()=>{
+ let raw=null;const slot={async read(){return raw;},async compareExchange(expected,value){if(raw!==expected)return {status:'conflict'};raw=value;return {status:'saved'};}};
+ const run=()=>{let text='';const c=new AssistantDraftController(async binding=>compareExchangeDraftStore(binding,slot),()=>text,value=>{text=value;},()=>{});return {c,get:()=>text,set:value=>{text=value;c.edit(value);}};};
+ const first=run(),key=JSON.stringify(['origin','owner','agent','conversation']);
+ await first.c.open(key);first.set('Sent before the app stopped');
+ await first.c.hold('Sent before the app stopped');first.set('');
+ assert.deepEqual(JSON.parse(raw),{version:1,binding:key,revision:JSON.parse(raw).revision,text:'Sent before the app stopped',sending:true});
+ const next=run();await next.c.open(key);
+ assert.equal(next.get(),'');assert.equal(next.c.state.unsettled,true);assert.equal(next.c.state.savedText,'Sent before the app stopped');
+ await assert.rejects(next.c.hold(''),/may already have been sent/);
+ next.c.keepCurrent();await tick();
+ assert.deepEqual(Object.keys(JSON.parse(raw)).sort(),['binding','revision','text','version']);assert.equal(JSON.parse(raw).text,'');
+ // The previous run's commit, if it ever came, finds a newer copy and clears nothing else.
+ await first.c.commit();assert.equal(JSON.parse(raw).text,'');
 });

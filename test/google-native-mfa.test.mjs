@@ -47,7 +47,7 @@ test('Google controller shows the native MFA panel and does not bind an account 
 });
 
 test('native Google and email share MFA admission; callback state custody remains native',()=>{
- const source=read('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaCloudSignInPlugin.java');
+ const source=read('vendor/eliza/packages/auth/android/src/main/java/ai/eliza/auth/cloud/CloudSignInPlugin.java');
  const complete=method(source,' private void complete(Attempt current, JSONObject session)',' /** The saved key');
  assert.ok(complete.indexOf('session.opt("mfaRequired")')<complete.indexOf('session.optString("token"'),'MFA is handled before a token is required');
  assert.match(complete,/Math\.min\(current\.expiresAt, expiresAt\)/);
@@ -75,7 +75,7 @@ test('Google MFA return revalidates retained events against the current native a
   const outcome=required();const queued=await fn(outcome);
   assert.equal(shown,!busy&&active?1:0);assert.equal(ensured,busy?0:1);assert.equal(checks,busy?0:1);assert.equal(queued,busy?outcome:null);
  }
- const native=read('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaCloudSignInPlugin.java');
+ const native=read('vendor/eliza/packages/auth/android/src/main/java/ai/eliza/auth/cloud/CloudSignInPlugin.java');
  const resume=method(native,' @PluginMethod public void resumeMfa(',' @PluginMethod public void cancel(');
  for(const guard of ['!attempt.cancelled','attempt.mfaType != null','attempt.id.equals(call.getString("attemptId"))','attempt.environment.name.equals(call.getString("environment"))','attempt.expiresAt > System.currentTimeMillis()'])assert.ok(resume.includes(guard),guard);
 });

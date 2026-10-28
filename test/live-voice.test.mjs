@@ -29,7 +29,7 @@ const frame = (timestamp = 1) => live.encodeLiveFrame(new Float32Array(512).fill
 test('frames and VAD edges reach the live route in order, with the upstream frame wire format', async () => {
   const agent = stubAgent();
   const session = live.createLiveVoiceSession({transport: agent.transport, roomId: 'room-1'});
-  assert.match(session.sessionId, /^alpha-live-/);assert.ok(session.sessionId.length <= 128);
+  assert.match(session.sessionId, /^live-/);assert.ok(session.sessionId.length <= 128);
   await session.push([frame(1), frame(2)], [{type: 'speech-start', timestampMs: 1}]);
   await session.push([frame(3)], [{type: 'speech-end', timestampMs: 3}]);
   assert.equal(agent.posts.length, 2);
@@ -100,7 +100,7 @@ test('an unavailable live route and transport failures settle the waiting turn w
 });
 
 test('malformed envelopes and finals are ignored', () => {
-  const id = 'alpha-live-x';
+  const id = 'live-x';
   assert.equal(live.parseVoiceTranscriptEnvelope({type: 'agent_event', stream: 'voice-control', payload: {}}, id), undefined);
   assert.equal(live.parseVoiceTranscriptEnvelope({type: 'agent_event', stream: 'voice-transcript', payload: {type: 'voice-transcript', sessionId: id, turnId: 't', phase: 'partial', text: 'x', seq: 0}}, id), undefined);
   assert.equal(live.parseVoiceTranscriptEnvelope({type: 'agent_event', stream: 'voice-transcript', payload: {type: 'voice-transcript', sessionId: id, turnId: 't', phase: 'partial', text: 'x'.repeat(16001), seq: 1}}, id), undefined);
@@ -122,7 +122,7 @@ test('live latency is numbers only, kept on the active turn and copied into diag
 });
 
 test('the live client and adapter never store, log or send interim text and keep the send policy constant', () => {
-  const sources = ['apps/app/src/runtime/live-voice.ts', 'apps/app/src/runtime/native-live-voice.ts'].map(file => fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8'));
+  const sources = ['apps/app/src/runtime/live-voice.ts', '.eliza/client-features/packages/voice/src/live-voice-session.ts', 'apps/app/src/runtime/native-live-voice.ts'].map(file => fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8'));
   for (const source of sources) assert.doesNotMatch(source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, ''), /console\.|localStorage|sessionStorage|indexedDB/);
   const adapter = fs.readFileSync(new URL('../apps/app/src/prototype/voice-adapter.ts', import.meta.url), 'utf8');
   for (const line of adapter.split('\n').filter(line => /conversationInterim/.test(line)))
@@ -137,13 +137,18 @@ test('Android: Silero VAD runs in the app process and only the live ASR and end-
   const plugin = fs.readFileSync(new URL('../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaLocalAgentPlugin.java', import.meta.url), 'utf8');
   // The end-of-turn route (#423, elizaOS #36546) carries text only; the heard route is covered in voice-turn-routes.test.mjs.
   assert.match(plugin, /\|asr\/local-inference\/\(live\(\/status\)\?\|end-of-turn\)\)\$"/);
-  const capture = fs.readFileSync(new URL('../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaLiveVoiceCapture.java', import.meta.url), 'utf8');
-  assert.match(capture, /ElizaVoiceNative\.nativeVadProcessBatch/);
+  // Capture and VAD are the shared ai.eliza.voice pipeline on the process-wide inference session.
+  const capture = fs.readFileSync(new URL('../vendor/eliza/plugins/plugin-local-inference/native/android/src/main/java/ai/eliza/voice/LiveVoiceCapture.java', import.meta.url), 'utf8');
+  assert.match(capture, /InferenceSession\.Vad vad=inference\.openVad\(\);/);
+  assert.match(capture, /float\[\] probability=vad\.process\(pcm\);/);
+  const voicePlugin = fs.readFileSync(new URL('../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaVoiceCloudPlugin.java', import.meta.url), 'utf8');
+  assert.match(voicePlugin, /new LiveVoiceCapture\(getContext\(\),VoiceAssets\.sharedInference\(getContext\(\)\),id,sink,echoCancel\)/);
+  assert.match(voicePlugin, /private final LiveCaptureController live=new LiveCaptureController\(/);
   assert.match(capture, /AudioFormat\.ENCODING_PCM_16BIT/);
   assert.doesNotMatch(capture, /FileOutputStream|openFileOutput|Log\./, 'no audio file and no log of audio or text');
 });
 
 test('the app-process VAD gate opens and closes segments on Silero probabilities (host JVM)', async () => {
-  const {nativeSource, fixture, runJvm} = await import('./fixtures/jvm-tools.mjs');
-  assert.match(runJvm([nativeSource('LiveVadGate.java'), fixture('LiveVadGateTest.java')], 'ai.elizaresearch.alphaphone.LiveVadGateTest'), /^PASS live vad gate/);
+  const {runJvm, upstreamVoiceFixture, upstreamVoiceSource} = await import('./fixtures/jvm-tools.mjs');
+  assert.match(runJvm([upstreamVoiceSource('LiveVadGate.java'), upstreamVoiceFixture('LiveVadGateTest.java')], 'ai.eliza.voice.LiveVadGateTest'), /^PASS live vad gate/);
 });

@@ -1,7 +1,7 @@
 import React,{useEffect,useId,useRef,useState} from 'react';
 import './cloud-membership-ui.css';
 export type MembershipBalance='checking'|'zero'|'funded'|'member'|'unavailable';
-import type {SubscriptionView} from './subscription-entitlement';
+import {serviceLimitNextChange,subscriptionSummary,type ServiceLimit,type SubscriptionView} from './subscription-entitlement';
 function creditLabel(usd:string):string {
  const [whole,fraction='']=usd.split('.');
  return `$${whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')}.${fraction.replace(/0+$/,'').padEnd(2,'0')}`;
@@ -11,12 +11,28 @@ function endLabel(endsAt:number):string {
  const days=Math.ceil((endsAt-Date.now())/86400000);
  return days>0?`Ends ${date} · ${days} ${days===1?'day':'days'} left`:`Ended ${date}`;
 }
-/** Approved bottom-sheet content; balances and actions remain bound to the current Cloud account. */
-export function CloudMembershipControls({balance,busy,error,connectionError,notice,email,credits,plan,endsAt,codeEntry=false,onRedeem,onAddFunds,onRefresh}:{balance:MembershipBalance;busy:boolean;error?:string;connectionError?:string;notice?:string;email?:string;credits?:{usd:string;observedAt:number}|null;plan?:SubscriptionView|null;endsAt?:number|null;codeEntry?:boolean;onRedeem:(code:string)=>Promise<boolean>;onAddFunds:()=>void;onRefresh:()=>void}){
+/**
+ * Approved "Membership & credits" bottom-sheet content (decision: NubsCarson 7a44d7038); balances and
+ * actions remain bound to the current Cloud account. The shared subscription summary
+ * (`@elizaos/cloud-sdk/subscription-entitlement`) adds, read-only, the plan allowance Cloud reports and
+ * the latest Cloud limit with its retry time (#410). Nothing is bought here: Add funds opens Cloud's
+ * own billing page after the account review.
+ *
+ * `planShownByHost`: the resident agent dialog already shows the plan with its allowance and end and
+ * the plan actions. There the sheet content leaves out its Membership row, so no plan fact appears twice.
+ */
+export function CloudMembershipControls({balance,busy,error,connectionError,notice,email,credits,plan,endsAt,lastLimit,serviceName='Cloud',codeEntry=false,planShownByHost=false,onRedeem,onAddFunds,onRefresh}:{balance:MembershipBalance;busy:boolean;error?:string;connectionError?:string;notice?:string;email?:string;credits?:{usd:string;observedAt:number}|null;plan?:SubscriptionView|null;endsAt?:number|null;lastLimit?:(ServiceLimit&{observedAt:number})|null;serviceName?:string;codeEntry?:boolean;planShownByHost?:boolean;onRedeem:(code:string)=>Promise<boolean>;onAddFunds:()=>void;onRefresh:()=>void}){
  const code=useRef<HTMLInputElement>(null),pending=useRef(false),codeEntryId=useId(),errorId=useId();
  // A retained redemption error must keep its associated input exposed.
  const [codeVisible,setCodeVisible]=useState(Boolean(error)),[submitting,setSubmitting]=useState(false),[submissionError,setSubmissionError]=useState(''),[codeValue,setCodeValue]=useState('');
  const active=plan?.kind==='active',disabled=busy||submitting,showCode=codeVisible||codeEntry,explicitEntry=useRef(codeEntry);
+ const summary=subscriptionSummary(plan??null,{planEndsAt:endsAt??null,lastLimit:lastLimit??null,lastLimitAt:lastLimit?.observedAt??null,serviceName});
+ // Render again when the shown limit's wait ends or its reset passes, so a lapsed retry time is not
+ // left on screen. Only those moments change the line; it is not a per-second countdown.
+ const [,tick]=useState(0);
+ const limitChange=summary.limit&&lastLimit?serviceLimitNextChange(lastLimit,lastLimit.observedAt,Date.now()):null;
+ useEffect(()=>{if(limitChange===null)return;const timer=setTimeout(()=>tick(value=>value+1),limitChange);return ()=>clearTimeout(timer);});
+ // Leaving an explicit code entry clears the code it held; a retained redemption error keeps the input.
  useEffect(()=>{if(explicitEntry.current&&!codeEntry){setCodeValue('');setSubmissionError('');setCodeVisible(Boolean(error));}explicitEntry.current=codeEntry;},[codeEntry,error]);
  useEffect(()=>{if(showCode)code.current?.focus();},[showCode]);
  async function redeem(event:React.FormEvent){
@@ -34,7 +50,8 @@ export function CloudMembershipControls({balance,busy,error,connectionError,noti
      <div className="alpha-membership-balance"><span className={credits?'alpha-membership-amount':'alpha-membership-amount-unavailable'}>{credits?<>{creditLabel(credits.usd)}<span className="alpha-membership-currency">USD</span></>:balance==='checking'?'Checking…':'Not available'}</span><button type="button" className="alpha-membership-refresh" disabled={disabled||balance==='checking'} onClick={onRefresh}>{balance==='checking'?'Checking…':'Refresh'}</button></div>
      {credits&&<small className="alpha-membership-fresh">Checked {new Date(credits.observedAt).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})}</small>}
     </dd></div>
-    <div className="alpha-membership-plan-fact"><dt>Membership</dt><dd>{active?plan.planName:plan?.kind==='inactive'||plan?.kind==='credits'?'No active membership':balance==='checking'?'Checking…':'Not confirmed'}{active&&<small>{typeof endsAt==='number'&&Number.isFinite(endsAt)?endLabel(endsAt):'End date not provided'}</small>}</dd></div>
+    {!planShownByHost&&<div className="alpha-membership-plan-fact"><dt>Membership</dt><dd>{active?plan.planName:plan?.kind==='inactive'||plan?.kind==='credits'?'No active membership':balance==='checking'?'Checking…':'Not confirmed'}{active&&<small>{typeof endsAt==='number'&&Number.isFinite(endsAt)?endLabel(endsAt):'End date not provided'}</small>}{active&&summary.allowance&&<small className="alpha-membership-allowance">{summary.allowance}</small>}</dd></div>}
+    {summary.limit&&<div className="alpha-membership-limit-fact"><dt>AI requests</dt><dd role="status">{summary.limit}</dd></div>}
    </dl>
    <p className="alpha-membership-support" role="status">{balance==='checking'?'Checking your account…':balance==='unavailable'?'Account details could not be refreshed. You can still redeem a code or check again.':balance==='zero'?'Add funds or use a membership code to ask Alpha.':''}</p>
    <div className="alpha-membership-main-actions"><button type="button" className="alpha-membership-primary" disabled={disabled} onClick={onAddFunds}>Add funds</button>{!showCode&&<button type="button" className="alpha-membership-secondary" aria-expanded={false} aria-controls={codeEntryId} disabled={disabled} onClick={()=>setCodeVisible(true)}>Use membership code</button>}</div>

@@ -26,6 +26,7 @@ const url = 'https://public-fixture.test/harbour';
 const html = '<article><h1>Harbour report</h1><p>The ferry leaves at nine from pier four.</p><p>OMIT THIS: internal planning detail.</p></article>';
 const answer = 'The ferry leaves at nine.';
 const button = (page: Page, name: string) => page.getByRole('button', {name, exact: true});
+// The test selects the retained (Older notes) document explicitly, as web-summary-note.spec.ts does.
 const notes = (page: Page) => page.evaluate(async () => JSON.parse((await (await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw()) || '{"records":[]}').records as any[]);
 const agentMessages = (page: Page) => page.evaluate(async () => (await (await import('/src/browser/development-agent-document.ts')).readDevelopmentAgent((await import('/src/browser/development-identity.ts')).developmentIdentity('local'))).conversations.flatMap((c: any) => c.messages) as {role: string; text: string}[]);
 const sourceHeading = (page: Page) => page.locator('iframe[title="Website"]:visible').contentFrame().getByRole('heading', {name: 'Harbour report', exact: true});

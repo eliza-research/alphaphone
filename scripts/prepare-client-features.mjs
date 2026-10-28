@@ -33,6 +33,10 @@ function matches(actual, expected) {
 }
 export const CLIENT_FEATURE_PATHS = [
   'packages/contracts/src/device-action-execution.ts',
+  'packages/contracts/src/client-turn-observation.ts',
+  'packages/contracts/src/notice-routes.ts',
+  'packages/contracts/src/phone-workflow.ts',
+  'packages/contracts/src/workflow-client.ts',
   'packages/ui/src/agent-surface/AgentSurfaceContext.hooks.ts',
   'packages/ui/src/agent-surface/registry.ts',
   'packages/ui/src/agent-surface/sensitive.ts',
@@ -68,17 +72,35 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-native-system/src/sense.ts',
   'plugins/plugin-native-system/src/sense-bridge.ts',
   'plugins/plugin-native-system/src/sense-web.ts',
+  'plugins/plugin-native-system/src/reset.ts',
+  'plugins/plugin-native-system/src/settings.ts',
   'plugins/plugin-native-system/src/definitions.ts',
   'packages/ui/src/components/pages/InstalledAppsLauncher.tsx',
+  'packages/contracts/src/contracts/theme.ts',
+  'packages/ui/src/config/theme.ts',
+  'packages/ui/src/mobile-shell/index.ts',
+  'packages/ui/src/mobile-shell/core.ts',
+  'packages/ui/src/mobile-shell/MobileAllAppsDrawer.tsx',
+  'packages/ui/src/mobile-shell/MobileHomeScreen.tsx',
+  'packages/ui/src/mobile-shell/MobileViewHost.tsx',
+  'packages/ui/src/mobile-shell/mobile-launcher.ts',
+  'packages/ui/src/mobile-shell/navigation.ts',
+  'packages/ui/src/mobile-shell/product-registration.ts',
+  'packages/ui/src/mobile-shell/view-id-migration.ts',
+  'packages/ui/src/mobile-shell/view-ids.ts',
+  'packages/ui/src/mobile-shell/view-registry.ts',
   'packages/ui/src/voice/pcm-wave.ts',
   "packages/ui/src/utils/reminder-presentation.ts",
   "plugins/plugin-browser/src/native-client-command.ts",
-  'packages/core/src/types/plugin.ts',
-  'packages/core/src/types/components.ts',
-  'packages/core/src/types/model.ts',
-  'packages/core/src/types/primitives.ts',
-  'packages/ui/src/api/client-base.ts',
-  'plugins/plugin-calendar/src/meetings/auto-join-settings.ts',
+  'plugins/plugin-native-browser-surface/src/address-input.ts',
+  'plugins/plugin-native-browser-surface/src/browsing-session.ts',
+  'plugins/plugin-native-browser-surface/src/page-reading.ts',
+  'plugins/plugin-native-browser-surface/src/page-source.ts',
+  'packages/core/src/schema-types.ts',
+  'packages/core/src/types/json.ts',
+  'packages/core/src/types/schema.ts',
+  'packages/core/src/types/view-capability.ts',
+  'plugins/plugin-calendar/src/meetings/auto-join-types.ts',
   'packages/core/src/types/permissions.ts',
   'packages/contracts/src/lifeops/gmail.ts',
   'packages/contracts/src/lifeops/policy.ts',
@@ -100,6 +122,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-calendar/src/api/client-calendar.ts',
   'plugins/plugin-calendar/src/browser.ts',
   'plugins/plugin-calendar/src/client/named-read.ts',
+  'plugins/plugin-calendar/src/client/availability-review.ts',
   'plugins/plugin-calendar/src/components/EventEditorDrawer.tsx',
   'plugins/plugin-calendar/src/components/event-editor-command.ts',
   'plugins/plugin-calendar/src/components/event-editor-policy.ts',
@@ -115,6 +138,7 @@ export const CLIENT_FEATURE_PATHS = [
 
   'packages/contracts/src/calendar-linked-sync.ts',
   'packages/ui/src/voice/batch-conversation.ts',
+  'packages/ui/src/accessibility/screen-focus.ts',
   'packages/ui/src/voice/voice-session-client-core.ts',
   'packages/ui/src/voice/voice-session-status.ts',
   'packages/ui/src/voice/voice-session-protocol.ts',
@@ -142,7 +166,12 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/voice/src/turn.ts',
   'packages/voice/src/browser-capture',
   'packages/voice/src/respond-gate.ts',
+  'packages/voice/src/voice-assistant-session.ts',
+  'packages/voice/src/live-voice-session.ts',
+  'packages/voice/src/voice-turn-routes.ts',
+  'packages/voice/src/voice-turn-timing.ts',
   'packages/voice/src/voice-eot.ts',
+  'packages/voice/src/random-id.ts',
   'packages/core/src/speech.ts',
   'packages/core/src/utils/string-boundaries.ts',
   'packages/core/src/spoken-text.ts',
@@ -157,7 +186,13 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/ui/src/gestures/recognizers.ts',
   'packages/ui/src/gestures/useRafCoalescer.ts',
   'packages/ui/src/components/shell/chat-panel-layout.ts',
+  'packages/ui/src/components/shell/dock-clearance.ts',
+  'packages/ui/src/components/shell/responsive-layout.ts',
   'packages/ui/src/utils/automation-feed-filter.ts',
+  'packages/ui/src/overview/daily-overview.ts',
+  'packages/ui/src/overview/OverviewCards.tsx',
+  'plugins/plugin-workflow/src/client/hosted-digests.ts',
+  'plugins/plugin-workflow/src/services/hosted-digest-policy.ts',
   'packages/ui/src/utils/cron-format.ts',
   'packages/core/src/events.ts',
   'packages/core/src/i18n/language.ts',
@@ -165,20 +200,40 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/core/src/views/view-action-handoff.ts',
   'packages/core/src/views/completed-action-navigation.ts',
   'packages/ui/src/platform/browser-document-store.ts',
+  'packages/ui/src/state/durable-draft.ts',
+  'packages/ui/src/state/durable-draft-controller.ts',
   'packages/contracts/src/native-notes-query.ts',
   'packages/contracts/src/device-reviews.ts',
   'packages/contracts/src/calendar-linked-sync.ts',
   'plugins/plugin-assistant/src/services/device-actions/camera-contract.ts',
+  'plugins/plugin-assistant/src/services/device-actions/photo-library-contract.ts',
+  'plugins/plugin-native-camera/src/definitions.ts',
+  'plugins/plugin-native-camera/src/host-ports.ts',
+  'plugins/plugin-native-camera/src/session.ts',
   'plugins/plugin-assistant/src/services/device-actions/notes-query-result.ts',
+  'packages/contracts/src/sms-send.ts',
   'plugins/plugin-assistant/src/services/device-actions/sms-contract.ts',
+  'packages/contracts/src/sms-send.ts',
+  'packages/contracts/src/mms-send.ts',
+  'packages/contracts/src/native-telephony.ts',
+  'packages/contracts/src/native-telephony-session.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-contract.ts',
+  'plugins/plugin-assistant/src/services/device-actions/clock-handoff.ts',
+  'plugins/plugin-assistant/src/services/device-actions/clock-handoff-history.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-review-executor.ts',
+  'plugins/plugin-assistant/src/services/device-actions/clock-handoff.ts',
+  'plugins/plugin-assistant/src/services/device-actions/clock-handoff-history.ts',
+  'plugins/plugin-assistant/src/services/device-actions/reminder-journal.ts',
+  'plugins/plugin-native-reminders/src/android-definitions.ts',
+  'plugins/plugin-native-reminders/src/occurrence.ts',
   'plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/device-record-presentation.ts',
   'plugins/plugin-assistant/src/services/device-actions/notes-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/reminder-create-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/reminder-contract.ts',
   'plugins/plugin-files',
+  'plugins/plugin-inbox/src/mailbox',
+  'plugins/plugin-calendar/src/linked-sync',
   'plugins/plugin-maps/src/client',
   'plugins/plugin-maps/test/navigation-client.test.mjs',
   'plugins/plugin-notes/src/client',
@@ -186,6 +241,8 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-notes/test/notes-trash-policy.test.mjs',
   'plugins/plugin-notes/test/notes-trash-maintenance.test.mjs',
   'plugins/plugin-notes/test/notes-trash-schedule.test.mjs',
+  'packages/cloud/sdk/src/subscription-entitlement.ts',
+  'packages/auth/src/auth/native-cloud-sign-in.ts',
 ];
 /** Copy authenticated upstream source outside the immutable vendor checkout. */
 export function prepareClientFeatures({ root = projectRoot, projectVoice = true } = {}) {
@@ -195,46 +252,40 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
 
 
   if(projectVoice){
-  // Only non-voice client types need a consumer projection. The voice client,
-  // logger contracts and renderer observations are browser-safe upstream entries.
+  // Upstream publishes every renderer type as a leaf entry (@elizaos/core/schema-types,
+  // @elizaos/ui/api/transport, plugin-calendar auto-join-types); copied files stay byte-exact.
+  // Only two re-export maps remain: they select upstream leaves for bare package specifiers
+  // and carry no declarations of their own.
   const project = (name, text) => source.set(name, {bytes:Buffer.from(text),mode:'100644',sha256:hash(Buffer.from(text))});
+  project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\nexport * from "./packages/contracts/src/device-reviews";\nexport * from "./packages/contracts/src/contracts/theme";\n');
   const text = name => source.get(name).bytes.toString();
-
-  project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\nexport * from "./packages/contracts/src/device-reviews";\n');
-  // Project only existing public type declarations; do not bundle host/client implementations.
-  const declarations = (name, names) => names.map(declaration => {
-    const escaped = declaration.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Upstream voice sessions import the shared random-id helper by its emitted .js name. Plain
+  // Node (tests and scripts that strip types) cannot map that to the copied .ts source, so the
+  // one reviewed value import is pointed at the .ts file; type-only .js imports are erased.
+  for (const name of ['packages/voice/src/voice-assistant-session.ts', 'packages/voice/src/live-voice-session.ts']) {
+    const before = 'import { randomId } from "./random-id.js";';
     const content = text(name);
-    const interfaces = [...content.matchAll(new RegExp('^export interface ' + escaped + '\\s*\\{[\\s\\S]*?^\\}', 'gm'))];
-    const aliases = [...content.matchAll(new RegExp('^export type ' + escaped + '\\s*=[\\s\\S]*?;', 'gm'))];
-    const matches = [...interfaces, ...aliases];
-    if (matches.length !== 1) throw Error('Review changed client type declaration: ' + name + ':' + declaration);
-    return matches[0][0];
-  }).join('\n') + '\n';
-  project('alpha-voice-core-types.ts',declarations(
-    'packages/core/src/types/plugin.ts', ['ViewCapabilityParameter', 'ViewCapability']) + declarations(
-    'packages/core/src/types/primitives.ts', ['JsonPrimitive', 'JsonValue']) + declarations(
-    'packages/core/src/types/components.ts', ['ActionParameterSchema']) + declarations(
-    'packages/core/src/types/model.ts', ['JSONSchema']));
-  const clientName = 'packages/ui/src/api/client-base.ts';
-  const fetchMatches = [...text(clientName).matchAll(/^  async fetch<T>\([\s\S]*?^  \): Promise<T> \{/gm)];
-  if (fetchMatches.length !== 1) throw Error('Review changed ElizaClient fetch declaration.');
-  const fetchSignature = fetchMatches[0][0].replace(/^  async /, '').replace(/ \{$/, '').trim();
-  project('alpha-client-fetch-types.ts', 'export interface ElizaClient { ' + fetchSignature + '; }\n');
-  project('plugins/plugin-calendar/src/meetings/auto-join-settings.ts', declarations(
-    'plugins/plugin-calendar/src/meetings/auto-join-settings.ts', ['MeetingAutoJoinPolicy', 'MeetingAutoJoinSettings']));
-  source.delete('packages/core/src/types/plugin.ts');
-  source.delete('packages/core/src/types/components.ts');
-  source.delete('packages/core/src/types/model.ts');
-  source.delete('packages/core/src/types/primitives.ts');
-  source.delete(clientName);
+    if (content.split(before).length !== 2) throw Error('Review changed voice random-id import: ' + name);
+    project(name, content.replace(before, 'import { randomId } from "./random-id.ts";'));
+  }
+
+  // The shared linked-sync modules import @elizaos/contracts by package name. Alpha has no
+  // such package: the renderer resolves it through a Vite/tsc alias, but Node consumers
+  // (the Vite config bundle, backend hosts and node tests reach calendarSyncHttp through
+  // cloud-protocol) cannot. Every symbol they import is in calendar-linked-sync, so point
+  // exactly that one import at the projected contract file.
+  for (const file of ['google-sync-port.ts', 'sync-controller.ts', 'linked-store.ts']) {
+    const name = 'plugins/plugin-calendar/src/linked-sync/' + file;
+    const content = text(name), specifier = /\} from "@elizaos\/contracts";/g;
+    if ((content.match(specifier) || []).length !== 1 || /["']@elizaos\/contracts\//.test(content))
+      throw Error('Review changed linked-sync contracts import: ' + name);
+    project(name, content.replace(specifier, '} from "../../../../packages/contracts/src/calendar-linked-sync.ts";'));
+  }
 
   project('alpha-voice-core-protocol.ts','export {ElizaError} from "./packages/core/src/errors";\nexport {redactTrailingArgs} from "./packages/core/src/security/log-redaction";\nexport {parseViewInteractionClientId, AGENT_SURFACE_CAPABILITY_IDS} from "./packages/core/src/views/view-interact-protocol";\nexport {findViewActionHandoff, type ViewActionHandoff} from "./packages/core/src/views/view-action-handoff";\nexport type {PermissionState} from "./packages/core/src/types/permissions";\n');
-
-
   }
   const files = Object.fromEntries([...source].map(([name, file]) => [name, file.sha256]));
-  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?10:0, files };
+  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?11:0, files };
   const parent = path.join(root, '.eliza'), destination = path.join(parent, 'client-features');
   regularPath(parent, true);
   const exists = regularPath(destination, true), stamp = path.join(destination, '.source.json');

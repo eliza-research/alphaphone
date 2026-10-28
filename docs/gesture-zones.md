@@ -3,7 +3,8 @@
 This page says which swipes belong to Android and which to Alpha, and how a person reaches
 notifications and quick settings. It records the behaviour in source after the owner's
 2026-10-12 decisions A-32 and A-33 (issues #416 and #417): `apps/app/src/prototype/model.js`,
-`system-shade.ts`, `template.html`, `phone.css`, `SystemShade.java` and `AlphaDevicePlugin.java`.
+`system-shade.ts`, `template.html`, `phone.css`, the shared `SystemShade.java` (plugin-native-system,
+consumed through the pin) and `AlphaDevicePlugin.java`.
 Browser tests are Chromium on a development or production build. They are not emulator,
 TalkBack, AOSP-image or device evidence. The instrumented classes named at the end, except
 `NotificationChannelsInstrumentedTest`, ran at `69a4be6c` on an API 35 Google APIs emulator on

@@ -7,7 +7,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { auditWebBundle } from "../scripts/audit-production-bundle.mjs";
 import { appLinkFilters, assetLinksProblems, fingerprint, PLACEHOLDER, renderAssetLinks, TEMPLATE } from "../scripts/render-assetlinks.mjs";
-import { partialSigningProblem, readReleaseSigner, releaseAdmission, signingRequested, validateReleaseSigner } from "../scripts/build-android.mjs";
+import { partialSigningProblem, readReleaseSigner, releaseAdmission, SIGNING_ENV, signingRequested, validateReleaseSigner } from "../scripts/build-android.mjs";
 
 const ALL = { ELIZAOS_KEYSTORE_PATH: "/k", ELIZAOS_KEYSTORE_PASSWORD: "p", ELIZAOS_KEY_ALIAS: "a", ELIZAOS_KEY_PASSWORD: "q" };
 const SIGNER = "a".repeat(64);
@@ -22,9 +22,15 @@ test("a partial ELIZAOS_ signing set is refused by name, never by value", () => 
   assert.ok(!problem.includes("/k") && !problem.includes("\"p\""));
   assert.match(partialSigningProblem({ ...ALL, ELIZAOS_KEY_ALIAS: "  " }), /missing ELIZAOS_KEY_ALIAS/, "blank counts as missing, as in Gradle");
   assert.equal(signingRequested({ ...ALL, ELIZAOS_KEY_ALIAS: " " }), false);
-  const gradle = fs.readFileSync("android/app/build.gradle", "utf8");
-  assert.match(gradle, /releaseSigningMissing\.size\(\) < releaseSigningNames\.size\(\)\)\n throw new GradleException/);
-  assert.doesNotMatch(gradle, /producing unsigned release APKs/);
+  // The generated host reads the names android/consumer-host.json declares; the pinned upstream
+  // template refuses a partial set by name and signs only when all four are present.
+  const { signing } = JSON.parse(fs.readFileSync("android/consumer-host.json", "utf8")).profile;
+  assert.deepEqual(signing, { storeFile: "ELIZAOS_KEYSTORE_PATH", storePassword: "ELIZAOS_KEYSTORE_PASSWORD", keyAlias: "ELIZAOS_KEY_ALIAS", keyPassword: "ELIZAOS_KEY_PASSWORD" });
+  assert.deepEqual(SIGNING_ENV, Object.keys(ALL));
+  const gradle = fs.readFileSync("vendor/eliza/packages/app/scripts/mobile/android/consumer-host/app.gradle", "utf8");
+  assert.match(gradle, /if \(!missing\.isEmpty\(\) && missing\.size\(\) < names\.size\(\)\)\n  throw new GradleException\("\[release-signing\] incomplete signing environment/);
+  assert.match(gradle, /if \(hostSigning\) signingConfig signingConfigs\.release/);
+  assert.doesNotMatch(gradle, /producing unsigned release APKs|println|logger/);
 });
 
 test("the committed descriptor is valid and unset fixtures remain supported", () => {
@@ -117,13 +123,13 @@ test("the bundle audit fails an assetlinks.json with a placeholder or debug fing
 });
 
 test("the https autoVerify filter is build-gated by ELIZAOS_APP_LINK_HOST and read back from the APK manifest", () => {
-  const gradle = fs.readFileSync("android/app/build.gradle", "utf8");
+  const gradle = fs.readFileSync("android/app/product.gradle", "utf8");
   const manifest = fs.readFileSync("android/app/src/main/AndroidManifest.xml", "utf8");
   // Default build: the main manifest has no https autoVerify filter at all; only the property adds the overlay.
   assert.doesNotMatch(manifest.replace(/<!--[\s\S]*?-->/g, ""), /autoVerify/);
   assert.match(gradle, /project\.findProperty\('ELIZAOS_APP_LINK_HOST'\) \?: envValue\('ELIZAOS_APP_LINK_HOST'\)/);
-  assert.ok(gradle.includes('<activity android:name="${identity.appId}.MainActivity" android:exported="true">'), 'the generated App Link activity explicitly exports its external return intent');
-  assert.match(gradle, /manifestPlaceholders = \[appOrientation: identity\.orientation, appLinkHost: appLinkHost\]/);
+  assert.ok(gradle.includes('<activity android:name="${android.namespace}.MainActivity" android:exported="true">'), 'the generated App Link activity explicitly exports its external return intent');
+  assert.match(gradle, /manifestPlaceholders\.put\('appLinkHost', appLinkHost\)/);
   assert.match(gradle, /if \(appLinkHost\) androidComponents \{ onVariants\(selector\(\)\.all\(\)\) \{ variant -> variant\.sources\.manifests\.addStaticManifestFile\(appLinksManifest\) \} \}/);
   assert.match(gradle, /<intent-filter android:autoVerify="true">[^\n]*android:scheme="https" android:host="\\\$\{appLinkHost\}" android:pathPrefix="\/alphaphone\/cloud-delegation"/);
   assert.doesNotMatch(gradle, /ALPHA_APP_LINK/);

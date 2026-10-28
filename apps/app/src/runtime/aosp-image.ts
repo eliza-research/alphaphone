@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { detectTelephonyProfile, TELEPHONY_PROFILE_METHOD } from '../../../../.eliza/client-features/packages/contracts/src/native-telephony.ts';
 /**
  * Alpha AOSP image capability (owner decision P-36, issue #420).
  *
@@ -11,8 +12,8 @@ import { Capacitor } from '@capacitor/core';
  * browser and a test-mocks development server all read `false`, and restored state cannot change it.
  */
 export const AOSP_TELEPHONY_PLUGIN = 'AlphaTelephony';
-/** The native method whose presence marks the verified capability. */
-export const AOSP_IMAGE_METHOD = 'imageCapability';
+/** The native method whose presence marks the verified capability (the shared telephony profile marker). */
+export const AOSP_IMAGE_METHOD = TELEPHONY_PROFILE_METHOD;
 /** Views the owner decision limits to the Alpha AOSP image. */
 export const AOSP_IMAGE_VIEWS: readonly string[] = Object.freeze(['phone', 'messages', 'contacts']);
 /**
@@ -23,12 +24,9 @@ export const AOSP_IMAGE_VIEWS: readonly string[] = Object.freeze(['phone', 'mess
  */
 export const ADMITTED_AOSP_VIEW_ADAPTERS: readonly string[] = Object.freeze(['messages']);
 
-type Header = { name?: unknown; methods?: readonly { name?: unknown }[] };
 /** True only for an Android bridge whose native side registered the image-only plugin. */
 export function detectAospImage(platform: string, headers: unknown): boolean {
-  if (platform !== 'android' || !Array.isArray(headers)) return false;
-  const header = (headers as Header[]).find(entry => entry?.name === AOSP_TELEPHONY_PLUGIN);
-  return !!header && Array.isArray(header.methods) && header.methods.some(method => method?.name === AOSP_IMAGE_METHOD);
+  return detectTelephonyProfile(platform, headers, AOSP_TELEPHONY_PLUGIN);
 }
 /** Views available in this install: an image view needs both the image and an admitted adapter. */
 export function admittedAospViews(image: boolean, admitted: readonly string[] = ADMITTED_AOSP_VIEW_ADAPTERS): string[] {

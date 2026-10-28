@@ -28,6 +28,8 @@ import {planAdmission} from '../runtime/subscription-entitlement';
 import { exportVoiceTiming } from '../runtime/voice-timing';
 import { readNativeVoiceTiming } from '../runtime/native-voice-turn';
 import { listenerStatus, openListenerSettings, pauseListener, turnOffListener, type ListenerStatus } from '../runtime/always-on-listener';
+import { reviewDataReset, type DataResetPlugin } from '@elizaos/capacitor-system/reset';
+import { androidRoleLabel, parseRoleStatuses } from '@elizaos/capacitor-system/settings';
 import { leavePasswordManager, passwordEntryPage, passwordManagerGroups, passwordManagerLifecycle, refreshPasswordManager, PASSWORD_PAGES } from '../passwords/password-manager';
 
 type Bag = Record<string, any>;
@@ -108,22 +110,13 @@ const deviceApps = registerPlugin<{ buildInfo(): Promise<{ launcher?: boolean; v
 const notifications = registerPlugin<{status():Promise<Bag>;openAppSettings():Promise<Bag>;openChannelSettings(input:{id:string}):Promise<{status:string}>;crossAppStatus():Promise<Bag>;notificationApps():Promise<{apps:Bag[]}>;setNotificationPolicy(input:Bag):Promise<Bag>;resumeCrossApp(input:{expectedRevision:string}):Promise<Bag>;openNotificationAccess():Promise<Bag>;notificationHistory():Promise<{items:Bag[]}>;clearNotificationHistory():Promise<void>}>('AlphaNotifications');
 const system = registerPlugin<{ getDeviceSettings(): Promise<Bag>; getStatus(): Promise<{ roles?: Bag[] }>; requestRole(input: { role: string }): Promise<{ role: string; held: boolean; resultCode: number }> }>('ElizaSystem');
 type RoleRow = { role: string; held: boolean; available: boolean; holders: string[] };
-/** Android role state exactly as ElizaSystem.getStatus() reports it; malformed rows are dropped. */
+/** Android role state exactly as ElizaSystem.getStatus() reports it (shared parser); malformed rows are dropped. */
 export function readRoles(status: unknown): Record<string, RoleRow> {
-  const out: Record<string, RoleRow> = {};
-  const rows = (status as { roles?: unknown })?.roles;
-  if (!Array.isArray(rows)) return out;
-  for (const row of rows) if (row && typeof row.role === 'string' && typeof row.held === 'boolean' && typeof row.available === 'boolean')
-    out[row.role] = { role: row.role, held: row.held, available: row.available, holders: Array.isArray(row.holders) ? row.holders.filter((h: unknown) => typeof h === 'string') : [] };
-  return out;
+  return Object.fromEntries(parseRoleStatuses(status).map(row => [row.role, row]));
 }
+/** Shared truthful wording: an empty holder lookup never claims that no app holds the role. */
 export function roleValue(row: RoleRow | undefined): string {
-  if (!row) return 'Unavailable';
-  if (!row.available) return 'Not available on this device';
-  if (row.held) return 'Alpha Phone';
-  // Holder lookups are best effort (package visibility, the system resolver "android"), so an
-  // empty answer never claims that no app holds the role.
-  return row.holders.some(holder => holder !== 'android' && holder !== 'ai.elizaresearch.alphaphone') ? 'Another app' : 'Not Alpha Phone';
+  return androidRoleLabel(row, { packageName: 'ai.elizaresearch.alphaphone', appName: 'Alpha Phone' });
 }
 
 // settings-facts:begin (dependency-free; exercised by test/settings-truth.test.mjs)
@@ -579,6 +572,9 @@ export function installSettingsAdapter(Component: any, views: Bag) {
             // Runtime location and Cloud inference are separate facts.
             const rows:Bag[]=[info('Account',plan.account??(plan.offline?`${serviceName} unreachable`:'Not signed in')),info('Plan',plan.plan),info('Agent execution',runtimeLocation),info('AI replies',plan.inference)];
             if(plan.endsAt)rows.push(info(plan.status==='active'||plan.status==='trialing'||plan.status==='past_due'?'Plan runs until':'Plan ended',day(plan.endsAt)));
+            // Plan state, not a balance: the allowance Cloud reports and the latest limit with its retry time.
+            if(plan.allowance)rows.push(info('Plan allowance',plan.allowance));
+            if(plan.limit)rows.push(info('AI requests',plan.limit));
             if(plan.keyExpiresAt)rows.push(info(plan.keyExpiring?'Sign-in expires soon':'Sign-in expires',day(plan.keyExpiresAt)));
             if(connection.busy)rows.push(info('Status',connection.message||'Please wait…'));
             const actions:Bag[]=connection.busy?[action('Cancel',()=>connectionController.cancel())]:plan.signedIn?[
@@ -640,8 +636,8 @@ export function installSettingsAdapter(Component: any, views: Bag) {
           out.stack.push({isTop:false,notTop:true,cls:'enter',z:4,title:'Agent connection',hasTitle:true,backLabel:'Back to Settings',back:()=>api.set({page:null}),hero:{},groups});
         }
         if(native)page.groups.push(group([{kNav:true,label:'Reset Alpha data',lbl:'Reset Alpha data',sub:'Erase local Alpha data · device unlock required',hasSub:true,chev:true,noAB:true,go:async()=>{
-          try{const result=await registerPlugin<{review():Promise<{status:string;message:string}>}>('AlphaReset').review();api.toast(result.message);}
-          catch{api.toast('Reset could not be opened. No completed reset is confirmed.');}
+          // Shared native review (@elizaos/capacitor-system/reset): only cancelled or unavailable reach here.
+          api.toast((await reviewDataReset(registerPlugin<DataResetPlugin>('AlphaReset'))).message);
         }}]));
         if(testMocksEnabled)page.groups.push(group([{kNav:true,label:'Try mock mode',lbl:'Try mock mode',chev:true,noAB:true,go:()=>connectionController.mock()}]));
         if(testMocksEnabled&&recovery.length)page.groups.push(group([info('Saved data needs recovery','Back up before resetting'),...recovery.map(name=>({kNav:true,label:recoveryActions[name].label,lbl:recoveryActions[name].label,chev:true,noAB:true,go:()=>recoveryActions[name].open()}))]));

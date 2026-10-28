@@ -27,7 +27,7 @@ final class GmailDelivery {
   return new JSONObject().put("generation",UUID.randomUUID().toString()).put("credentialId",credentialId).put("credentialDigest",GmailReconciliation.hash(raw)).put("accountRef",snapshot.getString("accountRef")).put("providerGeneration",snapshot.getString("sessionGeneration")).put("userId",user).put("organizationId",organization).put("grantId",GmailReconciliation.id(grant));
  }
  private void admitted(JSONObject binding)throws Exception{
-  if(AlphaDataReset.pending(context))throw new SecurityException("Reset pending");
+  if(AlphaDataReset.RESET.pending(context))throw new SecurityException("Reset pending");
   JSONObject live=admission(binding.getString("credentialId"),binding.getString("grantId"));
   for(String field:new String[]{"credentialDigest","accountRef","providerGeneration","userId","organizationId"})if(!live.getString(field).equals(binding.getString(field)))throw new SecurityException("Gmail owner changed");
  }

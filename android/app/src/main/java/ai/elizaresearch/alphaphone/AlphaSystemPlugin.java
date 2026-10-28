@@ -14,4 +14,6 @@ public final class AlphaSystemPlugin extends ai.eliza.plugins.system.SystemPlugi
  @Override @PluginMethod public void setFlashlight(PluginCall call){LateLaunch.ask(call,()->super.setFlashlight(call));}
  @Override protected boolean isRoleEnabled(String role){return AlphaImageCapabilities.roleEnabled(role);}
  @Override protected boolean isDefaultAppEnabled(String role){return AlphaImageCapabilities.defaultAppEnabled(getContext(),role);}
+ /** Only the launcher flavor drives Android's shade (#416, #417); the standalone app never asks. */
+ @Override protected boolean canExpandNotificationShade(){return BuildConfig.IS_LAUNCHER;}
 }

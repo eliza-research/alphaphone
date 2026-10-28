@@ -1,4 +1,5 @@
 package ai.elizaresearch.alphaphone;
+import ai.eliza.plugins.browsersurface.BrowserBookmarkStore;
 
 import android.os.SystemClock;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -34,14 +35,14 @@ public final class BrowserContinuityInstrumentedTest {
   ready("document.querySelector('[role=img][aria-label=\"Secure connection\"]')");
  }
  private int savedTabs(android.content.Context context,int expected)throws Exception{
-  int count=0;for(int i=0;i<100;i++){count=new BrowserSessionStore(context).read().getJSONArray("tabs").length();if(count==expected)break;SystemClock.sleep(100);}return count;
+  int count=0;for(int i=0;i<100;i++){count=AlphaBrowserStores.session(context).read().getJSONArray("tabs").length();if(count==expected)break;SystemClock.sleep(100);}return count;
  }
  /** The persistent normal-tab profile is retained by decision; only ephemeral ones retire. */
  private static java.util.HashSet<String> ephemeralOnly(java.util.Collection<String> names){java.util.HashSet<String> out=new java.util.HashSet<>();for(String name:names)if(AlphaBrowserPlugin.ephemeralProfile(name))out.add(name);return out;}
- private void saved(BrowserBookmarks store,String url,boolean expected)throws Exception{for(int i=0;i<150;i++){if(store.read().contains(url)==expected)return;SystemClock.sleep(100);}fail("Native encrypted bookmark commit did not match UI action");}
+ private void saved(BrowserBookmarkStore store,String url,boolean expected)throws Exception{for(int i=0;i<150;i++){if(store.read().contains(url)==expected)return;SystemClock.sleep(100);}fail("Native encrypted bookmark commit did not match UI action");}
  @Test public void tabsSurviveAppNavigationAndBookmarksSurviveActivityRecreation()throws Exception{
   String token=UUID.randomUUID().toString(),one="https://example.com/?alpha_continuity="+token+"-one",two="https://example.com/?alpha_continuity="+token+"-two",three="https://example.com/?alpha_continuity="+token+"-three";
-  android.content.Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();BrowserBookmarks store=new BrowserBookmarks(context);
+  android.content.Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();BrowserBookmarkStore store=AlphaBrowserStores.bookmarks(context);
   try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)){
    AppNavigation.liveMode();app("Browser");address(one);page(one);
    browser.child("localStorage.setItem('alpha_continuity',"+JSONObject.quote(token)+");true");
@@ -67,7 +68,7 @@ public final class BrowserContinuityInstrumentedTest {
    click("Menu");click("Bookmarks and history");click("Bookmarks");ready(button(two));
    host("("+button(two)+").parentElement.querySelector('button[aria-label=\"Remove bookmark\"]').click()");saved(store,two,false);ready("!("+button(two)+")");
    scenario.recreate();AppNavigation.liveMode();app("Browser");click("Menu");click("Bookmarks and history");click("Bookmarks");
-   assertFalse("Removal survives new native store instance",new BrowserBookmarks(context).read().contains(two));
+   assertFalse("Removal survives new native store instance",AlphaBrowserStores.bookmarks(context).read().contains(two));
   }finally{if(store.read().contains(two))store.change(two,false);}
  }
  private static class BrowserSnapshot {
@@ -128,7 +129,7 @@ public final class BrowserContinuityInstrumentedTest {
  @Test public void sameActivityReloadAndMockRoundTripRetireNativeProfiles()throws Exception{
   org.junit.Assume.assumeTrue("Mock mode exists only in -PELIZA_DEV_ALLOW_TEST_MOCKS=1 builds",BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS);
   String token=UUID.randomUUID().toString(),url="https://example.com/?alpha_document_reload="+token;
-  BrowserBookmarks store=new BrowserBookmarks(InstrumentationRegistry.getInstrumentation().getTargetContext());
+  BrowserBookmarkStore store=AlphaBrowserStores.bookmarks(InstrumentationRegistry.getInstrumentation().getTargetContext());
   try(BoundedActivityScenario<MainActivity> scenario=BoundedActivityScenario.launch(MainActivity.class)){
    // Normal tab: a sign-in-style cookie and storage that must survive host reloads.
    AppNavigation.liveMode();app("Browser");address(url);page(url);browser.child("localStorage.setItem('reload_signin',"+JSONObject.quote(token)+");document.cookie='alpha_reload_signin="+token+"; Secure; SameSite=Lax; Path=/; Max-Age=3600';true");
@@ -155,11 +156,11 @@ public final class BrowserContinuityInstrumentedTest {
  /** External runner supplies separate processes and explicit force-stop boundaries. */
  @Test public void bookmarkProcessRestartPhase()throws Exception{
   String phase=InstrumentationRegistry.getArguments().getString("bookmarkPhase");org.junit.Assume.assumeTrue("Explicit process runner only",phase!=null);
-  android.content.Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();BrowserBookmarks store=new BrowserBookmarks(context);
+  android.content.Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();BrowserBookmarkStore store=AlphaBrowserStores.bookmarks(context);
   android.content.SharedPreferences fixture=context.getSharedPreferences("browser-bookmark-restart-fixture",0);
   if("cleanup".equals(phase)){
    String owned=fixture.getString("url",null);if(owned!=null&&store.read().contains(owned))store.change(owned,false);
-   new BrowserSessionStore(context).clear();assertTrue(fixture.edit().clear().commit());return;
+   AlphaBrowserStores.session(context).clear();assertTrue(fixture.edit().clear().commit());return;
   }
   if("prepare".equals(phase)){
    assertFalse("Clean previous owned fixture first",fixture.contains("url"));String url="https://example.com/?alpha_bookmark_restart="+UUID.randomUUID();

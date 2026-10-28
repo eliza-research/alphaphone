@@ -1,5 +1,6 @@
 package ai.elizaresearch.alphaphone;
 
+import ai.eliza.plugins.browsersurface.BrowserLoginFields;
 import android.os.*;
 import android.view.*;
 import android.view.accessibility.AccessibilityNodeInfo;

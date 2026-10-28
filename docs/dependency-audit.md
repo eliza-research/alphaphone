@@ -294,9 +294,11 @@ same command. A second, ordinary strict build then passed with verification enfo
 macOS. No hosted Linux build has run with this file: the first Android foundation run
 after it merges is that evidence, and a failure there names the artifact to add.
 
-Review of sources. The root scripts (`android/settings.gradle`, `android/build.gradle`)
+Review of sources. The root scripts (`settings.gradle` and `build.gradle`, generated into
+`android/` from the pinned upstream consumer-host templates by `npm run android:host`)
 declare `google()`, `mavenCentral()` and `gradlePluginPortal()` only. The build also
-includes projects with a `build.gradle` of their own (the app, the notification fixture, Capacitor from `node_modules` and eleven plugins from the pinned
+includes the generated app script, Alpha's `android/app/product.gradle` and the modules
+`android/consumer-host.json` names, each with a `build.gradle` of its own (the notification fixture, Capacitor from `node_modules` and the plugins from the pinned
 upstream checkout), and some of those declare repositories too: the same named ones, Maven
 Central by URL (`https://repo.maven.apache.org/maven2`, four upstream plugins) and the
 plugin portal by URL (`https://plugins.gradle.org/m2/`, Capacitor's build script). The
@@ -305,7 +307,8 @@ and fails on any other repository, on a `maven { }` block without a literal revi
 on `flatDir`, `mavenLocal()` and the like, and on an included script it cannot read. The
 four upstream plugins take a mirror in place of Maven Central when the root project
 defines `mavenCentralMirrorUrl`; nothing in this repository defines it and the check
-fails if a root Gradle file or a build script here names it. Someone running Gradle by
+fails if the host descriptor, the pinned generator or its templates, or a build script here
+names it. Someone running Gradle by
 hand can still pass that property, which is why the checksum, not the repository list, is
 the enforcement.
 
@@ -494,7 +497,7 @@ nothing.
 | `licenses/font-licenses.json` | The owner-statement record for "Denton typeface", by exact hash |
 | `apps/app/public/licenses/` | Generated notice entry flagged `proprietary-licence-held-outside-repo` |
 | `scripts/generate-licenses.mjs` | Reads every font under `apps/app/public`; no Denton-specific code |
-| `apps/app/src/prototype/home-launcher.ts` | Supplies the Denton/Fraunces/Georgia serif stack to the shared launcher renderer |
+| `config/alpha-product.json` | The product theme's display stack (Denton/Fraunces/Georgia), read by the shared mobile shell's Home and All apps |
 | `scripts/prototype-capture.mjs` line 111 | Records `document.fonts.check('300 30px Denton')` in capture output |
 | `test/licenses.test.mjs`, `test/font-license.test.mjs` | Use Denton as the proprietary-font example |
 
@@ -682,6 +685,6 @@ The Bun lock and normalized input hash changed. The old raw/normalized input equ
 
 The shared Notes consumer changes the npm lockfile, so the audit was regenerated. The fresh audit identified Undici 8.11.2 under the development-only jsdom dependency. The lockfile now resolves 8.12.3 within jsdom's existing `^8.11.2` range. The upstream patched threshold is 8.12.2 for [GHSA-4qv8-2p9j-2685](https://github.com/advisories/GHSA-4qv8-2p9j-2685), [GHSA-f72v-6w45-q472](https://github.com/advisories/GHSA-f72v-6w45-q472), and [GHSA-xjj6-f33q-929c](https://github.com/advisories/GHSA-xjj6-f33q-929c). The new audit contains the same three moderate findings covered by the existing Capacitor/xcode/uuid disposition and no high or critical findings. No exception or review deadline was expanded.
 The shared installed-app launcher receives Alpha's existing Denton/Fraunces/Georgia
-font stack from `apps/app/src/prototype/home-launcher.ts`. This adds no font file
+font stack from the product theme in `config/alpha-product.json`. This adds no font file
 or download: `prototype.css` remains the sole Denton loading rule. The owner-stated
 commercial license record and the open/system fallback stack are unchanged.

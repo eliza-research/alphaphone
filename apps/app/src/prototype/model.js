@@ -11,6 +11,8 @@ import {
   ATTENTION_ROWS, HOME_DEFAULTS
 } from "./fixtures.js";
 import { isMvpView, DEFERRED_MVP_VIEWS, deferredMvpPrompt } from "./mvp-features";
+import { ALPHA_PRODUCT, alphaThemeVariables } from "../product/alpha-product";
+import { navigateMobileShell } from "@elizaos/ui/mobile-shell/core";
 import { emptyHomeShadePull, pullStart, shadeFallback } from "./system-shade";
 import React from "react";
 import { DCLogic } from "./dc-lite.js";
@@ -85,8 +87,6 @@ var IC = {
   spark: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18",
   dial: "M6 6h.01M12 6h.01M18 6h.01M6 12h.01M12 12h.01M18 12h.01M6 18h.01M12 18h.01M18 18h.01"
 };
-var DARK = { bg: "#000000", s1: "#0B0B0B", s2: "#151515", s3: "#262626", line: "#262626", fg: "#FFFFFF", mut: "#8F8F8F", acct: "#8A93FF", scrim: "rgba(0,0,0,.55)", frame: "#161616", shc: "rgba(0,0,0,.45)" };
-var LIGHT = { bg: "#FFFFFF", s1: "#FAFAFA", s2: "#F3F3F3", s3: "#E6E6E6", line: "#E3E3E3", fg: "#000000", mut: "#6B6B6B", acct: "#0000FF", scrim: "rgba(0,0,0,.18)", frame: "#DCDCDC", shc: "rgba(0,0,0,.12)" };
 // Device-locale names (Sunday-first, January-first), refilled when locale preferences change.
 var DAYS = WEEKDAYS;
 var MONS = MONTHS;
@@ -5088,7 +5088,7 @@ var BASE = {
   // Quick-settings facts; tiles stay neutral until a fact is known.
   q: Object.assign({}, QUICK_SETTINGS),
   nGone: [], nSlide: null, bright: 70, theme: null, fs: null, now: Date.now(),
-  charName: "Alpha", vs: {}, secure: false, stack: [], toastUndo: false, drawer: false, drawerQ: "",
+  charName: ALPHA_PRODUCT.identity.characterName, vs: {}, secure: false, stack: [], toastUndo: false, drawer: false, drawerQ: "",
   msgs: []
 };
 
@@ -5194,7 +5194,7 @@ class Component extends DCLogic {
     return {
       key: k, S: S, st: this.vget(k), ic: IC, people: PEOPLE, person: function (id) { var c = self.vget("contacts"); var l = (c && c.list) || []; for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i]; return person(id); },
       isActive: function () { return self.S().view === k; }, now: new Date(S.now), theme: theme,
-      name: S.charName || "Alpha", active: S.view === k,
+      name: S.charName || ALPHA_PRODUCT.identity.characterName, active: S.view === k,
       set: function (p) { self.vset(k, p); },
       get: function (other) { return self.vget(other); },
       setView: function (other, p) { self.vset(other, p); },
@@ -5278,8 +5278,8 @@ class Component extends DCLogic {
   }
   goHome(chat) {
     this.clear("hint"); this.leave();
-    if (this.S().secure) return this.setState({ secure: false, screen: "lock", view: null, shade: false, chat: "input", hint: false, heads: false, stack: [] });
-    this.setState({ view: null, shade: false, chat: chat === "sheet" || chat === "full" ? chat : "input", hint: false, heads: false, stack: [], drawer: false, drawerQ: "" });
+    if (this.S().secure) return this.setState(Object.assign(this.shellNavigate({ type: "home" }), { secure: false, screen: "lock", shade: false, hint: false, heads: false }));
+    this.setState(Object.assign(this.shellNavigate({ type: "home", assistant: chat === "sheet" || chat === "full" ? chat : "input" }), { shade: false, hint: false, heads: false }));
   }
   openView(k, patch, chat, opts) {
     if (!isMvpView(k)) return this.toast("This app is deferred from the MVP");
@@ -5288,36 +5288,44 @@ class Component extends DCLogic {
     // keepState returns to a view exactly as it was left (open note, event, email or tab and its
     // selection revision): the target's state is not reset. A different current view still gets
     // its onLeave, so its camera, recording or timers stop exactly as on any other switch.
-    if (opts && opts.keepState && VIEWS[k]) { if (this.S().view !== k) this.leave(); if (patch) this.vset(k, patch); this.setState({ screen: "home", view: k, shade: false, heads: false, drawer: false, drawerQ: "", chat: chat || this.defaultChat(k) }); return; }
+    if (opts && opts.keepState && VIEWS[k]) { if (this.S().view !== k) this.leave(); if (patch) this.vset(k, patch); this.setState(Object.assign(this.shellNavigate({ type: "open", view: k, history: "keep", assistant: this.shellDetent(chat) }), { screen: "home", shade: false, heads: false })); return; }
+    // Back's stack pop: the caller already set the stack; only the view changes here.
     if (opts && opts.keepStack) { var S0 = this.S(); if (S0.view !== k) { this.leave(); } this.setState({ screen: "home", view: k, shade: false, heads: false, chat: chat || this.defaultChat(k) }); return; }
     if (!VIEWS[k]) return;
     var S = this.S(); opts = opts || {};
-    if (S.secure && ["camera", "photos", "wallet"].indexOf(k) < 0) { this.leave(); this.setState({ secure: false, screen: "lock", view: null, shade: false, stack: [] }); return this.toast("Unlock to continue"); }
-    var stack = S.stack || [];
-    if (opts.push && S.view && S.view !== k) stack = stack.concat([S.view]).slice(-6);
-    else if (!opts.keepStack) stack = [];
+    if (S.secure && ["camera", "photos", "wallet"].indexOf(k) < 0) { this.leave(); this.setState(Object.assign(this.shellNavigate({ type: "home" }), { secure: false, screen: "lock", shade: false })); return this.toast("Unlock to continue"); }
+    var nav = this.shellNavigate({ type: "open", view: k, history: opts.push ? "push" : "reset", assistant: this.shellDetent(chat) });
     if (S.view !== k) {
       this.leave();
       var m = this.mod(k), cur = this.vget(k);
       var busy = m.ongoing && m.ongoing(cur, this.api(k));
       if (busy || opts.restore) { if (patch) this.vset(k, patch); } else this.vreset(k, patch);
     } else if (patch) { this.vset(k, patch); }
-    this.setState({ screen: "home", view: k, shade: false, heads: false, drawer: false, drawerQ: "", chat: chat || this.defaultChat(k), stack: stack });
+    this.setState(Object.assign(nav, { screen: "home", shade: false, heads: false }));
     this.homeHint();
+  }
+  /* ---- navigation: the shared mobile shell reducer owns view, Back stack, drawer and the
+     assistant detent (Alpha's "hidden" chat is the shell's pill) ---- */
+  shellNav() { var S = this.S(); return { view: S.view || null, stack: S.stack || [], drawer: !!S.drawer, drawerQuery: S.drawerQ || "", assistant: this.shellDetent(S.chat) || "input" }; }
+  /** A chat state as a shell assistant detent; none for an absent request (the surface's rest). */
+  shellDetent(chat) { return chat === "hidden" ? "pill" : chat === "input" || chat === "sheet" || chat === "full" ? chat : undefined; }
+  shellNavigate(action) {
+    var self = this, next = navigateMobileShell(this.shellNav(), action, { assistantRest: function (k) { return self.defaultChat(k) === "input" ? "input" : "pill"; } });
+    return { view: next.view, stack: next.stack.slice(), drawer: next.drawer, drawerQ: next.drawerQuery, chat: next.assistant === "pill" ? "hidden" : next.assistant };
   }
   back() {
     var S = this.S();
     if (S.shade) return this.setState({ shade: false });
     if (this.props && this.props.assistantSurface && !S.view && S.voice === "off") return this.closeAssistant();
-    if (S.drawer && !S.view) return this.setState({ drawer: false, drawerQ: "" });
+    if (S.drawer && !S.view) return this.setState(this.shellNavigate({ type: "back" }));
     if (S.voice !== "off") return this.stopVoice();
-    if (S.chat === "full") return this.setState({ chat: "sheet" });
-    if (S.chat === "sheet") return this.setState({ chat: this.rest() });
+    // An open conversation lowers one detent (full, sheet, rest) before Back leaves the view.
+    if (S.chat === "full" || S.chat === "sheet") return this.setState(this.shellNavigate({ type: "back" }));
     if (S.view) {
       var m = this.mod(S.view);
       if (m.back && m.back(this.vget(S.view), this.api(S.view))) return;
-      var stack = S.stack || [];
-      if (stack.length) { var prev = stack[stack.length - 1]; this.setState({ stack: stack.slice(0, -1) }); return this.openView(prev, null, null, { restore: true, keepStack: true }); }
+      var previous = this.shellNavigate({ type: "back" });
+      if (previous.view) { this.setState({ stack: previous.stack }); return this.openView(previous.view, null, null, { restore: true, keepStack: true }); }
       return this.goHome();
     }
   }
@@ -5517,10 +5525,8 @@ class Component extends DCLogic {
     var S = this.S(); var P = this.props || {}; var self = this;
     var fs = S.fs == null ? !!P.phoneOnly : S.fs;
     var theme = S.theme || P.theme || "light"; if (theme !== "dark") theme = "light";
-    var th = theme === "light" ? LIGHT : DARK;
-    var acc = P.accent || "#0000FF";
-    var acct = theme === "light" ? acc : (acc.toUpperCase() === "#0000FF" ? th.acct : "#9DB4FF");
-    var VM = { "--bg": th.bg, "--s1": th.s1, "--s2": th.s2, "--s3": th.s3, "--line": th.line, "--fg": th.fg, "--mut": th.mut, "--acc": acc, "--acct": acct, "--scrim": th.scrim, "--shc": th.shc };
+    // The product record (config/alpha-product.json) supplies every color and font.
+    var VM = alphaThemeVariables(theme);
     var vars = Object.keys(VM).map(function (k) { return k + ":" + VM[k]; }).join(";");
     var rootRef = function (el) {
       if (!el || !el.style) return;
@@ -5528,14 +5534,14 @@ class Component extends DCLogic {
       // Connection and digest dialogs are siblings of the phone. Share the
       // selected palette with their common root, including live theme changes.
       if (P.phoneSurface && el.parentElement) {
-        var palette = { bg: th.bg, fg: th.fg, s2: th.s2, line: th.line, mut: th.mut, acc: acct };
+        var palette = { bg: VM["--bg"], fg: VM["--fg"], s2: VM["--s2"], line: VM["--line"], mut: VM["--mut"], acc: VM["--acct"] };
         Object.keys(palette).forEach(function (k) { el.parentElement.style.setProperty("--connection-" + k, palette[k]); });
       }
     };
     var d = new Date(S.now);
     var clock = formatClock(d);
     var dateStr = formatLongDate(d);
-    var name = S.charName || "Alpha";
+    var name = S.charName || ALPHA_PRODUCT.identity.characterName;
     var isOn = S.screen === "home"; var v = S.view; var isView = isOn && !!v;
     var voiceOn = S.voice !== "off";
     var panelOpen = isOn && (S.chat === "sheet" || S.chat === "full");
@@ -5552,11 +5558,6 @@ class Component extends DCLogic {
     // Compose attach copy follows the provider adapter's attachment limit (c.attachLabel); one
     // reviewed file until an adapter reports more.
     if (v === "inbox" && out.inbox && out.inbox.c && !out.inbox.c.attachLabel) out.inbox.c = Object.assign({}, out.inbox.c, { attachLabel: "Attach file", heading: "New message" });
-
-    var apps = ORDER.filter(function (k) { return !VIEWS[k].hidden; }).map(function (k) {
-      var def = VIEWS[k];
-      return { key: k, d: IC[def.icon] || IC.grid, label: def.title, open: function () { self.openView(k); }, badge: def.badge && ["phone", "messages", "inbox"].indexOf(k) >= 0 ? !!def.badge(self.vget(k)) : false };
-    });
 
     var NOTIFS = NOTIF.map(function (n) { return Object.assign({}, n, { d: IC[n.icon] || IC.bell }); });
     var shadeN = NOTIFS.filter(function (n) { return isMvpView(n.go.view) && S.nGone.indexOf(n.id) < 0; }).map(function (n) {
@@ -5638,7 +5639,7 @@ class Component extends DCLogic {
     return Object.assign(out, {
       assistantSurface: assistantOnly, notAssistantSurface: !assistantOnly, closeAssistant: closeAssistant,
       mvpMessages: isMvpView("messages"),
-      ic: IC, iconAssets: ICON_ASSETS, vars: vars, rootRef: rootRef, frame: th.frame, clock: clock, dateStr: dateStr, name: name,
+      ic: IC, iconAssets: ICON_ASSETS, vars: vars, rootRef: rootRef, frame: VM["--mobile-shell-frame"], clock: clock, dateStr: dateStr, name: name,
       isBoot: S.screen === "boot", isOff: S.screen === "off", isLock: S.screen === "lock", isOn: isOn, isView: isView,
       viewBg: imm.dark ? "#000000" : "var(--bg)", viewFg: imm.dark ? "#ffffff" : "var(--fg)", sbColor: sbColor, homeIndicatorColor: out.photos && out.photos.albumManager ? "var(--fg)" : sbColor,
       systemShell: P.systemShell !== false,
@@ -5649,7 +5650,7 @@ class Component extends DCLogic {
       showStatus: !P.nativeSystemChrome && S.screen !== "boot" && S.screen !== "off" && !imm.noStatus, micLive: S.voice === "listening",
       showIndicator: !P.nativeSystemChrome && (isOn || S.screen === "lock") && !(isOn && !S.view && !S.drawer && !S.shade && S.chat !== "sheet" && S.chat !== "full"),
       toast: S.toast, toastOn: !!S.toast, toastUndo: !!S.toastUndo, toastPadR: S.toastUndo ? 5 : 18, doUndo: function () { var f = self.undoFn; self.undoFn = null; self.clear("t"); self.setState({ toast: "", toastUndo: false }); if (f) f(); },
-      hasOngoing: !!ongoing && isOn, ongoing: ongoing || {}, sbWifi: S.q.wifi, sbPlane: S.q.plane, apps: assistantOnly ? [] : apps, toastBottom: imm.toastBottom || ((isOn && (S.chat === "input" || (S.chat === "hidden" && !imm.noPill))) ? 104 : 40),
+      hasOngoing: !!ongoing && isOn, ongoing: ongoing || {}, sbWifi: S.q.wifi, sbPlane: S.q.plane, toastBottom: imm.toastBottom || ((isOn && (S.chat === "input" || (S.chat === "hidden" && !imm.noPill))) ? 104 : 40),
       goCalendar: function () { self.openView("calendar", copy("shell").homeCalendar || null); },
       goTriage: function () { self.send("What needs me?"); },
       goFlows: function () { self.openView("workflows", copy("shell").homeWorkflow || null); },

@@ -150,9 +150,11 @@ test('browser navigation, tabs, private tab, reviewed reading and password manag
     await expect(page.getByRole('button', {name: 'Read locally', exact: true})).toHaveCount(0);
     expect(await page.evaluate(() => (window as any).speechCalls)).toEqual(['The ferry leaves at nine.']);
     // The host cannot see where a sandboxed page took itself, so it says so and offers no reading
-    // or question action for that unknown document. Nothing is spoken.
+    // of that unknown document: the menu offers neither Read aloud nor a page question, so no review
+    // opens and nothing is spoken.
     await expect(page.getByRole('status').filter({hasText: 'The website navigated inside'})).toBeVisible();
     await button(page, 'Menu').click();
+    await expect(button(page, 'Reload page')).toBeVisible();
     await expect(button(page, 'Read aloud')).toHaveCount(0);
     await expect(button(page, 'Ask about page')).toHaveCount(0);
     await page.keyboard.press('Escape');

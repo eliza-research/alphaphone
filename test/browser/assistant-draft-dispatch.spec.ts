@@ -91,7 +91,10 @@ test('without a connection the chooser opens and the message returns to the comp
   await expect(composer(page)).toHaveValue('Keep this unsent message');
 });
 
-test('a transport refusal before dispatch returns the text and sends nothing', async ({ page }) => {
+// The lapsed session is retired, so the composer leaves that owner's binding before the refusal
+// settles: the text stays saved, unmarked, in its own conversation's slot (never moved into the next
+// binding, which may belong to another owner or agent) and nothing is sent.
+test('a transport refusal before dispatch keeps the text in its own conversation and sends nothing', async ({ page }) => {
   test.setTimeout(90_000);
   await remoteAgent(page, 'expires');
   await page.goto('/');
@@ -105,8 +108,9 @@ test('a transport refusal before dispatch returns the text and sends nothing', a
   await composer(page).press('Enter');
   // The expired session is retired and the chooser opens; the message never left the phone.
   await expect(page.locator('.alpha-connection')).toBeVisible();
+  await expect(page.getByText('Not sent. Your message was kept as a draft in its own conversation.', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Close connection settings', exact: true }).first().click();
-  await expect(composer(page)).toHaveValue('Do not lose this');
+  await expect(composer(page)).toHaveValue('');
   expect(await savedDraft(page, key)).toBe('Do not lose this');
   expect(await page.evaluate(() => { const f = (window as any).dispatchFixture; return { posts: f.posts, created: f.created }; })).toEqual({ posts: 0, created: false });
 });

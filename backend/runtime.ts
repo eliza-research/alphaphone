@@ -6,6 +6,7 @@ import sql from '@elizaos/plugin-sql';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { parseClientTurnObservation } from '../vendor/eliza/packages/contracts/src/client-turn-observation.ts';
 
 // Forward explicit upstream privacy settings; both desktop and Android use the
 // same reviewed upstream implementation, including cancellation-safe traversal.
@@ -51,9 +52,12 @@ export async function createRuntimeBackend({head,dataDir,model='qwen-3.8-27b'}:{
   uninstallViews=installDevelopmentViews(runtime);
   if(process.env.ALPHA_RUNTIME_TEST==='1')console.log(JSON.stringify({stage:'registered-actions',actions:runtime.getAllActions().map(a=>a.name)}));
  }catch(error){await close();throw error;}
+ // The current-turn observation travels once as typed metadata (the shared
+ // client-turn-observation contract), never as an instruction wrapper around
+ // the user's text. Upstream context assembly renders it as untrusted identifiers.
  const messageFor=(text:string,context?:{view:string;revision:number;selectedObject?:{kind:string;id:string;revision?:string}})=>{
-  const metadata=context?{view:context.view,revision:context.revision,...(context.selectedObject?{selectedObject:{...context.selectedObject}}:{})}:undefined;
-  return createMessageMemory({id:randomUUID(),entityId:ids.entity,roomId:ids.room,content:{text:metadata?text+'\n[Untrusted current view metadata: '+JSON.stringify(metadata)+']':text,metadata:{viewClientId:ids.room,viewDelivery:'completed-action',...(metadata?{uiView:metadata.view}:{})},source:'client_chat',channelType:ChannelType.DM}});
+  const observation=context?parseClientTurnObservation({view:context.view,revision:context.revision,sensitive:false,...(context.selectedObject?{selectedObject:{...context.selectedObject}}:{})}):undefined;
+  return createMessageMemory({id:randomUUID(),entityId:ids.entity,roomId:ids.room,content:{text,metadata:{viewClientId:ids.room,viewDelivery:'completed-action',...(observation?{uiView:observation.view,clientDevice:{context:observation}}:{})},source:'client_chat',channelType:ChannelType.DM}});
  };
  return {
   ...createDevelopmentPreparationSession(runtime,messageFor,()=>!closed),

@@ -1,17 +1,20 @@
 import {test,expect} from '@playwright/test';
+import {realpathSync} from 'node:fs';
+// The shared page-reading module, served from the prepared client features (vite fs.allow).
+const readingModule='/@fs'+realpathSync('.eliza/client-features/plugins/plugin-native-browser-surface/src/page-reading.ts');
 // Class S for the Android product: these run the renderer's capability module and the web build's
 // menu in Chromium. They do not run the native browser, whose answer BrowserReadingNavigation
 // asserts on an emulator.
 test.beforeEach(async({page})=>{await page.addInitScript(()=>localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'})));await page.goto('/');});
-const probe=(page:any,answers:unknown[])=>page.evaluate(async(answers:unknown[])=>{
- const {createReadingSupport}=await import('/src/browser/reading-capability.ts');
+const probe=(page:any,answers:unknown[])=>page.evaluate(async([answers,readingModule]:[unknown[],string])=>{
+ const {createReadingSupport}=await import(readingModule);
  let asked=0,changed=0;const states:string[]=[];
  const support=createReadingSupport(async()=>{const answer=answers[Math.min(asked++,answers.length-1)];if(answer==='throw')throw new Error('bridge closed');return answer;},()=>{changed++;});
  states.push(support.state);
  const together=await Promise.all([support.check(),support.check()]);states.push(support.state);
  const again=await support.check();states.push(support.state);
  return {asked,changed,states,together,again};
-},answers);
+},[answers,readingModule]);
 test('an explicit native "no" is remembered as unavailable and asked for once',async({page})=>{
  expect(await probe(page,[{available:false}])).toEqual({asked:1,changed:1,states:['unknown','unavailable','unavailable'],together:['unavailable','unavailable'],again:'unavailable'});
 });
@@ -25,7 +28,7 @@ test('a failed or malformed answer is never read as unavailable or available, an
   expect((await probe(page,[malformed,malformed])).states,JSON.stringify(malformed)).toEqual(['unknown','unknown','unknown']);
 });
 test('the message names both actions, the cause and the remedy, and promises nothing else',async({page})=>{
- const message=await page.evaluate(async()=>(await import('/src/browser/reading-capability.ts')).READING_UNSUPPORTED_MESSAGE);
+ const message=await page.evaluate(async readingModule=>(await import(readingModule)).READING_UNSUPPORTED_MESSAGE,readingModule);
  expect(message).toBe('Read aloud and Ask about page are unavailable on this device: its Android System WebView cannot read a page privately. Update Android System WebView.');
 });
 test('the web build offers reading a committed page without an Android unavailable note',async({page})=>{

@@ -41,6 +41,10 @@ test('the test binds it for the click only, does not suspend it, and restores wh
   assert.match(source, /configurator\.setUiAutomationFlags\(previousFlags\)/);
   // No connection without the flag: it would suspend the stand-in for as long as it lasted.
   assert.doesNotMatch(source, /getUiAutomation\(\)/);
+  // The shared TalkBack-order reader connects with the flags the test configured, never its own.
+  const order = read('android/app/src/androidTest/java/ai/elizaresearch/alphaphone/TalkBackOrder.java');
+  assert.doesNotMatch(order, /getUiAutomation\(\)/);
+  assert.match(order, /getUiAutomation\(Configurator\.getInstance\(\)\.getUiAutomationFlags\(\)\)/);
   const step = source.slice(source.indexOf('String previousServices='), source.indexOf('// 3. A pull down'));
   assert.match(step, /secure\("put","enabled_accessibility_services"/);
   assert.match(step, /assertTrue\("The stand-in screen reader is bound/);

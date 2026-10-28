@@ -119,10 +119,14 @@ test('a capture question carries the exact open item; a library search is never 
 test('a saved capture identity is its id and a local counter, never the library revision',()=>{
  const captures=m.createCaptureRevisions();
  // Android's library revision is DATE_ADDED:SIZE, with "|generation" appended after a favorite,
- // trash or restore (AlphaPhotosPlugin.metadata). Neither the time nor the size is an identity,
- // and the wire contract refuses '|', which would fail every message sent while that item is open.
+ // trash or restore (the shared OwnedMediaLibrary.metadata Alpha's Photos plugin uses). Neither the
+ // time nor the size is an identity, and the wire contract refuses '|', which would fail every
+ // message sent while that item is open.
  const java=readFileSync('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaPhotosPlugin.java','utf8');
- assert.match(java,/item\.put\("revision",base\+\(Build\.VERSION\.SDK_INT>=30&&marker\.startsWith\(base\+"\|"\)\?"\|"\+row\.getLong\(9\):""\)\)/,'Android revision format');
+ assert.match(java,/owned=new OwnedMediaLibrary\(getContext\(\),MEDIA_CONFIG,playback::revoke\);/);
+ const library=readFileSync(new URL('../vendor/eliza/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/OwnedMediaLibrary.java',import.meta.url),'utf8').replace(/\s+/g,' ');
+ assert.match(library,/String base = row\.getLong\(3\) \+ ":" \+ row\.getLong\(4\);/,'Android revision base');
+ assert.match(library,/"revision", base \+ \(Build\.VERSION\.SDK_INT >= 30 && marker\.startsWith\(base \+ "\|"\) \? "\|" \+ row\.getLong\(9\) : ""\)\);/,'Android revision format');
  const plain={kind:'image',id:'native-camera-42',revision:'1760000000:52344',mutationRevision:'1760000000:52344:916:0'};
  const flagged={...plain,revision:'1760000000:52344|917',mutationRevision:'1760000000:52344:917:0'};
  assert.throws(()=>sanitizePhoneContext({view:'photos',revision:1,sensitive:false,selectedObject:{kind:'photo',id:flagged.id,revision:flagged.revision}}));
@@ -196,10 +200,10 @@ test('a photo another app rewrote in place is refused at send time',()=>{
  const revisions=m.createCaptureRevisions(),before=revisions({kind:'image',...reviewed}),after=revisions({kind:'image',...reviewed,contentRevision:'1700000500:2048:12'});
  assert.equal(before.id,after.id);assert.notEqual(before.revision,after.revision);
  // The native list and read report contentRevision from MediaStore DATE_MODIFIED, size and generation.
- const photos=readFileSync('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaPhotosPlugin.java','utf8');
- assert.match(photos,/item\.put\("contentRevision",contentRevision\(row\)\);/);
- assert.match(photos,/private String contentRevision\(Cursor row\)\{return row\.getLong\(row\.getColumnIndexOrThrow\(MediaStore\.MediaColumns\.DATE_MODIFIED\)\)\+":"\+row\.getLong\(4\)\+\(Build\.VERSION\.SDK_INT>=30\?":"\+row\.getLong\(9\):""\);\}/);
- assert.match(photos,/result\[result\.length-1\]=MediaStore\.MediaColumns\.DATE_MODIFIED;/);
+ const photos=readFileSync(new URL('../vendor/eliza/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/OwnedMediaLibrary.java',import.meta.url),'utf8').replace(/\s+/g,' ');
+ assert.match(photos,/item\.put\("contentRevision", contentRevision\(row\)\);/);
+ assert.match(photos,/private static String contentRevision\(Cursor row\) \{ return row\.getLong\(row\.getColumnIndexOrThrow\(MediaStore\.MediaColumns\.DATE_MODIFIED\)\) \+ ":" \+ row\.getLong\(4\) \+ \(Build\.VERSION\.SDK_INT >= 30 \? ":" \+ row\.getLong\(9\) : ""\); \}/);
+ assert.match(photos,/result\[result\.length - 1\] = MediaStore\.MediaColumns\.DATE_MODIFIED;/);
  const camera=readFileSync('apps/app/src/prototype/camera-adapter.ts','utf8');
  assert.match(camera,/const unchanged=\(row:SavedPhoto\)=>captureUnchanged\(selected,row\);/,'the send-time re-read uses the content check');
 });

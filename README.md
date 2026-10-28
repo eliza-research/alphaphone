@@ -523,7 +523,7 @@ and inherit its `product.mk` from the selected product. See [build instructions]
 for signing, default-home policy and the full image verification boundary.
 
 The opt-in always-on listener ships only in the image. Build it with `./gradlew :sense:assembleRelease`
-(in `android/`, same signing variables as the APKs, after the speech model bundle is prepared) and pass
+(in `android/` after `npm run android:host`, same signing variables as the APKs, after the speech model bundle is prepared) and pass
 it with `--listener-apk FILE`. Production staging requires it together with `--listener-descriptor FILE`, an
 independently reviewed JSON record of `packageName`, `apkSha256` and `certificateSha256`, and refuses a
 listener APK without the qualified speech bundle. `node scripts/verify-aosp-listener.mjs --serial SERIAL --user 0` is a read-only
@@ -534,6 +534,25 @@ boundary and the remaining device gates.
 
 `apps/app` owns this product's UI. `android` owns its packaging and launcher bridge.
 `vendor/eliza` pins shared platform/native/OS code. `design` preserves the supplied references. Use root npm scripts.
+
+## Android host
+
+The upstream Eliza consumer-host generator owns the Android Gradle setup: toolchain and
+wrapper, SDK levels, modules, dependency versions, the standalone/launcher flavors, debug
+and release build types, release signing and version overrides, test-mocks source sets and
+admission hooks. `android/consumer-host.json` is Alpha's only Gradle input: identity comes
+from `app.config.json`; the descriptor names modules, dependencies, the four signing and two
+version environment variables, test-only sources and installed-data compatibility names
+(resident socket namespaces, notification resources and the environment hook used when the
+upstream resident classes are staged into Alpha's package). `android/app/product.gradle`
+keeps Alpha's Gradle-time product admission (runtime profile, App Links, voice and embedding
+hosts). `npm run android:host` writes the generated, git-ignored `settings.gradle`,
+`build.gradle`, `app/build.gradle`, `gradle.properties` and wrapper into `android/`; every
+`npm run android:build` regenerates them, and a host whose inputs changed refuses to
+configure. Run it before opening `android/` in Android Studio or invoking `./gradlew` directly.
+To add a module or dependency, edit the descriptor rather than a Gradle file; a shared native
+plugin Java source compiled beside the staged resident classes is a path in
+`residentHost.helpers` (staged verbatim from the pin unless upstream reviews a rewrite for it).
 
 For affected pull requests, GitHub Actions builds both variants and uploads artifacts. Repository verification runs once per change;
 main-branch pushes repeat only that inexpensive integration check. Full resident

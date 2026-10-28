@@ -18,3 +18,9 @@ test('billing review still requires the separate account acknowledgment and does
 test('identical redemption and connection recovery warnings render once without hiding the warning',()=>{const html=render({error:'Recovery requires review',connectionError:'Recovery requires review'});assert.equal((html.match(/Recovery requires review/g)||[]).length,1);assert.equal((html.match(/role="alert"/g)||[]).length,1);});
 test('distinct redemption and global recovery errors both remain visible',()=>{const html=render({error:'Code was not accepted',connectionError:'Recovery requires review'});assert.equal((html.match(/role="alert"/g)||[]).length,2);assert.match(html,/Code was not accepted/);assert.match(html,/Recovery requires review/);});
 test('no membership error produces no error alert',()=>{assert.doesNotMatch(render({error:'',connectionError:''}),/role="alert"/);});
+test('inside the resident plan panel the plan and its allowance are shown once, by the panel',()=>{
+ const plan={kind:'active',planName:'Example plan',allowance:{unit:'requests',period:'month',limit:40,used:3,resetsAt:null}};
+ const own=render({plan,endsAt:Date.now()+86400000});assert.match(own,/Membership/);assert.match(own,/Example plan/);
+ const hosted=render({plan,endsAt:Date.now()+86400000,planShownByHost:true});
+ assert.doesNotMatch(hosted,/Membership<|Example plan|Ends /);assert.match(hosted,/Available credits/);assert.match(hosted,/Use membership code/);
+});

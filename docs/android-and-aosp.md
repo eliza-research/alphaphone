@@ -70,7 +70,9 @@ AOSP checks to accommodate a compressed APK.
 
 After the normal packaged-runtime build and APK verification have passed, build an
 unsigned **debug** launcher with the same runtime profile, version overrides and
-web assets. The init script changes only debug signing. For an explicit Cloud QA
+web assets. The init script changes only debug signing. The Gradle wrapper and build
+files are generated from `android/consumer-host.json` (`npm run android:host`; the
+packaged-runtime build has already done this). For an explicit Cloud QA
 build, run from the repository root:
 
 ```sh
@@ -139,7 +141,7 @@ privileged permission whitelist is fabricated for a thin launcher.
 ## App Links
 
 **Build gate.** A default build declares no https `autoVerify` filter. With the Gradle property
-`ELIZAOS_APP_LINK_HOST` set, `android/app/build.gradle` overlays verified filters on that host for
+`ELIZAOS_APP_LINK_HOST` set, `android/app/product.gradle` overlays verified filters on that host for
 `/alphaphone/cloud-delegation` (prefix) and `/alphaphone/auth/callback` (exact path, the in-app
 Eliza Cloud sign-in return). Steward returns sign-in only to `eliza.app`, so the sign-in return
 works with `ELIZAOS_APP_LINK_HOST=eliza.app`. Test-mocks builds always add
@@ -213,7 +215,10 @@ update and recovery gates below.
    recovery. Record image/APK/source hashes. Image signing, the OTA package and its
    version/hash compatibility record come from `scripts/sign-aosp-release.mjs` on the image
    host ([Pixel 10a staging and release signing](pixel10a-staging.md)); the one update channel
-   is `android/aosp/pixel10a-ota-channel.json`. No release key, signed image, applied OTA,
+   is `android/aosp/pixel10a-ota-channel.json`. The operator update client, interrupted-update
+   resume, slot fallback and stock-recovery checks are `scripts/aosp-ota-update.mjs`, and
+   `scripts/verify-pixel10a-image.mjs` checks a booted image; all are bindings of shared
+   Pixel 10a tooling. No release key, signed image, applied OTA,
    interrupted-update, rollback or stock-recovery drill exists yet, and
    `scripts/pilot-update.mjs` still refuses a lower APK versionCode.
 
@@ -407,7 +412,11 @@ is false by default and is overlayable only from system/product partitions.
 A runtime overlay is needed because the launcher APK is presigned/preprocessed;
 an ordinary source resource overlay cannot modify that prebuilt APK. Existing
 release, signing and reviewed descriptor gates apply before staging. Development
-staging never emits this capability overlay.
+staging never emits this capability overlay. The overlay generator and the
+default-resource check are the shared `image-capability.mjs` in
+`packages/os/scripts/android`; Alpha supplies only its installed identifiers
+(`scripts/aosp-capability-overlay.mjs`). For Pixel 10a the shared composition
+writes it from `launcher.imageProvisioning` in `products/pixel10a-alpha.json`.
 
 The capability is an OS-provisioning boundary, not remote image attestation or
 proof that an image was built and booted. A privileged image builder can control
@@ -453,7 +462,9 @@ still disable the gesture.
 All non-development staging requires `--aosp-source PATH` in addition to the
 existing distributable APK and reviewed descriptor gates. The source verifier
 checks the exact module revisions and selected file hashes in
-`docs/aosp-secure-camera-source.json`, and rejects dirty, untracked or ignored module
+the shared contract
+`vendor/eliza/packages/os/android/sources/secure-camera.json` (checked by
+`packages/os/scripts/android/secure-camera.mjs`; Alpha binds only its package), and rejects dirty, untracked or ignored module
 inputs and index flags that can hide tracked edits. Linked module roots in repo shadow workspaces are supported; files
 must remain inside each resolved module. Source revisions and byte checks are
 recorded in the staged `secure-camera/source-evidence.json`. Development

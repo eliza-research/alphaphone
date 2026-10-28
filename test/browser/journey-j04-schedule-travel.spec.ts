@@ -11,6 +11,8 @@ import {openBrowserCalendar} from './helpers/browser-calendar';
 //   The fixture logs every search and route request to a test-owned localStorage key so the
 //   exactly-once assertions survive reloads. No map tiles, geocoder or router is contacted.
 // - "Device controls -> Back" is the development stand-in for the Android system Back gesture.
+// - Events live in the development browser calendar, an explicit test-mocks Calendar source
+//   (openBrowserCalendar); Agent Calendar is not involved.
 //
 // Native-only steps (not provable here; the honest browser state is asserted where one exists):
 // - Device location as a route origin and turn-by-turn "Start": the browser build reports that

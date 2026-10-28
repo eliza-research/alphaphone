@@ -21,9 +21,20 @@
     "ignoreDeprecations": "6.0",
     "paths": {
       "@elizaos/capacitor-system/sense": ["./.eliza/client-features/plugins/plugin-native-system/src/sense-bridge.ts"],
+      "@elizaos/capacitor-system/reset": ["./.eliza/client-features/plugins/plugin-native-system/src/reset.ts"],
+      "@elizaos/capacitor-system/settings": ["./.eliza/client-features/plugins/plugin-native-system/src/settings.ts"],
       "@elizaos/contracts/device-action-execution": ["./.eliza/client-features/packages/contracts/src/device-action-execution.ts"],
       "@elizaos/capacitor-system/launcher": [
         "./.eliza/client-features/plugins/plugin-native-system/src/client/launcher.ts"
+      ],
+      "@elizaos/contracts/sms-send": [
+        "./.eliza/client-features/packages/contracts/src/sms-send.ts"
+      ],
+      "@elizaos/ui/mobile-shell": [
+        "./.eliza/client-features/packages/ui/src/mobile-shell/index.ts"
+      ],
+      "@elizaos/ui/mobile-shell/core": [
+        "./.eliza/client-features/packages/ui/src/mobile-shell/core.ts"
       ],
       "@elizaos/contracts/native-notes-query": [
         "./.eliza/client-features/packages/contracts/src/native-notes-query.ts"
@@ -39,6 +50,9 @@
       ],
       "@elizaos/ui/voice/batch-conversation": [
         "./.eliza/client-features/packages/ui/src/voice/batch-conversation.ts"
+      ],
+      "@elizaos/ui/accessibility/screen-focus": [
+        "./.eliza/client-features/packages/ui/src/accessibility/screen-focus.ts"
       ],
       "@elizaos/ui/voice/voice-chat-playback": [
         "./.eliza/client-features/packages/ui/src/voice/voice-chat-playback.ts"
@@ -58,14 +72,14 @@
       "@elizaos/core/protocol": [
         "./.eliza/client-features/alpha-voice-core-protocol.ts"
       ],
-      "@elizaos/core": [
-        "./.eliza/client-features/alpha-voice-core-types.ts"
+      "@elizaos/core/schema-types": [
+        "./.eliza/client-features/packages/core/src/schema-types.ts"
       ],
       "@elizaos/contracts": [
         "./.eliza/client-features/client-contracts.ts"
       ],
-      "@elizaos/ui": [
-        "./.eliza/client-features/alpha-client-fetch-types.ts"
+      "@elizaos/ui/api/transport": [
+        "./.eliza/client-features/packages/ui/src/api/transport.ts"
       ],
       "@elizaos/plugin-assistant/device-calendar-contract": [
         "./.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts"
@@ -80,6 +94,7 @@
   },
   "include": [
     "apps/app/src",
+    ".eliza/client-features/packages/ui/src/mobile-shell",
     "vite.config.ts",
     "capacitor.config.ts"
   ]

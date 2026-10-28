@@ -66,15 +66,18 @@ import { installListenerInvocation } from './runtime/always-on-listener';
 import {GoogleConnectionsPanel} from './runtime/google-connection-ui';
 import { installNotesTrashAdapter } from './prototype/notes-trash-adapter';
 import { installInboxCloudAdapter, inboxAttention, subscribeInboxAttention } from './prototype/inbox-cloud-adapter';
+import { installHomeOverviewCards } from './prototype/home-overview-cards';
 import { installUseInEmailReview } from './prototype/use-in-email-review';
 import { latestRetainedDigest, subscribeRetainedDigest } from './runtime/hosted-digests';
-import { installHomeLauncher } from './prototype/home-launcher';
+import { installHomeShell } from './prototype/home-shell';
+import { alphaViews } from './product/alpha-product';
 import { setLocalePreferences } from './prototype/locale-time';
 import { installTextScale } from './runtime/text-scale';
 import { installDockClearance } from './runtime/dock-clearance';
 import { canvasGeometry, isEditing, keyboardFreeHeight, publishSurfaceLayout, surfaceLayout } from './runtime/canvas-geometry';
 import { TEXT_SCALE_PROPERTY } from './runtime/text-scale';
 import { installToastLayer } from './runtime/toast-layer';
+import { installViewFocus } from './runtime/view-focus';
 import './prototype/prototype.css';
 import './prototype/phone.css';
 installGlobalErrorRecovery();
@@ -161,11 +164,13 @@ installSubviewAccessibility(VIEWS);
 installCalendarMonthFocus(Component, VIEWS);
 installChatOverlayMotion(Component);
 installSystemShade(Component,{native:isAndroid});
+// The shared agenda, mail and brief cards render the final Home values of every adapter above.
+installHomeOverviewCards(Component);
 installClockAdapter(Component, VIEWS, { simulated: testMocksEnabled && fixture, browser: !isAndroid });
-// Installed apps come from Android (or the browser device's app list); outermost so its drawer
-// state composes with every Home binding above.
-installHomeLauncher(Component, DeviceApps, { icons: isAndroid, follow: deviceAppsListens,
-  aliases: isAndroid ? undefined : Object.fromEntries(browserApps.map(app => [app.packageName, `alpha:${app.view}`])),
+// Home, app grid and All apps from the shared mobile shell. Installed apps come from Android (or
+// the browser device's app list); outermost so Home composes with every binding above.
+installHomeShell(Component, VIEWS, DeviceApps, { icons: isAndroid, follow: deviceAppsListens,
+  aliases: isAndroid ? undefined : Object.fromEntries(browserApps.flatMap(app => { const view = alphaViews.find(app.view); return view ? [[app.packageName, alphaViews.launcherKey(view)]] : []; })),
 });
 /** A browser cannot read or change radios and sensors; show that instead of fixture toggles. */
 function installBrowserCapabilityTiles(Component:any){
@@ -304,6 +309,8 @@ async function mountPhone() {
   installDockClearance();
   // A toast raised under a top-layer dialog is shown and announced inside that dialog (runtime/toast-layer.ts).
   installToastLayer();
+  // Focus dropped by a screen change or HOME lands on the new screen's title (runtime/view-focus.ts).
+  installViewFocus();
   if (testMocksEnabled && mock && isAndroid) {
     const { pauseLiveActivityForMock } = await import('./runtime/mock-admission');
     const root=document.getElementById('root')!;

@@ -84,7 +84,18 @@ is not a guarantee of atomic filesystem deletion or recovery from power loss mid
 through Android's clear operation. Installed self-clear acceptance must be observed
 externally on a disposable package/user, since the reset kills its own instrumentation.
 The separate AOSP listener uses the reset contract below; native image qualification
-remains required before shipping it.
+remains required before shipping it. The coordinator, native review, authorization and
+recovery surface are the shared `plugin-native-system` `reset` package (`DataReset`,
+`DataResetPlugin`, `DataResetRecoveryActivity`); Alpha registers only its installed names
+(`AlphaReset`, `reset-alpha` marker, `:reset_recovery` process), copy and the bounded
+Cloud key revocation before dispatch (`AlphaDataReset`). Settings and tile system facts
+(switch states, transport, battery), the allowlisted Android settings handoffs, the
+launcher's shade request and Android role wording are likewise the shared ElizaSystem
+bridge (`SystemFacts`, `SystemSettingsPages`, `SystemShade`) and
+`@elizaos/capacitor-system/settings`; Alpha keeps its row and tile labels, theme and the
+existing `AlphaDevice` method names its renderer calls. The Quick Settings assistant tile is
+the shared `AssistantEntryTile` (inactive action tile, unlock before opening); Alpha keeps
+the `AlphaQuickSettingsTile` component name, its assist entry, wording and icon.
 
 Production Notes and vault migration controls are disabled, including their native
 entry points. Damaged-data notices retain saved bytes and drafts without backup or
@@ -98,9 +109,10 @@ Gmail attachments and PDF file creation remain available.
 | Path | Responsibility |
 | --- | --- |
 | `apps/app/src` | Alpha UI, product policy and adapters to shared features |
-| `android` | Product identity, Activity, permissions, resources and standalone/HOME packaging |
+| `android` | Product identity, Activity, permissions, resources and standalone/HOME packaging. `android/consumer-host.json` is the descriptor the pinned upstream consumer-host generator turns into the git-ignored Gradle host; `android/app/product.gradle` holds Gradle-time product admission |
 | `android/sense` | Product identity wrappers for the upstream Sense listener; shared implementation and SystemUI policy live in `vendor/eliza/packages/app/platforms/android/sense` and `vendor/eliza/packages/os/android/sense` ([ADR 0001](adr/0001-privileged-listener.md)); never in the standalone or launcher APK |
 | `app.config.json` | Package ID, display name, version and orientation |
+| `config/alpha-product.json` | Versioned product record of the shared mobile shell (`@elizaos/ui/mobile-shell`, schema `elizaos.mobile-product` v1): identity, theme and stylesheet aliases, icons, view order and labels, older view ids migrated once, and installed storage names (the launcher favorites record with its `alpha:` prefix and `alpha-apps` default policy, and the other names the app keeps reading). Home, the app grid, All apps, the view registry and navigation state (open view, Back stack, drawer and the assistant's pill, composer, sheet or full detent) render from the upstream shell with this record; runtime code such as agent navigation reads the React-free `@elizaos/ui/mobile-shell/core` entry |
 | `backend` | Development runtime composition, character and permitted model/actions |
 | `vendor/eliza` | Pinned shared platform source; never modified by consumer builds |
 | `scripts` | Consumer build orchestration and product acceptance scenarios |
@@ -115,6 +127,23 @@ compiles the generated copy under `.eliza/patched-native`, never a modified subm
 No source patch is applied during client, worker or resident-runtime builds. Photo edits, capture publication, the opt-in notification mirror and the delivery-receipt
 ledger for Alpha's own workflow and approval notices (`NoticeDelivery`, configured by
 `WorkflowNoticeDelivery`) also use shared native modules. Alpha wrappers retain installed storage names, media paths and Android components.
+The workflow notice tap routes, tap capture, owner fence, approval coordination, journal recovery and poster are the
+shared `NoticeRoutes`, `NoticeTapInbox`, `NoticeOwner`, `NoticeCoordinator`, `NoticeRecovery` and `HostNoticePoster`;
+`WorkflowNoticeTaps`, `WorkflowNoticeDelivery`, `WorkflowNoticePoster` and `AlphaNotificationsPlugin` only supply the
+deployed slot names, channels, icon, tag prefix, launch actions and the foreground and question-excerpt checks. The renderer's notice owner fence, tap resolution, approval notice identity and owner-return
+revalidation are the shared `@elizaos/contracts/notice-routes`. Typed workflows use the shared
+`@elizaos/contracts/phone-workflow` normalizer, and their reviewed local-time triggers run on the resident agent's
+durable task scheduler only while the phone is on (a missed occurrence is recorded, never run late, and its
+receipt offers an explicit Run now through the workflow's reviewed run confirmation); there is no Alpha scheduler. The receipt-checked workflow route client (exact-version activation and runs, approval
+receipts, metadata, removal and restore, typed saves, and reconciliation by submission or mutation identity) is
+the shared `@elizaos/contracts/workflow-client`; `runtime/workflow-protocol.ts` only adds the phone-step review read,
+the digest result routes and the test-mocks development enrollment labels, and always supplies the local transport.
+Modules named `hosted-*` are not Cloud-only and none is dead: `hosted-digests`, `hosted-background`,
+`hosted-digest-ui`, `hosted-live-source-ui`, `hosted-notice-question` and `hosted-result-notices`, with the native
+`Hosted*` classes and `SourceRenewalNotices`, carry the resident digest schedule, its retained results, the
+content-free result and source-renewal notices and their Ask taps. The agent half is upstream
+(`plugin-workflow` `services/hosted-digest.ts`). They belong to the brief and overview path, keep their installed
+channel, tag, action and storage names, and are moved only with that path, not removed because of their names.
 Browser policy helpers are staged from the same authenticated pin. Gradle writes shared
 library outputs under the host build directory, outside the immutable vendor checkout.
 Product wrappers inject presentation, device configuration and installed storage identities. Resident
@@ -125,6 +154,18 @@ and generated hashes across host identity/resource/environment configuration; CI
 requires both recovery files and refuses resident patches. The retired patch and
 source equivalence are recorded in `patches/eliza/resident-ipc-recovery.md`.
 The vendor checkout and prepared resident runtime stay unchanged.
+
+The Android Gradle setup itself is generated: the upstream consumer-host generator
+owns toolchain, SDK levels, variants, build types, signing and version policy, test-mocks
+source sets and admission wiring, and stages the resident runtime classes into Alpha's
+package from the descriptor's installed identities (socket namespaces, notification
+resources, environment hook). Upstream build orchestration collects the four APKs.
+Alpha keeps only data and its product admission and APK verification. The APK inspection
+itself (aapt/unzip facts, dex markers, signer digests, backup/cleartext/export/test-only/
+source-map/version checks) is upstream `artifact-inspection/apk-distribution.mjs`; Alpha's
+`scripts/apk.mjs` supplies `DISTRIBUTION_POLICY` as data (exported-component allowlist,
+development hooks, removed speech runtimes) plus the Quick Settings tile and per-flavor
+permission checks.
 
 Generic behavior belongs upstream with configurable host inputs. Product names,
 package IDs, storage namespaces, view allowlists and approval policy stay here.
@@ -151,6 +192,21 @@ requires visible upload/plan disclosure and an explicit start, and remains bound
 the current account. The `native` default and its native/AOSP qualification gates
 remain unchanged. This configuration does not prove native speech or release acceptance.
 See the [profile selection notes](../README.md#explicit-cloud-qa-profile--october-18).
+
+Both profiles are declared once upstream (`packages/app/src/runtime/native-runtime-profile.ts`
+at the pin). The resident boot selects one with `ELIZA_RUNTIME_PROFILE`; the shared profile
+writes the text, embedding and agent-speech routing and selects the shared powered-on
+scheduling policy (`ELIZA_MISSED_SCHEDULED_OCCURRENCES=record`, P-10). A scheduled workflow
+or prompt-automation occurrence that passed while the agent was not running (phone off or
+resident stopped) and is reached more than 120 seconds late is recorded once as missed and
+never replayed; the workflow history labels it "Missed — not run", and a missed one-time
+prompt stays listed, disabled, for an explicit Run now. A delay while the resident was running
+(Doze, a busy scheduler) still runs the occurrence late, since Doze is a separate constraint.
+Resident digests keep their own 120-second admission. Alpha's admitted host module declares
+only its Cloud API base (`backend/native-cloud-runtime.ts`). Current-turn screen and
+selection identifiers travel only in `metadata.clientDevice.context` under the shared
+`client-turn-observation` contract; the older instruction envelope remains for unnegotiated
+development peers and for reading history stored by older builds.
 
 ## Build surfaces
 
@@ -186,47 +242,61 @@ production authentication.
 
 ### Eliza Cloud sign-in ownership (in-app, 2026-10-14)
 
+October 27: the native client below is the shared elizaOS library `packages/auth/android`
+(`ai.eliza.auth.cloud`: `CloudSignInPlugin`, `CloudSignInFlow`, `CloudEmailCode`, `CloudSmsCode`,
+`CloudSignInReadiness`, `CloudSignInRoutes`, `CloudKeyRevocation`), consumed from the pin.
+`AlphaCloudSignInPlugin` only registers Alpha: its App Auth client, callback path, deployments,
+product name, Steward app client for native Google, installed slot and preference names, the
+Keystore credential store and the resident credential-intent fence. The subscription entitlement
+client is likewise `@elizaos/cloud-sdk/subscription-entitlement`; Alpha binds only its copy.
+
 Native sign-in stays on Alpha's own screens. Email remains available when the optional Google
 readiness probe fails or times out; its native request reports any service configuration failure.
 There is no automatic Eliza Cloud website sign-in fallback.
 
-- **Readiness (`CloudSignInReadiness`, `AlphaCloudSignInPlugin.status`)**: readiness reports email and optional Google separately, checked with a few short requests and cached (6 hours when ready,
-  10 minutes when not; any error, timeout or unexpected answer is "not ready"):
+- **Readiness (`CloudSignInReadiness`, `CloudSignInPlugin.status`)**: readiness reports email, SMS and optional native Google separately, checked with a few short requests and cached (6 hours when a method is ready,
+  10 minutes when none is; any error, timeout or unexpected answer is "not ready"):
   - `GET /api/v1/app-auth/mobile/config` confirms the registration for client
-    `ai.elizaresearch.alphaphone`, this environment and the return URL;
-  - For Google only, Steward's authorize route redirects to Google for the return URL (the tenant
-    redirect allowlist admits it; nothing is followed);
-  - For Google only, `/.well-known/assetlinks.json` on the return host grants `handle_all_urls`
-    to this package and the certificate this APK is signed with;
-  - `GET /steward/auth/providers` offers email without a captcha for `email_otp`, and the email code
-    route exists (an empty-object POST is refused as invalid, not as unknown; no email is sent).
-  Google is offered on top only when Steward offers it and Android reports the return host verified
-  for this package. A refusal from Cloud during an in-app sign-in clears the cache so the next
+    `ai.elizaresearch.alphaphone`, this environment and the return URL; without it no method is ready;
+  - `GET /steward/auth/providers` offers email (or SMS) without a captcha for `email_otp` (`sms_otp`),
+    and the email code route exists (an empty-object POST is refused as invalid, not as unknown; no
+    email is sent);
+  - native Google is offered only when Steward advertises `googleNative`. It uses no browser return,
+    so readiness reads no authorize redirect, App Link state or assetlinks document.
+  A refusal from Cloud during an in-app sign-in clears the cache so the next
   attempt re-checks. The renderer waits at most 6 seconds, then offers email alone. A late result cannot
   change the already opened attempt.
-- **Native (`AlphaCloudSignInPlugin`, `CloudSignInFlow`, `CloudEmailCode`)** holds the Steward
+- **Native (`CloudSignInPlugin` registered by `AlphaCloudSignInPlugin`, `CloudSignInFlow`, `CloudEmailCode`)** holds the Steward
   session, codes and PKCE verifiers and makes every sign-in request, using fixed URLs on the Cloud API
-  origin (`ConnectionRoutes.signInRoute`; the renderer transport admits none of them):
+  origin (`CloudSignInRoutes`; the renderer transport admits none of them):
   - Email: the six-digit code endpoints of elizaOS/eliza #36260, kept in one adapter
     (`CloudEmailCode`, `config/cloud-email-code.json`): `POST /steward/auth/email/code/send`, then
     the code typed into Alpha goes to `POST /steward/auth/email/code/verify` with a PKCE verifier.
-    No magic link is requested. Five wrong codes end an attempt; one code send a minute per phone.
-    A second verification uses `/steward/auth/mfa/{totp,sms}/complete`.
-  - Google: Alpha creates a PKCE verifier and state, keeps them in memory and in an encrypted,
-    single-use, ten-minute pending record (`cloud-signin:v1:pending`, a native-only slot), and opens
-    `{api}/steward/auth/oauth/google/authorize?...&prompt=select_account` in a Custom Tab (never a
-    WebView). Steward returns to the verified App Link `https://eliza.app/alphaphone/auth/callback`.
-  - Returns follow the shared callback contract
-    (`test/fixtures/alphaphone-auth-callback-contract.json`, the same file in elizaOS/eliza):
+    No magic link is requested. Five wrong codes end an attempt; one code send per 30 seconds per
+    phone, or longer when Cloud asks.
+    A second verification uses `/steward/auth/mfa/{totp,sms}/complete`. SMS codes use the
+    tenant-bound `/steward/auth/sms/{send,verify}` (`CloudSmsCode`) under the same send cooldown.
+  - Google: Android's account picker (Credential Manager), never a browser or WebView. Native sends
+    the S256 challenge of a fresh PKCE verifier to `POST /steward/auth/oauth/google/native/challenge`
+    (tenant and the Steward app client `alpha-phone`), shows the picker with the returned nonce and
+    Google server client, and sends the ID token with the verifier to
+    `POST /steward/auth/oauth/google/native/verify`. The ID token and verifier stay native.
+  - A browser return can still complete a sign-in started by an earlier build, which kept an
+    encrypted, single-use, ten-minute pending record (`cloud-signin:v1:pending`, a native-only slot)
+    for the verified App Link `https://eliza.app/alphaphone/auth/callback`. Returns follow the shared
+    callback contract
+    (Alpha's vectors `test/fixtures/alphaphone-auth-callback-contract.json`, run through the shared
+    parser; the shared client's own synthetic vectors are elizaOS/eliza
+    `packages/auth/android/test/fixtures/app-auth-callback-contract.json`):
     success is exactly `{code,state}` in the fragment; an error is exactly `{error,state}` (error
     from a fixed allowlist) in the query or fragment; anything else on the callback, including the
     parameterless hand-off from Cloud's fallback page, carries no result. The state is compared in
     constant time before anything is burned: a mismatching return is ignored and cannot cancel a
     sign-in; the matching return burns the record before the code goes to
-    `POST /steward/auth/oauth/exchange`. A return without a result, or coming back from the browser
-    without a return, ends the waiting step with a retry message but keeps the record until it
-    expires or the owner starts again (or cancels), so a late return still completes.
-  - Both paths then run the shared tail. The Steward session goes to
+    `POST /steward/auth/oauth/exchange`. A return without a result reports a retry message but keeps
+    the record until it expires or the owner starts again (or cancels), so a late return still
+    completes.
+  - Every path then runs the shared tail. The Steward session goes to
     `POST /api/v1/app-auth/connect` (`mobile_pkce`, a second independent state and PKCE pair), then
     `POST /mobile/token`. Native writes an ack receipt and then the `eliza_mobile_` key to
     `cloud:<environment>` (AlphaCredentialStore, Keystore AES-GCM, credential-intent rule) and
@@ -284,23 +354,86 @@ capability is decided natively by `AlphaImageCapability`: the launcher build wit
 mocks, installed from a system partition (`FLAG_SYSTEM`), with the `<package>.aosp_image`
 system feature that `scripts/stage-aosp.mjs` declares in the image product. The launcher
 flavor, test mocks, URLs and saved state never establish it. Only then does `MainActivity`
-register `AlphaTelephonyPlugin` (read-only contacts through upstream `ContactsReader`, role
+register `AlphaTelephonyPlugin` (read-only contacts through the shared `ContactsCatalog`, role
 and SIM status, dialer and SMS handoffs, SMS/MMS provider reads and reviewed native sends); the
-renderer reads its presence from the injected plugin headers (`apps/app/src/runtime/aosp-image.ts`). Standalone APKs declare no contacts or
-phone-state permission. Gmail is available in both distributions through Eliza Cloud, with
+renderer reads its presence from the injected plugin headers (`apps/app/src/runtime/aosp-image.ts`,
+using the shared `detectTelephonyProfile`). Standalone APKs declare no contacts or
+phone-state permission.
+
+Since the October 27 consolidation the telephony behaviour is shared upstream and Alpha keeps
+only identity: `AlphaTelephonyPlugin` subclasses `TelephonyPlugin` (plugin-native-messages);
+`AlphaTelephony` supplies the installed journal slot, legacy plaintext journal, retired-ID
+namespace, callback actions, data scheme, extras and receiver; the renderer client is
+`@elizaos/contracts/native-telephony` and the send contract `@elizaos/contracts/sms-send`.
+The launcher declares the dialer-role components (`AlphaInCallService`, `AlphaCallActivity`,
+`AlphaDialPadActivity`, shared from plugin-native-phone; `USE_FULL_SCREEN_INTENT` lets the ringing-call
+notice open the call screen over the lock screen) and the SMS-role components
+(`AlphaSmsDeliverReceiver`, `AlphaMmsWapPushReceiver`, `AlphaMmsResultReceiver`,
+`AlphaRespondViaMessageService`, `AlphaSmsComposeActivity` and the shared `MmsFileProvider`)
+disabled. `AlphaTelephonyRoles` enables them only while `AlphaImageCapability` verifies the image,
+so Android can offer the roles nowhere else and the owner still chooses them in Android's dialog.
+As SMS role holder Alpha stores incoming SMS and MMS before notifying (one notice per conversation,
+titled with the contact name when Contacts access is granted), keeps read state (opening a conversation
+marks its shown received messages read through the shared `markThreadRead`), and every outgoing text,
+quick replies included, is a reviewed, journaled send that Alpha also writes to the provider, because
+Android writes no sent rows for the default SMS app. Telecom owns emergency routing; the
+system emergency dialer does not depend on Alpha. Gmail is available in both distributions through Eliza Cloud, with
 read access first and one incremental change grant (`apps/app/src/runtime/gmail-grants.ts`).
 
-Native reminders use the shared `plugin-native-reminders` engine and bridge.
-The Clock hand-off contract is Alpha's: `apps/app/src/runtime/clock-contract.ts` owns the
-operation and result shapes and the validation of an agent's request, and
-`ClockHandoff.java` builds the Android Clock intents from it. Upstream offers
-`clock.handoff.v1`, `clock.handoff.v2` (repeat days) and `clock.alarms.v1` (alarms owned by
-the host app) in `packages/agent/src/api/device-action-routes.ts` at the pin. Alpha
-advertises `clock.handoff.v1`, adds `clock.handoff.v2` only on Android when the agent offers
-it and the native surface reports `clockRepeatDaysVersion` of at least 1, and never
-advertises `clock.alarms.v1`, because Alpha does not own alarms (A-11). As upstream
-defines, an explicit empty repeat-days list is a one-time alarm; `clock-contract.ts`
-normalises it to an omitted `days`, so Clock never receives an empty `EXTRA_DAYS`.
+Native reminders use the shared `plugin-native-reminders` engine and bridge. The browser
+build's reminder store applies the same engine's Done and Snooze decisions through the
+shared `@elizaos/macosreminders/occurrence` module: a one-off Done completes the reminder,
+and a repeat records the finished occurrence and advances to its next civil occurrence
+in the saved zone. Alpha keeps only storage, delivery state and revisions. The device-local
+write-ahead journals for reminder creations and selected-reminder actions (cancel, complete,
+snooze, edit), their readback match, refusal retirement, reviewed outcome checks and the
+overdue, undated to-do, reopen and refusal-message decisions are `plugin-assistant`'s
+`reminder-journal.ts` (`@elizaos/plugin-assistant/device-reminder-journal`).
+`apps/app/src/runtime/reminder-creations.ts` and `reminder-deletions.ts` bind it to Alpha's
+installed slots (`reminder-creations:v1:device`, `reminder-deletions:v1:device`) and browser
+documents through `reminder-journal-store.ts`; reconciliation reads rows and receipts only.
+
+The Clock hand-off contract is shared: `plugin-assistant`'s `clock-handoff.ts` (exported
+from `device-clock-review`) owns handoff validation, the capability policy, review text and
+receipt binding, and `apps/app/src/runtime/clock-contract.ts` only binds Alpha's brand name
+and existing import names. `ClockHandoff.java` builds the Android Clock intents. Upstream
+offers `clock.handoff.v1`, `clock.handoff.v2` (repeat days) and `clock.alarms.v1` (alarms
+owned by the host app) in `packages/agent/src/api/device-action-routes.ts` at the pin. Alpha
+negotiates through the shared `clockHandoffCapabilities` policy: `clock.handoff.v1` on Android
+when the agent offers it, `clock.handoff.v2` only when the native surface also reports
+`clockRepeatDaysVersion` of at least 1, and never `clock.alarms.v1`, because Android Clock
+owns alarms (P-17, A-11). As upstream defines, an explicit empty repeat-days list is a
+one-time alarm; the shared dispatch validator omits `days`, so Clock never receives an empty
+`EXTRA_DAYS`. The upstream Eliza Android host still advertises its owned `clock.alarms.v1`
+store: `packages/app`'s `SlotClockPlugin` builds `ClockHostClient` with `AlarmMetadata`, and
+the same client built without it advertises only `clock.handoff.v1,clock.handoff.v2`. Moving
+Eliza to the shared handoff policy, and what happens to alarms already saved in `ElizaAlarms`,
+is an open owner decision; until then the two brands advertise different Clock capabilities.
+
+Device-local Notes recovery is shared too: unsaved-edit drafts and their conflict merge
+(`notes-draft.ts`), the capacity-aware vault and the owner Trash actions
+(`notes-trash-actions.ts`: write-ahead move, restore, delete forever, empty Trash and the
+confirmed deletion after a full Trash) live in `plugin-notes/src/client`, as do the
+selected-note text serializer (`note-share-text.ts`), the voice-note recording deletion
+journal, its interrupted permanent-deletion plan, renderer lease, cross-view claims and
+deletion lock (`notes-recording-deletion.ts`), the recording effects of approved, expired,
+permanent and interrupted deletions (`notes-recording-effects.ts`) and the reviewed
+recording summary proposal (`notes-recording-summary.ts`). Alpha keeps its installed slot,
+document, lock and claim names, the native recording store (`AlphaNoteAudio`), the editor
+deletion and restore flows, and presentation. The renderer
+lease must stay equal to `NotesDeletionLease.LEASE_MS` used by the Android native passes.
+The device-local Older notes collection still renders through Alpha's own Notes view; the
+shared `NotesWorkspace` serves only canonical agent notes until it gains a device-local
+client and recording ports.
+Three Notes files remain Alpha's because they bind Alpha storage and platform surfaces rather
+than Notes rules: `runtime/notes-trash.ts` (the Trash slot `notes-trash:v1:device` and browser
+document under the shared Trash policy), `runtime/browser-note-documents.ts` (the browser's
+local text import and export for `AlphaNoteDocuments`) and `runtime/deleted-note-origin.ts`
+(which committed reminder and Calendar deletion receipts retire a From note link, read from
+Alpha's deletion documents). Moving them needs a shared storage and document-picker port in
+`plugin-notes`; until then this Notes cut-over is not complete. Note-origin links point only
+at Older notes voice recordings: canonical Notes records have no Notes-to-Calendar handoff
+or origin link yet.
 
 `AlphaReminders` supplies the product's existing encrypted store, preference and
 channel names, receiver/Activity identities and intent routes. `DailyApps` keeps
@@ -326,15 +459,19 @@ pin rollback does not by itself establish APK or OS rollback compatibility.
 The AOSP telephony contract additionally requires the canonical production image admission
 (`AlphaImageCapabilities`): release launcher, system install and the product-partition RRO.
 The feature XML is an additional telephony contract marker, never an alternative admission path.
-Contacts uses the bounded AlphaContacts adapter and its native capability response; Phone and SMS
-views remain deferred. Telephony contact reads recheck permission, unlock and lifecycle state
+Contacts uses AlphaContacts, the shared AOSP-profile address book (`AddressBookPlugin` over
+`ContactsCatalog` in plugin-native-contacts) under Alpha's plugin name and image admission, and its
+native capability response. The Messages session (foreground-only provider rows, observer, read
+marking) and receipt labels are the shared `@elizaos/contracts/native-telephony-session`. The Phone view stays deferred in the renderer; on the image the dialer role surfaces are
+native (shared call screen and dial pad). Telephony contact reads recheck permission, unlock and lifecycle state
 before and after asynchronous provider reads.
 
 ### SMS/MMS on the image (#421)
 
 Text messaging has no account or OAuth grant: identity is the device's active subscriptions and
-Android roles. Only the launcher manifest declares `READ_SMS` and `SEND_SMS` (both hard-restricted,
-so an ordinary sideloaded install cannot hold them) and the non-exported `AlphaSmsSendReceiver`;
+Android roles. Only the launcher manifest declares `READ_SMS`, `SEND_SMS` and the SMS-role
+`RECEIVE_*` permissions (all hard-restricted, so an ordinary sideloaded install cannot hold them)
+and the non-exported `AlphaSmsSendReceiver`;
 the standalone manifest removes them and `scripts/apk.mjs` checks the packaged permissions per flavor.
 `AlphaTelephonyPlugin` adds, behind the same image capability and unlocked-foreground check:
 
@@ -363,9 +500,19 @@ Delivery outcome is read from the provider row the platform writes for a non-def
 (matched by address, Alpha as creator, a date after the journal entry and body hash), because an
 immutable delivery PendingIntent cannot carry the status-report PDU. Each part's report overwrites the
 one row of a multipart message, so multipart delivery stays "unknown" and only single-part messages can
-read "delivered". The Messages
-view, agent `sms_send` proposals and the `sms.send.v1` device capability stay unavailable until the
-shared contract is in the reviewed pin. JVM and renderer tests cover the journal, mapping and contract;
+read "delivered". Android writes no sent rows for the default SMS app, so while Alpha holds the SMS
+role the shared core stores each recipient's text in the provider outbox just before that recipient's
+platform call and moves it to sent or failed from its sent callbacks; delivery is not claimed for these
+rows. The journal,
+provider reads, dispatch and delivery reconciliation described here are the shared
+plugin-native-messages implementation (`SmsSendJournal`, `SmsProviderReader`, `SmsTelephony`);
+Alpha's earlier copies are deleted. MMS notifications are downloaded and stored by the shared
+`MmsWapPushReceiver`/`MmsResultReceiver` only while Alpha holds the SMS role. Outgoing group
+messages and pictures are one reviewed MMS (`sendMms`/`mmsSendResult`, the shared `mms.send.v1`
+contract): offered only while `status.mmsSend` holds (direct sends, the SMS role and the launcher's
+`MmsFileProvider`), shown again in the native dialog with recipients, SIM and picture previews,
+journaled before `sendMultimediaMessage`, stored as Alpha's own outbox row and settled from the
+carrier's M-Send.conf. MMS delivery is never claimed. JVM and renderer tests cover the journal, mapping and contract;
 grants on the image, real provider rows, carrier delivery reports and owned SMS/MMS endpoints remain
 image/device qualification for #421.
 
@@ -427,6 +574,12 @@ Sense APK receives the two reviewed privileges. Each Sense APK has its own
 speech module and packages the complete admitted libelizainference runtime;
 the main app's speech module links to its host-owned runtime. This keeps the
 separate process independent without duplicate runtime selection in either APK.
+
+Release signing, the version/hash compatibility record, the operator OTA update
+client with interrupted-update, fallback and stock-recovery tooling, the system
+Clock requirement and the read-only image checks are shared Pixel 10a tooling too.
+Alpha keeps their inputs: its release descriptor, update channel, qualification
+gates and APK release signer under `android/`.
 
 Source reuse does not transfer image, signing or device qualification. Alpha's
 runtime provenance, image capability and listener acceptance gates remain active,

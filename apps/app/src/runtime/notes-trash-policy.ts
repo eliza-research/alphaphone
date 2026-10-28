@@ -1,6 +1,7 @@
 import type {NoteRecord} from './notes-store';
 import type {NotesTarget} from './notes-contract';
-import {createNotesTrashPolicy,type NotesTrashDocument as SharedDocument,type NotesTrashEntry as SharedEntry,type NotesTrashPlan as SharedPlan} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-trash-policy.ts';
+import {createNotesTrashPolicy,NOTES_TRASH_FULL_CODE,type NotesTrashDocument as SharedDocument,type NotesTrashEntry as SharedEntry,type NotesTrashPlan as SharedPlan} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-trash-policy.ts';
+export {NOTES_TRASH_FULL_CODE,NotesTrashFull,isNotesTrashFull} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-trash-policy.ts';
 
 /** Product deletion policy: a deleted note stays restorable in Trash for exactly three days. */
 export const NOTES_TRASH_RETENTION_MS=3*24*60*60*1000;
@@ -40,30 +41,18 @@ export function notesTrashDaysLabel(entry:Pick<NotesTrashEntry,'deletedAt'>,now:
  return days===0?'Deleting permanently':days===1?'1 day left':`${days} days left`;
 }
 
-/** Record a deletion before it is committed. A newer deletion of the same note replaces an older, stale entry. */
-export function addNotesTrashEntry(doc:NotesTrashDocument,entry:NotesTrashEntry):NotesTrashDocument{
- try{return policy.add(doc,entry);}
- catch(error){if(notesTrashOverflows(doc,entry))throw new NotesTrashFull();throw error;}
-}
-/** Stable code for a definite capacity refusal of a new Trash entry. Nothing was written. */
-export const NOTES_TRASH_FULL_CODE='notes-trash-full';
-export class NotesTrashFull extends Error{
- readonly code=NOTES_TRASH_FULL_CODE;
- constructor(){super('Notes Trash is full');this.name='NotesTrashFull';}
-}
 /**
- * True only when a valid new entry is refused by the entry or byte limit. Computed from the
- * product limits, never from an error message. Limits admit additions only: reading,
- * restoring and removing entries of a document that already exceeds them is never refused.
+ * Record a deletion before it is committed. A newer deletion of the same note replaces an older,
+ * stale entry. The shared policy refuses an entry over the product limits with NotesTrashFull.
+ */
+export function addNotesTrashEntry(doc:NotesTrashDocument,entry:NotesTrashEntry):NotesTrashDocument{return policy.add(doc,entry);}
+/**
+ * True only when a valid new entry is refused by the entry or byte limit. Limits admit additions
+ * only: reading, restoring and removing entries of a document that already exceeds them is never refused.
  */
 export function notesTrashOverflows(doc:NotesTrashDocument,entry:NotesTrashEntry):boolean{
- let next:NotesTrashDocument;
- try{
-  const current=policy.validate(doc);
-  if(current.entries.some(x=>x.id===entry.id))return false;
-  next=policy.validate({version:1,entries:[entry,...current.entries.filter(x=>x.note.id!==entry.note.id)]});
- }catch{return false;}
- return next.entries.length>NOTES_TRASH_MAX_ENTRIES||new TextEncoder().encode(JSON.stringify(next)).length>NOTES_TRASH_MAX_BYTES;
+ try{policy.add(doc,entry);return false;}
+ catch(error){return (error as {code?:unknown})?.code===NOTES_TRASH_FULL_CODE;}
 }
 export function removeNotesTrashEntries(doc:NotesTrashDocument,ids:Iterable<string>):NotesTrashDocument{return policy.remove(doc,ids);}
 

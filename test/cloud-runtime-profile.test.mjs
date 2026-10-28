@@ -27,12 +27,24 @@ test('Cloud profile checks the explicitly selected prepared source even when ano
  assert.notDeepEqual(preparedRuntimeProblems(process.cwd(),missing,{runtimeProfile:'cloud'}),[]);
 });
 test('Cloud profile keeps native speech and embeddings guards as default',()=>{
- const gradle=fs.readFileSync('android/app/build.gradle','utf8');
+ const gradle=fs.readFileSync('android/app/product.gradle','utf8');
  assert.match(gradle,/ELIZA_RUNTIME_PROFILE.*native/);
  assert.match(gradle,/runtimeProfile == 'cloud'.*runtime-profile.mjs/);
  assert.match(fs.readFileSync('android/local-speech/build.gradle','utf8'),/unpackaged \|\| cloudProfile/);
- const host=fs.readFileSync('backend/native-cloud-runtime-config.ts','utf8');
- assert.match(host,/ELIZA_RUNTIME_PROFILE==='cloud'\?\{embeddings:/);
+ // Routing belongs to the shared upstream profile; Alpha declares only its deployment.
+ const declaration=fs.readFileSync('backend/native-cloud-runtime.ts','utf8');
+ assert.doesNotMatch(declaration,/serviceRouting|updateRoutingPreferences|ELIZA_RUNTIME_PROFILE/);
+ assert.match(fs.readFileSync('backend/native-google-agent-host.ts','utf8'),/export \{nativeCloudRuntime\} from '\.\/native-cloud-runtime\.ts'/);
+ const profile=fs.readFileSync('vendor/eliza/packages/app/src/runtime/native-runtime-profile.ts','utf8');
+ assert.match(profile,/cloud: Object\.freeze\(\{[^}]*embeddings: "elizacloud"[^}]*localModels: false/s);
+ assert.match(profile,/native: Object\.freeze\(\{[^}]*embeddings: "local"[^}]*localModels: true/s);
+});
+test('every resident launch selects a profile, so powered-on scheduling applies signed in or not',()=>{
+ const plugin=fs.readFileSync('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaLocalAgentPlugin.java','utf8');
+ assert.match(plugin,/static void configureEnvironment\(Context context,java\.util\.Map<String,String> env\) throws java\.io\.IOException \{\s*env\.put\("ELIZA_RUNTIME_PROFILE",BuildConfig\.ELIZA_RUNTIME_PROFILE\);/);
+ const profile=fs.readFileSync('vendor/eliza/packages/app/src/runtime/native-runtime-profile.ts','utf8');
+ assert.equal((profile.match(/missedOccurrences: "record",/g)||[]).length,2);
+ assert.match(fs.readFileSync('vendor/eliza/packages/app/src/mobile-agent-entry.ts','utf8'),/applyNativeRuntimeProfileEnvironment\(process\.env\)/);
 });
 
 // Exercise the real admission path with an authenticated tiny source tree. The

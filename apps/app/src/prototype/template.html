@@ -17,78 +17,30 @@
 <sc-if value="{{isOn}}">
 <sc-if value="{{showAppBack}}"><button data-alpha-app-back-fallback aria-label="Back to apps" onClick="{{backToApps}}" style="position:absolute;top:0;left:12px;z-index:44;min-height:44px;display:flex;align-items:center;gap:6px;padding:0 8px;color:var(--fg);font-size:14px"><svg class="i" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="{{ic.back}}"></path></svg>Apps</button></sc-if>
 
-<div data-alpha-layer="home" onFocusCapture="{{focusAppContent}}" role="region" aria-label="Home" aria-hidden="{{homeHidden}}" inert="{{homeHidden}}" style="position: absolute; inset: 44px 0 0; z-index: 10; box-sizing: border-box; overflow-y:auto; overflow-x:hidden; scroll-padding-bottom:110px">
-<div data-alpha-home-layout style="min-height:100%;display:flex;flex-direction:column;padding:20px 0 108px;box-sizing:border-box">
+<!-- Home, its app grid and All apps come from the shared mobile shell (prototype/home-shell.ts,
+     @elizaos/ui/mobile-shell); this template fills its notice and card slots. -->
+<sc-element value="{{homeShell}}">
+<sc-slot name="header">
 <sc-if value="{{storageAccessWarning}}"><p role="alert" class="storage-access-warning">{{storageAccessWarning}}</p></sc-if>
   <!-- Launcher Home only (docs/gesture-zones.md, #416, #417): Android's shade is the one
        notification and quick-settings surface. This visible control asks Android to open it, as
        a pull down on empty Home does; the top-edge swipe stays Android's. Alpha draws no shade. -->
   <sc-if value="{{showShadeButton}}"><div class="alpha-shade-row"><button class="alpha-shade-handle" data-alpha-shade-handle aria-label="Open notifications" aria-description="Opens Android's notifications and quick settings" onClick="{{openSystemShade}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.bell}}"></path></svg><span>Notifications</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.down}}"></path></svg></button></div></sc-if>
-  <div class="scr" style="display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 0 24px; scroll-padding-left: 24px; touch-action: pan-x; flex-shrink: 0">
-    <button class="home-calendar-card" data-alpha-home-calendar data-alpha-home-calendar-event="{{homeCalendarHasEvent}}" data-alpha-home-calendar-meta="{{homeCalendarHasMeta}}" data-alpha-home-calendar-overdue="{{homeCalendarOverdue}}" data-alpha-home-calendar-next="{{homeCalendarHasNext}}" onClick="{{goCalendar}}" aria-label="{{homeCalendarLabel}}" aria-description="{{homeCalendarDescription}}" style="flex-shrink: 0; scroll-snap-align: start; border-radius: 30px; background: var(--acc); color: #ffffff; padding: 22px; box-sizing: border-box">
-      <div class="home-calendar-head">
-        <span class="home-calendar-time">{{homeCalendarTime}}</span>
-        <span class="home-calendar-origin" data-alpha-home-calendar-origin>{{homeCalendarOrigin}}</span>
-        <span aria-hidden="true" style="display:block;flex-shrink:0;width:24px;height:24px;background:#ffffff;mask:url('/icons/lucide/calendar.svg') center/contain no-repeat;-webkit-mask:url('/icons/lucide/calendar.svg') center/contain no-repeat"></span>
-      </div>
-      <sc-if value="{{homeCalendarVideo}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="{{ic.video}}"></path></svg></sc-if>
-      <div class="serif home-calendar-title">{{homeCalendarTitle}}</div>
-      <sc-if value="{{homeCalendarHasMeta}}"><span class="home-calendar-meta"><sc-if value="{{homeCalendarHasEvent}}"><span class="home-calendar-footer">{{homeCalendarFooter}}</span></sc-if><sc-if value="{{homeCalendarSource}}"><span class="home-calendar-source" data-alpha-home-calendar-source>{{homeCalendarSource}}</span></sc-if></span></sc-if>
-      <sc-if value="{{homeCalendarHasNext}}"><span class="home-calendar-meta home-calendar-next" data-alpha-home-calendar-next-line><span class="home-calendar-next-text">{{homeCalendarNext}}</span><sc-if value="{{homeCalendarNextSource}}"><span class="home-calendar-source" data-alpha-home-calendar-next-source>{{homeCalendarNextSource}}</span></sc-if></span></sc-if>
-    </button>
+</sc-slot>
+<sc-slot name="cards">
+    {{homeAgendaCard}}
     <button data-alpha-home-workflows onClick="{{goFlows}}" aria-label="{{homeWorkflowLabel}}" aria-description="{{homeWorkflowDescription}}" class="home-card" style="flex-shrink: 0; scroll-snap-align: start; width: max-content; min-width: 172px; max-width: calc(100% - 48px); border-radius: 30px; background: var(--s2); padding: 22px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between">
       <div style="display:flex;justify-content:flex-end;width:100%"><span aria-hidden="true" style="display:block;flex-shrink:0;width:24px;height:24px;background:var(--acct);mask:url('/icons/lucide/workflow.svg') center/contain no-repeat;-webkit-mask:url('/icons/lucide/workflow.svg') center/contain no-repeat"></span></div>
       <sc-if value="{{homeWorkflowHasRows}}"><div style="display:flex;flex-direction:column;gap:10px;max-width:260px;min-width:0;text-align:left"><sc-for list="{{homeWorkflowRows}}" as="flow"><div style="min-width:0"><div style="font-size:18px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{flow.name}}</div><div style="font-size:12px;line-height:1.4;color:var(--mut)">{{flow.status}}</div></div></sc-for></div></sc-if>
       <sc-if value="{{homeWorkflowTitle}}"><span class="serif" style="font-size:26px;line-height:1.1;min-width:0;max-width:260px;text-align:left;overflow-wrap:anywhere">{{homeWorkflowTitle}}</span></sc-if>
       <span style="display:flex;flex-direction:column;align-items:flex-start;min-width:0;font-size:12px;line-height:1.4;color:var(--mut);text-align:left"><span>{{homeWorkflowTime}}</span><sc-if value="{{homeWorkflowFreshness}}"><span data-alpha-home-workflow-freshness>{{homeWorkflowFreshness}}</span></sc-if></span>
     </button>
-    <button data-alpha-home-inbox onClick="{{goTriage}}" aria-label="{{homeAttentionLabel}}" aria-description="{{homeInboxDescription}}" class="home-card" style="flex-shrink: 0; scroll-snap-align: start; width: max-content; min-width:172px; max-width:calc(100% - 48px); border-radius: 30px; background: var(--s2); padding: 22px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between">
-      <div style="display:flex;justify-content:space-between;align-items:center;width:100%"><span style="font-size:14px;font-weight:600;text-align:left">{{homeInboxCount}}</span><span aria-hidden="true" style="display:block;flex-shrink:0;width:24px;height:24px;background:var(--acct);mask:url('/icons/lucide/inbox.svg') center/contain no-repeat;-webkit-mask:url('/icons/lucide/inbox.svg') center/contain no-repeat"></span></div>
-      <sc-if value="{{homeInboxHasRows}}"><div data-alpha-home-inbox-subjects style="display:flex;flex-direction:column;gap:10px;max-width:260px;min-width:0;text-align:left"><sc-for list="{{homeInboxRows}}" as="mail"><div style="min-width:0"><div style="font-size:18px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{mail.subject}}</div><div style="font-size:12px;line-height:1.4;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{mail.from}}</div></div></sc-for></div></sc-if>
-      <sc-if value="{{homeInboxTitle}}"><span class="serif" style="font-size:26px;line-height:1.1;min-width:0;max-width:260px;text-align:left;overflow-wrap:anywhere">{{homeInboxTitle}}</span></sc-if>
-      <span style="font-size:12px;line-height:1.4;min-height:17px;color:var(--mut);text-align:left">{{homeInboxStatus}}</span>
-      <sc-if value="{{homeAttentionPeople.length}}"><div style="display: flex; gap: 2px; visibility: {{homePeopleVisibility}}">
-        <sc-for list="{{homeAttentionPeople}}" as="person">
-          <span style="width: 28px; height: 28px; border-radius: 14px; background: var(--s3); font-size: 9.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px var(--s2); white-space: nowrap">{{person.ini}}</span>
-        </sc-for>
-      </div></sc-if>
-    </button>
-    <sc-if value="{{homeBriefHas}}"><button class="home-brief-card" data-alpha-home-brief data-alpha-home-brief-failed="{{homeBriefFailed}}" onClick="{{goBrief}}" aria-label="{{homeBriefLabel}}" aria-haspopup="dialog">
-      <div class="home-brief-head"><span>Latest brief</span><span aria-hidden="true" style="display:block;flex-shrink:0;width:24px;height:24px;background:var(--acct);mask:url('/icons/lucide/sparkles.svg') center/contain no-repeat;-webkit-mask:url('/icons/lucide/sparkles.svg') center/contain no-repeat"></span></div>
-      <span class="home-brief-title">{{homeBriefTitle}}</span>
-      <span class="home-brief-status">{{homeBriefStatus}}</span>
-    </button></sc-if>
-    <div style="flex-shrink: 0; width: 12px"></div>
-  </div>
-
-  <div style="flex-grow: 1; min-height: 28px"></div>
-
-  <div class="alpha-fit-grid" data-alpha-home-apps style="--fit-columns: 4; --fit-min: 62px; row-gap: 24px; padding: 0 16px">
-    <sc-for list="{{apps}}" as="a">
-      <button onClick="{{a.open}}" aria-label="{{a.label}}" style="display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0">
-        <span class="tap" style="position: relative; width: 64px; height: 64px; border-radius: 22px; background: var(--s2); display: flex; align-items: center; justify-content: center">
-          <sc-if value="{{a.hasIcon}}"><img alt="" src="{{a.icon}}" style="width: 44px; height: 44px; border-radius: 14px"></sc-if>
-          <sc-if value="{{a.noIcon}}"><svg class="i" viewBox="0 0 24 24" style="width: 30px; height: 30px"><path d="{{a.d}}"></path></svg></sc-if>
-          <sc-if value="{{a.badge}}"><span class="app-badge" style="position: absolute; top: 12px; right: 12px; width: 8px; height: 8px; border-radius: 4px; background: var(--acc)"></span></sc-if>
-        </span>
-        <span style="font-size: 12px; color: var(--mut); max-width: 100%; text-align: center; overflow-wrap: anywhere">{{a.label}}</span>
-      </button>
-    </sc-for>
-    <sc-if value="{{launcher}}">
-      <button onClick="{{launcher.open}}" aria-label="All apps" aria-haspopup="dialog" style="display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0">
-        <span class="tap" style="width: 64px; height: 64px; border-radius: 22px; background: var(--s2); display: flex; align-items: center; justify-content: center">
-          <svg class="i" viewBox="0 0 24 24" style="width: 30px; height: 30px"><path d="{{ic.grid}}"></path></svg>
-        </span>
-        <span style="font-size: 12px; color: var(--mut); max-width: 100%; text-align: center; overflow-wrap: anywhere">All apps</span>
-      </button>
-    </sc-if>
-  </div>
-
-  <div style="flex-grow: 1; min-height: 16px"></div>
-</div>
-<div data-alpha-home-clearance aria-hidden="true"></div>
-</div>
-<sc-if value="{{drawerOpen}}">{{installedAppsLauncher}}</sc-if>
+    {{homeAttentionCard}}
+    <!-- Each card placeholder stays alone in its text node, so it renders as the shared card element. -->
+    {{homeBriefCard}}
+</sc-slot>
+</sc-element>
+<sc-if value="{{drawerOpen}}">{{allAppsDrawer}}</sc-if>
 </sc-if>
 
 
@@ -373,16 +325,17 @@
 <sc-if value="{{is.messages}}">
 <sc-if value="{{messages.nativeManaged}}">
  <div class="scr" style="height:100%;overflow-y:auto;padding:56px 20px 120px;box-sizing:border-box">
-  <h1>Text messages</h1><p>SMS and MMS text can be read here. MMS sending and attachments use your existing messaging app, which remains the default.</p>
+  <h1>Text messages</h1><p>SMS and MMS text can be read here. Group messages and pictures are sent as one reviewed MMS; MMS attachments you receive open in your messaging app.</p>
   <p role="status">{{messages.nativeStatus}}</p>
   <button onClick="{{messages.nativeRead}}" style="min-height:44px">SMS read access</button>
   <button onClick="{{messages.nativeSendAccess}}" style="min-height:44px">SMS send access</button>
   <button onClick="{{messages.nativeSimAccess}}" style="min-height:44px">SIM access</button>
   <button onClick="{{messages.nativeRefresh}}" disabled="{{messages.nativeBusy}}" style="min-height:44px">Refresh</button>
   <h2>Compose SMS</h2>
-  <label>Phone numbers, separated by commas<input disabled="{{messages.nativeBusy}}" aria-label="SMS recipients" value="{{messages.nativeRecipients}}" onChange="{{messages.nativeOnRecipients}}" style="width:100%;min-height:44px;box-sizing:border-box" maxlength="110"></label>
+  <label>Phone numbers, separated by commas<input disabled="{{messages.nativeBusy}}" aria-label="SMS recipients" value="{{messages.nativeRecipients}}" onChange="{{messages.nativeOnRecipients}}" style="width:100%;min-height:44px;box-sizing:border-box" maxlength="230"></label>
   <label>Message<textarea disabled="{{messages.nativeBusy}}" aria-label="SMS text" value="{{messages.nativeBody}}" onChange="{{messages.nativeOnBody}}" style="width:100%;min-height:96px;box-sizing:border-box" maxlength="1600"></textarea></label>
   <p>{{messages.nativeSim}}</p><sc-for list="{{messages.nativeSims}}" as="sim"><button disabled="{{messages.nativeBusy}}" onClick="{{sim.pick}}" style="min-height:44px">{{sim.label}}</button></sc-for>
+  <sc-if value="{{messages.nativeMmsAvailable}}"><button onClick="{{messages.nativeAttach}}" disabled="{{messages.nativeBusy}}" style="min-height:44px">Add pictures</button><sc-for list="{{messages.nativeAttachments}}" as="picture"><button aria-label="Remove {{picture.label}}" disabled="{{messages.nativeBusy}}" onClick="{{picture.remove}}" style="min-height:44px">{{picture.label}} ✕</button></sc-for><button onClick="{{messages.nativeSendMms}}" disabled="{{messages.nativeBusy}}" style="min-height:44px">Review MMS (group or pictures)</button></sc-if>
   <button onClick="{{messages.nativeSend}}" disabled="{{messages.nativeBusy}}" style="min-height:44px">Review SMS</button><button disabled="{{messages.nativeBusy}}" onClick="{{messages.nativeClear}}" style="min-height:44px">Clear draft</button>
   <button onClick="{{messages.nativeHandoff}}" disabled="{{messages.nativeBusy}}" style="min-height:44px">Review in messaging app (choose SIM there)</button><p role="status">{{messages.nativeNotice}}</p>
   <h2>Recent Alpha send records</h2><sc-for list="{{messages.nativeReceipts}}" as="receipt"><p>{{receipt.label}}</p></sc-for>
@@ -836,6 +789,8 @@
   <sc-if value="{{calendar.reminderRecovery}}"><button aria-label="Recover browser reminder creation history" onClick="{{calendar.openReminderCreationRecovery}}" style="margin:0 16px 8px;padding:12px;border-radius:12px;background:var(--s2);color:var(--fg)">Reminder creation recovery</button></sc-if>
   <sc-if value="{{calendar.reminderRecovery}}"><button aria-label="Recover browser reminder action history" onClick="{{calendar.openReminderActionRecovery}}" style="margin:0 16px 8px;padding:12px;border-radius:12px;background:var(--s2);color:var(--fg)">Reminder action recovery</button></sc-if>
   <sc-if value="{{calendar.creationRecovery}}"><div role="status" style="margin: 0 16px 8px; padding: 12px; border-radius: 12px; background: var(--s2); font-size: 13px"><p>{{calendar.creationRecoveryText}}</p><button onClick="{{calendar.checkCreations}}" style="padding: 8px">Check event creation receipts</button><button onClick="{{calendar.separateCreation}}" style="padding: 8px">Create a separate event</button></div></sc-if>
+  <sc-if value="{{calendar.calendarAuthorityChoices}}"><details style="margin:8px 24px"><summary style="min-height:44px;align-content:center;cursor:pointer">Calendar sources</summary><p role="status">{{calendar.calendarSourceLabel}}</p><p>{{calendar.calendarSourceText}}</p><sc-for list="{{calendar.calendarAuthorityChoices}}" as="choice"><button onClick="{{choice.go}}" style="display:block;min-height:44px;padding:10px;text-align:left">{{choice.label}}</button></sc-for></details></sc-if>
+  <sc-if value="{{calendar.canConfirmCalendarTransition}}"><button onClick="{{calendar.confirmCalendarTransition}}" style="margin:8px 24px;padding:12px;border-radius:16px;background:var(--s2)">Keep saved app records read only and use Agent Calendar</button></sc-if>
   <sc-if value="{{calendar.nativeStatusLabel}}"><button aria-label="Retry calendar and reminders" onClick="{{calendar.nativeStatusRetry}}" style="margin: 0 16px 8px; padding: 10px 12px; border-radius: 12px; background: var(--s2); color: var(--fg); text-align: left; font-size: 13px">{{calendar.nativeStatusLabel}}</button></sc-if>
   <sc-if value="{{calendar.googleCalendarNotice}}"><p role="status" style="margin:0;padding:4px 24px 8px;font-size:13px;color:var(--mut)">{{calendar.googleCalendarNotice}}</p></sc-if>
   <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); padding: 4px 12px 8px; flex-shrink: 0">
@@ -1227,7 +1182,8 @@
     </sc-if>
   </div>
 
-  <div style="flex-grow: 1; min-height: 0; position: relative; display: flex; flex-direction: column">
+  <!-- While the address is edited its suggestions cover the page: the page leaves TalkBack and Tab order (AP-15). -->
+  <div inert="{{browser.pageCovered}}" aria-hidden="{{browser.pageCovered}}" style="flex-grow: 1; min-height: 0; position: relative; display: flex; flex-direction: column">
   <sc-if value="{{browser.agOn}}">
     <div class="drop" style="flex-shrink: 0; margin: 2px 12px 8px; display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 18px; border-radius: 26px; background: var(--acc); color: #fff">
       <span class="dot" style="width: 8px; height: 8px; border-radius: 4px; background: #fff; flex-shrink: 0"></span>
@@ -2034,6 +1990,72 @@
 <sc-if value="{{is.maps}}">
 <div data-alpha-maps-root ref="{{maps.rootRef}}" style="display: flex; flex-direction: column; height: 100%; position: relative; overflow: hidden">
   
+  <!-- Reading order (TalkBack, keyboard; AP-15): what is drawn over the top of the map is read first,
+       then the map, its credits and controls, then the sheets. Stacking comes from each layer's z-index. -->
+  <sc-if value="{{maps.showSearch}}">
+    <div data-alpha-app-header="main" data-alpha-app-header-overlay style="position: absolute; left: 12px; right: 12px; top: 52px; height: 54px; border-radius: 27px; background: var(--bg); box-shadow: 0 6px 22px var(--shc), 0 0 0 1px var(--line); display: flex; align-items: center; padding: 0 5px; z-index: 3">
+    <sc-if value="{{showAppBack}}"><button class="app-header-back" aria-label="Back to apps" onClick="{{backToApps}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.back}}"></path></svg></button></sc-if>
+      <button class="ib" aria-label="{{maps.searchLabel}}" onClick="{{maps.searchLead}}"><svg class="i" viewBox="0 0 24 24"><path d="{{maps.searchIcon}}"></path></svg></button>
+      <input aria-label="Search places" placeholder="Search" value="{{maps.q}}" onChange="{{maps.onQ}}" onClick="{{maps.focusQ}}" onKeyDown="{{maps.qKey}}" style="flex-grow: 1; min-width: 0; height: 44px; border: 0; outline: 0; background: transparent; color: var(--fg); font-size: 16px; padding: 0 4px">
+      <sc-if value="{{maps.hasQ}}">
+        <button class="ib" aria-label="Clear search" onClick="{{maps.clearQ}}"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px"><path d="{{ic.x}}"></path></svg></button>
+      </sc-if>
+    </div>
+  </sc-if>
+  <sc-if value="{{maps.eventReturnFloating}}"><button data-alpha-maps-event-return aria-label="Back to event" title="{{maps.backToEventTitle}}" onClick="{{maps.backToEvent}}" style="position: absolute; left: 12px; top: 114px; z-index: 5; background: var(--bg); color: var(--fg); box-shadow: 0 6px 22px var(--shc), 0 0 0 1px var(--line); height: 40px; padding: 0 14px 0 8px; border-radius: 20px; display: flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 600"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px; flex-shrink: 0"><path d="{{ic.back}}"></path></svg>Back to event</button></sc-if>
+  <sc-if value="{{maps.isBase}}">
+    <div class="scr" style="position: absolute; left: 0; right: 0; top: 116px; display: flex; gap: 8px; overflow-x: auto; padding: 0 12px 10px; touch-action: pan-x; z-index: 3">
+      <sc-for list="{{maps.chips}}" as="c">
+        <button class="tap" onClick="{{c.go}}" style="flex-shrink: 0; height: 40px; padding: 0 16px 0 12px; border-radius: 20px; background: var(--bg); box-shadow: 0 4px 14px var(--shc), 0 0 0 1px var(--line); display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px"><path d="{{c.d}}"></path></svg>{{c.label}}</button>
+      </sc-for>
+    </div>
+  </sc-if>
+  <sc-if value="{{maps.nativeStatusVisible}}">
+    <div data-alpha-maps-status data-location-state="{{maps.nativeLocationState}}" data-map-state="{{maps.nativeMapState}}" style="position: absolute; left: 20px; right: 20px; top: {{maps.nativeStatusTop}}px; max-height:calc(100% - {{maps.nativeStatusTop}}px - 110px); overflow-y:auto; box-sizing:border-box; z-index: 2; padding: 16px; border-radius: 22px; background: var(--bg); color: var(--mut); font-size: 14px; line-height: 1.45; box-shadow: 0 0 0 1px var(--line)">
+      <p role="status" style="margin:0">{{maps.nativeStatus}}</p>
+      <sc-if value="{{maps.nativeMapsHandoff}}"><button class="tap" data-alpha-maps-app-handoff aria-label="Open in maps app" onClick="{{maps.openInMapsApp}}" style="min-height:52px;margin-top:8px;padding:0 16px;border-radius:26px;background:var(--acc);color:#fff;font:inherit">Open in maps app</button></sc-if>
+      <sc-if value="{{maps.nativeStatusControls}}"><sc-if value="{{maps.nativeMapStatus}}"><p style="margin:6px 0">{{maps.nativeMapStatus}}</p></sc-if><p style="margin:6px 0">{{maps.nativeLocationHelp}}</p><div style="display:flex;flex-wrap:wrap;gap:8px">
+        <button class="tap" aria-label="{{maps.nativeLocationLabel}}" disabled="{{maps.nativeLocationBusy}}" onClick="{{maps.nativeLocation}}" style="min-height:52px;padding:0 16px;border-radius:26px;background:var(--acc);color:#fff;font:inherit">{{maps.nativeLocationLabel}}</button>
+        <sc-if value="{{maps.nativeLocationDenied}}"><button class="tap" aria-label="Location settings" onClick="{{maps.nativeLocationSettings}}" style="min-height:52px;padding:0 12px;border-radius:26px;background:var(--s2);color:var(--fg);font:inherit">Location settings</button></sc-if>
+        <sc-if value="{{maps.nativeMapRetry}}"><button class="tap" aria-label="Retry map" onClick="{{maps.retryNativeMap}}" style="min-height:52px;padding:0 12px;border-radius:26px;background:var(--s2);color:var(--fg);font:inherit">Retry map</button></sc-if>
+      </div></sc-if>
+    </div>
+  </sc-if>
+  <sc-if value="{{maps.isDir}}">
+    <div class="drop" data-alpha-maps-directions style="position: absolute; left: 12px; right: 12px; top: 52px; border-radius: 26px; background: var(--bg); box-shadow: 0 6px 22px var(--shc), 0 0 0 1px var(--line); padding: 6px 12px 12px 4px; z-index: 3">
+      <div style="display: flex; align-items: center; gap: 4px">
+        <button class="ib" aria-label="Back to place" onClick="{{maps.dr.close}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.back}}"></path></svg></button>
+        <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+          <sc-if value="{{maps.native}}"><input aria-label="Route origin coordinates" placeholder="Origin latitude, longitude" value="{{maps.originText}}" onChange="{{maps.onOrigin}}" onKeyDown="{{maps.originKey}}" style="height:32px;border:0;background:transparent;color:var(--fg);font-size:15px;width:100%"><button aria-label="Use current location for route" onClick="{{maps.originLocation}}" style="font-size:12px;text-align:left;color:var(--acct)">Use current location for route</button></sc-if>
+          <sc-if value="{{maps.notNative}}"><div style="display: flex; align-items: center; gap: 12px; height: 32px; font-size: 15px; color: var(--mut)"><span style="width: 10px; height: 10px; border-radius: 5px; background: var(--acc); box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--acc); margin: 0 4px; flex-shrink: 0"></span>Your location</div></sc-if>
+          <div style="display: flex; align-items: center; gap: 12px; height: 32px; font-size: 15px; font-weight: 600"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px; color: var(--acct)"><path d="{{ic.pin}}"></path></svg>{{maps.dr.name}}</div>
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0 8px">
+        <sc-for list="{{maps.dr.modes}}" as="md">
+          <button aria-label="{{md.label}}" aria-pressed="{{md.on}}" onClick="{{md.go}}" style="flex: 1 1 0; min-width: max-content; padding: 0 8px; box-sizing: border-box; min-height: 40px; border-radius: 20px; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 13px; font-weight: 600; white-space: nowrap; {{md.css}}"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px"><path d="{{md.d}}"></path></svg>{{md.t}}</button>
+        </sc-for>
+      </div>
+      <sc-if value="{{maps.eventReturnInline}}"><button data-alpha-maps-event-return aria-label="Back to event" title="{{maps.backToEventTitle}}" onClick="{{maps.backToEvent}}" style="margin: 8px 0 0 8px; background: var(--s2); color: var(--fg); height: 40px; padding: 0 14px 0 8px; border-radius: 20px; display: flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 600"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px; flex-shrink: 0"><path d="{{ic.back}}"></path></svg>Back to event</button></sc-if>
+    </div>
+  </sc-if>
+  <sc-if value="{{maps.isNav}}">
+    <div class="drop" style="position: absolute; left: 12px; right: 12px; top: 50px; border-radius: 28px; background: var(--acc); color: #ffffff; padding: 18px 20px; display: flex; align-items: center; gap: 16px; z-index: 5; box-shadow: 0 10px 30px rgba(0,0,0,.5)">
+      <sc-if value="{{maps.dr.nav.going}}">
+        <svg class="i" viewBox="0 0 24 24" style="width: 52px; height: 52px; "><path d="{{maps.dr.nav.icon}}"></path></svg>
+      </sc-if>
+      <sc-if value="{{maps.dr.nav.arrived}}">
+        <svg class="i" viewBox="0 0 24 24" style="width: 52px; height: 52px; "><path d="{{ic.check}}"></path></svg>
+      </sc-if>
+      <div style="min-width: 0">
+        <div class="serif" style="font-size: 40px; line-height: 1">{{maps.dr.nav.dist}}</div>
+        <div style="font-size: 19px; font-weight: 600; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{maps.dr.nav.street}}</div>
+      </div>
+    </div>
+    <sc-if value="{{maps.dr.nav.hasThen}}">
+      <div style="position: absolute; left: 28px; top: 158px; height: 40px; padding: 0 14px; border-radius: 0 0 16px 16px; background: #0000B8; color: #ffffff; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; z-index: 4">Then<svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="{{maps.dr.nav.thenD}}"></path></svg><sc-if value="{{maps.dr.nav.thenText}}"><span style="max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{maps.dr.nav.thenText}}</span></sc-if></div>
+    </sc-if>
+  </sc-if>
   <sc-if value="{{maps.hasNativeMap}}"><div ref="{{maps.mapRef}}" data-alpha-map-plane aria-label="{{maps.mapLabel}}" style="position:absolute;inset:0;z-index:1"></div>
     <div class="alpha-map-credits" style="bottom:{{maps.attributionBottom}}px">
       <sc-if value="{{maps.globalBasemap}}">
@@ -2046,6 +2068,7 @@
           <sc-if value="{{maps.nativePositionDetails}}"><p>{{maps.nativePositionDetails}}</p></sc-if>
           <button class="tap" onClick="{{maps.nativeManualLocation}}">Enter coordinates</button>
           <sc-if value="{{maps.globalBasemap}}"><p>OpenFreeMap receives your IP address and viewed map area. Location is used only when you request it.</p></sc-if>
+          <sc-if value="{{maps.searchDisclosure}}"><p data-maps-disclosure>{{maps.searchDisclosure}}</p></sc-if>
         </div>
       </details>
     </div>
@@ -2080,35 +2103,6 @@
   <div style="position: absolute; left: 0; right: 0; top: 0; height: 58px; background: linear-gradient({{maps.C.land}}, rgba(0,0,0,0)); pointer-events: none"></div>
 
   
-  <sc-if value="{{maps.nativeStatusVisible}}">
-    <div data-alpha-maps-status data-location-state="{{maps.nativeLocationState}}" data-map-state="{{maps.nativeMapState}}" style="position: absolute; left: 20px; right: 20px; top: {{maps.nativeStatusTop}}px; max-height:calc(100% - {{maps.nativeStatusTop}}px - 110px); overflow-y:auto; box-sizing:border-box; z-index: 2; padding: 16px; border-radius: 22px; background: var(--bg); color: var(--mut); font-size: 14px; line-height: 1.45; box-shadow: 0 0 0 1px var(--line)">
-      <p role="status" style="margin:0">{{maps.nativeStatus}}</p>
-      <sc-if value="{{maps.nativeMapsHandoff}}"><button class="tap" data-alpha-maps-app-handoff aria-label="Open in maps app" onClick="{{maps.openInMapsApp}}" style="min-height:52px;margin-top:8px;padding:0 16px;border-radius:26px;background:var(--acc);color:#fff;font:inherit">Open in maps app</button></sc-if>
-      <sc-if value="{{maps.nativeStatusControls}}"><sc-if value="{{maps.nativeMapStatus}}"><p style="margin:6px 0">{{maps.nativeMapStatus}}</p></sc-if><p style="margin:6px 0">{{maps.nativeLocationHelp}}</p><div style="display:flex;flex-wrap:wrap;gap:8px">
-        <button class="tap" aria-label="{{maps.nativeLocationLabel}}" disabled="{{maps.nativeLocationBusy}}" onClick="{{maps.nativeLocation}}" style="min-height:52px;padding:0 16px;border-radius:26px;background:var(--acc);color:#fff;font:inherit">{{maps.nativeLocationLabel}}</button>
-        <sc-if value="{{maps.nativeLocationDenied}}"><button class="tap" aria-label="Location settings" onClick="{{maps.nativeLocationSettings}}" style="min-height:52px;padding:0 12px;border-radius:26px;background:var(--s2);color:var(--fg);font:inherit">Location settings</button></sc-if>
-        <sc-if value="{{maps.nativeMapRetry}}"><button class="tap" aria-label="Retry map" onClick="{{maps.retryNativeMap}}" style="min-height:52px;padding:0 12px;border-radius:26px;background:var(--s2);color:var(--fg);font:inherit">Retry map</button></sc-if>
-      </div></sc-if>
-    </div>
-  </sc-if>
-  <sc-if value="{{maps.eventReturnFloating}}"><button data-alpha-maps-event-return aria-label="Back to event" title="{{maps.backToEventTitle}}" onClick="{{maps.backToEvent}}" style="position: absolute; left: 12px; top: 114px; z-index: 5; background: var(--bg); color: var(--fg); box-shadow: 0 6px 22px var(--shc), 0 0 0 1px var(--line); height: 40px; padding: 0 14px 0 8px; border-radius: 20px; display: flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 600"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px; flex-shrink: 0"><path d="{{ic.back}}"></path></svg>Back to event</button></sc-if>
-  <sc-if value="{{maps.showSearch}}">
-    <div data-alpha-app-header="main" data-alpha-app-header-overlay style="position: absolute; left: 12px; right: 12px; top: 52px; height: 54px; border-radius: 27px; background: var(--bg); box-shadow: 0 6px 22px var(--shc), 0 0 0 1px var(--line); display: flex; align-items: center; padding: 0 5px; z-index: 3">
-    <sc-if value="{{showAppBack}}"><button class="app-header-back" aria-label="Back to apps" onClick="{{backToApps}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.back}}"></path></svg></button></sc-if>
-      <button class="ib" aria-label="{{maps.searchLabel}}" onClick="{{maps.searchLead}}"><svg class="i" viewBox="0 0 24 24"><path d="{{maps.searchIcon}}"></path></svg></button>
-      <input aria-label="Search places" placeholder="Search" value="{{maps.q}}" onChange="{{maps.onQ}}" onClick="{{maps.focusQ}}" onKeyDown="{{maps.qKey}}" style="flex-grow: 1; min-width: 0; height: 44px; border: 0; outline: 0; background: transparent; color: var(--fg); font-size: 16px; padding: 0 4px">
-      <sc-if value="{{maps.hasQ}}">
-        <button class="ib" aria-label="Clear search" onClick="{{maps.clearQ}}"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px"><path d="{{ic.x}}"></path></svg></button>
-      </sc-if>
-    </div>
-  </sc-if>
-  <sc-if value="{{maps.isBase}}">
-    <div class="scr" style="position: absolute; left: 0; right: 0; top: 116px; display: flex; gap: 8px; overflow-x: auto; padding: 0 12px 10px; touch-action: pan-x; z-index: 3">
-      <sc-for list="{{maps.chips}}" as="c">
-        <button class="tap" onClick="{{c.go}}" style="flex-shrink: 0; height: 40px; padding: 0 16px 0 12px; border-radius: 20px; background: var(--bg); box-shadow: 0 4px 14px var(--shc), 0 0 0 1px var(--line); display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px"><path d="{{c.d}}"></path></svg>{{c.label}}</button>
-      </sc-for>
-    </div>
-  </sc-if>
 
   
   <sc-if value="{{maps.showRec}}">
@@ -2196,22 +2190,6 @@
 
   
   <sc-if value="{{maps.isDir}}">
-    <div class="drop" data-alpha-maps-directions style="position: absolute; left: 12px; right: 12px; top: 52px; border-radius: 26px; background: var(--bg); box-shadow: 0 6px 22px var(--shc), 0 0 0 1px var(--line); padding: 6px 12px 12px 4px; z-index: 3">
-      <div style="display: flex; align-items: center; gap: 4px">
-        <button class="ib" aria-label="Back to place" onClick="{{maps.dr.close}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.back}}"></path></svg></button>
-        <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
-          <sc-if value="{{maps.native}}"><input aria-label="Route origin coordinates" placeholder="Origin latitude, longitude" value="{{maps.originText}}" onChange="{{maps.onOrigin}}" onKeyDown="{{maps.originKey}}" style="height:32px;border:0;background:transparent;color:var(--fg);font-size:15px;width:100%"><button aria-label="Use current location for route" onClick="{{maps.originLocation}}" style="font-size:12px;text-align:left;color:var(--acct)">Use current location for route</button></sc-if>
-          <sc-if value="{{maps.notNative}}"><div style="display: flex; align-items: center; gap: 12px; height: 32px; font-size: 15px; color: var(--mut)"><span style="width: 10px; height: 10px; border-radius: 5px; background: var(--acc); box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--acc); margin: 0 4px; flex-shrink: 0"></span>Your location</div></sc-if>
-          <div style="display: flex; align-items: center; gap: 12px; height: 32px; font-size: 15px; font-weight: 600"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px; color: var(--acct)"><path d="{{ic.pin}}"></path></svg>{{maps.dr.name}}</div>
-        </div>
-      </div>
-      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0 8px">
-        <sc-for list="{{maps.dr.modes}}" as="md">
-          <button aria-label="{{md.label}}" aria-pressed="{{md.on}}" onClick="{{md.go}}" style="flex: 1 1 0; min-width: max-content; padding: 0 8px; box-sizing: border-box; min-height: 40px; border-radius: 20px; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 13px; font-weight: 600; white-space: nowrap; {{md.css}}"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px"><path d="{{md.d}}"></path></svg>{{md.t}}</button>
-        </sc-for>
-      </div>
-      <sc-if value="{{maps.eventReturnInline}}"><button data-alpha-maps-event-return aria-label="Back to event" title="{{maps.backToEventTitle}}" onClick="{{maps.backToEvent}}" style="margin: 8px 0 0 8px; background: var(--s2); color: var(--fg); height: 40px; padding: 0 14px 0 8px; border-radius: 20px; display: flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 600"><svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px; flex-shrink: 0"><path d="{{ic.back}}"></path></svg>Back to event</button></sc-if>
-    </div>
     <div class="enter" data-alpha-maps-sheet="directions" style="position: absolute; left: 0; right: 0; bottom: 0; --alpha-sheet-height: {{maps.sheetH}}px; border-radius: 28px 28px 0 0; background: var(--bg); box-shadow: 0 -10px 40px var(--shc), 0 -1px 0 var(--line); z-index: 4; padding: 22px 20px 0; box-sizing: border-box">
       <div style="display: flex; align-items: baseline; gap: 12px"><span class="serif" style="font-size: 44px; line-height: 1">{{maps.dr.min}}</span><span style="font-size: 15px; color: var(--mut)">{{maps.dr.meta}}</span></div>
       <div style="font-size: 14px; color: var(--mut); margin-top: 8px">{{maps.dr.via}}</div>
@@ -2224,21 +2202,6 @@
 
   
   <sc-if value="{{maps.isNav}}">
-    <div class="drop" style="position: absolute; left: 12px; right: 12px; top: 50px; border-radius: 28px; background: var(--acc); color: #ffffff; padding: 18px 20px; display: flex; align-items: center; gap: 16px; z-index: 5; box-shadow: 0 10px 30px rgba(0,0,0,.5)">
-      <sc-if value="{{maps.dr.nav.going}}">
-        <svg class="i" viewBox="0 0 24 24" style="width: 52px; height: 52px; "><path d="{{maps.dr.nav.icon}}"></path></svg>
-      </sc-if>
-      <sc-if value="{{maps.dr.nav.arrived}}">
-        <svg class="i" viewBox="0 0 24 24" style="width: 52px; height: 52px; "><path d="{{ic.check}}"></path></svg>
-      </sc-if>
-      <div style="min-width: 0">
-        <div class="serif" style="font-size: 40px; line-height: 1">{{maps.dr.nav.dist}}</div>
-        <div style="font-size: 19px; font-weight: 600; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{maps.dr.nav.street}}</div>
-      </div>
-    </div>
-    <sc-if value="{{maps.dr.nav.hasThen}}">
-      <div style="position: absolute; left: 28px; top: 158px; height: 40px; padding: 0 14px; border-radius: 0 0 16px 16px; background: #0000B8; color: #ffffff; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; z-index: 4">Then<svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="{{maps.dr.nav.thenD}}"></path></svg><sc-if value="{{maps.dr.nav.thenText}}"><span style="max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{maps.dr.nav.thenText}}</span></sc-if></div>
-    </sc-if>
     <div class="enter" style="position: absolute; left: 12px; right: 12px; bottom: 26px; border-radius: 32px; background: #151515; color: #ffffff; padding: 10px; display: flex; align-items: center; gap: 12px; z-index: 5">
       <button aria-label="End navigation" onClick="{{maps.dr.nav.end}}" style="width: 56px; height: 56px; border-radius: 28px; background: #262626; color: #ffffff; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.x}}"></path></svg></button>
       <div style="flex-grow: 1; min-width: 0; text-align: center">
@@ -3658,7 +3621,7 @@
             <sc-if value="{{workflows.b.tr.isTime}}">
               <div style="display: flex; flex-wrap: wrap; gap: 8px">
                 <sc-for list="{{workflows.b.tr.days}}" as="c">
-                  <button onClick="{{c.pick}}" style="height: 38px; padding: 0 14px; border-radius: 19px; font-size: 13.5px; font-weight: 600; {{c.css}}">{{c.label}}</button>
+                  <button onClick="{{c.pick}}" aria-pressed="{{c.pressed}}" style="height: 38px; padding: 0 14px; border-radius: 19px; font-size: 13.5px; font-weight: 600; {{c.css}}">{{c.label}}</button>
                 </sc-for>
               </div>
               <div style="display: flex; align-items: center; gap: 12px; margin-top: 14px">

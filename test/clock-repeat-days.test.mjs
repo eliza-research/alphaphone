@@ -22,7 +22,7 @@ test('set operations accept an optional days field and keep exact keys otherwise
  assert.equal('days' in validateClockOperation(set({days:[]})), false, 'an explicit [] is a one-time alarm');
  assert.throws(() => validateClockOperation({type:'clock_handoff',action:'show',days:[2]}), /Unexpected Clock fields/);
  assert.equal(isClockOperation({type:'clock_alarm',action:'show'}), false);
- assert.throws(() => validateClockOperation({type:'clock_alarm',action:'show'}), /Invalid Clock operation/);
+ assert.throws(() => validateClockOperation({type:'clock_alarm',action:'show'}), /Invalid Clock (handoff )?operation/);
  assert.match(describeClockHandoff(validateClockOperation(set({days:[2,3,4,5,6]}))), /repeating weekdays/);
  assert.match(describeClockHandoff(validateClockOperation(set({days:[6,5,4,3,2]}))), /repeating weekdays/, 'review text does not depend on the order');
  assert.equal(describeClockDays([1,2,3,4,5,6,7]), 'every day');

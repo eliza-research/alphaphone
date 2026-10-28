@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import {stripTypeScriptTypes} from 'node:module';
 import {randomUUID} from 'node:crypto';
 import {createDeviceActionExecution} from '../vendor/eliza/packages/contracts/src/device-action-execution.ts';
+import {parseBrowserAddressInput} from '../.eliza/client-features/plugins/plugin-native-browser-surface/src/address-input.ts';
 const root=process.env.ALPHA_RECEIPT_SOURCE_ROOT||'.';
 const read=p=>fs.readFileSync(root+'/'+p,'utf8');
 const agent=read('apps/app/src/prototype/agent-adapter.ts'),browser=read('apps/app/src/prototype/browser-adapter.ts'),device=read('apps/app/src/runtime/device-actions.ts');
@@ -24,7 +25,7 @@ function harness({native=false,origin='notes',receiptFailure=false,dispatchFailu
   openView(){events.push('present');currentContext={view:'browser',sensitive:false,revision:2};cancel();}};
  const connection={session,open:false},connectionController={getSnapshot:()=>connection},alphaClient={getState:()=>({context:currentContext})};
  const cancel=()=>vm.runInNewContext(cancelCode,{shell,document,connection,currentContext});
- const browserContext={URL,Error,document,Capacitor:{isNativePlatform:()=>native},session:'native-session',state:()=>state,created,shell,get disposed(){return disposed;},profileUnsupportedTab:undefined,newTabId:()=> 'new-tab',isPrivate:()=>false,restored:new Map(),metadata,documentRevisions,restoreAttempts:new Map(),
+ const browserContext={URL,Error,parseBrowserAddressInput,document,Capacitor:{isNativePlatform:()=>native},session:'native-session',state:()=>state,created,shell,get disposed(){return disposed;},profileUnsupportedTab:undefined,newTabId:()=> 'new-tab',isPrivate:()=>false,restored:new Map(),metadata,documentRevisions,restoreAttempts:new Map(),
  ensure(id){const promise=Promise.resolve();created.set(id,promise);return promise;},
  Browser:{async navigate(){controller.signal.throwIfAborted();events.push('dispatch');if(dispatchFailure)throw Error('dispatch failed');afterDispatch?.({controller,changeTab:()=>{created.set('foreign',Promise.resolve());state.cur='foreign';},dispose:()=>disposed=true});},async close(){}},refresh(){},report(){}};
  const browserNavigateApproved=vm.runInNewContext('(function(){'+navigateCode+'\n'+browserCode+';return this.browserNavigateApproved;}).call({})',browserContext);

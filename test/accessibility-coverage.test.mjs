@@ -112,6 +112,50 @@ test('the sweep applies every dimension and cannot be narrowed silently', () => 
   assert.match(production, /auditPage\(page, \{ contrast: true, targetSize: 24, clipping: true, overlap: true, dock: true \}\)/);
 });
 
+test('TalkBack reading order is checked in every lane, as Android checks it, across views and the lifecycle', () => {
+  // Every lane of both sweeps reads the order (the light theme once; it does not depend on the theme).
+  assert.match(sweep, /\.\.\.theme === 'light' \? await auditReadingOrder\(page\) : \[\]/);
+  assert.match(sweep, /200% text is not clipped[\s\S]*?const order = format\(await auditReadingOrder\(page\)\);\s*expect\(order, order\.join\('\\n'\)\)\.toEqual\(\[\]\);/);
+  assert.equal([...sweep.matchAll(/auditReadingOrder\(page\)/g)].length, 5, 'all five sweep lanes read the order');
+  assert.equal([...production.matchAll(/auditReadingOrder\(page\)/g)].length, 2, 'both production lanes read the order');
+  // The browser rule is the Android rule: the same geometry, the same assistant group, the same bars.
+  const audit = read('test/browser/accessibility-audit.ts');
+  const order = read('android/app/src/androidTest/java/ai/elizaresearch/alphaphone/TalkBackOrder.java');
+  assert.match(audit, /r\.top < p\.top - tallest \/ 2 && r\.left < p\.right/);
+  assert.match(order, /r\.top < p\.top - Math\.max\(p\.height\(\), r\.height\(\)\) \/ 2 && r\.left < p\.right/);
+  assert.match(audit, /export const ASSISTANT_GROUP = 'Assistant controls';/);
+  assert.match(order, /ASSISTANT_GROUP = "Assistant controls";/);
+  const groups = audit.match(/export const READING_GROUPS = '([^']+)';/)?.[1];
+  assert.ok(groups, 'the bars are declared once in the audit');
+  assert.ok(order.includes(groups.replaceAll('"', '\\"')), 'the Android rule reads the same bars');
+  // Every retained view is visited on the emulator and in the lifecycle spec, by its Home tile name.
+  const titles = enabledViews().map(view => view[0].toUpperCase() + view.slice(1)).sort();
+  const views = read('android/app/src/androidTest/java/ai/elizaresearch/alphaphone/AccessibilityViewsInstrumentedTest.java').match(/static final String\[\] VIEWS = \{([^}]*)\};/)?.[1];
+  assert.deepEqual([...views.matchAll(/"([A-Za-z]+)"/g)].map(match => match[1]).sort(), titles);
+  const lifecycle = read('test/browser/accessibility-lifecycle.spec.ts').match(/const VIEWS = \[([^\]]*)\] as const;/)?.[1];
+  assert.deepEqual([...lifecycle.matchAll(/'([A-Za-z]+)'/g)].map(match => match[1]).sort(), titles);
+  for (const name of ['AccessibilityLifecycleInstrumentedTest', 'AccessibilityHomeRoleInstrumentedTest'])
+    assert.match(read(`android/app/src/androidTest/java/ai/elizaresearch/alphaphone/${name}.java`), /AccessibilityViewsInstrumentedTest\.VIEWS/, `${name} visits every view`);
+  // What the order check found stays fixed. Maps reads what is drawn over the top of the map
+  // (search, Back to event, chips, status, the route card, the turn banner) before the map, its
+  // credits and Recenter; the browser page leaves the order while address suggestions cover it.
+  const template = read('apps/app/src/prototype/template.html');
+  const maps = template.slice(template.indexOf('data-alpha-maps-root'), template.indexOf('data-alpha-maps-sheet="results"'));
+  const stack = ['maps.showSearch', 'maps.eventReturnFloating', 'maps.isBase', 'maps.nativeStatusVisible', 'data-alpha-maps-directions', 'maps.dr.nav.hasThen', 'data-alpha-map-plane', 'alpha-map-credits', 'aria-label="Recenter"'].map(hook => [hook, maps.indexOf(hook)]);
+  for (const [hook, at] of stack) assert.ok(at > 0, `${hook} is in the Maps layer stack`);
+  for (let index = 1; index < stack.length; index++) assert.ok(stack[index - 1][1] < stack[index][1], `Maps reads ${stack[index - 1][0]} before ${stack[index][0]}`);
+  assert.match(template, /<div inert="\{\{browser\.pageCovered\}\}" aria-hidden="\{\{browser\.pageCovered\}\}"/);
+  assert.match(read('apps/app/src/prototype/subview-accessibility.ts'), /pageCovered:!!out\.editing/);
+  // Focus follows the screen: installed by the renderer, and asserted by the lifecycle spec and the emulator.
+  assert.match(read('apps/app/src/main.tsx'), /installViewFocus\(\)/);
+  // The behaviour is Eliza's shared screen focus; Alpha keeps only its selectors and screen-change wiring.
+  const viewFocus = read('apps/app/src/runtime/view-focus.ts');
+  assert.match(viewFocus, /from '@elizaos\/ui\/accessibility\/screen-focus'/);
+  assert.match(viewFocus, /createScreenFocus\(/);
+  assert.doesNotMatch(viewFocus, /setAttribute\('tabindex'|requestAnimationFrame/, 'no local copy of the focus mover');
+  assert.match(read('scripts/prepare-client-features.mjs'), /'packages\/ui\/src\/accessibility\/screen-focus\.ts'/);
+});
+
 test('provider-connected screens are swept, against a synthetic mailbox only', () => {
   const block = states.slice(states.indexOf('export const CONNECTED_STATES'), states.indexOf('export const DEVELOPMENT_STATES'));
   for (const state of ["connected('Home'", "connected('Inbox')", "connected('Inbox sent (empty)'", "connected('Inbox search'", "connected('Inbox message'", "connected('Inbox long subject'", "connected('Inbox compose'", "connected('Settings',", "connected('Settings accounts'", "connected('Settings connections'"])
@@ -139,8 +183,11 @@ test('the dock, title and toast fixes the sweep depends on stay in the source', 
   const dock = read('apps/app/src/runtime/dock-clearance.ts');
   assert.match(dock, /'--alpha-dock-clearance'/);
   assert.match(dock, /'--alpha-dock-rest'/);
-  // The dock moves without resizing when Android's insets arrive on the root element.
-  assert.match(dock, /root\.observe\(document\.documentElement, \{ attributes: true, attributeFilter: \['class', 'style'\] \}\)/);
+  // The dock moves without resizing when Android's insets arrive on the root element. The
+  // publisher is shared Eliza code (projected from the pin); Alpha binds its own selectors to it.
+  assert.match(dock, /installSharedDockClearance\(\{ screen: '\[data-screen\]', docks: DOCK, bar: '\[data-alpha-input-bar\]', clearanceProperty: DOCK_CLEARANCE_PROPERTY, restProperty: DOCK_REST_PROPERTY \}\)/);
+  const shared = read('.eliza/client-features/packages/ui/src/components/shell/dock-clearance.ts');
+  assert.match(shared, /root\.observe\(document\.documentElement, \{\s*attributes: true,\s*attributeFilter: \["class", "style"\],?\s*\}\)/);
   // Focus under the dock is scrolled clear, but never focus that came from a pointer.
   assert.match(read('apps/app/src/prototype/chat-overlay-motion-adapter.ts'), /if \(!sheet && !target\.matches\(":focus-visible"\)\) return;/);
   // A screen title is not shortened with a large system font: it takes its own row.
@@ -171,7 +218,11 @@ test('the layout fixes the sweep depends on stay in the stylesheet and template'
   assert.match(css, /\.home-calendar-card \{[^}]*min-height:196px/);
   assert.doesNotMatch(css, /\.home-calendar-title \{[^}]*max-height/);
   assert.match(css, /\.alpha-fit-grid\{[^}]*repeat\(auto-fill,[^}]*var\(--alpha-text-scale,1\)/);
-  assert.match(template, /class="alpha-fit-grid" data-alpha-home-apps style="--fit-columns: 4; --fit-min: 62px/);
+  // Home's app grid is the shared mobile shell's: four columns of at least 62px times its text scale,
+  // which Alpha maps to the measured text size.
+  assert.match(read('.eliza/client-features/packages/ui/src/mobile-shell/MobileHomeScreen.tsx'), /\[data-mobile-shell-apps\]\{display:grid;grid-template-columns:repeat\(auto-fill,[^}]*var\(--mobile-shell-grid-columns,4\)[^}]*var\(--mobile-shell-grid-min,62px\) \* var\(--mobile-shell-text-scale,1\)/);
+  assert.match(css, /\[data-alpha-layer="home"\] \{ --mobile-shell-text-scale:var\(--alpha-text-scale,1\); \}/);
+  assert.match(read('apps/app/src/prototype/home-shell.ts'), /gridProps: \{'data-alpha-home-apps': ''\}/);
   assert.doesNotMatch(template, /data-alpha-home-(calendar|workflows|inbox)\b[^>]*height: 196px/);
   assert.match(read('apps/app/src/main.tsx'), /installTextScale\(\)/);
   assert.match(read('apps/app/src/runtime/text-scale.ts'), /font-size:100px;line-height:1/);

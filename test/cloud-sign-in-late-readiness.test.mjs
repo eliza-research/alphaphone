@@ -6,7 +6,8 @@ const source=readFileSync(new URL('../apps/app/src/runtime/connection-ui.tsx',im
 const between=(a,b)=>{const start=source.indexOf(a),end=source.indexOf(b,start+a.length);assert.ok(start>=0&&end>start);return source.slice(start,end);};
 const methods=between('async function inAppSignInMethods(','/** A failed or cancelled step');
 const begin=between('  async beginSignIn(','  /** Leaves the sign-in screen');
-const contract=await import('data:text/javascript;base64,'+Buffer.from(transformSync(readFileSync(new URL('../apps/app/src/runtime/cloud-sign-in.ts',import.meta.url),'utf8'),{loader:'ts',format:'esm'}).code).toString('base64'));
+// cloud-sign-in.ts imports the shared native sign-in contract; Node loads the TypeScript directly.
+const contract=await import('../apps/app/src/runtime/cloud-sign-in.ts');
 const factory=transformSync(`(()=>{
  let epoch=0,operation=null,signInReadinessOwner=null,inAppGoogle=false,inAppPhone=false,inAppEmail=true;
  let state={purpose:'agent',open:true,signIn:null,cloudAccount:null};let timeout,resolve,reject,count=0,signal,probeController;

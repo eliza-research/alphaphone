@@ -8,7 +8,7 @@ import {nativeSource,fixture,runJvm} from './fixtures/jvm-tools.mjs';
 // APK, run on Android, or contact Eliza Cloud or any agent.
 // The JDK is JAVA_HOME, else the Homebrew openjdk@21 on darwin when it is installed, else javac on PATH.
 test('native transport refuses production pairing and non-Cloud origins and admits DELETE only for Cloud self-revocation',()=>{
- assert.match(runJvm([nativeSource('CloudDeployment.java'),nativeSource('ConnectionRoutes.java'),nativeSource('CloudKeyRevocation.java'),fixture('ConnectionRoutesTest.java')],'ai.elizaresearch.alphaphone.ConnectionRoutesTest'),/^PASS connection routes/);
+ assert.match(runJvm([nativeSource('CloudDeployment.java'),nativeSource('ConnectionRoutes.java'),fixture('ConnectionRoutesTest.java')],'ai.elizaresearch.alphaphone.ConnectionRoutesTest'),/^PASS connection routes/);
 });
 
 // Source-order check of the plugin that applies the policy; the policy itself is run on the JVM above.
@@ -40,22 +40,20 @@ test('openExternal admits only the ConnectionRoutes hosts and reads the sign-in 
 
 // Source checks of the native wiring the JVM run above cannot reach (Android classes).
 test('Reset Alpha data records the reset, revokes Cloud keys best effort within a deadline, then resets',()=>{
- const source=readFileSync(resolve(import.meta.dirname,'../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaResetPlugin.java'),'utf8');
- const authenticated=source.slice(source.indexOf('@ActivityCallback private void authenticated('),source.indexOf('static final long REVOCATION_DEADLINE_MS'));
- const record=authenticated.indexOf('AlphaDataReset.record(getContext());'),revoke=authenticated.indexOf('revokeCloudKeysThenReset(');
- assert.ok(record>0&&revoke>record,'the reset is recorded before any network request');
- assert.match(authenticated,/main\.postDelayed\(reset,REVOCATION_DEADLINE_MS\)/,'a deadline resets even when revocation hangs');
- assert.match(authenticated,/finally\{main\.post\(reset\);\}/,'revocation always ends in the reset');
- assert.match(authenticated,/dispatched\.compareAndSet\(false,true\)/,'the reset is dispatched once');
- assert.match(authenticated,/ResetCloudRevocation\.revoke\(context,REVOCATION_DEADLINE_MS-500\)/,'the live path uses bounded shared revocation');
- const notice=authenticated.indexOf('showRevocationNotice();');
- assert.ok(notice>record&&notice<revoke,'a blocking notice covers the revocation window');
+ // The shared DataResetPlugin records first, then runs the before-dispatch step once, bounded by a
+ // deadline that resets even when revocation hangs (behavior tested upstream in reset.test.mjs).
+ const plugin=readFileSync(resolve(import.meta.dirname,'../vendor/eliza/plugins/plugin-native-system/android/src/main/java/ai/eliza/plugins/system/reset/DataResetPlugin.java'),'utf8');
+ const authenticated=plugin.slice(plugin.indexOf('private void authenticated('));
+ const record=authenticated.indexOf('reset.record(context);'),notice=authenticated.indexOf('showProgress(text);'),dispatch=authenticated.indexOf('reset.dispatchAfterBeforeDispatch(context, DataReset.INTERACTIVE_DEADLINE_MS');
+ assert.ok(record>0&&notice>record&&dispatch>notice,'recorded before any network request, with a blocking notice over the revocation window');
+ const registration=readFileSync(resolve(import.meta.dirname,'../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaDataReset.java'),'utf8');
+ assert.match(registration,/\.beforeDispatch\(ResetCloudRevocation::revoke\)/,'the live and startup paths use bounded shared revocation');
  const shared=readFileSync(resolve(import.meta.dirname,'../android/app/src/main/java/ai/elizaresearch/alphaphone/ResetCloudRevocation.java'),'utf8');
- assert.match(shared,/CloudKeyRevocation\.revoke\(environment,/,'revocation goes through the exact self-revocation policy');
- assert.match(shared,/AlphaCredentialStore\.readSlotBeforeAttach\(context,"cloud:"\+environment\)/);
+ assert.match(shared,/ai\.eliza\.auth\.cloud\.CloudKeyRevocation\.revoke\(registration,environment,/,'revocation goes through the shared exact self-revocation policy');
+ assert.match(shared,/AlphaCredentialStore\.readSlotBeforeAttach\(context,registration\.credentialSlot\(environment\)\)/);
+ assert.match(shared,/AlphaCloudSignInPlugin\.REGISTRATION/,'only the deployments this build admits are revoked');
  const application=readFileSync(resolve(import.meta.dirname,'../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaApplication.java'),'utf8');
- assert.match(application,/AlphaDataReset\.pending\(this\)\)\{ResetCloudRevocation\.revoke\(base,ResetCloudRevocation\.PENDING_DEADLINE_MS\);AlphaDataReset\.admitAndExit\(this\);\}/,'interrupted reset revokes before bounded reset admission');
- assert.match(source,/REVOCATION_DEADLINE_MS=8000;/);
+ assert.match(application,/AlphaDataReset\.RESET\.admitBeforeStartup\(base,getProcessName\(\)\);/,'interrupted reset revokes before bounded reset admission');
 });
 test('production refuses a direct (bring-your-own) provider key before reading it',()=>{
  const source=readFileSync(resolve(import.meta.dirname,'../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaLocalAgentPlugin.java'),'utf8');

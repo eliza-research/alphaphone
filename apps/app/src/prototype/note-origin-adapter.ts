@@ -46,27 +46,40 @@ export function savedNoteOrigin(kind:NoteOriginKind,id:string):NoteOrigin|undefi
 /** Shows "From note" on a saved reminder or event and opens that exact note, or nothing. */
 export function installNoteOriginAdapter(Component:Bag,views:Bag){
  const p=Component.prototype,mount=p.componentDidMount,unmount=p.componentWillUnmount,render=views.calendar.render;
- p.componentDidMount=function(){mount.call(this);this.noteOriginChanged=()=>{if(this.live!==false)this.vset('calendar',{});};listeners.add(this.noteOriginChanged);void loadNoteOrigins();};
+ p.componentDidMount=function(){mount.call(this);shell=this;this.noteOriginChanged=()=>{if(this.live!==false)this.vset('calendar',{});};listeners.add(this.noteOriginChanged);void loadNoteOrigins();};
  p.componentWillUnmount=function(){listeners.delete(this.noteOriginChanged);unmount.call(this);};
- let opening=false;
+ let opening=false,shell:Bag|undefined;
+ /** Links point at recordings in Older notes. While that source is not the open, loaded list, a
+  * missing note proves nothing: say where the note lives and resolve it only after opening it. */
+ const olderNotesOpen=()=>!shell||shell.notesSourceMode==='legacy'&&!!shell.notesLegacySource&&!shell.notesStorageFailed;
+ const openOlderNotes=async()=>{
+  if(olderNotesOpen())return true;
+  const legacy=shell?.api?.('notes')?.notesSourceOptions?.find((source:Bag)=>source.id==='legacy');
+  if(!legacy)return false;legacy.choose();await Promise.resolve(shell?.notesReady).catch(()=>{});
+  return olderNotesOpen();
+ };
+ /** The open Older notes list; the store's copy is current before the view state catches up. */
+ const olderNotes=(api:Bag)=>(shell&&olderNotesOpen()?shell.notesStore?.list:undefined)??api.get('notes')?.list;
  views.calendar.render=(state:Bag,api:Bag)=>{
   const out=render(state,api),selected=out.ev&&state.open?(state.events||[]).find((e:Bag)=>e.id===state.open):undefined;
   const origin=selected?.alphaReminderId?savedNoteOrigin('reminder',selected.alphaReminderId):selected?.alphaCalendarId?savedNoteOrigin('event',eventNoteOriginId(selected.nativeEvent)||''):undefined;
   if(!origin||!out.ev)return out;
   const openId=state.open;
   // The title is the note's current one. A link whose note is gone names no note at all.
-  const live=resolveNoteOrigin(origin,api.get('notes')?.list),name=live.status==='found'?noteOriginTitle(live.note):'';
-  out.ev.hasOrigin=true;out.ev.originLabel=name?`From note: ${name}`:'From a note that is no longer in Notes';out.ev.originOpenLabel=name?`Open note ${name}`:'Open note';
+  const known=olderNotesOpen(),live=known?resolveNoteOrigin(origin,olderNotes(api)):undefined,name=live?.status==='found'?noteOriginTitle(live.note):'';
+  out.ev.hasOrigin=true;out.ev.originLabel=!known?'From a voice note in Older notes':name?`From note: ${name}`:'From a note that is no longer in Notes';out.ev.originOpenLabel=name?`Open note ${name}`:'Open note';
   out.ev.openOrigin=async()=>{
    if(opening)return;opening=true;
    try{
     const gone=()=>api.toast('The note this came from was deleted or replaced. Nothing was opened.');
-    const found=resolveNoteOrigin(origin,api.get('notes')?.list);
+    if(!await openOlderNotes()){if(api.isActive()&&!document.hidden)api.toast('Older notes could not be opened. Nothing was changed.');return;}
+    if(!api.isActive()||document.hidden||api.get('calendar').open!==openId)return;
+    const found=resolveNoteOrigin(origin,olderNotes(api));
     if(found.status!=='found'){gone();return;}
     const changed=await recordingRevision(found.note)!==origin.revision;
     if(!api.isActive()||document.hidden||api.get('calendar').open!==openId)return;
     // The note may have been deleted while its revision was computed.
-    if(resolveNoteOrigin(origin,api.get('notes')?.list).status!=='found'){gone();return;}
+    if(resolveNoteOrigin(origin,olderNotes(api)).status!=='found'){gone();return;}
     api.open('notes',{open:origin.noteId});
     if(changed)api.toast('This note was edited after this was created from it.');
    }finally{opening=false;}

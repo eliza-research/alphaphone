@@ -16,26 +16,45 @@ test('a different deployment changes actual native login, request admission and 
  try{
   const native='android/app/src/main/java/ai/elizaresearch/alphaphone/';
   fs.writeFileSync(path.join(temp,'CloudDeployment.java'),deploymentOutputs(config)[native+'CloudDeployment.java']);
-  const files=['CloudSignInFlow.java','ConnectionRoutes.java','CloudKeyRevocation.java'];
+  const files=['ConnectionRoutes.java'];
   for(const file of files)fs.copyFileSync(native+file,path.join(temp,file));
+  // Alpha's registration of the shared sign-in client, read from its plugin, over the shared pure classes.
+  const plugin=fs.readFileSync(native+'AlphaCloudSignInPlugin.java','utf8');
+  const registration=plugin.slice(plugin.indexOf(' static final String PENDING_SLOT'),plugin.indexOf(' static String receiptSlot('));
+  assert.ok(registration.includes('static CloudSignInConfig registration(boolean testMocks)'));
+  const shared='vendor/eliza/packages/auth/android/src/main/java/ai/eliza/auth/cloud/';
+  const sharedFiles=['CloudSignInConfig.java','CloudSignInEnvironment.java','CloudSignInFlow.java','CloudSignInRoutes.java','CloudKeyRevocation.java','CloudEmailCode.java','CloudSmsCode.java'].map(file=>shared+file).concat('vendor/eliza/packages/auth/android/test/org/json/JSONObject.java');
+  fs.writeFileSync(path.join(temp,'AlphaRegistration.java'),`package ai.elizaresearch.alphaphone;
+import ai.eliza.auth.cloud.*;
+final class BuildConfig {static final boolean ELIZA_DEV_ALLOW_TEST_MOCKS=false;}
+final class AlphaRegistration {
+${registration}
+}`);
   fs.writeFileSync(path.join(temp,'DeploymentTest.java'),`package ai.elizaresearch.alphaphone;
+import ai.eliza.auth.cloud.*;
 public class DeploymentTest {public static void main(String[] args){
- if(!CloudSignInFlow.Environment.PRODUCTION.api().equals("https://api.example.org"))throw new AssertionError("login");
- if(!CloudSignInFlow.Environment.PRODUCTION.callback().equals("https://login.example.org/alphaphone/auth/callback"))throw new AssertionError("callback");
+ CloudSignInConfig product=AlphaRegistration.registration(false);
+ CloudSignInEnvironment production=product.defaultEnvironment();
+ if(!production.api().equals("https://api.example.org"))throw new AssertionError("login");
+ if(!production.callback().equals("https://login.example.org/alphaphone/auth/callback"))throw new AssertionError("callback");
+ if(!production.tenant.equals("example")||product.environments().size()!=1)throw new AssertionError("product registration");
+ if(AlphaRegistration.registration(true).environments().size()!=2)throw new AssertionError("staging only in test-mocks builds");
+ if(!CloudSignInRoutes.origin(product,"https","api.example.org",-1)||CloudSignInRoutes.origin(product,"https","api.eliza.app",-1))throw new AssertionError("sign-in origin");
  if(!ConnectionRoutes.admittedOrigin("https","api.example.org",-1,false))throw new AssertionError("configured origin refused");
  if(ConnectionRoutes.admittedOrigin("https","api.eliza.app",-1,false))throw new AssertionError("default origin retained");
  if(ConnectionRoutes.admittedOrigin("http","api.example.org",-1,false))throw new AssertionError("HTTP admitted");
  if(!ConnectionRoutes.externalHost("https","services.example.org",-1,false))throw new AssertionError("configured services refused");
  if(ConnectionRoutes.externalHost("https","cloud.eliza.app",-1,false))throw new AssertionError("default services retained");
  if(ConnectionRoutes.externalHost("https","unlisted.example.org",-1,true))throw new AssertionError("unconfigured browser host admitted");
- if(!CloudKeyRevocation.endpoint("production").equals("https://api.example.org/api/v1/api-keys/current"))throw new AssertionError("revocation");
+ if(!CloudKeyRevocation.endpoint(production).equals("https://api.example.org/api/v1/api-keys/current"))throw new AssertionError("revocation");
+ if(!product.readinessPreferences.equals("alpha-cloud-signin-readiness-"+CloudDeployment.STORAGE_NAMESPACE))throw new AssertionError("readiness cache bound to the deployment");
  if(CloudDeployment.storageSlot("cloud:production").equals("cloud:production"))throw new AssertionError("legacy credential reused");
  if(!CloudDeployment.storageSlot("cloud-signin:v1:pending").startsWith(CloudDeployment.STORAGE_NAMESPACE))throw new AssertionError("pending not bound");
  if(!CloudDeployment.storageSlot("local-agent-provider:v1").startsWith(CloudDeployment.STORAGE_NAMESPACE))throw new AssertionError("provider not bound");
  if(!CloudDeployment.storageSlot("notes-records:v1:device").equals("notes-records:v1:device"))throw new AssertionError("local notes changed");
  System.out.println("PASS");}}
 `);
-  execFileSync('javac',['--release','11','-d',temp,...['CloudDeployment.java',...files,'DeploymentTest.java'].map(f=>path.join(temp,f))]);
+  execFileSync('javac',['--release','11','-d',temp,...['CloudDeployment.java',...files,'AlphaRegistration.java','DeploymentTest.java'].map(f=>path.join(temp,f)),...sharedFiles]);
   assert.equal(execFileSync('java',['-cp',temp,'ai.elizaresearch.alphaphone.DeploymentTest'],{encoding:'utf8'}).trim(),'PASS');
  }finally{fs.rmSync(temp,{recursive:true,force:true});}
 });
@@ -44,6 +63,21 @@ test('configuration refuses credentials, insecure URLs, paths, aliases and accid
   const config=structuredClone(defaults);config.production.api=api;assert.throws(()=>validateCloudDeployment(config));
  }
  const config=structuredClone(defaults);config.staging.api=config.production.api;assert.throws(()=>validateCloudDeployment(config));
+});
+test('configuration the shared native sign-in client cannot register fails at build time, not on the phone',()=>{
+ const refused=(environment,change)=>{const config=structuredClone(defaults);change(config[environment]);assert.throws(()=>validateCloudDeployment(config),undefined,JSON.stringify(config[environment]));};
+ for(const host of ['https://my_host.example.org','https://-api.example.org','https://api-.example.org'])for(const field of ['api','web'])refused('production',row=>{row[field]=host;});
+ for(const tenant of ['t'.repeat(65),'tenant id','tenant.v2','tenant:eu'])refused('staging',row=>{row.tenant=tenant;});
+ for(const name of ['N'.repeat(81),'Eliza‮Cloud','Eliza\u0085Cloud','Eliza​Cloud'])refused('production',row=>{row.name=name;});
+ // Accepted shapes stay accepted, and the services origin keeps its own browser-host rule.
+ const config=structuredClone(defaults);
+ config.production={...config.production,tenant:'Org_Tenant-1',name:'N'.repeat(80),services:'https://my_services.example.org'};
+ assert.doesNotThrow(()=>validateCloudDeployment(config));
+ // The shared registration constructor accepts every tenant this validator admits.
+ const shared=fs.readFileSync('vendor/eliza/packages/auth/android/src/main/java/ai/eliza/auth/cloud/CloudSignInEnvironment.java','utf8');
+ const tenantRule=shared.match(/tenant\.matches\("([^"]+)"\)/)?.[1];
+ assert.ok(tenantRule,'shared tenant rule located');
+ for(const tenant of ['Org_Tenant-1','elizacloud','elizacloud-staging','t'.repeat(64)])assert.match(tenant,new RegExp(`^(?:${tenantRule})$`),tenant);
 });
 
 test('build admission rejects drift in either renderer or native generated authorities',async()=>{
@@ -93,33 +127,13 @@ test('custom deployment reaches native inference configuration and Google transp
  try{
   write('package.json','{"type":"module"}');
   for(const [name,text] of Object.entries(deploymentOutputs(config)))write(name,text);
-  for(const name of ['backend/managed-google-failure-stage.ts','backend/managed-google-route-policy.ts','backend/native-google-cloud-port.ts','backend/native-cloud-runtime-config.ts','apps/app/src/runtime/managed-service-routes.ts'])write(name,fs.readFileSync(name,'utf8'));
-  write('vendor/eliza/packages/agent/src/config/config.ts','export const config={cloud:{apiKey:"stale-synthetic"}}; export function loadElizaConfig(){return config;} export function saveElizaConfig(value){Object.assign(config,value);}');
-  write('vendor/eliza/packages/host/src/contracts/service-routing.ts','export function buildElizaCloudServiceRoute(options={}){return {backend:"elizacloud",transport:"cloud-proxy",...options};}');
-  write('vendor/eliza/plugins/plugin-native-inference/src/model-catalog/routing-preferences.ts','export async function updateRoutingPreferences(update){update({});}');
+  for(const name of ['backend/managed-google-failure-stage.ts','backend/managed-google-route-policy.ts','backend/native-google-cloud-port.ts','backend/native-cloud-runtime.ts','apps/app/src/runtime/managed-service-routes.ts'])write(name,fs.readFileSync(name,'utf8'));
   const load=name=>import(pathToFileURL(path.join(temp,name)).href);
-  const {prepareNativeCloudRuntime}=await load('backend/native-cloud-runtime-config.ts');
-  process.env.ELIZAOS_CLOUD_SMALL_MODEL='synthetic-small';process.env.ELIZAOS_CLOUD_LARGE_MODEL='synthetic-large';
-  process.env.ELIZAOS_CLOUD_BASE_URL=config.production.api+'/api/v1';
-  process.env.ELIZA_RUNTIME_PROFILE='cloud';
-  await prepareNativeCloudRuntime();
-  const saved=(await load('vendor/eliza/packages/agent/src/config/config.ts')).config;
-  assert.equal(saved.cloud.baseUrl,config.production.api+'/api/v1');assert.equal(saved.cloud.apiKey,undefined);
-  assert.deepEqual(saved.serviceRouting.embeddings,{backend:'elizacloud',transport:'cloud-proxy'});
-  // Returning from Cloud QA must replace its saved embedding route even if
-  // native inputs are unavailable. Missing local assets never authorize Cloud.
-  process.env.ELIZA_RUNTIME_PROFILE='native';
-  process.env.ELIZA_LOCAL_EMBEDDING_ENABLED='0';process.env.ELIZA_DISABLE_LOCAL_EMBEDDINGS='true';
-  await prepareNativeCloudRuntime();
-  assert.deepEqual(saved.serviceRouting.embeddings,{backend:'eliza-local-inference',transport:'direct'});
-  process.env.ELIZA_LOCAL_EMBEDDING_ENABLED='1';process.env.ELIZA_DISABLE_LOCAL_EMBEDDINGS='false';
-  await prepareNativeCloudRuntime();
-  assert.deepEqual(saved.serviceRouting.embeddings,{backend:'eliza-local-inference',transport:'direct'});
-  assert.equal(saved.serviceRouting.llmText.backend,'elizacloud');
-  assert.equal(saved.serviceRouting.llmText.smallModel,'synthetic-small');
-  assert.equal(saved.serviceRouting.llmText.largeModel,'synthetic-large');
-  process.env.ELIZAOS_CLOUD_BASE_URL=defaults.production.api+'/api/v1';
-  await assert.rejects(prepareNativeCloudRuntime(),/binding is incomplete/);
+  // The product declares only its admitted Cloud API base; the shared upstream
+  // runtime profile writes routing and refuses any other base URL.
+  const {nativeCloudRuntime}=await load('backend/native-cloud-runtime.ts');
+  assert.deepEqual(nativeCloudRuntime,{apiBaseUrl:config.production.api+'/api/v1'});
+  assert.ok(Object.isFrozen(nativeCloudRuntime));
   const {createNativeGoogleCloudPort}=await load('backend/native-google-cloud-port.ts');
   const id='11111111-1111-4111-8111-111111111111',user='22222222-2222-4222-8222-222222222222',org='33333333-3333-4333-8333-333333333333',calls=[];
   const port=createNativeGoogleCloudPort({credentialId:id,userId:user,organizationId:org,accountRef:JSON.stringify(['cloud','production',user,org]),sessionGeneration:'synthetic',token:'synthetic-token'},()=>{},async(url)=>{calls.push(String(url));return new Response('{}',{headers:{'content-type':'application/json'}});});

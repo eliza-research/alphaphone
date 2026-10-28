@@ -85,9 +85,9 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-Current source projection: SDK `e40497d5d0` with source metadata refreshed for the reviewed Calendar diagnostics and Android notification compatibility changes; runtime, artifact and device qualification remains separate as recorded above.
+Current source projection: SDK `6c1a31f233` (elizaOS/eliza develop joined with the reviewed SDK line previously pinned at `5794c8c0d1`); the client feature projection now reads the SDK's browser-safe `@elizaos/core/schema-types`, `@elizaos/ui/api/transport`, Calendar auto-join types and Clock hand-off modules. Source metadata only; runtime, artifact and device qualification remains separate as recorded above.
 
-The current upstream source pin is `e40497d5d0` from upstream.lock.json. Runtime and device results remain bound to their own source, artifact and account receipts.
+The current upstream source pin is `6c1a31f233` from upstream.lock.json; the preceding pins were `5794c8c0d1` and `e40497d5d0`. Runtime and device results remain bound to their own source, artifact and account receipts.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 

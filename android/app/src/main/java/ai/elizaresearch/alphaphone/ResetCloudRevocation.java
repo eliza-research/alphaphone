@@ -1,18 +1,19 @@
 package ai.elizaresearch.alphaphone;
 
-/** Best-effort key revocation bounded independently of network and credential-store latency. */
+/** Best-effort key revocation bounded independently of network and credential-store latency. Runs as
+ * the shared reset coordinator's before-dispatch step (AlphaDataReset), only for a durable reset. */
 final class ResetCloudRevocation {
- static final long PENDING_DEADLINE_MS=4000;
  private ResetCloudRevocation(){}
  static void revoke(android.content.Context context,long timeoutMs){
-  if(timeoutMs<=0||!AlphaDataReset.pending(context))return;
+  if(timeoutMs<=0||!AlphaDataReset.RESET.pending(context))return;
   final long deadline=System.nanoTime()+Math.min(timeoutMs,8000)*1_000_000L;
   Thread worker=new Thread(()->{
-   for(String environment:CloudKeyRevocation.environments(BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS)){
+   ai.eliza.auth.cloud.CloudSignInConfig registration=AlphaCloudSignInPlugin.REGISTRATION;
+   for(ai.eliza.auth.cloud.CloudSignInEnvironment environment:registration.environments()){
     if(Thread.currentThread().isInterrupted()||System.nanoTime()>=deadline)return;
     try{
-     String saved=AlphaCredentialStore.readSlotBeforeAttach(context,"cloud:"+environment);
-     if(saved!=null&&System.nanoTime()<deadline)CloudKeyRevocation.revoke(environment,new org.json.JSONObject(saved).optString("token",null),BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS);
+     String saved=AlphaCredentialStore.readSlotBeforeAttach(context,registration.credentialSlot(environment));
+     if(saved!=null&&System.nanoTime()<deadline)ai.eliza.auth.cloud.CloudKeyRevocation.revoke(registration,environment,new org.json.JSONObject(saved).optString("token",null));
     }catch(Exception unavailable){/* Local reset must still proceed. */}
    }
   },"alpha-reset-key-revocation");

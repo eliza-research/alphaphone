@@ -1,6 +1,7 @@
 import { cloudServiceName } from '../runtime/cloud-protocol';
 import {developmentCloudVoiceEnabled,developmentCloudRealtimeVoiceEnabled} from '../runtime/development-cloud-voice';
 import React from 'react';
+import {alphaViewPath} from '../product/alpha-product';
 import {VoiceActivity} from './voice-activity';
 import {cloudRuntimeEnabled,testMocksEnabled} from '../build-flags';
 import {developmentCartesiaConversation,developmentCartesiaVoiceEnabled} from '../runtime/development-cartesia-conversation';
@@ -10,11 +11,11 @@ import {noteOriginFor} from '../runtime/note-origin';
 import {reviewContentQuestion} from '../browser/content-question';
 import {recordingLevels} from '../browser/audio-levels';
 import {browserDevProfile} from '../browser/dev-profile';
-import {pendingAudioDeletions,withAudioDeletionLock,changeAudioDeletion,audioDeletionNoteState,type AudioDeletion} from '../runtime/note-audio-deletions';
+import {pendingAudioDeletions,withAudioDeletionLock,changeAudioDeletion,audioDeletionNoteState,audioDeletionJournal,type AudioDeletion} from '../runtime/note-audio-deletions';
+import {createNotesRecordingEffects,type NotesRecordingEffects} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-recording-effects.ts';
 import {addNotesTrashEntry,editNotesTrash,isNotesTrashFull,notesTrashExpired,readNotesTrash,removeNotesTrashEntries,savedNotes,type NotesTrashEntry} from '../runtime/notes-trash';
 import type {NotesTarget} from '../runtime/notes-contract';
-import {planInterruptedPermanentDeletion,sameDeletionRow,leasedDeletionRow,deletionLeaseDue,claimDeletion,releaseDeletionClaim,deletionClaimedElsewhere,type PermanentDeletionEvidence} from '../runtime/permanent-voice-deletion';
-const audioOperation=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+import {sameDeletionRow,leasedDeletionRow,claimDeletion,releaseDeletionClaim,deletionClaimedElsewhere} from '../runtime/permanent-voice-deletion';
 import { installLocalSpeechPlayback, stopLocalSpeechPlayback, currentNoteReading, stopSpeaking, speakNote } from './local-speech-playback';
 import { registerPlugin } from '../platform-plugins';
 import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
@@ -85,7 +86,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
       };
       // Notes Trash hooks. Voice notes share one Trash with text notes; the recording follows its note.
       value.restoreTrashedVoice=(entry:NotesTrashEntry)=>restoreDeletion(trashRow(entry),value,entry.index);
-      value.purgeTrashedVoice=(entry:NotesTrashEntry)=>purgeTrashedRecording(entry);
+      value.purgeTrashedVoice=(entry:NotesTrashEntry)=>recordingEffects().purgeTrashed(entry);
       value.trashVoiceNoteWithRecording=<T,>(note:Bag,target:NotesTarget,operationId:string,index:number,commit:()=>Promise<T>)=>trashVoiceNoteWithRecording(note,target,operationId,index,commit);
       // Offered only after a full Trash refused this exact voice note, and confirmed separately.
       value.deleteVoiceNoteForever=(noteId:string)=>{const note=refusedVoice;if(note&&note.id===noteId)void deleteVoiceNote(value,note,true);};
@@ -497,7 +498,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
       current();const prepared=await chat.shell.prepareVoiceConversation(controller.signal);current();conversationPrepared=prepared;current();
       const previous=conversationVoice;conversationVoice=undefined;await stopping;await previous?.stop();current();
       if(developmentCloudRealtimeVoiceEnabled||(developmentCartesiaVoiceEnabled&&!developmentCloudVoiceEnabled)){
-        const direct=await developmentCartesiaConversation({binding:prepared.binding,assertCurrent:current,getUiContext:()=>{current();const context=chat.shell.voiceConversationContext(prepared.binding);const metadata=connectionController.voiceRendererMetadata(context);if(metadata.viewDelivery!=='completed-action')throw Error('The voice renderer is not bound to completed-action navigation.');return {viewDelivery:metadata.viewDelivery,uiViewPath:context.view==='home'?'/chat':'/'+(context.view==='workflows'?'automations':context.view),uiBrowserSurface:'native' as const,uiTimeZone:Intl.DateTimeFormat().resolvedOptions().timeZone};},onNavigate:async event=>{current();chat.shell.voiceSendTurnId=event.traceId;try{await chat.shell.applyRealtimeVoiceNavigation({...event,binding:prepared.binding,assertCurrent:current,navigation:navigationContinuation(chat,token,event.traceId)});current();}finally{if(chat.shell.voiceSendTurnId===event.traceId)chat.shell.voiceSendTurnId=undefined;}},onState:phase=>{if(token!==generation)return;if(phase==='idle'&&['starting','error'].includes(conversationState.phase))return;if(phase==='listening')conversationInterim='';conversationState={phase:['connecting','ready'].includes(phase)?'starting':['complete','interrupted'].includes(phase)?'listening':['listening','transcribing','thinking','speaking'].includes(phase)?phase as 'listening'|'transcribing'|'thinking'|'speaking':'idle'};refresh();},onPlaybackUnlockChange:()=>{if(token===generation)refresh();},onActionResult:summary=>{if(token===generation)chat.shell.toast(summary);},onTranscript:text=>{if(token===generation){if(!conversationInterim)conversationInterimKnownMessages=new Set((chat.shell.S().msgs||[]).map((m:Bag)=>String(m.id)));conversationLastTranscript=text;conversationInterim=text;refresh();}},onError:failure=>{if(token===generation){error=failure.message;conversationState={phase:'error',error:failure};refresh();}}});
+        const direct=await developmentCartesiaConversation({binding:prepared.binding,assertCurrent:current,getUiContext:()=>{current();const context=chat.shell.voiceConversationContext(prepared.binding);const metadata=connectionController.voiceRendererMetadata(context);if(metadata.viewDelivery!=='completed-action')throw Error('The voice renderer is not bound to completed-action navigation.');return {viewDelivery:metadata.viewDelivery,uiViewPath:alphaViewPath(context.view),uiBrowserSurface:'native' as const,uiTimeZone:Intl.DateTimeFormat().resolvedOptions().timeZone};},onNavigate:async event=>{current();chat.shell.voiceSendTurnId=event.traceId;try{await chat.shell.applyRealtimeVoiceNavigation({...event,binding:prepared.binding,assertCurrent:current,navigation:navigationContinuation(chat,token,event.traceId)});current();}finally{if(chat.shell.voiceSendTurnId===event.traceId)chat.shell.voiceSendTurnId=undefined;}},onState:phase=>{if(token!==generation)return;if(phase==='idle'&&['starting','error'].includes(conversationState.phase))return;if(phase==='listening')conversationInterim='';conversationState={phase:['connecting','ready'].includes(phase)?'starting':['complete','interrupted'].includes(phase)?'listening':['listening','transcribing','thinking','speaking'].includes(phase)?phase as 'listening'|'transcribing'|'thinking'|'speaking':'idle'};refresh();},onPlaybackUnlockChange:()=>{if(token===generation)refresh();},onActionResult:summary=>{if(token===generation)chat.shell.toast(summary);},onTranscript:text=>{if(token===generation){if(!conversationInterim)conversationInterimKnownMessages=new Set((chat.shell.S().msgs||[]).map((m:Bag)=>String(m.id)));conversationLastTranscript=text;conversationInterim=text;refresh();}},onError:failure=>{if(token===generation){error=failure.message;conversationState={phase:'error',error:failure};refresh();}}});
         current();conversationVoice=direct;await direct.start();current();return;
       }
       const networkSpeech = cloudRuntimeEnabled || testMocksEnabled;
@@ -659,63 +660,28 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     const extra=assistant?assistantControls:direct?{canMute:true,muteAutomatically:direct.microphoneAutomaticallyMuted,muteLabel:direct.microphoneAutomaticallyMuted?'Microphone paused while Alpha speaks':direct.microphoneMuted?'Unmute microphone':'Mute microphone',muted:direct.microphoneMuted||direct.microphoneAutomaticallyMuted?'true':'false',toggleMute:()=>{if(owned()){direct.setMicrophoneMuted(!direct.microphoneMuted);refresh();}},needsPlaybackUnlock:direct.needsPlaybackUnlock,unlockPlayback:()=>{if(owned())void direct.unlockPlayback().then(refresh).catch(failure=>{error=failure instanceof Error?failure.message:'Playback could not unlock.';refresh();});}}:{};
     return {...extra,regionLabel:'Voice conversation',closeLabel:'Close voice conversation',state:phase,flex:awaiting?'0 0 auto':'1',clockSize:awaiting?28:48,clock:awaiting?'Review':`${Math.floor(seconds/60)}:${String(Math.floor(seconds%60)).padStart(2,'0')}`,live,levels:conversationLevels.map(peak=>({h:4+Math.round(44*peak)})),lines:[{t:conversationReviewRequired?'Microphone off. Review the phone action in this conversation. Switch to keyboard to continue; voice cannot resume this older request.':error||messages[phase]},...(phase==='error'&&conversationLastTranscript?[{t:'Last transcript: '+conversationLastTranscript}]:[])],review:false,typeChoice:false,lastTranscript:awaiting?'':conversationLastTranscript,interimTranscript:awaiting||(!direct&&!['listening','transcribing'].includes(phase))?'':conversationInterim,lastReply:awaiting?'':conversationLastReply,primaryLabel:'Stop voice conversation',primaryIcon:icons.stop,primaryDisabled:false,stop:()=>{if(owned())cancelChat(false,true);},recoveryLabel:mediaUnconfirmed?'':cloudRuntimeEnabled&&phase==='idle'&&!cloudConnectRequired?'Start Cloud voice':cloudConnectRequired?`Connect ${voiceServiceName()}`:!connectionController.getSnapshot().session?'Connect agent':phase==='error'&&!conversationReviewRequired?'Try voice again':'',recover,discard:()=>{if(owned())cancelChat();},keyboard:()=>{if(owned())cancelChat(true);}};
   }
-  async function deletionReceipt(row:AudioDeletion,status:'removed'|'restored'){
-    const result=await noteAudio.deletionStatus({audioId:row.audioId,noteId:row.note.id,operationId:row.id});
-    if(result.audioId!==row.audioId||result.noteId!==row.note.id||result.operationId!==row.id||result.status!==status)throw Error('Audio operation unconfirmed');
-  }
+  /**
+   * The recording side of voice-note deletion (receipts, erase, Trash purge, approved agent
+   * deletion, the interrupted-deletion backstop, status passes and leases) is the shared
+   * plugin-notes recording effects over AlphaNoteAudio. Callers hold the deletion-effects lock.
+   */
+  let sharedRecordingEffects:NotesRecordingEffects|undefined;
+  // Created on first use, so installing the voice views needs no Notes storage.
+  const recordingEffects=()=>sharedRecordingEffects??=createNotesRecordingEffects({recordings:noteAudio,journal:audioDeletionJournal,savedNotes,now:()=>Date.now()});
+  const deletionReceipt=(row:AudioDeletion,status:'removed'|'restored')=>recordingEffects().confirmReceipt(row,status);
+  const eraseForever=(row:AudioDeletion)=>recordingEffects().eraseForever(row);
   const trashRow=(entry:NotesTrashEntry):AudioDeletion=>{
     if(!entry.audio||!entry.target)throw Error('This Trash entry has no recording');
     return {id:entry.id,target:entry.target,note:entry.note,audioId:entry.audio.audioId};
   };
-  /** Caller holds the deletion-effects lock. Erases the recording only when its own operation trashed it. */
-  async function purgeTrashedRecording(entry:NotesTrashEntry){
-    if(!entry.audio)return true;
-    // An unconfirmed deletion stays under review; it is never purged out from under its recovery row.
-    if((await pendingAudioDeletions())[entry.id])return false;
-    const row=trashRow(entry);
-    // Never erase a recording that a saved note still references (live again, or re-associated).
-    // A Notes reset replaces the collection identity, so the tombstone alone cannot be required.
-    if((await savedNotes()).some(n=>n.id===row.note.id||n.audio?.audioId===row.audioId))return false;
-    const result=await noteAudio.purge({audioId:row.audioId,noteId:row.note.id,operationId:row.id});
-    if(result.audioId!==row.audioId||result.noteId!==row.note.id||result.operationId!==row.id||result.status!=='purged')throw Error('Recording erase unconfirmed');
-    return true;
-  }
   /**
-   * Approved agent deletion of a voice note. Caller holds the deletion-effects lock.
-   * Same protocol as the editor delete: Trash row and recovery row before the tombstone
-   * commit, then the recording moves to the audio trash under the same operation id, so
-   * Trash restores or purges note and recording together. A failure after the commit
-   * leaves the recovery row for review; it never repeats a possibly completed effect.
+   * Approved agent deletion of a voice note. Same protocol as the editor delete: Trash row and
+   * recovery row before the tombstone commit, then the recording moves to the audio trash under
+   * the same operation id, so Trash restores or purges note and recording together.
    */
-  async function trashVoiceNoteWithRecording<T>(note:Bag,target:NotesTarget,operationId:string,index:number,commit:()=>Promise<T>):Promise<T>{
-    const audioId=note.audio?.audioId;let row:AudioDeletion|undefined;
-    if(typeof audioId==='string'&&audioId&&note.audio?.noteId===note.id&&audioOperation.test(operationId)){
-      if(Object.values(await pendingAudioDeletions()).some(x=>x.note.id===note.id))throw Error('A deletion of this voice note needs review first');
-      const metadata=await noteAudio.describe({audioId}).catch(()=>null);
-      // A recording that is already gone or owned elsewhere is left alone; the note text still goes to Trash.
-      if(metadata&&metadata.noteId===note.id&&metadata.audioId===audioId&&!metadata.deletedAt)row={id:operationId,target,note:note as AudioDeletion['note'],audioId};
-    }
-    await editNotesTrash(doc=>addNotesTrashEntry(doc,{id:operationId,note:note as NotesTrashEntry['note'],target,index,deletedAt:Date.now(),...(row?{audio:{audioId:row.audioId}}:{})}));
-    if(!row)return commit();
-    await changeAudioDeletion(row,true);
-    let result:T;
-    try{result=await commit();}catch(error){
-      // Proven unchanged: retire the recovery row. Otherwise it stays for review.
-      try{if(await audioDeletionNoteState(row)==='original')await changeAudioDeletion(row,false);}catch{/* Retained for review. */}
-      throw error;
-    }
-    try{
-      if(await audioDeletionNoteState(row)!=='deleted')throw Error('Saved note changed');
-      const retained=await noteAudio.describe({audioId:row.audioId});
-      if(retained.noteId!==row.note.id||retained.audioId!==row.audioId)throw Error('Recording association changed');
-      const dispatched={...row,audioRequested:true as const};await changeAudioDeletion(row,false,dispatched);row=dispatched;
-      if(!retained.deletedAt)try{await noteAudio.remove({audioId:row.audioId,noteId:row.note.id,operationId:row.id});}catch{/* Readback only. */}
-      const removed=await noteAudio.describe({audioId:row.audioId});
-      if(removed.noteId!==row.note.id||!removed.deletedAt)throw Error('Recording deletion unconfirmed');
-      await deletionReceipt(row,'removed');
-      await changeAudioDeletion(row,false);
-    }catch{/* The committed note deletion stands; the recovery row keeps the recording under review. */}
-    return result;
+  function trashVoiceNoteWithRecording<T>(note:Bag,target:NotesTarget,operationId:string,index:number,commit:()=>Promise<T>):Promise<T>{
+    return recordingEffects().trashWithRecording({note:note as AudioDeletion['note'],target,operationId,commit,
+      addTrashEntry:async audio=>{await editNotesTrash(doc=>addNotesTrashEntry(doc,{id:operationId,note:note as NotesTrashEntry['note'],target,index,deletedAt:Date.now(),...(audio?{audio}:{})}));}});
   }
   async function dropTrashEntry(id:string){
     if((await readNotesTrash()).entries.some(entry=>entry.id===id))await editNotesTrash(doc=>removeNotesTrashEntries(doc,[id]));
@@ -755,21 +721,6 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     });}catch{current.toast('Restore is unconfirmed. Reopen Notes and check deletion status. No newer note was replaced.');}
     finally{deletionBusy=false;void refreshDeletionStatus(current);}
     return done;
-  }
-  /**
-   * Permanent erase for a deletion that skipped Trash. Caller holds the deletion-effects lock,
-   * the tombstone is committed and this operation owns the audio trash. Idempotent: a recording
-   * already erased by this operation is only confirmed. A recording that any saved note
-   * references is never erased; the recovery row then stays for review.
-   */
-  async function eraseForever(row:AudioDeletion){
-    const status=await noteAudio.deletionStatus({audioId:row.audioId,noteId:row.note.id,operationId:row.id});
-    if(status.audioId!==row.audioId||status.noteId!==row.note.id||status.operationId!==row.id)throw Error('Audio operation unconfirmed');
-    if(status.status==='purged')return;
-    if(status.status!=='removed')throw Error('Audio operation unconfirmed');
-    if((await savedNotes()).some(n=>n.id===row.note.id||n.audio?.audioId===row.audioId))throw Error('A saved note references this recording');
-    const result=await noteAudio.purge({audioId:row.audioId,noteId:row.note.id,operationId:row.id});
-    if(result.audioId!==row.audioId||result.noteId!==row.note.id||result.operationId!==row.id||result.status!=='purged')throw Error('Recording erase unconfirmed');
   }
   /**
    * Editor deletion of a voice note. Normally the note and recording move to Trash. With
@@ -846,48 +797,6 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         }
   }
   /**
-   * Backstop for a permanent voice deletion that process death interrupted (the row was written by
-   * an earlier process, so none of its effects is in flight). Caller holds the deletion-effects
-   * lock. Every input is read back from authoritative storage; the plan either finishes the
-   * confirmed deletion for exactly this note and recording or returns to the state before it.
-   * Anything else, and any step that cannot be confirmed, leaves the row under review.
-   */
-  async function settleInterruptedPermanentDeletion(row:AudioDeletion,current:Bag){
-    const note=await audioDeletionNoteState(row);
-    let recording:PermanentDeletionEvidence['recording']=null,receipt:PermanentDeletionEvidence['receipt']=null;
-    try{
-      const metadata=await noteAudio.describe({audioId:row.audioId});
-      recording={ownedByNote:metadata.audioId===row.audioId&&metadata.noteId===row.note.id,inAudioTrash:!!metadata.deletedAt};
-      const status=await noteAudio.deletionStatus({audioId:row.audioId,noteId:row.note.id,operationId:row.id});
-      if(status.audioId===row.audioId&&status.noteId===row.note.id&&status.operationId===row.id&&['unknown','removed','restored','purged'].includes(status.status))receipt=status.status as PermanentDeletionEvidence['receipt'];
-    }catch{/* Unreadable recording state: the plan keeps the row under review. */}
-    const referencedElsewhere=(await savedNotes()).some(n=>n.id!==row.note.id&&n.audio?.audioId===row.audioId);
-    const step=planInterruptedPermanentDeletion({note,recording,receipt,referencedElsewhere});
-    if(step==='review')return;
-    if(step==='erase')await eraseForever(row);
-    else if(step==='trash-then-erase'){
-      // Same order as the uninterrupted deletion: dispatch mark, audio trash under this operation, erase.
-      if(!row.audioRequested){const dispatched=leasedDeletionRow({...row,audioRequested:true as const},Date.now());await changeAudioDeletion(row,false,dispatched);row=dispatched;}
-      await noteAudio.remove({audioId:row.audioId,noteId:row.note.id,operationId:row.id});
-      const removed=await noteAudio.describe({audioId:row.audioId});
-      if(removed.noteId!==row.note.id||!removed.deletedAt||await audioDeletionNoteState(row)!=='deleted')throw Error('Deletion unconfirmed');
-      // eraseForever requires this operation's own receipt: `removed` (it then erases) or `purged`. The
-      // Android native pass shares no lock with this one and may have finished the same operation meanwhile.
-      await eraseForever(row);
-    }else if(step==='restore-recording'){
-      await noteAudio.restore({audioId:row.audioId,noteId:row.note.id,operationId:row.id});
-      await deletionReceipt(row,'restored');
-      const restored=await noteAudio.describe({audioId:row.audioId});
-      if(restored.deletedAt||restored.noteId!==row.note.id||await audioDeletionNoteState(row)!=='original')throw Error('Rollback unconfirmed');
-    }else if(step==='delete-note'){
-      // The recording is already erased under this operation; the tombstone is for the exact reviewed revision only.
-      await current.commitAudioNoteDeletion(row,()=>{});
-      if(await audioDeletionNoteState(row)!=='deleted')throw Error('Deletion unconfirmed');
-    }
-    await changeAudioDeletion(row,false);
-    window.dispatchEvent(new Event('alpha:notes-trash-changed'));
-  }
-  /**
    * One pass at a time; a caller that arrives during a pass waits for that pass. Every caller first
    * shows the rows as they are now, without the lock, so a pass queued behind another view's
    * deletion never hides the review rows from a view that opens meanwhile.
@@ -903,18 +812,15 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
       current.setView('notes',{audioDeletionPending:Object.values(await pendingAudioDeletions()),audioDeletionChecked:true});
       await withAudioDeletionLock(async()=>{const rows=Object.values(await pendingAudioDeletions());
       for(const row of rows){try{
-        // Another live view's deletion is never settled here: its effects may still be in flight.
-        if(row.permanent&&!sessionDeletions.has(row.id)){if(!await deletionClaimedElsewhere(row.id))await settleInterruptedPermanentDeletion(row,current);continue;}
-        const metadata=await noteAudio.describe({audioId:row.audioId});
-        if(metadata.audioId===row.audioId&&metadata.noteId===row.note.id&&metadata.deletedAt&&await audioDeletionNoteState(row)==='deleted'){
-          // A permanent deletion this process started finishes its erase here; a Trash deletion only confirms its receipt.
-          if(row.permanent)await eraseForever(row);else await deletionReceipt(row,'removed');
-          await changeAudioDeletion(row,false);
-        }
+        // Rows an earlier process left are settled from readback (the interrupted-deletion plan), never
+        // while another live view claims them: their effects may still be in flight. Rows this process
+        // started only finish their erase or confirm their receipt.
+        const startedHere=sessionDeletions.has(row.id);
+        const retired=await recordingEffects().reconcile(row,{startedHere,claimedElsewhere:()=>deletionClaimedElsewhere(row.id),commitDeletion:settled=>current.commitAudioNoteDeletion(settled,()=>{})});
+        if(retired&&row.permanent&&!startedHere)window.dispatchEvent(new Event('alpha:notes-trash-changed'));
       }catch{/* Readback only. Preserve unknown operations. */}}
       // Rows still shown under review stay leased, so the native passes never erase what Restore offers.
-      const now=Date.now();
-      for(const row of Object.values(await pendingAudioDeletions()))if(deletionLeaseDue(row,now))try{await changeAudioDeletion(row,false,leasedDeletionRow(row,now));}catch{/* Renewed on the next pass. */}
+      await recordingEffects().renewLeases();
       current.setView('notes',{audioDeletionPending:Object.values(await pendingAudioDeletions()),audioDeletionChecked:true});
     });}catch{current.setView('notes',{audioDeletionRecoveryFailed:true,audioDeletionChecked:true});}finally{deletionRefresh=null;}
     })();

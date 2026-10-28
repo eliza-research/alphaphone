@@ -10,9 +10,7 @@ test('delayed provider results cannot cross a lifecycle or permission boundary',
  try{
   execFileSync(java('javac'),['--release','11','-d',dir,join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/NativeReadEpoch.java'),join(root,'test/fixtures/NativeReadEpochTest.java')],{timeout:60000});
   assert.match(execFileSync(java('java'),['-cp',dir,'ai.elizaresearch.alphaphone.NativeReadEpochTest'],{encoding:'utf8',timeout:15000}),/PASS native read publication fences/);
-  const catalog=readFileSync(join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/PermittedMediaCatalog.java'),'utf8');
-  assert.match(catalog,/main\.post\(\(\)->\{try\{requireReadTicket\(ticket\);call\.resolve/);
-  assert.match(catalog,/checkReadAccess/);assert.match(catalog,/ACTION_SCREEN_OFF/);
+  // The catalog's own ticket checks live in the shared native media module and are tested there.
   const photos=readFileSync(join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaPhotosPlugin.java'),'utf8');
   assert.match(photos,/permitted\.publish\(call,value,ticket\)/);
   const facade=readFileSync(join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaPhotoLibraryPlugin.java'),'utf8');

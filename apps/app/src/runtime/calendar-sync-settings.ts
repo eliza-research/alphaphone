@@ -2,7 +2,7 @@ import {calendarSourceKey,type AgentCalendar,type AgentCalendarSyncReview} from 
 import { calendarSyncHost } from "./calendar-sync-host";
 import { googleConnectionController } from "./google-connection-ui";
 import { holdPhoneInert } from "./modal-inert";
-import type { CalendarSyncReview } from "./calendar-sync-controller";
+import type { CalendarSyncReview } from "./calendar-sync-host";
 /** Explicit destination review. Opening Settings does not enable sync or dispatch provider writes. */
 export type CanonicalCalendarSyncSettings={calendar:AgentCalendar;current():boolean;canChange():boolean};
 export function openCalendarSyncSettings(canonical?:CanonicalCalendarSyncSettings) {

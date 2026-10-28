@@ -16,9 +16,7 @@ function completeAospLock(dir) {
   write("android/aosp/product.json", { ...product, hostPackages: product.hostPackages.map(pkg => ({ ...pkg, version: "1.0.0", sha256: "e".repeat(64) })),
     signer: { ...product.signer, platformCertificateSha256: "c".repeat(64) } });
   write(product.brandConfig, read(product.brandConfig));
-  const lock = read(product.sourceLock.file);
-  Object.assign(lock.profiles.cuttlefish.manifest, { tag: "android-17.0.0_r1", tagObject: "a".repeat(40), commit: "b".repeat(40) });
-  write(product.sourceLock.file, lock);
+  write(product.sourceLock.file, read(product.sourceLock.file));
   write("android/release-signer.json", { ...read("android/release-signer.json"), signerSha256: "d".repeat(64) });
 }
 function zip(file, entries) {
@@ -199,6 +197,8 @@ for (const mode of ['native', 'test-mocks', 'cloud', 'wrong-cloud-profile']) tes
   for (const name of ['scripts', 'bin']) fs.mkdirSync(path.join(dir, name));
   fs.symlinkSync(path.join(root, 'scripts/audit-production-bundle.mjs'), path.join(dir, 'scripts/audit-production-bundle.mjs'));
   fs.writeFileSync(path.join(dir, 'scripts/stage-local-agent-sources.mjs'), '');
+  // The generated Gradle host is written before the source snapshot; the stub stands in for it.
+  fs.writeFileSync(path.join(dir, 'scripts/android-host.mjs'), '');
   fs.writeFileSync(path.join(dir, 'scripts/source-snapshot.mjs'), 'console.log(JSON.stringify({digest:"synthetic-stable-source"}));');
   fs.writeFileSync(path.join(dir, 'bin/npm'), `#!/usr/bin/env node
 import fs from 'node:fs';

@@ -4,7 +4,7 @@ import { registerPlugin } from '../platform-plugins';
 import { DailyApps, type NativeResult } from '../daily';
 import { filesIndex, compareFilesEntries, matchesFileQuery, sortLabel, typeLabel, type RecentFile, type SortMode } from './files-index';
 import { reviewContentQuestion } from '../browser/content-question';
-import { sensitiveReadingText } from '../browser/reading-sensitive';
+import { sensitiveReadingText } from '../../../../.eliza/client-features/plugins/plugin-native-browser-surface/src/page-reading.ts';
 import { FOLDER_CONTEXT_EVENT, createFolderRevisions, folderExcerpt, folderScope, folderScopeCurrent } from './context-selection';
 type Bag=Record<string,any>;
 type Entry={id:string;parentId?:string;name:string;mimeType:string;directory:boolean;size:number;modified?:number;modifiedAt?:number;revision:string;canCreate:boolean;canRename:boolean;canDelete:boolean;canMove:boolean};

@@ -14,7 +14,7 @@ ELIZAOS_APP_LINK_HOST=eliza.app npm run android:build:local
 ```
 
 Without that explicit build setting, Gradle emits no HTTPS App Link filter.
-`android/app/build.gradle` deliberately writes a `${appLinkHost}` manifest
+`android/app/product.gradle` deliberately writes a `${appLinkHost}` manifest
 placeholder; Android manifest merging resolves it from `manifestPlaceholders`.
 Inspect the final APK manifest, not only the generated overlay. Both distributions
 must declare HTTPS host `eliza.app` and exact path `/alphaphone/auth/callback`.

@@ -1,0 +1,114 @@
+{
+  "schema": "elizaos.mobile-product",
+  "schemaVersion": 1,
+  "revision": 1,
+  "identity": {
+    "appName": "Alpha Phone",
+    "appId": "ai.elizaresearch.alphaphone",
+    "characterName": "Alpha"
+  },
+  "theme": {
+    "id": "alpha-phone",
+    "name": "Alpha Phone",
+    "description": "Alpha Phone reference design: black and white with a blue accent",
+    "defaultAppearance": "light",
+    "fonts": {
+      "body": "'Public Sans', system-ui, sans-serif",
+      "display": "'Denton', 'Fraunces', Georgia, serif"
+    },
+    "light": {
+      "bg": "#FFFFFF",
+      "bgAccent": "#FAFAFA",
+      "surface": "#F3F3F3",
+      "bgHover": "#E6E6E6",
+      "border": "#E3E3E3",
+      "text": "#000000",
+      "muted": "#6B6B6B",
+      "accent": "#0000FF",
+      "accentForeground": "#FFFFFF",
+      "linkColor": "#0000FF"
+    },
+    "dark": {
+      "bg": "#000000",
+      "bgAccent": "#0B0B0B",
+      "surface": "#151515",
+      "bgHover": "#262626",
+      "border": "#262626",
+      "text": "#FFFFFF",
+      "muted": "#8F8F8F",
+      "accent": "#0000FF",
+      "accentForeground": "#FFFFFF",
+      "linkColor": "#8A93FF"
+    },
+    "chrome": {
+      "light": { "scrim": "rgba(0,0,0,.18)", "shadow": "rgba(0,0,0,.12)", "frame": "#DCDCDC" },
+      "dark": { "scrim": "rgba(0,0,0,.55)", "shadow": "rgba(0,0,0,.45)", "frame": "#161616" }
+    },
+    "aliases": {
+      "--s1": "bgAccent",
+      "--s2": "surface",
+      "--s3": "bgHover",
+      "--line": "border",
+      "--fg": "text",
+      "--mut": "muted",
+      "--acc": "accent",
+      "--acct": "linkColor",
+      "--scrim": "scrim",
+      "--shc": "shadow"
+    }
+  },
+  "icons": {
+    "baseUrl": "/icons/lucide/",
+    "allApps": "layout-grid",
+    "views": {
+      "phone": "phone",
+      "messages": "message-square",
+      "inbox": "mail",
+      "calendar": "calendar",
+      "browser": "globe",
+      "camera": "camera",
+      "photos": "image",
+      "maps": "map-pin",
+      "notes": "sticky-note",
+      "contacts": "user-round",
+      "files": "folder",
+      "inventory": "wallet",
+      "automations": "workflow",
+      "settings": "settings"
+    }
+  },
+  "views": {
+    "order": ["phone", "messages", "inbox", "calendar", "browser", "camera", "photos", "maps", "notes", "contacts", "files", "inventory", "automations", "settings"],
+    "labels": {
+      "phone": "Phone",
+      "messages": "Messages",
+      "inbox": "Inbox",
+      "calendar": "Calendar",
+      "browser": "Browser",
+      "camera": "Camera",
+      "photos": "Photos",
+      "maps": "Maps",
+      "notes": "Notes",
+      "contacts": "Contacts",
+      "files": "Files",
+      "inventory": "Wallet",
+      "automations": "Workflows",
+      "settings": "Settings"
+    },
+    "rendererKeys": { "automations": "workflows", "inventory": "wallet" },
+    "legacyIds": { "home": "chat", "workflows": "automations", "wallet": "inventory" },
+    "serves": { "calendar": ["reminders"] }
+  },
+  "storage": {
+    "launcherFavorites": "alpha.launcher.favorites.v1",
+    "launcherBuiltinPrefix": "alpha:",
+    "launcherDefaultPolicy": "alpha-apps",
+    "retained": {
+      "appearance": "alpha.appearance.v1",
+      "connectionSelection": "alpha.connection.selection.v1",
+      "startupPermissions": "alpha.startup-permissions.v1",
+      "startupWalkthrough": "alpha:startup-permission-walkthrough:v1",
+      "dailyApps": "alphaphone:daily:v1"
+    }
+  }
+}
