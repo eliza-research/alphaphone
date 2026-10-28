@@ -1,3 +1,4 @@
+import {selectCalendarSource} from './helpers/browser-calendar';
 import {selectLegacyNotes} from './helpers/legacy-notes';
 import {seedCompletedAccessSetup} from './flag-off-android';
 // Core loops A–F and J01–J05 on the FLAG-OFF bundle (the bytes the distribution APKs package).
@@ -791,10 +792,7 @@ const SUMMARY = 'The team agreed to book the venue.';
 const ACTIONS = 'Book the venue\nEmail the caterer';
 
 async function openAndroidCalendar(page:Page){
- await button(page,'Calendar').click();
- await page.locator('summary').filter({hasText:'Calendar sources'}).click();
- await button(page,'Android calendars').click();
- await page.locator('summary').filter({hasText:'Calendar sources'}).click();
+ await selectCalendarSource(page, 'Android calendars');
 }
 
 test('loop B / J02 on Android: a recorded note, a resident summary and reviewed hand-offs save one reminder and one device event, each only on Save', async ({ page }) => {

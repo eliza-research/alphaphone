@@ -1,13 +1,19 @@
 import {expect, type Page} from '@playwright/test';
 
-/** Select the test-mocks-only calendar backed by the registered browser provider.
- * The platform stays web so draft persistence uses its real browser transactions.
- * Agent Calendar and retained app-calendar records remain separate sources. */
+/** Use the existing Settings page; selecting a source does not grant agent access. */
+export async function selectCalendarSource(page: Page, name: string) {
+  const back = page.getByRole('button', {name: 'Back to apps', exact: true});
+  if (await back.isVisible()) await back.click();
+  await page.getByRole('button', {name: 'Settings', exact: true}).click();
+  await page.getByRole('button', {name: 'Calendar', exact: true}).click();
+  await page.locator('[data-settings-page="Calendar"]').getByRole('button', {name, exact: true}).click();
+  await page.getByRole('button', {name: 'Back to Settings', exact: true}).click();
+  await page.getByRole('button', {name: 'Back to apps', exact: true}).click();
+  await page.getByRole('button', {name: 'Calendar', exact: true}).click();
+}
+
+/** The test-mocks-only browser provider retains its real browser transactions. */
 export async function openBrowserCalendar(page: Page) {
   await expect(page.getByRole('button', {name: 'Calendar', exact: true})).toBeVisible();
-  await page.getByRole('button', {name: 'Calendar', exact: true}).click();
-  const sources = page.locator('summary').filter({hasText: 'Calendar sources'});
-  await sources.click();
-  await page.getByRole('button', {name: 'Browser calendar (development)', exact: true}).click();
-  await sources.click();
+  await selectCalendarSource(page, 'Browser calendar (development)');
 }
