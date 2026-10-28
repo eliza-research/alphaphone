@@ -72,6 +72,14 @@ it('a newer committed view cancels a stale report before it can enter history',a
   const client=new ViewNavigationClient(async(path,body,signal)=>{const result=await f.request(path,body,signal);if(!held&&path.includes('/settings/navigate')){held=true;entered();await waiting;}return result;},()=>true,()=>f.state());
   const old=client.observeCommittedView();await started;f.set({view:'calendar',revision:2,sensitive:false});expect(await client.observeCommittedView()).toBe(true);resume();expect(await old).toBe(false);expect(f.calls.filter(c=>c.path.endsWith('interact-result'))).toHaveLength(1);client.dispose();
 });
+it('one explicit fresh turn can recover a failed observation without render retries',async()=>{
+  const f=await fixture();let offline=true,attempts=0;
+  const client=new ViewNavigationClient(async(path,body,signal)=>{attempts++;if(offline)throw Error('offline');return f.request(path,body,signal);},()=>true,()=>f.state());
+  expect(await client.observeCommittedView()).toBe(false);offline=false;
+  expect(await client.observeCommittedView()).toBe(false);expect(attempts).toBe(1);
+  expect(await client.observeCommittedView(true)).toBe(true);expect(attempts).toBe(4);
+  expect(await client.observeCommittedView(true)).toBe(true);expect(attempts).toBe(4);client.dispose();
+});
 it('offline observation has a bounded deadline and is not retried by repeated renders',async()=>{
   vi.useFakeTimers();vi.stubGlobal('document',{hidden:false});vi.stubGlobal('window',new EventTarget());let calls=0;
   const client=new ViewNavigationClient((_path,_body,signal)=>{calls++;return new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(Error('offline')),{once:true}));},()=>true,()=>({view:'settings',revision:1,sensitive:false}));

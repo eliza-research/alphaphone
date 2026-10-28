@@ -77,7 +77,7 @@ export class ViewNavigationClient {
   /** Record an already committed manual screen through the same owner-bound
    * prepare/claim/ack protocol as agent navigation. No second history is kept.
    * Cost: three requests per changed visible view; same-view updates reuse the result. */
-  observeCommittedView(): Promise<boolean> {
+  observeCommittedView(retryAfterFailure = false): Promise<boolean> {
     const context = this.context();
     if (this.disposed || !this.currentSession() || document.hidden || !context || context.sensitive) {
       this.observation?.controller.abort();
@@ -86,7 +86,7 @@ export class ViewNavigationClient {
     }
     if (this.delivering) return Promise.resolve(false);
     if (this.observation?.view === context.view) return this.observation.ready;
-    if (this.observationView === context.view) return Promise.resolve(this.observationAccepted);
+    if (this.observationView === context.view && (!retryAfterFailure || this.observationAccepted)) return Promise.resolve(this.observationAccepted);
     this.observation?.controller.abort();
     const controller = new AbortController();
     const deadline = setTimeout(() => controller.abort(), 5000);
