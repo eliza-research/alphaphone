@@ -21,7 +21,7 @@ for (const mode of ['create', 'read', 'update', 'complete', 'snooze', 'cancel', 
         nativePromise: async (plugin: string, method: string, input: any) => {
           if (plugin === 'AlphaActionJournal') {
             fixture.journal.push(method);
-            if (method === 'reserve') { w.calendarEntry={...structuredClone(input),phase:'reserved'}; return { created: true }; }
+            if (method === 'reserve') { w.calendarEntry={...structuredClone(input),phase:'reserved'}; return { created: true, entry: structuredClone(w.calendarEntry) }; }
             if (method === 'markApplying') { Object.assign(w.calendarEntry,{phase:'applying',attemptId:input.attemptId});return {}; }
             if(method==='get')return {entry:structuredClone(w.calendarEntry)};
             if(method==='list')return {entries:w.calendarEntry?[structuredClone(w.calendarEntry)]:[]};
