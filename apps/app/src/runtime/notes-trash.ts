@@ -2,7 +2,8 @@ import {Capacitor} from '@capacitor/core';
 import type {BrowserJsonDomainDocument} from '../browser/json-domain-document';
 import {secureConnectionStore} from './native-connection';
 import {SECURE_NOTES_SLOT} from './notes-secure-store';
-import {validateNotesTrash,type NotesTrashDocument} from './notes-trash-policy';
+import {notesTrashPolicy,type NotesTrashDocument} from './notes-trash-policy';
+import {compareExchangeNotesTrashPort,createNotesTrashStore,type NotesTrashStoragePort} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-trash-store.ts';
 export * from './notes-trash-policy';
 
 /**
@@ -23,19 +24,26 @@ function browserTrash(){return document??=import('../browser/json-domain-documen
  */
 export {withAudioDeletionLock as withNotesDeletionLock} from './note-audio-lock';
 
-export async function readNotesTrash():Promise<NotesTrashDocument>{
- return validateNotesTrash(android()?await secureConnectionStore.read<NotesTrashDocument>(NOTES_TRASH_SLOT):await(await browserTrash()).readJson<NotesTrashDocument>());
-}
+/**
+ * Alpha supplies only its durable slot; the shared Notes Trash storage step (elizaOS/eliza#38104)
+ * validates every edit in and out, writes through the slot's atomic edit and confirms it by reading
+ * it back. A lost race throws NotesTrashChanged; a write that does not read back throws
+ * NotesTrashUnconfirmed.
+ */
+const androidTrashPort:NotesTrashStoragePort=compareExchangeNotesTrashPort({
+ read:()=>secureConnectionStore.read<unknown>(NOTES_TRASH_SLOT),
+ compareExchange:async(expected,next)=>(await secureConnectionStore.compareExchange(NOTES_TRASH_SLOT,expected,next)).status==='saved',
+});
+const browserTrashPort:NotesTrashStoragePort={
+ read:async()=>(await browserTrash()).readJson<unknown>(),
+ edit:async update=>{await(await browserTrash()).editJson<unknown>(raw=>update(raw));},
+};
+const androidTrash=createNotesTrashStore(notesTrashPolicy,androidTrashPort),browserTrashStore=createNotesTrashStore(notesTrashPolicy,browserTrashPort);
+const trashStore=()=>android()?androidTrash:browserTrashStore;
+
+export function readNotesTrash():Promise<NotesTrashDocument>{return trashStore().read();}
 /** Compare-and-exchange edit with readback. Callers hold the Trash lock. */
-export async function editNotesTrash(update:(current:NotesTrashDocument)=>NotesTrashDocument):Promise<NotesTrashDocument>{
- let written:NotesTrashDocument|undefined;
- if(android()){
-  const raw=await secureConnectionStore.read<NotesTrashDocument>(NOTES_TRASH_SLOT);written=validateNotesTrash(update(validateNotesTrash(raw)));
-  if((await secureConnectionStore.compareExchange(NOTES_TRASH_SLOT,raw,written)).status!=='saved')throw Error('Notes Trash changed');
- }else await(await browserTrash()).editJson<NotesTrashDocument>(raw=>written=validateNotesTrash(update(validateNotesTrash(raw))));
- if(JSON.stringify(await readNotesTrash())!==JSON.stringify(written))throw Error('Notes Trash persistence unconfirmed');
- return written!;
-}
+export function editNotesTrash(update:(current:NotesTrashDocument)=>NotesTrashDocument):Promise<NotesTrashDocument>{return trashStore().edit(update);}
 
 /** Saved note records read from authoritative storage, never from an optimistic editor list. */
 export async function savedNotes():Promise<Array<{id:string;audio?:{audioId?:string}}>>{
