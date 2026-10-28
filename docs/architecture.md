@@ -88,7 +88,12 @@ remains required before shipping it. The coordinator, native review, authorizati
 recovery surface are the shared `plugin-native-system` `reset` package (`DataReset`,
 `DataResetPlugin`, `DataResetRecoveryActivity`); Alpha registers only its installed names
 (`AlphaReset`, `reset-alpha` marker, `:reset_recovery` process), copy and the bounded
-Cloud key revocation before dispatch (`AlphaDataReset`).
+Cloud key revocation before dispatch (`AlphaDataReset`). Settings and tile system facts
+(switch states, transport, battery), the allowlisted Android settings handoffs, the
+launcher's shade request and Android role wording are likewise the shared ElizaSystem
+bridge (`SystemFacts`, `SystemSettingsPages`, `SystemShade`) and
+`@elizaos/capacitor-system/settings`; Alpha keeps its row and tile labels, theme and the
+existing `AlphaDevice` method names its renderer calls.
 
 Production Notes and vault migration controls are disabled, including their native
 entry points. Damaged-data notices retain saved bytes and drafts without backup or

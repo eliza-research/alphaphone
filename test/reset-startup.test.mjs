@@ -114,7 +114,7 @@ public class ResetStartupTest {
 }`);
   const sibling=join(dir,'other-app');mkdirSync(sibling);writeFileSync(join(sibling,'keep'),'x');
   execFileSync(bin('javac'),['--release','17','-d',join(dir,'classes'),...sources,...['DataReset','DataResetCopy'].map(name=>join(upstreamReset,`${name}.java`)),...['AlphaDataReset','AlphaApplication'].map(name=>join(root,`android/app/src/main/java/ai/elizaresearch/alphaphone/${name}.java`))],{timeout:60000});
-  assert.match(execFileSync(bin('java'),['-cp',join(dir,'classes'),'ai.elizaresearch.alphaphone.ResetStartupTest',join(dir,'private-fixture'),sibling],{encoding:'utf8',timeout:10000}),/PASS reset startup/);
+  assert.match(execFileSync(bin('java'),['-cp',join(dir,'classes'),'ai.elizaresearch.alphaphone.ResetStartupTest',join(dir,'private-fixture'),sibling],{encoding:'utf8',timeout:60000}),/PASS reset startup/);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 

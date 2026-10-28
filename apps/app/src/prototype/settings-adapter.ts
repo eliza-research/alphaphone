@@ -28,6 +28,7 @@ import { exportVoiceTiming } from '../runtime/voice-timing';
 import { readNativeVoiceTiming } from '../runtime/native-voice-turn';
 import { listenerStatus, openListenerSettings, pauseListener, turnOffListener, type ListenerStatus } from '../runtime/always-on-listener';
 import { reviewDataReset, type DataResetPlugin } from '@elizaos/capacitor-system/reset';
+import { androidRoleLabel, parseRoleStatuses } from '@elizaos/capacitor-system/settings';
 import { leavePasswordManager, passwordEntryPage, passwordManagerGroups, passwordManagerLifecycle, refreshPasswordManager, PASSWORD_PAGES } from '../passwords/password-manager';
 
 type Bag = Record<string, any>;
@@ -108,22 +109,13 @@ const deviceApps = registerPlugin<{ buildInfo(): Promise<{ launcher?: boolean; v
 const notifications = registerPlugin<{status():Promise<Bag>;openAppSettings():Promise<Bag>;openChannelSettings(input:{id:string}):Promise<{status:string}>;crossAppStatus():Promise<Bag>;notificationApps():Promise<{apps:Bag[]}>;setNotificationPolicy(input:Bag):Promise<Bag>;resumeCrossApp(input:{expectedRevision:string}):Promise<Bag>;openNotificationAccess():Promise<Bag>;notificationHistory():Promise<{items:Bag[]}>;clearNotificationHistory():Promise<void>}>('AlphaNotifications');
 const system = registerPlugin<{ getDeviceSettings(): Promise<Bag>; getStatus(): Promise<{ roles?: Bag[] }>; requestRole(input: { role: string }): Promise<{ role: string; held: boolean; resultCode: number }> }>('ElizaSystem');
 type RoleRow = { role: string; held: boolean; available: boolean; holders: string[] };
-/** Android role state exactly as ElizaSystem.getStatus() reports it; malformed rows are dropped. */
+/** Android role state exactly as ElizaSystem.getStatus() reports it (shared parser); malformed rows are dropped. */
 export function readRoles(status: unknown): Record<string, RoleRow> {
-  const out: Record<string, RoleRow> = {};
-  const rows = (status as { roles?: unknown })?.roles;
-  if (!Array.isArray(rows)) return out;
-  for (const row of rows) if (row && typeof row.role === 'string' && typeof row.held === 'boolean' && typeof row.available === 'boolean')
-    out[row.role] = { role: row.role, held: row.held, available: row.available, holders: Array.isArray(row.holders) ? row.holders.filter((h: unknown) => typeof h === 'string') : [] };
-  return out;
+  return Object.fromEntries(parseRoleStatuses(status).map(row => [row.role, row]));
 }
+/** Shared truthful wording: an empty holder lookup never claims that no app holds the role. */
 export function roleValue(row: RoleRow | undefined): string {
-  if (!row) return 'Unavailable';
-  if (!row.available) return 'Not available on this device';
-  if (row.held) return 'Alpha Phone';
-  // Holder lookups are best effort (package visibility, the system resolver "android"), so an
-  // empty answer never claims that no app holds the role.
-  return row.holders.some(holder => holder !== 'android' && holder !== 'ai.elizaresearch.alphaphone') ? 'Another app' : 'Not Alpha Phone';
+  return androidRoleLabel(row, { packageName: 'ai.elizaresearch.alphaphone', appName: 'Alpha Phone' });
 }
 
 // settings-facts:begin (dependency-free; exercised by test/settings-truth.test.mjs)
