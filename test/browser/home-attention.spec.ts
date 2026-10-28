@@ -47,12 +47,16 @@ test('a failed Agent Calendar read shows the retry state and recovers only after
   await expect(card).toContainText('No upcoming events in this window');
   await refreshHomeCalendar(page,{fail:true});
   await expect(card).toHaveAttribute('aria-label', 'Open Agent Calendar');
-  await expect(card).toContainText('Calendar has not been verified');
-  await expect(card).toHaveAttribute('aria-description','Calendar service unavailable');
+  await expect(card).toContainText('Calendar unavailable');
+  await expect(card).not.toContainText(/No upcoming/);
+  await expect(card).toHaveAttribute('aria-description','Calendar service unavailable. Open Calendar to retry.');
   await expect(card).not.toContainText(/from this browser/);
   await page.evaluate(()=>(window as any).homeCalendarFixture.fail=false);
+  // Opening Calendar from the failed card is the explicit retry: it reads the agent calendar again.
+  const before = await page.evaluate(()=>(window as any).homeCalendarFixture.requests.length);
   await card.click();
-  await page.getByRole('button',{name:'Retry calendar and reminders',exact:true}).click();
+  await expect(page.locator('html')).toHaveAttribute('data-active-view','calendar');
+  await expect.poll(()=>page.evaluate(()=>(window as any).homeCalendarFixture.requests.length)).toBeGreaterThan(before);
   await returnToApps(page);
   await expect(card).toContainText('No upcoming events in this window');
 });

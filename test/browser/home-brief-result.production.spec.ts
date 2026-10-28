@@ -16,6 +16,7 @@
 // acceptance.
 import { test, expect, type Page } from '@playwright/test';
 import { flagOffAndroid, harness, button, fenceNetwork, expectNoDevelopmentSurface, residentHome, AGENT_NAME } from './flag-off-android';
+import { selectCalendarSource } from './helpers/browser-calendar';
 
 test.beforeEach(({}, testInfo) => { test.skip(testInfo.project.name !== 'production', 'Production bundle only'); });
 
@@ -210,13 +211,10 @@ test('Home follows the device calendars the owner chose in Calendar, with that c
   await canonicalHome(page, 'event');
   const card = calendarCard(page);
   await expect(card).toContainText('Agent calendar meeting');
-  // The owner chooses the source in Calendar; Home's agenda reads the same source.
+  // The owner chooses the source in Settings > Calendar; Home's agenda reads the same source.
   const choose = async (source: string) => {
-    await button(page, 'Calendar').click();
+    await selectCalendarSource(page, source);
     await expect(page.locator('html')).toHaveAttribute('data-active-view', 'calendar');
-    const sources = page.locator('summary').filter({ hasText: 'Calendar sources' });
-    await sources.click();
-    await button(page, source).click();
     await page.evaluate(() => window.dispatchEvent(new Event('launcher-home')));
     await expect(page.locator('html')).toHaveAttribute('data-active-view', 'home');
   };

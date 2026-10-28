@@ -12,11 +12,11 @@ async function openHome(page:Page,theme:string,size:{width:number;height:number}
   const date=new Date(Date.now()+3*86400000);date.setHours(12,0,0,0);
   const allDay=kind==='all-day',begin=allDay?Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()):date.getTime(),end=begin+(allDay?86400000:3600000);
   const title=kind==='unbroken'?'OwnedSyntheticCalendarTitle'.repeat(12):'Owned Calendar QA: a deliberately long event title with enough detail to wrap across all three lines';
-  return {title,startAt:new Date(begin).toISOString(),endAt:new Date(end).toISOString(),isAllDay:allDay,footer:allDay?'All day':new Date(begin).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})};
+  return {title,startAt:new Date(begin).toISOString(),endAt:new Date(end).toISOString(),isAllDay:allDay,day:date.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}),footer:allDay?'All day':new Date(begin).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+' – '+new Date(end).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})};
  },kind);
- await installHomeCalendar(page,expected);
+ await installHomeCalendar(page,expected&&{title:expected.title,startAt:expected.startAt,endAt:expected.endAt,isAllDay:expected.isAllDay});
  const card=page.locator('[data-alpha-home-calendar]');await expect(card).toBeVisible();await page.evaluate(()=>document.fonts.ready);
- if(expected){await expect(card).toHaveAccessibleName(`Open agent Calendar event ${expected.title}`);await expect(card.locator('.home-calendar-footer')).toHaveText(expected.footer);}
+ if(expected){await expect(card).toHaveAccessibleName(`Open calendar event: ${expected.title}, ${expected.day}, ${expected.footer}`);await expect(card.locator('.home-calendar-footer')).toHaveText(expected.footer);}
  else await expect(card).toHaveAccessibleName('Open Agent Calendar');
  return {card,expected};
 }

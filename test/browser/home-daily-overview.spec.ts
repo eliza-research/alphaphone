@@ -1,7 +1,7 @@
 import {installHomeCalendar,refreshHomeCalendar} from './helpers/home-calendar';
 import {test,expect,type Page} from '@playwright/test';
 import {returnToApps} from './app-navigation';
-import {openBrowserCalendar} from './helpers/browser-calendar';
+import {openBrowserCalendar,selectCalendarSource} from './helpers/browser-calendar';
 // Daily overview contract on Home (development lane): every card names its source and when it was
 // read, shows loading/empty/error states honestly, keeps overdue reminders visible, and shows the
 // latest retained brief only when one exists. Mail and digest data here is synthetic and injected
@@ -187,9 +187,10 @@ test('an upcoming reminder is attributed to the reminder store, not to a calenda
 test('calendar card shows the verified Agent Calendar event and its source without browser fallback',async({page},info)=>{
  await page.addInitScript(offline);await page.goto('/');await installHomeCalendar(page);
  const card=calendarCard(page);await expect(card).toContainText('No upcoming events in this window');
- const event=await page.evaluate(()=>{const date=new Date(Date.now()+2*86400000);date.setHours(9,30,0,0);return{title:'Synthetic overview event',startAt:date.toISOString(),endAt:new Date(date.getTime()+1800000).toISOString(),footer:date.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})};});
+ const event=await page.evaluate(()=>{const date=new Date(Date.now()+2*86400000);date.setHours(9,30,0,0);const end=new Date(date.getTime()+1800000),time=(d:Date)=>d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});return{title:'Synthetic overview event',startAt:date.toISOString(),endAt:end.toISOString(),day:date.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}),footer:time(date)+' – '+time(end)};});
  await installHomeCalendar(page,event);await page.reload();await installHomeCalendar(page,event);
- await expect(card).toHaveAccessibleName('Open agent Calendar event Synthetic overview event');
+ // The shared overview card names the event, its day and time; its source stays visible on the card.
+ await expect(card).toHaveAccessibleName(`Open calendar event: Synthetic overview event, ${event.day}, ${event.footer}`);
  await expect(card.locator('.home-calendar-footer')).toHaveText(event.footer);
  await expect(card.locator('[data-alpha-home-calendar-source]')).toHaveText('Agent Calendar');
  await expect(card).not.toContainText('In this app');await expect(card).toHaveAttribute('data-alpha-home-calendar-overdue','false');
@@ -209,11 +210,12 @@ test('events excluded by the Agent Calendar feed stay off Home until included ag
 
 test('a failed Agent Calendar read stays honest until an explicit Calendar retry',async({page})=>{
  await page.addInitScript(offline);await page.goto('/');await installHomeCalendar(page);
- const card=calendarCard(page);await refreshHomeCalendar(page,{fail:true});await expect(card).toContainText('Calendar has not been verified');await expect(card).toHaveAttribute('aria-description','Calendar service unavailable');
+ const card=calendarCard(page);await refreshHomeCalendar(page,{fail:true});await expect(card).toContainText('Calendar unavailable');await expect(card).not.toContainText(/No upcoming/);await expect(card).toHaveAttribute('aria-description','Calendar service unavailable. Open Calendar to retry.');
  const before=await page.evaluate(()=>(window as any).homeCalendarFixture.requests.length);
  await page.evaluate(()=>{(window as any).homeCalendarFixture.fail=false;});await page.getByRole('textbox',{name:'Ask Alpha',exact:true}).fill('Unsent rerender');await page.waitForTimeout(500);
- expect(await page.evaluate(()=>(window as any).homeCalendarFixture.requests.length)).toBe(before);await expect(card).toHaveAttribute('aria-description','Calendar service unavailable');
- await card.click();await page.getByRole('button',{name:'Retry calendar and reminders',exact:true}).click();await returnToApps(page);await expect(card).toContainText('No upcoming events in this window');
+ expect(await page.evaluate(()=>(window as any).homeCalendarFixture.requests.length)).toBe(before);await expect(card).toHaveAttribute('aria-description','Calendar service unavailable. Open Calendar to retry.');
+ // Opening Calendar from the failed card is the explicit retry: it reads the agent calendar again.
+ await card.click();await expect(page.locator('html')).toHaveAttribute('data-active-view','calendar');await returnToApps(page);await expect(card).toContainText('No upcoming events in this window');
  expect(await page.evaluate(()=>(window as any).homeCalendarFixture.requests.length)).toBeGreaterThan(before);
 });
 
@@ -221,16 +223,18 @@ test('an overdue reminder keeps priority over Agent Calendar and restores its ev
  await context.grantPermissions(['notifications']);await page.addInitScript(offline);await page.goto('/');
  const event={title:'Synthetic in-progress event',startAt:new Date(Date.now()-3600000).toISOString(),endAt:new Date(Date.now()+7200000).toISOString()};await installHomeCalendar(page,event);
  const scheduled=await page.evaluate(async()=>{const {DailyApps}=await import('/src/daily.ts'),at=Date.now()+1500;const a=await DailyApps.scheduleReminder({id:'overview-overdue-a',title:'Synthetic overdue reminder',body:'',at});const b=await DailyApps.scheduleReminder({id:'overview-overdue-b',title:'Synthetic second overdue',body:'',at:at+200});const future=await DailyApps.scheduleReminder({id:'overview-future',title:'Unselected future reminder',body:'',at:at+3600000});return{at,statuses:[a.status,b.status,future.status]};});expect(scheduled.statuses).toEqual(['scheduled','scheduled','scheduled']);await expect.poll(()=>page.evaluate(at=>Date.now()>at+400,scheduled.at),{timeout:10000}).toBe(true);
- await page.reload();await installHomeCalendar(page,event);const card=calendarCard(page);await expect(card).toHaveAttribute('data-alpha-home-calendar-overdue','true');await expect(card).toContainText('Synthetic overdue reminder');await expect(card).toContainText('2 overdue reminders');await expect(card).toHaveAttribute('aria-description',/^Overdue reminder saved on this browser, read /);await expect(card).not.toHaveAttribute('aria-description',/Unselected future reminder|Next:/);await expect(card.locator('[data-alpha-home-calendar-next-line]')).toHaveCount(0);await page.screenshot({path:info.outputPath('home-overdue.png'),animations:'disabled'});
+ await page.reload();await installHomeCalendar(page,event);const card=calendarCard(page);await expect(card).toHaveAttribute('data-alpha-home-calendar-overdue','true');await expect(card).toContainText('Synthetic overdue reminder');await expect(card).toContainText('2 overdue reminders');await expect(card).toHaveAttribute('aria-description',/^Overdue reminder saved on this browser, read /);// The overdue reminder leads but never hides what comes next: the agent's in-progress event, before the later reminder.
+ await expect(card).toHaveAttribute('aria-description',/Next: Synthetic in-progress event, Now\. Agent Calendar$/);await expect(card).not.toHaveAttribute('aria-description',/Unselected future reminder/);await page.screenshot({path:info.outputPath('home-overdue.png'),animations:'disabled'});
  await card.click();await expect(page.locator('html')).toHaveAttribute('data-active-view','calendar');await expect(page.getByText('Synthetic overdue reminder').first()).toBeVisible();
  const done=(id:string)=>page.evaluate(async id=>{const {DailyApps}=await import('/src/daily.ts'),row=(await DailyApps.listReminders()).reminders.find(r=>r.id===id)!;return(await DailyApps.reminderDecision({id,occurrenceId:row.occurrenceId!,action:'done'})).status;},id);
  expect(await done('overview-overdue-a')).toBe('completed');await page.reload();await installHomeCalendar(page,event);await expect(card).toContainText('Synthetic second overdue');expect(await done('overview-overdue-b')).toBe('completed');await page.reload();await installHomeCalendar(page,event);await expect(card).toHaveAttribute('data-alpha-home-calendar-overdue','false');await expect(card).toContainText(event.title);await expect(card.locator('[data-alpha-home-calendar-source]')).toHaveText('Agent Calendar');
 });
 
-test('an upcoming reminder remains separate from the Agent Calendar Home result',async({page,context})=>{
+// With no agent event before it, a reminder saved on this phone leads Home under Agent Calendar with its own source.
+test('an upcoming reminder leads Home under Agent Calendar with its own source and stays in Calendar',async({page,context})=>{
  await context.grantPermissions(['notifications']);await page.addInitScript(offline);await page.goto('/');await installHomeCalendar(page);
  expect(await page.evaluate(async()=>{const {DailyApps}=await import('/src/daily.ts');return(await DailyApps.scheduleReminder({id:'overview-upcoming',title:'Synthetic upcoming reminder',body:'',at:Date.now()+3600000})).status;})).toBe('scheduled');
- await page.reload();await installHomeCalendar(page);const card=calendarCard(page);await expect(card).toContainText('No upcoming events in this window');await expect(card).not.toContainText('Synthetic upcoming reminder');await expect(card).toHaveAttribute('data-alpha-home-calendar-overdue','false');
+ await page.reload();await installHomeCalendar(page);const card=calendarCard(page);await expect(card).toContainText('Synthetic upcoming reminder');await expect(card.locator('[data-alpha-home-calendar-origin]')).toHaveText('Reminder');await expect(card).toHaveAttribute('aria-description',/^Reminder saved on this browser/);await expect(card).not.toContainText('No upcoming events in this window');await expect(card).toHaveAttribute('data-alpha-home-calendar-overdue','false');
  expect(await page.evaluate(async()=>{const {DailyApps}=await import('/src/daily.ts');return(await DailyApps.listReminders()).reminders.some(r=>r.id==='overview-upcoming');})).toBe(true);
  await card.click();await expect(page.getByText('Synthetic upcoming reminder',{exact:true}).first()).toBeVisible();
 });
@@ -249,10 +253,9 @@ test('after a browser calendar read and local midnight, a reminder under Agent C
   return (await DailyApps.scheduleReminder({id:'overview-agent-after-device',title:'Synthetic agent-scope reminder',body:'',at:Date.now()+3600000})).status;
  })).toBe('scheduled');
  await page.reload();
- // The browser calendar is read once, then the owner chooses Agent Calendar in the same Calendar view.
+ // The browser calendar is read once, then the owner chooses Agent Calendar in Settings > Calendar.
  await openBrowserCalendar(page);
- const sources=page.locator('summary').filter({hasText:'Calendar sources'});
- await sources.click();await page.getByRole('button',{name:'Agent Calendar',exact:true}).click();await sources.click();
+ await selectCalendarSource(page,'Agent Calendar');
  await returnToApps(page);
  const card=calendarCard(page);
  await expect(card).toContainText('Synthetic agent-scope reminder');
