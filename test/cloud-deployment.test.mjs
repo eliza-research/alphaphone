@@ -28,7 +28,7 @@ test('a different deployment changes actual native login, request admission and 
 import ai.eliza.auth.cloud.*;
 final class BuildConfig {static final boolean ELIZA_DEV_ALLOW_TEST_MOCKS=false;}
 final class AlphaRegistration {
-${registration.replace('registration(BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS)','registration(BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS)')}
+${registration}
 }`);
   fs.writeFileSync(path.join(temp,'DeploymentTest.java'),`package ai.elizaresearch.alphaphone;
 import ai.eliza.auth.cloud.*;
@@ -63,6 +63,21 @@ test('configuration refuses credentials, insecure URLs, paths, aliases and accid
   const config=structuredClone(defaults);config.production.api=api;assert.throws(()=>validateCloudDeployment(config));
  }
  const config=structuredClone(defaults);config.staging.api=config.production.api;assert.throws(()=>validateCloudDeployment(config));
+});
+test('configuration the shared native sign-in client cannot register fails at build time, not on the phone',()=>{
+ const refused=(environment,change)=>{const config=structuredClone(defaults);change(config[environment]);assert.throws(()=>validateCloudDeployment(config),undefined,JSON.stringify(config[environment]));};
+ for(const host of ['https://my_host.example.org','https://-api.example.org','https://api-.example.org'])for(const field of ['api','web'])refused('production',row=>{row[field]=host;});
+ for(const tenant of ['t'.repeat(65),'tenant id','tenant.v2','tenant:eu'])refused('staging',row=>{row.tenant=tenant;});
+ for(const name of ['N'.repeat(81),'Eliza‮Cloud','Eliza\u0085Cloud','Eliza​Cloud'])refused('production',row=>{row.name=name;});
+ // Accepted shapes stay accepted, and the services origin keeps its own browser-host rule.
+ const config=structuredClone(defaults);
+ config.production={...config.production,tenant:'Org_Tenant-1',name:'N'.repeat(80),services:'https://my_services.example.org'};
+ assert.doesNotThrow(()=>validateCloudDeployment(config));
+ // The shared registration constructor accepts every tenant this validator admits.
+ const shared=fs.readFileSync('vendor/eliza/packages/auth/android/src/main/java/ai/eliza/auth/cloud/CloudSignInEnvironment.java','utf8');
+ const tenantRule=shared.match(/tenant\.matches\("([^"]+)"\)/)?.[1];
+ assert.ok(tenantRule,'shared tenant rule located');
+ for(const tenant of ['Org_Tenant-1','elizacloud','elizacloud-staging','t'.repeat(64)])assert.match(tenant,new RegExp(`^(?:${tenantRule})$`),tenant);
 });
 
 test('build admission rejects drift in either renderer or native generated authorities',async()=>{
