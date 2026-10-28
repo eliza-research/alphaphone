@@ -7,7 +7,10 @@ final class RendererCredentialSlots {
   "workflow-notice-delivery", "workflow-notice-owner", "workflow-approval-notices", "action-journal", "hosted-background",
   "hosted-digests", "hosted-notices", "note-audio-metadata", "reminder-taps",
   // In-app Cloud sign-in: the pending Google PKCE record and the key acknowledgement receipt.
-  "cloud-signin"
+  "cloud-signin",
+  // The physical deployment namespace (CloudDeployment.STORAGE_NAMESPACE): a renderer slot under it
+  // would write cloud:* or local-agent-provider:v1 directly, skipping mutateCredentials.
+  "cloud-deployment"
  };
  static String requireAllowed(String slot) {
   if (slot == null || slot.isEmpty() || slot.length() > 1024) throw new SecurityException("Invalid credential slot");

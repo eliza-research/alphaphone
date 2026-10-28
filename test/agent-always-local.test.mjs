@@ -182,7 +182,7 @@ test('native starts the agent without a provider and never offers it a Cloud key
   assert.match(unbound, /env\.put\("ELIZAOS_CLOUD_USE_INFERENCE","false"\);/);
   assert.ok(!unbound.includes('readCredentialSlot'), 'the unbound launch reads no credential');
   // An empty provider slot is its own attachable generation (host-JVM tested in LocalAgentProviderAdmission).
-  assert.match(between(plugin, 'private static String storedProviderGeneration(', 'private void rejectPending('), /if\(saved==null\)return LocalAgentProviderAdmission\.NO_PROVIDER_GENERATION;/);
+  assert.match(between(plugin, 'private static InvocationOwnerCache.Owner readProviderOwner(', 'private void rejectPending('), /if\(saved==null\)return new InvocationOwnerCache\.Owner\(LocalAgentProviderAdmission\.NO_PROVIDER_GENERATION,Long\.MAX_VALUE\);/);
   assert.match(read('vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderAdmission.java'), /NO_PROVIDER_GENERATION="no-provider"/);
   // With no stored provider, no process holds a Cloud key: a sign-in change does not stop the agent.
   assert.match(store, /if\(java\.util\.Objects\.equals\(before,value\)\)return false;\n\s+\/\/[^\n]*\n\s+\/\/[^\n]*\n\s+if\(provider==null\)return false;/);
