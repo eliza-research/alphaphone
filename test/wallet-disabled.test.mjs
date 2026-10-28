@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync,statSync,existsSync} from 'node:fs';
 import {join,resolve} from 'node:path';
+import {pathToFileURL} from 'node:url';
 import {stripTypeScriptTypes} from 'node:module';
 // AP-13 / #422: Wallet is outside the MVP in both distributions and on the Alpha AOSP image. Its
 // views, deep links, native/payment adapters and agent actions stay unavailable; no payment, card
@@ -13,7 +14,9 @@ const dataModule=text=>'data:text/javascript;base64,'+Buffer.from(text).toString
 /** The renderer feature gate exactly as shipped, for a standalone/launcher install or the verified image. */
 async function features(image){
  const headers=image?[{name:'AlphaTelephony',methods:[{name:'imageCapability'}]}]:[];
- const aosp=stripTypeScriptTypes(read('apps/app/src/runtime/aosp-image.ts').replace("import { Capacitor } from '@capacitor/core';",`const Capacitor={getPlatform:()=>'android',PluginHeaders:${JSON.stringify(headers)}};`),{mode:'transform'});
+ const aosp=stripTypeScriptTypes(read('apps/app/src/runtime/aosp-image.ts').replace("import { Capacitor } from '@capacitor/core';",`const Capacitor={getPlatform:()=>'android',PluginHeaders:${JSON.stringify(headers)}};`)
+  // The shared telephony contract is a projected upstream module; import it by absolute URL from the data: module.
+  .replace(/from ['"](?:\.\.\/)+\.eliza\/client-features\//g,`from '${pathToFileURL(join(root,'.eliza/client-features'))}/`),{mode:'transform'});
  const source=stripTypeScriptTypes(read('apps/app/src/prototype/mvp-features.ts'),{mode:'transform'})
   .replace(/from ['"]\.\.\/browser\/dev-profile['"]/,`from '${dataModule('export const browserDevProfile=false;')}'`)
   .replace(/from ['"]\.\.\/runtime\/aosp-image['"]/,`from '${dataModule(aosp)}'`);
