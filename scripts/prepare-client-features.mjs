@@ -119,6 +119,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-calendar/src/api/client-calendar.ts',
   'plugins/plugin-calendar/src/browser.ts',
   'plugins/plugin-calendar/src/client/named-read.ts',
+  'plugins/plugin-calendar/src/client/availability-review.ts',
   'plugins/plugin-calendar/src/components/EventEditorDrawer.tsx',
   'plugins/plugin-calendar/src/components/event-editor-command.ts',
   'plugins/plugin-calendar/src/components/event-editor-policy.ts',
@@ -211,6 +212,8 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-assistant/src/services/device-actions/reminder-create-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/reminder-contract.ts',
   'plugins/plugin-files',
+  'plugins/plugin-inbox/src/mailbox',
+  'plugins/plugin-calendar/src/linked-sync',
   'plugins/plugin-maps/src/client',
   'plugins/plugin-maps/test/navigation-client.test.mjs',
   'plugins/plugin-notes/src/client',
@@ -245,6 +248,20 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
     if (content.split(before).length !== 2) throw Error('Review changed voice random-id import: ' + name);
     project(name, content.replace(before, 'import { randomId } from "./random-id.ts";'));
   }
+
+  // The shared linked-sync modules import @elizaos/contracts by package name. Alpha has no
+  // such package: the renderer resolves it through a Vite/tsc alias, but Node consumers
+  // (the Vite config bundle, backend hosts and node tests reach calendarSyncHttp through
+  // cloud-protocol) cannot. Every symbol they import is in calendar-linked-sync, so point
+  // exactly that one import at the projected contract file.
+  for (const file of ['google-sync-port.ts', 'sync-controller.ts', 'linked-store.ts']) {
+    const name = 'plugins/plugin-calendar/src/linked-sync/' + file;
+    const content = text(name), specifier = /\} from "@elizaos\/contracts";/g;
+    if ((content.match(specifier) || []).length !== 1 || /["']@elizaos\/contracts\//.test(content))
+      throw Error('Review changed linked-sync contracts import: ' + name);
+    project(name, content.replace(specifier, '} from "../../../../packages/contracts/src/calendar-linked-sync.ts";'));
+  }
+
   project('alpha-voice-core-protocol.ts','export {ElizaError} from "./packages/core/src/errors";\nexport {redactTrailingArgs} from "./packages/core/src/security/log-redaction";\nexport {parseViewInteractionClientId, AGENT_SURFACE_CAPABILITY_IDS} from "./packages/core/src/views/view-interact-protocol";\nexport {findViewActionHandoff, type ViewActionHandoff} from "./packages/core/src/views/view-action-handoff";\nexport type {PermissionState} from "./packages/core/src/types/permissions";\n');
   }
   const files = Object.fromEntries([...source].map(([name, file]) => [name, file.sha256]));

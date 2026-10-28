@@ -2,9 +2,11 @@ import {productionCloud, stagingCloud} from './cloud-deployment.generated.ts';
 import {browserCloudResidentEnabled,browserCloudResidentEnvironment} from './browser-cloud-resident.ts';
 import {calendarSyncHttp,type CalendarSyncRequest} from './calendar-linked-provider.ts';
 import type {AutomationsMethod} from './automations-route-policy.ts';
-import { reviewMailAttachment, type MailAttachment } from './inbox-attachment.ts';
-import { reviewOpaqueAttachment, type OpaqueMailAttachment } from './inbox-operation.ts';
-import { gmailCapabilitiesFor } from './gmail-grants.ts';
+import { reviewMailAttachment } from './inbox-attachment.ts';
+import type { OpaqueMailAttachment } from './inbox-operation.ts';
+import { gmailCapabilitiesFor, gmailConsentCapabilities, type GmailGrantRequest } from './gmail-grants.ts';
+import { ManagedGmailMailboxClient } from '../../../../.eliza/client-features/plugins/plugin-inbox/src/mailbox/managed-gmail-client.ts';
+import type { GmailAccount, GmailDraftContent, GmailDraftSummary, GmailInboxCapabilities, GmailInboxReceipt, GmailReadResult, GmailSearchPage, GmailThreadPage, GoogleConnection } from '../../../../.eliza/client-features/plugins/plugin-inbox/src/mailbox/types.ts';
 import type { CloudMapsRoute } from '../maps/cloud-provider.ts';
 import { authenticated as signInAuthenticated, googleOutcome, type CloudSignInGoogleOutcome, CloudSignInError, emailStarted, verified as signInVerified, type CloudSignInAuthenticated, type CloudSignInEmailStarted, type CloudSignInMfaRequired, type CloudSignInPort } from './cloud-sign-in.ts';
 import { BILLING_LIMITS_PATH, ENTITLEMENT_KEYS_PATH, ENTITLEMENT_PATH, REDEEM_PATH, entitlementFromResponse, entitlementKeysFromResponse, fallbackPlanFromLimits, membershipCreditDetailsFromLimits, type MembershipCreditDetails, normalizeSubscriptionCode, redeemFailureForStatus, redeemResultFromResponse, SubscriptionRedeemError, type EntitlementSource, type FallbackPlan, type RedeemResult } from './subscription-entitlement.ts';
@@ -90,84 +92,14 @@ export interface CloudAgent {
   /** Only validated REST targets, never internal bridge URLs. Null until available. */
   runtimeUrl: string | null;
 }
-export interface GoogleConnection {
-  configured: boolean; connected: boolean; reason: string;
-  connectionId: string | null; grantedCapabilities: string[];
-}
-/** Managed Google Calendar wire data. Cloud enforces ownership of each grant. */
-export interface GoogleCalendarSummary {
-  calendarId:string; summary:string; description:string|null; primary:boolean; accessRole:string;
-  backgroundColor:string|null; foregroundColor:string|null; timeZone:string|null; selected:boolean;
-}
-export interface GoogleCalendarEvent {
-  externalId:string; calendarId:string; title:string; description:string; location:string; status:string;
-  startAt:string; endAt:string; isAllDay:boolean; timezone:string|null; htmlLink:string|null; conferenceLink:string|null;
-  organizer:Record<string,unknown>|null;
-  attendees:Array<{email:string|null;displayName:string|null;responseStatus:string|null;self:boolean;organizer:boolean;optional:boolean}>;
-  metadata:Record<string,unknown>;
-}
-/** Core exhausts provider pages before returning; no client cursor exists. */
-export interface GoogleCalendarFeed { calendarId:string; events:GoogleCalendarEvent[]; syncedAt:string }
-export interface GoogleCalendarRange { timeMin:string; timeMax:string; timeZone:string }
-export interface GmailInboxCapabilities {
-  version:1; from:string; threads:boolean; send:boolean; providerDrafts:boolean;
-  mailboxMutations:boolean; attachments:boolean; providerExactlyOnce:false; atomicDraftReplacement:false;
-  /** Reviewed mark-read/mark-unread operations. Older servers omit it: false. */
-  readState:boolean;
-  /** Provider draft listing and content reads. Absent: false. */
-  draftsList:boolean;
-  /** Forward with the source message's attachments bound to its historyId. Absent: false. */
-  forwardAttachments:boolean;
-  /** Gmail search can list Trash. Absent: false. */
-  searchTrash:boolean;
-  /** Opaque byte-copy download of any attachment type under the cap. Absent: false. */
-  opaqueAttachments:boolean;
-  /** Outgoing attachment policy. Older servers publish maximumOutgoing 1 or omit the policy. */
-  attachmentPolicy:{maximumOutgoing:number;maximumBytes:number;maximumTotalBytes:number};
-}
-/** A provider-extracted link: inert data, never fetched or rendered as HTML. */
-export interface GmailLink { href: string; text: string }
-export interface GmailDraftSummary { draftId: string; messageId: string; subject: string; to: string[]; snippet: string; updatedAt: string | null }
-export interface GmailDraftContent { draftId: string; messageId: string; providerDigest: string; to: string[]; cc: string[]; bcc: string[]; subject: string; bodyText: string; threaded: boolean; attachmentCount: number;
-  /** False for an HTML-only draft, whose formatting a plain-text edit would discard. */
-  plainText: boolean }
-export interface GmailInboxReceipt {
-  requestId:string; kind:'send'|'draft-create'|'draft-replace'|'draft-delete'|'archive'|'unarchive'|'trash'|'untrash'|'mark-read'|'mark-unread';
-  reviewDigest:string; state:'prepared'|'dispatched'|'succeeded'|'rejected'|'outcome-unknown';
-  providerResult:Record<string,unknown>|null; rejectionCode:string|null;
-}
-export interface GmailAccount extends GoogleConnection { label: string }
-export interface GmailMessage {
-  id: string; threadId: string; subject: string; from: string; fromEmail: string | null;
-  to: string[]; cc?: string[]; replyTo?: string | null; snippet: string; receivedAt: string; unread: boolean;
-  /** Search hint from a multipart/mixed container; absent on older servers. */
-  hasAttachments?: boolean;
-}
+export type { GoogleConnection } from '../../../../.eliza/client-features/plugins/plugin-inbox/src/mailbox/types.ts';
+/** Managed Google Calendar wire data (@elizaos/plugin-calendar/linked-sync). Cloud enforces ownership of each
+ * grant and exhausts provider pages before returning; no client cursor exists. */
+import type { GoogleCalendarEvent, GoogleCalendarFeed, GoogleCalendarRange, GoogleCalendarSummary } from '../../../../.eliza/client-features/plugins/plugin-calendar/src/linked-sync/google-reader.ts';
+export type { GoogleCalendarEvent, GoogleCalendarFeed, GoogleCalendarRange, GoogleCalendarSummary };
+export type { GmailAccount, GmailDraftContent, GmailDraftSummary, GmailInboxCapabilities, GmailInboxReceipt, GmailLink, GmailMessage } from '../../../../.eliza/client-features/plugins/plugin-inbox/src/mailbox/types.ts';
 /** Only absolute http(s) links without credentials are kept; anything else is dropped as untrusted. */
-export function safeMailLink(value: unknown): GmailLink | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const row = value as Record<string, unknown>;
-  if (typeof row.href !== "string" || row.href.length > 2048 || typeof row.text !== "string") return null;
-  let url: URL;
-  try { url = new URL(row.href); } catch { return null; }
-  if ((url.protocol !== "https:" && url.protocol !== "http:") || url.username || url.password || !url.hostname) return null;
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: strip control characters from untrusted labels.
-  const text = row.text.replace(/[\x00-\x1f\x7f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
-  return { href: url.href, text: text || url.hostname };
-}
-function mailLinks(value: unknown): GmailLink[] {
-  if (value === undefined) return [];
-  if (!Array.isArray(value) || value.length > 200) throw new CloudProtocolError("invalid-response");
-  const seen = new Set<string>(), links: GmailLink[] = [];
-  for (const row of value) { const link = safeMailLink(row); if (link && !seen.has(link.href)) { seen.add(link.href); links.push(link); } }
-  return links.slice(0, 50);
-}
-/** The complete optional display body; oversized HTML keeps the plain alternative. */
-function mailHtml(value: unknown): {bodyHtml?: string} {
-  if (value !== undefined && value !== null && typeof value !== 'string') throw new CloudProtocolError('invalid-response');
-  return typeof value === 'string' && value && new TextEncoder().encode(value).length <= 512 * 1024
-    ? {bodyHtml: value} : {};
-}
+export { safeMailLink } from '../../../../.eliza/client-features/plugins/plugin-inbox/src/mailbox/links.ts';
 export class CloudProtocolError extends Error {
   constructor(readonly code: "invalid-response" | "http" | "expired" | "credentials-missing" | "credential-consumed" | "login-active" | "account-changed", readonly status?: number, readonly data?: unknown, readonly retryAfter?: string) {
     super(`Cloud ${code}${status ? ` (${status})` : ""}`);
@@ -203,7 +135,6 @@ export function delay(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-const GMAIL_CAPABILITIES: readonly string[] = ["google.basic_identity", "google.gmail.triage", "google.gmail.send", "google.gmail.drafts", "google.gmail.mailbox"];
 export class CloudProtocol {
   protected activeLogin: AbortController | null = null;
   constructor(readonly environment: CloudEnvironment, private readonly request: CloudNativeRequest,
@@ -629,141 +560,59 @@ export class CloudProtocol {
    * scopes, so the request also names what the selected account already holds
    * (`grantedCapabilities`); otherwise a reconnect could drop an earlier grant. Only known Gmail
    * capabilities are carried over. Callers that pass no grants keep the plain request. */
-  async initiateGmail(signal: AbortSignal, permission: 'read'|'modify'|'send'|'drafts'|'mailbox' = 'read', grantedCapabilities: readonly string[] = []): Promise<string> {
-    const requested = permission === "read" || permission === "modify" ? gmailCapabilitiesFor(permission)
-      : ["google.basic_identity", "google.gmail.triage", permission === "send" ? "google.gmail.send" : permission === "drafts" ? "google.gmail.drafts" : "google.gmail.mailbox"];
-    const kept = grantedCapabilities.filter(capability => GMAIL_CAPABILITIES.includes(capability));
-    const capabilities = [...new Set(["google.basic_identity", "google.gmail.triage", ...kept, ...requested])];
+  async initiateGmail(signal: AbortSignal, permission: GmailGrantRequest = 'read', grantedCapabilities: readonly string[] = []): Promise<string> {
     const response = await this.call("/api/v1/eliza/google/connect/initiate", signal, { authenticated: true,
-      body: { side: "owner", capabilities } });
+      body: { side: "owner", capabilities: gmailConsentCapabilities(permission, grantedCapabilities) } });
     return this.googleAuthUrl(response.authUrl);
   }
-
-  private googleConnection(value: unknown): GmailAccount {
-    const data = object(value);
-    if (typeof data.configured !== "boolean" || typeof data.connected !== "boolean" || !Array.isArray(data.grantedCapabilities)) throw new CloudProtocolError("invalid-response");
-    const identity = data.identity == null ? {} : object(data.identity);
-    return { configured: data.configured, connected: data.connected, reason: string(data.reason),
-      connectionId: optionalString(data.connectionId), grantedCapabilities: data.grantedCapabilities.map(string),
-      label: optionalString(identity.email) ?? optionalString(identity.name) ?? "Google account" };
+  /** The shared managed Gmail client (@elizaos/plugin-inbox/mailbox) on this Cloud credential and transport. */
+  private gmailClient?: ManagedGmailMailboxClient;
+  private get gmail(): ManagedGmailMailboxClient {
+    this.gmailClient ??= new ManagedGmailMailboxClient({
+      request: (path, signal, options = {}) => this.requestData(path, signal, { authenticated: true, ...options }),
+      invalidResponse: () => new CloudProtocolError("invalid-response"),
+      reviewAttachment: reviewMailAttachment,
+    });
+    return this.gmailClient;
   }
-  async gmailAccounts(signal: AbortSignal): Promise<GmailAccount[]> {
-    const data = await this.requestData("/api/v1/eliza/google/accounts?side=owner", signal, { authenticated: true });
-    if (!Array.isArray(data)) throw new CloudProtocolError("invalid-response");
-    return data.map(value => this.googleConnection(value));
-  }
-  private gmailMessage(value: unknown): GmailMessage {
-    const data = object(value);
-    if (!Array.isArray(data.to) || typeof data.isUnread !== "boolean" || typeof data.subject !== "string" || typeof data.snippet !== "string") throw new CloudProtocolError("invalid-response");
-    return { id: string(data.externalId), threadId: string(data.threadId), subject: data.subject,
-      from: string(data.from), fromEmail: optionalString(data.fromEmail), to: data.to.map(string), cc: Array.isArray(data.cc)?data.cc.map(string):[], replyTo:optionalString(data.replyTo),
-      snippet: data.snippet, receivedAt: string(data.receivedAt), unread: data.isUnread,
-      ...(data.hasAttachments === undefined ? {} : typeof data.hasAttachments === "boolean" ? { hasAttachments: data.hasAttachments } : (() => { throw new CloudProtocolError("invalid-response"); })()) };
-  }
-  /** One page of results. `nextPageToken` is the provider's opaque cursor for the same query, or null. */
+  gmailAccounts(signal: AbortSignal): Promise<GmailAccount[]> { return this.gmail.gmailAccounts(signal); }
   /** One search page. `mailboxHistoryId` is the Gmail mailbox revision read before the page was listed
    * (elizaOS/eliza#35908); two pages of one search with different values came from a changed mailbox.
    * Older Cloud servers omit it. */
-  async gmailSearch(grantId: string, query: string, signal: AbortSignal, maxResults: 10 | 25 | 50 = 25, pageToken?: string): Promise<{ messages: GmailMessage[]; syncedAt: string; nextPageToken: string | null; mailboxHistoryId?: string; supportsSpamTrash: boolean }> {
-    if (pageToken !== undefined && (typeof pageToken !== "string" || !pageToken || pageToken.length > 4096)) throw new TypeError("Invalid Gmail page token");
-    const params = new URLSearchParams({ side: "owner", grantId: string(grantId), query: string(query), maxResults: String(maxResults) });
-    if (pageToken !== undefined) params.set("pageToken", pageToken);
-    const data = await this.call(`/api/v1/eliza/google/gmail/search?${params}`, signal, { authenticated: true });
-    if (!Array.isArray(data.messages)) throw new CloudProtocolError("invalid-response");
-    const next = data.nextPageToken;
-    if (next != null && (typeof next !== "string" || !next || next.length > 4096 || next === pageToken)) throw new CloudProtocolError("invalid-response");
-    const revision = data.mailboxHistoryId;
-    if (revision != null && (typeof revision !== "string" || !/^\d{1,20}$/.test(revision))) throw new CloudProtocolError("invalid-response");
-    if(data.supportsSpamTrash!==undefined&&typeof data.supportsSpamTrash!=='boolean')throw new CloudProtocolError('invalid-response');
-    return { messages: data.messages.map(value => this.gmailMessage(value)), syncedAt: string(data.syncedAt), nextPageToken: next == null ? null : next, ...(revision == null ? {} : { mailboxHistoryId: revision }), supportsSpamTrash: data.supportsSpamTrash === true };
+  gmailSearch(grantId: string, query: string, signal: AbortSignal, maxResults: 10 | 25 | 50 = 25, pageToken?: string): Promise<GmailSearchPage> {
+    return this.gmail.gmailSearch(grantId, query, signal, maxResults, pageToken);
   }
   /** Revokes Eliza Cloud's stored Google grant for one owner connection. It does not delete mail and
    * cannot remove the app from the user's Google Account permissions; callers verify with gmailAccounts. */
-  async disconnectGmail(connectionId: string, signal: AbortSignal): Promise<void> {
-    const data = await this.call("/api/v1/eliza/google/disconnect", signal, { authenticated: true, body: { side: "owner", connectionId: string(connectionId) } });
-    if (data.ok !== true) throw new CloudProtocolError("invalid-response");
-  }
-  async gmailRead(grantId: string, messageId: string, signal: AbortSignal): Promise<{ message: GmailMessage; bodyText: string; bodyHtml?:string; links: GmailLink[];historyId:string|null;attachments:{partId:string;name:string;mimeType:string;size:number;supported:boolean}[] }> {
-    const params = new URLSearchParams({ side: "owner", grantId: string(grantId), messageId: string(messageId) });
-    const data = await this.call(`/api/v1/eliza/google/gmail/read?${params}`, signal, { authenticated: true });
-    if (typeof data.bodyText !== "string") throw new CloudProtocolError("invalid-response");
-    const message = this.gmailMessage(data.message);
-    if (message.id !== messageId) throw new CloudProtocolError("invalid-response");
-    const metadata=data.message&&typeof data.message==='object'?object(object(data.message).metadata??{}):{};
-    const attachments=Array.isArray(data.attachments)?data.attachments.map(value=>{const a=object(value);const name=typeof a.filename==='string'?a.filename:a.name;if(typeof a.partId!=='string'||typeof name!=='string'||typeof a.mimeType!=='string'||!Number.isSafeInteger(a.size)||(a.size as number)<0||a.supported!==undefined&&typeof a.supported!=='boolean')throw new CloudProtocolError('invalid-response');return {partId:a.partId,name,mimeType:a.mimeType,size:a.size as number,supported:typeof a.supported==='boolean'?a.supported:['application/pdf','text/plain','image/png','image/jpeg','image/webp'].includes(a.mimeType)};}):[];
-    return { message, bodyText: data.bodyText,...mailHtml(data.bodyHtml), links: mailLinks(data.links),historyId:typeof metadata.historyId==='string'?metadata.historyId:null,attachments };
-  }
-  async gmailInboxCapabilities(grantId:string,signal:AbortSignal):Promise<GmailInboxCapabilities> {
-    const data=await this.call(`/api/v1/eliza/google/gmail/inbox-v1/capabilities?${new URLSearchParams({grantId})}`,signal,{authenticated:true});
-    if(data.version!==1||data.providerExactlyOnce!==false||data.atomicDraftReplacement!==false||['threads','send','providerDrafts','mailboxMutations','attachments'].some(key=>typeof data[key]!=='boolean'))throw new CloudProtocolError('invalid-response');
-    for(const key of ['readState','draftsList','forwardAttachments','opaqueAttachments','searchTrash'])if(data[key]!==undefined&&typeof data[key]!=='boolean')throw new CloudProtocolError('invalid-response');
-    const policy=data.attachmentPolicy===undefined?{}:object(data.attachmentPolicy),limit=(value:unknown,fallback:number,max:number)=>{if(value===undefined)return fallback;if(!Number.isSafeInteger(value)||(value as number)<1||(value as number)>max)throw new CloudProtocolError('invalid-response');return value as number;};
-    const maximumBytes=limit(policy.maximumBytes,5*1024*1024,25*1024*1024),attachmentPolicy={maximumOutgoing:limit(policy.maximumOutgoing,1,20),maximumBytes,maximumTotalBytes:limit(policy.maximumTotalBytes,maximumBytes,25*1024*1024)};
-    return {version:1,from:string(data.from),threads:data.threads as boolean,send:data.send as boolean,providerDrafts:data.providerDrafts as boolean,mailboxMutations:data.mailboxMutations as boolean,attachments:data.attachments as boolean,providerExactlyOnce:false,atomicDraftReplacement:false,readState:data.readState===true,draftsList:data.draftsList===true,forwardAttachments:data.forwardAttachments===true,opaqueAttachments:data.opaqueAttachments===true,searchTrash:data.searchTrash===true,attachmentPolicy};
-  }
-  async gmailThread(grantId:string,threadId:string,signal:AbortSignal,cursor?:{offset:number;historyId:string}) {
-    const params=new URLSearchParams({grantId,threadId});if(cursor){params.set('offset',String(cursor.offset));params.set('historyId',cursor.historyId);}
-    const data=await this.call(`/api/v1/eliza/google/gmail/inbox-v1/thread?${params}`,signal,{authenticated:true});
-    if(data.version!==1||data.threadId!==threadId||!Array.isArray(data.messages)||data.messages.length>25||!Number.isSafeInteger(data.total)||!Number.isSafeInteger(data.offset)||data.offset!==(cursor?.offset??0))throw new CloudProtocolError('invalid-response');
-    const messages=data.messages.map(row=>{const item=object(row),message=this.gmailMessage(item.message);if(message.threadId!==threadId||typeof item.bodyText!=='string')throw new CloudProtocolError('invalid-response');return {message,bodyText:item.bodyText,...mailHtml(item.bodyHtml),links:mailLinks(item.links),historyId:typeof item.historyId==='string'?item.historyId:null,attachments:Array.isArray(item.attachments)?item.attachments.map(value=>{const a=object(value);if(typeof a.name!=='string'||typeof a.mimeType!=='string'||typeof a.size!=='number'||typeof a.supported!=='boolean')throw new CloudProtocolError('invalid-response');return {partId:typeof a.partId==='string'?a.partId:(()=>{throw new CloudProtocolError('invalid-response')})(),name:a.name,mimeType:a.mimeType,size:a.size,supported:a.supported};}):[]};});
-    const total=data.total as number,offset=data.offset as number;if(total<offset+messages.length||total>2000||data.nextOffset!==(offset+messages.length<total?offset+messages.length:null))throw new CloudProtocolError('invalid-response');
-    const historyId=string(data.historyId);if(cursor&&cursor.historyId!==historyId)throw new CloudProtocolError('invalid-response');return {messages,total,offset,historyId,nextOffset:data.nextOffset as number|null};
+  disconnectGmail(connectionId: string, signal: AbortSignal): Promise<void> { return this.gmail.disconnectGmail(connectionId, signal); }
+  gmailRead(grantId: string, messageId: string, signal: AbortSignal): Promise<GmailReadResult> { return this.gmail.gmailRead(grantId, messageId, signal); }
+  gmailInboxCapabilities(grantId: string, signal: AbortSignal): Promise<GmailInboxCapabilities> { return this.gmail.gmailInboxCapabilities(grantId, signal); }
+  gmailThread(grantId: string, threadId: string, signal: AbortSignal, cursor?: { offset: number; historyId: string }): Promise<GmailThreadPage> {
+    return this.gmail.gmailThread(grantId, threadId, signal, cursor);
   }
   /** Opaque byte copy of any type under the server cap. The bytes are never
    * previewed or interpreted; only the name, size and SHA-256 are checked here. */
-  async gmailOpaqueAttachment(grantId:string,messageId:string,partId:string,historyId:string,signal:AbortSignal):Promise<OpaqueMailAttachment>{
-    const data=await this.call(`/api/v1/eliza/google/gmail/inbox-v1/attachment?${new URLSearchParams({grantId,messageId,partId,historyId,opaque:'1'})}`,signal,{authenticated:true});
-    if(data.version!==1||data.opaque!==true||data.messageId!==messageId||data.partId!==partId||data.historyId!==historyId)throw new CloudProtocolError('invalid-response');
-    let checked:OpaqueMailAttachment;try{checked=await reviewOpaqueAttachment({name:string(data.name),mimeType:typeof data.mimeType==='string'?data.mimeType:'',dataBase64:string(data.dataBase64)});}catch{throw new CloudProtocolError('invalid-response');}
-    if(checked.sha256!==data.sha256||checked.size!==data.size)throw new CloudProtocolError('invalid-response');return checked;
+  gmailOpaqueAttachment(grantId: string, messageId: string, partId: string, historyId: string, signal: AbortSignal): Promise<OpaqueMailAttachment> {
+    return this.gmail.gmailOpaqueAttachment(grantId, messageId, partId, historyId, signal);
   }
   /** One page of provider drafts. Metadata only; open one with gmailDraftContent. */
-  async gmailDrafts(grantId:string,signal:AbortSignal,pageToken?:string):Promise<{drafts:GmailDraftSummary[];nextPageToken:string|null}>{
-    if(pageToken!==undefined&&(!pageToken||pageToken.length>4096))throw new TypeError('Invalid Gmail page token');
-    const params=new URLSearchParams({grantId});if(pageToken!==undefined)params.set('pageToken',pageToken);
-    const data=await this.call(`/api/v1/eliza/google/gmail/inbox-v1/drafts?${params}`,signal,{authenticated:true});
-    if(data.version!==1||!Array.isArray(data.drafts)||data.drafts.length>50)throw new CloudProtocolError('invalid-response');
-    const next=data.nextPageToken;if(next!=null&&(typeof next!=='string'||!next||next.length>4096||next===pageToken))throw new CloudProtocolError('invalid-response');
-    const drafts=data.drafts.map(row=>{const d=object(row);if(!Array.isArray(d.to)||typeof d.subject!=='string'||typeof d.snippet!=='string')throw new CloudProtocolError('invalid-response');return {draftId:string(d.draftId),messageId:string(d.messageId),subject:d.subject,to:d.to.map(string),snippet:d.snippet,updatedAt:optionalString(d.updatedAt)};});
-    return {drafts,nextPageToken:next==null?null:next};
+  gmailDrafts(grantId: string, signal: AbortSignal, pageToken?: string): Promise<{ drafts: GmailDraftSummary[]; nextPageToken: string | null }> {
+    return this.gmail.gmailDrafts(grantId, signal, pageToken);
   }
   /** Exact provider draft content and its raw-MIME digest from one snapshot. */
-  async gmailDraftContent(grantId:string,draftId:string,signal:AbortSignal):Promise<GmailDraftContent>{
-    const data=await this.call(`/api/v1/eliza/google/gmail/inbox-v1/draft?${new URLSearchParams({grantId,draftId,content:'1'})}`,signal,{authenticated:true});
-    if(data.id!==draftId||typeof data.providerDigest!=='string'||!/^[a-f0-9]{64}$/.test(data.providerDigest))throw new CloudProtocolError('invalid-response');
-    const content=object(data.content),list=(value:unknown)=>{if(!Array.isArray(value)||value.length>50)throw new CloudProtocolError('invalid-response');return value.map(string);};
-    if(typeof content.subject!=='string'||typeof content.bodyText!=='string'||typeof content.threaded!=='boolean'||!Number.isSafeInteger(content.attachmentCount)||typeof content.plainText!=='boolean')throw new CloudProtocolError('invalid-response');
-    return {draftId,messageId:string(data.messageId),providerDigest:data.providerDigest,to:list(content.to),cc:list(content.cc),bcc:list(content.bcc),subject:content.subject,bodyText:content.bodyText,threaded:content.threaded,attachmentCount:content.attachmentCount as number,plainText:content.plainText};
+  gmailDraftContent(grantId: string, draftId: string, signal: AbortSignal): Promise<GmailDraftContent> { return this.gmail.gmailDraftContent(grantId, draftId, signal); }
+  gmailAttachment(grantId: string, messageId: string, partId: string, historyId: string, signal: AbortSignal) {
+    return this.gmail.gmailAttachment(grantId, messageId, partId, historyId, signal);
   }
-  async gmailAttachment(grantId:string,messageId:string,partId:string,historyId:string,signal:AbortSignal){
-    const data=await this.call(`/api/v1/eliza/google/gmail/inbox-v1/attachment?${new URLSearchParams({grantId,messageId,partId,historyId})}`,signal,{authenticated:true});
-    if(data.version!==1||data.messageId!==messageId||data.partId!==partId||data.historyId!==historyId)throw new CloudProtocolError('invalid-response');
-    const file={name:string(data.name),mimeType:data.mimeType,dataBase64:string(data.dataBase64)} as MailAttachment;const checked=await reviewMailAttachment(file);if(checked.sha256!==data.sha256||checked.size!==data.size)throw new CloudProtocolError('invalid-response');return {...checked,dataBase64:file.dataBase64};
-  }
-  async gmailDraft(grantId:string,draftId:string,signal:AbortSignal){
-    const data=await this.call(`/api/v1/eliza/google/gmail/inbox-v1/draft?${new URLSearchParams({grantId,draftId})}`,signal,{authenticated:true});
-    if(data.id!==draftId||typeof data.providerDigest!=='string'||!/[a-f0-9]{64}/.test(data.providerDigest))throw new CloudProtocolError('invalid-response');return {draftId,messageId:string(data.messageId),providerDigest:data.providerDigest};
-  }
-  private gmailInboxReceipt(value:unknown,requestId:string):GmailInboxReceipt {
-    const data=object(value);if(data.requestId!==requestId||!['send','draft-create','draft-replace','draft-delete','archive','unarchive','trash','untrash','mark-read','mark-unread'].includes(String(data.kind))||!['prepared','dispatched','succeeded','rejected','outcome-unknown'].includes(String(data.state))||typeof data.reviewDigest!=='string'||!/^[a-f0-9]{64}$/.test(data.reviewDigest))throw new CloudProtocolError('invalid-response');
-    const providerResult=data.providerResult===null?null:object(data.providerResult);if((data.state==='succeeded')!==(providerResult!==null))throw new CloudProtocolError('invalid-response');
-    return {requestId,kind:data.kind as GmailInboxReceipt['kind'],state:data.state as GmailInboxReceipt['state'],reviewDigest:data.reviewDigest,providerResult,rejectionCode:data.rejectionCode===null?null:string(data.rejectionCode)};
-  }
-  async gmailPrepareOperation(grantId:string,requestId:string,proposal:Record<string,unknown>,signal:AbortSignal) {
-    const data=await this.call('/api/v1/eliza/google/gmail/inbox-v1/operations',signal,{authenticated:true,body:{grantId,requestId,proposal}});if(data.version!==1||data.providerExactlyOnce!==false)throw new CloudProtocolError('invalid-response');return {receipt:this.gmailInboxReceipt(data.receipt,requestId),review:object(data.review)};
+  gmailDraft(grantId: string, draftId: string, signal: AbortSignal) { return this.gmail.gmailDraft(grantId, draftId, signal); }
+  gmailPrepareOperation(grantId: string, requestId: string, proposal: Record<string, unknown>, signal: AbortSignal) {
+    return this.gmail.gmailPrepareOperation(grantId, requestId, proposal, signal);
   }
   /** One explicit reviewed dispatch. The caller persists its intent before calling.
    * Any lost/aborted response must use gmailOperation, never an automatic send retry. */
-  async gmailDispatchOperation(grantId:string,requestId:string,reviewDigest:string,proposal:Record<string,unknown>,signal:AbortSignal) {
-    const data=await this.call(`/api/v1/eliza/google/gmail/inbox-v1/operations/${encodeURIComponent(requestId)}/dispatch`,signal,{authenticated:true,body:{grantId,reviewDigest,proposal},timeoutMs:45000});if(data.version!==1||data.providerExactlyOnce!==false)throw new CloudProtocolError('invalid-response');return this.gmailInboxReceipt(data.receipt,requestId);
+  gmailDispatchOperation(grantId: string, requestId: string, reviewDigest: string, proposal: Record<string, unknown>, signal: AbortSignal): Promise<GmailInboxReceipt> {
+    return this.gmail.gmailDispatchOperation(grantId, requestId, reviewDigest, proposal, signal);
   }
-  async gmailOperation(grantId:string,requestId:string,signal:AbortSignal) {
-    const data=await this.call(`/api/v1/eliza/google/gmail/inbox-v1/operations/${encodeURIComponent(requestId)}?${new URLSearchParams({grantId})}`,signal,{authenticated:true});if(data.version!==1||data.providerExactlyOnce!==false)throw new CloudProtocolError('invalid-response');return this.gmailInboxReceipt(data.receipt,requestId);
-  }
-  async gmailStatus(signal: AbortSignal): Promise<GoogleConnection> {
-    const data = await this.call("/api/v1/eliza/google/status?side=owner", signal, { authenticated: true });
-    if (typeof data.configured !== "boolean" || typeof data.connected !== "boolean" || !Array.isArray(data.grantedCapabilities)) throw new CloudProtocolError("invalid-response");
-    return { configured: data.configured, connected: data.connected, reason: string(data.reason),
-      connectionId: optionalString(data.connectionId), grantedCapabilities: data.grantedCapabilities.map(string) };
-  }
+  gmailOperation(grantId: string, requestId: string, signal: AbortSignal): Promise<GmailInboxReceipt> { return this.gmail.gmailOperation(grantId, requestId, signal); }
+  gmailStatus(signal: AbortSignal): Promise<GoogleConnection> { return this.gmail.gmailStatus(signal); }
 }

@@ -47,11 +47,13 @@ async function setup(page:Page,parts:Part[],options:{opaque?:boolean;agent?:bool
   s.read=async()=>null;s.compareExchange=async()=>({status:'saved'});
   const f=(window as any).hostileFixture={attachmentRequests:[] as string[],mutations:0,agentPosts:[] as unknown[]};
   const message={id:'selected',threadId:'thread',from:'Fixture sender',fromEmail:'sender@example.invalid',to:['reader@example.invalid'],cc:[],replyTo:null,subject:'Invoices attached',snippet:'See attached',receivedAt:'2026-10-04T12:00:00Z',unread:false};
-  // The product's own response validation, fed the server's JSON for the requested part.
+  // The product's own response validation (CloudProtocol over the shared managed Gmail client), fed the
+  // server's JSON for the requested part through a synthetic authenticated transport.
   const validated=(method:'gmailAttachment'|'gmailOpaqueAttachment')=>async(grant:string,messageId:string,partId:string,historyId:string,signal:AbortSignal)=>{
    f.attachmentRequests.push(`${method}:${partId}`);
    const row=parts.find(part=>part.partId===partId);
-   return (CloudProtocol.prototype as any)[method].call({call:async()=>structuredClone(row!.response)},grant,messageId,partId,historyId,signal);
+   const protocol=new CloudProtocol('production',async()=>({status:200,data:structuredClone(row!.response)}),{read:async()=>({token:'fixture-token',credentialId:'fixture'}),write:async()=>{},clear:async()=>{}},async()=>{});
+   return (protocol as any)[method](grant,messageId,partId,historyId,signal);
   };
   const client={
    gmailAccounts:async()=>[{connectionId:'fixture-grant',label:'Fixture mailbox',configured:true,connected:true,reason:'connected',grantedCapabilities:['google.gmail.triage']}],
