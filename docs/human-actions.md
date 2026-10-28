@@ -71,6 +71,7 @@ Rules for every step:
 | [H-34](#h-34-reviewer-reproduction-and-target-user-acceptance) | Reviewer reproduction and target-user acceptance | Reviewer and owner | Not run |
 | [H-35](#h-35-review-the-flagged-licence-obligations) | Review the flagged licence obligations | Owner or counsel | Open (non-blocking, P-09) |
 | [H-36](#h-36-required-checks-ruleset-owners-choice) | Required checks ruleset (owner's choice) | Repository owner | Not installed |
+| [H-37](#h-37-confirm-or-override-the-default-product-choices) | Confirm or override the default product choices | Owner | Defaults applied; owner confirmation open |
 
 Dependencies: H-01 gates H-08; H-08 gates H-09; H-09 gates H-10, the release SHA-1 in H-12,
 H-13 and H-22; H-18 gates a distributable H-10; H-10, H-18 and H-20 gate production staging
@@ -596,6 +597,23 @@ distinct gates are recorded in `android/aosp/pixel10a-qualification-gates.json`
 - Seam: `scripts/ci/required-checks-ruleset.json`.
 - Verify: `node scripts/ci/read-required-checks.mjs` reports the installed ruleset.
 - Unblocks: enforced checks on main.
+
+## Product defaults to confirm
+
+### H-37 Confirm or override the default product choices
+
+- Who: owner.
+- Do: two product choices were taken by default on October 28 so implementation could continue;
+  confirm or override each. (1) The membership sheet in Settings is titled "Membership & credits",
+  as on NubsCarson's collector commit `7a44d7038` ("Preserve approved membership entry and
+  canonical sync product behavior"). (2) Notes are stored as canonical Eliza records (#621), and
+  the older Notes-storage specifications are rewritten for canonical records rather than retired.
+  An override changes the membership sheet title or the Notes storage contract before the pilot
+  build (H-10); neither choice reopens an approved P- decision.
+- Seam: the HUMAN decision issue that records both defaults, and a dated `P-` entry in
+  [decisions](decisions.md) once confirmed or overridden.
+- Verify: decisions.md records a dated entry for the membership sheet title and for Notes storage.
+- Unblocks: the final Settings copy and the Notes storage contract for the pilot build.
 
 ## Retired items
 
