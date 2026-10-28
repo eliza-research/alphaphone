@@ -61,7 +61,7 @@ final class NativeOwnerReminderHost {
    }
    JSONObject get(String path,JSONObject headers)throws Exception{
     check();JSONObject response=ports.exchange(new JSONObject(session.toString()),path,headers);check();
-    if(response.getInt("status")!=200)throw new SecurityException("Native owner context unavailable");
+    if(response.getInt("status")!=200){NativeNotificationDiagnostics.ownerRead(path,response.getInt("status"));throw new SecurityException("Native owner context unavailable");}
     String body=response.getString("body");if(body.length()>65536)throw new SecurityException("Native owner response too large");return new JSONObject(body);
    }
    void owner()throws Exception{

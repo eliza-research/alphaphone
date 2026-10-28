@@ -28,6 +28,7 @@ final class AlphaCanonicalNotifications {
  private NativeNotificationInbox inbox;
  private long attempt;
  private int failures;
+ private NativeNotificationDiagnostics.Stage connectStage=NativeNotificationDiagnostics.Stage.CAPTURE_OWNER;
  private AlphaCanonicalNotifications(Context context){this.context=context.getApplicationContext();}
  /** Called by the canonical resident service after provisioning its new private boot token. */
  static void resumeExisting(Context context){
@@ -88,13 +89,18 @@ final class AlphaCanonicalNotifications {
   if(stopped||active!=this)return;
   final long generation=++attempt;
   try{
+   connectStage=NativeNotificationDiagnostics.Stage.CAPTURE_OWNER;
    session=AlphaLocalAgentPlugin.captureReminderOwnerSession();
+   connectStage=NativeNotificationDiagnostics.Stage.READ_OWNER;
    identity=new NativeOwnerReminderHost(context).read();
    String nextOwner=HostedResultNotices.hash(identity.toString());
    if(owner!=null&&!owner.equals(nextOwner))throw new SecurityException("Notification owner changed");
    owner=nextOwner;
+   connectStage=NativeNotificationDiagnostics.Stage.FENCE;
    fence=new NativeOwnerReminderHost(context).reviewFence(identity);check();
+   connectStage=NativeNotificationDiagnostics.Stage.PERSIST_OWNER;
    AlphaLocalAgentPlugin.rememberNotificationOwner(context,session,identity);
+   connectStage=NativeNotificationDiagnostics.Stage.INBOX;
    if(inbox==null)inbox=new NativeNotificationInbox(context.getNoBackupFilesDir().getCanonicalFile().toPath(),owner,record->{
     check();return AlphaLocalAgentPlugin.withNotificationSession(session,()->{
      check();boolean accepted=NativeNotificationProjector.post(context,owner,record);check();return accepted;
@@ -102,6 +108,7 @@ final class AlphaCanonicalNotifications {
    },NativeNotificationProjector::syncDirectory,this::check);
    inbox.beginBaseline();
    ElizaAgentService.LocalStreamHandle handle=new ElizaAgentService.LocalStreamHandle();stream=handle;
+   connectStage=NativeNotificationDiagnostics.Stage.SUBSCRIBE;
    EVENTS.execute(()->{
     try{AlphaLocalAgentPlugin.subscribeNotificationEvents(session,event->{
      if(stopped||generation!=attempt)return;
@@ -144,6 +151,7 @@ final class AlphaCanonicalNotifications {
  }
  private void fail(long generation,Exception failure){
   if(generation!=attempt||stopped||active!=this)return;
+  NativeNotificationDiagnostics.failure(connectStage,failure);
   ++attempt;ElizaAgentService.LocalStreamHandle h=stream;stream=null;if(h!=null)h.cancel();
   // An authority change cannot authorize background enrollment or a retry.
   if(failure instanceof SecurityException){stop();return;}
