@@ -40,6 +40,14 @@ function storedPhoneSpec(value:unknown):{phoneSpec?:unknown}{
  if(typeof value!=='string'||value.length>65536)return {};
  try{const spec:unknown=JSON.parse(value);return spec&&typeof spec==='object'&&!Array.isArray(spec)?{phoneSpec:spec}:{};}catch{return {};}
 }
+/** The exact explanations the agent writes when it records a scheduled occurrence that passed while it was not running (workflow service, resident digest admission). */
+const MISSED_OCCURRENCE_TEXTS=new Set(['The scheduled time passed while the agent was not running. This occurrence did not run, and no backlog is executed.','The scheduled time was missed. No backlog was executed.']);
+/** A finished run is a missed occurrence only on the agent's own evidence: an engine-only marker, or its exact missed record with a real scheduled instant. A workflow whose last step merely returns `status: 'missed'` ran, so any executed step event refutes it. */
+function missedOccurrence(p:Record<string,any>,events:unknown[]):boolean{
+ if(p.finished!==true||events.some(e=>!!e&&typeof e==='object'&&typeof (e as Record<string,unknown>).nodeId==='string'))return false;
+ const at=p.missedOccurrenceAt;if((typeof at==='number'&&Number.isFinite(at))||(typeof at==='string'&&Number.isFinite(Date.parse(at))))return true;
+ const o=p.output;return !!o&&typeof o==='object'&&!Array.isArray(o)&&o.status==='missed'&&typeof o.scheduledAt==='string'&&Number.isFinite(Date.parse(o.scheduledAt))&&MISSED_OCCURRENCE_TEXTS.has(o.text);
+}
 export class WorkflowProtocol {
  hosted(){return new HostedDigestProtocol(this.request);}
 
@@ -74,7 +82,7 @@ export class WorkflowProtocol {
    ...(typeof p.stoppedAt==='string'?{stoppedAt:p.stoppedAt}:{}),
    ...(typeof p.error?.message==='string'?{error:p.error.message.slice(0,2000)}:{}),
    ...(p.output===undefined?{}:{output:workflowOutput(p.output,id)}),
-   ...(p.finished&&p.output&&typeof p.output==='object'&&!Array.isArray(p.output)&&p.output.status==='missed'?{missed:true as const}:{}),
+   ...(missedOccurrence(p,events)?{missed:true as const}:{}),
    ...(()=>{const r=reconciliation(p.reconciliation);return r?{reconciliation:r}:{};})(),
    events:events.slice(-100).map((event:unknown)=>{const e=obj(event);if(e.runId!==id||e.workflowId!==workflowId)throw new Error('Execution event identity mismatch');return {type:str(e.type).slice(0,120),at:str(e.timestamp),...(typeof e.nodeId==='string'?{node:e.nodeId.slice(0,200)}:{})};})};
  }
