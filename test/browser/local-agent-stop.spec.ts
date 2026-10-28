@@ -1,30 +1,35 @@
 import { test, expect } from '@playwright/test';
+import { installResidentAgentPlugin } from './helpers/resident-agent-plugin';
 
 // Real rendered connection UI/controller; only the native IPC boundary is synthetic.
 // No runtime, provider key, model request or external account is used.
 // Decision P-43: Stop is replaced by Restart; the agent is never left stopped.
 for (const scenario of ['confirmed', 'incomplete-timeout'] as const) {
   test(`Restart local agent waits for native shutdown, then starts again: ${scenario}`, async ({ page }) => {
+    await installResidentAgentPlugin(page);
     await page.addInitScript(() => {
       const w = window as any;
       w.androidBridge = {};
       const store = new Map();
       w.stopFixture = { starts: 0, stops: 0, polls: 0, status: { state: 'stopping', serviceActive: true, socketListening: true }, unexpected: [] as string[] };
       const methods = (names: string[]) => names.map(name => ({ name, rtype: 'promise' }));
+      const agent = w.residentAgent = w.createResidentAgentPlugin({ owner: () => 'fixture-owner', agentId: 'fixture-agent' });
       w.Capacitor = {
         PluginHeaders: [
     {name:'AlphaNotifications',methods:methods(['status','crossAppStatus','addListener','removeListener'])},
     {name:'AlphaVoiceCloud',methods:methods(['checkPermissions'])},
-          { name: 'Agent', methods: methods(['getStatus', 'start', 'stop', 'request']) },
+          { name: 'Agent', methods: agent.methods(['getStatus', 'start', 'stop', 'request']) },
           { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite','secureCompareExchange', 'secureRemove', 'cancel', 'addListener', 'removeListener', 'pauseNotificationCollection']) },
           { name: 'AlphaActionJournal', methods: methods(['list']) },
           { name: 'DeviceApps', methods: methods(['buildInfo']) },
         ],
+        nativeCallback: agent.nativeCallback,
         nativePromise: async (plugin: string, method: string, input: any) => {
           const f = w.stopFixture;
           if(plugin==='AlphaNotifications')return {permissionGranted:true,appEnabled:true};
     if(plugin==='AlphaVoiceCloud')return {microphone:'granted'};
     if (plugin === 'Agent') {
+            const owned = agent.answer(method, input); if (owned) return owned;
             if (method === 'getStatus') {
               if (f.stops) { f.polls++; return { packaged: true, ...f.status }; }
               return { packaged: true, state: 'stopped', serviceActive: false, socketListening: false };
@@ -104,5 +109,6 @@ for (const scenario of ['confirmed', 'incomplete-timeout'] as const) {
     }
     const fixture = await page.evaluate(() => (window as any).stopFixture);
     expect(fixture.starts).toBe(scenario === 'confirmed' ? 2 : 1); expect(fixture.stops).toBe(1); expect(fixture.polls).toBeGreaterThan(1); expect(fixture.unexpected).toEqual([]);
+    expect(await page.evaluate(() => (window as any).residentAgent.state.unexpected)).toEqual([]);
   });
 }

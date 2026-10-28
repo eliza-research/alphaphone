@@ -1,29 +1,33 @@
 import { test, expect } from '@playwright/test';
+import { installResidentAgentPlugin } from './helpers/resident-agent-plugin';
 // Rendered provider section over a synthetic native Agent bridge. No key reaches Cerebras: the
 // native check is simulated here and covered by LocalAgentProviderInstrumentedTest on Android.
 
 async function stubAgent(page: import('@playwright/test').Page, cloud = false) {
+  await installResidentAgentPlugin(page);
   await page.addInitScript((cloud: boolean) => {
     const w = window as any; w.androidBridge = {};
     const f = w.providerFixture = { saved: null as null | { model: string }, configures: [] as any[], clears: 0, stops: 0, reject: '' };
     const methods = (names: string[]) => names.map(name => ({ name, rtype: name==='addListener'?'callback':'promise' }));
+    const agent = w.residentAgent = w.createResidentAgentPlugin({ owner: () => 'provider-owner', agentId: 'provider-agent' });
     // Eliza Cloud reports the same Qwen model with its Cerebras vendor prefix.
     const status = () => cloud ? { provider: 'elizacloud', configured: true, model: 'cerebras/qwen-3.8-27b' } : f.saved ? { provider: 'cerebras', configured: true, model: 'qwen-3.8-27b' } : { provider: 'cerebras', configured: false };
     w.Capacitor = {
       PluginHeaders: [
-        { name: 'Agent', methods: methods(['getStatus', 'start', 'stop', 'request', 'configureProvider', 'providerStatus', 'clearProvider']) },
+        { name: 'Agent', methods: agent.methods(['getStatus', 'start', 'stop', 'request', 'configureProvider', 'providerStatus', 'clearProvider']) },
         { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite', 'secureCompareExchange', 'secureRemove', 'request', 'cancel', 'addListener', 'removeListener']) },
         { name: 'AlphaNotifications', methods: methods(['status', 'crossAppStatus', 'addListener', 'removeListener']) },
         { name: 'AlphaVoiceCloud', methods: methods(['checkPermissions']) },
         { name: 'DeviceApps', methods: methods(['buildInfo']) },
       ],
-      nativeCallback: () => 'provider-fixture-listener',
+      nativeCallback: (plugin: string, method: string, input: any, callback: (value: unknown) => void) => plugin === 'Agent' ? agent.nativeCallback(plugin, method, input, callback) : 'provider-fixture-listener',
       nativePromise: async (plugin: string, method: string, input: any) => {
         if (plugin === 'DeviceApps') return { launcher: false, version: 'provider-fixture' };
         if (plugin === 'AlphaNotifications') return { permissionGranted: true, appEnabled: true };
         if (plugin === 'AlphaVoiceCloud') return { microphone: 'granted' };
         if (plugin === 'AlphaConnection') return method === 'secureRead' ? { value: null } : {};
         if (plugin === 'Agent') {
+          const owned = agent.answer(method, input); if (owned) return owned;
           if (method === 'getStatus') return { packaged: true, state: 'stopped', serviceActive: false, socketListening: false };
           if (method === 'start') return { state: 'ready' };
           if (method === 'request') {
@@ -94,6 +98,7 @@ test('the chooser names the Eliza Cloud model as Settings does', async ({ page }
 });
 
 for(const cloud of [false,true])test(`native Models shows on-device voice and actual provider admission: ${cloud?'configured':'unconfigured'}`,async({page})=>{
+ const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
  await stubAgent(page,cloud);await page.goto('/');
  await page.locator('.alpha-connection').getByRole('button',{name:'Start local agent',exact:true}).click();
  await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0);
@@ -103,4 +108,5 @@ for(const cloud of [false,true])test(`native Models shows on-device voice and ac
  await expect(page.getByText(cloud?'Eliza Cloud':'Not configured',{exact:true})).toBeVisible();
  if(cloud)await expect(page.getByText('Eliza Cloud · qwen-3.8-27b (Cerebras)',{exact:true})).toBeVisible();
  expect(await page.evaluate(()=>(window as any).providerFixture.configures)).toEqual([]);
+ expect(await page.evaluate(()=>(window as any).residentAgent.state.unexpected)).toEqual([]);expect(errors).toEqual([]);
 });

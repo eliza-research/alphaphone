@@ -1,5 +1,6 @@
 import {seedCompletedAccessSetup} from './flag-off-android';
 import {test,expect,type Page} from '@playwright/test';
+import {installResidentAgentPlugin} from './helpers/resident-agent-plugin';
 import {completeAccessSetup} from './flag-off-android';
 import {createServer,type ViteDevServer} from 'vite';
 import {resolve} from 'node:path';
@@ -60,14 +61,17 @@ type Fixture={plan?:string;route?:'signed'|'absent'|'503'|'401'|'offline';limits
 async function boot(page:Page,initial:Fixture&{tokens?:Record<string,string>;keys?:unknown[]}={}){
  page.on('pageerror',(error:Error)=>console.error('Composition page error:',error.message));
  await page.route('https://**',route=>route.abort());
+ await installResidentAgentPlugin(page);
  await page.addInitScript(initial=>{
   const w=window as any;
   if(initial.fullApp)w.androidBridge={};
   if(!sessionStorage.getItem('plan-fixture-seeded')){sessionStorage.setItem('plan-fixture-seeded','1');for(const [key,value] of Object.entries(initial.storage||{}))localStorage.setItem(key,value as string);}
   const f=w.planFixture={plan:'active',route:'signed',limits:'absent',identity:'ok',redeem:'ok',redeemPlan:'active',saved:true,holdProvider:true,cashBalance:0,...initial,calls:[]as any[],bodies:[]as any[],releaseProvider:null as null|(()=>void)};
+  const residentId='9f1dc45a-4011-4e44-947a-30d999d24fa5';
+  const resident=w.residentAgent=w.createResidentAgentPlugin({owner:()=>residentId,agentId:residentId});
   const credential={credentialId:'11111111-1111-4111-8111-111111111111',token:'synthetic-plan-token',expiresAt:initial.expiresAt??Date.now()+60*24*3600*1000};
   const names={AlphaCloudSignIn:['status','startEmail','verifyEmail','cancel','addListener','removeListener'],AlphaConnection:['secureRead','secureWrite','secureRemove','request','cancel','openExternal','addListener','removeListener'],Agent:['stop','getStatus','configureCloudProvider','clearProvider','providerStatus','start','request'],AlphaHostedResults:['disableBackground','addListener','removeListener'],DailyApps:['addListener','removeListener'],AlphaNotifications:['status','addListener','removeListener'],AlphaVoiceCloud:['checkPermissions']};
-  w.Capacitor={PluginHeaders:Object.entries(names).map(([name,methods])=>({name,methods:methods.map(name=>({name,rtype:'promise'}))})),nativePromise:async(plugin:string,method:string,input:any)=>{
+  w.Capacitor={PluginHeaders:Object.entries(names).map(([name,methods])=>({name,methods:name==='Agent'?resident.methods(methods):methods.map(name=>({name,rtype:'promise'}))})),nativeCallback:resident.nativeCallback,nativePromise:async(plugin:string,method:string,input:any)=>{
    f.calls.push({plugin,method,path:input?.url?new URL(input.url).pathname:undefined,url:input?.url,httpMethod:input?.method});
    if(plugin==='AlphaCloudSignIn'){
     if(method==='status')return {active:false,inApp:true,email:true,google:false};
@@ -75,13 +79,14 @@ async function boot(page:Page,initial:Fixture&{tokens?:Record<string,string>;key
     throw Error('Unexpected sign-in operation in plan fixture');
    }
    if(plugin==='Agent'){
+    const owned=resident.answer(method,input);if(owned)return owned;
     if(method==='getStatus')return {packaged:true,state:'stopped',serviceActive:false,socketListening:false};
     if(method==='configureCloudProvider'){if(f.providerFailure)throw Error(f.providerFailure);if(f.holdProvider)await new Promise<void>(resolve=>f.releaseProvider=resolve);return {};}
     // Unbinding removes the stored provider; native confirms it (provider status reads unconfigured).
     if(method==='clearProvider')return {configured:false};
     if(method==='providerStatus')return {provider:'elizacloud',configured:false};
     // The always-running resident answers its owner and agent reads (P-43).
-    if(method==='request'){const id='9f1dc45a-4011-4e44-947a-30d999d24fa5';const body=input.path==='/api/auth/me'?{identity:{id,kind:'owner'},access:{role:'OWNER',mode:'local'}}:input.path==='/api/agents'?{agents:[{id,name:'Alpha',status:'running'}]}:input.path==='/api/conversations'?{conversations:[]}:{};return {status:200,body:JSON.stringify(body)};}
+    if(method==='request'){const id=residentId;const body=input.path==='/api/auth/me'?{identity:{id,kind:'owner'},access:{role:'OWNER',mode:'local'}}:input.path==='/api/agents'?{agents:[{id,name:'Alpha',status:'running'}]}:input.path==='/api/conversations'?{conversations:[]}:{};return {status:200,body:JSON.stringify(body)};}
     return {};
    }
    if(plugin==='AlphaNotifications')return method==='status'?{permissionGranted:false,appEnabled:false}:{};
@@ -639,6 +644,7 @@ test('failed native provider binding reports AI off and exposes the error before
  expect(await error.evaluate((node,other)=>(node.compareDocumentPosition(other!)&Node.DOCUMENT_POSITION_FOLLOWING)!==0,await history.elementHandle())).toBe(true);
  expect(await configured(page)).toBe(1);
  expect(await page.evaluate(()=>(window as any).planController.getSnapshot().residentInference)).toBe('unavailable');
+ expect(await page.evaluate(()=>(window as any).residentAgent.state.unexpected)).toEqual([]);
  expect(pageErrors).toEqual([]);
 });
 
