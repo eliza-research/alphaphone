@@ -18,6 +18,8 @@ test('Android native owner lookup matches the renderer device key and rejects es
   put('android/compat/annotation/UnsupportedAppUsage.java','package android.compat.annotation; public @interface UnsupportedAppUsage {}');
   put('android/annotation/SystemApi.java','package android.annotation; public @interface SystemApi {enum Client {MODULE_LIBRARIES} Client client();}');
   for(const name of ['NonNull','Nullable'])put('libcore/util/'+name+'.java','package libcore.util; @java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE}) public @interface '+name+' {}');
+  put('android/util/Log.java','package android.util;public class Log {public static int w(String tag,String value){return 0;}}');
+  put('NativeNotificationDiagnostics.java',readFileSync(nativeSource('NativeNotificationDiagnostics.java'),'utf8'));
   put('android/content/Context.java','package android.content; public class Context {public Context getApplicationContext(){return this;}}');
   put('Support.java',`package ai.elizaresearch.alphaphone; import org.json.*;
 class AlphaCredentialStore {AlphaCredentialStore(android.content.Context c){} JSONObject providerAdmissionSnapshot(){throw new AssertionError();}String readCredentialSlot(String key){throw new AssertionError();}}
