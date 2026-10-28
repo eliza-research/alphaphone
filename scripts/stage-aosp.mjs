@@ -205,7 +205,7 @@ for (let i = 0; i < args.length; i++) {
     args[i + 1].startsWith("--")
   )
     throw new Error(
-      "Use --apk FILE --output NEW_DIR [--descriptor FILE [--production] | --development] [--apk-manifest FILE] [--aosp-source PATH] [--target cuttlefish | --target pixel10a --factory-image FILE (--development | --production --descriptor FILE)] [--listener-apk FILE [--listener-descriptor FILE]] [--applied-systemui-patch chip|ops ...] [--applied-build-patch soong-memory|soong-app-native ...]",
+      "Use --apk FILE --output NEW_DIR [--descriptor FILE [--production] | --development] [--apk-manifest FILE] [--aosp-source PATH] [--target cuttlefish | --target pixel10a --factory-image FILE (--development | --production --descriptor FILE)] [--listener-apk FILE [--listener-descriptor FILE]] [--applied-systemui-patch chip|ops|assist ...] [--applied-build-patch soong-memory|soong-app-native ...]",
     );
   if (args[i] === '--applied-systemui-patch') appliedPatchNames.push(args[i + 1]);
   if (args[i] === '--applied-build-patch') appliedBuildNames.push(args[i + 1]);
