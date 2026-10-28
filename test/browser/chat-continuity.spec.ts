@@ -5,7 +5,7 @@ import { test, expect, type Page } from '@playwright/test';
 // model is called. This is browser source evidence, not emulator or device acceptance.
 const REMOTE = 'https://agent.example.test';
 const ROOM = '99999999-8888-4777-8666-555555555555';
-type Options = { holdIdentity?: boolean; createFails?: boolean; createHangs?: boolean; createLimited?: boolean; abortRoute?: boolean; abortResult?: boolean; long?: boolean };
+type Options = { holdIdentity?: boolean; createFails?: boolean; createHangs?: boolean; createLimited?: boolean; abortRoute?: boolean; abortResult?: boolean; long?: boolean; assistantEntry?: boolean };
 
 async function remoteAgent(page: Page, options: Options = {}) {
   await page.addInitScript(({ remote, room, options }) => {
@@ -32,7 +32,7 @@ async function remoteAgent(page: Page, options: Options = {}) {
       ownerId: 'fixture-owner', posts: 0, creates: 0, aborts: 0, historyReads: 0, pageReads: 0, ready: false, messageIds: [] as unknown[],
       createFails: !!options.createFails, createHangs: !!options.createHangs, createLimited: !!options.createLimited, abortResult: !!options.abortResult,
       holdReads: false, identityReleased:false, heldIdentity:null as null|(()=>void), lists: 0, heldRead: null as null | (() => void), heldList: null as null | (() => void),
-      release: null as null | ((text: string) => void),
+      release: null as null | ((text: string) => void), assistantClosed: 0,
       /** The agent finishes the held turn and persists its reply, whether or not the phone still listens. */
       finish(text: string) { const user = [...agent.history].reverse().find(item => item.role === 'user'); agent.history.push({ id: crypto.randomUUID(), role: 'assistant', text, timestamp: Date.now() + 1, replyToMessageId: user?.id }); persist(); },
     };
@@ -44,11 +44,15 @@ async function remoteAgent(page: Page, options: Options = {}) {
         { name: 'AlphaNotifications', methods: methods(['status', 'crossAppStatus', 'addListener', 'removeListener']) },
         { name: 'AlphaVoiceCloud', methods: methods(['checkPermissions']) },
         { name: 'DeviceApps', methods: methods(['buildInfo']) },
+        // With `assistantEntry`, sessionStorage chooses whether this renderer is AlphaAssistActivity's.
+        ...(options.assistantEntry ? [{ name: 'DailyApps', methods: methods(['surfaceInfo', 'closeAssistant']) }] : []),
       ],
       nativePromise: async (plugin: string, method: string, input: any) => {
         if (plugin === 'AlphaNotifications') return { permissionGranted: true, appEnabled: true };
         if (plugin === 'AlphaVoiceCloud') return { microphone: 'granted' };
         if (plugin === 'DeviceApps') return { launcher: false, version: 'continuity-fixture' };
+        if (plugin === 'DailyApps' && method === 'surfaceInfo') return { developmentBuild: true, assistant: sessionStorage.getItem('continuity-assistant') === '1' };
+        if (plugin === 'DailyApps' && method === 'closeAssistant') { f.assistantClosed++; return {}; }
         if (plugin === 'AlphaActionJournal') return method === 'list' ? { entries: [] } : { entry: null };
         if (plugin !== 'AlphaConnection') throw Error('Unexpected native operation');
         if (method === 'secureRead') return { value: store.get(input.slot) ?? null };
@@ -124,6 +128,122 @@ async function typeDraft(page: Page, text: string) {
 }
 const MAY_FINISH = 'The agent may still finish this reply. Alpha Phone will check once and show it here if it does.';
 const UNKNOWN = 'Your message may have reached the agent. Check before sending it again.';
+const UNSETTLED = 'This message may already have been sent. Check the conversation before sending it again.';
+
+// A restart (the process dies) while a posted message waits for its reply: the device copy of the
+// sent text is marked as sending, so the next start never offers it as a draft. It is shown for
+// review, and keeping the empty composer clears only that copy. Nothing is posted again. The
+// conversation already exists, so the restart reopens the same draft slot (a new chat's first
+// message is covered by the next two tests).
+test('a restart while a message is in flight offers it for review, never as a draft, and posts nothing', async ({ page }) => {
+  test.setTimeout(120_000);
+  await connected(page);
+  await typeDraft(page, 'Start the conversation');
+  await composer(page).press('Enter');
+  await expect.poll(() => fixture(page, f => f.posts), { timeout: 15_000 }).toBe(1);
+  await fixture(page, f => { f.release('Started.'); f.finish('Started.'); });
+  await expect(conversation(page).getByText('Started.', { exact: true })).toHaveCount(1);
+  await expect(stop(page)).toHaveCount(0);
+  await typeDraft(page, 'In flight when the app stopped');
+  const key = await bindingKey(page);
+  await composer(page).press('Enter');
+  await expect.poll(() => fixture(page, f => f.posts), { timeout: 15_000 }).toBe(2);
+  await page.reload();
+  await expect.poll(() => fixture(page, f => f.ready), { timeout: 30_000 }).toBe(true);
+  await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0, { timeout: 20_000 });
+  const status = page.getByRole('status', { name: 'Assistant draft status', exact: true });
+  await expect(status).toHaveText(UNSETTLED, { timeout: 20_000 });
+  await expect(composer(page)).toHaveValue('');
+  expect(await bindingKey(page)).toBe(key);
+  expect(await savedDraft(page, key)).toBe('In flight when the app stopped');
+  await page.getByRole('button', { name: 'Replace saved draft with this text', exact: true }).click();
+  await expect(status).toHaveCount(0);
+  await expect.poll(() => savedDraft(page, key)).toBe('');
+  await expect(composer(page)).toHaveValue('');
+  await page.waitForTimeout(1_000);
+  expect(await fixture(page, f => ({ posts: f.posts, creates: f.creates }))).toEqual({ posts: 0, creates: 0 });
+});
+
+// A new chat's first message is held in the "no conversation yet" slot, and its send creates and
+// selects the conversation. No warmup send: the restart opens that new conversation, and the held
+// message is offered for review there (not only when a later new chat opens). Sending stays
+// refused until it is reviewed, and nothing is posted or created again.
+async function firstSendRestart(page: Page, text: string) {
+  await connected(page);
+  await typeDraft(page, text);
+  const slot = await bindingKey(page);
+  expect(JSON.parse(slot)[3]).toBeNull();
+  await composer(page).press('Enter');
+  await expect.poll(() => fixture(page, f => ({ posts: f.posts, creates: f.creates })), { timeout: 15_000 }).toEqual({ posts: 1, creates: 1 });
+  await page.reload();
+  await expect.poll(() => fixture(page, f => f.ready), { timeout: 30_000 }).toBe(true);
+  await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0, { timeout: 20_000 });
+  const status = page.getByRole('status', { name: 'Assistant draft status', exact: true });
+  await expect(status).toHaveText(UNSETTLED, { timeout: 20_000 });
+  await expect(composer(page)).toHaveValue('');
+  const key = await bindingKey(page);
+  expect(JSON.parse(key)[3]).toBe('fixture-chat');
+  expect(await savedDraft(page, slot)).toBe(text);
+  // Enter while the review is open sends nothing.
+  await composer(page).fill('Not before the review');
+  await composer(page).press('Enter');
+  await composer(page).fill('');
+  return { slot, key, status };
+}
+
+test('a restart during a new chat\'s first message offers it on the conversation it created and posts nothing', async ({ page }) => {
+  test.setTimeout(120_000);
+  const { slot, key, status } = await firstSendRestart(page, 'First message when the app stopped');
+  await page.getByRole('button', { name: 'Replace saved draft with this text', exact: true }).click();
+  await expect(status).toHaveCount(0);
+  await expect.poll(() => savedDraft(page, slot)).toBe('');
+  // The composer is now the conversation's own draft.
+  await typeDraft(page, 'Next words for the conversation');
+  expect(await savedDraft(page, key)).toBe('Next words for the conversation');
+  expect(await savedDraft(page, slot)).toBe('');
+  await page.waitForTimeout(1_000);
+  expect(await fixture(page, f => ({ posts: f.posts, creates: f.creates }))).toEqual({ posts: 0, creates: 0 });
+});
+
+test('restoring a new chat\'s first message after a restart moves it into the conversation\'s draft without sending it', async ({ page }) => {
+  test.setTimeout(120_000);
+  const { slot, key, status } = await firstSendRestart(page, 'Restore this first message');
+  await page.getByRole('button', { name: 'Restore saved draft', exact: true }).click();
+  await expect(composer(page)).toHaveValue('Restore this first message');
+  await expect(page.getByRole('button', { name: 'Restore saved draft', exact: true })).toHaveCount(0);
+  await expect.poll(() => savedDraft(page, key), { timeout: 15_000 }).toBe('Restore this first message');
+  // Only once the conversation holds it is the "no conversation yet" copy cleared.
+  await expect.poll(() => savedDraft(page, slot), { timeout: 15_000 }).toBe('');
+  await page.waitForTimeout(1_000);
+  expect(await fixture(page, f => ({ posts: f.posts, creates: f.creates }))).toEqual({ posts: 0, creates: 0 });
+});
+
+// The ACTION_ASSIST surface (AlphaAssistActivity) and the app are two renderers over the same device
+// draft slot of a conversation: words typed in either open in the other, Close keeps them, and
+// nothing is sent. A reload with the other entry stands in for the other Activity's renderer.
+test('the assistant surface and the app share the conversation draft through Close', async ({ page }) => {
+  test.setTimeout(120_000);
+  await connected(page, { assistantEntry: true });
+  await typeDraft(page, 'Started in the app');
+  const key = await bindingKey(page);
+  await page.evaluate(() => sessionStorage.setItem('continuity-assistant', '1'));
+  await page.reload();
+  await expect(page.locator('html')).toHaveClass(/alpha-assistant-surface/);
+  await expect.poll(() => fixture(page, f => f.ready), { timeout: 30_000 }).toBe(true);
+  await expect(composer(page)).toHaveValue('Started in the app', { timeout: 20_000 });
+  expect(await bindingKey(page)).toBe(key);
+  await composer(page).fill('Finished in the assistant');
+  await expect.poll(() => savedDraft(page, key)).toBe('Finished in the assistant');
+  await page.getByRole('button', { name: 'Close assistant', exact: true }).click();
+  await expect.poll(() => fixture(page, f => f.assistantClosed)).toBe(1);
+  expect(await savedDraft(page, key)).toBe('Finished in the assistant');
+  await page.evaluate(() => sessionStorage.setItem('continuity-assistant', '0'));
+  await page.reload();
+  await expect.poll(() => fixture(page, f => f.ready), { timeout: 30_000 }).toBe(true);
+  await expect(page.locator('html')).not.toHaveClass(/alpha-assistant-surface/);
+  await expect(composer(page)).toHaveValue('Finished in the assistant', { timeout: 20_000 });
+  expect(await fixture(page, f => f.posts)).toBe(0);
+});
 
 test('an offline failure before the message is posted keeps the text and a later send posts it once', async ({ page }) => {
   test.setTimeout(90_000);

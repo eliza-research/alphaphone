@@ -183,8 +183,11 @@ test('the dock, title and toast fixes the sweep depends on stay in the source', 
   const dock = read('apps/app/src/runtime/dock-clearance.ts');
   assert.match(dock, /'--alpha-dock-clearance'/);
   assert.match(dock, /'--alpha-dock-rest'/);
-  // The dock moves without resizing when Android's insets arrive on the root element.
-  assert.match(dock, /root\.observe\(document\.documentElement, \{ attributes: true, attributeFilter: \['class', 'style'\] \}\)/);
+  // The dock moves without resizing when Android's insets arrive on the root element. The
+  // publisher is shared Eliza code (projected from the pin); Alpha binds its own selectors to it.
+  assert.match(dock, /installSharedDockClearance\(\{ screen: '\[data-screen\]', docks: DOCK, bar: '\[data-alpha-input-bar\]', clearanceProperty: DOCK_CLEARANCE_PROPERTY, restProperty: DOCK_REST_PROPERTY \}\)/);
+  const shared = read('.eliza/client-features/packages/ui/src/components/shell/dock-clearance.ts');
+  assert.match(shared, /root\.observe\(document\.documentElement, \{\s*attributes: true,\s*attributeFilter: \["class", "style"\],?\s*\}\)/);
   // Focus under the dock is scrolled clear, but never focus that came from a pointer.
   assert.match(read('apps/app/src/prototype/chat-overlay-motion-adapter.ts'), /if \(!sheet && !target\.matches\(":focus-visible"\)\) return;/);
   // A screen title is not shortened with a large system font: it takes its own row.

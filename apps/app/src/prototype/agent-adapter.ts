@@ -72,6 +72,86 @@ type SendAttempt={transportCalled:boolean;preDispatch:boolean;streamed:boolean;s
 /** Refused before any request carrying the message could leave this phone. */
 class NotDispatched extends Error {}
 // connectionController.send refuses these before creating a conversation or posting the message.
+// Set while the page is being torn down (reload, Activity teardown). A send that fails then has
+// shown its outcome to no one, so its saved copy keeps the sending mark for review at the next start.
+// A page entering the back/forward cache (`persisted`) is restored later, so it is not leaving.
+let pageLeaving=false;
+if(typeof window!=='undefined'){window.addEventListener('pagehide',(event:PageTransitionEvent)=>{if(!event.persisted)pageLeaving=true;});window.addEventListener('pageshow',()=>{pageLeaving=false;});}
+/**
+ * A new chat's first message is held (marked as sending) in the owner and agent's "no conversation
+ * yet" draft slot; its send then creates the conversation and saves it as the restart selection.
+ * If the page goes away mid-send, the next start opens that conversation, so the mark would only be
+ * offered when a later new chat opens. While nothing is held here, a conversation binding whose
+ * owner and agent have such a mark opens that slot first: the message is offered for review
+ * ("may already have been sent"), never restored as a draft and never resent; sending stays
+ * refused until it is reviewed. `open` is the slot to open instead of `key`. Once the review is
+ * resolved, `moved` names the slot so its resolved text can follow the composer into the
+ * conversation's own draft.
+ */
+async function firstSendReview(shell:Shell,key:string,signal:AbortSignal):Promise<{open?:string;moved?:string}>{
+  let identity:unknown;try{identity=JSON.parse(key);}catch{return {};}
+  if(!Array.isArray(identity)||identity.length!==4||typeof identity[3]!=='string'||!identity[3])return {};
+  const slot=JSON.stringify([...identity.slice(0,3),null]),draft=shell.composerDraft;
+  if(shell.firstSendReview===slot&&draft.binding===slot){
+    if(draft.state.conflict||draft.state.opening)return {open:slot};
+    shell.firstSendReview=undefined;return {moved:slot};
+  }
+  shell.firstSendReview=undefined;
+  // Checked when the composer moves to this conversation, not on every connection update.
+  if(draft.holding||draft.binding===key)return {};
+  // An unreadable slot keeps its own recovery for when a new chat opens it.
+  let saved;try{saved=await(await assistantDraftStore(slot)).read(signal);}catch{return {};}
+  signal.throwIfAborted();
+  if(saved?.sending!==true||draft.holding)return {};
+  shell.firstSendReview=slot;return {open:slot};
+}
+/**
+ * After a first-send review is resolved, the composer's text is saved in the conversation's slot
+ * (by the binding that just opened). Only then is the same text cleared from the "no conversation
+ * yet" slot, by compare-and-exchange, so a later new chat does not offer it again. Unconfirmed,
+ * both copies stay: nothing is lost and nothing is sent.
+ */
+async function settleFirstSendSlot(slot:string,conversation:string,text:string,current:()=>boolean){
+  if(!text)return;// Replaced with an empty composer: the review itself cleared the slot.
+  try{
+    const from=await assistantDraftStore(slot),to=await assistantDraftStore(conversation);
+    for(const delay of [0,150,600,1500]){
+      if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
+      if(!current())return;
+      if((await to.read())?.text!==text)continue;
+      const saved=await from.read();
+      if(!saved||saved.text!==text)return;
+      if(saved.sending===true)continue;
+      try{await from.save(saved,'');return;}catch{/* A newer write won; read it again. */}
+    }
+  }catch{/* Storage review stays with the slot's own recovery. */}
+}
+/**
+ * A new chat's first message is held in the owner and agent's "no conversation yet" slot, and its
+ * send creates and selects the conversation before it can be refused (for example a resident
+ * stream refused by native IPC or HTTP 429). The shared controller then keeps the unsent text in
+ * the slot it was held in and never puts it in the next binding's editor, because a different
+ * binding may be another owner, agent or conversation. Here the next binding is the conversation
+ * this send created for the same owner and agent, so the text is that conversation's draft: an
+ * empty composer gets it back and saves it there, and only once the conversation holds it is the
+ * "no conversation yet" copy cleared (compare-and-exchange), so a later new chat does not offer it.
+ */
+function createdFromSlot(slot:string,key:string){
+  try{
+    const from=JSON.parse(slot),to=JSON.parse(key);
+    return Array.isArray(from)&&Array.isArray(to)&&from.length===4&&to.length===4&&from[3]===null&&typeof to[3]==='string'&&!!to[3]&&JSON.stringify(from.slice(0,3))===JSON.stringify(to.slice(0,3));
+  }catch{return false;}
+}
+function releaseComposerSend(shell:Shell,heldKey:string|undefined,heldText:string){
+  const draft=shell.composerDraft;draft.release();
+  const key=draft.binding;
+  if(!heldKey||!key||key===heldKey||!heldText.trim()||String(shell.S().draft||'').trim()||!createdFromSlot(heldKey,key))return;
+  shell.setState((previous:Shell)=>draft.binding!==key||String(previous.draft||'').trim()?null:{draft:heldText},()=>{
+    if(!shell.live||draft.binding!==key||String(shell.S().draft||'')!==heldText)return;
+    draft.edit(heldText);
+    void settleFirstSendSlot(heldKey,key,heldText,()=>shell.live&&draft.binding===key);
+  });
+}
 const preDispatchRefusals=new Set(['Finish the connection or history operation before sending.','Wait for the current reply before sending another message.',NO_AGENT_SEND,RESIDENT_STARTING_NOTICE,RESIDENT_RECOVERING_NOTICE]);
 // It also marks every failure that happened before it posted the message (`notDispatched`).
 function isPreDispatchError(error:unknown){return !!error&&typeof error==='object'&&((error as {notDispatched?:unknown}).notDispatched===true||error instanceof Error&&(preDispatchRefusals.has(error.message)||(error as {code?:unknown}).code==='session_expired'));}
@@ -483,7 +563,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     this.dialogBackObserver = new MutationObserver(() => updateBackAvailability(this));
     this.dialogBackObserver.observe(document.body, {subtree:true, childList:true, attributes:true, attributeFilter:['open']});
     this.composerDraft=new AssistantDraftController(assistantDraftStore,()=>String(this.S().draft||''),(text,expected,current)=>new Promise<void>(resolve=>{if(!this.live||current&&!current()){resolve();return;}this.setState((previous:Shell)=>{if(current&&!current()||expected!==undefined&&String(previous.draft||'')!==expected)return null;if(this.startupDraft!==null)this.startupDraft=undefined;this.reviewedSourceDraft=null;return {draft:text};},resolve);}),()=>{if(this.live)this.setState({});});
-    this.refreshDraftBinding=()=>{this.draftBindingAbort?.abort();if(residentAlwaysPresent&&!connectionController.getSnapshot().session){this.draftBindingTask=Promise.resolve();return;}const controller=this.draftBindingAbort=new AbortController();this.draftBindingTask=connectionController.assistantDraftBinding(controller.signal).then(key=>{if(this.live&&!controller.signal.aborted)return this.composerDraft.open(key);}).catch(()=>{if(this.live&&!controller.signal.aborted)this.composerDraft.unavailable();});};
+    this.refreshDraftBinding=()=>{this.draftBindingAbort?.abort();if(residentAlwaysPresent&&!connectionController.getSnapshot().session){this.draftBindingTask=Promise.resolve();return;}const controller=this.draftBindingAbort=new AbortController();this.draftBindingTask=connectionController.assistantDraftBinding(controller.signal).then(async key=>{if(!this.live||controller.signal.aborted)return;const review=await firstSendReview(this,key,controller.signal);if(!this.live||controller.signal.aborted)return;await this.composerDraft.open(review.open??key);if(review.moved&&this.composerDraft.binding===key)void settleFirstSendSlot(review.moved,key,String(this.S().draft||''),()=>this.live&&this.composerDraft.binding===key);}).catch(()=>{if(this.live&&!controller.signal.aborted)this.composerDraft.unavailable();});};
     this.refreshDraftBinding();
     this.connectionSession = connectionController.getSnapshot().session?.sessionId;
     // Only fresh typing before the first verified session can cross startup admission.
@@ -1053,7 +1133,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     // attempted send still explains why it cannot dispatch before readiness.
     const residentPending=residentAlwaysPresent&&!connection.session&&connection.kind==='recovering'?agentPendingText(connection):'';
     out.draftRetry=!!draft?.error;out.draftStatus=[draft?.message,offline?INFERENCE_OFFLINE_NOTICE:'',residentPending].filter(Boolean).join(' ');out.draftConflict=!!draft?.conflict;out.draftSavedText=draft?.savedText||'(Empty saved draft)';out.draftOpening=!!draft?.consuming;
-    out.restoreSavedDraft=()=>this.composerDraft?.restoreSaved();out.keepCurrentDraft=()=>this.composerDraft?.keepCurrent();out.retryDraft=()=>{this.composerDraft?.retire();this.refreshDraftBinding();};
+    out.restoreSavedDraft=()=>{this.composerDraft?.restoreSaved();if(this.firstSendReview)this.refreshDraftBinding();};out.keepCurrentDraft=()=>{this.composerDraft?.keepCurrent();if(this.firstSendReview)this.refreshDraftBinding();};out.retryDraft=()=>{this.composerDraft?.retire();this.refreshDraftBinding();};
     const onDraft=out.onDraft;
     out.onDraft=(event:Event&{target:HTMLTextAreaElement})=>{
       const connection=connectionController.getSnapshot(),current=String(this.S().draft||'');
@@ -1224,7 +1304,10 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     const retiring=this.stopVoiceConversation?.();if(retiring){await retiring;context(this);const now=this.S();if(JSON.stringify(alphaClient.getState().context)!==expectedContext||!this.live||document.hidden||connectionController.getSnapshot().open||sendBinding()!==binding||now.view!==view||String(now.draft||'')!==draft||this.messageReplyTarget!==reply||this.messageEditTarget!==edit)return;}
     let s = this.S(); const text = String(argument ?? s.draft);
     if (!text.trim() || s.typing || this.draftSendPending || this.composerDraft?.holding) return;
-    const editTarget:ConversationMessageTarget|undefined=this.messageEditTarget,replyTarget:ConversationMessageTarget|undefined=this.messageReplyTarget,editView=s.view;
+    // A prompt sent from elsewhere (a suggestion, a Calendar decision, a reviewed email) is not the
+    // composer's text: the composer keeps its draft, its saved copy, its reply target and source.
+    const fromComposer=argument===undefined;
+    const editTarget:ConversationMessageTarget|undefined=this.messageEditTarget,replyTarget:ConversationMessageTarget|undefined=fromComposer?this.messageReplyTarget:undefined,editView=s.view;
     if(editTarget){
       if(argument!==undefined||!connectionController.messageTargetCurrent(editTarget))return;
       this.draftSendPending=true;
@@ -1236,26 +1319,29 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       } catch(error){if(error&&typeof error==='object'&&'historyChanged' in error)this.messageEditTarget=undefined;this.toast(error instanceof Error?error.message:'Message replacement failed.');return;}
       finally{this.draftSendPending=false;}
     }
-    const sourceDraft=this.reviewedSourceDraft?.draft===text?sourceOf(this.reviewedSourceDraft.source):undefined;
+    const sourceDraft=fromComposer&&this.reviewedSourceDraft?.draft===text?sourceOf(this.reviewedSourceDraft.source):undefined;
     context(this);
     const revision=alphaClient.getState().context.revision,connection=connectionController.getSnapshot(),sessionId=connection.session?.sessionId,conversationId=connection.history?.conversationId;
     const current=()=>{const selected=connectionController.getSnapshot();return this.live&&!document.hidden&&!selected.busy&&!selected.open&&!document.querySelector('[data-alpha-chat-recorder],[data-alpha-pill-voice]')&&selected.session?.sessionId===sessionId&&selected.history?.conversationId===conversationId&&alphaClient.getState().context.revision===revision;};
-    this.draftSendPending=true;
-    // The durable draft keeps this text until the message is known to have been dispatched.
-    try{await this.draftBindingTask;await this.composerDraft.hold(String(s.draft||''),current);}catch(error){this.toast(error instanceof Error?error.message:'Draft could not be prepared. Nothing was sent.');return;}finally{this.draftSendPending=false;}
-    const reviewedSource=this.reviewedSourceDraft;this.reviewedSourceDraft=null;
+    const heldText=String(s.draft||'');let heldKey:string|undefined;
+    if(fromComposer){
+      this.draftSendPending=true;
+      // The durable draft keeps this text until the message is known to have been dispatched.
+      try{await this.draftBindingTask;heldKey=this.composerDraft.binding;await this.composerDraft.hold(heldText,current);}catch(error){this.toast(error instanceof Error?error.message:'Draft could not be prepared. Nothing was sent.');return;}finally{this.draftSendPending=false;}
+    }
+    const reviewedSource=fromComposer?this.reviewedSourceDraft:null;if(fromComposer)this.reviewedSourceDraft=null;
     // Everything this send later shows belongs to the agent connection it was sent on.
     const sameChat=()=>connectionController.getSnapshot().session?.sessionId===sessionId;
     const attempt:SendAttempt=this.sendAttempt={transportCalled:false,preDispatch:false,streamed:false};
     const userId=crypto.randomUUID(),streamedId=crypto.randomUUID();let streamed=false;
     const replaceStream=(value:string,streaming=true)=>this.setState((previous:Shell)=>({msgs:previous.msgs.map((message:Shell)=>message.id===streamedId?{...message,text:value,streaming}:message)}));
-    this.setState({ msgs: [...s.msgs, { id: userId, from: 'user', text }], draft: '', typing: true, chat: s.chat === 'full' ? 'full' : 'sheet', shade: false },focusAfterCommit);
+    this.setState({ msgs: [...s.msgs, { id: userId, from: 'user', text }], ...(fromComposer?{draft:''}:{}), typing: true, chat: s.chat === 'full' ? 'full' : 'sheet', shade: false },focusAfterCommit);
     let navigation:ReturnType<typeof connectionController.captureViewNavigation>|undefined,readyNavigation:readonly unknown[]|undefined;
     const deliverNavigation=(results:readonly unknown[]|undefined)=>deliverChatNavigation(this,navigation,results);
     try {
       try{
         await this.connectAgent(); context(this);
-        if (alphaClient.getState().context.revision !== revision) throw new NotDispatched('The active screen changed. Your message is back in the composer.');
+        if (alphaClient.getState().context.revision !== revision) throw new NotDispatched(fromComposer?'The active screen changed. Your message is back in the composer.':'The active screen changed. Nothing was sent.');
         if(expectedSession&&(JSON.stringify(connectionController.getSnapshot().session)!==JSON.stringify(expectedSession)||document.hidden))throw new NotDispatched('Agent changed. Review this message again.');
       }catch(error){throw error instanceof NotDispatched?error:new NotDispatched(error instanceof Error?error.message:'The agent connection is unavailable. Nothing was sent.');}
       const sourceSession=connectionController.getSnapshot().session;
@@ -1268,7 +1354,8 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         if(streamed)replaceStream(value);
         else{streamed=true;this.setState((previous:Shell)=>({msgs:[...previous.msgs,{id:streamedId,from:'agent',text:value,card:null,streaming:true}]}));}
       },replyTarget,results=>{readyNavigation=results;});
-      await this.composerDraft?.commit();
+      // Only the composer's own send holds its draft; a prompt from elsewhere never settles it.
+      if(fromComposer)await this.composerDraft?.commit();
       if (!this.live||!sameChat()) return;
       const identity=reply.messageBinding;
       const planCard=planActionCard(reply.planAction);
@@ -1304,10 +1391,11 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       await transportSettled(attempt);
       if(!dispatched(attempt,e)){
         // Nothing reached the agent: put the text back and drop the unsent bubble. Never resend.
-        if(this.live){const inlineNotice=privateLocalPreviewEnabled&&this.composerDraft?.holding===true;this.setState((previous:Shell)=>({msgs:previous.msgs.filter((item:Shell)=>item.id!==userId)}));this.composerDraft?.release();if(reviewedSource&&!this.reviewedSourceDraft)this.reviewedSourceDraft=reviewedSource;if(!inlineNotice)this.toast(e instanceof NotDispatched?message:e instanceof AlphaClientError&&(['unconfigured','sensitive','busy'].includes(e.code)||(e as {refusedBeforeTurn?:unknown}).refusedBeforeTurn===true)?'Not sent. '+message:'Not sent. Your message is back in the composer.');}
-        else this.composerDraft?.release();
+        if(this.live){const inlineNotice=fromComposer&&privateLocalPreviewEnabled&&this.composerDraft?.holding===true;this.setState((previous:Shell)=>({msgs:previous.msgs.filter((item:Shell)=>item.id!==userId)}));if(fromComposer)releaseComposerSend(this,heldKey,heldText);if(reviewedSource&&!this.reviewedSourceDraft)this.reviewedSourceDraft=reviewedSource;if(!inlineNotice)this.toast(e instanceof NotDispatched?message:e instanceof AlphaClientError&&(['unconfigured','sensitive','busy'].includes(e.code)||(e as {refusedBeforeTurn?:unknown}).refusedBeforeTurn===true)?'Not sent. '+message:fromComposer?'Not sent. Your message is back in the composer.':'Not sent.');}
+        else if(fromComposer)this.composerDraft?.release();
       }else{
-        await this.composerDraft?.commit();
+        if(pageLeaving){if(fromComposer)this.composerDraft?.abandon();return;}
+        if(fromComposer)await this.composerDraft?.commit();
         // After Stop the controller cancels, announces and reconciles once; its notice is the one shown.
         const reconciling=!!connectionController.getSnapshot().replyNotice&&e instanceof AlphaClientError&&e.code==='cancelled';
         // The owner changed mid-turn: say it was interrupted, but never show the previous agent's partial
