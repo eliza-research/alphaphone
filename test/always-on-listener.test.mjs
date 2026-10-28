@@ -73,7 +73,7 @@ test('press-and-hold power starts voice only through SystemUI identity that Andr
  assert.match(client,/SYSTEM_UI_PACKAGE = "com\.android\.systemui"/);
  assert.match(client,/checkSignatures\("android", callerPackage\) == PackageManager\.SIGNATURE_MATCH/);
  const policy=fs.readFileSync(path.join(root,'vendor/eliza/plugins/plugin-native-system/src/sense.ts'),'utf8');
- assert.match(policy,/\(input\.invocation === "listener" \|\| input.invocation === "system"\) &&/);
+ assert.match(policy,/\(input\.invocation === "listener" \|\|\s+input\.invocation === "system" \|\|\s+input\.invocation === "power"\) &&/);
  // SystemUI shares its identity only with the reviewed assist bundle applied to the exact pinned preimage.
  const bundle=JSON.parse(fs.readFileSync(path.join(root,'vendor/eliza/packages/os/android/sense/systemui/assist/manifest.json'),'utf8'));
  assert.deepEqual(bundle.files.map(file=>file.path),['packages/SystemUI/src/com/android/systemui/assist/AssistManager.java']);
