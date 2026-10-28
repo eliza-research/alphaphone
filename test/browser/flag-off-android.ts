@@ -1,3 +1,4 @@
+import {installNativeNavigationFixture} from './helpers/native-navigation-protocol';
 // Production Android as the FLAG-OFF renderer sees it, for the *.production.spec.ts files that
 // need mail, an agent conversation, scheduled-digest results or device calendars together.
 //
@@ -52,6 +53,7 @@ export interface FlagOffSchedules {
 export const AGENT_NAME = 'Alpha';
 
 export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
+  await page.addInitScript(installNativeNavigationFixture);
   await page.addInitScript(({ options, agentName }) => {
     const w = window as any; w.androidBridge = {};
     if(!options.freshAccess)localStorage.setItem('alpha:startup-permission-walkthrough:v1',JSON.stringify({version:1,status:'completed',step:4}));
@@ -86,10 +88,16 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
     const emitStream = (streamId: string, event: unknown) => f.emit('Agent', 'alphaAgentStream', { streamId, event });
     const data = (streamId: string, value: unknown) => emitStream(streamId, { type: 'chunk', dataBase64: btoa('data: ' + JSON.stringify(value) + '\n\n') });
     const ok = (value: unknown) => ({ status: 200, data: value });
-    const request = async (method: string, path: string, body: any, headers: Record<string, string>): Promise<{ status: number; data: unknown }> => {
+    let fixtureNavigation: any;
+    const navigation=()=>fixtureNavigation??=(window as any).createNativeNavigationFixture(id,agentId,f);
+    const request = async (method: string, path: string, body: any, headers: Record<string, string>, owner?: unknown): Promise<{ status: number; data: unknown }> => {
+      const navigationResult=navigation().request(method,path,body,headers,owner);if(navigationResult)return navigationResult;
+      // Mounted canonical views probe these sources; this native fixture provides none.
+      if (method === 'GET' && ['/api/notes/state', '/api/lifeops/calendar/feed', '/api/lifeops/calendar/calendars', '/api/lifeops/calendar/next-context'].includes(path.split('?')[0])) return { status: 503, data: { error: 'Canonical records unavailable in this fixture' } };
       if (path === '/api/auth/me') return ok({ identity: { id, kind: 'owner' }, access: { role: 'OWNER', mode: 'local' } });
+      if (path === '/api/notes/state' && method === 'GET') return ok({success:true,data:{notes:[],trash:[],revision:0}});
       if (path === '/api/agents') return ok({ agents: [{ id: agentId, name: agentName, status: 'running' }] });
-      if (path === '/api/client-devices/register') { f.installationId = headers['X-Eliza-Device-Id']; }
+      if (path === '/api/client-devices/register') { f.installationId = headers['X-Eliza-Device-Id']; navigation().register(headers); }
       if (path === '/api/client-devices/register') return ok({ installationId: headers['X-Eliza-Device-Id'], enrollmentId: 'fixture-enrollment', capabilities: [] });
       if (path === '/api/client-devices/proposals') return ok({ proposals: [] });
       // The agent advertises scheduled digests only; the workflow engine itself is not offered here.
@@ -324,7 +332,7 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
           if (method === 'configureCloudProvider') { slots['native:local-agent-provider'] = String(input.credentialId); persist(); return {}; }
           if (method === 'clearProvider') { delete slots['native:local-agent-provider']; persist(); return { configured: false }; }
           if (method === 'request') {
-            const result = await request(input.method || 'GET', input.path, input.body ? JSON.parse(input.body) : {}, input.headers || {});
+            const result = await request(input.method || 'GET', input.path, input.body ? JSON.parse(input.body) : {}, input.headers || {}, input.ownerId);
             // A lost acknowledgement: the agent applied the request, but its response never arrives.
             if (result.status === 0) throw Error('Agent response lost');
             return { status: result.status, body: JSON.stringify(result.data) };
@@ -406,7 +414,7 @@ export async function residentHome(page: Page) {
 }
 /** Production sign-in is a page; signed-in agent controls live in Settings. */
 export async function openYourAgent(page: Page) {
-  const gate = page.getByRole('main', { name: 'Sign in', exact: true });
+  const gate = page.locator('[role="main"].alpha-cloud-sign-in');
   if (await gate.isVisible()) return gate;
   await button(page, 'Settings').click();
   await page.getByRole('button', { name: 'Agent connection', exact: true }).click();

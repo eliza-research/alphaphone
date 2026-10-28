@@ -50,3 +50,28 @@
 .alpha-auth-body>p{margin:0 0 28px}
 .alpha-auth-body .alpha-connection-actions button{width:100%;min-height:52px}
 .alpha-auth-body [role=status],.alpha-auth-body [role=alert]{margin-top:16px}
+
+/* Alpha identity and the same task hierarchy across sign-in and code entry. */
+.alpha-auth-brand{display:flex;align-items:center;gap:12px;margin:0 0 44px;color:var(--connection-fg,#000)}
+.alpha-auth-brand>.serif{font-size:32px;line-height:1;letter-spacing:-.02em}
+.alpha-auth-mark{display:block;width:44px;height:44px;flex:none;background:var(--connection-acc,#0000ff);mask:url('/logo-mark.svg') center/contain no-repeat;-webkit-mask:url('/logo-mark.svg') center/contain no-repeat}
+.alpha-auth-page .alpha-auth-content{padding-top:max(calc(env(safe-area-inset-top) + 32px),8vh);padding-bottom:calc(env(safe-area-inset-bottom) + 32px)}
+.alpha-auth-page .alpha-cloud-sign-in{width:min(100%,32rem);margin-inline:auto}
+.alpha-auth-page h1{font-size:clamp(36px,9vw,48px);line-height:1.08;letter-spacing:-.025em;text-wrap:balance;margin:0 0 16px}
+.alpha-auth-page .alpha-auth-intro{font-size:16px;line-height:1.6;margin:0 0 30px;max-width:30ch}
+.alpha-auth-body .alpha-connection-actions button:first-child,.alpha-cloud-sign-in form>button:first-of-type{background:var(--connection-acc,#0000ff);color:#fff;min-height:52px;padding:14px 20px;border-radius:14px;font-size:16px}
+.alpha-auth-google button:first-child{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:52px;padding:14px 18px;background:var(--connection-bg,#fff);color:var(--connection-fg,#000);border:1px solid var(--connection-line,#d6d6d6);border-radius:14px;font-size:16px}
+.alpha-google-icon{display:inline-block;flex:none;width:20px;height:20px;background:url('/icons/senders/google.com.png') center/contain no-repeat}
+.alpha-auth-divider{display:flex;align-items:center;gap:14px;margin:26px 0;color:var(--connection-mut,#666);font-size:13px}
+.alpha-auth-divider::before,.alpha-auth-divider::after{content:'';flex:1;height:1px;background:var(--connection-line,#dedede)}
+.alpha-cloud-sign-in form>button:first-of-type{width:100%}
+.alpha-cloud-sign-in-code>button[type=button]{margin-top:8px;padding-inline:0;background:none;color:var(--connection-mut,#666)}
+.alpha-cloud-sign-in label{font-size:14px;font-weight:500;margin:0 0 16px;gap:9px;color:var(--connection-fg,#000)}
+.alpha-cloud-sign-in input{min-height:54px;border-radius:12px;background:var(--connection-bg,#fff);padding:14px 16px}
+.alpha-connection .alpha-auth-method-note{font-size:13px;line-height:1.5;margin:10px 0 0}
+.alpha-connection .alpha-auth-notice{border-top:1px solid var(--connection-line,#dedede);padding-top:16px;margin-top:28px;font-size:12px;line-height:1.6;color:var(--connection-mut,#666);background:none;border-radius:0}
+.alpha-cloud-sign-in>.alpha-connection-actions:last-child{margin-top:20px}
+.alpha-cloud-sign-in>.alpha-connection-actions:last-child .alpha-connection-cancel{border:0;padding-inline:0;background:none;color:var(--connection-mut,#666)}
+.alpha-cloud-sign-in .alpha-auth-submit[aria-busy=true]{opacity:1;cursor:progress}
+.alpha-cloud-sign-in-code>button[type=button]{min-height:44px;font-size:14px;font-variant-numeric:tabular-nums}
+@media(max-height:620px){.alpha-auth-page .alpha-auth-content{justify-content:flex-start;padding-top:calc(env(safe-area-inset-top) + 24px)}.alpha-auth-body{margin-block:0}.alpha-auth-brand{margin-bottom:28px}}

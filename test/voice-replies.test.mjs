@@ -38,7 +38,7 @@ function fixture({native = true} = {}) {
     constructor() { this.state = {chat: 'sheet', msgs: []}; this.live = true; }
     S() { return this.state; }
     setState(patch) { Object.assign(this.state, typeof patch === 'function' ? patch(this.state) : patch); this.componentDidUpdate(); }
-    renderVals() { return {ic:{copy:'copy',check:'check',wave:'wave',stop:'stop'},msgs: this.state.msgs.map(m => ({text: m.text}))}; }
+    renderVals() { return {ic:{copy:'copy',check:'check',wave:'wave',stop:'stop'},msgs: this.state.msgs.map(m => ({id: m.id, text: m.text}))}; }
     componentDidUpdate() {}
     componentWillUnmount() {}
   }

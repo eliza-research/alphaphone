@@ -17,9 +17,14 @@ export const DEVELOPMENT_CLASSES = Object.freeze([
 export const EXPORTED_COMPONENTS = Object.freeze({
   "ai.elizaresearch.alphaphone.MainActivity": null,
   "ai.elizaresearch.alphaphone.AlphaAssistActivity": null,
+  // Power entry is reserved for platform status-bar callers.
+  "ai.elizaresearch.alphaphone.AlphaPowerVoiceActivity": "android.permission.STATUS_BAR_SERVICE",
   "ai.elizaresearch.alphaphone.AlphaNotificationListener": "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE",
+  "ai.elizaresearch.alphaphone.AlphaQuickSettingsTile": "android.permission.BIND_QUICK_SETTINGS_TILE",
   // Alpha's password vault as an Android Autofill provider (shared plugin-native-passwords).
   "ai.eliza.plugins.passwords.ElizaPasswordAutofillService": "android.permission.BIND_AUTOFILL_SERVICE",
+  // Google Play services alone may notify this native sign-in revocation service.
+  "com.google.android.gms.auth.api.signin.RevocationBoundService": "com.google.android.gms.auth.api.signin.permission.REVOCATION_NOTIFICATION",
   "androidx.work.impl.background.systemjob.SystemJobService": "android.permission.BIND_JOB_SERVICE",
   "androidx.work.impl.diagnostics.DiagnosticsReceiver": "android.permission.DUMP",
   "androidx.profileinstaller.ProfileInstallReceiver": "android.permission.DUMP",
@@ -31,7 +36,7 @@ export const EXPORTED_COMPONENTS = Object.freeze({
 // in-browser model directory public/browser-speech/) never ship.
 export const REMOVED_SPEECH_ENTRY = /(?:\.on{2}x$|libon{2}xruntime|libsherpa|k2fsa|ort-wasm|^assets\/public\/browser-speech\/)/i;
 export const REMOVED_SPEECH_CLASSES = Object.freeze(["Lcom/k2fsa/", "Lai/eliza/speech/"]);
-import { manifestFacts } from "../vendor/eliza/packages/app/scripts/lib/android-manifest-facts.mjs";
+import { manifestFacts, parseXmlTree } from "../vendor/eliza/packages/app/scripts/lib/android-manifest-facts.mjs";
 export { manifestFacts, parseXmlTree } from "../vendor/eliza/packages/app/scripts/lib/android-manifest-facts.mjs";
 const isFalse = value => value === "0x0";
 
@@ -64,9 +69,25 @@ export function distributionProblems(apk, { mode, testMocks = false } = {}) {
       problems.push(`Unexpected exported ${component.tag} ${component.name}`);
       continue;
     }
+    if (component.name === "ai.elizaresearch.alphaphone.AlphaPowerVoiceActivity" && component.tag !== "activity")
+      problems.push("AlphaPowerVoiceActivity must be an activity");
     const required = EXPORTED_COMPONENTS[component.name];
     if (required && component.permission !== required)
       problems.push(`Exported ${component.name} must require ${required}`);
+  }
+  const tileName = "ai.elizaresearch.alphaphone.AlphaQuickSettingsTile";
+  const tile = facts.components.find(component => component.name === tileName);
+  if (tile) {
+    const application = parseXmlTree(apk.xml).children.find(node => node.name === "manifest")
+      ?.children.find(node => node.name === "application");
+    const nodes = application?.children.filter(node =>
+      node.attrs.name === tileName || node.attrs.name === ".AlphaQuickSettingsTile") ?? [];
+    const actions = nodes.flatMap(node => node.children.filter(child => child.name === "intent-filter")
+      .flatMap(filter => filter.children.filter(child => child.name === "action").map(child => child.attrs.name)));
+    if (tile.tag !== "service" || !tile.exported ||
+        tile.permission !== EXPORTED_COMPONENTS[tileName] || nodes.length !== 1 ||
+        actions.length !== 1 || actions[0] !== "android.service.quicksettings.action.QS_TILE")
+      problems.push("Alpha Quick Settings tile must be one exported, permission-protected QS_TILE service");
   }
   // Test-only names (mock providers, fixture peers) never ship in a flag-off build.
   if (!debugHooksAllowed) {
@@ -149,6 +170,15 @@ export function readBuildFlags(publicDir) {
   return flags;
 }
 
+/** OwnerRoutes reads assets/owner-routes.json; it must be config/owner-routes.json, the table the renderer imports. */
+export function verifyOwnerRouteTable(file) {
+  let packaged;
+  try { packaged = execFileSync("unzip", ["-p", file, "assets/owner-routes.json"], { stdio: ["ignore", "pipe", "pipe"] }); }
+  catch { throw new Error("assets/owner-routes.json is missing"); }
+  if (!packaged.equals(fs.readFileSync(new URL("../config/owner-routes.json", import.meta.url))))
+    throw new Error("assets/owner-routes.json differs from config/owner-routes.json");
+}
+
 export const AUDIT_SCRIPT = "scripts/audit-production-bundle.mjs";
 /** Run the shared production-bundle audit CLI against an extracted web payload. */
 export function auditBundle(directory, { testMocks = false, script = AUDIT_SCRIPT } = {}) {
@@ -163,16 +193,24 @@ export function auditBundle(directory, { testMocks = false, script = AUDIT_SCRIP
 }
 
 /** apksigner certificate digest of the first signer, or null when unsigned. */
-export function signerDigest(file) {
-  const output = execFileSync(tool("apksigner"), ["verify", "--print-certs", file], {
+export function signerDigest(file, { apiLevel } = {}) {
+  if (apiLevel !== undefined && (!Number.isInteger(apiLevel) || apiLevel < 1)) throw new Error("Invalid Android API level");
+  const output = execFileSync(tool("apksigner"), ["verify", "--print-certs", ...(apiLevel === undefined ? [] : ["--min-sdk-version", String(apiLevel), "--max-sdk-version", String(apiLevel)]), file], {
     encoding: "utf8", env: androidEnv(),
   });
-  return parseSignerDigest(output);
+  return parseSignerDigest(output, { apiLevel });
 }
-export function parseSignerDigest(output) {
-  const digest = /Signer #1 certificate SHA-256 digest:\s*([a-fA-F0-9]{64})/.exec(output)?.[1];
-  if (!digest) throw new Error("apksigner reported no SHA-256 signer digest");
-  return digest.toLowerCase();
+export function parseSignerDigest(output, { apiLevel } = {}) {
+  const legacy = [...output.matchAll(/Signer #([0-9]+) certificate SHA-256 digest:\s*([a-fA-F0-9]{64})/g)];
+  const ranged = [...output.matchAll(/Signer \(minSdkVersion=([0-9]+), maxSdkVersion=([0-9]+)\) certificate SHA-256 digest:\s*([a-fA-F0-9]{64})/g)];
+  if (legacy.length && ranged.length) throw new Error('Ambiguous APK signer output');
+  if (legacy.length === 1 && legacy[0][1] === '1') return legacy[0][2].toLowerCase();
+  if (legacy.length) throw new Error('Multiple or unrecognized APK signers are not supported');
+  if (!ranged.length) throw new Error('apksigner reported no SHA-256 signer digest');
+  if (!Number.isInteger(apiLevel) || apiLevel < 1) throw new Error('Rotated APK signer requires an explicit Android API level');
+  const matches = ranged.filter(row => Number(row[1]) <= apiLevel && apiLevel <= Number(row[2]));
+  if (matches.length !== 1) throw new Error('No unique APK signer for the requested Android API level');
+  return matches[0][3].toLowerCase();
 }
 
 export function validateApk(file, identity, wantsHome) {

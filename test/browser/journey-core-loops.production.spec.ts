@@ -1,3 +1,6 @@
+import {installNativeNavigationFixture} from './helpers/native-navigation-protocol';
+import {selectCalendarSource} from './helpers/browser-calendar';
+import {selectLegacyNotes} from './helpers/legacy-notes';
 import {seedCompletedAccessSetup} from './flag-off-android';
 // Core loops A–F and J01–J05 on the FLAG-OFF bundle (the bytes the distribution APKs package).
 //
@@ -46,6 +49,7 @@ async function fenceNetwork(page: Page, allowed: string[] = []) {
  * Cloud transcription returns that text, retained note audio, native reminders and one writable
  * device calendar; `signedOut` starts with no Cloud sign-in. */
 async function android(page: Page, options: { clock?: 'opened' | 'unavailable' | 'unknown'; voice?: string; signedOut?: boolean } = {}) {
+  await page.addInitScript(installNativeNavigationFixture);
   await page.addInitScript(({ options }) => {
     const w = window as any; w.androidBridge = {};
     const id = '9f1dc45a-4011-4e44-947a-30d999d24fa5', agentId = '6f1d3c3e-8c55-4c1b-9d1f-2b6f0b0d3a11';
@@ -72,10 +76,16 @@ async function android(page: Page, options: { clock?: 'opened' | 'unavailable' |
       listeners.filter(l => l.plugin === 'AlphaBrowser' && l.event === 'stateChanged').forEach(l => l.callback(state));
     };
     const data = (streamId: string, value: unknown) => emit(streamId, { type: 'chunk', dataBase64: btoa('data: ' + JSON.stringify(value) + '\n\n') });
-    const request = (method: string, path: string, body: any, headers: Record<string, string>): { status: number; data: unknown } => {
+    let fixtureNavigation: any;
+    const navigation=()=>fixtureNavigation??=(window as any).createNativeNavigationFixture(id,agentId,f);
+    const request = (method: string, path: string, body: any, headers: Record<string, string>, owner?: unknown): { status: number; data: unknown } => {
       const ok = (value: unknown) => ({ status: 200, data: value });
+      const navigationResult=navigation().request(method,path,body,headers,owner);if(navigationResult)return navigationResult;
+      // Mounted canonical views probe these sources; this native fixture provides none.
+      if (method === 'GET' && ['/api/notes/state', '/api/lifeops/calendar/feed', '/api/lifeops/calendar/calendars', '/api/lifeops/calendar/next-context'].includes(path.split('?')[0])) return { status: 503, data: { error: 'Canonical records unavailable in this fixture' } };
       if (path === '/api/auth/me') return ok({ identity: { id, kind: 'owner' }, access: { role: 'OWNER', mode: 'local' } });
       if (path === '/api/agents') return ok({ agents: [{ id: agentId, name: 'Alpha', status: 'running' }] });
+      if (path === '/api/client-devices/register') navigation().register(headers);
       if (path === '/api/client-devices/register') return ok({ installationId: headers['X-Eliza-Device-Id'], enrollmentId: 'fixture-enrollment', capabilities: [] });
       if (path === '/api/client-devices/proposals') return ok({ proposals: [] });
       if (path === '/api/workflow/status') return ok({ status: 'unavailable' });
@@ -155,7 +165,7 @@ async function android(page: Page, options: { clock?: 'opened' | 'unavailable' |
         if (plugin === 'Agent') {
           if (method === 'getStatus') return { packaged: true, state: 'stopped', serviceActive: false, socketListening: false };
           if (method === 'providerStatus') return { provider: 'elizacloud', configured: true, model: 'cerebras/qwen-3.8-27b' };
-          if (method === 'request') { const result = request(input.method || 'GET', input.path, input.body ? JSON.parse(input.body) : {}, input.headers || {}); return { status: result.status, body: JSON.stringify(result.data) }; }
+          if (method === 'request') { const result = request(input.method || 'GET', input.path, input.body ? JSON.parse(input.body) : {}, input.headers || {}, input.ownerId); return { status: result.status, body: JSON.stringify(result.data) }; }
           if (method === 'cancelStream') { f.cancelled++; return {}; }
           if (method === 'requestStream') {
             // The resident agent records the user turn, then streams its reply over native IPC.
@@ -426,58 +436,38 @@ test('loop C on Android: a phone time zone that changes after review retires the
   expect(await native(page, f => f.clock)).toEqual([]);
 });
 
-test('loops B, C and J04 in the web build: local calendar and alarm records are real, and Maps says a provider is missing instead of routing', async ({ page }) => {
+test('loops B, C and J04 in the web build: Agent Calendar requires a connection, local alarms persist, and Maps waits for a location', async ({ page }) => {
   test.setTimeout(120_000);
   const foreign = await fenceNetwork(page);
   await page.addInitScript(offline);
   await page.goto('/');
   await button(page, 'Calendar').click();
+  await expect(page.getByRole('region', {name: 'Calendar', exact: true})).toContainText('Connect to view Agent Calendar.');
   await button(page, 'New event').click();
-  await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Flag-off meeting');
-  await page.getByRole('textbox', { name: 'Location', exact: true }).fill('12 Market Street, Test Town');
-  await button(page, 'Save event').click();
-  await expect(page.getByRole('heading', { name: 'Flag-off meeting', level: 1 })).toBeVisible();
-  // J04: the location is handed to Maps once; with no provider there are no places, routes or times.
-  await button(page, '12 Market Street, Test Town').click();
-  await expect(page.locator('html')).toHaveAttribute('data-active-view', 'maps');
-  await expect(page.getByRole('textbox', { name: 'Search places', exact: true })).toHaveValue('12 Market Street, Test Town');
-  await expect(page.getByText('Connect a Maps provider to search places and plan routes.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', {name: 'Title', exact: true})).toHaveCount(0);
+  await expect(button(page, 'Save event')).toHaveCount(0);
+  expect(await storedEvents(page)).toEqual([]);
+  // An unavailable Agent Calendar must not silently create a local event.
+  await page.goto('/');
+  await button(page, 'Maps').click();
+  await expect(page.getByRole('region', {name: 'Map', exact: true})).toBeVisible();
+  await expect(page.getByRole('status')).toContainText('Add a location');
   await expect(button(page, 'Directions')).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Maps' })).not.toContainText(/\d+ min|\d km/);
-  // C: the web build keeps its own alarm list (it is not a development surface) and it survives a reload.
+  await expect(page.getByRole('region', {name: 'Maps'})).not.toContainText(/\d+ min|\d km/);
+  // The independent browser alarm list remains a durable local feature.
   await page.goto('/');
   await button(page, 'Calendar').click();
   await button(page, 'Clock alarms').click();
-  let clock = page.getByRole('dialog', { name: 'Clock alarms', exact: true });
-  await clock.getByRole('textbox', { name: 'Alarm label' }).fill('Flag-off web alarm');
-  await clock.getByLabel('Alarm time', { exact: true }).fill('07:15');
-  await clock.getByRole('button', { name: 'Save alarm', exact: true }).click();
-  await expect(clock.getByText('Flag-off web alarm', { exact: true })).toHaveCount(1);
+  let clock = page.getByRole('dialog', {name: 'Clock alarms', exact: true});
+  await clock.getByRole('textbox', {name: 'Alarm label'}).fill('Flag-off web alarm');
+  await clock.getByLabel('Alarm time', {exact: true}).fill('07:15');
+  await clock.getByRole('button', {name: 'Save alarm', exact: true}).click();
+  await expect(clock.getByText('Flag-off web alarm', {exact: true})).toHaveCount(1);
   await page.reload();
   await button(page, 'Calendar').click();
-  // B (direct UI): the saved event is still there after the reload, exactly once, and can be deleted.
-  await expect(page.getByRole('button', { name: /^Flag-off meeting,/ })).toHaveCount(1);
   await button(page, 'Clock alarms').click();
-  clock = page.getByRole('dialog', { name: 'Clock alarms', exact: true });
-  await expect(clock.getByText('Flag-off web alarm', { exact: true })).toHaveCount(1);
-  await clock.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await page.getByRole('button', { name: /^Flag-off meeting,/ }).click();
-  expect((await storedEvents(page)).map(row => row.title)).toEqual(['Flag-off meeting']);
-  await button(page, 'Delete event').click();
-  // Delete is reviewed first: the dialog names the event, and nothing is removed until it is confirmed.
-  const review = page.getByRole('dialog', { name: 'Delete calendar event?' });
-  await expect(review).toContainText('Flag-off meeting');
-  await expect(review).toContainText('Deletion waits 10 seconds. You can Undo during that time.');
-  expect((await storedEvents(page)).map(row => row.title)).toEqual(['Flag-off meeting']);
-  await review.getByRole('button', { name: 'Delete event', exact: true }).click();
-  await expect(review).toHaveCount(0);
-  // The deletion is queued with Undo for 10 seconds, then removes exactly the reviewed event.
-  await expect(page.getByRole('complementary', { name: 'Pending deletions' }).getByRole('button', { name: 'Undo', exact: true })).toBeVisible();
-  await expect.poll(() => storedEvents(page), { timeout: 30_000 }).toEqual([]);
-  // After a restart the event is gone from the list and from the saved calendar document.
-  await page.reload();
-  await button(page, 'Calendar').click();
-  await expect(page.getByRole('button', { name: /^Flag-off meeting,/ })).toHaveCount(0);
+  clock = page.getByRole('dialog', {name: 'Clock alarms', exact: true});
+  await expect(clock.getByText('Flag-off web alarm', {exact: true})).toHaveCount(1);
   expect(await storedEvents(page)).toEqual([]);
   await expectNoDevelopmentSurface(page);
   expect(foreign).toEqual([]);
@@ -512,7 +502,7 @@ test('loops D and F in the web build: digests and mail name the missing account 
   expect(foreign).toEqual([]);
 });
 
-test('loops E and J05 in the web build: browsing and page review work, an unconnected question is not sent, and no development vault is offered', async ({ page }) => {
+test('loops E and J05 in the web build: page content requires review and no development vault is offered', async ({ page }) => {
   test.setTimeout(120_000);
   const foreign = await fenceNetwork(page, ['public-fixture.test']);
   const url = 'https://public-fixture.test/harbour';
@@ -527,16 +517,15 @@ test('loops E and J05 in the web build: browsing and page review work, an unconn
   // The web build cannot verify TLS for the framed page and does not claim it.
   await expect(page.getByRole('img', { name: 'Secure connection', exact: true })).toHaveCount(0);
   await button(page, 'Menu').click();
+  // A committed web page offers an explicit review of a separately fetched copy;
+  // the frame itself is never certified as TLS or silently added to agent context.
+  await expect(button(page, 'Share')).toHaveCount(0);
   await button(page, 'Ask about page').click();
   const review = page.getByRole('dialog', { name: 'Ask about selected content' });
-  await expect(review.getByRole('textbox', { name: 'Content excerpt' })).toHaveValue(/The ferry leaves at nine from pier four\./);
-  await review.getByRole('button', { name: 'Use in conversation', exact: true }).click();
-  await button(page, 'Send').click();
-  // No local Android agent is available: preserve the reviewed draft and explain the local-only policy.
-  await expect(page.getByRole('status', { name: 'Assistant draft status' })).toHaveText('Not sent. Your message is back in the composer.');
-  await expect(page.locator('.alpha-connection').getByText('Your agent runs locally in the Android app. Remote agents and pairing are unavailable.', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Review summary note/ })).toHaveCount(0);
-  await page.locator('.alpha-connection').getByRole('button', { name: 'Close connection settings', exact: true }).click();
+  await expect(review).toBeVisible();
+  await expect(review.getByRole('textbox', { name: 'Content excerpt' })).toHaveValue(/The ferry leaves at nine from pier four/);
+  await review.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(review).toHaveCount(0);
   await page.goto('/');
   await button(page, 'Settings').click();
   await button(page, 'Password manager').click();
@@ -549,7 +538,7 @@ test('loops E and J05 in the web build: browsing and page review work, an unconn
   expect(foreign).toEqual([]);
 });
 
-test('loop J01 in the web build: a scanned poster becomes exactly one reviewed calendar event with no development profile', async ({ page }) => {
+test('loop J01 in the web build: a scanned event remains in review without an authorized Calendar source', async ({ page }) => {
   test.setTimeout(300_000);
   const foreign = await fenceNetwork(page);
   await page.clock.setFixedTime(new Date('2026-10-09T15:00:00Z'));
@@ -577,30 +566,16 @@ test('loop J01 in the web build: a scanned poster becomes exactly one reviewed c
   await expect(dialog.getByLabel('Event location', { exact: true })).toHaveValue('Main hall');
   await dialog.getByLabel('Event title', { exact: true }).fill('Reviewed studio visit');
   await dialog.getByRole('button', { name: 'Review in Calendar', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Reviewed studio visit');
-  // Suggesting and handing off saved nothing; only the Calendar form's Save writes.
+  // No agent Calendar source exists in this web session. Keep both the OCR
+  // text and the user's edited fields instead of opening an unusable form.
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('Calendar could not open. Your draft remains here.');
+  await expect(text).toHaveValue(recognized);
+  await expect(dialog.getByLabel('Event title', { exact: true })).toHaveValue('Reviewed studio visit');
+  await expect(button(page, 'Save event')).toHaveCount(0);
   expect(await storedEvents(page)).toEqual([]);
-  await button(page, 'Save event').click();
-  await expect(page.getByRole('heading', { name: 'Reviewed studio visit', level: 1 })).toBeVisible();
-  await page.reload();
-  await expect(button(page, 'Settings')).toBeVisible();
-  const saved = await storedEvents(page);
-  expect(saved).toHaveLength(1);
-  // 18:30 to 20:00 on October 10 in the phone's own zone.
-  const [begin, end] = await page.evaluate(() => [new Date(2026, 9, 10, 18, 30).getTime(), new Date(2026, 9, 10, 20, 0).getTime()]);
-  expect(saved[0]).toMatchObject({ calendarId: 'local', title: 'Reviewed studio visit', location: 'Main hall', body: recognized, begin, end });
-  // Home's agenda card names the saved event and opens that same event.
-  const card = page.getByRole('button', { name: /^Open calendar event: Reviewed studio visit,/ });
-  await expect(card).toHaveCount(1);
-  await card.click();
-  await expect(page.getByRole('heading', { name: 'Reviewed studio visit', level: 1 })).toBeVisible();
-  await expect(button(page, 'Main hall')).toBeVisible();
-  await button(page, 'Back to calendar').last().click();
-  await button(page, 'Day 10').click();
-  await expect(page.getByRole('button', { name: /^Reviewed studio visit,/ })).toHaveCount(1);
-  expect(await storedEvents(page)).toHaveLength(1);
   await expectNoDevelopmentSurface(page);
-  // Capture, OCR and the calendar are all local: nothing left the preview server.
+  // Capture and OCR are local: nothing left the preview server.
   expect(foreign).toEqual([]);
 });
 
@@ -625,7 +600,9 @@ test('loop J03 in the web build: a chosen document can be reviewed for a questio
   await page.evaluate(() => window.dispatchEvent(new Event('launcher-home')));
   await page.goto('/');
   await button(page, 'Notes').click();
-  await expect(page.locator('[data-screen]')).toContainText('No notes yet');
+  await expect(page.locator('[data-screen]')).toContainText('Notes is unavailable for this agent connection. Check Settings › Agent connection.');
+  await expect(button(page, 'New note')).toHaveCount(0);
+  await expect(page.getByRole('textbox', {name:'Note', exact:true})).toHaveCount(0);
   // The development Inbox simulator that feeds journey J03 does not exist here.
   await expect(button(page, 'Incoming email')).toHaveCount(0);
   await expectNoDevelopmentSurface(page);
@@ -653,11 +630,23 @@ async function askAboutHarbour(page: Page) {
 /** The notes saved in the Keystore-backed Notes slot of the stub (its envelope holds the collection's bytes). */
 const savedNotes = (page: Page) => native(page, f => { const slot = f.slots['notes-records:v1:device']; return slot ? JSON.parse(JSON.parse(slot).currentRaw).records : []; }) as Promise<any[]>;
 
+/** The attachment-summary path uses explicitly selected retained device notes. */
+async function openRetainedNativeNotes(page:Page){
+ await native(page,f=>{
+  const key='notes-records:v1:device';
+  if(!f.slots[key])f.slots[key]=JSON.stringify({version:1,archive:{v1:null,v2:null,daily:null},currentRaw:JSON.stringify({version:2,collectionId:crypto.randomUUID(),records:[],deleted:[]})});
+ });
+ await selectLegacyNotes(page);
+ await expect(page.getByRole('heading',{name:'Older notes',exact:true})).toBeVisible();
+ await expect(page.getByText('Note text encrypted on this device',{exact:true})).toBeVisible();
+}
+
 test('loop J05 on Android: a reviewed native page excerpt, a resident answer and an explicit Save leave one web-linked note', async ({ page }) => {
   test.setTimeout(180_000);
   const foreign = await fenceNetwork(page);
   await android(page);
   await residentHome(page);
+  await openRetainedNativeNotes(page);
   const tab = await openHarbour(page);
   await native(page, f => { f.browser.excerpt = 'The ferry leaves at nine from pier four.\nOMIT THIS: internal planning detail.'; f.replies.push('The ferry leaves at nine.'); });
   await askAboutHarbour(page);
@@ -704,7 +693,7 @@ test('loop J05 on Android: a reviewed native page excerpt, a resident answer and
   await page.reload();
   await expect.poll(() => native(page, f => f.calls.includes('Agent.start')), { timeout: 30_000 }).toBe(true);
   await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0, { timeout: 30_000 });
-  await button(page, 'Notes').click();
+  await openRetainedNativeNotes(page);
   await expect(page.getByRole('region', { name: 'Notes' }).getByRole('button', { name: /^Open (?!Trash$)/ })).toHaveCount(1);
   await button(page, 'Open Harbour summary').click();
   await expect(page.getByRole('textbox', { name: 'Note', exact: true })).toHaveValue('The ferry leaves at nine.');
@@ -808,6 +797,10 @@ const TRANSCRIPT = 'Meeting: we agreed to book the venue for Friday and email th
 const SUMMARY = 'The team agreed to book the venue.';
 const ACTIONS = 'Book the venue\nEmail the caterer';
 
+async function openAndroidCalendar(page:Page){
+ await selectCalendarSource(page, 'Android calendars');
+}
+
 test('loop B / J02 on Android: a recorded note, a resident summary and reviewed hand-offs save one reminder and one device event, each only on Save', async ({ page }) => {
   test.setTimeout(240_000);
   const foreign = await fenceNetwork(page);
@@ -816,7 +809,9 @@ test('loop B / J02 on Android: a recorded note, a resident summary and reviewed 
   const writes = () => native(page, f => ({ reminders: f.writes.reminders.length, events: f.writes.events.length }));
 
   // 1. Record with the native recorder, transcribe on the phone (on-device voice host), review and save the note.
-  await button(page, 'Notes').click();
+  await openAndroidCalendar(page);
+  await page.evaluate(() => window.dispatchEvent(new Event('launcher-home')));
+  await openRetainedNativeNotes(page);
   await button(page, 'Record and transcribe').click();
   await button(page, 'Start recording').click();
   await expect(button(page, 'Stop recording')).toBeVisible();
@@ -890,9 +885,13 @@ test('loop B / J02 on Android: a recorded note, a resident summary and reviewed 
   await page.reload();
   await expect.poll(() => native(page, f => f.calls.includes('Agent.start')), { timeout: 30_000 }).toBe(true);
   await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0, { timeout: 30_000 });
-  // Home's agenda card opens the next item; Back shows that item's day.
-  await page.getByRole('button', { name: /^Open calendar event: (Book the venue|Venue walkthrough),/ }).click();
-  await button(page, 'Back to calendar').last().click();
+  // Reopen the retained Notes source before resolving its saved backlinks.
+  await openRetainedNativeNotes(page);
+  await page.evaluate(() => window.dispatchEvent(new Event('launcher-home')));
+  // Device records are reviewed through the explicit Android source; Home uses Agent Calendar.
+  await openAndroidCalendar(page);
+  const savedDay=await page.evaluate(timestamp=>new Date(timestamp).getDate(),reminder.dueAt);
+  await button(page,`Day ${savedDay}`).click();
   await expect(page.getByRole('button', { name: /^Book the venue,/ })).toHaveCount(1);
   await expect(page.getByRole('button', { name: /^Venue walkthrough,/ })).toHaveCount(1);
   await page.getByRole('button', { name: /^Book the venue,/ }).click();
@@ -917,9 +916,11 @@ test('loop B / J02 on Android signed out: the Eliza Cloud sign-in comes first an
   await page.goto('/');
   // P-43 with #410: the resident starts signed out and the sign-in dialog, which every Alpha Phone
   // needs, opens by itself and cannot be dismissed; no "without AI" choice is offered.
-  const dialog = page.getByRole('main', { name: 'Sign in', exact: true });
+  const dialog = page.getByRole('main', { name: 'Welcome to Alpha.', exact: true });
   await expect(dialog).toBeVisible({ timeout: 30_000 });
-  await expect(dialog.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Continue with Google', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('textbox', { name: 'Email', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('alert')).toHaveText('Eliza Cloud sign-in is unavailable right now. Try again.');
   await expect(dialog.getByRole('button', { name: 'Close connection settings', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Use local apps without AI', exact: true })).toHaveCount(0);
   await expect(button(page, 'Start recording')).toHaveCount(0);

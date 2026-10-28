@@ -23,9 +23,9 @@
     "aosp:stage": "node scripts/stage-aosp.mjs",
     "aosp:verify-secure-camera": "node scripts/verify-aosp-secure-camera.mjs",
     "upstream:verify": "node scripts/verify-upstream.mjs",
-    "agent:dev": "ALPHA_AGENT_BACKEND=eliza bun scripts/dev-agent.mjs",
+    "agent:dev": "ELIZA_DEV_ALLOW_TEST_MOCKS=1 ALPHA_AGENT_BACKEND=eliza bun scripts/dev-agent.mjs",
     "agent:configure-emulator": "node scripts/configure-dev-agent.mjs",
-    "agent:diagnostic": "ALPHA_AGENT_BACKEND=direct-diagnostic node scripts/dev-agent.mjs",
+    "agent:diagnostic": "ELIZA_DEV_ALLOW_TEST_MOCKS=1 ALPHA_AGENT_BACKEND=direct-diagnostic bun scripts/dev-agent.mjs",
     "agent:local": "node scripts/start-local-remote.mjs",
     "test:browser": "playwright test --project=chromium",
     "test:browser:production": "playwright test --project=production",
@@ -71,7 +71,12 @@
     "pdfjs-dist": "6.3.289",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "tesseract.js": "7.0.0"
+    "tesseract.js": "7.0.0",
+    "@radix-ui/react-slot": "1.2.4",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "1.0.0",
+    "tailwind-merge": "3.7.0"
   },
   "devDependencies": {
     "@capacitor/cli": "8.5.2",

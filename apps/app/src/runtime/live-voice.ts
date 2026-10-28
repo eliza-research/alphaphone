@@ -252,7 +252,6 @@ export function createLiveVoiceSession(options: LiveVoiceSessionOptions) {
     dispose,
   };
 }
-export type LiveVoiceSession = ReturnType<typeof createLiveVoiceSession>;
 
 /** `agent_event` envelopes from an agent event WebSocket (`/ws`), for transports that have one. */
 export function webSocketAgentEvents(open: () => WebSocket): (listener: (envelope: unknown) => void) => () => void {

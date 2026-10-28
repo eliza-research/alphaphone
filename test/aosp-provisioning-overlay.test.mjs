@@ -17,8 +17,8 @@ function tree({ homes = 1, autofillPermission = "android.permission.BIND_AUTOFIL
     ...Array.from({ length: homes }, (_, i) => [...element(6, "activity", { name: `${PKG}.${i ? "Other" : "Main"}Activity`, exported: "(type 0x12)0xffffffff" }),
       ...filter(8, "android.intent.action.MAIN", ["android.intent.category.LAUNCHER"]),
       ...filter(8, "android.intent.action.MAIN", ["android.intent.category.HOME", "android.intent.category.DEFAULT"])]).flat(),
-    ...element(6, "activity", { name: `${PKG}.AlphaAssistActivity` }), ...filter(8, "android.intent.action.ASSIST", ["android.intent.category.DEFAULT"]),
-    ...element(6, "service", { name: "ai.eliza.plugins.passwords.ElizaPasswordAutofillService", permission: autofillPermission }), ...filter(8, "android.service.autofill.AutofillService"),
+    ...element(6, "activity", { name: `${PKG}.AlphaAssistActivity`, exported: "(type 0x12)0xffffffff" }), ...filter(8, "android.intent.action.ASSIST", ["android.intent.category.DEFAULT"]),
+    ...element(6, "service", { name: "ai.eliza.plugins.passwords.ElizaPasswordAutofillService", permission: autofillPermission, exported: "(type 0x12)0xffffffff" }), ...filter(8, "android.service.autofill.AutofillService"),
     ...element(6, "service", { name: `${PKG}.ElizaAgentService` }),
   ].join("\n");
 }
@@ -36,16 +36,16 @@ test("the overlay sets default HOME, assistant and Autofill offer additively", t
   const files = renderProvisioningOverlay(PKG, provisioningComponents(tree(), PKG));
   assert.match(files["provisioning/overlay/frameworks/base/core/res/res/values/config.xml"], new RegExp(`config_defaultAssistant" translatable="false">${PKG}<`));
   assert.match(files["provisioning/overlay/frameworks/base/core/res/res/values/config.xml"], /config_defaultAutofillService" translatable="false">ai\.elizaresearch\.alphaphone\/ai\.eliza\.plugins\.passwords\.ElizaPasswordAutofillService</);
-  assert.match(files["provisioning/preferred-apps/alphaphone-home.xml"], /<item name="ai\.elizaresearch\.alphaphone\/ai\.elizaresearch\.alphaphone\.MainActivity"/);
-  assert.match(files["provisioning/preferred-apps/alphaphone-home.xml"], /android\.intent\.category\.HOME/);
+  assert.match(files["provisioning/preferred-apps/launcher-home.xml"], /<item name="ai\.elizaresearch\.alphaphone\/ai\.elizaresearch\.alphaphone\.MainActivity"/);
+  assert.match(files["provisioning/preferred-apps/launcher-home.xml"], /android\.intent\.category\.HOME/);
   assert.doesNotMatch(files.productMakefile, /LOCAL_OVERRIDES_PACKAGES|Launcher3/, "the stock launcher stays as a recovery path");
   assert.doesNotMatch(files.productMakefile, /\bALPHA_/);
   const out = fs.mkdtempSync(path.join(os.tmpdir(), "alpha-provision-"));
   t.after(() => fs.rmSync(out, { recursive: true, force: true }));
   fs.writeFileSync(path.join(out, "product.mk"), "PRODUCT_PACKAGES += AlphaPhone\n");
   writeProvisioningOverlay(out, PKG, provisioningComponents(tree(), PKG));
-  assert.match(fs.readFileSync(path.join(out, "product.mk"), "utf8"), /PRODUCT_PACKAGE_OVERLAYS \+= \$\(alphaphone_provisioning_dir\)\/overlay/);
-  assert.ok(fs.existsSync(path.join(out, "provisioning/preferred-apps/alphaphone-home.xml")));
+  assert.match(fs.readFileSync(path.join(out, "product.mk"), "utf8"), /PRODUCT_PACKAGE_OVERLAYS \+= \$\(launcher_provisioning_dir\)\/overlay/);
+  assert.ok(fs.existsSync(path.join(out, "provisioning/preferred-apps/launcher-home.xml")));
   assert.throws(() => writeProvisioningOverlay(out, PKG, provisioningComponents(tree(), PKG)), /EEXIST/);
 });
 

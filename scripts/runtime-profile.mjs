@@ -21,7 +21,11 @@ export function verifyCloudResident(root,source=sourceDirectory(root)) {
  const omitted={path:'assets/agent/models/bge-small-en-v1.5-f16.gguf',sha256:'f0b2fef971e8366438bfd2d9aefea1b0115919389448806d290237f638bae999'};
  if(JSON.stringify(profile.omittedLocalModels)!==JSON.stringify([omitted]))throw Error('Cloud local-model projection differs');
  const lock=json(path.join(source,'packages/app/scripts/lib/android-bun-artifacts.lock.json'));
- const bun=lock.channels?.[provenance.bun?.channel];
+ const bunTarget=provenance.bun?.target??'linux-musl';
+ if(!['linux-musl','android'].includes(bunTarget))throw Error('Unsupported Cloud Bun target');
+ const bun=bunTarget==='linux-musl'?lock.channels?.[provenance.bun?.channel]:lock.targets?.android?.[provenance.bun?.channel];
+ const runtimeAbis=bunTarget==='android'?provenance.bun?.architectures:['arm64-v8a','x86_64'];
+ if(!Array.isArray(runtimeAbis)||!runtimeAbis.length||new Set(runtimeAbis).size!==runtimeAbis.length||runtimeAbis.some(abi=>!['arm64-v8a','x86_64'].includes(abi)))throw Error('Invalid Cloud Bun ABI admission');
  if(!bun||bun.version!==provenance.bun.version||bun.revision!==provenance.bun.revision)throw Error('Cloud Bun provenance differs from pinned producer lock');
  const seen=new Set();
  for(const row of provenance.files){
@@ -33,9 +37,13 @@ export function verifyCloudResident(root,source=sourceDirectory(root)) {
  }
  for(const name of ['agent-bundle.js','pglite.wasm','pglite.data','pglite-initdb.bin','vector.tar','fuzzystrmatch.tar'])if(!seen.has('assets/agent/'+name))throw Error('Required Cloud resident database/bundle missing: '+name);
  for(const name of ['pglite.wasm','pglite.data','pglite-initdb.bin','vector.tar','fuzzystrmatch.tar']){const original=fs.readFileSync(path.join(source,'packages/agent/dist-mobile',name.endsWith('.tar')?name+'.gz':name));if(workerHash(name.endsWith('.tar')?gunzipSync(original):original)!==digest(path.join(agent,name)))throw Error('Cloud PGlite differs from prepared build: '+name);}
- for(const [abi,arch] of [['arm64-v8a','aarch64'],['x86_64','x64']])if(digest(path.join(main,'jniLibs',abi,'libeliza_bun.so'))!==bun.artifacts[arch].binarySha256)throw Error('Cloud Bun executable differs from pinned artifact: '+abi);
+ for(const abi of runtimeAbis){const arch=abi==='arm64-v8a'?'aarch64':'x64';if(!bun.artifacts?.[arch]||digest(path.join(main,'jniLibs',abi,'libeliza_bun.so'))!==bun.artifacts[arch].binarySha256)throw Error('Cloud Bun executable differs from pinned artifact: '+abi);}
  if(digest(path.join(agent,'agent-bundle.js'))!==digest(path.join(source,'packages/agent/dist-mobile/agent-bundle.js')))throw Error('Cloud agent bundle differs from prepared build');
- for(const abi of ['arm64-v8a','x86_64'])for(const name of ['libeliza_bun.so',abi==='arm64-v8a'?'libeliza_ld_musl_aarch64.so':'libeliza_ld_musl_x86_64.so','libeliza_stdcpp.so','libeliza_gcc_s.so','libsigsys-handler.so',abi==='arm64-v8a'?'libeliza_ld_musl_aarch64_real.so':'libeliza_ld_musl_x86_64_real.so'])if(!seen.has(`lib/${abi}/${name}`))throw Error('Cloud resident executable missing: '+abi+'/'+name);
+ for(const abi of runtimeAbis){
+  const musl=[abi==='arm64-v8a'?'libeliza_ld_musl_aarch64.so':'libeliza_ld_musl_x86_64.so','libeliza_stdcpp.so','libeliza_gcc_s.so','libsigsys-handler.so',abi==='arm64-v8a'?'libeliza_ld_musl_aarch64_real.so':'libeliza_ld_musl_x86_64_real.so'];
+  if(bunTarget==='android'&&musl.some(name=>seen.has(`lib/${abi}/${name}`)))throw Error('Native Android Cloud runtime contains musl libraries');
+  for(const name of ['libeliza_bun.so',...(bunTarget==='android'?[]:musl)])if(!seen.has(`lib/${abi}/${name}`))throw Error('Cloud resident executable missing: '+abi+'/'+name);
+ }
  // Absence is deliberate capability admission, never acceptance of arbitrary local bytes.
  const visit=directory=>{if(!fs.existsSync(directory))return;for(const entry of fs.readdirSync(directory,{withFileTypes:true})){const file=path.join(directory,entry.name);if(entry.isSymbolicLink())throw Error('Runtime symlink refused');if(entry.isDirectory())visit(file);else if(/\.(gguf|onnx|safetensors|pt|pth)$/.test(entry.name))throw Error('Cloud profile cannot package local model: '+file);else if(/^(lib(?:elizainference|elizavoicejni|paradeevoicejni|llama|ggml|omnivoice)|llama-server)/.test(entry.name))throw Error('Cloud profile cannot package local inference: '+file);}};
  visit(agent);visit(path.join(main,'jniLibs'));

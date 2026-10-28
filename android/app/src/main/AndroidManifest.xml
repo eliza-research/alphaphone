@@ -72,6 +72,12 @@
    <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started local personal agent runtime" />
   </service>
   <service android:name=".AlphaNavigationService" android:exported="false" android:foregroundServiceType="location" />
+  <!-- Android alone binds this action tile. A locked-device tap requires unlocking; no capture
+       or connection authority comes from a tile being present in Quick Settings. -->
+  <service android:name=".AlphaQuickSettingsTile" android:label="@string/alpha_quick_settings_label" android:icon="@drawable/notification_icon" android:exported="true" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+   <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE"/></intent-filter>
+   <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="false"/>
+  </service>
   <activity android:name=".AlphaMailPdfActivity" android:exported="false" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="PDF attachment" />
   <service android:name=".IsolatedPdfService" android:exported="false" android:isolatedProcess="true" android:process=":isolated_pdf" android:stopWithTask="true" />
   <!-- Release-build data integrity export for pilot updates: per-file HMAC digests only, read-only,
@@ -98,6 +104,9 @@
   <activity android:name=".AlphaAssistActivity" android:exported="true" android:launchMode="singleTask" android:taskAffinity="${applicationId}.assistant" android:excludeFromRecents="true" android:screenOrientation="${appOrientation}" android:windowSoftInputMode="adjustResize" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|density|navigation" android:theme="@style/AppTheme.Launch">
    <intent-filter><action android:name="android.intent.action.ASSIST"/><category android:name="android.intent.category.DEFAULT"/></intent-filter>
   </activity>
+  <!-- Explicit native Power entry; only existing platform STATUS_BAR_SERVICE holders may launch.
+       Cold entry is surface-only; no intent filter or extra can authorize microphone capture. -->
+  <activity android:name=".AlphaPowerVoiceActivity" android:exported="true" android:permission="android.permission.STATUS_BAR_SERVICE" android:launchMode="singleTask" android:taskAffinity="${applicationId}.assistant" android:excludeFromRecents="true" android:screenOrientation="${appOrientation}" android:windowSoftInputMode="adjustResize" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|density|navigation" android:theme="@style/AppTheme.Launch" />
   <!-- Unfinished Reset Alpha data (#409). Own process: none of Alpha's providers or startup initializers run there. -->
   <activity android:name=".ResetRecoveryActivity" android:exported="false" android:process=":reset_recovery" android:taskAffinity="${applicationId}.reset" android:excludeFromRecents="true" android:launchMode="singleTask" android:theme="@android:style/Theme.DeviceDefault.DayNight" android:label="Reset Alpha data" />
   <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:screenOrientation="${appOrientation}" android:windowSoftInputMode="adjustResize" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|density|navigation" android:theme="@style/AppTheme.Launch">

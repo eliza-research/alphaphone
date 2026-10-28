@@ -38,7 +38,7 @@ test('Cloud profile keeps native speech and embeddings guards as default',()=>{
 // Exercise the real admission path with an authenticated tiny source tree. The
 // intentionally different Bun hash marks successful completion of database
 // admission; this fixture does not stand in for a complete resident payload.
-function databaseAdmissionFixture() {
+function databaseAdmissionFixture({bunTarget="linux-musl"}={}) {
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'alpha-cloud-database-'));
  const source=path.join(root,'source'),agent=path.join(root,'android/app/src/main/assets/agent');
  const write=(file,bytes)=>{fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,bytes);};
@@ -55,9 +55,8 @@ function databaseAdmissionFixture() {
  write(path.join(source,'bun.lock'),'{}');
  json(path.join(source,'package.json'),{name:'synthetic-cloud-admission',private:true,workspaces:[]});
  json(path.join(source,'turbo.json'),{tasks:{}});
- json(path.join(source,'packages/app/scripts/lib/android-bun-artifacts.lock.json'),{
-  channels:{fixture:{version:'fixture',revision:'fixture',artifacts:{aarch64:{binarySha256:'0'.repeat(64)}}}},
- });
+ const release={version:'fixture',revision:'fixture',artifacts:{aarch64:{binarySha256:'0'.repeat(64)}}};
+ json(path.join(source,'packages/app/scripts/lib/android-bun-artifacts.lock.json'),bunTarget==='android'?{targets:{android:{fixture:release}}}:{channels:{fixture:release}});
  const git=(...args)=>execFileSync('git',args,{cwd:source,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
  git('init','--quiet');git('add','.');git('-c','user.name=Alpha test','-c','user.email=alpha-test@invalid','commit','--quiet','-m','Synthetic source');
  const pin=git('rev-parse','HEAD');
@@ -66,7 +65,7 @@ function databaseAdmissionFixture() {
  json(path.join(source,'.alpha-runtime-source.json'),stamp);json(path.join(agent,'alpha-source.json'),stamp);
  const omitted={path:'assets/agent/models/bge-small-en-v1.5-f16.gguf',sha256:'f0b2fef971e8366438bfd2d9aefea1b0115919389448806d290237f638bae999'};
  json(path.join(agent,'alpha-runtime-profile.json'),{version:1,runtimeProfile:'cloud',omittedLocalModels:[omitted]});
- const provenance={schema:'eliza.android_agent_runtime_provenance.v1',bun:{channel:'fixture',version:'fixture',revision:'fixture'},files:[]};
+ const provenance={schema:'eliza.android_agent_runtime_provenance.v1',bun:{channel:'fixture',version:'fixture',revision:'fixture',target:bunTarget,...(bunTarget==='android'?{architectures:['arm64-v8a']}:{})},files:[]};
  for(const [name,bytes] of prepared){
   write(path.join(source,'packages/agent/dist-mobile',name.endsWith('.tar')?name+'.gz':name),name.endsWith('.tar')?gzipSync(bytes):bytes);
   write(path.join(agent,name),bytes);
@@ -97,4 +96,13 @@ test('Cloud snapshot bytes remain bound to the prepared build when provenance is
   row.sha256=fixture.hash(replacement);row.size_bytes=replacement.length;fixture.save();
   assert.throws(()=>verifyCloudResident(fixture.root,fixture.source),/Cloud PGlite differs from prepared build: pglite-initdb.bin/);
  }finally{fs.rmSync(fixture.root,{recursive:true,force:true});}
+});
+
+test('native Android Cloud admission uses its explicit target pin before any legacy-loader requirement',()=>{
+ const f=databaseAdmissionFixture({bunTarget:'android'});
+ try {
+  assert.throws(()=>verifyCloudResident(f.root,f.source),/Cloud Bun executable differs from pinned artifact: arm64-v8a/);
+  f.provenance.bun.target='unknown';f.save();assert.throws(()=>verifyCloudResident(f.root,f.source),/Unsupported Cloud Bun target/);
+  f.provenance.bun.target='android';f.provenance.bun.architectures=['riscv64'];f.save();assert.throws(()=>verifyCloudResident(f.root,f.source),/Invalid Cloud Bun ABI admission/);
+ } finally {fs.rmSync(f.root,{recursive:true,force:true});}
 });

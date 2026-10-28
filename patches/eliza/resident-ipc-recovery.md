@@ -14,3 +14,14 @@ intact archive and interrupted-archive refusal retain their existing authority.
 
 Earlier component and device evidence remains historical. The new source review
 and regression tests do not establish new installed-device recovery or acceptance.
+
+
+The October 26 integration candidate uses Eliza `6293e29bf398603d0ea233871edbdeb57e5c2405`.
+Its reviewed service now chooses the Bun target from APK provenance, rejects
+adoption when the socket peer's executable/bundle identity cannot be verified,
+and passes the device time zone to the resident. The survivor inventory keeps
+bounded, per-stop executable digest observations with held-FD/path identity
+checks and preserves unproven processes. `IpcStartupRecovery` itself is unchanged.
+Alpha stages the newly required `AndroidBunTarget` helper with the same product
+package relocation. Hash admission records these new source bytes; it does not
+transfer earlier runtime, recovery, stop or physical-device acceptance.

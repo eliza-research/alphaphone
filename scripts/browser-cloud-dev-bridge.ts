@@ -1,7 +1,8 @@
 import {productionCloud, stagingCloud, cloudStorageNamespace} from '../apps/app/src/runtime/cloud-deployment.generated.ts';
 import {createCloudResidentHost} from './cloud-resident-host.mjs';
-import {managedGoogleRequest,boundedServiceJson} from '../backend/managed-google-route-policy.ts';
-import {CLOUD_EMAIL_CODE,emailCodeExpiresAt,emailCodeSendBody,emailCodeVerifyBody} from './cloud-email-code.ts';
+import {managedGoogleRequest,boundedServiceJson,object} from '../backend/managed-google-route-policy.ts';
+import {CLOUD_EMAIL_CODE,emailCodeExpiresAt,emailCodeResendAt,emailCodeSendBody,emailCodeVerifyBody} from './cloud-email-code.ts';
+import {parseCloudServiceInfo} from '../apps/app/src/runtime/cloud-service-info.ts';
 import {randomUUID,createHash,randomBytes} from 'node:crypto';
 import {mkdir,readFile,writeFile,rename,lstat} from 'node:fs/promises';
 import path from 'node:path';
@@ -18,7 +19,6 @@ const publicCredential=(c:Credential)=>({credentialReference:c.credentialReferen
 function environment(value:unknown):Environment{if(value!=='production'&&value!=='staging')throw Error('Unsupported Cloud environment');return value;}
 function refusal(status:number,code:string){return Object.assign(Error(code),{status,code});}
 function requestId(value:unknown):string{if(typeof value!=='string'||!UUID.test(value))throw Error('Invalid request identity');return value;}
-function object(value:unknown):Record<string,any>{if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid Cloud request');return value as Record<string,any>;}
 /** DEV transport only. Canonical Cloud owns login, identity, plan entitlement and speech authorization. */
 export function createBrowserCloudDevHandler(options:{profile:string;request?:typeof fetch;environment?:Environment;diagnostic?:(event:{environment:Environment;operation:string;status:number;code?:string})=>void;resident?:{bind:(credential:{token:string;credentialId:string;reference:string;expiresAt?:number})=>Promise<unknown>;clear:()=>Promise<unknown>;status:(id?:string)=>unknown;ready:(signal:AbortSignal)=>Promise<unknown>}}){
  const profile=path.resolve(options.profile,cloudStorageNamespace.replaceAll(':','-')),stateFile=path.join(profile,'credentials.json'),initialFile=path.join(profile,'initial-credential.json'),fetchCloud=options.request??fetch;
@@ -44,8 +44,8 @@ export function createBrowserCloudDevHandler(options:{profile:string;request?:ty
  // session, PKCE material and the minted key stay in this process and the private profile file.
  type SignInAttempt={controller:AbortController;id:string;environment:Environment;email:string;verifier:string;expiresAt:number;resendAt:number;busy:boolean;failed:number;mfa?:{type:string;challengeId:string}};
  let signIn:SignInAttempt|null=null;
- // One code send a minute, whatever the address; five wrong codes end an attempt (as AlphaCloudSignInPlugin).
- let lastEmailSendAt=0;const MAX_VERIFY_ATTEMPTS=5;
+ // One code send per 30 seconds minimum, across addresses; honor longer server deadlines.
+ let lastEmailSendAt=0,emailSendAllowedAt=0;const MAX_VERIFY_ATTEMPTS=5;
  const SIGN_IN_CLIENT='ai.elizaresearch.alphaphone',SIGN_IN_CALLBACK={production:productionCloud.web+'/alphaphone/auth/callback',staging:stagingCloud.web+'/alphaphone/auth/callback'} as const;
  const signInFailure=(code:string)=>Object.assign(Error(code),{status:409,code});
  const signInStatus=(stage:string,status:number)=>status===429?'rate-limited':status===410?'expired':status===403?'account-check':(status===400||status===401)&&(stage==='verify'||stage==='mfa')?'invalid-code':status>=500?'unavailable':'rejected';
@@ -58,7 +58,7 @@ export function createBrowserCloudDevHandler(options:{profile:string;request?:ty
   const codes=new Set(['invalid_client','binding_mismatch','invalid_request','authorization_code_expired','authorization_complete','credential_proof_invalid','invalid_authorization_code','invalid_code_verifier','server_configuration_error']);
   const code=codes.has(data.error)?data.error:codes.has(data.code)?data.code:undefined;
   options.diagnostic?.({environment:env,operation:route,status:response.status,...(code?{code}:{})});
-  return {status:response.status,data};
+  return {status:response.status,data,retryAfter:response.headers.get('Retry-After')};
  }
  const pkce=()=>{const verifier=randomBytes(48).toString('base64url');return {verifier,challenge:createHash('sha256').update(verifier).digest('base64url'),state:randomBytes(32).toString('base64url')};};
  async function signInComplete(attempt:SignInAttempt,session:Record<string,any>,signal:AbortSignal){
@@ -89,19 +89,29 @@ export function createBrowserCloudDevHandler(options:{profile:string;request?:ty
   }finally{void signInCall(env,'/steward/auth/logout',typeof refresh==='string'?{refreshToken:refresh}:{},AbortSignal.timeout(10000),token).catch(()=>{});}
  }
  async function signInOperation(data:Record<string,any>,signal:AbortSignal){
+  if(data.operation==='signInServiceInfo'){
+   if(Object.keys(data).some(key=>key!=='operation'&&key!=='environment'))throw signInFailure('invalid-request');
+   const env=environment(data.environment);if(options.environment&&env!==options.environment)throw signInFailure('invalid-request');
+   const bounded=AbortSignal.any([signal,AbortSignal.timeout(15000)]),response=await canonical(env,'/api/public/service',bounded,{method:'GET'});
+   if(response.status!==200){await response.body?.cancel();throw signInFailure('unavailable');}
+   const result=await boundedServiceJson(response);bounded.throwIfAborted();
+   return {success:true,version:1,service:parseCloudServiceInfo(result)};
+  }
   if(data.operation==='signInCancel'){signIn?.controller.abort();signIn=null;await serial(async()=>{});return {};}
   if(data.operation==='signInStatus')return {active:!!signIn,inApp:true,google:false,email:true};
   if(data.operation==='signInStartEmail'){
    const env=environment(data.environment);if(options.environment&&env!==options.environment)throw Error('Cloud environment mismatch');const email=typeof data.email==='string'?data.email.trim().toLowerCase():'';
    if(email.length>320||!/^[^\s@\p{Cc}\p{Cf}]+@[^\s@\p{Cc}\p{Cf}]+\.[^\s@\p{Cc}\p{Cf}]+$/u.test(email))throw signInFailure('invalid-email');
    if(signIn?.busy)throw signInFailure('login-active');
-   if(Date.now()<lastEmailSendAt+60000)throw signInFailure('cooldown');
+   if(Date.now()<Math.max(lastEmailSendAt+30000,emailSendAllowedAt))throw signInFailure('cooldown');
    const attempt:SignInAttempt={controller:new AbortController(),id:randomUUID(),environment:env,email,verifier:randomBytes(48).toString('base64url'),expiresAt:0,resendAt:0,busy:true,failed:0};signIn=attempt;lastEmailSendAt=Date.now();signal=AbortSignal.any([signal,attempt.controller.signal]);
    try{
     const sent=await signInCall(env,CLOUD_EMAIL_CODE.sendPath,emailCodeSendBody(env,email,attempt.verifier),signal);
+    const reply=sent.data.data&&typeof sent.data.data==='object'?sent.data.data:sent.data;
+    emailSendAllowedAt=Math.max(emailSendAllowedAt,emailCodeResendAt(reply.resendAt,sent.retryAfter));
     if(sent.status!==200&&sent.status!==202)throw signInFailure(signInStatus('send',sent.status));
-    const reply=sent.data.data&&typeof sent.data.data==='object'?sent.data.data:sent.data,expiresAt=emailCodeExpiresAt(reply.expiresAt);
-    attempt.expiresAt=expiresAt;attempt.resendAt=lastEmailSendAt+60000;return {attemptId:attempt.id,expiresAt,resendAt:attempt.resendAt};
+    const expiresAt=emailCodeExpiresAt(reply.expiresAt);
+    attempt.expiresAt=expiresAt;attempt.resendAt=emailSendAllowedAt;return {attemptId:attempt.id,expiresAt,resendAt:attempt.resendAt};
    }catch(error){if(signIn===attempt)signIn=null;throw error;}finally{attempt.busy=false;}
   }
   if(data.operation==='signInVerifyEmail'||data.operation==='signInVerifyMfa'){
@@ -251,7 +261,8 @@ export function createBrowserCloudDevHandler(options:{profile:string;request?:ty
 export function browserCloudDevBridge():Plugin {
  return {name:'alpha-browser-cloud-dev-bridge',apply:'serve',async configureServer(server){
   const cloudResident=process.env.VITE_ALPHA_CLOUD_RESIDENT==='1';
-  if(process.env.ELIZA_DEV_ALLOW_TEST_MOCKS!=='1'&&!cloudResident)return;
+  const privatePreview=process.env.ALPHA_PRIVATE_LOCAL_PREVIEW==='1'&&process.env.VITE_ALPHA_PRIVATE_LOCAL_PREVIEW==='1'&&process.env.VITE_LOCAL_AGENT==='1'&&!!process.env.ALPHA_BROWSER_CLOUD_PROFILE;
+  if(process.env.ELIZA_DEV_ALLOW_TEST_MOCKS!=='1'&&!cloudResident&&!privatePreview)return;
   if(cloudResident&&(process.env.ELIZA_DEV_ALLOW_TEST_MOCKS==='1'||process.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS==='1'||process.env.VITE_LOCAL_AGENT!=='1'||!process.env.ALPHA_ELIZA_SOURCE||!process.env.ALPHA_REMOTE_PROFILE))throw Error('Cloud resident requires real local source and mocks off');
   const profile=path.resolve(process.env.ALPHA_BROWSER_CLOUD_PROFILE??path.join(homedir(),'.local/share/alphaphone/browser-cloud'));
   const selected=environment(process.env.VITE_ALPHA_CLOUD_ENVIRONMENT??'production');

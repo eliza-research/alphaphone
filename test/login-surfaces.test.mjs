@@ -68,7 +68,7 @@ test('subscription redemption is inventoried but excluded from password-provider
   assert.equal(surface.eligible, false, 'a redemption code is not a reusable credential');
   assert.equal(surface.binding, undefined, 'never bind a grant code to a website or app password');
   assert.equal(surface.providers, undefined, 'no password-provider fill route');
-  const field = read(surface.file).match(/<input[^\n]*name="subscription-code"[^\n]*\/>/);
+  const field = read(surface.file).match(/<input[^\n]*name="membership-code"[^\n]*\/>/);
   assert.ok(field, 'the inventoried redemption input exists');
   assert.match(field[0], /autoComplete="one-time-code"/);
   assert.match(field[0], /data-autofill-ignore="true"/);
@@ -178,8 +178,8 @@ test('Alpha-owned native credential fields declare hints and report a website or
   assert.ok(inventory.rules.alphaOwnedAppIdentity);
 });
 
-test('Google sign-in and Google account authorization leave Alpha for the user\'s own browser', () => {
-  for (const id of ['eliza-cloud-sign-in', 'eliza-cloud-sign-in-google', 'google-account-authorization']) {
+test('External authorization uses the browser and Google sign-in uses the native account picker', () => {
+  for (const id of ['eliza-cloud-sign-in', 'google-account-authorization']) {
     const surface = inventory.surfaces.find(s => s.id === id);
     assert.equal(surface?.kind, 'external-browser', id);
     assert.equal(surface.eligible, false, id);
@@ -208,8 +208,9 @@ test('Google sign-in and Google account authorization leave Alpha for the user\'
   assert.deepEqual(returns.sort(), ['android/app/src/testMocks/AndroidManifest.xml:${stagingCloudWebHost}'], 'the production return comes only from the ELIZAOS_APP_LINK_HOST overlay (android/app/build.gradle); the staging return exists only in the test-mocks overlay');
   assert.match(read('android/app/build.gradle'), /android:host="\\\$\{appLinkHost\}" android:path="\/alphaphone\/auth\/callback"\/><\/intent-filter>/, 'the build-gated sign-in return is one exact path');
   const signIn = read('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaCloudSignInPlugin.java');
-  assert.match(signIn, /CustomTabsIntent tab = new CustomTabsIntent\.Builder\(\)/, 'Google consent opens in a Custom Tab');
-  assert.match(signIn, /if \(browser != null && !browser\.equals\(getContext\(\)\.getPackageName\(\)\)\)/, 'never Alpha itself');
+  assert.equal(inventory.surfaces.find(s=>s.id==='eliza-cloud-sign-in-google').kind,'native-account-picker');
+  assert.doesNotMatch(signIn,/CustomTabsIntent/, 'Google sign-in does not open a browser consent flow');
+  assert.match(signIn,/NativeGoogleCredential\.request\(getActivity\(\), clientId, nonce, next\.googleCancellation/,'system picker remains bound to server client, nonce and cancellation');
   assert.doesNotMatch(signIn, /WebView|AlphaBrowserPlugin/, 'never an embedded user agent');
   const ui = read('apps/app/src/runtime/google-connection-ui.tsx');
   assert.match(ui, /await openConnectionBrowser\(url,abort\.signal\);/);
@@ -255,6 +256,13 @@ test('each registered Alpha-owned field still exists exactly as inventoried', ()
   }
 });
 
+test('membership inventory retains exact code semantics across controlled JSX props',()=>{
+  const surface=registered.find(entry=>entry.id==='eliza-cloud-subscription-code');
+  const pattern=new RegExp(surface.pattern);
+  assert.ok(pattern.test('name="membership-code" value={codeValue} onChange={event=>setCodeValue(event.target.value)} autoComplete="one-time-code"'));
+  for(const source of ['name="other-code" autoComplete="one-time-code"','name="membership-code" autoComplete="current-password"','name="membership-code"><input autoComplete="one-time-code"'])assert.equal(pattern.test(source),false,source);
+});
+
 test('native Alpha UI declares no unregistered credential fields', () => {
   // Every Android module's source sets (app, launcher, embedding-host, local-speech, fixtures), per line.
   const roots = fs.readdirSync('android', {withFileTypes: true}).filter(entry => entry.isDirectory()).map(entry => path.join('android', entry.name, 'src')).filter(dir => fs.existsSync(dir));
@@ -291,7 +299,7 @@ test('secrets stay out of observations, transcripts and logs', () => {
   for (const file of ['apps/app/src/passwords/password-manager.ts', 'apps/app/src/browser/password-provider.ts', 'apps/app/src/prototype/browser-adapter.ts']) {
     assert.doesNotMatch(read(file), /console\.(log|info|warn|error|debug)\(/, `${file} does not log`);
   }
-  for (const file of ['AlphaBrowserPlugin.java', 'PasswordProviderSupport.java', 'BrowserPasskeys.java', 'BrowserLoginFields.java', 'BrowserFieldOrigin.java']) {
+  for (const file of ['AlphaBrowserPlugin.java', 'PasswordProviderSupport.java', 'BrowserLoginFields.java', 'BrowserFieldOrigin.java']) {
     const text = read('android/app/src/main/java/ai/elizaresearch/alphaphone/' + file);
     const logs = [...text.matchAll(/(?:android\.util\.)?Log\.[vdiwe]\([^;]*;/g)].map(match => match[0]);
     for (const line of logs) assert.doesNotMatch(line, /url|value|password|username|structure|getText|origin/i, `${file}: ${line}`);

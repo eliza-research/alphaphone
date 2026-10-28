@@ -1,17 +1,17 @@
 import {cloudStorageSlot} from './cloud-deployment.generated.ts';
 import {browserCloudResidentEnabled,browserCloudManagedServiceAllowed} from './browser-cloud-resident';
 import {managedServiceRequest} from './managed-service-routes';
-import {automationsRouteAllowed} from './automations-route-policy';
+import {ownerRouteAllowed} from './owner-route-policy';
 import {BrowserCloudConnection,BrowserCloudSignIn,clearBrowserCloudCredentialIfCurrent} from '../browser/cloud-connection';
 import {Capacitor} from '@capacitor/core';
-import {devSurfacesEnabled,testMocksEnabled} from '../build-flags';
+import {devSurfacesEnabled,testMocksEnabled,privateLocalPreviewEnabled} from '../build-flags';
 import { registerPlugin } from '../platform-plugins';
 import type { CloudNativeRequest, CloudCredentialStore, CloudCredential, CloudEnvironment } from './cloud-protocol';
 import type { CloudSignInPort } from './cloud-sign-in';
 import type { RemoteRequester, RemoteCredentialStore } from './remote-protocol';
 
 const nativeConnectionHeader=(Capacitor as typeof Capacitor&{PluginHeaders?:{name:string}[]}).PluginHeaders?.some(header=>header.name==='AlphaConnection')??false;
-const browserCloudHost=(devSurfacesEnabled||browserCloudResidentEnabled)&&!Capacitor.isNativePlatform()&&!nativeConnectionHeader;
+const browserCloudHost=(devSurfacesEnabled||browserCloudResidentEnabled||privateLocalPreviewEnabled)&&!Capacitor.isNativePlatform()&&!nativeConnectionHeader;
 /** Exact current-key self-revocation is supported only by the owned Android/private browser hosts. */
 export const cloudSelfRevocationSupported=Capacitor.getPlatform()==='android'||browserCloudHost;
 const nativeSignInHeader=(Capacitor as typeof Capacitor&{PluginHeaders?:{name:string}[]}).PluginHeaders?.some(header=>header.name==='AlphaCloudSignIn')??false;
@@ -141,7 +141,7 @@ export function createBrowserConnection(options:{fetch?:typeof fetch;secrets?:Br
       if(!testMocksEnabled&&!managedServiceRequest(input.url,input.method,input.body!==undefined))throw new Error('Only managed Cloud services are available.');
       const loopback=['localhost','127.0.0.1','[::1]'].includes(url.hostname);
       if(url.username||url.password||!(url.protocol==='https:'||(allowHttp&&loopback&&url.protocol==='http:')))throw new Error('Connection request failed');
-      if(input.method!=='GET'&&input.method!=='POST'&&!automationsRouteAllowed(url.pathname+url.search,input.method)&&!managedServiceRequest(input.url,input.method,input.body!==undefined))throw new Error('Connection request failed');
+      if(input.method!=='GET'&&input.method!=='POST'&&!ownerRouteAllowed('automations',url.pathname+url.search,input.method)&&!managedServiceRequest(input.url,input.method,input.body!==undefined))throw new Error('Connection request failed');
       if(input.credentialReference)throw new Error('This credential requires its native or development host.');
       if(input.method==='GET'&&input.body!==undefined)throw new Error('Connection request failed');
       const headers=new Headers();

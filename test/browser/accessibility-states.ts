@@ -1,4 +1,6 @@
 import { expect, type Page } from '@playwright/test';
+import {openCanonicalCalendarForm} from './helpers/canonical-calendar';
+import {openLegacyNotes,openLegacyAttachment} from './helpers/legacy-notes';
 import {openOwnedPhotoViewer} from './helpers/owned-photo';
 
 /**
@@ -6,7 +8,9 @@ import {openOwnedPhotoViewer} from './helpers/owned-photo';
  *
  * "live" states use the product adapters with no connection and no data: they are what a
  * new or disconnected phone shows, including each app's empty, unavailable and
- * permission-denied states. "mock" states are the labelled fixture mode with populated
+ * permission-denied states. The event form explicitly supplies a closed canonical
+ * read port because a disconnected agent correctly refuses to open that form.
+ * "mock" states are the labelled fixture mode with populated
  * lists and open subviews, reached by its `start=` deep links (development server only).
  */
 export type State = {
@@ -39,6 +43,18 @@ const live = (name: string, steps: string[] = [], shows?: string): State => ({
     await showing(page, shows);
   },
 });
+/** Legacy-only controls remain covered through the explicit Older notes source. */
+const legacyNotes = (name: string, steps: string[], shows?: string): State => ({
+  name: `live ${name}`, shows,
+  open: async (page, theme) => {
+    await page.addInitScript(offline);
+    await page.goto(theme ? `/?theme=${theme}` : '/');
+    await openLegacyNotes(page);
+    await press(page, steps);
+    await settle(page);
+    await showing(page, shows);
+  },
+});
 /** Fixture screens that finish arriving on a timer: the control that marks them complete. */
 const ARRIVES: Record<string, string> = {
   // The scan fixture finds its page after about a second; the result actions are the state.
@@ -64,7 +80,8 @@ export const LIVE_STATES: State[] = [
   live('Conversation', ['Open conversation']),
   live('Inbox (not connected)', ['Inbox']),
   live('Calendar', ['Calendar']),
-  live('Calendar new event', ['Calendar', 'New event']),
+  // An admitted read-only source exposes the real form; no calendar event write runs.
+  {name:'live Calendar new event',shows:'calendar-form',open:async(page,theme)=>{await openCanonicalCalendarForm(page,theme);await settle(page);await showing(page,'calendar-form');}},
   live('Calendar month', ['Calendar', 'Month view']),
   live('Browser', ['Browser']),
   live('Browser tabs', ['Browser', 'Tabs']),
@@ -72,8 +89,8 @@ export const LIVE_STATES: State[] = [
   live('Photos (empty)', ['Photos']),
   live('Maps (no location)', ['Maps']),
   live('Notes (empty)', ['Notes']),
-  live('Notes new note', ['Notes', 'New note']),
-  live('Notes trash', ['Notes', 'Open Trash'], 'notes-trash'),
+  legacyNotes('Notes new note', ['New note']),
+  legacyNotes('Notes trash', ['Open Trash'], 'notes-trash'),
   live('Files', ['Files']),
   live('Workflows', ['Workflows']),
   live('Settings', ['Settings']),
@@ -94,9 +111,9 @@ export const LIVE_STATES: State[] = [
   live('Browser address', ['Browser', 'Edit address']),
   live('Calendar alarms', ['Calendar', 'Clock alarms']),
   live('Photos search', ['Photos', 'Search photos']),
-  live('Notes search', ['Notes', 'Search notes']),
-  live('Notes source document', ['Notes', 'New note', 'Link source document']),
-  live('Notes recording', ['Notes', 'Record and transcribe'], 'notes-recording'),
+  legacyNotes('Notes search', ['Search notes']),
+  {name:'live Notes source document',open:async(page,theme)=>{await page.addInitScript(offline);await page.goto(theme ? `/?theme=${theme}` : '/');await openLegacyAttachment(page);await settle(page);}},
+  legacyNotes('Notes recording', ['Record and transcribe'], 'notes-recording'),
   live('Files search', ['Files', 'Search files']),
   live('Workflows new automation', ['Workflows', 'New automation'], 'automations-detail'),
 ];

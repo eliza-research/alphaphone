@@ -13,8 +13,12 @@ final class AlphaLocalSpeechEngine implements AutoCloseable {
   Audio synthesize(String text, BooleanSupplier cancelled) throws Exception;
   void cancel();
   void close();
+  /** Explicit readiness checks must initialize their native models before reporting ready. */
+  default void prepare()throws Exception{}
   /** Native streaming synthesis is available (issue #397); otherwise speech is synthesized whole. */
   default boolean supportsStreaming(){return false;}
+  /** Whether this backend has loaded speech output; lazy session probes do not load it. */
+  default boolean speechLoaded(){return true;}
   /**
    * Streams validated mono PCM at {@link #STREAM_RATE} to {@code sink} as the model produces it. Each
    * chunk is finite and bounded; the last call has complete=true. Throws CancellationException when
@@ -42,8 +46,8 @@ final class AlphaLocalSpeechEngine implements AutoCloseable {
   if(backend==null){backend=factory.create();loads++;}
   return operation.run(backend);
  }
- /** How many times the models were opened; a change across a use means it loaded them (a cold trial, issue #395). */
- int loads(){return loads;}
+ /** Speech load generation; a lazy backend does not advance it until output is loaded. */
+ int loads(){Backend active=backend;return loads-(active!=null&&!active.speechLoaded()?1:0);}
  void cancel(){Backend active=backend;if(active!=null)active.cancel();}
  synchronized void release(){Backend previous=backend;backend=null;if(previous!=null)previous.close();}
  @Override public synchronized void close(){if(closed)return;closed=true;release();}

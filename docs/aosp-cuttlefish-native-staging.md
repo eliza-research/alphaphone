@@ -9,6 +9,7 @@ For the reviewed x86_64 Cuttlefish product, explicitly select this staging lane:
 
 ```sh
 node scripts/stage-aosp.mjs --development --target cuttlefish \
+  --applied-build-patch soong-app-native \
   --apk /absolute/path/to/normalized-signed-launcher.apk \
   --apk-manifest /absolute/path/to/matching-apk-manifest.json \
   --aosp-source /absolute/path/to/aosp \
@@ -30,8 +31,10 @@ JNI/asset equality, source stamp and complete worker closure. Cloud omission and
 mixed-profile checks remain unchanged. ARM libraries in a multi-ABI APK cannot
 substitute for missing or invalid x86 libraries. Unknown targets are rejected.
 
-Generated `Android.mk` uses the supported `BUILD_PREBUILT` rule with
-`LOCAL_PREBUILT_JNI_LIBS`, `PRESIGNED`, and `LOCAL_MODULE_TARGET_ARCH := x86_64`.
+The shared native admission verifies the payload. Alpha then converts its legacy
+install rules to a Soong `android_app_import` with required `prebuilt_app_native`
+modules, because this Cuttlefish product ignores `Android.mk`. Apply the exact
+recorded patch in `vendor/eliza/packages/os/android/patches/soong-app-native` and pass its admission flag above.
 `config.fs`, included by the product fragment, makes Bun and both loader files
 0755 and the shared libraries 0644 under
 `/product/app/AlphaPhone/lib/x86_64`. The launcher ZIP is unchanged. Pixel's

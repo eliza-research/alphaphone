@@ -11,7 +11,7 @@ assert.ok(begin>=0&&end>begin);
 const code=stripTypeScriptTypes(source.slice(begin,end),{mode:'transform'});
 function fixture(){
  const state={open:false,busy:false,purpose:'agent',message:'',error:''},updates=[];
- const context=vm.createContext({residentRecoveryReason,testMocksEnabled:false,AbortController,state,operation:null,active:null,cloud:{},expired:()=>false,errorMessage:e=>e.message,residentCloudFlow:()=>false,runQueuedResidentRebind:()=>{},runQueuedSignInReturn:()=>{},update:next=>{Object.assign(state,next);updates.push({...state});}});
+ const context=vm.createContext({residentRecoveryReason,testMocksEnabled:false,AbortController,state,signInReadinessOwner:null,operation:null,active:null,cloud:{},expired:()=>false,errorMessage:e=>e.message,residentCloudFlow:()=>false,runQueuedResidentRebind:()=>{},runQueuedSignInReturn:()=>{},update:next=>{Object.assign(state,next);updates.push({...state});}});
  vm.runInContext(code,context);return {state,updates,context,run:(...args)=>context.work(...args)};
 }
 test('background account restore never opens the chooser and clears its loading status',async()=>{
@@ -40,10 +40,12 @@ test('explicit connection operations retain their visible dialog',async()=>{
 const startupStart=source.indexOf('  async initialize() {');
 const startupEnd=source.indexOf('  /** Test mocks and the flag-off web preview',startupStart);
 assert.ok(startupStart>=0&&startupEnd>startupStart);
-const startupCode=stripTypeScriptTypes(source.slice(startupStart,startupEnd).trim().replace(/^async initialize\(\)/,'async function initialize()').replace(/,$/,''),{mode:'transform'});
+const restoreStart=source.indexOf('async function restoreOptionalBrowserCloudAccount('),restoreEnd=source.indexOf('\nexport const connectionController',restoreStart);
+assert.ok(restoreStart>=0&&restoreEnd>restoreStart);
+const startupCode=stripTypeScriptTypes(source.slice(restoreStart,restoreEnd)+'\n'+source.slice(startupStart,startupEnd).trim().replace(/^async initialize\(\)/,'async function initialize()').replace(/,$/,''),{mode:'transform'});
 function startupFixture({resident=false,android=false,environment='production'}={}){
  const state={open:false,error:''},reads=[];let gates=0;
- const context=vm.createContext({startup:null,state,epoch:0,operation:null,browserDevProfile:false,browserCloudResidentEnabled:resident,isAndroid:android,URLSearchParams,location:{search:''},selection:()=>({kind:'resident'}),update:next=>Object.assign(state,next),cloudCredentialStore:{acceptsReferences:!android,read:async env=>{reads.push(env);if(env!==environment)throw Error('Cloud development connection unavailable.');return null;}},work:async(_label,run)=>{try{await run(new AbortController().signal);}catch(error){state.error=error.message;state.open=true;}},webCloudUnavailable:()=>false,residentQa:()=>true,startResidentGate:async()=>{gates++;await context.cloudCredentialStore.read(environment);},settleResidentAfterStartup:()=>{}});
+ const context=vm.createContext({startup:null,state,epoch:0,operation:null,browserDevProfile:false,privateLocalPreviewEnabled:false,browserCloudResidentEnabled:resident,isAndroid:android,URLSearchParams,location:{search:''},selection:()=>({kind:'resident'}),update:next=>Object.assign(state,next),cloudCredentialStore:{acceptsReferences:!android,read:async env=>{reads.push(env);if(env!==environment)throw Error('Cloud development connection unavailable.');return null;}},work:async(_label,run)=>{try{await run(new AbortController().signal);}catch(error){state.error=error.message;state.open=true;}},webCloudUnavailable:()=>false,residentQa:()=>true,startResidentGate:async()=>{gates++;await context.cloudCredentialStore.read(environment);},settleResidentAfterStartup:()=>{}});
  vm.runInContext(startupCode,context);return {state,reads,run:()=>context.initialize(),gates:()=>gates};
 }
 test('explicit staging Cloud reload reaches resident restoration without reading production credentials',async()=>{

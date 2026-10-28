@@ -111,7 +111,7 @@ test('a transport refusal before dispatch returns the text and sends nothing', a
   expect(await page.evaluate(() => { const f = (window as any).dispatchFixture; return { posts: f.posts, created: f.created }; })).toEqual({ posts: 0, created: false });
 });
 
-test('a failure after dispatch offers Check for reply and never resends', async ({ page }) => {
+test('a failure after dispatch offers Check saved conversation and never resends', async ({ page }) => {
   await remoteAgent(page, 'post-fails');
   await page.goto('/');
   await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0, { timeout: 20_000 });
@@ -119,9 +119,9 @@ test('a failure after dispatch offers Check for reply and never resends', async 
   await expect.poll(() => savedDraft(page), { timeout: 15_000 }).toBe('Was this delivered?');
   const key = await bindingKey(page);
   await composer(page).press('Enter');
-  const check = page.getByRole('button', { name: /^Check for reply/ });
+  const check = page.getByRole('button', { name: /^Check saved conversation/ });
   await expect(check).toBeVisible();
-  await expect(page.getByText('Your message may have reached the agent. Check before sending it again.', { exact: true })).toBeVisible();
+  await expect(page.getByText('The reply stopped before it finished. Check the saved conversation before trying again.', { exact: true })).toBeVisible();
   // The message may have been received, so it is not offered again as a draft.
   await expect(composer(page)).toHaveValue('');
   await expect.poll(() => savedDraft(page, key)).toBe('');

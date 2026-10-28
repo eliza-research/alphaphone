@@ -75,7 +75,7 @@ async function androidWithMailbox(page: Page) {
           f.journal.push(method);
           if (method === 'list') return { entries: f.entry ? [structuredClone(f.entry)] : [] };
           if (method === 'get') return { entry: f.entry ? structuredClone(f.entry) : null };
-          if (method === 'reserve') { if (f.entry) return { created: false, entry: structuredClone(f.entry) }; f.entry = { ...structuredClone(input), phase: 'reserved' }; return { created: true }; }
+          if (method === 'reserve') { if (f.entry) return { created: false, entry: structuredClone(f.entry) }; f.entry = { ...structuredClone(input), phase: 'reserved' }; return { created: true, entry: structuredClone(f.entry) }; }
           if (method === 'markApplying') { Object.assign(f.entry, { phase: 'applying', attemptId: input.attemptId }); return {}; }
           if (method === 'finish') { Object.assign(f.entry, { phase: 'terminal', status: input.status, summary: input.summary, result: input.result }); return {}; }
           throw Error('Unexpected journal effect');

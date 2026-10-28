@@ -1,13 +1,30 @@
 # Alpha Phone (alphaphone)
 
+## Shared application direction — October 27
+
+The owner has requested one upstream Eliza mobile application and AOSP target,
+with Alpha supplying its character, theme and product registration. Shared views,
+plugins, agent context, action contracts and native behavior must move upstream;
+the separate renderer described below is the current implementation, not the target.
+The native profile uses libelizainference for local models (Paradee speech,
+Phonon-2 recognition and local embeddings), with Cerebras for Cloud text inference.
+Both branded images target Pixel 10a / Android 17. Package IDs, signing, callbacks
+and existing storage namespaces remain explicit compatibility inputs.
+
+See the [consolidation audit](docs/unification-audit-2026-10-27.md) for discrepancies,
+migration order and separate source, APK, image and device acceptance gates.
+
 Independent Android UI on Eliza, using the Alpha Phone prototype as its design
 reference. The current renderer includes native browser, camera,
 calendar, reminders, selected files and local notes. Phone, Contacts and SMS/MMS are
 AOSP-only capabilities; standalone APKs do not expose them. Wallet is outside MVP.
-Production Android starts with Eliza Cloud sign-in, followed by required device-permission
+Production Android starts with Eliza Cloud sign-in, followed by device-access
 setup, Ready, and Home. Notifications, microphone, camera and location retain the original
 sequence; Android then reviews Calendar and Photos access. Denied access stays on its
-Settings/check-access step without repeating blocked prompts. Google connects separately
+Settings/check-access step without repeating blocked prompts. Every access step offers
+Skip for now after 20 seconds, including an unavailable or pending browser permission.
+Reviewed choices persist across refresh; skipping never grants OS/browser access, and
+each feature still checks its current permission when used. Google connects separately
 in Settings. Previously completed installations remain completed.
 Cloud inference has a separate entitlement/binding check; a signed-in account does not
 by itself prove that AI is ready, and genuine plan or connection notices remain visible
@@ -81,6 +98,11 @@ Select it explicitly with `--runtime-profile=cloud` for runtime staging and Andr
 builds (`agent:stage-android` and `android:build`). Renderer, native and packaged
 runtime admission must agree on the profile; test mocks and unpackaged runtimes
 are rejected. The default remains `native` with its existing qualification gates.
+The Talk button is the explicit voice start; it opens the voice surface and starts
+the microphone without a second Start Cloud voice button. The active surface keeps
+the Cloud upload and plan-usage disclosure visible. Account and conversation binding,
+permission failures, and explicit Stop remain enforced.
+
 Cloud QA builds do not establish offline/native-speech, AOSP or release acceptance;
 real account, inference, microphone and playback evidence is still required.
 
@@ -400,8 +422,10 @@ one APK at a time and removes only reproducible packaging intermediates between
 variants. Source, generated provenance and finished APKs are retained.
 
 When a resident runtime is staged, APK verification checks its source stamp,
-agent bundle, complete workflow-worker inventory and both native runtime ABIs
-against the staged inputs. A stale stamp requires fresh preparation and staging.
+agent bundle, hash-bound agent dependency inventory, complete workflow-worker inventory
+and both native runtime ABIs against the staged inputs. Packaged notices use that
+inventory and verify package metadata in the prepared source; compact bundle text
+is not a dependency list. A stale stamp requires fresh preparation and staging.
 A developer APK without runtime payload is reported as `NOT_PACKAGED`; this is
 not proof of resident runtime execution or device acceptance.
 

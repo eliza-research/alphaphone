@@ -96,6 +96,17 @@ test('Calendar reads bind the current grant and refuse a revoked source before r
  }finally{await f.close();}
 });
 
+test('Calendar reads list and read every connected account while Gmail still needs one account',async()=>{
+ const f=await fixture();try{
+  const second='55555555-5555-4555-8555-555555555555';
+  f.setAccounts(()=>[{...account,label:'owned@example.invalid',grantedCapabilities:['google.calendar.read','google.gmail.triage']},{...account,connectionId:second,label:'work@example.invalid',grantedCapabilities:['google.calendar.read','google.gmail.triage']}]);
+  const sources=await f.reader.calendarSources();assert.equal(sources.length,2);assert.notEqual(sources[0].grantId,sources[1].grantId);
+  const input={grantId:sources[1].grantId,calendarId:'primary',timeMin:'2026-10-14T00:00:00Z',timeMax:'2026-10-16T00:00:00Z',timeZone:'UTC'};
+  assert.equal((await f.reader.calendarFeed(input)).state,'complete');assert.ok(f.calls.some(u=>u.href.includes(second)&&u.pathname.endsWith('/feed')),'the feed reads the named account');
+  await assert.rejects(f.reader.list({}),/More than one/);
+ }finally{await f.close();}
+});
+
 const mailboxAccount={...sendAccount,grantedCapabilities:[...sendAccount.grantedCapabilities,'google.gmail.mailbox']};
 test('agent mailbox changes use a durable turn ID, exact labels and one dispatch after a lost response',async()=>{
  const f=await fixture();try{

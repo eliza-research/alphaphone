@@ -16,13 +16,13 @@ const owner = { token: 'synthetic-cloud-key', userId: id, email: 'owner@example.
 const composer = (page: Page) => page.locator('[data-alpha-layer="composer"][aria-hidden="false"], [data-alpha-layer="conversation"][aria-hidden="false"]').getByRole('textbox').first();
 const conversation = (page: Page) => page.locator('[data-alpha-layer="conversation"]');
 const bubble = (page: Page, text: string) => page.getByRole('button', { name: 'Message actions: ' + text, exact: true });
-const UNKNOWN = 'Your message may have reached the agent. Check before sending it again.';
+const UNKNOWN = 'The reply stopped before it finished. Check the saved conversation before trying again.';
 const NOT_SENT = 'Not sent. Your message is back in the composer.';
 
-async function connected(page: Page) {
+async function connected(page: Page, nativeSignIn = true) {
   const foreign = await fenceNetwork(page);
   await flagOffAndroid(page);
-  await residentStub(page, { accounts: [owner] });
+  await residentStub(page, { accounts: [owner], nativeSignIn });
   await residentHome(page);
   return foreign;
 }
@@ -31,10 +31,10 @@ async function send(page: Page, text: string) { await composer(page).fill(text);
 const KINDS = {
   // Cloud's billing refusal is a service limit (subscription-entitlement.ts): nothing is bought or upgraded.
   insufficient_credits: "Eliza Cloud declined this AI request for your account's billing. Check your account in Settings. Alpha Phone did not retry your message, and nothing is purchased automatically. Local apps keep working.",
-  provider_issue: 'Hosted inference (Cloud / Cerebras) could not be reached; nothing was retried.',
-  generation_timeout: 'Hosted inference (Cloud / Cerebras) could not be reached; nothing was retried.',
+  provider_issue: 'Alpha’s AI service could not complete this reply. Nothing was resent.',
+  generation_timeout: 'Alpha’s AI service could not complete this reply. Nothing was resent.',
   // Bound to an admitted plan, yet the agent ran without a provider: a recheck is offered.
-  no_provider: 'Your agent answered without its Cloud AI connection. Check Cloud again; nothing was retried.',
+  no_provider: 'Your agent answered without its AI connection. Check the connection again; nothing was retried.',
 } as const;
 
 for (const [kind, text] of Object.entries(KINDS)) for (const frame of ['done', 'error'] as const) {
@@ -50,6 +50,7 @@ for (const [kind, text] of Object.entries(KINDS)) for (const frame of ['done', '
     await expect(page.getByText(UNKNOWN, { exact: true })).toHaveCount(0);
     await expect(bubble(page, `Failing ${kind}`)).toHaveCount(1);
     if (kind === 'insufficient_credits') {
+      await button(page, 'Expand chat').click();
       // A billing refusal offers the billing page only when the owner asks; no purchase is started.
       const manage = page.getByRole('button', { name: /^Manage billing in Eliza Cloud/ });
       await expect(manage).toHaveCount(1);
@@ -57,18 +58,23 @@ for (const [kind, text] of Object.entries(KINDS)) for (const frame of ['done', '
       const code = page.getByRole('button', { name: /^Use a membership code/ });
       await expect(code).toBeVisible();
       await code.click();
-      const account = page.getByRole('dialog', { name: /^Eliza Cloud account/ });
+      const account = page.getByRole('dialog', { name: 'Membership & credits',exact:true });
       await expect(account).toBeVisible();
-      await expect(account.getByRole('textbox', { name: 'Subscription code' })).toBeVisible();
-      await expect(account.getByRole('button', { name: /^(Manage (billing|plan) in Eliza Cloud|Choose a plan)/ })).toBeVisible();
+      await expect(account.getByRole('textbox', { name: 'Membership code' })).toBeVisible();
+      await expect(account.getByRole('button', { name: 'Add funds', exact: true })).toBeVisible();
       expect(await stub(page, s => s.opened)).toEqual([]);
       await page.screenshot({path:info.outputPath('membership-code-mobile.png'),animations:'disabled'});
       await page.setViewportSize({width:1024,height:768});
-      await expect(account.getByRole('textbox',{name:'Subscription code'})).toBeVisible();
+      await expect(account.getByRole('textbox',{name:'Membership code'})).toBeVisible();
       await page.screenshot({path:info.outputPath('membership-code-wide.png'),animations:'disabled'});
       await page.setViewportSize({width:412,height:915});
-      await account.getByRole('button', { name: 'Close connection settings', exact: true }).click();
+      await account.getByRole('button', { name: 'Close membership settings', exact: true }).click();
       await manage.click();
+      await expect(page.getByRole('heading',{name:'Check the billing account',exact:true})).toBeVisible();
+      await expect(page.getByRole('button',{name:'Open billing',exact:true})).toBeDisabled();
+      expect(await stub(page,s=>s.opened)).toEqual([]);
+      await page.getByRole('checkbox',{name:'I’ll check the account before paying.',exact:true}).check();
+      await page.getByRole('button',{name:'Open billing',exact:true}).click();
       await expect.poll(() => stub(page, s => s.opened)).toEqual(['https://cloud.eliza.app/cloud/billing']);
     } else {
       if (kind === 'no_provider') await expect(page.getByRole('button', { name: /^Check Eliza Cloud again/ })).toHaveCount(1);
@@ -111,7 +117,7 @@ for (const frame of ['done', 'error'] as const) test(`a provider-less turn witho
   const plan = page.getByRole('button', { name: /^Redeem code or choose a plan/ });
   await expect(plan).toHaveCount(1);
   await plan.click();
-  await expect(page.getByRole('dialog', { name: 'Eliza Cloud account & plan' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Membership & credits',exact:true })).toBeVisible();
   // Nothing was purchased or opened, and the message was sent once.
   expect(await stub(page, s => s.opened)).toEqual([]);
   expect(await harness(page, f => f.streams)).toBe(1);
@@ -176,7 +182,7 @@ test('a resident stream that fails after the turn was recorded offers a history 
   await stub(page, s => { s.stream = 'drop'; });
   await send(page, 'Dropped after recording');
   await expect(page.getByText(UNKNOWN, { exact: true })).toHaveCount(1);
-  await expect(page.getByRole('button', { name: /^Check for reply/ })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /^Check saved conversation/ })).toHaveCount(1);
   await expect(composer(page)).toHaveValue('');
   // The one re-read of a dropped stream reuses the same clientMessageId; nothing new is posted.
   const [body] = await stub(page, s => s.bodies);
@@ -214,12 +220,14 @@ test('a restart while the resident holds a reply posts nothing and shows the use
 
 test('a resident send the runtime no longer accepts (401) asks for an Eliza Cloud sign-in, never pairing', async ({ page }) => {
   test.setTimeout(120_000);
-  await connected(page);
+  await connected(page, true);
   await setStub(page, { stream: 'expired' });
   await send(page, 'Sent with an expired session');
-  const dialog = page.getByRole('main',{name:'Sign in',exact:true});
-  await expect(dialog.getByRole('alert')).toBeVisible({ timeout: 30_000 });
-  await expect(dialog.getByRole('button', { name: 'Sign in with Eliza Cloud', exact: true })).toBeVisible();
+  const dialog = page.getByRole('main',{name:'Welcome to Alpha.',exact:true});
+  await expect(dialog.getByRole('alert')).toHaveText('Your Cloud sign-in has expired. Sign in with Cloud again.', { timeout: 30_000 });
+  await expect(dialog.getByRole('button', { name: 'Continue with Google', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Email me a code', exact: true })).toBeEnabled();
+  expect(await harness(page, f => ({ streams: f.streams, posts: f.posts.length }))).toEqual({ streams: 1, posts: 0 });
   await expect(page.locator('body')).not.toContainText(/pair/i);
   expect(await stub(page, s => s.recoveries)).toEqual([]);
 });

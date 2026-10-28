@@ -50,6 +50,8 @@ html:not(.standalone-app) [data-alpha-layer="home"][data-alpha-home-fits="true"]
 /* The title's line height opens with the measured text scale (1.02 at 100%, 1.14 at 200%): at
  * twice the size the descenders of its last line no longer fit a 1.02 line and were cut by the clamp. */
 .home-calendar-title { min-width:0; align-self:center; font-size:36px; line-height:calc(1.02 + (clamp(1,var(--alpha-text-scale,1),2) - 1) * .12); letter-spacing:-.01em; overflow:hidden; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; }
+/* Availability copy is app state, not an event preview; keep the whole message readable. */
+.home-calendar-card:not([data-alpha-home-calendar-event="true"]) .home-calendar-title { display:block; -webkit-line-clamp:unset; overflow:visible; }
 .home-calendar-card[data-alpha-home-calendar-event="true"] { grid-template-rows:auto minmax(0,1fr) auto; }
 .home-calendar-card[data-alpha-home-calendar-event="true"] .home-calendar-title { font-size:26px; line-height:calc(1.1 + (clamp(1,var(--alpha-text-scale,1),2) - 1) * .08); }
 .home-card { min-height:196px; gap:12px; }
@@ -205,7 +207,7 @@ html:not(.standalone-app) [data-alpha-layer="home"][data-alpha-home-fits="true"]
 .app-header-back .i { width:22px; height:22px; }
 .app-header-back:focus-visible { outline:2px solid var(--acct); outline-offset:-2px; }
 .standalone-app [data-screen]:has([data-alpha-app-header]) [data-alpha-app-back-fallback] { display:none!important; }
-.standalone-app [data-alpha-app-header] { margin-top:0!important; height:52px!important; min-height:52px; padding-left:8px!important; padding-right:8px!important; gap:2px!important; box-sizing:border-box; }
+.standalone-app [data-alpha-app-header] { margin-top:0!important; height:52px!important; min-height:52px!important; padding-left:8px!important; padding-right:8px!important; gap:2px!important; box-sizing:border-box; }
 .standalone-app [data-alpha-app-header-overlay] { top:0!important; }
 .standalone-app [data-alpha-app-header] [data-alpha-app-title] { font-family:inherit; font-size:20px!important; line-height:1.2; letter-spacing:normal!important; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .standalone-app [data-alpha-app-header] .ib { width:52px!important; height:52px!important; min-width:52px; min-height:52px; flex-shrink:0; }
@@ -252,12 +254,14 @@ html:not(.standalone-app) [data-alpha-layer="home"][data-alpha-home-fits="true"]
  * and the last row can still be brought fully above the assistant. */
 :root { --alpha-dock-reserve:max(108px,calc(var(--alpha-dock-clearance,102px) + 6px)); --alpha-dock-rest-reserve:max(108px,calc(var(--alpha-dock-rest,102px) + 6px)); }
 html:not(.alpha-landscape) .alpha-phone [data-alpha-layer="home"] { bottom:0!important; scroll-padding-bottom:var(--alpha-dock-reserve)!important; }
-html:not(.alpha-landscape) .alpha-phone [data-alpha-home-layout] { padding-bottom:var(--alpha-dock-reserve)!important; min-height:calc(100% + var(--alpha-dock-reserve) - var(--alpha-dock-rest-reserve))!important; }
+/* Grow scroll clearance, not the flex space containing the icons. The resting
+ * pill and composer have different heights but share the same Home layout. */
+html:not(.alpha-landscape) .alpha-phone [data-alpha-home-layout] { padding-bottom:var(--alpha-dock-reserve)!important; min-height:calc(100% + var(--alpha-dock-reserve) - 108px)!important; }
 /* The app library fills the screen behind the floating dock. Its final row can
    scroll above the dock because the clearance belongs inside the list. */
 html:not(.alpha-landscape) .alpha-phone [data-alpha-layer="drawer"] { padding-bottom:0!important; }
-.alpha-app-drawer > [data-alpha-app-scroll="drawer"] { min-height:0; padding-bottom:var(--alpha-dock-reserve)!important; scroll-padding-bottom:var(--alpha-dock-reserve); }
-.alpha-landscape .alpha-app-drawer > [data-alpha-app-scroll="drawer"] { padding-bottom:16px!important; scroll-padding-bottom:16px; }
+.alpha-app-drawer [data-installed-apps-scroll] { min-height:0; padding-bottom:var(--alpha-dock-reserve)!important; scroll-padding-bottom:var(--alpha-dock-reserve); }
+.alpha-landscape .alpha-app-drawer [data-installed-apps-scroll] { padding-bottom:16px!important; scroll-padding-bottom:16px; }
 /* Under the resting half sheet Home keeps its layout and gains scroll range: what the sheet
  * covers beyond the reserve Home already leaves. */
 html:not(.alpha-landscape) .alpha-phone [data-screen][data-alpha-chat-half="true"] [data-alpha-home-clearance] { height:max(0px,calc(var(--alpha-chat-clearance,0px) + 16px - var(--alpha-dock-reserve))); }
@@ -300,8 +304,9 @@ html:not(.alpha-landscape) .alpha-phone [data-screen]:not([data-alpha-chat-half=
 .calendar-timeline{--calendar-timeline-scale:max(1,var(--alpha-text-scale,1))}
 /* A short timeline block shows the lines that fit. A line that does not fit wraps into a hidden
  * column instead of being cut through; the block's accessible name still carries title and time. */
-.calendar-block-text{display:flex;flex-direction:column;flex-wrap:wrap;align-self:stretch;min-height:0;overflow:hidden}
+.calendar-block-text{display:flex;flex-direction:column;justify-content:center;flex-wrap:wrap;align-self:stretch;min-height:0;overflow:hidden}
 .calendar-block-text>span{width:100%;flex-shrink:0}
+.calendar-block-text>span:empty{display:none}
 /* Map sheets keep the search field visible and scroll their own content when it outgrows the
  * design height (large text) or the screen (landscape). 104px is where the full sheet meets the
  * search field in the 915px design. */
@@ -447,6 +452,15 @@ button[aria-label$=" on or off"][aria-pressed]::before { content:""; position:ab
 .note-source-dialog footer button{flex:1 1 120px}
 .note-source-dialog [role=status]:empty{display:none}
 
+.alpha-map-credits { position:absolute; left:12px; right:76px; z-index:3; display:flex; align-items:center; gap:8px; padding-left:10px; border-radius:16px; background:var(--bg); color:var(--fg); box-shadow:0 2px 12px var(--shc); font-size:12px; line-height:1.4; }
+.alpha-map-credit-links { flex:1; min-width:0; }
+.alpha-map-credit-links a { color:inherit; text-decoration:underline; }
+.alpha-map-privacy { flex-shrink:0; }
+.alpha-map-privacy > summary { display:flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; cursor:pointer; list-style:none; }
+.alpha-map-privacy > summary::-webkit-details-marker { display:none; }
+.alpha-map-privacy > summary [data-alpha-icon] { width:18px; height:18px; }
+.alpha-map-info { position:absolute; right:0; bottom:calc(100% + 8px); width:min(320px,100%); padding:12px; border:1px solid var(--line); border-radius:16px; background:var(--bg); color:var(--fg); box-shadow:0 4px 20px var(--shc); font-size:14px; }
+.alpha-landscape .alpha-map-credits { bottom:12px!important; right:auto; width:calc(100% - min(440px,50%) - 24px); box-sizing:border-box; }
 .alpha-map-privacy:not([open]) > p { display:none; }
 
 .alpha-chat-composer { display:flex; align-items:center; gap:6px; flex-shrink:0; min-height:68px; box-sizing:border-box; margin:0 12px 30px; padding:6px 6px 6px 20px; border-radius:28px; background:var(--s2); color:var(--fg); }

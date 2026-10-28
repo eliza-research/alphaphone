@@ -71,7 +71,7 @@ function completeRoot(t, { platform, releasekey, apex, avb }) {
   const dir = temporary(t, "alpha-release-root-");
   const write = (rel, value) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), typeof value === "string" ? value : JSON.stringify(value, null, 2)); };
   const lock = JSON.stringify({ schema: 1, target: "pixel10a", device: { codename: "stallion", androidRelease: "17" }, developmentOnly: false, releaseQualified: false });
-  write("android/aosp/pixel10a-source.json", lock);
+  write("vendor/eliza/packages/os/android/sources/pixel10a-stallion.json", lock);
   const product = read(PIXEL10A_PRODUCT);
   write(PIXEL10A_PRODUCT, { ...product, sourceLock: { ...product.sourceLock, sha256: sha256(lock) }, signer: { ...product.signer, platformCertificateSha256: platform, releaseCertificates: releaseCertificates({ releasekey, apex }) }, avb: { ...product.avb, publicKeySha256: avb } });
   write(CHANNEL, { ...read(CHANNEL), otaCertificateSha256: releasekey, avbPublicKeySha256: avb });
@@ -170,7 +170,7 @@ test("the committed Pixel 10a production descriptor admits its pinned source loc
   assert.equal(product.releaseQualified, false);
   assert.equal(product.deviceAcceptanceVerified, false);
   assert.equal(product.ota.channel, CHANNEL);
-  assert.equal(channel.recovery.stockFactoryImage.sha256, read("android/aosp/pixel10a-source.json").factory.sha256, "stock recovery is the locked factory archive");
+  assert.equal(channel.recovery.stockFactoryImage.sha256, read("vendor/eliza/packages/os/android/sources/pixel10a-stallion.json").factory.sha256, "stock recovery is the locked factory archive");
   const problems = pixel10aProductProblems(root);
   for (const expected of [/signerSha256 is "unset"/, /platformCertificateSha256 must be a SHA-256/])
     assert.ok(problems.some(problem => expected.test(problem)), `${expected}\n${problems.join("\n")}`);
@@ -230,7 +230,7 @@ test("a complete fixture descriptor admits Pixel 10a production staging inputs; 
   refuse(PIXEL10A_PRODUCT, p => ({ ...p, device: { codename: "frankel", androidRelease: "17" } }), /must be stallion on Android 17/);
   refuse(PIXEL10A_PRODUCT, p => ({ ...p, lunch: { ...p.lunch, production: "alpha_stallion_phone-cp2a-userdebug" } }), /user build/);
   refuse("android/release-signer.json", s => ({ ...s, signerSha256: "unset" }), /signerSha256 is "unset"/);
-  refuse("android/aosp/pixel10a-source.json", l => ({ ...l, developmentOnly: true }), /still marked developmentOnly|differs from the pinned/);
+  refuse("vendor/eliza/packages/os/android/sources/pixel10a-stallion.json", l => ({ ...l, developmentOnly: true }), /still marked developmentOnly|differs from the pinned/);
 });
 
 test("Pixel 10a staging options: development or production, never both, always with exact source inputs", () => {
@@ -251,12 +251,13 @@ test("stage-aosp --target pixel10a --production refuses the committed descriptor
 });
 
 test("the stallion product sets no board AVB variables; signing carries the AVB keys and algorithm", () => {
-  assert.equal(fs.existsSync(path.join(root, "android/aosp/stallion/release-avb.mk")), false);
-  for (const name of fs.readdirSync(path.join(root, "android/aosp/stallion")).filter(name => name.endsWith(".mk")))
-    assert.doesNotMatch(fs.readFileSync(path.join(root, "android/aosp/stallion", name), "utf8"), /^\s*BOARD_AVB_/m, name);
+  assert.equal(fs.existsSync(path.join(root, "vendor/eliza/packages/os/android/devices/pixel10a/release-avb.mk")), false);
+  for (const name of fs.readdirSync(path.join(root, "vendor/eliza/packages/os/android/devices/pixel10a")).filter(name => name.endsWith(".mk")))
+    assert.doesNotMatch(fs.readFileSync(path.join(root, "vendor/eliza/packages/os/android/devices/pixel10a", name), "utf8"), /^\s*BOARD_AVB_/m, name);
   assert.equal(read(PIXEL10A_PRODUCT).avb.makefile, undefined);
-  assert.match(fs.readFileSync(path.join(root, "scripts/aosp-pixel10a.mjs"), "utf8"), /No BOARD_AVB_\* here/);
-  assert.match(fs.readFileSync(path.join(root, "android/aosp/stallion/AndroidProducts.mk"), "utf8"), /alpha_stallion_phone-cp2a-user\b/);
+  const composition = read("vendor/eliza/packages/os/android/products/pixel10a-alpha.json");
+  assert.equal(composition.productName, "alpha_stallion_phone");
+  assert.equal(composition.releaseConfig, "cp2a");
   // No key material is committed with the AOSP product.
   const files = execFileSync("git", ["-C", root, "ls-files", "android/aosp"], { encoding: "utf8" }).split("\n");
   assert.deepEqual(files.filter(name => /\.(pk8|pem|key|p12|jks|keystore)$|avb_pkmd/.test(name)), []);
@@ -352,7 +353,7 @@ test("signing refuses unsafe keys, mismatched digests, changed inputs and unset 
   await refuse(({ options }) => { fs.mkdirSync(options.out); fs.chmodSync(options.out, 0o700); }, /already exists/);
   await refuse(({ repo }) => { repo.write(CHANNEL, { ...read(CHANNEL), avbPublicKeySha256: "UNSET" }); }, /avbPublicKeySha256 is unset/);
   await refuse(({ repo }) => { repo.write(CHANNEL, { ...JSON.parse(fs.readFileSync(path.join(repo.dir, CHANNEL), "utf8")), downgradeAllowed: true }); }, /downgradeAllowed must be false/);
-  await refuse(({ repo }) => { repo.write("android/release-signer.json", read("android/release-signer.json")); }, /signerSha256 is "unset"/);
+  await refuse(({ repo }) => { repo.write("android/release-signer.json", {...read("android/release-signer.json"),signerSha256:"unset"}); }, /signerSha256 is "unset"/);
   // Keys inside a Git working tree (for example this repository) are refused.
   await refuse(({ options, key }) => {
     const inside = fs.mkdtempSync(path.join(options.root, "keys-"));
@@ -384,7 +385,11 @@ test("release blockers judge a recorded release against the current signer and t
   const signer = signerSha256 => ({ schema: 1, signerSha256, lastRelease: { versionCode: null, versionName: null, recordedAt: null } });
   assert.deepEqual(releaseBlockers(row), [], "the recorded admission alone");
   assert.ok(releaseBlockers(row, { releaseSigner: signer("unset") }).includes("release signer is unset in android/release-signer.json"));
-  assert.ok(releaseBlockers(row, { releaseSigner: read("android/release-signer.json") }).some(item => /release signer is unset/.test(item)), "the committed signer is unset");
+  const committedSigner = read("android/release-signer.json");
+  const committedBlockers = releaseBlockers(row, {releaseSigner:committedSigner});
+  if (committedSigner.signerSha256 === "unset") assert.ok(committedBlockers.some(item => /release signer is unset/.test(item)));
+  else if (committedSigner.signerSha256 !== row.signerSha256) assert.ok(committedBlockers.some(item => /does not match android\/release-signer\.json/.test(item)));
+  else assert.deepEqual(committedBlockers, []);
   assert.ok(releaseBlockers(row, { releaseSigner: signer("e".repeat(64)) }).some(item => /does not match android\/release-signer\.json/.test(item)));
   assert.deepEqual(releaseBlockers(row, { releaseSigner: signer("d".repeat(64)) }), []);
   assert.deepEqual(releaseBlockers(row, { releaseSigner: signer("d".repeat(64)), image: { platformCertificateSha256: "c".repeat(64) } }), []);

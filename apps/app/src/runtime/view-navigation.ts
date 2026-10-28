@@ -38,11 +38,24 @@ export class ViewNavigationClient {
 	private attempt?: NavigationAttempt;
 	private readonly deliveredContexts = new WeakMap<AbortController, ContextEnvelope>();
 	private readonly state;
+  private renderer?:{ready:Promise<void>;close:()=>void};
+  private rendererGeneration=0;
+  private rendererReady=false;
+  private readonly rendererVisibility=()=>{if(document.hidden)this.retireRenderer();else this.connectRenderer();};
+  private readonly interactions=new Set<string>();
+  private readonly executing=new Set<AbortController>();
+  private observationView?: string;
+  private observationAccepted = false;
+  private observation?: {view: string; controller: AbortController; ready: Promise<boolean>};
+  private delivering = false;
 	constructor(
 		private readonly request: Request,
 		private readonly currentSession: () => boolean,
 		private readonly context: () => ContextEnvelope | null,
+    private readonly subscribe?: (clientId:string,listener:(frame:unknown)=>void,ended:()=>void)=>{ready:Promise<void>;close:()=>void},
+    private readonly executeView?: (view:string,capability:string,params:unknown,signal:AbortSignal,current:()=>void)=>Promise<unknown>,
 	) {
+    if(subscribe){document.addEventListener?.('visibilitychange',this.rendererVisibility);this.connectRenderer();}
 		this.state = createCompletedActionNavigationState(() =>
 			JSON.stringify(this.context()),
 		);
@@ -61,6 +74,63 @@ export class ViewNavigationClient {
 				}
 			: {};
 	}
+  /** Record an already committed manual screen through the same owner-bound
+   * prepare/claim/ack protocol as agent navigation. No second history is kept.
+   * Cost: three requests per changed visible view; same-view updates reuse the result. */
+  observeCommittedView(retryAfterFailure = false): Promise<boolean> {
+    const context = this.context();
+    if (this.disposed || !this.currentSession() || document.hidden || !context || context.sensitive) {
+      this.observation?.controller.abort();
+      this.observation = undefined;
+      return Promise.resolve(false);
+    }
+    if (this.delivering) return Promise.resolve(false);
+    if (this.observation?.view === context.view) return this.observation.ready;
+    if (this.observationView === context.view && (!retryAfterFailure || this.observationAccepted)) return Promise.resolve(this.observationAccepted);
+    this.observation?.controller.abort();
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), 5000);
+    this.observationView = context.view;
+    this.observationAccepted = false;
+    const viewId = context.view === 'home' ? 'chat' : context.view === 'workflows' ? 'automations' : context.view;
+    const current = () => {
+      controller.signal.throwIfAborted();
+      const now = this.context();
+      if (this.disposed || !this.currentSession() || document.hidden || now?.sensitive || now?.view !== context.view || this.delivering)
+        throw Error('Committed navigation observation changed');
+    };
+    const ready = (async () => {
+      try {
+        current();
+        const prepared = object(await this.request(`/api/views/${encodeURIComponent(viewId)}/navigate`, {
+          clientId: this.clientId, delivery: 'completed-action', prepareOnly: true,
+          viewType: 'gui', completedActionHandoffId: crypto.randomUUID(),
+        }, controller.signal));
+        current();
+        const binding = object(prepared.navigationBinding);
+        if (binding.clientId !== this.clientId || binding.viewId !== viewId || binding.viewType !== 'gui' || typeof binding.requestId !== 'string' || typeof binding.installationId !== 'string')
+          throw Error('Committed navigation binding changed');
+        const claimed = object(await this.request('/api/views/interact-claim', binding, controller.signal));
+        current();
+        if (typeof claimed.claimId !== 'string' || !claimed.claimId) throw Error('Committed navigation claim missing');
+        const accepted = object(await this.request('/api/views/interact-result', {
+          ...binding, claimId: claimed.claimId, success: true, result: {switched: true},
+        }, controller.signal));
+        current();
+        if (accepted.accepted !== true) return false;
+        this.observationAccepted = true;
+        return true;
+      } catch {
+        // Reporting failure never changes the screen or invents confirmed history.
+        return false;
+      } finally {
+        clearTimeout(deadline);
+        if (this.observation?.controller === controller) this.observation = undefined;
+      }
+    })();
+    this.observation = {view: context.view, controller, ready};
+    return ready;
+  }
 	capture(context: ContextEnvelope): NavigationAttempt {
 		this.cancel();
 		const expected = JSON.stringify(context),
@@ -101,9 +171,55 @@ export class ViewNavigationClient {
 	}
 	dispose() {
 		this.disposed = true;
+    this.observation?.controller.abort();
 		this.cancel();
 		this.state.dispose();
+    document.removeEventListener?.('visibilitychange',this.rendererVisibility);this.retireRenderer();
 	}
+  /** Optional command delivery never gates ordinary chat or completed-action navigation.
+   * Cost: at most one empty subscription on connection use/foreground resume; no timer or replay. */
+  connectRenderer(){
+    if(!this.subscribe||this.renderer||this.disposed||!this.currentSession()||document.hidden)return;
+    const generation=++this.rendererGeneration;
+    const current=()=>generation===this.rendererGeneration&&!this.disposed&&this.currentSession()&&!document.hidden;
+    const end=()=>{if(generation===this.rendererGeneration)this.retireRenderer();};
+    try{
+      const channel=this.subscribe(this.clientId,frame=>{if(current())void this.receiveInteraction(frame);},end);
+      if(!current()){channel.close();return;}
+      this.renderer=channel;
+      void channel.ready.then(()=>{if(current())this.rendererReady=true;else end();},end);
+    }catch{end();}
+  }
+  private retireRenderer(){
+    ++this.rendererGeneration;this.rendererReady=false;
+    const channel=this.renderer;this.renderer=undefined;
+    for(const controller of this.executing)controller.abort();
+    channel?.close();
+  }
+  interactionAvailable(){return this.rendererReady&&!this.disposed&&this.currentSession()&&!document.hidden;}
+  async ready(){await this.renderer?.ready;}
+  private async receiveInteraction(value:unknown){
+    if(!this.executeView||this.disposed||!this.currentSession()||document.hidden||!value||typeof value!=='object'||Array.isArray(value))return;
+    const frame=value as Record<string,any>,context=this.context();
+    if(frame.type!=='view:interact'||frame.viewType!=='gui'||!context||frame.viewId!==context.view||context.sensitive||typeof frame.requestId!=='string'||typeof frame.installationId!=='string'||typeof frame.capability!=='string'||this.interactions.has(frame.requestId))return;
+    this.interactions.add(frame.requestId);
+    const controller=new AbortController();this.executing.add(controller);let claimId:string|undefined;
+    const deadline=setTimeout(()=>controller.abort(),4500);
+    const current=()=>{controller.signal.throwIfAborted();if(this.disposed||!this.currentSession()||document.hidden||JSON.stringify(this.context())!==JSON.stringify(context))throw Error('Renderer view or owner changed');};
+    const identity={requestId:frame.requestId,clientId:this.clientId,viewId:frame.viewId,viewType:frame.viewType,installationId:frame.installationId};
+    let success=false,result:unknown,error:string|undefined;
+    try{
+      current();const claim=object(await this.request('/api/views/interact-claim',identity,controller.signal));
+      if(typeof claim.claimId!=='string')return;claimId=claim.claimId;current();
+      result=await this.executeView(frame.viewId,frame.capability,frame.params,controller.signal,current);success=true;
+    }catch{error='Native view command failed or its outcome is unknown; it was not repeated';}
+    finally{
+      if(claimId&&!this.disposed&&this.currentSession()&&!controller.signal.aborted){
+        try{await this.request('/api/views/interact-result',{...identity,claimId,success,...(success?{result}:{error})},controller.signal);}catch{/* Lost acknowledgment is unknown; never replay an effect. */}
+      }
+      clearTimeout(deadline);this.executing.delete(controller);this.interactions.delete(frame.requestId);
+    }
+  }
 	async deliver(
 		results: readonly unknown[] | undefined,
 		attempt: NavigationAttempt,
@@ -180,7 +296,10 @@ export class ViewNavigationClient {
 				"stale",
 				"Navigation cancelled because the screen changed.",
 			);
+    this.delivering = true;
+    try {
 		let switched = false;
+    this.observation?.controller.abort();
 		const received = (event: Event) => {
 			const detail = (event as CustomEvent<NavigateViewDetail>).detail;
 			if (detail?.completedActionHandoffId !== binding.requestId) return;
@@ -209,8 +328,10 @@ export class ViewNavigationClient {
 			this.disposed ||
 			!this.currentSession() ||
 			attempt.controller.signal.aborted
-		)
+		) {
+
 			return { status: "unknown" };
+    }
 		switched =
 			switched &&
 			this.context()?.view === target &&
@@ -239,6 +360,9 @@ export class ViewNavigationClient {
 			!document.hidden
 		) {
 			this.deliveredContexts.set(attempt.controller, structuredClone(this.context()!));
+      this.observationView = target;
+      this.observationAccepted = true;
+
 			return {
 				status: "delivered",
 				label:
@@ -249,6 +373,7 @@ export class ViewNavigationClient {
 							: target,
 			};
 		}
-		return { status: "unknown" };
+    return { status: "unknown" };
+    } finally { this.delivering = false; }
 	}
 }

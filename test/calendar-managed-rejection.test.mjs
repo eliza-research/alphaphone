@@ -24,7 +24,7 @@ test('explicit Calendar rejection survives the private transport; uncertain repl
   }}]});
   const bundle=await buildPort(readFileSync(entry,'utf8'));
   const {createManagedCalendarMutationPort,CalendarMutationNotAcceptedError}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
-  const source='alpha-google:'+'a'.repeat(64),caps={grantId:source,calendarId:'calendar',accountId:'account',read:true,write:true,idempotentCreate:true,conditionalWrites:true,providerExactlyOnce:false};
+  const source='alpha-google:'+'a'.repeat(64),caps={version:1,grantId:source,calendarId:'calendar',accountId:'account',read:true,write:true,idempotentCreate:true,conditionalWrites:true,providerExactlyOnce:false};
   const approval={payload:{action:'schedule_event',side:'owner',grantId:source,calendarId:'calendar'}};
   for(const kind of ['not_accepted','precondition_failed','wrong-account','unknown','generic-http','timeout']){
    let mutations=0;
@@ -44,7 +44,7 @@ test('explicit Calendar rejection survives the private transport; uncertain repl
   const host=resolve('scripts/calendar-agent-write-host.ts');
   const brokerBundle=await build({entryPoints:['scripts/gmail-agent-dev-broker.ts'],bundle:true,platform:'node',format:'esm',write:false,plugins:[{name:'synthetic-cloud-owner-port',setup(b){
    b.onResolve({filter:/^\.\/gmail-agent-read-host\.ts$/},()=>({path:'reader',namespace:'cloud-fixture'}));
-   b.onLoad({filter:/.*/,namespace:'cloud-fixture'},()=>({loader:'js',resolveDir:process.cwd(),contents:`import {calendarAgentWrite} from ${JSON.stringify(host)};export const createGmailAgentReadHost=()=>({calendarWrite:(input,signal)=>calendarAgentWrite(globalThis.calendarRefusalFixture.client,'grant','a'.repeat(64),input,signal)});`}));
+   b.onLoad({filter:/.*/,namespace:'cloud-fixture'},()=>({loader:'js',resolveDir:process.cwd(),contents:`import {calendarAgentWrite} from ${JSON.stringify(host)};export const createGmailAgentReadHost=()=>({calendarWrite:(input,signal)=>calendarAgentWrite(globalThis.calendarRefusalFixture.client,'grant','a'.repeat(64),input,signal,'alpha-google')});`}));
   }}]});
   const {createGmailAgentDevBroker}=await import('data:text/javascript;base64,'+Buffer.from(brokerBundle.outputFiles[0].text).toString('base64'));
   const tokenFile=join(temp,'token');writeFileSync(tokenFile,'b'.repeat(64),{mode:0o600});let writes=0;

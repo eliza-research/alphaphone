@@ -1,5 +1,10 @@
 // Register browser implementations before any runtime module claims plugin identity.
 import './browser/register';
+import {installCanonicalNotesView} from './prototype/canonical-notes-ui';
+import {installCanonicalCalendarDrafts} from './prototype/canonical-calendar-drafts';
+import {installAgentCalendarAdapter,deviceCalendarScope,legacyGoogleCalendarScope} from './prototype/agent-calendar-adapter';
+import {Capacitor} from '@capacitor/core';
+import {ownerReminderNotifications} from './runtime/owner-reminder-notification-port';
 import {installCalendarApprovalAdapter} from './prototype/calendar-approval-adapter';
 import {bindBrowserDeletionOwner} from './runtime/deletion-owner';
 import {DEFAULT_PULL_DISTANCE,DEFAULT_PULL_VELOCITY} from "../../../.eliza/client-features/packages/ui/src/gestures/constants";
@@ -56,6 +61,7 @@ import { installCalendarAdapter } from './prototype/calendar-adapter';
 import {installGoogleCalendarViewAdapter} from './prototype/google-calendar-view-adapter';
 import { installSettingsAdapter, readAppearanceChoice, resolveAppearance } from './prototype/settings-adapter';
 import { ConnectionChooser, connectionController } from './runtime/connection-ui';
+import { protectedPowerLaunchState } from './runtime/power-launch-state';
 import { installListenerInvocation } from './runtime/always-on-listener';
 import {GoogleConnectionsPanel} from './runtime/google-connection-ui';
 import { installNotesTrashAdapter } from './prototype/notes-trash-adapter';
@@ -72,6 +78,8 @@ import { installToastLayer } from './runtime/toast-layer';
 import './prototype/prototype.css';
 import './prototype/phone.css';
 installGlobalErrorRecovery();
+// Registration has completed; this injected source cannot form a register→connection cycle.
+if(!Capacitor.isNativePlatform())ownerReminderNotifications.bind({binding:()=>connectionController.getOwnerReminderNotificationBinding(),subscribeBinding:listener=>connectionController.subscribe(listener)});
 // Developer surfaces are only reachable in an explicitly flagged development server.
 const browserDevProfile=devSurfacesEnabled&&devProfileQuery;
 const developmentAgentWorkflows=devSurfacesEnabled&&devAgentWorkflowsQuery;
@@ -107,13 +115,15 @@ if (!fixture) {
   installPrototypeCameraAdapter(Component, VIEWS);
   installAgentAdapter(Component, VIEWS);
   installReminderAdapter(Component, VIEWS);
-  installCalendarAdapter(Component, VIEWS);
+  installCalendarAdapter(Component, VIEWS, {active:deviceCalendarScope});
   if(isAndroid){installContactsAdapter(Component,VIEWS);installSmsAdapter(Component,VIEWS);}
-  installCalendarFormDraftAdapter(Component, VIEWS);
-  installCalendarEditDraftAdapter(Component, VIEWS);
-  installGoogleCalendarViewAdapter(Component, VIEWS);
+  installCalendarFormDraftAdapter(Component, VIEWS, {active:shell=>deviceCalendarScope(shell)||shell?.vget('calendar').form?.cal==='alpha-reminders'});
+  installCalendarEditDraftAdapter(Component, VIEWS, {active:shell=>deviceCalendarScope(shell)||shell?.vget('calendar').form?.cal==='alpha-reminders'});
+  installGoogleCalendarViewAdapter(Component, VIEWS, {active:legacyGoogleCalendarScope,preserveReadOnly:true});
   installNoteOriginAdapter(Component, VIEWS);
   installPrototypeDataAdapter(Component, VIEWS);
+  installAgentCalendarAdapter(Component,VIEWS);
+  installCanonicalCalendarDrafts(Component,VIEWS);
   // Notice rows feed only the development stand-in shade; product builds read no notice list (#416).
   if(systemShade==='simulated')installNotificationsAdapter(Component);
   installContextSelection(Component);
@@ -122,6 +132,7 @@ if (!fixture) {
   installNotesDocumentAdapter(Component, VIEWS);
   installNotesShareAdapter(VIEWS);
   installNotesTrashAdapter(Component, VIEWS);
+  installCanonicalNotesView(Component,VIEWS);
   installNoteSourceAdapter(VIEWS);
   installNoteWebSourceAdapter(VIEWS);
   installPrototypeBrowserAdapter(Component, VIEWS);
@@ -309,6 +320,6 @@ async function mountPhone() {
   }
   createRoot(document.getElementById('root')!).render(<RootErrorBoundary><Phone /></RootErrorBoundary>);
   // The image's always-on listener heard the wake phrase: start the on-device voice assistant.
-  if (isAndroid && assistantSurface) installListenerInvocation(() => shell, { connectionOpen: () => connectionController.getSnapshot().open, connected: () => !!connectionController.getSnapshot().session && !connectionController.getSnapshot().busy, voiceActive: () => !!document.querySelector('[data-alpha-chat-recorder]'), subscribe: listener => connectionController.subscribe(listener) });
+  if (isAndroid && assistantSurface) installListenerInvocation(() => shell, { authority: () => { const port=connectionController.getAppRecordClient(); if(!port)return null; try{if(!port.current())return null;return JSON.stringify([port.sessionId,port.scope??null,port.identity.ownerId,port.identity.agentId,port.identity.sessionId,port.identity.origin]);}catch{return null;} }, initialRestorePending: () => protectedPowerLaunchState(connectionController.getSnapshot()).initialRestorePending, powerAccountRef: () => protectedPowerLaunchState(connectionController.getSnapshot()).accountRef, connectionOpen: () => connectionController.getSnapshot().open, connected: () => !!connectionController.getSnapshot().session && !connectionController.getSnapshot().busy, voiceActive: () => !!document.querySelector('[data-alpha-chat-recorder]'), subscribe: listener => connectionController.subscribe(listener) });
 }
 void mountPhone();

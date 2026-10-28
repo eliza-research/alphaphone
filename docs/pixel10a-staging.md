@@ -2,11 +2,21 @@
 
 The physical product is `alpha_stallion_phone`, for the exact Android 17 stallion
 source and factory inputs in [the source contract](pixel10a-source-contract.md).
+Before image staging, apply the exact recorded Soong app-native patch to its
+manifest's `build/soong` revision. From this repository, after setting `AOSP_SOURCE`
+to the admitted source checkout:
+
+```sh
+git -C "$AOSP_SOURCE/build/soong" apply --check "$PWD/vendor/eliza/packages/os/android/patches/soong-app-native/soong-app-native.patch"
+git -C "$AOSP_SOURCE/build/soong" apply "$PWD/vendor/eliza/packages/os/android/patches/soong-app-native/soong-app-native.patch"
+```
+
 The following stages a new directory; it does not patch the source, build or flash
 an image, or admit a production release:
 
 ```sh
 npm run aosp:stage -- --target pixel10a --development \
+  --applied-build-patch soong-app-native \
   --apk /absolute/admitted-launcher-debug.apk \
   --aosp-source /absolute/prepared/stallion-source \
   --factory-image /absolute/stallion-cp3a.261005.005-factory-d1d25502.zip \
@@ -69,7 +79,7 @@ from the production descriptor `android/aosp/pixel10a-product.json`. Before any 
 factory archive or APK is read it refuses, naming each gap, while:
 
 - any descriptor value is `UNSET` or a placeholder;
-- `sourceLock.sha256` does not pin the exact bytes of `android/aosp/pixel10a-source.json`,
+- `sourceLock.sha256` does not pin the exact bytes of `vendor/eliza/packages/os/android/sources/pixel10a-stallion.json`,
   or that lock is still marked `developmentOnly` (admitting the inputs for release is a
   reviewed change to both files);
 - `android/release-signer.json` has no reviewed APK release signer, or
@@ -79,6 +89,7 @@ factory archive or APK is read it refuses, naming each gap, while:
 
 ```sh
 npm run aosp:stage -- --target pixel10a --production \
+  --applied-build-patch soong-app-native \
   --apk /absolute/launcher-release.apk --apk-manifest /absolute/apk-manifest.json \
   --descriptor /absolute/reviewed-launcher.json \
   --listener-apk /absolute/sense-release.apk --listener-descriptor /absolute/reviewed-listener.json \
@@ -233,3 +244,12 @@ compatible-rollback or stock-recovery drill is not `passed`; the script prints t
 `node --test test/aosp-release-signing.test.mjs` exercises these refusals, the command lines
 (key-file and managed) and the record with mocked releasetools and throwaway certificates. It is not a signed image,
 an image boot, an applied OTA, or a rollback or recovery drill.
+
+
+When the source tree already carries the reviewed SystemUI listener chip, pass
+`--applied-systemui-patch chip` to Pixel `aosp:stage`. Use `ops` for the other
+reviewed bundle. The option is repeatable, rejects duplicates and unknown names,
+and requires an explicit Pixel or Cuttlefish target. Each patch still requires the
+locked project revision, exact preimages and exact installed postimages; unrelated
+source changes remain rejected. This only admits staging and is not image or
+device acceptance.

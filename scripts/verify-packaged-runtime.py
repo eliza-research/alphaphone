@@ -52,20 +52,36 @@ def verify(apk, release=False, runtime_profile="native"):
             if stamp.get(field) != file_hash(ROOT / source):
                 raise ValueError('Staged source manifest mismatch')
         checks = {}
+        # An Android-target Bun may have a narrower admitted ABI set. Authenticate
+        # its provenance before using that set; legacy debug builds still require both.
+        runtime_abis = {'arm64-v8a', 'x86_64'}
+        provenance = None
+        provenance_entry = 'assets/agent/android-agent-runtime-provenance.json'
+        staged_provenance = staged / 'android-agent-runtime-provenance.json'
+        if staged_provenance.exists() or provenance_entry in names:
+            if hashlib.sha256(archive.read(provenance_entry)).hexdigest() != file_hash(staged_provenance):
+                raise ValueError('Runtime provenance differs from admitted staged provenance')
+            provenance = json.loads(archive.read(provenance_entry))
+            if provenance.get('schema') != 'eliza.android_agent_runtime_provenance.v1':
+                raise ValueError('Runtime provenance missing')
+            bun = provenance.get('bun', {})
+            target = bun.get('target', 'linux-musl')
+            if target not in ('android', 'linux-musl'):
+                raise ValueError('Unsupported Bun target')
+            if target == 'android':
+                if bun.get('architectures') != ['arm64-v8a']:
+                    raise ValueError('Invalid Android Bun ABI admission')
+                runtime_abis = {'arm64-v8a'}
         if runtime_profile == 'cloud':
+            if provenance is None:
+                raise ValueError('Runtime provenance missing')
             profile_entry = 'assets/agent/alpha-runtime-profile.json'
             if hashlib.sha256(archive.read(profile_entry)).hexdigest() != file_hash(staged / 'alpha-runtime-profile.json'):
                 raise ValueError('Cloud profile differs from staged profile')
-            provenance_entry = 'assets/agent/android-agent-runtime-provenance.json'
-            if hashlib.sha256(archive.read(provenance_entry)).hexdigest() != file_hash(staged / 'android-agent-runtime-provenance.json'):
-                raise ValueError('Cloud provenance differs from admitted staged provenance')
             profile = json.loads(archive.read(profile_entry))
             omitted = {'path': 'assets/agent/models/bge-small-en-v1.5-f16.gguf', 'sha256': 'f0b2fef971e8366438bfd2d9aefea1b0115919389448806d290237f638bae999'}
             if profile != {'version': 1, 'runtimeProfile': 'cloud', 'omittedLocalModels': [omitted]}:
                 raise ValueError('Packaged Cloud profile mismatch')
-            provenance = json.loads(archive.read('assets/agent/android-agent-runtime-provenance.json'))
-            if provenance.get('schema') != 'eliza.android_agent_runtime_provenance.v1':
-                raise ValueError('Runtime provenance missing')
             for row in provenance['files']:
                 entry = row['path']
                 if entry == omitted['path']:
@@ -89,8 +105,13 @@ def verify(apk, release=False, runtime_profile="native"):
                 raise ValueError(f'Packaged runtime mismatch: {entry}')
             checks[entry] = observed
 
-        for name in ['alpha-source.json', 'agent-bundle.js', 'workflow-worker/files.sha256', 'workflow-worker/manifest.json']:
+        for name in ['alpha-source.json', 'agent-bundle.js', 'agent-bundle-dependencies.json', 'workflow-worker/files.sha256', 'workflow-worker/manifest.json']:
             check('assets/agent/' + name, staged / name)
+        bundle_dependencies = json.loads(archive.read('assets/agent/agent-bundle-dependencies.json'))
+        if (bundle_dependencies.get('version') != 1 or
+                bundle_dependencies.get('bundleSha256') != checks['assets/agent/agent-bundle.js'] or
+                not isinstance(bundle_dependencies.get('packages'), list) or not bundle_dependencies['packages']):
+            raise ValueError('Packaged agent dependency inventory does not match bundle')
         check('assets/agent/native-view-declarations.json', staged / 'native-view-declarations.json', file_hash(ROOT / 'config/native-view-declarations.json'))
         worker_manifest = json.loads((staged / 'workflow-worker/manifest.json').read_text())
         worker_files = worker_manifest.get('files')
@@ -115,10 +136,14 @@ def verify(apk, release=False, runtime_profile="native"):
         packaged_worker = {name.removeprefix('assets/agent/workflow-worker/') for name in names if name.startswith('assets/agent/workflow-worker/') and not name.endswith('/')}
         if packaged_worker != inventory | {'files.sha256', 'manifest.json'}:
             raise ValueError('Unexpected packaged worker inventory')
-        # Debug/test APKs carry both ABIs. Releases may filter to the shipping
-        # arm64-v8a ABI; every packaged ABI must carry the runtime.
+        # Every packaged ABI must match the admitted runtime. Releases keep
+        # their shipping ARM64 requirement; legacy debug retains both ABIs.
         packaged_abis = {name.split('/')[1] for name in names if name.startswith('lib/') and name.count('/') >= 2}
-        abis = sorted(packaged_abis | ({'arm64-v8a'} if release else {'arm64-v8a', 'x86_64'}))
+        expected_abis = {'arm64-v8a'} if release else runtime_abis
+        unexpected_abis = packaged_abis - runtime_abis
+        if unexpected_abis:
+            raise ValueError(f'Unexpected packaged ABI: {sorted(unexpected_abis)}')
+        abis = sorted(packaged_abis | expected_abis)
         for abi in abis:
             if abi not in ('arm64-v8a', 'x86_64'):
                 raise ValueError(f'Unexpected packaged ABI: {abi}')

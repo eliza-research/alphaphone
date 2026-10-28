@@ -1,5 +1,5 @@
 import { cuttlefishOptions, writeCuttlefishNatives } from './aosp-cuttlefish.mjs';
-import { verifyPixel10aSource, defaultLockPath } from './pixel10a-source-contract.mjs';
+import { verifyPixel10aSource, defaultLockPath, listenerSystemuiPatch, aospBuildPatch } from './pixel10a-source-contract.mjs';
 import { pixel10aOptions, pixel10aProductProblems, writePixel10aProduct, PIXEL10A_PRODUCT } from './aosp-pixel10a.mjs';
 import { readReleaseSigner } from './build-android.mjs';
 import fs from "node:fs";
@@ -61,8 +61,8 @@ export function aospProductLockProblems(root = process.cwd()) {
   }
   // Source lock through the pinned upstream loader (manifest url, tag and full object IDs).
   const lockFile = product.sourceLock?.file, profileName = product.sourceLock?.profile;
-  if (typeof lockFile !== "string" || !lockFile.startsWith("android/aosp/") || !fs.existsSync(at(lockFile))) problems.push(`${PRODUCT_DESCRIPTOR}: sourceLock.file must name an existing lock under android/aosp/`);
-  else if (Object.values(product.separateLocks ?? {}).includes(lockFile)) problems.push(`${lockFile} is a separate product's lock; it is not admitted for the Cuttlefish product`);
+  if (Object.values(product.separateLocks ?? {}).includes(lockFile)) problems.push(`${lockFile} is a separate product's lock; it is not admitted for the Cuttlefish product`);
+  else if (typeof lockFile !== "string" || !lockFile.startsWith("android/aosp/") || !fs.existsSync(at(lockFile))) problems.push(`${PRODUCT_DESCRIPTOR}: sourceLock.file must name an existing lock under android/aosp/`);
   else {
     const lock = read(lockFile);
     if (lock.admitted === false) problems.push(`${lockFile} is not admitted`);
@@ -138,7 +138,61 @@ function admitApk({ apk, hash, development, manifestFile, platformCertificateSha
       throw new Error(`Refusing ${apk}: --development stages debug builds only. This is a release build that ${manifestFile} does not record as distributable.`);
   }
 }
+/**
+ * Source overrides the secure-camera source check admits. Pixel and Cuttlefish images are built from the same
+ * reviewed Android 17 tree, so both admit exactly its hash-pinned overrides; other development staging admits none.
+ */
+export function reviewedSourceOverrides({physicalSource = null, cuttlefish = false, lockPath = defaultLockPath, source, appliedPatches = []} = {}) {
+  if (!physicalSource && !cuttlefish) return [];
+  const lockBytes = fs.readFileSync(lockPath);
+  const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+  if (physicalSource && digest(lockBytes) !== physicalSource.sourceLockSha256) throw Error('Pixel source lock changed during staging');
+  const lock = JSON.parse(lockBytes), overrides = [...lock.overrides];
+  const seen = new Set(overrides.map(entry => entry.path));
+  for (const {manifest} of appliedPatches) {
+    if (!source || manifest.baselineLockSha256 !== digest(lockBytes)) throw Error('Applied SystemUI patch source lock differs');
+    if (!lock.projects?.some(project => project.path === manifest.project && project.commit === manifest.revision)) throw Error('Applied SystemUI patch revision differs');
+    const safe = name => typeof name === 'string' && name && !path.isAbsolute(name) && !name.split(/[\\/]/).some(part => !part || part === '.' || part === '..');
+    if (!safe(manifest.project)) throw Error('Unsafe SystemUI project path');
+    const base = fs.realpathSync(source), directory = fs.realpathSync(path.join(base, manifest.project));
+    if (!directory.startsWith(base + path.sep)) throw Error('SystemUI project escapes source');
+    const git = args => execFileSync('git', ['-C', directory, ...args], {env:{...process.env, GIT_OPTIONAL_LOCKS:'0'}, maxBuffer:64 << 20});
+    if (git(['rev-parse', 'HEAD']).toString().trim() !== manifest.revision) throw Error('Applied SystemUI checkout revision differs');
+    for (const file of manifest.files) {
+      if (!safe(file.path)) throw Error('Unsafe SystemUI patch path');
+      const relative = `${manifest.project}/${file.path}`;
+      if (seen.has(relative)) throw Error('Applied SystemUI patch overlaps source override');
+      seen.add(relative);
+      const entry = git(['ls-tree', manifest.revision, '--', file.path]).toString();
+      const before = entry ? digest(git(['show', `${manifest.revision}:${file.path}`])) : null;
+      if (before !== file.beforeSha256) throw Error('Applied SystemUI patch preimage differs');
+      const target = path.join(directory, file.path);
+      if (!fs.lstatSync(target).isFile() || !fs.realpathSync(target).startsWith(directory + path.sep)) throw Error('Applied SystemUI patch file is not regular');
+      const bytes = fs.readFileSync(target);
+      if (digest(bytes) !== file.afterSha256) throw Error('Applied SystemUI patch bytes differ');
+      overrides.push({path:relative, sizeBytes:bytes.length, sha256:file.afterSha256});
+    }
+  }
+  return overrides;
+}
+
+export function stagingSystemuiPatches(names, imageTarget) {
+  if (!names.length) return [];
+  if (!imageTarget) throw Error('--applied-systemui-patch requires --target pixel10a or cuttlefish');
+  if (new Set(names).size !== names.length) throw Error('Duplicate applied SystemUI patch');
+  return names.map(listenerSystemuiPatch);
+}
+
+export function stagingBuildPatches(names, imageTarget) {
+  if (!names.length) return [];
+  if (!imageTarget) throw Error('--applied-build-patch requires --target pixel10a or cuttlefish');
+  if (new Set(names).size !== names.length) throw Error('Duplicate applied build patch');
+  return names.map(aospBuildPatch);
+}
+
 async function main(args) {
+const appliedPatchNames = [];
+const appliedBuildNames = [];
 const get = (key) => {
   const i = args.indexOf(key);
   return i < 0 ? null : args[i + 1];
@@ -146,13 +200,15 @@ const get = (key) => {
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--development" || args[i] === "--production") continue;
   if (
-    !["--apk", "--output", "--descriptor", "--apk-manifest", "--aosp-source", "--listener-apk", "--listener-descriptor", "--target", "--factory-image"].includes(args[i]) ||
+    !["--apk", "--output", "--descriptor", "--apk-manifest", "--aosp-source", "--listener-apk", "--listener-descriptor", "--target", "--factory-image", "--applied-systemui-patch", "--applied-build-patch"].includes(args[i]) ||
     !args[i + 1] ||
     args[i + 1].startsWith("--")
   )
     throw new Error(
-      "Use --apk FILE --output NEW_DIR [--descriptor FILE [--production] | --development] [--apk-manifest FILE] [--aosp-source PATH] [--target cuttlefish | --target pixel10a --factory-image FILE (--development | --production --descriptor FILE)] [--listener-apk FILE [--listener-descriptor FILE]]",
+      "Use --apk FILE --output NEW_DIR [--descriptor FILE [--production] | --development] [--apk-manifest FILE] [--aosp-source PATH] [--target cuttlefish | --target pixel10a --factory-image FILE (--development | --production --descriptor FILE)] [--listener-apk FILE [--listener-descriptor FILE]] [--applied-systemui-patch chip|ops ...] [--applied-build-patch soong-memory|soong-app-native ...]",
     );
+  if (args[i] === '--applied-systemui-patch') appliedPatchNames.push(args[i + 1]);
+  if (args[i] === '--applied-build-patch') appliedBuildNames.push(args[i + 1]);
   i++;
 }
 const development = args.includes("--development");
@@ -171,7 +227,10 @@ if (production) {
   if (problems.length) throw new Error(`Refusing production staging: the ${name} is incomplete.\n${problems.map(item => `  - ${item}`).join("\n")}`);
 }
 const platformCertificateSha256 = production ? JSON.parse(fs.readFileSync(physical ? PIXEL10A_PRODUCT : PRODUCT_DESCRIPTOR, "utf8")).signer?.platformCertificateSha256 : undefined;
-const physicalSource = physical ? await verifyPixel10aSource({source:get('--aosp-source'), factory:get('--factory-image')}) : null;
+const appliedPatches = [...stagingSystemuiPatches(appliedPatchNames, physical || cuttlefish), ...stagingBuildPatches(appliedBuildNames, physical || cuttlefish)];
+if ((physical || cuttlefish) && !appliedBuildNames.includes('soong-app-native'))
+  throw Error('Image staging requires --applied-build-patch soong-app-native for Soong-only APK and JNI installation.');
+const physicalSource = physical ? await verifyPixel10aSource({source:get('--aosp-source'), factory:get('--factory-image'), appliedPatches}) : null;
 if (physical && production && physicalSource.sourceLockSha256 !== JSON.parse(fs.readFileSync(PIXEL10A_PRODUCT, "utf8")).sourceLock?.sha256)
   throw new Error(`Refusing production staging: the verified source lock is not the one pinned in ${PIXEL10A_PRODUCT}.`);
 // The always-on listener is part of the AOSP MVP (issue #424): production images must include it.
@@ -205,12 +264,7 @@ if (production && !listenerApk)
   throw new Error("Production staging requires --listener-apk (the always-on listener built by ./gradlew :sense:assembleRelease).");
 if (production && !listenerDescriptor)
   throw new Error("Production staging requires --listener-descriptor: an independently reviewed record of the listener's packageName, apkSha256 and certificateSha256.");
-let cameraOverrides = [];
-if (physicalSource) {
-  const lockBytes = fs.readFileSync(defaultLockPath);
-  if (createHash('sha256').update(lockBytes).digest('hex') !== physicalSource.sourceLockSha256) throw Error('Pixel source lock changed during staging');
-  cameraOverrides = JSON.parse(lockBytes).overrides;
-}
+const cameraOverrides = reviewedSourceOverrides({physicalSource, cuttlefish, source:get('--aosp-source'), appliedPatches});
 const cameraSource = get("--aosp-source") || !development
   ? verifySecureCameraSource(get("--aosp-source"), undefined, cameraOverrides)
   : { sourceVerified: false, imageVerified: false, lockedCaptureVerified: false, deviceAcceptanceVerified: false, reason: "Development staging without reviewed AOSP source" };
@@ -325,7 +379,7 @@ if (listenerApk) {
 }
 if (cuttlefish) writeCuttlefishNatives({root:process.cwd(), output, apk, module:identity.moduleName});
 if (physical) {
-  writePixel10aProduct({root:process.cwd(), output, apk, identity, sourceEvidence:physicalSource, production});
+  writePixel10aProduct({root:process.cwd(), output, apk, identity, launcher:reviewed, sourceEvidence:physicalSource, production});
 }
 if (physical || cuttlefish) {
   if (fs.existsSync(destination)) throw Error('Output appeared during staging: ' + destination);

@@ -39,6 +39,10 @@ class PackagedRuntimeTest(unittest.TestCase):
         self.entries = {'assets/agent/native-view-declarations.json': b'[]',
                         'assets/agent/alpha-source.json': stamp_bytes,
                         'assets/agent/agent-bundle.js': b'agent payload',
+                        'assets/agent/agent-bundle-dependencies.json': json.dumps({
+                            'version': 1, 'bundleSha256': sha(b'agent payload'),
+                            'packages': [{'directory': 'node_modules/example', 'name': 'example', 'version': '1.0.0', 'packageJsonSha256': 'b' * 64}]
+                        }).encode(),
                         'assets/agent/workflow-worker/worker.js': worker,
                         'assets/agent/workflow-worker/manifest.json': manifest,
                         'assets/agent/workflow-worker/files.sha256': index,
@@ -68,8 +72,18 @@ class PackagedRuntimeTest(unittest.TestCase):
     def test_valid_payload_is_byte_verified_without_execution_claim(self):
         result = verifier.verify(self.package())
         self.assertEqual(result['upstreamCommit'], self.pin)
-        self.assertEqual(result['verifiedEntries'], 8)
+        self.assertEqual(result['verifiedEntries'], 9)
         self.assertFalse(result['runtimeExecution'])
+
+    def test_inventory_must_describe_the_packaged_bundle_even_if_staging_matches(self):
+        name = 'assets/agent/agent-bundle-dependencies.json'
+        original = json.loads(self.entries[name])
+        for changes in [{'bundleSha256': 'c' * 64}, {'version': 2}, {'packages': []}]:
+            with self.subTest(changes=changes):
+                self.entries[name] = json.dumps({**original, **changes}).encode()
+                self.write('android/app/src/main/' + name, self.entries[name])
+                with self.assertRaisesRegex(ValueError, 'dependency inventory does not match bundle'):
+                    verifier.verify(self.package())
 
     def test_each_payload_byte_and_required_entry_is_checked(self):
         for name in self.entries:
@@ -99,6 +113,44 @@ class PackagedRuntimeTest(unittest.TestCase):
         entries = dict(self.entries)
         del entries['lib/x86_64/libeliza_bun.so']
         self.assertEqual(verifier.verify(self.package(entries), release=True)['runtime'], 'PACKAGED')
+
+    def android_entries(self):
+        entries = dict(self.entries)
+        del entries['lib/x86_64/libeliza_bun.so']
+        provenance = {'schema': 'eliza.android_agent_runtime_provenance.v1',
+                      'bun': {'target': 'android', 'architectures': ['arm64-v8a']}, 'files': []}
+        entries['assets/agent/android-agent-runtime-provenance.json'] = json.dumps(provenance).encode()
+        self.write('android/app/src/main/assets/agent/android-agent-runtime-provenance.json', entries['assets/agent/android-agent-runtime-provenance.json'])
+        return entries
+
+    def test_android_arm64_debug_and_release_match_admitted_runtime(self):
+        entries = self.android_entries()
+        for release in [False, True]:
+            self.assertEqual(verifier.verify(self.package(entries), release=release)['runtime'], 'PACKAGED')
+
+    def test_android_runtime_rejects_foreign_abi_missing_bun_and_missing_provenance(self):
+        entries = self.android_entries()
+        for abi in ['x86_64', 'armeabi-v7a', 'riscv64']:
+            with self.subTest(abi=abi), self.assertRaisesRegex(ValueError, 'Unexpected packaged ABI'):
+                verifier.verify(self.package({**entries, f'lib/{abi}/libcamera.so': b'foreign'}))
+        for missing in ['lib/arm64-v8a/libeliza_bun.so', 'assets/agent/android-agent-runtime-provenance.json']:
+            changed = dict(entries)
+            del changed[missing]
+            with self.subTest(missing=missing), self.assertRaises((ValueError, KeyError)):
+                verifier.verify(self.package(changed))
+
+    def test_android_provenance_rejects_invalid_targets_and_architectures(self):
+        entries = self.android_entries()
+        for bun in [{'target': 'other'}, {'target': 'android'}, {'target': 'android', 'architectures': []},
+                    {'target': 'android', 'architectures': ['x86_64']},
+                    {'target': 'android', 'architectures': ['arm64-v8a', 'arm64-v8a']},
+                    {'target': 'android', 'architectures': ['arm64-v8a', 'x86_64']}]:
+            changed = dict(entries)
+            changed['assets/agent/android-agent-runtime-provenance.json'] = json.dumps({
+                'schema': 'eliza.android_agent_runtime_provenance.v1', 'bun': bun, 'files': []}).encode()
+            self.write('android/app/src/main/assets/agent/android-agent-runtime-provenance.json', changed['assets/agent/android-agent-runtime-provenance.json'])
+            with self.subTest(bun=bun), self.assertRaises(ValueError):
+                verifier.verify(self.package(changed))
 
     def test_changed_source_guard_rejects_otherwise_identical_apk(self):
         self.write('scripts/local-agent-source.mjs', b'new guard')
@@ -144,6 +196,18 @@ class PackagedRuntimeTest(unittest.TestCase):
         entries['assets/agent/android-agent-runtime-provenance.json'] = json.dumps(provenance).encode()
         with self.assertRaisesRegex(ValueError, 'differs from admitted staged provenance'):
             verifier.verify(self.package(entries), runtime_profile='cloud')
+
+    def test_cloud_android_arm64_debug_and_release_match_provenance(self):
+        entries = dict(self.cloud_entries())
+        del entries['lib/x86_64/libeliza_bun.so']
+        name = 'assets/agent/android-agent-runtime-provenance.json'
+        provenance = json.loads(entries[name])
+        provenance['bun'] = {'target': 'android', 'architectures': ['arm64-v8a']}
+        provenance['files'] = [row for row in provenance['files'] if not row['path'].startswith('lib/x86_64/')]
+        entries[name] = json.dumps(provenance).encode()
+        self.write('android/app/src/main/' + name, entries[name])
+        for release in [False, True]:
+            self.assertEqual(verifier.verify(self.package(entries), release=release, runtime_profile='cloud')['runtime'], 'PACKAGED')
 
     def test_cloud_apk_rejects_local_inference_and_models(self):
         original = dict(self.cloud_entries())

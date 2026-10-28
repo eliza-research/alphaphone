@@ -1,3 +1,4 @@
+import {selectedAndroidAbis, abiArguments} from './android-abis.mjs';
 /**
  * On-device voice host record (android/voice-host/qualified-voice-host.json, schema 2).
  *
@@ -100,21 +101,22 @@ export function readVoiceHost(root) {
  * developer lane (`allowAbsentRuntime`); present outputs must be complete and byte-exact against
  * both the shared build record (scripts/paradee-runtime.mjs) and this record. Never downloads.
  */
-export function verifyVoiceHost(root, {allowAbsentRuntime = false, runtime = verifyParadeeRuntime} = {}) {
+export function verifyVoiceHost(root, {allowAbsentRuntime = false, runtime = verifyParadeeRuntime, abis} = {}) {
+  const selected = selectedAndroidAbis(abis);
   const native = path.join(root, PARADEE_NATIVE);
   if (!fs.existsSync(native)) {
     if (allowAbsentRuntime) return {status: 'not-packaged', qualified: false};
     throw Error(`On-device voice outputs are not staged in ${PARADEE_NATIVE}; run node scripts/android-stage-voice-models.mjs`);
   }
   const record = readVoiceHost(root);
-  runtime(root);
+  runtime(root, {abis: selected});
   const build = JSON.parse(fs.readFileSync(path.join(native, 'build-record.json'), 'utf8'));
   const recorded = new Map(build.files.map(row => [row.path, row]));
   for (const model of record.models) {
     const row = recorded.get(`${VOICE_BUNDLE_ASSETS}/${model.path}`);
     if (!row || row.sha256 !== model.sha256 || row.bytes !== model.bytes) throw Error(`Staged ${model.path} is not the bytes recorded in ${VOICE_HOST_MANIFEST}`);
   }
-  for (const abi of record.abis) {
+  for (const abi of record.abis.filter(row => selected.includes(row.abi))) {
     const engine = abi.libraries.find(lib => lib.name === 'libelizainference.so');
     const row = recorded.get(`jniLibs/${abi.abi}/libelizainference.so`);
     if (!row || row.sha256 !== engine.sha256 || row.bytes !== engine.bytes) throw Error(`Staged ${abi.abi} engine is not the library recorded in ${VOICE_HOST_MANIFEST}`);
@@ -123,9 +125,9 @@ export function verifyVoiceHost(root, {allowAbsentRuntime = false, runtime = ver
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const args = process.argv.slice(2);
+  const {rest: args, abis} = abiArguments(process.argv.slice(2));
   if (args[0] !== '--verify' || args.slice(1).some(arg => arg !== '--allow-absent')) throw Error('Usage: node scripts/voice-host.mjs --verify [--allow-absent]');
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   readVoiceHost(root);
-  console.log(JSON.stringify(verifyVoiceHost(root, {allowAbsentRuntime: args.includes('--allow-absent')})));
+  console.log(JSON.stringify(verifyVoiceHost(root, {allowAbsentRuntime: args.includes('--allow-absent'), abis})));
 }

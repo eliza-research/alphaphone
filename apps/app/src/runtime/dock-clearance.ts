@@ -14,8 +14,8 @@
  * belongs inside their scroll content rather than clipping the outer viewport.
  *
  * Two lengths are published. `--alpha-dock-clearance` is everything the dock
- * covers now. `--alpha-dock-rest` is the bar alone. Home uses their difference
- * to extend its scroll content when a status appears, preserving app positions.
+ * covers now. `--alpha-dock-rest` is the bar alone. Measurements use layout
+ * coordinates: entrance animations and chat dragging must not resize Home.
  *
  * While no dock is on screen (the shade, a voice session, the lock screen) the last footprint is
  * kept, so Home does not jump when the dock returns.
@@ -45,9 +45,17 @@ export function installDockClearance(): () => void {
       watched = docks;
     }
     if (!docks.length) return;
-    // The canvas is drawn scaled to the screen (--phone-scale); lengths in CSS are canvas pixels.
-    const frameBox = screen.getBoundingClientRect(), scale = frameBox.width / screen.offsetWidth || 1;
-    const above = (element: Element) => (frameBox.bottom - element.getBoundingClientRect().top) / scale;
+    // offsetTop stays in canvas pixels and ignores the dock's transient transform.
+    // A bounding rect would reserve less room during its slide-in, then move
+    // Home's icons again when the animation ends.
+    const above = (element: Element) => {
+      let top = 0, node: HTMLElement | null = element as HTMLElement;
+      while (node && node !== screen) {
+        top += node.offsetTop;
+        node = node.offsetParent as HTMLElement | null;
+      }
+      return node === screen ? screen.clientHeight - top : 0;
+    };
     const clearance = Math.ceil(Math.max(...docks.map(above)));
     // The bar is the composer's last row; the pill is its own bar.
     const rest = Math.ceil(Math.max(...docks.map(dock => above(dock.querySelector('[data-alpha-input-bar]') ?? dock))));

@@ -139,7 +139,7 @@ export function installLocalSpeechPlayback(Component: Shell) {
   }
   const refresh = (shell: Shell) => { if (shell.live !== false) shell.setState({ localSpeechRevision: Date.now() }); };
   const stop = (shell: Shell) => { const old = states.get(shell); old?.controller?.abort(); if(old?.pending)retainSpeechRetirement(old.pending);states.delete(shell); if (cancelOwner === shell) { cancelCurrent = undefined; cancelOwner = undefined; } };
-  async function listen(shell: Shell, id: string, text: string, onStarted?:()=>void) {
+  async function listen(shell: Shell, id: string, text: string, onStarted?:()=>void, spokenText = text) {
     const old = states.get(shell);
     if (old?.id === id && old.controller) { stop(shell); refresh(shell); return; }
     const selection=()=>JSON.stringify([connectionController.getSnapshot().session,connectionController.getSnapshot().history?.conversationId,connectionController.getCloudEnvironment(),connectionController.getCloudClient()?.sessionId,connectionController.getCloudClient()?.credentialId]);
@@ -166,7 +166,7 @@ export function installLocalSpeechPlayback(Component: Shell) {
       if (!current()) return;
       state.message = 'Reading aloud…'; refresh(shell);
       if(!current())return;
-      const pending=state.pending=(cloud ? createCloudVoice(directReadAloud?'direct':'cloud').speak(text, controller.signal, onStarted) : speakOnDevice(text, controller.signal, onStarted));await pending;
+      const pending=state.pending=(cloud ? createCloudVoice(directReadAloud?'direct':'cloud').speak(spokenText, controller.signal, onStarted) : speakOnDevice(spokenText, controller.signal, onStarted));await pending;
       if (current()) { state.controller = undefined; state.message = 'Finished reading.'; refresh(shell); }
     } catch (error) {
       if((error as {code?:string})?.code==='speech-cleanup-unconfirmed'&&state.pending)retainSpeechRetirement(state.pending);
@@ -210,12 +210,13 @@ export function installLocalSpeechPlayback(Component: Shell) {
     const directReadAloud=developmentCartesiaVoiceEnabled;
     const cloud = selectVoiceRoute() === 'cloud'||directReadAloud;
     const available = cloud || createOnDeviceVoice() !== null;
-    out.msgs = (out.msgs || []).map((message: Shell, index: number) => {
-      const entry = source[index];
+    out.msgs = (out.msgs || []).map((message: Shell) => {
+      const entry = source.find((entry: Shell) => entry.id === message.id);
       if (!entry || entry.streaming || entry.interrupted || !entry.text || entry.text !== message.text || typeof entry.id !== 'string') return message;
+      const visibleText = typeof message.displayText === 'string' ? message.displayText : entry.text;
       const selected = state?.id === entry.id;
       const menu = menus.get(this), opened = menu?.id === entry.id;
-      return { ...message, messageActionsOpen: opened, messageActionsRole: 'button', messageActionsTabIndex: 0, messageActionsLabel: 'Message actions: ' + entry.text, messageActionsPopup: 'menu',
+      return { ...message, messageActionsOpen: opened, messageActionsRole: 'button', messageActionsTabIndex: 0, messageActionsLabel: 'Message actions: ' + visibleText, messageActionsPopup: 'menu',
         openMessageActions: (event: MouseEvent) => { if(suppressedClicks.get(this)===entry.id){suppressedClicks.delete(this);event.preventDefault();event.stopPropagation();return;}if (window.getSelection()?.isCollapsed!==false) openMenu(this, entry.id, entry.text, event); },
         messageActionsKey: (event: KeyboardEvent) => { if (event.key === 'Enter' || event.key === ' ') openMenu(this, entry.id, entry.text, event); },
         messageActionsContext: (event: MouseEvent) => {if(window.getSelection()?.isCollapsed===false)return;suppressedClicks.set(this,entry.id);openMenu(this, entry.id, entry.text, event);},
@@ -240,7 +241,7 @@ export function installLocalSpeechPlayback(Component: Shell) {
         closeMessageActions: (event: MouseEvent) => closeMenu(this, event.detail===0), menuKey: (event: KeyboardEvent) => menuKey(this, event),
         copyMessage: async () => {
           if (!menu || menus.get(this) !== menu || menu.binding !== JSON.stringify(connectionController.getSnapshot().session)) return;
-          try { await navigator.clipboard.writeText(entry.text); if (menus.get(this) === menu) { menu.notice = ''; menu.announcement = 'Copied.'; menu.copied=true; refresh(this);setTimeout(()=>{if(menus.get(this)===menu){menu.copied=false;refresh(this);}},1400); } }
+          try { await navigator.clipboard.writeText(visibleText); if (menus.get(this) === menu) { menu.notice = ''; menu.announcement = 'Copied.'; menu.copied=true; refresh(this);setTimeout(()=>{if(menus.get(this)===menu){menu.copied=false;refresh(this);}},1400); } }
           catch { if (menus.get(this) === menu) { menu.copied=false; menu.announcement = ''; menu.notice = 'Copy unavailable. Select the message text to copy it.'; refresh(this); } }
         },
         copyMessageLabel: opened&&menu?.copied?'Copied!':'Copy',
@@ -249,7 +250,7 @@ export function installLocalSpeechPlayback(Component: Shell) {
         messageActionsAnnouncement: opened && menu ? menu.announcement || '' : '',
         localSpeechAvailable: available && entry.from === 'agent', localSpeechLabel: 'Read aloud', localSpeechControlLabel:selected&&state?.controller?'Stop reading':'Read aloud',localSpeechIcon:selected&&state?.controller?out.ic.stop:out.ic.wave,localSpeechActive:!!(selected&&state?.controller),
         localSpeechMessage: selected&&!state?.controller&&state?.message!=='Finished reading.' ? state?.message : '',
-        localSpeech: () => { void listen(this, entry.id, entry.text); }
+        localSpeech: () => { void listen(this, entry.id, entry.text, undefined, visibleText); }
       };
     });
     return out;

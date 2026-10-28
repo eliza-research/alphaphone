@@ -1,6 +1,10 @@
+import {createDeviceActionExecution} from '../../../../.eliza/client-features/packages/contracts/src/device-action-execution.ts';
+import {browserNavigationSummary} from './action-message-presentation';
+import {namedCalendarReadTarget} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/client/named-read.ts';
+import {foregroundReviewOperationAvailable} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/foreground-review-contract.ts';
 import {CAMERA_CAPTURE_CAPABILITY,isCameraCapture,validateCameraCapture,validateCameraCaptureResult,type CameraCaptureOperation,type CameraCaptureResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/camera-contract.ts';
 import {isSmsSend,validateSmsSend,validateSmsResult,smsAgentHash,smsDeviceStatus,SMS_SEND_CAPABILITY,type SmsSendOperation,type SmsSendResult} from './sms-agent-contract.ts';
-import {isNativeNotesQuery,validateNativeNotesQuery,NOTES_QUERY_CAPABILITY,validateNativeNotesReadReplyOrigin,validateNativeNotesReadReplyHint,validateNativeNotesReadReply,type NativeNotesReadReplyOrigin,type NativeNotesReadReplyHint,type NativeNotesReadReply,type NativeNotesQueryOperation} from '../../../../.eliza/client-features/packages/contracts/src/native-notes-query.ts';
+import {isOriginalDeviceReadOperationType,isNativeNotesQuery,validateNativeNotesQuery,NOTES_QUERY_CAPABILITY,validateNativeNotesReadReplyOrigin,validateNativeNotesReadReplyHint,validateNativeNotesReadReply,type NativeNotesReadReplyOrigin,type NativeNotesReadReplyHint,type NativeNotesReadReply,type NativeNotesQueryOperation} from '../../../../.eliza/client-features/packages/contracts/src/native-notes-query.ts';
 import {validateNotesQueryResult,type NotesQueryResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/notes-query-result.ts';
 import {presentDeviceRecordOperation} from './device-record-presentation';
 import {formatDeviceRecordDateTime} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/device-record-presentation.ts';
@@ -11,11 +15,11 @@ import { validateMapsSelectedObject } from '../maps/agent-context';
 import { isLibraryOperation, validateLibraryOperation, validateLibraryResult, describeLibraryOperation, PHOTO_LIBRARY_CAPABILITY, type LibraryAgentOperation, type LibraryAgentResult } from './photo-library';
 import {type ReminderOperation,type ReminderResult,isReminderOperation,reminderFields,validateReminderOperation,validateReminderResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/reminder-contract.ts';
 import {type NotesOperation,type NotesResult,type NotesTarget,isNotesOperation,notesFields,validateNotesOperation,validateNotesResult} from './notes-contract';
-import {type CalendarOperation,type CalendarResult,type CalendarRecordResult,calendarCapabilityAvailable,calendarFields,isCalendarOperation,validateCalendarOperation,validateCalendarResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts';
+import {CALENDAR_AGENDA_CAPABILITY,calendarSource,type CalendarSource,type CalendarOperation,type CalendarResult,type CalendarRecordResult,calendarCapabilityAvailable,calendarFields,isCalendarOperation,validateCalendarOperation,validateCalendarResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts';
 import {type DeviceReviewOperation,type CalendarAvailabilityResult,type NotesSearchResult,type NamedTargetResult,type NamedTargetValidators,deviceReviewCapabilityAvailable,isCalendarAvailabilityOperation,isNotesSearchOperation,validateCalendarAvailabilityOperation,validateCalendarAvailabilityResult,validateNotesSearchOperation,validateNotesSearchResult,validateNamedTargetOperation,validateNamedTargetResult} from '../../../../.eliza/client-features/packages/contracts/src/device-reviews.ts';
 import { isMvpView } from "../prototype/mvp-features";
 import { parseWorkflowBinding, parseWorkflowRead, validateWorkflowResult, assertWorkflowOperation, type WorkflowReadOperation, type WorkflowReadResult, type WorkflowDeviceBinding, type WorkflowPhoneReview } from './workflow-device-contract';
-import type { ActionProposal, ContextEnvelope, OperationReceipt, VerifiedSession } from './alpha-client';
+import type { AlphaClient, ActionProposal, ContextEnvelope, OperationReceipt, VerifiedSession } from './alpha-client';
 
 export type WorkflowPresentationOperation = {type:'post_notification';title:string;body:string}|{type:'speak_text';text:string};
 export type DeviceOperation = CameraCaptureOperation | SmsSendOperation | ReminderCreateOperation | WorkflowPresentationOperation | ClockOperation | MapsOperation | LibraryAgentOperation | ReminderOperation | NotesOperation | NativeNotesQueryOperation | CalendarOperation | WorkflowReadOperation | { type: 'create_note'; title: string; body: string }
@@ -50,7 +54,7 @@ export function validateForegroundReviewResult(operation:ForegroundReviewOperati
 export type ReviewableDeviceOperation = DeviceOperation | ForegroundReviewOperation;
 /** Runs the phone's local review (calendar choice, note choice, record disambiguation)
  * and any resulting exact-target effect. Only an owner-confirmed result is returned. */
-export type ForegroundReviewExecutor = (operation: ForegroundReviewOperation, operationId: string, context: ContextEnvelope, signal: AbortSignal, bindingHash: string, journalIdentity: DeviceJournalIdentity) => Promise<{ status: 'succeeded' | 'failed' | 'unknown'; summary: string; foregroundResult?: ForegroundReviewResult }>;
+export type ForegroundReviewExecutor = (operation: ForegroundReviewOperation, operationId: string, context: ContextEnvelope, signal: AbortSignal, bindingHash: string, journalIdentity: DeviceJournalIdentity, capabilities: readonly string[]) => Promise<{ status: 'succeeded' | 'failed' | 'unknown'; summary: string; foregroundResult?: ForegroundReviewResult }>;
 export interface DeviceCredential { installationId: string; key: string; enrollmentId?: string; capabilities?: readonly string[] }
 export interface JournalEntry {
   scope: string; proposalId: string; operationId: string; operationHash: string;
@@ -69,9 +73,9 @@ export interface ActionJournal {
 }
 export interface WorkflowNoticeRoute {scope:string;origin:string;ownerId:string;agentId:string;workflowId:string;runId:string;versionId:string}
 export interface DeviceJournalIdentity {scope:string;proposalId:string}
-export type DeviceExecutor = (operation: DeviceOperation, operationId: string, context: ContextEnvelope, signal: AbortSignal, bindingHash: string, workflowRoute?:WorkflowNoticeRoute,journalIdentity?:DeviceJournalIdentity) => Promise<{ status: 'succeeded' | 'failed' | 'unknown'; summary: string; readResult?: WorkflowReadResult; calendarResult?:CalendarResult; notesResult?:NotesResult|NotesQueryResult; reminderResult?:ReminderResult|ReminderCreateResult; mapsResult?:MapsResult;clockResult?:ClockHandoffResult;photoLibraryResult?:LibraryAgentResult;cameraResult?:CameraCaptureResult;smsResult?:SmsSendResult }>;
+export type DeviceExecutor = (operation: DeviceOperation, operationId: string, context: ContextEnvelope, signal: AbortSignal, bindingHash: string, workflowRoute?:WorkflowNoticeRoute,journalIdentity?:DeviceJournalIdentity,agendaSource?:CalendarSource) => Promise<{ status: 'succeeded' | 'failed' | 'unknown'; summary: string; readResult?: WorkflowReadResult; calendarResult?:CalendarResult; notesResult?:NotesResult|NotesQueryResult; reminderResult?:ReminderResult|ReminderCreateResult; mapsResult?:MapsResult;clockResult?:ClockHandoffResult;photoLibraryResult?:LibraryAgentResult;cameraResult?:CameraCaptureResult;smsResult?:SmsSendResult;/** Local Browser presentation only; never persisted or uploaded. */presentBrowser?:()=>void }>;
 export type DeviceRecovery = (operation:DeviceOperation,operationId:string,bindingHash:string,signal:AbortSignal)=>Promise<{status:string;reminderResult?:ReminderResult|ReminderCreateResult;smsResult?:SmsSendResult}>;
-interface Proposal { requestMessageId?: string; id: string; digest: string; state: string; expiresAt: number; operation: ReviewableDeviceOperation; workflow?:WorkflowDeviceBinding; attemptId?: string;providerIdempotencyKey?:string;readReplyOrigin?:NativeNotesReadReplyOrigin }
+interface Proposal { calendarAgendaSource?:CalendarSource; providerReceipt?:unknown; requestMessageId?: string; id: string; digest: string; state: string; expiresAt: number; operation: ReviewableDeviceOperation; workflow?:WorkflowDeviceBinding; attemptId?: string;providerIdempotencyKey?:string;readReplyOrigin?:NativeNotesReadReplyOrigin }
 const views = new Set(['home','notes','reminders','browser','calendar','files','photos','camera','maps','inbox','settings','workflows']);
 function object(value: unknown): Record<string, any> { if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid device action response'); return value as Record<string, any>; }
 function text(value: unknown, max = 128): string { if (typeof value !== 'string' || !value.trim() || value.length > max || value.includes('\0')) throw new Error('Invalid device action field'); return value; }
@@ -133,6 +137,7 @@ function assertForegroundContext(operation:ForegroundReviewOperation,context:Con
  if(operation.type==='calendar_availability'){if(!['home','calendar'].includes(context.view))throw new ContextNotice('Open Home or Calendar to review this availability check.');
   // All-day events block the owner's local days, so the check must use this phone's time zone.
   if(operation.timeZone!==context.timeZone)throw new ContextNotice('This availability check used a different time zone. Ask again from this phone.');return;}
+ if(operation.type==='calendar_named'&&operation.action==='read'){if(!namedCalendarReadTarget(context))throw new ContextNotice('Choose the matching event in Calendar before sharing it.');return;}
  if(operation.type==='notes_search'){if(!['home','notes'].includes(context.view))throw new ContextNotice('Open Home or Notes to review this Notes search.');return;}
  // Name-targeted edits are requested from Home and resolved by a local choice, never by a selection elsewhere.
  if(context.view!=='home')throw new ContextNotice('Return to Home to choose the record for this action.');
@@ -143,6 +148,7 @@ export class ContextNotice extends Error { override readonly name='ContextNotice
 function assertNotesContext(operation:NotesOperation,context:ContextEnvelope){const s=context.selectedObject,t=operation.target;if(context.sensitive||context.view!=='notes'||!s||s.kind!=='note'||s.id!==t.noteId||s.revision!==t.revision||s.accountId!==t.sourceId||s.sourceRevision!==t.sourceRevision)throw Error('Selected note context changed');}
 /** Every screen rule for a proposal; throws when the current screen cannot review it. */
 function assertProposalContext(operation:ReviewableDeviceOperation,context:ContextEnvelope){
+ if(operation.type==='read_calendar_range'&&(context.sensitive||typeof document!=='undefined'&&document.hidden))throw new ContextNotice('Unlock this foreground Calendar read before approving it.');
  if(isCameraCapture(operation)&&(context.sensitive||context.view!=='camera'))throw new ContextNotice(CAMERA_CONTEXT_NOTICE);
  if(isForegroundReview(operation))assertForegroundContext(operation,context);
  if(isSmsSend(operation)&&(context.sensitive||context.view!=='messages'||context.selectedObject?.kind!=='sms-subscription'||context.selectedObject.id!==String(operation.subscriptionId)))throw new ContextNotice('Open Messages and select the reviewed SIM before approving SMS.');
@@ -175,6 +181,7 @@ function describeForegroundReview(op:ForegroundReviewOperation,timeZone?:string)
   const zone=timeZone??op.timeZone;
   return {title:'Check availability',description:`Check whether you are free from ${formatDeviceRecordDateTime(op.start,zone)} to ${formatDeviceRecordDateTime(op.end,zone)} (${zone}).\nYou choose which calendars this phone reads. Only busy times are shared with the agent, not event titles or details. Events marked free are ignored; all-day events count as busy.`};
  }
+ if(op.type==='calendar_named'&&op.action==='read')return {title:'Share matching event',description:`Choose the event named ${quoted(op.name)} in Calendar, then review the details to share. The edit needs a separate confirmation.`};
  if(op.type==='notes_search')return op.query.kind==='content'
   ?{title:'Search notes',description:`Search your notes for ${quoted(op.query.text)} on this phone.\nChoose and review one note before its text is shared. Other notes stay on this phone.`}
   :{title:'List note titles',description:`List up to ${op.query.limit} note titles on this phone.\nReview the exact titles before they are shared. Note text is not shared.`};
@@ -189,6 +196,31 @@ function describeForegroundReview(op:ForegroundReviewOperation,timeZone?:string)
  }
  return {title:`${verb} ${noun} by name`,description:`Find ${quoted(op.name)} in ${where} on this phone. You choose the exact ${noun}, then review this ${verb.toLowerCase()} again before anything changes.${change}`};
 }
+const publishedDeviceReceipts=new WeakSet<OperationReceipt>();
+type RefreshClient=Pick<AlphaClient,'getState'|'subscribe'>;
+const pendingDeviceChanges=new WeakMap<RefreshClient,{entries:Map<string,{receipt:OperationReceipt;session:VerifiedSession}>;unsubscribe:()=>void;flushing:boolean;flush:()=>void}>();
+/** Queue only delivered receipts; publish when the same owner session is idle. */
+export function publishCommittedDeviceChanges(receipt:OperationReceipt,client:RefreshClient,session:VerifiedSession){
+ if(receipt.status!=='succeeded'||!receipt.committedChanges?.length||publishedDeviceReceipts.has(receipt))return;
+ let pending=pendingDeviceChanges.get(client);
+ if(!pending){
+  pending={entries:new Map(),unsubscribe:()=>{},flushing:false,flush:()=>{}};pendingDeviceChanges.set(client,pending);
+  const queue=pending;
+  const flush=()=>{
+   if(queue.flushing)return;queue.flushing=true;
+   try{for(const [id,item]of queue.entries){
+    const state=client.getState();
+    if(state.connection!=='ready'||JSON.stringify(state.session)!==JSON.stringify(item.session)){queue.entries.delete(id);continue;}
+    if(state.pending)break;
+    queue.entries.delete(id);publishedDeviceReceipts.add(item.receipt);
+    for(const view of new Set(item.receipt.committedChanges))if(['calendar','notes','reminders'].includes(view)&&typeof window!=='undefined')window.dispatchEvent(new CustomEvent('alpha:'+view+'-committed'));
+   }}finally{queue.flushing=false;if(!queue.entries.size){queue.unsubscribe();pendingDeviceChanges.delete(client);}}
+  };
+  queue.flush=flush;queue.unsubscribe=client.subscribe(flush);
+  queue.entries.set(receipt.proposalId,{receipt,session:{...session}});flush();return;
+ }
+ pending.entries.set(receipt.proposalId,{receipt,session:{...session}});pending.flush();
+}
 export interface PendingReviewItem {
   /** Reviewable from the current screen; null when only a notice can be shown. */
   proposal: ActionProposal | null;
@@ -201,6 +233,7 @@ export async function actionScope(value: string): Promise<string> {
 /** Authenticated structured actions only. Neither reply prose nor restored history
  * can enter this boundary. A durable journal gates every device effect. */
 export class DeviceActions {
+  get supportsCalendarAgenda(){return this.credential.capabilities?.includes(CALENDAR_AGENDA_CAPABILITY)===true;}
   private proposals = new Map<string, { proposal: Proposal; context: ContextEnvelope; workflowReview?:WorkflowPhoneReview }>();
   private readReplies = new Map<string,{digest:string;origin:NativeNotesReadReplyOrigin;hint?:NativeNotesReadReplyHint;consumed?:boolean}>();
   private busy = false;
@@ -218,13 +251,15 @@ export class DeviceActions {
     if(isCalendarOperation(op)&&(op.type==='calendar_create_local'||op.type==='calendar_read_next')&&!calendarCapabilityAvailable(op.type,this.credential.capabilities))throw Error('This agent has not negotiated native Calendar creation or discovery. Reconnect to a compatible agent.');
     if(isNativeNotesQuery(op)&&!this.credential.capabilities?.includes(NOTES_QUERY_CAPABILITY))throw Error('Notes discovery was not negotiated with this agent');
     if(isLibraryOperation(op)&&!this.credential.capabilities?.includes(PHOTO_LIBRARY_CAPABILITY))throw Error('Device library access was not negotiated with this agent');
-    if(isForegroundReview(op)&&(!deviceReviewCapabilityAvailable(op.type,this.credential.capabilities)||!this.executeForeground))throw Error('This action was not negotiated with this agent. Reconnect to a compatible agent.');
+    if(isForegroundReview(op)&&(!foregroundReviewOperationAvailable(op,this.credential.capabilities)||!this.executeForeground))throw Error('This action was not negotiated with this agent. Reconnect to a compatible agent.');
     if(isReminderCreate(op)&&!this.reminderCreate)throw Error('This agent does not support reviewed reminder creation. Reconnect to a compatible agent.');
     if(isReminderOperation(op)&&(op.target.timingVersion===2||op.type==='reminder_update'&&op.fields.schedule?.alertMinutes!==undefined)&&!this.reminderV2)throw Error('This agent does not support this reminder timing. Reconnect to a compatible agent.');
-    if((['read_selected_notes','read_calendar_range','post_notification','speak_text'].includes(op.type))&&!workflow)throw new Error('Workflow binding required for phone reads');
+    const agendaSource=payload.calendarAgendaSource===undefined?undefined:calendarSource(payload.calendarAgendaSource);
+    if(agendaSource&&(op.type!=='read_calendar_range'||workflow||!payload.requestMessageId||op.calendarIds.length!==1||op.calendarIds[0]!==agendaSource.sourceId||!this.credential.capabilities?.includes(CALENDAR_AGENDA_CAPABILITY)))throw Error('Standalone Calendar read was not negotiated or bound');
+    if((['read_selected_notes','read_calendar_range','post_notification','speak_text'].includes(op.type))&&!workflow&&!(op.type==='read_calendar_range'&&agendaSource))throw new Error('Workflow binding required for phone reads');
     const readReplyOrigin=p.readReplyOrigin===undefined?undefined:validateNativeNotesReadReplyOrigin(p.readReplyOrigin);
-    if(readReplyOrigin&&(workflow||!isNativeNotesQuery(op)&&op.type!=='notes_read_selected'))throw Error('Unexpected original Notes reply');
-    return { ...(payload.requestMessageId===undefined?{}:{requestMessageId:id(payload.requestMessageId)}), id: id(p.id), digest, state: text(p.state, 32), expiresAt, operation:op,...(workflow?{workflow}:{}), ...(p.execution?.providerIdempotencyKey ? {providerIdempotencyKey:id(p.execution.providerIdempotencyKey)}:{}), ...(p.execution?.attemptId ? { attemptId: id(p.execution.attemptId) } : {}),...(readReplyOrigin?{readReplyOrigin}:{}) };
+    if(readReplyOrigin&&(workflow||!isOriginalDeviceReadOperationType(op.type)))throw Error('Unexpected original Notes reply');
+    return { ...(agendaSource?{calendarAgendaSource:agendaSource}:{}),providerReceipt:p.execution?.providerReceipt, ...(payload.requestMessageId===undefined?{}:{requestMessageId:id(payload.requestMessageId)}), id: id(p.id), digest, state: text(p.state, 32), expiresAt, operation:op,...(workflow?{workflow}:{}), ...(p.execution?.providerIdempotencyKey ? {providerIdempotencyKey:id(p.execution.providerIdempotencyKey)}:{}), ...(p.execution?.attemptId ? { attemptId: id(p.execution.attemptId) } : {}),...(readReplyOrigin?{readReplyOrigin}:{}) };
   }
   /** Each proposal is parsed on its own: one invalid proposal never hides valid siblings. */
   private async listing(signal: AbortSignal): Promise<{ valid: Proposal[]; invalid: { pending: boolean; error: Error }[] }> {
@@ -247,13 +282,14 @@ export class DeviceActions {
   }
   private card(proposal: Proposal, context: ContextEnvelope): ActionProposal {
     const op = proposal.operation;
-    if (isForegroundReview(op)) return { id: proposal.id, ...describeForegroundReview(op, context.timeZone), expiresAt: proposal.expiresAt, contextRevision: context.revision };
+    const notesDestination=(op.type==='notes_delete'||op.type==='notes_update')&&!context.sensitive&&['home','notes'].includes(context.view)&&proposalContextNotice(op,context)?{reviewDestination:'notes' as const,reviewNoteTarget:structuredClone(op.target)}:{};
+    if (isForegroundReview(op)) return { ...(op.type==='calendar_named'&&op.action==='read'&&!context.sensitive&&['home','calendar'].includes(context.view)&&!namedCalendarReadTarget(context)?{reviewDestination:'calendar' as const}:{}), id: proposal.id, ...describeForegroundReview(op, context.timeZone), expiresAt: proposal.expiresAt, contextRevision: context.revision,...((op.type==='calendar_availability'||op.type==='calendar_named'&&op.action==='read'&&!!namedCalendarReadTarget(context))&&proposal.readReplyOrigin?{readReply:{origin:structuredClone(proposal.readReplyOrigin),digest:proposal.digest}}:{}) };
     if(isSmsSend(op))return {id:proposal.id,title:'Review SMS',description:`To: ${op.recipients.join(', ')}\nSIM subscription: ${op.subscriptionId}\n\n${op.body}\n\nConfirm again in Android. Submission does not prove delivery.`,expiresAt:proposal.expiresAt,contextRevision:context.revision};
     if(isCameraCapture(op))return {id:proposal.id,title:'Take photo',description:'Use the current camera and save one photo in Photos. The photo stays on this device.',expiresAt:proposal.expiresAt,contextRevision:context.revision};
     if (isLibraryOperation(op)) return { id: proposal.id, ...describeLibraryOperation(op), expiresAt: proposal.expiresAt, contextRevision: context.revision };
     const record = isReminderCreate(op)||isReminderOperation(op)||isNotesOperation(op)||isCalendarOperation(op)||op.type==='create_note'||op.type==='create_reminder'?presentDeviceRecordOperation(op,context.timeZone):undefined;
-    const description = isNativeNotesQuery(op)?(op.query.kind==='title'?`Look for the title “${op.query.text}” locally. Choose and review one note before sharing its text.`:`Find the latest ${op.query.by} note locally. Unknown dates or ties require your choice; only the chosen note is shared.`):record?.description ?? (isClockOperation(op) ? describeClockHandoff(op) : isMapsOperation(op) ? 'Send the exact selected place location or route endpoints, mode and distance to the connected agent. This shares location information. It does not start navigation.' : op.type === 'open_view' ? `Open ${op.view} on this phone` : op.type==='browser_navigate'?`Open browser destination ${op.url}`:'Workflow phone read');
-    return { id: proposal.id, title: record?.title ?? op.type.replaceAll('_', ' '), description, expiresAt: proposal.expiresAt, contextRevision: context.revision,...(isNativeNotesQuery(op)&&!['home','notes'].includes(context.view)?{reviewDestination:'home' as const}:{}),...(isNativeNotesQuery(op)||op.type==='notes_read_selected'?{privateNotesRead:true as const}:{}),...(proposal.readReplyOrigin?{readReply:{origin:structuredClone(proposal.readReplyOrigin),digest:proposal.digest}}:{}) };
+    const description = op.type==='read_calendar_range'&&!proposal.workflow?`Share this app Calendar from ${formatDeviceRecordDateTime(op.start,op.timeZone)} to ${formatDeviceRecordDateTime(op.end,op.timeZone)} (end not included), in ${op.timeZone}. Only this range is shared; other calendars, descriptions, locations and guests stay private.`:isNativeNotesQuery(op)?(op.query.kind==='title'?`Look for the title “${op.query.text}” locally. Choose and review one note before sharing its text.`:`Find the latest ${op.query.by} note locally. Unknown dates or ties require your choice; only the chosen note is shared.`):record?.description ?? (isClockOperation(op) ? describeClockHandoff(op) : isMapsOperation(op) ? 'Send the exact selected place location or route endpoints, mode and distance to the connected agent. This shares location information. It does not start navigation.' : op.type === 'open_view' ? `Open ${op.view} on this phone` : op.type==='browser_navigate'?`Open browser destination ${op.url}`:'Workflow phone read');
+    return { id: proposal.id, title:op.type==='read_calendar_range'&&!proposal.workflow?'Share Calendar agenda':record?.title ?? op.type.replaceAll('_', ' '), description, expiresAt: proposal.expiresAt, contextRevision: context.revision,...notesDestination,...(isNativeNotesQuery(op)&&!['home','notes'].includes(context.view)?{reviewDestination:'home' as const}:{}),...(isNativeNotesQuery(op)||op.type==='notes_read_selected'?{privateNotesRead:true as const}:{}),...(proposal.readReplyOrigin?{readReply:{origin:structuredClone(proposal.readReplyOrigin),digest:proposal.digest}}:{}) };
   }
   private async review(context: ContextEnvelope, signal: AbortSignal): Promise<{ items: PendingReviewItem[]; failures: Error[] }> {
     const { valid, invalid } = await this.listing(signal);
@@ -261,7 +297,7 @@ export class DeviceActions {
     const items: PendingReviewItem[] = [];
     for (const proposal of valid) {
       if (proposal.workflow || proposal.state !== 'pending' || proposal.expiresAt <= Date.now()) continue;
-      const card = this.card(proposal, context), notice = isNativeNotesQuery(proposal.operation)&&!context.sensitive ? undefined : proposalContextNotice(proposal.operation, context);
+      const card = this.card(proposal, context), notice = (isNativeNotesQuery(proposal.operation)&&!context.sensitive)||card.reviewDestination==='notes'||card.reviewDestination==='calendar' ? undefined : proposalContextNotice(proposal.operation, context);
       if (notice) { items.push({ proposal: null, notice: `${card.title}: ${notice}` }); continue; }
       this.proposals.set(proposal.id, { proposal, context: structuredClone(context) });
       if(proposal.readReplyOrigin&&!this.readReplies.has(proposal.id))this.readReplies.set(proposal.id,{digest:proposal.digest,origin:proposal.readReplyOrigin});
@@ -287,14 +323,16 @@ export class DeviceActions {
    * reads and Calendar/reminder writes retain their recorded separate review policy.
    * Recovery, workflows and old hosts remain review-only; ordinary OS permissions still apply. */
   async performRequested(messageId:string,context:ContextEnvelope,signal:AbortSignal,allowed:()=>Promise<boolean>,operationType?:ReviewableDeviceOperation['type']):Promise<OperationReceipt[]> {
-    const directTypes:readonly ReviewableDeviceOperation['type'][]=['create_note','open_view','camera_capture_photo','photo_library_select'];
+    const directTypes:readonly ReviewableDeviceOperation['type'][]=['create_note','open_view','browser_navigate','camera_capture_photo','photo_library_select'];
     const results:OperationReceipt[]=[];
     for(const [id,entry] of [...this.proposals]) {
       if(results.length>=4||!directTypes.includes(entry.proposal.operation.type)||entry.proposal.workflow||entry.proposal.requestMessageId!==messageId||(operationType!==undefined&&entry.proposal.operation.type!==operationType))continue;
+      // A navigation-only card is not an executable read/write, even in direct-request mode.
+      if(this.card(entry.proposal,context).reviewDestination)continue;
       if(!await allowed())break;
       signal.throwIfAborted();
       const result=await this.approve(id,context,signal);results.push(result);
-      if(result.status!=='succeeded')break;
+      if(result.status!=='succeeded'||signal.aborted)break;
     }
     return results;
   }
@@ -326,23 +364,26 @@ export class DeviceActions {
     if(isNativeNotesQuery(reviewed.proposal.operation))assertNotesQueryContext(context);
     this.busy = true; this.proposals.delete(proposalId);
     const p = reviewed.proposal, operationId = isSmsSend(p.operation)?p.id:crypto.randomUUID();
+    let execution:ReturnType<typeof createDeviceActionExecution>|undefined;
     try {
+      execution=createDeviceActionExecution({scope:this.scope,proposalId,operationId},signal,()=>assertProposalContext(p.operation,context));
       if(p.workflow){if(!reviewed.workflowReview)throw new Error('Workflow step must be reviewed from its execution');assertWorkflowOperation(reviewed.workflowReview,p.workflow,{installationId:this.credential.installationId,enrollmentId:this.credential.enrollmentId!},p.operation);}
-      signal.throwIfAborted();
-      assertProposalContext(p.operation,context);
+      execution.assertPrepared();
       const reserved = await this.journal.reserve({ scope: this.scope, proposalId, operationId, operationHash: await actionScope(JSON.stringify(p.operation)), record: { digest: p.digest, operation: p.operation, context, expiresAt: p.expiresAt, installationId: this.credential.installationId, enrollmentId: this.credential.enrollmentId, sessionId:this.session.sessionId,ownerId:this.session.ownerId,agentId:this.session.agentId,origin:this.session.origin,...(p.workflow?{workflow:p.workflow}:{}) } });
       if (!reserved.created) return { proposalId, status: 'unknown', summary: 'This action already has a device journal entry. Review action history; it was not repeated.' };
-      signal.throwIfAborted();
+      execution.assertIdentity(reserved.entry);
+      execution.assertPrepared();
       await this.mutation(p, 'decision', { decision: 'approve' }, signal);
       const claimed = await this.mutation(p, 'claim', {}, signal);
       if(isSmsSend(p.operation)&&claimed.providerIdempotencyKey!==operationId)throw Error('SMS execution claim identity changed');
       if (!claimed.attemptId || claimed.state !== 'executing') throw new Error('The server did not grant an execution claim');
-      signal.throwIfAborted();
+      execution.assertPrepared();
       await this.journal.markApplying({ scope: this.scope, proposalId, attemptId: claimed.attemptId });
       let result: Awaited<ReturnType<DeviceExecutor>> & { foregroundResult?: ForegroundReviewResult };
       try { signal.throwIfAborted(); if (p.expiresAt <= Date.now()) throw new Error('Expired action'); const bindingHash=await actionScope(JSON.stringify([this.scope,this.session.ownerId,this.session.agentId,this.session.sessionId,this.session.origin,this.credential.installationId,this.credential.enrollmentId,p.id,p.digest,operationId]));
-        if(isForegroundReview(p.operation)){if(!this.executeForeground)throw Error('Foreground review is unavailable');result=await this.executeForeground(p.operation,operationId,context,signal,bindingHash,{scope:this.scope,proposalId:p.id});}
-        else result = await this.execute(p.operation, operationId, context, signal, bindingHash,p.workflow?{scope:this.scope,origin:this.session.origin,ownerId:this.session.ownerId,agentId:this.session.agentId,workflowId:p.workflow.workflowId,runId:p.workflow.runId,versionId:p.workflow.versionId}:undefined,{scope:this.scope,proposalId:p.id}); }
+        execution.markDispatched(reserved.entry);
+        if(isForegroundReview(p.operation)){if(!this.executeForeground)throw Error('Foreground review is unavailable');result=await this.executeForeground(p.operation,operationId,context,signal,bindingHash,{scope:this.scope,proposalId:p.id},this.credential.capabilities??[]);}
+        else result = await this.execute(p.operation, operationId, context, signal, bindingHash,p.workflow?{scope:this.scope,origin:this.session.origin,ownerId:this.session.ownerId,agentId:this.session.agentId,workflowId:p.workflow.workflowId,runId:p.workflow.runId,versionId:p.workflow.versionId}:undefined,{scope:this.scope,proposalId:p.id},p.calendarAgendaSource); }
       catch { result = { status: 'unknown', summary: 'Action outcome needs review. It will not be repeated automatically.' }; }
       let smsResult:SmsSendResult|undefined;
       if(isSmsSend(p.operation)){if(result.smsResult!==undefined){smsResult=validateSmsResult(p.operation,result.smsResult,operationId,await smsAgentHash(p.operation));if(smsDeviceStatus(smsResult)!==result.status)throw Error('SMS outcome mismatch');}else if(result.status!=='unknown')throw Error('Missing SMS evidence');}else if(result.smsResult!==undefined)throw Error('Unexpected SMS result');
@@ -373,20 +414,34 @@ export class DeviceActions {
         else if(result.readResult!==undefined)throw new Error('Failed read cannot return content');
       }else if(result.readResult!==undefined)throw new Error('Unexpected read content');
       await this.journal.finish({ scope: this.scope, proposalId, status:result.status, summary:result.summary, result: { operationId,...(smsResult?{smsResult}:{}),...(clockResult?{clockResult}:{}),...(mapsResult?{mapsResult}:{}),...(photoLibraryResult?{photoLibraryResult}:{}),...(cameraResult?{cameraResult}:{}),...(readResult?{readResult}:{}),...(calendarResult?{calendarResult}:{}),...(notesResult?{notesResult}:{}),...(reminderResult?{reminderResult}:{}),...(foregroundResult?{foregroundResult}:{}) } });
+      if(execution.dispatched)execution.settle(reserved.entry);
       // A completed device effect is journaled even if the UI epoch was cancelled.
       // Receipt upload is retried only by the explicit history control.
+      const committedChanges:Array<'calendar'|'notes'|'reminders'>=[];
+      if(result.status==='succeeded'){
+       if(isCalendarOperation(p.operation)&&p.operation.type!=='calendar_read_selected'&&p.operation.type!=='calendar_read_next')committedChanges.push('calendar');
+       if(isNotesOperation(p.operation))committedChanges.push('notes');
+       if(isReminderOperation(p.operation)||isReminderCreate(p.operation)||p.operation.type==='create_reminder')committedChanges.push('reminders');
+       if(foregroundResult&&'operation'in foregroundResult&&!(foregroundResult.kind==='calendar_named'&&foregroundResult.action==='read'))committedChanges.push(foregroundResult.kind==='notes_named'?'notes':foregroundResult.kind==='calendar_named'?'calendar':'reminders');
+      }
+      // Presentation changes the foreground context and cancels its approval.
+      // Run it only after this exact action's receipt attempt, never as a retry.
+      const presentBrowser=()=>{
+        if(p.operation.type==='browser_navigate'&&result.status==='succeeded'){
+          try{result.presentBrowser?.();}catch{/* A retired foreground must not replace a journaled outcome. */}
+        }
+      };
       let confirmed:Proposal;
       try { if(isMapsOperation(p.operation))assertMapsContext(p.operation,context); confirmed=await this.mutation(p, 'receipt', { attemptId: claimed.attemptId, receipt: { outcome: result.status === 'succeeded' ? 'applied' : result.status === 'failed' ? 'failed' : 'unknown', operationId,...(smsResult?{result:smsResult}:foregroundResult?{result:foregroundResult}:clockResult?{result:clockResult}:mapsResult?{result:mapsResult}:cameraResult?{result:cameraResult}:photoLibraryResult?{result:photoLibraryResult}:readResult?{result:readResult}:calendarResult?{result:calendarResult}:notesResult?{result:notesResult}:reminderResult?{result:reminderResult}:{}) } }, signal); }
-      catch { return { proposalId, status: result.status, summary: `${result.summary} Server receipt is pending; check action history.` }; }
-      finally {if(typeof window!=='undefined'){if(isCalendarOperation(p.operation)&&p.operation.type!=='calendar_read_selected'&&p.operation.type!=='calendar_read_next'&&result.status==='succeeded')window.dispatchEvent(new CustomEvent('alpha:calendar-committed'));if(isNotesOperation(p.operation))window.dispatchEvent(new CustomEvent('alpha:notes-committed'));if(isReminderOperation(p.operation)||isReminderCreate(p.operation)||p.operation.type==='create_reminder')window.dispatchEvent(new CustomEvent('alpha:reminders-committed'));
-        if(foregroundResult&&'operation' in foregroundResult){const kind=foregroundResult.kind;window.dispatchEvent(new CustomEvent(kind==='notes_named'?'alpha:notes-committed':kind==='calendar_named'?'alpha:calendar-committed':'alpha:reminders-committed'));}}}
+      catch { presentBrowser();return { proposalId, status: result.status, summary: `${result.summary} Server receipt is pending; check action history.`,committedChanges }; }
+      presentBrowser();
       const retained=this.readReplies.get(proposalId);
-      const readReply=result.status==='succeeded'&&notesResult&&p.readReplyOrigin&&confirmed.state==='done'&&confirmed.attemptId===claimed.attemptId&&retained&&!retained.consumed&&retained.digest===p.digest&&JSON.stringify(retained.origin)===JSON.stringify(p.readReplyOrigin)?validateNativeNotesReadReplyHint({...p.readReplyOrigin,proposalId,digest:p.digest,attemptId:claimed.attemptId}):undefined;
+      const readReply=result.status==='succeeded'&&isOriginalDeviceReadOperationType(p.operation.type)&&(notesResult||calendarResult||reminderResult||mapsResult||readResult||foregroundResult?.kind==='calendar_availability'||foregroundResult?.kind==='calendar_named'&&foregroundResult.action==='read')&&p.readReplyOrigin&&confirmed.state==='done'&&confirmed.attemptId===claimed.attemptId&&retained&&!retained.consumed&&retained.digest===p.digest&&JSON.stringify(retained.origin)===JSON.stringify(p.readReplyOrigin)?validateNativeNotesReadReplyHint({...p.readReplyOrigin,proposalId,digest:p.digest,attemptId:claimed.attemptId}):undefined;
       if(readReply)retained!.hint=readReply;
-      return { proposalId, status:result.status, summary:result.summary,...(readReply?{readReply}:{}) };
+      return { proposalId, status:result.status, summary:result.summary,committedChanges,...(readReply?{readReply}:{}) };
     } catch {
       return { proposalId, status: 'unknown', summary: 'Action did not reach a confirmed result. Check action history before requesting it again.' };
-    } finally { this.busy = false; }
+    } finally { execution?.retire(); this.busy = false; }
   }
   async completeReadReply(hint:NativeNotesReadReplyHint,signal:AbortSignal):Promise<NativeNotesReadReply>{
     const valid=validateNativeNotesReadReplyHint(hint),retained=this.readReplies.get(valid.proposalId);
@@ -407,6 +462,32 @@ export class DeviceActions {
     if (!p || p.state !== 'pending') throw new Error('This proposal can no longer be rejected');
     await this.mutation(p, 'decision', { decision: 'reject' }, signal);
     this.proposals.delete(proposalId);
+  }
+  /** Reconstruct only committed Notes-create, calendar-write and browser-open acknowledgments for fetched user messages.
+   * Both the authenticated server receipt and this device's exact journal must agree. */
+  async conversationReceipts(requestMessageIds:ReadonlySet<string>,signal:AbortSignal):Promise<Array<{id:string;requestMessageId:string;summary:string;browserDestination?:string}>>{
+    if(!requestMessageIds.size)return [];
+    const proposals=await this.list(signal);
+    signal.throwIfAborted();
+    const results:Array<{id:string;requestMessageId:string;summary:string;browserDestination?:string}>=[];
+    for(const p of proposals){
+      if(p.workflow||p.state!=='done'||!p.requestMessageId||!requestMessageIds.has(p.requestMessageId)||!(p.operation.type==='create_note'||p.operation.type==='browser_navigate'||['calendar_create','calendar_create_local','calendar_update','calendar_delete'].includes(p.operation.type)&&isCalendarOperation(p.operation)))continue;
+      try{
+        const receipt=object(p.providerReceipt),{entry}=await this.journal.get({scope:this.scope,proposalId:p.id});
+        signal.throwIfAborted();
+        if(receipt.outcome!=='applied'||!entry||entry.scope!==this.scope||entry.phase!=='terminal'||entry.status!=='succeeded'||!p.attemptId||entry.attemptId!==p.attemptId||entry.record.digest!==p.digest||entry.record.ownerId!==this.session.ownerId||entry.record.agentId!==this.session.agentId||typeof entry.record.sessionId!=='string'||entry.record.origin!==this.session.origin||entry.record.installationId!==this.credential.installationId||entry.record.enrollmentId!==this.credential.enrollmentId||receipt.operationId!==entry.operationId||entry.result?.operationId!==entry.operationId||entry.operationHash!==await actionScope(JSON.stringify(p.operation)))continue;
+        if(isCalendarOperation(p.operation)){
+          const server=validateCalendarResult(p.operation,receipt.result),saved=validateCalendarResult(p.operation,entry.result?.calendarResult);
+          if(JSON.stringify(server)!==JSON.stringify(saved))continue;
+        }else if(p.operation.type==='create_note'||p.operation.type==='browser_navigate'){
+          // These operations return no typed record result. Restore only
+          // this exact terminal journal's acknowledgment, never infer a new effect.
+          if(JSON.stringify(entry.record.operation)!==JSON.stringify(p.operation)||receipt.result!==undefined||entry.result?.notesResult!==undefined)continue;
+        }else continue;
+        results.push({id:`device-receipt:${p.id}`,requestMessageId:p.requestMessageId,summary:p.operation.type==='browser_navigate'?browserNavigationSummary(p.operation.url):text(entry.summary,2000),...(p.operation.type==='browser_navigate'?{browserDestination:p.operation.url}:{})});
+      }catch{/* An incomplete, foreign or contradictory receipt is not a success. */}
+    }
+    signal.throwIfAborted();return results;
   }
   async history(signal: AbortSignal) {
     const proposals = await this.list(signal), local = await this.journal.list({ scope: this.scope });

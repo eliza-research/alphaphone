@@ -17,8 +17,6 @@ const CATEGORIES:Record<string,{mime?:string[];hint:string}>={
  Downloads:{hint:'Choose any file · open the Downloads folder in the picker'},
  Receipts:{hint:'Choose any file · receipts are not detected automatically'},
 };
-const pickFiles=DailyApps.perform as unknown as (input:{action:'files';mime?:string[]})=>Promise<NativeResult>;
-const reopen=registerPlugin<{describeSelected(input:{selectionId:string}):Promise<NativeResult>}>('DailyApps');
 const modifiedOf=(e:Entry)=>Number.isFinite(e.modified)&&e.modified!>0?e.modified!:Number.isFinite(e.modifiedAt)&&e.modifiedAt!>0?e.modifiedAt!:undefined;
 function relative(time:number){const minutes=Math.round((Date.now()-time)/60000);if(minutes<1)return 'Just now';if(minutes<60)return minutes+' min ago';const hours=Math.round(minutes/60);if(hours<24)return hours+' h ago';return new Date(time).toLocaleDateString(undefined,{month:'short',day:'numeric'});}
 const tree=registerPlugin<{
@@ -92,7 +90,7 @@ export function installFilesTreeAdapter(views:Bag,accept:(module:string,result:N
  // The picker itself hides the page, so only a view switch (epoch) or inactive owner fences its result, never document.hidden.
  async function pick(owner:Bag,mime?:string[]){
   if(busy)return;busy=true;const ticket=selectionEpoch;
-  try{const value=await pickFiles({action:'files',...(mime?{mime}:{})});if(value.status==='selected'){if(ticket!==selectionEpoch||!owner.isActive()){if(value.selectionId)await DailyApps.forgetSelected({selectionId:value.selectionId}).catch(()=>{});return;}await accept('files',value,owner);owner.toast(value.name?'Selected '+value.name:'Selection received');}else if(value.status!=='cancelled')owner.toast(value.message||'No file was selected.');}
+  try{const value=await DailyApps.perform({action:'files',...(mime?{mime}:{})});if(value.status==='selected'){if(ticket!==selectionEpoch||!owner.isActive()){if(value.selectionId)await DailyApps.forgetSelected({selectionId:value.selectionId}).catch(()=>{});return;}await accept('files',value,owner);owner.toast(value.name?'Selected '+value.name:'Selection received');}else if(value.status!=='cancelled')owner.toast(value.message||'No file was selected.');}
   catch{owner.toast('The file picker is unavailable. Try again.');}
   finally{busy=false;repaint();}
  }
@@ -104,7 +102,7 @@ export function installFilesTreeAdapter(views:Bag,accept:(module:string,result:N
   try{
    let value:NativeResult;
    if(row.kind==='tree'&&row.treeId&&!Capacitor.isNativePlatform()){value=await tree.select({id:row.treeId});if(value.status==='selected'&&row.selectionId!==value.selectionId){const old=row.selectionId;filesIndex.remove(row.key);void DailyApps.forgetSelected({selectionId:old}).catch(()=>{});}}
-   else if(Capacitor.isNativePlatform())value=await reopen.describeSelected({selectionId:row.selectionId});
+   else if(Capacitor.isNativePlatform())value=await DailyApps.describeSelected({selectionId:row.selectionId});
    else{const read=await DailyApps.readSelected({selectionId:row.selectionId});value={status:read.status==='unavailable'?'unavailable':'selected',action:'files',selectionId:row.selectionId,name:row.name,mimeType:row.mimeType};}
    if(value.status!=='selected'||!value.selectionId){filesIndex.revoke(row.key);owner.toast('Access to '+row.name+' ended. Select it again.');return;}
    await accept('files',value,owner,row.kind==='tree'&&row.treeId?{kind:'tree',treeId:row.treeId}:{kind:'selected'});
@@ -131,7 +129,12 @@ export function installFilesTreeAdapter(views:Bag,accept:(module:string,result:N
    if(wasPreview){clearSelected();selected=undefined;api?.set({open:null});}
    let target=folder.id;
    if(request.kind==='delete'&&entry?.id===folder.id)target=folder.parentId!;
-   apply(await tree.list({id:target}));
+   const refreshed=await tree.list({id:target});
+   if(value.status==='renamed'&&entry&&refreshed.status==='ready'){
+    const changed=[refreshed.folder,...(refreshed.entries||[])].find(row=>row?.id===entry.id);
+    if(changed)filesIndex.renameTree(changed.id,changed.name);
+   }
+   apply(refreshed);
   }catch(error){request.error=error instanceof Error?error.message:'Refresh the folder and try again.';api?.toast(request.error);}
   finally{busy=false;repaint();}
  }

@@ -41,8 +41,8 @@ export function installNoteSourceAdapter(views:Bag){
  notes.onLeave=(...args:any[])=>{closeCurrent?.();leave?.(...args);};
  notes.render=(state:Bag,api:Bag)=>{
   const out=render(state,api),selected=state.list?.find((n:Bag)=>n.id===state.open);
-  out.canLinkSource=selected?.kind==='text';
-  out.sourceLabel=sourceOf(selected?.documentSource)?'Source document linked':'Link source document';
+  out.canLinkSource=selected?.kind==='text'&&!!sourceOf(selected.documentSource);
+  out.sourceLabel='Attachment';
   out.sourceDocument=()=>{
    closeCurrent?.();
    const note=api.get('notes').list.find((n:Bag)=>n.id===api.get('notes').open);

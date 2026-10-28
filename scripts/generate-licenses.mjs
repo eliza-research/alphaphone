@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {VOICE_HOST_MANIFEST, voiceHostProblems} from './voice-host.mjs';
 import {canonicalNativeGradleSettings} from './native-gradle-descriptors.mjs';
+import {readAgentBundleDependencies} from './agent-bundle-dependencies.mjs';
 // Generates the third-party notices shipped in the web bundle and in every APK payload.
 //
 //   node scripts/generate-licenses.mjs                    write apps/app/public/licenses/*
@@ -9,8 +10,8 @@ import {canonicalNativeGradleSettings} from './native-gradle-descriptors.mjs';
 //                                                         classpath into licenses/android-runtime-classpath.json
 //
 //   node scripts/generate-licenses.mjs --packaged-runtime  also list Bun and every npm package bundled
-//                                                         into the staged agent (from the bundle's module
-//                                                         paths, resolved in the prepared lockfile source)
+//                                                         into the staged agent (from its hash-bound
+//                                                         inventory, verified in the prepared source)
 //                                                         and workflow worker (its dependencies.json)
 //
 // Runtime enumeration is explicit: a staged runtime in a development checkout never changes the
@@ -93,8 +94,8 @@ const LICENSE_FILE = /^(licen[cs]e|copying|notice)([.\-_].*)?$/i;
 // ---------------------------------------------------------------- helpers
 
 const read = (root, rel) => fs.readFileSync(path.join(root, rel), 'utf8');
-const readJson = (root, rel) => JSON.parse(read(root, rel));
-const exists = (root, rel) => fs.existsSync(path.join(root, rel));
+export const readJson = (root, rel) => JSON.parse(read(root, rel));
+export const exists = (root, rel) => fs.existsSync(path.join(root, rel));
 export const sha256 = data => createHash('sha256').update(data).digest('hex');
 const normalizeText = text => text.replace(/\r\n?/g, '\n').replace(/[ \t]+$/gm, '').replace(/^\n+|\n+$/g, '');
 
@@ -366,7 +367,7 @@ export function fontLicense(names) {
   return NO_FONT_LICENCE;
 }
 
-function listFonts(root, dir) {
+export function listFonts(root) {
   const out = [];
   const walk = rel => {
     for (const entry of fs.readdirSync(path.join(root, rel), {withFileTypes: true}).sort((a, b) => a.name.localeCompare(b.name))) {
@@ -374,7 +375,7 @@ function listFonts(root, dir) {
       if (entry.isDirectory()) { if (entry.name !== 'licenses') walk(child); } else if (/\.(woff2|ttf|otf)$/i.test(entry.name)) out.push(child);
     }
   };
-  walk(dir);
+  walk('apps/app/public');
   return out;
 }
 
@@ -449,7 +450,7 @@ function tesseractCoreEntries(root, errors) {
 function fontEntries(root, templates, errors) {
   const entries = [];
   const groups = new Map();
-  for (const rel of listFonts(root, 'apps/app/public')) {
+  for (const rel of listFonts(root)) {
     const bytes = fs.readFileSync(path.join(root, rel));
     let names;
     try { names = fontNames(bytes); } catch (error) { errors.push(`${rel}: cannot read font metadata (${error.message})`); continue; }
@@ -675,19 +676,6 @@ export function packagedRuntimePresent(root = ROOT, agentDir = path.join(root, A
   return fs.existsSync(path.join(agentDir, 'agent-bundle.js')) && fs.existsSync(path.join(agentDir, 'android-agent-runtime-provenance.json'));
 }
 
-/**
- * npm package directories that contributed modules to the Bun agent bundle, from the
- * bundler's per-module path comments (`// ../../node_modules/.bun/<id>/node_modules/<name>/…`).
- * Paths are relative to the prepared source root; workspace sources (packages/, plugins/)
- * are elizaOS itself and are covered by the elizaOS entry.
- */
-export function agentBundlePackageDirs(bundleText) {
-  const dirs = new Set();
-  for (const match of bundleText.matchAll(/^\/\/ (?:\.\.\/)*(node_modules\/(?:\.bun\/[^/\s]+\/node_modules\/)?(?:@[^/\s]+\/)?[^/\s@][^/\s]*)\//gm))
-    dirs.add(match[1]);
-  return [...dirs].sort();
-}
-
 function runtimePackageEntry(dir, bundle, templates, errors) {
   if (!fs.existsSync(path.join(dir, 'package.json'))) { errors.push(`${bundle}: ${dir} is not in the prepared runtime source; run npm run agent:prepare`); return null; }
   const manifest = readManifest(dir, `${bundle}: ${dir}`, errors);
@@ -735,8 +723,10 @@ export function runtimeEntries(root, templates, errors, {agentDir = path.join(ro
     if (existing) existing._bundles = [...new Set([...existing._bundles, ...entry._bundles])];
     else byId.set(key, entry);
   };
-  for (const dir of agentBundlePackageDirs(fs.readFileSync(path.join(agentDir, 'agent-bundle.js'), 'utf8')))
-    add(runtimePackageEntry(path.join(sourceDir, dir), 'agent bundle', templates, errors));
+  try {
+    for (const {directory} of readAgentBundleDependencies(sourceDir, agentDir))
+      add(runtimePackageEntry(path.join(sourceDir, directory), 'agent bundle', templates, errors));
+  } catch (error) { errors.push(error.message); }
   const workerDir = path.join(agentDir, 'workflow-worker');
   if (fs.existsSync(path.join(workerDir, 'dependencies.json'))) {
     for (const dep of JSON.parse(fs.readFileSync(path.join(workerDir, 'dependencies.json'), 'utf8'))) {

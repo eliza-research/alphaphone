@@ -39,11 +39,13 @@ export function installNotesTrashAdapter(Component:Shell,views:Record<string,Bag
   return typeof hook==='function'?!!await hook(entry):false;
  }
  async function load(shell:Shell){
+  if(shell.notesSourceMode==='canonical')return;
   try{const doc=await readNotesTrash();if(shell.live)shell.vset('notes',{trash:sortedNotesTrash(doc),trashError:''});}
   catch{if(shell.live)shell.vset('notes',{trash:[],trashError:'Trash could not be read. Nothing in it was deleted.'});}
  }
  /** Idempotent: a second run with the same clock finds nothing to do. */
  async function maintain(shell:Shell,background:boolean,now=Date.now()){
+  if(shell.notesSourceMode==='canonical')return;
   // Interrupted voice deletions are settled with every pass (startup, resume, timer, Notes open), so
   // a permanent deletion cut short by process death never waits for the person to open Notes. Not
   // awaited: it queues for the deletion-effects lock on its own and never delays Trash upkeep.
@@ -225,7 +227,7 @@ export function installNotesTrashAdapter(Component:Shell,views:Record<string,Bag
  };
  notes.render=(state:Bag,api:Bag)=>{
   const view=render(state,api),trash=api.notesTrash as Bag|undefined;
-  view.trashAvailable=!!trash;
+  view.trashAvailable=!!trash;view.trashCanErase=true;view.trashRetentionText='Deleted notes stay here for 3 days, then they are deleted permanently.';
   if(!trash)return view;
   // Notes opened: purge due entries. Navigation resets this flag, so every open checks again.
   if(!state.trashChecked){queueMicrotask(()=>{api.set({trashChecked:true});void trash.maintain();});}

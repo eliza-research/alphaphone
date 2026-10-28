@@ -88,8 +88,9 @@ test('find-in-page clears on navigation and tab change; fullscreen exits with Ba
 });
 
 test('passkeys stay disabled and the native browser offers an honest external remedy', () => {
-  assert.match(plugin, /WebSettingsCompat\.setWebAuthenticationSupport\(settings,WebSettingsCompat\.WEB_AUTHENTICATION_SUPPORT_NONE\)/);
-  assert.doesNotMatch(plugin, /WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER/);
+  assert.match(plugin, /t\.passkeys=false;/);
+  assert.doesNotMatch(plugin, /(?:get|set)WebAuthenticationSupport\(/, 'fresh WebView defaults stay disabled without entering the compat converter');
+  assert.doesNotMatch(plugin, /WEB_AUTHENTICATION_SUPPORT_FOR_(?:APP|BROWSER)/);
   assert.match(plugin, /Passkeys are not supported in Alpha Browser\./);
 });
 

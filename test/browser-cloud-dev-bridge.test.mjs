@@ -9,9 +9,9 @@ import {createServer} from 'node:http';
 if(!process.execArgv.some((arg,i)=>arg==='--import'&&process.execArgv[i+1]==='tsx')){const child=spawnSync(process.execPath,['--import','tsx',process.argv[1]],{stdio:'inherit',timeout:60000});if(child.error)throw child.error;process.exit(child.status??1);}
 const {createBrowserCloudDevHandler}=await import('../scripts/browser-cloud-dev-bridge.ts');
 const {CloudProtocol}=await import('../apps/app/src/runtime/cloud-protocol.ts');
-const {cloudStorageNamespace,productionCloud}=await import('../apps/app/src/runtime/cloud-deployment.generated.ts');
+const {cloudStorageNamespace,productionCloud,stagingCloud}=await import('../apps/app/src/runtime/cloud-deployment.generated.ts');
 const profileFile=(profile,name)=>join(profile,cloudStorageNamespace.replaceAll(':','-'),name);
-const {BrowserCloudConnection}=await import('../apps/app/src/browser/cloud-connection.ts');
+const {BrowserCloudConnection,BrowserCloudSignIn}=await import('../apps/app/src/browser/cloud-connection.ts');
 const owner='11111111-1111-4111-8111-111111111111',org='22222222-2222-4222-8222-222222222222',credentialId='33333333-3333-4333-8333-333333333333',reference='browser-cloud-reference:44444444-4444-4444-8444-444444444444';
 const secret='synthetic-cloud-credential-not-a-real-key';
 test('Cloud browser login admits only one session and the optional fixed Alpha hint',async()=>{
@@ -602,4 +602,57 @@ test('legacy profile credentials cannot authenticate the configured deployment',
   const result=await f.rpc({operation:'request',environment:'production',requestId:randomUUID(),input:{url:'https://api.eliza.app/api/v1/user',method:'GET',headers:{Accept:'application/json'},credentialReference:reference}});
   assert.equal(result.status,401);assert.equal(f.calls.length,0);
  }finally{await f.close();}
+});
+
+test('public signing keys do not read or forward account credentials',async()=>{
+ const key={kty:'EC',crv:'P-256',kid:'public-only',x:'test-public-x',y:'test-public-y'};let requests=0;
+ const client=new CloudProtocol('production',async input=>{
+  requests++;assert.equal(new URL(input.url).pathname,'/api/v1/subscription/entitlement-keys');
+  assert.equal(input.headers.Authorization,undefined);assert.equal(input.credentialReference,undefined);
+  return {status:200,data:{keys:[key]}};
+ },{read:async()=>{throw Error('Public key lookup must not read account storage');},write:async()=>{},clear:async()=>{}},async()=>{});
+ assert.deepEqual(await client.subscriptionEntitlementKeys(new AbortController().signal),[key]);assert.equal(requests,1);
+});
+
+const publicService={success:true,version:1,service:{name:'Example Cloud',terms:{title:'Terms',revision:'terms-1',sections:[{title:'Use',paragraphs:['Exact public terms.']}]},privacy:{title:'Privacy',revision:'privacy-1',sections:[{title:'Data',paragraphs:['Exact public privacy text.']}]}}};
+test('browser sign-in exposes the native-compatible public service-info method',async()=>{
+ const port=new BrowserCloudSignIn();assert.equal(typeof port.serviceInfo,'function');
+ const previous=globalThis.fetch,calls=[];
+ globalThis.fetch=async(url,input)=>{calls.push({url,input});return Response.json(publicService);};
+ try{assert.deepEqual(await port.serviceInfo({environment:'production'}),publicService);assert.equal(calls.length,1);assert.equal(calls[0].url,'/__alpha-browser-cloud');assert.deepEqual(JSON.parse(calls[0].input.body),{operation:'signInServiceInfo',environment:'production'});assert.equal(calls[0].input.redirect,'error');assert.equal(new Headers(calls[0].input.headers).get('Authorization'),null);}
+ finally{globalThis.fetch=previous;}
+});
+test('service-info bridge reads only the selected canonical public endpoint without account or login changes',async()=>{
+ const f=await fixture(undefined,'production');try{
+  const before=await readFile(profileFile(f.profile,'initial-credential.json'),'utf8');
+  f.setSignIn(async(path,input)=>{assert.equal(path,'/api/public/service');assert.equal(input.method,'GET');assert.equal(input.redirect,'error');assert.equal(new Headers(input.headers).get('Authorization'),null);assert.equal(input.body,undefined);assert.ok(input.signal instanceof AbortSignal);return Response.json(publicService);});
+  assert.deepEqual(await f.rpc({operation:'signInServiceInfo',environment:'production'}),{status:200,data:publicService});
+  assert.equal(f.calls[0].url,productionCloud.api+'/api/public/service');assert.equal(f.calls.length,1);assert.deepEqual((await f.rpc({operation:'signInStatus'})).data,{active:false,inApp:true,google:false,email:true});
+  assert.equal(await readFile(profileFile(f.profile,'initial-credential.json'),'utf8'),before);await assert.rejects(readFile(profileFile(f.profile,'credentials.json')),{code:'ENOENT'});
+  for(const input of [{environment:'staging'},{environment:'other'},{environment:'production',url:'https://attacker.invalid'},{environment:'production',credentialReference:reference},{environment:'production',headers:{Authorization:'Bearer '+secret}}])assert.notEqual((await f.rpc({operation:'signInServiceInfo',...input})).status,200);
+  for(const headers of [{Origin:'http://attacker.invalid'},{'X-Alpha-Browser-Cloud':'0'}])assert.equal((await f.send({operation:'signInServiceInfo',environment:'production'},{headers})).status,403);
+  assert.equal(f.calls.length,1,'unadmitted requests never reach the provider');
+ }finally{await f.close();}
+});
+test('service-info bridge rejects unavailable, oversized and noncanonical documents without leaking content',async()=>{
+ const f=await fixture();try{
+  for(const reply of [()=>Response.json(publicService,{status:503}),()=>Response.json({...publicService,version:2}),()=>Response.json({...publicService,token:secret}),()=>Response.json({...publicService,service:{...publicService.service,privacy:{}}}),()=>new Response('x'.repeat(16*1024*1024+1))]){
+   f.setSignIn(async()=>reply());const result=await f.rpc({operation:'signInServiceInfo',environment:'production'});assert.notEqual(result.status,200);assert.equal(JSON.stringify(result).includes(secret),false);
+  }
+ }finally{await f.close();}
+});
+test('service-info honors the configured staging authority without requiring its account credentials',async()=>{
+ const f=await fixture(undefined,'staging');try{
+  f.setSignIn(async(path,input)=>{assert.equal(path,'/api/public/service');assert.equal(new Headers(input.headers).get('Authorization'),null);return Response.json(publicService);});
+  assert.equal((await f.rpc({operation:'signInServiceInfo',environment:'staging'})).status,200);assert.equal(f.calls[0].url,stagingCloud.api+'/api/public/service');
+  assert.notEqual((await f.rpc({operation:'signInServiceInfo',environment:'production'})).status,200);assert.equal(f.calls.length,1);
+ }finally{await f.close();}
+});
+test('service-info cancels its provider request when the browser request closes',{timeout:3000},async()=>{
+ const f=await fixture();const controller=new AbortController();let started,aborted;
+ const ready=new Promise(resolve=>started=resolve),cancelled=new Promise(resolve=>aborted=resolve);
+ try{
+  f.setSignIn(async(_path,input)=>new Promise((_resolve,reject)=>{started();input.signal.addEventListener('abort',()=>{aborted();reject(input.signal.reason);},{once:true});}));
+  const pending=f.send({operation:'signInServiceInfo',environment:'production'},{signal:controller.signal});await ready;controller.abort();await assert.rejects(pending,{name:'AbortError'});await cancelled;
+ }finally{controller.abort();await f.close();}
 });

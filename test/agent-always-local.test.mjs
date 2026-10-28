@@ -110,8 +110,13 @@ test('Cloud inference is bound only for an admitted plan and unbound otherwise',
   const cloud = bind.indexOf("if(admission.binding==='cloud'&&admission.credentialId&&admission.account){");
   assert.ok(cloud > 0 && bind.indexOf('bindResidentCloudProvider(') > cloud, 'binding happens only in the admitted branch');
   assert.equal(bind.split('bindResidentCloudProvider(').length, 2, 'one bind call');
-  // Every other outcome clears the stored provider before the agent starts.
-  assert.ok(bind.split('await clearLocalProvider()').length >= 3);
+  // Failed admitted binding explicitly clears. Ordinary unbound startup only removes a
+  // genuinely present provider, preserving legacy recovery when native observes absence.
+  const unbound=bind.indexOf('// Unbound:');assert.ok(unbound>cloud);
+  assert.equal((bind.slice(0,unbound).match(/await clearLocalProvider\(\)/g)||[]).length,1,'failed binding retains explicit clear/tombstone semantics');
+  assert.doesNotMatch(bind.slice(0,unbound),/clearLocalProvider\(true\)/,'admitted binding never silently changes to presence-only removal');
+  assert.equal((bind.slice(unbound).match(/await clearLocalProvider\(true\)/g)||[]).length,1,'one native-observed absence-safe automatic unbind');
+  assert.doesNotMatch(bind.slice(unbound),/await clearLocalProvider\(\)/,'empty automatic startup must not manufacture sign-out');
   // The running state the UI and tests read is derived from the binding actually applied.
   assert.match(between(ui, 'async function connectResident(', 'async function connectCloud('), /residentBinding=bound\.binding;\n\s+update\(\{residentInference:bound\.binding==='cloud'\?'cloud':bound\.binding==='unbound'\?'unavailable':'unknown'\}\);/);
 });
@@ -159,8 +164,11 @@ test('the plan surface is a notice beside the running agent, not a gate', () => 
   assert.ok(between(ui, 'async function admitCloudResident(', 'function residentPlanEnded(').includes("update({residentSubscription:view,residentPlanNotice:'needs-plan',planEndsAt:null});\n    return {binding:'unbound',account};"));
   assert.ok(chooser.includes("const residentMustSignIn=residentCloudFlow()&&!snapshot.cloudAccount&&snapshot.residentPlanNotice!=='offline'&&!snapshot.residentStarting;"));
   assert.ok(chooser.includes('{!residentMustSignIn&&<button aria-label="Close connection settings"'));
-  // Back from the in-app sign-in screen returns to the gate; the gate itself still cannot be dismissed.
-  assert.match(ui, /close\(\) \{\n(\s+\/\/[^\n]*\n)*\s+if\(state\.signIn&&!state\.busy\)\{connectionController\.cancelSignIn\(\);return;\}\n\s+if\(residentSignInRequired\(\)\)\{/);
+  // Auth owns Back even while busy; the required top-level chooser remains protected.
+  const close = between(ui, '  close() {', '  cancel() {');
+  const cancelSignIn = close.indexOf('if(state.signIn){connectionController.cancelSignIn();return;}');
+  const requiredSignIn = close.indexOf('if(residentSignInRequired()){');
+  assert.ok(cancelSignIn >= 0 && requiredSignIn > cancelSignIn, 'Sign-in cancellation precedes the required-sign-in gate, after independent billing notices.');
   // No agent-less product choice remains in the phone's flow.
   const resident = between(chooser, 'if(residentCloudFlow())return', 'if(browserOnly)return');
   assert.doesNotMatch(resident, /Use local apps without AI|without AI|No agent connected/);
@@ -180,7 +188,7 @@ test('native starts the agent without a provider and never offers it a Cloud key
   assert.ok(!unbound.includes('readCredentialSlot'), 'the unbound launch reads no credential');
   // An empty provider slot is its own attachable generation (host-JVM tested in LocalAgentProviderAdmission).
   assert.match(between(plugin, 'private static String storedProviderGeneration(', 'private void rejectPending('), /if\(saved==null\)return LocalAgentProviderAdmission\.NO_PROVIDER_GENERATION;/);
-  assert.match(read('android/app/src/main/java/ai/elizaresearch/alphaphone/LocalAgentProviderAdmission.java'), /NO_PROVIDER_GENERATION="no-provider"/);
+  assert.match(read('vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderAdmission.java'), /NO_PROVIDER_GENERATION="no-provider"/);
   // With no stored provider, no process holds a Cloud key: a sign-in change does not stop the agent.
   assert.match(store, /if\(java\.util\.Objects\.equals\(before,value\)\)return false;\n\s+\/\/[^\n]*\n\s+\/\/[^\n]*\n\s+if\(provider==null\)return false;/);
 });
@@ -188,4 +196,9 @@ test('native starts the agent without a provider and never offers it a Cloud key
 test('browser speech has no Web Speech fallback', () => {
   for (const file of ['apps/app/src/browser/voice.ts', 'apps/app/src/browser/browser-surface.ts'])
     assert.doesNotMatch(read(file), /speechSynthesis|SpeechSynthesisUtterance/, file);
+});
+
+test('the on-device agent runs in the phone time zone', () => {
+  const configure = between(plugin, 'static void configureEnvironment(', '@PluginMethod public void start(');
+  assert.match(configure, /env\.put\("TZ",java\.util\.TimeZone\.getDefault\(\)\.getID\(\)\);/);
 });

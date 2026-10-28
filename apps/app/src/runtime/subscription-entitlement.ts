@@ -48,8 +48,6 @@ export interface CountAllowance {
  */
 export interface PeriodAllowance { unit: 'usd_micros'; granted: number; remaining: number; periodStart: number; resetsAt: number }
 export type PlanAllowance = CountAllowance | PeriodAllowance;
-/** Entitlement claim-set versions the phone reads. Tokens without `ver` are v1; later versions only add claims. */
-export const ENTITLEMENT_FORMAT_VERSION = 2;
 export interface SubscriptionEntitlement {
   id: string; keyId: string; issuer: string;
   userId: string; organizationId: string | null;
@@ -61,6 +59,8 @@ export interface SubscriptionEntitlement {
   /** Cloud-managed services this entitlement covers, e.g. "inference", "maps". */
   services: string[];
   issuedAt: number; expiresAt: number; refreshAt: number;
+  /** Signed membership window; distinct from this short-lived token expiry. */
+  planEndsAt?: number | null;
 }
 
 export type EntitlementErrorCode = 'malformed' | 'unsupported' | 'unknown-key' | 'signature' | 'account-mismatch' | 'audience' | 'expired' | 'not-yet-valid' | 'lifetime';
@@ -164,7 +164,8 @@ export function entitlementClaims(header: Bag, claims: Bag, expected: Entitlemen
   const refreshAt = suggested !== null && suggested > issuedAt && suggested < expiresAt ? suggested : fallback;
   return { id: text(claims.jti, 128), keyId, issuer: expected.issuer, userId, organizationId,
     plan: { id: text(plan.id, 128), name: text(plan.name, 80), status: plan.status as PlanStatus },
-    allowance, formatVersion, services, issuedAt, expiresAt, refreshAt };
+    allowance, formatVersion, services, issuedAt, expiresAt, refreshAt,
+    ...(claims.plan_ends_at === undefined ? {} : {planEndsAt: claims.plan_ends_at === null ? null : seconds(claims.plan_ends_at)}) };
 }
 
 /** Full verification: ES256 signature against Cloud's published P-256 keys, then claims. */
@@ -187,7 +188,7 @@ export async function verifyEntitlement(token: string, keys: readonly JsonWebKey
 export type SubscriptionView =
   | { kind: 'checking' }
   /** `source` 'billing-limits' is the unsigned billing snapshot used while the entitlement route is absent. */
-  | { kind: 'active'; planName: string; status: 'active' | 'trialing' | 'past_due'; allowance: PlanAllowance | null; expiresAt: number; refreshFailed: boolean; source?: 'billing-limits' }
+  | { kind: 'active'; planName: string; status: 'active' | 'trialing' | 'past_due'; allowance: PlanAllowance | null; expiresAt: number; refreshFailed: boolean; planEndsAt?: number | null; source?: 'billing-limits' }
   | { kind: 'credits'; source: 'billing-limits' }
   | { kind: 'inactive'; planName: string | null; status: 'canceled' | 'none'; source: 'entitlement' | 'billing-limits' }
   /** Billing status could not be read: an outage, no published plan source, or an invalid answer. */
@@ -198,7 +199,7 @@ export type SubscriptionView =
 export function subscriptionView(entitlement: SubscriptionEntitlement, refreshFailed = false): SubscriptionView {
   const { status, name } = entitlement.plan;
   if (status === 'canceled' || status === 'none') return { kind: 'inactive', planName: status === 'none' ? null : name, status, source: 'entitlement' };
-  return { kind: 'active', planName: name, status, allowance: entitlement.allowance, expiresAt: entitlement.expiresAt, refreshFailed };
+  return { kind: 'active', planName: name, status, allowance: entitlement.allowance, expiresAt: entitlement.expiresAt, refreshFailed, ...(entitlement.planEndsAt === undefined ? {} : {planEndsAt: entitlement.planEndsAt}) };
 }
 
 
@@ -599,4 +600,17 @@ export function redeemSuccessMessage(result: RedeemResult): string {
   const until = result.grantEndsAt === null ? '' : ` It runs until ${new Date(result.grantEndsAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}.`;
   if (result.paidPlanTakesPrecedence) return `Code redeemed. Your current paid plan stays in effect; the code applies if that plan ends.${until}`;
   return `Code redeemed${result.planName ? ` for ${result.planName}` : ''}.${until}`;
+}
+
+/** UI-only zero-balance eligibility from Cloud's existing exact organization billing snapshot.
+ * Missing, stale, negative or malformed authority is never treated as zero or used to admit AI. */
+export interface MembershipCreditDetails { state: 'zero' | 'funded' | 'unavailable'; usd: string | null; observedAt: number | null }
+export function membershipCreditDetailsFromLimits(payload: unknown, now=Date.now()): MembershipCreditDetails {
+  const unavailable:MembershipCreditDetails={state:'unavailable',usd:null,observedAt:null};
+  const root=bag(payload),data=bag(root?.data),v2=bag(data?.v2),observation=bag(v2?.balance),row=bag(observation?.value),amount=bag(row?.balance);
+  if(root?.success!==true || data?.schemaVersion!==2 || observation?.status!=='available' || observation.source!=='organizations' || typeof observation.observedAt!=='string')return unavailable;
+  const at=Date.parse(observation.observedAt);
+  if(!Number.isFinite(at)||at>now+60000||now-at>300000||typeof row?.revision!=='string'||!/^\d+$/.test(row.revision))return unavailable;
+  if(amount?.unit!=='usd'||amount.currency!=='USD'||typeof amount.value!=='string'||!/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/.test(amount.value))return unavailable;
+  return {state:/^0(?:\.0+)?$/.test(amount.value)?'zero':'funded',usd:amount.value,observedAt:at};
 }

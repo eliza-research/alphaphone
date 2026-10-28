@@ -2,8 +2,7 @@ import type { CloudEnvironment } from './cloud-protocol';
 
 /**
  * In-app Eliza Cloud sign-in port (owner directive 2026-10-14). Sign-in happens on Alpha's own
- * screens: an email code typed into Alpha, or Google's consent in a Custom Tab that returns to a
- * verified App Link. No Eliza Cloud web page is part of a successful sign-in.
+ * screens: an email code typed into Alpha, or Android’s native Google account picker. No Eliza Cloud web page is part of a successful sign-in.
  *
  * The port's host (AlphaCloudSignInPlugin on Android, the development Cloud bridge in a test-mocks
  * browser build) holds the Steward session, the PKCE verifiers and states and the authorization
@@ -20,7 +19,7 @@ export type CloudSignInFailureCode =
   | 'cancelled' | 'login-active' | 'invalid-phone' | 'invalid-email' | 'invalid-code' | 'cooldown' | 'expired' | 'rate-limited'
   | 'offline' | 'unavailable' | 'account-check' | 'state-mismatch' | 'browser-closed' | 'browser-unavailable'
   | 'provider-refused' | 'mfa-browser' | 'mfa-unsupported' | 'activation-pending' | 'storage' | 'rejected' | 'invalid-request'
-  | 'app-link-unverified' | 'attempts-exhausted';
+  | 'app-link-unverified' | 'attempts-exhausted' | 'google-account-unavailable';
 export interface CloudSignInAuthenticated {
   status: 'authenticated';
   environment: CloudEnvironment;
@@ -31,12 +30,15 @@ export interface CloudSignInAuthenticated {
   previousSignIn?: 'revoked' | 'unconfirmed';
 }
 export interface CloudSignInEmailStarted { attemptId: string; expiresAt: number; resendAt: number }
-export interface CloudSignInMfaRequired { status: 'mfa'; method: 'totp' | 'sms' | 'passkey'; expiresAt: number }
+export interface CloudSignInMfaRequired { attemptId?: string; status: 'mfa'; method: 'totp' | 'sms' | 'passkey'; expiresAt: number }
 export interface CloudSignInGoogleMfaRequired extends CloudSignInMfaRequired { attemptId: string; environment: CloudEnvironment }
 export type CloudSignInGoogleOutcome = CloudSignInAuthenticated | CloudSignInGoogleMfaRequired;
 export interface CloudSignInPort {
+  /** Native-only explicit recovery of the same product's saved pre-namespace credential. */
+  savedSignInRecoveryStatus?(): Promise<{eligible: boolean}>;
+  restoreSavedSignIn?(): Promise<{restored: boolean}>;
   serviceInfo?(input: { environment: CloudEnvironment }): Promise<unknown>;
-  /** Opens Google's consent in a Custom Tab and resolves once the App Link return is exchanged. */
+  /** Opens Android's native Google account picker; returns only authenticated or MFA metadata. */
   startGoogle(input: { environment: CloudEnvironment }): Promise<unknown>;
   startEmail(input: { environment: CloudEnvironment; email: string }): Promise<unknown>;
   startPhone?(input: { environment: CloudEnvironment; phone: string }): Promise<unknown>;
@@ -47,15 +49,17 @@ export interface CloudSignInPort {
   resumeMfa?(input: { attemptId: string; environment: CloudEnvironment }): Promise<unknown>;
   /** Ends the attempt and burns any pending Google record. Idempotent. */
   cancel(): Promise<void>;
+  /** Clears only the native credential picker session after explicit sign-out. */
+  clearCredentialState?(): Promise<void>;
   /** Which methods this host offers and whether Cloud is ready for in-app sign-in on this phone
    * (`inApp`, from the host's cached readiness probe). Hosts without Google (the browser bridge) say so. */
-  status?(input?: { environment: CloudEnvironment }): Promise<unknown>;
+  status?(input?: { environment: CloudEnvironment; refreshNegative?: boolean }): Promise<unknown>;
   /** `signInCompleted`: a Google return that completed after Alpha restarted (no waiting call).
    * `signInIncomplete`: a return without a sign-in result arrived with no waiting call.
    * `signInMfaRequired`: a retained hint that must be revalidated through resumeMfa. */
   addListener?(event: 'signInCompleted' | 'signInIncomplete' | 'signInMfaRequired', listener: (outcome: unknown) => void): Promise<unknown>;
 }
-const CODES = new Set<string>(['cancelled', 'login-active', 'invalid-phone', 'invalid-email', 'invalid-code', 'cooldown', 'expired', 'rate-limited', 'offline', 'unavailable', 'account-check', 'state-mismatch', 'browser-closed', 'browser-unavailable', 'provider-refused', 'mfa-browser', 'mfa-unsupported', 'activation-pending', 'storage', 'rejected', 'invalid-request', 'app-link-unverified', 'attempts-exhausted']);
+const CODES = new Set<string>(['cancelled', 'login-active', 'invalid-phone', 'invalid-email', 'invalid-code', 'cooldown', 'expired', 'rate-limited', 'offline', 'unavailable', 'account-check', 'state-mismatch', 'browser-closed', 'browser-unavailable', 'provider-refused', 'mfa-browser', 'mfa-unsupported', 'activation-pending', 'storage', 'rejected', 'invalid-request', 'app-link-unverified', 'attempts-exhausted', 'google-account-unavailable']);
 export class CloudSignInError extends Error {
   readonly code: CloudSignInFailureCode;
   constructor(code: CloudSignInFailureCode) { super(`Cloud sign-in ${code}`); this.code = code; this.name = 'CloudSignInError'; }
@@ -81,6 +85,7 @@ export function signInFailureMessage(code: CloudSignInFailureCode, serviceName: 
     case 'state-mismatch': return 'That sign-in return did not match this phone’s request. Start again.';
     case 'browser-closed': return 'Google sign-in was closed before it finished. Start again when you are ready.';
     case 'browser-unavailable': return 'No browser that can show Google sign-in is available. Use your email instead.';
+    case 'google-account-unavailable': return 'Google could not complete sign-in on this device. Check your Google account and update Google Play services, then try again or use email.';
     case 'provider-refused': return 'Google did not complete the sign-in. Try again or use your email.';
     case 'mfa-browser': return 'This account needs a second verification step. Sign in with your email to complete it in Alpha.';
     case 'mfa-unsupported': return `This account’s second verification method is not available in Alpha yet. Use account recovery or contact ${serviceName} support.`;
@@ -118,7 +123,8 @@ export function verified(value: unknown, environment: CloudEnvironment): CloudSi
   const row = object(value);
   if (row.status === 'mfa') {
     if (row.method !== 'totp' && row.method !== 'sms' && row.method !== 'passkey') throw new CloudSignInError('unavailable');
-    return { status: 'mfa', method: row.method, expiresAt: time(row.expiresAt) };
+    if (row.attemptId !== undefined && (typeof row.attemptId !== 'string' || !/^[0-9a-f-]{36}$/i.test(row.attemptId))) throw new CloudSignInError('unavailable');
+    return { status: 'mfa', method: row.method, expiresAt: time(row.expiresAt), ...(row.attemptId === undefined ? {} : { attemptId: row.attemptId as string }) };
   }
   return authenticated(row, environment);
 }
