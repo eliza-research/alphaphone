@@ -19,7 +19,8 @@ export class WorkflowProtocol extends WorkflowClient {
  }
  /** A workflow's own output can take any shape, including the recorded missed-occurrence output, so a
   * run is "missed" only when the agent's workflow service wrote the engine-only `missedOccurrenceAt`
-  * field on the finished execution (elizaOS/eliza isMissedOccurrenceExecution). */
+  * field on the finished execution (elizaOS/eliza isMissedOccurrenceExecution). The shared client applies
+  * the same rule from elizaOS/eliza#38099; once the pin includes it, delete this override and `raw`. */
  private recorded(run:WorkflowRun):WorkflowRun{
   const raw=this.raw.get(run.id);this.raw.delete(run.id);
   if(run.occurrence?.status!=='missed')return run;
