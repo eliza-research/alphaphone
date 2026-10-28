@@ -194,6 +194,14 @@ test("native boundary: image-only plugin methods, immutable explicit callbacks, 
   assert.equal((plugin.match(/SmsTelephony\.dispatch\(/g) || []).length, 1, "one dispatch site, inside the owner's Send decision");
   const begin = sms.indexOf("journal.beginDispatch("), first = sms.indexOf("manager.sendTextMessage(");
   assert.ok(begin > 0 && begin < first && begin < sms.indexOf("manager.sendMultipartTextMessage("), "journaled before the first platform call");
+  // Holding the SMS role, Alpha writes its own sent rows (Android writes none for the default SMS app):
+  // each recipient's outbox row precedes its platform call, and only that recipient's sent callbacks settle it.
+  const own = sms.indexOf("if (ownsRows) storeOwnRow(");
+  assert.ok(own > begin && own < first, "the default SMS app stores its own row before the platform call");
+  assert.match(sms, /final boolean ownsRows = MmsStore\.isDefaultSmsApp\(context\);/);
+  assert.match(sms, /if \(sent\) settleOwnRow\(app, journal, operation, index\);/);
+  const store = readFileSync(join(SHARED, "MmsStore.java"), "utf8");
+  assert.match(store, /Telephony\.Sms\.TYPE \+ " = \? AND " \+ Telephony\.Sms\.CREATOR \+ " = \?"/, "only outbox rows Alpha created are settled");
   assert.match(sms, /PendingIntent\.FLAG_IMMUTABLE \| PendingIntent\.FLAG_ONE_SHOT/);
   assert.doesNotMatch(sms, /FLAG_MUTABLE/);
   assert.match(sms, /setClass\(context, config\.receiverClass\)\.setPackage\(context\.getPackageName\(\)\)/);

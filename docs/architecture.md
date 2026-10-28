@@ -302,7 +302,8 @@ The launcher declares the dialer-role components (`AlphaInCallService`, `AlphaCa
 disabled. `AlphaTelephonyRoles` enables them only while `AlphaImageCapability` verifies the image,
 so Android can offer the roles nowhere else and the owner still chooses them in Android's dialog.
 As SMS role holder Alpha stores incoming SMS and MMS before notifying, and every outgoing text,
-quick replies included, is a reviewed, journaled send. Telecom owns emergency routing; the
+quick replies included, is a reviewed, journaled send that Alpha also writes to the provider, because
+Android writes no sent rows for the default SMS app. Telecom owns emergency routing; the
 system emergency dialer does not depend on Alpha. Gmail is available in both distributions through Eliza Cloud, with
 read access first and one incremental change grant (`apps/app/src/runtime/gmail-grants.ts`).
 
@@ -381,7 +382,10 @@ Delivery outcome is read from the provider row the platform writes for a non-def
 (matched by address, Alpha as creator, a date after the journal entry and body hash), because an
 immutable delivery PendingIntent cannot carry the status-report PDU. Each part's report overwrites the
 one row of a multipart message, so multipart delivery stays "unknown" and only single-part messages can
-read "delivered". The journal,
+read "delivered". Android writes no sent rows for the default SMS app, so while Alpha holds the SMS
+role the shared core stores each recipient's text in the provider outbox just before that recipient's
+platform call and moves it to sent or failed from its sent callbacks; delivery is not claimed for these
+rows. The journal,
 provider reads, dispatch and delivery reconciliation described here are the shared
 plugin-native-messages implementation (`SmsSendJournal`, `SmsProviderReader`, `SmsTelephony`);
 Alpha's earlier copies are deleted. MMS notifications are downloaded and stored by the shared
