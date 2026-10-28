@@ -10,9 +10,9 @@ const between=(text,start,end)=>{const a=text.indexOf(start),b=text.indexOf(end,
 const compiled=transformSync(panelSource.replace(/^import .*;\n/gm,'').replaceAll('export ',''),{loader:'tsx',jsxFactory:'React.createElement'}).code;
 const CloudSignInPanel=new Function('React','useRef','useState','useEffect','cloudServiceName',compiled+';return CloudSignInPanel;')(React,React.useRef,React.useState,React.useEffect,()=> 'Eliza Cloud');
 const branch=between(source,'  const requiredSignInView:', '  const accountCreatedNotice=');
-const renderBranch=new Function('React','CloudSignInPanel','snapshot','productionSignInRequired','residentEnvironment','inAppGoogle','panel','RESIDENT_UNPACKAGED','connectionController','browserCloudResidentEnabled','testMocksEnabled','ResidentRecoveryPanel','loadSignInService','cloudSignInPhone','inAppPhone','inAppEmail',transformSync('function render(){'+branch+'return null;}',{loader:'tsx',jsxFactory:'React.createElement'}).code+';return render();');
+const renderBranch=new Function('React','CloudSignInPanel','snapshot','productionSignInRequired','signInEntryRequired','residentEnvironment','inAppGoogle','panel','RESIDENT_UNPACKAGED','connectionController','browserCloudResidentEnabled','testMocksEnabled','ResidentRecoveryPanel','loadSignInService','cloudSignInPhone','inAppPhone','inAppEmail',transformSync('function render(){'+branch+'return null;}',{loader:'tsx',jsxFactory:'React.createElement'}).code+';return render();');
 const controller={beginSignIn(){},signInGoogle(){},signInEmail(){},verifySignInCode(){},resendSignInCode(){},cancelSignIn(){}};
-const render=snapshot=>renderToStaticMarkup(renderBranch(React,CloudSignInPanel,snapshot,true,()=> 'production',false,null,'unpackaged',controller,false,false,()=>null,undefined,null,false,true));
+const render=snapshot=>renderToStaticMarkup(renderBranch(React,CloudSignInPanel,snapshot,true,true,()=> 'production',false,null,'unpackaged',controller,false,false,()=>null,undefined,null,false,true));
 test('production signed-out entry server-renders direct options before readiness without false Google failure',()=>{
  const html=render({signIn:null,busy:false,message:'',error:''});
  assert.match(html,/Welcome to Alpha/);assert.match(html,/Continue with Google/);assert.match(html,/Email me a code/);assert.match(html,/Retry sign-in/);
@@ -25,7 +25,7 @@ test('ready choice renders usable email path and explicit unavailable Google not
 test('automatic readiness probes once per unresolved entry, rearms after a form closes and never initiates sign-in',()=>{
  const code=between(source,'  const automaticSignInProbe =','  const visible=');
  let ref,callback,count=0;
- const apply=new Function('useRef','useEffect','productionSignInRequired','snapshot','connectionController','residentEnvironment',transformSync(code,{loader:'tsx'}).code);
+ const apply=new Function('useRef','useEffect','signInEntryRequired','snapshot','connectionController','residentEnvironment',transformSync(code,{loader:'tsx'}).code);
  const draw=(required,busy=false,signIn=null)=>{callback=null;apply(()=>ref??=( {current:false}),fn=>{callback=fn;},required,{busy,signIn},{beginSignIn(){count++;},signInGoogle(){throw Error('Unexpected Google');},signInEmail(){throw Error('Unexpected email');}},()=> 'production');callback();};
  draw(true,true);assert.equal(count,0);draw(true);draw(true);assert.equal(count,1);
  draw(true,false,{step:'choose'});assert.equal(count,1);
@@ -35,10 +35,14 @@ test('automatic readiness probes once per unresolved entry, rearms after a form 
 });
 test('Cancel delegates in-flight readiness to the existing abort operation, without clearing saved credentials',()=>{
  const code=between(source,'  cancelSignIn() {','  async signInGoogle()');let aborted=0,changes=[];
- const make=new Function('operation','connectionController','state','productionCloudSignInRequired','update',transformSync('const target={'+code+'};',{loader:'ts'}).code+';return target;');
- const run=(active,signIn=null,required=false)=>make(active,{cancel(){aborted++;}},{signIn},()=>required,v=>changes.push(v)).cancelSignIn();
+ const make=new Function('operation','connectionController','state','productionCloudSignInRequired','explicitSignedOutCloudEntry','update',transformSync('const target={'+code+'};',{loader:'ts'}).code+';return target;');
+ let closed=0;
+ const run=(active,signIn=null,required=false,explicit=false)=>make(active,{cancel(){aborted++;},close(){closed++;}},{signIn},()=>required,()=>explicit,v=>changes.push(v)).cancelSignIn();
  run({});assert.equal(aborted,1);assert.deepEqual(changes,[{signIn:null,message:'',error:''}]);
  changes=[];run({}, {step:'code',environment:'production'});assert.equal(aborted,2);assert.deepEqual(changes,[{signIn:{step:'choose',environment:'production'},message:'',error:''}]);
  changes=[];run(null,{step:'choose',environment:'production'},true);assert.equal(aborted,2);assert.deepEqual(changes,[],'required idle chooser remains usable');
- run(null);assert.equal(aborted,3);assert.deepEqual(changes,[{signIn:null,message:'',error:''}]);
+ run(null);assert.equal(aborted,3);assert.deepEqual(changes,[{signIn:null,message:'',error:''}]);assert.equal(closed,0);
+ // An explicit signed-out Settings entry closes on Cancel instead of leaving an empty sheet.
+ changes=[];run(null,{step:'choose',environment:'production'},false,true);assert.equal(aborted,4);assert.equal(closed,1);
+ changes=[];run({},{step:'choose',environment:'production'},false,true);assert.equal(aborted,5);assert.equal(closed,1,'an in-flight readiness check is cancelled, not closed');
 });

@@ -9,7 +9,8 @@ import {execFileSync} from 'node:child_process';
 
 const root = path.resolve(import.meta.dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
-const ndkVersion = source => source.match(/^\s*ndkVersion\s+['"]([^'"]+)['"]/m)?.[1];
+// Also matches a guarded selection such as `if (!assetsOnly) { ndkVersion '…' }`.
+const ndkVersion = source => source.match(/(?:^|[{;])\s*ndkVersion\s+['"]([^'"]+)['"]/m)?.[1];
 const sense = read('android/sense/build.gradle');
 const sharedSense = read('vendor/eliza/packages/app/platforms/android/sense/consumer.gradle');
 const version = ndkVersion(sharedSense);
