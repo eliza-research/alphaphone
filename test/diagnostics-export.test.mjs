@@ -131,13 +131,13 @@ test('voice timing: the export carries the timing records, aggregator-ready, and
  for(const fragment of ['dentist','Dana','acct_','"transcript"','"reply"','accountId','agent.example'])assert.equal(json.includes(fragment),false,`leaked ${fragment}`);
  // The section is a complete export the latency aggregator reads as is.
  assert.equal(collectRecords([JSON.parse(json).voiceTiming]).records.length,2);
- // Same mark order and routes as voice-timing.ts.
+ // Same mark order and routes as voice-timing.ts (marks from the shared recorder).
  const source=readFileSync(new URL('../apps/app/src/runtime/voice-timing.ts',import.meta.url),'utf8');
  const list=name=>JSON.parse(new RegExp(`const ${name}[^=]*= (\\[[^\\]]*\\])`).exec(source)[1].replaceAll("'",'"'));
- assert.deepEqual(report.voiceTiming.marks,list('voiceTimingOrder'));
+ assert.deepEqual(report.voiceTiming.marks,timing.voiceTimingMarks());
  for(const route of list('voiceTimingRoutes'))assert.equal(buildDiagnostics({voiceTiming:{format:'alpha-voice-timing-v1',records:[{version:1,id,recordedAt:now,route,cold:false,marks:{}}]}},now).voiceTiming.records.length,1,route);
  // Nothing exported, or not an export: an empty section.
- assert.deepEqual(buildDiagnostics({},now).voiceTiming,{format:'alpha-voice-timing-v1',marks:list('voiceTimingOrder'),records:[]});
+ assert.deepEqual(buildDiagnostics({},now).voiceTiming,{format:'alpha-voice-timing-v1',marks:timing.voiceTimingMarks(),records:[]});
  assert.deepEqual(buildDiagnostics({voiceTiming:{format:'other',records:rows}},now).voiceTiming.records,[]);
  timing.clearVoiceTiming();delete globalThis.localStorage;
 });

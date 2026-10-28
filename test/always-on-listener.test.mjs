@@ -40,3 +40,44 @@ test('legacy AlphaListener is a thin alias of the shared native control bridge',
   execFileSync(java,['--release','21','-cp',sdk,'-d',path.join(temp,'out'),...files,...['SenseInvocation','SenseListenerClient','SensePlugin'].map(name=>path.join(source,`${name}.java`)),path.join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaListenerPlugin.java')]);
  } finally {fs.rmSync(temp,{recursive:true,force:true});}
 });
+test('a cold listener wake is bound to Alpha native owner state, never renderer input',()=>{
+ const root=path.resolve(import.meta.dirname,'..'),strip=text=>text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,'');
+ const app=strip(fs.readFileSync(path.join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaApplication.java'),'utf8'));
+ const agent=strip(fs.readFileSync(path.join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaLocalAgentPlugin.java'),'utf8'));
+ // Registered once in the main process, after the isolated/secondary-process return, before any activity records a wake.
+ const admission=app.indexOf('admitOwner(()->AlphaLocalAgentPlugin.invocationOwner(this))'),mainOnly=app.indexOf('if(android.os.Process.isIsolated()||!getPackageName().equals(getProcessName()))return;');
+ assert.ok(admission>mainOnly&&mainOnly>0,'admission is registered in the main process only');
+ // The owner is the stored provider admission generation (a UUID or no-provider), never a token.
+ assert.match(agent,/static String invocationOwner\(Context context\)\{return INVOCATION_OWNER\.get\(\(\)->readProviderOwner\(new AlphaCredentialStore\(context\)\),System\.currentTimeMillis\(\)\);\}/);
+ const shared=strip(fs.readFileSync(path.join(root,'vendor/eliza/plugins/plugin-native-system/android/src/main/java/ai/eliza/plugins/system/SenseInvocation.java'),'utf8'));
+ assert.match(shared,/COLD_WINDOW_MS = 15000/);
+ assert.match(shared,/if \(!waitingOwner\.equals\(admittedOwner\(\)\)\) \{ clear\(\); return; \}/);
+ // The assist surface still records only Android caller identity; no extra or deep link reaches it.
+ const assist=strip(fs.readFileSync(path.join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaAssistActivity.java'),'utf8'));
+ // An ordinary assist records the caller; a protected Power entry records no caller package.
+ assert.match(assist,/new ai\.eliza\.plugins\.system\.SenseListenerClient\(this\);/);
+ assert.match(assist,/sense\.recordInvocation\(isProtectedPowerEntry\(\) \? null : caller\);/);
+ assert.doesNotMatch(assist,/getStringExtra|getData\(\)|getExtras\(\)/);
+});
+test('press-and-hold power starts voice only through SystemUI identity that Android reports',()=>{
+ const root=path.resolve(import.meta.dirname,'..'),strip=text=>text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,'');
+ // The image routes press-and-hold power to the assistant role holder (Alpha's ACTION_ASSIST surface).
+ const overlay=fs.readFileSync(path.join(root,'vendor/eliza/packages/os/android/sense/config.xml'),'utf8');
+ assert.match(overlay,/<integer name="config_longPressOnPowerBehavior">5<\/integer>/);
+ // Alpha records only Android's caller APIs: the launching package on create and ComponentCaller on new intents.
+ const assist=strip(fs.readFileSync(path.join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaAssistActivity.java'),'utf8'));
+ assert.match(assist,/state == null && Build\.VERSION\.SDK_INT >= Build\.VERSION_CODES\.UPSIDE_DOWN_CAKE \? getLaunchedFromPackage\(\) : null/);
+ assert.match(assist,/newIntentCaller = caller == null \? null : caller\.getPackage\(\);/);
+ // Shared Sense marks a system gesture only for the platform-signed system UI; the shared renderer policy starts voice for it.
+ const client=strip(fs.readFileSync(path.join(root,'vendor/eliza/plugins/plugin-native-system/android/src/main/java/ai/eliza/plugins/system/SenseListenerClient.java'),'utf8'));
+ assert.match(client,/SYSTEM_UI_PACKAGE = "com\.android\.systemui"/);
+ assert.match(client,/checkSignatures\("android", callerPackage\) == PackageManager\.SIGNATURE_MATCH/);
+ const policy=fs.readFileSync(path.join(root,'vendor/eliza/plugins/plugin-native-system/src/sense.ts'),'utf8');
+ assert.match(policy,/\(input\.invocation === "listener" \|\| input.invocation === "system"\) &&/);
+ // SystemUI shares its identity only with the reviewed assist bundle applied to the exact pinned preimage.
+ const bundle=JSON.parse(fs.readFileSync(path.join(root,'vendor/eliza/packages/os/android/sense/systemui/assist/manifest.json'),'utf8'));
+ assert.deepEqual(bundle.files.map(file=>file.path),['packages/SystemUI/src/com/android/systemui/assist/AssistManager.java']);
+ assert.equal(bundle.imageBuilt,false);
+ const patch=fs.readFileSync(path.join(root,'vendor/eliza/packages/os/android/sense/systemui/assist',bundle.patch),'utf8');
+ assert.deepEqual(patch.split('\n').filter(line=>/^\+[^+]/.test(line)&&!/^\+\s*\/\//.test(line)).map(line=>line.slice(1).trim()),['opts.setShareIdentityEnabled(true);']);
+});

@@ -12,11 +12,25 @@ loads GGUF models only; no other neural runtime or model ships anywhere
 
 | Where | Engine | Route |
 | --- | --- | --- |
-| Android phone | The shared paradee-voice library (`:local-speech`, Java package `ai.eliza.voice`: `VoiceAssets`, `ParadeeVoice`, `NativeAsr`) and its `libparadeevoicejni.so` (RegisterNatives, only `JNI_OnLoad` exported), over the app's `libelizainference.so` | `AlphaVoiceCloud` local methods through `AlphaParadeeSpeech` / `AlphaLocalSpeechEngine`; provider `fused-paradee-asr`, execution `device` |
-| Android phone, live voice conversation | Silero VAD in the app process (`AlphaLiveVoiceCapture`, `ElizaVoiceNative`), Phonon-2 streaming decode in the resident agent's bionic host | The agent's `POST /api/asr/local-inference/live` through the owner-authenticated agent bridge (see Live voice below) |
+| Android phone | The shared paradee-voice library (`:local-speech`, Java package `ai.eliza.voice`: `VoiceAssets`, `ParadeeVoice`, `NativeAsr`) and its `libparadeevoicejni.so` (RegisterNatives, only `JNI_OnLoad` exported), over the app's `libelizainference.so` | `AlphaVoiceCloud` local methods through the shared `LocalSpeechEngine` / `SessionSpeech` on the process-wide `InferenceSession`; provider `fused-paradee-asr`, execution `device` |
+| Android phone, live voice conversation | Silero VAD in the app process (shared `ai.eliza.voice.LiveVoiceCapture` on the process-wide `InferenceSession` VAD context), Phonon-2 streaming decode in the resident agent's bionic host | The agent's `POST /api/asr/local-inference/live` through the owner-authenticated agent bridge (see Live voice below) |
 | Browser with the local agent | The agent's host workers load libelizainference from `ELIZA_INFERENCE_LIBRARY` | TTS `POST /api/tts/paradee` (provider `libelizainference-paradee`); ASR `POST /api/asr/libelizainference` (provider `local-inference`) |
 | Browser without the local agent | none | Local speech reports `local-agent-required`; replies are read as text. There is no Web Speech, no in-browser engine and no automatic network fallback |
 | Eliza Cloud | provider-side | Test-mocks builds only; production speech stays on the device (P-43) |
+
+Since the October 27 consolidation the speech engine owner (`LocalSpeechEngine`, `SessionSpeech`),
+streamed playback (`StreamingSpeechPlayback`, `SpeechPcmQueue`, `AudioTrackSpeechOutput`), audio
+focus, live capture with VAD (`LiveVoiceCapture`, `LiveVadGate`, `LiveCaptureSource`,
+`LiveCaptureResource`, `LiveCaptureAdmission`) and the latency trials (`VoiceLatencyTrials`,
+`VoiceLatencyProbe`) are the shared `ai.eliza.voice` classes in `plugin-local-inference`, compiled
+through `:local-speech`. Speech output, recognition and VAD share one process-wide
+`InferenceSession` (`VoiceAssets.sharedInference`). The engine's backend is its own client of that
+session: cancelling a request fences only the engine's own calls, and an idle or memory-pressure
+release drops only its own hold (the models are freed once no consumer holds them). VAD keeps a
+small separate context so capture stays full duplex while a sentence is synthesized.
+`AlphaVoiceCloudPlugin` keeps only the bridge, owner/account binding, recordings and resident
+transport; `AlphaApplication` names the timing export `alpha-native-voice-timing-v3`. The class
+names in the sections below refer to these shared classes.
 
 The app's own `ElizaVoiceNative` (embeddings and the host natives) is built from the same
 upstream `elizavoice-jni.cpp` with `-DELIZA_VOICE_JNI_CLASS=ai/elizaresearch/alphaphone/ElizaVoiceNative`
@@ -68,10 +82,10 @@ libelizainference serves `eliza_inference_asr_*` and `asr_stream_*` from whateve
 files; `scripts/paradee-runtime.mjs` admits exactly the files that backend needs (one for
 parakeet, two for qwen3) and refuses any other file under `asr/`, because the library would load
 a stray parakeet GGUF first. The voice host record carries the same rows
-(`asrSlot.backend`, `scripts/voice-host.mjs`). The APK sets `ELIZA_ASR_BACKEND=parakeet` by
-default (`BuildConfig.ELIZA_ASR_BACKEND`, exported before the library loads by the pinned
-`ElizaVoiceNative`/`ElizaAsrNativeEnv` and by `AlphaParadeeSpeech`); a build environment value of
-`auto`, `parakeet` or `qwen3` overrides it.
+(`asrSlot.backend`, `scripts/voice-host.mjs`). At runtime `parakeet` names the model
+architecture, not a backend: the pinned `ElizaVoiceNative`/`ElizaAsrNativeEnv` and the shared
+paradee-voice `VoiceNative` (loaded by the `SessionSpeech` backend) export
+`ELIZA_ASR_BACKEND=ggml` before the library loads, so Phonon-2 runs on the in-tree ggml path.
 
 **Licence.** Phonon-2 by Fermion Research is CC-BY-4.0, derived from NVIDIA
 parakeet-tdt-0.6b-v3 (CC-BY-4.0). The attribution, Fermion's NOTICE
@@ -94,7 +108,7 @@ recording a clip on the device:
 
 1. **App process.** `AlphaVoiceCloud.startLiveCapture` opens `AudioRecord` (16 kHz mono PCM16)
    and runs Silero VAD on every 32 ms window through libelizainference
-   (`AlphaLiveVoiceCapture`, `ElizaVoiceNative.nativeVadProcessBatch`). `LiveVadGate` opens a
+   (shared `LiveVoiceCapture`, `InferenceSession.openVad()`). `LiveVadGate` opens a
    segment after two windows at P ≥ 0.5 and closes it after 16 windows (about 512 ms) below 0.35,
    with a 320 ms pre-roll. Only segment audio is forwarded; nothing is written to storage. The
    assistant asks for `echoCancel`: the communication source with the platform
@@ -108,6 +122,8 @@ recording a clip on the device:
    closes the current IPC read. See [native transport](native-live-pcm-transport.md).
    Older native packages retain the renderer-forwarding compatibility path through
    `live-segment-stream.ts` and `live-voice.ts`; errors do not silently replay on that path.
+   Both, and `voice-turn-routes.ts` below, re-export the shared `@elizaos/voice/live-session` and
+   `@elizaos/voice/turn-routes` clients projected from the pin; Alpha adds no behavior to them.
 3. **Agent.** The live route (elizaOS #36213, #36214) decodes with the Phonon-2 streaming decoder
    through the bionic host (`BionicAsrStreams`, staged from the pin) and returns
    `final.text` in the response to the request that carries `speech-end`.
@@ -302,7 +318,7 @@ with the same `playbackId`/`play`/`playbackEnded` protocol. Only an engine witho
 whole-sentence MediaPlayer path; a streaming error is a failure, not a fallback.
 
 Speech requests `AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK` before it plays and abandons it afterwards
-(`AlphaSpeechAudioFocus`, `SpeechAudioFocusPolicy`): permanent or transient loss stops the utterance
+(shared `SpeechAudioFocus`, `SpeechAudioFocusPolicy`): permanent or transient loss stops the utterance
 and clears its queue, a ducking loss lowers it to 20 %, regain restores it. No speech, recording or
 live capture starts while the audio mode is ringing, in a call or in VoIP communication
 (`call-active`), and on Android 12+ a call starting stops speech and the assistant's live capture

@@ -93,6 +93,14 @@ assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','u
   assert.equal(stamp.sourceFiles[file],stamp.files[file],file+' is not projected');
   assert.deepEqual(fs.readFileSync(path.join(source,file)),fs.readFileSync(path.join('vendor/eliza',file)),file+' is copied exactly');
  }
+ // The shared voice sessions differ from upstream only in the one random-id value import, so
+ // plain Node can load them (it does not map ./random-id.js to the copied .ts source).
+ for(const file of ['packages/voice/src/voice-assistant-session.ts','packages/voice/src/live-voice-session.ts']){
+  const upstream=fs.readFileSync(path.join('vendor/eliza',file),'utf8'),projected=fs.readFileSync(path.join(source,file),'utf8');
+  assert.notEqual(stamp.sourceFiles[file],stamp.files[file],file+' is projected');
+  assert.equal(projected,upstream.replace('import { randomId } from "./random-id.js";','import { randomId } from "./random-id.ts";'));
+ }
+ assert.deepEqual(fs.readFileSync(path.join(source,'packages/voice/src/random-id.ts')),fs.readFileSync('vendor/eliza/packages/voice/src/random-id.ts'));
  const client=voiceFiles[0],text=fs.readFileSync(path.join(source,client),'utf8');
  assert.doesNotMatch(text,/import\("\.\/voice-session-fetch"\)/);
  for(const file of ['packages/core/src/logger.ts','packages/host/src/voice.ts','packages/ui/src/voice/voice-chat-types.ts','packages/ui/src/voice/voice-session-client.ts','packages/ui/src/voice/voice-session-fetch.ts']){

@@ -23,7 +23,7 @@ export async function verifyPixel10aSource({source, factory, lock = defaultLockP
     expected: {target:'pixel10a', codename:'stallion', androidRelease:'17'}});
 }
 
-/** A reviewed listener SystemUI bundle ('ops' or 'chip') in the form verifyPixel10aSource accepts. */
+/** A reviewed SystemUI bundle ('ops', 'chip' or 'assist') in the form verifyPixel10aSource accepts. */
 export {senseSystemuiPatch as listenerSystemuiPatch} from '../vendor/eliza/packages/os/scripts/android/sense-systemui.mjs';
 
 /** Explicit host-build patches; defaults and device source remain unchanged. */

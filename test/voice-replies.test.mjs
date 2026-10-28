@@ -6,7 +6,7 @@ import {stripTypeScriptTypes} from 'node:module';
 
 // Real playback, selection and timing sources; the speech engine boundary is a fixture.
 function load(file, name, box) {
-  const source = fs.readFileSync('apps/app/src/' + file, 'utf8').replace(/^import .*;\n/gm, '').replaceAll('export function', 'function').replaceAll('export type', 'type');
+  const source = fs.readFileSync('apps/app/src/' + file, 'utf8').replace(/^import .*;\n/gm, '').replaceAll('export function', 'function').replaceAll('export const', 'const').replaceAll('export type', 'type');
   vm.runInNewContext('{' + stripTypeScriptTypes(source, {mode: 'transform'}) + '\nglobalThis.' + name + '=' + name + ';}', box);
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -33,7 +33,8 @@ function fixture({native = true} = {}) {
       started?.();
     },
   };
-  for (const [file, name] of [['runtime/voice-selection.ts', 'selectVoiceRoute'], ['runtime/voice-timing.ts', 'markVoiceTiming'], ['prototype/local-speech-playback.ts', 'installLocalSpeechPlayback']]) load(file, name, box);
+  // voice-timing.ts configures the shared recorder projected from the pin, evaluated in this realm.
+  for (const [file, name] of [['../../../.eliza/client-features/packages/voice/src/voice-turn-timing.ts', 'createVoiceTurnTiming'], ['runtime/voice-selection.ts', 'selectVoiceRoute'], ['runtime/voice-timing.ts', 'markVoiceTiming'], ['prototype/local-speech-playback.ts', 'installLocalSpeechPlayback']]) load(file, name, box);
   class Shell {
     constructor() { this.state = {chat: 'sheet', msgs: []}; this.live = true; }
     S() { return this.state; }

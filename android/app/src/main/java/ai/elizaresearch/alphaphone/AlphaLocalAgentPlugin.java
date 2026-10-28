@@ -110,13 +110,24 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   if(refusal==null)invalidateOwnCalls();
   return refusal;
  }
+ /**
+  * The native owner a cold listener wake is bound to (SenseListenerClient.admitOwner): the stored
+  * provider admission generation, a random UUID or NO_PROVIDER_GENERATION and never a credential.
+  * A Cloud account change between the wake and the renderer's first authenticated binding changes
+  * it, so that wake only opens the assistant. Null when the stored admission is invalid.
+  */
+ static String invocationOwner(Context context){return INVOCATION_OWNER.get(()->readProviderOwner(new AlphaCredentialStore(context)),System.currentTimeMillis());}
+ /** Cached invocationOwner: mutateCredentials invalidates it around every provider/Cloud commit, and it is read again once the Cloud credential's expiresAt passes. */
+ private static final InvocationOwnerCache INVOCATION_OWNER=new InvocationOwnerCache();
  /** Stored provider admission generation; NO_PROVIDER_GENERATION when no provider is stored (the agent runs unbound and surfaces attach to it as to a bound one); null when legacy or no longer valid. Never writes. */
- private static String storedProviderGeneration(AlphaCredentialStore store){
-  try{
-   String saved=store.readCredentialSlot("local-agent-provider:v1");if(saved==null)return LocalAgentProviderAdmission.NO_PROVIDER_GENERATION;
-   String cloud="elizacloud".equals(new JSONObject(saved).optString("provider"))?store.readCredentialSlot("cloud:production"):null;
-   return LocalAgentProviderAdmission.currentGeneration(saved,cloud);
-  }catch(Exception unavailable){return null;}
+ private static String storedProviderGeneration(AlphaCredentialStore store){try{return readProviderOwner(store).value;}catch(Exception unavailable){return null;}}
+ /** The stored generation and when it may stop holding with no write: an elizacloud generation fails once its credential's expiresAt passes (NativeProviderAdmission.cloudProviderToken). */
+ private static InvocationOwnerCache.Owner readProviderOwner(AlphaCredentialStore store)throws Exception{
+  String saved=store.readCredentialSlot("local-agent-provider:v1");if(saved==null)return new InvocationOwnerCache.Owner(LocalAgentProviderAdmission.NO_PROVIDER_GENERATION,Long.MAX_VALUE);
+  String cloud="elizacloud".equals(new JSONObject(saved).optString("provider"))?store.readCredentialSlot("cloud:production"):null;
+  long validUntil=Long.MAX_VALUE;
+  if(cloud!=null){try{JSONObject credential=new JSONObject(cloud);if(credential.has("expiresAt"))validUntil=InvocationOwnerCache.deadline(credential.opt("expiresAt"));}catch(Exception unreadable){validUntil=Long.MIN_VALUE;}}
+  return new InvocationOwnerCache.Owner(LocalAgentProviderAdmission.currentGeneration(saved,cloud),validUntil);
  }
  /**
   * A system broadcast starts the resident only while no surface is stopping it or changing its
@@ -144,7 +155,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   synchronized(lifecycleLock){
    assertOwner.run();
    synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){
-    if(!mutation.requiresShutdown())return mutation.commit();
+    if(!mutation.requiresShutdown())return commitCredentials(mutation);
    }
    startRequestId=null;startOwnsLaunch=false;
    AlphaCanonicalNotifications.forget(context);
@@ -160,7 +171,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
     synchronized(lifecycleLock){
      assertOwner.run();if(epoch!=lifecycleEpoch||credentialMutationEpoch!=epoch)throw new Superseded();
      if(shutdownConfirmed(status)&&ElizaAgentService.isCredentialShutdownConfirmed(stopRequest)){
-      synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){return mutation.commit();}
+      synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){return commitCredentials(mutation);}
      }
     }
     if(android.os.SystemClock.elapsedRealtime()>=deadline)throw new IllegalStateException("Native shutdown unconfirmed");
@@ -170,6 +181,8 @@ public final class AlphaLocalAgentPlugin extends Plugin {
    synchronized(lifecycleLock){if(credentialMutationEpoch==epoch)credentialMutationEpoch=-1;}
   }
  }
+ /** Every provider and Cloud credential write commits here; the cached listener owner never outlives one. */
+ private static <T> T commitCredentials(CredentialMutation<T> mutation)throws Exception{INVOCATION_OWNER.invalidate();try{return mutation.commit();}finally{INVOCATION_OWNER.invalidate();}}
  static boolean providerAdmissionReadable(){return credentialMutationEpoch<0;}
  private void requireCurrent(long epoch) throws Superseded {
   synchronized(lifecycleLock){if(disposed||!accepting||epoch!=lifecycleEpoch)throw new Superseded();}
@@ -703,28 +716,28 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   }
  }
  /** Native speech uses only the existing enrollment, bound to its exact token and runtime epoch. */
- static NativeLiveVoicePipe.Transport openNativeVoiceTransport(String expectedOwner)throws Exception{
+ static ai.eliza.voice.LiveSegmentPipe.Transport openNativeVoiceTransport(String expectedOwner)throws Exception{
   final String root,token,owner;final long epoch;
   synchronized(lifecycleLock){
    captureResultSession(expectedOwner);root=rootToken;token=ownerToken;owner=ownerIdentity;epoch=lifecycleEpoch;
   }
   final NativeVoiceBinding binding=new NativeVoiceBinding(epoch,root,token,owner);
   final java.util.concurrent.atomic.AtomicBoolean cancelled=new java.util.concurrent.atomic.AtomicBoolean();
-  final java.util.concurrent.atomic.AtomicReference<NativeVoiceIpc.Handle> active=new java.util.concurrent.atomic.AtomicReference<>();
-  class VoiceHandle implements NativeVoiceIpc.Handle {final ElizaAgentService.LocalStreamHandle handle=new ElizaAgentService.LocalStreamHandle();public void cancel(){handle.cancel();}}
-  final NativeVoiceIpc.Port port=new NativeVoiceIpc.Port(){
-   public NativeVoiceIpc.Handle open(){return new VoiceHandle();}
-   public void request(JSONObject input,java.util.function.Consumer<String> events,NativeVoiceIpc.Handle handle){ElizaAgentService.requestLocalAgentStream(input.toString(),events,((VoiceHandle)handle).handle);}
+  final java.util.concurrent.atomic.AtomicReference<ai.eliza.voice.BufferedStreamExchange.Handle> active=new java.util.concurrent.atomic.AtomicReference<>();
+  class VoiceHandle implements ai.eliza.voice.BufferedStreamExchange.Handle {final ElizaAgentService.LocalStreamHandle handle=new ElizaAgentService.LocalStreamHandle();public void cancel(){handle.cancel();}}
+  final ai.eliza.voice.BufferedStreamExchange.Port port=new ai.eliza.voice.BufferedStreamExchange.Port(){
+   public ai.eliza.voice.BufferedStreamExchange.Handle open(){return new VoiceHandle();}
+   public void request(JSONObject input,java.util.function.Consumer<String> events,ai.eliza.voice.BufferedStreamExchange.Handle handle){ElizaAgentService.requestLocalAgentStream(input.toString(),events,((VoiceHandle)handle).handle);}
   };
-  return new NativeLiveVoicePipe.Transport(){
+  return new ai.eliza.voice.LiveSegmentPipe.Transport(){
    public void check()throws Exception{synchronized(lifecycleLock){
     if(!binding.current(lifecycleEpoch,rootToken,ownerToken,ownerIdentity,ElizaAgentService.localAgentToken(),expiresAt,System.currentTimeMillis(),accepting&&!stopping))throw new SecurityException("Voice enrollment changed");
    }}
-   public void cancelInFlight(){cancelled.set(true);NativeVoiceIpc.Handle handle=active.get();if(handle!=null)handle.cancel();}
+   public void cancelInFlight(){cancelled.set(true);ai.eliza.voice.BufferedStreamExchange.Handle handle=active.get();if(handle!=null)handle.cancel();}
    public JSONObject post(JSONObject body)throws Exception{
     JSONObject headers=new JSONObject().put("Authorization","Bearer "+token).put("Content-Type","application/json").put("Accept","application/json");
     JSONObject input=new JSONObject().put("path","/api/asr/local-inference/live").put("method","POST").put("body",body.toString()).put("headers",headers).put("timeoutMs",8000);
-    return NativeVoiceIpc.exchange(port,input,active,()->{check();if(cancelled.get()&&!body.optBoolean("close"))throw new IllegalStateException("Voice capture cancelled");},8000);
+    return ai.eliza.voice.BufferedStreamExchange.exchange(port,input,active,()->{check();if(cancelled.get()&&!body.optBoolean("close"))throw new IllegalStateException("Voice capture cancelled");},8000);
    }
   };
  }

@@ -15,7 +15,7 @@ test('pending reset retries, shows bounded recovery instead of a launcher restar
  try{
   put('ai/elizaresearch/alphaphone/ResetCloudRevocation.java',`package ai.elizaresearch.alphaphone; final class ResetCloudRevocation {static int calls;static long budget;static void revoke(android.content.Context c,long ms){if(!AlphaDataReset.RESET.pending(c))throw new AssertionError("Revocation must follow durable reset authorization");calls++;budget=ms;}}`);
   put('android/app/Activity.java',`package android.app; public class Activity extends android.content.Context {}`);
-  put('ai/eliza/plugins/system/SenseListenerClient.java',`package ai.eliza.plugins.system; public final class SenseListenerClient {public static boolean resetSaved=true;public static int calls;public SenseListenerClient(android.content.Context c){}public boolean resetForData(){calls++;return resetSaved;}}`);
+  put('ai/eliza/plugins/system/SenseListenerClient.java',`package ai.eliza.plugins.system; public final class SenseListenerClient {public static boolean resetSaved=true;public static int calls;public SenseListenerClient(android.content.Context c){}public boolean resetForData(){calls++;return resetSaved;}public void admitOwner(java.util.function.Supplier<String> owner){ai.elizaresearch.alphaphone.ResetStartupTest.started();}}`);
   put('android/content/Context.java',`package android.content; public class Context { public static java.io.File data; public static android.app.ActivityManager manager=new android.app.ActivityManager(); public Context createDeviceProtectedStorageContext(){return this;} public java.io.File getNoBackupFilesDir(){data.mkdirs();return data;} public <T>T getSystemService(Class<T> type){return type.cast(manager);} public String getPackageName(){return "fixture.alpha";} public static int recoveries; public void startActivity(Intent intent){if(!"ai.elizaresearch.alphaphone.ResetRecoveryActivity".equals(intent.target.getName())||intent.flags!=(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK))throw new AssertionError("unexpected start");recoveries++;} }`);
   put('android/content/Intent.java',`package android.content; public class Intent {public static final int FLAG_ACTIVITY_NEW_TASK=0x10000000,FLAG_ACTIVITY_CLEAR_TASK=0x8000;public final Class<?> target;public int flags;public Intent(Context c,Class<?> t){target=t;}public Intent addFlags(int f){flags|=f;return this;} }`);
   put('android/app/Application.java',`package android.app; public class Application extends android.content.Context {protected void attachBaseContext(android.content.Context base){} public void onCreate(){} public static String process="fixture.alpha"; public static String getProcessName(){return process;} }`);
@@ -35,11 +35,16 @@ class NativeSourceHost {static int started;static void configure(Runnable r){sta
 class NativeDeletionCoordinator {static NativeDeletionCoordinator get(android.content.Context c){return new NativeDeletionCoordinator();}void start(){NativeSourceHost.started++;}}
 class AlphaCrashLog {static void install(android.content.Context c){NativeSourceHost.started++;}}
 class AlphaNoteAudioPlugin {static void scheduleTrashBackstop(android.content.Context c){NativeSourceHost.started++;}}
+class AlphaLocalAgentPlugin {static String invocationOwner(android.content.Context c){return "no-provider";}}
+final class BuildConfig {static final String ELIZA_SOURCE_COMMIT="fixture",FLAVOR="launcher",BUILD_TYPE="debug";static final boolean ELIZA_SOURCE_DIRTY=false;}
 `);
+  // Shared listener admission and latency probe: counted as startup work, so a pending reset starts neither.
+  put('ai/eliza/voice/VoiceLatencyProbe.java',`package ai.eliza.voice; public final class VoiceLatencyProbe {public static void configureHost(String format,String commit,boolean dirty,String build){ai.elizaresearch.alphaphone.ResetStartupTest.started();}}`);
   put('ai/elizaresearch/alphaphone/ResetStartupTest.java',`package ai.elizaresearch.alphaphone;
 import ai.eliza.plugins.system.SenseListenerClient;
 import ai.eliza.plugins.system.reset.DataReset;
 public class ResetStartupTest {
+ public static void started(){NativeSourceHost.started++;}
  static void check(boolean ok){if(!ok)throw new AssertionError();}
  public static void main(String[] args)throws Exception {
   android.content.Context.data=new java.io.File(args[0]);AlphaApplication app=new AlphaApplication();
@@ -47,7 +52,7 @@ public class ResetStartupTest {
   // A stale attempt without a confirmed request neither withdraws listener consent nor clears data,
   // even with an acknowledging listener, and recreates no reset state in fresh data.
   SenseListenerClient.resetSaved=true;check(AlphaDataReset.RESET.attempt(app,System.currentTimeMillis())==DataReset.Outcome.DEFERRED);check(SenseListenerClient.calls==0&&android.app.ActivityManager.calls==0);check(android.content.Context.data.listFiles().length==0);
-  app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==7);
+  app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==9);
   // Package-scoped: Android's own-package clear only; the sibling app's fixture data is untouched.
   check(new java.io.File(args[1],"keep").isFile());NativeSourceHost.started=0;
   AlphaDataReset.RESET.record(app);check(AlphaDataReset.RESET.pending(new AlphaApplication()));
@@ -108,7 +113,7 @@ public class ResetStartupTest {
   // A stale attempt without a confirmed request neither withdraws listener consent nor clears data,
   // even with an acknowledging listener, and recreates no reset state in fresh data.
   SenseListenerClient.resetSaved=true;int listenerBefore=SenseListenerClient.calls,clearsBefore=android.app.ActivityManager.calls;check(AlphaDataReset.RESET.attempt(app,System.currentTimeMillis())==DataReset.Outcome.DEFERRED);check(SenseListenerClient.calls==listenerBefore&&android.app.ActivityManager.calls==clearsBefore);check(android.content.Context.data.listFiles().length==0);
-  app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==7);
+  app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==9);
   // Package-scoped: Android's own-package clear only; the sibling app's fixture data is untouched.
   check(new java.io.File(args[1],"keep").isFile());
   System.out.println("PASS reset startup admission and interrupted dispatch");

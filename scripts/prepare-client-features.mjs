@@ -158,7 +158,12 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/voice/src/turn.ts',
   'packages/voice/src/browser-capture',
   'packages/voice/src/respond-gate.ts',
+  'packages/voice/src/voice-assistant-session.ts',
+  'packages/voice/src/live-voice-session.ts',
+  'packages/voice/src/voice-turn-routes.ts',
+  'packages/voice/src/voice-turn-timing.ts',
   'packages/voice/src/voice-eot.ts',
+  'packages/voice/src/random-id.ts',
   'packages/core/src/speech.ts',
   'packages/core/src/utils/string-boundaries.ts',
   'packages/core/src/spoken-text.ts',
@@ -226,6 +231,16 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   // and carry no declarations of their own.
   const project = (name, text) => source.set(name, {bytes:Buffer.from(text),mode:'100644',sha256:hash(Buffer.from(text))});
   project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\nexport * from "./packages/contracts/src/device-reviews";\nexport * from "./packages/contracts/src/contracts/theme";\n');
+  const text = name => source.get(name).bytes.toString();
+  // Upstream voice sessions import the shared random-id helper by its emitted .js name. Plain
+  // Node (tests and scripts that strip types) cannot map that to the copied .ts source, so the
+  // one reviewed value import is pointed at the .ts file; type-only .js imports are erased.
+  for (const name of ['packages/voice/src/voice-assistant-session.ts', 'packages/voice/src/live-voice-session.ts']) {
+    const before = 'import { randomId } from "./random-id.js";';
+    const content = text(name);
+    if (content.split(before).length !== 2) throw Error('Review changed voice random-id import: ' + name);
+    project(name, content.replace(before, 'import { randomId } from "./random-id.ts";'));
+  }
   project('alpha-voice-core-protocol.ts','export {ElizaError} from "./packages/core/src/errors";\nexport {redactTrailingArgs} from "./packages/core/src/security/log-redaction";\nexport {parseViewInteractionClientId, AGENT_SURFACE_CAPABILITY_IDS} from "./packages/core/src/views/view-interact-protocol";\nexport {findViewActionHandoff, type ViewActionHandoff} from "./packages/core/src/views/view-action-handoff";\nexport type {PermissionState} from "./packages/core/src/types/permissions";\n');
   }
   const files = Object.fromEntries([...source].map(([name, file]) => [name, file.sha256]));

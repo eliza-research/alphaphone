@@ -20,6 +20,9 @@ export function cloudVoiceViewFixture(options={}){
  const box={cloudRuntimeEnabled:options.cloudProfile===true,developmentCloudRealtimeVoiceEnabled:false,developmentCloudVoiceEnabled:false,developmentCartesiaVoiceEnabled:false,testMocksEnabled:false,browserDevProfile:false,Capacitor:{getPlatform:()=>f.platform,isNativePlatform:()=>f.native,isPluginAvailable:()=>true},connectionController:controller,registerPlugin:()=>driver,createOnDeviceVoice:()=>{f.localFactories++;return local;},createPairedVoice:()=>{f.pairedFactories++;return null;},planLocalSpeech:()=>[],recordingLevels:()=>[],localStorage:{getItem:()=>JSON.stringify({kind:f.kind})},document:{hidden:false,documentElement:{dataset:{}},querySelector:selector=>selector==='dialog[open]'?f.reviewOpen||null:f.noteEditor||null,addEventListener(){},removeEventListener(){}},window:{addEventListener(){},removeEventListener(){},dispatchEvent(){},getSelection:()=>({isCollapsed:true})},queueMicrotask,setInterval:options.clock?.setInterval||setInterval,clearInterval:options.clock?.clearInterval||clearInterval,setTimeout:options.clock?.setTimeout||setTimeout,clearTimeout:options.clock?.clearTimeout||clearTimeout,Date:options.clock?.Date||Date,performance:options.clock?.performance,crypto,structuredClone,AbortController,DOMException,Event,console};
  loadPreparedBatchVoice(box);
  load('runtime/voice-selection.ts',box,['selectVoiceRoute','voiceSendPolicy']);
+ // voice-timing.ts configures the shared recorder projected from the pin; it is evaluated in the
+ // same realm so its promises keep the view's microtask timing.
+ load('../../../.eliza/client-features/packages/voice/src/voice-turn-timing.ts',box,['createVoiceTurnTiming']);
  load('runtime/voice-timing.ts',box,['beginVoiceTurn','markVoiceTiming','abandonVoiceTurn','finishVoiceTurn','sendVoiceEntry']);
  load('local-speech-playback.ts',box,['playOwnedSpeech']);
  load('runtime/cloud-voice.ts',box,['cloudVoiceFailure','createCloudVoice']);

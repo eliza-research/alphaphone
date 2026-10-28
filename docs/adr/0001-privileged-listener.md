@@ -38,6 +38,20 @@ overlay), so press-and-hold reaches the same `AlphaAssistActivity`. The standalo
 Android uses only permitted entrypoints: the ACTION_ASSIST activity when the user selects Alpha as
 assistant, and the in-app microphone.
 
+SystemUI launches that activity for press-and-hold power (and the other assistant gestures). Stock
+SystemUI does not share its identity with the launch, so Alpha sees an unknown caller and the gesture
+only opens the assistant. The image applies the shared `assist` SystemUI bundle
+(`vendor/eliza/packages/os/android/sense/systemui/assist`): one
+`ActivityOptions.setShareIdentityEnabled(true)` in `AssistManager.startAssistActivity`, bound to the
+exact pinned preimage. Android then reports `com.android.systemui` as the caller
+(`getLaunchedFromPackage`, or `ComponentCaller` for a new intent), the shared `SenseListenerClient`
+marks a `system` invocation only for that package signed with the platform certificate, and the
+shared renderer policy starts one voice turn under the same rules as a listener wake: the same bound
+owner session, unlocked, in front, no dialog or connection prompt, within five seconds (or the
+15-second cold window for the stored provider owner). Caller extras, deep links and app-sent
+ACTION_ASSIST intents stay assist-only. The patch is source only: SystemUI has not been compiled with
+it, and G4 still needs a physical Pixel 10a.
+
 ### Listener states
 
 `OFF → (consent, permission) → WAITING_FOR_UNLOCK → LISTENING ⇄ PAUSED_{USER, CALL, MIC_IN_USE, MIC_UNAVAILABLE}`,
@@ -68,7 +82,7 @@ plus `PERMISSION_REQUIRED`, `SPEECH_UNAVAILABLE`, `STOPPED_AFTER_ERRORS`, `INDIC
 | G1 Image build | `vendor/alphaphone` with the staged listener builds; privapp enforcement accepts the allowlist. |
 | G2 Boot and grants | `node scripts/verify-aosp-listener.mjs --serial S --user 0` passes on the booted image: system, privileged, persistent, `CAPTURE_AUDIO_HOTWORD` granted, no network permission, Alpha nonprivileged, indicator property set; no listening before consent. |
 | G3 Indicator | The system microphone indicator, the Listening chip and the listener notification are visible while listening, on the lock screen and AOD, including with "hide silent notifications" on; killing SystemUI, hiding the chip surface (immersive, shade, occluding windows) and an unattributed recording stop capture within the lease bound and do not resume it; with the screen off, listening continues while AOD shows the chip, and with AOD off it pauses and resumes when the lock screen shows the chip (AOD and HOTWORD may need the open SystemUI op-list patch and Listening chip, spec §3.4 rules 3 and 5). HOTWORD attribution under `ro.hotword.detection_service_required` is checked at the pinned AOSP tag. Pixel `PixelConfigOverlay*` must not re-assign the cleared roles. |
-| G4 Hardware invocation | Press-and-hold power opens Alpha's assistant surface; power + volume up opens the power menu; Emergency SOS and double-press camera unchanged — on a physical Pixel 10a. |
+| G4 Hardware invocation | Press-and-hold power opens Alpha's assistant surface and, with the `assist` SystemUI bundle applied, starts one voice turn (unlocked, signed in); an app-sent ACTION_ASSIST only opens it; power + volume up opens the power menu; Emergency SOS and double-press camera unchanged — on a physical Pixel 10a. |
 | G5 Coexistence | User switch to a guest or secondary user stops capture; ringing, calls, another recording app, Alpha's own voice turn, media playback and Bluetooth routing; the listener pauses and recovers; assistant speech does not re-invoke it (echo). |
 | G6 Reliability and power | Stop/pause reliability from notification, tile and lock screen; reboot before unlock; crash-loop behaviour; battery and thermal cost over a multi-hour and a 24-hour listening run. |
 | G7 Hardening | Optional custom `alpha_sense_app` SELinux domain and isolated speech process, evaluated after G1–G2. |
