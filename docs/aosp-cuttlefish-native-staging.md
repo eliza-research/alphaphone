@@ -22,7 +22,13 @@ not change the AOSP source or build an image. Install the reviewed generated
 content under `vendor/alphaphone` and inherit its `product.mk` from the explicit
 `alpha_cf_x86_64_phone` product. Production staging still requires the complete
 production source/product lock, release signer, listener and distributable APK;
-this development command does not satisfy those gates.
+this development command does not satisfy those gates. The product descriptor
+(`android/aosp/product.json`) is checked by the shared
+`packages/os/scripts/android/cuttlefish-product.mjs` against the shared reviewed
+`cuttlefish` profile in `vendor/eliza/packages/os/android/aosp.lock.json`
+(android-17.0.0_r1); Alpha keeps no Cuttlefish source lock of its own. Its host
+package hashes and the image platform certificate stay unset until the image
+host and release signer are chosen (A-01, A-06).
 
 `stage-aosp-native.py --target cuttlefish` selects only `lib/x86_64`, checks ELF64
 little-endian x86 machine headers, and requires the complete resident runtime.

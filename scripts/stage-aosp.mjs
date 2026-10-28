@@ -1,6 +1,6 @@
 import { cuttlefishOptions, writeCuttlefishNatives } from './aosp-cuttlefish.mjs';
 import { verifyPixel10aSource, defaultLockPath, listenerSystemuiPatch, aospBuildPatch } from './pixel10a-source-contract.mjs';
-import { pixel10aOptions, pixel10aProductProblems, writePixel10aProduct, PIXEL10A_PRODUCT } from './aosp-pixel10a.mjs';
+import { pixel10aOptions, pixel10aProductProblems, pixel10aVendorApi, writePixel10aProduct, PIXEL10A_PRODUCT } from './aosp-pixel10a.mjs';
 import { readReleaseSigner } from './build-android.mjs';
 import fs from "node:fs";
 import { writeAospCapabilityOverlay } from "./aosp-capability-overlay.mjs";
@@ -14,75 +14,26 @@ import { clockProductRequirement } from "./aosp-clock-contract.mjs";
 import { provisioningComponents, writeProvisioningOverlay } from "./aosp-provisioning-overlay.mjs";
 import { writeImageCapability } from "./aosp-image-capability.mjs";
 import { releaseBlockers } from "./release-blockers.mjs";
-import { loadProfile } from "../vendor/eliza/packages/os/scripts/android/verify-source-lock.ts";
-import { loadBrandConfig } from "../vendor/eliza/packages/os/scripts/android/brand-config.ts";
+import { CUTTLEFISH_TARGETS, cuttlefishProductProblems } from "../vendor/eliza/packages/os/scripts/android/cuttlefish-product.mjs";
 
 export const PRODUCT_DESCRIPTOR = "android/aosp/product.json";
-export const AOSP_TARGETS = Object.freeze(["cuttlefish_x86_64", "cuttlefish_arm64"]);
-const HEX64 = /^[0-9a-f]{64}$/;
-
-/** JSON paths whose string value is unset or a placeholder. */
-function placeholders(value, at = "") {
-  if (typeof value === "string") return /^(unset|todo|tbd)$/i.test(value.trim()) || /placeholder/i.test(value) ? [at || "(value)"] : [];
-  if (Array.isArray(value)) return value.flatMap((item, index) => placeholders(item, `${at}[${index}]`));
-  if (value && typeof value === "object") return Object.entries(value).filter(([key]) => key !== "description").flatMap(([key, item]) => placeholders(item, at ? `${at}.${key}` : key));
-  return [];
-}
+export const SHARED_CUTTLEFISH_LOCK = "vendor/eliza/packages/os/android/aosp.lock.json";
+export const AOSP_TARGETS = CUTTLEFISH_TARGETS;
 
 /**
- * Problems that keep the Alpha AOSP product from production staging, read from `root`: the
- * product descriptor, its brand config (upstream brand-config schema), its source-lock profile
- * (upstream verify-source-lock schema), the Cuttlefish host package hashes and the reviewed
- * signer. An empty list means the lock is complete; it says nothing about an image build or boot.
+ * Problems that keep the Alpha AOSP product from production staging, read from `root` by the shared
+ * Cuttlefish product checks (vendor/eliza/packages/os/scripts/android/cuttlefish-product.mjs): the
+ * product descriptor, its brand config, the shared reviewed Cuttlefish source-lock profile, the host
+ * package hashes and the reviewed signer. An empty list means the lock is complete; it says nothing
+ * about an image build or boot.
  */
 export function aospProductLockProblems(root = process.cwd()) {
   const at = rel => path.join(root, rel);
-  const read = rel => JSON.parse(fs.readFileSync(at(rel), "utf8"));
   if (!fs.existsSync(at(PRODUCT_DESCRIPTOR))) return [`${PRODUCT_DESCRIPTOR} is missing`];
-  const problems = [];
   let product;
-  try { product = read(PRODUCT_DESCRIPTOR); } catch (error) { return [`${PRODUCT_DESCRIPTOR} is unreadable: ${error.message}`]; }
-  if (product.schema !== 1) problems.push(`${PRODUCT_DESCRIPTOR}: schema must be 1`);
-  for (const field of placeholders(product)) problems.push(`${PRODUCT_DESCRIPTOR}: ${field} is unset or a placeholder`);
-  if (!AOSP_TARGETS.includes(product.target)) problems.push(`${PRODUCT_DESCRIPTOR}: target must be one of ${AOSP_TARGETS.join(", ")}`);
-  const identity = read("app.config.json");
-  // Brand config through the pinned upstream loader (required fields, architecture, lock path).
-  let brand = null;
-  if (typeof product.brandConfig !== "string" || !product.brandConfig.startsWith("android/aosp/")) problems.push(`${PRODUCT_DESCRIPTOR}: brandConfig must name a file under android/aosp/`);
-  else {
-    try { brand = loadBrandConfig(at(product.brandConfig)); } catch (error) { problems.push(`${product.brandConfig}: ${error.message}`); }
-    if (brand) {
-      for (const field of placeholders(brand)) problems.push(`${product.brandConfig}: ${field} is unset or a placeholder`);
-      if (brand.packageName !== identity.appId) problems.push(`${product.brandConfig}: packageName ${brand.packageName} is not ${identity.appId}`);
-      if (brand.productName !== product.product) problems.push(`${product.brandConfig}: productName ${brand.productName} is not ${product.product}`);
-      if (brand.aospLockProfile !== product.sourceLock?.profile) problems.push(`${product.brandConfig}: aospLockProfile is not the descriptor's source-lock profile`);
-      if (brand.aospLockPath !== product.sourceLock?.file) problems.push(`${product.brandConfig}: aospLockPath is not the descriptor's source lock`);
-    }
-  }
-  // Source lock through the pinned upstream loader (manifest url, tag and full object IDs).
-  const lockFile = product.sourceLock?.file, profileName = product.sourceLock?.profile;
-  if (Object.values(product.separateLocks ?? {}).includes(lockFile)) problems.push(`${lockFile} is a separate product's lock; it is not admitted for the Cuttlefish product`);
-  else if (typeof lockFile !== "string" || !lockFile.startsWith("android/aosp/") || !fs.existsSync(at(lockFile))) problems.push(`${PRODUCT_DESCRIPTOR}: sourceLock.file must name an existing lock under android/aosp/`);
-  else {
-    const lock = read(lockFile);
-    if (lock.admitted === false) problems.push(`${lockFile} is not admitted`);
-    let profile = null;
-    try { profile = loadProfile(profileName, at(lockFile)); } catch (error) { problems.push(`${lockFile}: ${error.message}`); }
-    for (const field of placeholders(lock.profiles?.[profileName] ?? {})) problems.push(`${lockFile}: profiles.${profileName}.${field} is unset or a placeholder`);
-    if (profile && profile.kind !== "virtual") problems.push(`${lockFile}: profile ${profileName} is a ${profile.kind} device; only the Cuttlefish product is admitted`);
-    if (profile && !(profile.supportedProducts ?? []).includes(product.product)) problems.push(`${lockFile}: profile ${profileName} does not list ${product.product}`);
-  }
-  const hosts = Array.isArray(product.hostPackages) ? product.hostPackages : [];
-  if (!hosts.length) problems.push(`${PRODUCT_DESCRIPTOR}: hostPackages lists no Cuttlefish host package`);
-  for (const pkg of hosts) if (!pkg?.name || !pkg?.version || !HEX64.test(pkg?.sha256 ?? "")) problems.push(`${PRODUCT_DESCRIPTOR}: host package ${pkg?.name ?? "(unnamed)"} needs a version and a SHA-256`);
-  // The reviewed signer: the APK release signer descriptor and the image platform certificate.
-  if (product.signer?.apkDescriptor !== "android/release-signer.json") problems.push(`${PRODUCT_DESCRIPTOR}: signer.apkDescriptor must be android/release-signer.json`);
-  else {
-    const signer = read(product.signer.apkDescriptor).signerSha256;
-    if (!HEX64.test(signer ?? "")) problems.push(`android/release-signer.json signerSha256 is ${JSON.stringify(signer)}, not a reviewed release certificate`);
-  }
-  if (!HEX64.test(product.signer?.platformCertificateSha256 ?? "")) problems.push(`${PRODUCT_DESCRIPTOR}: signer.platformCertificateSha256 must be a SHA-256`);
-  return [...new Set(problems)];
+  try { product = JSON.parse(fs.readFileSync(at(PRODUCT_DESCRIPTOR), "utf8")); } catch (error) { return [`${PRODUCT_DESCRIPTOR} is unreadable: ${error.message}`]; }
+  const identity = JSON.parse(fs.readFileSync(at("app.config.json"), "utf8"));
+  return cuttlefishProductProblems(product, { root, file: PRODUCT_DESCRIPTOR, appId: identity.appId, productDirectory: "android/aosp", sharedSourceLock: SHARED_CUTTLEFISH_LOCK, applicationSignerFile: "android/release-signer.json" });
 }
 import { VOICE_HOST_RECORD, checkListenerDescriptor, checkListenerSpeechBundle, checkListenerSpeechNatives, stageListener } from "./aosp-listener.mjs";
 
@@ -200,12 +151,12 @@ const get = (key) => {
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--development" || args[i] === "--production") continue;
   if (
-    !["--apk", "--output", "--descriptor", "--apk-manifest", "--aosp-source", "--listener-apk", "--listener-descriptor", "--target", "--factory-image", "--applied-systemui-patch", "--applied-build-patch"].includes(args[i]) ||
+    !["--apk", "--output", "--descriptor", "--apk-manifest", "--aosp-source", "--listener-apk", "--listener-descriptor", "--target", "--factory-image", "--applied-systemui-patch", "--applied-build-patch", "--boot-animation"].includes(args[i]) ||
     !args[i + 1] ||
     args[i + 1].startsWith("--")
   )
     throw new Error(
-      "Use --apk FILE --output NEW_DIR [--descriptor FILE [--production] | --development] [--apk-manifest FILE] [--aosp-source PATH] [--target cuttlefish | --target pixel10a --factory-image FILE (--development | --production --descriptor FILE)] [--listener-apk FILE [--listener-descriptor FILE]] [--applied-systemui-patch chip|ops ...] [--applied-build-patch soong-memory|soong-app-native ...]",
+      "Use --apk FILE --output NEW_DIR [--descriptor FILE [--production] | --development] [--apk-manifest FILE] [--aosp-source PATH] [--target cuttlefish | --target pixel10a --factory-image FILE (--development | --production --descriptor FILE)] [--listener-apk FILE [--listener-descriptor FILE]] [--applied-systemui-patch chip|ops ...] [--applied-build-patch soong-memory|soong-app-native ...] [--boot-animation ZIP (pixel10a, when the composition pins one)]",
     );
   if (args[i] === '--applied-systemui-patch') appliedPatchNames.push(args[i + 1]);
   if (args[i] === '--applied-build-patch') appliedBuildNames.push(args[i + 1]);
@@ -218,6 +169,7 @@ const development = args.includes("--development");
 const production = args.includes("--production");
 const cuttlefish = cuttlefishOptions({target:get('--target'), source:get('--aosp-source'), factory:get('--factory-image')});
 const physical = pixel10aOptions({target:cuttlefish ? null : get('--target'), development, production, source:get('--aosp-source'), factory:get('--factory-image')});
+if (get('--boot-animation') && !physical) throw new Error('--boot-animation belongs to --target pixel10a');
 if (production && development) throw new Error("--production and --development are exclusive");
 // The product lock is checked before any source or APK is read: production never stages into an
 // unset product. Pixel 10a has its own production descriptor; the Cuttlefish product its own lock.
@@ -231,6 +183,8 @@ const appliedPatches = [...stagingSystemuiPatches(appliedPatchNames, physical ||
 if ((physical || cuttlefish) && !appliedBuildNames.includes('soong-app-native'))
   throw Error('Image staging requires --applied-build-patch soong-app-native for Soong-only APK and JNI installation.');
 const physicalSource = physical ? await verifyPixel10aSource({source:get('--aosp-source'), factory:get('--factory-image'), appliedPatches}) : null;
+// The verified tree must also lunch a release carrying the stock stallion vendor API (shared check).
+const vendorApi = physical ? pixel10aVendorApi({root:process.cwd(), source:get('--aosp-source')}) : null;
 if (physical && production && physicalSource.sourceLockSha256 !== JSON.parse(fs.readFileSync(PIXEL10A_PRODUCT, "utf8")).sourceLock?.sha256)
   throw new Error(`Refusing production staging: the verified source lock is not the one pinned in ${PIXEL10A_PRODUCT}.`);
 // The always-on listener is part of the AOSP MVP (issue #424): production images must include it.
@@ -336,14 +290,18 @@ execFileSync(
 fs.appendFileSync(path.join(output, "product.mk"), clockProductRequirement);
 // The image system feature Alpha Phone requires, with a system-partition install, before it offers
 // Phone, Contacts or SMS (P-36). Development and production images both declare it; test-mocks APKs
-// were refused above, and a sideloaded APK never has the system-partition install.
-const capability = writeImageCapability(output, identity.appId);
-console.log(`Image capability: ${Object.keys(capability).find(name => name !== "productMakefile")}.`);
+// were refused above, and a sideloaded APK never has the system-partition install. The shared
+// Pixel 10a composition declares it for every brand, so only the other products write it here.
+if (!physical) {
+  const capability = writeImageCapability(output, identity.appId);
+  console.log(`Image capability: ${Object.keys(capability).find(name => name !== "productMakefile")}.`);
+}
 writeSecureCameraOverlay(output, cameraSource);
 if (production) {
   const components = provisioningComponents(tree, identity.appId);
   writeProvisioningOverlay(output, identity.appId, components);
-  writeAospCapabilityOverlay(output, identity.appId);
+  // The shared Pixel 10a composition writes the same overlay from products/pixel10a-alpha.json.
+  if (!physical) writeAospCapabilityOverlay(output, identity.appId);
   console.log(`Provisioning overlay: HOME ${components.home}, assistant ${identity.appId}, Autofill ${components.autofill}.`);
 }
 if (listenerApk) {
@@ -379,7 +337,7 @@ if (listenerApk) {
 }
 if (cuttlefish) writeCuttlefishNatives({root:process.cwd(), output, apk, module:identity.moduleName});
 if (physical) {
-  writePixel10aProduct({root:process.cwd(), output, apk, identity, launcher:reviewed, sourceEvidence:physicalSource, production});
+  writePixel10aProduct({root:process.cwd(), output, apk, identity, launcher:reviewed, sourceEvidence:physicalSource, production, bootAnimation:get('--boot-animation'), vendorApi});
 }
 if (physical || cuttlefish) {
   if (fs.existsSync(destination)) throw Error('Output appeared during staging: ' + destination);

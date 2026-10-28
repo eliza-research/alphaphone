@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {pixel10aOptions, writePixel10aProduct} from '../scripts/aosp-pixel10a.mjs';
+import {pixel10aOptions, pixel10aVendorApi, writePixel10aProduct} from '../scripts/aosp-pixel10a.mjs';
 
 function assertSingleProductRegistration(output) {
   const staged = fs.readdirSync(output, {recursive:true});
@@ -45,6 +45,7 @@ test('physical overlay installs ARM64 JNI and development product without boot c
   const product = fs.readFileSync(path.join(output, 'product.mk'), 'utf8');
   assert.match(product, /existing camera, clock and image capability/);
   assert.match(product, /TARGET_FS_CONFIG_GEN \+= vendor\/alphaphone\/config.fs/);
+  assert.equal(product.match(/^PRODUCT_PACKAGES \+= DeskClock$/gm)?.length, 1, 'the shared composition keeps the system Clock once');
   assert.match(fs.readFileSync(path.join(output, 'AndroidProducts.mk'), 'utf8'), /alpha_stallion_phone/);
   assert.ok(fs.existsSync(path.join(output, 'stallion/vendor-config/Android.bp')));
   const report = JSON.parse(fs.readFileSync(path.join(output, 'physical-product.json')));
@@ -75,4 +76,22 @@ test('production physical overlay sets no board AVB variables and records no bui
 
 test('native admission fixtures cover corrupt provenance, policy, ELF and overlay inputs', () => {
   execFileSync('python3', ['test/aosp-native-fixtures.py'], {stdio:'pipe'});
+});
+
+test('Pixel staging takes the shared stock stallion vendor API check before writing anything', t => {
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), 'alpha-stallion-api-'));
+  t.after(() => fs.rmSync(source, {recursive:true, force:true}));
+  const api = JSON.parse(fs.readFileSync('vendor/eliza/packages/os/android/aosp.lock.json', 'utf8')).profiles.pixel10a.device.vendorApiLevel;
+  const release = JSON.parse(fs.readFileSync('vendor/eliza/packages/os/android/products/pixel10a-alpha.json', 'utf8')).releaseConfig;
+  const flag = path.join(source, 'build/release/flag_values', release, 'RELEASE_BOARD_API_LEVEL.textproto');
+  const manifest = path.join(source, 'vendor/google_devices/stallion/vintf/vendor/manifest.xml');
+  for (const file of [flag, manifest]) fs.mkdirSync(path.dirname(file), {recursive:true});
+  fs.writeFileSync(flag, `value: { string_value: "${api}" }\n`);
+  fs.writeFileSync(manifest, `<manifest><sepolicy><version>${api}</version></sepolicy></manifest>\n`);
+  assert.deepEqual(pixel10aVendorApi({source}), {codename:'stallion', releaseConfig:release, vendorApiLevel:api});
+  fs.writeFileSync(manifest, '<manifest><sepolicy><version>202504</version></sepolicy></manifest>\n');
+  assert.throws(() => pixel10aVendorApi({source}), /must retain locked API/);
+  const stage = fs.readFileSync('scripts/stage-aosp.mjs', 'utf8');
+  const check = stage.indexOf('pixel10aVendorApi({root:process.cwd()');
+  assert.ok(check > stage.indexOf('verifyPixel10aSource({') && check < stage.indexOf('fs.mkdtempSync('), 'checked after source admission, before any output');
 });

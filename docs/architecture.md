@@ -452,6 +452,12 @@ speech module and packages the complete admitted libelizainference runtime;
 the main app's speech module links to its host-owned runtime. This keeps the
 separate process independent without duplicate runtime selection in either APK.
 
+Release signing, the version/hash compatibility record, the operator OTA update
+client with interrupted-update, fallback and stock-recovery tooling, the system
+Clock requirement and the read-only image checks are shared Pixel 10a tooling too.
+Alpha keeps their inputs: its release descriptor, update channel, qualification
+gates and APK release signer under `android/`.
+
 Source reuse does not transfer image, signing or device qualification. Alpha's
 runtime provenance, image capability and listener acceptance gates remain active,
 and `releaseQualified` remains false.

@@ -46,7 +46,7 @@ test("image staging declares the versioned system feature in the product partiti
   const files = renderImageCapability(PKG);
   const xml = files[`image-capability/${PKG}.aosp_image.xml`];
   assert.match(xml, new RegExp(`<feature name="${PKG.replaceAll(".", "\\.")}\\.aosp_image" version="${IMAGE_FEATURE_VERSION}" />`));
-  assert.match(files.productMakefile, new RegExp(`PRODUCT_COPY_FILES \\+= \\$\\(alphaphone_image_capability_dir\\)/${PKG.replaceAll(".", "\\.")}\\.aosp_image\\.xml:\\$\\(TARGET_COPY_OUT_PRODUCT\\)/etc/permissions/`));
+  assert.match(files.productMakefile, new RegExp(`PRODUCT_COPY_FILES \\+= \\$\\(image_capability_dir\\)/${PKG.replaceAll(".", "\\.")}\\.aosp_image\\.xml:\\$\\(TARGET_COPY_OUT_PRODUCT\\)/etc/permissions/`));
   assert.doesNotMatch(files.productMakefile, /\bALPHA_/);
   const out = fs.mkdtempSync(path.join(os.tmpdir(), "alpha-image-"));
   t.after(() => fs.rmSync(out, { recursive: true, force: true }));
@@ -67,6 +67,10 @@ test("staging, native check and feature declaration agree", () => {
   const admission = stage.indexOf("\nadmitApk({");
   assert.ok(admission > stage.indexOf("function admitApk("), "the admission call site, not the definition");
   assert.ok(admission > 0 && admission < call, "test-mocks and non-distributable APKs are refused before the capability is written");
+  // Pixel 10a takes the declaration from the shared composition every brand uses; it is never written twice.
+  assert.match(stage, /if \(!physical\) \{\n  const capability = writeImageCapability\(output, identity\.appId\);/);
+  assert.match(read("vendor/eliza/packages/os/scripts/android/pixel10a-product.ts"), /writeImageCapability\(output, launcher\.packageName\)/);
+  assert.match(read("scripts/aosp-image-capability.mjs"), /from "\.\.\/vendor\/eliza\/packages\/os\/scripts\/android\/image-capability\.mjs"/);
   const capability = read(`${JAVA}/AlphaImageCapability.java`);
   assert.match(capability, new RegExp(`static final int FEATURE_VERSION = ${IMAGE_FEATURE_VERSION};`));
   assert.match(capability, /return packageName \+ "\.aosp_image";/);

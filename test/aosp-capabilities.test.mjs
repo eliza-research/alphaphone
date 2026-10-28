@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {writeAospCapabilityOverlay} from '../scripts/aosp-capability-overlay.mjs';
+import {ALPHA_IMAGE_PROVISIONING, assertAlphaProvisioningDefault, writeAospCapabilityOverlay} from '../scripts/aosp-capability-overlay.mjs';
 
 test('compiled image admission requires every trusted fact and keeps adapter roles unavailable',t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'alpha-image-cap-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
@@ -39,7 +39,12 @@ test('production RRO targets the prebuilt app overlayable and cannot be a develo
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'alpha-image-overlay-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));fs.writeFileSync(path.join(dir,'product.mk'),'');
  const files=writeAospCapabilityOverlay(dir,'ai.elizaresearch.alphaphone');assert.match(files['image-capabilities/Android.bp'],/runtime_resource_overlay/);assert.match(files['image-capabilities/Android.bp'],/product_specific: true/);
  assert.match(files['image-capabilities/AndroidManifest.xml'],/targetName="AlphaImageProvisioning"/);assert.match(files['image-capabilities/res/values/capabilities.xml'],/>true</);
- const defaults=fs.readFileSync('android/app/src/main/res/values/aosp-capabilities.xml','utf8');assert.match(defaults,/alpha_aosp_image_capability">false</);assert.match(defaults,/policy type="system\|product"/);
- const stage=fs.readFileSync('scripts/stage-aosp.mjs','utf8');assert.ok(stage.indexOf('writeAospCapabilityOverlay(output')>stage.indexOf('if (production) {'));
+ assert.match(fs.readFileSync(path.join(dir,'product.mk'),'utf8'),/PRODUCT_PACKAGES \+= AlphaImageCapabilityOverlay\n/);
+ const defaults=fs.readFileSync('android/app/src/main/res/values/aosp-capabilities.xml','utf8');assert.equal(assertAlphaProvisioningDefault(defaults),true);
+ assert.throws(()=>assertAlphaProvisioningDefault(defaults.replace('>false<','>true<')),/default to false/);
+ const stage=fs.readFileSync('scripts/stage-aosp.mjs','utf8');assert.ok(stage.indexOf('if (!physical) writeAospCapabilityOverlay(output')>stage.indexOf('if (production) {'));
+ // The shared Pixel 10a composition writes the same overlay from Alpha's product, with Alpha's installed identifiers.
+ const product=JSON.parse(fs.readFileSync('vendor/eliza/packages/os/android/products/pixel10a-alpha.json','utf8'));
+ assert.deepEqual(product.launcher.imageProvisioning,{...ALPHA_IMAGE_PROVISIONING});
  assert.throws(()=>writeAospCapabilityOverlay(dir,'bad"target'),/Invalid/);
 });
