@@ -783,13 +783,26 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  }
  static void rememberNotificationOwner(Context context,JSONObject expected,JSONObject identity)throws Exception{
   synchronized(lifecycleLock){synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){
-   checkNotificationSession(expected);AlphaCredentialStore store=new AlphaCredentialStore(context);
-   if(notificationAgent!=null&&!notificationAgent.equals(identity.getString("agentId")))throw new SecurityException("Notification agent changed after validation");
-   JSONObject record=NativeNotificationSession.record(expected,identity,notificationInstallation(context),store.providerAdmissionSnapshot().toString());
-   String previous=store.readCredentialSlot(NativeNotificationSession.SLOT);
-   if(previous!=null){String old=new JSONObject(previous).optString("projectionOwner","");if(old.matches("[a-f0-9]{64}")&&!old.equals(record.getString("projectionOwner")))NativeNotificationProjector.retireOwner(context,old);}
-   notificationAgent=identity.getString("agentId");
-   store.writeCredentialSlot(NativeNotificationSession.SLOT,record.toString());checkNotificationSession(expected);
+   NativeNotificationDiagnostics.Persist stage=NativeNotificationDiagnostics.Persist.SESSION;
+   try{
+    checkNotificationSession(expected);AlphaCredentialStore store=new AlphaCredentialStore(context);
+    stage=NativeNotificationDiagnostics.Persist.AGENT;
+    if(notificationAgent!=null&&!notificationAgent.equals(identity.getString("agentId")))throw new SecurityException("Notification agent changed after validation");
+    stage=NativeNotificationDiagnostics.Persist.INSTALLATION;
+    String installation=notificationInstallation(context);
+    stage=NativeNotificationDiagnostics.Persist.PROVIDER;
+    String provider=store.providerAdmissionSnapshot().toString();
+    stage=NativeNotificationDiagnostics.Persist.RECORD;
+    JSONObject record=NativeNotificationSession.record(expected,identity,installation,provider);
+    stage=NativeNotificationDiagnostics.Persist.PREVIOUS;
+    String previous=store.readCredentialSlot(NativeNotificationSession.SLOT);
+    if(previous!=null){String old=new JSONObject(previous).optString("projectionOwner","");if(old.matches("[a-f0-9]{64}")&&!old.equals(record.getString("projectionOwner")))NativeNotificationProjector.retireOwner(context,old);}
+    stage=NativeNotificationDiagnostics.Persist.STORE;
+    notificationAgent=identity.getString("agentId");
+    store.writeCredentialSlot(NativeNotificationSession.SLOT,record.toString());
+    stage=NativeNotificationDiagnostics.Persist.FINAL;
+    checkNotificationSession(expected);
+   }catch(Exception failure){NativeNotificationDiagnostics.persistFailure(stage,failure);throw failure;}
   }}
  }
  static void retireRejectedNotificationSession(Context context,String expected)throws Exception{
