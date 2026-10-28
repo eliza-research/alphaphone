@@ -339,7 +339,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
    "ELIZA_MANAGED_CALENDAR_DELETE_ENABLED","ELIZA_NATIVE_GOOGLE_GMAIL_SEND_ENABLED","ELIZA_MANAGED_GMAIL_MAILBOX_CHANGES_ENABLED"})env.remove(name);
   env.put("ELIZAOS_CLOUD_USE_INFERENCE","false");
   env.put("ELIZAOS_CLOUD_USE_EMBEDDINGS","false");
-  // No embedding download: the packaged on-device embedding model is enabled when present (configureLocalEmbeddings).
+  // No embedding download: the packaged on-device embedding model is enabled when present (NativeRuntimeEmbeddings).
   env.put("ELIZA_DISABLE_LOCAL_EMBEDDINGS","true");
   env.put("ELIZA_LOCAL_EMBEDDING_ENABLED","0");
   env.put("ELIZA_HOST_CONTEXT_REVISION","boot:"+java.util.UUID.randomUUID().toString());
@@ -360,24 +360,6 @@ public final class AlphaLocalAgentPlugin extends Plugin {
    }
    catch(Exception unavailable){call.reject("Provider status unavailable.");}
   },()->{call.reject("Local agent bridge is closed.");});
- }
- /** The shared service activates its bionic host from this same packaged engine/JNI pair. */
- static void configureLocalEmbeddings(File nativeDirectory,File filesDirectory,java.util.Map<String,String> env) {
-  // Native profile never sends memory to Cloud when its local assets are unavailable.
-  // Clear inherited provider selectors before checking the exact local inputs.
-  env.put("ELIZAOS_CLOUD_USE_EMBEDDINGS","false");
-  env.remove("ELIZAOS_CLOUD_EMBEDDING_MODEL");env.remove("ELIZAOS_CLOUD_EMBEDDING_DIMENSIONS");
-  env.put("ELIZA_DISABLE_LOCAL_EMBEDDINGS","true");
-  env.put("ELIZA_LOCAL_EMBEDDING_ENABLED","0");
-  env.remove("ELIZA_LOCAL_EMBEDDING_MODEL_PATH");env.remove("ELIZA_LOCAL_EMBEDDING_DIMENSIONS");
-  File model=new File(filesDirectory,".eliza/local-inference/models/bge-small-en-v1.5-f16.gguf");
-  if(!new File(nativeDirectory,"libelizainference.so").isFile()||!new File(nativeDirectory,"libelizavoicejni.so").isFile()||!model.isFile())return;
-  // The APK build guard pins these native bytes and the BGE model. BgeEmbeddingSession
-  // verifies the actual extracted model and vector space before native inference.
-  env.put("ELIZA_DISABLE_LOCAL_EMBEDDINGS","false");
-  env.put("ELIZA_LOCAL_EMBEDDING_ENABLED","1");
-  env.put("ELIZA_LOCAL_EMBEDDING_MODEL_PATH",model.getAbsolutePath());
-  env.put("ELIZA_LOCAL_EMBEDDING_DIMENSIONS","384");
  }
  static void configureNativeViews(java.io.InputStream policy,java.util.Map<String,String> env) throws java.io.IOException {
   try(policy){
@@ -441,7 +423,9 @@ public final class AlphaLocalAgentPlugin extends Plugin {
     }
    }
   }
-  if(!"cloud".equals(BuildConfig.ELIZA_RUNTIME_PROFILE))configureLocalEmbeddings(new File(context.getApplicationInfo().nativeLibraryDir),context.getFilesDir(),env);
+  // The shared native runtime profile owns the embedding route: native keeps BGE embeddings on the
+  // device (unavailable, never Cloud, when the packaged engine/JNI pair or model is missing).
+  ai.eliza.plugins.agent.runtime.NativeRuntimeEmbeddings.apply(BuildConfig.ELIZA_RUNTIME_PROFILE,new File(context.getApplicationInfo().nativeLibraryDir),context.getFilesDir(),env);
   // The agent process has no /etc/localtime on Android and would run in UTC; calendar dates and
   // "tomorrow at 3pm" resolve in the process zone when no owner resolver is registered.
   env.put("TZ",java.util.TimeZone.getDefault().getID());
