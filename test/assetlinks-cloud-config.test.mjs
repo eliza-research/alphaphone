@@ -112,6 +112,17 @@ test("the CLI prints the Cloud value, checks a file and refuses unknown option m
   assert.deepEqual(entries.map(entry => entry.package_name), ["ai.elizaos.app", packageName]);
   assert.deepEqual(entries[1].sha256_cert_fingerprints, [fingerprint(RELEASE), fingerprint(DEV)]);
   assert.match(value.stderr, /ELIZA_ANDROID_ASSET_LINKS_JSON/);
+  assert.doesNotMatch(value.stderr, /lists no statement|without --published/);
+  // A value that could not include the other apps' entries says so before it is printed.
+  const alone = cli(["--cloud-config"]);
+  assert.equal(alone.status, 0, alone.stderr);
+  assert.match(alone.stderr, /without --published the value below holds only Alpha's entry; setting it replaces every other app's entry/);
+  assert.deepEqual(JSON.parse(alone.stdout).map(entry => entry.package_name), [packageName]);
+  const emptyFile = path.join(dir, "empty.json");
+  fs.writeFileSync(emptyFile, "[]");
+  const empty = cli(["--cloud-config", "--published", emptyFile]);
+  assert.equal(empty.status, 0, empty.stderr);
+  assert.match(empty.stderr, /lists no statement, so no other app's entry could be read from it/);
   const servedFile = path.join(dir, "served.json");
   fs.writeFileSync(servedFile, publish(entries));
   const check = cli(["--check", servedFile]);

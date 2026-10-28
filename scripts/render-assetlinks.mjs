@@ -299,7 +299,10 @@ async function main(argv) {
         const source = await readAssetLinksSource(options.published);
         if (source.problems.length) console.error(`warning: ${source.problems.join("; ")}`);
         if (source.text) entries = statementsToCloudEntries(JSON.parse(source.text));
-      }
+        // Cloud publishes [] both while the variable is unset and when it is malformed; in the second
+        // case the other apps' entries exist only in the variable, and this value would drop them.
+        if (!entries.length) console.error(`warning: ${options.published} lists no statement, so no other app's entry could be read from it. If ${CLOUD_ASSET_LINKS.variable} is set (Cloud publishes [] for a malformed value), add Alpha's entry below to its current entries instead of replacing them.`);
+      } else console.error(`warning: without --published the value below holds only Alpha's entry; setting it replaces every other app's entry in ${CLOUD_ASSET_LINKS.variable}. Pass --published https://<web host>/.well-known/assetlinks.json to keep them.`);
       const result = cloudAssetLinksConfig({ entries, packageName, signerSha256, keep: options.keep, debugFingerprints });
       for (const value of result.removed) console.error(`note: ${packageName} no longer lists ${value}; pass --keep-fingerprint ${value} to keep it`);
       for (const value of result.keptDebug) console.error(`warning: ${value} is a recorded debug signing certificate; keep it only where debug builds must verify (staging), never as a release identity`);
