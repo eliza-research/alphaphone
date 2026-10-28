@@ -132,14 +132,22 @@ const UNSETTLED = 'This message may already have been sent. Check the conversati
 
 // A restart (the process dies) while a posted message waits for its reply: the device copy of the
 // sent text is marked as sending, so the next start never offers it as a draft. It is shown for
-// review, and keeping the empty composer clears only that copy. Nothing is posted again.
+// review, and keeping the empty composer clears only that copy. Nothing is posted again. The
+// conversation already exists, so the restart reopens the same draft slot (a first message
+// moves the draft to the conversation it creates).
 test('a restart while a message is in flight offers it for review, never as a draft, and posts nothing', async ({ page }) => {
   test.setTimeout(120_000);
   await connected(page);
+  await typeDraft(page, 'Start the conversation');
+  await composer(page).press('Enter');
+  await expect.poll(() => fixture(page, f => f.posts), { timeout: 15_000 }).toBe(1);
+  await fixture(page, f => { f.release('Started.'); f.finish('Started.'); });
+  await expect(conversation(page).getByText('Started.', { exact: true })).toHaveCount(1);
+  await expect(stop(page)).toHaveCount(0);
   await typeDraft(page, 'In flight when the app stopped');
   const key = await bindingKey(page);
   await composer(page).press('Enter');
-  await expect.poll(() => fixture(page, f => f.posts), { timeout: 15_000 }).toBe(1);
+  await expect.poll(() => fixture(page, f => f.posts), { timeout: 15_000 }).toBe(2);
   await page.reload();
   await expect.poll(() => fixture(page, f => f.ready), { timeout: 30_000 }).toBe(true);
   await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0, { timeout: 20_000 });

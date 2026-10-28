@@ -71,6 +71,10 @@ type SendAttempt={transportCalled:boolean;preDispatch:boolean;streamed:boolean;s
 /** Refused before any request carrying the message could leave this phone. */
 class NotDispatched extends Error {}
 // connectionController.send refuses these before creating a conversation or posting the message.
+// Set while the page is being torn down (reload, Activity teardown). A send that fails then has
+// shown its outcome to no one, so its saved copy keeps the sending mark for review at the next start.
+let pageLeaving=false;
+if(typeof window!=='undefined'){window.addEventListener('pagehide',()=>{pageLeaving=true;});window.addEventListener('pageshow',()=>{pageLeaving=false;});}
 const preDispatchRefusals=new Set(['Finish the connection or history operation before sending.','Wait for the current reply before sending another message.',NO_AGENT_SEND,RESIDENT_STARTING_NOTICE,RESIDENT_RECOVERING_NOTICE]);
 // It also marks every failure that happened before it posted the message (`notDispatched`).
 function isPreDispatchError(error:unknown){return !!error&&typeof error==='object'&&((error as {notDispatched?:unknown}).notDispatched===true||error instanceof Error&&(preDispatchRefusals.has(error.message)||(error as {code?:unknown}).code==='session_expired'));}
@@ -1315,6 +1319,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         if(this.live){const inlineNotice=privateLocalPreviewEnabled&&this.composerDraft?.holding===true;this.setState((previous:Shell)=>({msgs:previous.msgs.filter((item:Shell)=>item.id!==userId)}));this.composerDraft?.release();if(reviewedSource&&!this.reviewedSourceDraft)this.reviewedSourceDraft=reviewedSource;if(!inlineNotice)this.toast(e instanceof NotDispatched?message:e instanceof AlphaClientError&&(['unconfigured','sensitive','busy'].includes(e.code)||(e as {refusedBeforeTurn?:unknown}).refusedBeforeTurn===true)?'Not sent. '+message:fromComposer?'Not sent. Your message is back in the composer.':'Not sent.');}
         else this.composerDraft?.release();
       }else{
+        if(pageLeaving){this.composerDraft?.abandon();return;}
         await this.composerDraft?.commit();
         // After Stop the controller cancels, announces and reconciles once; its notice is the one shown.
         const reconciling=!!connectionController.getSnapshot().replyNotice&&e instanceof AlphaClientError&&e.code==='cancelled';
