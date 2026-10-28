@@ -24,7 +24,7 @@ import {
 
 export {
   advanceSmsState, normalizePhoneNumber, reviewMms, parseContacts, parseHandoff, parseMessages, parseSmsJournal,
-  parseSmsSendResult, parseTelephonyStatus, parseThreads, reviewSms, smsBindingHash, smsBindingText, smsMayBeReviewedAgain,
+  parseSmsSendResult, parseTelephonyStatus, parseThreads, registerTelephonyProfile, reviewSms, smsBindingHash, smsBindingText, smsMayBeReviewedAgain,
   SMS_DIRECT_MAX_RECIPIENTS, SMS_MAX_RECIPIENTS, SMS_MAX_THREADS, TelephonyUnavailable,
   type MessageDirection, type MmsAttachmentDraft, type MmsReview, type MmsReviewProblem, type MmsSendResult, type MessageStatus, type SmsMessage, type SmsReview, type SmsReviewProblem, type SmsSendResult,
   type SmsSendState, type SmsThread, type TelephonyRole, type TelephonyStatus,
