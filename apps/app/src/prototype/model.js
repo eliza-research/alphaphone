@@ -3267,6 +3267,9 @@ registerView("notes", {
 
     var shareSheet = st.sheet === "share" && !!n;
     return {
+      // The prototype's own Notes surface. The shared Notes view replaces these when installed;
+      // a fixture shell without adapters keeps its titled list and Back.
+      legacyNotes: true, notesTitle: "Notes", primaryNotes: true,
       searching: st.q !== null && st.q !== undefined, notSearching: st.q === null || st.q === undefined,
       q: st.q || "",
       onQ: function (e) { api.set({ q: e.target.value }); },
