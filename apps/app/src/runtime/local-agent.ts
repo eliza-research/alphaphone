@@ -1,3 +1,4 @@
+import { isPreparedViewNavigationRequest } from './prepared-view-navigation';
 import {subscribeNativeViewEvents,type NativeViewEventPort} from "./native-view-events";
 import {browserCloudResidentEnabled,browserResidentCall} from './browser-cloud-resident';
 import type {AppRecordMethod} from './app-record-route-policy';
@@ -27,8 +28,7 @@ export interface LocalAgentBridge {
   archiveRecovery?(input:{reviewToken:string}):Promise<unknown>;
   configureProvider?(input:{apiKey:string;model:string}):Promise<unknown>;
   providerStatus?():Promise<{provider?:unknown;configured?:unknown;model?:unknown}>;
-  clearProvider?():Promise<{configured?:unknown}>;
-  launchSurface?():Promise<{assistant?:unknown}>;
+  clearProvider?(input?:{onlyIfPresent:true}):Promise<{configured?:unknown}>;
   /** Read-only native query; see residentAttachable. */
   residentAttachment?(input:{credentialId?:string}):Promise<{attachable?:unknown;reason?:unknown}>;
   configureCloudProvider?(input:{credentialId:string;model:string}):Promise<unknown>;
@@ -114,9 +114,9 @@ function subscribeBrowserConversationEvents(bridge:LocalAgentBridge,ownerId:stri
   void connect();return stop;
 }
 
-function record(value:unknown):Record<string,any> {
+function record(value:unknown):Record<string,unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid local agent response.');
-  return value as Record<string,any>;
+  return value as Record<string,unknown>;
 }
 // Set when this surface attached to the running resident but the attach did not yield a verified
 // owner session. The surface then stops asking to attach: its next resident admission takes the
@@ -201,7 +201,7 @@ export class LocalAgentProtocol {
     signal.throwIfAborted();
     const identity=record(who.identity),access=record(who.access);
     // Only the explicitly selected native/host bridge may establish local trust.
-    if(identity.kind!=='owner'||access.role!=='OWNER'||!['local','session'].includes(access.mode))throw new Error('The local runtime did not verify local owner access.');
+    if(identity.kind!=='owner'||access.role!=='OWNER'||access.mode!=='local'&&access.mode!=='session')throw new Error('The local runtime did not verify local owner access.');
     const result=record(await this.request('/api/agents',undefined,signal));
     signal.throwIfAborted();
     if(!Array.isArray(result.agents)||result.agents.length!==1)throw new Error('The local runtime must expose exactly one agent.');
@@ -291,7 +291,7 @@ export class LocalAgentProtocol {
     return record(await this.request(path,body,signal||new AbortController().signal,headers));
   }
   async viewNavigationRequest(path:string,body:unknown,signal:AbortSignal):Promise<unknown> {
-    if(path!=="/api/views/interact-claim"&&path!=="/api/views/interact-result")throw Error("Invalid navigation route");
+    if(path!=="/api/views/interact-claim"&&path!=="/api/views/interact-result"&&!isPreparedViewNavigationRequest(path,body))throw Error("Invalid navigation route");
     return this.json(path,body,signal);
   }
   async listConversations(signal?:AbortSignal):Promise<RemoteConversation[]> {
@@ -407,20 +407,14 @@ export async function localProviderStatus():Promise<LocalProviderStatus> {
   return parseProviderStatus(await native.providerStatus());
 }
 /** Removes the stored key and reads native status back; success requires configured:false. */
-export async function clearLocalProvider():Promise<LocalProviderStatus> {
+export async function clearLocalProvider(onlyIfPresent=false):Promise<LocalProviderStatus> {
   if(browserCloudResidentEnabled){const cleared=parseProviderStatus(await browserResidentCall('residentClear'));if(cleared.configured)throw Error('Cloud provider removal unconfirmed');return cleared;}
   if(!Capacitor.isNativePlatform()||!native.clearProvider)throw Error('Provider removal is unavailable in this version.');
-  const cleared=await native.clearProvider();
+  const cleared=await native.clearProvider(onlyIfPresent?{onlyIfPresent:true}:undefined);
   if(record(cleared).configured!==false)throw Error('The provider key could not be confirmed removed.');
   const status=await localProviderStatus();
   if(status.configured)throw Error('The provider key could not be confirmed removed.');
   return status;
-}
-
-/** True only in the Android ACTION_ASSIST surface (native alpha.assistant launch flag). */
-export async function launchedAsAssistant():Promise<boolean> {
-  if(!Capacitor.isNativePlatform()||!Capacitor.isPluginAvailable('Agent')||!native.launchSurface)return false;
-  try{return (await native.launchSurface()).assistant===true;}catch{return false;}
 }
 
 /** True only when native confirms an admitted, running, enrolled resident whose stored provider

@@ -109,6 +109,8 @@ public final class AlphaCloudSignInPlugin extends Plugin {
  /** Global code-send cooldown, including any longer deadline supplied by Cloud. */
  private long lastEmailSendAt, emailSendAllowedAt;
  private volatile boolean destroyed;
+ private long recoveryEpoch;
+ private boolean recoveringLegacy;
  private boolean testMocks() { return BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS; }
 
  @Override public void load() {
@@ -152,6 +154,32 @@ public final class AlphaCloudSignInPlugin extends Plugin {
  }
  private AlphaCredentialStore store() {
   return new AlphaCredentialStore(getContext(), () -> { if (destroyed) throw new IllegalStateException("Sign-in closed"); });
+ }
+
+ /** Read-only metadata; never reads another deployment's legacy slot. */
+ @PluginMethod public void savedSignInRecoveryStatus(PluginCall call) {
+  run(()->{try{call.resolve(new JSObject().put("eligible",store().legacyCloudRecoveryEligible()));}
+   catch(Exception failure){call.reject("Saved sign-in could not be checked", "storage");}});
+ }
+ /** Explicit owner request, not startup migration. No key, account ID or legacy proof is returned. */
+ @PluginMethod public void restoreSavedSignIn(PluginCall call) {
+  final long owner,intent;
+  synchronized(lock){
+   if(destroyed||attempt!=null||recoveringLegacy){call.reject("Another sign-in is in progress", "login-active");return;}
+   recoveringLegacy=true;owner=++recoveryEpoch;
+  }
+  intent=AlphaLocalAgentPlugin.reserveCredentialIntent();
+  run(()->{
+   try{
+    AlphaCredentialStore kept=new AlphaCredentialStore(getContext(),()->{
+     synchronized(lock){if(destroyed||attempt!=null||recoveryEpoch!=owner)throw new IllegalStateException("Sign-in closed");}
+     AlphaLocalAgentPlugin.requireCredentialIntent(intent);
+    });
+    boolean restored=kept.restoreLegacyCloudCredential();
+    call.resolve(new JSObject().put("restored",restored));
+   }catch(Exception failure){call.reject("Saved sign-in could not be restored. Your saved data is retained.", "unavailable");}
+   finally{synchronized(lock){recoveringLegacy=false;}}
+  });
  }
 
  // ── Readiness: in-app only once Cloud is ready for this phone ───────────────────────────────
@@ -309,7 +337,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
   final Attempt next = new Attempt(environment, true);
   synchronized (lock) {
    if (attempt != null) { call.reject("Another sign-in is in progress", "login-active"); return; }
-   attempt = next; next.waiting = call;
+   recoveryEpoch++; attempt = next; next.waiting = call;
   }
   next.googleVerifier = CloudSignInFlow.newVerifier();
   next.googleCancellation = new android.os.CancellationSignal();
@@ -420,7 +448,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
     // A cold start (process death in the browser) or a step that already ended: complete into storage
     // and announce it (signInCompleted) unless another sign-in has started meanwhile.
     owner = new Attempt(returned, true);
-    synchronized (lock) { if (attempt != null) return; attempt = owner; }
+    synchronized (lock) { if (attempt != null) return; recoveryEpoch++; attempt = owner; }
    }
    if (pending.expired(now)) { end(owner, "expired", false); return; }
    owner.expiresAt = pending.expiresAt;
@@ -461,7 +489,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
    if (now < Math.max(lastEmailSendAt + CloudSignInFlow.RESEND_COOLDOWN_MS, emailSendAllowedAt)) { call.reject("Wait before requesting another code", "cooldown"); return; }
    if (attempt != null) attempt.cancel();
    current = new Attempt(environment, false);
-   current.email = email; current.emailVerifier = CloudSignInFlow.newVerifier(); current.busy = true; attempt = current;
+   current.email = email; current.emailVerifier = CloudSignInFlow.newVerifier(); current.busy = true; recoveryEpoch++; attempt = current;
    lastEmailSendAt = now;
   }
   run(() -> {
@@ -495,7 +523,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
    if (now < lastEmailSendAt + CloudSignInFlow.RESEND_COOLDOWN_MS) { call.reject("Wait before requesting another code", "cooldown"); return; }
    if (attempt != null) attempt.cancel();
    current = new Attempt(environment, false);
-   current.phone = phone; current.busy = true; attempt = current;
+   current.phone = phone; current.busy = true; recoveryEpoch++; attempt = current;
    lastEmailSendAt = now;
   }
   run(() -> {
@@ -587,7 +615,7 @@ public final class AlphaCloudSignInPlugin extends Plugin {
 
  @PluginMethod public void cancel(PluginCall call) {
   Attempt current;
-  synchronized (lock) { current = attempt; attempt = null; }
+  synchronized (lock) { current = attempt; attempt = null; recoveryEpoch++; }
   if (current != null) { current.cancel(); PluginCall waiting; synchronized (lock) { waiting = current.waiting; current.waiting = null; } if (waiting != null) waiting.reject("cancelled", "cancelled"); }
   // The explicit cancel burns a pending Google record.
   burnUnclaimedPending();

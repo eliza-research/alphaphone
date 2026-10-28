@@ -58,7 +58,7 @@ for (const [kind, text] of Object.entries(KINDS)) for (const frame of ['done', '
       const code = page.getByRole('button', { name: /^Use a membership code/ });
       await expect(code).toBeVisible();
       await code.click();
-      const account = page.getByRole('dialog', { name: /^Eliza Cloud account/ });
+      const account = page.getByRole('dialog', { name: 'Membership & credits',exact:true });
       await expect(account).toBeVisible();
       await expect(account.getByRole('textbox', { name: 'Membership code' })).toBeVisible();
       await expect(account.getByRole('button', { name: 'Add funds', exact: true })).toBeVisible();
@@ -68,7 +68,7 @@ for (const [kind, text] of Object.entries(KINDS)) for (const frame of ['done', '
       await expect(account.getByRole('textbox',{name:'Membership code'})).toBeVisible();
       await page.screenshot({path:info.outputPath('membership-code-wide.png'),animations:'disabled'});
       await page.setViewportSize({width:412,height:915});
-      await account.getByRole('button', { name: 'Close connection settings', exact: true }).click();
+      await account.getByRole('button', { name: 'Close membership settings', exact: true }).click();
       await manage.click();
       await expect(page.getByRole('heading',{name:'Check the billing account',exact:true})).toBeVisible();
       await expect(page.getByRole('button',{name:'Open billing',exact:true})).toBeDisabled();
@@ -117,7 +117,7 @@ for (const frame of ['done', 'error'] as const) test(`a provider-less turn witho
   const plan = page.getByRole('button', { name: /^Redeem code or choose a plan/ });
   await expect(plan).toHaveCount(1);
   await plan.click();
-  await expect(page.getByRole('dialog', { name: 'Eliza Cloud account & plan' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Membership & credits',exact:true })).toBeVisible();
   // Nothing was purchased or opened, and the message was sent once.
   expect(await stub(page, s => s.opened)).toEqual([]);
   expect(await harness(page, f => f.streams)).toBe(1);

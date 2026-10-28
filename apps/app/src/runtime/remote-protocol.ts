@@ -1,3 +1,4 @@
+import { isPreparedViewNavigationRequest } from './prepared-view-navigation.ts';
 import { parseViewInteractionClientId } from "../../../../.eliza/client-features/packages/core/src/views/view-interact-protocol.ts";
 import type {ChatChannel} from './alpha-client';
 /** Eliza app-host REST protocol. Native composition owns network and secure storage.
@@ -215,7 +216,7 @@ export class RemoteProtocol {
     }
   }
   async viewNavigationRequest(path:string,body:unknown,signal:AbortSignal):Promise<unknown> {
-    if(path!=="/api/views/interact-claim"&&path!=="/api/views/interact-result")throw new RemoteProtocolError("invalid_view_route");
+    if(path!=="/api/views/interact-claim"&&path!=="/api/views/interact-result"&&!isPreparedViewNavigationRequest(path,body))throw new RemoteProtocolError("invalid_view_route");
     return this.authorized(path,"POST",body,signal);
   }
   async listConversations(signal?: AbortSignal): Promise<RemoteConversation[]> {

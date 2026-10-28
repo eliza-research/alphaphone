@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { returnToApps } from './app-navigation';
 import { openBrowserCalendar } from './helpers/browser-calendar';
+import { installHomeCalendar, refreshHomeCalendar } from './helpers/home-calendar';
 // Development lane. The development profile's inbox reports through the same attention summary a
 // mail provider adapter uses, which exercises the connected Home state; the calendar failure is a
 // real browser-calendar read failure. home-attention.production.spec.ts covers the flag-off build.
@@ -38,6 +39,22 @@ test('a failed calendar read shows the retry state instead of neutral copy, then
     window.dispatchEvent(new Event('alpha:calendar-preferences'));
   });
   await expect(card).toContainText('No upcoming events');
+});
+
+test('a failed Agent Calendar read shows the retry state and recovers only after retry', async ({ page }) => {
+  await page.goto('/');await installHomeCalendar(page);
+  const card = page.locator('[data-alpha-home-calendar]');
+  await expect(card).toContainText('No upcoming events in this window');
+  await refreshHomeCalendar(page,{fail:true});
+  await expect(card).toHaveAttribute('aria-label', 'Open Agent Calendar');
+  await expect(card).toContainText('Calendar has not been verified');
+  await expect(card).toHaveAttribute('aria-description','Calendar service unavailable');
+  await expect(card).not.toContainText(/from this browser/);
+  await page.evaluate(()=>(window as any).homeCalendarFixture.fail=false);
+  await card.click();
+  await page.getByRole('button',{name:'Retry calendar and reminders',exact:true}).click();
+  await returnToApps(page);
+  await expect(card).toContainText('No upcoming events in this window');
 });
 
 // A retained brief sits beside the attention items without replacing them; a record of an

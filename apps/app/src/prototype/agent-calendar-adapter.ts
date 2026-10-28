@@ -3,12 +3,13 @@ import {presentCalendarIntervals} from './calendar-interval-presentation';
 import {calendarRange} from '../browser/calendar-records';
 import {Capacitor} from '@capacitor/core';
 import {testMocksEnabled} from '../build-flags';
-import {connectionController} from '../runtime/connection-ui';
+import {connectionController,agentPendingText} from '../runtime/connection-ui';
+
 import {legacyCalendarPreservation} from '../runtime/legacy-calendar-preservation';
-import {AgentCalendar,calendarEventKey,calendarSourceKey,type CalendarPreservation} from '../runtime/agent-calendar';
+import {AgentCalendar,calendarOwnerKey,calendarEventKey,calendarSourceKey,type CalendarPreservation} from '../runtime/agent-calendar';
 import type {AppRecordPort} from '../runtime/app-record-route-policy';
 import {canonicalCalendarRow,calendarFormCreate,calendarFormPatch,canonicalHomeCalendar,type CanonicalCalendarForm} from '../runtime/agent-calendar-view';
-import {agentReminderLead,homeCalendarValues,overdueAgendaNext,presentHomeAgendaCard,presentHomeAgendaFeed,type HomeAgendaCardInput} from './home-cards';
+import {agentReminderLead,homeCalendarValues,overdueAgendaNext,presentAgentAgendaFeed,presentHomeAgendaCard,type HomeAgendaCardInput} from './home-cards';
 import {getZonedDateParts,addDaysToLocalDate} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/internal/time';
 import {eventEditorMutability} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/components/event-editor-policy';
 type Bag=Record<string,any>;
@@ -19,7 +20,9 @@ export const legacyGoogleCalendarScope=(shell:Bag|undefined)=>!!shell&&shell.vge
 /** Presentation adapter only: ordinary app records and all manual operations use CalendarService. */
 export function installAgentCalendarAdapter(Component:any,views:Bag,preservation?:CalendarPreservation){
  const p=Component.prototype,mount=p.componentDidMount,update=p.componentDidUpdate,unmount=p.componentWillUnmount,render=views.calendar.render,renderVals=p.renderVals,selection=p.calendarSelection,displaySources=views.calendar.displaySources;
- let owner:Bag|undefined,controller:AgentCalendar|undefined,requestKey='',boundKey='',invalidating=false;
+ let owner:Bag|undefined,controller:AgentCalendar|undefined,requestKey='',boundKey='',invalidating=false,nextEnded:ReturnType<typeof setTimeout>|undefined;
+ // Source selection is made in Settings and survives the existing view reset.
+ views.calendar.persist=Array.from(new Set([...(views.calendar.persist??[]),'calendarAuthority']));
  const markerKey=async(ownerKey:string)=>'alpha.calendar.retention.v1.'+Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(ownerKey)))).map(n=>n.toString(16).padStart(2,'0')).join('');
  const retention=preservation??legacyCalendarPreservation({
   has:async(ownerKey,fingerprint,signal)=>{
@@ -45,9 +48,13 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
  const range=(state:Bag)=>{const today=new Date(),day=new Date(today.getFullYear(),today.getMonth(),today.getDate()+Number(state.day||0));day.setMonth(day.getMonth()+Number(state.month||0));return{side:'owner' as const,timeMin:new Date(day.getFullYear(),day.getMonth()-1,1).toISOString(),timeMax:new Date(day.getFullYear(),day.getMonth()+2,1).toISOString(),timeZone:zone()};};
  const invalidate=(sessionId:string)=>{const target=port();if(!target?.current()||target.sessionId!==sessionId||invalidating)return;invalidating=true;queueMicrotask(()=>{invalidating=false;const current=port();if(owner?.live&&current?.current()&&current.sessionId===sessionId)refresh(true);});};
  const refresh=(force=false)=>{if(!owner?.live||!controller)return;const target=port(),key=JSON.stringify([target?.identity,target?.scope,range(owner.vget('calendar'))]);if(!force&&requestKey===key)return;requestKey=key;void controller.refresh(range(owner.vget('calendar')));};
- p.componentDidMount=function(){mount.call(this);owner=this;controller=new AgentCalendar(port,retention);this.agentCalendar=controller;this.canonicalCalendarDispose=controller.subscribe(()=>{if(owner===this&&this.live)this.setState({});});this.canonicalCalendarConnection=connectionController.subscribe(()=>{const target=port(),key=JSON.stringify([target?.identity,target?.scope]);if(key!==boundKey){boundKey=key;controller?.retire();requestKey='';refresh();}});this.canonicalCalendarInvalidated=(event:Event)=>{const sessionId=(event as CustomEvent<{sessionId?:unknown}>).detail?.sessionId;if(typeof sessionId==='string')invalidate(sessionId);};window.addEventListener('alpha:canonical-calendar-invalidated',this.canonicalCalendarInvalidated);refresh();};
+ // One end-time wake plus foreground events; no polling or background reads.
+ const readNext=()=>{if(!owner?.live||!controller)return;controller.invalidateNext();if(document.hidden)return;refresh(true);};
+ const watchNextEnd=()=>{clearTimeout(nextEnded);const end=Date.parse(controller?.state.next?.event?.endAt??'');if(end>Date.now())nextEnded=setTimeout(readNext,Math.min(end-Date.now(),2147483647));};
+ const resumed=()=>{if(!document.hidden&&owner?.live){readNext();}};
+ p.componentDidMount=function(){mount.call(this);owner=this;controller=new AgentCalendar(port,retention);this.agentCalendar=controller;this.canonicalCalendarDispose=controller.subscribe(()=>{if(owner!==this)return;watchNextEnd();if(this.live)this.setState({});});this.canonicalCalendarConnection=connectionController.subscribe(()=>{const target=port(),key=JSON.stringify([target?.identity,target?.scope]);if(key!==boundKey){boundKey=key;controller?.retire();requestKey='';refresh();}});this.canonicalCalendarInvalidated=(event:Event)=>{const sessionId=(event as CustomEvent<{sessionId?:unknown}>).detail?.sessionId;if(typeof sessionId==='string')invalidate(sessionId);};window.addEventListener('alpha:canonical-calendar-invalidated',this.canonicalCalendarInvalidated);document.addEventListener('visibilitychange',resumed);refresh();};
  p.componentDidUpdate=function(...args:any[]){update?.apply(this,args);if(owner===this)refresh();};
- p.componentWillUnmount=function(){this.canonicalCalendarConnection?.();window.removeEventListener('alpha:canonical-calendar-invalidated',this.canonicalCalendarInvalidated);this.canonicalCalendarDispose?.();if(owner===this){controller?.retire();controller=undefined;owner=undefined;}unmount.call(this);};
+ p.componentWillUnmount=function(){this.canonicalCalendarConnection?.();window.removeEventListener('alpha:canonical-calendar-invalidated',this.canonicalCalendarInvalidated);this.canonicalCalendarDispose?.();if(owner===this){clearTimeout(nextEnded);document.removeEventListener('visibilitychange',resumed);controller?.retire();controller=undefined;owner=undefined;}unmount.call(this);};
  p.calendarSelection=function(){
   if(deviceCalendarScope(this))return selection?.call(this);
   const state=this.vget('calendar'),model=this.agentCalendar as AgentCalendar|undefined;
@@ -59,7 +66,8 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
  views.calendar.displaySources=()=>deviceCalendarScope(owner)?displaySources?.():{native:false,canonical:true,status:controller?.state.status??'disconnected',ready:controller?.state.status==='ready',loading:controller?.state.status==='loading',error:controller?.state.status==='error',sources:sourceRows(),retry:()=>refresh(true)};
  function newForm(api:Bag){
   const state=api.get('calendar');if(state.form){api.toast('Keep or finish the current form before creating another event.');return;}
-  const model=controller?.state,sources=sourceRows();if(!model?.ownerKey||!['ready','partial','unavailable'].includes(model.status)){api.toast('Wait for the agent Calendar source and preservation review.');return;}
+  const target=port();if(!target?.current()){api.toast(agentPendingText(undefined,'Calendar is unavailable for this agent connection. Check Settings › Agent connection.'));return;}
+  const model=controller?.state,sources=sourceRows();if(!model?.ownerKey||model.ownerKey!==calendarOwnerKey(target)||!['ready','partial','unavailable'].includes(model.status)){api.toast('Wait for the agent Calendar source and preservation review.');return;}
   api.set({open:null,form:{id:null,canonicalOwnerKey:model.ownerKey,creationId:crypto.randomUUID(),title:'',notes:'',where:'',off:state.day||0,t:17,d:1,zone:zone(),who:[],video:false,repeat:'none',alert:null,cal:sources.length===1?sources[0].id:''}});
  }
  // A scan is only a draft. Admit it to the current source without writing or
@@ -77,6 +85,8 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
  function typedForm(f:Bag):CanonicalCalendarForm{
   const model=controller!.state;if(f.canonicalOwnerKey!==model.ownerKey)throw Error('This retained draft belongs to another owner or agent');
   const sourceKey=controller!.sourceKeyForHandle(f.cal);if(!sourceKey)throw Error('Choose a current authorized Calendar source');
+  const selectedSource=controller!.state.calendars.find(c=>calendarSourceKey(c)===sourceKey);
+  if(selectedSource?.provider==='eliza'&&f.repeat!=='none')throw Error('Agent Calendar does not support repeating events. Your draft is kept. Choose another Calendar or explicitly remove the requested repeat.');
   if(f.video||f.alert!==null)throw Error('Meeting rooms and reminders use their own canonical actions; this event draft was kept');
   const day=addDaysToLocalDate(getZonedDateParts(new Date(),zone()),Number(f.off));
   const rules:Record<string,string[]>={none:[],daily:['RRULE:FREQ=DAILY'],weekdays:['RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR'],weekly:['RRULE:FREQ=WEEKLY']};if(f.repeat==='preserve'&&!f.id||f.repeat!=='preserve'&&!Object.hasOwn(rules,f.repeat))throw Error('Review the original recurrence before saving');
@@ -114,11 +124,14 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
    else{const e=chosen.canonicalEvent,policy=eventEditorMutability(e);out.ev.calName=cals.find(c=>c.id===chosen.cal)?.name??'Agent Calendar';out.ev.notes=e.description;out.ev.hasNotes=!!e.description;if(e.isAllDay){out.ev.when='All day';const options:Intl.DateTimeFormatOptions={weekday:'short',month:'short',day:'numeric',year:'numeric',timeZone:'UTC'},start=new Date(e.startAt).toLocaleDateString(undefined,options),end=new Date(Date.parse(e.endAt)-86400000).toLocaleDateString(undefined,options);out.ev.day=start+(start===end?'':' – '+end);}out.ev.readOnly=policy.kind!=='editable';out.ev.readOnlyLabel='Calendar event · Read only';const deleteScope=state.canonicalDeleteScope?.eventKey===calendarEventKey(e)?state.canonicalDeleteScope.scope:undefined;out.ev.recurrenceScopes=e.recurringEventId||e.recurrence?.length?['instance','this_and_following','series'].map(scope=>({label:scope==='instance'?'This occurrence':scope==='series'?'Entire series':'This and following',selected:deleteScope===scope,pick:()=>api.set({canonicalDeleteScope:{eventKey:calendarEventKey(e),scope}})})):[];out.ev.edit=()=>{if(policy.kind!=='editable'){api.toast('This provider event is read only.');return;}api.set({form:{id:chosen.id,canonicalOwnerKey:model!.ownerKey,canonicalEventKey:calendarEventKey(e),expectedProviderVersion:policy.providerVersion,creationId:crypto.randomUUID(),title:e.title,notes:e.description,where:e.location,off:chosen.off,t:chosen.t,d:chosen.d||1,zone:zone(),who:[],video:false,repeat:e.recurringEventId||e.recurrence?.length?'preserve':'none',alert:null,cal:chosen.cal,allDay:e.isAllDay,canonicalAllDay:e.isAllDay?{startDate:e.startAt.slice(0,10),endDateExclusive:e.endAt.slice(0,10)}:undefined,canonicalTiming:[chosen.off,chosen.t,chosen.d||1,zone(),!!e.isAllDay],recurrenceScope:undefined}});};out.ev.del=async()=>{if(policy.kind!=='editable'){api.toast('This provider event is read only.');return;}if((e.recurringEventId||e.recurrence?.length)&&!deleteScope){api.toast('Choose which occurrences to delete before continuing.');return;}if(!window.confirm('Delete or decline this event through your agent Calendar?'))return;try{await controller!.delete(calendarEventKey(e),policy.providerVersion,crypto.randomUUID(),deleteScope);api.set({open:null,canonicalDeleteScope:null});refresh(true);}catch(error){api.toast(String(error));}};}
   }
   if(state.form&&state.form.cal!=='alpha-reminders'&&out.f){const f=state.form;
-   const reminderSource=out.f.cals?.filter((c:Bag)=>c.domain==='reminders')??[];out.f.cals=[...cals.map(c=>({...c,pick:()=>api.set({form:{...f,cal:c.id}})})),...reminderSource];out.f.alerts=[];out.f.video=false;out.f.toggleVideo=()=>api.toast('Use a meeting action to create a video room.');
+   const reminderSource=out.f.cals?.filter((c:Bag)=>c.domain==='reminders')??[];out.f.cals=[...cals.map(c=>({...c,pick:()=>api.set({form:{...f,cal:c.id}})})),...reminderSource];out.f.alerts=null;out.f.video=false;out.f.toggleVideo=()=>api.toast('Use a meeting action to create a video room.');
    const original=model?.feed?.events.find(e=>calendarEventKey(e)===f.canonicalEventKey),recurring=!!(original?.recurringEventId||original?.recurrence?.length);
    out.f.allDay=!!f.allDay;out.f.allDayTrack='background: '+(f.allDay?'var(--acc)':'var(--s3)');out.f.allDayKx=f.allDay?20:0;out.f.toggleAllDay=()=>api.set({form:{...f,allDay:!f.allDay}});
    out.f.recurrenceScopes=recurring?['instance','this_and_following','series'].map(scope=>({label:scope==='instance'?'This occurrence':scope==='series'?'Entire series':'This and following',selected:f.recurrenceScope===scope,pick:()=>api.set({form:{...f,recurrenceScope:scope}})})):[];
    if(recurring)out.f.repeats=[{label:'Keep existing repeat',pick:()=>api.set({form:{...f,repeat:'preserve'}})},...out.f.repeats];
+   const selectedSourceKey=controller?.sourceKeyForHandle(f.cal),selectedSource=controller?.state.calendars.find(c=>calendarSourceKey(c)===selectedSourceKey);
+   // Unsupported retained intent stays in the draft until the owner removes it.
+   if((original??selectedSource)?.provider==='eliza')out.f.repeats=f.repeat==='none'?null:[{label:'Remove requested repeat',pick:()=>api.set({form:{...f,repeat:'none'}})}];
    out.f.saveOff=!!model?.mutating||!model||!['ready','partial','unavailable'].includes(model.status)||f.canonicalOwnerKey!==model.ownerKey||f.canonicalUncertain===true;out.f.save=async()=>{try{
     const draft=typedForm(f);if(f.id&&recurring&&draft.recurrence!==undefined&&f.recurrenceScope!=='series')throw Error('Choose entire-series scope to replace or remove recurrence');let saved:any;
     if(f.id){const event=model?.feed?.events.find(e=>calendarEventKey(e)===f.canonicalEventKey);if(!event)throw Error('Refresh this event before saving');const timing=JSON.stringify(f.canonicalTiming)!==JSON.stringify([f.off,f.t,f.d,f.zone,!!f.allDay]);saved=await controller!.update(f.canonicalEventKey,f.expectedProviderVersion,calendarFormPatch(draft,event,{timing,zone:f.zone!==f.canonicalTiming?.[3]}));}
@@ -140,9 +153,10 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
   // Home's agenda reads the calendar the owner chose: Agent Calendar unless device calendars were
   // chosen explicitly in Calendar, whose read Home then shows with its own states and read times.
   if(deviceCalendarScope(this))return out;
-  const home=canonicalHomeCalendar(controller?.state.next??null),event=home.event,now=Date.now();
+  const home=canonicalHomeCalendar(controller?.state.next??null,controller?.state.nextFresh===true),event=home.event,now=Date.now();
   // Shared daily-overview states for the agent calendar feed: reading, not connected, failed, stale and fresh.
-  const state=controller?.state,feed=presentHomeAgendaFeed({status:state?.status??'disconnected',hasItem:!!event,feedState:(state?.next?.calendarFeedState as 'complete'|'partial'|'unavailable'|undefined)??null,asOf:Date.parse(state?.next?.timeReference?.asOf??'')||null,error:state?.error??null,now,source:'Agent Calendar',emptyLabel:home.emptyLabel});
+  // A next event that is not verified (failed next read, partial feed, ended event) is never fresh or empty.
+  const feed=presentAgentAgendaFeed(controller?.state,!!event,now,home.emptyLabel);
   const provenance={origin:'',read:feed.read,description:feed.description};
   // The agent's next event as an agenda item; an all-day event starts at local midnight of its first day.
   const day=(at:string)=>{const d=new Date(at);return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()).getTime();};

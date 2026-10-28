@@ -2,10 +2,10 @@
 export type ManagedGoogleFailureStage='credential'|'signal'|'client'|'identity'|'accounts'|'account-projection'|'credential-recheck'|'permission-recheck'|'calendar-sources'|'request-validation'|'fetch'|'response-json';
 const stages=new WeakMap<object,ManagedGoogleFailureStage>();
 export function recordManagedGoogleFailure(error:unknown,stage:ManagedGoogleFailureStage):void {
- try{if(error!==null&&(typeof error==='object'||typeof error==='function')&&!stages.has(error))stages.set(error,stage);}catch{/* Diagnostics never change the original error. */}
+ if(error!==null&&(typeof error==='object'||typeof error==='function')&&!stages.has(error))stages.set(error,stage);
 }
 export function managedGoogleFailureStage(error:unknown):ManagedGoogleFailureStage|undefined {
- try{return error!==null&&(typeof error==='object'||typeof error==='function')?stages.get(error):undefined;}catch{return;}
+ return error!==null&&(typeof error==='object'||typeof error==='function')?stages.get(error):undefined;
 }
 /** Exact transport constants only; never serialize error/cause objects or messages. */
 const transportCodes=[

@@ -2,15 +2,128 @@
   "schema": 1,
   "repository": "elizaOS/eliza",
   "base": "develop",
-  "baseCommit": "6497825b38cbe41b3677c0a445341fec900f0dd2",
-  "head": "6497825b38cbe41b3677c0a445341fec900f0dd2",
-  "recordedAt": "2026-10-27",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...6497825b38cbe41b3677c0a445341fec900f0dd2",
-  "status": "identical",
-  "aheadBy": 0,
+  "baseCommit": "6c227e5ff0d488843728c97684004dcfc760983c",
+  "head": "5794c8c0d18914b3564d5c6716e28c2a3587f5ed",
+  "recordedAt": "2026-10-28",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...5794c8c0d18914b3564d5c6716e28c2a3587f5ed",
+  "status": "ahead",
+  "aheadBy": 36,
   "behindBy": 0,
-  "mergeBase": "6497825b38cbe41b3677c0a445341fec900f0dd2",
-  "pinOnlyCommits": [],
+  "mergeBase": "6c227e5ff0d488843728c97684004dcfc760983c",
+  "pinOnlyCommits": [
+    {
+      "sha": "f983d68173f12b89af22f93502d81234c7112b7d",
+      "subject": "fix(assistant): retain context metadata type during reply recovery"
+    },
+    {
+      "sha": "2c5697b3a9c717dba715dc9479f835a1a34bc68d",
+      "subject": "fix(native-system): bind warm power voice to current Sense activity"
+    },
+    {
+      "sha": "d7d939fa12b6a39019bdfd3aef9a77e15a19c4e5",
+      "subject": "fix(native-system): bind warm power voice to current Sense activity"
+    },
+    {
+      "sha": "101929293328ec85ae3b6aa264a3bb763b2a9bc2",
+      "subject": "feat(native-system): scope cold power launch to native account grant"
+    },
+    {
+      "sha": "8cc623855ce49cab68f9ed321b206abcad4d5c0b",
+      "subject": "fix(calendar): share exclusive read windows with owner promoted tools"
+    },
+    {
+      "sha": "f83548d61ff9f0ebac756e98cd94aaf775db3649",
+      "subject": "fix(calendar): preserve read aliases in promoted tool validation"
+    },
+    {
+      "sha": "3a11393467827978b4f33f330a894f86b4a92692",
+      "subject": "fix(calendar): classify correctable read preflight diagnostics"
+    },
+    {
+      "sha": "a53ce9d7818d5493163be61423075cbc65d6f2b4",
+      "subject": "fix(calendar): bind slot proposals to their canonical read outcome"
+    },
+    {
+      "sha": "90dbfb20406d4e66913e84626465200035e5a5e9",
+      "subject": "fix(calendar): preserve existing event duration in move proposals"
+    },
+    {
+      "sha": "be0582982b694302e4933e1d695b57e1cb083b7e",
+      "subject": "Preserve reviewed Cloud model identity matching on the joined SDK"
+    },
+    {
+      "sha": "91953e99e0dc564a070910edada7afb044f54b8b",
+      "subject": "Preserve reviewed private Calendar meeting guidance alongside existing diagnostics"
+    },
+    {
+      "sha": "7e85d9536dbe237964ef5bc71a6ac4b2f88a0b1c",
+      "subject": "Preserve reviewed nonempty planner reply and held-finish schema handling"
+    },
+    {
+      "sha": "5f502a2891db9fe069bf689c0f3cf452c68d55ab",
+      "subject": "Preserve reviewed body-free Notes availability routing in the combined SDK"
+    },
+    {
+      "sha": "de16c240f8ef77779edd3aa411e407018d2be209",
+      "subject": "Type named Notes routing test outputs and assert provider presence"
+    },
+    {
+      "sha": "2f664cc6dc223cf12002120576357114f8cb9763",
+      "subject": "Clarify restoration of already inline provider evidence"
+    },
+    {
+      "sha": "6f91e22e6bfabdef67138b91c61ebf2929dad775",
+      "subject": "Expose bounded Calendar coverage failure diagnostics"
+    },
+    {
+      "sha": "96c560ec9c57c6f98cafc523c1ddbb9cea8a3379",
+      "subject": "fix(notifications): share native channel policy and require explicit in-app reads"
+    },
+    {
+      "sha": "e40497d5d0111d557aef022eb01d4f03023c9fc8",
+      "subject": "fix(android): use compat visibility constant for native notification builder"
+    },
+    {
+      "sha": "5e16a3aafcd3a21152a853938f10841ff1669450",
+      "subject": "Honor exact Cloud catalog IDs before leaf-name fallback"
+    },
+    {
+      "sha": "aa5b7444efe0f8e3d1b06058a39cae44b4a5817d",
+      "subject": "fix(reminders): derive in-app read receipts from exact notification reads"
+    },
+    {
+      "sha": "d10e1bf453db091c5f873100c6db532312ac723b",
+      "subject": "fix(reminders): reject invalid timestamps in explicit read evidence"
+    },
+    {
+      "sha": "9ad00ce5a5738fdb2d5266e6ecf9f7d49368ad53",
+      "subject": "fix(reminders): await durable notification state before read receipts"
+    },
+    {
+      "sha": "4c2482eb68cd9de5baca7dd6ff0fca6046944f3d",
+      "subject": "fix(notifications): expose a durable read snapshot for receipt consumers"
+    },
+    {
+      "sha": "6eac3ec567ed0daa5cc2fefc23183ec611f1772e",
+      "subject": "test(reminders): align notification publication clock with due dispatch"
+    },
+    {
+      "sha": "f19a9db46233d51430acf1573f480c3427028cc6",
+      "subject": "test(reminders): isolate real PGlite services from app host bootstrap"
+    },
+    {
+      "sha": "fc811e4b1e01afc58aff3a9bbe81cdceee678b55",
+      "subject": "test(reminders): compose exact domain services without the full plugin registry"
+    },
+    {
+      "sha": "ce9e81f57d747672d507860642cfc78fca47c5bd",
+      "subject": "test(reminders): distinguish successful deliveries from coalesced inbox rows"
+    },
+    {
+      "sha": "4de8836b2e008158a2fdc33bc78e8e06515422a8",
+      "subject": "test(reminders): verify durable coalesced inbox and distinct delivery attempts"
+    }
+  ],
   "pullRequests": [
     {
       "url": "https://github.com/elizaOS/eliza/pull/37059",
@@ -226,6 +339,10 @@
     },
     {
       "url": "https://github.com/elizaOS/eliza/pull/37970",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/37993",
       "status": "merged"
     }
   ]

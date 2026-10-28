@@ -1,3 +1,5 @@
+import {returnToApps} from './app-navigation';
+import {openLegacyNotes} from './helpers/legacy-notes';
 import {test,expect,type Page} from '@playwright/test';
 // Trash expiry must not depend on opening Notes: resume and the shell's 15-minute timer purge too.
 const DAY=24*60*60*1000;
@@ -5,8 +7,8 @@ test.describe.configure({timeout:60_000});
 const trashEntries=(page:Page)=>page.evaluate(async()=>(await (await import('/src/runtime/notes-trash.ts')).readNotesTrash()).entries);
 const savedRecords=(page:Page)=>page.evaluate(async()=>JSON.parse(await (await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw()).records);
 const describe=(page:Page)=>page.evaluate(async()=>{const {registerPlugin}=await import('/src/platform-plugins.ts');return registerPlugin<any>('AlphaNoteAudio').describe({audioId:'resume-audio'});});
-async function openNotes(page:Page){await page.getByRole('button',{name:'Notes',exact:true}).click();await expect(page.locator('html')).toHaveAttribute('data-notes-storage-state','ready');}
-async function home(page:Page){await page.getByRole('button',{name:'Back to apps',exact:true}).click();await expect(page.locator('html')).not.toHaveAttribute('data-active-view','notes');}
+async function openNotes(page:Page){await openLegacyNotes(page);await expect(page.getByRole('button',{name:'New note',exact:true})).toBeEnabled();}
+async function home(page:Page){await returnToApps(page);await expect(page.locator('html')).not.toHaveAttribute('data-active-view','notes');}
 async function trashTextNote(page:Page,title:string){
  await page.getByRole('button',{name:'New note',exact:true}).click();
  await page.getByRole('textbox',{name:'Title',exact:true}).fill(title);
