@@ -17,14 +17,17 @@
 <sc-if value="{{isOn}}">
 <sc-if value="{{showAppBack}}"><button data-alpha-app-back-fallback aria-label="Back to apps" onClick="{{backToApps}}" style="position:absolute;top:0;left:12px;z-index:44;min-height:44px;display:flex;align-items:center;gap:6px;padding:0 8px;color:var(--fg);font-size:14px"><svg class="i" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="{{ic.back}}"></path></svg>Apps</button></sc-if>
 
-<div data-alpha-layer="home" onFocusCapture="{{focusAppContent}}" role="region" aria-label="Home" aria-hidden="{{homeHidden}}" inert="{{homeHidden}}" style="position: absolute; inset: 44px 0 0; z-index: 10; box-sizing: border-box; overflow-y:auto; overflow-x:hidden; scroll-padding-bottom:110px">
-<div data-alpha-home-layout style="min-height:100%;display:flex;flex-direction:column;padding:20px 0 108px;box-sizing:border-box">
+<!-- Home, its app grid and All apps come from the shared mobile shell (prototype/home-shell.ts,
+     @elizaos/ui/mobile-shell); this template fills its notice and card slots. -->
+<sc-element value="{{homeShell}}">
+<sc-slot name="header">
 <sc-if value="{{storageAccessWarning}}"><p role="alert" class="storage-access-warning">{{storageAccessWarning}}</p></sc-if>
   <!-- Launcher Home only (docs/gesture-zones.md, #416, #417): Android's shade is the one
        notification and quick-settings surface. This visible control asks Android to open it, as
        a pull down on empty Home does; the top-edge swipe stays Android's. Alpha draws no shade. -->
   <sc-if value="{{showShadeButton}}"><div class="alpha-shade-row"><button class="alpha-shade-handle" data-alpha-shade-handle aria-label="Open notifications" aria-description="Opens Android's notifications and quick settings" onClick="{{openSystemShade}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.bell}}"></path></svg><span>Notifications</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.down}}"></path></svg></button></div></sc-if>
-  <div class="scr" style="display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 0 24px; scroll-padding-left: 24px; touch-action: pan-x; flex-shrink: 0">
+</sc-slot>
+<sc-slot name="cards">
     <button class="home-calendar-card" data-alpha-home-calendar data-alpha-home-calendar-event="{{homeCalendarHasEvent}}" data-alpha-home-calendar-meta="{{homeCalendarHasMeta}}" data-alpha-home-calendar-overdue="{{homeCalendarOverdue}}" data-alpha-home-calendar-next="{{homeCalendarHasNext}}" onClick="{{goCalendar}}" aria-label="{{homeCalendarLabel}}" aria-description="{{homeCalendarDescription}}" style="flex-shrink: 0; scroll-snap-align: start; border-radius: 30px; background: var(--acc); color: #ffffff; padding: 22px; box-sizing: border-box">
       <div class="home-calendar-head">
         <span class="home-calendar-time">{{homeCalendarTime}}</span>
@@ -58,37 +61,9 @@
       <span class="home-brief-title">{{homeBriefTitle}}</span>
       <span class="home-brief-status">{{homeBriefStatus}}</span>
     </button></sc-if>
-    <div style="flex-shrink: 0; width: 12px"></div>
-  </div>
-
-  <div style="flex-grow: 1; min-height: 28px"></div>
-
-  <div class="alpha-fit-grid" data-alpha-home-apps style="--fit-columns: 4; --fit-min: 62px; row-gap: 24px; padding: 0 16px">
-    <sc-for list="{{apps}}" as="a">
-      <button onClick="{{a.open}}" aria-label="{{a.label}}" style="display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0">
-        <span class="tap" style="position: relative; width: 64px; height: 64px; border-radius: 22px; background: var(--s2); display: flex; align-items: center; justify-content: center">
-          <sc-if value="{{a.hasIcon}}"><img alt="" src="{{a.icon}}" style="width: 44px; height: 44px; border-radius: 14px"></sc-if>
-          <sc-if value="{{a.noIcon}}"><svg class="i" viewBox="0 0 24 24" style="width: 30px; height: 30px"><path d="{{a.d}}"></path></svg></sc-if>
-          <sc-if value="{{a.badge}}"><span class="app-badge" style="position: absolute; top: 12px; right: 12px; width: 8px; height: 8px; border-radius: 4px; background: var(--acc)"></span></sc-if>
-        </span>
-        <span style="font-size: 12px; color: var(--mut); max-width: 100%; text-align: center; overflow-wrap: anywhere">{{a.label}}</span>
-      </button>
-    </sc-for>
-    <sc-if value="{{launcher}}">
-      <button onClick="{{launcher.open}}" aria-label="All apps" aria-haspopup="dialog" style="display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0">
-        <span class="tap" style="width: 64px; height: 64px; border-radius: 22px; background: var(--s2); display: flex; align-items: center; justify-content: center">
-          <svg class="i" viewBox="0 0 24 24" style="width: 30px; height: 30px"><path d="{{ic.grid}}"></path></svg>
-        </span>
-        <span style="font-size: 12px; color: var(--mut); max-width: 100%; text-align: center; overflow-wrap: anywhere">All apps</span>
-      </button>
-    </sc-if>
-  </div>
-
-  <div style="flex-grow: 1; min-height: 16px"></div>
-</div>
-<div data-alpha-home-clearance aria-hidden="true"></div>
-</div>
-<sc-if value="{{drawerOpen}}">{{installedAppsLauncher}}</sc-if>
+</sc-slot>
+</sc-element>
+<sc-if value="{{drawerOpen}}">{{allAppsDrawer}}</sc-if>
 </sc-if>
 
 

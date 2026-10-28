@@ -68,7 +68,8 @@ import { installNotesTrashAdapter } from './prototype/notes-trash-adapter';
 import { installInboxCloudAdapter, inboxAttention, subscribeInboxAttention } from './prototype/inbox-cloud-adapter';
 import { installUseInEmailReview } from './prototype/use-in-email-review';
 import { latestRetainedDigest, subscribeRetainedDigest } from './runtime/hosted-digests';
-import { installHomeLauncher } from './prototype/home-launcher';
+import { installHomeShell } from './prototype/home-shell';
+import { alphaViews } from './product/alpha-product';
 import { setLocalePreferences } from './prototype/locale-time';
 import { installTextScale } from './runtime/text-scale';
 import { installDockClearance } from './runtime/dock-clearance';
@@ -162,10 +163,10 @@ installCalendarMonthFocus(Component, VIEWS);
 installChatOverlayMotion(Component);
 installSystemShade(Component,{native:isAndroid});
 installClockAdapter(Component, VIEWS, { simulated: testMocksEnabled && fixture, browser: !isAndroid });
-// Installed apps come from Android (or the browser device's app list); outermost so its drawer
-// state composes with every Home binding above.
-installHomeLauncher(Component, DeviceApps, { icons: isAndroid, follow: deviceAppsListens,
-  aliases: isAndroid ? undefined : Object.fromEntries(browserApps.map(app => [app.packageName, `alpha:${app.view}`])),
+// Home, app grid and All apps from the shared mobile shell. Installed apps come from Android (or
+// the browser device's app list); outermost so Home composes with every binding above.
+installHomeShell(Component, VIEWS, DeviceApps, { icons: isAndroid, follow: deviceAppsListens,
+  aliases: isAndroid ? undefined : Object.fromEntries(browserApps.flatMap(app => { const view = alphaViews.find(app.view); return view ? [[app.packageName, alphaViews.launcherKey(view)]] : []; })),
 });
 /** A browser cannot read or change radios and sensors; show that instead of fixture toggles. */
 function installBrowserCapabilityTiles(Component:any){
