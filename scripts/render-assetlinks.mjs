@@ -21,9 +21,11 @@
  * document unchanged; the operator sets it (docs/human-actions.md H-13). --check reads a rendered
  * file or the published URL (HTTPS, HTTP 200 without a redirect, application/json, as Android's
  * verifier requires) and exits 0 only when it grants handle_all_urls to Alpha's package for the
- * recorded release signer. The https autoVerify filter itself is emitted only by a build with
- * ELIZAOS_APP_LINK_HOST set (android/app/build.gradle); appLinkFilters() reads it back from an APK
- * manifest dump.
+ * recorded release signer.
+ *
+ * Publishing is the operator's step (docs/human-actions.md H-13). The https
+ * autoVerify filter itself is emitted only by a build with ELIZAOS_APP_LINK_HOST set
+ * (android/app/build.gradle); appLinkFilters() reads it back from an APK manifest dump.
  */
 import fs from "node:fs";
 import path from "node:path";
