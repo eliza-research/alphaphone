@@ -20,8 +20,11 @@ class AndroidAppAbis(unittest.TestCase):
     def select(self, env, props=None):
         self.assertTrue(GROOVY_JARS, 'An existing Gradle wrapper distribution is required; no download is started')
         self.assertTrue(JAVA, 'Java is required')
+        groovy_json = GROOVY_JARS[0].with_name(GROOVY_JARS[0].name.replace('groovy-', 'groovy-json-'))
+        self.assertTrue(groovy_json.is_file(), 'Matching Groovy JSON library is required')
+        classpath = os.pathsep.join([str(GROOVY_JARS[0]), str(groovy_json)])
         source = (ROOT/'android/app/build.gradle').read_text()
-        selection = source.split('// Use the same explicit target', 1)[1].split('android {', 1)[0]
+        selection = source[source.index('// Use the same explicit target'):].split('android {', 1)[0]
         build_types = block(source, ' buildTypes {')
         driver = """class GradleException extends RuntimeException { GradleException(String s) { super(s) } }
 class TypeConfig {
@@ -45,7 +48,7 @@ println(observed.debug.join(',') + '|' + observed.release.join(','))
         clean.update(env)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)/'selection.groovy'; path.write_text(driver)
-            return subprocess.run([str(JAVA), '-Xmx128m', '-cp', str(GROOVY_JARS[0]), 'groovy.ui.GroovyMain', str(path), json.dumps(props or {})], env=clean, capture_output=True, text=True)
+            return subprocess.run([str(JAVA), '-Xmx128m', '-cp', classpath, 'groovy.ui.GroovyMain', str(path), json.dumps(props or {})], env=clean, capture_output=True, text=True)
 
     def test_default_dual_and_explicit_android_arm64(self):
         for env, expected in [({}, 'arm64-v8a,x86_64|arm64-v8a'), ({'ELIZA_ANDROID_BUN_TARGET':'android', 'ELIZA_ANDROID_TARGET_ABIS':'arm64-v8a'}, 'arm64-v8a|arm64-v8a'), ({'ELIZA_ANDROID_TARGET_ABIS':'arm64-v8a,x86_64'}, 'arm64-v8a,x86_64|arm64-v8a')]:
@@ -59,7 +62,11 @@ println(observed.debug.join(',') + '|' + observed.release.join(','))
             with self.subTest(value=value):
                 result = self.select({'ELIZA_ANDROID_BUN_TARGET':'android', 'ELIZA_ANDROID_TARGET_ABIS':value})
                 self.assertNotEqual(result.returncode, 0)
-        self.assertNotEqual(self.select({'ELIZA_ANDROID_BUN_TARGET':'other'}).returncode, 0)
+                self.assertRegex(result.stderr, r'(Invalid ELIZA_ANDROID_TARGET_ABIS|Android Bun requires the explicit arm64-v8a target)')
+                self.assertNotIn('MultipleCompilationErrorsException', result.stderr)
+        result = self.select({'ELIZA_ANDROID_BUN_TARGET':'other'})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Android Bun requires the explicit arm64-v8a target', result.stderr)
 
     def test_existing_gradle_property_selects_same_target(self):
         result = self.select({}, {'ELIZA_ANDROID_BUN_TARGET':'android', 'ELIZA_ANDROID_TARGET_ABIS':'arm64-v8a'})
