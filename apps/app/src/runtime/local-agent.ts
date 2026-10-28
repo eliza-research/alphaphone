@@ -1,3 +1,4 @@
+import { isPreparedViewNavigationRequest } from './prepared-view-navigation';
 import {subscribeNativeViewEvents,type NativeViewEventPort} from "./native-view-events";
 import {browserCloudResidentEnabled,browserResidentCall} from './browser-cloud-resident';
 import type {AppRecordMethod} from './app-record-route-policy';
@@ -290,7 +291,7 @@ export class LocalAgentProtocol {
     return record(await this.request(path,body,signal||new AbortController().signal,headers));
   }
   async viewNavigationRequest(path:string,body:unknown,signal:AbortSignal):Promise<unknown> {
-    if(path!=="/api/views/interact-claim"&&path!=="/api/views/interact-result")throw Error("Invalid navigation route");
+    if(path!=="/api/views/interact-claim"&&path!=="/api/views/interact-result"&&!isPreparedViewNavigationRequest(path,body))throw Error("Invalid navigation route");
     return this.json(path,body,signal);
   }
   async listConversations(signal?:AbortSignal):Promise<RemoteConversation[]> {
