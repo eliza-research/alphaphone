@@ -33,7 +33,10 @@
  * and entry names, and these function exports so callers, the aggregator and diagnostics keep
  * their contract. Function declarations only: Node contract tests evaluate this source.
  */
-import { createVoiceTurnTiming, type NativeVoiceStageSink, type VoiceTimingMark, type VoiceTimingPolicy } from '../../../../.eliza/client-features/packages/voice/src/voice-turn-timing.ts';
+import { createVoiceTurnTiming, type NativeVoiceStageSink, type VoiceTimingEndpoint as SharedVoiceTimingEndpoint, type VoiceTimingLive as SharedVoiceTimingLive, type VoiceTimingMark, type VoiceTimingPolicy } from '../../../../.eliza/client-features/packages/voice/src/voice-turn-timing.ts';
+/** The shared record shapes diagnostics copies (diagnostics-export.ts). */
+export type VoiceTimingLive = SharedVoiceTimingLive;
+export type VoiceTimingEndpoint = SharedVoiceTimingEndpoint;
 const voiceTimingRoutes = ['on-device', 'browser', 'local-agent', 'eliza-cloud', 'paired-agent', 'development-agent', 'manual'];
 type VoiceTimingEntry = 'conversation' | 'notes';
 // Storage and clock are read from this realm per access, so a test realm's fakes are the ones used.

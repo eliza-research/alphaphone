@@ -31,16 +31,22 @@ class NativeSourceHost {static int started;static void configure(Runnable r){sta
 class NativeDeletionCoordinator {static NativeDeletionCoordinator get(android.content.Context c){return new NativeDeletionCoordinator();}void start(){NativeSourceHost.started++;}}
 class AlphaCrashLog {static void install(android.content.Context c){NativeSourceHost.started++;}}
 class AlphaNoteAudioPlugin {static void scheduleTrashBackstop(android.content.Context c){NativeSourceHost.started++;}}
+class AlphaLocalAgentPlugin {static String invocationOwner(android.content.Context c){return "no-provider";}}
+final class BuildConfig {static final String ELIZA_SOURCE_COMMIT="fixture",FLAVOR="launcher",BUILD_TYPE="debug";static final boolean ELIZA_SOURCE_DIRTY=false;}
 `);
+  // Shared listener admission and latency probe: counted as startup work, so a pending reset starts neither.
+  put('ai/eliza/plugins/system/SenseListenerClient.java',`package ai.eliza.plugins.system; public final class SenseListenerClient {public SenseListenerClient(android.content.Context c){} public void admitOwner(java.util.function.Supplier<String> owner){ai.elizaresearch.alphaphone.ResetStartupTest.started();}}`);
+  put('ai/eliza/voice/VoiceLatencyProbe.java',`package ai.eliza.voice; public final class VoiceLatencyProbe {public static void configureHost(String format,String commit,boolean dirty,String build){ai.elizaresearch.alphaphone.ResetStartupTest.started();}}`);
   put('ai/elizaresearch/alphaphone/ResetStartupTest.java',`package ai.elizaresearch.alphaphone;
 public class ResetStartupTest {
+ public static void started(){NativeSourceHost.started++;}
  static void check(boolean ok){if(!ok)throw new AssertionError();}
  public static void main(String[] args)throws Exception {
   android.content.Context.data=new java.io.File(args[0]);AlphaApplication app=new AlphaApplication();
   check(!AlphaDataReset.pending(app));
   // A late failure result from a stale recovery attempt cannot recreate reset state in fresh data.
   AlphaListenerPlugin.resetSaved=false;check(AlphaDataReset.attempt(app,System.currentTimeMillis())==AlphaDataReset.Outcome.LISTENER_UNACKNOWLEDGED);check(android.content.Context.data.listFiles().length==0);AlphaListenerPlugin.resetSaved=true;
-  app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==7);
+  app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==9);
   // Package-scoped: Android's own-package clear only; the sibling app's fixture data is untouched.
   check(new java.io.File(args[1],"keep").isFile());NativeSourceHost.started=0;
   AlphaDataReset.record(app);check(AlphaDataReset.pending(new AlphaApplication()));
@@ -98,7 +104,7 @@ public class ResetStartupTest {
   check(!AlphaDataReset.pending(app));
   // A late failure result from a stale recovery attempt cannot recreate reset state in fresh data.
   AlphaListenerPlugin.resetSaved=false;check(AlphaDataReset.attempt(app,System.currentTimeMillis())==AlphaDataReset.Outcome.LISTENER_UNACKNOWLEDGED);check(android.content.Context.data.listFiles().length==0);AlphaListenerPlugin.resetSaved=true;
-  app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==7);
+  app.attachBaseContext(app);app.onCreate();check(NativeSourceHost.started==9);
   // Package-scoped: Android's own-package clear only; the sibling app's fixture data is untouched.
   check(new java.io.File(args[1],"keep").isFile());
   System.out.println("PASS reset startup admission and interrupted dispatch");
