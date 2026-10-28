@@ -176,49 +176,13 @@ assert.throws(()=>restoreNotesTrashEntry([text],entry(text,'op',t0)),/already ex
  assert.deepEqual(smaller.add(reduced,entry({id:'new',kind:'text',title:'New'},'new-op',t0)).entries.map(e=>e.id),['new-op']);
 }
 
-// MVP-15 startup backstop: an interrupted permanent voice deletion is finished or rolled back only
-// on exact note and recording ownership. Every combination of evidence is enumerated.
+// MVP-15 startup backstop: the plan for an interrupted permanent voice deletion is the shared
+// plugin-notes recording-deletion module; every combination of evidence is enumerated upstream
+// (plugins/plugin-notes/test/notes-recording-deletion.test.mjs). Alpha re-exports that plan.
 {
- const {planInterruptedPermanentDeletion:plan}=await import('../apps/app/src/runtime/permanent-voice-deletion');
- const live={ownedByNote:true,inAudioTrash:false},trashed={ownedByNote:true,inAudioTrash:true};
- const at=(note:'deleted'|'original'|'changed',recording:typeof live|null,receipt:'unknown'|'removed'|'restored'|'purged'|null,referencedElsewhere=false)=>plan({note,recording,receipt,referencedElsewhere});
- // Death after the tombstone commit, before the recording was moved: finish both remaining steps.
- assert.equal(at('deleted',live,'unknown'),'trash-then-erase');
- // Death after the move to the audio trash, before the erase.
- assert.equal(at('deleted',trashed,'removed'),'erase');
- // Death after the erase, before the recovery row was retired.
- assert.equal(at('deleted',trashed,'purged'),'retire');
- // Death before the tombstone commit: nothing happened, so only the row goes (rollback).
- assert.equal(at('original',live,'unknown'),'retire');
- assert.equal(at('original',live,'restored'),'retire');
- // The other order. Recording moved but the note never deleted: give the recording back.
- assert.equal(at('original',trashed,'removed'),'restore-recording');
- // Recording already erased under this operation and the exact reviewed note still saved: finish the note.
- assert.equal(at('original',trashed,'purged'),'delete-note');
- // Never: a note that changed, was restored as another revision or was deleted by another operation.
- for(const recording of [live,trashed,null])for(const receipt of ['unknown','removed','restored','purged',null] as const)for(const elsewhere of [false,true])
-  assert.equal(at('changed',recording,receipt,elsewhere),'review');
- // Never: a recording another note owns, unreadable recording state, or an unreadable receipt.
- for(const note of ['deleted','original'] as const)for(const receipt of ['unknown','removed','restored','purged'] as const){
-  assert.equal(at(note,null,receipt),'review');
-  for(const inAudioTrash of [false,true])assert.equal(plan({note,recording:{ownedByNote:false,inAudioTrash},receipt,referencedElsewhere:false}),'review');
- }
- for(const note of ['deleted','original'] as const)for(const recording of [live,trashed])assert.equal(at(note,recording,null),'review');
- // Never: the recording of a deleted note that another saved note references.
- for(const recording of [live,trashed])for(const receipt of ['unknown','removed','restored','purged'] as const)assert.equal(at('deleted',recording,receipt,true),'review');
- // Never: a recording another deletion holds in the audio trash, a started restore, or receipts that disagree with the recording.
- assert.equal(at('deleted',trashed,'unknown'),'review');
- assert.equal(at('deleted',live,'restored'),'review');
- assert.equal(at('deleted',trashed,'restored'),'review');
- assert.equal(at('deleted',live,'removed'),'review');
- assert.equal(at('original',trashed,'unknown'),'review');
- assert.equal(at('original',trashed,'restored'),'review');
- assert.equal(at('original',live,'removed'),'review');
- // Only two plans ever erase a recording, and both require this operation's committed tombstone.
- for(const note of ['deleted','original','changed'] as const)for(const recording of [live,trashed])for(const receipt of ['unknown','removed','restored','purged'] as const){
-  const step=at(note,recording,receipt);
-  if(step==='erase'||step==='trash-then-erase')assert.equal(note,'deleted');
-  if(step==='delete-note')assert.equal(receipt,'purged');
- }
+ const alpha=await import('../apps/app/src/runtime/permanent-voice-deletion');
+ const shared=await import('../.eliza/client-features/plugins/plugin-notes/src/client/notes-recording-deletion.ts');
+ assert.equal(alpha.planInterruptedPermanentDeletion,shared.planInterruptedPermanentDeletion);
+ assert.equal(alpha.planInterruptedPermanentDeletion({note:'deleted',recording:{ownedByNote:true,inAudioTrash:false},receipt:'unknown',referencedElsewhere:false}),'trash-then-erase');
 }
 console.log('notes trash flow ok');

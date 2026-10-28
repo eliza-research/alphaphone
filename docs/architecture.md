@@ -343,17 +343,60 @@ renderer reads its presence from the injected plugin headers (`apps/app/src/runt
 phone-state permission. Gmail is available in both distributions through Eliza Cloud, with
 read access first and one incremental change grant (`apps/app/src/runtime/gmail-grants.ts`).
 
-Native reminders use the shared `plugin-native-reminders` engine and bridge.
-The Clock hand-off contract is Alpha's: `apps/app/src/runtime/clock-contract.ts` owns the
-operation and result shapes and the validation of an agent's request, and
-`ClockHandoff.java` builds the Android Clock intents from it. Upstream offers
-`clock.handoff.v1`, `clock.handoff.v2` (repeat days) and `clock.alarms.v1` (alarms owned by
-the host app) in `packages/agent/src/api/device-action-routes.ts` at the pin. Alpha
-advertises `clock.handoff.v1`, adds `clock.handoff.v2` only on Android when the agent offers
-it and the native surface reports `clockRepeatDaysVersion` of at least 1, and never
-advertises `clock.alarms.v1`, because Alpha does not own alarms (A-11). As upstream
-defines, an explicit empty repeat-days list is a one-time alarm; `clock-contract.ts`
-normalises it to an omitted `days`, so Clock never receives an empty `EXTRA_DAYS`.
+Native reminders use the shared `plugin-native-reminders` engine and bridge. The browser
+build's reminder store applies the same engine's Done and Snooze decisions through the
+shared `@elizaos/macosreminders/occurrence` module: a one-off Done completes the reminder,
+and a repeat records the finished occurrence and advances to its next civil occurrence
+in the saved zone. Alpha keeps only storage, delivery state and revisions. The device-local
+write-ahead journals for reminder creations and selected-reminder actions (cancel, complete,
+snooze, edit), their readback match, refusal retirement, reviewed outcome checks and the
+overdue, undated to-do, reopen and refusal-message decisions are `plugin-assistant`'s
+`reminder-journal.ts` (`@elizaos/plugin-assistant/device-reminder-journal`).
+`apps/app/src/runtime/reminder-creations.ts` and `reminder-deletions.ts` bind it to Alpha's
+installed slots (`reminder-creations:v1:device`, `reminder-deletions:v1:device`) and browser
+documents through `reminder-journal-store.ts`; reconciliation reads rows and receipts only.
+
+The Clock hand-off contract is shared: `plugin-assistant`'s `clock-handoff.ts` (exported
+from `device-clock-review`) owns handoff validation, the capability policy, review text and
+receipt binding, and `apps/app/src/runtime/clock-contract.ts` only binds Alpha's brand name
+and existing import names. `ClockHandoff.java` builds the Android Clock intents. Upstream
+offers `clock.handoff.v1`, `clock.handoff.v2` (repeat days) and `clock.alarms.v1` (alarms
+owned by the host app) in `packages/agent/src/api/device-action-routes.ts` at the pin. Alpha
+negotiates through the shared `clockHandoffCapabilities` policy: `clock.handoff.v1` on Android
+when the agent offers it, `clock.handoff.v2` only when the native surface also reports
+`clockRepeatDaysVersion` of at least 1, and never `clock.alarms.v1`, because Android Clock
+owns alarms (P-17, A-11). As upstream defines, an explicit empty repeat-days list is a
+one-time alarm; the shared dispatch validator omits `days`, so Clock never receives an empty
+`EXTRA_DAYS`. The upstream Eliza Android host still advertises its owned `clock.alarms.v1`
+store: `packages/app`'s `SlotClockPlugin` builds `ClockHostClient` with `AlarmMetadata`, and
+the same client built without it advertises only `clock.handoff.v1,clock.handoff.v2`. Moving
+Eliza to the shared handoff policy, and what happens to alarms already saved in `ElizaAlarms`,
+is an open owner decision; until then the two brands advertise different Clock capabilities.
+
+Device-local Notes recovery is shared too: unsaved-edit drafts and their conflict merge
+(`notes-draft.ts`), the capacity-aware vault and the owner Trash actions
+(`notes-trash-actions.ts`: write-ahead move, restore, delete forever, empty Trash and the
+confirmed deletion after a full Trash) live in `plugin-notes/src/client`, as do the
+selected-note text serializer (`note-share-text.ts`), the voice-note recording deletion
+journal, its interrupted permanent-deletion plan, renderer lease, cross-view claims and
+deletion lock (`notes-recording-deletion.ts`), the recording effects of approved, expired,
+permanent and interrupted deletions (`notes-recording-effects.ts`) and the reviewed
+recording summary proposal (`notes-recording-summary.ts`). Alpha keeps its installed slot,
+document, lock and claim names, the native recording store (`AlphaNoteAudio`), the editor
+deletion and restore flows, and presentation. The renderer
+lease must stay equal to `NotesDeletionLease.LEASE_MS` used by the Android native passes.
+The device-local Older notes collection still renders through Alpha's own Notes view; the
+shared `NotesWorkspace` serves only canonical agent notes until it gains a device-local
+client and recording ports.
+Three Notes files remain Alpha's because they bind Alpha storage and platform surfaces rather
+than Notes rules: `runtime/notes-trash.ts` (the Trash slot `notes-trash:v1:device` and browser
+document under the shared Trash policy), `runtime/browser-note-documents.ts` (the browser's
+local text import and export for `AlphaNoteDocuments`) and `runtime/deleted-note-origin.ts`
+(which committed reminder and Calendar deletion receipts retire a From note link, read from
+Alpha's deletion documents). Moving them needs a shared storage and document-picker port in
+`plugin-notes`; until then this Notes cut-over is not complete. Note-origin links point only
+at Older notes voice recordings: canonical Notes records have no Notes-to-Calendar handoff
+or origin link yet.
 
 `AlphaReminders` supplies the product's existing encrypted store, preference and
 channel names, receiver/Activity identities and intent routes. `DailyApps` keeps

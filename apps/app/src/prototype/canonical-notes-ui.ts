@@ -6,7 +6,7 @@ import {createNotesClient} from '../../../../.eliza/client-features/plugins/plug
 import {projectNoteForModel,type StickyNote} from '../../../../.eliza/client-features/plugins/plugin-notes/src/types.ts';
 import type {AppRecordPort} from '../runtime/app-record-route-policy';
 import {shareSelectedText,copySelectedText} from '../runtime/text-share';
-import {noteShareText} from '../runtime/note-share-text';
+import {noteShareText} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/note-share-text.ts';
 import {DailyApps} from '../daily';
 import {registerPlugin} from '../platform-plugins';
 import {speakNote,stopSpeaking} from './local-speech-playback';
