@@ -48,7 +48,10 @@ export default defineConfig({
   fullyParallel: true,
   reporter: [['list'], ['html', { outputFolder: 'test-results/browser-report', open: 'never' }]],
   outputDir: 'test-results/browser',
-  use: { baseURL: `http://127.0.0.1:${port}`, viewport: { width: 412, height: 915 }, screenshot: 'only-on-failure', trace: 'retain-on-failure', reducedMotion: 'reduce' },
+  // Motion stays at the browser default: many specs measure transitions and settled geometry.
+  // `reducedMotion` is not a Playwright test option (a bare `use.reducedMotion` is ignored);
+  // a spec that needs it opts in with test.use({contextOptions:{reducedMotion:'reduce'}}).
+  use: { baseURL: `http://127.0.0.1:${port}`, viewport: { width: 412, height: 915 }, screenshot: 'only-on-failure', trace: 'retain-on-failure' },
   projects: [
     { name: 'chromium', testIgnore: productionSpec },
     { name: 'production', testMatch: productionSpec, use: { baseURL: `http://127.0.0.1:${productionPort}` } },

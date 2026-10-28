@@ -1,6 +1,9 @@
 import {openBrowserCalendar} from './helpers/browser-calendar';
 import {test,expect} from '@playwright/test';
 import {returnToApps} from './app-navigation';
+// Each step re-enters Settings and Calendar. Their 460ms entry animation is not under test here,
+// and clicking during it waits out Playwright's stability retries on every step.
+test.use({contextOptions:{reducedMotion:'reduce'}});
 async function open(page:any){await page.goto('/?mode=dev');await openBrowserCalendar(page);await page.getByRole('button',{name:'Month view',exact:true}).click();}
 async function sources(page:any){await page.goto('/?mode=dev');await openBrowserCalendar(page);await returnToApps(page);await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Calendar',exact:true}).click();await expect(page.getByText('Agent access is reviewed separately',{exact:true})).toBeVisible();}
 async function timeline(page:any){await page.getByRole('button',{name:'Back to Settings',exact:true}).click();await returnToApps(page);await openBrowserCalendar(page);}
