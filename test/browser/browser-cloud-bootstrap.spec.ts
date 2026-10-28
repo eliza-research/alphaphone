@@ -30,8 +30,15 @@ test('choosing offline while optional credential discovery is held cannot restor
  expect(snapshot).toEqual({open:false,account:false,choice:{kind:'offline'}});expect(operations).toEqual(['secureRead']);
 });
 test('a changed credential during optional restore cannot verify or publish the old account',async({page})=>{
- const operations:string[]=[];let reads=0;
- await page.route(endpoint,async route=>{if(await fulfillPublicSignInRead(route))return;const data=route.request().postDataJSON();operations.push(data.operation);expect(data.operation).toBe('secureRead');const suffix=++reads===1?'11111111-1111-4111-8111-111111111111':'22222222-2222-4222-8222-222222222222';await route.fulfill({json:{value:JSON.stringify({credentialReference:'browser-cloud-reference:'+suffix,credentialId:suffix})}});});
+ const operations:string[]=[],readiness:string[]=[];let reads=0;
+ await page.route(endpoint,async route=>{if(await fulfillPublicSignInRead(route))return;const data=route.request().postDataJSON();
+  // The reported failure opens Alpha's signed-out sign-in screen, whose readiness check burns any
+  // pending host sign-in attempt. That cancel carries no credential and is not a store operation.
+  if(data.operation==='signInCancel'){expect(data).toEqual({operation:'signInCancel'});readiness.push(data.operation);await route.fulfill({json:{}});return;}
+  operations.push(data.operation);expect(data.operation).toBe('secureRead');const suffix=++reads===1?'11111111-1111-4111-8111-111111111111':'22222222-2222-4222-8222-222222222222';await route.fulfill({json:{value:JSON.stringify({credentialReference:'browser-cloud-reference:'+suffix,credentialId:suffix})}});});
  await page.goto('/');const snapshot=await page.evaluate(async()=>{const c=(await import('/src/runtime/connection-ui.tsx')).connectionController;await c.initialize();return {account:!!c.getSnapshot().cloudAccount,error:c.getSnapshot().error};});
- expect(snapshot.account).toBe(false);expect(snapshot.error).toContain('Cloud account changed');expect(operations).toEqual(['secureRead','secureRead']);
+ expect(snapshot.account).toBe(false);expect(snapshot.error).toContain('Cloud account changed');
+ const signIn=page.getByRole('dialog',{name:'Welcome to Alpha.',exact:true});await expect(signIn).toBeVisible();await expect(signIn.getByRole('alert')).toContainText('Cloud account changed');
+ expect(await page.evaluate(async()=>!!(await import('/src/runtime/connection-ui.tsx')).connectionController.getSnapshot().cloudAccount)).toBe(false);
+ expect(operations).toEqual(['secureRead','secureRead']);expect(readiness.length).toBeLessThanOrEqual(1);
 });
