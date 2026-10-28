@@ -24,6 +24,10 @@
  <uses-permission android:name="android.permission.WRITE_CALL_LOG" tools:node="remove" />
  <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" tools:node="remove" />
  <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" tools:node="remove" />
+ <!-- The dialer role's ringing-call notice opens the shared call screen over the lock screen and wakes
+      the display. Android drops a full-screen intent without this install-time permission. Only the
+      shared call service (AlphaInCallService) posts one. -->
+ <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
  <!-- SMS permissions imply telephony hardware; keep it optional so no install is filtered by it. -->
  <uses-feature android:name="android.hardware.telephony" android:required="false" />
  <queries>

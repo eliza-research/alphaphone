@@ -296,7 +296,8 @@ only identity: `AlphaTelephonyPlugin` subclasses `TelephonyPlugin` (plugin-nativ
 namespace, callback actions, data scheme, extras and receiver; the renderer client is
 `@elizaos/contracts/native-telephony` and the send contract `@elizaos/contracts/sms-send`.
 The launcher declares the dialer-role components (`AlphaInCallService`, `AlphaCallActivity`,
-`AlphaDialPadActivity`, shared from plugin-native-phone) and the SMS-role components
+`AlphaDialPadActivity`, shared from plugin-native-phone; `USE_FULL_SCREEN_INTENT` lets the ringing-call
+notice open the call screen over the lock screen) and the SMS-role components
 (`AlphaSmsDeliverReceiver`, `AlphaMmsWapPushReceiver`, `AlphaMmsResultReceiver`,
 `AlphaRespondViaMessageService`, `AlphaSmsComposeActivity` and the shared `MmsFileProvider`)
 disabled. `AlphaTelephonyRoles` enables them only while `AlphaImageCapability` verifies the image,

@@ -124,6 +124,10 @@ test("permissions: standalone has none, the launcher declares read access only, 
   // CALL_PHONE reaches only the dialer-role holder, and only the launcher can be offered that role.
   assert.ok(declared(launcher).includes("android.permission.CALL_PHONE") && !declared(main).includes("android.permission.CALL_PHONE"));
   assert.ok(removed(standalone).includes("android.permission.CALL_PHONE"), "standalone removes CALL_PHONE from the shared phone module");
+  // The ringing-call screen is a full-screen intent, which Android drops without this permission; only the
+  // launcher has the dialer role's call service, and only that service posts one.
+  assert.ok(declared(launcher).includes("android.permission.USE_FULL_SCREEN_INTENT"), "launcher declares USE_FULL_SCREEN_INTENT for the incoming-call screen");
+  assert.ok(!declared(main).includes("android.permission.USE_FULL_SCREEN_INTENT") && !declared(standalone).includes("android.permission.USE_FULL_SCREEN_INTENT"), "no other build asks for full-screen intents");
   // RECEIVE_* reach only the SMS-role holder; only the launcher can be offered that role.
   for (const permission of ["RECEIVE_SMS", "RECEIVE_MMS", "RECEIVE_WAP_PUSH"]) {
     assert.ok(declared(launcher).includes(`android.permission.${permission}`) && !declared(main).includes(`android.permission.${permission}`));
