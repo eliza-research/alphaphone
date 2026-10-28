@@ -16,13 +16,16 @@ const sha = text => createHash("sha256").update(text).digest("hex");
 const DISTRIBUTABLE = { mode: "release", signed: true, signerSha256: SIGNER, distributable: true, runtime: "PACKAGED", runtimeNotices: true, testMocks: false, bundleAudit: "passed",
   voiceHost: { packaged: true, asr: true, differences: [], qualified: true }, licenceBlockers: [] };
 
-/** A checkout with the committed release-signer record (signer set to SIGNER) and a verify-apks build of both releases. */
+/**
+ * A checkout with the committed release-signer record (signer set to SIGNER, no release recorded
+ * unless `last` names one, whatever the checkout has recorded since) and a verify-apks build of both releases.
+ */
 function fixture(t, { rows = {}, last = null } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "alpha-record-release-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const committed = JSON.parse(fs.readFileSync(path.join(root, "android/release-signer.json"), "utf8"));
   fs.mkdirSync(path.join(dir, "android"), { recursive: true });
-  fs.writeFileSync(path.join(dir, "android/release-signer.json"), `${JSON.stringify({ ...committed, signerSha256: SIGNER, lastRelease: last ?? committed.lastRelease }, null, 2)}\n`);
+  fs.writeFileSync(path.join(dir, "android/release-signer.json"), `${JSON.stringify({ ...committed, signerSha256: SIGNER, lastRelease: last ?? { versionCode: null, versionName: null, recordedAt: null } }, null, 2)}\n`);
   fs.mkdirSync(path.join(dir, "artifacts"));
   const results = ["standalone", "launcher"].map(variant => {
     const name = `${variant}-release.apk`;
