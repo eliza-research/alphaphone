@@ -7,6 +7,7 @@ import ai.eliza.plugins.browsersurface.BrowserFieldOrigin;
 import ai.eliza.plugins.browsersurface.BrowserHttpAuthAutofill;
 import ai.eliza.plugins.browsersurface.BrowserHttpAuthOrigin;
 import ai.eliza.plugins.browsersurface.BrowserLoginFields;
+import ai.eliza.plugins.browsersurface.BrowserReadingWorld;
 import ai.eliza.plugins.browsersurface.BrowserWebOrigin;
 import ai.eliza.plugins.securestore.nativeonly.PasswordAutofillPolicy;
 

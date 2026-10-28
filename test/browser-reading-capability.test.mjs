@@ -10,9 +10,11 @@ import fs from "node:fs";
 import test from "node:test";
 
 const java = name => fs.readFileSync(`android/app/src/main/java/ai/elizaresearch/alphaphone/${name}.java`, "utf8");
-const world = java("BrowserReadingWorld"), reading = java("BrowserReading"), plugin = java("AlphaBrowserPlugin");
-// Blob capture and downloads are staged into the app from the reviewed pin (plugin-native-browser-surface).
+const reading = java("BrowserReading"), plugin = java("AlphaBrowserPlugin");
+// The isolated reading world, blob capture and downloads are staged into the app from the reviewed
+// pin (plugin-native-browser-surface).
 const shared = name => fs.readFileSync(`vendor/eliza/plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface/${name}.java`, "utf8");
+const world = shared("BrowserReadingWorld");
 const downloads = shared("BrowserDownloads"), capture = shared("BrowserBlobCapture"), loginFields = shared("BrowserLoginFields");
 const adapter = fs.readFileSync("apps/app/src/prototype/browser-adapter.ts", "utf8");
 // The shared page-reading policy at the pin: the renderer module and its native half.
@@ -39,13 +41,28 @@ test("no browser source can put a script or a bridge in a page's own world", () 
   // Reading never evaluates in the page: only through the isolated world's own proxy.
   assert.doesNotMatch(world, /\.evaluateJavascript\(/);
   assert.doesNotMatch(reading, /\.evaluateJavascript\(/);
-  assert.match(world, /if\(!ready\(\)\)\{failure\.run\(\);return;\}/, "evaluation is refused, not rerouted, when no isolated world is ready");
+  assert.match(world, /if \(!ready\(\)\) \{\s*failure\.run\(\);\s*return;\s*\}/, "evaluation is refused, not rerouted, when no isolated world is ready");
+});
+
+test("the isolated-reading probe looks for the shared world's channel in the page world", () => {
+  // BrowserIsolatedReadingInstrumentedTest checks that the page (and a frame it creates) cannot see
+  // the reading channel. A renamed channel would let that check pass without testing anything.
+  const channel = /CHANNEL = "(__\w+)"/.exec(world)?.[1];
+  assert.equal(channel, "__elizaBrowserReadWorld");
+  const probe = fs.readFileSync("android/app/src/androidTest/java/ai/elizaresearch/alphaphone/BrowserIsolatedReadingInstrumentedTest.java", "utf8");
+  assert.ok(probe.includes(`typeof ${channel}==='undefined'`), "the page world is probed");
+  assert.ok(probe.includes(`typeof frame.contentWindow.${channel}==='undefined'`), "a frame the page creates is probed");
+  assert.doesNotMatch(probe, /__alphaBrowserReadWorld/, "no retired channel name");
 });
 
 test("the native side reports the capability and refuses a review with the unavailable answer", () => {
-  assert.match(world, /static boolean supported\(\)\{\s*try\{return WebViewFeature\.isFeatureSupported\(WebViewFeature\.JS_INJECTION_IN_FRAME_AND_WORLD\);\}\s*catch\(RuntimeException\|LinkageError \w+\)\{return false;\}/);
-  assert.match(world, /this\.web=web;\s*if\(!supported\(\)\)return;/, "no world, listener or script is created without the capability");
-  assert.match(world, /boolean available\(\)\{return !closed&&world!=null;\}/);
+  assert.match(world, /public static boolean supported\(\) \{\s*try \{\s*return WebViewFeature\.isFeatureSupported\(WebViewFeature\.JS_INJECTION_IN_FRAME_AND_WORLD\);\s*\} catch \(RuntimeException \| LinkageError \w+\) \{\s*return false;\s*\}/);
+  assert.match(world, /this\.web = web;\s*if \(!supported\(\)\)\s*return;/, "no world, listener or script is created without the capability");
+  assert.match(world, /public boolean available\(\) \{\s*return !closed && world != null;\s*\}/);
+  // Alpha uses the shared world; it keeps no copy of its own.
+  assert.ok(!fs.existsSync("android/app/src/main/java/ai/elizaresearch/alphaphone/BrowserReadingWorld.java"));
+  assert.match(plugin, /^import ai\.eliza\.plugins\.browsersurface\.BrowserReadingWorld;$/m);
+  assert.match(reading, /^import ai\.eliza\.plugins\.browsersurface\.BrowserReadingWorld;$/m);
   assert.match(plugin, /@PluginMethod public void readingSupport\(PluginCall call\) \{ JSObject out=new JSObject\(\);out\.put\("available",BrowserReadingWorld\.supported\(\)\);call\.resolve\(out\); \}/);
   // Unavailable is the first answer of a review: before a speech route is asked for, before the
   // page is judged, before extraction, and it is not the "reload this page" answer.

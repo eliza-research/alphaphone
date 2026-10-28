@@ -18,7 +18,7 @@ import test from "node:test";
 const root = "android/app/src/main/java/ai/elizaresearch/alphaphone";
 // Shared browser classes the app compiles from the reviewed pin (scripts/stage-local-agent-sources.mjs).
 const shared = "vendor/eliza/plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface";
-const sharedFiles = ["BrowserBlobCapture.java", "BrowserDownloads.java", "BrowserLoginFields.java"];
+const sharedFiles = ["BrowserBlobCapture.java", "BrowserDownloads.java", "BrowserLoginFields.java", "BrowserReadingWorld.java"];
 const files = [...fs.readdirSync(root).filter(name => name.endsWith(".java")), ...sharedFiles].sort();
 const read = name => fs.readFileSync(path.join(sharedFiles.includes(name) ? shared : root, name), "utf8");
 
