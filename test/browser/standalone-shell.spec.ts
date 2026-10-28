@@ -201,7 +201,8 @@ for(const viewport of [{width:412,height:915},{width:1440,height:500}])for(const
 
 for(const view of ['Settings','Notes','Files'])test(`${view} Back works directly beside nonblocking half chat while full chat isolates the app`,async({page},info)=>{
  await page.setViewportSize({width:412,height:915});await page.goto('/');await page.getByRole('button',{name:view,exact:true}).click();
- const app=page.locator('[data-alpha-layer="app"]'),back=app.locator('button[aria-label="Back to apps"]');
+ // Shared Notes is drawn above the app layer and carries the same isolation on its own surface.
+ const app=page.locator(view==='Notes'?'[data-alpha-notes-surface]':'[data-alpha-layer="app"]'),back=app.locator('button[aria-label="Back to apps"]');
  await page.getByRole('button',{name:'Open conversation',exact:true}).click();await page.getByRole('textbox',{name:'Message Alpha',exact:true}).fill('Keep this unsent draft');await page.locator('[data-alpha-layer=conversation]').evaluate(el=>Promise.all(el.getAnimations().map(animation=>animation.finished.catch(()=>{}))));
  await expect(back).toBeVisible();await expect(app).not.toHaveAttribute('inert','');await expect(app).toHaveAttribute('aria-hidden','false');await back.click({trial:true});expect((await back.boundingBox())!.height).toBeGreaterThanOrEqual(44);
  await page.screenshot({path:info.outputPath('header-live-beside-sheet.png'),animations:'disabled'});await back.click();await expect(page.locator('html')).toHaveAttribute('data-active-view','home');await expect(page.getByRole('textbox',{name:'Ask Alpha',exact:true})).toHaveValue('Keep this unsent draft');
