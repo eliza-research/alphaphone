@@ -373,16 +373,17 @@
 <sc-if value="{{is.messages}}">
 <sc-if value="{{messages.nativeManaged}}">
  <div class="scr" style="height:100%;overflow-y:auto;padding:56px 20px 120px;box-sizing:border-box">
-  <h1>Text messages</h1><p>SMS and MMS text can be read here. MMS sending and attachments use your existing messaging app, which remains the default.</p>
+  <h1>Text messages</h1><p>SMS and MMS text can be read here. Group messages and pictures are sent as one reviewed MMS; MMS attachments you receive open in your messaging app.</p>
   <p role="status">{{messages.nativeStatus}}</p>
   <button onClick="{{messages.nativeRead}}" style="min-height:44px">SMS read access</button>
   <button onClick="{{messages.nativeSendAccess}}" style="min-height:44px">SMS send access</button>
   <button onClick="{{messages.nativeSimAccess}}" style="min-height:44px">SIM access</button>
   <button onClick="{{messages.nativeRefresh}}" disabled="{{messages.nativeBusy}}" style="min-height:44px">Refresh</button>
   <h2>Compose SMS</h2>
-  <label>Phone numbers, separated by commas<input disabled="{{messages.nativeBusy}}" aria-label="SMS recipients" value="{{messages.nativeRecipients}}" onChange="{{messages.nativeOnRecipients}}" style="width:100%;min-height:44px;box-sizing:border-box" maxlength="110"></label>
+  <label>Phone numbers, separated by commas<input disabled="{{messages.nativeBusy}}" aria-label="SMS recipients" value="{{messages.nativeRecipients}}" onChange="{{messages.nativeOnRecipients}}" style="width:100%;min-height:44px;box-sizing:border-box" maxlength="230"></label>
   <label>Message<textarea disabled="{{messages.nativeBusy}}" aria-label="SMS text" value="{{messages.nativeBody}}" onChange="{{messages.nativeOnBody}}" style="width:100%;min-height:96px;box-sizing:border-box" maxlength="1600"></textarea></label>
   <p>{{messages.nativeSim}}</p><sc-for list="{{messages.nativeSims}}" as="sim"><button disabled="{{messages.nativeBusy}}" onClick="{{sim.pick}}" style="min-height:44px">{{sim.label}}</button></sc-for>
+  <sc-if value="{{messages.nativeMmsAvailable}}"><button onClick="{{messages.nativeAttach}}" disabled="{{messages.nativeBusy}}" style="min-height:44px">Add pictures</button><sc-for list="{{messages.nativeAttachments}}" as="picture"><button aria-label="Remove {{picture.label}}" disabled="{{messages.nativeBusy}}" onClick="{{picture.remove}}" style="min-height:44px">{{picture.label}} ✕</button></sc-for><button onClick="{{messages.nativeSendMms}}" disabled="{{messages.nativeBusy}}" style="min-height:44px">Review MMS (group or pictures)</button></sc-if>
   <button onClick="{{messages.nativeSend}}" disabled="{{messages.nativeBusy}}" style="min-height:44px">Review SMS</button><button disabled="{{messages.nativeBusy}}" onClick="{{messages.nativeClear}}" style="min-height:44px">Clear draft</button>
   <button onClick="{{messages.nativeHandoff}}" disabled="{{messages.nativeBusy}}" style="min-height:44px">Review in messaging app (choose SIM there)</button><p role="status">{{messages.nativeNotice}}</p>
   <h2>Recent Alpha send records</h2><sc-for list="{{messages.nativeReceipts}}" as="receipt"><p>{{receipt.label}}</p></sc-for>

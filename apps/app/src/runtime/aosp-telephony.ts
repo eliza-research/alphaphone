@@ -23,12 +23,14 @@ import {
 } from '../../../../.eliza/client-features/packages/contracts/src/native-telephony.ts';
 
 export {
-  advanceSmsState, normalizePhoneNumber, parseContacts, parseHandoff, parseMessages, parseSmsJournal,
+  advanceSmsState, normalizePhoneNumber, reviewMms, parseContacts, parseHandoff, parseMessages, parseSmsJournal,
   parseSmsSendResult, parseTelephonyStatus, parseThreads, reviewSms, smsBindingHash, smsBindingText, smsMayBeReviewedAgain,
   SMS_DIRECT_MAX_RECIPIENTS, SMS_MAX_RECIPIENTS, SMS_MAX_THREADS, TelephonyUnavailable,
-  type MessageDirection, type MessageStatus, type SmsMessage, type SmsReview, type SmsReviewProblem, type SmsSendResult,
+  type MessageDirection, type MmsAttachmentDraft, type MmsReview, type MmsReviewProblem, type MmsSendResult, type MessageStatus, type SmsMessage, type SmsReview, type SmsReviewProblem, type SmsSendResult,
   type SmsSendState, type SmsThread, type TelephonyRole, type TelephonyStatus,
 } from '../../../../.eliza/client-features/packages/contracts/src/native-telephony.ts';
+
+export {MMS_MAX_ATTACHMENTS} from '../../../../.eliza/client-features/packages/contracts/src/mms-send.ts';
 
 export type PermissionState = TelephonyPermissionState;
 export type RoleState = TelephonyRoleState;
