@@ -31,6 +31,8 @@ public final class CloudSignInAuthorizationInstrumentedTest {
     Field expires=field(attemptType,"expiresAt");expires.setLong(attempt,System.currentTimeMillis()+60000);
     Field owner=field(CloudSignInPlugin.class,"attempt");owner.set(plugin,attempt);
     Method gate=CloudSignInPlugin.class.getDeclaredMethod("requireAuthorization",attemptType);gate.setAccessible(true);
+    // The shared client's teardown is protected in another package; the host lifecycle calls it.
+    Method destroy=CloudSignInPlugin.class.getDeclaredMethod("handleOnDestroy");destroy.setAccessible(true);
     AtomicReference<Throwable> failure=new AtomicReference<>();
     Thread waiting=new Thread(()->{try{gate.invoke(plugin,attempt);}catch(InvocationTargetException error){failure.set(error.getCause());}catch(Throwable error){failure.set(error);}},"consent-gate-test");
     try {
@@ -54,7 +56,7 @@ public final class CloudSignInAuthorizationInstrumentedTest {
      if("authorize".equals(choice)) assertNull(failure.get());
      else { assertTrue(failure.get() instanceof CloudSignInPlugin.SignInFailure);assertEquals("expired".equals(choice)?"expired":"cancelled",((CloudSignInPlugin.SignInFailure)failure.get()).code); }
     } finally {
-     WebViewTestDriver.withActivity(MainActivity.class,a->plugin.handleOnDestroy());
+     WebViewTestDriver.withActivity(MainActivity.class,a->{try{destroy.invoke(plugin);}catch(ReflectiveOperationException error){throw new AssertionError("Sign-in teardown failed",error);}});
      waiting.join(10000);
     }
     assertTrue("Native dialog is removed",device.wait(Until.gone(By.text("Authorize Alpha Phone")),10000));
