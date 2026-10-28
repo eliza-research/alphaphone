@@ -142,7 +142,11 @@ export function installPrototypeDataAdapter(Component: any, views: Record<string
       homeWorkflowLabel: brief.label, homeWorkflowTitle: brief.title, homeWorkflowTime: brief.time, homeWorkflowSource: brief.source,
       // After a failed read, opening Calendar from the card reads it again; Calendar itself does not retry on entry.
       // A stale read is read again when the card is opened (the same forced read Calendar's retry uses).
-      goCalendar: () => { if (calendarSource?.error) calendarSource.retry?.(); else if (stale) void this.refreshAgentCalendar?.(); this.openView('calendar', agenda ? {open:agenda.event.id, day:agenda.event.off, openDay:agenda.event.off} : undefined); },
+      // Opening a view resets its state, so the card names the calendar source it showed: Calendar
+      // opens on that source (a device scope chosen there, or the default) with the item selected.
+      goCalendar: () => { if (calendarSource?.error) calendarSource.retry?.(); else if (stale) void this.refreshAgentCalendar?.();
+        const authority = this.vget('calendar').calendarAuthority, patch = {...(authority ? {calendarAuthority: authority} : {}), ...(agenda ? {open:agenda.event.id, day:agenda.event.off, openDay:agenda.event.off} : {})};
+        this.openView('calendar', Object.keys(patch).length ? patch : undefined); },
       homeBriefHas: briefCard.has, homeBriefTitle: briefCard.title, homeBriefStatus: briefCard.status, homeBriefLabel: briefCard.label, homeBriefFailed: briefCard.failed,
       // Opens the retained results list. Showing the card reads nothing; opening the list syncs
       // retained results with the agent as it does from Settings. Neither runs a digest.
