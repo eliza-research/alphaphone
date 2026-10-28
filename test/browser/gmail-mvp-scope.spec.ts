@@ -61,7 +61,8 @@ async function setup(page:Page,options:Options={}){
  },options);
 }
 const gm=(page:Page)=>page.evaluate(()=>(window as any).gm);
-const inboxBadge=(page:Page)=>page.getByRole('button',{name:'Inbox',exact:true}).locator('.app-badge');
+// The Home app grid is the shared mobile shell's (prototype/home-shell.ts); its tile marks unread with this badge.
+const inboxBadge=(page:Page)=>page.getByRole('button',{name:'Inbox',exact:true}).locator('[data-mobile-shell-tile-badge]');
 
 for(const scenario of ['connected','empty','error','restored'] as const)test(`Shared email waits for Gmail account readiness: ${scenario}`,async({page})=>{
  await setup(page);
