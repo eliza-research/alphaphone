@@ -1,7 +1,7 @@
 /** Device photo/video library contract (issue 408, policy P-24): the shared elizaOS contract
  * (plugin-assistant device-actions/photo-library-contract) with Alpha named in owner-facing text.
  * The local agent may use every photo and video Android lets Alpha read; full local access is not
- * an upload. The native bounds mirror android/.../PhotoLibraryAccess.java. */
+ * an upload. Native scope and identity rules are the shared PermittedMediaCatalog (plugin-native-media). */
 import * as shared from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/photo-library-contract.ts';
 
 export * from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/photo-library-contract.ts';
