@@ -42,7 +42,7 @@ public class PersistTest {
   AlphaCredentialStore.failProvider=true;refuses("provider","PROVIDER",()->AlphaLocalAgentPlugin.rememberNotificationOwner(context,session,identity));AlphaCredentialStore.failProvider=false;
   AlphaCredentialStore.failRead=true;refuses("previous","PREVIOUS",()->AlphaLocalAgentPlugin.rememberNotificationOwner(context,session,identity));AlphaCredentialStore.failRead=false;
   AlphaCredentialStore.failWrite=true;refuses("write","STORE",()->AlphaLocalAgentPlugin.rememberNotificationOwner(context,session,identity));AlphaCredentialStore.failWrite=false;
-  Path alias=root.resolve("alias");Files.createSymbolicLink(alias,files);refuses("Notification installation unavailable","INSTALLATION",()->AlphaLocalAgentPlugin.rememberNotificationOwner(new Context(alias.toFile()),session,identity));
+  Path foreign=Files.createDirectory(root.resolve("foreign"));Files.createSymbolicLink(foreign.resolve(".eliza"),state);refuses("Notification installation unavailable","INSTALLATION",()->AlphaLocalAgentPlugin.rememberNotificationOwner(new Context(foreign.toFile()),session,identity));
   int beforeFinal=AlphaCredentialStore.writes;AlphaLocalAgentPlugin.failFinal=true;AlphaLocalAgentPlugin.checkCalls=0;
   try{AlphaLocalAgentPlugin.rememberNotificationOwner(context,session,identity);throw new AssertionError("Final check accepted");}catch(SecurityException expected){if(!android.util.Log.values.get(android.util.Log.values.size()-1).equals("persist=FINAL family=security"))throw new AssertionError("Final stage missing");}
   if(AlphaCredentialStore.writes!=beforeFinal+1)throw new AssertionError("Final verification changed write ordering");AlphaLocalAgentPlugin.failFinal=false;
