@@ -51,10 +51,14 @@ test('the organization credit balance is read only from an exact, fresh billing 
 });
 
 test('the approved Membership & credits sheet adds the plan allowance and the latest Cloud limit read-only', async () => {
-  const {subscriptionSummary: summary, serviceLimitNextChange} = await import('../apps/app/src/runtime/subscription-entitlement.ts');
+  const {subscriptionSummary: sharedSummary, serviceLimitNextChange, alphaSubscriptionCopy} = await import('../apps/app/src/runtime/subscription-entitlement.ts');
+  // The sheet renders through the projected shared hook (elizaOS/eliza#38105), evaluated as shipped.
+  const hookSource = fs.readFileSync('.eliza/client-features/packages/ui/src/components/settings/cloud-subscription-summary.tsx', 'utf8');
+  const hookCompiled = transformSync(hookSource.replace(/^import [\s\S]*?;\n/gm, '').replaceAll('export ', ''), {loader: 'tsx', jsxFactory: 'React.createElement'}).code;
+  const useCloudSubscriptionSummary = new Function('React', 'useEffect', 'useState', 'subscriptionSummary', 'serviceLimitNextChange', hookCompiled + ';return useCloudSubscriptionSummary;')(React, React.useEffect, React.useState, sharedSummary, serviceLimitNextChange);
   const source = fs.readFileSync('apps/app/src/runtime/cloud-membership-ui.tsx', 'utf8');
   const compiled = transformSync(source.replace(/^import .*;\n/gm, '').replaceAll('export ', ''), {loader: 'tsx', jsxFactory: 'React.createElement'}).code;
-  const Controls = new Function('React', 'useEffect', 'useId', 'useRef', 'useState', 'subscriptionSummary', 'serviceLimitNextChange', compiled + ';return CloudMembershipControls;')(React, React.useEffect, React.useId, React.useRef, React.useState, summary, serviceLimitNextChange);
+  const Controls = new Function('React', 'useEffect', 'useId', 'useRef', 'useState', 'useCloudSubscriptionSummary', 'alphaSubscriptionCopy', compiled + ';return CloudMembershipControls;')(React, React.useEffect, React.useId, React.useRef, React.useState, useCloudSubscriptionSummary, alphaSubscriptionCopy);
   const render = props => renderToStaticMarkup(React.createElement(Controls, {balance: 'member', busy: false, email: 'owner@example.invalid', serviceName: 'Eliza Cloud', onRedeem: async () => true, onAddFunds() {}, onRefresh() {}, ...props}));
   const active = render({plan: {kind: 'active', planName: 'Synthetic plan', status: 'active', allowance: {unit: 'usd_micros', granted: 100, remaining: 25, periodStart: Date.now() - 1000, resetsAt: Date.now() + 86400000}, expiresAt: Date.now() + 1000, refreshFailed: false},
     endsAt: Date.now() + 10 * 86400000, lastLimit: {kind: 'rate-limited', retryAfterMs: 60000, resetsAt: null, observedAt: Date.now()}, credits: {usd: '9', observedAt: Date.now()}});
@@ -85,7 +89,10 @@ test('the approved Membership & credits sheet adds the plan allowance and the la
   assert.equal(change({kind: 'allowance-exhausted', retryAfterMs: null, resetsAt: at + 30 * 86400000, observedAt: at}, at), 3600000, 'a far reset never overflows a timer');
   assert.equal(change({kind: 'billing-refused', retryAfterMs: null, resetsAt: null, observedAt: at - 59900}, at), 1000);
   assert.equal(change({kind: 'rate-limited', retryAfterMs: 1000, resetsAt: at - 1, observedAt: at - 5000}, at), null, 'nothing is scheduled for a lapsed limit');
-  assert.match(source, /const limitChange=summary\.limit&&lastLimit\?serviceLimitNextChange\(lastLimit,lastLimit\.observedAt,Date\.now\(\)\):null;\s+useEffect\(\(\)=>\{if\(limitChange===null\)return;const timer=setTimeout\(\(\)=>tick\(value=>value\+1\),limitChange\);return \(\)=>clearTimeout\(timer\);\}\);/);
+  // The re-render timer is the shared hook's; Alpha keeps no copy of it.
+  assert.match(source, /const summary=useCloudSubscriptionSummary\(plan,\{planEndsAt:endsAt\?\?null,lastLimit:lastLimit\?\?null,copy:alphaSubscriptionCopy\(serviceName\)\}\);/);
+  assert.doesNotMatch(source, /serviceLimitNextChange|setTimeout/);
+  assert.match(hookSource, /const nextChange =\s+summary\.limit && lastLimit\s+\? serviceLimitNextChange\(lastLimit, lastLimit\.observedAt, now\)\s+: null;\s+useEffect\(\(\) => \{\s+if \(nextChange === null\) return;\s+const timer = setTimeout\(\(\) => tick\(\(value\) => value \+ 1\), nextChange\);/);
   const ui = fs.readFileSync('apps/app/src/runtime/connection-ui.tsx', 'utf8');
   assert.match(ui, /lastLimit=\{snapshot\.lastServiceLimit\} serviceName=\{serviceName\}/, 'the sheet receives the latest Cloud limit');
   assert.match(ui, /className="serif">Membership &amp; credits<\/h1>/);
@@ -128,7 +135,7 @@ test('only admission and its background refresher read the entitlement; turns an
     ['apps/app/src/maps/cloud-maps.ts', false, ['readServiceLimit']],
     ['apps/app/src/prototype/settings-adapter.ts', false, ['planAdmission']],
     ['apps/app/src/runtime/diagnostics-export.ts', true, ['PlanAdmission', 'PlanStatus', 'SubscriptionView']],
-    ['apps/app/src/runtime/cloud-membership-ui.tsx', false, ['serviceLimitNextChange', 'subscriptionSummary', 'type ServiceLimit', 'type SubscriptionView']],
+    ['apps/app/src/runtime/cloud-membership-ui.tsx', false, ['alphaSubscriptionCopy', 'type ServiceLimit', 'type SubscriptionView']],
   ]) {
     const text = fs.readFileSync(file, 'utf8');
     const imports = [...text.matchAll(/import(\s+type)?\s*\{([^}]+)\}\s*from\s*['"][^'"]*subscription-entitlement(?:\.ts)?['"]/g)];

@@ -1,7 +1,8 @@
 import React,{useEffect,useId,useRef,useState} from 'react';
 import './cloud-membership-ui.css';
 export type MembershipBalance='checking'|'zero'|'funded'|'member'|'unavailable';
-import {serviceLimitNextChange,subscriptionSummary,type ServiceLimit,type SubscriptionView} from './subscription-entitlement';
+import {alphaSubscriptionCopy,type ServiceLimit,type SubscriptionView} from './subscription-entitlement';
+import {useCloudSubscriptionSummary} from '../../../../.eliza/client-features/packages/ui/src/components/settings/cloud-subscription-summary.tsx';
 function creditLabel(usd:string):string {
  const [whole,fraction='']=usd.split('.');
  return `$${whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')}.${fraction.replace(/0+$/,'').padEnd(2,'0')}`;
@@ -14,7 +15,7 @@ function endLabel(endsAt:number):string {
 /**
  * Approved "Membership & credits" bottom-sheet content (decision: NubsCarson 7a44d7038); balances and
  * actions remain bound to the current Cloud account. The shared subscription summary
- * (`@elizaos/cloud-sdk/subscription-entitlement`) adds, read-only, the plan allowance Cloud reports and
+ * (`@elizaos/cloud-sdk/subscription-entitlement`, through the shared `useCloudSubscriptionSummary` hook) adds, read-only, the plan allowance Cloud reports and
  * the latest Cloud limit with its retry time (#410). Nothing is bought here: Add funds opens Cloud's
  * own billing page after the account review.
  *
@@ -26,12 +27,9 @@ export function CloudMembershipControls({balance,busy,error,connectionError,noti
  // A retained redemption error must keep its associated input exposed.
  const [codeVisible,setCodeVisible]=useState(Boolean(error)),[submitting,setSubmitting]=useState(false),[submissionError,setSubmissionError]=useState(''),[codeValue,setCodeValue]=useState('');
  const active=plan?.kind==='active',disabled=busy||submitting,showCode=codeVisible||codeEntry,explicitEntry=useRef(codeEntry);
- const summary=subscriptionSummary(plan??null,{planEndsAt:endsAt??null,lastLimit:lastLimit??null,lastLimitAt:lastLimit?.observedAt??null,serviceName});
- // Render again when the shown limit's wait ends or its reset passes, so a lapsed retry time is not
- // left on screen. Only those moments change the line; it is not a per-second countdown.
- const [,tick]=useState(0);
- const limitChange=summary.limit&&lastLimit?serviceLimitNextChange(lastLimit,lastLimit.observedAt,Date.now()):null;
- useEffect(()=>{if(limitChange===null)return;const timer=setTimeout(()=>tick(value=>value+1),limitChange);return ()=>clearTimeout(timer);});
+ // The shared hook (elizaOS/eliza#38105) renders again only when the shown limit's wait ends or its
+ // reset passes, so a lapsed retry time is not left on screen; it is not a per-second countdown.
+ const summary=useCloudSubscriptionSummary(plan,{planEndsAt:endsAt??null,lastLimit:lastLimit??null,copy:alphaSubscriptionCopy(serviceName)});
  // Leaving an explicit code entry clears the code it held; a retained redemption error keeps the input.
  useEffect(()=>{if(explicitEntry.current&&!codeEntry){setCodeValue('');setSubmissionError('');setCodeVisible(Boolean(error));}explicitEntry.current=codeEntry;},[codeEntry,error]);
  useEffect(()=>{if(showCode)code.current?.focus();},[showCode]);
