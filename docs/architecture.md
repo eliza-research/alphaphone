@@ -308,13 +308,24 @@ when the agent offers it, `clock.handoff.v2` only when the native surface also r
 owns alarms (P-17, A-11). As upstream defines, an explicit empty repeat-days list is a
 one-time alarm; the shared dispatch validator omits `days`, so Clock never receives an empty
 `EXTRA_DAYS`. The upstream Eliza Android host still advertises its owned `clock.alarms.v1`
-store; moving it to the same handoff policy is an open owner decision.
+store: `packages/app`'s `SlotClockPlugin` builds `ClockHostClient` with `AlarmMetadata`, and
+the same client built without it advertises only `clock.handoff.v1,clock.handoff.v2`. Moving
+Eliza to the shared handoff policy, and what happens to alarms already saved in `ElizaAlarms`,
+is an open owner decision; until then the two brands advertise different Clock capabilities.
 
 Device-local Notes recovery is shared too: unsaved-edit drafts and their conflict merge
 (`notes-draft.ts`), the capacity-aware vault and the owner Trash actions
 (`notes-trash-actions.ts`: write-ahead move, restore, delete forever, empty Trash and the
-confirmed deletion after a full Trash) live in `plugin-notes/src/client`. Alpha keeps its
-installed slot names, deletion lock, recording path and presentation.
+confirmed deletion after a full Trash) live in `plugin-notes/src/client`, as do the
+selected-note text serializer (`note-share-text.ts`), the voice-note recording deletion
+journal, its interrupted permanent-deletion plan, renderer lease, cross-view claims and
+deletion lock (`notes-recording-deletion.ts`) and the reviewed recording summary proposal
+(`notes-recording-summary.ts`). Alpha keeps its installed slot, document, lock and claim
+names, the native recording store and its effect order, and presentation. The renderer
+lease must stay equal to `NotesDeletionLease.LEASE_MS` used by the Android native passes.
+The device-local Older notes collection still renders through Alpha's own Notes view; the
+shared `NotesWorkspace` serves only canonical agent notes until it gains a device-local
+client and recording ports.
 
 `AlphaReminders` supplies the product's existing encrypted store, preference and
 channel names, receiver/Activity identities and intent routes. `DailyApps` keeps
