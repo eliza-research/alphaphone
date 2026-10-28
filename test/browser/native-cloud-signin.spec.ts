@@ -152,15 +152,12 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
   const dialog=signInDialog(page);await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toBeVisible();
   await expect(dialog.getByText(/in your browser/)).toHaveCount(0);
-  await expect(dialog.getByRole('textbox',{name:'Email',exact:true})).toBeHidden();
-  await expect(dialog.getByLabel('Phone number with country code')).toBeHidden();
-  const disclosure=dialog.getByRole('button',{name:'Other sign-in methods',exact:true});
-  await expect(disclosure).toHaveAttribute('aria-expanded','false');
-  await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:info.outputPath('sign-in-choose.png'),animations:'disabled'});
-  await disclosure.focus();await disclosure.press('Enter');
-  await expect(dialog.getByRole('textbox',{name:'Email',exact:true})).toBeFocused();
+  // The reviewed chooser (f9bf6a3ae) offers email and phone beside Google without a disclosure.
+  await expect(dialog.getByRole('button',{name:'Other sign-in methods',exact:true})).toHaveCount(0);
+  await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toBeFocused();
+  await expect(dialog.getByRole('textbox',{name:'Email',exact:true})).toBeVisible();
   await expect(dialog.getByLabel('Phone number with country code')).toBeVisible();
-  await page.screenshot({path:info.outputPath('sign-in-other-methods.png'),animations:'disabled'});
+  await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:info.outputPath('sign-in-choose.png'),animations:'disabled'});
  await revealOtherMethods(page);
   await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('not-an-address');await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
   expect((await calls(page)).filter(c=>c.method==='startEmail')).toHaveLength(0);
@@ -230,9 +227,14 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
   await readySignIn(page);
   await signInDialog(page).getByRole('button',{name:'Continue with Google',exact:true}).click();
   await agent(page,'cloud');
-  await page.evaluate(()=>{(window as any).signInFixture.signIn='readiness-hold';(window as any).planController.openPlan();});
-  await page.getByRole('button',{name:'Approve this phone again',exact:true}).click();
-  await expect(page.getByText('Checking Eliza Cloud sign-in…',{exact:true})).toBeVisible();
+  // Production Android shows agent controls only in Settings, and the approved Membership &
+  // credits sheet carries no sign-in renewal. Settings › Eliza Cloud account & plan reports the
+  // expiring key (residentPlanSettings) and its "Approve this phone again" row calls
+  // residentCloudLogin, which is driven directly here.
+  expect(await page.evaluate(()=>(window as any).planController.residentPlanSettings())).toMatchObject({signedIn:true,keyExpiring:true});
+  await page.evaluate(()=>{(window as any).signInFixture.signIn='readiness-hold';void (window as any).planController.residentCloudLogin();});
+  // Settings shows this busy message in its Status row; this composition has no Settings stack.
+  await expect.poll(async()=>{const s=await snapshot(page);return {busy:s.busy,message:s.message};}).toEqual({busy:true,message:'Checking Eliza Cloud sign-in…'});
   await page.evaluate(()=>{(window as any).signInFixture.entitlementStatus='none';(window as any).planController.recheckPlanAfterRefusal();});
   await expect.poll(async()=>(await snapshot(page)).residentPlanNotice).toBe('needs-plan');
   expect((await snapshot(page)).busy).toBe(true);
