@@ -18,10 +18,13 @@ Independent Android UI on Eliza, using the Alpha Phone prototype as its design
 reference. The current renderer includes native browser, camera,
 calendar, reminders, selected files and local notes. Phone, Contacts and SMS/MMS are
 AOSP-only capabilities; standalone APKs do not expose them. Wallet is outside MVP.
-Production Android starts with Eliza Cloud sign-in, followed by required device-permission
+Production Android starts with Eliza Cloud sign-in, followed by device-access
 setup, Ready, and Home. Notifications, microphone, camera and location retain the original
 sequence; Android then reviews Calendar and Photos access. Denied access stays on its
-Settings/check-access step without repeating blocked prompts. Google connects separately
+Settings/check-access step without repeating blocked prompts. Every access step offers
+Skip for now after 20 seconds, including an unavailable or pending browser permission.
+Reviewed choices persist across refresh; skipping never grants OS/browser access, and
+each feature still checks its current permission when used. Google connects separately
 in Settings. Previously completed installations remain completed.
 Cloud inference has a separate entitlement/binding check; a signed-in account does not
 by itself prove that AI is ready, and genuine plan or connection notices remain visible
