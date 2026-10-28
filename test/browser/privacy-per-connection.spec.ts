@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { installResidentAgentPlugin } from './helpers/resident-agent-plugin';
 
 // Real rendered Settings over the real connection controller; only the Android IPC boundary is
 // synthetic. No runtime, provider key, model request or external account is used.
@@ -16,6 +17,7 @@ const forbidden = [/Redaction on/, /Identifiers replaced/, /Pre-egress redaction
 
 type Scenario = 'resident' | 'remote' | 'offline';
 async function nativeStub(page: Page, scenario: Scenario, options: { strayKeyInStatus?: boolean; proposals?: boolean; locationAccess?: 'approximate' | 'precise'; providerStatus?: { provider: string; model: string } } = {}) {
+  await installResidentAgentPlugin(page);
   await page.addInitScript(({ scenario, key, remote, strayKeyInStatus, proposals, locationAccess, providerStatus }) => {
     const w = window as any;
     w.androidBridge = {};
@@ -31,23 +33,26 @@ async function nativeStub(page: Page, scenario: Scenario, options: { strayKeyInS
     // The native credential slot holds the provider key; only providerStatus may describe it.
     const provider = { key, name: providerStatus?.provider ?? 'cerebras', model: providerStatus?.model ?? 'qwen-3.8-27b' };
     w.privacyFixture = { calls: [] as unknown[], unexpected: [] as string[] };
+    const agent = w.residentAgent = w.createResidentAgentPlugin({ owner: () => 'fixture-owner', agentId: 'fixture-agent' });
     const methods = (names: string[]) => names.map(name => ({ name, rtype: 'promise' }));
     w.Capacitor = {
       PluginHeaders: [
         { name: 'AlphaNotifications', methods: methods(['status','crossAppStatus','addListener','removeListener']) },
         { name: 'AlphaVoiceCloud', methods: methods(['checkPermissions']) },
-        { name: 'Agent', methods: methods(['getStatus', 'start', 'stop', 'request', 'providerStatus']) },
+        { name: 'Agent', methods: agent.methods(['getStatus', 'start', 'stop', 'request', 'providerStatus']) },
         { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite','secureCompareExchange', 'secureRemove', 'request', 'cancel', 'addListener', 'removeListener', 'pauseNotificationCollection']) },
         { name: 'AlphaActionJournal', methods: methods(['list']) },
         { name: 'DeviceApps', methods: methods(['buildInfo']) },
         { name: 'AlphaDevice', methods: methods(['snapshot']) },
       ],
+      nativeCallback: agent.nativeCallback,
       nativePromise: async (plugin: string, method: string, input: any) => {
         if (plugin === 'AlphaNotifications') return {permissionGranted:true,appEnabled:true};
         if (plugin === 'AlphaVoiceCloud') return {microphone:'granted'};
         const f = w.privacyFixture;
         const respond = (value: unknown) => { f.calls.push({ plugin, method, input, value }); return value; };
         if (plugin === 'Agent') {
+          const owned = agent.answer(method, input); if (owned) return respond(owned);
           if (method === 'getStatus') return respond({ packaged: true, state: 'stopped', serviceActive: false, socketListening: false });
           if (method === 'start') return respond({ state: 'ready' });
           if (method === 'stop') return respond({ state: 'stopping' });
@@ -217,6 +222,7 @@ for (const proposals of [true, false]) test(`resident Activity shows history onl
   const text = await page.locator('body').innerText();
   for (const row of fixtureActivity) expect(text).not.toMatch(row);
   expect(text).not.toContain('Connect your remote agent to see activity');
+  expect(await page.evaluate(() => (window as any).residentAgent.state.unexpected)).toEqual([]);
 });
 
 for (const locationAccess of ['approximate', 'precise'] as const) test(`Privacy shows the native ${locationAccess} location grant without losing connection disclosure`, async ({ page }) => {
