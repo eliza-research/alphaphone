@@ -60,10 +60,15 @@ test('a reopened binding for the same conversation never offers the in-flight te
  await f.c.commit();assert.equal(f.saved().text,'');
  f.set('Next message');await tick();assert.equal(f.saved().text,'Next message','the reopened binding saves with the committed receipt');
 });
-test('a connection change before dispatch keeps the text saved with its conversation and returns it to an empty composer',async()=>{
+// A binding is an owner, agent and conversation identity: once the composer has moved to another
+// binding (or none), the unsent text stays saved, unmarked, with its own conversation and is never
+// put in this composer, where the next binding would adopt it. Reopening its binding restores it.
+test('a connection change before dispatch keeps the text saved with its own conversation, never in the next binding',async()=>{
  const f=fixture();f.external('Unsent words');await f.c.open('one');await f.c.hold('Unsent words');f.set('');await tick();
- f.c.retire();f.set('');f.c.release();
- assert.equal(f.get(),'Unsent words');assert.equal(f.saved().text,'Unsent words');assert.match(f.c.state.message,/back in the composer/);
+ f.c.retire();f.set('');f.c.release();await tick();
+ assert.equal(f.get(),'');assert.equal(f.saved().text,'Unsent words');assert.notEqual(f.saved().sending,true);
+ assert.match(f.c.state.message,/kept as a draft in its own conversation/);
+ await f.c.open('one');assert.equal(f.get(),'Unsent words');
 });
 test('typing as the reply arrives is queued after the commit, never racing it into a conflict',async()=>{
  const f=fixture();f.external('Sent text');await f.c.open('one');await f.c.hold('Sent text');f.set('');await tick();
