@@ -42,9 +42,14 @@ public class DeviceKeyTest {public static void main(String[]args)throws Exceptio
  else throw new AssertionError("Unexpected identity route");return new JSONObject().put("status",200).put("body",body.toString());}};
  JSONObject identity=NativeOwnerReminderHost.read(ports);new NativeOwnerReminderHost(ports).reviewFence(identity);
  if(requested[0]<2)throw new AssertionError("Both read and fence were not tested");
+ session.put("ownerId","50000000-0000-4000-8000-000000000005");
+ try{new NativeOwnerReminderHost(ports).reviewFence(identity);throw new AssertionError("Wrong owner accepted");}catch(SecurityException expectedRefusal){}
+ session.put("ownerId",owner);identity.put("agentId","50000000-0000-4000-8000-000000000005");
+ try{new NativeOwnerReminderHost(ports).reviewFence(identity);throw new AssertionError("Wrong agent accepted");}catch(SecurityException expectedRefusal){}
+
  System.out.println("PASS Android JSON mismatch reproduced; renderer-derived native read and review fence verified");}}
 `);
-  put('NativeOwnerReminderHost.java',readFileSync(nativeSource('NativeOwnerReminderHost.java'),'utf8'));
+  put('NativeOwnerReminderHost.java',readFileSync(process.env.ALPHA_NOTIFICATION_HOST_SOURCE||nativeSource('NativeOwnerReminderHost.java'),'utf8'));
   execFileSync(javaBinary('javac'),['--release','17','-d',dir,...files],{timeout:30000,stdio:'pipe'});
   assert.match(execFileSync(javaBinary('java'),['-cp',dir,'ai.elizaresearch.alphaphone.DeviceKeyTest'],{encoding:'utf8',timeout:30000,stdio:'pipe'}),/^PASS Android JSON mismatch reproduced/);
  }finally{rmSync(dir,{recursive:true,force:true});}
