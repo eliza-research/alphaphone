@@ -33,6 +33,7 @@ function matches(actual, expected) {
 }
 export const CLIENT_FEATURE_PATHS = [
   'packages/contracts/src/device-action-execution.ts',
+  'packages/contracts/src/client-turn-observation.ts',
   'packages/ui/src/agent-surface/AgentSurfaceContext.hooks.ts',
   'packages/ui/src/agent-surface/registry.ts',
   'packages/ui/src/agent-surface/sensitive.ts',

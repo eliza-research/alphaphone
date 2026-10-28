@@ -1,7 +1,7 @@
 import {createDeviceActionExecution} from '../../../../.eliza/client-features/packages/contracts/src/device-action-execution.ts';
 import {browserNavigationSummary} from './action-message-presentation';
 import {namedCalendarReadTarget} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/client/named-read.ts';
-import {foregroundReviewOperationAvailable} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/foreground-review-contract.ts';
+import {foregroundReviewOperationAvailable,isForegroundReviewOperation as isForegroundReview,validateForegroundReviewOperation,validateForegroundReviewResult,type ForegroundReviewOperation,type ForegroundReviewResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/foreground-review-contract.ts';
 import {CAMERA_CAPTURE_CAPABILITY,isCameraCapture,validateCameraCapture,validateCameraCaptureResult,type CameraCaptureOperation,type CameraCaptureResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/camera-contract.ts';
 import {isSmsSend,validateSmsSend,validateSmsResult,smsAgentHash,smsDeviceStatus,SMS_SEND_CAPABILITY,type SmsSendOperation,type SmsSendResult} from './sms-agent-contract.ts';
 import {isOriginalDeviceReadOperationType,isNativeNotesQuery,validateNativeNotesQuery,NOTES_QUERY_CAPABILITY,validateNativeNotesReadReplyOrigin,validateNativeNotesReadReplyHint,validateNativeNotesReadReply,type NativeNotesReadReplyOrigin,type NativeNotesReadReplyHint,type NativeNotesReadReply,type NativeNotesQueryOperation} from '../../../../.eliza/client-features/packages/contracts/src/native-notes-query.ts';
@@ -13,10 +13,9 @@ import {isClockOperation,validateClockOperation,validateClockResult,assertClockT
 import { isMapsOperation, validateMapsOperation, validateMapsResult, type MapsOperation, type MapsResult } from './maps-contract';
 import { validateMapsSelectedObject } from '../maps/agent-context';
 import { isLibraryOperation, validateLibraryOperation, validateLibraryResult, describeLibraryOperation, PHOTO_LIBRARY_CAPABILITY, type LibraryAgentOperation, type LibraryAgentResult } from './photo-library';
-import {type ReminderOperation,type ReminderResult,isReminderOperation,reminderFields,validateReminderOperation,validateReminderResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/reminder-contract.ts';
-import {type NotesOperation,type NotesResult,type NotesTarget,isNotesOperation,notesFields,validateNotesOperation,validateNotesResult} from './notes-contract';
-import {CALENDAR_AGENDA_CAPABILITY,calendarSource,type CalendarSource,type CalendarOperation,type CalendarResult,type CalendarRecordResult,calendarCapabilityAvailable,calendarFields,isCalendarOperation,validateCalendarOperation,validateCalendarResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts';
-import {type DeviceReviewOperation,type CalendarAvailabilityResult,type NotesSearchResult,type NamedTargetResult,type NamedTargetValidators,deviceReviewCapabilityAvailable,isCalendarAvailabilityOperation,isNotesSearchOperation,validateCalendarAvailabilityOperation,validateCalendarAvailabilityResult,validateNotesSearchOperation,validateNotesSearchResult,validateNamedTargetOperation,validateNamedTargetResult} from '../../../../.eliza/client-features/packages/contracts/src/device-reviews.ts';
+import {type ReminderOperation,type ReminderResult,isReminderOperation,validateReminderOperation,validateReminderResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/reminder-contract.ts';
+import {type NotesOperation,type NotesResult,isNotesOperation,validateNotesOperation,validateNotesResult} from './notes-contract';
+import {CALENDAR_AGENDA_CAPABILITY,calendarSource,type CalendarSource,type CalendarOperation,type CalendarResult,calendarCapabilityAvailable,isCalendarOperation,validateCalendarOperation,validateCalendarResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts';
 import { isMvpView } from "../prototype/mvp-features";
 import { parseWorkflowBinding, parseWorkflowRead, validateWorkflowResult, assertWorkflowOperation, type WorkflowReadOperation, type WorkflowReadResult, type WorkflowDeviceBinding, type WorkflowPhoneReview } from './workflow-device-contract';
 import type { AlphaClient, ActionProposal, ContextEnvelope, OperationReceipt, VerifiedSession } from './alpha-client';
@@ -25,31 +24,9 @@ export type WorkflowPresentationOperation = {type:'post_notification';title:stri
 export type DeviceOperation = CameraCaptureOperation | SmsSendOperation | ReminderCreateOperation | WorkflowPresentationOperation | ClockOperation | MapsOperation | LibraryAgentOperation | ReminderOperation | NotesOperation | NativeNotesQueryOperation | CalendarOperation | WorkflowReadOperation | { type: 'create_note'; title: string; body: string }
   | { type: 'create_reminder'; title: string; dueAt: string }
   | { type: 'open_view'; view: string } | { type: 'browser_navigate'; url: string };
-/** Kept in step with the patched contract's FOREGROUND_REVIEW_TYPES (asserted by test-device-actions). */
-export const FOREGROUND_OPERATION_TYPES: readonly string[] = ['calendar_availability','notes_search','notes_named','calendar_named','reminder_named'];
-function isForegroundReview(value: unknown): value is ForegroundReviewOperation { return !!value && typeof value === 'object' && FOREGROUND_OPERATION_TYPES.includes(String((value as {type?:unknown}).type)); }
-export type ForegroundReviewOperation = DeviceReviewOperation;
-/** Exact selected-record operation a named proposal resolves to after the owner's choice. */
-export type NamedTargetExactOperation = Extract<NotesOperation|CalendarOperation|ReminderOperation,{target:unknown}>;
-export type ForegroundReviewResult = CalendarAvailabilityResult|NotesSearchResult<NotesTarget,NotesResult>|NamedTargetResult<NamedTargetExactOperation,NotesResult|CalendarRecordResult|ReminderResult>;
-/** Shared device-review contracts bound to this renderer's Notes, Calendar and reminder contracts.
- * Methods resolve their validators on call, so loading this module touches no domain contract. */
-export const namedTargetValidators:NamedTargetValidators<NamedTargetExactOperation,NotesResult|CalendarRecordResult|ReminderResult>={
- notesFields:value=>notesFields(value),calendarFields:value=>calendarFields(value),reminderFields:value=>reminderFields(value),
- exact(value){const exact=isNotesOperation(value)?validateNotesOperation(value):isCalendarOperation(value)?validateCalendarOperation(value):isReminderOperation(value)?validateReminderOperation(value):undefined;if(!exact||!('target' in exact))throw Error('Unsupported named target operation');return exact;},
- record(operation,value){if(isNotesOperation(operation))return validateNotesResult(operation,value);if(isCalendarOperation(operation)){const result=validateCalendarResult(operation,value);if(result.kind==='calendar_read_next')throw Error('Unexpected Calendar discovery result');return result;}return validateReminderResult(operation,value);},
-};
-export function selectedNotesRead(target:unknown,record:unknown):{target:NotesTarget;record:NotesResult}{const selected=validateNotesOperation({type:'notes_read_selected',target});if(selected.type!=='notes_read_selected')throw Error('Invalid selected Notes read');return {target:selected.target,record:validateNotesResult(selected,record)};}
-export function validateForegroundReviewOperation(value:unknown):ForegroundReviewOperation{
- if(isCalendarAvailabilityOperation(value))return validateCalendarAvailabilityOperation(value);
- if(isNotesSearchOperation(value))return validateNotesSearchOperation(value);
- return validateNamedTargetOperation(value,namedTargetValidators);
-}
-export function validateForegroundReviewResult(operation:ForegroundReviewOperation,value:unknown):ForegroundReviewResult{
- if(operation.type==='calendar_availability')return validateCalendarAvailabilityResult(operation,value);
- if(operation.type==='notes_search')return validateNotesSearchResult(operation,value,selectedNotesRead);
- return validateNamedTargetResult(operation,value,namedTargetValidators);
-}
+/** Foreground reviews (free/busy, Notes search, name-targeted edits) and their validators are
+ * the shared device-review contract bound to the shared Notes, Calendar and reminder contracts. */
+export {FOREGROUND_REVIEW_TYPES as FOREGROUND_OPERATION_TYPES,namedTargetValidators,selectedNotesRead,validateForegroundReviewOperation,validateForegroundReviewResult,type ForegroundReviewOperation,type ForegroundReviewResult,type NamedTargetExactOperation} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/foreground-review-contract.ts';
 /** Every operation a proposal may carry. Foreground reviews run through their own executor. */
 export type ReviewableDeviceOperation = DeviceOperation | ForegroundReviewOperation;
 /** Runs the phone's local review (calendar choice, note choice, record disambiguation)

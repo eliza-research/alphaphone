@@ -9,6 +9,10 @@ import {pathToFileURL} from 'node:url';
 const moduleFile = process.env.ALPHA_NATIVE_CLOUD_HOST_MODULE;
 if(!moduleFile||!path.isAbsolute(moduleFile))throw Error('Run through scripts/test-native-cloud-runtime-config.mjs with a verified prepared host');
 const moduleUrl = pathToFileURL(moduleFile).href;
+// The compiled product host declares its deployment; the prepared SDK's shared profile writes routing.
+const sdkRoot = process.env.ALPHA_NATIVE_CLOUD_SDK;
+if(!sdkRoot||!path.isAbsolute(sdkRoot))throw Error('Run through scripts/test-native-cloud-runtime-config.mjs with the prepared SDK');
+const profileUrl = pathToFileURL(path.join(sdkRoot,'packages/app/src/runtime/native-runtime-profile.ts')).href;
 for (const mode of ['native', 'cloud', 'disabled']) {
  test(`native Cloud preparation preserves ${mode} embedding ownership`, () => {
   const code = `
@@ -25,13 +29,15 @@ import {pathToFileURL} from 'node:url';
    fs.writeFileSync(config,JSON.stringify({cloud:{enabled:false},serviceRouting:{},features:{shellEnabled:false}}));
    let requests=0; globalThis.fetch=async()=>{requests++;throw Error('Unexpected network request');};
    try {
-    const {prepareNativeCloudRuntime}=await import(${JSON.stringify(moduleUrl)});
-    await prepareNativeCloudRuntime();
+    const {nativeCloudRuntime}=await import(${JSON.stringify(moduleUrl)});
+    const {applyNativeCloudRuntimeProfile}=await import(${JSON.stringify(profileUrl)});
+    await applyNativeCloudRuntimeProfile(process.env,nativeCloudRuntime);
     const actual=JSON.parse(fs.readFileSync(config,'utf8'));
     assert.equal(actual.serviceRouting.llmText.backend,'elizacloud');
     if(mode==='native')assert.deepEqual(actual.serviceRouting.embeddings,{backend:'eliza-local-inference',transport:'direct'});
     if(mode==='cloud')assert.equal(actual.serviceRouting.embeddings.backend,'elizacloud');
-    if(mode==='disabled')assert.equal(actual.serviceRouting.embeddings,undefined);
+    // Missing local inputs never authorize Cloud: the native route is kept and reported unavailable.
+    if(mode==='disabled')assert.deepEqual(actual.serviceRouting.embeddings,{backend:'eliza-local-inference',transport:'direct'});
     assert.equal(requests,0);
    } finally {fs.rmSync(root,{recursive:true,force:true});}
   `;

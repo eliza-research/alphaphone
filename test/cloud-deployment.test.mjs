@@ -93,33 +93,13 @@ test('custom deployment reaches native inference configuration and Google transp
  try{
   write('package.json','{"type":"module"}');
   for(const [name,text] of Object.entries(deploymentOutputs(config)))write(name,text);
-  for(const name of ['backend/managed-google-failure-stage.ts','backend/managed-google-route-policy.ts','backend/native-google-cloud-port.ts','backend/native-cloud-runtime-config.ts','apps/app/src/runtime/managed-service-routes.ts'])write(name,fs.readFileSync(name,'utf8'));
-  write('vendor/eliza/packages/agent/src/config/config.ts','export const config={cloud:{apiKey:"stale-synthetic"}}; export function loadElizaConfig(){return config;} export function saveElizaConfig(value){Object.assign(config,value);}');
-  write('vendor/eliza/packages/host/src/contracts/service-routing.ts','export function buildElizaCloudServiceRoute(options={}){return {backend:"elizacloud",transport:"cloud-proxy",...options};}');
-  write('vendor/eliza/plugins/plugin-native-inference/src/model-catalog/routing-preferences.ts','export async function updateRoutingPreferences(update){update({});}');
+  for(const name of ['backend/managed-google-failure-stage.ts','backend/managed-google-route-policy.ts','backend/native-google-cloud-port.ts','backend/native-cloud-runtime.ts','apps/app/src/runtime/managed-service-routes.ts'])write(name,fs.readFileSync(name,'utf8'));
   const load=name=>import(pathToFileURL(path.join(temp,name)).href);
-  const {prepareNativeCloudRuntime}=await load('backend/native-cloud-runtime-config.ts');
-  process.env.ELIZAOS_CLOUD_SMALL_MODEL='synthetic-small';process.env.ELIZAOS_CLOUD_LARGE_MODEL='synthetic-large';
-  process.env.ELIZAOS_CLOUD_BASE_URL=config.production.api+'/api/v1';
-  process.env.ELIZA_RUNTIME_PROFILE='cloud';
-  await prepareNativeCloudRuntime();
-  const saved=(await load('vendor/eliza/packages/agent/src/config/config.ts')).config;
-  assert.equal(saved.cloud.baseUrl,config.production.api+'/api/v1');assert.equal(saved.cloud.apiKey,undefined);
-  assert.deepEqual(saved.serviceRouting.embeddings,{backend:'elizacloud',transport:'cloud-proxy'});
-  // Returning from Cloud QA must replace its saved embedding route even if
-  // native inputs are unavailable. Missing local assets never authorize Cloud.
-  process.env.ELIZA_RUNTIME_PROFILE='native';
-  process.env.ELIZA_LOCAL_EMBEDDING_ENABLED='0';process.env.ELIZA_DISABLE_LOCAL_EMBEDDINGS='true';
-  await prepareNativeCloudRuntime();
-  assert.deepEqual(saved.serviceRouting.embeddings,{backend:'eliza-local-inference',transport:'direct'});
-  process.env.ELIZA_LOCAL_EMBEDDING_ENABLED='1';process.env.ELIZA_DISABLE_LOCAL_EMBEDDINGS='false';
-  await prepareNativeCloudRuntime();
-  assert.deepEqual(saved.serviceRouting.embeddings,{backend:'eliza-local-inference',transport:'direct'});
-  assert.equal(saved.serviceRouting.llmText.backend,'elizacloud');
-  assert.equal(saved.serviceRouting.llmText.smallModel,'synthetic-small');
-  assert.equal(saved.serviceRouting.llmText.largeModel,'synthetic-large');
-  process.env.ELIZAOS_CLOUD_BASE_URL=defaults.production.api+'/api/v1';
-  await assert.rejects(prepareNativeCloudRuntime(),/binding is incomplete/);
+  // The product declares only its admitted Cloud API base; the shared upstream
+  // runtime profile writes routing and refuses any other base URL.
+  const {nativeCloudRuntime}=await load('backend/native-cloud-runtime.ts');
+  assert.deepEqual(nativeCloudRuntime,{apiBaseUrl:config.production.api+'/api/v1'});
+  assert.ok(Object.isFrozen(nativeCloudRuntime));
   const {createNativeGoogleCloudPort}=await load('backend/native-google-cloud-port.ts');
   const id='11111111-1111-4111-8111-111111111111',user='22222222-2222-4222-8222-222222222222',org='33333333-3333-4333-8333-333333333333',calls=[];
   const port=createNativeGoogleCloudPort({credentialId:id,userId:user,organizationId:org,accountRef:JSON.stringify(['cloud','production',user,org]),sessionGeneration:'synthetic',token:'synthetic-token'},()=>{},async(url)=>{calls.push(String(url));return new Response('{}',{headers:{'content-type':'application/json'}});});
