@@ -17,7 +17,7 @@ import {reviewMailContext,validateMailContext,type ReviewedMailContext,type Mail
 import { inboxProviderControls } from './inbox-provider-controls';
 import { presentHomeAttention, presentHomeInboxStatus } from './home-cards';
 import { inboxDrafts, type ComposePrefill, type SuggestionTarget } from './inbox-drafts';
-import { attachmentReadFailure, classifyGmailFailure, gmailReadable, setGmailReadState, GMAIL_ACCOUNTS_CHANGED, type GmailFailureKind } from '../runtime/gmail-mailbox';
+import { attachmentReadFailure, classifyGmailFailure, gmailReadable, MailReadStateGuard, mailReadStateMessage, GMAIL_ACCOUNTS_CHANGED, type GmailFailureKind } from '../runtime/gmail-mailbox';
 import { connectionController, agentPendingText } from '../runtime/connection-ui';
 import { gmailGrantChange, gmailInboxAllows, gmailModifyIncomplete, gmailReadCacheKey } from '../runtime/gmail-grants';
 import { cloudServiceName, type GmailAccount, type GmailDraftContent, type GmailDraftSummary, type GmailLink, type GmailMessage } from '../runtime/cloud-protocol';
@@ -116,9 +116,9 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
   // A moved email (From switcher) names its target account and how to return it to the source.
   type PendingCompose = ComposePrefill & { account?: string; returnTo?: GmailAccount; restore?: () => void };
   let pendingCompose: PendingCompose | null = null, lastCompose: unknown = null, resumeDraftFor = '', composeAttempt = 0;
-  // Read-state requests are keyed by account and message. One may be in flight per message, and an
-  // automatic mark-read whose outcome was not confirmed is never sent again for that message.
-  const readStateInFlight = new Set<string>(), readStateUnconfirmed = new Set<string>();
+  // Shared read-state guard (@elizaos/plugin-inbox/mailbox), keyed by account and message: one change may
+  // be in flight per message, and an automatic mark-read whose outcome was not confirmed is never sent again.
+  const readState = new MailReadStateGuard();
   let seenCursors = new Set<string>();
   /** Retires queued shares and returns a pending moved email to its source account. */
   const returnPending = () => { composeAttempt++; pendingCompose?.restore?.(); pendingCompose = null; };
@@ -288,7 +288,7 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
     generation++; operation?.abort(); operation = null;
     thread=null; accounts = []; accountsChecked = false;accountsSession=''; messages = []; selected = ''; loadedQuery = ''; nextPageToken = null; body = null; phase = 'idle'; revision = '';
     hasUnread = false; inboxPreview=null;homePreview=null;homeRestoreAttempt='';homeFailure=null; failure = null; pendingCompose = null; resumeDraftFor = '';
-    readStateInFlight.clear(); readStateUnconfirmed.clear(); seenCursors = new Set();
+    readState.clear(); seenCursors = new Set();
     status = `Connect ${serviceName()} to use Gmail`;
     publish({ mails: [], sent: [], open: null, compose: null, nativeMailSelection: null });
   }
@@ -470,28 +470,19 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
     const binding = connectionController.getCloudClient(), accountId = selected;
     if (!binding || !accountId || !provider.capabilities()?.readState) { if (explicit) api?.toast('This account cannot change read state here. Nothing was changed.'); return; }
     const current = () => accountId === selected && binding.sessionId === connectionController.getCloudClient()?.sessionId;
-    const key = JSON.stringify([accountId, message.id]);
-    if (readStateInFlight.has(key)) { if (explicit) api?.toast('A read-state change for this message is still in progress.'); return; }
-    if (!explicit && readStateUnconfirmed.has(key)) return;
-    readStateInFlight.add(key);
-    try {
-      const result = await setGmailReadState(binding.client, accountId, { messageId: message.id, expectedHistoryId: historyId, unread }, new AbortController().signal);
-      if (!result) readStateUnconfirmed.add(key); else readStateUnconfirmed.delete(key);
-      if (!current()) return;
-      if (!result) { if (explicit) api?.toast('Read state was not confirmed. Refresh to check it before trying again.'); return; }
-      folderLists.clear();readAhead.invalidate();messageBodies.delete(bodyKey(message.id));
-      const update = (m: GmailMessage) => m.id === message.id ? { ...m, unread } : m;
-      if(inboxPreview?.sessionId===binding.sessionId&&inboxPreview.accountId===accountId)inboxPreview.messages=inboxPreview.messages.map(m=>m.id===message.id?{...m,unread}:m);
-      messages = messages.map(update); recountUnread();
-      if (thread) thread = { ...thread, messages: thread.messages.map(row => row.message.id === message.id ? { ...row, message: update(row.message), historyId: result.historyId ?? row.historyId } : row) };
-      if (body?.message.id === message.id) body = { ...body, message: update(body.message), historyId: result.historyId ?? body.historyId };
-      if (explicit) api?.toast(unread ? 'Marked unread in Gmail' : 'Marked read in Gmail');
-      publish();
-    } catch (error) {
-      // Any failure may have reached Gmail; an automatic mark-read is not sent again for this message.
-      readStateUnconfirmed.add(key);
-      if (explicit && current()) api?.toast(classifyGmailFailure(error, 'operation').message);
-    } finally { readStateInFlight.delete(key); }
+    const outcome = await readState.set(binding.client, accountId, { messageId: message.id, expectedHistoryId: historyId, unread }, explicit);
+    const notice = explicit ? mailReadStateMessage(outcome, unread, error => classifyGmailFailure(error, 'operation').message) : null;
+    if (outcome.status === 'busy') { if (notice) api?.toast(notice); return; }
+    if (!current()) return;
+    if (outcome.status !== 'changed') { if (notice) api?.toast(notice); return; }
+    folderLists.clear();readAhead.invalidate();messageBodies.delete(bodyKey(message.id));
+    const update = (m: GmailMessage) => m.id === message.id ? { ...m, unread } : m;
+    if(inboxPreview?.sessionId===binding.sessionId&&inboxPreview.accountId===accountId)inboxPreview.messages=inboxPreview.messages.map(m=>m.id===message.id?{...m,unread}:m);
+    messages = messages.map(update); recountUnread();
+    if (thread) thread = { ...thread, messages: thread.messages.map(row => row.message.id === message.id ? { ...row, message: update(row.message), historyId: outcome.historyId ?? row.historyId } : row) };
+    if (body?.message.id === message.id) body = { ...body, message: update(body.message), historyId: outcome.historyId ?? body.historyId };
+    if (notice) api?.toast(notice);
+    publish();
   }
   /** Swipe left routes to the same reviewed archive flow as the message view. */
   async function swipeArchive(message: GmailMessage) {
