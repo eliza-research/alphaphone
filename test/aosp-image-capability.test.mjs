@@ -86,15 +86,19 @@ test("the telephony plugin is registered and answers only on the verified image"
   assert.match(main, /if \(AlphaImageCapability\.verified\(this\)\) registerPlugin\(AlphaTelephonyPlugin\.class\);/);
   assert.equal((main.match(/AlphaTelephonyPlugin/g) || []).length, 1, "no unconditional registration");
   assert.doesNotMatch(main, /plugins\.contacts\.ContactsPlugin|MessagesPlugin|PhonePlugin/, "upstream telephony plugins with write paths are not registered");
-  const plugin = read(`${JAVA}/AlphaTelephonyPlugin.java`);
+  // Alpha's subclass adds contact search to the shared TelephonyPlugin base; both are checked.
+  const alpha = read(`${JAVA}/AlphaTelephonyPlugin.java`);
+  const plugin = read("vendor/eliza/plugins/plugin-native-messages/android/src/main/java/ai/eliza/plugins/messages/TelephonyPlugin.java") + "\n" + alpha;
+  assert.match(alpha, /public class AlphaTelephonyPlugin extends TelephonyPlugin \{/);
+  assert.match(alpha, /protected SmsTelephonyConfiguration configuration\(\) \{ return AlphaTelephony\.CONFIGURATION; \}/);
   // Every @PluginMethod, overrides of Capacitor's inherited permission methods included.
   const methods = [...plugin.matchAll(/@PluginMethod public void (\w+)\(PluginCall call\)\s*\{\s*([^\n]*)/g)];
   assert.equal(methods.length, (plugin.match(/@PluginMethod/g) || []).length, "no plugin method escapes the check");
-  assert.deepEqual(methods.map(m => m[1]).sort(), ["cancelSmsReview", "checkPermissions", "composeSms", "dial", "imageCapability", "listMessages", "listThreads", "observeMessages", "requestAccess", "requestPermissions", "requestRole", "searchContacts", "sendSms", "smsSendHistory", "smsSendResult", "status"]);
+  assert.deepEqual(methods.map(m => m[1]).sort(), ["cancelSmsReview", "checkPermissions", "composeSms", "dial", "imageCapability", "listMessages", "listThreads", "markThreadRead", "mmsSendResult", "observeMessages", "requestAccess", "requestPermissions", "requestRole", "searchContacts", "sendMms", "sendSms", "smsSendHistory", "smsSendResult", "status"]);
   for (const [, name, first] of methods) assert.match(first, /^if \(!?refused\(call\)\)/, `${name} re-checks the capability before anything else`);
   for (const callback of plugin.matchAll(/@(?:Permission|Activity)Callback private void (\w+)\([^)]*\) \{ (.*)/g)) assert.match(callback[2], /refused\(call\)/, `${callback[1]} re-checks the capability`);
-  assert.doesNotMatch(plugin, /sendTextMessage|sendMultipartTextMessage|ACTION_CALL\b|placeCall|WRITE_CONTACTS|insert\(|applyBatch/, "no direct call or contact write; native SMS dispatch lives only in AlphaSms behind the native review");
-  assert.equal((plugin.match(/AlphaSms\.dispatch\(/g) || []).length, 1, "one dispatch site, inside the owner's Send decision");
+  assert.doesNotMatch(plugin, /sendTextMessage|sendMultipartTextMessage|ACTION_CALL\b|placeCall|WRITE_CONTACTS|insert\(|applyBatch/, "no direct call or contact write; native SMS dispatch lives only in the shared SmsTelephony behind the native review");
+  assert.equal((plugin.match(/SmsTelephony\.dispatch\(/g) || []).length, 1, "one dispatch site, inside the owner's Send decision");
   assert.match(plugin, /Intent\.ACTION_DIAL/); assert.match(plugin, /Intent\.ACTION_SENDTO/);
   assert.match(plugin, /if \(!eligibleFor\(role\)\)/, "a role request Android could only refuse is never shown");
 });
@@ -119,8 +123,20 @@ test("permissions: standalone has none, the launcher declares read access only, 
   }
   assert.ok(removed(main).includes("android.permission.WRITE_CONTACTS"), "contact writes are removed from every build");
   for (const xml of [main, launcher, standalone])
-    for (const permission of ["RECEIVE_SMS", "RECEIVE_MMS", "RECEIVE_WAP_PUSH", "CALL_PHONE", "READ_CALL_LOG", "WRITE_CALL_LOG", "ANSWER_PHONE_CALLS"])
+    for (const permission of ["READ_CALL_LOG", "WRITE_CALL_LOG", "ANSWER_PHONE_CALLS", "MANAGE_OWN_CALLS"])
       assert.ok(!declared(xml).includes(`android.permission.${permission}`), `${permission} is not declared`);
+  // CALL_PHONE reaches only the dialer-role holder, and only the launcher can be offered that role.
+  assert.ok(declared(launcher).includes("android.permission.CALL_PHONE") && !declared(main).includes("android.permission.CALL_PHONE"));
+  assert.ok(removed(standalone).includes("android.permission.CALL_PHONE"), "standalone removes CALL_PHONE from the shared phone module");
+  // The ringing-call screen is a full-screen intent, which Android drops without this permission; only the
+  // launcher has the dialer role's call service, and only that service posts one.
+  assert.ok(declared(launcher).includes("android.permission.USE_FULL_SCREEN_INTENT"), "launcher declares USE_FULL_SCREEN_INTENT for the incoming-call screen");
+  assert.ok(!declared(main).includes("android.permission.USE_FULL_SCREEN_INTENT") && !declared(standalone).includes("android.permission.USE_FULL_SCREEN_INTENT"), "no other build asks for full-screen intents");
+  // RECEIVE_* reach only the SMS-role holder; only the launcher can be offered that role.
+  for (const permission of ["RECEIVE_SMS", "RECEIVE_MMS", "RECEIVE_WAP_PUSH"]) {
+    assert.ok(declared(launcher).includes(`android.permission.${permission}`) && !declared(main).includes(`android.permission.${permission}`));
+    assert.ok(removed(standalone).includes(`android.permission.${permission}`));
+  }
   // SMS reads and reviewed sends (#421): launcher flavor only, never main or standalone.
   for (const permission of ["SEND_SMS", "READ_SMS"]) {
     assert.ok(!declared(main).includes(`android.permission.${permission}`) && !declared(standalone).includes(`android.permission.${permission}`), `${permission} is launcher-only`);
@@ -132,14 +148,53 @@ test("permissions: standalone has none, the launcher declares read access only, 
 
 test("telephony shares the bounded Contacts provider adapter", () => {
   const plugin=read(`${JAVA}/AlphaTelephonyPlugin.java`);
-  assert.match(plugin,/new AlphaContactsCatalog\(getContext\(\)\)\.list\(query, limit, cancel\)/);
+  assert.match(plugin,/new ContactsCatalog\(getContext\(\)\)\.list\(query, limit, cancel\)/);
   assert.doesNotMatch(plugin,/ContactsReader/);
 });
 test("queued contacts cannot return data after access or lifecycle changes", () => {
-  for(const name of ['AlphaTelephonyPlugin','AlphaContactsPlugin']) {
-   const plugin=read(`${JAVA}/${name}.java`);
-   assert.match(plugin,/handleOnResume/);assert.match(plugin,/ACTION_SCREEN_OFF/);
-   assert.match(plugin,/handleOnPause/);assert.match(plugin,/handleOnDestroy/);
-   assert.match(plugin,/runOnUiThread/);assert.match(plugin,/generation\.current/);
+  // AlphaContactsPlugin inherits the shared AOSP-profile address book's fence.
+  assert.match(read(`${JAVA}/AlphaContactsPlugin.java`),/extends AddressBookPlugin/);
+  const contacts=read('vendor/eliza/plugins/plugin-native-contacts/android/src/main/java/ai/eliza/plugins/contacts/AddressBookPlugin.java');
+  assert.match(contacts,/handleOnResume/);assert.match(contacts,/ACTION_SCREEN_OFF/);
+  assert.match(contacts,/handleOnPause/);assert.match(contacts,/handleOnDestroy/);
+  assert.match(contacts,/runOnUiThread/);assert.match(contacts,/ticket == generation\.get\(\)/);
+  // AlphaTelephonyPlugin's reads (contact search included) use the shared base's fence.
+  const shared=read('vendor/eliza/plugins/plugin-native-messages/android/src/main/java/ai/eliza/plugins/messages/TelephonyPlugin.java');
+  assert.match(shared,/handleOnResume/);assert.match(shared,/ACTION_SCREEN_OFF/);
+  assert.match(shared,/handleOnPause/);assert.match(shared,/handleOnDestroy/);
+  assert.match(shared,/main\.post\(\(\) -> \{\n      if \(fenceResult && !current\(access, cancel, alias\)\)/);assert.match(shared,/protected final void fencedRead\(PluginCall call, String alias, String noun, Read read\) \{ fenced\(call, alias, noun, read, true\); \}/,'reads are fenced again before their result is published');assert.match(shared,/access == generation\.get\(\)/);
+  assert.match(read(`${JAVA}/AlphaTelephonyPlugin.java`),/fencedRead\(call, "contacts", "Contacts"/);
+});
+
+test("dialer- and SMS-role components exist only in the launcher, disabled until the image is verified", () => {
+  const launcher = read("android/app/src/launcher/AndroidManifest.xml"), standalone = read("android/app/src/standalone/AndroidManifest.xml"), main = read("android/app/src/main/AndroidManifest.xml");
+  const component = name => launcher.match(new RegExp(`<(?:service|activity|receiver) android:name="\\.${name}"[^>]*>`))?.[0] ?? "";
+  for (const name of ["AlphaInCallService", "AlphaCallActivity", "AlphaDialPadActivity", "AlphaSmsDeliverReceiver", "AlphaMmsWapPushReceiver", "AlphaMmsResultReceiver", "AlphaRespondViaMessageService", "AlphaSmsComposeActivity"]) {
+    assert.match(component(name), /android:enabled="false"/, `${name} is declared disabled`);
+    assert.doesNotMatch(main + standalone, new RegExp(name), `${name} is launcher-only`);
   }
+  assert.match(component("AlphaInCallService"), /android:permission="android\.permission\.BIND_INCALL_SERVICE"/, "only Telecom can bind the call service");
+  assert.match(component("AlphaCallActivity"), /android:exported="false"/);
+  assert.match(component("AlphaSmsDeliverReceiver"), /android:permission="android\.permission\.BROADCAST_SMS"/);
+  assert.match(component("AlphaMmsWapPushReceiver"), /android:permission="android\.permission\.BROADCAST_WAP_PUSH"/);
+  assert.match(component("AlphaRespondViaMessageService"), /android:permission="android\.permission\.SEND_RESPOND_VIA_MESSAGE"/);
+  assert.match(component("AlphaMmsResultReceiver"), /android:exported="false"/);
+  assert.match(launcher, /<provider android:name="ai\.eliza\.plugins\.messages\.MmsFileProvider" android:authorities="\$\{applicationId\}\.mms" android:enabled="false" android:exported="false" android:grantUriPermissions="true" \/>/);
+  assert.match(read("android/app/src/launcher/java/ai/elizaresearch/alphaphone/AlphaTelephonyRoles.java"), /AlphaSmsDeliverReceiver\.class, AlphaMmsWapPushReceiver\.class, AlphaMmsResultReceiver\.class, AlphaRespondViaMessageService\.class, AlphaSmsComposeActivity\.class, ai\.eliza\.plugins\.messages\.MmsFileProvider\.class/);
+  assert.match(launcher, /android\.telecom\.IN_CALL_SERVICE_UI" android:value="true"/);
+  const roles = read("android/app/src/launcher/java/ai/elizaresearch/alphaphone/AlphaTelephonyRoles.java");
+  assert.match(roles, /boolean image = AlphaImageCapability\.verified\(context\);/);
+  assert.match(roles, /int wanted = image \? PackageManager\.COMPONENT_ENABLED_STATE_ENABLED : PackageManager\.COMPONENT_ENABLED_STATE_DEFAULT;/, "anything but the verified image returns to the disabled manifest state");
+  assert.match(read("android/app/src/standalone/java/ai/elizaresearch/alphaphone/AlphaTelephonyRoles.java"), /static void sync\(Context context\) \{\}/);
+  const activity = read(`${JAVA}/MainActivity.java`);
+  assert.ok(activity.indexOf("AlphaTelephonyRoles.sync(this);") > 0 && activity.indexOf("AlphaTelephonyRoles.sync(this);") < activity.indexOf("registerPlugin(AlphaTelephonyPlugin.class)"), "roles follow the image before the plugin is registered");
+  // The shared surfaces place calls only from the owner's press and leave emergency routing to Telecom.
+  const shared = "vendor/eliza/plugins/plugin-native-phone/android/src/main/java/ai/eliza/plugins/phone";
+  const pad = read(`${shared}/TelecomDialPadActivity.java`), dial = read(`${shared}/TelecomDial.java`);
+  assert.equal((pad.match(/TelecomDial\.originate\(/g) || []).length, 1, "one placement, from the Call press");
+  assert.match(pad, /call\.setOnClickListener\(view -> place\(\)\);/); assert.match(pad, /call\.setFilterTouchesWhenObscured\(true\)/);
+  assert.match(dial, /telecom\.placeCall\(telUri, extras\)/);
+  const apk = read("scripts/apk.mjs");
+  assert.match(apk, /"ai\.elizaresearch\.alphaphone\.AlphaInCallService": "android\.permission\.BIND_INCALL_SERVICE"/);
+  assert.match(apk, /if \(data\.xml\.includes\('android\.permission\.CALL_PHONE'\) !== wantsHome\)/);
 });

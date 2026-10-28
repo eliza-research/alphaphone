@@ -32,7 +32,7 @@ async function setup(page: import("@playwright/test").Page) {
 	await page.addScriptTag({
 		type: "module",
 		content:
-			"const browserDevProfile=false; const Capacitor={getPlatform:()=>\"web\",PluginHeaders:[]};\n" +
+			"const browserDevProfile=false; const Capacitor={getPlatform:()=>\"web\",PluginHeaders:[]}; const TELEPHONY_PROFILE_METHOD=\"imageCapability\"; const detectTelephonyProfile=()=>false;\n" +
 			source +
 			"\nwindow.ViewNavigationClient=ViewNavigationClient;",
 	});
