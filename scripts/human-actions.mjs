@@ -9,7 +9,8 @@
  * the release identities (android/release-signer.json, android/aosp/pixel10a-product.json,
  * android/aosp/pixel10a-ota-channel.json), the recorded last release or a distributable build in
  * this checkout's artifacts/apk-manifest.json, the voice host and listener qualification records,
- * the embedding host toolchain, the Pixel 10a distribution gates and the update channel drills.
+ * the embedding host toolchain, the Pixel 10a distribution gates, the update channel drills and the
+ * owner's per-view approvals in docs/app-qa-checklist.json.
  * Each such step is `done`, `open` or `not needed`; every other step is `external` (recorded
  * outside this repository) and prints its Verify line. Reads files only, prints no secret (signing
  * variables are reported by name) and always exits 0, like `npm run android:build:inputs`.
@@ -130,6 +131,15 @@ export const CHECKS = Object.freeze({
       : { state: "open", detail: `${Object.entries(drills).map(([name, value]) => `${name} ${value}`).join(", ")}; signedUpdateRecovery gate: ${status}` };
   },
   "H-34": root => { const status = gate(root, "userAcceptance"); return { state: status === "passed" ? "done" : "open", detail: `userAcceptance gate: ${status}` }; },
+  "H-38": root => {
+    // Only the owner marks userApproval; a row counts as approved when its value starts with "Approved".
+    const items = (readJson(root, "docs/app-qa-checklist.json").items ?? []).filter(item => item?.scope === "MVP");
+    if (!items.length) return { state: "open", detail: "docs/app-qa-checklist.json lists no MVP rows" };
+    const approved = items.filter(item => /^approved\b/i.test(String(item.userApproval ?? "").trim())).length;
+    const seekerPending = items.filter(item => /^pending\b/i.test(String(item.seeker ?? "").trim())).length;
+    return approved === items.length ? { state: "done", detail: `all ${items.length} MVP rows approved by the owner` }
+      : { state: "open", detail: `${approved} of ${items.length} MVP rows approved by the owner; ${seekerPending} still have no Seeker result` };
+  },
 });
 
 /** Every step with its state. A check that cannot read its record reports open with the reason. */

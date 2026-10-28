@@ -72,6 +72,7 @@ Rules for every step:
 | [H-35](#h-35-review-the-flagged-licence-obligations) | Review the flagged licence obligations | Owner or counsel | Open (non-blocking, P-09) |
 | [H-36](#h-36-required-checks-ruleset-owners-choice) | Required checks ruleset (owner's choice) | Repository owner | Not installed |
 | [H-37](#h-37-confirm-or-override-the-default-product-choices) | Confirm or override the default product choices | Owner | Defaults applied; owner confirmation open |
+| [H-38](#h-38-owner-per-view-approval-and-seeker-review) | Owner per-view approval and Seeker review | Owner | Open: no MVP row approved |
 
 Dependencies: H-01 gates H-08; H-08 gates H-09; H-09 gates H-10, the release SHA-1 in H-12,
 H-13 and H-22; H-18 gates a distributable H-10; H-10, H-18 and H-20 gate production staging
@@ -598,7 +599,7 @@ distinct gates are recorded in `android/aosp/pixel10a-qualification-gates.json`
 - Verify: `node scripts/ci/read-required-checks.mjs` reports the installed ruleset.
 - Unblocks: enforced checks on main.
 
-## Product defaults to confirm
+## Product defaults and owner review
 
 ### H-37 Confirm or override the default product choices
 
@@ -614,6 +615,19 @@ distinct gates are recorded in `android/aosp/pixel10a-qualification-gates.json`
   [decisions](decisions.md) once confirmed or overridden.
 - Verify: decisions.md records a dated entry for the membership sheet title and for Notes storage.
 - Unblocks: the final Settings copy and the Notes storage contract for the pilot build.
+
+### H-38 Owner per-view approval and Seeker review
+
+- Who: owner, with the device operator for the installed build.
+- Do: review every MVP row of the [app QA and approval checklist](app-qa-checklist.md) in the order
+  it gives (latest preview, deployed backend and prompt proof, installed build on the Seeker, then
+  your own approval), including gesture navigation and smoothness on the current Android build, and
+  mark `userApproval` approved only for rows you have personally accepted. Agents and tests never
+  set this field; implemented and tested are separate columns.
+- Seam: `docs/app-qa-checklist.json` (`items[].userApproval`, `items[].seeker`) and its
+  [page](app-qa-checklist.md); `npm run human:status` counts the MVP rows still pending.
+- Verify: every MVP row in docs/app-qa-checklist.json records userApproval approved.
+- Unblocks: the final personal visual review and Seeker acceptance items of #381, and H-34.
 
 ## Retired items
 
