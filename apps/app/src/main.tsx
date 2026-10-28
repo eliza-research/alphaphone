@@ -66,10 +66,10 @@ import { installListenerInvocation } from './runtime/always-on-listener';
 import {GoogleConnectionsPanel} from './runtime/google-connection-ui';
 import { installNotesTrashAdapter } from './prototype/notes-trash-adapter';
 import { installInboxCloudAdapter, inboxAttention, subscribeInboxAttention } from './prototype/inbox-cloud-adapter';
+import { installHomeOverviewCards } from './prototype/home-overview-cards';
 import { installUseInEmailReview } from './prototype/use-in-email-review';
 import { latestRetainedDigest, subscribeRetainedDigest } from './runtime/hosted-digests';
 import { installHomeLauncher } from './prototype/home-launcher';
-import { installHomeOverviewCards } from './prototype/home-overview-cards';
 import { setLocalePreferences } from './prototype/locale-time';
 import { installTextScale } from './runtime/text-scale';
 import { installDockClearance } from './runtime/dock-clearance';
@@ -162,9 +162,9 @@ installSubviewAccessibility(VIEWS);
 installCalendarMonthFocus(Component, VIEWS);
 installChatOverlayMotion(Component);
 installSystemShade(Component,{native:isAndroid});
-installClockAdapter(Component, VIEWS, { simulated: testMocksEnabled && fixture, browser: !isAndroid });
-// The shared agenda and brief cards render the final Home values of every adapter above.
+// The shared agenda, mail and brief cards render the final Home values of every adapter above.
 installHomeOverviewCards(Component);
+installClockAdapter(Component, VIEWS, { simulated: testMocksEnabled && fixture, browser: !isAndroid });
 // Installed apps come from Android (or the browser device's app list); outermost so its drawer
 // state composes with every Home binding above.
 installHomeLauncher(Component, DeviceApps, { icons: isAndroid, follow: deviceAppsListens,
