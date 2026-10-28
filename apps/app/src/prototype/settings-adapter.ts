@@ -533,7 +533,9 @@ export function installSettingsAdapter(Component: any, views: Bag) {
             if(calendarView.canConfirmCalendarTransition)sourceRows.push({kNav:true,label:'Keep saved app records read only and use Agent Calendar',lbl:'Keep saved app records read only and use Agent Calendar',chev:true,noAB:true,go:calendarView.confirmCalendarTransition});
             groups.unshift({...group(sourceRows),cap:'Calendar sources',hasCap:true});
           }
-          groups.push({...group([{kNav:true,label:'Google Calendar sync',lbl:'Google Calendar sync',sub:'Review the destination and enable linked event sync',hasSub:true,chev:true,noAB:true,go:()=>{
+          const syncAuthority=owner?.vget('calendar').calendarAuthority;
+          const syncUnavailable=syncAuthority==='android-native'||browserCalendarScope(owner)?'':syncAuthority==='legacy'||syncAuthority==='legacy-google'?'Choose Agent Calendar to review sync. Retained calendars stay read only.':!owner?.agentCalendar?.state.ownerKey?'Connect to Agent Calendar to review sync.':'';
+          groups.push({...group([syncUnavailable?info('Google Calendar sync',syncUnavailable):{kNav:true,label:'Google Calendar sync',lbl:'Google Calendar sync',sub:'Review the destination and enable linked event sync',hasSub:true,chev:true,noAB:true,go:()=>{
             const shell=owner,authority=shell?.vget('calendar').calendarAuthority;
             if(authority==='android-native'||browserCalendarScope(shell)){openCalendarSyncSettings();return;}
             if(authority==='legacy'||authority==='legacy-google'){api.toast('Choose Agent Calendar before reviewing sync. Retained calendars stay read only.');return;}

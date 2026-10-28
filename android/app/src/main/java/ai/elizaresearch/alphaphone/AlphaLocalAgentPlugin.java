@@ -776,20 +776,35 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   }
  }
  static String notificationInstallation(Context context)throws Exception{
-  java.nio.file.Path directory=new java.io.File(context.getFilesDir(),".eliza").toPath();
+  // Context supplies the app-owned root; Android may expose it through a lexical alias.
+  java.nio.file.Path root=context.getFilesDir().toPath().toRealPath();
+  java.nio.file.Path directory=root.resolve(".eliza");
   java.nio.file.Path file=directory.resolve("runtime-installation-id");
-  if(!directory.toRealPath().equals(directory.toAbsolutePath().normalize())||java.nio.file.Files.isSymbolicLink(file)||!java.nio.file.Files.isRegularFile(file,java.nio.file.LinkOption.NOFOLLOW_LINKS))throw new SecurityException("Notification installation unavailable");
+  if(java.nio.file.Files.isSymbolicLink(directory)||!java.nio.file.Files.isDirectory(directory,java.nio.file.LinkOption.NOFOLLOW_LINKS)||!directory.toRealPath().equals(directory)||java.nio.file.Files.isSymbolicLink(file)||!java.nio.file.Files.isRegularFile(file,java.nio.file.LinkOption.NOFOLLOW_LINKS))throw new SecurityException("Notification installation unavailable");
   String id=new String(java.nio.file.Files.readAllBytes(file),java.nio.charset.StandardCharsets.UTF_8).trim();HostedInbox.id(id);return id;
  }
  static void rememberNotificationOwner(Context context,JSONObject expected,JSONObject identity)throws Exception{
   synchronized(lifecycleLock){synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){
-   checkNotificationSession(expected);AlphaCredentialStore store=new AlphaCredentialStore(context);
-   if(notificationAgent!=null&&!notificationAgent.equals(identity.getString("agentId")))throw new SecurityException("Notification agent changed after validation");
-   JSONObject record=NativeNotificationSession.record(expected,identity,notificationInstallation(context),store.providerAdmissionSnapshot().toString());
-   String previous=store.readCredentialSlot(NativeNotificationSession.SLOT);
-   if(previous!=null){String old=new JSONObject(previous).optString("projectionOwner","");if(old.matches("[a-f0-9]{64}")&&!old.equals(record.getString("projectionOwner")))NativeNotificationProjector.retireOwner(context,old);}
-   notificationAgent=identity.getString("agentId");
-   store.writeCredentialSlot(NativeNotificationSession.SLOT,record.toString());checkNotificationSession(expected);
+   NativeNotificationDiagnostics.Persist stage=NativeNotificationDiagnostics.Persist.SESSION;
+   try{
+    checkNotificationSession(expected);AlphaCredentialStore store=new AlphaCredentialStore(context);
+    stage=NativeNotificationDiagnostics.Persist.AGENT;
+    if(notificationAgent!=null&&!notificationAgent.equals(identity.getString("agentId")))throw new SecurityException("Notification agent changed after validation");
+    stage=NativeNotificationDiagnostics.Persist.INSTALLATION;
+    String installation=notificationInstallation(context);
+    stage=NativeNotificationDiagnostics.Persist.PROVIDER;
+    String provider=store.providerAdmissionSnapshot().toString();
+    stage=NativeNotificationDiagnostics.Persist.RECORD;
+    JSONObject record=NativeNotificationSession.record(expected,identity,installation,provider);
+    stage=NativeNotificationDiagnostics.Persist.PREVIOUS;
+    String previous=store.readCredentialSlot(NativeNotificationSession.SLOT);
+    if(previous!=null){String old=new JSONObject(previous).optString("projectionOwner","");if(old.matches("[a-f0-9]{64}")&&!old.equals(record.getString("projectionOwner")))NativeNotificationProjector.retireOwner(context,old);}
+    stage=NativeNotificationDiagnostics.Persist.STORE;
+    notificationAgent=identity.getString("agentId");
+    store.writeCredentialSlot(NativeNotificationSession.SLOT,record.toString());
+    stage=NativeNotificationDiagnostics.Persist.FINAL;
+    checkNotificationSession(expected);
+   }catch(Exception failure){NativeNotificationDiagnostics.persistFailure(stage,failure);throw failure;}
   }}
  }
  static void retireRejectedNotificationSession(Context context,String expected)throws Exception{
