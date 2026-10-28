@@ -18,10 +18,13 @@ Independent Android UI on Eliza, using the Alpha Phone prototype as its design
 reference. The current renderer includes native browser, camera,
 calendar, reminders, selected files and local notes. Phone, Contacts and SMS/MMS are
 AOSP-only capabilities; standalone APKs do not expose them. Wallet is outside MVP.
-Production Android starts with Eliza Cloud sign-in, followed by required device-permission
+Production Android starts with Eliza Cloud sign-in, followed by device-access
 setup, Ready, and Home. Notifications, microphone, camera and location retain the original
 sequence; Android then reviews Calendar and Photos access. Denied access stays on its
-Settings/check-access step without repeating blocked prompts. Google connects separately
+Settings/check-access step without repeating blocked prompts. Every access step offers
+Skip for now after 20 seconds, including an unavailable or pending browser permission.
+Reviewed choices persist across refresh; skipping never grants OS/browser access, and
+each feature still checks its current permission when used. Google connects separately
 in Settings. Previously completed installations remain completed.
 Cloud inference has a separate entitlement/binding check; a signed-in account does not
 by itself prove that AI is ready, and genuine plan or connection notices remain visible
@@ -333,9 +336,12 @@ Three inputs of a distributable build cannot come from a script, and
 - **A qualified speech runtime** (decision A-24). A local rebuild installs only with
   `--allow-unqualified-runtime`. The chain still completes with it; `verify-apks` records
   the releases `distributable:false` and names the speech reasons.
-- **The release signer** (decision A-06). Without the `ELIZAOS_*` signing values and a
-  certificate digest in `android/release-signer.json` the chain completes with unsigned,
-  non-distributable releases.
+- **The release signer** (decision P-16; [human actions](docs/human-actions.md) H-08 to H-10).
+  `node scripts/enroll-release-keys.mjs` records the key ceremony's certificate digest in
+  `android/release-signer.json`; releases are then signed by Gradle with the `ELIZAOS_KEYSTORE_*`
+  values or afterwards with `node scripts/sign-release-apks.mjs` (ceremony key files or a PKCS#11
+  token). Without either the chain completes with unsigned, non-distributable releases.
+  `npm run human:status` lists every step only a person can take and what this checkout records.
 
 Gradle verifies every plugin and dependency artifact against
 `android/gradle/verification-metadata.xml` (SHA-256) in every build of the `android/`

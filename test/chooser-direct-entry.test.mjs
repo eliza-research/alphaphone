@@ -10,9 +10,9 @@ const between=(text,start,end)=>{const a=text.indexOf(start),b=text.indexOf(end,
 const compiled=transformSync(panelSource.replace(/^import .*;\n/gm,'').replaceAll('export ',''),{loader:'tsx',jsxFactory:'React.createElement'}).code;
 const CloudSignInPanel=new Function('React','useRef','useState','useEffect','cloudServiceName',compiled+';return CloudSignInPanel;')(React,React.useRef,React.useState,React.useEffect,()=> 'Eliza Cloud');
 const branch=between(source,'  const requiredSignInView:', '  const accountCreatedNotice=');
-const renderBranch=new Function('React','CloudSignInPanel','snapshot','productionSignInRequired','residentEnvironment','inAppGoogle','panel','RESIDENT_UNPACKAGED','connectionController','browserCloudResidentEnabled','testMocksEnabled','ResidentRecoveryPanel','loadSignInService','cloudSignInPhone','inAppPhone','inAppEmail',transformSync('function render(){'+branch+'return null;}',{loader:'tsx',jsxFactory:'React.createElement'}).code+';return render();');
+const renderBranch=new Function('React','CloudSignInPanel','snapshot','productionSignInRequired','signInEntryRequired','residentEnvironment','inAppGoogle','panel','RESIDENT_UNPACKAGED','connectionController','browserCloudResidentEnabled','testMocksEnabled','ResidentRecoveryPanel','loadSignInService','cloudSignInPhone','inAppPhone','inAppEmail',transformSync('function render(){'+branch+'return null;}',{loader:'tsx',jsxFactory:'React.createElement'}).code+';return render();');
 const controller={beginSignIn(){},signInGoogle(){},signInEmail(){},verifySignInCode(){},resendSignInCode(){},cancelSignIn(){}};
-const render=snapshot=>renderToStaticMarkup(renderBranch(React,CloudSignInPanel,snapshot,true,()=> 'production',false,null,'unpackaged',controller,false,false,()=>null,undefined,null,false,true));
+const render=snapshot=>renderToStaticMarkup(renderBranch(React,CloudSignInPanel,snapshot,true,true,()=> 'production',false,null,'unpackaged',controller,false,false,()=>null,undefined,null,false,true));
 test('production signed-out entry server-renders direct options before readiness without false Google failure',()=>{
  const html=render({signIn:null,busy:false,message:'',error:''});
  assert.match(html,/Welcome to Alpha/);assert.match(html,/Continue with Google/);assert.match(html,/Email me a code/);assert.match(html,/Retry sign-in/);
@@ -24,9 +24,11 @@ test('ready choice renders usable email path and explicit unavailable Google not
 });
 test('automatic readiness probes once per unresolved entry, rearms after a form closes and never initiates sign-in',()=>{
  const code=between(source,'  const automaticSignInProbe =','  const visible=');
- let ref,callback,count=0;
- const apply=new Function('useRef','useEffect','productionSignInRequired','snapshot','connectionController','residentEnvironment',transformSync(code,{loader:'tsx'}).code);
- const draw=(required,busy=false,signIn=null)=>{callback=null;apply(()=>ref??=( {current:false}),fn=>{callback=fn;},required,{busy,signIn},{beginSignIn(){count++;},signInGoogle(){throw Error('Unexpected Google');},signInEmail(){throw Error('Unexpected email');}},()=> 'production');callback();};
+ let ref,effects=[],count=0;
+ const apply=new Function('useRef','useEffect','signInEntryRequired','snapshot','connectionController','residentEnvironment','isAndroid','cloudSignIn','update',transformSync(code,{loader:'tsx'}).code);
+ const draw=(required,busy=false,signIn=null,rest={})=>{effects=[];apply(()=>ref??=( {current:false}),fn=>{effects.push(fn);},required,{busy,signIn,...rest},{beginSignIn(...args){assert.deepEqual(args,['production',false,true]);count++;},signInGoogle(){throw Error('Unexpected Google');},signInEmail(){throw Error('Unexpected email');}},()=> 'production',false,undefined,()=>{throw Error('Unexpected native recovery update in browser');});assert.equal(effects.length,2,'execute both real startup effects in React order');for(const effect of effects)effect();};
+ draw(true,false,null,{startupResolved:false});assert.equal(count,0);
+ draw(true,false,null,{automaticRestore:true});assert.equal(count,0);
  draw(true,true);assert.equal(count,0);draw(true);draw(true);assert.equal(count,1);
  draw(true,false,{step:'choose'});assert.equal(count,1);
  // Cloud can refuse a newly issued key after the form closes. Probe its fresh entry once.
@@ -34,11 +36,14 @@ test('automatic readiness probes once per unresolved entry, rearms after a form 
  draw(false);draw(true);assert.equal(count,3);
 });
 test('Cancel delegates in-flight readiness to the existing abort operation, without clearing saved credentials',()=>{
- const code=between(source,'  cancelSignIn() {','  async signInGoogle()');let aborted=0,changes=[];
- const make=new Function('operation','connectionController','state','productionCloudSignInRequired','update',transformSync('const target={'+code+'};',{loader:'ts'}).code+';return target;');
- const run=(active,signIn=null,required=false)=>make(active,{cancel(){aborted++;}},{signIn},()=>required,v=>changes.push(v)).cancelSignIn();
+ const code=between(source,'  cancelSignIn() {','  async signInGoogle()');let aborted=0,closed=0,changes=[];
+ const entry=between(source,'export function explicitSignedOutCloudEntry(', 'export function connectionChooserVisible(').replace('export ','');
+ const make=new Function('operation','connectionController','state','productionCloudSignInRequired','update',transformSync(entry+'const target={'+code+'};',{loader:'ts'}).code+';return target;');
+ const run=(active,signIn=null,required=false,rest={})=>make(active,{cancel(){aborted++;},close(){closed++;}},{signIn,...rest},()=>required,v=>changes.push(v)).cancelSignIn();
  run({});assert.equal(aborted,1);assert.deepEqual(changes,[{signIn:null,message:'',error:''}]);
  changes=[];run({}, {step:'code',environment:'production'});assert.equal(aborted,2);assert.deepEqual(changes,[{signIn:{step:'choose',environment:'production'},message:'',error:''}]);
  changes=[];run(null,{step:'choose',environment:'production'},true);assert.equal(aborted,2);assert.deepEqual(changes,[],'required idle chooser remains usable');
  run(null);assert.equal(aborted,3);assert.deepEqual(changes,[{signIn:null,message:'',error:''}]);
+ run(null,null,false,{open:true,purpose:'cloud-account',cloudAccount:null});assert.equal(closed,1,'idle explicit signed-out account entry returns to the app');
+ run({},null,false,{open:true,purpose:'cloud-account',cloudAccount:null});assert.equal(closed,1,'in-flight work is cancelled without dismissing its entry');
 });

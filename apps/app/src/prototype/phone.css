@@ -304,8 +304,9 @@ html:not(.alpha-landscape) .alpha-phone [data-screen]:not([data-alpha-chat-half=
 .calendar-timeline{--calendar-timeline-scale:max(1,var(--alpha-text-scale,1))}
 /* A short timeline block shows the lines that fit. A line that does not fit wraps into a hidden
  * column instead of being cut through; the block's accessible name still carries title and time. */
-.calendar-block-text{display:flex;flex-direction:column;flex-wrap:wrap;align-self:stretch;min-height:0;overflow:hidden}
+.calendar-block-text{display:flex;flex-direction:column;justify-content:center;flex-wrap:wrap;align-self:stretch;min-height:0;overflow:hidden}
 .calendar-block-text>span{width:100%;flex-shrink:0}
+.calendar-block-text>span:empty{display:none}
 /* Map sheets keep the search field visible and scroll their own content when it outgrows the
  * design height (large text) or the screen (landscape). 104px is where the full sheet meets the
  * search field in the 915px design. */

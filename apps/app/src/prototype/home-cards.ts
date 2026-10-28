@@ -14,7 +14,6 @@ export interface HomeAttentionSummary {
 }
 /** Latest retained scheduled brief (P05 latestRetainedDigest()). */
 export interface HomeBriefSummary { summary: string; ranAt: string | number; agent: string; status: string }
-export type HomeCardAction = 'inbox' | 'connections' | 'calendar' | 'workflows';
 
 const instant = (value: unknown) => { const at = typeof value === 'number' ? value : typeof value === 'string' ? Date.parse(value) : NaN; return Number.isFinite(at) && at > 0 ? at : null; };
 /** "3:04 PM" today, otherwise "Wed, Oct 8 3:04 PM". */
