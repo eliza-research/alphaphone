@@ -3,6 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { CALLBACK_PATH, STEWARD_APP_CLIENT, formatProbe, main, probe, productRegistration, registrationValues } from "../scripts/cloud-readiness.mjs";
 import { fingerprint } from "../scripts/render-assetlinks.mjs";
@@ -10,6 +11,18 @@ import { fingerprint } from "../scripts/render-assetlinks.mjs";
 const root = path.resolve(import.meta.dirname, "..");
 const RELEASE = "c3".repeat(32);
 const javaDir = path.join(root, "android/app/src/main/java/ai/elizaresearch/alphaphone");
+/** A copy of the configuration the probe reads, with the release signer recorded as `signer`. */
+function fixtureRoot(t, signer) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "alpha-cloud-readiness-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  for (const file of ["app.config.json", "config/cloud-deployment.json", "android/release-signer.json"]) {
+    fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+    fs.copyFileSync(path.join(root, file), path.join(dir, file));
+  }
+  const signerFile = path.join(dir, "android/release-signer.json");
+  fs.writeFileSync(signerFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(signerFile, "utf8")), signerSha256: signer }));
+  return dir;
+}
 const javaSource = fs.readdirSync(javaDir).filter(name => name.endsWith(".java")).map(name => fs.readFileSync(path.join(javaDir, name), "utf8")).join("\n");
 
 test("registration values come from the committed product configuration and match the native sign-in registration", () => {
@@ -57,7 +70,6 @@ function cloud({ registration, overrides = {} }) {
     [CALLBACK_PATH]: () => ({ status: 200, headers: new Headers({ "content-type": "text/html" }), text: async () => "<!doctype html>" }),
     "/api/public/service": () => json(200, { success: true, version: 1, service: { name: "Eliza Cloud", terms: document, privacy: { ...document, title: "Privacy" } } }),
     "/api/v1/subscription/entitlement-keys": () => json(200, { keys: [{ kty: "EC", crv: "P-256", kid: "entitlement-production-2026-10", x: "x", y: "y", alg: "ES256" }] }),
-    "/api/v1/maps/capabilities": () => json(401, { error: "authentication_required" }),
     ...overrides,
   };
   const fetchImpl = async (url, init = {}) => {
@@ -70,15 +82,19 @@ function cloud({ registration, overrides = {} }) {
   return { calls, fetchImpl };
 }
 
-test("a fully configured deployment passes every gate with one request each and no credential", async () => {
+test("a fully configured deployment passes every checkable gate with one request each and no credential", async () => {
   const registration = { ...productRegistration(root, "production"), signerSha256: RELEASE };
   const { calls, fetchImpl } = cloud({ registration });
   const gates = await probe(registration, { fetchImpl });
   assert.deepEqual(gates.map(row => [row.gate, row.step, row.passed]), [
     ["registration", "H-11", true], ["email sign-in", "H-12", true], ["native Google", "H-12", true], ["browser return", "H-12", true],
-    ["App Links", "H-13", true], ["callback page", "H-13", true], ["service documents", "H-14", true], ["entitlement keys", "H-15", true], ["Maps route", "H-16", true],
+    ["App Links", "H-13", true], ["callback page", "H-13", true], ["service documents", "H-14", true], ["entitlement keys", "H-15", true],
+    ["Maps route", "H-16", null], ["Google connector", "H-17", null],
   ]);
-  assert.equal(calls.length, 9);
+  // Cloud's global auth gate answers any protected /api/ path without a credential with 401 before routing,
+  // so the account rows are listed, never requested: a 401 would not show that the route exists.
+  assert.equal(calls.length, 8);
+  assert.ok(calls.every(call => !call.url.pathname.startsWith("/api/v1/maps") && !call.url.pathname.startsWith("/api/v1/eliza/google")));
   assert.ok(calls.every(call => call.redirect === "manual"), "no redirect is followed");
   for (const call of calls) {
     assert.equal(call.url.protocol, "https:");
@@ -93,7 +109,10 @@ test("a fully configured deployment passes every gate with one request each and 
   assert.equal(authorize.get("code_challenge_method"), "S256");
   assert.match(authorize.get("code_challenge"), /^[A-Za-z0-9_-]{43}$/);
   assert.match(authorize.get("state"), /^[A-Za-z0-9_-]{43}$/);
-  assert.match(formatProbe(registration, gates), /Every gate passes\. This is deployment configuration evidence only/);
+  const report = formatProbe(registration, gates);
+  assert.match(report, /Every checkable gate passes\. This is deployment configuration evidence only/);
+  assert.match(report, /\[account\] Maps route \(H-16\): needs an account/);
+  assert.match(report, /2 row\(s\) need a signed-in account and were not requested/);
 });
 
 test("each observed deployment gap fails its own gate and names its step", async () => {
@@ -106,11 +125,10 @@ test("each observed deployment gap fails its own gate and names its step", async
     "/steward/auth/oauth/google/authorize": () => json(400, { error: "redirect_uri is not allowed for this tenant" }),
     "/api/public/service": () => json(503, { error: "not configured" }),
     "/api/v1/subscription/entitlement-keys": () => json(503, { error: "not configured" }),
-    "/api/v1/maps/capabilities": () => json(404, {}),
   } });
   const gates = await probe(registration, { fetchImpl });
   const byGate = Object.fromEntries(gates.map(row => [row.gate, row]));
-  assert.ok(gates.every(row => !row.passed || row.gate === "callback page"));
+  assert.deepEqual(gates.filter(row => row.passed !== false).map(row => [row.gate, row.passed]), [["callback page", true], ["Maps route", null], ["Google connector", null]]);
   assert.match(byGate.registration.detail, /HTTP 503: Configured mobile App Auth app is not active and approved/);
   assert.match(byGate["email sign-in"].detail, /not offered \(or behind a captcha\)/);
   assert.match(byGate["native Google"].detail, /STEWARD_GOOGLE_NATIVE_CLIENT_IDS/);
@@ -118,7 +136,8 @@ test("each observed deployment gap fails its own gate and names its step", async
   assert.match(byGate["App Links"].detail, /H-09/);
   assert.match(byGate["service documents"].detail, /CLOUD_PUBLIC_SERVICE_JSON/);
   assert.match(byGate["entitlement keys"].detail, /ELIZA_ENTITLEMENT_/);
-  assert.match(byGate["Maps route"].detail, /HTTP 404/);
+  assert.match(byGate["Maps route"].detail, /^needs an account: .*401 before routing/);
+  assert.match(byGate["Google connector"].detail, /readState/);
   // Malformed documents and keys never count as published.
   const malformed = cloud({ registration: { ...registration, signerSha256: RELEASE }, overrides: {
     "/api/public/service": () => json(200, { success: true, version: 1, service: { name: "Eliza Cloud", terms: "<p>html</p>", privacy: {} } }),
@@ -129,7 +148,7 @@ test("each observed deployment gap fails its own gate and names its step", async
   assert.equal(second["entitlement keys"].passed, false);
   // An unreachable Cloud fails closed.
   const down = await probe(registration, { fetchImpl: async () => { throw new Error("getaddrinfo ENOTFOUND"); } });
-  assert.ok(down.every(row => !row.passed));
+  assert.ok(down.every(row => row.passed === false || (row.passed === null && ["Maps route", "Google connector"].includes(row.gate))));
   assert.match(down[0].detail, /unreachable \(getaddrinfo ENOTFOUND\)/);
 });
 
@@ -151,7 +170,7 @@ test("staging, which serves only debug-signed test-mocks builds, needs some gran
   assert.equal(gates.find(row => row.gate === "App Links").passed, false);
 });
 
-test("the CLI prints registration values offline, probes through an injected fetch and refuses unknown options", async () => {
+test("the CLI prints registration values offline, probes through an injected fetch and refuses unknown options", async t => {
   const out = [], err = [];
   const io = { root, log: line => out.push(line), error: line => err.push(line) };
   assert.equal(await main(["registration", "--json"], { ...io, fetchImpl: async () => { throw new Error("registration must not fetch"); } }), 0);
@@ -165,6 +184,11 @@ test("the CLI prints registration values offline, probes through an injected fet
   const code = await main(["probe", "--json"], { ...io, fetchImpl });
   // The committed release signer decides the App Links gate: it stays open until H-09 records it.
   assert.equal(code, registration.signerSha256 === "unset" ? 1 : 0);
-  assert.equal(JSON.parse(out.pop()).gates.length, 9);
+  assert.equal(JSON.parse(out.pop()).gates.length, 10);
+  // Account rows never fail the exit code: everything checkable passing exits 0.
+  const released = cloud({ registration: { ...registration, signerSha256: RELEASE } });
+  const releasedRoot = fixtureRoot(t, RELEASE);
+  assert.equal(await main(["probe"], { ...io, root: releasedRoot, fetchImpl: released.fetchImpl }), 0);
+  assert.match(out.pop(), /Every checkable gate passes/);
   for (const argv of [[], ["probe", "--environment", "dev"], ["registration", "--json", "--extra"], ["status"], ["registration", "--signer", RELEASE], ["probe", "--signer", "abc"]]) assert.equal(await main(argv, io), 2);
 });

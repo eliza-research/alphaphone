@@ -1,8 +1,10 @@
 {
   "schema": 1,
-  "observedAt": "2026-10-27T13:53:46Z",
+  "observedAt": "2026-10-28T05:55:42Z",
   "command": "node scripts/cloud-readiness.mjs probe [--environment staging] --json",
-  "scope": "Unauthenticated, read-only deployment probes (the same requests the phone sign-in readiness, plan check and Maps client make, once each). No account, key, code, email or subscription was used or changed. Deployment configuration evidence only: not a sign-in, plan admission, App Link verification on a device, Maps coverage or device result.",
+  "scope": "Unauthenticated, read-only deployment probes (the requests the phone sign-in readiness and plan check make, once each). No account, key, code, email or subscription was used or changed. Deployment configuration evidence only: not a sign-in, plan admission, App Link verification on a device, Maps coverage, Google connector or device result.",
+  "accountRows": "Maps route (H-16) and Google connector (H-17) are listed with passed:null and were not requested: Cloud answers every protected /api/ path without a credential with 401 before routing, so no unauthenticated request shows whether those routes are deployed.",
+  "supersedes": "The 2026-10-27T13:53:46Z observation from the first version of the probe, whose checkable gates had the same outcomes; that version read the Maps 401 as a deployed route, which the global auth gate does not show.",
   "releaseSigner": "unset",
   "environments": [
     {
@@ -60,8 +62,14 @@
         {
           "gate": "Maps route",
           "step": "H-16",
-          "passed": true,
-          "detail": "deployed and requires an account; coverage needs an authenticated read on a signed-in phone"
+          "passed": null,
+          "detail": "needs an account: Cloud answers every protected /api/ path with 401 before routing, so only GET /api/v1/maps/capabilities with a signed-in plan shows the route, its coverage and its dataset revision (H-32)"
+        },
+        {
+          "gate": "Google connector",
+          "step": "H-17",
+          "passed": null,
+          "detail": "needs an account: the Gmail and Calendar routes under /api/v1/eliza/google answer 401 without a session whether or not they are deployed; a signed-in connect, and inbox-v1/capabilities for readState, show them (H-27)"
         }
       ]
     },
@@ -120,8 +128,14 @@
         {
           "gate": "Maps route",
           "step": "H-16",
-          "passed": true,
-          "detail": "deployed and requires an account; coverage needs an authenticated read on a signed-in phone"
+          "passed": null,
+          "detail": "needs an account: Cloud answers every protected /api/ path with 401 before routing, so only GET /api/v1/maps/capabilities with a signed-in plan shows the route, its coverage and its dataset revision (H-32)"
+        },
+        {
+          "gate": "Google connector",
+          "step": "H-17",
+          "passed": null,
+          "detail": "needs an account: the Gmail and Calendar routes under /api/v1/eliza/google answer 401 without a session whether or not they are deployed; a signed-in connect, and inbox-v1/capabilities for readState, show them (H-27)"
         }
       ]
     }

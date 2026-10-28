@@ -12,8 +12,8 @@
  * sign-in registers. It reads no secret and contacts nothing. Values only the operator knows (the
  * Cloud apps-row UUID, Google's Android OAuth client ID) are named, never invented.
  *
- * `probe` makes the same unauthenticated requests Alpha's sign-in readiness, plan check and Maps
- * client make, once each, and reports each deployment gate with the step that owns it:
+ * `probe` makes the same unauthenticated requests Alpha's sign-in readiness and plan check make,
+ * once each, and reports each deployment gate with the step that owns it:
  *   registration      GET  {api}/api/v1/app-auth/mobile/config for this client, environment and return URL (H-11)
  *   sign-in methods   GET  {api}/steward/auth/providers?tenantId=..., and POST {api}/steward/auth/email/code/send
  *                     with an empty body, which Steward refuses as invalid without sending any email (H-12)
@@ -25,11 +25,14 @@
  *   callback page     GET  https://{web}/alphaphone/auth/callback, the hosted fallback (H-13)
  *   service documents GET  {api}/api/public/service, the Terms and Privacy text the sign-in screen shows (H-14)
  *   entitlement keys  GET  {api}/api/v1/subscription/entitlement-keys (H-15)
- *   Maps route        GET  {api}/api/v1/maps/capabilities without a key: 401 means deployed; coverage needs an
- *                     authenticated read on a signed-in phone (H-16)
- * It never signs in, sends a code, redeems anything or follows a redirect. Exit 0 when every gate
- * passes, 1 otherwise, 2 for a usage error. A pass is deployment configuration evidence only, not a
- * completed sign-in, plan admission or device result.
+ * Two rows need an account and are listed without a request (state "account"): the Maps route
+ * (H-16) and the Google connector routes for Gmail and Calendar (H-17). Cloud's global auth gate
+ * answers every non-public /api/ path that carries no credential with 401 before routing, so an
+ * unauthenticated 401 cannot tell a deployed route from a missing one; they are checked with an
+ * authenticated read on a signed-in phone (H-32).
+ * It never signs in, sends a code, redeems anything or follows a redirect. Exit 0 when every
+ * checkable gate passes, 1 otherwise, 2 for a usage error. A pass is deployment configuration
+ * evidence only, not a completed sign-in, plan admission or device result.
  */
 import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -174,18 +177,31 @@ export async function probe(registration, { fetchImpl = globalThis.fetch, debugF
   const usable = (keyList ?? []).filter(key => object(key).kty === "EC" && object(key).crv === "P-256" && typeof object(key).kid === "string" && object(key).d === undefined);
   gate("entitlement keys", "H-15", keys.status === 200 && usable.length > 0, keys.status === 200 ? `${usable.length} ES256 signing key(s)${usable.length ? `: ${usable.map(key => key.kid).join(", ")}` : ""}` : `${reached(keys)} (Cloud answers 503 until ELIZA_ENTITLEMENT_* is set)`);
 
-  const maps = await request(fetchImpl, `${api}/api/v1/maps/capabilities`);
-  gate("Maps route", "H-16", maps.status === 401, maps.status === 401 ? "deployed and requires an account; coverage needs an authenticated read on a signed-in phone"
-    : maps.status === 200 ? "answered without authentication; Cloud requires an API key or session for Maps" : reached(maps));
+  for (const row of ACCOUNT_GATES) gate(row.gate, row.step, null, row.detail);
   return gates;
 }
 
+/**
+ * Rows no unauthenticated request can decide, listed with `passed: null` and never requested.
+ * Cloud's global auth middleware (packages/cloud/api/src/middleware/auth.ts) answers every
+ * non-public /api/ path that carries no credential with 401 before the router runs, so the same
+ * 401 comes back whether the route is deployed or not.
+ */
+export const ACCOUNT_GATES = Object.freeze([
+  { gate: "Maps route", step: "H-16", detail: "needs an account: Cloud answers every protected /api/ path with 401 before routing, so only GET /api/v1/maps/capabilities with a signed-in plan shows the route, its coverage and its dataset revision (H-32)" },
+  { gate: "Google connector", step: "H-17", detail: "needs an account: the Gmail and Calendar routes under /api/v1/eliza/google answer 401 without a session whether or not they are deployed; a signed-in connect, and inbox-v1/capabilities for readState, show them (H-27)" },
+]);
+
+const mark = passed => (passed === true ? "pass" : passed === false ? "FAIL" : "account");
+
 export function formatProbe(registration, gates) {
   const lines = [`Eliza Cloud readiness for ${registration.packageName}, ${registration.environment} (${registration.api}):`];
-  for (const row of gates) lines.push(`  [${row.passed ? "pass" : "FAIL"}] ${row.gate} (${row.step}): ${row.detail}`);
-  const failed = gates.filter(row => !row.passed);
+  for (const row of gates) lines.push(`  [${mark(row.passed)}] ${row.gate} (${row.step}): ${row.detail}`);
+  const failed = gates.filter(row => row.passed === false);
+  const account = gates.filter(row => row.passed === null).length;
   lines.push("", failed.length ? `${failed.length} gate(s) open. Each names its step in docs/human-actions.md. This is deployment configuration evidence only.`
-    : "Every gate passes. This is deployment configuration evidence only, not a sign-in, plan admission or device result.");
+    : "Every checkable gate passes. This is deployment configuration evidence only, not a sign-in, plan admission or device result.");
+  if (account) lines.push(`${account} row(s) need a signed-in account and were not requested.`);
   return lines.join("\n");
 }
 
@@ -221,7 +237,7 @@ export async function main(argv, { root = process.cwd(), fetchImpl = globalThis.
   }
   const gates = await probe(registration, { fetchImpl, signer: options.signer });
   log(options.json ? JSON.stringify({ environment: registration.environment, api: registration.api, gates }, null, 2) : formatProbe(registration, gates));
-  return gates.every(row => row.passed) ? 0 : 1;
+  return gates.some(row => row.passed === false) ? 1 : 0;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = await main(process.argv.slice(2));
