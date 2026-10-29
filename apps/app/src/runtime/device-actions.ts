@@ -74,7 +74,7 @@ export function validateDeviceOperation(value: unknown): DeviceOperation {
   if(isNotesOperation(p))return validateNotesOperation(p);
   if(isCalendarOperation(p))return validateCalendarOperation(p);
   if(p.type==='notes_query')return validateNativeNotesQuery(p);
-  if(p.type==='read_selected_notes'||p.type==='read_calendar_range')return parseWorkflowRead(p);
+  if(p.type==='read_selected_notes'||p.type==='read_calendar_range'||p.type==='read_selected_reminders')return parseWorkflowRead(p);
   if(p.type==='post_notification'){if(Object.keys(p).some(k=>!['type','title','body'].includes(k)))throw Error('Invalid notification fields');return {type:p.type,title:text(p.title,200),body:text(p.body,2000)};}
   if(p.type==='speak_text'){if(Object.keys(p).some(k=>!['type','text'].includes(k)))throw Error('Invalid speech fields');return {type:p.type,text:text(p.text,5000)};}
   if (p.type === 'create_note') {
@@ -233,7 +233,7 @@ export class DeviceActions {
     if(isReminderOperation(op)&&(op.target.timingVersion===2||op.type==='reminder_update'&&op.fields.schedule?.alertMinutes!==undefined)&&!this.reminderV2)throw Error('This agent does not support this reminder timing. Reconnect to a compatible agent.');
     const agendaSource=payload.calendarAgendaSource===undefined?undefined:calendarSource(payload.calendarAgendaSource);
     if(agendaSource&&(op.type!=='read_calendar_range'||workflow||!payload.requestMessageId||op.calendarIds.length!==1||op.calendarIds[0]!==agendaSource.sourceId||!this.credential.capabilities?.includes(CALENDAR_AGENDA_CAPABILITY)))throw Error('Standalone Calendar read was not negotiated or bound');
-    if((['read_selected_notes','read_calendar_range','post_notification','speak_text'].includes(op.type))&&!workflow&&!(op.type==='read_calendar_range'&&agendaSource))throw new Error('Workflow binding required for phone reads');
+    if((['read_selected_notes','read_calendar_range','read_selected_reminders','post_notification','speak_text'].includes(op.type))&&!workflow&&!(op.type==='read_calendar_range'&&agendaSource))throw new Error('Workflow binding required for phone reads');
     const readReplyOrigin=p.readReplyOrigin===undefined?undefined:validateNativeNotesReadReplyOrigin(p.readReplyOrigin);
     if(readReplyOrigin&&(workflow||!isOriginalDeviceReadOperationType(op.type)))throw Error('Unexpected original Notes reply');
     return { ...(agendaSource?{calendarAgendaSource:agendaSource}:{}),providerReceipt:p.execution?.providerReceipt, ...(payload.requestMessageId===undefined?{}:{requestMessageId:id(payload.requestMessageId)}), id: id(p.id), digest, state: text(p.state, 32), expiresAt, operation:op,...(workflow?{workflow}:{}), ...(p.execution?.providerIdempotencyKey ? {providerIdempotencyKey:id(p.execution.providerIdempotencyKey)}:{}), ...(p.execution?.attemptId ? { attemptId: id(p.execution.attemptId) } : {}),...(readReplyOrigin?{readReplyOrigin}:{}) };
@@ -323,7 +323,7 @@ export class DeviceActions {
     if(context.view!=='workflows'||context.sensitive||context.selectedObject?.kind!=='workflow-run'||context.selectedObject.id!==review.runId||context.selectedObject.revision!==review.versionId)throw new Error('Open this exact workflow execution before reviewing phone steps');
     const pending=(await this.list(signal)).filter(p=>p.workflow?.runId===review.runId&&p.state==='pending'&&p.expiresAt>Date.now());signal.throwIfAborted();this.proposals.clear();
     return pending.map(p=>{assertWorkflowOperation(review,p.workflow!,{installationId:this.credential.installationId,enrollmentId:this.credential.enrollmentId!},p.operation);this.proposals.set(p.id,{proposal:p,context:structuredClone(context),workflowReview:structuredClone(review)});
-      const op=p.operation;const scope=op.type==='read_selected_notes'?`Read only ${op.notes.length} selected Notes at the recorded revisions. Text and titles will be sent to this agent.\nSelected IDs: ${op.notes.map(n=>n.id).join(', ')}`:op.type==='read_calendar_range'?`Read calendars ${op.calendarIds.join(', ')} from ${op.start} up to (excluding) ${op.end}, shown in ${op.timeZone}. At most ${op.maximumEvents} events; overflow fails. Event titles, times and IDs will be sent; descriptions, locations and attendees are excluded.`:op.type==='create_note'?`Save one note “${op.title}” on this phone:\n${op.body}`:op.type==='post_notification'?`Post this notification on this device: ${op.title}\n${op.body}`:op.type==='speak_text'?`Read this exact text aloud on this device:\n${op.text}`:'Unsupported phone step';
+      const op=p.operation;const scope=op.type==='read_selected_reminders'?`Read reminders open by the end of ${op.day} (overdue included) and reminders completed that day, in ${op.timeZone}. At most ${op.maximumItems} reminders; overflow fails. Titles, due times and completion times will be sent; reminder notes and alarms are excluded.`:op.type==='read_selected_notes'?`Read only ${op.notes.length} selected Notes at the recorded revisions. Text and titles will be sent to this agent.\nSelected IDs: ${op.notes.map(n=>n.id).join(', ')}`:op.type==='read_calendar_range'?`Read calendars ${op.calendarIds.join(', ')} from ${op.start} up to (excluding) ${op.end}, shown in ${op.timeZone}. At most ${op.maximumEvents} events; overflow fails. Event titles, times and IDs will be sent; descriptions, locations and attendees are excluded.`:op.type==='create_note'?`Save one note “${op.title}” on this phone:\n${op.body}`:op.type==='post_notification'?`Post this notification on this device: ${op.title}\n${op.body}`:op.type==='speak_text'?`Read this exact text aloud on this device:\n${op.text}`:'Unsupported phone step';
       return {id:p.id,title:op.type.replaceAll('_',' '),reviewScope:`${scope}\nAgent: ${this.session.origin}`,reviewIdentity:`Owner: ${this.session.ownerId}\nWorkflow: ${p.workflow!.workflowId}\nRun: ${p.workflow!.runId}\nVersion: ${p.workflow!.versionId}\nStep: ${p.workflow!.stepId}\nSpec: ${p.workflow!.specDigest}`,description:`Agent: ${this.session.origin}\nOwner: ${this.session.ownerId}\nWorkflow: ${p.workflow!.workflowId}\nRun: ${p.workflow!.runId}\nVersion: ${p.workflow!.versionId}\nStep: ${p.workflow!.stepId}\nSpec: ${p.workflow!.specDigest}\n${scope}`,expiresAt:p.expiresAt,contextRevision:context.revision};});
   }
   private async mutation(p: Proposal, suffix: string, body: Record<string, unknown>, signal: AbortSignal): Promise<Proposal> {
@@ -386,7 +386,7 @@ export class DeviceActions {
       let foregroundResult:ForegroundReviewResult|undefined;
       if(isForegroundReview(p.operation)){if(result.status==='succeeded')foregroundResult=validateForegroundReviewResult(p.operation,result.foregroundResult);else if(result.foregroundResult!==undefined)throw Error('An unconfirmed review cannot return a result');}else if(result.foregroundResult!==undefined)throw Error('Unexpected foreground review result');
       let readResult:WorkflowReadResult|undefined;
-      if(p.operation.type==='read_selected_notes'||p.operation.type==='read_calendar_range'){
+      if(p.operation.type==='read_selected_notes'||p.operation.type==='read_calendar_range'||p.operation.type==='read_selected_reminders'){
         if(result.status==='succeeded')readResult=await validateWorkflowResult(p.operation,result.readResult);
         else if(result.readResult!==undefined)throw new Error('Failed read cannot return content');
       }else if(result.readResult!==undefined)throw new Error('Unexpected read content');
@@ -599,7 +599,7 @@ export class DeviceActions {
     return validateForegroundReviewResult(p.operation,entry.result?.foregroundResult);
   }
   private async savedReadResult(p:Proposal,summary:JournalEntry):Promise<WorkflowReadResult|undefined>{
-    if(p.operation.type!=='read_selected_notes'&&p.operation.type!=='read_calendar_range')return undefined;
+    if(p.operation.type!=='read_selected_notes'&&p.operation.type!=='read_calendar_range'&&p.operation.type!=='read_selected_reminders')return undefined;
     if(summary.status!=='succeeded')return undefined;
     const {entry}=await this.journal.get({scope:this.scope,proposalId:p.id});
     if(!entry||entry.phase!=='terminal'||entry.status!=='succeeded'||entry.operationId!==summary.operationId||entry.record.digest!==p.digest||JSON.stringify(entry.record.workflow)!==JSON.stringify(p.workflow)||entry.record.ownerId!==this.session.ownerId||entry.record.agentId!==this.session.agentId||entry.record.origin!==this.session.origin)throw new Error('No exact saved read receipt is available; the source will not be read again');
@@ -630,7 +630,7 @@ export class DeviceActions {
     if(outcome==='applied'&&(isReminderOperation(p.operation)||isReminderCreate(p.operation))&&!reminderResult)throw Error('Applied reminder reconciliation requires exact saved receipt');
     if(outcome==='applied'&&(isNotesOperation(p.operation)||isNativeNotesQuery(p.operation))&&!notesResult)throw Error('Applied Notes reconciliation requires its exact saved receipt');
     if(outcome==='applied'&&isCalendarOperation(p.operation)&&!calendarResult)throw Error('Applied Calendar reconciliation requires exact saved provider receipt');
-    if(outcome==='applied'&&(p.operation.type==='read_selected_notes'||p.operation.type==='read_calendar_range')&&!readResult)throw new Error('Applied read requires its exact saved result');
+    if(outcome==='applied'&&(p.operation.type==='read_selected_notes'||p.operation.type==='read_calendar_range'||p.operation.type==='read_selected_reminders')&&!readResult)throw new Error('Applied read requires its exact saved result');
     await this.mutation(p, 'reconciliation', { attemptId: p.attemptId, resolution: { confirmed: true, outcome, ...((outcome === 'applied'||isClockOperation(p.operation)||isSmsSend(p.operation)) && entry ? { operationId: entry.operationId } : {}),...(smsResult?{result:smsResult}:foregroundResult?{result:foregroundResult}:clockResult?{result:clockResult}:mapsResult?{result:mapsResult}:cameraResult?{result:cameraResult}:photoLibraryResult?{result:photoLibraryResult}:readResult?{result:readResult}:calendarResult?{result:calendarResult}:notesResult?{result:notesResult}:reminderResult?{result:reminderResult}:{}) } }, signal);
   }
 }

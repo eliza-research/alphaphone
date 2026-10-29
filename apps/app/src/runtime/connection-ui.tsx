@@ -29,7 +29,7 @@ import {developmentAgentDocument} from '../browser/development-agent-document';
 import {openDomainRecovery} from '../browser/domain-recovery';
 import {retireClockReviews} from './clock-agent-review';
 import { negotiateEnabledViews } from './device-view-profile';
-import { workflowPresentationProtocol } from './workflow-presentation';
+import { registerWorkflowDevice, workflowDeviceProtocol } from './workflow-presentation';
 import {clockHandoffCapabilities} from './clock-contract';
 import {developmentIdentity,readDevelopmentIdentity,verifyDevelopmentIdentity,developmentOwnerRecovery,assertDevelopmentIdentity,developmentProfiles,type DevelopmentProfile} from '../browser/development-identity';
 import {developmentCloudKey} from '../browser/development-cloud';
@@ -164,7 +164,7 @@ export type SignInView =
 /** `revokeDevice` revokes this phone's enrollment on the agent; `deviceSlot` names its installation key. */
 type Enrollment = { revokeDevice?: (signal: AbortSignal) => Promise<boolean>; deviceSlot?: string; deviceHeaders?: Record<string,string> };
 type DeviceRequest=(path:string,body:unknown|undefined,signal:AbortSignal)=>Promise<unknown>;
-type Active = ({ kind: 'resident'; remote: LocalAgentProtocol; origin: string; actions?: DeviceActions; workflowProtocol?: 1|2 } | { kind: 'remote' | 'local'; remote: RemoteProtocol; origin: string; actions?: DeviceActions; workflowProtocol?: 1|2 } | { kind: 'cloud'; cloud: DevelopmentCloudAgentProtocol; agentId: string; actions?: DeviceActions; workflowProtocol?: 1|2; phoneTarget?: CloudPhoneTarget; voiceExpiresAt?: number }) & Enrollment & { request?:DeviceRequest; viewNavigation?:ViewNavigationClient; userTextFormatVersion?:1 };
+type Active = ({ kind: 'resident'; remote: LocalAgentProtocol; origin: string; actions?: DeviceActions; workflowProtocol?: 1|2|3 } | { kind: 'remote' | 'local'; remote: RemoteProtocol; origin: string; actions?: DeviceActions; workflowProtocol?: 1|2|3 } | { kind: 'cloud'; cloud: DevelopmentCloudAgentProtocol; agentId: string; actions?: DeviceActions; workflowProtocol?: 1|2|3; phoneTarget?: CloudPhoneTarget; voiceExpiresAt?: number }) & Enrollment & { request?:DeviceRequest; viewNavigation?:ViewNavigationClient; userTextFormatVersion?:1 };
 const SELECTION = 'alpha.connection.selection.v1';
 // The development chooser exists only on an explicitly flagged development server.
 const browserDevProfile = devSurfacesEnabled && devProfileQuery;
@@ -838,7 +838,7 @@ async function connectRemote(kind: 'remote' | 'local', origin: string, code: str
   let userTextFormatVersion:1|undefined;
   let reason = "";
   const enrollment: Enrollment = {};
-  const workflowProtocol=await workflowPresentationProtocol(signal);
+  let workflowProtocol:1|2|3=await workflowDeviceProtocol(signal);
   try {
     const baseScope = await actionScope(JSON.stringify([remote.origin, session.ownerId, session.agentId]));
     const slot = `device:${baseScope}`;
@@ -858,7 +858,9 @@ async function connectRemote(kind: 'remote' | 'local', origin: string, code: str
       if (response.status < 200 || response.status >= 300) throw Object.assign(new Error('Device action request failed'), { status: response.status });
       return response.body;
     };
-    const registered = await request('/api/client-devices/register', { label: 'Alpha Phone', workflowProtocol }, signal) as { installationId: string; enrollmentId: string; capabilities?: string[]; viewProfileVersion?: unknown; userTextFormatVersion?:unknown };
+    const admitted = await registerWorkflowDevice(workflowProtocol, protocol => request('/api/client-devices/register', { label: 'Alpha Phone', workflowProtocol: protocol }, signal), signal);
+    workflowProtocol = admitted.workflowProtocol;
+    const registered = admitted.registered as { installationId: string; enrollmentId: string; capabilities?: string[]; viewProfileVersion?: unknown; userTextFormatVersion?:unknown };
     if (registered.installationId !== credential.installationId || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(registered.enrollmentId)) throw new Error('Device registration was not verified');
     if(registered.userTextFormatVersion===1)userTextFormatVersion=1;
     reason = await negotiateEnabledViews(registered.viewProfileVersion, request, signal);
@@ -880,7 +882,7 @@ async function connectRemote(kind: 'remote' | 'local', origin: string, code: str
 async function connectDevelopment(profile:DevelopmentProfile,signal:AbortSignal){
  if(!browserDevProfile)throw Error('Development mode required.');
  // This explicitly gated browser fixture implements reminder v2; real peers still negotiate it.
- const identity=await readDevelopmentIdentity(profile,signal);const client=new LocalAgentProtocol(developmentBridge(profile,identity));const {session,name}=await client.connect(signal);signal.throwIfAborted();const credential=developmentCredential(profile,identity),scope=await actionScope(JSON.stringify([client.origin,session.ownerId,session.agentId,credential.installationId]));const actions=new DeviceActions(session,credential,scope,(path,body,signal)=>client.request(path,body,signal),developmentJournal(profile,identity),(op,id,context,signal,binding,workflowRoute,journalIdentity,agendaSource)=>deviceExecutor(op,id,context,signal,binding,workflowRoute,journalIdentity,agendaSource),(op,id,binding,signal)=>deviceRecovery?deviceRecovery(op,id,binding,signal):Promise.resolve({status:'unknown'}),true,true);await retire();signal.throwIfAborted();await verifyDevelopmentIdentity(identity,signal);const workflowProtocol=2 as const;save({kind:'development',profile,...(identity.account?{account:identity.account}:{})});developmentVoiceExpiresAt=Date.now()+3600000;activate({kind:'resident',remote:client,origin:client.origin,actions,workflowProtocol},session,name);
+ const identity=await readDevelopmentIdentity(profile,signal);const client=new LocalAgentProtocol(developmentBridge(profile,identity));const {session,name}=await client.connect(signal);signal.throwIfAborted();const credential=developmentCredential(profile,identity),scope=await actionScope(JSON.stringify([client.origin,session.ownerId,session.agentId,credential.installationId]));const actions=new DeviceActions(session,credential,scope,(path,body,signal)=>client.request(path,body,signal),developmentJournal(profile,identity),(op,id,context,signal,binding,workflowRoute,journalIdentity,agendaSource)=>deviceExecutor(op,id,context,signal,binding,workflowRoute,journalIdentity,agendaSource),(op,id,binding,signal)=>deviceRecovery?deviceRecovery(op,id,binding,signal):Promise.resolve({status:'unknown'}),true,true);await retire();signal.throwIfAborted();await verifyDevelopmentIdentity(identity,signal);const workflowProtocol=3 as const;save({kind:'development',profile,...(identity.account?{account:identity.account}:{})});developmentVoiceExpiresAt=Date.now()+3600000;activate({kind:'resident',remote:client,origin:client.origin,actions,workflowProtocol},session,name);
 }
 /** How the running resident's Eliza Cloud inference is bound after admission, and what to tell the owner. */
 type ResidentAdmission = { binding: 'cloud' | 'unbound' | 'kept'; credentialId?: string; account?: { client: CloudProtocol; identity: CloudServiceSession }; notice?: { error?: string; message?: string; open?: boolean } };
@@ -1077,7 +1079,7 @@ async function connectResident(signal: AbortSignal) {
   signal.throwIfAborted();
   let actions:DeviceActions|undefined;
   let deviceRequest:DeviceRequest|undefined;
-  const workflowProtocol=await workflowPresentationProtocol(signal);
+  let workflowProtocol:1|2|3=await workflowDeviceProtocol(signal);
   let userTextFormatVersion:1|undefined;
   let reason='';
   try {
@@ -1091,7 +1093,8 @@ async function connectResident(signal: AbortSignal) {
     // Browser and Android use the same reviewed local-record contracts.
     const headers={'X-Eliza-Device-Id':credential.installationId,'X-Eliza-Device-Key':credential.key,'X-Eliza-Device-Capabilities':'calendar.local-event.v1,notes.local-record.v1'};
     const request=(path:string,body:unknown|undefined,requestSignal:AbortSignal)=>client.request(path,body,requestSignal,headers);
-    const registered=await request('/api/client-devices/register',{label:isAndroid?'Alpha Phone':'Alpha browser development',workflowProtocol},signal);
+    const admitted=await registerWorkflowDevice(workflowProtocol,protocol=>request('/api/client-devices/register',{label:isAndroid?'Alpha Phone':'Alpha browser development',workflowProtocol:protocol},signal),signal);
+    workflowProtocol=admitted.workflowProtocol;const registered=admitted.registered;
     if(registered.installationId!==credential.installationId||typeof registered.enrollmentId!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(registered.enrollmentId))throw Error('Device registration was not verified');
     if(registered.userTextFormatVersion===1)userTextFormatVersion=1;
     reason = await negotiateEnabledViews(registered.viewProfileVersion, request, signal);
@@ -1140,7 +1143,7 @@ async function connectCloud(agentId: string, signal: AbortSignal, expectedOwner?
   if (agent.status !== 'running' || !agent.runtimeUrl) throw new Error('This agent is not ready. Refresh its status.');
   if(expectedOrigin&&new URL(agent.runtimeUrl).origin!==new URL(expectedOrigin).origin)throw Error('The personal Cloud runtime changed. Refresh its status.');
   const session = {ownerId:identity.userId,agentId,sessionId:crypto.randomUUID(),origin:new URL(agent.runtimeUrl).origin};
-  const workflowProtocol=await workflowPresentationProtocol(signal);
+  const workflowProtocol=await workflowDeviceProtocol(signal);
   const next: Extract<Active,{kind:'cloud'}> = {kind:'cloud',cloud:client,agentId,workflowProtocol};
   let attached = false;
   let reason = 'This Cloud runtime has not enabled verified phone actions, workflows or paired speech.';
@@ -1166,7 +1169,8 @@ async function connectCloud(agentId: string, signal: AbortSignal, expectedOwner?
     if (capability.protocol!==1 || capability.agentId!==agentId || typeof capability.identityId!=='string' || !/^[a-f0-9-]{36}$/.test(capability.identityId) || external?.subject!==identity.userId || external?.organizationId!==identity.organizationId || typeof external?.issuer!=='string' || !external.issuer.startsWith('https://') || device?.protocol!==1 || !Array.isArray(device.capabilities) || !device.capabilities.includes('calendar.local-event.v1')) throw new Error('Cloud runtime owner capability was not verified');
     target.headers["X-Eliza-Device-Capabilities"]=await deviceCapabilities(device?.capabilities);
     session.ownerId=capability.identityId;
-    const registered=await request('/api/client-devices/register',{label:'Alpha Phone',workflowProtocol},signal);
+    const admitted=await registerWorkflowDevice(workflowProtocol,protocol=>request('/api/client-devices/register',{label:'Alpha Phone',workflowProtocol:protocol},signal),signal);
+    next.workflowProtocol=admitted.workflowProtocol;const registered=admitted.registered;
     if (registered.installationId!==credential.installationId || typeof registered.enrollmentId!=='string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(registered.enrollmentId)) throw new Error('Cloud device registration was not verified');
     if(registered.userTextFormatVersion===1)next.userTextFormatVersion=1;
     const profileReason = await negotiateEnabledViews(registered.viewProfileVersion, request, signal);
@@ -1818,7 +1822,9 @@ export const connectionController = {
     if(!proposal)throw Error('This action is no longer pending for the current screen. Open its original selection and review again.');
     return this.execute(proposal,context,signal);
   },
-  getWorkflowPresentationProtocol():1|2 { return active?.actions ? active.workflowProtocol ?? 1 : 1; },
+  getWorkflowPresentationProtocol():1|2 { return active?.actions && (active.workflowProtocol ?? 1) >= 2 ? 2 : 1; },
+  /** Registered workflow device protocol: 3 adds the selected-reminders read. */
+  getWorkflowDeviceProtocol():1|2|3 { return active?.actions ? active.workflowProtocol ?? 1 : 1; },
   getWorkflowDeviceTarget(){const selected=active;if(!selected||!selected.actions||!selected.actions.credential.enrollmentId)return null;return {installationId:selected.actions.credential.installationId,enrollmentId:selected.actions.credential.enrollmentId};},
   async workflowNoticeActions(review:WorkflowPhoneReview,signal:AbortSignal){
     const selected=active,generation=epoch,sessionId=state.session?.sessionId;
