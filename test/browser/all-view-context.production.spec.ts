@@ -45,10 +45,10 @@ test('each enabled view supplies its own context to the resident agent, and no s
     await composer(page).fill(text); await composer(page).press('Enter');
     await expect(page.getByRole('button', { name: `Message actions: Resident reply ${index + 1}`, exact: true })).toHaveCount(1, { timeout: 30_000 });
     const body = (await stub(page, s => s.bodies) as any[])[index];
-    // The structured context and the model-visible observation both name this view, unpaused.
+    // The structured context names this view, unpaused. A product build sends the authored text
+    // unchanged (no client-authored observation banner); the agent renders this metadata once.
     expect(body.metadata.clientDevice.context, name).toMatchObject({ view, sensitive: false });
-    expect(String(body.text), name).toContain(`"view":"${view}"`);
-    expect(String(body.text).endsWith(text), name).toBe(true);
+    expect(String(body.text), name).toBe(text);
     const wire = JSON.stringify(body);
     for (const secret of await secrets(page)) expect(wire.includes(secret), `${name} carries a stored secret`).toBe(false);
   }

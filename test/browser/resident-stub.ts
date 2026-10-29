@@ -25,7 +25,24 @@ export type StubStream =
   | 'hold'
   /** The turn fails on the agent with this upstream failure kind, in a `done` or `error` frame. */
   | { failure: string; frame: 'done' | 'error' };
+/** One Cloud Maps place in the deployed `/api/v1/maps` shape. */
+export interface StubMapsPlace { id: string; name: string; latitude: number; longitude: number; address?: string }
+/** Eliza Cloud Maps (#412) behind the synthetic Cloud: capabilities, places/search and routes only.
+ * Every request is recorded in `residentStub.maps.requests`. `residentStub.maps.hold` holds the next
+ * search answer until `residentStub.releaseSearch()`, even after the renderer cancels it (recorded in
+ * `cancelled`); `limit` refuses
+ * the next search or route once with HTTP 429 and that Retry-After header. */
+export interface StubMaps {
+  regions: { id: string; name: string; bounds: [number, number, number, number] }[];
+  /** Search answers by exact query text; anything else finds nothing. */
+  places: Record<string, StubMapsPlace[]>;
+  /** Route candidates per request, recommended first (minutes, metres, via street). */
+  routes: { minutes: number; meters: number; via: string }[];
+  modes?: string[];
+}
 export interface ResidentStubOptions {
+  /** Eliza Cloud Maps routes. Omitted: the base harness refuses them (404, Maps not deployed). */
+  maps?: StubMaps;
   /** Synthetic native email-code boundary; no real code is sent. */
   nativeSignIn?: boolean;
   /** First run: no Cloud key is saved on this phone. */
@@ -57,6 +74,7 @@ export async function residentStub(page: Page, options: ResidentStubOptions = {}
       ...kept,
       // Per page load: the stream mode and a held reply do not survive a restart.
       stream: null as any, release: null as null | (() => void), recoveries: [] as string[], capabilities: '',
+      maps: { requests: [] as Array<{ route: string; body: any; requestId: string }>, cancelled: [] as string[], hold: false, limit: null as null | string },
     };
     const persist = () => sessionStorage.setItem('resident-stub', JSON.stringify({ order: s.order, cloud: s.cloud, bodies: s.bodies, opened: s.opened, accounts: s.accounts, login: s.login, nextToken: s.nextToken, polls: s.polls, start: s.start, held: s.held }));
     s.persist = persist; persist();
@@ -128,6 +146,7 @@ export async function residentStub(page: Page, options: ResidentStubOptions = {}
       }
       if (plugin === 'AlphaConnection' && method === 'secureWrite' && input.slot === 'cloud:production') { s.order.push('store ' + JSON.parse(input.value).token); persist(); }
       if (plugin === 'AlphaConnection' && method === 'secureRemove' && input.slot === 'cloud:production') { s.order.push('remove cloud key'); persist(); }
+      if (options.maps && plugin === 'AlphaConnection' && method === 'cancel') { s.maps.cancelled.push(input.requestId); return {}; }
       if (plugin === 'AlphaConnection' && method === 'openExternal') { f.calls.push('AlphaConnection.openExternal'); s.opened.push(input.url); s.order.push('openExternal ' + new URL(input.url).origin); persist(); return {}; }
       if (plugin === 'AlphaConnection' && method === 'request') {
         const url = new URL(input.url), path = url.pathname, auth = input.headers?.Authorization;
@@ -142,14 +161,39 @@ export async function residentStub(page: Page, options: ResidentStubOptions = {}
           s.order.push('poll ' + s.login);
           return { status: 200, data: s.login === 'expired' ? { status: 'expired' } : { status: 'authenticated', token: s.nextToken } };
         }
+        if (options.maps && path.startsWith('/api/v1/maps/')) {
+          const m = options.maps, route = path.slice('/api/v1/maps/'.length), body = input.body ? JSON.parse(input.body) : null, maps = s.maps;
+          maps.requests.push({ route, body, requestId: input.requestId });
+          const provider = 'eliza-cloud-osm', attribution = '© OpenStreetMap contributors (ODbL). Search: Nominatim. Routing: GraphHopper.';
+          if (route === 'capabilities' && input.method === 'GET') return { status: 200, data: { providerId: provider, connectionId: 'conn_eliza_cloud_maps_osm', revision: 'osm-fixture-2026-10', attribution, sources: { data: 'OpenStreetMap', search: 'Nominatim', routing: 'GraphHopper' },
+            disclosure: { recipients: [{ role: 'gateway', name: 'Eliza Cloud Maps', operator: 'Eliza Labs' }, { role: 'search', name: 'Nominatim', operator: 'Eliza Labs' }, { role: 'routing', name: 'GraphHopper', operator: 'Eliza Labs' }], cloudRecords: 'operation-and-result-code' },
+            regions: m.regions, capabilities: { map: false, search: true, placeDetails: true, geocode: true, reverseGeocode: true, modes: m.modes ?? ['drive', 'walk', 'bicycle'], alternatives: true, traffic: 'none', transit: 'none', offline: { map: false, search: false, routing: false } } } };
+          if (input.method !== 'POST' || !input.headers?.['Idempotency-Key']) { f.unexpected.push('maps ' + input.method + ' ' + route); return { status: 400, data: { code: 'maps_request_id_required' } }; }
+          if (maps.limit) { const retryAfter = maps.limit; maps.limit = null; persist(); return { status: 429, data: { error: 'Rate limited', code: 'rate_limited' }, retryAfter }; }
+          const wire = (p: any) => ({ providerId: provider, id: p.id, name: p.name, coordinate: { latitude: p.latitude, longitude: p.longitude }, ...(p.address ? { address: p.address } : {}), attribution, fetchedAt: Date.now() });
+          if (route === 'places/search') {
+            const answer = { status: 200, data: { providerId: provider, attribution, places: (m.places[body.query] ?? []).map(wire) } };
+            if (!maps.hold) return answer;
+            maps.hold = false;
+            // Held until the test calls releaseSearch(), even after a cancel: a late answer still arrives.
+            return new Promise(resolve => { s.releaseSearch = () => { s.releaseSearch = null; resolve(answer); }; });
+          }
+          if (route === 'places/details') { const found = Object.values(m.places).flat().find(p => p.id === body.id); return { status: 200, data: { providerId: provider, attribution, place: found ? wire(found) : null } }; }
+          if (route === 'routes') return { status: 200, data: { providerId: provider, attribution, routes: m.routes.slice(0, body.alternatives ? m.routes.length : 1).map((r, i) => ({ providerId: provider, id: 'route_fixture_' + body.mode + '_' + i, from: body.from, to: body.to, mode: body.mode,
+            geometry: [body.from, { latitude: (body.from.latitude + body.to.latitude) / 2 + i * 0.001, longitude: (body.from.longitude + body.to.longitude) / 2 }, body.to], distanceMeters: r.meters, durationSeconds: r.minutes * 60,
+            steps: [{ instruction: 'Head along ' + r.via, coordinate: body.from, distanceMeters: r.meters, maneuver: 'depart' }, { instruction: 'Arrive at the destination', coordinate: body.to, distanceMeters: 0, maneuver: 'arrive' }], attribution, fetchedAt: Date.now(), traffic: 'none' })) } };
+          f.unexpected.push('maps ' + route); return { status: 404, data: {} };
+        }
         if (path === '/api/v1/api-keys/current' && input.method === 'DELETE') { s.order.push('revoke ' + auth); persist(); return { status: 200, data: { success: true, status: 'revoked', credentialId: null, revokedAt: new Date().toISOString() } }; }
         if (s.accounts.length) {
           const owner = account(auth);
           if (!owner) return { status: 401, data: {} };
           if (path === '/api/v1/user') { if (owner.userStatus && owner.userStatus !== 200) return { status: owner.userStatus, data: {} }; return { status: 200, data: { success: true, data: { id: owner.userId, email: owner.email } } }; }
-          if (path === '/api/v1/credits/balance') { s.order.push('credits ' + owner.email); persist(); return { status: 200, data: { balance: owner.balance } }; }
-          // The billing snapshot answers the plan while the entitlement route is absent (404, from the base harness).
-          if (path === '/api/v1/billing/limits') { s.order.push('plan ' + owner.email); persist(); return { status: 200, data: { success: true, data: { v2: { subscription: { status: 'available', value: { planKey: 'plus_monthly', state: owner.plan === 'none' ? 'canceled' : 'active', currentPeriodEnd: '2099-01-01T00:00:00.000Z' } } } } } }; }
+          // The billing snapshot answers the plan while the entitlement route is absent (404, from the base
+          // harness), and carries the organization credit balance (the retired /api/v1/credits/balance is never read).
+          if (path === '/api/v1/billing/limits') { s.order.push('plan ' + owner.email); persist(); return { status: 200, data: { success: true, data: { schemaVersion: 2, v2: {
+            subscription: { status: 'available', value: { planKey: 'plus_monthly', state: owner.plan === 'none' ? 'canceled' : 'active', currentPeriodEnd: '2099-01-01T00:00:00.000Z' } },
+            balance: { status: 'available', source: 'organizations', observedAt: new Date().toISOString(), value: { balance: { value: String(owner.balance), unit: 'usd', currency: 'USD' }, revision: '1' } } } } } }; }
           if (path === '/api/v1/eliza/google/accounts') return { status: 200, data: owner.inbox ? [{ configured: true, connected: true, reason: 'connected', connectionId: 'grant-' + owner.userId.slice(0, 8), grantedCapabilities: ['google.gmail.triage'], identity: { email: owner.inbox } }] : [] };
         }
         return base(plugin, method, input);
