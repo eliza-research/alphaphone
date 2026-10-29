@@ -129,8 +129,11 @@ ledger for Alpha's own workflow and approval notices (`NoticeDelivery`, configur
 `WorkflowNoticeDelivery`) also use shared native modules. Alpha wrappers retain installed storage names, media paths and Android components.
 The workflow notice tap routes, tap capture, owner fence, approval coordination, journal recovery and poster are the
 shared `NoticeRoutes`, `NoticeTapInbox`, `NoticeOwner`, `NoticeCoordinator`, `NoticeRecovery` and `HostNoticePoster`;
-`WorkflowNoticeTaps`, `WorkflowNoticeDelivery`, `WorkflowNoticePoster` and `AlphaNotificationsPlugin` only supply the
-deployed slot names, channels, icon, tag prefix, launch actions and the foreground and question-excerpt checks. The renderer's notice owner fence, tap resolution, approval notice identity and owner-return
+the renderer bridge itself (own rows, channel settings, cross-app policy and history, tap pending/consume with the
+question excerpt, `postWorkflow`/`workflowReceipt`, all behind `ForegroundNoticeGate` on a bounded `NoticeWorker`) is the
+shared Capacitor `NotificationsHostPlugin`. `WorkflowNoticeTaps`, `WorkflowNoticeDelivery`, `WorkflowNoticePoster` and
+`AlphaNotificationsPlugin` only supply the deployed slot names, channels, icon, tag prefix, launch actions, the
+`alpha-notification-access` mirror, Alpha's own notice kinds and the canonical Eliza notification tap. The renderer's notice owner fence, tap resolution, approval notice identity and owner-return
 revalidation are the shared `@elizaos/contracts/notice-routes`. Typed workflows use the shared
 `@elizaos/contracts/phone-workflow` normalizer, and their reviewed local-time triggers run on the resident agent's
 durable task scheduler only while the phone is on (a missed occurrence is recorded, never run late, and its
@@ -198,11 +201,11 @@ at the pin). The resident boot selects one with `ELIZA_RUNTIME_PROFILE`; the sha
 writes the text, embedding and agent-speech routing and selects the shared powered-on
 scheduling policy (`ELIZA_MISSED_SCHEDULED_OCCURRENCES=record`, P-10). A scheduled workflow
 or prompt-automation occurrence that passed while the agent was not running (phone off or
-resident stopped) and is reached more than 120 seconds late is recorded once as missed and
+resident stopped) and is reached more than 30 minutes late is recorded once as missed and
 never replayed; the workflow history labels it "Missed — not run", and a missed one-time
 prompt stays listed, disabled, for an explicit Run now. A delay while the resident was running
 (Doze, a busy scheduler) still runs the occurrence late, since Doze is a separate constraint.
-Resident digests keep their own 120-second admission. Alpha's admitted host module declares
+Resident digests use the same 30-minute admission window (elizaOS/eliza#38161). Alpha's admitted host module declares
 only its Cloud API base (`backend/native-cloud-runtime.ts`). Current-turn screen and
 selection identifiers travel only in `metadata.clientDevice.context` under the shared
 `client-turn-observation` contract; the older instruction envelope remains for unnegotiated
@@ -313,7 +316,10 @@ There is no automatic Eliza Cloud website sign-in fallback.
   path on the stored key, and says so when `accountCreated` is true.
 - **Cloud sign-in hand-off (`CloudProtocol.login`, `/api/auth/cli-session`, the `cli-login` page)**:
   the explicit browser development profile and a **Browser sign-in (diagnostic)** button
-  in test-mocks builds only; it is not the native readiness fallback.
+  in test-mocks builds only; it is not the native readiness fallback. Product bundles fold it away
+  (`cloudSignInHandOffAvailable`), refuse it before any request, and their route policies
+  (`managed-service-routes.ts`, `ConnectionRoutes.managedService`) do not admit `cli-session`; the
+  production bundle audit denies its routes and copy.
 - **Cloud (elizaOS/eliza `packages/cloud`, `packages/auth`, `packages/app`)** owns the accounts:
   - Steward links Google and email to the existing user by verified email.
   - Mobile App Auth mints the key, valid for 30 days.

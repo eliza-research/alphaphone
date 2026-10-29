@@ -67,12 +67,31 @@ test('heard reporting: the exact played prefix goes to the reply of this convers
   assert.equal(await idempotent.heard.report(interrupted()), 'unchanged');
 });
 
-test('heard reporting: nothing is sent when the reply was fully heard, not interrupted, unheard text is empty, or nothing was heard', async () => {
+test('heard reporting: nothing is sent when the reply was fully heard, not interrupted or unheard text is empty', async () => {
   const r = reporter([]);
   assert.equal(await r.heard.report(interrupted({interrupted: false, unheard: ''})), 'not-needed');
   assert.equal(await r.heard.report(interrupted({unheard: '  '})), 'not-needed');
-  assert.equal(await r.heard.report(interrupted({heard: '', unheard: 'All of it.'})), 'nothing-heard', 'the route needs a non-empty prefix');
   assert.deepEqual(r.calls, []);
+});
+
+test('heard reporting: a reply interrupted before any of it played is recorded as nothing heard', async () => {
+  const r = reporter([{ok: true, messageId: replyId, text: '', truncated: true, changed: true}]);
+  assert.equal(await r.heard.report(interrupted({heard: '', unheard: 'All of it.'})), 'recorded');
+  assert.deepEqual(r.calls, [{path: `/api/conversations/room-1/messages/${replyId}/heard`, body: {nothingHeard: true}}]);
+  assert.deepEqual(r.outcomes, [['recorded', {attempts: 1, status: 200}]]);
+  // An agent that predates the explicit report refuses it; the view stays marked.
+  const older = reporter([400]);
+  assert.equal(await older.heard.report(interrupted({heard: '', unheard: 'All of it.'})), 'rejected');
+});
+
+test('heard reporting: a playback failure before any sentence finished never empties the reply', async () => {
+  const r = reporter([]);
+  assert.equal(await r.heard.report(interrupted({heard: '', unheard: 'All of it.', playbackFailed: true})), 'nothing-heard');
+  assert.deepEqual(r.calls, [], 'a speech failure is not a barge-in: nothing is sent');
+  assert.deepEqual(r.outcomes, [['nothing-heard', {attempts: 0}]]);
+  const adapter = fs.readFileSync(new URL('../apps/app/src/prototype/voice-adapter.ts', import.meta.url), 'utf8');
+  assert.match(adapter, /interrupted:true,\.\.\.\(failed\?\{playbackFailed:true\}:\{\}\)\}\)/);
+  assert.match(adapter, /if\(failed&&!heard\.heard\)return;/, 'the view keeps the reply text too');
 });
 
 test('heard reporting: only assistant replies of the current conversation, and nothing after the binding changed', async () => {
@@ -172,9 +191,36 @@ test('voice timing and diagnostics keep the endpoint path and heard outcome as e
   assert.equal(exported.heard, 'conflict');
 });
 
+test('the end-of-turn chain keeps Clef off: the local scorer decides, and its path is kept as an enum', async () => {
+  const {stripTypeScriptTypes} = await import('node:module'), vm = await import('node:vm');
+  const source = fs.readFileSync(new URL('../apps/app/src/runtime/voice-selection.ts', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '').replaceAll('export function', 'function').replaceAll('export type', 'type');
+  const box = {cloudRuntimeEnabled: false, testMocksEnabled: true, browserDevProfile: false, connectionController: {}};
+  vm.runInNewContext('{' + stripTypeScriptTypes(source, {mode: 'transform'}) + '\nglobalThis.selection={clefEndpointStage};}', box);
+  const selection = box.selection;
+  assert.deepEqual(JSON.parse(JSON.stringify(selection.clefEndpointStage())), {enabled: false, client: null});
+  assert.equal(routes.clefEndpointStageEnabled(selection.clefEndpointStage()), false);
+  const asked = [];
+  const chain = routes.createEndpointChain({local: routes.residentEndpoint(() => (path, body) => { asked.push(path); return Promise.resolve({available: false, reason: 'ram-pressure'}); }), clef: selection.clefEndpointStage()});
+  assert.deepEqual(await chain('turn off the lights', new AbortController().signal), {decision: 'unavailable', reason: 'ram-pressure', path: 'local'});
+  assert.deepEqual(asked, ['/api/asr/local-inference/end-of-turn'], 'only the resident is asked; no text goes to Cloud');
+  timing.clearVoiceTiming();
+  const id = timing.beginVoiceTurn({route: 'local-agent', cold: false, entry: 'conversation'});
+  assert.equal(timing.recordEndpointVoiceTiming({by: 'semantic', semantic: 'complete', latencyMs: 30, path: 'clef'}), true);
+  const later = timing.beginVoiceTurn({route: 'local-agent', cold: false, entry: 'conversation'});
+  assert.equal(timing.recordEndpointVoiceTiming({by: 'gap', semantic: 'unavailable', reason: 'clef-timeout', path: 'clef'}), true);
+  const report = buildDiagnostics({voiceTiming: JSON.parse(timing.exportVoiceTiming())});
+  assert.deepEqual(report.voiceTiming.records.find(row => row.id === id).endpoint, {by: 'semantic', semantic: 'complete', latencyMs: 30, path: 'clef'});
+  assert.deepEqual(report.voiceTiming.records.find(row => row.id === later).endpoint, {by: 'gap', semantic: 'unavailable', reason: 'clef-timeout', path: 'clef'});
+  // Diagnostics copies only allowlisted enums.
+  const forged = buildDiagnostics({voiceTiming: {format: 'alpha-voice-timing-v1', records: [{version: 1, id, recordedAt: 1, route: 'local-agent', cold: false, entry: 'conversation', marks: {}, endpoint: {by: 'gap', semantic: 'timeout', path: 'cloud-text', reason: 'clef-says-yes'}}]}});
+  assert.deepEqual(forged.voiceTiming.records[0].endpoint, {by: 'gap', semantic: 'timeout'});
+});
+
 test('sources: the adapter wires the endpoint and heard routes through the resident binding; Android allows exactly these routes', () => {
   const adapter = fs.readFileSync(new URL('../apps/app/src/prototype/voice-adapter.ts', import.meta.url), 'utf8');
   assert.match(adapter, /endpoint:\(text,signal\)=>\{current\(\);return semanticEndpoint\(text,signal\);\}/);
+  // The chain: the resident's fused scorer, then Clef only through the #663 switch.
+  assert.match(adapter, /const semanticEndpoint=createEndpointChain\(\{local:residentEndpoint\(residentRequest\),clef:clefEndpointStage\(\)\}\)!;/);
   assert.match(adapter, /connectionController\.voiceConversationCurrent\(binding,false\)/);
   assert.match(adapter, /heardReporter\.report\(/);
   const plugin = fs.readFileSync(new URL('../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaLocalAgentPlugin.java', import.meta.url), 'utf8');

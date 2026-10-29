@@ -569,6 +569,11 @@ test('Stop is offered while an agent has not produced its first chunk, and a lat
 // Back and HOME during a reply. Collapsing the chat (Back from full to sheet, HOME while Home is the
 // current app) is not a Stop: the reply keeps arriving and is shown once. HOME from another app
 // changes the screen the turn was asked from, which is an explicit Stop with its one reconciliation.
+// That is the current behaviour: AlphaClient.setViewContext (runtime/alpha-client.ts) aborts the
+// foreground request whenever the view context's revision moves. Whether a view change should stop a
+// reply at all, or let it finish while refusing only the actions bound to the old screen, is an open
+// owner question (docs/decisions.md, "Open engineering question: a view change during a reply");
+// this test pins the current answer until it is decided.
 for (const step of ['Back from full to sheet', 'HOME on Home'] as const) {
   test(`${step} during a reply keeps it: the finished reply appears once and nothing is resent`, async ({ page }) => {
     test.setTimeout(90_000);
@@ -629,6 +634,8 @@ test('typing during initial identity verification survives Minimize and admissio
 
 
 for(const edit of [false,true])test(`initial identity admission never transfers a restored offline draft${edit?' with edits':''}`,async({page})=>{
+ // Two loads (the first and a reload) on the development server; under load one reload alone took the 30s default.
+ test.setTimeout(90_000);
  await remoteAgent(page,{holdIdentity:true});await page.goto('/');await expect.poll(()=>fixture(page,f=>!!f.heldIdentity)).toBe(true);
  await page.evaluate(async()=>{const {assistantDraftStore}=await import('/src/runtime/assistant-draft-store.ts');const store=await assistantDraftStore(JSON.stringify(['offline']));await store.save(await store.read(),'Earlier offline private words');});
  await page.reload();await expect.poll(()=>fixture(page,f=>!!f.heldIdentity)).toBe(true);await expect(composer(page)).toHaveValue('Earlier offline private words');if(edit)await composer(page).fill('Earlier offline private words with new edits');

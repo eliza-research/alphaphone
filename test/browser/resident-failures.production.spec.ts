@@ -58,14 +58,15 @@ for (const [kind, text] of Object.entries(KINDS)) for (const frame of ['done', '
       const code = page.getByRole('button', { name: /^Use a membership code/ });
       await expect(code).toBeVisible();
       await code.click();
-      // On the phone's own agent explicit code entry opens the resident account & plan panel (plan
-      // headline, Check plan again, Approve this phone again), which carries the approved Membership &
-      // credits controls opened at the code field, with Add funds.
-      const account = page.getByRole('dialog', { name: 'Eliza Cloud account & plan', exact: true });
+      // The billing snapshot reports a zero credit balance with no plan, so the approved Membership &
+      // credits sheet (the funding guard in connection-ui) carries the code entry, opened at the code
+      // field, with Add funds. Zero is shown as zero, never as unavailable.
+      const account = page.getByRole('dialog', { name: 'Membership & credits', exact: true });
       await expect(account).toBeVisible();
       const membership = account.getByRole('region', { name: 'Membership and credits', exact: true });
       await expect(membership).toBeVisible();
       await expect(membership.getByRole('textbox', { name: 'Membership code' })).toBeVisible();
+      await expect(membership.locator('.alpha-membership-amount')).toHaveText('$0.00USD');
       await expect(membership.getByRole('button', { name: 'Add funds', exact: true })).toBeVisible();
       expect(await stub(page, s => s.opened)).toEqual([]);
       await page.screenshot({path:info.outputPath('membership-code-mobile.png'),animations:'disabled'});
@@ -73,7 +74,7 @@ for (const [kind, text] of Object.entries(KINDS)) for (const frame of ['done', '
       await expect(account.getByRole('textbox',{name:'Membership code'})).toBeVisible();
       await page.screenshot({path:info.outputPath('membership-code-wide.png'),animations:'disabled'});
       await page.setViewportSize({width:412,height:915});
-      await account.getByRole('button', { name: 'Close connection settings', exact: true }).click();
+      await account.getByRole('button', { name: 'Close membership settings', exact: true }).click();
       await expect(account).toHaveCount(0);
       await manage.click();
       await expect(page.getByRole('heading',{name:'Check the billing account',exact:true})).toBeVisible();

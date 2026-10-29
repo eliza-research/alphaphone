@@ -10,11 +10,12 @@ import {readFileSync} from 'node:fs';
 import {nativeSource,fixture,runJvm} from './fixtures/jvm-tools.mjs';
 
 test('the shared guard refuses work for a stopped, shut-down or full worker without throwing',()=>{
- assert.match(runJvm([nativeSource('PluginWorkers.java'),nativeSource('WorkflowNoticeIo.java'),fixture('PluginWorkersTest.java')],'ai.elizaresearch.alphaphone.PluginWorkersTest'),/^PASS plugin workers/);
+ assert.match(runJvm([nativeSource('PluginWorkers.java'),fixture('PluginWorkersTest.java')],'ai.elizaresearch.alphaphone.PluginWorkersTest'),/^PASS plugin workers/);
 });
 
 // Each plugin and the workers it owns or borrows. worker() is the upstream ActionJournalPlugin's
-// journal worker; NOTICE_IO is the bounded notification worker.
+// journal worker. AlphaNotificationsPlugin has no worker of its own: the upstream
+// NotificationsHostPlugin owns its NoticeWorker and guards it with NoticeWorker.submit.
 const plugins={
  AlphaActionJournalPlugin:['worker()'],
  AlphaConnectionPlugin:['workers'],
@@ -26,7 +27,6 @@ const plugins={
  AlphaMapsTransportPlugin:['workers','closers','deadlines'],
  AlphaNoteAudioPlugin:['migrationWorker'],
  AlphaNoteDocumentsPlugin:['worker'],
- AlphaNotificationsPlugin:['NOTICE_IO'],
  AlphaVoiceCloudPlugin:['workers'],
 };
 const escape=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -56,7 +56,7 @@ test('the Maps deadline scheduler is the one dispatch that cannot use Executor a
 test('every worker a plugin declares is listed and checked above',()=>{
  for(const name of Object.keys(plugins)){
   const source=readFileSync(nativeSource(`${name}.java`),'utf8');
-  const declared=[...source.matchAll(/(?:ExecutorService|ThreadPoolExecutor|WorkflowNoticeIo)\s+(\w+)\s*=/g)].map(match=>match[1]);
+  const declared=[...source.matchAll(/(?:ExecutorService|ThreadPoolExecutor|NoticeWorker)\s+(\w+)\s*=/g)].map(match=>match[1]);
   for(const worker of declared)assert.ok(plugins[name].includes(worker),`${name}.${worker} is listed`);
  }
 });
