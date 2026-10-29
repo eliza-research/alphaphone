@@ -60,12 +60,18 @@ nothing is downloaded.
 
 | Path | Role | Size | Licence |
 | --- | --- | --- | --- |
-| `tts/paradee/paradee-8m-v1_1.gguf` | Paradee-8M F32 (converted from the pinned PyTorch files) | 32 MB | Apache-2.0 |
+| `tts/paradee/paradee-8m-v1_2.gguf` | Paradee-8M v1.2 F32 (converted from the pinned PyTorch files) | 32 MB | Apache-2.0 |
 | `tts/paradee/misaki-en-us.lex` | misaki US lexicon (converted from the pinned misaki data) | 12.9 MB | Apache-2.0 |
 | `tts/paradee/espeak-ng-data/*` (7 files) | eSpeak NG English data for out-of-lexicon words | 0.8 MB | GPL-3.0-or-later (flagged) |
 | `asr/phonon-2-fv5.gguf` | The ASR slot: Phonon-2 (Parakeet-TDT 0.6B, five-value weights, `general.architecture=parakeet-tdt`) | 331 MB | CC-BY-4.0 (attribution and NOTICE shipped; training-data terms flagged) |
 | `vad/silero-vad-v5.gguf` | Silero VAD v5 | 0.6 MB | MIT |
 | `notices/*` | eSpeak NG, misaki, spaCy and Phonon-2 (Fermion NOTICE, CC-BY-4.0 text) notices | small | as named |
+
+At eliza pin `fbc2d23d4b` upstream pins Paradee-8M v1.2, adds an enabled Castilian Spanish voice
+(Delibes-8M, with Spanish eSpeak NG data) and moves the llama.cpp fork to `13d0ccbf`. The recorded
+engine libraries were built from fork `0d9fd4b9` and are not admitted at this pin: a fresh engine
+build, a fresh byte record, a fresh APK and on-device validation are required
+(`docs/evidence/develop-fbc2d23d-build-input-admission-20261029.json`).
 
 The Phonon-2 GGUF (330,632,256 bytes, sha256 `dc552eb7…`) replaces the Qwen3-ASR pair
 (about 1 GB), so the bundle is about 380 MB. It ships in the APK assets with the verified first-run

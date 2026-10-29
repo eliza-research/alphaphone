@@ -32,7 +32,7 @@ test('the committed record satisfies the schema, model inventory and ASR slot', 
   assert.ok(record.models.some(row => row.path === 'notices/Phonon-2-NOTICE.txt' && row.sha256 === '00624a5043e7ce74029317b024132ca5286116d6fbf3191d226374bc8273789f'), 'Fermion NOTICE ships in the bundle');
   assert.equal(record.models.some(row => row.role === 'asr-mmproj'), false);
   const paradee = record.models.find(row => row.role === 'tts-model');
-  assert.equal(paradee.path, 'tts/paradee/paradee-8m-v1_1.gguf');
+  assert.equal(paradee.path, 'tts/paradee/paradee-8m-v1_2.gguf');
   assert.ok(paradee.bytes < 40 * 1024 * 1024, 'Paradee ships in the APK assets');
   assert.equal(record.models.some(row => /kokoro|\.on{2}x|\.bin$/i.test(row.path)), false, 'no Kokoro, other-runtime model or voice preset');
 });
@@ -66,7 +66,7 @@ test('notices list the engine components and every voice model, flagging eSpeak 
   const espeak = entries.filter(entry => entry.name.startsWith('eSpeak NG'));
   assert.ok(espeak.length >= 2, 'the linked library and the bundled data');
   for (const entry of espeak) { assert.equal(entry.license, 'GPL-3.0-or-later'); assert.ok(entry.flags.includes('copyleft-strong')); }
-  for (const name of ['Paradee-8M v1.1 (F32 GGUF) (tts-model)', 'misaki English (US) lexicon (g2p-lexicon)', 'Phonon-2 (Parakeet-TDT 0.6B, five-value GGUF; ASR slot model) (asr-model)', 'Silero VAD v5 (GGUF) (vad-model)'])
+  for (const name of ['Paradee-8M v1.2 (F32 GGUF) (tts-model)', 'misaki English (US) lexicon (g2p-lexicon)', 'Phonon-2 (Parakeet-TDT 0.6B, five-value GGUF; ASR slot model) (asr-model)', 'Silero VAD v5 (GGUF) (vad-model)'])
     assert.ok(entries.some(entry => entry.name === name), name);
   // CC-BY-4.0 attribution: the attribution line, Fermion's NOTICE and the licence text ship; the training-data terms are flagged, not blocking.
   const phonon = entries.find(entry => entry.name.startsWith('Phonon-2'));
