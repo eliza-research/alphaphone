@@ -52,7 +52,10 @@ export type DiagnosticsInput={
 };
 type NativeVoiceTimingIdentity={sourceCommit:string;sourceDirty:boolean;engineSha256:string;modelSha256:string;models?:Record<string,string>;device:string;environment:'device'|'emulator';abi:'arm64-v8a'|'x86_64';sdk?:number;build:string};
 type NativeVoiceTimingRow={id:string;turnId:string;pipeline:string;clock:'native-monotonic-ms';captureClock:string;cold:boolean;coldReason?:string;outcome:string;reason?:string;audibleClock?:string;network?:string;thermal?:string;thermalHeadroom?:number;identity:NativeVoiceTimingIdentity;marks:Record<string,number>};
-type VoiceTimingRow={version:1;id:string;recordedAt:number;route:string;cold:boolean;entry?:'conversation'|'notes';policy?:'auto-send'|'review';marks:Record<string,number>;live?:VoiceTimingLive;endpoint?:VoiceTimingEndpoint;heard?:string;nativeTurn?:string;outcome?:'abandoned'};
+type VoiceTimingRow={version:1;id:string;recordedAt:number;route:string;cold:boolean;entry?:'conversation'|'notes';policy?:'auto-send'|'review';marks:Record<string,number>;live?:VoiceTimingLive;endpoint?:VoiceTimingEndpoint;heard?:string;nativeTurn?:string;outcome?:'abandoned';
+ /** Conversation path, derived from the copied enums: 'live' (the echo-cancelled voice assistant: it
+  * records endpointing, or streaming ASR) or 'batch' (the recorded-clip loop, live mode 'batch'). */
+ path?:'live'|'batch'};
 export type DiagnosticsReport={
  format:typeof DIAGNOSTICS_FORMAT;generatedAt:string;platform:'android'|'web';
  app:{version:string|null;versionCode?:number;variant?:'launcher'|'standalone';buildType?:'debug'|'release';testMocks?:boolean};
@@ -111,6 +114,7 @@ function voiceTimingRows(input:unknown):VoiceTimingRow[]{
   const heard=one(row.heard,['recorded','unchanged','not-needed','nothing-heard','conflict','not-found','unavailable','rejected','stale','invalid'] as const);if(heard)out.heard=heard;
   const nativeTurn=text(row.nativeTurn,uuid);if(nativeTurn)out.nativeTurn=nativeTurn;
   if(row.outcome==='abandoned')out.outcome='abandoned';
+  if(out.entry==='conversation'){const path=out.endpoint||out.live?.mode==='stream'?'live':out.live?.mode==='batch'?'batch':undefined;if(path)out.path=path;}
   rows.push(out);
  }
  return rows;
