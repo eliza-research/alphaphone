@@ -67,12 +67,18 @@ test('heard reporting: the exact played prefix goes to the reply of this convers
   assert.equal(await idempotent.heard.report(interrupted()), 'unchanged');
 });
 
-test('heard reporting: nothing is sent when the reply was fully heard, not interrupted, unheard text is empty, or nothing was heard', async () => {
+test('heard reporting: nothing is sent when the reply was fully heard, not interrupted, unheard text is empty, or playback failed before anything was heard', async () => {
   const r = reporter([]);
   assert.equal(await r.heard.report(interrupted({interrupted: false, unheard: ''})), 'not-needed');
   assert.equal(await r.heard.report(interrupted({unheard: '  '})), 'not-needed');
-  assert.equal(await r.heard.report(interrupted({heard: '', unheard: 'All of it.'})), 'nothing-heard', 'the route needs a non-empty prefix');
+  assert.equal(await r.heard.report(interrupted({heard: '', unheard: 'All of it.', playbackFailed: true})), 'nothing-heard', 'a speech failure never empties the stored reply');
   assert.deepEqual(r.calls, []);
+});
+
+test('heard reporting: a reply the user interrupted before any of it was heard is reported explicitly (elizaOS/eliza#38149)', async () => {
+  const r = reporter([]);
+  assert.equal(await r.heard.report(interrupted({heard: '', unheard: 'All of it.'})), 'recorded');
+  assert.deepEqual(r.calls, [{path: `/api/conversations/room-1/messages/${replyId}/heard`, body: {nothingHeard: true}}]);
 });
 
 test('heard reporting: only assistant replies of the current conversation, and nothing after the binding changed', async () => {
