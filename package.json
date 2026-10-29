@@ -22,6 +22,7 @@
     "android:verify": "node scripts/verify-apks.mjs",
     "test:android:instrumentation": "node scripts/android-instrumentation.mjs",
     "aosp:stage": "node scripts/stage-aosp.mjs",
+    "aosp:retain-known-good": "node scripts/aosp-retain-known-good.mjs",
     "aosp:verify-secure-camera": "node scripts/verify-aosp-secure-camera.mjs",
     "upstream:verify": "node scripts/verify-upstream.mjs",
     "agent:dev": "ELIZA_DEV_ALLOW_TEST_MOCKS=1 ALPHA_AGENT_BACKEND=eliza bun scripts/dev-agent.mjs",
