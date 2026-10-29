@@ -74,8 +74,15 @@ device, and Google's own verification result each prove only themselves.
 4. **Decide D-1 to D-4** below, then submit for verification with the scope justifications and a
    demo video (outline below). Start the restricted-scope security assessment with a Google-approved
    assessor. Record status only (no secrets) in the evidence template.
-5. **Send flag (Cloud operator).** Enable `ELIZA_NATIVE_GOOGLE_GMAIL_SEND_ENABLED` only once the
-   send service is deployed.
+5. **Native send path stays off (Alpha owner decision, not a Cloud setting).**
+   `ELIZA_NATIVE_GOOGLE_GMAIL_SEND_ENABLED` is read by the native managed-Google host in the pinned
+   upstream (`packages/app/src/runtime/native-managed-google-host.ts`, `NATIVE_GMAIL_SEND_FLAG`).
+   Alpha removes it on purpose from the resident agent environment
+   (`android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaLocalAgentPlugin.java`, the two
+   `env.remove` lists) so the path stays refused until Seeker acceptance and the production service
+   exist (`docs/verification.md`). OAuth verification does not change this. Stopping the strip is a
+   separate reviewed Alpha change, made only after Seeker acceptance and a deployed production send
+   service, with its own decision entry and tests; no operator should set the flag to bypass it.
 6. **Acceptance (operator with the H-27 account).** Run the Gmail OAuth row below and fill
    [the evidence template](668-gmail-oauth-evidence-template.json). Until verification completes,
    the account must be a listed test user, and its refresh token expires after seven days.
@@ -157,7 +164,7 @@ create; Disconnect in Settings. Use only the H-27 synthetic account.
 
 | # | Question | Options | Default / recommendation | What each choice changes |
 | --- | --- | --- | --- | --- |
-| D-1 | Does the modify step keep `gmail.send` and `gmail.compose` alongside `gmail.modify`? | (a) keep all three (current source, P-37); (b) request only `gmail.modify` for the modify step and keep `gmail.send` alone for the send-only upgrade | Recommend (a) for this submission with the per-action justification above, unless a reviewer objects; (b) is the least-privilege fallback | (a) no code change, possible reviewer question. (b) needs a Cloud mapping change (`scopesToCapabilities` already reads `gmail.modify` as drafts and mailbox, but not as send) and an Alpha grants change in the pinned upstream; fewer restricted scopes on the screen (compose dropped) |
+| D-1 | Does the modify step keep `gmail.send` and `gmail.compose` alongside `gmail.modify`? | (a) keep all three (current source mapping; no recorded decision covers the Gmail scope set yet, so this row would become that decision); (b) request only `gmail.modify` for the modify step and keep `gmail.send` alone for the send-only upgrade | Recommend (a) for this submission with the per-action justification above, unless a reviewer objects; (b) is the least-privilege fallback | (a) no code change, possible reviewer question. (b) needs a Cloud mapping change (`scopesToCapabilities` already reads `gmail.modify` as drafts and mailbox, but not as send) and an Alpha grants change in the pinned upstream; fewer restricted scopes on the screen (compose dropped) |
 | D-2 | Submit Gmail change scopes now, or verify read-only Gmail and Calendar first? | (a) submit everything in the matrix; (b) verify read set plus Calendar first, keep change scopes in Testing | Default (a): the MVP includes reviewed sends and mailbox changes (AP-09) | (a) one assessment covers all restricted scopes. (b) faster first approval, but change actions stay limited to test users with seven-day tokens |
 | D-3 | Who publishes the Google user data disclosure (F-1)? | (a) Eliza Cloud privacy policy (client owner); (b) a separate Alpha Phone policy | Default (a): the consent screen and tokens belong to Eliza Cloud's client | (a) Cloud's served Privacy text and web page change. (b) Alpha would need its own homepage/domain on the consent screen, which it does not have |
 | D-4 | Fix F-3 (narrower consent drops grants) before the acceptance run? | (a) carry over held capabilities in `initiateGoogle` like `initiateGmail` does, including Calendar; (b) Cloud adds `include_granted_scopes=true` and merges scopes; (c) leave as is | Recommend (a), and (b) in Cloud as defence in depth | (a) Alpha change plus a test. (b) upstream Cloud change through a reviewed eliza commit. (c) acceptance must avoid the affected button sequences, and real users can lose access silently |
