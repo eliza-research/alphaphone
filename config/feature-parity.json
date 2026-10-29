@@ -3,7 +3,7 @@
   "reference": "ELIZA_MOBILE_PRODUCT",
   "ceiling": {
     "differences": 20,
-    "modules": 540
+    "modules": 539
   },
   "differences": {
     "view:clock:only-b": "Eliza offers Clock; Alpha hands alarms and timers to the Android clock (clock.handoff) without a Clock view.",
@@ -72,7 +72,6 @@
     "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaTelephony.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaTelephonyPlugin.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaVoiceCloudPlugin.java",
-    "android/app/src/main/java/ai/elizaresearch/alphaphone/BrowserReading.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/CalendarAvailabilityJournalResult.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/CalendarCreationStore.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/CalendarDeletionIdentity.java",
@@ -398,7 +397,6 @@
     "apps/app/src/prototype/workflow-authoring.ts",
     "apps/app/src/prototype/workflow-filters.ts",
     "apps/app/src/prototype/workflow-notice-question.ts",
-    "apps/app/src/prototype/workflow-scope.ts",
     "apps/app/src/runtime/abort-signal.ts",
     "apps/app/src/runtime/action-message-presentation.ts",
     "apps/app/src/runtime/agent-calendar-client.ts",
@@ -564,6 +562,7 @@
     "apps/app/src/runtime/workflow-notice-taps.ts",
     "apps/app/src/runtime/workflow-presentation.ts",
     "apps/app/src/runtime/workflow-protocol.ts",
+    "apps/app/src/runtime/workflow-reminder-read.ts",
     "apps/app/src/startup-browser-permissions.ts",
     "apps/app/src/startup-permission-flow.ts",
     "apps/app/src/startup-permission-progress.ts",
