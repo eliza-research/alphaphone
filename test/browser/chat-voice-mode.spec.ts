@@ -1,4 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
+import {preloadPageModules} from './helpers/page-modules';
 
 const voice=(page:Page)=>page.getByRole('region',{name:'Voice conversation',exact:true});
 async function setup(page:Page,signed=true,theme='light'){
@@ -10,6 +11,7 @@ async function setup(page:Page,signed=true,theme='light'){
  });
  await page.goto('/?theme='+theme);
  await expect(page.locator('textarea[data-alpha-composer]')).toBeEnabled();
+ await preloadPageModules(page,['/src/browser/voice.ts','/src/runtime/connection-ui.tsx','/src/prototype/model.js','/src/runtime/voice-selection.ts','/src/runtime/voice-timing.ts','/src/runtime/diagnostics-export.ts']);
  await page.evaluate(async signed=>{
   const {BrowserVoice}=await import('/src/browser/voice.ts'),{connectionController:c}=await import('/src/runtime/connection-ui.tsx'),{Component}=await import('/src/prototype/model.js');
   const f=(window as any).chatVoiceFixture;

@@ -1,6 +1,9 @@
 // Hosted/CLI behavior is test-mocks-only diagnostic coverage. Enter that explicit controller
 // route; the production sign-in button uses native email and never falls back to this route.
 import { test, expect, type Page } from '@playwright/test';
+import { preloadPageModules } from './helpers/page-modules';
+// Modules the scenarios import inside page.evaluate (see helpers/page-modules.ts).
+const setupModules=['/src/runtime/connection-ui.tsx','/src/runtime/cloud-personal-intent.ts','/src/runtime/cloud-personal-protocol.ts','/src/browser/documents.ts'];
 
 async function intentSnapshot(page:Page){return page.evaluate(async()=>{const {personalIntentDocument}=await import('/src/runtime/cloud-personal-intent.ts');return (await personalIntentDocument({environment:'production',userId:'11111111-1111-4111-8111-111111111111',organizationId:'22222222-2222-4222-8222-222222222222',credentialId:'snapshot-only'})).capture();});}
 // Actual connection UI/controller/Cloud protocol; only native HTTP and secure storage are synthetic.
@@ -46,6 +49,7 @@ for(const scenario of ['decline','accepted-reload','lost-activation','quote-chan
    }};
   },scenario);
   await page.goto('/');await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Agent connection',exact:true}).click();await page.locator('summary').filter({hasText:/^Development Cloud agent infrastructure$/}).click();
+  await preloadPageModules(page,setupModules);
   await page.evaluate(async()=>{const {connectionController}=await import('/src/runtime/connection-ui.tsx');void connectionController.signInBrowser();});
   const review=page.getByRole('region',{name:'Dedicated hosting review'});
   // Section has an accessible name and is a region; display real reviewed price fields.
@@ -91,7 +95,7 @@ for(const scenario of ['decline','accepted-reload','lost-activation','quote-chan
    await expect(page.getByText('Dedicated setup accepted',{exact:true})).toBeVisible();
    expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('fixture.cloud.setup')!))).toMatchObject({activation:1,cutover:0});return;
   }
-  await page.reload();await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Agent connection',exact:true}).click();await page.locator('summary').filter({hasText:/^Development Cloud agent infrastructure$/}).click();await page.getByRole('button',{name:'Refresh agent status',exact:true}).click();
+  await page.reload();await preloadPageModules(page,setupModules);await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Agent connection',exact:true}).click();await page.locator('summary').filter({hasText:/^Development Cloud agent infrastructure$/}).click();await page.getByRole('button',{name:'Refresh agent status',exact:true}).click();
   if(scenario==='stopped-resume'){await page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('fixture.cloud.setup')!);s.stopped=true;s.quote=1;localStorage.setItem('fixture.cloud.setup',JSON.stringify(s));});await page.getByRole('button',{name:'Refresh agent status',exact:true}).click();await expect(page.getByRole('button',{name:'Start Dedicated',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Start Dedicated',exact:true}).click();await page.getByRole('button',{name:'Check setup status',exact:true}).click();}
   await expect(page.getByRole('button',{name:'Continue setup',exact:true})).toBeVisible();
   expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('fixture.cloud.setup')!))).toMatchObject({activation:scenario==='stopped-resume'?2:1,cutover:0});
