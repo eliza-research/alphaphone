@@ -141,8 +141,9 @@ check the AlphaCompute organization secrets that were shared with it before the 
    - Review `slopdotcash` on eliza-research.
 3. **Check machines** (each person; see the IOC checklist below). Report only "clean" or "found
    and handled" per machine, never credential values.
-4. **Protect shared branches** (repository / organization owner): install the rulesets below,
-   then post the read-back output.
+4. **Protect shared branches** (repository / organization owner): **deferred by the owner on
+   2026-10-29** (see "Owner decision" below). When revisited, install the rulesets below, then
+   post the read-back output.
 5. **Review the audit log** for `gabrielbarbera` from 2026-10-21 in AlphaCompute (Enterprise):
    `incident-access-audit.mjs` prints event counts per action when run by an owner; open the full
    log in Settings > Audit log with `actor:gabrielbarbera created:>=2026-10-21`, and look in
@@ -227,6 +228,20 @@ g. Reset local clones to the rewritten branches: `git fetch` then `git reset --h
    (a plain `git pull` merges the forged history back), and `git gc --prune=now` once no ref
    reaches the forged commits.
 
+## Owner decision (2026-10-29): branch protection deferred
+
+The owner decided: no branch protection for now. Decisions D1 to D4 below (signature scope,
+pull request required, bypass, AlphaCompute organization ruleset) are therefore **deferred**, and
+step 4 of the remaining human steps is skipped until the owner revisits it. The ruleset drafts in
+`scripts/owner/rulesets/` stay prepared and uninstalled. The other steps (rotation, access
+revocation including the pending invitation, machine checks, audit log, purge request, evidence
+comment) are not affected by this decision. Consequence to keep in view: until a ruleset is
+installed, any account with write access can push unsigned commits straight to `main`
+(classic protection blocks only force push and deletion, with `enforce_admins` off) and
+`develop` has no protection at all; the read-only
+`node scripts/owner/forged-branch-scan.mjs` is the detection control in the meantime (re-run
+2026-10-29: 146 heads, 0 flagged).
+
 ## Decisions for the owner
 
 ### D1. Scope of the signature requirement
@@ -278,6 +293,14 @@ member without 2FA from the organization at once; check the member list first.
 ## Draft decision entries
 
 Not added to `docs/decisions.md`; copy the chosen ones with the next free `P-` number.
+
+- P-xx (draft, **chosen by the owner 2026-10-29**): "2026-10-29: Branch protection for the
+  2026-10-27 incident is deferred. No 'Shared branch integrity' or 'Default branch baseline'
+  ruleset is installed on eliza-research/alphaphone or AlphaCompute; the drafts stay in
+  `scripts/owner/rulesets/`. Shared branches are monitored with
+  `node scripts/owner/forged-branch-scan.mjs`. Revisit at <trigger>."
+
+The entries below apply only when the deferral is lifted.
 
 - P-xx (draft): "2026-10-__: Shared branches (`main`, `develop`) of eliza-research/alphaphone are
   protected by the repository ruleset 'Shared branch integrity': no deletion, no force push, signed

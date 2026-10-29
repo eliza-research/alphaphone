@@ -45,6 +45,18 @@ pins these names. One caveat: `Repository verification` is skipped when the chan
 select it, and GitHub treats a skipped required check as passing; `Browser MVP result` still fails
 if a selected verification was skipped, so the pair is sound.
 
+## Owner decision (2026-10-29): deferred
+
+The owner decided: no branch protection for now. D1 is **B (defer)**; nothing is installed.
+`node scripts/ci/read-required-checks.mjs --repo eliza-research/alphaphone` is expected to keep
+exiting 1 with `DIFF MISSING` / `not installed` until the owner revisits this; that output is the
+recorded state, not a failure to act on. Re-read on 2026-10-29 at `main` f4ebce3b: still no
+ruleset, classic protection without required checks, and the three contexts still match
+`browser.yml` jobs `verify`/`result` and `android.yml` job `result` (those workflows have not
+changed since 94676c82). D2 and D3 are moot while deferred; the #658 shared-branch rulesets are
+deferred by the same decision (see that runbook). The defer entry below is the one to copy, with
+the trigger left for the owner to name.
+
 ## Decisions for the owner
 
 ### D1. Install "Main required checks" now, later, or not at all?
@@ -106,7 +118,7 @@ request showing that a failing or missing check blocks the merge.
 Not added to `docs/decisions.md`; the owner (or the agent that maintains that file) copies the
 chosen one with the next free `P-` number.
 
-- P-xx (draft, defer): "2026-10-__: The 'Main required checks' ruleset (MVP-46) is not installed on
+- P-xx (draft, defer; **chosen by the owner 2026-10-29**): "2026-10-29: The 'Main required checks' ruleset (MVP-46) is not installed on
   eliza-research/alphaphone yet. CI stays advisory on `main` until <trigger>. Force pushes, deletion
   and unsigned commits on shared branches are blocked separately by 'Shared branch integrity'
   (#658). Revisit at <trigger>."
