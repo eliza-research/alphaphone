@@ -43,6 +43,8 @@ const production={
 
 export default defineConfig({
   testDir: './test/browser',
+  // Loads the app once on the development server before the workers start (see the file).
+  globalSetup: needsDevelopment ? './test/browser/warm-dev-server.ts' : undefined,
   timeout: 30_000,
   workers: 2,
   fullyParallel: true,
