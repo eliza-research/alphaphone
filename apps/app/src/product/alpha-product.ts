@@ -26,7 +26,7 @@ export const ALPHA_PRODUCT = defineMobileProductRegistration(record as MobilePro
  * read only when its view opens, so agent navigation and voice never load a view.
  */
 export const ALPHA_VIEW_LOADERS: readonly MobileViewContribution[] = [
-  { id: 'notes', loader: () => import('../prototype/canonical-notes-view') },
+  { id: 'notes', loader: () => import('./notes-view') },
 ];
 
 /** Alpha's view registry and its navigation answers for one availability policy, given by

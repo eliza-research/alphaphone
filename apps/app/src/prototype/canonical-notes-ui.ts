@@ -14,7 +14,7 @@ import {speakNote,stopSpeaking} from './local-speech-playback';
 import {MobileViewHost,type MobileViewFailure} from '@elizaos/ui/mobile-shell';
 import {alphaViews} from '../product/alpha-product';
 import {recordRendererFailure} from '../runtime/crash-log';
-import {NotesHostContext} from './notes-host-context';
+import {NotesHostContext} from '../product/notes-host-context';
 /** Back chevron from the shared icon pack, like every other Back control: it does not reflow as text at large font sizes. */
 const backIcon=()=>React.createElement('span',{'aria-hidden':'true','data-alpha-icon':'/icons/lucide/chevron-left.svg',style:{...iconStyle('chevron-left'),width:24,height:24}});
 type Bag=Record<string,any>;
