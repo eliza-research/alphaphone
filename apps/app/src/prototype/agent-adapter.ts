@@ -1192,7 +1192,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     out.stopReply=()=>{connectionController.cancelViewNavigation();alphaClient.cancel();};
     if (isAndroid) {
       out.showStatus = false; out.showIndicator = false;
-      const style = out.sbColor === '#ffffff' || out.sbColor === '#FFFFFF' ? SystemBarsStyle.Dark : SystemBarsStyle.Light;
+      const style = out.sbColor === 'var(--alpha-white)' ? SystemBarsStyle.Dark : SystemBarsStyle.Light;
       if (this.barStyle !== style) { this.barStyle = style; void SystemBars.setStyle({ style }).catch(() => {}); }
     }
     out.shadeN = (out.shadeN || []).filter((n: Shell) => n.id !== 'n4');

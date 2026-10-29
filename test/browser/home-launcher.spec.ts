@@ -87,3 +87,27 @@ test('an upgraded install keeps its Home favorites saved under older view ids', 
   await expect.poll(tiles).toEqual(['Workflows', 'Notes', 'All apps']);
   expect(errors).toEqual([]);
 });
+
+// The palette (config/alpha-product.json theme.palette) is read outside the phone too: html/body
+// and the review dialogs appended to document.body. Without it there, a primary button's
+// var(--alpha-white) text would fall back to the inherited colour.
+test('the product palette reaches the document root and dialogs outside the phone', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'All apps', exact: true })).toBeVisible();
+  const colours = await page.evaluate(() => {
+    const button = document.createElement('button');
+    button.className = 'content-question-primary';
+    const dialog = document.createElement('div');
+    dialog.className = 'note-source-dialog';
+    dialog.append(button);
+    document.body.append(dialog);
+    const result = {
+      root: getComputedStyle(document.documentElement).getPropertyValue('--alpha-white').trim(),
+      body: getComputedStyle(document.body).backgroundColor,
+      text: getComputedStyle(button).color,
+    };
+    dialog.remove();
+    return result;
+  });
+  expect(colours).toEqual({ root: '#FFFFFF', body: 'rgb(255, 255, 255)', text: 'rgb(255, 255, 255)' });
+});

@@ -9,7 +9,8 @@ const source=readFileSync('apps/app/src/prototype/canonical-notes-ui.ts','utf8')
 const code=stripTypeScriptTypes(source.replace(/^import .*;\n/gm,'').replace(/^export /gm,''),{mode:'transform'});
 function notesFixture({kind='offline',resident=false,status='',ready=false}={}){
  const reason=pending({kind},resident),React={createElement:(type,props,...children)=>({type,props:props??{},children})};
- const install=new Function('React','registerPlugin','agentPendingText','agentAvailabilityNotice',code+';return installCanonicalNotesView;')(React,()=>({}),reason.agentPendingText,reason.agentAvailabilityNotice);
+ // The Notes view renders through the shared shell's view host; its loader is not run here.
+ const install=new Function('React','registerPlugin','agentPendingText','agentAvailabilityNotice','MobileViewHost','alphaViews','recordRendererFailure','NotesHostContext',code+';return installCanonicalNotesView;')(React,()=>({}),reason.agentPendingText,reason.agentAvailabilityNotice,'MobileViewHost',{find:()=>undefined},async()=>{},{Provider:'NotesHostContext.Provider'});
  const state={list:[{id:'retained',body:'Exact draft'}],open:'retained',draft:{body:'Unsaved exact draft'},storageStatus:status},before=structuredClone(state),calls=[],toasts=[];
  class Shell{live=true;notesSourceMode='canonical';vget(){return state;}api(){return{toast:x=>toasts.push(x),set:patch=>calls.push(patch),notesSourceOptions:[]};}renderVals(){return{};}S(){return{screen:'home',view:'notes'};}goHome(){}}
  const shell=new Shell();shell.canonicalNotesUi=ready?{list:state.list,open:state.open,create:()=>calls.push('canonical-create'),render:()=>null}:undefined;

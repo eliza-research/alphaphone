@@ -74,6 +74,7 @@ export const CLIENT_FEATURE_PATHS = [
 
   'packages/ui/src/api/transport.ts',
   'plugins/plugin-native-system/src/client/launcher.ts',
+  'plugins/plugin-native-system/src/client/shade.ts',
   'plugins/plugin-native-system/src/sense.ts',
   'plugins/plugin-native-system/src/sense-bridge.ts',
   'plugins/plugin-native-system/src/sense-web.ts',
