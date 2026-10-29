@@ -7,7 +7,9 @@ wipe. Results are **device evidence**, kept apart from Cuttlefish boot evidence 
 from APK builds (#662); none proves another, and none of this is user acceptance (H-34).
 
 Prerequisites: #672 done (a release-signed `signed-target_files.zip`, `ota.zip`, `avb_pkmd.bin`
-and `release-record.json`, recorded as `recovery.knownGoodRelease`); pilot units named (H-07);
+and `release-record.json`, recorded as `recovery.knownGoodRelease`; under the 2026-10-29 custody
+decision these come from the CI `signed-release-image-<run>` artifact, so check the artifact files against
+`release-record.json` before flashing, and keep the run URL in the unit evidence as `image.signingRun`); pilot units named (H-07);
 the [pilot acceptance runbook](../pilot-acceptance-runbook.md) entry conditions met.
 
 ## Prepared on this branch

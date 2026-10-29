@@ -21,7 +21,8 @@
     "signedTargetFilesSha256": "UNSET",
     "releaseRecordSha256": "UNSET",
     "flashedImageSha256": "UNSET",
-    "avbPkmdSha256": "UNSET"
+    "avbPkmdSha256": "UNSET",
+    "signingRun": "UNSET"
   },
   "bootloader": {
     "decision": "UNSET",
