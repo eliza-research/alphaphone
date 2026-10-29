@@ -24,6 +24,13 @@ const VOICE_AGENT_ID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const VOICE_UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 // Owner diagnostics only: bounded list and exact trace detail, no configuration/export/write routes.
 const TRAJECTORY_READ=/^\/api\/trajectories(?:\?limit=(?:[1-9]|10)(?:&search=[A-Za-z0-9_-]{1,128})?|\/(?!(?:config|export|stats)$)[A-Za-z0-9_-]{1,128})$/i;
+// Keep the existing exact-ID validator; only this literal metadata-only suffix is new.
+function trajectoryReadAllowed(value:unknown):value is string {
+ if(typeof value!=='string')return false;
+ if(TRAJECTORY_READ.test(value))return true;
+ const suffix='?includePayloads=0';
+ return value.startsWith('/api/trajectories/')&&value.endsWith(suffix)&&TRAJECTORY_READ.test(value.slice(0,-suffix.length));
+}
 function voiceControl(input:any):'health'|'consent'|'mint'|'revoke'|null {
  if(typeof input.path!=='string'||!input.path.startsWith(VOICE_PATH))return null;
  if(typeof input.ownerId!=='string'||!input.ownerId||input.stream||input.storage||input.audioBase64||input.requestId)return null;
@@ -60,7 +67,7 @@ export function localAgentPathAllowed(path:unknown):path is string {
     const before=query.get('before'),id=query.get('beforeId'),limit=query.get('limit');
     return (limit===null||/^[1-9][0-9]{0,2}$/.test(limit)&&Number(limit)<=200)&&(before===null&&id===null||before!==null&&/^[0-9]{1,16}$/.test(before)&&Number.isSafeInteger(Number(before))&&id!==null&&VOICE_AGENT_ID.test(id));
   }
-  if(TRAJECTORY_READ.test(path))return true;
+  if(trajectoryReadAllowed(path))return true;
   if(path===ASR_PATH||path===ASR_PATH+'/status'||path===TTS_PATH||path===TTS_PATH+'/status')return true;
   return /^\/api\/(auth\/me|agents|status|conversations(?:\/[A-Za-z0-9_-]+(?:\/messages(?:\/(?:stream|truncate))?)?)?|views\/interact-(claim|result)|client-devices\/[A-Za-z0-9_/-]+|workflow(?:\/[A-Za-z0-9_/?=&-]+)?)$/.test(path);
 }
@@ -125,7 +132,7 @@ export function createLocalAgentDevHandler(options:{origin:string;tokenFile:stri
       }
       const group=ownerRouteGroup(input.path);
       if((!renderer&&!voice&&!cloudSpeech&&!directTts&&!localAgentPathAllowed(input.path)&&!preparedNavigation)||(group?!ownerRouteAllowed(group,input.path,input.method)||typeof input.ownerId!=='string'||!input.ownerId.trim():!['GET','POST'].includes(input.method))||
-         (TRAJECTORY_READ.test(input.path)&&(input.method!=='GET'||typeof input.ownerId!=='string'||!input.ownerId.trim()))||
+         (trajectoryReadAllowed(input.path)&&(input.method!=='GET'||typeof input.ownerId!=='string'||!input.ownerId.trim()))||
          ((input.path.startsWith('/api/views/')||input.path.endsWith('/messages/truncate'))&&(input.method!=='POST'||typeof input.ownerId!=='string'||!input.ownerId.trim()))||
          (input.body!==undefined&&typeof input.body!=='string')||
          (['GET','DELETE'].includes(input.method)&&input.body!==undefined)) {fail(400,'Unsupported local request');return;}
