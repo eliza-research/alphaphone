@@ -18,9 +18,11 @@
  * client, and the agent's own last-frame to final. Never text.
  *
  * A voice-assistant turn (#423) also carries `endpoint`: which path submitted it (`semantic`, the
- * resident's end-of-turn scorer, or `gap`, the long silence gap), the scorer's outcome enum, its
- * unavailable reason enum and latency; and `heard`: the outcome enum of recording heard-only content
- * after an interruption (voice-turn-routes.ts). Never text.
+ * end-of-turn chain, or `gap`, the long silence gap), the chain's outcome enum, its unavailable
+ * reason enum (scorer or `clef-*`), latency and the chain stage that answered (`path`: `local`, the
+ * resident's fused scorer, or `clef`); and `heard`: the outcome enum of recording heard-only content
+ * after an interruption, including a reply interrupted before any of it played (voice-turn-routes.ts).
+ * Never text.
  *
  * On the phone, a conversation turn's transcript-ready, send and first-token marks are also
  * reported to the native latency collector (issue #395) through a sink the platform installs

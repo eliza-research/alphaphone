@@ -29,6 +29,17 @@ export function setVoiceSendPolicyForTests(policy?: VoiceSendPolicy): boolean {
   return true;
 }
 
+/**
+ * The Clef end-of-turn stage (P-39 names Clef for semantic turn completion; #663 / H-18 holds the
+ * owner decision). Off: the local fused scorer and the long gap decide, and no transcript text
+ * leaves the phone for endpointing. Turning it on also needs a Cloud Clef client, which the
+ * renderer does not hold (native code owns the Cloud credential), so the stage stays out until
+ * the owner admits a model and that client exists. This constant is the one switch.
+ */
+const CLEF_ENDPOINT_ENABLED = false;
+/** The Clef stage for `createEndpointChain`: built only with the switch on AND a client. */
+export function clefEndpointStage(): { enabled: boolean; client: null } { return { enabled: CLEF_ENDPOINT_ENABLED, client: null }; }
+
 function storage(): Storage | undefined { try { return globalThis.localStorage; } catch { return undefined; } }
 function read(key: string): unknown { try { const raw = storage()?.getItem(key); return raw == null ? null : JSON.parse(raw); } catch { return null; } }
 function write(key: string, value: object): boolean {
