@@ -62,7 +62,9 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
   /** Gmail mailbox revision reported with the first page of the loaded list, when the server sends one. */
   let firstPageRevision: string | null = null;
   // Native verifies this Cloud owner and grant itself; background checks never depend on the inference provider.
-  const watchSelectedMail=()=>{const binding=connectionController.getCloudClient(),owner=connectionController.getSnapshot().cloudAccount;if(binding)void configureGmailBackground(selected&&owner?.organizationId?{credentialId:binding.credentialId,grantId:selected,userId:owner.userId,organizationId:owner.organizationId}:null).catch(()=>{});};
+  // Only "no account selected" withdraws: an owner the screen cannot name yet (or without an organization,
+  // which native refuses) leaves the saved selection and its cursor for native to revalidate or retire.
+  const watchSelectedMail=()=>{const binding=connectionController.getCloudClient(),owner=connectionController.getSnapshot().cloudAccount;if(!binding)return;if(!selected){void configureGmailBackground(null).catch(()=>{});return;}if(owner?.organizationId&&owner.credentialId===binding.credentialId)void configureGmailBackground({credentialId:binding.credentialId,grantId:selected,userId:owner.userId,organizationId:owner.organizationId}).catch(()=>{});};
   let closeMailQuestion:(()=>void)|undefined;
   let noticeAttempt=0,noAgentNoticeToken='';
   async function openNotice(){

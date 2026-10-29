@@ -35,7 +35,10 @@ test('background admission no longer depends on the agent inference provider',()
  assert.doesNotMatch(store,/PROVIDER_SLOT\.equals\(name\)\|\|"cloud:production"\.equals\(name\)&&!LocalAgentProviderAdmission\.sameCloudCredential\(before,value\)\)cloudChange/);
  assert.match(store,/if\("cloud:production"\.equals\(name\)&&!LocalAgentProviderAdmission\.sameCloudCredential\(before,value\)\)cloudChange\.changed\(\);/);
  const adapter=readFileSync(join(root,'apps/app/src/prototype/inbox-cloud-adapter.ts'),'utf8');
- assert.match(adapter,/configureGmailBackground\(selected&&owner\?\.organizationId\?\{credentialId:binding\.credentialId,grantId:selected,userId:owner\.userId,organizationId:owner\.organizationId\}:null\)/);
+ const watch=adapter.match(/const watchSelectedMail=\(\)=>\{.*\};/)?.[0]??'';
+ assert.match(watch,/if\(!selected\)\{void configureGmailBackground\(null\)/,'only an unselected account withdraws');
+ assert.match(watch,/if\(owner\?\.organizationId&&owner\.credentialId===binding\.credentialId\)void configureGmailBackground\(\{credentialId:binding\.credentialId,grantId:selected,userId:owner\.userId,organizationId:owner\.organizationId\}\)/);
+ assert.equal((watch.match(/configureGmailBackground\(/g)||[]).length,2,'an unnamed owner never withdraws the saved selection');
 });
 
 // The shared engine and delivery are exercised at the pin, against the real projected sources.
