@@ -45,7 +45,7 @@ const baseEnv = Object.fromEntries(['PATH','TMPDIR','LANG','SHELL','USER','LOGNA
 const env = {...baseEnv, ...AGENT_CHARACTER_ENVIRONMENT, ELIZA_HEADLESS:'1', ELIZA_API_BIND:'127.0.0.1', ELIZA_ALLOWED_HOSTS:'10.0.2.2', ELIZA_API_PORT:String(port), ELIZA_API_EXPOSE_PORT:'1', ELIZA_STATE_DIR:profile, ELIZA_CONFIG_PATH:config, ELIZA_API_TOKEN:fs.readFileSync(tokenPath,'utf8').trim(), CEREBRAS_API_KEY:fs.readFileSync(keyPath,'utf8').trim(), ...modelEnvironment, ELIZAOS_CLOUD_USE_INFERENCE:'false'};
 Object.assign(env, admitSpeech('tts'));
 if(process.env.ELIZA_ASR_ENABLED==='1')Object.assign(env,admitSpeech('asr'));
-Object.assign(env, localEmbeddingEnvironment(env));
+Object.assign(env, localEmbeddingEnvironment({...process.env,...env}));
 for (const key of ['ELIZAOS_CLOUD_API_KEY','OPENAI_API_KEY','ANTHROPIC_API_KEY']) delete env[key];
 const child = spawn(options.bun || 'bun', ['--conditions=eliza-source', entry], {cwd:profile, env, stdio:['ignore',log,log]});
 const metadata = {pid:child.pid, port, profile, source, revision:execFileSync('git',['rev-parse','HEAD'],{cwd:source,encoding:'utf8'}).trim(), startedAt:new Date().toISOString()};

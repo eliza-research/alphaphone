@@ -12,7 +12,14 @@ const FUSED_LIBRARY={darwin:'libelizainference.dylib',win32:'elizainference.dll'
 // vendor/eliza/packages/app/scripts/stage-desktop-fused-lib.ts) must be named explicitly. An explicit
 // ELIZA_INFERENCE_LIBRARY (speech admission) or ELIZA_INFERENCE_LIB_DIR wins.
 export function localEmbeddingEnvironment(env=process.env){
- if(env.ELIZA_INFERENCE_LIBRARY||env.ELIZA_INFERENCE_LIB_DIR)return {};
+ const explicit={};
+ for(const key of ['ELIZA_INFERENCE_LIBRARY','ELIZA_INFERENCE_LIB_DIR']){
+  const value=env[key];
+  if(value===undefined||value==='')continue;
+  if(typeof value!=='string'||!path.isAbsolute(value)||value.includes('\0'))throw Error(`${key} must be an absolute path`);
+  explicit[key]=value;
+ }
+ if(Object.keys(explicit).length)return explicit;
  const dir=path.join(os.homedir(),'.local/state/eliza/local-inference/lib');
  if(!fs.existsSync(path.join(dir,FUSED_LIBRARY)))console.error(`No fused inference library at ${dir}; local embeddings cannot load until it is staged (vendor/eliza/packages/app/scripts/stage-desktop-fused-lib.ts) or ELIZA_INFERENCE_LIB_DIR names it.`);
  return {ELIZA_INFERENCE_LIB_DIR:dir};
