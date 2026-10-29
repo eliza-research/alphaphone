@@ -174,7 +174,7 @@ export function installPrototypeMapsAdapter(Component: { prototype: Bag }, views
       results: view.results.map(row => ({ name: row.name, sub: row.detail, d: PIN, go: () => screen.choose(row.key) })),
       hasResults: view.hasResults, noResults: view.noResults, emptyQ: view.emptyQuery,
       recenter: () => screen.recenter(), recBottom: isPlace ? 414 : view.mode === 'results' ? 534 : 124, recCss: '',
-      sheetH: directionsOpen ? 300 : isPlace ? 400 : 520, sheetSw: { down: () => {}, up: () => {} }, sheetTap: () => {},
+      sheetH: directionsOpen ? 300+(view.directions?.routes.length??0)*50 : isPlace ? 400 : 520, sheetSw: { down: () => {}, up: () => {} }, sheetTap: () => {},
       askAlpha: () => currentApi.send(view.query || 'Help me with Maps.'), noResTxt: `Ask ${currentApi.name} about this search`,
     });
     const place = view.place;
@@ -208,6 +208,9 @@ export function installPrototypeMapsAdapter(Component: { prototype: Bag }, views
       const nav = view.navigation;
       data.dr={name:directions.name,close:()=>screen.back(),min:directions.duration,meta:directions.meta,via:directions.via,shareLabel:'Share route',shareEta:()=>screen.shareRoute(),
        modes:data.nativeModeMetadata.map((reference:{mode:'drive'|'walk'|'bike'|'transit';label:string;d:string})=>{const mode:TravelMode=reference.mode==='bike'?'bicycle':reference.mode;const on=!!directions.modes.find(choice=>choice.mode===mode)?.selected;return {label:reference.label,t:reference.label,d:reference.d,on,css:on?'background:var(--acc);color:#fff':'background:var(--s2);color:var(--fg)',go:()=>screen.setMode(mode)};}),
+       // The provider's ordered route choice (recommended first); choosing requests nothing.
+       hasRoutes:directions.routes.length>0,
+       routes:directions.routes.map(choice=>({label:`${choice.label}, ${choice.duration}, ${choice.meta}`,t:choice.label,sub:`${choice.duration} · ${choice.meta}`,on:choice.selected,css:choice.selected?'background:var(--acc);color:#fff':'background:var(--s2);color:var(--fg)',go:()=>screen.chooseRoute(choice.id)})),
        start:()=>screen.start(),
        nav:{going:!nav?.arrived,arrived:!!nav?.arrived,dist:nav?.distance||'Locating…',street:nav?.instruction||'Waiting for location',icon:nav?.maneuverIcon||PIN,hasThen:!!nav?.following,thenD:nav?.following?.icon||'',thenText:nav?.following?.text||'',
         left:nav?.remainingTime||'Guidance',meta:nav?.meta||'Foreground guidance',remaining:nav?.remaining||'',

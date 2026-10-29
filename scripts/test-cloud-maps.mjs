@@ -66,7 +66,7 @@ const memory = () => { const values = new Map(); return { getItem: key => values
   assert.equal(planned.value.distanceMeters, 640);
   assert.deepEqual(calls.map(([path]) => path), ['capabilities', 'places/search', 'places/details', 'routes']);
   assert.deepEqual(calls[1][1], { query: 'Port' });
-  assert.deepEqual(calls[3][1], { from: CASINO, to: PORT, mode: 'walk' }, 'location travels only in the body; no alternatives are requested');
+  assert.deepEqual(calls[3][1], { from: CASINO, to: PORT, mode: 'walk', alternatives: true }, 'location travels only in the body; Cloud serves alternatives, so the one route request asks for them');
 }
 
 // Typed Cloud refusals become device failures; none becomes data.

@@ -208,3 +208,57 @@ test('a cancelled search shows nothing late, a place outside coverage is named, 
   expect(await harness(page, f => f.unexpected)).toEqual([]);
   expect(foreign).toEqual([]);
 });
+
+test('Cloud route alternatives are offered in order; choosing one requests nothing and Start follows it', async ({ page }) => {
+  test.setTimeout(150_000);
+  const foreign = await fenceNetwork(page);
+  await flagOffAndroid(page, {});
+  await residentStub(page, { maps: MAPS });
+  await devicePorts(page, LOCATION);
+  await residentHome(page);
+  await button(page, 'Maps').click();
+  const maps = page.getByRole('region', { name: 'Maps' });
+  const search = page.getByRole('textbox', { name: 'Search places', exact: true });
+  await search.fill(LOCATION);
+  await search.press('Enter');
+  await page.getByRole('button', { name: /^Port Hercule fuel dock/ }).first().click();
+  await button(page, 'Directions').click();
+  const origin = page.getByRole('textbox', { name: 'Route origin coordinates' });
+  await origin.fill(`${ORIGIN.latitude}, ${ORIGIN.longitude}`);
+  await origin.press('Enter');
+
+  // One admitted request asks Cloud for alternatives; both come back in Cloud's order.
+  const routes = page.getByRole('group', { name: 'Routes' });
+  const recommended = routes.getByRole('button', { name: 'Recommended, 7 min, 1.2 km', exact: true });
+  const alternative = routes.getByRole('button', { name: 'Alternative 1, 9 min, 1.5 km', exact: true });
+  await expect(recommended).toHaveAttribute('aria-pressed', 'true');
+  await expect(alternative).toHaveAttribute('aria-pressed', 'false');
+  await expect(maps).toContainText('Head along Boulevard Albert 1er');
+  const routeRequests = async () => (await mapsRequests(page)).filter(row => row.route === 'routes').map(row => row.body);
+  expect(await routeRequests()).toEqual([{ from: ORIGIN, to: { latitude: 43.7351, longitude: 7.4232 }, mode: 'drive', alternatives: true }]);
+
+  // Choosing the alternative is local: nothing more is requested.
+  await alternative.click();
+  await expect(alternative).toHaveAttribute('aria-pressed', 'true');
+  await expect(recommended).toHaveAttribute('aria-pressed', 'false');
+  await expect(maps).toContainText(/9 min\s*1\.5 km · no live traffic/);
+  await expect(maps).toContainText('Head along Avenue de la Costa');
+  expect(await routeRequests()).toHaveLength(1);
+
+  // Start guides along the chosen route; End stops the screen-off service.
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(button(page, 'End navigation')).toBeVisible();
+  await expect.poll(async () => (await j04(page)).navigation[0]).toBe('startNavigation Route to Port Hercule fuel dock');
+  await fix(page, ORIGIN);
+  // Guidance runs on the chosen route: its 9-minute duration, not the recommended 7.
+  await expect(page.getByRole('status', { name: 'Remaining distance and time' })).toBeVisible();
+  await expect(maps).toContainText('9 min');
+  await expect(maps).not.toContainText('7 min');
+  await button(page, 'End navigation').click();
+  await expect.poll(async () => (await j04(page)).navigation.filter(row => row.startsWith('stopNavigation'))).toHaveLength(1);
+  expect(await routeRequests()).toHaveLength(1);
+
+  await expectNoDevelopmentSurface(page);
+  expect(await harness(page, f => f.unexpected)).toEqual([]);
+  expect(foreign).toEqual([]);
+});
