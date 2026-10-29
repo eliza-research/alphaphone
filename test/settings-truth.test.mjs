@@ -16,6 +16,11 @@ test('updates are never reported as checked, available or current',()=>{
  const format=at=>'day '+at;
  assert.deepEqual(m.updateRows(1760000000000,format),[['Installed or last updated','day 1760000000000'],['Updates','Alpha does not check for updates']]);
  for(const at of [undefined,null,0,-5,'1760000000000',1.5])assert.deepEqual(m.updateRows(at,format),[['Updates','Alpha does not check for updates']]);
+ // The OS update-channel check is registered off; only a development build (both About pages)
+ // shows its state, and the production bundle audit denies the row.
+ assert.match(readFileSync('apps/app/src/build-flags.ts','utf8'),/export const updateChannelCheckEnabled = false as boolean;/);
+ assert.equal((source.match(/\.\.\.\(devSurfacesEnabled\?\[info\('Update channel \(development\)',updateChannelCheckEnabled\?'Read-only check on · never downloads or installs':'Off'\)\]:\[\]\)/g)??[]).length,2);
+ assert.match(readFileSync('scripts/audit-production-bundle.mjs','utf8'),/'Update channel \(development\)'/);
  // Neither the adapter nor the native plugin carries an update-check claim.
  assert.doesNotMatch(source,/Up to date|Update available|Check for updates/);
  assert.doesNotMatch(java,/Up to date|Update available/);
