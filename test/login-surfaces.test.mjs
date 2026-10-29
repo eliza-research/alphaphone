@@ -195,7 +195,10 @@ test('External authorization uses the browser and Google sign-in uses the native
   // Exact production hosts (eliza.app, cloud.eliza.app, accounts.google.com); staging only with test mocks.
   assert.match(open, /if \(!ConnectionRoutes\.externalHost\(url\.getScheme\(\), url\.getHost\(\), url\.getPort\(\), BuildConfig\.ELIZA_DEV_ALLOW_TEST_MOCKS\)\) throw new IllegalArgumentException\(\);/);
   const routes = read('android/app/src/main/java/ai/elizaresearch/alphaphone/ConnectionRoutes.java');
-  assert.match(routes, /if\(CloudDeployment\.PRODUCTION_WEB_HOST\.equals\(value\)\|\|CloudDeployment\.PRODUCTION_SERVICES_HOST\.equals\(value\)\|\|"accounts\.google\.com"\.equals\(value\)\)return true;/);
+  // Alpha supplies its hosts and Google consent to the shared policy, which opens exactly those (plugin-native-agent).
+  assert.match(routes, /CloudDeployment\.PRODUCTION_WEB_HOST,CloudDeployment\.STAGING_WEB_HOST,\s*CloudDeployment\.PRODUCTION_SERVICES_HOST,CloudDeployment\.STAGING_SERVICES_HOST,java\.util\.Collections\.singleton\("accounts\.google\.com"\)\)\)/);
+  const policy = read('vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/CloudConnectionPolicy.java');
+  assert.match(policy, /if \(hosts\.productionWeb\.equals\(value\) \|\| hosts\.productionServices\.equals\(value\) \|\| hosts\.externalProviders\.contains\(value\)\)\s+return true;/);
   assert.doesNotMatch(open, /setPackage\(getContext\(\)\.getPackageName\(\)\)|AlphaBrowserPlugin/, 'never opened in Alpha\'s own browser');
   // Alpha registers no general web handler, so a sign-in page cannot resolve back into Alpha. The one
   // exception is the verified in-app sign-in return: exactly one https host and one exact path.
