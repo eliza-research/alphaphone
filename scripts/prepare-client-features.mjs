@@ -268,6 +268,15 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   const project = (name, text) => source.set(name, {bytes:Buffer.from(text),mode:'100644',sha256:hash(Buffer.from(text))});
   project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\nexport * from "./packages/contracts/src/device-reviews";\nexport * from "./packages/contracts/src/contracts/theme";\n');
   const text = name => source.get(name).bytes.toString();
+  // The native compatibility entry re-exports the shared parser by package name.
+  // Plain Node consumers need that one import resolved within the copied graph.
+  {
+    const name = 'plugins/plugin-native-browser-surface/src/address-input.ts';
+    const before = 'from "@elizaos/contracts/browser-address-input";';
+    const content = text(name);
+    if (content.split(before).length !== 2) throw Error('Review changed browser address re-export: ' + name);
+    project(name, content.replace(before, 'from "../../../packages/contracts/src/browser-address-input.ts";'));
+  }
   // Upstream voice sessions import the shared random-id helper by its emitted .js name. Plain
   // Node (tests and scripts that strip types) cannot map that to the copied .ts source, so the
   // one reviewed value import is pointed at the .ts file; type-only .js imports are erased.

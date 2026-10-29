@@ -20,7 +20,6 @@
     ],
     "ignoreDeprecations": "6.0",
     "paths": {
-      "@elizaos/contracts/browser-address-input": ["./.eliza/client-features/packages/contracts/src/browser-address-input.ts"],
       "@elizaos/capacitor-system/sense": ["./.eliza/client-features/plugins/plugin-native-system/src/sense-bridge.ts"],
       "@elizaos/capacitor-system/reset": ["./.eliza/client-features/plugins/plugin-native-system/src/reset.ts"],
       "@elizaos/capacitor-system/settings": ["./.eliza/client-features/plugins/plugin-native-system/src/settings.ts"],

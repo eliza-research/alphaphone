@@ -29,7 +29,6 @@
     "packages/contracts/src/browser-request-grounding.ts",
     "packages/contracts/src/browser-address-input.ts"
   ],
-  "existingNativeAddressReexportAlias": "@elizaos/contracts/browser-address-input",
   "runtimeProfileModelDevicePortChanges": false,
   "publicPushMerge": false,
   "holds": [
@@ -39,5 +38,6 @@
     "timed Calendar and voice replay",
     "5229 admission",
     "fresh native engine bothABIs/models/APK/device continuity"
-  ]
+  ],
+  "existingNativeAddressReexportProjection": "Exact guarded package specifier rewrite to ../../../packages/contracts/src/browser-address-input.ts for plain Node consumers; source/projection hashes recorded separately"
 }
