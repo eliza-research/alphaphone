@@ -129,8 +129,11 @@ ledger for Alpha's own workflow and approval notices (`NoticeDelivery`, configur
 `WorkflowNoticeDelivery`) also use shared native modules. Alpha wrappers retain installed storage names, media paths and Android components.
 The workflow notice tap routes, tap capture, owner fence, approval coordination, journal recovery and poster are the
 shared `NoticeRoutes`, `NoticeTapInbox`, `NoticeOwner`, `NoticeCoordinator`, `NoticeRecovery` and `HostNoticePoster`;
-`WorkflowNoticeTaps`, `WorkflowNoticeDelivery`, `WorkflowNoticePoster` and `AlphaNotificationsPlugin` only supply the
-deployed slot names, channels, icon, tag prefix, launch actions and the foreground and question-excerpt checks. The renderer's notice owner fence, tap resolution, approval notice identity and owner-return
+the renderer bridge itself (own rows, channel settings, cross-app policy and history, tap pending/consume with the
+question excerpt, `postWorkflow`/`workflowReceipt`, all behind `ForegroundNoticeGate` on a bounded `NoticeWorker`) is the
+shared Capacitor `NotificationsHostPlugin`. `WorkflowNoticeTaps`, `WorkflowNoticeDelivery`, `WorkflowNoticePoster` and
+`AlphaNotificationsPlugin` only supply the deployed slot names, channels, icon, tag prefix, launch actions, the
+`alpha-notification-access` mirror, Alpha's own notice kinds and the canonical Eliza notification tap. The renderer's notice owner fence, tap resolution, approval notice identity and owner-return
 revalidation are the shared `@elizaos/contracts/notice-routes`. Typed workflows use the shared
 `@elizaos/contracts/phone-workflow` normalizer, and their reviewed local-time triggers run on the resident agent's
 durable task scheduler only while the phone is on (a missed occurrence is recorded, never run late, and its
@@ -359,11 +362,24 @@ permissions. OS staging admits the product APK separately from Eliza's full app;
 release provisioning owns default roles, signing, update compatibility and
 recovery policy.
 
+Image staging, APK release records and update tooling are shared `packages/os` modules that
+Alpha binds with its policy only. `image-apk-admission.mjs` admits the launcher APK and the
+reviewed source overrides for `scripts/stage-aosp.mjs`; `apk-release-record.mjs` names a
+release row's blockers for `scripts/release-blockers.mjs` (Alpha supplies the release-signer
+admission and the font-licence switch; open-source licence flags never block, P-09) and holds
+the in-place update checks `scripts/pilot-update.mjs` uses; `aosp-ota-update.mjs` owns the
+operator update, fallback, stock-recovery and known-good retention commands. The read-only
+update-channel client is upstream and registered off in Alpha. Alpha's remaining staging code is
+its product policy (descriptor, listener, provisioning, capability and Pixel 10a/Cuttlefish
+bindings). The shared mobile agent build excludes the browser wallet-connector graph (wagmi,
+RainbowKit, `@metamask/*`) from the Android resident bundle.
+
 Phone, Contacts and SMS exist only on the Alpha AOSP image (decision P-36). The image
 capability is decided natively by the shared plugin-native-messages `ImageCapability`, which
 `AlphaImageCapability` feeds with Alpha's build flags and provisioning resource: the release
 launcher build without test mocks, installed from a system partition (`FLAG_SYSTEM`), with the `<package>.aosp_image`
-system feature that `scripts/stage-aosp.mjs` declares in the image product. The launcher
+system feature that `scripts/stage-aosp.mjs` declares in the image product (see the release
+tooling paragraph below). The launcher
 flavor, test mocks, URLs and saved state never establish it. Only then does `MainActivity`
 register `AlphaTelephonyPlugin` (read-only contacts through the shared `ContactsCatalog`, role
 and SIM status, dialer and SMS handoffs, SMS/MMS provider reads and reviewed native sends); the
@@ -403,6 +419,12 @@ overdue, undated to-do, reopen and refusal-message decisions are `plugin-assista
 `apps/app/src/runtime/reminder-creations.ts` and `reminder-deletions.ts` bind it to Alpha's
 installed slots (`reminder-creations:v1:device`, `reminder-deletions:v1:device`) and browser
 documents through `reminder-journal-store.ts`; reconciliation reads rows and receipts only.
+The reviewed deletion Undo window (ten seconds on a monotonic clock, delayed provider
+deletion, immediate suspension of reminder delivery, owner fences and no replay of an unknown
+outcome) is `@elizaos/capacitor-action-journal`'s `actionjournal.deletion` package, with the
+renderer contract in `@elizaos/contracts/deletion-window` and the notice in `@elizaos/ui`'s
+`DeferredDeletionNotice`. Alpha's `NativeDeletionCoordinator`, `AlphaDeletionsPlugin` and
+`runtime/deletion-undo.tsx` bind its ports, slot names and theme (`docs/deletion-undo.md`).
 
 The Clock hand-off contract is shared: `plugin-assistant`'s `clock-handoff.ts` (exported
 from `device-clock-review`) owns handoff validation, the capability policy, review text and
@@ -492,8 +514,14 @@ The feature XML is an additional telephony contract marker, never an alternative
 Contacts uses AlphaContacts, the shared AOSP-profile address book (`AddressBookPlugin` over
 `ContactsCatalog` in plugin-native-contacts) under Alpha's plugin name and image admission, and its
 native capability response. The Messages session (foreground-only provider rows, observer, read
-marking) and receipt labels are the shared `@elizaos/contracts/native-telephony-session`. The Phone view stays deferred in the renderer; on the image the dialer role surfaces are
-native (shared call screen and dial pad). Telephony contact reads recheck permission, unlock and lifecycle state
+marking) and receipt labels are the shared `@elizaos/contracts/native-telephony-session`. On the image the Phone view is admitted
+(`prototype/phone-adapter.ts`): recent calls come from the shared profile's bounded, unlocked,
+foreground-only `listRecentCalls` (READ_CALL_LOG, launcher manifest only, asked for only from the
+owner's control), and every dial, from the view or the agent's reviewed `phone.dial.v1` device action
+(`@elizaos/contracts/phone-dial`, advertised only with the profile), is a handoff to the system dial
+screen that never reports a call. The dialer role surfaces stay native (shared call screen and dial
+pad). The on-device `contacts.lookup.v1` dial target is not negotiated until the review has an owner
+number picker. Telephony contact reads recheck permission, unlock and lifecycle state
 before and after asynchronous provider reads.
 
 ### SMS/MMS on the image (#421)

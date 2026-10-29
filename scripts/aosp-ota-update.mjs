@@ -10,7 +10,9 @@
  *     --ota OTA.zip --journal FILE [--execute --confirm-update]
  *   node scripts/aosp-ota-update.mjs status --serial S --journal FILE
  *   node scripts/aosp-ota-update.mjs fallback --serial S --journal FILE [--execute --confirm-fallback]
- *   node scripts/aosp-ota-update.mjs stock-archive --archive FACTORY.zip
+ *   node scripts/aosp-ota-update.mjs stock-archive --archive FACTORY.zip [--known-good DIR]
+ *   node scripts/aosp-ota-update.mjs retain-known-good --record RECORD --signed-target-files ZIP \
+ *     --signed-image IMAGE.zip --archive-dir NEW_DIR   (or scripts/aosp-retain-known-good.mjs)
  *   node scripts/aosp-ota-update.mjs verify-stock --serial S
  *
  * `apply` enters recovery with `adb reboot recovery`; the operator chooses "Apply update from

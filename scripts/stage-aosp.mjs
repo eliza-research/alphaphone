@@ -14,6 +14,7 @@ import { clockProductRequirement } from "./aosp-clock-contract.mjs";
 import { provisioningComponents, writeProvisioningOverlay } from "./aosp-provisioning-overlay.mjs";
 import { writeImageCapability } from "./aosp-image-capability.mjs";
 import { releaseBlockers } from "./release-blockers.mjs";
+import { aaptManifestTree, admitImageApk, manifestTreeIsDebuggable, reviewedSourceOverrides as sharedReviewedSourceOverrides } from "../vendor/eliza/packages/os/scripts/android/image-apk-admission.mjs";
 import { CUTTLEFISH_TARGETS, cuttlefishProductProblems } from "../vendor/eliza/packages/os/scripts/android/cuttlefish-product.mjs";
 
 export const PRODUCT_DESCRIPTOR = "android/aosp/product.json";
@@ -38,93 +39,32 @@ export function aospProductLockProblems(root = process.cwd()) {
 import { VOICE_HOST_RECORD, checkListenerDescriptor, checkListenerSpeechBundle, checkListenerSpeechNatives, stageListener } from "./aosp-listener.mjs";
 
 /**
- * Refuse inputs that must never reach an image: anything from the separate
- * test-mocks build, APKs whose packaged web bundle was built with test mocks,
- * and releases verify-apks recorded as non-distributable. Production staging
- * additionally requires a verified distributable release from apk-manifest.json.
+ * Alpha's policy for the shared image APK admission
+ * (vendor/eliza/packages/os/scripts/android/image-apk-admission.mjs): its separate test-mocks
+ * builds live in artifacts/test-mocks/, and a release row is judged by release-blockers.mjs
+ * (Alpha's signer and font-licence policy). Production judges the row against the committed
+ * release signer now, not only the admission verify-apks recorded, and requires the reviewed
+ * image platform certificate. Open-source licence flags are a record, never a blocker (P-09).
  */
 function admitApk({ apk, hash, development, manifestFile, platformCertificateSha256 }) {
-  const testMocksDir = path.resolve("artifacts/test-mocks");
-  const real = fs.realpathSync(apk);
-  for (const candidate of [path.resolve(apk), real]) {
-    const relative = path.relative(testMocksDir, candidate);
-    if (!relative.startsWith("..") && !path.isAbsolute(relative))
-      throw new Error(`Refusing ${apk}: artifacts/test-mocks/ builds are never staged into an image.`);
-  }
-  let flags;
-  try {
-    flags = JSON.parse(execFileSync("unzip", ["-p", apk, "assets/public/build-flags.json"], { encoding: "utf8" }));
-  } catch {
-    throw new Error(`Refusing ${apk}: its web bundle has no assets/public/build-flags.json, so its test-mocks flag is unverified.`);
-  }
-  if (flags.testMocks !== false)
-    throw new Error(`Refusing ${apk}: its web bundle was built with test mocks enabled.`);
-  const manifest = fs.existsSync(manifestFile) ? JSON.parse(fs.readFileSync(manifestFile, "utf8")) : null;
-  const entry = manifest?.results?.find(row => row.sha256 === hash) ?? null;
-  if (entry && (manifest.testMocks === true || entry.testMocks === true))
-    throw new Error(`Refusing ${apk}: ${manifestFile} records it as a test-mocks build.`);
-  // Every unresolved blocker verify-apks recorded for a release (signing, runtime, speech,
-  // the proprietary-font check, test mocks) is named; a release is never staged while one remains.
-  // Open-source licence flags (licenceFlags) are a record, never a blocker (decision P-09).
-  // Production judges the row against the committed release signer now, not only the admission
-  // verify-apks recorded, and requires the reviewed image platform certificate.
   const current = development ? {} : { releaseSigner: readReleaseSigner(), image: { platformCertificateSha256 } };
-  const blockers = entry?.mode === "release" || entry?.distributable !== undefined
-    ? releaseBlockers(entry, { manifestTestMocks: manifest.testMocks, ...current }) : [];
-  if (entry && (entry.distributable === false || (entry.mode === "release" && blockers.length)))
-    throw new Error(`Refusing ${apk}: ${manifestFile} records this release as not distributable (runtime ${entry.runtime ?? "unknown"}, ${entry.signed ? "signed" : "unsigned"}). Unresolved blockers:\n${blockers.map(item => `  - ${item}`).join("\n")}`);
-  if (!development && !(entry && entry.mode === "release" && entry.distributable === true && blockers.length === 0))
-    throw new Error(`Production staging requires a release APK that verify-apks recorded as distributable in ${manifestFile}.`);
-  // --development is for debug builds. A release reaches an image only through its distributable
-  // manifest row (checked above), so an APK without that row must itself be a debuggable build:
-  // a missing manifest, a row for other bytes or a row relabelled "debug" admits no release.
-  if (development && entry?.mode !== "release") {
-    let debuggable;
-    try {
-      debuggable = /android:debuggable[^\n]*0xffffffff/.test(execFileSync(tool("aapt"), ["dump", "xmltree", apk, "AndroidManifest.xml"], { encoding: "utf8", env: androidEnv(), maxBuffer: 64 << 20, stdio: ["ignore", "pipe", "ignore"] }));
-    } catch {
-      throw new Error(`Refusing ${apk}: --development stages debug builds only, and this APK's build type could not be read.`);
-    }
-    if (!debuggable)
-      throw new Error(`Refusing ${apk}: --development stages debug builds only. This is a release build that ${manifestFile} does not record as distributable.`);
-  }
+  return admitImageApk({
+    apk,
+    sha256: hash,
+    development,
+    manifest: fs.existsSync(manifestFile) ? JSON.parse(fs.readFileSync(manifestFile, "utf8")) : null,
+    manifestFile,
+    testMocksDir: path.resolve("artifacts/test-mocks"),
+    judge: (row, manifest) => releaseBlockers(row, { manifestTestMocks: manifest.testMocks, ...current }),
+    readManifestTree: file => aaptManifestTree(file, { aapt: tool("aapt"), env: androidEnv() }),
+  });
 }
 /**
  * Source overrides the secure-camera source check admits. Pixel and Cuttlefish images are built from the same
  * reviewed Android 17 tree, so both admit exactly its hash-pinned overrides; other development staging admits none.
  */
 export function reviewedSourceOverrides({physicalSource = null, cuttlefish = false, lockPath = defaultLockPath, source, appliedPatches = []} = {}) {
-  if (!physicalSource && !cuttlefish) return [];
-  const lockBytes = fs.readFileSync(lockPath);
-  const digest = bytes => createHash('sha256').update(bytes).digest('hex');
-  if (physicalSource && digest(lockBytes) !== physicalSource.sourceLockSha256) throw Error('Pixel source lock changed during staging');
-  const lock = JSON.parse(lockBytes), overrides = [...lock.overrides];
-  const seen = new Set(overrides.map(entry => entry.path));
-  for (const {manifest} of appliedPatches) {
-    if (!source || manifest.baselineLockSha256 !== digest(lockBytes)) throw Error('Applied SystemUI patch source lock differs');
-    if (!lock.projects?.some(project => project.path === manifest.project && project.commit === manifest.revision)) throw Error('Applied SystemUI patch revision differs');
-    const safe = name => typeof name === 'string' && name && !path.isAbsolute(name) && !name.split(/[\\/]/).some(part => !part || part === '.' || part === '..');
-    if (!safe(manifest.project)) throw Error('Unsafe SystemUI project path');
-    const base = fs.realpathSync(source), directory = fs.realpathSync(path.join(base, manifest.project));
-    if (!directory.startsWith(base + path.sep)) throw Error('SystemUI project escapes source');
-    const git = args => execFileSync('git', ['-C', directory, ...args], {env:{...process.env, GIT_OPTIONAL_LOCKS:'0'}, maxBuffer:64 << 20});
-    if (git(['rev-parse', 'HEAD']).toString().trim() !== manifest.revision) throw Error('Applied SystemUI checkout revision differs');
-    for (const file of manifest.files) {
-      if (!safe(file.path)) throw Error('Unsafe SystemUI patch path');
-      const relative = `${manifest.project}/${file.path}`;
-      if (seen.has(relative)) throw Error('Applied SystemUI patch overlaps source override');
-      seen.add(relative);
-      const entry = git(['ls-tree', manifest.revision, '--', file.path]).toString();
-      const before = entry ? digest(git(['show', `${manifest.revision}:${file.path}`])) : null;
-      if (before !== file.beforeSha256) throw Error('Applied SystemUI patch preimage differs');
-      const target = path.join(directory, file.path);
-      if (!fs.lstatSync(target).isFile() || !fs.realpathSync(target).startsWith(directory + path.sep)) throw Error('Applied SystemUI patch file is not regular');
-      const bytes = fs.readFileSync(target);
-      if (digest(bytes) !== file.afterSha256) throw Error('Applied SystemUI patch bytes differ');
-      overrides.push({path:relative, sizeBytes:bytes.length, sha256:file.afterSha256});
-    }
-  }
-  return overrides;
+  return sharedReviewedSourceOverrides({physicalSource, imageTarget: cuttlefish, lockPath, source, appliedPatches});
 }
 
 export function stagingSystemuiPatches(names, imageTarget) {
@@ -309,7 +249,7 @@ if (listenerApk) {
   if (!development) {
     let debuggable;
     try {
-      debuggable = /android:debuggable[^\n]*0xffffffff/.test(execFileSync(tool("aapt"), ["dump", "xmltree", listenerApk, "AndroidManifest.xml"], { encoding: "utf8", env, maxBuffer: 64 << 20 }));
+      debuggable = manifestTreeIsDebuggable(aaptManifestTree(listenerApk, { aapt: tool("aapt"), env }));
     } catch {
       throw new Error(`Refusing ${listenerApk}: its manifest could not be read.`);
     }
