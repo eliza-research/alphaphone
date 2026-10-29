@@ -224,6 +224,7 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/contracts/src/mms-send.ts',
   'packages/contracts/src/native-telephony.ts',
   'packages/contracts/src/native-telephony-session.ts',
+  'packages/contracts/src/phone-dial.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-handoff.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-handoff-history.ts',
