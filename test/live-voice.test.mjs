@@ -141,7 +141,8 @@ test('Android: Silero VAD runs in the app process and only the live ASR and end-
   const capture = fs.readFileSync(new URL('../vendor/eliza/plugins/plugin-local-inference/native/android/src/main/java/ai/eliza/voice/LiveVoiceCapture.java', import.meta.url), 'utf8');
   assert.match(capture, /InferenceSession\.Vad vad=inference\.openVad\(\);/);
   assert.match(capture, /float\[\] probability=vad\.process\(pcm\);/);
-  const voicePlugin = fs.readFileSync(new URL('../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaVoiceCloudPlugin.java', import.meta.url), 'utf8');
+  // The bridge is the shared LocalSpeechBridgePlugin that AlphaVoiceCloudPlugin subclasses.
+  const voicePlugin = fs.readFileSync(new URL('../vendor/eliza/plugins/plugin-local-inference/native/android/speech-bridge/src/main/java/ai/eliza/voice/LocalSpeechBridgePlugin.java', import.meta.url), 'utf8');
   assert.match(voicePlugin, /new LiveVoiceCapture\(getContext\(\),VoiceAssets\.sharedInference\(getContext\(\)\),id,sink,echoCancel\)/);
   assert.match(voicePlugin, /private final LiveCaptureController live=new LiveCaptureController\(/);
   assert.match(capture, /AudioFormat\.ENCODING_PCM_16BIT/);
@@ -151,4 +152,32 @@ test('Android: Silero VAD runs in the app process and only the live ASR and end-
 test('the app-process VAD gate opens and closes segments on Silero probabilities (host JVM)', async () => {
   const {runJvm, upstreamVoiceFixture, upstreamVoiceSource} = await import('./fixtures/jvm-tools.mjs');
   assert.match(runJvm([upstreamVoiceSource('LiveVadGate.java'), upstreamVoiceFixture('LiveVadGateTest.java')], 'ai.eliza.voice.LiveVadGateTest'), /^PASS live vad gate/);
+});
+
+test('the native speech bridge and live transport are shared upstream; Alpha keeps only bindings', () => {
+  const strip = source => source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+  const alpha = strip(fs.readFileSync(new URL('../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaVoiceCloudPlugin.java', import.meta.url), 'utf8'));
+  assert.match(alpha, /@CapacitorPlugin\(name="AlphaVoiceCloud", permissions=\{@Permission\(alias="microphone"/);
+  assert.match(alpha, /public final class AlphaVoiceCloudPlugin extends LocalSpeechBridgePlugin \{/);
+  assert.match(alpha, /super\("alpha-cloud-voice-","alpha-cloud-tts-"\)/, 'installed cache prefixes are kept');
+  assert.match(alpha, /protected LiveCaptureController\.Route residentRoute\(String owner\)\{return \(\)->AlphaLocalAgentPlugin\.openNativeVoiceTransport\(owner\);\}/);
+  // The generic bridge (recording, local recognition/synthesis, playback, focus, live capture, timing) is gone from Alpha.
+  for (const moved of [/class AlphaCloudVoiceCapture/, /new MediaRecorder|MediaRecorder\(/, /new MediaPlayer/, /new LiveCaptureController/, /new LocalSpeechEngine/, /StreamingSpeechPlayback/, /SpeechAudioFocus/, /VoiceLatencyProbe|VoiceLatencyTrials/, /ThreadPoolExecutor|ExecutorService/,
+    /public void (?:startRecording|stopRecording|cancelRecording|getRecordingMetrics|transcribeLocalRecording|synthesizeLocal|play|stopPlayback|cancel|liveCaptureStatus|startLiveCapture|stopLiveCapture|localSpeechStatus|releaseLocalSpeech|nativeVoiceTiming|markVoiceTurn|clearNativeVoiceTiming)\(PluginCall call\)/])
+    assert.doesNotMatch(alpha, moved, String(moved));
+  assert.equal(fs.existsSync(new URL('../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaVoicePcm.java', import.meta.url)), false);
+  // The renderer transport is the shared @elizaos/voice/native-live; Alpha binds its bridge and resident.
+  const binding = strip(fs.readFileSync(new URL('../apps/app/src/runtime/native-live-voice.ts', import.meta.url), 'utf8'));
+  assert.match(binding, /createNativeLiveVoice\(\{ port: plugin, available, resident \}\)/);
+  for (const moved of [/addListener/, /parseLiveFinal|parseVoiceTranscriptEnvelope/, /createLiveSegmentStream/, /startLiveCapture|stopLiveCapture/, /crypto\.randomUUID/])
+    assert.doesNotMatch(binding, moved, String(moved));
+  assert.equal(fs.existsSync(new URL('../apps/app/src/runtime/native-resident-capture.ts', import.meta.url)), false);
+  const turn = strip(fs.readFileSync(new URL('../apps/app/src/runtime/native-voice-turn.ts', import.meta.url), 'utf8'));
+  assert.match(turn, /setNativeVoiceStageSink\(nativeVoiceStageSink\(plugin\(\)\)\)/);
+  assert.doesNotMatch(turn, /markVoiceTurn\(|Promise\.race/);
+  for (const file of ['local-voice.ts', 'paired-voice.ts']) {
+    const source = strip(fs.readFileSync(new URL('../apps/app/src/runtime/' + file, import.meta.url), 'utf8'));
+    assert.match(source, /const operation = createNativeSpeechRequests\(\{/, file);
+    assert.doesNotMatch(source, /new AbortController\(\)|crypto\.randomUUID/, file);
+  }
 });
