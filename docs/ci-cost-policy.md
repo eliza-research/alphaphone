@@ -80,8 +80,10 @@ with only the change gate and the two short aggregate jobs.
 
 The ruleset below (`scripts/ci/required-checks-ruleset.json`, integration 15368 is
 GitHub Actions) requires those two aggregates and Repository verification on the
-default branch. It is additive to the existing "Default branch baseline" ruleset
-(PR required, no deletion or force push). Up-to-date branches are not required:
+default branch. It was written as additive to the AlphaCompute "Default branch
+baseline" ruleset (PR required, no deletion or force push); that ruleset did not move
+with the repository to eliza-research, where on October 28 `main` had only classic
+protection against force push and deletion (docs/runbooks/679-main-required-checks.md). Up-to-date branches are not required:
 that would force a rebase and full rerun of every open PR after each merge. A
 semantic conflict between two green PRs is instead caught by the main-push
 verification and Android build. Applying it changes repository settings and needs
@@ -118,9 +120,9 @@ the owner's explicit approval; it had not been applied when this was written.
 
 ```sh
 # Owner-approved only. Creates the ruleset; it does not modify the baseline ruleset.
-gh api --method POST repos/AlphaCompute/alphaphone/rulesets --input scripts/ci/required-checks-ruleset.json
+gh api --method POST repos/eliza-research/alphaphone/rulesets --input scripts/ci/required-checks-ruleset.json
 # Confirm:
-gh api repos/AlphaCompute/alphaphone/rules/branches/main
+node scripts/ci/read-required-checks.mjs --repo eliza-research/alphaphone
 ```
 
 Android still checks both standalone and launcher, debug and release outputs and
