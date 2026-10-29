@@ -60,12 +60,18 @@ nothing is downloaded.
 
 | Path | Role | Size | Licence |
 | --- | --- | --- | --- |
-| `tts/paradee/paradee-8m-v1_1.gguf` | Paradee-8M F32 (converted from the pinned PyTorch files) | 32 MB | Apache-2.0 |
+| `tts/paradee/paradee-8m-v1_2.gguf` | Paradee-8M v1.2 F32 (converted from the pinned PyTorch files) | 32 MB | Apache-2.0 |
 | `tts/paradee/misaki-en-us.lex` | misaki US lexicon (converted from the pinned misaki data) | 12.9 MB | Apache-2.0 |
 | `tts/paradee/espeak-ng-data/*` (7 files) | eSpeak NG English data for out-of-lexicon words | 0.8 MB | GPL-3.0-or-later (flagged) |
 | `asr/phonon-2-fv5.gguf` | The ASR slot: Phonon-2 (Parakeet-TDT 0.6B, five-value weights, `general.architecture=parakeet-tdt`) | 331 MB | CC-BY-4.0 (attribution and NOTICE shipped; training-data terms flagged) |
 | `vad/silero-vad-v5.gguf` | Silero VAD v5 | 0.6 MB | MIT |
 | `notices/*` | eSpeak NG, misaki, spaCy and Phonon-2 (Fermion NOTICE, CC-BY-4.0 text) notices | small | as named |
+
+At eliza pin `fbc2d23d4b` upstream pins Paradee-8M v1.2, adds an enabled Castilian Spanish voice
+(Delibes-8M, with Spanish eSpeak NG data) and moves the llama.cpp fork to `13d0ccbf`. The recorded
+engine libraries were built from fork `0d9fd4b9` and are not admitted at this pin: a fresh engine
+build, a fresh byte record, a fresh APK and on-device validation are required
+(`docs/evidence/develop-fbc2d23d-build-input-admission-20261029.json`).
 
 The Phonon-2 GGUF (330,632,256 bytes, sha256 `dc552eb7…`) replaces the Qwen3-ASR pair
 (about 1 GB), so the bundle is about 380 MB. It ships in the APK assets with the verified first-run
@@ -146,10 +152,18 @@ recording a clip on the device:
    `ram-pressure`, `unscored`, `timeout`), a 502 scoring error, a transport failure or the deadline
    all fall back to the long gap; unavailable is never treated as complete. The route never starts
    voice or loads a model, so the semantic path only works where the resident's voice bridge and
-   its fused text context are loaded; elsewhere the gaps decide alone. **Clef is not in the pin**
-   (no Clef model, loader or decision head); the scorer is the Eliza-1 one. Each submitted turn's
-   voice timing record keeps `endpoint`: the path (`semantic` or `gap`), the outcome enum, the
-   unavailable reason and the scorer latency, never text. The gaps and deadline are engineering
+   its fused text context are loaded; elsewhere the gaps decide alone. The scorer is the Eliza-1
+   one. The assistant asks it through the shared end-of-turn chain (`@elizaos/voice/endpoint-chain`
+   `createEndpointChain`): local fused scorer, then an optional **Clef** `turn` stage (Eliza Cloud
+   `clef-decisions`, transcript text only, its own 300 ms timeout; unavailable, disabled, refused or
+   late is never a yes), then the long gap. The Clef stage is asked only when the local scorer could
+   not score, and is built only with an explicit switch AND a Cloud client: `CLEF_ENDPOINT_ENABLED`
+   in `voice-selection.ts` is `false` and the renderer holds no Cloud Clef client (the owner
+   decision is #663 / H-18), so today the chain is the local scorer and the gap, and no transcript
+   leaves the phone for endpointing. Each submitted turn's voice timing record keeps `endpoint`: the
+   path (`semantic` or `gap`), the outcome enum, the unavailable reason (scorer or `clef-*`), the
+   latency and the chain stage that answered (`path`: `local` or `clef`), never text; the
+   diagnostics export copies the same enums. The gaps and deadline are engineering
    defaults (local-speech research), not measurements or owner-set constants.
 6. **Send.** The turn goes through the existing voice policy unchanged (`VOICE_SEND_POLICY`
    in `voice-selection.ts`, P-39: the assistant submits automatically; Transcribe only inserts
@@ -185,8 +199,15 @@ recording a clip on the device:
    sent for a reply that was fully heard. The request never blocks the next turn. A 409 (the played
    text is not a prefix the agent recognises) is recorded and the view stays trimmed; a 404 or 503
    is retried once after 1.5 s, then dropped; the outcome enum is kept on the turn's voice timing
-   record (`heard`). **Gaps:** a reply interrupted before its first sentence finished cannot be
-   recorded (the route needs a non-empty prefix), so the agent keeps it in full; a reply the agent
+   record (`heard`). A reply interrupted before its first sentence finished is reported as
+   `{ nothingHeard: true }`: the agent replaces it with an empty, interruption-marked reply
+   (`heardNothing`), so it keeps that it answered and was cut off but none of the unheard words; an
+   agent that predates the explicit report refuses it (`rejected`) and keeps the reply. A speech
+   failure is not a barge-in: when playback fails before the first sentence finished
+   (`playbackFailed`, for example a refused Cloud speech request) nothing is sent (`nothing-heard`)
+   and both the agent and the view keep the whole reply; after a finished sentence only the heard
+   prefix is kept, as for an interruption. **Gaps:** a
+   reply the agent
    completes after the user interrupted it while it was still being generated has no message id
    in the voice session, is not trimmed and appears in full after a reload; a partially played
    sentence is never claimed as heard. The 700 ms hold and the sentence-by-sentence synthesis gap

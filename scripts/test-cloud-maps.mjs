@@ -66,7 +66,8 @@ const memory = () => { const values = new Map(); return { getItem: key => values
   assert.equal(planned.value.distanceMeters, 640);
   assert.deepEqual(calls.map(([path]) => path), ['capabilities', 'places/search', 'places/details', 'routes']);
   assert.deepEqual(calls[1][1], { query: 'Port' });
-  assert.deepEqual(calls[3][1], { from: CASINO, to: PORT, mode: 'walk' }, 'location travels only in the body; no alternatives are requested');
+  // The shared client asks one routes request for ordered alternatives when coverage advertises them (elizaOS/eliza#38153).
+  assert.deepEqual(calls[3][1], { from: CASINO, to: PORT, mode: 'walk', alternatives: true }, 'location travels only in the body, with one alternatives request');
 }
 
 // Typed Cloud refusals become device failures; none becomes data.

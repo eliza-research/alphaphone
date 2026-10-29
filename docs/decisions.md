@@ -199,6 +199,23 @@ selections: custody P-58, catalog, limits and Maps allowance P-62, Maps coverage
 The steps that carry them out (the key ceremony, enrollment, Cloud settings and the pilot) remain
 open in [human actions](human-actions.md).
 
+### Open engineering question: a view change during a reply (2026-10-28)
+
+Current behaviour: a typed reply in flight is stopped when the screen it was asked from changes.
+`AlphaClient.setViewContext` (`apps/app/src/runtime/alpha-client.ts`) aborts the foreground request
+whenever the view context's revision moves, so HOME pressed while another app is in front, or
+opening another app, is an explicit Stop: one cancel through the agent's abort route where it has
+one, the "may still finish" notice, and one history read that shows the reply if it finished.
+Nothing is resent. Collapsing the chat (Back from full to sheet) and HOME while Home is already in
+front change no view, so the reply keeps arriving and is shown once.
+`test/browser/chat-continuity.spec.ts` pins both.
+
+The question for the owner: should a view change stop the reply, or should the reply keep
+arriving (as it does for Back and HOME on Home) while only actions and proposals bound to the old
+screen are refused (`contextRevision` already fences proposals)? Until it is decided the current
+behaviour stays and no software chooses otherwise. Tracked with the other open engineering
+choices in issue #680.
+
 ## Pending owner decisions
 
 No reviewed A-01–A-26/A-32–A-35/MVP-01/MVP-52/owner-notice item remains awaiting

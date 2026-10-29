@@ -102,12 +102,14 @@ function voiceTimingRows(input:unknown):VoiceTimingRow[]{
    for(const key of ['firstPartialMs','finalFromSpeechEndMs','asrFinalFromSpeechEndMs'] as const){const at=live[key];if(typeof at==='number'&&Number.isFinite(at)&&at>=0&&at<3_600_000)numbers[key]=Math.round(at);}
    out.live=numbers;
   }
-  // Voice-assistant endpointing and heard-content outcomes (#423): enums and two numbers only.
+  // Voice-assistant endpointing (#423; chain path local or clef) and heard-content outcomes: enums and numbers only.
   const endpoint=row.endpoint&&typeof row.endpoint==='object'&&!Array.isArray(row.endpoint)?row.endpoint as Record<string,unknown>:null;
   const by=endpoint?one(endpoint.by,['semantic','gap'] as const):undefined,semantic=endpoint?one(endpoint.semantic,['complete','incomplete','unavailable','timeout','error','not-asked'] as const):undefined;
   if(endpoint&&by&&semantic){
    const value:VoiceTimingEndpoint={by,semantic};
-   const reason=one(endpoint.reason,['voice-not-started','ffi-context-unloaded','scorer-unsupported','ram-pressure','unscored','timeout','too-long','invalid-response','unknown'] as const);if(reason)value.reason=reason;
+   const reason=one(endpoint.reason,['voice-not-started','ffi-context-unloaded','scorer-unsupported','ram-pressure','unscored','timeout','too-long','invalid-response','unknown','clef-disabled','clef-unavailable','clef-timeout','clef-error','clef-too-long'] as const);if(reason)value.reason=reason;
+   // The end-of-turn chain stage that answered: the local fused scorer or Clef.
+   const path=one(endpoint.path,['local','clef'] as const);if(path)value.path=path;
    if(typeof endpoint.latencyMs==='number'&&Number.isFinite(endpoint.latencyMs)&&endpoint.latencyMs>=0&&endpoint.latencyMs<3_600_000)value.latencyMs=Math.round(endpoint.latencyMs);
    out.endpoint=value;
   }
