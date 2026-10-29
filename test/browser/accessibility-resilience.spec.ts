@@ -4,6 +4,7 @@ import { setTextScale } from './accessibility-states';
 import {canonicalNotesFixture,openCanonicalNotes} from './helpers/canonical-notes';
 import {openOwnedPhotoViewer} from './helpers/owned-photo';
 import { auditPage, auditTabOrder, format } from './accessibility-audit';
+import { settled } from './helpers/settled';
 
 // Behaviour behind the defects the accessibility sweep found (MVP-48, renderer part).
 const offline = () => localStorage.setItem('alpha.connection.selection.v1', JSON.stringify({ kind: 'offline' }));
@@ -52,6 +53,7 @@ test.describe('camera in landscape', () => {
 
 test.describe('maps sheets', () => {
   test('directions at 200% text: Start stays reachable and is not under the composer', async ({ page }, info) => {
+    test.setTimeout(60_000);
     await page.goto('/?mode=mock&start=maps:route');
     await setTextScale(page, 2);
     const start = page.getByRole('button', { name: 'Start', exact: true });
@@ -111,6 +113,8 @@ test('the note editor keeps Delete on screen beside the other header actions', a
 });
 
 test.describe('200% text keeps the way out on screen', () => {
+  // Large-text layouts re-measure every rule after the text grows: explicit, as other sweeps run beside them.
+  test.describe.configure({ timeout: 60_000 });
   for (const [start, open, field] of [['inbox', 'Search email', 'Search mail'], ['photos', 'Search photos', 'Search photos'], ['notes', 'Search notes', 'Search notes'], ['files', 'Search files', 'Search files']] as const) {
     test(`${start} search: the field shrinks and Close search stays reachable`, async ({ page }) => {
       await page.goto(`/?mode=mock&start=${start}`);
@@ -416,11 +420,12 @@ async function openHome(page: Page, url: string, scale: number) {
   await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
   if (scale !== 1) await setTextScale(page, scale);
   await expect(page.locator('[data-alpha-layer="composer"] [data-alpha-input-bar]')).toBeVisible();
-  await page.waitForTimeout(400);
+  await settled(page);
 }
 
 for (const shell of HOME_SHELLS) for (const scale of [1, 1.5, 2]) {
   test(`${shell.name} Home at ${scale * 100}% text fills the screen and scrolls every app above the composer`, async ({ page }) => {
+    test.setTimeout(60_000);
     await openHome(page, shell.url, scale);
     const home = page.locator('[data-alpha-layer="home"]');
     const top = await homeUnderDock(page);
@@ -466,6 +471,8 @@ test('a status line on the composer adds Home scroll clearance without moving it
 });
 
 test.describe('landscape Home', () => {
+  // Large-text layouts re-measure every rule after the text grows: explicit, as other sweeps run beside them.
+  test.describe.configure({ timeout: 60_000 });
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 915, height: 412 } });
   for (const scale of [1, 2]) test(`the dock stays beside Home at ${scale * 100}% text`, async ({ page }) => {
     await openHome(page, '/', scale);
@@ -484,6 +491,8 @@ test.describe('landscape Home', () => {
 });
 
 test.describe('keyboard focus and the floating dock', () => {
+  // Large-text layouts re-measure every rule after the text grows: explicit, as other sweeps run beside them.
+  test.describe.configure({ timeout: 60_000 });
   for (const scale of [1, 2]) test(`every Settings row that takes focus is wholly above the dock at ${scale * 100}% text`, async ({ page }) => {
     await page.addInitScript(offline);
     await page.goto('/');
@@ -537,6 +546,8 @@ test.describe('keyboard focus and the floating dock', () => {
 });
 
 test.describe('screen titles with a large system font', () => {
+  // Large-text layouts re-measure every rule after the text grows: explicit, as other sweeps run beside them.
+  test.describe.configure({ timeout: 60_000 });
   for (const title of [{ name: 'Photos', steps: ['Photos'] }, { name: 'Camera', steps: ['Camera'] }, { name: 'Password manager', steps: ['Settings', 'Password manager'] }]) {
     test(`"${title.name}" is shown whole at 200% text`, async ({ page }) => {
       await page.addInitScript(offline);

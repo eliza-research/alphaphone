@@ -16,7 +16,7 @@ import {createNotesRecordingEffects,type NotesRecordingEffects} from '../../../.
 import {addNotesTrashEntry,editNotesTrash,isNotesTrashFull,notesTrashExpired,readNotesTrash,removeNotesTrashEntries,savedNotes,type NotesTrashEntry} from '../runtime/notes-trash';
 import type {NotesTarget} from '../runtime/notes-contract';
 import {sameDeletionRow,leasedDeletionRow,claimDeletion,releaseDeletionClaim,deletionClaimedElsewhere} from '../runtime/permanent-voice-deletion';
-import { installLocalSpeechPlayback, stopLocalSpeechPlayback, currentNoteReading, stopSpeaking, speakNote } from './local-speech-playback';
+import { installLocalSpeechPlayback, stopLocalSpeechPlayback, currentNoteReading, stopSpeaking, speakNote, noteVoiceDraft } from './local-speech-playback';
 import { registerPlugin } from '../platform-plugins';
 import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
 import { createOnDeviceVoice } from '../runtime/local-voice';
@@ -173,6 +173,11 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     const route=timingRoute(),cold=!warmRoutes.has(route);warmRoutes.add(route);
     beginVoiceTurn({route,cold,entry,...(entry==='conversation'?{policy:voiceSendPolicy()}:{})});
   };
+  // A recorded-clip (batch) conversation turn: its path is recorded as live mode 'batch' with no
+  // partials, so timing and the diagnostics export tell it from the live assistant ('stream').
+  const batchRecordingEnded=(id:string|undefined)=>{if(!id||timedRecording===id)return;recordingEnded(id,'conversation');recordLiveVoiceTiming({mode:'batch',partials:0});};
+  // Said once per page session: the half-duplex loop cannot hear the user while a reply plays.
+  let halfDuplexDisclosed=false;
   let mediaUnconfirmed:unknown;
   let retirement:{shell:any;phase:'stopping'|'error';returnChat:string;view:string|null;binding:string;panelChat:string;promise:Promise<void>;approval?:AbortController;proposalId?:string}|undefined;
   const refresh = () => chatDestination ? chatDestination.shell.setState({}) : api?.setView('notes', { nativeVoiceRevision: Date.now() });
@@ -267,7 +272,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     catch (reason) { if (token === generation) {
       const kind = voiceFailure(reason, { transcribing: stage === 'transcribing', browser: !Capacitor.isNativePlatform(), cloud: cloudMode, serviceName: voiceServiceName() });
       if (kind) { failure = kind.kind; error = kind.message; stage = stage === 'review' ? 'review' : clip ? 'recorded' : 'ready'; stopClock(); return; }
-      error = (cloudMode && cloudVoiceFailure(reason)) || (onDeviceReady ? 'On-device speech unavailable. Keep recordings under 30 seconds and use English text under 500 characters for playback. Your recording is retained.' : pairedAsrReady ? 'Agent Whisper transcription unavailable. Your recording is retained; check the selected agent and retry explicitly.' : deviceOnly ? 'Recording unavailable. Check microphone access and available device storage, then retry.' : cloudMode ? 'Cloud voice unavailable. Check microphone access, your Cloud account and the connection, then retry.' : 'Voice unavailable. Check microphone access and the local development service, then retry.'); stage = stage === 'review' ? 'review' : clip ? 'recorded' : 'ready'; stopClock(); } }
+      error = (cloudMode && cloudVoiceFailure(reason,{recording:!!clip})) || (onDeviceReady ? 'On-device speech unavailable. Keep recordings under 30 seconds and use English text under 500 characters for playback. Your recording is retained.' : pairedAsrReady ? 'Agent Whisper transcription unavailable. Your recording is retained; check the selected agent and retry explicitly.' : deviceOnly ? 'Recording unavailable. Check microphone access and available device storage, then retry.' : cloudMode ? 'Cloud voice unavailable. Check microphone access, your Cloud account and the connection, then retry.' : 'Voice unavailable. Check microphone access and the local development service, then retry.'); stage = stage === 'review' ? 'review' : clip ? 'recorded' : 'ready'; stopClock(); } }
     finally { if (token === generation) { busy = false; refresh(); } }
   }
   async function start(token: number) {
@@ -306,6 +311,9 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         const { shell, chat, draft:previousDraft } = chatDestination;
         const text=previousDraft?[previousDraft,draft].join('\n'):draft;
         cleanup();
+        // The dictated draft is voice-originated: if it is sent exactly as placed, its reply may be
+        // read aloud (Settings: Read replies aloud, off by default). Editing it first makes it typed.
+        if(!previousDraft)noteVoiceDraft(text,shell.S().msgs||[]);
         shell.setState({chat:['input','sheet','full'].includes(chat)?chat:'input',draft:text,voice:'off'});
         return;
       }
@@ -460,7 +468,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
       handle=await selected.addListener('recordingStopped',value=>{
         if(!active||input.signal.aborted||id&&value.recordingId!==id)return;
         if(!value.recordingId)return;
-        endId=value.recordingId;if(Number.isFinite(value.durationMs)){ended=value;if(id)recordingEnded(id,'conversation');}else problem=Error('Microphone capture was interrupted.');
+        endId=value.recordingId;if(Number.isFinite(value.durationMs)){ended=value;if(id)batchRecordingEnded(id);}else problem=Error('Microphone capture was interrupted.');
         if(id){recording=false;if(poll)clearTimeout(poll);input.onEnd(problem);}
       });check();
       const pending=selected.startRecording();startingCapture=pending;
@@ -474,7 +482,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
       };
       if(ended||problem){recording=false;input.onEnd(problem);}else void sample();
       return {
-        stop:async()=>{check();recording=false;recordingEnded(id,'conversation');await detach();check();if(problem)throw problem;const value=ended??await selected.stopRecording();check();if(value.recordingId!==id||!Number.isFinite(value.durationMs))throw Error('Recording identity changed.');clip=value;return value;},
+        stop:async()=>{check();recording=false;batchRecordingEnded(id);await detach();check();if(problem)throw problem;const value=ended??await selected.stopRecording();check();if(value.recordingId!==id||!Number.isFinite(value.durationMs))throw Error('Recording identity changed.');clip=value;return value;},
         cancel,
       };
     }catch(error){await cancel();throw error;}
@@ -583,6 +591,9 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         conversationLive=assistant;conversationVoice=assistant;conversationInterim='';conversationLevels=[];started=Date.now();
         await assistant.start();current();return;
       }
+      // The live assistant is not ready (or this is a Cloud route): the recorded-clip loop listens
+      // only between replies, so say once that speaking will not interrupt a reply.
+      if(!halfDuplexDisclosed){halfDuplexDisclosed=true;chat.shell.toast('Speaking will not interrupt Alpha’s reply in this voice mode. Close the voice conversation to stop a reply.');}
       const conversation:BatchVoiceConversation<Clip>=new BatchVoiceConversation<Clip>({
         conversationId:prepared.binding.conversationId,assertCurrent:current,
         capture:input=>{current();conversationPrepared={...conversationPrepared!,context:chat.shell.voiceConversationContext(prepared.binding)};current();return captureConversationAudio(selected,current,input);},
@@ -975,7 +986,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     }
     if(chatDestination?.mode==='dictation'){labels.review='Use in draft';messages.recording='Recording on this device. Stop to transcribe into editable text. Nothing is sent to your agent.';messages.review='Edit the transcript, then add it to your draft. Only Send submits the message.';}
     if(liveDictation){messages.ready='Starting transcription on this device. No message is sent.';messages.recording='Your agent on this phone transcribes as you speak. Stop when you finish; speech after Stop is not used. No message is sent.';messages.transcribing='Finishing the transcript on this phone. No message is sent.';messages.review='Edit the transcript, then add it to your draft. Only Send submits the message.';}
-    // The Cloud route offers no typing choice (MVP-01 decides whether it should); its failure wording names none.
+    // The Cloud route offers no typing choice (P-39 keeps the conversation spoken; the keyboard stays a separate entry), so its failure wording names none.
     const canType = !cloudMode && stage === 'recorded' && !!clip && !busy && (failure === 'no-speech' || failure === 'local-agent' || failure === 'recognition');
     // A refused microphone uses the route slot for its recovery: Android's app settings for Alpha.
     const settingsChoice = deniedSettingsChoice({ failure, stage, busy, native: Capacitor.isNativePlatform() });

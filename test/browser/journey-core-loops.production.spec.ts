@@ -170,7 +170,7 @@ async function android(page: Page, options: { clock?: 'opened' | 'unavailable' |
           if (method === 'requestStream') {
             // The resident agent records the user turn, then streams its reply over native IPC.
             const conversation = /^\/api\/conversations\/([^/]+)\/messages\/stream$/.exec(input.path)![1], body = JSON.parse(input.body), streamId = input.streamId as string;
-            f.streams++; f.posts.push(String(body.text).split('[USER MESSAGE]\n').pop()); f.views.push(/"view":"([a-z-]+)"/.exec(String(body.text))?.[1] ?? ''); f.conversations.push(conversation); f.bodies.push(input.body);
+            f.streams++; f.posts.push(String(body.text).split('[USER MESSAGE]\n').pop()); f.views.push(String(body.metadata?.clientDevice?.context?.view ?? '')); f.conversations.push(conversation); f.bodies.push(input.body);
             agent.history[conversation].push({ id: crypto.randomUUID(), role: 'user', text: body.text, timestamp: Date.now() }); persist();
             const reply = f.replies.shift() ?? 'Resident reply ' + f.streams;
             const finish = () => {
