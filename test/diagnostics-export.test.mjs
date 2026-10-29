@@ -170,7 +170,7 @@ test('native voice timing (#395): linked monotonic trials, hashes and labels onl
  const settings=readFileSync(new URL('../apps/app/src/prototype/settings-adapter.ts',import.meta.url),'utf8');
  assert.match(settings,/readNativeVoiceTiming\(\)\]\);/);
  assert.match(settings,/nativeVoiceTiming: nativeTiming\.status === 'fulfilled' \? nativeTiming\.value : null/);
- assert.match(readFileSync(new URL('../apps/app/src/runtime/native-voice-turn.ts',import.meta.url),'utf8'),/plugin\(\)\.nativeVoiceTiming\(\)/);
+ assert.match(readFileSync(new URL('../apps/app/src/runtime/native-voice-turn.ts',import.meta.url),'utf8'),/return readBridgeTiming\(plugin\(\), timeoutMs\)/);assert.match(readFileSync(new URL('../vendor/eliza/packages/voice/src/native-live-voice.ts',import.meta.url),'utf8'),/port\.nativeVoiceTiming\(\)/);
 });
 
 test('Cloud inference failures share one finite problem-log and Android export projection',async()=>{
