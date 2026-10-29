@@ -8,6 +8,22 @@ verify-apks rows, the staged agent bundle and the upstream source show, prepared
 counsel can review it. A licence flag is a record of what was found, not a clearance. Nothing here
 shows that any obligation is met. Only the owner or counsel can make the review and the decisions.
 
+## Owner decision recorded (2026-10-29)
+
+The owner decided H-06: **the resident runtime ships `@metamask/sdk` 0.33.1, and the owner accepts
+its terms.** That settles decision 1 below as option (b). It changes this packet as follows:
+
+- The MetaMask stub is dropped from the draft upstream change. Option A now covers only the
+  `ffmpeg-static` wrapper, and it is optional.
+- The acceptance covers version 0.33.1 only. The probe lists it under "Owner acceptances". If a
+  pin update resolves another version, the probe reports `version-not-covered`, and the owner
+  decides again.
+- The notices keep flagging the package (`unknown-licence`, `non-open-source-terms`). Under P-09
+  flags never block. The flag records what was found, and the owner's decision records why it ships.
+- The owner now carries the call on whether a commercial phone fits ConsenSys's terms, including
+  the non-commercial clause and the monthly-active-user limit. Nothing here assesses that.
+- H-35, the review of the copyleft flags, is still open. It is decisions 3 to 8.
+
 ## What was prepared
 
 - `scripts/owner/licence-review.mjs`: a read-only probe that builds the review packet. It reads
@@ -141,6 +157,9 @@ payload (APK-build evidence). Remediation options are engineering options, not a
 
 ## Draft upstream elizaOS change (not applied)
 
+Since the 2026-10-29 decision, the `@metamask/sdk` lines below are kept for the record only and
+are **not** part of the proposed change. The package ships by the owner's decision.
+
 These are scoped for review. Nothing in `vendor/eliza` was edited. The change would land
 upstream and come in through a pin update, or as an explicit tested patch under
 `patches/eliza`.
@@ -184,7 +203,7 @@ APK-build evidence. It does not prove anything about emulator, image, device or 
 
 ## Decisions for the owner
 
-1. **May the product ship `@metamask/sdk` 0.33.1 (H-06)?**
+1. **Decided 2026-10-29: ship (b).** The record of the question follows. **May the product ship `@metamask/sdk` 0.33.1 (H-06)?**
    - Options: (a) remove it from the agent bundle with an upstream change; (b) ship it under
      ConsenSys's terms; (c) obtain a commercial licence from ConsenSys.
    - Documented default: none. P-09 does not cover it and H-06 is open. The H-06 text names (a)
@@ -194,12 +213,15 @@ APK-build evidence. It does not prove anything about emulator, image, device or 
    - What changes: (a) needs an upstream PR and a pin update, then the notices drop the entry;
      (b) needs owner or counsel to find that the non-commercial and monthly-user limits fit a
      commercial phone; (c) costs money and needs a signed licence (record a reference only).
-2. **How far should the upstream change go?**
-   - Options: Option A (MetaMask and the ffmpeg wrapper only) or Option B (barrel split, which
-     also removes the AGPL `ua-parser-js` and LGPL `rpc-websockets`).
-   - Recommendation: A now. Propose B upstream as a follow-up, since B is the only one that
-     removes the AGPL code that probably executes.
-   - What changes: A is a small bundler edit. B touches the shared `packages/ui` public API.
+2. **Should any upstream change be made now that `@metamask/sdk` ships?**
+   - Options: none; Option A reduced to the `ffmpeg-static` stub; or Option B (barrel split).
+     B would also remove `@metamask/sdk` from the agent bundle. If B is chosen, the owner should
+     say whether that removal is wanted or the SDK should be kept on purpose.
+   - Recommendation (engineering): decide decision 3 for `ua-parser-js` first. B is the only
+     option that removes the AGPL code that probably executes. A, with only `ffmpeg-static`,
+     removes a GPL wrapper that never finds a binary.
+   - What changes: none keeps the notices as they are. A is a small bundler edit. B touches the
+     shared `packages/ui` public API and needs the upstream owners to agree.
 3. **Review outcome for the copyleft flags (H-35).** For each of `ffmpeg-static`,
    `ua-parser-js`, `rpc-websockets`, Bun/JavaScriptCore and eSpeak NG:
    - Options: accept, with the stated obligations met (source offer and mirror); remediate (the
@@ -229,10 +251,12 @@ APK-build evidence. It does not prove anything about emulator, image, device or 
 
 1. Owner or counsel reads this packet and the flagged entries in
    `apps/app/public/licenses/THIRD_PARTY_NOTICES.txt` (or the v17 archived notices).
-2. Owner decides 1 to 8 above.
-3. If the owner chooses (a) for `@metamask/sdk`: say so on #674. An agent then opens the
-   upstream elizaOS PR (Option A, and B if chosen). After it merges, it bumps the pin, runs
-   `npm run android:build:local`, re-runs this probe and verifies both variants.
+2. Owner decides 2 to 8 above (1 was decided on 2026-10-29).
+3. `@metamask/sdk` was decided on 2026-10-29 (ship 0.33.1). No upstream change is needed for it.
+   If the owner wants Option A (the `ffmpeg-static` stub only) or Option B, they say so on #674.
+   An agent then opens the upstream elizaOS PR. After it merges, the agent bumps the pin, runs
+   `npm run android:build:local`, re-runs this probe and verifies both variants. After any pin
+   update, check that the probe still reports the MetaMask acceptance as `covered`.
 4. Optionally, owner gives the Denton licence reference (not the document) for
    `licenses/font-licenses.json`.
 5. Owner records the dated outcome entries in `docs/decisions.md` (drafts below), then closes
@@ -242,11 +266,14 @@ APK-build evidence. It does not prove anything about emulator, image, device or 
 
 Drafts only. The owner fills in the outcome. The text is not owner wording.
 
-- **P-?? (draft) — H-06 `@metamask/sdk`, 2026-__-__ (owner):** The product does / does not ship
-  `@metamask/sdk` 0.33.1. [If not:] It is removed from the resident agent bundle by an upstream
-  elizaOS change (mobile bundle stub / `@elizaos/ui` wallet subpath), consumed at pin `____`.
-  Until then it ships flagged `non-open-source-terms` and is not expected to execute (it is only
-  reached through the wallet login UI, which the headless agent never renders).
+- **P-?? (draft) — H-06 `@metamask/sdk`, 2026-10-29 (owner):** The resident runtime ships
+  `@metamask/sdk` 0.33.1, and the owner accepts its terms (ConsenSys; non-commercial clause and
+  monthly-active-user limit). It reaches the agent bundle only through `@wagmi/connectors` 6.2.0,
+  via `wagmi` and RainbowKit in the shared `packages/ui` wallet login. It is not expected to
+  execute, because the headless agent renders no wallet UI. The notices keep flagging it
+  `non-open-source-terms` (P-09: flags never block). The acceptance covers 0.33.1 only, and any
+  other version needs a new decision (`scripts/owner/licence-review.mjs` reports
+  `version-not-covered`). This entry records the owner's acceptance. It is not a legal review.
 - **P-?? (draft) — H-35 licence review, 2026-__-__ (owner / counsel ____):** The flagged
   obligations of `ffmpeg-static`, `ua-parser-js`, `rpc-websockets`, Bun/JavaScriptCore, eSpeak NG,
   Phonon-2 and the OpenStreetMap data were reviewed. Outcome per item: ____. Corresponding source

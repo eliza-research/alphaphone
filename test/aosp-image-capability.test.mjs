@@ -99,7 +99,7 @@ test("the telephony plugin is registered and answers only on the verified image"
   // Every @PluginMethod, overrides of Capacitor's inherited permission methods included.
   const methods = [...plugin.matchAll(/@PluginMethod public void (\w+)\(PluginCall call\)\s*\{\s*([^\n]*)/g)];
   assert.equal(methods.length, (plugin.match(/@PluginMethod/g) || []).length, "no plugin method escapes the check");
-  assert.deepEqual(methods.map(m => m[1]).sort(), ["cancelSmsReview", "checkPermissions", "composeSms", "dial", "imageCapability", "listMessages", "listThreads", "markThreadRead", "mmsSendResult", "observeMessages", "requestAccess", "requestPermissions", "requestRole", "searchContacts", "sendMms", "sendSms", "smsSendHistory", "smsSendResult", "status"]);
+  assert.deepEqual(methods.map(m => m[1]).sort(), ["cancelSmsReview", "checkPermissions", "composeSms", "dial", "imageCapability", "listMessages", "listRecentCalls", "listThreads", "markThreadRead", "mmsSendResult", "observeMessages", "requestAccess", "requestPermissions", "requestRole", "searchContacts", "sendMms", "sendSms", "smsSendHistory", "smsSendResult", "status"]);
   for (const [, name, first] of methods) assert.match(first, /^if \(!?refused\(call\)\)/, `${name} re-checks the capability before anything else`);
   for (const callback of plugin.matchAll(/@(?:Permission|Activity)Callback private void (\w+)\([^)]*\) \{ (.*)/g)) assert.match(callback[2], /refused\(call\)/, `${callback[1]} re-checks the capability`);
   assert.doesNotMatch(plugin, /sendTextMessage|sendMultipartTextMessage|ACTION_CALL\b|placeCall|WRITE_CONTACTS|insert\(|applyBatch/, "no direct call or contact write; native SMS dispatch lives only in the shared SmsTelephony behind the native review");
