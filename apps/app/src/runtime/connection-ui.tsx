@@ -66,6 +66,7 @@ import { DevelopmentCloudAgentProtocol, type CloudPhoneTarget } from './developm
 import { checkEntitlement, clearEntitlementKeyCache, describeSubscription, EntitlementError, EntitlementRefresher, isEntitlementSignInFailure, CHOOSE_PLAN_LABEL, MANAGE_PLAN_LABEL, planAdmission, readServiceLimit, redeemFailureMessage, redeemSuccessMessage, serviceLimitMessage, subscriptionSummary, SubscriptionRedeemError, type ServiceLimit, type SubscriptionView } from './subscription-entitlement';
 import { RemoteProtocol, RemoteProtocolError } from './remote-protocol';
 import { phoneContextMessage } from './phone-context';
+import {calendarSource,calendarTarget} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts';
 import { CloudSignInPanel } from './cloud-sign-in-ui';
 import { cloudCredentialStore, cloudSelfRevocationSupported, cloudSignIn, cloudSignInPhone, remoteCredentialStore, nativeCloudRequest, nativeRemoteRequest, openConnectionBrowser, removeStoredCloudCredential, secureConnectionStore } from './native-connection';
 import { findStoppedUserTurn, type StoppedTurn } from './stopped-reply-match';
@@ -381,16 +382,32 @@ const calendarAgendaObservations=new WeakMap<DeviceActions,SingleFlightMemo<Cale
 let calendarAgendaObservationEpoch=0;
 if(typeof window!=='undefined')for(const event of ['alpha:calendar-sync-source-changed','alpha:calendar-document-changed'])window.addEventListener(event,()=>{calendarAgendaObservationEpoch++;});
 /** Source observation cached per requesting owner session/source epoch; no event content is sent. */
-async function calendarAgendaObservation(actions:DeviceActions):Promise<CalendarAgendaSourceObservation|undefined>{
- if(Capacitor.isNativePlatform()||!actions.supportsCalendarAgenda)return;
+async function calendarAgendaObservation(actions:DeviceActions,context:ContextEnvelope,current?:()=>void):Promise<CalendarAgendaSourceObservation|undefined>{
+ if(Capacitor.isNativePlatform()||!actions.supportsCalendarAgenda||context.view!=='calendar'||context.sensitive!==false)return;
+ // Only the captured typed native selection owns this separate browser store.
+ // Canonical, retained and unknown sources must not initialize a legacy document.
+ const selected=context.selectedObject;
+ let requested:CalendarAgendaSourceObservation;
+ try{
+  if(selected?.kind==='calendar-source'){
+   requested=calendarSource({sourceId:selected.id,sourceRevision:selected.revision});
+   if(selected.accountId!==requested.sourceId||selected.sourceRevision!==requested.sourceRevision)return;
+  }else if(selected?.kind==='calendar-event'){
+   const target=calendarTarget({sourceId:selected.accountId,sourceRevision:selected.sourceRevision,eventId:selected.id,revision:selected.revision});
+   requested={sourceId:target.sourceId,sourceRevision:target.sourceRevision};
+  }else return;
+ }catch{return;}
+ // AlphaCalendar's browser adapter owns only its local source.
+ if(requested.sourceId!=='local')return;
+ current?.();
  const sourceEpoch=calendarAgendaObservationEpoch;
  let memo=calendarAgendaObservations.get(actions);
  if(!memo){memo=new SingleFlightMemo<CalendarAgendaSourceObservation>(Infinity,1);calendarAgendaObservations.set(actions,memo);}
- const key=String(sourceEpoch);
- const value=memo.peek(key)?.promise??memo.put(key,undefined,Promise.resolve().then(()=>registerPlugin<{prepareAgentSource():Promise<CalendarAgendaSourceObservation>}>('AlphaCalendar').prepareAgentSource()).then(source=>({sourceId:source.sourceId,sourceRevision:source.sourceRevision})));
+ const key=JSON.stringify([sourceEpoch,requested.sourceId,requested.sourceRevision]);
+ const value=memo.peek(key)?.promise??memo.put(key,undefined,Promise.resolve().then(()=>{current?.();return registerPlugin<{prepareAgentSource():Promise<CalendarAgendaSourceObservation>}>('AlphaCalendar').prepareAgentSource();}).then(source=>calendarSource({sourceId:source.sourceId,sourceRevision:source.sourceRevision})));
  try{
-  const source=await value;
-  return sourceEpoch===calendarAgendaObservationEpoch?source:undefined;
+  const source=await value;current?.();
+  return sourceEpoch===calendarAgendaObservationEpoch&&source.sourceId===requested.sourceId&&source.sourceRevision===requested.sourceRevision?source:undefined;
  }catch{return undefined;}
 }
 async function deviceCapabilities(offered:unknown):Promise<string>{
@@ -2738,7 +2755,7 @@ export const connectionController = {
       const wireText=canonicalProse||!testMocksEnabled?text:message.text;
       const actionPreferences=await readDevicePreferences(requestSignal).catch(()=>{requestSignal.throwIfAborted();return {askBeforeAgentActions:true};});assertCurrent();
       const directRequestedActions=!actionPreferences.askBeforeAgentActions;
-      const calendarAgendaSource=!message.context.sensitive&&selected.actions?await calendarAgendaObservation(selected.actions):undefined;
+      const calendarAgendaSource=!message.context.sensitive&&selected.actions?await calendarAgendaObservation(selected.actions,message.context,assertCurrent):undefined;
       requestSignal.throwIfAborted();assertCurrent();
       await boundNavigation()?.observeCommittedView(true);
       requestSignal.throwIfAborted();assertCurrent();
