@@ -941,6 +941,8 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         if(!openInternalView(this,operation.view))return {status:'failed',summary:'This view is unavailable.'};
         return { status: 'succeeded', summary: `Opened ${operation.view} on this phone.` };
       }
+      // Alpha's workflow read profile admits notes and Calendar ranges only; a shared reminder read never reaches this phone.
+      if (operation.type !== 'browser_navigate') return { status: 'failed', summary: 'This phone does not run that workflow read. Nothing was read.' };
       if (!this.browserNavigateApproved) return { status: 'failed', summary: 'Approved browser navigation is unavailable. No page opened.' };
       const browserSession=connectionController.getSnapshot().session;
       const present=await this.browserNavigateApproved(operation.url, signal, true);

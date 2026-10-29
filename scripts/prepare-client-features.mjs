@@ -33,6 +33,7 @@ function matches(actual, expected) {
 }
 export const CLIENT_FEATURE_PATHS = [
   'packages/contracts/src/device-action-execution.ts',
+  'packages/contracts/src/phone-dial.ts',
   'packages/contracts/src/client-turn-observation.ts',
   'packages/contracts/src/notice-routes.ts',
   'packages/contracts/src/phone-workflow.ts',
@@ -242,6 +243,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-assistant/src/services/device-actions/maps-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/workflow-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/contract.ts',
+  'plugins/plugin-assistant/src/services/device-actions/phone-dial-contract.ts',
   'plugins/plugin-files',
   'plugins/plugin-inbox/src/mailbox',
   'plugins/plugin-calendar/src/linked-sync',
@@ -270,7 +272,7 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   // Only two re-export maps remain: they select upstream leaves for bare package specifiers
   // and carry no declarations of their own.
   const project = (name, text) => source.set(name, {bytes:Buffer.from(text),mode:'100644',sha256:hash(Buffer.from(text))});
-  project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\nexport * from "./packages/contracts/src/device-reviews";\nexport * from "./packages/contracts/src/contracts/theme";\n');
+  project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\nexport * from "./packages/contracts/src/device-reviews";\nexport * from "./packages/contracts/src/workflow-device";\nexport * from "./packages/contracts/src/contracts/theme";\n');
   const text = name => source.get(name).bytes.toString();
   // Upstream voice sessions import the shared random-id helper by its emitted .js name. Plain
   // Node (tests and scripts that strip types) cannot map that to the copied .ts source, so the
