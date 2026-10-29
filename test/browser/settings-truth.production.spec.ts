@@ -8,10 +8,12 @@ import {installResidentAgentPlugin} from './helpers/resident-agent-plugin';
 test.describe.configure({timeout:240_000});
 test.beforeEach(async({},testInfo)=>{test.skip(testInfo.project.name!=='production','Production lane only (flag-off build)');});
 
-type Fixture={snapshot?:Record<string,unknown>;drop?:string[];subscription?:'credits'|'active'|'canceled';agentStartFailure?:boolean};
+type Fixture={snapshot?:Record<string,unknown>;drop?:string[];subscription?:'credits'|'active'|'canceled';agentStartFailure?:boolean;
+ /** Exact USD organization credit balance in the billing snapshot (data.v2.balance); absent when unset. */
+ credits?:string};
 async function nativeStub(page:Page,fixture:Fixture={}){
  await installResidentAgentPlugin(page);
- await page.addInitScript(({snapshot,drop,subscription,agentStartFailure})=>{
+ await page.addInitScript(({snapshot,drop,subscription,agentStartFailure,credits})=>{
   const w=window as any;w.androidBridge={};
   localStorage.setItem('alpha.startup-permissions.v1',JSON.stringify({dismissed:true,attempted:{}}));
   const now=Date.now(),store=new Map<string,string>();
@@ -77,7 +79,8 @@ async function nativeStub(page:Page,fixture:Fixture={}){
       const path=new URL(input.url).pathname;
       if(path==='/api/v1/user')return {status:200,data:{success:true,data:{id:'9f1dc45a-4011-4e44-947a-30d999d24fa5',email:'synthetic-settings@example.invalid'}}};
       if(path==='/api/v1/subscription/entitlement')return {status:404,data:{}};
-      if(path==='/api/v1/billing/limits')return {status:200,data:{success:true,data:{schemaVersion:2,v2:{subscription:subscription==='credits'?{status:'not_applicable',reason:'no_organization_subscription'}:{status:'available',value:{planKey:'plus_monthly',state:subscription||'active',currentPeriodEnd:'2099-01-01T00:00:00.000Z'}}}}}};
+      if(path==='/api/v1/billing/limits')return {status:200,data:{success:true,data:{schemaVersion:2,v2:{subscription:subscription==='credits'?{status:'not_applicable',reason:'no_organization_subscription'}:{status:'available',value:{planKey:'plus_monthly',state:subscription||'active',currentPeriodEnd:'2099-01-01T00:00:00.000Z'}},
+       ...(credits===undefined?{}:{balance:{status:'available',source:'organizations',observedAt:new Date().toISOString(),value:{balance:{value:credits,unit:'usd',currency:'USD'},revision:'1'}}})}}}};
       return {status:404,data:{}};
      }
      return {};
@@ -102,7 +105,7 @@ async function nativeStub(page:Page,fixture:Fixture={}){
     throw Error('Unexpected native operation '+plugin+'.'+method);
    },
   };
- },{snapshot:fixture.snapshot??{},drop:fixture.drop??[],subscription:fixture.subscription,agentStartFailure:fixture.agentStartFailure});
+ },{snapshot:fixture.snapshot??{},drop:fixture.drop??[],subscription:fixture.subscription,agentStartFailure:fixture.agentStartFailure,credits:fixture.credits});
 }
 const app=(page:Page)=>page.locator('[data-alpha-layer="app"]');
 const current=(page:Page)=>page.locator('[data-settings-page]:not([inert])').last();
@@ -418,7 +421,7 @@ test('the browser build of Settings shows no fixture value and no radio or senso
 });
 
 test('Settings › Eliza Cloud account & plan reports the verified plan and opens explicit code entry',async({page})=>{
- await nativeStub(page);
+ await nativeStub(page,{credits:'0'});
  await openSettings(page);
  const row=current(page).getByRole('button',{name:/Eliza Cloud account & plan/});
  await expect(row).toContainText('Plus');await row.click();
@@ -429,8 +432,13 @@ test('Settings › Eliza Cloud account & plan reports the verified plan and open
  // On the phone's own agent Redeem code opens the resident account & plan panel at the code field of
  // its Membership and credits controls.
  const account=page.getByRole('dialog',{name:'Eliza Cloud account & plan',exact:true});
- await expect(account.getByRole('region',{name:'Membership and credits',exact:true}).getByRole('textbox',{name:'Membership code',exact:true})).toBeFocused();
+ const credits=account.getByRole('region',{name:'Membership and credits',exact:true});
+ await expect(credits.getByRole('textbox',{name:'Membership code',exact:true})).toBeFocused();
+ // The billing snapshot's zero balance is shown as zero, never as unavailable or as a funding block.
+ await expect(credits.locator('.alpha-membership-amount')).toHaveText('$0.00USD');
+ await expect(credits.getByText('Not available',{exact:true})).toHaveCount(0);
  expect(await page.evaluate(()=>(window as any).truth.calls.filter((c:any)=>c.plugin==='AlphaConnection'&&c.method==='request'&&new URL(c.input.url).pathname==='/api/v1/subscription/redeem').length)).toBe(0);
+ expect(await page.evaluate(()=>(window as any).truth.calls.some((c:any)=>c.plugin==='AlphaConnection'&&c.method==='request'&&new URL(c.input.url).pathname==='/api/v1/credits/balance'))).toBe(false);
 });
 
 for(const subscription of ['credits','active','canceled'] as const)test(`Settings redemption matches ${subscription} account controls`,async({page})=>{

@@ -20,6 +20,11 @@ const text=(value:unknown):string=>typeof value==='string'?value:'';
 export function automationId(value:unknown):string {const id=text(value);if(!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/.test(id)||id.includes('..'))throw Error('Automation identity is unavailable.');return id;}
 const list=(value:unknown):unknown[]=>{if(!Array.isArray(value))throw Error('Invalid automation list.');return value;};
 export class AutomationOutcomeError extends Error {readonly outcomeKnown=true;}
+// Since elizaOS/eliza #trigger-routes (pin 4557621650) the agent refuses PUT that enables a paused
+// trigger with 429 once its active-trigger limit is reached, before changing anything. A 429 alone
+// stays an unknown outcome (a proxy may answer 429 after the agent applied the write), so enable
+// re-reads the trigger: still paused means a known refusal, enabled means the write landed.
+export const AUTOMATION_LIMIT_MESSAGE='This automation was not enabled. The agent is at its limit of active automations or is busy; pause another automation or try again later.';
 /** Native datetime-local controls use the browser's zone; stored instants keep their zone. */
 export function automationLocalDateInput(stamp:string|number):string{const date=new Date(stamp);return Number.isFinite(date.getTime())?new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16):'';}
 function localDate(value:string):Date{
@@ -97,7 +102,17 @@ export class AutomationsProtocol {
   const result=object(await this.request(id?'/api/triggers/'+automationId(id):'/api/triggers',id?'PUT':'POST',request,signal)),trigger=object(result.trigger);automationId(trigger.id);
   if((id&&trigger.id!==id)||trigger.displayName!==title||trigger.instructions!==instructions||(!id&&trigger.enabled!==false))throw Error('Prompt save was not confirmed. Check this agent before saving again.');
  }
- async setPromptEnabled(id:string,enabled:boolean,signal:AbortSignal){const result=object(await this.request('/api/triggers/'+automationId(id),'PUT',{enabled},signal)),trigger=object(result.trigger);if(trigger.id!==id||trigger.enabled!==enabled)throw Error('Prompt state was not confirmed.');}
+ async setPromptEnabled(id:string,enabled:boolean,signal:AbortSignal){
+  let response:unknown;
+  try{response=await this.request('/api/triggers/'+automationId(id),'PUT',{enabled},signal);}
+  catch(error){
+   if(!enabled||!error||typeof error!=='object'||!('status' in error)||Number(error.status)!==429)throw error;
+   let current:ObjectValue;try{current=await this.prompt(id,signal);}catch{throw error;}
+   if(current.id===id&&current.enabled===true)return;
+   if(current.id===id&&current.enabled===false)throw new AutomationOutcomeError(AUTOMATION_LIMIT_MESSAGE);
+   throw error;
+  }
+  const result=object(response),trigger=object(result.trigger);if(trigger.id!==id||trigger.enabled!==enabled)throw Error('Prompt state was not confirmed.');}
  async deletePrompt(id:string,signal:AbortSignal){if(object(await this.request('/api/triggers/'+automationId(id),'DELETE',undefined,signal)).ok!==true)throw Error('Prompt deletion was not confirmed.');}
  async runPrompt(id:string,signal:AbortSignal){const result=object(await this.request('/api/triggers/'+automationId(id)+'/execute','POST',{},signal)),run=object(result.result);if(result.ok!==true||!['success','error','skipped'].includes(run.status))throw Error('Prompt execution was not confirmed.');if(run.status!=='success')throw new AutomationOutcomeError(text(run.error)||'The prompt did not run. Check its execution history.');return result;}
  async scheduledVerb(id:string,verb:ScheduledVerb,signal:AbortSignal):Promise<unknown>{
