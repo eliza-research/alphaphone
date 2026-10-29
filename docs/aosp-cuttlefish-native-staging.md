@@ -30,6 +30,13 @@ this development command does not satisfy those gates. The product descriptor
 package hashes and the image platform certificate stay unset until the image
 host and release signer are chosen (A-01, A-06).
 
+Launcher APK admission is shared: `scripts/stage-aosp.mjs` passes Alpha's policy
+(`artifacts/test-mocks/`, its `apk-manifest.json` and `release-blockers.mjs`) to
+`packages/os/scripts/android/image-apk-admission.mjs`, which refuses test-mocks paths and web
+bundles, judges the recorded release row, and admits only debuggable APKs for development. The
+same module checks the reviewed source overrides of a staging run (applied patch preimages,
+revisions, paths and bytes against the pinned source lock).
+
 `stage-aosp-native.py --target cuttlefish` selects only `lib/x86_64`, checks ELF64
 little-endian x86 machine headers, and requires the complete resident runtime.
 It verifies the original runtime file inventory, selected x64 Bun artifact pin,
