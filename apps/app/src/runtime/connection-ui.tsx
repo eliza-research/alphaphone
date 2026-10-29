@@ -59,7 +59,7 @@ import { DeviceActions, actionScope, type DeviceCredential, type DeviceExecutor,
 import { cloneElement, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { isAndroid } from '../native';
 import type { AgentReply, ActionProposal, OperationReceipt, ContextEnvelope, VerifiedSession } from './alpha-client';
-import { cloudServiceName, CloudProtocol, CloudProtocolError, type CloudAgent, type CloudEnvironment } from './cloud-protocol';
+import { cloudServiceName, cloudSignInHandOffAvailable, CloudProtocol, CloudProtocolError, type CloudAgent, type CloudEnvironment } from './cloud-protocol';
 import { googleOutcome as signInOutcome, type CloudSignInGoogleOutcome, CloudSignInError, normalizeSignInCode, signInFailureMessage as formatSignInFailureMessage, signInReadiness, validSignInEmail, validSignInPhone, type CloudSignInAuthenticated } from './cloud-sign-in';
 import { DevelopmentCloudAgentProtocol, type CloudPhoneTarget } from './development-cloud-agents';
 import { checkEntitlement, clearEntitlementKeyCache, describeSubscription, EntitlementError, EntitlementRefresher, isEntitlementSignInFailure, CHOOSE_PLAN_LABEL, MANAGE_PLAN_LABEL, planAdmission, readServiceLimit, redeemFailureMessage, redeemSuccessMessage, serviceLimitMessage, subscriptionSummary, SubscriptionRedeemError, type ServiceLimit, type SubscriptionView } from './subscription-entitlement';
@@ -2402,17 +2402,24 @@ export const connectionController = {
   /**
    * The Cloud sign-in hand-off in the browser (cli-session), used by the explicit browser
    * development profile and the test-mocks diagnostic entry. Never a native readiness fallback.
+   * Product bundles fold it away (`cloudSignInHandOffAvailable`): the in-app sign-in is the only path.
    */
   async signInBrowser(environment: CloudEnvironment = state.signIn?.environment ?? (residentCloudFlow() ? residentEnvironment() : cloud.environment)) {
     if (operation) return;
+    if (!cloudSignInHandOffAvailable) { update({ open: true, error: signInFailureMessage('unavailable'), message: '' }); return; }
+    else {
     update({ signIn: null });
     if (residentCloudFlow()) await connectionController.residentBrowserLogin();
     else await connectionController.browserCloudLogin(environment);
+    }
   },
   async residentBrowserLogin() {
+    if (!cloudSignInHandOffAvailable) { update({ open: true, error: signInFailureMessage('unavailable'), message: '' }); return; }
+    else {
     await work(`Opening ${cloudServiceName(cloud.environment)} sign-in…`, residentBrowserLoginAction);
     // A cancelled or failed sign-in never leaves the phone without its agent (P-43).
     await ensureResident();
+    }
   },
   /** The hosted browser has its own login. Review the intended Alpha account before opening it. */
   async residentManagePlan() {
@@ -2484,6 +2491,15 @@ export const connectionController = {
     if(!state.session||residentBinding!=='cloud'){void recheckResidentPlan();return;}
     entitlementRefresher?.refreshNow();
   },
+  /**
+   * A Cloud limit seen outside a chat turn (a Cloud speech 429, cloud-voice.ts) becomes the account
+   * panel's latest limit with its retry time, the same record a refused turn writes. Only for the
+   * Cloud session the request was made with; a late refusal for an earlier account is dropped.
+   */
+  noteCloudServiceLimit(limit: ServiceLimit | null, sessionId: string | undefined) {
+    if(!limit||!sessionId||!service||service.identity.sessionId!==sessionId)return false;
+    update({lastServiceLimit:{...limit,observedAt:Date.now()}});return true;
+  },
   /** A billing refusal asks for fresh plan state; the failed turn is never retried. */
   recheckPlanAfterRefusal() {
     if(!residentCloudFlow()||!entitlementRefresher)return;
@@ -2500,7 +2516,8 @@ export const connectionController = {
     await connectionController.beginSignIn(environment);
   },
   async browserCloudLogin(environment: CloudEnvironment) {
-    await work(`Opening ${cloudServiceName(cloud.environment)} sign-in…`, signal => browserCloudLoginAction(environment, signal));
+    if (!cloudSignInHandOffAvailable) { update({ open: true, error: signInFailureMessage('unavailable'), message: '' }); return; }
+    else await work(`Opening ${cloudServiceName(cloud.environment)} sign-in…`, signal => browserCloudLoginAction(environment, signal));
   },
   async cloudList(environment: CloudEnvironment) {
     if (!hosted) { update({ error: PAIRING_RETIRED }); return; }
@@ -2671,9 +2688,11 @@ export const connectionController = {
       if(replyTo&&(!validateUuid(replyTo.messageId)||replyTo.conversationId!==id||JSON.stringify(replyTo.session)!==JSON.stringify(session)))throw Error('The reply target belongs to a different conversation.');
       if(replyTo){const history=selected.kind==='cloud'?await selected.cloud.messages(selected.agentId,id,requestSignal):await selected.remote.messages(id,requestSignal);assertCurrent();const row=history.messages.find(row=>row.id===replyTo.messageId);if(!row||row.role!==(replyTo.from==='user'?'user':'assistant')||typeof row.text!=='string'||(replyTo.from==='user'?restoredText(row.text,row.userTextFormat):row.text)!==replyTo.text)throw Error('The reply target changed. Reload its conversation before replying.');}
       // Verified peers negotiate the same canonical request format on browser
-      // and Android. Unadvertised legacy peers retain their existing envelope.
+      // and Android. The legacy text envelope is a development compatibility surface:
+      // only test-mocks builds send it to an unnegotiated peer. A product build sends the authored
+      // text; the observation travels only in metadata, never as a client-authored banner.
       const canonicalProse=selected.userTextFormatVersion===1;
-      const wireText=canonicalProse?text:message.text;
+      const wireText=canonicalProse||!testMocksEnabled?text:message.text;
       const actionPreferences=await readDevicePreferences(requestSignal).catch(()=>{requestSignal.throwIfAborted();return {askBeforeAgentActions:true};});assertCurrent();
       const directRequestedActions=!actionPreferences.askBeforeAgentActions;
       const calendarAgendaSource=!message.context.sensitive&&selected.actions?await calendarAgendaObservation(selected.actions):undefined;
