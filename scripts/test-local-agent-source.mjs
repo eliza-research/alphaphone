@@ -10,6 +10,6 @@ const source=sourceDirectory(root);
 for(const test of tests) {
   if(!statSync(resolve(source,test),{throwIfNoEntry:false})?.isFile()) throw new Error(`Required admitted-source test missing: ${test}`);
 }
-execFileSync(process.env.ALPHA_BUN||'bun',['--no-install','--conditions=eliza-source','test',...tests],{
-  cwd:source,stdio:'inherit',
+execFileSync(process.env.ALPHA_BUN||'bun',['--no-install','--conditions=eliza-source','test',...tests,resolve(root,'test/fixtures/agent-identity-canonical.test.ts')],{
+  cwd:source,stdio:'inherit',env:{...process.env,ALPHA_IDENTITY_TEST_SOURCE:source},
 });

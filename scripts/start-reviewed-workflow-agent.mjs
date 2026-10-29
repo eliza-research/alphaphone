@@ -12,7 +12,7 @@ import {spawn, execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
 import {AGENT_MODEL,agentModelEnvironment} from './agent-model.mjs';
-import {AGENT_CHARACTER_ENVIRONMENT} from './agent-identity.mjs';
+import {AGENT_CHARACTER_ENVIRONMENT,freshAgentProfile,prepareAgentIdentityConfig} from './agent-identity.mjs';
 import {LOCAL_EMBEDDING_ROUTE,localEmbeddingEnvironment,reportMissingEmbeddingRoute} from './agent-embeddings.mjs';
 import {sourceDirectory} from './local-agent-source.mjs';
 // The default is artifacts/local-agent-resident-<commit> from `npm run agent:prepare`; --source selects
@@ -27,6 +27,7 @@ if (!fs.existsSync(path.join(source,'node_modules'))) {
 const profile = path.resolve(options.profile || path.join(os.homedir(), '.local/share/alphaphone/local-reviewed-workflows'));
 const port = Number(options.port || 47848);
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid port');
+const freshProfile=freshAgentProfile(profile);
 const keyPath = path.join(os.homedir(), '.config/alphaphone/cerebras-key');
 if ((fs.statSync(keyPath).mode & 0o077) !== 0) throw new Error('Provider key must be owner-only');
 fs.mkdirSync(profile, {recursive:true, mode:0o700});
@@ -38,7 +39,7 @@ const entry = path.join(source,'packages/app/src/runtime/dev-server.ts');
 if (!fs.existsSync(entry)) throw new Error('Eliza app host source is missing');
 const config = path.join(profile,'eliza.json');
 if (!fs.existsSync(config)) fs.writeFileSync(config, JSON.stringify({cloud:{enabled:false}, serviceRouting:{llmText:{backend:'cerebras',transport:'direct',smallModel:AGENT_MODEL,largeModel:AGENT_MODEL},embeddings:{...LOCAL_EMBEDDING_ROUTE}},plugins:{entries:{scheduling:{enabled:false},'personal-assistant':{enabled:false}}}})+'\n', {mode:0o600, flag:'wx'});
-const savedConfig=JSON.parse(fs.readFileSync(config,'utf8')), modelEnvironment=agentModelEnvironment(savedConfig);
+const savedConfig=await prepareAgentIdentityConfig(config,JSON.parse(fs.readFileSync(config,'utf8')),{freshProfile}), modelEnvironment=agentModelEnvironment(savedConfig);
 reportMissingEmbeddingRoute(savedConfig,config);
 const log = fs.openSync(path.join(profile,'server.log'), 'a', 0o600);
 fs.fchmodSync(log, 0o600);

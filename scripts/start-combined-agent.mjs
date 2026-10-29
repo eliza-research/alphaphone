@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import {spawn,execFileSync} from 'node:child_process';
 import {sourceManifest,sha} from './combined-agent-source.mjs';
 import {AGENT_MODEL,agentModelEnvironment} from './agent-model.mjs';
-import {AGENT_CHARACTER_ENVIRONMENT} from './agent-identity.mjs';
+import {AGENT_CHARACTER_ENVIRONMENT,freshAgentProfile,prepareAgentIdentityConfig} from './agent-identity.mjs';
 const nodeBin=process.env.ALPHA_NODE_BIN,bunBin=process.env.ALPHA_BUN;
 if(!nodeBin||!bunBin||!path.isAbsolute(nodeBin)||!path.isAbsolute(bunBin)||path.basename(nodeBin)!=='node')throw Error('Explicit absolute ALPHA_NODE_BIN (named node) and ALPHA_BUN required');
 if(execFileSync(nodeBin,['--version'],{encoding:'utf8'}).trim()!=='v24.15.0'||execFileSync(bunBin,['--version'],{encoding:'utf8'}).trim()!=='1.4.2')throw Error('Combined runtime requires Node24.15.0 and Bun1.4.2');
@@ -28,14 +28,20 @@ if(profile.startsWith(realSource+path.sep)||profile===realSource)throw Error('Pr
 const privatePath=(file,directory=false)=>{const st=fs.lstatSync(file);if(st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o077)!==0||(directory?!st.isDirectory():!st.isFile()))throw Error('Private path must be owned, non-symlink and owner-only');};
 const keyPath=path.join(os.homedir(),'.config/alphaphone/cerebras-key');privatePath(keyPath);
 const voice={...admitSpeech('tts'),...admitSpeech('asr')};
+const freshProfile=freshAgentProfile(profile);
 const configValue={cloud:{enabled:false},serviceRouting:{llmText:{backend:'cerebras',transport:'direct',smallModel:AGENT_MODEL,largeModel:AGENT_MODEL}},plugins:{entries:{scheduling:{enabled:false},'personal-assistant':{enabled:false}}}};
 if(fs.existsSync(profile)){privatePath(profile,true);if(!fs.existsSync(path.join(profile,'combined-profile.json')))throw Error('Refuse adoption of another existing profile');}
 if(process.argv.includes('--validate-only')){console.log(JSON.stringify({validated:true,port,revision:actual.revision,contentSha256:actual.contentSha256,launched:false}));process.exit(0);}
 fs.mkdirSync(profile,{recursive:true,mode:0o700});privatePath(profile,true);
 const marker=path.join(profile,'combined-profile.json');if(!fs.existsSync(marker))fs.writeFileSync(marker,JSON.stringify({kind:'alphaphone-combined',port})+'\n',{mode:0o600,flag:'wx'});privatePath(marker);
 const markerValue=JSON.parse(fs.readFileSync(marker,'utf8'));if(markerValue.kind!=='alphaphone-combined'||markerValue.port!==port)throw Error('Wrong profile marker');
-const config=path.join(profile,'eliza.json');if(!fs.existsSync(config))fs.writeFileSync(config,JSON.stringify(configValue)+'\n',{mode:0o600,flag:'wx'});privatePath(config);if(JSON.stringify(JSON.parse(fs.readFileSync(config,'utf8')))!==JSON.stringify(configValue))throw Error('Profile routing differs; review migration explicitly');
-const modelEnvironment=agentModelEnvironment(JSON.parse(fs.readFileSync(config,'utf8')));
+const config=path.join(profile,'eliza.json');if(!fs.existsSync(config))fs.writeFileSync(config,JSON.stringify(configValue)+'\n',{mode:0o600,flag:'wx'});privatePath(config);
+const currentConfig=JSON.parse(fs.readFileSync(config,'utf8'));
+const {agents:identityConfig,...routingConfig}=currentConfig;
+if(JSON.stringify(routingConfig)!==JSON.stringify(configValue))throw Error('Profile routing differs; review migration explicitly');
+if(identityConfig&&(Object.keys(identityConfig).some(key=>key!=='list')||!Array.isArray(identityConfig.list)||identityConfig.list.length!==1||Object.keys(identityConfig.list[0]).some(key=>!['id','default','name','identityName'].includes(key))))throw Error('Combined profile has unreviewed agent configuration');
+const savedConfig=await prepareAgentIdentityConfig(config,currentConfig,{freshProfile});
+const modelEnvironment=agentModelEnvironment(savedConfig);
 const tokenPath=path.join(profile,'owner-token');if(!fs.existsSync(tokenPath))fs.writeFileSync(tokenPath,crypto.randomBytes(32).toString('hex'),{mode:0o600,flag:'wx'});privatePath(tokenPath);
 const token=fs.readFileSync(tokenPath,'utf8').trim(),key=fs.readFileSync(keyPath,'utf8').trim();if(!token||!key)throw Error('Required private credential is empty');
 const logPath=path.join(profile,'server.log');if(fs.existsSync(logPath))privatePath(logPath);const log=fs.openSync(logPath,'a',0o600);

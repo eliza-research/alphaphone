@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {preparePrivateRuntimeProfile,runtimeEnvironment,startPrivateRuntimeProcess,writePrivateRuntimeJson} from '../vendor/eliza/packages/agent/native-host/private-runtime-launch.mjs';
 import {AGENT_MODEL,agentModelEnvironment} from './agent-model.mjs';
-import {AGENT_CHARACTER_ENVIRONMENT} from './agent-identity.mjs';
+import {AGENT_CHARACTER_ENVIRONMENT,freshAgentProfile,prepareAgentIdentityConfig} from './agent-identity.mjs';
 import {LOCAL_EMBEDDING_ROUTE,localEmbeddingEnvironment,reportMissingEmbeddingRoute} from './agent-embeddings.mjs';
 import {agentTtsEnvironment} from './agent-tts.mjs';
 import {developmentCartesiaEnvironment} from './dev-cartesia.mjs';
@@ -27,6 +27,7 @@ if (redaction === 'all') {
 const profile = path.resolve(process.env.ALPHA_REMOTE_PROFILE || path.join(os.homedir(), '.local/share/alphaphone/local-remote'));
 const port = Number(process.env.ALPHA_REMOTE_PORT || 47839);
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid port');
+const freshProfile=freshAgentProfile(profile);
 const keyPath = path.join(os.homedir(), '.config/alphaphone/cerebras-key');
 let providerKey = process.env.CEREBRAS_API_KEY;
 if (!providerKey && fs.existsSync(keyPath)) { if ((fs.statSync(keyPath).mode & 0o077) !== 0) throw new Error('Provider key must be owner-only'); providerKey=fs.readFileSync(keyPath,'utf8').trim(); }
@@ -42,8 +43,9 @@ const privateProfile=await preparePrivateRuntimeProfile({tokenPath,configPath:co
  createToken:()=>crypto.randomBytes(32).toString('hex'),
  initialConfig:{cloud:{enabled:false},serviceRouting:{llmText:{backend:'cerebras',transport:'direct',smallModel:AGENT_MODEL,largeModel:AGENT_MODEL},embeddings:{...LOCAL_EMBEDDING_ROUTE}},plugins:{entries:{'personal-assistant':{enabled:false}}}},
 });
-const modelEnvironment=agentModelEnvironment(privateProfile.config);
-reportMissingEmbeddingRoute(privateProfile.config,config);
+const savedConfig=await prepareAgentIdentityConfig(config,privateProfile.config,{freshProfile});
+const modelEnvironment=agentModelEnvironment(savedConfig);
+reportMissingEmbeddingRoute(savedConfig,config);
 if(!/^[a-f0-9]{64}$/.test(privateProfile.token))throw Error('Invalid owner token');
 const asrEnvironment = agentAsrEnvironment();
 const ttsEnvironment = agentTtsEnvironment();
