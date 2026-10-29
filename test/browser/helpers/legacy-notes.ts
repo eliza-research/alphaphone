@@ -16,6 +16,8 @@ export async function openLegacyNotes(page:Page){
 /** Navigate only; leave raw-store setup and recovery assertions to the caller. */
 export async function selectLegacyNotes(page:Page){
  await page.getByRole('button',{name:'Notes',exact:true}).click();
+ // The source choice is only counted once the Notes view is active, not on the home screen.
+ await expect(page.locator('html')).toHaveAttribute('data-active-view','notes');
  const older=page.getByRole('button',{name:/^(Older|Previous) notes$/});
  if(await older.count())await older.click();
 }

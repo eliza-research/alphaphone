@@ -81,12 +81,21 @@ later Cuttlefish boot record must name the same packages. The 2026-10-25 develop
 on this workstation's local Cuttlefish; reusing it as the image host is possible only if its
 packages are the ones recorded.
 
-### D2. Managed or key-file image signing
+### D2. Managed or key-file image signing. Settled 2026-10-29: key files, in CI
 
-Follows #661 D1. Key files: `--keys-dir` only. Managed: add `--pkcs11-config`,
-`--avb-signing-helper`, `--payload-signer [--payload-signer-arg ...]`,
-`--payload-signer-signature-size 512`, and use a stable key-directory path (token labels are
-`<key-dir real path>/<name>.pk8`; `--dry-run` prints them as `tokenLabels`).
+H-01 is decided ([#661 D1](661-release-key-custody-ceremony.md#d1-h-01-where-do-the-release-keys-live-after-the-ceremony-decided-2026-10-29)):
+the keys are GitHub Actions secrets, and signing happens in the draft `sign-image` job of
+[drafts/661-release-signing.workflow.yml](drafts/661-release-signing.workflow.yml). That job
+uses key-file mode (`--keys-dir` only). It decrypts the eleven image keys into tmpfs, sets them
+to 0600, runs a `--dry-run` and then the real run, and shreds the keys. The managed options
+(`--pkcs11-config`, `--avb-signing-helper`, `--payload-signer`,
+`--payload-signer-signature-size 512`) stay available for a later move to custody B or C.
+
+Open points the owner should know before enabling `sign-image`:
+- Disk space on a hosted runner for the target-files zip plus otatools has not been checked.
+- Releasetools has only run against mocks (`test/owner-sign-aosp-release-edges.test.mjs`).
+- Input transport is [#661 D2](661-release-key-custody-ceremony.md#d2-how-do-unsigned-inputs-reach-the-ci-signing-job):
+  a target-files zip may exceed the 2 GB release-asset cap, so a URL plus SHA-256 is the default.
 
 ### D3. Full or incremental OTA for the known-good release
 
@@ -140,8 +149,12 @@ and record the **unsigned target-files SHA-256** in the build record.
 
 ### 3. H-22 Sign the image and the OTA (release owner)
 
+Under the 2026-10-29 decision, this runs inside the CI `sign-image` job (D2). The commands
+below are what that job does, and the manual equivalent on a trusted host if the owner ever
+signs outside CI:
+
 ```sh
-# option A custody: decrypt into a new tmpfs directory, then tighten every file the job reads
+# key-file custody: decrypt into a new tmpfs directory, then tighten every file the job reads
 node vendor/eliza/packages/os/scripts/android/decrypt-release-keys.ts --input <bundle> \
   --output /dev/shm/keys --passphrase-file /dev/shm/pass
 chmod 600 /dev/shm/keys/*          # public certificates and avb_pkmd.bin too: the job requires 0600
