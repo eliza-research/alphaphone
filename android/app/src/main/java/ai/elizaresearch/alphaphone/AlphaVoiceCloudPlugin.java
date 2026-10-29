@@ -36,8 +36,11 @@ public final class AlphaVoiceCloudPlugin extends LocalSpeechBridgePlugin {
  @Override protected boolean launch(PluginCall call,Runnable request){return LateLaunch.ask(call,request);}
 
  @PluginMethod public void workflowPresentationCapabilities(PluginCall call){JSObject result=new JSObject();result.put("protocol",2);call.resolve(result);}
- /** Keeps a finished draft as a Notes recording (AlphaNoteAudio owns the stored copy). */
- @PluginMethod public void saveRecording(PluginCall call){getActivity().runOnUiThread(()->{try{String key=call.getString("recordingId");AlphaNoteAudioPlugin store=(AlphaNoteAudioPlugin)getBridge().getPlugin("AlphaNoteAudio").getInstance();File chosen=recording().selected(key);if(chosen==null)throw new IllegalStateException();call.resolve(store.retain(chosen,key,call.getString("noteId"),recording().durationMs(),call.getString("transcript")));}catch(Exception error){call.reject("The recording could not be saved. Keep this draft and retry.");}});}
+ /**
+  * Keeps a finished draft as a Notes recording (AlphaNoteAudio owns the stored copy). The draft
+  * lock is held across selection, duration and retention so a cancel or new draft cannot interleave.
+  */
+ @PluginMethod public void saveRecording(PluginCall call){getActivity().runOnUiThread(()->{try{String key=call.getString("recordingId");AlphaNoteAudioPlugin store=(AlphaNoteAudioPlugin)getBridge().getPlugin("AlphaNoteAudio").getInstance();ai.eliza.voice.LocalVoiceRecording drafts=recording();JSObject kept;synchronized(drafts){File chosen=drafts.selected(key);if(chosen==null)throw new IllegalStateException();kept=store.retain(chosen,key,call.getString("noteId"),drafts.durationMs(),call.getString("transcript"));}call.resolve(kept);}catch(Exception error){call.reject("The recording could not be saved. Keep this draft and retry.");}});}
 
  // ---- Explicit Cloud voice profile (credential-bound) -----------------------------------------
 
