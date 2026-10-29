@@ -106,6 +106,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-native-browser-surface/src/browsing-session.ts',
   'plugins/plugin-native-browser-surface/src/page-reading.ts',
   'plugins/plugin-native-browser-surface/src/page-source.ts',
+  'plugins/plugin-native-browser-surface/src/tab-host.ts',
   'packages/core/src/schema-types.ts',
   'packages/core/src/types/json.ts',
   'packages/core/src/types/schema.ts',

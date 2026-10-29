@@ -12,7 +12,8 @@ import {execFileSync} from 'node:child_process';
 // They do not establish device behaviour: see remainingGates in the inventory.
 const read = file => fs.readFileSync(file, 'utf8');
 const inventory = JSON.parse(read('config/login-surfaces.json'));
-const plugin = read('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaBrowserPlugin.java');
+// The native tab host is shared (plugin-native-browser-surface); Alpha's plugin only names it.
+const plugin = read('vendor/eliza/plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface/BrowserTabHostPlugin.java');
 // The browser's login adapters are staged into the app from the reviewed pin (plugin-native-browser-surface).
 const sharedBrowser = 'vendor/eliza/plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface/';
 
@@ -127,8 +128,9 @@ test('the HTTP authentication prompt fills only for an engine-authenticated orig
   assert.match(auth, /public AutofillValue getAutofillValue\(\) \{\s*return admitted\(\) \? super\.getAutofillValue\(\) : null;\s*\}/);
   assert.match(auth, /public void autofill\(AutofillValue value\) \{\s*if \(admitted\(\)\)\s*super\.autofill\(value\);\s*\}/);
   // Alpha passes the integrated vault's extras keys; a field without them is never bound.
-  assert.match(plugin, /static final BrowserAutofillExtras AUTOFILL_EXTRAS = new BrowserAutofillExtras\(PasswordAutofillPolicy\.FIELD_ORIGIN, PasswordFormPolicy\.TOP_ORIGIN_EXTRA\);/);
-  assert.match(plugin, /BrowserHttpAuthAutofill\.field\(getActivity\(\),authOrigin,bound,false,AUTOFILL_EXTRAS\);[\s\S]{0,120}BrowserHttpAuthAutofill\.field\(getActivity\(\),authOrigin,bound,true,AUTOFILL_EXTRAS\);/);
+  const alphaStores = read('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaBrowserStores.java');
+  assert.match(alphaStores, /\.autofillExtras\(new BrowserAutofillExtras\(PasswordAutofillPolicy\.FIELD_ORIGIN,PasswordFormPolicy\.TOP_ORIGIN_EXTRA\)\)/);
+  assert.match(plugin, /BrowserHttpAuthAutofill\.field\(getActivity\(\),authOrigin,bound,false,config\(\)\.autofillExtras\);[\s\S]{0,140}BrowserHttpAuthAutofill\.field\(getActivity\(\),authOrigin,bound,true,config\(\)\.autofillExtras\);/);
   assert.match(plugin, /java\.util\.function\.BooleanSupplier bound=\(\)->authBinding!=null&&authBinding\.admits\(authSnapshot\(t,host,realm\)\)&&siteDialogTab==t;/);
   assert.match(plugin, /siteDialogRevoke=\(\)->\{if\(authBinding!=null\)authBinding\.revoke\(\);BrowserHttpAuthAutofill\.exclude\(user,pass\);\};/);
   // Cancel, Back, tab change, navigation and process loss all dismiss through these two paths, which revoke first.
@@ -287,7 +289,7 @@ test('website fills bind to the committed HTTPS top-level origin of an eligible 
   // With engine-attested fields the WebView's own structure (no per-field origins) is never offered.
   assert.match(credential, /onProvideAutofillVirtualStructure\(ViewStructure structure,int flags\) \{\n\s*if\(canAutofill\(tab\)&&tab\.fields==null\) \{/);
   assert.match(credential, /onProvideAutofillStructure\(ViewStructure structure,int flags\) \{\n\s*if\(canAutofill\(tab\)&&tab\.fields==null\)super\.onProvideAutofillStructure/);
-  assert.match(credential, /String origin=topOrigin\(tab\.url\);\n\s*if\(origin!=null && structure\.getExtras\(\)!=null\)structure\.getExtras\(\)\.putString\(PasswordFormPolicy\.TOP_ORIGIN_EXTRA,origin\);/);
+  assert.match(credential, /String origin=topOrigin\(tab\.url\);\n\s*if\(origin!=null && structure\.getExtras\(\)!=null\)structure\.getExtras\(\)\.putString\(config\(\)\.autofillExtras\.topOrigin,origin\);/);
   assert.match(credential, /else structure\.setChildCount\(0\);/, 'an ineligible tab exposes no fields');
   assert.match(credential, /public void autofill\(SparseArray<AutofillValue> values\) \{\n\s*if\(canAutofill\(tab\)&&tab\.fields==null\)super\.autofill\(values\);/, 'late values for an ineligible tab are dropped');
   const top = plugin.slice(plugin.indexOf('static String topOrigin('));
@@ -309,7 +311,7 @@ test('secrets stay out of observations, transcripts and logs', () => {
   for (const file of ['apps/app/src/passwords/password-manager.ts', 'apps/app/src/browser/password-provider.ts', 'apps/app/src/prototype/browser-adapter.ts']) {
     assert.doesNotMatch(read(file), /console\.(log|info|warn|error|debug)\(/, `${file} does not log`);
   }
-  for (const file of ['AlphaBrowserPlugin.java', 'PasswordProviderSupport.java', sharedBrowser + 'BrowserLoginFields.java', sharedBrowser + 'BrowserFieldOrigin.java', sharedBrowser + 'BrowserHttpAuthAutofill.java']) {
+  for (const file of ['AlphaBrowserPlugin.java', 'PasswordProviderSupport.java', sharedBrowser + 'BrowserTabHostPlugin.java', sharedBrowser + 'BrowserReviewedReading.java', sharedBrowser + 'BrowserLoginFields.java', sharedBrowser + 'BrowserFieldOrigin.java', sharedBrowser + 'BrowserHttpAuthAutofill.java']) {
     const text = read(file.startsWith(sharedBrowser) ? file : 'android/app/src/main/java/ai/elizaresearch/alphaphone/' + file);
     const logs = [...text.matchAll(/(?:android\.util\.)?Log\.[vdiwe]\([^;]*;/g)].map(match => match[0]);
     for (const line of logs) assert.doesNotMatch(line, /url|value|password|username|structure|getText|origin/i, `${file}: ${line}`);
@@ -375,7 +377,7 @@ test('website field origins come only from the engine\'s sourceOrigin, never fro
   assert.match(code, /String top = BrowserFieldOrigin\.exactHttps\(host\.snapshot\(\)\.state\.documentUrl\);[\s\S]{0,260}bundle\.putString\(extras\.topOrigin, top\);/);
   assert.equal((code.match(/extras\.fieldOrigin/g) || []).length, 1, 'the per-field origin is written in one place');
   // Alpha passes the integrated vault's keys when it installs the adapter.
-  assert.match(plugin, /t\.fields=BrowserLoginFields\.install\(t\.web,\(\)->fieldSnapshot\(t\),AUTOFILL_EXTRAS\);/);
+  assert.match(plugin, /t\.fields=BrowserLoginFields\.install\(t\.web,\(\)->fieldSnapshot\(t\),config\(\)\.autofillExtras\);/);
   // Fail closed: no binding or no admission, no fields; late values are dropped.
   assert.match(code, /if \(current == null \|\| !admitted\(\)\) \{\s*structure\.setChildCount\(0\);\s*return;\s*\}/);
   assert.match(code, /public int getImportantForAutofill\(\) \{\s*return admitted\(\) \? View\.IMPORTANT_FOR_AUTOFILL_YES\s*: View\.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS;\s*\}/);
@@ -397,7 +399,7 @@ test('website field origins come only from the engine\'s sourceOrigin, never fro
     assert.doesNotMatch(strip(text), /\bLog\.[vdiwe]\(|printStackTrace|System\.(?:out|err)|SharedPreferences|FileOutputStream/, name);
   }
   // The browser installs the adapter before any load and makes it the tab's only Autofill surface.
-  assert.match(plugin, /t\.fields=BrowserLoginFields\.install\(t\.web,\(\)->fieldSnapshot\(t\),AUTOFILL_EXTRAS\);\n\s*if\(t\.fields!=null\)t\.frame\.addView\(t\.fields\.anchor, new FrameLayout\.LayoutParams\(-1,-1\)\);/);
+  assert.match(plugin, /t\.fields=BrowserLoginFields\.install\(t\.web,\(\)->fieldSnapshot\(t\),config\(\)\.autofillExtras\);\n\s*if\(t\.fields!=null\)t\.frame\.addView\(t\.fields\.anchor, new FrameLayout\.LayoutParams\(-1,-1\)\);/);
   assert.ok(plugin.indexOf('t.fields=BrowserLoginFields.install(') < plugin.indexOf('t.web.setWebViewClient(new WebViewClient() {'), 'installed before the tab can load');
   assert.match(plugin, /t\.web\.setImportantForAutofill\(t\.fields==null\?View\.IMPORTANT_FOR_AUTOFILL_YES:View\.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS\);/);
   assert.match(plugin, /snapshot\.supported=t\.fields!=null&&!destroyed&&tabs\.get\(t\.id\)==t;\n\s*snapshot\.state=autofillState\(t\);snapshot\.navigation=t\.navigation;/);

@@ -339,7 +339,14 @@ There is no automatic Eliza Cloud website sign-in fallback.
 
 Third-party web content runs in an isolated native browser surface; it must not
 receive the application's Capacitor bridge. Origin, context revision, consent,
-sensitive fields and cancellation remain bound to each action. Credentials use
+sensitive fields and cancellation remain bound to each action. The native tab
+lifecycle (tab model, persistent and private profiles, pop-ups, app links, clearing,
+find, reviewed reading and attested login fields) is upstream
+`BrowserTabHostPlugin` in `plugin-native-browser-surface`, and the renderer's tab
+events and document revisions are its `BrowserTabSession` (`./tab-host`).
+`AlphaBrowserPlugin` supplies only the Capacitor name, Alpha's installed browser
+identity (`AlphaBrowserStores.IDENTITY`) and its speech route; `browser-adapter.ts`
+binds the session model to Alpha's view. Credentials use
 Android Keystore-backed storage in the no-backup directory. The renderer bridge
 and background consumers use upstream `JsonCredentialSlots` through
 `AlphaCredentialStore`, sharing one process-wide lock and compare-and-exchange.
