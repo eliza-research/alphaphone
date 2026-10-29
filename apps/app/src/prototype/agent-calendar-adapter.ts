@@ -12,6 +12,7 @@ import {canonicalCalendarRow,calendarFormCreate,calendarFormPatch,canonicalHomeC
 import {agentReminderLead,homeCalendarValues,overdueAgendaNext,presentAgentAgendaFeed,presentHomeAgendaCard,type HomeAgendaCardInput} from './home-cards';
 import {getZonedDateParts,addDaysToLocalDate} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/internal/time';
 import {eventEditorMutability} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/components/event-editor-policy';
+import {calendarDayObservation} from '../runtime/calendar-day-observation';
 type Bag=Record<string,any>;
 export const nativeCalendarScope=(shell:Bag|undefined)=>!!shell&&Capacitor.getPlatform()==='android'&&shell.vget('calendar').calendarAuthority==='android-native';
 export const browserCalendarScope=(shell:Bag|undefined)=>testMocksEnabled&&!!shell&&Capacitor.getPlatform()==='web'&&shell.vget('calendar').calendarAuthority==='browser-local';
@@ -63,6 +64,10 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
   const key=model?.sourceKeyForHandle(state.form?.cal);return key?model?.sourceSelection(key):undefined;
  };
  const sourceRows=()=>controller?.state.calendars.map(c=>({id:controller!.sourceHandle(calendarSourceKey(c)),name:c.summary,sub:c.accountEmail??c.provider,color:'acc',on:true}))??[];
+ p.calendarDayObservation=function(){
+  const shell=this.S(),connection=connectionController.getSnapshot(),target=port(),model=controller?.state;
+  return calendarDayObservation({live:owner===this&&this.live,view:shell.view||'home',screen:shell.screen||'home',hidden:document.hidden,pageSuspended:this.pageSuspended===true,secure:shell.secure===true,shade:!!shell.shade,connectionOpen:connection.open,recovery:!!connection.residentRecoveryReason||!!connection.residentRecovery,clockDraft:!!this.clockSelection?.(),ownerCurrent:!!target?.current(),ownerKey:model?.ownerKey??null,expectedOwnerKey:target?calendarOwnerKey(target):null,status:model?.status??'disconnected',mutating:model?.mutating===true,calendar:this.vget('calendar')},zone());
+ };
  views.calendar.displaySources=()=>deviceCalendarScope(owner)?displaySources?.():{native:false,canonical:true,status:controller?.state.status??'disconnected',ready:controller?.state.status==='ready',loading:controller?.state.status==='loading',error:controller?.state.status==='error',sources:sourceRows(),retry:()=>refresh(true)};
  function newForm(api:Bag){
   const state=api.get('calendar');if(state.form){api.toast('Keep or finish the current form before creating another event.');return;}

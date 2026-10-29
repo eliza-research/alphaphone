@@ -31,6 +31,7 @@ import {openDomainRecovery} from '../browser/domain-recovery';
 import {retireClockReviews} from './clock-agent-review';
 import { negotiateEnabledViews } from './device-view-profile';
 import { workflowPresentationProtocol } from './workflow-presentation';
+import {ClientObservationSupportSession} from './client-observation-support';
 import {clockHandoffCapabilities} from './clock-contract';
 import {developmentIdentity,readDevelopmentIdentity,verifyDevelopmentIdentity,developmentOwnerRecovery,assertDevelopmentIdentity,developmentProfiles,type DevelopmentProfile} from '../browser/development-identity';
 import {developmentCloudKey} from '../browser/development-cloud';
@@ -293,6 +294,9 @@ let developmentPageSuspended = false;
 let state: ConnectionSnapshot = { startupResolved:false, inferenceOffline: typeof navigator !== 'undefined' && navigator.onLine === false, phoneActionsAvailable:false, phoneCapabilityReason:'', actionHistory: [], conversations: [], history: null, cloudAccount: null, open: false, busy: false, message: '', error: '', kind: residentAlwaysPresent ? 'starting' : 'offline', name: residentAlwaysPresent ? RESIDENT_NAME : 'Offline', session: null, agents: [] };
 let active: Active | null = null, operation: AbortController | null = null;
 let startup: Promise<void> | null = null, epoch = 0;
+// Unsupported peers keep the ordinary context; optional fields require a current process handshake.
+let clientObservationSession:ClientObservationSupportSession|undefined;
+function clearClientObservationSupport(){clientObservationSession?.clear();clientObservationSession=undefined;}
 let sending: AbortController | null = null;
 let developmentVoiceExpiresAt=0;
 const appRequests = new Set<AbortController>();
@@ -652,6 +656,7 @@ function update(patch: Partial<ConnectionSnapshot>) {
 // P-43: where the resident is always present no "no agent" choice is ever stored.
 function save(selection: Selection) { localStorage.setItem(SELECTION, JSON.stringify(residentAlwaysPresent && (selection.kind === 'none' || selection.kind === 'offline') ? { kind: 'resident' } : selection)); }
 function retire(name?: string) {
+  clearClientObservationSupport();
   retireConversationEvents();
   retireReadReplies();
   const retirement=Promise.allSettled([state.session?pauseHostedBackground(state.session.sessionId):Promise.resolve(),retireClockReviews()]).then(results=>{const failed=results.find(result=>result.status==='rejected');if(failed?.status==='rejected')throw failed.reason;});
@@ -777,6 +782,7 @@ async function settleResidentAfterStartup() {
   update({ kind: 'recovering' });
 }
 function activate(next: Active, session: VerifiedSession, name: string) {
+  clearClientObservationSupport();
   retireConversationEvents();
   retireReadReplies();
   active?.viewNavigation?.dispose();
@@ -786,6 +792,14 @@ function activate(next: Active, session: VerifiedSession, name: string) {
   for(const request of appRequests)request.abort(new DOMException('The connection changed','AbortError'));
   epoch++; sending?.abort(new DOMException('The connection changed.', 'AbortError')); sending = null; active = next;
   update({ residentRecoveryReason:undefined,residentRecovery:undefined,phoneActionsAvailable:!!next.actions, conversations: [], history: null, conversationDelivery:undefined,conversationEvents:'unavailable', historyError: '', historyPartial:false, replyNotice:'', actionHistory: [], kind: next.kind, name, session, open: false, message: next.kind === 'resident' && state.inferenceOffline ? '' : 'Connected', error: '' });
+  // Canonical app Calendar records currently belong to this resident transport only.
+  // Read the existing allowed authenticated status route, never a native auth/status expansion.
+  if(next.kind==='resident'){
+    const generation=epoch,controller=new AbortController();appRequests.add(controller);
+    const peer=new ClientObservationSupportSession({...session,connectionEpoch:generation},()=>epoch===generation&&active===next&&state.session===session,signal=>next.remote.request('/api/status',undefined,signal));
+    clientObservationSession=peer;
+    void peer.handshake(controller.signal).catch(()=>{}).finally(()=>appRequests.delete(controller));
+  }
   startConversationEvents(next,session);
 }
 /**
@@ -2683,7 +2697,7 @@ export const connectionController = {
     if (operation) throw new Error('Finish the connection or history operation before sending.');
     if(replyTo&&!this.messageTargetCurrent(replyTo))throw Error('The reply target belongs to a different conversation.');
     const authoredRequestText=text;
-    const message = phoneContextMessage(text, context);
+    let message = phoneContextMessage(text,{...context,calendarDay:undefined});
     if (sending) throw new Error('Wait for the current reply before sending another message.');
     const selected = active, session = state.session, generation = epoch;
     requestedCameraContinuation=undefined;
@@ -2706,6 +2720,12 @@ export const connectionController = {
         if (!selected.remote.session || selected.remote.session.expiresAt <= Date.now()) throw Object.assign(new Error('Your session has expired. Pair again.'), { code: 'session_expired' });
       }
       const assertCurrent=()=>{requestSignal.throwIfAborted();if(generation!==epoch||selected!==active||state.session?.sessionId!==session.sessionId||(expectedConversationId!==undefined&&conversationMemory.get(conversationKey(session))!==expectedConversationId))throw Error('The connection or conversation changed.');};
+      const observationSession=clientObservationSession;
+      // Legacy text/alphaPhone projections remain day-free; plain-v1 alone never admits the field.
+      if(context.calendarDay&&selected.userTextFormatVersion===1&&observationSession){
+        const admitted=await observationSession.context(context,requestSignal);assertCurrent();
+        message=phoneContextMessage(text,admitted);
+      }
       const id=await ensureSelectedConversation(selected,session,requestSignal,assertCurrent);
       if(expectedConversationId!==undefined&&id!==expectedConversationId)throw Error('The voice conversation changed.');
       if(replyTo&&(!validateUuid(replyTo.messageId)||replyTo.conversationId!==id||JSON.stringify(replyTo.session)!==JSON.stringify(session)))throw Error('The reply target belongs to a different conversation.');

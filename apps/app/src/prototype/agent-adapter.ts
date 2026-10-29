@@ -547,8 +547,11 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     if(view==='files'&&!providerSelection&&shell.vget('files').open!=='__native_selected_document'&&shell.folderSelection?.())providerSelection=shell.folderSelection();
     if(view==='settings'&&!providerSelection&&shell.settingsSelection?.())providerSelection=shell.settingsSelection();
     if(s.shade&&shell.notificationSelection?.())providerSelection=shell.notificationSelection();
+    // The owning Calendar hook checks readiness/privacy; a chat overlay does not replace its underlying view.
+    const calendarDay=view==='calendar'?shell.calendarDayObservation?.():undefined;
     alphaClient.setViewContext({
       timeZone:currentClockTimeZone(),
+      ...(calendarDay?{calendarDay}:{}),
       view: (view === 'wallet' ? 'passwords' : view) as AlphaView,
       // Suspension invalidates this turn and approvals, but retains the account
       // and conversation. Visibility is not a claim about Android lock state.

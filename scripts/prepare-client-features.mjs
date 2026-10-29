@@ -36,6 +36,7 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/contracts/src/browser-request-grounding.ts',
   'packages/contracts/src/device-action-execution.ts',
   'packages/contracts/src/client-turn-observation.ts',
+  'packages/contracts/src/contracts/remote-agent-pairing.ts',
   'packages/contracts/src/notice-routes.ts',
   'packages/contracts/src/phone-workflow.ts',
   'packages/contracts/src/workflow-client.ts',

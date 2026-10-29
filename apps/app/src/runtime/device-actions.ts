@@ -98,6 +98,10 @@ function contextKey(value: ContextEnvelope): string {
   const selected = value.selectedObject;
   return JSON.stringify([value.view, value.sensitive === true, value.revision, value.timeZone ?? null, selected ? [selected.kind, selected.id, selected.revision ?? null, selected.accountId ?? null,selected.sourceRevision??null,selected.occurrenceId??null] : null]);
 }
+/** Calendar-day lookup hints belong only to chat metadata, never the native action journal. */
+export function deviceJournalContext(context:ContextEnvelope):ContextEnvelope {
+  const ordinary={...context};delete ordinary.calendarDay;return ordinary;
+}
 function assertCalendarContext(operation:CalendarOperation,context:ContextEnvelope){
  if(operation.type==='calendar_create_local'||operation.type==='calendar_read_next'){if(context.sensitive)throw Error('Return to the unlocked phone and review Calendar access');return;}
  const selected=context.selectedObject;
@@ -391,7 +395,7 @@ export class DeviceActions {
       execution=createDeviceActionExecution({scope:this.scope,proposalId,operationId},signal,()=>assertProposalContext(p.operation,context));
       if(p.workflow){if(!reviewed.workflowReview)throw new Error('Workflow step must be reviewed from its execution');assertWorkflowOperation(reviewed.workflowReview,p.workflow,{installationId:this.credential.installationId,enrollmentId:this.credential.enrollmentId!},p.operation);}
       execution.assertPrepared();
-      const reserved = await this.journal.reserve({ scope: this.scope, proposalId, operationId, operationHash: await actionScope(JSON.stringify(p.operation)), record: { digest: p.digest, operation: p.operation, context, expiresAt: p.expiresAt, installationId: this.credential.installationId, enrollmentId: this.credential.enrollmentId, sessionId:this.session.sessionId,ownerId:this.session.ownerId,agentId:this.session.agentId,origin:this.session.origin,...(p.workflow?{workflow:p.workflow}:{}) } });
+      const reserved = await this.journal.reserve({ scope: this.scope, proposalId, operationId, operationHash: await actionScope(JSON.stringify(p.operation)), record: { digest: p.digest, operation: p.operation, context:deviceJournalContext(context), expiresAt: p.expiresAt, installationId: this.credential.installationId, enrollmentId: this.credential.enrollmentId, sessionId:this.session.sessionId,ownerId:this.session.ownerId,agentId:this.session.agentId,origin:this.session.origin,...(p.workflow?{workflow:p.workflow}:{}) } });
       if (!reserved.created) return { proposalId, status: 'unknown', summary: 'This action already has a device journal entry. Review action history; it was not repeated.' };
       execution.assertIdentity(reserved.entry);
       execution.assertPrepared();
