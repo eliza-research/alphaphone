@@ -108,6 +108,7 @@ export const CLASS_REGISTRY = {
   CloudDeploymentStorage: {},
   CloudSignInAuthorization: { note: "Actual native Authorize/Cancel gate with an isolated plugin and no session; not live authentication or remote key issuance" },
   DailyApps: {},
+  ReminderNoticeQuestion: { requiresTestMocksBuild: true, note: "own reminder notice's Ask Alpha action without a selected agent; the review method needs a selected agent (-e noticeQuestion 1) and skips here (MVP-13, #676)" },
   ReminderLifecycle: { note: "the re-post method skips unless notifications are enabled for the app" },
   ClockHandoff: { args: { clockHandoff: "1" }, note: "Clock intents are intercepted; not ringing evidence" },
   ClockRepeatDays: {},
@@ -131,6 +132,7 @@ export const CLASS_REGISTRY = {
   SystemShade: { note: "homeAsksAndroidForItsShadeOnTheLauncherOnly needs --test-mocks (skipped otherwise). Launcher Home asks Android for its shade (EXPAND_STATUS_BAR); standalone never does (#416, #417). Not AOSP-image or device acceptance" },
   CameraScan: {},
   FilesTree: {},
+  FilesFolderQuestion: { note: "real DocumentsUI tree grant; the folder question reviews entry names only, and a delete or revoked grant during review adds nothing (MVP-13)" },
   // J05-2: native page excerpt -> reviewed question -> composer; a note's web source across recreation.
   BrowserPageQuestion: { args: { browserPageQuestion: "1" }, note: "offline: every page is served from memory to the tab's WebView (the first tab opens on https://reading.invalid/start, which never resolves); needs a WebView provider with isolated-world injection; the agent's answer and the summary-note save that follows it need a connected agent and are not covered" },
   // Mock mode and loopback fixtures exist only in a test-mocks app build.

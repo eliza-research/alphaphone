@@ -51,6 +51,7 @@ for(const [scenario,method,gate,permissions]of [
  ['voice-limit','nativeLocalDeadlineStopsBeforeAsrMaximum',['localVoiceRecording','1'],[['grant','RECORD_AUDIO']]],
  ['notice','redactedNoticeTapSurvivesRecreationWithoutReplay',['hostedNotice','1'],[['grant','POST_NOTIFICATIONS']]],
  ['notice-denied','deniedNotificationRetainsEncryptedHistory',['hostedNoticeDenied','1'],[['revoke','POST_NOTIFICATIONS']]],
+ ['camera-capture','photoCapturePublishesReadableImageAndShowsRealViewer',['cameraCapture','1'],[['grant','CAMERA']]],
 ]){
  test(`${scenario} sets its permission before the app starts and passes its gate to the exact method`,()=>{
   const r=exercise('pass',scenario);assert.equal(r.code,0,r.stderr);assert.equal(r.record.scenario,scenario);assert.equal(r.record.passed,true);assert.equal(r.record.userLifecycle.removed,true);
