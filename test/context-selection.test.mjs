@@ -126,8 +126,12 @@ test('a saved capture identity is its id and a local counter, never the library 
  // trash or restore (the shared OwnedMediaLibrary.metadata Alpha's Photos plugin uses). Neither the
  // time nor the size is an identity, and the wire contract refuses '|', which would fail every
  // message sent while that item is open.
+ // AlphaPhotos registers the shared PhotosPlugin with Alpha's media names; the shared bridge builds the library.
  const java=readFileSync('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaPhotosPlugin.java','utf8');
- assert.match(java,/owned=new OwnedMediaLibrary\(getContext\(\),MEDIA_CONFIG,playback::revoke\);/);
+ assert.match(java,/public class AlphaPhotosPlugin extends PhotosPlugin \{/);
+ assert.match(java,/@Override protected OwnedMediaConfig mediaConfig\(\)\{return MEDIA_CONFIG;\}/);
+ const bridge=readFileSync(new URL('../vendor/eliza/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/PhotosPlugin.java',import.meta.url),'utf8');
+ assert.match(bridge,/owned = new OwnedMediaLibrary\(getContext\(\), config, playback::revoke\);/);
  const library=readFileSync(new URL('../vendor/eliza/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/OwnedMediaLibrary.java',import.meta.url),'utf8').replace(/\s+/g,' ');
  assert.match(library,/String base = row\.getLong\(3\) \+ ":" \+ row\.getLong\(4\);/,'Android revision base');
  assert.match(library,/"revision", base \+ \(Build\.VERSION\.SDK_INT >= 30 && marker\.startsWith\(base \+ "\|"\) \? "\|" \+ row\.getLong\(9\) : ""\)\);/,'Android revision format');
