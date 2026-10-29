@@ -118,7 +118,7 @@ public final class BrowserAutofillInstrumentedTest {
   boolean[] enabled={false};
   try{WebViewTestDriver.withActivity(MainActivity.class,main->{try{
    Object plugin=main.getBridge().getPlugin("AlphaBrowser").getInstance();
-   java.lang.reflect.Field tabs=plugin.getClass().getDeclaredField("tabs");tabs.setAccessible(true);
+   java.lang.reflect.Field tabs=ai.eliza.plugins.browsersurface.BrowserTabHostPlugin.class.getDeclaredField("tabs");tabs.setAccessible(true);
    for(Object tab:((java.util.Map<?,?>)tabs.get(plugin)).values()){
     java.lang.reflect.Field web=tab.getClass().getDeclaredField("web");web.setAccessible(true);
     if(web.get(tab)!=child)continue;

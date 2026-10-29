@@ -87,7 +87,7 @@ public final class BrowserReadingNavigationInstrumentedTest {
      // The native review of this loaded, non-sensitive HTTPS document: refused as unavailable, nothing shown.
      BrowserReading reading=new BrowserReading(web.getContext() instanceof android.app.Activity?(android.app.Activity)web.getContext():null,id->{});
      reading.reviewQuestion(call,web,world,()->true);
-     java.lang.reflect.Field dialog=BrowserReading.class.getDeclaredField("dialog");dialog.setAccessible(true);assertNull("No review dialog is shown",dialog.get(reading));
+     java.lang.reflect.Field dialog=ai.eliza.plugins.browsersurface.BrowserReviewedReading.class.getDeclaredField("dialog");dialog.setAccessible(true);assertNull("No review dialog is shown",dialog.get(reading));
     }catch(Throwable failure){error.set(failure);}});
     if(error.get()!=null)throw new AssertionError(error.get());
     assertFalse("The review never resolves",call.resolved.get());

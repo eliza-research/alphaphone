@@ -10,11 +10,12 @@ import fs from "node:fs";
 import test from "node:test";
 
 const java = name => fs.readFileSync(`android/app/src/main/java/ai/elizaresearch/alphaphone/${name}.java`, "utf8");
-const reading = java("BrowserReading"), plugin = java("AlphaBrowserPlugin");
 // The isolated reading world, blob capture and downloads are staged into the app from the reviewed
 // pin (plugin-native-browser-surface).
 const shared = name => fs.readFileSync(`vendor/eliza/plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface/${name}.java`, "utf8");
 const world = shared("BrowserReadingWorld");
+// The tab host and its reviewed reading are shared; AlphaBrowserPlugin supplies only Alpha's identity.
+const reading = shared("BrowserReviewedReading"), plugin = shared("BrowserTabHostPlugin"), alphaPlugin = java("AlphaBrowserPlugin");
 const downloads = shared("BrowserDownloads"), capture = shared("BrowserBlobCapture"), loginFields = shared("BrowserLoginFields");
 const adapter = fs.readFileSync("apps/app/src/prototype/browser-adapter.ts", "utf8");
 // The shared page-reading policy at the pin: the renderer module and its native half.
@@ -23,7 +24,7 @@ const policy = shared("BrowserPageReading");
 const template = fs.readFileSync("apps/app/src/prototype/template.html", "utf8");
 
 test("no browser source can put a script or a bridge in a page's own world", () => {
-  for (const [name, source] of [["BrowserReadingWorld", world], ["BrowserReading", reading], ["AlphaBrowserPlugin", plugin], ["BrowserDownloads", downloads], ["BrowserBlobCapture", capture], ["BrowserLoginFields", loginFields]]) {
+  for (const [name, source] of [["BrowserReadingWorld", world], ["BrowserReviewedReading", reading], ["BrowserTabHostPlugin", plugin], ["AlphaBrowserPlugin", alphaPlugin], ["BrowserDownloads", downloads], ["BrowserBlobCapture", capture], ["BrowserLoginFields", loginFields]]) {
     assert.doesNotMatch(source, /addJavascriptInterface\s*\(/, `${name}: no JavaScript interface on a page`);
     assert.doesNotMatch(source, /addDocumentStartJavaScript\s*\(/, `${name}: no page-world document-start script`);
     const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -61,8 +62,9 @@ test("the native side reports the capability and refuses a review with the unava
   assert.match(world, /public boolean available\(\) \{\s*return !closed && world != null;\s*\}/);
   // Alpha uses the shared world; it keeps no copy of its own.
   assert.ok(!fs.existsSync("android/app/src/main/java/ai/elizaresearch/alphaphone/BrowserReadingWorld.java"));
-  assert.match(plugin, /^import ai\.eliza\.plugins\.browsersurface\.BrowserReadingWorld;$/m);
-  assert.match(reading, /^import ai\.eliza\.plugins\.browsersurface\.BrowserReadingWorld;$/m);
+  // The tab host and its reading are in the world's own package; Alpha's plugin extends that host.
+  for (const source of [plugin, reading]) assert.match(source, /^package ai\.eliza\.plugins\.browsersurface;$/m);
+  assert.match(alphaPlugin, /public class AlphaBrowserPlugin extends BrowserTabHostPlugin \{/);
   assert.match(plugin, /@PluginMethod public void readingSupport\(PluginCall call\) \{ JSObject out=new JSObject\(\);out\.put\("available",BrowserReadingWorld\.supported\(\)\);call\.resolve\(out\); \}/);
   // Unavailable is the first answer of a review: before a speech route is asked for, before the
   // page is judged, before extraction, and it is not the "reload this page" answer.

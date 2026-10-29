@@ -135,8 +135,18 @@ preference files and their `-v1` Android Keystore aliases, so records written by
 earlier builds are read as they are. The stored format did not change
 (`{"https://host[:port]":{"camera":true,...}}`, oldest origin first); an origin or kind
 the upstream class does not recognize, or a damaged record, grants nothing and the site
-is asked again. Alpha keeps the prompt dialog, the single open-prompt slot and the chain
-from an Allow to Android's runtime permission in `AlphaBrowserPlugin.sitePermission`.
+is asked again. The prompt dialog, the single open-prompt slot and the chain from an Allow
+to Android's runtime permission are the shared tab host's (`BrowserTabHostPlugin.sitePermission`
+in plugin-native-browser-surface); `AlphaBrowserPlugin` extends it under Alpha's Capacitor name.
+
+The rest of Alpha's installed browser identity is `AlphaBrowserStores.IDENTITY`
+(`BrowserTabHostConfig`): the persistent normal-tab profile `alpha_browser_v1` (website
+sign-ins), private profiles `alpha_private_<namespace>_<tab>`, leftover pre-P-04
+`alpha_public_*` profiles, and the `alpha-browser` storage prefix from which the shared host
+derives the installed `alpha-browser-downloads`, `alpha-browser-retired-profiles` and
+`alpha-browser-notices` preference files and its activity-result keys. Keeping these names
+is what keeps an existing install's sign-ins, download history and private-profile cleanup
+ledger after the tab host moved upstream; nothing is migrated.
 `test/browser-site-permissions.test.mjs` runs the upstream record test (allow, deny, a
 damaged store, the 200-origin bound) on the host JVM against the pinned sources; it does
 not exercise WebView prompts or the Keystore. `BrowserStorageFormatInstrumentedTest`

@@ -8,10 +8,12 @@ import fs from 'node:fs';
 // invariants from regressing between device runs.
 const read = file => fs.readFileSync(file, 'utf8');
 const dir = 'android/app/src/main/java/ai/elizaresearch/alphaphone/';
-const plugin = read(dir + 'AlphaBrowserPlugin.java');
 // Downloads, blob capture and their list come from the reviewed pin (plugin-native-browser-surface),
 // staged into the app by scripts/stage-local-agent-sources.mjs.
 const shared = 'vendor/eliza/plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface/';
+// The tab host itself is shared too; AlphaBrowserPlugin names it and AlphaBrowserStores keeps Alpha's identity.
+const plugin = read(shared + 'BrowserTabHostPlugin.java');
+const alphaPlugin = read(dir + 'AlphaBrowserPlugin.java');
 const downloads = read(shared + 'BrowserDownloads.java');
 const capture = read(shared + 'BrowserBlobCapture.java');
 const downloadPolicy = read(shared + 'BrowserDownloadPolicy.java');
@@ -29,9 +31,12 @@ test('private-tab downloads never reach the persisted download list', () => {
   assert.match(plugin, /if\(t\.priv\)downloads\.forgetPrivate\(t\.id\);/, 'closing a private tab forgets its entries');
   assert.match(plugin, /sessionStore\.clear\(\);sessionStore\.clearPermissions\(\);downloads\.clearHistory\(\);/, 'Clear browsing data clears downloads and permissions');
   assert.match(plugin, /downloads\.clearSite\(cleared\);/, 'Clear data for this site clears its downloads');
-  // The installed list keeps its preference file, so existing download history survives the move upstream.
-  assert.match(plugin, /static final String DOWNLOAD_PREFERENCES = "alpha-browser-downloads";/);
-  assert.match(plugin, /new BrowserDownloads\(getActivity\(\),new BrowserDownloads\.Config\(DOWNLOAD_PREFERENCES,BuildConfig\.ELIZA_DEV_ALLOW_TEST_MOCKS\)\)/, 'loopback downloads only in test-mocks builds');
+  // The installed list keeps its preference file, so existing download history survives the move upstream:
+  // the shared host derives alpha-browser-downloads from Alpha's storage prefix (BrowserTabHostConfigTest).
+  assert.match(stores, /BrowserTabHostConfig\.builder\(PERSISTENT_PROFILE,PRIVATE_PREFIX,"alpha-browser"\)/);
+  assert.doesNotMatch(stores, /\.downloadPreferences\(/, 'the derived name is the installed one');
+  assert.match(plugin, /new BrowserDownloads\(getActivity\(\),new BrowserDownloads\.Config\(identity\.downloadPreferences,identity\.allowLoopback\)\)/, 'loopback downloads only when the host allows loopback');
+  assert.match(stores, /\.allowLoopback\(BuildConfig\.ELIZA_DEV_ALLOW_TEST_MOCKS\)/, 'Alpha allows loopback only in test-mocks builds');
 });
 
 test('download cookies come only from the requesting tab, for its exact origin', () => {
@@ -89,7 +94,7 @@ test('site permissions are origin-bound prompts, stored only for normal tabs and
   assert.match(prompt, /if \(!ephemeral\)\s*try \{\s*decision = stored\.apply/, 'private tabs never read decisions');
   assert.equal((plugin.match(/if\(!t\.priv\)for\(String kind:plan\.asked\)try\{sessionStore\.setPermission/g) || []).length, 2, 'private tabs never store decisions');
   assert.match(plugin, /callback\.invoke\(requested,granted\.contains\("location"\),false\)/, 'WebView never retains a geolocation grant');
-  assert.match(plugin, /BrowserSitePrompt\.origin\(t\.lastCommittedUrl,t\.web\.getUrl\(\),requested,BuildConfig\.ELIZA_DEV_ALLOW_TEST_MOCKS\)/, 'local test hosts only in developer builds');
+  assert.match(plugin, /BrowserSitePrompt\.origin\(t\.lastCommittedUrl,t\.web\.getUrl\(\),requested,config\(\)\.allowLoopback\)/, 'local test hosts only in developer builds');
   assert.match(prompt, /if \(page == null \|\| !page\.equals\(asked\) \|\| !page\.equals\(BrowserWebOrigin\.of\(currentUrl\)\)\)/, 'embedded cross-origin requests are refused; same-document navigations keep the page origin');
   assert.match(plugin, /runtimePermissions\.launch\(missing\.toArray/, 'chained to the Android runtime permission');
   assert.match(plugin, /if\(!t\.priv\)try\{sessionStore\.clearPermissionsForSite\(cleared\);\}/);
@@ -105,8 +110,9 @@ test('HTTP authentication is a native prompt for the page host over a secure con
   assert.match(plugin, /if \(r\.isForMainFrame\(\)\) t\.pendingMain=r\.getUrl\(\)\.toString\(\);/, 'every main-frame request is recorded');
   assert.match(plugin, /if \(r\.isForMainFrame\(\)\) t\.pendingMain=target;/, 'main-frame redirects are recorded');
   assert.match(plugin, /if\(!matched\)\{handler\.cancel\(\);notice\(t,"Blocked a sign-in prompt from a different site\."\);return;\}/);
-  assert.match(plugin, /"\\nAlpha's browser does not keep this password\."\+managerLine\+/);
-  assert.match(plugin, /String managerLine=authOrigin==null\?"\\n"\+authDecision\.refusal:!autofillOn\?"":autofillState\.hasEnabledAutofillServices\(\)\?" Alpha's password manager can fill it, and offer to save it after the site accepts it, for "\+authOrigin\+"\.":" If your password manager supports this browser, it can fill or save it for "\+authOrigin\+"\.";/, 'provider wording depends on an enabled service; an unbound prompt states why fill is off');
+  assert.match(plugin, /"\\n"\+config\(\)\.hostName\+"'s browser does not keep this password\."\+managerLine\+/);
+  assert.match(stores, /\.names\("Alpha Phone","Alpha","Alpha Browser"\)/, 'the prompts name Alpha');
+  assert.match(plugin, /String managerLine=authOrigin==null\?"\\n"\+authDecision\.refusal:!autofillOn\?"":autofillState\.hasEnabledAutofillServices\(\)\?" "\+config\(\)\.hostName\+"'s password manager can fill it, and offer to save it after the site accepts it, for "\+authOrigin\+"\.":" If your password manager supports this browser, it can fill or save it for "\+authOrigin\+"\.";/, 'provider wording depends on an enabled service; an unbound prompt states why fill is off');
   assert.doesNotMatch(plugin, /setHttpAuthUsernamePassword|useHttpAuthUsernamePassword/, 'nothing is stored or reused');
 });
 
@@ -124,7 +130,7 @@ test('passkeys stay disabled and the native browser offers an honest external re
   assert.match(plugin, /t\.passkeys=false;/);
   assert.doesNotMatch(plugin, /(?:get|set)WebAuthenticationSupport\(/, 'fresh WebView defaults stay disabled without entering the compat converter');
   assert.doesNotMatch(plugin, /WEB_AUTHENTICATION_SUPPORT_FOR_(?:APP|BROWSER)/);
-  assert.match(plugin, /Passkeys are not supported in Alpha Browser\./);
+  assert.match(plugin, /"Passkeys are not supported in "\+config\(\)\.browserName\+"\./);
 });
 
 test('a page-initiated navigation commits the selected tab autofill session so the provider can offer Save', () => {
@@ -143,5 +149,6 @@ test('P-19 changes only child-tab third-party policy after assigning an isolated
   assert.match(plugin, /setAcceptThirdPartyCookies\(t\.web, !priv\)/);
   assert.doesNotMatch(plugin, /setAcceptCookie\(/, 'never change the process-wide first-party policy');
   assert.ok(plugin.indexOf('WebViewCompat.setProfile(t.web, t.profile)') < plugin.indexOf('setAcceptThirdPartyCookies(t.web, !priv)'));
-  assert.match(plugin, /priv \? namespace \+ "_" \+ id : PERSISTENT_PROFILE/);
+  assert.match(plugin, /priv \? config\(\)\.privateProfile\(namespace, id\) : config\(\)\.persistentProfile/);
+  assert.match(stores, /PERSISTENT_PROFILE="alpha_browser_v1"/, 'normal tabs keep the installed sign-in profile');
 });

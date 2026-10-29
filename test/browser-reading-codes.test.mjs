@@ -4,10 +4,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {nativeSource} from './fixtures/jvm-tools.mjs';
 
 test('isolated-world and sensitive-page refusals use distinct codes and keep their messages',()=>{
- const source=readFileSync(nativeSource('BrowserReading.java'),'utf8');
+ const source=readFileSync('vendor/eliza/plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface/BrowserReviewedReading.java','utf8');
  // The codes are the shared page-reading policy's (plugin-native-browser-surface at the pin).
  const policy=readFileSync('vendor/eliza/plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface/BrowserPageReading.java','utf8');
  assert.match(policy,/public static final String ISOLATED_WORLD_UNAVAILABLE = "isolated-world-unavailable";/);
