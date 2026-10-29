@@ -1,21 +1,11 @@
-import {authoredBrowserDestination,browserDestinationMatches} from '../.eliza/client-features/packages/contracts/src/browser-request-grounding.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {stripTypeScriptTypes} from 'node:module';
-import vm from 'node:vm';
 
-// Exercise the actual direct dispatch policy, with approve as the effect boundary.
-// No browser, network, account, provider, model or device executor is used.
-const source=readFileSync('apps/app/src/runtime/device-actions.ts','utf8');
-const start=source.indexOf('  async performRequested('),end=source.indexOf('  /** Notice restoration',start);
-const policy=stripTypeScriptTypes('({'+source.slice(start,end)+'})',{mode:'transform'});
+import {policyFixture} from './fixtures/device-action-policy.mjs';
 function fixture(url='https://example.com/dashboard',requestMessageId='request'){
- const calls=[];
- const proposal={requestMessageId,operation:{type:'browser_navigate',url}};
- const actions={session:{sessionId:'session',ownerId:'owner',agentId:'agent',origin:'https://agent.example'},credential:{installationId:'install',enrollmentId:'enrollment'},browserRequestedAttempts:new Map(),browserPolicyBlocks:new Map(),proposals:new Map([['browser',{proposal}]]),card:()=>({}),approve:async id=>{calls.push(id);return {proposalId:id,status:'succeeded'};}};
- actions.performRequested=vm.runInNewContext(policy,{URL,authoredBrowserDestination,browserDestinationMatches}).performRequested;
- return {calls,proposal,actions,run:(text,allowed=async()=>true,signal=new AbortController().signal)=>actions.performRequested('request',{},signal,allowed,undefined,text===undefined?undefined:{messageId:'request',text,current:()=>signal.throwIfAborted()})};
+ const actions=policyFixture([['browser',requestMessageId,undefined,'browser_navigate']]);
+ const proposal=actions.proposals.get('browser').proposal;proposal.operation.url=url;
+ return {calls:actions.calls,proposal,actions,run:(text,allowed=async()=>true,signal=new AbortController().signal)=>actions.performRequested('request',{},signal,allowed,undefined,text===undefined?undefined:{messageId:'request',text,current:()=>signal.throwIfAborted()})};
 }
 for(const text of [undefined,'','Move it to 4 pm','https://example.com','Open https://example.com',
  'Do not open https://example.com/dashboard','Never visit https://example.com/dashboard','Can you explain https://example.com/dashboard',
@@ -66,14 +56,14 @@ test('concurrent callbacks recheck the consumed browser attempt after preference
 
 test('A to B to A does not repeat an older request even when its proof remains live',async()=>{
  const f=fixture(undefined,'A'),signal=new AbortController().signal;
- const run=id=>{f.proposal.requestMessageId=id;return f.actions.performRequested(id,{},signal,async()=>true,undefined,{messageId:id,text:'Open example.com/dashboard',current:()=>{}});};
- await run('A');await run('B');await run('A');assert.deepEqual(f.calls,['browser','browser']);assert.equal(f.actions.browserRequestedAttempts.size,2);
+ const run=id=>{f.proposal.requestMessageId=id;f.actions.proposals.get('browser').requestKey=f.actions.requestKey(id);return f.actions.performRequested(id,{},signal,async()=>true,undefined,{messageId:id,text:'Open example.com/dashboard',current:()=>{}});};
+ await run('A');await run('B');await run('A');assert.deepEqual(f.calls,['browser','browser']);assert.equal(f.actions.browserAttempts.size,2);
 });
 test('128 live consumed proofs are not evicted, while definitively retired proofs can be pruned',async()=>{
- const full=fixture();for(let i=0;i<128;i++)full.actions.browserRequestedAttempts.set(String(i),{messageId:String(i),text:'Open example.com/',current:()=>{}});
- await full.run('Open example.com/dashboard');assert.deepEqual(full.calls,[]);assert.equal(full.actions.browserRequestedAttempts.size,128);
- const pruned=fixture();for(let i=0;i<128;i++)pruned.actions.browserRequestedAttempts.set(String(i),{messageId:String(i),text:'Open example.com/',current:()=>{if(i===0)throw Error('Retired');}});
- await pruned.run('Open example.com/dashboard');assert.deepEqual(pruned.calls,['browser']);assert.equal(pruned.actions.browserRequestedAttempts.size,128);assert.equal(pruned.actions.browserRequestedAttempts.has('0'),false);
+ const full=fixture();for(let i=0;i<128;i++)full.actions.browserAttempts.set(String(i),{messageId:String(i),text:'Open example.com/',current:()=>{}});
+ await full.run('Open example.com/dashboard');assert.deepEqual(full.calls,[]);assert.equal(full.actions.browserAttempts.size,128);
+ const pruned=fixture();for(let i=0;i<128;i++)pruned.actions.browserAttempts.set(String(i),{messageId:String(i),text:'Open example.com/',current:()=>{if(i===0)throw Error('Retired');}});
+ await pruned.run('Open example.com/dashboard');assert.deepEqual(pruned.calls,['browser']);assert.equal(pruned.actions.browserAttempts.size,128);assert.equal(pruned.actions.browserAttempts.has('0'),false);
 });
 
 test('final shared grammar keeps host punctuation, literal path punctuation and apostrophes precise',async()=>{

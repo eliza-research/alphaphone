@@ -15,8 +15,7 @@ const {browserNavigationSummary,projectActionMessages}=await import('data:text/j
 const navigateCode=ts(browser.slice(browser.indexOf('  async function navigate('),browser.indexOf('  async function command(')));
 const browserCode=ts(browser.slice(browser.indexOf('    this.browserNavigateApproved ='),browser.indexOf('    // Identity only:')));
 const executorCode=agent.slice(agent.indexOf("      if (!this.browserNavigateApproved) return"),agent.indexOf('\n    });\n    context(this);',agent.indexOf("      if (!this.browserNavigateApproved) return")));
-const deviceJournalContext=vm.runInNewContext(ts(device.slice(device.indexOf('export function deviceJournalContext('),device.indexOf('function assertCalendarContext('))).replace('export ', '')+';deviceJournalContext');
-const approveCode=ts('({'+device.slice(device.indexOf('  async approve(proposalId:'),device.indexOf('  async completeReadReply('))+'})');
+import {DeviceActions,deviceJournalContext} from './fixtures/device-action-policy.mjs';
 const cancelCode=ts(agent.slice(agent.indexOf('    if(shell.pendingActionApproval&&'),agent.indexOf('\n    const blocked=',agent.indexOf('    if(shell.pendingActionApproval&&'))));
 function harness({native=false,origin='notes',receiptFailure=false,dispatchFailure=false,finishFailure=false,beforeReceipt,afterDispatch}={}){
  const journalResults=[],receiptBodies=[],events=[],controller=new AbortController(),session={sessionId:'s',ownerId:'o',agentId:'a'},initial={view:origin,sensitive:false,revision:1,...(origin==='browser'?{selectedObject:{kind:'browser-tab',id:'existing',revision:'0'}}:{})};
@@ -35,12 +34,12 @@ function harness({native=false,origin='notes',receiptFailure=false,dispatchFailu
  const p={id:'proposal',digest:'digest',operation:{type:'browser_navigate',url:'https://example.com'},expiresAt:Date.now()+60000};
  const globals={Error,Date,JSON,deviceJournalContext,createDeviceActionExecution,crypto:{randomUUID},contextKey:JSON.stringify,actionScope:async()=> 'hash',assertProposalContext(){}};
  for(const name of ['isClockOperation','isNativeNotesQuery','isSmsSend','isMapsOperation','isCameraCapture','isLibraryOperation','isReminderCreate','isReminderOperation','isNotesOperation','isCalendarOperation','isForegroundReview','isOriginalDeviceReadOperationType'])globals[name]=()=>false;
- const approve=vm.runInNewContext(approveCode,globals).approve;
+
  const journal={async reserve(input){events.push('reserve');return {created:true,entry:{...input,phase:'reserved'}};},async markApplying(){events.push('applying');},async finish(record){journalResults.push(record);events.push('finish');if(finishFailure)throw Error('journal failed');}};
- const owner={busy:false,scope:'c'.repeat(64),session,credential:{installationId:'i',enrollmentId:'e'},proposals:new Map([[p.id,{proposal:p,context:initial}]]),readReplies:new Map(),journal,
-  execute:async(op,_id,context,signal)=>executor(op,signal,context),
-  async mutation(proposal,suffix,body){if(suffix==='receipt')receiptBodies.push(body);events.push(suffix);if(suffix==='receipt')await beforeReceipt?.({controller,document,session:connection,externalView(){currentContext={view:'calendar',sensitive:false,revision:3};cancel();}});controller.signal.throwIfAborted();if(suffix==='receipt'&&receiptFailure)throw Error('network unavailable');return {...proposal,state:suffix==='claim'?'executing':'done',attemptId:'attempt'};}};
- return {journalResults,receiptBodies,events,controller,document,owner,async run(){return approve.call(owner,p.id,initial,controller.signal);},setLive:v=>live=v};
+ const owner=new DeviceActions(session,{installationId:'i',enrollmentId:'e'},'c'.repeat(64),async()=>{},journal,async(op,_id,context,signal)=>executor(op,signal,context));
+ owner.proposals.set(p.id,{proposal:p,context:initial});
+ owner.mutation=async(proposal,suffix,body)=>{if(suffix==='receipt')receiptBodies.push(body);events.push(suffix);if(suffix==='receipt')await beforeReceipt?.({controller,document,session:connection,externalView(){currentContext={view:'calendar',sensitive:false,revision:3};cancel();}});controller.signal.throwIfAborted();if(suffix==='receipt'&&receiptFailure)throw Error('network unavailable');return {...proposal,state:suffix==='claim'?'executing':'done',attemptId:'attempt'};};
+ return {journalResults,receiptBodies,events,controller,document,owner,async run(){return DeviceActions.prototype.approve.call(owner,p.id,initial,controller.signal);},setLive:v=>live=v};
 }
 for(const native of [false,true])for(const origin of ['notes','browser']){
  const label=(native?'native':'web')+' from '+origin;
@@ -70,7 +69,7 @@ for(const native of [false,true])for(const origin of ['notes','browser']){
 const connectionSource=read('apps/app/src/runtime/connection-ui.tsx');
 const deliverySource=ts(connectionSource.slice(connectionSource.indexOf('function deliverRequestedActionReceipts('),connectionSource.indexOf('/** Coalesced reconnect/foreground-settlement')));
 const mergeSource=ts(connectionSource.slice(connectionSource.indexOf('export function mergeConversationDelivery'),connectionSource.indexOf('const actionReceipts =')).replace('export ',''));
-const directMethod=ts('({'+device.slice(device.indexOf('  async performRequested('),device.indexOf('  /** Notice restoration'))+'})');
+
 const deliveryStart=connectionSource.indexOf('            const performed=await selected.actions.performRequested(reply.userMessageId,context,requestSignal');
 const deliveryEnd=connectionSource.indexOf('            assertCurrent();',deliveryStart)+'            assertCurrent();'.length;
 const directDelivery=ts('(async function(){'+connectionSource.slice(deliveryStart,deliveryEnd)+'})');
@@ -80,7 +79,7 @@ function deliveryHarness(selected,session,receipts,controller){
 }
 test('direct navigation journals once, changes view and cancels chat, but its exact receipt survives reopening',async()=>{
  const h=harness({native:true}),p=[...h.owner.proposals.values()][0].proposal;p.requestMessageId='canonical-user';h.owner.card=()=>({});h.owner.approve=()=>h.run();
- h.owner.browserRequestedAttempts=new Map();h.owner.browserPolicyBlocks=new Map();h.owner.performRequested=vm.runInNewContext(directMethod,{URL,authoredBrowserDestination,browserDestinationMatches}).performRequested;
+ h.owner.proposals.get(p.id).requestKey=h.owner.requestKey('canonical-user');
  const selected={actions:h.owner},d=deliveryHarness(selected,h.owner.session,[],h.controller);
  await assert.rejects(d.run(),{name:'AbortError'});assert.equal(h.controller.signal.aborted,true);assert.equal(h.events.filter(e=>e==='dispatch').length,1);assert.equal(h.events.at(-1),'present');
  const delivery=d.state.conversationDelivery;assert.equal(delivery.messages.length,1);assert.equal(delivery.messages[0].inReplyTo,'canonical-user');assert.equal(delivery.messages[0].text,'Opened example.com.');
@@ -96,7 +95,7 @@ test('completed receipt delivery cannot cross owner, conversation or generation 
 
 for(const authored of ['Move it to 4 pm','Open https://example.com/other',undefined])test(`ordinary caller leaves ungrounded browser proposal pending: ${authored}`,async()=>{
  const h=harness({native:true}),p=[...h.owner.proposals.values()][0].proposal;p.requestMessageId='canonical-user';h.owner.card=()=>({});h.owner.approve=()=>h.run();
- h.owner.browserRequestedAttempts=new Map();h.owner.browserPolicyBlocks=new Map();h.owner.performRequested=vm.runInNewContext(directMethod,{URL,authoredBrowserDestination,browserDestinationMatches}).performRequested;
+ h.owner.proposals.get(p.id).requestKey=h.owner.requestKey('canonical-user');
  const selected={actions:h.owner},d=deliveryHarness(selected,h.owner.session,[],h.controller);d.globals.authoredRequest=authored===undefined?undefined:{messageId:'canonical-user',text:authored,current:()=>h.controller.signal.throwIfAborted()};
  // A model reply repeating a URL never supplies the authored permission.
  d.globals.reply.text='Opening https://example.com/ now.';

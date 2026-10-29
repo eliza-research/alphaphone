@@ -21,16 +21,14 @@ test('restored verified browser receipt hides only exact protocol instruction in
 });
 test('no page loaded or read claim; malformed/non-HTTPS destinations refuse',()=>{assert.equal(browserNavigationSummary('https://example.com/path'),'Opened example.com.');assert.throws(()=>browserNavigationSummary('http://example.com/'));assert.throws(()=>browserNavigationSummary('not a URL'));});
 
-const {readFileSync}=await import('node:fs');const {stripTypeScriptTypes}=await import('node:module');const vm=await import('node:vm');
-const device=readFileSync('apps/app/src/runtime/device-actions.ts','utf8');
-const method=stripTypeScriptTypes('({'+device.slice(device.indexOf('  async conversationReceipts('),device.indexOf('  async history('))+'})',{mode:'transform'});
-const restore=vm.runInNewContext(method,{browserNavigationSummary,object:value=>value,text:value=>value,actionScope:async value=>value,isCalendarOperation:()=>false}).conversationReceipts;
-function restoredReceipt(change=()=>{}){
+import {DeviceActions,actionScope} from './fixtures/device-action-policy.mjs';
+async function restoredReceipt(change=()=>{}){
  const operation={type:'browser_navigate',url:'https://example.com/'};
  const proposal={id:'p',state:'done',requestMessageId:'user',attemptId:'attempt',digest:'digest',operation,providerReceipt:{outcome:'applied',operationId:'effect'}};
- const entry={scope:'scope',phase:'terminal',status:'succeeded',attemptId:'attempt',operationId:'effect',operationHash:JSON.stringify(operation),summary:old,result:{operationId:'effect'},record:{operation,digest:'digest',ownerId:'owner',agentId:'agent',sessionId:'session',origin:'origin',installationId:'installation',enrollmentId:'enrollment'}};
- const owner={scope:'scope',session:{ownerId:'owner',agentId:'agent',origin:'origin'},credential:{installationId:'installation',enrollmentId:'enrollment'},list:async()=>[proposal],journal:{get:async()=>({entry})}};
- change(proposal,entry);return restore.call(owner,new Set(['user']),new AbortController().signal);
+ const entry={scope:'scope',phase:'terminal',status:'succeeded',attemptId:'attempt',operationId:'effect',operationHash:await actionScope(JSON.stringify(operation)),summary:old,result:{operationId:'effect'},record:{operation,digest:'digest',ownerId:'owner',agentId:'agent',sessionId:'session',origin:'origin',installationId:'installation',enrollmentId:'enrollment'}};
+ const owner=new DeviceActions({ownerId:'owner',agentId:'agent',origin:'origin'},{installationId:'installation',enrollmentId:'enrollment'},'scope',async()=>{}, {get:async()=>({entry})},async()=>{throw Error('No navigation during history');});
+ owner.list=async()=>[proposal];
+ change(proposal,entry);return owner.conversationReceipts(new Set(['user']),new AbortController().signal);
 }
 test('cold history reads one fully matched browser receipt without executing navigation',async()=>{
  const result=await restoredReceipt();assert.equal(result.length,1);assert.equal(result[0].summary,'Opened example.com.');assert.equal(result[0].browserDestination,'https://example.com/');

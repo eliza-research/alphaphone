@@ -34,6 +34,7 @@ function matches(actual, expected) {
 export const CLIENT_FEATURE_PATHS = [
   'packages/contracts/src/browser-address-input.ts',
   'packages/contracts/src/browser-request-grounding.ts',
+  'packages/contracts/src/phone-dial.ts',
   'packages/contracts/src/device-action-execution.ts',
   'packages/contracts/src/client-turn-observation.ts',
   'packages/contracts/src/contracts/remote-agent-pairing.ts',
@@ -213,6 +214,11 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/contracts/src/native-notes-query.ts',
   'packages/contracts/src/device-reviews.ts',
   'packages/contracts/src/calendar-linked-sync.ts',
+  'plugins/plugin-assistant/src/services/device-actions/contract.ts',
+  'plugins/plugin-assistant/src/services/device-actions/phone-dial-contract.ts',
+  'plugins/plugin-assistant/src/services/device-actions/client-coordinator.ts',
+  'plugins/plugin-assistant/src/services/device-actions/maps-contract.ts',
+  'plugins/plugin-assistant/src/services/device-actions/workflow-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/camera-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/photo-library-contract.ts',
   'plugins/plugin-native-camera/src/definitions.ts',
@@ -267,7 +273,7 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   // Only two re-export maps remain: they select upstream leaves for bare package specifiers
   // and carry no declarations of their own.
   const project = (name, text) => source.set(name, {bytes:Buffer.from(text),mode:'100644',sha256:hash(Buffer.from(text))});
-  project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\nexport * from "./packages/contracts/src/device-reviews";\nexport * from "./packages/contracts/src/contracts/theme";\n');
+  project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\nexport * from "./packages/contracts/src/device-reviews";\nexport * from "./packages/contracts/src/workflow-device";\nexport * from "./packages/contracts/src/contracts/theme";\n');
   const text = name => source.get(name).bytes.toString();
   // The native compatibility entry re-exports the shared parser by package name.
   // Plain Node consumers need that one import resolved within the copied graph.
