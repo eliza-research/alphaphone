@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
 import vm from 'node:vm';
-const src=readFileSync('apps/app/src/runtime/device-actions.ts','utf8');
+// Alpha's DeviceActions extends the shared coordinator; its direct-request policy is upstream.
+assert.match(readFileSync('apps/app/src/runtime/device-actions.ts','utf8'),/class DeviceActions extends DeviceActionCoordinator/);
+const src=readFileSync('.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/client-coordinator.ts','utf8');
 const start=src.indexOf('  async performRequested('),end=src.indexOf('  /** Notice restoration',start);
 const method=stripTypeScriptTypes('class Fixture {'+src.slice(start,end)+'}',{mode:'transform'})+'; globalThis.Fixture=Fixture;';
 const context=vm.createContext({});vm.runInContext(method,context);

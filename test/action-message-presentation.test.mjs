@@ -21,16 +21,19 @@ test('restored verified browser receipt hides only exact protocol instruction in
 });
 test('no page loaded or read claim; malformed/non-HTTPS destinations refuse',()=>{assert.equal(browserNavigationSummary('https://example.com/path'),'Opened example.com.');assert.throws(()=>browserNavigationSummary('http://example.com/'));assert.throws(()=>browserNavigationSummary('not a URL'));});
 
-const {readFileSync}=await import('node:fs');const {stripTypeScriptTypes}=await import('node:module');const vm=await import('node:vm');
-const device=readFileSync('apps/app/src/runtime/device-actions.ts','utf8');
-const method=stripTypeScriptTypes('({'+device.slice(device.indexOf('  async conversationReceipts('),device.indexOf('  async history('))+'})',{mode:'transform'});
-const restore=vm.runInNewContext(method,{browserNavigationSummary,object:value=>value,text:value=>value,actionScope:async value=>value,isCalendarOperation:()=>false}).conversationReceipts;
-function restoredReceipt(change=()=>{}){
+// Cold history restoration runs through the real Alpha binding of the shared device-action coordinator.
+const device=await build({entryPoints:['apps/app/src/runtime/device-actions.ts'],bundle:true,platform:'node',format:'esm',write:false});
+const {DeviceActions,actionScope}=await import('data:text/javascript;base64,'+Buffer.from(device.outputFiles[0].text).toString('base64'));
+const DIGEST='d'.repeat(64),SCOPE='c'.repeat(64);
+async function restoredReceipt(change=()=>{}){
  const operation={type:'browser_navigate',url:'https://example.com/'};
- const proposal={id:'p',state:'done',requestMessageId:'user',attemptId:'attempt',digest:'digest',operation,providerReceipt:{outcome:'applied',operationId:'effect'}};
- const entry={scope:'scope',phase:'terminal',status:'succeeded',attemptId:'attempt',operationId:'effect',operationHash:JSON.stringify(operation),summary:old,result:{operationId:'effect'},record:{operation,digest:'digest',ownerId:'owner',agentId:'agent',sessionId:'session',origin:'origin',installationId:'installation',enrollmentId:'enrollment'}};
- const owner={scope:'scope',session:{ownerId:'owner',agentId:'agent',origin:'origin'},credential:{installationId:'installation',enrollmentId:'enrollment'},list:async()=>[proposal],journal:{get:async()=>({entry})}};
- change(proposal,entry);return restore.call(owner,new Set(['user']),new AbortController().signal);
+ const proposal={requestMessageId:'user',attemptId:'attempt',providerReceipt:{outcome:'applied',operationId:'effect'}};
+ const entry={scope:SCOPE,proposalId:'p',phase:'terminal',status:'succeeded',attemptId:'attempt',operationId:'effect',operationHash:await actionScope(JSON.stringify(operation)),summary:old,result:{operationId:'effect'},record:{operation,digest:DIGEST,ownerId:'owner',agentId:'agent',sessionId:'session',origin:'https://origin.example',installationId:'installation',enrollmentId:'enrollment'}};
+ change(proposal,entry);
+ const wire={id:'p',digest:DIGEST,state:'done',subjectUserId:'owner',requestedBy:'agent',action:'device_action',expiresAt:new Date(Date.now()+600000).toISOString(),payload:{action:'device_action',version:1,installationId:'installation',enrollmentId:'enrollment',operation,requestMessageId:proposal.requestMessageId},execution:{attemptId:proposal.attemptId,providerReceipt:proposal.providerReceipt}};
+ const journal={get:async()=>({entry}),list:async()=>({entries:[entry]}),reserve:async()=>{throw Error('restoration never reserves');},markApplying:async()=>{throw Error('restoration never dispatches');},finish:async()=>{throw Error('restoration never dispatches');}};
+ const actions=new DeviceActions({ownerId:'owner',agentId:'agent',sessionId:'session',origin:'https://origin.example'},{installationId:'installation',enrollmentId:'enrollment',key:'k'},SCOPE,async(path,body)=>{assert.equal(body,undefined,'restoration only reads proposals');return {proposals:[wire]};},journal,async()=>{throw Error('restoration never executes');});
+ return actions.conversationReceipts(new Set(['user']),new AbortController().signal);
 }
 test('cold history reads one fully matched browser receipt without executing navigation',async()=>{
  const result=await restoredReceipt();assert.equal(result.length,1);assert.equal(result[0].summary,'Opened example.com.');assert.equal(result[0].browserDestination,'https://example.com/');

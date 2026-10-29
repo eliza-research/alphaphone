@@ -231,10 +231,13 @@ test('library operations are registered in Alpha device actions: Photos-only, ne
  assert.equal(out.home,'Open Photos > Device library to review this action.');
  assert.equal(out.locked,'Unlock the phone to review this action.');
  assert.equal(out.photos,null);
- const actions=readFileSync('apps/app/src/runtime/device-actions.ts','utf8');
- assert.match(actions,/if\(isLibraryOperation\(op\)&&!this\.credential\.capabilities\?\.includes\(PHOTO_LIBRARY_CAPABILITY\)\)throw/);
- assert.match(actions,/photoLibraryResult=validateLibraryResult\(p\.operation,result\.photoLibraryResult\)/);
- assert.equal((actions.match(/photoLibraryResult\?\{result:photoLibraryResult\}/g)||[]).length,3,'approve, sync and reconcile receipts');
+ // Alpha binds the shared coordinator; capability admission, typed results and receipts are upstream.
+ assert.match(readFileSync('apps/app/src/runtime/device-actions.ts','utf8'),/class DeviceActions extends DeviceActionCoordinator/);
+ const actions=readFileSync('.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/client-coordinator.ts','utf8');
+ assert.match(actions,/if \(isLibraryOperation\(op\) && !this\.capability\(PHOTO_LIBRARY_CAPABILITY\)\)\s+throw/);
+ assert.match(actions,/photoLibraryResult = validateLibraryResult\(\s*op,\s*result\.photoLibraryResult,?\s*\)/);
+ assert.match(actions,/results\.photoLibraryResult \?\?/,'the library result travels in the one typed receipt result');
+ assert.equal((actions.match(/\.\.\.receiptResult\(/g)||[]).length,3,'approve, sync and reconcile receipts');
  const executor=readFileSync('apps/app/src/prototype/agent-adapter.ts','utf8');
  assert.match(executor,/if\(isLibraryOperation\(operation\)\)\{[\s\S]*deviceLibraryAgent\(\)[\s\S]*expectedContext\.view!=='photos'/);
  const journal=readFileSync('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaActionJournal.java','utf8');

@@ -68,6 +68,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-notes/src/workspace.ts',
 
   'packages/ui/src/api/transport.ts',
+  'packages/ui/src/api/conversation-turn-controller.ts',
   'plugins/plugin-native-system/src/client/launcher.ts',
   'plugins/plugin-native-system/src/sense.ts',
   'plugins/plugin-native-system/src/sense-bridge.ts',
@@ -231,6 +232,11 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-assistant/src/services/device-actions/notes-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/reminder-create-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/reminder-contract.ts',
+  // Shared phone half of the device-action queue and the contracts its types name.
+  'plugins/plugin-assistant/src/services/device-actions/client-coordinator.ts',
+  'plugins/plugin-assistant/src/services/device-actions/maps-contract.ts',
+  'plugins/plugin-assistant/src/services/device-actions/workflow-contract.ts',
+  'plugins/plugin-assistant/src/services/device-actions/contract.ts',
   'plugins/plugin-files',
   'plugins/plugin-inbox/src/mailbox',
   'plugins/plugin-calendar/src/linked-sync',
