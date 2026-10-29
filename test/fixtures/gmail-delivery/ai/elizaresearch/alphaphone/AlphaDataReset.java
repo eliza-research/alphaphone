@@ -1,1 +1,0 @@
-package ai.elizaresearch.alphaphone;import android.content.Context;class AlphaDataReset{static final Reset RESET=new Reset();static final class Reset{boolean pending;boolean pending(Context c){return pending;}}}
