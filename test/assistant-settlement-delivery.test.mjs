@@ -96,6 +96,7 @@ function fixture(){
     resolve(extra){gate.resolve(reply(extra));},
     deferNextFunction(){holdOne=true;},
     rebind(){session={sessionId:'session-b',agentId:'agent-b',ownerId:'owner-b',origin:'https://other.invalid'};room='foreign-room';},
+    chooseAnotherConversation(){room='foreign-room';},
     drainHeld(){const item=held.shift();assert.ok(item,'the real functional updater was deferred');const patch=item.update(shell.state);patches.push(patch);if(patch)shell.state={...shell.state,...patch};item.callback?.();return patch;},
   };
 }
@@ -164,4 +165,21 @@ test('Calendar sources and transition controls remain in Settings after duplicat
   assert.match(settings,/sourceRows\.push\(\.\.\.calendarView\.calendarAuthorityChoices\.map/);
   assert.match(settings,/go:calendarView\.confirmCalendarTransition/);
   assert.match(settings,/cap:'Calendar sources',hasCap:true/);
+});
+
+for(const kind of ['text','voice'])test(`${kind}: focused existing non-null card metadata stays authoritative`,async()=>{
+  const h=fixture(),{task}=await h.start(kind);h.stream();
+  const card={type:'generic',planAction:'retry',title:'Existing reviewed control',limit:{retryAfterSeconds:30},reviewed:true};
+  h.shell.agentSay('Existing canonical reply',card,{id:REPLY,messageBinding:clone(h.binding)});
+  h.deliver();const before=h.shell.state.msgs.find(row=>row.id===REPLY);
+  h.resolve({planAction:'plan'});await task;
+  const after=h.shell.state.msgs.find(row=>row.id===REPLY);
+  assert.equal(after.card,card);assert.deepEqual(clone(after),clone(before));
+  assert.equal(h.shell.state.msgs.filter(row=>row.id===REPLY).length,1);
+});
+for(const change of ['owner','conversation'])test(`text: focused queued unstreamed agentSay refuses changed ${change}`,async()=>{
+  const h=fixture(),{task}=await h.start('text');h.deferNextFunction();h.resolve({planAction:'plan'});await flush();
+  assert.equal(h.held.length,1);if(change==='owner')h.rebind();else h.chooseAnotherConversation();
+  const foreign=[{id:'foreign-message',from:'agent',text:'New selected conversation'}];h.shell.state={...h.shell.state,msgs:foreign};
+  assert.equal(h.drainHeld(),null);await task;assert.equal(h.shell.state.msgs,foreign);
 });
