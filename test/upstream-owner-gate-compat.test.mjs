@@ -14,10 +14,10 @@ import {createHash} from 'node:crypto';
 const SERVER = 'vendor/eliza/packages/agent/src/api/server.ts';
 const PAIRING = 'vendor/eliza/packages/app/src/api/auth-pairing-routes.ts';
 const LOCAL_AGENT = 'android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaLocalAgentPlugin.java';
-// SHA-256 of isOwnerOnlyApiRequest as reviewed at elizaOS/eliza develop 4557621650 (#37702, #37733, #37786, #37840,
-// #37861, #38121 and the other owner-only gates since 1f2a922f86). A pin that changes the gate fails here until its
+// SHA-256 of isOwnerOnlyApiRequest as reviewed at elizaOS/eliza develop fbc2d23d4b (#37702, #37733, #37786, #37840,
+// #37861, #38121, #38126 /api/logs and /api/security/audit, and the other owner-only gates since 1f2a922f86). A pin that changes the gate fails here until its
 // new routes are checked against Alpha's route surface below and this hash is updated.
-const REVIEWED_GATE_SHA256 = 'e9ae4104d6e96deaebff1adea4499c54d4c8363d9faa315004c262ca8f17dbc6';
+const REVIEWED_GATE_SHA256 = 'f501638a182cf387e51057d23563fb45c1a2243980a6775de92fb90af4f468a0';
 
 function gateSource() {
   const text = fs.readFileSync(SERVER, 'utf8');

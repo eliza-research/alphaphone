@@ -3,7 +3,7 @@
 Alpha carries no resident IPC recovery patch. Native staging reads
 `ElizaAgentService`, `IpcStartupRecovery`, `WorkflowSurvivorInventory` and
 `AndroidBunTarget` directly from the pinned elizaOS/eliza develop source named
-in `upstream.lock.json` (currently `45576216509e7126c915ee5b2026b4b906f035b1`).
+in `upstream.lock.json` (currently `fbc2d23d4bae0c7086ea529c019e5a47fb7b8352`).
 `test/resident-native-patch-admission.test.mjs` binds all four files to their
 reviewed SHA-256 hashes, and refuses the retired consumer patch and its patch
 slot. A pin move that changes any of these bytes fails that test until the new
@@ -11,8 +11,9 @@ source is reviewed and its hash recorded.
 
 The bytes admitted at the current pin were last changed upstream by:
 
-- `ElizaAgentService`: 69367adefb (keep fallback inference startup behind
-  packaged model verification). The service chooses the Bun target from APK
+- `ElizaAgentService`: 6dfbe99e96 (elizaOS/eliza #38158: problem-log
+  exit-reason collection; fallback inference startup stays behind packaged
+  model verification from 69367adefb). The service chooses the Bun target from APK
   provenance, rejects adoption when the socket peer's executable or bundle
   identity cannot be verified, and passes the device time zone to the resident.
 - `IpcStartupRecovery`: b1cdaa5e32 (carries elizaOS/eliza #37979 and #37981: verify
