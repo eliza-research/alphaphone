@@ -61,22 +61,24 @@ test('both notice owner fences are written even when workflow cancellation fails
 
 test('reviewed photo changes use the shared resume-gated review with Alpha\'s launch gate',()=>{
  // Resume gating and rejection codes are the shared native media module's PermittedMediaReview (tested there).
- const photos=java('AlphaPhotosPlugin');
- assert.match(photos,/mediaReview=new PermittedMediaReview\(getBridge\(\),permitted,worker,LateLaunch::ask\);/);
- assert.match(photos,/import ai\.eliza\.plugins\.media\.PermittedMediaReview;/);
+ // AlphaPhotos registers the shared PhotosPlugin; its launch gate answers with Alpha's LateLaunch wording.
+ const photos=java('AlphaPhotosPlugin'),bridge=readFileSync(new URL('../vendor/eliza/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/PhotosPlugin.java',import.meta.url),'utf8');
+ assert.match(bridge,/mediaReview = new PermittedMediaReview\(getBridge\(\), permitted, worker, this::ask\);/);
+ assert.match(bridge,/protected final boolean ask\(PluginCall call, Runnable launch\) \{\n {4}try \{\n {6}launch\.run\(\);\n {6}return true;\n {4}\} catch \(IllegalStateException closed\) \{\n {6}call\.reject\(closedMessage\(\)\);/);
+ assert.match(photos,/@Override protected String closedMessage\(\)\{return LateLaunch\.CLOSED;\}/);
 });
 
 test('album listing reads permitted members in batches and fences only the metadata',()=>{
  // Custom albums are the shared OwnedAlbums; batched member reads are PermittedMediaCatalog.albumItems.
- const photos=java('AlphaPhotosPlugin');
- assert.match(photos,/albums=new OwnedAlbums\(getContext\(\),MEDIA_CONFIG,owned,permitted\);/);
+ const photos=readFileSync(new URL('../vendor/eliza/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/PhotosPlugin.java',import.meta.url),'utf8');
+ assert.match(photos,/albums = new OwnedAlbums\(getContext\(\), config, owned, permitted\);/);
  const albums=readFileSync(new URL('../vendor/eliza/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/OwnedAlbums.java',import.meta.url),'utf8');
  const rows=body(albums,'  private JSArray permittedRows(','  private static boolean hasPermitted(');
  assert.match(rows,/permitted\.albumItems\(wanted\)/);assert.doesNotMatch(rows,/albumItem\(/,'no per-member fenced read');
  const custom=body(albums,'  public JSObject list(','  public JSObject change(');
  assert.ok(custom.indexOf('permitted.requireCurrent(fence);')>0&&custom.indexOf('permitted.requireCurrent(fence);')<custom.indexOf('permitted.albumItem(key, row.getString("identity"), true)'),'thumbnails load after the metadata fence');
  // PhotosTrashInstrumentedTest stalls real album writers on the plugin's gate: it must be the shared write lock.
- assert.match(photos,/static final Object ALBUMS_LOCK=OwnedAlbums\.LOCK;/);
+ assert.match(photos,/public static final Object ALBUMS_LOCK = OwnedAlbums\.LOCK;/);
  assert.match(albums,/public static final Object LOCK = new Object\(\);/);
  assert.match(body(albums,'  public JSObject change(','\n}\n'),/synchronized \(LOCK\)/);
 });
