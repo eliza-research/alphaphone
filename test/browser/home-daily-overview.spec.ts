@@ -1,5 +1,10 @@
 import {installHomeCalendar,refreshHomeCalendar} from './helpers/home-calendar';
 import {test,expect,type Page} from '@playwright/test';
+// Most tests here load the app more than once (a reload, a second tab or a restart). Each load of the development server
+// fetches its ~700 unbundled modules; with four workers on a loaded machine one load has taken 10-20s
+// (traces show single module responses of 10s), so the 30s default timed out mid-reload. The timeout
+// is explicit and per file; no step, wait or assertion changes.
+test.describe.configure({timeout:90_000});
 import {returnToApps} from './app-navigation';
 import {openBrowserCalendar,selectCalendarSource} from './helpers/browser-calendar';
 // Daily overview contract on Home (development lane): every card names its source and when it was

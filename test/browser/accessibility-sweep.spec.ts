@@ -15,10 +15,15 @@ const STATES = [...LIVE_STATES, ...DEVELOPMENT_STATES, ...MOCK_STATES, ...CONNEC
 // neither is a cut app title: it names the screen and has room to wrap.
 const appTitle = (line: string) => /^text-truncated: .*<[^>]*\bdata-alpha-app-title\b/.test(line);
 const blocking = (lines: string[]) => lines.filter(line => !line.startsWith('text-truncated:') || appTitle(line));
+// A state at large text is opened, re-laid out and audited rule by rule. Under four workers on a
+// loaded machine that has run past the 30s default, so the large-text and landscape sweeps say
+// how long they may take instead of inheriting it.
+const LARGE_TEXT_TIMEOUT = 90_000;
 
 for (const theme of ['light', 'dark'] as const) {
   for (const state of STATES) {
     test(`names, roles, focus and contrast: ${state.name} (${theme})`, async ({ page }) => {
+      test.setTimeout(60_000);
       await state.open(page, theme);
       const found = format([
         ...await auditTree(page),
@@ -34,6 +39,7 @@ for (const theme of ['light', 'dark'] as const) {
 
 for (const state of STATES) {
   test(`200% text is not clipped and does not overlap: ${state.name}`, async ({ page }, info) => {
+    test.setTimeout(LARGE_TEXT_TIMEOUT);
     await state.open(page, 'light');
     await setTextScale(page, 2);
     // Clipping and overlap: nothing is cut, nothing is printed over anything else, no label is
@@ -59,6 +65,7 @@ test.describe('landscape', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 915, height: 412 } });
   for (const state of STATES) {
     test(`landscape keeps every control on screen: ${state.name}`, async ({ page }) => {
+      test.setTimeout(LARGE_TEXT_TIMEOUT);
       await state.open(page, 'light');
       // The landscape layout is what is being checked, not a scaled-down portrait canvas.
       await expect(page.locator('html')).toHaveClass(/alpha-landscape/);
@@ -69,6 +76,7 @@ test.describe('landscape', () => {
   // The two together: a phone on its side with the system's largest font (round 10).
   for (const state of STATES) {
     test(`landscape at 200% text keeps every control on screen: ${state.name}`, async ({ page }) => {
+      test.setTimeout(LARGE_TEXT_TIMEOUT);
       await state.open(page, 'light');
       await expect(page.locator('html')).toHaveClass(/alpha-landscape/);
       await setTextScale(page, 2);
@@ -83,6 +91,7 @@ test.describe('landscape', () => {
 for (const state of [...FIXTURE_STATES, ...LAUNCHER_STATES]) {
   for (const scale of [1, 2]) {
     test(`${scale * 100}% text, names, focus and contrast: ${state.name}`, async ({ page }) => {
+      test.setTimeout(LARGE_TEXT_TIMEOUT);
       await state.open(page, 'light');
       if (scale !== 1) await setTextScale(page, scale);
       const found = blocking(format([

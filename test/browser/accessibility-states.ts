@@ -2,6 +2,7 @@ import { expect, type Page } from '@playwright/test';
 import {openCanonicalCalendarForm} from './helpers/canonical-calendar';
 import {openLegacyNotes,openLegacyAttachment} from './helpers/legacy-notes';
 import {openOwnedPhotoViewer} from './helpers/owned-photo';
+import {settled} from './helpers/settled';
 
 /**
  * The retained MVP surface, as a list of states the accessibility sweep visits.
@@ -22,9 +23,8 @@ export type State = {
 const offline = () => localStorage.setItem('alpha.connection.selection.v1', JSON.stringify({ kind: 'offline' }));
 const settle = async (page: Page) => {
   await expect(page.locator('.alpha-phone')).toBeVisible();
-  // Entry transitions are short even with reduced motion; fonts decide final geometry.
-  await page.evaluate(() => document.fonts.ready);
-  await page.waitForTimeout(450);
+  // Entry motion has finished and fonts are loaded: final geometry, not a fixed wait.
+  await settled(page);
 };
 
 const press = async (page: Page, steps: string[]) => { for (const step of steps) await page.getByRole('button', { name: step, exact: true }).first().click(); };
@@ -399,6 +399,8 @@ export async function setTextScale(page: Page, scale: number) {
     display.installBrowserDisplay();
     document.documentElement.style.setProperty('--browser-text-scale', String(value));
   }, scale);
-  await page.evaluate(() => document.fonts.ready);
-  await page.waitForTimeout(350);
+  // The renderer's own probe (runtime/text-scale.ts) has measured the new size and published it, so
+  // the layout rules that read it have applied; then any reflow motion settles.
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--alpha-text-scale').trim())).toBe(String(scale));
+  await settled(page);
 }

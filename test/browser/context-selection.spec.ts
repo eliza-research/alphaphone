@@ -167,6 +167,10 @@ test.describe('mail',()=>{
  // boundary and the agent a fixed session; nothing is sent anywhere. Browser renderer only.
  const sent=(page:Page)=>page.evaluate(()=>(window as any).mailFixture.sent as string[]);
  async function setup(page:Page,beforeReview?:()=>Promise<void>){
+  // The first-run access walkthrough is not under test here. Left pending it opens a modal over Home
+  // on its own schedule and, under load, takes the Inbox tap (or, once the composer opens, covers the
+  // review), so it is recorded as finished before the page loads, as a returning phone has it.
+  await page.addInitScript(()=>localStorage.setItem('alpha:startup-permission-walkthrough:v1',JSON.stringify({version:1,status:'completed',step:4})));
   await page.goto('/');
   await page.evaluate(async()=>{
    const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');
@@ -217,9 +221,6 @@ test.describe('mail',()=>{
   const typed='Unrelated words I am still writing';
   // Whichever composer is on screen: the dock's while the chat is closed, the sheet's once it opens.
   const chatComposer=()=>page.locator('[data-alpha-layer="composer"][aria-hidden="false"], [data-alpha-layer="conversation"][aria-hidden="false"]').getByRole('textbox').first();
-  // The startup access walkthrough, finished earlier, would otherwise cover the review once the
-  // composer opens.
-  await page.addInitScript(()=>localStorage.setItem('alpha:startup-permission-walkthrough:v1',JSON.stringify({version:1,status:'completed',step:4})));
   const sharing=await setup(page,async()=>{
    await page.evaluate(async()=>{const {alphaClient}=await import('/src/runtime/alpha-client.ts');(alphaClient as any).send=async(text:string)=>{(window as any).mailFixture.sent.push(text);return {text:'Shared email summary'};};});
    // An open app shows the dock's Type control; it opens the composer's textbox.

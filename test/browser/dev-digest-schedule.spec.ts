@@ -1,4 +1,9 @@
 import {test,expect} from '@playwright/test';
+// Most tests here load the app more than once (a reload, a second tab or a restart). Each load of the development server
+// fetches its ~700 unbundled modules; with four workers on a loaded machine one load has taken 10-20s
+// (traces show single module responses of 10s), so the 30s default timed out mid-reload. The timeout
+// is explicit and per file; no step, wait or assertion changes.
+test.describe.configure({timeout:90_000});
 test('reviewed snapshot schedule delivers one retained result and survives reload',async({page})=>{
  await page.clock.install({time:new Date('2026-10-03T12:00:10Z')});
  await page.goto('/?mode=dev');await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Agent connection',exact:true}).click();await page.getByRole('button',{name:'Connect development profile'}).click();
