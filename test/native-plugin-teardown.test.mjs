@@ -18,7 +18,8 @@ import test from "node:test";
 const root = "android/app/src/main/java/ai/elizaresearch/alphaphone";
 // Shared browser classes the app compiles from the reviewed pin (scripts/stage-local-agent-sources.mjs).
 const shared = "vendor/eliza/plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface";
-const sharedFiles = ["BrowserBlobCapture.java", "BrowserDownloads.java", "BrowserLoginFields.java", "BrowserReadingWorld.java"];
+// The browser tab host and its reviewed reading are the shared BrowserTabHostPlugin; AlphaBrowserPlugin only names it.
+const sharedFiles = ["BrowserBlobCapture.java", "BrowserDownloads.java", "BrowserLoginFields.java", "BrowserReadingWorld.java", "BrowserReviewedReading.java", "BrowserTabHostPlugin.java"];
 const files = [...fs.readdirSync(root).filter(name => name.endsWith(".java")), ...sharedFiles].sort();
 const read = name => fs.readFileSync(path.join(sharedFiles.includes(name) ? shared : root, name), "utf8");
 
@@ -186,7 +187,7 @@ test("the workers that plugins stop on destroy are reached through one rejecting
 });
 
 test("nothing is shown or created on a destroyed activity by a late browser call", () => {
-  const plugin = read("AlphaBrowserPlugin.java");
+  const plugin = read("BrowserTabHostPlugin.java");
   assert.match(plugin, /private boolean closed\(PluginCall call\)\{if\(!destroyed\)return false;call\.reject\("Browser closed"\);return true;\}/);
   // Every plugin method that reaches the main thread checks first; load() has no call to reject.
   const posts = plugin.split("\n").filter(line => /getActivity\(\)\.runOnUiThread\(/.test(line) && /PluginCall call/.test(line));
@@ -267,7 +268,7 @@ test("a permission or activity-result request that arrives after the activity is
 
   const found = files.flatMap(name => launches(name, mask(read(name))));
   // A scanner that silently finds nothing would pass.
-  for (const [name, method] of [["AlphaHostedResultsPlugin.java", "requestPermissionForAlias"], ["DailyAppsPlugin.java", "startActivityForResult"], ["AlphaFilesPlugin.java", "startActivityForResult"], ["AlphaMailAttachmentsPlugin.java", "startActivityForResult"], ["AlphaNoteDocumentsPlugin.java", "startActivityForResult"], ["AlphaBrowserPlugin.java", "takePicture.launch"], ["AlphaBrowserPlugin.java", "runtimePermissions.launch"], ["AlphaBrowserPlugin.java", "filePicker.launch"], ["AlphaBrowserPlugin.java", "pageShare.launch"]])
+  for (const [name, method] of [["AlphaHostedResultsPlugin.java", "requestPermissionForAlias"], ["DailyAppsPlugin.java", "startActivityForResult"], ["AlphaFilesPlugin.java", "startActivityForResult"], ["AlphaMailAttachmentsPlugin.java", "startActivityForResult"], ["AlphaNoteDocumentsPlugin.java", "startActivityForResult"], ["BrowserTabHostPlugin.java", "takePicture.launch"], ["BrowserTabHostPlugin.java", "runtimePermissions.launch"], ["BrowserTabHostPlugin.java", "filePicker.launch"], ["BrowserTabHostPlugin.java", "pageShare.launch"]])
     assert.ok(found.some(site => site.file === name && site.method === method), `${name}: ${method} not found`);
   assert.deepEqual(found.filter(site => !site.guarded).map(site => `${site.file}:${site.line} ${site.method}(`), [],
     "each of these throws on the calling thread once the activity is destroyed; make it the body of LateLaunch.ask");

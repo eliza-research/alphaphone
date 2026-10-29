@@ -30,8 +30,8 @@ The overview domain and cards are upstream elizaOS code that Alpha consumes thro
   result inbox, retained-brief selection and `RetainedBriefStore`, fenced to the current
   connection scope (origin, owner and agent). `apps/app/src/runtime/hosted-digests.ts` keeps only
   Alpha's store binding and the `alpha:retained-digest` event.
-- `plugins/plugin-workflow/src/services/hosted-digest-policy.ts`: the occurrence policy (120-second
-  run window, not-run records and their texts, source state) used by the agent's admission and by
+- `plugins/plugin-workflow/src/services/hosted-digest-policy.ts`: the occurrence policy (30-minute
+  run window, P-75, not-run records and their texts, source state) used by the agent's admission and by
   the test-mocks development scheduler. Scheduling stays with the agent's durable runtime
   scheduler (TaskService triggers): schedules run only while the phone is on, an occurrence that
   came due while it was off is recorded once as missed at startup and never run late, and no

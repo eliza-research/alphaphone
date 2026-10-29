@@ -6,7 +6,7 @@ import { developmentWorkflowDraftStore } from '../runtime/local-agent-storage';
 import { connectionController } from '../runtime/connection-ui';
 import { normalizePhoneSpec, assertPhoneCapabilities, describePhoneTrigger, phoneTriggerClockChangeNote, type PhoneSpec, type PhoneStep, type PhoneCatalog, type PhoneTimeTrigger } from '../runtime/phone-workflow-authoring';
 import { workflowSha, workflowBytes } from '../runtime/workflow-device-contract';
-import { checkWorkflowScope, WORKFLOW_OPERATION_LABELS } from './workflow-scope';
+import { checkWorkflowScope, WORKFLOW_OPERATION_LABELS } from '../../../../.eliza/client-features/packages/contracts/src/workflow-scope.ts';
 import { WorkflowTypedRejected, type RemoteWorkflow } from '../runtime/workflow-protocol';
 type Bag=Record<string,any>;
 type Pending={mutationId:string;specDigest:string;compilerRevision:string;workflowId?:string;versionId?:string};
@@ -16,8 +16,8 @@ const draftStorageDescription=browserDevProfile?'in this preview (not encrypted)
 const calendar=registerPlugin<{workflowCalendars():Promise<{status:string;calendars:Bag[]}>;requestWorkflowReadAccess():Promise<{status:string}>}>('AlphaCalendar');
 const palette=['Read','If','Write','Send','Notify','Speak','Do'];
 const icons:Record<string,string>={Read:'wfRead',If:'wfIf',Write:'edit',Send:'send',Notify:'bell',Speak:'wave',Do:'wfDo'};
-const known=new Set(['supplied_text','selected_notes','calendar_range','contains','compose_draft','model_draft','save_note','app_notification','read_aloud']);
-const supported=(id:string)=>known.has(id)&&(!['app_notification','read_aloud'].includes(id)||connectionController.getWorkflowPresentationProtocol()===2);
+const known=new Set(['supplied_text','selected_notes','selected_reminders','calendar_range','contains','compose_draft','model_draft','save_note','app_notification','read_aloud']);
+const supported=(id:string)=>known.has(id)&&(!['app_notification','read_aloud'].includes(id)||connectionController.getWorkflowPresentationProtocol()===2)&&(id!=='selected_reminders'||connectionController.getWorkflowDeviceProtocol()>=3);
 /** Monday-first weekday chips for a reviewed local-time trigger (0 = Sunday in the shared contract). */
 const WEEKDAYS:Array<[number,string]>=[[1,'Mon'],[2,'Tue'],[3,'Wed'],[4,'Thu'],[5,'Fri'],[6,'Sat'],[0,'Sun']];
 const TRIGGER_LABELS:Record<string,string>={manual:'Manual',time:'Time'};
@@ -63,6 +63,7 @@ export function createWorkflowAuthoring(owner:()=>any,publish:()=>void,onSaved:(
   const common={id:stepId,kind:kind as PhoneStep['kind'],operation:id};
   if(id==='supplied_text')return {...common,text:''};
   if(id==='selected_notes'){ensureDevice();return {...common,notes:[]};}
+  if(id==='selected_reminders'){ensureDevice();return {...common,scope:{window:'open_and_completed_today',timeZone:deviceTimeZone(),maximumItems:50}};}
   if(id==='calendar_range'){ensureDevice();const start=new Date();start.setHours(0,0,0,0);const end=new Date(start);end.setDate(end.getDate()+1);return {...common,range:{calendarIds:[],start:start.toISOString(),end:end.toISOString(),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,maximumEvents:100}};}
   if(id==='contains')return {...common,source,text:'',caseSensitive:false};
   if(id==='compose_draft')return {...common,source,prefix:'',suffix:''};
@@ -132,6 +133,7 @@ export function createWorkflowAuthoring(owner:()=>any,publish:()=>void,onSaved:(
   if(step.operation==='model_draft')fields.push(field('Drafting instruction',step.instruction,v=>step.instruction=v,'text',true));
   if(step.operation==='app_notification')fields.push(field('Notification title',step.title,v=>step.title=v));
   if(step.operation==='save_note')fields.push(field('New note title',step.title,v=>step.title=v));
+  if(step.operation==='selected_reminders')fields.push(field('Review time zone',step.scope.timeZone,v=>step.scope.timeZone=v),field('Maximum reminders (1–200)',String(step.scope.maximumItems),v=>step.scope.maximumItems=Number(v),'number'));
   if(step.operation==='calendar_range'){fields.push(field('Range start (UTC ISO)',step.range.start,v=>step.range.start=v),field('Range end, exclusive (UTC ISO)',step.range.end,v=>step.range.end=v),field('Review time zone',step.range.timeZone,v=>step.range.timeZone=v),field('Maximum events (1–200)',String(step.range.maximumEvents),v=>step.range.maximumEvents=Number(v),'number'));}
  }
  const generatedSteps=generated?.steps.map((s,i)=>{
@@ -140,6 +142,7 @@ export function createWorkflowAuthoring(owner:()=>any,publish:()=>void,onSaved:(
   let text='';
   if(s.operation==='supplied_text')text=s.text;
   else if(s.operation==='selected_notes')text=s.notes.map((n:Bag)=>(owner()?.vget('notes').list??[]).find((note:Bag)=>note.id===n.id)?.title||n.id).join('\n');
+  else if(s.operation==='selected_reminders')text='Open by the end of each run’s day (overdue included) and completed that day\n'+s.scope.timeZone+' · Up to '+s.scope.maximumItems+' reminders';
   else if(s.operation==='calendar_range')text=s.range.start+' to '+s.range.end+' (end excluded)\n'+s.range.timeZone+' · Up to '+s.range.maximumEvents+' events\nCalendars: '+s.range.calendarIds.map((id:string)=>calendars.find(c=>c.id===id)?.name||id).join(', ');
   else if(s.operation==='contains')text='Match: '+JSON.stringify(s.text)+'\n'+(s.caseSensitive?'Case-sensitive':'Ignore letter case');
   else if(s.operation==='compose_draft')text='Prefix: '+JSON.stringify(s.prefix)+'\nSuffix: '+JSON.stringify(s.suffix);
