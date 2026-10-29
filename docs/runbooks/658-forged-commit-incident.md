@@ -294,7 +294,7 @@ member without 2FA from the organization at once; check the member list first.
 
 Not added to `docs/decisions.md`; copy the chosen ones with the next free `P-` number.
 
-- P-xx (draft, **chosen by the owner 2026-10-29**): "2026-10-29: Branch protection for the
+- P-xx (draft, **owner decision 2026-10-29, as relayed in the agent task; confirm with the owner before copying**): "2026-10-29: Branch protection for the
   2026-10-27 incident is deferred. No 'Shared branch integrity' or 'Default branch baseline'
   ruleset is installed on eliza-research/alphaphone or AlphaCompute; the drafts stay in
   `scripts/owner/rulesets/`. Shared branches are monitored with

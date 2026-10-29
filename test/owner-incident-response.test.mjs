@@ -27,18 +27,21 @@ test('the IOC file transcribes the cleanup record', () => {
   for (const row of iocs.branches) for (const key of ['preAttack', 'forged']) assert.match(row[key], /^[0-9a-f]{9}$/);
 });
 
-// The incident scripts only. Other owner scripts in scripts/owner/ belong to other issues and
-// legitimately read fields such as `.value` from non-secret data, so they are not scanned here.
-const INCIDENT_SCRIPTS = ['gh-readonly.mjs', 'incident-ci-exposure.mjs', 'incident-access-audit.mjs', 'forged-branch-scan.mjs', 'read-branch-integrity.mjs'];
+// The mutation checks cover every owner script. The secret-field check covers the incident scripts
+// only: other owner scripts belong to other issues and legitimately read fields such as `.value`
+// from non-secret data.
+const INCIDENT_SCRIPTS = new Set(['gh-readonly.mjs', 'incident-ci-exposure.mjs', 'incident-access-audit.mjs', 'forged-branch-scan.mjs', 'read-branch-integrity.mjs']);
 
-test('every incident script talks to GitHub with GET only and never mutates git state', () => {
+test('every owner script talks to GitHub with GET only and never mutates git state', () => {
   const dir = path.join(root, 'scripts/owner');
-  for (const file of INCIDENT_SCRIPTS) {
+  const files = fs.readdirSync(dir).filter(file => file.endsWith('.mjs'));
+  for (const file of INCIDENT_SCRIPTS) assert.ok(files.includes(file), file);
+  for (const file of files) {
     const code = fs.readFileSync(path.join(dir, file), 'utf8').replace(/^\s*(\/\/|\*).*$/gm, '');
     assert.doesNotMatch(code, /['"`](POST|PUT|PATCH|DELETE)['"`]/, file);
     assert.doesNotMatch(code, /--method['"`],\s*['"`](?!GET)/, file);
     assert.doesNotMatch(code, /['"`](checkout|switch|reset|push|merge|rebase|worktree|clean|update-ref)['"`]/, file);
-    assert.doesNotMatch(code, /\.value\b|secret_value|encrypted_value/, file);
+    if (INCIDENT_SCRIPTS.has(file)) assert.doesNotMatch(code, /\.value\b|secret_value|encrypted_value/, file);
   }
   assert.throws(() => assertReadOnlyEndpoint('-X'), /refusing/);
   assert.throws(() => assertReadOnlyEndpoint('repos/a/b --method POST'), /refusing/);

@@ -118,10 +118,11 @@ request showing that a failing or missing check blocks the merge.
 Not added to `docs/decisions.md`; the owner (or the agent that maintains that file) copies the
 chosen one with the next free `P-` number.
 
-- P-xx (draft, defer; **chosen by the owner 2026-10-29**): "2026-10-29: The 'Main required checks' ruleset (MVP-46) is not installed on
-  eliza-research/alphaphone yet. CI stays advisory on `main` until <trigger>. Force pushes, deletion
-  and unsigned commits on shared branches are blocked separately by 'Shared branch integrity'
-  (#658). Revisit at <trigger>."
+- P-xx (draft, defer; **owner decision 2026-10-29, as relayed in the agent task; confirm with the owner before copying**): "2026-10-29: The 'Main required checks' ruleset (MVP-46) is not installed on
+  eliza-research/alphaphone yet. CI stays advisory on `main` until <trigger>. Shared-branch
+  rulesets (#658) are also deferred; only classic protection (force push and deletion blocked,
+  admins bypass) applies to `main`; `develop` is unprotected; shared branches are monitored with
+  `node scripts/owner/forged-branch-scan.mjs`. Revisit at <trigger>."
 - P-xx (draft, install): "2026-10-__: 'Main required checks' is installed on eliza-research/alphaphone
   with no bypass actors; `node scripts/ci/read-required-checks.mjs --repo eliza-research/alphaphone`
   reports MATCH; controlled blocking PR #___ recorded."
