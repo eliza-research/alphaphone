@@ -370,7 +370,7 @@ export class DeviceActions {
       let smsResult:SmsSendResult|undefined;
       if(isSmsSend(p.operation)){if(result.smsResult!==undefined){smsResult=validateSmsResult(p.operation,result.smsResult,operationId,await smsAgentHash(p.operation));if(smsDeviceStatus(smsResult)!==result.status)throw Error('SMS outcome mismatch');}else if(result.status!=='unknown')throw Error('Missing SMS evidence');}else if(result.smsResult!==undefined)throw Error('Unexpected SMS result');
       let dialResult:PhoneDialResult|undefined;
-      if(isPhoneDial(p.operation)){if(result.dialResult!==undefined){dialResult=validatePhoneDialResult(p.operation,result.dialResult);if(dialDeviceStatus(dialResult)!==result.status)throw Error('Dial outcome mismatch');}else if(result.status==='succeeded')throw Error('Missing dial result');}else if(result.dialResult!==undefined)throw Error('Unexpected dial result');
+      if(isPhoneDial(p.operation)){if(result.dialResult!==undefined){dialResult=validatePhoneDialResult(p.operation,result.dialResult);if(dialDeviceStatus(dialResult)!==result.status)throw Error('Dial outcome mismatch');}else if(result.status!=='unknown')throw Error('Missing dial result');}else if(result.dialResult!==undefined)throw Error('Unexpected dial result');
       let clockResult:ClockHandoffResult|undefined;
       if(isClockOperation(p.operation)){
         if(result.clockResult!==undefined){clockResult=validateClockResult(p.operation,result.clockResult);const expected=clockResult.status==='opened'?'succeeded':clockResult.status==='unknown'?'unknown':'failed';if(result.status!==expected)throw Error('Clock handoff outcome mismatch');}
