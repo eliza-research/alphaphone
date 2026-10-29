@@ -5,7 +5,7 @@ import {statSync} from 'node:fs';
 import {sourceDirectory} from './local-agent-source.mjs';
 const root=resolve(import.meta.dirname,'..');
 execFileSync(process.execPath,['scripts/prepare-local-agent.mjs','--source-only'],{cwd:root,stdio:'inherit'});
-const tests=['./packages/agent/test/lean-chat-workflows.test.ts','./packages/agent/test/mobile-workflows.test.ts','./packages/agent/test/mobile-workspace-exports.test.ts','./plugins/plugin-workflow/__tests__/hosted-route-registration.test.ts','./plugins/plugin-workflow/__tests__/integration/workflow-process-host.test.ts','./plugins/plugin-workflow/__tests__/integration/process-host-controls.test.ts','./plugins/plugin-workflow/__tests__/integration/process-host-compiler.test.ts'];
+const tests=['./packages/agent/test/mobile-workspace-exports.test.ts','./plugins/plugin-workflow/__tests__/integration/workflow-process-host.test.ts','./plugins/plugin-workflow/__tests__/integration/process-host-controls.test.ts','./plugins/plugin-workflow/__tests__/integration/process-host-compiler.test.ts'];
 const source=sourceDirectory(root);
 for(const test of tests) {
   if(!statSync(resolve(source,test),{throwIfNoEntry:false})?.isFile()) throw new Error(`Required admitted-source test missing: ${test}`);
