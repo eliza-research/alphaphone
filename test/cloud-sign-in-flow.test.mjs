@@ -79,6 +79,10 @@ test('the sign-in App Link is build-gated with the delegation return; staging li
  assert.ok(gradle.includes(filter('\\${appLinkHost}')),'ELIZAOS_APP_LINK_HOST adds the sign-in return beside the delegation return');
  assert.ok(!main.includes('staging.eliza.app'),'no staging host in a product manifest');
  assert.ok(between(main,'<activity android:name=".MainActivity"','</activity>').includes('<data android:scheme="alphaphone" android:host="cloud-delegation"/>'),'the delegation return is unchanged');
+ // The shared DelegationCallback admits only the scheme and host the plugin passes; they must be the manifest's.
+ const connection=read(native+'AlphaConnectionPlugin.java');
+ assert.match(connection,/static final String DELEGATION_SCHEME="alphaphone",DELEGATION_HOST="cloud-delegation";/);
+ assert.match(connection,/DelegationCallback\.admit\(DELEGATION_SCHEME,DELEGATION_HOST,uri\.getScheme\(\),uri\.getHost\(\),uri\.getPort\(\),uri\.getUserInfo\(\),uri\.getFragment\(\),uri\.getPath\(\),query\)==null\)return;/);
  assert.ok(main.includes('<intent><action android:name="android.support.customtabs.action.CustomTabsService"/></intent>'),'Custom Tabs providers are visible');
  assert.ok(mocks.includes(filter('${stagingCloudWebHost}'))&&mocks.includes('<activity android:name=".MainActivity" tools:node="merge">'),'the staging return merges into MainActivity in test-mocks builds');
  const assetlinks=JSON.parse(read('android/app/src/main/assetlinks.template.json'));
