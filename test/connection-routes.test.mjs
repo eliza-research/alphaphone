@@ -47,11 +47,10 @@ test('Reset Alpha data records the reset, revokes Cloud keys best effort within 
  const record=authenticated.indexOf('reset.record(context);'),notice=authenticated.indexOf('showProgress(text);'),dispatch=authenticated.indexOf('reset.dispatchAfterBeforeDispatch(context, DataReset.INTERACTIVE_DEADLINE_MS');
  assert.ok(record>0&&notice>record&&dispatch>notice,'recorded before any network request, with a blocking notice over the revocation window');
  const registration=readFileSync(resolve(import.meta.dirname,'../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaDataReset.java'),'utf8');
- assert.match(registration,/\.beforeDispatch\(ResetCloudRevocation::revoke\)/,'the live and startup paths use bounded shared revocation');
- const shared=readFileSync(resolve(import.meta.dirname,'../android/app/src/main/java/ai/elizaresearch/alphaphone/ResetCloudRevocation.java'),'utf8');
- assert.match(shared,/ai\.eliza\.auth\.cloud\.CloudKeyRevocation\.revoke\(registration,environment,/,'revocation goes through the shared exact self-revocation policy');
- assert.match(shared,/AlphaCredentialStore\.readSlotBeforeAttach\(context,registration\.credentialSlot\(environment\)\)/);
- assert.match(shared,/AlphaCloudSignInPlugin\.REGISTRATION/,'only the deployments this build admits are revoked');
+ assert.ok(registration.includes('.beforeDispatch(ai.eliza.auth.cloud.CloudKeyRevocation.resetStep(()->AlphaCloudSignInPlugin.REGISTRATION,AlphaCredentialStore::readSlotBeforeAttach)::run)'),'the live and startup paths use the shared bounded revocation step over only the deployments this build admits');
+ const shared=readFileSync(resolve(import.meta.dirname,'../vendor/eliza/packages/auth/android/src/main/java/ai/eliza/auth/cloud/CloudKeyRevocation.java'),'utf8');
+ assert.match(shared,/transport\.revoke\(config, environment, token\)/,'revocation goes through the shared exact self-revocation policy');
+ assert.match(shared,/Math\.min\(timeoutMs, RESET_BUDGET_CAP_MS\)/,'bounded by the caller budget and the 8 s cap');
  const application=readFileSync(resolve(import.meta.dirname,'../android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaApplication.java'),'utf8');
  assert.match(application,/AlphaDataReset\.RESET\.admitBeforeStartup\(base,getProcessName\(\)\);/,'interrupted reset revokes before bounded reset admission');
 });
