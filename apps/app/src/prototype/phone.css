@@ -113,6 +113,14 @@ html:not(.standalone-app) [data-alpha-layer="home"][data-alpha-home-fits="true"]
 
 .note-source-dialog footer button { flex:1 1 180px; min-width:0; overflow-wrap:normal; }
 .note-source-content:focus-visible { outline:2px solid currentColor; outline-offset:-2px; }
+/* At large text the heading and the wrapped actions alone can fill the dialog, leaving the details
+ * region no height (and its focus ring nowhere to show) and pushing the last actions past the
+ * dialog's edge. There the whole dialog scrolls instead: every action stays reachable, and the
+ * details region takes the height of its text so its focus ring is drawn around it. */
+.alpha-large-text .note-source-dialog { overflow:auto; overscroll-behavior:contain; }
+.alpha-large-text .note-source-content { flex-shrink:0; overflow:visible; }
+.alpha-large-text .note-source-content:focus-visible { outline-offset:2px; }
+.alpha-large-text .note-source-dialog footer button { overflow-wrap:anywhere; }
 
 .note-source-dialog button:disabled { opacity:.5; cursor:default; }
 
@@ -231,6 +239,11 @@ html:not(.standalone-app) [data-alpha-layer="home"][data-alpha-home-fits="true"]
 /* The lock clock is display text already far above any reading size; at large text it is held to the
  * screen width (divided by the measured scale, which Android text zoom multiplies back) so it is never cut. */
 .alpha-large-text [data-alpha-lock-clock] { font-size:min(132px, calc(31vw / var(--alpha-text-scale,1)))!important; }
+/* The Notes recording timer is display text (72px) that is never smaller than body text at any size.
+ * At large text it is held to the recorder's width (its container): room for "123:45" beside the
+ * live dot, divided by the measured scale and multiplied by the browser text setting so it is drawn
+ * at min(72px x scale, fit) both under Android text zoom and with the browser build's declared sizes. */
+.alpha-large-text [data-alpha-notes-rec-clock] { font-size:min(calc(72px * var(--browser-text-scale,1)), calc((100cqi - 26px) / 3.4 / var(--alpha-text-scale,1) * var(--browser-text-scale,1)))!important; }
 
 .standalone-app .notes-layout { padding-top:0!important; }
 
