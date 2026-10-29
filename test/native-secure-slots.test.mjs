@@ -13,21 +13,20 @@ const source=readFileSync(nativeSource('AlphaConnectionPlugin.java'),'utf8');
 const credentialStore=readFileSync(nativeSource('AlphaCredentialStore.java'),'utf8');
 const slotsJava=readFileSync(nativeSource('RendererCredentialSlots.java'),'utf8');
 
-/** The admission predicate parsed from secureCompareExchange: exact names, prefixes and patterns. */
+/** The compare-exchange allow-list: Alpha's slot patterns, applied by the shared SecureSlotPolicy. */
 function nativeAllowList(){
  const method=source.slice(source.indexOf('@PluginMethod public void secureCompareExchange('),source.indexOf('@PluginMethod public void secureRemove('));
- const condition=method.match(/if\(name==null\|\|!\((.*?)\)\|\|!call\.getData\(\)\.has\("expectedValue"\)/);
- assert.ok(condition,'secureCompareExchange keeps one allow-list expression');
- const constant=name=>{const found=credentialStore.match(new RegExp(`static final String ${name}="([^"]+)"`));assert.ok(found,`AlphaCredentialStore.${name} resolves`);return found[1];};
- const rules=condition[1].split('||').map(clause=>{
-  let match;
-  if((match=clause.match(/^name\.equals\("([^"]+)"\)$/)))return {kind:'exact',value:match[1]};
-  if((match=clause.match(/^name\.equals\(AlphaCredentialStore\.(\w+)\)$/)))return {kind:'exact',value:constant(match[1])};
-  if((match=clause.match(/^name\.startsWith\("([^"]+)"\)$/)))return {kind:'prefix',value:match[1]};
-  if((match=clause.match(/^name\.matches\("([^"]+)"\)$/)))return {kind:'pattern',value:new RegExp(`^(?:${match[1].replace(/\\\\/g,'\\')})$`)};
-  assert.fail(`unparsed allow-list clause: ${clause}`);
+ assert.match(method,/if\(!RendererCredentialSlots\.compareExchangeAllowed\(name\)\|\|!call\.getData\(\)\.has\("expectedValue"\)/,'secureCompareExchange admits through the one shared allow-list');
+ const list=slotsJava.match(/COMPARE_EXCHANGE = \{([\s\S]*?)\};/);assert.ok(list,'RendererCredentialSlots keeps one COMPARE_EXCHANGE list');
+ assert.match(slotsJava,/new SecureSlotPolicy\(Arrays\.asList\(NATIVE_NAMESPACES\), Arrays\.asList\(COMPARE_EXCHANGE\), Arrays\.asList\(CREDENTIAL_SLOTS\)\)/);
+ // SecureSlotPolicy full-matches each pattern; a pattern without metacharacters is an exact name.
+ const rules=[...list[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(match=>{
+  const pattern=match[1].replace(/\\\\/g,'\\');
+  return /[\\[\]{}()*+?.^$|]/.test(pattern)?{kind:'pattern',value:new RegExp(`^(?:${pattern})$`)}:{kind:'exact',value:pattern};
  });
- return {rules,admits:slot=>rules.some(rule=>rule.kind==='exact'?slot===rule.value:rule.kind==='prefix'?slot.startsWith(rule.value):rule.value.test(slot))};
+ const draft=credentialStore.match(/static final String NOTES_DRAFT="([^"]+)"/);assert.ok(draft,'AlphaCredentialStore.NOTES_DRAFT resolves');
+ assert.ok(rules.some(rule=>rule.kind==='exact'&&rule.value===draft[1]),'the native notes draft slot is admitted exactly');
+ return {rules,admits:slot=>rules.some(rule=>rule.kind==='exact'?slot===rule.value:rule.value.test(slot))};
 }
 function nativeOnlyNamespaces(){
  const list=slotsJava.match(/NATIVE_NAMESPACES = \{([\s\S]*?)\};/);assert.ok(list);

@@ -116,7 +116,7 @@ public final class AlphaConnectionPlugin extends Plugin {
   submitStorage(call,()->{
    try {
     String name=RendererCredentialSlots.requireAllowed(call.getString("slot"));
-    if(name==null||!(name.startsWith("inbox-drafts:v1:")||name.matches("inbox-operation:v1:[a-f0-9]{64}")||name.matches("calendar-linked-sync:v1:[a-f0-9]{64}")||name.matches("connected-read-cache:v1:[a-f0-9]{64}")||name.matches("workflow-draft:v1:[a-f0-9]{64}")||name.matches("assistant-draft:v1:[a-f0-9]{64}")||name.equals("notes-records:v1:device")||name.equals("reminder-deletions:v1:device")||name.equals("reminder-creations:v1:device")||name.equals("clock-handoff:v1:device")||name.equals("notes-audio-deletions:v1:device")||name.equals("notes-trash:v1:device")||name.equals(AlphaCredentialStore.NOTES_DRAFT)||name.equals("note-origins:v1:device")||name.matches("cloud-delegation:v1:[a-f0-9]{64}"))||!call.getData().has("expectedValue")||!call.getData().has("value"))throw new IllegalArgumentException();
+    if(!RendererCredentialSlots.compareExchangeAllowed(name)||!call.getData().has("expectedValue")||!call.getData().has("value"))throw new IllegalArgumentException();
     for(String field:new String[]{"expectedValue","value"})if(!call.getData().isNull(field)&&!(call.getData().get(field) instanceof String))throw new IllegalArgumentException();
     String expected=call.getString("expectedValue"), value=call.getString("value");
     JSObject result=new JSObject();
