@@ -2,6 +2,13 @@ import {installWorkflowListFixture,newWorkflow,workflowCard} from './workflow-na
 import {guardCalendarFixture as guardNoMedia} from './calendar-draft-readiness';
 import { returnToApps } from './app-navigation';
 import {test,expect,type Page} from '@playwright/test';
+// Each test loads the development app, connects its profile and seeds a workflow (some reload or open a
+// second tab). Under four workers on a loaded machine one load has taken 10-30s, past the 30s default
+// for the whole test, so the timeout is explicit. No step, wait or assertion changes.
+test.describe.configure({timeout:90_000});
+// Screen-entry motion is not under test here; waiting out its stability retries on every tap is what
+// ran these tests out of time under load (as in #700).
+test.use({contextOptions:{reducedMotion:'reduce'}});
 // MVP-32 interruption probes against the real typed-workflow protocol and the development agent store.
 // A fault layer sits between the app's WorkflowProtocol and that store: it can lose a request before it
 // arrives, lose only the response, hold a request, or answer with the agent's identity-bound refusal.

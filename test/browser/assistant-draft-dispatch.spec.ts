@@ -1,4 +1,14 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect as baseExpect, type Page } from '@playwright/test';
+// Every test here loads the whole development app at least once (several reload it, open a second tab
+// or connect a profile), and the composer's saved draft is restored from IndexedDB after each load.
+// Under four workers on a loaded machine a load has taken 10-30s and a restore more than the 5s
+// default, so the timeouts are explicit: 90s per test, 15s per expectation. What is expected is
+// unchanged; only how long the page may take to get there.
+test.describe.configure({timeout:90_000});
+const expect=baseExpect.configure({timeout:15_000});
+// Screen-entry motion is not under test here; waiting out its stability retries on every tap is what
+// ran these tests out of time under load (as in #700).
+test.use({contextOptions:{reducedMotion:'reduce'}});
 
 // Real composer, draft store and connection controller. Only the Android IPC boundary and a
 // remote agent are synthetic, in-page fixtures; nothing leaves the page.

@@ -4,6 +4,9 @@ import {test,expect} from '@playwright/test';
 // (traces show single module responses of 10s), so the 30s default timed out mid-reload. The timeout
 // is explicit and per file; no step, wait or assertion changes.
 test.describe.configure({timeout:90_000});
+// Screen-entry motion is not under test here; waiting out its stability retries on every tap is what
+// ran these tests out of time under load (as in #700).
+test.use({contextOptions:{reducedMotion:'reduce'}});
 test('reviewed snapshot schedule delivers one retained result and survives reload',async({page})=>{
  await page.clock.install({time:new Date('2026-10-03T12:00:10Z')});
  await page.goto('/?mode=dev');await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Agent connection',exact:true}).click();await page.getByRole('button',{name:'Connect development profile'}).click();

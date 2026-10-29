@@ -1,4 +1,10 @@
 import {test,expect,type Page} from '@playwright/test';
+// Each test loads the app and drives Files, Inbox or the shade; under four workers on a loaded machine
+// one load has taken 10-30s, so the timeout is explicit. No step, wait or assertion changes.
+test.describe.configure({timeout:60_000});
+// Screen-entry motion is not under test here; waiting out its stability retries on every tap is what
+// ran these tests out of time under load (as in #700).
+test.use({contextOptions:{reducedMotion:'reduce'}});
 // MVP-13: folder, notification and capture questions keep the exact selected identity and
 // revision. A switch, delete or revoke during review adds nothing and never sends a neighbor.
 const offline=(page:Page)=>page.addInitScript(()=>localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'})));
