@@ -152,10 +152,18 @@ recording a clip on the device:
    `ram-pressure`, `unscored`, `timeout`), a 502 scoring error, a transport failure or the deadline
    all fall back to the long gap; unavailable is never treated as complete. The route never starts
    voice or loads a model, so the semantic path only works where the resident's voice bridge and
-   its fused text context are loaded; elsewhere the gaps decide alone. **Clef is not in the pin**
-   (no Clef model, loader or decision head); the scorer is the Eliza-1 one. Each submitted turn's
-   voice timing record keeps `endpoint`: the path (`semantic` or `gap`), the outcome enum, the
-   unavailable reason and the scorer latency, never text. The gaps and deadline are engineering
+   its fused text context are loaded; elsewhere the gaps decide alone. The scorer is the Eliza-1
+   one. The assistant asks it through the shared end-of-turn chain (`@elizaos/voice/endpoint-chain`
+   `createEndpointChain`): local fused scorer, then an optional **Clef** `turn` stage (Eliza Cloud
+   `clef-decisions`, transcript text only, its own 300 ms timeout; unavailable, disabled, refused or
+   late is never a yes), then the long gap. The Clef stage is asked only when the local scorer could
+   not score, and is built only with an explicit switch AND a Cloud client: `CLEF_ENDPOINT_ENABLED`
+   in `voice-selection.ts` is `false` and the renderer holds no Cloud Clef client (the owner
+   decision is #663 / H-18), so today the chain is the local scorer and the gap, and no transcript
+   leaves the phone for endpointing. Each submitted turn's voice timing record keeps `endpoint`: the
+   path (`semantic` or `gap`), the outcome enum, the unavailable reason (scorer or `clef-*`), the
+   latency and the chain stage that answered (`path`: `local` or `clef`), never text; the
+   diagnostics export copies the same enums. The gaps and deadline are engineering
    defaults (local-speech research), not measurements or owner-set constants.
 6. **Send.** The turn goes through the existing voice policy unchanged (`VOICE_SEND_POLICY`
    in `voice-selection.ts`, P-39: the assistant submits automatically; Transcribe only inserts
@@ -191,8 +199,15 @@ recording a clip on the device:
    sent for a reply that was fully heard. The request never blocks the next turn. A 409 (the played
    text is not a prefix the agent recognises) is recorded and the view stays trimmed; a 404 or 503
    is retried once after 1.5 s, then dropped; the outcome enum is kept on the turn's voice timing
-   record (`heard`). **Gaps:** a reply interrupted before its first sentence finished cannot be
-   recorded (the route needs a non-empty prefix), so the agent keeps it in full; a reply the agent
+   record (`heard`). A reply interrupted before its first sentence finished is reported as
+   `{ nothingHeard: true }`: the agent replaces it with an empty, interruption-marked reply
+   (`heardNothing`), so it keeps that it answered and was cut off but none of the unheard words; an
+   agent that predates the explicit report refuses it (`rejected`) and keeps the reply. A speech
+   failure is not a barge-in: when playback fails before the first sentence finished
+   (`playbackFailed`, for example a refused Cloud speech request) nothing is sent (`nothing-heard`)
+   and both the agent and the view keep the whole reply; after a finished sentence only the heard
+   prefix is kept, as for an interruption. **Gaps:** a
+   reply the agent
    completes after the user interrupted it while it was still being generated has no message id
    in the voice session, is not trimmed and appears in full after a reload; a partially played
    sentence is never claimed as heard. The 700 ms hold and the sentence-by-sentence synthesis gap
