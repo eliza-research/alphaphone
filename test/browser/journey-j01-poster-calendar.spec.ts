@@ -67,7 +67,9 @@ test('J01 poster scan becomes exactly one reviewed Calendar event; suggestions a
   mediaDevices.getUserMedia=async()=>{const canvas=document.createElement('canvas');canvas.width=1000;canvas.height=700;const c=canvas.getContext('2d')!;const draw=()=>{c.fillStyle='white';c.fillRect(0,0,1000,700);c.fillStyle='black';c.font='58px Arial';c.fillText('Open studio',60,140);c.fillText('October 10, 2026',60,260);c.fillText('Time: 6:30 PM - 8:00 PM',60,380);c.fillText('Venue: Main hall',60,500);};draw();const stream=canvas.captureStream(10);const timer=setInterval(draw,100);stream.getTracks()[0].addEventListener('ended',()=>clearInterval(timer));return stream;};
  });
  await page.goto('/?mode=dev');await ready(page);await openBrowserCalendar(page);await returnToApps(page);
- await expect(page.getByRole('button',{name:'Open Agent Calendar',exact:true})).toBeVisible();
+ // Home's agenda reads the calendar chosen in Calendar (docs/daily-overview.md): the empty browser calendar.
+ const homeAgenda=page.getByRole('region',{name:'Home',exact:true}).locator('[data-alpha-home-calendar]');
+ await expect(homeAgenda).toHaveAccessibleName('Open your calendar');await expect(homeAgenda).toContainText('No upcoming events');
  expect(await events(page)).toHaveLength(0);
 
  // 1. Scan, review suggestions, then cancel from the scan review: nothing is saved.
