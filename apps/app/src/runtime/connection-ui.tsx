@@ -922,8 +922,12 @@ async function admitCloudResident(signal:AbortSignal):Promise<ResidentAdmission>
       // no Cloud inference until the owner signs in again.
       // A changed account before the identity was verified leaves the connection as it is: a newer
       // sign-in may own it, and only a rejected read of this sign-in detaches it.
+      // The shared controller's own account-changed fence (a newer credential replaced this one
+      // during admission) carries code 'account-changed', which the entitlement classifier reads
+      // as an auth failure; it is not a refusal of this sign-in, so it never detaches. Detaching
+      // there would put the required sign-in page over the running resident (P-43).
       if(!admission.identity){if(admission.reason==='sign-in-rejected'&&service)detachService();}
-      else if(isEntitlementSignInFailure(admission.error)&&account&&service===account)detachService();
+      else if(!(admission.error instanceof CloudResidentBindingError)&&isEntitlementSignInFailure(admission.error)&&account&&service===account)detachService();
       update({residentPlanNotice:null,residentSubscription:null,planEndsAt:null});
       return {binding:'unbound',notice:{error:errorMessage(admission.error),open:true}};
     case 'plan-unavailable':
