@@ -16,6 +16,32 @@ and durable effect receipts. Consume reviewed upstream commits through the pin;
 do not edit the vendor checkout. The [unification audit](unification-audit-2026-10-27.md)
 records the migration order and the gaps that prevent a completion claim.
 
+### Shell host pieces and their upstream targets
+
+The shared mobile shell (`@elizaos/ui/mobile-shell`) renders Home, All apps, the view
+registry and navigation from `config/alpha-product.json`. Views whose registration carries a
+lazy loader (`ALPHA_VIEW_LOADERS` in `apps/app/src/product/alpha-product.ts`) render through
+`MobileViewHost`, with its failure-and-retry notice drawn in Alpha's chrome (`renderError`) and
+`active={false}` keeping a view mounted behind Home so drafts and selection survive. Today that
+is Notes (the upstream `NotesWorkspace` from `plugin-notes`). Gesture zones are the shell's
+`resolveMobileShellSwipe`, and the launcher shade and empty-Home pull policy is
+`@elizaos/capacitor-system/shade`; Alpha keeps only its wording and Home selector
+(`prototype/system-shade.ts`). Colours, fonts and backgrounds are the record's theme, including
+its `palette` of fixed product colours; the prototype files hold no colour literals
+(`test/theme-palette.test.mjs`). Persisted view ids migrate once through the shell's launcher
+(`migrateLauncherViewIds`, run by `createMobileShellLauncher`).
+
+What the prototype renderer (`prototype/model.js`, `prototype/template.html`) still hosts, and
+where each moves:
+
+| Host piece | Today | Upstream target |
+| --- | --- | --- |
+| Status bar band (clock, radios, battery, ongoing chip) | template status row fed by `renderVals` and `AlphaDevice`/`System` facts | a mobile-shell status chrome part fed by `@elizaos/capacitor-system/settings` facts |
+| Lock screen and secure surface | template lock layer, `unlock()` | a mobile-shell lock surface over the shared navigation state; device credentials stay Android's |
+| Chat overlay, pill, composer, sheet and full detents | template conversation layers, `chat-overlay-motion-adapter.ts`, `usePullGesture` binding in `main.tsx` | `@elizaos/ui` shell chat sheet driven by `navigateMobileShell`'s assistant detent |
+| Development stand-in shade | template shade layer behind `ELIZA_DEV_ALLOW_TEST_MOCKS` | stays a development surface; product builds use Android's shade |
+| Domain views other than Notes (Calendar, Messages, Phone, Contacts, Maps, Browser, Camera, Photos, Files, Wallet, Workflows, Settings) | template views with adapters | each plugin's shared view, registered as a `MobileViewHost` loader by its own workstream |
+
 Alpha Phone is an independent Android product. `apps/app` owns its renderer,
 navigation, presentation, capability policy and storage configuration. Shared
 runtime, browser features, native plugins and OS tooling come from the exact

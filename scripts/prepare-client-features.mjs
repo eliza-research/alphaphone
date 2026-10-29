@@ -69,6 +69,7 @@ export const CLIENT_FEATURE_PATHS = [
 
   'packages/ui/src/api/transport.ts',
   'plugins/plugin-native-system/src/client/launcher.ts',
+  'plugins/plugin-native-system/src/client/shade.ts',
   'plugins/plugin-native-system/src/sense.ts',
   'plugins/plugin-native-system/src/sense-bridge.ts',
   'plugins/plugin-native-system/src/sense-web.ts',
@@ -80,6 +81,7 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/ui/src/config/theme.ts',
   'packages/ui/src/mobile-shell/index.ts',
   'packages/ui/src/mobile-shell/core.ts',
+  'packages/ui/src/mobile-shell/gestures.ts',
   'packages/ui/src/mobile-shell/MobileAllAppsDrawer.tsx',
   'packages/ui/src/mobile-shell/MobileHomeScreen.tsx',
   'packages/ui/src/mobile-shell/MobileViewHost.tsx',
