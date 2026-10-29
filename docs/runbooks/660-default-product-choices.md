@@ -13,12 +13,25 @@ browser, an APK, an emulator, an image or on a device.
 ## Current state (read-only findings)
 
 - **Guard.** `residentCloudFlow()` (`apps/app/src/runtime/connection-ui.tsx` line 228) is true on
-  production Android, in browser Cloud-resident development and in resident QA. The render branch
-  at line 3003 shows the **"Membership & credits"** sheet (`data-alpha-membership-sheet`) when
-  `purpose==='plan'` off the resident flow, **or whenever the signed-in account's membership balance
-  is `zero` (funding required), on either flow**. Otherwise the resident flow renders the dialog
-  titled "Your agent", "Eliza Cloud account" (credits plan view) or "Eliza Cloud account & plan",
-  with the same `CloudMembershipControls` inside it (`planShownByHost`).
+  production Android, in browser Cloud-resident development and in resident QA. Two render branches
+  show the **"Membership & credits"** sheet (`data-alpha-membership-sheet`):
+  - Line 3003 (plan entry): when `purpose==='plan'` off the resident flow, **or whenever the
+    signed-in account's membership balance is `zero` (funding required), on either flow**.
+  - Line 3004 (cloud-account entry): `if(snapshot.purpose==='cloud-account')` has **no
+    `residentCloudFlow()` guard**. For **any signed-in account, at any balance and on either flow**,
+    it renders the dialog with h1 "Membership & credits" (line 3005). Signed out, it is the sign-in
+    screen. `connectionController.openCloudAccount()` (line 2034) sets this purpose. It is reached
+    from Settings > Accounts > "Manage Cloud account" (`apps/app/src/prototype/settings-adapter.ts`
+    line 663), Inbox "Connect Eliza Cloud" (`inbox-cloud-adapter.ts` lines 300 and 709), the voice
+    adapter (`voice-adapter.ts` lines 300 and 644) and `apps/app/src/runtime/cloud-voice.ts` line 96.
+    Specs that expect it: `test/browser/browser-cloud-dev.spec.ts` lines 56-58 and 90-91, and
+    `test/browser/cloud-account-panel.spec.ts` (`membershipSheet`, lines 9 and 57).
+
+  Otherwise (the plan entry on the resident flow with a nonzero or unavailable balance) the
+  resident flow renders the dialog titled "Your agent", "Eliza Cloud account" (credits plan view)
+  or "Eliza Cloud account & plan", with the same `CloudMembershipControls` inside it
+  (`planShownByHost`). So a resident user with a funded balance sees the sheet from Settings >
+  Manage Cloud account and the plan panel from the plan entry.
 - **Where the sheet's content lives.** `apps/app/src/runtime/cloud-membership-ui.tsx`
   (`CloudMembershipControls`): exact credit value (`creditLabel`), **Add funds** (opens Cloud
   billing after the billing-account review), Redeem code, the plan allowance and the last service
@@ -61,13 +74,17 @@ guard. **Do not loosen** the guard in either case (#659).
 - Tests: reconcile `test/browser/native-cloud-subscription.spec.ts` with the guard. Every case
   boots the resident flow (see the #659 reviewer table,
   `node scripts/owner/subscription-spec-map.mjs`). Cases that wait for the resident panel keep
-  `accountPanel`; a case that reaches a zero balance must expect the sheet.
+  `accountPanel`; a case that reaches a zero balance must expect the sheet, and a case that opens
+  the account through the cloud-account entry (Settings > Manage Cloud account, Inbox Connect,
+  voice) must expect the sheet at any signed-in balance.
 - Decision record: draft entry A below.
 
 **What B changes (override):**
 - `apps/app/src/runtime/connection-ui.tsx`: the sheet `<h1>` at lines 3003 and 3005
-  ("Membership &amp; credits") becomes `${serviceName} account & plan`. The close label
-  "Close membership settings" changes to match.
+  ("Membership &amp; credits") becomes `${serviceName} account & plan`. Line 3005 is the
+  cloud-account branch (Settings > Manage Cloud account, Inbox Connect, voice), which shows this
+  title for any signed-in account, so B renames that entry too. The close label "Close membership
+  settings" changes to match.
 - `apps/app/src/runtime/cloud-membership-ui.tsx`: remove `creditLabel` display and the Add funds
   button (`onAddFunds`). The balance support line no longer says "Add funds or use a membership
   code"; it keeps Redeem code and the plan allowance.
@@ -131,8 +148,11 @@ Copy one entry per item into `docs/decisions.md` with the next free number and t
   and Add funds, which opens Eliza Cloud billing after the billing-account review, plus the plan
   allowance and the last limit with its retry time. This is the organization-credit mode of the
   October 16 entry. P-26 still holds for subscription plans: no per-turn billing round trip, and
-  Alpha shows no price. On the resident agent the "Eliza Cloud account & plan" panel carries the
-  same controls; the sheet replaces it only for a zero balance.
+  Alpha shows no price. Settings > Accounts > "Manage Cloud account" and the other cloud-account
+  entries (Inbox Connect, voice) open this sheet for any signed-in account at any balance, on the
+  resident agent too. On the resident agent the plan entry (plan notice, Settings plan panel) opens
+  the "Eliza Cloud account & plan" panel with the same controls, and the sheet replaces it there
+  only for a zero balance.
 - **P-__ (B, membership)** — H-37/#660 (owner, 2026-__-__): the Settings plan surface is titled
   "Eliza Cloud account & plan" on every flow (P-26/#410). Plan state comes from signed
   entitlements. Alpha shows no credit amount and no Add funds; Manage plan opens Eliza Cloud.

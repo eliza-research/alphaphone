@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {failingTitles, fixtureFacts, mapSpec, parseCases, SPEC} from '../scripts/owner/subscription-spec-map.mjs';
+import {entryOf, failingTitles, fixtureFacts, mapSpec, parseCases, predictedSurface, SPEC} from '../scripts/owner/subscription-spec-map.mjs';
 
 const sample = [
  "test.describe('plan state',()=>{",
@@ -63,4 +63,23 @@ test('the real spec parses into cases that all boot the resident flow', () => {
  const rows = mapSpec(fs.readFileSync(SPEC, 'utf8'));
  assert.ok(rows.length >= 30, `parsed ${rows.length} cases`);
  assert.ok(rows.every(row => row.flow.startsWith('resident')));
+});
+
+test('the cloud-account entry predicts the Membership & credits sheet for any signed-in balance', () => {
+ // connection-ui.tsx: purpose 'cloud-account' has no residentCloudFlow() guard, so Settings >
+ // Manage Cloud account, Inbox Connect, voice and cloud-voice.ts reach the sheet for a nonzero
+ // balance too; only the plan entry depends on the zero-balance (fundingRequired) branch.
+ assert.equal(entryOf("await page.getByRole('button',{name:'Manage Cloud account',exact:true}).click();"), 'cloud-account');
+ assert.equal(entryOf('c.openCloudAccount();'), 'cloud-account');
+ assert.equal(entryOf('await openAccountPlan(page);'), 'plan');
+ assert.equal(entryOf('await openAccountPlan(page);c.openCloudAccount();'), 'both');
+ assert.equal(entryOf('expect(1).toBe(1);'), 'none');
+ const funded = fixtureFacts("{signed,plan:'none',cashBalance:5}");
+ assert.match(predictedSurface(funded, 'cloud-account'), /Membership & credits.*any signed-in balance/);
+ assert.match(predictedSurface(funded, 'plan'), /^resident dialog/);
+ assert.match(predictedSurface(fixtureFacts('{saved:false}'), 'cloud-account'), /sign-in screen/);
+ const rows = mapSpec("test('settings entry',async({page})=>{await boot(page,{signed});await page.getByRole('button',{name:'Manage Cloud account',exact:true}).click();});");
+ assert.equal(rows[0].entry, 'cloud-account');
+ assert.ok(rows[0].expects.some(item => item.includes('via the cloud-account entry')));
+ assert.match(rows[0].surface, /Membership & credits/);
 });

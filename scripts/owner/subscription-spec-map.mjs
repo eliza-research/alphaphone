@@ -9,9 +9,15 @@
  * case waits for. `--results` joins a saved `playwright test --reporter=list` log so failing cases
  * are marked. Every case's `boot()` asserts planFlags {native:'android', mocks:false}, which makes
  * `residentCloudFlow()` in apps/app/src/runtime/connection-ui.tsx true: all cases boot the
- * resident flow. On that flow the "Membership & credits" sheet is rendered only when the account's
- * membership balance is "zero" (funding required); otherwise the resident dialog titled
- * "Your agent" / "Eliza Cloud account" / "Eliza Cloud account & plan" is rendered.
+ * resident flow. Which account surface renders then depends on the entry the case uses
+ * (connection-ui.tsx render branches near lines 3003-3004):
+ *  - cloud-account entry (connectionController.openCloudAccount(): Settings > Accounts > "Manage
+ *    Cloud account", Inbox "Connect", the voice adapter, cloud-voice.ts). The purpose 'cloud-account'
+ *    branch has no residentCloudFlow() guard: any signed-in account gets the "Membership & credits"
+ *    sheet (data-alpha-membership-sheet) whatever its balance; signed out it is the sign-in screen.
+ *  - plan entry (planController.openPlan(), the plan notice). On the resident flow the sheet is
+ *    forced only for a "zero" membership balance (fundingRequired); otherwise the resident dialog
+ *    titled "Your agent" / "Eliza Cloud account" / "Eliza Cloud account & plan" is rendered.
  * This is source review data; it is not a browser run, APK, emulator, image or device result.
  */
 import fs from 'node:fs';
@@ -27,6 +33,7 @@ export const EXPECTATIONS = Object.freeze([
  {token: /\bopenAccountPlan\(|\baccountPanel\(|\bplanDetails\(/, element: 'dialog /^Eliza Cloud account( & plan)?$/ (resident plan panel)'},
  {token: /\bsignInPage\(/, element: '.alpha-cloud-sign-in[role=main] (resident first-run sign-in page)'},
  {token: /Membership (&amp;|&) credits|alpha-membership-title|data-alpha-membership/, element: 'dialog "Membership & credits" (membership sheet)'},
+ {token: /\bopenCloudAccount\(|Manage Cloud account|Connect Eliza Cloud|Close Cloud account|cloud-account-title/, element: 'dialog "Membership & credits" via the cloud-account entry (any signed-in balance; sign-in screen when signed out)'},
  {token: /Review billing account/, element: 'dialog "Review billing account" (billing handoff review)'},
  {token: /\bstarted\(/, element: 'Agent.start called (resident always runs, P-43)'},
 ]);
@@ -78,12 +85,27 @@ export function fixtureFacts(boot) {
  return {account, route, plan, limits, cashBalance: cash ? Number(cash[1]) : 0, fullApp: /\bfullApp:\s*true\b/.test(boot)};
 }
 
-/** The surface the resident-flow guard would render first for these facts, as source reasoning. */
-export function predictedSurface(facts) {
- if (facts.account !== 'verified') return 'resident dialog (sign-in required or offline; no account yet)';
- // Credits come from /api/v1/billing/limits v2.balance (organizationCreditFromLimits); the spec's
- // billing-limits fixture carries no v2.balance, so the credit state is "unavailable", never "zero".
- return 'resident dialog (membership balance cannot be "zero" with this fixture, so the sheet is not forced)';
+/** Which account entry a case body opens: 'cloud-account', 'plan', 'both' or 'none'. */
+export function entryOf(body) {
+ const cloud = /\bopenCloudAccount\(|Manage Cloud account|Connect Eliza Cloud|Close Cloud account/.test(body);
+ const plan = /\bopenPlan\(|\bopenAccountPlan\(|\baccountPanel\(|\bneedsPlan\(|\bplanDetails\(|\bsheet\(page\)/.test(body);
+ return cloud && plan ? 'both' : cloud ? 'cloud-account' : plan ? 'plan' : 'none';
+}
+
+/** The surface the resident flow would render for these facts and this entry, as source reasoning. */
+export function predictedSurface(facts, entry = 'plan') {
+ const cloudSurface = facts.account === 'verified'
+  ? 'sheet "Membership & credits" (cloud-account entry: no resident guard, any signed-in balance)'
+  : 'sign-in screen (cloud-account entry, no account yet)';
+ // Plan entry: credits come from /api/v1/billing/limits v2.balance (organizationCreditFromLimits);
+ // the spec's billing-limits fixture carries no v2.balance, so the credit state is "unavailable",
+ // never "zero", and the zero-balance (fundingRequired) branch cannot force the sheet.
+ const planSurface = facts.account === 'verified'
+  ? 'resident dialog (plan entry; balance cannot be "zero" with this fixture, so the sheet is not forced)'
+  : 'resident dialog (sign-in required or offline; no account yet)';
+ if (entry === 'cloud-account') return cloudSurface;
+ if (entry === 'both') return `${planSurface}; ${cloudSurface}`;
+ return planSurface;
 }
 
 /** Failing titles from a `--reporter=list` log ("✘ … › title" lines). */
@@ -102,14 +124,14 @@ export function mapSpec(source, log = null) {
   const facts = fixtureFacts(item.boot);
   const expects = EXPECTATIONS.filter(rule => rule.token.test(item.body)).map(rule => rule.element);
   const failures = failed ? [...failed].filter(key => Number(key.split('|')[0]) === item.line).map(key => key.split('|')[1]) : null;
-  return {line: item.line, describe: item.describe, title: item.title, loop: item.loop, boot: item.boot, flow: 'resident (Android, test mocks off)', facts, surface: predictedSurface(facts), expects, failed: failures};
+  return {line: item.line, describe: item.describe, title: item.title, loop: item.loop, boot: item.boot, flow: 'resident (Android, test mocks off)', facts, entry: entryOf(item.body), surface: predictedSurface(facts, entryOf(item.body)), expects, failed: failures};
  });
 }
 
 function table(rows) {
  const cell = value => String(value ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ');
- const out = ['| Line | Case | Boot fixture | Flow | Account | Expects | Failed |', '| --- | --- | --- | --- | --- | --- | --- |'];
- for (const row of rows) out.push(`| ${row.line} | ${cell(row.title)} | ${row.boot === null ? '(none found)' : `\`${cell(row.boot)}\``} | ${row.flow} | ${cell(row.facts.account)} | ${cell(row.expects.join('; ') || 'calls only')} | ${row.failed === null ? 'not run' : row.failed.length ? `yes (${row.failed.length})` : 'no'} |`);
+ const out = ['| Line | Case | Boot fixture | Flow | Account | Entry | Expects | Failed |', '| --- | --- | --- | --- | --- | --- | --- | --- |'];
+ for (const row of rows) out.push(`| ${row.line} | ${cell(row.title)} | ${row.boot === null ? '(none found)' : `\`${cell(row.boot)}\``} | ${row.flow} | ${cell(row.facts.account)} | ${row.entry} | ${cell(row.expects.join('; ') || 'calls only')} | ${row.failed === null ? 'not run' : row.failed.length ? `yes (${row.failed.length})` : 'no'} |`);
  return out.join('\n');
 }
 

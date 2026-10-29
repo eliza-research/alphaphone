@@ -79,16 +79,36 @@ modules and no browser-surface helpers. The descriptor is a superset.
 
 **Flow booted:** every case calls `boot()`, which asserts
 `planFlags = {native:'android', mocks:false}`. That makes `residentCloudFlow()` true, so **every
-case boots the resident flow**. None boots the off-resident flow. On the resident flow, the
-renderer shows the dialog titled "Your agent", "Eliza Cloud account" (credits plan view) or
-"Eliza Cloud account & plan". It shows the "Membership & credits" sheet instead only when the
-membership balance is `zero` (`fundingRequired`, connection-ui.tsx line 3003).
+case boots the resident flow**. None boots the off-resident flow. On the resident flow, which
+account surface renders depends on how the account is opened (`apps/app/src/runtime/connection-ui.tsx`):
+
+- **Cloud-account entry** (`connectionController.openCloudAccount()`, line 2034, purpose
+  `'cloud-account'`). It is reached from Settings > Accounts > "Manage Cloud account"
+  (`apps/app/src/prototype/settings-adapter.ts` line 663), Inbox "Connect Eliza Cloud"
+  (`inbox-cloud-adapter.ts` lines 300 and 709), the voice adapter (`voice-adapter.ts` lines 300 and
+  644) and `apps/app/src/runtime/cloud-voice.ts` line 96. The branch at line 3004
+  (`if(snapshot.purpose==='cloud-account')`) has **no `residentCloudFlow()` guard**. For any
+  signed-in account, whatever its balance, it renders the dialog with h1 "Membership & credits"
+  (line 3005) and `data-alpha-membership-sheet`. Signed out, it is the sign-in screen
+  (`explicitSignedOutCloudEntry`). Specs that expect this: `test/browser/browser-cloud-dev.spec.ts`
+  lines 56-58 and 90-91 (signed-in "Membership & credits" dialog), and
+  `test/browser/cloud-account-panel.spec.ts` (`membershipSheet`, line 9; Settings "Manage Cloud
+  account", line 57).
+- **Plan entry** (`planController.openPlan()`, line 2042, purpose `'plan'`, and the plan notice).
+  The resident flow renders the dialog titled "Your agent", "Eliza Cloud account" (credits plan
+  view) or "Eliza Cloud account & plan". The branch at line 3003 forces the "Membership & credits"
+  sheet on this entry only when the membership balance is `zero` (`fundingRequired`).
+
+No case in `native-cloud-subscription.spec.ts` uses the cloud-account entry (the script's Entry
+column shows `plan` or `none` for every case). All its dialog waits use the plan entry, so the
+zero-balance question below applies to them only.
 
 **Can a case reach the sheet?** Credits are read from `/api/v1/billing/limits` `v2.balance`
 (upstream `organizationCreditFromLimits`). The spec's billing-limits fixture never returns a
 `v2.balance`, so the credit state is always `unavailable`. The `cashBalance` field only feeds
-`/api/v1/credits/balance`, which the app does not read. So no case can force the sheet, and every
-`accountPanel`/`needsPlan` wait targets the resident dialog. Reviewer question: each case that
+`/api/v1/credits/balance`, which the app does not read. So no plan-entry case can force the sheet
+through `fundingRequired`, and every `accountPanel`/`needsPlan` wait targets the resident dialog. A
+case that opened the account through the cloud-account entry would see the sheet at any balance. Reviewer question: each case that
 sets `cashBalance:0` or `cashBalance:5` (lines 389, 406, 516 and the explicit-entry group) appears
 to intend a zero or funded balance that the fixture cannot produce. If those cases should see the
 sheet (zero balance) or the funded controls, the fixture needs a signed `v2.balance` observation.
