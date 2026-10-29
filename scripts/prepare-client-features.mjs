@@ -172,6 +172,8 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/voice/src/respond-gate.ts',
   'packages/voice/src/voice-assistant-session.ts',
   'packages/voice/src/live-voice-session.ts',
+  'packages/voice/src/native-live-voice.ts',
+  'packages/voice/src/native-speech-request.ts',
   'packages/voice/src/voice-turn-routes.ts',
   'packages/voice/src/voice-turn-timing.ts',
   'packages/voice/src/voice-endpoint-chain.ts',
@@ -223,6 +225,7 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/contracts/src/mms-send.ts',
   'packages/contracts/src/native-telephony.ts',
   'packages/contracts/src/native-telephony-session.ts',
+  'packages/contracts/src/phone-dial.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-handoff.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-handoff-history.ts',
@@ -276,6 +279,14 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
     if (content.split(before).length !== 2) throw Error('Review changed voice random-id import: ' + name);
     project(name, content.replace(before, 'import { randomId } from "./random-id.ts";'));
   }
+  // The shared native live transport imports the live session's values by their emitted .js name
+  // (and only types from turn timing, which type stripping erases); point that one import at .ts.
+  {
+    const name = 'packages/voice/src/native-live-voice.ts', before = '} from "./live-voice-session.js";';
+    const content = text(name);
+    if (content.split(before).length !== 2 || /^import (?!type )[^;]*from "\.\/(?!live-voice-session\.js")/m.test(content)) throw Error('Review changed native live voice imports: ' + name);
+    project(name, content.replace(before, '} from "./live-voice-session.ts";'));
+  }
 
   // The shared linked-sync modules import @elizaos/contracts by package name. Alpha has no
   // such package: the renderer resolves it through a Vite/tsc alias, but Node consumers
@@ -293,7 +304,7 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   project('alpha-voice-core-protocol.ts','export {ElizaError} from "./packages/core/src/errors";\nexport {redactTrailingArgs} from "./packages/core/src/security/log-redaction";\nexport {parseViewInteractionClientId, AGENT_SURFACE_CAPABILITY_IDS} from "./packages/core/src/views/view-interact-protocol";\nexport {findViewActionHandoff, type ViewActionHandoff} from "./packages/core/src/views/view-action-handoff";\nexport type {PermissionState} from "./packages/core/src/types/permissions";\n');
   }
   const files = Object.fromEntries([...source].map(([name, file]) => [name, file.sha256]));
-  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?11:0, files };
+  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?12:0, files };
   const parent = path.join(root, '.eliza'), destination = path.join(parent, 'client-features');
   regularPath(parent, true);
   const exists = regularPath(destination, true), stamp = path.join(destination, '.source.json');

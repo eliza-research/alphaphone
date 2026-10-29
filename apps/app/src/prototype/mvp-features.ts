@@ -9,7 +9,7 @@ import { admittedAospViews, aospImage } from '../runtime/aosp-image';
 // reachable anywhere.
 // Reference definitions and saved user data are retained; development fixtures are non-product.
 export const ENABLED_MVP_VIEWS = new Set([
-  // "phone", // Alpha AOSP image only, once its adapter is admitted (runtime/aosp-image.ts).
+  // "phone", // Alpha AOSP image only: admitted with its native adapter (runtime/aosp-image.ts).
   // "messages", // SMS UI: Alpha AOSP image only. This does not defer email.
   "inbox", "calendar", "browser", "camera", "photos", "maps", "notes",
   // "contacts", // Alpha AOSP image only, once its adapter is admitted.

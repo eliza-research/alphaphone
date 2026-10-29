@@ -17,6 +17,7 @@ import {installCalendarFormDraftAdapter} from './prototype/calendar-form-draft-a
 import { browserApps } from './browser/apps';
 import { installSmsAdapter } from './prototype/sms-adapter';
 import { installContactsAdapter } from './prototype/contacts-adapter';
+import { installPhoneAdapter } from './prototype/phone-adapter';
 import { admitImageContacts } from './prototype/mvp-features';
 import {DeletionUndo} from './runtime/deletion-undo';
 import {bindBrowserSpeechConnection} from './browser/agent-speech';
@@ -119,7 +120,7 @@ if (!fixture) {
   installAgentAdapter(Component, VIEWS);
   installReminderAdapter(Component, VIEWS);
   installCalendarAdapter(Component, VIEWS, {active:deviceCalendarScope});
-  if(isAndroid){installContactsAdapter(Component,VIEWS);installSmsAdapter(Component,VIEWS);}
+  if(isAndroid){installContactsAdapter(Component,VIEWS);installSmsAdapter(Component,VIEWS);installPhoneAdapter(Component,VIEWS);}
   installCalendarFormDraftAdapter(Component, VIEWS, {active:shell=>deviceCalendarScope(shell)||shell?.vget('calendar').form?.cal==='alpha-reminders'});
   installCalendarEditDraftAdapter(Component, VIEWS, {active:shell=>deviceCalendarScope(shell)||shell?.vget('calendar').form?.cal==='alpha-reminders'});
   installGoogleCalendarViewAdapter(Component, VIEWS, {active:legacyGoogleCalendarScope,preserveReadOnly:true});
