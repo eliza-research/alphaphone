@@ -17,12 +17,12 @@ export const AOSP_IMAGE_METHOD = TELEPHONY_PROFILE_METHOD;
 /** Views the owner decision limits to the Alpha AOSP image. */
 export const AOSP_IMAGE_VIEWS: readonly string[] = Object.freeze(['phone', 'messages', 'contacts']);
 /**
- * SMS has a native provider and reviewed-send adapter. Contacts has its own bounded
- * native adapter and is admitted dynamically by DeviceApps.platformCapabilities before mounting.
- * The Phone drawer handoff is separately guarded by AlphaImageCapabilities, including release,
- * system-install and product-overlay requirements; ordinary launcher APKs do not expose it.
+ * SMS has a native provider and reviewed-send adapter. Phone has the shared profile's bounded
+ * recent-calls read and dial handoff (prototype/phone-adapter.ts); it never places or simulates a
+ * call. Contacts has its own bounded native adapter and is admitted dynamically by
+ * DeviceApps.platformCapabilities before mounting. All of them need the verified image first.
  */
-export const ADMITTED_AOSP_VIEW_ADAPTERS: readonly string[] = Object.freeze(['messages']);
+export const ADMITTED_AOSP_VIEW_ADAPTERS: readonly string[] = Object.freeze(['messages', 'phone']);
 
 /** True only for an Android bridge whose native side registered the image-only plugin. */
 export function detectAospImage(platform: string, headers: unknown): boolean {
