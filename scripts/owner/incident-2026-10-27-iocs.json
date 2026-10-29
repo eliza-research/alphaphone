@@ -1,5 +1,5 @@
 {
-  "$comment": "Indicators of compromise for the 2026-10-27 forged-commit incident (issue #658). Transcribed from the owner cleanup record incident-branch-cleanup-2026-10-28.md. Data only: SHAs are 9-hex prefixes. Never check out any forged commit.",
+  "$comment": "Indicators of compromise for the 2026-10-27 forged-commit incident (issue #658). Transcribed from the owner private cleanup record, which is held off-repo and not tracked in this repository, so it cannot be checked from here. Data only: SHAs are 9-hex prefixes. Never check out any forged commit.",
   "actor": "gabrielbarbera",
   "window": {
     "start": "2026-10-27T22:45:00Z",

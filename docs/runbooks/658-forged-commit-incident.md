@@ -1,8 +1,8 @@
 # #658: respond to the 2026-10-27 forged-commit incident
 
-Owner runbook for issue #658. Prepared on 2026-10-28 by an agent with read-only GitHub access
-(member, not admin, of AlphaCompute; admin of eliza-research/alphaphone). Nothing was rotated,
-revoked, removed or installed. Every script below only reads (`gh api --method GET`, `git
+Owner runbook for issue #658. Prepared on 2026-10-28 by an agent that took only read-only actions
+(GET requests and git reads) with its existing access: member, not admin, of AlphaCompute, and
+admin of eliza-research/alphaphone. Nothing was rotated, revoked, removed or installed. Every script below only reads (`gh api --method GET`, `git
 ls-remote`, `git ls-tree`, `git show`); none prints a secret value, and the GitHub API never
 returns one.
 
@@ -14,7 +14,7 @@ that a rotation happened; those need the human steps below.
 
 | File | Purpose |
 |---|---|
-| `scripts/owner/incident-2026-10-27-iocs.json` | The 102 forged branches (pre-attack and forged SHA prefixes), the 18 repositories with CI runs on forged commits, the attack window, and the marker patterns. Transcribed from the owner's cleanup record `incident-branch-cleanup-2026-10-28.md`. |
+| `scripts/owner/incident-2026-10-27-iocs.json` | The 102 forged branches (pre-attack and forged SHA prefixes), the 18 repositories with CI runs on forged commits, the attack window, and the marker patterns. Transcribed from the owner's private cleanup record, which is held off-repo and is not in this repository, so the transcription cannot be checked from here; the owner can compare it with that record. |
 | `scripts/owner/incident-ci-exposure.mjs` | Lists workflow runs whose head SHA is a forged commit, and the secret, variable and environment NAMES per repository with `updated_at` and `NOT-ROTATED-YET` / `UPDATED-AFTER-INCIDENT`. |
 | `scripts/owner/incident-access-audit.mjs` | Per repository: the actor's effective permission, outside collaborators, pending invitations, deploy keys (no key material) and webhooks (host only). Per organization: membership, outside-collaborator and invitation state of the actor, GitHub App installations, and audit-log event counts for the actor since 2026-10-21. |
 | `scripts/owner/forged-branch-scan.mjs` | Scans every current branch and tag of a remote, without a checkout, for ancestry to a forged commit, marker paths, `node init` script hooks and loader patterns. |
@@ -33,10 +33,9 @@ missing admin rights or the `admin:org` token scope).
 ### eliza-research/alphaphone
 
 - **Pending invitation for the attacker account.** `GET repos/eliza-research/alphaphone/invitations`
-  lists an unexpired invitation for `gabrielbarbera`, permission `read`, created by `neuroscr` at
-  2026-10-28T05:26:27Z (after the attack). `neuroscr` is not a current member of eliza-research.
+  lists an unexpired invitation for `gabrielbarbera`, permission `read`, created after the attack.
   Read on a public repository grants little, but accepting it would make the account a collaborator
-  again. Cancel it (step 2).
+  again. Cancel it (step 2). Who created it is in the owner's private incident record.
 - **CI runs on forged commits: 6, matching the record.** All `pull_request`, all started by
   `gabrielbarbera` at 22:49 UTC: runs 40597671432, 40597671433, 40597671452 (forged `39ef59401`,
   `codex/merge-build-latest-20261026`) and 40597689749, 40597689787, 40597689789 (forged
@@ -84,17 +83,18 @@ missing admin rights or the `admin:org` token scope).
   account has on the 7 public ones). Organization outside collaborators and invitations, GitHub
   App installations and the audit log need an organization owner's token with `admin:org`, and
   webhooks need `admin:repo_hook`; without them those reads are reported as `UNREADABLE`.
-- Workflow runs found by head SHA are exactly half the record in 13 of the 18 repositories (for
-  example dstack-tee 12 of 24, vera 11 of 22, all on one forged commit `3edbd2060` for vera),
-  equal to it in four (altx-compute-terminal, alphaphone, confidential-plane, kata-containers) and
-  3 of 7 for shroud-go. The record may have counted runs twice; the script prints both numbers.
-- Repository secrets were readable with this account: 79 secrets in 8 AlphaCompute repositories
-  still have an `updated_at` before the attack (table below). Repository outside-collaborator
-  lists were readable and empty for all 25 repositories. Repository invitations, deploy keys and
-  webhooks were not readable (repository admin and `admin:repo_hook` needed).
+- Workflow runs found by head SHA differ from the run counts in the IOC file for most repositories
+  (often exactly half); the record may have counted runs twice. The script prints both numbers.
+- Repository outside-collaborator lists were readable and empty for all 25 repositories.
+  Repository invitations, deploy keys and webhooks were not readable (repository admin and
+  `admin:repo_hook` needed).
+- The per-repository secret, variable and environment snapshot (counts and rotation state) is not
+  published here: this repository is public, and which credentials are still unrotated, or which
+  repositories hold cloud-role variables, would help anyone holding stolen values. It is in the
+  owner's private incident record. Re-create it at any time with `incident-ci-exposure.mjs`.
 - `incident-ci-exposure.mjs` lists names only. Variables are shown as `VARIABLE` (not secret)
-  because some, such as an `AWS_ROLE_ARN` used for OIDC, tell you which cloud roles a
-  `pull_request` run could have assumed. Check those roles' trust policies.
+  because some name cloud roles used through OIDC, which a `pull_request` run could have assumed.
+  Check those roles' trust policies.
 
 ## Per-repository rotation checklist (step 1)
 
@@ -104,48 +104,33 @@ GitHub secret, and re-run until every row shows `UPDATED-AFTER-INCIDENT`. Also r
 secrets the repository could read, cloud credentials those secrets granted, and any role an OIDC
 `pull_request` subject could assume.
 
-Read-only snapshot from `incident-ci-exposure.mjs --all` on 2026-10-28 (names are not listed
-here because this repository is public; run the script to see them). "Secrets" counts repository,
-Dependabot and environment secrets; "not rotated" means `updated_at` is before 2026-10-27 23:36 UTC.
-Repository secrets were available to same-repository `pull_request` runs; environment secrets only
-to jobs that named that environment and passed its protection rules.
+Record progress privately (a private issue, the owner's incident record, or a private copy of
+this table), never in this public repository: a filled-in table tells an attacker which stolen
+credentials are probably still valid. "Secrets" counts repository, Dependabot and environment
+secrets; "not rotated" means `updated_at` is before 2026-10-27 23:36 UTC. Repository secrets were
+available to same-repository `pull_request` runs; environment secrets only to jobs that named that
+environment and passed its protection rules. The repositories with CI runs on forged commits are
+listed in `scripts/owner/incident-2026-10-27-iocs.json`.
 
-| Repository | Runs (record) | Runs found by SHA | Secrets | Not rotated | Variables | Environments | Rotated on | By |
-|---|---|---|---|---|---|---|---|---|
-| AlphaCompute/dstack-tee | 24 | 12 | 0 | 0 | 0 | 0 | | |
-| AlphaCompute/vera | 22 | 11 | 0 | 0 | 22 | 11 | | |
-| AlphaCompute/altx-compute-terminal | 10 | 10 | 28 | 28 | 14 | 3 | | |
-| AlphaCompute/rafay-plugins | 10 | 5 | 0 | 0 | 0 | 0 | | |
-| AlphaCompute/corpus-app | 8 | 4 | 3 | 3 | 13 | 0 | | |
-| AlphaCompute/shroud-go | 7 | 3 | 15 | 15 | 19 | 1 | | |
-| eliza-research/alphaphone (then AlphaCompute/alphaphone) | 6 | 6 | 0 | 0 | 0 | 1 | check AlphaCompute org secrets shared before the move | |
-| AlphaCompute/shroud-swarm-worker | 6 | 3 | 5 | 5 | 5 | 2 | | |
-| AlphaCompute/alphabox-deploy | 4 | 2 | 9 | 9 | 10 | 1 | | |
-| AlphaCompute/alpha-infra | 4 | 2 | 0 | 0 | 0 | 0 | | |
-| AlphaCompute/vera.report | 4 | 2 | 0 | 0 | 0 | 0 | | |
-| AlphaCompute/alpha-compute | 2 | 1 | 10 | 10 | 0 | 2 | | |
-| AlphaCompute/confidential-platform | 2 | 1 | 8 | 8 | 5 | 1 | | |
-| AlphaCompute/corpus-supervisor | 2 | 1 | 0 | 0 | 1 | 0 | | |
-| AlphaCompute/expenseATON | 2 | 1 | 0 | 0 | 0 | 5 | | |
-| AlphaCompute/midnight-ton-bridge | 2 | 1 | 0 | 0 | 0 | 0 | | |
-| AlphaCompute/confidential-plane | 1 | 1 | 1 | 1 | 6 | 0 | | |
-| AlphaCompute/kata-containers | 1 | 1 | 0 | 0 | 0 | 0 | | |
+| Repository | Runs (record) | Runs found by SHA | Secrets | Not rotated | Variables | Environments | Cloud-role variables (OIDC trust checked) | Rotated on | By |
+|---|---|---|---|---|---|---|---|---|---|
+| | | | | | | | | | |
 
-79 secrets in 8 repositories had not been rotated on 2026-10-28. No repository could read an
-organization Actions secret at the time of the snapshot. Six repositories (vera,
-altx-compute-terminal, corpus-app, shroud-go, alphabox-deploy, confidential-plane) have a variable
-or secret whose name suggests a cloud role (for example `*_ROLE_ARN`); check whether those roles
-trust OIDC tokens from `pull_request` runs.
+For eliza-research/alphaphone, which was AlphaCompute/alphaphone at the time of the runs, also
+check the AlphaCompute organization secrets that were shared with it before the move.
 
 ## Remaining human steps
 
-1. **Rotate secrets** (organization owner, per table above). Command per repository:
-   `GH_BIN=... node scripts/owner/incident-ci-exposure.mjs --all --json > ci-exposure.json`
-   (attach the JSON; it holds names and dates only).
+1. **Rotate secrets** (organization owner, per the private table above). Command for all
+   repositories in the IOC file:
+   `GH_BIN=... node scripts/owner/incident-ci-exposure.mjs --all --json > ci-exposure.json`,
+   or for one repository: `GH_BIN=... node scripts/owner/incident-ci-exposure.mjs --repo <owner/name> --json`.
+   Keep the JSON private (it holds names and dates only, but shows what is still unrotated).
 2. **Revoke access** (organization owners of AlphaCompute and eliza-research):
    - Cancel the pending eliza-research/alphaphone invitation (Settings > Collaborators and teams,
      or `gh api --method DELETE repos/eliza-research/alphaphone/invitations/<id>`; the id is in
-     `GET repos/eliza-research/alphaphone/invitations`). Ask `neuroscr` why it was sent.
+     `GET repos/eliza-research/alphaphone/invitations`). Ask the account that created it why it was
+     sent (named in the private incident record).
    - Run `GH_BIN=... node scripts/owner/incident-access-audit.mjs --all` with a token that has
      `admin:org` and `admin:repo_hook`. Remove any outside collaborator, invitation, deploy key,
      webhook or app installation you do not recognize. Exit 0 means the actor has no remaining
@@ -203,8 +188,8 @@ mode is reported separately and does not count.
 ## Machine-check IOC checklist (step 3)
 
 Who: anyone who fetched, checked out or opened an affected branch, in VS Code or otherwise,
-between 2026-10-27 22:45 UTC and the cleanup (including Andrei Pfau, `shroud-go`
-`feat/apps-connector-demo`), and anyone whose local clone may still have the forged history.
+between 2026-10-27 22:45 UTC and the cleanup (the private incident record names the people known
+to have opened affected branches), and anyone whose local clone may still have the forged history.
 
 Indicators (from the forged alphaphone commits; the other repositories used the same kit):
 
@@ -313,10 +298,10 @@ Not added to `docs/decisions.md`; copy the chosen ones with the next free `P-` n
 ## Incident evidence, <date>
 
 ### 1. Secrets rotated
-| Repository | Rotated on | Who | `incident-ci-exposure.mjs` shows all UPDATED-AFTER-INCIDENT |
-|---|---|---|---|
-| ... | | | yes / no (names left: ...) |
-Org secrets reviewed: AlphaCompute <date>. OIDC roles reviewed: <list or none>.
+Rotation finished for every repository in the IOC file: <yes/no>, checked <date> with
+`incident-ci-exposure.mjs --all` (no NOT-ROTATED-YET rows). The per-repository record is kept
+privately at <private location>; do not paste names, counts or remaining items here.
+Org secrets reviewed: AlphaCompute <date>. OIDC roles reviewed: <yes/no>.
 
 ### 2. Access revoked
 - `incident-access-audit.mjs --all` (owner token) exit code: <0/1/2>, run <date>.

@@ -1,8 +1,8 @@
 # #679: decide whether to install the "Main required checks" ruleset on main
 
 Owner runbook for issue #679 (requirement MVP-46, `docs/human-actions.md` H-36). Prepared on
-2026-10-28 by an agent with read-only access; nothing in GitHub was changed. Installing a
-ruleset is the repository owner's action.
+2026-10-28 by an agent that took only read-only actions (GET requests) with its existing access;
+nothing in GitHub was changed. Installing a ruleset is the repository owner's action.
 
 ## Read-back on eliza-research/alphaphone (2026-10-28, read-only)
 
