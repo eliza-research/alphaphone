@@ -112,8 +112,10 @@ test('the sweep applies every dimension and cannot be narrowed silently', () => 
   assert.ok(open300 !== undefined, 'the open 300% defects are listed in one place');
   const recorded300 = ['live Home', 'live Conversation', 'live Calendar new event', 'live Camera (unavailable)', 'live Browser tabs', 'live Browser menu', 'live Notes trash', 'live Notes recording', 'live Notes source document', 'live Settings display', 'launcher Home', 'launcher Conversation', 'launcher Calendar', 'launcher Camera', 'launcher Photos', 'launcher Workflows', 'launcher Settings display'];
   for (const name of [...open300.matchAll(/'([^']+)'/g)].map(match => match[1])) assert.ok(recorded300.includes(name), `${name} is not a recorded 300% defect; fix it instead of exempting it`);
-  assert.match(sweep, /test\.fail\(OPEN_AT_300\.has\(state\.name\), 'Open 300% layout defect, issue #701'\);/);
-  assert.equal([...sweep.matchAll(/test\.fail\(/g)].length, 1, 'no other lane has expected failures');
+  // An open entry must still report a layout defect from the audit itself; a timeout, a crash or a
+  // state that no longer opens is not taken as the expected failure.
+  assert.match(sweep, /if \(OPEN_AT_300\.has\(state\.name\)\) expect\(found, `\$\{state\.name\} now passes at 300%: remove it from OPEN_AT_300 \(issue #701\)`\)\.not\.toEqual\(\[\]\);\s*else expect\(found, found\.join\('\\n'\)\)\.toEqual\(\[\]\);/);
+  assert.doesNotMatch(sweep, /test\.fail\(/, 'no lane has expected failures');
   // The launcher presentation of every retained app view, and the conversation.
   for (const view of ['Conversation', 'Inbox', 'Calendar', 'Browser', 'Camera', 'Photos', 'Maps', 'Notes', 'Files', 'Workflows', 'Settings'])
     assert.ok(states.includes(`launcher('${view}'`), `the launcher ${view} is swept`);

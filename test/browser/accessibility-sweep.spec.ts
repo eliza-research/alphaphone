@@ -64,8 +64,9 @@ for (const state of STATES) {
 // largest in-app size (150%) with the largest system font (200%) draws text at 300%. Every primary
 // view, in the standalone and the launcher presentation, is held to the 200% rules there.
 // The states below failed on real layout defects when this lane was added (issue #701). They still
-// run, as expected failures: a fix makes Playwright report an unexpected pass, and the entry must
-// then be removed. The list may only shrink (test/accessibility-coverage.test.mjs).
+// run every rule, and must still report a defect: a fix makes the test fail with "now passes", and
+// the entry must then be removed. A timeout or a state that no longer opens fails as well, instead
+// of counting as the expected failure. The list may only shrink (test/accessibility-coverage.test.mjs).
 const OPEN_AT_300 = new Set([
   'live Home', 'live Conversation', 'live Calendar new event', 'live Camera (unavailable)', 'live Browser tabs',
   'live Browser menu', 'live Notes trash', 'live Notes recording', 'live Notes source document', 'live Settings display',
@@ -74,12 +75,12 @@ const OPEN_AT_300 = new Set([
 ]);
 for (const state of [...LIVE_STATES, ...LAUNCHER_STATES]) {
   test(`300% text (largest in-app size and system font) is not clipped and does not overlap: ${state.name}`, async ({ page }) => {
-    test.fail(OPEN_AT_300.has(state.name), 'Open 300% layout defect, issue #701');
     test.setTimeout(LARGE_TEXT_TIMEOUT);
     await state.open(page, 'light');
     await setTextScale(page, 3);
     const found = blocking(format([...await auditPage(page, { clipping: true, overlap: true, dock: true }), ...await auditTree(page), ...await auditTabOrder(page), ...await auditReadingOrder(page)]));
-    expect(found, found.join('\n')).toEqual([]);
+    if (OPEN_AT_300.has(state.name)) expect(found, `${state.name} now passes at 300%: remove it from OPEN_AT_300 (issue #701)`).not.toEqual([]);
+    else expect(found, found.join('\n')).toEqual([]);
   });
 }
 

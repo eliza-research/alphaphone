@@ -146,8 +146,9 @@ product commitment; the landscape decision is still A-22 in `docs/decisions.md`.
   (`accessibility-sweep.spec.ts`, "300% text"). When the lane was added (cycle 2) 38 of the 55
   states passed; the other 17 fail on real layout defects (a display title split mid-word,
   segmented controls and header actions pushed off screen, chips and menu tiles narrower than
-  their labels) and are tracked in issue #701. They run as expected failures listed in
-  `OPEN_AT_300`, so a fix shows up as an unexpected pass and the list can only shrink.
+  their labels) and are tracked in issue #701. They are listed in `OPEN_AT_300` and still run
+  every rule; each must still report a layout defect, so a fix (or a state that no longer opens or
+  times out) fails the test, and the list can only shrink.
 
 Truncation policy: a single-line ellipsis or line clamp on a preview of user content
 (a mail snippet, a file name in a list, a note preview) is allowed, because the full text
