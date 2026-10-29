@@ -401,6 +401,7 @@ export async function setTextScale(page: Page, scale: number) {
   }, scale);
   // The renderer's own probe (runtime/text-scale.ts) has measured the new size and published it, so
   // the layout rules that read it have applied; then any reflow motion settles.
-  await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--alpha-text-scale').trim())).toBe(String(scale));
+  // The probe reports on its next layout; a starved renderer can take seconds to lay out a frame.
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--alpha-text-scale').trim()), { timeout: 15_000 }).toBe(String(scale));
   await settled(page);
 }
