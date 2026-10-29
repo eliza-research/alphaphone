@@ -73,8 +73,12 @@ test('Mute controls capture and Stop retires playback without a separate interru
  await expect.poll(()=>live(page,f=>f.stopped)).toBeGreaterThan(0);
  await expect(page.getByText('(Interrupted before this reply was played.)')).toBeVisible();
  expect(await posts(page)).toEqual(['How is the weather']);
- // Nothing was heard: the route needs a non-empty prefix, so nothing is sent.
- expect(await live(page,f=>f.heard)).toEqual([]);
+ // Nothing was heard: the agent is told so explicitly ({ nothingHeard: true }, docs/fused-speech.md), never sent an empty prefix.
+ const heard=await live(page,f=>f.heard);
+ expect(heard.map((row:any)=>[row.path.split('/')[5],row.nothingHeard,row.heardText])).toEqual([['11111111-1111-4111-8111-111111111111',true,undefined]]);
+ expect(heard[0].ownerId).toBeTruthy();
+ const outcomes=await page.evaluate(()=>JSON.parse(localStorage.getItem('alphaphone:voice-timing:v1')||'[]').filter((row:any)=>row.endpoint).map((row:any)=>row.heard??null));
+ expect(outcomes).toEqual(['recorded']);
  await clean(page,foreign);
 });
 
@@ -129,7 +133,8 @@ test('semantic endpointing: a complete score submits after the short gap; an inc
  expect(await posts(page)).toEqual(['What is on my calendar today'],'not complete: no early submit');
  await expect.poll(()=>posts(page)).toEqual(['What is on my calendar today','and remind me to']);
  const endpoints=await page.evaluate(()=>JSON.parse(localStorage.getItem('alphaphone:voice-timing:v1')||'[]').filter((row:any)=>row.endpoint).map((row:any)=>row.endpoint));
- expect(endpoints).toEqual([{by:'semantic',semantic:'complete',latencyMs:18},{by:'gap',semantic:'incomplete',latencyMs:15}]);
+ // `path` names the chain stage that answered: the resident's fused scorer (Clef is off).
+ expect(endpoints).toEqual([{by:'semantic',semantic:'complete',latencyMs:18,path:'local'},{by:'gap',semantic:'incomplete',latencyMs:15,path:'local'}]);
  expect(JSON.stringify(endpoints)).not.toContain('calendar');
  // The reply was fully heard: no heard request.
  expect(await live(page,f=>f.heard)).toEqual([]);
