@@ -16,10 +16,6 @@ export async function openLegacyNotes(page:Page){
 /** Navigate only; leave raw-store setup and recovery assertions to the caller. */
 export async function selectLegacyNotes(page:Page){
  await page.getByRole('button',{name:'Notes',exact:true}).click();
- const menu=page.getByLabel('Notes options',{exact:true});
- if(await menu.count()){
-  await menu.click();
- }
  const older=page.getByRole('button',{name:/^(Older|Previous) notes$/});
  if(await older.count())await older.click();
 }
