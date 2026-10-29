@@ -43,7 +43,7 @@ import {presentDeviceRecordOperation} from './device-record-presentation';
 import {validateMapsSelectedObject} from '../maps/agent-context';
 import {isMvpView} from '../prototype/mvp-features';
 import {assertWorkflowOperation,parseWorkflowBinding,parseWorkflowRead,validateWorkflowResult,type WorkflowPhoneReview} from './workflow-device-contract';
-import type {ActionProposal,AlphaClient,ContextEnvelope,OperationReceipt,VerifiedSession} from './alpha-client';
+import type {AlphaClient,ContextEnvelope,OperationReceipt,VerifiedSession} from './alpha-client';
 
 export {deviceJournalContext,actionScope,CAMERA_CONTEXT_NOTICE,ContextNotice};
 export type {CurrentDeviceActionRequest,DeviceCredential,DeviceJournalIdentity,DeviceOperation,DeviceRecovery,ReviewableDeviceOperation,WorkflowNoticeRoute,WorkflowPresentationOperation};
@@ -54,7 +54,7 @@ export type JournalEntry = DeviceJournalEntry;
 export type ActionJournal = DeviceActionJournal;
 export type DeviceExecutor = SharedDeviceExecutor<ContextEnvelope>;
 export type ForegroundReviewExecutor = SharedForegroundReviewExecutor<ContextEnvelope>;
-export interface PendingReviewItem extends SharedPendingReviewItem { proposal: ActionProposal | null }
+export type PendingReviewItem = SharedPendingReviewItem;
 
 /** Alpha ships Home and Reminders plus the enabled MVP views. */
 const operations = {admitView:(view:string)=>view==='home'||view==='reminders'||isMvpView(view),parseWorkflowRead};
@@ -86,7 +86,4 @@ export class DeviceActions extends DeviceActionCoordinator<ContextEnvelope,Workf
     journal: ActionJournal, execute: DeviceExecutor, recover?:DeviceRecovery, reminderTimingV2=false, reminderCreate=false, executeForeground?:ForegroundReviewExecutor) {
     super({session,credential,scope,request,journal,execute,recover,reminderTimingV2,reminderCreate,executeForeground,profile:alphaDeviceActionProfile},{currentRequestBrowserPolicy:true});
   }
-  override async pendingReview(context: ContextEnvelope, signal: AbortSignal, proof?:CurrentDeviceActionRequest): Promise<PendingReviewItem[]> { return super.pendingReview(context,signal,proof) as Promise<PendingReviewItem[]>; }
-  override async pending(context: ContextEnvelope, signal: AbortSignal): Promise<ActionProposal[]> { return super.pending(context,signal) as Promise<ActionProposal[]>; }
-  override async pendingForWorkflow(review: WorkflowPhoneReview, context: ContextEnvelope, signal: AbortSignal): Promise<ActionProposal[]> { return super.pendingForWorkflow(review,context,signal) as Promise<ActionProposal[]>; }
 }
