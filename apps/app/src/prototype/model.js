@@ -408,6 +408,7 @@ registerView("phone", {
     var scrDone = screening && (st.scrN || 0) >= PN_SCREEN.length;
 
     return {
+      nativePrototype: true,
       tab: tab, title: tab === "keypad" ? "Keypad" : (tab === "voicemail" ? "Voicemail" : "Recents"),
       tabs: tabs, isRecents: tab === "recents", isKeypad: tab === "keypad", isVm: tab === "voicemail",
       favs: favs, hasFavs: favs.length > 0, recents: recents, noRecents: recents.length === 0,
