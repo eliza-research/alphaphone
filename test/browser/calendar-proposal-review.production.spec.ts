@@ -84,7 +84,7 @@ async function residentAgent(page: Page, operation: unknown, capabilities: strin
     w.Capacitor = {
       PluginHeaders: [
         { name: 'AlphaDeletions', methods: methods(['pending']) },
-        { name: 'DeviceApps', methods: methods(['buildInfo']) },
+        { name: 'ElizaSystem', methods: methods(['getBuildInfo']) },
         { name: 'Agent', methods: resident.methods(['getStatus', 'start', 'stop', 'configureCloudProvider', 'request', 'providerStatus']) },
         { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite', 'secureRemove', 'secureCompareExchange', 'request', 'cancel', 'openExternal', 'addListener', 'removeListener', 'pauseNotificationCollection']) },
         { name: 'AlphaActionJournal', methods: methods(['reserve', 'markApplying', 'finish', 'list', 'get']) },
@@ -95,7 +95,7 @@ async function residentAgent(page: Page, operation: unknown, capabilities: strin
       nativeCallback: resident.nativeCallback,
       nativePromise: async (plugin: string, method: string, input: any) => {
         if (plugin === 'AlphaDeletions' && method === 'pending') return { deletions: [] };
-        if (plugin === 'DeviceApps') return { launcher: false, version: 'decline-fixture' };
+        if (plugin === 'ElizaSystem' && method === 'getBuildInfo') return { launcher: false, version: 'decline-fixture' };
         if (plugin === 'AlphaNotifications') return { permissionGranted: true, appEnabled: true };
         if (plugin === 'AlphaVoiceCloud') return { microphone: 'granted' };
         if (plugin === 'AlphaActionJournal') {

@@ -21,11 +21,11 @@ Generated from product main/debug Android source on October 2, 2026; instrumenta
 | AlphaVoiceCloud | `releaseLocalSpeech`, `startRecording`, `stopRecording`, `saveRecording`, `cancelRecording`, `pairedVoiceStatus`, `pairedTranscriptionStatus`, `transcribePairedRecording`, `synthesizePaired`, `synthesizeBrowserReading`, `transcribeRecording`, `localSpeechStatus`, `transcribeLocalRecording`, `synthesizeLocal`, `synthesize`, `play`, `stopPlayback`, `cancel` | `android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaVoiceCloudPlugin.java` (subclass of the shared `LocalSpeechBridgePlugin`, which declares the on-device methods) |
 | DailyApps | `surfaceInfo`, `closeAssistant`, `scheduleReminder`, `reminderDecision`, `selectedReminder`, `reminderOperationReceipt`, `operateReminder`, `listReminders`, `cancelReminder`, `restoreSelected`, `renameSelected`, `pdfSelected`, `readSelected`, `openSelected`, `shareSelected`, `forgetSelected`, `clockHandoff`, `capabilities`, `perform` | `android/app/src/main/java/ai/elizaresearch/alphaphone/DailyAppsPlugin.java` |
 | DevelopmentAgent | `startRecording`, `stopRecording`, `saveRecording`, `cancelRecording`, `transcribeRecording`, `status`, `chat`, `cancel` | `android/app/src/testMocks/java/ai/elizaresearch/alphaphone/DevelopmentAgentPlugin.java` (debug variant only when `ELIZA_DEV_ALLOW_TEST_MOCKS=1`) |
-| DeviceApps | `buildInfo`, `list`, `launch` | `android/app/src/main/java/ai/elizaresearch/alphaphone/DeviceAppsPlugin.java` |
+| DeviceApps | `platformCapabilities` | `android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaDeviceAppsPlugin.java` (image admission only; installed apps, default hand-offs and build, launch and locale reads are the shared ElizaSystem through `createSystemLauncherBridge`) |
 
-Total: 18 plugin declarations, 166 method declarations. AlphaBrowser also emits `stateChanged`, `tabOpened`, `tabClosed` and `notice` events.
+Total: 18 plugin declarations, 164 method declarations. AlphaBrowser also emits `stateChanged`, `tabOpened`, `tabClosed` and `notice` events.
 
-Imported upstream ports used by the renderer also require parity: ElizaSystem (status/settings/default roles), ElizaCamera (preview/capture/recording/focus/zoom/flash), ElizaContacts (permission/list/create), ElizaLocation (permission/watch/clear), and Capacitor SystemBars (style/insets). Their checkouts remain pinned and unmodified.
+Imported upstream ports used by the renderer also require parity: ElizaSystem (status/settings/default roles, installed-app list/launch, default dial hand-off, build/launch/locale reads), ElizaCamera (preview/capture/recording/focus/zoom/flash), ElizaContacts (permission/list/create), ElizaLocation (permission/watch/clear), and Capacitor SystemBars (style/insets). Their checkouts remain pinned and unmodified.
 
 See [implementation and acceptance ledger](browser-dev-parity.md) for each capability group and remaining work.
 

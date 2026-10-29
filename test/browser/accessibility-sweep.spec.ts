@@ -164,3 +164,33 @@ test('launcher All apps keeps scroll clearance when a late draft status arrives'
   expect(layout.room).toBeGreaterThanOrEqual(layout.need);
   expect(errors).toEqual([]);
 });
+
+// Shared Home tiles (@elizaos/ui/mobile-shell MobileHomeScreen): every tile in the grid is one named
+// button whose accessible name is its visible label; the glyph id it carries for audits
+// (data-mobile-shell-tile-icon) never changes that name.
+for (const theme of ['light', 'dark'] as const) {
+  test(`shared Home tiles are counted, named and reachable: ${theme}`, async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('alpha.connection.selection.v1', JSON.stringify({ kind: 'offline' })));
+    await page.goto('/?mode=dev&theme=' + theme);
+    const home = page.getByRole('region', { name: 'Home', exact: true });
+    const grid = home.locator('[data-mobile-shell-apps]');
+    await expect(grid.locator('[data-mobile-shell-tile]').first()).toBeVisible();
+    const tiles = await grid.locator('[data-mobile-shell-tile]').evaluateAll(elements => elements.map(element => ({
+      tag: element.tagName, type: element.getAttribute('type'), name: element.getAttribute('aria-label'),
+      label: element.querySelector('[data-mobile-shell-tile-label]')?.textContent ?? '',
+      icon: element.getAttribute('data-mobile-shell-tile-icon'), image: !!element.querySelector('img'),
+    })));
+    expect(tiles.length).toBe(await grid.getByRole('button').count());
+    expect(tiles.length, 'product tiles and All apps').toBeGreaterThan(1);
+    for (const tile of tiles) {
+      expect(tile).toMatchObject({ tag: 'BUTTON', type: 'button' });
+      expect(tile.name, 'accessible name is the visible label').toBe(tile.label);
+      expect(tile.icon !== null || tile.image, `${tile.name} carries a glyph id or a platform icon`).toBe(true);
+    }
+    expect(new Set(tiles.map(tile => tile.name)).size, 'no two tiles read alike').toBe(tiles.length);
+    for (const tile of tiles) await expect(grid.getByRole('button', { name: tile.name!, exact: true })).toHaveCount(1);
+    // The whole Home is audited unfiltered: a tile defect cannot hide behind a narrowed result.
+    const found = format([...await auditTree(page), ...await auditPage(page, { targetSize: 24 })]);
+    expect(found, found.join('\n')).toEqual([]);
+  });
+}

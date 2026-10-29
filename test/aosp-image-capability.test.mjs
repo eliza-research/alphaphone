@@ -110,10 +110,22 @@ test("the telephony plugin is registered and answers only on the verified image"
 });
 
 test("the Home Phone shortcut exists only in the launcher build (P-36)", () => {
-  const apps = read(`${JAVA}/DeviceAppsPlugin.java`);
-  assert.match(apps, /if \("dial"\.equals\(role\) && BuildConfig\.IS_LAUNCHER\) return new Intent\(Intent\.ACTION_DIAL, Uri\.parse\("tel:"\)\);/, "standalone resolves no dial hand-off, so the drawer shows no Phone entry");
-  assert.match(apps, /Intent intent = roleIntent\(role\);\n\s*if \(intent == null\) \{ call\.reject/);
-  assert.match(apps, /Intent intent = roleIntent\(call\.getString\("role"\)\);\n\s*if \(intent == null\) \{ call\.reject/, "openDefault is refused too");
+  const system = read(`${JAVA}/AlphaSystemPlugin.java`);
+  assert.match(system, /@Override protected boolean isDefaultAppEnabled\(String role\)\{return BuildConfig\.IS_LAUNCHER&&AlphaImageCapabilities\.defaultAppEnabled\(getContext\(\),role\);\}/, "standalone resolves no dial hand-off, so the drawer shows no Phone entry; the shared ElizaSystem refuses resolve and open alike");
+  assert.match(system, /isLauncherBuild\(\)\{return BuildConfig\.IS_LAUNCHER;\}/, "the shared build read reports Alpha's launcher flavor");
+});
+
+test("no Alpha Java lists or launches apps: installed apps and default hand-offs are the shared ElizaSystem", () => {
+  assert.equal(fs.existsSync(`${JAVA}/DeviceAppsPlugin.java`), false);
+  const product = read(`${JAVA}/AlphaDeviceAppsPlugin.java`);
+  assert.deepEqual([...product.matchAll(/@PluginMethod public void (\w+)/g)].map(m => m[1]), ["platformCapabilities"]);
+  // The password-provider hand-off opens one verified-publisher app by package; it is not the
+  // launcher inventory. Nothing else in Alpha may list or launch apps.
+  const handoffs = new Set(["PasswordProviderSupport.java"]);
+  for (const name of fs.readdirSync(JAVA).filter(file => file.endsWith(".java") && !handoffs.has(file))) {
+    const source = read(`${JAVA}/${name}`);
+    assert.doesNotMatch(source, /SystemLauncherApps\.(list|launchIntent|resolve)\(|getLaunchIntentForPackage|startMainActivity|CATEGORY_LAUNCHER/, `${name} lists or launches no app`);
+  }
 });
 
 test("permissions: standalone has none, the launcher declares read access only, nothing writes", () => {

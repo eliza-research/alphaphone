@@ -100,7 +100,7 @@ async function android(page: Page, options: { clock?: 'opened' | 'unavailable' |
     const withListeners = (names: string[]) => [...promise(names), { name: 'addListener', rtype: 'callback' }, { name: 'removeListener', rtype: 'callback' }];
     w.Capacitor = {
       PluginHeaders: [
-        { name: 'DeviceApps', methods: promise(['buildInfo']) },
+        { name: 'ElizaSystem', methods: promise(['getBuildInfo']) },
         { name: 'DailyApps', methods: withListeners(['surfaceInfo', 'clockHandoff', ...(options.voice ? ['listReminders', 'scheduleReminder', 'pendingReminderTap'] : [])]) },
         { name: 'Agent', methods: withListeners(['getStatus', 'start', 'stop', 'configureCloudProvider', 'request', 'providerStatus', 'requestStream', 'cancelStream']) },
         { name: 'AlphaConnection', methods: promise(['secureRead', 'secureWrite', 'secureRemove', 'secureCompareExchange', 'request', 'cancel', 'openExternal']) },
@@ -114,7 +114,7 @@ async function android(page: Page, options: { clock?: 'opened' | 'unavailable' |
       nativeCallback: (plugin: string, method: string, input: any, callback: (value: unknown) => void) => { if (method === 'addListener') listeners.push({ plugin, event: input?.eventName, callback }); return String(listeners.length); },
       nativePromise: async (plugin: string, method: string, input: any) => {
         f.calls.push(plugin + '.' + method);
-        if (plugin === 'DeviceApps') return { launcher: true, version: 'core-loops' };
+        if (plugin === 'ElizaSystem' && method === 'getBuildInfo') return { launcher: true, version: 'core-loops' };
         if (plugin === 'AlphaNotifications') return { permissionGranted: true, appEnabled: true };
         if (plugin === 'AlphaVoiceCloud') {
           const v = f.voice;
