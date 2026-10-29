@@ -67,7 +67,8 @@ adb shell pm get-app-links ai.elizaresearch.alphaphone     # shows the verificat
 Email code sign-in does not depend on the App Link, but the readiness probe does: Alpha offers its
 in-app screens only after Cloud reports the client registration, the redirect allowlist admits the
 return URL, and the return host's `assetlinks.json` lists this APK's package and signing certificate.
-Until then **Sign in with Eliza Cloud** opens the Cloud sign-in hand-off in the browser. The answer is
+Until then Google is hidden and email code sign-in stays in Alpha; only test-mocks builds offer the
+browser sign-in hand-off (**Browser sign-in (diagnostic)**). The answer is
 cached (6 hours when ready, 10 minutes when not); clearing Alpha's app data resets it.
 
 On the phone: **Settings › Agent connection › Subscription gate QA**, choose **Staging**, then

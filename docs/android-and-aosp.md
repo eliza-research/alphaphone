@@ -158,8 +158,9 @@ one-time code in the fragment. AlphaCloudSignInPlugin validates it under the sha
 contract and exchanges the code natively (docs/architecture.md, "Eliza Cloud sign-in ownership").
 Alpha offers its in-app sign-in only after its readiness probe sees the client registration, the
 redirect allowlist, `assetlinks.json` listing this package and its signing certificate, and (for
-Google) Android reporting the return host verified for Alpha. Until then the Cloud sign-in hand-off
-stays the sign-in path. If the link is not handed to Alpha, Cloud's fallback page brings Alpha
+Google) Android reporting the return host verified for Alpha. Email code sign-in stays in Alpha
+while readiness is unavailable; product builds have no browser sign-in hand-off (it is a test-mocks
+diagnostic only). If the link is not handed to Alpha, Cloud's fallback page brings Alpha
 forward without parameters and Alpha asks the owner to start again; no code is forwarded.
 
 Check verification with `adb shell pm get-app-links ai.elizaresearch.alphaphone` on an installed
