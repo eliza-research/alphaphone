@@ -89,3 +89,23 @@ test('a binding change while an authorization URL is pending cannot arm or open 
 test('a still-referenced watcher from the prior panel generation cannot initiate under a freshly rendered binding',async()=>{
  const f=fixture();f.change({organizationId:'new-tenant'});f.globals.binding={...f.binding,organizationId:'new-tenant'};await f.globals.connect();assert.equal(f.initiations,0);assert.equal(f.opens,0);f.close();
 });
+
+function mountActualLifecycle(){
+ const start=ui.indexOf(' useEffect(()=>{\n  if(!open||!binding)return;');
+ if(start<0)return null;
+ const prefix=' useEffect(()=>{',end=ui.indexOf('\n },[open,identity,cloud?.client]);',start);
+ const body=stripTypeScriptTypes('(function(){'+ui.slice(start+prefix.length,end)+'\n})',{mode:'transform'});
+ const document=Object.assign(new EventTarget(),{hidden:false}),window=new EventTarget(),registration=deferred();let nativeCallback,removed=0,revision=0;
+ const binding={client:{},environment:'production',userId:'owner',organizationId:'tenant',sessionId:'session',credentialId:'credential'},active={current:new AbortController()},returnWatch={current:null};
+ const mount=vm.runInNewContext(body,{open:true,binding,watchGoogleConnectionReturn,currentGoogleConnectionReturnBinding:()=>binding,document,window,isAndroid:true,DailyApps:{addListener(name,callback){assert.equal(name,'appResumed');nativeCallback=callback;return registration.promise;}},returnWatch,active,setRevision:update=>{revision=update(revision);}});
+ const cleanup=mount();return {document,window,returnWatch,active,cleanup,native:()=>nativeCallback?.(),resolveRegistration(){registration.resolve({remove(){removed++;}});return returnWatch.current?.ready??Promise.resolve();},get removed(){return removed;},get revision(){return revision;}};
+}
+test('actual panel lifecycle effect retains late cached events, refreshes once after background and aborts on cleanup',async()=>{
+ const h=mountActualLifecycle();assert.ok(h,'panel must mount the owned lifecycle helper');await h.resolveRegistration();h.returnWatch.current.arm();h.native();assert.equal(h.revision,0);
+ h.document.hidden=true;h.document.dispatchEvent(new Event('visibilitychange'));h.native();assert.equal(h.revision,0);
+ h.document.hidden=false;h.window.dispatchEvent(new Event('focus'));h.native();h.document.dispatchEvent(new Event('visibilitychange'));assert.equal(h.revision,1);
+ h.cleanup();assert.equal(h.active.current.signal.aborted,true);assert.equal(h.returnWatch.current,null);assert.equal(h.removed,1);h.native();h.window.dispatchEvent(new Event('focus'));assert.equal(h.revision,1);
+});
+test('actual panel cleanup also retires a native registration that resolves later',async()=>{
+ const h=mountActualLifecycle();assert.ok(h);const ready=h.returnWatch.current.ready;h.cleanup();h.resolveRegistration();await ready;assert.equal(h.removed,1);h.native();assert.equal(h.revision,0);
+});
