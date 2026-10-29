@@ -2481,10 +2481,10 @@
 
   <sc-if value="{{notes.trashOpen}}">
     <div ref="{{notes.trashFocus}}" data-alpha-subview="notes-trash" inert="{{notes.trashCovered}}" aria-hidden="{{notes.trashCovered}}" class="enter" style="position: absolute; inset: 0; background: var(--bg); display: flex; flex-direction: column; z-index: 4">
-      <div style="display: flex; align-items: center; height: 56px; padding: 0 8px; gap: 2px; flex-shrink: 0">
+      <div data-alpha-notes-trash-header style="display: flex; flex-wrap: wrap; align-items: center; min-height: 56px; padding: 4px 8px; box-sizing: border-box; gap: 2px; flex-shrink: 0">
         <button class="ib" aria-label="Close Trash" onClick="{{notes.closeTrash}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.back}}"></path></svg></button>
-        <h1 class="serif" style="margin: 0 0 0 4px; font-size: 32px; flex-grow: 1; letter-spacing: -.01em">Trash</h1>
-        <sc-if value="{{notes.trashCanErase}}"><button class="tap" aria-label="Empty Trash" disabled="{{notes.trashEmptyDisabled}}" onClick="{{notes.emptyTrash}}" style="min-height: 44px; padding: 0 14px; border-radius: 22px; background: var(--s2); color: var(--fg); font-size: 14px; font-weight: 600">Empty Trash</button></sc-if>
+        <h1 class="serif" style="margin: 0 0 0 4px; font-size: 32px; flex-grow: 1; min-width: 0; overflow-wrap: anywhere; letter-spacing: -.01em">Trash</h1>
+        <sc-if value="{{notes.trashCanErase}}"><button class="tap" aria-label="Empty Trash" disabled="{{notes.trashEmptyDisabled}}" onClick="{{notes.emptyTrash}}" style="min-height: 48px; max-width: 100%; margin-left: auto; padding: 0 14px; border-radius: 22px; background: var(--s2); color: var(--fg); font-size: 14px; font-weight: 600">Empty Trash</button></sc-if>
       </div>
       <div class="scr" style="flex-grow: 1; overflow-y: auto; touch-action: pan-y; padding: 4px 16px 190px; box-sizing: border-box">
         <p style="margin: 0 8px 14px; font-size: 14px; line-height: 1.43; color: var(--mut)">{{notes.trashRetentionText}}</p>
@@ -2527,14 +2527,14 @@
   </sc-if>
 
   <sc-if value="{{notes.recording}}">
-    <div ref="{{notes.recordingFocus}}" data-alpha-subview="notes-recording" data-voice-state="{{notes.rec.state}}" class="enter" style="position: absolute; inset: 0; z-index: 10; background: var(--bg); display: flex; flex-direction: column; padding: 0 24px; box-sizing: border-box">
+    <div ref="{{notes.recordingFocus}}" data-alpha-subview="notes-recording" data-voice-state="{{notes.rec.state}}" class="enter" style="position: absolute; inset: 0; z-index: 10; container-type: inline-size; background: var(--bg); display: flex; flex-direction: column; padding: 0 24px; box-sizing: border-box">
       <div style="display: flex; align-items: center; height: 56px; margin: 0 -16px 8px">
         <button class="ib" aria-label="Discard recording" onClick="{{notes.rec.discard}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.x}}"></path></svg></button>
       </div>
       <div style="display: flex; align-items: center; gap: 14px">
         <sc-if value="{{notes.rec.live}}"><span class="dot" style="width: 12px; height: 12px; border-radius: 6px; {{notes.rec.dotCss}}"></span></sc-if>
         <sc-if value="{{notes.rec.paused}}"><span style="width: 12px; height: 12px; border-radius: 6px; {{notes.rec.dotCss}}"></span></sc-if>
-        <span class="serif" style="font-size: 72px; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; {{notes.rec.clockCss}}">{{notes.rec.clock}}</span>
+        <span class="serif" data-alpha-notes-rec-clock style="font-size: 72px; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; {{notes.rec.clockCss}}">{{notes.rec.clock}}</span>
       </div>
       <div role="img" aria-label="Microphone levels" style="display: flex; align-items: center; gap: 3px; height: 72px; margin-top: 26px">
         <sc-for list="{{notes.rec.levels}}" as="b"><span style="flex: 1 1 0; height: {{b.h}}px; border-radius: 2px; background: var(--acct); transition: height .2s"></span></sc-for>
