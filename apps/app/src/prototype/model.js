@@ -5526,6 +5526,10 @@ class Component extends DCLogic {
     var rootRef = function (el) {
       if (!el || !el.style) return;
       Object.keys(VM).forEach(function (k) { el.style.setProperty(k, VM[k]); });
+      // The palette's fixed colours (--alpha-...) are also read outside the phone: html/body and
+      // the review dialogs Alpha appends to document.body. Define them on the document root too.
+      var docRoot = el.ownerDocument && el.ownerDocument.documentElement;
+      if (docRoot && docRoot.style) Object.keys(ALPHA_PRODUCT.theme.palette || {}).forEach(function (k) { if (VM[k]) docRoot.style.setProperty(k, VM[k]); });
       // Connection and digest dialogs are siblings of the phone. Share the
       // selected palette with their common root, including live theme changes.
       if (P.phoneSurface && el.parentElement) {
