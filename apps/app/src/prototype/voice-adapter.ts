@@ -23,9 +23,9 @@ import { createOnDeviceVoice } from '../runtime/local-voice';
 import { voiceFailure, transcriptProvenance, deniedSettingsChoice, DENIED_SETTINGS_LABEL, type VoiceFailure, type TranscriptProvenance } from '../runtime/voice-states';
 import { createPairedVoice } from '../runtime/paired-voice';
 import { createCloudVoice, cloudVoiceFailure } from '../runtime/cloud-voice';
-import { selectVoiceRoute, voiceSendPolicy, type VoicePreference } from '../runtime/voice-selection';
+import { clefEndpointStage, selectVoiceRoute, voiceSendPolicy, type VoicePreference } from '../runtime/voice-selection';
 import { beginVoiceTurn, markVoiceTiming, abandonVoiceTurn, finishVoiceTurn, sendVoiceEntry, recordLiveVoiceTiming, recordEndpointVoiceTiming, recordHeardVoiceTiming, activeVoiceTurn } from '../runtime/voice-timing';
-import { residentEndpoint, createHeardReporter } from '../runtime/voice-turn-routes';
+import { residentEndpoint, createHeardReporter, createEndpointChain } from '../runtime/voice-turn-routes';
 import { createNativeLiveDictation, nativeAssistantListener, nativeLiveVoiceReady, type NativeLiveDictation } from '../runtime/native-live-voice';
 import { installNativeVoiceTurnMarks } from '../runtime/native-voice-turn';
 import { VoiceAssistantSession, type AssistantState } from '../runtime/voice-assistant';
@@ -545,7 +545,9 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         // conversation's binding: owner session, connection epoch and conversation.
         const binding=prepared.binding;
         const residentRequest=()=>{const resident=connectionController.getResidentLiveVoice();return resident&&connectionController.voiceConversationCurrent(binding,false)?resident.request:null;};
-        const semanticEndpoint=residentEndpoint(residentRequest);
+        // The end-of-turn chain: the resident's fused scorer, then Clef only when it is admitted
+        // (clefEndpointStage, off: #663), then the session's long gap. Each answer names its path.
+        const semanticEndpoint=createEndpointChain({local:residentEndpoint(residentRequest),clef:clefEndpointStage()})!;
         const heardReporter=createHeardReporter({
           request:residentRequest,
           current:conversationId=>conversationId===binding.conversationId&&connectionController.voiceConversationCurrent(binding,false),
@@ -559,7 +561,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
           // Each utterance is sent with the screen context current when the user began speaking.
           beginUtterance:()=>{current();conversationPrepared={...conversationPrepared!,context:chat.shell.voiceConversationContext(prepared.binding)};current();},
           listen:nativeAssistantListener({onLatency:recordLiveVoiceTiming,onInterim:text=>{if(token!==generation||chatDestination!==chat)return;conversationInterim=text;refresh();}}),
-          // After the short gap: the resident's scorer. Unavailable, slow or failing: the long gap decides.
+          // After the short gap: the chain. Unavailable, slow or failing: the long gap decides.
           endpoint:(text,signal)=>{current();return semanticEndpoint(text,signal);},
           shouldRespond:(text,context)=>shouldRespondToVoiceTurn(text,context),
           turnSignal:text=>buildVoiceTurnSignal(text),
