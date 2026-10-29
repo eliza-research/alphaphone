@@ -96,8 +96,9 @@ export function sanitizePhoneContext(input: ContextEnvelope): ContextEnvelope {
 /** Legacy compatibility envelope. A peer that negotiates `userTextFormatVersion: 1`
  * (every resident and local agent at the pin) receives the authored text unchanged and
  * this observation only in `metadata.clientDevice.context`, where the shared contract
- * renders it once per turn. The envelope remains for unnegotiated development peers and
- * to recognize history stored by older builds; the user's message follows the separator
+ * renders it once per turn. The envelope is sent only to unnegotiated peers in
+ * ELIZA_DEV_ALLOW_TEST_MOCKS=1 builds (connection-ui send) and is otherwise used only to
+ * recognize history stored by older builds; the user's message follows the separator
  * unchanged. */
 export function phoneContextMessage(text: string, input: ContextEnvelope): { text: string; context: ContextEnvelope } {
   if (typeof text !== 'string' || !text.trim()) throw new Error('Enter a message.');

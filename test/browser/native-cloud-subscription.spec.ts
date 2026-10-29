@@ -57,7 +57,9 @@ async function entitlements(overrides:Record<string,unknown>={}){
 }
 
 type Fixture={plan?:string;route?:'signed'|'absent'|'503'|'401'|'offline';limits?:'active'|'none'|'canceled'|'absent'|'503';identity?:'ok'|'offline'|'401';
- redeem?:'ok'|'invalid'|'rate'|'already'|'transport-once';redeemPlan?:string;saved?:boolean;expiresAt?:number;holdProvider?:boolean;providerFailure?:string;cashBalance?:number;storage?:Record<string,string>;fullApp?:boolean};
+ redeem?:'ok'|'invalid'|'rate'|'already'|'transport-once';redeemPlan?:string;saved?:boolean;expiresAt?:number;holdProvider?:boolean;providerFailure?:string;cashBalance?:number;
+ /** Exact USD organization credit balance in the billing snapshot (data.v2.balance); absent when unset. */
+ credits?:string;storage?:Record<string,string>;fullApp?:boolean};
 async function boot(page:Page,initial:Fixture&{tokens?:Record<string,string>;keys?:unknown[]}={}){
  page.on('pageerror',(error:Error)=>console.error('Composition page error:',error.message));
  await page.route('https://**',route=>route.abort());
@@ -113,7 +115,8 @@ async function boot(page:Page,initial:Fixture&{tokens?:Record<string,string>;key
     if(f.limits==='absent')return {status:404,data:{}};
     if(f.limits==='503')return {status:503,data:{}};
     const subscription=f.limits==='none'?{status:'not_applicable',reason:'no_organization_subscription'}:{status:'available',value:{planKey:'plus_monthly',state:f.limits,currentPeriodEnd:'2099-01-01T00:00:00.000Z'}};
-    return {status:200,data:{success:true,data:{schemaVersion:2,v2:{subscription}}}};
+    const balance=f.credits===undefined?{}:{balance:{status:'available',source:'organizations',observedAt:new Date().toISOString(),value:{balance:{value:f.credits,unit:'usd',currency:'USD'},revision:'1'}}};
+    return {status:200,data:{success:true,data:{schemaVersion:2,v2:{subscription,...balance}}}};
    }
    if(path==='/api/v1/subscription/redeem'){
     const body=JSON.parse(input.body);f.bodies.push(body);
@@ -415,6 +418,20 @@ test.describe('entitlement route unavailable: authenticated billing mode fallbac
   expect(routes).not.toContain('/api/v1/credits/balance');expect(routes).not.toContain('/api/v1/subscription/redeem');
   expect(await page.evaluate(()=>(window as any).planFixture.cashBalance)).toBe(0);
   expect(await page.evaluate(()=>(window as any).planController.getSnapshot().residentSubscription.kind)).toBe('active');
+ });
+ test('a zero credit balance from the billing snapshot renders as zero, never as unavailable',async({page})=>{
+  await boot(page,{...await entitlements(),plan:'active',limits:'active',credits:'0',holdProvider:false});
+  await expect.poll(()=>configured(page)).toBe(1);await idle(page);
+  await expect.poll(()=>page.evaluate(()=>(window as any).planController.getSnapshot().membershipCredits?.usd)).toBe('0');
+  await page.evaluate(()=>(window as any).planController.openPlan());
+  const panel=page.getByRole('dialog',{name:'Eliza Cloud account & plan',exact:true});await expect(panel).toBeVisible();
+  const credits=panel.getByRole('region',{name:'Membership and credits',exact:true});
+  await expect(credits.locator('.alpha-membership-amount')).toHaveText('$0.00USD');
+  await expect(credits.getByText('Not available',{exact:true})).toHaveCount(0);
+  // An active plan is the membership: zero credits never block the agent or open a funding sheet.
+  expect(await page.evaluate(()=>(window as any).planController.getSnapshot().membershipBalance)).toBe('member');
+  const routes=(await calls(page)).filter(c=>c.method==='request').map(c=>c.path);
+  expect(routes).toContain('/api/v1/billing/limits');expect(routes).not.toContain('/api/v1/credits/balance');
  });
  test('no plan source at all is unknown: needs plan with a retry, never admitted',async({page})=>{
   await boot(page,{route:'absent',limits:'absent'});

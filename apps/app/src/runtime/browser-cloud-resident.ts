@@ -11,8 +11,19 @@ export async function browserResidentCall(operation:'residentBind'|'residentClea
  return response.json();
 }
 
+/** The loopback browser Cloud host signs in through the Cloud sign-in hand-off (cli-session). It is a
+ * development route only; product route policy (managed-service-routes.ts) never admits it. */
+function browserCloudSignInHandOff(input:string,method:string,hasBody:boolean):boolean {
+ if(!browserCloudResidentEnabled)return false;
+ let url:URL;try{url=new URL(input);}catch{return false;}
+ const api=browserCloudResidentEnvironment==='staging'?stagingCloud.api:productionCloud.api;
+ if(url.origin!==api||url.username||url.password||url.hash||url.search)return false;
+ if(method==='POST')return url.pathname==='/api/auth/cli-session';
+ return method==='GET'&&!hasBody&&/^\/api\/auth\/cli-session\/[0-9a-fA-F-]{36}$/.test(url.pathname);
+}
 /** Reuse the production route policy for one exact, explicitly selected development issuer. */
 export function browserCloudManagedServiceAllowed(input:string,method:string,hasBody=false):boolean {
+ if(browserCloudSignInHandOff(input,method,hasBody))return true;
  if(browserCloudResidentEnabled&&browserCloudResidentEnvironment==='staging'){
   let url:URL;try{url=new URL(input);}catch{return false;}
   if(url.origin!==stagingCloud.api)return false;

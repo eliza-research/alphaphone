@@ -122,6 +122,10 @@ public final class ConnectionRoutesTest {
   check(ConnectionRoutes.managedService("/api/v1/billing/limits",null,"GET",false,false),"billing snapshot read allowed");
   check(!ConnectionRoutes.managedService("/api/v1/billing/limits",null,"POST",true,false),"billing snapshot write refused");
   check(!ConnectionRoutes.managedService("/api/v1/credits/balance",null,"GET",false,false),"credit balance retired");
+  // The Cloud sign-in hand-off is a test-mocks diagnostic route; product sign-in is the native host.
+  check(!ConnectionRoutes.managedService("/api/auth/cli-session",null,"POST",true,false),"sign-in hand-off create refused flag-off");
+  check(!ConnectionRoutes.managedService("/api/auth/cli-session/b7a2c1d0-5e4f-4a3b-8c2d-1e0f9a8b7c6d",null,"GET",false,false),"sign-in hand-off poll refused flag-off");
+  check(ConnectionRoutes.managedService("/api/auth/cli-session",null,"POST",true,true),"sign-in hand-off kept in test-mocks builds");
   // Reset Alpha data revokes only the presented key through the shared CloudKeyRevocation (tested with
   // the sign-in library upstream); this transport admits exactly the same self-revocation DELETE.
   check(revoke("https","api.eliza.app",-1,"/api/v1/api-keys/current",null,"DELETE",false,false),"production self-revocation target");

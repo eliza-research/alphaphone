@@ -16,6 +16,10 @@ test('managed service admission preserves owned service APIs and refuses agent h
  for(const [url,method,body] of [['https://api.eliza.app/api/v1/subscription/redeem','POST',false],['https://api.eliza.app/api/v1/subscription/redeem','GET',false],['https://api.eliza.app/api/v1/subscription/redeem?code=x','POST',true],['https://api.eliza.app/api/v1/subscription/redeem/','POST',true],['https://api.eliza.app/api/v1/subscription/redeem','DELETE',false],['https://api-staging.eliza.app/api/v1/subscription/redeem','POST',true],['https://api.eliza.app/api/v1/billing/limits','POST',true],['https://api.eliza.app/api/v1/billing/limits?x=1','POST',true]])assert.equal(allowed(url,method,body),false,`${method} ${url}`);
  // The credit balance check is retired with the subscription plan gate.
  assert.equal(allowed('https://api.eliza.app/api/v1/credits/balance','GET'),false);
+ // The Cloud sign-in hand-off is not a product route (product sign-in is the native in-app host).
+ assert.equal(allowed('https://api.eliza.app/api/auth/cli-session','POST',true),false);
+ assert.equal(allowed('https://api.eliza.app/api/auth/cli-session','POST',false),false);
+ assert.equal(allowed('https://api.eliza.app/api/auth/cli-session/b7a2c1d0-5e4f-4a3b-8c2d-1e0f9a8b7c6d','GET'),false);
  const sync='https://api.eliza.app/api/v1/eliza/google/calendar/sync-v1/event';
  for(const method of ['POST','PATCH']){assert.equal(allowed(sync,method,true),true);assert.equal(allowed(sync,method,false),false);assert.equal(allowed(sync+'?grantId=owned',method,true),false);}
  for(const method of ['GET','DELETE']){assert.equal(allowed(sync+'?grantId=owned',method,false),true);assert.equal(allowed(sync,method,false),false);assert.equal(allowed(sync+'?grantId=owned',method,true),false);}
