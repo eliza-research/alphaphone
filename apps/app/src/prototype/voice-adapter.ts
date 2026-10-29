@@ -16,7 +16,7 @@ import {createNotesRecordingEffects,type NotesRecordingEffects} from '../../../.
 import {addNotesTrashEntry,editNotesTrash,isNotesTrashFull,notesTrashExpired,readNotesTrash,removeNotesTrashEntries,savedNotes,type NotesTrashEntry} from '../runtime/notes-trash';
 import type {NotesTarget} from '../runtime/notes-contract';
 import {sameDeletionRow,leasedDeletionRow,claimDeletion,releaseDeletionClaim,deletionClaimedElsewhere} from '../runtime/permanent-voice-deletion';
-import { installLocalSpeechPlayback, stopLocalSpeechPlayback, currentNoteReading, stopSpeaking, speakNote } from './local-speech-playback';
+import { installLocalSpeechPlayback, stopLocalSpeechPlayback, currentNoteReading, stopSpeaking, speakNote, noteVoiceDraft } from './local-speech-playback';
 import { registerPlugin } from '../platform-plugins';
 import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
 import { createOnDeviceVoice } from '../runtime/local-voice';
@@ -306,6 +306,9 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         const { shell, chat, draft:previousDraft } = chatDestination;
         const text=previousDraft?[previousDraft,draft].join('\n'):draft;
         cleanup();
+        // The dictated draft is voice-originated: if it is sent exactly as placed, its reply may be
+        // read aloud (Settings: Read replies aloud, off by default). Editing it first makes it typed.
+        if(!previousDraft)noteVoiceDraft(text,shell.S().msgs||[]);
         shell.setState({chat:['input','sheet','full'].includes(chat)?chat:'input',draft:text,voice:'off'});
         return;
       }
@@ -975,7 +978,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     }
     if(chatDestination?.mode==='dictation'){labels.review='Use in draft';messages.recording='Recording on this device. Stop to transcribe into editable text. Nothing is sent to your agent.';messages.review='Edit the transcript, then add it to your draft. Only Send submits the message.';}
     if(liveDictation){messages.ready='Starting transcription on this device. No message is sent.';messages.recording='Your agent on this phone transcribes as you speak. Stop when you finish; speech after Stop is not used. No message is sent.';messages.transcribing='Finishing the transcript on this phone. No message is sent.';messages.review='Edit the transcript, then add it to your draft. Only Send submits the message.';}
-    // The Cloud route offers no typing choice (MVP-01 decides whether it should); its failure wording names none.
+    // The Cloud route offers no typing choice (P-39 keeps the conversation spoken; the keyboard stays a separate entry), so its failure wording names none.
     const canType = !cloudMode && stage === 'recorded' && !!clip && !busy && (failure === 'no-speech' || failure === 'local-agent' || failure === 'recognition');
     // A refused microphone uses the route slot for its recovery: Android's app settings for Alpha.
     const settingsChoice = deniedSettingsChoice({ failure, stage, busy, native: Capacitor.isNativePlatform() });

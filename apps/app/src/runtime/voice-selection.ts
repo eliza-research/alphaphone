@@ -15,7 +15,8 @@ export type VoicePreference = 'default' | 'device' | 'agent' | 'manual';
 /**
  * When a spoken turn is sent. 'auto-send' (today's behaviour) sends each finished Cloud
  * conversation transcript as it is; 'review' shows it for editing and an explicit Send first.
- * The choice is an owner decision (MVP-01, A-04, A-10): this constant is the one switch.
+ * P-39 (MVP-01) decided the split: the voice assistant submits automatically, while Transcribe
+ * only inserts editable text the user sends. This constant is the one switch for the former.
  */
 export type VoiceSendPolicy = 'auto-send' | 'review';
 const VOICE_SEND_POLICY: VoiceSendPolicy = 'auto-send';
@@ -63,7 +64,7 @@ export function cloudSpeechDisclosure(serviceName = 'Cloud') { return `${service
 
 /** Opt-in: replies to voice-originated turns are read aloud. Off unless explicitly enabled. */
 export function speakRepliesEnabled(): boolean { const value = record(read(speakRepliesKey)); return !!value && value.version === 1 && value.enabled === true; }
-/** No Settings control calls this yet (MVP-01); tests use it to seed a retained preference. */
+/** Settings > Voice and agent settings > Read replies aloud (P-39). False when storage did not confirm the save. */
 export function setSpeakReplies(enabled: boolean): boolean { return write(speakRepliesKey, { version: 1, enabled: enabled === true }); }
 
 /** A usable Cloud speech account is signed in for this renderer. */
