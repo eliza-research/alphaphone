@@ -27,7 +27,6 @@ const plugins={
  AlphaMapsTransportPlugin:['workers','closers','deadlines'],
  AlphaNoteAudioPlugin:['migrationWorker'],
  AlphaNoteDocumentsPlugin:['worker'],
- AlphaPhotosPlugin:['worker'],
 };
 const escape=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 
@@ -59,6 +58,21 @@ test('every worker a plugin declares is listed and checked above',()=>{
   const declared=[...source.matchAll(/(?:ExecutorService|ThreadPoolExecutor|NoticeWorker)\s+(\w+)\s*=/g)].map(match=>match[1]);
   for(const worker of declared)assert.ok(plugins[name].includes(worker),`${name}.${worker} is listed`);
  }
+});
+
+test('the shared Photos bridge Alpha registers answers a call for a stopped worker instead of throwing',()=>{
+ // AlphaPhotosPlugin and AlphaPhotoLibraryPlugin are registrations of plugin-native-media's PhotosPlugin and
+ // DeviceLibraryPlugin and own no worker; the shared plugins catch the refusal themselves.
+ for(const name of ['AlphaPhotosPlugin','AlphaPhotoLibraryPlugin'])assert.doesNotMatch(readFileSync(nativeSource(`${name}.java`),'utf8'),/ExecutorService|\.execute\(/);
+ const shared=name=>readFileSync(new URL(`../vendor/eliza/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/${name}.java`,import.meta.url),'utf8');
+ const photos=shared('PhotosPlugin'),library=shared('DeviceLibraryPlugin');
+ const submit=photos.slice(photos.indexOf('  private void submit(PluginCall call, Runnable action) {'),photos.indexOf('  static void requireLibraryAliases('));
+ assert.match(submit,/try \{\n {6}worker\.execute\([\s\S]*\} catch \(RejectedExecutionException stopped\) \{\n {6}call\.reject\("Photo library closed"\);/);
+ assert.equal([...photos.matchAll(/worker\.execute\(/g)].length,2,'submit and the destroy-time close only');
+ assert.match(photos,/try \{\n {6}worker\.execute\(\(\) -> \{\n {8}if \(edits != null\) edits\.close\(\);\n {6}\}\);\n {4}\} catch \(RejectedExecutionException stopped\)/);
+ const facade=library.slice(library.indexOf('  private void submit(PluginCall call, ReadAction action) {'),library.indexOf('  private boolean locked()'));
+ assert.match(facade,/worker\.execute\([\s\S]*\} catch \(RuntimeException stopped\) \{[\s\S]*call\.reject\("Device library closed"\);/);
+ assert.equal([...library.matchAll(/worker\.execute\(/g)].length,1);
 });
 
 test('the shared speech bridge AlphaVoiceCloudPlugin subclasses answers a stopped or full worker the same way',()=>{

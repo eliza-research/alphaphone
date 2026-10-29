@@ -1,12 +1,14 @@
 import {parseNativeHistoryCommand} from '../.eliza/client-features/plugins/plugin-browser/src/native-client-command.ts';
 import {parseBrowserAddressInput} from '../.eliza/client-features/plugins/plugin-native-browser-surface/src/address-input.ts';
+// The adapter's native tabs are the shared session model; the harnesses run the real one.
+import {BrowserTabSession} from '../.eliza/client-features/plugins/plugin-native-browser-surface/src/tab-host.ts';
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {stripTypeScriptTypes} from 'node:module';import vm from 'node:vm';
 const source=readFileSync(process.env.ALPHA_BROWSER_ADAPTER_SOURCE||'apps/app/src/prototype/browser-adapter.ts','utf8');
 const region=stripTypeScriptTypes(source.slice(source.indexOf('  async function navigate('),source.indexOf('  async function command(')),{mode:'transform'});
-function harness(){let release;const pending=new Promise(resolve=>release=resolve),state={cur:'owned',tabs:[{id:'owned'},{id:'other'}],editing:true,tabsOpen:true,menu:true},navigations=[],patches=[],closed=[];const created=new Map([['owned',pending]]);
- const context={URL,Error,parseBrowserAddressInput,session:"owned-session",disposed:false,state:()=>state,isPrivate:()=>false,newTabId:()=> 'owned',restored:new Map(),metadata:new Map(),created,documentRevisions:new Map(),restoreAttempts:new Map(),ensure:()=>pending,shell:{vset(_key,patch){patches.push(patch);Object.assign(state,patch);}},Browser:{async navigate(input){navigations.push(input);},async close(input){closed.push(input);}},refresh(){},report(){}};
- const navigate=vm.runInNewContext(region+';navigate',context);return {state,created,navigations,patches,closed,release,navigate};}
-test('closing a tab while native creation is pending cannot resurrect or navigate it',async()=>{const h=harness(),task=h.navigate('https://example.com');h.state.tabs=[{id:'other'}];h.state.cur='other';h.created.delete('owned');h.release();await task;assert.equal(h.navigations.length,0);assert.equal(h.patches.length,0);});
+function harness(){let release;const pending=new Promise(resolve=>release=resolve),state={cur:'owned',tabs:[{id:'owned'},{id:'other'}],editing:true,tabsOpen:true,menu:true},navigations=[],patches=[],closed=[];const tabs=new BrowserTabSession({session:'owned-session'});void tabs.ensure('owned',false,()=>pending);
+ const context={URL,Error,parseBrowserAddressInput,session:"owned-session",disposed:false,state:()=>state,isPrivate:()=>false,newTabId:()=> 'owned',restored:new Map(),tabs,restoreAttempts:new Map(),ensure:id=>tabs.creation(id)??tabs.ensure(id,false,()=>pending),shell:{vset(_key,patch){patches.push(patch);Object.assign(state,patch);}},Browser:{async navigate(input){navigations.push(input);},async close(input){closed.push(input);}},refresh(){},report(){}};
+ const navigate=vm.runInNewContext(region+';navigate',context);return {state,tabs,navigations,patches,closed,release,navigate};}
+test('closing a tab while native creation is pending cannot resurrect or navigate it',async()=>{const h=harness(),task=h.navigate('https://example.com');h.state.tabs=[{id:'other'}];h.state.cur='other';h.tabs.forget(['owned']);h.release();await task;assert.equal(h.navigations.length,0);assert.equal(h.patches.length,0);});
 test('switching while creation is pending keeps the new tab’s editor and switcher state',async()=>{const h=harness(),task=h.navigate('https://example.com');h.state.cur='other';h.release();await task;assert.equal(h.navigations.length,0);assert.equal(h.state.editing,true);assert.equal(h.state.tabsOpen,true);});
 test('unchanged tab still navigates once and exits its own address editor',async()=>{const h=harness(),task=h.navigate('https://example.com');h.release();await task;assert.equal(h.navigations.length,1);assert.equal(h.state.editing,false);});
 
@@ -16,11 +18,11 @@ test('time-like digit:digit input searches while real host:port, IPv4 and IPv6 s
  for(const typed of ['10:30','3:16','1:1',' 12:00 ']){const h=harness(),task=h.navigate(typed);h.release();await task;assert.equal(h.navigations.length,1,typed);const url=new URL(h.navigations[0].url);assert.equal(url.origin+url.pathname,'https://www.google.com/search',typed);assert.equal(url.searchParams.get('q'),typed.trim(),typed);}
  for(const [typed,expected] of [['nas:8080','https://nas:8080/'],['127.0.0.1:8080','https://127.0.0.1:8080/'],['192.168.1.1','https://192.168.1.1/'],['[::1]:8080','https://[::1]:8080/'],['[::1]','https://[::1]/'],['example.com:8443/x','https://example.com:8443/x']]){const h=harness(),task=h.navigate(typed);h.release();await task;assert.equal(h.navigations.length,1,typed);assert.equal(h.navigations[0].url,expected,typed);}});
 
-test('cancelled approved new-tab creation closes its orphan and never navigates',async()=>{const h=harness(),abort=new AbortController();const task=h.navigate('https://example.com',true,abort.signal);abort.abort();h.release();await assert.rejects(task);assert.equal(h.navigations.length,0);assert.equal(h.closed.length,1);assert.equal(h.created.size,0);});
+test('cancelled approved new-tab creation closes its orphan and never navigates',async()=>{const h=harness(),abort=new AbortController();const task=h.navigate('https://example.com',true,abort.signal);abort.abort();h.release();await assert.rejects(task);assert.equal(h.navigations.length,0);assert.equal(h.closed.length,1);assert.equal(h.tabs.ids().length,0);});
 
 const commandSource=stripTypeScriptTypes(source.slice(source.indexOf('    this.browserCommand = async'),source.indexOf('    this.browserNavigateApproved =')),{mode:'transform'});
 function commandHarness(){let selected='owned',navigation='nav-1',activeView='browser',disposed=false;const calls=[];const info={navigation:'nav-1',committed:true,error:'',loading:false};const metadata=new Map([['owned',info]]);const state=()=>({cur:selected});
- const context={parseNativeHistoryCommand,Capacitor:{isNativePlatform:()=>true},document:{hidden:false},session:'native-session',get disposed(){return disposed;},shell:{S:()=>({view:activeView})},state,metadata,created:new Map([['owned',Promise.resolve()]]),Browser:{async command(input){calls.push(input);return {session:'native-session',id:selected};}}};
+ const context={parseNativeHistoryCommand,Capacitor:{isNativePlatform:()=>true},document:{hidden:false},session:'native-session',get disposed(){return disposed;},shell:{S:()=>({view:activeView})},state,metadata,tabInfo:id=>metadata.get(id),tabs:{has:id=>id==='owned'},Browser:{async command(input){calls.push(input);return {session:'native-session',id:selected};}}};
  const execute=vm.runInNewContext('(function(){'+commandSource+';return this.browserCommand;}).call({})',context);return {execute,calls,metadata,tab:()=>selected='foreign',view:()=>activeView='notes',dispose:()=>disposed=true};}
 for(const subaction of ['back','forward','reload'])test(`agent ${subaction} binds the current native tab and document, with dispatch-only receipt`,async()=>{const h=commandHarness();const r=await h.execute({subaction},new AbortController().signal,()=>{});assert.equal(h.calls.length,1);assert.deepEqual(JSON.parse(JSON.stringify(h.calls[0])),{session:'native-session',id:'owned',command:subaction,navigation:'nav-1'});assert.equal(r.ok,true);assert.equal(r.data.completed,false);assert.equal(r.data.requiresReadback,true);});
 test('foreign selected tab, view, owner and unsupported command cannot reach native Browser',async()=>{for(const change of ['tab','view','dispose','owner','command']){const h=commandHarness();if(['tab','view','dispose'].includes(change))h[change]();await assert.rejects(h.execute(change==='command'?{subaction:'back',id:'server-tab'}:{subaction:'back'},new AbortController().signal,()=>{if(change==='owner')throw Error('Owner changed');}));assert.equal(h.calls.length,0);}});
@@ -29,11 +31,11 @@ test('cancellation never repeats a native browser command',async()=>{const h=com
 const stateChangedStart="  void Browser.addListener('stateChanged',";
 const stateChangedSource=stripTypeScriptTypes(source.slice(source.indexOf(stateChangedStart)+stateChangedStart.length,source.indexOf(').then((value:any)=>{listener=value;})',source.indexOf(stateChangedStart))),{mode:'transform'});
 function committedPageHarness({native=false,privateTab=false}={}){
- const current={cur:'owned',visits:[]},metadata=new Map(),created=new Map([['owned',Promise.resolve()]]);
- const context={session:'session',created,metadata,reading:false,documentRevisions:new Map(),lastGeometry:'',MAX_HISTORY:100,Capacitor:{isNativePlatform:()=>native},state:()=>current,isPrivate:()=>privateTab,shell:{vset(_key,patch){Object.assign(current,patch);}},refresh(){}};
+ const current={cur:'owned',visits:[]},tabs=new BrowserTabSession({session:'session'});void tabs.ensure('owned',privateTab,async()=>undefined);
+ const context={session:'session',tabs,reading:false,stopReading(){},lastGeometry:'',MAX_HISTORY:100,Capacitor:{isNativePlatform:()=>native},state:()=>current,isPrivate:()=>privateTab,shell:{vset(_key,patch){Object.assign(current,patch);}},refresh(){}};
  const receive=vm.runInNewContext('const receive = '+stateChangedSource+';receive',context);
  const event={session:'session',id:'owned',sequence:1,navigation:1,url:'http://127.0.0.1/article',committed:true,loading:false,error:''};
- return {current,metadata,receive,event};
+ return {current,metadata:{get:id=>tabs.info(id)},receive,event};
 }
 test('confirmed embedded and native pages retain normal tabs and bounded history',()=>{
  for(const native of [false,true]){
@@ -57,13 +59,13 @@ function approvedHarness({native=false,deferred=false,failNavigate=false}={}){
  let release,disposed=false,creations=0;
  const pending=deferred?new Promise(resolve=>{release=resolve;}):Promise.resolve();
  const state={cur:'existing',tabs:[{id:'existing',hist:['newtab'],pos:0}],editing:true,tabsOpen:true,menu:true};
- const calls=[],closed=[],opened=[],created=new Map(),metadata=new Map();
- const context={URL,Error,parseBrowserAddressInput,document:{hidden:false},Capacitor:{isNativePlatform:()=>native},session:'reviewed-session',get disposed(){return disposed;},profileUnsupportedTab:undefined,state:()=>state,isPrivate:()=>false,newTabId:()=> 'approved-tab',restored:new Map(),metadata,created,documentRevisions:new Map(),restoreAttempts:new Map(),
-  ensure(id){creations++;created.set(id,pending);return pending;},
+ const calls=[],closed=[],opened=[],tabs=new BrowserTabSession({session:'reviewed-session'});
+ const context={URL,Error,parseBrowserAddressInput,document:{hidden:false},Capacitor:{isNativePlatform:()=>native},session:'reviewed-session',get disposed(){return disposed;},profileUnsupportedTab:undefined,state:()=>state,isPrivate:()=>false,newTabId:()=> 'approved-tab',restored:new Map(),tabs,restoreAttempts:new Map(),
+  ensure(id){creations++;return tabs.creation(id)??tabs.ensure(id,false,()=>pending);},
   shell:{vset(_key,patch){Object.assign(state,patch);},openView(...args){opened.push({args,tab:state.cur,bridgeCalls:calls.length});}},
   Browser:{async navigate(input){calls.push(input);if(failNavigate)throw Error('Bridge navigation failed');},async close(input){closed.push(input);}},refresh(){},report(){}};
  const methods=vm.runInNewContext('(function(){'+region+'\n'+approvedSource+'\nreturn {manual:navigate,approved:this.browserNavigateApproved};}).call({})',context);
- return {...methods,state,calls,closed,opened,metadata,created,get creations(){return creations;},release:()=>release?.(),dispose:()=>{disposed=true;}};
+ return {...methods,state,calls,closed,opened,metadata:{get:id=>tabs.info(id)},created:{get size(){return tabs.ids().length;}},get creations(){return creations;},release:()=>release?.(),dispose:()=>{disposed=true;}};
 }
 for(const native of [false,true]){
  const platform=native?'native':'web preview';

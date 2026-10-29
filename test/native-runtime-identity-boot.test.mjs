@@ -89,7 +89,7 @@ test("a rejected old-target listening peer stays unready and unattachable withou
     writeFileSync(
       join(temporary, "NativeBootHarness.java"),
       `package ai.elizaresearch.alphaphone;
-import org.json.JSONObject;import org.json.JSONException;
+import org.json.JSONObject;import org.json.JSONException;import ai.eliza.plugins.agent.runtime.ResidentAttachment;
 public class NativeBootHarness {
  static final long AGENT_BOOT_GRACE_MS=${grace[1]};
  static class IpcStartupRecovery {static final String RETENTION_LIMIT="ipc-recovery-retention-limit";}
@@ -127,7 +127,7 @@ public class NativeBootHarness {
         temporary,
         join(
           root,
-          "android/app/src/main/java/ai/elizaresearch/alphaphone/ResidentAttachment.java",
+          "vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/ResidentAttachment.java",
         ),
         join(temporary, "NativeBootHarness.java"),
       ],

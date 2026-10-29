@@ -22,8 +22,7 @@ async function nativeStub(page:Page,options:Options={}){
     {name:'AlphaVoiceCloud',methods:methods(['checkPermissions'])},
     {name:'Agent',methods:methods(['getStatus'])},
     {name:'AlphaConnection',methods:methods(['secureRead','secureWrite','secureCompareExchange','secureRemove','addListener','removeListener'])},
-    {name:'DeviceApps',methods:methods(['buildInfo'])},
-    {name:'ElizaSystem',methods:methods(['getStatus','requestRole','getDeviceSettings'])},
+    {name:'ElizaSystem',methods:methods(['getStatus','requestRole','getDeviceSettings','getBuildInfo'])},
     {name:'AlphaDevice',methods:methods(['snapshot','crashLog','clearCrashLog','recordRendererFailure','diagnosticsFacts','shareDiagnostics','openSettings'])},
     {name:'DailyApps',methods:[{name:'addListener',rtype:'callback'},{name:'removeListener',rtype:'callback'}]},
    ],
@@ -39,7 +38,7 @@ async function nativeStub(page:Page,options:Options={}){
      if(method==='secureWrite'){store.set(input.slot,input.value);return {};}
      return {};
     }
-    if(plugin==='DeviceApps')return {launcher,version:'0.1.0'};
+    if(plugin==='ElizaSystem'&&method==='getBuildInfo')return {launcher,version:'0.1.0'};
     if(plugin==='ElizaSystem'){
      if(method==='getStatus')return {packageName:'ai.elizaresearch.alphaphone',roles:Object.entries(roles).map(([role,r])=>({role,androidRole:'android.app.role.'+role.toUpperCase(),available:true,held:r.held,holders:r.held?['ai.elizaresearch.alphaphone']:r.holders}))};
      // Android's own dialog decides; the fixture declines first when asked to.

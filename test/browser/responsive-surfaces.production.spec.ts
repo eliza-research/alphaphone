@@ -23,7 +23,7 @@ async function open(page: Page, app: string) {
     await flagOffAndroid(page,{calendar:{access:'granted',calendars:[{id:'7',name:'Layout calendar',account:'layout@example.invalid'}],events:[{id:'42',calendarId:'7',title:'Column check',begin:begin.getTime(),end:begin.getTime()+1800000}]}});
     await page.addInitScript(()=>{
       const bridge=(window as any).Capacitor,base=bridge.nativePromise;
-      bridge.nativePromise=(plugin:string,method:string,input:any)=>plugin==='DeviceApps'&&method==='buildInfo'
+      bridge.nativePromise=(plugin:string,method:string,input:any)=>plugin==='ElizaSystem'&&method==='getBuildInfo'
         ?Promise.resolve({launcher:false,version:'standalone-layout-fixture'})
         :base(plugin,method,input);
     });

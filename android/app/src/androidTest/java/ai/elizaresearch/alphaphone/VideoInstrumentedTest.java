@@ -37,7 +37,7 @@ public class VideoInstrumentedTest {
   java.util.concurrent.atomic.AtomicReference<String> result=new java.util.concurrent.atomic.AtomicReference<>("unavailable");
   WebViewTestDriver.withActivity(MainActivity.class,activity->{try{
    Object plugin=activity.getBridge().getPlugin("AlphaPhotos").getInstance();
-   java.lang.reflect.Field field=plugin.getClass().getDeclaredField("playback");field.setAccessible(true);
+   java.lang.reflect.Field field=ai.eliza.plugins.media.PhotosPlugin.class.getDeclaredField("playback");field.setAccessible(true);
    result.set(((OwnedVideoPlayback)field.get(plugin)).diagnostics());
   }catch(Exception error){result.set(error.getClass().getSimpleName());}});return result.get();
  }

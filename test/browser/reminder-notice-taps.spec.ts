@@ -14,7 +14,7 @@ for(const mode of ['recover','stale','read-failure','draft-race','navigation-rac
    {name:'AlphaNotifications',methods:methods(['status','crossAppStatus','addListener','removeListener'])},
    {name:'AlphaVoiceCloud',methods:methods(['checkPermissions'])},
    {name:'DailyApps',methods:methods(['surfaceInfo','pendingReminderTap','consumeReminderTap','dismissReminderTap','listReminders','addListener','removeListener'])},
-   {name:'DeviceApps',methods:methods(['buildInfo'])},
+   {name:'ElizaSystem',methods:methods(['getBuildInfo'])},
    {name:'AlphaConnection',methods:methods(['secureRead','secureWrite','secureCompareExchange','secureRemove','addListener','removeListener'])},
    {name:'AlphaHostedResults',methods:methods(['disableBackground','addListener','removeListener'])},
   ],nativePromise:async(plugin:string,method:string,input:any)=>{
@@ -32,7 +32,7 @@ for(const mode of ['recover','stale','read-failure','draft-race','navigation-rac
     }
     return {};
    }
-   if(plugin==='DeviceApps')return {launcher:false,version:'fixture'};
+   if(plugin==='ElizaSystem'&&method==='getBuildInfo')return {launcher:false,version:'fixture'};
    if(plugin==='AlphaConnection'){
     if(method==='secureRead')return {value:slots[input.slot]??null};
     if(method==='secureWrite'){slots[input.slot]=input.value;return {};}

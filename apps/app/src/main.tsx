@@ -54,7 +54,7 @@ import { installPrototypeNativeAdapters } from './prototype/native-adapter';
 import { installSelectedDocumentAdapter } from './prototype/selection-adapter';
 import { installPrototypeCameraAdapter } from './prototype/camera-adapter';
 import { installPrototypeHomeBindings, installPrototypeDataAdapter, setHomeSources, HOME_SOURCES_CHANGED } from './prototype/data-adapter';
-import { isAndroid, DeviceApps, deviceAppsListens } from './native';
+import { isAndroid, DeviceApps, System, launcherBridge, launcherListens } from './native';
 import { DailyApps } from './daily';
 import { installPrototypeVoiceAdapter } from './prototype/voice-adapter';
 import { installPrototypeBrowserAdapter } from './prototype/browser-adapter';
@@ -168,9 +168,10 @@ installSystemShade(Component,{native:isAndroid});
 // The shared agenda, mail and brief cards render the final Home values of every adapter above.
 installHomeOverviewCards(Component);
 installClockAdapter(Component, VIEWS, { simulated: testMocksEnabled && fixture, browser: !isAndroid });
-// Home, app grid and All apps from the shared mobile shell. Installed apps come from Android (or
-// the browser device's app list); outermost so Home composes with every binding above.
-installHomeShell(Component, VIEWS, DeviceApps, { icons: isAndroid, follow: deviceAppsListens,
+// Home, app grid and All apps from the shared mobile shell. Installed apps come from ElizaSystem
+// (Android, or the browser device's app list) through the shared launcher bridge; outermost so Home
+// composes with every binding above.
+installHomeShell(Component, VIEWS, launcherBridge, { icons: isAndroid, follow: launcherListens,
   aliases: isAndroid ? undefined : Object.fromEntries(browserApps.flatMap(app => { const view = alphaViews.find(app.view); return view ? [[app.packageName, alphaViews.launcherKey(view)]] : []; })),
 });
 /** A browser cannot read or change radios and sensors; show that instead of fixture toggles. */
@@ -279,19 +280,19 @@ function Phone() {
 }
 /** Android's locale and 24-hour setting; WebView Intl alone does not follow the latter. */
 async function applyDeviceLocale() {
-  try { const info = await DeviceApps.localeInfo(); setLocalePreferences({ locale: info.locale, hourCycle: info.hour24 === true ? 'h23' : info.hour24 === false ? 'h12' : undefined }); }
+  try { const info = await System.getLocaleInfo(); setLocalePreferences({ locale: info.locale, hourCycle: info.hour24 === true ? 'h23' : info.hour24 === false ? 'h12' : undefined }); }
   catch { /* Keep the WebView's default locale formatting. */ }
 }
 async function mountPhone() {
   // Android owns its system bars; browser defaults to the standalone app.
   launcherPresentation = isAndroid
-    ? await DeviceApps.buildInfo().then(info => info.launcher === true).catch(() => false)
+    ? await System.getBuildInfo().then(info => info.launcher === true).catch(() => false)
     : devSurfacesEnabled && query.get('shell') === 'launcher';
   if (isAndroid) {
     // AlphaAssistActivity (surfaceInfo) or an Activity opened with the 'alpha.assistant' extra.
     const [surface, launch] = await Promise.all([
       DailyApps.surfaceInfo().then(info => info.assistant === true).catch(() => false),
-      DeviceApps.launchInfo().then(info => info.assistant === true).catch(() => false),
+      System.getLaunchInfo().then(info => info.assistant === true).catch(() => false),
     ]);
     assistantSurface = surface || launch;
     const refreshImage=async()=>{const image=await DeviceApps.platformCapabilities().catch(()=>({aospImage:false,contacts:false}));const admitted=image.aospImage===true&&image.contacts===true;admitImageContacts(admitted);const index=ORDER.indexOf('contacts');if(admitted&&index<0)ORDER.push('contacts');else if(!admitted&&index>=0)ORDER.splice(index,1);if(!admitted&&shell?.S().view==='contacts')shell.goHome();};
