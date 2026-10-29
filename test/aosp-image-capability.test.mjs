@@ -25,8 +25,9 @@ test("the renderer sees the image only through the native image-only plugin on A
 
 test("image views open only on the image and only with an admitted adapter", () => {
   assert.deepEqual([...AOSP_IMAGE_VIEWS].sort(), ["contacts", "messages", "phone"]);
-  assert.deepEqual(ADMITTED_AOSP_VIEW_ADAPTERS, ["messages"], "only the implemented native Messages adapter is admitted");
-  assert.deepEqual(admittedAospViews(true), ["messages"]);
+  assert.deepEqual(ADMITTED_AOSP_VIEW_ADAPTERS, ["messages", "phone"], "only the implemented native Messages and Phone adapters are admitted");
+  assert.deepEqual(admittedAospViews(true), ["messages", "phone"]);
+  assert.deepEqual(admittedAospViews(false), [], "a standalone or sideloaded install admits no phone view");
   assert.deepEqual(admittedAospViews(false, ["contacts"]), [], "no install without the image admits a view");
   assert.deepEqual(admittedAospViews(true, ["contacts", "wallet", "inbox"]), ["contacts"], "only image views can be admitted this way");
 });
@@ -140,8 +141,14 @@ test("permissions: standalone has none, the launcher declares read access only, 
   }
   assert.ok(removed(main).includes("android.permission.WRITE_CONTACTS"), "contact writes are removed from every build");
   for (const xml of [main, launcher, standalone])
-    for (const permission of ["READ_CALL_LOG", "WRITE_CALL_LOG", "ANSWER_PHONE_CALLS", "MANAGE_OWN_CALLS"])
+    for (const permission of ["WRITE_CALL_LOG", "ANSWER_PHONE_CALLS", "MANAGE_OWN_CALLS"])
       assert.ok(!declared(xml).includes(`android.permission.${permission}`), `${permission} is not declared`);
+  // Recent calls (AP-08): the launcher reads them on the verified image; no other build declares it.
+  assert.ok(declared(launcher).includes("android.permission.READ_CALL_LOG"), "launcher declares READ_CALL_LOG");
+  assert.ok(!declared(main).includes("android.permission.READ_CALL_LOG"), "main does not declare READ_CALL_LOG");
+  assert.ok(removed(standalone).includes("android.permission.READ_CALL_LOG"), "standalone removes READ_CALL_LOG");
+  const plugin = read("android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaTelephonyPlugin.java");
+  assert.match(plugin, /@Permission\(alias = "callLog", strings = \{ Manifest\.permission\.READ_CALL_LOG \}\)/, "the image plugin declares the optional call-log alias");
   // CALL_PHONE reaches only the dialer-role holder, and only the launcher can be offered that role.
   assert.ok(declared(launcher).includes("android.permission.CALL_PHONE") && !declared(main).includes("android.permission.CALL_PHONE"));
   assert.ok(removed(standalone).includes("android.permission.CALL_PHONE"), "standalone removes CALL_PHONE from the shared phone module");
@@ -214,4 +221,7 @@ test("dialer- and SMS-role components exist only in the launcher, disabled until
   const apk = read("scripts/apk.mjs");
   assert.match(apk, /"ai\.elizaresearch\.alphaphone\.AlphaInCallService": "android\.permission\.BIND_INCALL_SERVICE"/);
   assert.match(apk, /if \(data\.xml\.includes\('android\.permission\.CALL_PHONE'\) !== wantsHome\)/);
+  // Per-flavor recent-calls packaging: launcher only, and call-log writes never.
+  assert.match(apk, /if \(data\.xml\.includes\('android\.permission\.READ_CALL_LOG'\) !== wantsHome\)/);
+  assert.match(apk, /for \(const permission of \['WRITE_CALL_LOG', 'MANAGE_OWN_CALLS', 'ANSWER_PHONE_CALLS'\]\)/);
 });
