@@ -219,9 +219,16 @@ update and recovery gates below.
    is `android/aosp/pixel10a-ota-channel.json`. The operator update client, interrupted-update
    resume, slot fallback and stock-recovery checks are `scripts/aosp-ota-update.mjs`, and
    `scripts/verify-pixel10a-image.mjs` checks a booted image; all are bindings of shared
-   Pixel 10a tooling. No release key, signed image, applied OTA,
-   interrupted-update, rollback or stock-recovery drill exists yet, and
-   `scripts/pilot-update.mjs` still refuses a lower APK versionCode.
+   Pixel 10a tooling. `scripts/aosp-retain-known-good.mjs` (the shared `retain-known-good`
+   command) archives and hash-records a verified signed image and its target-files, refusing
+   placeholders, test-keys builds and inputs that differ from the release record;
+   `aosp-ota-update.mjs stock-archive --known-good DIR` re-verifies that archive and offers
+   its reflash plan beside the stock plan. The shared read-only update-channel client
+   (`packages/os/scripts/android/update-channel-client.mjs`) is registered off in Alpha
+   (`updateChannelCheckEnabled`); only a development build shows its state in About. No
+   release key, signed image, applied OTA, interrupted-update, rollback, known-good or
+   stock-recovery drill exists yet, and `scripts/pilot-update.mjs` (shared signer-equal,
+   higher-versionCode and per-domain readback checks) still refuses a lower APK versionCode.
 
 An SDK emulator with an installed launcher is useful HOME/app evidence, but is not
 proof that this product makefile built or booted in a custom AOSP image.

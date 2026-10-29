@@ -20,7 +20,8 @@
  *    provider sources, result notifications on a device.
  *
  * Missed occurrences follow the proposed scheduler policy ("explicit missed/overlap records", no backlog replay):
- * a scheduled time that passed while the app was closed leaves exactly one `missed` record, is never run late, is
+ * a scheduled time that passed while the app was closed (and is beyond the shared 30-minute run window,
+ * DIGEST_RUN_WINDOW_MS) leaves exactly one `missed` record, is never run late, is
  * labelled "Missed — not run" in the panel and does not replace the last real brief on Home (asserted on the
  * rendered Home card; the development profile reads the same latestRetainedDigest source as the product profile). The resident engine's
  * own restart behaviour is covered by scripts/test-local-digest-restart.mjs, not here.
@@ -164,7 +165,7 @@ test('journey D: morning and evening digests run once each, are retained and ack
 
  // 5. Missed occurrence: the app is closed across the next morning time, then started again.
  await page.goto('about:blank');
- await advanceTo(page,'2026-10-04T07:10:00Z');
+ await advanceTo(page,'2026-10-04T07:40:00Z');
  await page.goto('/?mode=dev');
  await expect(page.getByRole('region',{name:'Home'})).toBeVisible();
  await tickFor(page,60_000);
@@ -247,7 +248,7 @@ test('journey D: an occurrence missed while the app was closed leaves one explic
  // Frozen before the occurrence, however long the panel took: 07:00 must pass only while the app is closed.
  await page.clock.pauseAt(new Date('2026-10-03T06:59:00Z'));
  await page.goto('about:blank');
- await advanceTo(page,'2026-10-03T07:10:00Z');
+ await advanceTo(page,'2026-10-03T07:40:00Z');
  await page.goto('/?mode=dev');
  await tickFor(page,60_000);
  const state=await digests(page);
