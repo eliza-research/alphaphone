@@ -3,6 +3,7 @@ import {createCloudResidentHost} from './cloud-resident-host.mjs';
 import {managedGoogleRequest,boundedServiceJson,object} from '../backend/managed-google-route-policy.ts';
 import {CLOUD_EMAIL_CODE,emailCodeExpiresAt,emailCodeResendAt,emailCodeSendBody,emailCodeVerifyBody} from './cloud-email-code.ts';
 import {parseCloudServiceInfo} from '../apps/app/src/runtime/cloud-service-info.ts';
+import {readCloudVoiceLimit,type CloudVoiceLimitFacts} from '../apps/app/src/runtime/cloud-voice-limit.ts';
 import {randomUUID,createHash,randomBytes} from 'node:crypto';
 import {mkdir,readFile,writeFile,rename,lstat} from 'node:fs/promises';
 import path from 'node:path';
@@ -215,7 +216,12 @@ export function createBrowserCloudDevHandler(options:{profile:string;request?:ty
     if(data.operation==='stt'){if(!audio)throw Error('Speech audio required');const form=new FormData();form.append('provider','cartesia');form.append('audio',audio,'recording.'+(audio.type.includes('ogg')?'ogg':audio.type.includes('mp4')?'mp4':audio.type.includes('wav')?'wav':'webm'));init={method:'POST',body:form};}
     else{if(audio||typeof data.text!=='string'||!data.text.trim()||data.text.length>5000)throw Error('Invalid speech text');init={method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:data.text,format:'mp3'})};}
     const response=await canonical(env,'/api/v1/voice/'+data.operation,controller.signal,init,c);
-    if(!response.ok){await response.body?.cancel();await current(env,c,controller.signal);send(res,response.status,{error:'Cloud voice request failed',code:'voice-http-'+response.status});return;}
+    if(!response.ok){
+     // A 429 keeps only its retry facts (cloud-voice-limit.ts); no Cloud or provider text crosses.
+     let limit:CloudVoiceLimitFacts|undefined;
+     if(response.status===429){let body:unknown=null;const reader=response.body?.getReader();try{if(reader){const chunks:Uint8Array[]=[];let size=0;for(;;){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>16384)throw Error('Cloud limit body too large');chunks.push(part.value);}body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}}catch{body=null;}finally{await reader?.cancel().catch(()=>{});}limit=readCloudVoiceLimit(response.headers.get('Retry-After'),body);}else await response.body?.cancel();
+     await current(env,c,controller.signal);send(res,response.status,{error:'Cloud voice request failed',code:'voice-http-'+response.status,...(limit?{limit}:{})});return;
+    }
     if(data.operation==='stt'){if(response.headers.get('X-Eliza-STT-Provider')!=='cartesia'){await response.body?.cancel();throw Error('Cloud transcription provider was not verified');}const result=object(await response.json());await current(env,c,controller.signal);if(typeof result.transcript!=='string'||!result.transcript.trim())throw Error('Cloud returned no transcript');send(res,200,{text:result.transcript,local:false});return;}
     const type=response.headers.get('content-type')?.split(';')[0];if(!['audio/mpeg','audio/wav','audio/mp3'].includes(type??'')){await response.body?.cancel();throw Error('Invalid Cloud speech response');}
     const reader=response.body?.getReader();if(!reader)throw Error('Empty Cloud speech');const output:Uint8Array[]=[];let total=0;try{for(;;){const value=await reader.read();if(value.done)break;total+=value.value.byteLength;if(total>8*1024*1024)throw Error('Cloud speech exceeded bounds');output.push(value.value);}}finally{await reader.cancel().catch(()=>{});}
