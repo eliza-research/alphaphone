@@ -33,7 +33,7 @@ function harness({native=false,origin='notes',receiptFailure=false,dispatchFailu
  const executor=vm.runInNewContext(ts('(async function(operation,signal,expectedContext){'+executorCode+'})'),{connectionController,alphaClient,document,browserNavigationSummary}).bind({browserNavigateApproved,get live(){return live;}});
  const p={id:'proposal',digest:'digest',operation:{type:'browser_navigate',url:'https://example.com'},expiresAt:Date.now()+60000};
  const globals={Error,Date,JSON,createDeviceActionExecution,crypto:{randomUUID},contextKey:JSON.stringify,actionScope:async()=> 'hash',assertProposalContext(){}};
- for(const name of ['isClockOperation','isNativeNotesQuery','isSmsSend','isMapsOperation','isCameraCapture','isLibraryOperation','isReminderCreate','isReminderOperation','isNotesOperation','isCalendarOperation','isForegroundReview','isOriginalDeviceReadOperationType'])globals[name]=()=>false;
+ for(const name of ['isClockOperation','isNativeNotesQuery','isSmsSend','isPhoneDial','isMapsOperation','isCameraCapture','isLibraryOperation','isReminderCreate','isReminderOperation','isNotesOperation','isCalendarOperation','isForegroundReview','isOriginalDeviceReadOperationType'])globals[name]=()=>false;
  const approve=vm.runInNewContext(approveCode,globals).approve;
  const journal={async reserve(input){events.push('reserve');return {created:true,entry:{...input,phase:'reserved'}};},async markApplying(){events.push('applying');},async finish(record){journalResults.push(record);events.push('finish');if(finishFailure)throw Error('journal failed');}};
  const owner={busy:false,scope:'c'.repeat(64),session,credential:{installationId:'i',enrollmentId:'e'},proposals:new Map([[p.id,{proposal:p,context:initial}]]),readReplies:new Map(),journal,
