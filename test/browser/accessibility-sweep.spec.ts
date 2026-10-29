@@ -5,7 +5,7 @@ import { CONNECTED_STATES, DEVELOPMENT_STATES, FAILURE_STATES, FIXTURE_STATES, L
 // MVP-48, renderer part. Every retained primary view, subview and failure screen is checked for
 // accessible names and roles, keyboard reachability, focus order and traps, contrast, pointer
 // target size, TalkBack reading order (the rule AccessibilityInstrumentedTest applies on Android),
-// 200% text and landscape. This is Chromium on a development server. It is not a TalkBack, Switch
+// 200% and 300% text and landscape. This is Chromium on a development server. It is not a TalkBack, Switch
 // Access, physical large-font, rotation or device pass; those remain open.
 test.describe.configure({ mode: 'parallel' });
 
@@ -15,10 +15,15 @@ const STATES = [...LIVE_STATES, ...DEVELOPMENT_STATES, ...MOCK_STATES, ...CONNEC
 // neither is a cut app title: it names the screen and has room to wrap.
 const appTitle = (line: string) => /^text-truncated: .*<[^>]*\bdata-alpha-app-title\b/.test(line);
 const blocking = (lines: string[]) => lines.filter(line => !line.startsWith('text-truncated:') || appTitle(line));
+// A state at large text is opened, re-laid out and audited rule by rule. Under four workers on a
+// loaded machine that has run past the 30s default, so the large-text and landscape sweeps say
+// how long they may take instead of inheriting it.
+const LARGE_TEXT_TIMEOUT = 90_000;
 
 for (const theme of ['light', 'dark'] as const) {
   for (const state of STATES) {
     test(`names, roles, focus and contrast: ${state.name} (${theme})`, async ({ page }) => {
+      test.setTimeout(60_000);
       await state.open(page, theme);
       const found = format([
         ...await auditTree(page),
@@ -34,6 +39,7 @@ for (const theme of ['light', 'dark'] as const) {
 
 for (const state of STATES) {
   test(`200% text is not clipped and does not overlap: ${state.name}`, async ({ page }, info) => {
+    test.setTimeout(LARGE_TEXT_TIMEOUT);
     await state.open(page, 'light');
     await setTextScale(page, 2);
     // Clipping and overlap: nothing is cut, nothing is printed over anything else, no label is
@@ -54,11 +60,36 @@ for (const state of STATES) {
   });
 }
 
+// Above 200% (MVP-48): Android multiplies Alpha's own text size by the system font scale, so the
+// largest in-app size (150%) with the largest system font (200%) draws text at 300%. Every primary
+// view, in the standalone and the launcher presentation, is held to the 200% rules there.
+// The states below failed on real layout defects when this lane was added (issue #701). They still
+// run every rule, and must still report a defect: a fix makes the test fail with "now passes", and
+// the entry must then be removed. A timeout or a state that no longer opens fails as well, instead
+// of counting as the expected failure. The list may only shrink (test/accessibility-coverage.test.mjs).
+const OPEN_AT_300 = new Set([
+  'live Home', 'live Conversation', 'live Calendar new event', 'live Camera (unavailable)', 'live Browser tabs',
+  'live Browser menu', 'live Notes trash', 'live Notes recording', 'live Notes source document', 'live Settings display',
+  'launcher Home', 'launcher Conversation', 'launcher Calendar', 'launcher Camera', 'launcher Photos',
+  'launcher Workflows', 'launcher Settings display',
+]);
+for (const state of [...LIVE_STATES, ...LAUNCHER_STATES]) {
+  test(`300% text (largest in-app size and system font) is not clipped and does not overlap: ${state.name}`, async ({ page }) => {
+    test.setTimeout(LARGE_TEXT_TIMEOUT);
+    await state.open(page, 'light');
+    await setTextScale(page, 3);
+    const found = blocking(format([...await auditPage(page, { clipping: true, overlap: true, dock: true }), ...await auditTree(page), ...await auditTabOrder(page), ...await auditReadingOrder(page)]));
+    if (OPEN_AT_300.has(state.name)) expect(found, `${state.name} now passes at 300%: remove it from OPEN_AT_300 (issue #701)`).not.toEqual([]);
+    else expect(found, found.join('\n')).toEqual([]);
+  });
+}
+
 test.describe('landscape', () => {
   // A touch phone on its side (the Android WebView path in main.tsx).
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 915, height: 412 } });
   for (const state of STATES) {
     test(`landscape keeps every control on screen: ${state.name}`, async ({ page }) => {
+      test.setTimeout(LARGE_TEXT_TIMEOUT);
       await state.open(page, 'light');
       // The landscape layout is what is being checked, not a scaled-down portrait canvas.
       await expect(page.locator('html')).toHaveClass(/alpha-landscape/);
@@ -69,6 +100,7 @@ test.describe('landscape', () => {
   // The two together: a phone on its side with the system's largest font (round 10).
   for (const state of STATES) {
     test(`landscape at 200% text keeps every control on screen: ${state.name}`, async ({ page }) => {
+      test.setTimeout(LARGE_TEXT_TIMEOUT);
       await state.open(page, 'light');
       await expect(page.locator('html')).toHaveClass(/alpha-landscape/);
       await setTextScale(page, 2);
@@ -83,6 +115,7 @@ test.describe('landscape', () => {
 for (const state of [...FIXTURE_STATES, ...LAUNCHER_STATES]) {
   for (const scale of [1, 2]) {
     test(`${scale * 100}% text, names, focus and contrast: ${state.name}`, async ({ page }) => {
+      test.setTimeout(LARGE_TEXT_TIMEOUT);
       await state.open(page, 'light');
       if (scale !== 1) await setTextScale(page, scale);
       const found = blocking(format([
