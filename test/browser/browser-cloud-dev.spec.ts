@@ -67,7 +67,8 @@ test('browser restores an existing host Cloud account, uses canonical voice and 
   await page.reload();
   expect(calls.filter(p=>p==='/api/v1/api-keys/current')).toHaveLength(1);
   await expect.poll(()=>page.evaluate(async()=>{const state=(await import('/src/runtime/connection-ui.tsx')).connectionController.getSnapshot();return state.startupResolved===true&&!state.busy&&state.cloudAccount===null;})).toBe(true);
-  // Completed returning users still review access after explicit Settings sign-in.
+  // An existing account signing in again from Settings keeps the completed install: no Ready popup
+  // (only a newly created account gets one; startup-permission-completion.test.mjs).
   await page.evaluate(()=>window.dispatchEvent(new Event('alpha:agent-settings')));
   await page.evaluate(async()=>(await import('/src/runtime/connection-ui.tsx')).connectionController.openCloudAccount());
   // This test-mocks host's account button retains the diagnostic browser route. Exercise the
@@ -80,9 +81,8 @@ test('browser restores an existing host Cloud account, uses canonical voice and 
   await signIn.getByRole('button',{name:'Browser sign-in (diagnostic)',exact:true}).click();
   await expect.poll(()=>page.evaluate(async()=>(await import('/src/runtime/connection-ui.tsx')).connectionController.getSnapshot().cloudAccount?.userId)).toBe(owner);
   await expect(page.getByRole('dialog',{name:'Eliza Cloud',exact:true})).toHaveCount(0);
-  const postSignInSetup=page.getByRole('dialog',{name:'You’re all set',exact:true});
-  await expect(postSignInSetup).toBeVisible();
-  const box=await postSignInSetup.boundingBox();expect(box!.width).toBeGreaterThanOrEqual(page.viewportSize()!.width*.95);expect(box!.height).toBeGreaterThanOrEqual(page.viewportSize()!.height*.95);
+  await expect(signIn).toHaveCount(0);
+  await expect(page.locator('dialog.alpha-startup-permissions')).toHaveCount(0);
   expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('alpha:startup-permission-walkthrough:v1')!).status)).toBe('completed');
   await completeAccessSetup(page);
   await expect(page.getByRole('button',{name:'Inbox',exact:true})).toBeVisible();

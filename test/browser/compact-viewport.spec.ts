@@ -66,12 +66,15 @@ test('Connection dialog follows a live theme change and remains keyboard accessi
   await page.getByRole('button',{name:'Accounts',exact:true}).click();
   // Open by keyboard: WebKit intentionally does not focus buttons on a pointer click.
   const opener=page.getByRole('button',{name:'Manage Cloud account',exact:true});await opener.focus();await opener.press('Enter');
-  const dialog=page.getByRole('dialog',{name:'Eliza Cloud',exact:true});
+  // Signed out, Manage Cloud account is Alpha's sign-in screen (explicitSignedOutCloudEntry).
+  const dialog=page.getByRole('dialog',{name:'Welcome to Alpha.',exact:true});
   await expect(dialog).toHaveCSS('background-color','rgb(0, 0, 0)');
   await page.setViewportSize({width:412,height:300});
   await expect(dialog.getByText('Remote agent',{exact:true})).toHaveCount(0);
-  const signIn=dialog.getByRole('button',{name:'Sign in',exact:true});
-  await signIn.focus();await expect(signIn).toBeInViewport();
+  const signIn=dialog.getByRole('textbox',{name:'Email',exact:true});
+  // The email field may already hold focus from opening; move focus to the dialog first so focusing
+  // the field again must bring it into the compact viewport.
+  await expect(signIn).toBeEnabled();await dialog.focus();await signIn.focus();await expect(signIn).toBeFocused();await expect(signIn).toBeInViewport();
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Manage Cloud account',exact:true})).toBeFocused();

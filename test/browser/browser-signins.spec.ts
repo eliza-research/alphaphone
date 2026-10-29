@@ -43,6 +43,10 @@ test('a private tab is labelled, created ephemeral and never enters saved tabs o
  await page.evaluate(async()=>{const {registerPlugin}=await import('/src/platform-plugins.ts');(window as any).privateEvents=[];await registerPlugin<any>('AlphaBrowser').addListener('stateChanged',(e:any)=>(window as any).privateEvents.push({id:e.id,private:e.private}));});
  await openBrowser(page);await navigate(page,'normal');
  await menu(page,'New private tab');
+ // A new private tab opens on its address field, whose suggestions cover the page and its badge:
+ // the disclosure must be on the covering surface itself (the covered page is inert).
+ await expect(page.getByRole('textbox',{name:'Address',exact:true})).toBeFocused();
+ await expect(page.getByRole('note',{name:'Private tab notice'})).toContainText('deleted when you close it, and it is not saved in history');
  await page.getByRole('button',{name:'Cancel editing',exact:true}).click();
  await expect(page.getByRole('img',{name:'Private tab',exact:true})).toBeVisible();
  await expect(page.getByRole('note',{name:'Private tab notice'})).toContainText('deleted when you close it, and it is not saved in history');

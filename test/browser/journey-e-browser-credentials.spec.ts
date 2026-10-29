@@ -102,6 +102,7 @@ test('browser navigation, tabs, private tab, reviewed reading and password manag
     await button(page, 'Tabs').click();
     await expect(page.getByRole('heading', {name: '1 tab', exact: true})).toBeVisible();
     await button(page, 'New tab').click();
+    await expect(page.getByRole('note', {name: 'Private tab notice'})).toHaveCount(0);
     await enter(page, `${origin}/article`);
     await expect(heading(page, 'Harbour notes')).toBeVisible();
     await expect(button(page, 'Tabs')).toHaveText('2');

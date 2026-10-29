@@ -386,8 +386,10 @@ for (const mode of ['signed-out','empty','credits','unavailable','funded','repla
   // by itself and cannot be dismissed. Without an admissible plan a non-blocking notice beside the
   // running agent offers Redeem code and Choose a plan; its Redeem code opens the plan panel. A
   // sign-in that changed underneath admission is reported in the dialog. Otherwise nothing opens.
+  // On the phone's own agent that plan panel is the resident account & plan panel; it carries the
+  // approved Membership and credits controls, opened at the code field.
   const signedOut=mode==='signed-out'||mode==='legacy-offline'||mode==='unpackaged',needsPlan=mode==='empty'||mode==='unavailable';
-  const dialog=signedOut?page.locator('[role="main"].alpha-cloud-sign-in'):needsPlan?page.getByRole('dialog',{name:'Membership & credits',exact:true}):page.getByRole('region',{name:'Settings',exact:true});
+  const dialog=signedOut?page.locator('[role="main"].alpha-cloud-sign-in'):needsPlan?page.getByRole('dialog',{name:'Eliza Cloud account & plan',exact:true}):page.getByRole('region',{name:'Settings',exact:true});
   if(needsPlan){
    const notice=page.getByRole('region',{name:'Eliza Cloud plan notice'});
    await expect(notice).toContainText('Your agent is running on this device. AI replies aren’t available right now');
@@ -421,7 +423,9 @@ for (const mode of ['signed-out','empty','credits','unavailable','funded','repla
    await expect(dialog.getByRole('textbox',{name:'Membership code',exact:true})).toBeFocused();
    await expect(dialog.getByRole('button',{name:'Redeem',exact:true})).toBeVisible();
    await expect(dialog.getByRole('button',{name:'Add funds',exact:true})).toBeVisible();
-   await expect(dialog.getByText(mode==='empty'?'No active membership':'Not confirmed',{exact:true})).toBeVisible();
+   // The resident panel shows the plan headline itself (planShownByHost); the membership controls do not repeat it.
+   await expect(dialog.getByRole('region',{name:'Eliza Cloud plan',exact:true}).getByText(mode==='empty'?'No active plan':'Plan status unavailable',{exact:true})).toBeVisible();
+   await expect(dialog.getByRole('region',{name:'Membership and credits',exact:true}).getByText(mode==='empty'?'No active membership':'Not confirmed',{exact:true})).toHaveCount(0);
   }
   if(mode==='replaced')await expect(dialog.getByText(/account changed/i)).toBeVisible();
   if(admitted)await expect(dialog.getByRole('button',{name:'Sign out of Eliza Cloud',exact:true})).toBeVisible();
