@@ -13,7 +13,10 @@ test('pending reset retries, shows bounded recovery instead of a launcher restar
  const put=(name,body)=>{const path=join(dir,name);mkdirSync(dirname(path),{recursive:true});writeFileSync(path,body);sources.push(path);};
  const bin=name=>process.env.JAVA_HOME?join(process.env.JAVA_HOME,'bin',name):name;
  try{
-  put('ai/elizaresearch/alphaphone/ResetCloudRevocation.java',`package ai.elizaresearch.alphaphone; final class ResetCloudRevocation {static int calls;static long budget;static void revoke(android.content.Context c,long ms){if(!AlphaDataReset.RESET.pending(c))throw new AssertionError("Revocation must follow durable reset authorization");calls++;budget=ms;}}`);
+  // The shared Cloud reset step (ai.eliza.auth.cloud.CloudKeyRevocation, tested upstream) as a recording stand-in.
+  put('ai/eliza/auth/cloud/CloudSignInConfig.java',`package ai.eliza.auth.cloud; public final class CloudSignInConfig {}`);
+  put('ai/eliza/auth/cloud/CloudKeyRevocation.java',`package ai.eliza.auth.cloud; public final class CloudKeyRevocation {public static int calls;public static long budget;public static java.util.function.Predicate<Object> pending;public interface Registration{CloudSignInConfig get();}public interface SavedSlots<C>{String read(C c,String s)throws Exception;}public interface ResetStep<C>{void run(C c,long ms);}public static <C> ResetStep<C> resetStep(Registration r,SavedSlots<C> s){return (c,ms)->{if(!pending.test(c))throw new AssertionError("Revocation must follow durable reset authorization");calls++;budget=ms;};}}`);
+  put('ai/eliza/plugins/system/crash/CrashLog.java',`package ai.eliza.plugins.system.crash; public final class CrashLog {public static void install(android.content.Context c){ai.elizaresearch.alphaphone.ResetStartupTest.started();}}`);
   put('android/app/Activity.java',`package android.app; public class Activity extends android.content.Context {}`);
   put('ai/eliza/plugins/system/SenseListenerClient.java',`package ai.eliza.plugins.system; public final class SenseListenerClient {public static boolean resetSaved=true;public static int calls;public SenseListenerClient(android.content.Context c){}public boolean resetForData(){calls++;return resetSaved;}public void admitOwner(java.util.function.Supplier<String> owner){ai.elizaresearch.alphaphone.ResetStartupTest.started();}}`);
   put('android/content/Context.java',`package android.content; public class Context { public static java.io.File data; public static android.app.ActivityManager manager=new android.app.ActivityManager(); public Context createDeviceProtectedStorageContext(){return this;} public java.io.File getNoBackupFilesDir(){data.mkdirs();return data;} public <T>T getSystemService(Class<T> type){return type.cast(manager);} public String getPackageName(){return "fixture.alpha";} public static int recoveries; public void startActivity(Intent intent){if(!"ai.elizaresearch.alphaphone.ResetRecoveryActivity".equals(intent.target.getName())||intent.flags!=(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK))throw new AssertionError("unexpected start");recoveries++;} }`);
@@ -33,7 +36,8 @@ class NativeDigestHost {NativeDigestHost(android.content.Context c){NativeSource
 class NativeOwnerReminderHost {NativeOwnerReminderHost(android.content.Context c){NativeSourceHost.started++;}void read(){}}
 class NativeSourceHost {static int started;static void configure(Runnable r){started++;}static void configureOwnerReminderContext(Runnable r){started++;}}
 class NativeDeletionCoordinator {static NativeDeletionCoordinator get(android.content.Context c){return new NativeDeletionCoordinator();}void start(){NativeSourceHost.started++;}}
-class AlphaCrashLog {static void install(android.content.Context c){NativeSourceHost.started++;}}
+class AlphaCloudSignInPlugin {static ai.eliza.auth.cloud.CloudSignInConfig REGISTRATION=new ai.eliza.auth.cloud.CloudSignInConfig();}
+class AlphaCredentialStore {static String readSlotBeforeAttach(android.content.Context c,String slot)throws Exception{throw new AssertionError("the stand-in step reads no slot");}}
 class AlphaNoteAudioPlugin {static void scheduleTrashBackstop(android.content.Context c){NativeSourceHost.started++;}}
 class AlphaLocalAgentPlugin {static String invocationOwner(android.content.Context c){return "no-provider";}}
 final class BuildConfig {static final String ELIZA_SOURCE_COMMIT="fixture",FLAVOR="launcher",BUILD_TYPE="debug";static final boolean ELIZA_SOURCE_DIRTY=false;}
@@ -47,6 +51,7 @@ public class ResetStartupTest {
  public static void started(){NativeSourceHost.started++;}
  static void check(boolean ok){if(!ok)throw new AssertionError();}
  public static void main(String[] args)throws Exception {
+  ai.eliza.auth.cloud.CloudKeyRevocation.pending=c->AlphaDataReset.RESET.pending((android.content.Context)c);
   android.content.Context.data=new java.io.File(args[0]);AlphaApplication app=new AlphaApplication();
   check(!AlphaDataReset.RESET.pending(app));
   // A stale attempt without a confirmed request neither withdraws listener consent nor clears data,
@@ -59,7 +64,7 @@ public class ResetStartupTest {
   for(int mode=0;mode<3;mode++){android.app.ActivityManager.mode=mode;try{AlphaApplication restarted=new AlphaApplication();restarted.attachBaseContext(app);throw new AssertionError("Providers would initialize before onCreate");}catch(android.os.Process.Exit stopped){}check(NativeSourceHost.started==0);check(AlphaDataReset.RESET.pending(app));}
   check(android.app.ActivityManager.calls==3);
   // Each interrupted reset revokes Cloud keys first, bounded by the startup budget, only while the marker is durable.
-  check(ResetCloudRevocation.calls==3&&ResetCloudRevocation.budget==DataReset.STARTUP_BEFORE_DISPATCH_MS&&ResetCloudRevocation.budget==4000);
+  check(ai.eliza.auth.cloud.CloudKeyRevocation.calls==3&&ai.eliza.auth.cloud.CloudKeyRevocation.budget==DataReset.STARTUP_BEFORE_DISPATCH_MS&&ai.eliza.auth.cloud.CloudKeyRevocation.budget==4000);
   SenseListenerClient.resetSaved=false;
   try{app.attachBaseContext(app);throw new AssertionError("Unacknowledged listener reset resumed");}catch(android.os.Process.Exit stopped){}
   check(android.app.ActivityManager.calls==3);check(AlphaDataReset.RESET.pending(app));check(NativeSourceHost.started==0);

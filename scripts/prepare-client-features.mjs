@@ -76,6 +76,8 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-native-system/src/sense-bridge.ts',
   'plugins/plugin-native-system/src/sense-web.ts',
   'plugins/plugin-native-system/src/reset.ts',
+  'plugins/plugin-native-system/src/crash-log.ts',
+  'packages/ui/src/components/permissions/permission-walkthrough.ts',
   'plugins/plugin-native-system/src/settings.ts',
   'plugins/plugin-native-system/src/definitions.ts',
   'packages/ui/src/components/pages/InstalledAppsLauncher.tsx',
@@ -219,6 +221,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-native-camera/src/definitions.ts',
   'plugins/plugin-native-camera/src/host-ports.ts',
   'plugins/plugin-native-camera/src/session.ts',
+  'plugins/plugin-native-camera/src/scan-document.ts',
   'plugins/plugin-assistant/src/services/device-actions/notes-query-result.ts',
   'packages/contracts/src/sms-send.ts',
   'plugins/plugin-assistant/src/services/device-actions/sms-contract.ts',
@@ -256,6 +259,11 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/cloud/sdk/src/subscription-entitlement.ts',
   'packages/ui/src/components/settings/cloud-subscription-summary.tsx',
   'packages/auth/src/auth/native-cloud-sign-in.ts',
+  // Credential-bound account billing reader and its snapshot types (AP-03/#410).
+  'packages/cloud/sdk/src/cloud-account-billing.ts',
+  'packages/cloud/sdk/src/account-billing-snapshot.ts',
+  // Framework-free resident Cloud binding controller (AP-04/P-22).
+  'packages/auth/src/auth/cloud-resident-binding.ts',
 ];
 /** Copy authenticated upstream source outside the immutable vendor checkout. */
 export function prepareClientFeatures({ root = projectRoot, projectVoice = true } = {}) {
@@ -288,6 +296,16 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
     const content = text(name);
     if (content.split(before).length !== 2 || /^import (?!type )[^;]*from "\.\/(?!live-voice-session\.js")/m.test(content)) throw Error('Review changed native live voice imports: ' + name);
     project(name, content.replace(before, '} from "./live-voice-session.ts";'));
+  }
+
+  // The shared account billing reader imports the entitlement helpers by their emitted .js name.
+  // Plain Node (tests and scripts that strip types) cannot map that to the copied .ts source, so
+  // the one reviewed value import is pointed at the .ts file; its type-only .js import is erased.
+  {
+    const name = 'packages/cloud/sdk/src/cloud-account-billing.ts', before = '} from "./subscription-entitlement.js";';
+    const content = text(name);
+    if (content.split(before).length !== 2) throw Error('Review changed account billing import: ' + name);
+    project(name, content.replace(before, '} from "./subscription-entitlement.ts";'));
   }
 
   // The shared linked-sync modules import @elizaos/contracts by package name. Alpha has no
