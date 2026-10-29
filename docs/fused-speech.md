@@ -28,8 +28,18 @@ through `:local-speech`. Speech output, recognition and VAD share one process-wi
 session: cancelling a request fences only the engine's own calls, and an idle or memory-pressure
 release drops only its own hold (the models are freed once no consumer holds them). VAD keeps a
 small separate context so capture stays full duplex while a sentence is synthesized.
-`AlphaVoiceCloudPlugin` keeps only the bridge, owner/account binding, recordings and resident
-transport; `AlphaApplication` names the timing export `alpha-native-voice-timing-v3`. The class
+The Capacitor bridge itself is the shared `LocalSpeechBridgePlugin`
+(`plugin-local-inference/native/android/speech-bridge`, enabled in `:local-speech` with
+`elizaSpeechBridgeCapacitor=true`): recording drafts (`LocalVoiceRecording`, decoded by
+`RecordingPcm`), single-request admission and the cancellation drain (`SpeechRequestGate`),
+on-device recognition and synthesis, playback, audio focus, live capture and the latency
+collector. `AlphaVoiceCloudPlugin` is a thin subclass that keeps the `AlphaVoiceCloud` name, the
+installed `alpha-cloud-voice-`/`alpha-cloud-tts-` cache prefixes, the owner's resident transport
+(`AlphaLocalAgentPlugin.openNativeVoiceTransport`), Notes audio storage and the Alpha-only
+methods (browser-reading synthesis, paired agent speech, the explicit Cloud profile). The renderer
+side is the shared `@elizaos/voice/native-live` and `@elizaos/voice/native-speech`, which
+`native-live-voice.ts`, `native-voice-turn.ts`, `local-voice.ts` and `paired-voice.ts` bind to
+that bridge. `AlphaApplication` names the timing export `alpha-native-voice-timing-v3`. The class
 names in the sections below refer to these shared classes.
 
 The app's own `ElizaVoiceNative` (embeddings and the host natives) is built from the same
@@ -344,6 +354,10 @@ never makes a Cloud speech request. When Cloud answers HTTP 429, `AlphaVoiceClou
 (`CloudVoiceLimit.java`) and the development bridge (`cloud-voice-limit.ts`) pass on only the retry
 facts: `Retry-After` or the body's `retryAfterSeconds`/`retryAt` (at most a day), a short
 lower-case limit code and a bounded `resetAt`; the message, plan and provider body never leave.
+The shared `LocalSpeechBridgePlugin.submit` rejects a non-2xx answer with `voice-http-<status>`
+and no data, so Alpha's `submitLimited` settles a 429 itself: it closes the connection, marks the
+request resolved and rejects with the same code plus those facts (a cancelled request keeps the
+shared cancellation). Moving this data path into the shared request gate is upstream follow-up.
 `cloud-voice.ts` reads them as the shared `ServiceLimit` (`readServiceLimit`), shows plan-limit
 wording with the retry time ("... reached your plan's request limit. Try again in about 42
 seconds. Your recording is kept."), keeps the recorded clip for an explicit retry, and records the
@@ -352,7 +366,7 @@ for the same signed-in Cloud session only. Nothing is retried automatically.
 
 ## Streamed speech output and audio focus (#397)
 
-When the pinned engine reports `ParadeeVoice.supportsStreaming()`, `AlphaVoiceCloudPlugin` synthesizes
+When the pinned engine reports `ParadeeVoice.supportsStreaming()`, the speech bridge synthesizes
 each reviewed sentence with `synthesizeStream` and plays the chunks through an AudioTrack
 (`AudioTrackSpeechOutput`: MODE_STREAM, 24 kHz mono float, USAGE_ASSISTANT/CONTENT_TYPE_SPEECH) as
 they arrive. `StreamingSpeechPlayback` holds at most 30 s of PCM in a `SpeechPcmQueue`; a full queue
