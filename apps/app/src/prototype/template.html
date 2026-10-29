@@ -25,7 +25,7 @@
   <!-- Launcher Home only (docs/gesture-zones.md, #416, #417): Android's shade is the one
        notification and quick-settings surface. This visible control asks Android to open it, as
        a pull down on empty Home does; the top-edge swipe stays Android's. Alpha draws no shade. -->
-  <sc-if value="{{showShadeButton}}"><div class="alpha-shade-row"><button class="alpha-shade-handle" data-alpha-shade-handle aria-label="Open notifications" aria-description="Opens Android's notifications and quick settings" onClick="{{openSystemShade}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.bell}}"></path></svg><span>Notifications</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.down}}"></path></svg></button></div></sc-if>
+  <sc-if value="{{showShadeButton}}"><div class="alpha-shade-row"><button type="button" class="alpha-shade-handle" data-alpha-shade-handle aria-label="Open notifications" aria-description="Opens Android's notifications and quick settings" onClick="{{openSystemShade}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.bell}}"></path></svg><span>Notifications</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.down}}"></path></svg></button></div></sc-if>
 </sc-slot>
 <sc-slot name="cards">
     {{homeAgendaCard}}
@@ -2234,7 +2234,6 @@
     <sc-if value="{{notes.primaryNotes}}"><sc-if value="{{showAppBack}}"><button class="app-header-back" aria-label="Back to apps" onClick="{{backToApps}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.back}}"></path></svg></button></sc-if></sc-if>
       <sc-if value="{{notes.returnToNotesAction}}"><button class="ib" aria-label="Return to Notes" onClick="{{notes.returnToNotesAction}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.back}}"></path></svg></button></sc-if>
       <h1 data-alpha-app-title class="serif" style="margin: 0; font-size: 32px; flex-grow: 1; letter-spacing: -.01em">{{notes.notesTitle}}</h1>
-      <sc-if value="{{notes.olderNotesAction}}"><details class="notes-secondary-menu" style="position:relative"><summary class="ib" aria-label="Notes options" style="list-style:none;cursor:pointer"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.more}}"></path></svg></summary><div style="position:absolute;right:0;top:100%;z-index:3;min-width:144px;background:var(--s2);border-radius:12px;padding:4px"><button class="tap" onClick="{{notes.olderNotesAction}}" style="min-height:44px;width:100%;padding:0 12px;text-align:left;white-space:nowrap">Older notes</button></div></details></sc-if>
       <sc-if value="{{notes.canRecord}}"><button class="ib" aria-label="Record and transcribe" onClick="{{notes.record}}"><svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="{{ic.notesWave}}"></path></svg></button></sc-if>
       <sc-if value="{{notes.canImportText}}"><button class="ib" aria-label="Import text note" disabled="{{notes.documentBusy}}" onClick="{{notes.importText}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.filesDown}}"></path></svg></button></sc-if>
       <sc-if value="{{notes.trashAvailable}}"><button class="ib" aria-label="Open Trash" title="{{notes.trashLabel}}" onClick="{{notes.openTrash}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.trash}}"></path></svg></button></sc-if>

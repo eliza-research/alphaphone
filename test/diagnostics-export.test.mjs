@@ -223,3 +223,16 @@ test('confirmed clear cancels an outstanding inference refresh before it can app
  vm.runInNewContext(stripTypeScriptTypes(refresh+'\n'+clear,{mode:'strip'})+'\nglobalThis.refresh=refreshInferenceFailure;globalThis.clear=clearProblems;',context);
  const pending=context.refresh();await context.clear({toast:()=>{}});await pending;assert.equal(clears,1);assert.equal(records,0);assert.equal(context.inferenceAbort,null);
 });
+
+test('voice conversation rows name their path: live assistant or recorded-clip batch',()=>{
+ const row=(id,extra)=>({version:1,id,recordedAt:now,route:'local-agent',cold:false,entry:'conversation',marks:{'recording-end':0},...extra});
+ const ids=['1b0c7a52-6d5e-4e0f-9a43-5c1d2e3f4a51','2b0c7a52-6d5e-4e0f-9a43-5c1d2e3f4a52','3b0c7a52-6d5e-4e0f-9a43-5c1d2e3f4a53','4b0c7a52-6d5e-4e0f-9a43-5c1d2e3f4a54','5b0c7a52-6d5e-4e0f-9a43-5c1d2e3f4a55'];
+ const records=buildDiagnostics({voiceTiming:{format:'alpha-voice-timing-v1',records:[
+  row(ids[0],{endpoint:{by:'gap',semantic:'not-asked'}}),
+  row(ids[1],{live:{mode:'stream',partials:3}}),
+  row(ids[2],{live:{mode:'batch',partials:0}}),
+  row(ids[3],{}),
+  {...row(ids[4],{live:{mode:'batch',partials:0}}),entry:'notes',path:'live'},
+ ]}},now).voiceTiming.records;
+ assert.deepEqual(records.map(r=>r.path),['live','live','batch',undefined,undefined]);
+});
