@@ -281,8 +281,10 @@ const rows=[
  ['expired and late','UTC','08:00','2026-10-03T11:00:00.000Z',{expiresAt:'2026-10-03T09:00:00.000Z'}],
  ['revoked, on time','UTC','08:00','2026-10-03T08:00:10.000Z',{revoked:true}],
  ['offset zone','Asia/Kolkata','07:15','2026-10-03T01:45:30.000Z'],
+ ['created after the latest occurrence','UTC','08:00','2026-10-03T09:00:00.000Z',{created:'2026-10-03T08:30:00.000Z'}],
  // Start of daylight saving: 02:30 does not exist in New York on 8 March, nor 01:30 in London on 29 March.
  ['spring-forward day, skipped time','America/New_York','02:30','2026-03-08T12:00:00.000Z'],
+ ['spring-forward day, skipped time, on time','America/New_York','02:30','2026-03-08T07:30:30.000Z'],
  ['day after spring forward','America/New_York','02:30','2026-03-09T06:30:30.000Z'],
  ['spring-forward day, London','Europe/London','01:30','2026-03-29T03:00:00.000Z'],
  ['spring-forward day, hour after','America/New_York','03:30','2026-03-08T07:30:00.000Z'],
@@ -308,8 +310,9 @@ console.log(JSON.stringify(out));`);
   for(const row of out.rows)assert.deepEqual(row.dev,row.agent,`${row.name}: development and agent admission agree`);
   // The table exercises every status, not only the happy path.
   assert.deepEqual([...new Set(out.rows.map(row=>row.agent?.status??'none'))].sort(),['missed','none','ready','unavailable']);
-  // A skipped civil time has no occurrence that day on either side.
-  assert.equal(out.rows.find(row=>row.name==='spring-forward day, skipped time').agent,null);
+  // A skipped civil time runs one gap later that day on both sides (02:30 -> 03:30 EDT), as the agent's cron scan does.
+  assert.equal(out.rows.find(row=>row.name==='spring-forward day, skipped time').agent?.scheduledAt,'2026-03-08T07:30:00.000Z');
+  assert.equal(out.rows.find(row=>row.name==='spring-forward day, skipped time, on time').agent?.status,'ready');
   assert.ok(out.rows.some(row=>row.agent?.sourceState==='expired')&&out.rows.some(row=>row.agent?.sourceState==='revoked'));
   assert.equal(out.pausedNext,null);
   for(const week of out.weeks)assert.deepEqual(week.dev,week.agent,`${week.zone} ${week.localTime}: the same occurrence instants`);

@@ -33,12 +33,30 @@ const formats=new Map<string,Intl.DateTimeFormat>();
 /** Civil minute of an instant in a zone, `YYYY-MM-DDTHH:MM`. Throws for an unknown zone. */
 export function wall(at:number,zone:string){let format=formats.get(zone);if(!format){format=new Intl.DateTimeFormat('en-GB',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});formats.set(zone,format);}const p=Object.fromEntries(format.formatToParts(at).map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;}
 const latest=new Map<string,{at:number;local:string}|null>();
+/** Zone offset at a minute-aligned instant, in milliseconds. */
+function offsetAt(at:number,zone:string){const local=wall(at,zone);return Date.UTC(+local.slice(0,4),+local.slice(5,7)-1,+local.slice(8,10),+local.slice(11,13),+local.slice(14,16))-at;}
+/** UTC rendering of a shifted instant as a civil minute, `YYYY-MM-DDTHH:MM`. */
+const utcMinute=(at:number)=>new Date(at).toISOString().slice(0,16);
+/** The agent's largest spring-forward look-back (computeNextCronRunAtMs): DST gaps in use are at most two hours. */
+const SPRING_FORWARD_LOOKBACK_MS=3*3600000;
+/**
+ * The civil time a zone skipped that this instant stands for, or null. As the agent's cron scan does,
+ * a skipped civil time runs one gap later (02:30 -> 03:30 for a one-hour gap): the instant is in the
+ * first gap-length span after a forward offset change, read with the offset before the change.
+ */
+function skippedCivilTime(at:number,zone:string){
+ const offset=offsetAt(at,zone),prior=offsetAt(at-SPRING_FORWARD_LOOKBACK_MS,zone);
+ if(prior>=offset||offsetAt(at-(offset-prior),zone)!==prior)return null;
+ return utcMinute(at+prior);
+}
 /** The most recent instant at or before this minute whose civil time is the reviewed local time.
- * Repeated civil times resolve to their earlier instant. Skipped civil times never match. */
+ * Repeated civil times resolve to their earlier instant. A skipped civil time resolves one gap later,
+ * as on the agent. */
 function latestOccurrence(zone:string,localTime:string,minute:number){
  const key=zone+'|'+localTime+'|'+minute;if(latest.has(key))return latest.get(key)!;
  let found:{at:number;local:string}|null=null;
- for(let at=minute;at>minute-26*3600000;at-=60000){const local=wall(at,zone);if(local.slice(11)!==localTime)continue;
+ for(let at=minute;at>minute-26*3600000;at-=60000){const local=wall(at,zone);
+  if(local.slice(11)!==localTime){const skipped=skippedCivilTime(at,zone);if(skipped?.slice(11)===localTime){found={at,local:skipped};break;}continue;}
   let first=at;for(let delta=60000;delta<=3*3600000;delta+=60000)if(wall(at-delta,zone)===local)first=at-delta;
   found={at:first,local};break;}
  if(latest.size>200)latest.clear();latest.set(key,found);return found;
@@ -60,8 +78,8 @@ function latestOccurrence(zone:string,localTime:string,minute:number){
  *
  * Limits: an occurrence at or below `settledFloor` (older than the 32 remembered settlements, or
  * behind the newest record of a document written before the list existed) is treated as settled and
- * leaves no record; a civil time a zone skips (start of daylight saving) has no occurrence that day,
- * as on the agent, whose cron scan matches civil minutes.
+ * leaves no record. A civil time a zone skips (start of daylight saving) occurs one gap later that
+ * day (02:30 -> 03:30 EDT), as on the agent, whose cron scan runs a skipped time one gap later.
  */
 export function scheduledOccurrence(loop:OccurrenceLoop,now:number):Occurrence|null{
  if(!loop.active||loop.removed||loop.sourcePaused)return null;
