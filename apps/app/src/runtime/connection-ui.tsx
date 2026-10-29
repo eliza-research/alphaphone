@@ -2682,6 +2682,7 @@ export const connectionController = {
     if (!active && residentAlwaysPresent) throw noSessionError('');
     if (operation) throw new Error('Finish the connection or history operation before sending.');
     if(replyTo&&!this.messageTargetCurrent(replyTo))throw Error('The reply target belongs to a different conversation.');
+    const authoredRequestText=text;
     const message = phoneContextMessage(text, context);
     if (sending) throw new Error('Wait for the current reply before sending another message.');
     const selected = active, session = state.session, generation = epoch;
@@ -2768,16 +2769,17 @@ export const connectionController = {
       if (selected.actions) {
         // A pending action that does not fit this screen, time zone or negotiated support is
         // named to the owner instead of being dropped; it stays unapprovable.
-        try { let items = await selected.actions.pendingReview(context, requestSignal);
+        try { const authoredRequest=typeof reply.userMessageId==='string'&&validateUuid(reply.userMessageId)?{messageId:reply.userMessageId,text:authoredRequestText,current:assertCurrent}:undefined;
+          let items = await selected.actions.pendingReview(context, requestSignal,authoredRequest);
           if(!failed&&directRequestedActions&&typeof reply.userMessageId==='string'&&validateUuid(reply.userMessageId)){
-            const performed=await selected.actions.performRequested(reply.userMessageId,context,requestSignal,async()=>!(await readDevicePreferences(requestSignal)).askBeforeAgentActions);
+            const performed=await selected.actions.performRequested(reply.userMessageId,context,requestSignal,async()=>!(await readDevicePreferences(requestSignal)).askBeforeAgentActions,undefined,authoredRequest);
             // Publish existing outcomes before self-navigation's cancelled foreground wait.
             deliverRequestedActionReceipts(selected,session,generation,id,reply.userMessageId,performed);
             assertCurrent();
             if(performed.length){
               completedActions.push(...performed);
               for(const receipt of performed){const proposal=items.find(item=>item.proposal?.id===receipt.proposalId)?.proposal;if(receipt.status==='succeeded'&&receipt.readReply&&proposal?.readReply)completedReads.push({proposal,receipt});}
-              items=await selected.actions.pendingReview(message.context,requestSignal);
+              items=await selected.actions.pendingReview(message.context,requestSignal,authoredRequest);
             }
           }
           // A pending action joins the first reply after it appears; later replies do not repeat it.

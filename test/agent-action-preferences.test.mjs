@@ -1,3 +1,4 @@
+import {authoredBrowserDestination,browserDestinationMatches} from '../.eliza/client-features/packages/contracts/src/browser-request-grounding.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -6,8 +7,8 @@ import vm from 'node:vm';
 const src=readFileSync('apps/app/src/runtime/device-actions.ts','utf8');
 const start=src.indexOf('  async performRequested('),end=src.indexOf('  /** Notice restoration',start);
 const method=stripTypeScriptTypes('class Fixture {'+src.slice(start,end)+'}',{mode:'transform'})+'; globalThis.Fixture=Fixture;';
-const context=vm.createContext({});vm.runInContext(method,context);
-function fixture(rows,status='succeeded'){const f=new context.Fixture();f.proposals=new Map(rows.map(([id,source,workflow,type="create_note"])=>[id,{proposal:{requestMessageId:source,workflow,operation:{type}}}]));f.card=()=>({});f.calls=[];f.approve=async id=>{f.calls.push(id);return {proposalId:id,status,summary:'Test result'};};return f;}
+const context=vm.createContext({URL,authoredBrowserDestination,browserDestinationMatches});vm.runInContext(method,context);
+function fixture(rows,status='succeeded'){const f=new context.Fixture();f.session={sessionId:'session',ownerId:'owner',agentId:'agent',origin:'https://agent.example'};f.credential={installationId:'install',enrollmentId:'enrollment'};f.browserRequestedAttempts=new Map();f.browserPolicyBlocks=new Map();f.proposals=new Map(rows.map(([id,source,workflow,type="create_note"])=>[id,{proposal:{requestMessageId:source,workflow,operation:{type,...(type==='browser_navigate'?{url:'https://example.com/'}:{})}}}]));f.card=()=>({});f.calls=[];f.approve=async id=>{f.calls.push(id);return {proposalId:id,status,summary:'Test result'};};return f;}
 test('only current-request proposals execute; old, unbound and workflow stay pending',async()=>{const f=fixture([['old','previous'],['unbound',undefined],['current','request'],['workflow','request',{}]]);await f.performRequested('request',{},new AbortController().signal,async()=>true);assert.deepEqual(f.calls,['current']);});
 test('ask-first preference executes nothing',async()=>{const f=fixture([['current','request']]);await f.performRequested('request',{},new AbortController().signal,async()=>false);assert.deepEqual(f.calls,[]);});
 test('preference is rechecked before each action',async()=>{const f=fixture([['one','request'],['two','request']]);let n=0;await f.performRequested('request',{},new AbortController().signal,async()=>++n===1);assert.deepEqual(f.calls,['one']);});
@@ -26,7 +27,7 @@ test('direct requests retain review for destructive, private and external operat
 test('only the enumerated reversible local actions can run directly',async()=>{
  const types=['create_note','open_view','browser_navigate','camera_capture_photo','photo_library_select'];
  const f=fixture(types.map(type=>[type,'request',undefined,type]));
- await f.performRequested('request',{},new AbortController().signal,async()=>true);
+ await f.performRequested('request',{},new AbortController().signal,async()=>true,undefined,{messageId:'request',text:'Open https://example.com/',current:()=>{}});
  assert.deepEqual(f.calls,types.slice(0,4),'the existing four-action batch cap remains in force');
  const last=fixture([['photo_library_select','request',undefined,'photo_library_select']]);await last.performRequested('request',{},new AbortController().signal,async()=>true);assert.deepEqual(last.calls,['photo_library_select']);
 });
@@ -35,6 +36,6 @@ test('navigation-only cards never auto-execute',async()=>{const f=fixture([['cur
 
 test('ordinary browser navigation reuses current-request execution and still respects ask-first',async()=>{
  const rows=[['old','old',undefined,'browser_navigate'],['unbound',undefined,undefined,'browser_navigate'],['current','request',undefined,'browser_navigate'],['workflow','request',{},'browser_navigate']];
- const direct=fixture(rows);await direct.performRequested('request',{},new AbortController().signal,async()=>true);assert.deepEqual(direct.calls,['current']);
- const reviewed=fixture(rows);await reviewed.performRequested('request',{},new AbortController().signal,async()=>false);assert.deepEqual(reviewed.calls,[]);
+ const direct=fixture(rows);await direct.performRequested('request',{},new AbortController().signal,async()=>true,undefined,{messageId:'request',text:'Open https://example.com/',current:()=>{}});assert.deepEqual(direct.calls,['current']);
+ const reviewed=fixture(rows);await reviewed.performRequested('request',{},new AbortController().signal,async()=>false,undefined,{messageId:'request',text:'Open https://example.com/',current:()=>{}});assert.deepEqual(reviewed.calls,[]);
 });

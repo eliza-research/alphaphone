@@ -1,3 +1,4 @@
+import {authoredBrowserDestination,browserDestinationMatches} from '../.eliza/client-features/packages/contracts/src/browser-request-grounding.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -73,12 +74,12 @@ const deliveryStart=connectionSource.indexOf('            const performed=await 
 const deliveryEnd=connectionSource.indexOf('            assertCurrent();',deliveryStart)+'            assertCurrent();'.length;
 const directDelivery=ts('(async function(){'+connectionSource.slice(deliveryStart,deliveryEnd)+'})');
 function deliveryHarness(selected,session,receipts,controller){
- const state={session,conversationDelivery:undefined};const updates=[];const globals={active:selected,epoch:1,state,conversationMemory:new Map([['key','conversation']]),conversationKey:()=> 'key',update:patch=>{updates.push(patch);Object.assign(state,patch);},selected,session,generation:1,id:'conversation',reply:{userMessageId:'canonical-user'},context:{view:'notes',revision:1},requestSignal:controller.signal,readDevicePreferences:async()=>({askBeforeAgentActions:false}),assertCurrent:()=>controller.signal.throwIfAborted()};
+ const state={session,conversationDelivery:undefined};const updates=[];const globals={active:selected,epoch:1,state,conversationMemory:new Map([['key','conversation']]),conversationKey:()=> 'key',update:patch=>{updates.push(patch);Object.assign(state,patch);},selected,session,generation:1,id:'conversation',reply:{userMessageId:'canonical-user'},authoredRequest:{messageId:'canonical-user',text:'Open https://example.com/',current:()=>controller.signal.throwIfAborted()},context:{view:'notes',revision:1},requestSignal:controller.signal,readDevicePreferences:async()=>({askBeforeAgentActions:false}),assertCurrent:()=>controller.signal.throwIfAborted()};
  vm.runInNewContext(deliverySource+';globalThis.deliver=deliverRequestedActionReceipts;',globals);return {globals,state,updates,run:()=>vm.runInNewContext(directDelivery,globals)(),deliver:()=>globals.deliver(selected,session,1,'conversation','canonical-user',receipts)};
 }
 test('direct navigation journals once, changes view and cancels chat, but its exact receipt survives reopening',async()=>{
  const h=harness({native:true}),p=[...h.owner.proposals.values()][0].proposal;p.requestMessageId='canonical-user';h.owner.card=()=>({});h.owner.approve=()=>h.run();
- h.owner.performRequested=vm.runInNewContext(directMethod,{}).performRequested;
+ h.owner.browserRequestedAttempts=new Map();h.owner.browserPolicyBlocks=new Map();h.owner.performRequested=vm.runInNewContext(directMethod,{URL,authoredBrowserDestination,browserDestinationMatches}).performRequested;
  const selected={actions:h.owner},d=deliveryHarness(selected,h.owner.session,[],h.controller);
  await assert.rejects(d.run(),{name:'AbortError'});assert.equal(h.controller.signal.aborted,true);assert.equal(h.events.filter(e=>e==='dispatch').length,1);assert.equal(h.events.at(-1),'present');
  const delivery=d.state.conversationDelivery;assert.equal(delivery.messages.length,1);assert.equal(delivery.messages[0].inReplyTo,'canonical-user');assert.equal(delivery.messages[0].text,'Opened example.com.');
@@ -90,4 +91,13 @@ test('completed receipt delivery cannot cross owner, conversation or generation 
  for(const retire of [d=>d.globals.active={},d=>d.state.session={sessionId:'foreign'},d=>d.globals.epoch=2,d=>d.globals.conversationMemory.set('key','different')]){
   const selected={},session={sessionId:'owner'},d=deliveryHarness(selected,session,[{proposalId:'p',status:'succeeded',summary:'Opened example.com.'}],new AbortController());retire(d);d.deliver();assert.equal(d.updates.length,0);
  }
+});
+
+for(const authored of ['Move it to 4 pm','Open https://example.com/other',undefined])test(`ordinary caller leaves ungrounded browser proposal pending: ${authored}`,async()=>{
+ const h=harness({native:true}),p=[...h.owner.proposals.values()][0].proposal;p.requestMessageId='canonical-user';h.owner.card=()=>({});h.owner.approve=()=>h.run();
+ h.owner.browserRequestedAttempts=new Map();h.owner.browserPolicyBlocks=new Map();h.owner.performRequested=vm.runInNewContext(directMethod,{URL,authoredBrowserDestination,browserDestinationMatches}).performRequested;
+ const selected={actions:h.owner},d=deliveryHarness(selected,h.owner.session,[],h.controller);d.globals.authoredRequest=authored===undefined?undefined:{messageId:'canonical-user',text:authored,current:()=>h.controller.signal.throwIfAborted()};
+ // A model reply repeating a URL never supplies the authored permission.
+ d.globals.reply.text='Opening https://example.com/ now.';
+ await d.run();assert.equal(h.controller.signal.aborted,false);assert.ok(!h.events.includes('dispatch'));assert.ok(!h.events.includes('present'));assert.equal(h.owner.proposals.size,1);assert.equal(d.state.conversationDelivery,undefined);
 });

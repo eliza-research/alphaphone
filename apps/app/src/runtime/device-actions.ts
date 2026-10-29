@@ -1,3 +1,4 @@
+import {authoredBrowserDestination,browserDestinationMatches} from '../../../../.eliza/client-features/packages/contracts/src/browser-request-grounding.ts';
 import {createDeviceActionExecution} from '../../../../.eliza/client-features/packages/contracts/src/device-action-execution.ts';
 import {browserNavigationSummary} from './action-message-presentation';
 import {namedCalendarReadTarget} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/client/named-read.ts';
@@ -19,6 +20,8 @@ import {CALENDAR_AGENDA_CAPABILITY,calendarSource,type CalendarSource,type Calen
 import { isMvpView } from "../prototype/mvp-features";
 import { parseWorkflowBinding, parseWorkflowRead, validateWorkflowResult, assertWorkflowOperation, type WorkflowReadOperation, type WorkflowReadResult, type WorkflowDeviceBinding, type WorkflowPhoneReview } from './workflow-device-contract';
 import type { AlphaClient, ActionProposal, ContextEnvelope, OperationReceipt, VerifiedSession } from './alpha-client';
+
+export type CurrentDeviceActionRequest={readonly messageId:string;readonly text:string;readonly current:()=>void};
 
 export type WorkflowPresentationOperation = {type:'post_notification';title:string;body:string}|{type:'speak_text';text:string};
 export type DeviceOperation = CameraCaptureOperation | SmsSendOperation | ReminderCreateOperation | WorkflowPresentationOperation | ClockOperation | MapsOperation | LibraryAgentOperation | ReminderOperation | NotesOperation | NativeNotesQueryOperation | CalendarOperation | WorkflowReadOperation | { type: 'create_note'; title: string; body: string }
@@ -215,6 +218,8 @@ export class DeviceActions {
   get supportsCalendarAgenda(){return this.credential.capabilities?.includes(CALENDAR_AGENDA_CAPABILITY)===true;}
   private proposals = new Map<string, { proposal: Proposal; context: ContextEnvelope; workflowReview?:WorkflowPhoneReview }>();
   private readReplies = new Map<string,{digest:string;origin:NativeNotesReadReplyOrigin;hint?:NativeNotesReadReplyHint;consumed?:boolean}>();
+  private readonly browserRequestedAttempts=new Map<string,CurrentDeviceActionRequest>();
+  private readonly browserPolicyBlocks=new Map<string,{digest:string;requestMessageId:string;binding:string;summary:string}>();
   private busy = false;
   constructor(readonly session: VerifiedSession, readonly credential: DeviceCredential, readonly scope: string,
     private request: (path: string, body: unknown | undefined, signal: AbortSignal) => Promise<unknown>,
@@ -270,12 +275,31 @@ export class DeviceActions {
     const description = op.type==='read_calendar_range'&&!proposal.workflow?`Share this app Calendar from ${formatDeviceRecordDateTime(op.start,op.timeZone)} to ${formatDeviceRecordDateTime(op.end,op.timeZone)} (end not included), in ${op.timeZone}. Only this range is shared; other calendars, descriptions, locations and guests stay private.`:isNativeNotesQuery(op)?(op.query.kind==='title'?`Look for the title “${op.query.text}” locally. Choose and review one note before sharing its text.`:`Find the latest ${op.query.by} note locally. Unknown dates or ties require your choice; only the chosen note is shared.`):record?.description ?? (isClockOperation(op) ? describeClockHandoff(op) : isMapsOperation(op) ? 'Send the exact selected place location or route endpoints, mode and distance to the connected agent. This shares location information. It does not start navigation.' : op.type === 'open_view' ? `Open ${op.view} on this phone` : op.type==='browser_navigate'?`Open browser destination ${op.url}`:'Workflow phone read');
     return { id: proposal.id, title:op.type==='read_calendar_range'&&!proposal.workflow?'Share Calendar agenda':record?.title ?? op.type.replaceAll('_', ' '), description, expiresAt: proposal.expiresAt, contextRevision: context.revision,...notesDestination,...(isNativeNotesQuery(op)&&!['home','notes'].includes(context.view)?{reviewDestination:'home' as const}:{}),...(isNativeNotesQuery(op)||op.type==='notes_read_selected'?{privateNotesRead:true as const}:{}),...(proposal.readReplyOrigin?{readReply:{origin:structuredClone(proposal.readReplyOrigin),digest:proposal.digest}}:{}) };
   }
-  private async review(context: ContextEnvelope, signal: AbortSignal): Promise<{ items: PendingReviewItem[]; failures: Error[] }> {
+  private async review(context: ContextEnvelope, signal: AbortSignal, authoredRequest?:CurrentDeviceActionRequest): Promise<{ items: PendingReviewItem[]; failures: Error[] }> {
+    const binding=JSON.stringify([this.session.sessionId,this.session.ownerId,this.session.agentId,this.session.origin,this.credential.installationId,this.credential.enrollmentId]);
+    authoredRequest?.current();
     const { valid, invalid } = await this.listing(signal);
-    signal.throwIfAborted(); this.proposals.clear();
+    authoredRequest?.current();signal.throwIfAborted(); this.proposals.clear();
     const items: PendingReviewItem[] = [];
     for (const proposal of valid) {
       if (proposal.workflow || proposal.state !== 'pending' || proposal.expiresAt <= Date.now()) continue;
+      // Filter before constructing a new approval card. Only this exact current
+      // request may cause a refusal; unrelated/old/workflow proposals stay untouched.
+      if(proposal.operation.type==='browser_navigate'){
+        const prior=this.browserPolicyBlocks.get(proposal.id);
+        if(prior&&prior.digest===proposal.digest&&prior.requestMessageId===proposal.requestMessageId&&prior.binding===binding){
+          if(authoredRequest?.messageId===proposal.requestMessageId)items.push({proposal:null,notice:prior.summary,proposalId:proposal.id});
+          continue;
+        }
+        if(authoredRequest&&proposal.requestMessageId===authoredRequest.messageId&&!browserDestinationMatches(proposal.operation,authoredBrowserDestination(authoredRequest.text))){
+          authoredRequest.current();signal.throwIfAborted();
+          const block={digest:proposal.digest,requestMessageId:authoredRequest.messageId,binding,summary:'Browser navigation was blocked because this destination was not requested. No navigation or approval decision was sent.'};
+          this.browserPolicyBlocks.set(proposal.id,block);
+          // This is a local legacy-host defense, never an attributed human
+          // rejection or a claim that the host durably dismissed its proposal.
+          items.push({proposal:null,notice:block.summary,proposalId:proposal.id});continue;
+        }
+      }
       const card = this.card(proposal, context), notice = (isNativeNotesQuery(proposal.operation)&&!context.sensitive)||card.reviewDestination==='notes'||card.reviewDestination==='calendar' ? undefined : proposalContextNotice(proposal.operation, context);
       const origin={proposalId:proposal.id};
       if (notice) { items.push({ proposal: null, notice: `${card.title}: ${notice}`, ...origin }); continue; }
@@ -288,8 +312,8 @@ export class DeviceActions {
     return { items, failures };
   }
   /** Reviewable proposals plus owner-visible notices for pending ones that do not fit this screen. */
-  async pendingReview(context: ContextEnvelope, signal: AbortSignal): Promise<PendingReviewItem[]> {
-    return (await this.review(context, signal)).items;
+  async pendingReview(context: ContextEnvelope, signal: AbortSignal, authoredRequest?:CurrentDeviceActionRequest): Promise<PendingReviewItem[]> {
+    return (await this.review(context, signal,authoredRequest)).items;
   }
   /** Reviewable proposals only. An invalid proposal fails the call only when nothing else is reviewable. */
   async pending(context: ContextEnvelope, signal: AbortSignal): Promise<ActionProposal[]> {
@@ -302,15 +326,33 @@ export class DeviceActions {
    * Only reversible local actions bypass the optional review. Sends, deletes, private
    * reads and Calendar/reminder writes retain their recorded separate review policy.
    * Recovery, workflows and old hosts remain review-only; ordinary OS permissions still apply. */
-  async performRequested(messageId:string,context:ContextEnvelope,signal:AbortSignal,allowed:()=>Promise<boolean>,operationType?:ReviewableDeviceOperation['type']):Promise<OperationReceipt[]> {
+  async performRequested(messageId:string,context:ContextEnvelope,signal:AbortSignal,allowed:()=>Promise<boolean>,operationType?:ReviewableDeviceOperation['type'],authoredRequest?:CurrentDeviceActionRequest):Promise<OperationReceipt[]> {
     const directTypes:readonly ReviewableDeviceOperation['type'][]=['create_note','open_view','browser_navigate','camera_capture_photo','photo_library_select'];
+    const binding=JSON.stringify([this.session.sessionId,this.session.ownerId,this.session.agentId,this.session.origin,this.credential.installationId,this.credential.enrollmentId]);
+    const attemptKey=JSON.stringify([binding,messageId]);
+    const requestedBrowserUrl=authoredRequest?.messageId===messageId?authoredBrowserDestination(authoredRequest.text):undefined;
     const results:OperationReceipt[]=[];
     for(const [id,entry] of [...this.proposals]) {
       if(results.length>=4||!directTypes.includes(entry.proposal.operation.type)||entry.proposal.workflow||entry.proposal.requestMessageId!==messageId||(operationType!==undefined&&entry.proposal.operation.type!==operationType))continue;
+      if(entry.proposal.operation.type==='browser_navigate'){
+        const block=this.browserPolicyBlocks.get(id);
+        if(block?.requestMessageId===messageId&&block.digest===entry.proposal.digest&&block.binding===binding||this.browserRequestedAttempts.has(attemptKey))continue;
+      }
+      if(entry.proposal.operation.type==='browser_navigate'&&!browserDestinationMatches(entry.proposal.operation,requestedBrowserUrl))continue;
+      if(entry.proposal.operation.type==='browser_navigate')authoredRequest?.current();
       // A navigation-only card is not an executable read/write, even in direct-request mode.
       if(this.card(entry.proposal,context).reviewDestination)continue;
       if(!await allowed())break;
       signal.throwIfAborted();
+      if(entry.proposal.operation.type==='browser_navigate')authoredRequest?.current();
+      if(entry.proposal.operation.type==='browser_navigate'&&!browserDestinationMatches(entry.proposal.operation,requestedBrowserUrl))continue;
+      if(entry.proposal.operation.type==='browser_navigate'){
+        if(!authoredRequest||this.browserRequestedAttempts.has(attemptKey))continue;
+        for(const [key,proof] of this.browserRequestedAttempts){try{proof.current();}catch{this.browserRequestedAttempts.delete(key);}}
+        // Never evict a live once marker or retry a possibly dispatched effect.
+        if(this.browserRequestedAttempts.size>=128)continue;
+        this.browserRequestedAttempts.set(attemptKey,authoredRequest);
+      }
       const result=await this.approve(id,context,signal);results.push(result);
       if(result.status!=='succeeded'||signal.aborted)break;
     }
