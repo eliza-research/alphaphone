@@ -1336,6 +1336,8 @@
   <sc-if value="{{browser.editing}}">
     <div class="scr" style="position: absolute; top: 100px; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--bg); overflow-y: auto; padding: 6px 0 140px">
       <sc-if value="{{browser.profileUnsupportedEditing}}"><p role="status" aria-label="In-app browsing unavailable" data-alpha-browser-unsupported style="margin:16px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--s2);color:var(--fg);font-size:15px;line-height:1.5">{{browser.profileUnsupportedMessage}}</p></sc-if>
+      <!-- The suggestions cover the page and its toolbar badge, so a private tab discloses itself here too (the covered page is inert). -->
+      <sc-if value="{{browser.isPrivate}}"><p role="note" aria-label="Private tab notice" style="margin: 10px 22px 12px; display: flex; align-items: baseline; gap: 10px; font-size: 14.5px; line-height: 1.4; color: var(--mut)"><span style="flex-shrink: 0; padding: 2px 8px; border-radius: 10px; background: var(--fg); color: var(--bg); font-size: 11.5px; font-weight: 700; letter-spacing: .02em">Private</span><span>{{browser.privateNotice}}</span></p></sc-if>
       <sc-for list="{{browser.sugg}}" as="s">
         <button class="tap" onClick="{{s.go}}" style="width: 100%; display: flex; align-items: center; gap: 16px; padding: 0 22px; min-height: 60px; box-sizing: border-box; text-align: left">
           <svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px; color: var(--mut)"><path d="{{s.d}}"></path></svg>
