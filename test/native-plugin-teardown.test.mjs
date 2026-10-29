@@ -75,7 +75,7 @@ function blocks(code) {
 }
 
 const ANSWERS_A_STOPPED_EXECUTOR = new Set(["RejectedExecutionException", "java.util.concurrent.RejectedExecutionException", "RuntimeException", "Exception", "Throwable"]);
-const EXECUTOR_TYPES = "ExecutorService|ScheduledExecutorService|ThreadPoolExecutor|ScheduledThreadPoolExecutor|Executor|WorkflowNoticeIo";
+const EXECUTOR_TYPES = "ExecutorService|ScheduledExecutorService|ThreadPoolExecutor|ScheduledThreadPoolExecutor|Executor|NoticeWorker";
 
 /** Hand-offs to an executor field of this file (or the shared journal plugin's worker()). */
 function handOffs(name, code) {
@@ -113,8 +113,6 @@ const REVIEWED = [
     why: "runs in the constructor, on a timer created by that same object's field initialiser; nothing can have stopped it yet" },
   { file: "IsolatedPdfService.java", receiver: "worker", method: "execute", count: 1,
     why: "not a plugin: an isolated service whose onDestroy kills its own process right after stopping the worker; a request outside the isolated process is refused before the hand-off" },
-  { file: "WorkflowNoticeIo.java", receiver: "executor", method: "execute", count: 1,
-    why: "the wrapper itself; it deliberately lets the rejection reach its callers, and every NOTICE_IO.execute call is scanned here" },
 ];
 
 /** A lifetime exception is safe only while the executor cannot escape or be stopped. */
@@ -144,7 +142,7 @@ test("notification dispatcher outlives sessions and cannot escape to a shutdown 
 test("the scanner sees the executors the app really has", () => {
   // A scanner that silently finds nothing would pass every assertion below.
   assert.ok(sites.length >= 30, `only ${sites.length} executor hand-offs were found`);
-  for (const name of ["AlphaDevicePlugin.java", "AlphaMailAttachmentsPlugin.java", "AlphaActionJournalPlugin.java", "AlphaLocalAgentPlugin.java", "AlphaNotificationsPlugin.java", "BrowserDownloads.java", "AlphaConnectionPlugin.java"])
+  for (const name of ["AlphaDevicePlugin.java", "AlphaMailAttachmentsPlugin.java", "AlphaActionJournalPlugin.java", "AlphaLocalAgentPlugin.java", "BrowserDownloads.java", "AlphaConnectionPlugin.java"])
     assert.ok(sites.some(site => site.file === name), `${name}: no executor hand-off found`);
   const sample = "class A{private final ExecutorService w=null;void a(PluginCall c){w.execute(()->{});}void b(){try{w.execute(()->{});}catch(RejectedExecutionException e){}}void c(){try{run(()->{w.execute(()->{});});}catch(Exception e){}}void d(){try{w.execute(()->{});}catch(java.io.IOException e){}}}";
   assert.deepEqual(handOffs("A.java", mask(sample)).map(site => site.guarded), [false, true, false, false],
