@@ -57,6 +57,8 @@ export const DENYLIST = Object.freeze([
   'Browser sign-in (diagnostic)', 'staging.eliza.app/alphaphone',
   ...RETIRED_SIGN_IN_HAND_OFF_TEXT,
   'Browser calendar (development)',
+  // The read-only OS update-channel check is registered off; its About row is development only.
+  'Update channel (development)',
 ]);
 const TEXT = /\.(?:html?|js|mjs|cjs|css|json|txt|svg|xml|webmanifest)$/i;
 
