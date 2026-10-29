@@ -6,13 +6,18 @@
 export {
  NOTE_ORIGIN_LIMIT as noteOriginLimit,
  addNoteOrigin,
+ findNoteLink,
  findNoteOrigin,
  noteOriginFor,
  noteOriginIndex,
  noteOriginKey,
  noteOriginOf,
  noteOriginTitle,
+ noteLinkOf,
+ recordNoteOriginOf,
+ recordNoteRevision,
  removeNoteOrigin,
+ resolveNoteLink,
  resolveNoteOrigin,
 } from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/note-origin.ts';
-export type {NoteOrigin,NoteOriginIndex,NoteOriginKind} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/note-origin.ts';
+export type {NoteLink,NoteOrigin,NoteOriginIndex,NoteOriginKind,RecordNoteOrigin} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/note-origin.ts';
