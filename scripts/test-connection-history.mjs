@@ -26,7 +26,7 @@ const { presentDeviceRecordOperation } = await import('../apps/app/src/runtime/d
 const subscriptionEntitlement = await import('../apps/app/src/runtime/subscription-entitlement.ts');
 const { AlphaClient, AlphaClientError } = await import('../apps/app/src/runtime/alpha-client.ts');
 const {loadBrowserModule}=await import('../test/fixtures/browser-source.mjs');
-const {LocalAgentProtocol}=await loadBrowserModule('apps/app/src/runtime/local-agent.ts');
+const [{LocalAgentProtocol},{withResidentMapsNavigation}]=await loadBrowserModule(['apps/app/src/runtime/local-agent.ts','apps/app/src/maps/resident-relay.ts']);
 const { ClientObservationSupportSession } = await import('../apps/app/src/runtime/client-observation-support.ts');
 const user = '11111111-1111-4111-8111-111111111111', agent = '22222222-2222-4222-8222-222222222222', organization = '99999999-9999-4999-8999-999999999999';
 const personal = 'personal:12345678-1234-5234-8234-123456789abc', agentHost = `https://${agent}.cloud.eliza.app`;
@@ -119,7 +119,7 @@ const retireClockReviews=async()=>{clockRetirements++;clockRetirementStarted?.()
 // has none and starts no Cloud route; test/browser/connection-boundaries.production.spec.ts covers it.
 const sandbox = { validateUuid, isCalendarReadFailureCode, appRecordInvalidations,AUTOMATIONS_COMMITTED_EVENT,automationsCommitted, browserCloudResidentEnabled:false,browserCloudResidentEnvironment:'production',...residentRecovery,CAMERA_CAPTURE_CAPABILITY:'camera.capture-photo.v1',clockHandoffCapabilities,readDevicePreferences:async()=>({askBeforeAgentActions:true}),  resolveCloudEnvironment,fixtureViteEnv:{DEV:true},...subscriptionEntitlement, ...cloudSignInModule, cloudSignIn:undefined, cloudSignInGoogle:false, AlphaClientError, browserLocalAgentEnabled:true, retireClockReviews, workflowPresentationProtocol:async()=>2, browserDevProfile:false,privateLocalPreviewEnabled:false, devProfileQuery:false, testMocksEnabled:true, devSurfacesEnabled:true, secureConnectionStore:{read:async slot=>deviceSlots.get(slot)??null,write:async(slot,value)=>{deviceSlots.set(slot,value);},remove:async slot=>{deviceSlots.delete(slot);}},
   PersonalProtocolError, ClientObservationSupportSession, personalIntent:async()=>null, savePersonalIntent:async(_owner,intent)=>intent, clearPersonalIntent:async()=>{},
-  RemoteProtocol, remoteCredentialStore, nativeRemoteRequest, DeviceActions, presentDeviceRecordOperation, actionScope:async value=>Buffer.from(value).toString('base64url').slice(0,32), negotiateEnabledViews:async()=>'',
+  withResidentMapsNavigation, RemoteProtocol, remoteCredentialStore, nativeRemoteRequest, DeviceActions, presentDeviceRecordOperation, actionScope:async value=>Buffer.from(value).toString('base64url').slice(0,32), negotiateEnabledViews:async()=>'',
   Capacitor:{getPlatform:()=>'web',isNativePlatform:()=>false},aospImage:false,SMS_SEND_CAPABILITY:'sms.send.v1', setTimeout:(callback,ms)=>setTimeout(callback,ms===15000?20:ms), clearTimeout, Intl, Date, Buffer, pauseHostedBackground:async()=>{}, configureHostedBackground:async()=>{}, registerPlugin: () => ({}), cloudServiceName, CloudProtocol, DevelopmentCloudAgentProtocol, CloudProvisionAcceptedError, phoneContextMessage, findStoppedUserTurn, nativeCloudRequest,
   cloudCredentialStore: { read: async () => credential, write: async (_environment, value) => { credential = value; }, clear: async () => { credential = null; } },
   openConnectionBrowser: async () => { throw new Error('Unexpected browser effect'); },
@@ -345,7 +345,8 @@ try {
       statusReads++;
       value={serverInstanceId:processId,clientTurnObservationSupport:{version:1,optionalFields:['calendarDay']}};
       if(holdStatus){statusStarted?.();value=await new Promise(resolve=>{releaseStatus=()=>resolve(value);});}
-    }else if(input.path==='/api/conversations')value={conversations:[{id:conversation,title:'Observation fixture'}]};
+    }else if(input.path==='/api/conversations'&&input.method==='POST'){assert.deepEqual(JSON.parse(input.body),{title:'Alpha Phone'});value={conversation:{id:conversation,title:'Observation fixture'}};}
+    else if(input.path==='/api/conversations')value={conversations:[{id:conversation,title:'Observation fixture'}]};
     else if(input.path.endsWith('/messages')&&input.method==='GET')value={messages:[]};
     else if(input.path.endsWith('/messages')&&input.method==='POST'){actualWires.push(JSON.parse(input.body));value={text:'Synthetic answer',agentName:'Observation fixture'};}
     else throw Error('Unexpected observation fixture route: '+input.path);
@@ -354,7 +355,7 @@ try {
   const local=new LocalAgentProtocol(bridge),alpha=new AlphaClient();
   const bind=async()=>{
     await local.connect(new AbortController().signal);sandbox.observationFixture.activate(local,1);
-    alpha.attachVerifiedTransport({session:local.session,send:input=>controller.send(input.text,input.context,input.requestId,input.signal,input.onText,input.replyTo,input.onReplyReady,input.channelType??'DM',input.expectedConversationId,input.voiceTurnSignal),execute:async()=>{throw Error('No effects in the observation fixture');}});
+    alpha.attachVerifiedTransport({session:local.session,send:input=>controller.send(input.text,input.context,input.requestId,input.signal,input.onText,input.replyTo,input.onReplyReady,input.channelType??'DM',input.expectedConversationId,input.voiceTurnSignal).catch(error=>{console.error('Observation fixture controller rejection:',{name:error?.name,message:error?.message});throw error;}),execute:async()=>{throw Error('No effects in the observation fixture');}});
   };
   await bind();alpha.setViewContext(calendar);await alpha.send('Move my 3pm to 4');
   assert.equal(actualWires.at(-1).text,'Move my 3pm to 4');assert.equal((JSON.stringify(actualWires.at(-1)).match(/"calendarDay"/g)||[]).length,1);assert.deepEqual(actualWires.at(-1).metadata.clientDevice.context.calendarDay,day);
