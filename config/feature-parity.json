@@ -3,7 +3,7 @@
   "reference": "ELIZA_MOBILE_PRODUCT",
   "ceiling": {
     "differences": 20,
-    "modules": 553
+    "modules": 555
   },
   "differences": {
     "view:clock:only-b": "Eliza offers Clock; Alpha hands alarms and timers to the Android clock (clock.handoff) without a Clock view.",
@@ -92,6 +92,7 @@
     "android/app/src/main/java/ai/elizaresearch/alphaphone/ClockHandoff.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/CloudDeployment.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/CloudSpeechPolicy.java",
+    "android/app/src/main/java/ai/elizaresearch/alphaphone/CloudVoiceLimit.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/ConnectionRoutes.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/DailyAppsPlugin.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/DeferredDeletionJournal.java",
@@ -457,6 +458,7 @@
     "apps/app/src/runtime/cloud-service-info.ts",
     "apps/app/src/runtime/cloud-sign-in-ui.tsx",
     "apps/app/src/runtime/cloud-sign-in.ts",
+    "apps/app/src/runtime/cloud-voice-limit.ts",
     "apps/app/src/runtime/cloud-voice.ts",
     "apps/app/src/runtime/connection-ui.tsx",
     "apps/app/src/runtime/conversation-selection.ts",
