@@ -44,7 +44,9 @@ test('a deterministic stage refusal never leaves a permanent agent claim',()=>{
  const adapter=readFileSync('apps/app/src/prototype/reminder-adapter.ts','utf8');
  assert.match(adapter,/const refusal=reminderDeletionRefusal\(reviewed\.status\);/);
  // Refusal wording is the shared contract's; Alpha re-exports it from the pin.
- assert.match(readFileSync('apps/app/src/runtime/deletions.ts','utf8'),/export \{reminderDeletionRefusal\} from '..\/..\/..\/..\/.eliza\/client-features\/packages\/contracts\/src\/deletion-window';/);
+ // A local wrapper, not a re-export: a forwarded re-export let the bundler move the browser
+ // development modules out of the entry chunk (scripts/audit-production-bundle.mjs).
+ assert.match(readFileSync('apps/app/src/runtime/deletions.ts','utf8'),/export function reminderDeletionRefusal\(status:string\)\{return sharedRefusal\(status\);\}/);
  const contract=readFileSync('.eliza/client-features/packages/contracts/src/deletion-window.ts','utf8');
  for(const status of ['stale','unavailable','not-staged'])assert.match(contract,new RegExp(`case "${status}":`));
  assert.doesNotMatch(contract,/case "unknown":/,'unknown remains an uncertain outcome');
