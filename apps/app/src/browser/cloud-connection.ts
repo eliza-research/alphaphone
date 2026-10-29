@@ -3,6 +3,7 @@ import {anyAbortSignal} from '../runtime/abort-signal';
 import {googleAuthorizationUrlAllowed} from '../runtime/google-authorization';
 import {WebPlugin} from '@capacitor/core';
 import type {CloudCredential,CloudEnvironment} from '../runtime/cloud-protocol';
+import {cloudVoiceLimitOf,type CloudVoiceLimitFacts} from '../runtime/cloud-voice-limit';
 
 const endpoint='/__alpha-browser-cloud';
 const references=new Map<string,string|null>();
@@ -60,7 +61,12 @@ export async function browserCloudVoice(input:{environment:string;credentialId:s
   if(!(payload instanceof Blob))throw Error('Recorded audio required');const form=new FormData();for(const [key,value]of Object.entries(values))form.append(key,value);form.append('audio',payload,'recording');
   response=await fetch(endpoint,{method:'POST',headers:{'X-Alpha-Browser-Cloud':'1'},body:form,signal:anyAbortSignal([signal,AbortSignal.timeout(120000)]),redirect:'error'});
  }else response=await browserCloudCall({...values,text:payload},signal);
- signal.throwIfAborted();if(!response.ok){await response.body?.cancel();throw Object.assign(Error('Cloud voice request failed.'),{code:'voice-http-'+response.status,status:response.status});}return response;
+ signal.throwIfAborted();if(!response.ok){
+  // The development bridge passes a 429's retry facts only (cloud-voice-limit.ts); they are validated again.
+  let data:CloudVoiceLimitFacts|undefined;
+  if(response.status===429){try{const body=await response.json() as {limit?:unknown};data=cloudVoiceLimitOf({code:'voice-http-429',data:body?.limit})??undefined;}catch{data=undefined;}}else await response.body?.cancel();
+  throw Object.assign(Error('Cloud voice request failed.'),{code:'voice-http-'+response.status,status:response.status,...(data?{data}:{})});
+ }return response;
 }
 /** Development host in-app sign-in (email code). The host keeps the Steward session and the key;
  * this page receives only the non-secret outcome. Google needs the phone's App Link return. */

@@ -2481,6 +2481,15 @@ export const connectionController = {
     entitlementRefresher?.refreshNow();
   },
   /** A billing refusal asks for fresh plan state; the failed turn is never retried. */
+  /**
+   * A Cloud limit seen outside a chat turn (a Cloud speech 429, cloud-voice.ts) becomes the account
+   * panel's latest limit with its retry time, the same record a refused turn writes. Only for the
+   * Cloud session the request was made with; a late refusal for an earlier account is dropped.
+   */
+  noteCloudServiceLimit(limit: ServiceLimit | null, sessionId: string | undefined) {
+    if(!limit||!sessionId||!service||service.identity.sessionId!==sessionId)return false;
+    update({lastServiceLimit:{...limit,observedAt:Date.now()}});return true;
+  },
   recheckPlanAfterRefusal() {
     if(!residentCloudFlow()||!entitlementRefresher)return;
     // Deliver the terminal refusal before refreshing a plan that could rebind the resident.

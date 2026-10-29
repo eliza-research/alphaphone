@@ -130,9 +130,11 @@ test('only admission and its background refresher read the entitlement; turns an
   const walk = dir => { for (const entry of fs.readdirSync(dir, {withFileTypes: true})) { const path = `${dir}/${entry.name}`; if (entry.isDirectory()) walk(path); else if (/\.(ts|tsx|js|mjs)$/.test(entry.name) && /subscription-entitlement/.test(fs.readFileSync(path, 'utf8'))) importers.push(path); } };
   walk('apps/app/src');
   // The upstream plugin-maps device provider reads Cloud Maps limits with this shared reader.
-  assert.deepEqual(importers.sort(), ['apps/app/src/maps/cloud-maps.ts', 'apps/app/src/prototype/settings-adapter.ts', 'apps/app/src/runtime/cloud-membership-ui.tsx', 'apps/app/src/runtime/cloud-protocol.ts', 'apps/app/src/runtime/connection-ui.tsx', 'apps/app/src/runtime/diagnostics-export.ts', 'apps/app/src/runtime/subscription-entitlement.ts']);
+  assert.deepEqual(importers.sort(), ['apps/app/src/maps/cloud-maps.ts', 'apps/app/src/prototype/settings-adapter.ts', 'apps/app/src/runtime/cloud-membership-ui.tsx', 'apps/app/src/runtime/cloud-protocol.ts', 'apps/app/src/runtime/cloud-voice.ts', 'apps/app/src/runtime/connection-ui.tsx', 'apps/app/src/runtime/diagnostics-export.ts', 'apps/app/src/runtime/subscription-entitlement.ts']);
   for (const [file, typeOnly, names] of [
     ['apps/app/src/maps/cloud-maps.ts', false, ['readServiceLimit']],
+    // A Cloud speech 429 reads as the shared limit with its retry time (cloud-voice-limit.ts).
+    ['apps/app/src/runtime/cloud-voice.ts', false, ['readServiceLimit', 'retryDuration', 'type ServiceLimit']],
     ['apps/app/src/prototype/settings-adapter.ts', false, ['planAdmission']],
     ['apps/app/src/runtime/diagnostics-export.ts', true, ['PlanAdmission', 'PlanStatus', 'SubscriptionView']],
     ['apps/app/src/runtime/cloud-membership-ui.tsx', false, ['alphaSubscriptionCopy', 'type ServiceLimit', 'type SubscriptionView']],

@@ -81,7 +81,7 @@ for(const [code,message] of [
  ['voice-stt-upload','The recording upload could not be confirmed. Your recording is kept. Check your connection before trying again.'],
  ['voice-stt-response','Cloud voice returned no usable transcript. Your recording is kept. Try again later.'],
  ['voice-http-400','Cloud voice could not complete this request (400). Try again later.'],
- ['voice-http-429','Cloud voice could not complete this request (429). Try again later.'],
+ ['voice-http-429',"Eliza Cloud voice reached your plan's request limit. Wait a moment, then try again. Your recording is kept."],
  ['voice-http-503','Cloud voice could not complete this request (503). Try again later.'],
 ] as const)test(`${code} retains the recording and allows only an explicit retry`,async({page})=>{
  const f=await cloudNotesVoiceFixture(page);await page.evaluate(code=>(window as any).cloudNotesVoice.failureCode=code,code);await openNotesRecorder(page);await recordClosedClip(page);
@@ -89,6 +89,23 @@ for(const [code,message] of [
  await expect(notesRecorder(page).getByRole('button',{name:'Transcribe with Eliza Cloud',exact:true})).toBeEnabled();await expect(notesRecorder(page).getByRole('button',{name:'Record again',exact:true})).toBeVisible();expect(await page.evaluate(()=>(window as any).cloudNotesVoice.uploads)).toBe(1);
  await page.evaluate(()=>(window as any).cloudNotesVoice.failureCode=null);await notesRecorder(page).getByRole('button',{name:'Transcribe with Eliza Cloud',exact:true}).click();await expect(notesRecorder(page).getByRole('textbox',{name:'Review transcript',exact:true})).toHaveValue('Closed Cloud transcript');
  expect(await page.evaluate(()=>{const f=(window as any).cloudNotesVoice;return {uploads:f.uploads,same:f.requests[0].recordingId===f.requests[1].recordingId&&f.requests[0].recordingId===f.clip};})).toEqual({uploads:2,same:true});await noPhysicalOrLocalVoice(page);expect(f.foreign).toEqual([]);
+});
+
+test('a Cloud speech 429 keeps the clip, shows the retry time and records the account limit',async({page})=>{
+ const f=await cloudNotesVoiceFixture(page);
+ await page.evaluate(async()=>{const v=(window as any).cloudNotesVoice;v.failureCode='voice-http-429';v.failureData={retryAfterSeconds:42,limitCode:'rate_limited',message:'PRIVATE_PROVIDER_BODY_SENTINEL'};v.limits=[];
+  const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');c.noteCloudServiceLimit=(limit:any,sessionId:any)=>{v.limits.push({kind:limit?.kind,retryAfterMs:limit?.retryAfterMs,sessionId});return true;};});
+ await openNotesRecorder(page);await recordClosedClip(page);
+ await notesRecorder(page).getByRole('button',{name:'Transcribe with Eliza Cloud',exact:true}).click();
+ await expect(notesRecorder(page)).toContainText("Eliza Cloud voice reached your plan's request limit. Try again in about 42 seconds. Your recording is kept.");
+ await expect(notesRecorder(page)).not.toContainText('PRIVATE_PROVIDER_BODY_SENTINEL');await expect(notesRecorder(page)).not.toContainText('PRIVATE_TRANSCRIPTION_SENTINEL');
+ await expect(notesRecorder(page).getByRole('button',{name:'Transcribe with Eliza Cloud',exact:true})).toBeEnabled();
+ expect(await page.evaluate(()=>(window as any).cloudNotesVoice.limits)).toEqual([{kind:'rate-limited',retryAfterMs:42_000,sessionId:'fixture-account-a'}]);
+ // The kept clip is the one an explicit retry uploads.
+ await page.evaluate(()=>{const v=(window as any).cloudNotesVoice;v.failureCode=null;v.failureData=null;});await notesRecorder(page).getByRole('button',{name:'Transcribe with Eliza Cloud',exact:true}).click();
+ await expect(notesRecorder(page).getByRole('textbox',{name:'Review transcript',exact:true})).toHaveValue('Closed Cloud transcript');
+ expect(await page.evaluate(()=>{const v=(window as any).cloudNotesVoice;return {uploads:v.uploads,same:v.requests[0].recordingId===v.requests[1].recordingId&&v.requests[0].recordingId===v.clip};})).toEqual({uploads:2,same:true});
+ await noPhysicalOrLocalVoice(page);expect(f.foreign).toEqual([]);
 });
 
 for(const exit of ['cancel','background','account'] as const)test(`${exit} during Cloud transcription retires late words without saving`,async({page})=>{
