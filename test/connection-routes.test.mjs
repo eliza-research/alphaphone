@@ -2,13 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
-import {nativeSource,fixture,runJvm} from './fixtures/jvm-tools.mjs';
+import {nativeSource,fixture,runJvm,upstreamConnection} from './fixtures/jvm-tools.mjs';
 
 // Plain-JVM compile and run of the native renderer-transport route policy. This does not build an
 // APK, run on Android, or contact Eliza Cloud or any agent.
 // The JDK is JAVA_HOME, else the Homebrew openjdk@21 on darwin when it is installed, else javac on PATH.
 test('native transport refuses production pairing and non-Cloud origins and admits DELETE only for Cloud self-revocation',()=>{
- assert.match(runJvm([nativeSource('CloudDeployment.java'),nativeSource('ConnectionRoutes.java'),fixture('ConnectionRoutesTest.java')],'ai.elizaresearch.alphaphone.ConnectionRoutesTest'),/^PASS connection routes/);
+ assert.match(runJvm([nativeSource('CloudDeployment.java'),upstreamConnection('CloudConnectionPolicy.java'),nativeSource('ConnectionRoutes.java'),fixture('ConnectionRoutesTest.java')],'ai.elizaresearch.alphaphone.ConnectionRoutesTest'),/^PASS connection routes/);
 });
 
 // Source-order check of the plugin that applies the policy; the policy itself is run on the JVM above.
@@ -59,7 +59,8 @@ test('production refuses a direct (bring-your-own) provider key before reading i
  const method=source.slice(source.indexOf('@PluginMethod public void configureProvider('),source.indexOf('@PluginMethod public void clearProvider('));
  const gate=method.indexOf('if(!directProviderAllowed(BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS)){call.reject(');
  assert.ok(gate>0&&gate<method.indexOf('call.getString("apiKey"')&&gate<method.indexOf('saveVerifiedProvider('),'the gate precedes reading or saving the key');
- assert.match(source,/static boolean directProviderAllowed\(boolean testMocks\)\{return testMocks;\}/);
+ assert.match(source,/static boolean directProviderAllowed\(boolean testMocks\)\{return NativeProviderSlot\.directProviderAllowed\(testMocks\);\}/);
+ assert.match(readFileSync(resolve(import.meta.dirname,'../vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderSlot.java'),'utf8'),/public static boolean directProviderAllowed\(boolean testMocks\) \{\s+return testMocks;\s+\}/);
  const renderer=readFileSync(resolve(import.meta.dirname,'../apps/app/src/runtime/local-agent.ts'),'utf8');
  const configure=renderer.slice(renderer.indexOf('export async function configureLocalProvider('),renderer.indexOf('export async function localProviderStatus('));
  assert.ok(configure.indexOf("VITE_ELIZA_DEV_ALLOW_TEST_MOCKS==='1'))throw")>0&&configure.indexOf("VITE_ELIZA_DEV_ALLOW_TEST_MOCKS==='1'))throw")<configure.indexOf('native.configureProvider('),'the renderer refuses before the native call');

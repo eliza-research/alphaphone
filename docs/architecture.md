@@ -243,6 +243,8 @@ The production AlphaConnection boundary admits exact managed-service origin and 
 builds) is development infrastructure, not evidence of a resident runtime or
 production authentication.
 
+The route set, transport bounds, delegation-return admission and request registry behind AlphaConnection, and the provider slot binding, launch order (provider admission, then the native profile's embedding route) and attach admission behind the resident Agent bridge, are the shared `plugin-native-agent` `connection` and `runtime` policies. Renderer secure-slot admission (native-only namespaces, the compare-and-exchange allow-list and the credential slots) is the shared `SecureSlotPolicy`, and the last-intent-wins credential fence that orders Cloud sign-in, renderer credential writes and resident rebinds is the shared `CredentialIntentFence`, guarded by the resident lifecycle lock. Alpha supplies its plugin names, Cloud hosts (`CloudDeployment`), link scheme, slot names (`RendererCredentialSlots`) and the packaged `config/owner-routes.json`; the Capacitor plugins keep the Android plumbing and the resident lifecycle locks.
+
 ### Eliza Cloud sign-in ownership (in-app, 2026-10-14)
 
 October 27: the native client below is the shared elizaOS library `packages/auth/android`
@@ -412,6 +414,12 @@ overdue, undated to-do, reopen and refusal-message decisions are `plugin-assista
 `apps/app/src/runtime/reminder-creations.ts` and `reminder-deletions.ts` bind it to Alpha's
 installed slots (`reminder-creations:v1:device`, `reminder-deletions:v1:device`) and browser
 documents through `reminder-journal-store.ts`; reconciliation reads rows and receipts only.
+The reviewed deletion Undo window (ten seconds on a monotonic clock, delayed provider
+deletion, immediate suspension of reminder delivery, owner fences and no replay of an unknown
+outcome) is `@elizaos/capacitor-action-journal`'s `actionjournal.deletion` package, with the
+renderer contract in `@elizaos/contracts/deletion-window` and the notice in `@elizaos/ui`'s
+`DeferredDeletionNotice`. Alpha's `NativeDeletionCoordinator`, `AlphaDeletionsPlugin` and
+`runtime/deletion-undo.tsx` bind its ports, slot names and theme (`docs/deletion-undo.md`).
 
 The Clock hand-off contract is shared: `plugin-assistant`'s `clock-handoff.ts` (exported
 from `device-clock-review`) owns handoff validation, the capability policy, review text and
@@ -516,8 +524,14 @@ The feature XML is an additional telephony contract marker, never an alternative
 Contacts uses AlphaContacts, the shared AOSP-profile address book (`AddressBookPlugin` over
 `ContactsCatalog` in plugin-native-contacts) under Alpha's plugin name and image admission, and its
 native capability response. The Messages session (foreground-only provider rows, observer, read
-marking) and receipt labels are the shared `@elizaos/contracts/native-telephony-session`. The Phone view stays deferred in the renderer; on the image the dialer role surfaces are
-native (shared call screen and dial pad). Telephony contact reads recheck permission, unlock and lifecycle state
+marking) and receipt labels are the shared `@elizaos/contracts/native-telephony-session`. On the image the Phone view is admitted
+(`prototype/phone-adapter.ts`): recent calls come from the shared profile's bounded, unlocked,
+foreground-only `listRecentCalls` (READ_CALL_LOG, launcher manifest only, asked for only from the
+owner's control), and every dial, from the view or the agent's reviewed `phone.dial.v1` device action
+(`@elizaos/contracts/phone-dial`, advertised only with the profile), is a handoff to the system dial
+screen that never reports a call. The dialer role surfaces stay native (shared call screen and dial
+pad). The on-device `contacts.lookup.v1` dial target is not negotiated until the review has an owner
+number picker. Telephony contact reads recheck permission, unlock and lifecycle state
 before and after asynchronous provider reads.
 
 ### SMS/MMS on the image (#421)
