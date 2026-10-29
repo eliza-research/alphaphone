@@ -32,41 +32,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { signerDigest } from "./apk.mjs";
 import { adbFor, admitUnitApk, deviceFacts, installedApkSha256, PACKAGE, packageFacts, parseUnitArgs, requireConsistentApk } from "./provision-unit.mjs";
+import { apkUpdateAdmission, compareDomains, DOMAIN_SCRIPT, inPlaceUpdateFailures, integrityQuery as sharedIntegrityQuery, parseDomainInventory, parseIntegrityExport, readbackInventory } from "../vendor/eliza/packages/os/scripts/android/apk-release-record.mjs";
 
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
-/** Parse `sha256sum` lines from run-as into { domain: { file: digest } }. */
-export function parseDomainInventory(output) {
-  const domains = {};
-  for (const line of output.split(/\r?\n/)) {
-    const match = /^([0-9a-f]{64})\s+\.\/(\S.*)$/.exec(line.trim());
-    if (!match) continue;
-    const [, digest, file] = match;
-    const domain = file.includes("/") ? file.slice(0, file.indexOf("/")) : ".";
-    (domains[domain] ??= {})[file] = digest;
-  }
-  return domains;
-}
-
-/** Compare two domain inventories; returns human-readable differences. */
-export function compareDomains(before, after) {
-  const problems = [];
-  for (const domain of new Set([...Object.keys(before), ...Object.keys(after)])) {
-    const a = before[domain] ?? {}, b = after[domain] ?? {};
-    for (const file of Object.keys(a)) if (!(file in b)) problems.push(`${file} was lost`);
-      else if (a[file] !== b[file]) problems.push(`${file} changed`);
-    for (const file of Object.keys(b)) if (!(file in a)) problems.push(`${file} appeared`);
-  }
-  return problems.sort();
-}
-
-export function updateAdmission({ installedVersionCode, installedSigner, newVersionCode, newSigner }) {
-  const problems = [];
-  if (!Number.isInteger(installedVersionCode) || !Number.isInteger(newVersionCode) || newVersionCode <= installedVersionCode)
-    problems.push(`new versionCode ${newVersionCode} must be greater than the installed ${installedVersionCode}`);
-  if (!installedSigner || installedSigner !== newSigner) problems.push(`new signer ${newSigner ?? "none"} differs from the installed ${installedSigner ?? "unknown"}`);
-  return problems;
-}
+// The comparison, inventory and export parsers are shared with every product
+// (vendor/eliza/packages/os/scripts/android/apk-release-record.mjs); Alpha binds its package.
+export { compareDomains, DOMAIN_SCRIPT, parseDomainInventory, parseIntegrityExport, readbackInventory };
+export const updateAdmission = apkUpdateAdmission;
 
 /** Both variants share one package id, so an update never switches the unit's variant or build type. */
 export function unitApkMismatch(unit, apk) {
@@ -74,51 +47,9 @@ export function unitApkMismatch(unit, apk) {
   return `provisioned with the ${unit?.apk?.variant ?? "unknown"} ${unit?.apk?.build ?? "unknown"} APK, not ${apk.variant} ${apk.build}; pass the same --variant and --build`;
 }
 
-// Excludes caches and code-cache, which Android may clear at any time. adb joins the
-// arguments into one device-shell command line, so the script is one single-quoted word
-// whose patterns use double quotes (never globbed by either shell), and it ends with the
-// inner exit status so a failed walk can never read as an empty, unchanged inventory.
-export const DOMAIN_SCRIPT = 'find . -type f ! -path "./cache/*" ! -path "./code_cache/*" -exec sha256sum {} + ; echo "READBACK_EXIT=$?"';
-
-/** Parse one readback; null when run-as is refused (non-debuggable), throws when the walk failed. */
-export function readbackInventory(output) {
-  if (/run-as: package not debuggable|is not debuggable|Package .* is unknown/.test(output)) return null;
-  const exit = /^READBACK_EXIT=(\d+)\s*$/m.exec(output)?.[1];
-  if (exit !== "0") throw new Error(`App-data readback failed (exit ${exit ?? "missing"}): ${output.trim().split(/\r?\n/).slice(-3).join(" | ")}`);
-  return parseDomainInventory(output);
-}
-
 export const INTEGRITY_AUTHORITY = `${PACKAGE}.integrity`;
 /** The export query for one nonce; the URI is single-quoted for the device shell ("?" must not glob). */
-export const integrityQuery = nonce => {
-  if (!/^[0-9a-f]{32,128}$/.test(nonce)) throw new Error("Integrity nonce must be 32 to 128 hex characters");
-  return ["shell", "content", "query", "--uri", `'content://${INTEGRITY_AUTHORITY}/domains?nonce=${nonce}'`];
-};
-
-/**
- * Parse `content query` output of the integrity export into { domain: { "domain/<path HMAC>": content HMAC } }.
- * null when the installed build has no export; throws on a refused, failed or truncated export.
- */
-export function parseIntegrityExport(output) {
-  const text = String(output ?? "");
-  if (/Could not find provider|Unknown authority|No content provider found/i.test(text)) return null;
-  if (/Permission Denial|SecurityException|Exception|Error while accessing provider/.test(text))
-    throw new Error(`Integrity export failed: ${text.trim().split(/\r?\n/).slice(0, 2).join(" | ")}`);
-  const domains = {};
-  let rows = 0, end = null;
-  for (const line of text.split(/\r?\n/)) {
-    const match = /^Row: \d+ domain=(.+?), key=([0-9a-f]{64}|\d+), digest=([0-9a-f]{64})$/.exec(line.trim());
-    if (!match) continue;
-    const [, domain, key, digest] = match;
-    if (domain === "#end") { end = Number(key); continue; }
-    if (!/^[0-9a-f]{64}$/.test(key) || /[/,=]/.test(domain)) throw new Error(`Malformed integrity export row: ${line.trim()}`);
-    (domains[domain] ??= {})[`${domain}/${key}`] = digest;
-    rows++;
-  }
-  if (end === null) throw new Error("Integrity export has no end row; the output is truncated");
-  if (end !== rows) throw new Error(`Integrity export lists ${rows} files but its end row says ${end}`);
-  return domains;
-}
+export const integrityQuery = nonce => sharedIntegrityQuery(INTEGRITY_AUTHORITY, nonce);
 
 function readExport(adb, nonce) {
   return parseIntegrityExport(adb(integrityQuery(nonce), { allowFailure: true, withStderr: true }));
@@ -170,16 +101,7 @@ async function main() {
   const after = packageFacts(adb(["shell", "dumpsys", "package", PACKAGE]));
   const installedSha256 = installedApkSha256(adb);
   const domainsAfter = !domainsBefore ? null : method === "run-as" ? readDomains(adb) : readExport(adb, nonce);
-  const failures = [];
-  if (installedSha256 !== apk.sha256) failures.push("installed bytes differ from the admitted APK");
-  if (after.versionCode !== apk.versionCode) failures.push(`installed versionCode ${after.versionCode} is not ${apk.versionCode}`);
-  if (after.userId !== before.userId) failures.push("package uid changed (data would be unreachable)");
-  if (after.firstInstallTime !== before.firstInstallTime) failures.push("first-install time changed (the update replaced the install)");
-  if (domainsBefore) {
-    // An empty inventory would make the byte-identical check vacuous.
-    if (!Object.values(domainsBefore).some(files => Object.keys(files).length)) failures.push("no app data was found before the update; the readback proves nothing");
-    failures.push(...compareDomains(domainsBefore, domainsAfter ?? {}));
-  }
+  const failures = inPlaceUpdateFailures({ apk, before, after, installedSha256, domainsBefore, domainsAfter });
   const update = {
     createdAt: new Date().toISOString(),
     signerApiLevel: device.sdk,
