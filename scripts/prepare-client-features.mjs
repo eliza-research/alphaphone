@@ -210,6 +210,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-native-camera/src/definitions.ts',
   'plugins/plugin-native-camera/src/host-ports.ts',
   'plugins/plugin-native-camera/src/session.ts',
+  'plugins/plugin-native-camera/src/scan-document.ts',
   'plugins/plugin-assistant/src/services/device-actions/notes-query-result.ts',
   'packages/contracts/src/sms-send.ts',
   'plugins/plugin-assistant/src/services/device-actions/sms-contract.ts',

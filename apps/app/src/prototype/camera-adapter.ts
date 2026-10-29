@@ -3,6 +3,9 @@ import {validateCameraCaptureResult,type CameraCaptureResult} from '../../../../
 import {cameraAccessDenied,restartAfterResume,type CameraAccessKind as AccessKind} from '../../../../.eliza/client-features/plugins/plugin-native-camera/src/host-ports.ts';
 // The shared camera session owns the preview/capture/recording lifecycle; this adapter presents it.
 import {createCameraSession} from '../../../../.eliza/client-features/plugins/plugin-native-camera/src/session.ts';
+// A scanned page reaches Photos only through its explicit Keep, under one operation identity per capture.
+import {createScanCapture} from '../../../../.eliza/client-features/plugins/plugin-native-camera/src/scan-document.ts';
+import type {CameraKeepOutcome} from '../../../../.eliza/client-features/plugins/plugin-native-camera/src/host-ports.ts';
 import {reviewFileEmail} from './file-email-review';
 import {connectionController} from '../runtime/connection-ui';
 import type {MailAttachment} from '../runtime/inbox-attachment';
@@ -647,7 +650,9 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
           if(photo.format!=='jpeg'||!photo.base64||photo.width<=0||photo.height<=0)throw new Error('Incomplete photo receipt');
           if(disposed||!session.current(token))return;
           const bytes=Uint8Array.from(atob(photo.base64),char=>char.charCodeAt(0));
-          closeScan=openScanReview(new Blob([bytes],{type:'image/jpeg'}),(text,id)=>owner.saveScannedNote?.(text,id)??Promise.resolve(false),draft=>{if(disposed||!active())return false;return owner.reviewScannedCalendarDraft?.(draft)??false;},'unsaved',(_image,signal)=>keepScan(photo,signal,owner));
+          const scan=createScanCapture(photo,'unsaved',(page,operationId,signal)=>keepScan(page,operationId,signal,owner));
+          const closeReview=openScanReview(new Blob([bytes],{type:'image/jpeg'}),(text,id)=>owner.saveScannedNote?.(text,id)??Promise.resolve(false),draft=>{if(disposed||!active())return false;return owner.reviewScannedCalendarDraft?.(draft)??false;},'unsaved',async()=>{const outcome=await scan.keep();if(outcome?.status==='saved')return outcome.message||'Photo kept in Photos.';throw Error(outcome&&'message' in outcome?outcome.message:'Photo was not kept.');});
+          closeScan=()=>{scan.close();closeReview();};
           message('Page captured. It is not saved to Photos unless you keep it.');
         }catch{if(session.current(token))message('Page could not be captured. Nothing was saved.');}
         return;
@@ -683,15 +688,17 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
     }catch{return {status:dispatched?'unknown':'failed',summary:dispatched?'The photo outcome is unconfirmed. Check Photos before taking another.':'The Camera request changed. No photo was taken.'};}
   };
   requestedPhoto=takeRequestedPhoto;
-  async function keepScan(photo:Photo,signal:AbortSignal,owner:Bag):Promise<string>{
+  /** The host Keep port of a scanned page: the browser's photo store, or the owned captures store with the capture's operation identity. */
+  async function keepScan(photo:Photo,operationId:string,signal:AbortSignal,owner:Bag):Promise<CameraKeepOutcome>{
     if(browserMode){
       const row=await importBrowserPhoto({original:new File([],'scan.jpg',{type:'image/jpeg'}),image:'data:image/jpeg;base64,'+photo.base64,width:photo.width,height:photo.height},signal);
       captures=[normalize(row),...captures.filter(item=>nativeId(item.id)!==row.id)];loaded=false;owner.setView('photos',{nativeCaptureRevision:row.id});
-      return 'Photo kept in Photos in this browser.';
+      return {status:'saved',id:row.id,message:'Photo kept in Photos in this browser.'};
     }
-    const result=await library.keepCapture({dataBase64:photo.base64,operationId:crypto.randomUUID()});signal.throwIfAborted();
-    if(result.status!=='saved'||!result.id)throw Error(result.message||'Photo was not kept.');
-    loaded=false;owner.setView('photos',{nativeCaptureRevision:'native-camera-'+result.id});return 'Photo kept in Android Photos.';
+    const result=await library.keepCapture({dataBase64:photo.base64,operationId});
+    if(result.status!=='saved'||!result.id)return {status:'failed',message:result.message||'Photo was not kept.'};
+    // Saved even if the review closed meanwhile: Photos shows the kept page.
+    loaded=false;owner.setView('photos',{nativeCaptureRevision:'native-camera-'+result.id});return {status:'saved',id:result.id,message:'Photo kept in Android Photos.'};
   }
   /** Android: the system picker returns one image straight into scan review
    * (source 'selected'); the grant is released and nothing is copied to Photos. */
