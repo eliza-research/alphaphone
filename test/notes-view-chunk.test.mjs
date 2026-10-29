@@ -13,3 +13,12 @@ test('the lazy Notes view imports nothing from the renderer', () => {
   const context = readFileSync('apps/app/src/prototype/notes-host-context.ts', 'utf8');
   assert.deepEqual([...context.matchAll(/from\s+'([^']+)'/g)].map(match => match[1]), ['react']);
 });
+
+// MobileViewHost shows this fallback for render failures as well as load failures, and a render can
+// fail after a Notes save has committed: the copy must not claim the notes are unchanged.
+test('the Notes failure surface makes no claim about note contents', () => {
+  const source = readFileSync('apps/app/src/prototype/canonical-notes-ui.ts', 'utf8');
+  const failure = source.slice(source.indexOf('function NotesFailure'), source.indexOf('const reportFailure'));
+  assert.match(failure, /could not be shown\. Try again/);
+  assert.doesNotMatch(failure, /unchanged|not changed|were kept|is safe|are safe/i);
+});

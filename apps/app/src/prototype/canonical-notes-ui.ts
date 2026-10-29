@@ -134,7 +134,7 @@ function NotesFailure({label,retry,close,active}:MobileViewFailure){
    React.createElement('button',{className:'app-header-back','aria-label':'Back to apps',onClick:close},backIcon()),
    React.createElement('h1',{'data-alpha-app-title':true,style:{margin:0,fontSize:24}},label)),
   React.createElement('div',{role:'alert',style:{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:16,padding:'16px 24px'}},
-   React.createElement('p',{style:{margin:0,lineHeight:1.5}},`${label} could not be opened. Your notes are unchanged.`),
+   React.createElement('p',{style:{margin:0,lineHeight:1.5}},`${label} could not be shown. Try again, or go back to your apps.`),
    React.createElement('button',{onClick:retry,style:{minHeight:48,padding:'12px 18px',borderRadius:16,background:'var(--s2)',color:'var(--fg)',font:'inherit'}},'Try again')));
 }
 const reportFailure=(error:unknown)=>{void recordRendererFailure('render',error);};
