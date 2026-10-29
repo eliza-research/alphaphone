@@ -73,13 +73,13 @@ or Bluetooth headset for routing checks. Toolchain: NDK 28.2.13676358, CMake 4.0
 
 ```sh
 git submodule update --init vendor/eliza
-git -C vendor/eliza rev-parse HEAD          # must print 1f2a922f86e2a1f3d6cd62e097145492bd49ebfc
+git -C vendor/eliza rev-parse HEAD          # must print the commit in upstream.lock.json
 npm run upstream:prepare-client
 ```
 
 Never edit `vendor/eliza`. The upstream qualify project builds inside the checkout. Build it from a
 separate disposable worktree of the same commit, for example
-`git -C vendor/eliza worktree add /abs/eliza-qualify 1f2a922f86e2`, so build outputs never land in
+`git -C vendor/eliza worktree add /abs/eliza-qualify "$(jq -r .commit upstream.lock.json)"`, so build outputs never land in
 the vendor checkout.
 
 ### 2. Build the voice outputs at the pin
