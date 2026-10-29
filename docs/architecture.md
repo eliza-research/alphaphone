@@ -244,6 +244,8 @@ The production AlphaConnection boundary admits exact managed-service origin and 
 builds) is development infrastructure, not evidence of a resident runtime or
 production authentication.
 
+The route set, transport bounds, delegation-return admission and request registry behind AlphaConnection, and the provider slot binding, launch order (provider admission, then the native profile's embedding route) and attach admission behind the resident Agent bridge, are the shared `plugin-native-agent` `connection` and `runtime` policies. Renderer secure-slot admission (native-only namespaces, the compare-and-exchange allow-list and the credential slots) is the shared `SecureSlotPolicy`, and the last-intent-wins credential fence that orders Cloud sign-in, renderer credential writes and resident rebinds is the shared `CredentialIntentFence`, guarded by the resident lifecycle lock. Alpha supplies its plugin names, Cloud hosts (`CloudDeployment`), link scheme, slot names (`RendererCredentialSlots`) and the packaged `config/owner-routes.json`; the Capacitor plugins keep the Android plumbing and the resident lifecycle locks.
+
 ### Eliza Cloud sign-in ownership (in-app, 2026-10-14)
 
 October 27: the native client below is the shared elizaOS library `packages/auth/android`
@@ -413,6 +415,12 @@ overdue, undated to-do, reopen and refusal-message decisions are `plugin-assista
 `apps/app/src/runtime/reminder-creations.ts` and `reminder-deletions.ts` bind it to Alpha's
 installed slots (`reminder-creations:v1:device`, `reminder-deletions:v1:device`) and browser
 documents through `reminder-journal-store.ts`; reconciliation reads rows and receipts only.
+The reviewed deletion Undo window (ten seconds on a monotonic clock, delayed provider
+deletion, immediate suspension of reminder delivery, owner fences and no replay of an unknown
+outcome) is `@elizaos/capacitor-action-journal`'s `actionjournal.deletion` package, with the
+renderer contract in `@elizaos/contracts/deletion-window` and the notice in `@elizaos/ui`'s
+`DeferredDeletionNotice`. Alpha's `NativeDeletionCoordinator`, `AlphaDeletionsPlugin` and
+`runtime/deletion-undo.tsx` bind its ports, slot names and theme (`docs/deletion-undo.md`).
 
 The Clock hand-off contract is shared: `plugin-assistant`'s `clock-handoff.ts` (exported
 from `device-clock-review`) owns handoff validation, the capability policy, review text and
@@ -446,19 +454,47 @@ lease must stay equal to `NotesDeletionLease.LEASE_MS` used by the Android nativ
 The device-local Older notes collection still renders through Alpha's own Notes view; the
 shared `NotesWorkspace` serves only canonical agent notes until it gains a device-local
 client and recording ports.
-Three Notes files remain Alpha's because they bind Alpha storage and platform surfaces rather
-than Notes rules: `runtime/notes-trash.ts` (the Trash slot `notes-trash:v1:device` and browser
-document under the shared Trash policy), `runtime/browser-note-documents.ts` (the browser's
-local text import and export for `AlphaNoteDocuments`) and `runtime/deleted-note-origin.ts`
-(which committed reminder and Calendar deletion receipts retire a From note link, read from
-Alpha's deletion documents). Moving them needs a shared storage and document-picker port in
-`plugin-notes`; until then this Notes cut-over is not complete. The Trash storage step itself
+Notes ports are shared too: `plugin-notes/src/client` owns the document port and its browser
+implementation (`note-documents.ts`; Alpha's `runtime/browser-note-documents.ts` only registers
+it as `AlphaNoteDocuments` with the `Alpha scan` PDF file name), the deletion-receipt rule that
+retires a From note link (`note-deleted-origins.ts`; Alpha's `browser/deleted-note-origins.ts`
+only supplies its deletion documents as the receipts port) and the reviewed Calendar/reminder
+draft (`note-schedule-draft.ts`, `NotesWorkspacePorts.draftEvent`/`draftReminder`). One
+Notes file remains Alpha's because it binds Alpha storage rather than Notes rules:
+`runtime/notes-trash.ts` (the Trash slot `notes-trash:v1:device` and browser document under the
+shared Trash policy). The Trash storage step itself
 (validate in and out, compare-and-exchange, confirm by readback) is now shared as
 `createNotesTrashStore` and `compareExchangeNotesTrashPort` in `plugin-notes/src/client`
 (elizaOS/eliza#38104, develop d2578cb4); once the pin includes it, `notes-trash.ts` keeps only its two slot
-ports and its slot names. Note-origin links point only
-at Older notes voice recordings: canonical Notes records have no Notes-to-Calendar handoff
-or origin link yet.
+ports and its slot names. Note-origin links name either an Older notes voice recording (version 1) or a canonical
+Notes record (version 2, a SHA-256 of its authored fields) and share one index
+(`note-origins:v1:device`); `canonical-notes-ui.ts` binds the draft ports, so a canonical
+note's Calendar draft or reminder draft keeps a From note link that opens that exact record.
+
+`AlphaNoteAudioPlugin` is installed-data compatibility, not a second recording engine. Storage,
+receipts, owner fences, the two-step trash/restore/purge and the legacy metadata migration are
+the shared `RecordingStore` (elizaOS `plugin-native-media`); the renderer settles permanent
+deletions with the shared `notes-recording-deletion.ts` and `notes-recording-effects.ts` plan,
+and the plugin's native backstop (`finishPermanentDeletions`, `sweepExpiredTrash`) settles the
+same receipts through `RecordingStore` while Alpha is closed. What stays in Alpha are the identities an installed phone already holds and
+that must keep resolving: the `note-audio` no-backup folder, the `note-audio-metadata:v1:` and
+`notes-trash:v1:device` / `notes-records:v1:device` / `notes-audio-deletions:v1:device` slot
+names in `AlphaCredentialStore`, the `alpha-notes-trash-backstop` WorkManager name, the
+`AlphaNoteAudio` Capacitor name, and `MediaPlayer` playback of a saved clip. Renaming any of
+these would orphan existing recordings or their deletion receipts. A shared notes-audio host
+would only rename these: no Eliza Android host uses `RecordingStore` for device-local voice
+notes today, so the plugin stays as the product's binding to the shared store.
+
+Selected documents, attachments and PDFs follow the same split. `plugin-native-media` owns the
+selected-document registry and its bridge contract (`SelectedDocuments`,
+`SelectedDocumentCalls`), the folder tree (`DocumentFolderTree`), the temporary viewer copy
+(`ReviewedFileHandoff`), verified export (`DocumentExport`, `DocumentDestinations`) and isolated
+PDF rendering (`IsolatedPdfRenderService`, `IsolatedPdfViewerActivity`, `PdfPageLimits`).
+Alpha keeps the installed identities: `DailyApps` method names and the `selected-documents`
+registry, `AlphaFiles`' `alpha-files-tree`, the `<package>.mailattachments` provider and its
+`mail-attachments` cache path, and the `.IsolatedPdfService` (`:isolated_pdf`) and
+`.AlphaMailPdfActivity` components, which are thin subclasses that only add Alpha's colours,
+messages and the development-only watchdog fixture.
 
 `AlphaNoteAudioPlugin` is installed-data compatibility, not a second recording engine. Storage,
 receipts, owner fences, the two-step trash/restore/purge and the legacy metadata migration are
@@ -502,8 +538,14 @@ The feature XML is an additional telephony contract marker, never an alternative
 Contacts uses AlphaContacts, the shared AOSP-profile address book (`AddressBookPlugin` over
 `ContactsCatalog` in plugin-native-contacts) under Alpha's plugin name and image admission, and its
 native capability response. The Messages session (foreground-only provider rows, observer, read
-marking) and receipt labels are the shared `@elizaos/contracts/native-telephony-session`. The Phone view stays deferred in the renderer; on the image the dialer role surfaces are
-native (shared call screen and dial pad). Telephony contact reads recheck permission, unlock and lifecycle state
+marking) and receipt labels are the shared `@elizaos/contracts/native-telephony-session`. On the image the Phone view is admitted
+(`prototype/phone-adapter.ts`): recent calls come from the shared profile's bounded, unlocked,
+foreground-only `listRecentCalls` (READ_CALL_LOG, launcher manifest only, asked for only from the
+owner's control), and every dial, from the view or the agent's reviewed `phone.dial.v1` device action
+(`@elizaos/contracts/phone-dial`, advertised only with the profile), is a handoff to the system dial
+screen that never reports a call. The dialer role surfaces stay native (shared call screen and dial
+pad). The on-device `contacts.lookup.v1` dial target is not negotiated until the review has an owner
+number picker. Telephony contact reads recheck permission, unlock and lifecycle state
 before and after asynchronous provider reads.
 
 ### SMS/MMS on the image (#421)
