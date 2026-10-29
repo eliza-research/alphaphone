@@ -10,7 +10,7 @@ export async function workflowDeviceProtocol(signal: AbortSignal): Promise<1 | 3
 /**
  * Registers with `protocol`, and once more at protocol 2 when an agent that predates the
  * selected-reminders read refuses protocol 3 (its device routes answer a rejected request with
- * HTTP 409). Any other failure (sign-in, network, server) is not retried, so a transient fault
+ * HTTP 409). Any other failure (sign-in, network, server, or an error carrying no HTTP status) is not retried, so a transient fault
  * never downgrades the enrollment. Registration is idempotent for the same device.
  */
 export async function registerWorkflowDevice<T>(protocol: 1 | 2 | 3, register: (protocol: 1 | 2 | 3) => Promise<T>, signal: AbortSignal): Promise<{ registered: T; workflowProtocol: 1 | 2 | 3 }> {
@@ -18,7 +18,7 @@ export async function registerWorkflowDevice<T>(protocol: 1 | 2 | 3, register: (
   catch (error) {
     signal.throwIfAborted();
     const status = error && typeof error === 'object' ? Reflect.get(error, 'status') : undefined;
-    if (protocol !== 3 || (typeof status === 'number' && status !== 409)) throw error;
+    if (protocol !== 3 || status !== 409) throw error;
     return { registered: await register(2), workflowProtocol: 2 };
   }
 }

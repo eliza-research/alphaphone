@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {resolve} from 'node:path';
 // AP-11: a phone registers workflow device protocol 3 and falls back to 2 only when an agent that predates the
-// selected-reminders read refuses it (HTTP 409). Sign-in, network and server failures never downgrade it.
+// selected-reminders read refuses it (HTTP 409). Sign-in, network, server and status-less transport failures never downgrade it.
 const root=resolve(import.meta.dirname,'..');
 const script=`
 const P=await import(${JSON.stringify(resolve(root,'apps/app/src/runtime/workflow-presentation.ts'))});
@@ -23,7 +23,7 @@ test('workflow device registration falls back from protocol 3 only when the agen
  assert.deepEqual(out,{
   accepted:{calls:[3],protocol:3},
   olderAgent:{calls:[3,2],protocol:2},
-  noStatus:{calls:[3,2],protocol:2},
+  noStatus:{calls:[3],error:'refused'},
   signedOut:{calls:[3],error:'refused'},
   serverDown:{calls:[3],error:'refused'},
   protocol1:{calls:[1],protocol:1},
