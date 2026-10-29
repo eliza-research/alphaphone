@@ -243,6 +243,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-assistant/src/services/device-actions/reminder-contract.ts',
   'plugins/plugin-files',
   'plugins/plugin-inbox/src/mailbox',
+  'plugins/plugin-inbox/src/components/mailbox',
   'plugins/plugin-calendar/src/linked-sync',
   'plugins/plugin-maps/src/client',
   'plugins/plugin-maps/test/navigation-client.test.mjs',
