@@ -15,7 +15,7 @@ public final class AlphaApplication extends android.app.Application {
   if(resetRecoveryProcess())return;NativeDigestHost host=new NativeDigestHost(this);NativeSourceHost.configure(host::read);NativeOwnerReminderHost owner=new NativeOwnerReminderHost(this);NativeSourceHost.configureOwnerReminderContext(owner::read);
   // Isolated helper processes have no app storage; only the main process keeps the problem log and schedules upkeep.
   if(android.os.Process.isIsolated()||!getPackageName().equals(getProcessName()))return;
-  AlphaCrashLog.install(this);
+  ai.eliza.plugins.system.crash.CrashLog.install(this);
   // A listener wake that reaches a cold process may start voice once the renderer binds a session
   // for the same native owner (shared SenseInvocation); before this registration it only opens.
   new ai.eliza.plugins.system.SenseListenerClient(this).admitOwner(()->AlphaLocalAgentPlugin.invocationOwner(this));
