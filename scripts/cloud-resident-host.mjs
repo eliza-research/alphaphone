@@ -2,7 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {randomUUID,randomBytes} from 'node:crypto';
 import {preparePrivateRuntimeProfile,runtimeEnvironment,startPrivateRuntimeProcess} from '../vendor/eliza/packages/agent/native-host/private-runtime-launch.mjs';
-import {verifySource,preparedSourceEnv} from './local-agent-source.mjs';
+import {verifySource,preparedSourceEnv,workerArtifactDirectory,digest} from './local-agent-source.mjs';
+import {verifyWorkerArtifact} from './workflow-worker-artifact.mjs';
+import {verifyNativeGoogleHostArtifact} from './native-google-host-artifact.mjs';
 import {nativeViewDeclarationsJson} from './native-view-policy.mjs';
 import {CLOUD_SDK_BASES} from './cloud-sdk-authority.mjs';
 export const CLOUD_MODEL='cerebras/qwen-3.8-27b';
@@ -13,6 +15,12 @@ export async function createCloudResidentHost({source,profile,port,environment='
  const root=path.resolve(import.meta.dirname,'..');
  const commit=JSON.parse(fs.readFileSync(path.join(root,'upstream.lock.json'),'utf8')).commit;
  verifySource(source,commit);
+ // The product declaration comes only from the current verified worker module,
+ // independent of provider credentials. No inherited module path or character JSON.
+ const worker=workerArtifactDirectory(root,inherited);
+ verifyWorkerArtifact(worker,{sourceStampSha256:digest(path.join(source,'.alpha-runtime-source.json')),lockSha256:digest(path.join(source,'bun.lock'))});
+ verifyNativeGoogleHostArtifact(root,worker);
+ const nativeHostEnvironment={ELIZA_SMTHRS_RUNTIME_DIR:worker,ELIZA_NATIVE_GOOGLE_HOST_MODULE:path.join(worker,'google-host.mjs')};
  if(!Number.isInteger(port)||port<1024||port>65535)throw Error('Invalid resident port');
  fs.mkdirSync(profile,{recursive:true,mode:0o700});
  const st=fs.lstatSync(profile);if(!st.isDirectory()||st.isSymbolicLink()||(st.mode&0o077)||st.uid!==process.getuid?.())throw Error('Private resident directory required');
@@ -36,7 +44,7 @@ export async function createCloudResidentHost({source,profile,port,environment='
   await stop();
   if(credential&&(!credential.token||typeof credential.token!=='string'||!credential.credentialId||credential.expiresAt!==undefined&&(!Number.isFinite(credential.expiresAt)||credential.expiresAt<=Date.now())))throw Error('Invalid Cloud resident binding');
   const settings={...(environment==='staging'?{ELIZA_DEV_SOURCE:'1',ELIZA_DEV_CLOUD_ENV_AUTHORITY:'staging-explicit'}:{}),ELIZA_VAULT_PASSPHRASE:vaultPassphrase,ELIZAOS_CLOUD_USE_INFERENCE:credential?'true':'false',ELIZAOS_CLOUD_USE_EMBEDDINGS:credential?'true':'false',ELIZA_DISABLE_LOCAL_EMBEDDINGS:'true',ELIZA_LOCAL_EMBEDDING_ENABLED:'0',ELIZA_ASR_ENABLED:'0',ELIZA_PARADEE_ENABLED:'0',...(credential?{ELIZAOS_CLOUD_API_KEY:credential.token,ELIZAOS_CLOUD_BASE_URL:CLOUD_SDK_BASES[environment],ELIZAOS_CLOUD_SMALL_MODEL:CLOUD_MODEL,ELIZAOS_CLOUD_LARGE_MODEL:CLOUD_MODEL,ELIZAOS_CLOUD_EMBEDDING_MODEL:'bge-small-en-v1.5',ELIZAOS_CLOUD_EMBEDDING_DIMENSIONS:'384'}:{})};
-  const env=runtimeEnvironment({inherited:preparedSourceEnv(inherited),allow:['PATH','TMPDIR','LANG','SHELL','USER','LOGNAME','HOME'],settings,owned:{ELIZA_HEADLESS:'1',ELIZA_DISTRIBUTION_PROFILE:'store',...(profileMode==='lean'?{ELIZA_PLUGIN_SET:'lean-chat',ELIZA_LEAN_CHAT_WORKFLOWS:'1'}:{}),ELIZA_REQUIRE_LOCAL_AUTH:'1',ELIZA_API_BIND:'127.0.0.1',ELIZA_API_PORT:String(port),ELIZA_API_EXPOSE_PORT:'1',ELIZA_STATE_DIR:profile,ELIZA_CONFIG_PATH:configPath,ELIZA_API_TOKEN:privateProfile.token,ELIZA_HOST_CONTEXT_REVISION:'cloud:'+randomUUID(),ELIZA_NATIVE_VIEW_DECLARATIONS:nativeViewDeclarationsJson}});
+  const env=runtimeEnvironment({inherited:preparedSourceEnv(inherited),allow:['PATH','TMPDIR','LANG','SHELL','USER','LOGNAME','HOME'],settings,owned:{...nativeHostEnvironment,ELIZA_HEADLESS:'1',ELIZA_DISTRIBUTION_PROFILE:'store',...(profileMode==='lean'?{ELIZA_PLUGIN_SET:'lean-chat',ELIZA_LEAN_CHAT_WORKFLOWS:'1'}:{}),ELIZA_REQUIRE_LOCAL_AUTH:'1',ELIZA_API_BIND:'127.0.0.1',ELIZA_API_PORT:String(port),ELIZA_API_EXPOSE_PORT:'1',ELIZA_STATE_DIR:profile,ELIZA_CONFIG_PATH:configPath,ELIZA_API_TOKEN:privateProfile.token,ELIZA_HOST_CONTEXT_REVISION:'cloud:'+randomUUID(),ELIZA_NATIVE_VIEW_DECLARATIONS:nativeViewDeclarationsJson}});
   const log=fs.openSync(path.join(profile,'server.log'),fs.constants.O_WRONLY|fs.constants.O_APPEND|fs.constants.O_CREAT|fs.constants.O_NOFOLLOW,0o600);fs.fchmodSync(log,0o600);
   try{running=await launch({command:inherited.ALPHA_BUN||'bun',args:['--no-install','--conditions=eliza-source',path.join(source,'packages/app/src/runtime/dev-server.ts')],cwd:profile,env,stdio:['ignore',log,log]});}finally{fs.closeSync(log);}
   const current=running;bound=credential?{credentialId:credential.credentialId,reference:credential.reference,expiresAt:credential.expiresAt}:null;

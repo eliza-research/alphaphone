@@ -372,7 +372,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  static void applyUnboundEnvironment(java.util.Map<String,String> env){
   for(String name:new String[]{"ELIZAOS_CLOUD_API_KEY","ELIZAOS_CLOUD_BASE_URL","ELIZAOS_CLOUD_SMALL_MODEL","ELIZAOS_CLOUD_LARGE_MODEL","ELIZAOS_CLOUD_USE_EMBEDDINGS","ELIZAOS_CLOUD_EMBEDDING_MODEL","ELIZAOS_CLOUD_EMBEDDING_DIMENSIONS",
    "CEREBRAS_API_KEY","CEREBRAS_BASE_URL","CEREBRAS_MODEL","CEREBRAS_SMALL_MODEL","CEREBRAS_LARGE_MODEL","OPENAI_API_KEY","OPENAI_BASE_URL","ELIZA_PROVIDER",
-   "ELIZA_LOCAL_EMBEDDING_MODEL_PATH","ELIZA_LOCAL_EMBEDDING_DIMENSIONS","ELIZA_NATIVE_GOOGLE_HOST_MODULE","ELIZA_NATIVE_GOOGLE_BINDING_JSON",
+   "ELIZA_LOCAL_EMBEDDING_MODEL_PATH","ELIZA_LOCAL_EMBEDDING_DIMENSIONS","ELIZA_NATIVE_GOOGLE_BINDING_JSON",
    "ELIZA_MANAGED_GMAIL_READ_BROKER","ELIZA_MANAGED_GMAIL_SEND_BROKER","ELIZA_MANAGED_GMAIL_OPERATION_BROKER","ELIZA_MANAGED_CALENDAR_READ_BROKER",
    // Upstream default-off Google mutations (elizaOS/eliza#36598) stay off until Seeker acceptance and the production service.
    "ELIZA_MANAGED_CALENDAR_DELETE_ENABLED","ELIZA_NATIVE_GOOGLE_GMAIL_SEND_ENABLED","ELIZA_MANAGED_GMAIL_MAILBOX_CHANGES_ENABLED"})env.remove(name);
@@ -428,6 +428,11 @@ public final class AlphaLocalAgentPlugin extends Plugin {
    WorkflowWorkerAssets.configureEnvironment(worker,env);
    nativeHostResources=worker;
   }
+  // The packaged product declaration is credential-independent. Its parent was
+  // authenticated by WorkflowWorkerAssets.install, including every indexed hash.
+  java.io.File google=nativeHostResources==null?null:new java.io.File(nativeHostResources,"google-host.mjs");
+  if(google!=null&&google.isFile())env.put("ELIZA_NATIVE_GOOGLE_HOST_MODULE",google.getCanonicalPath());
+  else if("cloud".equals(BuildConfig.ELIZA_RUNTIME_PROFILE))throw new java.io.IOException("Native Cloud routing module unavailable");
   try {
   // Decision P-43: the resident always runs. With no provider slot it launches with no hosted
   // provider environment; upstream then reports no_provider for each turn.
@@ -449,11 +454,8 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   // No usable provider: every provider credential and selector is removed (applyUnboundEnvironment).
   if(provider==null)applyUnboundEnvironment(env);
   if(provider!=null&&"elizacloud".equals(provider.optString("provider"))){
-   if(nativeHostResources==null)throw new java.io.IOException("Native Cloud routing resources unavailable");
-   java.io.File google=new java.io.File(nativeHostResources,"google-host.mjs");
-   if(!google.isFile())throw new java.io.IOException("Native Cloud routing module unavailable");
+   if(google==null||!google.isFile())throw new java.io.IOException("Native Cloud routing module unavailable");
    {
-    env.put("ELIZA_NATIVE_GOOGLE_HOST_MODULE",google.getCanonicalPath());
     JSONObject binding=LocalAgentProviderAdmission.managedGoogleBinding(saved,cloudSaved,System.currentTimeMillis());
     if(binding!=null){
     JSONObject current=new AlphaCredentialStore(context).providerAdmissionSnapshot();
