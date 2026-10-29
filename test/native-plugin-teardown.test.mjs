@@ -268,7 +268,7 @@ test("a permission or activity-result request that arrives after the activity is
 
   const found = files.flatMap(name => launches(name, mask(read(name))));
   // A scanner that silently finds nothing would pass.
-  for (const [name, method] of [["AlphaHostedResultsPlugin.java", "requestPermissionForAlias"], ["AlphaVoiceCloudPlugin.java", "requestPermissionForAlias"], ["DailyAppsPlugin.java", "startActivityForResult"], ["AlphaFilesPlugin.java", "startActivityForResult"], ["AlphaMailAttachmentsPlugin.java", "startActivityForResult"], ["AlphaNoteDocumentsPlugin.java", "startActivityForResult"], ["AlphaBrowserPlugin.java", "takePicture.launch"], ["AlphaBrowserPlugin.java", "runtimePermissions.launch"], ["AlphaBrowserPlugin.java", "filePicker.launch"], ["AlphaBrowserPlugin.java", "pageShare.launch"]])
+  for (const [name, method] of [["AlphaHostedResultsPlugin.java", "requestPermissionForAlias"], ["DailyAppsPlugin.java", "startActivityForResult"], ["AlphaFilesPlugin.java", "startActivityForResult"], ["AlphaMailAttachmentsPlugin.java", "startActivityForResult"], ["AlphaNoteDocumentsPlugin.java", "startActivityForResult"], ["AlphaBrowserPlugin.java", "takePicture.launch"], ["AlphaBrowserPlugin.java", "runtimePermissions.launch"], ["AlphaBrowserPlugin.java", "filePicker.launch"], ["AlphaBrowserPlugin.java", "pageShare.launch"]])
     assert.ok(found.some(site => site.file === name && site.method === method), `${name}: ${method} not found`);
   assert.deepEqual(found.filter(site => !site.guarded).map(site => `${site.file}:${site.line} ${site.method}(`), [],
     "each of these throws on the calling thread once the activity is destroyed; make it the body of LateLaunch.ask");
@@ -291,6 +291,15 @@ test("Capacitor's own permission request, and the shared plugins' requests an ap
       const base=fs.readFileSync("vendor/eliza/plugins/plugin-native-messages/android/src/main/java/ai/eliza/plugins/messages/TelephonyPlugin.java","utf8");
       assert.match(base,/@Override @PluginMethod public void requestPermissions\(PluginCall call\) \{ if \(refused\(call\)\) return; launch\(call, \(\) -> super\.requestPermissions\(call\)\); \}/);
       assert.match(base,/protected static boolean launch\(PluginCall call, Runnable start\) \{\n  try \{ start\.run\(\); return true; \} catch \(IllegalStateException gone\) \{ call\.reject\(CLOSED\); return false; \}/);
+    } else if(name==='AlphaVoiceCloudPlugin.java') {
+      // The shared LocalSpeechBridgePlugin base sends every prompt (requestPermissions and both
+      // microphone requests) through its launch port, which Alpha answers with LateLaunch.ask.
+      const base=fs.readFileSync("vendor/eliza/plugins/plugin-local-inference/native/android/speech-bridge/src/main/java/ai/eliza/voice/LocalSpeechBridgePlugin.java","utf8");
+      assert.match(base,/@Override @PluginMethod public void requestPermissions\(PluginCall call\)\{launch\(call,\(\)->super\.requestPermissions\(call\)\);\}/);
+      assert.match(base,/protected boolean launch\(PluginCall call,Runnable request\)\{\n  try\{request\.run\(\);return true;\}catch\(IllegalStateException closed\)\{call\.reject\(LAUNCH_CLOSED\);return false;\}/);
+      const prompts=[...base.matchAll(/requestPermissionForAlias\(/g)].map(match=>base.slice(Math.max(0,match.index-24),match.index));
+      assert.equal(prompts.length,2);for(const before of prompts)assert.match(before,/launch\(call,\(\)->$/);
+      assert.match(read(name),/@Override protected boolean launch\(PluginCall call,Runnable request\)\{return LateLaunch\.ask\(call,request\);\}/);
     } else assert.ok(guardedOverride(read(name), "requestPermissions"), `${name}: requestPermissions is overridden with the guard`);
   }
 

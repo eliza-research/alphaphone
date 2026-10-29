@@ -17,6 +17,7 @@ import {resolveCloudEnvironment} from './cloud-environment-selection';
 import { withResidentMapsNavigation } from '../maps/resident-relay.ts';
 import {aospImage} from './aosp-image';
 import {SMS_SEND_CAPABILITY} from './sms-agent-contract';
+import {PHONE_DIAL_CAPABILITY,telephonyDeviceCapabilities} from './phone-dial-contract';
 import {assertAutomationRequestAllowed, AutomationRequestNotDispatchedError, type AutomationsMethod} from './automations-route-policy.ts';
 import {iconStyle} from '../icon-style';
 import {validateUuid} from '../../../../vendor/eliza/packages/core/src/utils/uuid';
@@ -395,6 +396,9 @@ async function deviceCapabilities(offered:unknown):Promise<string>{
   capabilities.push(...clockHandoffCapabilities({offered:agent,handler:android,repeatDays:android&&agent.includes('clock.handoff.v2')&&await clockRepeatDaysSupported()}));
   // SMS sending is negotiated only on the AOSP image, where Alpha holds the SMS role.
   if(aospImage&&agent.includes(SMS_SEND_CAPABILITY))capabilities.push(SMS_SEND_CAPABILITY);
+  // The reviewed dial handoff only with the native telephony profile (the verified image). The
+  // on-device contact lookup waits for an owner number picker in the review, so it is not offered.
+  capabilities.push(...telephonyDeviceCapabilities({present:aospImage,dial:agent.includes(PHONE_DIAL_CAPABILITY),contactLookup:false}));
   return capabilities.join(',');
 }
 let deviceReadReview:((proposal:ActionProposal,context:ContextEnvelope,signal:AbortSignal)=>Promise<void>)|undefined;

@@ -355,11 +355,24 @@ permissions. OS staging admits the product APK separately from Eliza's full app;
 release provisioning owns default roles, signing, update compatibility and
 recovery policy.
 
+Image staging, APK release records and update tooling are shared `packages/os` modules that
+Alpha binds with its policy only. `image-apk-admission.mjs` admits the launcher APK and the
+reviewed source overrides for `scripts/stage-aosp.mjs`; `apk-release-record.mjs` names a
+release row's blockers for `scripts/release-blockers.mjs` (Alpha supplies the release-signer
+admission and the font-licence switch; open-source licence flags never block, P-09) and holds
+the in-place update checks `scripts/pilot-update.mjs` uses; `aosp-ota-update.mjs` owns the
+operator update, fallback, stock-recovery and known-good retention commands. The read-only
+update-channel client is upstream and registered off in Alpha. Alpha's remaining staging code is
+its product policy (descriptor, listener, provisioning, capability and Pixel 10a/Cuttlefish
+bindings). The shared mobile agent build excludes the browser wallet-connector graph (wagmi,
+RainbowKit, `@metamask/*`) from the Android resident bundle.
+
 Phone, Contacts and SMS exist only on the Alpha AOSP image (decision P-36). The image
 capability is decided natively by the shared plugin-native-messages `ImageCapability`, which
 `AlphaImageCapability` feeds with Alpha's build flags and provisioning resource: the release
 launcher build without test mocks, installed from a system partition (`FLAG_SYSTEM`), with the `<package>.aosp_image`
-system feature that `scripts/stage-aosp.mjs` declares in the image product. The launcher
+system feature that `scripts/stage-aosp.mjs` declares in the image product (see the release
+tooling paragraph below). The launcher
 flavor, test mocks, URLs and saved state never establish it. Only then does `MainActivity`
 register `AlphaTelephonyPlugin` (read-only contacts through the shared `ContactsCatalog`, role
 and SIM status, dialer and SMS handoffs, SMS/MMS provider reads and reviewed native sends); the
@@ -494,8 +507,14 @@ The feature XML is an additional telephony contract marker, never an alternative
 Contacts uses AlphaContacts, the shared AOSP-profile address book (`AddressBookPlugin` over
 `ContactsCatalog` in plugin-native-contacts) under Alpha's plugin name and image admission, and its
 native capability response. The Messages session (foreground-only provider rows, observer, read
-marking) and receipt labels are the shared `@elizaos/contracts/native-telephony-session`. The Phone view stays deferred in the renderer; on the image the dialer role surfaces are
-native (shared call screen and dial pad). Telephony contact reads recheck permission, unlock and lifecycle state
+marking) and receipt labels are the shared `@elizaos/contracts/native-telephony-session`. On the image the Phone view is admitted
+(`prototype/phone-adapter.ts`): recent calls come from the shared profile's bounded, unlocked,
+foreground-only `listRecentCalls` (READ_CALL_LOG, launcher manifest only, asked for only from the
+owner's control), and every dial, from the view or the agent's reviewed `phone.dial.v1` device action
+(`@elizaos/contracts/phone-dial`, advertised only with the profile), is a handoff to the system dial
+screen that never reports a call. The dialer role surfaces stay native (shared call screen and dial
+pad). The on-device `contacts.lookup.v1` dial target is not negotiated until the review has an owner
+number picker. Telephony contact reads recheck permission, unlock and lifecycle state
 before and after asynchronous provider reads.
 
 ### SMS/MMS on the image (#421)
