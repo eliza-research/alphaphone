@@ -56,3 +56,21 @@ public final class AlphaBrowserIdentityProbe {
    'true','true','true','false',String(mocks),'Alpha Phone','Alpha','Alpha Browser','alphaphone','vault-field-origin','vault-top-origin','8']);
  }finally{fs.rmSync(directory,{recursive:true,force:true});}
 });
+
+test('instrumented tests reach browser host state through the shared BrowserTabHostPlugin', () => {
+ // The host's fields and helpers are declared on the upstream base class, so a reflective lookup on
+ // AlphaBrowserPlugin (or on the plugin instance's own class) fails only on a device, and the deleted
+ // BrowserReading class would stop androidTest compiling.
+ const roots=['android/app/src/androidTest/java','android/app/src/testMocks/androidTest/java'];
+ const files=roots.filter(root=>fs.existsSync(root)).flatMap(root=>fs.readdirSync(root,{recursive:true}).filter(name=>String(name).endsWith('.java')).map(name=>path.join(root,String(name))));
+ assert.ok(files.length>0);
+ for(const file of files){
+  const source=fs.readFileSync(file,'utf8');
+  assert.doesNotMatch(source,/\bnew BrowserReading\(|\bBrowserReading\.class\b/,`${file}: BrowserReading is the shared BrowserReviewedReading`);
+  assert.doesNotMatch(source,/AlphaBrowserPlugin\.class\.getDeclared(?:Field|Method)/,`${file}: host members are declared on BrowserTabHostPlugin`);
+  if(source.includes('getPlugin("AlphaBrowser")'))
+   assert.doesNotMatch(source,/plugin\.getClass\(\)\.getDeclaredField\(/,`${file}: the plugin instance's class is AlphaBrowserPlugin, not the host`);
+ }
+ const features=fs.readFileSync('android/app/src/androidTest/java/ai/elizaresearch/alphaphone/BrowserWebFeaturesInstrumentedTest.java','utf8');
+ assert.match(features,/private Object field\(Object owner,String name\)throws Exception\{for\(Class<\?> type=owner\.getClass\(\);type!=null;type=type\.getSuperclass\(\)\)/,'the field helper walks to the shared host');
+});
