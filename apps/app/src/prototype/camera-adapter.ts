@@ -17,7 +17,7 @@ import {createDeviceLibrary} from './photo-library-adapter';
 import {openScanDocument,pickNativeScanImage} from './scan-document';
 import {openVideoEditReview} from './video-edit-review';
 import {openCameraImageImport} from './browser-image-import';
-import {openScanReview} from './scan-review';
+import {openScanReview,ScanKeepError} from './scan-review';
 import {systemPickerActive} from './scan-pdf';
 import {DailyApps} from '../daily';
 import {browserCamera,browserLibrary,browserPhotoLibrary,mountBrowserCamera,importBrowserPhoto,saveBrowserMedia} from './browser-camera';
@@ -651,7 +651,14 @@ export function installPrototypeCameraAdapter(_Component: unknown, views: Record
           if(disposed||!session.current(token))return;
           const bytes=Uint8Array.from(atob(photo.base64),char=>char.charCodeAt(0));
           const scan=createScanCapture(photo,'unsaved',(page,operationId,signal)=>keepScan(page,operationId,signal,owner));
-          const closeReview=openScanReview(new Blob([bytes],{type:'image/jpeg'}),(text,id)=>owner.saveScannedNote?.(text,id)??Promise.resolve(false),draft=>{if(disposed||!active())return false;return owner.reviewScannedCalendarDraft?.(draft)??false;},'unsaved',async()=>{const outcome=await scan.keep();if(outcome?.status==='saved')return outcome.message||'Photo kept in Photos.';throw Error(outcome&&'message' in outcome?outcome.message:'Photo was not kept.');});
+          const closeReview=openScanReview(new Blob([bytes],{type:'image/jpeg'}),(text,id)=>owner.saveScannedNote?.(text,id)??Promise.resolve(false),draft=>{if(disposed||!active())return false;return owner.reviewScannedCalendarDraft?.(draft)??false;},'unsaved',async()=>{const outcome=await scan.keep();if(outcome?.status==='saved')return outcome.message||'Photo kept in Photos.';
+            // No outcome: a Keep is already running or the review closed; nothing to retry from here.
+            if(!outcome)throw new ScanKeepError('Keep photo unconfirmed. Check Photos before keeping it again.',false);
+            // A definite failure kept nothing (the next Keep is a new identity). An unknown native outcome is
+            // retried under the same operation identity, which the owned captures store resolves once. The
+            // browser photo store has no operation identity, so an unknown outcome there is not retried.
+            if(outcome.status==='failed')throw new ScanKeepError((outcome.message||'Photo was not kept.')+' Nothing was saved.',true);
+            throw new ScanKeepError(browserMode?'Keep photo unconfirmed. Check Photos before keeping it again.':'Keep photo unconfirmed. Trying again checks the same photo and does not save a second copy.',!browserMode);});
           closeScan=()=>{scan.close();closeReview();};
           message('Page captured. It is not saved to Photos unless you keep it.');
         }catch{if(session.current(token))message('Page could not be captured. Nothing was saved.');}
