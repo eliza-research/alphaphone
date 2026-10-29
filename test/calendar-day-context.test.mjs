@@ -4,7 +4,8 @@ import {AlphaClient} from '../apps/app/src/runtime/alpha-client.ts';
 import {phoneContextMessage,sanitizePhoneContext} from '../apps/app/src/runtime/phone-context.ts';
 import {calendarDayObservation} from '../apps/app/src/runtime/calendar-day-observation.ts';
 import {ClientObservationSupportCache,ClientObservationSupportSession,contextForObservationSupport} from '../apps/app/src/runtime/client-observation-support.ts';
-import {LocalAgentProtocol} from '../apps/app/src/runtime/local-agent.ts';
+import {loadBrowserModule} from './fixtures/browser-source.mjs';
+const {LocalAgentProtocol}=await loadBrowserModule('apps/app/src/runtime/local-agent.ts');
 import {DeviceActions,deviceJournalContext,actionScope} from '../apps/app/src/runtime/device-actions.ts';
 import {ViewNavigationClient} from '../apps/app/src/runtime/view-navigation.ts';
 
