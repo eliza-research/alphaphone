@@ -58,7 +58,7 @@ import { DeviceActions, actionScope, type DeviceCredential, type DeviceExecutor,
 import { cloneElement, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { isAndroid } from '../native';
 import type { AgentReply, ActionProposal, OperationReceipt, ContextEnvelope, VerifiedSession } from './alpha-client';
-import { CloudResidentBindingController, CloudResidentBindingError, parseResidentPlanAdmission, recentResidentPlanAdmission, type ResidentPlanAdmissionRecord } from '../../../../.eliza/client-features/packages/auth/src/auth/cloud-resident-binding.ts';
+import { CloudResidentBindingController, CloudResidentBindingError, ResidentRebindQueue, parseResidentPlanAdmission, recentResidentPlanAdmission, type ResidentPlanAdmissionRecord } from '../../../../.eliza/client-features/packages/auth/src/auth/cloud-resident-binding.ts';
 import { cloudServiceName, cloudSignInHandOffAvailable, CloudProtocol, CloudProtocolError, type CloudAgent, type CloudEnvironment } from './cloud-protocol';
 import { googleOutcome as signInOutcome, type CloudSignInGoogleOutcome, CloudSignInError, normalizeSignInCode, signInFailureMessage as formatSignInFailureMessage, signInReadiness, validSignInEmail, validSignInPhone, type CloudSignInAuthenticated } from './cloud-sign-in';
 import { DevelopmentCloudAgentProtocol, type CloudPhoneTarget } from './development-cloud-agents';
@@ -406,8 +406,14 @@ let entitlementRefresher: EntitlementRefresher | null = null;
 let residentBinding: 'cloud' | 'unbound' | 'kept' | 'unknown' | null = null;
 /** Shown beside the running agent when native could not confirm the Cloud inference binding was removed. */
 const RESIDENT_UNBIND_UNCONFIRMED='Cloud inference removal could not be confirmed. Your agent is running; retry in Settings.';
-/** A plan change arrived while another connection step ran; it is applied when that step ends. */
-let residentRebindQueued = false;
+/**
+ * The shared rebind rule (`ResidentRebindQueue`): at most one rebind of the running agent runs and
+ * one more waits behind it. A plan change that arrives while another connection step or a reply
+ * runs is applied when that step ends.
+ */
+let residentRebindQueue: ResidentRebindQueue | null = null;
+const residentRebinds = () => residentRebindQueue ??= new ResidentRebindQueue();
+const residentRebindBlocked = () => !!operation || !!sending;
 /** Every Cloud detach ends background plan refresh, so no request goes out under a stale admission. */
 function stopEntitlementRefresh(){entitlementRefresher?.stop();entitlementRefresher=null;clearEntitlementKeyCache();}
 function detachService() { stopEntitlementRefresh(); retireReadReplies();for(const request of appRequests)request.abort(new DOMException('Cloud account changed','AbortError')); clearPersonalSetup(); membershipRead?.abort();membershipRead=null;pendingBillingReview=null;service = null; update({ cloudAccount: null,membershipBalance:undefined,membershipCredits:null,membershipPlan:null,lastServiceLimit:null,planEndsAt:null,billingReviewEmail:undefined,membershipDismissed:false }); }
@@ -781,12 +787,13 @@ function activate(next: Active, session: VerifiedSession, name: string) {
  */
 function queueResidentRebind(interruptReply=false) {
   if (!residentCloudFlow()) return;
-  if (operation || sending&&!interruptReply) { residentRebindQueued = true; return; }
-  residentRebindQueued = false;
+  void residentRebinds().request(rebindResident, interruptReply ? () => !!operation : residentRebindBlocked).catch(() => {});
+}
+function rebindResident() {
   // An outcome the open dialog is showing (a sign-out, a cancelled sign-in) stays visible after the rebind.
   const shown = state.open ? { message: state.message, error: state.error, startFailed: !!state.error && state.error === residentStartFailure } : null;
   const signIn = state.signIn;
-  void work('Updating your agent…', async signal => {
+  return work('Updating your agent…', async signal => {
     retire();
     try { await connectResident(signal); }
     catch (error) { if (residentAlwaysPresent && !active) update({ kind: 'recovering' }); throw error; }
@@ -799,7 +806,7 @@ function queueResidentRebind(interruptReply=false) {
 /** A native sign-in return that arrived while another step was running; handled once it ends. */
 let queuedSignInReturn: unknown = null;
 function runQueuedSignInReturn() { if (queuedSignInReturn !== null && !operation) { const value = queuedSignInReturn; queuedSignInReturn = null; void connectionController.signInReturned(value); } }
-function runQueuedResidentRebind() { if (residentRebindQueued && !operation && !sending) queueResidentRebind(); }
+function runQueuedResidentRebind() { if (residentRebindQueue?.pending && residentCloudFlow()) void residentRebindQueue.resume(rebindResident, residentRebindBlocked)?.catch(() => {}); }
 async function remoteIdentity(remote: RemoteProtocol, signal: AbortSignal) {
   const credential = await remoteCredentialStore.read(remote.origin);
   if (!credential || !remote.session) throw new Error('Pair this agent before connecting.');
@@ -979,7 +986,7 @@ async function recheckResidentPlan(){
   try{
     const admission=await admitCloudResident(controller.signal);
     const target=residentBindable()?admission.binding:residentBinding;
-    if(target!=='kept'&&target!==residentBinding)residentRebindQueued=true;
+    if(target!=='kept'&&target!==residentBinding)residentRebinds().queue();
     else if(admission.notice?.open||admission.notice?.error)update({open:true,purpose:state.purpose==='plan'||state.purpose==='cloud-account'?state.purpose:'agent',message:'',error:admission.notice.error??''});
   }catch{/* The next return checks again; the agent keeps running as it is. */}
   finally{if(operation===controller)operation=null;runQueuedResidentRebind();}
@@ -1675,7 +1682,7 @@ async function residentBrowserLoginAction(signal: AbortSignal) {
   let login:Awaited<ReturnType<typeof cloud.login>>;
   try{login=await cloud.login(signal,()=>update({message:`Finish signing in to ${cloudServiceName(cloud.environment)} in your browser, then return here.`}));}
   // A cancelled or failed sign-in leaves the stored sign-in as it was: re-admit it afterwards.
-  catch(error){if(kept)residentRebindQueued=true;throw error;}
+  catch(error){if(kept)residentRebinds().queue();throw error;}
   const issued=(await cloudCredentialStore.read(residentEnvironment()))?.credentialId;
   // Admission binds the new sign-in: native attaches when the process already matches, otherwise
   // it restarts the agent once (a process bound to the replaced key is stopped by the write).
@@ -2587,7 +2594,7 @@ export const connectionController = {
       // The agent keeps running: reconnected (or restarted) without Cloud inference, and the
       // sign-in dialog asks for an account again.
       // A cancelled sign-out still removed the local key above; the agent is then started by the queued rebind.
-      if(residentCloudFlow()){if(signal.aborted)residentRebindQueued=true;else{retire();try{await connectResident(signal);}catch(error){if(residentAlwaysPresent&&!active)update({kind:'recovering'});throw error;}update({message,open:true,...(state.residentInference==='unknown'?{error:RESIDENT_UNBIND_UNCONFIRMED}:{})});}}
+      if(residentCloudFlow()){if(signal.aborted)residentRebinds().queue();else{retire();try{await connectResident(signal);}catch(error){if(residentAlwaysPresent&&!active)update({kind:'recovering'});throw error;}update({message,open:true,...(state.residentInference==='unknown'?{error:RESIDENT_UNBIND_UNCONFIRMED}:{})});}}
     });
     // P-43: signing out unbinds inference only; the resident restarts without it.
     await ensureResident();
