@@ -10,6 +10,8 @@ export const nativeSource=name=>join(root,'android/app/src/main/java/ai/elizares
 export const fixture=name=>join(root,'test/fixtures',name);
 // Shared speech pipeline (ai.eliza.voice) and its upstream host-JVM fixtures at the reviewed pin.
 export const upstreamVoiceSource=name=>join(root,'vendor/eliza/plugins/plugin-local-inference/native/android/src/main/java/ai/eliza/voice',name);
+// The shared product-subclassable speech bridge (AlphaVoiceCloudPlugin's base) at the reviewed pin.
+export const upstreamBridgeSource=name=>join(root,'vendor/eliza/plugins/plugin-local-inference/native/android/speech-bridge/src/main/java/ai/eliza/voice',name);
 export const upstreamVoiceFixture=name=>join(root,'vendor/eliza/packages/app/scripts/paradee-voice/speech-pipeline',name);
 
 const homebrew='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home';

@@ -8,6 +8,8 @@ if (!paradee.isDirectory()) {
  ext.elizaSpeechSourceDir = file('../../vendor/eliza/packages/app/platforms/android/local-speech')
  apply from: new File(ext.elizaSpeechSourceDir, 'consumer.gradle')
 } else {
+ // Alpha's AlphaVoiceCloud bridge subclasses the shared LocalSpeechBridgePlugin.
+ ext.elizaSpeechBridgeCapacitor = 'true'
  def nativeOutput = file('../../.eliza/paradee-voice/native')
  def cloudProfile = project.findProperty('ELIZA_RUNTIME_PROFILE')?.toString() == 'cloud'
  def unpackaged = project.findProperty('ELIZA_ALLOW_UNPACKAGED_RUNTIME')?.toString() == '1'
@@ -20,11 +22,12 @@ if (!paradee.isDirectory()) {
    compileSdk 36
    defaultConfig { minSdk 26 }
    sourceSets.main {
-    java.srcDirs = [new File(paradee, 'src/main/java')]
+    java.srcDirs = [new File(paradee, 'src/main/java'), new File(paradee, 'speech-bridge/src/main/java')]
     manifest.srcFile new File(paradee, 'src/main/AndroidManifest.xml')
    }
    compileOptions { sourceCompatibility JavaVersion.VERSION_21; targetCompatibility JavaVersion.VERSION_21 }
   }
+  dependencies { compileOnly project(':capacitor-android') }
  } else {
   ext.elizaParadeeSourceDir = paradee
   ext.elizaParadeeNativeDir = nativeOutput

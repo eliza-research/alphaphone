@@ -28,8 +28,18 @@ through `:local-speech`. Speech output, recognition and VAD share one process-wi
 session: cancelling a request fences only the engine's own calls, and an idle or memory-pressure
 release drops only its own hold (the models are freed once no consumer holds them). VAD keeps a
 small separate context so capture stays full duplex while a sentence is synthesized.
-`AlphaVoiceCloudPlugin` keeps only the bridge, owner/account binding, recordings and resident
-transport; `AlphaApplication` names the timing export `alpha-native-voice-timing-v3`. The class
+The Capacitor bridge itself is the shared `LocalSpeechBridgePlugin`
+(`plugin-local-inference/native/android/speech-bridge`, enabled in `:local-speech` with
+`elizaSpeechBridgeCapacitor=true`): recording drafts (`LocalVoiceRecording`, decoded by
+`RecordingPcm`), single-request admission and the cancellation drain (`SpeechRequestGate`),
+on-device recognition and synthesis, playback, audio focus, live capture and the latency
+collector. `AlphaVoiceCloudPlugin` is a thin subclass that keeps the `AlphaVoiceCloud` name, the
+installed `alpha-cloud-voice-`/`alpha-cloud-tts-` cache prefixes, the owner's resident transport
+(`AlphaLocalAgentPlugin.openNativeVoiceTransport`), Notes audio storage and the Alpha-only
+methods (browser-reading synthesis, paired agent speech, the explicit Cloud profile). The renderer
+side is the shared `@elizaos/voice/native-live` and `@elizaos/voice/native-speech`, which
+`native-live-voice.ts`, `native-voice-turn.ts`, `local-voice.ts` and `paired-voice.ts` bind to
+that bridge. `AlphaApplication` names the timing export `alpha-native-voice-timing-v3`. The class
 names in the sections below refer to these shared classes.
 
 The app's own `ElizaVoiceNative` (embeddings and the host natives) is built from the same
@@ -306,7 +316,7 @@ still required.
 
 ## Streamed speech output and audio focus (#397)
 
-When the pinned engine reports `ParadeeVoice.supportsStreaming()`, `AlphaVoiceCloudPlugin` synthesizes
+When the pinned engine reports `ParadeeVoice.supportsStreaming()`, the speech bridge synthesizes
 each reviewed sentence with `synthesizeStream` and plays the chunks through an AudioTrack
 (`AudioTrackSpeechOutput`: MODE_STREAM, 24 kHz mono float, USAGE_ASSISTANT/CONTENT_TYPE_SPEECH) as
 they arrive. `StreamingSpeechPlayback` holds at most 30 s of PCM in a `SpeechPcmQueue`; a full queue

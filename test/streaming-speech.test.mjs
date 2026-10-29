@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { nativeSource, runJvm, upstreamVoiceFixture, upstreamVoiceSource } from './fixtures/jvm-tools.mjs';
+import { runJvm, upstreamBridgeSource, upstreamVoiceFixture, upstreamVoiceSource } from './fixtures/jvm-tools.mjs';
 
 // Issue #397 streamed on-device speech output. The queue, writer, focus policy and validated session
 // backend are the shared ai.eliza.voice pipeline at the reviewed pin; Alpha runs its upstream host-JVM
 // fixture and checks its own bridge wiring. Not AudioTrack, device playback or latency evidence.
-const read = name => fs.readFileSync(nativeSource(name), 'utf8');
+// AlphaVoiceCloudPlugin subclasses the shared bridge, which owns the local speech wiring checked here.
+const bridge = () => fs.readFileSync(upstreamBridgeSource('LocalSpeechBridgePlugin.java'), 'utf8');
 const shared = name => fs.readFileSync(upstreamVoiceSource(name), 'utf8');
 const strip = source => source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
 
@@ -16,7 +17,7 @@ test('bounded PCM queue, streamed writer, cancellation, focus policy and chunk v
 });
 
 test('local speech streams through AudioTrack when the engine supports it and falls back only when it does not', () => {
-  const plugin = strip(read('AlphaVoiceCloudPlugin.java')), output = strip(shared('AudioTrackSpeechOutput.java')), paradee = strip(shared('SessionSpeech.java'));
+  const plugin = strip(bridge()), output = strip(shared('AudioTrackSpeechOutput.java')), paradee = strip(shared('SessionSpeech.java'));
   // One process-wide session owns speech output, recognition and VAD. The engine's backend is its own
   // client of that session: its cancel and release never fence or unload another consumer's calls.
   assert.match(plugin, /new LocalSpeechEngine\(\(\)->SessionSpeech\.shared\(getContext\(\)\)\)/);
@@ -44,12 +45,12 @@ test('local speech streams through AudioTrack when the engine supports it and fa
   // Bounded capacity, early publication and stop/barge-in semantics.
   assert.match(plugin, /STREAM_CAPACITY=LocalSpeechEngine\.STREAM_RATE\*30;/);
   assert.match(plugin, /if\(streamPlayback!=null\)\{streamPlayback\.stop\(\);streamPlayback=null;VoiceLatencyProbe\.TRIALS\.stopped\(playbackTrial\);\}/);
-  assert.match(plugin, /private static boolean keepsEngine\(Pending request\)\{return request\.keepEngine&&request\.cancelled;\}/, 'a cancelled stream keeps the models loaded');
+  assert.match(plugin, /private static boolean keepsEngine\(SpeechRequestGate\.Request request\)\{return request\.keepEngine&&request\.cancelled;\}/, 'a cancelled stream keeps the models loaded');
   assert.match(plugin, /if\(request\.resolvedEarly\)\{\}else if/);
 });
 
 test('speech holds transient duckable audio focus only while it plays and never starts during a call', () => {
-  const plugin = strip(read('AlphaVoiceCloudPlugin.java')), focus = strip(shared('SpeechAudioFocus.java')), capture = strip(shared('LiveVoiceCapture.java'));
+  const plugin = strip(bridge()), focus = strip(shared('SpeechAudioFocus.java')), capture = strip(shared('LiveVoiceCapture.java'));
   assert.match(focus, /new AudioFocusRequest\.Builder\(AudioManager\.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK\)/);
   assert.match(focus, /abandonAudioFocusRequest\(request\)/);
   assert.match(focus, /addOnModeChangedListener\(executor,modeListener\)/);

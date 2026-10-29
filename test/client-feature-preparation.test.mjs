@@ -65,7 +65,7 @@ test('direct local development launcher prepares a clean client tree before star
 
 test('actual pinned client features retain shared voice source unchanged and exclude dashboard transport',()=>{
  const source=prepareClientFeatures(),stamp=JSON.parse(fs.readFileSync(path.join(source,'.source.json')));
-assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','utf8')).commit);assert.equal(stamp.projectionVersion,11);
+assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','utf8')).commit);assert.equal(stamp.projectionVersion,12);
  // Node consumers (the Vite config bundle and backend hosts) load linked-sync through cloud-protocol.
  for(const file of ['google-sync-port.ts','sync-controller.ts','linked-store.ts']){
   const name='plugins/plugin-calendar/src/linked-sync/'+file,projected=fs.readFileSync(path.join(source,name),'utf8'),original=fs.readFileSync(path.join('vendor/eliza',name),'utf8');

@@ -585,8 +585,12 @@ test('sources: no Web Speech, storage or logging in the assistant path; the adap
   // The assistant uses its own controller and the same send policy boundary as the recorded loop.
   assert.match(adapter, /new VoiceAssistantSession\(\{/);
   const native = fs.readFileSync(new URL('../apps/app/src/runtime/native-live-voice.ts', import.meta.url), 'utf8');
-  assert.match(native, /nativeAssistantListener[\s\S]{0,300}return liveAssistantListener\(openNativeLiveStream, options\)/);
-  assert.match(native, /createNativeLiveDictation[\s\S]{0,300}return createLiveDictation\(openNativeLiveStream, options\)/);
+  assert.match(native, /nativeAssistantListener[\s\S]{0,300}return voice\.assistantListener\(options\)/);
+  assert.match(native, /createNativeLiveDictation[\s\S]{0,300}return voice\.dictation\(options\)/);
+  // The shared native transport hands its own opener to the shared listen and dictation adapters.
+  const nativeShared = fs.readFileSync(new URL('../vendor/eliza/packages/voice/src/native-live-voice.ts', import.meta.url), 'utf8');
+  assert.match(nativeShared, /return liveAssistantListener\(open, listen\)/);
+  assert.match(nativeShared, /return createLiveDictation\(open, dictate\)/);
   // The shared adapters fix the echo-cancellation choice: the assistant cancels its own speaker, dictation does not.
   const shared = fs.readFileSync(new URL('../vendor/eliza/packages/voice/src/live-voice-session.ts', import.meta.url), 'utf8');
   assert.match(shared, /export function liveAssistantListener[\s\S]{0,500}echoCancel: true/);

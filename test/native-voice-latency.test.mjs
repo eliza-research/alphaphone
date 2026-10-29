@@ -143,12 +143,12 @@ test('CLI distinguishes insufficient samples, failed budgets and measured timing
 });
 
 test('the Android collector times capture from AudioRecord and playback from the output timestamp (host JVM state)', async () => {
-  const { nativeSource, runJvm, upstreamVoiceFixture, upstreamVoiceSource } = await import('./fixtures/jvm-tools.mjs');
+  const { nativeSource, runJvm, upstreamBridgeSource, upstreamVoiceFixture, upstreamVoiceSource } = await import('./fixtures/jvm-tools.mjs');
   assert.match(runJvm([upstreamVoiceSource('VoiceLatencyTrials.java'), upstreamVoiceFixture('VoiceLatencyTrialsTest.java')], 'ai.eliza.voice.VoiceLatencyTrialsTest'), /^PASS voice latency trials/);
   const harness = fs.readFileSync(path.join(path.dirname(nativeSource('x')), '../../../../../androidTest/java/ai/elizaresearch/alphaphone/NativeVoiceLatencyInstrumentedTest.java'), 'utf8');
   assert.match(harness, /\},"harness-no-inference",source,LiveVoiceCapture\.detectors\(VoiceAssets\.sharedInference\(app\)\)\);/, 'the harness labels its own trials');
   const read = name => fs.readFileSync(nativeSource(name), 'utf8'), shared = name => fs.readFileSync(upstreamVoiceSource(name), 'utf8');
-  const probe = shared('VoiceLatencyProbe.java'), capture = shared('LiveVoiceCapture.java'), plugin = read('AlphaVoiceCloudPlugin.java');
+  const probe = shared('VoiceLatencyProbe.java'), capture = shared('LiveVoiceCapture.java'), plugin = fs.readFileSync(upstreamBridgeSource('LocalSpeechBridgePlugin.java'), 'utf8');
   // The shared probe keeps Alpha's timing document name and build identity, configured once per process.
   assert.match(read('AlphaApplication.java'), /VoiceLatencyProbe\.configureHost\("alpha-native-voice-timing-v3",BuildConfig\.ELIZA_SOURCE_COMMIT,BuildConfig\.ELIZA_SOURCE_DIRTY,/);
   assert.match(probe, /getTimestamp\(scratch,AudioTimestamp\.TIMEBASE_MONOTONIC\)/);
