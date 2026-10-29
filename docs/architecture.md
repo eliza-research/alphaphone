@@ -201,11 +201,12 @@ at the pin). The resident boot selects one with `ELIZA_RUNTIME_PROFILE`; the sha
 writes the text, embedding and agent-speech routing and selects the shared powered-on
 scheduling policy (`ELIZA_MISSED_SCHEDULED_OCCURRENCES=record`, P-10). A scheduled workflow
 or prompt-automation occurrence that passed while the agent was not running (phone off or
-resident stopped) and is reached more than 30 minutes late is recorded once as missed and
+resident stopped) and is reached more than 30 minutes late (P-75) is recorded once as missed and
 never replayed; the workflow history labels it "Missed — not run", and a missed one-time
 prompt stays listed, disabled, for an explicit Run now. A delay while the resident was running
 (Doze, a busy scheduler) still runs the occurrence late, since Doze is a separate constraint.
-Resident digests use the same 30-minute admission window (elizaOS/eliza#38161). Alpha's admitted host module declares
+Phone typed schedules and resident digests admit with the same 30-minute window, measured from
+the scheduled time alone. Alpha's admitted host module declares
 only its Cloud API base (`backend/native-cloud-runtime.ts`). Current-turn screen and
 selection identifiers travel only in `metadata.clientDevice.context` under the shared
 `client-turn-observation` contract; the older instruction envelope remains for unnegotiated
@@ -431,7 +432,10 @@ renderer contract in `@elizaos/contracts/deletion-window` and the notice in `@el
 The Clock hand-off contract is shared: `plugin-assistant`'s `clock-handoff.ts` (exported
 from `device-clock-review`) owns handoff validation, the capability policy, review text and
 receipt binding, and `apps/app/src/runtime/clock-contract.ts` only binds Alpha's brand name
-and existing import names. `ClockHandoff.java` builds the Android Clock intents. Upstream
+and existing import names. The shared `plugin-native-system` `clock.ClockHandoff` builds the
+Android Clock intents and starts the resolved external handler (a launched Activity is never
+a receipt), and `clock.ClockDays` admits repeat days; Alpha's `DailyAppsPlugin.clockHandoff`
+and `ClockAgentReview` only bind them, and Alpha keeps no Clock intent copy. Upstream
 offers `clock.handoff.v1`, `clock.handoff.v2` (repeat days) and `clock.alarms.v1` (alarms
 owned by the host app) in `packages/agent/src/api/device-action-routes.ts` at the pin. Alpha
 negotiates through the shared `clockHandoffCapabilities` policy: `clock.handoff.v1` on Android
@@ -443,7 +447,19 @@ one-time alarm; the shared dispatch validator omits `days`, so Clock never recei
 store: `packages/app`'s `SlotClockPlugin` builds `ClockHostClient` with `AlarmMetadata`, and
 the same client built without it advertises only `clock.handoff.v1,clock.handoff.v2`. Moving
 Eliza to the shared handoff policy, and what happens to alarms already saved in `ElizaAlarms`,
-is an open owner decision; until then the two brands advertise different Clock capabilities.
+is an open owner decision (#681 item 5); until then the two brands advertise different Clock
+capabilities. The seam is upstream: `clock.ClockProfile` (`HANDOFF_ONLY` or `OWNED_ALARMS`)
+selects the Eliza host's capabilities in `SlotClockPlugin.CLOCK_PROFILE`, and
+`ClockProfile.SavedAlarms` names the saved-alarm paths (keep, read-only, hand off to Clock).
+
+Other shared system pieces Alpha only binds: the Cloud key revocation that runs before a
+confirmed data reset (`CloudKeyRevocation.resetStep` in `packages/auth`, bounded to 8 seconds,
+bound in `AlphaDataReset`), the privacy-bounded problem log (`plugin-native-system`
+`crash.CrashLog` and `@elizaos/capacitor-system/crash-log`, bound by `AlphaDevicePlugin` and
+`runtime/crash-log.ts`, which adds only Alpha's Cloud inference records), and the startup
+permission walkthrough policy (`packages/ui` `permissions/permission-walkthrough.ts`, bound by
+`startup-permission-flow.ts` and `startup-permission-progress.ts` under Alpha's installed
+storage names).
 
 Device-local Notes recovery is shared too: unsaved-edit drafts and their conflict merge
 (`notes-draft.ts`), the capacity-aware vault and the owner Trash actions

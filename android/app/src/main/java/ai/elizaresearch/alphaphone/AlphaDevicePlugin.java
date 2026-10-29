@@ -138,20 +138,20 @@ public final class AlphaDevicePlugin extends Plugin {
  private void diagnostics(PluginCall call,Runnable work){
   PluginWorkers.submit(diagnosticsWorker,work,()->call.reject("Problem log is unavailable"));
  }
- /** Local problem log: failure classes only, never messages, stacks or content. */
+ /** Local problem log (shared plugin-native-system crash.CrashLog): failure classes only, never messages, stacks or content. */
  @PluginMethod public void crashLog(PluginCall call){
   diagnostics(call,()->{
    try{
-    try{AlphaCrashLog.collectExitReasons(getContext());}catch(Exception unavailable){/* Exit history is best effort. */}
-    JSObject out=new JSObject();out.put("entries",AlphaCrashLog.read(getContext()).getJSONArray("entries"));out.put("exitHistory",Build.VERSION.SDK_INT>=Build.VERSION_CODES.R);call.resolve(out);
+    try{ai.eliza.plugins.system.crash.CrashLog.collectExitReasons(getContext());}catch(Exception unavailable){/* Exit history is best effort. */}
+    JSObject out=new JSObject();out.put("entries",ai.eliza.plugins.system.crash.CrashLog.read(getContext()).getJSONArray("entries"));out.put("exitHistory",Build.VERSION.SDK_INT>=Build.VERSION_CODES.R);call.resolve(out);
    }catch(Exception error){call.reject("Problem log is unavailable");}
   });
  }
  @PluginMethod public void recordRendererFailure(PluginCall call){
-  diagnostics(call,()->{try{AlphaCrashLog.recordRenderer(getContext(),call.getString("kind"),call.getString("errorClass"));call.resolve();}catch(Exception error){call.reject("Problem was not recorded");}});
+  diagnostics(call,()->{try{ai.eliza.plugins.system.crash.CrashLog.recordRenderer(getContext(),call.getString("kind"),call.getString("errorClass"));call.resolve();}catch(Exception error){call.reject("Problem was not recorded");}});
  }
  @PluginMethod public void clearCrashLog(PluginCall call){
-  diagnostics(call,()->{try{AlphaCrashLog.clear(getContext());call.resolve();}catch(Exception error){call.reject("Problem log could not be cleared");}});
+  diagnostics(call,()->{try{ai.eliza.plugins.system.crash.CrashLog.clear(getContext());call.resolve();}catch(Exception error){call.reject("Problem log could not be cleared");}});
  }
  /** Non-secret build identity for diagnostics: variant, pin and packaged runtime hashes. */
  @PluginMethod public void diagnosticsFacts(PluginCall call){

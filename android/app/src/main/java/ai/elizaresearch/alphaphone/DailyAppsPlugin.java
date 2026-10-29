@@ -82,8 +82,14 @@ public class DailyAppsPlugin extends ai.eliza.plugins.reminders.ReminderPlugin {
    while(keys.hasNext()){String key=keys.next();if(!java.util.Arrays.asList("action","hour","minute","label","snoozeMinutes","reviewed","timeZone","days").contains(key))throw new IllegalArgumentException("Unexpected Clock option");}
    if(data.has("timeZone")&&(!(data.opt("timeZone") instanceof String)||((String)data.opt("timeZone")).length()>100))throw new IllegalArgumentException("Invalid Clock time zone");
    Object label=data.opt("label");if(label!=null&&label!=org.json.JSONObject.NULL&&!(label instanceof String))throw new IllegalArgumentException("Invalid Clock label");
-   call.resolve(ClockHandoff.launch(getActivity(),call.getString("action"),clockInteger(data,"hour"),clockInteger(data,"minute"),label instanceof String?(String)label:null,clockInteger(data,"snoozeMinutes"),Boolean.TRUE.equals(data.opt("reviewed")),call.getString("timeZone"),ClockHandoff.days(data.opt("days"))));
-  }catch(IllegalArgumentException invalid){call.resolve(ClockHandoff.result(call.getString("action"),"failed",invalid.getMessage()));}
+   // Shared reviewed handoff (plugin-native-system clock.ClockHandoff): a launched Clock activity is
+   // never a receipt; the strongest status is "opened", naming the package that received it.
+   call.resolve(clockResult(ai.eliza.plugins.system.clock.ClockHandoff.launch(getActivity(),"Alpha",call.getString("action"),clockInteger(data,"hour"),clockInteger(data,"minute"),label instanceof String?(String)label:null,clockInteger(data,"snoozeMinutes"),Boolean.TRUE.equals(data.opt("reviewed")),call.getString("timeZone"),ai.eliza.plugins.system.clock.ClockDays.strict(data.opt("days")))));
+  }catch(IllegalArgumentException invalid){call.resolve(clockResult(ai.eliza.plugins.system.clock.ClockHandoff.result(call.getString("action"),ai.eliza.plugins.system.clock.ClockHandoff.Status.FAILED,invalid.getMessage())));}
+ }
+ static JSObject clockResult(ai.eliza.plugins.system.clock.ClockHandoff.Result result){
+  JSObject out=new JSObject();out.put("action",result.action);out.put("status",result.status.wire);out.put("message",result.message);
+  if(result.receiver!=null)out.put("package",result.receiver);return out;
  }
  @PluginMethod public void capabilities(PluginCall call) {
   JSArray actions = new JSArray();

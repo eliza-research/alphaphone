@@ -235,8 +235,9 @@ function launches(name, code) {
     if (method === "launch" ? !launchers.has(receiver) : receiver !== undefined && receiver !== "super" && receiver !== "this") continue;
     // A declaration of the method, not a call of it.
     if (/\b(?:void|boolean)\s+$/.test(code.slice(Math.max(0, at - 12), at))) continue;
-    // LateLaunch.ask in Alpha; the shared TelephonyPlugin base has the same guard as its launch(call, ...) helper.
-    let guarded = /(?:LateLaunch\.ask|(?<![\w.])launch)\(\s*\w+\s*,\s*\(\)\s*->\s*$/.test(code.slice(Math.max(0, at - 80), at));
+    // LateLaunch.ask in Alpha; the shared TelephonyPlugin base has the same guard as its launch(call, ...) helper
+    // and the shared PhotosPlugin as its ask(call, ...) helper (both checked below).
+    let guarded = /(?:LateLaunch\.ask|(?<![\w.])(?:launch|ask))\(\s*\w+\s*,\s*\(\)\s*->\s*$/.test(code.slice(Math.max(0, at - 80), at));
     for (const block of all.filter(block => block.start < at && at < block.end).sort((a, b) => b.start - a.start)) {
       if (guarded || block.kind === "deferred") break;
       if (block.kind === "try" && block.catches.some(type => ANSWERS_A_MISSING_LAUNCHER.has(type))) guarded = true;
@@ -281,10 +282,17 @@ test("Capacitor's own permission request, and the shared plugins' requests an ap
   assert.deepEqual(declaring, ["AlphaCalendarPlugin.java", "AlphaContactsPlugin.java", "AlphaHostedResultsPlugin.java", "AlphaPhotoLibraryPlugin.java", "AlphaPhotosPlugin.java", "AlphaSystemPlugin.java", "AlphaTelephonyPlugin.java", "AlphaVoiceCloudPlugin.java", "DailyAppsPlugin.java"], "the plugins that declare permissions");
   for (const name of declaring.filter(name=>name!=="AlphaContactsPlugin.java")) {
     if(name==='AlphaPhotosPlugin.java'||name==='AlphaPhotoLibraryPlugin.java') {
-      // Photos must select aliases for this Android version, rather than asking
-      // for the obsolete legacy permission together with the current media grants.
-      assert.match(read(name),/@Override @PluginMethod public void requestPermissions\(PluginCall call\)\{(?:requestLibraryAccess|requestAccess)\(call\);\}/);
-      assert.match(read(name),/LateLaunch\.ask\(call,\(\)->requestPermissionForAliases\(aliases,call,"libraryPermissionResult"\)\)/);
+      // Registrations of the shared PhotosPlugin and DeviceLibraryPlugin. Photos must select aliases for this
+      // Android version, rather than asking for the obsolete legacy permission together with the current media
+      // grants, and a late request is answered with Alpha's LateLaunch wording.
+      const media="vendor/eliza/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/";
+      const base=fs.readFileSync(media+(name==='AlphaPhotosPlugin.java'?"PhotosPlugin.java":"DeviceLibraryPlugin.java"),"utf8");
+      assert.match(base,/@Override\n {2}@PluginMethod\n {2}public void requestPermissions\(PluginCall call\) \{\n {4}(?:requestLibraryAccess|requestAccess)\(call\);\n {2}\}/);
+      if(name==='AlphaPhotosPlugin.java'){
+        assert.match(base,/ask\(call, \(\) -> requestPermissionForAliases\(aliases, call, "libraryPermissionResult"\)\);/);
+        assert.match(base,/protected final boolean ask\(PluginCall call, Runnable launch\) \{\n {4}try \{\n {6}launch\.run\(\);\n {6}return true;\n {4}\} catch \(IllegalStateException closed\) \{\n {6}call\.reject\(closedMessage\(\)\);\n {6}return false;/);
+      } else assert.match(base,/try \{\n {6}requestPermissionForAliases\(aliases, call, "libraryPermissionResult"\);\n {4}\} catch \(IllegalStateException closed\) \{\n {6}call\.reject\(closedMessage\(\)\);/);
+      assert.match(read(name),/@Override protected String closedMessage\(\)\{return LateLaunch\.CLOSED;\}/);
     } else if(name==='AlphaTelephonyPlugin.java') {
       // The shared TelephonyPlugin base answers a late request the same way (its launch helper rejects with CLOSED).
       const base=fs.readFileSync("vendor/eliza/plugins/plugin-native-messages/android/src/main/java/ai/eliza/plugins/messages/TelephonyPlugin.java","utf8");

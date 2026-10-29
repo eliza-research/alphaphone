@@ -1,5 +1,5 @@
 import React from 'react';
-import {MailFolderPicker} from '../apps/app/src/prototype/mail-folder-picker.tsx';
+import {MailFolderPicker} from '../.eliza/client-features/plugins/plugin-inbox/src/components/mailbox/MailFolderPicker.tsx';
 import {mailSenderImage} from '../apps/app/src/runtime/mail-sender-image.ts';
 import {decodeMailPreview} from '../apps/app/src/runtime/mail-preview.ts';
 import {readGmailAccountChoice,saveGmailAccountChoice} from '../apps/app/src/runtime/gmail-account-selection.ts';

@@ -83,8 +83,8 @@ state, not new storage domains.
 (`render`/`startup`/`uncaught`) and error class name, never messages, stacks, URLs or
 content. The web build stores them in `alpha.crash-log.v1` in this browser profile (best
 effort: 50 entries, 30 days, unreadable bytes read as empty and storage failures are
-ignored). Android keeps the log natively in `AlphaCrashLog` (no-backup
-`crash-log/v1.json`), adding uncaught exception classes and Android's recorded process
+ignored). Android keeps the log natively in the shared `plugin-native-system`
+`crash.CrashLog` (no-backup `crash-log/v1.json`, the same installed path), adding uncaught exception classes and Android's recorded process
 exit reasons (`getHistoricalProcessExitReasons`, Android 11+). Settings > About shows
 it, and Export diagnostics (`runtime/diagnostics-export.ts`) shares or saves an
 allowlisted JSON report (versions, pin, runtime hashes, permission and role state,
