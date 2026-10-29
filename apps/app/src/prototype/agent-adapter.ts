@@ -1396,6 +1396,10 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       }else{
         if(pageLeaving){if(fromComposer)this.composerDraft?.abandon();return;}
         if(fromComposer)await this.composerDraft?.commit();
+        // The agent recorded the user turn before the reply failed: the sent bubble adopts its
+        // message identity, as on success, so a later conversation re-read merges onto it.
+        const recorded=e&&typeof e==='object'?e as {userMessageId?:unknown;messageBinding?:unknown}:{};
+        if(this.live&&sameChat()&&typeof recorded.userMessageId==='string'&&recorded.messageBinding&&typeof recorded.messageBinding==='object')this.setState((previous:Shell)=>({msgs:previous.msgs.map((item:Shell)=>item.id===userId?{...item,id:recorded.userMessageId,messageBinding:recorded.messageBinding}:item)}));
         // After Stop the controller cancels, announces and reconciles once; its notice is the one shown.
         const reconciling=!!connectionController.getSnapshot().replyNotice&&e instanceof AlphaClientError&&e.code==='cancelled';
         // The owner changed mid-turn: say it was interrupted, but never show the previous agent's partial

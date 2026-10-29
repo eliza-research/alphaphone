@@ -4,6 +4,7 @@ import {parseCloudServiceInfo} from './cloud-service-info';
 import {productionCloud, stagingCloud} from './cloud-deployment.generated.ts';
 import {browserCloudResidentEnabled,browserCloudResidentEnvironment} from './browser-cloud-resident';
 import {appRecordInvalidations} from './app-record-completion';
+import {normalizeEffectReceipts} from '../../../../.eliza/client-features/packages/core/src/types/effects.ts';
 import {assertAppRecordRequestAllowed,type AppRecordMethod,type AppRecordPort} from './app-record-route-policy';
 import {AUTOMATIONS_COMMITTED_EVENT,automationsCommitted} from './automation-completion';
 import {OWNER_REMINDER_LIST,OWNER_REMINDER_READBACK,ownerReminderRoute,reminderReadPath,type ReminderNotificationBinding} from './owner-reminder-notification-protocol';
@@ -1302,6 +1303,17 @@ const RESIDENT_SIGN_IN_EXPIRED = 'Your Cloud sign-in has expired. Sign in with C
 /** Shown beside the composer while the resident is connected and the phone has no network. */
 export const INFERENCE_OFFLINE_NOTICE = 'Your agent is running; AI needs a connection. Nothing is sent until this phone is back online.';
 const RATE_LIMITED = 'The agent provider is rate-limiting requests. Wait before sending again. Alpha Phone did not retry your message.';
+/** A turn that failed after its action committed: the owner is told the action went through, never the generic failure. */
+export const EFFECT_APPLIED_INTERRUPTED = 'The requested action went through, but the reply was cut off before it finished. Check the app it changed. Nothing was run again.';
+/** Upstream's post-commit interruption (`TURN_INTERRUPTED_AFTER_EFFECT`), or an effect receipt the reply proves applied and not rolled back. */
+function effectAppliedBeforeFailure(reply:{terminalFailure?:unknown;actionResults?:unknown}):boolean {
+  const code=reply.terminalFailure&&typeof reply.terminalFailure==='object'?(reply.terminalFailure as {code?:unknown}).code:undefined;
+  if(code==='TURN_INTERRUPTED_AFTER_EFFECT')return true;
+  if(!Array.isArray(reply.actionResults))return false;
+  const receipts=reply.actionResults.flatMap(result=>{if(!result||typeof result!=='object'||!('effectReceipts' in result))return [];try{return [...normalizeEffectReceipts((result as {effectReceipts:unknown}).effectReceipts)];}catch{return [];}});
+  const reverted=new Set(receipts.flatMap(receipt=>receipt.outcome==='rolled_back'?receipt.rollback.revertedReceiptIds:[]));
+  return receipts.some(receipt=>receipt.outcome==='applied'&&!reverted.has(receipt.receiptId));
+}
 /** Owner-facing states for upstream's CHAT_FAILURE_KINDS (pinned contracts `chat.ts`). Each says
  * what happened and what to do next; none retries the message. Unlisted kinds keep the generic text. */
 export const REPLY_FAILURES = {
@@ -2708,6 +2720,7 @@ export const connectionController = {
       if(channelType==='VOICE_DM' && (('interrupted' in reply && reply.interrupted===true)||('noResponseReason' in reply && reply.noResponseReason==='ignored')))throw Error('The voice response did not complete. Check conversation history before speaking again.');
       let responseFailure: Error | undefined;
       const failed = ('interrupted' in reply && reply.interrupted===true) || ('failureKind' in reply && !!reply.failureKind) || ('terminalFailure' in reply && !!reply.terminalFailure);
+      const effectApplied=failed&&effectAppliedBeforeFailure(reply);
       // A completed Calendar read can truthfully fail its coverage guard. Its
       // visible answer and durable message identity remain usable; this is not
       // a transport failure and must not gain a retry prompt or extra card.
@@ -2727,6 +2740,10 @@ export const connectionController = {
         // on the failed turn is read like a direct HTTP refusal's; absent, nothing is invented.
         const timing = reply as { resetAt?: unknown; retryAfterSeconds?: unknown };
         responseFailure = replyFailure(failureKindOf(reply)??('interrupted' in reply&&reply.interrupted===true?'interrupted':undefined), selected, readServiceLimit({ failureKind: 'failureKind' in reply ? reply.failureKind : undefined, terminalFailure: 'terminalFailure' in reply ? reply.terminalFailure : undefined, resetAt: timing.resetAt, retryAfterSeconds: timing.retryAfterSeconds }));
+        // The turn failed after its action committed (a calendar event exists, say): the owner is
+        // told the action went through and the reply was cut off. A mapped provider or Cloud limit
+        // keeps its own retry information after that; the generic and plain interrupted texts do not.
+        if(effectApplied){const mapped=responseFailure instanceof AlphaClientError?responseFailure as AlphaClientError&{failureKind?:unknown;serviceLimit?:unknown;planAction?:unknown}:undefined;responseFailure=Object.assign(new AlphaClientError('transport-failed',mapped&&mapped.failureKind!=='interrupted'?`${EFFECT_APPLIED_INTERRUPTED} ${mapped.message}`:EFFECT_APPLIED_INTERRUPTED),{failureKind:typeof mapped?.failureKind==='string'?mapped.failureKind:failureKindOf(reply)??'interrupted'},mapped?.serviceLimit===undefined?{}:{serviceLimit:mapped.serviceLimit},mapped?.planAction===undefined?{}:{planAction:mapped.planAction});}
         if ('failureKind' in responseFailure) retractReadiness();
       }
       for(const key of ['messageId','userMessageId'] as const)if(reply[key]!==undefined&&!validateUuid(reply[key]))throw Error('The agent returned an invalid message identity.');
@@ -2756,9 +2773,13 @@ export const connectionController = {
       assertCurrent();
       // These events refresh records only. A later reply failure cannot undo a recorded effect.
       for(const invalidation of appRecordInvalidations(reply.actionResults))window.dispatchEvent(new CustomEvent(invalidation.event,{detail:{sessionId:session.sessionId,...(invalidation.revision===undefined?{}:{revision:invalidation.revision})}}));
+      // The agent recorded the user turn even when the reply failed: its identity rides on the
+      // failure so the sent bubble adopts it, and a later conversation re-read merges onto that
+      // bubble instead of adding a second copy. The failed assistant row keeps the phone's own text.
+      const messageBinding={conversationId:id,session:{...session}},recorded=typeof reply.userMessageId==='string'?{userMessageId:reply.userMessageId,messageBinding}:{};
       // A failed reply can follow a durably recorded proposal. Recover only the
       // existing identity/context-bound review; never retry chat or execute it.
-      if (responseFailure && !proposals?.length) throw responseFailure;
+      if (responseFailure && !proposals?.length) throw Object.assign(responseFailure,recorded);
       if(!failed&&directRequestedActions&&message.context.view==='home'&&cameraNavigation&&cameraAttempt&&typeof reply.userMessageId==='string'&&Array.isArray(reply.actionResults)){
         requestedCameraContinuation={messageId:reply.userMessageId,selected,session,generation,conversationId:id,client:cameraNavigation,attempt:cameraAttempt,expiresAt:Date.now()+30_000};
       }
@@ -2766,8 +2787,8 @@ export const connectionController = {
       // A reply that got through means the last Cloud limit no longer applies.
       if(!failed&&state.lastServiceLimit)update({lastServiceLimit:null});
       return { text: responseFailure
-        ? `${responseFailure.message} Pending phone actions are available for separate review. Nothing has been approved or performed automatically.`
-        : reply.text, ...(completedReads.length?{completedReads}:{}), ...(completedActions.length?{completedActions}:{}), ...(notices.length ? { notices } : {}), ...(!responseFailure?{...(typeof reply.messageId==='string'?{messageId:reply.messageId}:{}),...(typeof reply.userMessageId==='string'?{userMessageId:reply.userMessageId}:{}),messageBinding:{conversationId:id,session:{...session}}}:{}), ...(proposals ? { proposals } : {}), ...(!failed&&Array.isArray(reply.actionResults)?{actionResults:reply.actionResults}:{}) };
+        ? `${responseFailure.message} Pending phone actions are available for separate review.${effectApplied?'':' Nothing has been approved or performed automatically.'}`
+        : reply.text, ...(completedReads.length?{completedReads}:{}), ...(completedActions.length?{completedActions}:{}), ...(notices.length ? { notices } : {}), ...(!responseFailure?{...(typeof reply.messageId==='string'?{messageId:reply.messageId}:{}),messageBinding}:{}), ...recorded, ...(proposals ? { proposals } : {}), ...(!failed&&Array.isArray(reply.actionResults)?{actionResults:reply.actionResults}:{}) };
     } catch (error) {
       // Nothing carrying the message left this phone (no conversation, offline, changed owner, or a
       // Stop before the post): the composer keeps the text instead of reporting an unknown outcome.
