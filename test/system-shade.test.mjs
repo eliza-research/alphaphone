@@ -74,7 +74,7 @@ test('product builds draw no Alpha shade; the template gates the development sta
   // The last gate opened before the layer is the simulated-shade gate.
   assert.match(template.slice(0, layer), /<sc-if value="\{\{simulatedShade\}\}">\s*<sc-if value="\{\{isOn\}\}">\s*<div $/);
   // The Notifications button exists on launcher Home only, asks for Android's shade, and controls no Alpha region.
-  assert.match(template, /<sc-if value="\{\{showShadeButton\}\}"><div class="alpha-shade-row"><button class="alpha-shade-handle" data-alpha-shade-handle aria-label="Open notifications"[^>]*onClick="\{\{openSystemShade\}\}"/);
+  assert.match(template, /<sc-if value="\{\{showShadeButton\}\}"><div class="alpha-shade-row"><button type="button" class="alpha-shade-handle" data-alpha-shade-handle aria-label="Open notifications"[^>]*onClick="\{\{openSystemShade\}\}"/);
   assert.doesNotMatch(template, /aria-controls="alpha-notifications"/);
   const model = read('apps/app/src/prototype/model.js');
   assert.match(model, /shadeY: isOn && S\.shade && this\.simulatedShade\(\) \? "0" : "-100%"/);

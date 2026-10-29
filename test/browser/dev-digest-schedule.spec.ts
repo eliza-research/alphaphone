@@ -1,4 +1,15 @@
-import {test,expect} from '@playwright/test';
+import {test,expect as baseExpect} from '@playwright/test';
+// After a load the digest panel fills from IndexedDB and its first tick; under machine load that has taken longer
+// than the 5s default, so expectations wait up to 15s (as in home-daily-overview). What is expected is unchanged.
+const expect=baseExpect.configure({timeout:15_000});
+// Most tests here load the app more than once (a reload, a second tab or a restart). Each load of the development server
+// fetches its ~700 unbundled modules; with four workers on a loaded machine one load has taken 10-20s
+// (traces show single module responses of 10s), so the 30s default timed out mid-reload. The timeout
+// is explicit and per file; no step, wait or assertion changes.
+test.describe.configure({timeout:90_000});
+// Screen-entry motion is not under test here; waiting out its stability retries on every tap is what
+// ran these tests out of time under load (as in #700).
+test.use({contextOptions:{reducedMotion:'reduce'}});
 test('reviewed snapshot schedule delivers one retained result and survives reload',async({page})=>{
  await page.clock.install({time:new Date('2026-10-03T12:00:10Z')});
  await page.goto('/?mode=dev');await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Agent connection',exact:true}).click();await page.getByRole('button',{name:'Connect development profile'}).click();
@@ -52,7 +63,9 @@ test('a schedule whose time passed while the app was closed yields exactly one m
 });
 
 test('a clock set back, a paused schedule and a revoked source never settle an occurrence twice or late',async({page})=>{
- await page.clock.install({time:new Date('2026-10-03T07:59:30Z')});await page.goto('/?mode=dev');
+ // Held at 07:59:30 while the app loads and the schedule is seeded: with a running clock, a slow load or seed
+ // under machine load carried the creation itself past 08:00, so the first occurrence was never due.
+ await page.clock.install({time:new Date('2026-10-03T07:59:30Z')});await page.clock.setFixedTime(new Date('2026-10-03T07:59:30Z'));await page.goto('/?mode=dev');
  const [{loop,source}]=await seedLoops(page,[{template:'morning',localTime:'08:00',text:'Morning text'}]);
  await page.clock.setFixedTime(new Date('2026-10-03T08:00:05Z'));await digestCall(page,'tick');expect((await digestState(page)).results.map(row=>row.status)).toEqual(['completed']);
  // Clock moved back across the same occurrence, then forward again within the day.
@@ -126,7 +139,8 @@ test('a clock jump forward then back still runs the real occurrence once and nev
 });
 
 test('morning and evening at the same minute produce distinct source-backed results, and an edited time runs once at its new time',async({page})=>{
- await page.clock.install({time:new Date('2026-10-03T17:58:00Z')});await page.goto('/?mode=dev');
+ // Held before 18:00 while the app loads and both schedules are seeded, whatever that takes.
+ await page.clock.install({time:new Date('2026-10-03T17:58:00Z')});await page.clock.setFixedTime(new Date('2026-10-03T17:58:00Z'));await page.goto('/?mode=dev');
  const [morning,evening]=await seedLoops(page,[{template:'morning',localTime:'18:00',text:'Morning source text'},{template:'evening',localTime:'18:00',text:'Evening source text'}]);
  await page.clock.setFixedTime(new Date('2026-10-03T18:00:10Z'));await Promise.all([digestCall(page,'tick'),digestCall(page,'tick')]);
  const both=(await digestState(page)).results;expect(both.map(row=>row.status)).toEqual(['completed','completed']);

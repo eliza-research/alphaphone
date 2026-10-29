@@ -314,7 +314,10 @@ There is no automatic Eliza Cloud website sign-in fallback.
   path on the stored key, and says so when `accountCreated` is true.
 - **Cloud sign-in hand-off (`CloudProtocol.login`, `/api/auth/cli-session`, the `cli-login` page)**:
   the explicit browser development profile and a **Browser sign-in (diagnostic)** button
-  in test-mocks builds only; it is not the native readiness fallback.
+  in test-mocks builds only; it is not the native readiness fallback. Product bundles fold it away
+  (`cloudSignInHandOffAvailable`), refuse it before any request, and their route policies
+  (`managed-service-routes.ts`, `ConnectionRoutes.managedService`) do not admit `cli-session`; the
+  production bundle audit denies its routes and copy.
 - **Cloud (elizaOS/eliza `packages/cloud`, `packages/auth`, `packages/app`)** owns the accounts:
   - Steward links Google and email to the existing user by verified email.
   - Mobile App Auth mints the key, valid for 30 days.
@@ -440,6 +443,20 @@ Alpha's deletion documents). Moving them needs a shared storage and document-pic
 ports and its slot names. Note-origin links point only
 at Older notes voice recordings: canonical Notes records have no Notes-to-Calendar handoff
 or origin link yet.
+
+`AlphaNoteAudioPlugin` is installed-data compatibility, not a second recording engine. Storage,
+receipts, owner fences, the two-step trash/restore/purge and the legacy metadata migration are
+the shared `RecordingStore` (elizaOS `plugin-native-media`); the renderer settles permanent
+deletions with the shared `notes-recording-deletion.ts` and `notes-recording-effects.ts` plan,
+and the plugin's native backstop (`finishPermanentDeletions`, `sweepExpiredTrash`) settles the
+same receipts through `RecordingStore` while Alpha is closed. What stays in Alpha are the identities an installed phone already holds and
+that must keep resolving: the `note-audio` no-backup folder, the `note-audio-metadata:v1:` and
+`notes-trash:v1:device` / `notes-records:v1:device` / `notes-audio-deletions:v1:device` slot
+names in `AlphaCredentialStore`, the `alpha-notes-trash-backstop` WorkManager name, the
+`AlphaNoteAudio` Capacitor name, and `MediaPlayer` playback of a saved clip. Renaming any of
+these would orphan existing recordings or their deletion receipts. A shared notes-audio host
+would only rename these: no Eliza Android host uses `RecordingStore` for device-local voice
+notes today, so the plugin stays as the product's binding to the shared store.
 
 `AlphaReminders` supplies the product's existing encrypted store, preference and
 channel names, receiver/Activity identities and intent routes. `DailyApps` keeps

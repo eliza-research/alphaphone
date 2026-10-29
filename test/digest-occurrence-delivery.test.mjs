@@ -279,6 +279,7 @@ const later='2027-01-01T00:00:00.000Z';
 const rows=[
  ['on time','UTC','08:00','2026-10-03T08:00:00.000Z'],['29:59.999 late','UTC','08:00','2026-10-03T08:29:59.999Z'],['30 minutes late','UTC','08:00','2026-10-03T08:30:00.000Z'],
  ['30:00.001 late','UTC','08:00','2026-10-03T08:30:00.001Z'],['three days absent','UTC','08:00','2026-10-06T09:30:00.000Z'],
+ ['created after the time today, ticked an hour later','UTC','08:00','2026-10-03T09:00:00.000Z',{created:'2026-10-03T08:00:30.000Z'}],
  ['expired, on time','UTC','08:00','2026-10-03T08:00:30.000Z',{expiresAt:'2026-10-03T08:00:00.000Z'}],
  ['expires at this instant','UTC','08:00','2026-10-03T08:00:00.000Z',{expiresAt:'2026-10-03T08:00:00.000Z'}],
  ['expired and late','UTC','08:00','2026-10-03T11:00:00.000Z',{expiresAt:'2026-10-03T09:00:00.000Z'}],
