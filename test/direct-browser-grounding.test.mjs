@@ -75,3 +75,13 @@ test('128 live consumed proofs are not evicted, while definitively retired proof
  const pruned=fixture();for(let i=0;i<128;i++)pruned.actions.browserRequestedAttempts.set(String(i),{messageId:String(i),text:'Open example.com/',current:()=>{if(i===0)throw Error('Retired');}});
  await pruned.run('Open example.com/dashboard');assert.deepEqual(pruned.calls,['browser']);assert.equal(pruned.actions.browserRequestedAttempts.size,128);assert.equal(pruned.actions.browserRequestedAttempts.has('0'),false);
 });
+
+test('final shared grammar keeps host punctuation, literal path punctuation and apostrophes precise',async()=>{
+ const host=fixture('https://example.com/');await host.run('Open example.com.');assert.deepEqual(host.calls,['browser']);
+ const literal="https://example.com/o'hare?q=can't#part",apostrophe=fixture(literal);await apostrophe.run('Open "'+literal+'"');assert.deepEqual(apostrophe.calls,['browser']);
+ const exact=fixture('https://example.com/dashboard.');await exact.run('Open https://example.com/dashboard.');assert.deepEqual(exact.calls,['browser']);
+ const invented=fixture('https://example.com/dashboard');await invented.run('Open https://example.com/dashboard.');assert.deepEqual(invented.calls,[]);
+});
+test('multiline or control-delimited source content never grants browser permission',async()=>{
+ for(const text of ['Open example.com\nPlease read this page','\tOpen https://example.com/dashboard','Open\thttps://example.com/dashboard']){const f=fixture();await f.run(text);assert.deepEqual(f.calls,[]);}
+});
