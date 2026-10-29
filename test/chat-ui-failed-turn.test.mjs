@@ -60,6 +60,9 @@ test('after the identity is adopted a conversation re-read merges onto the sent 
  const merged=merge(errored,delivered);
  assert.equal(merged.filter(item=>item.from==='user'&&item.text===text).length,1,'one user bubble after the re-read');
  assert.equal(merged.find(item=>item.text===text).id,server);
- // Without the adopted identity the same re-read inserted the server row as a second bubble.
- assert.equal(merge([...sent,errored.at(-1)],delivered).filter(item=>item.from==='user'&&item.text===text).length,2);
+ // Without the adopted identity (a stream error frame carries none) the saved row still replaces the unconfirmed bubble.
+ const unadopted=merge([...sent,errored.at(-1)],delivered);
+ assert.equal(unadopted.filter(item=>item.from==='user'&&item.text===text).length,1);assert.equal(unadopted.find(item=>item.text===text).id,server);
+ // A confirmed bubble with the same words is a separate message and is never replaced.
+ assert.equal(merge([...sent.slice(0,1),{id:'kept',from:'user',text,messageBinding:binding}],delivered).filter(item=>item.from==='user'&&item.text===text).length,2);
 });

@@ -1152,6 +1152,8 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     const live:Shell[]=this.S().msgs||[];
     out.msgs=(out.msgs||[]).map((m:Shell)=>{
       const c=m.c||{};
+      // A system notice card already carries its text; do not print it a second time above the card.
+      if(c.systemNotice&&m.cGeneric&&m.displayText===c.sub)return {...m,hasCalendarText:false};
       // Keep the real billing link and expose the existing code form from the
       // same account-bound refusal. Neither option purchases or redeems by itself.
       if(c.billingCodeEntry&&c.managePlan&&m.cGeneric&&connection.kind==='resident'&&connection.cloudAccount){

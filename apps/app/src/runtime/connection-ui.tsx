@@ -173,6 +173,8 @@ const browserDevProfile = devSurfacesEnabled && devProfileQuery;
 const cloudEnvironmentPolicy = {development: import.meta.env.DEV, testMocks: testMocksEnabled, android: isAndroid, previewEnvironment: import.meta.env.VITE_ALPHA_CLOUD_ENVIRONMENT, cloudResident:browserCloudResidentEnabled};
 const cloudEnvironmentAllowed = (environment: unknown): environment is CloudEnvironment => browserCloudResidentEnabled ? environment===browserCloudResidentEnvironment : environment === 'production' || (testMocksEnabled && environment === 'staging');
 /** Eliza Cloud admits no request from the production web origin, so no Cloud route is started there. */
+// Pending device actions already named in a reply, per actions client (one per session).
+const announcedProposals=new WeakMap<object,Set<string>>();
 const webCloudUnavailable = () => !testMocksEnabled && !isAndroid && !browserLocalAgentEnabled;
 /** Decision P-43 (owner, 2026-10-13): the agent always runs locally. On Android production and in
  * browser development with the local agent there is never a "no agent" state: before the resident
@@ -337,6 +339,9 @@ export function mergeConversationDelivery<T extends{id:string}>(current:T[],deli
   for(let i=0;i<delivered.length;i++){
     const message=delivered[i];if(seen.has(message.id)){previous=message.id;continue;}
     if(result===current)result=[...current];let index=-1;
+    // A failed stream can end without the saved id; the saved copy replaces its unconfirmed local bubble.
+    const sent=message as {from?:unknown;text?:unknown},twin=sent.from==='user'?result.findIndex(item=>{const local=item as {from?:unknown;text?:unknown;messageBinding?:unknown};return local.from==='user'&&!local.messageBinding&&local.text===sent.text&&!delivered.some(other=>other.id===item.id);}):-1;
+    if(twin>=0){result[twin]=message;seen.add(message.id);previous=message.id;continue;}
     for(let j=i+1;j<delivered.length;j++){index=result.findIndex(item=>item.id===delivered[j].id);if(index>=0)break;}
     if(index<0&&previous!==undefined){const anchor=result.findIndex(item=>item.id===previous);if(anchor>=0)index=anchor+1;}
     result.splice(index<0?result.length:index,0,message);seen.add(message.id);previous=message.id;
@@ -2766,7 +2771,10 @@ export const connectionController = {
               items=await selected.actions.pendingReview(message.context,requestSignal);
             }
           }
-          proposals = items.flatMap(item => item.proposal ? [item.proposal] : []); notices.push(...items.flatMap(item => item.notice ? [item.notice.slice(0, 500)] : []));notices=notices.slice(0,5); }
+          // A pending action joins the first reply after it appears; later replies do not repeat it.
+          const shown=announcedProposals.get(selected.actions)??new Set<string>();announcedProposals.set(selected.actions,shown);
+          const turnItems=items.filter(item=>!item.proposalId||!shown.has(item.proposalId));for(const item of items)if(item.proposalId)shown.add(item.proposalId);
+          proposals = turnItems.flatMap(item => item.proposal ? [item.proposal] : []); notices.push(...turnItems.flatMap(item => item.notice ? [item.notice.slice(0, 500)] : []));notices=[...new Set(notices)].slice(0,5); }
         catch { update({ message: 'Reply received. Phone action proposals could not be checked; use action history.' }); }
       }
       requestSignal.throwIfAborted();
