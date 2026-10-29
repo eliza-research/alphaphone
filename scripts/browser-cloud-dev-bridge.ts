@@ -219,7 +219,7 @@ export function createBrowserCloudDevHandler(options:{profile:string;request?:ty
     if(!response.ok){
      // A 429 keeps only its retry facts (cloud-voice-limit.ts); no Cloud or provider text crosses.
      let limit:CloudVoiceLimitFacts|undefined;
-     if(response.status===429){try{const text=await response.text();limit=readCloudVoiceLimit(response.headers.get('Retry-After'),text.length<=16384?JSON.parse(text):null);}catch{limit=readCloudVoiceLimit(response.headers.get('Retry-After'),null);}}else await response.body?.cancel();
+     if(response.status===429){let body:unknown=null;const reader=response.body?.getReader();try{if(reader){const chunks:Uint8Array[]=[];let size=0;for(;;){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>16384)throw Error('Cloud limit body too large');chunks.push(part.value);}body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}}catch{body=null;}finally{await reader?.cancel().catch(()=>{});}limit=readCloudVoiceLimit(response.headers.get('Retry-After'),body);}else await response.body?.cancel();
      await current(env,c,controller.signal);send(res,response.status,{error:'Cloud voice request failed',code:'voice-http-'+response.status,...(limit?{limit}:{})});return;
     }
     if(data.operation==='stt'){if(response.headers.get('X-Eliza-STT-Provider')!=='cartesia'){await response.body?.cancel();throw Error('Cloud transcription provider was not verified');}const result=object(await response.json());await current(env,c,controller.signal);if(typeof result.transcript!=='string'||!result.transcript.trim())throw Error('Cloud returned no transcript');send(res,200,{text:result.transcript,local:false});return;}

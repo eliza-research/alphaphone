@@ -196,11 +196,13 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
   try(InputStream in=c.getErrorStream()){
    if(in!=null){ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1){if(out.size()+n>16384)throw new IOException();out.write(b,0,n);}
     JSONObject body=new JSONObject(new String(out.toByteArray(),StandardCharsets.UTF_8));JSONObject error=body.optJSONObject("error");JSONObject row=error!=null?error:body;
-    code=row.optString("code",null);retryAt=row.optString("retryAt",null);resetAt=row.optString("resetAt",null);
+    code=jsonText(row,"code");retryAt=jsonText(row,"retryAt");resetAt=jsonText(row,"resetAt");
     Object value=row.opt("retryAfterSeconds");if(value instanceof Number)seconds=(Number)value;}
   }catch(Exception ignored){/* A body that is absent, oversized or not JSON leaves only Retry-After. */}
   return CloudVoiceLimit.read(c.getHeaderField("Retry-After"),code,seconds,retryAt,resetAt,System.currentTimeMillis());
  }
+ /** A string member only: JSON null or a number is absent, never coerced to text ("null"). */
+ private static String jsonText(JSONObject row,String key){Object value=row.opt(key);return value instanceof String?(String)value:null;}
  private static JSObject limitData(CloudVoiceLimit limit){JSObject data=new JSObject();if(limit.retryAfterSeconds!=null)data.put("retryAfterSeconds",limit.retryAfterSeconds);if(limit.limitCode!=null)data.put("limitCode",limit.limitCode);if(limit.resetAt!=null)data.put("resetAt",limit.resetAt);return data;}
  @PluginMethod public void transcribeRecording(PluginCall call){submit(call,request->{
   request.failureCode="voice-stt-decode";

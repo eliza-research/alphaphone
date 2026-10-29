@@ -104,6 +104,11 @@ test('native CloudVoiceLimit keeps the same facts and never the body text',()=>{
  const plugin=fs.readFileSync('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaVoiceCloudPlugin.java','utf8');
  assert.match(plugin,/throw new VoiceHttpException\(status,status==429\?limitOf\(c\):null\)/);
  assert.match(plugin,/call\.reject\(request\.failure,request\.failureCode,limitData\(request\.limit\)\)/);
+ // String members only: JSON null or a number is no code or instant (optString would coerce them).
+ const limitOf=plugin.slice(plugin.indexOf('private static CloudVoiceLimit limitOf('),plugin.indexOf('private static JSObject limitData('));
+ assert.doesNotMatch(limitOf,/optString/);
+ assert.match(limitOf,/code=jsonText\(row,"code"\);retryAt=jsonText\(row,"retryAt"\);resetAt=jsonText\(row,"resetAt"\)/);
+ assert.match(plugin,/private static String jsonText\(JSONObject row,String key\)\{Object value=row\.opt\(key\);return value instanceof String\?\(String\)value:null;\}/);
  // Only the three facts cross the bridge.
  const data=plugin.slice(plugin.indexOf('private static JSObject limitData('),plugin.indexOf('private static JSObject limitData(')+400);
  assert.deepEqual([...data.matchAll(/data\.put\("([a-zA-Z]+)"/g)].map(match=>match[1]),['retryAfterSeconds','limitCode','resetAt']);
