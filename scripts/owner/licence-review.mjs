@@ -39,6 +39,15 @@ export const WATCHED = [
   {name: /^Denton typeface/, topic: 'proprietary font, recorded on owner statement'},
 ];
 
+/**
+ * Owner decisions that accept a flagged package as shipped. An acceptance covers the exact version
+ * named; any other version found in the notices is reported as not covered (re-decide). Recording
+ * an acceptance here is not a licence review and not legal advice.
+ */
+export const OWNER_ACCEPTED = [
+  {name: '@metamask/sdk', version: '0.33.1', decided: '2026-10-29', issue: '#674 (H-06)', note: 'owner accepts its terms and ships it in the resident runtime'},
+];
+
 const matches = (pattern, name) => (typeof pattern === 'string' ? pattern === name : pattern.test(name));
 
 /** Modules whose presence and initialisation in the agent bundle decide runtime reachability. */
@@ -91,6 +100,16 @@ export function reviewRows(entries) {
       shippedBy: /^Bundled in the on-device ([^.]+)\./.exec(entry.text ?? '')?.[1] ?? null,
       obligations: (entry.obligations ?? []).map(o => o.flag),
     };
+  });
+}
+
+/** Each owner acceptance against the notices: covered, version not covered, or not present. */
+export function acceptanceStatus(entries, accepted = OWNER_ACCEPTED) {
+  const list = Array.isArray(entries) ? entries : [];
+  return accepted.map(a => {
+    const found = list.filter(e => e?.name === a.name).map(e => String(e.version ?? '').split('\n')[0]);
+    const status = !found.length ? 'not-present' : found.every(v => v === a.version) ? 'covered' : 'version-not-covered';
+    return {name: a.name, acceptedVersion: a.version, decided: a.decided, issue: a.issue, foundVersions: found, status};
   });
 }
 
@@ -173,7 +192,9 @@ export function buildPacket(argv, root = ROOT) {
     if (snap) { noticesFile = snap.notices; packet.snapshot = {dir: path.relative(root, path.dirname(snap.notices)), upstreamCommit: snap.snapshot.upstreamCommit ?? null, sourceCommit: snap.snapshot.sourceCommit ?? null}; }
   }
   if (noticesFile) {
-    const rows = reviewRows(readJson(noticesFile));
+    const all = readJson(noticesFile);
+    const rows = reviewRows(all);
+    packet.acceptance = acceptanceStatus(all);
     packet.notices = {file: path.relative(root, path.resolve(noticesFile)), flagged: rows.length, counts: flagCounts(rows), watched: rows.filter(r => r.watched), otherFlagged: rows.filter(r => !r.watched).length};
   }
   const apkManifest = argValue(argv, '--apk-manifest');
@@ -201,6 +222,10 @@ export function formatPacket(packet) {
     lines.push('', 'Entries #674 asks about:');
     for (const r of packet.notices.watched) lines.push(`  ${r.name.slice(0, 70)} | ${r.license} | ${r.flags.join(', ')}${r.shippedBy ? ` | ${r.shippedBy}` : ''}\n    -> ${r.watched}`);
     lines.push(`  (${packet.notices.otherFlagged} other flagged entries, mostly licence-text-missing-from-package / unverified)`);
+  }
+  if (packet.acceptance) {
+    lines.push('', 'Owner acceptances (exact version only):');
+    for (const a of packet.acceptance) lines.push(`  ${a.name}@${a.acceptedVersion} (${a.issue}, ${a.decided}): ${a.status}${a.foundVersions.length ? ` [found ${a.foundVersions.join(', ')}]` : ''}${a.status === 'version-not-covered' ? ' -> the owner must re-decide for the new version' : ''}`);
   }
   if (packet.apkManifest) {
     lines.push('', 'verify-apks licenceFlags:');
