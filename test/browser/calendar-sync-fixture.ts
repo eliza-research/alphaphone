@@ -1,8 +1,8 @@
 import type {Page} from '@playwright/test';
 // Synthetic Google/native boundaries; actual Settings, controller and checkpoint code.
-export async function calendarSyncFixture(page:Page,native=false){
+export async function calendarSyncFixture(page:Page,native=false,theme?:'light'|'dark'){
  await page.addInitScript(()=>localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'})));
- await page.goto('/?mode=dev');
+ await page.goto(theme?`/?mode=dev&theme=${theme}`:'/?mode=dev');
  await page.evaluate(async(native)=>{
   const {connectionController}=await import('/src/runtime/connection-ui.tsx'),{saveGoogleCalendarSelection}=await import('/src/runtime/google-calendar-selection.ts'),{calendarDocument,initialCalendarState,prepareCalendarSource}=await import('/src/browser/calendar-store.ts');
   const userId='11111111-1111-4111-8111-111111111111',organizationId='22222222-2222-4222-8222-222222222222',grantId='33333333-3333-4333-8333-333333333333';

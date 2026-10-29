@@ -5,7 +5,7 @@ import { CONNECTED_STATES, DEVELOPMENT_STATES, FAILURE_STATES, FIXTURE_STATES, L
 // MVP-48, renderer part. Every retained primary view, subview and failure screen is checked for
 // accessible names and roles, keyboard reachability, focus order and traps, contrast, pointer
 // target size, TalkBack reading order (the rule AccessibilityInstrumentedTest applies on Android),
-// 200% text and landscape. This is Chromium on a development server. It is not a TalkBack, Switch
+// 200% and 300% text and landscape. This is Chromium on a development server. It is not a TalkBack, Switch
 // Access, physical large-font, rotation or device pass; those remain open.
 test.describe.configure({ mode: 'parallel' });
 
@@ -57,6 +57,29 @@ for (const state of STATES) {
     // So does TalkBack's reading order: the round 8 emulator failure was this check at 200% text.
     const order = format(await auditReadingOrder(page));
     expect(order, order.join('\n')).toEqual([]);
+  });
+}
+
+// Above 200% (MVP-48): Android multiplies Alpha's own text size by the system font scale, so the
+// largest in-app size (150%) with the largest system font (200%) draws text at 300%. Every primary
+// view, in the standalone and the launcher presentation, is held to the 200% rules there.
+// The states below failed on real layout defects when this lane was added (issue #701). They still
+// run, as expected failures: a fix makes Playwright report an unexpected pass, and the entry must
+// then be removed. The list may only shrink (test/accessibility-coverage.test.mjs).
+const OPEN_AT_300 = new Set([
+  'live Home', 'live Conversation', 'live Calendar new event', 'live Camera (unavailable)', 'live Browser tabs',
+  'live Browser menu', 'live Notes trash', 'live Notes recording', 'live Notes source document', 'live Settings display',
+  'launcher Home', 'launcher Conversation', 'launcher Calendar', 'launcher Camera', 'launcher Photos',
+  'launcher Workflows', 'launcher Settings display',
+]);
+for (const state of [...LIVE_STATES, ...LAUNCHER_STATES]) {
+  test(`300% text (largest in-app size and system font) is not clipped and does not overlap: ${state.name}`, async ({ page }) => {
+    test.fail(OPEN_AT_300.has(state.name), 'Open 300% layout defect, issue #701');
+    test.setTimeout(LARGE_TEXT_TIMEOUT);
+    await state.open(page, 'light');
+    await setTextScale(page, 3);
+    const found = blocking(format([...await auditPage(page, { clipping: true, overlap: true, dock: true }), ...await auditTree(page), ...await auditTabOrder(page), ...await auditReadingOrder(page)]));
+    expect(found, found.join('\n')).toEqual([]);
   });
 }
 
