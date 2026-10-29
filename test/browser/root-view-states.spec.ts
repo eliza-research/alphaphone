@@ -15,7 +15,8 @@ const EMPTY: Record<View, RegExp> = {
   Camera: /^Camera unavailable$/,
   Photos: /^No photos$/,
   Maps: /Add a location/,
-  Notes: /Waiting for an agent connection to open Notes\./,
+  // The canonical unavailable state (canonical-notes-ui WaitingNotes), as in production-surface.spec.ts.
+  Notes: /Notes is unavailable for this agent connection\. Check Settings › Agent connection\./,
   Files: /No recent files/,
   Workflows: /Connect your remote agent in Settings\. Reminders on this phone stay available/,
   Settings: /Not signed in/,
