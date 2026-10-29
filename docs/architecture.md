@@ -129,8 +129,11 @@ ledger for Alpha's own workflow and approval notices (`NoticeDelivery`, configur
 `WorkflowNoticeDelivery`) also use shared native modules. Alpha wrappers retain installed storage names, media paths and Android components.
 The workflow notice tap routes, tap capture, owner fence, approval coordination, journal recovery and poster are the
 shared `NoticeRoutes`, `NoticeTapInbox`, `NoticeOwner`, `NoticeCoordinator`, `NoticeRecovery` and `HostNoticePoster`;
-`WorkflowNoticeTaps`, `WorkflowNoticeDelivery`, `WorkflowNoticePoster` and `AlphaNotificationsPlugin` only supply the
-deployed slot names, channels, icon, tag prefix, launch actions and the foreground and question-excerpt checks. The renderer's notice owner fence, tap resolution, approval notice identity and owner-return
+the renderer bridge itself (own rows, channel settings, cross-app policy and history, tap pending/consume with the
+question excerpt, `postWorkflow`/`workflowReceipt`, all behind `ForegroundNoticeGate` on a bounded `NoticeWorker`) is the
+shared Capacitor `NotificationsHostPlugin`. `WorkflowNoticeTaps`, `WorkflowNoticeDelivery`, `WorkflowNoticePoster` and
+`AlphaNotificationsPlugin` only supply the deployed slot names, channels, icon, tag prefix, launch actions, the
+`alpha-notification-access` mirror, Alpha's own notice kinds and the canonical Eliza notification tap. The renderer's notice owner fence, tap resolution, approval notice identity and owner-return
 revalidation are the shared `@elizaos/contracts/notice-routes`. Typed workflows use the shared
 `@elizaos/contracts/phone-workflow` normalizer, and their reviewed local-time triggers run on the resident agent's
 durable task scheduler only while the phone is on (a missed occurrence is recorded, never run late, and its
