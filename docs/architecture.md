@@ -426,19 +426,22 @@ lease must stay equal to `NotesDeletionLease.LEASE_MS` used by the Android nativ
 The device-local Older notes collection still renders through Alpha's own Notes view; the
 shared `NotesWorkspace` serves only canonical agent notes until it gains a device-local
 client and recording ports.
-Three Notes files remain Alpha's because they bind Alpha storage and platform surfaces rather
-than Notes rules: `runtime/notes-trash.ts` (the Trash slot `notes-trash:v1:device` and browser
-document under the shared Trash policy), `runtime/browser-note-documents.ts` (the browser's
-local text import and export for `AlphaNoteDocuments`) and `runtime/deleted-note-origin.ts`
-(which committed reminder and Calendar deletion receipts retire a From note link, read from
-Alpha's deletion documents). Moving them needs a shared storage and document-picker port in
-`plugin-notes`; until then this Notes cut-over is not complete. The Trash storage step itself
+Notes ports are shared too: `plugin-notes/src/client` owns the document port and its browser
+implementation (`note-documents.ts`; Alpha's `runtime/browser-note-documents.ts` only registers
+it as `AlphaNoteDocuments` with the `Alpha scan` PDF file name), the deletion-receipt rule that
+retires a From note link (`note-deleted-origins.ts`; Alpha's `browser/deleted-note-origins.ts`
+only supplies its deletion documents as the receipts port) and the reviewed Calendar/reminder
+draft (`note-schedule-draft.ts`, `NotesWorkspacePorts.draftEvent`/`draftReminder`). One
+Notes file remains Alpha's because it binds Alpha storage rather than Notes rules:
+`runtime/notes-trash.ts` (the Trash slot `notes-trash:v1:device` and browser document under the
+shared Trash policy). The Trash storage step itself
 (validate in and out, compare-and-exchange, confirm by readback) is now shared as
 `createNotesTrashStore` and `compareExchangeNotesTrashPort` in `plugin-notes/src/client`
 (elizaOS/eliza#38104, develop d2578cb4); once the pin includes it, `notes-trash.ts` keeps only its two slot
-ports and its slot names. Note-origin links point only
-at Older notes voice recordings: canonical Notes records have no Notes-to-Calendar handoff
-or origin link yet.
+ports and its slot names. Note-origin links name either an Older notes voice recording (version 1) or a canonical
+Notes record (version 2, a SHA-256 of its authored fields) and share one index
+(`note-origins:v1:device`); `canonical-notes-ui.ts` binds the draft ports, so a canonical
+note's Calendar draft or reminder draft keeps a From note link that opens that exact record.
 
 `AlphaNoteAudioPlugin` is installed-data compatibility, not a second recording engine. Storage,
 receipts, owner fences, the two-step trash/restore/purge and the legacy metadata migration are
@@ -453,6 +456,17 @@ names in `AlphaCredentialStore`, the `alpha-notes-trash-backstop` WorkManager na
 these would orphan existing recordings or their deletion receipts. A shared notes-audio host
 would only rename these: no Eliza Android host uses `RecordingStore` for device-local voice
 notes today, so the plugin stays as the product's binding to the shared store.
+
+Selected documents, attachments and PDFs follow the same split. `plugin-native-media` owns the
+selected-document registry and its bridge contract (`SelectedDocuments`,
+`SelectedDocumentCalls`), the folder tree (`DocumentFolderTree`), the temporary viewer copy
+(`ReviewedFileHandoff`), verified export (`DocumentExport`, `DocumentDestinations`) and isolated
+PDF rendering (`IsolatedPdfRenderService`, `IsolatedPdfViewerActivity`, `PdfPageLimits`).
+Alpha keeps the installed identities: `DailyApps` method names and the `selected-documents`
+registry, `AlphaFiles`' `alpha-files-tree`, the `<package>.mailattachments` provider and its
+`mail-attachments` cache path, and the `.IsolatedPdfService` (`:isolated_pdf`) and
+`.AlphaMailPdfActivity` components, which are thin subclasses that only add Alpha's colours,
+messages and the development-only watchdog fixture.
 
 `AlphaReminders` supplies the product's existing encrypted store, preference and
 channel names, receiver/Activity identities and intent routes. `DailyApps` keeps
