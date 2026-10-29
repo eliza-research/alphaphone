@@ -185,6 +185,16 @@ try {
     assert.equal(sent.metadata.userTextFormat,version===1?'plain-v1':undefined);
     assert.equal(Object.hasOwn(sent.metadata,'alphaPhone'),version!==1);
     assert.equal(sent.metadata.clientDevice.context.view,'notes');
+    if(version===undefined){
+      // A product build never sends the legacy envelope: an unnegotiated peer receives the
+      // authored text, with the observation only in metadata.
+      sandbox.testMocksEnabled=false;
+      try{await controller.send('Plain authored question',{view:'notes',revision:11,sensitive:false},'format-flag-off',new AbortController().signal);}
+      finally{sandbox.testMocksEnabled=true;}
+      const plain=sentBodies.at(-1);
+      assert.equal(plain.text,'Plain authored question','flag-off builds send no legacy envelope to an unnegotiated peer');
+      assert.equal(plain.metadata.clientDevice.context.view,'notes');
+    }
   }
   const beforeRetirements=clockRetirements;
   let releaseClockRetirement;heldClockRetirement=new Promise(resolve=>{releaseClockRetirement=resolve;});
