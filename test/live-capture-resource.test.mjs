@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {nativeSource, runJvm, upstreamVoiceFixture, upstreamVoiceSource} from './fixtures/jvm-tools.mjs';
+import {nativeSource, runJvm, upstreamBridgeSource, upstreamVoiceFixture, upstreamVoiceSource} from './fixtures/jvm-tools.mjs';
 
 test('capture cancellation unblocks a read and serializes source release', () => {
  assert.match(runJvm([upstreamVoiceSource('LiveCaptureResource.java'), upstreamVoiceFixture('LiveCaptureResourceTest.java')], 'ai.eliza.voice.LiveCaptureResourceTest'), /^PASS live capture resource/);
@@ -21,7 +21,7 @@ test('native admission cancels permission/start before the serialized worker can
  assert.match(controller,/admission\.attach\(ticket,[\s\S]*next\.start\(\)/);
  assert.match(controller,/admission\.stop\(id\);\s*submit\(worker/);
  assert.match(controller,/next\.start\(\);\s*if\(!host\.open\(epoch\)\|\|!admission\.current\(ticket\)\)/);
- const plugin=fs.readFileSync(nativeSource('AlphaVoiceCloudPlugin.java'),'utf8');
+ const plugin=fs.readFileSync(upstreamBridgeSource('LocalSpeechBridgePlugin.java'),'utf8');
  assert.match(plugin,/LiveCaptureAdmission\.Ticket ticket=live\.reserve\(id,epoch\.get\(\)\);\s*if\(getPermissionState\("microphone"\)/);
- assert.match(plugin,/public boolean open\(long e\)\{return !destroyed&&speechForeground&&e==epoch\.get\(\);\}/);
+ assert.match(plugin,/public boolean open\(long admitted\)\{return !destroyed&&speechForeground&&admitted==epoch\.get\(\);\}/);
 });
