@@ -84,7 +84,7 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
  String instrumentationBaseUrl;
  String instrumentationCredentialSlot;
  private static final int AUDIO_LIMIT=8*1024*1024;
- private static final class Pending { volatile boolean cancelled,resolvedEarly,keepEngine; volatile Runnable cancelNative,deadline; volatile HttpURLConnection connection; volatile JSObject result; volatile String failure,failureCode; void cancel(){cancelled=true;if(connection!=null)connection.disconnect();Runnable nativeCancel=cancelNative;if(nativeCancel!=null)try{nativeCancel.run();}catch(RuntimeException ignored){/* Late output remains fenced even if native cancellation fails. */}} }
+ private static final class Pending { volatile boolean cancelled,resolvedEarly,keepEngine; volatile Runnable cancelNative,deadline; volatile HttpURLConnection connection; volatile JSObject result; volatile String failure,failureCode;volatile CloudVoiceLimit limit; void cancel(){cancelled=true;if(connection!=null)connection.disconnect();Runnable nativeCancel=cancelNative;if(nativeCancel!=null)try{nativeCancel.run();}catch(RuntimeException ignored){/* Late output remains fenced even if native cancellation fails. */}} }
  @Override public void load(){focus=new SpeechAudioFocus(getContext(),main,this::speechFocusChanged);focus.watchCalls(main::post,()->main.post(this::callStarted));getContext().registerComponentCallbacks(localMemoryCallbacks);capture=new AlphaCloudVoiceCapture(getContext(),v->notifyListeners("recordingStopped",v));File[] stale=getContext().getCacheDir().listFiles((d,n)->n.startsWith("alpha-cloud-tts-"));if(stale!=null)for(File f:stale)f.delete();}
  @PluginMethod public void startRecording(PluginCall call){
   if(isDraining()){call.reject("Voice cancellation is still draining");return;}
@@ -178,18 +178,32 @@ public final class AlphaVoiceCloudPlugin extends Plugin {
   Pending request=new Pending();synchronized(pending){if(destroyed||draining||!pending.isEmpty()){if(!destroyed&&!draining&&Boolean.FALSE.equals(call.getBoolean("replace",true)))call.reject("Speaker is in use","playback-busy");else call.reject("Voice request already active or unavailable");return;}pending.put(id,request);}
   Runnable deadline=request::cancel;request.deadline=deadline;main.postDelayed(deadline,120000);
   PluginWorkers.submit(workers,()->{
-   try{if(request.cancelled)throw new IOException();work.run(request);}catch(Exception error){request.failure=request.cancelled?"Voice request cancelled":"Voice request failed";if(!request.cancelled&&error instanceof VoiceHttpException)request.failureCode="voice-http-"+((VoiceHttpException)error).status;}
+   try{if(request.cancelled)throw new IOException();work.run(request);}catch(Exception error){request.failure=request.cancelled?"Voice request cancelled":"Voice request failed";if(!request.cancelled&&error instanceof VoiceHttpException){request.failureCode="voice-http-"+((VoiceHttpException)error).status;request.limit=((VoiceHttpException)error).limit;}}
    finally{try{if(request.connection!=null)request.connection.disconnect();}catch(RuntimeException error){request.failure="Voice request cleanup failed";}finally{pending.remove(id,request);main.removeCallbacks(deadline);}}
    // A continuation may submit immediately when this resolves: release admission first.
    // A streamed utterance resolved at its first chunk; its playback events report the rest.
-   if(request.resolvedEarly){/* Settled. */}else if(request.cancelled||destroyed)call.reject("Voice request cancelled");else if(request.failure!=null){if(request.failureCode!=null)call.reject(request.failure,request.failureCode);else call.reject(request.failure);}else if(request.result==null)call.reject("Voice request failed");else call.resolve(request.result);
+   if(request.resolvedEarly){/* Settled. */}else if(request.cancelled||destroyed)call.reject("Voice request cancelled");else if(request.failure!=null){if(request.failureCode!=null&&request.limit!=null)call.reject(request.failure,request.failureCode,limitData(request.limit));else if(request.failureCode!=null)call.reject(request.failure,request.failureCode);else call.reject(request.failure);}else if(request.result==null)call.reject("Voice request failed");else call.resolve(request.result);
   },()->{main.removeCallbacks(deadline);pending.remove(id,request);call.reject("Voice unavailable");});
  }
  private static final class VoiceHttpException extends IOException {
-  final int status;
-  VoiceHttpException(int status){super("Voice HTTP request failed");this.status=status;}
+  final int status;final CloudVoiceLimit limit;
+  VoiceHttpException(int status,CloudVoiceLimit limit){super("Voice HTTP request failed");this.status=status;this.limit=limit;}
  }
- private static void successful(HttpURLConnection c)throws Exception{int status=c.getResponseCode();if(status<200||status>=300)throw new VoiceHttpException(status);}
+ private static void successful(HttpURLConnection c)throws Exception{int status=c.getResponseCode();if(status<200||status>=300)throw new VoiceHttpException(status,status==429?limitOf(c):null);}
+ /** A 429's retry facts only (CloudVoiceLimit): the body is read bounded and never forwarded. */
+ private static CloudVoiceLimit limitOf(HttpURLConnection c){
+  String code=null,retryAt=null,resetAt=null;Number seconds=null;
+  try(InputStream in=c.getErrorStream()){
+   if(in!=null){ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1){if(out.size()+n>16384)throw new IOException();out.write(b,0,n);}
+    JSONObject body=new JSONObject(new String(out.toByteArray(),StandardCharsets.UTF_8));JSONObject error=body.optJSONObject("error");JSONObject row=error!=null?error:body;
+    code=jsonText(row,"code");retryAt=jsonText(row,"retryAt");resetAt=jsonText(row,"resetAt");
+    Object value=row.opt("retryAfterSeconds");if(value instanceof Number)seconds=(Number)value;}
+  }catch(Exception ignored){/* A body that is absent, oversized or not JSON leaves only Retry-After. */}
+  return CloudVoiceLimit.read(c.getHeaderField("Retry-After"),code,seconds,retryAt,resetAt,System.currentTimeMillis());
+ }
+ /** A string member only: JSON null or a number is absent, never coerced to text ("null"). */
+ private static String jsonText(JSONObject row,String key){Object value=row.opt(key);return value instanceof String?(String)value:null;}
+ private static JSObject limitData(CloudVoiceLimit limit){JSObject data=new JSObject();if(limit.retryAfterSeconds!=null)data.put("retryAfterSeconds",limit.retryAfterSeconds);if(limit.limitCode!=null)data.put("limitCode",limit.limitCode);if(limit.resetAt!=null)data.put("resetAt",limit.resetAt);return data;}
  @PluginMethod public void transcribeRecording(PluginCall call){submit(call,request->{
   request.failureCode="voice-stt-decode";
   String recordingId=required(call.getString("recordingId"),256);File file=capture.selected(recordingId);if(file==null)throw new IOException();

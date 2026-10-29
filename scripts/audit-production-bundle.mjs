@@ -49,6 +49,8 @@ export const DENYLIST = Object.freeze([
   // fallback until the in-app readiness probe passes, so its routes are not denied here.
   'Browser sign-in (diagnostic)', 'staging.eliza.app/alphaphone',
   'Browser calendar (development)',
+  // The read-only OS update-channel check is registered off; its About row is development only.
+  'Update channel (development)',
 ]);
 const TEXT = /\.(?:html?|js|mjs|cjs|css|json|txt|svg|xml|webmanifest)$/i;
 
