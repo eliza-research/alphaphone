@@ -104,6 +104,21 @@ test('the sweep applies every dimension and cannot be narrowed silently', () => 
   assert.match(sweep, /for \(const state of \[\.\.\.FIXTURE_STATES, \.\.\.LAUNCHER_STATES\]\) \{\s*for \(const scale of \[1, 2\]\)/);
   for (const name of ["mock('lock')", "shows: 'photos-empty'", "launcher('Home')", "launcher('All apps'", "connected('Inbox'", "connected('Settings connections'", "name: 'connected Calendar with events'", "CONNECTED_STATES.push(calendarWithEvents)"])
     assert.ok(states.includes(name), `${name} is swept`);
+  // Above 200%: the largest in-app size with the largest system font (300%), over every live and
+  // launcher state, with the clipping, overlap, dock, name, tab-order and reading-order rules.
+  assert.match(sweep, /for \(const state of \[\.\.\.LIVE_STATES, \.\.\.LAUNCHER_STATES\]\) \{\s*test\(`300% text[\s\S]{0,400}setTextScale\(page, 3\);\s*const found = blocking\(format\(\[\.\.\.await auditPage\(page, \{ clipping: true, overlap: true, dock: true \}\), \.\.\.await auditTree\(page\), \.\.\.await auditTabOrder\(page\), \.\.\.await auditReadingOrder\(page\)\]\)\);/);
+  // The 300% defects open when the lane was added (#701) run as expected failures; the list only shrinks.
+  const open300 = sweep.match(/const OPEN_AT_300 = new Set\(\[([^\]]*)\]\);/)?.[1];
+  assert.ok(open300 !== undefined, 'the open 300% defects are listed in one place');
+  const recorded300 = ['live Home', 'live Conversation', 'live Calendar new event', 'live Camera (unavailable)', 'live Browser tabs', 'live Browser menu', 'live Notes trash', 'live Notes recording', 'live Notes source document', 'live Settings display', 'launcher Home', 'launcher Conversation', 'launcher Calendar', 'launcher Camera', 'launcher Photos', 'launcher Workflows', 'launcher Settings display'];
+  for (const name of [...open300.matchAll(/'([^']+)'/g)].map(match => match[1])) assert.ok(recorded300.includes(name), `${name} is not a recorded 300% defect; fix it instead of exempting it`);
+  // An open entry must still report a layout defect from the audit itself; a timeout, a crash or a
+  // state that no longer opens is not taken as the expected failure.
+  assert.match(sweep, /if \(OPEN_AT_300\.has\(state\.name\)\) expect\(found, `\$\{state\.name\} now passes at 300%: remove it from OPEN_AT_300 \(issue #701\)`\)\.not\.toEqual\(\[\]\);\s*else expect\(found, found\.join\('\\n'\)\)\.toEqual\(\[\]\);/);
+  assert.doesNotMatch(sweep, /test\.fail\(/, 'no lane has expected failures');
+  // The launcher presentation of every retained app view, and the conversation.
+  for (const view of ['Conversation', 'Inbox', 'Calendar', 'Browser', 'Camera', 'Photos', 'Maps', 'Notes', 'Files', 'Workflows', 'Settings'])
+    assert.ok(states.includes(`launcher('${view}'`), `the launcher ${view} is swept`);
   // No state is skipped, marked fixme or exempted from a dimension.
   assert.doesNotMatch(sweep, /test\.skip|test\.fixme|\.only\(/);
   assert.doesNotMatch(production, /test\.skip|test\.fixme|\.only\(/);
@@ -116,7 +131,7 @@ test('TalkBack reading order is checked in every lane, as Android checks it, acr
   // Every lane of both sweeps reads the order (the light theme once; it does not depend on the theme).
   assert.match(sweep, /\.\.\.theme === 'light' \? await auditReadingOrder\(page\) : \[\]/);
   assert.match(sweep, /200% text is not clipped[\s\S]*?const order = format\(await auditReadingOrder\(page\)\);\s*expect\(order, order\.join\('\\n'\)\)\.toEqual\(\[\]\);/);
-  assert.equal([...sweep.matchAll(/auditReadingOrder\(page\)/g)].length, 5, 'all five sweep lanes read the order');
+  assert.equal([...sweep.matchAll(/auditReadingOrder\(page\)/g)].length, 6, 'all six sweep lanes read the order');
   assert.equal([...production.matchAll(/auditReadingOrder\(page\)/g)].length, 2, 'both production lanes read the order');
   // The browser rule is the Android rule: the same geometry, the same assistant group, the same bars.
   const audit = read('test/browser/accessibility-audit.ts');
@@ -160,6 +175,11 @@ test('provider-connected screens are swept, against a synthetic mailbox only', (
   const block = states.slice(states.indexOf('export const CONNECTED_STATES'), states.indexOf('export const DEVELOPMENT_STATES'));
   for (const state of ["connected('Home'", "connected('Inbox')", "connected('Inbox sent (empty)'", "connected('Inbox search'", "connected('Inbox message'", "connected('Inbox long subject'", "connected('Inbox compose'", "connected('Settings',", "connected('Settings accounts'", "connected('Settings connections'"])
     assert.ok(block.includes(state), `${state} is swept`);
+  // Connected states other than a mailbox (MVP-48): an agent's calendar, a linked Google Calendar
+  // account's sync review and a connected agent's conversation. None writes to a provider.
+  for (const state of ["agentCalendar('on Home')", "agentCalendar('in Calendar'", "googleCalendar('account', false)", "googleCalendar('review', true)", "developmentAgent('Settings', false)", "developmentAgent('Conversation', true)"])
+    assert.ok(states.includes(state), `${state} is swept`);
+  assert.match(states, /const googleCalendar = [\s\S]*?expect\(await page\.evaluate\(\(\) => \(window as any\)\.calendarSyncFixture\.writes\)\)\.toBe\(0\);/, 'the Google Calendar states make no provider write');
   assert.doesNotMatch(block, /fixme|skip/);
   // The provider boundary is replaced in the page; nothing is fetched and no real address is used.
   const fixture = states.slice(states.indexOf('async function connectMailbox'), states.indexOf('const connected ='));

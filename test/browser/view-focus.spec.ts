@@ -1,7 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
+import { frames } from './helpers/settled';
 
 // runtime/view-focus.ts on its own, over seeded markup: when a screen change or HOME drops focus,
-// it lands on the new screen's name; focus that is somewhere real is never moved.
+// it lands on the new screen's name; focus that is somewhere real is never moved. "Stays" checks wait
+// out the module's whole frame window (helpers/settled.ts `frames`), not a fixed time.
 const phone = `<div class="os"><div data-screen="1">
   <div data-alpha-layer="home" role="region" aria-label="Home"><button>Settings</button><button>Files</button></div>
   <div data-alpha-layer="app" role="region" aria-label="Settings" inert aria-hidden="true" hidden>
@@ -48,25 +50,25 @@ test('a screen change that drops focus moves it to the screen title, then to the
 test('focus that is somewhere real stays: the composer, an open dialog, or the first screen of a load', async ({ page }) => {
   await load(page);
   // The first screen of a load is not a change: nothing is focused for it.
-  await page.waitForTimeout(100);
+  await frames(page);
   expect(await focused(page)).toBe('body');
   // Typing in the composer across a screen change.
   await page.getByRole('textbox', { name: 'Ask Alpha', exact: true }).focus();
   await show(page, 'settings');
-  await page.waitForTimeout(150);
+  await frames(page);
   expect(await focused(page)).toBe('Ask Alpha');
   // A dialog owns focus while it is open.
   await show(page, 'home');
   await page.evaluate(() => { const dialog = document.createElement('dialog'); dialog.innerHTML = '<p>Review</p>'; document.body.append(dialog); dialog.showModal(); (document.activeElement as HTMLElement)?.blur(); });
   await page.evaluate(() => window.dispatchEvent(new Event('launcher-home')));
-  await page.waitForTimeout(150);
+  await frames(page);
   expect(await focused(page)).toBe('body');
 });
 
 test('rotation that rebuilds the focused layer gives focus back to the screen name; a page without focus gets none', async ({ page }) => {
   await load(page);
   await page.setViewportSize({ width: 915, height: 412 });
-  await page.waitForTimeout(150);
+  await frames(page);
   expect(await focused(page)).toBe('body');
   await show(page, 'settings');
   await page.getByRole('button', { name: 'Display', exact: true }).focus();

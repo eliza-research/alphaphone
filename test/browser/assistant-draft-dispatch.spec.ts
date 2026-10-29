@@ -1,4 +1,14 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect as baseExpect, type Page } from '@playwright/test';
+// Every test here loads the whole development app at least once (several reload it, open a second tab
+// or connect a profile), and the composer's saved draft is restored from IndexedDB after each load.
+// Under four workers on a loaded machine a load has taken 10-30s and a restore more than the 5s
+// default, so the timeouts are explicit: 90s per test, 15s per expectation. What is expected is
+// unchanged; only how long the page may take to get there.
+test.describe.configure({timeout:90_000});
+const expect=baseExpect.configure({timeout:15_000});
+// Screen-entry motion is not under test here; waiting out its stability retries on every tap is what
+// ran these tests out of time under load (as in #700).
+test.use({contextOptions:{reducedMotion:'reduce'}});
 
 // Real composer, draft store and connection controller. Only the Android IPC boundary and a
 // remote agent are synthetic, in-page fixtures; nothing leaves the page.
@@ -10,8 +20,10 @@ async function remoteAgent(page: Page, mode: Mode) {
     const w = window as any;
     w.androidBridge = {};
     const store = new Map<string, string>();
-    // An expiring session lets the composer refuse before any request carries the message.
-    const expiresAt = Date.now() + (mode === 'expires' ? 25_000 : 86_400_000);
+    // An expiring session lets the composer refuse before any request carries the message. It lapses
+    // only when the test moves the page clock past it (ten minutes on), never while a slow load is
+    // still connecting: a 25s wall-clock lifetime ran out before the first load finished under load.
+    const expiresAt = Date.now() + (mode === 'expires' ? 600_000 : 86_400_000);
     store.set('remote:' + remote, JSON.stringify({ origin: remote, token: 'remote-session-token', identityId: 'fixture-owner', sessionId: 'remote-session-token', expiresAt }));
     try { if (!sessionStorage.getItem('dispatch-seeded')) { sessionStorage.setItem('dispatch-seeded', '1'); localStorage.setItem('alpha.connection.selection.v1', JSON.stringify({ kind: 'remote', origin: remote })); } } catch { /* covered elsewhere */ }
     const f = w.dispatchFixture = { posts: 0, historyReads: 0, created: false, ready: false, expiresAt, store };
@@ -96,6 +108,7 @@ test('without a connection the chooser opens and the message returns to the comp
 // binding, which may belong to another owner or agent) and nothing is sent.
 test('a transport refusal before dispatch keeps the text in its own conversation and sends nothing', async ({ page }) => {
   test.setTimeout(90_000);
+  await page.clock.install();
   await remoteAgent(page, 'expires');
   await page.goto('/');
   await expect.poll(() => page.evaluate(() => (window as any).dispatchFixture.ready), { timeout: 30_000 }).toBe(true);
@@ -103,7 +116,10 @@ test('a transport refusal before dispatch keeps the text in its own conversation
   await composer(page).fill('Do not lose this');
   await expect.poll(() => savedDraft(page), { timeout: 15_000 }).toBe('Do not lose this');
   // Let the paired session lapse: the transport refuses before it creates or posts anything.
-  await page.waitForFunction(() => Date.now() > (window as any).dispatchFixture.expiresAt + 250, undefined, { timeout: 30_000 });
+  const left = await page.evaluate(() => (window as any).dispatchFixture.expiresAt + 250 - Date.now());
+  expect(left).toBeGreaterThan(0);
+  await page.clock.fastForward(left);
+  expect(await page.evaluate(() => Date.now() > (window as any).dispatchFixture.expiresAt + 250)).toBe(true);
   const key = await bindingKey(page);
   await composer(page).press('Enter');
   // The expired session is retired and the chooser opens; the message never left the phone.

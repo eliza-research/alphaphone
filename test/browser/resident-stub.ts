@@ -189,9 +189,11 @@ export async function residentStub(page: Page, options: ResidentStubOptions = {}
           const owner = account(auth);
           if (!owner) return { status: 401, data: {} };
           if (path === '/api/v1/user') { if (owner.userStatus && owner.userStatus !== 200) return { status: owner.userStatus, data: {} }; return { status: 200, data: { success: true, data: { id: owner.userId, email: owner.email } } }; }
-          if (path === '/api/v1/credits/balance') { s.order.push('credits ' + owner.email); persist(); return { status: 200, data: { balance: owner.balance } }; }
-          // The billing snapshot answers the plan while the entitlement route is absent (404, from the base harness).
-          if (path === '/api/v1/billing/limits') { s.order.push('plan ' + owner.email); persist(); return { status: 200, data: { success: true, data: { v2: { subscription: { status: 'available', value: { planKey: 'plus_monthly', state: owner.plan === 'none' ? 'canceled' : 'active', currentPeriodEnd: '2099-01-01T00:00:00.000Z' } } } } } }; }
+          // The billing snapshot answers the plan while the entitlement route is absent (404, from the base
+          // harness), and carries the organization credit balance (the retired /api/v1/credits/balance is never read).
+          if (path === '/api/v1/billing/limits') { s.order.push('plan ' + owner.email); persist(); return { status: 200, data: { success: true, data: { schemaVersion: 2, v2: {
+            subscription: { status: 'available', value: { planKey: 'plus_monthly', state: owner.plan === 'none' ? 'canceled' : 'active', currentPeriodEnd: '2099-01-01T00:00:00.000Z' } },
+            balance: { status: 'available', source: 'organizations', observedAt: new Date().toISOString(), value: { balance: { value: String(owner.balance), unit: 'usd', currency: 'USD' }, revision: '1' } } } } } }; }
           if (path === '/api/v1/eliza/google/accounts') return { status: 200, data: owner.inbox ? [{ configured: true, connected: true, reason: 'connected', connectionId: 'grant-' + owner.userId.slice(0, 8), grantedCapabilities: ['google.gmail.triage'], identity: { email: owner.inbox } }] : [] };
         }
         return base(plugin, method, input);

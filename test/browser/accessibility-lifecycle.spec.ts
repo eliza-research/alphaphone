@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { ASSISTANT_GROUP, auditPage, auditReadingOrder, auditTree, format } from './accessibility-audit';
 import { setTextScale } from './accessibility-states';
+import { settled } from './helpers/settled';
 
 // PRD AP-15 across views, in the renderer: repeated HOME, popups open when HOME arrives, rotation
 // and a reload (the renderer's process death) leave every screen announced, operable and in
@@ -40,6 +41,7 @@ async function openFromHome(page: Page, view: string) {
 async function pressHome(page: Page, times = 1) {
   for (let press = 0; press < times; press++) {
     await page.evaluate(() => window.dispatchEvent(new Event('launcher-home')));
+    // Press cadence, not readiness: repeated presses land while the previous one is still moving.
     await page.waitForTimeout(120);
   }
   await expect.poll(() => activeView(page)).toBe('home');
@@ -82,6 +84,7 @@ test.describe('repeated HOME across views', () => {
   }
 
   test('HOME on Home with All apps open closes it and keeps focus on Home', async ({ page }) => {
+    test.setTimeout(60_000);
     await start(page);
     await page.getByRole('button', { name: 'All apps', exact: true }).focus();
     await page.keyboard.press('Enter');
@@ -99,10 +102,12 @@ test.describe('HOME while a popup, subview or field is open', () => {
   // leave the page inert or focus behind them. Live screens: HOME is the product's own handler.
   for (const steps of [['Browser', 'Menu'], ['Browser', 'Edit address'], ['Calendar', 'Clock alarms'], ['Workflows', 'New automation'], ['Settings', 'Display']] as const) {
     test(`${steps.join(' > ')}: HOME retires it and Home is announced`, async ({ page }) => {
+      // Two app openings, a popup and two audits: explicit, as the 200% sweeps run beside it.
+      test.setTimeout(60_000);
       await start(page);
       await openFromHome(page, steps[0]);
       for (const step of steps.slice(1)) await page.getByRole('button', { name: step, exact: true }).first().click();
-      await page.waitForTimeout(300);
+      await settled(page);
       await pressHome(page, 2);
       await expect.poll(async () => (await focusState(page)).onHome).toBe(true);
       await screenIsSound(page, `Home after HOME from ${steps.join(' > ')}`);
@@ -118,6 +123,8 @@ test.describe('rotation across views', () => {
   test.use({ hasTouch: true, isMobile: true });
   for (const view of VIEWS) {
     test(`${view}: rotating keeps the screen, focus and draft, with every control on screen`, async ({ page }) => {
+      // Four rotations, each audited: explicit, as the 200% sweeps run beside it.
+      test.setTimeout(90_000);
       await page.setViewportSize({ width: 412, height: 915 });
       await start(page);
       await composer(page).fill(DRAFT);
@@ -128,7 +135,7 @@ test.describe('rotation across views', () => {
         await page.setViewportSize({ width, height });
         const html = page.locator('html');
         if (landscape) await expect(html).toHaveClass(/alpha-landscape/); else await expect(html).not.toHaveClass(/alpha-landscape/);
-        await page.waitForTimeout(250);
+        await settled(page);
         expect(await activeView(page), `${view} is still in front after rotating`).toBe(view.toLowerCase());
         // Focus stays on the screen's name; a layer the new layout rebuilt hands it back within a few frames.
         await expect.poll(async () => { const focus = await focusState(page); return focus.dropped ? 'dropped' : focus.name; }, { message: `${view}: rotating dropped focus` }).toBe(before);
@@ -158,7 +165,7 @@ test.describe('a reload (the renderer restarted)', () => {
     await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await expect.poll(() => page.evaluate(() => Number(getComputedStyle(document.documentElement).getPropertyValue('--alpha-text-scale')))).toBeCloseTo(scale, 1);
-    await page.waitForTimeout(400);
+    await settled(page);
     await screenIsSound(page, 'Home after a reload at the larger text size');
     // Every app still opens announced at that size.
     for (const view of ['Settings', 'Files', 'Calendar'] as const) {
@@ -178,7 +185,7 @@ test.describe('a reload (the renderer restarted)', () => {
     await setTextScale(page, 2);
     for (const view of VIEWS) {
       await openFromHome(page, view);
-      await page.waitForTimeout(300);
+      await settled(page);
       const found = format(await auditReadingOrder(page));
       expect(found, `${view} at 200% after reload:\n${found.join('\n')}`).toEqual([]);
       await pressHome(page);
@@ -189,6 +196,7 @@ test.describe('a reload (the renderer restarted)', () => {
 
 test.describe('permission loss and offline', () => {
   test('camera permission withdrawn while away: Camera reopens to an announced recovery, and HOME still works', async ({ page }) => {
+    test.setTimeout(60_000);
     // Granted first (a synthetic canvas stream), then withdrawn as Android Settings would while Alpha is in the background.
     await page.addInitScript(() => {
       const devices = navigator.mediaDevices;
@@ -230,7 +238,7 @@ test.describe('permission loss and offline', () => {
       for (const view of VIEWS) {
         await openFromHome(page, view);
         await expect.poll(async () => (await focusState(page)).dropped, { message: `${view} offline: focus was dropped` }).toBe(false);
-        await page.waitForTimeout(200);
+        await settled(page);
         const found = format([...await auditTree(page), ...await auditReadingOrder(page)]);
         expect(found, `${view} offline:\n${found.join('\n')}`).toEqual([]);
         await pressHome(page);
