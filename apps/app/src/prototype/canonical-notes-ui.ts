@@ -155,7 +155,7 @@ export function installCanonicalNotesView(Component:any,views:Record<string,Bag>
   return {...value,canonicalNotesWorkspace:React.createElement(NotesHostContext.Provider,{value:host},React.createElement(MobileViewHost,{registry:alphaViews,view:'notes',active,onClose:()=>this.goHome(),onError:reportFailure,renderError:NotesFailure,fallback:active?React.createElement('div',{'aria-busy':true,style:surface}):null}))};
  };
  const notes=views.notes,render=notes.render,back=notes.back,leave=notes.onLeave;
- notes.render=(state:Bag,value:Bag)=>{if(value.notesSourceMode==='canonical'||value.canonicalNotes)return {legacyNotes:false};const result=render(state,value),main=(value.notesSourceOptions??[]).find((source:Bag)=>source.id==='canonical');return {...result,legacyNotes:true,notesTitle:'Older notes',primaryNotes:false,olderNotesAction:null,returnToNotesAction:main?.choose};};
+ notes.render=(state:Bag,value:Bag)=>{if(value.notesSourceMode==='canonical'||value.canonicalNotes)return {legacyNotes:false};const result=render(state,value),main=(value.notesSourceOptions??[]).find((source:Bag)=>source.id==='canonical');return {...result,legacyNotes:true,notesTitle:'Older notes',primaryNotes:false,returnToNotesAction:main?.choose};};
  notes.back=(state:Bag,value:Bag)=>{const ui=value.canonicalNotes;if(!ui)return back?.(state,value);if(!ui.editing)return false;void ui.leave();return true;};
  notes.onLeave=(value:Bag)=>{if(!value.canonicalNotes)leave?.(value);};
 }
