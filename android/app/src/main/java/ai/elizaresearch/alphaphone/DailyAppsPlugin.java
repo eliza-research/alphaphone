@@ -18,6 +18,7 @@ import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import ai.eliza.plugins.media.SelectedDocumentCalls;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.util.ArrayList;
@@ -60,22 +61,15 @@ public class DailyAppsPlugin extends ai.eliza.plugins.reminders.ReminderPlugin {
   JSObject value = new JSObject(); value.put("closed", assistant); call.resolve(value);
   if (assistant) getActivity().runOnUiThread(() -> getActivity().finish());
  }
- @PluginMethod public void restoreSelected(PluginCall call) {try{call.resolve(SelectedDocumentAccess.restore(getContext()));}catch(RuntimeException error){call.reject("Saved document access is unavailable");}}
- @PluginMethod public void renameSelected(PluginCall call) {call.resolve(SelectedDocumentAccess.rename(getContext(),call.getString("selectionId"),call.getString("name")));}
- @PluginMethod public void pdfSelected(PluginCall call) {call.resolve(SelectedDocumentAccess.pdf(getContext(),call.getString("selectionId"),call.getInt("page",0)));}
- @PluginMethod public void describeSelected(PluginCall call) {try{call.resolve(SelectedDocumentAccess.describeSelected(getContext(),call.getString("selectionId")));}catch(RuntimeException error){call.reject("Saved document access is unavailable");}}
- @PluginMethod public void readSelected(PluginCall call) {
-  call.resolve(SelectedDocumentAccess.read(getContext(), call.getString("selectionId")));
- }
- @PluginMethod public void openSelected(PluginCall call) {
-  call.resolve(SelectedDocumentAccess.open(getActivity(), call.getString("selectionId")));
- }
- @PluginMethod public void shareSelected(PluginCall call) {
-  call.resolve(SelectedDocumentAccess.share(getActivity(), call.getString("selectionId")));
- }
- @PluginMethod public void forgetSelected(PluginCall call) {
-  try{SelectedDocumentAccess.forget(call.getString("selectionId"));call.resolve();}catch(RuntimeException error){call.reject("Document access could not be released");}
- }
+ /** Selected-document capabilities: the shared bridge contract over Alpha's installed registry (SelectedDocumentAccess). */
+ @PluginMethod public void restoreSelected(PluginCall call){SelectedDocumentCalls.restore(call,()->SelectedDocumentAccess.documents(getContext()));}
+ @PluginMethod public void renameSelected(PluginCall call){SelectedDocumentCalls.rename(call,()->SelectedDocumentAccess.documents(getContext()));}
+ @PluginMethod public void pdfSelected(PluginCall call){SelectedDocumentCalls.pdf(call,()->SelectedDocumentAccess.documents(getContext()));}
+ @PluginMethod public void describeSelected(PluginCall call){SelectedDocumentCalls.describe(call,()->SelectedDocumentAccess.documents(getContext()));}
+ @PluginMethod public void readSelected(PluginCall call){SelectedDocumentCalls.read(call,()->SelectedDocumentAccess.documents(getContext()));}
+ @PluginMethod public void openSelected(PluginCall call){SelectedDocumentCalls.open(call,()->SelectedDocumentAccess.documents(getContext()),getActivity());}
+ @PluginMethod public void shareSelected(PluginCall call){SelectedDocumentCalls.share(call,()->SelectedDocumentAccess.documents(getContext()),getActivity());}
+ @PluginMethod public void forgetSelected(PluginCall call){SelectedDocumentCalls.forget(call,()->SelectedDocumentAccess.documents(getContext()));}
  private Integer clockInteger(JSObject data,String key) {
   Object value=data.opt(key);if(value==null||value==org.json.JSONObject.NULL)return null;
   if(!(value instanceof Number))throw new IllegalArgumentException("Invalid Clock number");
