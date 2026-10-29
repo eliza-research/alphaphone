@@ -156,7 +156,8 @@ for (const theme of ['light', 'dark'] as const) {
     }
     expect(new Set(tiles.map(tile => tile.name)).size, 'no two tiles read alike').toBe(tiles.length);
     for (const tile of tiles) await expect(grid.getByRole('button', { name: tile.name!, exact: true })).toHaveCount(1);
-    const found = format([...await auditTree(page), ...await auditPage(page, { targetSize: 24 })]).filter(line => line.includes('data-mobile-shell-tile'));
+    // The whole Home is audited unfiltered: a tile defect cannot hide behind a narrowed result.
+    const found = format([...await auditTree(page), ...await auditPage(page, { targetSize: 24 })]);
     expect(found, found.join('\n')).toEqual([]);
   });
 }
