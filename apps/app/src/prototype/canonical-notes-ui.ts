@@ -13,6 +13,7 @@ import {speakNote,stopSpeaking} from './local-speech-playback';
 import {MobileViewHost,type MobileViewFailure} from '@elizaos/ui/mobile-shell';
 import {alphaViews} from '../product/alpha-product';
 import {recordRendererFailure} from '../runtime/crash-log';
+import {NotesHostContext} from './notes-host-context';
 /** Back chevron from the shared icon pack, like every other Back control: it does not reflow as text at large font sizes. */
 const backIcon=()=>React.createElement('span',{'aria-hidden':'true','data-alpha-icon':'/icons/lucide/chevron-left.svg',style:{...iconStyle('chevron-left'),width:24,height:24}});
 type Bag=Record<string,any>;
@@ -116,12 +117,11 @@ function WaitingNotes({shell,storageAccessWarning,covered=false}:{shell:Bag;stor
    ...(shell.api('notes').notesSourceOptions??[]).filter((source:Bag)=>!source.selected).map((source:Bag)=>React.createElement('button',{key:source.id,onClick:source.choose,style:{minHeight:48,padding:'12px 18px',borderRadius:16,background:'var(--s2)',color:'var(--fg)',font:'inherit'}},source.id==='legacy'?'Older notes':source.label))));
 }
 
-/** What the Notes view reads from the shell that hosts it. */
-export type NotesHost={shell:Bag;ui:CanonicalNotesUi|null;storageAccessWarning:string;covered:boolean};
-export const NotesHostContext=React.createContext<NotesHost|null>(null);
+/** What the Notes view draws for the shell that hosts it. */
+type NotesHost={shell:Bag;ui:CanonicalNotesUi|null;storageAccessWarning:string;covered:boolean};
 
 /** The canonical workspace while a connection is bound, else the opaque waiting surface. */
-export function renderNotesSurface(host:NotesHost,active:boolean):React.ReactNode{
+function renderNotesSurface(host:NotesHost,active:boolean):React.ReactNode{
  if(host.ui)return host.ui.render(host.shell,active,host.storageAccessWarning,host.covered);
  return active?React.createElement(WaitingNotes,{shell:host.shell,storageAccessWarning:host.storageAccessWarning,covered:host.covered}):null;
 }
@@ -152,7 +152,7 @@ export function installCanonicalNotesView(Component:any,views:Record<string,Bag>
   // surface itself renders only while Notes is open.
   if(!ui&&this.notesSourceMode!=='canonical')return {...value,canonicalNotesWorkspace:null};
   const host:NotesHost={shell:this,ui,storageAccessWarning:value.storageAccessWarning??'',covered:!!value.appHidden};
-  return {...value,canonicalNotesWorkspace:React.createElement(NotesHostContext.Provider,{value:host},React.createElement(MobileViewHost,{registry:alphaViews,view:'notes',active,onClose:()=>this.goHome(),onError:reportFailure,renderError:NotesFailure,fallback:active?React.createElement('div',{'aria-busy':true,style:surface}):null}))};
+  return {...value,canonicalNotesWorkspace:React.createElement(NotesHostContext.Provider,{value:(open:boolean)=>renderNotesSurface(host,open)},React.createElement(MobileViewHost,{registry:alphaViews,view:'notes',active,onClose:()=>this.goHome(),onError:reportFailure,renderError:NotesFailure,fallback:active?React.createElement('div',{'aria-busy':true,style:surface}):null}))};
  };
  const notes=views.notes,render=notes.render,back=notes.back,leave=notes.onLeave;
  notes.render=(state:Bag,value:Bag)=>{if(value.notesSourceMode==='canonical'||value.canonicalNotes)return {legacyNotes:false};const result=render(state,value),main=(value.notesSourceOptions??[]).find((source:Bag)=>source.id==='canonical');return {...result,legacyNotes:true,notesTitle:'Older notes',primaryNotes:false,returnToNotesAction:main?.choose};};

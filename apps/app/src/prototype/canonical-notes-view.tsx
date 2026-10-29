@@ -1,6 +1,6 @@
 import {useContext} from 'react';
 import type {MobileViewProps} from '@elizaos/ui/mobile-shell/core';
-import {NotesHostContext, renderNotesSurface} from './canonical-notes-ui';
+import {NotesHostContext} from './notes-host-context';
 
 /**
  * Notes as a view of the shared shell (MobileViewHost, registered in product/alpha-product.ts).
@@ -9,6 +9,6 @@ import {NotesHostContext, renderNotesSurface} from './canonical-notes-ui';
  * Home or another view (`active` false), so its drafts and selection survive.
  */
 export default function CanonicalNotesView({active}: MobileViewProps) {
- const host = useContext(NotesHostContext);
- return host ? renderNotesSurface(host, active !== false) : null;
+ const render = useContext(NotesHostContext);
+ return render ? render(active !== false) : null;
 }
