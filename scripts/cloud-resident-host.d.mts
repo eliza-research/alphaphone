@@ -8,4 +8,4 @@ export interface CloudResidentHost {
  ready(signal:AbortSignal):Promise<{state:string}>;
  close():Promise<void>;
 }
-export function createCloudResidentHost(options:{source:string;profile:string;port:number;environment?:'production'|'staging';launch?:unknown;inherited?:NodeJS.ProcessEnv;request?:typeof fetch}):Promise<CloudResidentHost>;
+export function createCloudResidentHost(options:{source:string;profile:string;port:number;environment?:'production'|'staging';profileMode?:'lean'|'full';launch?:unknown;inherited?:NodeJS.ProcessEnv;request?:typeof fetch}):Promise<CloudResidentHost>;

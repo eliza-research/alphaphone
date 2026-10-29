@@ -380,6 +380,19 @@ commit; `ALPHA_CLOUD_UI_PORT` and `ALPHA_REMOTE_PORT` select free loopback ports
 This browser check exercises real login, subscription and inference only after
 those actions are completed; it does not establish Android or device acceptance.
 
+The default resident remains the lean chat profile. For full application QA, use
+`ALPHA_CLOUD_RESIDENT_PROFILE=full npm run dev:cloud` with an explicitly selected,
+separate Cloud-only `ALPHA_REMOTE_PROFILE`. A new full profile enables the
+canonical personal assistant and uses the normal SDK plugin set, including Notes
+and Calendar. It uses the same account-bound Cloud inference and speech routes;
+it does not impersonate Android or enable mocks.
+
+Full mode refuses an existing profile whose personal assistant is disabled or
+not explicitly enabled. It never reverses that saved choice or converts a direct
+provider profile. Existing accounts, credentials and histories are not copied or
+reset. Verify the running Notes and Calendar services and real Cloud requests
+before treating the preview as full application acceptance.
+
 ```sh
 npm run android:build
 # Distribution APKs (switch off) are in artifacts/: debug-signed debug APKs and
