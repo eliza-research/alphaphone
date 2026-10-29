@@ -70,8 +70,7 @@ for (const state of STATES) {
 const OPEN_AT_300 = new Set([
   'live Home', 'live Conversation', 'live Calendar new event', 'live Camera (unavailable)', 'live Browser tabs',
   'live Browser menu', 'live Notes trash', 'live Notes recording', 'live Notes source document', 'live Settings display',
-  'launcher Home', 'launcher Conversation', 'launcher Calendar', 'launcher Camera', 'launcher Photos',
-  'launcher Workflows', 'launcher Settings display',
+  'launcher Home', 'launcher Conversation', 'launcher Settings display',
 ]);
 for (const state of [...LIVE_STATES, ...LAUNCHER_STATES]) {
   test(`300% text (largest in-app size and system font) is not clipped and does not overlap: ${state.name}`, async ({ page }) => {
