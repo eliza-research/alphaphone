@@ -40,7 +40,8 @@ final class ConnectionRoutes {
  // Native Eliza Cloud sign-in sends its fixed routes only through the shared sign-in client
  // (ai.eliza.auth.cloud.CloudSignInRoutes, registered by AlphaCloudSignInPlugin); this renderer
  // transport admits none of them, so no Steward session, authorization code or PKCE verifier crosses
- // the bridge. The Cloud sign-in hand-off (/api/auth/cli-session, managedService) remains a product route.
+ // the bridge. The Cloud sign-in hand-off (/api/auth/cli-session) is a test-mocks diagnostic route only:
+ // product builds sign in through the native host and this policy refuses it.
  /** P-22/P-31: allow current managed APIs; new services need explicit route review. */
  static boolean managedService(String path,String query,String method,boolean hasBody,boolean testMocks){
   if(testMocks)return true;
@@ -52,9 +53,9 @@ final class ConnectionRoutes {
   if("/api/v1/maps/capabilities".equals(path))return "GET".equals(method)&&query==null&&!hasBody;
   // Subscription code redemption carries its code and idempotency key in the JSON body only.
   if("POST".equals(method)&&"/api/v1/subscription/redeem".equals(path))return query==null&&hasBody;
-  if("POST".equals(method))return query==null&&(java.util.Set.of("/api/auth/cli-session","/api/v1/eliza/google/connect/initiate","/api/v1/eliza/google/disconnect","/api/v1/eliza/google/gmail/inbox-v1/operations").contains(path)||path.matches("/api/v1/eliza/google/gmail/inbox-v1/operations/[A-Za-z0-9_-]{1,160}/dispatch"));
+  if("POST".equals(method))return query==null&&(java.util.Set.of("/api/v1/eliza/google/connect/initiate","/api/v1/eliza/google/disconnect","/api/v1/eliza/google/gmail/inbox-v1/operations").contains(path)||path.matches("/api/v1/eliza/google/gmail/inbox-v1/operations/[A-Za-z0-9_-]{1,160}/dispatch"));
   if(!"GET".equals(method)||hasBody)return false;
-  return path.matches("/api/auth/cli-session/[0-9a-fA-F-]{36}")||java.util.Set.of("/api/v1/user","/api/v1/billing/limits","/api/v1/subscription/entitlement","/api/v1/subscription/entitlement-keys","/api/v1/eliza/google/accounts","/api/v1/eliza/google/status","/api/v1/eliza/google/calendar/calendars","/api/v1/eliza/google/calendar/feed","/api/v1/eliza/google/gmail/search","/api/v1/eliza/google/gmail/read").contains(path)||path.matches("/api/v1/eliza/google/gmail/inbox-v1/(capabilities|thread|attachment|drafts|draft)")||path.matches("/api/v1/eliza/google/gmail/inbox-v1/operations/[A-Za-z0-9_-]{1,160}");
+  return java.util.Set.of("/api/v1/user","/api/v1/billing/limits","/api/v1/subscription/entitlement","/api/v1/subscription/entitlement-keys","/api/v1/eliza/google/accounts","/api/v1/eliza/google/status","/api/v1/eliza/google/calendar/calendars","/api/v1/eliza/google/calendar/feed","/api/v1/eliza/google/gmail/search","/api/v1/eliza/google/gmail/read").contains(path)||path.matches("/api/v1/eliza/google/gmail/inbox-v1/(capabilities|thread|attachment|drafts|draft)")||path.matches("/api/v1/eliza/google/gmail/inbox-v1/operations/[A-Za-z0-9_-]{1,160}");
  }
  static boolean calendarSync(String path,String query,String method,boolean hasBody){
   if("/api/v1/eliza/google/calendar/sync-v1/capabilities".equals(path))return "GET".equals(method)&&query!=null&&!query.isEmpty()&&!hasBody;

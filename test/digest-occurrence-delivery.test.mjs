@@ -125,11 +125,11 @@ out.window=o.DIGEST_RUN_WINDOW_MS;out.missed=o.DIGEST_MISSED_TEXT;out.unavailabl
 out.shared=[o.DIGEST_RUN_WINDOW_MS===p.DIGEST_RUN_WINDOW_MS,o.DIGEST_MISSED_TEXT===p.DIGEST_MISSED_TEXT,o.DIGEST_UNAVAILABLE_TEXT===p.DIGEST_PAUSED_TEXT];
 out.states=[[false,'2026-10-08T00:00:00.000Z'],[false,'2026-10-07T08:00:00.000Z'],[false,'2026-10-07T07:59:59.999Z'],[true,'2026-10-08T00:00:00.000Z'],[true,'2026-10-01T00:00:00.000Z']].map(([revoked,expiresAt])=>o.digestSourceState({revoked,expiresAt},at('2026-10-07T08:00:00.000Z')));
 console.log(JSON.stringify(out));`);
- // Threshold: the agent records missed only when more than 120 seconds late.
+ // Threshold: the agent records missed only when more than 30 minutes late.
  assert.match(agent,/if \(checkWindow && digestOccurrenceMissed\(scheduledAt, now\)\)/);
- assert.match(policy,/export const DIGEST_RUN_WINDOW_MS = 120_000;/);
+ assert.match(policy,/export const DIGEST_RUN_WINDOW_MS = 30 \* 60_000;/);
  assert.match(policy,/return now - scheduledAt > DIGEST_RUN_WINDOW_MS;/);
- assert.equal(out.window,120000);
+ assert.equal(out.window,1800000);
  assert.deepEqual(out.shared,[true,true,true],'the development scheduler uses the agent policy module itself');
  for(const text of [out.missed,out.unavailable.expired,out.unavailable.revoked])assert.ok(policy.includes(`'${text}'`),`pinned agent policy writes: ${text}`);
  assert.match(agent,/text: DIGEST_PAUSED_TEXT\[sourceState\]/);
@@ -143,13 +143,13 @@ console.log(JSON.stringify(out));`);
  assert.deepEqual(out.states,['current','expired','expired','revoked','revoked']);
 });
 
-test('a development occurrence runs up to 120 seconds late, is missed after that, and settles once',()=>{
+test('a development occurrence runs up to 30 minutes late, is missed after that, and settles once',()=>{
  const out=run(occurrencePrelude+`
 const ticks=(created,times)=>{const l=loop(created);return times.map(time=>tick(l,time));};
 out.exact=ticks('2026-10-03T07:00:00Z',['2026-10-03T07:59:59.999Z','2026-10-03T08:00:00Z','2026-10-03T08:00:15Z','2026-10-03T08:01:00Z']);
-out.late119=ticks('2026-10-03T07:00:00Z',['2026-10-03T08:01:59.999Z','2026-10-03T08:02:30Z']);
-out.late120=ticks('2026-10-03T07:00:00Z',['2026-10-03T08:02:00Z']);
-out.late121=ticks('2026-10-03T07:00:00Z',['2026-10-03T08:02:00.001Z','2026-10-03T08:02:15Z','2026-10-03T12:00:00Z']);
+out.late119=ticks('2026-10-03T07:00:00Z',['2026-10-03T08:29:59.999Z','2026-10-03T08:30:30Z']);
+out.late120=ticks('2026-10-03T07:00:00Z',['2026-10-03T08:30:00Z']);
+out.late121=ticks('2026-10-03T07:00:00Z',['2026-10-03T08:30:00.001Z','2026-10-03T08:30:15Z','2026-10-03T12:00:00Z']);
 // Three days closed: one record for the most recent occurrence, no backlog, then the next day runs.
 out.absence=ticks('2026-10-03T07:00:00Z',['2026-10-06T09:30:00Z','2026-10-06T09:30:15Z','2026-10-07T08:00:20Z']);
 // Created after today's time: nothing until tomorrow. Paused, removed or source-paused: nothing.
@@ -177,12 +177,12 @@ out.settled=l.settledOccurrences;out.mark=l.lastOccurrence;
 const again=loop('2026-10-03T07:00:00Z');
 out.again=['2026-10-03T08:00:05Z','2026-10-03T07:58:00Z','2026-10-03T08:00:30Z','2026-10-03T08:01:59Z'].map(time=>tick(again,time));
 // Back behind the jump but past today's time: never a late run, and the occurrence does not pass without a
-// record. It is recorded once as missed, like any other occurrence found more than 120 seconds late.
+// record. It is recorded once as missed, like any other occurrence found more than 30 minutes late.
 const late=loop('2026-10-03T07:00:00Z');
 out.late=['2026-10-05T08:00:00Z','2026-10-04T09:30:00Z','2026-10-04T23:00:00Z','2026-10-05T08:00:00Z','2026-10-06T08:00:00Z'].map(time=>tick(late,time));
 // The round-4 case: the clock jumps two days ahead and is corrected, then the tab sleeps through the real time.
 const asleep=loop('2026-10-03T07:00:00Z');
-out.asleep=['2026-10-05T08:00:10Z','2026-10-03T07:40:00Z','2026-10-03T08:10:00Z','2026-10-03T08:10:30Z','2026-10-04T08:20:00Z','2026-10-05T08:00:00Z','2026-10-06T08:00:00Z'].map(time=>tick(asleep,time));
+out.asleep=['2026-10-05T08:00:10Z','2026-10-03T07:40:00Z','2026-10-03T08:40:00Z','2026-10-03T08:40:30Z','2026-10-04T08:50:00Z','2026-10-05T08:00:00Z','2026-10-06T08:00:00Z'].map(time=>tick(asleep,time));
 // A clock set back onto a day a long absence skipped: one truthful record for that day, never a backlog or a run.
 const absent=loop('2026-10-01T07:00:00Z');
 out.absent=['2026-10-06T09:30:00Z','2026-10-03T09:00:00Z','2026-10-03T09:00:30Z','2026-10-03T23:00:00Z'].map(time=>tick(absent,time));out.absentSettled=absent.settledOccurrences;
@@ -274,8 +274,9 @@ const devSide=(row)=>{const loop={active:true,removed:false,createdAt:at(row.cre
  return found.missed?{...base,status:'missed',text:o.DIGEST_MISSED_TEXT}:{...base,status:'ready',text:''};};
 const later='2027-01-01T00:00:00.000Z';
 const rows=[
- ['on time','UTC','08:00','2026-10-03T08:00:00.000Z'],['119.999 s late','UTC','08:00','2026-10-03T08:01:59.999Z'],['120 s late','UTC','08:00','2026-10-03T08:02:00.000Z'],
- ['120.001 s late','UTC','08:00','2026-10-03T08:02:00.001Z'],['three days absent','UTC','08:00','2026-10-06T09:30:00.000Z'],
+ ['on time','UTC','08:00','2026-10-03T08:00:00.000Z'],['29 min 59.999 s late','UTC','08:00','2026-10-03T08:29:59.999Z'],['30 min late','UTC','08:00','2026-10-03T08:30:00.000Z'],
+ ['30 min 0.001 s late','UTC','08:00','2026-10-03T08:30:00.001Z'],['three days absent','UTC','08:00','2026-10-06T09:30:00.000Z'],
+ ['created after the time today','UTC','08:00','2026-10-03T09:00:00.000Z',{created:'2026-10-03T08:00:30.000Z'}],
  ['expired, on time','UTC','08:00','2026-10-03T08:00:30.000Z',{expiresAt:'2026-10-03T08:00:00.000Z'}],
  ['expires at this instant','UTC','08:00','2026-10-03T08:00:00.000Z',{expiresAt:'2026-10-03T08:00:00.000Z'}],
  ['expired and late','UTC','08:00','2026-10-03T11:00:00.000Z',{expiresAt:'2026-10-03T09:00:00.000Z'}],
@@ -308,8 +309,8 @@ console.log(JSON.stringify(out));`);
   for(const row of out.rows)assert.deepEqual(row.dev,row.agent,`${row.name}: development and agent admission agree`);
   // The table exercises every status, not only the happy path.
   assert.deepEqual([...new Set(out.rows.map(row=>row.agent?.status??'none'))].sort(),['missed','none','ready','unavailable']);
-  // A skipped civil time has no occurrence that day on either side.
-  assert.equal(out.rows.find(row=>row.name==='spring-forward day, skipped time').agent,null);
+  // A skipped civil time runs one gap later that day on both sides (02:30 -> 03:30 EDT, elizaOS/eliza trigger-scheduling).
+  assert.equal(out.rows.find(row=>row.name==='spring-forward day, skipped time').agent?.scheduledAt,'2026-03-08T07:30:00.000Z');
   assert.ok(out.rows.some(row=>row.agent?.sourceState==='expired')&&out.rows.some(row=>row.agent?.sourceState==='revoked'));
   assert.equal(out.pausedNext,null);
   for(const week of out.weeks)assert.deepEqual(week.dev,week.agent,`${week.zone} ${week.localTime}: the same occurrence instants`);

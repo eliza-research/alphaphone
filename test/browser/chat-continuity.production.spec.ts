@@ -134,7 +134,8 @@ for (const step of ['Back from full to sheet', 'HOME on Home', 'a rotation and t
     // One post, carrying this message after its current-turn screen observation.
     const posts = await harness(page, f => f.posts as string[]);
     expect(posts).toHaveLength(1);
-    expect(posts[0].endsWith('[USER MESSAGE]\n' + asked)).toBe(true);
+    // A product build sends the authored text; the screen observation travels only in metadata.
+    expect(posts[0]).toBe(asked);
     await noResend(page, foreign, 1);
   });
 }
@@ -203,7 +204,7 @@ test('replacing the reviewed message after a restart clears only its copy, and t
   await expect(button(page, 'Stop reply')).toHaveCount(0, { timeout: 30_000 });
   const posts = await harness(page, f => f.posts as string[]);
   expect(posts).toHaveLength(1);
-  expect(posts[0].endsWith('[USER MESSAGE]\n' + next)).toBe(true);
+  expect(posts[0]).toBe(next);
   await expect.poll(() => keptRows(page)).toEqual([]);
   await noResend(page, foreign, 1);
 });

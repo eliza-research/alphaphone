@@ -60,12 +60,18 @@ nothing is downloaded.
 
 | Path | Role | Size | Licence |
 | --- | --- | --- | --- |
-| `tts/paradee/paradee-8m-v1_1.gguf` | Paradee-8M F32 (converted from the pinned PyTorch files) | 32 MB | Apache-2.0 |
+| `tts/paradee/paradee-8m-v1_2.gguf` | Paradee-8M v1.2 F32 (converted from the pinned PyTorch files) | 32 MB | Apache-2.0 |
 | `tts/paradee/misaki-en-us.lex` | misaki US lexicon (converted from the pinned misaki data) | 12.9 MB | Apache-2.0 |
 | `tts/paradee/espeak-ng-data/*` (7 files) | eSpeak NG English data for out-of-lexicon words | 0.8 MB | GPL-3.0-or-later (flagged) |
 | `asr/phonon-2-fv5.gguf` | The ASR slot: Phonon-2 (Parakeet-TDT 0.6B, five-value weights, `general.architecture=parakeet-tdt`) | 331 MB | CC-BY-4.0 (attribution and NOTICE shipped; training-data terms flagged) |
 | `vad/silero-vad-v5.gguf` | Silero VAD v5 | 0.6 MB | MIT |
 | `notices/*` | eSpeak NG, misaki, spaCy and Phonon-2 (Fermion NOTICE, CC-BY-4.0 text) notices | small | as named |
+
+At eliza pin `fbc2d23d4b` upstream pins Paradee-8M v1.2, adds an enabled Castilian Spanish voice
+(Delibes-8M, with Spanish eSpeak NG data) and moves the llama.cpp fork to `13d0ccbf`. The recorded
+engine libraries were built from fork `0d9fd4b9` and are not admitted at this pin: a fresh engine
+build, a fresh byte record, a fresh APK and on-device validation are required
+(`docs/evidence/develop-fbc2d23d-build-input-admission-20261029.json`).
 
 The Phonon-2 GGUF (330,632,256 bytes, sha256 `dc552eb7…`) replaces the Qwen3-ASR pair
 (about 1 GB), so the bundle is about 380 MB. It ships in the APK assets with the verified first-run
@@ -152,8 +158,19 @@ recording a clip on the device:
    unavailable reason and the scorer latency, never text. The gaps and deadline are engineering
    defaults (local-speech research), not measurements or owner-set constants.
 6. **Send.** The turn goes through the existing voice policy unchanged (`VOICE_SEND_POLICY`
-   in `voice-selection.ts`, MVP-01/P-01). A reply carrying action proposals ends voice for review in
+   in `voice-selection.ts`, P-39: the assistant submits automatically; Transcribe only inserts
+   editable text the user sends). A reply carrying action proposals ends voice for review in
    the conversation: automatic submission never approves a side effect.
+   **Read replies aloud** (Settings, Voice and agent settings; off by default, `setSpeakReplies`)
+   speaks the reply to a message dictated with Transcribe and sent exactly as placed; a typed or
+   edited message stays silent. The switch shows the stored preference and reports a save that
+   storage did not confirm.
+   **Path.** When the live assistant is not ready (`nativeLiveVoiceReady` false) or the route is
+   Cloud, the conversation runs the recorded-clip loop (`BatchVoiceConversation`), which cannot hear
+   the user while a reply plays; Alpha says so once per session ("Speaking will not interrupt
+   Alpha's reply in this voice mode"). Each conversation turn's timing record keeps its path as the
+   live ASR mode (`live.mode`: `batch` for the recorded-clip loop, `stream` from the live route), and
+   the diagnostics export names it `path: live | batch`.
 7. **Barge-in and heard content.** Speech that starts while a reply is pending or playing is
    tentative. Before playback it interrupts once the VAD segment has stayed open for 700 ms (longer
    than the gate's hangover, so a blip never confirms by time) or its transcript passes the
@@ -303,6 +320,20 @@ still required.
   current installed capture/IPC/inference/playback acceptance remains open (see Live voice).
 - The app-process recorded-clip path (`NativeAsr.transcribe`, used by Notes dictation and when the
   live route is not ready) is batch.
+
+## Cloud speech plan limits (cloud runtime profile only)
+
+Only the explicit `--runtime-profile=cloud` QA build and development browser-resident builds send
+speech to Eliza Cloud; a flag-off native build routes speech to the device (`selectVoiceRoute`) and
+never makes a Cloud speech request. When Cloud answers HTTP 429, `AlphaVoiceCloudPlugin`
+(`CloudVoiceLimit.java`) and the development bridge (`cloud-voice-limit.ts`) pass on only the retry
+facts: `Retry-After` or the body's `retryAfterSeconds`/`retryAt` (at most a day), a short
+lower-case limit code and a bounded `resetAt`; the message, plan and provider body never leave.
+`cloud-voice.ts` reads them as the shared `ServiceLimit` (`readServiceLimit`), shows plan-limit
+wording with the retry time ("... reached your plan's request limit. Try again in about 42
+seconds. Your recording is kept."), keeps the recorded clip for an explicit retry, and records the
+limit as the account panel's latest limit (`lastLimit` of the shared `useCloudSubscriptionSummary`)
+for the same signed-in Cloud session only. Nothing is retried automatically.
 
 ## Streamed speech output and audio focus (#397)
 
