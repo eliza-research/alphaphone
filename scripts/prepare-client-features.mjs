@@ -34,6 +34,7 @@ function matches(actual, expected) {
 export const CLIENT_FEATURE_PATHS = [
   'packages/contracts/src/browser-address-input.ts',
   'packages/contracts/src/browser-request-grounding.ts',
+  'packages/contracts/src/stated-clock-time.ts',
   'packages/contracts/src/phone-dial.ts',
   'packages/contracts/src/device-action-execution.ts',
   'packages/contracts/src/client-turn-observation.ts',
