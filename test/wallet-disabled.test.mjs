@@ -84,3 +84,22 @@ test('the resident agent profile used by Alpha loads no Wallet actions in either
   for(const plugin of policy[name])assert.doesNotMatch(plugin,/wallet|payment|solana|evm/i,`${name} admits ${plugin}`);
  }
 });
+
+// The resident runtime payload carries no browser wallet-connector closure (wagmi, RainbowKit,
+// the MetaMask SDK, whose licence is not open source): the pinned mobile build resolves them to
+// its throw-on-call stub, so they never appear in the staged runtime inventory (#674).
+const WALLET_CONNECTOR=/^(?:wagmi|@wagmi\/[^/]+|@rainbow-me\/[^/]+|@metamask\/[^/]+)$/;
+test('the pinned Android resident build excludes the wallet-connector graph',async()=>{
+ const build=read('vendor/eliza/packages/agent/scripts/build-mobile-bundle.ts');
+ assert.match(build,/mobileWalletConnectorStubPlugin\(path\.join\(stubsDir, "null-plugin\.ts"\)\)/,'the mobile build installs the wallet-connector stub');
+ const {MOBILE_WALLET_CONNECTOR_FILTER}=await import(pathToFileURL(join(root,'vendor/eliza/packages/agent/scripts/mobile-wallet-connectors.ts')).href);
+ for(const name of ['wagmi','wagmi/chains','@wagmi/connectors','@wagmi/core','@rainbow-me/rainbowkit','@metamask/sdk','@metamask/connect-evm'])assert.ok(MOBILE_WALLET_CONNECTOR_FILTER.test(name),name);
+ for(const name of ['viem','ethers','@elizaos/core'])assert.equal(MOBILE_WALLET_CONNECTOR_FILTER.test(name),false,name);
+});
+test('a staged resident runtime inventory lists no @metamask/*, wagmi or @rainbow-me/* package',t=>{
+ const file=join(root,'android/app/src/main/assets/agent/agent-bundle-dependencies.json');
+ if(!existsSync(file)){t.skip('no staged resident runtime (npm run agent:stage-android writes it)');return;}
+ const {packages}=JSON.parse(readFileSync(file,'utf8'));
+ assert.ok(Array.isArray(packages)&&packages.length>0,'staged inventory lists packages');
+ assert.deepEqual(packages.filter(row=>WALLET_CONNECTOR.test(row.name)).map(row=>`${row.name}@${row.version}`),[]);
+});

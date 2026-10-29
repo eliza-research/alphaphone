@@ -443,6 +443,15 @@ It is listed with its own terms, flagged, and not blocked; whether the product m
 is an open question for the owner, and removing it from the agent bundle would be an
 upstream elizaOS change. It was not assessed here.
 
+That upstream change exists: the shared mobile agent build
+(`packages/agent/scripts/mobile-wallet-connectors.ts`) resolves wagmi, RainbowKit and every
+`@metamask/*` specifier to the mobile stub, so the wallet-connector closure, including
+`@metamask/sdk`, is not bundled. An Android mobile bundle built from that change contained no
+MetaMask SDK source. The licence inventory above predates it; regenerate the notices from a
+runtime staged at that pin (`npm run agent:stage-android`, then the licence generator) and
+`test/wallet-disabled.test.mjs` asserts the staged inventory lists no `@metamask/*`, wagmi or
+`@rainbow-me/*` package.
+
 Bun is flagged `copyleft-weak` as well as `unverified` because it statically links
 JavaScriptCore (LGPL). The other copyleft entries (`mediabunny`, MPL-2.0; the pdf.js
 Liberation fonts, GPL-2.0-only with the font exception) are in the committed notices too.
