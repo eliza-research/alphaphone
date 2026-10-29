@@ -20,8 +20,10 @@ async function remoteAgent(page: Page, mode: Mode) {
     const w = window as any;
     w.androidBridge = {};
     const store = new Map<string, string>();
-    // An expiring session lets the composer refuse before any request carries the message.
-    const expiresAt = Date.now() + (mode === 'expires' ? 25_000 : 86_400_000);
+    // An expiring session lets the composer refuse before any request carries the message. It lapses
+    // only when the test moves the page clock past it (ten minutes on), never while a slow load is
+    // still connecting: a 25s wall-clock lifetime ran out before the first load finished under load.
+    const expiresAt = Date.now() + (mode === 'expires' ? 600_000 : 86_400_000);
     store.set('remote:' + remote, JSON.stringify({ origin: remote, token: 'remote-session-token', identityId: 'fixture-owner', sessionId: 'remote-session-token', expiresAt }));
     try { if (!sessionStorage.getItem('dispatch-seeded')) { sessionStorage.setItem('dispatch-seeded', '1'); localStorage.setItem('alpha.connection.selection.v1', JSON.stringify({ kind: 'remote', origin: remote })); } } catch { /* covered elsewhere */ }
     const f = w.dispatchFixture = { posts: 0, historyReads: 0, created: false, ready: false, expiresAt, store };
@@ -106,6 +108,7 @@ test('without a connection the chooser opens and the message returns to the comp
 // binding, which may belong to another owner or agent) and nothing is sent.
 test('a transport refusal before dispatch keeps the text in its own conversation and sends nothing', async ({ page }) => {
   test.setTimeout(90_000);
+  await page.clock.install();
   await remoteAgent(page, 'expires');
   await page.goto('/');
   await expect.poll(() => page.evaluate(() => (window as any).dispatchFixture.ready), { timeout: 30_000 }).toBe(true);
@@ -113,7 +116,10 @@ test('a transport refusal before dispatch keeps the text in its own conversation
   await composer(page).fill('Do not lose this');
   await expect.poll(() => savedDraft(page), { timeout: 15_000 }).toBe('Do not lose this');
   // Let the paired session lapse: the transport refuses before it creates or posts anything.
-  await page.waitForFunction(() => Date.now() > (window as any).dispatchFixture.expiresAt + 250, undefined, { timeout: 30_000 });
+  const left = await page.evaluate(() => (window as any).dispatchFixture.expiresAt + 250 - Date.now());
+  expect(left).toBeGreaterThan(0);
+  await page.clock.fastForward(left);
+  expect(await page.evaluate(() => Date.now() > (window as any).dispatchFixture.expiresAt + 250)).toBe(true);
   const key = await bindingKey(page);
   await composer(page).press('Enter');
   // The expired session is retired and the chooser opens; the message never left the phone.

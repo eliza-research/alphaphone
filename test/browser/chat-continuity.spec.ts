@@ -634,6 +634,8 @@ test('typing during initial identity verification survives Minimize and admissio
 
 
 for(const edit of [false,true])test(`initial identity admission never transfers a restored offline draft${edit?' with edits':''}`,async({page})=>{
+ // Two loads (the first and a reload) on the development server; under load one reload alone took the 30s default.
+ test.setTimeout(90_000);
  await remoteAgent(page,{holdIdentity:true});await page.goto('/');await expect.poll(()=>fixture(page,f=>!!f.heldIdentity)).toBe(true);
  await page.evaluate(async()=>{const {assistantDraftStore}=await import('/src/runtime/assistant-draft-store.ts');const store=await assistantDraftStore(JSON.stringify(['offline']));await store.save(await store.read(),'Earlier offline private words');});
  await page.reload();await expect.poll(()=>fixture(page,f=>!!f.heldIdentity)).toBe(true);await expect(composer(page)).toHaveValue('Earlier offline private words');if(edit)await composer(page).fill('Earlier offline private words with new edits');
