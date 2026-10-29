@@ -66,17 +66,20 @@ No agent ran the build chain or Gradle for this issue.
 
 ## Decisions for the owner
 
-### D1. Gradle signing or post-build signing?
+### D1. Gradle signing or post-build signing? Settled by the 2026-10-29 custody decision
 
-| Option | How | What it changes |
-| --- | --- | --- |
-| Gradle (`ELIZAOS_KEYSTORE_PATH`, `ELIZAOS_KEYSTORE_PASSWORD`, `ELIZAOS_KEY_ALIAS`, `ELIZAOS_KEY_PASSWORD`) | Needs a keystore (PKCS#12/JKS) holding `alphaphone_app`, which the ceremony does not produce: someone must convert the decrypted `.pk8` + certificate into a keystore | Passwords sit in the build environment for the whole Gradle run; an extra keystore file must be created and destroyed. Gradle refuses a partial set. |
-| Post-build `sign-release-apks.mjs --keys-dir /dev/shm/keys` (default for option A custody) | Build unsigned, then sign with the ceremony layout decrypted by `decrypt-release-keys.ts --only alphaphone_app` | No keystore conversion; the key is in tmpfs only for the signing step; the script removes unsigned files only after the signer matches the recorded digest and re-runs `verify-apks` and the SBOM. |
-| Post-build `sign-release-apks.mjs --pkcs11-config <file> --key-label <label>` (custody B/C) | PIN only via `ELIZAOS_PKCS11_PIN` | No private key on disk. |
+H-01 is decided: the keys live as GitHub Actions secrets, and a CI job signs
+([#661 D1](661-release-key-custody-ceremony.md#d1-h-01-where-do-the-release-keys-live-after-the-ceremony-decided-2026-10-29)).
+That makes post-build signing the path: build **unsigned** on the release build host, then run
+the draft `sign-apks` job
+([drafts/661-release-signing.workflow.yml](drafts/661-release-signing.workflow.yml)). The job
+decrypts only `alphaphone_app` into tmpfs, runs `sign-release-apks.mjs --keys-dir ... --no-verify`
+(the signer check against `android/release-signer.json` still runs), and shreds the key. Gradle
+signing (`ELIZAOS_KEYSTORE_*`) is not used. It would need a keystore that the ceremony does not
+produce, and the passwords would sit in the build environment for the whole build. The PKCS#11
+form is kept only for a later move to custody B or C.
 
-Documented default: none chosen; the recommendation is the post-build signer matching the H-01
-custody choice, because it is the path tested against ceremony-layout keys and re-verifies the
-result.
+The remaining choice here is the input transport, [#661 D2](661-release-key-custody-ceremony.md#d2-how-do-unsigned-inputs-reach-the-ci-signing-job).
 
 ### D2. Version code and name
 
@@ -110,17 +113,22 @@ Prerequisites: #661 done (H-09 `done`), H-18 admitted, this pin (or a later one 
      npm run android:build:local
    ```
    (with the four `ELIZAOS_KEYSTORE_*` variables only if D1 chose Gradle signing).
-5. Sign (if D1 chose post-build signing):
+5. Sign in CI (D1), following [#661 CI signing path step 5](661-release-key-custody-ceremony.md#5-run):
    ```sh
-   # option A: decrypt only the application key into tmpfs for this job
-   node vendor/eliza/packages/os/scripts/android/decrypt-release-keys.ts --input <bundle> \
-     --output /dev/shm/keys --passphrase-file /dev/shm/pass --only alphaphone_app
-   node scripts/sign-release-apks.mjs --keys-dir /dev/shm/keys --dry-run
-   node scripts/sign-release-apks.mjs --keys-dir /dev/shm/keys
-   node scripts/sign-release-apks.mjs --keys-dir /dev/shm/keys --apk <prepared Sense listener APK> --out <signed listener APK>
-   shred -u /dev/shm/keys/* /dev/shm/pass; rmdir /dev/shm/keys
-   # option B/C: --pkcs11-config <file> --key-label <label>, PIN only via ELIZAOS_PKCS11_PIN
+   tar -cf unsigned-release.tar -C artifacts standalone-release-unsigned.apk launcher-release-unsigned.apk \
+     build-config.json apk-manifest.json            # add sense-listener-unsigned.apk if prepared
+   sha256sum unsigned-release.tar                   # typed into the dispatch form with the URL
    ```
+   Dispatch `Release signing (draft)` with `target=apks` once it is enabled, and approve the
+   `release` gate after checking the workflow file at that commit. Download
+   `signed-release-apks-<run>` into `artifacts/` on this same build tree, remove the two
+   `*-release-unsigned.apk` files, then run:
+   ```sh
+   node scripts/verify-apks.mjs
+   node scripts/generate-sbom.mjs --out artifacts/sbom/alphaphone.cdx.json --apks artifacts --packaged-runtime
+   ```
+   (`--packaged-runtime` applies when the resident runtime is staged, as it is for a distributable build.)
+   No key ever reaches the build host.
 6. Check: both release rows (`standalone`, `launcher`) of `artifacts/apk-manifest.json` read
    `distributable: true`; `node scripts/audit-production-bundle.mjs` passes; `npm run human:status`
    shows H-10 `done`.
@@ -133,8 +141,8 @@ Prerequisites: #661 done (H-09 `done`), H-18 admitted, this pin (or a later one 
 
 ```markdown
 - **P-5x — H-10 ([#662](https://github.com/eliza-research/alphaphone/issues/662)), decided <YYYY-MM-DD> by Shaw:**
-  Release APKs are signed <in Gradle from a keystore | after the build with scripts/sign-release-apks.mjs
-  using <key files in tmpfs | PKCS#11 token>>. The first pilot release uses versionCode <N> and
+  Release APKs are built unsigned on the release build host and signed by the CI release-signing job
+  (P-57) with scripts/sign-release-apks.mjs from key files decrypted into tmpfs for one step. The first pilot release uses versionCode <N> and
   versionName <name>; ELIZAOS_APP_LINK_HOST=eliza.app. Policy only, not build evidence.
 ```
 
@@ -142,6 +150,7 @@ Prerequisites: #661 done (H-09 `done`), H-18 admitted, this pin (or a later one 
 
 1. Finish #661 (custody, ceremony, enrollment).
 2. H-18 reviewer: stage and admit the on-device voice outputs (`qualified: true`).
-3. Release owner: choose D1/D2, then run the procedure above on the release build host.
+3. Release owner: choose D2 and the #661 D2 transport, then run the procedure above (build on the
+   release build host, sign in CI, verify on the build host).
 4. Confirm both `distributable: true` rows and H-10 `done`; hand the manifest and APKs to the image
    host operator for #672.
