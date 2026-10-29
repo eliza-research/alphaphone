@@ -399,6 +399,9 @@ for (const mode of ['signed-out','empty','credits','unavailable','funded','repla
   }
   if(!signedOut&&!needsPlan){
    await expect(page.getByRole('button',{name:'Notes',exact:true})).toBeVisible();
+   // A sign-in replaced underneath admission is not a refused sign-in: the account stays attached
+   // and the required sign-in page never covers the running resident's Home.
+   if(mode==='replaced')await expect(page.locator('[role="main"].alpha-cloud-sign-in')).toHaveCount(0);
    await expect(page.getByRole('dialog')).toHaveCount(0);
    await page.getByRole('button',{name:'Settings',exact:true}).click();
    await page.getByRole('button',{name:mode==='replaced'?'Agent connection':'Eliza Cloud account & plan',exact:true}).click();
