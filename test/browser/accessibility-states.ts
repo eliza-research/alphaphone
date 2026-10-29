@@ -2,6 +2,9 @@ import { expect, type Page } from '@playwright/test';
 import {openCanonicalCalendarForm} from './helpers/canonical-calendar';
 import {openLegacyNotes,openLegacyAttachment} from './helpers/legacy-notes';
 import {openOwnedPhotoViewer} from './helpers/owned-photo';
+import {installHomeCalendar} from './helpers/home-calendar';
+import {calendarSyncFixture} from './calendar-sync-fixture';
+import {settled} from './helpers/settled';
 
 /**
  * The retained MVP surface, as a list of states the accessibility sweep visits.
@@ -22,9 +25,8 @@ export type State = {
 const offline = () => localStorage.setItem('alpha.connection.selection.v1', JSON.stringify({ kind: 'offline' }));
 const settle = async (page: Page) => {
   await expect(page.locator('.alpha-phone')).toBeVisible();
-  // Entry transitions are short even with reduced motion; fonts decide final geometry.
-  await page.evaluate(() => document.fonts.ready);
-  await page.waitForTimeout(450);
+  // Entry motion has finished and fonts are loaded: final geometry, not a fixed wait.
+  await settled(page);
 };
 
 const press = async (page: Page, steps: string[]) => { for (const step of steps) await page.getByRole('button', { name: step, exact: true }).first().click(); };
@@ -366,9 +368,18 @@ const launcher = (name: string, steps: string[] = [], shows?: string): State => 
 export const LAUNCHER_STATES: State[] = [
   launcher('Home'),
   launcher('All apps', ['All apps']),
+  launcher('Conversation', ['Open conversation']),
+  // Every retained app view in the launcher presentation (its headers and system bars differ).
+  launcher('Inbox', ['Inbox']),
   launcher('Calendar', ['Calendar']),
+  launcher('Calendar month', ['Calendar', 'Month view']),
+  launcher('Browser', ['Browser']),
+  launcher('Camera', ['Camera']),
+  launcher('Photos', ['Photos']),
+  launcher('Maps', ['Maps']),
   launcher('Notes', ['Notes']),
   launcher('Files', ['Files']),
+  launcher('Workflows', ['Workflows']),
   launcher('Settings', ['Settings']),
   launcher('Settings display', ['Settings', 'Display']),
 ];
@@ -392,6 +403,73 @@ const calendarWithEvents: State = {
 };
 CONNECTED_STATES.push(calendarWithEvents);
 
+/**
+ * Connected states other than a mailbox (MVP-48): an agent's own calendar, a linked Google Calendar
+ * account and a connected agent with a conversation. Each is held at the same boundary its own
+ * browser spec uses (home-daily-overview, calendar-sync-settings, journey-d-digests); every
+ * account, event and reply is synthetic, and none of these states writes to a provider.
+ */
+// A fixed local noon keeps the agent's event inside today's Calendar window whenever the sweep runs.
+const AGENT_CALENDAR_DAY = { year: 2026, month: 9, day: 14 };
+const agentCalendar = (name: string, steps: string[] = []): State => ({
+  name: `connected Agent Calendar ${name}`,
+  open: async (page, theme) => {
+    const { year, month, day } = AGENT_CALENDAR_DAY;
+    await page.clock.install({ time: new Date(year, month, day, 12, 0, 0) });
+    await page.addInitScript(offline);
+    await page.goto(theme ? `/?theme=${theme}` : '/');
+    const start = new Date(year, month, day, 14, 30, 0), end = new Date(year, month, day, 15, 15, 0);
+    await installHomeCalendar(page, { title: 'Synthetic planning review with a long enough title to wrap', startAt: start.toISOString(), endAt: end.toISOString() });
+    await expect(page.locator('[data-alpha-home-calendar]')).toContainText('Synthetic planning review');
+    await press(page, steps);
+    if (steps.length) await expect(page.getByText(/^Synthetic planning review/).first()).toBeVisible();
+    await settle(page);
+  },
+});
+/** The Google Calendar sync sheet for a linked account, before and after its read-only review. */
+const googleCalendar = (name: string, review: boolean): State => ({
+  name: `connected Google Calendar sync ${name}`,
+  open: async (page, theme) => {
+    const dialog = await calendarSyncFixture(page, false, theme);
+    await expect(dialog).toBeVisible();
+    if (review) {
+      await dialog.getByRole('button', { name: 'Review sync', exact: true }).click();
+      await expect(dialog.getByText(/owner@example.invalid.*Personal.*1 Alpha events/)).toBeVisible();
+    }
+    await settle(page);
+    expect(await page.evaluate(() => (window as any).calendarSyncFixture.writes)).toBe(0);
+  },
+});
+const DEVELOPMENT_REPLY = 'Development reply. Edit this response in Agent connection.';
+/** The on-device development agent profile (no model or network) answering one typed message. */
+const developmentAgent = (name: string, conversation: boolean): State => ({
+  name: `connected agent ${name}`,
+  open: async (page, theme) => {
+    await page.goto(`/?mode=dev&theme=${theme || 'light'}`);
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Agent connection', exact: true }).click();
+    await page.getByRole('button', { name: 'Connect development profile', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Development connections', exact: true })).toHaveCount(0);
+    await expect.poll(() => page.evaluate(async () => !!(await import('/src/runtime/connection-ui.tsx' as string)).connectionController.getSnapshot().session), { timeout: 15_000 }).toBe(true);
+    if (conversation) {
+      await page.getByRole('button', { name: 'Back to apps', exact: true }).click();
+      const composer = page.getByRole('textbox', { name: 'Ask Alpha', exact: true });
+      await composer.fill('What is on my list for this afternoon?');
+      await composer.press('Enter');
+      await expect(page.locator('[data-alpha-layer="conversation"][aria-hidden="false"]').getByText(DEVELOPMENT_REPLY, { exact: true })).toBeVisible();
+    }
+    await settle(page);
+  },
+});
+CONNECTED_STATES.push(
+  agentCalendar('on Home'),
+  agentCalendar('in Calendar', ['Calendar']),
+  googleCalendar('account', false),
+  googleCalendar('review', true),
+  developmentAgent('Settings', false),
+  developmentAgent('Conversation', true),
+);
+
 /** Large text as the renderer sees it: every declared pixel size multiplied, as WebView text zoom does. */
 export async function setTextScale(page: Page, scale: number) {
   await page.evaluate(async value => {
@@ -399,6 +477,9 @@ export async function setTextScale(page: Page, scale: number) {
     display.installBrowserDisplay();
     document.documentElement.style.setProperty('--browser-text-scale', String(value));
   }, scale);
-  await page.evaluate(() => document.fonts.ready);
-  await page.waitForTimeout(350);
+  // The renderer's own probe (runtime/text-scale.ts) has measured the new size and published it, so
+  // the layout rules that read it have applied; then any reflow motion settles.
+  // The probe reports on its next layout; a starved renderer can take seconds to lay out a frame.
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--alpha-text-scale').trim()), { timeout: 15_000 }).toBe(String(scale));
+  await settled(page);
 }
