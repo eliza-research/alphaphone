@@ -240,6 +240,8 @@ The production AlphaConnection boundary admits exact managed-service origin and 
 builds) is development infrastructure, not evidence of a resident runtime or
 production authentication.
 
+The route set, transport bounds, delegation-return admission and request registry behind AlphaConnection, and the provider slot binding, launch order (provider admission, then the native profile's embedding route) and attach admission behind the resident Agent bridge, are the shared `plugin-native-agent` `connection` and `runtime` policies. Alpha supplies its plugin names, Cloud hosts (`CloudDeployment`), link scheme, slot names and the packaged `config/owner-routes.json`; the Capacitor plugins keep the Android plumbing and the resident lifecycle locks.
+
 ### Eliza Cloud sign-in ownership (in-app, 2026-10-14)
 
 October 27: the native client below is the shared elizaOS library `packages/auth/android`
