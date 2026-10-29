@@ -186,12 +186,15 @@ test('native starts the agent without a provider and never offers it a Cloud key
   assert.doesNotMatch(start, /Configure your model provider/);
   assert.doesNotMatch(plugin, /Configure your model provider before starting the local agent|Configure a model provider before starting/);
   const configure = between(plugin, 'static void configureEnvironment(', '@PluginMethod public void start(');
-  assert.match(configure, /if\(provider==null\)applyUnboundEnvironment\(env\);/);
+  // The shared launch order applies the provider or, when none is usable, the unbound environment.
+  assert.match(configure, /if\(!NativeProviderSlot\.applyLaunchEnvironment\(BuildConfig\.ELIZA_RUNTIME_PROFILE,provider,cloudSaved,[^\n]*\)\)\{provider=null;saved=null;cloudSaved=null;\}/);
   assert.match(configure, /launchedGeneration=LocalAgentProviderAdmission\.launchGeneration\(saved,cloudSaved\);/);
-  const unbound = between(plugin, 'static void applyUnboundEnvironment(', '\n }\n');
+  const sharedSlot = read('vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderSlot.java');
+  assert.match(between(sharedSlot, 'public static boolean applyLaunchEnvironment(', '\n  }\n'), /if \(!bound\) applyUnboundEnvironment\(env\);/);
+  const unbound = between(sharedSlot, 'public static final String[] PROVIDER_ENVIRONMENT', '\n  }\n\n');
   for (const key of ['ELIZAOS_CLOUD_API_KEY', 'CEREBRAS_API_KEY', 'OPENAI_API_KEY', 'ELIZA_PROVIDER', 'ELIZAOS_CLOUD_BASE_URL'])
     assert.ok(unbound.includes(`"${key}"`), `unbound launch removes ${key}`);
-  assert.match(unbound, /env\.put\("ELIZAOS_CLOUD_USE_INFERENCE","false"\);/);
+  assert.match(unbound, /env\.put\("ELIZAOS_CLOUD_USE_INFERENCE", "false"\);/);
   assert.ok(!unbound.includes('readCredentialSlot'), 'the unbound launch reads no credential');
   // An empty provider slot is its own attachable generation (host-JVM tested in LocalAgentProviderAdmission).
   assert.match(between(plugin, 'private static InvocationOwnerCache.Owner readProviderOwner(', 'private void rejectPending('), /if\(saved==null\)return new InvocationOwnerCache\.Owner\(LocalAgentProviderAdmission\.NO_PROVIDER_GENERATION,Long\.MAX_VALUE\);/);

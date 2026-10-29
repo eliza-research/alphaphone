@@ -4,7 +4,7 @@ import {readFileSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {nativeSource,javaBinary,jsonJar} from './fixtures/jvm-tools.mjs';
+import {nativeSource,upstreamConnection,javaBinary,jsonJar} from './fixtures/jvm-tools.mjs';
 function method(source,name){const a=source.indexOf('@PluginMethod public void '+name+'(');assert.ok(a>=0);const z=source.indexOf('\n }',a);assert.ok(z>a);return source.slice(a,z+3).replace('@PluginMethod ','');}
 function run(files,main){assert.ok(jsonJar,'Pinned JSON dependency required; no skipped security proof');const dir=mkdtempSync(join(tmpdir(),'canonical-notification-security-'));try{const paths=files.map(([name,content])=>{const p=join(dir,name);writeFileSync(p,content);return p;});execFileSync(javaBinary('javac'),['--release','11','-cp',jsonJar,'-d',dir,...paths],{stdio:'pipe',timeout:30000});return execFileSync(javaBinary('java'),['-cp',dir+':'+jsonJar,main],{encoding:'utf8',stdio:'pipe',timeout:30000});}finally{rmSync(dir,{recursive:true,force:true});}}
 test('actual renderer read/write/remove/CAS methods reject every native notification session namespace',()=>{
@@ -28,7 +28,7 @@ test('actual renderer read/write/remove/CAS methods reject every native notifica
  for(String operation:new String[]{"write","read","remove","cas"}){String slot=operation.equals("cas")?"notes-records:v1:device":"device:fixture";PluginCall call=new PluginCall(slot);switch(operation){case "read":bridge.secureRead(call);break;case "write":bridge.secureWrite(call);break;case "remove":bridge.secureRemove(call);break;default:bridge.secureCompareExchange(call);}if(!call.resolved||call.rejected)throw new AssertionError("Allowed operation refused");checks++;}
  System.out.println("PASS renderer native-session boundary "+checks);
  }} `;
- assert.match(run([['RendererCredentialSlots.java',readFileSync(nativeSource('RendererCredentialSlots.java'),'utf8')],['CredentialBoundaryTest.java',java]],'ai.elizaresearch.alphaphone.CredentialBoundaryTest'),/^PASS renderer native-session boundary 16/);
+ assert.match(run([['SecureSlotPolicy.java',readFileSync(upstreamConnection('SecureSlotPolicy.java'),'utf8')],['RendererCredentialSlots.java',readFileSync(nativeSource('RendererCredentialSlots.java'),'utf8')],['CredentialBoundaryTest.java',java]],'ai.elizaresearch.alphaphone.CredentialBoundaryTest'),/^PASS renderer native-session boundary 16/);
 });
 test('actual canonical renderer methods recheck foreground after queueing and before exposure or read dispatch',()=>{
  const source=readFileSync(nativeSource('AlphaNotificationsPlugin.java'),'utf8');

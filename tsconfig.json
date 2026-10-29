@@ -27,6 +27,9 @@
       "@elizaos/capacitor-system/launcher": [
         "./.eliza/client-features/plugins/plugin-native-system/src/client/launcher.ts"
       ],
+      "@elizaos/contracts/deletion-window": [
+        "./.eliza/client-features/packages/contracts/src/deletion-window.ts"
+      ],
       "@elizaos/contracts/sms-send": [
         "./.eliza/client-features/packages/contracts/src/sms-send.ts"
       ],
