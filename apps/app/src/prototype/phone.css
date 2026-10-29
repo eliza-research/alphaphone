@@ -224,11 +224,12 @@ html:not(.standalone-app) [data-alpha-layer="home"][data-alpha-home-fits="true"]
 /* The launcher (Android HOME) presentation keeps each view's own header: a 32px serif title and,
  * in Camera, labelled pill actions. Above 150% they no longer fit one row either (#701), so the
  * header wraps the same way: its actions stay on the first row (wrapping themselves when they must)
- * and the title, or the button that holds it (Calendar's month), takes a full row of its own. */
-html.alpha-text-xl:not(.standalone-app) [data-alpha-app-header] { height:auto!important; flex-wrap:wrap; align-content:flex-start; row-gap:4px; flex-shrink:0; }
-html.alpha-text-xl:not(.standalone-app) [data-alpha-app-header] > :is([data-alpha-app-title],:has([data-alpha-app-title])) { order:1; flex:1 0 100%; min-width:0; box-sizing:border-box; }
-html.alpha-text-xl:not(.standalone-app) [data-alpha-app-header] > :is([data-alpha-app-title],:has([data-alpha-app-title])) + * { margin-left:auto; }
-html.alpha-text-xl:not(.standalone-app) [data-alpha-app-header] [data-alpha-app-title] { white-space:normal!important; overflow:visible!important; text-overflow:clip!important; overflow-wrap:anywhere; }
+ * and the title, or the button that holds it (Calendar's month), takes a full row of its own.
+ * Browser's address bar is its own layout and already fits, so it is left as it is. */
+html.alpha-text-xl:not(.standalone-app) [data-alpha-app-header]:not([data-alpha-browser-header]) { height:auto!important; flex-wrap:wrap; align-content:flex-start; row-gap:4px; flex-shrink:0; }
+html.alpha-text-xl:not(.standalone-app) [data-alpha-app-header]:not([data-alpha-browser-header]) > :is([data-alpha-app-title],:has([data-alpha-app-title])) { order:1; flex:1 0 100%; min-width:0; box-sizing:border-box; }
+html.alpha-text-xl:not(.standalone-app) [data-alpha-app-header]:not([data-alpha-browser-header]) > :is([data-alpha-app-title],:has([data-alpha-app-title])) + * { margin-left:auto; }
+html.alpha-text-xl:not(.standalone-app) [data-alpha-app-header]:not([data-alpha-browser-header]) [data-alpha-app-title] { white-space:normal!important; overflow:visible!important; text-overflow:clip!important; overflow-wrap:anywhere; }
 
 .app-header-action-icon { display:none; }
 .standalone-app [data-alpha-app-header] [data-alpha-header-icon-action] { width:52px; height:52px; min-width:52px; min-height:52px; padding:0!important; display:flex; align-items:center; justify-content:center; flex-shrink:0; }

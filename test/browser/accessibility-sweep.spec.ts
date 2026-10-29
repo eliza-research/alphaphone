@@ -68,7 +68,7 @@ for (const state of STATES) {
 // the entry must then be removed. A timeout or a state that no longer opens fails as well, instead
 // of counting as the expected failure. The list may only shrink (test/accessibility-coverage.test.mjs).
 const OPEN_AT_300 = new Set([
-  'live Home', 'live Conversation', 'live Calendar new event', 'live Camera (unavailable)', 'live Browser tabs',
+  'live Home', 'live Conversation', 'live Calendar new event', 'live Browser tabs',
   'live Browser menu', 'live Notes trash', 'live Notes recording', 'live Notes source document', 'live Settings display',
   'launcher Home', 'launcher Conversation', 'launcher Settings display',
 ]);
