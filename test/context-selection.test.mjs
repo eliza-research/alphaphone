@@ -88,9 +88,13 @@ test('only an unredacted own notification is reviewable, and only while that exa
  assert.equal(m.noticeReviewable({...own,title:'Alpha Phone',text:''}),false,'redacted while locked');
  assert.equal(m.noticeReviewable({...own,title:'',text:''}),false,'nothing shown');
  // Android withholds content with fixed wording instead of an empty row. That wording is not content.
+ // The shared host plugin (vendor/eliza) builds the hidden title from Alpha's appLabel().
+ const host=readFileSync('vendor/eliza/plugins/plugin-native-notifications/android/src/capacitor/java/ai/eliza/plugins/notifications/NotificationsHostPlugin.java','utf8');
  const java=readFileSync('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaNotificationsPlugin.java','utf8');
- assert.ok(java.includes(`item.put("title",hidden?"${m.HIDDEN_NOTICE_TITLE}":`),'Android hidden title');
- assert.ok(java.includes(`item.put("text",hidden?(locked?"${m.HIDDEN_NOTICE_TEXTS[0]}":"${m.HIDDEN_NOTICE_TEXTS[1]}"):`),'Android hidden text');
+ const label=/protected String appLabel\(\)\{return "([^"]+)";\}/.exec(java)?.[1];
+ assert.equal(`${label} notification`,m.HIDDEN_NOTICE_TITLE,'Android hidden title');
+ assert.ok(host.includes('item.put("title",hidden?label+" notification":'),'Android hidden title');
+ assert.ok(host.includes(`item.put("text",hidden?(locked?"${m.HIDDEN_NOTICE_TEXTS[0]}":"${m.HIDDEN_NOTICE_TEXTS[1]}"):`),'Android hidden text');
  for(const text of m.HIDDEN_NOTICE_TEXTS){
   assert.equal(m.noticeReviewable({...own,title:m.HIDDEN_NOTICE_TITLE,text}),false,text);
   assert.equal(m.noticeHidden({...own,title:m.HIDDEN_NOTICE_TITLE,text}),true);
@@ -216,9 +220,11 @@ test('hosted-result, digest and workflow notices are never reviewable; reminder 
  assert.equal(m.noticeReviewable({...own,id:'calendar:alert-1'}),true);assert.equal(m.noticeReviewable({...own}),true);
  assert.equal(m.noticeKind({id:'calendar:x'}),'calendar');assert.equal(m.noticeKind({id:'x',kind:'hosted-result'}),'hosted-result');
  // The native list returns a kind for every own row, from the posting channel.
+ const host=readFileSync('vendor/eliza/plugins/plugin-native-notifications/android/src/capacitor/java/ai/eliza/plugins/notifications/NotificationsHostPlugin.java','utf8');
+ assert.match(host,/item\.put\("source","own"\);item\.put\("kind",noticeKind\(n\.getChannelId\(\)\)\);/);
  const plugin=readFileSync('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaNotificationsPlugin.java','utf8');
- assert.match(plugin,/item\.put\("source","own"\);item\.put\("kind",noticeKind\(n\.getChannelId\(\)\)\);/);
- const kinds=plugin.slice(plugin.indexOf('static String noticeKind('),plugin.indexOf('@PluginMethod public void list('));
+ assert.match(plugin,/@Override protected String noticeKind\(String channel\)\{return kind\(channel\);\}/);
+ const kinds=plugin.slice(plugin.indexOf('static String kind('),plugin.lastIndexOf('\n}'));
  assert.match(kinds,/AlphaHostedResultsPlugin\.CHANNEL\.equals\(channel\)\)return "hosted-result";/);
  assert.match(kinds,/WorkflowNoticePoster\.CHANNEL\.equals\(channel\)\|\|WorkflowNoticePoster\.APPROVAL_CHANNEL\.equals\(channel\)\)return "workflow";/);
  assert.match(kinds,/return "other";\n \}/,'an unknown channel is not reviewable');
