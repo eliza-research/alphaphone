@@ -62,14 +62,14 @@ public class DailyAppsPlugin extends ai.eliza.plugins.reminders.ReminderPlugin {
   if (assistant) getActivity().runOnUiThread(() -> getActivity().finish());
  }
  /** Selected-document capabilities: the shared bridge contract over Alpha's installed registry (SelectedDocumentAccess). */
- @PluginMethod public void restoreSelected(PluginCall call){SelectedDocumentCalls.restore(call,SelectedDocumentAccess.documents(getContext()));}
- @PluginMethod public void renameSelected(PluginCall call){SelectedDocumentCalls.rename(call,SelectedDocumentAccess.documents(getContext()));}
- @PluginMethod public void pdfSelected(PluginCall call){SelectedDocumentCalls.pdf(call,SelectedDocumentAccess.documents(getContext()));}
- @PluginMethod public void describeSelected(PluginCall call){SelectedDocumentCalls.describe(call,SelectedDocumentAccess.documents(getContext()));}
- @PluginMethod public void readSelected(PluginCall call){SelectedDocumentCalls.read(call,SelectedDocumentAccess.documents(getContext()));}
- @PluginMethod public void openSelected(PluginCall call){SelectedDocumentCalls.open(call,SelectedDocumentAccess.documents(getContext()),getActivity());}
- @PluginMethod public void shareSelected(PluginCall call){SelectedDocumentCalls.share(call,SelectedDocumentAccess.documents(getContext()),getActivity());}
- @PluginMethod public void forgetSelected(PluginCall call){SelectedDocumentCalls.forget(call,SelectedDocumentAccess.documents(getContext()));}
+ @PluginMethod public void restoreSelected(PluginCall call){SelectedDocumentCalls.restore(call,()->SelectedDocumentAccess.documents(getContext()));}
+ @PluginMethod public void renameSelected(PluginCall call){SelectedDocumentCalls.rename(call,()->SelectedDocumentAccess.documents(getContext()));}
+ @PluginMethod public void pdfSelected(PluginCall call){SelectedDocumentCalls.pdf(call,()->SelectedDocumentAccess.documents(getContext()));}
+ @PluginMethod public void describeSelected(PluginCall call){SelectedDocumentCalls.describe(call,()->SelectedDocumentAccess.documents(getContext()));}
+ @PluginMethod public void readSelected(PluginCall call){SelectedDocumentCalls.read(call,()->SelectedDocumentAccess.documents(getContext()));}
+ @PluginMethod public void openSelected(PluginCall call){SelectedDocumentCalls.open(call,()->SelectedDocumentAccess.documents(getContext()),getActivity());}
+ @PluginMethod public void shareSelected(PluginCall call){SelectedDocumentCalls.share(call,()->SelectedDocumentAccess.documents(getContext()),getActivity());}
+ @PluginMethod public void forgetSelected(PluginCall call){SelectedDocumentCalls.forget(call,()->SelectedDocumentAccess.documents(getContext()));}
  private Integer clockInteger(JSObject data,String key) {
   Object value=data.opt(key);if(value==null||value==org.json.JSONObject.NULL)return null;
   if(!(value instanceof Number))throw new IllegalArgumentException("Invalid Clock number");
