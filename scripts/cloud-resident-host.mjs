@@ -25,7 +25,7 @@ export async function createCloudResidentHost({source,profile,port,environment='
  fs.mkdirSync(profile,{recursive:true,mode:0o700});
  const st=fs.lstatSync(profile);if(!st.isDirectory()||st.isSymbolicLink()||(st.mode&0o077)||st.uid!==process.getuid?.())throw Error('Private resident directory required');
  const tokenPath=path.join(profile,'owner-token'),configPath=path.join(profile,'eliza.json');
- const privateProfile=await preparePrivateRuntimeProfile({tokenPath,configPath,createToken:()=>randomBytes(32).toString('hex'),initialConfig:{cloud:{enabled:true},serviceRouting:{llmText:{backend:'elizacloud',transport:'cloud-proxy',smallModel:CLOUD_MODEL,largeModel:CLOUD_MODEL}},plugins:{entries:{'personal-assistant':{enabled:profileMode==='full'}}}}});
+ const privateProfile=await preparePrivateRuntimeProfile({tokenPath,configPath,createToken:()=>randomBytes(32).toString('hex'),initialConfig:{cloud:{enabled:true},serviceRouting:{llmText:{backend:'elizacloud',transport:'cloud-proxy',smallModel:CLOUD_MODEL,largeModel:CLOUD_MODEL},embeddings:{backend:'elizacloud',transport:'cloud-proxy'}},plugins:{entries:{'personal-assistant':{enabled:profileMode==='full'}}}}});
  const route=privateProfile.config.serviceRouting?.llmText;
  if(route?.backend!=='elizacloud'||route?.transport!=='cloud-proxy'||privateProfile.config.cloud?.enabled!==true||privateProfile.config.cloud?.apiKey)throw Error('Select a separate Cloud-only resident profile');
  // A full host must not silently reverse a saved assistant opt-out.
