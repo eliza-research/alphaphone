@@ -3,7 +3,7 @@
   "reference": "ELIZA_MOBILE_PRODUCT",
   "ceiling": {
     "differences": 20,
-    "modules": 544
+    "modules": 540
   },
   "differences": {
     "view:clock:only-b": "Eliza offers Clock; Alpha hands alarms and timers to the Android clock (clock.handoff) without a Clock view.",
@@ -39,7 +39,6 @@
     "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaCloudSignInPlugin.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaConnectionPlugin.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaContactsPlugin.java",
-    "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaCrashLog.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaCredentialStore.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaDataReset.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaDeletionsPlugin.java",
@@ -87,8 +86,6 @@
     "android/app/src/main/java/ai/elizaresearch/alphaphone/CalendarSyncSnapshot.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/CalendarZones.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/ClockAgentReview.java",
-    "android/app/src/main/java/ai/elizaresearch/alphaphone/ClockContract.java",
-    "android/app/src/main/java/ai/elizaresearch/alphaphone/ClockHandoff.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/CloudDeployment.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/CloudSpeechPolicy.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/CloudVoiceLimit.java",
@@ -132,7 +129,6 @@
     "android/app/src/main/java/ai/elizaresearch/alphaphone/ReminderReceiver.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/RendererCredentialSlots.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/RendererRecoveryBudget.java",
-    "android/app/src/main/java/ai/elizaresearch/alphaphone/ResetCloudRevocation.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/ResetRecoveryActivity.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/ResidentCredentialShutdownRetry.java",
     "android/app/src/main/java/ai/elizaresearch/alphaphone/ResidentRecoveryReview.java",
