@@ -111,8 +111,6 @@ const REVIEWED = [
     why: "same process dispatcher; queued retries check session generation and the dispatcher is never shut down" },
   { file: "HostedTransport.java", receiver: "timer", method: "schedule", count: 1,
     why: "runs in the constructor, on a timer created by that same object's field initialiser; nothing can have stopped it yet" },
-  { file: "IsolatedPdfService.java", receiver: "worker", method: "execute", count: 1,
-    why: "not a plugin: an isolated service whose onDestroy kills its own process right after stopping the worker; a request outside the isolated process is refused before the hand-off" },
 ];
 
 /** A lifetime exception is safe only while the executor cannot escape or be stopped. */

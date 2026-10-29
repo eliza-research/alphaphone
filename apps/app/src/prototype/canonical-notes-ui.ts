@@ -7,6 +7,7 @@ import {projectNoteForModel,type StickyNote} from '../../../../.eliza/client-fea
 import type {AppRecordPort} from '../runtime/app-record-route-policy';
 import {shareSelectedText,copySelectedText} from '../runtime/text-share';
 import {noteShareText} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/note-share-text.ts';
+import {noteScheduleDraft,type NoteScheduleKind} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/note-schedule-draft.ts';
 import {DailyApps} from '../daily';
 import {registerPlugin} from '../platform-plugins';
 import {speakNote,stopSpeaking} from './local-speech-playback';
@@ -61,6 +62,20 @@ export class CanonicalNotesUi {
  get editing(){return this.handle?.isEditing()??false;}
  get list(){if(!this.current)return [];const revision=this.handle?.revision()??null;if(revision!==this.rowsRevision){const snapshot=this.handle?.snapshot();this.rows=(snapshot?.notes??[]).map(note=>({...row(note),canonicalRevision:revision}));this.rowsRevision=revision;}return this.rows;}
  get open(){return this.handle?.selection()?.id??null;}
+ /** The current canonical records, exactly as the shared controller holds them (for origin links). */
+ notes():StickyNote[]{return this.current?this.handle?.snapshot()?.notes??[]:[];}
+ /**
+  * Opens a reviewed Calendar event or reminder draft from the selected note. Nothing is written
+  * until Save in Calendar; the saved record keeps the draft's canonical origin link.
+  */
+ private async scheduleDraft(note:StickyNote,kind:NoteScheduleKind,signal:AbortSignal){
+  const result=await noteScheduleDraft(note,kind);signal.throwIfAborted();
+  const api=this.api;if(!api||!this.active||!this.current||this.open!==note.id)throw new DOMException('The note changed.','AbortError');
+  if(result.status!=='ready'){api.toast(result.message);return;}
+  const {draft}=result,shared={id:null,title:draft.title,off:1,t:9,d:1,where:'',video:false,who:[],repeat:'none',notes:draft.notes,origin:draft.origin};
+  api.open('calendar',{calendarAuthority:api.get('calendar').calendarAuthority,form:kind==='event'?{...shared,creationId:crypto.randomUUID(),separateCreation:false,cal:'native:local',alert:null}:{...shared,cal:'alpha-reminders',alert:0},open:null,month:null,day:1},'hidden');
+  api.toast(kind==='event'?'Review the time, then Save. Nothing is on your calendar yet.':'Review the time, then Save. Nothing scheduled yet.');
+ }
  selection(){return this.handle?.selection();}
  private async admitted(){const handle=this.handle?.current()?this.handle:await this.ready;if(!handle||!this.current)throw new DOMException('The Notes connection changed.','AbortError');return handle;}
  async refresh(){const handle=await this.admitted();await handle.refresh();}
@@ -89,6 +104,8 @@ export class CanonicalNotesUi {
     exportText:async(note,signal)=>{const value=selected(note,signal);const result=await documents.exportText(value);if(this.current&&!signal.aborted)this.api?.toast(result.message);},
     composeEmail:async(note,signal)=>{const value=selected(note,signal);this.api?.open('inbox',{compose:{subject:value.title,body:value.text}});},
     dictate:async signal=>{signal.throwIfAborted();const result=await DailyApps.perform({action:'voice'});signal.throwIfAborted();if(!this.current)throw new DOMException('The Notes connection changed.','AbortError');if(!result.transcript)throw Error(result.message||'Speech recognition is unavailable.');return result.transcript;},
+    draftEvent:async(note,signal)=>this.scheduleDraft(note,'event',signal),
+    draftReminder:async(note,signal)=>this.scheduleDraft(note,'reminder',signal),
     readAloud:async(note,signal)=>{const value=selected(note,signal),cancel=()=>stopSpeaking();signal.addEventListener('abort',cancel,{once:true});try{const result=await speakNote(value.text,{noteId:note.id});if(result!=='finished'&&result!=='stopped')throw Error('Reading this note is unavailable.');}finally{signal.removeEventListener('abort',cancel);}},
    }}));
  }
