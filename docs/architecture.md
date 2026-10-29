@@ -412,6 +412,12 @@ overdue, undated to-do, reopen and refusal-message decisions are `plugin-assista
 `apps/app/src/runtime/reminder-creations.ts` and `reminder-deletions.ts` bind it to Alpha's
 installed slots (`reminder-creations:v1:device`, `reminder-deletions:v1:device`) and browser
 documents through `reminder-journal-store.ts`; reconciliation reads rows and receipts only.
+The reviewed deletion Undo window (ten seconds on a monotonic clock, delayed provider
+deletion, immediate suspension of reminder delivery, owner fences and no replay of an unknown
+outcome) is `@elizaos/capacitor-action-journal`'s `actionjournal.deletion` package, with the
+renderer contract in `@elizaos/contracts/deletion-window` and the notice in `@elizaos/ui`'s
+`DeferredDeletionNotice`. Alpha's `NativeDeletionCoordinator`, `AlphaDeletionsPlugin` and
+`runtime/deletion-undo.tsx` bind its ports, slot names and theme (`docs/deletion-undo.md`).
 
 The Clock hand-off contract is shared: `plugin-assistant`'s `clock-handoff.ts` (exported
 from `device-clock-review`) owns handoff validation, the capability policy, review text and
