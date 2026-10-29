@@ -131,7 +131,7 @@ Points the operator must plan for:
    request budget the operator confirms; export the key variables in the operator's shell only;
    run `node packages/cloud/scripts/plan-admission-deployed-latency.ts --config FILE --confirm-real-requests`
    from a separate eliza checkout at the pin; then
-   `node scripts/owner/latency-report.mjs wrap results.json --environment staging --upstream-revision 1f2a922f86e2a1f3d6cd62e097145492bd49ebfc --confirmed-by "Cloud operator" --confirmed-at <ISO> --billing-outage "<how>" --out docs/evidence/plan-admission-latency-staging-<date>.json`
+   `node scripts/owner/latency-report.mjs wrap results.json --environment staging --upstream-revision "$(jq -r .commit upstream.lock.json)" --confirmed-by "Cloud operator" --confirmed-at <ISO> --billing-outage "<how>" --out docs/evidence/plan-admission-latency-staging-<date>.json`
    and commit only a report that `check` passes. Never commit the config with filled values if it
    contains anything but variable names, and never paste keys into chat, issues or commits.
 6. Re-run `node scripts/cloud-readiness.mjs probe` after any change and record it.
