@@ -1,8 +1,10 @@
 // Alpha's agent routes against the pinned agent's owner-only API gate (packages/agent/src/api/server.ts,
 // isOwnerOnlyApiRequest). The gate answers 403 "Owner role required" to a request whose session is not the owner.
 // Alpha's native enrollment pairs with the operator code, so its session keeps OWNER authority; this test also
-// checks that no route Alpha issues needs that authority, so a guest or downgraded session would not silently lose
-// a product surface either. Source-level evidence only: no APK, emulator or device result.
+// checks that no route Alpha issues falls under that gate. Upstream has separate owner checks outside it: the
+// trigger and automation routes resolve the presented credential without loopback promotion and need OWNER, and
+// Alpha's automations surface uses them, so it depends on the owner-paired session. The last tests pin that set.
+// Source-level evidence only: no APK, emulator or device result.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -31,7 +33,12 @@ function gateModel(source) {
   const split = source.indexOf('(write &&');
   assert.ok(split > 0, 'the owner gate no longer has a write-only clause; re-review it');
   const read = (part) => ({
-    prefixes: [...part.matchAll(/under\("([^"]+)"\)/g)].map((m) => m[1]),
+    prefixes: [
+      ...[...part.matchAll(/under\("([^"]+)"\)/g)].map((m) => m[1]),
+      // under(`/api/agent/${op}`) over a literal op list.
+      ...[...part.matchAll(/\[([^\]]*)\]\s*\.some\(\s*\(op\)\s*=>\s*under\(`([^`$]*)\$\{op\}`\)\s*\)/g)].flatMap((m) =>
+        [...m[1].matchAll(/"([^"]+)"/g)].map((op) => `${m[2]}${op[1]}`)),
+    ],
     starts: [...part.matchAll(/pathname\.startsWith\("([^"]+)"\)/g)].map((m) => m[1]),
     exact: [...part.matchAll(/pathname === "([^"]+)"/g)].map((m) => m[1]),
   });
@@ -98,12 +105,13 @@ test('the gate model reads the clauses Alpha was reviewed against', () => {
     ['POST', '/api/cloud/disconnect'], ['POST', '/api/cloud/login'], ['POST', '/api/cloud/login/persist'],
     ['GET', '/api/voice/profiles'], ['GET', '/v1/voice/speaker-profiles/x'], ['GET', '/api/character/experiences'],
     ['GET', '/api/database/tables'], ['GET', '/api/workbench/overview'], ['POST', '/api/views/events/broadcast'],
-    ['GET', '/api/memories/browse'], ['POST', '/api/config'],
+    ['GET', '/api/memories/browse'], ['POST', '/api/config'], ['POST', '/api/agent/restart'], ['POST', '/api/agent/reset'],
   ]) assert.ok(ownerOnly(model, method, pathname), `${method} ${pathname} should be owner-only at the pin`);
   // Reads the gate leaves open, and routes Alpha depends on.
   for (const [method, pathname] of [
     ['GET', '/api/config'], ['GET', '/api/cloud/login/status'], ['GET', '/api/auth/me'], ['POST', '/api/conversations/x/messages'],
     ['POST', '/api/views/interact-claim'], ['POST', '/api/workflow/phone/validate'], ['GET', '/api/notes/state'],
+    ['GET', '/api/agent/restart'],
   ]) assert.ok(!ownerOnly(model, method, pathname), `${method} ${pathname} should stay open to the session gate`);
 });
 
@@ -129,4 +137,17 @@ test('native enrollment pairs as the owner, never through a guest invitation', (
   // Upstream: the operator code preserves OWNER; guest authority is a separate owner-minted grant.
   assert.match(pairing, /Owner\s+\*?\s*pairing preserves OWNER authority/);
   assert.match(pairing, /pair endpoint never accepts a caller-selected role/);
+});
+
+test('Alpha routes behind upstream owner checks outside the gate are only the reviewed automation routes', () => {
+  const server = fs.readFileSync(SERVER, 'utf8');
+  // The separate owner checks this review covered: trajectories, triggers/automations, and first-run after setup.
+  assert.match(server, /pathname === "\/api\/trajectories" \|\|\s*pathname\.startsWith\("\/api\/trajectories\/"\)/);
+  assert.match(server, /pathname\.startsWith\("\/api\/triggers"\) \|\| pathname === "\/api\/automations"/);
+  assert.match(server, /pathname === "\/api\/first-run" &&\s*hasPersistedFirstRunState/);
+  const gated = [...alphaAgentPathLiterals().keys()].filter((literal) =>
+    /^\/api\/(?:trajectories|triggers|automations|first-run|onboarding)(?:\/|$)/.test(literal));
+  assert.ok(gated.length > 0, 'Alpha automations routes were not found');
+  // Only the trigger and automation routes, which the owner-paired native session (Bearer from /api/auth/pair) serves.
+  for (const literal of gated) assert.match(literal, /^\/api\/(?:triggers|automations)(?:\/|$)/, `${literal} needs a new owner review`);
 });
