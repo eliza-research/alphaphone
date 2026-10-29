@@ -28,7 +28,6 @@ const plugins={
  AlphaNoteAudioPlugin:['migrationWorker'],
  AlphaNoteDocumentsPlugin:['worker'],
  AlphaPhotosPlugin:['worker'],
- AlphaVoiceCloudPlugin:['workers'],
 };
 const escape=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 
@@ -60,4 +59,11 @@ test('every worker a plugin declares is listed and checked above',()=>{
   const declared=[...source.matchAll(/(?:ExecutorService|ThreadPoolExecutor|NoticeWorker)\s+(\w+)\s*=/g)].map(match=>match[1]);
   for(const worker of declared)assert.ok(plugins[name].includes(worker),`${name}.${worker} is listed`);
  }
+});
+
+test('the shared speech bridge AlphaVoiceCloudPlugin subclasses answers a stopped or full worker the same way',()=>{
+ const base=readFileSync('vendor/eliza/plugins/plugin-local-inference/native/android/speech-bridge/src/main/java/ai/eliza/voice/LocalSpeechBridgePlugin.java','utf8');
+ assert.match(base,/private boolean submitWork\(Runnable work,Runnable refused\)\{\n  try\{workers\.execute\(work\);return true;\}catch\(RejectedExecutionException stopped\)\{refused\.run\(\);return false;\}/);
+ assert.deepEqual([...base.matchAll(/workers\.(execute|submit|invokeAll|invokeAny)\(/g)].length,1,'the bridge worker is used only inside submitWork');
+ assert.doesNotMatch(readFileSync(nativeSource('AlphaVoiceCloudPlugin.java'),'utf8'),/ExecutorService|ThreadPoolExecutor|\.execute\(/,'the Alpha subclass owns no worker');
 });
