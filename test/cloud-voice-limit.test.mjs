@@ -102,8 +102,10 @@ test('native CloudVoiceLimit keeps the same facts and never the body text',()=>{
   assert.match(execFileSync(binary('java'),['-cp',out,'ai.elizaresearch.alphaphone.CloudVoiceLimitTest'],{encoding:'utf8'}),/PASS Cloud voice 429 retry facts/);
  }finally{fs.rmSync(out,{recursive:true,force:true});}
  const plugin=fs.readFileSync('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaVoiceCloudPlugin.java','utf8');
- assert.match(plugin,/throw new VoiceHttpException\(status,status==429\?limitOf\(c\):null\)/);
- assert.match(plugin,/call\.reject\(request\.failure,request\.failureCode,limitData\(request\.limit\)\)/);
+ assert.match(plugin,/if\(status==429\)throw new VoiceHttpException\(status,limitOf\(c\)\);successful\(c\);/);
+ assert.match(plugin,/request\.resolvedEarly=true;\s*call\.reject\(request\.failure,request\.failureCode,limitData\(limited\.limit\)\);/);
+ assert.equal(plugin.match(/successful\(c\)/g).length,1,'every Alpha speech response goes through answered, which keeps a 429 limit');
+ assert.equal(plugin.match(/[^d]submit\(call,/g).length,1,'Alpha speech requests use submitLimited');
  // String members only: JSON null or a number is no code or instant (optString would coerce them).
  const limitOf=plugin.slice(plugin.indexOf('private static CloudVoiceLimit limitOf('),plugin.indexOf('private static JSObject limitData('));
  assert.doesNotMatch(limitOf,/optString/);

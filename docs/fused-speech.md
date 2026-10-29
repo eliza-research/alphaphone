@@ -28,8 +28,18 @@ through `:local-speech`. Speech output, recognition and VAD share one process-wi
 session: cancelling a request fences only the engine's own calls, and an idle or memory-pressure
 release drops only its own hold (the models are freed once no consumer holds them). VAD keeps a
 small separate context so capture stays full duplex while a sentence is synthesized.
-`AlphaVoiceCloudPlugin` keeps only the bridge, owner/account binding, recordings and resident
-transport; `AlphaApplication` names the timing export `alpha-native-voice-timing-v3`. The class
+The Capacitor bridge itself is the shared `LocalSpeechBridgePlugin`
+(`plugin-local-inference/native/android/speech-bridge`, enabled in `:local-speech` with
+`elizaSpeechBridgeCapacitor=true`): recording drafts (`LocalVoiceRecording`, decoded by
+`RecordingPcm`), single-request admission and the cancellation drain (`SpeechRequestGate`),
+on-device recognition and synthesis, playback, audio focus, live capture and the latency
+collector. `AlphaVoiceCloudPlugin` is a thin subclass that keeps the `AlphaVoiceCloud` name, the
+installed `alpha-cloud-voice-`/`alpha-cloud-tts-` cache prefixes, the owner's resident transport
+(`AlphaLocalAgentPlugin.openNativeVoiceTransport`), Notes audio storage and the Alpha-only
+methods (browser-reading synthesis, paired agent speech, the explicit Cloud profile). The renderer
+side is the shared `@elizaos/voice/native-live` and `@elizaos/voice/native-speech`, which
+`native-live-voice.ts`, `native-voice-turn.ts`, `local-voice.ts` and `paired-voice.ts` bind to
+that bridge. `AlphaApplication` names the timing export `alpha-native-voice-timing-v3`. The class
 names in the sections below refer to these shared classes.
 
 The app's own `ElizaVoiceNative` (embeddings and the host natives) is built from the same
@@ -152,10 +162,18 @@ recording a clip on the device:
    `ram-pressure`, `unscored`, `timeout`), a 502 scoring error, a transport failure or the deadline
    all fall back to the long gap; unavailable is never treated as complete. The route never starts
    voice or loads a model, so the semantic path only works where the resident's voice bridge and
-   its fused text context are loaded; elsewhere the gaps decide alone. **Clef is not in the pin**
-   (no Clef model, loader or decision head); the scorer is the Eliza-1 one. Each submitted turn's
-   voice timing record keeps `endpoint`: the path (`semantic` or `gap`), the outcome enum, the
-   unavailable reason and the scorer latency, never text. The gaps and deadline are engineering
+   its fused text context are loaded; elsewhere the gaps decide alone. The scorer is the Eliza-1
+   one. The assistant asks it through the shared end-of-turn chain (`@elizaos/voice/endpoint-chain`
+   `createEndpointChain`): local fused scorer, then an optional **Clef** `turn` stage (Eliza Cloud
+   `clef-decisions`, transcript text only, its own 300 ms timeout; unavailable, disabled, refused or
+   late is never a yes), then the long gap. The Clef stage is asked only when the local scorer could
+   not score, and is built only with an explicit switch AND a Cloud client: `CLEF_ENDPOINT_ENABLED`
+   in `voice-selection.ts` is `false` and the renderer holds no Cloud Clef client (the owner
+   decision is #663 / H-18), so today the chain is the local scorer and the gap, and no transcript
+   leaves the phone for endpointing. Each submitted turn's voice timing record keeps `endpoint`: the
+   path (`semantic` or `gap`), the outcome enum, the unavailable reason (scorer or `clef-*`), the
+   latency and the chain stage that answered (`path`: `local` or `clef`), never text; the
+   diagnostics export copies the same enums. The gaps and deadline are engineering
    defaults (local-speech research), not measurements or owner-set constants.
 6. **Send.** The turn goes through the existing voice policy unchanged (`VOICE_SEND_POLICY`
    in `voice-selection.ts`, P-39: the assistant submits automatically; Transcribe only inserts
@@ -191,8 +209,15 @@ recording a clip on the device:
    sent for a reply that was fully heard. The request never blocks the next turn. A 409 (the played
    text is not a prefix the agent recognises) is recorded and the view stays trimmed; a 404 or 503
    is retried once after 1.5 s, then dropped; the outcome enum is kept on the turn's voice timing
-   record (`heard`). **Gaps:** a reply interrupted before its first sentence finished cannot be
-   recorded (the route needs a non-empty prefix), so the agent keeps it in full; a reply the agent
+   record (`heard`). A reply interrupted before its first sentence finished is reported as
+   `{ nothingHeard: true }`: the agent replaces it with an empty, interruption-marked reply
+   (`heardNothing`), so it keeps that it answered and was cut off but none of the unheard words; an
+   agent that predates the explicit report refuses it (`rejected`) and keeps the reply. A speech
+   failure is not a barge-in: when playback fails before the first sentence finished
+   (`playbackFailed`, for example a refused Cloud speech request) nothing is sent (`nothing-heard`)
+   and both the agent and the view keep the whole reply; after a finished sentence only the heard
+   prefix is kept, as for an interruption. **Gaps:** a
+   reply the agent
    completes after the user interrupted it while it was still being generated has no message id
    in the voice session, is not trimmed and appears in full after a reload; a partially played
    sentence is never claimed as heard. The 700 ms hold and the sentence-by-sentence synthesis gap
@@ -329,6 +354,10 @@ never makes a Cloud speech request. When Cloud answers HTTP 429, `AlphaVoiceClou
 (`CloudVoiceLimit.java`) and the development bridge (`cloud-voice-limit.ts`) pass on only the retry
 facts: `Retry-After` or the body's `retryAfterSeconds`/`retryAt` (at most a day), a short
 lower-case limit code and a bounded `resetAt`; the message, plan and provider body never leave.
+The shared `LocalSpeechBridgePlugin.submit` rejects a non-2xx answer with `voice-http-<status>`
+and no data, so Alpha's `submitLimited` settles a 429 itself: it closes the connection, marks the
+request resolved and rejects with the same code plus those facts (a cancelled request keeps the
+shared cancellation). Moving this data path into the shared request gate is upstream follow-up.
 `cloud-voice.ts` reads them as the shared `ServiceLimit` (`readServiceLimit`), shows plan-limit
 wording with the retry time ("... reached your plan's request limit. Try again in about 42
 seconds. Your recording is kept."), keeps the recorded clip for an explicit retry, and records the
@@ -337,7 +366,7 @@ for the same signed-in Cloud session only. Nothing is retried automatically.
 
 ## Streamed speech output and audio focus (#397)
 
-When the pinned engine reports `ParadeeVoice.supportsStreaming()`, `AlphaVoiceCloudPlugin` synthesizes
+When the pinned engine reports `ParadeeVoice.supportsStreaming()`, the speech bridge synthesizes
 each reviewed sentence with `synthesizeStream` and plays the chunks through an AudioTrack
 (`AudioTrackSpeechOutput`: MODE_STREAM, 24 kHz mono float, USAGE_ASSISTANT/CONTENT_TYPE_SPEECH) as
 they arrive. `StreamingSpeechPlayback` holds at most 30 s of PCM in a `SpeechPcmQueue`; a full queue
