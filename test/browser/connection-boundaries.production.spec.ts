@@ -48,7 +48,7 @@ async function android(page: Page, options: AndroidOptions) {
     const methods = (names: string[]) => names.map(name => ({ name, rtype: 'promise' }));
     w.Capacitor = { PluginHeaders: [
         { name: 'AlphaDeletions', methods: methods(['pending']) },
-      { name: 'DeviceApps', methods: methods(['buildInfo']) },
+      { name: 'ElizaSystem', methods: methods(['getBuildInfo']) },
       { name: 'Agent', methods: resident.methods(['getStatus', 'start', 'stop', 'configureCloudProvider', 'clearProvider', 'providerStatus', 'request']) },
       { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite', 'secureRemove', 'secureCompareExchange', 'request', 'cancel', 'openExternal']) },
       { name: 'AlphaNotifications', methods: methods(['status', 'crossAppStatus', 'addListener', 'removeListener']) },
@@ -60,7 +60,7 @@ async function android(page: Page, options: AndroidOptions) {
         if (plugin === 'AlphaDeletions' && method === 'pending') return { deletions: [] };
       w.nativeCalls.push({ plugin, method, slot: input?.slot, url: input?.url, http: input?.method, authorization: input?.headers?.Authorization, path: input?.path });
       if (plugin === 'AlphaHostedResults') return {};
-      if (plugin === 'DeviceApps') return { launcher: false, version: 'connection-boundaries' };
+      if (plugin === 'ElizaSystem' && method === 'getBuildInfo') return { launcher: false, version: 'connection-boundaries' };
       if (plugin === 'AlphaNotifications') return { permissionGranted: true, appEnabled: true };
       if (plugin === 'AlphaVoiceCloud') return { microphone: 'granted' };
       if (plugin === 'AlphaHostedResults' && method === 'disableBackground') return {};

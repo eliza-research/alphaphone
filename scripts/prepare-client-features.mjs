@@ -80,6 +80,8 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/ui/src/config/theme.ts',
   'packages/ui/src/mobile-shell/index.ts',
   'packages/ui/src/mobile-shell/core.ts',
+  'packages/ui/src/mobile-shell/eliza-product.ts',
+  'packages/ui/src/mobile-shell/feature-manifest.ts',
   'packages/ui/src/mobile-shell/MobileAllAppsDrawer.tsx',
   'packages/ui/src/mobile-shell/MobileHomeScreen.tsx',
   'packages/ui/src/mobile-shell/MobileViewHost.tsx',

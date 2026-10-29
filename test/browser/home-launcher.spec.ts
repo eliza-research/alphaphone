@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-// Development lane: the browser DeviceApps implementation stands in for Android's installed-app
+// Development lane: the browser device implementation (behind ElizaSystem's launcher methods) stands in for Android's installed-app
 // plugin (its "apps" are Alpha views). Android behaviour is covered by LauncherHomeInstrumentedTest.
 
 test('All apps lists the device apps, searches, launches one and closes on Back and Home', async ({ page }, info) => {
@@ -46,7 +46,7 @@ test('All apps lists the device apps, searches, launches one and closes on Back 
 
 test('a failed installed-app read shows an explicit failure with a manual retry', async ({ page }) => {
   await page.goto('/');
-  // Fail only the next list() call of the browser device implementation behind DeviceApps.
+  // Fail only the next list() call of the browser device implementation behind the shared launcher bridge.
   await page.evaluate(async () => {
     const { BrowserDevice } = await import('/src/browser/device.ts');
     const proto = BrowserDevice.prototype as any, original = proto.list;

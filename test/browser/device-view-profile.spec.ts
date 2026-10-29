@@ -17,7 +17,7 @@ for(const scenario of ['supported','legacy','unsupported','malformed','lost','re
     {name:'Agent',methods:methods(['getStatus','start','request','addListener','removeListener','subscribeViewEvents','unsubscribeViewEvents'])},
     {name:'AlphaConnection',methods:methods(['secureRead','secureWrite','secureCompareExchange','secureRemove','cancel','addListener','removeListener','pauseNotificationCollection'])},
     {name:'AlphaActionJournal',methods:methods(['list'])},
-    {name:'DeviceApps',methods:methods(['buildInfo'])},
+    {name:'ElizaSystem',methods:methods(['getBuildInfo'])},
     {name:'AlphaHostedResults',methods:methods(['configureBackground','disableBackground','cancelBackground','inboxHistory','status','pendingResult','addListener','removeListener'])},
    ],nativePromise:async(plugin:string,method:string,input:any)=>{
     if(plugin==='AlphaNotifications')return {permissionGranted:true,appEnabled:true};
@@ -49,7 +49,7 @@ for(const scenario of ['supported','legacy','unsupported','malformed','lost','re
      if(method==='secureRemove'){store.delete(input.slot);return {};}
      return {};
     }
-    if(plugin==='DeviceApps')return {launcher:false,version:'fixture'};
+    if(plugin==='ElizaSystem'&&method==='getBuildInfo')return {launcher:false,version:'fixture'};
     if(plugin==='AlphaActionJournal')return {entries:[]};
     return {};
    }};

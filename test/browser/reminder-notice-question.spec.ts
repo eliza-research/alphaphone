@@ -17,7 +17,7 @@ for(const mode of ['compose','cancel','source-changed','owner-changed'] as const
     {name:'Agent',methods:agent.methods(['getStatus','start','request'])},
     {name:'AlphaConnection',methods:methods(['secureRead','secureWrite','secureCompareExchange','secureRemove','cancel','addListener','removeListener','pauseNotificationCollection'])},
     {name:'AlphaActionJournal',methods:methods(['list'])},
-    {name:'DeviceApps',methods:methods(['buildInfo'])},
+    {name:'ElizaSystem',methods:methods(['getBuildInfo'])},
     {name:'AlphaHostedResults',methods:methods(['beginBackground','cancelBackground','configureBackground','disableBackground','inboxHistory','syncInbox','status','setBackgroundPolling','enable','pendingResult','withdrawOtherOwnerApprovalNotices','addListener','removeListener'])},
    ],nativeCallback:agent.nativeCallback,nativePromise:async(plugin:string,method:string,input:any)=>{
     if(plugin==='DailyApps'){
@@ -71,7 +71,7 @@ for(const mode of ['compose','cancel','source-changed','owner-changed'] as const
      return {};
     }
     if(plugin==='AlphaActionJournal')return {entries:[]};
-    if(plugin==='DeviceApps')return {launcher:false,version:'fixture'};
+    if(plugin==='ElizaSystem'&&method==='getBuildInfo')return {launcher:false,version:'fixture'};
     if(plugin==='AlphaHostedResults'){
      if(method==='configureBackground'){
       f.configured++;f.input=input;

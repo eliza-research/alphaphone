@@ -46,14 +46,14 @@ export function installHomeShell(Component: any, views: Record<string, Bag>, bri
     const out = render.call(this), S = this.S(), self = this;
     shell.syncViews();
     const tile = (entry: MobileHomeEntry): MobileHomeTile => {
-      if (entry.kind === 'app') return {key: entry.key, label: entry.app.label, image: entry.app.icon, glyphUrl: entry.app.icon ? undefined : grid, onOpen: () => void shell.launcher.launch(entry.app)};
+      if (entry.kind === 'app') return {key: entry.key, label: entry.app.label, image: entry.app.icon, glyphUrl: entry.app.icon ? undefined : grid, iconId: entry.app.icon ? undefined : ALPHA_PRODUCT.icons.allApps, onOpen: () => void shell.launcher.launch(entry.app)};
       const key = alphaViews.hostKey(entry.view), definition = views[key] || {};
       const badge = typeof definition.badge === 'function' && ['phone', 'messages', 'inbox'].includes(key) ? !!definition.badge(self.vget(key)) : false;
-      return {key: entry.key, label: entry.view.label, glyphUrl: alphaViews.iconUrl(entry.view), badge, onOpen: () => self.openView(key)};
+      return {key: entry.key, label: entry.view.label, glyphUrl: alphaViews.iconUrl(entry.view), iconId: ALPHA_PRODUCT.icons.views[entry.view.id], badge, onOpen: () => self.openView(key)};
     };
     const homeShell = createElement(MobileHomeScreen, {
       tiles: out.assistantSurface ? [] : shell.homeEntries().map(tile),
-      onOpenAllApps: () => self.openAllApps(), allAppsGlyphUrl: grid, covered: !!out.homeHidden,
+      onOpenAllApps: () => self.openAllApps(), allAppsGlyphUrl: grid, allAppsIconId: ALPHA_PRODUCT.icons.allApps, covered: !!out.homeHidden,
       onFocusCapture: out.focusAppContent, 'data-alpha-layer': 'home',
       style: {inset: '44px 0 0', zIndex: 10, scrollPaddingBottom: 110},
       layoutProps: {'data-alpha-home-layout': ''}, cardsProps: {className: 'scr'}, gridProps: {'data-alpha-home-apps': ''}, clearanceProps: {'data-alpha-home-clearance': ''},
