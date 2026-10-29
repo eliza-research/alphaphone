@@ -141,6 +141,14 @@ product commitment; the landscape decision is still A-22 in `docs/decisions.md`.
   reading order.
 - Landscape 915 by 412 at 200% text: the same rules (round 10). It passed for every state
   without a layout change of its own.
+- Text at 300%, portrait: the largest in-app size (150%) with the largest system font (200%),
+  which Android multiplies. The 200% rules over every live state and every launcher state
+  (`accessibility-sweep.spec.ts`, "300% text"). When the lane was added (cycle 2) 38 of the 55
+  states passed; the other 17 fail on real layout defects (a display title split mid-word,
+  segmented controls and header actions pushed off screen, chips and menu tiles narrower than
+  their labels) and are tracked in issue #701. They are listed in `OPEN_AT_300` and still run
+  every rule; each must still report a layout defect, so a fix (or a state that no longer opens or
+  times out) fails the test, and the list can only shrink.
 
 Truncation policy: a single-line ellipsis or line clamp on a preview of user content
 (a mail snippet, a file name in a list, a note preview) is allowed, because the full text
@@ -177,17 +185,23 @@ text scale, so its last line is no longer cut by the clamp at 200%.
   completion integration, the launcher presentation too.
 - The composer field keeps a pixel line height, and text typed into inputs is not judged
   for clipping; only rendered text nodes are.
-- No zoom above 200% is swept: the largest in-app size with the largest system font
-  multiplies to 300%.
+- Zoom above 300% is not swept: 300% is the largest size the in-app setting and the system font
+  can reach together. Display size (density) is not emulated.
 - Provider-connected states are one synthetic mailbox held at the provider boundary
   (`connectMailbox` in `accessibility-states.ts`): Home with its unread card, the Inbox
   list, an empty folder, search, an open message, a long subject, compose, and Settings with
-  its accounts and connections pages. No account, OAuth or mail exists. A connected
-  calendar, cloud agent or password provider is not swept; dialogs and flows that need a
-  permission are covered by their own accessibility specs. These states run on the
-  development server only, so the flag-off production sweep does not include them. The
-  fixture lock screen, the `photos-empty` viewer state and the launcher presentation are swept
-  at 100% and 200% (`FIXTURE_STATES` and `LAUNCHER_STATES` in `accessibility-states.ts`).
+  its accounts and connections pages. No account, OAuth or mail exists. Since cycle 2 the
+  connected states also cover an agent's own calendar (Agent Calendar on Home and in Calendar,
+  held at the app-record boundary as in `home-daily-overview.spec.ts`), a linked Google Calendar
+  account's sync sheet before and after its read-only review (`calendar-sync-fixture.ts`; no
+  write is made) and a connected agent (the on-device development profile) in Settings and in a
+  conversation with its reply. A Cloud-hosted agent and a password provider are not swept;
+  dialogs and flows that need a permission are covered by their own accessibility specs. These
+  states run on the development server only, so the flag-off production sweep does not include
+  them. The fixture lock screen, the `photos-empty` viewer state and the launcher presentation
+  of Home, All apps, the conversation and every retained app view are swept at 100% and 200%,
+  and the launcher states at 300% too (`FIXTURE_STATES` and `LAUNCHER_STATES` in
+  `accessibility-states.ts`).
 - The dock rules judge the composer bar, the pill and the resting sheet. Only Home and the
   app library end above the dock; an app page's content still passes under it and is only
   required to be scrollable clear of it. The renderer reads every state's order; TalkBack's

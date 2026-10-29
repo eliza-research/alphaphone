@@ -66,7 +66,7 @@ public class CloudWavUploadTest {
  static class JSONObject{static int reads;JSONObject(String value){reads++;}Object get(String key){return "transcript";}}
  static class Capture{File file=new File("opaque-selected-recording");File selected(String id){return file;}}
  interface Work{void run(Pending request)throws Exception;}
- void submit(PluginCall call,Work work){pending=new Pending();try{work.run(pending);}catch(Exception e){error=e;}}
+ void submitLimited(PluginCall call,Work work){pending=new Pending();try{work.run(pending);}catch(Exception e){error=e;}}
  String required(String value,int limit){return value;}
  static class RecordingPcm{static byte[] last;static File selected;static String failure;static byte[] decode(File file,BooleanSupplier cancelled)throws Exception{selected=file;if("decode".equals(failure)||cancelled.getAsBoolean())throw new IOException("PRIVATE_DECODE_SENTINEL");last=new byte[]{82,73,70,70,0,0,0,0,87,65,86,69};return last;}}
  class Connection extends HttpURLConnection {
@@ -79,7 +79,7 @@ public class CloudWavUploadTest {
   public void connect(){}public void disconnect(){}public boolean usingProxy(){return false;}
  }
  HttpURLConnection connect(PluginCall call,String route,Pending request)throws Exception{if(!route.equals("stt"))throw new AssertionError();if(failure.equals("connect"))throw new IOException();if(failure.equals("cancel"))request.cancelled=true;return connection=new Connection();}
- void successful(HttpURLConnection c){}
+ void answered(HttpURLConnection c){}
  byte[] read(InputStream in,int max,Pending request)throws Exception{if(failure.equals("response"))throw new IOException("PRIVATE_RESPONSE_SENTINEL");return in.readAllBytes();}
  ${method}
  public static void main(String[] args)throws Exception{
@@ -115,7 +115,9 @@ test('Cloud voice shows finite HTTP support codes without replacing sign-in or b
   const failure=code=>f.box.cloudVoiceFailure({code,message:'PRIVATE_HTTP_SENTINEL'});
   for(const status of [401,403])assert.equal(failure(`voice-http-${status}`),'Sign in to Cloud again in Settings, then retry voice.');
   assert.equal(failure('voice-http-402'),"Cloud declined cloud voice for your account's billing. Check your account in Settings, then retry.");
-  for(const status of [400,429,503])assert.equal(failure(`voice-http-${status}`),`Cloud voice could not complete this request (${status}). Try again later.`);
+  for(const status of [400,503])assert.equal(failure(`voice-http-${status}`),`Cloud voice could not complete this request (${status}). Try again later.`);
+  // A 429 is the plan's request limit (cloud-voice-limit.test.mjs covers its retry facts).
+  assert.match(failure('voice-http-429'),/voice reached your plan's request limit\. Wait a moment, then try again\.$/);
   for(const code of ['voice-http-200','voice-http-600','voice-http-400PRIVATE_HTTP_SENTINEL','voice-http-400\n','voice-http-400\r\n','voice-http-400\nPRIVATE_HTTP_SENTINEL','voice-http-0400',400,null])assert.equal(failure(code),null);
  }finally{f.close();}
 });
