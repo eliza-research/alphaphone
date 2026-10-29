@@ -4099,6 +4099,9 @@
       </div>
     </sc-for>
     <sc-if value="{{voiceInterim}}"><div data-alpha-voice-interim aria-label="Heard so far, not sent" style="align-self:flex-end;max-width:80%;background:var(--acc);color:#fff;padding:11px 16px;border-radius:22px 22px 6px 22px;font-size:15px;line-height:1.4">{{voiceInterim}}</div></sc-if>
+    <sc-if value="{{turnStatus}}">
+      <div data-alpha-turn-status role="status" class="alpha-turn-status">{{turnStatus}}</div>
+    </sc-if>
     <sc-if value="{{typing}}">
       <div style="display: flex; gap: 5px; padding: 6px 0"><span class="dot" style="width: 7px; height: 7px; border-radius: 4px; background: var(--acct)"></span><span class="dot" style="width: 7px; height: 7px; border-radius: 4px; background: var(--acct); animation-delay: .2s"></span><span class="dot" style="width: 7px; height: 7px; border-radius: 4px; background: var(--acct); animation-delay: .4s"></span></div>
     </sc-if>

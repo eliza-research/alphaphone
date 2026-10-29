@@ -14,6 +14,9 @@ function preparedNavigation(results:unknown):readonly unknown[]|undefined {
   return Object.freeze([Object.freeze({actionName:'VIEWS',success:true,values:Object.freeze({mode:'show',viewId:handoff.viewId,...(handoff.viewPath?{viewPath:handoff.viewPath}:{}),viewType:'gui',...(typeof values.label==='string'&&values.label.length<=256?{label:values.label}:{}),completedActionDelivered:false,completedActionHandoffId:handoff.completedActionHandoffId,navigationPrepared:true,navigationBinding:Object.freeze(handoff.navigationBinding)})})]);
  }
 }
+/** Transient planning label ("checking today's calendar") for the turn in flight.
+ * It is display-only: never reply text, never history, never an effect. */
+export const localTurnStatus=new EventTarget();
 export async function readLocalAgentStream(response:Response, signal:AbortSignal, onText:(text:string)=>void,onReplyReady?:(results:readonly unknown[]|undefined)=>void):Promise<RemoteChatReply> {
  if(!response.ok)throw Object.assign(Error(`Local agent request failed (HTTP ${response.status}).`),{status:response.status});
  if(!response.headers.get('content-type')?.startsWith('text/event-stream')||!response.body)throw Error('Invalid local stream response');
@@ -33,6 +36,11 @@ export async function readLocalAgentStream(response:Response, signal:AbortSignal
    // The upstream failure kind (CHAT_FAILURE_KINDS) travels with the error; its prose never does.
    const kind=typeof value.failureKind==='string'?value.failureKind:value.terminalFailure&&typeof value.terminalFailure==='object'&&typeof value.terminalFailure.kind==='string'?value.terminalFailure.kind:undefined;
    throw Object.assign(Error('Local agent response interrupted. Check conversation and action history before retrying.'),kind&&kind.length<=64?{failureKind:kind}:{});
+  }
+  if(value.type==='status'){
+   const label=typeof value.label==='string'?value.label.trim():'';
+   if(label&&label.length<=160&&!signal.aborted)localTurnStatus.dispatchEvent(new CustomEvent('label',{detail:label}));
+   return;
   }
   if(value.type==='reply_ready'){
    if(value.terminalFailure!==undefined||value.failureKind!==undefined)return invalid('Reply-ready snapshot is not successful');

@@ -9,6 +9,7 @@ import {captureAgentPhoto} from './camera-adapter';
 import {isCameraCapture} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/camera-contract.ts';
 import {dismissMailFolderMenu} from './mail-folder-picker';
 import {aospImage} from '../runtime/aosp-image';
+import {localTurnStatus} from '../runtime/local-agent-stream';
 import {smsSubscriptionRevision} from '../runtime/sms-subscription-revision';
 import {createAospTelephony,type AlphaTelephonyPlugin} from '../runtime/aosp-telephony';
 import {isSmsSend,validateSmsResult,smsAgentHash,smsDeviceStatus} from '../runtime/sms-agent-contract';
@@ -1348,12 +1349,17 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       navigation=connectionController.captureViewNavigation(alphaClient.getState().context);
       // The request becomes pending after the render above; render again so Stop is offered before any streamed text.
       queueMicrotask(()=>{if(this.live&&alphaClient.getState().pending)this.setState({});});
-      const reply = await alphaClient.send(text,value=>{
+      // The planning label shows only until the first reply text; it is never kept as a message.
+      const showStatus=(event:Event)=>{if(this.live&&!streamed&&this.sendAttempt===attempt)this.setState({turnStatus:(event as CustomEvent<string>).detail});};
+      localTurnStatus.addEventListener('label',showStatus);
+      let reply;
+      try{reply = await alphaClient.send(text,value=>{
         attempt.streamed=true;
         if(!this.live)return;
         if(streamed)replaceStream(value);
-        else{streamed=true;this.setState((previous:Shell)=>({msgs:[...previous.msgs,{id:streamedId,from:'agent',text:value,card:null,streaming:true}]}));}
-      },replyTarget,results=>{readyNavigation=results;});
+        else{streamed=true;this.setState((previous:Shell)=>({turnStatus:'',msgs:[...previous.msgs,{id:streamedId,from:'agent',text:value,card:null,streaming:true}]}));}
+      },replyTarget,results=>{readyNavigation=results;});}
+      finally{localTurnStatus.removeEventListener('label',showStatus);}
       // Only the composer's own send holds its draft; a prompt from elsewhere never settles it.
       if(fromComposer)await this.composerDraft?.commit();
       if (!this.live||!sameChat()) return;
@@ -1429,7 +1435,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         }
       }
     }
-    finally { if(this.sendAttempt===attempt)this.sendAttempt=null; if (this.live) this.setState({ typing: false }); }
+    finally { if(this.sendAttempt===attempt)this.sendAttempt=null; if (this.live) this.setState({ typing: false, turnStatus: '' }); }
   };
   p.agentSay = function (text: string, card?: Shell, identity?:{id?:string;messageBinding?:{conversationId:string;session:unknown};deviceReceipt?:true},current?:()=>boolean) {
     this.setState((previous: Shell) => {
