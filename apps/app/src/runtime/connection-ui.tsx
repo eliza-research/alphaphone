@@ -907,7 +907,9 @@ async function admitCloudResident(signal:AbortSignal):Promise<ResidentAdmission>
     case 'account-changed':
       // A rejected or unreadable sign-in, an entitlement for another account or a changed account:
       // no Cloud inference until the owner signs in again.
-      if(!admission.identity){if(service)detachService();}
+      // A changed account before the identity was verified leaves the connection as it is: a newer
+      // sign-in may own it, and only a rejected read of this sign-in detaches it.
+      if(!admission.identity){if(admission.reason==='sign-in-rejected'&&service)detachService();}
       else if(isEntitlementSignInFailure(admission.error)&&account&&service===account)detachService();
       update({residentPlanNotice:null,residentSubscription:null,planEndsAt:null});
       return {binding:'unbound',notice:{error:errorMessage(admission.error),open:true}};

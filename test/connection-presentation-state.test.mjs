@@ -270,11 +270,12 @@ const savedAdmissionCode=stripTypeScriptTypes([
 // The shared resident binding controller (projected from the pinned upstream source) decides the binding.
 const residentBinding=await import('../.eliza/client-features/packages/auth/src/auth/cloud-resident-binding.ts');
 const residentTail=source.slice(source.indexOf('  // Restore only the saved choice for this verified agent and owner;'),source.indexOf('async function connectCloud('));
-async function offlineRestoreFixture({kind='offline',recent=false}={}){
+async function offlineRestoreFixture({kind='offline',recent=false,newer=null}={}){
  const f=fixture({account:null});let historyReads=0,credentialWrites=0,unbinds=0,identityReads=0;
  class CloudProtocolError extends Error {constructor(code,status){super(code);this.code=code;this.status=status;}}
- const client={environment:'production',async identity(){identityReads++;if(kind==='expired')throw new CloudProtocolError('expired');if(kind==='revoked')throw new CloudProtocolError('http',401);throw new Error('Connection request failed');}};
+ const client={environment:'production',async identity(){identityReads++;if(kind==='expired')throw new CloudProtocolError('expired');if(kind==='revoked')throw new CloudProtocolError('http',401);if(kind==='changed')throw new residentBinding.CloudResidentBindingError('account-changed');throw new Error('Connection request failed');}};
  Object.assign(f.context,{Error,DOMException,CloudProtocolError,EntitlementError:class extends Error{},cloud:null,service:null,OFFLINE_NOTICE:'Cloud unavailable; resident remains local.',RESIDENT_UNBIND_UNCONFIRMED:'Unbind not confirmed',residentCloudFlow:()=>true,residentBindable:()=>true,residentEnvironment:()=> 'production',makeCloud:()=>client,stopEntitlementRefresh:()=>{},CloudResidentBindingController:residentBinding.CloudResidentBindingController,CloudResidentBindingError:residentBinding.CloudResidentBindingError,recentResidentPlanAdmission:residentBinding.recentResidentPlanAdmission,readPlanAdmission:()=>recent?{version:1,environment:'production',credentialId:'synthetic-retained-credential',userId:'synthetic-user',organizationId:null,status:'active',planName:'Synthetic plan',verifiedAt:Date.now()-1000,endsAt:null}:null,writePlanAdmission:()=>{},isEntitlementSignInFailure:()=>false,LocalCloudProviderStopUnconfirmed:class extends Error{},cloudCredentialStore:{read:async()=>kind==='missing'?null:{credentialId:'synthetic-retained-credential'},write:async()=>{credentialWrites++;}},detachService:()=>{f.context.service=null;f.update({cloudAccount:null});},clearLocalProvider:async()=>{unbinds++;},restoreSavedHistory:async()=>{historyReads++;f.update({history:{messages:Array.from({length:15},(_,id)=>({id:'synthetic-'+id,text:'Fixture'}))}});},refreshActionReview:async()=>{},browserLocalAgentEnabled:false,residentBinding:null});
+ if(newer)f.context.service=newer;
  vm.runInContext(savedAdmissionCode+';globalThis.admit=admitCloudResident;globalThis.bind=applyResidentBinding;',f.context);
  f.update({startupResolved:false,automaticRestore:true});
  f.context.admission=await f.context.admit(new AbortController().signal);f.context.bound=await f.context.bind(f.context.admission,new AbortController().signal);f.context.signal=new AbortController().signal;
@@ -290,6 +291,11 @@ test('retained credential with unreachable identity restores history without for
 test('retained offline exception cannot bypass missing, expired or revoked sign-in',async()=>{
  for(const kind of ['missing','expired','revoked']){const f=await offlineRestoreFixture({kind});assert.equal(f.snapshot().cloudAccount,null);assert.equal(f.context.productionCloudSignInRequired(f.snapshot()),true);assert.equal(f.snapshot().open,true);assert.equal(f.context.admission.binding,'unbound');assert.equal(f.credentialWrites,0);}
  for(const patch of [{residentSavedCredential:false,residentPlanNotice:'offline'},{residentSavedCredential:true,residentPlanNotice:null},{residentSavedCredential:true,residentPlanNotice:'offline',error:'Sign-in expired'},{residentSavedCredential:true,residentPlanNotice:'offline',cloudAccount:{expiresAt:Date.now()-1000}}]){const f=fixture({account:null});f.update({startupResolved:true,...patch});assert.equal(f.context.productionCloudSignInRequired(f.snapshot()),true);}
+});
+test('an account change before identity is verified never detaches a newer connection',async()=>{
+ const newer={client:{environment:'production'},identity:{credentialId:'synthetic-newer-credential'}};
+ const f=await offlineRestoreFixture({kind:'changed',newer});
+ assert.equal(f.context.admission.binding,'unbound');assert.equal(f.context.service,newer,'only a rejected read of this sign-in detaches the connection');assert.equal(f.credentialWrites,0);
 });
 test('retained offline account controls still open explicitly without claiming verified identity',async()=>{const f=await offlineRestoreFixture();f.update({purpose:'cloud-account',open:true});assert.equal(f.snapshot().cloudAccount,null);assert.equal(f.context.productionCloudSignInRequired(f.snapshot()),false);assert.equal(f.context.connectionChooserVisible(f.snapshot()),true);});
 
