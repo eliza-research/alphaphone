@@ -83,5 +83,8 @@ for (const repeatDays of [true, false]) {
     const advertised = (await stub(page, s => s.capabilities) as string).split(',');
     expect(advertised).toEqual(expect.arrayContaining(['calendar.local-event.v1', 'notes.local-record.v1', 'notes.query.v1', 'clock.handoff.v1']));
     expect(advertised.includes('clock.handoff.v2')).toBe(repeatDays);
+    // Enrollment completed against the harness: no device route (such as the committed-enrollment
+    // read) was refused, which would leave the send without any device capabilities.
+    expect(await harness(page, f => f.unexpected)).toEqual([]);
   });
 }

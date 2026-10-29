@@ -117,7 +117,9 @@ export async function residentStub(page: Page, options: ResidentStubOptions = {}
       if (plugin === 'Agent' && ['start', 'stop', 'configureCloudProvider'].includes(method)) { s.order.push(method === 'configureCloudProvider' ? 'configureCloudProvider ' + input.credentialId : 'Agent.' + method); persist(); }
       if (plugin === 'Agent' && method === 'start' && (s.start === 'reject' || s.start === 'reject-once')) { if (s.start === 'reject-once') { s.start = 'ok'; persist(); } f.calls.push('Agent.start'); throw Error('Local agent failed to start.'); }
       if (plugin === 'Agent' && method === 'request' && input.path === '/api/agents' && s.start === 'starting') { f.calls.push('Agent.request'); return { status: 200, body: JSON.stringify({ agents: [{ id: '6f1d3c3e-8c55-4c1b-9d1f-2b6f0b0d3a11', name: 'Alpha', status: 'starting' }] }) }; }
-      if (plugin === 'Agent' && method === 'request' && input.path === '/api/client-devices/register' && options.offered) { f.calls.push('Agent.request'); return { status: 200, body: JSON.stringify({ installationId: input.headers['X-Eliza-Device-Id'], enrollmentId: 'fixture-enrollment', capabilities: options.offered }) }; }
+      // The harness still registers the device (it answers the committed-enrollment read from that
+      // registration); only the capabilities the agent offers in its answer change.
+      if (plugin === 'Agent' && method === 'request' && input.path === '/api/client-devices/register' && options.offered) { const registered = await base(plugin, method, input); return { ...registered, body: JSON.stringify({ ...JSON.parse(registered.body), capabilities: options.offered }) }; }
       if (plugin === 'DailyApps' && method === 'surfaceInfo' && options.clockRepeatDaysVersion !== undefined) { f.calls.push('DailyApps.surfaceInfo'); return { developmentBuild: false, assistant: false, clockRepeatDaysVersion: options.clockRepeatDaysVersion }; }
       if (plugin === 'Agent' && method === 'request') {
         const answer = conversations(input.method || 'GET', input.path, input.body ? JSON.parse(input.body) : {});
