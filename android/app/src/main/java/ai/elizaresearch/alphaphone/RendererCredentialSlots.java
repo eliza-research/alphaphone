@@ -17,4 +17,6 @@ final class RendererCredentialSlots {
    if (slot.equals(namespace) || slot.startsWith(namespace + ":")) throw new SecurityException("Native-only credential slot");
   return slot;
  }
+ /** Cloud sign-in credentials: renderer writes and removals reserve a credential intent (AlphaLocalAgentPlugin). */
+ static boolean credentialSlot(String slot) { return "cloud:production".equals(slot) || "cloud:staging".equals(slot); }
 }

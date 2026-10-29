@@ -23,7 +23,7 @@ test('a different deployment changes actual native login, request admission and 
   const registration=plugin.slice(plugin.indexOf(' static final String PENDING_SLOT'),plugin.indexOf(' static String receiptSlot('));
   assert.ok(registration.includes('static CloudSignInConfig registration(boolean testMocks)'));
   const shared='vendor/eliza/packages/auth/android/src/main/java/ai/eliza/auth/cloud/';
-  const sharedFiles=['CloudSignInConfig.java','CloudSignInEnvironment.java','CloudSignInFlow.java','CloudSignInRoutes.java','CloudKeyRevocation.java','CloudEmailCode.java','CloudSmsCode.java'].map(file=>shared+file).concat('vendor/eliza/packages/auth/android/test/org/json/JSONObject.java');
+  const sharedFiles=['CloudSignInConfig.java','CloudSignInEnvironment.java','CloudSignInFlow.java','CloudSignInRoutes.java','CloudKeyRevocation.java','CloudEmailCode.java','CloudSmsCode.java'].map(file=>shared+file).concat('vendor/eliza/packages/auth/android/test/org/json/JSONObject.java','vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/CloudConnectionPolicy.java');
   fs.writeFileSync(path.join(temp,'AlphaRegistration.java'),`package ai.elizaresearch.alphaphone;
 import ai.eliza.auth.cloud.*;
 final class BuildConfig {static final boolean ELIZA_DEV_ALLOW_TEST_MOCKS=false;}

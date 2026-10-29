@@ -32,7 +32,7 @@ test('the plugin delegates provider rules to the admission class and keeps the d
  // #410 (main, 2026-10-13): product phones use the Eliza Cloud plan; a direct (bring-your-own)
  // Cerebras key is a test-mocks developer route, refused in production before the key is read.
  const direct=source.slice(source.indexOf('static boolean directProviderAllowed('),source.indexOf('@PluginMethod public void clearProvider('));
- assert.match(direct,/static boolean directProviderAllowed\(boolean testMocks\)\{return testMocks;\}/);
+ assert.match(direct,/static boolean directProviderAllowed\(boolean testMocks\)\{return NativeProviderSlot\.directProviderAllowed\(testMocks\);\}/);
  assert.match(direct,/if\(!directProviderAllowed\(BuildConfig\.ELIZA_DEV_ALLOW_TEST_MOCKS\)\)/);
  assert.match(direct,/if\(!runtimePackaged\(\)\)/);
 });
