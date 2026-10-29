@@ -13,8 +13,10 @@ import { BILLING_LIMITS_PATH, ENTITLEMENT_KEYS_PATH, ENTITLEMENT_PATH, REDEEM_PA
 /** Narrow Alpha adapter for Eliza Cloud managed services: sign-in, identity, subscription plan and
  * the connected Google services. Sign-in is in-app (cloud-sign-in.ts) once the native host reports
  * Cloud ready for this phone: the host signs in with Steward and mints an `eliza_mobile_` key through
- * Cloud's mobile App Auth routes, so no Eliza Cloud web page is opened. Until then `login()` keeps the
- * Cloud sign-in hand-off (v3's cloud/api/auth/cli-session) as the product path. Contracts inspected
+ * Cloud's mobile App Auth routes, so no Eliza Cloud web page is opened. That is the only product
+ * sign-in. The Cloud sign-in hand-off (`login()`, v3's cloud/api/auth/cli-session) is a development
+ * surface: it exists only in ELIZA_DEV_ALLOW_TEST_MOCKS=1 builds and the loopback browser Cloud host
+ * (`cloudSignInHandOffAvailable`); product bundles fold it away. Contracts inspected
  * in cloud/api/v1/app-auth, cloud/api/auth/cli-session, cloud/api/v1/eliza/google and
  * ui/src/api/client-cloud.ts. Native composition owns HTTP and secure storage. This module never
  * stores credentials in renderer persistence or logs them.
@@ -32,6 +34,14 @@ const authorities: Partial<Record<CloudEnvironment, CloudAuthority>> = {
   production: productionCloud,
   ...(stagingAvailable ? { staging: stagingCloud } : {}),
 };
+/**
+ * Whether this build carries the Cloud sign-in hand-off (cli-session, the hosted cli-login page, then
+ * polling). Product builds sign in only through the native in-app host (cloud-sign-in.ts); the
+ * hand-off is a test-mocks diagnostic and the loopback browser Cloud host's sign-in. Vite folds this
+ * to false in product bundles, so the hand-off body and its routes are not shipped there. Node
+ * contract tests import this source without Vite and keep it.
+ */
+export const cloudSignInHandOffAvailable: boolean = import.meta.env === undefined || import.meta.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS === '1' || browserCloudResidentEnabled;
 /** Display names follow the same build gate as request authorities. */
 export function cloudServiceName(environment: CloudEnvironment): string { return authorities[environment]?.name ?? 'Cloud service'; }
 /** Whether this build can address the environment. Production builds expose only production. */
@@ -326,13 +336,20 @@ export class CloudProtocol {
     }
   }
   /**
-   * The Cloud sign-in hand-off (cli-session, the hosted cli-login page, then polling). The product
-   * sign-in path until the in-app host reports Cloud ready for this phone (connection-ui
-   * inAppSignInMethods), and a diagnostic fallback in test-mocks builds afterwards. Only one poller
-   * may claim the server's single-consumption credential. A cancelled/lost claim is not retried
-   * automatically; start a fresh login.
+   * The Cloud sign-in hand-off (cli-session, the hosted cli-login page, then polling). A development
+   * surface only (`cloudSignInHandOffAvailable`): a product build refuses it as `unavailable` before
+   * any request, and the in-app host (signInWithGoogle/startEmailSignIn) is the one sign-in path.
+   * Only one poller may claim the server's single-consumption credential. A cancelled/lost claim is
+   * not retried automatically; start a fresh login.
    */
   async login(signal: AbortSignal, onWaiting?: (attempt: CloudLoginAttempt) => void): Promise<CloudLoginResult> {
+    if (!cloudSignInHandOffAvailable) throw new CloudSignInError("unavailable");
+    return this.handOffLogin(signal, onWaiting);
+  }
+  private async handOffLogin(signal: AbortSignal, onWaiting?: (attempt: CloudLoginAttempt) => void): Promise<CloudLoginResult> {
+    // Folded away in product bundles: no hand-off route or hosted page string ships.
+    if (!cloudSignInHandOffAvailable) throw new CloudSignInError("unavailable");
+    else {
     if (this.activeLogin) throw new CloudProtocolError("login-active");
     signal.throwIfAborted();
     const controller = new AbortController();
@@ -392,6 +409,7 @@ export class CloudProtocol {
       clearTimeout(expiryTimer);
       signal.removeEventListener("abort", abort);
       this.activeLogin = null;
+    }
     }
   }
   /** The host stored the key before reporting success; confirm this store now holds a sign-in. */

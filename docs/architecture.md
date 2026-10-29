@@ -339,7 +339,10 @@ There is no automatic Eliza Cloud website sign-in fallback.
   path on the stored key, and says so when `accountCreated` is true.
 - **Cloud sign-in hand-off (`CloudProtocol.login`, `/api/auth/cli-session`, the `cli-login` page)**:
   the explicit browser development profile and a **Browser sign-in (diagnostic)** button
-  in test-mocks builds only; it is not the native readiness fallback.
+  in test-mocks builds only; it is not the native readiness fallback. Product bundles fold it away
+  (`cloudSignInHandOffAvailable`), refuse it before any request, and their route policies
+  (`managed-service-routes.ts`, `ConnectionRoutes.managedService`) do not admit `cli-session`; the
+  production bundle audit denies its routes and copy.
 - **Cloud (elizaOS/eliza `packages/cloud`, `packages/auth`, `packages/app`)** owns the accounts:
   - Steward links Google and email to the existing user by verified email.
   - Mobile App Auth mints the key, valid for 30 days.
