@@ -105,6 +105,31 @@ test.describe('launcher', () => {
     await expect(shade(page)).toHaveAttribute('aria-hidden', 'false');
   });
 
+  // Android's ACTION_CLICK lands on the node at the target's centre: the trigger must be the
+  // native <button> itself (not a wrapper or a role on a div), carry its own name, and no layer of
+  // the launcher (status bar band, cutout, development chrome) may sit over that point.
+  test('the trigger is a named native button that nothing covers, at any status bar inset', async ({ page }) => {
+    await home(page);
+    for (const inset of [0, 24, 48, 72]) {
+      await page.evaluate(value => document.documentElement.style.setProperty('--native-top-inset', `${value}px`), inset);
+      await page.waitForTimeout(50);
+      const target = await button(page).evaluate(element => {
+        const box = element.getBoundingClientRect(), x = box.left + box.width / 2, y = box.top + box.height / 2;
+        const hit = document.elementFromPoint(x, y), owner = hit?.closest('button');
+        const stack = document.elementsFromPoint(x, y), own = stack.findIndex(node => element.contains(node));
+        const covering = (own < 0 ? stack : stack.slice(0, own)).filter(node => !node.contains(element)).map(node => node.tagName + (node.getAttribute('data-alpha-layer') ? `[${node.getAttribute('data-alpha-layer')}]` : ''));
+        return { tag: element.tagName, type: (element as HTMLButtonElement).type, name: element.getAttribute('aria-label'), role: element.getAttribute('role'), owned: owner === element, covering, inert: !!element.closest('[inert]'), hidden: !!element.closest('[aria-hidden="true"]') };
+      });
+      expect(target, `inset ${inset}`).toMatchObject({ tag: 'BUTTON', type: 'button', name: 'Open notifications', role: null, owned: true, inert: false, hidden: false });
+      // Whatever stacks above Home at that point is only an ancestor, never a sibling overlay.
+      expect(target.covering, `inset ${inset}`).toEqual([]);
+      await button(page).evaluate(element => (element as HTMLElement).click());
+      await expect(shade(page), `inset ${inset}`).toHaveAttribute('aria-hidden', 'false');
+      await page.keyboard.press('Escape');
+      await expect(shade(page), `inset ${inset}`).toHaveAttribute('aria-hidden', 'true');
+    }
+  });
+
   test('a pull down on the button or on empty Home opens the shade', async ({ page }) => {
     await home(page);
     const box = await buttonBox(page);

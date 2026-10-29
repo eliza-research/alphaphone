@@ -62,21 +62,28 @@ public final class AccessibilityInstrumentedTest {
   return names;
  }
  private static boolean standInRunning(){return runningServices().contains(ScreenReaderStandInService.class.getName());}
- /** The handle as accessibility services see it: found by its name, then the clickable node that carries it. */
- private static android.view.accessibility.AccessibilityNodeInfo handleNode(){
+ /**
+  * The handle as accessibility services see it: the native button node that carries the name,
+  * whose bounds hold the button's centre on screen (x, y). A clickable ancestor (the WebView, or
+  * Home with its pointer handlers) is never taken in its place: ACTION_CLICK on such a node would
+  * not be a click on the button. The name may sit on the button or on its label child.
+  */
+ private static android.view.accessibility.AccessibilityNodeInfo handleNode(int x,int y){
   android.view.accessibility.AccessibilityNodeInfo target=null;
   for(int i=0;i<50;i++){
    android.view.accessibility.AccessibilityNodeInfo root=automation().getRootInActiveWindow();
    // Reopening follows a modal tree rebuild. DOM aria-hidden can settle before the AX tree;
    // refresh the cached nodes and wait for a current actionable handle without clicking it.
    if(root!=null&&root.refresh()){
-    android.view.accessibility.AccessibilityNodeInfo node=named(root,"Open notifications",0);
-    target=node;while(target!=null&&!target.isClickable())target=target.getParent();
-    if(target!=null&&target.refresh()&&target.isClickable()&&target.isEnabled()&&target.isVisibleToUser())return target;
+    target=named(root,"Open notifications",0);
+    if(target!=null&&!target.isClickable()){android.view.accessibility.AccessibilityNodeInfo parent=target.getParent();if(parent!=null&&"android.widget.Button".contentEquals(parent.getClassName()==null?"":parent.getClassName()))target=parent;}
+    Rect bounds=new Rect();if(target!=null)target.getBoundsInScreen(bounds);
+    if(target!=null&&target.refresh()&&"android.widget.Button".contentEquals(target.getClassName()==null?"":target.getClassName())&&target.isClickable()&&target.isEnabled()&&target.isVisibleToUser()&&bounds.contains(x,y))return target;
    }
    SystemClock.sleep(100);
   }
-  fail("The handle is a current visible enabled clickable accessibility node (last: "+(target==null?"none":chain(target))+")");
+  Rect bounds=new Rect();if(target!=null)target.getBoundsInScreen(bounds);
+  fail("The handle is a current visible enabled clickable button node at ("+x+","+y+") (last: "+(target==null?"none":chain(target)+" "+bounds.toShortString())+")");
   return null;
  }
  /** For a failure message: the node and its ancestors, with whether each is enabled (WebView drops a click on a disabled node or under one). */
@@ -216,7 +223,7 @@ public final class AccessibilityInstrumentedTest {
      int handleX=web.left+Math.round((float)handle.getDouble("x")*css),handleY=web.top+Math.round((float)handle.getDouble("y")*css);
      // 2. TalkBack and Switch Access activate the button with the click action, with no touch.
      // The button is exposed by name as a clickable node whatever service is asking.
-     handleNode();
+     handleNode(handleX,handleY);
      // The click itself is performed as those services perform it: with a screen reader bound, so
      // that WebView delivers default actions to the page (see ScreenReaderStandInService).
      String previousServices=secure("get","enabled_accessibility_services",null),previousEnabled=secure("get","accessibility_enabled",null);
@@ -230,14 +237,14 @@ public final class AccessibilityInstrumentedTest {
       // it, so the click is repeated once a second while that switch is under way, and only then.
       int attempts=0;boolean opened=false;android.view.accessibility.AccessibilityNodeInfo target=null;
       for(long deadline=SystemClock.uptimeMillis()+20000;!opened&&SystemClock.uptimeMillis()<deadline;){
-       target=handleNode();attempts++;
+       target=handleNode(handleX,handleY);attempts++;
        assertTrue("The accessibility click action is accepted",target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));
        opened=AndroidShade.waitOpen(1000);
       }
       assertTrue("The accessibility click action opens Android's shade (attempts: "+attempts+"; running services: "+runningServices()+"; node: "+(target==null?"none":chain(target))+")",opened);
       AndroidShade.collapse();
       // With WebView in that mode one click is enough, every time: no second attempt here.
-      target=handleNode();
+      target=handleNode(handleX,handleY);
       assertTrue("The accessibility click action is accepted again (node: "+target+"; ancestry: "+chain(target)+")",target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));
       assertTrue("A single accessibility click opens Android's shade once WebView serves a screen reader (node: "+chain(target)+")",AndroidShade.waitOpen(5000));
       AndroidShade.collapse();

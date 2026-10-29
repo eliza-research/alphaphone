@@ -25,7 +25,7 @@
   <!-- Launcher Home only (docs/gesture-zones.md, #416, #417): Android's shade is the one
        notification and quick-settings surface. This visible control asks Android to open it, as
        a pull down on empty Home does; the top-edge swipe stays Android's. Alpha draws no shade. -->
-  <sc-if value="{{showShadeButton}}"><div class="alpha-shade-row"><button class="alpha-shade-handle" data-alpha-shade-handle aria-label="Open notifications" aria-description="Opens Android's notifications and quick settings" onClick="{{openSystemShade}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.bell}}"></path></svg><span>Notifications</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.down}}"></path></svg></button></div></sc-if>
+  <sc-if value="{{showShadeButton}}"><div class="alpha-shade-row"><button type="button" class="alpha-shade-handle" data-alpha-shade-handle aria-label="Open notifications" aria-description="Opens Android's notifications and quick settings" onClick="{{openSystemShade}}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.bell}}"></path></svg><span>Notifications</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.down}}"></path></svg></button></div></sc-if>
 </sc-slot>
 <sc-slot name="cards">
     {{homeAgendaCard}}

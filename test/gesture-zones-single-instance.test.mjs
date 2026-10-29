@@ -22,7 +22,7 @@ test('Android\'s shade is the only shade: the swipe handler asks Android, never 
   // The development stand-in opens only in a build that has it.
   assert.match(model, /openShade\(\) \{\s*var S = this\.S\(\);\s*if \(!this\.simulatedShade\(\) \|\| S\.screen !== "home" \|\| S\.shade\) return;/);
   const template = read('apps/app/src/prototype/template.html');
-  assert.match(template, /<button class="alpha-shade-handle" data-alpha-shade-handle aria-label="Open notifications"[^>]*onClick="\{\{openSystemShade\}\}"/);
+  assert.match(template, /<button type="button" class="alpha-shade-handle" data-alpha-shade-handle aria-label="Open notifications"[^>]*onClick="\{\{openSystemShade\}\}"/);
   assert.match(template, /<sc-if value="\{\{simulatedShade\}\}">\s*<sc-if value="\{\{isOn\}\}">\s*<div data-alpha-layer="shade" id="alpha-notifications"/);
 });
 
