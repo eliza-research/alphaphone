@@ -49,7 +49,7 @@ import {developmentDeviceStore,developmentActionJournal} from './local-agent-sto
 import { reviewLocalRecovery,archiveLocalRecovery,stopLocalAgent, configureLocalProvider, bindResidentCloudProvider, LocalCloudProviderStopUnconfirmed, LocalAgentProtocol, localAgentPackaged, browserLocalAgentEnabled, localProviderStatus, clearLocalProvider, providerStatusLabel, LOCAL_PROVIDER_MODEL, type LocalProviderStatus } from './local-agent';
 import { presentDeviceRecordOperation } from './device-record-presentation';
 import type { MessagePage } from './remote-protocol';
-import type {DeviceRecovery} from "./device-actions";
+import type {DeviceRecovery,CurrentDeviceActionRequest} from "./device-actions";
 import type { WorkflowPhoneReview } from './workflow-device-contract';
 import { AlphaClientError } from './alpha-client';
 import { WorkflowProtocol, WorkflowHttpError } from './workflow-protocol';
@@ -1755,15 +1755,15 @@ export const connectionController = {
   setDeviceRecovery(recovery: DeviceRecovery) { deviceRecovery=recovery; },
   cancelViewNavigation(){active?.viewNavigation?.cancel();},
   setNavigationContext(read:()=>ContextEnvelope|null){navigationContext=read;},
-  async performVoiceRequestedActions(binding:VoiceConversationBinding,messageId:string,signal:AbortSignal,operationType?:'camera_capture_photo'){
+  async performVoiceRequestedActions(binding:VoiceConversationBinding,messageId:string,signal:AbortSignal,operationType?:'camera_capture_photo',proof?:CurrentDeviceActionRequest){
     const selected=active,expected=navigationContext?.();
-    if(!selected?.actions||!expected||!validateUuid(messageId))return [];
+    if(!selected?.actions||!expected||!validateUuid(messageId)||!proof||proof.messageId!==messageId||!proof.text.trim())return [];
     const context=structuredClone(expected);
-    const current=()=>{signal.throwIfAborted();if(active!==selected||!this.voiceConversationCurrent(binding)||context.sensitive||JSON.stringify(navigationContext?.())!==JSON.stringify(context))throw Error('Voice action context changed');};
+    const current=()=>{signal.throwIfAborted();proof.current();if(active!==selected||!this.voiceConversationCurrent(binding)||context.sensitive||JSON.stringify(navigationContext?.())!==JSON.stringify(context))throw Error('Voice action context changed');};
     const allowed=async()=>{current();const preferences=await readDevicePreferences(signal);current();return !preferences.askBeforeAgentActions;};
     if(!await allowed())return [];
-    await selected.actions.pendingReview(context,signal);current();
-    const receipts=await selected.actions.performRequested(messageId,context,signal,allowed,operationType);current();
+    await selected.actions.pendingReview(context,signal,proof);current();
+    const receipts=await selected.actions.performRequested(messageId,context,signal,allowed,operationType,proof);current();
     return receipts;
   },
   async continueRequestedCamera(messageId:string,signal:AbortSignal):Promise<OperationReceipt[]> {
