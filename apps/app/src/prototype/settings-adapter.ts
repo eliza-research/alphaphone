@@ -1,3 +1,4 @@
+import {residentRecoveryCopy} from '../runtime/resident-recovery';
 import {browserCalendarScope} from './agent-calendar-adapter';
 import {cloudServiceName} from '../runtime/cloud-protocol';
 import {openCalendarSyncSettings} from '../runtime/calendar-sync-settings';
@@ -598,23 +599,23 @@ export function installSettingsAdapter(Component: any, views: Bag) {
           }
         }
         page.groups.push(group([{kNav:true,label:'Agent connection',lbl:'Agent connection',val:connectionController.getSnapshot().name,hasVal:true,chev:true,noAB:true,go:()=>native&&!testMocksEnabled?api.set({page:'agent-connection'}):connectionController.open()}]));
+        if(native&&!testMocksEnabled&&state.page==='agent-recovery-details'){
+          const reason=connection.residentRecoveryReason,recovery=connection.residentRecovery;
+          const rows:Bag[]=[info('Status',reason?residentRecoveryCopy(reason,recovery):connection.session?'Alpha is running.':'Restart status is unavailable.')];
+          if(reason)rows.push(info('Reason',reason));
+          if(recovery)rows.push(info('Stage',recovery.step));
+          if(recovery?.step==='review')rows.push(info('Startup records to keep',String(recovery.review.retainedCount)));
+          out.stack.push({isTop:false,notTop:true,cls:'enter',z:4,title:'Restart details',hasTitle:true,backLabel:'Back to Agent connection',back:()=>api.set({page:'agent-connection'}),hero:{},groups:[group(rows)]});
+        }
         if(native&&!testMocksEnabled&&state.page==='agent-connection'){
-          const agentRows=[info('Agent',connection.session?'Running on this device':connection.residentRecoveryReason?'Recovery review needed':connection.kind==='recovering'?'Not running':'Starting…'),info('AI',connection.residentInference==='cloud'?serviceName:connection.cloudAccount?'Not available':'Sign in required')];
+          const agentRows=[info('Agent',connection.session?'Running on this device':connection.residentRecoveryReason?(connection.residentRecoveryReason==='ipc-recovery-retention-limit'?'Restart needed':'Needs attention'):connection.kind==='recovering'?'Not running':'Starting…'),info('AI',connection.residentInference==='cloud'?serviceName:connection.cloudAccount?'Not available':'Sign in required')];
           if(connection.message)agentRows.push(info('Status',connection.message));
           if(connection.error)agentRows.push(info('Connection problem',connection.error));
           if(connection.residentRecoveryReason&&!connection.session){
-            agentRows.push(info('Records','Your notes, chats and sign-in stay unchanged.'));
-            if(connection.residentRecoveryReason==='ipc-recovery-retention-limit'){
-              const recovery=connection.residentRecovery;
-              if(recovery?.step==='review'){
-                agentRows.push(info('Review',`Alpha will keep ${recovery.review.retainedCount} old startup records, then restart your agent.`));
-                if(!connection.busy)agentRows.push(action('Keep records and restart',()=>void connectionController.confirmRecovery()),action('Cancel',()=>connectionController.cancelRecoveryReview()));
-              }else{
-                if(recovery?.step==='unavailable')agentRows.push(info('Recovery','Recovery could not be checked. Your records were kept. Review again later.'));
-                if(recovery?.step==='partial')agentRows.push(info('Recovery','Recovery did not finish. Your records were kept. Review again before restarting.'));
-                if(!connection.busy)agentRows.push(action('Review recovery',()=>void connectionController.reviewRecovery()));
-              }
-            }
+            agentRows.push(info('Status',residentRecoveryCopy(connection.residentRecoveryReason,connection.residentRecovery)));
+            if(connection.residentRecoveryReason==='ipc-recovery-retention-limit'&&!connection.busy)
+              agentRows.push(action('Restart Alpha',()=>void connectionController.restartRecovery()));
+            agentRows.push(action('Details',()=>api.set({page:'agent-recovery-details'})));
           }else if(!connection.busy)agentRows.push(action(connection.session?'Reconnect agent':'Retry',()=>void connectionController.startLocal()));
           if(connection.busy){
             agentRows.push(info('Connection','Please wait…'));

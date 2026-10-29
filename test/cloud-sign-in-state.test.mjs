@@ -28,7 +28,7 @@ async function panel(run){
   const root=createRoot(document.getElementById('root'));
   const calls=[];
   let props={view:code,busy:false,google:true,message:'',error:'',actions:{verify:value=>calls.push(value),google(){},email(){},resend(){},cancel(){}}};
-  const render=async next=>{props={...props,...next};await act(()=>root.render(React.createElement(CloudSignInPanel,props)));};
+  const render=async next=>{props={...props,...next};await act(async()=>{root.render(React.createElement(CloudSignInPanel,props));await Promise.resolve();});};
   try{await render({});await run({document:dom.window.document,window:dom.window,render,calls});}
   finally{await act(()=>root.unmount());dom.window.close();for(const [key,value]of Object.entries(previous)){if(value)Object.defineProperty(globalThis,key,value);else delete globalThis[key];}}
 }
@@ -217,4 +217,16 @@ test('initial chooser visibly presents email alongside Google without another di
     assert.equal(visible(document.querySelector('form[aria-label="Sign in with phone"]')),true,'offered phone entry is retained');
     assert.equal([...document.querySelectorAll('button')].some(button=>/Other sign-in methods|Hide other sign-in methods/.test(button.textContent)),false);
   }
+}));
+
+test('service terms and privacy still open without the technical service-documents label',async()=>panel(async({document,render})=>{
+ const service={name:'Eliza Cloud',terms:{title:'Terms of Service',revision:'1',sections:[{title:'Terms',paragraphs:['Terms content.']}]},privacy:{title:'Privacy Policy',revision:'1',sections:[{title:'Privacy',paragraphs:['Privacy content.']}]}};
+ await render({view:choose,ready:true,serviceLoader:async()=>service});
+ await act(async()=>{await Promise.resolve();});
+ assert.doesNotMatch(document.body.textContent,/Service documents:/);
+ const button=label=>[...document.querySelectorAll('button')].find(item=>item.textContent===label);
+ assert.ok(button('Terms of Service'));assert.ok(button('Privacy Policy'));
+ await act(()=>button('Terms of Service').click());assert.match(document.querySelector('.alpha-cloud-legal').textContent,/Terms content/);
+ await act(()=>button('Back to sign-in').click());
+ await act(()=>button('Privacy Policy').click());assert.match(document.querySelector('.alpha-cloud-legal').textContent,/Privacy content/);
 }));

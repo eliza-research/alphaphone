@@ -10,7 +10,7 @@ import {AUTOMATIONS_COMMITTED_EVENT,automationsCommitted} from './automation-com
 import {OWNER_REMINDER_LIST,OWNER_REMINDER_READBACK,ownerReminderRoute,reminderReadPath,type ReminderNotificationBinding} from './owner-reminder-notification-protocol';
 import {CAMERA_CAPTURE_CAPABILITY} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/camera-contract.ts';
 import {sanitizeCloudInferenceFailure,type CloudInferenceFailure} from './crash-log';
-import {residentRecoveryReason,residentRecoveryMessage,RESIDENT_RECOVERY_PENDING,type ResidentRecoveryReason,type ResidentRecoveryView} from './resident-recovery';
+import {residentRecoveryReason,residentRecoveryMessage,residentRecoveryCopy,RESIDENT_RECOVERY_PENDING,type ResidentRecoveryReason,type ResidentRecoveryView} from './resident-recovery';
 import {anyAbortSignal} from './abort-signal';
 import {CALENDAR_APPROVAL_READ_PATH,calendarApprovalFromList,calendarApprovalId} from './calendar-approval';
 import {readDevicePreferences} from '../browser/device-preferences';
@@ -195,7 +195,7 @@ export const NO_AGENT_SEND = testMocksEnabled ? 'Connect your remote agent in Se
 export const NO_AGENT_VOICE = testMocksEnabled ? 'Connect your remote agent in Settings to start a voice conversation.' : 'Your agent runs on your phone, not here. Open Alpha on your Android phone to talk with it.';
 /** One wording for every surface that needs the agent and has no session yet. */
 export function residentPendingText(snapshot: Pick<ConnectionSnapshot, 'kind'|'residentRecoveryReason'> = state): string {
-  if(snapshot.residentRecoveryReason)return RESIDENT_RECOVERY_PENDING;
+  if(snapshot.residentRecoveryReason)return residentRecoveryMessage(snapshot.residentRecoveryReason);
   return snapshot.kind === 'recovering' ? 'Your agent stopped. Retry in Settings › Agent connection.' : 'Your agent is starting…';
 }
 /** Every surface that needs an agent and has no session: the resident state where the resident is
@@ -1463,7 +1463,7 @@ async function restoreConversationHistory(id:string,signal:AbortSignal,automatic
   const older=result.partial?' Older messages remain on the agent.':'';
   // An explicit reload already shows whether a stopped reply finished; the pending check is retired.
   if(!automatic)cancelStoppedReply();
-  update({history:{sessionId:session.sessionId,conversationId:id,revision:(state.history?.revision||0)+1,messages,automatic,deliveryRevisionAtStart:result.deliveryRevisionAtStart},historyError:'',historyPartial:result.partial,...(automatic?{}:{open:false,replyNotice:''}),message:(automatic?'Saved conversation restored.':saved?'Conversation restored.':'History restored for this session; restart selection could not be saved.')+older});
+  update({history:{sessionId:session.sessionId,conversationId:id,revision:(state.history?.revision||0)+1,messages,automatic,deliveryRevisionAtStart:result.deliveryRevisionAtStart},historyError:'',historyPartial:result.partial,...(automatic?{}:{open:false,replyNotice:''}),message:automatic?older.trim():(saved?'Conversation restored.':'History restored for this session; restart selection could not be saved.')+older});
   const last=result.messages.at(-1);
   if(afterConnect&&selected.kind==='resident'&&last?.role==='user'&&typeof last.text==='string'&&typeof last.timestamp==='number'&&last.timestamp>Date.now()-RESTORED_REPLY_WINDOW_MS)
     scheduleStoppedReply(selected,session,id,{text:restoredText(last.text,last.userTextFormat),sentAt:last.timestamp,...(typeof last.clientMessageId==='string'?{clientMessageId:last.clientMessageId}:{})},STOPPED_REPLY_CHECK_MS,false);
@@ -2214,16 +2214,24 @@ export const connectionController = {
       catch(error){update({residentRecovery:{step:'unavailable'}});throw error;}
     });
   },
+  /** Explicit owner action only: obtain a fresh native review before the existing guarded restart. */
+  async restartRecovery() {
+    if(operation||document.hidden||state.residentRecoveryReason!=='ipc-recovery-retention-limit'||state.session)return;
+    const generation=epoch;
+    await connectionController.reviewRecovery();
+    if(generation!==epoch||document.hidden||operation||state.residentRecoveryReason!=='ipc-recovery-retention-limit'||state.session||state.residentRecovery?.step!=='review')return;
+    await connectionController.confirmRecovery();
+  },
   cancelRecoveryReview(){if(!operation)update({residentRecovery:undefined});},
   async confirmRecovery() {
     if(operation||state.residentRecoveryReason!=='ipc-recovery-retention-limit'||state.residentRecovery?.step!=='review'||state.session)return;
     const review=state.residentRecovery.review;let archived=false;
-    await work('Keeping startup records…',async signal=>{
+    await work('Restarting Alpha…',async signal=>{
       update({residentRecovery:{step:'archiving'}});
       try{
         const result=await archiveLocalRecovery(review.reviewToken);signal.throwIfAborted();
         if(result.status!=='archived'||result.retainedCount!==0||result.archivedCount!==review.retainedCount){update({message:'',residentRecovery:{step:result.status==='partial'?'partial':'unavailable'}});return;}
-        archived=true;update({residentRecoveryReason:undefined,residentRecovery:undefined,error:'',message:'Startup records were kept. Restarting your agent…'});
+        archived=true;update({residentRecoveryReason:undefined,residentRecovery:undefined,error:'',message:'Restarting Alpha…'});
       }catch(error){update({residentRecovery:{step:'unavailable'}});throw error;}
     });
     if(archived)await connectionController.startLocal();
@@ -3032,7 +3040,7 @@ export function ConnectionChooser() {
       extra={signInEntryRequired && !snapshot.signIn && !snapshot.busy
         ? <button onClick={()=>void connectionController.beginSignIn(residentEnvironment(),true)}>Retry sign-in</button>
         : browserCloudResidentEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Sign in with browser</button>:testMocksEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Browser sign-in (diagnostic)</button>:undefined}/>
-    {snapshot.legacySignInRecovery&&requiredSignInView.step==='choose'&&requiredSignInView.environment==='production'&&<button disabled={snapshot.busy} onClick={()=>void connectionController.restoreSavedSignIn()}>Restore saved sign-in</button>}
+    {!snapshot.cloudAccount&&snapshot.legacySignInRecovery&&requiredSignInView.step==='choose'&&requiredSignInView.environment==='production'&&<details aria-label="Sign-in troubleshooting"><summary>Trouble signing in?</summary><button disabled={snapshot.busy} onClick={()=>void connectionController.restoreSavedSignIn()}>Restore saved sign-in</button></details>}
     {snapshot.signOutNotice && snapshot.signOutNotice!==snapshot.message && <p role="status">{snapshot.signOutNotice}</p>}
     {productionSignInRequired && <ResidentRecoveryPanel snapshot={snapshot}/>}
   </div></div>;
@@ -3069,7 +3077,7 @@ export function ConnectionChooser() {
   // (Starting / Running on this device / Not running, with Retry) and its Eliza Cloud AI: sign-in
   // (which every Alpha Phone needs), plan, redeem code and sign-out. Plan state never stops the agent.
   const residentSignInRejected=snapshot.error===errorMessage({status:401});
-  const residentStatus=snapshot.session?'Running on this device':snapshot.residentRecoveryReason?'Recovery review needed':snapshot.kind==='recovering'?'Not running':'Starting…';
+  const residentStatus=snapshot.session?'Running on this device':snapshot.residentRecoveryReason?(snapshot.residentRecoveryReason==='ipc-recovery-retention-limit'?'Restart needed':'Needs attention'):snapshot.kind==='recovering'?'Not running':'Starting…';
   const residentNeedsPlan=snapshot.residentPlanNotice==='needs-plan'&&!!snapshot.cloudAccount&&!residentSignInRejected;
   const residentOffline=snapshot.residentPlanNotice==='offline'&&!snapshot.cloudAccount;
   // Only a required sign-in (first run, or a sign-in Cloud rejected) cannot be dismissed. The agent runs either way.
@@ -3211,15 +3219,14 @@ export function ConnectionChooser() {
 }
 
 function ResidentRecoveryPanel({snapshot}:{snapshot:ConnectionSnapshot}) {
-  return snapshot.residentRecoveryReason==='ipc-recovery-retention-limit'&&!snapshot.session&&<section aria-label="Agent recovery">
-        <p>Your notes, chats and sign-in stay unchanged.</p>
-        {snapshot.residentRecovery?.step==='review'?<>
-          <p>Alpha will keep {snapshot.residentRecovery.review.retainedCount} old startup records, then restart your agent.</p>
-          <div className="alpha-connection-actions"><button disabled={snapshot.busy} onClick={()=>void connectionController.confirmRecovery()}>Keep records and restart</button><button disabled={snapshot.busy} onClick={()=>connectionController.cancelRecoveryReview()}>Cancel</button></div>
-        </>:<>
-          {snapshot.residentRecovery?.step==='unavailable'&&<p role="status">Recovery could not be checked. Your records were kept. Review again later.</p>}
-          {snapshot.residentRecovery?.step==='partial'&&<p role="status">Recovery did not finish. Your records were kept. Review again before restarting.</p>}
-          <button disabled={snapshot.busy} onClick={()=>void connectionController.reviewRecovery()}>Review recovery</button>
-        </>}
-      </section>;
+  const reason=snapshot.residentRecoveryReason,recovery=snapshot.residentRecovery;
+  return reason&&!snapshot.session&&<section aria-label="Restart Alpha">
+    <p role="status">{residentRecoveryCopy(reason,recovery)}</p>
+    {reason==='ipc-recovery-retention-limit'&&<button disabled={snapshot.busy} onClick={()=>void connectionController.restartRecovery()}>Restart Alpha</button>}
+    <details><summary>Details</summary>
+      <p>Reason: {reason}</p>
+      {recovery&&<p>Stage: {recovery.step}</p>}
+      {recovery?.step==='review'&&<p>Startup records to keep: {recovery.review.retainedCount}</p>}
+    </details>
+  </section>;
 }

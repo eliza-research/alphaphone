@@ -171,7 +171,7 @@ html:not(.standalone-app) [data-alpha-layer="home"][data-alpha-home-fits="true"]
 .photo-favorite-badge { padding:3px;border-radius:50%; }
 
 /* Standalone Alpha uses Android system chrome, including in its app preview. */
-.standalone-app [data-alpha-system-cutout]{display:none}
+.standalone-app [data-alpha-system-cutout],.native-phone [data-alpha-system-cutout]{display:none}
 /* The app WebView is already fitted below native bars; only the launcher reserves OS chrome. */
 .standalone-app [data-alpha-layer="home"]{top:0!important}
 .standalone-app [data-alpha-home-layout]{padding-top:12px!important}
