@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  apkFfmpegEntries, apkManifestSummary, buildPacket, bundleProbe, flagCounts, formatPacket, newestSnapshot, reviewRows, sbomSummary, sourceChain, SOURCE_MARKERS,
+  acceptanceStatus, apkFfmpegEntries, apkManifestSummary, buildPacket, bundleProbe, flagCounts, formatPacket, newestSnapshot, reviewRows, sbomSummary, sourceChain, SOURCE_MARKERS,
 } from '../scripts/owner/licence-review.mjs';
 
 const entries = [
@@ -90,4 +90,13 @@ test('the repository archive yields a packet without any external input', () => 
   const packet = buildPacket([]);
   if (!packet.notices) return; // no archived snapshot in this checkout
   assert.ok(packet.notices.flagged > 0);
+});
+
+test('owner acceptance covers the exact @metamask/sdk version only', () => {
+  assert.equal(acceptanceStatus(entries)[0].status, 'covered');
+  const bumped = [{...entries[0], version: '0.34.0'}];
+  assert.equal(acceptanceStatus(bumped)[0].status, 'version-not-covered');
+  assert.deepEqual(acceptanceStatus(bumped)[0].foundVersions, ['0.34.0']);
+  assert.equal(acceptanceStatus([])[0].status, 'not-present');
+  assert.match(formatPacket({disclaimer: 'd', acceptance: acceptanceStatus(bumped)}), /re-decide/);
 });
