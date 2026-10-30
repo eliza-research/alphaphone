@@ -114,6 +114,8 @@ export default defineConfig({
   resolve: {
     dedupe: ['react', 'react-dom'],
     alias: {
+      "@elizaos/core/errors": fileURLToPath(new URL("./.eliza/client-features/packages/core/src/errors.ts", import.meta.url)),
+      "@elizaos/core/unicode": fileURLToPath(new URL("./.eliza/client-features/packages/core/src/utils/unicode.ts", import.meta.url)),
       "@elizaos/auth/app-return": fileURLToPath(new URL("./.eliza/client-features/packages/auth/src/sdk/app-return.ts",import.meta.url)),
       "@elizaos/ui/api/client-observation": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/api/client-observation.ts",import.meta.url)),
       "@elizaos/plugin-calendar/client/day-observation": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-calendar/src/client/day-observation.ts",import.meta.url)),

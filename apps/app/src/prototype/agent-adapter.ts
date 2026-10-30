@@ -1,9 +1,7 @@
 import {cloudServiceName} from '../runtime/cloud-protocol';
 import {browserNavigationSummary,projectActionMessages} from '../runtime/action-message-presentation';
 import {CanonicalNotesUi} from './canonical-notes-ui';
-import {openExistingBrowserNotes,openExistingDeviceNotes} from './legacy-notes-access';
 import {executeNamedCalendarRead,type NamedCalendarReadProvider} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/client/named-read.ts';
-import {reconcileNotesEditor} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-draft.ts';
 import {CAMERA_CONTEXT_NOTICE,publishCommittedDeviceChanges} from '../runtime/device-actions';
 import {captureAgentPhoto} from './camera-adapter';
 import {isCameraCapture} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/camera-contract.ts';
@@ -27,7 +25,7 @@ import {presentDeviceRecordOperation} from '../runtime/device-record-presentatio
 import { passwordSurfaceOpen } from '../passwords/password-manager';
 import {AssistantDraftController} from './assistant-draft-controller';
 import {assistantDraftStore} from '../runtime/assistant-draft-store';
-import {browserNotesPort,browserNotesRecovery} from '../runtime/browser-notes-document';
+import {browserNotesRecovery} from '../runtime/browser-notes-document';
 import {audioDeletionRecovery} from '../runtime/note-audio-deletions';
 import {addNotesTrashEntry,editNotesTrash,isNotesTrashFull,withNotesDeletionLock} from '../runtime/notes-trash';
 import {openDomainRecovery} from '../browser/domain-recovery';
@@ -38,7 +36,6 @@ import {isReminderCreate,validateReminderCreateResult} from '../../../../.eliza/
 import {publishWorkflowNotice} from '../browser/workflow-notices';
 import {speakAppText} from '../runtime/app-speech';
 import {browserDevProfile} from '../browser/dev-profile';
-import {stampNoteChanges} from '../runtime/note-dates';
 import {isClockOperation,assertClockTimeZone,currentClockTimeZone,validateClockResult} from '../runtime/clock-contract';
 import { Capacitor } from '@capacitor/core';
 import { isMapsOperation } from '../runtime/maps-contract';
@@ -46,9 +43,9 @@ import { readMapsSelection } from '../maps/agent-context';
 import { isLibraryOperation } from '../runtime/photo-library';
 import { deviceLibraryAgent, LibraryAgentRefusal } from './photo-library-adapter';
 import {isReminderOperation,validateReminderResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/reminder-contract.ts';
-import { SecureNotesStore, notesDraftBase, applyNotesDraft, notesDraftConflicts, NotesStorageFull, SECURE_NOTES_SLOT, SECURE_NOTES_DRAFT_SLOT, type NotesDraft, type NotesDraftReason } from '../runtime/notes-secure-store';
+import { NotesStorageFull, SECURE_NOTES_SLOT, SECURE_NOTES_DRAFT_SLOT } from '../runtime/notes-secure-store';
 import { secureConnectionStore } from '../runtime/native-connection';
-import {NotesCommitUncertain,isStorageFull} from '../runtime/notes-store';
+import {NotesCommitUncertain} from '../runtime/notes-store';
 import {isNotesOperation,validateNotesOperation,notesTarget} from '../runtime/notes-contract';
 import {isCalendarOperation,validateCalendarResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts';
 import { isMvpView } from "./mvp-features";
@@ -233,55 +230,6 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     if(shell.notesStorageFull){notesDataset('notesStorageState','full');return kept?'Notes storage is full. Unsaved changes are kept in an encrypted draft on this device. Delete notes you no longer need or empty Trash.':'Notes storage is full. Delete notes you no longer need or empty Trash. Keep this screen open to preserve unsaved text.';}
     return kept?'Save unconfirmed. Unsaved changes are kept in an encrypted draft on this device; reopen Alpha to resume.':'Save unconfirmed. Keep this screen open to preserve unsaved text.';
   }
-  /** Android: keep the attempted edits in the encrypted draft slot after a failed or uncertain commit. */
-  function keepNotesDraft(shell:Shell,list:unknown,reason:NotesDraftReason){
-    if(!isAndroid||!Array.isArray(list))return;
-    let records:Shell[];try{records=JSON.parse(JSON.stringify(list));}catch{return;}
-    const savedRaw=typeof shell.notesRaw==='string'?shell.notesRaw:'';
-    shell.notesDraftTask=Promise.resolve(shell.notesDraftTask).then(async()=>{
-      let saved:Shell[]=[];try{const parsed=JSON.parse(savedRaw).records;if(Array.isArray(parsed))saved=parsed;}catch{/* no saved collection */}
-      shell.notesDraftSaved=await SecureNotesStore.saveDraft(secureConnectionStore,{savedRaw,reason,list:records,saved,own:shell.notesDraftSaved,kept:shell.notesDraftKept});
-      notesDataset('notesDraftState','saved');
-      if(shell.live&&shell.notesStorageFailed)originalSet.call(shell,'notes',{storageStatus:failedNotesStatus(shell,true)});
-    }).catch(()=>{
-      shell.notesDraftSaved=null;notesDataset('notesDraftState','failed');
-      if(shell.live&&shell.notesStorageFailed)originalSet.call(shell,'notes',{storageStatus:failedNotesStatus(shell,false)});
-    });
-  }
-  /** Android: after a clean open, finish a draft kept from an earlier failed or uncertain save. */
-  async function resumeNotesDraft(shell:Shell,known?:NotesDraft){
-    let draft:NotesDraft|null;
-    try{draft=known??await SecureNotesStore.readDraft(secureConnectionStore);}
-    catch{shell.notesDraftUnreadable=true;notesDataset('notesDraftState','unreadable');if(shell.live)originalSet.call(shell,'notes',{storageStatus:'An unsaved Notes draft could not be read. Open Notes recovery to download it.'});return;}
-    shell.notesDraftDeferred=null;
-    // Until it is cleared, a later failed save merges this draft instead of replacing it.
-    shell.notesDraftKept=draft;
-    if(!draft||!shell.live||!shell.notesStore||shell.notesStorageFailed||shell.notesPending)return;
-    const current=shell.notesStore.list,next=applyNotesDraft(current,draft),conflicts=notesDraftConflicts(current,draft);
-    // A note edited again since the draft was kept keeps its newer saved text; the draft stays
-    // encrypted on this device instead of overwriting it.
-    const conflicted=()=>{
-      shell.notesDraftConflict=true;notesDataset('notesDraftState','conflict');
-      if(shell.live){originalSet.call(shell,'notes',{storageStatus:'Some unsaved changes from an earlier session conflict with newer edits. Your newer notes were kept. Open Notes recovery to download the older changes.'});context(shell);}
-    };
-    // An uncertain commit that did complete leaves nothing to apply.
-    if(JSON.stringify(next)===JSON.stringify(current)){
-      if(conflicts.length){conflicted();return;}
-      if(await SecureNotesStore.clearDraft(secureConnectionStore,draft).catch(()=>false))shell.notesDraftKept=null;
-      notesDataset('notesDraftState','none');return;
-    }
-    // Retrying a full collection before anything was freed would fail again and lock editing.
-    if(draft.reason==='storage-full'&&draft.base===await notesDraftBase(shell.notesStore.raw)){
-      shell.notesDraftDeferred=draft;notesDataset('notesDraftState','deferred');
-      originalSet.call(shell,'notes',{storageStatus:'Notes storage was full, so recent changes are kept in an encrypted draft. Delete notes you no longer need or empty Trash; Alpha saves the draft after your next saved change.'});return;
-    }
-    notesDataset('notesDraftState','resuming');
-    if(await shell.vset('notes',{list:next},{exact:true})!==true)return;// A new draft was kept by the failed save.
-    if(conflicts.length){conflicted();if(shell.live)shell.toast('Recovered some unsaved Notes changes. Others conflict with newer edits.');return;}
-    if(await SecureNotesStore.clearDraft(secureConnectionStore,draft).catch(()=>false))shell.notesDraftKept=null;
-    notesDataset('notesDraftState','resumed');
-    if(shell.live){originalSet.call(shell,'notes',{storageStatus:'Recovered unsaved changes from your last session and saved them on this device.'});shell.toast('Recovered unsaved Notes changes.');}
-  }
   /** Android Notes recovery: export saved Notes with the draft; reset clears only what is broken. */
   function openNativeNotesRecovery(shell:Shell,signal:AbortSignal){
     const collection=!!shell.notesOpenFailed,captures=new WeakMap<object,{saved:string|null;draft:string|null}>();
@@ -458,45 +406,19 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     return port?JSON.stringify([port.sessionId,port.scope??null,port.identity.ownerId,port.identity.agentId,port.identity.sessionId,port.identity.origin]):null;
   }
   function syncCanonicalNotes(shell:Shell):void {
-    if(!shell.live||shell.notesSourceMode==='legacy')return;
+    if(!shell.live)return;
     const port=connectionController.getAppRecordClient(),key=canonicalNotesKey(port);
-    if(shell.canonicalNotesKey===key&&(key===null||shell.canonicalNotesUi?.current))return;
-    const previous=shell.canonicalNotesUi;shell.canonicalNotesUi=null;shell.canonicalNotesKey=key;previous?.retire();
-    shell.notesSelectionKey=null;shell.notesSelection=null;shell.notesStorageFailed=true;shell.notesPending=0;
-    if(!port){shell.notesReady=Promise.resolve();originalSet.call(shell,'notes',{list:[],open:null,trash:[],trashOpen:false,storageStatus:agentAvailabilityNotice(undefined,'Notes is unavailable for this agent connection. Check Settings › Agent connection.')});return;}
+    if(shell.canonicalNotesUi){shell.canonicalNotesKey=key;shell.canonicalNotesUi.updatePort(port);return;}
+    shell.canonicalNotesKey=key;shell.notesSelectionKey=null;shell.notesSelection=null;shell.notesStorageFailed=true;shell.notesPending=0;
     let binding:CanonicalNotesUi;
     const paint=()=>{if(shell.live&&shell.canonicalNotesUi===binding)shell.setState({},()=>context(shell));};
     binding=new CanonicalNotesUi(port,{paint,review:paint,committed:()=>paint()});
     shell.canonicalNotesUi=binding;
-    shell.notesReady=binding.refresh().catch(()=>{if(shell.canonicalNotesUi===binding)paint();});
-  }
-  async function previousNotesObservation(store:Shell,current:()=>boolean):Promise<Shell>{
-    const first=store.list[0],target=first?await store.target(first.id):null;
-    if(!current())throw new DOMException('Notes source changed.','AbortError');
-    if(target)return {kind:'note-source',id:target.sourceId,revision:target.sourceRevision,accountId:target.sourceId,sourceRevision:target.sourceRevision};
-    // A viewport namespace/fingerprint, never a made-up native source identity.
-    const revision=await notesDraftBase(store.raw);if(!current())throw new DOMException('Notes source changed.','AbortError');
-    return {kind:'legacy-app-notes-source',id:'previous-notes',accountId:'device-local-legacy',revision};
+    shell.notesReady=port?binding.refresh().catch(()=>{if(shell.canonicalNotesUi===binding)paint();}):Promise.resolve();
   }
   async function selectNotesSource(shell:Shell,source:'canonical'|'legacy'):Promise<boolean>{
-    if(!shell.live||source===shell.notesSourceMode)return true;
-    if(shell.notesSourceMode==='legacy'&&shell.vget('notes').rec){shell.toast('Finish the recording before switching notes.');return false;}
-    if(shell.notesPending||shell.canonicalNotesUi?.pending||shell.canonicalNotesUi?.dirty){shell.toast('Finish or review the current note before switching.');return false;}
-    shell.cancelReadReplyCompletions?.();shell.notesOpenAbort?.abort();shell.notesOpenAbort=new AbortController();
-    const previous=shell.canonicalNotesUi;shell.canonicalNotesUi=null;shell.canonicalNotesKey=null;previous?.retire();
-    shell.notesLegacySource=null;shell.notesSourceMode=source;shell.notesSourceEpoch=(shell.notesSourceEpoch??0)+1;shell.notesSelectionKey=null;shell.notesSelection=null;
-    originalSet.call(shell,'notes',{list:[],open:null,q:null,trashOpen:false,trashChecked:false,storageStatus:'Opening Notes…'});
-    if(source==='canonical'){syncCanonicalNotes(shell);context(shell);return true;}
-    const epoch=shell.notesSourceEpoch,signal=shell.notesOpenAbort.signal,current=()=>shell.live&&shell.notesSourceMode==='legacy'&&shell.notesSourceEpoch===epoch;
-    shell.notesStorageFailed=true;shell.notesPending=0;
-    shell.notesReady=(async()=>{
-      const store=isAndroid?await openExistingDeviceNotes(secureConnectionStore,localStorage,signal,current):await openExistingBrowserNotes(browserNotesPort,signal,current);
-      if(!current())return;const observation=await previousNotesObservation(store,current);if(!current())return;shell.notesStore=store;shell.notesRaw=store.raw;shell.notesLegacySource=observation;shell.notesStorageFailed=false;
-      originalSet.call(shell,'notes',{list:store.list,storageStatus:isAndroid?'Note text encrypted on this device':''});context(shell);
-      // Existing unsaved device drafts remain in their original slot. Recovery
-      // stays an explicit existing action; source selection never applies them.
-    })().catch(()=>{if(current()){shell.notesStorageFailed=true;originalSet.call(shell,'notes',{list:[],storageStatus:'Previous notes need a recovery review. Nothing was moved or changed.'});context(shell);}});
-    await shell.notesReady;return !shell.notesStorageFailed;
+    if(!shell.live)return false;
+    return await shell.canonicalNotesUi?.selectSource(source)??false;
   }
   function context(shell: Shell) {
     const s = shell.S();
@@ -506,13 +428,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     const selected = notes?.list?.find((note: Shell) => note.id === notes.open)?.id;
     const selectedRecord=notes?.list?.find((note:Shell)=>note.id===selected);
     const selectedKey=shell.notesSourceMode==='canonical'?null:selectedRecord?JSON.stringify(selectedRecord):null;
-    if(shell.notesSourceMode==='canonical'){shell.notesSelectionKey=null;shell.notesSelection=view==='notes'?shell.canonicalNotesUi?.selection()??null:null;}
-    else if(shell.notesSelectionKey!==selectedKey||(selected&&!shell.notesSelection&&!shell.notesPending&&!shell.notesStorageFailed)){
-      shell.notesSelectionKey=selectedKey;shell.notesSelection=null;
-      if(selected&&shell.notesStore&&!shell.notesStorageFailed&&!shell.notesPending)void shell.notesStore.target(String(selected)).then((target:Shell)=>{
-        if(shell.live&&shell.notesSourceMode==='legacy'&&!shell.notesPending&&!shell.notesStorageFailed&&shell.notesSelectionKey===selectedKey){shell.notesSelection={kind:'note',id:target.noteId,revision:target.revision,accountId:target.sourceId,sourceRevision:target.sourceRevision};context(shell);}
-      }).catch(()=>{});
-    }
+    shell.notesSelectionKey=null;shell.notesSelection=view==='notes'?shell.canonicalNotesUi?.selection()??null:null;
 
     const previousNotesScope=view==='notes'&&shell.notesSourceMode==='legacy'?(shell.notesLegacySource??{kind:'legacy-app-notes-source',id:'previous-notes',accountId:'device-local-legacy'}):undefined;
     let providerSelection = view === 'browser' ? shell.browserSelection?.() : undefined;
@@ -622,20 +538,6 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     });
     // Canonical is the default; no legacy store/migration/cleanup is opened.
     syncCanonicalNotes(this);
-    this.notesCommittedHandler=()=>{
-      if(this.notesSourceMode!=='legacy')return;
-      const store=this.notesStore,epoch=this.notesSourceEpoch,current=()=>this.live&&this.notesSourceMode==='legacy'&&this.notesSourceEpoch===epoch&&this.notesStore===store;
-      if(store&&!this.notesPending&&!this.notesStorageFailed)void previousNotesObservation(store,current).then(value=>{if(current()){this.notesLegacySource=value;context(this);}}).catch(()=>{});
-      if(!this.live||!this.notesStore||this.notesStorageFailed||this.notesPending||this.notesStore.needsRecovery)return;
-      const update=reconcileNotesEditor(this.notesRaw,this.vget('notes').list,this.notesStore.raw,this.notesStore.list);
-      if(update.kind==='unchanged')return;
-      if(update.kind==='conflict'){
-        originalSet.call(this,'notes',{storageStatus:'A newer saved note is available. Your unsaved text is still here.'});return;
-      }
-      this.notesRaw=this.notesStore.raw;
-      originalSet.call(this,'notes',{...(update.list?{list:update.list}:{}),storageStatus:isAndroid?'Note text encrypted on this device':''});context(this);
-    };
-    window.addEventListener('alpha:notes-committed',this.notesCommittedHandler);
     this.visibilityHandler = () => { if(document.hidden)connectionController.cancelViewNavigation();if (this.live) {if(!document.hidden&&this.notesSourceMode==='canonical'&&this.S().view==='notes')void this.canonicalNotesUi?.refresh().catch(()=>{});context(this);} };
     this.pageHideHandler = () => { notesRecovery?.abort();this.pageSuspended = true; if (this.live) context(this); };
     this.pageShowHandler = () => { this.pageSuspended = false; if (this.live) context(this); };
@@ -833,9 +735,9 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         return {status:result.status==='unknown'?'unknown':'failed',summary:result.status==='unknown'?'Calendar outcome is unconfirmed. Inspect action history before another action.':result.status==='cancelled'?'Calendar review cancelled. Nothing was changed.':'Calendar target changed, access was denied, or the operation is unsupported. Nothing was changed.'};
       }
       if(isNativeNotesQuery(operation)){
-        if(this.notesSourceMode!=='legacy'||this.notesStorageFailed||this.notesPending||!this.notesStore)return {status:'failed',summary:'Select Previous notes to review this device-record request. Nothing was shared.'};
+        if(this.notesSourceMode!=='legacy'||this.notesStorageFailed||(this.canonicalNotesUi?.pending||this.canonicalNotesUi?.dirty)||!this.notesStore)return {status:'failed',summary:'Select Previous notes to review this device-record request. Nothing was shared.'};
         const ownerSession=connectionController.getSnapshot().session,ownerTarget=JSON.stringify(connectionController.getWorkflowDeviceTarget());
-        const current=()=>{signal.throwIfAborted();context(this);if(!ownerSession||connectionController.getSnapshot().session!==ownerSession||JSON.stringify(connectionController.getWorkflowDeviceTarget())!==ownerTarget||!this.live||this.notesPending||this.notesStorageFailed||document.hidden||expectedContext.sensitive||!['home','notes'].includes(expectedContext.view)||JSON.stringify(alphaClient.getState().context)!==JSON.stringify(expectedContext))throw Error('Notes query or connection changed');};
+        const current=()=>{signal.throwIfAborted();context(this);if(!ownerSession||connectionController.getSnapshot().session!==ownerSession||JSON.stringify(connectionController.getWorkflowDeviceTarget())!==ownerTarget||!this.live||(this.canonicalNotesUi?.pending||this.canonicalNotesUi?.dirty)||this.notesStorageFailed||document.hidden||expectedContext.sensitive||!['home','notes'].includes(expectedContext.view)||JSON.stringify(alphaClient.getState().context)!==JSON.stringify(expectedContext))throw Error('Notes query or connection changed');};
         try{return await executeNotesQuery(this.notesStore,operation,operationId,signal,current);
         }catch{return {status:'failed',summary:'Notes changed or sharing became unavailable. Review the query again; nothing was shared.'};}
       }
@@ -890,7 +792,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       if(operation.type==='read_selected_notes'||operation.type==='read_calendar_range'){
         const current=()=>{signal.throwIfAborted();context(this);if(!this.live||document.hidden||JSON.stringify(alphaClient.getState().context)!==JSON.stringify(expectedContext)||expectedContext.sensitive||expectedContext.view!=='workflows'||expectedContext.selectedObject?.kind!=='workflow-run')throw new Error('Workflow read context changed');};current();
         if(operation.type==='read_selected_notes'){
-          await this.notesStore?.assertCurrent();const raw=this.notesStore?.raw;if(this.notesStorageFailed||this.notesPending||raw!==this.notesRaw)return {status:'failed',summary:'Notes changed or storage is unavailable. Review the selected notes again.'};
+          await this.notesStore?.assertCurrent();const raw=this.notesStore?.raw;if(this.notesStorageFailed||(this.canonicalNotesUi?.pending||this.canonicalNotesUi?.dirty)||raw!==this.notesRaw)return {status:'failed',summary:'Notes changed or storage is unavailable. Review the selected notes again.'};
           const source=this.vget('notes').list;const snapshot=operation.notes.map(selected=>{const matches=source.filter((n:Shell)=>n.id===selected.id);if(matches.length!==1||typeof matches[0].title!=='string'||typeof matches[0].body!=='string')throw new Error('A selected note is missing');return {id:selected.id,revision:selected.revision,title:matches[0].title,text:matches[0].body};});
           const result=await validateWorkflowResult(operation,{kind:'notes',notes:snapshot});current();await this.notesStore.assertCurrent();current();if(this.notesStore.raw!==raw)throw new Error('Notes changed while preparing the approved read');
           return {status:'succeeded',summary:`Read ${snapshot.length} selected notes. The exact result is retained for this workflow receipt.`,readResult:result};
@@ -991,7 +893,6 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     this.notesOpenAbort?.abort();if(activeShell===this){activeShell=null;notesRecovery?.abort();}
     this.closeSummaryReview?.();
     this.connectionUnsubscribe?.();
-    window.removeEventListener('alpha:notes-committed',this.notesCommittedHandler);
     document.removeEventListener('visibilitychange', this.visibilityHandler);
     window.removeEventListener('pagehide', this.pageHideHandler);
     window.removeEventListener('pageshow', this.pageShowHandler);
@@ -999,59 +900,16 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     this.live = false; alphaClient.disconnect(); window.removeEventListener('alpha-back', this.backHandler); window.removeEventListener('launcher-home', this.homeHandler); window.removeEventListener('alpha-selected-context', this.selectionHandler);
     void this.assistListener?.then((l: Shell) => l?.remove()); originalUnmount.call(this);
   };
-  p.vset = function (key: string, patch: Shell, options?: {exact?: boolean}) {
-    if(key==='notes'&&Object.hasOwn(patch,'list')&&this.notesSourceMode!=='legacy'){originalSet.call(this,key,{compose:false,record:false});this.toast('That note change could not be saved. Your draft is still open.');return false;}
-    if (key !== 'notes' || !patch.list) { originalSet.call(this,key,patch);return true; }
-    if (this.notesStorageFailed||!this.notesStore) {
-      // Recovery can race the next input event. Retain its text only as a draft;
-      // unavailable storage must never turn this edit into an action receipt.
-      this.notesSelectionKey=null;this.notesSelection=null;
-      originalSet.call(this,key,{...patch,storageStatus:failedNotesStatus(this,false)});
-      this.toast('Notes storage needs recovery. Unsaved text is kept on this screen; saved drafts are retained in Alpha.');context(this);
-      keepNotesDraft(this,patch.list,this.notesStorageFull?'storage-full':this.notesCommitUncertain?'uncertain':'failed');return false;
-    }
-    try {
-      // A Trash restore reinstates the exact saved record; it is not a content modification.
-      if(!options?.exact)patch={...patch,list:stampNoteChanges(this.notesStore.list,patch.list)};
-      // While this editor's own write is still settling, the store already holds that write's
-      // revision; only a revision that is neither confirmed nor ours is a concurrent change.
-      if((this.notesPending?this.notesLocalRaw:this.notesRaw)!==this.notesStore.raw)throw Error('Notes changed while this editor had unsaved text. Review recovery before saving.');
-      const pending=this.notesStore.replace(patch.list);
-      this.notesLocalRaw=this.notesStore.raw;
-      this.notesPending++;
-      this.notesSelectionKey=null;this.notesSelection=null;
-      // Text remains visible while the native commit is pending; this is not a saved receipt.
-      originalSet.call(this,key,{...patch,storageStatus:'Saving on this device…'});
-      context(this);
-      return Promise.resolve(pending).then(()=>{
-        this.notesPending--;this.notesRaw=this.notesStore.raw;
-        if(this.live&&!this.notesPending&&!this.notesStorageFailed){originalSet.call(this,'notes',{storageStatus:''});context(this);}
-        // A change was saved, so space may have been freed: retry a draft kept from a full collection.
-        const deferred=this.notesDraftDeferred;if(deferred&&!this.notesPending){this.notesDraftDeferred=null;setTimeout(()=>{if(this.live)void resumeNotesDraft(this,deferred);},0);}
-        return true;
-      }).catch((error)=>{
-        this.notesPending--;this.notesStorageFailed=true;this.notesCommitUncertain=error instanceof NotesCommitUncertain;
-        const full=error instanceof NotesStorageFull||isStorageFull(error);if(full)this.notesStorageFull=true;
-        if(this.live){
-          originalSet.call(this,'notes',{storageStatus:failedNotesStatus(this,false)});
-          this.toast(full?'Notes storage is full. Nothing new was saved; unsaved text remains on this screen.':error instanceof NotesCommitUncertain?'Save outcome unknown. Reopen to inspect saved notes; do not repeat the action.':'Notes could not be saved. Unsaved text remains on this screen.');context(this);
-        }
-        keepNotesDraft(this,this.vget('notes').list,full?'storage-full':this.notesCommitUncertain?'uncertain':'failed');
-        return false;
-      });
-    } catch (error) {
-      // Browser storage and revision checks can fail synchronously, before the
-      // optimistic state above is installed. Preserve the attempted draft just
-      // as we do for a rejected native commit, without retrying the write.
-      this.notesStorageFailed=true;
-      this.notesCommitUncertain=error instanceof NotesCommitUncertain;
-      this.notesSelectionKey=null;this.notesSelection=null;
-      originalSet.call(this,key,{...patch,storageStatus:failedNotesStatus(this,false)});
-      keepNotesDraft(this,patch.list,this.notesCommitUncertain?'uncertain':'failed');
-      this.toast(this.notesCommitUncertain?'Save outcome unknown. Unsaved text remains on this screen; do not repeat the action.':'Notes changed or storage is unavailable. Unsaved text remains on this screen.');
-      context(this);
-      return false;
-    }
+  p.vset = function (key:string,patch:Shell,options?:{exact?:boolean;authorized?:()=>void}){
+    if(key!=='notes'||!Object.hasOwn(patch,'list')){originalSet.call(this,key,patch);return true;}
+    const notes=this.canonicalNotesUi;
+    if(!notes||notes.sourceMode!=='legacy'){this.toast('Select the installed Notes source before changing these records.');return false;}
+    return notes.writeRecords(patch.list,options).then(()=>{
+      if(Object.hasOwn(patch,'open'))notes.select(patch.open);
+      const remaining={...patch};delete remaining.list;delete remaining.open;
+      if(Object.keys(remaining).length)originalSet.call(this,key,remaining);
+      context(this);return true;
+    }).catch(()=>{this.toast('The Notes save was not confirmed. Your saved notes and retained draft must be reviewed before retrying.');context(this);return false;});
   };
   p.api = function (key: string) {
     const api = originalApi.call(this, key);
@@ -1079,9 +937,9 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
 
       api.localWorkflowNotes=async(input:{operationId?:string;text?:string},signal:AbortSignal)=>{
         signal.throwIfAborted();
-        if(this.notesStorageFailed||this.notesPending||!this.notesStore)throw Error('Reopen Notes before running this step.');
+        if(this.notesStorageFailed||(this.canonicalNotesUi?.pending||this.canonicalNotesUi?.dirty)||!this.notesStore)throw Error('Reopen Notes before running this step.');
         await this.notesStore.assertCurrent();signal.throwIfAborted();
-        if(this.notesPending||this.notesRaw!==this.notesStore.raw)throw Error('Notes changed during this step.');
+        if((this.canonicalNotesUi?.pending||this.canonicalNotesUi?.dirty)||this.notesRaw!==this.notesStore.raw)throw Error('Notes changed during this step.');
         const list=this.notesStore.list;
         if(!input.operationId)return list;
         const text=input.text||'';
@@ -1094,7 +952,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         return note;
       };
     }
-    if(key==='notes'){api.set=(patch:Shell)=>this.vset('notes',patch);api.storageReady=()=>!this.notesStorageFailed&&!this.notesPending; }
+    if(key==='notes'){api.set=(patch:Shell)=>this.vset('notes',patch);api.storageReady=()=>this.canonicalNotesUi?this.canonicalNotesUi.current&&!this.canonicalNotesUi.pending&&!this.canonicalNotesUi.dirty:!this.notesStorageFailed&&!this.notesPending; }
     api.say = () => this.toast('Connect the underlying account or select real content before requesting this action.');
     // Open the real conversation without sending a prompt or uploading content.
     // Keep the current view/selection so a subsequent user message is scoped.
@@ -1530,7 +1388,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       if(recording&&(!recordingNote?.audio||await recordingRevision(recordingNote)!==recording.revision||!current())){this.toast('Recording changed or is unavailable. Ask about its current transcript again.');return;}
       this.closeSummaryReview?.();
       this.closeSummaryReview=reviewSummaryNote({text:review.text,source:review.source,current,save:async(fields)=>{
-        if(!current()||this.notesStorageFailed||this.notesPending)return false;
+        if(!current()||this.notesStorageFailed||(this.canonicalNotesUi?.pending||this.canonicalNotesUi?.dirty))return false;
         const update=(title:string,sub:string)=>{if(this.live)this.setState({msgs:this.S().msgs.map((m:Shell)=>m.id===message.id?{...m,card:{...m.card,done:true,title,sub}}:m)});};
         update('Saving summary note','Inspect Notes before retrying if this is interrupted.');
         try{
@@ -1564,7 +1422,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
           const store=this.notesStore,expectedContext=JSON.stringify(alphaClient.getState().context),expectedSession=JSON.stringify(session);
           const current=()=>{
             context(this);
-            if(card.reviewUnavailable||card.expiresAt<=Date.now()||!store||!this.live||document.hidden||alphaClient.getState().context.sensitive||!['home','notes'].includes(this.S().view||'home')||connectionController.getSnapshot().open||JSON.stringify(connectionController.getSnapshot().session)!==expectedSession||JSON.stringify(alphaClient.getState().context)!==expectedContext||this.notesStore!==store||this.notesStorageFailed||this.notesPending||this.notesRaw!==store.raw||JSON.stringify(this.vget('notes').list)!==JSON.stringify(store.list))throw Error('Save your Notes changes and review this request again.');
+            if(card.reviewUnavailable||card.expiresAt<=Date.now()||!store||!this.live||document.hidden||alphaClient.getState().context.sensitive||!['home','notes'].includes(this.S().view||'home')||connectionController.getSnapshot().open||JSON.stringify(connectionController.getSnapshot().session)!==expectedSession||JSON.stringify(alphaClient.getState().context)!==expectedContext||this.notesStore!==store||this.notesStorageFailed||(this.canonicalNotesUi?.pending||this.canonicalNotesUi?.dirty)||this.notesRaw!==store.raw||JSON.stringify(this.vget('notes').list)!==JSON.stringify(store.list))throw Error('Save your Notes changes and review this request again.');
           };
           current();const target=await store.target(expectedTarget.noteId);current();
           if(JSON.stringify(target)!==JSON.stringify(expectedTarget))throw Error('The note changed. Request a fresh review.');
@@ -1632,7 +1490,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     const failed=Boolean((activeShell?.notesStorageFailed&&document.documentElement.dataset.notesStorageState!=='opening')||activeShell?.notesStore?.needsRecovery);
     // A damaged collection, kept draft or full store exposes retention guidance. Development builds also offer fixture recovery tools.
     out.browserRecovery=isAndroid?Boolean(failed||activeShell?.notesDraftUnreadable||activeShell?.notesDraftDeferred||activeShell?.notesDraftConflict):Boolean(failed||state.audioDeletionRecoveryFailed||state.audioDeletionPending?.length);
-    out.openBrowserRecovery=()=>{const shell=activeShell;if(!shell||shell.notesPending)return;notesRecovery?.abort();const controller=notesRecovery=new AbortController();if(isAndroid){openNativeNotesRecovery(shell,controller.signal);return;}openDomainRecovery({capture:async signal=>{const draft=JSON.stringify({...JSON.parse(shell.notesStore?.raw||'{}'),records:shell.vget('notes').list});const saved=await browserNotesRecovery.capture(signal);return {...saved,raw:JSON.stringify({saved:saved.raw,draft})};},reset:browserNotesRecovery.reset},'Notes','Browser Notes recovery','Download saved Notes and the current editor draft before resetting. Reset starts an empty collection; it does not delete audio files or resolve pending audio deletion. Close other Alpha tabs before continuing.',controller.signal);};
+    out.openBrowserRecovery=()=>{const shell=activeShell;if(!shell||shell.canonicalNotesUi?.pending||shell.canonicalNotesUi?.dirty)return;notesRecovery?.abort();const controller=notesRecovery=new AbortController();if(isAndroid){openNativeNotesRecovery(shell,controller.signal);return;}openDomainRecovery({capture:async signal=>{const draft=JSON.stringify({...JSON.parse(shell.notesStore?.raw||'{}'),records:shell.vget('notes').list});const saved=await browserNotesRecovery.capture(signal);return {...saved,raw:JSON.stringify({saved:saved.raw,draft})};},reset:browserNotesRecovery.reset},'Notes','Browser Notes recovery','Download saved Notes and the current editor draft before resetting. Reset starts an empty collection; it does not delete audio files or resolve pending audio deletion. Close other Alpha tabs before continuing.',controller.signal);};
     out.openAudioRecovery=async()=>{const shell=activeShell;if(!shell)return;notesRecovery?.abort();const controller=notesRecovery=new AbortController();try{const recovery=await audioDeletionRecovery();if(controller.signal.aborted||activeShell!==shell||!shell.live||shell.S().view!=='notes')return;openDomainRecovery(recovery,'note audio deletion history','Note audio deletion recovery','Download unresolved note/audio deletion records before resetting. Reset forgets recovery records, but does not delete or restore Notes or audio. Check uncertain outcomes before repeating any deletion. Close other Alpha tabs before continuing.',controller.signal);}catch{if(!controller.signal.aborted)api.toast('Audio deletion recovery could not be opened.');}};
     const dictate = async () => {
       try {

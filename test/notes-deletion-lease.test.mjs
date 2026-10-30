@@ -35,8 +35,10 @@ test('the renderer leases each step and every row it shows, and lease lengths ag
  const binding=readFileSync(join(root,'apps/app/src/runtime/permanent-voice-deletion.ts'),'utf8');
  assert.match(binding,/createNotesDeletionClaims\('alpha\.notes-deletion-claim\.v1:'\)/,'the installed claim name is kept');
  const voice=readFileSync(join(root,'apps/app/src/prototype/voice-adapter.ts'),'utf8');
- assert.match(voice,/row=leasedDeletionRow\(\{id:crypto\.randomUUID\(\)/,'a new row is written leased');
- assert.match(voice,/const dispatched=leasedDeletionRow\(\{\.\.\.row,audioRequested:true as const\},Date\.now\(\)\);await changeAudioDeletion\(row,false,dispatched\);/,'each step renews it');
+ const effects=readFileSync(join(root,'.eliza/client-features/plugins/plugin-notes/src/client/notes-recording-effects.ts'),'utf8');
+ assert.match(voice,/await recordingEffects\(\)\.deleteReviewed\(/,'the native editor uses the shared reviewed deletion owner');
+ assert.match(effects,/let row = leasedDeletionRow\(structuredClone\(input\.row\), host\.now\(\)\);/,'the shared owner leases the reviewed row');
+ assert.match(effects,/const dispatched = leasedDeletionRow\(\s*\{ \.\.\.row, audioRequested: true as const \},\s*host\.now\(\),\s*\);\s*await journal\.change\(row, false, dispatched\);/,'the shared owner renews before audio dispatch');
  // The status pass, the interrupted-deletion settlement and lease renewal are the shared recording
  // effects (plugins/plugin-notes/test/notes-recording-effects.test.mjs); Alpha wires its rows to them.
  assert.match(voice,/createNotesRecordingEffects\(\{recordings:noteAudio,journal:audioDeletionJournal,savedNotes,now:\(\)=>Date\.now\(\)\}\)/,'the native recording store backs the shared effects');

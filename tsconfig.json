@@ -139,6 +139,12 @@
       ],
       "@elizaos/auth/auth/native-cloud-sign-in": [
         "./.eliza/client-features/packages/auth/src/auth/native-cloud-sign-in.ts"
+      ],
+      "@elizaos/core/errors": [
+        "./.eliza/client-features/packages/core/src/errors.ts"
+      ],
+      "@elizaos/core/unicode": [
+        "./.eliza/client-features/packages/core/src/utils/unicode.ts"
       ]
     }
   },
