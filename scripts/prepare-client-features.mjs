@@ -83,6 +83,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-notes/src/components/NotesWorkspace.tsx',
   'plugins/plugin-notes/src/components/viewPrimitives.tsx',
   'plugins/plugin-notes/src/workspace.ts',
+  'plugins/plugin-notes/src/host.ts',
 
   'packages/ui/src/api/transport.ts',
   'plugins/plugin-native-system/src/client/launcher.ts',
