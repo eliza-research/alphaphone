@@ -27,7 +27,7 @@ test('Google settings offer no calendar choice, revalidate grants and own Androi
   './google-connection-return':connectionReturn,
   './google-workspace-return':workspaceReturn,
   '../daily':{DailyApps:{addListener:async()=>({remove(){}})}},
-  './gmail-background':{gmailBackgroundStatus:async()=>({}),gmailBackgroundMessage:()=>'',gmailNotificationSettings:async()=>{},GMAIL_BACKGROUND_CHANGED:'alpha:test-gmail-background'},
+  './gmail-background':{gmailBackgroundStatus:async()=>({}),gmailBackgroundMessage:()=>'',GMAIL_BACKGROUND_CHANGED:'alpha:test-gmail-background'},
   '../native':{isAndroid:true},
   './gmail-grants':{gmailGrantTier:()=> 'send',googleAccountAccessLabel:()=> 'Read and send access'},
   './modal-inert':{holdPhoneInert:()=>()=>{}},

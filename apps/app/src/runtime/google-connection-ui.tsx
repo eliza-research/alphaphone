@@ -1,6 +1,6 @@
 import {DailyApps} from '../daily';
 import {watchGoogleConnectionReturn,sameGoogleConnectionReturnBinding,type GoogleConnectionReturnBinding} from './google-connection-return';
-import {gmailBackgroundStatus,gmailBackgroundMessage,gmailNotificationSettings,GMAIL_BACKGROUND_CHANGED} from './gmail-background';
+import {gmailBackgroundStatus,gmailBackgroundMessage,GMAIL_BACKGROUND_CHANGED} from './gmail-background';
 import {isAndroid} from '../native';
 import {gmailGrantTier,googleAccountAccessLabel} from './gmail-grants';
 import {useEffect,useRef,useState,useSyncExternalStore} from 'react';
@@ -132,7 +132,6 @@ export function GoogleConnectionsPanel(){
   <p>Connect Gmail and Google Calendar.</p>
   <p role="status">{notice}</p>
   <p>{background}</p>
-  {isAndroid&&<button onClick={()=>void gmailNotificationSettings().catch(()=>setBackground('Android notification settings are unavailable.'))}>Gmail notification settings</button>}
   {connected.map(account=><section className="alpha-connection-current alpha-google-account" key={account.connectionId}><strong>{account.label}</strong><span>{googleAccountAccessLabel(account)}</span><button className="alpha-google-disconnect" aria-label={`Disconnect Google account ${account.label}`} disabled={busy} onClick={()=>setConfirm(account)}>Disconnect</button></section>)}
   {connected.length>0&&<section aria-label="Agent access to Google"><h3>Agent access</h3><p>Turning a switch off keeps Google connected and reading still works. Alpha asks you to review email sends and Calendar changes, even when “Ask before agent actions” is off.</p>
    {([['gmailChanges','Gmail changes','Send email for you.',gmailGranted],['calendarEdits','Calendar edits','Create and update events.',calendarGranted]] as const).map(([kind,label,detail,granted])=><label className="alpha-google-switch" key={kind}><span><strong>{label}</strong><small>{granted?detail:`${detail} Needs Google approval.`}</small></span><input type="checkbox" role="switch" aria-label={label} checked={access[kind]&&granted} disabled={busy} onChange={()=>void toggleAccess(kind,granted)}/></label>)}

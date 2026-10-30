@@ -109,6 +109,7 @@ test('production Google account entry opens and dismisses its owned dialog',asyn
  const panel=page.getByRole('dialog',{name:'Google accounts',exact:true});
  await expect(panel).toBeVisible();
  await expect(panel.getByRole('button',{name:'Sign in to Eliza Cloud',exact:true})).toBeVisible();
+ await expect(panel.getByText('Gmail notification settings',{exact:true})).toHaveCount(0);
  await closeOverlays(page);
  await expect(panel).toHaveCount(0);
  await expect(current(page).getByRole('button',{name:'System accounts',exact:true})).toBeVisible();
