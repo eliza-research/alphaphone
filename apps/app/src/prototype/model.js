@@ -11,8 +11,8 @@ import {
   ATTENTION_ROWS, HOME_DEFAULTS
 } from "./fixtures.js";
 import { isMvpView, DEFERRED_MVP_VIEWS, deferredMvpPrompt } from "./mvp-features";
-import { ALPHA_PRODUCT, alphaThemeVariables } from "../product/alpha-product";
-import { navigateMobileShell } from "@elizaos/ui/mobile-shell/core";
+import { ALPHA_PRODUCT, alphaPaletteColor, alphaThemeVariables } from "../product/alpha-product";
+import { navigateMobileShell, resolveMobileShellSwipe } from "@elizaos/ui/mobile-shell/core";
 import { emptyHomeShadePull, pullStart, shadeFallback } from "./system-shade";
 import React from "react";
 import { DCLogic } from "./dc-lite.js";
@@ -235,8 +235,8 @@ registerView("phone", {
   },
   /* calls and ringing keep going in the background: status-bar chip returns here */
   ongoing: function (st, api) {
-    if (st.incoming) { var ip = pnWho(api, st.incoming); return { label: (st.ring === "screen" ? api.name + " · " : "Incoming · ") + (ip ? pnFirst(ip) : "Unknown"), icon: "phone", color: "#1e9e4a" }; }
-    if (st.callWho) return { label: st.liveAt ? (st.hold ? "Hold " : "") + pnClock((Date.now() - st.liveAt) / 1000) : "Calling…", icon: "phone", color: "#1e9e4a" };
+    if (st.incoming) { var ip = pnWho(api, st.incoming); return { label: (st.ring === "screen" ? api.name + " · " : "Incoming · ") + (ip ? pnFirst(ip) : "Unknown"), icon: "phone", color: "var(--alpha-call-green)" }; }
+    if (st.callWho) return { label: st.liveAt ? (st.hold ? "Hold " : "") + pnClock((Date.now() - st.liveAt) / 1000) : "Calling…", icon: "phone", color: "var(--alpha-call-green)" };
     return null;
   },
   onLeave: function (api) {
@@ -388,9 +388,9 @@ registerView("phone", {
     var status = !live ? "Calling…" : (st.hold ? "On hold · " : "") + pnClock(el);
     var sc = pnScript(st.call);
     var themName = cp ? pnFirst(cp) : "Caller";
-    var lines = sc.lines.slice(0, st.aiN || 0).map(function (l) { return { who: l[0] === "you" ? "You" : themName, text: l[1], css: l[0] === "you" ? "color:#8F8F8F" : "color:#FFFFFF" }; }).slice(-5);
+    var lines = sc.lines.slice(0, st.aiN || 0).map(function (l) { return { who: l[0] === "you" ? "You" : themName, text: l[1], css: l[0] === "you" ? "color:var(--alpha-gray-8f)" : "color:var(--alpha-white)" }; }).slice(-5);
     var ctrl = function (key, d, label, on, extra) {
-      return { d: d, label: label, on: !!on, css: on ? (key === "ai" ? "background:var(--acc);color:#fff" : "background:#FFFFFF;color:#000000") : "background:rgba(255,255,255,.12);color:#FFFFFF", glyph: key === "ai", icon: key !== "ai",
+      return { d: d, label: label, on: !!on, css: on ? (key === "ai" ? "background:var(--acc);color:var(--alpha-white)" : "background:var(--alpha-white);color:var(--alpha-black)") : "background:rgba(255,255,255,.12);color:var(--alpha-white)", glyph: key === "ai", icon: key !== "ai",
         toggle: function () { var s = api.get("phone"); var p = {}; p[key] = !s[key]; if (key === "ai" && p.ai) p.kp = false; api.set(p); if (key === "ai" && p.ai) api.toast(api.name + " is taking notes"); } };
     };
     var controls = inCall ? [
@@ -404,10 +404,11 @@ registerView("phone", {
     /* incoming */
     var ip = st.incoming ? pnWho(api, st.incoming) : null;
     var screening = st.ring === "screen";
-    var scrLines = PN_SCREEN.slice(0, st.scrN || 0).map(function (l) { return { who: l[0] === "alpha" ? api.name : (ip ? pnFirst(ip) : "Caller"), text: l[1].replace("{name}", api.name), css: l[0] === "alpha" ? "color:#8F8F8F" : "color:#FFFFFF" }; });
+    var scrLines = PN_SCREEN.slice(0, st.scrN || 0).map(function (l) { return { who: l[0] === "alpha" ? api.name : (ip ? pnFirst(ip) : "Caller"), text: l[1].replace("{name}", api.name), css: l[0] === "alpha" ? "color:var(--alpha-gray-8f)" : "color:var(--alpha-white)" }; });
     var scrDone = screening && (st.scrN || 0) >= PN_SCREEN.length;
 
     return {
+      nativePrototype: true,
       tab: tab, title: tab === "keypad" ? "Keypad" : (tab === "voicemail" ? "Voicemail" : "Recents"),
       tabs: tabs, isRecents: tab === "recents", isKeypad: tab === "keypad", isVm: tab === "voicemail",
       favs: favs, hasFavs: favs.length > 0, recents: recents, noRecents: recents.length === 0,
@@ -671,7 +672,7 @@ registerView("messages", {
           text: m.text || "", isText: !isPhoto && !isFile, isPhoto: isPhoto, isFile: isFile, file: m.file || "", size: m.size || "",
           openFile: function () { if (VIEWS.files && m.fid) api.open("files", { open: m.fid }); else api.toast(m.file); },
           row: "justify-content:" + (m.me ? "flex-end" : "flex-start") + ";margin-top:" + (sep ? "4px" : (prev && prev.me === m.me ? "3px" : "12px")),
-          css: (m.me ? "background:var(--acc);color:#fff;" : "background:var(--s2);color:var(--fg);") + "border-radius:" + r,
+          css: (m.me ? "background:var(--acc);color:var(--alpha-white);" : "background:var(--s2);color:var(--fg);") + "border-radius:" + r,
           photoCss: "background:" + (MSG_PHOTOS.length ? imgBg("msg" + ((m.photo || 0) % MSG_PHOTOS.length), MSG_PHOTOS[(m.photo || 0) % MSG_PHOTOS.length]) : "var(--s3)") + ";border-radius:" + r,
           openPhoto: function () { if (VIEWS.photos) api.open("photos"); else api.toast("Photo"); }
         };
@@ -694,7 +695,7 @@ registerView("messages", {
         atts: atts.map(function (f) { return { name: f.name, rm: function () { api.set({ attach: (api.get("messages").attach || []).filter(function (x) { return x !== f.id; }) }); } }; }),
         hasAtts: atts.length > 0,
         text: st.text || "", hasText: !!(st.text || "").trim(),
-        sendCss: ((st.text || "").trim() || atts.length) ? "background:var(--acc);color:#fff" : "background:var(--s2);color:var(--mut)",
+        sendCss: ((st.text || "").trim() || atts.length) ? "background:var(--acc);color:var(--alpha-white)" : "background:var(--s2);color:var(--mut)",
         onText: function (e) { api.set({ text: e.target.value }); },
         onKey: function (e) { if (e.key === "Enter") { e.preventDefault(); send(); } },
         send: function () { send(); },
@@ -1347,7 +1348,7 @@ registerView("calendar", {
     var sdow = calDow(api, sel);
     var week = "MTWTFSS".split("").map(function (l, i) {
       var off = sel - sdow + i; var dt = calDate(api, off);
-      var cs = off === 0 ? "background:var(--acc);color:#fff" : (off === sel ? "box-shadow:inset 0 0 0 1.5px var(--fg)" : "");
+      var cs = off === 0 ? "background:var(--acc);color:var(--alpha-white)" : (off === sel ? "box-shadow:inset 0 0 0 1.5px var(--fg)" : "");
       return { l: l, n: dt.getDate(), cs: cs, dot: on(off).length ? (off === 0 ? "var(--acct)" : "var(--mut)") : "transparent", pick: function () { set({ day: off }); } };
     });
 
@@ -1361,7 +1362,7 @@ registerView("calendar", {
       var n = 1; evs.forEach(function (o) { if (o !== e && o.t < e.t + e.d && o.t + o.d > e.t) n = Math.max(n, Math.max(laneOf[o.id], laneOf[e.id]) + 1); });
       var w = W / n; var c = calOf(e.cal);
       var pending = e.invite && e.invite.status === "pending";
-      var css = e.key ? "background:var(--acc);color:#fff" : (e.hold || pending ? "background:var(--bg);box-shadow:inset 0 0 0 1.5px " + (pending ? "var(--mut)" : "var(--acct)") : "background:var(--s2)");
+      var css = e.key ? "background:var(--acc);color:var(--alpha-white)" : (e.hold || pending ? "background:var(--bg);box-shadow:inset 0 0 0 1.5px " + (pending ? "var(--mut)" : "var(--acct)") : "background:var(--s2)");
       if (pending) css += ";border:1.5px dashed var(--mut);box-shadow:none";
       var h = Math.max(24, e.d * CAL_PX - 4); var short = h < 40;
       return {
@@ -1403,7 +1404,7 @@ registerView("calendar", {
         var off = Math.round((gd - today) / 864e5);
         var inM = gd.getMonth() === mBase.getMonth();
         var has = on(off).length > 0;
-        var cs = off === 0 ? "background:var(--acc);color:#fff" : (off === sel ? "box-shadow:inset 0 0 0 1.5px var(--fg)" : "");
+        var cs = off === 0 ? "background:var(--acc);color:var(--alpha-white)" : (off === sel ? "box-shadow:inset 0 0 0 1.5px var(--fg)" : "");
         mdays.push({ n: gd.getDate(), cs: cs + (inM || off === 0 ? "" : ";color:var(--mut)"), dot: has ? (off === 0 ? "var(--acct)" : "var(--fg)") : "transparent", pick: function () { set({ day: off, month: null }); }, label: DAYS[gd.getDay()] + " " + MONS[gd.getMonth()] + " " + gd.getDate() });
       })(gd);
     }
@@ -1429,7 +1430,7 @@ registerView("calendar", {
       var c = calOf(ev.cal);
       var isInvite = !!ev.invite;
       var rsvp = ev.invite ? ev.invite.status : null;
-      var rsvpBtn = function (s, label) { var act = rsvp === s; return { label: label, css: act ? (s === "declined" ? "background:var(--fg);color:var(--bg)" : "background:var(--acc);color:#fff") : "background:var(--s2)", go: function () { set({ events: list.map(function (x) { return x.id === ev.id ? Object.assign({}, x, { invite: Object.assign({}, x.invite, { status: s }) }) : x; }) }); api.toast(s === "yes" ? "Going · " + calPerson(api, ev.invite.from).name.split(" ")[0] + " will see it" : (s === "maybe" ? "Maybe" : "Declined")); } }; };
+      var rsvpBtn = function (s, label) { var act = rsvp === s; return { label: label, css: act ? (s === "declined" ? "background:var(--fg);color:var(--bg)" : "background:var(--acc);color:var(--alpha-white)") : "background:var(--s2)", go: function () { set({ events: list.map(function (x) { return x.id === ev.id ? Object.assign({}, x, { invite: Object.assign({}, x.invite, { status: s }) }) : x; }) }); api.toast(s === "yes" ? "Going · " + calPerson(api, ev.invite.from).name.split(" ")[0] + " will see it" : (s === "maybe" ? "Maybe" : "Declined")); } }; };
       var isPhone = ev.where === "Phone";
       var repeatLabel = ev.repeat && ev.repeat !== "none" ? CAL_REPEAT.filter(function (r) { return r[0] === ev.repeat; })[0][1] : "";
       var alertLabel = ev.alert == null ? "" : (ev.alert === 0 ? "Alert at start" : (ev.alert >= 60 ? ev.alert / 60 + " hour before" : ev.alert + " min before"));
@@ -1462,7 +1463,7 @@ registerView("calendar", {
       var first = Math.min(0, f.off);
       for (var k = first; k < first + 21; k++) (function (k) {
         var dt = calDate(api, k); var act = k === f.off;
-        dayChips.push({ top: k === 0 ? "Today" : weekdayName(dt, "short"), n: dt.getDate(), css: act ? "background:var(--acc);color:#fff" : "background:var(--s2)", pick: function () { fp({ off: k }); }, label: calDayName(api, k) });
+        dayChips.push({ top: k === 0 ? "Today" : weekdayName(dt, "short"), n: dt.getDate(), css: act ? "background:var(--acc);color:var(--alpha-white)" : "background:var(--s2)", pick: function () { fp({ off: k }); }, label: calDayName(api, k) });
       })(k);
       var chosen = f.who.map(function (id) { var p = calPerson(api, id); return { ini: p.ini, first: p.name.split(" ")[0], label: "Remove " + p.name, remove: function () { fp({ who: f.who.filter(function (x) { return x !== id; }) }); } }; });
       var q = (f.pq || "").toLowerCase().trim();
@@ -1485,7 +1486,7 @@ registerView("calendar", {
         openPick: function () { fp({ pq: "" }); }, closePick: function () { fp({ pq: null }); },
         onPq: function (e) { fp({ pq: e.target.value }); },
         pqKey: function (e) { if (e.key === "Enter" && sugg.length) { e.preventDefault(); sugg[0].pick(); } if (e.key === "Escape") fp({ pq: null }); },
-        valid: !!(f.title || "").trim(), saveOff: !(f.title || "").trim(), saveCss: (f.title || "").trim() ? "background:var(--acc);color:#fff" : "background:var(--s2);color:var(--mut)",
+        valid: !!(f.title || "").trim(), saveOff: !(f.title || "").trim(), saveCss: (f.title || "").trim() ? "background:var(--acc);color:var(--alpha-white)" : "background:var(--s2);color:var(--mut)",
         cals: (Array.isArray(st.canonicalCalendars) ? st.canonicalCalendars : cals).map(function (c) { return { name: c.name, dot: CAL_COLORS[c.color], css: chip(f.cal === c.id), pick: function () { fp({ cal: c.id }); } }; }),
         repeats: CAL_REPEAT.map(function (r) { return { label: r[1], css: chip(f.repeat === r[0]), pick: function () { fp({ repeat: r[0] }); } }; }),
         alerts: CAL_ALERT.map(function (a) { return { label: a[1], css: chip(f.alert === a[0]), pick: function () { fp({ alert: a[0] }); } }; }),
@@ -1753,7 +1754,7 @@ registerView("browser", {
     /* booking page */
     var bk = st.bk; var agBook = st.ag && st.ag.task === "book";
     var times = BR_TIMES.slice(); if (bk.time && times.indexOf(bk.time) < 0) times.push(bk.time);
-    var chip = function (on) { return on ? "background:var(--acc);color:#fff" : "background:var(--s2)"; };
+    var chip = function (on) { return on ? "background:var(--acc);color:var(--alpha-white)" : "background:var(--s2)"; };
     var canBook = !!(bk.time && bk.name.trim() && bk.phone.trim());
     var bkSet = function (p) { var b = Object.assign({}, api.get("browser").bk, p); set({ bk: b }); };
 
@@ -1761,7 +1762,7 @@ registerView("browser", {
     var results = pg.kind === "search" ? brResults(pg.q).map(function (u) { var p = BR_PAGES[u]; return { title: p.title, host: p.host + p.path, snip: p.snip, go: link(u) }; }) : [];
 
     /* recent sites for new tab */
-    var recents = st.visits.slice(0, 6).map(function (u) { var p = brPage(u); return { ini: (p.host || "?").charAt(0).toUpperCase(), host: p.host, go: link(u), css: "background:" + (p.tile && p.tile.indexOf("var") < 0 ? p.tile + ";color:#fff" : "var(--s2)") }; });
+    var recents = st.visits.slice(0, 6).map(function (u) { var p = brPage(u); return { ini: (p.host || "?").charAt(0).toUpperCase(), host: p.host, go: link(u), css: "background:" + (p.tile && p.tile.indexOf("var") < 0 ? p.tile + ";color:var(--alpha-white)" : "var(--s2)") }; });
 
     /* tabs */
     var tabCards = st.tabs.map(function (x) {
@@ -1778,7 +1779,7 @@ registerView("browser", {
     /* library */
     var libRows = (st.lib === "history" ? st.visits : st.marks).map(function (u) {
       var p = brPage(u);
-      return { title: p.title, host: p.host + p.path, ini: (p.host || "?").charAt(0).toUpperCase(), css: "background:" + (p.tile && p.tile.indexOf("var") < 0 ? p.tile + ";color:#fff" : "var(--s3)"), go: link(u),
+      return { title: p.title, host: p.host + p.path, ini: (p.host || "?").charAt(0).toUpperCase(), css: "background:" + (p.tile && p.tile.indexOf("var") < 0 ? p.tile + ";color:var(--alpha-white)" : "var(--s3)"), go: link(u),
         canRemove: st.lib !== "history", removeAria: "Remove bookmark " + p.title, remove: function () { var s = api.get("browser"); set({ marks: s.marks.filter(function (x) { return x !== u; }) }); } };
     });
 
@@ -1793,7 +1794,7 @@ registerView("browser", {
       // Fixture pages are available only in explicit mock builds; production fixtures are empty.
       pageContentAvailable: Object.prototype.hasOwnProperty.call(BR_PAGES, url),
       pageShareAvailable: Object.prototype.hasOwnProperty.call(BR_PAGES, url),
-      pg: pg, heroNews: imgBg("news", "#000"), heroEnc: imgBg("enclave", "#0000FF"), heroBook: imgBg("nopa", "#17352A"), heroArt: IMG.news ? "none" : "block", isNews: pg.kind === "news", isEnc: pg.kind === "enclave", isBook: pg.kind === "book", isSearch: pg.kind === "search", isNew: pg.kind === "newtab", isGeneric: pg.kind === "generic", genLinks: (pg.links || []).map(function (l) { return { label: l.label, host: l.url, go: link(l.url) }; }),
+      pg: pg, heroNews: imgBg("news", "var(--alpha-black)"), heroEnc: imgBg("enclave", "var(--alpha-blue)"), heroBook: imgBg("nopa", "var(--alpha-web-hero-1)"), heroArt: IMG.news ? "none" : "block", isNews: pg.kind === "news", isEnc: pg.kind === "enclave", isBook: pg.kind === "book", isSearch: pg.kind === "search", isNew: pg.kind === "newtab", isGeneric: pg.kind === "generic", genLinks: (pg.links || []).map(function (l) { return { label: l.label, host: l.url, go: link(l.url) }; }),
       host: pg.host || "Search or address", hostCss: pg.host ? "" : "color:var(--mut)", path: pg.path, hasLock: !!pg.host,
       backOp: canBack ? 1 : 0.3, fwdOp: canFwd ? 1 : 0.3, goBack: stepTab(-1), goFwd: stepTab(1),
       nTabs: st.tabs.length, openTabs: function () { set({ tabsOpen: true, menu: false, editing: false }); }, closeTabs: function () { set({ tabsOpen: false }); },
@@ -1810,7 +1811,7 @@ registerView("browser", {
       toggleMark: function () { var s = api.get("browser"); var on = s.marks.indexOf(url) >= 0; if (!pg.host) return; set({ marks: on ? s.marks.filter(function (x) { return x !== url; }) : [url].concat(s.marks), menu: false }); api.toast(on ? "Bookmark removed" : "Bookmarked"); },
       openLib: function () { set({ lib: "bookmarks", menu: false }); }, lib: !!st.lib, closeLib: function () { set({ lib: null }); },
       libMarks: function () { set({ lib: "bookmarks" }); }, libHist: function () { set({ lib: "history" }); },
-      libMarksCss: st.lib !== "history" ? "background:var(--acc);color:#fff" : "color:var(--mut)", libHistCss: st.lib === "history" ? "background:var(--acc);color:#fff" : "color:var(--mut)",
+      libMarksCss: st.lib !== "history" ? "background:var(--acc);color:var(--alpha-white)" : "color:var(--mut)", libHistCss: st.lib === "history" ? "background:var(--acc);color:var(--alpha-white)" : "color:var(--mut)",
       libRows: libRows, libEmpty: !libRows.length, libIsHist: st.lib === "history" && libRows.length > 0, clearHist: function () { set({ visits: [] }); api.toast("History cleared"); },
       openShare: function () { set({ share: true, menu: false }); }, share: st.share, closeShare: function () { set({ share: false }); }, people: people,
       copyLink: function () { set({ share: false }); api.toast("Link copied"); },
@@ -1824,7 +1825,7 @@ registerView("browser", {
       times: times.map(function (x) { return { label: x, key: "t-" + x, css: chip(bk.time === x), on: bk.time === x, aria: x + " PM", pick: function () { bkSet({ time: x }); } }; }),
       bkName: bk.name, bkPhone: bk.phone, onName: function (e) { bkSet({ name: e.target.value }); }, onPhone: function (e) { bkSet({ phone: e.target.value }); },
       fieldCss: agBook ? "box-shadow:inset 0 0 0 1.5px var(--acct)" : "",
-      bookCss: canBook ? "background:var(--acc);color:#fff" : "background:var(--s3);color:var(--mut)", canBookNot: !canBook,
+      bookCss: canBook ? "background:var(--acc);color:var(--alpha-white)" : "background:var(--s3);color:var(--mut)", canBookNot: !canBook,
       bookNow: function () { if (!canBook || api.get("browser").ag) return; brFinishBook(api); },
       booked: st.booked, isBooked: !!st.booked, notBooked: !st.booked,
       rebook: function () { set({ booked: null }); },
@@ -1893,7 +1894,7 @@ registerView("camera", {
   title: "Camera", icon: "camera", aliases: ["cam"],
   chat: "hidden",
   state: { mode: "photo", front: false, flash: false, zoom: 1, rec: false, recAt: 0, tick: 0, fl: 0, focus: null, found: false, flip: false, session: [], said: "" },
-  ongoing: function (st) { return st.rec ? { label: camRecLabel(st), icon: "video", color: "#E53935" } : null; },
+  ongoing: function (st) { return st.rec ? { label: camRecLabel(st), icon: "video", color: "var(--alpha-record-red)" } : null; },
   jumps: [[null, "Camera"], ["video", "Video"], ["scan", "Scan"]],
   preset: function (sub) { if (sub) return { mode: sub }; },
   immersive: function () { return { dark: true, noPill: true }; },
@@ -1944,7 +1945,7 @@ registerView("camera", {
 
     function pt(e) { var sc = e.currentTarget.closest("[data-screen]"); var r = sc.getBoundingClientRect(); var s = r.width / 412 || 1; return { x: (e.clientX - r.left) / s, y: (e.clientY - r.top) / s }; }
     return {
-      bg: bg, vfBg: isScan ? "linear-gradient(135deg, #6B5A4A, #4E4036)" : "#111111",
+      bg: bg, vfBg: isScan ? "linear-gradient(135deg, var(--alpha-scan-viewfinder-1), var(--alpha-scan-viewfinder-2))" : "var(--alpha-gray-11)",
       drift: "transform: translate(" + dr[0] + "px, calc(-50% + " + dr[1] + "px))",
       zoomCss: "transform: scale(" + zs + ")" + (front ? " scaleX(-1)" : "") + "; filter: " + (st.flip ? "blur(14px) brightness(.7)" : "none"),
       flOp: st.fl ? (st.flash ? 1 : 0.85) : 0, flTr: st.fl ? "none" : "opacity .45s",
@@ -1956,7 +1957,7 @@ registerView("camera", {
       showZoom: !isScan && !front,
       zooms: CAM_ZOOM.map(function (z, i) {
         var on = st.zoom === i;
-        return { label: z[0], aria: "Zoom " + z[0].replace("×", "") + "x", css: on ? "background-color:#ffffff;color:#000000;width:40px;height:40px;padding:2px;box-sizing:content-box;background-clip:content-box;font-size:13px" : "background-color:rgba(0,0,0,.65);color:#ffffff;width:34px;height:34px;padding:5px;box-sizing:content-box;background-clip:content-box;font-size:12px", pick: function () { api.set({ zoom: i }); } };
+        return { label: z[0], aria: "Zoom " + z[0].replace("×", "") + "x", css: on ? "background-color:var(--alpha-white);color:var(--alpha-black);width:40px;height:40px;padding:2px;box-sizing:content-box;background-clip:content-box;font-size:13px" : "background-color:rgba(0,0,0,.65);color:var(--alpha-white);width:34px;height:34px;padding:5px;box-sizing:content-box;background-clip:content-box;font-size:12px", pick: function () { api.set({ zoom: i }); } };
       }),
       scanFound: isScan && st.found, scanning: isScan && !st.found,
       posterDay: poster.short,
@@ -1965,9 +1966,9 @@ registerView("camera", {
       openLink: function () { var link = (copy("camera").scan || {}).link; if (link) api.open("browser", { url: link }); else api.toast("No link was read from this scan"); },
       modes: CAM_MODES.map(function (m) {
         var on = st.mode === m[0];
-        return { label: m[1], css: on ? "color:#ffffff" : "color:rgba(255,255,255,.55)", dot: on ? 1 : 0, pick: function () { setMode(m[0]); } };
+        return { label: m[1], css: on ? "color:var(--alpha-white)" : "color:rgba(255,255,255,.55)", dot: on ? 1 : 0, pick: function () { setMode(m[0]); } };
       }),
-      innerCss: isVideo ? (st.rec ? "width:30px;height:30px;border-radius:8px;background:#E53935" : "width:62px;height:62px;border-radius:31px;background:#E53935") : "width:62px;height:62px;border-radius:31px;background:#ffffff",
+      innerCss: isVideo ? (st.rec ? "width:30px;height:30px;border-radius:8px;background:var(--alpha-record-red)" : "width:62px;height:62px;border-radius:31px;background:var(--alpha-record-red)") : "width:62px;height:62px;border-radius:31px;background:var(--alpha-white)",
       scanGlyph: isScan,
       shutterLabel: isVideo ? (st.rec ? "Stop recording" : "Start recording") : (isScan ? "Save scan" : "Take photo"),
       shutter: function () {
@@ -2023,43 +2024,43 @@ function phW(x, y, from, span, c) { return "conic-gradient(from " + from + "deg 
 function phFig(x, s, c) { // head + shoulders silhouette; s = 1 mid shot, 2 portrait
   return [phE(8.5 * s, 6.4 * s, x, 100 - 28 * s, c), phE(19 * s, 22 * s, x, 100 + 2 * s, c)];
 }
-var PH_TONES = [["#EBC9B6", "#B89AB3"], ["#CFE0D3", "#8FAE9C"], ["#D6DDEB", "#9AA8C4"], ["#F0DDB0", "#C99B6A"]];
+var PH_TONES = [["var(--alpha-photo-tone-1)", "var(--alpha-photo-tone-2)"], ["var(--alpha-photo-tone-3)", "var(--alpha-photo-tone-4)"], ["var(--alpha-photo-tone-5)", "var(--alpha-photo-tone-6)"], ["var(--alpha-photo-tone-7)", "var(--alpha-photo-tone-8)"]];
 function phCity(win) {
-  var b = [[14, 40, 4, 60, "#1B1C36"], [10, 52, 19, 48, "#22244A"], [16, 34, 30, 66, "#191A31"], [12, 58, 47, 42, "#23254C"], [18, 38, 60, 62, "#1A1B34"], [9, 48, 79, 52, "#20224A"], [12, 30, 89, 70, "#181930"]];
+  var b = [[14, 40, 4, 60, "var(--alpha-photo-city-1)"], [10, 52, 19, 48, "var(--alpha-photo-city-2)"], [16, 34, 30, 66, "var(--alpha-photo-city-3)"], [12, 58, 47, 42, "var(--alpha-photo-city-4)"], [18, 38, 60, 62, "var(--alpha-photo-city-5)"], [9, 48, 79, 52, "var(--alpha-photo-city-6)"], [12, 30, 89, 70, "var(--alpha-photo-city-7)"]];
   var L = [phRg(8, 50, 49, 46, "repeating-linear-gradient(to bottom, " + win + " 0 1.2%, transparent 1.2% 4%)"), phRg(6, 44, 21, 52, "repeating-linear-gradient(to bottom, " + win + " 0 1.2%, transparent 1.2% 4.4%)"), phRg(5, 40, 81, 56, "repeating-linear-gradient(to bottom, " + win + " 0 1.2%, transparent 1.2% 5%)")];
   b.forEach(function (r) { L.push(phR(r[0], r[1], r[2], r[3], r[4])); });
   return L;
 }
 function phQR(x, y) { // 18% x 13.5% box (square in a 3:4 frame): three finder squares + a module field
   var L = [];
-  [[x, y], [x + 12, y], [x, y + 9]].forEach(function (f) { L.push(phR(2, 1.5, f[0] + 2, f[1] + 1.5, "#111")); L.push(phR(4, 3, f[0] + 1, f[1] + 0.75, "#FAFAF7")); L.push(phR(6, 4.5, f[0], f[1], "#111")); });
-  L.unshift(phRg(9, 6.75, x + 8, y + 6, "repeating-conic-gradient(#111 0 25%, transparent 0 50%)"));
-  L.unshift(phR(3, 2.25, x + 8, y + 1, "#111"), phR(1.5, 4.5, x + 7.5, y + 6.75, "#111"), phR(3, 1.1, x + 1.5, y + 6.1, "#111"), phR(1.5, 2.25, x + 15, y + 11.25, "#111"));
+  [[x, y], [x + 12, y], [x, y + 9]].forEach(function (f) { L.push(phR(2, 1.5, f[0] + 2, f[1] + 1.5, "var(--alpha-photo-qr-1)")); L.push(phR(4, 3, f[0] + 1, f[1] + 0.75, "var(--alpha-photo-qr-2)")); L.push(phR(6, 4.5, f[0], f[1], "var(--alpha-photo-qr-1)")); });
+  L.unshift(phRg(9, 6.75, x + 8, y + 6, "repeating-conic-gradient(var(--alpha-photo-qr-1) 0 25%, transparent 0 50%)"));
+  L.unshift(phR(3, 2.25, x + 8, y + 1, "var(--alpha-photo-qr-1)"), phR(1.5, 4.5, x + 7.5, y + 6.75, "var(--alpha-photo-qr-1)"), phR(3, 1.1, x + 1.5, y + 6.1, "var(--alpha-photo-qr-1)"), phR(1.5, 2.25, x + 15, y + 11.25, "var(--alpha-photo-qr-1)"));
   return L;
 }
 var PH_SCENES = {
-  beach: function () { return [phE(7, 5.25, 72, 24, "#FFF6DE"), phE(45, 26, 72, 24, "rgba(255,238,200,.55)", 1), phR(100, 0.6, 0, 57, "rgba(255,255,255,.5)"), phR(100, 0.8, 0, 61.2, "rgba(255,255,255,.75)"), "linear-gradient(to bottom, #8DBFE6 0%, #D2E6EF 45%, #6AA6C6 45.3%, #2E7098 58%, #3F86A8 61.5%, #E8D5B2 62%, #D2B68A 100%)"]; },
-  sea: function () { return [phRg(100, 78, 0, 22, "repeating-linear-gradient(176deg, transparent 0 6%, rgba(255,255,255,.4) 6.4% 7.2%, transparent 7.8% 12%)"), "linear-gradient(to bottom, #9CC9E4 0%, #D3E8F1 22%, #3C86AE 22.3%, #1F5F86 100%)"]; },
-  sunset: function () { return [phR(100, 36, 0, 64, "#1F1826"), phE(13, 9.75, 50, 64, "#FFE0A6"), phE(75, 32, 50, 64, "rgba(255,170,110,.55)", 1), "linear-gradient(to bottom, #2C2B5C 0%, #78497D 30%, #D9687A 48%, #F4A262 60%, #F9CB82 64%)"]; },
-  sunsea: function () { return [phR(12, 30, 44, 64.5, "rgba(255,196,130,.35)"), phRg(100, 36, 0, 64, "linear-gradient(to bottom, #5A3A55, #22192E)"), phE(13, 9.75, 50, 64, "#FFE0A6"), phE(75, 32, 50, 64, "rgba(255,170,110,.55)", 1), "linear-gradient(to bottom, #2C2B5C 0%, #78497D 30%, #D9687A 48%, #F4A262 60%, #F9CB82 64%)"]; },
-  mountain: function () { return [phR(100, 20, 0, 80, "#2F4839"), phW(70, 50, 122, 116, "#46624F"), phRg(34, 7, 11, 40, "conic-gradient(from 120deg at 50% 0%, #EEF3F6 0deg 119.4deg, transparent 120deg)"), phW(28, 40, 120, 120, "#7D95A3"), phE(8, 6, 82, 18, "#FFF9EC"), "linear-gradient(to bottom, #A7CAE4 0%, #E6EEF1 75%)"]; },
-  lake: function () { return [phR(30, 0.5, 35, 72, "rgba(255,255,255,.35)"), phR(20, 0.5, 50, 79, "rgba(255,255,255,.25)"), phRg(100, 34, 0, 66, "linear-gradient(to bottom, #4B86A6, #1F4C6B)"), phW(64, 44, 122, 116, "#3E5B55"), phRg(34, 6, 13, 38, "conic-gradient(from 120deg at 50% 0%, #EEF3F6 0deg 119.4deg, transparent 120deg)"), phW(30, 38, 120, 120, "#7890A0"), "linear-gradient(to bottom, #B4D0E6 0%, #EEF2F2 66%)"]; },
-  forest: function () { return [phR(100, 16, 0, 84, "#33452F"), phW(12, 28, 162, 36, "#2D4731"), phW(34, 20, 160, 40, "#26402B"), phW(58, 30, 163, 34, "#35553A"), phW(80, 22, 160, 40, "#2B4530"), phW(96, 34, 162, 36, "#2F4C34"), "linear-gradient(to bottom, #DDE8D6 0%, #B9CCB0 70%, #8FA884 100%)"]; },
-  park: function () { return [phW(56, 62, 168, 24, "#D8C9AC"), phE(10, 7.5, 24, 50, "#3E6B45"), phE(8, 6, 74, 55, "#4B7A4F"), phR(1.6, 10, 23.2, 54, "#4A3A2C"), phR(1.4, 8, 73.3, 58, "#4A3A2C"), phE(90, 20, 30, 68, "#86B06D"), "linear-gradient(to bottom, #94C0E8 0%, #DCEBF4 58%, #7CA864 58.3%, #6C9A58 100%)"]; },
-  city: function () { return phCity("rgba(255,210,140,.5)").concat([phE(3, 2.25, 78, 16, "#F5F0E0"), "linear-gradient(to bottom, #161A45 0%, #4B3F82 50%, #D98C86 82%, #F0B48A 100%)"]); },
-  night: function () { return phCity("rgba(255,214,150,.75)").concat([phE(2.6, 1.95, 22, 12, "#F5F0E0"), "linear-gradient(to bottom, #05071A 0%, #141838 60%, #2A2458 100%)"]); },
-  cafe: function () { return [phE(6.6, 2, 60, 74.6, "#5A3923"), phE(8, 2.6, 60, 74.5, "#FBF8F4"), phE(12, 3.6, 60, 77, "#EDE6DC"), phE(12, 16, 86, 50, "#5E7E52"), phR(10, 10, 81, 60, "#B87A56"), phR(100, 30, 0, 70, "#7B573B"), phR(0.8, 34, 28.6, 14, "#D2B895"), phR(38, 0.8, 10, 30.6, "#D2B895"), phR(38, 34, 10, 14, "#F6EAD6"), "linear-gradient(to bottom, #DCC6A8, #C6A986)"]; },
-  food: function () { return [phE(7, 5.25, 44, 46, "#79A552"), phE(6, 4.5, 57, 54, "#E0B04A"), phE(20, 15, 50, 50, "#C8643C"), phE(34, 25.5, 50, 50, "#F6F3EE"), phE(38, 29, 51, 52, "rgba(0,0,0,.2)", 1), phE(4, 3, 84, 16, "#6E4A2E"), phE(6, 4.5, 84, 16, "#EDE7DE"), "repeating-linear-gradient(90deg, #BE8F63 0 12%, #B3845A 12% 24%)"]; },
-  whiteboard: function () { return [phR(44, 1, 12, 20, "#2F55D4"), phR(30, 1, 12, 27, "#2F55D4"), phR(36, 1, 12, 34, "#2F55D4"), phR(22, 1, 12, 48, "#D8433B"), phE(10, 7.5, 60, 58, "#F4F4F0"), phE(11.5, 8.6, 60, 58, "#2F55D4"), phR(16, 11, 74, 16, "#FFE173"), phR(16, 11, 74, 30, "#FF9DB6"), phR(16, 11, 22, 66, "#9EE3C4"), phR(100, 5, 0, 90, "#B9BDC3"), phR(100, 90, 0, 0, "#F4F4F0"), "linear-gradient(#DADDE2, #DADDE2)"]; },
-  shot: function () { return [phR(80, 2.4, 10, 86, "#E6E6E6"), phR(56, 2.4, 10, 80, "#E6E6E6"), phR(38, 6, 10, 62, "#111111"), phR(30, 6, 60, 62, "#111111"), phR(40, 3, 14, 23, "rgba(255,255,255,.85)"), phR(24, 8, 14, 34, "#FFFFFF"), phR(24, 8, 62, 34, "#FFFFFF"), phR(84, 32, 8, 16, "#0000FF"), phR(100, 5, 0, 0, "#F2F2F2"), "linear-gradient(#FFFFFF, #FFFFFF)"]; },
-  shot2: function () { return [phE(3, 2.25, 72, 66, "#FFFFFF"), phR(1.6, 26, 40.2, 40, "#3D5AFE"), phR(33, 1.6, 40, 65.6, "#3D5AFE"), phR(92, 16, 4, 80, "#232323"), phR(100, 1.2, 0, 40, "#2A2A2A"), phR(1.2, 100, 40, 0, "#2A2A2A"), phR(100, 1.2, 0, 66, "#2A2A2A"), phR(1.2, 100, 72, 0, "#2A2A2A"), phR(100, 1.2, 0, 20, "#232323"), "linear-gradient(#141414, #141414)"]; },
-  doc: function () { return [phR(40, 1.6, 30, 18, "#222222"), phRg(56, 44, 22, 26, "repeating-linear-gradient(to bottom, #A5A5A5 0 1.6%, transparent 1.6% 7%)"), phR(56, 0.4, 22, 74, "#222222"), phR(30, 2, 48, 78, "#222222"), phR(70, 80, 15, 10, "#FBFAF6"), "linear-gradient(135deg, #5F646B, #474B52)"]; },
-  poster: function () { return phQR(64, 66).concat([phRg(38, 12, 22, 66, "repeating-linear-gradient(to bottom, #8A8A8A 0 9%, transparent 9% 28%)"), phR(58, 22, 22, 36, "#0000FF"), phR(40, 4.5, 22, 24, "#111111"), phR(52, 4.5, 22, 16, "#111111"), phR(70, 80, 15, 10, "#FAFAF7"), "linear-gradient(135deg, #6B5A4A, #4E4036)"]); },
+  beach: function () { return [phE(7, 5.25, 72, 24, "var(--alpha-photo-beach-1)"), phE(45, 26, 72, 24, "rgba(255,238,200,.55)", 1), phR(100, 0.6, 0, 57, "rgba(255,255,255,.5)"), phR(100, 0.8, 0, 61.2, "rgba(255,255,255,.75)"), "linear-gradient(to bottom, var(--alpha-photo-beach-2) 0%, var(--alpha-photo-beach-3) 45%, var(--alpha-photo-beach-4) 45.3%, var(--alpha-photo-beach-5) 58%, var(--alpha-photo-beach-6) 61.5%, var(--alpha-photo-beach-7) 62%, var(--alpha-photo-beach-8) 100%)"]; },
+  sea: function () { return [phRg(100, 78, 0, 22, "repeating-linear-gradient(176deg, transparent 0 6%, rgba(255,255,255,.4) 6.4% 7.2%, transparent 7.8% 12%)"), "linear-gradient(to bottom, var(--alpha-photo-sea-1) 0%, var(--alpha-photo-sea-2) 22%, var(--alpha-photo-sea-3) 22.3%, var(--alpha-photo-sea-4) 100%)"]; },
+  sunset: function () { return [phR(100, 36, 0, 64, "var(--alpha-photo-sunset-1)"), phE(13, 9.75, 50, 64, "var(--alpha-photo-sunset-2)"), phE(75, 32, 50, 64, "rgba(255,170,110,.55)", 1), "linear-gradient(to bottom, var(--alpha-photo-sunset-3) 0%, var(--alpha-photo-sunset-4) 30%, var(--alpha-photo-sunset-5) 48%, var(--alpha-photo-sunset-6) 60%, var(--alpha-photo-sunset-7) 64%)"]; },
+  sunsea: function () { return [phR(12, 30, 44, 64.5, "rgba(255,196,130,.35)"), phRg(100, 36, 0, 64, "linear-gradient(to bottom, var(--alpha-photo-sunsea-1), var(--alpha-photo-sunsea-2))"), phE(13, 9.75, 50, 64, "var(--alpha-photo-sunsea-3)"), phE(75, 32, 50, 64, "rgba(255,170,110,.55)", 1), "linear-gradient(to bottom, var(--alpha-photo-sunsea-4) 0%, var(--alpha-photo-sunsea-5) 30%, var(--alpha-photo-sunsea-6) 48%, var(--alpha-photo-sunsea-7) 60%, var(--alpha-photo-sunsea-8) 64%)"]; },
+  mountain: function () { return [phR(100, 20, 0, 80, "var(--alpha-photo-mountain-1)"), phW(70, 50, 122, 116, "var(--alpha-photo-mountain-2)"), phRg(34, 7, 11, 40, "conic-gradient(from 120deg at 50% 0%, var(--alpha-photo-mountain-3) 0deg 119.4deg, transparent 120deg)"), phW(28, 40, 120, 120, "var(--alpha-photo-mountain-4)"), phE(8, 6, 82, 18, "var(--alpha-photo-mountain-5)"), "linear-gradient(to bottom, var(--alpha-photo-mountain-6) 0%, var(--alpha-photo-mountain-7) 75%)"]; },
+  lake: function () { return [phR(30, 0.5, 35, 72, "rgba(255,255,255,.35)"), phR(20, 0.5, 50, 79, "rgba(255,255,255,.25)"), phRg(100, 34, 0, 66, "linear-gradient(to bottom, var(--alpha-photo-lake-1), var(--alpha-photo-lake-2))"), phW(64, 44, 122, 116, "var(--alpha-photo-lake-3)"), phRg(34, 6, 13, 38, "conic-gradient(from 120deg at 50% 0%, var(--alpha-photo-lake-4) 0deg 119.4deg, transparent 120deg)"), phW(30, 38, 120, 120, "var(--alpha-photo-lake-5)"), "linear-gradient(to bottom, var(--alpha-photo-lake-6) 0%, var(--alpha-photo-lake-7) 66%)"]; },
+  forest: function () { return [phR(100, 16, 0, 84, "var(--alpha-photo-forest-1)"), phW(12, 28, 162, 36, "var(--alpha-photo-forest-2)"), phW(34, 20, 160, 40, "var(--alpha-photo-forest-3)"), phW(58, 30, 163, 34, "var(--alpha-photo-forest-4)"), phW(80, 22, 160, 40, "var(--alpha-photo-forest-5)"), phW(96, 34, 162, 36, "var(--alpha-photo-forest-6)"), "linear-gradient(to bottom, var(--alpha-photo-forest-7) 0%, var(--alpha-photo-forest-8) 70%, var(--alpha-photo-forest-9) 100%)"]; },
+  park: function () { return [phW(56, 62, 168, 24, "var(--alpha-photo-park-1)"), phE(10, 7.5, 24, 50, "var(--alpha-photo-park-2)"), phE(8, 6, 74, 55, "var(--alpha-photo-park-3)"), phR(1.6, 10, 23.2, 54, "var(--alpha-photo-park-4)"), phR(1.4, 8, 73.3, 58, "var(--alpha-photo-park-4)"), phE(90, 20, 30, 68, "var(--alpha-photo-park-5)"), "linear-gradient(to bottom, var(--alpha-photo-park-6) 0%, var(--alpha-photo-park-7) 58%, var(--alpha-photo-park-8) 58.3%, var(--alpha-photo-park-9) 100%)"]; },
+  city: function () { return phCity("rgba(255,210,140,.5)").concat([phE(3, 2.25, 78, 16, "var(--alpha-photo-city-8)"), "linear-gradient(to bottom, var(--alpha-photo-city-9) 0%, var(--alpha-photo-city-10) 50%, var(--alpha-photo-city-11) 82%, var(--alpha-photo-city-12) 100%)"]); },
+  night: function () { return phCity("rgba(255,214,150,.75)").concat([phE(2.6, 1.95, 22, 12, "var(--alpha-photo-night-1)"), "linear-gradient(to bottom, var(--alpha-photo-night-2) 0%, var(--alpha-photo-night-3) 60%, var(--alpha-photo-night-4) 100%)"]); },
+  cafe: function () { return [phE(6.6, 2, 60, 74.6, "var(--alpha-photo-cafe-1)"), phE(8, 2.6, 60, 74.5, "var(--alpha-photo-cafe-2)"), phE(12, 3.6, 60, 77, "var(--alpha-photo-cafe-3)"), phE(12, 16, 86, 50, "var(--alpha-photo-cafe-4)"), phR(10, 10, 81, 60, "var(--alpha-photo-cafe-5)"), phR(100, 30, 0, 70, "var(--alpha-photo-cafe-6)"), phR(0.8, 34, 28.6, 14, "var(--alpha-photo-cafe-7)"), phR(38, 0.8, 10, 30.6, "var(--alpha-photo-cafe-7)"), phR(38, 34, 10, 14, "var(--alpha-photo-cafe-8)"), "linear-gradient(to bottom, var(--alpha-photo-cafe-9), var(--alpha-photo-cafe-10))"]; },
+  food: function () { return [phE(7, 5.25, 44, 46, "var(--alpha-photo-food-1)"), phE(6, 4.5, 57, 54, "var(--alpha-photo-food-2)"), phE(20, 15, 50, 50, "var(--alpha-photo-food-3)"), phE(34, 25.5, 50, 50, "var(--alpha-photo-food-4)"), phE(38, 29, 51, 52, "rgba(0,0,0,.2)", 1), phE(4, 3, 84, 16, "var(--alpha-photo-food-5)"), phE(6, 4.5, 84, 16, "var(--alpha-photo-food-6)"), "repeating-linear-gradient(90deg, var(--alpha-photo-food-7) 0 12%, var(--alpha-photo-food-8) 12% 24%)"]; },
+  whiteboard: function () { return [phR(44, 1, 12, 20, "var(--alpha-photo-whiteboard-1)"), phR(30, 1, 12, 27, "var(--alpha-photo-whiteboard-1)"), phR(36, 1, 12, 34, "var(--alpha-photo-whiteboard-1)"), phR(22, 1, 12, 48, "var(--alpha-photo-whiteboard-2)"), phE(10, 7.5, 60, 58, "var(--alpha-photo-whiteboard-3)"), phE(11.5, 8.6, 60, 58, "var(--alpha-photo-whiteboard-1)"), phR(16, 11, 74, 16, "var(--alpha-photo-whiteboard-4)"), phR(16, 11, 74, 30, "var(--alpha-photo-whiteboard-5)"), phR(16, 11, 22, 66, "var(--alpha-photo-whiteboard-6)"), phR(100, 5, 0, 90, "var(--alpha-photo-whiteboard-7)"), phR(100, 90, 0, 0, "var(--alpha-photo-whiteboard-3)"), "linear-gradient(var(--alpha-photo-whiteboard-8), var(--alpha-photo-whiteboard-8))"]; },
+  shot: function () { return [phR(80, 2.4, 10, 86, "var(--alpha-photo-shot-1)"), phR(56, 2.4, 10, 80, "var(--alpha-photo-shot-1)"), phR(38, 6, 10, 62, "var(--alpha-photo-shot-2)"), phR(30, 6, 60, 62, "var(--alpha-photo-shot-2)"), phR(40, 3, 14, 23, "rgba(255,255,255,.85)"), phR(24, 8, 14, 34, "var(--alpha-white)"), phR(24, 8, 62, 34, "var(--alpha-white)"), phR(84, 32, 8, 16, "var(--alpha-blue)"), phR(100, 5, 0, 0, "var(--alpha-photo-shot-3)"), "linear-gradient(var(--alpha-white), var(--alpha-white))"]; },
+  shot2: function () { return [phE(3, 2.25, 72, 66, "var(--alpha-white)"), phR(1.6, 26, 40.2, 40, "var(--alpha-photo-shot2-1)"), phR(33, 1.6, 40, 65.6, "var(--alpha-photo-shot2-1)"), phR(92, 16, 4, 80, "var(--alpha-photo-shot2-2)"), phR(100, 1.2, 0, 40, "var(--alpha-photo-shot2-3)"), phR(1.2, 100, 40, 0, "var(--alpha-photo-shot2-3)"), phR(100, 1.2, 0, 66, "var(--alpha-photo-shot2-3)"), phR(1.2, 100, 72, 0, "var(--alpha-photo-shot2-3)"), phR(100, 1.2, 0, 20, "var(--alpha-photo-shot2-2)"), "linear-gradient(var(--alpha-photo-shot2-4), var(--alpha-photo-shot2-4))"]; },
+  doc: function () { return [phR(40, 1.6, 30, 18, "var(--alpha-photo-doc-1)"), phRg(56, 44, 22, 26, "repeating-linear-gradient(to bottom, var(--alpha-photo-doc-2) 0 1.6%, transparent 1.6% 7%)"), phR(56, 0.4, 22, 74, "var(--alpha-photo-doc-1)"), phR(30, 2, 48, 78, "var(--alpha-photo-doc-1)"), phR(70, 80, 15, 10, "var(--alpha-photo-doc-3)"), "linear-gradient(135deg, var(--alpha-photo-doc-4), var(--alpha-photo-doc-5))"]; },
+  poster: function () { return phQR(64, 66).concat([phRg(38, 12, 22, 66, "repeating-linear-gradient(to bottom, var(--alpha-photo-poster-1) 0 9%, transparent 9% 28%)"), phR(58, 22, 22, 36, "var(--alpha-blue)"), phR(40, 4.5, 22, 24, "var(--alpha-photo-poster-2)"), phR(52, 4.5, 22, 16, "var(--alpha-photo-poster-2)"), phR(70, 80, 15, 10, "var(--alpha-photo-poster-3)"), "linear-gradient(135deg, var(--alpha-photo-poster-4), var(--alpha-photo-poster-5))"]); },
   portrait: function (tone) { var t = PH_TONES[tone || 0]; return [phE(70, 50, 28, 20, "rgba(255,255,255,.35)", 1), "linear-gradient(160deg, " + t[0] + ", " + t[1] + ")"]; },
-  selfie: function () { return [phR(30, 60, 0, 0, "rgba(255,255,255,.35)"), phE(60, 60, 10, 20, "rgba(255,255,255,.35)", 1), "linear-gradient(90deg, #E4E9EF, #AEB8C6)"]; },
-  birthday: function () { return [phE(1.6, 1.8, 50, 58, "#FFD27A"), phR(1, 5, 49.5, 59, "#F4E9D8"), phR(34, 12, 33, 64, "#F7EFE6"), phR(44, 2, 28, 76, "#E9DCCB"), phE(4, 3, 15, 20, "rgba(255,206,120,.55)"), phE(3, 2.25, 82, 14, "rgba(255,206,120,.45)"), phE(5, 3.75, 72, 34, "rgba(255,190,110,.35)"), phE(3, 2.25, 30, 40, "rgba(255,220,150,.4)"), phE(40, 26, 50, 60, "rgba(255,180,90,.25)", 1), "linear-gradient(to bottom, #2B1B16, #4A2E20)"]; }
+  selfie: function () { return [phR(30, 60, 0, 0, "rgba(255,255,255,.35)"), phE(60, 60, 10, 20, "rgba(255,255,255,.35)", 1), "linear-gradient(90deg, var(--alpha-photo-selfie-1), var(--alpha-photo-selfie-2))"]; },
+  birthday: function () { return [phE(1.6, 1.8, 50, 58, "var(--alpha-photo-birthday-1)"), phR(1, 5, 49.5, 59, "var(--alpha-photo-birthday-2)"), phR(34, 12, 33, 64, "var(--alpha-photo-birthday-3)"), phR(44, 2, 28, 76, "var(--alpha-photo-birthday-4)"), phE(4, 3, 15, 20, "rgba(255,206,120,.55)"), phE(3, 2.25, 82, 14, "rgba(255,206,120,.45)"), phE(5, 3.75, 72, 34, "rgba(255,190,110,.35)"), phE(3, 2.25, 30, 40, "rgba(255,220,150,.4)"), phE(40, 26, 50, 60, "rgba(255,180,90,.25)", 1), "linear-gradient(to bottom, var(--alpha-photo-birthday-5), var(--alpha-photo-birthday-6))"]; }
 };
-var PH_FIGC = { beach: "#2A2B38", sunsea: "#1A1320", sunset: "#1A1320", mountain: "#26332C", lake: "#23303A", night: "#07081A", birthday: "#6A4431", park: "#2B3A30", portrait: "#262A36", selfie: "#353B48" };
+var PH_FIGC = { beach: "var(--alpha-photo-figure-beach)", sunsea: "var(--alpha-photo-figure-sunsea)", sunset: "var(--alpha-photo-figure-sunsea)", mountain: "var(--alpha-photo-figure-mountain)", lake: "var(--alpha-photo-figure-lake)", night: "var(--alpha-photo-figure-night)", birthday: "var(--alpha-photo-figure-birthday)", park: "var(--alpha-photo-figure-park)", portrait: "var(--alpha-photo-figure-portrait)", selfie: "var(--alpha-photo-figure-selfie)" };
 var PH_CACHE = {};
 var PH_SCENE_IMG = { park: "cam_park", selfie: "cam_selfie", poster: "cam_poster" };
 function phImg(it) { return IMG[it.id] ? it.id : (IMG[PH_SCENE_IMG[it.scene]] ? PH_SCENE_IMG[it.scene] : null); }
@@ -2068,7 +2069,7 @@ function phScene(scene, figs, tone, img) {
   var k = scene + "|" + JSON.stringify(figs || []) + "|" + (tone || 0);
   if (PH_CACHE[k]) return PH_CACHE[k];
   var L = [];
-  var c = PH_FIGC[scene] || "#1E2230";
+  var c = PH_FIGC[scene] || "var(--alpha-photo-figure-1)";
   (figs || []).forEach(function (f) { L = L.concat(phFig(f[0], f[1], f[2] || c)); });
   if (scene === "birthday") L = L.slice(0, 0).concat(PH_SCENES.birthday().slice(0, 4), L, PH_SCENES.birthday().slice(4)); // cake in front of people
   else L = L.concat((PH_SCENES[scene] || PH_SCENES.beach)(tone));
@@ -2278,7 +2279,7 @@ registerView("photos", {
       return {
         bg: v.bg, tf: v.tf, flt: v.flt, vid: it.kind === "video" && !selecting, dur: it.dur, fav: !!it.fav && !trashMode && !selecting, selecting: selecting && !trashMode, on: on,
         dim: trashMode ? "opacity:.6" : "",
-        selCss: on ? "background:var(--acc);box-shadow:0 0 0 2px #ffffff" : "background:rgba(0,0,0,.7);box-shadow:inset 0 0 0 2px #ffffff",
+        selCss: on ? "background:var(--acc);box-shadow:0 0 0 2px var(--alpha-white)" : "background:rgba(0,0,0,.7);box-shadow:inset 0 0 0 2px var(--alpha-white)",
         alt: (trashMode ? "Restore " : "") + (it.kind === "video" ? "Video" : "Photo") + ", " + phDayLabel(it.ts, now) + (it.place ? ", " + it.place : ""),
         tap: function () {
           if (PH_T.fired) { PH_T.fired = false; return; }
@@ -2422,14 +2423,14 @@ registerView("photos", {
         var el = phLook(cur, "view", ed);
         vw.ed = {
           bg: el.bg, tf: el.tf, flt: el.flt,
-          cropCss: ed.crop ? "background:#ffffff;color:#000000" : "background:rgba(255,255,255,.12);color:#ffffff",
+          cropCss: ed.crop ? "background:var(--alpha-white);color:var(--alpha-black)" : "background:rgba(255,255,255,.12);color:var(--alpha-white)",
           cropOn: !!ed.crop,
           rotate: function () { var e2 = api.get("photos").edit; api.set({ edit: Object.assign({}, e2, { rot: ((e2.rot || 0) + 90) % 360 }) }); },
           crop: function () { var e2 = api.get("photos").edit; api.set({ edit: Object.assign({}, e2, { crop: !e2.crop }) }); },
           filters: PH_FILTER_LIST.map(function (f) {
             var fl = phLook(cur, "thumb", { filter: f[0] });
             var on = (ed.filter || "none") === f[0];
-            return { label: f[1], bg: fl.bg, flt: fl.flt, on: on, ring: on ? "box-shadow: 0 0 0 2px #000000, 0 0 0 4px #ffffff" : "", lc: on ? "#ffffff" : "rgba(255,255,255,.6)", pick: function () { var e2 = api.get("photos").edit; api.set({ edit: Object.assign({}, e2, { filter: f[0] }) }); } };
+            return { label: f[1], bg: fl.bg, flt: fl.flt, on: on, ring: on ? "box-shadow: 0 0 0 2px var(--alpha-black), 0 0 0 4px var(--alpha-white)" : "", lc: on ? "var(--alpha-white)" : "rgba(255,255,255,.6)", pick: function () { var e2 = api.get("photos").edit; api.set({ edit: Object.assign({}, e2, { filter: f[0] }) }); } };
           }),
           cancel: function () { api.set({ edit: null }); },
           save: function () { var s = api.get("photos"); var e2 = s.edit; var clean = (!e2.rot && !e2.crop && (e2.filter || "none") === "none") ? null : e2; api.set({ edit: null, list: s.list.map(function (it) { return it.id === cur.id ? Object.assign({}, it, { edit: clean }) : it; }) }); api.toast("Saved"); }
@@ -2704,8 +2705,8 @@ registerView("maps", {
   render: function (st, api) {
     if (st.query && mapsIsAddr(st.query) && !st.place && !st.directions) api.later(function () { var s0 = api.get("maps"); if (s0.query && mapsIsAddr(s0.query) && !s0.place) api.set({ place: "addr:" + s0.query.trim(), query: null, pan: null }); }, 0);
     var dark = api.theme === "dark" || st.nav;
-    var C = dark ? { land: "#101010", minor: "#1C1C1C", major: "#282828", fwy: "#333333", fwyE: "#1A1A1A", water: "#0A1022", park: "#0D1A12", rwy: "#222222", route: "#4A58FF", done: "#3A3A3A", halo: "#101010", label: "#AAAAAA" }
-                 : { land: "#EFEFEC", minor: "#FFFFFF", major: "#FFFFFF", fwy: "#FFFFFF", fwyE: "#D9D9D4", water: "#D3DCEA", park: "#DCE6D4", rwy: "#DADAD6", route: "#0000FF", done: "#B8B8B8", halo: "#EFEFEC", label: "#555555" };
+    var C = dark ? { land: "var(--alpha-map-dark-land)", minor: "var(--alpha-map-dark-minor)", major: "var(--alpha-map-dark-major)", fwy: "var(--alpha-map-dark-fwy)", fwyE: "var(--alpha-map-dark-fwye)", water: "var(--alpha-map-dark-water)", park: "var(--alpha-map-dark-park)", rwy: "var(--alpha-map-dark-rwy)", route: "var(--alpha-map-dark-route)", done: "var(--alpha-map-dark-done)", halo: "var(--alpha-map-dark-land)", label: "var(--alpha-map-dark-label)" }
+                 : { land: "var(--alpha-map-light-land)", minor: "var(--alpha-map-light-minor)", major: "var(--alpha-map-light-minor)", fwy: "var(--alpha-map-light-minor)", fwyE: "var(--alpha-map-light-fwye)", water: "var(--alpha-map-light-water)", park: "var(--alpha-map-light-park)", rwy: "var(--alpha-map-light-rwy)", route: "var(--alpha-map-light-route)", done: "var(--alpha-map-light-done)", halo: "var(--alpha-map-light-land)", label: "var(--alpha-map-light-label)" };
     var mi = mapsModeI(st.mode);
     var place = mapsPlace(st.place);
     var dst = mapsPlace(st.directions);
@@ -2757,7 +2758,7 @@ registerView("maps", {
     var pins = pinList.map(function (id) {
       var p = mapsPlace(id); var o = scr(p.x, p.y); var big = mode !== "base" && mode !== "results";
       return { l: o.l, t: o.t, d: IC[p.icon], name: p.name, sz: big ? 44 : 34, off: big ? -22 : -17, isz: big ? 20 : 16,
-        css: big ? "background: var(--acc); color: #fff; box-shadow: 0 0 0 3px #fff, 0 6px 18px rgba(0,0,0,.25)" : "background: var(--bg); color: var(--fg); box-shadow: 0 0 0 1.5px var(--line), 0 4px 12px var(--shc)",
+        css: big ? "background: var(--acc); color: var(--alpha-white); box-shadow: 0 0 0 3px var(--alpha-white), 0 6px 18px rgba(0,0,0,.25)" : "background: var(--bg); color: var(--fg); box-shadow: 0 0 0 1.5px var(--line), 0 4px 12px var(--shc)",
         tap: function () { if (tapGuard() || mode === "nav" || mode === "dir") return; api.set({ place: id, pan: null }); } };
     });
     var me = navPt ? scr(navPt.x, navPt.y) : scr(MAPS_ME[0], MAPS_ME[1]);
@@ -2834,7 +2835,7 @@ registerView("maps", {
         via: "via " + [first].concat(via).filter(function (v, i, a) { return a.indexOf(v) === i; }).slice(0, 2).join(" and "),
         modes: MAPS_MODES.map(function (md, i) {
           var on = i === mi;
-          return { d: IC[md[1]], label: md[2] + ", " + mapsFmtMin(dst.min[i]), t: mapsFmtMin(dst.min[i]), on: on, css: on ? "background: var(--acc); color: #fff" : "background: var(--s2); color: var(--fg)", go: function () { api.set({ mode: md[0] }); } };
+          return { d: IC[md[1]], label: md[2] + ", " + mapsFmtMin(dst.min[i]), t: mapsFmtMin(dst.min[i]), on: on, css: on ? "background: var(--acc); color: var(--alpha-white)" : "background: var(--s2); color: var(--fg)", go: function () { api.set({ mode: md[0] }); } };
         }),
         close: function () { api.set({ directions: null, place: dst.id, pan: null }); },
         start: function () { mapsStartNav(api, dst.id); },
@@ -2899,7 +2900,7 @@ IC.notesList = IC.notesList || "M10 6h10M10 12h10M10 18h10M4 6l1.5 1.5L8 5M4 12l
 IC.notesBox = IC.notesBox || "M5 5h14v14H5z";
 IC.notesRecDot = IC.notesRecDot || "M12 7.5a4.5 4.5 0 1 1 0 9a4.5 4.5 0 1 1 0-9zM12 10a2 2 0 1 1 0 4a2 2 0 1 1 0-4z";
 IC.notesWave = IC.notesWave || "M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2M21 12h0";
-var NOTES_RED = "#E5484D";
+var NOTES_RED = "var(--alpha-notes-red)";
 
 var NOTES_WAVE = []; (function () { for (var i = 0; i < 56; i++) NOTES_WAVE.push(Math.round(8 + 26 * Math.abs(Math.sin(i * 0.9) * Math.cos(i * 0.37)) + (i % 3) * 3)); })();
 var NT = { pend: false, recI: null, playI: null, dicI: null, dIdx: 0, undoT: null };
@@ -3164,7 +3165,7 @@ registerView("notes", {
         addItem: function () { var v = String(api.get("notes").newItem || "").trim(); if (!v) return; notesUpd(api, n.id, function (x) { return { items: (x.items || []).concat([{ t: v, done: false }]) }; }); api.set({ newItem: "" }); },
         newKey: function (e) { if (e.key === "Enter") { e.preventDefault(); var v = String(api.get("notes").newItem || "").trim(); if (!v) return; notesUpd(api, n.id, function (x) { return { items: (x.items || []).concat([{ t: v, done: false }]) }; }); api.set({ newItem: "" }); } },
         dict: !!st.dict, notDict: !st.dict,
-        dictLabel: st.dict ? "Stop dictation" : "Dictate", dictCss: st.dict ? "background: var(--acc); color: #fff" : "",
+        dictLabel: st.dict ? "Stop dictation" : "Dictate", dictCss: st.dict ? "background: var(--acc); color: var(--alpha-white)" : "",
         dictate: function () {
           if (api.get("notes").dict) { clearInterval(NT.dicI); NT.dicI = null; api.set({ dict: false }); return; }
           if (!NOTES_DICT.length) { api.toast("Dictation is not connected"); return; }
@@ -3226,7 +3227,7 @@ registerView("notes", {
         lines: (n.lines || []).map(function (l, i) {
           var p = l.s === "me" ? null : api.person(l.s);
           return { ini: p ? p.ini : "You", who: p ? p.name.split(" ")[0] : "You", t: l.t, at: notesFmt(l.at),
-            chip: l.s === "me" ? "background: var(--acc); color: #fff" : "background: var(--s3); color: var(--fg)",
+            chip: l.s === "me" ? "background: var(--acc); color: var(--alpha-white)" : "background: var(--s3); color: var(--fg)",
             css: i === nextIdx && pos > 0 ? "color: var(--fg)" : (pos > 0 ? "color: var(--mut)" : ""),
             seek: function () { api.set({ pos: l.at }); } };
         }),
@@ -3249,7 +3250,7 @@ registerView("notes", {
       var lines = NOTES_LIVE.slice(0, cnt).map(function (l, i) {
         var p = l.s === "me" ? null : api.person(l.s);
         var tx = i === cnt - 1 && within < 9 ? l.t.slice(0, Math.max(1, Math.round(l.t.length * (within + 1) / 9))) : l.t;
-        return { ini: p ? p.ini : "You", t: tx, chip: l.s === "me" ? "background: var(--acc); color: #fff" : "background: var(--s3); color: var(--fg)", css: i === cnt - 1 ? "" : "color: var(--mut)" };
+        return { ini: p ? p.ini : "You", t: tx, chip: l.s === "me" ? "background: var(--acc); color: var(--alpha-white)" : "background: var(--s3); color: var(--fg)", css: i === cnt - 1 ? "" : "color: var(--mut)" };
       }).reverse();
       var lv = r.levels.slice(); while (lv.length < 44) lv.unshift(0.06);
       rec = {
@@ -3516,7 +3517,7 @@ registerView("contacts", {
       eIni: form ? ctIni(form.first, form.last) : "", eHasIni: !!form && ctIni(form.first, form.last) !== "#", eNoIni: !!form && ctIni(form.first, form.last) === "#",
       nameInputs: form ? [input("first", "First name", IC.user), input("last", "Last name", "")] : [],
       inputs: form ? [input("phone", "Phone", IC.phone, "tel"), input("email", "Email", IC.mail, "email"), input("address", "Address", IC.pin), input("birthday", "Birthday", IC.contactsGift), input("note", "Note", IC.contactsNote)] : [],
-      saveCss: canSave ? "background: var(--acc); color: #fff" : "background: var(--s2); color: var(--mut)", canSave: canSave, cantSave: !canSave,
+      saveCss: canSave ? "background: var(--acc); color: var(--alpha-white)" : "background: var(--s2); color: var(--mut)", canSave: canSave, cantSave: !canSave,
       cancelEdit: function () { var s = api.get("contacts"); api.set({ edit: null, add: null, form: null, open: s.edit || s.open }); },
       save: function () { ctSave(api); }
     };
@@ -3712,7 +3713,7 @@ registerView("files", {
     if (f) {
       var ty = FILES_TYPES[f.type] || FILES_TYPES.pdf;
       var parts = filesSplit(f.name);
-      var paper = api.theme === "dark" ? "#E9E9E9" : "#FFFFFF";
+      var paper = api.theme === "dark" ? "var(--alpha-gray-e9)" : "var(--alpha-white)";
       var pages = [];
       if (f.type === "pdf" || f.type === "doc") {
         for (var p = 0; p < Math.min(f.pages || 1, 2); p++) {
@@ -3728,7 +3729,7 @@ registerView("files", {
         meta: (f.type === "pdf" ? "PDF" : ty.label) + " · " + f.size + (fromP ? " · from " + fromP.name.split(" ")[0] : "") + " · " + f.folder,
         d: IC[ty.icon],
         isPages: pages.length > 0, pages: pages, paper: paper,
-        isReceipt: f.scan === "receipt", isPhoto: f.scan === "photo", photoBg: imgBg("p10", "linear-gradient(180deg, #F4B26B 0%, #E57A5A 45%, #6D5A8C 62%, #2F4A6B 63%, #1E3550 100%)"), photoSun: IMG.p10 ? "none" : "block", isAudio: f.type === "audio", isArchive: f.type === "archive",
+        isReceipt: f.scan === "receipt", isPhoto: f.scan === "photo", photoBg: imgBg("p10", "linear-gradient(180deg, var(--alpha-scan-photo-1) 0%, var(--alpha-scan-photo-2) 45%, var(--alpha-scan-photo-3) 62%, var(--alpha-scan-photo-4) 63%, var(--alpha-scan-photo-5) 100%)"), photoSun: IMG.p10 ? "none" : "block", isAudio: f.type === "audio", isArchive: f.type === "archive",
         receipt: f.receipt ? { shop: f.receipt.shop, rows: f.receipt.rows.map(function (r) { return { k: r[0], v: r[1] }; }), total: f.receipt.total } : null,
         contents: (f.contents || []).map(function (c) { return { name: c, d: /\/$/.test(c) ? IC.folder : IC.filesDoc }; }),
         wave: wave, time: Math.floor((st.pos || 0) / 60) + ":" + pad2(Math.floor(st.pos || 0) % 60) + " / " + Math.floor((f.dur || 0) / 60) + ":" + pad2((f.dur || 0) % 60),
@@ -3828,7 +3829,7 @@ IC.walGym = IC.walGym || "M7 7v10M4 9.5v5M17 7v10M20 9.5v5M7 12h10";
 IC.walBag = IC.walBag || "M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2";
 IC.walUnlock = IC.walUnlock || "M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 6.8-1.2";
 
-var WAL_NEW_BG = ["#0C0C61", "#3A3A3A", "#5B5BD6"];
+var WAL_NEW_BG = ["var(--alpha-wallet-navy)", "var(--alpha-gray-3a)", "var(--alpha-wallet-new-1)"];
 
 function walMoney(a) { return "$" + a.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
 function walDay(d, now) {
@@ -3952,7 +3953,7 @@ registerView("wallet", {
     var vis = function (c) {
       return { name: c.name, last4: "•••• " + c.last4, kind: c.kind, locked: c.locked, unlocked: !c.locked,
         css: "background: " + c.bg + "; color: " + c.fg + (c.locked ? "; filter: saturate(.25) brightness(.85)" : ""),
-        chip: c.fg === "#000000" ? "rgba(0,0,0,.16)" : "rgba(255,255,255,.28)" };
+        chip: c.fg === "var(--alpha-black)" || c.fg === alphaPaletteColor("--alpha-black") ? "rgba(0,0,0,.16)" : "rgba(255,255,255,.28)" };
     };
     /* stack: default card in front (last) */
     var order = cards.filter(function (c) { return !c.def; }).concat(cards.filter(function (c) { return c.def; }));
@@ -3960,7 +3961,7 @@ registerView("wallet", {
       return Object.assign(vis(c), { mt: i === 0 ? 0 : -174, label: c.name + " card ending " + c.last4, open: function () { set({ open: c.id }); } });
     });
     var passes = WAL_PASSES.map(function (p) {
-      return { id: p.id, title: p.title, sub: walDate(p.day, now) + " · " + p.time, d: IC[p.icon], iconCss: p.accent ? "background: var(--acc); color: #fff" : "background: var(--s3)", right: "" };
+      return { id: p.id, title: p.title, sub: walDate(p.day, now) + " · " + p.time, d: IC[p.icon], iconCss: p.accent ? "background: var(--acc); color: var(--alpha-white)" : "background: var(--s3)", right: "" };
     }).concat(WAL_TRANSIT != null ? [
       { id: "transit", title: "Transit", sub: "Tap at the gate", d: IC.walBus, iconCss: "background: var(--s3)", right: walMoney(st.transit) }
     ] : []).map(function (p) { return Object.assign(p, { go: function () { set({ open: p.id }); } }); });
@@ -4032,7 +4033,7 @@ registerView("wallet", {
         has: !!pc, none: !pc,
         c: pc ? vis(pc) : null,
         isAuth: stage === "auth", isHold: stage === "hold", isDone: stage === "done",
-        dots: payable.length > 1 && !secure ? payable.map(function (c) { var on = pc && c.id === pc.id; return { label: "Pay with " + c.name, css: on ? "background: #ffffff; width: 22px" : "background: #555555; width: 8px", go: function () { if (stage === "auth") set({ card: c.id }); } }; }) : [],
+        dots: payable.length > 1 && !secure ? payable.map(function (c) { var on = pc && c.id === pc.id; return { label: "Pay with " + c.name, css: on ? "background: var(--alpha-white); width: 22px" : "background: var(--alpha-gray-55); width: 8px", go: function () { if (stage === "auth") set({ card: c.id }); } }; }) : [],
         swDown: function (e) { try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {} sw.down(e); }, swUp: sw.up,
         paid: st.paid ? walMoney(st.paid.a) : "", paidAt: st.paid ? st.paid.m : "",
         auth: function () {
@@ -4082,7 +4083,7 @@ registerView("wallet", {
       prevNum: digits.length ? "•••• " + (digits.length >= 4 ? digits.slice(-4) : digits) : "•••• ••••",
       prevExp: f.exp || "MM/YY",
       ok: formOk, notOk: !formOk,
-      nextCss: formOk ? "background: var(--acc); color: #fff" : "background: var(--s2); color: var(--mut)",
+      nextCss: formOk ? "background: var(--acc); color: var(--alpha-white)" : "background: var(--s2); color: var(--mut)",
       next: function () {
         if (!formOk) return;
         set({ add: "verify", code: "" });
@@ -4091,13 +4092,13 @@ registerView("wallet", {
       code: st.code || "", auto: !!st.auto && (st.code || "") === "482913",
       onCode: function (e) { set({ code: e.target.value.replace(/\D/g, "").slice(0, 6), auto: false }); },
       codeOk: (st.code || "").length === 6, codeBad: (st.code || "").length !== 6,
-      verifyCss: (st.code || "").length === 6 ? "background: var(--acc); color: #fff" : "background: var(--s2); color: var(--mut)",
+      verifyCss: (st.code || "").length === 6 ? "background: var(--acc); color: var(--alpha-white)" : "background: var(--s2); color: var(--mut)",
       verify: function () {
         var s2 = api.get("wallet");
         if ((s2.code || "").length !== 6) return;
         var d4 = s2.form.num.replace(/\D/g, "").slice(-4);
         var nid = "c" + Date.now();
-        var nc = { id: nid, name: s2.form.name ? s2.form.name.split(" ")[0] + "'s card" : "Card " + d4, last4: d4, kind: "Credit", bg: WAL_NEW_BG[(s2.cards.length) % WAL_NEW_BG.length], fg: "#FFFFFF", def: s2.cards.length === 0, locked: false, tx: [] };
+        var nc = { id: nid, name: s2.form.name ? s2.form.name.split(" ")[0] + "'s card" : "Card " + d4, last4: d4, kind: "Credit", bg: WAL_NEW_BG[(s2.cards.length) % WAL_NEW_BG.length], fg: "var(--alpha-white)", def: s2.cards.length === 0, locked: false, tx: [] };
         api.stop();
         api.set({ cards: [nc].concat(s2.cards), add: null, code: "", auto: false, form: { num: "", exp: "", name: "", cvv: "" }, open: nid });
         api.toast("Card added");
@@ -4476,7 +4477,7 @@ registerView("workflows", {
             add: function () { var p = wfPresets(k)[0]; if (!p) return wfDeferred(api); var steps = b.steps.concat([{ k: k, t: p[0], apps: p[1].slice() }]); set({ build: Object.assign({}, b, { steps: steps }), sheet: { type: "step", i: steps.length - 1 } }); } };
         }),
         apps: chipsOf(b), hasApps: wfApps(b).length > 0, empty: b.steps.length === 0,
-        saveOff: b.steps.length === 0, saveCss: b.steps.length ? "background:var(--acc);color:#fff" : "background:var(--s2);color:var(--mut)",
+        saveOff: b.steps.length === 0, saveCss: b.steps.length ? "background:var(--acc);color:var(--alpha-white)" : "background:var(--s2);color:var(--mut)",
         describe: function () { set({ build: null }); api.chat("Every weekday at 6, "); },
         cancel: function () { set({ build: null, sheet: null }); },
         save: function () {
@@ -4495,14 +4496,14 @@ registerView("workflows", {
         var tr = b.trig; var tp = function (p) { bp({ trig: Object.assign({}, tr, p) }); };
         var chip = function (on) { return on ? "background:var(--fg);color:var(--bg)" : "background:var(--s2)"; };
         B.tr = {
-          kinds: WF_TRIG.filter(function (k) { return k[0] !== "message" || isMvpView("messages"); }).map(function (k) { var on = tr.kind === k[0]; return { d: IC[k[1]], label: k[2], css: on ? "background:var(--acc);color:#fff" : "background:var(--s2)", pressed: on, pick: function () { bp({ trig: { kind: k[0], days: "Weekdays", t: 18, ev: WF_EVENTS[0][0], person: copy("workflows").triggerPerson || null, place: WF_PLACES[0], match: "receipt" } }); } }; }),
+          kinds: WF_TRIG.filter(function (k) { return k[0] !== "message" || isMvpView("messages"); }).map(function (k) { var on = tr.kind === k[0]; return { d: IC[k[1]], label: k[2], css: on ? "background:var(--acc);color:var(--alpha-white)" : "background:var(--s2)", pressed: on, pick: function () { bp({ trig: { kind: k[0], days: "Weekdays", t: 18, ev: WF_EVENTS[0][0], person: copy("workflows").triggerPerson || null, place: WF_PLACES[0], match: "receipt" } }); } }; }),
           text: wfTrigText(tr, api),
           isTime: tr.kind === "time", isEvent: tr.kind === "event", isMsg: tr.kind === "message", isPlace: tr.kind === "location", isEmail: tr.kind === "email",
           days: WF_DAYS.map(function (d) { return { label: d, css: chip(tr.days === d), pick: function () { tp({ days: d }); } }; }),
           time: wfAmpm(tr.t == null ? 18 : tr.t), tMinus: function () { tp({ t: Math.max(0, (tr.t || 0) - 0.5) }); }, tPlus: function () { tp({ t: Math.min(23.5, (tr.t || 0) + 0.5) }); },
           evs: WF_EVENTS.map(function (e) { return { label: e[0], css: chip(tr.ev === e[0]), pick: function () { tp({ ev: e[0] }); } }; }),
           places: WF_PLACES.map(function (p) { return { label: p, css: chip(tr.place === p), pick: function () { tp({ place: p }); } }; }),
-          people: PEOPLE.map(function (p) { var on = tr.person === p.id; return { ini: p.ini, first: p.name.split(" ")[0], css: on ? "background:var(--acc);color:#fff" : "background:var(--s2)", pick: function () { tp({ person: p.id }); } }; }),
+          people: PEOPLE.map(function (p) { var on = tr.person === p.id; return { ini: p.ini, first: p.name.split(" ")[0], css: on ? "background:var(--acc);color:var(--alpha-white)" : "background:var(--s2)", pick: function () { tp({ person: p.id }); } }; }),
           match: tr.match || "", onMatch: function (e) { tp({ match: e.target.value }); }
         };
       }
@@ -4512,7 +4513,7 @@ registerView("workflows", {
         var mv = function (dir) { return function () { var j = i + dir; if (j < 0 || j >= b.steps.length) return; var steps = b.steps.slice(); var tmp = steps[i]; steps[i] = steps[j]; steps[j] = tmp; set({ build: Object.assign({}, b, { steps: steps }), sheet: { type: "step", i: j } }); }; };
         B.sp = {
           k: s.k, d: IC[WF_KINDS[s.k].icon], text: s.t, onText: function (e) { sp({ t: e.target.value }); },
-          presets: wfPresets(s.k).map(function (p) { var on = s.t === p[0]; return { label: p[0], on: on, css: on ? "background:var(--acc);color:#fff" : "background:var(--s2)", pick: function () { sp({ t: p[0], apps: p[1].slice() }); } }; }),
+          presets: wfPresets(s.k).map(function (p) { var on = s.t === p[0]; return { label: p[0], on: on, css: on ? "background:var(--acc);color:var(--alpha-white)" : "background:var(--s2)", pick: function () { sp({ t: p[0], apps: p[1].slice() }); } }; }),
           canUp: i > 0, canDown: i < b.steps.length - 1, up: mv(-1), down: mv(1),
           upCss: i > 0 ? "" : "opacity:.3", downCss: i < b.steps.length - 1 ? "" : "opacity:.3",
           del: function () { set({ build: Object.assign({}, b, { steps: b.steps.filter(function (_, j) { return j !== i; }) }), sheet: null }); }
@@ -4571,7 +4572,7 @@ function stNav(o) { var r = stRow("kNav", o); if (o.bold) r.labCss0 = "font-weig
 function stTog(o, on, fn) { var r = stRow("kTog", o); r.aria = o.aria || r.label; r.on = !!on; r.track = on ? "background:var(--acc)" : "background:var(--s3)"; r.kx = on ? 20 : 0; r.toggle = fn; return r; }
 function stSeg(o, opts, cur, fn) {
   var r = stRow("kSeg", o);
-  r.opts = opts.map(function (op) { var on = op[0] === cur; return { label: op[1], on: on, aria: (o.label ? o.label + ": " : "") + op[1], css: on ? "background:var(--acc);color:#fff" : "color:var(--mut)", pick: function () { fn(op[0]); } }; });
+  r.opts = opts.map(function (op) { var on = op[0] === cur; return { label: op[1], on: on, aria: (o.label ? o.label + ": " : "") + op[1], css: on ? "background:var(--acc);color:var(--alpha-white)" : "color:var(--mut)", pick: function () { fn(op[0]); } }; });
   return r;
 }
 function stRemoveAcct(api, id) {
@@ -4809,7 +4810,7 @@ registerView("settings", {
       p1 = page("", { hero: { kChar: true }, groups: [
         { rows: [stRow("kChips", { items: ST_VOICES.map(function (v, i) {
           var on = ch.voice === i; var pl = st.playing === i;
-          return { label: v, on: on, playing: pl, notPlaying: !pl, aria: v + " voice", css: on ? "background:var(--acc);color:#fff" : "background:var(--bg)",
+          return { label: v, on: on, playing: pl, notPlaying: !pl, aria: v + " voice", css: on ? "background:var(--acc);color:var(--alpha-white)" : "background:var(--bg)",
             pick: function () { set({ char: Object.assign({}, api.get("settings").char, { voice: i }), playing: i }); api.later(function () { if (api.get("settings").playing === i) set({ playing: null }); }, 1800); } };
         }) })] },
         { rows: [["Short", "Detailed", "brev"], ["Formal", "Casual", "tone"], ["Asks first", "Acts first", "init"]].map(function (s) {
@@ -4823,18 +4824,18 @@ registerView("settings", {
       p1 = page("Accounts", { groups: [
         { rows: accts.map(function (a) {
           var pv = provOf(a.provider);
-          return stNav({ tile: pv.name.charAt(0), tileCss: a.label === "Personal" ? "background:var(--acc);color:#fff" : "background:var(--s3)", label: a.address, sub: (a.label ? a.label + " · " : "") + pv.name + " · " + lvlText(a), bold: true, go: function () { set({ acct: a.id }); } });
+          return stNav({ tile: pv.name.charAt(0), tileCss: a.label === "Personal" ? "background:var(--acc);color:var(--alpha-white)" : "background:var(--s3)", label: a.address, sub: (a.label ? a.label + " · " : "") + pv.name + " · " + lvlText(a), bold: true, go: function () { set({ acct: a.id }); } });
         }).concat([stNav({ d: IC.plus, label: "Add account", accent: true, noChev: true, go: function () { set({ adding: true, addStep: null, addProv: null, addEmail: "", addPw: "", addServer: "", addLvl: null, busy: null }); } })]) }
       ] });
     } else if (P === "connections") {
       p1 = page("Connections", { groups: [{ rows: ST_CONNS.map(function (c) {
         var on = !!st.conns[c.id];
-        return stNav({ tile: c.name.charAt(0), tileCss: on ? "background:var(--acc);color:#fff" : "background:var(--s3)", label: c.name, sub: on ? c.scopes[0] : "", val: on ? "" : "Connect", valCss: "color:var(--acct);font-weight:600", trail: on ? IC.check : "", trailCss: "color:var(--acct)", go: function () { set({ sheet: { kind: "conn", id: c.id } }); } });
+        return stNav({ tile: c.name.charAt(0), tileCss: on ? "background:var(--acc);color:var(--alpha-white)" : "background:var(--s3)", label: c.name, sub: on ? c.scopes[0] : "", val: on ? "" : "Connect", valCss: "color:var(--acct);font-weight:600", trail: on ? IC.check : "", trailCss: "color:var(--acct)", go: function () { set({ sheet: { kind: "conn", id: c.id } }); } });
       }) }] });
     } else if (P === "privacy") {
       var logN = ST_LOG.length + (api.get("browser").booked && BR_LINKS.venue ? 1 : 0);
       p1 = page("Privacy & data", {
-        hero: { kBig: true, hasIcon: true, d: IC.shield, iconCss: "background:var(--acc);color:#fff", big: "Redaction on", sub: "Identifiers replaced before hosted requests" },
+        hero: { kBig: true, hasIcon: true, d: IC.shield, iconCss: "background:var(--acc);color:var(--alpha-white)", big: "Redaction on", sub: "Identifiers replaced before hosted requests" },
         groups: [
           { rows: [
             stNav({ label: "Leaves this device", val: st.cloud ? "Hard questions" : "Nothing", go: go("models") }),
@@ -4853,7 +4854,7 @@ registerView("settings", {
     } else if (P === "wifi") {
       var wOn = !!S.q.wifi; var cur = ST_NETS.filter(function (n) { return n.id === st.wifiCur; })[0];
       p1 = page("Wi-Fi", { hdrTog: stTog({ label: "Wi-Fi", aria: "Use Wi-Fi" }, wOn, function () { q({ wifi: !api.S.q.wifi }); }),
-        hero: wOn && cur ? { kBig: true, hasIcon: true, d: IC.wifi, iconCss: "background:var(--acc);color:#fff", big: cur.name, sub: "Connected · " + (cur.lock ? "Secure" : "Open") } : { kBig: true, hasIcon: true, d: IC.wifi, iconCss: "background:var(--s2);color:var(--mut)", big: wOn ? "Not connected" : "Off", sub: "" },
+        hero: wOn && cur ? { kBig: true, hasIcon: true, d: IC.wifi, iconCss: "background:var(--acc);color:var(--alpha-white)", big: cur.name, sub: "Connected · " + (cur.lock ? "Secure" : "Open") } : { kBig: true, hasIcon: true, d: IC.wifi, iconCss: "background:var(--s2);color:var(--mut)", big: wOn ? "Not connected" : "Off", sub: "" },
         groups: wOn ? [{ rows: ST_NETS.filter(function (n) { return !cur || n.id !== cur.id; }).map(function (n) {
           var known = (st.wifiKnown || []).indexOf(n.id) >= 0; var busy = st.busy === "w_" + n.id;
           return stNav({ d: IC.wifi, label: n.name, sub: busy ? "Connecting…" : (known ? "Saved" : n.sig), trail: n.lock ? IC.lock : "", trailCss: "color:var(--mut)", noChev: true, aria: n.name,
@@ -4926,7 +4927,7 @@ registerView("settings", {
         { rows: (ST_DEVICE ? ST_DEVICE.battery.usage : []).map(function (u) { return stRow("kInfo", { d: IC[u[0]], label: u[1], val: u[2] }); }) }
       ].filter(function (g) { return g.rows.length; }) });
     } else if (P === "models") {
-      p1 = page("Models", { hero: { kBig: true, hasIcon: true, d: IC.chip, iconCss: "background:var(--acc);color:#fff", big: ST_DEVICE ? ST_DEVICE.model.name : "No model loaded", sub: ST_DEVICE ? ST_DEVICE.model.sub : "Model details are not reported" }, groups: [
+      p1 = page("Models", { hero: { kBig: true, hasIcon: true, d: IC.chip, iconCss: "background:var(--acc);color:var(--alpha-white)", big: ST_DEVICE ? ST_DEVICE.model.name : "No model loaded", sub: ST_DEVICE ? ST_DEVICE.model.sub : "Model details are not reported" }, groups: [
         { rows: [stTog({ label: "Cloud fallback", sub: st.cloud ? "Asks each time, sends only the question" : "Off · nothing leaves this phone" }, st.cloud, function () { set({ cloud: !api.get("settings").cloud }); })] },
         { rows: (st.models || []).map(function (md) {
           var done = md.pct >= 100; var going = md.pct >= 0 && md.pct < 100;
@@ -4978,28 +4979,28 @@ registerView("settings", {
           stRow("kInput", { d: IC.lock, label: "Password", ph: "Password", type: "password", value: st.addPw, change: function (e) { set({ addPw: e.target.value }); } })
         ];
         if (pv.id === "other") rows.push(stRow("kInput", { d: IC.globe, label: "Server", ph: "Server (imap.example.com)", type: "text", value: st.addServer, change: function (e) { set({ addServer: e.target.value }); } }));
-        var gr = [{ plain: true, rows: rows }, { plain: true, rows: [stRow("kBtn", { label: busy ? "Signing in…" : "Sign in", primary: true, dis: !ok || busy, css: ok ? "background:var(--acc);color:#fff" : "background:var(--s3);color:var(--mut)",
+        var gr = [{ plain: true, rows: rows }, { plain: true, rows: [stRow("kBtn", { label: busy ? "Signing in…" : "Sign in", primary: true, dis: !ok || busy, css: ok ? "background:var(--acc);color:var(--alpha-white)" : "background:var(--s3);color:var(--mut)",
           go: function () { if (!ok) return; set({ busy: "signin" }); api.later(function () { set({ busy: null, addStep: "perms" }); }, 900); } })] }];
         if (pv.oauth) gr[1].rows.push(stRow("kBtn", { label: "Continue in browser", dis: false, css: "background:var(--s2)", d: IC.globe, hasIcon: true, go: function () { set({ addStep: "oauth" }); } }));
         p2 = page(pv.name, { back: back2, backLabel: "Back to providers", groups: gr });
       } else if (step === "oauth") {
         p2 = page(pv.name, { back: back2, backLabel: "Back to sign in", hero: { kWeb: true, host: pv.web, big: "Alpha wants to access your " + pv.name + " account", sub: stEmailOk(st.addEmail) ? st.addEmail : "Choose an account on " + pv.web },
           groups: [{ plain: true, rows: [
-            stRow("kBtn", { label: st.busy === "oauth" ? "Allowing…" : "Allow", primary: true, dis: false, css: "background:var(--acc);color:#fff", go: function () { set({ busy: "oauth" }); api.later(function () { set({ busy: null, addStep: "perms" }); }, 800); } }),
+            stRow("kBtn", { label: st.busy === "oauth" ? "Allowing…" : "Allow", primary: true, dis: false, css: "background:var(--acc);color:var(--alpha-white)", go: function () { set({ busy: "oauth" }); api.later(function () { set({ busy: null, addStep: "perms" }); }, 800); } }),
             stRow("kBtn", { label: "Cancel", dis: false, css: "background:var(--s2)", go: function () { set({ addStep: "signin" }); } })
           ] }] });
       } else if (step === "perms") {
         var lv = st.addLvl || { mail: "act", calendar: "act", contacts: "read" };
         p2 = page(name + " can", { back: back2, backLabel: "Back to sign in", groups: [
           { rows: ST_TYPES.map(function (x) { return stSeg({ d: IC[x[2]], label: x[1] }, [["off", "Off"], ["read", "Read"], ["act", "Act"]], lv[x[0]], function (v) { var o = Object.assign({}, lv); o[x[0]] = v; set({ addLvl: o }); }); }) },
-          { plain: true, cap: "Stored on this phone. Act always asks before sending.", rows: [stRow("kBtn", { label: "Connect", primary: true, dis: false, css: "background:var(--acc);color:#fff", go: finish })] }
+          { plain: true, cap: "Stored on this phone. Act always asks before sending.", rows: [stRow("kBtn", { label: "Connect", primary: true, dis: false, css: "background:var(--acc);color:var(--alpha-white)", go: finish })] }
         ] });
       } else {
-        p2 = page("", { back: closeAdd, hero: { kBig: true, hasIcon: true, d: IC.check, iconCss: "background:var(--acc);color:#fff", big: "Added", sub: st.addEmail }, groups: [{ plain: true, rows: [stRow("kBtn", { label: "Done", primary: true, dis: false, css: "background:var(--acc);color:#fff", go: closeAdd })] }] });
+        p2 = page("", { back: closeAdd, hero: { kBig: true, hasIcon: true, d: IC.check, iconCss: "background:var(--acc);color:var(--alpha-white)", big: "Added", sub: st.addEmail }, groups: [{ plain: true, rows: [stRow("kBtn", { label: "Done", primary: true, dis: false, css: "background:var(--acc);color:var(--alpha-white)", go: closeAdd })] }] });
       }
     } else if (P === "accounts" && a) {
       var pva = provOf(a.provider);
-      p2 = page("", { back: function () { set({ acct: null }); }, hero: { kBig: true, bigCss: "font-family:'Public Sans',system-ui,sans-serif;font-size:24px;font-weight:600;letter-spacing:0", ini: pva.name.charAt(0), hasIni: true, iconCss: a.label === "Personal" ? "background:var(--acc);color:#fff" : "background:var(--s3)", big: a.address, sub: (a.label ? a.label + " · " : "") + pva.name },
+      p2 = page("", { back: function () { set({ acct: null }); }, hero: { kBig: true, bigCss: "font-family:'Public Sans',system-ui,sans-serif;font-size:24px;font-weight:600;letter-spacing:0", ini: pva.name.charAt(0), hasIni: true, iconCss: a.label === "Personal" ? "background:var(--acc);color:var(--alpha-white)" : "background:var(--s3)", big: a.address, sub: (a.label ? a.label + " · " : "") + pva.name },
         groups: [
           { rows: ST_TYPES.map(function (x) { return stSeg({ d: IC[x[2]], label: x[1] }, [["off", "Off"], ["read", "Read"], ["act", "Act"]], levelOf(a, x[0]), function (v) {
             var cur = api.get("settings").accounts.filter(function (y) { return y.id === a.id; })[0]; var p = {}; p[x[0]] = v !== "off"; if (v !== "off") p.access = Object.assign({}, cur.access, (function () { var o = {}; o[x[0]] = v; return o; })()); setAcct(a.id, p);
@@ -5056,7 +5057,7 @@ registerView("settings", {
     if (sh) {
       api.later(stUnscroll, 30); api.later(stUnscroll, 400);
       sh.hasSub = !!sh.sub; sh.close = closeSheet; sh.hasInput = !!sh.hasInput; sh.hasScopes = !!sh.hasScopes;
-      sh.okCss = sh.dis ? "background:var(--s3);color:var(--mut)" : "background:var(--acc);color:#fff";
+      sh.okCss = sh.dis ? "background:var(--s3);color:var(--mut)" : "background:var(--acc);color:var(--alpha-white)";
       if (!sh.onKey) sh.onKey = function () {};
       if (!sh.onPw) sh.onPw = function () {};
     }
@@ -5377,25 +5378,20 @@ class Component extends DCLogic {
   gDown(e) { if (e.target.closest?.("[data-alpha-transcript]")) { this.g = null; return; } var o = this.scale(e.currentTarget); this.g = { x: (e.clientX - o.r.left) / o.s, y: (e.clientY - o.r.top) / o.s, cx: e.clientX, cy: e.clientY, s: o.s, handle: !!e.target.closest?.("[data-alpha-shade-handle]"), pull: pullStart(e.target) }; }
   gUp(e) { var g = this.g; this.g = null; if (!g || window.getSelection()?.isCollapsed === false) return; this.swipe(g, (e.clientX - g.cx) / g.s, (e.clientY - g.cy) / g.s); }
   swipe(g, dx, dy) {
-    var S = this.S(); var T = 46; var ax = Math.abs(dx), ay = Math.abs(dy);
-    if (ax < T && ay < T) return;
-    if (S.screen === "lock") { if (dy < -T && ay > ax) this.unlock(); return; }
-    if (S.screen !== "home") return;
-    if (S.shade) { if (dy < -T && ay > ax) this.setState({ shade: false }); else if (ax > ay && ((g.x < 30 && dx > T) || (g.x > 382 && dx < -T))) this.back(); return; }
-    if (ay > ax) {
-      // Gesture zones (docs/gesture-zones.md). The top edge of the screen belongs to Android: a swipe
-      // from there opens Android's own shade, and Alpha does not answer it. On launcher Home a pull
-      // down that starts on the Notifications button or on empty Home asks Android for the same
-      // shade (#417); a pull on editable or scrollable content, or with the keyboard up, does not.
-      if (dy > T && ((g.handle && this.props.systemShell !== false) || emptyHomeShadePull(this.pullContext(), g.pull, g.y, dx, dy, T))) return this.openSystemShade();
-      if (this.props.systemShell !== false && dy < -T && g.y > 872) return this.goHome();
-      if (S.chat === "sheet" && dy > T) return this.setState({ chat: this.rest() });
-      if (!S.view && S.chat !== "sheet" && S.chat !== "full") {
-        if (dy < -T) return this.setState({ chat: "sheet" });
-      }
-    } else {
-      if ((g.x < 30 && dx > T) || (g.x > 382 && dx < -T)) return this.back();
-    }
+    // Gesture zones (docs/gesture-zones.md) are the shared shell's (resolveMobileShellSwipe). The top
+    // edge belongs to Android; on launcher Home a pull down that starts on the Notifications button
+    // or on empty Home asks Android for its shade (#417, @elizaos/capacitor-system/shade).
+    var self = this, S = this.S();
+    var action = resolveMobileShellSwipe({ screen: S.screen, shade: !!S.shade, view: S.view, chat: S.chat, launcher: this.props.systemShell !== false }, { x: g.x, y: g.y, onShadeControl: !!g.handle }, dx, dy, {
+      pullOpensShade: function (px, py, threshold) { return emptyHomeShadePull(self.pullContext(), g.pull, g.y, px, py, threshold); },
+    });
+    if (action === "unlock") return this.unlock();
+    if (action === "close-shade") return this.setState({ shade: false });
+    if (action === "back") return this.back();
+    if (action === "open-system-shade") return this.openSystemShade();
+    if (action === "home") return this.goHome();
+    if (action === "lower-assistant") return this.setState({ chat: this.rest() });
+    if (action === "raise-assistant") return this.setState({ chat: "sheet" });
   }
   pullContext() {
     var S = this.S();
@@ -5531,6 +5527,10 @@ class Component extends DCLogic {
     var rootRef = function (el) {
       if (!el || !el.style) return;
       Object.keys(VM).forEach(function (k) { el.style.setProperty(k, VM[k]); });
+      // The palette's fixed colours (--alpha-...) are also read outside the phone: html/body and
+      // the review dialogs Alpha appends to document.body. Define them on the document root too.
+      var docRoot = el.ownerDocument && el.ownerDocument.documentElement;
+      if (docRoot && docRoot.style) Object.keys(ALPHA_PRODUCT.theme.palette || {}).forEach(function (k) { if (VM[k]) docRoot.style.setProperty(k, VM[k]); });
       // Connection and digest dialogs are siblings of the phone. Share the
       // selected palette with their common root, including live theme changes.
       if (P.phoneSurface && el.parentElement) {
@@ -5574,7 +5574,7 @@ class Component extends DCLogic {
       var facts = S.q.tileFacts && typeof S.q.tileFacts === "object" ? S.q.tileFacts : null;
       var known = facts ? typeof facts[t[0]] === "boolean" : typeof S.q[t[0]] === "boolean"; var on = known ? (facts ? facts[t[0]] : S.q[t[0]]) : undefined;
       // Reference tiles switch in place, so each is a toggle: its name is the label and aria-pressed its state.
-      return { d: t[1], label: t[2], aria: t[2], pressed: on, on: on, css: on ? "background:var(--acc);color:#fff" : "background:var(--s2);color:var(--fg)", toggle: function () {
+      return { d: t[1], label: t[2], aria: t[2], pressed: on, on: on, css: on ? "background:var(--acc);color:var(--alpha-white)" : "background:var(--s2);color:var(--fg)", toggle: function () {
         var q = Object.assign({}, self.S().q); q[t[0]] = !q[t[0]];
         if (t[0] === "plane") { if (q.plane) { self.prePlane = { wifi: q.wifi, bt: q.bt }; q.wifi = false; q.bt = false; } else if (self.prePlane) { q.wifi = self.prePlane.wifi; q.bt = self.prePlane.bt; } }
         self.setState({ q: q });
@@ -5606,14 +5606,14 @@ class Component extends DCLogic {
     var cur = S.screen === "home" ? (v ? v : (S.shade ? "shade" : "home")) : S.screen;
     var jumpDefs = [["boot", "Power on"], ["lock", "Lock"], ["home", "Home"], ["shade", "Shade"]];
     ORDER.forEach(function (k) { jumpDefs.push([k, VIEWS[k].title]); });
-    var jumps = jumpDefs.map(function (j) { return { label: j[1], go: function () { self.lastSub = null; self.preset(j[0]); }, css: cur === j[0] ? "background:#ffffff;color:#000000;border-color:#ffffff" : "" }; });
+    var jumps = jumpDefs.map(function (j) { return { label: j[1], go: function () { self.lastSub = null; self.preset(j[0]); }, css: cur === j[0] ? "background:var(--alpha-white);color:var(--alpha-black);border-color:var(--alpha-white)" : "" }; });
     var subJumps = (v && VIEWS[v].jumps ? VIEWS[v].jumps : []).filter(function (j) { return j[0]; }).map(function (j) {
       var key = v + ":" + j[0];
-      return { label: j[1], go: function () { self.lastSub = key; self.preset(key); }, css: self.lastSub === key ? "background:#2a2a2a;color:#ffffff" : "" };
+      return { label: j[1], go: function () { self.lastSub = key; self.preset(key); }, css: self.lastSub === key ? "background:var(--alpha-gray-2a);color:var(--alpha-white)" : "" };
     });
     var modes = [["hidden", IC.pill, "Pill"], ["input", IC.kbd, "Input"], ["sheet", IC.half, "Overlay"], ["full", IC.expand, "Full"]].map(function (md) {
       var on = isOn && S.chat === md[0];
-      return { d: md[1], label: md[2], on: on, css: on ? "background:#0000FF;border-color:#0000FF" : "", go: function () { var S2 = self.S(); if (S2.screen !== "home") self.unlock(); self.setState({ chat: md[0], shade: false }); } };
+      return { d: md[1], label: md[2], on: on, css: on ? "background:var(--alpha-blue);border-color:var(--alpha-blue)" : "", go: function () { var S2 = self.S(); if (S2.screen !== "home") self.unlock(); self.setState({ chat: md[0], shade: false }); } };
     });
     var legend = [
       [IC.up, "Swipe up from the bottom bar, or tap it · Home, from anywhere"],
@@ -5625,7 +5625,7 @@ class Component extends DCLogic {
 
     var showPill = isOn && S.chat === "hidden" && !voiceOn && !imm.noPill;
     var showComposer = isOn && S.chat === "input" && !voiceOn && !imm.noPill;
-    var sbColor = isView && imm.dark && !S.shade && S.chat !== "full" && S.chat !== "sheet" ? "#ffffff" : "var(--fg)";
+    var sbColor = isView && imm.dark && !S.shade && S.chat !== "full" && S.chat !== "sheet" ? "var(--alpha-white)" : "var(--fg)";
     if (S.secure) { showPill = false; showComposer = false; }
     var ongoing = null;
     ORDER.forEach(function (k) {
@@ -5641,7 +5641,7 @@ class Component extends DCLogic {
       mvpMessages: isMvpView("messages"),
       ic: IC, iconAssets: ICON_ASSETS, vars: vars, rootRef: rootRef, frame: VM["--mobile-shell-frame"], clock: clock, dateStr: dateStr, name: name,
       isBoot: S.screen === "boot", isOff: S.screen === "off", isLock: S.screen === "lock", isOn: isOn, isView: isView,
-      viewBg: imm.dark ? "#000000" : "var(--bg)", viewFg: imm.dark ? "#ffffff" : "var(--fg)", sbColor: sbColor, homeIndicatorColor: out.photos && out.photos.albumManager ? "var(--fg)" : sbColor,
+      viewBg: imm.dark ? "var(--alpha-black)" : "var(--bg)", viewFg: imm.dark ? "var(--alpha-white)" : "var(--fg)", sbColor: sbColor, homeIndicatorColor: out.photos && out.photos.albumManager ? "var(--fg)" : sbColor,
       systemShell: P.systemShell !== false,
       showAppBack: P.systemShell === false && isOn && isView && !S.shade,
       // A fresh Home or Talk press is intentional even immediately after opening chat.
@@ -5716,7 +5716,7 @@ class Component extends DCLogic {
         var next = !fs; self.setState({ fs: next });
         try { if (window.top === window.self && document.fullscreenEnabled) { if (next && !document.fullscreenElement) document.documentElement.requestFullscreen(); if (!next && document.fullscreenElement) document.exitFullscreen(); } } catch (err) {}
       },
-      themes: [["light", "Light", "#FFFFFF"], ["dark", "Dark", "#000000"]].map(function (t) { var on = theme === t[0]; return { label: t[1], sw: t[2], on: on, css: on ? "background:#ffffff;color:#000000;border-color:#ffffff" : "", go: function () { self.setState({ theme: t[0] }); } }; })
+      themes: [["light", "Light", "var(--alpha-white)"], ["dark", "Dark", "var(--alpha-black)"]].map(function (t) { var on = theme === t[0]; return { label: t[1], sw: t[2], on: on, css: on ? "background:var(--alpha-white);color:var(--alpha-black);border-color:var(--alpha-white)" : "", go: function () { self.setState({ theme: t[0] }); } }; })
     });
   }
 }

@@ -42,7 +42,7 @@ public final class BrowserSensitiveReadingInstrumentedTest {
   assertEquals(url,navigation.getString("url"));
  }
  private static String text(View view){String out=view instanceof TextView?((TextView)view).getText().toString():"";if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)out+="\n"+text(group.getChildAt(i));}return out;}
- private AlertDialog dialog(BoundedActivityScenario<MainActivity> scenario)throws Exception{AtomicReference<AlertDialog> result=new AtomicReference<>();for(int i=0;i<150;i++){BoundedActivityScenario.main(()->{MainActivity activity=resumedActivity();try{Object plugin=activity.getBridge().getPlugin("AlphaBrowser").getInstance();java.lang.reflect.Field reading=AlphaBrowserPlugin.class.getDeclaredField("reading");reading.setAccessible(true);Object helper=reading.get(plugin);java.lang.reflect.Field field=BrowserReading.class.getDeclaredField("dialog");field.setAccessible(true);result.set((AlertDialog)field.get(helper));}catch(Exception e){throw new AssertionError(e);}});if(result.get()!=null&&result.get().isShowing())return result.get();SystemClock.sleep(100);}throw new AssertionError("Actual review dialog missing");}
+ private AlertDialog dialog(BoundedActivityScenario<MainActivity> scenario)throws Exception{AtomicReference<AlertDialog> result=new AtomicReference<>();for(int i=0;i<150;i++){BoundedActivityScenario.main(()->{MainActivity activity=resumedActivity();try{Object plugin=activity.getBridge().getPlugin("AlphaBrowser").getInstance();java.lang.reflect.Field reading=ai.eliza.plugins.browsersurface.BrowserTabHostPlugin.class.getDeclaredField("reading");reading.setAccessible(true);Object helper=reading.get(plugin);java.lang.reflect.Field field=ai.eliza.plugins.browsersurface.BrowserReviewedReading.class.getDeclaredField("dialog");field.setAccessible(true);result.set((AlertDialog)field.get(helper));}catch(Exception e){throw new AssertionError(e);}});if(result.get()!=null&&result.get().isShowing())return result.get();SystemClock.sleep(100);}throw new AssertionError("Actual review dialog missing");}
  /** In-memory navigation fixture: exact synthetic routes only; never forwards network traffic. */
  private final class UrlFixture implements AutoCloseable {
   final android.webkit.WebView web;final android.webkit.WebViewClient original;
@@ -50,7 +50,7 @@ public final class BrowserSensitiveReadingInstrumentedTest {
   final Set<String> urls=new HashSet<>();
   UrlFixture(String tabId)throws Exception{
    Object plugin=resumedActivity().getBridge().getPlugin("AlphaBrowser").getInstance();
-   java.lang.reflect.Field tabs=AlphaBrowserPlugin.class.getDeclaredField("tabs");tabs.setAccessible(true);
+   java.lang.reflect.Field tabs=ai.eliza.plugins.browsersurface.BrowserTabHostPlugin.class.getDeclaredField("tabs");tabs.setAccessible(true);
    Object tab=((Map<?,?>)tabs.get(plugin)).get(tabId);assertNotNull(tab);
    java.lang.reflect.Field field=tab.getClass().getDeclaredField("web");field.setAccessible(true);web=(android.webkit.WebView)field.get(tab);original=web.getWebViewClient();assertNotNull(original);
    for(String key:new String[]{"api_key","api-key","api%20key","apikey","%61pi%5fkey","API+KEY"})urls.add("https://reading.invalid/?"+key+"=SYNTHETIC-ONLY");
@@ -85,7 +85,7 @@ public final class BrowserSensitiveReadingInstrumentedTest {
     int before=fixture.get().requests.get();
     js("window.__readingResult=null;Capacitor.Plugins.AlphaBrowser.reviewReading({...window.__readingArgs,"+binding+"}).then(v=>window.__readingResult=JSON.stringify(v),e=>window.__readingResult=JSON.stringify({error:true,message:e.message}))");
     JSONObject denied=result();assertTrue(denied.toString(),denied.optBoolean("error"));assertEquals("Reading unavailable on a sensitive or unverified page",denied.getString("message"));assertFalse(denied.has("readingToken"));
-    BoundedActivityScenario.main(()->{try{Object plugin=resumedActivity().getBridge().getPlugin("AlphaBrowser").getInstance();java.lang.reflect.Field field=AlphaBrowserPlugin.class.getDeclaredField("reading");field.setAccessible(true);Object reading=field.get(plugin);java.lang.reflect.Field dialog=BrowserReading.class.getDeclaredField("dialog");dialog.setAccessible(true);assertNull("Sensitive URL must not open review",dialog.get(reading));}catch(Exception e){throw new AssertionError(e);}});
+    BoundedActivityScenario.main(()->{try{Object plugin=resumedActivity().getBridge().getPlugin("AlphaBrowser").getInstance();java.lang.reflect.Field field=ai.eliza.plugins.browsersurface.BrowserTabHostPlugin.class.getDeclaredField("reading");field.setAccessible(true);Object reading=field.get(plugin);java.lang.reflect.Field dialog=ai.eliza.plugins.browsersurface.BrowserReviewedReading.class.getDeclaredField("dialog");dialog.setAccessible(true);assertNull("Sensitive URL must not open review",dialog.get(reading));}catch(Exception e){throw new AssertionError(e);}});
     assertEquals("Review must not fetch another source",before,fixture.get().requests.get());assertEquals(0,server.bodies.size());
     assertTrue(call("Capacitor.Plugins.AlphaVoiceCloud.synthesizeBrowserReading({"+binding+",readingToken:'not-issued',requestId:'blocked-url-fixture'})").has("error"));assertEquals(0,server.bodies.size());
    }

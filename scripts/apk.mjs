@@ -178,7 +178,11 @@ export function validateApk(file, identity, wantsHome) {
   for (const permission of ['RECEIVE_SMS', 'RECEIVE_MMS', 'RECEIVE_WAP_PUSH'])
     if (data.xml.includes(`android.permission.${permission}`) !== wantsHome)
       throw new Error(`Invalid ${permission} permission for distribution in ${file}`);
-  for (const permission of ['READ_CALL_LOG', 'WRITE_CALL_LOG', 'MANAGE_OWN_CALLS', 'ANSWER_PHONE_CALLS'])
+  // Recent calls (AP-08) are packaged only for the launcher; the image capability, unlocked
+  // foreground and the owner's runtime grant remain separate requirements for any read.
+  if (data.xml.includes('android.permission.READ_CALL_LOG') !== wantsHome)
+    throw new Error(`Invalid READ_CALL_LOG permission for distribution in ${file}`);
+  for (const permission of ['WRITE_CALL_LOG', 'MANAGE_OWN_CALLS', 'ANSWER_PHONE_CALLS'])
     if (data.xml.includes(`android.permission.${permission}`))
       throw new Error(`Unexpected telephony permission ${permission} in ${file}`);
   // aapt badging distinguishes required hardware from optional feature declarations.

@@ -2,10 +2,12 @@
 
 Ownership (October 2026): the owned collection, its favorite/trash fences, batches,
 counts and two-step permanent removal are elizaOS `OwnedMediaLibrary`, and custom
-albums are `OwnedAlbums` (`plugins/plugin-native-media`). `AlphaPhotosPlugin` binds
-them to the `AlphaPhotos` Capacitor plugin with Alpha's `alpha` namespace, so the
-installed preferences `alpha-owned-media-versions` and `alpha-owned-albums` keep
-resolving after an upgrade. The behaviour below is unchanged by that move.
+albums are `OwnedAlbums` (`plugins/plugin-native-media`). The Capacitor binding is the
+shared `PhotosPlugin` of the same module; `AlphaPhotosPlugin` only registers it as the
+`AlphaPhotos` plugin with Alpha's `alpha` namespace (`AlphaMediaConfig`), its playback
+path, debug QA markers and late-launch wording, so the installed preferences
+`alpha-owned-media-versions` and `alpha-owned-albums` keep resolving after an upgrade.
+The behaviour below is unchanged by that move.
 
 The owned collection operations below manage this package's published images and
 videos. The #408 branch additionally requests photo/video library access only from
@@ -171,7 +173,8 @@ and both-variant execution are pending.
 ## Device library (source for issue 408)
 
 The Device library album retains the agent proposal, selection, review and receipt
-contract from #442. Its native facade (`AlphaPhotoLibraryPlugin`) uses the
+contract from #442. Its native facade (`AlphaPhotoLibraryPlugin`, a registration of the
+shared `DeviceLibraryPlugin`) uses the
 `AlphaPhotos` plugin's own `PermittedMediaCatalog` and `PermittedMediaReview`
 instances (the shared engines in elizaOS `plugins/plugin-native-media`, configured
 with Alpha's installed names in `AlphaMediaConfig`) rather than constructing its own: one read epoch, one grant-change

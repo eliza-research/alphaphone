@@ -9,6 +9,7 @@ import {iconStyle} from './icon-style';
 import {browserStartupPermission} from './startup-browser-permissions';
 import {createStartupPermissionFlow, startupPermissionKeys, nativeStartupPermissionKeys, type NativeStartupPermissionKey as PermissionKey, type StartupPermissionState} from './startup-permission-flow';
 import {readStartupPermissionProgress, writeStartupPermissionProgress, startupPermissionProgressKey} from './startup-permission-progress';
+import {showWalkthroughCompletion} from '../../../.eliza/client-features/packages/ui/src/components/permissions/permission-walkthrough.ts';
 import './startup-permissions.css';
 
 const notifications = registerPlugin<{status(): Promise<{permissionGranted: boolean; appEnabled: boolean}>}>('AlphaNotifications');
@@ -103,7 +104,7 @@ export function StartupPermissions({active:enabled = true}: {active?: boolean} =
   useEffect(() => {
     if (!connection.setupRevision) return;
     ++sequence.current;setReopened(false);setTarget(null);targetRef.current=null;setReview(false);reviewRef.current=false;
-    const resume=progressError?progressRef.current:savedProgress(native);setReady(!resume && connection.accountCreated === true);setActive(!!resume);if(resume)writeProgress(resume);
+    const resume=progressError?progressRef.current:savedProgress(native);setReady(showWalkthroughCompletion({accountCreated: connection.accountCreated, resumed: !!resume}));setActive(!!resume);if(resume)writeProgress(resume);
   }, [connection.setupRevision]);
   useEffect(() => {
     alive.current = true; let disposed = false;

@@ -108,7 +108,9 @@ final class AlphaCredentialStore {
     if(conflict)return false;
     if(!LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)&&java.util.Objects.equals(before,value))return true;
     if(!java.util.Objects.equals(before,slots.read(CloudDeployment.storageSlot(name)))||!java.util.Objects.equals(provider,slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT))))throw new IllegalStateException("Credential changed");
-    if(LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)||"cloud:production".equals(name)&&!LocalAgentProviderAdmission.sameCloudCredential(before,value))cloudChange.changed();
+    // Only a replaced or removed Cloud key retires Cloud-bound background state; changing the agent's
+    // inference provider does not (background Gmail binds the Cloud credential, not the provider).
+    if("cloud:production".equals(name)&&!LocalAgentProviderAdmission.sameCloudCredential(before,value))cloudChange.changed();
     String committed=LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)&&value!=null?LocalAgentProviderAdmission.withoutAdmission(value):value;
     // Metadata/valid expiry refresh is not replacement; use the same canonical credential
     // comparison that retains provider admission. Provider writes still strip admission.
@@ -174,7 +176,7 @@ final class AlphaCredentialStore {
      if(authority!=AlphaLocalAgentPlugin.credentialAuthorityEpoch()
        ||!java.util.Objects.equals(provider,slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT)))
        ||!java.util.Objects.equals(cloud,slots.read(CloudDeployment.storageSlot("cloud:production"))))throw new ProviderChanged();
-     cloudChange.changed();AlphaLocalAgentPlugin.powerAuthorizationChanged();
+     AlphaLocalAgentPlugin.powerAuthorizationChanged();
      slots.remove(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT));
      if(slots.read(CloudDeployment.storageSlot(LocalAgentProviderAdmission.PROVIDER_SLOT))!=null)throw new IllegalStateException("Provider removal unconfirmed");
      return true;

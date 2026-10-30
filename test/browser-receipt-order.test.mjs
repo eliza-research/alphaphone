@@ -7,6 +7,7 @@ import {stripTypeScriptTypes} from 'node:module';
 import {randomUUID} from 'node:crypto';
 import {createDeviceActionExecution} from '../vendor/eliza/packages/contracts/src/device-action-execution.ts';
 import {parseBrowserAddressInput} from '../.eliza/client-features/plugins/plugin-native-browser-surface/src/address-input.ts';
+import {BrowserTabSession} from '../.eliza/client-features/plugins/plugin-native-browser-surface/src/tab-host.ts';
 const root=process.env.ALPHA_RECEIPT_SOURCE_ROOT||'.';
 const read=p=>fs.readFileSync(root+'/'+p,'utf8');
 const agent=read('apps/app/src/prototype/agent-adapter.ts'),browser=read('apps/app/src/prototype/browser-adapter.ts'),device=read('apps/app/src/runtime/device-actions.ts');
@@ -20,20 +21,20 @@ const cancelCode=ts(agent.slice(agent.indexOf('    if(shell.pendingActionApprova
 function harness({native=false,origin='notes',receiptFailure=false,dispatchFailure=false,finishFailure=false,beforeReceipt,afterDispatch}={}){
  const journalResults=[],receiptBodies=[],events=[],controller=new AbortController(),session={sessionId:'s',ownerId:'o',agentId:'a'},initial={view:origin,sensitive:false,revision:1,...(origin==='browser'?{selectedObject:{kind:'browser-tab',id:'existing',revision:'0'}}:{})};
  let currentContext=initial,live=true,disposed=false,selected='existing';
- const state={cur:selected,tabs:[{id:selected,hist:['newtab'],pos:0}]},created=new Map([[selected,Promise.resolve()]]),document={hidden:false},metadata=new Map(),documentRevisions=new Map();
+ const state={cur:selected,tabs:[{id:selected,hist:['newtab'],pos:0}]},tabs=new BrowserTabSession({session:'native-session'}),document={hidden:false};void tabs.ensure(selected,false,()=>Promise.resolve());
  const shell={pendingActionApproval:controller,pendingActionApprovalContext:initial,pendingActionApprovalSession:session,
-  vset(_key,patch){Object.assign(state,patch);if(origin==='browser'&&state.cur!==initial.selectedObject.id){currentContext={...initial,revision:2,selectedObject:{kind:'browser-tab',id:state.cur,revision:String(documentRevisions.get(state.cur)||0)}};cancel();}},
+  vset(_key,patch){Object.assign(state,patch);if(origin==='browser'&&state.cur!==initial.selectedObject.id){currentContext={...initial,revision:2,selectedObject:{kind:'browser-tab',id:state.cur,revision:String(tabs.revision(state.cur))}};cancel();}},
   openView(){events.push('present');currentContext={view:'browser',sensitive:false,revision:2};cancel();}};
  const connection={session,open:false},connectionController={getSnapshot:()=>connection},alphaClient={getState:()=>({context:currentContext})};
  const cancel=()=>vm.runInNewContext(cancelCode,{shell,document,connection,currentContext});
- const browserContext={URL,Error,parseBrowserAddressInput,document,Capacitor:{isNativePlatform:()=>native},session:'native-session',state:()=>state,created,shell,get disposed(){return disposed;},profileUnsupportedTab:undefined,newTabId:()=> 'new-tab',isPrivate:()=>false,restored:new Map(),metadata,documentRevisions,restoreAttempts:new Map(),
- ensure(id){const promise=Promise.resolve();created.set(id,promise);return promise;},
- Browser:{async navigate(){controller.signal.throwIfAborted();events.push('dispatch');if(dispatchFailure)throw Error('dispatch failed');afterDispatch?.({controller,changeTab:()=>{created.set('foreign',Promise.resolve());state.cur='foreign';},dispose:()=>disposed=true});},async close(){}},refresh(){},report(){}};
+ const browserContext={URL,Error,parseBrowserAddressInput,document,Capacitor:{isNativePlatform:()=>native},session:'native-session',state:()=>state,tabs,shell,get disposed(){return disposed;},profileUnsupportedTab:undefined,newTabId:()=> 'new-tab',isPrivate:()=>false,restored:new Map(),restoreAttempts:new Map(),
+ ensure(id){return tabs.creation(id)??tabs.ensure(id,false,()=>Promise.resolve());},
+ Browser:{async navigate(){controller.signal.throwIfAborted();events.push('dispatch');if(dispatchFailure)throw Error('dispatch failed');afterDispatch?.({controller,changeTab:()=>{void tabs.ensure('foreign',false,()=>Promise.resolve());state.cur='foreign';},dispose:()=>disposed=true});},async close(){}},refresh(){},report(){}};
  const browserNavigateApproved=vm.runInNewContext('(function(){'+navigateCode+'\n'+browserCode+';return this.browserNavigateApproved;}).call({})',browserContext);
  const executor=vm.runInNewContext(ts('(async function(operation,signal,expectedContext){'+executorCode+'})'),{connectionController,alphaClient,document,browserNavigationSummary}).bind({browserNavigateApproved,get live(){return live;}});
  const p={id:'proposal',digest:'digest',operation:{type:'browser_navigate',url:'https://example.com'},expiresAt:Date.now()+60000};
  const globals={Error,Date,JSON,deviceJournalContext,createDeviceActionExecution,crypto:{randomUUID},contextKey:JSON.stringify,actionScope:async()=> 'hash',assertProposalContext(){}};
- for(const name of ['isClockOperation','isNativeNotesQuery','isSmsSend','isMapsOperation','isCameraCapture','isLibraryOperation','isReminderCreate','isReminderOperation','isNotesOperation','isCalendarOperation','isForegroundReview','isOriginalDeviceReadOperationType'])globals[name]=()=>false;
+ for(const name of ['isClockOperation','isNativeNotesQuery','isSmsSend','isPhoneDial','isMapsOperation','isCameraCapture','isLibraryOperation','isReminderCreate','isReminderOperation','isNotesOperation','isCalendarOperation','isForegroundReview','isOriginalDeviceReadOperationType'])globals[name]=()=>false;
 
  const journal={async reserve(input){events.push('reserve');return {created:true,entry:{...input,phase:'reserved'}};},async markApplying(){events.push('applying');},async finish(record){journalResults.push(record);events.push('finish');if(finishFailure)throw Error('journal failed');}};
  const owner=new DeviceActions(session,{installationId:'i',enrollmentId:'e'},'c'.repeat(64),async()=>{},journal,async(op,_id,context,signal)=>executor(op,signal,context));

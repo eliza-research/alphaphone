@@ -122,6 +122,7 @@ export default defineConfig({
       "@elizaos/contracts/phone-dial": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/phone-dial.ts", import.meta.url)),
       "@elizaos/contracts/device-action-execution": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/device-action-execution.ts", import.meta.url)),
       "@elizaos/ui/view-primitives": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/view-primitives.ts",import.meta.url)),
+      "@elizaos/capacitor-system/shade": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/client/shade.ts",import.meta.url)),
       "@elizaos/capacitor-system/launcher": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/client/launcher.ts",import.meta.url)),
       // The core entry precedes the shell entry: an alias also matches its own subpaths.
       "@elizaos/ui/mobile-shell/core": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/mobile-shell/core.ts",import.meta.url)),
@@ -138,6 +139,7 @@ export default defineConfig({
       "@elizaos/ui/accessibility/screen-focus": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/accessibility/screen-focus.ts",import.meta.url)),
       "@elizaos/ui/voice/voice-chat-playback": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/voice/voice-chat-playback.ts",import.meta.url)),
       "@elizaos/cloud-sdk/subscription-entitlement": fileURLToPath(new URL("./.eliza/client-features/packages/cloud/sdk/src/subscription-entitlement.ts",import.meta.url)),
+      "@elizaos/contracts/deletion-window": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/deletion-window.ts",import.meta.url)),
       "@elizaos/contracts/sms-send": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/sms-send.ts",import.meta.url)),
       "@elizaos/contracts/native-notes-query": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/native-notes-query.ts",import.meta.url)),
       "@elizaos/contracts": fileURLToPath(new URL("./.eliza/client-features/client-contracts.ts",import.meta.url)),

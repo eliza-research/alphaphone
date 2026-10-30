@@ -41,6 +41,8 @@ function segment(pattern: string, path: string): string | undefined {
  const head = pattern.slice(0, at), tail = pattern.slice(at + 4);
  if(path.length <= head.length + tail.length || !path.startsWith(head) || !path.endsWith(tail))return;
  const id = path.slice(head.length, path.length - tail.length);
+ // One path segment: never a slash, and never the query of a route matched literally with it (as the shared
+ // native OwnerRoutePolicy).
  return id.includes('/') || id.includes('?') ? undefined : id;
 }
 /** Percent-decodes keeping '+' literal; malformed UTF-8 refuses, as no allowed key or id accepts the native U+FFFD. */

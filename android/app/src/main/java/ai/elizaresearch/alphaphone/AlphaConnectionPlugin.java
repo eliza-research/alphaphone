@@ -21,9 +21,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.json.JSONObject;
 
-/** First-party renderer transport and encrypted storage. Never injected into browser pages. */
+/** First-party renderer transport and encrypted storage. Never injected into browser pages. Transport bounds, route
+ * policy, delegation-return admission and the request registry are the shared plugin-native-agent connection
+ * policies; this class keeps Alpha's plugin name, link scheme, hosts (ConnectionRoutes), slots and Android plumbing. */
 @CapacitorPlugin(name = "AlphaConnection")
 public final class AlphaConnectionPlugin extends Plugin {
+ /** Alpha's Cloud delegation return link: alphaphone://cloud-delegation?state=...&(code|error)=... */
  static final String DELEGATION_SCHEME="alphaphone",DELEGATION_HOST="cloud-delegation";
  private volatile Uri delegationCallback;
  private volatile String workspaceCallback;

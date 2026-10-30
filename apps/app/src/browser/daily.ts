@@ -1,5 +1,5 @@
 import {browserDeletionOwnerCurrent,browserDeletionOwnerVisible} from '../runtime/deletion-owner';
-import {browserDeletionClock,deletionWindow} from '../runtime/deletion-window';
+import {rendererDeletionClock,deletionWindow} from '../../../../.eliza/client-features/packages/contracts/src/deletion-window';
 import {stageReminderDeletion,settleReminderDeletions,undoReminderDeletion,type DeletableReminder,type ReminderDeletionState} from './reminder-deletions';
 import {isReminderCreate,validateReminderCreate,validateReminderCreateResult,type ReminderCreateOperation,type ReminderCreateResult} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/reminder-create-contract.ts';
 import { validateReminderOperation, reminderFields, reminderTiming, type ReminderOperation, type ReminderResult, type ReminderTarget } from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/reminder-contract.ts';
@@ -37,7 +37,7 @@ export class BrowserDaily extends WebPlugin {
     const staged=stageReminderDeletion(data,row,owner,id,binding);if(journalBinding)data.deletions![staged.id].journalBinding=journalBinding;return staged;
   });}
   async deletionReceipt(id:string){const data=await reminderDocument.read(initial);return {entry:data.deletions?.[id]||null,row:data.reminders.find(r=>r.pendingDeletion===id||r.id===data.deletions?.[id]?.target.row.id)};}
-  async pendingDeletions(){const data=await reminderDocument.read(initial),clock=browserDeletionClock();return Object.values(data.deletions||{}).filter(e=>!e.acknowledged&&['queued','paused','unknown','dispatching'].includes(e.phase)&&browserDeletionOwnerVisible(e.owner)).map(e=>({...e,kind:'reminder',window:e.phase==='queued'?deletionWindow(e.deadline,clock):undefined}));}
+  async pendingDeletions(){const data=await reminderDocument.read(initial),clock=rendererDeletionClock();return Object.values(data.deletions||{}).filter(e=>!e.acknowledged&&['queued','paused','unknown','dispatching'].includes(e.phase)&&browserDeletionOwnerVisible(e.owner)).map(e=>({...e,kind:'reminder',window:e.phase==='queued'?deletionWindow(e.deadline,clock):undefined}));}
   async settleDeletions(){
     // Polling an empty store must not create a document or a recovery revision.
     const data=await reminderDocument.read(initial);

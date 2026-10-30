@@ -32,6 +32,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  private static String startRequestId;
  private static long startRequestEpoch;
  private static boolean startOwnsLaunch;
+ /** Last-intent-wins credential fence (plugin-native-agent), guarded by the lifecycle lock. */
  private static final CredentialIntentFence credentialIntents=new CredentialIntentFence(lifecycleLock);
  private static long powerAuthorizationMutationEpoch;
  static long credentialAuthorityEpoch(){synchronized(lifecycleLock){return powerAuthorizationMutationEpoch;}}

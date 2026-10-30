@@ -35,7 +35,7 @@ Decided by the product owner on 2026-10-10. Same rules as the entries above: thi
   2. Denton check: "flag only". The separately named check for proprietary fonts, `unresolved-font-licence`, is reported in the build output and in release records and does not make a release `distributable: false`. The constant `UNRESOLVED_FONT_LICENCE_BLOCKS_DISTRIBUTION` in `scripts/licence-policy.mjs` is therefore `false`; setting it to `true` makes a font with no licence record a release blocker again.
   3. Denton licence. The owner states that Alpha Compute owns the Denton font and that the licence is simply not in this repository. This closes A-21 as licensed, with the licence held by the owner outside the repository. What is recorded is that statement and nothing more (`licenses/font-licenses.json`, evidence `held-outside-repository`): no licence document, name, number, date, scope or terms is in the repository or was seen in this work. The font remains proprietary and is not open-source software; its notice and SBOM entries say so and stay flagged `proprietary-licence-held-outside-repo`. One follow-up would complete the record: a reference to the licence document (a reference only, never the document itself, and no secrets) in the record's `reference` field, when the owner supplies one.
 
-  What this entry does not claim. "Included and flagged" is not legal review. The obligations a flag names (corresponding source for GPL, AGPL and LGPL components, a replaceable library for LGPL, a source offer that extends to network use for AGPL) are stated, not shown to be met. The first statement covers open-source software: the resident runtime payload contains one package under non-commercial terms (`@metamask/sdk`, flagged `non-open-source-terms`; see the dependency audit), which none of the three statements addresses. **Amended by P-71 (2026-10-29):** the owner accepted the `@metamask/sdk` licence and accepted the flagged copyleft obligations as fulfilled for the pilot, with legal review before any wider release.
+  What this entry does not claim. "Included and flagged" is not legal review. The obligations a flag names (corresponding source for GPL, AGPL and LGPL components, a replaceable library for LGPL, a source offer that extends to network use for AGPL) are stated, not shown to be met. The first statement covers open-source software: the resident runtime payload contained one package under non-commercial terms (`@metamask/sdk`, flagged `non-open-source-terms`; see the dependency audit), which none of the three statements addresses. **Amended by P-71 (2026-10-29):** the owner accepted the `@metamask/sdk` licence and accepted the flagged copyleft obligations as fulfilled for the pilot, with legal review before any wider release. From the pin that carries the shared mobile wallet-connector exclusion, the Android resident bundle resolves wagmi, RainbowKit and `@metamask/*` to a stub, so the package is no longer expected in the payload; `test/wallet-disabled.test.mjs` checks a staged runtime inventory for it.
 
 ## October 12 owner product decision: one local inference engine
 
@@ -349,7 +349,8 @@ earlier one, the earlier entry carries a dated "Amended by" note and keeps its o
   The flagged copyleft obligations (ffmpeg-static, ua-parser-js, rpc-websockets, JavaScriptCore,
   eSpeak NG) are **accepted as fulfilled today for the pilot**; a legal review is required before
   any wider release. This **amends P-09**, whose statements did not cover `@metamask/sdk`. It is an
-  owner acceptance, not legal review.
+  owner acceptance, not legal review. *Amended by P-77 (2026-10-29): AGPL dependencies are
+  accepted generally, not only for the pilot.*
 - **P-72** — H-07, H-26, H-27, H-29 ([#675](https://github.com/eliza-research/alphaphone/issues/675), [#677](https://github.com/eliza-research/alphaphone/issues/677)): The owner is the operator,
   support owner, rollback owner, key custodian and witness. **NubsCarson is the independent
   reviewer.** The pilot cohort is the internal team only (the owner, the reviewer and teammates),
@@ -388,3 +389,10 @@ earlier one, the earlier entry carries a dated "Amended by" note and keeps its o
   **Eliza's SMS gateway must go through the reviewed send**; there are no unreviewed auto-replies.
   These are elizaOS changes, recorded here for tracking. Alpha's own policy is unchanged, and the
   two products keep separate UI and identity (foundation item 1).
+- **P-77** — H-35 ([#674](https://github.com/eliza-research/alphaphone/issues/674)): **AGPL-licensed dependencies may ship**, because the whole
+  project is open source; ua-parser-js (AGPL-3.0-or-later, through the RainbowKit wallet barrel) is
+  one example. AGPL is not a licence blocker. Every AGPL component that ships must still be
+  attributed in the licence notices, and the public eliza-research/alphaphone and elizaOS/eliza
+  repositories meet the source-availability obligation. This **amends P-71**, which accepted the
+  flagged copyleft obligations for the pilot only; AGPL dependencies are now accepted generally.
+  It is an owner acceptance, not legal review.

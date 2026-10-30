@@ -10,11 +10,12 @@ import {readFileSync} from 'node:fs';
 import {nativeSource,fixture,runJvm} from './fixtures/jvm-tools.mjs';
 
 test('the shared guard refuses work for a stopped, shut-down or full worker without throwing',()=>{
- assert.match(runJvm([nativeSource('PluginWorkers.java'),nativeSource('WorkflowNoticeIo.java'),fixture('PluginWorkersTest.java')],'ai.elizaresearch.alphaphone.PluginWorkersTest'),/^PASS plugin workers/);
+ assert.match(runJvm([nativeSource('PluginWorkers.java'),fixture('PluginWorkersTest.java')],'ai.elizaresearch.alphaphone.PluginWorkersTest'),/^PASS plugin workers/);
 });
 
 // Each plugin and the workers it owns or borrows. worker() is the upstream ActionJournalPlugin's
-// journal worker; NOTICE_IO is the bounded notification worker.
+// journal worker. AlphaNotificationsPlugin has no worker of its own: the upstream
+// NotificationsHostPlugin owns its NoticeWorker and guards it with NoticeWorker.submit.
 const plugins={
  AlphaActionJournalPlugin:['worker()'],
  AlphaConnectionPlugin:['workers'],
@@ -26,8 +27,6 @@ const plugins={
  AlphaMapsTransportPlugin:['workers','closers','deadlines'],
  AlphaNoteAudioPlugin:['migrationWorker'],
  AlphaNoteDocumentsPlugin:['worker'],
- AlphaNotificationsPlugin:['NOTICE_IO'],
- AlphaPhotosPlugin:['worker'],
 };
 const escape=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 
@@ -56,11 +55,25 @@ test('the Maps deadline scheduler is the one dispatch that cannot use Executor a
 test('every worker a plugin declares is listed and checked above',()=>{
  for(const name of Object.keys(plugins)){
   const source=readFileSync(nativeSource(`${name}.java`),'utf8');
-  const declared=[...source.matchAll(/(?:ExecutorService|ThreadPoolExecutor|WorkflowNoticeIo)\s+(\w+)\s*=/g)].map(match=>match[1]);
+  const declared=[...source.matchAll(/(?:ExecutorService|ThreadPoolExecutor|NoticeWorker)\s+(\w+)\s*=/g)].map(match=>match[1]);
   for(const worker of declared)assert.ok(plugins[name].includes(worker),`${name}.${worker} is listed`);
  }
 });
 
+test('the shared Photos bridge Alpha registers answers a call for a stopped worker instead of throwing',()=>{
+ // AlphaPhotosPlugin and AlphaPhotoLibraryPlugin are registrations of plugin-native-media's PhotosPlugin and
+ // DeviceLibraryPlugin and own no worker; the shared plugins catch the refusal themselves.
+ for(const name of ['AlphaPhotosPlugin','AlphaPhotoLibraryPlugin'])assert.doesNotMatch(readFileSync(nativeSource(`${name}.java`),'utf8'),/ExecutorService|\.execute\(/);
+ const shared=name=>readFileSync(new URL(`../vendor/eliza/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/${name}.java`,import.meta.url),'utf8');
+ const photos=shared('PhotosPlugin'),library=shared('DeviceLibraryPlugin');
+ const submit=photos.slice(photos.indexOf('  private void submit(PluginCall call, Runnable action) {'),photos.indexOf('  static void requireLibraryAliases('));
+ assert.match(submit,/try \{\n {6}worker\.execute\([\s\S]*\} catch \(RejectedExecutionException stopped\) \{\n {6}call\.reject\("Photo library closed"\);/);
+ assert.equal([...photos.matchAll(/worker\.execute\(/g)].length,2,'submit and the destroy-time close only');
+ assert.match(photos,/try \{\n {6}worker\.execute\(\(\) -> \{\n {8}if \(edits != null\) edits\.close\(\);\n {6}\}\);\n {4}\} catch \(RejectedExecutionException stopped\)/);
+ const facade=library.slice(library.indexOf('  private void submit(PluginCall call, ReadAction action) {'),library.indexOf('  private boolean locked()'));
+ assert.match(facade,/worker\.execute\([\s\S]*\} catch \(RuntimeException stopped\) \{[\s\S]*call\.reject\("Device library closed"\);/);
+ assert.equal([...library.matchAll(/worker\.execute\(/g)].length,1);
+});
 
 test('the shared speech bridge AlphaVoiceCloudPlugin subclasses answers a stopped or full worker the same way',()=>{
  const base=readFileSync('vendor/eliza/plugins/plugin-local-inference/native/android/speech-bridge/src/main/java/ai/eliza/voice/LocalSpeechBridgePlugin.java','utf8');

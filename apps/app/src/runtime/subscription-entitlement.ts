@@ -9,8 +9,6 @@
  */
 import {
   allowanceText as sharedAllowanceText,
-  organizationCreditFromLimits,
-  type OrganizationCreditBalance,
   describeSubscription as sharedDescribeSubscription,
   redeemFailureMessage as sharedRedeemFailureMessage,
   serviceLimitMessage as sharedServiceLimitMessage,
@@ -45,12 +43,3 @@ export function subscriptionSummary(view: SubscriptionView | null | undefined, o
   const { serviceName, ...rest } = options;
   return sharedSubscriptionSummary(view, { ...rest, copy: alphaSubscriptionCopy(serviceName) });
 }
-
-/**
- * The organization credit balance shown in the approved Membership & credits sheet, read by the
- * shared `organizationCreditFromLimits` from Cloud's exact billing snapshot in its explicit
- * organization-credit billing mode (October 16 decision). It is never a top-up meter and never
- * admits AI.
- */
-export type MembershipCreditDetails = OrganizationCreditBalance;
-export const membershipCreditDetailsFromLimits = organizationCreditFromLimits;

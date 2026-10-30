@@ -35,10 +35,11 @@ test('emptying the trash needs the explicit all intent; a missing or unusable se
 });
 test('native prepareDeleteTrash reads the selection through the shared TrashDeleteRequest before asking the library',()=>{
  // The shared request parser refuses no intent, items:null and a non-list items value; only {all:true} empties the trash.
- const java=readFileSync('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaPhotosPlugin.java','utf8');
+ // AlphaPhotos is a registration of the shared PhotosPlugin, which owns this method.
+ const java=readFileSync(new URL('../vendor/eliza/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/PhotosPlugin.java',import.meta.url),'utf8');
  const method=java.slice(java.indexOf('public void prepareDeleteTrash('),java.indexOf('public void cancelDeleteTrash('));
  assert.doesNotMatch(method,/getArray\("items"\)/,'the plugin never hands a raw or null items array to the library');
- assert.match(method,/request=ai\.eliza\.plugins\.media\.TrashDeleteRequest\.fromPayload\(call\.getData\(\)\);\}\s*catch\(IllegalArgumentException unusable\)\{call\.reject\("Select deleted items again\.[^"]*"\);return;\}/);
+ assert.match(method,/request = TrashDeleteRequest\.fromPayload\(call\.getData\(\)\);\s*\} catch \(IllegalArgumentException unusable\) \{\s*call\.reject\("Select deleted items again\.[^"]*"\);\s*return;\s*\}/);
  assert.ok(method.indexOf('TrashDeleteRequest.fromPayload(')<method.indexOf('owned.prepareDeleteTrash(request)'),'refusal happens before the shared library is asked');
  const adapter=readFileSync('apps/app/src/prototype/camera-adapter.ts','utf8');
  assert.match(adapter,/library\.prepareDeleteTrash\(selected\?\{items:selected\}:\{all:true\}\)/,'Empty trash sends the explicit all intent');

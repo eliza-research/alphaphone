@@ -40,7 +40,7 @@ Rules for every step:
 | [H-03](#h-03-select-the-plan-request-limits) | Select the plan request limits | Owner | Open |
 | [H-04](#h-04-select-the-maps-request-allowance) | Select the Maps request allowance | Owner | Open |
 | [H-05](#h-05-choose-maps-coverage-and-its-operator) | Choose Maps coverage and its operator | Owner | Open |
-| [H-06](#h-06-decide-whether-the-resident-runtime-may-ship-metamasksdk) | Decide on `@metamask/sdk` in the resident runtime | Owner | Open |
+| [H-06](#h-06-decide-whether-the-resident-runtime-may-ship-metamasksdk) | Decide on `@metamask/sdk` in the resident runtime | Owner | Moot after repin (confirm with a staged runtime) |
 | [H-07](#h-07-name-the-pilot-roles-and-cohort) | Name the pilot roles and cohort | Owner | Open |
 | [H-08](#h-08-run-the-release-key-ceremony) | Run the release key ceremony | Custodian and witness | Open |
 | [H-09](#h-09-enroll-the-public-release-identities) | Enroll the public release identities | Release owner | Open: every digest unset |
@@ -161,6 +161,10 @@ These are the values approved policy deliberately leaves open. None reopens a de
   pinned lock only `@wagmi/connectors` requires it (through `wagmi`, a dependency of the shared
   `packages/ui`), a wallet-connector closure; Wallet is outside the MVP (P-38).
 - Seam: the notices flag it `non-open-source-terms`; nothing blocks a build (P-09).
+- Update: the shared mobile agent build now excludes the wallet-connector graph (wagmi,
+  RainbowKit, `@metamask/*`) from the Android resident bundle. Once the pin carries it and a
+  staged runtime's inventory passes `test/wallet-disabled.test.mjs`, the package is not shipped
+  and no decision is needed.
 - Verify: the decision is recorded in decisions.md.
 - Unblocks: licence clearance for distribution.
 

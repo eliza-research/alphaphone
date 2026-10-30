@@ -20,13 +20,13 @@ test('Activity presents recorded phone actions in plain language with reconcile 
         { name: 'Agent', methods: agent.methods(['getStatus', 'start', 'stop', 'request']) },
         { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite', 'secureCompareExchange', 'secureRemove', 'request', 'cancel', 'addListener', 'removeListener']) },
         { name: 'AlphaActionJournal', methods: methods(['list']) },
-        { name: 'DeviceApps', methods: methods(['buildInfo']) },
+        { name: 'ElizaSystem', methods: methods(['getBuildInfo']) },
       ],
       nativeCallback: agent.nativeCallback,
       nativePromise: async (plugin: string, method: string, input: any) => {
         if (plugin === 'AlphaNotifications') return { permissionGranted: true, appEnabled: true };
         if (plugin === 'AlphaVoiceCloud') return { microphone: 'granted' };
-        if (plugin === 'DeviceApps') return { launcher: false, version: 'activity-fixture' };
+        if (plugin === 'ElizaSystem' && method === 'getBuildInfo') return { launcher: false, version: 'activity-fixture' };
         if (plugin === 'AlphaActionJournal') return { entries: [{ scope: 'any', proposalId: 'note-proposal', operationId: 'op-1', operationHash: 'h', record: {}, phase: 'applying', applyingAt: Date.UTC(2026, 9, 8, 15, 30) }] };
         if (plugin === 'Agent') {
           const owned = agent.answer(method, input); if (owned) return owned;
