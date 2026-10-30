@@ -154,6 +154,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
 
  private static final class Superseded extends Exception {}
  private static void clearEnrollment(){AlphaCanonicalNotifications.stop();rootToken=null;ownerToken=null;ownerIdentity=null;notificationAgent=null;expiresAt=0;}
+ static long currentCredentialIntent(){return credentialIntents.current();}
  static long reserveCredentialIntent(){return credentialIntents.reserve();}
  static void requireCredentialIntent(long intent){credentialIntents.require(intent);}
  interface CredentialMutation<T> {
@@ -263,18 +264,21 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  @PluginMethod public void residentAttachment(PluginCall call) {
   final String credentialId=call.getString("credentialId");
   PluginWorkers.submit(workers,()->{try{
-   AlphaCredentialStore store=new AlphaCredentialStore(getContext());
-   String refusal=null;
-   if(credentialId!=null){
-    try{
-     JSONObject provider=new JSONObject(store.readCredentialSlot("local-agent-provider:v1"));
-     if(!"elizacloud".equals(provider.optString("provider"))||!credentialId.equals(provider.optString("credentialId"))||!CLOUD_PROVIDER_MODEL.equals(provider.optString("model")))refusal="provider-changed";
-    }catch(Exception unreadable){refusal="provider-unadmitted";}
-   }
-   String generation=storedProviderGeneration(store),root=ElizaAgentService.localAgentToken();
    JSONObject bootState=ElizaAgentService.getLocalAgentBootState(getContext());
-   if(refusal==null)synchronized(lifecycleLock){refusal=attachRefusalLocked(bootState,root,generation);}
-   call.resolve(new JSObject(ResidentAttachment.describe(refusal).toString()));
+   synchronized(lifecycleLock){synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){
+    AlphaCredentialStore store=new AlphaCredentialStore(getContext());
+    String saved=store.readCredentialSlot("local-agent-provider:v1"),refusal=null;
+    if(credentialId!=null){
+     try{
+      JSONObject provider=new JSONObject(saved);
+      if(!"elizacloud".equals(provider.optString("provider"))||!credentialId.equals(provider.optString("credentialId"))||!CLOUD_PROVIDER_MODEL.equals(provider.optString("model")))refusal="provider-changed";
+     }catch(Exception unreadable){refusal="provider-unadmitted";}
+    }
+    if(refusal==null)refusal=attachRefusalLocked(bootState,ElizaAgentService.localAgentToken(),storedProviderGeneration(store));
+    JSObject result=new JSObject(ResidentAttachment.describe(refusal).toString());
+    if(refusal==null&&credentialId!=null)result.put("bindingGuard",store.providerBindingGuard(saved));
+    call.resolve(result);
+   }}
   }catch(Exception unavailable){call.resolve(new JSObject().put("attachable",false).put("reason","unavailable"));}},()->{call.reject("Local agent bridge is closed.");});
  }
  /** A direct (bring-your-own) Cerebras key is a test-mocks developer surface only. Product phones use
@@ -302,6 +306,15 @@ public final class AlphaLocalAgentPlugin extends Plugin {
    call.resolve(clearProviderSlot(new AlphaCredentialStore(getContext(),()->{if(disposed)throw new IllegalStateException("Local agent bridge closed");requireCredentialIntent(configuration);}),onlyIfPresent));
   }catch(Exception error){call.reject("The provider key could not be removed.");}},()->{call.reject("Local agent bridge is closed.");});
  }
+ @PluginMethod public void clearProviderIfCurrent(PluginCall call){
+  String guard=call.getString("bindingGuard","");
+  if(!guard.matches("[a-f0-9]{64}")){call.reject("Invalid binding guard");return;}
+  PluginWorkers.submit(workers,()->{try{
+   AlphaCredentialStore store=new AlphaCredentialStore(getContext(),()->{if(disposed)throw new IllegalStateException("Local agent bridge closed");});
+   boolean cleared=store.removeProviderIfCurrent(guard);
+   call.resolve(new JSObject().put("outcome",cleared?"cleared":"changed"));
+  }catch(Exception error){call.reject("Conditional provider removal could not be confirmed.");}},()->call.reject("Local agent bridge is closed."));
+ }
  static final String CLOUD_PROVIDER_MODEL=LocalAgentProviderAdmission.CLOUD_PROVIDER_MODEL;
  static final String CLOUD_PROVIDER_BASE=LocalAgentProviderAdmission.CLOUD_PROVIDER_BASE;
  /** Binds an existing account credential; no bearer value crosses this method's renderer API. */
@@ -312,8 +325,8 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   final long configuration=reserveCredentialIntent();
   PluginWorkers.submit(workers,()->{try{
    AlphaCredentialStore store=new AlphaCredentialStore(getContext(),()->{if(disposed)throw new IllegalStateException("Local agent bridge closed");requireCredentialIntent(configuration);});
-   bindCloudProvider(store,credentialId,model);store.assertCurrent();
-   call.resolve(new JSObject().put("configured",true));
+   String applied=bindCloudProvider(store,credentialId,model);store.assertCurrent();
+   call.resolve(new JSObject().put("configured",true).put("bindingGuard",store.providerBindingGuard(applied)));
   }catch(Exception unavailable){
    String code="NATIVE_CLOUD_ADMISSION_UNAVAILABLE";
    if(unavailable instanceof LocalAgentProviderAdmission.CloudBindingFailure){LocalAgentProviderAdmission.CloudBindingFailure failure=(LocalAgentProviderAdmission.CloudBindingFailure)unavailable;code="NATIVE_CLOUD_ADMISSION_"+failure.stage.toUpperCase(java.util.Locale.ROOT).replace('-','_');android.util.Log.w("AlphaCloudAdmission",failure.diagnostic.toString());}
@@ -321,8 +334,8 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   }},()->{call.reject("Local agent bridge is closed.");});
  }
  /** Preserve the previous selection when admission loses its account, without replacing a newer selection. */
- static void bindCloudProvider(AlphaCredentialStore store,String credentialId,String model) throws Exception {
-  LocalAgentProviderAdmission.bindCloudProvider(new LocalAgentProviderAdmission.CloudBindingStore(){
+ static String bindCloudProvider(AlphaCredentialStore store,String credentialId,String model) throws Exception {
+  return LocalAgentProviderAdmission.bindCloudProvider(new LocalAgentProviderAdmission.CloudBindingStore(){
    public String readProvider()throws Exception{return store.readCredentialSlot("local-agent-provider:v1");}
    public String readCloud()throws Exception{return store.readCredentialSlot("cloud:production");}
    public void assertCurrent()throws Exception{store.assertCurrent();}

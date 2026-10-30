@@ -29,8 +29,9 @@ export interface LocalAgentBridge {
   configureProvider?(input:{apiKey:string;model:string}):Promise<unknown>;
   providerStatus?():Promise<{provider?:unknown;configured?:unknown;model?:unknown}>;
   clearProvider?(input?:{onlyIfPresent:true}):Promise<{configured?:unknown}>;
+  clearProviderIfCurrent?(input:{bindingGuard:string}):Promise<{outcome?:unknown}>;
   /** Read-only native query; see residentAttachable. */
-  residentAttachment?(input:{credentialId?:string}):Promise<{attachable?:unknown;reason?:unknown}>;
+  residentAttachment?(input:{credentialId?:string}):Promise<{attachable?:unknown;reason?:unknown;bindingGuard?:unknown}>;
   configureCloudProvider?(input:{credentialId:string;model:string}):Promise<unknown>;
   request(input: { path: string; audioBase64?:string;requestId?:string;ownerId?:string; method: LocalAgentMethod; headers: Record<string,string>; body?: string; timeoutMs: number }, signal?:AbortSignal): Promise<{status:number;body?:string}>;
   stream?(input:{path:string;ownerId:string;headers:Record<string,string>;body:string},signal:AbortSignal,onText:(text:string)=>void,onReplyReady?:(results:readonly unknown[]|undefined)=>void):Promise<RemoteChatReply>;
@@ -422,20 +423,31 @@ export async function clearLocalProvider(onlyIfPresent=false):Promise<LocalProvi
  * it never starts, stops, pairs or rebinds. Any error or doubt reports false, which keeps the
  * ordinary stop → bind → start path; so does an earlier attach by this surface that failed its
  * owner-session verification. */
-export async function residentAttachable(credentialId:string,bridge:Pick<LocalAgentBridge,'residentAttachment'>=native,nativePlatform:boolean=Capacitor.isNativePlatform()):Promise<boolean> {
-  if(browserCloudResidentEnabled){if(attachDistrusted)return false;try{return (await browserResidentCall('residentStatus',credentialId)).attachable===true;}catch{return false;}}
-  if(attachDistrusted||!nativePlatform||typeof credentialId!=='string'||!credentialId||!bridge.residentAttachment)return false;
-  try{return (await bridge.residentAttachment({credentialId}))?.attachable===true;}catch{return false;}
+async function residentAttachmentStatus(credentialId:string,bridge:Pick<LocalAgentBridge,'residentAttachment'>=native,nativePlatform:boolean=Capacitor.isNativePlatform()):Promise<{attachable:boolean;bindingGuard?:string}> {
+  if(attachDistrusted||!nativePlatform&&!browserCloudResidentEnabled||typeof credentialId!=='string'||!credentialId)return {attachable:false};
+  try{
+    const result=browserCloudResidentEnabled?await browserResidentCall('residentStatus',credentialId):await bridge.residentAttachment?.({credentialId});
+    const guard=result&&typeof result.bindingGuard==='string'&&/^[a-f0-9]{64}$/.test(result.bindingGuard)?result.bindingGuard:undefined;
+    return {attachable:result?.attachable===true,...(guard?{bindingGuard:guard}:{})};
+  }catch{return {attachable:false};}
 }
-/** Bind the resident's Cloud provider for one surface. A surface that can attach (the assistant
- * opening beside Home, or either surface reconnecting while the other keeps the enrollment)
- * reuses the running agent: rebinding would stop it, retiring another surface's in-flight work
- * and restarting inference. When the last surface is destroyed native clears the enrollment, so
- * a lone recreated surface is not attachable and takes the ordinary path. */
-export async function bindResidentCloudProvider(credentialId:string,ports:{attachable:(credentialId:string)=>Promise<boolean>;configure:(credentialId:string)=>Promise<void>}={attachable:residentAttachable,configure:configureLocalCloudProvider}):Promise<'attached'|'configured'> {
-  if(await ports.attachable(credentialId))return 'attached';
-  await ports.configure(credentialId);
-  return 'configured';
+export async function residentAttachable(credentialId:string,bridge:Pick<LocalAgentBridge,'residentAttachment'>=native,nativePlatform:boolean=Capacitor.isNativePlatform()):Promise<boolean> {
+  return (await residentAttachmentStatus(credentialId,bridge,nativePlatform)).attachable;
+}
+/** A returned guard identifies this call's exact attachment or newly applied binding. */
+export async function bindResidentCloudProvider(credentialId:string,ports?:{attachable:(credentialId:string)=>Promise<boolean>;configure:(credentialId:string)=>Promise<void|string>}):Promise<string|undefined> {
+  const attachment=ports?{attachable:await ports.attachable(credentialId)}:await residentAttachmentStatus(credentialId);
+  if(attachment.attachable)return 'bindingGuard' in attachment?attachment.bindingGuard:undefined;
+  return await (ports?.configure??configureLocalCloudProvider)(credentialId);
+}
+/** Automatic failed-bind cleanup has no unguarded fallback, including on older hosts. */
+export async function clearLocalProviderIfCurrent(bindingGuard:string,signal:AbortSignal):Promise<'cleared'|'changed'> {
+  signal.throwIfAborted();
+  if(!/^[a-f0-9]{64}$/.test(bindingGuard)||browserCloudResidentEnabled||!Capacitor.isNativePlatform()||!native.clearProviderIfCurrent)throw Error('Conditional provider removal is unavailable.');
+  const result=await native.clearProviderIfCurrent({bindingGuard});
+  signal.throwIfAborted();
+  if(result.outcome!=='cleared'&&result.outcome!=='changed')throw Error('Conditional provider removal was not confirmed.');
+  return result.outcome;
 }
 
 /** The renderer has not attempted a credential bind when this stop fails.
@@ -453,7 +465,8 @@ export async function configureLocalCloudProvider(credentialId:string) {
   try { await stopLocalAgent(); }
   catch(cause) { throw new LocalCloudProviderStopUnconfirmed(cause); }
   if(!native.configureCloudProvider)throw Error('Cloud billing is unavailable in this version.');
-  await native.configureCloudProvider({credentialId,model:'cerebras/qwen-3.8-27b'});
+  const result=record(await native.configureCloudProvider({credentialId,model:'cerebras/qwen-3.8-27b'}));
+  return typeof result.bindingGuard==='string'&&/^[a-f0-9]{64}$/.test(result.bindingGuard)?result.bindingGuard:undefined;
 }
 
 export async function stopLocalAgent() {
