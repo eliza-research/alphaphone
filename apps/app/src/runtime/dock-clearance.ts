@@ -1,4 +1,4 @@
-import { installDockClearance as installSharedDockClearance, visibleDocks as sharedVisibleDocks } from '../../../../.eliza/client-features/packages/ui/src/components/shell/dock-clearance.ts';
+import { installDockClearance as installSharedDockClearance, revealFocusAboveDocks, visibleDocks as sharedVisibleDocks } from '../../../../.eliza/client-features/packages/ui/src/components/shell/dock-clearance.ts';
 /**
  * How much of the bottom of the phone the floating dock takes (the composer bar with whatever is
  * stacked on it, or the pill), measured, in the phone canvas's own pixels.
@@ -24,10 +24,17 @@ import { installDockClearance as installSharedDockClearance, visibleDocks as sha
 export const DOCK_CLEARANCE_PROPERTY = '--alpha-dock-clearance';
 export const DOCK_REST_PROPERTY = '--alpha-dock-rest';
 const DOCK = '[data-alpha-layer="composer"],[data-alpha-layer="pill"] > *';
+const FOCUS = {scrollContainers: '[data-alpha-app-scroll],[data-installed-apps-scroll],[data-alpha-layer="home"],.calendar-timeline,.calendar-draft-fields'};
 
 /** The dock elements on screen now: rendered, and not retired behind the shade or a voice session. */
 export function visibleDocks(root: ParentNode = document): HTMLElement[] {
   return sharedVisibleDocks(root, DOCK);
+}
+
+/** Product selectors for the shared focus reveal; the resting sheet also uses it. */
+export function revealAppFocus(target: EventTarget | null, docks = visibleDocks(), keyboardOnly = true): void {
+  const screen = document.querySelector<HTMLElement>('[data-screen]');
+  if (screen) revealFocusAboveDocks(target, screen, docks, FOCUS, keyboardOnly);
 }
 
 let installed: (() => void) | null = null;
@@ -38,7 +45,7 @@ let installed: (() => void) | null = null;
  */
 export function installDockClearance(): () => void {
   if (installed) return installed;
-  const uninstall = installSharedDockClearance({ screen: '[data-screen]', docks: DOCK, bar: '[data-alpha-input-bar]', clearanceProperty: DOCK_CLEARANCE_PROPERTY, restProperty: DOCK_REST_PROPERTY });
+  const uninstall = installSharedDockClearance({ screen: '[data-screen]', docks: DOCK, bar: '[data-alpha-input-bar]', clearanceProperty: DOCK_CLEARANCE_PROPERTY, restProperty: DOCK_REST_PROPERTY, revealFocus: FOCUS });
   installed = () => { installed = null; uninstall(); };
   return installed;
 }
