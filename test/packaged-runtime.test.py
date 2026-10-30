@@ -179,7 +179,11 @@ class PackagedRuntimeTest(unittest.TestCase):
         self.entries['assets/agent/pglite.data'] = b'database payload'
         rows = [{'path': name, 'sha256': sha(data), 'size_bytes': len(data)} for name, data in self.entries.items() if name.endswith(('libeliza_bun.so', 'pglite.data', 'agent-bundle.js'))]
         self.entries['assets/agent/alpha-runtime-profile.json'] = json.dumps({'version': 1, 'runtimeProfile': 'cloud', 'omittedLocalModels': [omitted]}).encode()
-        self.entries['assets/agent/android-agent-runtime-provenance.json'] = json.dumps({'schema': 'eliza.android_agent_runtime_provenance.v1', 'files': rows}).encode()
+        self.entries['assets/agent/android-agent-runtime-provenance.json'] = json.dumps({
+            'schema': 'eliza.android_agent_runtime_provenance.v1',
+            'bun': {'target': 'linux-musl', 'architectures': ['arm64-v8a', 'x86_64']},
+            'files': rows,
+        }).encode()
         for name, data in self.entries.items():
             if name.startswith('assets/'):
                 self.write('android/app/src/main/' + name, data)

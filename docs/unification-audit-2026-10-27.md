@@ -546,3 +546,31 @@ The required Android command built all four standalone/launcher debug/release AP
 The APKs, generated BuildConfig sources, mappings, notices and logs are retained in `artifacts/unification-checkpoints/f31d7c3-2d2509762/`; the compact record is [unification-f31-2d250-checkpoint.json](evidence/unification-f31-2d250-checkpoint.json). Releases are unsigned and non-distributable, voice acceptance remains false, and this is ARM64 APK evidence rather than application installation, HOME-role, image, live-service or device acceptance.
 
 The same review found a CI setup gap: the real SDK collector/routing tests depended on manual source/Bun environment variables. They now discover and authenticate the prepared SDK and its declared Bun version. All 14 checks pass with those overrides removed; verification jobs now prepare that SDK first. No source-authentication or real collector check was replaced by a mock.
+
+
+### October 30 — owner PR reconciliation and ABI fixture correction
+
+Alpha PR 717's shared device coordinator, stopped-turn matching and eight client
+source projections are already implemented by the newer integration. Its ancestry
+was merged while preserving the exact current tree; the older browser-policy
+casts and weaker authored-URL tests were not restored. The source comparison and
+tree hashes are recorded in `docs/evidence/alpha-owner-reconciliation-20261030.json`.
+This is a local integration merge, not a claim that GitHub PR 717 has merged.
+
+NubsCarson's quiet background pending-action check from PR 759 is integrated with
+its original authorship. Four tests verify that a failed read preserves the existing
+card and expiry without a toast, a retired context cannot report, and an explicit
+retry or context change permits a new read. The old source reproduces the failure;
+all four pass after the change. PR 759's Home period selection has a shared upstream
+replacement in draft Eliza PR 38300. The old pin and parity allowlist expansion are
+not adopted. The remote PR remains pending the shared replacement and final checks.
+
+Full verification at `661817263` reported 2,743 passes, one failure, three skips
+and one pre-existing APEX payload-key TODO. The failure was the Cloud APK fixture:
+it lacked the Bun ABI declaration now required by the verifier, although the real
+staging producer emits that declaration. The fixture now supplies the actual
+linux-musl/two-ABI shape; no verifier checks were loosened. All 76 selected tests,
+including both real-ZIP verifier suites, device receipts, authored-URL refusals and
+stopped-turn matching, pass. The queued Android command correctly refused to start
+after the failed full check. A new full source check and four-variant Android command
+are required at the resulting commit before this checkpoint is accepted.
