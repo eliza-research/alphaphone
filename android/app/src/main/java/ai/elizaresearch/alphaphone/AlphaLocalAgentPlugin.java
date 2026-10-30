@@ -43,6 +43,14 @@ public final class AlphaLocalAgentPlugin extends Plugin {
    synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){return action.call();}
   }
  }
+ /** Shared sign-in delivery reads the same current authority under lifecycle then vault locks. */
+ static <T> T withCredentialRead(java.util.concurrent.Callable<T> read)throws Exception{
+  final long owner=credentialAuthorityEpoch();
+  return withCredentialAuthority(owner,()->{
+   if(credentialMutationEpoch>=0)throw new IllegalStateException("Credential mutation in progress");
+   return read.call();
+  });
+ }
  /** Native-only authorization mutation marker. Both locks are already held by credential commit. */
  static void powerAuthorizationChanged(){
   if(!Thread.holdsLock(lifecycleLock)||!Thread.holdsLock(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK))throw new IllegalStateException("Credential lock order required");
