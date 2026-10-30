@@ -2,206 +2,134 @@
   "schema": 1,
   "repository": "elizaOS/eliza",
   "base": "develop",
-  "baseCommit": "d5f604eee7ca518fef6706bc163ffa71ae7647ba",
-  "head": "9af104a1c7c7021493db575899baee666ea0ff6a",
+  "baseCommit": "6b2fd5f5752cb08e4fa018b35038ec7078283ea2",
+  "head": "89714cd4b8d89824ef435c69362523c8b5e37f60",
   "recordedAt": "2026-10-30",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...9af104a1c7c7021493db575899baee666ea0ff6a",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...89714cd4b8d89824ef435c69362523c8b5e37f60",
   "status": "diverged",
-  "aheadBy": 50,
-  "behindBy": 8,
-  "mergeBase": "25da1a402eeb7eac4bf454636c70ca2f0be71580",
+  "aheadBy": 30,
+  "behindBy": 13,
+  "mergeBase": "ad1212caee0e818da370be62aef34277780a9f1a",
   "pinOnlyCommits": [
     {
-      "sha": "5ed02e85514399fea3b50e9bf6c4e2288ad3be90",
-      "subject": "Answer DM closings, admit more progress acks, keep the day on calendar follow-ups"
+      "sha": "8d722239ffb2df99488fc65c24b85ee6011d9d88",
+      "subject": "fix(assistant): read a receipt's request source ID as its history:hN"
     },
     {
-      "sha": "61782bf28392ddebb76b8e43481f97b19f647557",
-      "subject": "Keep the stated time out of created event titles"
+      "sha": "c8bc47aa5f0e99ed9f5099505d299ce48fc36fee",
+      "subject": "fix(calendar): treat the runtime redaction mask as a placeholder calendarId"
     },
     {
-      "sha": "bd3ee06349c446956686fe86a048a297c8782423",
-      "subject": "Test direct replies, progress delivery, and calendar follow-ups"
+      "sha": "621c0c84f47eb9dfa22c3ff341d7f7be700c9763",
+      "subject": "fix(trigger): require taskId on the promoted TRIGGER_UPDATE schema"
     },
     {
-      "sha": "160e80f58cad5b7f65e0890d285f180cd3dca0aa",
-      "subject": "fix(workflow): bind the owner conversation when an edit switches a trigger to prompt (#38169)"
+      "sha": "4b5eeca0819e8a9ba135b0fb7146ad285c74e6a6",
+      "subject": "fix(assistant): stop advertising the full discovery catalog as a name index"
     },
     {
-      "sha": "189cf276902ae41a3a3d6a441cfd40c0e954cb29",
-      "subject": "Phone workflow device contract, selected-reminders read, 30-minute missed-run window (#38161)"
+      "sha": "d54014e2c311a971911f67fd9635e5c6287d193d",
+      "subject": "test(assistant): state the discovery-copy regression without a causal claim"
     },
     {
-      "sha": "0db04d25367889fd0b939f9e5f31d38338a37f94",
-      "subject": "fix(notes): new editor drafts do not bind to another note on first save (#38172)"
+      "sha": "1c9c91cd0489b01593e4d8c8fcc2d97b29b988ad",
+      "subject": "fix(calendar): create a past start the user dated explicitly"
     },
     {
-      "sha": "41fb9efd8800074d73fb77a4b4931ef6ba0c3548",
-      "subject": "Declare bounded Calendar day observation format support"
+      "sha": "47deb470f387287cb21462e48f167803f235abf6",
+      "subject": "fix(calendar): stand the past-start pause down only for a stated today"
     },
     {
-      "sha": "ec258a5b40e448509e14d4ec31f734cb69ad08ca",
-      "subject": "WIP preserve separate Calendar carry-forward for later qualification"
+      "sha": "4226836757e3590b76348624af02aa267ae2eaf6",
+      "subject": "fix(notes): keep the update revision token writable on strict tool grammars"
     },
     {
-      "sha": "d83b9c0f9075ae2fc267958bd1ef2017bda8e647",
-      "subject": "wip(calendar): freeze instance-bound selected-day carrier for qualification"
+      "sha": "e8e1d3dd72076e3122ab1f6e061bf1173124c74f",
+      "subject": "fix(assistant): replan pending work after a prepared app-view navigation"
     },
     {
-      "sha": "ae9afede979c357583a1faad8f405654bbd9d669",
-      "subject": "fix(calendar): qualify selected-day edits through the canonical chat reader"
+      "sha": "70537dc4b05a88593614a5dd54ad8b3e153fbb4b",
+      "subject": "fix(assistant): replan after a prepared navigation at most once per turn"
     },
     {
-      "sha": "4fd281d6c3880e47d55773acb30d5f60755b5900",
-      "subject": "fix(assistant): ground browser proposals in the current owner request"
+      "sha": "0aaf7b3de06a3baeacc8c7de9b95942ba8277aff",
+      "subject": "fix(assistant): return the complete name index when describe-all exceeds the result budget"
     },
     {
-      "sha": "cea0da10f64b4ab14f63e3d1ace5d02a80d10e7d",
-      "subject": "test(assistant): bind browser lifecycle fixtures to durable owner requests"
+      "sha": "0e601fec120dd371d19fcbb221d59f0c5911c5d5",
+      "subject": "docs(assistant): say the discovery index carries a summary only where one exists"
     },
     {
-      "sha": "1bb36fbc33517fc095c5f8ced9a4fd2f33d65205",
-      "subject": "Preserve typed Cloud authentication reasons in bounded text diagnostics"
+      "sha": "f700a3f4886c151783209e6300eee674d8ee148e",
+      "subject": "fix(planner): cap non-coding planner output and retry a capped generation once"
     },
     {
-      "sha": "1d09118cfd33cf21d3532119e28d34fd566f3d3e",
-      "subject": "Format the bounded authentication diagnostic cases"
+      "sha": "c17f8b24e81a2d8d17718e9f33e47d6ba3e35864",
+      "subject": "fix(elizacloud): report a capped tool call as incomplete output"
     },
     {
-      "sha": "210bc893b3dda55daba72d914bd851155f954f86",
-      "subject": "fix(calendar): retain next-event facts as internal reply evidence"
+      "sha": "c89ad84783e533f0bf40e67e25f0f2a21ea86f75",
+      "subject": "fix(planner): apply the default output cap only where the provider can honor it"
     },
     {
-      "sha": "da9dea519fa8cbeb9952eae47f64d548f765192f",
-      "subject": "fix(calendar): expose existing create duration policy without hiding invalid timing"
+      "sha": "a6eaad0a01a6bf6fc258c20cdb8b7bfd9f586fa8",
+      "subject": "fix(planner): send Anthropic no default output cap"
     },
     {
-      "sha": "e86a6764f9a43fc5afa034345ce05a147caf6190",
-      "subject": "fix(calendar): preserve explicit agenda record ownership before dispatch"
+      "sha": "a28dc11a112623e297738f3cf18efb5a82dd5f36",
+      "subject": "fix(calendar,assistant): turn provider reasoning off for extractors and the post-turn evaluator"
     },
     {
-      "sha": "7854f43ff93082452c8aca5c4bf56aff0e0015bf",
-      "subject": "fix(calendar): declare the optional agenda port outcome contract"
+      "sha": "339eaf97cf5ad960801c019ba0d78958f009c0a9",
+      "subject": "test(openai,personal-assistant): prove evaluator reasoning off on the wire and fix a create stub check"
     },
     {
-      "sha": "5c8df54c156a9871d56e58124ae5708604610d50",
-      "subject": "feat(agent): prepare product branding through canonical identity config"
+      "sha": "9d3d1b263290986d4119f9323707c4d62a98ee38",
+      "subject": "fix(assistant): replan a follow-up Stage 1 planned after a final-scope view"
     },
     {
-      "sha": "d9c37ec3ce63f35e3f16539008d3f87a73dd1fa4",
-      "subject": "fix(agent): validate canonical names before identity comparison"
+      "sha": "2cb0e8b107ddb9b35e2b3c68f29a508ba47b3a3f",
+      "subject": "docs(assistant): state the follow-up navigation hint as a replan, not a rule"
     },
     {
-      "sha": "cc5bbbb3ed305838dfdaf740b4286f12fd4750ff",
-      "subject": "fix(agent): guard optional UI identity without assertion"
+      "sha": "d6235c43df2ce3c5a952891ee67b5099aa7001af",
+      "subject": "fix(notes): route plain appends to the patch operation whose grammar requires target and revision"
     },
     {
-      "sha": "eeae1b54a19ee04efd205d56520a28ace24898a9",
-      "subject": "fix(agent): consume admitted product persona in normal host boot"
+      "sha": "a636db0961724998265b1be710e27bd57a5c5dde",
+      "subject": "fix(notes): keep NEW checklist items on the update operation"
     },
     {
-      "sha": "a4c766dbdbaeda8ff0ad045ed5afb4b21bee1480",
-      "subject": "fix(agent): preserve profile scopes and explicit persona edits"
+      "sha": "65333120817d19b913c45a702e3760ba8ee5b785",
+      "subject": "fix(calendar): stop rejecting invented planner sourceNote hashes"
     },
     {
-      "sha": "055105126e36276079b2c856a724378feb2d4737",
-      "subject": "fix(agent): reject ambiguous restored persona scopes"
+      "sha": "c3bf0774233604e03de64f91fd6835f4f3852107",
+      "subject": "fix(assistant): skip post-turn memory review after navigation-only turns"
     },
     {
-      "sha": "7df08bce13070b720a17611c45a7da18d318d662",
-      "subject": "fix: carry reviewed planner dedup and trigger limit clearing"
+      "sha": "aeeeac7e9248332dc2d7a97c26931a5fce531f69",
+      "subject": "fix(assistant): keep possessive and discovery navigation turns out of post-turn review"
     },
     {
-      "sha": "2ad4d605ec8e6a7d251ec83d017faa873fa1c4ee",
-      "subject": "fix(assistant): preserve current-request browser coordination"
+      "sha": "e53e0f4d81786ed1644e4052e78e521aa4cf6e2c",
+      "subject": "fix(lifeops): wait for the deferred calendar service before failing a read"
     },
     {
-      "sha": "e101fcce6560a371f81f5310b5a82fbea1454feb",
-      "subject": "fix(assistant): fence browser dispatch with current request"
+      "sha": "e2c9ffe080424140f32c5ec560d4c6fa52b44f9a",
+      "subject": "fix(lifeops): bound the deferred calendar wait under the client GET timeout"
     },
     {
-      "sha": "bb51e5dd5e276b27ac3cd9b8a70421e797375dfe",
-      "subject": "fix(assistant): retain manual review of older browser proposals"
+      "sha": "3b73d5c0132b9e8e1bf0fdaa897d64589c3d7826",
+      "subject": "fix(assistant): keep a delete's update sibling when the request sets a new value"
     },
     {
-      "sha": "36bb2d743e0c2988595cb66ea618a07661b3e879",
-      "subject": "fix(assistant): preserve current browser cancellation errors"
+      "sha": "7a3d9ff9e7f28ad1ac744bf3619f7a64f5deb8ac",
+      "subject": "fix(trigger): move a one-off trigger by delayMinutes on update"
     },
     {
-      "sha": "45a410b126202e2ec375c584e9f59336058d3579",
-      "subject": "fix(calendar): ground confirmation ranges in committed event time"
-    },
-    {
-      "sha": "4b2aa625744f53528d080ec684276b91124ee347",
-      "subject": "test(calendar): preserve exact observed time-regression wording"
-    },
-    {
-      "sha": "a683c93ba651beeb9239f4f98c315d41d690c0ab",
-      "subject": "fix(calendar): retain time grounding with repeated evidence"
-    },
-    {
-      "sha": "d4b1b0afc4ec349c438263c0ba8aa2343ff52b81",
-      "subject": "Expose safe trajectory control decisions in detail metadata"
-    },
-    {
-      "sha": "53d9625a2552bfe1dff88e734ae99bb4d3ee49b2",
-      "subject": "Clarify current Calendar detail reads require source lookup"
-    },
-    {
-      "sha": "e311c50f0df5e7a5884aabc7a5e2fed1e73c9e10",
-      "subject": "Anchor relative owner reminders to the request observation time"
-    },
-    {
-      "sha": "c4820e15efea5ad104a1e1bab46a3071999a7893",
-      "subject": "Recheck relative reminder expiry after final lookups"
-    },
-    {
-      "sha": "66f6d75ff1e1880692681f5bc4223985030f8391",
-      "subject": "Preserve committed reminder retries before checking new-write deadline"
-    },
-    {
-      "sha": "ed9c013d7af311c9fdec1f2a5bf8fc2fd1c4edff",
-      "subject": "fix: settle speech requests before host failure handling"
-    },
-    {
-      "sha": "0b0d6e5fcdbbb37b54c546361f511c5f57ac76db",
-      "subject": "Guard failed resident bind cleanup by exact host binding"
-    },
-    {
-      "sha": "8d690dff0fa50a2ccff107bfeb491b25e0063d97",
-      "subject": "Admit dash- and comma-joined progress acknowledgements"
-    },
-    {
-      "sha": "406e9d6f6f3671f5466c1133e879a331ecd1efbf",
-      "subject": "Preserve relative reminder deadlines through preview confirmation"
-    },
-    {
-      "sha": "27df08a88ce6d79d496fc6793ffae6cefd0d3712",
-      "subject": "fix: retain phone and reminder reads in shared device coordinator"
-    },
-    {
-      "sha": "6e9bf50799f351dfb63e17b08cf2eabc00181a2e",
-      "subject": "fix(agent): narrow productCharacter before restoring its profile scope"
-    },
-    {
-      "sha": "3127155ea340676034b2ed073a97bfd78ee9f154",
-      "subject": "style(calendar): format the qualified-target test table"
-    },
-    {
-      "sha": "30780e9339519a72395b9121a16969c78db6e2e6",
-      "subject": "style: apply biome formatting and import order to the snapshot's changed files"
-    },
-    {
-      "sha": "7a61d33443ccdccfe6a8d8087534af3db385bf71",
-      "subject": "fix(voice): do not speak a reply that repeats the spoken progress cue"
-    },
-    {
-      "sha": "0fde8e0a288bc2dc94bac78d4c431c6a0d6056b7",
-      "subject": "fix(assistant): offer the grounding review's context read only when allowed"
-    },
-    {
-      "sha": "9af104a1c7c7021493db575899baee666ea0ff6a",
-      "subject": "Suppress consecutive repeated spoken progress cues before reply speech"
+      "sha": "89714cd4b8d89824ef435c69362523c8b5e37f60",
+      "subject": "fix(trigger): allow delete and create for a one-off/recurring switch"
     }
   ],
   "pullRequests": [
@@ -532,6 +460,14 @@
     {
       "url": "https://github.com/elizaOS/eliza/pull/38168",
       "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/38251",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/38277",
+      "status": "open"
     }
   ]
 }
