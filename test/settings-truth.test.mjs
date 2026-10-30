@@ -36,6 +36,10 @@ test('the Google accounts sheet has no Gmail notification settings button: Andro
  assert.doesNotMatch(readFileSync('apps/app/src/runtime/google-connection-ui.tsx','utf8'),/Gmail notification settings|gmailNotificationSettings/);
  assert.doesNotMatch(readFileSync('apps/app/src/runtime/gmail-background.ts','utf8'),/gmailNotificationSettings/);
 });
+test('Scheduled digests has one Settings entry, the top-level row',()=>{
+ assert.equal((source.match(/label:'Scheduled digests'/g)??[]).length,1);
+ assert.doesNotMatch(source,/\bdigests\b *=|hosted\(\)\.available/);
+});
 test('prototype-only sheets (memory wipe, Wi-Fi password, forget network) never reach the renderer',()=>{
  const line=source.split('\n').find(row=>row.includes('const out = render({ ...state'));
  for(const kind of ['wipe','wifiPw','forget','conn','voice'])assert.match(line,new RegExp(`'${kind}'`));

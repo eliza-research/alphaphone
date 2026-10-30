@@ -15,7 +15,7 @@ import { registerPlugin } from '../platform-plugins';
 import { broaderPageNotice, switchValue } from './native-adapter';
 import { Capacitor } from '@capacitor/core';
 import { DailyApps } from '../daily';
-import { connectionController, agentAvailabilityNotice } from '../runtime/connection-ui';
+import { connectionController } from '../runtime/connection-ui';
 import {googleConnectionController} from '../runtime/google-connection-ui';
 import {GOOGLE_ACCOUNTS_CHANGED,googleDisconnectConfirmation,googleDisconnectMessage} from '../runtime/google-accounts';
 import { browserLocalAgentEnabled, modelLabel } from '../runtime/local-agent';
@@ -171,7 +171,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
   let gmailAccounts: GmailAccount[] = [], gmailBusy = '', settingsApi: Bag | undefined;
   let roles: Record<string, RoleRow> | null = null, launcher: boolean | null = null, roleBusy = false;
   let crashLog: CrashLog | null = null, crashBusy = false, diagnosticsBusy = false;
-  let gmail = 'Not checked', digests = 'Not checked';
+  let gmail = 'Not checked';
   let inferenceProvider = 'Not reported by agent';
   // The AOSP image's always-on listener (#424): status, Pause and Turn off only. Turning listening on
   // or resuming happens in the listener's own consent screen, never here.
@@ -204,15 +204,14 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     capabilityAbort?.abort();
     // Hidden Settings must not turn a Home cache restore or account switch into remote discovery.
     if(!enteringSettings&&owner?.S?.().view!=='settings'){
-      capabilityAbort=null;gmailAccounts=[];gmail='Not checked';digests='Not checked';inferenceProvider='Not reported by agent';return;
+      capabilityAbort=null;gmailAccounts=[];gmail='Not checked';inferenceProvider='Not reported by agent';return;
     }
     const abort = capabilityAbort = new AbortController();
-    const cloud = connectionController.getCloudClient(), workflow = connectionController.getWorkflowClient(), instance = owner;
+    const cloud = connectionController.getCloudClient(), instance = owner;
     gmail = cloud ? 'Checking authorization…' : 'Cloud sign-in required'; gmailAccounts = [];
-    digests = workflow ? 'Checking agent support…' : agentAvailabilityNotice();
     inferenceProvider = 'Not reported by agent';
     changed();
-    const timeout = setTimeout(() => { abort.abort(); if (owner === instance && capabilityAbort === abort) { if (gmail === 'Checking authorization…') gmail = 'Authorization not verified'; if (digests === 'Checking agent support…') digests = 'Agent support not verified'; changed(); } }, 10000);
+    const timeout = setTimeout(() => { abort.abort(); if (owner === instance && capabilityAbort === abort) { if (gmail === 'Checking authorization…') gmail = 'Authorization not verified'; changed(); } }, 10000);
     try {
       await Promise.allSettled([
         (async () => {
@@ -240,14 +239,6 @@ export function installSettingsAdapter(Component: any, views: Bag) {
             gmailAccounts = accounts;
             gmail = gmailGrantLabel(accounts);
           } catch { if (owner === instance && capabilityAbort === abort) gmail = 'Authorization not verified'; }
-        })(),
-        (async () => {
-          if (!workflow) return;
-          try {
-            const available = await workflow.client.hosted().available(abort.signal);
-            if (abort.signal.aborted || owner !== instance || capabilityAbort !== abort || connectionController.getWorkflowClient()?.sessionId !== workflow.sessionId) return;
-            digests = available ? 'Supported by selected agent' : 'Unavailable on selected agent';
-          } catch { if (owner === instance && capabilityAbort === abort) digests = 'Agent support not verified'; }
         })(),
       ]);
     } finally { clearTimeout(timeout); if (owner === instance && capabilityAbort === abort) changed(); }
@@ -691,8 +682,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
           ...(externalVoiceInvocationEnabled ? [{kNav:true,label:'Wake assistant',lbl:'Wake assistant',chev:true,noAB:true,go:()=>void owner?.startVoice()}] : []),
           {kNav:true,label:'Open conversation',lbl:'Open conversation',chev:true,noAB:true,go:()=>api.composeContentQuestion('')},
           {kNav:true,label:'Agent connection',lbl:'Agent connection',chev:true,noAB:true,go:()=>connectionController.open()},
-          {kNav:true,label:'Scheduled digests',lbl:'Scheduled digests',chev:true,noAB:true,go:()=>window.dispatchEvent(new Event('alpha:hosted-digests'))},
-        ])]:[group([...speechRows(), ...listenerRows(), { kNav:true, label:'Scheduled digests', lbl:'Scheduled digests', val:digests, hasVal:true, chev:true, noAB:true, go:()=>window.dispatchEvent(new Event('alpha:hosted-digests')) }])];
+        ])]:[group([...speechRows(), ...listenerRows()])];
       } else if (page.title === 'Battery') {
         page.hero = { ...page.hero, big: percent, sub: typeof facts.charging === 'boolean' ? facts.charging ? 'Charging' : 'On battery' : 'Battery reading unavailable', hasMeter: typeof facts.batteryPercent === 'number', meter: facts.batteryPercent ?? 0 };
         page.groups = [group([info('Battery saver', typeof facts.powerSave === 'boolean' ? facts.powerSave ? 'On' : 'Off' : 'Unavailable'), nav('Manage battery in Android', 'battery')])];

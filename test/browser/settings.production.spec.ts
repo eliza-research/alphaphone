@@ -86,7 +86,7 @@ const removedRows:Record<string,RegExp[]>={
  'Calendar':[/^Calendar backups$/,/^Display only$/],
  'Connections':[/^Other connectors$/,/^Not available in this version$/,/^Last change$/],
  'Notifications':[/^Delivery timing$/],
- 'Voice and agent settings':[/^Personality settings$/,/^Managed by your agent$/],
+ 'Voice and agent settings':[/^Personality settings$/,/^Managed by your agent$/,/^Scheduled digests$/],
  'Privacy & data':[/^Workflow runs$/],
 };
 test('production Settings shows no developer or removed rows, even with ?tools=1',async({page})=>{

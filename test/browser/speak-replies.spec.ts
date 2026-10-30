@@ -59,7 +59,10 @@ for(const mode of ['','?mode=dev'])test(`Settings has no Read replies aloud swit
  await page.addInitScript(()=>localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'})));
  await page.goto('/'+mode);
  await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Character',exact:true}).click();
- await expect(page.getByRole('button',{name:'Scheduled digests',exact:true})).toBeVisible();
+ const voicePage=page.locator('[data-settings-page]:not([inert])').last();
+ await expect(voicePage.getByText('Speech',{exact:true})).toBeVisible();
+ // Scheduled digests has one entry, the top-level Settings row; the voice page does not repeat it.
+ await expect(voicePage.getByRole('button',{name:'Scheduled digests',exact:true})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Read replies aloud',exact:true})).toHaveCount(0);
  await expect(page.getByText(/Read replies aloud|Speak replies|Speak the reply to a message you dictated/)).toHaveCount(0);
 });
