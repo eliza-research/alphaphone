@@ -155,10 +155,11 @@ test('TalkBack reading order is checked in every lane, as Android checks it, acr
   // (search, Back to event, chips, status, the route card, the turn banner) before the map, its
   // credits and Recenter; the browser page leaves the order while address suggestions cover it.
   const template = read('apps/app/src/prototype/template.html');
-  const maps = template.slice(template.indexOf('data-alpha-maps-root'), template.indexOf('data-alpha-maps-sheet="results"'));
-  const stack = ['maps.showSearch', 'maps.eventReturnFloating', 'maps.isBase', 'maps.nativeStatusVisible', 'data-alpha-maps-directions', 'maps.dr.nav.hasThen', 'data-alpha-map-plane', 'alpha-map-credits', 'aria-label="Recenter"'].map(hook => [hook, maps.indexOf(hook)]);
-  for (const [hook, at] of stack) assert.ok(at > 0, `${hook} is in the Maps layer stack`);
-  for (let index = 1; index < stack.length; index++) assert.ok(stack[index - 1][1] < stack[index][1], `Maps reads ${stack[index - 1][0]} before ${stack[index][0]}`);
+  assert.ok(template.includes('{{canonicalMapsWorkspace}}'), 'Maps mounts through the shared mobile view host');
+  assert.ok(!template.includes('data-alpha-maps-sheet'), 'no second Maps rendering order lives in the template');
+  const maps=read('apps/app/src/product/maps-view.tsx');
+  assert.match(maps, /<MapsScreen /, 'the shared view owns Maps reading order and controls');
+  assert.match(maps, /inert=\{host.covered/, 'covered Maps cannot receive keyboard input');
   assert.match(template, /<div inert="\{\{browser\.pageCovered\}\}" aria-hidden="\{\{browser\.pageCovered\}\}"/);
   assert.match(read('apps/app/src/prototype/subview-accessibility.ts'), /pageCovered:!!out\.editing/);
   // Focus follows the screen: installed by the renderer, and asserted by the lifecycle spec and the emulator.
@@ -225,10 +226,9 @@ test('the dock, title and toast fixes the sweep depends on stay in the source', 
 test('the layout fixes the sweep depends on stay in the stylesheet and template', () => {
   const css = read('apps/app/src/prototype/phone.css');
   const template = read('apps/app/src/prototype/template.html');
-  for (const hook of ['data-alpha-camera-root', 'data-alpha-camera="viewfinder"', 'data-alpha-camera="capture"', 'data-alpha-camera="modes"', 'data-alpha-camera="zoom"', 'data-alpha-maps-sheet="results"', 'data-alpha-maps-sheet="place"', 'data-alpha-maps-sheet="directions"', 'data-alpha-maps-directions', 'data-alpha-map-canvas', 'class="calendar-block-text"'])
+  for (const hook of ['data-alpha-camera-root', 'data-alpha-camera="viewfinder"', 'data-alpha-camera="capture"', 'data-alpha-camera="modes"', 'data-alpha-camera="zoom"', 'class="calendar-block-text"'])
     assert.ok(template.includes(hook), `${hook} is in the template`);
   assert.match(css, /\.alpha-landscape \[data-alpha-camera="capture"\]\{[^}]*flex-direction:column-reverse/);
-  assert.match(css, /\[data-alpha-maps-sheet="place"\],\[data-alpha-maps-sheet="directions"\]\{[^}]*max-height:calc\(100% - 104px\);overflow-y:auto/);
   assert.match(css, /\.calendar-block-text\{[^}]*flex-wrap:wrap/);
   assert.match(css, /\[data-alpha-browser-menu\]>button\{[^}]*min-height:50px/);
   assert.match(css, /\[data-alpha-subview="photos-edit"\]\{[^}]*overflow-y:auto/);

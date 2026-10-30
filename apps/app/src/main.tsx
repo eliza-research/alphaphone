@@ -37,7 +37,7 @@ import {installNoteSourceAdapter} from './prototype/note-source-adapter';
 import {installSharePanelAdapter} from './prototype/share-panel-adapter';
 import {installNotesShareAdapter} from './prototype/notes-share-adapter';
 import { installNotesDocumentAdapter } from './prototype/notes-document-adapter';
-import { installPrototypeMapsAdapter } from './prototype/maps-adapter';
+import { installCanonicalMapsView } from './prototype/maps-adapter';
 import { installNotificationsAdapter } from './prototype/notifications-adapter';
 import { installSystemShade, shadeSurface } from './prototype/system-shade';
 import { installContextSelection } from './prototype/context-selection';
@@ -115,7 +115,7 @@ installPrototypeHomeBindings(Component);
 if (!fixture) {
   let selected: ReturnType<typeof installSelectedDocumentAdapter> | undefined;
   installPrototypeNativeAdapters(Component, VIEWS, { onSelection: (module, result, api) => { void selected?.(module, result, api); } });
-  installPrototypeMapsAdapter(Component, VIEWS);
+  installCanonicalMapsView(Component, VIEWS);
   selected = installSelectedDocumentAdapter(Component, VIEWS);
   installPrototypeCameraAdapter(Component, VIEWS);
   installAgentAdapter(Component, VIEWS);
@@ -159,6 +159,8 @@ if (!fixture) {
   // the same way, so its Home reads the latest retained brief from the same source.
   if(browserDevProfile){subscribeRetainedDigest(()=>window.dispatchEvent(new Event(HOME_SOURCES_CHANGED)));setHomeSources({brief:latestRetainedDigest});}
   installSharePanelAdapter(Component,VIEWS);
+} else {
+  installCanonicalMapsView(Component,VIEWS,{simulated:true});
 }
 if(devSurfacesEnabled&&simulatedApps)installSimulatedApps(Component,VIEWS,simulatedApps);
 if(developmentAgentWorkflows){installWorkflowAdapter(Component,VIEWS);installAutomationsAdapter(Component,VIEWS);}

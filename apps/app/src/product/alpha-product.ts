@@ -27,6 +27,7 @@ export const ALPHA_PRODUCT = defineMobileProductRegistration(record as MobilePro
  */
 export const ALPHA_VIEW_LOADERS: readonly MobileViewContribution[] = [
   { id: 'notes', loader: () => import('./notes-view') },
+  { id: 'maps', loader: () => import('./maps-view') },
 ];
 
 /** Alpha's view registry and its navigation answers for one availability policy, given by

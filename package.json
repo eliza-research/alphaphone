@@ -67,7 +67,7 @@
     "@capacitor/core": "8.5.2",
     "@tesseract.js-data/eng": "1.0.0",
     "dompurify": "3.4.17",
-    "maplibre-gl": "6.11.2",
+    "maplibre-gl": "6.16.0",
     "mediabunny": "1.61.0",
     "pdf-lib": "1.17.1",
     "pdfjs-dist": "6.3.289",

@@ -58,7 +58,7 @@ test('an event location opens unconfigured Maps, hands off to an installed map a
 
   // No provider: the notice says so, and no route, ETA or Directions is invented.
   const maps = page.getByRole('region', { name: 'Maps' });
-  await expect(maps.locator('[data-alpha-maps-status]')).toContainText(/Maps provider/);
+  await expect(maps.locator('[data-maps-status]')).toContainText(/Maps provider/);
   await expect(button(page, 'Directions')).toHaveCount(0);
   await expect(maps).not.toContainText(/\b\d+\s*min\b|\bETA\b|Arrive|route to/i);
   await expect(button(page, 'Back to event')).toBeVisible();
@@ -70,7 +70,7 @@ test('an event location opens unconfigured Maps, hands off to an installed map a
   expect((await j04(page)).capabilities).toBeGreaterThan(0);
   await handoff.click();
   await expect.poll(async () => (await j04(page)).performs).toEqual([{ action: 'maps', query: LOCATION }]);
-  await expect(maps.locator('[data-alpha-maps-status] [role="status"]')).toHaveText('Opened in your maps app. Review the place there.');
+  await expect(maps.locator('[data-maps-status] [role="status"]')).toHaveText('Opened in your maps app. Review the place there.');
 
   // Back to event reads that exact event again and restores it.
   const before = (await j04(page)).lists.length;

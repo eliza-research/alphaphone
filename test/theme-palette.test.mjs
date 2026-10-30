@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 // the theme tokens and aliases, and its palette of fixed product colours, all emitted as CSS custom
 // properties by the shared shell's mobileShellThemeVariables. A new colour is added to the record's
 // palette and referenced as var(--alpha-...); a hex literal in these files fails here.
-const FILES = ['template.html', 'model.js', 'phone.css', 'scan-dialog.css'].map(name => `apps/app/src/prototype/${name}`);
+const FILES = ['template.html', 'model.js', 'phone.css', 'scan-dialog.css'].map(name => `apps/app/src/prototype/${name}`).concat(['apps/app/src/prototype/maps-adapter.ts','apps/app/src/product/maps-view.tsx','apps/app/src/maps/map-plane.ts']);
 const record = JSON.parse(readFileSync('config/alpha-product.json', 'utf8'));
 const palette = record.theme.palette ?? {};
 const HEX = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/g;
@@ -33,7 +33,7 @@ test('every palette property the prototype uses is in the record, and every pale
   const used = new Set();
   for (const file of FILES) for (const match of readFileSync(file, 'utf8').matchAll(/var\((--alpha-[a-z0-9-]+)\)/g)) used.add(match[1]);
   // Non-CSS reads (a comparison with stored data) name the property through alphaPaletteColor.
-  for (const match of readFileSync('apps/app/src/prototype/model.js', 'utf8').matchAll(/alphaPaletteColor\("(--alpha-[a-z0-9-]+)"\)/g)) used.add(match[1]);
+  for (const file of FILES) for (const match of readFileSync(file, 'utf8').matchAll(/alphaPaletteColor\(["'](--alpha-[a-z0-9-]+)["']\)/g)) used.add(match[1]);
   // Layout properties the renderer sets itself (--alpha-dock-width: ...) are not colours.
   const defined = new Set();
   for (const file of [...FILES, 'apps/app/src/runtime/dock-clearance.ts', 'apps/app/src/main.tsx'])

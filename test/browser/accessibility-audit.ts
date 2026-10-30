@@ -109,7 +109,7 @@ export async function auditPage(page: Page, options: PageAuditOptions = {}): Pro
     const within = (el: Element) => !top || top.contains(el);
     // The map is a pannable surface: labels and pins outside the frame are reached by panning,
     // and every place is also listed in the results sheet.
-    const PANNABLE = '[data-alpha-map-canvas],[data-alpha-map-plane]';
+    const PANNABLE = '[data-alpha-map-canvas],[data-map-plane]';
     const viewport = { width: document.documentElement.clientWidth, height: document.documentElement.clientHeight };
 
     // 1. Focus must never be able to enter content that assistive technology cannot see.
@@ -582,7 +582,7 @@ export async function auditReadingOrder(page: Page): Promise<Violation[]> {
           const framed=!!document.querySelector('[data-screen]');
           const screen=!framed||el.closest('[data-screen]')||el.closest('dialog[open],:popover-open');
           // Names painted on the pannable map have a place, not an order; its pins are also listed in the results sheet.
-          if(!screen||el.closest('[inert],[aria-hidden="true"]')||el.closest('[data-alpha-map-canvas],[data-alpha-map-plane]')){out.push(null);continue;}
+          if(!screen||el.closest('[inert],[aria-hidden="true"]')||el.closest('[data-alpha-map-canvas],[data-map-plane]')){out.push(null);continue;}
           let rect;
           if(node.nodeType===3){const range=document.createRange();range.selectNodeContents(node);rect=range.getBoundingClientRect();}else rect=el.getBoundingClientRect();
           const box={left:Math.max(0,rect.left),top:Math.max(0,rect.top),right:Math.min(innerWidth,rect.right),bottom:Math.min(innerHeight,rect.bottom)};
@@ -660,7 +660,7 @@ export async function auditTabOrder(page: Page, limit = 120): Promise<Violation[
     let under = '';
     // A focusable scroll region is the scroller itself: it runs under the dock by design and its
     // content is scrolled clear, which the obscured-by-dock rule of auditPage judges.
-    const region = ['auto', 'scroll'].includes(getComputedStyle(el).overflowY) || el.matches('canvas.maplibregl-canvas[role=region]') && !!el.closest('[data-alpha-map-plane]');
+    const region = ['auto', 'scroll'].includes(getComputedStyle(el).overflowY) || el.matches('canvas.maplibregl-canvas[role=region]') && !!el.closest('[data-map-plane]');
     // The map is a keyboard-pannable region beneath floating controls. Its marker and buttons
     // are still checked individually; the canvas viewport itself intentionally fills the view.
     if (!region && !el.closest('[data-alpha-layer="composer"],[data-alpha-layer="pill"],[data-alpha-layer="conversation"],dialog')) {

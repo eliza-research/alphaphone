@@ -9,18 +9,18 @@ import { SavedPlaces } from '../.eliza/client-features/plugins/plugin-maps/src/c
 import { MapsFailure, coordinate, failure } from '../.eliza/client-features/plugins/plugin-maps/src/client/contracts.ts';
 import { distanceToRoute, routeProgress } from '../apps/app/src/maps/route-distance.ts';
 import { atStep, guidanceView } from '../apps/app/src/maps/guidance.ts';
-import { MapsScreenController } from '../apps/app/src/maps/screen.ts';
+import { createMapsScreen } from '../apps/app/src/maps/screen.ts';
 
 const ORIGIN = {latitude: 43.73, longitude: 7.42};
 const END = {latitude: 43.74, longitude: 7.42};
 const OFF_ROUTE = {latitude: 43.735, longitude: 7.43};
-const source = stripTypeScriptTypes(fs.readFileSync(new URL('../apps/app/src/prototype/maps-adapter.ts', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '').replace('export function installPrototypeMapsAdapter', 'function installPrototypeMapsAdapter'), {mode: 'transform'});
+const source = stripTypeScriptTypes(fs.readFileSync(new URL('../apps/app/src/prototype/maps-adapter.ts', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '').replace('export function installCanonicalMapsView', 'function installCanonicalMapsView'), {mode: 'transform'});
 
 // Execute the actual adapter/render callbacks with the real shared screen and domain controllers.
 // Only device, DOM and provider boundaries are fixtures: this does not establish physical GPS acceptance.
 const realNow = Date.now;
 async function fixture() {
- let now = realNow(), surface, receiveFix;
+ let now = realNow(), surface, receiveFix, screen;
  Date.now = () => now;
  const requests = [];
  const config = {status:'configured',providerId:'fixture',connectionId:'conn_fixture_123456789',revision:'1',capabilities:{map:false,search:true,placeDetails:true,modes:['drive'],traffic:'none',transit:'none',offline:{map:false,search:false,routing:false}}};
@@ -34,8 +34,8 @@ async function fixture() {
  class Background { async start(){return false;} async stop(){} active(){return false;} update(){} }
  class Voice { enabled=true; pause(){} update(){} toggle(){this.enabled=!this.enabled;} }
  const storage = {getItem:()=>null,setItem:noop};
- const context = vm.createContext({console,queueMicrotask, setTimeout, clearTimeout, AbortController,
-  MapsScreenController, shareMap:async()=>'closed', MapPlane:class{update(){} destroy(){}}, insideCloudCoverage:()=>true, describeMapsDisclosure:()=>'', DailyApps:{}, mapsEventStillThere:()=>false, connectionController:{getSnapshot:()=>({open:false})},
+ const context = vm.createContext({console,queueMicrotask, setTimeout, clearTimeout, AbortController,testMocksEnabled:false,
+  createMapsScreen:options=>{const handle=createMapsScreen(options);screen=handle.controller;return handle;}, shareMap:async()=>'closed', MapPlane:class{update(){} destroy(){}}, insideCloudCoverage:()=>true, describeMapsDisclosure:()=>'', DailyApps:{}, mapsEventStillThere:()=>false, connectionController:{getSnapshot:()=>({open:false})},
   initializeRegionalMaps:async()=>{}, regionalDiagnostics:()=>({}),
   MapsController:class extends MapsController { constructor(c,p){super(c,p,new SavedPlaces('freshness',storage),new Location());} },
   locationPermissionGranted:async()=>true,NativeMapsLocation:Location,BackgroundNavigation:Background,NavigationVoice:Voice,registerPlugin:()=>({}),Capacitor:{isNativePlatform:()=>false},isAndroid:false,
@@ -45,7 +45,7 @@ async function fixture() {
   publishMapsSelection:noop,clearMapsSelection:noop,mapsEventReturnOffered:()=>undefined,
   window:{addEventListener:noop,removeEventListener:noop},document:{hidden:false,addEventListener:noop,removeEventListener:noop},
  });
- vm.runInContext(source+';globalThis.install=installPrototypeMapsAdapter;',context);
+ vm.runInContext(source+';globalThis.install=installCanonicalMapsView;',context);
  const views={maps:{render:()=>({cats:[],nativeModeMetadata:[]})}};
  const dispose=context.install({prototype:{renderVals:noop}},views);
  const api={isActive:()=>true,set:noop,get:()=>({}),S:{stack:[]}};
@@ -54,17 +54,17 @@ async function fixture() {
  await surface.showDirections(place,'drive',false);
  await surface.planFrom(ORIGIN);
  assert.equal(surface.snapshot().route.phase,'ready',surface.snapshot().route.error?.message);
- render().dr.start();
+ screen.start();
  await Promise.resolve();
  const fix=(overrides={})=>({coordinate:OFF_ROUTE,accuracyMeters:8,precision:'precise',timestamp:now,...overrides});
- return {surface,render,requests,fix,emit:value=>receiveFix(value),advance:ms=>{now+=ms;},dispose:()=>{dispose();Date.now=realNow;}};
+ return {surface,screen,render,requests,fix,emit:value=>receiveFix(value),advance:ms=>{now+=ms;},dispose:()=>{dispose();Date.now=realNow;}};
 }
 
-test('actual Maps UI refuses an aged reroute callback and preserves the exact active route', async()=>{
+test('Alpha Maps host refuses an aged reroute callback and preserves the exact active route', async()=>{
  const f=await fixture();
  try {
   f.emit(f.fix());
-  const button=f.render().dr.nav;
+  const button={...f.screen.view().navigation,reroute:()=>f.screen.reroute()};
   assert.equal(button.canReroute,true);
   const previous=f.surface.snapshot().route.value;
   f.advance(30_001); // No GPS event: even a callback retained from the previous render must recheck.
@@ -73,11 +73,11 @@ test('actual Maps UI refuses an aged reroute callback and preserves the exact ac
   assert.equal(f.surface.snapshot().route.value,previous);
   assert.equal(f.surface.guidance().routeId,previous.id);
   assert.equal(f.surface.guidance().rerouting,false);
-  assert.equal(f.render().dr.nav.canReroute,false);
-  assert.match(f.render().nativeStatus,/current route was kept/);
+  assert.equal(f.screen.view().navigation.canReroute,false);
+  assert.match(f.screen.view().status.text,/current route was kept/);
   f.emit(f.fix());
   assert.equal(f.requests.length,1,'fresh GPS does not reroute automatically');
-  f.render().dr.nav.reroute();
+  f.screen.reroute();
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(f.requests.length,2);
   assert.notEqual(f.surface.snapshot().route.value,previous);
@@ -90,17 +90,17 @@ test('approximate or inaccurate updates invalidate an older precise fix without 
   const f=await fixture();
   try {
    f.emit(f.fix());
-   const callback=f.render().dr.nav.reroute;
+   const callback=()=>f.screen.reroute();
    const previous=f.surface.snapshot().route.value;
    f.emit(f.fix(update));
    assert.equal(f.surface.guidance().fix,undefined);
    callback();
-   assert.equal(f.render().dr.nav.canReroute,false);
+   assert.equal(f.screen.view().navigation.canReroute,false);
    assert.equal(f.requests.length,1);
    assert.equal(f.surface.snapshot().route.value,previous);
    assert.equal(f.surface.guidance().routeId,previous.id);
    f.emit(f.fix());
-   assert.equal(f.render().dr.nav.canReroute,true);
+   assert.equal(f.screen.view().navigation.canReroute,true);
   } finally { f.dispose(); }
  }
 });

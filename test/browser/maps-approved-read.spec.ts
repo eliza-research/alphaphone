@@ -96,8 +96,8 @@ for (const mode of ['place', 'route', 'stale-before-approval', 'stale-after-read
     if(mode==='basemap-ready'){
       const before=await page.evaluate(async()=>{const {getMapsSelectedObject}=await import('/src/maps/agent-context.ts');return getMapsSelectedObject();});
       expect(before?.kind).toBe('map-place');
-      await page.locator('[data-alpha-map-plane]').evaluate(element=>element.setAttribute('data-map-ready','false'));
-      await page.locator('[data-alpha-map-plane]').evaluate(element=>element.setAttribute('data-map-ready','true'));
+      await page.locator('[data-map-plane]').evaluate(element=>element.setAttribute('data-map-ready','false'));
+      await page.locator('[data-map-plane]').evaluate(element=>element.setAttribute('data-map-ready','true'));
       const after=await page.evaluate(async()=>{const {getMapsSelectedObject}=await import('/src/maps/agent-context.ts');return getMapsSelectedObject();});
       expect(after).toEqual(before);
     }

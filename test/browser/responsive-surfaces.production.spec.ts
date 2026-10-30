@@ -193,7 +193,7 @@ test('the Browser menu ends above the dock on short screens and its rows stay re
 
 test('the Maps notice sits beside the map in landscape and is bounded on a wide portrait screen', async ({ page }) => {
   await open(page, 'Maps');
-  const notice = page.locator('[data-alpha-maps-status]');
+  const notice = page.locator('[data-maps-status]');
   await expect(notice).toBeVisible();
   await resize(page, LANDSCAPE);
   expect((await box(notice)).width).toBeLessThanOrEqual(915 / 2);

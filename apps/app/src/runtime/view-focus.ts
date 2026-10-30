@@ -23,7 +23,7 @@ import { createScreenFocus, isExposed } from '@elizaos/ui/accessibility/screen-f
 
 const TITLE = '[data-alpha-app-title]';
 const HOME = '[data-alpha-layer="home"]';
-const APP = '[data-alpha-layer="app"][role="region"]';
+const APP = '[data-alpha-layer="app"][role="region"],[data-alpha-shared-maps] [data-maps-root]';
 /** Surfaces that manage their own focus: a screen change behind them does not take it. */
 const SELF_FOCUSED = '[aria-label="Voice conversation"],[data-alpha-layer="conversation"][aria-hidden="false"],[data-alpha-voice-panel]';
 

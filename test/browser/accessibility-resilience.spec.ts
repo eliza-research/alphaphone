@@ -5,6 +5,7 @@ import {canonicalNotesFixture,openCanonicalNotes} from './helpers/canonical-note
 import {openOwnedPhotoViewer} from './helpers/owned-photo';
 import { auditPage, auditTabOrder, format } from './accessibility-audit';
 import { settled } from './helpers/settled';
+import {openCanonicalMaps} from './helpers/canonical-maps';
 
 // Behaviour behind the defects the accessibility sweep found (MVP-48, renderer part).
 const offline = () => localStorage.setItem('alpha.connection.selection.v1', JSON.stringify({ kind: 'offline' }));
@@ -54,12 +55,12 @@ test.describe('camera in landscape', () => {
 test.describe('maps sheets', () => {
   test('directions at 200% text: Start stays reachable and is not under the composer', async ({ page }, info) => {
     test.setTimeout(60_000);
-    await page.goto('/?mode=mock&start=maps:route');
+    await openCanonicalMaps(page,'route');
     await setTextScale(page, 2);
     const start = page.getByRole('button', { name: 'Start', exact: true });
     await reachable(page, start);
     // Travel modes wrap instead of printing over each other.
-    const modes = await page.locator('[data-alpha-maps-directions] button[aria-label]').filter({ hasNotText: /^$/ }).evaluateAll(list => list.filter(el => el.getAttribute('aria-label') !== 'Back to place').map(el => { const r = el.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, sw: el.scrollWidth, cw: el.clientWidth }; }));
+    const modes = await page.locator('[data-maps-directions] button[aria-label]').filter({ hasNotText: /^$/ }).evaluateAll(list => list.filter(el => el.getAttribute('aria-label') !== 'Back to place').map(el => { const r = el.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, sw: el.scrollWidth, cw: el.clientWidth }; }));
     expect(modes.length).toBeGreaterThanOrEqual(2);
     for (const item of modes) expect(item.sw).toBeLessThanOrEqual(item.cw + 1);
     for (let a = 0; a < modes.length; a++) for (let b = a + 1; b < modes.length; b++) {
@@ -72,8 +73,8 @@ test.describe('maps sheets', () => {
   test.describe('landscape', () => {
     test.use({ hasTouch: true, isMobile: true, viewport: { width: 915, height: 412 } });
     test('the directions card and the route sheet sit side by side', async ({ page }, info) => {
-      await page.goto('/?mode=mock&start=maps:route');
-      const card = page.locator('[data-alpha-maps-directions]'), sheet = page.locator('[data-alpha-maps-sheet="directions"]');
+      await openCanonicalMaps(page,'route');
+      const card = page.locator('[data-maps-directions]'), sheet = page.locator('[data-maps-sheet="directions"]');
       const cardBox = (await card.boundingBox())!, sheetBox = (await sheet.boundingBox())!;
       expect(cardBox.x + cardBox.width).toBeLessThanOrEqual(sheetBox.x + 1);
       await reachable(page, page.getByRole('button', { name: 'Back to place', exact: true }));
@@ -81,10 +82,10 @@ test.describe('maps sheets', () => {
       await page.screenshot({ path: info.outputPath('directions-landscape.png') });
     });
     test('search results keep the search field and the list on screen', async ({ page }) => {
-      await page.goto('/?mode=mock&start=maps:search');
+      await openCanonicalMaps(page,'search');
       await reachable(page, page.getByRole('textbox', { name: 'Search places', exact: true }));
-      await reachable(page, page.getByRole('button', { name: 'Resize results', exact: true }));
-      await reachable(page, page.getByRole('button', { name: /Philz Coffee/ }).last());
+      await reachable(page, page.getByRole('button', { name: 'Back', exact: true }));
+      await reachable(page, page.locator('[data-maps-sheet="results"]').getByRole('button', { name: /^Garden/ }));
     });
   });
 });

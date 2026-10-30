@@ -7,8 +7,12 @@ const root=fileURLToPath(new URL('../../',import.meta.url));
 export async function loadBrowserModule(entry,{testMocks=false,env={}}={}) {
  const entries=Array.isArray(entry)?entry:[entry];
  const contents=entries.map((name,index)=>`export * as entry${index} from ${JSON.stringify(resolve(root,name))};`).join('\n');
- const {outputFiles}=await build({absWorkingDir:root,stdin:{contents,resolveDir:root,sourcefile:'browser-fixture.mjs'},bundle:true,write:false,platform:'node',format:'esm',define:{'import.meta.env':JSON.stringify({DEV:testMocks,VITE_ELIZA_DEV_ALLOW_TEST_MOCKS:testMocks?'1':'',...env})},plugins:[{
-  name:'fixture-module-url',setup(builder){builder.onLoad({filter:/\.[cm]?[jt]sx?$/},async({path})=>{
+ const {outputFiles}=await build({absWorkingDir:root,stdin:{contents,resolveDir:root,sourcefile:'browser-fixture.mjs'},bundle:true,write:false,loader:{'.css':'empty'},platform:'node',format:'esm',define:{'import.meta.env':JSON.stringify({DEV:testMocks,VITE_ELIZA_DEV_ALLOW_TEST_MOCKS:testMocks?'1':'',...env})},plugins:[{
+  name:'fixture-module-url',setup(builder){
+   // Node contract fixtures do not instantiate CSS, fonts or a Vite worker URL.
+   builder.onResolve({filter:/\?(?:worker&)?url$/},args=>({path:args.path,namespace:'fixture-vite-url'}));
+   builder.onLoad({filter:/.*/,namespace:'fixture-vite-url'},()=>({contents:'export default \"fixture-asset\";',loader:'js'}));
+   builder.onLoad({filter:/\.[cm]?[jt]sx?$/},async({path})=>{
    if(path.includes("/node_modules/"))return;
    const loader=/\.tsx$/.test(path)?'tsx':/\.[cm]?ts$/.test(path)?'ts':/\.jsx$/.test(path)?'jsx':'js';
    const {code}=await transform(await readFile(path,'utf8'),{loader,format:'esm',define:{'import.meta.url':JSON.stringify(pathToFileURL(path).href)}});

@@ -5,6 +5,7 @@ import {openOwnedPhotoViewer} from './helpers/owned-photo';
 import {installHomeCalendar} from './helpers/home-calendar';
 import {calendarSyncFixture} from './calendar-sync-fixture';
 import {settled} from './helpers/settled';
+import {openCanonicalMaps} from './helpers/canonical-maps';
 
 /**
  * The retained MVP surface, as a list of states the accessibility sweep visits.
@@ -66,7 +67,8 @@ const mock = (start: string, steps: string[] = [], shows?: string): State => ({
   name: `mock ${[start, ...steps].join(' > ')}`, shows,
   open: async (page, theme) => {
     // Edit and info require a real library revision; prototype images have none.
-    if(start==='photos:viewer'&&steps.some(step=>step==='Edit photo'||step==='Photo info'))await openOwnedPhotoViewer(page,theme);
+    if(start==='maps'||start.startsWith('maps:'))await openCanonicalMaps(page,start.split(':')[1]||'base',theme);
+    else if(start==='photos:viewer'&&steps.some(step=>step==='Edit photo'||step==='Photo info'))await openOwnedPhotoViewer(page,theme);
     else await page.goto(`/?mode=mock&theme=${theme || 'light'}&start=${start}`);
     await settle(page);
     if (ARRIVES[start]) { await expect(page.getByRole('button', { name: ARRIVES[start], exact: true })).toBeVisible(); await settle(page); }

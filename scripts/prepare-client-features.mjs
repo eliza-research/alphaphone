@@ -259,6 +259,8 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-inbox/src/components/mailbox',
   'plugins/plugin-calendar/src/linked-sync',
   'plugins/plugin-maps/src/client',
+  'plugins/plugin-maps/src/screen.ts',
+  'plugins/plugin-maps/src/components/MapsScreen.tsx',
   'plugins/plugin-maps/test/navigation-client.test.mjs',
   'plugins/plugin-notes/src/client',
   'plugins/plugin-notes/test/device-query.test.mjs',

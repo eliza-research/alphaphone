@@ -39,7 +39,7 @@ async function openMaps(page: Page, refusal: { status: number; code: string; ret
 test('Maps keeps the OpenStreetMap copyright credit visible beside Cloud results', async ({ page }) => {
   await openMaps(page, null);
   await expect(page.getByRole('button', { name: /^Port Hercule/ }).first()).toBeVisible();
-  const credit = page.locator('.alpha-map-credits a[href="https://www.openstreetmap.org/copyright"]');
+  const credit = page.locator('[data-maps-credits] a[href="https://www.openstreetmap.org/copyright"]');
   await expect(credit).toBeVisible();
   await expect(credit).toContainText(/OpenStreetMap/);
 });
@@ -58,7 +58,7 @@ for (const refusal of REFUSALS) {
     await openMaps(page, refusal);
     const expected = await page.evaluate(() => (window as any).expectedRefusal as string);
     expect(expected).toMatch(refusal.text);
-    await expect(page.locator('[data-alpha-maps-status] [role="status"]')).toHaveText(expected);
+    await expect(page.locator('[data-maps-status] [role="status"]')).toHaveText(expected);
     await expect(page.getByRole('button', { name: /^Port Hercule/ })).toHaveCount(0);
   });
 }

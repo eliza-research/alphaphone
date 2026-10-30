@@ -1,5 +1,18 @@
 # Maps implementation and provider decision
 
+## Shared view implementation
+
+The October 27 shared-application direction in [architecture](architecture.md)
+supersedes the separate renderer described in the original research below. Alpha
+loads upstream `plugin-maps` `MapsScreen` through `MobileViewHost`. The old Maps
+template and simulated SVG map renderer are removed. Alpha supplies its product
+theme, MapLibre assets, native location and speech, sharing, exact Calendar return
+and guarded agent-navigation ports. The shared component owns its controls,
+keyboard behavior, sheets, map retry and navigation presentation.
+
+This source migration does not establish native location, background speech,
+provider, Android or device acceptance.
+
 Latest implementation checkpoint: a configurable, real Monaco regional OSM provider, MapLibre map plane, local search and GraphHopper drive/walk/bicycle routes are now implemented. Local backend and headless rendered flow checks pass; configured Android build59 passed both regional instrumentation methods in both distribution variants, with actual map/route screenshots inspected. Build60 also passed controlled emulator GPS foreground guidance, off-route, arrival and watch cleanup in both variants. Permissions, service interruption, physical navigation and production hosting remain separate acceptance work. The default build remains unconfigured. See [regional validation and reproduction](maps-regional-validation.md) for exact evidence, coverage, configuration and remaining navigation/provider limits. The earlier hosted-provider evaluation below remains planning context, not the only available implementation path.
 
 Status: researched September 30, 2026; provider-independent source integrated September 30, pending APK/emulator verification. No provider account, API key, quota, or live provider connection is confirmed. This document is a plan, not evidence that Maps works.
