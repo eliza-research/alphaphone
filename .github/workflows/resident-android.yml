@@ -200,6 +200,10 @@ jobs:
           # Gate distribution on exactly the npm set the staged payload ships (A-4).
           python3 scripts/ci/resident-phase.py --name packaged-dependency-audit --seconds 180 node scripts/dependency-audit.mjs --resident --notices apps/app/public/licenses/third-party-notices.json
           if [ "$ALPHA_RUNTIME_PROFILE" = cloud ]; then
+            node scripts/prepare-local-agent.mjs --source-only
+            export ALPHA_CLOUD_COLLECTOR_SOURCE="$ALPHA_LOCAL_AGENT_SOURCE_DIR"
+            export ALPHA_BUN="$(command -v bun)"
+            test "$("$ALPHA_BUN" --version)" = "1.4.2"
             # Genuine Cloud resident, all four APKs, test mocks off. No provider calls.
             python3 scripts/ci/resident-phase.py --name cloud-archive --seconds 3000 node scripts/build-archive.mjs --runtime-profile=cloud test-results/resident-ci-cloud
           else
