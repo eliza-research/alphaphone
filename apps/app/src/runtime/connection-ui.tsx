@@ -47,7 +47,7 @@ import { PersonalProtocolError, type CloudPersonalProtocol, type PersonalView, t
 import { holdPhoneInert } from './modal-inert';
 import { pauseHostedBackground } from './hosted-background';
 import {developmentDeviceStore,developmentActionJournal} from './local-agent-storage';
-import { reviewLocalRecovery,archiveLocalRecovery,stopLocalAgent, configureLocalProvider, bindResidentCloudProvider, LocalCloudProviderStopUnconfirmed, LocalAgentProtocol, localAgentPackaged, browserLocalAgentEnabled, localProviderStatus, clearLocalProvider, providerStatusLabel, LOCAL_PROVIDER_MODEL, type LocalProviderStatus } from './local-agent';
+import { reviewLocalRecovery,archiveLocalRecovery,stopLocalAgent, configureLocalProvider, bindResidentCloudProvider, LocalCloudProviderStopUnconfirmed, LocalAgentProtocol, localAgentPackaged, browserLocalAgentEnabled, localProviderStatus, clearLocalProvider, clearLocalProviderIfCurrent, providerStatusLabel, LOCAL_PROVIDER_MODEL, type LocalProviderStatus } from './local-agent';
 import { presentDeviceRecordOperation } from './device-record-presentation';
 import type { MessagePage } from './remote-protocol';
 import type {DeviceRecovery,CurrentDeviceActionRequest} from "./device-actions";
@@ -1055,10 +1055,11 @@ async function applyResidentBinding(admission:ResidentAdmission,signal:AbortSign
   if(admission.binding==='kept')return {binding:'kept'};
   if(admission.binding==='cloud'&&admission.credentialId&&admission.account){
     const bindingEpoch=epoch;
+    let bindingGuard:string|undefined;
     try{
       // An admitted running resident under this same Cloud admission is reused, not stopped and
       // rebound: opening the assistant, or reconnecting one surface, must not retire the other's work.
-      await bindResidentCloudProvider(admission.credentialId);
+      bindingGuard=await bindResidentCloudProvider(admission.credentialId);
       signal.throwIfAborted();
       if(service!==admission.account || (await cloudCredentialStore.read(residentEnvironment()))?.credentialId!==admission.credentialId)throw Error('Cloud account changed. Sign in again.');
       return {binding:'cloud'};
@@ -1078,7 +1079,9 @@ async function applyResidentBinding(admission:ResidentAdmission,signal:AbortSign
       // The agent always starts. It is reported unbound only after native confirms removal;
       // otherwise its inference state is unconfirmed (native still gates a Cloud binding on a
       // valid production credential at use time) and the owner can retry in Settings.
-      try{await clearLocalProvider();}catch{signal.throwIfAborted();return {binding:'unknown',error:`AI could not be connected to your ${cloudServiceName(cloud.environment)} plan: ${errorMessage(error)} ${RESIDENT_UNBIND_UNCONFIRMED}`};}
+      try{
+        if(!bindingGuard||await clearLocalProviderIfCurrent(bindingGuard,signal)!=='cleared')return {binding:'unknown',error:RESIDENT_UNBIND_UNCONFIRMED};
+      }catch{signal.throwIfAborted();return {binding:'unknown',error:`AI could not be connected to your ${cloudServiceName(cloud.environment)} plan: ${errorMessage(error)} ${RESIDENT_UNBIND_UNCONFIRMED}`};}
       signal.throwIfAborted();
       return {binding:'unbound',error:`AI could not be connected to your ${cloudServiceName(cloud.environment)} plan: ${errorMessage(error)} Your agent is running; check your plan again in Settings.`};
     }
