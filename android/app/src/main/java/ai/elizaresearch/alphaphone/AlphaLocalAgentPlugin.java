@@ -170,15 +170,18 @@ public final class AlphaLocalAgentPlugin extends Plugin {
     invalidateCalls();long epoch=++lifecycleEpoch;credentialMutationEpoch=epoch;accepting=false;stopping=true;clearEnrollment();return epoch;
    }
    public void requireCurrent(long epoch)throws Exception{if(epoch!=lifecycleEpoch||credentialMutationEpoch!=epoch)throw new Superseded();}
-   public long requestStop(){credentialShutdownRequest=-2;long request=ElizaAgentService.stopForCredentialChange(context);credentialShutdownRequest=request;return request;}
+   public long reserveStop(){return credentialShutdownRequest=ElizaAgentService.reserveCredentialShutdown();}
+   public void requestStop(long request){ElizaAgentService.retryCredentialShutdown(context,request);}
    public boolean stopped()throws Exception{return shutdownConfirmed(ElizaAgentService.getLocalAgentBootState(context));}
    public boolean stopAcknowledged(long request){return ElizaAgentService.isCredentialShutdownConfirmed(request);}
    public long elapsedRealtime(){return android.os.SystemClock.elapsedRealtime();}
    public void sleep(long millis)throws InterruptedException{Thread.sleep(millis);}
    public void finishMutation(long epoch,long request,boolean commitAttempted,boolean commitConfirmed){
-    if(credentialMutationEpoch!=epoch)return;
-    credentialMutationEpoch=-1;
-    if((!commitAttempted||commitConfirmed)&&request>=0)ElizaAgentService.releaseCredentialShutdown(request);
+    if(request>=0){
+     if(!commitAttempted)ElizaAgentService.abandonCredentialShutdown(request);
+     else if(commitConfirmed)ElizaAgentService.releaseCredentialShutdown(request);
+    }
+    if(credentialMutationEpoch==epoch)credentialMutationEpoch=-1;
    }
    public <R> R commit(ai.eliza.plugins.securestore.nativeonly.CredentialMutationConductor.Mutation<R> change)throws Exception{return commitCredentials(change);}
   },assertOwner,mutation);
