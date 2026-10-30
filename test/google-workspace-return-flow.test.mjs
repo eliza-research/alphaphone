@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
-import {tmpdir} from 'node:os';
+import {existsSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {homedir,tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {nativeSource,javaBinary,jsonJar} from './fixtures/jvm-tools.mjs';
@@ -66,4 +66,14 @@ public class WorkspaceFlowTest {
   execFileSync(javaBinary('javac'),['--release','11','-cp',jsonJar,'-d',root,nativeSource('GoogleWorkspaceReturn.java'),nativeSource('GoogleWorkspaceReturnFlow.java'),file],{timeout:30000,stdio:'pipe'});
   assert.match(execFileSync(javaBinary('java'),['-cp',root+':'+jsonJar,'ai.elizaresearch.alphaphone.WorkspaceFlowTest'],{timeout:30000,encoding:'utf8'}),/^PASS Workspace flow /);
  }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+
+test('Workspace return flow compiles against the Android org.json API',()=>{
+ const sdk=[process.env.ANDROID_HOME,process.env.ANDROID_SDK_ROOT,join(homedir(),'Library/Android/sdk'),join(homedir(),'Android/Sdk')].filter(Boolean).map(root=>join(root,'platforms/android-36/android.jar')).find(existsSync);
+ assert.ok(sdk,'Android 36 platform is required for the native API compatibility check');
+ const output=mkdtempSync(join(tmpdir(),'alpha-workspace-android-api-'));
+ try{
+  execFileSync(javaBinary('javac'),['--release','11','-cp',sdk,'-d',output,nativeSource('GoogleWorkspaceReturn.java'),nativeSource('GoogleWorkspaceReturnFlow.java')],{timeout:30000,stdio:'pipe'});
+ }finally{rmSync(output,{recursive:true,force:true});}
 });

@@ -49,7 +49,9 @@ final class GoogleWorkspaceReturnFlow {
  private static GoogleWorkspaceReturn.Pending pending(String raw) {
   try {
    JSONObject value=object(raw);
-   if(!value.keySet().equals(Set.of("environment","userId","organizationId","credentialId","credentialHash","state","createdAt")))return null;
+   Set<String> expected=Set.of("environment","userId","organizationId","credentialId","credentialHash","state","createdAt");
+   if(value.length()!=expected.size())return null;
+   for(java.util.Iterator<String> keys=value.keys();keys.hasNext();)if(!expected.contains(keys.next()))return null;
    Object time=value.get("createdAt");if(!(time instanceof Number))return null;
    double decimal=((Number)time).doubleValue();long instant=((Number)time).longValue();
    if(!Double.isFinite(decimal)||decimal!=instant)return null;
