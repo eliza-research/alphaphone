@@ -69,7 +69,7 @@ for (const state of STATES) {
 // of counting as the expected failure. The list may only shrink (test/accessibility-coverage.test.mjs).
 const OPEN_AT_300 = new Set([
   'live Home', 'live Conversation', 'live Camera (unavailable)', 'live Browser tabs',
-  'live Browser menu', 'live Notes trash', 'live Notes recording', 'live Notes source document', 'live Settings display',
+  'live Browser menu', 'live Settings display',
   'launcher Home', 'launcher Conversation', 'launcher Calendar', 'launcher Camera', 'launcher Photos',
   'launcher Workflows', 'launcher Settings display',
 ]);
