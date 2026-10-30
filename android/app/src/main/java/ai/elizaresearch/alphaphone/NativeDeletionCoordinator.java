@@ -2,8 +2,7 @@ package ai.elizaresearch.alphaphone;
 
 import android.content.Context;
 import ai.eliza.plugins.actionjournal.deletion.DeferredDeletionCoordinator;
-import androidx.work.*;
-import java.util.concurrent.TimeUnit;
+import ai.eliza.plugins.actionjournal.android.AndroidDeletionHost;
 import org.json.*;
 
 /**
@@ -17,20 +16,14 @@ final class NativeDeletionCoordinator {
  /** Installed slot names: they hold every pending Calendar deletion and the manual owner. */
  static final String JOURNAL="native-delete-journal:v1",INSTALLATION="native-delete-installation:v1";
  static final String WORK="alpha-delete-window";
- private static final String UNKNOWN_BOOT="unknown:"+java.util.UUID.randomUUID();
  private static DeferredDeletionCoordinator instance;
  static synchronized DeferredDeletionCoordinator get(Context context){if(instance==null)instance=create(context.getApplicationContext());return instance;}
  private static DeferredDeletionCoordinator create(Context context){
   AlphaCredentialStore store=new AlphaCredentialStore(context);
-  return new DeferredDeletionCoordinator(new DeferredDeletionCoordinator.Configuration(JOURNAL,INSTALLATION),
+  return AndroidDeletionHost.create(context,new DeferredDeletionCoordinator.Configuration(JOURNAL,INSTALLATION),
    new DeferredDeletionCoordinator.Slots(){
     public String read(String slot)throws Exception{return store.readCredentialSlot(slot);}
     public void write(String slot,String value)throws Exception{store.writeCredentialSlot(slot,value);}
-   },
-   new DeferredDeletionCoordinator.Clock(){
-    public String continuity(){try{return "boot:"+android.provider.Settings.Global.getInt(context.getContentResolver(),android.provider.Settings.Global.BOOT_COUNT);}catch(Exception unavailable){return UNKNOWN_BOOT;}}
-    public long elapsed(){return android.os.SystemClock.elapsedRealtime();}
-    public long wall(){return System.currentTimeMillis();}
    },
    new DeferredDeletionCoordinator.Owners(){
     public JSONObject identity()throws Exception{return new NativeOwnerReminderHost(context).read();}
@@ -51,7 +44,7 @@ final class NativeDeletionCoordinator {
      return CalendarDeletionIdentity.parse(target.getString("eventId")).eventId==event;
     }
    },
-   delay->WorkManager.getInstance(context).enqueueUniqueWork(WORK,ExistingWorkPolicy.REPLACE,new OneTimeWorkRequest.Builder(DeletionWorker.class).setInitialDelay(delay,TimeUnit.MILLISECONDS).build()));
+   WORK,DeletionWorker.class);
  }
  private NativeDeletionCoordinator(){}
 }

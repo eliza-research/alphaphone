@@ -6,7 +6,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const java=name=>readFileSync(`android/app/src/main/java/ai/elizaresearch/alphaphone/${name}.java`,'utf8');
-const shared=readFileSync('vendor/eliza/plugins/plugin-native-action-journal/android/src/main/java/ai/eliza/plugins/actionjournal/deletion/DeferredDeletionCoordinator.java','utf8');
+const sharedRoot=process.env.ALPHA_RESIDENT_NATIVE_SOURCE||'vendor/eliza';
+const shared=readFileSync(`${sharedRoot}/plugins/plugin-native-action-journal/android/src/main/java/ai/eliza/plugins/actionjournal/deletion/DeferredDeletionCoordinator.java`,'utf8');
 const body=(source,start,end)=>source.slice(source.indexOf(start),end?source.indexOf(end,source.indexOf(start)):undefined);
 
 test('reconcile isolates every row, always schedules the next wake-up and retries failures',()=>{
@@ -34,7 +35,7 @@ test('a deterministic stage refusal never leaves a permanent agent claim',()=>{
  assert.ok(positive.indexOf('coordinator.stageAdmissible(owner)')<positive.indexOf('DeletionDispatchClaim.check('),'owner and selection are checked before the claim');
  assert.match(positive,/\}catch\(Exception failure\)\{outcome\[0\]=unstaged\(coordinator,operationId\);\}/);
  assert.match(deletions,/return staged==null\?new JSONObject\(\)\.put\("status","not-staged"\):new JSONObject\(\)\.put\("status","queued"\)/,'not-staged only without a receipt for the exact operation');
- assert.match(deletions,/if\(retired\|\|review!=null\|\|!foreground\(\)\)\{resolveStatus\(call,"unavailable"\);return;\}/);
+ assert.match(deletions,/if\(deletionRetired\(\)\|\|review!=null\|\|!foreground\(\)\)\{resolveStatus\(call,"unavailable"\);return;\}/);
  assert.match(deletions,/resolveStatus\(call,"stale"\);return;/);
  const calendar=java('AlphaCalendarPlugin'),enqueue=body(calendar,'enqueueReviewedDeletion(','@Override @PluginMethod public void executeAgent');
  assert.ok(enqueue.indexOf('stageAdmissible(owner)')<enqueue.indexOf('DeletionDispatchClaim.check('),'calendar checks the owner before claiming');
@@ -47,7 +48,7 @@ test('a deterministic stage refusal never leaves a permanent agent claim',()=>{
  // A local wrapper, not a re-export: a forwarded re-export let the bundler move the browser
  // development modules out of the entry chunk (scripts/audit-production-bundle.mjs).
  assert.match(readFileSync('apps/app/src/runtime/deletions.ts','utf8'),/export function reminderDeletionRefusal\(status:string\)\{return sharedRefusal\(status\);\}/);
- const contract=readFileSync('.eliza/client-features/packages/contracts/src/deletion-window.ts','utf8');
+ const contract=readFileSync(process.env.ALPHA_RESIDENT_NATIVE_SOURCE?`${sharedRoot}/packages/contracts/src/deletion-window.ts`:'.eliza/client-features/packages/contracts/src/deletion-window.ts','utf8');
  for(const status of ['stale','unavailable','not-staged'])assert.match(contract,new RegExp(`case "${status}":`));
  assert.doesNotMatch(contract,/case "unknown":/,'unknown remains an uncertain outcome');
 });
@@ -62,7 +63,7 @@ test('both notice owner fences are written even when workflow cancellation fails
 test('reviewed photo changes use the shared resume-gated review with Alpha\'s launch gate',()=>{
  // Resume gating and rejection codes are the shared native media module's PermittedMediaReview (tested there).
  // AlphaPhotos registers the shared PhotosPlugin; its launch gate answers with Alpha's LateLaunch wording.
- const photos=java('AlphaPhotosPlugin'),bridge=readFileSync(new URL('../vendor/eliza/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/PhotosPlugin.java',import.meta.url),'utf8');
+ const photos=java('AlphaPhotosPlugin'),bridge=readFileSync(`${sharedRoot}/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/PhotosPlugin.java`,'utf8');
  assert.match(bridge,/mediaReview = new PermittedMediaReview\(getBridge\(\), permitted, worker, this::ask\);/);
  assert.match(bridge,/protected final boolean ask\(PluginCall call, Runnable launch\) \{\n {4}try \{\n {6}launch\.run\(\);\n {6}return true;\n {4}\} catch \(IllegalStateException closed\) \{\n {6}call\.reject\(closedMessage\(\)\);/);
  assert.match(photos,/@Override protected String closedMessage\(\)\{return LateLaunch\.CLOSED;\}/);
@@ -70,9 +71,9 @@ test('reviewed photo changes use the shared resume-gated review with Alpha\'s la
 
 test('album listing reads permitted members in batches and fences only the metadata',()=>{
  // Custom albums are the shared OwnedAlbums; batched member reads are PermittedMediaCatalog.albumItems.
- const photos=readFileSync(new URL('../vendor/eliza/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/PhotosPlugin.java',import.meta.url),'utf8');
+ const photos=readFileSync(`${sharedRoot}/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/PhotosPlugin.java`,'utf8');
  assert.match(photos,/albums = new OwnedAlbums\(getContext\(\), config, owned, permitted\);/);
- const albums=readFileSync(new URL('../vendor/eliza/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/OwnedAlbums.java',import.meta.url),'utf8');
+ const albums=readFileSync(`${sharedRoot}/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/OwnedAlbums.java`,'utf8');
  const rows=body(albums,'  private JSArray permittedRows(','  private static boolean hasPermitted(');
  assert.match(rows,/permitted\.albumItems\(wanted\)/);assert.doesNotMatch(rows,/albumItem\(/,'no per-member fenced read');
  const custom=body(albums,'  public JSObject list(','  public JSObject change(');

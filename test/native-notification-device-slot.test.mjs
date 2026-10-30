@@ -5,7 +5,7 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {nativeSource,javaBinary,jsonJar} from './fixtures/jvm-tools.mjs';
+import {nativeSource,javaBinary,jsonJar,ownerContextSources} from './fixtures/jvm-tools.mjs';
 
 // Portable producer/consumer contract; Android serializer causal proof is kept
 // separately in scripts/test-android-notification-device-slot.mjs.
@@ -53,7 +53,7 @@ public class DeviceKeyTest {public static void main(String[]args)throws Exceptio
 `);
   put('NativeDeviceEnrollmentKey.java',readFileSync(nativeSource('NativeDeviceEnrollmentKey.java'),'utf8'));
   put('NativeOwnerReminderHost.java',readFileSync(process.env.ALPHA_NOTIFICATION_HOST_SOURCE||nativeSource('NativeOwnerReminderHost.java'),'utf8'));
-  execFileSync(javaBinary('javac'),['--release','17','-cp',jsonJar,'-d',dir,...files],{timeout:30000,stdio:'pipe'});
+  execFileSync(javaBinary('javac'),['--release','17','-cp',jsonJar,'-d',dir,...files,...ownerContextSources()],{timeout:30000,stdio:'pipe'});
   assert.match(execFileSync(javaBinary('java'),['-cp',dir+':'+jsonJar,'ai.elizaresearch.alphaphone.DeviceKeyTest'],{encoding:'utf8',timeout:30000,stdio:'pipe'}),/^PASS renderer-derived native read/);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
