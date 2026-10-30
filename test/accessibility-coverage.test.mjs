@@ -242,7 +242,7 @@ test('the layout fixes the sweep depends on stay in the stylesheet and template'
   assert.match(css, /\.home-calendar-card:not\(\[data-alpha-home-calendar-event="true"\]\) \{ container-type:inline-size; \}/);
   assert.match(css, /\.home-calendar-card:not\(\[data-alpha-home-calendar-event="true"\]\) \.home-calendar-title \{ font-size:calc\(min\(36px, 25cqi \/ var\(--alpha-text-scale,1\)\) \* var\(--browser-text-scale,1\)\); \}/);
   // The conversation's suggestion chips grow with their text and keep a 48px target.
-  assert.match(template, /<button onClick="\{\{s\.go\}\}" style="flex-shrink: 0; min-height: 48px;[^"]*line-height: 1\.25; white-space: nowrap">/);
+  assert.match(template, /<button onClick="\{\{s\.go\}\}" style="flex-shrink: 0; min-height: 48px;[^"]*line-height: 1\.25; text-align: center; overflow-wrap: anywhere">/);
   assert.match(css, /\.alpha-fit-grid\{[^}]*repeat\(auto-fill,[^}]*var\(--alpha-text-scale,1\)/);
   // Home's app grid is the shared mobile shell's: four columns of at least 62px times its text scale,
   // which Alpha maps to the measured text size.
