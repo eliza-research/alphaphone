@@ -177,6 +177,13 @@ npm run dev                       # local agent + development server, switch on
 npm run dev:ui                    # renderer-only development server, switch on
 ```
 
+`npm run dev` shows the product connection sheet, **Alpha connection** (connected, connecting
+or couldn't connect, **Try again**, conversation history), and attaches to the local agent in
+the background, so loading the page while the agent restarts leaves Home recovering instead of
+opening the sheet. Set `ALPHA_DEV_CONNECTION_TOOLS=1` for the development connection sheet:
+development profiles (`?mode=dev`), mock mode, subscription gate QA and the development Cloud
+and pairing tools. `npm run dev:ui` keeps the development connection sheet.
+
 For configured regional Maps, prepare the data once as described in
 [regional Maps setup](docs/maps-regional-validation.md), then run `npm run dev:maps`.
 This starts the local router, gateway and app together; use `-- --port 5194` to
@@ -202,8 +209,9 @@ provide a saved Home place and manual movement for location-triggered workflows.
 The role buttons persist the development device's selected Home, assistant, dialer
 and SMS roles.
 
-On the development server (switch on), **Settings → Agent connection** offers development
-profiles to exercise conversations, approvals and durable receipts without credentials.
+On the development server (switch on; with `npm run dev`, also `ALPHA_DEV_CONNECTION_TOOLS=1`),
+**Settings → Agent connection** offers development profiles to exercise conversations,
+approvals and durable receipts without credentials.
 Use `?mode=dev&workflows=agent` (switch on, development server only) to exercise the
 agent workflow UI with that profile.
 For real host inference and speech, follow the separate [local agent setup](docs/local-agent-development.md).
