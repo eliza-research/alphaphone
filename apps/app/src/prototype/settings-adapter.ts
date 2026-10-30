@@ -590,7 +590,8 @@ export function installSettingsAdapter(Component: any, views: Bag) {
           }
         }
         page.groups.push(group([{kNav:true,label:'Agent connection',lbl:'Agent connection',val:connectionController.getSnapshot().name,hasVal:true,chev:true,noAB:true,go:()=>native&&!testMocksEnabled?api.set({page:'agent-connection'}):connectionController.open()}]));
-        if(native&&!testMocksEnabled&&state.page==='agent-recovery-details'){
+        // Raw recovery reason, stage and record count are developer data: the product keeps the plain status.
+        if(native&&developerTools&&state.page==='agent-recovery-details'){
           const reason=connection.residentRecoveryReason,recovery=connection.residentRecovery;
           const rows:Bag[]=[info('Status',reason?residentRecoveryCopy(reason,recovery):connection.session?'Alpha is running.':'Restart status is unavailable.')];
           if(reason)rows.push(info('Reason',reason));
@@ -606,7 +607,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
             agentRows.push(info('Status',residentRecoveryCopy(connection.residentRecoveryReason,connection.residentRecovery)));
             if(connection.residentRecoveryReason==='ipc-recovery-retention-limit'&&!connection.busy)
               agentRows.push(action('Restart Alpha',()=>void connectionController.restartRecovery()));
-            agentRows.push(action('Details',()=>api.set({page:'agent-recovery-details'})));
+            if(developerTools)agentRows.push(action('Details',()=>api.set({page:'agent-recovery-details'})));
           }else if(!connection.busy)agentRows.push(action(connection.session?'Reconnect agent':'Retry',()=>void connectionController.startLocal()));
           if(connection.busy){
             agentRows.push(info('Connection','Please wait…'));
