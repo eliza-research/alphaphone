@@ -12,5 +12,12 @@
   "dependencyInputs207Exact": true,
   "qualified": false,
   "admitted": false,
-  "requalificationRequired": true
+  "requalificationRequired": true,
+  "multiCueSuccessor": {
+    "from": "0fde8e0a288bc2dc94bac78d4c431c6a0d6056b7",
+    "to": "9af104a1c7c7021493db575899baee666ea0ff6a",
+    "nativeInputsChanged": false,
+    "SDKDependencyInputsChanged": false,
+    "validation": "6pureprefixchecks+2actualVoiceSessiontests(selected8scenario variants)PASS;no liveaudio/fullsuite"
+  }
 }
