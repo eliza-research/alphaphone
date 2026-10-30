@@ -9,6 +9,7 @@ import {captureAgentPhoto} from './camera-adapter';
 import {isCameraCapture} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/camera-contract.ts';
 import {dismissMailFolderMenu} from '../../../../.eliza/client-features/plugins/plugin-inbox/src/components/mailbox/MailFolderPicker.tsx';
 import {aospImage} from '../runtime/aosp-image';
+import {localTurnStatus} from '../runtime/local-agent-stream';
 import {smsSubscriptionRevision} from '../runtime/sms-subscription-revision';
 import {createAospTelephony,type AlphaTelephonyPlugin} from '../runtime/aosp-telephony';
 import {isSmsSend,validateSmsResult,smsAgentHash,smsDeviceStatus} from '../runtime/sms-agent-contract';
@@ -1170,6 +1171,8 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     const live:Shell[]=this.S().msgs||[];
     out.msgs=(out.msgs||[]).map((m:Shell)=>{
       const c=m.c||{};
+      // A system notice card already carries its text; do not print it a second time above the card.
+      if(c.systemNotice&&m.cGeneric&&m.displayText===c.sub)return {...m,hasCalendarText:false};
       // Keep the real billing link and expose the existing code form from the
       // same account-bound refusal. Neither option purchases or redeems by itself.
       if(c.billingCodeEntry&&c.managePlan&&m.cGeneric&&connection.kind==='resident'&&connection.cloudAccount){
@@ -1367,12 +1370,17 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       navigation=connectionController.captureViewNavigation(alphaClient.getState().context);
       // The request becomes pending after the render above; render again so Stop is offered before any streamed text.
       queueMicrotask(()=>{if(this.live&&alphaClient.getState().pending)this.setState({});});
-      const reply = await alphaClient.send(text,value=>{
+      // The planning label shows only until the first reply text; it is never kept as a message.
+      const showStatus=(event:Event)=>{if(this.live&&!streamed&&this.sendAttempt===attempt)this.setState({turnStatus:(event as CustomEvent<string>).detail});};
+      localTurnStatus.addEventListener('label',showStatus);
+      let reply;
+      try{reply = await alphaClient.send(text,value=>{
         attempt.streamed=true;
         if(!this.live)return;
         if(streamed)replaceStream(value);
-        else{streamed=true;this.setState((previous:Shell)=>({msgs:[...previous.msgs,{id:streamedId,from:'agent',text:value,card:null,streaming:true}]}));}
-      },replyTarget,results=>{readyNavigation=results;});
+        else{streamed=true;this.setState((previous:Shell)=>({turnStatus:'',msgs:[...previous.msgs,{id:streamedId,from:'agent',text:value,card:null,streaming:true}]}));}
+      },replyTarget,results=>{readyNavigation=results;});}
+      finally{localTurnStatus.removeEventListener('label',showStatus);}
       // Only the composer's own send holds its draft; a prompt from elsewhere never settles it.
       if(fromComposer)await this.composerDraft?.commit();
       if (!this.live||!sameChat()) return;
@@ -1415,6 +1423,10 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       }else{
         if(pageLeaving){if(fromComposer)this.composerDraft?.abandon();return;}
         if(fromComposer)await this.composerDraft?.commit();
+        // The agent recorded the user turn before the reply failed: the sent bubble adopts its
+        // message identity, as on success, so a later conversation re-read merges onto it.
+        const recorded=e&&typeof e==='object'?e as {userMessageId?:unknown;messageBinding?:unknown}:{};
+        if(this.live&&sameChat()&&typeof recorded.userMessageId==='string'&&recorded.messageBinding&&typeof recorded.messageBinding==='object')this.setState((previous:Shell)=>({msgs:previous.msgs.map((item:Shell)=>item.id===userId?{...item,id:recorded.userMessageId,messageBinding:recorded.messageBinding}:item)}));
         // After Stop the controller cancels, announces and reconciles once; its notice is the one shown.
         const reconciling=!!connectionController.getSnapshot().replyNotice&&e instanceof AlphaClientError&&e.code==='cancelled';
         // The owner changed mid-turn: say it was interrupted, but never show the previous agent's partial
@@ -1444,7 +1456,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         }
       }
     }
-    finally { if(this.sendAttempt===attempt)this.sendAttempt=null; if (this.live) this.setState({ typing: false }); }
+    finally { if(this.sendAttempt===attempt)this.sendAttempt=null; if (this.live) this.setState({ typing: false, turnStatus: '' }); }
   };
   p.agentSay = function (text: string, card?: Shell, identity?:{id?:string;messageBinding?:{conversationId:string;session:unknown};deviceReceipt?:true},current?:()=>boolean) {
     this.setState((previous: Shell) => {

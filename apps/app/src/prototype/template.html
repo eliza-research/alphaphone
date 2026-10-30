@@ -1552,7 +1552,7 @@
     <sc-if value="{{camera.rec}}">
       <span role="timer" aria-label="Recording" style="display:flex;align-items:center;gap:8px;height:30px;padding:0 12px;border-radius:15px;background:rgba(0,0,0,.75);color:var(--alpha-white);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums"><span class="dot" aria-hidden="true" style="width:7px;height:7px;border-radius:4px;background:var(--alpha-record-dot)"></span>{{camera.recTime}}</span>
     </sc-if>
-    <button class="ib" aria-label="Ask Alpha about this" onClick="{{camera.ask}}"><span style="width: 30px; height: 30px; border-radius: 15px; background: rgba(255,255,255,.16); display: flex; align-items: center; justify-content: center; font-family: Denton, Fraunces, Georgia, serif; font-style: italic; font-size: 18px"><span class="alpha-compute-mark" aria-hidden="true"></span></span></button>
+    <button class="ib" data-alpha-header-icon-action aria-label="Ask Alpha about this" onClick="{{camera.ask}}" style="border-radius:22px;background:rgba(255,255,255,.16);color:var(--alpha-white)"><span class="alpha-compute-mark" aria-hidden="true" style="width:24px;height:24px"></span></button>
   </div>
 
   <sc-if value="{{camera.hasSaid}}">
@@ -4116,6 +4116,9 @@
       </div>
     </sc-for>
     <sc-if value="{{voiceInterim}}"><div data-alpha-voice-interim aria-label="Heard so far, not sent" style="align-self:flex-end;max-width:80%;background:var(--acc);color:var(--alpha-white);padding:11px 16px;border-radius:22px 22px 6px 22px;font-size:15px;line-height:1.4">{{voiceInterim}}</div></sc-if>
+    <sc-if value="{{turnStatus}}">
+      <div data-alpha-turn-status role="status" class="alpha-turn-status">{{turnStatus}}</div>
+    </sc-if>
     <sc-if value="{{typing}}">
       <div style="display: flex; gap: 5px; padding: 6px 0"><span class="dot" style="width: 7px; height: 7px; border-radius: 4px; background: var(--acct)"></span><span class="dot" style="width: 7px; height: 7px; border-radius: 4px; background: var(--acct); animation-delay: .2s"></span><span class="dot" style="width: 7px; height: 7px; border-radius: 4px; background: var(--acct); animation-delay: .4s"></span></div>
     </sc-if>
@@ -4129,11 +4132,11 @@
   </sc-if>
   <sc-if value="{{inlineChatRecorder}}">
     <section data-alpha-chat-recorder data-voice-state="{{chatRecorder.state}}" class="alpha-chat-composer alpha-voice-composer" role="region" aria-label="Voice conversation">
-      <div class="alpha-voice-input"><div role="status" aria-label="Voice conversation status" class="{{chatRecorder.statusClass}}"><sc-for list="{{chatRecorder.lines}}" as="line"><span>{{line.t}}</span></sc-for></div><div class="alpha-voice-waveform" role="img" aria-label="Voice activity">{{chatRecorder.activity}}</div></div>
+      <div class="alpha-voice-input"><div role="status" aria-label="Voice conversation status" class="{{chatRecorder.statusClass}}"><sc-for list="{{chatRecorder.lines}}" as="line"><span>{{line.t}}</span></sc-for></div><sc-if value="{{chatRecorder.activity}}"><div class="alpha-voice-waveform" role="img" aria-label="Voice activity">{{chatRecorder.activity}}</div></sc-if></div>
       <sc-if value="{{chatRecorder.canMute}}"><button class="ib" aria-label="{{chatRecorder.muteLabel}}" disabled="{{chatRecorder.muteDisabled}}" aria-pressed="{{chatRecorder.muted}}" onClick="{{chatRecorder.toggleMute}}"><span aria-hidden="true" class="mail-toolbar-icon" style="mask-image:url('{{chatRecorder.muteAsset}}');-webkit-mask-image:url('{{chatRecorder.muteAsset}}')"></span></button></sc-if>
       <button class="alpha-voice-primary" aria-label="{{chatRecorder.primaryLabel}}" disabled="{{chatRecorder.primaryDisabled}}" onClick="{{chatRecorder.stop}}"><svg class="i" viewBox="0 0 24 24"><path d="{{chatRecorder.primaryIcon}}"></path></svg></button>
     </section>
-    <sc-if value="{{chatRecorder.cloudDisclosure}}"><p class="alpha-voice-error" role="note">{{chatRecorder.cloudDisclosureText}}</p></sc-if>
+    <sc-if value="{{chatRecorder.voiceDetails}}"><details class="alpha-voice-error"><summary>Voice details</summary><sc-if value="{{chatRecorder.cloudDisclosure}}"><p role="note">{{chatRecorder.cloudDisclosureText}}</p></sc-if><sc-if value="{{chatRecorder.errorDetail}}"><p>{{chatRecorder.errorDetail}}</p></sc-if></details></sc-if>
     <sc-if value="{{chatRecorder.problem}}"><p class="alpha-voice-error" role="alert"><sc-for list="{{chatRecorder.lines}}" as="line"><span>{{line.t}}</span></sc-for></p></sc-if>
       <sc-if value="{{chatRecorder.recoveryLabel}}"><button data-alpha-voice-recovery class="tap alpha-voice-recovery" onClick="{{chatRecorder.recover}}" style="align-self:center;min-height:max(44px,calc(45px / var(--phone-scale,1)));margin:-18px 16px 12px;padding:8px 16px;border-radius:22px;color:var(--acct);font:inherit">{{chatRecorder.recoveryLabel}}</button></sc-if>
     <sc-if value="{{chatRecorder.needsPlaybackUnlock}}"><button class="tap alpha-voice-unlock" onClick="{{chatRecorder.unlockPlayback}}">Enable sound</button></sc-if>

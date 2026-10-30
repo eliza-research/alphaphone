@@ -206,6 +206,8 @@ export interface PendingReviewItem {
   proposal: ActionProposal | null;
   /** Why a pending proposal cannot be reviewed here, for example "Open the selected note". */
   notice?: string;
+  /** The pending proposal this row describes, so a reply can name it once. */
+  proposalId?: string;
 }
 export async function actionScope(value: string): Promise<string> {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), b => b.toString(16).padStart(2, '0')).join('');
@@ -280,10 +282,11 @@ export class DeviceActions {
     for (const proposal of valid) {
       if (proposal.workflow || proposal.state !== 'pending' || proposal.expiresAt <= Date.now()) continue;
       const card = this.card(proposal, context), notice = (isNativeNotesQuery(proposal.operation)&&!context.sensitive)||card.reviewDestination==='notes'||card.reviewDestination==='calendar' ? undefined : proposalContextNotice(proposal.operation, context);
-      if (notice) { items.push({ proposal: null, notice: `${card.title}: ${notice}` }); continue; }
+      const origin={proposalId:proposal.id};
+      if (notice) { items.push({ proposal: null, notice: `${card.title}: ${notice}`, ...origin }); continue; }
       this.proposals.set(proposal.id, { proposal, context: structuredClone(context) });
       if(proposal.readReplyOrigin&&!this.readReplies.has(proposal.id))this.readReplies.set(proposal.id,{digest:proposal.digest,origin:proposal.readReplyOrigin});
-      items.push({ proposal: card });
+      items.push({ proposal: card, ...origin });
     }
     const failures = invalid.filter(item => item.pending).map(item => item.error);
     for (const error of failures) items.push({ proposal: null, notice: `An agent action could not be shown on this phone. ${error.message.slice(0, 300)}` });

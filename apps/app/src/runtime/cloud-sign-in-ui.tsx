@@ -91,7 +91,7 @@ export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = tru
       {(dismissible || view.step !== 'choose' || busy) && <button type="button" className="alpha-connection-cancel" onClick={actions.cancel}>{view.step === 'choose' && !busy ? 'Back' : 'Cancel sign-in'}</button>}
       {view.step === 'choose' && extra}
     </div>
-    {service && <p>Service documents: <button type="button" disabled={busy} onClick={event=>{legalTrigger.current=event.currentTarget;setLegal('terms');}}>Terms of Service</button> and <button type="button" disabled={busy} onClick={event=>{legalTrigger.current=event.currentTarget;setLegal('privacy');}}>Privacy Policy</button>.</p>}
+    {service && <p><button type="button" disabled={busy} onClick={event=>{legalTrigger.current=event.currentTarget;setLegal('terms');}}>Terms of Service</button> and <button type="button" disabled={busy} onClick={event=>{legalTrigger.current=event.currentTarget;setLegal('privacy');}}>Privacy Policy</button>.</p>}
     {serviceError && <p role="status">Service information is unavailable. <button type="button" disabled={busy} onClick={()=>setRetry(value=>value+1)}>Retry service information</button></p>}
     </div>
     {legal && service && <section aria-labelledby="cloud-legal-title" className="alpha-cloud-legal">

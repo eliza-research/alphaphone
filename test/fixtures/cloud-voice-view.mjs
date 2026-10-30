@@ -1,4 +1,5 @@
 import { tsImport } from 'tsx/esm/api';
+const {alphaViewPath}=await tsImport(new URL('../../apps/app/src/product/alpha-product.ts',import.meta.url).href,{parentURL:import.meta.url});
 const {cloudServiceName}=await tsImport(new URL('../../apps/app/src/runtime/cloud-protocol.ts',import.meta.url).href,{parentURL:import.meta.url});
 const {cloudVoiceLimitOf}=await tsImport(new URL('../../apps/app/src/runtime/cloud-voice-limit.ts',import.meta.url).href,{parentURL:import.meta.url});
 const {readServiceLimit,retryDuration}=await tsImport(new URL('../../.eliza/client-features/packages/cloud/sdk/src/subscription-entitlement.ts',import.meta.url).href,{parentURL:import.meta.url});
@@ -9,8 +10,8 @@ import vm from 'node:vm';
 import {stripTypeScriptTypes} from 'node:module';
 import {loadPreparedBatchVoice} from './shared-batch-voice.mjs';
 
-function load(file,box,names){
- const source=fs.readFileSync('apps/app/src/'+file,'utf8').replace(/^import .*;\n/gm,'').replaceAll('export async function','async function').replaceAll('export function','function').replaceAll('export const','const').replaceAll('export type','type');
+function load(file,box,names,transform=source=>source){
+ const source=transform(fs.readFileSync('apps/app/src/'+file,'utf8')).replace(/^import .*;\n/gm,'').replaceAll('export async function','async function').replaceAll('export function','function').replaceAll('export const','const').replaceAll('export type','type');
  vm.runInNewContext('{'+stripTypeScriptTypes(source,{mode:'transform'})+'\n'+names.map(name=>'globalThis.'+name+'='+name+';').join('\n')+'}',box);
 }
 export function cloudVoiceViewFixture(options={}){
@@ -32,8 +33,8 @@ export function cloudVoiceViewFixture(options={}){
  load('runtime/voice-states.ts',box,['voiceFailure','transcriptProvenance','deniedSettingsChoice','DENIED_SETTINGS_LABEL']);
  // Issue #395 native stage bridge: a no-op outside the phone.
  box.installNativeVoiceTurnMarks=()=>{};
- box.cloudServiceName=cloudServiceName;box.cloudVoiceLimitOf=cloudVoiceLimitOf;box.readServiceLimit=readServiceLimit;box.retryDuration=retryDuration;
- load('prototype/voice-adapter.ts',box,['installPrototypeVoiceAdapter']);
+ box.alphaViewPath=alphaViewPath;box.cloudServiceName=cloudServiceName;box.cloudVoiceLimitOf=cloudVoiceLimitOf;box.readServiceLimit=readServiceLimit;box.retryDuration=retryDuration;
+ load('prototype/voice-adapter.ts',box,['installPrototypeVoiceAdapter'],options.adapterSourceTransform);
  const icons={check:'check',mic:'official-mic-path',stop:'stop',play:'play',x:'close',cloud:'cloud',user:'account'};
  class Shell{
   live=true;state={view:null,chat:'sheet',draft:'',msgs:[{id:'message',from:'agent',text:'Synthetic reply'}]};notes={list:[]};messages=[];

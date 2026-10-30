@@ -3,7 +3,7 @@ import {canSnoozeReminder,reminderDue} from '../../../../.eliza/client-features/
 import {AUTOMATIONS_COMMITTED_EVENT} from '../runtime/automation-completion';
 import {openWorkflowFilters,workflowFilterLabel,type WorkflowTypeFilter,type WorkflowStatusFilter} from './workflow-filters';
 import {FEED_FILTERS,passesFilter,type FeedFilter} from '../../../../.eliza/client-features/packages/ui/src/utils/automation-feed-filter';
-import {AutomationsProtocol,AutomationOutcomeError,automationIssue,automationLocalDateInput,mergeAutomationRows,type AutomationRow,type AutomationIssue,type PromptDraft,type ReminderDraft,type AutomationRequest,type ScheduledVerb} from '../runtime/automations-protocol';
+import {AutomationsProtocol,AutomationOutcomeError,automationIssue,automationLocalDateInput,automationWhen,mergeAutomationRows,type AutomationRow,type AutomationIssue,type PromptDraft,type ReminderDraft,type AutomationRequest,type ScheduledVerb} from '../runtime/automations-protocol';
 import {connectionController,agentPendingText,agentAvailabilityNotice} from '../runtime/connection-ui';
 import {DailyApps,type Reminder} from '../daily';
 import {WorkflowIntentStore,workflowIntentKey} from '../runtime/workflow-intents';
@@ -33,7 +33,7 @@ const filterNames:Record<Filter,string>={all:'All',reminders:'Reminders',prompts
 const rowStatus=(row:AutomationRow)=>(row.kind==='reminder'?({blocked:'Delivery blocked',duplicate:'Duplicate skipped',unknown:'Delivery status unavailable',unscheduled:'No scheduled occurrence'} as Record<string,string>)[row.status]:undefined)||(row.status?row.status.charAt(0).toUpperCase()+row.status.slice(1).replaceAll('-',' '):(row.enabled?'Active':'Inactive'));
 const rowPasses=(row:AutomationRow,filter:Filter)=>filter==='reminders'?row.kind==='reminder'||row.kind==='device-reminder':filter==='schedules'?row.kind==='schedule':passesFilter({kind:row.kind==='workflow'?'workflow':'task',active:row.enabled},filter)&&!(filter==='prompts'&&(row.kind==='reminder'||row.kind==='device-reminder'||row.kind==='schedule'));
 function deviceRow(row:Reminder):AutomationRow {
- return {key:'device-reminder:'+row.id,id:row.id,kind:'device-reminder',title:row.title,description:row.body||'',status:row.status,enabled:['pending','scheduled','posted'].includes(row.status),source:'On this phone',schedule:new Date(row.dueAt||row.at).toLocaleString(),record:row};
+ return {key:'device-reminder:'+row.id,id:row.id,kind:'device-reminder',title:row.title,description:row.body||'',status:row.status,enabled:['pending','scheduled','posted'].includes(row.status),source:'On this phone',schedule:automationWhen(row.dueAt||row.at),record:row};
 }
 /** One Alpha list over existing engines. Only explicit owner actions submit mutations. */
 export function installAutomationsAdapter(Component:any,views:Bag){

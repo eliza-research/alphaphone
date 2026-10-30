@@ -4,12 +4,13 @@ import {parseCloudServiceInfo} from './cloud-service-info';
 import {productionCloud, stagingCloud} from './cloud-deployment.generated.ts';
 import {browserCloudResidentEnabled,browserCloudResidentEnvironment} from './browser-cloud-resident';
 import {appRecordInvalidations} from './app-record-completion';
+import {normalizeEffectReceipts} from '../../../../.eliza/client-features/packages/core/src/types/effects.ts';
 import {assertAppRecordRequestAllowed,type AppRecordMethod,type AppRecordPort} from './app-record-route-policy';
 import {AUTOMATIONS_COMMITTED_EVENT,automationsCommitted} from './automation-completion';
 import {OWNER_REMINDER_LIST,OWNER_REMINDER_READBACK,ownerReminderRoute,reminderReadPath,type ReminderNotificationBinding} from './owner-reminder-notification-protocol';
 import {CAMERA_CAPTURE_CAPABILITY} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/camera-contract.ts';
 import {sanitizeCloudInferenceFailure,type CloudInferenceFailure} from './crash-log';
-import {residentRecoveryReason,residentRecoveryMessage,RESIDENT_RECOVERY_PENDING,type ResidentRecoveryReason,type ResidentRecoveryView} from './resident-recovery';
+import {residentRecoveryReason,residentRecoveryMessage,residentRecoveryCopy,RESIDENT_RECOVERY_PENDING,type ResidentRecoveryReason,type ResidentRecoveryView} from './resident-recovery';
 import {anyAbortSignal} from './abort-signal';
 import {CALENDAR_APPROVAL_READ_PATH,calendarApprovalFromList,calendarApprovalId} from './calendar-approval';
 import {readDevicePreferences} from '../browser/device-preferences';
@@ -174,6 +175,8 @@ const browserDevProfile = devSurfacesEnabled && devProfileQuery;
 const cloudEnvironmentPolicy = {development: import.meta.env.DEV, testMocks: testMocksEnabled, android: isAndroid, previewEnvironment: import.meta.env.VITE_ALPHA_CLOUD_ENVIRONMENT, cloudResident:browserCloudResidentEnabled};
 const cloudEnvironmentAllowed = (environment: unknown): environment is CloudEnvironment => browserCloudResidentEnabled ? environment===browserCloudResidentEnvironment : environment === 'production' || (testMocksEnabled && environment === 'staging');
 /** Eliza Cloud admits no request from the production web origin, so no Cloud route is started there. */
+// Pending device actions already named in a reply, per actions client (one per session).
+const announcedProposals=new WeakMap<object,Set<string>>();
 const webCloudUnavailable = () => !testMocksEnabled && !isAndroid && !browserLocalAgentEnabled;
 /** Decision P-43 (owner, 2026-10-13): the agent always runs locally. On Android production and in
  * browser development with the local agent there is never a "no agent" state: before the resident
@@ -194,7 +197,7 @@ export const NO_AGENT_SEND = testMocksEnabled ? 'Connect your remote agent in Se
 export const NO_AGENT_VOICE = testMocksEnabled ? 'Connect your remote agent in Settings to start a voice conversation.' : 'Your agent runs on your phone, not here. Open Alpha on your Android phone to talk with it.';
 /** One wording for every surface that needs the agent and has no session yet. */
 export function residentPendingText(snapshot: Pick<ConnectionSnapshot, 'kind'|'residentRecoveryReason'> = state): string {
-  if(snapshot.residentRecoveryReason)return RESIDENT_RECOVERY_PENDING;
+  if(snapshot.residentRecoveryReason)return residentRecoveryMessage(snapshot.residentRecoveryReason);
   return snapshot.kind === 'recovering' ? 'Your agent stopped. Retry in Settings › Agent connection.' : 'Your agent is starting…';
 }
 /** Every surface that needs an agent and has no session: the resident state where the resident is
@@ -329,6 +332,9 @@ export function mergeConversationDelivery<T extends{id:string}>(current:T[],deli
   for(let i=0;i<delivered.length;i++){
     const message=delivered[i];if(seen.has(message.id)){previous=message.id;continue;}
     if(result===current)result=[...current];let index=-1;
+    // A failed stream can end without the saved id; the saved copy replaces its unconfirmed local bubble.
+    const sent=message as {from?:unknown;text?:unknown},twin=sent.from==='user'?result.findIndex(item=>{const local=item as {from?:unknown;text?:unknown;messageBinding?:unknown};return local.from==='user'&&!local.messageBinding&&local.text===sent.text&&!delivered.some(other=>other.id===item.id);}):-1;
+    if(twin>=0){result[twin]=message;seen.add(message.id);previous=message.id;continue;}
     for(let j=i+1;j<delivered.length;j++){index=result.findIndex(item=>item.id===delivered[j].id);if(index>=0)break;}
     if(index<0&&previous!==undefined){const anchor=result.findIndex(item=>item.id===previous);if(anchor>=0)index=anchor+1;}
     result.splice(index<0?result.length:index,0,message);seen.add(message.id);previous=message.id;
@@ -381,7 +387,8 @@ async function deviceCapabilities(offered:unknown):Promise<string>{
   const capabilities=['calendar.local-event.v1','notes.local-record.v1'];
   if(agent.includes(CAMERA_CAPTURE_CAPABILITY)&&(Capacitor.isPluginAvailable('ElizaCamera')||!android&&typeof navigator!=='undefined'&&typeof navigator.mediaDevices?.getUserMedia==='function'))capabilities.push(CAMERA_CAPTURE_CAPABILITY);
   if(agent.includes('reminders.local-record.v2'))capabilities.push('reminders.local-record.v2');else if(agent.includes('reminders.local-record.v1'))capabilities.push('reminders.local-record.v1');
-  for(const capability of [...(!Capacitor.isNativePlatform()?['calendar.agenda-read.v1']:[]),'notes.query.v1','reminders.create.v1','calendar.create.v1',...(android||!Capacitor.isNativePlatform()?['calendar.next-read.v1']:[]),'maps.selected-read.v1'])if(agent.includes(capability))capabilities.push(capability);
+  // Browser chat reminders use the runtime scheduler; do not offer a second device-creation lifecycle.
+  for(const capability of [...(!Capacitor.isNativePlatform()?['calendar.agenda-read.v1']:[]),'notes.query.v1',...(Capacitor.isNativePlatform()?['reminders.create.v1']:[]),'calendar.create.v1',...(android||!Capacitor.isNativePlatform()?['calendar.next-read.v1']:[]),'maps.selected-read.v1'])if(agent.includes(capability))capabilities.push(capability);
   if(availabilityNegotiated(agent))capabilities.push(CALENDAR_AVAILABILITY_CAPABILITY);
   if((android||!Capacitor.isNativePlatform())&&typeof foregroundExecutor==='function'&&agent.includes('calendar.named-read.v1'))capabilities.push('calendar.named-read.v1');
   // One shared external-handoff policy for every brand: never clock.alarms.v1 (P-17).
@@ -1336,6 +1343,17 @@ const RESIDENT_SIGN_IN_EXPIRED = 'Your Cloud sign-in has expired. Sign in with C
 /** Shown beside the composer while the resident is connected and the phone has no network. */
 export const INFERENCE_OFFLINE_NOTICE = 'Your agent is running; AI needs a connection. Nothing is sent until this phone is back online.';
 const RATE_LIMITED = 'The agent provider is rate-limiting requests. Wait before sending again. Alpha Phone did not retry your message.';
+/** A turn that failed after its action committed: the owner is told the action went through, never the generic failure. */
+export const EFFECT_APPLIED_INTERRUPTED = 'The requested action went through, but the reply was cut off before it finished. Check the app it changed. Nothing was run again.';
+/** Upstream's post-commit interruption (`TURN_INTERRUPTED_AFTER_EFFECT`), or an effect receipt the reply proves applied and not rolled back. */
+function effectAppliedBeforeFailure(reply:{terminalFailure?:unknown;actionResults?:unknown}):boolean {
+  const code=reply.terminalFailure&&typeof reply.terminalFailure==='object'?(reply.terminalFailure as {code?:unknown}).code:undefined;
+  if(code==='TURN_INTERRUPTED_AFTER_EFFECT')return true;
+  if(!Array.isArray(reply.actionResults))return false;
+  const receipts=reply.actionResults.flatMap(result=>{if(!result||typeof result!=='object'||!('effectReceipts' in result))return [];try{return [...normalizeEffectReceipts((result as {effectReceipts:unknown}).effectReceipts)];}catch{return [];}});
+  const reverted=new Set(receipts.flatMap(receipt=>receipt.outcome==='rolled_back'?receipt.rollback.revertedReceiptIds:[]));
+  return receipts.some(receipt=>receipt.outcome==='applied'&&!reverted.has(receipt.receiptId));
+}
 /** Owner-facing states for upstream's CHAT_FAILURE_KINDS (pinned contracts `chat.ts`). Each says
  * what happened and what to do next; none retries the message. Unlisted kinds keep the generic text. */
 export const REPLY_FAILURES = {
@@ -1479,7 +1497,7 @@ async function restoreConversationHistory(id:string,signal:AbortSignal,automatic
   const older=result.partial?' Older messages remain on the agent.':'';
   // An explicit reload already shows whether a stopped reply finished; the pending check is retired.
   if(!automatic)cancelStoppedReply();
-  update({history:{sessionId:session.sessionId,conversationId:id,revision:(state.history?.revision||0)+1,messages,automatic,deliveryRevisionAtStart:result.deliveryRevisionAtStart},historyError:'',historyPartial:result.partial,...(automatic?{}:{open:false,replyNotice:''}),message:(automatic?'Saved conversation restored.':saved?'Conversation restored.':'History restored for this session; restart selection could not be saved.')+older});
+  update({history:{sessionId:session.sessionId,conversationId:id,revision:(state.history?.revision||0)+1,messages,automatic,deliveryRevisionAtStart:result.deliveryRevisionAtStart},historyError:'',historyPartial:result.partial,...(automatic?{}:{open:false,replyNotice:''}),message:automatic?older.trim():(saved?'Conversation restored.':'History restored for this session; restart selection could not be saved.')+older});
   const last=result.messages.at(-1);
   if(afterConnect&&selected.kind==='resident'&&last?.role==='user'&&typeof last.text==='string'&&typeof last.timestamp==='number'&&last.timestamp>Date.now()-RESTORED_REPLY_WINDOW_MS)
     scheduleStoppedReply(selected,session,id,{text:restoredText(last.text,last.userTextFormat),sentAt:last.timestamp,...(typeof last.clientMessageId==='string'?{clientMessageId:last.clientMessageId}:{})},STOPPED_REPLY_CHECK_MS,false);
@@ -2232,16 +2250,24 @@ export const connectionController = {
       catch(error){update({residentRecovery:{step:'unavailable'}});throw error;}
     });
   },
+  /** Explicit owner action only: obtain a fresh native review before the existing guarded restart. */
+  async restartRecovery() {
+    if(operation||document.hidden||state.residentRecoveryReason!=='ipc-recovery-retention-limit'||state.session)return;
+    const generation=epoch;
+    await connectionController.reviewRecovery();
+    if(generation!==epoch||document.hidden||operation||state.residentRecoveryReason!=='ipc-recovery-retention-limit'||state.session||state.residentRecovery?.step!=='review')return;
+    await connectionController.confirmRecovery();
+  },
   cancelRecoveryReview(){if(!operation)update({residentRecovery:undefined});},
   async confirmRecovery() {
     if(operation||state.residentRecoveryReason!=='ipc-recovery-retention-limit'||state.residentRecovery?.step!=='review'||state.session)return;
     const review=state.residentRecovery.review;let archived=false;
-    await work('Keeping startup records…',async signal=>{
+    await work('Restarting Alpha…',async signal=>{
       update({residentRecovery:{step:'archiving'}});
       try{
         const result=await archiveLocalRecovery(review.reviewToken);signal.throwIfAborted();
         if(result.status!=='archived'||result.retainedCount!==0||result.archivedCount!==review.retainedCount){update({message:'',residentRecovery:{step:result.status==='partial'?'partial':'unavailable'}});return;}
-        archived=true;update({residentRecoveryReason:undefined,residentRecovery:undefined,error:'',message:'Startup records were kept. Restarting your agent…'});
+        archived=true;update({residentRecoveryReason:undefined,residentRecovery:undefined,error:'',message:'Restarting Alpha…'});
       }catch(error){update({residentRecovery:{step:'unavailable'}});throw error;}
     });
     if(archived)await connectionController.startLocal();
@@ -2744,6 +2770,7 @@ export const connectionController = {
       if(channelType==='VOICE_DM' && (('interrupted' in reply && reply.interrupted===true)||('noResponseReason' in reply && reply.noResponseReason==='ignored')))throw Error('The voice response did not complete. Check conversation history before speaking again.');
       let responseFailure: Error | undefined;
       const failed = ('interrupted' in reply && reply.interrupted===true) || ('failureKind' in reply && !!reply.failureKind) || ('terminalFailure' in reply && !!reply.terminalFailure);
+      const effectApplied=failed&&effectAppliedBeforeFailure(reply);
       // A completed Calendar read can truthfully fail its coverage guard. Its
       // visible answer and durable message identity remain usable; this is not
       // a transport failure and must not gain a retry prompt or extra card.
@@ -2763,6 +2790,10 @@ export const connectionController = {
         // on the failed turn is read like a direct HTTP refusal's; absent, nothing is invented.
         const timing = reply as { resetAt?: unknown; retryAfterSeconds?: unknown };
         responseFailure = replyFailure(failureKindOf(reply)??('interrupted' in reply&&reply.interrupted===true?'interrupted':undefined), selected, readServiceLimit({ failureKind: 'failureKind' in reply ? reply.failureKind : undefined, terminalFailure: 'terminalFailure' in reply ? reply.terminalFailure : undefined, resetAt: timing.resetAt, retryAfterSeconds: timing.retryAfterSeconds }));
+        // The turn failed after its action committed (a calendar event exists, say): the owner is
+        // told the action went through and the reply was cut off. A mapped provider or Cloud limit
+        // keeps its own retry information after that; the generic and plain interrupted texts do not.
+        if(effectApplied){const mapped=responseFailure instanceof AlphaClientError?responseFailure as AlphaClientError&{failureKind?:unknown;serviceLimit?:unknown;planAction?:unknown}:undefined;responseFailure=Object.assign(new AlphaClientError('transport-failed',mapped&&mapped.failureKind!=='interrupted'?`${EFFECT_APPLIED_INTERRUPTED} ${mapped.message}`:EFFECT_APPLIED_INTERRUPTED),{failureKind:typeof mapped?.failureKind==='string'?mapped.failureKind:failureKindOf(reply)??'interrupted'},mapped?.serviceLimit===undefined?{}:{serviceLimit:mapped.serviceLimit},mapped?.planAction===undefined?{}:{planAction:mapped.planAction});}
         if ('failureKind' in responseFailure) retractReadiness();
       }
       for(const key of ['messageId','userMessageId'] as const)if(reply[key]!==undefined&&!validateUuid(reply[key]))throw Error('The agent returned an invalid message identity.');
@@ -2785,16 +2816,23 @@ export const connectionController = {
               items=await selected.actions.pendingReview(message.context,requestSignal);
             }
           }
-          proposals = items.flatMap(item => item.proposal ? [item.proposal] : []); notices.push(...items.flatMap(item => item.notice ? [item.notice.slice(0, 500)] : []));notices=notices.slice(0,5); }
+          // A pending action joins the first reply after it appears; later replies do not repeat it.
+          const shown=announcedProposals.get(selected.actions)??new Set<string>();announcedProposals.set(selected.actions,shown);
+          const turnItems=items.filter(item=>!item.proposalId||!shown.has(item.proposalId));for(const item of items)if(item.proposalId)shown.add(item.proposalId);
+          proposals = turnItems.flatMap(item => item.proposal ? [item.proposal] : []); notices.push(...turnItems.flatMap(item => item.notice ? [item.notice.slice(0, 500)] : []));notices=[...new Set(notices)].slice(0,5); }
         catch { update({ message: 'Reply received. Phone action proposals could not be checked; use action history.' }); }
       }
       requestSignal.throwIfAborted();
       assertCurrent();
       // These events refresh records only. A later reply failure cannot undo a recorded effect.
       for(const invalidation of appRecordInvalidations(reply.actionResults))window.dispatchEvent(new CustomEvent(invalidation.event,{detail:{sessionId:session.sessionId,...(invalidation.revision===undefined?{}:{revision:invalidation.revision})}}));
+      // The agent recorded the user turn even when the reply failed: its identity rides on the
+      // failure so the sent bubble adopts it, and a later conversation re-read merges onto that
+      // bubble instead of adding a second copy. The failed assistant row keeps the phone's own text.
+      const messageBinding={conversationId:id,session:{...session}},recorded=typeof reply.userMessageId==='string'?{userMessageId:reply.userMessageId,messageBinding}:{};
       // A failed reply can follow a durably recorded proposal. Recover only the
       // existing identity/context-bound review; never retry chat or execute it.
-      if (responseFailure && !proposals?.length) throw responseFailure;
+      if (responseFailure && !proposals?.length) throw Object.assign(responseFailure,recorded);
       if(!failed&&directRequestedActions&&message.context.view==='home'&&cameraNavigation&&cameraAttempt&&typeof reply.userMessageId==='string'&&Array.isArray(reply.actionResults)){
         requestedCameraContinuation={messageId:reply.userMessageId,selected,session,generation,conversationId:id,client:cameraNavigation,attempt:cameraAttempt,expiresAt:Date.now()+30_000};
       }
@@ -2802,8 +2840,8 @@ export const connectionController = {
       // A reply that got through means the last Cloud limit no longer applies.
       if(!failed&&state.lastServiceLimit)update({lastServiceLimit:null});
       return { text: responseFailure
-        ? `${responseFailure.message} Pending phone actions are available for separate review. Nothing has been approved or performed automatically.`
-        : reply.text, ...(completedReads.length?{completedReads}:{}), ...(completedActions.length?{completedActions}:{}), ...(notices.length ? { notices } : {}), ...(!responseFailure?{...(typeof reply.messageId==='string'?{messageId:reply.messageId}:{}),...(typeof reply.userMessageId==='string'?{userMessageId:reply.userMessageId}:{}),messageBinding:{conversationId:id,session:{...session}}}:{}), ...(proposals ? { proposals } : {}), ...(!failed&&Array.isArray(reply.actionResults)?{actionResults:reply.actionResults}:{}) };
+        ? `${responseFailure.message} Pending phone actions are available for separate review.${effectApplied?'':' Nothing has been approved or performed automatically.'}`
+        : reply.text, ...(completedReads.length?{completedReads}:{}), ...(completedActions.length?{completedActions}:{}), ...(notices.length ? { notices } : {}), ...(!responseFailure?{...(typeof reply.messageId==='string'?{messageId:reply.messageId}:{}),messageBinding}:{}), ...recorded, ...(proposals ? { proposals } : {}), ...(!failed&&Array.isArray(reply.actionResults)?{actionResults:reply.actionResults}:{}) };
     } catch (error) {
       // Nothing carrying the message left this phone (no conversation, offline, changed owner, or a
       // Stop before the post): the composer keeps the text instead of reporting an unknown outcome.
@@ -3038,7 +3076,7 @@ export function ConnectionChooser() {
       extra={signInEntryRequired && !snapshot.signIn && !snapshot.busy
         ? <button onClick={()=>void connectionController.beginSignIn(residentEnvironment(),true)}>Retry sign-in</button>
         : browserCloudResidentEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Sign in with browser</button>:testMocksEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Browser sign-in (diagnostic)</button>:undefined}/>
-    {snapshot.legacySignInRecovery&&requiredSignInView.step==='choose'&&requiredSignInView.environment==='production'&&<button disabled={snapshot.busy} onClick={()=>void connectionController.restoreSavedSignIn()}>Restore saved sign-in</button>}
+    {!snapshot.cloudAccount&&snapshot.legacySignInRecovery&&requiredSignInView.step==='choose'&&requiredSignInView.environment==='production'&&<details aria-label="Sign-in troubleshooting"><summary>Trouble signing in?</summary><button disabled={snapshot.busy} onClick={()=>void connectionController.restoreSavedSignIn()}>Restore saved sign-in</button></details>}
     {snapshot.signOutNotice && snapshot.signOutNotice!==snapshot.message && <p role="status">{snapshot.signOutNotice}</p>}
     {productionSignInRequired && <ResidentRecoveryPanel snapshot={snapshot}/>}
   </div></div>;
@@ -3075,7 +3113,7 @@ export function ConnectionChooser() {
   // (Starting / Running on this device / Not running, with Retry) and its Eliza Cloud AI: sign-in
   // (which every Alpha Phone needs), plan, redeem code and sign-out. Plan state never stops the agent.
   const residentSignInRejected=snapshot.error===errorMessage({status:401});
-  const residentStatus=snapshot.session?'Running on this device':snapshot.residentRecoveryReason?'Recovery review needed':snapshot.kind==='recovering'?'Not running':'Starting…';
+  const residentStatus=snapshot.session?'Running on this device':snapshot.residentRecoveryReason?(snapshot.residentRecoveryReason==='ipc-recovery-retention-limit'?'Restart needed':'Needs attention'):snapshot.kind==='recovering'?'Not running':'Starting…';
   const residentNeedsPlan=snapshot.residentPlanNotice==='needs-plan'&&!!snapshot.cloudAccount&&!residentSignInRejected;
   const residentOffline=snapshot.residentPlanNotice==='offline'&&!snapshot.cloudAccount;
   // Only a required sign-in (first run, or a sign-in Cloud rejected) cannot be dismissed. The agent runs either way.
@@ -3217,15 +3255,14 @@ export function ConnectionChooser() {
 }
 
 function ResidentRecoveryPanel({snapshot}:{snapshot:ConnectionSnapshot}) {
-  return snapshot.residentRecoveryReason==='ipc-recovery-retention-limit'&&!snapshot.session&&<section aria-label="Agent recovery">
-        <p>Your notes, chats and sign-in stay unchanged.</p>
-        {snapshot.residentRecovery?.step==='review'?<>
-          <p>Alpha will keep {snapshot.residentRecovery.review.retainedCount} old startup records, then restart your agent.</p>
-          <div className="alpha-connection-actions"><button disabled={snapshot.busy} onClick={()=>void connectionController.confirmRecovery()}>Keep records and restart</button><button disabled={snapshot.busy} onClick={()=>connectionController.cancelRecoveryReview()}>Cancel</button></div>
-        </>:<>
-          {snapshot.residentRecovery?.step==='unavailable'&&<p role="status">Recovery could not be checked. Your records were kept. Review again later.</p>}
-          {snapshot.residentRecovery?.step==='partial'&&<p role="status">Recovery did not finish. Your records were kept. Review again before restarting.</p>}
-          <button disabled={snapshot.busy} onClick={()=>void connectionController.reviewRecovery()}>Review recovery</button>
-        </>}
-      </section>;
+  const reason=snapshot.residentRecoveryReason,recovery=snapshot.residentRecovery;
+  return reason&&!snapshot.session&&<section aria-label="Restart Alpha">
+    <p role="status">{residentRecoveryCopy(reason,recovery)}</p>
+    {reason==='ipc-recovery-retention-limit'&&<button disabled={snapshot.busy} onClick={()=>void connectionController.restartRecovery()}>Restart Alpha</button>}
+    <details><summary>Details</summary>
+      <p>Reason: {reason}</p>
+      {recovery&&<p>Stage: {recovery.step}</p>}
+      {recovery?.step==='review'&&<p>Startup records to keep: {recovery.review.retainedCount}</p>}
+    </details>
+  </section>;
 }
