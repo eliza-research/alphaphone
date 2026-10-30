@@ -110,7 +110,7 @@ test('the sweep applies every dimension and cannot be narrowed silently', () => 
   // The 300% defects open when the lane was added (#701) run as expected failures; the list only shrinks.
   const open300 = sweep.match(/const OPEN_AT_300 = new Set\(\[([^\]]*)\]\);/)?.[1];
   assert.ok(open300 !== undefined, 'the open 300% defects are listed in one place');
-  const recorded300 = ['live Home', 'live Conversation', 'live Calendar new event', 'live Camera (unavailable)', 'live Browser tabs', 'live Browser menu', 'live Settings display', 'launcher Home', 'launcher Conversation', 'launcher Calendar', 'launcher Camera', 'launcher Photos', 'launcher Workflows', 'launcher Settings display'];
+  const recorded300 = ['live Home', 'live Conversation', 'live Camera (unavailable)', 'live Browser tabs', 'live Browser menu', 'live Settings display', 'launcher Home', 'launcher Conversation', 'launcher Calendar', 'launcher Camera', 'launcher Photos', 'launcher Workflows', 'launcher Settings display'];
   for (const name of [...open300.matchAll(/'([^']+)'/g)].map(match => match[1])) assert.ok(recorded300.includes(name), `${name} is not a recorded 300% defect; fix it instead of exempting it`);
   // An open entry must still report a layout defect from the audit itself; a timeout, a crash or a
   // state that no longer opens is not taken as the expected failure.
