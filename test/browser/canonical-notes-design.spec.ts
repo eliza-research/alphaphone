@@ -3,9 +3,10 @@ import {canonicalNotesFixture,openCanonicalNotes} from './helpers/canonical-note
 import {setTextScale} from './accessibility-states';
 
 // Live agent Notes are drawn by Alpha's own Notes template, the one mock mode shows: header with
-// Back, title and actions, the search pill, and a two-column masonry of rounded cards whose type
-// (checklist, voice note, link, text) follows the record's own data. Screenshots land in
-// test-results/notes-restore for side-by-side review with the mock-mode reference.
+// Back, title, the waveform and +, the search pill, and a two-column masonry of rounded cards whose
+// type (checklist, voice note, link, text) follows the record's own data. Trash is a pill under the
+// list beside Previous notes. Screenshots land in test-results/notes-restore for side-by-side review
+// with the mock-mode reference.
 const SHOTS='test-results/notes-restore';
 const at='2026-10-30T09:00:00.000Z';
 const note=(id:string,title:string,body:string,format?:{kind:string;data:Record<string,unknown>})=>({id,title,body:body?'\n'+body:'',color:'yellow',createdAt:at,updatedAt:at,...(format?{format}:{})});
@@ -29,13 +30,16 @@ async function openSeeded(page:Page,path='/'){
 }
 const card=(page:Page,title:string)=>page.getByRole('button',{name:`Open ${title}`,exact:true});
 async function shot(page:Page,name:string){await page.screenshot({path:`${SHOTS}/${name}.png`,animations:'disabled'});}
-/** Geometry and paint of the Notes list that the mock design fixes. */
+/** Geometry and paint of the Notes list that the mock design fixes, header actions and their icons included. */
 async function layout(page:Page){
  return page.evaluate(()=>{
   const box=(el:Element|null)=>{if(!el)return null;const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {x:Math.round(r.x),w:Math.round(r.width),radius:s.borderRadius,bg:s.backgroundColor};};
   const cards=[...document.querySelectorAll('[data-alpha-subview="notes-list"] button.note-card')];
+  // Mock mode's banner moves the whole view down, so header actions are placed within their header.
+  const header=document.querySelector('[data-alpha-subview="notes-list"] [data-alpha-app-header="main"]')!,top=header.getBoundingClientRect().y;
+  const actions=[...header.querySelectorAll('button')].map(el=>{const r=el.getBoundingClientRect(),icon=el.querySelector('[data-alpha-icon]');return {x:Math.round(r.x),y:Math.round(r.y-top),w:Math.round(r.width),h:Math.round(r.height),icon:icon?.getAttribute('data-alpha-icon'),iconSize:icon&&Math.round(icon.getBoundingClientRect().width)};});
   return {title:getComputedStyle(document.querySelector('[data-alpha-app-title]')!).fontSize,search:box(document.querySelector('[data-alpha-subview="notes-list"] button[aria-label="Search notes"]')),
-   columns:[...new Set(cards.map(el=>Math.round(el.getBoundingClientRect().x)))].sort((a,b)=>a-b),first:box(cards[0])};
+   columns:[...new Set(cards.map(el=>Math.round(el.getBoundingClientRect().x)))].sort((a,b)=>a-b),first:box(cards[0]),actions};
  });
 }
 
@@ -46,10 +50,15 @@ test('live agent Notes use the mock-mode Notes design with typed cards',async({p
  await card(page,'Groceries').click();await expect(page.getByRole('button',{name:'Uncheck Oat milk',exact:true})).toBeVisible();
  await shot(page,'reference-mock-checklist');
  const {foreign,errors}=await openSeeded(page);
+ // Same header as mock mode: Back, title, the waveform and +, each in the same place, size and icon.
  expect(await layout(page)).toEqual(mock);
  await expect(page.getByRole('heading',{name:'Notes',exact:true})).toBeVisible();
- for(const name of ['Back to apps','Open Trash','New note','Search notes'])await expect(page.getByRole('button',{name,exact:true})).toBeVisible();
+ const header=page.locator('[data-alpha-subview="notes-list"] [data-alpha-app-header="main"]');
+ expect(await header.getByRole('button').evaluateAll(list=>list.map(el=>el.getAttribute('aria-label')))).toEqual(['Back to apps','Dictate new note','New note']);
+ for(const name of ['Back to apps','Dictate new note','New note','Search notes'])await expect(page.getByRole('button',{name,exact:true})).toBeVisible();
+ // The waveform dictates a new agent note; device recording stays with Older notes.
  await expect(page.getByRole('button',{name:'Record and transcribe',exact:true})).toHaveCount(0);
+ await expect(header.getByRole('button',{name:'Open Trash',exact:true})).toHaveCount(0);
  // Pinned first, then the collection order, alternating between the two columns.
  const order=await page.locator('[data-alpha-subview="notes-list"] button.note-card').evaluateAll(list=>list.map(el=>[el.getAttribute('aria-label'),Math.round(el.getBoundingClientRect().x)]));
  expect(order.map(([label])=>label)).toEqual(['Open Launch checklist','Open Groceries','Open Gift ideas','Open Design sync','Open The case for on-device agents','Open Radiator']);
@@ -62,10 +71,16 @@ test('live agent Notes use the mock-mode Notes design with typed cards',async({p
  await expect(card(page,'Radiator').locator('span')).toHaveCount(0);
  // The shared Notes view's agent ids stay on the matching controls (canonical-notes-ui.ts, template.html).
  const ids=(scope:string)=>page.locator(`${scope} [data-agent-id]`).evaluateAll(list=>list.filter(el=>(el as HTMLElement).getClientRects().length).map(el=>el.getAttribute('data-agent-id')));
- expect(await ids('[data-alpha-subview="notes-list"]')).toEqual(['notes-trash','notes-new','notes-search','launch','groceries','gifts','voice-sync','agents','voicemail','notes-source-legacy']);
+ expect(await ids('[data-alpha-subview="notes-list"]')).toEqual(['notes-dictate-new','notes-new','notes-search','launch','groceries','gifts','voice-sync','agents','voicemail','notes-source-legacy','notes-trash']);
  await shot(page,'live-list');
- await page.getByRole('button',{name:'Previous notes',exact:true}).scrollIntoViewIfNeeded();
- expect((await page.getByRole('button',{name:'Previous notes',exact:true}).boundingBox())!.height).toBeGreaterThanOrEqual(48);
+ // Trash stays one tap away: a pill under the list, beside Previous notes, in the list's scroll area.
+ const previous=page.getByRole('button',{name:'Previous notes',exact:true}),trash=page.locator('[data-alpha-app-scroll="notes"]').getByRole('button',{name:'Open Trash',exact:true});
+ await trash.scrollIntoViewIfNeeded();await expect(trash).toHaveText('Trash');await expect(trash).toHaveAttribute('data-agent-id','notes-trash');
+ const [p,t,last]=[(await previous.boundingBox())!,(await trash.boundingBox())!,(await card(page,'Radiator').boundingBox())!];
+ expect(p.height).toBeGreaterThanOrEqual(48);expect(t.height).toBeGreaterThanOrEqual(48);
+ expect(Math.round(t.y)).toBe(Math.round(p.y));expect(t.x).toBeGreaterThan(p.x+p.width);expect(t.y).toBeGreaterThan(last.y+last.height);
+ await trash.click();
+ await expect(page.locator('[data-alpha-subview="notes-trash"]').getByText('Deleted notes are kept here for recovery.',{exact:true})).toBeVisible();
  expect(foreign).toEqual([]);expect(errors).toEqual([]);
 });
 
@@ -136,7 +151,7 @@ test('live agent Notes at 300% text keep cards and controls on screen',async({pa
   return out;
  });
  expect(overflow).toEqual([]);
- for(const name of ['Back to apps','Open Trash','New note']){const box=(await page.getByRole('button',{name,exact:true}).boundingBox())!;expect(box.width).toBeGreaterThanOrEqual(44);expect(box.x+box.width).toBeLessThanOrEqual(413);}
+ for(const name of ['Back to apps','Dictate new note','New note','Open Trash']){const box=(await page.getByRole('button',{name,exact:true}).boundingBox())!;expect(box.width).toBeGreaterThanOrEqual(44);expect(box.x+box.width).toBeLessThanOrEqual(413);}
  await shot(page,'live-list-300pct');
  await card(page,'Launch checklist').click();
  await expect(page.getByRole('textbox',{name:'Note',exact:true})).toBeVisible();

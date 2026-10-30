@@ -39,6 +39,44 @@ test('canonical Notes UI creates, edits, trashes and restores the same committed
  expect(foreign).toEqual([]);expect(errors).toEqual([]);
 });
 
+// The header waveform is mock mode's, in live mode a new agent note dictated into: speech to text
+// through the editor's dictation, saved like typing after + (create, then expectedRevision updates).
+test('the header waveform starts one canonical note and dictates into it like typing',async({page})=>{
+ const {foreign,errors}=await canonicalNotesFixture(page);await openCanonicalNotes(page);
+ const requests=()=>page.evaluate(()=>(window as any).canonicalNotesFixture.requests.filter((r:any)=>r.path==='/api/views/notes/interact'));
+ await page.evaluate(()=>(window as any).canonicalNotesFixture.dictation=['Call the landlord Friday','Bedroom radiator clanks all night.']);
+ await page.getByRole('button',{name:'Dictate new note',exact:true}).click();
+ // The transcript is the new note's first save: one create-note, the same one typing after + makes.
+ await expect.poll(()=>snapshot(page).then((s:any)=>s.notes.map((n:any)=>[n.title,n.body]))).toEqual([['Call the landlord Friday','']]);
+ const title=page.getByRole('textbox',{name:'Title',exact:true}),body=page.getByRole('textbox',{name:'Note',exact:true});
+ await expect(title).toHaveValue('Call the landlord Friday');
+ const created=await requests();expect(created.map((r:any)=>r.body.capability)).toEqual(['create-note']);
+ expect(created[0].body.params).toEqual({forceNew:true,content:'Call the landlord Friday',color:'yellow'});
+ // Dictating again into the open note is an edit of that record against the revision it was made from.
+ await page.getByRole('button',{name:'Dictate',exact:true}).click();
+ await expect.poll(()=>snapshot(page).then((s:any)=>s.notes.map((n:any)=>[n.title,n.body]))).toEqual([['Call the landlord Friday','\nBedroom radiator clanks all night.']]);
+ await expect(body).toHaveValue('Bedroom radiator clanks all night.');
+ const [first,second]=await requests();const id=(await snapshot(page)).notes[0].id;
+ expect(second.body).toMatchObject({capability:'update-note',params:{id,expectedRevision:1,content:'Call the landlord Friday\nBedroom radiator clanks all night.'}});
+ expect(first.body.params.expectedRevision).toBeUndefined();
+ expect(await page.evaluate(()=>(window as any).canonicalNotesFixture.heard)).toBe(2);
+ // An ordinary agent note: no recording, no audio handle, nothing device-local.
+ expect((await snapshot(page)).notes[0].format).toBeUndefined();expect(JSON.stringify(await requests())).not.toMatch(/audio/i);
+ await page.getByRole('button',{name:'Back to notes',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Open Call the landlord Friday',exact:true})).toContainText('Bedroom radiator clanks all night.');
+ expect((await snapshot(page)).notes).toHaveLength(1);
+ // Without speech recognition (this browser build, or a denied microphone) the waveform still opens
+ // the new note and shows the editor's own message; an untouched note is dropped on Back.
+ await page.evaluate(()=>(window as any).canonicalNotesFixture.dictation=undefined);
+ await page.getByRole('button',{name:'Dictate new note',exact:true}).click();
+ await expect(title).toHaveValue('');await expect(body).toHaveValue('');
+ await expect(page.getByText('Speech recognition is unavailable.',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Back to notes',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Dictate new note',exact:true})).toBeVisible();
+ expect((await requests()).length).toBe(2);expect((await snapshot(page)).notes).toHaveLength(1);
+ expect(foreign).toEqual([]);expect(errors).toEqual([]);
+});
+
 test('canonical failed save retains the owner draft until explicit discard and reload',async({page})=>{
  const {errors}=await canonicalNotesFixture(page);await openCanonicalNotes(page);
  await page.getByRole('button',{name:'New note',exact:true}).click();

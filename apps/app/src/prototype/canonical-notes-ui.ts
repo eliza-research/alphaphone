@@ -160,6 +160,8 @@ export class CanonicalNotesUi {
   const editor=document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Note"]'),caret=editor&&editor.value===before.body?editor:null,start=caret?caret.selectionStart:before.body.length,end=caret?caret.selectionEnd:before.body.length;
   try{
    const result=await DailyApps.perform({action:'voice'});
+   // A new note's first save (a title typed while listening) names its record by now.
+   id=this.resolve(id);
    if(!this.controller.current||this.open!==id)return;
    if(typeof result.transcript!=='string'||!result.transcript){api.toast(result.message||'Speech recognition is unavailable.');return;}
    const current=this.list.find(row=>row.id===id);if(!current)return;
@@ -167,12 +169,18 @@ export class CanonicalNotesUi {
    await this.update(id,{body});
   }catch{api.toast('Speech recognition is unavailable.');}
  }
- /** Canonical behaviour on top of Alpha's Notes view: restore-only Trash, review and reload, no device recording. */
+ /** The header waveform: a new note, then the editor's dictation into its body. It saves like typing after +
+  * (create, then expectedRevision updates), so it is an ordinary agent note; no audio is kept. */
+ private async dictateNew(api:Bag):Promise<void>{
+  if(!await this.create('text'))return;
+  const id=this.open;if(id)await this.dictate(id,api);
+ }
+ /** Canonical behaviour on top of Alpha's Notes view: restore-only Trash under the list, review and reload, dictation instead of device recording. */
  decorate(view:Bag,api:Bag,state:Bag):Bag{
   const rows=this.controller.current?this.trashValue:[],ready=this.controller.revision!==null,busy=this.controller.pending,open=this.open,saved=!!open&&this.controller.hasViewNote(open);
-  const out:Bag={...view,none:ready&&this.phase!=='review'&&view.none,canRecord:false,canImportText:false,browserRecovery:false,audioDeletionUnknown:false,createDisabled:!ready,
+  const out:Bag={...view,none:ready&&this.phase!=='review'&&view.none,canRecord:false,canDictateNew:true,dictateNew:()=>void this.dictateNew(api),canImportText:false,browserRecovery:false,audioDeletionUnknown:false,createDisabled:!ready,
    canonicalReview:this.phase==='review',canonicalReviewLabel:this.editor.draft?.version?'Discard draft and reload':'Reload Notes',canonicalReviewAction:()=>void this.discardDraftAndReload(),
-   trashAvailable:true,trashOpen:!!state.trashOpen,trashCanErase:false,trashRetentionText:'Deleted notes are kept here for recovery.',trashLabel:rows.length?`Trash, ${rows.length} item${rows.length===1?'':'s'}`:'Trash',trashNone:ready&&this.phase!=='review'&&rows.length===0,trashError:'',trashBusy:busy,trashEmptyDisabled:true,trashConfirmOpen:false,trashFullOpen:false,
+   trashAvailable:false,trashInList:true,trashOpen:!!state.trashOpen,trashCanErase:false,trashRetentionText:'Deleted notes are kept here for recovery.',trashLabel:rows.length?`Trash, ${rows.length} item${rows.length===1?'':'s'}`:'Trash',trashNone:ready&&this.phase!=='review'&&rows.length===0,trashError:'',trashBusy:busy,trashEmptyDisabled:true,trashConfirmOpen:false,trashFullOpen:false,
    trashRows:rows.map(row=>({id:row.id,title:row.title||'Untitled',kind:row.kind==='list'?'Checklist':row.kind==='voice'?'Voice note':row.kind==='link'?'Link':'Note',left:'Recoverable',restoreLabel:`Restore ${row.title||'note'}`,disabled:busy,restore:()=>void this.editor.restore(row.id)})),
    openTrash:()=>{void this.leave(null).then(left=>{if(left&&this.controller.current){api.set({trashOpen:true,sheet:null,q:null});void this.controller.refresh().catch(()=>{});}});},
    closeTrash:()=>api.set({trashOpen:false}),emptyTrash:()=>{},trashConfirmGo:()=>{},trashCancel:()=>api.set({trashConfirm:null,trashFull:null})};
@@ -212,9 +220,9 @@ export function installCanonicalNotesView(Component:any,views:Record<string,Bag>
   const ui:CanonicalNotesUi|undefined=value.canonicalNotes,sources=value.notesSourceOptions??[],older=sources.find((source:Bag)=>source.id==='legacy'),main=sources.find((source:Bag)=>source.id==='canonical');
   if(value.notesSourceMode!=='canonical')return {...render(state,value),notesTitle:'Older notes',primaryNotes:false,returnToNotesAction:main?.choose};
   const olderNotesAction=older&&!older.selected?older.choose:null;
-  if(ui)return {...ui.decorate(render(state,value),value,state),olderNotesAction};
+  if(ui)return {...ui.decorate(render(state,value),value,state),olderNotesAction,listActions:true};
   // A pending New note request waits for the binding instead of drafting into no collection.
   const waiting={...state,...DEVICE_ONLY_STATE,list:[],open:null,compose:false,trashOpen:false,storageStatus:state.storageStatus||agentAvailabilityNotice(undefined,UNAVAILABLE)};
-  return {...render(waiting,value),storageStatus:waiting.storageStatus,none:false,canCreate:false,browserRecovery:false,audioDeletionUnknown:false,trashAvailable:false,canRecord:false,canImportText:false,olderNotesAction};
+  return {...render(waiting,value),storageStatus:waiting.storageStatus,none:false,canCreate:false,browserRecovery:false,audioDeletionUnknown:false,trashAvailable:false,canRecord:false,canImportText:false,olderNotesAction,listActions:!!olderNotesAction};
  };
 }

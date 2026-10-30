@@ -1,7 +1,10 @@
 import {expect,type Page} from '@playwright/test';
 /** Closed canonical app-record transport. Real Notes controller/client/editor/rendering run unchanged.
  * This fixture tests UI contracts, not the server store or account/provider integration.
- * Setting `canonicalNotesFixture.delay` (ms) holds every later response that long, like a slow link. */
+ * Setting `canonicalNotesFixture.delay` (ms) holds every later response that long, like a slow link.
+ * Setting `canonicalNotesFixture.dictation` to a list of transcripts answers the platform speech
+ * recognition (DailyApps voice) with them in order, counted in `heard`; unset, the browser build's
+ * own answer (no recognition) stands. */
 export async function canonicalNotesFixture(page:Page,{path='/',notes=[]}:{path?:string;notes?:unknown[]}={}){
  const foreign:string[]=[],errors:string[]=[];
  page.on('pageerror',error=>errors.push(error.message));
@@ -11,6 +14,8 @@ export async function canonicalNotesFixture(page:Page,{path='/',notes=[]}:{path?
  await page.evaluate(async(notes)=>{
   const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');
   const f=(window as any).canonicalNotesFixture={state:{notes,trash:[],revision:notes.length?1:0},requests:[],otherRequests:[],fail:false};
+  const {BrowserDaily}=await import('/src/browser/daily.ts'),perform=BrowserDaily.prototype.perform;
+  BrowserDaily.prototype.perform=async function(input:any){if(input?.action!=='voice'||!f.dictation)return perform.call(this,input);f.heard=(f.heard??0)+1;return {status:'selected',action:'voice',transcript:f.dictation.shift()??''};};
   const identity={ownerId:'canonical-fixture-owner',agentId:'canonical-fixture-agent',sessionId:'canonical-fixture-session',origin:location.origin};
   c.getAppRecordClient=()=>({sessionId:identity.sessionId,identity,current:()=>true,request:async(path:string,method:string,body:any,signal:AbortSignal)=>{
    signal.throwIfAborted();if(f.delay)await new Promise(resolve=>setTimeout(resolve,f.delay));

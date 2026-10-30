@@ -2250,6 +2250,7 @@
       <sc-if value="{{notes.returnToNotesAction}}"><button class="ib" aria-label="Return to Notes" onClick="{{notes.returnToNotesAction}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.back}}"></path></svg></button></sc-if>
       <h1 data-alpha-app-title class="serif" style="margin: 0; font-size: 32px; flex-grow: 1; letter-spacing: -.01em">{{notes.notesTitle}}</h1>
       <sc-if value="{{notes.canRecord}}"><button class="ib" aria-label="Record and transcribe" onClick="{{notes.record}}"><svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="{{ic.notesWave}}"></path></svg></button></sc-if>
+      <sc-if value="{{notes.canDictateNew}}"><button class="ib" data-agent-id="notes-dictate-new" aria-label="Dictate new note" disabled="{{notes.createDisabled}}" onClick="{{notes.dictateNew}}"><svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="{{ic.notesWave}}"></path></svg></button></sc-if>
       <sc-if value="{{notes.canImportText}}"><button class="ib" aria-label="Import text note" disabled="{{notes.documentBusy}}" onClick="{{notes.importText}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.filesDown}}"></path></svg></button></sc-if>
       <sc-if value="{{notes.trashAvailable}}"><button class="ib" data-agent-id="notes-trash" aria-label="Open Trash" title="{{notes.trashLabel}}" onClick="{{notes.openTrash}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.trash}}"></path></svg></button></sc-if>
       <sc-if value="{{notes.canCreate}}"><button class="ib" data-agent-id="notes-new" aria-label="New note" disabled="{{notes.createDisabled}}" onClick="{{notes.newNote}}"><svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="{{ic.plus}}"></path></svg></button></sc-if>
@@ -2337,10 +2338,11 @@
         <button onClick="{{notes.askSearch}}" aria-label="{{notes.askQ}}" style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px; border-radius: 18px; background: var(--s2); font-size: 14px; font-weight: 600; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex-shrink:0;color:var(--acct)"><span class="alpha-compute-mark" aria-hidden="true" style="width:100%;height:100%"></span></span>{{notes.askQ}}</button>
       </div>
     </sc-if>
-    <!-- Agent Notes: the device-local collection stays one explicit choice away (agent-adapter.ts selectNotesSource). -->
-    <sc-if value="{{notes.olderNotesAction}}">
-      <div style="display: flex; justify-content: center; margin-top: 18px">
-        <button class="tap" data-agent-id="notes-source-legacy" onClick="{{notes.olderNotesAction}}" style="min-height: 48px; max-width: 100%; padding: 8px 18px; border-radius: 24px; background: var(--s2); color: var(--fg); font-size: 14px; font-weight: 600; overflow-wrap: anywhere">Previous notes</button>
+    <!-- Agent Notes: the device-local collection stays one explicit choice away (agent-adapter.ts selectNotesSource); the restore-only Trash sits beside it, so the header keeps the template's waveform and +. -->
+    <sc-if value="{{notes.listActions}}">
+      <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 18px">
+        <sc-if value="{{notes.olderNotesAction}}"><button class="tap" data-agent-id="notes-source-legacy" onClick="{{notes.olderNotesAction}}" style="min-height: 48px; max-width: 100%; padding: 8px 18px; border-radius: 24px; background: var(--s2); color: var(--fg); font-size: 14px; font-weight: 600; overflow-wrap: anywhere">Previous notes</button></sc-if>
+        <sc-if value="{{notes.trashInList}}"><button class="tap" data-agent-id="notes-trash" aria-label="Open Trash" title="{{notes.trashLabel}}" onClick="{{notes.openTrash}}" style="min-height: 48px; max-width: 100%; padding: 8px 18px; border-radius: 24px; background: var(--s2); color: var(--fg); font-size: 14px; font-weight: 600; overflow-wrap: anywhere">Trash</button></sc-if>
       </div>
     </sc-if>
   </div>
