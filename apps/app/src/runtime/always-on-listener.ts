@@ -25,7 +25,8 @@ let wakeStopUnconfirmed = false;
 export const wakeListeningStopUnconfirmed = () => wakeStopUnconfirmed;
 /** Stop a previously enabled image listener through its canonical native port. Never enable capture. */
 export async function stopWakeListenerForChatOnly(): Promise<boolean> {
-  if (externalVoiceInvocationEnabled || !nativeListener()) return true;
+  if (externalVoiceInvocationEnabled || !Capacitor.isNativePlatform()) return true;
+  if (!nativeListener()) { wakeStopUnconfirmed = true; return false; }
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const reply = await Promise.race([

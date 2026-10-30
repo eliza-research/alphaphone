@@ -39,13 +39,21 @@ test('in-chat-only startup requests the canonical native listener stop and repor
  const code=stripTypeScriptTypes(source.slice(start,end).replace('export ',''));
  for(const result of [{available:true,state:'OFF',listening:false,microphoneOpen:false},{available:true,state:'LISTENING',listening:true,microphoneOpen:true},{available:false},new Error('unavailable')]){
   let stops=0;
-  const context=vm.createContext({externalVoiceInvocationEnabled:false,nativeListener:()=>true,parseListenerStatus:value=>value,listener:{turnOff:async()=>{stops++;if(result instanceof Error)throw result;return result;}},wakeStopUnconfirmed:false,Promise,Error,setTimeout,clearTimeout});
+  const context=vm.createContext({Capacitor:{isNativePlatform:()=>true},externalVoiceInvocationEnabled:false,nativeListener:()=>true,parseListenerStatus:value=>value,listener:{turnOff:async()=>{stops++;if(result instanceof Error)throw result;return result;}},wakeStopUnconfirmed:false,Promise,Error,setTimeout,clearTimeout});
   const stop=vm.runInContext(code+'\nstopWakeListenerForChatOnly;',context);
   const confirmed=await stop();
   assert.equal(stops,1,'startup must request turnOff, not only hide the controls');
   const expected=!(result instanceof Error)&&result.available===true&&result.state==='OFF';
   assert.equal(confirmed,expected);
   assert.equal(context.wakeStopUnconfirmed,!expected);
+ }
+ for(const native of [true,false]){
+  let stops=0;
+  const context=vm.createContext({Capacitor:{isNativePlatform:()=>native},externalVoiceInvocationEnabled:false,nativeListener:()=>false,parseListenerStatus:value=>value,listener:{turnOff:async()=>{stops++;throw Error('must not call missing bridge');}},wakeStopUnconfirmed:false,Promise,Error,setTimeout,clearTimeout});
+  const stop=vm.runInContext(code+'\nstopWakeListenerForChatOnly;',context);
+  assert.equal(await stop(),!native,'missing Android bridge cannot confirm the companion stopped');
+  assert.equal(context.wakeStopUnconfirmed,native);
+  assert.equal(stops,0);
  }
  assert.match(read('apps/app/src/main.tsx'),/if \(isAndroid && !externalVoiceInvocationEnabled\) void stopWakeListenerForChatOnly\(\)/);
  assert.match(read('apps/app/src/prototype/settings-adapter.ts'),/wakeListeningStopUnconfirmed\(\)/);
