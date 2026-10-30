@@ -353,7 +353,18 @@ export class LocalAgentProtocol {
     try{
       const room=conversationRoomId(await this.listConversations(signal),conversationId);
       if(!room)return 'unsupported';
-      const outcome=turnAbortOutcome(await this.request(turnAbortPath(room),{reason:'client-stop'},signal));
+      const outcome=await this.abortRoom(room,signal);
+      if(generation!==this.generation)throw Error('Local agent connection changed.');
+      return outcome;
+    }catch(error){signal.throwIfAborted();if(generation!==this.generation)throw error;return 'unsupported';}
+  }
+  /** The shared turn controller captures this room before dispatch. Stop must not resolve
+   * a new conversation selection after the owner has already cancelled the old turn. */
+  async abortRoom(roomId:string,signal:AbortSignal=new AbortController().signal):Promise<TurnAbortOutcome>{
+    if(!this.session)return 'unsupported';
+    const generation=this.generation;
+    try{
+      const outcome=turnAbortOutcome(await this.request(turnAbortPath(roomId),{reason:'client-stop'},signal),{roomId,reason:'client-stop'});
       if(generation!==this.generation)throw Error('Local agent connection changed.');
       return outcome;
     }catch(error){signal.throwIfAborted();if(generation!==this.generation)throw error;return 'unsupported';}

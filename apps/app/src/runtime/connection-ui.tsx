@@ -12,6 +12,7 @@ import {CAMERA_CAPTURE_CAPABILITY} from '../../../../.eliza/client-features/plug
 import {sanitizeCloudInferenceFailure,type CloudInferenceFailure} from './crash-log';
 import {residentRecoveryReason,residentRecoveryMessage,residentRecoveryCopy,RESIDENT_RECOVERY_PENDING,type ResidentRecoveryReason,type ResidentRecoveryView} from './resident-recovery';
 import {anyAbortSignal} from './abort-signal';
+import {ResidentConversationTurns} from './resident-conversation-turns';
 import {CALENDAR_APPROVAL_READ_PATH,calendarApprovalFromList,calendarApprovalId} from './calendar-approval';
 import {readDevicePreferences} from '../browser/device-preferences';
 import {resolveCloudEnvironment} from './cloud-environment-selection';
@@ -66,12 +67,12 @@ import { cloudServiceName, cloudSignInHandOffAvailable, CloudProtocol, CloudProt
 import { googleOutcome as signInOutcome, type CloudSignInGoogleOutcome, CloudSignInError, normalizeSignInCode, signInFailureMessage as formatSignInFailureMessage, signInReadiness, validSignInEmail, validSignInPhone, type CloudSignInAuthenticated } from './cloud-sign-in';
 import { DevelopmentCloudAgentProtocol, type CloudPhoneTarget } from './development-cloud-agents';
 import { checkEntitlement, clearEntitlementKeyCache, describeSubscription, EntitlementError, EntitlementRefresher, isEntitlementSignInFailure, CHOOSE_PLAN_LABEL, MANAGE_PLAN_LABEL, planAdmission, readServiceLimit, redeemFailureMessage, redeemSuccessMessage, serviceLimitMessage, subscriptionSummary, SubscriptionRedeemError, type ServiceLimit, type SubscriptionView } from './subscription-entitlement';
-import { RemoteProtocol, RemoteProtocolError } from './remote-protocol';
+import { RemoteProtocol, RemoteProtocolError, conversationRoomId, type TurnAbortOutcome } from './remote-protocol';
 import { phoneContextMessage } from './phone-context';
 import {calendarSource,calendarTarget} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts';
 import { CloudSignInPanel } from './cloud-sign-in-ui';
 import { cloudCredentialStore, cloudSelfRevocationSupported, cloudSignIn, cloudSignInPhone, remoteCredentialStore, nativeCloudRequest, nativeRemoteRequest, openConnectionBrowser, removeStoredCloudCredential, secureConnectionStore } from './native-connection';
-import { findStoppedUserTurn, type StoppedUserTurn as StoppedTurn } from '../../../../.eliza/client-features/packages/ui/src/api/conversation-turn-controller.ts';
+import { findStoppedUserTurn, isConversationTurnRefusal, type StoppedUserTurn as StoppedTurn } from '../../../../.eliza/client-features/packages/ui/src/api/conversation-turn-controller.ts';
 import './connection-ui.css';
 import {CloudMembershipControls,BillingAccountReview,type MembershipBalance} from './cloud-membership-ui';
 
@@ -292,6 +293,7 @@ let startup: Promise<void> | null = null, epoch = 0;
 let clientObservationSession:ClientObservationSupportSession|undefined;
 function clearClientObservationSupport(){clientObservationSession?.clear();clientObservationSession=undefined;}
 let sending: AbortController | null = null;
+let residentTurns: ResidentConversationTurns | null = null;
 let developmentVoiceExpiresAt=0;
 const appRequests = new Set<AbortController>();
 const conversationMemory = new Map<string, string>();
@@ -675,6 +677,7 @@ function update(patch: Partial<ConnectionSnapshot>) {
 // P-43: where the resident is always present no "no agent" choice is ever stored.
 function save(selection: Selection) { localStorage.setItem(SELECTION, JSON.stringify(residentAlwaysPresent && (selection.kind === 'none' || selection.kind === 'offline') ? { kind: 'resident' } : selection)); }
 function retire(name?: string) {
+  void residentTurns?.reset();residentTurns=null;
   clearClientObservationSupport();
   retireConversationEvents();
   retireReadReplies();
@@ -801,6 +804,8 @@ async function settleResidentAfterStartup() {
   update({ kind: 'recovering' });
 }
 function activate(next: Active, session: VerifiedSession, name: string) {
+  void residentTurns?.reset();
+  residentTurns=next.kind==='resident'?new ResidentConversationTurns(room=>next.remote.abortRoom(room.roomId),expired):null;
   clearClientObservationSupport();
   retireConversationEvents();
   retireReadReplies();
@@ -1432,8 +1437,8 @@ export const WEB_CLOUD_UNAVAILABLE = 'Cloud sign-in is available in the Alpha Ph
  * conversation shows the reply if the agent finished it before or despite the cancel. */
 const STOPPED_REPLY_CHECK_MS = 15_000;
 export const STOPPED_REPLY_NOTICE = 'The agent may still finish this reply. Alpha Phone will check once and show it here if it does.';
-export const STOPPED_CONFIRMED_NOTICE = 'The agent stopped this reply.';
-export const STOPPED_CANCELLED_NOTICE = 'The agent cancelled this reply. Alpha Phone will check once in case it had already finished.';
+export const STOPPED_CONFIRMED_NOTICE = 'No completed reply was found when Alpha Phone checked.';
+export const STOPPED_CANCELLED_NOTICE = 'The agent accepted Stop. Alpha Phone will check once for a saved reply.';
 let stoppedReply: { timer: ReturnType<typeof setTimeout>; controller: AbortController } | null = null;
 function cancelStoppedReply() { if (!stoppedReply) return; clearTimeout(stoppedReply.timer); stoppedReply.controller.abort(); stoppedReply = null; }
 /** A restart can land while the resident still holds the reply to the last message: the stop-check
@@ -1441,7 +1446,7 @@ function cancelStoppedReply() { if (!stoppedReply) return; clearTimeout(stoppedR
  * same single later read (no cancel attempt); nothing is sent. Only the restore that follows a
  * connection does this (not a message edit's re-read). Older unanswered turns are left alone. */
 const RESTORED_REPLY_WINDOW_MS = 10 * 60_000;
-function scheduleStoppedReply(selected: Active, session: VerifiedSession, conversationId: string, turn: StoppedTurn, delay = STOPPED_REPLY_CHECK_MS, cancelTurn = true) {
+function scheduleStoppedReply(selected: Active, session: VerifiedSession, conversationId: string, turn: StoppedTurn, delay = STOPPED_REPLY_CHECK_MS, cancelTurn = true, residentStop?:Promise<TurnAbortOutcome>) {
   cancelStoppedReply();
   const generation = epoch, controller = new AbortController();
   // The check belongs to the stopped conversation: selecting another one retires it.
@@ -1449,8 +1454,8 @@ function scheduleStoppedReply(selected: Active, session: VerifiedSession, conver
   // An earlier turn's confirmed stop is not this turn's outcome.
   update({ replyNotice: STOPPED_REPLY_NOTICE, ...(state.message === STOPPED_CONFIRMED_NOTICE ? { message: '' } : {}) });
   let cancelled = false;
-  // The single reconciliation read waits for the cancel attempt, so it reports the settled outcome.
-  const cancelAttempt = selected.kind === 'cloud' || !cancelTurn ? Promise.resolve() : selected.remote.abortTurn(conversationId, controller.signal).then(outcome => {
+  // Wait for the cancellation receipt before reading history; neither confirms remote cleanup.
+  const cancelAttempt = selected.kind === 'cloud' || !cancelTurn ? Promise.resolve() : (residentStop??selected.remote.abortTurn(conversationId, controller.signal)).then(outcome => {
     if (outcome !== 'aborted' || !current() || stoppedReply?.controller !== controller) return;
     cancelled = true; update({ replyNotice: STOPPED_CANCELLED_NOTICE });
   }, () => {});
@@ -1479,6 +1484,20 @@ function scheduleStoppedReply(selected: Active, session: VerifiedSession, conver
 async function conversationList(selected: Active, signal: AbortSignal) {
   const list = selected.kind === 'cloud' ? await selected.cloud.listConversations(selected.agentId, signal) : await selected.remote.listConversations(signal);
   return list.map(item => ({ id: item.id, title: typeof item.title === 'string' && item.title ? item.title : 'Conversation' }));
+}
+
+async function resolveResidentConversation(selected:Active,id:string,signal:AbortSignal,current:()=>void){
+  const turns=residentTurns;
+  if(selected.kind!=='resident')return null;
+  if(!turns)throw Error('The resident connection changed. Nothing was sent.');
+  const roomId=conversationRoomId(await selected.remote.listConversations(signal),id);current();
+  if(!roomId)throw Error('The agent did not return this conversation’s room identity. Nothing was sent.');
+  return {turns,room:{id,roomId}};
+}
+async function bindResidentConversation(selected:Active,id:string,signal:AbortSignal,current:()=>void){
+  const resident=await resolveResidentConversation(selected,id,signal,current);
+  if(resident){await resident.turns.bind(resident.room,signal);current();}
+  return resident;
 }
 
 async function restoreConversationHistory(id:string,signal:AbortSignal,automatic:boolean,afterConnect=false,fallbackExpected?:ConversationChoice,canCommit?:()=>boolean) {
@@ -1521,6 +1540,7 @@ async function restoreConversationHistory(id:string,signal:AbortSignal,automatic
     assertCurrent();
     if(JSON.stringify(current)!==JSON.stringify(expected))throw Error('Saved conversation selection changed.');
   }
+  await bindResidentConversation(selected,id,signal,assertCurrent);await assertAccount();
   conversationMemory.set(key,id);
   const older=result.partial?' Older messages remain on the agent.':'';
   // An explicit reload already shows whether a stopped reply finished; the pending check is retired.
@@ -2263,7 +2283,7 @@ export const connectionController = {
       assertCurrent();
       let saved = true;
       try { await selectConversation(key, expected, created.id, signal, assertCurrent); } catch { saved = false; }
-      assertCurrent(); conversationMemory.set(key, created.id); cancelStoppedReply();
+      assertCurrent();await bindResidentConversation(selected,created.id,signal,assertCurrent);conversationMemory.set(key, created.id); cancelStoppedReply();
       update({ history: { sessionId: session.sessionId, conversationId: created.id, revision: (state.history?.revision || 0) + 1, messages: [], automatic: false }, historyError: '', historyPartial: false, replyNotice: '', open: false, message: saved ? 'New conversation started.' : 'New conversation started for this session; restart selection could not be saved.' });
     });
   },
@@ -2750,6 +2770,7 @@ export const connectionController = {
     let message = phoneContextMessage(text,{...context,calendarDay:undefined});
     if (sending) throw new Error('Wait for the current reply before sending another message.');
     const selected = active, session = state.session, generation = epoch;
+    const turns=selected?.kind==='resident'?residentTurns:null;
     requestedCameraContinuation=undefined;
     const cameraNavigation=boundNavigation(),cameraAttempt=cameraNavigation?.currentAttempt(context);
     if (!selected || !session) throw noSessionError(NO_AGENT_SEND);
@@ -2777,6 +2798,7 @@ export const connectionController = {
         message=phoneContextMessage(text,admitted);
       }
       const id=await ensureSelectedConversation(selected,session,requestSignal,assertCurrent);
+      const resident=await resolveResidentConversation(selected,id,requestSignal,assertCurrent);
       if(expectedConversationId!==undefined&&id!==expectedConversationId)throw Error('The voice conversation changed.');
       if(replyTo&&(!validateUuid(replyTo.messageId)||replyTo.conversationId!==id||JSON.stringify(replyTo.session)!==JSON.stringify(session)))throw Error('The reply target belongs to a different conversation.');
       if(replyTo){const history=selected.kind==='cloud'?await selected.cloud.messages(selected.agentId,id,requestSignal):await selected.remote.messages(id,requestSignal);assertCurrent();const row=history.messages.find(row=>row.id===replyTo.messageId);if(!row||row.role!==(replyTo.from==='user'?'user':'assistant')||typeof row.text!=='string'||(replyTo.from==='user'?restoredText(row.text,row.userTextFormat):row.text)!==replyTo.text)throw Error('The reply target changed. Reload its conversation before replying.');}
@@ -2793,10 +2815,21 @@ export const connectionController = {
       await boundNavigation()?.observeCommittedView(true);
       requestSignal.throwIfAborted();assertCurrent();
       const options = { signal: requestSignal, clientMessageId: requestId, channelType, metadata: { ...(directRequestedActions?{agentActionMode:'direct-request-v1'}:{}), ...(channelType==='VOICE_DM'&&voiceTurnSignal?{voiceTurnSignal}:{}), ...(replyTo?{replyToMessageId:replyTo.messageId}:{}), ...(message.context.timeZone===undefined?{}:{uiTimeZone:message.context.timeZone}), clientDevice: { context: message.context,...(calendarAgendaSource?{calendarAgendaSource:{sourceId:calendarAgendaSource.sourceId,sourceRevision:calendarAgendaSource.sourceRevision}}:{}) }, ...boundNavigation()?.metadata(context), ...(canonicalProse?{userTextFormat:'plain-v1'}:{alphaPhone:{context:message.context}}) } };
-      dispatched = { conversationId: id, at: Date.now() };
+      if(selected.kind!=='resident')dispatched = { conversationId: id, at: Date.now() };
       const progress=(value:string)=>{requestSignal.throwIfAborted();if(generation!==epoch||selected!==active||state.session?.sessionId!==session.sessionId)throw Error('The connection changed.');onText?.(value);};
       const replyReady=(results:readonly unknown[]|undefined)=>{assertCurrent();onReplyReady?.(results);};
-      const reply = selected.kind === 'cloud' ? await selected.cloud.send(selected.agentId, id, wireText, options) : selected.kind==='resident'?await withResidentMapsNavigation(selected.request,id,requestSignal,()=>selected.remote.send(id,wireText,{...options,onText:progress,onReplyReady:replyReady})):await selected.remote.send(id, wireText, options);
+      const sendSelected=async()=>{
+        if(selected.kind==='cloud')return selected.cloud.send(selected.agentId,id,wireText,options);
+        if(selected.kind!=='resident')return selected.remote.send(id,wireText,options);
+        if(!resident)throw Error('The resident conversation changed. Nothing was sent.');
+        return resident.turns.send(resident.room,requestId,text,requestSignal,turn=>{
+          dispatched={conversationId:id,at:Date.now()};
+          const signal=anyAbortSignal([requestSignal,turn.signal]);
+          const current=()=>{signal.throwIfAborted();if(!turn.current())throw new DOMException('The conversation changed.','AbortError');};
+          return withResidentMapsNavigation(selected.request,id,signal,()=>selected.remote.send(id,wireText,{...options,signal,clientMessageId:turn.clientMessageId,onText:value=>{current();progress(value);},onReplyReady:results=>{current();replyReady(results);}}));
+        });
+      };
+      const reply=await sendSelected();
       requestSignal.throwIfAborted();
       assertCurrent();
       // Action callbacks (calendar receipts, approval cards) commit rows outside the streamed reply;
@@ -2885,10 +2918,14 @@ export const connectionController = {
       // A transport that proves its request was refused before the turn was accepted (native IPC
       // rejection, an agent's 429 admission refusal) marks it `beforeDispatch`: still provably unsent.
       const refused = !!error && typeof error === 'object' && (error as { beforeDispatch?: unknown }).beforeDispatch === true;
+      if(isConversationTurnRefusal(error))throw Object.assign(new AlphaClientError('transport-failed',error.message),{notDispatched:true});
       const mark = (target: unknown) => { if (target && typeof target === 'object' && (!dispatched || refused || 'notDispatched' in target)) try { Object.defineProperty(target, 'notDispatched', { value: !dispatched || refused, configurable: true }); } catch { /* An unmarkable error stays an unknown outcome. */ } };
       mark(error);
       // Stop (or leaving the chat) after dispatch: the turn may still complete on the agent.
-      if (signal.aborted && dispatched && generation === epoch && selected === active && state.session?.sessionId === session.sessionId) scheduleStoppedReply(selected, session, dispatched.conversationId, { clientMessageId: requestId, text, sentAt: dispatched.at });
+      if (signal.aborted && dispatched && generation === epoch && selected === active && state.session?.sessionId === session.sessionId) {
+        const stopped=turns?.stopped;
+        if(!turns||stopped?.clientMessageId===requestId)scheduleStoppedReply(selected,session,dispatched.conversationId,stopped?{clientMessageId:stopped.clientMessageId,text:stopped.input.text,sentAt:stopped.sentAt}:{clientMessageId:requestId,text,sentAt:dispatched.at},STOPPED_REPLY_CHECK_MS,true,turns?.stopResult);
+      }
       if (refused && error && typeof error === 'object' && 'status' in error && error.status === 403) {
         const failure=Object.assign(new AlphaClientError('transport-failed','The agent did not accept this message. Your draft is saved. Check its connection before trying again.'),{refusedBeforeTurn:true});
         mark(failure);throw failure;

@@ -28,6 +28,110 @@ async function connected(page: Page, nativeSignIn = true) {
 }
 async function send(page: Page, text: string) { await composer(page).fill(text); await composer(page).press('Enter'); }
 
+test('resident replacement waits for the old room Stop before it posts another turn',async({page},info)=>{
+  test.setTimeout(120_000);await connected(page);
+  await setStub(page,{stream:'hold',abort:'hold'});
+  await send(page,'First owned turn');
+  await expect.poll(()=>stub(page,s=>s.bodies.length)).toBe(1);
+  await page.getByRole('button',{name:'Stop reply',exact:true}).click();
+  await expect.poll(()=>stub(page,s=>s.aborts.length)).toBe(1);
+  await expect(page.getByRole('button',{name:'Stop reply',exact:true})).toHaveCount(0);
+  await send(page,'Replacement turn');
+  await page.waitForTimeout(500);
+  expect(await stub(page,s=>s.bodies.length)).toBe(1);
+  await page.screenshot({path:info.outputPath('waiting-for-old-room-stop.png')});
+  const room=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('resident-stub-agent')!).conversations[0].roomId);
+  expect(await stub(page,s=>s.aborts)).toEqual([`/api/turns/${room}/abort`]);
+  await stub(page,s=>{s.stream=null;s.abort='aborted';s.releaseAbort();});
+  await expect.poll(()=>stub(page,s=>s.bodies.length)).toBe(2);
+  await expect(bubble(page,'Resident reply 2')).toHaveCount(1);
+  expect(await stub(page,s=>s.bodies.map((body:any)=>body.clientMessageId))).toEqual(expect.arrayContaining([expect.any(String),expect.any(String)]));
+  expect(await stub(page,s=>new Set(s.bodies.map((body:any)=>body.clientMessageId)).size)).toBe(2);
+  expect(await harness(page,f=>f.unexpected)).toEqual([]);
+});
+
+test('unconfirmed resident Stop refuses the next send and keeps its draft',async({page})=>{
+  test.setTimeout(120_000);await connected(page);await setStub(page,{stream:'hold'});
+  await send(page,'Stopped once');await expect.poll(()=>stub(page,s=>s.bodies.length)).toBe(1);
+  await page.getByRole('button',{name:'Stop reply',exact:true}).click();
+  await expect.poll(()=>stub(page,s=>s.aborts.length)).toBe(1);
+  await expect(page.getByRole('button',{name:'Stop reply',exact:true})).toHaveCount(0);
+  await send(page,'Keep this replacement');
+  await expect(composer(page)).toHaveValue('Keep this replacement');
+  expect(await stub(page,s=>s.bodies.length)).toBe(1);
+  await expect(bubble(page,'Keep this replacement')).toHaveCount(0);
+});
+
+for(const abort of ['idle','wrong-room','wrong-reason'] as const)test(`unconfirmed resident receipt ${abort} never releases a replacement`,async({page})=>{
+  test.setTimeout(120_000);await connected(page);await setStub(page,{stream:'hold',abort});
+  await send(page,'First receipt owner');await expect.poll(()=>stub(page,s=>s.bodies.length)).toBe(1);
+  await page.getByRole('button',{name:'Stop reply',exact:true}).click();
+  await expect.poll(()=>stub(page,s=>s.aborts.length)).toBe(1);
+  await expect(page.getByRole('button',{name:'Stop reply',exact:true})).toHaveCount(0);
+  await setStub(page,{stream:null});
+  await send(page,'Keep the unconfirmed draft');
+  await expect(composer(page)).toHaveValue('Keep the unconfirmed draft');
+  expect(await stub(page,s=>s.bodies.length)).toBe(1);
+});
+
+test('cancelling a replacement waiting for Stop keeps its draft without cancelling the old Stop',async({page})=>{
+  test.setTimeout(120_000);await connected(page);await setStub(page,{stream:'hold',abort:'hold'});
+  await send(page,'Original turn');await expect.poll(()=>stub(page,s=>s.bodies.length)).toBe(1);
+  await page.getByRole('button',{name:'Stop reply',exact:true}).click();
+  await expect.poll(()=>stub(page,s=>s.aborts.length)).toBe(1);
+  await expect(page.getByRole('button',{name:'Stop reply',exact:true})).toHaveCount(0);
+  await send(page,'Cancel this waiting replacement');
+  await page.getByRole('button',{name:'Stop reply',exact:true}).click();
+  await expect(composer(page)).toHaveValue('Cancel this waiting replacement');
+  expect(await stub(page,s=>({posts:s.bodies.length,aborts:s.aborts.length}))).toEqual({posts:1,aborts:1});
+  await stub(page,s=>{s.stream=null;s.abort='aborted';s.releaseAbort();});
+  await composer(page).press('Enter');
+  await expect.poll(()=>stub(page,s=>s.bodies.length)).toBe(2);
+  await expect(bubble(page,'Resident reply 2')).toHaveCount(1);
+});
+
+test('Stop while the first resident conversation is being created sends no turn and keeps its draft',async({page})=>{
+  test.setTimeout(120_000);await connected(page);await setStub(page,{holdCreation:true});
+  await send(page,'Keep the first draft');
+  await expect.poll(()=>stub(page,s=>!!s.releaseCreation)).toBe(true);
+  await page.getByRole('button',{name:'Stop reply',exact:true}).click();
+  await stub(page,s=>s.releaseCreation());
+  await expect(composer(page)).toHaveValue('Keep the first draft');
+  expect(await stub(page,s=>({posts:s.bodies.length,aborts:s.aborts.length}))).toEqual({posts:0,aborts:0});
+  await expect(bubble(page,'Keep the first draft')).toHaveCount(0);
+});
+
+test('accepted Stop and an empty reply check never claim remote cleanup',async({page})=>{
+  test.setTimeout(120_000);await connected(page);await page.clock.install();
+  await setStub(page,{stream:'hold',abort:'aborted'});
+  await send(page,'Keep the work held');await expect.poll(()=>stub(page,s=>s.bodies.length)).toBe(1);
+  await page.getByRole('button',{name:'Stop reply',exact:true}).click();
+  await expect(conversation(page).getByText('The agent accepted Stop. Alpha Phone will check once for a saved reply.',{exact:true})).toBeVisible();
+  await page.clock.fastForward(15100);
+  await expect(conversation(page).getByText('No completed reply was found when Alpha Phone checked.',{exact:true})).toBeVisible();
+  expect(await stub(page,s=>s.bodies.length)).toBe(1);
+  await expect(bubble(page,'Held reply 1')).toHaveCount(0);
+});
+
+test('a stopped resident turn performs one history read and joins its recorded reply once',async({page})=>{
+  test.setTimeout(120_000);await connected(page);await page.clock.install();
+  await setStub(page,{stream:'hold',abort:'aborted'});
+  await send(page,'Check the stopped identity');await expect.poll(()=>stub(page,s=>s.bodies.length)).toBe(1);
+  await page.getByRole('button',{name:'Stop reply',exact:true}).click();
+  await expect.poll(()=>stub(page,s=>s.aborts.length)).toBe(1);
+  await expect(page.getByRole('button',{name:'Stop reply',exact:true})).toHaveCount(0);
+  // Let the ordinary conversation subscription catch up after the send releases its gate.
+  // The later stopped-reply check is separate from that normal initial history read.
+  await page.clock.runFor(1000);
+  const reads=await stub(page,s=>s.historyReads);
+  await stub(page,s=>s.release());await page.clock.fastForward(15100);
+  await expect(bubble(page,'Held reply 1')).toHaveCount(1);
+  await expect(bubble(page,'Check the stopped identity')).toHaveCount(1);
+  expect(await stub(page,s=>s.historyReads)-reads).toBe(1);
+  await page.clock.fastForward(30000);
+  expect(await stub(page,s=>({reads:s.historyReads,posts:s.bodies.length,aborts:s.aborts.length}))).toEqual({reads:reads+1,posts:1,aborts:1});
+});
+
 const KINDS = {
   // Cloud's billing refusal is a service limit (subscription-entitlement.ts): nothing is bought or upgraded.
   insufficient_credits: "Eliza Cloud declined this AI request for your account's billing. Check your account in Settings. Alpha Phone did not retry your message, and nothing is purchased automatically. Local apps keep working.",

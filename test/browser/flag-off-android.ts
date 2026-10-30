@@ -61,7 +61,7 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
     const kept = (key: string, initial: unknown) => { try { return JSON.parse(sessionStorage.getItem(key) || 'null') ?? initial; } catch { return initial; } };
     // Keystore-backed slots and the resident agent's own store survive a reload of the page.
     const slots: Record<string, string> = kept('flag-off-slots', { 'cloud:production': JSON.stringify({ token: 'synthetic-cloud-key', credentialId: id, expiresAt: Date.now() + 86_400_000 }) });
-    const agent: { conversations: { id: string; title: string }[]; history: Record<string, any[]> } = kept('flag-off-agent', { conversations: [], history: {} });
+    const agent: { conversations: { id: string; title: string; roomId?:string }[]; history: Record<string, any[]> } = kept('flag-off-agent', { conversations: [], history: {} });
     // So do the results the agent produced and what the Android result inbox committed.
     const produced: { results: any[]; acked: number; acks: number[]; inbox: any[] } = kept('flag-off-digests', { results: [], acked: 0, acks: [], inbox: [] });
     // Source references Android retained for picked documents: reference -> the bytes' SHA-256.
@@ -95,6 +95,7 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
       // Mounted canonical views probe these sources; this native fixture provides none.
       if (method === 'GET' && ['/api/notes/state', '/api/lifeops/calendar/feed', '/api/lifeops/calendar/calendars', '/api/lifeops/calendar/next-context'].includes(path.split('?')[0])) return { status: 503, data: { error: 'Canonical records unavailable in this fixture' } };
       if (path === '/api/auth/me') return ok({ identity: { id, kind: 'owner' }, access: { role: 'OWNER', mode: 'local' } });
+      if (path === '/api/status') return {status:503,data:{}};
       if (path === '/api/notes/state' && method === 'GET') return ok({success:true,data:{notes:[],trash:[],revision:0}});
       if (path === '/api/agents') return ok({ agents: [{ id: agentId, name: agentName, status: 'running' }] });
       if (path === '/api/client-devices/register') { f.installationId = headers['X-Eliza-Device-Id']; navigation().register(headers); }
@@ -116,7 +117,7 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
         // counted, its path is recorded and it is refused.
         if (path.startsWith('/api/workflow/hosted/') && method === 'POST') { f.digests.runs++; f.digests.refused.push(path); return { status: 409, data: {} }; }
       }
-      if (path === '/api/conversations' && method === 'POST') { const row = { id: 'resident-chat-' + (agent.conversations.length + 1), title: String(body.title || 'Alpha Phone') }; agent.conversations.push(row); agent.history[row.id] = []; persist(); return ok({ conversation: row }); }
+      if (path === '/api/conversations' && method === 'POST') { const row = { id: 'resident-chat-' + (agent.conversations.length + 1), roomId:crypto.randomUUID(), title: String(body.title || 'Alpha Phone') }; agent.conversations.push(row); agent.history[row.id] = []; persist(); return ok({ conversation: row }); }
       if (path === '/api/conversations') return ok({ conversations: agent.conversations });
       const history = /^\/api\/conversations\/([^/]+)\/messages$/.exec(path.split('?')[0]);
       if (history && method === 'GET') return ok({ messages: (agent.history[history[1]] || []).slice(-200) });
@@ -341,7 +342,7 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
             // The resident agent records the user turn, then streams its reply over native IPC.
             const conversation = /^\/api\/conversations\/([^/]+)\/messages\/stream$/.exec(input.path)![1], body = JSON.parse(input.body), streamId = input.streamId as string;
             f.streams++; f.posts.push(String(body.text));
-            agent.history[conversation].push({ id: crypto.randomUUID(), role: 'user', text: body.text, timestamp: Date.now() }); persist();
+            agent.history[conversation].push({ id: crypto.randomUUID(), role: 'user', text: body.text, clientMessageId:body.clientMessageId, timestamp: Date.now() }); persist();
             const reply = f.replies.shift() ?? 'Resident reply ' + f.streams;
             setTimeout(() => {
               emitStream(streamId, { type: 'response', status: 200, headers: { 'content-type': 'text/event-stream' } });

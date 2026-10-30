@@ -123,7 +123,7 @@ const stale=client.send('Cancel',text=>values.push(text));client.cancel();late('
 }
 // Explicit Stop: upstream's POST /api/turns/:roomId/abort, with the room read from the conversation list.
 {
- const room='5f0c8a52-6d8e-4c4a-9a51-0b6e6f0d1a22',calls=[];let abortStatus=200,abortBody={aborted:true};
+ const room='5f0c8a52-6d8e-4c4a-9a51-0b6e6f0d1a22',calls=[];let abortStatus=200,abortBody={aborted:true,roomId:room,reason:'client-stop'};
  const bridge={start:async()=>({}),request:async input=>{calls.push({path:input.path,method:input.method,body:input.body});
   if(input.path==='/api/conversations')return {status:200,body:JSON.stringify({conversations:[{id:'thread',title:'T',roomId:room},{id:'roomless',title:'R'}]})};
   if(input.path===`/api/turns/${room}/abort`)return {status:abortStatus,body:JSON.stringify(abortBody)};
@@ -131,20 +131,25 @@ const stale=client.send('Cancel',text=>values.push(text));client.cancel();late('
  const local=new LocalAgentProtocol(bridge);local.session={ownerId:'owner',agentId:'agent',sessionId:'session',origin:'https://device.alpha.invalid'};
  assert.equal(await local.abortTurn('thread'),'aborted');
  assert.deepEqual(calls.at(-1),{path:`/api/turns/${room}/abort`,method:'POST',body:JSON.stringify({reason:'client-stop'})});
- abortBody={aborted:false};assert.equal(await local.abortTurn('thread'),'idle','no active turn: the reply may already be durable');
+ for(const invalid of [{aborted:false,roomId:room,reason:'client-stop'},{aborted:true,roomId:'other-room',reason:'client-stop'},{aborted:true,roomId:room,reason:'other-stop'},{}]){
+  abortBody=invalid;assert.equal(await local.abortTurn('thread'),'unsupported','false or mismatched Stop cannot prove quiescence');
+ }
  abortStatus=404;assert.equal(await local.abortTurn('thread'),'unsupported','an agent without the route keeps the may-still-finish state');
  const before=calls.length;assert.equal(await local.abortTurn('roomless'),'unsupported');assert.equal(calls.length,before+1,'no abort without a verified room');
  const saved={origin:'https://agent.example',token:'session-token',identityId:'owner',sessionId:'session-token',expiresAt:Date.now()+60000};
- let removed=0,remoteStatus=200;const remoteCalls=[];
+ let removed=0,remoteStatus=200,remoteBody={aborted:true,roomId:room,reason:'client-stop'};const remoteCalls=[];
  const requester=async input=>{const path=new URL(input.url).pathname;remoteCalls.push({path,method:input.method,body:input.body});
   if(path==='/api/auth/me')return {status:200,body:{identity:{id:'owner',kind:'owner',displayName:'Owner'},session:{id:'session-token',kind:'machine',expiresAt:Date.now()+60000},access:{role:'OWNER',mode:'session'}}};
   if(path==='/api/conversations')return {status:200,body:{conversations:[{id:'thread',roomId:room}]}};
-  if(path===`/api/turns/${room}/abort`)return {status:remoteStatus,body:{aborted:true,roomId:room}};
+  if(path===`/api/turns/${room}/abort`)return {status:remoteStatus,body:remoteBody};
   return {status:404,body:{}};};
  const remote=new RemoteProtocol('https://agent.example',requester,{read:async()=>saved,write:async()=>{},remove:async()=>{removed++;}});
  await remote.restore();
  assert.equal(await remote.abortTurn('thread'),'aborted');
  const abortCall=remoteCalls.find(item=>item.path===`/api/turns/${room}/abort`);assert.equal(abortCall.method,'POST');
+ for(const invalid of [{aborted:false,roomId:room,reason:'client-stop'},{aborted:true,roomId:'other-room',reason:'client-stop'},{aborted:true,roomId:room,reason:'other-stop'},{}]){
+  remoteBody=invalid;assert.equal(await remote.abortTurn('thread'),'unsupported');
+ }
  remoteStatus=401;assert.equal(await remote.abortTurn('thread'),'unsupported');assert.equal(removed,0,'a refused optional cancel never signs the phone out');
  assert.ok(remote.session,'the paired session remains');
  const stop=new AbortController();stop.abort();await assert.rejects(remote.abortTurn('thread',stop.signal));
