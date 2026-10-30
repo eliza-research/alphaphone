@@ -461,10 +461,9 @@ export class CloudProtocol {
     if (response.success !== true) throw new CloudProtocolError("invalid-response");
     return response.data;
   }
-  /** Authenticated identity is server-derived, never inferred from entered email. */
+  /** Identity parsing and exact credential readback share the same upstream account reader as the full App. */
   async identity(signal: AbortSignal): Promise<{ userId: string; organizationId?: string;email?:string }> {
-    const data = object(this.success(await this.call("/api/v1/user", signal, { authenticated: true })));
-    return { userId: uuid(data.id), ...(typeof data.email==='string'&&data.email.trim()&&data.email.length<=320?{email:data.email.trim()}:{}), ...(data.organization_id == null ? {} : { organizationId: uuid(data.organization_id) }) };
+    return this.billingRead(() => this.billing.identity(signal));
   }
   /** Read access by default; Calendar writes require explicit additional consent. */
   private async requestGoogleAuthorization(signal:AbortSignal, calendarPermission:'read'|'write'='read', gmailPermission:'read'|'modify'|'send'|'drafts'|'mailbox'='read', redirectUrl?:string):Promise<{authUrl:string;appReturn:boolean}> {
