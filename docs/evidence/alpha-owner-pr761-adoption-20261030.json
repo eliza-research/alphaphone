@@ -1,0 +1,34 @@
+{
+  "recordedAt": "2026-10-30T12:02:50.392351+00:00",
+  "reviewedPr": "https://github.com/eliza-research/alphaphone/pull/761",
+  "reviewedHead": "1da555d5cdf8746333e98075a8953143da29b21b",
+  "previouslyReviewedHead": "cdabc933",
+  "baseBeforeAdoption": "6a07739bd3f926fdc67ba0562621fc218fd66fcd",
+  "scope": "Cloud hosted producer selects pinned Android Bionic ARM64. Native workflow defaults remain unchanged. Offline frozen install uses the real process working directory, preserving network isolation and graph/lock comparison. All existing artifact, license, audit and four-APK gates remain active.",
+  "checks": {
+    "acquisition": "11/11 PASS including real pinned Bun parser before/after",
+    "currentPrimary": "33/33 CI/native-admission/license checks PASS",
+    "syntax": {
+      "yaml": "passed",
+      "bashSteps": 26,
+      "pythonHeredocs": 3,
+      "status": "passed"
+    }
+  },
+  "sourceSha256": {
+    ".github/workflows/resident-android.yml": "2f3cc154937fe90d1df99fdb0ec26b901911add372402d8364d49fa2f7f4a37a",
+    "scripts/ci/acquire-resident-bun.py": "e584a418804a05915edd62cdc00a7607641a89c4eb96c0ab60648ac1dcea2644",
+    "scripts/ci/test-acquire-resident-bun.py": "f72c9c72c87264ce979ca469368dd4bdc657692c26ee794d9d6fc048f3585aa4"
+  },
+  "logs": {
+    "primary-tests.log": "c302a8d2527169c758b2e986e2d1b17576e0f5b186908a13a2e53173bab0cd18",
+    "primary-focused.log": "49a36e2221583c82cf3d1cf65033bbf20772e12c4b72242e1dde951eb9bef971",
+    "primary-syntax.json": "f1fb7d6d0a7d179185b92f2b2e182d2b869e1c932c0cdd05bfaed13995a653a3"
+  },
+  "limits": [
+    "No hosted workflow dispatched for this adoption",
+    "No current Cloud Bionic APK or device qualification",
+    "Previously accepted 440/69c source and APK checkpoint remains separate",
+    "Remote PR761 remains open"
+  ]
+}
