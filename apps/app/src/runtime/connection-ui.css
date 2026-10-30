@@ -19,13 +19,12 @@
 .alpha-google-connections>header h2{margin:0;font-size:24px;line-height:1.2}
 .alpha-google-account>strong,.alpha-google-account>span{min-width:0;overflow-wrap:anywhere}
 .alpha-google-account>span{flex:none}
-.alpha-google-account details{padding:0;width:100%}
-.alpha-google-account summary{display:flex;align-items:center;gap:12px;min-height:44px;font-size:14px;list-style:none}
-.alpha-google-account summary::-webkit-details-marker{display:none}
-.alpha-google-account summary::after{content:'';width:6px;height:6px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin:0 5px 4px auto;flex:none}
-.alpha-google-account details[open] summary::after{transform:rotate(225deg);margin-bottom:0}
 .alpha-google-account .alpha-google-disconnect{align-self:flex-start;color:var(--connection-mut,#6b6b6b)}
 .alpha-google-calendar-choices{display:grid;gap:8px}
+.alpha-google-connections .alpha-google-switch{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:12px;min-height:52px;margin:0 0 8px;padding:10px 12px;border:1px solid var(--connection-line,#e3e3e3);border-radius:14px;box-sizing:border-box;cursor:pointer;color:var(--connection-fg,#000)}
+.alpha-google-switch>span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.alpha-google-switch small{color:var(--connection-mut,#6b6b6b)}
+.alpha-google-switch input{flex:none;width:22px;height:22px;accent-color:var(--connection-acc,#0000ff)}
 .alpha-google-connections .alpha-google-calendar-option{display:flex;flex-direction:row;align-items:center;gap:12px;min-height:52px;margin:0;padding:10px 12px;border:1px solid var(--connection-line,#e3e3e3);border-radius:14px;box-sizing:border-box;cursor:pointer;color:var(--connection-fg,#000)}
 .alpha-google-calendar-option.is-selected{border-color:var(--connection-acc,#0000ff);background:var(--connection-s2,#f3f3f3)}
 .alpha-google-connections .alpha-google-calendar-option input{width:20px;height:20px;min-height:0;margin:0;padding:0;flex:none;accent-color:var(--connection-acc,#0000ff)}

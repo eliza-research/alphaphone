@@ -59,12 +59,13 @@ test("consent paths are exactly what CloudProtocol posts to connect/initiate", {
 
 test("the Settings screen starts only the consent paths marked ui", () => {
   const ui = fs.readFileSync("apps/app/src/runtime/google-connection-ui.tsx", "utf8");
-  const connects = [...ui.matchAll(/onClick=\{\(\)=>void connect\((.*?)\)\}>/g)].map(m => m[1].trim());
-  assert.deepEqual(connects.sort(), ["", "'modify'", "accounts.some(account=>gmailGrantTier(account)==='modify')?'modify':'send','write'"].sort(),
+  const connects = [...ui.matchAll(/(?:onClick=\{\(\)=>void|await) connect\((.*?)\)(?:\}>|;)/g)].map(m => m[1].trim());
+  assert.deepEqual(connects.sort(), ["", "accounts.some(account=>gmailGrantTier(account)==='modify')?'modify':'send','write'"].sort(),
     "a new Settings consent button needs a row in ALPHA_CONSENT_PATHS and the runbook matrix");
   assert.doesNotMatch(ui, /initiateGmail/);
   const uiPaths = ALPHA_CONSENT_PATHS.filter(p => p.surface === "ui").map(p => p.call.slice(1).join("/")).sort();
-  assert.deepEqual(uiPaths, ["read/modify", "read/read", "write/modify", "write/send"]);
+  assert.deepEqual(uiPaths, ["write/modify", "write/send"]);
+  assert.match(ui, /async function connect\(permission:'read'\|'modify'\|'send'='send',calendarPermission:'read'\|'write'='write'\)/, "Connect asks for every scope Cloud grants up front");
 });
 
 test("read state is unavailable unless inbox-v1/capabilities advertises readState", { skip: !prepared && "client features not prepared" }, () => {

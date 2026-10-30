@@ -12,6 +12,7 @@ import {clearGoogleCalendarSelectionForConnection,readGoogleCalendarSelection,sa
 import {openConnectionBrowser,googleWorkspaceReturnPort} from './native-connection';
 import {prepareGoogleWorkspaceReturn,watchGoogleWorkspaceReturn,sameGoogleWorkspaceBinding,type GoogleWorkspaceBinding} from './google-workspace-return';
 import {cloudServiceName,type GmailAccount} from './cloud-protocol';
+import {googleAgentAccess,publishGoogleAgentAccess,setGoogleAgentAccess} from './google-agent-access';
 let opened=false;const listeners=new Set<()=>void>();
 export const googleConnectionController={open(){opened=true;for(const listener of listeners)listener();},close(){opened=false;for(const listener of listeners)listener();},subscribe(listener:()=>void){listeners.add(listener);return()=>{listeners.delete(listener);};},getSnapshot:()=>opened};
 export function googleCalendarAccountKey(){const account=connectionController.getSnapshot().cloudAccount;return account?.organizationId?{environment:account.environment,userId:account.userId,organizationId:account.organizationId}:null;}
@@ -32,7 +33,9 @@ export function GoogleConnectionsPanel(){
  const [background,setBackground]=useState('');
  useEffect(()=>{if(!open)return;let alive=true;const read=()=>void gmailBackgroundStatus().then(value=>{if(alive)setBackground(gmailBackgroundMessage(value));});read();window.addEventListener(GMAIL_BACKGROUND_CHANGED,read);return()=>{alive=false;window.removeEventListener(GMAIL_BACKGROUND_CHANGED,read);};},[open]);
  const [accounts,setAccounts]=useState<GmailAccount[]>([]),[sources,setSources]=useState<GoogleCalendarSource[]>([]),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[confirm,setConfirm]=useState<GmailAccount|null>(null),[revision,setRevision]=useState(0);
- const [,refreshSelection]=useState(0);
+ const [,refreshSelection]=useState(0),[access,setAccess]=useState(googleAgentAccess);
+ // The agent host reads the owner's Google switches; republish whenever device settings load or change.
+ useEffect(()=>{const sync=()=>{setAccess(googleAgentAccess());void publishGoogleAgentAccess();};sync();window.addEventListener('alpha:device-settings',sync);return()=>window.removeEventListener('alpha:device-settings',sync);},[]);
  const returnedWorkspaceOwner=useRef<GoogleWorkspaceBinding|null>(null);
  const returnedWorkspace=useRef<{result:'connected'|'denied'|'failed';connectionId?:string}|null>(null);
  const returnWatch=useRef<ReturnType<typeof watchGoogleConnectionReturn>|null>(null);
@@ -97,7 +100,9 @@ export function GoogleConnectionsPanel(){
   window.addEventListener('alpha-back',back,true);document.addEventListener('keydown',keydown);
   return()=>{window.removeEventListener('alpha-back',back,true);document.removeEventListener('keydown',keydown);releaseInert();if(previous instanceof HTMLElement&&previous.isConnected)previous.focus();};
  },[open]);
- async function connect(permission:'read'|'modify'|'send'='read',calendarPermission:'read'|'write'='read'){
+ /** Connect asks once for everything Cloud grants (Gmail read and send, Calendar read and edit), so the agent works on first use.
+  * Gmail drafts, archive, trash and read state (gmail.compose/gmail.modify) are not in Cloud's Google scope allowlist yet. */
+ async function connect(permission:'read'|'modify'|'send'='send',calendarPermission:'read'|'write'='write'){
   if(!cloud){googleConnectionController.close();connectionController.openCloudAccount();return;}
   const watcher=returnWatch.current;if(!watcher)return;
   active.current?.abort();const abort=active.current=new AbortController();let cancelReturn:(()=>void)|undefined;let returnState:string|undefined;let phase:'native-return'|'cloud'|'browser'='native-return';
@@ -121,8 +126,16 @@ export function GoogleConnectionsPanel(){
   }catch(error){cancelReturn?.();if(returnState)await googleWorkspaceReturnPort?.cancel(returnState).catch(()=>{});if(current()){if(phase==='cloud')connectionController.rejectCloudSession(cloud.sessionId,error);setNotice('Google authorization could not start. Check your Cloud sign-in and retry.');}}
   finally{if(active.current===abort)setBusy(false);}
  }
+ /** Off only stops agent writes; on uses the existing grant, or asks Google once when it is missing. */
+ async function toggleAccess(kind:'gmailChanges'|'calendarEdits',granted:boolean){
+  const on=!(access[kind]&&granted);
+  try{await setGoogleAgentAccess({[kind]:on});}catch{setNotice('That setting could not be saved. Try again.');return;}
+  if(on&&!granted)await connect(accounts.some(account=>gmailGrantTier(account)==='modify')?'modify':'send','write');
+ }
  async function disconnect(account:GmailAccount){if(!cloud||!key||!account.connectionId)return;active.current?.abort();const abort=active.current=new AbortController();setBusy(true);setConfirm(null);try{const result=await createGoogleAccounts(cloud,()=>connectionController.getCloudClient()).disconnect(account.connectionId,abort.signal);if(result.outcome==='disconnected')clearGoogleCalendarSelectionForConnection(key,account.connectionId);setNotice(googleDisconnectMessage(result.outcome,account.label,serviceName));setAccounts(result.accounts||[]);setSources([]);}catch(error){if(!abort.signal.aborted){connectionController.rejectCloudSession(cloud.sessionId,error);setNotice('Disconnect was not confirmed. Check Google connections before trying again.');}}finally{if(active.current===abort)setBusy(false);}}
  if(!open)return null;
+ const connected=accounts.filter(account=>account.connected);
+ const gmailGranted=connected.some(account=>account.grantedCapabilities.includes('google.gmail.send')),calendarGranted=connected.some(account=>account.grantedCapabilities.includes('google.calendar.write'));
  const icon={width:20,height:20,display:'inline-block',background:'currentColor',mask:'url(/icons/lucide/x.svg) center / contain no-repeat',WebkitMask:'url(/icons/lucide/x.svg) center / contain no-repeat'};
  return <div className="alpha-connection-scrim"><div className="alpha-connection alpha-google-connections" role="dialog" aria-modal="true" aria-labelledby="google-connections-title" tabIndex={-1} ref={panel}>
   <header><h2 id="google-connections-title">Google accounts</h2><button aria-label="Close Google accounts" onClick={()=>{active.current?.abort();googleConnectionController.close();}}><span aria-hidden="true" data-alpha-icon="/icons/lucide/x.svg" style={icon}/></button></header>
@@ -130,11 +143,10 @@ export function GoogleConnectionsPanel(){
   <p role="status">{notice}</p>
   <p>{background}</p>
   {isAndroid&&<button onClick={()=>void gmailNotificationSettings().catch(()=>setBackground('Android notification settings are unavailable.'))}>Gmail notification settings</button>}
-  {accounts.filter(account=>account.connected).map(account=><section className="alpha-connection-current alpha-google-account" key={account.connectionId}><strong>{account.label}</strong><span>{googleAccountAccessLabel(account)}</span><details><summary>Gmail permissions</summary><p>Extra access is optional. Google will ask you to approve any change.</p>
-   <p>{gmailGrantTier(account)==='modify'?'Sending, Gmail drafts and mailbox changes are enabled.':'Gmail changes use one additional consent for sending, drafts, archive, trash and read state.'}</p>
-   {gmailGrantTier(account)!=='modify'&&<button disabled={busy} onClick={()=>void connect('modify')}>Enable Gmail changes</button>}
-  </details><button className="alpha-google-disconnect" aria-label={`Disconnect Google account ${account.label}`} disabled={busy} onClick={()=>setConfirm(account)}>Disconnect</button></section>)}
-  {accounts.some(account=>account.connected&&(!account.grantedCapabilities.includes('google.gmail.send')||!account.grantedCapabilities.includes('google.calendar.write')))&&<section aria-label="Google permission upgrades"><h3>Sending and Calendar sync</h3><p>Approve additional Google access to send email and create or update Calendar events. Alpha still asks you to review email sends and Calendar changes, even when “Ask before agent actions” is off.</p><button disabled={busy} onClick={()=>void connect(accounts.some(account=>gmailGrantTier(account)==='modify')?'modify':'send','write')}>Review Google permission upgrade</button><p>Google shows the account and requested permissions before you approve. Existing local events stay on this device.</p></section>}
+  {connected.map(account=><section className="alpha-connection-current alpha-google-account" key={account.connectionId}><strong>{account.label}</strong><span>{googleAccountAccessLabel(account)}</span><button className="alpha-google-disconnect" aria-label={`Disconnect Google account ${account.label}`} disabled={busy} onClick={()=>setConfirm(account)}>Disconnect</button></section>)}
+  {connected.length>0&&<section aria-label="Agent access to Google"><h3>Agent access</h3><p>Turning a switch off keeps Google connected and reading still works. Alpha asks you to review email sends and Calendar changes, even when “Ask before agent actions” is off.</p>
+   {([['gmailChanges','Gmail changes','Send email for you.',gmailGranted],['calendarEdits','Calendar edits','Create and update events.',calendarGranted]] as const).map(([kind,label,detail,granted])=><label className="alpha-google-switch" key={kind}><span><strong>{label}</strong><small>{granted?detail:`${detail} Needs Google approval.`}</small></span><input type="checkbox" role="switch" aria-label={label} checked={access[kind]&&granted} disabled={busy} onChange={()=>void toggleAccess(kind,granted)}/></label>)}
+  </section>}
   {(!!sources.length||!!selected)&&<section><h3 id="google-calendar-display-title">Calendar to display</h3><p>Show a Google calendar alongside your local events.</p><div className="alpha-google-calendar-choices" role="radiogroup" aria-labelledby="google-calendar-display-title"><label className={`alpha-google-calendar-option${!selected?' is-selected':''}`}><input type="radio" name="google-calendar" aria-label="Local calendars only" checked={!selected} disabled={busy} onChange={()=>{if(key&&!saveGoogleCalendarSelection(key,null))setNotice('Calendar choice could not be saved.');}}/><span>Local calendars only</span></label>{sources.map(source=><label className={`alpha-google-calendar-option${selected?.sourceId===source.id?' is-selected':''}`} key={source.id}><input type="radio" name="google-calendar" aria-label={source.name===source.account?source.name:`${source.name} · ${source.account}`} checked={selected?.sourceId===source.id} disabled={busy} onChange={()=>{if(key&&!saveGoogleCalendarSelection(key,{connectionId:source.connectionId,sourceId:source.id,providerCalendarId:source.providerCalendarId,name:source.name,account:source.account}))setNotice('Calendar choice could not be saved.');}}/><span><strong>{source.name}</strong>{source.name!==source.account&&<small>{source.account}</small>}</span></label>)}</div></section>}
   {confirm&&<section role="alert"><p style={{whiteSpace:'pre-line'}}>{googleDisconnectConfirmation(confirm.label,serviceName)}</p><button disabled={busy} onClick={()=>void disconnect(confirm)}>Confirm disconnect Google account</button><button disabled={busy} onClick={()=>setConfirm(null)}>Keep connected</button></section>}
   <div className="alpha-connection-actions"><button disabled={busy} onClick={()=>void connect()}>{cloud?(accounts.some(account=>account.connected)?'Add Google account':'Connect Google account'):`Sign in to ${serviceName}`}</button><button disabled={busy||!cloud} onClick={()=>setRevision(value=>value+1)}>Check Google connections</button></div>

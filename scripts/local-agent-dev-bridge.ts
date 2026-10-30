@@ -257,7 +257,17 @@ export function localAgentDevBridge():Plugin {
     const upgrade=(req:IncomingMessage,socket:Duplex,head:Buffer)=>{if(req.url?.startsWith(LOCAL_VOICE_WS_PATH)||req.url?.startsWith(LOCAL_RENDERER_WS_PATH))void handler.upgrade(req,socket,head);};
     server.httpServer?.on('upgrade',upgrade);server.httpServer?.once('close',()=>{server.httpServer?.off('upgrade',upgrade);handler.closeVoice();});
     server.middlewares.use((req,res,next)=>{if(req.url!==LOCAL_AGENT_BRIDGE_PATH){next();return;}void handler(req,res);});
-    const gmail=createGmailAgentDevBroker({profile:process.env.ALPHA_BROWSER_CLOUD_PROFILE||join(homedir(),'.local/share/alphaphone/browser-cloud'),tokenFile});
+    // The owner's Settings switches (apps/app/src/runtime/google-agent-access.ts). Same-origin renderer only;
+    // a restart starts from the product default (on) until the renderer republishes on load.
+    let googleAccess={gmailChanges:true,calendarEdits:true};
+    server.middlewares.use('/__alpha-agent-google-access',(req,res)=>{
+      const host=req.headers.host||'';
+      if(req.method!=='POST'||!/^(?:127\.0\.0\.1|localhost):\d+$/.test(host)||req.headers.origin!==`http://${host}`){res.writeHead(403).end();return;}
+      let body='';req.setEncoding('utf8');
+      req.on('data',chunk=>{body+=chunk;if(body.length>256)req.destroy();});
+      req.on('end',()=>{try{const value=JSON.parse(body);if(Object.keys(value).sort().join()!=='calendarEdits,gmailChanges'||typeof value.gmailChanges!=='boolean'||typeof value.calendarEdits!=='boolean')throw Error('invalid');googleAccess={gmailChanges:value.gmailChanges,calendarEdits:value.calendarEdits};res.writeHead(204).end();}catch{res.writeHead(400).end();}});
+    });
+    const gmail=createGmailAgentDevBroker({profile:process.env.ALPHA_BROWSER_CLOUD_PROFILE||join(homedir(),'.local/share/alphaphone/browser-cloud'),tokenFile,access:()=>googleAccess});
     server.middlewares.use('/__alpha-owner-gmail',(req,res)=>{void gmail(req,res);});
   }};
 }
