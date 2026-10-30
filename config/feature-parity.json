@@ -3,7 +3,7 @@
   "reference": "ELIZA_MOBILE_PRODUCT",
   "ceiling": {
     "differences": 20,
-    "modules": 546
+    "modules": 545
   },
   "differences": {
     "view:clock:only-b": "Eliza offers Clock; Alpha hands alarms and timers to the Android clock (clock.handoff) without a Clock view.",
@@ -473,6 +473,7 @@
     "apps/app/src/runtime/gmail-mailbox.ts",
     "apps/app/src/runtime/gmail-read-ahead.ts",
     "apps/app/src/runtime/google-accounts.ts",
+    "apps/app/src/runtime/google-agent-access.ts",
     "apps/app/src/runtime/google-authorization.ts",
     "apps/app/src/runtime/google-calendar-selection.ts",
     "apps/app/src/runtime/google-connection-return.ts",
