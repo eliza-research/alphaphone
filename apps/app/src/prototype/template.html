@@ -776,7 +776,6 @@
       <h1 data-alpha-app-title class="serif" style="margin: 0; min-width: 0; font-size: 32px; letter-spacing: -.01em; white-space: nowrap">{{calendar.month}}</h1>
       <svg class="i" viewBox="0 0 24 24" style="width: 18px; height: 18px; color: var(--mut); margin-top: 4px"><path d="{{calendar.chevron}}"></path></svg>
     </button>
-    <sc-if value="{{calendar.canRefreshGoogleCalendar}}"><button class="ib" aria-label="Refresh Google Calendar" disabled="{{calendar.googleCalendarRefreshing}}" onClick="{{calendar.refreshGoogleCalendar}}"><span aria-hidden="true" style="display:block;width:20px;height:20px;background:currentColor;mask:url('/icons/lucide/rotate-cw.svg') center/contain no-repeat;-webkit-mask:url('/icons/lucide/rotate-cw.svg') center/contain no-repeat"></span></button></sc-if>
     <button class="ib" aria-label="Clock alarms" onClick="{{calendar.openClock}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.clock}}"></path></svg></button>
 
     <sc-if value="{{calendar.dayMode}}">
@@ -806,7 +805,6 @@
   <sc-if value="{{calendar.reminderRecovery}}"><button aria-label="Recover browser reminder action history" onClick="{{calendar.openReminderActionRecovery}}" style="margin:0 16px 8px;padding:12px;border-radius:12px;background:var(--s2);color:var(--fg)">Reminder action recovery</button></sc-if>
   <sc-if value="{{calendar.creationRecovery}}"><div role="status" style="margin: 0 16px 8px; padding: 12px; border-radius: 12px; background: var(--s2); font-size: 13px"><p>{{calendar.creationRecoveryText}}</p><button onClick="{{calendar.checkCreations}}" style="padding: 8px">Check event creation receipts</button><button onClick="{{calendar.separateCreation}}" style="padding: 8px">Create a separate event</button></div></sc-if>
   <sc-if value="{{calendar.nativeStatusLabel}}"><button aria-label="Retry calendar and reminders" onClick="{{calendar.nativeStatusRetry}}" style="margin: 0 16px 8px; padding: 10px 12px; border-radius: 12px; background: var(--s2); color: var(--fg); text-align: left; font-size: 13px">{{calendar.nativeStatusLabel}}</button></sc-if>
-  <sc-if value="{{calendar.googleCalendarNotice}}"><p role="status" style="margin:0;padding:4px 24px 8px;font-size:13px;color:var(--mut)">{{calendar.googleCalendarNotice}}</p></sc-if>
   <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); padding: 4px 12px 8px; flex-shrink: 0">
     <sc-for list="{{calendar.week}}" as="w">
       <button onClick="{{w.pick}}" aria-label="Day {{w.n}}" style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 4px 0">

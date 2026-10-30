@@ -90,9 +90,11 @@ export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort,access:
    // An unconnected optional provider contributes no sources. Connected-owner
    // identity/permission/provider failures still propagate.
    if(!await host.agentCredential())return [];
-   // Calendar reads are scoped per grant, so every connected account's calendars are listed.
+   // Calendar reads are scoped per grant, so every connected account's calendars are listed. Alpha shows one
+   // merged Calendar: each account's own calendar and every calendar the owner shows in Google Calendar join the
+   // agent feed by default (CalendarService keeps an explicit per-calendar choice once the owner makes one).
    const {client,signal,accounts,confirm}=await ownerAccounts(parent,'google.calendar.read','calendar');
-   const sources=(await Promise.all(accounts.map(async({account,grantId,scope})=>(await client.googleCalendars(grantId,signal)).filter(row=>['reader','writer','owner'].includes(row.accessRole)).map(row=>({...row,provider:'google',side:'owner',grantId:`alpha-google:${scope}`,connectorAccountId:`alpha-google:${scope}`,accountEmail:account.label,includeInFeed:true,selectionVersion:1}))))).flat();
+   const sources=(await Promise.all(accounts.map(async({account,grantId,scope})=>(await client.googleCalendars(grantId,signal)).filter(row=>['reader','writer','owner'].includes(row.accessRole)).map(row=>({...row,provider:'google',side:'owner',grantId:`alpha-google:${scope}`,connectorAccountId:`alpha-google:${scope}`,accountEmail:account.label,includeInFeed:row.primary||row.selected,selectionVersion:1}))))).flat();
    await confirm(accounts.map(a=>a.grantId));return sources;
    }catch(error){recordManagedGoogleFailure(error,'calendar-sources');throw error;}
   },

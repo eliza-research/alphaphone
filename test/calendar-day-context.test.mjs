@@ -18,7 +18,7 @@ test('only the ordinary ready owner Calendar produces a visible day',()=>{
  assert.deepEqual(calendarDayObservation({...surface(),chat:'full'},zone,now),day);
  for(const patch of [{live:false},{view:'notes'},{screen:'lock'},{screen:'off'},{hidden:true},{pageSuspended:true},{secure:true},{shade:true},{connectionOpen:true},{recovery:true},{clockDraft:true},{ownerCurrent:false},{ownerKey:'previous-owner'},{status:'loading'},{status:'partial'},{status:'legacy-recovery'},{mutating:true}])
   assert.equal(calendarDayObservation({...surface(),...patch},zone,now),undefined,JSON.stringify(patch));
- for(const patch of [{month:0},{month:1},{form:{}},{open:'event'},{day:1.5},{day:'1'},{calendarAuthority:'legacy'},{calendarAuthority:'legacy-google'},{calendarAuthority:'android-native'},{calendarAuthority:'browser-local'}])
+ for(const patch of [{month:0},{month:1},{form:{}},{open:'event'},{day:1.5},{day:'1'},{calendarAuthority:'legacy'},{calendarAuthority:'android-native'},{calendarAuthority:'browser-local'}])
   assert.equal(calendarDayObservation({...surface(),calendar:{...surface().calendar,...patch}},zone,now),undefined,JSON.stringify(patch));
  assert.equal(calendarDayObservation(surface(),'Not/AZone',now),undefined);
 });

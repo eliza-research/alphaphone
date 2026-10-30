@@ -21,8 +21,7 @@ function fixture({heldStatus=false,heldOpen=false,panelClosed=false,accountRows}
  let current={...binding};const active={current:null};
  const liveCloud=()=>current?{client:current.client,sessionId:current.sessionId,credentialId:current.credentialId}:null;
  const globals={identity:"synthetic",AbortController,DOMException,returnedWorkspace:{current:null},returnedWorkspaceOwner:{current:null},sameGoogleWorkspaceBinding,prepareGoogleWorkspaceReturn,watchGoogleWorkspaceReturn,googleWorkspaceReturnPort:undefined,currentWorkspaceBinding:()=>current,createGoogleAccounts,sameGoogleConnectionReturnBinding,active,binding,cloud:liveCloud(),key:{environment:'production',userId:'owner',organizationId:'tenant'},serviceName:'Cloud',googleConnectionController:{getSnapshot:()=>panelOpen,close:()=>{panelOpen=false;},open:()=>{panelOpen=true;}},connectionController:{getCloudClient:liveCloud,rejectCloudSession(){throw Error('Unexpected sign-in mutation');},openCloudAccount(){throw Error('Unexpected sign-in');}},currentGoogleConnectionReturnBinding:()=>current,
-  setRevision:update=>{revision=update(revision);loadPromise=globals.load();},setAccounts:rows=>published.push(rows),setSources(){},setConfirm(){},setBusy(){},setNotice:text=>notices.push(text),
-  GoogleCalendarReader:class{constructor(){throw Error('No provider reads in this fixture');}},
+  setRevision:update=>{revision=update(revision);loadPromise=globals.load();},setAccounts:rows=>published.push(rows),setConfirm(){},setBusy(){},setNotice:text=>notices.push(text),
   openConnectionBrowser:async()=>{opens++;return heldOpen?opening.promise:undefined;},returnWatch:{current:null},
  };
  vm.createContext(globals);vm.runInContext(loadCode+'\n'+connectCode+';globalThis.load=load;globalThis.connect=connect;',globals);
@@ -111,7 +110,7 @@ test('actual panel cleanup also retires a native registration that resolves late
  const h=mountActualLifecycle();assert.ok(h);const ready=h.returnWatch.current.ready;h.cleanup();h.resolveRegistration();await ready;assert.equal(h.removed,1);h.native();assert.equal(h.revision,0);
 });
 
-const workspaceEffect=ui.slice(ui.indexOf(' useEffect(()=>{\n  const port=googleWorkspaceReturnPort'),ui.indexOf(' // A display preference costs'));
+const workspaceEffect=ui.slice(ui.indexOf(' useEffect(()=>{\n  const port=googleWorkspaceReturnPort'),ui.indexOf(' useEffect(()=>{if(!open)return;const accountsChanged'));
 for(const hasGrant of [true,false])test('actual closed panel callback opens only after native admission and verifies grant '+hasGrant,async()=>{
  const rows=hasGrant?[{connected:true,connectionId:'owned',label:'Synthetic',grantedCapabilities:['google.gmail.triage']}]:[];
  const f=fixture({panelClosed:true,accountRows:rows});let cleanup,consumed=false;

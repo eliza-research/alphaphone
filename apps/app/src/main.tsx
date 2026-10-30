@@ -3,7 +3,7 @@ import { externalVoiceInvocationEnabled } from './runtime/voice-entry-policy';
 import './browser/register';
 import {installCanonicalNotesView} from './prototype/canonical-notes-ui';
 import {installCanonicalCalendarDrafts} from './prototype/canonical-calendar-drafts';
-import {installAgentCalendarAdapter,deviceCalendarScope,legacyGoogleCalendarScope} from './prototype/agent-calendar-adapter';
+import {installAgentCalendarAdapter,deviceCalendarScope} from './prototype/agent-calendar-adapter';
 import {Capacitor} from '@capacitor/core';
 import {ownerReminderNotifications} from './runtime/owner-reminder-notification-port';
 import {installCalendarApprovalAdapter} from './prototype/calendar-approval-adapter';
@@ -60,7 +60,6 @@ import { DailyApps } from './daily';
 import { installPrototypeVoiceAdapter } from './prototype/voice-adapter';
 import { installPrototypeBrowserAdapter } from './prototype/browser-adapter';
 import { installCalendarAdapter } from './prototype/calendar-adapter';
-import {installGoogleCalendarViewAdapter} from './prototype/google-calendar-view-adapter';
 import { installSettingsAdapter, readAppearanceChoice, resolveAppearance } from './prototype/settings-adapter';
 import { ConnectionChooser, connectionController } from './runtime/connection-ui';
 import { protectedPowerLaunchState } from './runtime/power-launch-state';
@@ -124,7 +123,6 @@ if (!fixture) {
   if(isAndroid){installContactsAdapter(Component,VIEWS);installSmsAdapter(Component,VIEWS);installPhoneAdapter(Component,VIEWS);}
   installCalendarFormDraftAdapter(Component, VIEWS, {active:shell=>deviceCalendarScope(shell)||shell?.vget('calendar').form?.cal==='alpha-reminders'});
   installCalendarEditDraftAdapter(Component, VIEWS, {active:shell=>deviceCalendarScope(shell)||shell?.vget('calendar').form?.cal==='alpha-reminders'});
-  installGoogleCalendarViewAdapter(Component, VIEWS, {active:legacyGoogleCalendarScope,preserveReadOnly:true});
   installNoteOriginAdapter(Component, VIEWS);
   installPrototypeDataAdapter(Component, VIEWS);
   installAgentCalendarAdapter(Component,VIEWS);

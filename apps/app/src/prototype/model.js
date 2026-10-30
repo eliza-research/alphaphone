@@ -1140,7 +1140,6 @@ function calCals(st, api) {
       else list.push({ id: a.id || ("acct" + i), name: a.provider || "Calendar", sub: a.address || "", color: "mut" });
     });
   } else { var subs = copy("calendar").calendarSubs || []; list[0].sub = subs[0] || ""; list[1].sub = subs[1] || ""; }
-  if (st.googleCalendarName) list.push({ id: 'google', name: st.googleCalendarName, sub: 'Google Calendar', color: 'acc' });
   var prefs = st.calPrefs || {};
   return list.map(function (c) { var p = prefs[c.id] || {}; return Object.assign({}, c, { on: p.on !== false, color: p.color || c.color }); });
 }

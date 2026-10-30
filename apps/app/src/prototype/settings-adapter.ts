@@ -534,14 +534,14 @@ export function installSettingsAdapter(Component: any, views: Bag) {
             groups.unshift({...group(sourceRows),cap:'Calendar sources',hasCap:true});
           }
           const syncAuthority=owner?.vget('calendar').calendarAuthority;
-          const syncUnavailable=syncAuthority==='android-native'||browserCalendarScope(owner)?'':syncAuthority==='legacy'||syncAuthority==='legacy-google'?'Choose Agent Calendar to review sync. Retained calendars stay read only.':!owner?.agentCalendar?.state.ownerKey?'Connect to Agent Calendar to review sync.':'';
+          const syncUnavailable=syncAuthority==='android-native'||browserCalendarScope(owner)?'':syncAuthority==='legacy'?'Choose Agent Calendar to review sync. Retained calendars stay read only.':!owner?.agentCalendar?.state.ownerKey?'Connect to Agent Calendar to review sync.':'';
           groups.push({...group([syncUnavailable?info('Google Calendar sync',syncUnavailable):{kNav:true,label:'Google Calendar sync',lbl:'Google Calendar sync',sub:'Review the destination and enable linked event sync',hasSub:true,chev:true,noAB:true,go:()=>{
             const shell=owner,authority=shell?.vget('calendar').calendarAuthority;
             if(authority==='android-native'||browserCalendarScope(shell)){openCalendarSyncSettings();return;}
-            if(authority==='legacy'||authority==='legacy-google'){api.toast('Choose Agent Calendar before reviewing sync. Retained calendars stay read only.');return;}
+            if(authority==='legacy'){api.toast('Choose Agent Calendar before reviewing sync. Retained calendars stay read only.');return;}
             const calendar=shell?.agentCalendar,ownerKey=calendar?.state.ownerKey;
             if(!calendar||!ownerKey){if(native&&!testMocksEnabled)api.set({page:'agent-connection'});else connectionController.open();return;}
-            openCalendarSyncSettings({calendar,current:()=>owner===shell&&shell.live&&shell.agentCalendar===calendar&&calendar.state.ownerKey===ownerKey&&!['android-native','legacy','legacy-google'].includes(shell.vget('calendar').calendarAuthority),canChange:()=>!shell.vget('calendar').form&&!shell.canonicalDraftText&&!shell.canonicalDraftInvalid&&!shell.canonicalDraft?.state.opening&&!shell.canonicalDraft?.state.consuming});
+            openCalendarSyncSettings({calendar,current:()=>owner===shell&&shell.live&&shell.agentCalendar===calendar&&calendar.state.ownerKey===ownerKey&&!['android-native','legacy'].includes(shell.vget('calendar').calendarAuthority),canChange:()=>!shell.vget('calendar').form&&!shell.canonicalDraftText&&!shell.canonicalDraftInvalid&&!shell.canonicalDraft?.state.opening&&!shell.canonicalDraft?.state.consuming});
           }}]),cap:'Sync',hasCap:true});
           if(testMocksEnabled&&!Capacitor.isNativePlatform())groups.push({...group([{kNav:true,label:'Calendar backups',lbl:'Calendar backups',sub:'Events saved in this app',hasSub:true,chev:true,noAB:true,go:()=>openCalendarRecovery()}]),cap:'Saved data',hasCap:true});
           out.stack.push({isTop:false,notTop:true,cls:'enter',z:4,title:'Calendar',hasTitle:true,backLabel:'Back to Settings',back:()=>api.set({page:null}),hero:{},groups});
