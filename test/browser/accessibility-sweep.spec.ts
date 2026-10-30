@@ -190,3 +190,56 @@ for (const theme of ['light', 'dark'] as const) {
     expect(found, found.join('\n')).toEqual([]);
   });
 }
+
+// A late native draft-read failure must not cover a control that already owns keyboard focus.
+test('launcher keeps current keyboard focus clear when its draft status arrives at 300%', async ({page}, info) => {
+  await page.addInitScript(() => {
+    let capacitor: any;
+    let fail = false;
+    const pending: Array<(error: Error) => void> = [];
+    (window as any).__failAssistantDraftRead = () => {
+      fail = true;
+      for (const reject of pending.splice(0)) reject(Error('Synthetic delayed draft storage failure'));
+    };
+    Object.defineProperty(window, 'Capacitor', {
+      configurable: true,
+      get: () => capacitor,
+      set(value) {
+        capacitor = value;
+        value.PluginHeaders.push({name:'AlphaConnection',methods:[{name:'secureRead',rtype:'promise'}]});
+        const original=value.nativePromise;
+        value.nativePromise=async (plugin: string,method: string,args: {slot?:string}) => {
+          if(plugin==='AlphaConnection'&&method==='secureRead') {
+            if(args?.slot?.startsWith('assistant-draft:v1:')) {
+              if(fail) throw Error('Synthetic delayed draft storage failure');
+              return new Promise((_resolve,reject)=>pending.push(reject));
+            }
+            return {value:null};
+          }
+          return original(plugin,method,args);
+        };
+      },
+    });
+  });
+  await LAUNCHER_STATES.find(state=>state.name==='launcher Home')!.open(page,'light');
+  await setTextScale(page,3);
+  const card=page.locator('[data-overview-card="attention"]');
+  await page.keyboard.press('Tab');
+  for(let n=0;n<8 && !(await card.evaluate(el=>el===document.activeElement));n++) await page.keyboard.press('Tab');
+  await expect(card).toBeFocused();
+  const geometry=()=>page.evaluate(()=>{
+    const active=document.activeElement as HTMLElement;
+    const dock=document.querySelector<HTMLElement>('[data-alpha-layer="composer"]')!;
+    const home=document.querySelector<HTMLElement>('[data-alpha-layer="home"]')!;
+    return {bottom:active.getBoundingClientRect().bottom,dockTop:dock.getBoundingClientRect().top,homeScroll:home.scrollTop,active:active.getAttribute('data-overview-card'),clearance:getComputedStyle(document.documentElement).getPropertyValue('--alpha-dock-clearance')};
+  });
+  const before=await geometry();
+  expect(before.bottom).toBeLessThanOrEqual(before.dockTop);
+  await page.evaluate(()=>(window as any).__failAssistantDraftRead());
+  await expect(page.getByRole('status',{name:'Assistant draft status'})).toContainText('Local draft could not be read');
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  const after=await geometry();
+  await info.attach('focus-before-after',{body:JSON.stringify({before,after}),contentType:'application/json'});
+  await expect(card).toBeFocused();
+  expect(after.bottom).toBeLessThanOrEqual(after.dockTop);
+});
