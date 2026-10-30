@@ -26,8 +26,10 @@ test('explicit native legacy recovery uses real encrypted slots and current toke
   const nativeLifecycle=readFileSync(nativeSource('AlphaLocalAgentPlugin.java'),'utf8');
   const powerEpoch=nativeLifecycle.match(/^ private static long powerAuthorizationMutationEpoch;$/m)?.[0];
   const authorityGetter=nativeLifecycle.match(/^ static long credentialAuthorityEpoch\(\).*$/m)?.[0];
+  // The authority range also carries the shared sign-in read hook, which refuses during a mutation.
+  const mutationEpoch=nativeLifecycle.match(/^ private static volatile long credentialMutationEpoch=-1;$/m)?.[0];
   const powerStart=nativeLifecycle.indexOf(' static <T> T withCredentialAuthority('),powerEnd=nativeLifecycle.indexOf(' /** A protected launch constraint',powerStart);
-  assert.ok(powerEpoch&&authorityGetter&&powerStart>0&&powerEnd>powerStart);
+  assert.ok(powerEpoch&&authorityGetter&&mutationEpoch&&powerStart>0&&powerEnd>powerStart);
   const fastStart=nativeLifecycle.indexOf(' static <T> T mutateCredentials('),fastEnd=nativeLifecycle.indexOf('   startRequestId=',fastStart);
   // The fast path commits through the actual listener-owner invalidation (InvocationOwnerCache).
   const ownerCache=nativeLifecycle.match(/^ private static final InvocationOwnerCache INVOCATION_OWNER=new InvocationOwnerCache\(\);$/m)?.[0];
@@ -46,6 +48,7 @@ test('explicit native legacy recovery uses real encrypted slots and current toke
   const lifecycle=join(dir,'AlphaLocalAgentPlugin.java');writeFileSync(lifecycle,`package ai.elizaresearch.alphaphone;import android.content.Context;import org.json.JSONObject;import com.getcapacitor.JSObject;import ai.eliza.plugins.agent.runtime.NativeProviderSlot;class AlphaLocalAgentPlugin {
    static final Object lifecycleLock=new Object();static final ai.eliza.plugins.agent.runtime.CredentialIntentFence credentialIntents=new ai.eliza.plugins.agent.runtime.CredentialIntentFence(lifecycleLock);static{credentialIntents.reserve();}
    ${powerEpoch}
+   ${mutationEpoch}
    ${authorityGetter}
    static long currentCredentialIntent(){return credentialIntents.current();}
    static long reserveCredentialIntent(){return credentialIntents.reserve();}
@@ -136,13 +139,13 @@ test('Restore saved sign-in around the shared sign-in client: eligible restore, 
    file('CloudCredentialSlots.java',`package ai.eliza.auth.cloud;public interface CloudCredentialSlots{String read(String s)throws Exception;void write(String s,String v)throws Exception;void remove(String s)throws Exception;}`),
    ...['CloudSignInEnvironment.java','CloudSignInConfig.java','CloudSignInFlow.java','CloudEmailCode.java','CloudSmsCode.java'].map(name=>join(root,'vendor/eliza/packages/auth/android/src/main/java/ai/eliza/auth/cloud',name)),
    file('CloudSignInPlugin.java',`package ai.eliza.auth.cloud;import com.getcapacitor.*;public abstract class CloudSignInPlugin extends Plugin{public final java.util.List<String> calls=new java.util.concurrent.CopyOnWriteArrayList<>();
-    protected abstract CloudSignInConfig registration();protected abstract CloudCredentialSlots credentials(Runnable guard);protected Runnable reserveCredentialCommit(){return()->{};}
+    protected abstract CloudSignInConfig registration();protected abstract CloudCredentialSlots credentials(Runnable guard);protected abstract <T> T withCredentialRead(java.util.concurrent.Callable<T> read) throws Exception;protected Runnable reserveCredentialCommit(){return()->{};}
     /** Stands in for the shared client's commit of a minted key: reserve, then write under the guard. */
     public void commitSignIn()throws Exception{Runnable check=reserveCredentialCommit();credentials(check).write("cloud:production","minted");}
     @PluginMethod public void startGoogle(PluginCall c){calls.add("startGoogle");c.resolve();}@PluginMethod public void startEmail(PluginCall c){calls.add("startEmail");c.resolve();}@PluginMethod public void startPhone(PluginCall c){calls.add("startPhone");c.resolve();}@PluginMethod public void cancel(PluginCall c){calls.add("cancel");c.resolve();}
     @Override protected void handleOnNewIntent(android.content.Intent i){calls.add("intent");}@Override protected void handleOnDestroy(){calls.add("destroy");}}`),
    file('BuildConfig.java',`package ai.elizaresearch.alphaphone;final class BuildConfig{static final boolean ELIZA_DEV_ALLOW_TEST_MOCKS=false;}`),
-   file('AlphaLocalAgentPlugin.java',`package ai.elizaresearch.alphaphone;final class AlphaLocalAgentPlugin{static final Object lifecycleLock=new Object();static final ai.eliza.plugins.agent.runtime.CredentialIntentFence credentialIntents=new ai.eliza.plugins.agent.runtime.CredentialIntentFence(lifecycleLock);\n${intent}\n${require}\n}`),
+   file('AlphaLocalAgentPlugin.java',`package ai.elizaresearch.alphaphone;final class AlphaLocalAgentPlugin{static final Object lifecycleLock=new Object();static final ai.eliza.plugins.agent.runtime.CredentialIntentFence credentialIntents=new ai.eliza.plugins.agent.runtime.CredentialIntentFence(lifecycleLock);\n${intent}\n${require}\nstatic <T> T withCredentialRead(java.util.concurrent.Callable<T> read)throws Exception{synchronized(lifecycleLock){return read.call();}}\n}`),
    file('AlphaCredentialStore.java',`package ai.elizaresearch.alphaphone;import java.util.concurrent.*;final class AlphaCredentialStore{
     /** Synthetic encrypted vault: a retained legacy credential, and the scoped slot a restore copies it to. */
     static volatile boolean legacy=true,failRestore;static final java.util.Map<String,String> slots=new ConcurrentHashMap<>();static volatile CountDownLatch entered,release;
