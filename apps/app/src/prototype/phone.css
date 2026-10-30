@@ -229,6 +229,15 @@ html:not(.standalone-app) [data-alpha-layer="home"][data-alpha-home-fits="true"]
 .alpha-text-xl.standalone-app [data-alpha-app-header] { height:auto!important; min-height:52px; flex-wrap:wrap; align-content:flex-start; flex-shrink:0; }
 .alpha-text-xl.standalone-app [data-alpha-app-header] [data-alpha-app-title] { order:1; flex:1 0 100%; box-sizing:border-box; padding:0 8px 6px!important; margin:0!important; white-space:normal!important; overflow:visible!important; text-overflow:clip!important; overflow-wrap:anywhere; }
 .alpha-text-xl.standalone-app [data-alpha-app-header] > [data-alpha-app-title] + * { margin-left:auto; }
+/* The launcher (Android HOME) presentation keeps each view's own header: a 32px serif title and,
+ * in Camera, labelled pill actions. Above 150% they no longer fit one row either (#701), so the
+ * header wraps the same way: its actions stay on the first row (wrapping themselves when they must)
+ * and the title, or the button that holds it (Calendar's month), takes a full row of its own.
+ * Browser's address bar is its own layout and already fits, so it is left as it is. */
+html.alpha-text-xl:not(.standalone-app) [data-alpha-app-header]:not([data-alpha-browser-header]) { height:auto!important; flex-wrap:wrap; align-content:flex-start; row-gap:4px; flex-shrink:0; }
+html.alpha-text-xl:not(.standalone-app) [data-alpha-app-header]:not([data-alpha-browser-header]) > :is([data-alpha-app-title],:has([data-alpha-app-title])) { order:1; flex:1 0 100%; min-width:0; box-sizing:border-box; }
+html.alpha-text-xl:not(.standalone-app) [data-alpha-app-header]:not([data-alpha-browser-header]) > :is([data-alpha-app-title],:has([data-alpha-app-title])) + * { margin-left:auto; }
+html.alpha-text-xl:not(.standalone-app) [data-alpha-app-header]:not([data-alpha-browser-header]) [data-alpha-app-title] { white-space:normal!important; overflow:visible!important; text-overflow:clip!important; overflow-wrap:anywhere; }
 
 .app-header-action-icon { display:none; }
 .standalone-app [data-alpha-app-header] [data-alpha-header-icon-action] { width:52px; height:52px; min-width:52px; min-height:52px; padding:0!important; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
@@ -340,6 +349,12 @@ html:not(.alpha-landscape) .alpha-phone [data-screen]:not([data-alpha-chat-half=
 /* With a large system font the Camera title has a row of its own under the header's buttons
  * (.alpha-text-xl above); the capture rail starts below that row instead of under it. */
 .alpha-text-xl.alpha-landscape.standalone-app [data-alpha-camera-root]{--alpha-camera-top:calc(60px + 24px * var(--alpha-text-scale,1))}
+/* In portrait at a large system font (#701) the Video, Photo and Scan labels are wider than the
+ * phone and taller than their 44px row. Each mode keeps its full label and a 48px target; the row
+ * grows upward from the capture row (its bottom edge stays put) and scrolls sideways when the
+ * labels do not fit, so every mode stays reachable. */
+html.alpha-text-xl:not(.alpha-landscape) [data-alpha-camera="modes"]{height:auto!important;translate:0 calc(44px - 100%);justify-content:safe center!important;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:none;padding:0 16px;box-sizing:border-box}
+html.alpha-text-xl:not(.alpha-landscape) [data-alpha-camera="modes"] button{height:auto!important;min-height:48px;flex-shrink:0;white-space:nowrap}
 /* The camera's message stops at the capture rail in landscape instead of lying across it. */
 .alpha-landscape [data-alpha-camera="said"],
 .alpha-landscape [data-alpha-camera-access]{right:calc(var(--alpha-camera-rail) + 16px)!important}
