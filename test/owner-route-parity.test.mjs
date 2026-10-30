@@ -176,6 +176,7 @@ function nativeGate(config,cases){
  const directory=mkdtempSync(join(tmpdir(),'alpha-owner-routes-')),harness=join(directory,'OwnerRouteHarness.java');
  try{
   writeFileSync(harness,`package ai.elizaresearch.alphaphone;
+import ai.eliza.plugins.agent.connection.NativeAppReadPolicy;
 public final class OwnerRouteHarness{
  static String config;
  static final OwnerRoutes.Assets CONFIG=name->new java.io.FileInputStream(config+name);
@@ -199,7 +200,7 @@ public final class OwnerRouteHarness{
  }
 }`);
   const field=value=>value===null?'-':Buffer.from(value,'utf8').toString('base64');
-  return runJvm([upstreamConnection('OwnerRoutePolicy.java'),nativeSource('OwnerRoutes.java'),harness],'ai.elizaresearch.alphaphone.OwnerRouteHarness',{json:true,args:[config+'/'],input:cases.map(c=>[c.method,c.path,c.body,c.owner].map(field).join(' ')).join('\n')+'\n'}).trim().split('\n').map(line=>line.split(' '));
+  return runJvm([upstreamConnection('OwnerRoutePolicy.java'),upstreamConnection('NativeAppReadPolicy.java'),nativeSource('OwnerRoutes.java'),harness],'ai.elizaresearch.alphaphone.OwnerRouteHarness',{json:true,args:[config+'/'],input:cases.map(c=>[c.method,c.path,c.body,c.owner].map(field).join(' ')).join('\n')+'\n'}).trim().split('\n').map(line=>line.split(' '));
  }finally{rmSync(directory,{recursive:true,force:true});}
 }
 
@@ -250,4 +251,21 @@ test('the renderer interpreter fails to load every owner route table the Android
   .then(({outputFiles})=>import('data:text/javascript;base64,'+Buffer.from(outputFiles[0].text).toString('base64')));
  assert.equal(typeof (await load(shippedTable)).ownerRouteAllowed,'function');
  for(const [name,table] of brokenTables)await assert.rejects(load(table),undefined,name);
+});
+
+// Common startup reads are now owned upstream. They do not grant adjacent writes.
+test('the native gate admits exact shared AppProvider reads and preserves effect boundaries',{skip:jsonJarSkip},()=>{
+ const reads=['/api/auth/status','/api/auth/me','/api/agents','/api/status','/api/first-run/status','/api/first-run/options',
+  '/api/config','/api/stream/settings','/api/wallet/config','/api/wallet/addresses','/api/wallet/balances','/api/wallet/nfts',
+  '/api/plugins','/api/skills','/api/character','/api/workbench/overview','/api/update/status','/api/update/status?force=true',
+  '/api/agent/events','/api/agent/events?after=1&limit=300&runId=run-1&fromSeq=2'];
+ const added=reads.filter(path=>!['/api/auth/me','/api/agents','/api/status'].includes(path));
+ const cases=[...reads.map(path=>({path,method:'GET',body:null,owner:null,expected:'A'})),
+  ...added.flatMap(path=>[{path,method:'POST',body:'{}',owner:'owner',expected:'R'},
+   {path,method:'GET',body:'{}',owner:'owner',expected:'R'}]),
+  ...['/api/auth/pair','/api/auth/pair-code','/api/config?','/api/auth/me?','/api/plugins/install',
+   '/api/wallet/export','/api/config/../auth/me','/api/%63onfig','/api/update/status?force=false',
+   '/api/agent/events?limit=1&limit=2','/api/agent/events?unknown=1'].map(path=>({path,method:'GET',body:null,owner:'owner',expected:'R'}))];
+ const verdicts=nativeGate(join(root,'config'),cases);
+ cases.forEach((value,index)=>assert.equal(verdicts[index][0],value.expected,`${value.method} ${value.path}`));
 });
