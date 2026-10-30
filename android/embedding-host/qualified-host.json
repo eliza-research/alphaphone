@@ -69,8 +69,8 @@
   },
   "requalification": {
     "required": true,
-    "atPin": "9af104a1c7c7021493db575899baee666ea0ff6a",
-    "reason": "elizaOS/eliza develop fbc2d23d4b moves the native engine gitlink plugins/plugin-local-inference/native/llama.cpp from 0d9fd4b9 to 13d0ccbf and changes stage-elizavoice-lib.ts and the elizavoice JNI sources, so the reviewed libelizainference, libelizavoicejni and libc++ bytes built at fork 0d9fd4b9 are not admitted. A fresh embedding host build from the pinned sources and a new qualification receipt are required; nothing was built or run at this pin. The pin then moved to 9af104a1c7 (the head of the open draft elizaOS/eliza #38251), which moves the same gitlink again to 6973dc6c and changes the stage-elizavoice-lib.ts and elizavoice JNI inputs further, so the earlier statement still holds: nothing was built or run at this pin.",
-    "evidence": "docs/evidence/develop-fbc2d23d-build-input-admission-20261029.json"
+    "atPin": "f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5",
+    "reason": "The retained c95a manifest does not admit current f31/d960 ABI20 bytes. A new f31 Alpha-class JNI bridge has now built for both ABIs; its actual Alpha Java loader and all 81 registrations plus all three BGE384 embedding entrypoints passed ARM64 standalone execution. Stage the new docs/evidence/native-f31-embedding/QUALIFICATION.json through the official staging command after agent:stage-android supplies the pinned BGE model. No installed Alpha application, voice, x86_64 execution, or user acceptance is established.",
+    "evidence": "docs/evidence/native-f31-embedding/QUALIFICATION.json"
   }
 }

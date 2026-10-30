@@ -200,7 +200,8 @@ test('native starts the agent without a provider and never offers it a Cloud key
   assert.match(between(plugin, 'private static InvocationOwnerCache.Owner readProviderOwner(', 'private void rejectPending('), /if\(saved==null\)return new InvocationOwnerCache\.Owner\(LocalAgentProviderAdmission\.NO_PROVIDER_GENERATION,Long\.MAX_VALUE\);/);
   assert.match(read('vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderAdmission.java'), /NO_PROVIDER_GENERATION="no-provider"/);
   // With no stored provider, no process holds a Cloud key: a sign-in change does not stop the agent.
-  assert.match(store, /if\(java\.util\.Objects\.equals\(before,value\)\)return false;\n\s+\/\/[^\n]*\n\s+\/\/[^\n]*\n\s+if\(provider==null\)return false;/);
+  assert.match(store, /return resident\.mutateSlot\(name,expected,value,compare\);/);
+  assert.match(read('vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/ResidentCredentialStore.java'), /if \(Objects\.equals\(before, value\) \|\| provider == null\) return false;/);
 });
 
 test('browser speech has no Web Speech fallback', () => {

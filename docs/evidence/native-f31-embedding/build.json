@@ -1,0 +1,93 @@
+{
+  "sourcePin": "f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5",
+  "forkPin": "d960f633ddb034d0dd828a55216cfc17d012acbd",
+  "jniBinding": {
+    "mode": "registered",
+    "className": "ai/elizaresearch/alphaphone/ElizaVoiceNative",
+    "subset": "full"
+  },
+  "startedAt": 1793353985.374843,
+  "steps": [
+    {
+      "argv": [
+        "cmake",
+        "-S",
+        "/home/shaw/Work/eliza-unification/alpha-jni-f31/source/packages/app/platforms/android/app/src/main/elizavoice-jni",
+        "-B",
+        "/home/shaw/Work/eliza-unification/alpha-jni-f31/jni-build/arm64-v8a",
+        "-G",
+        "Ninja",
+        "-DCMAKE_TOOLCHAIN_FILE=/home/shaw/Android/Sdk/ndk/28.2.13676358/build/cmake/android.toolchain.cmake",
+        "-DANDROID_ABI=arm64-v8a",
+        "-DANDROID_PLATFORM=android-23",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DELIZA_VOICE_JNI_CLASS=ai/elizaresearch/alphaphone/ElizaVoiceNative",
+        "-DELIZA_VOICE_JNI_SUBSET=full",
+        "-DELIZA_VOICE_JNI_LIBRARY=elizavoicejni",
+        "-DELIZAVOICE_FFI_INCLUDE_DIR=/home/shaw/Work/eliza-unification/paradee-reproducible-inputs/plugins/plugin-local-inference/native/llama.cpp/tools/omnivoice/include",
+        "-DELIZAVOICE_INFERENCE_LIB_DIR=/home/shaw/Work/eliza-unification/native-build-inputs/abi20/core"
+      ],
+      "startedAt": 1793353985.3749452,
+      "log": "/home/shaw/.codex/worktrees/alpha-accessibility-merge/alphaphone/test-results/native-admission-f31/jni-build-0.log",
+      "exitCode": 0,
+      "finishedAt": 1793353988.5363724
+    },
+    {
+      "argv": [
+        "cmake",
+        "--build",
+        "/home/shaw/Work/eliza-unification/alpha-jni-f31/jni-build/arm64-v8a",
+        "--target",
+        "elizavoicejni",
+        "-j",
+        "2"
+      ],
+      "startedAt": 1793353988.5365753,
+      "log": "/home/shaw/.codex/worktrees/alpha-accessibility-merge/alphaphone/test-results/native-admission-f31/jni-build-1.log",
+      "exitCode": 0,
+      "finishedAt": 1793353993.0030024
+    },
+    {
+      "argv": [
+        "cmake",
+        "-S",
+        "/home/shaw/Work/eliza-unification/alpha-jni-f31/source/packages/app/platforms/android/app/src/main/elizavoice-jni",
+        "-B",
+        "/home/shaw/Work/eliza-unification/alpha-jni-f31/jni-build/x86_64",
+        "-G",
+        "Ninja",
+        "-DCMAKE_TOOLCHAIN_FILE=/home/shaw/Android/Sdk/ndk/28.2.13676358/build/cmake/android.toolchain.cmake",
+        "-DANDROID_ABI=x86_64",
+        "-DANDROID_PLATFORM=android-23",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DELIZA_VOICE_JNI_CLASS=ai/elizaresearch/alphaphone/ElizaVoiceNative",
+        "-DELIZA_VOICE_JNI_SUBSET=full",
+        "-DELIZA_VOICE_JNI_LIBRARY=elizavoicejni",
+        "-DELIZAVOICE_FFI_INCLUDE_DIR=/home/shaw/Work/eliza-unification/paradee-reproducible-inputs/plugins/plugin-local-inference/native/llama.cpp/tools/omnivoice/include",
+        "-DELIZAVOICE_INFERENCE_LIB_DIR=/home/shaw/Work/eliza-unification/native-build-inputs/abi20/core"
+      ],
+      "startedAt": 1793353993.0032272,
+      "log": "/home/shaw/.codex/worktrees/alpha-accessibility-merge/alphaphone/test-results/native-admission-f31/jni-build-2.log",
+      "exitCode": 0,
+      "finishedAt": 1793353993.3306088
+    },
+    {
+      "argv": [
+        "cmake",
+        "--build",
+        "/home/shaw/Work/eliza-unification/alpha-jni-f31/jni-build/x86_64",
+        "--target",
+        "elizavoicejni",
+        "-j",
+        "2"
+      ],
+      "startedAt": 1793353993.3308268,
+      "log": "/home/shaw/.codex/worktrees/alpha-accessibility-merge/alphaphone/test-results/native-admission-f31/jni-build-3.log",
+      "exitCode": 0,
+      "finishedAt": 1793353994.7711077
+    }
+  ],
+  "status": "passed",
+  "scope": "JNI bridge only, imports verified existing ABI20 engine; no engine/model build",
+  "finishedAt": 1793353994.771318
+}

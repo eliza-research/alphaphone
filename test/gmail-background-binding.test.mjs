@@ -33,7 +33,9 @@ test('the Alpha binding keeps the installed slot, notice identifiers and bridge 
 test('background admission no longer depends on the agent inference provider',()=>{
  const store=java('AlphaCredentialStore.java');
  assert.doesNotMatch(store,/PROVIDER_SLOT\.equals\(name\)\|\|"cloud:production"\.equals\(name\)&&!LocalAgentProviderAdmission\.sameCloudCredential\(before,value\)\)cloudChange/);
- assert.match(store,/if\("cloud:production"\.equals\(name\)&&!LocalAgentProviderAdmission\.sameCloudCredential\(before,value\)\)cloudChange\.changed\(\);/);
+ assert.match(store,/public void cloudChanged\(\)throws Exception\{cloudChange\.changed\(\);\}/);
+ const shared=readFileSync(join(root,'vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/ResidentCredentialStore.java'),'utf8');
+ assert.match(shared,/if \(cloudSlot\.equals\(name\) && !NativeProviderAdmission\.sameCloudCredential\(before, value\)\)\s+compatibility\.cloudChanged\(\);/);
  const adapter=readFileSync(join(root,'apps/app/src/prototype/inbox-cloud-adapter.ts'),'utf8');
  const watch=adapter.match(/const watchSelectedMail=\(\)=>\{.*\};/)?.[0]??'';
  assert.match(watch,/if\(!selected\)\{void configureGmailBackground\(null\)/,'only an unselected account withdraws');

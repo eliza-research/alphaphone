@@ -9,14 +9,16 @@ const strip=text=>text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,'');
 test('the listener owner is read once per credential state and never survives a provider or Cloud commit',()=>{
  const agent=strip(readFileSync(nativeSource('AlphaLocalAgentPlugin.java'),'utf8')),store=strip(readFileSync(nativeSource('AlphaCredentialStore.java'),'utf8'));
  assert.match(agent,/static String invocationOwner\(Context context\)\{return INVOCATION_OWNER\.get\(\(\)->readProviderOwner\(new AlphaCredentialStore\(context\)\),System\.currentTimeMillis\(\)\);\}/);
- assert.match(agent,/private static <T> T commitCredentials\(CredentialMutation<T> mutation\)throws Exception\{INVOCATION_OWNER\.invalidate\(\);try\{return mutation\.commit\(\);\}finally\{INVOCATION_OWNER\.invalidate\(\);\}\}/);
+ assert.match(agent,/private static <T> T commitCredentials\(ai\.eliza\.plugins\.securestore\.nativeonly\.CredentialMutationConductor\.Mutation<T> mutation\)throws Exception\{INVOCATION_OWNER\.invalidate\(\);try\{return mutation\.commit\(\);\}finally\{INVOCATION_OWNER\.invalidate\(\);\}\}/);
  // The cached owner carries the Cloud credential's expiresAt as its deadline.
  assert.match(agent,/if\(credential\.has\("expiresAt"\)\)validUntil=InvocationOwnerCache\.deadline\(credential\.opt\("expiresAt"\)\);/);
  // Every commit in mutateCredentials (the only path that writes the provider or Cloud slots) is wrapped.
- assert.equal(agent.match(/mutation\.commit\(\)/g).length,1);assert.equal(agent.match(/return commitCredentials\(mutation\);/g).length,2);
+ assert.equal(agent.match(/mutation\.commit\(\)/g).length,1);assert.equal(agent.match(/return commitCredentials\(change\);/g).length,1);
+ assert.match(store,/return resident\.mutateSlot\(name,expected,value,compare\);/);
  // The store writes the provider and Cloud slots only inside a CredentialMutation commit.
- const fast=store.slice(store.indexOf('private boolean mutateSlotOnce('),store.indexOf('return AlphaLocalAgentPlugin.mutateCredentials('));
- assert.match(fast,/if\(!"cloud:production"\.equals\(name\)&&!"cloud:staging"\.equals\(name\)&&!LocalAgentProviderAdmission\.PROVIDER_SLOT\.equals\(name\)\)\{/);
+ const shared=strip(readFileSync(new URL('../vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/ResidentCredentialStore.java',import.meta.url),'utf8'));
+ assert.match(shared,/public boolean requiresShutdown\(\)/);
+ assert.match(shared,/return authority\.mutate\(/);
  const temporary=mkdtempSync(join(tmpdir(),'invocation-owner-cache-'));
  try{
   writeFileSync(join(temporary,'Harness.java'),`package ai.elizaresearch.alphaphone;

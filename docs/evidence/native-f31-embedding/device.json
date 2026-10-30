@@ -1,0 +1,68 @@
+{
+  "sourcePin": "f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5",
+  "forkPin": "d960f633ddb034d0dd828a55216cfc17d012acbd",
+  "remoteDirectory": "/data/local/tmp/eliza-alpha-jni-f31-20261030-1023",
+  "startedAt": 1793354147.72959,
+  "android": {
+    "abi": "arm64-v8a",
+    "sdk": "37"
+  },
+  "inputs": [
+    {
+      "path": "/home/shaw/.codex/worktrees/alpha-accessibility-merge/alphaphone/test-results/native-admission-f31/jni-device/probe.zip",
+      "devicePath": "/data/local/tmp/eliza-alpha-jni-f31-20261030-1023/probe.zip",
+      "bytes": 6060,
+      "sha256": "ed68554cd62eaa0978a126a0c3d8da6ac172c87fba33d1f54542d0bd2faa797f",
+      "deviceSha256": "ed68554cd62eaa0978a126a0c3d8da6ac172c87fba33d1f54542d0bd2faa797f"
+    },
+    {
+      "path": "/home/shaw/Work/eliza-unification/alpha-jni-f31/jni-build/arm64-v8a/libelizavoicejni.so",
+      "devicePath": "/data/local/tmp/eliza-alpha-jni-f31-20261030-1023/libelizavoicejni.so",
+      "bytes": 1231016,
+      "sha256": "310ca5ee7c401c04bcfd6be52e19035dd9ecfc9d8d897bba1637957c0e16713e",
+      "deviceSha256": "310ca5ee7c401c04bcfd6be52e19035dd9ecfc9d8d897bba1637957c0e16713e"
+    },
+    {
+      "path": "/home/shaw/Work/eliza-unification/native-build-inputs/abi20/core/arm64-v8a/libelizainference.so",
+      "devicePath": "/data/local/tmp/eliza-alpha-jni-f31-20261030-1023/libelizainference.so",
+      "bytes": 10008856,
+      "sha256": "9e658577a8833c5dcb46746762371e10296da60d7675efc124fdf11706fd8644",
+      "deviceSha256": "9e658577a8833c5dcb46746762371e10296da60d7675efc124fdf11706fd8644"
+    },
+    {
+      "path": "/home/shaw/Work/eliza-unification/native-build-inputs/abi20/core/arm64-v8a/libc++_shared.so",
+      "devicePath": "/data/local/tmp/eliza-alpha-jni-f31-20261030-1023/libc++_shared.so",
+      "bytes": 1253544,
+      "sha256": "cd61762848882a16c8244c964a6f396c0caa0b440588a210ce9cc4ab0e6d9f0c",
+      "deviceSha256": "cd61762848882a16c8244c964a6f396c0caa0b440588a210ce9cc4ab0e6d9f0c"
+    },
+    {
+      "path": "/home/shaw/Work/eliza-unification/native-route-policy/packages/app/platforms/android/app/src/main/assets/agent/models/bge-small-en-v1.5-f16.gguf",
+      "devicePath": "/data/local/tmp/eliza-alpha-jni-f31-20261030-1023/bundle/text/bge-small-en-v1.5-f16.gguf",
+      "bytes": 67308128,
+      "sha256": "f0b2fef971e8366438bfd2d9aefea1b0115919389448806d290237f638bae999",
+      "deviceSha256": "f0b2fef971e8366438bfd2d9aefea1b0115919389448806d290237f638bae999"
+    }
+  ],
+  "scope": "Standalone app_process execution of exact generated Alpha Java loader and 81-method full RegisterNatives class with existing ABI20 engine and fixed BGE text. No installed-app, microphone, speaker, network, voice, AOSP, or user acceptance claim.",
+  "command": "ulimit -c 0; export ELIZA_LLM_USE_GPU=0 ELIZA_ASR_THREADS=2 GGML_N_THREADS=2 LD_LIBRARY_PATH=/data/local/tmp/eliza-alpha-jni-f31-20261030-1023 CLASSPATH=/data/local/tmp/eliza-alpha-jni-f31-20261030-1023/probe.zip; exec app_process -Djava.library.path=/data/local/tmp/eliza-alpha-jni-f31-20261030-1023 /system/bin ai.elizaresearch.alphaphone.AlphaJniQualification /data/local/tmp/eliza-alpha-jni-f31-20261030-1023/bundle",
+  "exitCode": 0,
+  "result": {
+    "status": "passed",
+    "abi": "20",
+    "className": "ai/elizaresearch/alphaphone/ElizaVoiceNative",
+    "loader": "actual ensureLoaded",
+    "dimensions": 384,
+    "tokenCount": 10,
+    "norms": [
+      1.0000000375051887,
+      1.0000000375051887,
+      1.0000000375051887,
+      1.0000000375051887
+    ],
+    "matchingCosine": 1.0,
+    "repeatCosine": 1.0
+  },
+  "status": "passed",
+  "finishedAt": 1793354153.8789527
+}

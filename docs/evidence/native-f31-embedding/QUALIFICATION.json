@@ -1,0 +1,129 @@
+{
+  "pin": "f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5",
+  "forkPin": "d960f633ddb034d0dd828a55216cfc17d012acbd",
+  "identity": "ai.elizaresearch.alphaphone",
+  "abi": "arm64-v8a",
+  "inputs": [
+    {
+      "path": "packages/app/scripts/stage-elizavoice-lib.ts",
+      "sourceSha256": "dd59fe988cb0393594369439ffa798d47a4149dff3e48a219ddea0b397e8efbc",
+      "generatedSha256": "dd59fe988cb0393594369439ffa798d47a4149dff3e48a219ddea0b397e8efbc"
+    },
+    {
+      "path": "packages/app/scripts/build-helpers/arm64-simd.ts",
+      "sourceSha256": "b5291bb3c31f2b284691ff7c465de31c7564ea1c1c22e726309661e64a47aee2",
+      "generatedSha256": "b5291bb3c31f2b284691ff7c465de31c7564ea1c1c22e726309661e64a47aee2"
+    },
+    {
+      "path": "packages/app/scripts/build-helpers/verify-fused-symbols.ts",
+      "sourceSha256": "a7706e5f2526e20a7685825b19e9bdd7115f61d2791d921ba55af4fe3e73baa1",
+      "generatedSha256": "a7706e5f2526e20a7685825b19e9bdd7115f61d2791d921ba55af4fe3e73baa1"
+    },
+    {
+      "path": "packages/app/platforms/android/app/src/main/elizavoice-jni/CMakeLists.txt",
+      "sourceSha256": "a956ce2fb2ccc5610d9108eb168c2418b50083b4981288c917f2a9ed1686e281",
+      "generatedSha256": "a956ce2fb2ccc5610d9108eb168c2418b50083b4981288c917f2a9ed1686e281"
+    },
+    {
+      "path": "packages/app/platforms/android/app/src/main/elizavoice-jni/elizavoice-jni.cpp",
+      "sourceSha256": "8fe2a0324d8052c353d4136fbb34612c7560fc91a66e2181a454430fcfd09f1b",
+      "generatedSha256": "8fe2a0324d8052c353d4136fbb34612c7560fc91a66e2181a454430fcfd09f1b"
+    },
+    {
+      "path": "packages/app/platforms/android/app/src/main/java/ai/elizaos/app/ElizaVoiceNative.java",
+      "sourceSha256": "296add0ee1157bf8f7c14bb03d7f8918df0f9af46e91eaf903a390acb3974d4f",
+      "generatedSha256": "e0269f4aa6953f3409ef394ba0c7144d62946c09b45fe341a1fc2daa06b2f20f"
+    }
+  ],
+  "jniBinding": {
+    "mode": "registered",
+    "className": "ai/elizaresearch/alphaphone/ElizaVoiceNative",
+    "subset": "full"
+  },
+  "env": {
+    "ANDROID_HOME": "/home/shaw/Android/Sdk",
+    "ELIZA_NDK_VERSION": "28.2.13676358",
+    "CMAKE_BUILD_PARALLEL_LEVEL": "2",
+    "CCC_OVERRIDE_OPTIONS": "# +-ffile-prefix-map=/home/shaw/Work/eliza-unification/alpha-jni-f31/source=/alphaphone-embedding-host +-ffile-prefix-map=/home/shaw/Work/eliza-unification/paradee-reproducible-inputs/plugins/plugin-local-inference/native/llama.cpp=/alphaphone-embedding-host/plugins/plugin-local-inference/native/llama.cpp +-ffile-prefix-map=/home/shaw/Work/eliza-unification/alpha-jni-f31/jni-build=/alphaphone-embedding-host/jni-build +-ffile-prefix-map=/home/shaw/Android/Sdk=/work/android-sdk"
+  },
+  "buildPathRemapped": true,
+  "commands": [
+    [
+      "cmake",
+      "-S",
+      "/home/shaw/Work/eliza-unification/alpha-jni-f31/source/packages/app/platforms/android/app/src/main/elizavoice-jni",
+      "-B",
+      "/home/shaw/Work/eliza-unification/alpha-jni-f31/jni-build/arm64-v8a",
+      "-G",
+      "Ninja",
+      "-DCMAKE_TOOLCHAIN_FILE=/home/shaw/Android/Sdk/ndk/28.2.13676358/build/cmake/android.toolchain.cmake",
+      "-DANDROID_ABI=arm64-v8a",
+      "-DANDROID_PLATFORM=android-23",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DELIZA_VOICE_JNI_CLASS=ai/elizaresearch/alphaphone/ElizaVoiceNative",
+      "-DELIZA_VOICE_JNI_SUBSET=full",
+      "-DELIZA_VOICE_JNI_LIBRARY=elizavoicejni",
+      "-DELIZAVOICE_FFI_INCLUDE_DIR=/home/shaw/Work/eliza-unification/paradee-reproducible-inputs/plugins/plugin-local-inference/native/llama.cpp/tools/omnivoice/include",
+      "-DELIZAVOICE_INFERENCE_LIB_DIR=/home/shaw/Work/eliza-unification/native-build-inputs/abi20/core"
+    ],
+    [
+      "cmake",
+      "--build",
+      "/home/shaw/Work/eliza-unification/alpha-jni-f31/jni-build/arm64-v8a",
+      "--target",
+      "elizavoicejni",
+      "-j",
+      "2"
+    ]
+  ],
+  "built": true,
+  "packaged": false,
+  "runtimePolicyChanged": false,
+  "buildScope": "Only Alpha JNI bridges were compiled at f31 for arm64-v8a and x86_64; the ABI20 engine and libc++ are the previously built independently hash-verified inputs. No engine rebuild or model download.",
+  "engineProvenance": {
+    "builtAt": "45b70998d247178973e3fb16a947a02333c9b34e",
+    "nativeCommit": "d960f633ddb034d0dd828a55216cfc17d012acbd",
+    "record": "docs/evidence/native-f31-source-admission-20261030.json"
+  },
+  "libraries": [
+    {
+      "path": "/home/shaw/Work/eliza-unification/alpha-jni-f31/jni-build/arm64-v8a/libelizavoicejni.so",
+      "sha256": "310ca5ee7c401c04bcfd6be52e19035dd9ecfc9d8d897bba1637957c0e16713e",
+      "bytes": 1231016,
+      "alignment16KiB": true,
+      "requiredSymbols": [
+        "JNI_OnLoad"
+      ]
+    },
+    {
+      "path": "/home/shaw/Work/eliza-unification/native-build-inputs/abi20/core/arm64-v8a/libelizainference.so",
+      "sha256": "9e658577a8833c5dcb46746762371e10296da60d7675efc124fdf11706fd8644",
+      "bytes": 10008856,
+      "alignment16KiB": true,
+      "requiredSymbols": [
+        "eliza_inference_embed",
+        "eliza_inference_embed_with_options",
+        "eliza_inference_abi_version"
+      ]
+    },
+    {
+      "path": "/home/shaw/Work/eliza-unification/native-build-inputs/abi20/core/arm64-v8a/libc++_shared.so",
+      "sha256": "cd61762848882a16c8244c964a6f396c0caa0b440588a210ce9cc4ab0e6d9f0c",
+      "bytes": 1253544,
+      "alignment16KiB": true,
+      "requiredSymbols": []
+    }
+  ],
+  "qualifiedAt": "2026-10-30T09:55:53.878953+00:00",
+  "qualification": {
+    "scope": "ARM64 Alpha JNI component execution, not complete product qualification",
+    "evidence": "docs/evidence/native-f31-embedding/device.json",
+    "evidenceSha256": "aebf56d6b12584a402b3766b4d88c9c866230b9e2d2d91e0abe8f3d72d671254",
+    "test": "exactAlphaLoaderAndAllEmbeddingEntrypointsUsePinnedBge",
+    "registeredNativeMethods": 81,
+    "passed": true,
+    "userAccepted": false,
+    "installedApplicationTested": false,
+    "x86_64Executed": false
+  }
+}

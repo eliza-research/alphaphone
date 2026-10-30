@@ -1,0 +1,40 @@
+{
+  "sourcePin": "f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5",
+  "sources": [
+    {
+      "path": "/home/shaw/.codex/worktrees/alpha-accessibility-merge/alphaphone/test-results/native-admission-f31/jni-device/src/ai/elizaresearch/alphaphone/AlphaJniQualification.java",
+      "sha256": "b3af102eb062a0242d22ae2df2789ec6a4465ddcf5438af8a981a7386d53b89d",
+      "bytes": 2623
+    },
+    {
+      "path": "/home/shaw/.codex/worktrees/alpha-accessibility-merge/alphaphone/test-results/native-admission-f31/jni-device/src/ai/elizaresearch/alphaphone/BuildConfig.java",
+      "sha256": "71252f82cdd2cfb2d4a5fdadf41acb0ea3f9075a21f623db6164f6ea88ba04a2",
+      "bytes": 108
+    },
+    {
+      "path": "/home/shaw/.codex/worktrees/alpha-accessibility-merge/alphaphone/test-results/native-admission-f31/jni-device/src/ai/elizaresearch/alphaphone/ElizaAsrNativeEnv.java",
+      "sha256": "7f7511c3a35f6fec4dca02948dc54095cb5e49c25b6273d4004a5f17d2174814",
+      "bytes": 3861
+    },
+    {
+      "path": "/home/shaw/.codex/worktrees/alpha-accessibility-merge/alphaphone/test-results/native-admission-f31/jni-device/src/ai/elizaresearch/alphaphone/ElizaVoiceNative.java",
+      "sha256": "e0269f4aa6953f3409ef394ba0c7144d62946c09b45fe341a1fc2daa06b2f20f",
+      "bytes": 18233
+    }
+  ],
+  "javac": {
+    "binary": "/usr/lib/jvm/java-21-openjdk/bin/javac",
+    "source": "8",
+    "target": "8",
+    "androidJar": "/home/shaw/Android/Sdk/platforms/android-36/android.jar",
+    "exitCode": 0
+  },
+  "d8": {
+    "binary": "/home/shaw/Android/Sdk/build-tools/36.0.0/d8",
+    "minApi": 23,
+    "androidJar": "/home/shaw/Android/Sdk/platforms/android-36/android.jar",
+    "exitCode": 0,
+    "dexZipSha256": "ed68554cd62eaa0978a126a0c3d8da6ac172c87fba33d1f54542d0bd2faa797f"
+  },
+  "note": "ElizaVoiceNative.java is the exact generated f31 Alpha class. ElizaAsrNativeEnv.java is the exact f31 source with package identity substitution only. BuildConfig contains only test thread constant 2; production method declarations/loader are unchanged."
+}

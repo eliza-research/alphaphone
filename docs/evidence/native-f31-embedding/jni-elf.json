@@ -1,0 +1,30 @@
+[
+  {
+    "abi": "arm64-v8a",
+    "path": "/home/shaw/Work/eliza-unification/alpha-jni-f31/jni-build/arm64-v8a/libelizavoicejni.so",
+    "bytes": 1231016,
+    "sha256": "310ca5ee7c401c04bcfd6be52e19035dd9ecfc9d8d897bba1637957c0e16713e",
+    "alignment16KiB": true,
+    "exports": [
+      "JNI_OnLoad"
+    ],
+    "needed": [
+      "libelizainference.so",
+      "libc++_shared.so"
+    ]
+  },
+  {
+    "abi": "x86_64",
+    "path": "/home/shaw/Work/eliza-unification/alpha-jni-f31/jni-build/x86_64/libelizavoicejni.so",
+    "bytes": 1111672,
+    "sha256": "02a94278a126c601aa4c5d1a5b238fbf73ceb027dc5fda5d1e3000e2e0a2b4bf",
+    "alignment16KiB": true,
+    "exports": [
+      "JNI_OnLoad"
+    ],
+    "needed": [
+      "libelizainference.so",
+      "libc++_shared.so"
+    ]
+  }
+]
