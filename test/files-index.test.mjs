@@ -1,5 +1,7 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {stripTypeScriptTypes} from 'node:module';
-const {createFilesIndex,compareFilesEntries,matchesFileQuery,sortLabel,RECENT_LIMIT,filesIndexKey}=await import('data:text/javascript;base64,'+Buffer.from(stripTypeScriptTypes(readFileSync('apps/app/src/prototype/files-index.ts','utf8'))).toString('base64'));
+import test from 'node:test';import assert from 'node:assert/strict';import {build} from 'esbuild';
+// Import the real compatibility adapter and its staged upstream artifact.
+const result=await build({entryPoints:['apps/app/src/prototype/files-index.ts'],bundle:true,platform:'node',format:'esm',write:false});
+const {createFilesIndex,compareFilesEntries,matchesFileQuery,sortLabel,RECENT_LIMIT,filesIndexKey}=await import('data:text/javascript;base64,'+Buffer.from(result.outputFiles[0].contents).toString('base64'));
 const memory=()=>{const values=new Map();return {getItem:key=>values.has(key)?values.get(key):null,setItem:(key,value)=>values.set(key,String(value)),removeItem:key=>values.delete(key),values};};
 
 test('recent sort is newest modified first with folders first and unknown times last; name sort is natural',()=>{

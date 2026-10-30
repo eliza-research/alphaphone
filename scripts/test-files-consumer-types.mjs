@@ -1,0 +1,21 @@
+/** Real source alias semantic check; never a distributable artifact/declaration substitute. */
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {execFileSync} from 'node:child_process';
+import {writeFileSync,mkdirSync,readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import path from 'node:path';
+const root=process.cwd(),source=process.env.ELIZA_FILES_UPSTREAM_SOURCE,expected=process.env.ELIZA_FILES_UPSTREAM_COMMIT;
+if(!source||!expected)throw Error('Explicit clean upstream source required for non-distributable semantic check.');
+assert.equal(execFileSync('git',['rev-parse','HEAD'],{cwd:source,encoding:'utf8'}).trim(),expected);
+assert.equal(execFileSync('git',['status','--porcelain'],{cwd:source,encoding:'utf8'}).trim(),'');
+const require=createRequire(path.join(source,'package.json')),ts=require('typescript');
+const output=path.join(root,'test-results/shared-files-consumer');mkdirSync(output,{recursive:true});
+const alias=path.join(output,'files-types-source.ts');writeFileSync(alias,`export {createBrowserFiles} from '${source}/plugins/plugin-files/src/browser/files.ts';export * from '${source}/plugins/plugin-files/src/workspace/recent.ts';export type {FilesHost} from '${source}/plugins/plugin-files/src/workspace/contracts.ts';\n`);
+const options={target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler,noEmit:true,strict:true,skipLibCheck:true,allowImportingTsExtensions:true,types:[],ignoreDeprecations:'6.0',paths:{'@capacitor/core':[path.join(source,'node_modules/@capacitor/core')],'pdfjs-dist':[path.join(source,'plugins/plugin-files/node_modules/pdfjs-dist')]}};
+const host=ts.createCompilerHost(options);host.resolveModuleNames=(names,file)=>names.map(name=>/\.eliza\/browser-consumer\/index\.js$/.test(name)?{resolvedFileName:alias,extension:ts.Extension.Ts}:ts.resolveModuleName(name,file,options,host).resolvedModule);
+const names=['apps/app/src/product/files-host.ts','apps/app/src/product/files-upstream.ts','apps/app/src/prototype/files-index.ts','apps/app/src/browser/files.ts','apps/app/src/browser/file-picker.ts','apps/app/src/platform-plugins.ts'].map(name=>path.join(root,name));names.push(path.join(source,'node_modules/vite/client.d.ts'));
+const program=ts.createProgram(names,options,host);const diagnostics=ts.getPreEmitDiagnostics(program);
+const text=ts.formatDiagnosticsWithColorAndContext(diagnostics,{getCurrentDirectory:()=>root,getCanonicalFileName:f=>f,getNewLine:()=> '\n'});writeFileSync(path.join(output,'source-types.log'),text);
+const inputs=program.getSourceFiles().filter(file=>!file.isDeclarationFile).map(file=>({path:file.fileName,sha256:createHash('sha256').update(readFileSync(file.fileName)).digest('hex')}));
+writeFileSync(path.join(output,'source-types.json'),JSON.stringify({status:diagnostics.length?'failed':'passed',distributable:false,upstream:expected,typescript:ts.version,diagnostics:diagnostics.length,inputs},null,2)+'\n');console.log(text||`PASS ${inputs.length} real source files, TypeScript ${ts.version}`);if(diagnostics.length)process.exitCode=1;
