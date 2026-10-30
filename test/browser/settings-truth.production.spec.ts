@@ -201,7 +201,7 @@ test('switches Android does not report are shown as a handoff, never as off, and
  const about=await current(page).innerText();
  expect(about).toMatch(/Alpha Phone\s*0\.1\.0\s/);
  expect(about).not.toContain('Installed or last updated');
- expect(about).toMatch(/Updates\s*Alpha does not check for updates/);
+ expect(about).not.toMatch(/Updates|Alpha does not check for updates|Runtime/);
 });
 
 test('every Settings page shows native facts or an honest handoff, with no fixture value or simulated switch',async({page})=>{
@@ -225,9 +225,13 @@ test('every Settings page shows native facts or an honest handoff, with no fixtu
   'Sound & vibration':[/Media\s*40%/,/Ring\s*100%/,/Alarm\s*0%/,/Do Not Disturb\s*No DND suppression reported/],
   'Notifications':[/Reminders\s*Channel allowed/,/Scheduled digest results\s*Channel allowed/],'Battery':[/64%/,/On battery/,/Battery saver\s*Off/],
   'Privacy & data':[/Device location\s*On/,/Microphone\s*Allowed for Alpha/,/Camera\s*Not allowed/],
-  'About':[/Stub phone/,/Alpha Phone\s*0\.1\.0 \(7\)/,/Installed or last updated/,/Updates\s*Alpha does not check for updates/,/Android\s*16/,/Security patch\s*2026-09-05/,/Inference model\s*Not reported by agent/],
-  // Telegram, Discord and the other deferred connectors cannot be connected in this build.
-  'Connections':[/Other connectors\s*Not available in this version/],'Models':[/Inference model\s*Not reported by agent/],
+  'About':[/Stub phone/,/Alpha Phone\s*0\.1\.0 \(7\)/,/Installed or last updated/,/Android\s*16/,/Security patch\s*2026-09-05/,/Inference model\s*Not reported by agent/],
+  'Connections':[/Manage Google accounts/],'Models':[/Inference model\s*Not reported by agent/],
+ };
+ // Dead-end and negative rows the Settings cleanup removed.
+ const gone:Record<string,RegExp[]>={
+  'About':[/Updates|Alpha does not check for updates/,/Runtime/,/Android app/],'Connections':[/Other connectors|Not available in this version/],
+  'Notifications':[/Delivery timing|Android battery policies may delay alerts/],'Calendar':[/Display only|Agent access is reviewed separately/],
  };
  await expect(current(page).getByRole('button',{name:'Developer',exact:true})).toHaveCount(0);
  const report:string[]=[`Settings: ${top.replace(/\s+/g,' ')}`];
@@ -244,6 +248,7 @@ test('every Settings page shows native facts or an honest handoff, with no fixtu
   noFixtures(text,label);
   if(label==='Privacy & data')await expect(current(page).getByText('Memory',{exact:true})).toHaveCount(0);
   for(const pattern of shown[label]||[])expect(text,`${label} shows ${pattern}`).toMatch(pattern);
+  for(const pattern of gone[label]||[])expect(text,`${label} no longer shows ${pattern}`).not.toMatch(pattern);
   if(label==='About'){await expect(current(page).getByRole('button',{name:'Problem log',exact:true})).toBeVisible();await expect(current(page).getByRole('button',{name:'Export diagnostics',exact:true})).toBeVisible();}
   // A switch must be backed by app-owned state; the email preference is exercised here and across reload below.
   const switches=await current(page).locator('[role="switch"],[aria-pressed],[aria-checked],input[type="checkbox"],input[type="range"]').evaluateAll(list=>list.map(e=>e.getAttribute('aria-label')||e.textContent?.trim()||e.tagName));
@@ -386,10 +391,11 @@ test('the browser build of Settings shows no fixture value and no radio or senso
   noFixtures(text,label);
   if(label==='Privacy & data')await expect(current(page).getByText('Memory',{exact:true})).toHaveCount(0);
   expect(text).not.toMatch(/Wi-Fi\s*(On|Off)\b|Bluetooth\s*(On|Off)\b|Airplane mode\s*(On|Off)\b/);
-  if(label==='Connections'){expect(text).toMatch(/Other connectors\s*Not available in this version/);expect(text).not.toMatch(/Other connectors\s*Not connected/);}
+  if(label==='Connections')expect(text).not.toMatch(/Other connectors|Not available in this version/);
+  if(label==='Calendar')expect(text).not.toMatch(/Display only|Agent access is reviewed separately/);
   if(label==='Notifications'){
    expect(text).toContain('In-app alerts enabled');
-   expect(text).toContain('Shown while Alpha is open');
+   expect(text).not.toMatch(/Delivery timing|Shown while Alpha is open/);
    expect(text).not.toMatch(/App notifications allowed|Channel allowed|Android battery policies/);
    expect(text).not.toMatch(/Manage development notification access|selected-app collection|other-app collection|Choose notification apps|Hide app choices|Local metadata history|local metadata history|Notification privacy/);
    await expect(current(page).getByRole('button',{name:'Manage Reminders',exact:true})).toBeVisible();
@@ -408,7 +414,7 @@ test('the browser build of Settings shows no fixture value and no radio or senso
  }
  await test.info().attach('browser-settings-rows',{body:report.join('\n\n'),contentType:'text/plain'});
  const about=report.find(row=>row.startsWith('About: '))||'';
- expect(about).toMatch(/Updates Alpha does not check for updates/);
+ expect(about).not.toMatch(/Updates|Alpha does not check for updates|Runtime/);
  expect(about).not.toContain('Installed or last updated');
  // The browser build is the standalone app: no Alpha shade, no tiles and no notifications button (#416, #417).
  await page.goto('/');

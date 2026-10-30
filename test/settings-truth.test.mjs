@@ -14,8 +14,10 @@ test('the version row shows only what the build and Android report',()=>{
 });
 test('updates are never reported as checked, available or current',()=>{
  const format=at=>'day '+at;
- assert.deepEqual(m.updateRows(1760000000000,format),[['Installed or last updated','day 1760000000000'],['Updates','Alpha does not check for updates']]);
- for(const at of [undefined,null,0,-5,'1760000000000',1.5])assert.deepEqual(m.updateRows(at,format),[['Updates','Alpha does not check for updates']]);
+ assert.deepEqual(m.installedRows(1760000000000,format),[['Installed or last updated','day 1760000000000']]);
+ for(const at of [undefined,null,0,-5,'1760000000000',1.5])assert.deepEqual(m.installedRows(at,format),[]);
+ // No dead-end Updates row either: Alpha does not check, so About says nothing about updates.
+ assert.doesNotMatch(source,/Alpha does not check for updates|updateRows/);
  // The OS update-channel check is registered off; only the Developer gate (both About pages)
  // shows its state, and the production bundle audit denies the row.
  assert.match(readFileSync('apps/app/src/build-flags.ts','utf8'),/export const updateChannelCheckEnabled = false as boolean;/);
@@ -24,6 +26,11 @@ test('updates are never reported as checked, available or current',()=>{
  // Neither the adapter nor the native plugin carries an update-check claim.
  assert.doesNotMatch(source,/Up to date|Update available|Check for updates/);
  assert.doesNotMatch(java,/Up to date|Update available/);
+});
+test('dead-end and negative Settings rows are gone from the adapter',()=>{
+ for(const row of ["info('Other connectors'","info('Personality settings'","info('Runtime'","info('Display only'","info('Delivery timing'","'Last change'"])assert.ok(!source.includes(row),row);
+ // Their notices stay as toasts only, so no state is kept for a row.
+ assert.doesNotMatch(source,/gmailNotice|roleNotice/);
 });
 test('prototype-only sheets (memory wipe, Wi-Fi password, forget network) never reach the renderer',()=>{
  const line=source.split('\n').find(row=>row.includes('const out = render({ ...state'));

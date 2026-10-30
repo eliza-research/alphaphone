@@ -81,9 +81,12 @@ test('every production Settings control has a real effect, never a toast alone',
 
 /** Rows the Settings cleanup removed or put behind the Developer gate; a product build shows none of them. */
 const removedRows:Record<string,RegExp[]>={
- '':[/^Developer$/,/^Try mock mode$/,/^Saved data needs recovery$/],
- 'About':[/^Update channel \(development\)$/],
- 'Calendar':[/^Calendar backups$/],
+ '':[/^Developer$/,/^Try mock mode$/,/^Saved data needs recovery$/,/^Last change$/],
+ 'About':[/^Update channel \(development\)$/,/^Updates$/,/^Alpha does not check for updates$/,/^Runtime$/],
+ 'Calendar':[/^Calendar backups$/,/^Display only$/],
+ 'Connections':[/^Other connectors$/,/^Not available in this version$/,/^Last change$/],
+ 'Notifications':[/^Delivery timing$/],
+ 'Voice and agent settings':[/^Personality settings$/,/^Managed by your agent$/],
 };
 test('production Settings shows no developer or removed rows, even with ?tools=1',async({page})=>{
  await page.addInitScript(offline);
@@ -91,7 +94,7 @@ test('production Settings shows no developer or removed rows, even with ?tools=1
   for(const [label,rows] of Object.entries(removedRows)){
    await page.goto(query);await page.getByRole('button',{name:'Settings',exact:true}).click();
    await expect(page.locator('html')).toHaveAttribute('data-active-view','settings');
-   if(label){await current(page).getByRole('button',{name:label,exact:true}).first().click();await expect(page.getByRole('button',{name:'Back to Settings',exact:true})).toBeVisible();}
+   if(label){await current(page).getByText(label,{exact:true}).first().click();await expect(page.getByRole('button',{name:'Back to Settings',exact:true})).toBeVisible();}
    for(const row of rows)await expect(current(page).getByText(row),`${query} ${label||'Settings'}: ${row}`).toHaveCount(0);
   }
  }

@@ -72,6 +72,8 @@ test('Settings shows HOME and assistant role state and reads it back after a dec
  const reads=await calls(page,'ElizaSystem','getStatus');
  await make.click();
  await expect(page.getByText('Home app not changed',{exact:true}).first()).toBeVisible();
+ // The toast is the only notice; Settings keeps no "Last change" row.
+ await expect(app(page).getByText('Last change',{exact:true})).toHaveCount(0);
  expect(await calls(page,'ElizaSystem','getStatus')).toBeGreaterThan(reads);
  await expect(make).toBeVisible();
  await make.click();
