@@ -119,7 +119,7 @@ test("bootstrap, partial, mutation and failures stay neutral and never claim emp
 test("only a complete covering feed produces a real empty month", () => {
 	assert.equal(
 		select(model([]), "UTC", new Set(), now).emptyLabel,
-		"No events this month",
+		"Nothing planned",
 	);
 	const s = model([]);
 	s.feed.timeMax = "2026-10-30T00:00:00Z";
@@ -176,7 +176,23 @@ test("an event ending exactly at today midnight belongs only to yesterday", () =
 		...event("yesterday", "2026-10-28"),
 		endAt: "2026-10-29T00:00:00Z",
 	};
-	assert.equal(select(model([e]), "UTC", new Set(), now).event, null);
+	assert.equal(select(model([e, event("today", "2026-10-29")]), "UTC", new Set(), now).event.id, "today");
 	e.endAt = "2026-10-29T00:01:00Z";
 	assert.equal(select(model([e]), "UTC", new Set(), now).event.id, "yesterday");
+});
+
+test("Oct 30 retains Oct 29 past-week event; past month is the next fallback", () => {
+ const clock = new Date("2026-10-30T08:00:00Z");
+ assert.equal(select(model([event("Thursday", "2026-10-29")]), "America/Los_Angeles", new Set(), clock).event.id, "Thursday");
+ assert.equal(select(model([event("earlier month", "2026-10-10")]), "UTC", new Set(), clock).event.id, "earlier month");
+});
+test("each period prefers upcoming, otherwise the most recent past", () => {
+ const clock = new Date("2026-10-30T08:00:00Z");
+ const past = [event("Monday", "2026-10-26"), event("Thursday", "2026-10-29")];
+ assert.equal(select(model(past), "UTC", new Set(), clock).event.id, "Thursday");
+ assert.equal(select(model([...past, event("Saturday", "2026-10-31")]), "UTC", new Set(), clock).event.id, "Saturday");
+});
+test("week spilling before the month requires full week coverage to prove empty", () => {
+ const s = model([]);
+ assert.equal(select(s, "UTC", new Set(), new Date("2026-10-02T12:00:00Z")).verified, false);
 });
