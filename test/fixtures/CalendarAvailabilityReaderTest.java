@@ -3,6 +3,7 @@ package ai.elizaresearch.alphaphone;
 import android.content.ContentResolver;
 import android.database.Cursor;
 import android.net.Uri;
+import ai.eliza.plugins.calendar.CalendarSyncFreshness;
 import ai.eliza.plugins.calendar.read.CalendarSourceIdentity;
 import ai.eliza.plugins.calendar.read.SelectedCalendarReader;
 import java.nio.charset.StandardCharsets;

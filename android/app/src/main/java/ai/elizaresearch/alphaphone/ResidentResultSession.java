@@ -10,10 +10,7 @@ final class ResidentResultSession {
  }
  interface Guard {void check()throws Exception;}
  static JSONObject snapshot(String owner,String token,long expiry,String root)throws Exception {
-  HostedInbox.id(owner);
-  if(token==null||token.isEmpty()||token.length()>8192||token.contains("\r")||token.contains("\n")||
-     root==null||root.isEmpty()||expiry<=System.currentTimeMillis())throw new SecurityException("Resident session unavailable");
-  return new JSONObject().put("version",1).put("ownerId",owner).put("token",token).put("expiresAt",expiry).put("runtimeDigest",HostedResultNotices.hash(root));
+  return ai.eliza.plugins.agent.connection.NativeOwnerTransport.snapshot(new ai.eliza.plugins.agent.connection.NativeOwnerTransport.Session(root,token,owner,expiry));
  }
  static ResidentResultTransport open(HostedInbox.Store store,JSONObject requested,Runtime runtime,Guard guard)throws Exception {
   // Copy the binding so later caller mutation cannot change authority mid-request.

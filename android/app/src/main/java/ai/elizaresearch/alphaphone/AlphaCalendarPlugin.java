@@ -16,6 +16,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import ai.eliza.plugins.calendar.CalendarConfiguration;
 import ai.eliza.plugins.calendar.CalendarPlugin;
+import ai.eliza.plugins.calendar.CalendarSyncFreshness;
 import ai.eliza.plugins.calendar.write.CalendarDestinations;
 import ai.eliza.plugins.calendar.write.CalendarEventOptions;
 import ai.eliza.plugins.calendar.write.CalendarInsertHandoff;
@@ -23,59 +24,36 @@ import ai.eliza.plugins.calendar.write.CalendarOptionCreationStore;
 
 /** Keep installed calendar/journal identity stable while sharing provider behavior. */
 @CapacitorPlugin(name="AlphaCalendar", permissions={@Permission(alias="calendar",strings={Manifest.permission.READ_CALENDAR,Manifest.permission.WRITE_CALENDAR}),@Permission(alias="workflowCalendarRead",strings={Manifest.permission.READ_CALENDAR})})
-public final class AlphaCalendarPlugin extends CalendarPlugin {
+public final class AlphaCalendarPlugin extends ai.eliza.plugins.calendar.DeferredCalendarPlugin {
  static final CalendarConfiguration CONFIGURATION=new CalendarConfiguration(
   "Alpha Phone","alpha-phone-local","On this phone","alpha-calendar-creations-v1","alphaphone://calendar-creation/",0xff0000ff);
  /** Patch 0041: all-day, zoned and recurring direct saves use their own creation journal. */
  static final CalendarOptionCreationStore OPTION_CREATIONS=new CalendarOptionCreationStore(CONFIGURATION);
  public AlphaCalendarPlugin(){super(CONFIGURATION);}
- private final java.util.concurrent.ExecutorService deleteOwnerWorker=java.util.concurrent.Executors.newSingleThreadExecutor();
- private static final class DeleteOwner{org.json.JSONObject owner,identity,operation;}
- private final java.util.concurrent.ConcurrentHashMap<String,DeleteOwner> deleteOwners=new java.util.concurrent.ConcurrentHashMap<>();
- private volatile boolean deletionRetired;
- private CalendarSyncBridge calendarSync;
- private synchronized CalendarSyncBridge calendarSync(){if(calendarSync==null)calendarSync=new CalendarSyncBridge(this);return calendarSync;}
- void calendarSyncChanged(){notifyListeners("calendarSyncChanged",new JSObject());}
- @PluginMethod public void sync(PluginCall call){calendarSync().call(call);}
- private CalendarScopedDeletionReview scopedDeletion;
- private synchronized CalendarScopedDeletionReview scopedDeletion(){if(scopedDeletion==null)scopedDeletion=new CalendarScopedDeletionReview(this);return scopedDeletion;}
- @PluginMethod public void inspectDeletion(PluginCall call){scopedDeletion().inspect(call);}
- @PluginMethod public void removeScoped(PluginCall call){scopedDeletion().review(call,null);}
- @Override protected boolean deferReviewedDeletion(){return true;}
- @Override protected JSObject enqueueReviewedDeletion(org.json.JSONObject target,String operationId)throws Exception{
-  DeferredDeletionCoordinator coordinator=NativeDeletionCoordinator.get(getContext());DeleteOwner captured=operationId==null?null:deleteOwners.remove(operationId);
-  if(operationId!=null&&(captured==null||captured.owner==null))throw new SecurityException("Agent deletion review expired");
-  org.json.JSONObject owner=captured==null?coordinator.manualOwner():captured.owner;
-  // Owner precondition before the permanent claim: a refusal leaves nothing claimed (reported as a conflict, nothing changed).
-  if(!coordinator.stageAdmissible(owner))throw new SecurityException("Deletion owner changed during review");
-  String id=operationId==null?java.util.UUID.randomUUID().toString():operationId;
-  if(captured!=null){DeletionDispatchClaim.check(AlphaActionJournal.get(getContext()),captured.identity,operationId,captured.operation,owner,true);target.put("journalBinding",DeletionDispatchClaim.binding(AlphaActionJournal.get(getContext()),captured.identity));}
-  try{return JSObject.fromJSONObject(new org.json.JSONObject().put("status","queued").put("deletion",coordinator.stageCalendar(target,owner,id)));}
-  catch(Exception failure){
-   // A stage that persisted before failing (for example while scheduling expiry) is still pending: never report it as unchanged.
-   org.json.JSONObject staged;try{staged=coordinator.receipt("calendar",id);}catch(Exception unreadable){return status("unknown");}
-   if(staged!=null)return JSObject.fromJSONObject(new org.json.JSONObject().put("status","queued").put("deletion",staged));
-   throw failure;
-  }
- }
- @Override @PluginMethod public void executeAgent(PluginCall call){
-  JSObject operation=call.getObject("operation");if(operation==null||!"calendar_delete".equals(operation.optString("type"))){super.executeAgent(call);return;}
-  String id=call.getString("operationId","");if(!id.matches("[A-Za-z0-9_-]{1,128}")||deleteOwners.size()>=32){call.reject("Deletion review unavailable");return;}
-  DeleteOwner ticket=new DeleteOwner();if(deleteOwners.putIfAbsent(id,ticket)!=null){call.resolve(status("busy"));return;}
-  PluginCall owned=new PluginCall(null,call.getPluginId(),call.getCallbackId(),call.getMethodName(),call.getData()){
-   @Override public void resolve(JSObject value){deleteOwners.remove(id,ticket);call.resolve(value);}
-   @Override public void resolve(){deleteOwners.remove(id,ticket);call.resolve();}
-   @Override public void reject(String message){deleteOwners.remove(id,ticket);call.reject(message);}
+ static final String SYNC_SLOT="native-calendar-sync:v1";
+ static ai.eliza.plugins.calendar.CalendarSyncHost nativeSyncHost(android.content.Context context){
+  android.content.Context app=context.getApplicationContext();AlphaCredentialStore store=new AlphaCredentialStore(app);
+  return new ai.eliza.plugins.calendar.CalendarSyncHost(){
+   public String slot(){return SYNC_SLOT;}
+   public String productName(){return "Alpha";}
+   public CalendarConfiguration configuration(){return CONFIGURATION;}
+   public String read(String slot)throws Exception{return store.readCredentialSlot(slot);}
+   public boolean compareExchange(String slot,String expected,String value)throws Exception{return store.compareExchangeCredentialSlot(slot,expected,value);}
+   public String credential()throws Exception{return store.readCredentialSlot("cloud:production");}
+   public boolean sameCredential(String before,String after){return LocalAgentProviderAdmission.sameCloudCredential(before,after);}
+   public String credentialToken(String credential,String id,long now)throws Exception{return LocalAgentProviderAdmission.cloudProviderToken(credential,id,now);}
+   public org.json.JSONObject cloudIdentity(String token)throws Exception{return AlphaConnectionPlugin.readCloudIdentity(token);}
+   public org.json.JSONObject capabilities(String token,String grant,String calendar)throws Exception{return AlphaConnectionPlugin.readCalendarSyncCapabilities(token,grant,calendar);}
+   public org.json.JSONObject agentOwner()throws Exception{return NativeDeletionCoordinator.get(app).agentOwner();}
+   public boolean ownerCurrent(org.json.JSONObject owner){return NativeDeletionCoordinator.get(app).stageAdmissible(owner);}
+   public boolean calendarPending(long source,long event)throws Exception{return NativeDeletionCoordinator.get(app).calendarPending(source,event);}
+   public org.json.JSONObject stageCalendar(org.json.JSONObject target,org.json.JSONObject owner,String operationId)throws Exception{return NativeDeletionCoordinator.get(app).stageCalendar(target,owner,operationId);}
+   public org.json.JSONObject receipt(String kind,String operationId)throws Exception{return NativeDeletionCoordinator.get(app).receipt(kind,operationId);}
   };
-  try{deleteOwnerWorker.execute(()->{try{
-   ticket.owner=NativeDeletionCoordinator.get(getContext()).agentOwner();ticket.identity=call.getObject("journalIdentity");ticket.operation=new org.json.JSONObject(operation.toString());
-   DeletionDispatchClaim.check(AlphaActionJournal.get(getContext()),ticket.identity,id,ticket.operation,ticket.owner,false);
-   getActivity().runOnUiThread(()->{if(deletionRetired||deleteOwners.get(id)!=ticket||!foreground()){deleteOwners.remove(id,ticket);call.resolve(status("cancelled"));return;}if(operation.optJSONObject("target").optString("eventId").startsWith("delete2:"))scopedDeletion().review(owned,operation);else super.executeAgent(owned);});
-  }catch(Exception unavailable){deleteOwners.remove(id,ticket);call.reject("Authenticated local agent is unavailable for deletion review.");}});}catch(java.util.concurrent.RejectedExecutionException retired){deleteOwners.remove(id,ticket);call.resolve(status("cancelled"));}
  }
- @Override @PluginMethod public void cancelAgent(PluginCall call){deleteOwners.remove(call.getString("operationId",""));super.cancelAgent(call);}
- @Override protected void handleOnPause(){if(scopedDeletion!=null)scopedDeletion.pause();if(calendarSync!=null)calendarSync.pause();super.handleOnPause();}
- @Override protected void handleOnDestroy(){if(scopedDeletion!=null)scopedDeletion.destroy();if(calendarSync!=null)calendarSync.destroy();deletionRetired=true;deleteOwners.clear();deleteOwnerWorker.shutdown();super.handleOnDestroy();}
+ @Override protected ai.eliza.plugins.calendar.CalendarSyncHost calendarSyncHost(){return nativeSyncHost(getContext());}
+ @Override protected DeferredDeletionCoordinator deletionCoordinator(){return NativeDeletionCoordinator.get(getContext());}
+ @Override protected ai.eliza.plugins.actionjournal.ActionJournal deletionJournal(){return AlphaActionJournal.get(getContext());}
 
  private boolean granted(){return getPermissionState("calendar")==PermissionState.GRANTED;}
  /** Capacitor's own permission request launches through the activity; see {@link LateLaunch}. */

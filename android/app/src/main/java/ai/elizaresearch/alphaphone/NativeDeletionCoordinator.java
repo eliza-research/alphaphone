@@ -37,11 +37,11 @@ final class NativeDeletionCoordinator {
     public JSONObject reminder(String id)throws Exception{return AlphaReminders.engine(context).read(id);}
    },
    new DeferredDeletionCoordinator.CalendarDeletions(){
-    public String refusal(JSONObject owner,JSONObject target){return target.optInt("version")==3?CalendarSyncBridge.deletionRefusal(context,owner,target):null;}
-    public JSONObject dispatch(JSONObject target)throws Exception{return target.optInt("version")==3?CalendarSyncBridge.dispatchDeletion(context,target):target.optInt("version")==2?CalendarScopedDeletionReview.dispatch(context,target):ai.eliza.plugins.calendar.CalendarPlugin.deleteReviewedExact(context,AlphaCalendarPlugin.CONFIGURATION,target);}
+    public String refusal(JSONObject owner,JSONObject target){return target.optInt("version")==3?ai.eliza.plugins.calendar.CalendarPlugin.syncedDeletionRefusal(AlphaCalendarPlugin.nativeSyncHost(context),owner,target):null;}
+    public JSONObject dispatch(JSONObject target)throws Exception{return target.optInt("version")==3?ai.eliza.plugins.calendar.CalendarPlugin.dispatchSyncedDeletion(context,AlphaCalendarPlugin.CONFIGURATION,target):target.optInt("version")==2?ai.eliza.plugins.calendar.CalendarPlugin.dispatchScopedDeletion(context,target):ai.eliza.plugins.calendar.CalendarPlugin.deleteReviewedExact(context,AlphaCalendarPlugin.CONFIGURATION,target);}
     public boolean targets(JSONObject target,long source,long event)throws Exception{
      if(target.optInt("version")==3)return Long.toString(event).equals(target.optString("eventId"));
-     return CalendarDeletionIdentity.parse(target.getString("eventId")).eventId==event;
+     return ai.eliza.plugins.calendar.CalendarDeletionIdentity.parse(target.getString("eventId")).eventId==event;
     }
    },
    WORK,DeletionWorker.class);

@@ -1,5 +1,4 @@
 package ai.elizaresearch.alphaphone;
-import ai.eliza.plugins.actionjournal.deletion.DeletionReceiptRecovery;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PluginCall;
@@ -15,7 +14,7 @@ import static ai.eliza.plugins.actionjournal.ActionJournal.sameJson;
 
 /** Product receipt recovery and Clock approval over the shared encrypted journal. */
 @CapacitorPlugin(name="AlphaActionJournal")
-public final class AlphaActionJournalPlugin extends ActionJournalPlugin {
+public final class AlphaActionJournalPlugin extends ai.eliza.plugins.actionjournal.android.DeletionActionJournalPlugin {
  @Override protected ActionJournal createJournal(){return AlphaActionJournal.get(getContext());}
  private static JSONObject read(ActionJournal journal,String scope,String id)throws Exception{return journal.get(scope,id);}
  private static JSObject response(JSONObject entry)throws Exception{return entryResponse(entry);}
@@ -26,18 +25,11 @@ public final class AlphaActionJournalPlugin extends ActionJournalPlugin {
   JSONObject recovered=NoticeRecovery.recover(entry,scope,id,call.getString("bindingHash"),delivery::receipt);
   if(recovered!=entry)store.update(scope,id,previous->recovered);return response(recovered);
  }});}
- @PluginMethod public void recoverDeletion(PluginCall call){work(call,true,(store,scope,id)->{synchronized(store.lock()){
-  JSONObject entry=read(store,scope,id);if(entry==null)return response(null);
-  JSONObject operation=entry.getJSONObject("record").getJSONObject("operation");String type=operation.optString("type");
-  if(!Set.of("calendar_delete","reminder_cancel").contains(type))return response(entry);
-  JSONObject receipt=NativeDeletionCoordinator.get(getContext()).receipt("calendar_delete".equals(type)?"calendar":"reminder",entry.getString("operationId")),reminderResult=null;
-  if(receipt!=null&&"reminder_cancel".equals(type)&&receipt.has("operationBinding")){
-   JSONObject binding=receipt.getJSONObject("operationBinding"),saved=AlphaReminders.engine(getContext()).operationReceipt(entry.getString("operationId"),binding.getString("bindingHash"),operation);
-   if("succeeded".equals(saved.optString("status")))reminderResult=saved.optJSONObject("result");
-  }
-  JSONObject recovered=DeletionReceiptRecovery.recover(entry,receipt,reminderResult);
-  if(recovered!=entry){AlphaActionJournal.checkResult(recovered,recovered.getString("status"),recovered.getJSONObject("result"));store.update(scope,id,previous->recovered);}return response(recovered);
- }});}
+ @Override protected ai.eliza.plugins.actionjournal.deletion.DeferredDeletionCoordinator deletionCoordinator(){return NativeDeletionCoordinator.get(getContext());}
+ @Override protected JSONObject reminderDeletionResult(JSONObject entry,JSONObject receipt,JSONObject operation)throws Exception{
+  JSONObject binding=receipt.getJSONObject("operationBinding"),saved=AlphaReminders.engine(getContext()).operationReceipt(entry.getString("operationId"),binding.getString("bindingHash"),operation);
+  return "succeeded".equals(saved.optString("status"))?saved.optJSONObject("result"):null;
+ }
  @PluginMethod public void recoverReminder(PluginCall call){work(call,true,(store,scope,id)->{synchronized(store.lock()){
   JSONObject entry=read(store,scope,id);if(entry==null)throw new IllegalStateException();
   JSONObject operation=entry.getJSONObject("record").getJSONObject("operation");

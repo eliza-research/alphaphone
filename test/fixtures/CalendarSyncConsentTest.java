@@ -1,4 +1,4 @@
-package ai.elizaresearch.alphaphone;
+package ai.eliza.plugins.calendar;
 
 import org.json.JSONObject;
 

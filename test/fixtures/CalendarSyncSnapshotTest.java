@@ -1,4 +1,4 @@
-package ai.elizaresearch.alphaphone;
+package ai.eliza.plugins.calendar;
 import android.content.*;import android.database.Cursor;import android.net.Uri;import java.util.*;
 public final class CalendarSyncSnapshotTest {
  static final String GENERATION="00000000-0000-4000-8000-000000000001";

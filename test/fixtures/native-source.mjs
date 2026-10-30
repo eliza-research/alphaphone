@@ -5,6 +5,8 @@ import {preparePatchedNative} from '../../scripts/prepare-patched-native.mjs';
 /** Shared host notice classes (receipts, owner fence, routes, coordination, recovery) in a staged native root. */
 export const noticeSources=(staged,...names)=>names.map(name=>join(staged,'plugins/plugin-native-notifications/android/src/main/java/ai/eliza/plugins/notifications',name+'.java'));
 export function prepareNativeFixture(root,directory) {
+ // Explicit candidate source for tests before reviewed pin admission; never writes through it.
+ if(process.env.ALPHA_RESIDENT_NATIVE_SOURCE)return {root:realpathSync(process.env.ALPHA_RESIDENT_NATIVE_SOURCE)};
  const fixture=join(realpathSync(directory),'native-source');
  mkdirSync(join(fixture,'vendor'),{recursive:true});
  symlinkSync(realpathSync(join(root,'vendor/eliza')),join(fixture,'vendor/eliza'),'dir');

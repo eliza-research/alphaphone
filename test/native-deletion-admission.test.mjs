@@ -31,13 +31,15 @@ test('owner network reads happen before the coordinator lock, never while holdin
 });
 
 test('a deterministic stage refusal never leaves a permanent agent claim',()=>{
- const deletions=java('AlphaDeletionsPlugin'),positive=body(deletions,'DeferredDeletionCoordinator coordinator=NativeDeletionCoordinator.get(getContext());String operationId;','}).create();');
+ const deletions=readFileSync(`${sharedRoot}/plugins/plugin-native-action-journal/android/src/main/java/ai/eliza/plugins/actionjournal/android/ReviewedDeletionPlugin.java`,'utf8'),positive=body(deletions,'DeferredDeletionCoordinator coordinator=coordinator();String operationId;','}).create();');
  assert.ok(positive.indexOf('coordinator.stageAdmissible(owner)')<positive.indexOf('DeletionDispatchClaim.check('),'owner and selection are checked before the claim');
  assert.match(positive,/\}catch\(Exception failure\)\{outcome\[0\]=unstaged\(coordinator,operationId\);\}/);
  assert.match(deletions,/return staged==null\?new JSONObject\(\)\.put\("status","not-staged"\):new JSONObject\(\)\.put\("status","queued"\)/,'not-staged only without a receipt for the exact operation');
  assert.match(deletions,/if\(deletionRetired\(\)\|\|review!=null\|\|!foreground\(\)\)\{resolveStatus\(call,"unavailable"\);return;\}/);
  assert.match(deletions,/resolveStatus\(call,"stale"\);return;/);
- const calendar=java('AlphaCalendarPlugin'),enqueue=body(calendar,'enqueueReviewedDeletion(','@Override @PluginMethod public void executeAgent');
+ assert.match(java('AlphaDeletionsPlugin'),/extends ReviewedDeletionPlugin/);
+ assert.match(java('AlphaCalendarPlugin'),/extends ai\.eliza\.plugins\.calendar\.DeferredCalendarPlugin/);
+ const calendar=readFileSync(`${sharedRoot}/plugins/plugin-native-calendar/android/src/main/java/ai/eliza/plugins/calendar/DeferredCalendarPlugin.java`,'utf8'),enqueue=body(calendar,'enqueueReviewedDeletion(','@Override @PluginMethod public void executeAgent');
  assert.ok(enqueue.indexOf('stageAdmissible(owner)')<enqueue.indexOf('DeletionDispatchClaim.check('),'calendar checks the owner before claiming');
  assert.match(enqueue,/staged=coordinator\.receipt\("calendar",id\)/,'a persisted calendar stage is never reported as unchanged');
  const agent=readFileSync('apps/app/src/prototype/agent-adapter.ts','utf8');

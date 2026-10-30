@@ -493,6 +493,11 @@ outcome) is `@elizaos/capacitor-action-journal`'s `actionjournal.deletion` packa
 renderer contract in `@elizaos/contracts/deletion-window` and the notice in `@elizaos/ui`'s
 `DeferredDeletionNotice`. Alpha's `NativeDeletionCoordinator`, `AlphaDeletionsPlugin` and
 `runtime/deletion-undo.tsx` bind its ports, slot names and theme (`docs/deletion-undo.md`).
+Scoped Calendar deletion, sync leases/consent/conditional dispatch and read-only
+receipt recovery belong to `@elizaos/capacitor-calendar`. The shared
+`DeferredCalendarPlugin`, `ReviewedDeletionPlugin` and `DeletionActionJournalPlugin`
+use Alpha's existing owner, encrypted slots, Reminder engine and journal through
+small native adapters; installed names and provider event identities stay unchanged.
 
 The Clock hand-off contract is shared: `plugin-assistant`'s `clock-handoff.ts` (exported
 from `device-clock-review`) owns handoff validation, the capability policy, review text and

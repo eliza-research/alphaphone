@@ -5,10 +5,11 @@ import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {execFileSync} from 'node:child_process';
 const root=resolve(import.meta.dirname,'..');
+const shared=process.env.ALPHA_RESIDENT_NATIVE_SOURCE||join(root,'vendor/eliza');
 test('native scoped deletion identity cannot widen an occurrence or legacy event into a series',()=>{
  const dir=mkdtempSync(join(tmpdir(),'alpha-calendar-delete-id-')),bin=name=>process.env.JAVA_HOME?join(process.env.JAVA_HOME,'bin',name):name;
  try{
-  const file=join(dir,'IdentityTest.java');writeFileSync(file,`package ai.elizaresearch.alphaphone;
+  const file=join(dir,'IdentityTest.java');writeFileSync(file,`package ai.elizaresearch.alphaphone; import ai.eliza.plugins.calendar.CalendarDeletionIdentity;
 public final class IdentityTest {
  static void check(boolean value){if(!value)throw new AssertionError();}
  static void refuses(Runnable action){try{action.run();throw new AssertionError("Expected refusal");}catch(IllegalArgumentException expected){}}
@@ -23,7 +24,7 @@ public final class IdentityTest {
   System.out.println("PASS exact scoped Calendar deletion identities");
  }
 }`);
-  execFileSync(bin('javac'),['--release','11','-d',dir,join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/CalendarDeletionIdentity.java'),file],{timeout:60000});
+  execFileSync(bin('javac'),['--release','11','-d',dir,join(shared,'plugins/plugin-native-calendar/android/src/main/java/ai/eliza/plugins/calendar/CalendarDeletionIdentity.java'),file],{timeout:60000});
   assert.match(execFileSync(bin('java'),['-cp',dir,'ai.elizaresearch.alphaphone.IdentityTest'],{encoding:'utf8',timeout:10000}),/PASS exact scoped/);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });

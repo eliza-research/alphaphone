@@ -1,4 +1,4 @@
-package ai.elizaresearch.alphaphone;
+package ai.eliza.plugins.calendar;
 import org.json.*;
 public final class CalendarSyncReceiptRecoveryTest {
  static void check(boolean value){if(!value)throw new AssertionError();}

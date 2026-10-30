@@ -39,7 +39,10 @@ test('Alpha binds the shared coordinator with its installed slots, bridge and wo
  assert.match(alpha('AlphaDeletionsPlugin'),/@CapacitorPlugin\(name="AlphaDeletions"\)/);
  assert.match(readFileSync(join(root,'apps/app/src/runtime/deletions.ts'),'utf8'),/\}>\('AlphaDeletions'\);/);
  assert.match(alpha('DeletionWorker'),/NativeDeletionCoordinator\.get\(getApplicationContext\(\)\)\.reconcile\(\)\?Result\.retry\(\):Result\.success\(\)/);
- assert.match(alpha('AlphaActionJournalPlugin'),/DeletionReceiptRecovery\.recover\(entry,receipt,reminderResult\)/);
+ assert.match(alpha('AlphaActionJournalPlugin'),/extends ai\.eliza\.plugins\.actionjournal\.android\.DeletionActionJournalPlugin/);
+ const sharedRoot=process.env.ALPHA_RESIDENT_NATIVE_SOURCE||join(root,'vendor/eliza');
+ assert.match(readFileSync(join(sharedRoot,'plugins/plugin-native-action-journal/android/src/main/java/ai/eliza/plugins/actionjournal/android/DeletionActionJournalPlugin.java'),'utf8'),/DeletionReceiptRecovery\.recover\(entry,receipt,reminderResult\)/);
+ for(const name of ['CalendarDeletionIdentity','CalendarScopedDeletionReview','CalendarSyncBridge','CalendarSyncSnapshot','CalendarSyncMutation','CalendarSyncReceiptRecovery','CalendarSyncConsent','CalendarSyncFreshness']) assert.equal(existsSync(join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone',name+'.java')),false,name+' belongs to the shared Calendar module');
  assert.equal(existsSync(join(root,'apps/app/src/runtime/deletion-window.ts')),false,'the renderer contract is @elizaos/contracts/deletion-window');
  const notice=readFileSync(join(root,'apps/app/src/runtime/deletion-undo.tsx'),'utf8');
  assert.match(notice,/<DeferredDeletionNotice bridge=\{deletions\} identity=\{identity\} concealed=\{browserScreenLocked\} refreshEvents=\{refreshEvents\} onChanged=\{refreshDeletionViews\} className="alpha-deletion-undo"/);

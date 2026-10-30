@@ -167,7 +167,7 @@ public final class AlphaConnectionPlugin extends Plugin {
  void writeCredentialSlot(String name,String value)throws Exception{storage().writeCredentialSlot(name,value);}
  String readCredentialSlot(String name)throws Exception{return storage().readCredentialSlot(name);}
  /** The native Calendar sync consent (renderer-inaccessible); read only for a sync write. */
- private String calendarSyncConsent()throws Exception{return readCredentialSlot(CalendarSyncBridge.SLOT);}
+ private String calendarSyncConsent()throws Exception{return readCredentialSlot(AlphaCalendarPlugin.SYNC_SLOT);}
  void removeCredentialSlot(String name)throws Exception{storage().removeCredentialSlot(name);}
  /** Required before rendering or persisting mock mode; never resumes automatically. */
  @PluginMethod public void pauseNotificationCollection(PluginCall call) {
@@ -210,26 +210,10 @@ public final class AlphaConnectionPlugin extends Plugin {
  private static byte[] readBounded(InputStream input, int limit) throws Exception { return ConnectionTransport.readBounded(input, limit); }
  /** Native-owned read routes; URLs and credentials never come from Calendar renderer calls. */
  static JSONObject readCloudIdentity(String token)throws Exception {
-  JSONObject response=readCloudObject(token,"/api/v1/user");
-  if(!Boolean.TRUE.equals(response.opt("success")))throw new SecurityException("Cloud identity unavailable");
-  return LocalAgentProviderAdmission.verifiedCloudIdentity(response.getJSONObject("data"));
+  return new ai.eliza.plugins.agent.connection.NativeCalendarCloudClient(CloudDeployment.PRODUCTION_API).identity(token);
  }
  static JSONObject readCalendarSyncCapabilities(String token,String grant,String calendar)throws Exception {
-  if(!java.util.UUID.fromString(grant).toString().equalsIgnoreCase(grant)||calendar==null||calendar.isEmpty()||calendar.length()>1024||calendar.chars().anyMatch(c->c<32||c==127))throw new IllegalArgumentException();
-  JSONObject response=readCloudObject(token,"/api/v1/eliza/google/calendar/sync-v1/capabilities?grantId="+java.net.URLEncoder.encode(grant,"UTF-8")+"&calendarId="+java.net.URLEncoder.encode(calendar,"UTF-8"));
-  return response;
- }
- private static JSONObject readCloudObject(String token,String path)throws Exception {
-  if(!AlphaLocalAgentPlugin.validProviderToken(token,16384))throw new IllegalArgumentException();
-  HttpURLConnection connection=(HttpURLConnection)validatedUrl(CloudDeployment.PRODUCTION_API+path,false).toURL().openConnection();
-  try{
-   connection.setInstanceFollowRedirects(false);connection.setUseCaches(false);
-   connection.setConnectTimeout(20000);connection.setReadTimeout(20000);connection.setRequestMethod("GET");
-   connection.setRequestProperty("Accept","application/json");connection.setRequestProperty("Authorization","Bearer "+token);
-   int status=connection.getResponseCode();if(status!=200)throw new LocalAgentProviderAdmission.CloudReadFailure(status);if(connection.getContentLengthLong()>RESPONSE_LIMIT)throw new SecurityException("Cloud read unavailable");
-   byte[] bytes;try(InputStream input=connection.getInputStream()){bytes=readBounded(input,RESPONSE_LIMIT);}
-   return (JSONObject)parseJson(new String(bytes,StandardCharsets.UTF_8));
-  }finally{connection.disconnect();}
+  return new ai.eliza.plugins.agent.connection.NativeCalendarCloudClient(CloudDeployment.PRODUCTION_API).capabilities(token,grant,calendar);
  }
  static boolean validDeviceCapabilities(String value) {
   Set<String> allowed=Set.of("calendar.local-event.v1","calendar.create.v1","calendar.next-read.v1","notes.local-record.v1","notes.query.v1","reminders.local-record.v1","reminders.local-record.v2","reminders.create.v1","maps.selected-read.v1","clock.handoff.v1","clock.handoff.v2");
@@ -274,7 +258,7 @@ public final class AlphaConnectionPlugin extends Plugin {
     String method = call.getString("method", "GET");
     if(!ConnectionRoutes.managedService(url.getRawPath(),url.getRawQuery(),method,call.getString("body")!=null,BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS))throw new IllegalArgumentException();
     // Google Calendar writes need the native sync consent; the renderer's preference alone is not enough.
-    if(CalendarSyncConsent.write(url.getRawPath(),method)&&!CalendarSyncConsent.admits(url.getRawPath(),url.getRawQuery(),method,call.getString("body"),calendarSyncConsent()))throw new IllegalArgumentException();
+    if(ai.eliza.plugins.calendar.CalendarSyncConsent.write(url.getRawPath(),method)&&!ai.eliza.plugins.calendar.CalendarSyncConsent.admits(url.getRawPath(),url.getRawQuery(),method,call.getString("body"),calendarSyncConsent()))throw new IllegalArgumentException();
     String route=url.getRawPath()+(url.getRawQuery()==null?"":"?"+url.getRawQuery());
     if(ConnectionRoutes.retiredPairing(url.getPath(),BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS))throw new IllegalArgumentException();
     boolean selfRevocation=ConnectionRoutes.cloudSelfRevocation(url.getScheme(),url.getHost(),url.getPort(),url.getRawPath(),url.getRawQuery(),method,call.getString("body")!=null,BuildConfig.ELIZA_DEV_ALLOW_TEST_MOCKS);

@@ -12,6 +12,7 @@ export const upstreamConnection=name=>join(residentSource||join(root,'vendor/eli
 // A candidate shared native source may be compiled before the reviewed vendor pin is updated.
 const residentSource=process.env.ALPHA_RESIDENT_NATIVE_SOURCE;
 if(residentSource&&!residentSource.startsWith('/'))throw Error('ALPHA_RESIDENT_NATIVE_SOURCE must be absolute');
+export const upstreamCalendar=name=>join(residentSource||join(root,'vendor/eliza'),'plugins/plugin-native-calendar/android/src/main/java/ai/eliza/plugins/calendar',name);
 export const ownerContextSources=()=>['NativeOwnerContext.java','NativeOwnerTransport.java','NativeAppRequestPolicy.java','NativeAppReadPolicy.java','OwnerRoutePolicy.java'].map(upstreamConnection);
 export const upstreamAgentRuntime=name=>join(residentSource||join(root,'vendor/eliza'),'plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime',name);
 export const upstreamSecureStore=name=>join(residentSource||join(root,'vendor/eliza'),'plugins/plugin-native-secure-store/android/src/main/java/ai/eliza/plugins/securestore/nativeonly',name);

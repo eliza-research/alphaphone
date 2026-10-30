@@ -15,10 +15,10 @@ const sqlite=(()=>{try{execFileSync('sqlite3',['-version'],{stdio:'pipe',timeout
 test('Android free/busy reader: chosen calendars only, provider availability, civil all-day dates, bounds',{skip:!jsonJar?'Pinned JVM JSON dependency unavailable':!sqlite?'sqlite3 shell unavailable':false},()=>{
  const root=resolve(import.meta.dirname,'..'),temporary=mkdtempSync(join(tmpdir(),'calendar-availability-reader-'));
  const java=process.env.JAVA_HOME||(process.platform==='darwin'?'/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home':'');const binary=name=>java?join(java,'bin',name):name;
- const shared=name=>join(root,'vendor/eliza/plugins/plugin-native-calendar',name);
+ const shared=name=>join(process.env.ALPHA_RESIDENT_NATIVE_SOURCE||join(root,'vendor/eliza'),'plugins/plugin-native-calendar',name);
  try{
   execFileSync(binary('javac'),['--release','11','-cp',jsonJar,'-d',temporary,
-   join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/CalendarZones.java'),join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/CalendarSyncFreshness.java'),join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/CalendarAvailabilityJournalResult.java'),
+   join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/CalendarZones.java'),shared('android/src/main/java/ai/eliza/plugins/calendar/CalendarSyncFreshness.java'),join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/CalendarAvailabilityJournalResult.java'),
    shared('android/src/main/java/ai/eliza/plugins/calendar/read/CalendarSourceIdentity.java'),shared('android/src/main/java/ai/eliza/plugins/calendar/read/SelectedCalendarReader.java'),
    ...['content/ContentResolver.java','content/ContentUris.java','content/ContentValues.java','database/Cursor.java','net/Uri.java'].map(name=>shared('test/jvm/android/'+name)),
    join(root,'test/fixtures/calendar-provider-jvm/android/provider/CalendarContract.java'),join(root,'test/fixtures/CalendarAvailabilityReaderTest.java')],{timeout:180000,stdio:'pipe'});

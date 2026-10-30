@@ -30,12 +30,13 @@ final class AlphaActionJournal {
   return instance;
  }
  static void checkResult(JSONObject entry,String status,JSONObject result)throws Exception{
+  if(ai.eliza.plugins.actionjournal.deletion.DeletionActionResults.handles(entry)){ai.eliza.plugins.actionjournal.deletion.DeletionActionResults.check(entry,status,result);return;}
   JSONObject retainedOperation=entry.getJSONObject("record").optJSONObject("operation");
   if(retainedOperation!=null&&"sms_send".equals(retainedOperation.optString("type"))){SmsActionJournalResult.check(entry,status,result);return;}
   // A free/busy answer holds up to 200 busy intervals: it has its own exact shape and bound.
   if(retainedOperation!=null&&CalendarAvailabilityJournalResult.TYPE.equals(retainedOperation.optString("type"))){CalendarAvailabilityJournalResult.check(retainedOperation,entry.getString("operationId"),status,result);return;}
   if("succeeded".equals(status)&&entry.getJSONObject("record").has("workflow")&&retainedOperation!=null&&Set.of("read_selected_notes","read_calendar_range","read_selected_reminders").contains(retainedOperation.optString("type"))&&result==null)throw new IllegalArgumentException();
-  if("succeeded".equals(status)&&retainedOperation!=null&&Set.of("calendar_create_local","calendar_read_next","clock_handoff","maps_read_selected","photo_library_search","photo_library_inspect","photo_library_select","photo_library_review","notes_read_selected","notes_query","notes_update","notes_delete","reminder_create","reminder_read_selected","reminder_update","reminder_complete","reminder_snooze","reminder_cancel").contains(retainedOperation.optString("type"))&&result==null)throw new IllegalArgumentException();
+  if("succeeded".equals(status)&&retainedOperation!=null&&Set.of("calendar_create_local","calendar_read_next","clock_handoff","maps_read_selected","photo_library_search","photo_library_inspect","photo_library_select","photo_library_review","notes_read_selected","notes_query","notes_update","notes_delete","reminder_create","reminder_read_selected","reminder_update","reminder_complete","reminder_snooze").contains(retainedOperation.optString("type"))&&result==null)throw new IllegalArgumentException();
   if(result!=null){
    JSONObject record=entry.getJSONObject("record"),operation=record.optJSONObject("operation");String type=operation==null?"":operation.optString("type");boolean workflowRead=record.has("workflow")&&Set.of("read_selected_notes","read_calendar_range","read_selected_reminders").contains(type);
    if("clock_handoff".equals(type)){
@@ -54,7 +55,7 @@ final class AlphaActionJournal {
     if("succeeded".equals(status)){if(maps==null||maps.length()!=4||!type.equals(maps.optString("kind"))||maps.optInt("version")!=1||maps.optJSONObject("fields")==null||!sameJson(operation.optJSONObject("target"),maps.optJSONObject("target")))throw new IllegalArgumentException();}
     else if(maps!=null)throw new IllegalArgumentException();
     if(result.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length>8000)throw new IllegalArgumentException();
-   }else if(Set.of("reminder_create","reminder_read_selected","reminder_update","reminder_complete","reminder_snooze","reminder_cancel").contains(type)){
+   }else if(Set.of("reminder_create","reminder_read_selected","reminder_update","reminder_complete","reminder_snooze").contains(type)){
     if(result.length()!=(result.has("reminderResult")?2:1)||!entry.getString("operationId").equals(result.optString("operationId")))throw new IllegalArgumentException();
     JSONObject reminder=result.optJSONObject("reminderResult");if("succeeded".equals(status)){if(reminder==null||!type.equals(reminder.optString("kind"))||reminder.optInt("version")!=1)throw new IllegalArgumentException();}else if(reminder!=null)throw new IllegalArgumentException();
     if("reminder_create".equals(type)&&reminder!=null){
@@ -70,7 +71,7 @@ final class AlphaActionJournal {
     JSONObject note=result.optJSONObject("notesResult");if("succeeded".equals(status)){if(note==null||!type.equals(note.optString("kind"))||note.optInt("version")!=1)throw new IllegalArgumentException();}else if(note!=null)throw new IllegalArgumentException();
     if("notes_query".equals(type)&&note!=null){if(!sameJson(operation.getJSONObject("query"),note.getJSONObject("query")))throw new IllegalArgumentException();if("no-match".equals(note.optString("basis"))){if(note.length()!=4||note.has("target")||note.has("record"))throw new IllegalArgumentException();}else if(note.length()!=6||note.optJSONObject("target")==null||note.optJSONObject("record")==null||!"notes_read_selected".equals(note.getJSONObject("record").optString("kind")))throw new IllegalArgumentException();}
     if(result.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length>150000)throw new IllegalArgumentException();
-   }else if(Set.of("calendar_create_local","calendar_read_next","calendar_create","calendar_read_selected","calendar_update","calendar_delete").contains(type)){
+   }else if(Set.of("calendar_create_local","calendar_read_next","calendar_create","calendar_read_selected","calendar_update").contains(type)){
     if(result.length()!=(result.has("calendarResult")?2:1)||!entry.getString("operationId").equals(result.optString("operationId")))throw new IllegalArgumentException();
     JSONObject calendar=result.optJSONObject("calendarResult");if("succeeded".equals(status)){if(calendar==null||!type.equals(calendar.optString("kind"))||calendar.optInt("version")!=1)throw new IllegalArgumentException();}else if(calendar!=null)throw new IllegalArgumentException();
     if(result.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length>80000)throw new IllegalArgumentException();
