@@ -21,9 +21,7 @@ export const DEVELOPMENT_CLASSES = Object.freeze([
 // listed permission (null: a deliberate public entry point).
 export const EXPORTED_COMPONENTS = Object.freeze({
   "ai.elizaresearch.alphaphone.MainActivity": null,
-  "ai.elizaresearch.alphaphone.AlphaAssistActivity": null,
-  // Power entry is reserved for platform status-bar callers.
-  "ai.elizaresearch.alphaphone.AlphaPowerVoiceActivity": "android.permission.STATUS_BAR_SERVICE",
+  // P-78: assistant and Power voice entries are dormant, never exported.
   "ai.elizaresearch.alphaphone.AlphaNotificationListener": "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE",
   "ai.elizaresearch.alphaphone.AlphaQuickSettingsTile": "android.permission.BIND_QUICK_SETTINGS_TILE",
   // Alpha's password vault as an Android Autofill provider (shared plugin-native-passwords).
@@ -76,9 +74,16 @@ export function distributionProblems(apk, { mode, testMocks = false } = {}) {
     DISTRIBUTION_POLICY,
     { mode, testMocks },
   );
-  const powerName = "ai.elizaresearch.alphaphone.AlphaPowerVoiceActivity";
-  if (facts.exported.some(component => component.name === powerName && component.tag !== "activity"))
-    problems.push("AlphaPowerVoiceActivity must be an activity");
+  const application = parseXmlTree(apk.xml).children.find(node => node.name === "manifest")
+    ?.children.find(node => node.name === "application");
+  for (const simpleName of ["AlphaAssistActivity", "AlphaPowerVoiceActivity"]) {
+    const fullName = `ai.elizaresearch.alphaphone.${simpleName}`;
+    const nodes = application?.children.filter(node => node.attrs.name === fullName || node.attrs.name === `.${simpleName}`) ?? [];
+    for (const node of nodes) {
+      if (node.name !== "activity" || !["0x0", "false"].includes(node.attrs.enabled) || !["0x0", "false"].includes(node.attrs.exported))
+        problems.push(`${simpleName} must remain a disabled, non-exported activity under the in-chat-only voice policy`);
+    }
+  }
   const tileName = "ai.elizaresearch.alphaphone.AlphaQuickSettingsTile";
   const tile = facts.components.find(component => component.name === tileName);
   if (tile) {

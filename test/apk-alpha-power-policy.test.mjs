@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { distributionProblems } from '../scripts/apk.mjs';
 
-function assess({name='.AlphaPowerVoiceActivity', permission='android.permission.STATUS_BAR_SERVICE', tag='activity', extra=''}={}) {
+function assess({name='.AlphaPowerVoiceActivity', permission='android.permission.STATUS_BAR_SERVICE', tag='activity', enabled=false, exported=false, extra=''}={}) {
   return distributionProblems({xml:`E: manifest
   A: package="ai.elizaresearch.alphaphone"
   E: application
@@ -11,24 +11,28 @@ function assess({name='.AlphaPowerVoiceActivity', permission='android.permission
     A: android:networkSecurityConfig=@0x7f010001
     E: ${tag}
       A: android:name="${name}"
-      A: android:exported=(type 0x12)0xffffffff
+      A: android:enabled=(type 0x12)${enabled ? "0xffffffff" : "0x0"}
+      A: android:exported=(type 0x12)${exported ? "0xffffffff" : "0x0"}
       ${permission ? `A: android:permission="${permission}"` : ''}
 ${extra}`, badging:"package: name='ai.elizaresearch.alphaphone' versionCode='15' versionName='15'", names:['assets/public/licenses/third-party-notices.json']}, {mode:'release'}).problems;
 }
 
-test('release admits the exact platform-protected Power activity', () => {
+test('release admits only dormant assistant and Power voice activities', () => {
   assert.deepEqual(assess(), []);
+  assert.deepEqual(assess({name:'.AlphaAssistActivity',permission:''}), []);
 });
-test('release refuses unprotected or incorrectly protected Power entry', () => {
+test('release refuses active or exported Power voice even with a platform permission', () => {
+  assert.ok(assess({enabled:true}).some(problem=>problem.includes("AlphaPowerVoiceActivity")));
+  assert.ok(assess({exported:true}).some(problem=>problem.includes("AlphaPowerVoiceActivity")));
   for (const permission of ['', 'android.permission.INTERNET', 'android.permission.BIND_QUICK_SETTINGS_TILE'])
-    assert.ok(assess({permission}).some(problem => problem.includes('AlphaPowerVoiceActivity')), permission);
+    assert.ok(assess({permission,enabled:true,exported:true}).some(problem => problem.includes('AlphaPowerVoiceActivity')), permission);
 });
 test('release refuses the Power name on other component types', () => {
   for (const tag of ['service', 'receiver', 'provider'])
     assert.ok(assess({tag}).some(problem => problem.includes('AlphaPowerVoiceActivity')), tag);
 });
 test('platform permission does not admit an unexpected exported component', () => {
-  assert.ok(assess({name:'.OtherPowerActivity'}).some(problem => problem.includes('Unexpected exported activity')));
+  assert.ok(assess({name:'.OtherPowerActivity',exported:true}).some(problem => problem.includes('Unexpected exported activity')));
   assert.ok(assess({extra:`    E: activity
       A: android:name=".UnexpectedActivity"
       A: android:exported=(type 0x12)0xffffffff
