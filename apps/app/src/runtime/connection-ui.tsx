@@ -2109,10 +2109,13 @@ export const connectionController = {
   /** Pre-warm: the resident agent opens its Cloud inference connection with one no-model request
    * (POST /api/cloud/warm) when the owner is about to talk: foreground, chat opened, typing started,
    * Talk, or a new connection while visible. Once per INFERENCE_WARM_INTERVAL_MS; advisory, so a failure is ignored
-   * and nothing is retried or scheduled. */
+   * and nothing is retried or scheduled. Skipped while offline, while the resident has no Cloud
+   * binding (signed out or a plan notice), and while a turn is in flight, so it never queues
+   * ahead of the owner's own request. */
   warmInference(){
     const selected=active,now=Date.now();
     if(selected?.kind!=='resident'||!state.session||now-lastInferenceWarm<INFERENCE_WARM_INTERVAL_MS)return;
+    if(sending||state.inferenceOffline||state.residentPlanNotice||(residentCloudFlow()&&!state.cloudAccount))return;
     lastInferenceWarm=now;
     void selected.remote.request('/api/cloud/warm',{},AbortSignal.timeout(10000)).catch(()=>{});
   },

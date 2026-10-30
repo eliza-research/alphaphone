@@ -20,7 +20,7 @@ function warmer(context){
 test('one POST /api/cloud/warm per minute, only for a verified resident session, failures ignored',async()=>{
  const calls=[];let now=1_000_000,fail=false;
  const remote={request:async(path,body,signal,headers,method)=>{calls.push({path,body:JSON.stringify(body),method});assert.ok(signal instanceof AbortSignal);if(fail)throw Error('offline');return {warmed:true};}};
- const context={active:{kind:'resident',remote},state:{session:{sessionId:'s'}},lastInferenceWarm:Number.NEGATIVE_INFINITY,INFERENCE_WARM_INTERVAL_MS:60000,AbortSignal,Date:{now:()=>now}};
+ const context={active:{kind:'resident',remote},state:{session:{sessionId:'s'}},sending:null,residentCloudFlow:()=>false,lastInferenceWarm:Number.NEGATIVE_INFINITY,INFERENCE_WARM_INTERVAL_MS:60000,AbortSignal,Date:{now:()=>now}};
  const warm=warmer(context);
  warm();warm();
  assert.deepEqual(calls,[{path:'/api/cloud/warm',body:'{}',method:undefined}]);// POST with an empty JSON body: no prompt
@@ -31,6 +31,22 @@ test('one POST /api/cloud/warm per minute, only for a verified resident session,
  context.state.session={sessionId:'s'};context.active={kind:'cloud'};warm();
  context.active=null;warm();
  assert.equal(calls.length,2);
+});
+
+test('no warm without Cloud inference to warm, or while a turn already holds the connection; skips do not spend the minute',()=>{
+ const calls=[];let now=1_000_000;
+ const remote={request:async path=>{calls.push(path);return {};}};
+ const context={active:{kind:'resident',remote},state:{session:{sessionId:'s'},cloudAccount:{id:'a'}},sending:null,residentCloudFlow:()=>true,lastInferenceWarm:Number.NEGATIVE_INFINITY,INFERENCE_WARM_INTERVAL_MS:60000,AbortSignal,Date:{now:()=>now}};
+ const warm=warmer(context);
+ context.sending={};warm();context.sending=null;// a send or Talk turn is in flight
+ context.state.inferenceOffline=true;warm();context.state.inferenceOffline=false;
+ for(const notice of ['needs-plan','offline']){context.state.residentPlanNotice=notice;warm();}
+ context.state.residentPlanNotice=null;
+ context.state.cloudAccount=null;warm();// signed-out resident: unbound, no Cloud inference
+ assert.equal(calls.length,0);
+ context.residentCloudFlow=()=>false;warm();// development resident without the Cloud flow: the agent decides (direct answers not-cloud-text)
+ context.residentCloudFlow=()=>true;context.state.cloudAccount={id:'a'};now+=60_000;warm();
+ assert.deepEqual(calls,['/api/cloud/warm','/api/cloud/warm']);
 });
 
 test('a new connection resets the debounce and warms while visible; triggers are wired',()=>{
