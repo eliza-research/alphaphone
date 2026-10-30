@@ -53,18 +53,22 @@ public final class ReadHookHarness {
   Exception cause=new Exception("fixture read failure");
   try{bridge.withCredentialRead(()->{throw cause;});throw new AssertionError("failure lost");}
   catch(Exception actual){check(actual==cause,"same exception propagates");}
-  // Writers take lifecycle then vault: a reader waiting on the lifecycle lock must not hold the vault.
+  // Writers take lifecycle then vault: a reader waiting on the lifecycle lock must not hold the vault,
+  // and a mutation that begins under that lock (as mutateCredentials does) refuses it once it enters.
   AtomicReference<Throwable> failure=new AtomicReference<>();
-  Thread reader=new Thread(()->{try{bridge.withCredentialRead(()->null);}catch(Throwable e){failure.set(e);}});
+  Thread reader=new Thread(()->{try{bridge.withCredentialRead(()->{calls.incrementAndGet();return null;});}catch(Throwable e){failure.set(e);}});
   synchronized(AlphaLocalAgentPlugin.lifecycleLock){
    reader.start();
    for(long end=System.nanoTime()+2_000_000_000L;reader.getState()!=Thread.State.BLOCKED;Thread.sleep(1))
     check(reader.isAlive()&&System.nanoTime()<end,"a read waits for the lifecycle lock");
    Thread probe=new Thread(()->{synchronized(JsonCredentialSlots.LOCK){}});probe.start();probe.join(2000);
    check(!probe.isAlive(),"vault lock free while a read waits for the lifecycle lock");
+   AlphaLocalAgentPlugin.credentialMutationEpoch=8;
   }
-  reader.join(2000);check(!reader.isAlive()&&failure.get()==null,"the read completes after the lifecycle lock");
-  System.out.println("PASS actual credential read hook: shared signature, exact result, locks and order, mutation refusal, exception");
+  reader.join(2000);
+  check(!reader.isAlive()&&failure.get() instanceof IllegalStateException&&calls.get()==1,"a waiting read is refused by a mutation that began under the lifecycle lock");
+  AlphaLocalAgentPlugin.credentialMutationEpoch=-1;
+  System.out.println("PASS actual credential read hook: shared signature, exact result, locks and order, mutation refusal under the locks, exception");
  }
 }`),
   ];
