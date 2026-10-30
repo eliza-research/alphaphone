@@ -79,6 +79,23 @@ test('every production Settings control has a real effect, never a toast alone',
  expect(toastOnly).toEqual([]);
 });
 
+/** Rows the Settings cleanup removed or put behind the Developer gate; a product build shows none of them. */
+const removedRows:Record<string,RegExp[]>={
+ '':[/^Developer$/,/^Try mock mode$/,/^Saved data needs recovery$/],
+ 'About':[/^Update channel \(development\)$/],
+ 'Calendar':[/^Calendar backups$/],
+};
+test('production Settings shows no developer or removed rows, even with ?tools=1',async({page})=>{
+ await page.addInitScript(offline);
+ for(const query of ['/','/?tools=1','/?mode=dev&tools=1']){
+  for(const [label,rows] of Object.entries(removedRows)){
+   await page.goto(query);await page.getByRole('button',{name:'Settings',exact:true}).click();
+   await expect(page.locator('html')).toHaveAttribute('data-active-view','settings');
+   if(label){await current(page).getByRole('button',{name:label,exact:true}).first().click();await expect(page.getByRole('button',{name:'Back to Settings',exact:true})).toBeVisible();}
+   for(const row of rows)await expect(current(page).getByText(row),`${query} ${label||'Settings'}: ${row}`).toHaveCount(0);
+  }
+ }
+});
 
 test('production Google account entry opens and dismisses its owned dialog',async({page})=>{
  await page.addInitScript(offline);

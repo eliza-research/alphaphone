@@ -3,7 +3,7 @@ import {residentRecoveryCopy} from '../runtime/resident-recovery';
 import {browserCalendarScope} from './agent-calendar-adapter';
 import {cloudServiceName} from '../runtime/cloud-protocol';
 import {openCalendarSyncSettings} from '../runtime/calendar-sync-settings';
-import {browserDevProfile as devProfileQuery} from '../browser/dev-profile';
+import {browserDevProfile as devProfileQuery,developerTools} from '../browser/dev-profile';
 import {cloudRuntimeEnabled,testMocksEnabled,devSurfacesEnabled,updateChannelCheckEnabled} from '../build-flags';
 import {openCalendarRecovery} from '../browser/calendar-recovery';
 import {openNotificationRecovery} from '../browser/notification-recovery';
@@ -358,8 +358,8 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     delivery = noticeState.status === 'fulfilled' ? noticeState.value : {};
     cross = crossState.status === 'fulfilled' ? crossState.value : {};
     if(metadata.status==='fulfilled'&&metadata.value!==null)history=metadata.value.items;
-    // Browser-only stores; native Android data has its own platform recovery.
-    if(!Capacitor.isNativePlatform()){const next=await recoveryNeeded().catch(()=>[] as RecoveryDomain[]);if(owner!==instance||generation!==token)return;recovery=next;}
+    // Browser-only stores, probed only for the Developer gate's recovery rows; native Android data has its own platform recovery.
+    if(developerTools&&!Capacitor.isNativePlatform()){const next=await recoveryNeeded().catch(()=>[] as RecoveryDomain[]);if(owner!==instance||generation!==token)return;recovery=next;}
     instance.vset('settings', { nativeReadAt: Date.now() });
     refreshPasswordManager();
   }
@@ -425,7 +425,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
   };
   definition.render = (state: Bag, api: Bag) => {
     settingsApi = api;
-    const out = render({ ...state, page: settingsPage(state.page, devSurfacesEnabled), acct: null, adding: false, sheet: ['conn', 'voice', 'wipe', 'wifiPw', 'forget'].includes(state.sheet?.kind) ? null : state.sheet }, api);
+    const out = render({ ...state, page: settingsPage(state.page, developerTools), acct: null, adding: false, sheet: ['conn', 'voice', 'wipe', 'wifiPw', 'forget'].includes(state.sheet?.kind) ? null : state.sheet }, api);
     // Prototype personality values are mock-only until the agent reports them.
     out.persona = 'Voice and agent settings';
     const connection = connectionController.getSnapshot();
@@ -479,7 +479,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     };
     for (const page of out.stack) {
       if (page.isTop) {
-        page.groups = page.groups.map((group: Bag) => ({ ...group, rows: settingsNavigationRows(group.rows, devSurfacesEnabled) }));
+        page.groups = page.groups.map((group: Bag) => ({ ...group, rows: settingsNavigationRows(group.rows, developerTools) }));
         const native=Capacitor.isNativePlatform(), provider=facts.passwordProvider||{};
         const installation:Bag={installed:'Installed · publisher verified',disabled:'Installed but disabled',absent:'Not installed','unrecognized-publisher':'Installed · publisher not recognized',unknown:'Not checked'};
         const selection:Bag={proton:provider.installation==='installed'?'Proton Pass selected':provider.installation==='disabled'?'Proton Pass selected · app disabled':'Provider package selected · publisher not verified',other:'Another provider selected',none:'No provider selected',unknown:'Selection unavailable'};
@@ -543,7 +543,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
             if(!calendar||!ownerKey){if(native&&!testMocksEnabled)api.set({page:'agent-connection'});else connectionController.open();return;}
             openCalendarSyncSettings({calendar,current:()=>owner===shell&&shell.live&&shell.agentCalendar===calendar&&calendar.state.ownerKey===ownerKey&&!['android-native','legacy'].includes(shell.vget('calendar').calendarAuthority),canChange:()=>!shell.vget('calendar').form&&!shell.canonicalDraftText&&!shell.canonicalDraftInvalid&&!shell.canonicalDraft?.state.opening&&!shell.canonicalDraft?.state.consuming});
           }}]),cap:'Sync',hasCap:true});
-          if(testMocksEnabled&&!Capacitor.isNativePlatform())groups.push({...group([{kNav:true,label:'Calendar backups',lbl:'Calendar backups',sub:'Events saved in this app',hasSub:true,chev:true,noAB:true,go:()=>openCalendarRecovery()}]),cap:'Saved data',hasCap:true});
+          if(developerTools&&!Capacitor.isNativePlatform())groups.push({...group([{kNav:true,label:'Calendar backups',lbl:'Calendar backups',sub:'Events saved in this app',hasSub:true,chev:true,noAB:true,go:()=>openCalendarRecovery()}]),cap:'Saved data',hasCap:true});
           out.stack.push({isTop:false,notTop:true,cls:'enter',z:4,title:'Calendar',hasTitle:true,backLabel:'Back to Settings',back:()=>api.set({page:null}),hero:{},groups});
         }
         page.groups.push(group([{
@@ -647,8 +647,8 @@ export function installSettingsAdapter(Component: any, views: Bag) {
           // Shared native review (@elizaos/capacitor-system/reset): only cancelled or unavailable reach here.
           api.toast((await reviewDataReset(registerPlugin<DataResetPlugin>('AlphaReset'))).message);
         }}]));
-        if(testMocksEnabled)page.groups.push(group([{kNav:true,label:'Try mock mode',lbl:'Try mock mode',chev:true,noAB:true,go:()=>connectionController.mock()}]));
-        if(testMocksEnabled&&recovery.length)page.groups.push(group([info('Saved data needs recovery','Back up before resetting'),...recovery.map(name=>({kNav:true,label:recoveryActions[name].label,lbl:recoveryActions[name].label,chev:true,noAB:true,go:()=>recoveryActions[name].open()}))]));
+        if(developerTools)page.groups.push(group([{kNav:true,label:'Try mock mode',lbl:'Try mock mode',chev:true,noAB:true,go:()=>connectionController.mock()}]));
+        if(developerTools&&recovery.length)page.groups.push(group([info('Saved data needs recovery','Back up before resetting'),...recovery.map(name=>({kNav:true,label:recoveryActions[name].label,lbl:recoveryActions[name].label,chev:true,noAB:true,go:()=>recoveryActions[name].open()}))]));
         if(state.page==='problems'){
           const rows=crashLog?[...crashLog.entries].reverse().map(entry=>{const line=describeCrashEntry(entry);return {kLog:true,time:new Date(entry.at).toLocaleString(),text:`${line.title} · ${line.detail}`};}):[];
           out.stack.push({isTop:false,notTop:true,cls:'enter',z:4,title:'Problem log',hasTitle:true,backLabel:'Back to Settings',back:()=>api.set({page:null}),hero:{},groups:[
@@ -706,7 +706,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
       } else if (page.title === 'About') {
         page.hero = { ...page.hero, big: facts.model || 'This phone', sub: facts.manufacturer || 'Device information unavailable' };
         page.groups = [group([
-          info('Alpha Phone', versionLabel(facts.appVersion || buildVersion, facts.appVersionCode)), ...updateRows(facts.appUpdatedAt).map(([label, val]) => info(label, val)), ...(devSurfacesEnabled?[info('Update channel (development)',updateChannelCheckEnabled?'Read-only check on · never downloads or installs':'Off')]:[]), info('Android', facts.androidRelease || 'Unavailable'),
+          info('Alpha Phone', versionLabel(facts.appVersion || buildVersion, facts.appVersionCode)), ...updateRows(facts.appUpdatedAt).map(([label, val]) => info(label, val)), ...(developerTools?[info('Update channel (development)',updateChannelCheckEnabled?'Read-only check on · never downloads or installs':'Off')]:[]), info('Android', facts.androidRelease || 'Unavailable'),
           info('Build', facts.build || 'Unavailable'), info('Security patch', facts.securityPatch || 'Unavailable'),
           info('Runtime', 'Android app'), info('Agent execution', runtimeLocation), info('Agent', target), info('Inference model', inferenceModel),
         ]), group([problemsRow(), diagnosticsRow()]), group([nav('Android device information', 'about')]), group([licensesRow()])];
@@ -811,7 +811,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     }
     if(!Capacitor.isNativePlatform()) {
       for(const page of out.stack){
-        if(page.title==='About')page.groups=[group([info('Alpha Phone',buildVersion),...updateRows(undefined).map(([label,val])=>info(label,val)),...(devSurfacesEnabled?[info('Update channel (development)',updateChannelCheckEnabled?'Read-only check on · never downloads or installs':'Off')]:[]),info('Runtime',devSurfacesEnabled?'Development preview':'Web app'),info('Agent execution',runtimeLocation),info('Agent',target),info('Inference model',inferenceModel),info('Storage','App storage')]),group([problemsRow(),diagnosticsRow()]),group([licensesRow()])];
+        if(page.title==='About')page.groups=[group([info('Alpha Phone',buildVersion),...updateRows(undefined).map(([label,val])=>info(label,val)),...(developerTools?[info('Update channel (development)',updateChannelCheckEnabled?'Read-only check on · never downloads or installs':'Off')]:[]),info('Runtime',devSurfacesEnabled?'Development preview':'Web app'),info('Agent execution',runtimeLocation),info('Agent',target),info('Inference model',inferenceModel),info('Storage','App storage')]),group([problemsRow(),diagnosticsRow()]),group([licensesRow()])];
       }
       const browserLabels=(value:any):any=>{if(typeof value==='string')return value.replaceAll('Manage brightness in Android','Brightness').replaceAll('Manage sound in Android','Sound settings').replaceAll('Manage in Android','App settings').replaceAll('Device accounts in Android','System accounts').replaceAll('Wi-Fi transport · network names stay in Android settings','Network names stay in system settings').replaceAll('in Android','in system settings').replaceAll('Android settings','System settings').replaceAll('Android Calendar','App calendar').replaceAll('Android device information','System information').replaceAll('Android developer settings','App development settings').replaceAll('On this phone','In this app').replaceAll('on this phone','in this app').replaceAll('Android access not granted','Development event access off').replaceAll('Waiting for Android listener','Waiting for local events').replaceAll('Selected apps connected','Selected development apps connected').replaceAll('Android battery policies may delay alerts','Alerts appear while Alpha is open').replaceAll('Native setting unavailable','Managed by your system');if(Array.isArray(value))return value.map(browserLabels);if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,browserLabels(v)]));return value;};
       return browserLabels(out);

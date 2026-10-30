@@ -16,10 +16,10 @@ test('updates are never reported as checked, available or current',()=>{
  const format=at=>'day '+at;
  assert.deepEqual(m.updateRows(1760000000000,format),[['Installed or last updated','day 1760000000000'],['Updates','Alpha does not check for updates']]);
  for(const at of [undefined,null,0,-5,'1760000000000',1.5])assert.deepEqual(m.updateRows(at,format),[['Updates','Alpha does not check for updates']]);
- // The OS update-channel check is registered off; only a development build (both About pages)
+ // The OS update-channel check is registered off; only the Developer gate (both About pages)
  // shows its state, and the production bundle audit denies the row.
  assert.match(readFileSync('apps/app/src/build-flags.ts','utf8'),/export const updateChannelCheckEnabled = false as boolean;/);
- assert.equal((source.match(/\.\.\.\(devSurfacesEnabled\?\[info\('Update channel \(development\)',updateChannelCheckEnabled\?'Read-only check on · never downloads or installs':'Off'\)\]:\[\]\)/g)??[]).length,2);
+ assert.equal((source.match(/\.\.\.\(developerTools\?\[info\('Update channel \(development\)',updateChannelCheckEnabled\?'Read-only check on · never downloads or installs':'Off'\)\]:\[\]\)/g)??[]).length,2);
  assert.match(readFileSync('scripts/audit-production-bundle.mjs','utf8'),/'Update channel \(development\)'/);
  // Neither the adapter nor the native plugin carries an update-check claim.
  assert.doesNotMatch(source,/Up to date|Update available|Check for updates/);
@@ -72,8 +72,16 @@ test('production Settings refuses Developer routes and preserves real About diag
  assert.equal(rows.length,4,'filtering must not mutate the reference model');
  assert.equal(m.settingsPage('developer',false),null);
  for(const page of ['about','problems','licenses','models',null,undefined])assert.equal(m.settingsPage(page,false),page);
- assert.match(source,/page: settingsPage\(state\.page, devSurfacesEnabled\)/);
- assert.match(source,/rows: settingsNavigationRows\(group\.rows, devSurfacesEnabled\)/);
+ assert.match(source,/page: settingsPage\(state\.page, developerTools\)/);
+ assert.match(source,/rows: settingsNavigationRows\(group\.rows, developerTools\)/);
+});
+test('one Developer gate: a development server build opened with ?tools=1, never the product',()=>{
+ const profile=readFileSync('apps/app/src/browser/dev-profile.ts','utf8');
+ assert.match(profile,/export const developerTools=devSurfacesEnabled&&new URLSearchParams\(location\.search\)\.get\('tools'\)==='1';/);
+ assert.match(profile,/const devSurfacesEnabled:boolean=import\.meta\.env!==undefined&&import\.meta\.env\.DEV===true&&/);
+ // Every developer-only Settings row reads the same gate, not a test-mocks or dev-surface flag alone.
+ for(const row of ["if(developerTools&&!Capacitor.isNativePlatform())groups.push({...group([{kNav:true,label:'Calendar backups'","if(developerTools)page.groups.push(group([{kNav:true,label:'Try mock mode'","if(developerTools&&recovery.length)page.groups.push(group([info('Saved data needs recovery'"])assert.ok(source.includes(row),row);
+ assert.doesNotMatch(source,/(testMocksEnabled|devSurfacesEnabled)[^;\n]{0,40}(Calendar backups|Try mock mode|Saved data needs recovery|Update channel)/);
 });
 test('explicit developer surfaces retain Developer navigation and route',()=>{
  const rows=[{label:'Developer'},{label:'About'}];

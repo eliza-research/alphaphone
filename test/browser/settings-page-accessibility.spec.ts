@@ -41,3 +41,22 @@ for (const mode of ['mock', 'dev']) {
   }
  });
 }
+
+test('developer-only Settings rows appear only with ?tools=1 on the development server', async ({page}) => {
+ await page.addInitScript(() => localStorage.setItem('alpha.connection.selection.v1', JSON.stringify({kind:'offline'})));
+ const open = async (query: string) => { await page.goto(`/${query}`); await page.getByRole('button', {name:'Settings', exact:true}).first().click(); await expect(page.locator('html')).toHaveAttribute('data-active-view', 'settings'); };
+ await open('');
+ for (const name of ['Developer', 'Try mock mode']) await expect(page.getByRole('button', {name, exact:true})).toHaveCount(0);
+ await page.getByRole('button', {name:'About', exact:true}).click();
+ await expect(page.getByText('Update channel (development)', {exact:true})).toHaveCount(0);
+ await page.getByRole('button', {name:'Back to Settings', exact:true}).click();
+ await page.getByRole('button', {name:'Calendar', exact:true}).click();
+ await expect(page.getByText('Calendar backups', {exact:true})).toHaveCount(0);
+ await open('?tools=1');
+ for (const name of ['Developer', 'Try mock mode']) await expect(page.getByRole('button', {name, exact:true})).toBeVisible();
+ await page.getByRole('button', {name:'About', exact:true}).click();
+ await expect(page.getByText('Update channel (development)', {exact:true})).toBeVisible();
+ await page.getByRole('button', {name:'Back to Settings', exact:true}).click();
+ await page.getByRole('button', {name:'Calendar', exact:true}).click();
+ await expect(page.getByText('Calendar backups', {exact:true})).toBeVisible();
+});
