@@ -118,11 +118,12 @@ test('every installed storage name in the product record is still read by the re
   for (const key of Object.values(record.storage.retained)) assert.ok(source.includes(`'${key}'`) || source.includes(`"${key}"`), `${key} is no longer named in apps/app/src; keep it while installs may hold it`);
   // The favorites record is read through the product registration by the shared launcher join;
   // Alpha supplies a store of its own only in tests.
-  const shell = fs.readFileSync('apps/app/src/prototype/home-shell.ts', 'utf8');
-  assert.match(shell, /createMobileShellLauncher\(\{\s*bridge, registry: alphaViews,/);
-  const install = fs.readFileSync('apps/app/src/main.tsx', 'utf8').match(/installHomeShell\(Component,[\s\S]*?\n\}\);/);
-  assert.ok(install, 'main.tsx installs the shared Home');
-  assert.doesNotMatch(install[0], /\b(?:favorites|storage):/, 'the app keeps the installed favorites record');
+  const shell = fs.readFileSync('apps/app/src/product/AlphaMobileApplication.tsx', 'utf8');
+  assert.match(shell, /createMobileApplicationCatalog\(ALPHA_PRODUCT, listAppShellPages/);
+  const main = fs.readFileSync('apps/app/src/main.tsx', 'utf8');
+  assert.match(main, /renderApplication=\{[^\n]*<AlphaMobileApplication/);
+  assert.doesNotMatch(main, /installHomeShell/);
+  assert.doesNotMatch(shell, /\b(?:favorites|storage)=/, 'the app keeps the installed favorites record');
 });
 
 test('the product theme supplies every Alpha palette property the stylesheets read', async () => {

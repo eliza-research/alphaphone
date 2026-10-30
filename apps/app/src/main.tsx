@@ -1,4 +1,4 @@
-import { CONVERSATION_ONLY_VOICE_ENTRY } from '@elizaos/capacitor-system/sense';
+import { externalVoiceInvocationEnabled } from './runtime/aosp-image';
 // Register browser implementations before any runtime module claims plugin identity.
 import './browser/register';
 import {installCanonicalNotesView} from './prototype/canonical-notes-ui';
@@ -71,7 +71,7 @@ import { installInboxCloudAdapter, inboxAttention, subscribeInboxAttention } fro
 import { installHomeOverviewCards } from './prototype/home-overview-cards';
 import { installUseInEmailReview } from './prototype/use-in-email-review';
 import { latestRetainedDigest, subscribeRetainedDigest } from './runtime/hosted-digests';
-import { installHomeShell } from './prototype/home-shell';
+import { AlphaMobileApplication, registerCompatibilityViews } from './product/AlphaMobileApplication';
 import { alphaViews } from './product/alpha-product';
 import { setLocalePreferences } from './prototype/locale-time';
 import { installTextScale } from './runtime/text-scale';
@@ -174,9 +174,7 @@ installClockAdapter(Component, VIEWS, { simulated: testMocksEnabled && fixture, 
 // Home, app grid and All apps from the shared mobile shell. Installed apps come from ElizaSystem
 // (Android, or the browser device's app list) through the shared launcher bridge; outermost so Home
 // composes with every binding above.
-installHomeShell(Component, VIEWS, launcherBridge, { icons: isAndroid, follow: launcherListens,
-  aliases: isAndroid ? undefined : Object.fromEntries(browserApps.flatMap(app => { const view = alphaViews.find(app.view); return view ? [[app.packageName, alphaViews.launcherKey(view)]] : []; })),
-});
+registerCompatibilityViews(VIEWS);
 /** A browser cannot read or change radios and sensors; show that instead of fixture toggles. */
 function installBrowserCapabilityTiles(Component:any){
   const p=Component.prototype,render=p.renderVals;
@@ -278,7 +276,7 @@ function Phone() {
     else if(action==='background'){shell.leave();shell.setState({screen:'off',voice:'off',chat:'input',shade:false});document.documentElement.dataset.devBackground='true';window.dispatchEvent(new Event('blur'));}
     else if(action==='resume'){delete document.documentElement.dataset.devBackground;shell.unlock();window.dispatchEvent(new Event('focus'));}
     if(['power','unlock','boot','background','resume'].includes(action))window.dispatchEvent(new Event('alpha:device-state'));
-  }}/>}{testMocksEnabled && mock && <div className="mock-mode-banner" role="status"><span>Mock mode · simulated data and actions</span><button onClick={() => { void connectionController.offline().then(() => { const url = new URL(location.href); url.searchParams.delete('mode'); url.searchParams.delete('start'); location.assign(url.href); }); }}>Exit mock mode</button></div>}<Component configureChatPull={(surface:{input:boolean;scale:number})=>setPullSurface(current=>current.input===surface.input&&current.scale===surface.scale?current:surface)} chatPullBinding={chatPullBinding} phoneSurface assistantSurface={assistantSurface} onCloseAssistant={closeAssistant} onReopenStartupAccess={!fixture && !assistantSurface ? reopenStartupPermissions : undefined} systemShell={launcherPresentation} systemShade={systemShade} nativeSystemChrome={isAndroid || !launcherPresentation} initial={testMocksEnabled && fixture ? query.get('start') || 'home' : 'home'} theme={initialTheme} ref={(value: any) => { shell = value; }} />
+  }}/>}{testMocksEnabled && mock && <div className="mock-mode-banner" role="status"><span>Mock mode · simulated data and actions</span><button onClick={() => { void connectionController.offline().then(() => { const url = new URL(location.href); url.searchParams.delete('mode'); url.searchParams.delete('start'); location.assign(url.href); }); }}>Exit mock mode</button></div>}<Component renderApplication={(vals:any,model:any,parts:any)=><AlphaMobileApplication vals={vals} model={model} parts={parts} views={VIEWS} bridge={launcherBridge} installedIcons={isAndroid} followInstalledApps={launcherListens} browserApps={isAndroid ? undefined : browserApps}/>} configureChatPull={(surface:{input:boolean;scale:number})=>setPullSurface(current=>current.input===surface.input&&current.scale===surface.scale?current:surface)} chatPullBinding={chatPullBinding} phoneSurface assistantSurface={assistantSurface} onCloseAssistant={closeAssistant} onReopenStartupAccess={!fixture && !assistantSurface ? reopenStartupPermissions : undefined} systemShell={launcherPresentation} systemShade={systemShade} nativeSystemChrome={isAndroid || !launcherPresentation} initial={testMocksEnabled && fixture ? query.get('start') || 'home' : 'home'} theme={initialTheme} ref={(value: any) => { shell = value; }} />
 {!fixture && <><ConnectionChooser /><GoogleConnectionsPanel />{!assistantSurface && <><HostedDigestPanel canComposeQuestion={questionTarget} composeQuestion={(draft,sessionId)=>{if(!questionTarget(sessionId))return false;shell.api(shell.S().view).composeContentQuestion(draft);return true;}} /><StartupPermissions active={!!connection.cloudAccount && !connection.busy && !connection.signIn} /></>}</>}</>;
 }
 /** Android's locale and 24-hour setting; WebView Intl alone does not follow the latter. */
@@ -332,10 +330,10 @@ async function mountPhone() {
   }
   createRoot(document.getElementById('root')!).render(<RootErrorBoundary><Phone /></RootErrorBoundary>);
   // P-78 also retires an already-enabled listener; entry-point hiding alone is insufficient.
-  if (isAndroid && !CONVERSATION_ONLY_VOICE_ENTRY.externalInvocation) void stopWakeListenerForChatOnly().then(stopped => {
-    if (!stopped) shell?.toast('Wake listening could not be confirmed off. Turn it off in Android settings.');
+  if (isAndroid && !externalVoiceInvocationEnabled) void stopWakeListenerForChatOnly().then(stopped => {
+    if (!stopped) shell?.toast('Wake listening could not be confirmed off.');
   });
   // The image's always-on listener heard the wake phrase: start the on-device voice assistant.
-  if (CONVERSATION_ONLY_VOICE_ENTRY.externalInvocation && isAndroid && assistantSurface) installListenerInvocation(() => shell, { authority: () => { const port=connectionController.getAppRecordClient(); if(!port)return null; try{if(!port.current())return null;return JSON.stringify([port.sessionId,port.scope??null,port.identity.ownerId,port.identity.agentId,port.identity.sessionId,port.identity.origin]);}catch{return null;} }, initialRestorePending: () => protectedPowerLaunchState(connectionController.getSnapshot()).initialRestorePending, powerAccountRef: () => protectedPowerLaunchState(connectionController.getSnapshot()).accountRef, connectionOpen: () => connectionController.getSnapshot().open, connected: () => !!connectionController.getSnapshot().session && !connectionController.getSnapshot().busy, voiceActive: () => !!document.querySelector('[data-alpha-chat-recorder]'), subscribe: listener => connectionController.subscribe(listener) });
+  if (externalVoiceInvocationEnabled && isAndroid && assistantSurface) installListenerInvocation(() => shell, { authority: () => { const port=connectionController.getAppRecordClient(); if(!port)return null; try{if(!port.current())return null;return JSON.stringify([port.sessionId,port.scope??null,port.identity.ownerId,port.identity.agentId,port.identity.sessionId,port.identity.origin]);}catch{return null;} }, initialRestorePending: () => protectedPowerLaunchState(connectionController.getSnapshot()).initialRestorePending, powerAccountRef: () => protectedPowerLaunchState(connectionController.getSnapshot()).accountRef, connectionOpen: () => connectionController.getSnapshot().open, connected: () => !!connectionController.getSnapshot().session && !connectionController.getSnapshot().busy, voiceActive: () => !!document.querySelector('[data-alpha-chat-recorder]'), subscribe: listener => connectionController.subscribe(listener) });
 }
 void mountPhone();

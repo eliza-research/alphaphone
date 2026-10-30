@@ -9,7 +9,7 @@ This report precedes implementation. It is based on direct source inspection, no
 ## Implementation checkpoint — October 30
 
 The initial findings below remain the audit baseline. The integration branch now
-pins reviewed upstream merge `340f9d7bf8d4dc370ab6446721c617de1cae29f5`.
+pins reviewed upstream merge `d2175f38b52ba29759bf30698a5c718c5d719754`.
 Unification is still in progress.
 
 | Area | Current implementation and evidence |
@@ -18,7 +18,7 @@ Unification is still in progress.
 | Conversation and returns | Shared conversation turns, selected context observations and Workspace returns are merged in [#38270](https://github.com/elizaOS/eliza/pull/38270) and [#38271](https://github.com/elizaOS/eliza/pull/38271). The Alpha integration consumes them. |
 | Maps and Home | Alpha consumes the shared Maps screen and dock clearance behavior. The latest owner Calendar/Inbox reads are retained in the integration. |
 | Native models and packaging | [#38278](https://github.com/elizaOS/eliza/pull/38278) is merged. Exact-head full verification, 32 staging tests, standalone ARM64 debug and AOSP system release inspection pass. The fresh APKs are 508,319,468 and 486,715,355 bytes. Alpha now uses the same compression policy and upstream test-runner version. |
-| Mobile application root | [#38276](https://github.com/elizaOS/eliza/pull/38276) mounts the shared application in the canonical host. Review fixes preserve off-catalog routes and require confirmed listener shutdown for chat-only mode. Full verification and visual audit are being completed before adoption. |
+| Mobile application root | [#38276](https://github.com/elizaOS/eliza/pull/38276) mounts the shared application in the canonical host. Review fixes preserve off-catalog routes and require confirmed listener shutdown for chat-only mode. It is merged after full verification, 38 mobile tests and 218 browser audit checks. Alpha now mounts the same root; its 29 focused tests, normal typecheck and three production-browser flows pass. |
 | Sign-in and session | [#38275](https://github.com/elizaOS/eliza/pull/38275) shares the sign-in state and forms. [#38281](https://github.com/elizaOS/eliza/pull/38281) shares native credential mutation and correlates cancellation with its originating request. Both still require final qualification. The shared AppProvider and native owner transport are being integrated. |
 | Remaining views | A shared Calendar workspace and common Home selection policy are under validation. Full Inbox behavior, Wallet integration and the remaining domain views still need completion. |
 

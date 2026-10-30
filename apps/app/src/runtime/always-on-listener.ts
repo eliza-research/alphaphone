@@ -1,6 +1,6 @@
-import { CONVERSATION_ONLY_VOICE_ENTRY } from '@elizaos/capacitor-system/sense';
+import { externalVoiceInvocationEnabled, voiceEntryPolicy } from './aosp-image';
 import { Capacitor } from '@capacitor/core';
-import {Sense,createSenseInvocationController} from '@elizaos/capacitor-system/sense';
+import {Sense,createSenseInvocationController,stopSenseListenerForChatOnly} from '@elizaos/capacitor-system/sense';
 import { parseAssistantInvocation, parseListenerStatus, type AssistantInvocation, type ListenerStatus } from './always-on-listener-status';
 
 export type { AssistantInvocation, ListenerState, ListenerStatus } from './always-on-listener-status';
@@ -25,29 +25,15 @@ let wakeStopUnconfirmed = false;
 export const wakeListeningStopUnconfirmed = () => wakeStopUnconfirmed;
 /** Stop a previously enabled image listener through its canonical native port. Never enable capture. */
 export async function stopWakeListenerForChatOnly(): Promise<boolean> {
-  if (CONVERSATION_ONLY_VOICE_ENTRY.externalInvocation || !Capacitor.isNativePlatform()) return true;
-  if (!nativeListener()) { wakeStopUnconfirmed = true; return false; }
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    const reply = await Promise.race([
-      listener.turnOff(),
-      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Wake listener stop timed out')), 5000); }),
-    ]);
-    const status = parseListenerStatus(reply);
-    const stopped = status.available && status.state === 'OFF' && status.listening === false && status.microphoneOpen === false;
-    wakeStopUnconfirmed = !stopped;
-    return stopped;
-  } catch {
-    wakeStopUnconfirmed = true;
-    return false;
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
+  if (externalVoiceInvocationEnabled || !Capacitor.isNativePlatform()) return true;
+  const stopped = await stopSenseListenerForChatOnly(nativeListener() ? listener : undefined);
+  wakeStopUnconfirmed = !stopped;
+  return stopped;
 }
 
 /** Opens the listener's consent and settings screen. */
 export async function openListenerSettings(): Promise<boolean> {
-  if (!CONVERSATION_ONLY_VOICE_ENTRY.externalInvocation || !nativeListener()) return false;
+  if (!externalVoiceInvocationEnabled || !nativeListener()) return false;
   try { return (await listener.openSettings()).opened === true; } catch { return false; }
 }
 
@@ -70,9 +56,9 @@ export const INVOCATION_EVENT = 'alpha:assist-invocation';
  * (a new invocation of the single-task activity).
  */
 export function installListenerInvocation(shell: () => { startVoice?: () => unknown; live?: boolean } | undefined, state: { authority: () => string | null; initialRestorePending?: () => boolean; powerAccountRef?: () => string | null; connectionOpen: () => boolean; connected: () => boolean; voiceActive: () => boolean; subscribe: (listener: () => void) => () => void }) {
-  if(!CONVERSATION_ONLY_VOICE_ENTRY.externalInvocation || !nativeListener())return ()=>{};
+  if(!externalVoiceInvocationEnabled || !nativeListener())return ()=>{};
   const ready=()=>!!shell()?.startVoice&&shell()?.live!==false&&!state.connectionOpen()&&state.connected();
   const owner=createSenseInvocationController(Sense,{authority:state.authority,initialRestorePending:state.initialRestorePending,powerAccountRef:state.powerAccountRef,ready,voiceActive:state.voiceActive,
-    startVoice:()=>{const current=shell();if(ready())void current?.startVoice?.();},subscribe:state.subscribe,events:[INVOCATION_EVENT]},CONVERSATION_ONLY_VOICE_ENTRY);
+    startVoice:()=>{const current=shell();if(ready())void current?.startVoice?.();},subscribe:state.subscribe,events:[INVOCATION_EVENT]},voiceEntryPolicy);
   return ()=>owner.dispose();
 }

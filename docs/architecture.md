@@ -18,9 +18,27 @@ records the migration order and the gaps that prevent a completion claim.
 
 ### Shell host pieces and their upstream targets
 
-The shared mobile shell (`@elizaos/ui/mobile-shell`) renders Home, All apps, the view
-registry and navigation from `config/alpha-product.json`. Views whose registration carries a
-lazy loader (`ALPHA_VIEW_LOADERS` in `apps/app/src/product/alpha-product.ts`) render through
+The production entry mounts the upstream `MobileApplication` from
+`product/AlphaMobileApplication.tsx`. The existing Component runs as a headless
+navigation/domain adapter: its template contributes individual view, assistant
+and system-chrome leaves, not a second Home or application root. Shared Home,
+All apps and placement read the same AppShellPage registry as canonical Eliza.
+Product order, labels, icons, theme and installed storage names remain presentation
+inputs. Existing approvals, source selection, conversation cancellation and
+retained Notes stay with their current owners.
+
+This is an incremental root migration. The remaining template domain views and
+session orchestration still need their own upstream migration, and Alpha's
+`isMvpView` availability policy still differs from canonical
+`curateLauncherPages`. Those are explicit U5/U3/U6 gaps; a common root does not
+prove full application parity. Both products default ordinary mobile entry to
+conversation-only while preserving the admitted AOSP native invocation path;
+this migration never enables or resumes capture.
+
+The shared mobile shell (`@elizaos/ui/mobile-shell`) renders Home, All apps and view
+placement from the AppShellPage catalog and the existing navigation owner.
+`config/alpha-product.json` supplies presentation and installed storage names.
+Compatibility views whose registration carries a lazy loader (`ALPHA_VIEW_LOADERS` in `apps/app/src/product/alpha-product.ts`) render through
 `MobileViewHost`, with its failure-and-retry notice drawn in Alpha's chrome (`renderError`) and
 `active={false}` keeping a view mounted behind Home so drafts and selection survive. Today that
 is Notes (the upstream `NotesWorkspace` from `plugin-notes`) and Maps (the upstream

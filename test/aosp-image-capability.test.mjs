@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { detectAospImage, admittedAospViews, AOSP_IMAGE_VIEWS, ADMITTED_AOSP_VIEW_ADAPTERS } from "../apps/app/src/runtime/aosp-image.ts";
+import {aospImageModule} from "./helpers/aosp-image-module.mjs";
+const {detectAospImage,admittedAospViews,AOSP_IMAGE_VIEWS,ADMITTED_AOSP_VIEW_ADAPTERS}=await aospImageModule();
 import { IMAGE_FEATURE_VERSION, imageFeatureName, renderImageCapability, writeImageCapability } from "../scripts/aosp-image-capability.mjs";
 
 const PKG = "ai.elizaresearch.alphaphone";

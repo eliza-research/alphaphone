@@ -1,4 +1,4 @@
-import { CONVERSATION_ONLY_VOICE_ENTRY } from '@elizaos/capacitor-system/sense';
+import { externalVoiceInvocationEnabled } from '../runtime/aosp-image';
 import iconCatalog from '../icon-catalog.json';
 /* Seeds, scripted replies and fixture images. Production builds resolve this
    specifier to ./fixtures.empty.js (same names, empty values). */
@@ -4845,7 +4845,7 @@ class Component extends DCLogic {
     // The development stand-in for Android's shade; product builds have no Alpha shade (#416).
     if (n === "shade") return this.setState(Object.assign({}, home, { shade: this.simulatedShade() }));
     if (n === "sheet" || n === "full") return this.setState(Object.assign({}, home, { chat: n }));
-    if (n === "voice") { if (!CONVERSATION_ONLY_VOICE_ENTRY.externalInvocation) return; this.setState(home); this.later(function () { self.startVoice(); }, 60); return; }
+    if (n === "voice") { if (!externalVoiceInvocationEnabled) return; this.setState(home); this.later(function () { self.startVoice(); }, 60); return; }
     if (n === "heads") { this.setState(home); this.later(function () { self.showHeads(); }, 60); return; }
     var parts = String(n).split(":"); var k = parts[0], sub = parts[1];
     if (VIEWS[k]) {
@@ -5293,7 +5293,7 @@ class Component extends DCLogic {
       pillSw: this.sw(function (dx, dy) { if (dy < 0) self.setState({ chat: "sheet" }); }),
       voiceOn: voiceOn, vShow: vShow, vRing: S.voice === "listening" || S.voice === "speaking",
       vTextCss: S.voice === "thinking" ? "color:var(--mut)" : "", vBarColor: S.voice === "thinking" ? "var(--line)" : "var(--acc)", vPlay: S.voice === "thinking" ? "paused" : "running", bars: bars,
-      externalVoiceInvocation: CONVERSATION_ONLY_VOICE_ENTRY.externalInvocation,
+      externalVoiceInvocation: externalVoiceInvocationEnabled,
       startVoice: function () { self.startVoice(); }, stopVoice: function () { self.stopVoice(); },
       voiceToType: function () { var vt = self.S().vtext; self.stopVoice(); self.setState({ chat: self.S().screen === "home" ? "sheet" : self.S().chat, draft: vt }); },
       headsSw: this.sw(function () { self.setState({ heads: false }); }),
@@ -5303,7 +5303,7 @@ class Component extends DCLogic {
       headsReply: function () { self.setState({ heads: false }); if (HEADS) self.agentSay("Here's a reply to " + HEADS.who.split(" ")[0] + ".", { type: "draft", to: HEADS.who, body: HEADS.reply, act: { mod: "messages", fn: "sendDraft" }, pid: HEADS.pid }); },
       fireHeads: function () { var S2 = self.S(); if (S2.screen !== "home") self.unlock(); self.later(function () { self.showHeads(); }, 80); },
       unlock: function () { self.unlock(); }, wake: function () { self.setState({ screen: "lock" }); },
-      pDown: function (e) { e.stopPropagation(); self.pLong = false; clearTimeout(self.pT); if (CONVERSATION_ONLY_VOICE_ENTRY.externalInvocation) self.pT = setTimeout(function () { self.pLong = true; self.startVoice(); }, 550); },
+      pDown: function (e) { e.stopPropagation(); self.pLong = false; clearTimeout(self.pT); if (externalVoiceInvocationEnabled) self.pT = setTimeout(function () { self.pLong = true; self.startVoice(); }, 550); },
       pUp: function (e) {
         e.stopPropagation(); clearTimeout(self.pT); if (self.pLong) return; self.pLong = true;
         var now = Date.now();

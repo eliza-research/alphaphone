@@ -1,4 +1,4 @@
-import { CONVERSATION_ONLY_VOICE_ENTRY } from '@elizaos/capacitor-system/sense';
+import { externalVoiceInvocationEnabled } from '../runtime/aosp-image';
 import {residentRecoveryCopy} from '../runtime/resident-recovery';
 import {browserCalendarScope} from './agent-calendar-adapter';
 import {cloudServiceName} from '../runtime/cloud-protocol';
@@ -221,7 +221,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
       await Promise.allSettled([
         (async () => {
           // A status read older than a Pause or Turn off never replaces that action's result.
-          if (!CONVERSATION_ONLY_VOICE_ENTRY.externalInvocation) return;
+          if (!externalVoiceInvocationEnabled) return;
           const sequence = ++listenerSequence, status = await listenerStatus();
           if (owner === instance && capabilityAbort === abort && sequence === listenerSequence) listener = status;
         })(),
@@ -441,7 +441,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     const nav = (label: string, page: string): Bag => ({ kNav: true, label, lbl: label, chev: true, noAB: true, go: manage(page) });
     const group = (rows: Bag[]) => ({ css: 'background:var(--s2);padding:4px 0', rows });
     // Speech follows the explicit production runtime profile; developer routes stay separate.
-    const speechRows = (): Bag[] => [info('Speech', developmentCartesiaVoiceEnabled?'Cartesia · development':cloudRuntimeEnabled?`${serviceName} · Cartesia output (uses your plan)`:testMocksEnabled?`${serviceName} (counts toward your plan)`:'On this device'), ...(wakeListeningStopUnconfirmed() ? [note('Wake listening', 'Could not confirm listening is off. Turn it off in Android settings.')] : [])];
+    const speechRows = (): Bag[] => [info('Speech', developmentCartesiaVoiceEnabled?'Cartesia · development':cloudRuntimeEnabled?`${serviceName} · Cartesia output (uses your plan)`:testMocksEnabled?`${serviceName} (counts toward your plan)`:'On this device'), ...(wakeListeningStopUnconfirmed() ? [note('Wake listening', 'Could not confirm listening is off.')] : [])];
     const action = (label: string, go: () => void): Bag => ({ kNav:true, label, lbl:label, chev:true, noAB:true, go });
     // P-39: a reply to a message you dictated (Transcribe, then Send) can be read aloud. The switch
     // shows the stored preference, never the requested one: a save that storage does not confirm
@@ -452,7 +452,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
         toggle:()=>{ const next=!speakRepliesEnabled(); if(!setSpeakReplies(next)||speakRepliesEnabled()!==next) api.toast('Read replies aloud could not be saved. Try again.'); changed(); } };
     };
     const listenerRows = (): Bag[] => {
-      if (!CONVERSATION_ONLY_VOICE_ENTRY.externalInvocation) return [];
+      if (!externalVoiceInvocationEnabled) return [];
       if (!listener.available) return [info('Wake word', 'Not available')];
       const status = listener;
       return [
@@ -701,7 +701,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
         page.groups = browserDevProfile?[group([
           info('Speech','Record and review in this app'),
           speakRepliesRow(),
-          ...(CONVERSATION_ONLY_VOICE_ENTRY.externalInvocation ? [{kNav:true,label:'Wake assistant',lbl:'Wake assistant',chev:true,noAB:true,go:()=>void owner?.startVoice()}] : []),
+          ...(externalVoiceInvocationEnabled ? [{kNav:true,label:'Wake assistant',lbl:'Wake assistant',chev:true,noAB:true,go:()=>void owner?.startVoice()}] : []),
           {kNav:true,label:'Open conversation',lbl:'Open conversation',chev:true,noAB:true,go:()=>api.composeContentQuestion('')},
           {kNav:true,label:'Agent connection',lbl:'Agent connection',chev:true,noAB:true,go:()=>connectionController.open()},
           {kNav:true,label:'Scheduled digests',lbl:'Scheduled digests',chev:true,noAB:true,go:()=>window.dispatchEvent(new Event('alpha:hosted-digests'))},

@@ -1,3 +1,4 @@
+import { mobileVoiceEntryPolicy } from '@elizaos/capacitor-system/sense';
 import { Capacitor } from '@capacitor/core';
 import { detectTelephonyProfile, TELEPHONY_PROFILE_METHOD } from '../../../../.eliza/client-features/packages/contracts/src/native-telephony.ts';
 /**
@@ -36,3 +37,9 @@ export function admittedAospViews(image: boolean, admitted: readonly string[] = 
 const capacitor = Capacitor as typeof Capacitor & { PluginHeaders?: unknown };
 /** Read once at module load; the native registration cannot change while the page lives. */
 export const aospImage: boolean = detectAospImage(Capacitor.getPlatform(), capacitor.PluginHeaders);
+
+/** The common mobile default is conversation-only. Native image admission
+ * preserves verified gestures and opted-in listener wakes without enabling
+ * or resuming capture. Listener consent remains in the native companion. */
+export const voiceEntryPolicy = mobileVoiceEntryPolicy(aospImage);
+export const externalVoiceInvocationEnabled = voiceEntryPolicy.externalInvocation;
