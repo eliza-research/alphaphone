@@ -422,7 +422,7 @@
         "plugins/plugin-local-inference/native"
       ],
       "evidence": "docs/evidence/native-f31-source-admission-20261030.json",
-      "note": "Current engine/model integrity and fresh Alpha JNI component evidence are recorded. Official embedding staging remains pending the prepared BGE payload. Historical application qualification is not transferred; fresh APK and device voice acceptance remain required.",
+      "note": "Current engine/model integrity and fresh Alpha JNI component evidence are recorded. The ARM64 embedding host and pinned BGE were staged through the official qualification receipt guard. Historical application qualification is not transferred; fresh APK and device voice acceptance remain required.",
       "previousRecordedPin": "9af104a1c7c7021493db575899baee666ea0ff6a",
       "builtAt": "45b70998d247178973e3fb16a947a02333c9b34e"
     },

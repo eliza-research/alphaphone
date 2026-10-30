@@ -1,6 +1,6 @@
 {
-  "pin": "c95a37be8d56fb672825df7e9e9a742b59567bbb",
-  "forkPin": "0d9fd4b9db239bbf851068f98c99f4263f8c05c5",
+  "pin": "f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5",
+  "forkPin": "d960f633ddb034d0dd828a55216cfc17d012acbd",
   "identity": "ai.elizaresearch.alphaphone",
   "abi": "arm64-v8a",
   "model": {
@@ -11,14 +11,14 @@
   "libraries": [
     {
       "name": "libelizainference.so",
-      "sha256": "c1679c25c28f1ba5a7757aa821265135f3c8f09657a16804ae744761f262eb1e",
-      "bytes": 8066120,
+      "sha256": "9e658577a8833c5dcb46746762371e10296da60d7675efc124fdf11706fd8644",
+      "bytes": 10008856,
       "alignment16KiB": true
     },
     {
       "name": "libelizavoicejni.so",
-      "sha256": "49f59561bf022650f813d79cf0ab0be84f53f37f908c679e05d80ce4e444a491",
-      "bytes": 1190824,
+      "sha256": "310ca5ee7c401c04bcfd6be52e19035dd9ecfc9d8d897bba1637957c0e16713e",
+      "bytes": 1231016,
       "alignment16KiB": true
     },
     {
@@ -28,13 +28,13 @@
       "alignment16KiB": true
     }
   ],
-  "qualificationReceiptSha256": "78d598438eb62947532b02251565181e7c8f505fe453488deec605b10a65f20a",
+  "qualificationReceiptSha256": "662dcef198852a15d0c73a5edfdf22ba39726838c79007d8689e6df63a4fc50f",
   "jniIdentityRelocated": true,
   "inputs": [
     {
       "path": "packages/app/scripts/stage-elizavoice-lib.ts",
-      "sourceSha256": "b1203497834b883d19b638ace5e791a1c608bd0c65e9d8b38315db76730c2fdf",
-      "generatedSha256": "b1203497834b883d19b638ace5e791a1c608bd0c65e9d8b38315db76730c2fdf"
+      "sourceSha256": "dd59fe988cb0393594369439ffa798d47a4149dff3e48a219ddea0b397e8efbc",
+      "generatedSha256": "dd59fe988cb0393594369439ffa798d47a4149dff3e48a219ddea0b397e8efbc"
     },
     {
       "path": "packages/app/scripts/build-helpers/arm64-simd.ts",
@@ -53,24 +53,18 @@
     },
     {
       "path": "packages/app/platforms/android/app/src/main/elizavoice-jni/elizavoice-jni.cpp",
-      "sourceSha256": "cacf867e01c7867d0d5c35e8a60f68584deeb0a95d6f49e22e4a751ace0b69eb",
-      "generatedSha256": "cacf867e01c7867d0d5c35e8a60f68584deeb0a95d6f49e22e4a751ace0b69eb"
+      "sourceSha256": "8fe2a0324d8052c353d4136fbb34612c7560fc91a66e2181a454430fcfd09f1b",
+      "generatedSha256": "8fe2a0324d8052c353d4136fbb34612c7560fc91a66e2181a454430fcfd09f1b"
     },
     {
       "path": "packages/app/platforms/android/app/src/main/java/ai/elizaos/app/ElizaVoiceNative.java",
-      "sourceSha256": "53a0c6edaeb4b43b0e673996ec9539b4e10c43fa6db2d018f59b00a91a8d5551",
-      "generatedSha256": "8667be638eaee77b24ec285b3119f27d19fbdcb27719c900fe85b9ea1b088f1f"
+      "sourceSha256": "296add0ee1157bf8f7c14bb03d7f8918df0f9af46e91eaf903a390acb3974d4f",
+      "generatedSha256": "e0269f4aa6953f3409ef394ba0c7144d62946c09b45fe341a1fc2daa06b2f20f"
     }
   ],
   "jniBinding": {
     "mode": "registered",
     "className": "ai/elizaresearch/alphaphone/ElizaVoiceNative",
     "subset": "full"
-  },
-  "requalification": {
-    "required": true,
-    "atPin": "f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5",
-    "reason": "The retained c95a manifest does not admit current f31/d960 ABI20 bytes. A new f31 Alpha-class JNI bridge has now built for both ABIs; its actual Alpha Java loader and all 81 registrations plus all three BGE384 embedding entrypoints passed ARM64 standalone execution. Stage the new docs/evidence/native-f31-embedding/QUALIFICATION.json through the official staging command after agent:stage-android supplies the pinned BGE model. No installed Alpha application, voice, x86_64 execution, or user acceptance is established.",
-    "evidence": "docs/evidence/native-f31-embedding/QUALIFICATION.json"
   }
 }

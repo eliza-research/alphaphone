@@ -205,7 +205,9 @@
     "sha256": "662dcef198852a15d0c73a5edfdf22ba39726838c79007d8689e6df63a4fc50f",
     "scope": "ARM64 Alpha JNI component execution, not complete product qualification",
     "passed": true,
-    "officialStagingPending": true,
-    "installedApplicationTested": false
+    "officialStagingPending": false,
+    "installedApplicationTested": false,
+    "stagedManifest": "android/embedding-host/qualified-host.json",
+    "stagedManifestSha256": "0f42839de025b0900fdaa916c8667b97c5f0535a7b102fd3d7f99e00ebf4e8ab"
   }
 }
