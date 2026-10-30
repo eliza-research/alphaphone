@@ -6,6 +6,29 @@ Alpha should become a branded build of one upstream Eliza mobile application. Sh
 
 This report precedes implementation. It is based on direct source inspection, not product acceptance. The initial checkout is Alpha `417f8196e` with Eliza `ff9c8264550efd64fd0119c6ff50f99eb8561977`. Implementation starts from the existing combined PR #624 head `ecd5e30ef4fc3d66f4ed43c0ae58502b8fb96b99`, with Eliza `4b928290d388e8f9866b6c404a1b186c7bfe7f70`, so the existing consolidation stack is retained. Findings must be checked against that candidate before edits; the inventories below describe the initial checkout.
 
+## Implementation checkpoint — October 30
+
+The initial findings below remain the audit baseline. The integration branch now
+pins reviewed upstream merge `340f9d7bf8d4dc370ab6446721c617de1cae29f5`.
+Unification is still in progress.
+
+| Area | Current implementation and evidence |
+| --- | --- |
+| Device actions | Alpha delegates admission, review, journal, claim, execution and receipt recovery to the upstream `DeviceActionCoordinator`. |
+| Conversation and returns | Shared conversation turns, selected context observations and Workspace returns are merged in [#38270](https://github.com/elizaOS/eliza/pull/38270) and [#38271](https://github.com/elizaOS/eliza/pull/38271). The Alpha integration consumes them. |
+| Maps and Home | Alpha consumes the shared Maps screen and dock clearance behavior. The latest owner Calendar/Inbox reads are retained in the integration. |
+| Native models and packaging | [#38278](https://github.com/elizaOS/eliza/pull/38278) is merged. Exact-head full verification, 32 staging tests, standalone ARM64 debug and AOSP system release inspection pass. The fresh APKs are 508,319,468 and 486,715,355 bytes. Alpha now uses the same compression policy and upstream test-runner version. |
+| Mobile application root | [#38276](https://github.com/elizaOS/eliza/pull/38276) mounts the shared application in the canonical host. Review fixes preserve off-catalog routes and require confirmed listener shutdown for chat-only mode. Full verification and visual audit are being completed before adoption. |
+| Sign-in and session | [#38275](https://github.com/elizaOS/eliza/pull/38275) shares the sign-in state and forms. [#38281](https://github.com/elizaOS/eliza/pull/38281) shares native credential mutation and correlates cancellation with its originating request. Both still require final qualification. The shared AppProvider and native owner transport are being integrated. |
+| Remaining views | A shared Calendar workspace and common Home selection policy are under validation. Full Inbox behavior, Wallet integration and the remaining domain views still need completion. |
+
+The [native evidence archive](https://github.com/elizaOS/eliza/releases/download/pr-evidence-14/pruning-compression-c43e3bcde-final-evidence.tar.gz)
+retains the failed attempts as well as successful qualification. The isolated
+Android AssetManager tests establish model extraction and warm reuse only.
+Final Alpha full verification, both distribution variants, complete AOSP image
+boot, real provider/audio flows and device/user acceptance remain separate gates.
+No complete parity or optimal inference claim is made by this checkpoint.
+
 ## Main findings
 
 | Area | Current state | Target and work required |
