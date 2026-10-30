@@ -1,0 +1,63 @@
+{
+  "source": "377862d20f73436249f955a36a38e449749a4ae5",
+  "updatedAt": "2026-10-30T12:30:56.333124+00:00",
+  "status": "scoped-only",
+  "checks": {
+    "cameraPhotosNativePermissions": {
+      "passed": 52,
+      "log": "ui-camera-photos-r1.log",
+      "sha256": "501250e04d47c9e89b2deb8cc15d117f544a6678df5f881f1e8c24f0258c73be",
+      "path": "/home/shaw/Work/eliza-unification/shared-inbox-action/test-results/full-app-composition-preview/ui-camera-photos-r1.log"
+    },
+    "hostComposition": {
+      "passed": 9,
+      "log": "host-camera-r1.log",
+      "sha256": "5a403630ee0eaaf055c2717e676d305bf8e0317ea65cc268ce0b5f754aa11ca1",
+      "path": "/home/shaw/Work/eliza-unification/shared-inbox-action/test-results/full-app-composition-preview/host-camera-r1.log"
+    },
+    "nativeCalendarApi": {
+      "status": "passed",
+      "record": "calendar-api-current-r2.json"
+    },
+    "nativeDispatch": [
+      {
+        "name": "provider",
+        "exitCode": 0
+      },
+      {
+        "name": "lease",
+        "exitCode": 0
+      },
+      {
+        "name": "destinations",
+        "exitCode": 0
+      }
+    ],
+    "calendarControllerAndView": {
+      "passed": 78,
+      "log": "calendar-current-r3.log",
+      "retainedWarning": "React act warning in existing async editor flow",
+      "sha256": "f1b49a2d07cb774202fc97d96605a9eb96e99ba2eddeaec1d0981402814ca5ed",
+      "path": "/home/shaw/Work/eliza-unification/shared-inbox-action/test-results/full-app-composition-preview/calendar-current-r3.log"
+    },
+    "calendarReadWeek": {
+      "passed": 18,
+      "log": "calendar-reads-week-r1.log",
+      "sha256": "4dc60faa8eb8bee90cddc5657998affe2f0f58fec5ddd58407ba2fa8172cc91f",
+      "path": "/home/shaw/Work/eliza-unification/shared-inbox-action/test-results/full-app-composition-preview/calendar-reads-week-r1.log"
+    }
+  },
+  "dependencyPolicy": "Read-only existing lock-matched dependencies; explicit source aliases in retained configs. No production bundle, lockfile or install mutation.",
+  "limits": [
+    "Combined full repository and App build pending",
+    "Current Alpha entry and pin still do not consume this composition",
+    "No APK/image/live/device qualification"
+  ],
+  "retainedHarnessFailures": [
+    "ui-current-r1: wrong test cwd",
+    "calendar-current-r1: setup file cwd",
+    "calendar-current-r2: missing lucide dependency alias",
+    "calendar-api-current-r1: omitted new Photos Java closure"
+  ],
+  "recordedAt": "2026-10-30T12:31:43.091649+00:00"
+}
