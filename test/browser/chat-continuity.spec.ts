@@ -80,7 +80,7 @@ async function remoteAgent(page: Page, options: Options = {}) {
         }
         if (path === '/api/conversations' && input.method === 'GET' && f.holdReads) { f.lists++; await new Promise<void>(resolve => { f.heldList = resolve; }); }
         if (path === '/api/conversations' && input.method === 'GET') return ok({ conversations: agent.created ? [{ id: 'fixture-chat', title: 'Alpha Phone', ...(options.abortRoute ? { roomId: room } : {}) }] : [] });
-        if (path === `/api/turns/${room}/abort` && input.method === 'POST') { f.aborts++; return options.abortRoute ? ok({ aborted: f.abortResult, roomId: room }) : { status: 404, data: {} }; }
+        if (path === `/api/turns/${room}/abort` && input.method === 'POST') { f.aborts++; return options.abortRoute ? ok({ aborted: f.abortResult, roomId: room, reason: JSON.parse(input.body || '{}').reason }) : { status: 404, data: {} }; }
         if (path === '/api/conversations/fixture-chat/messages' && input.method === 'POST') {
           const body = JSON.parse(input.body || '{}');
           f.posts++; f.messageIds.push(body.clientMessageId ?? null);
@@ -316,8 +316,8 @@ test('Stop asks the agent to cancel exactly once and reports a confirmed cancel 
   await composer(page).press('Enter');
   await expect.poll(() => fixture(page, f => f.posts), { timeout: 15_000 }).toBe(1);
   await stop(page).click();
-  await expect(conversation(page).getByText('The agent cancelled this reply. Alpha Phone will check once in case it had already finished.', { exact: true })).toBeVisible({ timeout: 15_000 });
-  await expect(conversation(page).getByText('The agent stopped this reply.', { exact: true })).toBeVisible({ timeout: 40_000 });
+  await expect(conversation(page).getByText('The agent accepted Stop. Alpha Phone will check once for a saved reply.', { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(conversation(page).getByText('No completed reply was found when Alpha Phone checked.', { exact: true })).toBeVisible({ timeout: 40_000 });
   await expect(conversation(page).getByText(/Alpha Phone will check once/)).toHaveCount(0);
   await expect(conversation(page).getByText('Please stop this one', { exact: true })).toHaveCount(1);
   expect(await fixture(page, f => ({ posts: f.posts, aborts: f.aborts, reads: f.historyReads }))).toEqual({ posts: 1, aborts: 1, reads: 1 });
@@ -483,7 +483,7 @@ test('a confirmed stop of one turn is never repeated as the outcome of a later s
   await composer(page).press('Enter');
   await expect.poll(() => fixture(page, f => f.posts), { timeout: 15_000 }).toBe(1);
   await stop(page).click();
-  await expect(conversation(page).getByText('The agent stopped this reply.', { exact: true })).toHaveCount(1, { timeout: 40_000 });
+  await expect(conversation(page).getByText('No completed reply was found when Alpha Phone checked.', { exact: true })).toHaveCount(1, { timeout: 40_000 });
   await typeDraft(page, 'Stop the second');
   await composer(page).press('Enter');
   await expect.poll(() => fixture(page, f => f.posts), { timeout: 15_000 }).toBe(2);
@@ -494,7 +494,7 @@ test('a confirmed stop of one turn is never repeated as the outcome of a later s
   await composer(page).press('Enter');
   await expect.poll(() => fixture(page, f => f.posts), { timeout: 15_000 }).toBe(3);
   await expect(conversation(page).getByText(NOT_CHECKED)).toHaveCount(1);
-  await expect(conversation(page).getByText('The agent stopped this reply.', { exact: true })).toHaveCount(1);
+  await expect(conversation(page).getByText('No completed reply was found when Alpha Phone checked.', { exact: true })).toHaveCount(1);
   expect(await fixture(page, f => ({ aborts: f.aborts, reads: f.historyReads }))).toEqual({ aborts: 2, reads: 1 });
 });
 

@@ -1,3 +1,4 @@
+import { admitConversationStopReceipt } from "../../../../.eliza/client-features/packages/ui/src/api/conversation-turn-controller.ts";
 import { isPreparedViewNavigationRequest } from './prepared-view-navigation.ts';
 import { parseViewInteractionClientId } from "../../../../.eliza/client-features/packages/core/src/views/view-interact-protocol.ts";
 import type {ChatChannel} from './alpha-client';
@@ -270,7 +271,7 @@ export class RemoteProtocol {
       // Not `authorized`: a refusal of this optional route must never sign the phone out.
       const credential = this.credential, generation = this.generation;
       if (!credential || credential.expiresAt <= this.now()) return "unsupported";
-      const outcome = turnAbortOutcome(await this.json(turnAbortPath(room), "POST", { reason: "client-stop" }, credential.token, signal));
+      const outcome = turnAbortOutcome(await this.json(turnAbortPath(room), "POST", { reason: "client-stop" }, credential.token, signal), { roomId: room, reason: "client-stop" });
       if (generation !== this.generation) throw new RemoteProtocolError("connection_changed");
       return outcome;
     } catch (error) { signal?.throwIfAborted(); if (error instanceof RemoteProtocolError && error.code === "connection_changed") throw error; return "unsupported"; }
@@ -294,9 +295,9 @@ export class RemoteProtocol {
     return value as RemoteChatReply;
   }
 }
-/** Outcome of an explicit Stop. `aborted`: the agent cancelled an active turn. `idle`: the agent
- * reports no active turn (it may already have finished). `unsupported`: the agent does not expose
- * upstream's `POST /api/turns/:roomId/abort` to this client or the conversation has no room. */
+/** `aborted` means a matching Stop signal was accepted, not that remote cleanup finished.
+ * `idle` is local state before a Stop; a false host receipt never proves it.
+ * `unsupported` means the host did not confirm this exact Stop request. */
 export type TurnAbortOutcome = "aborted" | "idle" | "unsupported";
 export function conversationRoomId(conversations: RemoteConversation[], conversationId: string): string | null {
   const row = conversations.find(item => item.id === conversationId);
@@ -307,10 +308,9 @@ export function turnAbortPath(roomId: string): string {
   if (!uuidPattern.test(roomId)) throw new RemoteProtocolError("invalid_room");
   return `/api/turns/${roomId}/abort`;
 }
-export function turnAbortOutcome(value: unknown): TurnAbortOutcome {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return "unsupported";
-  const aborted = (value as Record<string, unknown>).aborted;
-  return aborted === true ? "aborted" : aborted === false ? "idle" : "unsupported";
+export function turnAbortOutcome(value: unknown, expected: {roomId:string;reason:string}): TurnAbortOutcome {
+  try { admitConversationStopReceipt(value, expected); return "aborted"; }
+  catch { return "unsupported"; }
 }
 export interface MessagePage { before: number; beforeId?: string; limit?: number }
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

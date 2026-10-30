@@ -119,7 +119,7 @@ test('journey A: boot, connect, converse across apps, stop a reply, reload and r
    await expect(conversation.getByText(MAY_FINISH,{exact:true})).toHaveCount(1);
    await expect(conversation.getByText('Request cancelled. A dispatched action may still need status reconciliation.',{exact:true})).toHaveCount(0);
    await expect(bubble(page,'Your message may have reached the agent. Check before sending it again.')).toHaveCount(0);
-   await expect(conversation.getByText('The agent stopped this reply.',{exact:true})).toHaveCount(0);
+   await expect(conversation.getByText('No completed reply was found when Alpha Phone checked.',{exact:true})).toHaveCount(0);
    // While the single check is pending there is nothing to press: the check is automatic.
    await expect(page.getByRole('button',{name:/^Check saved conversation/})).toHaveCount(0);
    await expect(bubble(page,'Journey A cancelled request')).toHaveCount(1);

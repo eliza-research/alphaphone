@@ -15,7 +15,6 @@ test('the pinned agent returns clientMessageId on conversation history user rows
  assert.match(routes,/\.\.\.\(clientMessageId \? \{ clientMessageId \} : \{\}\)/,'user rows sent with one return it');
  const ui=fs.readFileSync(path.join(root,'apps/app/src/runtime/connection-ui.tsx'),'utf8');
  assert.match(ui,/clientMessageId: requestId, channelType/,'the send posts requestId as clientMessageId');
- assert.match(ui,/scheduleStoppedReply\(selected, session, dispatched\.conversationId, \{ clientMessageId: requestId, text, sentAt: dispatched\.at \}\)/,'and Stop checks for that same id');
  assert.match(ui,/const user = findStoppedUserTurn\(result\.messages, turn, restoredText\);/);
 });
 

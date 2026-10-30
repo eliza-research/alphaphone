@@ -7,6 +7,7 @@ const source=readFileSync(process.env.ALPHA_RESTORE_SOURCE||'apps/app/src/runtim
 const part=(start,end)=>{const a=source.indexOf(start),b=source.indexOf(end,a);assert.ok(a>=0&&b>a);return source.slice(a,b);};
 const code=stripTypeScriptTypes([
  part('async function createSelectedConversation(', '/** Only remove'),
+ part('async function resolveResidentConversation(', 'async function restoreConversationHistory('),
  part('async function restoreConversationHistory(', '/** Restored chats'),
  part('async function restoreSavedHistory(', 'type HistoryEntry'),
 ].join('\n'),{mode:'transform'});
@@ -15,7 +16,7 @@ function fixture(){
  const state={session:{sessionId:'session'},history:{conversationId:'manual-visible',revision:4,messages:[]}},writes=[],memory=new Map();
  const selected={kind:'remote',remote:{createConversation:async()=>{createCount++;return{id:'new-empty'};}}};
  const box={state,active:selected,epoch:1,Capacitor:{getPlatform:()=> 'android'},service:null,Date,JSON,Error,
-  residentCloudFlow:()=>false,conversationKey:()=> 'owner-key',conversationMemory:memory,
+  residentCloudFlow:()=>false,residentTurns:null,conversationKey:()=> 'owner-key',conversationMemory:memory,
   captureConversationChoice:async()=>structuredClone(choice),
   selectConversation:async(_key,expected,id)=>{assert.deepEqual(expected,choice);choice={id,revision:'r2'};},
   conversationList:async()=>[],readConversation:async()=>({messages:[],partial:false,deliveryRevisionAtStart:0}),

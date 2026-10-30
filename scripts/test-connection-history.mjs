@@ -1,5 +1,6 @@
 import {validateUuid} from '../vendor/eliza/packages/core/src/utils/uuid.ts';
 import {isCalendarReadFailureCode} from '../.eliza/client-features/packages/contracts/src/calendar.ts';
+import {anyAbortSignal} from '../apps/app/src/runtime/abort-signal.ts';
 import * as residentRecovery from '../apps/app/src/runtime/resident-recovery.ts';
 import {resolveCloudEnvironment} from '../apps/app/src/runtime/cloud-environment-selection.ts';
 // Non-product development controller + shared Cloud protocol over synthetic loopback HTTP. No live account.
@@ -22,8 +23,9 @@ const { cloudServiceName, CloudProtocol, CloudProtocolError, CloudProvisionAccep
 const { PersonalProtocolError } = await import('../apps/app/src/runtime/cloud-personal-protocol.ts');
 const { DevelopmentCloudAgentProtocol } = await import('../apps/app/src/runtime/development-cloud-agents.ts');
 const { phoneContextMessage } = await import('../apps/app/src/runtime/phone-context.ts');
-const { findStoppedUserTurn } = await import('../.eliza/client-features/packages/ui/src/api/conversation-turn-controller.ts');
-const { RemoteProtocol } = await import('../apps/app/src/runtime/remote-protocol.ts');
+const { findStoppedUserTurn, isConversationTurnRefusal } = await import('../.eliza/client-features/packages/ui/src/api/conversation-turn-controller.ts');
+const { ResidentConversationTurns } = await import('../apps/app/src/runtime/resident-conversation-turns.ts');
+const { RemoteProtocol, conversationRoomId } = await import('../apps/app/src/runtime/remote-protocol.ts');
 const { presentDeviceRecordOperation } = await import('../apps/app/src/runtime/device-record-presentation.ts');
 const subscriptionEntitlement = await import('../apps/app/src/runtime/subscription-entitlement.ts');
 const { AlphaClient, AlphaClientError } = await import('../apps/app/src/runtime/alpha-client.ts');
@@ -119,7 +121,7 @@ let clockRetirements=0,heldClockRetirement=null,clockRetirementStarted=null;
 const retireClockReviews=async()=>{clockRetirements++;clockRetirementStarted?.();if(heldClockRetirement)await heldClockRetirement;};
 // This controller fixture models a host whose transport reaches Eliza Cloud. The flag-off web page
 // has none and starts no Cloud route; test/browser/connection-boundaries.production.spec.ts covers it.
-const sandbox = { validateUuid, isCalendarReadFailureCode, appRecordInvalidations,AUTOMATIONS_COMMITTED_EVENT,automationsCommitted, browserCloudResidentEnabled:false,browserCloudResidentEnvironment:'production',...residentRecovery,CAMERA_CAPTURE_CAPABILITY:'camera.capture-photo.v1',clockHandoffCapabilities,PHONE_DIAL_CAPABILITY,telephonyDeviceCapabilities,readDevicePreferences:async()=>({askBeforeAgentActions:true}),  resolveCloudEnvironment,fixtureViteEnv:{DEV:true},...subscriptionEntitlement, ...cloudSignInModule, cloudSignIn:undefined, cloudSignInGoogle:false, AlphaClientError, browserLocalAgentEnabled:true, retireClockReviews, workflowPresentationProtocol:async()=>2, browserDevProfile:false,privateLocalPreviewEnabled:false, devProfileQuery:false, testMocksEnabled:true, devSurfacesEnabled:true, secureConnectionStore:{read:async slot=>deviceSlots.get(slot)??null,write:async(slot,value)=>{deviceSlots.set(slot,value);},remove:async slot=>{deviceSlots.delete(slot);}},
+const sandbox = { anyAbortSignal, conversationRoomId, ResidentConversationTurns, isConversationTurnRefusal, validateUuid, isCalendarReadFailureCode, appRecordInvalidations,AUTOMATIONS_COMMITTED_EVENT,automationsCommitted, browserCloudResidentEnabled:false,browserCloudResidentEnvironment:'production',...residentRecovery,CAMERA_CAPTURE_CAPABILITY:'camera.capture-photo.v1',clockHandoffCapabilities,PHONE_DIAL_CAPABILITY,telephonyDeviceCapabilities,readDevicePreferences:async()=>({askBeforeAgentActions:true}),  resolveCloudEnvironment,fixtureViteEnv:{DEV:true},...subscriptionEntitlement, ...cloudSignInModule, cloudSignIn:undefined, cloudSignInGoogle:false, AlphaClientError, browserLocalAgentEnabled:true, retireClockReviews, workflowPresentationProtocol:async()=>2, browserDevProfile:false,privateLocalPreviewEnabled:false, devProfileQuery:false, testMocksEnabled:true, devSurfacesEnabled:true, secureConnectionStore:{read:async slot=>deviceSlots.get(slot)??null,write:async(slot,value)=>{deviceSlots.set(slot,value);},remove:async slot=>{deviceSlots.delete(slot);}},
   PersonalProtocolError, ClientObservationSupportSession, personalIntent:async()=>null, savePersonalIntent:async(_owner,intent)=>intent, clearPersonalIntent:async()=>{},
   withResidentMapsNavigation, RemoteProtocol, remoteCredentialStore, nativeRemoteRequest, DeviceActions, presentDeviceRecordOperation, actionScope:async value=>Buffer.from(value).toString('base64url').slice(0,32), negotiateEnabledViews:async()=>'',
   Capacitor:{getPlatform:()=>'web',isNativePlatform:()=>false},aospImage:false,SMS_SEND_CAPABILITY:'sms.send.v1', setTimeout:(callback,ms)=>setTimeout(callback,ms===15000?20:ms), clearTimeout, Intl, Date, Buffer, pauseHostedBackground:async()=>{}, configureHostedBackground:async()=>{}, registerPlugin: () => ({}), cloudServiceName, CloudProtocol, CloudProtocolError, DevelopmentCloudAgentProtocol, CloudProvisionAcceptedError, phoneContextMessage, findStoppedUserTurn, nativeCloudRequest,
@@ -285,7 +287,7 @@ try {
   cancelStop.abort();await assert.rejects(cancelledSend);
   await until(()=>remote.aborts.length===1,'explicit turn abort');
   assert.deepEqual(remote.aborts,[{reason:'client-stop'}]);
-  await until(()=>controller.getSnapshot().message==='The agent stopped this reply.','cancelled reply check');
+  await until(()=>controller.getSnapshot().message==='No completed reply was found when Alpha Phone checked.','cancelled reply check');
   assert.equal(controller.getSnapshot().replyNotice,'');
   assert.equal(remote.aborts.length,1,'Stop cancels exactly once and never repeats the turn');
   assert.equal(remoteMessages.filter(item=>item.text==='Finished after Stop').length,1,'no second turn ran');
@@ -350,7 +352,7 @@ try {
       value={serverInstanceId:processId,clientTurnObservationSupport:{version:1,optionalFields:['calendarDay']}};
       if(holdStatus){statusStarted?.();value=await new Promise(resolve=>{releaseStatus=()=>resolve(value);});}
     }else if(input.path==='/api/conversations'&&input.method==='POST'){assert.deepEqual(JSON.parse(input.body),{title:'Alpha Phone'});value={conversation:{id:conversation,title:'Observation fixture'}};}
-    else if(input.path==='/api/conversations')value={conversations:[{id:conversation,title:'Observation fixture'}]};
+    else if(input.path==='/api/conversations')value={conversations:[{id:conversation,title:'Observation fixture',roomId:remoteRoom}]};
     else if(input.path.endsWith('/messages')&&input.method==='GET')value={messages:[]};
     else if(input.path.endsWith('/messages')&&input.method==='POST'){actualWires.push(JSON.parse(input.body));value={text:'Synthetic answer',agentName:'Observation fixture'};}
     else throw Error('Unexpected observation fixture route: '+input.path);
