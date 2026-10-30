@@ -54,13 +54,12 @@
       { "configuration": "implementation", "module": "androidx.webkit:webkit", "toolchainVersion": "androidxWebkitVersion" },
       { "configuration": "implementation", "module": "androidx.appcompat:appcompat", "toolchainVersion": "androidxAppCompatVersion" },
       { "configuration": "implementation", "module": "androidx.core:core-splashscreen", "toolchainVersion": "coreSplashScreenVersion" },
-      { "configuration": "androidTestImplementation", "coordinate": "androidx.test:runner:1.6.2" },
+      { "configuration": "androidTestImplementation", "module": "androidx.test:runner", "toolchainVersion": "androidxTestRunnerVersion" },
       { "configuration": "androidTestImplementation", "coordinate": "androidx.test.ext:junit:1.3.0" },
       { "configuration": "androidTestImplementation", "coordinate": "androidx.test.espresso:espresso-core:3.7.0" },
       { "configuration": "androidTestImplementation", "coordinate": "androidx.test.espresso:espresso-accessibility:3.7.0" },
       { "configuration": "androidTestImplementation", "coordinate": "androidx.test.uiautomator:uiautomator:2.3.0" }
     ],
-    "androidResources": { "noCompress": ["gguf", "lex"] },
     "buildConfigFields": [
       { "name": "AOSP_BUILD", "type": "boolean", "value": false },
       { "name": "ELIZA_CHROMIUM_PACKAGE_NAME", "type": "String", "value": "" },
