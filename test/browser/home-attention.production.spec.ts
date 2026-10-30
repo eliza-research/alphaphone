@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import {launcherTile,returnToApps} from './app-navigation';
 // Production lane (flag-off build, mocks unset). Home's attention, brief and calendar cards show
 // honest states: no provider is connected in a fresh browser profile, no brief has run, and the
 // calendar names where it was read from. The connected Inbox state of this card is exercised with
@@ -15,11 +16,18 @@ test('not connected: the attention card offers Gmail setup and opens Connections
   const card = page.getByRole('button', { name: 'Connect email', exact: true });
   await expect(card).toBeVisible();
   await expect(card).toHaveAccessibleName('Connect email');
+  await expect(launcherTile(page,'Inbox')).toHaveCount(1);
+  await expect(launcherTile(page,'Inbox')).toHaveAccessibleName('Inbox');
   await expect(page.getByText('Accounts are not connected')).toHaveCount(0);
   await page.screenshot({ path: info.outputPath('home-not-connected.png') });
   await card.click();
   await expect(page.locator('html')).toHaveAttribute('data-active-view', 'settings');
   await expect(page.getByRole('heading', { name: 'Connections', exact: true })).toBeVisible();
+  await returnToApps(page);
+  await launcherTile(page,'Inbox').click();
+  await expect(page.locator('html')).toHaveAttribute('data-active-view','inbox');
+  await expect(page.getByRole('region',{name:'Inbox',exact:true})).toBeVisible();
+  await page.screenshot({path:info.outputPath('inbox-app-navigation.png')});
   expect(errors).toEqual([]);
 });
 

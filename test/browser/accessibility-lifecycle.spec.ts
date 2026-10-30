@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { ASSISTANT_GROUP, auditPage, auditReadingOrder, auditTree, format } from './accessibility-audit';
 import { setTextScale } from './accessibility-states';
 import { settled } from './helpers/settled';
+import { launcherTile } from './app-navigation';
 
 // PRD AP-15 across views, in the renderer: repeated HOME, popups open when HOME arrives, rotation
 // and a reload (the renderer's process death) leave every screen announced, operable and in
@@ -33,7 +34,7 @@ const focusState = (page: Page) => page.evaluate(() => {
 });
 /** Activates a Home tile from the keyboard, as Switch Access or a TalkBack double tap does. */
 async function openFromHome(page: Page, view: string) {
-  const tile = page.locator('[data-alpha-layer="home"]').getByRole('button', { name: view, exact: true }).first();
+  const tile = launcherTile(page, view);
   await tile.focus();
   await page.keyboard.press('Enter');
   await expect.poll(() => activeView(page)).toBe(view.toLowerCase());

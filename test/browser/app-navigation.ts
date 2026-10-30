@@ -28,3 +28,7 @@ export async function returnToApps(page: Page) {
   if(await minimize.isVisible())await minimize.click();
   await expect(settings).toBeVisible();
 }
+
+/** Open an app from the shared launcher, independently of Home status/setup cards. */
+export const launcherTile = (page: Page, name: string) =>
+  page.locator('[data-mobile-shell-tile]').and(page.getByRole('button', {name, exact: true}));

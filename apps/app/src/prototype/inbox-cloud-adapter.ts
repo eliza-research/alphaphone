@@ -610,10 +610,11 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
       loaded:cached?{unread:cached.messages.filter(m=>m.unread),more:cached.more,label:accounts.find(a=>a.connectionId===selected)?.label||restored?.label||'',readAt:cached.readAt}:null,
       failure:homeFailure?homeFailure==='revoked'?'revoked':'error':null,
       stale:binding&&attention.state==='stale'?{state:'stale',unread:attention.unread,...(attention.source?{source:attention.source}:{}),updatedAt:attention.updatedAt}:null});
-    // Keep a known read failure visible even before the first successful cached page.
-    if(!cached&&!homeFailure&&(pending||!binding||!accountsChecked))return {...out,homeAttentionLabel:'Inbox',homeInboxCount:'',homeInboxRows:[],homeInboxHasRows:false,homeInboxTitle:'Inbox',homeInboxStatus:'',homeInboxDescription:'',homeInboxState:'pending'};
+    // The same shared state names the card and determines its action. An unresolved
+    // account opens Inbox to check it; only verified disconnection offers setup.
     return {...out,homeAttentionLabel:card.label,homeInboxCount:card.count,homeInboxRows:card.rows.map(row=>({subject:row.title,from:row.detail})),homeInboxHasRows:card.rows.length>0,
-      homeInboxTitle:card.title,homeInboxStatus:card.status,homeInboxDescription:card.description,homeInboxState:card.state};
+      homeInboxTitle:card.title,homeInboxStatus:card.status,homeInboxDescription:card.description,homeInboxState:card.state,
+      goTriage:()=>card.state==='not-connected'?this.openView('settings',{page:'connections'}):this.openView('inbox',{acct:'all',open:null,q:null})};
   };
   // Mail content is never sent to the agent automatically, so chips ask only for help the agent can give.
   // Sharing one message goes through the explicit "Review email with agent" review.
