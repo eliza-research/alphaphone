@@ -146,4 +146,6 @@ test('the agent panel shows a calm starting state while a signed-in agent starts
   assert.match(panel,/residentAiStarting\?'Waiting for your agent to start\.'/);
   assert.match(panel,/\{residentAiStarting\?accountCreatedNotice:snapshot\.cloudAccount/);
   assert.match(panel,/\{residentAiStarting\?null:snapshot\.cloudAccount&&!residentSignInRejected \? <>/);
+  // A start that failed (the binding was cleared at sign-in) never says the agent still runs.
+  assert.match(panel,/:!snapshot\.session&&snapshot\.kind==='recovering'\?'AI is unavailable while your agent is not running\.':'AI connection is not confirmed\. Your agent still runs on this device\.'/);
 });
