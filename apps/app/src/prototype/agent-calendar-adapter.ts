@@ -1,3 +1,4 @@
+import {homeCalendarSelection} from '../runtime/home-calendar-selection';
 import {browserDocuments} from '../browser/documents';
 import {presentCalendarIntervals} from './calendar-interval-presentation';
 import {calendarRange} from '../browser/calendar-records';
@@ -8,8 +9,8 @@ import {connectionController,agentPendingText} from '../runtime/connection-ui';
 import {legacyCalendarPreservation} from '../runtime/legacy-calendar-preservation';
 import {AgentCalendar,calendarOwnerKey,calendarEventKey,calendarSourceKey,type CalendarPreservation} from '../runtime/agent-calendar';
 import type {AppRecordPort} from '../runtime/app-record-route-policy';
-import {canonicalCalendarRow,calendarFormCreate,calendarFormPatch,canonicalHomeCalendar,type CanonicalCalendarForm} from '../runtime/agent-calendar-view';
-import {agentReminderLead,homeCalendarValues,overdueAgendaNext,presentAgentAgendaFeed,presentHomeAgendaCard,type HomeAgendaCardInput} from './home-cards';
+import {canonicalCalendarRow,calendarFormCreate,calendarFormPatch,type CanonicalCalendarForm} from '../runtime/agent-calendar-view';
+import {agentReminderLead,homeCalendarValues,overdueAgendaNext,presentHomeAgendaCard,type HomeAgendaCardInput} from './home-cards';
 import {getZonedDateParts,addDaysToLocalDate} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/internal/time';
 import {eventEditorMutability} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/components/event-editor-policy';
 import {calendarDayObservation} from '../runtime/calendar-day-observation';
@@ -48,7 +49,7 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
  const zone=()=>Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';
  const range=(state:Bag)=>{const today=new Date(),day=new Date(today.getFullYear(),today.getMonth(),today.getDate()+Number(state.day||0));day.setMonth(day.getMonth()+Number(state.month||0));return{side:'owner' as const,timeMin:new Date(day.getFullYear(),day.getMonth()-1,1).toISOString(),timeMax:new Date(day.getFullYear(),day.getMonth()+2,1).toISOString(),timeZone:zone()};};
  const invalidate=(sessionId:string)=>{const target=port();if(!target?.current()||target.sessionId!==sessionId||invalidating)return;invalidating=true;queueMicrotask(()=>{invalidating=false;const current=port();if(owner?.live&&current?.current()&&current.sessionId===sessionId)refresh(true);});};
- const refresh=(force=false)=>{if(!owner?.live||!controller)return;const target=port(),key=JSON.stringify([target?.identity,target?.scope,range(owner.vget('calendar'))]);if(!force&&requestKey===key)return;requestKey=key;void controller.refresh(range(owner.vget('calendar')));};
+ const refresh=(force=false)=>{if(!owner?.live||!controller)return;const target=port(),window=range(owner.S?.()?.view==='calendar'?owner.vget('calendar'):{}),key=JSON.stringify([target?.identity,target?.scope,window]);if(!force&&requestKey===key)return;requestKey=key;void controller.refresh(window);};
  // One end-time wake plus foreground events; no polling or background reads.
  const readNext=()=>{if(!owner?.live||!controller)return;controller.invalidateNext();if(document.hidden)return;refresh(true);};
  const watchNextEnd=()=>{clearTimeout(nextEnded);const end=Date.parse(controller?.state.next?.event?.endAt??'');if(end>Date.now())nextEnded=setTimeout(readNext,Math.min(end-Date.now(),2147483647));};
@@ -158,10 +159,13 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
   // Home's agenda reads the calendar the owner chose: Agent Calendar unless device calendars were
   // chosen explicitly in Calendar, whose read Home then shows with its own states and read times.
   if(deviceCalendarScope(this))return out;
-  const home=canonicalHomeCalendar(controller?.state.next??null,controller?.state.nextFresh===true),event=home.event,now=Date.now();
+  const now=Date.now(),calendarState=this.vget('calendar'),hidden=new Set<string>();
+  for(const source of controller?.state.calendars??[]){const key=calendarSourceKey(source),handle=controller!.sourceHandle(key);if(handle&&calendarState.calPrefs?.[handle]?.on===false)hidden.add(key);}
+  const target=port(),model=target?.current()&&controller?.state.ownerKey===calendarOwnerKey(target)?controller.state:undefined;
+  const home=homeCalendarSelection(model,zone(),hidden,new Date(now)),event=home.event;
   // Shared daily-overview states for the agent calendar feed: reading, not connected, failed, stale and fresh.
-  // A next event that is not verified (failed next read, partial feed, ended event) is never fresh or empty.
-  const feed=presentAgentAgendaFeed(controller?.state,!!event,now,home.emptyLabel);
+  // Only a current complete feed may supply an item or a real empty state.
+  const feed={state:home.verified?'ready':'pending',read:'',description:'' ,stale:false,title:home.emptyLabel};
   const provenance={origin:'',read:feed.read,description:feed.description};
   // The agent's next event as an agenda item; an all-day event starts at local midnight of its first day.
   const day=(at:string)=>{const d=new Date(at);return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()).getTime();};
