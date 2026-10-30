@@ -1,5 +1,5 @@
 import {DailyApps} from '../daily';
-import {watchGoogleConnectionReturn,sameGoogleConnectionReturnBinding,type GoogleConnectionReturnBinding} from './google-connection-return';
+import {watchForegroundAccountReturn as watchGoogleConnectionReturn,sameAccountReturnBinding as sameGoogleConnectionReturnBinding,type AccountReturnBinding as GoogleConnectionReturnBinding,sameAccountReturnBinding as sameGoogleWorkspaceBinding,type AccountReturnBinding as GoogleWorkspaceBinding} from '@elizaos/auth/app-return';
 import {gmailBackgroundStatus,gmailBackgroundMessage,gmailNotificationSettings,GMAIL_BACKGROUND_CHANGED} from './gmail-background';
 import {isAndroid} from '../native';
 import {gmailGrantTier,googleAccountAccessLabel} from './gmail-grants';
@@ -9,8 +9,8 @@ import {connectionController} from './connection-ui';
 import {createGoogleAccounts,GOOGLE_ACCOUNTS_CHANGED,googleDisconnectConfirmation,googleDisconnectMessage} from './google-accounts';
 import {GoogleCalendarReader,type GoogleCalendarBinding,type GoogleCalendarSource} from './google-calendar';
 import {clearGoogleCalendarSelectionForConnection,readGoogleCalendarSelection,saveGoogleCalendarSelection,GOOGLE_CALENDAR_SELECTION_CHANGED} from './google-calendar-selection';
-import {openConnectionBrowser,googleWorkspaceReturnPort} from './native-connection';
-import {prepareGoogleWorkspaceReturn,watchGoogleWorkspaceReturn,sameGoogleWorkspaceBinding,type GoogleWorkspaceBinding} from './google-workspace-return';
+import {openConnectionBrowser,googleWorkspaceReturnPort,workspaceAppReturn} from './native-connection';
+const {prepare:prepareGoogleWorkspaceReturn,watch:watchGoogleWorkspaceReturn}=workspaceAppReturn;
 import {cloudServiceName,type GmailAccount} from './cloud-protocol';
 let opened=false;const listeners=new Set<()=>void>();
 export const googleConnectionController={open(){opened=true;for(const listener of listeners)listener();},close(){opened=false;for(const listener of listeners)listener();},subscribe(listener:()=>void){listeners.add(listener);return()=>{listeners.delete(listener);};},getSnapshot:()=>opened};

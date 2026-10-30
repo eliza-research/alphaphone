@@ -51,7 +51,7 @@ final class LegacyCloudRecovery {
    before.token();
    slots.write(scoped(JOURNAL),"{\"status\":\"pending\"}");
    current.run();
-   slots.remove(CloudDeployment.storageSlot(GoogleWorkspaceReturn.SLOT));
+   slots.remove(CloudDeployment.storageSlot(AlphaConnectionPlugin.WORKSPACE_PENDING_SLOT));
    slots.write(scoped(CLOUD),before.legacy);
    slots.write(scoped(JOURNAL),"{\"status\":\"complete\"}");
    return true;

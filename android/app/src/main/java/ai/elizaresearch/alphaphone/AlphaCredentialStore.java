@@ -118,7 +118,7 @@ final class AlphaCredentialStore {
       ?!java.util.Objects.equals(before,committed):!LocalAgentProviderAdmission.sameCloudCredential(before,committed);
     if(authorityChanged)AlphaLocalAgentPlugin.powerAuthorizationChanged();
     invalidateProviderAdmission(name,value);
-    if("cloud:production".equals(name)&&authorityChanged)slots.remove(CloudDeployment.storageSlot(GoogleWorkspaceReturn.SLOT));
+    if("cloud:production".equals(name)&&authorityChanged)slots.remove(CloudDeployment.storageSlot(AlphaConnectionPlugin.WORKSPACE_PENDING_SLOT));
     if(value==null)slots.remove(CloudDeployment.storageSlot(name));
     else slots.write(CloudDeployment.storageSlot(name),committed);
     return true;

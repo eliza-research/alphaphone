@@ -1,4 +1,6 @@
-import {nativeGoogleWorkspaceReturnAvailable,type GoogleWorkspaceBinding,type GoogleWorkspaceReturnPort} from './google-workspace-return';
+import type {AccountReturnBinding as GoogleWorkspaceBinding,WorkspaceAppReturnPort as GoogleWorkspaceReturnPort} from '@elizaos/auth/app-return';
+import {workspaceAppReturn} from './cloud-protocol';
+export {workspaceAppReturn};
 import {cloudStorageSlot} from './cloud-deployment.generated.ts';
 import {browserCloudResidentEnabled,browserCloudManagedServiceAllowed} from './browser-cloud-resident';
 import {managedServiceRequest} from './managed-service-routes';
@@ -187,7 +189,7 @@ let browserConnection:ConnectionPort|undefined;
 const native = registerPlugin<ConnectionPort>('AlphaConnection',!nativeConnectionHeader&&!Capacitor.isNativePlatform()?{web:()=>browserCloudHost?new BrowserCloudConnection():browserConnection??=createBrowserConnection()}:undefined);
 
 /** Unsupported or unverified native app links retain the existing manual-return flow. */
-export const googleWorkspaceReturnPort:GoogleWorkspaceReturnPort|undefined=Capacitor.getPlatform()==='android'&&nativeGoogleWorkspaceReturnAvailable((Capacitor as typeof Capacitor&{PluginHeaders?:unknown}).PluginHeaders)?{
+export const googleWorkspaceReturnPort:GoogleWorkspaceReturnPort|undefined=Capacitor.getPlatform()==='android'&&workspaceAppReturn.available((Capacitor as typeof Capacitor&{PluginHeaders?:unknown}).PluginHeaders)?{
  async prepare(binding){if(binding.environment!=='production')return {supported:false};return native.prepareGoogleWorkspaceReturn?native.prepareGoogleWorkspaceReturn(binding):{supported:false};},
  async consume(binding){return native.consumeGoogleWorkspaceReturn?native.consumeGoogleWorkspaceReturn(binding):{result:'none'};},
  async cancel(state){await native.cancelGoogleWorkspaceReturn?.({state});},

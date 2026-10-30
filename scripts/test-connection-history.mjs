@@ -24,14 +24,14 @@ const { PersonalProtocolError } = await import('../apps/app/src/runtime/cloud-pe
 const { DevelopmentCloudAgentProtocol } = await import('../apps/app/src/runtime/development-cloud-agents.ts');
 const { phoneContextMessage } = await import('../apps/app/src/runtime/phone-context.ts');
 const { findStoppedUserTurn, isConversationTurnRefusal } = await import('../.eliza/client-features/packages/ui/src/api/conversation-turn-controller.ts');
-const { ResidentConversationTurns } = await import('../apps/app/src/runtime/resident-conversation-turns.ts');
+const { ResidentConversationTurns } = await import('../apps/app/src/runtime/alpha-client.ts');
 const { RemoteProtocol, conversationRoomId } = await import('../apps/app/src/runtime/remote-protocol.ts');
 const { presentDeviceRecordOperation } = await import('../apps/app/src/runtime/device-record-presentation.ts');
 const subscriptionEntitlement = await import('../apps/app/src/runtime/subscription-entitlement.ts');
 const { AlphaClient, AlphaClientError } = await import('../apps/app/src/runtime/alpha-client.ts');
 const {loadBrowserModule}=await import('../test/fixtures/browser-source.mjs');
 const [{LocalAgentProtocol},{withResidentMapsNavigation}]=await loadBrowserModule(['apps/app/src/runtime/local-agent.ts','apps/app/src/maps/resident-relay.ts']);
-const { ClientObservationSupportSession } = await import('../apps/app/src/runtime/client-observation-support.ts');
+const { ClientObservationSupportSession } = await import('../.eliza/client-features/packages/ui/src/api/client-observation.ts');
 const user = '11111111-1111-4111-8111-111111111111', agent = '22222222-2222-4222-8222-222222222222', organization = '99999999-9999-4999-8999-999999999999';
 const personal = 'personal:12345678-1234-5234-8234-123456789abc', agentHost = `https://${agent}.cloud.eliza.app`;
 const conversation = '33333333-3333-4333-8333-333333333333';

@@ -1,4 +1,6 @@
-import {googleWorkspaceRedirectAllowed} from './google-workspace-return.ts';
+import {createWorkspaceAppReturn} from '../../../../.eliza/client-features/packages/auth/src/sdk/app-return.ts';
+export const workspaceAppReturn=createWorkspaceAppReturn({callbackUrl:'https://alphacompute.ai/alphaphone/gmail/callback',pluginName:'AlphaConnection',methods:['prepareGoogleWorkspaceReturn','consumeGoogleWorkspaceReturn','cancelGoogleWorkspaceReturn']});
+const {redirectAllowed:googleWorkspaceRedirectAllowed}=workspaceAppReturn;
 import {productionCloud, stagingCloud} from './cloud-deployment.generated.ts';
 import {browserCloudResidentEnabled,browserCloudResidentEnvironment} from './browser-cloud-resident.ts';
 import {calendarSyncHttp,type CalendarSyncRequest} from './calendar-linked-provider.ts';

@@ -12,7 +12,7 @@ import {canonicalCalendarRow,calendarFormCreate,calendarFormPatch,canonicalHomeC
 import {agentReminderLead,homeCalendarValues,overdueAgendaNext,presentAgentAgendaFeed,presentHomeAgendaCard,type HomeAgendaCardInput} from './home-cards';
 import {getZonedDateParts,addDaysToLocalDate} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/internal/time';
 import {eventEditorMutability} from '../../../../.eliza/client-features/plugins/plugin-calendar/src/components/event-editor-policy';
-import {calendarDayObservation} from '../runtime/calendar-day-observation';
+import {calendarDayObservation} from '@elizaos/plugin-calendar/client/day-observation';
 type Bag=Record<string,any>;
 export const nativeCalendarScope=(shell:Bag|undefined)=>!!shell&&Capacitor.getPlatform()==='android'&&shell.vget('calendar').calendarAuthority==='android-native';
 export const browserCalendarScope=(shell:Bag|undefined)=>testMocksEnabled&&!!shell&&Capacitor.getPlatform()==='web'&&shell.vget('calendar').calendarAuthority==='browser-local';
@@ -66,7 +66,9 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
  const sourceRows=()=>controller?.state.calendars.map(c=>({id:controller!.sourceHandle(calendarSourceKey(c)),name:c.summary,sub:c.accountEmail??c.provider,color:'acc',on:true}))??[];
  p.calendarDayObservation=function(){
   const shell=this.S(),connection=connectionController.getSnapshot(),target=port(),model=controller?.state;
-  return calendarDayObservation({live:owner===this&&this.live,view:shell.view||'home',screen:shell.screen||'home',hidden:document.hidden,pageSuspended:this.pageSuspended===true,secure:shell.secure===true,shade:!!shell.shade,connectionOpen:connection.open,recovery:!!connection.residentRecoveryReason||!!connection.residentRecovery,clockDraft:!!this.clockSelection?.(),ownerCurrent:!!target?.current(),ownerKey:model?.ownerKey??null,expectedOwnerKey:target?calendarOwnerKey(target):null,status:model?.status??'disconnected',mutating:model?.mutating===true,calendar:this.vget('calendar')},zone());
+  const calendar=this.vget('calendar');
+  // The application root still owns visibility; Calendar owns observation eligibility.
+  return calendarDayObservation({dayOffset:calendar.day,mode:calendar.month===undefined||calendar.month===null?'day':'month',selection:calendar.form?'editor':calendar.open?'event':'none',source:calendar.calendarAuthority===undefined||calendar.calendarAuthority==='canonical'?'canonical':'other',status:model?.status??'disconnected',mutating:model?.mutating===true,ownerKey:model?.ownerKey??null},{visible:owner===this&&this.live&&(shell.view||'home')==='calendar'&&(shell.screen||'home')==='home'&&!document.hidden&&this.pageSuspended!==true&&shell.secure!==true&&!shell.shade&&!connection.open&&!connection.residentRecoveryReason&&!connection.residentRecovery&&!this.clockSelection?.(),ownerCurrent:!!target?.current(),currentOwnerKey:target?calendarOwnerKey(target):null},zone());
  };
  views.calendar.displaySources=()=>deviceCalendarScope(owner)?displaySources?.():{native:false,canonical:true,status:controller?.state.status??'disconnected',ready:controller?.state.status==='ready',loading:controller?.state.status==='loading',error:controller?.state.status==='error',sources:sourceRows(),retry:()=>refresh(true)};
  function newForm(api:Bag){

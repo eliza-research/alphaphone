@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {loadBrowserModule} from './fixtures/browser-source.mjs';
-const [flow,protocol,accounts]=await loadBrowserModule(['apps/app/src/runtime/google-workspace-return.ts','apps/app/src/runtime/cloud-protocol.ts','apps/app/src/runtime/google-accounts.ts']);
+const [returns,protocol,accounts]=await loadBrowserModule(['.eliza/client-features/packages/auth/src/sdk/app-return.ts','apps/app/src/runtime/cloud-protocol.ts','apps/app/src/runtime/google-accounts.ts']);
+const callback='https://alphacompute.ai/alphaphone/gmail/callback';
+const shared=returns.createWorkspaceAppReturn({callbackUrl:callback,pluginName:'AlphaConnection',methods:['prepareGoogleWorkspaceReturn','consumeGoogleWorkspaceReturn','cancelGoogleWorkspaceReturn']});
+const flow={GOOGLE_WORKSPACE_CALLBACK:callback,prepareGoogleWorkspaceReturn:shared.prepare,watchGoogleWorkspaceReturn:shared.watch,googleWorkspaceRedirectAllowed:shared.redirectAllowed,nativeGoogleWorkspaceReturnAvailable:shared.available};
 const state='A'.repeat(43),redirect=flow.GOOGLE_WORKSPACE_CALLBACK+'?state='+state;
 const binding={environment:'production',userId:'11111111-1111-4111-8111-111111111111',organizationId:'22222222-2222-4222-8222-222222222222',credentialId:'credential',sessionId:'ui-session'};
 const signal=()=>new AbortController().signal;

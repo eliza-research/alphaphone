@@ -10,6 +10,8 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import ai.eliza.plugins.agent.connection.ConnectionTransport;
 import ai.eliza.plugins.agent.connection.DelegationCallback;
 import ai.eliza.plugins.agent.connection.PendingRequests;
+import ai.eliza.plugins.agent.connection.WorkspaceAppReturn;
+import ai.eliza.plugins.agent.connection.WorkspaceAppReturnFlow;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
@@ -28,6 +30,9 @@ import org.json.JSONObject;
 public final class AlphaConnectionPlugin extends Plugin {
  /** Alpha's Cloud delegation return link: alphaphone://cloud-delegation?state=...&(code|error)=... */
  static final String DELEGATION_SCHEME="alphaphone",DELEGATION_HOST="cloud-delegation";
+ static final String WORKSPACE_CALLBACK="https://alphacompute.ai/alphaphone/gmail/callback";
+ static final String WORKSPACE_PENDING_SLOT="google-workspace-return:v1:pending";
+ private static final WorkspaceAppReturn WORKSPACE_RETURN=new WorkspaceAppReturn(WORKSPACE_CALLBACK);
  private volatile Uri delegationCallback;
  private volatile String workspaceCallback;
  private final Object foregroundLock=new Object();
@@ -58,15 +63,15 @@ public final class AlphaConnectionPlugin extends Plugin {
  }
 
  /** Workspace return uses only its own native protected pending slot. */
- private GoogleWorkspaceReturnFlow workspaceFlow(){
-  return new GoogleWorkspaceReturnFlow(new GoogleWorkspaceReturnFlow.Store(){
+ private WorkspaceAppReturnFlow workspaceFlow(){
+  return new WorkspaceAppReturnFlow(WORKSPACE_RETURN,new WorkspaceAppReturnFlow.Store(){
    public String credential()throws Exception{return storage().readCredentialSlot("cloud:production");}
-   public String pending()throws Exception{return storage().readCredentialSlot(GoogleWorkspaceReturn.SLOT);}
-   public boolean comparePending(String expected,String value)throws Exception{return storage().compareExchangeCredentialSlot(GoogleWorkspaceReturn.SLOT,expected,value);}
+   public String pending()throws Exception{return storage().readCredentialSlot(WORKSPACE_PENDING_SLOT);}
+   public boolean comparePending(String expected,String value)throws Exception{return storage().compareExchangeCredentialSlot(WORKSPACE_PENDING_SLOT,expected,value);}
   });
  }
- private GoogleWorkspaceReturn.Binding workspaceBinding(PluginCall call,String raw)throws Exception {
-  return GoogleWorkspaceReturnFlow.binding(call.getString("environment"),call.getString("userId"),call.getString("organizationId"),call.getString("credentialId"),raw);
+ private WorkspaceAppReturn.Binding workspaceBinding(PluginCall call,String raw)throws Exception {
+  return WorkspaceAppReturnFlow.binding(call.getString("environment"),call.getString("userId"),call.getString("organizationId"),call.getString("credentialId"),raw,System.currentTimeMillis());
  }
  private String workspaceAppLinkAssociation(){
   if(android.os.Build.VERSION.SDK_INT<31)return null;
@@ -75,9 +80,9 @@ public final class AlphaConnectionPlugin extends Plugin {
    android.content.pm.verify.domain.DomainVerificationUserState state=manager==null?null:manager.getDomainVerificationUserState(getContext().getPackageName());
    if(state==null)return null;
    Integer domain=state.getHostToStateMap().get("alphacompute.ai");
-   Intent intent=new Intent(Intent.ACTION_VIEW,Uri.parse(GoogleWorkspaceReturn.CALLBACK));intent.addCategory(Intent.CATEGORY_BROWSABLE);intent.addCategory(Intent.CATEGORY_DEFAULT);intent.setPackage(getContext().getPackageName());
+   Intent intent=new Intent(Intent.ACTION_VIEW,Uri.parse(WORKSPACE_CALLBACK));intent.addCategory(Intent.CATEGORY_BROWSABLE);intent.addCategory(Intent.CATEGORY_DEFAULT);intent.setPackage(getContext().getPackageName());
    boolean ownCallback=!getContext().getPackageManager().queryIntentActivities(intent,android.content.pm.PackageManager.MATCH_DEFAULT_ONLY).isEmpty();
-   return GoogleWorkspaceReturn.association(state.isLinkHandlingAllowed(),ownCallback,java.util.Objects.equals(domain,android.content.pm.verify.domain.DomainVerificationUserState.DOMAIN_STATE_VERIFIED),java.util.Objects.equals(domain,android.content.pm.verify.domain.DomainVerificationUserState.DOMAIN_STATE_SELECTED));
+   return WorkspaceAppReturn.association(state.isLinkHandlingAllowed(),ownCallback,java.util.Objects.equals(domain,android.content.pm.verify.domain.DomainVerificationUserState.DOMAIN_STATE_VERIFIED),java.util.Objects.equals(domain,android.content.pm.verify.domain.DomainVerificationUserState.DOMAIN_STATE_SELECTED));
   }catch(Exception unavailable){return null;}
  }
  @PluginMethod public void prepareGoogleWorkspaceReturn(PluginCall call){
@@ -86,7 +91,7 @@ public final class AlphaConnectionPlugin extends Plugin {
    if(association==null||!"production".equals(call.getString("environment"))){call.resolve(new JSObject().put("supported",false));return;}
    final long owner=AlphaLocalAgentPlugin.credentialAuthorityEpoch();
    String raw=storage().readCredentialSlot("cloud:production");
-   GoogleWorkspaceReturn.Binding binding=workspaceBinding(call,raw);
+   WorkspaceAppReturn.Binding binding=workspaceBinding(call,raw);
    JSONObject saved=new JSONObject(raw);if(saved.has("expiresAt")&&saved.getLong("expiresAt")<=System.currentTimeMillis())throw new IllegalArgumentException();
    JSONObject identity=readCloudIdentity(saved.getString("token"));
    if(!binding.userId.equals(identity.optString("userId"))||!binding.organizationId.equals(identity.optString("organizationId")))throw new SecurityException();
@@ -98,7 +103,7 @@ public final class AlphaConnectionPlugin extends Plugin {
  }
  private void captureWorkspaceCallback(Intent intent){
   final String url=intent==null||intent.getData()==null?null:intent.getData().toString();
-  if(GoogleWorkspaceReturn.parse(url)==null)return;
+  if(WORKSPACE_RETURN.parse(url)==null)return;
   storageTasks.submit(()->{try{
    if(destroyed||workspaceAppLinkAssociation()==null||!workspaceFlow().captureAllowed(url,System.currentTimeMillis()))return;
    workspaceCallback=url;notifyListeners("googleWorkspaceReturn",new JSObject(),true);
@@ -108,7 +113,7 @@ public final class AlphaConnectionPlugin extends Plugin {
   submitStorage(call,()->{try{
    final String url=workspaceCallback;
    if(workspaceAppLinkAssociation()==null){call.resolve(new JSObject().put("result","none"));return;}
-   GoogleWorkspaceReturn.Callback result=workspaceFlow().consume(workspaceBinding(call,storage().readCredentialSlot("cloud:production")),url,System.currentTimeMillis());
+   WorkspaceAppReturn.Callback result=workspaceFlow().consume(workspaceBinding(call,storage().readCredentialSlot("cloud:production")),url,System.currentTimeMillis());
    if(result==null){call.resolve(new JSObject().put("result","none"));return;}
    if(java.util.Objects.equals(workspaceCallback,url))workspaceCallback=null;
    getActivity().runOnUiThread(()->{Intent current=getActivity().getIntent();if(current!=null&&current.getData()!=null&&url.equals(current.getData().toString()))current.setData(null);});

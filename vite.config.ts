@@ -114,6 +114,12 @@ export default defineConfig({
   resolve: {
     dedupe: ['react', 'react-dom'],
     alias: {
+      "@elizaos/auth/app-return": fileURLToPath(new URL("./.eliza/client-features/packages/auth/src/sdk/app-return.ts",import.meta.url)),
+      "@elizaos/ui/api/client-observation": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/api/client-observation.ts",import.meta.url)),
+      "@elizaos/plugin-calendar/client/day-observation": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-calendar/src/client/day-observation.ts",import.meta.url)),
+      "@elizaos/contracts/client-turn-observation": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/client-turn-observation.ts",import.meta.url)),
+      "@elizaos/contracts/remote-agent-pairing": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/contracts/remote-agent-pairing.ts",import.meta.url)),
+
       "@elizaos/capacitor-system/sense": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/sense-bridge.ts", import.meta.url)),
       "@elizaos/capacitor-system/reset": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/reset.ts", import.meta.url)),
       "@elizaos/capacitor-system/settings": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/settings.ts", import.meta.url)),

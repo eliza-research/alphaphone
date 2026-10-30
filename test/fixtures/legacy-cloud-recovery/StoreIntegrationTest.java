@@ -1,4 +1,6 @@
 package ai.elizaresearch.alphaphone;
+import ai.eliza.plugins.agent.connection.WorkspaceAppReturn;
+import ai.eliza.plugins.agent.connection.WorkspaceAppReturnFlow;
 import java.io.File;
 import ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots;
 public final class StoreIntegrationTest {
@@ -74,7 +76,7 @@ public final class StoreIntegrationTest {
    JsonCredentialSlots raw=new JsonCredentialSlots(new File(context.getNoBackupFilesDir(),"connection-credentials"),"alpha.connection.aes.v1",name->262144);
    raw.write(CloudDeployment.storageSlot("cloud:production"),original);
    AlphaCredentialStore store=new AlphaCredentialStore(context);
-   store.writeCredentialSlot(GoogleWorkspaceReturn.SLOT,pending);
+   store.writeCredentialSlot(AlphaConnectionPlugin.WORKSPACE_PENDING_SLOT,pending);
    boolean keep=false;
    switch(operation){
     case "write":store.writeCredentialSlot("cloud:production",changed);break;
@@ -91,11 +93,11 @@ public final class StoreIntegrationTest {
     case "staging":store.writeCredentialSlot("cloud:staging",changed);keep=true;break;
     case "unrelated":store.writeCredentialSlot("device:fixture","unrelated");keep=true;break;
    }
-   check(keep?pending.equals(store.readCredentialSlot(GoogleWorkspaceReturn.SLOT)):store.readCredentialSlot(GoogleWorkspaceReturn.SLOT)==null,"Workspace pending lifecycle: "+operation);
+   check(keep?pending.equals(store.readCredentialSlot(AlphaConnectionPlugin.WORKSPACE_PENDING_SLOT)):store.readCredentialSlot(AlphaConnectionPlugin.WORKSPACE_PENDING_SLOT)==null,"Workspace pending lifecycle: "+operation);
    if(!keep){
     // ABA cannot revive the old attempt even when the exact original credential bytes return.
     store.writeCredentialSlot("cloud:production",original);
-    check(store.readCredentialSlot(GoogleWorkspaceReturn.SLOT)==null,"restoring old credential never restores pending: "+operation);
+    check(store.readCredentialSlot(AlphaConnectionPlugin.WORKSPACE_PENDING_SLOT)==null,"restoring old credential never restores pending: "+operation);
     check(original.equals(store.readCredentialSlot("cloud:production")),"original credential restored without pending: "+operation);
    }
   }
@@ -103,11 +105,11 @@ public final class StoreIntegrationTest {
   JsonCredentialSlots raw=new JsonCredentialSlots(new File(context.getNoBackupFilesDir(),"connection-credentials"),"alpha.connection.aes.v1",name->262144);
   raw.write("cloud:production",original);
   AlphaCredentialStore store=new AlphaCredentialStore(context);
-  store.writeCredentialSlot(GoogleWorkspaceReturn.SLOT,pending);
+  store.writeCredentialSlot(AlphaConnectionPlugin.WORKSPACE_PENDING_SLOT,pending);
   check(store.restoreLegacyCloudCredential(),"legacy direct write restores credential");
-  check(store.readCredentialSlot(GoogleWorkspaceReturn.SLOT)==null,"legacy direct credential write clears pending");
+  check(store.readCredentialSlot(AlphaConnectionPlugin.WORKSPACE_PENDING_SLOT)==null,"legacy direct credential write clears pending");
   check(original.equals(raw.read("cloud:production")),"legacy source retained after Workspace invalidation");
-  for(String slot:new String[]{"google-workspace-return",GoogleWorkspaceReturn.SLOT,"google-workspace-return:v99:future"}){
+  for(String slot:new String[]{"google-workspace-return",AlphaConnectionPlugin.WORKSPACE_PENDING_SLOT,"google-workspace-return:v99:future"}){
    try{RendererCredentialSlots.requireAllowed(slot);throw new AssertionError("Workspace slot was renderer accessible");}
    catch(SecurityException expected){}
   }
@@ -118,25 +120,25 @@ public final class StoreIntegrationTest {
   admissionRaw.write(CloudDeployment.storageSlot("cloud:production"),original);
   AlphaCredentialStore admissionStore=new AlphaCredentialStore(admissionContext);
   int[] calls={0};
-  GoogleWorkspaceReturnFlow flow=new GoogleWorkspaceReturnFlow(new GoogleWorkspaceReturnFlow.Store(){
+  WorkspaceAppReturnFlow flow=new WorkspaceAppReturnFlow(new WorkspaceAppReturn(AlphaConnectionPlugin.WORKSPACE_CALLBACK),new WorkspaceAppReturnFlow.Store(){
    private void locked(){check(Thread.holdsLock(AlphaLocalAgentPlugin.lifecycleLock)&&Thread.holdsLock(JsonCredentialSlots.LOCK),"native admission holds lifecycle then vault");calls[0]++;}
    public String credential()throws Exception{locked();return admissionStore.readCredentialSlot("cloud:production");}
-   public String pending()throws Exception{locked();return admissionStore.readCredentialSlot(GoogleWorkspaceReturn.SLOT);}
-   public boolean comparePending(String expected,String value)throws Exception{locked();return admissionStore.compareExchangeCredentialSlot(GoogleWorkspaceReturn.SLOT,expected,value);}
+   public String pending()throws Exception{locked();return admissionStore.readCredentialSlot(AlphaConnectionPlugin.WORKSPACE_PENDING_SLOT);}
+   public boolean comparePending(String expected,String value)throws Exception{locked();return admissionStore.compareExchangeCredentialSlot(AlphaConnectionPlugin.WORKSPACE_PENDING_SLOT,expected,value);}
   });
-  GoogleWorkspaceReturn.Binding owner=GoogleWorkspaceReturnFlow.binding("production","22222222-2222-4222-8222-222222222222","33333333-3333-4333-8333-333333333333",LegacyCloudRecoveryTest.ID,original);
+  WorkspaceAppReturn.Binding owner=WorkspaceAppReturnFlow.binding("production","22222222-2222-4222-8222-222222222222","33333333-3333-4333-8333-333333333333",LegacyCloudRecoveryTest.ID,original,1000);
   long priorEpoch=AlphaLocalAgentPlugin.credentialAuthorityEpoch();
   admissionStore.removeCredentialSlot("cloud:production");
   admissionStore.writeCredentialSlot("cloud:production",original);
   check(AlphaLocalAgentPlugin.credentialAuthorityEpoch()!=priorEpoch,"clear and same-byte restore advances authority epoch");
   try{AlphaLocalAgentPlugin.withCredentialAuthority(priorEpoch,()->flow.prepare(owner,"A".repeat(43),1000));throw new AssertionError("old admission epoch revived after ABA");}catch(SecurityException expected){}
-  check(admissionStore.readCredentialSlot(GoogleWorkspaceReturn.SLOT)==null&&calls[0]==0,"stale API call refuses before flow or pending write");
+  check(admissionStore.readCredentialSlot(AlphaConnectionPlugin.WORKSPACE_PENDING_SLOT)==null&&calls[0]==0,"stale API call refuses before flow or pending write");
   long currentEpoch=AlphaLocalAgentPlugin.credentialAuthorityEpoch();
   admissionStore.writeCredentialSlot("cloud:production",metadata);
   check(AlphaLocalAgentPlugin.credentialAuthorityEpoch()==currentEpoch,"metadata-only refresh retains authority epoch");
   String redirect=AlphaLocalAgentPlugin.withCredentialAuthority(currentEpoch,()->flow.prepare(owner,"B".repeat(43),1000));
-  check(redirect.equals(GoogleWorkspaceReturn.CALLBACK+"?state="+"B".repeat(43))&&calls[0]>0,"current API admits real flow under both locks");
-  check(admissionStore.readCredentialSlot(GoogleWorkspaceReturn.SLOT)!=null,"current API retains prepared pending record");
+  check(redirect.equals(AlphaConnectionPlugin.WORKSPACE_CALLBACK+"?state="+"B".repeat(43))&&calls[0]>0,"current API admits real flow under both locks");
+  check(admissionStore.readCredentialSlot(AlphaConnectionPlugin.WORKSPACE_PENDING_SLOT)!=null,"current API retains prepared pending record");
   System.out.println("PASS Workspace credential lifecycle and native-slot isolation");
  }
 }

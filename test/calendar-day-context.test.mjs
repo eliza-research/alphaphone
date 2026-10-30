@@ -1,8 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
 import {loadBrowserModule} from './fixtures/browser-source.mjs';
 // The runtime sources use Vite resolution and full TypeScript, so they load through the Vite-aware fixture.
-const [{AlphaClient},{phoneContextMessage,sanitizePhoneContext},{calendarDayObservation},{ClientObservationSupportCache,ClientObservationSupportSession,contextForObservationSupport},{LocalAgentProtocol},{DeviceActions,deviceJournalContext,actionScope},{ViewNavigationClient}]=await loadBrowserModule(['alpha-client','phone-context','calendar-day-observation','client-observation-support','local-agent','device-actions','view-navigation'].map(name=>`apps/app/src/runtime/${name}.ts`));
+const [{AlphaClient},{phoneContextMessage,sanitizePhoneContext},{calendarDayObservation:projectDay},{ClientObservationSupportCache,ClientObservationSupportSession,contextForObservationSupport},{LocalAgentProtocol},{DeviceActions,deviceJournalContext,actionScope},{ViewNavigationClient}]=await loadBrowserModule(['apps/app/src/runtime/alpha-client.ts','apps/app/src/runtime/phone-context.ts','.eliza/client-features/plugins/plugin-calendar/src/client/day-observation.ts','.eliza/client-features/packages/ui/src/api/client-observation.ts','apps/app/src/runtime/local-agent.ts','apps/app/src/runtime/device-actions.ts','apps/app/src/runtime/view-navigation.ts']);
+// Exercise the actual host gate plus the shared civil-day projection.
+const adapter=readFileSync(new URL('../apps/app/src/prototype/agent-calendar-adapter.ts',import.meta.url),'utf8');
+const gate=adapter.slice(adapter.indexOf(' p.calendarDayObservation=function(){'),adapter.indexOf(' views.calendar.displaySources='));
+function calendarDayObservation(s,timeZone,now){
+ const target={current:()=>s.ownerCurrent};
+ const shell={live:s.live,pageSuspended:s.pageSuspended,S:()=>s,vget:()=>s.calendar,clockSelection:()=>s.clockDraft};
+ const p={};
+ vm.runInNewContext(gate,{p,owner:shell,document:{hidden:s.hidden},connectionController:{getSnapshot:()=>({open:s.connectionOpen,residentRecovery:s.recovery})},port:()=>target,controller:{state:{ownerKey:s.ownerKey,status:s.status,mutating:s.mutating}},calendarOwnerKey:()=>s.expectedOwnerKey,calendarDayObservation:(state,host,zone)=>projectDay(state,host,zone,now),zone:()=>timeZone});
+ return p.calendarDayObservation.call(shell);
+}
 
 const zone='America/Los_Angeles';
 const day={date:'2026-10-29',timeZone:zone};

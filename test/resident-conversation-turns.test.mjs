@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ResidentConversationTurns} from '../apps/app/src/runtime/resident-conversation-turns.ts';
+import {tsImport} from 'tsx/esm/api';
+const {ResidentConversationTurns} = await tsImport(new URL('../apps/app/src/runtime/alpha-client.ts', import.meta.url).href, import.meta.url);
 
 const deferred=()=>{let resolve;const promise=new Promise(done=>resolve=done);return {promise,resolve};};
 const tick=()=>new Promise(resolve=>setImmediate(resolve));

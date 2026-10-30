@@ -1,4 +1,4 @@
-import { externalVoiceInvocationEnabled } from './voice-entry-policy';
+import { CONVERSATION_ONLY_VOICE_ENTRY } from '@elizaos/capacitor-system/sense';
 import { Capacitor } from '@capacitor/core';
 import {Sense,createSenseInvocationController} from '@elizaos/capacitor-system/sense';
 import { parseAssistantInvocation, parseListenerStatus, type AssistantInvocation, type ListenerStatus } from './always-on-listener-status';
@@ -25,7 +25,7 @@ let wakeStopUnconfirmed = false;
 export const wakeListeningStopUnconfirmed = () => wakeStopUnconfirmed;
 /** Stop a previously enabled image listener through its canonical native port. Never enable capture. */
 export async function stopWakeListenerForChatOnly(): Promise<boolean> {
-  if (externalVoiceInvocationEnabled || !Capacitor.isNativePlatform()) return true;
+  if (CONVERSATION_ONLY_VOICE_ENTRY.externalInvocation || !Capacitor.isNativePlatform()) return true;
   if (!nativeListener()) { wakeStopUnconfirmed = true; return false; }
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -47,7 +47,7 @@ export async function stopWakeListenerForChatOnly(): Promise<boolean> {
 
 /** Opens the listener's consent and settings screen. */
 export async function openListenerSettings(): Promise<boolean> {
-  if (!externalVoiceInvocationEnabled || !nativeListener()) return false;
+  if (!CONVERSATION_ONLY_VOICE_ENTRY.externalInvocation || !nativeListener()) return false;
   try { return (await listener.openSettings()).opened === true; } catch { return false; }
 }
 
@@ -70,9 +70,9 @@ export const INVOCATION_EVENT = 'alpha:assist-invocation';
  * (a new invocation of the single-task activity).
  */
 export function installListenerInvocation(shell: () => { startVoice?: () => unknown; live?: boolean } | undefined, state: { authority: () => string | null; initialRestorePending?: () => boolean; powerAccountRef?: () => string | null; connectionOpen: () => boolean; connected: () => boolean; voiceActive: () => boolean; subscribe: (listener: () => void) => () => void }) {
-  if(!externalVoiceInvocationEnabled || !nativeListener())return ()=>{};
+  if(!CONVERSATION_ONLY_VOICE_ENTRY.externalInvocation || !nativeListener())return ()=>{};
   const ready=()=>!!shell()?.startVoice&&shell()?.live!==false&&!state.connectionOpen()&&state.connected();
   const owner=createSenseInvocationController(Sense,{authority:state.authority,initialRestorePending:state.initialRestorePending,powerAccountRef:state.powerAccountRef,ready,voiceActive:state.voiceActive,
-    startVoice:()=>{const current=shell();if(ready())void current?.startVoice?.();},subscribe:state.subscribe,events:[INVOCATION_EVENT]});
+    startVoice:()=>{const current=shell();if(ready())void current?.startVoice?.();},subscribe:state.subscribe,events:[INVOCATION_EVENT]},CONVERSATION_ONLY_VOICE_ENTRY);
   return ()=>owner.dispose();
 }

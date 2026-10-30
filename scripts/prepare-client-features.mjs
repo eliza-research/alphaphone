@@ -53,6 +53,8 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/ui/src/agent-surface/useAgentElement.ts',
   'packages/ui/src/api/api-error.ts',
   'packages/ui/src/api/conversation-turn-controller.ts',
+  'packages/ui/src/api/client-observation.ts',
+  'packages/auth/src/sdk/app-return.ts',
   'packages/ui/src/components/composites/deferred-deletion-notice.tsx',
   'packages/ui/src/components/composites/page-panel/content-state.tsx',
   'packages/ui/src/components/composites/page-panel/index.ts',
@@ -140,6 +142,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-calendar/src/api/client-calendar.ts',
   'plugins/plugin-calendar/src/browser.ts',
   'plugins/plugin-calendar/src/client/named-read.ts',
+  'plugins/plugin-calendar/src/client/day-observation.ts',
   'plugins/plugin-calendar/src/client/availability-review.ts',
   'plugins/plugin-calendar/src/components/EventEditorDrawer.tsx',
   'plugins/plugin-calendar/src/components/event-editor-command.ts',
@@ -292,6 +295,24 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   const project = (name, text) => source.set(name, {bytes:Buffer.from(text),mode:'100644',sha256:hash(Buffer.from(text))});
   project('client-contracts.ts', 'export * from "./packages/contracts/src/calendar";\nexport * from "./packages/contracts/src/calendar-linked-sync";\nexport * from "./packages/contracts/src/device-reviews";\nexport * from "./packages/contracts/src/workflow-device";\nexport * from "./packages/contracts/src/contracts/theme";\n');
   const text = name => source.get(name).bytes.toString();
+  // These shared observation leaves also run in plain Node consumers. Resolve
+  // their contract imports within the same verified source projection.
+  for (const [name, replacements] of [
+    ['packages/ui/src/api/client-observation.ts', [
+      ['"@elizaos/contracts/client-turn-observation"', '"../../../contracts/src/client-turn-observation.ts"'],
+      ['"@elizaos/contracts/remote-agent-pairing"', '"../../../contracts/src/contracts/remote-agent-pairing.ts"'],
+    ]],
+    ['plugins/plugin-calendar/src/client/day-observation.ts', [
+      ['"@elizaos/contracts/client-turn-observation"', '"../../../../packages/contracts/src/client-turn-observation.ts"'],
+    ]],
+  ]) {
+    let content = text(name);
+    for (const [before, after] of replacements) {
+      if (content.split(before).length !== 2) throw Error('Review changed observation contract import: ' + name);
+      content = content.replace(before, after);
+    }
+    project(name, content);
+  }
   // The native compatibility entry re-exports the shared parser by package name.
   // Plain Node consumers need that one import resolved within the copied graph.
   {

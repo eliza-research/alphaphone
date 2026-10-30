@@ -12,7 +12,7 @@ import {CAMERA_CAPTURE_CAPABILITY} from '../../../../.eliza/client-features/plug
 import {sanitizeCloudInferenceFailure,type CloudInferenceFailure} from './crash-log';
 import {residentRecoveryReason,residentRecoveryMessage,residentRecoveryCopy,RESIDENT_RECOVERY_PENDING,type ResidentRecoveryReason,type ResidentRecoveryView} from './resident-recovery';
 import {anyAbortSignal} from './abort-signal';
-import {ResidentConversationTurns} from './resident-conversation-turns';
+import {ResidentConversationTurns} from './alpha-client';
 import {CALENDAR_APPROVAL_READ_PATH,calendarApprovalFromList,calendarApprovalId} from './calendar-approval';
 import {readDevicePreferences} from '../browser/device-preferences';
 import {resolveCloudEnvironment} from './cloud-environment-selection';
@@ -33,7 +33,7 @@ import {openDomainRecovery} from '../browser/domain-recovery';
 import {retireClockReviews} from './clock-agent-review';
 import { negotiateEnabledViews } from './device-view-profile';
 import { registerWorkflowDevice, workflowDeviceProtocol } from './workflow-presentation';
-import {ClientObservationSupportSession} from './client-observation-support';
+import {ClientObservationSupportSession} from '@elizaos/ui/api/client-observation';
 import {clockHandoffCapabilities} from './clock-contract';
 import {developmentIdentity,readDevelopmentIdentity,verifyDevelopmentIdentity,developmentOwnerRecovery,assertDevelopmentIdentity,developmentProfiles,type DevelopmentProfile} from '../browser/development-identity';
 import {developmentCloudKey} from '../browser/development-cloud';

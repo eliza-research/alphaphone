@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
 import vm from 'node:vm';
-import {prepareGoogleWorkspaceReturn,watchGoogleWorkspaceReturn,sameGoogleWorkspaceBinding} from '../apps/app/src/runtime/google-workspace-return.ts';
-import {watchGoogleConnectionReturn,sameGoogleConnectionReturnBinding} from '../apps/app/src/runtime/google-connection-return.ts';
+import {createWorkspaceAppReturn,sameAccountReturnBinding as sameGoogleWorkspaceBinding,watchForegroundAccountReturn as watchGoogleConnectionReturn,sameAccountReturnBinding as sameGoogleConnectionReturnBinding} from '../.eliza/client-features/packages/auth/src/sdk/app-return.ts';
+const {prepare:prepareGoogleWorkspaceReturn,watch:watchGoogleWorkspaceReturn}=createWorkspaceAppReturn({callbackUrl:'https://alphacompute.ai/alphaphone/gmail/callback',pluginName:'AlphaConnection',methods:['prepareGoogleWorkspaceReturn','consumeGoogleWorkspaceReturn','cancelGoogleWorkspaceReturn']});
 
 const ui=readFileSync(process.env.ALPHA_GOOGLE_RETURN_UI_SOURCE||'apps/app/src/runtime/google-connection-ui.tsx','utf8');
 const accountsSource=stripTypeScriptTypes(readFileSync('apps/app/src/runtime/google-accounts.ts','utf8'),{mode:'transform'}).replace(/^import[^;]+;\n/gm,'').replace(/^export /gm,'');

@@ -160,6 +160,8 @@
       "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/ConnectionTransport.java",
       "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/DelegationCallback.java",
       "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/PendingRequests.java",
+      "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/WorkspaceAppReturn.java",
+      "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/WorkspaceAppReturnFlow.java",
       "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/SecureSlotPolicy.java",
       "plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface/ChromiumBrowserIdentity.java",
       "plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface/ChromiumBrowserConnection.java",
