@@ -643,3 +643,30 @@ the unresolved advisories. The source comparison is recorded in
 `docs/evidence/advisory-440-source-admission-20261030.json`. Reconciliation checks
 pass, but the complete source and Android commands must be repeated at the next
 commit before this pin is accepted.
+
+### October 30 — complete 440 source and Android checkpoint
+
+At Alpha `69c8912987442443235e27d5520eb12fb5baa63f`, the ordinary
+`npm run verify` passes: 2,723 tests, no failures, three skips and the existing
+APEX payload-key TODO. TypeScript, the production build and its 422-file
+mock-exclusion audit pass. The native sign-in composition also passed all 18
+browser cases before the source-record reconciliation.
+
+The complete required `npm run android:build:local` passes at the same head and
+Eliza `440e3c76fc231f4c6e0763e2a71dbd8ae7b9bdaa`: standalone and launcher,
+debug and release, both instrumentation APK compilations, lint and all four
+package inspections. Each package contains the authenticated ARM64 linux-musl
+runtime and passes all 1,118 runtime-entry checks. Voice qualification remains
+false, and release APKs are unsigned and non-distributable.
+
+The four APKs, instrumentation APKs, mappings, BuildConfigs, 577 packaged
+notices, runtime metadata and logs are preserved under
+`artifacts/unification-checkpoints/440e3c76-69c891298`. The compact record is
+`docs/evidence/unification-440-69c891-checkpoint.json`. Source-only notices were
+restored after archiving the exact packaged notices. Only duplicate Gradle APK
+outputs were removed after matching their hashes to the checkpoint.
+
+This qualifies the current sign-in/native-transport integration as a source and
+APK checkpoint. It does not complete the shared App cutover or pending Inbox
+action change, and it does not establish app installation, emulator HOME-role,
+full AOSP boot, live integrations, physical audio or user acceptance.

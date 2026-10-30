@@ -1,0 +1,67 @@
+{
+  "source": "69c8912987442443235e27d5520eb12fb5baa63f",
+  "upstream": "440e3c76fc231f4c6e0763e2a71dbd8ae7b9bdaa",
+  "engine": "d960f633ddb034d0dd828a55216cfc17d012acbd",
+  "sourceVerification": {
+    "passed": 2723,
+    "failed": 0,
+    "skipped": 3,
+    "todo": 1,
+    "fullVerify": true
+  },
+  "android": {
+    "command": "npm run android:build:local",
+    "exitCode": 0,
+    "compiled": [
+      "standaloneDebug",
+      "standaloneRelease",
+      "launcherDebug",
+      "launcherRelease"
+    ],
+    "instrumentation": "both compiled, not executed",
+    "lint": "passed",
+    "runtimePackaging": "all four passed, 1118 entries each",
+    "runtimeAbis": [
+      "arm64-v8a"
+    ],
+    "runtimeTarget": "linux-musl"
+  },
+  "artifacts": [
+    {
+      "file": "artifacts/standalone-debug.apk",
+      "sha256": "190d609318c1ec9374edaa8d78500e0a1db992679cf01ed886bc530252d8bbdf",
+      "runtime": "PACKAGED",
+      "signed": true,
+      "voiceQualified": false
+    },
+    {
+      "file": "artifacts/standalone-release-unsigned.apk",
+      "sha256": "62a6349a8e02e88224ca4a3ef135f27047582d82afd6746d7b1792fb3392c20a",
+      "runtime": "PACKAGED",
+      "signed": false,
+      "voiceQualified": false
+    },
+    {
+      "file": "artifacts/launcher-debug.apk",
+      "sha256": "255844fbe0d7a5d4be2b4b32fb21dc6e77eed3526ebd7aa475c1d2d9ef5f4226",
+      "runtime": "PACKAGED",
+      "signed": true,
+      "voiceQualified": false
+    },
+    {
+      "file": "artifacts/launcher-release-unsigned.apk",
+      "sha256": "fa9a05d61122a33640470525cc83553360e7781e1e963b87cc52ff7f5af8e8a6",
+      "runtime": "PACKAGED",
+      "signed": false,
+      "voiceQualified": false
+    }
+  ],
+  "evidenceDirectory": "artifacts/unification-checkpoints/440e3c76-69c891298",
+  "packagedNoticeCount": 577,
+  "limitations": [
+    "APK packaging only; no new runtime or emulator HOME-role execution",
+    "No new complete AOSP image boot, live integration, physical audio or user acceptance",
+    "Release APKs are unsigned and non-distributable; voice qualification remains false",
+    "Full canonical App cutover and shared Inbox action adoption are still pending"
+  ]
+}
