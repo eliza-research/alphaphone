@@ -10,6 +10,7 @@ public final class ProviderConditionalClearTest {
   String a="{\"provider\":\"elizacloud\",\"revision\":\"a\"}";
   String b="{\"provider\":\"elizacloud\",\"revision\":\"b\"}";
   AlphaCredentialStore store=new AlphaCredentialStore(context);
+  int[] cloudChanges={0};AlphaCredentialStore.observeCloudChanges(()->cloudChanges[0]++);
   raw.write(slot,a);String guard=store.providerBindingGuard(a);
   long intent=AlphaLocalAgentPlugin.currentCredentialIntent();
   raw.write(slot,b);
@@ -19,6 +20,7 @@ public final class ProviderConditionalClearTest {
   check(!store.removeProviderIfCurrent(guard),"same bytes after newer intent admitted");
   guard=store.providerBindingGuard(a);
   check(store.removeProviderIfCurrent(guard)&&raw.read(slot)==null,"matching binding did not clear");
+  check(cloudChanges[0]==0,"provider-only cleanup withdrew unchanged Cloud services");
   check(!store.removeProviderIfCurrent(guard),"replayed cleanup admitted");
   raw.write(slot,a);guard=store.providerBindingGuard(a);
   AlphaLocalAgentPlugin.beforeCommit=()->{try{raw.write(slot,b);}catch(Exception e){throw new RuntimeException(e);}};
