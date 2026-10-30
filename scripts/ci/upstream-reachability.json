@@ -2,136 +2,15 @@
   "schema": 1,
   "repository": "elizaOS/eliza",
   "base": "develop",
-  "baseCommit": "6b2fd5f5752cb08e4fa018b35038ec7078283ea2",
+  "baseCommit": "db860d2402f541238bea5a6e1b35dfd3826f22a3",
   "head": "89714cd4b8d89824ef435c69362523c8b5e37f60",
   "recordedAt": "2026-10-30",
   "command": "gh api repos/elizaOS/eliza/compare/develop...89714cd4b8d89824ef435c69362523c8b5e37f60",
-  "status": "diverged",
-  "aheadBy": 30,
-  "behindBy": 13,
-  "mergeBase": "ad1212caee0e818da370be62aef34277780a9f1a",
-  "pinOnlyCommits": [
-    {
-      "sha": "8d722239ffb2df99488fc65c24b85ee6011d9d88",
-      "subject": "fix(assistant): read a receipt's request source ID as its history:hN"
-    },
-    {
-      "sha": "c8bc47aa5f0e99ed9f5099505d299ce48fc36fee",
-      "subject": "fix(calendar): treat the runtime redaction mask as a placeholder calendarId"
-    },
-    {
-      "sha": "621c0c84f47eb9dfa22c3ff341d7f7be700c9763",
-      "subject": "fix(trigger): require taskId on the promoted TRIGGER_UPDATE schema"
-    },
-    {
-      "sha": "4b5eeca0819e8a9ba135b0fb7146ad285c74e6a6",
-      "subject": "fix(assistant): stop advertising the full discovery catalog as a name index"
-    },
-    {
-      "sha": "d54014e2c311a971911f67fd9635e5c6287d193d",
-      "subject": "test(assistant): state the discovery-copy regression without a causal claim"
-    },
-    {
-      "sha": "1c9c91cd0489b01593e4d8c8fcc2d97b29b988ad",
-      "subject": "fix(calendar): create a past start the user dated explicitly"
-    },
-    {
-      "sha": "47deb470f387287cb21462e48f167803f235abf6",
-      "subject": "fix(calendar): stand the past-start pause down only for a stated today"
-    },
-    {
-      "sha": "4226836757e3590b76348624af02aa267ae2eaf6",
-      "subject": "fix(notes): keep the update revision token writable on strict tool grammars"
-    },
-    {
-      "sha": "e8e1d3dd72076e3122ab1f6e061bf1173124c74f",
-      "subject": "fix(assistant): replan pending work after a prepared app-view navigation"
-    },
-    {
-      "sha": "70537dc4b05a88593614a5dd54ad8b3e153fbb4b",
-      "subject": "fix(assistant): replan after a prepared navigation at most once per turn"
-    },
-    {
-      "sha": "0aaf7b3de06a3baeacc8c7de9b95942ba8277aff",
-      "subject": "fix(assistant): return the complete name index when describe-all exceeds the result budget"
-    },
-    {
-      "sha": "0e601fec120dd371d19fcbb221d59f0c5911c5d5",
-      "subject": "docs(assistant): say the discovery index carries a summary only where one exists"
-    },
-    {
-      "sha": "f700a3f4886c151783209e6300eee674d8ee148e",
-      "subject": "fix(planner): cap non-coding planner output and retry a capped generation once"
-    },
-    {
-      "sha": "c17f8b24e81a2d8d17718e9f33e47d6ba3e35864",
-      "subject": "fix(elizacloud): report a capped tool call as incomplete output"
-    },
-    {
-      "sha": "c89ad84783e533f0bf40e67e25f0f2a21ea86f75",
-      "subject": "fix(planner): apply the default output cap only where the provider can honor it"
-    },
-    {
-      "sha": "a6eaad0a01a6bf6fc258c20cdb8b7bfd9f586fa8",
-      "subject": "fix(planner): send Anthropic no default output cap"
-    },
-    {
-      "sha": "a28dc11a112623e297738f3cf18efb5a82dd5f36",
-      "subject": "fix(calendar,assistant): turn provider reasoning off for extractors and the post-turn evaluator"
-    },
-    {
-      "sha": "339eaf97cf5ad960801c019ba0d78958f009c0a9",
-      "subject": "test(openai,personal-assistant): prove evaluator reasoning off on the wire and fix a create stub check"
-    },
-    {
-      "sha": "9d3d1b263290986d4119f9323707c4d62a98ee38",
-      "subject": "fix(assistant): replan a follow-up Stage 1 planned after a final-scope view"
-    },
-    {
-      "sha": "2cb0e8b107ddb9b35e2b3c68f29a508ba47b3a3f",
-      "subject": "docs(assistant): state the follow-up navigation hint as a replan, not a rule"
-    },
-    {
-      "sha": "d6235c43df2ce3c5a952891ee67b5099aa7001af",
-      "subject": "fix(notes): route plain appends to the patch operation whose grammar requires target and revision"
-    },
-    {
-      "sha": "a636db0961724998265b1be710e27bd57a5c5dde",
-      "subject": "fix(notes): keep NEW checklist items on the update operation"
-    },
-    {
-      "sha": "65333120817d19b913c45a702e3760ba8ee5b785",
-      "subject": "fix(calendar): stop rejecting invented planner sourceNote hashes"
-    },
-    {
-      "sha": "c3bf0774233604e03de64f91fd6835f4f3852107",
-      "subject": "fix(assistant): skip post-turn memory review after navigation-only turns"
-    },
-    {
-      "sha": "aeeeac7e9248332dc2d7a97c26931a5fce531f69",
-      "subject": "fix(assistant): keep possessive and discovery navigation turns out of post-turn review"
-    },
-    {
-      "sha": "e53e0f4d81786ed1644e4052e78e521aa4cf6e2c",
-      "subject": "fix(lifeops): wait for the deferred calendar service before failing a read"
-    },
-    {
-      "sha": "e2c9ffe080424140f32c5ec560d4c6fa52b44f9a",
-      "subject": "fix(lifeops): bound the deferred calendar wait under the client GET timeout"
-    },
-    {
-      "sha": "3b73d5c0132b9e8e1bf0fdaa897d64589c3d7826",
-      "subject": "fix(assistant): keep a delete's update sibling when the request sets a new value"
-    },
-    {
-      "sha": "7a3d9ff9e7f28ad1ac744bf3619f7a64f5deb8ac",
-      "subject": "fix(trigger): move a one-off trigger by delayMinutes on update"
-    },
-    {
-      "sha": "89714cd4b8d89824ef435c69362523c8b5e37f60",
-      "subject": "fix(trigger): allow delete and create for a one-off/recurring switch"
-    }
-  ],
+  "status": "behind",
+  "aheadBy": 0,
+  "behindBy": 14,
+  "mergeBase": "89714cd4b8d89824ef435c69362523c8b5e37f60",
+  "pinOnlyCommits": [],
   "pullRequests": [
     {
       "url": "https://github.com/elizaOS/eliza/pull/37059",
@@ -467,7 +346,7 @@
     },
     {
       "url": "https://github.com/elizaOS/eliza/pull/38277",
-      "status": "open"
+      "status": "merged"
     }
   ]
 }
