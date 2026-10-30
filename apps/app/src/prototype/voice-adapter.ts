@@ -13,6 +13,7 @@ import {recordingLevels} from '../browser/audio-levels';
 import {browserDevProfile} from '../browser/dev-profile';
 import {pendingAudioDeletions,withAudioDeletionLock,changeAudioDeletion,audioDeletionNoteState,audioDeletionJournal,type AudioDeletion} from '../runtime/note-audio-deletions';
 import {createNotesRecordingEffects,type NotesRecordingEffects} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-recording-effects.ts';
+import {createNotesRecordingPlayback} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-recording-playback.ts';
 import {addNotesTrashEntry,editNotesTrash,isNotesTrashFull,notesTrashExpired,readNotesTrash,removeNotesTrashEntries,savedNotes,type NotesTrashEntry} from '../runtime/notes-trash';
 import type {NotesTarget} from '../runtime/notes-contract';
 import {leasedDeletionRow,claimDeletion,releaseDeletionClaim,deletionClaimedElsewhere} from '../runtime/permanent-voice-deletion';
@@ -76,6 +77,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     const value = originalApi.call(this, key);
     // The prototype setView callback discards vset's persistence receipt.
     if (key === 'notes') {
+      value.recordingPlayback=savedPlayback;
       value.voiceNoteActive=()=>this.live&&this.S().view==='notes';
       value.saveVoiceNote = async (patch: Bag, options?: {exact?: boolean;authorized?:()=>void}) => await this.vset('notes', patch, options) === true;
       value.reviewAudioDeletion=async(note:Bag)=>{
@@ -116,17 +118,16 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
   // Distinct failure kinds keep their own guidance.
   let failure: VoiceFailure | '' = '';
   let recognized: { text: string; provenance: TranscriptProvenance } | undefined;
-  let savedStarting:Promise<void>|undefined;
-  let savedPlaying: string | undefined, savedPosition = 0, savedEpoch = 0, savedTick: ReturnType<typeof setInterval> | undefined;
-  const stopSaved = () => { const owned = savedPlaying !== undefined; ++savedEpoch; savedPlaying = undefined; savedPosition = 0; if (savedTick) clearInterval(savedTick); savedTick = undefined; if (owned) {const pending=savedStarting;stopping=stopping.then(async()=>{try{await pending;}catch{}await noteAudio.stop();}).catch(failure=>{mediaUnconfirmed=failure;throw failure;});void stopping.catch(()=>{});} };
-  async function playSaved(note: Bag) {
-    if (savedPlaying === note.audio.audioId) { stopSaved(); refresh(); return; }
-    stopSaved(); const epoch = savedEpoch; savedPlaying = note.audio.audioId; refresh();
-    try {
-      await stopping;if(epoch!==savedEpoch)return;const pending=savedStarting=noteAudio.play({ audioId: note.audio.audioId });try{await pending;}finally{if(savedStarting===pending)savedStarting=undefined;}
-      if (epoch !== savedEpoch) return;
-      savedTick = setInterval(() => { void noteAudio.state().then(value => { if (epoch !== savedEpoch) return; if (!value.playing || value.audioId !== savedPlaying) { stopSaved(); refresh(); return; } savedPosition = value.positionMs; refresh(); }).catch(() => { if (epoch === savedEpoch) { stopSaved(); refresh(); } }); }, 250);
-    } catch { if (epoch === savedEpoch) { stopSaved(); api?.toast('This saved recording could not be played. The transcript is still available.'); refresh(); } }
+  let savedPlaying: string | undefined, savedPosition = 0;
+  const savedPlayback=createNotesRecordingPlayback({store:noteAudio,waitForRetirement:()=>stopping,
+    stopAfter:start=>{stopping=stopping.then(async()=>{try{await start;}catch{}await noteAudio.stop();}).catch(failure=>{mediaUnconfirmed=failure;throw failure;});void stopping.catch(()=>{});return stopping;},
+  });
+  const unsubscribeSavedPlayback=savedPlayback.subscribe(()=>{const value=savedPlayback.getSnapshot();savedPlaying=value.phase==='starting'||value.phase==='playing'?value.audioId:undefined;savedPosition=value.positionMs;queueMicrotask(refresh);});
+  const stopSaved=()=>{const stopped=savedPlayback.stop();void stopped.catch(()=>{});return stopped;};
+  async function playSaved(note:Bag,current:Bag){
+    if(savedPlaying===note.audio.audioId){stopSaved();return;}
+    try{await savedPlayback.play({audioId:note.audio.audioId,noteId:note.id},()=>current.voiceNoteActive()&&!document.hidden&&current.get('notes').open===note.id);}
+    catch(error){if((error as {name?:string})?.name!=='AbortError'&&current.voiceNoteActive())current.toast('This saved recording could not be played. The transcript is still available.');}
   }
   type DictationTarget = { id: string; body: string; revision: string; start: number; end: number };
   let destination: DictationTarget | undefined;
@@ -731,11 +732,11 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
    * leaves the deletion under review instead of losing or repeating an effect.
    */
   async function deleteVoiceNote(current:Bag,reviewed:Bag,permanent:boolean){
-        if(deletionBusy)return;deletionBusy=true;stopSaved();
+        if(deletionBusy)return;deletionBusy=true;const stopped=stopSaved();
         if(permanent)current.set({trashBusy:true});
         let row:AudioDeletion|undefined,refusedFull=false;
         const active=()=>current.voiceNoteActive()&&current.isActive()&&!document.hidden&&!connectionController.getSnapshot().open&&current.get('notes').open===reviewed.id;
-        try {await withAudioDeletionLock(async()=>{
+        try {await stopped;await withAudioDeletionLock(async()=>{
           if(!active())return;
           const prior=Object.values(await pendingAudioDeletions()).find(x=>x.note.id===reviewed.id);
           if(prior){current.toast('Deletion remains unconfirmed. Check deletion status; it will not be repeated.');return;}
@@ -885,8 +886,8 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
       } : undefined;
       vo.playLabel = savedPlaying ? 'Stop recording playback' : 'Play recording';
       vo.playIcon = savedPlaying ? current.ic.stop : current.ic.play;
-      vo.play = () => { if (currentNoteReading()?.noteId === selected.id) stopSpeaking(); void playSaved(selected); };
-      vo.lines = [{ ini: 'You', who: 'You', t: selected.body || selected.audio.transcript, at: '0:00', chip: 'background:var(--acc);color:#fff', css: '', seek: () => { void playSaved(selected); } }];
+      vo.play = () => { if (currentNoteReading()?.noteId === selected.id) stopSpeaking(); void playSaved(selected,current); };
+      vo.lines = [{ ini: 'You', who: 'You', t: selected.body || selected.audio.transcript, at: '0:00', chip: 'background:var(--acc);color:#fff', css: '', seek: () => { void playSaved(selected,current); } }];
       vo.bars = vo.bars.map((bar: Bag) => ({ ...bar, h: 4 })); // No invented amplitude analysis.
       vo.share = () => current.toast('Audio stays in this app. Sharing recordings is not available yet.');
       const reviewed=structuredClone(selected);
@@ -1075,5 +1076,5 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
   document.addEventListener('visibilitychange', visibility);
   window.addEventListener('pagehide', pagehide);
   const unmount = Component.prototype.componentWillUnmount;
-  Component.prototype.componentWillUnmount = function () { window.removeEventListener('alpha:note-reading',noteReadingChanged);stopSpeaking();api = undefined; chatDestination=undefined;cleanup(); unsubscribe(); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', pagehide); unmount?.call(this); };
+  Component.prototype.componentWillUnmount = function () { unsubscribeSavedPlayback();window.removeEventListener('alpha:note-reading',noteReadingChanged);stopSpeaking();api = undefined; chatDestination=undefined;cleanup(); unsubscribe(); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', pagehide); unmount?.call(this); };
 }
