@@ -1,4 +1,4 @@
-import {cachedDevicePreferences,editDevicePreferences} from '../browser/device-preferences';
+import {cachedDevicePreferences,editDevicePreferences,initializeDevicePreferences} from '../browser/device-preferences';
 import {browserLocalAgentEnabled} from './local-agent';
 
 /** Owner switches for agent writes through Google. Off never disconnects or revokes Google; reads keep working. */
@@ -11,6 +11,9 @@ export function googleAgentAccess():GoogleAgentAccess{
 }
 export async function publishGoogleAgentAccess(){
  if(!browserLocalAgentEnabled)return;
+ // Before the saved settings load, the default (on) must not overwrite a saved off on the host.
+ // Loading them fires alpha:device-settings, which publishes again.
+ initializeDevicePreferences();if(!cachedDevicePreferences())return;
  await fetch(GOOGLE_AGENT_ACCESS_PATH,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(googleAgentAccess())}).catch(()=>{});
 }
 export async function setGoogleAgentAccess(change:Partial<GoogleAgentAccess>){
