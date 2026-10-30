@@ -174,8 +174,11 @@ public final class AlphaLocalAgentPlugin extends Plugin {
    AlphaCanonicalNotifications.forget(context);
    invalidateCalls();epoch=++lifecycleEpoch;credentialMutationEpoch=epoch;accepting=false;stopping=true;clearEnrollment();
   }
+  // The service's stop ACK proves absence but keeps starts fenced (CredentialShutdownLease). As the
+  // shared CredentialMutationConductor does: a completed commit releases this exact request, a stop
+  // with no commit attempt abandons it (released at its ACK), and an uncertain commit keeps it.
+  long stopRequest=-1;boolean commitAttempted=false,commitFailed=false;
   try{
-   final long stopRequest;
    synchronized(lifecycleLock){assertOwner.run();if(epoch!=lifecycleEpoch||credentialMutationEpoch!=epoch)throw new Superseded();credentialShutdownRequest=-2;stopRequest=ElizaAgentService.stopForCredentialChange(context);credentialShutdownRequest=stopRequest;}
    long deadline=android.os.SystemClock.elapsedRealtime()+15000;
    while(true){
@@ -184,14 +187,20 @@ public final class AlphaLocalAgentPlugin extends Plugin {
     synchronized(lifecycleLock){
      assertOwner.run();if(epoch!=lifecycleEpoch||credentialMutationEpoch!=epoch)throw new Superseded();
      if(shutdownConfirmed(status)&&ElizaAgentService.isCredentialShutdownConfirmed(stopRequest)){
-      synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){return commitCredentials(mutation);}
+      synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){commitAttempted=true;return commitCredentials(mutation);}
      }
     }
     if(android.os.SystemClock.elapsedRealtime()>=deadline)throw new IllegalStateException("Native shutdown unconfirmed");
     Thread.sleep(50);
    }
+  }catch(Throwable failure){
+   // Only the commit follows commitAttempted, so a failure after it is an uncertain write.
+   commitFailed=commitAttempted;throw failure;
   }finally{
-   synchronized(lifecycleLock){if(credentialMutationEpoch==epoch)credentialMutationEpoch=-1;}
+   synchronized(lifecycleLock){
+    if(stopRequest>=0){if(!commitAttempted)ElizaAgentService.abandonCredentialShutdown(stopRequest);else if(!commitFailed)ElizaAgentService.releaseCredentialShutdown(stopRequest);}
+    if(credentialMutationEpoch==epoch)credentialMutationEpoch=-1;
+   }
   }
  }
  /** Every provider and Cloud credential write commits here; the cached listener owner never outlives one. */
@@ -483,6 +492,8 @@ public final class AlphaLocalAgentPlugin extends Plugin {
      requireShutdownRetry(call,retryEpoch,retryIntent);
      credentialShutdownRequest=-2;
      stopRequest=ElizaAgentService.stopForCredentialChange(getContext());
+     // A retry commits nothing, so its own stop ACK releases the service lease (never left fencing starts).
+     ElizaAgentService.abandonCredentialShutdown(stopRequest);
      credentialShutdownRequest=stopRequest;
     }
     ResidentCredentialShutdownRetry.await(
