@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "createdAt": "2026-10-30T11:39:40.284718+00:00",
+  "sourceBefore": "c5feaff802c45bf190004f1780f796c34fd2d4be",
+  "pin": "67f7ced37f025ad7cf409006b1097addd11ddf83",
+  "upstreamPr": 38295,
+  "upstreamPrHead": "ab9edd2603ad1f8311bf87244aa17f9d86acb5ba",
+  "sourceDirectory": "artifacts/local-agent-resident-67f7ced37f025ad7cf409006b1097addd11ddf83",
+  "nativeInputAdmission": "docs/evidence/native-67f-source-admission-20261030.json",
+  "advisoryAdmission": "docs/evidence/advisory-67f-source-admission-20261030.json",
+  "focused": {
+    "nativeHeaderOwnerVoiceEmbedding": 28,
+    "metadataAndActualNavigation": 40
+  },
+  "dependencies": {
+    "copiedIndependentDirectories": 135,
+    "sameLock": true,
+    "linksChecked": 14831,
+    "foreignDonorTargets": 0,
+    "frozenInstallPending": true
+  },
+  "logs": {
+    "focused-native-r1.log": {
+      "sha256": "572bbd2224ac792e96f5354e09d43ff38268d05b9fd1ac43f5327a37ed27c601",
+      "bytes": 3945
+    },
+    "focused-native-r2.log": {
+      "sha256": "90684df6abc0b970c8c7d3ff10a7d0e47fa18d89b4ca348858776f43c22bc9f8",
+      "bytes": 2984
+    },
+    "metadata-and-native-r1.log": {
+      "sha256": "47d26178ebc4b904f58d19196e72b8e53a8902d0265944abfc0e820624decee7",
+      "bytes": 5198
+    },
+    "metadata-and-native-r2.log": {
+      "sha256": "c0e1a249224689194a7bae23c49036ea337a26dddbd47ad9a7301af8d52502da",
+      "bytes": 4241
+    },
+    "source-prepare.log": {
+      "sha256": "40f952e444240359f0e36845cac11dfc2b1007386efa2a00fb42ccfa1b22c1fd",
+      "bytes": 397
+    },
+    "dependency-link-audit.json": {
+      "sha256": "b808ec189bc150d898e992d7dbfe9195ffc37e0237810ed70f15d70c5c10585c",
+      "bytes": 202
+    },
+    "native-admission/voice-staging.log": {
+      "sha256": "87701a679368aaad763551b4cbaf389280658bb10673a7dab451c1ebac30e8ae",
+      "bytes": 1977
+    },
+    "native-admission/embedding-verify.log": {
+      "sha256": "8bb914f81d2c1f0b5eb2bf25c2387de7ffc741e3a9eae6055444b2a5d7f14eeb",
+      "bytes": 87
+    },
+    "reachability-before-stage.log": {
+      "sha256": "7d0b659fe5863fb730cc9f6bfd0d0bb105bce41cd27fe9d29f589f99ef4acf9e",
+      "bytes": 509
+    },
+    "reachability-before-stage-r2.log": {
+      "sha256": "2943b0ba246b9182b90c61f19b8965f4a8a5efad8609126fa0b5fa1a526971f2",
+      "bytes": 637
+    }
+  },
+  "failuresRetained": [
+    "Old raw/header and read-policy harness expectations failed after shared delegation; final tests execute actual shared delegation and pass",
+    "Initial reachability refresh hit mise stdout; direct pinned gh retry recordedreachable67 before rejecting old staged440runtime"
+  ],
+  "notProven": [
+    "Full Alpha verify at new pin",
+    "Updated staged runtime/APKs",
+    "Full AOSP image boot",
+    "Real providers, device voice or user acceptance"
+  ]
+}

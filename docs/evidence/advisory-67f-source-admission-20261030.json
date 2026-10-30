@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "createdAt": "2026-10-30T11:36:40.940259+00:00",
+  "priorPin": "440e3c76fc231f4c6e0763e2a71dbd8ae7b9bdaa",
+  "pin": "67f7ced37f025ad7cf409006b1097addd11ddf83",
+  "normalizedInputUnchanged": true,
+  "findingsUnchanged": true,
+  "counts": {
+    "info": 0,
+    "low": 18,
+    "moderate": 61,
+    "high": 59,
+    "critical": 1
+  },
+  "findings": 139,
+  "priorSnapshotSha256": "b810cce71495e57b2a360927542fe280422097023a103639ec697bf3592db4b8",
+  "snapshotSha256": "899babc1e1979ef759babdc463c8db00eba5781d56fa2b76ddbba5e8c1278127",
+  "waiversAdded": false,
+  "note": "Fresh npm bulk advisory query; identity binding only. Existing unresolved advisories and pending fixes remain; audit command exits1 and is not security clearance."
+}

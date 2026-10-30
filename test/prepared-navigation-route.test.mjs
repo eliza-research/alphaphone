@@ -36,8 +36,11 @@ test('local and remote navigation entrypoints admit only exact preparation, reta
 });
 test('actual native request gate agrees on preparation shape, method, owner and encoded paths',{skip:jsonJarSkip},()=>{
  const source=readFileSync(nativeSource('AlphaLocalAgentPlugin.java'),'utf8');
- const start=source.indexOf('if(!NativeAppReadPolicy.allowed(',source.indexOf(' @PluginMethod public void request('));
- assert.ok(start>=0,'the actual request gate must include the shared read policy');
+ const declarationStart=source.indexOf('boolean common=NativeAppRequestPolicy.claims(',source.indexOf(' @PluginMethod public void request('));
+ assert.ok(declarationStart>=0,'the actual request gate must classify shared requests');
+ const start=source.indexOf('if(common&&!NativeAppRequestPolicy.allowed(',declarationStart);
+ assert.ok(start>=0,'the actual request gate must include the shared request policy');
+ const declaration=source.slice(declarationStart,start);
  const end=source.indexOf('){',start);assert.ok(end>start,'the actual request gate must be complete');
  const expression=source.slice(start+3,end);
  const temp=mkdtempSync(join(tmpdir(),'alpha-navigation-gate-'));
@@ -46,11 +49,12 @@ test('actual native request gate agrees on preparation shape, method, owner and 
   writeFileSync(file,`package ai.elizaresearch.alphaphone;
 import org.json.*;
 import ai.eliza.plugins.agent.connection.NativeAppReadPolicy;
+import ai.eliza.plugins.agent.connection.NativeAppRequestPolicy;
 class OwnerRoutes { boolean allowed(String g,String p,String m){return true;} }
 public class NavigationGateTest {
  static boolean allowed(String path,String method,String body,String expectedOwner){
   if(path.endsWith("/navigate")&&!PreparedViewNavigation.allowed(path,method,body))return false;
-  String group=null;OwnerRoutes routes=new OwnerRoutes();return !(${expression});
+  String group=null;OwnerRoutes routes=new OwnerRoutes();${declaration}return !(${expression});
  }
  public static void main(String[]args)throws Exception{
   JSONArray rows=new JSONArray(new String(System.in.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8));
@@ -60,6 +64,6 @@ public class NavigationGateTest {
  }
 }`);
   const shared='vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/';
-  assert.match(runJvm([nativeSource('PreparedViewNavigation.java'),shared+'NativeAppReadPolicy.java',shared+'OwnerRoutePolicy.java',file],'ai.elizaresearch.alphaphone.NavigationGateTest',{json:true,input:JSON.stringify(cases)}),/PASS native actual request gate/);
+  assert.match(runJvm([nativeSource('PreparedViewNavigation.java'),shared+'NativeAppReadPolicy.java',shared+'NativeAppRequestPolicy.java',shared+'OwnerRoutePolicy.java',file],'ai.elizaresearch.alphaphone.NavigationGateTest',{json:true,input:JSON.stringify(cases)}),/PASS native actual request gate/);
  }finally{rmSync(temp,{recursive:true,force:true});}
 });

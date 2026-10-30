@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "createdAt": "2026-10-30T11:34:02.593302+00:00",
+  "priorPin": "440e3c76fc231f4c6e0763e2a71dbd8ae7b9bdaa",
+  "pin": "67f7ced37f025ad7cf409006b1097addd11ddf83",
+  "nativeFork": "d960f633ddb034d0dd828a55216cfc17d012acbd",
+  "sourceComparisons": [
+    {
+      "path": "plugins/plugin-local-inference/native",
+      "prior": "040000 tree 0c8ddc474f73cdc393ca419093ff99ffd1006e39\tplugins/plugin-local-inference/native",
+      "current": "040000 tree 0c8ddc474f73cdc393ca419093ff99ffd1006e39\tplugins/plugin-local-inference/native",
+      "unchanged": true
+    },
+    {
+      "path": "packages/app/scripts/paradee-voice",
+      "prior": "040000 tree 203bc324e2da09ac614fdde3e36152b23fe35971\tpackages/app/scripts/paradee-voice",
+      "current": "040000 tree 203bc324e2da09ac614fdde3e36152b23fe35971\tpackages/app/scripts/paradee-voice",
+      "unchanged": true
+    },
+    {
+      "path": "packages/app/scripts/stage-elizavoice-lib.ts",
+      "prior": "100644 blob 5fc80a6ddf8e5e0f266c6481996568025763f5a3\tpackages/app/scripts/stage-elizavoice-lib.ts",
+      "current": "100644 blob 5fc80a6ddf8e5e0f266c6481996568025763f5a3\tpackages/app/scripts/stage-elizavoice-lib.ts",
+      "unchanged": true
+    },
+    {
+      "path": "packages/app/scripts/build-helpers/arm64-simd.ts",
+      "prior": "100644 blob 7c7a5ce7e11150ccc7bb3321d776f08cd511af62\tpackages/app/scripts/build-helpers/arm64-simd.ts",
+      "current": "100644 blob 7c7a5ce7e11150ccc7bb3321d776f08cd511af62\tpackages/app/scripts/build-helpers/arm64-simd.ts",
+      "unchanged": true
+    },
+    {
+      "path": "packages/app/scripts/build-helpers/verify-fused-symbols.ts",
+      "prior": "100644 blob 3c6498f0cd87d1b33a63ff4317a8d7a066ffff48\tpackages/app/scripts/build-helpers/verify-fused-symbols.ts",
+      "current": "100644 blob 3c6498f0cd87d1b33a63ff4317a8d7a066ffff48\tpackages/app/scripts/build-helpers/verify-fused-symbols.ts",
+      "unchanged": true
+    },
+    {
+      "path": "packages/app/platforms/android/app/src/main/elizavoice-jni",
+      "prior": "040000 tree 4918776fc9b898a46390735527bb003d48c6bf54\tpackages/app/platforms/android/app/src/main/elizavoice-jni",
+      "current": "040000 tree 4918776fc9b898a46390735527bb003d48c6bf54\tpackages/app/platforms/android/app/src/main/elizavoice-jni",
+      "unchanged": true
+    },
+    {
+      "path": "packages/app/platforms/android/app/src/main/java/ai/elizaos/app/ElizaVoiceNative.java",
+      "prior": "100644 blob 386478a98d8182a0541779922894a4d77ea8f3e8\tpackages/app/platforms/android/app/src/main/java/ai/elizaos/app/ElizaVoiceNative.java",
+      "current": "100644 blob 386478a98d8182a0541779922894a4d77ea8f3e8\tpackages/app/platforms/android/app/src/main/java/ai/elizaos/app/ElizaVoiceNative.java",
+      "unchanged": true
+    }
+  ],
+  "preservedReceipts": [
+    {
+      "path": "android/voice-host/qualified-voice-host.json",
+      "sha256": "cea7e4ac14762b4bc131cd4b8dbe4b8e52322561cb08bb57add7fe053b859a71",
+      "bytes": 63936,
+      "backup": "test-results/unification-67f7ced37/native-admission/qualified-voice-host.json"
+    },
+    {
+      "path": ".eliza/paradee-voice/native/build-record.json",
+      "sha256": "27e3f3174c395423d63e2919536f4045ded2ab4bb2702844a5e1fcb733f35e46",
+      "bytes": 9142,
+      "backup": "test-results/unification-67f7ced37/native-admission/build-record.json"
+    },
+    {
+      "path": "android/embedding-host/qualified-host.json",
+      "sha256": "3f6f36e84afc043bb6141c3425b17c4de6ac73849f2873ac9a977e9a15b6f21d",
+      "bytes": 3050,
+      "backup": "test-results/unification-67f7ced37/native-admission/qualified-host.json"
+    },
+    {
+      "path": "docs/evidence/native-f31-embedding/QUALIFICATION.json",
+      "sha256": "662dcef198852a15d0c73a5edfdf22ba39726838c79007d8689e6df63a4fc50f",
+      "bytes": 5914,
+      "backup": "test-results/unification-67f7ced37/native-admission/QUALIFICATION.json"
+    }
+  ],
+  "nativeInputsUnchanged": true,
+  "newNativeBuild": false,
+  "newDeviceExecution": false,
+  "qualificationTransferred": false,
+  "qualified": false,
+  "note": "The same engine/model/JNI bytes remain admitted after exact Git comparison. The shared native request policy/dispatch changed and needs new source/APK checks; retained historical embedding/voice execution evidence is not relabeled."
+}

@@ -85,7 +85,7 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-Current integration source: SDK `440e3c76fc`, a merged Eliza develop revision. Shared native sign-in and owner transport are integrated. The prior f31 checkpoint passed full source verification and four-variant Android packaging. The current pin needs record reconciliation and a full rerun; no current APK, full AOSP boot, live integration or device acceptance is implied by this source pin.
+Current integration source: SDK `67f7ced37f`, a merged Eliza develop revision. Shared native setup request admission joins the sign-in and owner transport. The preserved 440 checkpoint passed full source verification and four-variant Android packaging. The new pin has focused native checks and source/input preparation; its full verification and APK build are pending. No full AOSP boot, live integration or device acceptance is implied by this source pin.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 

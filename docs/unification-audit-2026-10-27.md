@@ -10,7 +10,9 @@ This report precedes implementation. It is based on direct source inspection, no
 
 Alpha's accepted source/APK checkpoint is `69c8912987442443235e27d5520eb12fb5baa63f`,
 with Eliza `440e3c76fc231f4c6e0763e2a71dbd8ae7b9bdaa`. The later documentation
-commit preserves the same runtime. `npm run verify` passes 2,723 tests with no
+commit preserves the same runtime. A new integration candidate admits merged
+startup-route pin `67f7ced37f025ad7cf409006b1097addd11ddf83`; its full source/APK
+checks have not run yet. `npm run verify` passes 2,723 tests with no
 failures, three skips and one existing APEX-key TODO. The required
 `npm run android:build:local` passes all four standalone/launcher debug/release
 builds, both instrumentation APK compilations, lint and 1,118 runtime-entry
@@ -22,7 +24,7 @@ See [the exact checkpoint](evidence/unification-440-69c891-checkpoint.json).
 | Device actions and conversation | Alpha consumes shared admission, review, journal, claim, execution, receipt recovery, conversation turns, context observations and Workspace returns. Installed owner/data compatibility still constrains full-App adoption. |
 | Sign-in and owner transport | Merged [#38275](https://github.com/elizaOS/eliza/pull/38275) and [#38291](https://github.com/elizaOS/eliza/pull/38291) are consumed at 440; duplicate Alpha sign-in forms/state are removed. All 18 native-sign-in composition browser cases pass with controlled native fixtures. |
 | Native startup routes | [#38295](https://github.com/elizaOS/eliza/pull/38295) is merged as `67f7ced37f025ad7cf409006b1097addd11ddf83` after exact-head local full verification and all six latest hosted checks passed. Alpha's companion and new pin are next; this merge is not yet part of the 440 APK checkpoint. |
-| Shared full application | [#38296](https://github.com/elizaOS/eliza/pull/38296) is ready: exact-head full verification, production browser consumer and canonical App audit pass. Alpha currently consumes the shared mobile root but has **not** completed the full AppProvider/application cutover. Appearance, installed stores, native ports and combined Calendar qualification remain required. |
+| Shared full application | [#38296](https://github.com/elizaOS/eliza/pull/38296) is merged as `2f69d73e2c8120f728d0c2070baa4b4ed3b9665e`: exact-head full verification, production browser consumer and canonical App audit pass. Alpha currently consumes the shared mobile root but has **not** completed the full AppProvider/application cutover. Appearance, installed stores, native ports and combined Calendar qualification remain required. |
 | Calendar and Home | [#38285](https://github.com/elizaOS/eliza/pull/38285) is ready with full verification, 218 audit captures, 212 OCR-verified captures and nine actual application-entry journeys. Native Calendar [#38298](https://github.com/elizaOS/eliza/pull/38298) is ready but awaits hosted checks and startup dependency admission. The Home follow-up [#38300](https://github.com/elizaOS/eliza/pull/38300) is rebased unchanged onto the reviewed Calendar base; 40 focused tests and 18 phone/desktop application-entry journeys pass, with full qualification queued. |
 | Inbox and deletion notices | [#38307](https://github.com/elizaOS/eliza/pull/38307) supplies the shared Inbox card action so labels and navigation cannot diverge; Alpha has not yet adopted it. [#38312](https://github.com/elizaOS/eliza/pull/38312) fences pending deletion reads/actions to their owner and bridge; full source verification passes and current visual qualification is finishing. |
 | Scoped native permissions | [#38310](https://github.com/elizaOS/eliza/pull/38310) adds camera-only native permission methods and removes broad fallback requests. Exact-head full source verification, focused tests and Android debug/release AAR compilation pass. Device grants and Swift compilation are unrun; the change remains stacked on the full-App PR. |
