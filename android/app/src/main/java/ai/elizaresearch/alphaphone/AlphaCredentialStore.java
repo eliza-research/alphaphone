@@ -84,10 +84,10 @@ final class AlphaCredentialStore {
  }
  private boolean mutateSlotOnce(String name,String expected,String value,boolean compare)throws Exception{
   if(!"cloud:production".equals(name)&&!"cloud:staging".equals(name)&&!LocalAgentProviderAdmission.PROVIDER_SLOT.equals(name)){
-   synchronized(JsonCredentialSlots.LOCK){
-    assertOwner.run();if(compare&&!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(name)),expected))return false;
+   return AlphaLocalAgentPlugin.withCredentialSlotMutation(assertOwner,()->{
+    if(compare&&!java.util.Objects.equals(slots.read(CloudDeployment.storageSlot(name)),expected))return false;
     if(value==null)slots.remove(CloudDeployment.storageSlot(name));else slots.write(CloudDeployment.storageSlot(name),value);return true;
-   }
+   });
   }
   return AlphaLocalAgentPlugin.mutateCredentials(context,assertOwner,new AlphaLocalAgentPlugin.CredentialMutation<Boolean>(){
    String before,provider;boolean conflict;

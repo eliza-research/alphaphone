@@ -50,6 +50,12 @@ public final class AlphaLocalAgentPlugin extends Plugin {
    return read.call();
   }}
  }
+ /** Noncritical slots share the canonical lock order without changing credential authority. */
+ static <T> T withCredentialSlotMutation(Runnable guard,java.util.concurrent.Callable<T> commit)throws Exception{
+  synchronized(lifecycleLock){synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){
+   guard.run();return commit.call();
+  }}
+ }
  /** Native-only authorization mutation marker. Both locks are already held by credential commit. */
  static void powerAuthorizationChanged(){
   if(!Thread.holdsLock(lifecycleLock)||!Thread.holdsLock(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK))throw new IllegalStateException("Credential lock order required");
