@@ -43,8 +43,25 @@ test('production review history refresh preserves browser instructions and modal
 test('stale action history replies cannot mutate the current connection',async()=>{
  const f=fixture();let resolve;f.context.readActionHistory=()=>new Promise(r=>{resolve=r;});const result=f.review();f.context.epoch++;resolve(f.entries);await result;assert.equal(f.snapshot().actionHistory,undefined);assert.equal(f.snapshot().message,'Finish signing in in your browser.');
 });
-test('development and non-Android presentation retain their explicit review notice',async()=>{
- for(const options of [{dev:true},{android:false}]){const f=fixture(options);f.update({open:true});assert.equal(f.snapshot().open,true);await f.review();assert.equal(f.snapshot().actionHistory,f.entries);assert.match(f.snapshot().message,/phone action needs your review/);}
+test('background history preserves open panels and connection messages on every platform',async()=>{
+ for(const options of [{},{dev:true},{android:false}])for(const open of [false,true]){
+  const f=fixture({...options,open});f.update({error:'Retained connection notice'});const before=f.snapshot();
+  await f.review();assert.equal(f.snapshot().actionHistory,f.entries);assert.equal(f.snapshot().open,before.open);assert.equal(f.snapshot().message,before.message);assert.equal(f.snapshot().error,before.error);
+ }
+});
+test('mixed historical outcomes are retained without settlement, synchronization or execution',async()=>{
+ const f=fixture({android:false});
+ f.entries.splice(0,f.entries.length,{id:'done',state:'done',local:{status:'succeeded'}},{id:'started',state:'executing',local:{phase:'started'}},{id:'uncertain',state:'reconciliation_required',local:{status:'failed'}});
+ let mutations=0;for(const name of ['syncReceipts','reconcile','reject','approve','execute'])f.context.active.actions[name]=()=>{mutations++;throw Error('No background mutation');};
+ const before=f.snapshot();await f.review();assert.equal(f.snapshot().actionHistory,f.entries);assert.equal(f.snapshot().actionHistory.length,3);assert.equal(mutations,0);assert.equal(f.snapshot().open,before.open);assert.equal(f.snapshot().message,before.message);
+});
+test('a replaced active owner cannot publish a delayed history reply',async()=>{
+ const f=fixture({android:false});let resolve;f.context.readActionHistory=()=>new Promise(r=>{resolve=r;});const pending=f.review();f.context.active={actions:{}};resolve(f.entries);await pending;assert.equal(f.snapshot().actionHistory,undefined);assert.equal(f.snapshot().open,false);
+});
+test('an aborted history read leaves presentation and records untouched',async()=>{
+ const f=fixture({android:false});const controller=new AbortController();const prior=[{id:'retained',state:'done'}];f.context.state={...f.snapshot(),actionHistory:prior};
+ f.context.readActionHistory=(_selected,signal)=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));
+ const before=f.snapshot();const pending=f.context.refreshActionReview(controller.signal);controller.abort();await assert.rejects(pending);assert.equal(f.snapshot(),before);assert.equal(f.snapshot().actionHistory,prior);
 });
 
 test('unresolved saved-session restore does not start the earlier automatic sign-in probe',()=>{

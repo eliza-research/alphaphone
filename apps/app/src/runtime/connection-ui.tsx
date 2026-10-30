@@ -1626,10 +1626,9 @@ async function refreshActionReview(signal:AbortSignal){
   try{
     const entries=await readActionHistory(selected,signal);
     if(generation!==epoch||selected!==active)return;
-    const review=entries.some(entry=>entry.state==='reconciliation_required');
-    // Production action history lives in Settings. A background refresh must not replace sign-in
-    // instructions or claim modal ownership over the current view.
-    update({actionHistory:entries,...(review&&!(isAndroid&&!testMocksEnabled)?{open:true,message:'A phone action needs your review. Check this phone, then record whether it happened.'}:{})});
+    // Action history is available in Settings on every platform. Background reads
+    // retain every outcome without changing the current panel or connection message.
+    update({actionHistory:entries});
   }catch{signal.throwIfAborted();/* The history stays available from Phone action history. */}
 }
 let viewInteractionExecutor:((view:string,capability:string,params:unknown,signal:AbortSignal,current:()=>void)=>Promise<unknown>)|undefined;
