@@ -89,7 +89,7 @@ assert.equal(stamp.baseCommit,JSON.parse(fs.readFileSync('upstream.lock.json','u
  const shellInputs=Object.keys(shellBundle.metafile.inputs).map(file=>path.relative(source,path.resolve(file)));
  assert.deepEqual(shellInputs.filter(file=>!stamp.files[file]),[],'the mobile entry loads only projected files');
  assert.deepEqual(shellInputs.filter(file=>file.startsWith('packages/ui/src/')&&!file.startsWith('packages/ui/src/mobile-shell/')).sort(),['packages/ui/src/app-shell-pages.ts','packages/ui/src/components/pages/InstalledAppsLauncher.tsx','packages/ui/src/config/theme.ts','packages/ui/src/registry-host.ts'],'the mobile entry reaches no other shared UI module');
- for(const file of ['packages/ui/src/app-shell-pages.ts','packages/ui/src/registry-host.ts','packages/ui/src/mobile-shell/application-catalog.ts','packages/ui/src/mobile-shell/MobileApplication.tsx']){
+ for(const file of ['packages/ui/src/app-shell-pages.ts','packages/ui/src/registry-host.ts','packages/ui/src/mobile-shell/application-catalog.ts','packages/ui/src/mobile-shell/MobileApplication.tsx','packages/ui/src/mobile-shell/view-policy.ts']){
   assert.equal(stamp.sourceFiles[file],stamp.files[file],file+' is not projected');
   assert.deepEqual(fs.readFileSync(path.join(source,file)),fs.readFileSync(path.join('vendor/eliza',file)),file+' is copied exactly');
  }

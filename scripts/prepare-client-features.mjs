@@ -111,6 +111,8 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/ui/src/mobile-shell/product-registration.ts',
   'packages/ui/src/mobile-shell/view-id-migration.ts',
   'packages/ui/src/mobile-shell/view-ids.ts',
+  // core.ts re-exports the shared mobile discovery policy (a type-and-function leaf, no imports).
+  'packages/ui/src/mobile-shell/view-policy.ts',
   'packages/ui/src/mobile-shell/view-registry.ts',
   'packages/ui/src/voice/pcm-wave.ts',
   "packages/ui/src/utils/reminder-presentation.ts",
