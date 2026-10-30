@@ -14,15 +14,21 @@ Android documents [WebSettings.setTextZoom](https://developer.android.com/refere
 
 ## Completeness and recovery
 
-The 2,000-instance bound belongs to this product, not to the shared calendar plugin: the
-shared `list` returns every instance in the range and always reports `truncated:false`.
-`AlphaCalendarPlugin` overrides `list` and reads through `CalendarRangeReader`, which
-returns the first 2,000 non-deleted instances by start and reports `truncated` when the
-provider held at least one more (exactly 2,000 is a complete result). Between the adoption
-of the shared plugin (`ab780d04`) and round 8 that override did not exist, the Android read
-was unbounded and the warning below could not appear; the truncation fixture's first run
-(round 7) failed for that reason. `test/calendar-range-reader.test.mjs` runs the reader on
-the JVM; the fixture has not been rerun since the fix.
+The native host selects an explicit 2,000-instance bound in its shared
+`CalendarConfiguration`. `CalendarPlugin.list` uses the same bounded reader as
+other Android hosts. It returns the first non-deleted instances by start and
+reports `truncated` when the provider held one more; exactly 2,000 is complete.
+The old six-argument configuration keeps complete reads for existing consumers.
+The product no longer carries a separate `CalendarRangeReader` or list override.
+`test/calendar-range-reader.test.mjs` runs the actual shared reader contract and
+checks the installed Alpha identity and retained incomplete-results warning.
+This JVM check is separate from current-APK provider and renderer qualification.
+
+The shared option and timed creation journals retain their installed names and
+URI prefixes. A creation ID cannot be reused across the two stores. Unknown
+receipts are not replayed, and an ambiguous legacy ID cannot be acknowledged by
+choosing one store. The shared guards use the existing canonical journal locks;
+Alpha retains its native deletion review, Undo, sync and source-freshness gates.
 
 Truncated provider results retain an incomplete-results warning and explicit retry;
 unreturned dates cannot say “Free all day.” The truncation fixture creates 2,001

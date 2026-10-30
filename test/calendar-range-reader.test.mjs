@@ -1,38 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {existsSync,readdirSync,mkdtempSync,readFileSync,rmSync} from 'node:fs';
-import {homedir,tmpdir} from 'node:os';
+import {readFileSync,existsSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {execFileSync} from 'node:child_process';
-// The Android Calendar view's bounded provider read, run on the JVM against a stand-in provider.
-// CalendarTruncationInstrumentedTest is the CalendarProvider and rendered-warning check; this is
-// neither Android nor a device run.
-const cache=join(homedir(),'.gradle/caches/modules-2/files-2.1/org.json/json/20250517');
-const cached=existsSync(cache)?readdirSync(cache).flatMap(hash=>readdirSync(join(cache,hash)).filter(name=>name==='json-20250517.jar').map(name=>join(cache,hash,name)))[0]:undefined;
-const jsonJar=process.env.ALPHA_JSON_JAR||cached;
+
 const root=resolve(import.meta.dirname,'..');
-test('Android Calendar range read returns at most 2,000 instances and reports a longer provider result',{skip:!jsonJar?'Pinned JVM JSON dependency unavailable':false},()=>{
- const temporary=mkdtempSync(join(tmpdir(),'calendar-range-reader-'));
- const java=process.env.JAVA_HOME||(process.platform==='darwin'?'/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home':'');const binary=name=>java?join(java,'bin',name):name;
- const shared=name=>join(root,'vendor/eliza/plugins/plugin-native-calendar/test/jvm/android',name);
- try{
-  execFileSync(binary('javac'),['--release','11','-cp',jsonJar,'-d',temporary,
-   join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/CalendarRangeReader.java'),
-   ...['content/ContentResolver.java','content/ContentUris.java','database/Cursor.java','net/Uri.java'].map(shared),
-   join(root,'test/fixtures/calendar-provider-jvm/android/provider/CalendarContract.java'),join(root,'test/fixtures/CalendarRangeReaderTest.java')],{timeout:180000,stdio:'pipe'});
-  const output=execFileSync(binary('java'),['-cp',temporary+':'+jsonJar,'ai.elizaresearch.alphaphone.CalendarRangeReaderTest'],{encoding:'utf8',timeout:120000,stdio:'pipe'});
-  assert.equal(output.trim(),'PASS calendar range reader');
- }finally{rmSync(temporary,{recursive:true,force:true});}
-});
-test('the Android Calendar plugin answers list through the bounded reader, not the unbounded shared one',()=>{
+// A candidate may point this test at an explicit upstream checkout before pin admission.
+// Production always uses the reviewed submodule; this variable affects tests only.
+const shared=process.env.ELIZA_CALENDAR_TEST_PLUGIN||join(root,'vendor/eliza/plugins/plugin-native-calendar');
+test('Android Calendar uses the same bounded shared reader and keeps incomplete results visible',()=>{
+ const runner=join(shared,'test/native-host/read-window.test.mjs');
+ assert.ok(existsSync(runner),'The admitted upstream Calendar bridge must provide the range contract');
+ const environment={...process.env};delete environment.NODE_TEST_CONTEXT;
+ const result=execFileSync(process.execPath,['--test',runner],{env:environment,encoding:'utf8',stdio:'pipe',timeout:60000});
+ assert.match(result,/(?:pass 1|# pass 1)/,'The shared contract actually ran');
  const plugin=readFileSync(join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaCalendarPlugin.java'),'utf8');
- const list=/@Override @PluginMethod public void list\(PluginCall c\)\{([\s\S]*?)\n \}\n/.exec(plugin)?.[1];
- assert.ok(list,'AlphaCalendarPlugin overrides list');
- assert.match(list,/CalendarRangeReader\.read\(resolver,begin,end\)/);
- assert.match(list,/value\.put\("truncated",read\.getBoolean\("truncated"\)\)/);
- assert.doesNotMatch(list,/\.events\(|super\.list/,'the shared reader returns every instance and reports truncated:false');
- assert.match(list,/if\(!granted\(\)\)\{c\.resolve\(status\("permission-required"\)\);return;\}/);
- // The renderer shows the warning the instrumentation waits for only when the native result says so.
+ assert.match(plugin,/"Alpha Phone","alpha-phone-local","On this phone","alpha-calendar-creations-v1","alphaphone:\/\/calendar-creation\/",0xff0000ff,2000/);
+ for(const method of ['list','saveOptions','readOptions','pendingCreations','acknowledgeCreation','insertHandoff'])assert.doesNotMatch(plugin,new RegExp(`public (?:synchronized )?void ${method}\\(`),`${method} belongs to the shared bridge`);
+ assert.equal(existsSync(join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone/CalendarRangeReader.java')),false,'No second provider reader');
+ assert.match(plugin,/protected boolean deferReviewedDeletion\(\)\{return true;\}/);
+ assert.match(plugin,/DeletionDispatchClaim\.check/);
+ assert.match(plugin,/CalendarSyncFreshness\.requireLocal/);
+ assert.match(plugin,/LateLaunch\.ask\(call,\(\)->super\.requestAccess\(call\)\)/);
  const adapter=readFileSync(join(root,'apps/app/src/prototype/calendar-adapter.ts'),'utf8');
  assert.match(adapter,/truncated=!!result\.truncated/);
  assert.match(adapter,/rangeReady&&truncated\?'Calendar results incomplete\. Some events may be missing\.'/);
