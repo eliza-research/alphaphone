@@ -202,24 +202,6 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
       publish();
     }catch{/* Inbox can still open normally when its optional saved Home summary is unavailable. */}
   }
-  let homeReadAttempt='',homeReadAbort:AbortController|undefined;
-  /** One header-only foreground refresh per Cloud binding; no message bodies or draft binding. */
-  async function refreshHomeMailbox(){
-    const binding=connectionController.getCloudClient(),owner=offlineOwner();
-    if(!binding||!owner||!shell?.live||document.hidden||api?.isActive())return;
-    const identity=JSON.stringify(owner),attempt=JSON.stringify([identity,binding.sessionId,binding.credentialId]);
-    if(homeReadAttempt===attempt)return;homeReadAttempt=attempt;homeReadAbort?.abort();const abort=homeReadAbort=new AbortController(),token=generation;
-    const valid=()=>!abort.signal.aborted&&shell?.live&&generation===token&&identity===JSON.stringify(offlineOwner())&&connectionController.getCloudClient()?.client===binding.client&&connectionController.getCloudClient()?.sessionId===binding.sessionId;
-    try{
-      const rows=await binding.client.gmailAccounts(abort.signal);if(!valid())return;
-      const hint=readGmailAccountChoice(connectionController.getSnapshot().cloudAccount),account=rows.find(row=>row.connectionId===hint&&row.connected&&row.grantedCapabilities.includes('google.gmail.triage'))??rows.find(row=>row.connected&&row.grantedCapabilities.includes('google.gmail.triage'));
-      if(!account?.connectionId)return;
-      const page=await binding.client.gmailSearch(account.connectionId,'in:inbox',abort.signal,25);if(!valid())return;
-      const key=gmailReadCacheKey(binding.sessionId,account);if(!key)return;
-      homePreview={key,owner:identity,label:account.label,sessionId:binding.sessionId,accountId:account.connectionId,messages:page.messages,more:!!page.nextPageToken,readAt:Date.now()};
-      setAttention(inboxAttentionFor(page.messages,!!page.nextPageToken,account.label,new Date(homePreview.readAt).toISOString(),'ready'));publish();
-    }catch{/* Home keeps its quiet saved summary; Inbox itself retains actionable errors. */}
-  }
   // Cost: one bounded local snapshot write after a successful page/body read. No credentials or timers.
   function persistMailbox(){const epoch=mailCacheEpoch;if(!accountsChecked||!selected||failure)return;const accountId=selected,snapshot={accounts,selected,spamTrashSearch,lists:folderLists.values().filter(row=>JSON.parse(row.key)[2]===selected),bodies:messageBodies.values()};void offlineStore().then(cache=>{if(cache&&epoch===mailCacheEpoch&&selected===accountId)return cache.put('gmail:mailbox',snapshot);}).catch(()=>{});}
   function purgeOffline(){++mailCacheEpoch;if(offline)void offline.clear().catch(()=>{});offline=null;offlineIdentity='';homePreview=null;homeRestoreAttempt='';}
@@ -808,7 +790,7 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
       if (next !== sessionId) {if(offlineIdentity&&JSON.stringify(offlineOwner())!==offlineIdentity)purgeOffline(); sessionId = next; clear(); if(next)void openNotice(); }
       const nextAgent = connectionController.getSnapshot().session?.sessionId;
       if (nextAgent !== agentSession) { contextReview=null;agentSession = nextAgent; publish({ nativeMailSelection: null }); }
-      void restoreHomeMailbox().finally(()=>void refreshHomeMailbox());
+      void restoreHomeMailbox();
     });
     this.gmailNoticeListener=onGmailNotice(()=>void openNotice());void openNotice();
     this.inboxVisibility=()=>{if(document.hidden){readAhead.pause();stopBodyReads();}else void openNotice();};
@@ -816,7 +798,6 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
     this.inboxResume = DailyApps.addListener('appResumed', () => { void openNotice(); if (api?.isActive()) { if (!operation) void refreshAccounts(true); } }).catch(() => null);
     // Settings can disconnect an account; re-check instead of showing a revoked mailbox.
     this.inboxAccountsChanged = (event: Event) => {
-      homeReadAbort?.abort();homeReadAttempt='';
       void withdrawGmailBackground().catch(()=>{});purgeOffline();invalidateList();saveGmailAccountChoice(connectionController.getSnapshot().cloudAccount,null);
       if ((event as CustomEvent).detail?.source === 'inbox') return;
       if (api?.isActive() && !operation) { void refreshAccounts(); return; }
@@ -828,13 +809,13 @@ export function installInboxCloudAdapter(Component: any, views: Record<string, B
       phase = 'idle'; status = 'Checking Gmail connection…'; publish({ open: null, nativeMailSelection: null });
     };
     window.addEventListener(GMAIL_ACCOUNTS_CHANGED, this.inboxAccountsChanged);window.addEventListener(GOOGLE_ACCOUNTS_CHANGED, this.inboxAccountsChanged);
-    void restoreHomeMailbox().finally(()=>void refreshHomeMailbox());
+    void restoreHomeMailbox();
   };
   p.componentWillUnmount = function () {
     closeMailQuestion?.();closeMailQuestion=undefined;noticeAttempt++;void this.gmailNoticeListener?.then((handle:Bag)=>handle.remove()).catch(()=>{});
     window.removeEventListener('alpha:device-settings',this.inboxImagePreferenceChanged);
     document.removeEventListener('visibilitychange',this.inboxVisibility);
     this.inboxConnectionUnsubscribe?.(); void this.inboxResume?.then((handle: Bag) => handle?.remove()); window.removeEventListener(GMAIL_ACCOUNTS_CHANGED, this.inboxAccountsChanged);window.removeEventListener(GOOGLE_ACCOUNTS_CHANGED, this.inboxAccountsChanged);
-    homeReadAbort?.abort();shell = undefined; openInboxHandler = null; clear(true); setAttention({ state: 'not-connected', unread: undefined, unreadMore: false, source: null, updatedAt: null }); unmount?.call(this);
+    shell = undefined; openInboxHandler = null; clear(true); setAttention({ state: 'not-connected', unread: undefined, unreadMore: false, source: null, updatedAt: null }); unmount?.call(this);
   };
 }
