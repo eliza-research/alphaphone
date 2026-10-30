@@ -35,6 +35,12 @@ prove full application parity. Both products default ordinary mobile entry to
 conversation-only while preserving the admitted AOSP native invocation path;
 this migration never enables or resumes capture.
 
+The [shared Photos consumer checkpoint](shared-photos-consumer.md) delegates the
+browser media engine and copy journal to the common application artifact while
+retaining installed storage names and native plugin bindings. Its Photos host is
+prepared for the common App mount; the existing template view remains until that
+integration and its owner-bound behavior are qualified.
+
 The shared mobile shell (`@elizaos/ui/mobile-shell`) renders Home, All apps and view
 placement from the AppShellPage catalog and the existing navigation owner.
 `config/alpha-product.json` supplies presentation and installed storage names.

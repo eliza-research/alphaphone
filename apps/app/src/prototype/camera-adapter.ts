@@ -110,7 +110,7 @@ export function askAboutCapture(item?:{id:string}):boolean{return captureQuestio
 const browserMode=!Capacitor.isNativePlatform();
 const camera:typeof nativeCamera=browserMode?browserCamera:nativeCamera;
 // Check every implemented browser method against the native port contract.
-browserPhotoLibrary satisfies Pick<typeof nativeLibrary,Exclude<keyof typeof browserPhotoLibrary,'saveVideoCopy'|'share'|'shareMany'>>;
+browserPhotoLibrary satisfies Pick<typeof nativeLibrary,Extract<keyof typeof browserPhotoLibrary,keyof typeof nativeLibrary>>;
 const library=browserMode?browserLibrary as unknown as typeof nativeLibrary:nativeLibrary;
 const libraryAvailable=()=>browserMode||Capacitor.isPluginAvailable('AlphaPhotos');
 type EditPreview={sessionId:string;operationId:string;image:string;width:number;height:number;reduced:boolean;maxEdge:number;filter:string};
