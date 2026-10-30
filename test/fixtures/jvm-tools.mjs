@@ -9,7 +9,11 @@ export const root=resolve(import.meta.dirname,'../..');
 export const nativeSource=name=>join(root,'android/app/src/main/java/ai/elizaresearch/alphaphone',name);
 export const fixture=name=>join(root,'test/fixtures',name);
 export const upstreamConnection=name=>join(root,'vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection',name);
-export const upstreamAgentRuntime=name=>join(root,'vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime',name);
+// A candidate shared native source may be compiled before the reviewed vendor pin is updated.
+const residentSource=process.env.ALPHA_RESIDENT_NATIVE_SOURCE;
+if(residentSource&&!residentSource.startsWith('/'))throw Error('ALPHA_RESIDENT_NATIVE_SOURCE must be absolute');
+export const upstreamAgentRuntime=name=>join(residentSource||join(root,'vendor/eliza'),'plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime',name);
+export const upstreamSecureStore=name=>join(residentSource||join(root,'vendor/eliza'),'plugins/plugin-native-secure-store/android/src/main/java/ai/eliza/plugins/securestore/nativeonly',name);
 // Shared speech pipeline (ai.eliza.voice) and its upstream host-JVM fixtures at the reviewed pin.
 export const upstreamVoiceSource=name=>join(root,'vendor/eliza/plugins/plugin-local-inference/native/android/src/main/java/ai/eliza/voice',name);
 // The shared product-subclassable speech bridge (AlphaVoiceCloudPlugin's base) at the reviewed pin.

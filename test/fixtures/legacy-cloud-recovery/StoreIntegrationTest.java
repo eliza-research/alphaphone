@@ -62,8 +62,30 @@ public final class StoreIntegrationTest {
   Thread vaultProbe=new Thread(()->{synchronized(JsonCredentialSlots.LOCK){vaultAvailable.countDown();}});vaultProbe.setDaemon(true);vaultProbe.start();
   boolean ordered=vaultAvailable.await(1,java.util.concurrent.TimeUnit.SECONDS);releaseLifecycle.countDown();
   check(ordered,"recovery must not hold vault while waiting for lifecycle");normal.join(2000);recoveryThread.join(2000);check(!normal.isAlive()&&!recoveryThread.isAlive()&&problem.get()==null,"concurrent signout/recovery completes");
+  nativeSignInMetadataOrder(contention);
   workspaceReturns(args[0]);
   System.out.println("PASS actual AlphaCredentialStore restore, canonical identity, no-op clears and explicit writes");
+ }
+ static void nativeSignInMetadataOrder(android.content.Context context)throws Exception{
+  String slot="cloud-signin:v1:ack:production";
+  for(boolean remove:new boolean[]{false,true}){
+   long intent=AlphaLocalAgentPlugin.currentCredentialIntent();
+   AlphaCredentialStore store=new AlphaCredentialStore(context,()->AlphaLocalAgentPlugin.requireCredentialIntent(intent));
+   java.util.concurrent.atomic.AtomicReference<Throwable> failure=new java.util.concurrent.atomic.AtomicReference<>();
+   java.util.concurrent.CountDownLatch available=new java.util.concurrent.CountDownLatch(1);
+   Thread metadata=new Thread(()->{try{if(remove)store.removeCredentialSlot(slot);else store.writeCredentialSlot(slot,"{\"test\":\"receipt\"}");}catch(Throwable error){failure.set(error);}});
+   metadata.setDaemon(true);boolean ordered;
+   synchronized(AlphaLocalAgentPlugin.lifecycleLock){
+    metadata.start();long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(2);
+    while(metadata.getState()!=Thread.State.BLOCKED&&System.nanoTime()<deadline)Thread.yield();
+    check(metadata.getState()==Thread.State.BLOCKED,"metadata reaches authority boundary");
+    Thread probe=new Thread(()->{synchronized(JsonCredentialSlots.LOCK){available.countDown();}});probe.setDaemon(true);probe.start();
+    ordered=available.await(1,java.util.concurrent.TimeUnit.SECONDS);
+   }
+   metadata.join(2000);
+   check(ordered&&!metadata.isAlive()&&failure.get()==null,"native sign-in metadata takes lifecycle before vault");
+   check(remove?store.readCredentialSlot(slot)==null:"{\"test\":\"receipt\"}".equals(store.readCredentialSlot(slot)),"metadata encrypted readback");
+  }
  }
  static void workspaceReturns(String root)throws Exception{
   String original=LegacyCloudRecoveryTest.SAVED,pending="synthetic-workspace-pending";
