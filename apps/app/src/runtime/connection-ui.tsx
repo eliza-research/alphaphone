@@ -50,6 +50,7 @@ import { pauseHostedBackground } from './hosted-background';
 import {developmentDeviceStore,developmentActionJournal} from './local-agent-storage';
 import { reviewLocalRecovery,archiveLocalRecovery,stopLocalAgent, configureLocalProvider, bindResidentCloudProvider, LocalCloudProviderStopUnconfirmed, LocalAgentProtocol, localAgentPackaged, browserLocalAgentEnabled, localProviderStatus, clearLocalProvider, clearLocalProviderIfCurrent, providerStatusLabel, LOCAL_PROVIDER_MODEL, type LocalProviderStatus } from './local-agent';
 import { presentDeviceRecordOperation } from './device-record-presentation';
+import { succeededBrowserDestination } from './action-message-presentation';
 import type { MessagePage } from './remote-protocol';
 import type {DeviceRecovery,CurrentDeviceActionRequest} from "./device-actions";
 import type { WorkflowPhoneReview } from './workflow-device-contract';
@@ -311,9 +312,12 @@ function deliverConversationMessages(selected:Active,session:VerifiedSession,id:
   const messages=restoredMessages(rows);if(messages.length)update({conversationDelivery:{sessionId:session.sessionId,conversationId:id,messages,revision:(state.conversationDelivery?.revision||0)+1}});
 }
 /** A journaled effect belongs to its conversation even when its own navigation retires chat. */
-function deliverRequestedActionReceipts(selected:Active,session:VerifiedSession,generation:number,id:string,requestMessageId:string,receipts:OperationReceipt[]){
+function deliverRequestedActionReceipts(selected:Active,session:VerifiedSession,generation:number,id:string,requestMessageId:string,receipts:OperationReceipt[],reviewed:ReadonlyArray<{proposal:ActionProposal|null}>){
   if(generation!==epoch||active!==selected||state.session!==session||conversationMemory.get(conversationKey(session))!==id)return;
-  const messages:RestoredMessage[]=receipts.map(receipt=>({id:`device-receipt:${receipt.proposalId}`,from:'agent',text:receipt.summary,deviceReceipt:true,inReplyTo:requestMessageId}));
+  const messages:RestoredMessage[]=receipts.map(receipt=>{
+    const browserDestination=succeededBrowserDestination(reviewed.find(item=>item.proposal?.id===receipt.proposalId)?.proposal,receipt);
+    return {id:`device-receipt:${receipt.proposalId}`,from:'agent',text:receipt.summary,deviceReceipt:true,inReplyTo:requestMessageId,...(browserDestination?{browserDestination}:{})};
+  });
   if(messages.length)update({conversationDelivery:{sessionId:session.sessionId,conversationId:id,messages,revision:(state.conversationDelivery?.revision||0)+1}});
 }
 /** Coalesced reconnect/foreground-settlement reconciliation through the existing history API. */
@@ -2876,7 +2880,7 @@ export const connectionController = {
           if(!failed&&directRequestedActions&&typeof reply.userMessageId==='string'&&validateUuid(reply.userMessageId)){
             const performed=await selected.actions.performRequested(reply.userMessageId,context,requestSignal,async()=>!(await readDevicePreferences(requestSignal)).askBeforeAgentActions,undefined,authoredRequest);
             // Publish existing outcomes before self-navigation's cancelled foreground wait.
-            deliverRequestedActionReceipts(selected,session,generation,id,reply.userMessageId,performed);
+            deliverRequestedActionReceipts(selected,session,generation,id,reply.userMessageId,performed,items);
             assertCurrent();
             if(performed.length){
               completedActions.push(...performed);

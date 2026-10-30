@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {build} from 'esbuild';
 const bundle=await build({entryPoints:['apps/app/src/runtime/action-message-presentation.ts'],bundle:true,platform:'node',format:'esm',write:false});
-const {projectActionMessages,browserNavigationSummary}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const {projectActionMessages,browserNavigationSummary,succeededBrowserDestination}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
 const notice='Review this request on your phone before it can run.';
 const old='Opened an approved HTTPS destination in a new browser tab. Page loading is not verified.';
 const user={id:'user',from:'user',text:'Open example.com'};
@@ -80,4 +80,40 @@ test('cross-turn collapse retains pending, foreign, quoted, different and offscr
  }
  const rows=[queued,user,receipt],visible=render([user,receipt]);
  assert.deepEqual(projectActionMessages(visible,rows).map(message=>message.id),['user','device-receipt:clock']);
+});
+
+// Live 2026-10-30 tj-79465dcbc873b2 "open example.com": the direct Browser open showed the reply
+// "Opening example.com." and then the device receipt "Opened example.com.". The reply is the one answer.
+const browserReply={id:'reply',from:'agent',text:'Opening example.com.'};
+const browserReceipt={id:'device-receipt:p',from:'agent',text:'Opened example.com.',deviceReceipt:true,inReplyTo:'user',browserDestination:'https://example.com'};
+test('a requested Browser open answered by the agent reply shows that reply once, live or restored',()=>{
+ for(const rows of [[user,browserReply,browserReceipt],[user,browserReceipt,browserReply],[user,browserReply,{...browserReceipt,inReplyTo:undefined}],[user,{id:'n',from:'agent',text:notice},browserReply,browserReceipt]]){
+  const frozen=structuredClone(rows);
+  assert.deepEqual(projectActionMessages(render(rows),rows).map(message=>message.id),['user','reply']);
+  assert.deepEqual(rows,frozen);
+ }
+});
+test('failed, other, unanswered and offscreen-reply receipts stay visible',()=>{
+ for(const rows of [
+  [user,browserReply,{id:'device-receipt:p',from:'agent',text:'Approved browser navigation is unavailable. No page opened.',deviceReceipt:true}],
+  [user,browserReply,{id:'device-receipt:n',from:'agent',text:'Note saved.',deviceReceipt:true}],
+  [user,{...browserReply,interrupted:true},browserReceipt],
+  [user,{...browserReply,text:''},browserReceipt],
+  [user,browserReply,{id:'next',from:'user',text:'Thanks'},browserReceipt],
+ ])assert.deepEqual(projectActionMessages(render(rows),rows).map(message=>message.id),rows.map(message=>message.id));
+ const rows=[user,browserReply,browserReceipt];
+ assert.deepEqual(projectActionMessages(render([user,browserReceipt]),rows).map(message=>message.id),['user','device-receipt:p']);
+});
+test('only a browser proposal receipt that succeeded with its exact summary names its destination',()=>{
+ const card={id:'p',description:'Open browser destination https://example.com'},opened={status:'succeeded',summary:'Opened example.com.'};
+ assert.equal(succeededBrowserDestination(card,opened),'https://example.com');
+ for(const [proposal,receipt] of [
+  [card,{status:'succeeded',summary:'Opened example.com. Server receipt is pending; check action history.'}],
+  [card,{status:'failed',summary:'Approved browser navigation is unavailable. No page opened.'}],
+  [card,{...opened,status:'unknown'}],
+  [{id:'p',description:'Open browser destination https://other.example'},opened],
+  [{id:'p',description:'Open browser destination http://example.com'},opened],
+  [{id:'p',description:'Save one note'},opened],
+  [null,opened],[undefined,opened],
+ ])assert.equal(succeededBrowserDestination(proposal,receipt),undefined);
 });

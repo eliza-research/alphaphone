@@ -12,7 +12,7 @@ const root=process.env.ALPHA_RECEIPT_SOURCE_ROOT||'.';
 const read=p=>fs.readFileSync(root+'/'+p,'utf8');
 const agent=read('apps/app/src/prototype/agent-adapter.ts'),browser=read('apps/app/src/prototype/browser-adapter.ts'),device=read('apps/app/src/runtime/device-actions.ts');
 const ts=s=>stripTypeScriptTypes(s,{mode:'transform'});
-const {browserNavigationSummary,projectActionMessages}=await import('data:text/javascript;base64,'+Buffer.from(ts(read('apps/app/src/runtime/action-message-presentation.ts'))).toString('base64'));
+const {browserNavigationSummary,projectActionMessages,succeededBrowserDestination}=await import('data:text/javascript;base64,'+Buffer.from(ts(read('apps/app/src/runtime/action-message-presentation.ts'))).toString('base64'));
 const navigateCode=ts(browser.slice(browser.indexOf('  async function navigate('),browser.indexOf('  async function command(')));
 const browserCode=ts(browser.slice(browser.indexOf('    this.browserNavigateApproved ='),browser.indexOf('    // Identity only:')));
 const executorCode=agent.slice(agent.indexOf("      if (!this.browserNavigateApproved) return"),agent.indexOf('\n    });\n    context(this);',agent.indexOf("      if (!this.browserNavigateApproved) return")));
@@ -91,19 +91,22 @@ const deliveryStart=connectionSource.indexOf('            const performed=await 
 const deliveryEnd=connectionSource.indexOf('            assertCurrent();',deliveryStart)+'            assertCurrent();'.length;
 const directDelivery=ts('(async function(){'+connectionSource.slice(deliveryStart,deliveryEnd)+'})');
 function deliveryHarness(selected,session,receipts,controller){
- const state={session,conversationDelivery:undefined};const updates=[];const globals={active:selected,epoch:1,state,conversationMemory:new Map([['key','conversation']]),conversationKey:()=> 'key',update:patch=>{updates.push(patch);Object.assign(state,patch);},selected,session,generation:1,id:'conversation',reply:{userMessageId:'canonical-user'},authoredRequest:{messageId:'canonical-user',text:'Open https://example.com/',current:()=>controller.signal.throwIfAborted()},context:{view:'notes',revision:1},requestSignal:controller.signal,readDevicePreferences:async()=>({askBeforeAgentActions:false}),assertCurrent:()=>controller.signal.throwIfAborted()};
- vm.runInNewContext(deliverySource+';globalThis.deliver=deliverRequestedActionReceipts;',globals);return {globals,state,updates,run:()=>vm.runInNewContext(directDelivery,globals)(),deliver:()=>globals.deliver(selected,session,1,'conversation','canonical-user',receipts)};
+ const state={session,conversationDelivery:undefined};const updates=[];const globals={succeededBrowserDestination,items:[],active:selected,epoch:1,state,conversationMemory:new Map([['key','conversation']]),conversationKey:()=> 'key',update:patch=>{updates.push(patch);Object.assign(state,patch);},selected,session,generation:1,id:'conversation',reply:{userMessageId:'canonical-user'},authoredRequest:{messageId:'canonical-user',text:'Open https://example.com/',current:()=>controller.signal.throwIfAborted()},context:{view:'notes',revision:1},requestSignal:controller.signal,readDevicePreferences:async()=>({askBeforeAgentActions:false}),assertCurrent:()=>controller.signal.throwIfAborted()};
+ vm.runInNewContext(deliverySource+';globalThis.deliver=deliverRequestedActionReceipts;',globals);return {globals,state,updates,run:()=>vm.runInNewContext(directDelivery,globals)(),deliver:()=>globals.deliver(selected,session,1,'conversation','canonical-user',receipts,globals.items)};
 }
 test('direct navigation journals once and shows Browser after the chat request settles; its exact receipt survives reopening',async()=>{
- const h=harness({native:true,pending:true}),p=[...h.owner.proposals.values()][0].proposal;p.requestMessageId='canonical-user';h.owner.card=()=>({});h.owner.approve=()=>h.run();
+ const h=harness({native:true,pending:true}),p=[...h.owner.proposals.values()][0].proposal;p.requestMessageId='canonical-user';const card=h.owner.card(p,{view:'notes',sensitive:false,revision:1});h.owner.card=()=>({});h.owner.approve=()=>h.run();
  h.owner.proposals.get(p.id).requestKey=h.owner.requestKey('canonical-user');
- const selected={actions:h.owner},d=deliveryHarness(selected,h.owner.session,[],h.controller);
+ const selected={actions:h.owner},d=deliveryHarness(selected,h.owner.session,[],h.controller);d.globals.items=[{proposal:card}];
  await d.run();assert.equal(h.controller.signal.aborted,false,'the reply request is not cancelled');assert.equal(h.events.filter(e=>e==='dispatch').length,1);assert.ok(!h.events.includes('present'));
  h.settle();await new Promise(resolve=>setTimeout(resolve,0));assert.equal(h.events.at(-1),'present');
- const delivery=d.state.conversationDelivery;assert.equal(delivery.messages.length,1);assert.equal(delivery.messages[0].inReplyTo,'canonical-user');assert.equal(delivery.messages[0].text,'Opened example.com.');
+ const delivery=d.state.conversationDelivery;assert.equal(delivery.messages.length,1);assert.equal(delivery.messages[0].inReplyTo,'canonical-user');assert.equal(delivery.messages[0].text,'Opened example.com.');assert.equal(delivery.messages[0].browserDestination,'https://example.com');
  const user={id:'optimistic-user',from:'user',text:'Open example.com.'},pause={id:'streamed-pause',from:'agent',text:'Review this request on your phone before it can run.'};const original=[user,pause];
  const merge=vm.runInNewContext(mergeSource+';mergeConversationDelivery',{});const reopened=merge(original,delivery.messages);const shown=projectActionMessages(reopened.map(m=>({...m,displayText:m.text,hasCalendarText:true})),reopened);
  assert.deepEqual(Array.from(shown,m=>m.id),['optimistic-user','device-receipt:proposal']);assert.equal(shown[1].displayText,'Opened example.com.');assert.equal(original[1].text,pause.text,'raw stored protocol remains intact');assert.equal(merge(reopened,delivery.messages).length,3,'redelivery is idempotent');
+ // Live tj-79465dcbc873b2: with the agent reply "Opening example.com." in the turn, that reply is the one line shown.
+ const answered=merge([user,{id:'reply',from:'agent',text:'Opening example.com.'}],delivery.messages);
+ assert.deepEqual(Array.from(projectActionMessages(answered.map(m=>({...m,displayText:m.text,hasCalendarText:true})),answered),m=>m.id),['optimistic-user','reply']);
 });
 test('completed receipt delivery cannot cross owner, conversation or generation changes',()=>{
  for(const retire of [d=>d.globals.active={},d=>d.state.session={sessionId:'foreign'},d=>d.globals.epoch=2,d=>d.globals.conversationMemory.set('key','different')]){
