@@ -313,8 +313,8 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         const { shell, chat, draft:previousDraft } = chatDestination;
         const text=previousDraft?[previousDraft,draft].join('\n'):draft;
         cleanup();
-        // The dictated draft is voice-originated: if it is sent exactly as placed, its reply may be
-        // read aloud (Settings: Read replies aloud, off by default). Editing it first makes it typed.
+        // If the dictated draft is sent exactly as placed, its turn is timed through the reply. The
+        // reply is never spoken: only the voice conversation speaks replies.
         if(!previousDraft)noteVoiceDraft(text,shell.S().msgs||[]);
         shell.setState({chat:['input','sheet','full'].includes(chat)?chat:'input',draft:text,voice:'off'});
         return;

@@ -28,7 +28,6 @@ import { clearCrashLog, describeCrashEntry, readCrashLog, recordCloudInferenceFa
 import { buildDiagnostics, diagnosticsFileName, diagnosticsText } from '../runtime/diagnostics-export';
 import {planAdmission} from '../runtime/subscription-entitlement';
 import { exportVoiceTiming } from '../runtime/voice-timing';
-import { setSpeakReplies, speakRepliesEnabled } from '../runtime/voice-selection';
 import { readNativeVoiceTiming } from '../runtime/native-voice-turn';
 import { listenerStatus, openListenerSettings, pauseListener, turnOffListener, wakeListeningStopUnconfirmed, type ListenerStatus } from '../runtime/always-on-listener';
 import { reviewDataReset, type DataResetPlugin } from '@elizaos/capacitor-system/reset';
@@ -446,14 +445,6 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     // Speech follows the explicit production runtime profile; developer routes stay separate.
     const speechRows = (): Bag[] => [info('Speech', developmentCartesiaVoiceEnabled?'Cartesia · development':cloudRuntimeEnabled?`${serviceName} · Cartesia output (uses your plan)`:testMocksEnabled?`${serviceName} (counts toward your plan)`:'On this device'), ...(wakeListeningStopUnconfirmed() ? [note('Wake listening', 'Could not confirm listening is off. Turn it off in Android settings.')] : [])];
     const action = (label: string, go: () => void): Bag => ({ kNav:true, label, lbl:label, chev:true, noAB:true, go });
-    // P-39: a reply to a message you dictated (Transcribe, then Send) can be read aloud. The switch
-    // shows the stored preference, never the requested one: a save that storage does not confirm
-    // keeps the old position and says so.
-    const speakRepliesRow = (): Bag => {
-      const on = speakRepliesEnabled();
-      return { kTog:true, label:'Read replies aloud', aria:'Read replies aloud', hasSub:true, sub:'Speak the reply to a message you dictated and sent. Typed messages stay silent.', on, track:on?'background:var(--acc)':'background:var(--line)', kx:on?20:0,
-        toggle:()=>{ const next=!speakRepliesEnabled(); if(!setSpeakReplies(next)||speakRepliesEnabled()!==next) api.toast('Read replies aloud could not be saved. Try again.'); changed(); } };
-    };
     const listenerRows = (): Bag[] => {
       if (!externalVoiceInvocationEnabled) return [];
       if (!listener.available) return [info('Wake word', 'Not available')];
@@ -703,12 +694,11 @@ export function installSettingsAdapter(Component: any, views: Bag) {
         // The reference character page deliberately has no visible title.
         page.groups = browserDevProfile?[group([
           info('Speech','Record and review in this app'),
-          speakRepliesRow(),
           ...(externalVoiceInvocationEnabled ? [{kNav:true,label:'Wake assistant',lbl:'Wake assistant',chev:true,noAB:true,go:()=>void owner?.startVoice()}] : []),
           {kNav:true,label:'Open conversation',lbl:'Open conversation',chev:true,noAB:true,go:()=>api.composeContentQuestion('')},
           {kNav:true,label:'Agent connection',lbl:'Agent connection',chev:true,noAB:true,go:()=>connectionController.open()},
           {kNav:true,label:'Scheduled digests',lbl:'Scheduled digests',chev:true,noAB:true,go:()=>window.dispatchEvent(new Event('alpha:hosted-digests'))},
-        ])]:[group([...speechRows(), speakRepliesRow(), ...listenerRows(), { kNav:true, label:'Scheduled digests', lbl:'Scheduled digests', val:digests, hasVal:true, chev:true, noAB:true, go:()=>window.dispatchEvent(new Event('alpha:hosted-digests')) }, info('Personality settings', 'Managed by your agent')])];
+        ])]:[group([...speechRows(), ...listenerRows(), { kNav:true, label:'Scheduled digests', lbl:'Scheduled digests', val:digests, hasVal:true, chev:true, noAB:true, go:()=>window.dispatchEvent(new Event('alpha:hosted-digests')) }, info('Personality settings', 'Managed by your agent')])];
       } else if (page.title === 'Battery') {
         page.hero = { ...page.hero, big: percent, sub: typeof facts.charging === 'boolean' ? facts.charging ? 'Charging' : 'On battery' : 'Battery reading unavailable', hasMeter: typeof facts.batteryPercent === 'number', meter: facts.batteryPercent ?? 0 };
         page.groups = [group([info('Battery saver', typeof facts.powerSave === 'boolean' ? facts.powerSave ? 'On' : 'Off' : 'Unavailable'), nav('Manage battery in Android', 'battery')])];
