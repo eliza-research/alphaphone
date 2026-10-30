@@ -503,7 +503,10 @@ async function refreshMembershipBalance(){
     finally{clearTimeout(deadline);if(membershipRead===recovery)membershipRead=null;}
     return;
   }
-  membershipRead?.abort();const controller=new AbortController();membershipRead=controller;const timer=setTimeout(()=>controller.abort(),10000);if(!['funded','member'].includes(state.membershipBalance??''))update({membershipBalance:'checking',membershipCredits:null});
+  membershipRead?.abort();const controller=new AbortController();membershipRead=controller;const timer=setTimeout(()=>controller.abort(),10000);
+  // The balance last read, kept before a $0 or unknown balance is cleared to "checking" below.
+  const before=state.membershipCredits;
+  if(!['funded','member'].includes(state.membershipBalance??''))update({membershipBalance:'checking',membershipCredits:null});
   try{
     const [credits,checked]=await Promise.all([
       account.client.membershipCredits(controller.signal).catch(error=>{reportMembershipReadFailure('credits',error);return {state:'unavailable' as const,usd:null,observedAt:null};}),
@@ -514,7 +517,7 @@ async function refreshMembershipBalance(){
     if(checked.view.kind==='active')balance='member';
     else if(balance!=='funded'&&!['inactive','credits'].includes(checked.view.kind))balance='unavailable';
     // Credits that rose since Cloud declined a turn for billing (added in Cloud's billing page) end that refusal.
-    const raised=!!state.fundingRefused&&state.membershipCredits!=null&&credits.usd!==null&&Number(credits.usd)>Number(state.membershipCredits.usd);
+    const raised=!!state.fundingRefused&&before!=null&&credits.usd!==null&&Number(credits.usd)>Number(before.usd);
     if(membershipRead===controller&&service===account)update({membershipBalance:balance,...(raised?{fundingRefused:false}:{}),membershipCredits:credits.usd!==null&&credits.observedAt!==null?{usd:credits.usd,observedAt:credits.observedAt}:null,membershipPlan:checked.view,...(checked.entitlement?.planEndsAt!==undefined?{planEndsAt:checked.entitlement.planEndsAt}:checked.view.kind==='active'&&checked.view.source==='billing-limits'&&checked.view.expiresAt>0?{planEndsAt:checked.view.expiresAt}:checked.view.kind==='inactive'?{planEndsAt:null}:{})});
   }catch(error){reportMembershipReadFailure('refresh',error);if(membershipRead===controller&&service===account)update({membershipBalance:'unavailable',membershipCredits:null,membershipPlan:{kind:'unavailable',reason:'outage'}});}
   finally{clearTimeout(timer);if(membershipRead===controller)membershipRead=null;}

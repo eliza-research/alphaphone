@@ -190,3 +190,27 @@ test('Cloud declining a turn mid-use gives one answer and the popup; after a top
   await expectNoDevelopmentSurface(page);
   expect(foreign).toEqual([]);
 });
+
+test('a refusal that leaves the balance at $0.00 ends when the owner returns from Cloud billing with credits', async ({ page }, info) => {
+  test.setTimeout(150_000);
+  const foreign = await boot(page, { balance: 0.02 });
+  await residentHome(page);
+  // The last request spent the balance: Cloud declines this turn and now reports $0.00.
+  await setStub(page, { stream: { failure: 'insufficient_credits', frame: 'done', runtime: true } });
+  await stub(page, s => { s.accounts[0].balance = 0; s.persist(); });
+  await send(page, 'What is on my calendar this week?');
+  await expect(sheet(page)).toBeVisible({ timeout: 30_000 });
+  await expect(controls(page).getByRole('status').filter({ hasText: SHEET_REFUSED })).toHaveCount(1);
+  await expect(controls(page).locator('.alpha-membership-amount')).toHaveText('$0.00USD');
+  await shot(page, info, '10-refusal-at-zero-popup.png');
+  // The owner pays in Cloud's billing page (synthetic here) and comes back to Alpha: no Refresh tap.
+  await stub(page, s => { s.accounts[0].balance = 10; s.stream = null; s.persist(); });
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect(sheet(page)).toHaveCount(0, { timeout: 30_000 });
+  await send(page, 'Try my calendar again');
+  await expect(conversation(page).getByText(/^Resident reply \d+$/)).toHaveCount(1, { timeout: 30_000 });
+  await shot(page, info, '11-reply-after-return-from-billing.png');
+  expect(await harness(page, f => f.streams)).toBe(2);
+  expect(await stub(page, s => s.opened)).toEqual([]);
+  expect(foreign).toEqual([]);
+});
