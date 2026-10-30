@@ -35,7 +35,7 @@
         "test/browser/home-native-launcher.spec.ts",
         "test/browser/home-landscape.spec.ts",
         "android/app/src/androidTest/java/ai/elizaresearch/alphaphone/LauncherHomeInstrumentedTest.java",
-        "android/app/src/main/java/ai/elizaresearch/alphaphone/DeviceAppsPlugin.java",
+        "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaSystemPlugin.java",
         "android/app/src/androidTest/java/ai/elizaresearch/alphaphone/LauncherAppsInstrumentedTest.java",
         "android/app/src/androidTest/java/ai/elizaresearch/alphaphone/SettingsRolesInstrumentedTest.java",
         "test/product-identity.test.mjs"

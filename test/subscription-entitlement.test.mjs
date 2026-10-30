@@ -11,7 +11,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {transformSync} from 'esbuild';
 import {
   describeSubscription, planAdmission, readServiceLimit, redeemFailureMessage, serviceLimitMessage, subscriptionSummary,
-  SubscriptionRedeemError, membershipCreditDetailsFromLimits,
+  SubscriptionRedeemError, organizationCreditFromLimits,
 } from '../apps/app/src/runtime/subscription-entitlement.ts';
 
 const NOW = Date.UTC(2026, 9, 12, 12, 0, 0);
@@ -43,11 +43,11 @@ test('Alpha keeps no second entitlement implementation: it re-exports the projec
 test('the organization credit balance is read only from an exact, fresh billing snapshot', () => {
   const at = new Date(NOW - 1000).toISOString();
   const snapshot = value => ({success: true, data: {schemaVersion: 2, v2: {balance: {status: 'available', source: 'organizations', observedAt: at, value: {revision: '7', balance: {unit: 'usd', currency: 'USD', value}}}}}});
-  assert.deepEqual(membershipCreditDetailsFromLimits(snapshot('12.5'), NOW), {state: 'funded', usd: '12.5', observedAt: NOW - 1000});
-  assert.equal(membershipCreditDetailsFromLimits(snapshot('0.000'), NOW).state, 'zero');
+  assert.deepEqual(organizationCreditFromLimits(snapshot('12.5'), NOW), {state: 'funded', usd: '12.5', observedAt: NOW - 1000});
+  assert.equal(organizationCreditFromLimits(snapshot('0.000'), NOW).state, 'zero');
   for (const bad of [snapshot('-1'), snapshot('1e3'), {success: true, data: {schemaVersion: 1}}, null])
-    assert.equal(membershipCreditDetailsFromLimits(bad, NOW).state, 'unavailable');
-  assert.equal(membershipCreditDetailsFromLimits(snapshot('5'), NOW + 400000).state, 'unavailable', 'a stale observation is not shown');
+    assert.equal(organizationCreditFromLimits(bad, NOW).state, 'unavailable');
+  assert.equal(organizationCreditFromLimits(snapshot('5'), NOW + 400000).state, 'unavailable', 'a stale observation is not shown');
 });
 
 test('the approved Membership & credits sheet adds the plan allowance and the latest Cloud limit read-only', async () => {

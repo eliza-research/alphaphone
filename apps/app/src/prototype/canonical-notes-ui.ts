@@ -7,9 +7,14 @@ import {projectNoteForModel,type StickyNote} from '../../../../.eliza/client-fea
 import type {AppRecordPort} from '../runtime/app-record-route-policy';
 import {shareSelectedText,copySelectedText} from '../runtime/text-share';
 import {noteShareText} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/note-share-text.ts';
+import {noteScheduleDraft,type NoteScheduleKind} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/note-schedule-draft.ts';
 import {DailyApps} from '../daily';
 import {registerPlugin} from '../platform-plugins';
 import {speakNote,stopSpeaking} from './local-speech-playback';
+import {MobileViewHost,type MobileViewFailure} from '@elizaos/ui/mobile-shell';
+import {alphaViews} from '../product/alpha-product';
+import {recordRendererFailure} from '../runtime/crash-log';
+import {NotesHostContext} from '../product/notes-host-context';
 /** Back chevron from the shared icon pack, like every other Back control: it does not reflow as text at large font sizes. */
 const backIcon=()=>React.createElement('span',{'aria-hidden':'true','data-alpha-icon':'/icons/lucide/chevron-left.svg',style:{...iconStyle('chevron-left'),width:24,height:24}});
 type Bag=Record<string,any>;
@@ -61,6 +66,20 @@ export class CanonicalNotesUi {
  get editing(){return this.handle?.isEditing()??false;}
  get list(){if(!this.current)return [];const revision=this.handle?.revision()??null;if(revision!==this.rowsRevision){const snapshot=this.handle?.snapshot();this.rows=(snapshot?.notes??[]).map(note=>({...row(note),canonicalRevision:revision}));this.rowsRevision=revision;}return this.rows;}
  get open(){return this.handle?.selection()?.id??null;}
+ /** The current canonical records, exactly as the shared controller holds them (for origin links). */
+ notes():StickyNote[]{return this.current?this.handle?.snapshot()?.notes??[]:[];}
+ /**
+  * Opens a reviewed Calendar event or reminder draft from the selected note. Nothing is written
+  * until Save in Calendar; the saved record keeps the draft's canonical origin link.
+  */
+ private async scheduleDraft(note:StickyNote,kind:NoteScheduleKind,signal:AbortSignal){
+  const result=await noteScheduleDraft(note,kind);signal.throwIfAborted();
+  const api=this.api;if(!api||!this.active||!this.current||this.open!==note.id)throw new DOMException('The note changed.','AbortError');
+  if(result.status!=='ready'){api.toast(result.message);return;}
+  const {draft}=result,shared={id:null,title:draft.title,off:1,t:9,d:1,where:'',video:false,who:[],repeat:'none',notes:draft.notes,origin:draft.origin};
+  api.open('calendar',{calendarAuthority:api.get('calendar').calendarAuthority,form:kind==='event'?{...shared,creationId:crypto.randomUUID(),separateCreation:false,cal:'native:local',alert:null}:{...shared,cal:'alpha-reminders',alert:0},open:null,month:null,day:1},'hidden');
+  api.toast(kind==='event'?'Review the time, then Save. Nothing is on your calendar yet.':'Review the time, then Save. Nothing scheduled yet.');
+ }
  selection(){return this.handle?.selection();}
  private async admitted(){const handle=this.handle?.current()?this.handle:await this.ready;if(!handle||!this.current)throw new DOMException('The Notes connection changed.','AbortError');return handle;}
  async refresh(){const handle=await this.admitted();await handle.refresh();}
@@ -89,6 +108,8 @@ export class CanonicalNotesUi {
     exportText:async(note,signal)=>{const value=selected(note,signal);const result=await documents.exportText(value);if(this.current&&!signal.aborted)this.api?.toast(result.message);},
     composeEmail:async(note,signal)=>{const value=selected(note,signal);this.api?.open('inbox',{compose:{subject:value.title,body:value.text}});},
     dictate:async signal=>{signal.throwIfAborted();const result=await DailyApps.perform({action:'voice'});signal.throwIfAborted();if(!this.current)throw new DOMException('The Notes connection changed.','AbortError');if(!result.transcript)throw Error(result.message||'Speech recognition is unavailable.');return result.transcript;},
+    draftEvent:async(note,signal)=>this.scheduleDraft(note,'event',signal),
+    draftReminder:async(note,signal)=>this.scheduleDraft(note,'reminder',signal),
     readAloud:async(note,signal)=>{const value=selected(note,signal),cancel=()=>stopSpeaking();signal.addEventListener('abort',cancel,{once:true});try{const result=await speakNote(value.text,{noteId:note.id});if(result!=='finished'&&result!=='stopped')throw Error('Reading this note is unavailable.');}finally{signal.removeEventListener('abort',cancel);}},
    }}));
  }
@@ -113,12 +134,43 @@ function WaitingNotes({shell,storageAccessWarning,covered=false}:{shell:Bag;stor
    ...(shell.api('notes').notesSourceOptions??[]).filter((source:Bag)=>!source.selected).map((source:Bag)=>React.createElement('button',{key:source.id,onClick:source.choose,style:{minHeight:48,padding:'12px 18px',borderRadius:16,background:'var(--s2)',color:'var(--fg)',font:'inherit'}},source.id==='legacy'?'Older notes':source.label))));
 }
 
-/** The stable screen-level React hole stays mounted across Home/app changes. */
+/** What the Notes view draws for the shell that hosts it. */
+type NotesHost={shell:Bag;ui:CanonicalNotesUi|null;storageAccessWarning:string;covered:boolean};
+
+/** The canonical workspace while a connection is bound, else the opaque waiting surface. */
+function renderNotesSurface(host:NotesHost,active:boolean):React.ReactNode{
+ if(host.ui)return host.ui.render(host.shell,active,host.storageAccessWarning,host.covered);
+ return active?React.createElement(WaitingNotes,{shell:host.shell,storageAccessWarning:host.storageAccessWarning,covered:host.covered}):null;
+}
+
+const surface={position:'absolute',inset:0,zIndex:21,background:'var(--bg)',color:'var(--fg)',paddingTop:44,boxSizing:'border-box',display:'flex',flexDirection:'column'} as React.CSSProperties;
+/** A Notes view that could not load or render: the same opaque surface, Back and a retry. */
+function NotesFailure({label,retry,close,active}:MobileViewFailure){
+ return React.createElement('section',{role:'region','aria-label':label,className:'notes-layout',hidden:!active,inert:!active||undefined,'aria-hidden':!active,'data-alpha-view-failure':'notes',style:{...surface,display:active?'flex':'none'}},
+  React.createElement('header',{'data-alpha-app-header':'main',style:{display:'flex',alignItems:'center',height:56,flexShrink:0,gap:12,padding:'0 16px'}},
+   React.createElement('button',{className:'app-header-back','aria-label':'Back to apps',onClick:close},backIcon()),
+   React.createElement('h1',{'data-alpha-app-title':true,style:{margin:0,fontSize:24}},label)),
+  React.createElement('div',{role:'alert',style:{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:16,padding:'16px 24px'}},
+   React.createElement('p',{style:{margin:0,lineHeight:1.5}},`${label} could not be shown. Try again, or go back to your apps.`),
+   React.createElement('button',{onClick:retry,style:{minHeight:48,padding:'12px 18px',borderRadius:16,background:'var(--s2)',color:'var(--fg)',font:'inherit'}},'Try again')));
+}
+const reportFailure=(error:unknown)=>{void recordRendererFailure('render',error);};
+
+/** The stable screen-level React hole stays mounted across Home/app changes; Notes renders in it
+ * through the shared shell's view host. */
 export function installCanonicalNotesView(Component:any,views:Record<string,Bag>):void{
  const prototype=Component.prototype,renderVals=prototype.renderVals,get=prototype.vget,api=prototype.api;
  prototype.vget=function(key:string){const value=get.call(this,key),ui=this.canonicalNotesUi;return key==='notes'&&ui?{...value,list:ui.list,open:ui.open,rec:null,record:false}:value;};
  prototype.api=function(key:string){const value=api.call(this,key);if(key!=='notes')return value;const ui=this.canonicalNotesUi;if(!ui)return this.notesSourceMode==='canonical'?{...value,notesSourceMode:'canonical',notesTrash:undefined,moveNoteToTrash:()=>false,set:(patch:Bag)=>{if(patch.compose){value.toast(this.vget('notes').storageStatus||agentPendingText(undefined,'Notes is unavailable for this agent connection. Check Settings › Agent connection.'));return false;}return value.set(patch);}}:value;return {...value,canonicalNotes:ui,notesSourceMode:'canonical',set:(patch:Bag)=>{if(Object.hasOwn(patch,'list'))return false;if(Object.hasOwn(patch,'open'))ui.select(patch.open);if(patch.compose)void ui.create();const rest={...patch};delete rest.open;delete rest.compose;return Object.keys(rest).length?value.set(rest):true;}};};
- prototype.renderVals=function(){const value=renderVals.call(this),ui=this.canonicalNotesUi;return {...value,canonicalNotesWorkspace:ui?ui.render(this,this.live&&this.S().screen==='home'&&this.S().view==='notes',value.storageAccessWarning,!!value.appHidden):this.notesSourceMode==='canonical'&&this.live&&this.S().screen==='home'&&this.S().view==='notes'?React.createElement(WaitingNotes,{shell:this,storageAccessWarning:value.storageAccessWarning,covered:!!value.appHidden}):null};};
+ prototype.renderVals=function(){
+  const value=renderVals.call(this),ui:CanonicalNotesUi|null=this.canonicalNotesUi??null,active=!!(this.live&&this.S().screen==='home'&&this.S().view==='notes');
+  // The view host stays mounted behind Home and other views whenever Notes is canonical, so the
+  // lazy view has loaded before Notes opens and a bound workspace keeps its drafts; the waiting
+  // surface itself renders only while Notes is open.
+  if(!ui&&this.notesSourceMode!=='canonical')return {...value,canonicalNotesWorkspace:null};
+  const host:NotesHost={shell:this,ui,storageAccessWarning:value.storageAccessWarning??'',covered:!!value.appHidden};
+  return {...value,canonicalNotesWorkspace:React.createElement(NotesHostContext.Provider,{value:(open:boolean)=>renderNotesSurface(host,open)},React.createElement(MobileViewHost,{registry:alphaViews,view:'notes',active,onClose:()=>this.goHome(),onError:reportFailure,renderError:NotesFailure,fallback:active?React.createElement('div',{'aria-busy':true,style:surface}):null}))};
+ };
  const notes=views.notes,render=notes.render,back=notes.back,leave=notes.onLeave;
  notes.render=(state:Bag,value:Bag)=>{if(value.notesSourceMode==='canonical'||value.canonicalNotes)return {legacyNotes:false};const result=render(state,value),main=(value.notesSourceOptions??[]).find((source:Bag)=>source.id==='canonical');return {...result,legacyNotes:true,notesTitle:'Older notes',primaryNotes:false,returnToNotesAction:main?.choose};};
  notes.back=(state:Bag,value:Bag)=>{const ui=value.canonicalNotes;if(!ui)return back?.(state,value);if(!ui.editing)return false;void ui.leave();return true;};

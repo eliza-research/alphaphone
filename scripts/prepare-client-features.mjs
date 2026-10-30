@@ -35,15 +35,19 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/contracts/src/device-action-execution.ts',
   'packages/contracts/src/client-turn-observation.ts',
   'packages/contracts/src/notice-routes.ts',
+  'packages/contracts/src/deletion-window.ts',
   'packages/contracts/src/phone-workflow.ts',
   'packages/contracts/src/workflow-client.ts',
   'packages/contracts/src/workflow-device.ts',
+  'packages/contracts/src/workflow-intents.ts',
+  'packages/contracts/src/workflow-scope.ts',
   'packages/ui/src/agent-surface/AgentSurfaceContext.hooks.ts',
   'packages/ui/src/agent-surface/registry.ts',
   'packages/ui/src/agent-surface/sensitive.ts',
   'packages/ui/src/agent-surface/types.ts',
   'packages/ui/src/agent-surface/useAgentElement.ts',
   'packages/ui/src/api/api-error.ts',
+  'packages/ui/src/components/composites/deferred-deletion-notice.tsx',
   'packages/ui/src/components/composites/page-panel/content-state.tsx',
   'packages/ui/src/components/composites/page-panel/index.ts',
   'packages/ui/src/components/composites/page-panel/page-panel-collapsible-section.tsx',
@@ -70,10 +74,13 @@ export const CLIENT_FEATURE_PATHS = [
 
   'packages/ui/src/api/transport.ts',
   'plugins/plugin-native-system/src/client/launcher.ts',
+  'plugins/plugin-native-system/src/client/shade.ts',
   'plugins/plugin-native-system/src/sense.ts',
   'plugins/plugin-native-system/src/sense-bridge.ts',
   'plugins/plugin-native-system/src/sense-web.ts',
   'plugins/plugin-native-system/src/reset.ts',
+  'plugins/plugin-native-system/src/crash-log.ts',
+  'packages/ui/src/components/permissions/permission-walkthrough.ts',
   'plugins/plugin-native-system/src/settings.ts',
   'plugins/plugin-native-system/src/definitions.ts',
   'packages/ui/src/components/pages/InstalledAppsLauncher.tsx',
@@ -100,6 +107,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-native-browser-surface/src/browsing-session.ts',
   'plugins/plugin-native-browser-surface/src/page-reading.ts',
   'plugins/plugin-native-browser-surface/src/page-source.ts',
+  'plugins/plugin-native-browser-surface/src/tab-host.ts',
   'packages/core/src/schema-types.ts',
   'packages/core/src/types/json.ts',
   'packages/core/src/types/schema.ts',
@@ -172,6 +180,8 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/voice/src/respond-gate.ts',
   'packages/voice/src/voice-assistant-session.ts',
   'packages/voice/src/live-voice-session.ts',
+  'packages/voice/src/native-live-voice.ts',
+  'packages/voice/src/native-speech-request.ts',
   'packages/voice/src/voice-turn-routes.ts',
   'packages/voice/src/voice-turn-timing.ts',
   'packages/voice/src/voice-endpoint-chain.ts',
@@ -215,6 +225,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-native-camera/src/definitions.ts',
   'plugins/plugin-native-camera/src/host-ports.ts',
   'plugins/plugin-native-camera/src/session.ts',
+  'plugins/plugin-native-camera/src/scan-document.ts',
   'plugins/plugin-assistant/src/services/device-actions/notes-query-result.ts',
   'packages/contracts/src/sms-send.ts',
   'plugins/plugin-assistant/src/services/device-actions/sms-contract.ts',
@@ -222,6 +233,7 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/contracts/src/mms-send.ts',
   'packages/contracts/src/native-telephony.ts',
   'packages/contracts/src/native-telephony-session.ts',
+  'packages/contracts/src/phone-dial.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-contract.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-handoff.ts',
   'plugins/plugin-assistant/src/services/device-actions/clock-handoff-history.ts',
@@ -238,6 +250,7 @@ export const CLIENT_FEATURE_PATHS = [
   'plugins/plugin-assistant/src/services/device-actions/reminder-contract.ts',
   'plugins/plugin-files',
   'plugins/plugin-inbox/src/mailbox',
+  'plugins/plugin-inbox/src/components/mailbox',
   'plugins/plugin-calendar/src/linked-sync',
   'plugins/plugin-maps/src/client',
   'plugins/plugin-maps/test/navigation-client.test.mjs',
@@ -250,6 +263,11 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/cloud/sdk/src/subscription-entitlement.ts',
   'packages/ui/src/components/settings/cloud-subscription-summary.tsx',
   'packages/auth/src/auth/native-cloud-sign-in.ts',
+  // Credential-bound account billing reader and its snapshot types (AP-03/#410).
+  'packages/cloud/sdk/src/cloud-account-billing.ts',
+  'packages/cloud/sdk/src/account-billing-snapshot.ts',
+  // Framework-free resident Cloud binding controller (AP-04/P-22).
+  'packages/auth/src/auth/cloud-resident-binding.ts',
 ];
 /** Copy authenticated upstream source outside the immutable vendor checkout. */
 export function prepareClientFeatures({ root = projectRoot, projectVoice = true } = {}) {
@@ -275,6 +293,24 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
     if (content.split(before).length !== 2) throw Error('Review changed voice random-id import: ' + name);
     project(name, content.replace(before, 'import { randomId } from "./random-id.ts";'));
   }
+  // The shared native live transport imports the live session's values by their emitted .js name
+  // (and only types from turn timing, which type stripping erases); point that one import at .ts.
+  {
+    const name = 'packages/voice/src/native-live-voice.ts', before = '} from "./live-voice-session.js";';
+    const content = text(name);
+    if (content.split(before).length !== 2 || /^import (?!type )[^;]*from "\.\/(?!live-voice-session\.js")/m.test(content)) throw Error('Review changed native live voice imports: ' + name);
+    project(name, content.replace(before, '} from "./live-voice-session.ts";'));
+  }
+
+  // The shared account billing reader imports the entitlement helpers by their emitted .js name.
+  // Plain Node (tests and scripts that strip types) cannot map that to the copied .ts source, so
+  // the one reviewed value import is pointed at the .ts file; its type-only .js import is erased.
+  {
+    const name = 'packages/cloud/sdk/src/cloud-account-billing.ts', before = '} from "./subscription-entitlement.js";';
+    const content = text(name);
+    if (content.split(before).length !== 2) throw Error('Review changed account billing import: ' + name);
+    project(name, content.replace(before, '} from "./subscription-entitlement.ts";'));
+  }
 
   // The shared linked-sync modules import @elizaos/contracts by package name. Alpha has no
   // such package: the renderer resolves it through a Vite/tsc alias, but Node consumers
@@ -292,7 +328,7 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
   project('alpha-voice-core-protocol.ts','export {ElizaError} from "./packages/core/src/errors";\nexport {redactTrailingArgs} from "./packages/core/src/security/log-redaction";\nexport {parseViewInteractionClientId, AGENT_SURFACE_CAPABILITY_IDS} from "./packages/core/src/views/view-interact-protocol";\nexport {findViewActionHandoff, type ViewActionHandoff} from "./packages/core/src/views/view-action-handoff";\nexport type {PermissionState} from "./packages/core/src/types/permissions";\n');
   }
   const files = Object.fromEntries([...source].map(([name, file]) => [name, file.sha256]));
-  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?11:0, files };
+  const provenance = { baseCommit: upstream.pin, sourceFiles, projectionVersion:projectVoice?12:0, files };
   const parent = path.join(root, '.eliza'), destination = path.join(parent, 'client-features');
   regularPath(parent, true);
   const exists = regularPath(destination, true), stamp = path.join(destination, '.source.json');
