@@ -17,7 +17,7 @@ function tree({ homes = 1, autofillPermission = "android.permission.BIND_AUTOFIL
     ...Array.from({ length: homes }, (_, i) => [...element(6, "activity", { name: `${PKG}.${i ? "Other" : "Main"}Activity`, exported: "(type 0x12)0xffffffff" }),
       ...filter(8, "android.intent.action.MAIN", ["android.intent.category.LAUNCHER"]),
       ...filter(8, "android.intent.action.MAIN", ["android.intent.category.HOME", "android.intent.category.DEFAULT"])]).flat(),
-    ...element(6, "activity", { name: `${PKG}.AlphaAssistActivity`, exported: "(type 0x12)0xffffffff" }), ...filter(8, "android.intent.action.ASSIST", ["android.intent.category.DEFAULT"]),
+    ...element(6, "activity", { name: `${PKG}.AlphaAssistActivity`, enabled: "(type 0x12)0x0", exported: "(type 0x12)0x0" }), ...filter(8, "android.intent.action.ASSIST", ["android.intent.category.DEFAULT"]),
     ...element(6, "service", { name: "ai.eliza.plugins.passwords.ElizaPasswordAutofillService", permission: autofillPermission, exported: "(type 0x12)0xffffffff" }), ...filter(8, "android.service.autofill.AutofillService"),
     ...element(6, "service", { name: `${PKG}.ElizaAgentService` }),
   ].join("\n");
@@ -25,16 +25,16 @@ function tree({ homes = 1, autofillPermission = "android.permission.BIND_AUTOFIL
 
 test("components come from the APK manifest and must be unique", () => {
   assert.deepEqual(provisioningComponents(tree(), PKG), {
-    home: `${PKG}.MainActivity`, assistant: `${PKG}.AlphaAssistActivity`, autofill: "ai.eliza.plugins.passwords.ElizaPasswordAutofillService",
+    home: `${PKG}.MainActivity`, assistant: null, autofill: "ai.eliza.plugins.passwords.ElizaPasswordAutofillService",
   });
   assert.throws(() => provisioningComponents(tree({ homes: 0 }), PKG), /HOME/);
   assert.throws(() => provisioningComponents(tree({ homes: 2 }), PKG), /exactly one/);
   assert.throws(() => provisioningComponents(tree({ autofillPermission: "none" }), PKG), /AUTOFILL/);
 });
 
-test("the overlay sets default HOME, assistant and Autofill offer additively", t => {
+test("the overlay keeps HOME and Autofill without setting the deferred assistant role", t => {
   const files = renderProvisioningOverlay(PKG, provisioningComponents(tree(), PKG));
-  assert.match(files["provisioning/overlay/frameworks/base/core/res/res/values/config.xml"], new RegExp(`config_defaultAssistant" translatable="false">${PKG}<`));
+  assert.doesNotMatch(files["provisioning/overlay/frameworks/base/core/res/res/values/config.xml"], /config_defaultAssistant/);
   assert.match(files["provisioning/overlay/frameworks/base/core/res/res/values/config.xml"], /config_defaultAutofillService" translatable="false">ai\.elizaresearch\.alphaphone\/ai\.eliza\.plugins\.passwords\.ElizaPasswordAutofillService</);
   assert.match(files["provisioning/preferred-apps/launcher-home.xml"], /<item name="ai\.elizaresearch\.alphaphone\/ai\.elizaresearch\.alphaphone\.MainActivity"/);
   assert.match(files["provisioning/preferred-apps/launcher-home.xml"], /android\.intent\.category\.HOME/);
