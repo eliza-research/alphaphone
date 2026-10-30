@@ -6,28 +6,34 @@ Alpha should become a branded build of one upstream Eliza mobile application. Sh
 
 This report precedes implementation. It is based on direct source inspection, not product acceptance. The initial checkout is Alpha `417f8196e` with Eliza `ff9c8264550efd64fd0119c6ff50f99eb8561977`. Implementation starts from the existing combined PR #624 head `ecd5e30ef4fc3d66f4ed43c0ae58502b8fb96b99`, with Eliza `4b928290d388e8f9866b6c404a1b186c7bfe7f70`, so the existing consolidation stack is retained. Findings must be checked against that candidate before edits; the inventories below describe the initial checkout.
 
-## Implementation checkpoint — October 30
+## Current implementation checkpoint — October 30
 
-The initial findings below remain the audit baseline. The integration branch now
-pins reviewed upstream merge `d2175f38b52ba29759bf30698a5c718c5d719754`.
-Unification is still in progress.
+Alpha's accepted source/APK checkpoint is `69c8912987442443235e27d5520eb12fb5baa63f`,
+with Eliza `440e3c76fc231f4c6e0763e2a71dbd8ae7b9bdaa`. The later documentation
+commit preserves the same runtime. `npm run verify` passes 2,723 tests with no
+failures, three skips and one existing APEX-key TODO. The required
+`npm run android:build:local` passes all four standalone/launcher debug/release
+builds, both instrumentation APK compilations, lint and 1,118 runtime-entry
+checks per APK. Releases remain unsigned; voice user qualification remains false.
+See [the exact checkpoint](evidence/unification-440-69c891-checkpoint.json).
 
-| Area | Current implementation and evidence |
+| Area | Current implementation and remaining boundary |
 | --- | --- |
-| Device actions | Alpha delegates admission, review, journal, claim, execution and receipt recovery to the upstream `DeviceActionCoordinator`. |
-| Conversation and returns | Shared conversation turns, selected context observations and Workspace returns are merged in [#38270](https://github.com/elizaOS/eliza/pull/38270) and [#38271](https://github.com/elizaOS/eliza/pull/38271). The Alpha integration consumes them. |
-| Maps and Home | Alpha consumes the shared Maps screen and dock clearance behavior. The latest owner Calendar/Inbox reads are retained in the integration. |
-| Native models and packaging | [#38278](https://github.com/elizaOS/eliza/pull/38278) is merged. Exact-head full verification, 32 staging tests, standalone ARM64 debug and AOSP system release inspection pass. The fresh APKs are 508,319,468 and 486,715,355 bytes. Alpha now uses the same compression policy and upstream test-runner version. |
-| Mobile application root | [#38276](https://github.com/elizaOS/eliza/pull/38276) mounts the shared application in the canonical host. Review fixes preserve off-catalog routes and require confirmed listener shutdown for chat-only mode. It is merged after full verification, 38 mobile tests and 218 browser audit checks. Alpha now mounts the same root; its 29 focused tests, normal typecheck and three production-browser flows pass. |
-| Sign-in and session | [#38275](https://github.com/elizaOS/eliza/pull/38275) shares the sign-in state and forms. [#38281](https://github.com/elizaOS/eliza/pull/38281) shares native credential mutation and correlates cancellation with its originating request. Both still require final qualification. The shared AppProvider and native owner transport are being integrated. |
-| Remaining views | A shared Calendar workspace and common Home selection policy are under validation. Full Inbox behavior, Wallet integration and the remaining domain views still need completion. |
+| Device actions and conversation | Alpha consumes shared admission, review, journal, claim, execution, receipt recovery, conversation turns, context observations and Workspace returns. Installed owner/data compatibility still constrains full-App adoption. |
+| Sign-in and owner transport | Merged [#38275](https://github.com/elizaOS/eliza/pull/38275) and [#38291](https://github.com/elizaOS/eliza/pull/38291) are consumed at 440; duplicate Alpha sign-in forms/state are removed. All 18 native-sign-in composition browser cases pass with controlled native fixtures. |
+| Native startup routes | [#38295](https://github.com/elizaOS/eliza/pull/38295) is merged as `67f7ced37f025ad7cf409006b1097addd11ddf83` after exact-head local full verification and all six latest hosted checks passed. Alpha's companion and new pin are next; this merge is not yet part of the 440 APK checkpoint. |
+| Shared full application | [#38296](https://github.com/elizaOS/eliza/pull/38296) is ready: exact-head full verification, production browser consumer and canonical App audit pass. Alpha currently consumes the shared mobile root but has **not** completed the full AppProvider/application cutover. Appearance, installed stores, native ports and combined Calendar qualification remain required. |
+| Calendar and Home | [#38285](https://github.com/elizaOS/eliza/pull/38285) is ready with full verification, 218 audit captures, 212 OCR-verified captures and nine actual application-entry journeys. Native Calendar [#38298](https://github.com/elizaOS/eliza/pull/38298) is ready but awaits hosted checks and startup dependency admission. The Home follow-up [#38300](https://github.com/elizaOS/eliza/pull/38300) is rebased unchanged onto the reviewed Calendar base; 40 focused tests and 18 phone/desktop application-entry journeys pass, with full qualification queued. |
+| Inbox and deletion notices | [#38307](https://github.com/elizaOS/eliza/pull/38307) supplies the shared Inbox card action so labels and navigation cannot diverge; Alpha has not yet adopted it. [#38312](https://github.com/elizaOS/eliza/pull/38312) fences pending deletion reads/actions to their owner and bridge; full source verification passes and current visual qualification is finishing. |
+| Scoped native permissions | [#38310](https://github.com/elizaOS/eliza/pull/38310) adds camera-only native permission methods and removes broad fallback requests. Exact-head full source verification, focused tests and Android debug/release AAR compilation pass. Device grants and Swift compilation are unrun; the change remains stacked on the full-App PR. |
+| Models and inference | Both products use shared libelizainference inputs. Current Alpha packages the authenticated ARM64 runtime, Paradee/Phonon-2/BGE/VAD inputs and shared compression policy. No optimal-latency, full voice, long-session context-growth or physical-device claim follows from compilation/packaging. |
+| Authored request authority | Review of [#38305](https://github.com/elizaOS/eliza/pull/38305) found document-augmentation text could outrank the authored request. A local fix reuses the existing ingress binding and avoids full-content cloning on text reads; 270 focused tests, two Workflow tests, typechecks and the browser import check pass. Full qualification remains pending. The earlier Notes/URL experiment hit an authorization guard and is not a confirmed production path. |
+| Owner PRs and complete parity | Reviewed owner changes are merged only at tested exact heads. New Alpha [#760](https://github.com/eliza-research/alphaphone/pull/760) and [#761](https://github.com/eliza-research/alphaphone/pull/761) are under review. Full App/data migration, remaining native/domain bindings, complete AOSP image boot, real provider/audio flows and device/user acceptance are still open. |
 
-The [native evidence archive](https://github.com/elizaOS/eliza/releases/download/pr-evidence-14/pruning-compression-c43e3bcde-final-evidence.tar.gz)
-retains the failed attempts as well as successful qualification. The isolated
-Android AssetManager tests establish model extraction and warm reuse only.
-Final Alpha full verification, both distribution variants, complete AOSP image
-boot, real provider/audio flows and device/user acceptance remain separate gates.
-No complete parity or optimal inference claim is made by this checkpoint.
+Unification is incomplete. The detailed initial findings below remain a baseline,
+and later dated entries retain failed attempts and superseded checkpoints. Source,
+APK packaging, emulator HOME-role, full AOSP boot and physical acceptance are
+separate evidence categories.
 
 ## Main findings
 
