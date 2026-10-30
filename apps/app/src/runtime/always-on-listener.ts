@@ -20,6 +20,30 @@ export const pauseListener = () => ask('pause');
 /** Turns listening off; consent is kept. Turning it back on happens only in the listener's UI. */
 export const turnOffListener = () => ask('turnOff');
 
+let wakeStopUnconfirmed = false;
+/** A failed stop stays visible in voice settings; hiding an entry never proves capture stopped. */
+export const wakeListeningStopUnconfirmed = () => wakeStopUnconfirmed;
+/** Stop a previously enabled image listener through its canonical native port. Never enable capture. */
+export async function stopWakeListenerForChatOnly(): Promise<boolean> {
+  if (externalVoiceInvocationEnabled || !nativeListener()) return true;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const reply = await Promise.race([
+      listener.turnOff(),
+      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Wake listener stop timed out')), 5000); }),
+    ]);
+    const status = parseListenerStatus(reply);
+    const stopped = status.available && status.state === 'OFF' && status.listening === false && status.microphoneOpen === false;
+    wakeStopUnconfirmed = !stopped;
+    return stopped;
+  } catch {
+    wakeStopUnconfirmed = true;
+    return false;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 /** Opens the listener's consent and settings screen. */
 export async function openListenerSettings(): Promise<boolean> {
   if (!externalVoiceInvocationEnabled || !nativeListener()) return false;

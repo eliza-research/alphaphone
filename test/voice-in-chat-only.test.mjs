@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {stripTypeScriptTypes} from 'node:module';
 const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
 
 test('holding the side key never opens the microphone while the chat mic still works',()=>{
@@ -27,4 +28,25 @@ test('holding the side key never opens the microphone while the chat mic still w
  assert.match(read('apps/app/src/main.tsx'),/if \(externalVoiceInvocationEnabled && isAndroid && assistantSurface\) installListenerInvocation/);
  assert.match(read('apps/app/src/runtime/always-on-listener.ts'),/if\(!externalVoiceInvocationEnabled \|\| !nativeListener\(\)\)return/);
  for(const name of ['AlphaAssistActivity','AlphaPowerVoiceActivity'])assert.match(read('android/app/src/main/AndroidManifest.xml'),new RegExp('<activity android:name="\\.'+name+'" android:enabled="false" android:exported="false"'));
+});
+
+
+test('in-chat-only startup requests the canonical native listener stop and reports uncertainty',async()=>{
+ const source=read('apps/app/src/runtime/always-on-listener.ts');
+ const start=source.indexOf('export async function stopWakeListenerForChatOnly()');
+ const end=source.indexOf('\n}\n',start)+2;
+ assert.ok(start>=0&&end>start);
+ const code=stripTypeScriptTypes(source.slice(start,end).replace('export ',''));
+ for(const result of [{available:true,state:'OFF',listening:false,microphoneOpen:false},{available:true,state:'LISTENING',listening:true,microphoneOpen:true},{available:false},new Error('unavailable')]){
+  let stops=0;
+  const context=vm.createContext({externalVoiceInvocationEnabled:false,nativeListener:()=>true,parseListenerStatus:value=>value,listener:{turnOff:async()=>{stops++;if(result instanceof Error)throw result;return result;}},wakeStopUnconfirmed:false,Promise,Error,setTimeout,clearTimeout});
+  const stop=vm.runInContext(code+'\nstopWakeListenerForChatOnly;',context);
+  const confirmed=await stop();
+  assert.equal(stops,1,'startup must request turnOff, not only hide the controls');
+  const expected=!(result instanceof Error)&&result.available===true&&result.state==='OFF';
+  assert.equal(confirmed,expected);
+  assert.equal(context.wakeStopUnconfirmed,!expected);
+ }
+ assert.match(read('apps/app/src/main.tsx'),/if \(isAndroid && !externalVoiceInvocationEnabled\) void stopWakeListenerForChatOnly\(\)/);
+ assert.match(read('apps/app/src/prototype/settings-adapter.ts'),/wakeListeningStopUnconfirmed\(\)/);
 });

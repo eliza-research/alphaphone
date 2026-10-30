@@ -30,7 +30,7 @@ import {planAdmission} from '../runtime/subscription-entitlement';
 import { exportVoiceTiming } from '../runtime/voice-timing';
 import { setSpeakReplies, speakRepliesEnabled } from '../runtime/voice-selection';
 import { readNativeVoiceTiming } from '../runtime/native-voice-turn';
-import { listenerStatus, openListenerSettings, pauseListener, turnOffListener, type ListenerStatus } from '../runtime/always-on-listener';
+import { listenerStatus, openListenerSettings, pauseListener, turnOffListener, wakeListeningStopUnconfirmed, type ListenerStatus } from '../runtime/always-on-listener';
 import { reviewDataReset, type DataResetPlugin } from '@elizaos/capacitor-system/reset';
 import { androidRoleLabel, parseRoleStatuses } from '@elizaos/capacitor-system/settings';
 import { leavePasswordManager, passwordEntryPage, passwordManagerGroups, passwordManagerLifecycle, refreshPasswordManager, PASSWORD_PAGES } from '../passwords/password-manager';
@@ -441,7 +441,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     const nav = (label: string, page: string): Bag => ({ kNav: true, label, lbl: label, chev: true, noAB: true, go: manage(page) });
     const group = (rows: Bag[]) => ({ css: 'background:var(--s2);padding:4px 0', rows });
     // Speech follows the explicit production runtime profile; developer routes stay separate.
-    const speechRows = (): Bag[] => [info('Speech', developmentCartesiaVoiceEnabled?'Cartesia · development':cloudRuntimeEnabled?`${serviceName} · Cartesia output (uses your plan)`:testMocksEnabled?`${serviceName} (counts toward your plan)`:'On this device')];
+    const speechRows = (): Bag[] => [info('Speech', developmentCartesiaVoiceEnabled?'Cartesia · development':cloudRuntimeEnabled?`${serviceName} · Cartesia output (uses your plan)`:testMocksEnabled?`${serviceName} (counts toward your plan)`:'On this device'), ...(wakeListeningStopUnconfirmed() ? [note('Wake listening', 'Could not confirm listening is off. Turn it off in Android settings.')] : [])];
     const action = (label: string, go: () => void): Bag => ({ kNav:true, label, lbl:label, chev:true, noAB:true, go });
     // P-39: a reply to a message you dictated (Transcribe, then Send) can be read aloud. The switch
     // shows the stored preference, never the requested one: a save that storage does not confirm
