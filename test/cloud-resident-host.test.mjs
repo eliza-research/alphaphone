@@ -5,7 +5,8 @@ import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {createServer} from 'node:net';
-import {createCloudResidentHost} from './fixtures/product-character-host.mjs';
+import {createCloudResidentHost,productCharacterHostFixture} from './fixtures/product-character-host.mjs';
+import fsSync from 'node:fs';
 test('Cloud host retires old processes, strips direct-provider keys and never persists Cloud credentials',async()=>{
  const profile=await fs.mkdtemp(join(tmpdir(),'alpha-cloud-resident-')),events=[],launches=[];let rejectStop=false;
  const launch=async options=>{let done;const completion=new Promise(resolve=>done=resolve);const id=launches.length;launches.push(options);events.push('start'+id);return {completion,async stop(){events.push('stop'+id);if(rejectStop)throw Error('stop failed');done({code:0});}};};
@@ -65,3 +66,45 @@ test('first readiness preserves a concurrently queued Cloud binding',async()=>{
   for(const key of ['CEREBRAS_API_KEY','OPENAI_API_KEY','ELIZAOS_CLOUD_API_KEY','ALPHA_DEV_CARTESIA','ALPHA_DEV_CLOUD_REALTIME_VOICE','VITE_ALPHA_DEV_CLOUD_VOICE'])assert.equal(env[key],null,key);
  }finally{await fs.rm(directory,{recursive:true,force:true});}
  });
+
+
+for(const existingPassphrase of [false,true])test(`platform vault preserves existing keychain authority with ${existingPassphrase?'an unrelated':'no'} profile passphrase`,{skip:process.platform!=='darwin'},async()=>{
+ let touchedPassphrase=false;
+ const guardedFs=new Proxy(fsSync,{get(target,key){const value=Reflect.get(target,key);if(typeof value!=='function')return value;return function(...args){
+  if(typeof args[0]==='string'&&args[0].endsWith('/vault-passphrase')){touchedPassphrase=true;throw Error('Platform host must not access a profile passphrase');}
+  return value.apply(target,args);
+ };}});
+ const launches=[];
+ const fixture=productCharacterHostFixture(undefined,{vaultMode:'platform',profileMode:'full',inherited:{ELIZA_VAULT_PASSPHRASE:'forbidden-inherited-secret'},launch:async options=>{
+  // The existing launch seam retains this personal profile's local embeddings.
+  const env={...options.env,ELIZAOS_CLOUD_USE_EMBEDDINGS:'false'};
+  delete env.ELIZA_DISABLE_LOCAL_EMBEDDINGS;delete env.ELIZA_LOCAL_EMBEDDING_ENABLED;
+  delete env.ELIZAOS_CLOUD_EMBEDDING_MODEL;delete env.ELIZAOS_CLOUD_EMBEDDING_DIMENSIONS;
+  launches.push({...options,env});let finish;return {completion:new Promise(done=>finish=done),async stop(){finish({code:0});}};
+ }},guardedFs);
+ let host;
+ try{
+  await fs.mkdir(fixture.profile,{mode:0o700});
+  const saved=JSON.stringify({cloud:{enabled:true},serviceRouting:{llmText:{backend:'elizacloud',transport:'cloud-proxy'},embeddings:{backend:'eliza-local-inference',transport:'direct'}},plugins:{entries:{'personal-assistant':{enabled:true}}}})+'\n';
+  await fs.writeFile(join(fixture.profile,'eliza.json'),saved,{mode:0o600});
+  await fs.writeFile(join(fixture.profile,'owner-token'),'1'.repeat(64),{mode:0o600});
+  if(existingPassphrase)await fs.writeFile(join(fixture.profile,'vault-passphrase'),'existing-do-not-read-or-replace',{mode:0o600});
+  host=await fixture.make();
+  await host.bind({token:'synthetic-platform-cloud-token',credentialId:'same-owner',reference:'same-ref'});
+  assert.equal(host.status('same-owner').attachable,true);
+  await host.bind({token:'synthetic-platform-cloud-token',credentialId:'same-owner',reference:'same-ref'});
+  assert.equal(launches.length,1,'same account binding reuses its process');
+  await host.clear();
+  assert.equal(launches.length,2);
+  for(const call of launches){
+   assert.equal(Object.hasOwn(call.env,'ELIZA_VAULT_PASSPHRASE'),false);
+   assert.equal(call.cwd,fixture.profile);
+   assert.equal(call.env.ELIZAOS_CLOUD_USE_EMBEDDINGS,'false');
+   assert.equal(call.env.ELIZA_DISABLE_LOCAL_EMBEDDINGS,undefined);
+  }
+  assert.equal(touchedPassphrase,false,'host must never create, inspect, read or write a profile passphrase');
+  assert.equal(await fs.readFile(join(fixture.profile,'eliza.json'),'utf8'),saved);
+  if(existingPassphrase)assert.equal(await fs.readFile(join(fixture.profile,'vault-passphrase'),'utf8'),'existing-do-not-read-or-replace');
+  else await assert.rejects(fs.stat(join(fixture.profile,'vault-passphrase')),{code:'ENOENT'});
+ }finally{await host?.close();fixture.close();}
+});

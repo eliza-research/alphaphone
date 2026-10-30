@@ -15,7 +15,7 @@ const nativeSource=fs.readFileSync('scripts/native-google-host-artifact.mjs','ut
 const verification=nativeSource.slice(nativeSource.indexOf('const hash='),nativeSource.indexOf('/** Product host code'));
 const {verifyNativeGoogleHostArtifact}=vm.runInNewContext(verification.replace('export function','function')+';({verifyNativeGoogleHostArtifact});',{fs,path,createHash});
 const source=fs.readFileSync('scripts/cloud-resident-host.mjs','utf8').replace(/^import .*;\n/gm,'').replaceAll('import.meta.dirname','scriptDirectory').replace(/^export /gm,'');
-export function productCharacterHostFixture(mode,options={}){
+export function productCharacterHostFixture(mode,options={},hostFs=fs){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'product-character-host-')),sdk=path.join(root,'sdk'),profile=path.join(root,'profile'),worker=path.join(root,'artifacts','fixture-worker');
  fs.mkdirSync(sdk,{recursive:true});fs.writeFileSync(path.join(sdk,'bun.lock'),'{}');fs.writeFileSync(path.join(sdk,'package.json'),JSON.stringify({name:'fixture',workspaces:[]}));fs.writeFileSync(path.join(sdk,'turbo.json'),JSON.stringify({tasks:{}}));
  const env={...process.env,GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null'};
@@ -31,7 +31,7 @@ export function productCharacterHostFixture(mode,options={}){
  if(mode==='input-changed')fs.appendFileSync(path.join(root,input),'changed');
  if(mode==='manifest-changed'){const manifest=JSON.parse(fs.readFileSync(path.join(worker,'manifest.json')));manifest.sourceStampSha256='0'.repeat(64);fs.writeFileSync(path.join(worker,'manifest.json'),JSON.stringify(manifest));}
  if(mode==='symlink'){fs.renameSync(worker,worker+'-real');fs.symlinkSync(worker+'-real',worker);}
- const globals={fs,path,randomUUID,randomBytes,preparePrivateRuntimeProfile,runtimeEnvironment,verifySource,preparedSourceEnv,workerArtifactDirectory,digest,verifyWorkerArtifact,verifyNativeGoogleHostArtifact,CLOUD_SDK_BASES,nativeViewDeclarationsJson:'[]',scriptDirectory:path.join(root,'scripts'),process,fetch,AbortSignal,setTimeout,clearTimeout};
+ const globals={fs:hostFs,path,randomUUID,randomBytes,preparePrivateRuntimeProfile,runtimeEnvironment,verifySource,preparedSourceEnv,workerArtifactDirectory,digest,verifyWorkerArtifact,verifyNativeGoogleHostArtifact,CLOUD_SDK_BASES,nativeViewDeclarationsJson:'[]',scriptDirectory:path.join(root,'scripts'),process,fetch,AbortSignal,setTimeout,clearTimeout};
  vm.runInNewContext(source+';globalThis.make=createCloudResidentHost;',globals);
  const launches=[];const launch=async options=>{launches.push(options);let done;return {completion:new Promise(resolve=>done=resolve),async stop(){done({code:0});}};};
  return {root,sdk,worker,profile,launches,async make(){return globals.make({...options,source:sdk,profile:options.profile??profile,port:options.port??47869,launch:options.launch??launch,inherited:{...options.inherited,PATH:process.env.PATH,ALPHA_WORKFLOW_WORKER_OUTPUT:worker,ELIZA_NATIVE_GOOGLE_HOST_MODULE:'/untrusted/module',ELIZA_SMTHRS_RUNTIME_DIR:'/untrusted/root',ELIZA_AGENT_CHARACTER_JSON:'untrusted',CEREBRAS_API_KEY:'untrusted'}});},close(){fs.rmSync(root,{recursive:true,force:true});}};
