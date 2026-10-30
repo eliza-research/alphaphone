@@ -28,7 +28,7 @@ async function capabilities(platform,offers=offered){
   Capacitor:{getPlatform:()=>platform,isNativePlatform:()=>platform!=='web',isPluginAvailable:()=>false},
   CAMERA_CAPTURE_CAPABILITY:'camera.capture-photo.v1',SMS_SEND_CAPABILITY:'sms.send.v1',
   CALENDAR_AVAILABILITY_CAPABILITY:'calendar.availability-read.v1',
-  availabilityNegotiated:()=>false,foregroundExecutor:undefined,aospImage:false,
+  availabilityNegotiated:()=>false,foregroundExecutor:undefined,aospImage:false,PHONE_DIAL_CAPABILITY:'phone.dial.v1',telephonyDeviceCapabilities:()=>[],
   clockHandoffCapabilities:()=>[],clockRepeatDaysSupported:async()=>false,
  });
  return (await negotiate(offers)).split(',');
