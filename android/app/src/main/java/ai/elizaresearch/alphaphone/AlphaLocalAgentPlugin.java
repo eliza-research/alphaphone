@@ -186,7 +186,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   // with no commit attempt abandons it (released at its ACK), and an uncertain commit keeps it.
   long stopRequest=-1;boolean commitAttempted=false,commitFailed=false;
   try{
-   synchronized(lifecycleLock){assertOwner.run();if(epoch!=lifecycleEpoch||credentialMutationEpoch!=epoch)throw new Superseded();credentialShutdownRequest=-2;stopRequest=ElizaAgentService.stopForCredentialChange(context);credentialShutdownRequest=stopRequest;}
+   synchronized(lifecycleLock){assertOwner.run();if(epoch!=lifecycleEpoch||credentialMutationEpoch!=epoch)throw new Superseded();credentialShutdownRequest=-2;stopRequest=ElizaAgentService.reserveCredentialShutdown();credentialShutdownRequest=stopRequest;ElizaAgentService.retryCredentialShutdown(context,stopRequest);}
    long deadline=android.os.SystemClock.elapsedRealtime()+15000;
    while(true){
     synchronized(lifecycleLock){assertOwner.run();if(epoch!=lifecycleEpoch||credentialMutationEpoch!=epoch)throw new Superseded();}
@@ -498,10 +498,12 @@ public final class AlphaLocalAgentPlugin extends Plugin {
     synchronized(lifecycleLock){
      requireShutdownRetry(call,retryEpoch,retryIntent);
      credentialShutdownRequest=-2;
-     stopRequest=ElizaAgentService.stopForCredentialChange(getContext());
-     // A retry commits nothing, so its own stop ACK releases the service lease (never left fencing starts).
-     ElizaAgentService.abandonCredentialShutdown(stopRequest);
+     stopRequest=ElizaAgentService.reserveCredentialShutdown();
      credentialShutdownRequest=stopRequest;
+     // Retain the exact request even if Android dispatch throws. Retry commits nothing;
+     // abandonment keeps starts fenced until this request's actual stop ACK.
+     try{ElizaAgentService.retryCredentialShutdown(getContext(),stopRequest);}
+     finally{ElizaAgentService.abandonCredentialShutdown(stopRequest);}
     }
     ResidentCredentialShutdownRetry.await(
      ()->{synchronized(lifecycleLock){requireShutdownRetry(call,retryEpoch,retryIntent);}},

@@ -84,7 +84,8 @@ public class RetryTransitionHarness {
  static class ElizaAgentService {
  static int stops,probes,confirmChecks;static long epoch=1;static boolean confirmed,absent=true,failDispatch;static Runnable onProbe=()->{},onFourthConfirmation=()->{};
  static long abandoned=-1;
- static long stopForCredentialChange(Context context){stops++;if(failDispatch)throw new IllegalStateException();return ++epoch;}
+ static long reserveCredentialShutdown(){return ++epoch;}
+ static long retryCredentialShutdown(Context context,long request){check(request==epoch,"only current request dispatches");stops++;if(failDispatch)throw new IllegalStateException();return request;}
  static boolean abandonCredentialShutdown(long request){abandoned=request;return request==epoch;}
  static boolean isCredentialShutdownConfirmed(long epoch){confirmChecks++;if(confirmChecks==4)onFourthConfirmation.run();return epoch==ElizaAgentService.epoch&&confirmed;}
  static boolean getLocalAgentBootState(Context context){probes++;onProbe.run();return absent;}
@@ -110,7 +111,7 @@ public class RetryTransitionHarness {
  h=fresh();first=new PluginCall();h.retryCredentialShutdown(first,"cancel");ElizaAgentService.confirmed=true;ElizaAgentService.onProbe=()->lifecycleEpoch++;run();check(h.dispatched==0&&credentialShutdownRequest!=-1,"canceled observation cannot start");
  h=fresh();first=new PluginCall();h.retryCredentialShutdown(first,"account");ElizaAgentService.confirmed=true;ElizaAgentService.onFourthConfirmation=()->credentialIntents.reserve();run();check(h.dispatched==0,"account intent after proof is fenced by actual continuation guard");
  h=fresh();first=new PluginCall();h.retryCredentialShutdown(first,"focus");ElizaAgentService.confirmed=true;final RetryTransitionHarness focused=h;ElizaAgentService.onFourthConfirmation=()->focused.activity.focus=false;run();check(h.dispatched==0,"lost focus after proof cannot start");
- h=fresh();first=new PluginCall();h.retryCredentialShutdown(first,"dispatch");ElizaAgentService.failDispatch=true;run();check(h.dispatched==0&&credentialShutdownRequest==-2&&ElizaAgentService.abandoned==-1,"uncertain stop dispatch retains fence");
+ h=fresh();first=new PluginCall();h.retryCredentialShutdown(first,"dispatch");ElizaAgentService.failDispatch=true;run();check(h.dispatched==0&&first.rejected==1&&credentialShutdownRequest==ElizaAgentService.epoch&&ElizaAgentService.abandoned==ElizaAgentService.epoch,"dispatch failure abandons exactly its reserved no-commit request without starting");
  System.out.println("PASS actual retry transition: serial admission, strict stop count, unknown owner, transient recovery, cancel, post-proof account/focus, uncertain dispatch");
  }
 }`);
