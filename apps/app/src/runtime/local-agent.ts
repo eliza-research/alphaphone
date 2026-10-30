@@ -438,7 +438,8 @@ export async function residentAttachable(credentialId:string,bridge:Pick<LocalAg
 export async function bindResidentCloudProvider(credentialId:string,ports?:{attachable:(credentialId:string)=>Promise<boolean>;configure:(credentialId:string)=>Promise<void|string>}):Promise<string|undefined> {
   const attachment=ports?{attachable:await ports.attachable(credentialId)}:await residentAttachmentStatus(credentialId);
   if(attachment.attachable)return 'bindingGuard' in attachment?attachment.bindingGuard:undefined;
-  return await (ports?.configure??configureLocalCloudProvider)(credentialId);
+  const bindingGuard=await (ports?.configure??configureLocalCloudProvider)(credentialId);
+  return typeof bindingGuard==='string'?bindingGuard:undefined;
 }
 /** Automatic failed-bind cleanup has no unguarded fallback, including on older hosts. */
 export async function clearLocalProviderIfCurrent(bindingGuard:string,signal:AbortSignal):Promise<'cleared'|'changed'> {
