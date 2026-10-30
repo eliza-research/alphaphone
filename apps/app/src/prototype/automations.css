@@ -28,7 +28,9 @@
 .automation-new{display:flex;flex-direction:column;gap:2px}
 .automation-new button{min-height:64px;text-align:left;border-bottom:1px solid var(--line);font-size:17px}
 .automation-new span{display:block;color:var(--mut);font-size:14px;margin-top:5px}
-.automation-management{position:relative;display:flex;flex-direction:column;gap:5px;padding:16px 32px 16px 4px;min-height:64px;text-align:left;border-bottom:1px solid var(--line)}
+/* flex-shrink:0: the list is a flex column, and with a large system font (#701) a row squeezed to its
+   64px minimum left its label printed below it. The row grows with its text instead. */
+.automation-management{position:relative;display:flex;flex-direction:column;flex-shrink:0;gap:5px;padding:16px 32px 16px 4px;min-height:64px;text-align:left;border-bottom:1px solid var(--line)}
 .automation-management span+span{font-size:14px;color:var(--mut)}
 .automation-management svg{position:absolute;right:0;top:22px;color:var(--mut)}
 .automation-review{margin-top:24px;padding-top:16px;border-top:1px solid var(--line)}

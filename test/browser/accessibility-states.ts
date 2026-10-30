@@ -317,26 +317,27 @@ export const FIXTURE_STATES: State[] = [
 
 /**
  * The Android HOME (launcher) presentation, booted as home-native-launcher.spec.ts does: an
- * Android Capacitor bridge whose DeviceApps reports the launcher build. Its headers and system
+ * Android Capacitor bridge whose ElizaSystem reports the launcher build. Its headers and system
  * bars differ from the standalone app the other states show.
  */
 const launcherBridge = () => {
   localStorage.setItem('alpha.connection.selection.v1', JSON.stringify({ kind: 'offline' }));
   const w = window as any; w.androidBridge = {};
   const plugins: Record<string, string[]> = {
-    DeviceApps: ['list', 'launch', 'resolveDefault', 'openDefault', 'buildInfo', 'localeInfo', 'launchInfo'],
+    ElizaSystem: ['listLauncherApps', 'launchApp', 'resolveDefaultApp', 'openDefaultApp', 'getBuildInfo', 'getLocaleInfo', 'getLaunchInfo'],
+      DeviceApps: ['platformCapabilities'],
     DailyApps: ['surfaceInfo', 'requestPermissions', 'closeAssistant'],
     AlphaNotifications: ['status', 'list'],
     AlphaVoiceCloud: ['checkPermissions', 'requestPermissions'],
     AlphaDevice: ['openSettings'],
   };
   const answer = (plugin: string, method: string) => {
-    if (plugin === 'DeviceApps') {
-      if (method === 'list') return { apps: [{ packageName: 'org.example.clock', label: 'Synthetic clock' }, { packageName: 'org.example.weather', label: 'Synthetic weather' }] };
-      if (method === 'resolveDefault') return { role: 'dial', available: false };
-      if (method === 'buildInfo') return { launcher: true, version: 'stub' };
-      if (method === 'launchInfo') return { assistant: false };
-      if (method === 'localeInfo') return { locale: 'en-US', hour24: false };
+    if (plugin === 'ElizaSystem') {
+      if (method === 'listLauncherApps') return { apps: [{ packageName: 'org.example.clock', label: 'Synthetic clock' }, { packageName: 'org.example.weather', label: 'Synthetic weather' }] };
+      if (method === 'resolveDefaultApp') return { role: 'dial', available: false };
+      if (method === 'getBuildInfo') return { launcher: true, version: 'stub' };
+      if (method === 'getLaunchInfo') return { assistant: false };
+      if (method === 'getLocaleInfo') return { locale: 'en-US', hour24: false };
       return {};
     }
     if (plugin === 'DailyApps' && method === 'surfaceInfo') return { assistant: false, developmentBuild: true, topInset: 0, bottomInset: 0 };

@@ -27,7 +27,7 @@ async function boot(page: Page, mode: Mode) {
     const values: Record<string, string> = { 'cloud:production': JSON.stringify({ token: 'synthetic-cloud-key', credentialId: id, expiresAt: Date.now() + 600000 }) };
     const methods = (names: string[]) => names.map(name => ({ name, rtype: 'promise' }));
     w.Capacitor = { PluginHeaders: [
-      { name: 'DeviceApps', methods: methods(['buildInfo']) },
+      { name: 'ElizaSystem', methods: methods(['getBuildInfo']) },
       { name: 'Agent', methods: resident.methods(['getStatus', 'start', 'stop', 'configureCloudProvider', 'clearProvider', 'providerStatus', 'request']) },
       { name: 'AlphaCloudSignIn', methods: methods(['status']) },
       { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite', 'secureRemove', 'secureCompareExchange', 'request', 'cancel', 'openExternal']) },
@@ -36,7 +36,7 @@ async function boot(page: Page, mode: Mode) {
     ], nativeCallback: resident.nativeCallback, nativePromise: async (plugin: string, method: string, input: any) => {
       w.residentCalls.push({ plugin, method, path: input?.path, url: input?.url, slot: input?.slot });
       if (plugin === 'AlphaCloudSignIn' && method === 'status') return { active: false, inApp: true, email: true, google: false };
-      if (plugin === 'DeviceApps') return { launcher: false, version: 'saved-signin-fixture' };
+      if (plugin === 'ElizaSystem' && method === 'getBuildInfo') return { launcher: false, version: 'saved-signin-fixture' };
       if (plugin === 'AlphaNotifications') return { permissionGranted: true, appEnabled: true };
       if (plugin === 'AlphaVoiceCloud') return { microphone: 'granted' };
       if (plugin === 'Agent') {

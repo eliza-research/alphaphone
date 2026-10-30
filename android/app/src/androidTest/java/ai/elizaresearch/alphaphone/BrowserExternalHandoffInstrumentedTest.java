@@ -24,8 +24,10 @@ import static org.junit.Assert.*;
  * the chooser is intercepted, so no remote page, account or external app is opened. */
 public final class BrowserExternalHandoffInstrumentedTest {
  private static final String URL="https://accounts.example/signin?step=2#passkey";
- private static void set(Object object,String name,Object value)throws Exception{Field field=object.getClass().getDeclaredField(name);field.setAccessible(true);field.set(object,value);}
- private static Object get(Object object,String name)throws Exception{Field field=object.getClass().getDeclaredField(name);field.setAccessible(true);return field.get(object);}
+ /** The named field of the object's class or, for the plugin, of the shared tab host it extends. */
+ private static Field declared(Object object,String name)throws Exception{for(Class<?> type=object.getClass();type!=null;type=type.getSuperclass())try{Field field=type.getDeclaredField(name);field.setAccessible(true);return field;}catch(NoSuchFieldException next){}throw new NoSuchFieldException(name);}
+ private static void set(Object object,String name,Object value)throws Exception{declared(object,name).set(object,value);}
+ private static Object get(Object object,String name)throws Exception{return declared(object,name).get(object);}
  private static final class Call extends PluginCall {
   final CountDownLatch done=new CountDownLatch(1);volatile String error;int settlements;
   Call(String session,boolean confirmed){super(null,"AlphaBrowser",UUID.randomUUID().toString(),"openExternalBrowser",new JSObject().put("session",session).put("id","handoff").put("url",URL).put("navigation","7").put("privateConfirmed",confirmed));}
@@ -54,7 +56,7 @@ public final class BrowserExternalHandoffInstrumentedTest {
    AppNavigation.liveMode();
    WebViewTestDriver.withActivity(MainActivity.class,activity->{try{
     AlphaBrowserPlugin p=(AlphaBrowserPlugin)activity.getBridge().getPlugin("AlphaBrowser").getInstance();plugin.set(p);
-    Method build=AlphaBrowserPlugin.class.getDeclaredMethod("build",String.class,boolean.class,String.class);build.setAccessible(true);
+    Method build=ai.eliza.plugins.browsersurface.BrowserTabHostPlugin.class.getDeclaredMethod("build",String.class,boolean.class,String.class);build.setAccessible(true);
     Object t=build.invoke(p,"handoff",priv,priv?AlphaBrowserPlugin.PRIVATE_PREFIX+session.replace("-",""):AlphaBrowserPlugin.PERSISTENT_PROFILE);tab.set(t);
     web.set((WebView)get(t,"web"));WebViewClient original=web.get().getWebViewClient();
     web.get().setWebViewClient(new WebViewClient(){

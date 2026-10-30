@@ -47,3 +47,20 @@ test('successful empty fallback clears previous visible history explicitly',asyn
  const f=fixture();await f.box.restoreSavedHistory(new AbortController().signal);
  assert.equal(f.choice.id,'new-empty');assert.equal(f.memory.get('owner-key'),'new-empty');assert.equal(f.state.history.conversationId,'new-empty');assert.equal(f.state.history.messages.length,0);assert.equal(f.state.history.automatic,true);
 });
+
+test('routine automatic restore stays quiet while partial-history notice remains truthful',async()=>{
+ for(const partial of [false,true]){
+  const f=fixture();f.choice={id:'saved',revision:'r1'};
+  f.box.conversationList=async()=>[{id:'saved'}];
+  f.box.readConversation=async()=>({messages:[],partial,deliveryRevisionAtStart:0});
+  await f.box.restoreConversationHistory('saved',new AbortController().signal,true,true);
+  assert.equal(f.state.history.conversationId,'saved');assert.equal(f.state.historyPartial,partial);
+  assert.equal(f.state.message,partial?'Older messages remain on the agent.':'');
+ }
+});
+test('explicit restoration still reports a failed restart-selection save',async()=>{
+ const f=fixture();f.choice={id:'saved',revision:'r1'};f.box.conversationList=async()=>[{id:'saved'}];
+ f.box.selectConversation=async()=>{throw Error('Storage unavailable');};
+ await f.box.restoreConversationHistory('saved',new AbortController().signal,false,false);
+ assert.match(f.state.message,/restart selection could not be saved/);assert.equal(f.state.history.conversationId,'saved');
+});

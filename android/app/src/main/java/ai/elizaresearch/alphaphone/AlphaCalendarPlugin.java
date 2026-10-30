@@ -1,4 +1,6 @@
 package ai.elizaresearch.alphaphone;
+import ai.eliza.plugins.actionjournal.deletion.DeferredDeletionCoordinator;
+import ai.eliza.plugins.actionjournal.deletion.DeletionDispatchClaim;
 
 import android.Manifest;
 import android.content.ContentValues;
@@ -41,13 +43,13 @@ public final class AlphaCalendarPlugin extends CalendarPlugin {
  @PluginMethod public void removeScoped(PluginCall call){scopedDeletion().review(call,null);}
  @Override protected boolean deferReviewedDeletion(){return true;}
  @Override protected JSObject enqueueReviewedDeletion(org.json.JSONObject target,String operationId)throws Exception{
-  NativeDeletionCoordinator coordinator=NativeDeletionCoordinator.get(getContext());DeleteOwner captured=operationId==null?null:deleteOwners.remove(operationId);
+  DeferredDeletionCoordinator coordinator=NativeDeletionCoordinator.get(getContext());DeleteOwner captured=operationId==null?null:deleteOwners.remove(operationId);
   if(operationId!=null&&(captured==null||captured.owner==null))throw new SecurityException("Agent deletion review expired");
   org.json.JSONObject owner=captured==null?coordinator.manualOwner():captured.owner;
   // Owner precondition before the permanent claim: a refusal leaves nothing claimed (reported as a conflict, nothing changed).
   if(!coordinator.stageAdmissible(owner))throw new SecurityException("Deletion owner changed during review");
   String id=operationId==null?java.util.UUID.randomUUID().toString():operationId;
-  if(captured!=null){NativeDeletionClaim.check(AlphaActionJournal.get(getContext()),captured.identity,operationId,captured.operation,owner,true);target.put("journalBinding",NativeDeletionClaim.binding(AlphaActionJournal.get(getContext()),captured.identity));}
+  if(captured!=null){DeletionDispatchClaim.check(AlphaActionJournal.get(getContext()),captured.identity,operationId,captured.operation,owner,true);target.put("journalBinding",DeletionDispatchClaim.binding(AlphaActionJournal.get(getContext()),captured.identity));}
   try{return JSObject.fromJSONObject(new org.json.JSONObject().put("status","queued").put("deletion",coordinator.stageCalendar(target,owner,id)));}
   catch(Exception failure){
    // A stage that persisted before failing (for example while scheduling expiry) is still pending: never report it as unchanged.
@@ -67,7 +69,7 @@ public final class AlphaCalendarPlugin extends CalendarPlugin {
   };
   try{deleteOwnerWorker.execute(()->{try{
    ticket.owner=NativeDeletionCoordinator.get(getContext()).agentOwner();ticket.identity=call.getObject("journalIdentity");ticket.operation=new org.json.JSONObject(operation.toString());
-   NativeDeletionClaim.check(AlphaActionJournal.get(getContext()),ticket.identity,id,ticket.operation,ticket.owner,false);
+   DeletionDispatchClaim.check(AlphaActionJournal.get(getContext()),ticket.identity,id,ticket.operation,ticket.owner,false);
    getActivity().runOnUiThread(()->{if(deletionRetired||deleteOwners.get(id)!=ticket||!foreground()){deleteOwners.remove(id,ticket);call.resolve(status("cancelled"));return;}if(operation.optJSONObject("target").optString("eventId").startsWith("delete2:"))scopedDeletion().review(owned,operation);else super.executeAgent(owned);});
   }catch(Exception unavailable){deleteOwners.remove(id,ticket);call.reject("Authenticated local agent is unavailable for deletion review.");}});}catch(java.util.concurrent.RejectedExecutionException retired){deleteOwners.remove(id,ticket);call.resolve(status("cancelled"));}
  }

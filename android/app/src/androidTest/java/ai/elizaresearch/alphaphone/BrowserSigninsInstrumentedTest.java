@@ -73,7 +73,7 @@ public final class BrowserSigninsInstrumentedTest {
   assertTrue("Alpha returned to the foreground",mainIn(Stage.RESUMED));
  }
  private int liveTabs()throws Exception{
-  int[] count=new int[1];WebViewTestDriver.withActivity(MainActivity.class,activity->{try{Object plugin=activity.getBridge().getPlugin("AlphaBrowser").getInstance();java.lang.reflect.Field tabs=plugin.getClass().getDeclaredField("tabs");tabs.setAccessible(true);count[0]=((java.util.Map<?,?>)tabs.get(plugin)).size();}catch(Exception failure){throw new AssertionError(failure);}});return count[0];
+  int[] count=new int[1];WebViewTestDriver.withActivity(MainActivity.class,activity->{try{Object plugin=activity.getBridge().getPlugin("AlphaBrowser").getInstance();java.lang.reflect.Field tabs=ai.eliza.plugins.browsersurface.BrowserTabHostPlugin.class.getDeclaredField("tabs");tabs.setAccessible(true);count[0]=((java.util.Map<?,?>)tabs.get(plugin)).size();}catch(Exception failure){throw new AssertionError(failure);}});return count[0];
  }
 
  @Test public void externalLinkIntentsAreImplicitBrowsableAndNeverTargetAlpha() {
@@ -204,7 +204,7 @@ public final class BrowserSigninsInstrumentedTest {
  private java.util.HashSet<String> ephemeralProfiles()throws Exception{
   java.util.HashSet<String> names=new java.util.HashSet<>();
   WebViewTestDriver.withActivity(MainActivity.class,activity->{try{
-   Object plugin=activity.getBridge().getPlugin("AlphaBrowser").getInstance();java.lang.reflect.Field tabs=plugin.getClass().getDeclaredField("tabs");tabs.setAccessible(true);
+   Object plugin=activity.getBridge().getPlugin("AlphaBrowser").getInstance();java.lang.reflect.Field tabs=ai.eliza.plugins.browsersurface.BrowserTabHostPlugin.class.getDeclaredField("tabs");tabs.setAccessible(true);
    for(Object tab:((java.util.Map<?,?>)tabs.get(plugin)).values()){java.lang.reflect.Field profile=tab.getClass().getDeclaredField("profile");profile.setAccessible(true);String name=(String)profile.get(tab);if(AlphaBrowserPlugin.ephemeralProfile(name))names.add(name);}
   }catch(Exception failure){throw new AssertionError(failure);}});
   return names;

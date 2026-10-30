@@ -349,7 +349,8 @@ earlier one, the earlier entry carries a dated "Amended by" note and keeps its o
   The flagged copyleft obligations (ffmpeg-static, ua-parser-js, rpc-websockets, JavaScriptCore,
   eSpeak NG) are **accepted as fulfilled today for the pilot**; a legal review is required before
   any wider release. This **amends P-09**, whose statements did not cover `@metamask/sdk`. It is an
-  owner acceptance, not legal review.
+  owner acceptance, not legal review. *Amended by P-77 (2026-10-29): AGPL dependencies are
+  accepted generally, not only for the pilot.*
 - **P-72** — H-07, H-26, H-27, H-29 ([#675](https://github.com/eliza-research/alphaphone/issues/675), [#677](https://github.com/eliza-research/alphaphone/issues/677)): The owner is the operator,
   support owner, rollback owner, key custodian and witness. **NubsCarson is the independent
   reviewer.** The pilot cohort is the internal team only (the owner, the reviewer and teammates),
@@ -388,3 +389,10 @@ earlier one, the earlier entry carries a dated "Amended by" note and keeps its o
   **Eliza's SMS gateway must go through the reviewed send**; there are no unreviewed auto-replies.
   These are elizaOS changes, recorded here for tracking. Alpha's own policy is unchanged, and the
   two products keep separate UI and identity (foundation item 1).
+- **P-77** — H-35 ([#674](https://github.com/eliza-research/alphaphone/issues/674)): **AGPL-licensed dependencies may ship**, because the whole
+  project is open source; ua-parser-js (AGPL-3.0-or-later, through the RainbowKit wallet barrel) is
+  one example. AGPL is not a licence blocker. Every AGPL component that ships must still be
+  attributed in the licence notices, and the public eliza-research/alphaphone and elizaOS/eliza
+  repositories meet the source-availability obligation. This **amends P-71**, which accepted the
+  flagged copyleft obligations for the pilot only; AGPL dependencies are now accepted generally.
+  It is an owner acceptance, not legal review.

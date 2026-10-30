@@ -24,7 +24,7 @@ test('Alpha keeps its record names and its prompt dialog; the rules are upstream
  const store=readFileSync(join(upstream,'BrowserSessionStore.java'),'utf8');
  assert.match(store,/PERMISSIONS_KEY = "permissions"/,'the stored preference key is unchanged');
  assert.match(store,/BrowserSitePermissionRecord\.read\(sealer\.open\(packed\)\)/,'the record is unsealed before it is read');
- const app=readFileSync(nativeSource('AlphaBrowserPlugin.java'),'utf8');
+ const app=readFileSync(join(upstream,'BrowserTabHostPlugin.java'),'utf8');
  const decide=app.slice(app.indexOf('private void sitePermission('),app.indexOf('private void mediaPermission('));
  assert.match(decide,/BrowserSitePrompt\.plan\(origin,kinds,promptable\(t\),t\.priv,/,'only the selected, shown page may prompt or use a stored Allow');
  assert.match(decide,/runtimePermissions\.launch\(/,'an Allow is chained to the Android runtime permission');

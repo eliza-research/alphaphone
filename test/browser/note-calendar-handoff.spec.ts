@@ -9,6 +9,7 @@ import {test,expect,type Page} from '@playwright/test';
 import {returnToApps} from './app-navigation';
 import {openLegacyNotes,selectLegacyNotes} from './helpers/legacy-notes';
 import {openBrowserCalendar} from './helpers/browser-calendar';
+import {canonicalNotesFixture,openCanonicalNotes} from './helpers/canonical-notes';
 test.setTimeout(240_000);
 const button=(page:Page,name:string|RegExp)=>page.getByRole('button',{name,exact:true});
 const notes=(page:Page)=>page.evaluate(async()=>JSON.parse((await (await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw())||'{"records":[]}').records as any[]);
@@ -251,4 +252,36 @@ test('double activation makes one draft; a reload mid hand-off keeps the draft a
  await expect(page.getByText('From note: Garden meeting',{exact:true})).toBeVisible();
  expect(await events(page)).toHaveLength(2);expect(await reminders(page)).toEqual([]);
  for(const message of dialogs)expect(message).toBe('Replace the retained unsaved form with a new event?');
+});
+
+// Canonical path: an agent Notes record (closed app-record fixture, no server) hands its text to a
+// reminder draft through the shared NotesWorkspace draft port. The saved reminder keeps a version 2
+// record link (note id and a hash of its authored fields only) that opens that exact record.
+test('a canonical note opens a reminder draft whose saved reminder links back to that exact record',async({page})=>{
+ const {errors}=await canonicalNotesFixture(page);
+ await openBrowserCalendar(page);await returnToApps(page);
+ await openCanonicalNotes(page);
+ await button(page,'New note').click();await title(page).fill('Venue plan');
+ await page.getByRole('textbox',{name:'Note',exact:true}).fill('Book the venue');
+ await button(page,'Back to notes').click();
+ await button(page,'Note Venue plan').click();
+ const before=await page.evaluate(()=>structuredClone((window as any).canonicalNotesFixture.state.notes));
+ await button(page,'Reminder draft').click();
+ await expect(page.getByRole('textbox',{name:'Notes',exact:true})).toHaveValue('Book the venue');
+ await expect(page.getByText('Review the time, then Save. Nothing scheduled yet.',{exact:true})).toBeVisible();
+ expect(await reminders(page)).toEqual([]);expect(await stored(page)).toEqual({});
+ await button(page,'Save event').click();
+ await expect.poll(async()=>(await reminders(page)).length).toBe(1);
+ const reminder=(await reminders(page))[0];
+ await expect.poll(async()=>Object.keys(await stored(page))).toEqual([`reminder:${reminder.id}`]);
+ const link=(await stored(page))[`reminder:${reminder.id}`];
+ expect(Object.keys(link).sort()).toEqual(['noteId','revision','savedAt','version']);
+ expect(link).toMatchObject({version:2,noteId:before[0].id});
+ expect(JSON.stringify(await stored(page))).not.toMatch(/Venue plan|Book the venue/);
+ await button(page,/^Venue plan,/).click();
+ await expect(page.getByText('From note: Venue plan',{exact:true})).toBeVisible();
+ await button(page,'Open note Venue plan').click();
+ await expect(page.getByRole('textbox',{name:'Note',exact:true})).toHaveValue('Book the venue');
+ expect(await page.evaluate(()=>(window as any).canonicalNotesFixture.state.notes)).toEqual(before);
+ expect(errors).toEqual([]);
 });

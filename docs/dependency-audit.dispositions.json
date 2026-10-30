@@ -222,10 +222,10 @@
           "3.25.76",
           "4.4.3"
         ],
-        "reachability": "Present in the full upstream lock; none of these exact package versions are in the 603-package staged agent/worker inventory at the current pin. This is packaging evidence only, not a general safety exception.",
-        "plan": "Retain as unresolved upstream work, adopt dependency fixes upstream, and re-audit both full lock and packaged inventory before release.",
-        "observedOn": "2026-10-26",
-        "ships": true
+        "reachability": "Present in the full upstream lock as zod@3.22.4, zod@3.25.76 and zod@4.4.3. The 603-package staged agent/worker inventory at this pin ships zod@4.6.7 only, which is outside the GHSA-mrhx-c7xc-m3w5 range (< 4.6.6). Packaging evidence: docs/evidence/packaged-notices-v14-2026-10-27. This is unresolved upstream lock work, not a shipped high.",
+        "plan": "Keep unresolved for the full lock audit. Adopt upstream dependency fixes that drop the vulnerable zod versions from vendor/eliza/bun.lock, then re-audit both the full lock and packaged inventory before release. Do not treat this row as a shipped exception.",
+        "observedOn": "2026-10-29",
+        "ships": false
       },
       {
         "advisory": "GHSA-2m5v-pch6-74hx",
@@ -280,17 +280,6 @@
           "8.10.0",
           "8.10.2",
           "8.11.2"
-        ],
-        "reachability": "Present in the full upstream dependency lock. Exact current packaged-runtime inclusion and call-site reachability have not yet been established; this is unresolved, not a safety exception.",
-        "plan": "Keep unresolved, adopt upstream dependency fixes, and audit the exact current packaged inventory and reachable code before release. No exception or distribution acceptance is granted.",
-        "observedOn": "2026-10-27"
-      },
-      {
-        "advisory": "GHSA-6pq8-jhm2-2vcw",
-        "package": "qs",
-        "severity": "moderate",
-        "versions": [
-          "6.16.0"
         ],
         "reachability": "Present in the full upstream dependency lock. Exact current packaged-runtime inclusion and call-site reachability have not yet been established; this is unresolved, not a safety exception.",
         "plan": "Keep unresolved, adopt upstream dependency fixes, and audit the exact current packaged inventory and reachable code before release. No exception or distribution acceptance is granted.",
@@ -1895,6 +1884,23 @@
         "reviewedBy": "Pin bump review 2026-10-22: npm bulk advisories at the pin, GitHub advisory ranges and bun.lock dependency chains",
         "reviewedOn": "2026-10-22",
         "reviewBy": "2027-01-10"
+      },
+      {
+        "advisory": "GHSA-6pq8-jhm2-2vcw",
+        "severity": "moderate",
+        "packages": [
+          "qs"
+        ],
+        "versions": [
+          "qs@6.16.0"
+        ],
+        "ships": true,
+        "reachability": "qs@6.16.0 ships in the staged on-device agent bundle at the evidence pin (docs/evidence/packaged-notices-v14-2026-10-27/third-party-notices.json, SHA-256 a8234035325ae27743684d68daece69ac33331a223c6f62ebce8548522b1db77; upstream elizaOS/eliza fbc2d23d4bae0c7086ea529c019e5a47fb7b8352). The only packaged npm consumer of qs in that inventory is googleapis@169.0.0 -> googleapis-common@8.0.3 -> qs@6.16.0 (bun.lock integrities sha512-IOGMG8tljCZSLvYgdojRu6mB10KEsK0J7X62sXXlQz9koe5BUAW+rqkY3qhQM9wXM6hVL3/Hase7XbxoMyeYiQ==, sha512-7g1yzQKx0mmNTjiK0H9dJ8eqKqDBveES9vLHeg5neb3BMQy/d1oQefIMhIpOVT8a+f+LOcixMEdRbFIW/cQUJw==, sha512-h6fhOIaRrID2CbEY2fqs+7t+UXZo+MLAnU5gRIq85uFtdiUPCdsApMlHhXogKVM4HM2DVbIjGNTTYH2OcmP1vA==). express, body-parser, pepr, and @meteora-ag/dlmm also depend on qs in the full upstream lock, but none of those packages appear in the packaged-runtime notices. GHSA-6pq8-jhm2-2vcw is a DoS only when qs.stringify runs with arrayFormat 'comma' on an array element whose own toString is not callable. Shipped stringify call sites in googleapis-common@8.0.3: build/src/apirequest.js sets paramsSerializer to qs.stringify(params, { arrayFormat: 'repeat' }); build/src/http2.js uses config.paramsSerializer || qs.stringify (qs default arrayFormat is 'indices'). Neither call site selects arrayFormat 'comma'. Input to stringify is Google API request params assembled by googleapis-common for outbound calls; the arrayFormat option is fixed by that library, not taken from request bodies or query strings. This row does not claim a product-wide proof that no future caller can pass arrayFormat 'comma', and it does not assert a process-level error boundary.",
+        "justification": "Shipped moderate DoS advisory whose vulnerable sink requires arrayFormat 'comma'. The only packaged qs consumer's verified stringify options are 'repeat' or the qs default 'indices', so the comma branch is not taken on the evidence artifact. Recorded as a time-bounded shipped exception so the A-4 packaged-notices gate can stay green while upstream adopts qs >= 6.16.1 (eliza develop tip still resolves qs@6.16.0 under a frozen lockfile; alphaphone prepare uses bun install --frozen-lockfile with no local qs override). High/critical shipped advisories remain forbidden exceptions.",
+        "removeWhen": "The upstream lock and packaged-runtime notices no longer resolve qs@6.16.0 (prefer qs >= 6.16.1 via an upstream override or dependency bump, then re-run node scripts/dependency-audit.mjs --resident --notices apps/app/public/licenses/third-party-notices.json).",
+        "reviewedBy": "Alpha packaged-notices gate re-review 2026-10-29 after NubsCarson change request: npm advisory GHSA-6pq8-jhm2-2vcw, eliza bun.lock at fbc2d23d4bae (qs dependents and integrities), packaged-notices-v14-2026-10-27 (SHA-256 a8234035...), and googleapis-common@8.0.3 apirequest.js / http2.js stringify options from the published package tarball",
+        "reviewedOn": "2026-10-29",
+        "reviewBy": "2027-02-26"
       }
     ],
     "note": "The complete lock inventory and advisory findings were re-audited unchanged at 9eef5dbd7b381576aad0801b1fee424d1483c63c. Existing pending upstream fixes remain open; no new exception or security acceptance is granted. October 26 build campaign: re-bound to 6293e29bf398603d0ea233871edbdeb57e5c2405 after fresh full-lock and 603-package agent/worker inventory audits. Existing exceptions and expiry dates are unchanged. All unexcepted full-lock findings remain pending; none of their exact vulnerable versions is in this staged inventory. The packaged audit reports only the existing uuid moderate advisory. No release or device qualification is inferred. Rebound to fd5511ca1d after verifying its only delta from 9eef5dbd is the Notes/Calendar end-to-end test fixture; the dependency lock is byte-identical. No new advisory exception or device acceptance. Fresh npm bulk advisory audit on 2026-10-27 at SDK 41d99bb4c86cb61bfa07d5e49b07603dbbe1080b covers the same 3,694 exact package versions and input hash 63509920ce413bb6fcb44fc7e5b1047cc22517eab2ea51a445203e29bd7c6201. All 124 finding rows and severity counts are byte-identical to the prior admitted snapshot. This updates the full-lock evidence binding only: existing exceptions, review dates, expiry dates, shipped-set evidence and pending upstream fixes are unchanged. Historical packaged inventories are not new payload or release acceptance; exact current packaged audit remains required before release. A further normal npm bulk audit at reviewed recovery SDK 18cc0cf2ee9f332afe8b6dffecc8f9b2fbcf8d47 returned the identical package/input/finding set; the current full-lock binding is advanced without changing any exception, expiry, pending-fix or historical packaged-evidence classification. Fresh full-lock registry query at the type-only recovery successor f983d68173f12b89af22f93502d81234c7112b7d returns identical normalized package input and all 124 advisory rows. Existing exceptions, deadlines, pending fixes and historical packaged evidence remain unchanged; this is source binding only. Fresh registry full-lock audit at Calendar schema successor 8cc623855ce49cab68f9ed321b206abcad4d5c0b on 2026-10-27 returns the same 3,694 exact package versions/input hash but 140 advisory rows: all prior 124 are preserved, with 16 new rows across eight advisory IDs. The eight new findings remain pending upstream fixes with current packaged reachability explicitly unknown. Existing exceptions, deadlines, old pending entries and historical shipped-set evidence are unchanged. No security, current payload or release acceptance is granted.",

@@ -20,7 +20,7 @@ const runOutcomeUnknown=(run:WorkflowRun)=>!run.finished&&run.reconciliation?.st
 /** A worker that outlived its host is still being reconciled by the agent. */
 const runWorkerRunning=(run:WorkflowRun)=>!run.finished&&run.reconciliation?.state==='worker-running';
 /** Typed phone operations that only read selected sources or draft text. Writes, notifications and speech are excluded. */
-const READ_ONLY_PHONE_OPERATIONS:ReadonlySet<string>=new Set(['supplied_text','selected_notes','calendar_range','contains','compose_draft','model_draft']);
+const READ_ONLY_PHONE_OPERATIONS:ReadonlySet<string>=new Set(['supplied_text','selected_notes','selected_reminders','calendar_range','contains','compose_draft','model_draft']);
 /** True only for a typed phone workflow whose every step reads or drafts text (a read-only digest). Hosted digests are excluded: the agent admits them only at their scheduled occurrence. */
 function readOnlyDigestWorkflow(workflow:RemoteWorkflow|null|undefined):boolean{
  if(!workflow||workflow.hostedDigest||workflow.removed)return false;

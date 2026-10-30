@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 // Development lane with a native-plugin stub: the page sees an Android Capacitor bridge whose
-// DeviceApps answers and `appsChanged` events come from this file. The stub's inventory is the
+// ElizaSystem launcher answers and `launcherAppsChanged` events come from this file. The stub's inventory is the
 // "device": tests add and remove entries there, never in the renderer. No Android package manager,
 // work profile or HOME role is involved; LauncherAppsInstrumentedTest and
 // LauncherHomeInstrumentedTest cover the Android side, and a phone covers acceptance.
@@ -23,19 +23,20 @@ async function nativeStub(page: Page, apps: App[], refusals: Record<string, Refu
     const persist = () => sessionStorage.setItem('stub.device', JSON.stringify(device.apps));
     const key = (app: any) => app.packageName + (app.activityName ? '/' + app.activityName : '') + (app.user ? '#' + app.user : '');
     const listeners: Record<string, (data: unknown) => void> = {};
-    w.deviceChange = (next: any[], notify: boolean) => { device.apps = next; persist(); if (notify) listeners['DeviceApps:appsChanged']?.({ reason: 'changed' }); };
-    w.deviceListening = () => !!listeners['DeviceApps:appsChanged'];
+    w.deviceChange = (next: any[], notify: boolean) => { device.apps = next; persist(); if (notify) listeners['ElizaSystem:launcherAppsChanged']?.({ reason: 'changed' }); };
+    w.deviceListening = () => !!listeners['ElizaSystem:launcherAppsChanged'];
     const plugins: Record<string, string[]> = {
-      DeviceApps: ['list', 'launch', 'resolveDefault', 'openDefault', 'buildInfo', 'localeInfo', 'launchInfo'],
+      ElizaSystem: ['listLauncherApps', 'launchApp', 'resolveDefaultApp', 'openDefaultApp', 'getBuildInfo', 'getLocaleInfo', 'getLaunchInfo'],
+      DeviceApps: ['platformCapabilities'],
       DailyApps: ['surfaceInfo', 'requestPermissions', 'closeAssistant'],
       AlphaNotifications: ['status', 'list'],
       AlphaVoiceCloud: ['checkPermissions', 'requestPermissions'],
       AlphaDevice: ['openSettings'],
     };
     const answer = (plugin: string, method: string, options: any) => {
-      if (plugin === 'DeviceApps') {
-        if (method === 'list') { if (device.failList) throw Error('Package manager unavailable'); return { apps: device.apps }; }
-        if (method === 'launch') {
+      if (plugin === 'ElizaSystem') {
+        if (method === 'listLauncherApps') { if (device.failList) throw Error('Package manager unavailable'); return { apps: device.apps }; }
+        if (method === 'launchApp') {
           const refusal = device.refusals[key(options)];
           if (refusal) {
             if (refusal.remove) { device.apps = device.apps.filter((app: any) => key(app) !== key(options)); persist(); }
@@ -44,10 +45,10 @@ async function nativeStub(page: Page, apps: App[], refusals: Record<string, Refu
           if (!device.apps.some((app: any) => key(app) === key(options))) throw Object.assign(Error('This app is no longer installed.'), { code: 'not-installed' });
           return {};
         }
-        if (method === 'resolveDefault') return { role: 'dial', available: false };
-        if (method === 'buildInfo') return { launcher: true, version: 'stub' };
-        if (method === 'launchInfo') return { assistant: false };
-        if (method === 'localeInfo') return { locale: 'en-US', hour24: false };
+        if (method === 'resolveDefaultApp') return { role: 'dial', available: false };
+        if (method === 'getBuildInfo') return { launcher: true, version: 'stub' };
+        if (method === 'getLaunchInfo') return { assistant: false };
+        if (method === 'getLocaleInfo') return { locale: 'en-US', hour24: false };
         return {};
       }
       if (plugin === 'DailyApps' && method === 'surfaceInfo') return { assistant: false, developmentBuild: true, topInset: 0, bottomInset: 0 };
@@ -68,7 +69,8 @@ async function nativeStub(page: Page, apps: App[], refusals: Record<string, Refu
     for (const name of Object.keys(plugins)) cap.Plugins[name] = { addListener: () => ({ remove: async () => {} }) };
   }, { apps, refusals, emptyHome });
 }
-const calls = (page: Page, method: string) => page.evaluate(method => (window as any).nativeCalls.filter((c: any) => c.plugin === 'DeviceApps' && c.method === method).map((c: any) => c.options ?? null), method);
+/** Shared launcher calls on ElizaSystem, by their old short names (list, launch). */
+const calls = (page: Page, method: string) => page.evaluate(method => (window as any).nativeCalls.filter((c: any) => c.plugin === 'ElizaSystem' && c.method === method).map((c: any) => c.options ?? null), ({ list: 'listLauncherApps', launch: 'launchApp' } as Record<string, string>)[method] ?? method);
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 const PNG2 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 

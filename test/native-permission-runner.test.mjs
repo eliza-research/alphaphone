@@ -68,6 +68,20 @@ for(const [scenario,method,gate,permissions]of [
  });
 }
 
+test('every permission-campaign kind routes to the native-permissions runner, not the calendar fallback', async () => {
+ const fs = await import('node:fs');
+ const source = fs.readFileSync(new URL('./fixtures/isolated-native-campaign.mjs', import.meta.url), 'utf8');
+ const scriptsBlock = source.match(/const scripts=\{([\s\S]*?)\};/)?.[1];
+ assert.ok(scriptsBlock, 'isolated-native-campaign declares its scripts map');
+ const permissionKinds = [...(source.match(/const permissionCampaign=\[([^\]]*)\]/)?.[1].matchAll(/'([^']+)'/g) ?? [])].map(match => match[1]);
+ assert.ok(permissionKinds.includes('camera-capture'), 'camera-capture stays in the permission campaign');
+ for (const kind of permissionKinds) {
+  const entry = new RegExp(`(?:^|,)\\s*(?:'${kind}'|${kind}):path\\.resolve\\('([^']+)'\\)`).exec(scriptsBlock);
+  assert.ok(entry, `${kind} must be listed in the scripts map`);
+  assert.equal(entry[1], 'scripts/test-native-permissions.mjs', `${kind} must resolve to the native-permissions runner`);
+ }
+});
+
 test('voice-revoke grants, revokes while the recording phase runs, verifies in a new process and grants again',()=>{
  const r=exercise('pass','voice-revoke');assert.equal(r.code,0,r.stderr);assert.equal(r.record.passed,true);assert.equal(r.record.userLifecycle.removed,true);assert.equal(r.state.created,false);assert.deepEqual(r.state.files,{});
  const steps=r.commands.filter(a=>a.includes('instrument')||(a[1]==='pm'&&['grant','revoke'].includes(a[2]))).map(a=>a.includes('instrument')?'instrument:'+a[a.indexOf('voiceRevokePhase')+1]:a[2]);

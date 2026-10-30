@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,mkdtempSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {root,nativeSource,runJvm,jsonJarSkip} from './fixtures/jvm-tools.mjs';
+import {root,nativeSource,upstreamAgentRuntime,runJvm,jsonJarSkip} from './fixtures/jvm-tools.mjs';
 import {prepareNativeFixture} from './fixtures/native-source.mjs';
 test('explicit native legacy recovery uses real encrypted slots and current token validation',{skip:jsonJarSkip},()=>{
  const dir=mkdtempSync(join(tmpdir(),'alpha-legacy-recovery-'));
@@ -28,17 +28,17 @@ test('explicit native legacy recovery uses real encrypted slots and current toke
   const commitStart=nativeLifecycle.indexOf(' private static <T> T commitCredentials('),commitEnd=nativeLifecycle.indexOf('\n',commitStart);
   assert.ok(ownerCache&&commitStart>0&&commitEnd>commitStart);
   const intentStart=nativeLifecycle.indexOf(' static void requireCredentialIntent('),intentEnd=nativeLifecycle.indexOf('\n',intentStart);
-  const bindingStart=nativeLifecycle.indexOf(' static void bindCloudProvider('),bindingEnd=nativeLifecycle.indexOf(' /** Direct configuration',bindingStart);
+  const bindingStart=nativeLifecycle.indexOf(' static void bindCloudProvider('),bindingEnd=nativeLifecycle.indexOf(' // The provider rules live in',bindingStart);
   assert.ok(bindingStart>0&&bindingEnd>bindingStart);
-  const clearStart=nativeLifecycle.indexOf(' static JSObject clearProviderSlot('),clearEnd=nativeLifecycle.indexOf(' /** Which surface',clearStart);
+  const clearStart=nativeLifecycle.indexOf(' static NativeProviderSlot.Store providerSlot('),clearEnd=nativeLifecycle.indexOf(' /** Which surface',clearStart);
   const identityStart=nativeLifecycle.indexOf(' static JSObject providerIdentity('),identityEnd=nativeLifecycle.indexOf(' @PluginMethod public void providerStatus(',identityStart);
   assert.ok(clearStart>0&&clearEnd>clearStart&&identityStart>0&&identityEnd>identityStart);
   const jsObject=join(dir,'JSObject.java');writeFileSync(jsObject,'package com.getcapacitor;public class JSObject extends org.json.JSONObject {public JSObject(String text){super(text);}}');
   assert.ok(fastStart>0&&fastEnd>fastStart&&intentStart>0);
   // Use the actual lifecycle→vault fast path and the ACTUAL synchronized intent check.
   // Process shutdown is fixture-only; these tests do not launch or stop an Android service.
-  const lifecycle=join(dir,'AlphaLocalAgentPlugin.java');writeFileSync(lifecycle,`package ai.elizaresearch.alphaphone;import android.content.Context;import org.json.JSONObject;import com.getcapacitor.JSObject;class AlphaLocalAgentPlugin {
-   static final Object lifecycleLock=new Object();static long credentialIntentEpoch=1;
+  const lifecycle=join(dir,'AlphaLocalAgentPlugin.java');writeFileSync(lifecycle,`package ai.elizaresearch.alphaphone;import android.content.Context;import org.json.JSONObject;import com.getcapacitor.JSObject;import ai.eliza.plugins.agent.runtime.NativeProviderSlot;class AlphaLocalAgentPlugin {
+   static final Object lifecycleLock=new Object();static final ai.eliza.plugins.agent.runtime.CredentialIntentFence credentialIntents=new ai.eliza.plugins.agent.runtime.CredentialIntentFence(lifecycleLock);static{credentialIntents.reserve();}
    ${powerEpoch}
    ${nativeLifecycle.slice(powerStart,powerEnd)}
    ${nativeLifecycle.slice(intentStart,intentEnd)}
@@ -54,7 +54,7 @@ test('explicit native legacy recovery uses real encrypted slots and current toke
    ${nativeLifecycle.slice(identityStart,identityEnd)}
   }`);
   const identity=join(dir,'AlphaConnectionPlugin.java');writeFileSync(identity,`package ai.elizaresearch.alphaphone;class AlphaConnectionPlugin {static int verified;static org.json.JSONObject readCloudIdentity(String token)throws Exception{if(Thread.holdsLock(AlphaLocalAgentPlugin.lifecycleLock)||Thread.holdsLock(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK))throw new AssertionError("HTTP held a credential lock");if(!token.equals("synthetic-test-token"))throw new AssertionError();verified++;return LocalAgentProviderAdmission.verifiedCloudIdentity(new org.json.JSONObject().put("id","22222222-2222-4222-8222-222222222222"));}}`);
-  const sources=[store,atomic,jsObject,context,lifecycle,identity,nativeSource('RendererCredentialSlots.java'),join(root,'test/fixtures/legacy-cloud-recovery/RendererRecoverySlotsTest.java'),nativeSource('AlphaCredentialStore.java'),nativeSource('CloudDeployment.java'),join(root,'test/fixtures/legacy-cloud-recovery/StoreIntegrationTest.java'),join(root,'vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderAdmission.java'),nativeSource('LocalAgentProviderAdmission.java'),nativeSource('LegacyCloudRecovery.java'),nativeSource('InvocationOwnerCache.java'),join(root,'test/fixtures/legacy-cloud-recovery/LegacyCloudRecoveryTest.java')];
+  const sources=[upstreamAgentRuntime('CredentialIntentFence.java'),store,atomic,jsObject,context,lifecycle,identity,join(root,'vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/SecureSlotPolicy.java'),nativeSource('RendererCredentialSlots.java'),join(root,'test/fixtures/legacy-cloud-recovery/RendererRecoverySlotsTest.java'),nativeSource('AlphaCredentialStore.java'),nativeSource('CloudDeployment.java'),join(root,'test/fixtures/legacy-cloud-recovery/StoreIntegrationTest.java'),join(root,'vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderAdmission.java'),join(root,'vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderSlot.java'),join(root,'vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeRuntimeEmbeddings.java'),nativeSource('LocalAgentProviderAdmission.java'),nativeSource('LegacyCloudRecovery.java'),nativeSource('InvocationOwnerCache.java'),join(root,'test/fixtures/legacy-cloud-recovery/LegacyCloudRecoveryTest.java')];
   const result=runJvm(sources,'ai.elizaresearch.alphaphone.LegacyCloudRecoveryTest',{json:true,args:[join(dir,'slots')]});
   assert.match(result,/PASS actual AlphaCredentialStore/);
   assert.match(result,/PASS renderer logical and physical recovery slot isolation/);
@@ -113,7 +113,7 @@ test('Restore saved sign-in around the shared sign-in client: eligible restore, 
   const intent=lifecycle.match(/^ static long reserveCredentialIntent\(\)\{.*\}$/m)?.[0],require=lifecycle.match(/^ static void requireCredentialIntent\(long intent\)\{.*\}$/m)?.[0];
   assert.ok(intent&&require,'actual credential-intent methods');
   const sources=[
-   nativeSource('AlphaCloudSignInPlugin.java'),nativeSource('PluginWorkers.java'),nativeSource('CloudDeployment.java'),
+   upstreamAgentRuntime('CredentialIntentFence.java'),nativeSource('AlphaCloudSignInPlugin.java'),nativeSource('PluginWorkers.java'),nativeSource('CloudDeployment.java'),
    file('Capacitor.java',`package com.getcapacitor;public class Capacitor{}`),
    file('Plugin.java',`package com.getcapacitor;public class Plugin{public android.content.Context getContext(){return new android.content.Context();}protected void handleOnNewIntent(android.content.Intent intent){}protected void handleOnDestroy(){}}`),
    file('PluginMethod.java',`package com.getcapacitor;@java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)public @interface PluginMethod{}`),
@@ -133,7 +133,7 @@ test('Restore saved sign-in around the shared sign-in client: eligible restore, 
     @PluginMethod public void startGoogle(PluginCall c){calls.add("startGoogle");c.resolve();}@PluginMethod public void startEmail(PluginCall c){calls.add("startEmail");c.resolve();}@PluginMethod public void startPhone(PluginCall c){calls.add("startPhone");c.resolve();}@PluginMethod public void cancel(PluginCall c){calls.add("cancel");c.resolve();}
     @Override protected void handleOnNewIntent(android.content.Intent i){calls.add("intent");}@Override protected void handleOnDestroy(){calls.add("destroy");}}`),
    file('BuildConfig.java',`package ai.elizaresearch.alphaphone;final class BuildConfig{static final boolean ELIZA_DEV_ALLOW_TEST_MOCKS=false;}`),
-   file('AlphaLocalAgentPlugin.java',`package ai.elizaresearch.alphaphone;final class AlphaLocalAgentPlugin{static final Object lifecycleLock=new Object();static long credentialIntentEpoch;\n${intent}\n${require}\n}`),
+   file('AlphaLocalAgentPlugin.java',`package ai.elizaresearch.alphaphone;final class AlphaLocalAgentPlugin{static final Object lifecycleLock=new Object();static final ai.eliza.plugins.agent.runtime.CredentialIntentFence credentialIntents=new ai.eliza.plugins.agent.runtime.CredentialIntentFence(lifecycleLock);\n${intent}\n${require}\n}`),
    file('AlphaCredentialStore.java',`package ai.elizaresearch.alphaphone;import java.util.concurrent.*;final class AlphaCredentialStore{
     /** Synthetic encrypted vault: a retained legacy credential, and the scoped slot a restore copies it to. */
     static volatile boolean legacy=true,failRestore;static final java.util.Map<String,String> slots=new ConcurrentHashMap<>();static volatile CountDownLatch entered,release;
@@ -185,7 +185,8 @@ test('automatic startup requests presence-only unbind; explicit provider clear r
  const run=new Function('native',`const browserCloudResidentEnabled=false,Capacitor={isNativePlatform:()=>true},record=value=>value,localProviderStatus=async()=>({configured:false});${code};return clearLocalProvider;`)(native);
  await run();await run(true);assert.deepEqual(calls,[undefined,{onlyIfPresent:true}]);
  const ui=readFileSync(join(root,'apps/app/src/runtime/connection-ui.tsx'),'utf8');
- assert.match(ui,/Unbound: remove any stored Cloud inference binding[\s\S]*?try\{await clearLocalProvider\(true\);\}catch/);
+ // The shared resident binding controller asks for a plain unbind as `unbound`: presence-only.
+ assert.match(ui,/A plain unbind is a no-op \(no restart\) when no binding is stored\.\s*clearProvider:async\(_signal,reason\)=>\{await clearLocalProvider\(reason==='unbound'\);\}/);
  const plugin=readFileSync(nativeSource('AlphaLocalAgentPlugin.java'),'utf8');
  assert.match(plugin,/Boolean\.TRUE\.equals\(call\.getBoolean\("onlyIfPresent"\)\)/);
 });

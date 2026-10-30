@@ -74,13 +74,13 @@ test('a stored mock selection on Android reads as the resident (P-43) and never 
         { name: 'AlphaConnection', methods: methods(['pauseNotificationCollection', 'secureRead', 'secureWrite', 'secureRemove', 'request', 'cancel', 'addListener', 'removeListener']) },
         { name: 'AlphaHostedResults', methods: methods(['disableBackground', 'status', 'pendingResult', 'addListener', 'removeListener']) },
         { name: 'AlphaNotifications', methods: methods(['resumeCrossApp', 'status', 'crossAppStatus', 'addListener', 'removeListener']) },
-        { name: 'Agent', methods: methods(['getStatus']) }, { name: 'DeviceApps', methods: methods(['buildInfo']) },
+        { name: 'Agent', methods: methods(['getStatus']) }, { name: 'ElizaSystem', methods: methods(['getBuildInfo']) },
       ],
       nativePromise: async (plugin: string, method: string) => {
         calls.push(`${plugin}.${method}`);
         if (plugin === 'Agent') return { packaged: false, state: 'unavailable' };
         if (method === 'secureRead') return { value: null };
-        if (plugin === 'DeviceApps') return { launcher: false, version: 'production-surface' };
+        if (plugin === 'ElizaSystem' && method === 'getBuildInfo') return { launcher: false, version: 'production-surface' };
         return {};
       },
     };
@@ -337,7 +337,7 @@ for (const mode of ['signed-out','empty','credits','unavailable','funded','repla
    if(mode!=='signed-out'&&mode!=='unpackaged'&&mode!=='legacy-offline')values['cloud:production']=JSON.stringify({token:'synthetic-cloud-key',credentialId:id,expiresAt:Date.now()+60000});
    const methods=(names:string[])=>names.map(name=>({name,rtype:'promise'}));
    w.Capacitor={PluginHeaders:[
-    {name:'DeviceApps',methods:methods(['buildInfo'])},
+    {name:'ElizaSystem',methods:methods(['getBuildInfo'])},
     {name:'Agent',methods:resident.methods(['getStatus','start','stop','configureCloudProvider','clearProvider','providerStatus','request'])},
     {name:'AlphaCloudSignIn',methods:methods(['status'])},
     {name:'AlphaConnection',methods:methods(['secureRead','secureWrite','secureRemove','secureCompareExchange','request','cancel','openExternal'])},
@@ -346,7 +346,7 @@ for (const mode of ['signed-out','empty','credits','unavailable','funded','repla
    ],nativeCallback:resident.nativeCallback,nativePromise:async(plugin:string,method:string,input:any)=>{
     w.residentCalls.push({plugin,method,path:input?.path,url:input?.url});
     if(plugin==='AlphaCloudSignIn'&&method==='status')return{active:false,inApp:true,email:true,google:false};
-    if(plugin==='DeviceApps')return{launcher:false,version:'billing-fixture'};
+    if(plugin==='ElizaSystem'&&method==='getBuildInfo')return{launcher:false,version:'billing-fixture'};
     if(plugin==='AlphaNotifications')return{permissionGranted:true,appEnabled:true};
     if(plugin==='AlphaVoiceCloud')return{microphone:'granted'};
     if(plugin==='Agent'){
@@ -399,6 +399,9 @@ for (const mode of ['signed-out','empty','credits','unavailable','funded','repla
   }
   if(!signedOut&&!needsPlan){
    await expect(page.getByRole('button',{name:'Notes',exact:true})).toBeVisible();
+   // A sign-in replaced underneath admission is not a refused sign-in: the account stays attached
+   // and the required sign-in page never covers the running resident's Home.
+   if(mode==='replaced')await expect(page.locator('[role="main"].alpha-cloud-sign-in')).toHaveCount(0);
    await expect(page.getByRole('dialog')).toHaveCount(0);
    await page.getByRole('button',{name:'Settings',exact:true}).click();
    await page.getByRole('button',{name:mode==='replaced'?'Agent connection':'Eliza Cloud account & plan',exact:true}).click();
@@ -452,7 +455,7 @@ test('resident always present (P-43): a kept local-apps choice and a saved sign-
   localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline',localApps:true}));
   const methods=(names:string[])=>names.map(name=>({name,rtype:'promise'}));
   w.Capacitor={PluginHeaders:[
-   {name:'DeviceApps',methods:methods(['buildInfo'])},
+   {name:'ElizaSystem',methods:methods(['getBuildInfo'])},
    {name:'Agent',methods:resident.methods(['getStatus','start','stop','clearProvider','providerStatus','request'])},
    {name:'AlphaConnection',methods:methods(['secureRead','secureWrite','secureRemove','secureCompareExchange','request','cancel','openExternal'])},
    {name:'AlphaNotifications',methods:methods(['status','crossAppStatus','addListener','removeListener'])},
@@ -461,7 +464,7 @@ test('resident always present (P-43): a kept local-apps choice and a saved sign-
    w.residentCalls.push({plugin,method,slot:input?.slot,url:input?.url});
    if(plugin==='Agent'){const owned=resident.answer(method,input);if(owned)return owned;}
    if(plugin==='AlphaVoiceCloud')return{microphone:'granted'};
-   if(plugin==='DeviceApps')return{launcher:false,version:'resident-fixture'};
+   if(plugin==='ElizaSystem'&&method==='getBuildInfo')return{launcher:false,version:'resident-fixture'};
    if(plugin==='AlphaNotifications')return{permissionGranted:true,appEnabled:true};
    if(plugin==='Agent'&&method==='getStatus')return{packaged:true,state:'stopped',serviceActive:false,socketListening:false};
    if(plugin==='Agent'&&method==='clearProvider')return{configured:false};

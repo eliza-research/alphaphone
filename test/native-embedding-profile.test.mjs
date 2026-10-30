@@ -5,9 +5,15 @@ test('Alpha selects embeddings only through the shared native runtime profile',(
  // No Alpha copy of the embedding route: the build profile is passed to the shared class as-is.
  assert.doesNotMatch(source,/static void configureLocalEmbeddings\(/);
  assert.doesNotMatch(source,/bge-small-en-v1\.5-f16\.gguf/);
- const calls=source.split('\n').filter(line=>line.includes('NativeRuntimeEmbeddings.apply('));
+ // The launch composes provider admission and the embedding route in the shared order (NativeProviderSlot).
+ assert.doesNotMatch(source,/NativeRuntimeEmbeddings\.apply\(/);
+ const calls=source.split('\n').filter(line=>line.includes('NativeProviderSlot.applyLaunchEnvironment('));
  assert.equal(calls.length,1);
- assert.match(calls[0],/NativeRuntimeEmbeddings\.apply\(BuildConfig\.ELIZA_RUNTIME_PROFILE,new File\(context\.getApplicationInfo\(\)\.nativeLibraryDir\),context\.getFilesDir\(\),env\);/);
+ assert.match(calls[0],/NativeProviderSlot\.applyLaunchEnvironment\(BuildConfig\.ELIZA_RUNTIME_PROFILE,provider,cloudSaved,new File\(context\.getApplicationInfo\(\)\.nativeLibraryDir\),context\.getFilesDir\(\),env,System\.currentTimeMillis\(\)\)/);
+ const slot=fs.readFileSync('vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderSlot.java','utf8');
+ const launch=slot.slice(slot.indexOf('public static boolean applyLaunchEnvironment('));
+ assert.ok(launch.indexOf('applyProviderEnvironment(')<launch.indexOf('NativeRuntimeEmbeddings.apply(')&&launch.indexOf('applyUnboundEnvironment(env)')<launch.indexOf('NativeRuntimeEmbeddings.apply('),'the embedding route is applied after provider admission');
+ assert.ok(JSON.parse(fs.readFileSync('android/consumer-host.json','utf8')).residentHost.helpers.includes('plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderSlot.java'),'NativeProviderSlot.java must be staged for the APK compile');
  // The shared class is compiled from the selected-source staging list, like NativeProviderAdmission.
  // stage-local-agent-sources.mjs stages the consumer host descriptor's resident helpers.
  assert.ok(JSON.parse(fs.readFileSync('android/consumer-host.json','utf8')).residentHost.helpers.includes('plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeRuntimeEmbeddings.java'),'NativeRuntimeEmbeddings.java must be staged for the APK compile');

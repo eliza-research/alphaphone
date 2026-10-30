@@ -21,7 +21,7 @@ for (const scenario of ['confirmed', 'incomplete-timeout'] as const) {
           { name: 'Agent', methods: agent.methods(['getStatus', 'start', 'stop', 'request']) },
           { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite','secureCompareExchange', 'secureRemove', 'cancel', 'addListener', 'removeListener', 'pauseNotificationCollection']) },
           { name: 'AlphaActionJournal', methods: methods(['list']) },
-          { name: 'DeviceApps', methods: methods(['buildInfo']) },
+          { name: 'ElizaSystem', methods: methods(['getBuildInfo']) },
         ],
         nativeCallback: agent.nativeCallback,
         nativePromise: async (plugin: string, method: string, input: any) => {
@@ -59,7 +59,7 @@ for (const scenario of ['confirmed', 'incomplete-timeout'] as const) {
             if (['cancel', 'addListener', 'removeListener', 'pauseNotificationCollection'].includes(method)) return {};
           }
           if (plugin === 'AlphaActionJournal' && method === 'list') return { entries: [] };
-          if (plugin === 'DeviceApps' && method === 'buildInfo') return { launcher: false, version: 'fixture' };
+          if (plugin === 'ElizaSystem' && method === 'getBuildInfo') return { launcher: false, version: 'fixture' };
           f.unexpected.push(plugin + '.' + method); throw Error('Unexpected native operation');
         },
       };

@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 // Development lane with a native-plugin stub: the page sees an Android Capacitor bridge whose
-// DeviceApps, AlphaNotifications and AlphaVoiceCloud answers come from this file. No Android
+// ElizaSystem launcher, AlphaNotifications and AlphaVoiceCloud answers come from this file. No Android
 // device, package manager or permission prompt is involved; LauncherHomeInstrumentedTest covers
 // the real launcher APK holding HOME.
 
@@ -11,20 +11,21 @@ async function nativeStub(page: Page, stub: Stub) {
     localStorage.setItem('alpha.connection.selection.v1', JSON.stringify({ kind: 'offline' }));
     const w = window as any; w.nativeCalls = w.nativeCalls || []; w.androidBridge = {};
     const plugins: Record<string, string[]> = {
-      DeviceApps: ['list', 'launch', 'resolveDefault', 'openDefault', 'buildInfo', 'localeInfo', 'launchInfo'],
+      ElizaSystem: ['listLauncherApps', 'launchApp', 'resolveDefaultApp', 'openDefaultApp', 'getBuildInfo', 'getLocaleInfo', 'getLaunchInfo'],
+      DeviceApps: ['platformCapabilities'],
       DailyApps: ['surfaceInfo', 'requestPermissions', 'closeAssistant'],
       AlphaNotifications: ['status', 'list'],
       AlphaVoiceCloud: ['checkPermissions', 'requestPermissions'],
       AlphaDevice: ['openSettings'],
     };
     const answer = (plugin: string, method: string, options: any) => {
-      if (plugin === 'DeviceApps') {
-        if (method === 'list') return { apps: stub.apps ?? [] };
-        if (method === 'launch') { if ((stub.failLaunch || []).includes(options?.packageName)) throw Error('Activity not found'); return {}; }
-        if (method === 'resolveDefault') return stub.dial ?? { role: 'dial', available: false };
-        if (method === 'buildInfo') return { launcher: true, version: 'stub' };
-        if (method === 'launchInfo') return { assistant: stub.assistant === true };
-        if (method === 'localeInfo') return { locale: 'en-US', hour24: false };
+      if (plugin === 'ElizaSystem') {
+        if (method === 'listLauncherApps') return { apps: stub.apps ?? [] };
+        if (method === 'launchApp') { if ((stub.failLaunch || []).includes(options?.packageName)) throw Error('Activity not found'); return {}; }
+        if (method === 'resolveDefaultApp') return stub.dial ?? { role: 'dial', available: false };
+        if (method === 'getBuildInfo') return { launcher: true, version: 'stub' };
+        if (method === 'getLaunchInfo') return { assistant: stub.assistant === true };
+        if (method === 'getLocaleInfo') return { locale: 'en-US', hour24: false };
         return {};
       }
       if (plugin === 'DailyApps' && method === 'surfaceInfo') return { assistant: false, developmentBuild: true, topInset: 0, bottomInset: 0 };
@@ -61,7 +62,7 @@ test('the launcher drawer lists installed apps with icons, launches by package a
   const drawer = page.getByRole('dialog', { name: 'All apps', exact: true });
   await expect(drawer.getByRole('button', { name: 'Open Settings (com.android.settings)', exact: true })).toBeVisible();
   // Icons are requested on Android; an entry with an unsafe icon or a duplicate package is dropped.
-  expect(await calls(page, 'DeviceApps', 'list')).toEqual([{ icons: true }]);
+  expect(await calls(page, 'ElizaSystem', 'listLauncherApps')).toEqual([{ icons: true }]);
   await expect(drawer.getByRole('button', { name: 'Open Bad icon', exact: true })).toHaveCount(0);
   await expect(drawer.getByRole('button', { name: 'Open Settings duplicate', exact: true })).toHaveCount(0);
   await expect(drawer.getByRole('status').first()).toHaveText('12 apps');
@@ -71,19 +72,19 @@ test('the launcher drawer lists installed apps with icons, launches by package a
   const phone = drawer.getByRole('button', { name: 'Open Phone (Phone by Example)', exact: true });
   await expect(phone).toBeVisible();
   await phone.click();
-  expect(await calls(page, 'DeviceApps', 'openDefault')).toEqual([{ role: 'dial' }]);
+  expect(await calls(page, 'ElizaSystem', 'openDefaultApp')).toEqual([{ role: 'dial' }]);
 
   // Search, then launch by package name only.
   await drawer.getByRole('searchbox', { name: 'Search apps', exact: true }).fill('sett');
   await expect(phone).toHaveCount(0);
   await drawer.getByRole('button', { name: 'Open Settings (com.android.settings)', exact: true }).click();
-  await expect.poll(() => calls(page, 'DeviceApps', 'launch')).toEqual([{ packageName: 'com.android.settings' }]);
+  await expect.poll(() => calls(page, 'ElizaSystem', 'launchApp')).toEqual([{ packageName: 'com.android.settings' }]);
 
   // A failed launch is reported in place and nothing is retried.
   await drawer.getByRole('searchbox', { name: 'Search apps', exact: true }).fill('broken');
   await drawer.getByRole('button', { name: 'Open Broken app', exact: true }).click();
   await expect(drawer.getByRole('alert')).toHaveText(/^Broken app could not be opened\./);
-  expect(await calls(page, 'DeviceApps', 'launch')).toHaveLength(2);
+  expect(await calls(page, 'ElizaSystem', 'launchApp')).toHaveLength(2);
   await page.screenshot({ path: info.outputPath('native-drawer.png') });
   expect(errors).toEqual([]);
 });
@@ -103,7 +104,7 @@ test('typing a search while the installed-app list is still loading still shows 
   // Hold the list read until the user has typed.
   await page.addInitScript(() => {
     const w = window as any; const original = w.Capacitor.nativePromise;
-    w.Capacitor.nativePromise = (plugin: string, method: string, options: any) => plugin === 'DeviceApps' && method === 'list'
+    w.Capacitor.nativePromise = (plugin: string, method: string, options: any) => plugin === 'ElizaSystem' && method === 'listLauncherApps'
       ? new Promise(resolve => { w.releaseList = () => resolve(original(plugin, method, options)); }) : original(plugin, method, options);
   });
   await page.goto('/');

@@ -92,8 +92,8 @@ public final class BrowserPageQuestionInstrumentedTest {
   BoundedActivityScenario.main(() -> {
    try {
     Object plugin = resumedActivity().getBridge().getPlugin("AlphaBrowser").getInstance();
-    java.lang.reflect.Field reading = AlphaBrowserPlugin.class.getDeclaredField("reading"); reading.setAccessible(true);
-    java.lang.reflect.Field dialog = BrowserReading.class.getDeclaredField("dialog"); dialog.setAccessible(true);
+    java.lang.reflect.Field reading = ai.eliza.plugins.browsersurface.BrowserTabHostPlugin.class.getDeclaredField("reading"); reading.setAccessible(true);
+    java.lang.reflect.Field dialog = ai.eliza.plugins.browsersurface.BrowserReviewedReading.class.getDeclaredField("dialog"); dialog.setAccessible(true);
     AlertDialog value = (AlertDialog) dialog.get(reading.get(plugin));
     found.set(value != null && value.isShowing() ? value : null);
    } catch (Exception error) { throw new AssertionError(error); }
@@ -118,7 +118,7 @@ public final class BrowserPageQuestionInstrumentedTest {
   final AtomicInteger requests = new AtomicInteger();
   Pages(String tabId) throws Exception {
    Object plugin = resumedActivity().getBridge().getPlugin("AlphaBrowser").getInstance();
-   java.lang.reflect.Field tabs = AlphaBrowserPlugin.class.getDeclaredField("tabs"); tabs.setAccessible(true);
+   java.lang.reflect.Field tabs = ai.eliza.plugins.browsersurface.BrowserTabHostPlugin.class.getDeclaredField("tabs"); tabs.setAccessible(true);
    Object tab = ((Map<?, ?>) tabs.get(plugin)).get(tabId); assertNotNull("The visible tab exists", tab);
    java.lang.reflect.Field field = tab.getClass().getDeclaredField("web"); field.setAccessible(true);
    web = (android.webkit.WebView) field.get(tab); original = web.getWebViewClient(); assertNotNull(original);

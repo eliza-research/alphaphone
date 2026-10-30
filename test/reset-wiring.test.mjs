@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,rmSync,readFileSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,rmSync,readFileSync,readdirSync} from 'node:fs';
 import {tmpdir,homedir} from 'node:os';
 import {join,dirname,resolve} from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -22,7 +22,8 @@ test('Alpha reset is the shared native review, coordinator and recovery under Al
   put('com/getcapacitor/annotation/CapacitorPlugin.java','package com.getcapacitor.annotation; @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME) public @interface CapacitorPlugin {String name();}');
   put('com/getcapacitor/annotation/ActivityCallback.java','package com.getcapacitor.annotation; @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME) public @interface ActivityCallback {}');
   put('androidx/activity/result/ActivityResult.java','package androidx.activity.result; public class ActivityResult { public int getResultCode(){return 0;} }');
-  put('ai/elizaresearch/alphaphone/ResetCloudRevocation.java','package ai.elizaresearch.alphaphone; final class ResetCloudRevocation {static void revoke(android.content.Context c,long ms){}}');
+  put('ai/elizaresearch/alphaphone/AlphaCloudSignInPlugin.java','package ai.elizaresearch.alphaphone; final class AlphaCloudSignInPlugin {static ai.eliza.auth.cloud.CloudSignInConfig REGISTRATION;}');
+  put('ai/elizaresearch/alphaphone/AlphaCredentialStore.java','package ai.elizaresearch.alphaphone; final class AlphaCredentialStore {static String readSlotBeforeAttach(android.content.Context c,String n)throws Exception{return null;}}');
   put('ai/elizaresearch/alphaphone/WiringCheck.java',`package ai.elizaresearch.alphaphone;
 import ai.eliza.plugins.system.reset.*;
 public final class WiringCheck {
@@ -46,7 +47,10 @@ public final class WiringCheck {
  }
 }`);
   const shared=['reset/DataReset','reset/DataResetCopy','reset/DataResetPlugin','reset/DataResetRecoveryActivity','reset/ResetAuthorization','SenseListenerClient','SenseInvocation'].map(name=>join(upstream,`${name}.java`));
-  execFileSync(bin('javac'),['--release','17','-proc:none','-cp',sdk,'-d',join(dir,'classes'),...files,...shared,...['AlphaDataReset','AlphaResetPlugin','ResetRecoveryActivity'].map(alpha)],{timeout:120000});
+  // The real shared Cloud reset step: Alpha's binding must compile against its exact signature.
+  const authDir=resolve(root,'vendor/eliza/packages/auth/android/src/main/java/ai/eliza/auth/cloud');
+  const auth=readdirSync(authDir).filter(name=>name.endsWith('.java')&&!['CloudSignInPlugin.java','NativeGoogleCredential.java'].includes(name)).map(name=>join(authDir,name));
+  execFileSync(bin('javac'),['--release','17','-proc:none','-cp',sdk,'-d',join(dir,'classes'),...files,...shared,...auth,...['AlphaDataReset','AlphaResetPlugin','ResetRecoveryActivity'].map(alpha)],{timeout:120000});
   assert.match(execFileSync(bin('java'),['-cp',`${join(dir,'classes')}:${sdk}`,'ai.elizaresearch.alphaphone.WiringCheck'],{encoding:'utf8',timeout:30000}),/PASS Alpha reset wiring/);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });

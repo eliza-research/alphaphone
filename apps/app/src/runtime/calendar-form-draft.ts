@@ -1,4 +1,4 @@
-import {noteOriginOf} from './note-origin.ts';
+import {noteLinkOf} from './note-origin.ts';
 type Form=Record<string,any>;
 // `origin` is a display back-reference to the note a draft came from. It grants no access.
 // `allDay` is stored only as true, for creation forms (an all-day form restored without it would come back as a timed event).
@@ -15,7 +15,7 @@ function validate(value:any,requireCreation=true){
  if(!Number.isFinite(f.t)||f.t<0||f.t>=24||!Number.isFinite(f.d)||f.d<=0||f.d>168||typeof f.video!=='boolean'||!Array.isArray(f.who)||f.who.length>100||f.who.some((id:any)=>typeof id!=='string'||id.length>256))fail();
  if(typeof f.cal!=='string'||f.cal.length>256||!(f.cal==='alpha-reminders'||f.cal.startsWith('native:')||/^agent:[a-f0-9]{64}$/.test(f.cal))||!(['none','daily','weekdays','weekly'].includes(f.repeat)||/^agent:[a-f0-9]{64}$/.test(f.cal)&&f.repeat==='preserve')||f.alert!==null&&(!Number.isFinite(f.alert)||f.alert<0||f.alert>10080))fail();
  for(const key of ['creationId','reminderCreationId'])if(f[key]!==undefined&&(typeof f[key]!=='string'||!/^[-a-zA-Z0-9_]{1,100}$/.test(f[key])))fail();
- if(f.origin!==undefined&&JSON.stringify(noteOriginOf(f.origin))!==JSON.stringify(f.origin))fail();
+ if(f.origin!==undefined&&JSON.stringify(noteLinkOf(f.origin))!==JSON.stringify(f.origin))fail();
  if(f.allDay!==undefined&&f.allDay!==true)fail();
  if(f.zone!==undefined){if(typeof f.zone!=='string')fail();try{new Intl.DateTimeFormat('en',{timeZone:f.zone});}catch{fail();}}
  if(requireCreation&&!f.creationId)fail();

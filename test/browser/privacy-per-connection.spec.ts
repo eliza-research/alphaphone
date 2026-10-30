@@ -42,7 +42,7 @@ async function nativeStub(page: Page, scenario: Scenario, options: { strayKeyInS
         { name: 'Agent', methods: agent.methods(['getStatus', 'start', 'stop', 'request', 'providerStatus']) },
         { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite','secureCompareExchange', 'secureRemove', 'request', 'cancel', 'addListener', 'removeListener', 'pauseNotificationCollection']) },
         { name: 'AlphaActionJournal', methods: methods(['list']) },
-        { name: 'DeviceApps', methods: methods(['buildInfo']) },
+        { name: 'ElizaSystem', methods: methods(['getBuildInfo']) },
         { name: 'AlphaDevice', methods: methods(['snapshot']) },
       ],
       nativeCallback: agent.nativeCallback,
@@ -85,7 +85,7 @@ async function nativeStub(page: Page, scenario: Scenario, options: { strayKeyInS
         }
         if (plugin === 'AlphaActionJournal' && method === 'list') return respond({ entries: [] });
         if (plugin === 'AlphaDevice' && method === 'snapshot') return respond({ permissions: { Location: !!locationAccess }, locationAccess: locationAccess ?? 'none' });
-        if (plugin === 'DeviceApps' && method === 'buildInfo') return respond({ launcher: false, version: 'fixture' });
+        if (plugin === 'ElizaSystem' && method === 'getBuildInfo') return respond({ launcher: false, version: 'fixture' });
         f.unexpected.push(plugin + '.' + method); throw Error('Unexpected native operation');
       },
     };

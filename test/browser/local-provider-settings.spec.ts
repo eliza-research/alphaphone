@@ -18,11 +18,11 @@ async function stubAgent(page: import('@playwright/test').Page, cloud = false) {
         { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite', 'secureCompareExchange', 'secureRemove', 'request', 'cancel', 'addListener', 'removeListener']) },
         { name: 'AlphaNotifications', methods: methods(['status', 'crossAppStatus', 'addListener', 'removeListener']) },
         { name: 'AlphaVoiceCloud', methods: methods(['checkPermissions']) },
-        { name: 'DeviceApps', methods: methods(['buildInfo']) },
+        { name: 'ElizaSystem', methods: methods(['getBuildInfo']) },
       ],
       nativeCallback: (plugin: string, method: string, input: any, callback: (value: unknown) => void) => plugin === 'Agent' ? agent.nativeCallback(plugin, method, input, callback) : 'provider-fixture-listener',
       nativePromise: async (plugin: string, method: string, input: any) => {
-        if (plugin === 'DeviceApps') return { launcher: false, version: 'provider-fixture' };
+        if (plugin === 'ElizaSystem' && method === 'getBuildInfo') return { launcher: false, version: 'provider-fixture' };
         if (plugin === 'AlphaNotifications') return { permissionGranted: true, appEnabled: true };
         if (plugin === 'AlphaVoiceCloud') return { microphone: 'granted' };
         if (plugin === 'AlphaConnection') return method === 'secureRead' ? { value: null } : {};

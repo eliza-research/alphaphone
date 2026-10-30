@@ -4,7 +4,7 @@ import {parseWorkflowRead} from '../runtime/workflow-device-contract';
 import {calendarSource} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/calendar-contract.ts';
 import {stageCalendarDeletion,settleCalendarDeletions,undoCalendarDeletion,calendarDeletionPending} from './calendar-deletions';
 import {browserDeletionOwner,browserDeletionOwnerCurrent,browserDeletionOwnerVisible} from '../runtime/deletion-owner';
-import {browserDeletionClock,deletionWindow} from '../runtime/deletion-window';
+import {rendererDeletionClock,deletionWindow} from '../../../../.eliza/client-features/packages/contracts/src/deletion-window';
 import {beginNoticeAction,noticeActionBlocked} from './notice-action';
 import {calendarAlerts} from './calendar-alerts';
 import {editCalendarResponse,calendarResponses} from './calendar-response';
@@ -273,12 +273,12 @@ export class BrowserCalendar extends WebPlugin {
     if(!await this.reviews.confirm('delete-event','Delete calendar event?',`${reviewed.title||'Untitled event'}\n${source.name}\n${when}\n\n${reviewed.seriesId?'Delete this one occurrence? Other dates in the series stay.':'Delete this one event?'} Deletion waits 10 seconds. You can Undo during that time.`,'Delete event'))return {status:'cancelled'};
     return calendarDocument.edit(initial,data=>{const row=calendarRecord(data.events,input.id);if(!row||row.calendarId!==input.calendarId||row.revision!==input.revision||!matches(row,input.expected))return {status:'conflict'};const deletion=stageCalendarDeletion(data,row,'event','manual:'+data.sourceRevision);return {status:'queued',deletion};});}
   async deletionReceipt(id:string){const data=await calendarDocument.read(initial);return data.deletions?.[id]||null;}
-  async pendingDeletions(){const data=await calendarDocument.read(initial),clock=browserDeletionClock();return Object.values(data.deletions||{}).filter(e=>!e.acknowledged&&['queued','paused','unknown','dispatching'].includes(e.phase)&&browserDeletionOwnerVisible(e.owner)).map(e=>({...e,kind:'calendar',window:e.phase==='queued'?deletionWindow(e.deadline,clock):undefined}));}
+  async pendingDeletions(){const data=await calendarDocument.read(initial),clock=rendererDeletionClock();return Object.values(data.deletions||{}).filter(e=>!e.acknowledged&&['queued','paused','unknown','dispatching'].includes(e.phase)&&browserDeletionOwnerVisible(e.owner)).map(e=>({...e,kind:'calendar',window:e.phase==='queued'?deletionWindow(e.deadline,clock):undefined}));}
   async settleDeletions(){
     // Undo polling runs every 500ms. Only an expired queued deletion may change the
     // document; any other edit would replace the receipt held by recovery and editors.
     const raw=await calendarDocument.readRaw();if(raw===null)return;
-    const data:State=JSON.parse(raw),clock=browserDeletionClock();
+    const data:State=JSON.parse(raw),clock=rendererDeletionClock();
     if(!Object.values(data.deletions||{}).some(entry=>entry.phase==='queued'&&deletionWindow(entry.deadline,clock)==='expired'))return;
     await calendarDocument.edit(initial,data=>settleCalendarDeletions(data,browserDeletionOwnerCurrent));
   }

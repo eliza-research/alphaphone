@@ -18,7 +18,8 @@ import test from "node:test";
 const root = "android/app/src/main/java/ai/elizaresearch/alphaphone";
 // Shared browser classes the app compiles from the reviewed pin (scripts/stage-local-agent-sources.mjs).
 const shared = "vendor/eliza/plugins/plugin-native-browser-surface/android/src/main/java/ai/eliza/plugins/browsersurface";
-const sharedFiles = ["BrowserBlobCapture.java", "BrowserDownloads.java", "BrowserLoginFields.java", "BrowserReadingWorld.java"];
+// The browser tab host and its reviewed reading are the shared BrowserTabHostPlugin; AlphaBrowserPlugin only names it.
+const sharedFiles = ["BrowserBlobCapture.java", "BrowserDownloads.java", "BrowserLoginFields.java", "BrowserReadingWorld.java", "BrowserReviewedReading.java", "BrowserTabHostPlugin.java"];
 const files = [...fs.readdirSync(root).filter(name => name.endsWith(".java")), ...sharedFiles].sort();
 const read = name => fs.readFileSync(path.join(sharedFiles.includes(name) ? shared : root, name), "utf8");
 
@@ -111,8 +112,6 @@ const REVIEWED = [
     why: "same process dispatcher; queued retries check session generation and the dispatcher is never shut down" },
   { file: "HostedTransport.java", receiver: "timer", method: "schedule", count: 1,
     why: "runs in the constructor, on a timer created by that same object's field initialiser; nothing can have stopped it yet" },
-  { file: "IsolatedPdfService.java", receiver: "worker", method: "execute", count: 1,
-    why: "not a plugin: an isolated service whose onDestroy kills its own process right after stopping the worker; a request outside the isolated process is refused before the hand-off" },
 ];
 
 /** A lifetime exception is safe only while the executor cannot escape or be stopped. */
@@ -188,7 +187,7 @@ test("the workers that plugins stop on destroy are reached through one rejecting
 });
 
 test("nothing is shown or created on a destroyed activity by a late browser call", () => {
-  const plugin = read("AlphaBrowserPlugin.java");
+  const plugin = read("BrowserTabHostPlugin.java");
   assert.match(plugin, /private boolean closed\(PluginCall call\)\{if\(!destroyed\)return false;call\.reject\("Browser closed"\);return true;\}/);
   // Every plugin method that reaches the main thread checks first; load() has no call to reject.
   const posts = plugin.split("\n").filter(line => /getActivity\(\)\.runOnUiThread\(/.test(line) && /PluginCall call/.test(line));
@@ -236,8 +235,9 @@ function launches(name, code) {
     if (method === "launch" ? !launchers.has(receiver) : receiver !== undefined && receiver !== "super" && receiver !== "this") continue;
     // A declaration of the method, not a call of it.
     if (/\b(?:void|boolean)\s+$/.test(code.slice(Math.max(0, at - 12), at))) continue;
-    // LateLaunch.ask in Alpha; the shared TelephonyPlugin base has the same guard as its launch(call, ...) helper.
-    let guarded = /(?:LateLaunch\.ask|(?<![\w.])launch)\(\s*\w+\s*,\s*\(\)\s*->\s*$/.test(code.slice(Math.max(0, at - 80), at));
+    // LateLaunch.ask in Alpha; the shared TelephonyPlugin base has the same guard as its launch(call, ...) helper
+    // and the shared PhotosPlugin as its ask(call, ...) helper (both checked below).
+    let guarded = /(?:LateLaunch\.ask|(?<![\w.])(?:launch|ask))\(\s*\w+\s*,\s*\(\)\s*->\s*$/.test(code.slice(Math.max(0, at - 80), at));
     for (const block of all.filter(block => block.start < at && at < block.end).sort((a, b) => b.start - a.start)) {
       if (guarded || block.kind === "deferred") break;
       if (block.kind === "try" && block.catches.some(type => ANSWERS_A_MISSING_LAUNCHER.has(type))) guarded = true;
@@ -268,7 +268,7 @@ test("a permission or activity-result request that arrives after the activity is
 
   const found = files.flatMap(name => launches(name, mask(read(name))));
   // A scanner that silently finds nothing would pass.
-  for (const [name, method] of [["AlphaHostedResultsPlugin.java", "requestPermissionForAlias"], ["DailyAppsPlugin.java", "startActivityForResult"], ["AlphaFilesPlugin.java", "startActivityForResult"], ["AlphaMailAttachmentsPlugin.java", "startActivityForResult"], ["AlphaNoteDocumentsPlugin.java", "startActivityForResult"], ["AlphaBrowserPlugin.java", "takePicture.launch"], ["AlphaBrowserPlugin.java", "runtimePermissions.launch"], ["AlphaBrowserPlugin.java", "filePicker.launch"], ["AlphaBrowserPlugin.java", "pageShare.launch"]])
+  for (const [name, method] of [["AlphaHostedResultsPlugin.java", "requestPermissionForAlias"], ["DailyAppsPlugin.java", "startActivityForResult"], ["AlphaFilesPlugin.java", "startActivityForResult"], ["AlphaMailAttachmentsPlugin.java", "startActivityForResult"], ["AlphaNoteDocumentsPlugin.java", "startActivityForResult"], ["BrowserTabHostPlugin.java", "takePicture.launch"], ["BrowserTabHostPlugin.java", "runtimePermissions.launch"], ["BrowserTabHostPlugin.java", "filePicker.launch"], ["BrowserTabHostPlugin.java", "pageShare.launch"]])
     assert.ok(found.some(site => site.file === name && site.method === method), `${name}: ${method} not found`);
   assert.deepEqual(found.filter(site => !site.guarded).map(site => `${site.file}:${site.line} ${site.method}(`), [],
     "each of these throws on the calling thread once the activity is destroyed; make it the body of LateLaunch.ask");
@@ -282,10 +282,17 @@ test("Capacitor's own permission request, and the shared plugins' requests an ap
   assert.deepEqual(declaring, ["AlphaCalendarPlugin.java", "AlphaContactsPlugin.java", "AlphaHostedResultsPlugin.java", "AlphaPhotoLibraryPlugin.java", "AlphaPhotosPlugin.java", "AlphaSystemPlugin.java", "AlphaTelephonyPlugin.java", "AlphaVoiceCloudPlugin.java", "DailyAppsPlugin.java"], "the plugins that declare permissions");
   for (const name of declaring.filter(name=>name!=="AlphaContactsPlugin.java")) {
     if(name==='AlphaPhotosPlugin.java'||name==='AlphaPhotoLibraryPlugin.java') {
-      // Photos must select aliases for this Android version, rather than asking
-      // for the obsolete legacy permission together with the current media grants.
-      assert.match(read(name),/@Override @PluginMethod public void requestPermissions\(PluginCall call\)\{(?:requestLibraryAccess|requestAccess)\(call\);\}/);
-      assert.match(read(name),/LateLaunch\.ask\(call,\(\)->requestPermissionForAliases\(aliases,call,"libraryPermissionResult"\)\)/);
+      // Registrations of the shared PhotosPlugin and DeviceLibraryPlugin. Photos must select aliases for this
+      // Android version, rather than asking for the obsolete legacy permission together with the current media
+      // grants, and a late request is answered with Alpha's LateLaunch wording.
+      const media="vendor/eliza/plugins/plugin-native-media/android/src/main/java/ai/eliza/plugins/media/";
+      const base=fs.readFileSync(media+(name==='AlphaPhotosPlugin.java'?"PhotosPlugin.java":"DeviceLibraryPlugin.java"),"utf8");
+      assert.match(base,/@Override\n {2}@PluginMethod\n {2}public void requestPermissions\(PluginCall call\) \{\n {4}(?:requestLibraryAccess|requestAccess)\(call\);\n {2}\}/);
+      if(name==='AlphaPhotosPlugin.java'){
+        assert.match(base,/ask\(call, \(\) -> requestPermissionForAliases\(aliases, call, "libraryPermissionResult"\)\);/);
+        assert.match(base,/protected final boolean ask\(PluginCall call, Runnable launch\) \{\n {4}try \{\n {6}launch\.run\(\);\n {6}return true;\n {4}\} catch \(IllegalStateException closed\) \{\n {6}call\.reject\(closedMessage\(\)\);\n {6}return false;/);
+      } else assert.match(base,/try \{\n {6}requestPermissionForAliases\(aliases, call, "libraryPermissionResult"\);\n {4}\} catch \(IllegalStateException closed\) \{\n {6}call\.reject\(closedMessage\(\)\);/);
+      assert.match(read(name),/@Override protected String closedMessage\(\)\{return LateLaunch\.CLOSED;\}/);
     } else if(name==='AlphaTelephonyPlugin.java') {
       // The shared TelephonyPlugin base answers a late request the same way (its launch helper rejects with CLOSED).
       const base=fs.readFileSync("vendor/eliza/plugins/plugin-native-messages/android/src/main/java/ai/eliza/plugins/messages/TelephonyPlugin.java","utf8");

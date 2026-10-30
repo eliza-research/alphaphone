@@ -197,6 +197,8 @@ jobs:
           python3 scripts/ci/resident-phase.py --name mobile-bundle --seconds 300 npm run agent:test-mobile-workflow-bundle
           # Fresh native artifacts and the runtime pin are inputs to shipped notices.
           python3 scripts/ci/resident-phase.py --name license-notices --seconds 120 node scripts/generate-licenses.mjs --packaged-runtime
+          # Gate distribution on exactly the npm set the staged payload ships (A-4).
+          python3 scripts/ci/resident-phase.py --name packaged-dependency-audit --seconds 180 node scripts/dependency-audit.mjs --resident --notices apps/app/public/licenses/third-party-notices.json
           if [ "$ALPHA_RUNTIME_PROFILE" = cloud ]; then
             # Genuine Cloud resident, all four APKs, test mocks off. No provider calls.
             python3 scripts/ci/resident-phase.py --name cloud-archive --seconds 3000 node scripts/build-archive.mjs --runtime-profile=cloud test-results/resident-ci-cloud

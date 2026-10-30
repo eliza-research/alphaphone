@@ -44,8 +44,7 @@ async function nativeStub(page:Page,fixture:Fixture={}){
     {name:'AlphaVoiceCloud',methods:methods(['checkPermissions'])},
     {name:'Agent',methods:resident.methods(['getStatus','start','stop','providerStatus','configureCloudProvider','clearProvider','request'])},
     {name:'AlphaConnection',methods:methods(['secureRead','secureWrite','secureCompareExchange','secureRemove','request','cancel','addListener','removeListener'])},
-    {name:'DeviceApps',methods:methods(['buildInfo'])},
-    {name:'ElizaSystem',methods:methods(['getStatus','requestRole','getDeviceSettings','setFlashlight'])},
+    {name:'ElizaSystem',methods:methods(['getStatus','requestRole','getDeviceSettings','setFlashlight','getBuildInfo'])},
     {name:'AlphaDevice',methods:methods(['snapshot','crashLog','clearCrashLog','recordRendererFailure','diagnosticsFacts','shareDiagnostics','openSettings','openNotificationShade'])},
     {name:'DailyApps',methods:[{name:'addListener',rtype:'callback'},{name:'removeListener',rtype:'callback'}]},
    ],
@@ -85,7 +84,7 @@ async function nativeStub(page:Page,fixture:Fixture={}){
      }
      return {};
     }
-    if(plugin==='DeviceApps')return {launcher:true,version:'0.1.0'};
+    if(plugin==='ElizaSystem'&&method==='getBuildInfo')return {launcher:true,version:'0.1.0'};
     if(plugin==='ElizaSystem'){
      if(method==='getStatus')return {packageName:'ai.elizaresearch.alphaphone',roles:['home','assistant'].map(role=>({role,androidRole:'android.app.role.'+role.toUpperCase(),available:true,held:false,holders:[]}))};
      if(method==='getDeviceSettings')return {volumes:[{stream:'music',current:6,max:15},{stream:'ring',current:7,max:7},{stream:'alarm',current:0,max:7}]};

@@ -25,8 +25,14 @@
       "@elizaos/capacitor-system/settings": ["./.eliza/client-features/plugins/plugin-native-system/src/settings.ts"],
       "@elizaos/contracts/device-action-execution": ["./.eliza/client-features/packages/contracts/src/device-action-execution.ts"],
       "@elizaos/contracts/phone-dial": ["./.eliza/client-features/packages/contracts/src/phone-dial.ts"],
+      "@elizaos/capacitor-system/shade": [
+        "./.eliza/client-features/plugins/plugin-native-system/src/client/shade.ts"
+      ],
       "@elizaos/capacitor-system/launcher": [
         "./.eliza/client-features/plugins/plugin-native-system/src/client/launcher.ts"
+      ],
+      "@elizaos/contracts/deletion-window": [
+        "./.eliza/client-features/packages/contracts/src/deletion-window.ts"
       ],
       "@elizaos/contracts/sms-send": [
         "./.eliza/client-features/packages/contracts/src/sms-send.ts"

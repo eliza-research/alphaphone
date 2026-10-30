@@ -4,13 +4,18 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import http from 'node:http';
 import {loadBrowserModule} from '../test/fixtures/browser-source.mjs';
-const [{createLocalAgentDevHandler},{readLocalAgentStream},{AlphaClient},{LocalAgentProtocol},{RemoteProtocol},{streamNativeAgent}]=await loadBrowserModule(['scripts/local-agent-dev-bridge.ts', 'apps/app/src/runtime/local-agent-stream.ts', 'apps/app/src/runtime/alpha-client.ts', 'apps/app/src/runtime/local-agent.ts', 'apps/app/src/runtime/remote-protocol.ts', 'apps/app/src/runtime/local-agent-native-stream.ts'],{testMocks:true});
+const [{createLocalAgentDevHandler},{readLocalAgentStream,localTurnStatus},{AlphaClient},{LocalAgentProtocol},{RemoteProtocol},{streamNativeAgent}]=await loadBrowserModule(['scripts/local-agent-dev-bridge.ts', 'apps/app/src/runtime/local-agent-stream.ts', 'apps/app/src/runtime/alpha-client.ts', 'apps/app/src/runtime/local-agent.ts', 'apps/app/src/runtime/remote-protocol.ts', 'apps/app/src/runtime/local-agent-native-stream.ts'],{testMocks:true});
 const encoder=new TextEncoder(),signal=new AbortController().signal;
 const event=value=>`data: ${JSON.stringify(value)}\n\n`;
 function response(text,size=1){const bytes=encoder.encode(text);return new Response(new ReadableStream({start(c){for(let i=0;i<bytes.length;i+=size)c.enqueue(bytes.slice(i,i+size));c.close();}}),{headers:{'content-type':'text/event-stream'}});}
 const progress=[];
 const terminal=await readLocalAgentStream(response(': heartbeat\r\n\r\n'+event({type:'token',text:'Hé'}).replaceAll('\n','\r\n')+event({type:'token',text:'llo'})+event({type:'token',fullText:'Hello revised'})+event({type:'tool',action:'execute',proposal:{id:'untrusted'}})+event({type:'done',fullText:'Final',agentName:'Fixture'})),signal,text=>progress.push(text));
-assert.deepEqual(progress,['Hé','Héllo','Hello revised']);assert.equal(terminal.text,'Final');assert.equal(terminal.proposals,undefined);
+assert.deepEqual(progress,['Hé','Héllo','Hello revised']);
+// A planning label is a transient display event: it never becomes reply text, and oversized or empty labels are dropped.
+const labels=[],onLabel=event=>labels.push(event.detail);localTurnStatus.addEventListener('label',onLabel);
+const labelled=await readLocalAgentStream(response(event({type:'status',kind:'thinking'})+event({type:'status',kind:'thinking',label:"  checking today's calendar  "})+event({type:'status',kind:'thinking',label:'x'.repeat(161)})+event({type:'token',text:'Done.'})+event({type:'done',fullText:'Done.',agentName:'Fixture'})),signal,()=>{});
+localTurnStatus.removeEventListener('label',onLabel);
+assert.deepEqual(labels,["checking today's calendar"]);assert.equal(labelled.text,'Done.');assert.equal(terminal.text,'Final');assert.equal(terminal.proposals,undefined);
 // A settled semantic refusal carries its diagnostic without a second display,
 // early navigation, a thrown transport error, or an invented retry.
 const calendarFailure={kind:'reply_generation_error',code:'CALENDAR_READ_RECEIPT_MISMATCH',transient:false,message:"I couldn't confirm that Calendar request."};

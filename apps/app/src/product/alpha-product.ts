@@ -7,6 +7,7 @@
  */
 import {
   createMobileViewRegistry,
+  type MobileViewContribution,
   defineMobileProductRegistration,
   mobileShellThemeVariables,
   mobileShellViewPath,
@@ -19,10 +20,19 @@ import {isMvpView} from '../prototype/mvp-features';
 
 export const ALPHA_PRODUCT = defineMobileProductRegistration(record as MobileProductRegistration);
 
+/**
+ * Views the shared shell renders itself (MobileViewHost), as lazy components. The rest are still
+ * drawn by the prototype renderer (docs/architecture.md, remaining host pieces). Each loader is
+ * read only when its view opens, so agent navigation and voice never load a view.
+ */
+export const ALPHA_VIEW_LOADERS: readonly MobileViewContribution[] = [
+  { id: 'notes', loader: () => import('./notes-view') },
+];
+
 /** Alpha's view registry and its navigation answers for one availability policy, given by
  * Alpha renderer key. The app uses the MVP scope and AOSP image admission (below). */
 export function alphaNavigation(available: (hostKey: string) => boolean) {
-  const views = createMobileViewRegistry(ALPHA_PRODUCT, {available: view => available(views.hostKey(view))});
+  const views = createMobileViewRegistry(ALPHA_PRODUCT, {views: ALPHA_VIEW_LOADERS, available: view => available(views.hostKey(view))});
   return {
     views,
     /** The renderer key navigation to any accepted id lands on ('home' for Home); undefined when
@@ -57,8 +67,15 @@ export const alphaCanonicalViewId = navigation.canonicalViewId;
 export const alphaViewPaths = navigation.viewPaths;
 export const alphaViewPath = navigation.viewPath;
 
-/** CSS custom properties of Alpha's theme: canonical shell properties and the
- * stylesheet aliases (--s2, --acct, ...) the record declares. */
+/** A fixed product colour of the record's palette, for the few reads that are not CSS (a
+ * comparison with stored data). Everything drawn uses var(<name>) instead. */
+export function alphaPaletteColor(name: string): string | undefined {
+  const color = ALPHA_PRODUCT.theme.palette?.[name];
+  return typeof color === 'string' ? color : color?.light;
+}
+
+/** CSS custom properties of Alpha's theme: canonical shell properties, the stylesheet aliases
+ * (--s2, --acct, ...) and the palette (--alpha-...) the record declares. */
 export function alphaThemeVariables(appearance: MobileShellAppearance): Record<string, string> {
   return mobileShellThemeVariables(ALPHA_PRODUCT, appearance);
 }

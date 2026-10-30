@@ -245,7 +245,7 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
     w.Capacitor = {
       PluginHeaders: [
         { name: 'AlphaDeletions', methods: promise(['pending']) },
-        { name: 'DeviceApps', methods: promise(['buildInfo']) },
+        { name: 'ElizaSystem', methods: promise(['getBuildInfo']) },
         { name: 'DailyApps', methods: withListeners(['surfaceInfo', 'listReminders', 'pendingReminderTap', ...(options.document ? ['perform', 'readSelected', 'forgetSelected', 'describeSelected'] : [])]) },
         ...(options.document ? [{ name: 'AlphaMailAttachments', methods: promise(['readSelected', 'retainSourceReference', 'openSourceReference', 'cancel']) }] : []),
         { name: 'Agent', methods: withListeners(['getStatus', 'start', 'stop', 'configureCloudProvider', 'clearProvider', 'request', 'providerStatus', 'requestStream', 'cancelStream']) },
@@ -261,7 +261,7 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
       nativePromise: async (plugin: string, method: string, input: any) => {
         if (plugin === 'AlphaDeletions' && method === 'pending') return { deletions: [] };
         f.calls.push(plugin + '.' + method);
-        if (plugin === 'DeviceApps') return { launcher: true, version: 'flag-off-harness' };
+        if (plugin === 'ElizaSystem' && method === 'getBuildInfo') return { launcher: true, version: 'flag-off-harness' };
         if (plugin === 'DailyApps' && method === 'surfaceInfo') return { developmentBuild: false, assistant: false };
         // No reminders are saved on this phone.
         if (plugin === 'DailyApps' && method === 'listReminders') return { reminders: [] };

@@ -9,7 +9,8 @@ import { ManagedGmailMailboxClient } from '../../../../.eliza/client-features/pl
 import type { GmailAccount, GmailDraftContent, GmailDraftSummary, GmailInboxCapabilities, GmailInboxReceipt, GmailReadResult, GmailSearchPage, GmailThreadPage, GoogleConnection } from '../../../../.eliza/client-features/plugins/plugin-inbox/src/mailbox/types.ts';
 import type { CloudMapsRoute } from '../maps/cloud-provider.ts';
 import { authenticated as signInAuthenticated, googleOutcome, type CloudSignInGoogleOutcome, CloudSignInError, emailStarted, verified as signInVerified, type CloudSignInAuthenticated, type CloudSignInEmailStarted, type CloudSignInMfaRequired, type CloudSignInPort } from './cloud-sign-in.ts';
-import { BILLING_LIMITS_PATH, ENTITLEMENT_KEYS_PATH, ENTITLEMENT_PATH, REDEEM_PATH, entitlementFromResponse, entitlementKeysFromResponse, fallbackPlanFromLimits, membershipCreditDetailsFromLimits, type MembershipCreditDetails, normalizeSubscriptionCode, redeemFailureForStatus, redeemResultFromResponse, SubscriptionRedeemError, type EntitlementSource, type FallbackPlan, type RedeemResult } from './subscription-entitlement.ts';
+import type { EntitlementSource, FallbackPlan, OrganizationCreditBalance, RedeemResult } from './subscription-entitlement.ts';
+import { CloudAccountBillingClient, CloudBillingError, type CloudBillingRequest, type CloudBillingResponse } from '../../../../.eliza/client-features/packages/cloud/sdk/src/cloud-account-billing.ts';
 /** Narrow Alpha adapter for Eliza Cloud managed services: sign-in, identity, subscription plan and
  * the connected Google services. Sign-in is in-app (cloud-sign-in.ts) once the native host reports
  * Cloud ready for this phone: the host signs in with Steward and mints an `eliza_mobile_` key through
@@ -156,7 +157,7 @@ export class CloudProtocol {
     if (!authority) throw new Error("This Cloud environment is unavailable in this build.");
     return authority;
   }
-  protected async requestData(path: string, signal: AbortSignal, options: { credentialReference?: string; body?: unknown; method?: AutomationsMethod | 'PATCH'; authenticated?: boolean; runtimeBase?: string; timeoutMs?: number; headers?: Record<string,string>; credentialId?: string; expiresAt?: number; onStatus?: (status:number)=>void } = {}) {
+  protected async requestData(path: string, signal: AbortSignal, options: { credentialReference?: string; body?: unknown; method?: AutomationsMethod | 'PATCH'; authenticated?: boolean; runtimeBase?: string; timeoutMs?: number; headers?: Record<string,string>; credentialId?: string; expiresAt?: number; onStatus?: (status:number)=>void; /** Answer every HTTP status; the caller interprets it. */ anyStatus?: boolean } = {}): Promise<unknown> {
     signal.throwIfAborted();
     let credentialReference: string | undefined;
     const headers: Record<string, string> = { Accept: "application/json", ...options.headers };
@@ -178,9 +179,39 @@ export class CloudProtocol {
       method: options.method ?? (options.body === undefined ? "GET" : "POST"), headers, body: options.body,
       signal, credentialReference, timeoutMs: options.timeoutMs ?? 30_000, redirect: "error", ...(options.expiresAt === undefined ? {} : {expiresAt:options.expiresAt}) });
     signal.throwIfAborted();
+    if (options.anyStatus) return response;
     if (response.status < 200 || response.status >= 300) throw new CloudProtocolError("http", response.status, response.data, response.retryAfter);
     options.onStatus?.(response.status);
     return response.data;
+  }
+  /**
+   * Account billing (plan fallback, credit state, entitlement, redemption and self-revocation) is
+   * the shared credential-bound reader `@elizaos/cloud-sdk/cloud-account-billing`. This adapter
+   * supplies only the native transport and this environment's secure credential store; the reader
+   * keeps the same-credential and account-changed fences.
+   */
+  private billingClient: CloudAccountBillingClient | null = null;
+  protected get billing(): CloudAccountBillingClient {
+    return this.billingClient ??= new CloudAccountBillingClient({
+      readCredential: () => this.credentials.read(this.environment),
+      request: async (input: CloudBillingRequest): Promise<CloudBillingResponse> => {
+        const credential = input.credential;
+        const answer = await this.requestData(input.path, input.signal, { anyStatus: true, method: input.method, ...(input.body === undefined ? {} : { body: input.body }),
+          ...(credential ? { authenticated: true, ...(credential.credentialId ? { credentialId: credential.credentialId } : {}), ...(credential.credentialReference ? { credentialReference: credential.credentialReference } : {}) } : {}) });
+        return answer as CloudBillingResponse;
+      },
+      // A changed account is never replayed; a lost redemption request is replayed once.
+      replayable: error => !(error instanceof CloudProtocolError) && !(error instanceof Error && error.message === "Cloud account changed"),
+      deleteRequests: this.options.deleteRequests === true,
+    });
+  }
+  /** The shared reader's refusals keep this adapter's error type for its callers. */
+  private async billingRead<T>(read: () => Promise<T>): Promise<T> {
+    try { return await read(); }
+    catch (error) {
+      if (error instanceof CloudBillingError) throw new CloudProtocolError(error.code, error.status, error.data, error.retryAfter);
+      throw error;
+    }
   }
   protected async call(path: string, signal: AbortSignal, options: { body?: unknown; method?: AutomationsMethod | 'PATCH'; authenticated?: boolean; runtimeBase?: string; timeoutMs?: number; headers?: Record<string,string>; credentialId?: string; expiresAt?: number } = {}) {
     return object(await this.requestData(path, signal, options));
@@ -188,34 +219,14 @@ export class CloudProtocol {
   /** Plan state from the read-only billing snapshot, used only while the entitlement route is
    * absent. `null` when the snapshot route is absent too or does not report a known plan state. */
   async billingFallbackPlan(signal: AbortSignal): Promise<FallbackPlan | null> {
-    signal.throwIfAborted();
-    const credential = await this.credentials.read(this.environment);
-    signal.throwIfAborted();
-    if (!credential?.credentialId) throw new CloudProtocolError("credentials-missing");
-    let data: ObjectValue;
-    try { data = await this.call(BILLING_LIMITS_PATH, signal, { authenticated: true, credentialId: credential.credentialId }); }
-    catch (error) {
-      if (error instanceof CloudProtocolError && error.code === "http" && [404, 405, 501].includes(error.status ?? 0)) return null;
-      throw error;
-    }
-    await this.assertSameCredential(credential.credentialId, signal);
-    if (data.success !== true) return null;
-    return fallbackPlanFromLimits(data);
+    return this.billingRead(() => this.billing.fallbackPlan(signal));
   }
   /** Read-only UI eligibility, bound to the current credential. Never grants spending authority. */
   async membershipBalance(signal: AbortSignal): Promise<'zero' | 'funded' | 'unavailable'> {
     return (await this.membershipCredits(signal)).state;
   }
-  async membershipCredits(signal:AbortSignal):Promise<MembershipCreditDetails> {
-    signal.throwIfAborted();
-    const credential=await this.credentials.read(this.environment);signal.throwIfAborted();
-    if(!credential?.credentialId)throw new CloudProtocolError('credentials-missing');
-    const binding=JSON.stringify([credential.credentialId,credential.credentialReference,credential.token,credential.userId,credential.organizationId]);
-    const payload=await this.call(BILLING_LIMITS_PATH,signal,{authenticated:true,credentialId:credential.credentialId});
-    await this.assertSameCredential(credential.credentialId,signal);
-    const current=await this.credentials.read(this.environment);signal.throwIfAborted();
-    if(!current||JSON.stringify([current.credentialId,current.credentialReference,current.token,current.userId,current.organizationId])!==binding)throw new CloudProtocolError('account-changed');
-    return membershipCreditDetailsFromLimits(payload);
+  async membershipCredits(signal: AbortSignal): Promise<OrganizationCreditBalance> {
+    return this.billingRead(() => this.billing.credits(signal));
   }
   /**
    * Redeems a subscription grant code for the signed-in account. `idempotencyKey` is fresh for
@@ -224,37 +235,7 @@ export class CloudProtocol {
    * retried. The code is never logged, stored or put in an error.
    */
   async redeemSubscriptionCode(code: string, idempotencyKey: string, signal: AbortSignal): Promise<RedeemResult> {
-    signal.throwIfAborted();
-    const normalized = normalizeSubscriptionCode(code);
-    if (!normalized) throw new SubscriptionRedeemError("invalid");
-    if (!/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) throw new TypeError("Invalid idempotency key");
-    const credential = await this.credentials.read(this.environment);
-    signal.throwIfAborted();
-    if (!credential?.credentialId) throw new CloudProtocolError("credentials-missing");
-    let data: ObjectValue | undefined;
-    for (let attempt = 0; data === undefined; attempt++) {
-      try { data = await this.call(REDEEM_PATH, signal, { authenticated: true, credentialId: credential.credentialId, body: { code: normalized, idempotencyKey } }); }
-      catch (error) {
-        signal.throwIfAborted();
-        if (error instanceof CloudProtocolError) {
-          if (error.code !== "http") throw error;
-          // 401 is a rejected sign-in; every other refusal maps to the owner's redemption copy.
-          throw redeemFailureForStatus(error.status ?? 0, error.data, error.retryAfter) ?? error;
-        }
-        if (error instanceof Error && error.message === "Cloud account changed") throw error;
-        // Transport failure: the request may have reached Cloud. One replay with the same key.
-        if (attempt >= 1) throw new SubscriptionRedeemError("unavailable");
-        await delay(1000, signal);
-      }
-    }
-    await this.assertSameCredential(credential.credentialId, signal);
-    return redeemResultFromResponse(data);
-  }
-  private async assertSameCredential(credentialId: string, signal: AbortSignal) {
-    const current = await this.credentials.read(this.environment);
-    signal.throwIfAborted();
-    if (current?.credentialId !== credentialId) throw new CloudProtocolError("account-changed");
-    if (current.expiresAt !== undefined && current.expiresAt <= Date.now()) throw new CloudProtocolError("expired");
+    return this.billingRead(() => this.billing.redeem(code, idempotencyKey, signal));
   }
   /** Cloud API origin, used as the entitlement issuer. */
   get entitlementIssuer(): string { return this.authority.api; }
@@ -262,26 +243,11 @@ export class CloudProtocol {
    * admission and by the background refresher, never per assistant turn. `null` means the
    * deployed Cloud does not offer the route yet (404/405/501). */
   async subscriptionEntitlement(signal: AbortSignal): Promise<string | null> {
-    signal.throwIfAborted();
-    const credential = await this.credentials.read(this.environment);
-    signal.throwIfAborted();
-    if (!credential?.credentialId) throw new CloudProtocolError("credentials-missing");
-    let data: ObjectValue;
-    try { data = await this.call(ENTITLEMENT_PATH, signal, { authenticated: true, credentialId: credential.credentialId }); }
-    catch (error) {
-      if (error instanceof CloudProtocolError && error.code === "http" && [404, 405, 501].includes(error.status ?? 0)) return null;
-      throw error;
-    }
-    await this.assertSameCredential(credential.credentialId, signal);
-    const entitlement = entitlementFromResponse(data);
-    if (entitlement === null) throw new CloudProtocolError("invalid-response");
-    return entitlement;
+    return this.billingRead(() => this.billing.entitlement(signal));
   }
   /** Public ES256 verification keys for entitlements. Never private material. */
   async subscriptionEntitlementKeys(signal: AbortSignal): Promise<JsonWebKey[]> {
-    const keys = entitlementKeysFromResponse(await this.call(ENTITLEMENT_KEYS_PATH, signal));
-    if (keys === null) throw new CloudProtocolError("invalid-response");
-    return keys;
+    return this.billingRead(() => this.billing.entitlementKeys(signal));
   }
   /** Entitlement ports for checkEntitlement, bound to this client. */
   entitlementSource(): EntitlementSource {
@@ -476,18 +442,8 @@ export class CloudProtocol {
   }
   private async revokeStored(credential: CloudCredential, signal: AbortSignal, clearLocal = true): Promise<CloudSessionRevocation> {
     try {
-      if (!this.options.deleteRequests) return { supported: false, reason: "transport" };
-      let data: unknown;
-      try {
-        data = await this.requestData("/api/v1/api-keys/current", signal, { authenticated: true, method: "DELETE",
-          ...(credential.credentialId ? { credentialId: credential.credentialId } : {}), ...(credential.credentialReference ? {credentialReference:credential.credentialReference} : {}) });
-      } catch (error) {
-        if (error instanceof CloudProtocolError && error.code === "http" && (error.status === 404 || error.status === 405 || error.status === 501)) return { supported: false, reason: "server" };
-        throw error;
-      }
-      const result = object(data);
-      if (result.success !== true || (result.status !== undefined && result.status !== "revoked")) throw new CloudProtocolError("invalid-response");
-      return { supported: true, revoked: true, credentialId: typeof result.credentialId === "string" ? result.credentialId : null, revokedAt: typeof result.revokedAt === "string" ? result.revokedAt : null };
+      // One attempt through the shared reader, never retried; the local copy is cleared below.
+      return await this.billingRead(() => this.billing.revoke(credential, signal));
     } finally {
       const current = clearLocal ? await this.credentials.read(this.environment) : null;
       if (current?.credentialId === credential.credentialId && current?.token === credential.token && current?.credentialReference === credential.credentialReference) {

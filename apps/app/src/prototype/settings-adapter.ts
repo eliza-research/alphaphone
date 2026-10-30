@@ -1,3 +1,4 @@
+import {residentRecoveryCopy} from '../runtime/resident-recovery';
 import {browserCalendarScope} from './agent-calendar-adapter';
 import {cloudServiceName} from '../runtime/cloud-protocol';
 import {openCalendarSyncSettings} from '../runtime/calendar-sync-settings';
@@ -107,9 +108,8 @@ const device = registerPlugin<{
   diagnosticsFacts(): Promise<Bag>;
   shareDiagnostics(input: { text: string }): Promise<{ status: string }>;
 }>('AlphaDevice');
-const deviceApps = registerPlugin<{ buildInfo(): Promise<{ launcher?: boolean; version?: string }> }>('DeviceApps');
 const notifications = registerPlugin<{status():Promise<Bag>;openAppSettings():Promise<Bag>;openChannelSettings(input:{id:string}):Promise<{status:string}>;crossAppStatus():Promise<Bag>;notificationApps():Promise<{apps:Bag[]}>;setNotificationPolicy(input:Bag):Promise<Bag>;resumeCrossApp(input:{expectedRevision:string}):Promise<Bag>;openNotificationAccess():Promise<Bag>;notificationHistory():Promise<{items:Bag[]}>;clearNotificationHistory():Promise<void>}>('AlphaNotifications');
-const system = registerPlugin<{ getDeviceSettings(): Promise<Bag>; getStatus(): Promise<{ roles?: Bag[] }>; requestRole(input: { role: string }): Promise<{ role: string; held: boolean; resultCode: number }> }>('ElizaSystem');
+const system = registerPlugin<{ getDeviceSettings(): Promise<Bag>; getStatus(): Promise<{ roles?: Bag[] }>; requestRole(input: { role: string }): Promise<{ role: string; held: boolean; resultCode: number }>; getBuildInfo(): Promise<{ launcher?: boolean; version?: string }> }>('ElizaSystem');
 type RoleRow = { role: string; held: boolean; available: boolean; holders: string[] };
 /** Android role state exactly as ElizaSystem.getStatus() reports it (shared parser); malformed rows are dropped. */
 export function readRoles(status: unknown): Record<string, RoleRow> {
@@ -346,7 +346,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     const native = Capacitor.isNativePlatform();
     const [state, settings, noticeState, crossState, metadata, roleState, build, problems, photos] = await Promise.allSettled([device.snapshot(), system.getDeviceSettings(), notifications.status(), notifications.crossAppStatus(), history===null?Promise.resolve(null):notifications.notificationHistory(),
       // Browsers have no Android roles: the web plugin rejects, so nothing is shown there.
-      native ? system.getStatus() : Promise.reject(Error('No device roles')), native && launcher === null ? deviceApps.buildInfo() : Promise.resolve(null), readCrashLog(), native ? photoLibrary.libraryAccess() : Promise.resolve(null), native ? connectionController.refreshProviderStatus() : Promise.resolve()]);
+      native ? system.getStatus() : Promise.reject(Error('No device roles')), native && launcher === null ? system.getBuildInfo() : Promise.resolve(null), readCrashLog(), native ? photoLibrary.libraryAccess() : Promise.resolve(null), native ? connectionController.refreshProviderStatus() : Promise.resolve()]);
     if (owner !== instance || generation !== token) return;
     roles = roleState.status === 'fulfilled' ? readRoles(roleState.value) : null;
     if (build.status === 'fulfilled' && build.value) launcher = build.value.launcher === true;
@@ -435,6 +435,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     const cloudLabel = account ? account.email||`Account ${account.userId.slice(0, 8)}` : 'Not signed in';
     const manage = (page: string) => () => void device.openSettings({ page }).then(opened => { const notice = broaderPageNotice(page, opened); if (notice) api.toast(notice); }, () => api.toast('This Android settings page is unavailable.'));
     const info = (label: string, val: string): Bag => ({ kInfo: true, label, val, hasVal: true, noAB: true });
+    const note = (label: string, sub: string): Bag => ({ kInfo: true, label, val: '', hasVal: false, hasSub: true, sub, noAB: true });
     const nav = (label: string, page: string): Bag => ({ kNav: true, label, lbl: label, chev: true, noAB: true, go: manage(page) });
     const group = (rows: Bag[]) => ({ css: 'background:var(--s2);padding:4px 0', rows });
     // Speech follows the explicit production runtime profile; developer routes stay separate.
@@ -498,11 +499,11 @@ export function installSettingsAdapter(Component: any, views: Bag) {
           passwordAction('Choose password provider','settings'),
           provider.installation==='installed'?passwordAction('Open development vault','open'):passwordAction('Add development provider','install'),
         ]:[
-          info('Proton Pass',native?(installation[provider.installation]||'Status unavailable'):'Managed by your browser and operating system'),
-          info('Selection',native?(selection[provider.selection]||'Selection unavailable'):'Native provider status is unavailable here'),
-          info('Autofill',native?(provider.support==='available'?'Available on this device':provider.support==='unavailable'?'Unavailable for this device or user':'Availability not checked'):'Use your browser’s password settings'),
-          info('Vault','Confirm unlock, saved passwords and filling in your provider.'),
-          info('Compatibility','Proton may show a browser warning. Check the website address before filling.'),
+          native?info('Proton Pass',installation[provider.installation]||'Status unavailable'):note('Proton Pass','Managed by your browser and operating system'),
+          native?info('Selection',selection[provider.selection]||'Selection unavailable'):note('Selection','Native provider status is unavailable here'),
+          native?info('Autofill',provider.support==='available'?'Available on this device':provider.support==='unavailable'?'Unavailable for this device or user':'Availability not checked'):note('Autofill','Use your browser’s password settings'),
+          note('Vault','Confirm unlock, saved passwords and filling in your provider.'),
+          note('Compatibility','Proton may show a browser warning. Check the website address before filling.'),
           ...(native?[passwordAction('Choose password provider in Android','settings'),...(provider.installation==='installed'?[passwordAction('Open Proton Pass','open')]:provider.installation==='absent'?[passwordAction('Get Proton Pass from Proton','install')]:[]),{kNav:true,label:'Refresh password provider status',lbl:'Refresh password provider status',chev:true,noAB:true,go:()=>void refresh()}]:[]),
         ]);
         if(native){
@@ -597,23 +598,23 @@ export function installSettingsAdapter(Component: any, views: Bag) {
           }
         }
         page.groups.push(group([{kNav:true,label:'Agent connection',lbl:'Agent connection',val:connectionController.getSnapshot().name,hasVal:true,chev:true,noAB:true,go:()=>native&&!testMocksEnabled?api.set({page:'agent-connection'}):connectionController.open()}]));
+        if(native&&!testMocksEnabled&&state.page==='agent-recovery-details'){
+          const reason=connection.residentRecoveryReason,recovery=connection.residentRecovery;
+          const rows:Bag[]=[info('Status',reason?residentRecoveryCopy(reason,recovery):connection.session?'Alpha is running.':'Restart status is unavailable.')];
+          if(reason)rows.push(info('Reason',reason));
+          if(recovery)rows.push(info('Stage',recovery.step));
+          if(recovery?.step==='review')rows.push(info('Startup records to keep',String(recovery.review.retainedCount)));
+          out.stack.push({isTop:false,notTop:true,cls:'enter',z:4,title:'Restart details',hasTitle:true,backLabel:'Back to Agent connection',back:()=>api.set({page:'agent-connection'}),hero:{},groups:[group(rows)]});
+        }
         if(native&&!testMocksEnabled&&state.page==='agent-connection'){
-          const agentRows=[info('Agent',connection.session?'Running on this device':connection.residentRecoveryReason?'Recovery review needed':connection.kind==='recovering'?'Not running':'Starting…'),info('AI',connection.residentInference==='cloud'?serviceName:connection.cloudAccount?'Not available':'Sign in required')];
+          const agentRows=[info('Agent',connection.session?'Running on this device':connection.residentRecoveryReason?(connection.residentRecoveryReason==='ipc-recovery-retention-limit'?'Restart needed':'Needs attention'):connection.kind==='recovering'?'Not running':'Starting…'),info('AI',connection.residentInference==='cloud'?serviceName:connection.cloudAccount?'Not available':'Sign in required')];
           if(connection.message)agentRows.push(info('Status',connection.message));
           if(connection.error)agentRows.push(info('Connection problem',connection.error));
           if(connection.residentRecoveryReason&&!connection.session){
-            agentRows.push(info('Records','Your notes, chats and sign-in stay unchanged.'));
-            if(connection.residentRecoveryReason==='ipc-recovery-retention-limit'){
-              const recovery=connection.residentRecovery;
-              if(recovery?.step==='review'){
-                agentRows.push(info('Review',`Alpha will keep ${recovery.review.retainedCount} old startup records, then restart your agent.`));
-                if(!connection.busy)agentRows.push(action('Keep records and restart',()=>void connectionController.confirmRecovery()),action('Cancel',()=>connectionController.cancelRecoveryReview()));
-              }else{
-                if(recovery?.step==='unavailable')agentRows.push(info('Recovery','Recovery could not be checked. Your records were kept. Review again later.'));
-                if(recovery?.step==='partial')agentRows.push(info('Recovery','Recovery did not finish. Your records were kept. Review again before restarting.'));
-                if(!connection.busy)agentRows.push(action('Review recovery',()=>void connectionController.reviewRecovery()));
-              }
-            }
+            agentRows.push(info('Status',residentRecoveryCopy(connection.residentRecoveryReason,connection.residentRecovery)));
+            if(connection.residentRecoveryReason==='ipc-recovery-retention-limit'&&!connection.busy)
+              agentRows.push(action('Restart Alpha',()=>void connectionController.restartRecovery()));
+            agentRows.push(action('Details',()=>api.set({page:'agent-recovery-details'})));
           }else if(!connection.busy)agentRows.push(action(connection.session?'Reconnect agent':'Retry',()=>void connectionController.startLocal()));
           if(connection.busy){
             agentRows.push(info('Connection','Please wait…'));

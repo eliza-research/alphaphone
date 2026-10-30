@@ -34,10 +34,11 @@ function localDate(value:string):Date{
  if(expected.some((part,index)=>part!==actual[index])||date.getMilliseconds()!==Number((fields[7]||'').padEnd(3,'0')))throw Error('This local time does not exist. Choose another time.');
  return date;
 }
-const at=(value:unknown)=>{const stamp=Date.parse(text(value));return Number.isFinite(stamp)?new Date(stamp).toLocaleString():'';};
+/** One instant label for every list row ("Oct 29, 2026, 6:00 PM"), in the record's zone when it names a valid one. */
+export function automationWhen(stamp:string|number,zone?:string):string{const date=new Date(stamp);if(!Number.isFinite(date.getTime()))return '';const options:Intl.DateTimeFormatOptions={year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'};try{return date.toLocaleString(undefined,{...options,...(zone?{timeZone:zone}:{})});}catch{return date.toLocaleString(undefined,options);}}
 function schedule(value:unknown):string {
  const t=object(value);switch(t.triggerType??t.kind){
-  case 'once':return at(t.scheduledAtIso??t.atIso??t.dueAt)||'Once';
+  case 'once':return automationWhen(Date.parse(text(t.scheduledAtIso??t.atIso??t.dueAt)),text(t.timezone??t.tz).trim()||undefined)||'Once';
   case 'cron': {
    const expression=text(t.cronExpression??t.expression).trim(),description=expression?formatSchedule(expression):'';
    let zone=text(t.timezone??t.tz).trim();
@@ -68,7 +69,7 @@ function scheduled(value:unknown):AutomationRow {
 function reminder(value:unknown):AutomationRow {
  const row=object(value),definition=object(row.definition),id=automationId(definition.id),occurrence=row.occurrence?object(row.occurrence):null;
  const presentation={definition:row.definition,occurrence:row.occurrence??null,latestAttempt:row.latestAttempt??null},due=reminderDue(presentation);
- return {key:'reminder:'+id,id,kind:'reminder',title:text(definition.title)||'Reminder',description:text(definition.description),status:reminderDeliveryLabel(presentation),enabled:definition.status==='active',source:'Agent reminder',schedule:due?new Date(due).toLocaleString(undefined,{timeZone:definition.timezone,year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'No upcoming occurrence',record:row,...(occurrence?{occurrenceId:automationId(occurrence.id)}:{})};
+ return {key:'reminder:'+id,id,kind:'reminder',title:text(definition.title)||'Reminder',description:text(definition.description),status:reminderDeliveryLabel(presentation),enabled:definition.status==='active',source:'Agent reminder',schedule:due?automationWhen(due,text(definition.timezone)||undefined):'No upcoming occurrence',record:row,...(occurrence?{occurrenceId:automationId(occurrence.id)}:{})};
 }
 export function automationIssue(source:AutomationIssue['source'],error:unknown):AutomationIssue {
  const status=error&&typeof error==='object'&&'status' in error?Number(error.status):0;

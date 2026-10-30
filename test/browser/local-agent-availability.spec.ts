@@ -16,7 +16,7 @@ for (const mode of ['checking', 'unavailable', 'available'] as const) {
           { name: 'AlphaConnection', methods: methods(['secureRead', 'secureWrite','secureCompareExchange', 'secureRemove', 'request', 'cancel', 'addListener', 'removeListener', 'pauseNotificationCollection']) },
           { name: 'AlphaHostedResults', methods: methods(['disableBackground','addListener','removeListener','pendingResult','status']) },
           { name: 'AlphaActionJournal', methods: methods(['list']) },
-          { name: 'DeviceApps', methods: methods(['buildInfo']) },
+          { name: 'ElizaSystem', methods: methods(['getBuildInfo']) },
         ],
         nativePromise: async (plugin: string, method: string, input: any) => {
           if (plugin === 'Agent') {
@@ -37,7 +37,7 @@ for (const mode of ['checking', 'unavailable', 'available'] as const) {
           }
           if (plugin === 'AlphaHostedResults' && ['disableBackground','addListener','removeListener','pendingResult','status'].includes(method)) return {};
           if (plugin === 'AlphaActionJournal' && method === 'list') return { entries: [] };
-          if (plugin === 'DeviceApps' && method === 'buildInfo') return { launcher: false, version: 'fixture' };
+          if (plugin === 'ElizaSystem' && method === 'getBuildInfo') return { launcher: false, version: 'fixture' };
           throw Error('Unexpected native operation: ' + plugin + '.' + method);
         },
       };

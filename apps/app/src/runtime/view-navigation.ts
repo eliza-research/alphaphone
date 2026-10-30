@@ -87,28 +87,58 @@ export class ViewNavigationClient {
         throw Error('Committed navigation observation changed');
     };
     const ready = (async () => {
+      let binding: Record<string, unknown> | undefined;
+      let claimId: string | undefined;
+      let claimAttempted = false;
+      let positiveDispatched = false;
       try {
         current();
         const prepared = object(await this.request(`/api/views/${encodeURIComponent(viewId)}/navigate`, {
           clientId: this.clientId, delivery: 'completed-action', prepareOnly: true,
           viewType: 'gui', completedActionHandoffId: crypto.randomUUID(),
         }, controller.signal));
-        current();
-        const binding = object(prepared.navigationBinding);
-        if (binding.clientId !== this.clientId || binding.viewId !== viewId || binding.viewType !== 'gui' || typeof binding.requestId !== 'string' || typeof binding.installationId !== 'string')
+        const preparedBinding = object(prepared.navigationBinding);
+        if (preparedBinding.clientId !== this.clientId || preparedBinding.viewId !== viewId || preparedBinding.viewType !== 'gui' || typeof preparedBinding.requestId !== 'string' || !preparedBinding.requestId || typeof preparedBinding.installationId !== 'string' || !preparedBinding.installationId)
           throw Error('Committed navigation binding changed');
-        const claimed = object(await this.request('/api/views/interact-claim', binding, controller.signal));
+        binding = preparedBinding;
         current();
+        claimAttempted = true;
+        const claimed = object(await this.request('/api/views/interact-claim', binding, controller.signal));
         if (typeof claimed.claimId !== 'string' || !claimed.claimId) throw Error('Committed navigation claim missing');
+        claimId = claimed.claimId;
+        current();
+        positiveDispatched = true;
         const accepted = object(await this.request('/api/views/interact-result', {
-          ...binding, claimId: claimed.claimId, success: true, result: {switched: true},
+          ...binding, claimId, success: true, result: {switched: true},
         }, controller.signal));
         current();
         if (accepted.accepted !== true) return false;
         this.observationAccepted = true;
         return true;
       } catch {
-        // Reporting failure never changes the screen or invents confirmed history.
+        // Only the original owner/session/runtime may retire its prepared waiter.
+        // An ambiguous claim or dispatched positive acknowledgment is never retried.
+        if (binding && !positiveDispatched && (!claimAttempted || claimId) && this.currentSession()) {
+          const cleanup = new AbortController();
+          const cleanupDeadline = setTimeout(() => cleanup.abort(), 1500);
+          try {
+            if (!claimId) {
+              const claimed = object(await this.request('/api/views/interact-claim', binding, cleanup.signal));
+              if (typeof claimed.claimId !== 'string' || !claimed.claimId) return false;
+              claimId = claimed.claimId;
+            }
+            if (this.currentSession()) {
+              await this.request('/api/views/interact-result', {
+                ...binding, claimId, success: false, result: {switched: false},
+              }, cleanup.signal);
+            }
+          } catch {
+            // A rejected or lost cleanup stays unknown; never replay the request.
+            return false;
+          } finally {
+            clearTimeout(cleanupDeadline);
+          }
+        }
         return false;
       } finally {
         clearTimeout(deadline);

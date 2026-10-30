@@ -11,8 +11,9 @@ import java.util.Map;
  * Alpha's one process-wide selected-document registry: the shared {@link SelectedDocuments} engine
  * with Alpha's installed preference name ({@code selected-documents}) and preview file prefix
  * ({@code document-}). A grant a Notes source link still names ({@link NoteSourceReferences}) is
- * kept when its selection is forgotten or evicted. The static entry points keep the existing
- * plugin call sites; behavior lives in the shared module.
+ * kept when its selection is forgotten or evicted. DailyApps' selected-document methods delegate to
+ * the shared {@code SelectedDocumentCalls} bridge contract over {@link #documents}; the remaining
+ * static entry points serve native picker callbacks, Files, Photos and instrumentation.
  */
 final class SelectedDocumentAccess {
  static final String PREFERENCES="selected-documents",PREVIEW_PREFIX="document-";
@@ -30,16 +31,11 @@ final class SelectedDocumentAccess {
  static boolean releaseUnreferenced(Context context,Uri uri){return documents(context).releaseUnreferenced(uri);}
  static void forget(String id){SelectedDocuments registry=loaded();if(registry!=null)registry.forget(id);}
  static JSObject restore(Context context){return documents(context).restore();}
- static JSObject describeSelected(Context context,String id){return documents(context).describeSelected(id);}
- static JSObject rename(Context context,String id,String name){return documents(context).rename(id,name);}
- static JSObject pdf(Context context,String id,int pageIndex){return documents(context).pdf(id,pageIndex);}
  static JSObject read(Context context,String id){return documents(context).read(id);}
  /** Only native picker callbacks may use this; no renderer-supplied URI entrypoint. */
  static JSObject readTransientText(Context context,Uri uri){return documents(context).readTransientText(uri);}
- static JSObject share(Activity activity,String id){return documents(activity).share(activity,id);}
  /** Callers must first validate a picker capability or an admitted media identity. */
  static JSObject shareUri(Activity activity,Uri uri){return SelectedDocuments.shareUri(activity,uri);}
- static JSObject open(Activity activity,String id){return documents(activity).open(activity,id);}
  /** A copy of the loaded selections, for instrumentation. */
  static Map<String,Uri> selections(){SelectedDocuments registry=loaded();return registry==null?Map.of():registry.selections();}
 }

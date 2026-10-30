@@ -6,7 +6,7 @@ import {DIGEST_MISSED_TEXT as MISSED_TEXT,DIGEST_PAUSED_TEXT,DIGEST_RUN_WINDOW_M
  * file adds only the development scheduler's civil-time bookkeeping:
  *  - a lapsed source is checked first and yields one explicit `unavailable` record that pauses the
  *    schedule until a new source is reviewed;
- *  - an occurrence later than the shared run window (30 minutes) is recorded as `missed` and never run;
+ *  - an occurrence more than 30 minutes late is recorded as `missed` and never run;
  *  - an occurrence is settled at most once.
  * Development schedules exist only with ELIZA_DEV_ALLOW_TEST_MOCKS.
  */
@@ -33,24 +33,22 @@ const formats=new Map<string,Intl.DateTimeFormat>();
 /** Civil minute of an instant in a zone, `YYYY-MM-DDTHH:MM`. Throws for an unknown zone. */
 export function wall(at:number,zone:string){let format=formats.get(zone);if(!format){format=new Intl.DateTimeFormat('en-GB',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});formats.set(zone,format);}const p=Object.fromEntries(format.formatToParts(at).map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;}
 const latest=new Map<string,{at:number;local:string}|null>();
-/** Zone offset at a minute-aligned instant, in milliseconds. */
-const offset=(at:number,zone:string)=>Date.parse(wall(at,zone)+':00Z')-at;
-/** A civil time the zone skips (start of daylight saving) as the agent's cron reads it: one gap later
- * (02:30 -> 03:30 for a one-hour gap), on the instant in the first gap-length span after the
- * transition. Returns the skipped civil minute, or null. */
-function skippedCivil(at:number,zone:string,localTime:string){
- const current=offset(at,zone),prior=offset(at-3*3600000,zone);if(prior>=current)return null;
- if(offset(at-(current-prior),zone)!==prior)return null;
- const civil=new Date(at+prior).toISOString().slice(0,16);return civil.slice(11)===localTime?civil:null;
-}
+const civil=(local:string)=>Date.parse(local+':00Z');
 /** The most recent instant at or before this minute whose civil time is the reviewed local time.
- * Repeated civil times resolve to their earlier instant. A skipped civil time runs one gap later,
- * as on the agent (packages/core trigger-scheduling cronMatches). */
+ * Repeated civil times resolve to their earlier instant. A civil time the zone skips (start of
+ * daylight saving) runs one gap later (02:30 -> 03:30 for a one-hour gap), as the agent's cron scan
+ * (`computeNextCronRunAtMs`) does. */
 function latestOccurrence(zone:string,localTime:string,minute:number){
  const key=zone+'|'+localTime+'|'+minute;if(latest.has(key))return latest.get(key)!;
- let found:{at:number;local:string}|null=null;
- for(let at=minute;at>minute-26*3600000;at-=60000){const local=wall(at,zone);
-  if(local.slice(11)!==localTime){const skipped=skippedCivil(at,zone,localTime);if(skipped){found={at,local:skipped};break;}continue;}
+ let found:{at:number;local:string}|null=null,after:string|undefined;
+ for(let at=minute;at>minute-26*3600000;at-=60000){const local=wall(at,zone),next=after;after=local;
+  // Stepping back from at+1min, a civil jump of more than a minute is a spring-forward gap: the civil
+  // times strictly between `local` and `next` do not exist that day.
+  // A gap can cross midnight (America/Santiago skips 00:00), so the skipped time may be on either day.
+  if(next!==undefined&&civil(next)-civil(local)>60000){const skipped=[local,next].map(day=>civil(day.slice(0,11)+localTime)).find(time=>time>civil(local)&&time<civil(next));
+   if(skipped!==undefined){const shifted=at+60000+(skipped-civil(local)-60000);
+    if(shifted<=minute){found={at:shifted,local:wall(shifted,zone)};break;}}}
+  if(local.slice(11)!==localTime)continue;
   let first=at;for(let delta=60000;delta<=3*3600000;delta+=60000)if(wall(at-delta,zone)===local)first=at-delta;
   found={at:first,local};break;}
  if(latest.size>200)latest.clear();latest.set(key,found);return found;
@@ -59,13 +57,13 @@ function latestOccurrence(zone:string,localTime:string,minute:number){
  * One occurrence to settle now, or null. Only the most recent occurrence is considered, so a long
  * absence yields one record and no backlog.
  *
- * Ahead of every settled occurrence: it runs within the shared run window, otherwise it is recorded
+ * Ahead of every settled occurrence: it runs when at most 30 minutes late, otherwise it is recorded
  * once as missed and never run late.
  *
  * At or behind the newest settled occurrence (the clock was moved back, for example after a jump
  * forward settled a later day): an occurrence that was itself settled never settles again, so nothing
  * runs twice. One that was never settled and is not older than the remembered history follows the
- * same rule as any other: it runs within the shared run window and is otherwise recorded once as
+ * same rule as any other: it runs when at most 30 minutes late and is otherwise recorded once as
  * missed, so a jump forward neither suppresses the real occurrences before it nor lets one pass
  * without a record. Only the most recent occurrence before `now` is ever considered, so a clock set
  * back onto an earlier day yields at most one truthful record for that day and never a backlog.
@@ -73,7 +71,7 @@ function latestOccurrence(zone:string,localTime:string,minute:number){
  * Limits: an occurrence at or below `settledFloor` (older than the 32 remembered settlements, or
  * behind the newest record of a document written before the list existed) is treated as settled and
  * leaves no record; a civil time a zone skips (start of daylight saving) runs one gap later that day,
- * as on the agent, whose cron scan reads a skipped civil minute that way.
+ * as on the agent, whose cron scan shifts a skipped time by the gap.
  */
 export function scheduledOccurrence(loop:OccurrenceLoop,now:number):Occurrence|null{
  if(!loop.active||loop.removed||loop.sourcePaused)return null;

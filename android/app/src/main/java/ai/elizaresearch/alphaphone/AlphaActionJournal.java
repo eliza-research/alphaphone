@@ -34,10 +34,10 @@ final class AlphaActionJournal {
   if(retainedOperation!=null&&"sms_send".equals(retainedOperation.optString("type"))){SmsActionJournalResult.check(entry,status,result);return;}
   // A free/busy answer holds up to 200 busy intervals: it has its own exact shape and bound.
   if(retainedOperation!=null&&CalendarAvailabilityJournalResult.TYPE.equals(retainedOperation.optString("type"))){CalendarAvailabilityJournalResult.check(retainedOperation,entry.getString("operationId"),status,result);return;}
-  if("succeeded".equals(status)&&entry.getJSONObject("record").has("workflow")&&retainedOperation!=null&&Set.of("read_selected_notes","read_calendar_range").contains(retainedOperation.optString("type"))&&result==null)throw new IllegalArgumentException();
+  if("succeeded".equals(status)&&entry.getJSONObject("record").has("workflow")&&retainedOperation!=null&&Set.of("read_selected_notes","read_calendar_range","read_selected_reminders").contains(retainedOperation.optString("type"))&&result==null)throw new IllegalArgumentException();
   if("succeeded".equals(status)&&retainedOperation!=null&&Set.of("calendar_create_local","calendar_read_next","clock_handoff","maps_read_selected","photo_library_search","photo_library_inspect","photo_library_select","photo_library_review","notes_read_selected","notes_query","notes_update","notes_delete","reminder_create","reminder_read_selected","reminder_update","reminder_complete","reminder_snooze","reminder_cancel").contains(retainedOperation.optString("type"))&&result==null)throw new IllegalArgumentException();
   if(result!=null){
-   JSONObject record=entry.getJSONObject("record"),operation=record.optJSONObject("operation");String type=operation==null?"":operation.optString("type");boolean workflowRead=record.has("workflow")&&Set.of("read_selected_notes","read_calendar_range").contains(type);
+   JSONObject record=entry.getJSONObject("record"),operation=record.optJSONObject("operation");String type=operation==null?"":operation.optString("type");boolean workflowRead=record.has("workflow")&&Set.of("read_selected_notes","read_calendar_range","read_selected_reminders").contains(type);
    if("clock_handoff".equals(type)){
     if(result.length()!=(result.has("clockResult")?2:1)||!entry.getString("operationId").equals(result.optString("operationId")))throw new IllegalArgumentException();
     JSONObject clock=result.optJSONObject("clockResult");

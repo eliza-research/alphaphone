@@ -25,7 +25,10 @@ import com.getcapacitor.annotation.Permission;
  @Permission(alias = "contacts", strings = { Manifest.permission.READ_CONTACTS }),
  @Permission(alias = "phoneState", strings = { Manifest.permission.READ_PHONE_STATE }),
  @Permission(alias = "sms", strings = { Manifest.permission.READ_SMS }),
- @Permission(alias = "sendSms", strings = { Manifest.permission.SEND_SMS })
+ @Permission(alias = "sendSms", strings = { Manifest.permission.SEND_SMS }),
+ // Bounded recent calls for the image Phone view (shared TelephonyPlugin.listRecentCalls). Only the
+ // launcher manifest declares READ_CALL_LOG; the standalone manifest removes it.
+ @Permission(alias = "callLog", strings = { Manifest.permission.READ_CALL_LOG })
 })
 public class AlphaTelephonyPlugin extends TelephonyPlugin {
  @Override protected SmsTelephonyConfiguration configuration() { return AlphaTelephony.CONFIGURATION; }

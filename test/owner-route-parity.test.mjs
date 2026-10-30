@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {nativeSource,runJvm,jsonJarSkip,root} from './fixtures/jvm-tools.mjs';
+import {nativeSource,runJvm,jsonJarSkip,root,upstreamConnection} from './fixtures/jvm-tools.mjs';
 import {build} from 'esbuild';
 import {loadBrowserModule} from './fixtures/browser-source.mjs';
 const [{ownerRouteGroup,ownerRouteAllowed}]=await loadBrowserModule(['apps/app/src/runtime/owner-route-policy.ts'],{testMocks:true});
@@ -199,7 +199,7 @@ public final class OwnerRouteHarness{
  }
 }`);
   const field=value=>value===null?'-':Buffer.from(value,'utf8').toString('base64');
-  return runJvm([nativeSource('OwnerRoutes.java'),harness],'ai.elizaresearch.alphaphone.OwnerRouteHarness',{json:true,args:[config+'/'],input:cases.map(c=>[c.method,c.path,c.body,c.owner].map(field).join(' ')).join('\n')+'\n'}).trim().split('\n').map(line=>line.split(' '));
+  return runJvm([upstreamConnection('OwnerRoutePolicy.java'),nativeSource('OwnerRoutes.java'),harness],'ai.elizaresearch.alphaphone.OwnerRouteHarness',{json:true,args:[config+'/'],input:cases.map(c=>[c.method,c.path,c.body,c.owner].map(field).join(' ')).join('\n')+'\n'}).trim().split('\n').map(line=>line.split(' '));
  }finally{rmSync(directory,{recursive:true,force:true});}
 }
 

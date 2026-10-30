@@ -19,7 +19,7 @@ for(const scenario of ['ready','rejected','late','mock-ready','mock-retire-rejec
     {name:'Agent',methods:agent.methods(['getStatus','start','request'])},
     {name:'AlphaConnection',methods:methods(['secureRead','secureWrite','secureCompareExchange','secureRemove','cancel','addListener','removeListener','pauseNotificationCollection'])},
     {name:'AlphaActionJournal',methods:methods(['list'])},
-    {name:'DeviceApps',methods:methods(['buildInfo'])},
+    {name:'ElizaSystem',methods:methods(['getBuildInfo'])},
     {name:'AlphaHostedResults',methods:methods(['beginBackground','cancelBackground','configureBackground','disableBackground','inboxHistory','syncInbox','status','setBackgroundPolling','enable','pendingResult','pendingSourceRenewal','addListener','removeListener'])},
    ],nativeCallback:agent.nativeCallback,nativePromise:async(plugin:string,method:string,input:any)=>{
    if(plugin==='AlphaNotifications')return {permissionGranted:true,appEnabled:true};
@@ -52,7 +52,7 @@ for(const scenario of ['ready','rejected','late','mock-ready','mock-retire-rejec
      return {};
     }
     if(plugin==='AlphaActionJournal')return {entries:[]};
-    if(plugin==='DeviceApps')return {launcher:false,version:'fixture'};
+    if(plugin==='ElizaSystem'&&method==='getBuildInfo')return {launcher:false,version:'fixture'};
     if(plugin==='AlphaHostedResults'){
      if(method==='configureBackground'){
       f.configured++;f.input=input;

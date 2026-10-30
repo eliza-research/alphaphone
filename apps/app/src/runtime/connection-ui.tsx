@@ -4,12 +4,13 @@ import {parseCloudServiceInfo} from './cloud-service-info';
 import {productionCloud, stagingCloud} from './cloud-deployment.generated.ts';
 import {browserCloudResidentEnabled,browserCloudResidentEnvironment} from './browser-cloud-resident';
 import {appRecordInvalidations} from './app-record-completion';
+import {normalizeEffectReceipts} from '../../../../.eliza/client-features/packages/core/src/types/effects.ts';
 import {assertAppRecordRequestAllowed,type AppRecordMethod,type AppRecordPort} from './app-record-route-policy';
 import {AUTOMATIONS_COMMITTED_EVENT,automationsCommitted} from './automation-completion';
 import {OWNER_REMINDER_LIST,OWNER_REMINDER_READBACK,ownerReminderRoute,reminderReadPath,type ReminderNotificationBinding} from './owner-reminder-notification-protocol';
 import {CAMERA_CAPTURE_CAPABILITY} from '../../../../.eliza/client-features/plugins/plugin-assistant/src/services/device-actions/camera-contract.ts';
 import {sanitizeCloudInferenceFailure,type CloudInferenceFailure} from './crash-log';
-import {residentRecoveryReason,residentRecoveryMessage,RESIDENT_RECOVERY_PENDING,type ResidentRecoveryReason,type ResidentRecoveryView} from './resident-recovery';
+import {residentRecoveryReason,residentRecoveryMessage,residentRecoveryCopy,RESIDENT_RECOVERY_PENDING,type ResidentRecoveryReason,type ResidentRecoveryView} from './resident-recovery';
 import {anyAbortSignal} from './abort-signal';
 import {CALENDAR_APPROVAL_READ_PATH,calendarApprovalFromList,calendarApprovalId} from './calendar-approval';
 import {readDevicePreferences} from '../browser/device-preferences';
@@ -17,6 +18,7 @@ import {resolveCloudEnvironment} from './cloud-environment-selection';
 import { withResidentMapsNavigation } from '../maps/resident-relay.ts';
 import {aospImage} from './aosp-image';
 import {SMS_SEND_CAPABILITY} from './sms-agent-contract';
+import {PHONE_DIAL_CAPABILITY,telephonyDeviceCapabilities} from './phone-dial-contract';
 import {assertAutomationRequestAllowed, AutomationRequestNotDispatchedError, type AutomationsMethod} from './automations-route-policy.ts';
 import {iconStyle} from '../icon-style';
 import {validateUuid} from '../../../../vendor/eliza/packages/core/src/utils/uuid';
@@ -29,7 +31,7 @@ import {developmentAgentDocument} from '../browser/development-agent-document';
 import {openDomainRecovery} from '../browser/domain-recovery';
 import {retireClockReviews} from './clock-agent-review';
 import { negotiateEnabledViews } from './device-view-profile';
-import { workflowPresentationProtocol } from './workflow-presentation';
+import { registerWorkflowDevice, workflowDeviceProtocol } from './workflow-presentation';
 import {clockHandoffCapabilities} from './clock-contract';
 import {developmentIdentity,readDevelopmentIdentity,verifyDevelopmentIdentity,developmentOwnerRecovery,assertDevelopmentIdentity,developmentProfiles,type DevelopmentProfile} from '../browser/development-identity';
 import {developmentCloudKey} from '../browser/development-cloud';
@@ -58,6 +60,7 @@ import { DeviceActions, actionScope, type DeviceCredential, type DeviceExecutor,
 import { cloneElement, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { isAndroid } from '../native';
 import type { AgentReply, ActionProposal, OperationReceipt, ContextEnvelope, VerifiedSession } from './alpha-client';
+import { CloudResidentBindingController, CloudResidentBindingError, ResidentRebindQueue, parseResidentPlanAdmission, recentResidentPlanAdmission, type ResidentPlanAdmissionRecord } from '../../../../.eliza/client-features/packages/auth/src/auth/cloud-resident-binding.ts';
 import { cloudServiceName, cloudSignInHandOffAvailable, CloudProtocol, CloudProtocolError, type CloudAgent, type CloudEnvironment } from './cloud-protocol';
 import { googleOutcome as signInOutcome, type CloudSignInGoogleOutcome, CloudSignInError, normalizeSignInCode, signInFailureMessage as formatSignInFailureMessage, signInReadiness, validSignInEmail, validSignInPhone, type CloudSignInAuthenticated } from './cloud-sign-in';
 import { DevelopmentCloudAgentProtocol, type CloudPhoneTarget } from './development-cloud-agents';
@@ -164,7 +167,7 @@ export type SignInView =
 /** `revokeDevice` revokes this phone's enrollment on the agent; `deviceSlot` names its installation key. */
 type Enrollment = { revokeDevice?: (signal: AbortSignal) => Promise<boolean>; deviceSlot?: string; deviceHeaders?: Record<string,string> };
 type DeviceRequest=(path:string,body:unknown|undefined,signal:AbortSignal)=>Promise<unknown>;
-type Active = ({ kind: 'resident'; remote: LocalAgentProtocol; origin: string; actions?: DeviceActions; workflowProtocol?: 1|2 } | { kind: 'remote' | 'local'; remote: RemoteProtocol; origin: string; actions?: DeviceActions; workflowProtocol?: 1|2 } | { kind: 'cloud'; cloud: DevelopmentCloudAgentProtocol; agentId: string; actions?: DeviceActions; workflowProtocol?: 1|2; phoneTarget?: CloudPhoneTarget; voiceExpiresAt?: number }) & Enrollment & { request?:DeviceRequest; viewNavigation?:ViewNavigationClient; userTextFormatVersion?:1 };
+type Active = ({ kind: 'resident'; remote: LocalAgentProtocol; origin: string; actions?: DeviceActions; workflowProtocol?: 1|2|3 } | { kind: 'remote' | 'local'; remote: RemoteProtocol; origin: string; actions?: DeviceActions; workflowProtocol?: 1|2|3 } | { kind: 'cloud'; cloud: DevelopmentCloudAgentProtocol; agentId: string; actions?: DeviceActions; workflowProtocol?: 1|2|3; phoneTarget?: CloudPhoneTarget; voiceExpiresAt?: number }) & Enrollment & { request?:DeviceRequest; viewNavigation?:ViewNavigationClient; userTextFormatVersion?:1 };
 const SELECTION = 'alpha.connection.selection.v1';
 // The development chooser exists only on an explicitly flagged development server.
 const browserDevProfile = devSurfacesEnabled && devProfileQuery;
@@ -172,6 +175,8 @@ const browserDevProfile = devSurfacesEnabled && devProfileQuery;
 const cloudEnvironmentPolicy = {development: import.meta.env.DEV, testMocks: testMocksEnabled, android: isAndroid, previewEnvironment: import.meta.env.VITE_ALPHA_CLOUD_ENVIRONMENT, cloudResident:browserCloudResidentEnabled};
 const cloudEnvironmentAllowed = (environment: unknown): environment is CloudEnvironment => browserCloudResidentEnabled ? environment===browserCloudResidentEnvironment : environment === 'production' || (testMocksEnabled && environment === 'staging');
 /** Eliza Cloud admits no request from the production web origin, so no Cloud route is started there. */
+// Pending device actions already named in a reply, per actions client (one per session).
+const announcedProposals=new WeakMap<object,Set<string>>();
 const webCloudUnavailable = () => !testMocksEnabled && !isAndroid && !browserLocalAgentEnabled;
 /** Decision P-43 (owner, 2026-10-13): the agent always runs locally. On Android production and in
  * browser development with the local agent there is never a "no agent" state: before the resident
@@ -192,7 +197,7 @@ export const NO_AGENT_SEND = testMocksEnabled ? 'Connect your remote agent in Se
 export const NO_AGENT_VOICE = testMocksEnabled ? 'Connect your remote agent in Settings to start a voice conversation.' : 'Your agent runs on your phone, not here. Open Alpha on your Android phone to talk with it.';
 /** One wording for every surface that needs the agent and has no session yet. */
 export function residentPendingText(snapshot: Pick<ConnectionSnapshot, 'kind'|'residentRecoveryReason'> = state): string {
-  if(snapshot.residentRecoveryReason)return RESIDENT_RECOVERY_PENDING;
+  if(snapshot.residentRecoveryReason)return residentRecoveryMessage(snapshot.residentRecoveryReason);
   return snapshot.kind === 'recovering' ? 'Your agent stopped. Retry in Settings › Agent connection.' : 'Your agent is starting…';
 }
 /** Every surface that needs an agent and has no session: the resident state where the resident is
@@ -239,32 +244,23 @@ function residentBindable(): boolean { return browserCloudResidentEnabled || isA
 /** Warn this long before this phone's Cloud sign-in key expires (CLI keys last 90 days). */
 export const CLOUD_KEY_EXPIRY_WARNING_MS = 14 * 24 * 60 * 60 * 1000;
 /**
- * A verified Cloud billing mode within this window keeps its inference binding while
- * Cloud is unreachable (the agent runs either way). An engineering bound for offline use, not a
- * billing decision: Cloud enforces authentication, credits and quota on every request.
+ * A verified Cloud billing mode within the shared controller's OFFLINE_PLAN_GRACE_MS (7 days) keeps
+ * its inference binding while Cloud is unreachable (the agent runs either way); see
+ * `@elizaos/auth/auth/cloud-resident-binding`. An engineering bound for offline use, not a billing
+ * decision: Cloud enforces authentication, credits and quota on every request. The record keeps its
+ * installed storage key.
  */
-export const OFFLINE_PLAN_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 const PLAN_ADMISSION = 'alpha.connection.plan-admission.v1';
 export const PLAN_RECHECK_INTERVAL_MS = 60_000;
 let lastPlanRecheck = -Infinity, lastRefusalRecheck = -Infinity;
 let planManagementReturn = false;
-type PlanAdmissionRecord = { version: 1; environment: CloudEnvironment; credentialId: string; userId: string; organizationId: string | null; status: 'active' | 'trialing' | 'past_due' | 'credit-funded'; planName: string; verifiedAt: number; endsAt: number | null };
+type PlanAdmissionRecord = ResidentPlanAdmissionRecord<CloudEnvironment>;
+/** The stored record, parsed by the shared controller's rules; installed data keeps its key. */
 function readPlanAdmission(): PlanAdmissionRecord | null {
-  try {
-    const value = JSON.parse(localStorage.getItem(PLAN_ADMISSION) || 'null');
-    if (!value || value.version !== 1 || !cloudEnvironmentAllowed(value.environment) || typeof value.credentialId !== 'string' || typeof value.userId !== 'string' || !['active', 'trialing', 'past_due', 'credit-funded'].includes(value.status) || typeof value.planName !== 'string' || !Number.isFinite(value.verifiedAt)) return null;
-    return { version: 1, environment: value.environment, credentialId: value.credentialId, userId: value.userId, organizationId: typeof value.organizationId === 'string' ? value.organizationId : null, status: value.status, planName: value.planName, verifiedAt: value.verifiedAt, endsAt: Number.isFinite(value.endsAt) ? value.endsAt : null };
-  } catch { return null; }
+  try { return parseResidentPlanAdmission(JSON.parse(localStorage.getItem(PLAN_ADMISSION) || 'null'), cloudEnvironmentAllowed); }
+  catch { return null; }
 }
 function writePlanAdmission(record: PlanAdmissionRecord | null) { try { if (record) localStorage.setItem(PLAN_ADMISSION, JSON.stringify(record)); else localStorage.removeItem(PLAN_ADMISSION); } catch { /* Offline grace is a convenience; the gate still checks Cloud. */ } }
-/** The recent admitting plan this credential holds, or null. */
-function recentPlanAdmission(environment: CloudEnvironment, credentialId: string | undefined, userId?: string): PlanAdmissionRecord | null {
-  const record = readPlanAdmission();
-  if (!record || !credentialId || record.environment !== environment || record.credentialId !== credentialId || (userId !== undefined && record.userId.toLowerCase() !== userId.toLowerCase())) return null;
-  const now = Date.now(), age = now - record.verifiedAt;
-  if (record.endsAt !== null && record.endsAt <= now) return null;
-  return age >= 0 && age <= OFFLINE_PLAN_GRACE_MS ? record : null;
-}
 /** A Cloud outage or no network: not a refusal of the account or the plan. */
 function cloudUnreachable(error: unknown): boolean {
   if (error instanceof DOMException && error.name === 'AbortError') return false;
@@ -336,6 +332,9 @@ export function mergeConversationDelivery<T extends{id:string}>(current:T[],deli
   for(let i=0;i<delivered.length;i++){
     const message=delivered[i];if(seen.has(message.id)){previous=message.id;continue;}
     if(result===current)result=[...current];let index=-1;
+    // A failed stream can end without the saved id; the saved copy replaces its unconfirmed local bubble.
+    const sent=message as {from?:unknown;text?:unknown},twin=sent.from==='user'?result.findIndex(item=>{const local=item as {from?:unknown;text?:unknown;messageBinding?:unknown};return local.from==='user'&&!local.messageBinding&&local.text===sent.text&&!delivered.some(other=>other.id===item.id);}):-1;
+    if(twin>=0){result[twin]=message;seen.add(message.id);previous=message.id;continue;}
     for(let j=i+1;j<delivered.length;j++){index=result.findIndex(item=>item.id===delivered[j].id);if(index>=0)break;}
     if(index<0&&previous!==undefined){const anchor=result.findIndex(item=>item.id===previous);if(anchor>=0)index=anchor+1;}
     result.splice(index<0?result.length:index,0,message);seen.add(message.id);previous=message.id;
@@ -388,13 +387,17 @@ async function deviceCapabilities(offered:unknown):Promise<string>{
   const capabilities=['calendar.local-event.v1','notes.local-record.v1'];
   if(agent.includes(CAMERA_CAPTURE_CAPABILITY)&&(Capacitor.isPluginAvailable('ElizaCamera')||!android&&typeof navigator!=='undefined'&&typeof navigator.mediaDevices?.getUserMedia==='function'))capabilities.push(CAMERA_CAPTURE_CAPABILITY);
   if(agent.includes('reminders.local-record.v2'))capabilities.push('reminders.local-record.v2');else if(agent.includes('reminders.local-record.v1'))capabilities.push('reminders.local-record.v1');
-  for(const capability of [...(!Capacitor.isNativePlatform()?['calendar.agenda-read.v1']:[]),'notes.query.v1','reminders.create.v1','calendar.create.v1',...(android||!Capacitor.isNativePlatform()?['calendar.next-read.v1']:[]),'maps.selected-read.v1'])if(agent.includes(capability))capabilities.push(capability);
+  // Browser chat reminders use the runtime scheduler; do not offer a second device-creation lifecycle.
+  for(const capability of [...(!Capacitor.isNativePlatform()?['calendar.agenda-read.v1']:[]),'notes.query.v1',...(Capacitor.isNativePlatform()?['reminders.create.v1']:[]),'calendar.create.v1',...(android||!Capacitor.isNativePlatform()?['calendar.next-read.v1']:[]),'maps.selected-read.v1'])if(agent.includes(capability))capabilities.push(capability);
   if(availabilityNegotiated(agent))capabilities.push(CALENDAR_AVAILABILITY_CAPABILITY);
   if((android||!Capacitor.isNativePlatform())&&typeof foregroundExecutor==='function'&&agent.includes('calendar.named-read.v1'))capabilities.push('calendar.named-read.v1');
   // One shared external-handoff policy for every brand: never clock.alarms.v1 (P-17).
   capabilities.push(...clockHandoffCapabilities({offered:agent,handler:android,repeatDays:android&&agent.includes('clock.handoff.v2')&&await clockRepeatDaysSupported()}));
   // SMS sending is negotiated only on the AOSP image, where Alpha holds the SMS role.
   if(aospImage&&agent.includes(SMS_SEND_CAPABILITY))capabilities.push(SMS_SEND_CAPABILITY);
+  // The reviewed dial handoff only with the native telephony profile (the verified image). The
+  // on-device contact lookup waits for an owner number picker in the review, so it is not offered.
+  capabilities.push(...telephonyDeviceCapabilities({present:aospImage,dial:agent.includes(PHONE_DIAL_CAPABILITY),contactLookup:false}));
   return capabilities.join(',');
 }
 let deviceReadReview:((proposal:ActionProposal,context:ContextEnvelope,signal:AbortSignal)=>Promise<void>)|undefined;
@@ -414,8 +417,14 @@ let entitlementRefresher: EntitlementRefresher | null = null;
 let residentBinding: 'cloud' | 'unbound' | 'kept' | 'unknown' | null = null;
 /** Shown beside the running agent when native could not confirm the Cloud inference binding was removed. */
 const RESIDENT_UNBIND_UNCONFIRMED='Cloud inference removal could not be confirmed. Your agent is running; retry in Settings.';
-/** A plan change arrived while another connection step ran; it is applied when that step ends. */
-let residentRebindQueued = false;
+/**
+ * The shared rebind rule (`ResidentRebindQueue`): at most one rebind of the running agent runs and
+ * one more waits behind it. A plan change that arrives while another connection step or a reply
+ * runs is applied when that step ends.
+ */
+let residentRebindQueue: ResidentRebindQueue | null = null;
+const residentRebinds = () => residentRebindQueue ??= new ResidentRebindQueue();
+const residentRebindBlocked = () => !!operation || !!sending;
 /** Every Cloud detach ends background plan refresh, so no request goes out under a stale admission. */
 function stopEntitlementRefresh(){entitlementRefresher?.stop();entitlementRefresher=null;clearEntitlementKeyCache();}
 function detachService() { stopEntitlementRefresh(); retireReadReplies();for(const request of appRequests)request.abort(new DOMException('Cloud account changed','AbortError')); clearPersonalSetup(); membershipRead?.abort();membershipRead=null;pendingBillingReview=null;service = null; update({ cloudAccount: null,membershipBalance:undefined,membershipCredits:null,membershipPlan:null,lastServiceLimit:null,planEndsAt:null,billingReviewEmail:undefined,membershipDismissed:false }); }
@@ -789,12 +798,13 @@ function activate(next: Active, session: VerifiedSession, name: string) {
  */
 function queueResidentRebind(interruptReply=false) {
   if (!residentCloudFlow()) return;
-  if (operation || sending&&!interruptReply) { residentRebindQueued = true; return; }
-  residentRebindQueued = false;
+  void residentRebinds().request(rebindResident, interruptReply ? () => !!operation : residentRebindBlocked).catch(() => {});
+}
+function rebindResident() {
   // An outcome the open dialog is showing (a sign-out, a cancelled sign-in) stays visible after the rebind.
   const shown = state.open ? { message: state.message, error: state.error, startFailed: !!state.error && state.error === residentStartFailure } : null;
   const signIn = state.signIn;
-  void work('Updating your agent…', async signal => {
+  return work('Updating your agent…', async signal => {
     retire();
     try { await connectResident(signal); }
     catch (error) { if (residentAlwaysPresent && !active) update({ kind: 'recovering' }); throw error; }
@@ -807,7 +817,7 @@ function queueResidentRebind(interruptReply=false) {
 /** A native sign-in return that arrived while another step was running; handled once it ends. */
 let queuedSignInReturn: unknown = null;
 function runQueuedSignInReturn() { if (queuedSignInReturn !== null && !operation) { const value = queuedSignInReturn; queuedSignInReturn = null; void connectionController.signInReturned(value); } }
-function runQueuedResidentRebind() { if (residentRebindQueued && !operation && !sending) queueResidentRebind(); }
+function runQueuedResidentRebind() { if (residentRebindQueue?.pending && residentCloudFlow()) void residentRebindQueue.resume(rebindResident, residentRebindBlocked)?.catch(() => {}); }
 async function remoteIdentity(remote: RemoteProtocol, signal: AbortSignal) {
   const credential = await remoteCredentialStore.read(remote.origin);
   if (!credential || !remote.session) throw new Error('Pair this agent before connecting.');
@@ -838,7 +848,7 @@ async function connectRemote(kind: 'remote' | 'local', origin: string, code: str
   let userTextFormatVersion:1|undefined;
   let reason = "";
   const enrollment: Enrollment = {};
-  const workflowProtocol=await workflowPresentationProtocol(signal);
+  let workflowProtocol:1|2|3=await workflowDeviceProtocol(signal);
   try {
     const baseScope = await actionScope(JSON.stringify([remote.origin, session.ownerId, session.agentId]));
     const slot = `device:${baseScope}`;
@@ -858,7 +868,9 @@ async function connectRemote(kind: 'remote' | 'local', origin: string, code: str
       if (response.status < 200 || response.status >= 300) throw Object.assign(new Error('Device action request failed'), { status: response.status });
       return response.body;
     };
-    const registered = await request('/api/client-devices/register', { label: 'Alpha Phone', workflowProtocol }, signal) as { installationId: string; enrollmentId: string; capabilities?: string[]; viewProfileVersion?: unknown; userTextFormatVersion?:unknown };
+    const admitted = await registerWorkflowDevice(workflowProtocol, protocol => request('/api/client-devices/register', { label: 'Alpha Phone', workflowProtocol: protocol }, signal), signal);
+    workflowProtocol = admitted.workflowProtocol;
+    const registered = admitted.registered as { installationId: string; enrollmentId: string; capabilities?: string[]; viewProfileVersion?: unknown; userTextFormatVersion?:unknown };
     if (registered.installationId !== credential.installationId || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(registered.enrollmentId)) throw new Error('Device registration was not verified');
     if(registered.userTextFormatVersion===1)userTextFormatVersion=1;
     reason = await negotiateEnabledViews(registered.viewProfileVersion, request, signal);
@@ -880,7 +892,7 @@ async function connectRemote(kind: 'remote' | 'local', origin: string, code: str
 async function connectDevelopment(profile:DevelopmentProfile,signal:AbortSignal){
  if(!browserDevProfile)throw Error('Development mode required.');
  // This explicitly gated browser fixture implements reminder v2; real peers still negotiate it.
- const identity=await readDevelopmentIdentity(profile,signal);const client=new LocalAgentProtocol(developmentBridge(profile,identity));const {session,name}=await client.connect(signal);signal.throwIfAborted();const credential=developmentCredential(profile,identity),scope=await actionScope(JSON.stringify([client.origin,session.ownerId,session.agentId,credential.installationId]));const actions=new DeviceActions(session,credential,scope,(path,body,signal)=>client.request(path,body,signal),developmentJournal(profile,identity),(op,id,context,signal,binding,workflowRoute,journalIdentity,agendaSource)=>deviceExecutor(op,id,context,signal,binding,workflowRoute,journalIdentity,agendaSource),(op,id,binding,signal)=>deviceRecovery?deviceRecovery(op,id,binding,signal):Promise.resolve({status:'unknown'}),true,true);await retire();signal.throwIfAborted();await verifyDevelopmentIdentity(identity,signal);const workflowProtocol=2 as const;save({kind:'development',profile,...(identity.account?{account:identity.account}:{})});developmentVoiceExpiresAt=Date.now()+3600000;activate({kind:'resident',remote:client,origin:client.origin,actions,workflowProtocol},session,name);
+ const identity=await readDevelopmentIdentity(profile,signal);const client=new LocalAgentProtocol(developmentBridge(profile,identity));const {session,name}=await client.connect(signal);signal.throwIfAborted();const credential=developmentCredential(profile,identity),scope=await actionScope(JSON.stringify([client.origin,session.ownerId,session.agentId,credential.installationId]));const actions=new DeviceActions(session,credential,scope,(path,body,signal)=>client.request(path,body,signal),developmentJournal(profile,identity),(op,id,context,signal,binding,workflowRoute,journalIdentity,agendaSource)=>deviceExecutor(op,id,context,signal,binding,workflowRoute,journalIdentity,agendaSource),(op,id,binding,signal)=>deviceRecovery?deviceRecovery(op,id,binding,signal):Promise.resolve({status:'unknown'}),true,true);await retire();signal.throwIfAborted();await verifyDevelopmentIdentity(identity,signal);const workflowProtocol=3 as const;save({kind:'development',profile,...(identity.account?{account:identity.account}:{})});developmentVoiceExpiresAt=Date.now()+3600000;activate({kind:'resident',remote:client,origin:client.origin,actions,workflowProtocol},session,name);
 }
 /** How the running resident's Eliza Cloud inference is bound after admission, and what to tell the owner. */
 type ResidentAdmission = { binding: 'cloud' | 'unbound' | 'kept'; credentialId?: string; account?: { client: CloudProtocol; identity: CloudServiceSession }; notice?: { error?: string; message?: string; open?: boolean } };
@@ -896,79 +908,64 @@ async function admitCloudResident(signal:AbortSignal):Promise<ResidentAdmission>
   const environment=residentEnvironment();
   cloud = makeCloud(environment);
   const client=cloud;
-  const saved=await cloudCredentialStore.read(environment);signal.throwIfAborted();
-  // First run or signed out: sign-in is required (the dialog cannot be dismissed), and the agent
-  // runs meanwhile without Cloud inference.
-  if(!saved?.credentialId){
-    if(service)detachService();
-    update({residentSavedCredential:false,residentSubscription:null,residentPlanNotice:null,planEndsAt:null});
-    return {binding:'unbound',notice:{open:true}};
-  }
-  let identity:Awaited<ReturnType<typeof verifyService>>;
-  try{identity=await verifyService(client,signal);}
-  catch(error){
-    signal.throwIfAborted();
-    if(cloudUnreachable(error)){
+  let account:NonNullable<typeof service>|null=null,checked:Awaited<ReturnType<typeof checkEntitlement>>|null=null;
+  const binding=residentBindingController(environment,client,{verified:value=>{account=value;},checked:value=>{checked=value;}});
+  const admission=await binding.admit(signal);
+  switch(admission.reason){
+    case 'signed-out':
+      // First run or signed out: sign-in is required (the dialog cannot be dismissed), and the agent
+      // runs meanwhile without Cloud inference.
+      if(service)detachService();
+      update({residentSavedCredential:false,residentSubscription:null,residentPlanNotice:null,planEndsAt:null});
+      return {binding:'unbound',notice:{open:true}};
+    case 'offline':
       // Offline or a Cloud outage: a plan verified recently for this sign-in keeps its binding
       // (Cloud still decides each AI request once reachable); otherwise inference is unbound.
-      const recent=recentPlanAdmission(environment,saved.credentialId);
-      update({residentPlanNotice:'offline',residentSubscription:{kind:'unavailable',reason:'outage'},planEndsAt:recent?.endsAt??null});
-      return {binding:recent?'kept':'unbound',notice:{message:OFFLINE_NOTICE}};
-    }
-    // A rejected or unreadable sign-in: no Cloud inference until the owner signs in again.
-    if(service)detachService();
-    update({residentPlanNotice:null,residentSubscription:null,planEndsAt:null});
-    return {binding:'unbound',notice:{error:errorMessage(error),open:true}};
-  }
-  const account=service;
-  if(!account)return {binding:'unbound',notice:{error:'Cloud account changed. Sign in again.',open:true}};
-  // One entitlement read at admission; turns never wait on billing.
-  const expected={userId:identity.userId,organizationId:identity.organizationId??null};
-  let checked:Awaited<ReturnType<typeof checkEntitlement>>;
-  try{
-    checked=await checkEntitlement(client.entitlementSource(),expected,signal);
-    signal.throwIfAborted();
-    if(service!==account || (await cloudCredentialStore.read(environment))?.credentialId!==account.identity.credentialId)throw Error('Cloud account changed. Sign in again.');
-  }catch(error){
-    signal.throwIfAborted();
-    // An entitlement for another account, a rejected sign-in or a changed account: nothing is bound.
-    if(isEntitlementSignInFailure(error)||(error instanceof EntitlementError&&error.code==='account-mismatch')||(error instanceof Error&&error.message==='Cloud account changed. Sign in again.')){
-      if(isEntitlementSignInFailure(error)&&service===account)detachService();
+      update({residentPlanNotice:'offline',residentSubscription:{kind:'unavailable',reason:'outage'},planEndsAt:admission.recent?.endsAt??null});
+      return {binding:admission.binding,notice:{message:OFFLINE_NOTICE}};
+    case 'sign-in-rejected':
+    case 'account-changed':
+      // A rejected or unreadable sign-in, an entitlement for another account or a changed account:
+      // no Cloud inference until the owner signs in again.
+      // A changed account before the identity was verified leaves the connection as it is: a newer
+      // sign-in may own it, and only a rejected read of this sign-in detaches it.
+      // The shared controller's own account-changed fence (a newer credential replaced this one
+      // during admission) carries code 'account-changed', which the entitlement classifier reads
+      // as an auth failure; it is not a refusal of this sign-in, so it never detaches. Detaching
+      // there would put the required sign-in page over the running resident (P-43).
+      if(!admission.identity){if(admission.reason==='sign-in-rejected'&&service)detachService();}
+      else if(!(admission.error instanceof CloudResidentBindingError)&&isEntitlementSignInFailure(admission.error)&&account&&service===account)detachService();
       update({residentPlanNotice:null,residentSubscription:null,planEndsAt:null});
-      return {binding:'unbound',notice:{error:errorMessage(error),open:true}};
-    }
-    // Cloud went unreachable between identity and plan: the same rule as offline admission.
-    const recent=cloudUnreachable(error)?recentPlanAdmission(environment,account.identity.credentialId,account.identity.userId):null;
-    if(cloudUnreachable(error)){update({residentPlanNotice:'offline',residentSubscription:{kind:'unavailable',reason:'outage'},planEndsAt:recent?.endsAt??null});return {binding:recent?'kept':'unbound',notice:{message:OFFLINE_NOTICE}};}
-    update({residentPlanNotice:'needs-plan',residentSubscription:{kind:'unavailable',reason:'outage'},planEndsAt:null});
-    return {binding:'unbound'};
+      return {binding:'unbound',notice:{error:errorMessage(admission.error),open:true}};
+    case 'plan-unavailable':
+      update({residentPlanNotice:'needs-plan',residentSubscription:{kind:'unavailable',reason:'outage'},planEndsAt:null});
+      return {binding:'unbound'};
+    default:
+      break;
   }
-  let view=checked.view,decision=planAdmission(view);
-  const recent=recentPlanAdmission(environment,account.identity.credentialId,account.identity.userId);
-  // A billing outage after a recent verified plan keeps the binding: Cloud still decides each AI request.
-  if(decision==='unknown'&&view.kind==='unavailable'&&view.reason==='outage'&&recent)decision=recent.status==='past_due'?'admit-with-warning':'admit';
-  // End of the plan window when Cloud reported one: the billing snapshot's period end, a redeemed grant's end, or the last known.
-  const endsAt=checked.entitlement?.planEndsAt!==undefined?checked.entitlement.planEndsAt:view.kind==='credits'?null:view.kind==='active'&&view.source==='billing-limits'&&view.expiresAt>0?view.expiresAt:recent?.endsAt??(state.cloudAccount?.credentialId===account.identity.credentialId?state.planEndsAt??null:null);
-  if(decision==='needs-plan'||decision==='unknown'){
+  const admitted=account as NonNullable<typeof service>|null,plan=admission.plan,result=checked as Awaited<ReturnType<typeof checkEntitlement>>|null;
+  if(!admitted||!plan||!result)return {binding:'unbound',notice:{error:'Cloud account changed. Sign in again.',open:true}};
+  if(admission.reason==='needs-plan'){
     // No admissible plan: the agent runs without Cloud inference; the plan notice offers Redeem
     // code / Choose a plan / Check plan again. Nothing is bound.
-    if(decision==='needs-plan')writePlanAdmission(null);
-    update({residentSubscription:view,residentPlanNotice:'needs-plan',planEndsAt:null});
-    return {binding:'unbound',account};
+    update({residentSubscription:plan.view,residentPlanNotice:'needs-plan',planEndsAt:null});
+    return {binding:'unbound',account:admitted};
   }
-  if(view.kind==='active'||view.kind==='credits')writePlanAdmission({version:1,environment,credentialId:account.identity.credentialId,userId:account.identity.userId,organizationId:account.identity.organizationId??null,status:view.kind==='credits'?'credit-funded':view.status,planName:view.kind==='credits'?`${cloudServiceName(cloud.environment)} credits`:view.planName,verifiedAt:Date.now(),endsAt});
-  update({residentSubscription:view,residentPlanNotice:null,planEndsAt:endsAt});
+  const endsAt=admission.endsAt??null,identity=admission.identity!;
+  update({residentSubscription:plan.view,residentPlanNotice:null,planEndsAt:endsAt});
   // Background refresh: it updates what the owner sees, never interrupts a turn, and unbinds Cloud
   // inference (the agent keeps running) when Cloud reports the plan ended. Revocation is enforced
   // by Cloud immediately.
-  entitlementRefresher=new EntitlementRefresher({entitlement:checked.entitlement,fallbackActive:checked.view.kind==='credits'||checked.view.kind==='active'&&checked.view.source==='billing-limits',retry:checked.view.kind==='unavailable'&&checked.view.reason!=='not-published',
+  const expected={userId:identity.userId,organizationId:identity.organizationId};
+  entitlementRefresher=new EntitlementRefresher({entitlement:result.entitlement,fallbackActive:result.view.kind==='credits'||result.view.kind==='active'&&result.view.source==='billing-limits',retry:result.view.kind==='unavailable'&&result.view.reason!=='not-published',
     check:refreshSignal=>checkEntitlement(client.entitlementSource(),expected,refreshSignal),
-    onView:next=>{if(service!==account)return;update({residentSubscription:next,...(next.kind==='active'&&next.planEndsAt!==undefined?{planEndsAt:next.planEndsAt}:next.kind==='credits'?{planEndsAt:null}:{})});
+    onView:next=>{if(service!==admitted)return;update({residentSubscription:next,...(next.kind==='active'&&next.planEndsAt!==undefined?{planEndsAt:next.planEndsAt}:next.kind==='credits'?{planEndsAt:null}:{})});
       const nextDecision=planAdmission(next);
-      if((next.kind==='active'&&!next.refreshFailed)||next.kind==='credits')writePlanAdmission({version:1,environment,credentialId:account.identity.credentialId,userId:account.identity.userId,organizationId:account.identity.organizationId??null,status:next.kind==='credits'?'credit-funded':next.status,planName:next.kind==='credits'?`${cloudServiceName(cloud.environment)} credits`:next.planName,verifiedAt:Date.now(),endsAt:next.kind==='credits'?null:(state.planEndsAt??null)});
-      if(nextDecision==='needs-plan')residentPlanEnded(account,next);},
-    onAuthFailure:error=>{if(service===account)residentRefreshRefused(account,error);}});
-  return {binding:'cloud',credentialId:account.identity.credentialId,account};
+      if(next.kind==='credits')binding.recordAdmission(identity,{status:'credit-funded',planName:`${cloudServiceName(environment)} credits`},null);
+      else if(next.kind==='active'&&!next.refreshFailed)binding.recordAdmission(identity,{status:next.status,planName:next.planName},state.planEndsAt??null);
+      if(nextDecision==='needs-plan')residentPlanEnded(admitted,next);},
+    onAuthFailure:error=>{if(service===admitted)residentRefreshRefused(admitted,error);}});
+  return {binding:'cloud',credentialId:identity.credentialId,account:admitted};
 }
 /**
  * Cloud reported, on a background refresh, that the plan ended: Eliza Cloud inference is unbound
@@ -1006,7 +1003,7 @@ async function recheckResidentPlan(){
   try{
     const admission=await admitCloudResident(controller.signal);
     const target=residentBindable()?admission.binding:residentBinding;
-    if(target!=='kept'&&target!==residentBinding)residentRebindQueued=true;
+    if(target!=='kept'&&target!==residentBinding)residentRebinds().queue();
     else if(admission.notice?.open||admission.notice?.error)update({open:true,purpose:state.purpose==='plan'||state.purpose==='cloud-account'?state.purpose:'agent',message:'',error:admission.notice.error??''});
   }catch{/* The next return checks again; the agent keeps running as it is. */}
   finally{if(operation===controller)operation=null;runQueuedResidentRebind();}
@@ -1014,42 +1011,84 @@ async function recheckResidentPlan(){
 /** Bind or unbind Eliza Cloud inference before the agent starts. Returns the binding in effect. */
 async function applyResidentBinding(admission:ResidentAdmission,signal:AbortSignal):Promise<{binding:'cloud'|'unbound'|'kept'|'unknown';error?:string}> {
   if(!residentBindable())return {binding:admission.binding};
-  if(admission.binding==='kept')return {binding:'kept'};
-  if(admission.binding==='cloud'&&admission.credentialId&&admission.account){
-    const bindingEpoch=epoch;
-    try{
-      // An admitted running resident under this same Cloud admission is reused, not stopped and
-      // rebound: opening the assistant, or reconnecting one surface, must not retire the other's work.
-      await bindResidentCloudProvider(admission.credentialId);
-      signal.throwIfAborted();
-      if(service!==admission.account || (await cloudCredentialStore.read(residentEnvironment()))?.credentialId!==admission.credentialId)throw Error('Cloud account changed. Sign in again.');
-      return {binding:'cloud'};
-    }catch(error){
-      if(error instanceof LocalCloudProviderStopUnconfirmed){
-        // No bind was attempted. Retire only this operation's still-current
-        // renderer client; never expose an old owner's resident as ready, and
-        // never retire a newer connection that superseded this operation.
-        if(epoch===bindingEpoch){
-          if(active||state.session)retire();
-          update({residentInference:'unknown'});
-        }
-        signal.throwIfAborted();
-        throw error;
+  const bindingEpoch=epoch;
+  const controller=residentBindingController(residentEnvironment(),cloud,{account:admission.account});
+  try{
+    const result=await controller.apply({binding:admission.binding,...(admission.binding==='cloud'&&admission.credentialId&&admission.account?{identity:{credentialId:admission.credentialId,userId:admission.account.identity.userId,organizationId:admission.account.identity.organizationId??null}}:{})},signal);
+    if(result.binding==='cloud'||result.binding==='kept')return {binding:result.binding};
+    // The agent always starts. It is reported unbound only after native confirms removal;
+    // otherwise its inference state is unconfirmed (native still gates a Cloud binding on a
+    // valid production credential at use time) and the owner can retry in Settings.
+    if(result.failure?.kind==='bind-failed'){
+      const why=errorMessage(result.failure.cause),serviceName=cloudServiceName(cloud.environment);
+      return result.binding==='unknown'?{binding:'unknown',error:`AI could not be connected to your ${serviceName} plan: ${why} ${RESIDENT_UNBIND_UNCONFIRMED}`}
+        :{binding:'unbound',error:`AI could not be connected to your ${serviceName} plan: ${why} Your agent is running; check your plan again in Settings.`};
+    }
+    // A removal native cannot confirm never stops the agent from starting; it is shown as unconfirmed.
+    if(result.failure?.kind==='unbind-unconfirmed')return {binding:'unknown',error:RESIDENT_UNBIND_UNCONFIRMED};
+    return {binding:'unbound'};
+  }catch(error){
+    if(error instanceof LocalCloudProviderStopUnconfirmed){
+      // No bind was attempted. Retire only this operation's still-current
+      // renderer client; never expose an old owner's resident as ready, and
+      // never retire a newer connection that superseded this operation.
+      if(epoch===bindingEpoch){
+        if(active||state.session)retire();
+        update({residentInference:'unknown'});
       }
       signal.throwIfAborted();
-      // The agent always starts. It is reported unbound only after native confirms removal;
-      // otherwise its inference state is unconfirmed (native still gates a Cloud binding on a
-      // valid production credential at use time) and the owner can retry in Settings.
-      try{await clearLocalProvider();}catch{signal.throwIfAborted();return {binding:'unknown',error:`AI could not be connected to your ${cloudServiceName(cloud.environment)} plan: ${errorMessage(error)} ${RESIDENT_UNBIND_UNCONFIRMED}`};}
-      signal.throwIfAborted();
-      return {binding:'unbound',error:`AI could not be connected to your ${cloudServiceName(cloud.environment)} plan: ${errorMessage(error)} Your agent is running; check your plan again in Settings.`};
     }
+    throw error;
   }
-  // Unbound: remove any stored Cloud inference binding. A no-op (no restart) when none is stored.
-  // A removal native cannot confirm never stops the agent from starting; it is shown as unconfirmed.
-  try{await clearLocalProvider(true);}catch{signal.throwIfAborted();return {binding:'unknown',error:RESIDENT_UNBIND_UNCONFIRMED};}
-  signal.throwIfAborted();
-  return {binding:'unbound'};
+}
+/**
+ * The shared resident binding controller (`@elizaos/auth/auth/cloud-resident-binding`) wired to
+ * this renderer: the secure credential store, the Cloud identity read, the shared entitlement
+ * check, the native provider bind/clear and the installed plan admission record. The controller
+ * owns the binding rules (account fences, the 7-day offline rule, bind confirmation); this file
+ * maps its outcome to the owner's notices.
+ */
+function residentBindingController(environment:CloudEnvironment,client:CloudProtocol,hooks:{verified?:(account:NonNullable<typeof service>)=>void;checked?:(checked:Awaited<ReturnType<typeof checkEntitlement>>)=>void;account?:ResidentAdmission['account']}={}){
+  return new CloudResidentBindingController<SubscriptionView,CloudEnvironment>(environment,{
+    readCredential:async signal=>{const saved=await cloudCredentialStore.read(environment);signal.throwIfAborted();return saved?.credentialId?{credentialId:saved.credentialId}:null;},
+    verifyIdentity:async signal=>{
+      await verifyService(client,signal);
+      const account=service;
+      if(!account||account.client!==client)throw new CloudResidentBindingError('account-changed');
+      hooks.verified?.(account);
+      return {credentialId:account.identity.credentialId,userId:account.identity.userId,organizationId:account.identity.organizationId??null};
+    },
+    // One entitlement read at admission; turns never wait on billing.
+    checkPlan:async(identity,signal)=>{
+      const account=service;
+      const checked=await checkEntitlement(client.entitlementSource(),{userId:identity.userId,organizationId:identity.organizationId},signal);
+      signal.throwIfAborted();
+      if(service!==account)throw Error('Cloud account changed. Sign in again.');
+      hooks.checked?.(checked);
+      const view=checked.view;
+      // End of the plan window when Cloud reported one: the billing snapshot's period end, a redeemed grant's end, or the last known.
+      const reported=checked.entitlement?.planEndsAt!==undefined?checked.entitlement.planEndsAt:view.kind==='credits'?null:view.kind==='active'&&view.source==='billing-limits'&&view.expiresAt>0?view.expiresAt:undefined;
+      const recent=recentResidentPlanAdmission(readPlanAdmission(),environment,identity.credentialId,identity.userId,Date.now());
+      return {decision:planAdmission(view),view,outage:view.kind==='unavailable'&&view.reason==='outage',
+        record:view.kind==='credits'?{status:'credit-funded',planName:`${cloudServiceName(environment)} credits`}:view.kind==='active'?{status:view.status,planName:view.planName}:null,
+        endsAt:reported!==undefined?reported:recent?.endsAt??(state.cloudAccount?.credentialId===identity.credentialId?state.planEndsAt??null:null)};
+    },
+    bindProvider:async(credentialId,signal)=>{
+      // An admitted running resident under this same Cloud admission is reused, not stopped and
+      // rebound: opening the assistant, or reconnecting one surface, must not retire the other's work.
+      await bindResidentCloudProvider(credentialId);
+      signal.throwIfAborted();
+      if(hooks.account&&service!==hooks.account)throw Error('Cloud account changed. Sign in again.');
+    },
+    // A plain unbind is a no-op (no restart) when no binding is stored.
+    clearProvider:async(_signal,reason)=>{await clearLocalProvider(reason==='unbound');},
+    readAdmission:readPlanAdmission,
+    writeAdmission:writePlanAdmission,
+    isUnreachable:cloudUnreachable,
+    // An entitlement for another account, a rejected sign-in or a changed account: nothing is bound.
+    isSignInRejected:error=>isEntitlementSignInFailure(error)||(error instanceof EntitlementError&&error.code==='account-mismatch')||(error instanceof Error&&error.message==='Cloud account changed. Sign in again.'),
+    isFatalBindError:error=>error instanceof LocalCloudProviderStopUnconfirmed,
+  });
 }
 /** The packaged-runtime refusal. Android production without the runtime is a non-distributable
  * developer build (--allow-unpackaged-runtime); browser development needs the host agent running. */
@@ -1077,7 +1116,7 @@ async function connectResident(signal: AbortSignal) {
   signal.throwIfAborted();
   let actions:DeviceActions|undefined;
   let deviceRequest:DeviceRequest|undefined;
-  const workflowProtocol=await workflowPresentationProtocol(signal);
+  let workflowProtocol:1|2|3=await workflowDeviceProtocol(signal);
   let userTextFormatVersion:1|undefined;
   let reason='';
   try {
@@ -1091,7 +1130,8 @@ async function connectResident(signal: AbortSignal) {
     // Browser and Android use the same reviewed local-record contracts.
     const headers={'X-Eliza-Device-Id':credential.installationId,'X-Eliza-Device-Key':credential.key,'X-Eliza-Device-Capabilities':'calendar.local-event.v1,notes.local-record.v1'};
     const request=(path:string,body:unknown|undefined,requestSignal:AbortSignal)=>client.request(path,body,requestSignal,headers);
-    const registered=await request('/api/client-devices/register',{label:isAndroid?'Alpha Phone':'Alpha browser development',workflowProtocol},signal);
+    const admitted=await registerWorkflowDevice(workflowProtocol,protocol=>request('/api/client-devices/register',{label:isAndroid?'Alpha Phone':'Alpha browser development',workflowProtocol:protocol},signal),signal);
+    workflowProtocol=admitted.workflowProtocol;const registered=admitted.registered;
     if(registered.installationId!==credential.installationId||typeof registered.enrollmentId!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(registered.enrollmentId))throw Error('Device registration was not verified');
     if(registered.userTextFormatVersion===1)userTextFormatVersion=1;
     reason = await negotiateEnabledViews(registered.viewProfileVersion, request, signal);
@@ -1140,7 +1180,7 @@ async function connectCloud(agentId: string, signal: AbortSignal, expectedOwner?
   if (agent.status !== 'running' || !agent.runtimeUrl) throw new Error('This agent is not ready. Refresh its status.');
   if(expectedOrigin&&new URL(agent.runtimeUrl).origin!==new URL(expectedOrigin).origin)throw Error('The personal Cloud runtime changed. Refresh its status.');
   const session = {ownerId:identity.userId,agentId,sessionId:crypto.randomUUID(),origin:new URL(agent.runtimeUrl).origin};
-  const workflowProtocol=await workflowPresentationProtocol(signal);
+  const workflowProtocol=await workflowDeviceProtocol(signal);
   const next: Extract<Active,{kind:'cloud'}> = {kind:'cloud',cloud:client,agentId,workflowProtocol};
   let attached = false;
   let reason = 'This Cloud runtime has not enabled verified phone actions, workflows or paired speech.';
@@ -1166,7 +1206,8 @@ async function connectCloud(agentId: string, signal: AbortSignal, expectedOwner?
     if (capability.protocol!==1 || capability.agentId!==agentId || typeof capability.identityId!=='string' || !/^[a-f0-9-]{36}$/.test(capability.identityId) || external?.subject!==identity.userId || external?.organizationId!==identity.organizationId || typeof external?.issuer!=='string' || !external.issuer.startsWith('https://') || device?.protocol!==1 || !Array.isArray(device.capabilities) || !device.capabilities.includes('calendar.local-event.v1')) throw new Error('Cloud runtime owner capability was not verified');
     target.headers["X-Eliza-Device-Capabilities"]=await deviceCapabilities(device?.capabilities);
     session.ownerId=capability.identityId;
-    const registered=await request('/api/client-devices/register',{label:'Alpha Phone',workflowProtocol},signal);
+    const admitted=await registerWorkflowDevice(workflowProtocol,protocol=>request('/api/client-devices/register',{label:'Alpha Phone',workflowProtocol:protocol},signal),signal);
+    next.workflowProtocol=admitted.workflowProtocol;const registered=admitted.registered;
     if (registered.installationId!==credential.installationId || typeof registered.enrollmentId!=='string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(registered.enrollmentId)) throw new Error('Cloud device registration was not verified');
     if(registered.userTextFormatVersion===1)next.userTextFormatVersion=1;
     const profileReason = await negotiateEnabledViews(registered.viewProfileVersion, request, signal);
@@ -1302,6 +1343,17 @@ const RESIDENT_SIGN_IN_EXPIRED = 'Your Cloud sign-in has expired. Sign in with C
 /** Shown beside the composer while the resident is connected and the phone has no network. */
 export const INFERENCE_OFFLINE_NOTICE = 'Your agent is running; AI needs a connection. Nothing is sent until this phone is back online.';
 const RATE_LIMITED = 'The agent provider is rate-limiting requests. Wait before sending again. Alpha Phone did not retry your message.';
+/** A turn that failed after its action committed: the owner is told the action went through, never the generic failure. */
+export const EFFECT_APPLIED_INTERRUPTED = 'The requested action went through, but the reply was cut off before it finished. Check the app it changed. Nothing was run again.';
+/** Upstream's post-commit interruption (`TURN_INTERRUPTED_AFTER_EFFECT`), or an effect receipt the reply proves applied and not rolled back. */
+function effectAppliedBeforeFailure(reply:{terminalFailure?:unknown;actionResults?:unknown}):boolean {
+  const code=reply.terminalFailure&&typeof reply.terminalFailure==='object'?(reply.terminalFailure as {code?:unknown}).code:undefined;
+  if(code==='TURN_INTERRUPTED_AFTER_EFFECT')return true;
+  if(!Array.isArray(reply.actionResults))return false;
+  const receipts=reply.actionResults.flatMap(result=>{if(!result||typeof result!=='object'||!('effectReceipts' in result))return [];try{return [...normalizeEffectReceipts((result as {effectReceipts:unknown}).effectReceipts)];}catch{return [];}});
+  const reverted=new Set(receipts.flatMap(receipt=>receipt.outcome==='rolled_back'?receipt.rollback.revertedReceiptIds:[]));
+  return receipts.some(receipt=>receipt.outcome==='applied'&&!reverted.has(receipt.receiptId));
+}
 /** Owner-facing states for upstream's CHAT_FAILURE_KINDS (pinned contracts `chat.ts`). Each says
  * what happened and what to do next; none retries the message. Unlisted kinds keep the generic text. */
 export const REPLY_FAILURES = {
@@ -1445,7 +1497,7 @@ async function restoreConversationHistory(id:string,signal:AbortSignal,automatic
   const older=result.partial?' Older messages remain on the agent.':'';
   // An explicit reload already shows whether a stopped reply finished; the pending check is retired.
   if(!automatic)cancelStoppedReply();
-  update({history:{sessionId:session.sessionId,conversationId:id,revision:(state.history?.revision||0)+1,messages,automatic,deliveryRevisionAtStart:result.deliveryRevisionAtStart},historyError:'',historyPartial:result.partial,...(automatic?{}:{open:false,replyNotice:''}),message:(automatic?'Saved conversation restored.':saved?'Conversation restored.':'History restored for this session; restart selection could not be saved.')+older});
+  update({history:{sessionId:session.sessionId,conversationId:id,revision:(state.history?.revision||0)+1,messages,automatic,deliveryRevisionAtStart:result.deliveryRevisionAtStart},historyError:'',historyPartial:result.partial,...(automatic?{}:{open:false,replyNotice:''}),message:automatic?older.trim():(saved?'Conversation restored.':'History restored for this session; restart selection could not be saved.')+older});
   const last=result.messages.at(-1);
   if(afterConnect&&selected.kind==='resident'&&last?.role==='user'&&typeof last.text==='string'&&typeof last.timestamp==='number'&&last.timestamp>Date.now()-RESTORED_REPLY_WINDOW_MS)
     scheduleStoppedReply(selected,session,id,{text:restoredText(last.text,last.userTextFormat),sentAt:last.timestamp,...(typeof last.clientMessageId==='string'?{clientMessageId:last.clientMessageId}:{})},STOPPED_REPLY_CHECK_MS,false);
@@ -1660,7 +1712,7 @@ async function residentBrowserLoginAction(signal: AbortSignal) {
   let login:Awaited<ReturnType<typeof cloud.login>>;
   try{login=await cloud.login(signal,()=>update({message:`Finish signing in to ${cloudServiceName(cloud.environment)} in your browser, then return here.`}));}
   // A cancelled or failed sign-in leaves the stored sign-in as it was: re-admit it afterwards.
-  catch(error){if(kept)residentRebindQueued=true;throw error;}
+  catch(error){if(kept)residentRebinds().queue();throw error;}
   const issued=(await cloudCredentialStore.read(residentEnvironment()))?.credentialId;
   // Admission binds the new sign-in: native attaches when the process already matches, otherwise
   // it restarts the agent once (a process bound to the replaced key is stopped by the write).
@@ -1818,7 +1870,9 @@ export const connectionController = {
     if(!proposal)throw Error('This action is no longer pending for the current screen. Open its original selection and review again.');
     return this.execute(proposal,context,signal);
   },
-  getWorkflowPresentationProtocol():1|2 { return active?.actions ? active.workflowProtocol ?? 1 : 1; },
+  getWorkflowPresentationProtocol():1|2 { return active?.actions && (active.workflowProtocol ?? 1) >= 2 ? 2 : 1; },
+  /** Registered workflow device protocol: 3 adds the selected-reminders read. */
+  getWorkflowDeviceProtocol():1|2|3 { return active?.actions ? active.workflowProtocol ?? 1 : 1; },
   getWorkflowDeviceTarget(){const selected=active;if(!selected||!selected.actions||!selected.actions.credential.enrollmentId)return null;return {installationId:selected.actions.credential.installationId,enrollmentId:selected.actions.credential.enrollmentId};},
   async workflowNoticeActions(review:WorkflowPhoneReview,signal:AbortSignal){
     const selected=active,generation=epoch,sessionId=state.session?.sessionId;
@@ -2196,16 +2250,24 @@ export const connectionController = {
       catch(error){update({residentRecovery:{step:'unavailable'}});throw error;}
     });
   },
+  /** Explicit owner action only: obtain a fresh native review before the existing guarded restart. */
+  async restartRecovery() {
+    if(operation||document.hidden||state.residentRecoveryReason!=='ipc-recovery-retention-limit'||state.session)return;
+    const generation=epoch;
+    await connectionController.reviewRecovery();
+    if(generation!==epoch||document.hidden||operation||state.residentRecoveryReason!=='ipc-recovery-retention-limit'||state.session||state.residentRecovery?.step!=='review')return;
+    await connectionController.confirmRecovery();
+  },
   cancelRecoveryReview(){if(!operation)update({residentRecovery:undefined});},
   async confirmRecovery() {
     if(operation||state.residentRecoveryReason!=='ipc-recovery-retention-limit'||state.residentRecovery?.step!=='review'||state.session)return;
     const review=state.residentRecovery.review;let archived=false;
-    await work('Keeping startup records…',async signal=>{
+    await work('Restarting Alpha…',async signal=>{
       update({residentRecovery:{step:'archiving'}});
       try{
         const result=await archiveLocalRecovery(review.reviewToken);signal.throwIfAborted();
         if(result.status!=='archived'||result.retainedCount!==0||result.archivedCount!==review.retainedCount){update({message:'',residentRecovery:{step:result.status==='partial'?'partial':'unavailable'}});return;}
-        archived=true;update({residentRecoveryReason:undefined,residentRecovery:undefined,error:'',message:'Startup records were kept. Restarting your agent…'});
+        archived=true;update({residentRecoveryReason:undefined,residentRecovery:undefined,error:'',message:'Restarting Alpha…'});
       }catch(error){update({residentRecovery:{step:'unavailable'}});throw error;}
     });
     if(archived)await connectionController.startLocal();
@@ -2581,7 +2643,7 @@ export const connectionController = {
       // The agent keeps running: reconnected (or restarted) without Cloud inference, and the
       // sign-in dialog asks for an account again.
       // A cancelled sign-out still removed the local key above; the agent is then started by the queued rebind.
-      if(residentCloudFlow()){if(signal.aborted)residentRebindQueued=true;else{retire();try{await connectResident(signal);}catch(error){if(residentAlwaysPresent&&!active)update({kind:'recovering'});throw error;}update({message,open:true,...(state.residentInference==='unknown'?{error:RESIDENT_UNBIND_UNCONFIRMED}:{})});}}
+      if(residentCloudFlow()){if(signal.aborted)residentRebinds().queue();else{retire();try{await connectResident(signal);}catch(error){if(residentAlwaysPresent&&!active)update({kind:'recovering'});throw error;}update({message,open:true,...(state.residentInference==='unknown'?{error:RESIDENT_UNBIND_UNCONFIRMED}:{})});}}
     });
     // P-43: signing out unbinds inference only; the resident restarts without it.
     await ensureResident();
@@ -2708,6 +2770,7 @@ export const connectionController = {
       if(channelType==='VOICE_DM' && (('interrupted' in reply && reply.interrupted===true)||('noResponseReason' in reply && reply.noResponseReason==='ignored')))throw Error('The voice response did not complete. Check conversation history before speaking again.');
       let responseFailure: Error | undefined;
       const failed = ('interrupted' in reply && reply.interrupted===true) || ('failureKind' in reply && !!reply.failureKind) || ('terminalFailure' in reply && !!reply.terminalFailure);
+      const effectApplied=failed&&effectAppliedBeforeFailure(reply);
       // A completed Calendar read can truthfully fail its coverage guard. Its
       // visible answer and durable message identity remain usable; this is not
       // a transport failure and must not gain a retry prompt or extra card.
@@ -2727,6 +2790,10 @@ export const connectionController = {
         // on the failed turn is read like a direct HTTP refusal's; absent, nothing is invented.
         const timing = reply as { resetAt?: unknown; retryAfterSeconds?: unknown };
         responseFailure = replyFailure(failureKindOf(reply)??('interrupted' in reply&&reply.interrupted===true?'interrupted':undefined), selected, readServiceLimit({ failureKind: 'failureKind' in reply ? reply.failureKind : undefined, terminalFailure: 'terminalFailure' in reply ? reply.terminalFailure : undefined, resetAt: timing.resetAt, retryAfterSeconds: timing.retryAfterSeconds }));
+        // The turn failed after its action committed (a calendar event exists, say): the owner is
+        // told the action went through and the reply was cut off. A mapped provider or Cloud limit
+        // keeps its own retry information after that; the generic and plain interrupted texts do not.
+        if(effectApplied){const mapped=responseFailure instanceof AlphaClientError?responseFailure as AlphaClientError&{failureKind?:unknown;serviceLimit?:unknown;planAction?:unknown}:undefined;responseFailure=Object.assign(new AlphaClientError('transport-failed',mapped&&mapped.failureKind!=='interrupted'?`${EFFECT_APPLIED_INTERRUPTED} ${mapped.message}`:EFFECT_APPLIED_INTERRUPTED),{failureKind:typeof mapped?.failureKind==='string'?mapped.failureKind:failureKindOf(reply)??'interrupted'},mapped?.serviceLimit===undefined?{}:{serviceLimit:mapped.serviceLimit},mapped?.planAction===undefined?{}:{planAction:mapped.planAction});}
         if ('failureKind' in responseFailure) retractReadiness();
       }
       for(const key of ['messageId','userMessageId'] as const)if(reply[key]!==undefined&&!validateUuid(reply[key]))throw Error('The agent returned an invalid message identity.');
@@ -2749,16 +2816,23 @@ export const connectionController = {
               items=await selected.actions.pendingReview(message.context,requestSignal);
             }
           }
-          proposals = items.flatMap(item => item.proposal ? [item.proposal] : []); notices.push(...items.flatMap(item => item.notice ? [item.notice.slice(0, 500)] : []));notices=notices.slice(0,5); }
+          // A pending action joins the first reply after it appears; later replies do not repeat it.
+          const shown=announcedProposals.get(selected.actions)??new Set<string>();announcedProposals.set(selected.actions,shown);
+          const turnItems=items.filter(item=>!item.proposalId||!shown.has(item.proposalId));for(const item of items)if(item.proposalId)shown.add(item.proposalId);
+          proposals = turnItems.flatMap(item => item.proposal ? [item.proposal] : []); notices.push(...turnItems.flatMap(item => item.notice ? [item.notice.slice(0, 500)] : []));notices=[...new Set(notices)].slice(0,5); }
         catch { update({ message: 'Reply received. Phone action proposals could not be checked; use action history.' }); }
       }
       requestSignal.throwIfAborted();
       assertCurrent();
       // These events refresh records only. A later reply failure cannot undo a recorded effect.
       for(const invalidation of appRecordInvalidations(reply.actionResults))window.dispatchEvent(new CustomEvent(invalidation.event,{detail:{sessionId:session.sessionId,...(invalidation.revision===undefined?{}:{revision:invalidation.revision})}}));
+      // The agent recorded the user turn even when the reply failed: its identity rides on the
+      // failure so the sent bubble adopts it, and a later conversation re-read merges onto that
+      // bubble instead of adding a second copy. The failed assistant row keeps the phone's own text.
+      const messageBinding={conversationId:id,session:{...session}},recorded=typeof reply.userMessageId==='string'?{userMessageId:reply.userMessageId,messageBinding}:{};
       // A failed reply can follow a durably recorded proposal. Recover only the
       // existing identity/context-bound review; never retry chat or execute it.
-      if (responseFailure && !proposals?.length) throw responseFailure;
+      if (responseFailure && !proposals?.length) throw Object.assign(responseFailure,recorded);
       if(!failed&&directRequestedActions&&message.context.view==='home'&&cameraNavigation&&cameraAttempt&&typeof reply.userMessageId==='string'&&Array.isArray(reply.actionResults)){
         requestedCameraContinuation={messageId:reply.userMessageId,selected,session,generation,conversationId:id,client:cameraNavigation,attempt:cameraAttempt,expiresAt:Date.now()+30_000};
       }
@@ -2766,8 +2840,8 @@ export const connectionController = {
       // A reply that got through means the last Cloud limit no longer applies.
       if(!failed&&state.lastServiceLimit)update({lastServiceLimit:null});
       return { text: responseFailure
-        ? `${responseFailure.message} Pending phone actions are available for separate review. Nothing has been approved or performed automatically.`
-        : reply.text, ...(completedReads.length?{completedReads}:{}), ...(completedActions.length?{completedActions}:{}), ...(notices.length ? { notices } : {}), ...(!responseFailure?{...(typeof reply.messageId==='string'?{messageId:reply.messageId}:{}),...(typeof reply.userMessageId==='string'?{userMessageId:reply.userMessageId}:{}),messageBinding:{conversationId:id,session:{...session}}}:{}), ...(proposals ? { proposals } : {}), ...(!failed&&Array.isArray(reply.actionResults)?{actionResults:reply.actionResults}:{}) };
+        ? `${responseFailure.message} Pending phone actions are available for separate review.${effectApplied?'':' Nothing has been approved or performed automatically.'}`
+        : reply.text, ...(completedReads.length?{completedReads}:{}), ...(completedActions.length?{completedActions}:{}), ...(notices.length ? { notices } : {}), ...(!responseFailure?{...(typeof reply.messageId==='string'?{messageId:reply.messageId}:{}),messageBinding}:{}), ...recorded, ...(proposals ? { proposals } : {}), ...(!failed&&Array.isArray(reply.actionResults)?{actionResults:reply.actionResults}:{}) };
     } catch (error) {
       // Nothing carrying the message left this phone (no conversation, offline, changed owner, or a
       // Stop before the post): the composer keeps the text instead of reporting an unknown outcome.
@@ -3002,7 +3076,7 @@ export function ConnectionChooser() {
       extra={signInEntryRequired && !snapshot.signIn && !snapshot.busy
         ? <button onClick={()=>void connectionController.beginSignIn(residentEnvironment(),true)}>Retry sign-in</button>
         : browserCloudResidentEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Sign in with browser</button>:testMocksEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Browser sign-in (diagnostic)</button>:undefined}/>
-    {snapshot.legacySignInRecovery&&requiredSignInView.step==='choose'&&requiredSignInView.environment==='production'&&<button disabled={snapshot.busy} onClick={()=>void connectionController.restoreSavedSignIn()}>Restore saved sign-in</button>}
+    {!snapshot.cloudAccount&&snapshot.legacySignInRecovery&&requiredSignInView.step==='choose'&&requiredSignInView.environment==='production'&&<details aria-label="Sign-in troubleshooting"><summary>Trouble signing in?</summary><button disabled={snapshot.busy} onClick={()=>void connectionController.restoreSavedSignIn()}>Restore saved sign-in</button></details>}
     {snapshot.signOutNotice && snapshot.signOutNotice!==snapshot.message && <p role="status">{snapshot.signOutNotice}</p>}
     {productionSignInRequired && <ResidentRecoveryPanel snapshot={snapshot}/>}
   </div></div>;
@@ -3039,7 +3113,7 @@ export function ConnectionChooser() {
   // (Starting / Running on this device / Not running, with Retry) and its Eliza Cloud AI: sign-in
   // (which every Alpha Phone needs), plan, redeem code and sign-out. Plan state never stops the agent.
   const residentSignInRejected=snapshot.error===errorMessage({status:401});
-  const residentStatus=snapshot.session?'Running on this device':snapshot.residentRecoveryReason?'Recovery review needed':snapshot.kind==='recovering'?'Not running':'Starting…';
+  const residentStatus=snapshot.session?'Running on this device':snapshot.residentRecoveryReason?(snapshot.residentRecoveryReason==='ipc-recovery-retention-limit'?'Restart needed':'Needs attention'):snapshot.kind==='recovering'?'Not running':'Starting…';
   const residentNeedsPlan=snapshot.residentPlanNotice==='needs-plan'&&!!snapshot.cloudAccount&&!residentSignInRejected;
   const residentOffline=snapshot.residentPlanNotice==='offline'&&!snapshot.cloudAccount;
   // Only a required sign-in (first run, or a sign-in Cloud rejected) cannot be dismissed. The agent runs either way.
@@ -3181,15 +3255,14 @@ export function ConnectionChooser() {
 }
 
 function ResidentRecoveryPanel({snapshot}:{snapshot:ConnectionSnapshot}) {
-  return snapshot.residentRecoveryReason==='ipc-recovery-retention-limit'&&!snapshot.session&&<section aria-label="Agent recovery">
-        <p>Your notes, chats and sign-in stay unchanged.</p>
-        {snapshot.residentRecovery?.step==='review'?<>
-          <p>Alpha will keep {snapshot.residentRecovery.review.retainedCount} old startup records, then restart your agent.</p>
-          <div className="alpha-connection-actions"><button disabled={snapshot.busy} onClick={()=>void connectionController.confirmRecovery()}>Keep records and restart</button><button disabled={snapshot.busy} onClick={()=>connectionController.cancelRecoveryReview()}>Cancel</button></div>
-        </>:<>
-          {snapshot.residentRecovery?.step==='unavailable'&&<p role="status">Recovery could not be checked. Your records were kept. Review again later.</p>}
-          {snapshot.residentRecovery?.step==='partial'&&<p role="status">Recovery did not finish. Your records were kept. Review again before restarting.</p>}
-          <button disabled={snapshot.busy} onClick={()=>void connectionController.reviewRecovery()}>Review recovery</button>
-        </>}
-      </section>;
+  const reason=snapshot.residentRecoveryReason,recovery=snapshot.residentRecovery;
+  return reason&&!snapshot.session&&<section aria-label="Restart Alpha">
+    <p role="status">{residentRecoveryCopy(reason,recovery)}</p>
+    {reason==='ipc-recovery-retention-limit'&&<button disabled={snapshot.busy} onClick={()=>void connectionController.restartRecovery()}>Restart Alpha</button>}
+    <details><summary>Details</summary>
+      <p>Reason: {reason}</p>
+      {recovery&&<p>Stage: {recovery.step}</p>}
+      {recovery?.step==='review'&&<p>Startup records to keep: {recovery.review.retainedCount}</p>}
+    </details>
+  </section>;
 }

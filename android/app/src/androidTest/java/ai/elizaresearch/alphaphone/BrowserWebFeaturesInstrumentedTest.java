@@ -91,7 +91,8 @@ public final class BrowserWebFeaturesInstrumentedTest {
 
  // ---- Plugin state through reflection (native witness, not renderer state) --------
  private Object plugin(MainActivity activity){return activity.getBridge().getPlugin("AlphaBrowser").getInstance();}
- private Object field(Object owner,String name)throws Exception{java.lang.reflect.Field field=owner.getClass().getDeclaredField(name);field.setAccessible(true);return field.get(owner);}
+ /** A declared field of owner's class or a superclass (the shared BrowserTabHostPlugin holds the host state). */
+ private Object field(Object owner,String name)throws Exception{for(Class<?> type=owner.getClass();type!=null;type=type.getSuperclass())try{java.lang.reflect.Field field=type.getDeclaredField(name);field.setAccessible(true);return field.get(owner);}catch(NoSuchFieldException next){/* superclass */}throw new NoSuchFieldException(name);}
  /** The shared download list (BrowserDownloadPolicy.History), as the persisted record keys plus the in-memory private and transfer state. */
  private List<JSONObject> downloadEntries()throws Exception{
   List<JSONObject> result=new ArrayList<>();AtomicReference<Exception> error=new AtomicReference<>();

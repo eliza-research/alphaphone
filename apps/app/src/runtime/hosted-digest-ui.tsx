@@ -691,7 +691,7 @@ export function HostedDigestPanel({composeQuestion,canComposeQuestion}:{composeQ
 							<p>
 								Skipped clock times are missed; repeated times run once at the
 								earlier offset. A missed schedule does not replay a backlog. Only these
-								digests are scheduled; workflows you build run when you start them.
+								digests are scheduled; workflows you build run when you start them.{' '}
 								{interactiveDevelopment ? 'Digests use the configured development reply.' : 'Model usage is billed by the connected agent.'}
 							</p>
 							{(["morning", "evening"] as const).filter(t=>t==='morning'||features.nativeEvening||sources.find(source=>source.id===sourceId)?.live?.provider!=='native').map((t) => (
