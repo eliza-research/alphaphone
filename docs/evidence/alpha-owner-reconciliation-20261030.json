@@ -1,0 +1,79 @@
+{
+  "schema": "alpha-owner-reconciliation-v1",
+  "recordedAt": "2026-10-30T10:37:24.774573+00:00",
+  "base": "6618172636b197fcc3bb04c56ae4b3fa686e50de",
+  "pin": "f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5",
+  "pr717": {
+    "head": "8a27b41510d1264cb18b553827d25b3767a7e419",
+    "integrationMerge": "f83f5b4babebbd8c1e898205bd00166420dc3145",
+    "strategy": "ours after semantic source review; exact base tree preserved",
+    "treeBefore": "a0bc2640151fd5ce0ee99cd842ed4132a6f4c870",
+    "treeAfter": "a0bc2640151fd5ce0ee99cd842ed4132a6f4c870",
+    "review": {
+      "current": "2d2509762e42e642927ad37697c9951d3710208e",
+      "pr717": "8a27b41510d1264cb18b553827d25b3767a7e419",
+      "mergeBase": "4de465075478584096209a759244bbe5ed4eb852",
+      "readOnly": true,
+      "currentEvidence": {
+        "deviceActionLines": 89,
+        "sharedCoordinator": true,
+        "currentRequestBrowserPolicy": true,
+        "directStoppedMatcher": true,
+        "legacyStoppedMatcherExists": false,
+        "projectedPaths": {
+          "packages/contracts/src/phone-dial.ts": true,
+          "packages/contracts/src/workflow-device.ts": true,
+          "packages/ui/src/api/conversation-turn-controller.ts": true,
+          "plugins/plugin-assistant/src/services/device-actions/client-coordinator.ts": true,
+          "plugins/plugin-assistant/src/services/device-actions/maps-contract.ts": true,
+          "plugins/plugin-assistant/src/services/device-actions/workflow-contract.ts": true,
+          "plugins/plugin-assistant/src/services/device-actions/contract.ts": true,
+          "plugins/plugin-assistant/src/services/device-actions/phone-dial-contract.ts": true
+        },
+        "testFixtureLoadsProductionBinding": true
+      },
+      "unsafeOldSnapshotDifferences": {
+        "lacksCurrentRequestBrowserPolicy": true,
+        "addsNarrowingCasts": true,
+        "castsRecordOperation": true
+      },
+      "recommendation": [
+        "Treat PR717 runtime extraction intent as already integrated; do not restore its file snapshots.",
+        "Retain current request grounding, journal identity, actual upstream types, current pin and native admission receipts.",
+        "Optionally port its real wire/proposal setup into current receipt tests while preserving current authored-URL refusal cases; this is test maintenance, not an unmet runtime extraction."
+      ]
+    },
+    "preservedFiles": {
+      "apps/app/src/runtime/device-actions.ts": "c85099044e02a9d18fce4bcbb98a31c5eab37a82694084e6a5c553545304e0ab",
+      "apps/app/src/runtime/connection-ui.tsx": "4d5451a96c1248a9f59dccb0f3b84b70712ae961f2ff2225fa8eeb651dc8bb49",
+      "scripts/prepare-client-features.mjs": "c2f96bc3c4ca18c82ee92a9ab8101a4880d81db999884f7764a613fb16004a5e",
+      "test/browser-receipt-order.test.mjs": "450e1ecaa7e5e862ca4816cde8e30c44b5ae3f4b65946ac7e5fec7eebb4d0010",
+      "test/fixtures/device-action-policy.mjs": "aa8c10207fe716f3b68b6f8630364e4d64d1b9853652777fb18451f08ad81cb8",
+      "test/stopped-reply-match.test.mjs": "f64c956d92ec067a7a0a83abe01b102425b67a9a6e3062c7fd34307515615e0d"
+    },
+    "remoteMergeStatus": "not yet merged; this is local integration ancestry"
+  },
+  "pr759": {
+    "head": "ba664a4635f25d8f32fe8c281c1929f17efcf405",
+    "quietBackgroundOriginalCommit": "2c3ed6f7af0bbfae2e3806d700c816f95b7c92d2",
+    "quietBackgroundIntegration": "da7f5a8ecf8825cd24f943b5ab4a6e84639bab0c",
+    "behavior": "Failed background pending-action reads retain cards, expiry and retry binding without a toast. Explicit review/outcome reporting remains unchanged.",
+    "verification": {
+      "command": "node --test test/pending-action-background-recovery.test.mjs",
+      "before": "Expected failure reproduced on exact base source; see quiet-background-before.log",
+      "after": "4 passed, 0 failed",
+      "logHashes": {
+        "quiet-background-before.log": "feb8abf8acc8afa5988e47138795c868ecb638c859571a86f003f7e9fcb16b47",
+        "quiet-background-current.log": "514f8a6a0458185f1e2ea543c28e6f485d80a0432445329fb6d1acd60dd87246"
+      }
+    },
+    "remaining": {
+      "0f6671a4b": "Do not expand the parity allowlist; stricter current parity checks pass.",
+      "95bd9fa9c": "Do not downgrade pin or native receipts; current f31 embedding/voice provenance is newer.",
+      "3baaf0964": "Shared replacement proposed in upstream PR38300. Adopt after full validation/merge rather than restore the private selector.",
+      "ba664a463": "Current reachability record will be regenerated for the final reviewed pin."
+    },
+    "remoteMergeStatus": "pending shared Home adoption and final combined verification"
+  },
+  "scope": "Source reconciliation and focused behavior checks only. Final combined source/browser/Android checks, full AOSP boot, real integrations and device acceptance remain pending."
+}
