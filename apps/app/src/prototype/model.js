@@ -4848,8 +4848,7 @@ registerView("settings", {
           ] },
           { rows: ST_PERMS.map(function (pm) { var n = Object.keys(st.perms[pm[0]] || {}).filter(function (k) { return st.perms[pm[0]][k] && (k === "alpha" || isMvpView(k)); }).length; return stNav({ d: IC[pm[2]], label: pm[1], val: n === 1 ? "1 app" : n + " apps", go: function () { set({ perm: pm[0] }); } }); }) },
           { rows: [
-            stNav({ d: IC.stList, label: "Activity", val: logN + " today", go: function () { set({ log: true }); } }),
-            stNav({ d: IC.flow, label: "Workflow runs", go: function () { api.open("workflows"); } })
+            stNav({ d: IC.stList, label: "Activity", val: logN + " today", go: function () { set({ log: true }); } })
           ] },
           { rows: [
             // No "Wipe memory" action: there is no reviewed memory-erase path to call, so none is offered.
@@ -5023,8 +5022,7 @@ registerView("settings", {
     } else if (P === "privacy" && st.log) {
       var lg = ST_LOG.slice(); if (api.get("browser").booked && BR_LINKS.venue) lg.unshift(["now", "Booked " + BR_LINKS.venue + " for you (confirmed)", "globe"]);
       p2 = page("Activity", { back: function () { set({ log: false }); }, groups: [
-        { rows: lg.map(function (l) { return stNav({ d: IC[l[2]] || IC.check, label: l[1], val: l[0], noChev: true, go: function () {} }); }) },
-        { rows: [stNav({ d: IC.flow, label: "Workflow runs", go: function () { api.open("workflows"); } })] }
+        { rows: lg.map(function (l) { return stNav({ d: IC[l[2]] || IC.check, label: l[1], val: l[0], noChev: true, go: function () {} }); }) }
       ] });
     }
     if (p2) { p2.z = 6; stack.push(p2); }

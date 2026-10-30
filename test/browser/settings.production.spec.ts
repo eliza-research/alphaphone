@@ -36,7 +36,7 @@ async function openSettings(page:Page){
  await expect(page.locator('html')).toHaveAttribute('data-active-view','settings');
 }
 /** Labels whose effect is outside the page and verified by their own suites. */
-const external=new Set(['Agent connection','Manage Cloud account','Open Inbox','Scheduled digests','Workflow runs','Wipe memory']);
+const external=new Set(['Agent connection','Manage Cloud account','Open Inbox','Scheduled digests','Wipe memory']);
 
 test('every production Settings control has a real effect, never a toast alone',async({page})=>{
  page.on('dialog',dialog=>void dialog.dismiss());
@@ -87,6 +87,7 @@ const removedRows:Record<string,RegExp[]>={
  'Connections':[/^Other connectors$/,/^Not available in this version$/,/^Last change$/],
  'Notifications':[/^Delivery timing$/],
  'Voice and agent settings':[/^Personality settings$/,/^Managed by your agent$/],
+ 'Privacy & data':[/^Workflow runs$/],
 };
 test('production Settings shows no developer or removed rows, even with ?tools=1',async({page})=>{
  await page.addInitScript(offline);
