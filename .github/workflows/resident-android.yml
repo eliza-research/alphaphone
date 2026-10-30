@@ -214,7 +214,8 @@ jobs:
             env -i HOME="$HOME" PATH="$PATH" TMPDIR="$RUNNER_TEMP" NO_COLOR=1 \
             BUN_INSTALL_CACHE_DIR="${BUN_INSTALL_CACHE_DIR:-$HOME/.bun/install/cache}" \
             BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 \
-            "$bun_executable" --no-env-file --cwd "$source" install --offline --frozen-lockfile --ignore-scripts
+            /bin/sh -c 'cd "$1" && shift && exec "$@"' sh "$source" \
+            "$bun_executable" --no-env-file install --offline --frozen-lockfile --ignore-scripts
           sha256sum --check test-results/resident-ci/sdk-lock.sha256
           (cd "$source" && "$bun_executable" --no-env-file pm ls --all) > test-results/resident-ci/sdk-graph-after.txt
           cmp test-results/resident-ci/sdk-graph-before.txt test-results/resident-ci/sdk-graph-after.txt

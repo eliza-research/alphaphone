@@ -6,6 +6,8 @@ import importlib.util
 import io
 import json
 import os
+import shutil
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -116,6 +118,29 @@ class TransportTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     acquire.download(3, destination, digest, 'UNIT_TEST_NOT_A_CREDENTIAL', opener=Opener(), max_bytes=maximum)
                 self.assertFalse(destination.exists())
+
+
+class OfflineCommandTests(unittest.TestCase):
+    def test_pinned_bun_install_uses_process_cwd_not_global_cwd_flag(self):
+        bun = os.environ.get('ALPHA_TEST_BUN') or shutil.which('bun')
+        self.assertTrue(bun, 'Pinned Bun must be installed before command contract tests')
+        self.assertEqual(subprocess.check_output([bun, '--version'], text=True).strip(), '1.4.2')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'package.json').write_text('{"name":"cwd-contract-fixture","private":true}')
+            env = {'PATH': '/usr/bin:/bin', 'HOME': tmp, 'TMPDIR': tmp, 'NO_COLOR': '1'}
+            # --help never installs. It reproduces the actual failing parser route
+            # without needing a dependency graph, SDK, credentials or network.
+            old = subprocess.run([bun, '--no-env-file', '--cwd', tmp, 'install', '--help'],
+                                 cwd=tmp, env=env, capture_output=True, text=True, timeout=10)
+            self.assertEqual(old.returncode, 1)
+            self.assertIn('Script not found "install"', old.stderr)
+            correct = subprocess.run(['/bin/sh', '-c', 'cd "$1" && shift && exec "$@"', 'sh', tmp,
+                                      bun, '--no-env-file', 'install', '--help'],
+                                     cwd='/', env=env, capture_output=True, text=True, timeout=10)
+            self.assertEqual(correct.returncode, 0, correct.stderr)
+            self.assertIn('Usage: bun install', correct.stdout + correct.stderr)
+            self.assertEqual(sorted(p.name for p in root.iterdir()), ['package.json'])
 
 
 if __name__ == '__main__':
