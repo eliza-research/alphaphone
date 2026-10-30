@@ -975,8 +975,15 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       const browserSession=connectionController.getSnapshot().session;
       const present=await this.browserNavigateApproved(operation.url, signal, true);
       return { status: 'succeeded', summary: browserNavigationSummary(operation.url),presentBrowser:()=>{
-        if(!this.live||document.hidden||connectionController.getSnapshot().session!==browserSession||JSON.stringify(alphaClient.getState().context)!==JSON.stringify(expectedContext))return;
-        present?.();
+        const show=()=>{
+          if(!this.live||document.hidden||alphaClient.getState().pending||connectionController.getSnapshot().session!==browserSession||JSON.stringify(alphaClient.getState().context)!==JSON.stringify(expectedContext))return;
+          present?.();
+        };
+        // Showing Browser changes the view, and a view change cancels the active request. A directly
+        // requested open runs inside the chat request that still carries its reply: show Browser after
+        // that request settles, so the reply stays whole instead of "Stopped." with a stop notice.
+        if(!alphaClient.getState().pending){show();return;}
+        const stop=alphaClient.subscribe(()=>{if(alphaClient.getState().pending)return;stop();setTimeout(()=>{try{show();}catch{/* A retired tab keeps its journaled receipt. */}},0);});
       } };
     });
     context(this);
