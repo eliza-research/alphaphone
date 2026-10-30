@@ -2,14 +2,11 @@
   "$comment": "Shrink-only parity of Alpha with Eliza's reference mobile registration (test/feature-parity.test.mjs, scripts/feature-manifest.mjs --parity). Brands may differ only by identity and theme. 'differences' are the functional manifest differences still open, each with the Alpha module that owns it; 'modules' are the Alpha source files that still carry behaviour (everything but apps/app/src/product). Remove an entry and lower its ceiling when the behaviour moves upstream; never add one.",
   "reference": "ELIZA_MOBILE_PRODUCT",
   "ceiling": {
-    "differences": 20,
+    "differences": 17,
     "modules": 545
   },
   "differences": {
     "view:clock:only-b": "Eliza offers Clock; Alpha hands alarms and timers to the Android clock (clock.handoff) without a Clock view.",
-    "view:inbox:only-a": "apps/app/src/runtime/gmail-mailbox.ts",
-    "view:maps:only-a": "apps/app/src/maps",
-    "view:photos:only-a": "apps/app/src/runtime/photo-library.ts",
     "capability:calendar.agenda-read.v1:only-a": "apps/app/src/runtime/connection-ui.tsx deviceCapabilities and apps/app/src/runtime/device-actions.ts",
     "capability:calendar.availability-read.v1:only-a": "apps/app/src/runtime/connection-ui.tsx deviceCapabilities and apps/app/src/runtime/device-actions.ts",
     "capability:calendar.create.v1:only-a": "apps/app/src/runtime/connection-ui.tsx deviceCapabilities and apps/app/src/runtime/device-actions.ts",
