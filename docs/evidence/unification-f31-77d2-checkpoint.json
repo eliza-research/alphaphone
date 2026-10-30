@@ -1,0 +1,70 @@
+{
+  "source": "77d2b3054ae264dfd75433d451583e638dc77949",
+  "upstream": "f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5",
+  "engine": "d960f633ddb034d0dd828a55216cfc17d012acbd",
+  "sourceVerification": {
+    "passed": 2748,
+    "failed": 0,
+    "skipped": 3,
+    "todo": 1,
+    "fullVerify": true
+  },
+  "android": {
+    "command": "npm run android:build:local",
+    "exitCode": 0,
+    "compiled": [
+      "standaloneDebug",
+      "standaloneRelease",
+      "launcherDebug",
+      "launcherRelease"
+    ],
+    "instrumentation": "both compiled, not executed",
+    "lint": "passed",
+    "runtimePackaging": "all four passed,1118entries each",
+    "runtimeAbis": [
+      "arm64-v8a"
+    ],
+    "runtimeTarget": "linux-musl"
+  },
+  "artifacts": [
+    {
+      "file": "artifacts/standalone-debug.apk",
+      "sha256": "a60bbbb1a588c2687267935d7be91aaf8bcc4d7a25a94ab8be757b8c295c48b5",
+      "runtime": "PACKAGED",
+      "signed": true,
+      "distributable": null,
+      "voiceQualified": false
+    },
+    {
+      "file": "artifacts/standalone-release-unsigned.apk",
+      "sha256": "2b1187bced7d1acc07d112bb6ee1131655410a8aaf235e7d673eaac624fb938a",
+      "runtime": "PACKAGED",
+      "signed": false,
+      "distributable": false,
+      "voiceQualified": false
+    },
+    {
+      "file": "artifacts/launcher-debug.apk",
+      "sha256": "897fa7c8c484c4d896f49c02e0d7f019383910d487c26b39a7e1177f2f152ea2",
+      "runtime": "PACKAGED",
+      "signed": true,
+      "distributable": null,
+      "voiceQualified": false
+    },
+    {
+      "file": "artifacts/launcher-release-unsigned.apk",
+      "sha256": "d05505a803c29bc3213c5dae329e4118b7d622a71cf0ed7e5e0faea1fdec3a67",
+      "runtime": "PACKAGED",
+      "signed": false,
+      "distributable": false,
+      "voiceQualified": false
+    }
+  ],
+  "evidenceDirectory": "artifacts/unification-checkpoints/f31d7c3-77d2b3054",
+  "limitations": [
+    "Releases are unsigned and non-distributable.",
+    "Voice user acceptance remains false.",
+    "No x86 runtime qualification.",
+    "No application installation, HOME-role test, image boot, live integration or device acceptance is established."
+  ]
+}

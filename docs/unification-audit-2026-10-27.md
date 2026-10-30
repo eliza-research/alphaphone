@@ -574,3 +574,28 @@ including both real-ZIP verifier suites, device receipts, authored-URL refusals 
 stopped-turn matching, pass. The queued Android command correctly refused to start
 after the failed full check. A new full source check and four-variant Android command
 are required at the resulting commit before this checkpoint is accepted.
+
+
+### October 30 — complete f31 source and Android checkpoint
+
+At Alpha `77d2b3054ae264dfd75433d451583e638dc77949`, the ordinary
+`npm run verify` passed with 2,748 tests passed, no failures, three skips and
+one existing APEX payload-key TODO. The real prepared-SDK tests use their
+automatic source discovery; the manual source and Bun override variables were
+unset for this full run. Types, production build and the 422-file flag-off
+bundle audit passed.
+
+The complete required `npm run android:build:local` then passed at the same
+head and upstream `f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5`: standalone and
+launcher debug/release APKs, both instrumentation APK compilations, lint, and
+final runtime/APK inspections. All four packages contain the authenticated
+ARM64 linux-musl runtime; each runtime inspection checks 1,118 entries. Local
+voice assets and ASR are packaged with no recorded byte differences. Voice
+user qualification remains false. Releases are unsigned and non-distributable.
+
+The exact files, mappings, BuildConfigs, notices and logs are preserved under
+`artifacts/unification-checkpoints/f31d7c3-77d2b3054`; the compact committed
+record is `docs/evidence/unification-f31-77d2-checkpoint.json`. This supersedes
+the earlier command-level verifier failure at the f31 checkpoint. It proves
+source verification and APK packaging only: no new app installation, emulator
+HOME-role test, full image boot, live integration or device acceptance is claimed.
