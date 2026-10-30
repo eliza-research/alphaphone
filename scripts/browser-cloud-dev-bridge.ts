@@ -272,7 +272,12 @@ export function browserCloudDevBridge():Plugin {
   if(cloudResident&&(process.env.ELIZA_DEV_ALLOW_TEST_MOCKS==='1'||process.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS==='1'||process.env.VITE_LOCAL_AGENT!=='1'||!process.env.ALPHA_ELIZA_SOURCE||!process.env.ALPHA_REMOTE_PROFILE))throw Error('Cloud resident requires real local source and mocks off');
   const profile=path.resolve(process.env.ALPHA_BROWSER_CLOUD_PROFILE??path.join(homedir(),'.local/share/alphaphone/browser-cloud'));
   const selected=environment(process.env.VITE_ALPHA_CLOUD_ENVIRONMENT??'production');
-  const resident=cloudResident?await createCloudResidentHost({source:path.resolve(process.env.ALPHA_ELIZA_SOURCE!),profile:path.resolve(process.env.ALPHA_REMOTE_PROFILE!),port:Number(process.env.ALPHA_REMOTE_PORT),environment:selected}):undefined;
+  let resident;
+  if(cloudResident){
+   const profileMode=process.env.ALPHA_CLOUD_RESIDENT_PROFILE??'lean';
+   if(profileMode!=='lean'&&profileMode!=='full')throw Error('Invalid Cloud resident profile mode');
+   resident=await createCloudResidentHost({source:path.resolve(process.env.ALPHA_ELIZA_SOURCE!),profile:path.resolve(process.env.ALPHA_REMOTE_PROFILE!),port:Number(process.env.ALPHA_REMOTE_PORT),environment:selected,profileMode});
+  }
   if(resident)server.httpServer?.once('close',()=>{void resident.close();});
   const handler=createBrowserCloudDevHandler({profile,resident,...(cloudResident?{environment:selected,diagnostic:(event:unknown)=>console.info('[alpha-cloud-auth]',JSON.stringify(event))}:{})});server.middlewares.use(BROWSER_CLOUD_BRIDGE_PATH,(req,res)=>{void handler(req,res);});
  }};

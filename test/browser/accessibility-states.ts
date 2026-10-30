@@ -253,9 +253,18 @@ export const CONNECTED_STATES: State[] = [
   connected('Settings connections', ['Settings', 'Connections'], { home: true }),
 ];
 
-/** Live states that exist only on the development server (developer surfaces). */
+/** Live states that exist only behind the one Developer gate: the development server opened with ?tools=1. */
 export const DEVELOPMENT_STATES: State[] = [
-  live('Settings developer', ['Settings', 'Developer']),
+  {
+    name: 'live Settings developer',
+    open: async (page, theme) => {
+      await page.addInitScript(offline);
+      await page.goto(theme ? `/?theme=${theme}&tools=1` : '/?tools=1');
+      await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
+      await press(page, ['Settings', 'Developer']);
+      await settle(page);
+    },
+  },
 ];
 
 /** The renderer's own failure screens. */

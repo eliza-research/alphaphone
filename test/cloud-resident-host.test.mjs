@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {createServer} from 'node:net';
-import {createCloudResidentHost} from '../scripts/cloud-resident-host.mjs';
+import {createCloudResidentHost} from './fixtures/product-character-host.mjs';
 test('Cloud host retires old processes, strips direct-provider keys and never persists Cloud credentials',async()=>{
  const profile=await fs.mkdtemp(join(tmpdir(),'alpha-cloud-resident-')),events=[],launches=[];let rejectStop=false;
  const launch=async options=>{let done;const completion=new Promise(resolve=>done=resolve);const id=launches.length;launches.push(options);events.push('start'+id);return {completion,async stop(){events.push('stop'+id);if(rejectStop)throw Error('stop failed');done({code:0});}};};
@@ -32,7 +32,7 @@ test('Cloud readiness waits for the single running agent after the auth listener
    if(calls===1)return new Response('{}',{status:503});
    return Response.json({agents:[{status:calls===2?'starting':'running'}]});
   }});
- try{await host.clear();assert.deepEqual(await host.ready(new AbortController().signal),{state:'host-managed'});assert.equal(calls,3);
+ try{await host.clear();assert.deepEqual(JSON.parse(JSON.stringify(await host.ready(new AbortController().signal))),{state:'host-managed'});assert.equal(calls,3);
   await host.bind({token:'synthetic-cloud-secret',credentialId:'retained',reference:'retained-ref'});
   const controller=new AbortController();controller.abort();await assert.rejects(host.ready(controller.signal),{name:'AbortError'});
   assert.equal(host.status('retained').attachable,true,'cancelled readiness preserves the admitted Cloud binding');

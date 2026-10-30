@@ -6,15 +6,15 @@ import test from 'node:test';
 // Execute the complete adapter with only its platform/service dependencies
 // replaced. No Calendar write API is supplied: handoff must only open a form.
 const code=stripTypeScriptTypes(readFileSync('apps/app/src/prototype/agent-calendar-adapter.ts','utf8').replace(/^import .*;\n/gm,'').replace(/^export /gm,''),{mode:'transform'});
-function fixture({status='ready',sources=1,authority='canonical',platform='web',form=null,provider='eliza',recordPort=null,pendingText=()=> 'Synthetic pending',testMocks=false}={}){
- const state={status,ownerKey:'owner-A',feed:{events:[]},calendars:Array.from({length:sources},(_,i)=>({summary:`Source ${i}`,provider,calendarId:String(i)}))};
+function fixture({status='ready',sources=1,authority='canonical',platform='web',form=null,provider='eliza',recordPort=null,pendingText=()=> 'Synthetic pending',testMocks=false,calendars=null}={}){
+ const state={status,ownerKey:'owner-A',feed:{events:[]},calendars:calendars??Array.from({length:sources},(_,i)=>({summary:`Source ${i}`,provider,calendarId:String(i),includeInFeed:true,accessRole:'owner'}))};
  const refreshes=[],creates=[],listeners={};let published;
  class Calendar{state=state;subscribe(fn){published=fn;return()=>{};}refresh(window){refreshes.push(window);}create(_sourceKey,input){creates.push(input);return {outcome:'created',event:null};}invalidateNext(){state.nextFresh=false;if(state.next?.event&&Date.parse(state.next.event.endAt)<=Date.now())state.next=null;}retire(){}sourceHandle(key){return 'handle:'+key;}sourceKeyForHandle(handle){return handle.slice('handle:'.length);}}
  const connection={subscribe:()=>()=>{},getAppRecordClient:()=>recordPort};
  const install=new Function('AgentCalendar','Capacitor','connectionController','calendarSourceKey','presentCalendarIntervals','calendarFormCreate','getZonedDateParts','addDaysToLocalDate','calendarOwnerKey','agentPendingText','testMocksEnabled',code+';return installAgentCalendarAdapter;')(Calendar,{getPlatform:()=>platform},connection,c=>c.calendarId,()=>{},draft=>draft,()=>({}),()=>({}),()=>state.ownerKey,pendingText,testMocks);
 
  const opened=[];const calendar={calendarAuthority:authority,form};
- class Shell{live=true;componentDidMount(){}componentWillUnmount(){}vget(){return calendar;}openView(...args){opened.push(args);}setState(){}}
+ class Shell{live=true;componentDidMount(){}componentWillUnmount(){}vget(){return calendar;}vset(_view,patch){Object.assign(calendar,patch);}openView(...args){opened.push(args);}setState(){}}
  const views={calendar:{render:()=>({f:{cals:[],repeats:[{label:'Weekly'}],alerts:[{label:'10 min'}]}})}};install(Shell,views,{});
  const oldWindow=globalThis.window;globalThis.window={addEventListener(){},removeEventListener(){}};
  globalThis.document={hidden:false,addEventListener(type,fn){listeners[type]=fn;},removeEventListener(type,fn){if(listeners[type]===fn)delete listeners[type];}};
@@ -33,9 +33,21 @@ test('multiple authorized sources require an explicit Calendar selection',()=>{
  const f=fixture({sources:2});assert.equal(f.shell.reviewScannedCalendarDraft(draft),true);assert.equal(f.opened[0][1].form.cal,'');
 });
 test('unavailable sources, preservation review and existing drafts retain camera review',()=>{
- for(const options of [{sources:0},{status:'disconnected'},{status:'transition-required'},{status:'legacy-recovery'},{authority:'legacy'},{authority:'legacy-google'},{form:{title:'Keep me'}}]){
+ for(const options of [{sources:0},{status:'disconnected'},{status:'transition-required'},{status:'legacy-recovery'},{authority:'legacy'},{form:{title:'Keep me'}}]){
   const f=fixture(options);assert.equal(f.shell.reviewScannedCalendarDraft(draft),false,JSON.stringify(options));assert.deepEqual(f.opened,[]);
  }
+});
+test('the one merged Calendar offers only feed calendars that accept events',()=>{
+ const source=(calendarId,includeInFeed,accessRole)=>({summary:calendarId,provider:'google',calendarId,includeInFeed,accessRole});
+ // Holidays is shown but read only, and Birthdays is not in the feed: the owner's calendar is the only destination.
+ const f=fixture({calendars:[source('owner',true,'owner'),source('holidays',true,'reader'),source('birthdays',false,'owner')]});
+ assert.equal(f.shell.reviewScannedCalendarDraft(draft),true);assert.equal(f.opened[0][1].form.cal,'handle:owner');
+ assert.deepEqual(f.views.calendar.displaySources().sources.map(row=>[row.name,row.on,row.writable]),[['owner',true,true],['holidays',true,false]]);
+ const readOnly=fixture({calendars:[source('holidays',true,'reader')]});assert.equal(readOnly.shell.reviewScannedCalendarDraft(draft),false);
+});
+test('a saved "Previously connected calendars" choice reopens the one merged Calendar',()=>{
+ const f=fixture({authority:'legacy-google'});assert.equal(f.calendar.calendarAuthority,'canonical');
+ assert.equal(f.shell.reviewScannedCalendarDraft(draft),true);assert.equal(f.opened[0][1].calendarAuthority,'canonical');
 });
 test('explicit Android Calendar handoff preserves the native draft',()=>{
  const f=fixture({authority:'android-native',platform:'android',status:'disconnected',sources:0});assert.equal(f.shell.reviewScannedCalendarDraft(draft),true);assert.equal(f.opened[0][1].form,draft);assert.equal(f.opened[0][1].calendarAuthority,'android-native');

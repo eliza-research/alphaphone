@@ -43,8 +43,25 @@ test('production review history refresh preserves browser instructions and modal
 test('stale action history replies cannot mutate the current connection',async()=>{
  const f=fixture();let resolve;f.context.readActionHistory=()=>new Promise(r=>{resolve=r;});const result=f.review();f.context.epoch++;resolve(f.entries);await result;assert.equal(f.snapshot().actionHistory,undefined);assert.equal(f.snapshot().message,'Finish signing in in your browser.');
 });
-test('development and non-Android presentation retain their explicit review notice',async()=>{
- for(const options of [{dev:true},{android:false}]){const f=fixture(options);f.update({open:true});assert.equal(f.snapshot().open,true);await f.review();assert.equal(f.snapshot().actionHistory,f.entries);assert.match(f.snapshot().message,/phone action needs your review/);}
+test('background history preserves open panels and connection messages on every platform',async()=>{
+ for(const options of [{},{dev:true},{android:false}])for(const open of [false,true]){
+  const f=fixture({...options,open});f.update({error:'Retained connection notice'});const before=f.snapshot();
+  await f.review();assert.equal(f.snapshot().actionHistory,f.entries);assert.equal(f.snapshot().open,before.open);assert.equal(f.snapshot().message,before.message);assert.equal(f.snapshot().error,before.error);
+ }
+});
+test('mixed historical outcomes are retained without settlement, synchronization or execution',async()=>{
+ const f=fixture({android:false});
+ f.entries.splice(0,f.entries.length,{id:'done',state:'done',local:{status:'succeeded'}},{id:'started',state:'executing',local:{phase:'started'}},{id:'uncertain',state:'reconciliation_required',local:{status:'failed'}});
+ let mutations=0;for(const name of ['syncReceipts','reconcile','reject','approve','execute'])f.context.active.actions[name]=()=>{mutations++;throw Error('No background mutation');};
+ const before=f.snapshot();await f.review();assert.equal(f.snapshot().actionHistory,f.entries);assert.equal(f.snapshot().actionHistory.length,3);assert.equal(mutations,0);assert.equal(f.snapshot().open,before.open);assert.equal(f.snapshot().message,before.message);
+});
+test('a replaced active owner cannot publish a delayed history reply',async()=>{
+ const f=fixture({android:false});let resolve;f.context.readActionHistory=()=>new Promise(r=>{resolve=r;});const pending=f.review();f.context.active={actions:{}};resolve(f.entries);await pending;assert.equal(f.snapshot().actionHistory,undefined);assert.equal(f.snapshot().open,false);
+});
+test('an aborted history read leaves presentation and records untouched',async()=>{
+ const f=fixture({android:false});const controller=new AbortController();const prior=[{id:'retained',state:'done'}];f.context.state={...f.snapshot(),actionHistory:prior};
+ f.context.readActionHistory=(_selected,signal)=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));
+ const before=f.snapshot();const pending=f.context.refreshActionReview(controller.signal);controller.abort();await assert.rejects(pending);assert.equal(f.snapshot(),before);assert.equal(f.snapshot().actionHistory,prior);
 });
 
 test('unresolved saved-session restore does not start the earlier automatic sign-in probe',()=>{
@@ -70,6 +87,7 @@ test('expired and rejected restored sessions still require authentication; valid
 // normal conversation binding, before preferences, transport or model work.
 const preflightSource = [
   section('function residentSignInRequired()', '\n'),
+  section('function fundingNeeded()', '\n'),
   'const preflightController = {',
   section('  close() {', '  cancel() {'),
   section('  async prepareVoiceConversation(', '  async send('),
@@ -84,10 +102,12 @@ function preflightFixture(balance, options = {}) {
   const f = fixture({purpose: 'plan', ...options});
   let bindings = 0;
   Object.assign(f.context, {
-    AbortController, DOMException, document: {hidden: false}, navigator: {onLine: true},
+    AbortController, DOMException, document: {hidden: false}, navigator: {onLine: true}, setTimeout,
+    FUNDING_NEEDED: 'Add credits or enter a membership code to ask Alpha.',
+    AlphaClientError: class AlphaClientError extends Error {constructor(code, message) {super(message); this.code = code;}},
     residentCloudFlow: () => true, residentAlwaysPresent: true,
     residentStartInBackground: false, pendingBillingReview: null,
-    operation: null, requestedCameraContinuation: undefined,
+    operation: null, requestedCameraContinuation: undefined, clientObservationSession: undefined,
     NO_AGENT_SEND: 'No selected session', NO_AGENT_VOICE: 'No selected session',
     INFERENCE_OFFLINE_NOTICE: 'Offline',
     noSessionError: () => Error('No selected session'),
@@ -113,12 +133,18 @@ for (const balance of ['zero', 'checking', 'unavailable', undefined, 'funded', '
     for (const method of ['voice', 'send']) {
       const f = preflightFixture(balance);
       if (balance === 'zero') {
+        f.context.state.membershipDismissed = true;
         await assert.rejects(f[method](), error => {
-          assert.match(error.message, /Add funds or an active membership in Settings/);
-          if (method === 'send') assert.equal(error.notDispatched, true);
+          assert.equal(error.message, 'Add credits or enter a membership code to ask Alpha.');
+          // Nothing was sent, and the composer says why instead of a generic "Not sent".
+          assert.equal(error.notDispatched, true);
+          assert.equal(error.refusedBeforeTurn, true);
           return true;
         });
         assert.equal(f.bindings, 0);
+        // The Membership & credits sheet is offered again even after it was closed, once the refusal is delivered.
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(f.snapshot().membershipDismissed, false);
       } else {
         const result = await f[method]();
         assert.equal(method === 'voice' ? result.conversationId : result, 'conversation-1');
@@ -163,6 +189,14 @@ test('closing unknown balance uses ordinary close rules without claiming zero ba
   zero.context.state.open = true; zero.close();
   assert.equal(zero.snapshot().open, false);
   assert.equal(zero.snapshot().membershipDismissed, true);
+  // After a Cloud billing refusal the sheet closes the same way; the refusal stays until Cloud admits a turn.
+  for (const balance of ['funded', 'member', 'checking']) {
+    const refused = preflightFixture(balance);
+    refused.context.state.open = true; refused.context.state.fundingRefused = true; refused.close();
+    assert.equal(refused.snapshot().open, false);
+    assert.equal(refused.snapshot().membershipDismissed, true);
+    assert.equal(refused.snapshot().fundingRefused, true);
+  }
 });
 test('closing unknown balance preserves required sign-in for signed-out and expired accounts', () => {
   for (const balance of ['checking', 'unavailable', undefined]) {

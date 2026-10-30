@@ -7,6 +7,7 @@ export const GOOGLE_ACCOUNTS_CHANGED = 'alpha:google-accounts-changed';
 
 export interface GoogleAccountsClient {
   initiateGoogle(signal: AbortSignal, calendarPermission?: 'read' | 'write', gmailPermission?: 'read' | 'modify' | 'send' | 'drafts' | 'mailbox'): Promise<string>;
+  initiateGoogleWithReturn?(signal:AbortSignal,redirectUrl:string,calendarPermission?:'read'|'write',gmailPermission?:'read'|'modify'|'send'|'drafts'|'mailbox'):Promise<{authUrl:string;appReturn:boolean}>;
   gmailAccounts(signal: AbortSignal): Promise<GmailAccount[]>;
   disconnectGmail(connectionId: string, signal: AbortSignal): Promise<void>;
 }
@@ -57,6 +58,11 @@ export function createGoogleAccounts(
       const url = await client.initiateGoogle(signal, calendarPermission, gmailPermission);
       check(signal);
       return url;
+    },
+    async connectWithReturn(signal:AbortSignal,redirectUrl:string,calendarPermission:'read'|'write'='read',gmailPermission:'read'|'modify'|'send'|'drafts'|'mailbox'='read') {
+      check(signal);
+      const result=client.initiateGoogleWithReturn?await client.initiateGoogleWithReturn(signal,redirectUrl,calendarPermission,gmailPermission):{authUrl:await client.initiateGoogle(signal,calendarPermission,gmailPermission),appReturn:false};
+      check(signal);return result;
     },
     /** Caller owns confirmation. Reuse Gmail's one-request, read-back-verified grant revocation. */
     async disconnect(connectionId: string, signal: AbortSignal) {

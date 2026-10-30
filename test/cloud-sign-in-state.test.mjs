@@ -43,6 +43,12 @@ test('actual OTP form retains input through submission, pending state and wrong-
   assert.equal(document.querySelector('form').getAttribute('aria-busy'),'true');
   assert.equal(document.querySelector('form button').textContent,'Checking code…');
   assert.equal(document.querySelector('[role="status"]:not(#alpha-google-unavailable)')===null,true,'busy feedback stays inside the button without adding a line');
+  // Once the code is verified the account is admitted: the code check has ended (owner report 2026-10-30).
+  await render({busy:true,message:'Signing in…'});
+  assert.equal(document.querySelector('form button').textContent,'Signing in…');
+  assert.equal(document.querySelector('[role="status"]:not(#alpha-google-unavailable)')===null,true);
+  assert.ok(!document.body.textContent.includes('Checking'));
+  await render({busy:true,message:'Checking your code…'});
   await act(()=>document.querySelector('form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
   assert.equal(calls.length,1,'pending submit must not dispatch again');
   await render({busy:false,message:'',error:'That code did not work. Check it and try again, or send a new code.'});

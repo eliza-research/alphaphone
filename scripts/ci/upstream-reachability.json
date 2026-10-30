@@ -2,15 +2,100 @@
   "schema": 1,
   "repository": "elizaOS/eliza",
   "base": "develop",
-  "baseCommit": "fbc2d23d4bae0c7086ea529c019e5a47fb7b8352",
-  "head": "fbc2d23d4bae0c7086ea529c019e5a47fb7b8352",
-  "recordedAt": "2026-10-29",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...fbc2d23d4bae0c7086ea529c019e5a47fb7b8352",
-  "status": "identical",
-  "aheadBy": 0,
+  "baseCommit": "53f78e1e1d7e851572f3466655ae3d8c4261f18f",
+  "head": "641c179ce8214c864a7ea3dee23dae2d2bd2a682",
+  "recordedAt": "2026-10-30",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...641c179ce8214c864a7ea3dee23dae2d2bd2a682",
+  "status": "ahead",
+  "aheadBy": 22,
   "behindBy": 0,
-  "mergeBase": "fbc2d23d4bae0c7086ea529c019e5a47fb7b8352",
-  "pinOnlyCommits": [],
+  "mergeBase": "53f78e1e1d7e851572f3466655ae3d8c4261f18f",
+  "pinOnlyCommits": [
+    {
+      "sha": "5bf3316457ab12cb0e708a9db89e354d9ca7b974",
+      "subject": "fix(core): render Stage-1 routing and loop verdict events without envelope ids"
+    },
+    {
+      "sha": "9e7bc30d54cc1abf26d9ca9fe80584d71d84227d",
+      "subject": "fix(calendar): bind a bare intent number in a Stage-1 Calendar read"
+    },
+    {
+      "sha": "18fc48f2217986a4d4d97baeaad0bd92650fdbf5",
+      "subject": "fix(personal-assistant): offer separate free slots in propose_times"
+    },
+    {
+      "sha": "d232d4d3cd248d80e6ab3d8b7260fc213e6f9288",
+      "subject": "fix(agent): name view-interact controls only for views with scoped actions"
+    },
+    {
+      "sha": "8c2649601fbc9940f9654fe5625c0d5e9739250f",
+      "subject": "fix(assistant): reroute an applied-claim follow-up to its recent effect's domains"
+    },
+    {
+      "sha": "3c665465ab9e713b6f2afb54093bda40156d7615",
+      "subject": "fix(assistant): say plainly which calendar check failed and what changed"
+    },
+    {
+      "sha": "f90f1fbd6adff049e2f0d442c0747ff8dea8d36b",
+      "subject": "fix(assistant): drop empty follow-up, session and DM census provider text"
+    },
+    {
+      "sha": "e20d35c9c719eb14974c123ebbb77c1f6523c4d6",
+      "subject": "fix(lifeops): move a one-off owner reminder by delayMinutes on update"
+    },
+    {
+      "sha": "520dfbf111cf002598bdfb67080fe2f6fffb22b3",
+      "subject": "fix(trigger): send an OWNER_REMINDERS reminder's update back to OWNER_REMINDERS"
+    },
+    {
+      "sha": "c76b573f831ad7d6765bc7da459b0b3b96e66bac",
+      "subject": "perf(assistant): lead the Stage-1 user message with its static catalog and Task"
+    },
+    {
+      "sha": "2696c422056820d89600226f6b78f34ac55d8be5",
+      "subject": "fix(assistant): replay each call's declared turn scope in model history"
+    },
+    {
+      "sha": "0ef20d63a8f60f10c87cd315519d049ebd949f04",
+      "subject": "perf(assistant): keep the turn-scope protocol out of every tool schema"
+    },
+    {
+      "sha": "3ab51a24de11d3470cac03552d821fb6b1f3ce97",
+      "subject": "fix(assistant): reroute a referential follow-up to the domain its effect owns"
+    },
+    {
+      "sha": "fc0f8c9ebd37f8dd65a90db2028c6927a5ce2ff5",
+      "subject": "fix(calendar): encode aggregated feed reads that carry an undefined field"
+    },
+    {
+      "sha": "cf99e5955566e6001c2f771e28ef6ccf690d63ef",
+      "subject": "test(personal-assistant): accept Bun's slot time format in the spread test"
+    },
+    {
+      "sha": "6077930ff6ffd25ad01ece23e6a2cd1eb21da9fb",
+      "subject": "fix(assistant): leave an undeclared call's scope unknown in retry feedback"
+    },
+    {
+      "sha": "a69613c195181452dcf4efe408fd084ce95e506b",
+      "subject": "fix(lifeops): refuse a fractional delay on a relative reminder update"
+    },
+    {
+      "sha": "56b6bfcb0ce628d34952469f283127ba65ca5b58",
+      "subject": "Warm the Cloud inference connection before the first model call"
+    },
+    {
+      "sha": "bcc2099d8791e69f0bc9ece64100e0379461f215",
+      "subject": "Say what the Cloud pre-warm cannot warm"
+    },
+    {
+      "sha": "1c4080b3052839dfc1301b5e8ac8ef4aa5065ecb",
+      "subject": "fix(lifeops): resolve an unknown mutation target by its one-match title"
+    },
+    {
+      "sha": "d8f2e1fc35b841acd176184b0ae439e22c0eabf7",
+      "subject": "fix(lifeops): keep the target's guards on a title-resolved delete"
+    }
+  ],
   "pullRequests": [
     {
       "url": "https://github.com/elizaOS/eliza/pull/37059",
@@ -339,6 +424,26 @@
     {
       "url": "https://github.com/elizaOS/eliza/pull/38168",
       "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/38251",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/38277",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/38305",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/38317",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/elizaOS/eliza/pull/38325",
+      "status": "open"
     }
   ]
 }

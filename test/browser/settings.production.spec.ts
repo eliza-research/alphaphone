@@ -36,7 +36,7 @@ async function openSettings(page:Page){
  await expect(page.locator('html')).toHaveAttribute('data-active-view','settings');
 }
 /** Labels whose effect is outside the page and verified by their own suites. */
-const external=new Set(['Agent connection','Manage Cloud account','Open Inbox','Scheduled digests','Workflow runs','Wipe memory']);
+const external=new Set(['Agent connection','Manage Cloud account','Open Inbox','Scheduled digests','Wipe memory']);
 
 test('every production Settings control has a real effect, never a toast alone',async({page})=>{
  page.on('dialog',dialog=>void dialog.dismiss());
@@ -79,6 +79,27 @@ test('every production Settings control has a real effect, never a toast alone',
  expect(toastOnly).toEqual([]);
 });
 
+/** Rows the Settings cleanup removed or put behind the Developer gate; a product build shows none of them. */
+const removedRows:Record<string,RegExp[]>={
+ '':[/^Developer$/,/^Try mock mode$/,/^Saved data needs recovery$/,/^Last change$/],
+ 'About':[/^Update channel \(development\)$/,/^Updates$/,/^Alpha does not check for updates$/,/^Runtime$/],
+ 'Calendar':[/^Calendar backups$/,/^Display only$/],
+ 'Connections':[/^Other connectors$/,/^Not available in this version$/,/^Last change$/],
+ 'Notifications':[/^Delivery timing$/],
+ 'Voice and agent settings':[/^Personality settings$/,/^Managed by your agent$/,/^Scheduled digests$/],
+ 'Privacy & data':[/^Workflow runs$/],
+};
+test('production Settings shows no developer or removed rows, even with ?tools=1',async({page})=>{
+ await page.addInitScript(offline);
+ for(const query of ['/','/?tools=1','/?mode=dev&tools=1']){
+  for(const [label,rows] of Object.entries(removedRows)){
+   await page.goto(query);await page.getByRole('button',{name:'Settings',exact:true}).click();
+   await expect(page.locator('html')).toHaveAttribute('data-active-view','settings');
+   if(label){await current(page).getByText(label,{exact:true}).first().click();await expect(page.getByRole('button',{name:'Back to Settings',exact:true})).toBeVisible();}
+   for(const row of rows)await expect(current(page).getByText(row),`${query} ${label||'Settings'}: ${row}`).toHaveCount(0);
+  }
+ }
+});
 
 test('production Google account entry opens and dismisses its owned dialog',async({page})=>{
  await page.addInitScript(offline);
@@ -88,6 +109,7 @@ test('production Google account entry opens and dismisses its owned dialog',asyn
  const panel=page.getByRole('dialog',{name:'Google accounts',exact:true});
  await expect(panel).toBeVisible();
  await expect(panel.getByRole('button',{name:'Sign in to Eliza Cloud',exact:true})).toBeVisible();
+ await expect(panel.getByText('Gmail notification settings',{exact:true})).toHaveCount(0);
  await closeOverlays(page);
  await expect(panel).toHaveCount(0);
  await expect(current(page).getByRole('button',{name:'System accounts',exact:true})).toBeVisible();

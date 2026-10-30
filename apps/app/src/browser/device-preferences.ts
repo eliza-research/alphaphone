@@ -1,11 +1,11 @@
 import {devicePreferencesDocument} from './preference-documents';
 
-export const initialDevicePreferences=()=>({askBeforeAgentActions:false,autoLoadMailImages:true,wifiActive:true,bluetoothActive:false,cellularActive:false,airplaneMode:false,microphoneEnabled:true,locationEnabled:true,doNotDisturb:false,preAirplane:null as null|{wifiActive:boolean;bluetoothActive:boolean;cellularActive:boolean},powerSave:false,batteryPercent:100,charging:true,textScalePercent:100,brightness:100,music:70,ring:70,alarm:70});
+export const initialDevicePreferences=()=>({askBeforeAgentActions:false,agentGmailChanges:true,agentCalendarEdits:true,autoLoadMailImages:true,wifiActive:true,bluetoothActive:false,cellularActive:false,airplaneMode:false,microphoneEnabled:true,locationEnabled:true,doNotDisturb:false,preAirplane:null as null|{wifiActive:boolean;bluetoothActive:boolean;cellularActive:boolean},powerSave:false,batteryPercent:100,charging:true,textScalePercent:100,brightness:100,music:70,ring:70,alarm:70});
 export type DevicePreferences=ReturnType<typeof initialDevicePreferences>;
 function validate(raw:unknown):DevicePreferences{
  if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Device settings need recovery.');
  const state={...initialDevicePreferences(),...raw};
- for(const key of ['askBeforeAgentActions','autoLoadMailImages','wifiActive','bluetoothActive','cellularActive','airplaneMode','microphoneEnabled','locationEnabled','doNotDisturb','powerSave','charging'] as const)if(typeof state[key]!=='boolean')throw Error('Device settings need recovery.');
+ for(const key of ['askBeforeAgentActions','agentGmailChanges','agentCalendarEdits','autoLoadMailImages','wifiActive','bluetoothActive','cellularActive','airplaneMode','microphoneEnabled','locationEnabled','doNotDisturb','powerSave','charging'] as const)if(typeof state[key]!=='boolean')throw Error('Device settings need recovery.');
  for(const key of ['batteryPercent','textScalePercent','brightness','music','ring','alarm'] as const)if(!Number.isFinite(state[key])||state[key]<(key==='textScalePercent'?75:0)||state[key]>(key==='textScalePercent'?150:100))throw Error('Device settings need recovery.');
  if(state.preAirplane!==null&&(!state.preAirplane||typeof state.preAirplane!=='object'||Array.isArray(state.preAirplane)||Object.keys(state.preAirplane).some(key=>!['wifiActive','bluetoothActive','cellularActive'].includes(key))||['wifiActive','bluetoothActive','cellularActive'].some(key=>typeof (state.preAirplane as unknown as Record<string,unknown>)[key]!=='boolean')))throw Error('Device settings need recovery.');
  return state;
