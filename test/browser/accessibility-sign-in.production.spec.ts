@@ -81,8 +81,8 @@ async function phoneBehind(page: Page) {
   }, ASSISTANT_GROUP);
 }
 
-for (const scale of [1, 2]) {
-  test(`the required sign-in page at ${scale * 100}% text: names, focus, reading order and nothing behind it`, async ({ page }) => {
+for (const scale of [1, 2, 3]) {
+  test(`the required sign-in page at ${scale * 100}% text: names, focus, reading order and nothing behind it`, async ({ page }, info) => {
     const { foreign } = await signedOut(page);
     if (scale !== 1) {
       await zoomText(page, scale);
@@ -98,19 +98,33 @@ for (const scale of [1, 2]) {
     expect(found, found.join('\n')).toEqual([]);
     expect(await phoneBehind(page)).toEqual([]);
     expect(await unreachable(page)).toEqual([]);
+    if(scale===3){
+      await page.screenshot({path:info.outputPath("sign-in-300-top.png")});
+      const email=page.getByRole("textbox",{name:"Email",exact:true});
+      await email.fill("owner@example.invalid");await email.focus();await page.keyboard.press("Tab");
+      await expect(page.getByRole("button",{name:"Email me a code",exact:true})).toBeFocused();
+      await page.screenshot({path:info.outputPath("sign-in-300-keyboard.png")});
+    }
     expect(foreign).toEqual([]);
   });
 }
 
 test.describe('landscape', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 915, height: 412 } });
-  for (const scale of [1, 2]) test(`the required sign-in page on its side at ${scale * 100}% text keeps every control reachable`, async ({ page }) => {
+  for (const scale of [1, 2, 3]) test(`the required sign-in page on its side at ${scale * 100}% text keeps every control reachable`, async ({ page }, info) => {
     const { foreign } = await signedOut(page);
     if (scale !== 1) await zoomText(page, scale);
     const found = blocking(format([...await auditTree(page), ...await auditPage(page, { clipping: true, overlap: true }), ...await auditReadingOrder(page), ...await auditTabOrder(page)]));
     expect(found, found.join('\n')).toEqual([]);
     expect(await phoneBehind(page)).toEqual([]);
     expect(await unreachable(page)).toEqual([]);
+    if(scale===3){
+      await page.screenshot({path:info.outputPath("sign-in-300-top.png")});
+      const email=page.getByRole("textbox",{name:"Email",exact:true});
+      await email.fill("owner@example.invalid");await email.focus();await page.keyboard.press("Tab");
+      await expect(page.getByRole("button",{name:"Email me a code",exact:true})).toBeFocused();
+      await page.screenshot({path:info.outputPath("sign-in-300-keyboard.png")});
+    }
     expect(foreign).toEqual([]);
   });
 });

@@ -12,6 +12,11 @@ const {CloudProtocol}=await import('../apps/app/src/runtime/cloud-protocol.ts');
 const {cloudStorageNamespace,productionCloud,stagingCloud}=await import('../apps/app/src/runtime/cloud-deployment.generated.ts');
 const profileFile=(profile,name)=>join(profile,cloudStorageNamespace.replaceAll(':','-'),name);
 const {BrowserCloudConnection,BrowserCloudSignIn}=await import('../apps/app/src/browser/cloud-connection.ts');
+test('browser sign-in cancellation reports an unacknowledged host retirement and can retry',async()=>{
+ const original=globalThis.fetch,port=new BrowserCloudSignIn();let calls=0;
+ globalThis.fetch=async(_url,input)=>{assert.deepEqual(JSON.parse(input.body),{operation:'signInCancel'});return ++calls===1?Response.json({code:'unavailable'},{status:503}):Response.json({});};
+ try{await assert.rejects(port.cancel(),error=>error.code==='unavailable');await port.cancel();assert.equal(calls,2);}finally{globalThis.fetch=original;}
+});
 const owner='11111111-1111-4111-8111-111111111111',org='22222222-2222-4222-8222-222222222222',credentialId='33333333-3333-4333-8333-333333333333',reference='browser-cloud-reference:44444444-4444-4444-8444-444444444444';
 const secret='synthetic-cloud-credential-not-a-real-key';
 test('Cloud browser login admits only one session and the optional fixed Alpha hint',async()=>{

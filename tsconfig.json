@@ -130,6 +130,15 @@
       ],
       "@elizaos/contracts/remote-agent-pairing": [
         "./.eliza/client-features/packages/contracts/src/contracts/remote-agent-pairing.ts"
+      ],
+      "@elizaos/ui/android-cloud/NativeCloudSignInView": [
+        "./.eliza/client-features/packages/ui/src/android-cloud/NativeCloudSignInView.tsx"
+      ],
+      "@elizaos/ui/android-cloud/native-cloud-sign-in-controller": [
+        "./.eliza/client-features/packages/ui/src/android-cloud/native-cloud-sign-in-controller.ts"
+      ],
+      "@elizaos/auth/auth/native-cloud-sign-in": [
+        "./.eliza/client-features/packages/auth/src/auth/native-cloud-sign-in.ts"
       ]
     }
   },

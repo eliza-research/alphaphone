@@ -599,3 +599,32 @@ record is `docs/evidence/unification-f31-77d2-checkpoint.json`. This supersedes
 the earlier command-level verifier failure at the f31 checkpoint. It proves
 source verification and APK packaging only: no new app installation, emulator
 HOME-role test, full image boot, live integration or device acceptance is claimed.
+
+### October 30 — merged sign-in and native transport adoption
+
+The integration now admits Eliza `440e3c76fc231f4c6e0763e2a71dbd8ae7b9bdaa`,
+including merged PR 38275's shared native sign-in controller/view and PR 38291's
+native owner transport. Alpha removes its duplicate sign-in state transitions and
+forms, while retaining its product copy, native port and current connection owner.
+The focused consumer suite passes 138 tests, and the integrated renderer passes
+TypeScript. Full source, browser and distribution qualification at this new pin
+are separate pending checks; the complete f31 checkpoint above remains preserved.
+
+Seven engine, model-input and JNI source paths have identical Git tree/blob IDs
+between f31 and 440. The existing ARM64 embedding receipt is unchanged, and its
+input, identity, library and BGE checks pass at the new pin. Official voice staging
+verified the same 29 files and regenerated only its source admission record.
+`docs/evidence/native-440-source-admission-20261030.json` records the comparison
+and hashes of the retained historical records. No new engine build or device
+execution is implied, and voice qualification remains false.
+
+An independent runtime source checkout was prepared at the new exact pin. Its
+dependency lock matches the prior checkpoint; copied dependency directories have
+independent paths, and all 14,831 links were checked for references back to the
+prior runtime. No donor source or build target was found. This preparation is not
+evidence of an APK, image boot or live service result.
+
+The shared Inbox action API and the canonical full-App browser consumer remain
+separate pending integrations. In particular, the intermediate Home change can
+still navigate incorrectly after an Inbox read fails and the account binding
+disappears; it is not accepted until the presenter-provided action is consumed.

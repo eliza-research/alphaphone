@@ -382,19 +382,21 @@ export class CloudProtocol {
     }
   }
   /** The host stored the key before reporting success; confirm this store now holds a sign-in. */
-  private async storedSignIn(outcome: CloudSignInAuthenticated, signal: AbortSignal): Promise<CloudSignInAuthenticated> {
+  async confirmStoredSignIn(outcome: CloudSignInAuthenticated, signal: AbortSignal): Promise<CloudSignInAuthenticated> {
     const credential = await this.credentials.read(this.environment);
     signal.throwIfAborted();
     const usable = !!credential?.credentialId && (typeof credential.token === "string" && !!credential.token
       || !!this.credentials.acceptsReferences && typeof credential.credentialReference === "string");
     if (!usable) throw new CloudProtocolError("credentials-missing");
+    if (outcome.credentialId !== undefined && outcome.credentialId !== credential.credentialId)
+      throw new CloudProtocolError("account-changed");
     if (credential.expiresAt !== undefined && credential.expiresAt <= Date.now()) throw new CloudProtocolError("expired");
     return outcome;
   }
   /** Google through the native account picker: request native MFA, or finish after the key is stored. */
   async signInWithGoogle(signal: AbortSignal): Promise<CloudSignInGoogleOutcome> {
     const outcome = await this.signInStep(signal, port => port.startGoogle({ environment: this.environment }), value => googleOutcome(value, this.environment));
-    return outcome.status === "mfa" ? outcome : this.storedSignIn(outcome, signal);
+    return outcome.status === "mfa" ? outcome : this.confirmStoredSignIn(outcome, signal);
   }
   /** Sends a six-digit code to the address. The address is never stored or logged here. */
   async startEmailSignIn(email: string, signal: AbortSignal): Promise<CloudSignInEmailStarted> {
@@ -405,15 +407,15 @@ export class CloudProtocol {
   }
   async verifyPhoneSignIn(attemptId: string, code: string, signal: AbortSignal): Promise<CloudSignInAuthenticated | CloudSignInMfaRequired> {
     const outcome = await this.signInStep(signal, port => { if (!port.verifyPhone) throw new CloudSignInError('unavailable'); return port.verifyPhone({ attemptId, code }); }, value => signInVerified(value, this.environment));
-    return outcome.status === "mfa" ? outcome : this.storedSignIn(outcome, signal);
+    return outcome.status === "mfa" ? outcome : this.confirmStoredSignIn(outcome, signal);
   }
   async verifyEmailSignIn(attemptId: string, code: string, signal: AbortSignal): Promise<CloudSignInAuthenticated | CloudSignInMfaRequired> {
     const outcome = await this.signInStep(signal, port => port.verifyEmail({ attemptId, code }), value => signInVerified(value, this.environment));
-    return outcome.status === "mfa" ? outcome : this.storedSignIn(outcome, signal);
+    return outcome.status === "mfa" ? outcome : this.confirmStoredSignIn(outcome, signal);
   }
   async verifyMfaSignIn(attemptId: string, code: string, signal: AbortSignal): Promise<CloudSignInAuthenticated> {
     const outcome = await this.signInStep(signal, port => port.verifyMfa({ attemptId, code }), value => signInAuthenticated(value, this.environment));
-    return this.storedSignIn(outcome, signal);
+    return this.confirmStoredSignIn(outcome, signal);
   }
   async disconnect(expected?: CloudCredential | null): Promise<void> {
     this.cancelLogin();

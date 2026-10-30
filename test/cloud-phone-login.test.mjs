@@ -8,22 +8,18 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {createServer} from 'vite';
 const require=createRequire(import.meta.url);
 
-test('phone sign-in and code entry stay in the app and are absent without native support',()=>{
- const code=buildSync({entryPoints:['apps/app/src/runtime/cloud-sign-in-ui.tsx'],bundle:true,write:false,platform:'node',format:'cjs',jsx:'automatic',external:['react','react/jsx-runtime']}).outputFiles[0].text;
- const module={exports:{}};new Function('require','module','exports',code)(require,module,module.exports);
- const panel=module.exports.CloudSignInPanel;
- const props={view:{step:'choose',environment:'production'},busy:false,google:false,message:'',error:'',actions:{}};
- const render=extra=>renderToStaticMarkup(React.createElement(panel,{...props,...extra}));
- assert.doesNotMatch(render({phone:false}),/Text me a code/);
- assert.match(render({phone:false}),/Sign in to verify your account/);
- assert.match(render({phone:false}),/review access before authorizing Alpha Phone/);
- assert.doesNotMatch(render({phone:false}),/By continuing, you allow/);
- assert.match(render({phone:true}),/Phone number with country code/);
- assert.match(render({phone:true}),/type="tel"/);
- assert.doesNotMatch(render({phone:true,emailEnabled:false}),/Email me a code/);
- const entered=render({phone:true,view:{step:'code',environment:'production',phone:'+14155550100',email:'',attemptId:'synthetic',expiresAt:Date.now()+60000,resendAt:Date.now()+60000}});
- assert.match(entered,/Enter your phone code/);assert.match(entered,/\+14155550100/);assert.match(entered,/Resend code in/);
- assert.doesNotMatch(entered,/href=|iframe|type="email"/);
+test('phone sign-in and code entry use the shared controller and stay absent without native support',async()=>{
+ const {CloudSignInPanel,signInFixture}=await import('./helpers/shared-sign-in.mjs');
+ const f=signInFixture({status:async()=>({inApp:true,methodsKnown:true,email:true,phone:false,google:false})});
+ const render=()=>renderToStaticMarkup(React.createElement(CloudSignInPanel,f.props));
+ await f.controller.refreshReadiness();
+ assert.doesNotMatch(render(),/Text me a code/);assert.match(render(),/Sign in to verify your account/);
+ assert.match(render(),/review access before authorizing Alpha Phone/);assert.doesNotMatch(render(),/By continuing, you allow/);
+ f.port.status=async()=>({inApp:true,methodsKnown:true,email:false,phone:true,google:false});await f.controller.refreshReadiness();
+ assert.match(render(),/Phone number with country code/);assert.match(render(),/type="tel"/);assert.doesNotMatch(render(),/Email me a code/);
+ await f.controller.startPhone('+14155550100');
+ assert.match(render(),/Enter your phone code/);assert.match(render(),/\+14155550100/);assert.match(render(),/Resend code in/);
+ assert.doesNotMatch(render(),/href=|iframe|type="email"/);f.controller.dispose();
 });
 
 test('phone codes use the native host, retain MFA, and never reach renderer HTTP',async()=>{

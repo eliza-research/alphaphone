@@ -63,7 +63,7 @@ async function firstRun(page: Page, overrides: Partial<StubAccount> = {}) {
 async function nothingLeft(page: Page, welcome: ReturnType<Page['getByRole']>, untouched = false) {
   await expect.poll(()=>harness(page,f=>f.calls.filter((call:string)=>call==='Agent.start').length)).toBeGreaterThan(0);
   await expect(welcome).toBeVisible();
-  await expect(welcome.getByRole('button', { name: 'Email me a code', exact: true })).toBeEnabled();
+  await expect(welcome.getByRole('textbox', { name: 'Email', exact: true })).toBeEnabled();
   expect(await harness(page, f => f.slots['cloud:production'] ?? null)).toBeNull();
   expect(await stub(page, s => s.order.some((entry: string) => entry.startsWith('configureCloudProvider')))).toBe(false);
   if (untouched) {

@@ -11,16 +11,15 @@ const declarations=[
  part('function retire(','/** Test mocks only (the mock-mode exit'),
  part('async function work(','// Keep startup-error provenance'),
  part('async function ensureResident(','/** P-43: a startup path'),
- part('async function inAppSignInMethods(','/** A failed or cancelled step'),
  part('export function productionCloudSignInRequired(','export function ConnectionChooser()').replaceAll('export ',''),
 ].join('\n');
 const hooks=part('  const automaticSignInProbe =','  const visible=');
-const methods=part('  async restoreSavedSignIn()','  async pair(')+part('  async beginSignIn(','  /** Leaves the sign-in screen');
+const methods=part('  async restoreSavedSignIn()','  async pair(')+part('  async beginSignIn(','  /** Retire only this attempt.');
 const body=`function make(React, signInReadiness, options){
  const {useRef,useEffect,useSyncExternalStore}=React;
  let state={residentRecoveryReason:options.recoveryReason,open:true,purpose:'agent',cloudAccount:null,startupResolved:true,residentSavedCredential:false,residentPlanNotice:null,error:'',message:'',busy:false,signIn:{step:'choose',environment:'production'},session:{sessionId:'existing-owner-session'},kind:'resident',legacySignInRecovery:true};
  let residentTurns=null;
- let epoch=0,operation=null,residentStartInBackground=false,residentStartFailure='',sending=null,active={kind:'resident'},signInReadinessOwner=null,inAppGoogle=false,inAppPhone=false,inAppEmail=true;
+ let signInAttempt=null,nativeSignInOperation=false;let epoch=0,operation=null,residentStartInBackground=false,residentStartFailure='',sending=null,active={kind:'resident'},signInReadinessOwner=null,inAppGoogle=false,inAppPhone=false,inAppEmail=true;
  const timeline=[],listeners=new Set(),actionReceipts=new Map(),conversationMemory=new Map(),appRequests=new Set();
  const RESIDENT_NAME='Local agent',RESIDENT_STARTING='Starting',SIGN_IN_READINESS_WAIT_MS=6000;
  const isAndroid=true,testMocksEnabled=false,residentAlwaysPresent=true,developmentPageSuspended=false;
@@ -31,6 +30,7 @@ const body=`function make(React, signInReadiness, options){
  let nativeResolve,admissionResolve,nativeCalls=0,nativeCancels=0,admissions=0,probeCalls=0,copied=false,invocation;const admissionGate=new Promise(resolve=>{admissionResolve=resolve;});
  const native=new Promise(resolve=>{nativeResolve=resolve;}),probeResolves=[];
  const cloudSignIn={restoreSavedSignIn(){nativeCalls++;timeline.push('native-request');return native;},async cancel(){nativeCancels++;timeline.push('native-cancel');},async savedSignInRecoveryStatus(){return{eligible:!copied};},status(){probeCalls++;timeline.push('readiness-start');return new Promise(resolve=>probeResolves.push(resolve));}};
+ function createSignInAttempt(environment,refresh){probeCalls++;timeline.push('readiness-start');signInAttempt={getSnapshot:()=>({environment,readiness:'loading'}),refreshReadiness:async()=>{},retireReadiness(){}};return signInAttempt;}
  class CloudSignInError extends Error{}
  async function connectResident(signal){admissions++;timeline.push('normal-admission-start');signal.throwIfAborted();if(options.deferAdmission)await admissionGate;signal.throwIfAborted();if(options.failAdmission)throw Error('Current account verification failed');if(options.unbound){active={kind:'resident'};update({residentInference:'unavailable',session:{sessionId:'unbound-session'}});timeline.push('normal-admission-unbound');return;}active={kind:'resident'};update({cloudAccount:{userId:'verified-owner'},residentInference:'cloud',session:{sessionId:'current-session'}});timeline.push('normal-admission-complete');}
  ${declarations}

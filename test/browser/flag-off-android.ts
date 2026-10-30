@@ -94,6 +94,8 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
       const navigationResult=navigation().request(method,path,body,headers,owner);if(navigationResult)return navigationResult;
       // Mounted canonical views probe these sources; this native fixture provides none.
       if (method === 'GET' && ['/api/notes/state', '/api/lifeops/calendar/feed', '/api/lifeops/calendar/calendars', '/api/lifeops/calendar/next-context'].includes(path.split('?')[0])) return { status: 503, data: { error: 'Canonical records unavailable in this fixture' } };
+      // This legacy fixture intentionally advertises no optional observation format.
+      if (path === '/api/status' && method === 'GET') return { status: 404, data: { error: 'Status unavailable in this fixture' } };
       if (path === '/api/auth/me') return ok({ identity: { id, kind: 'owner' }, access: { role: 'OWNER', mode: 'local' } });
       if (path === '/api/status') return {status:503,data:{}};
       if (path === '/api/notes/state' && method === 'GET') return ok({success:true,data:{notes:[],trash:[],revision:0}});

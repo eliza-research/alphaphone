@@ -32,6 +32,10 @@ function matches(actual, expected) {
     Object.entries(expected).every(([file, digest]) => actual[file] === digest);
 }
 export const CLIENT_FEATURE_PATHS = [
+  'packages/ui/src/android-cloud/NativeCloudSignInView.tsx',
+  'packages/ui/src/android-cloud/native-cloud-sign-in-controller.ts',
+  'packages/ui/src/android-cloud/native-cloud-service-info.ts',
+  'packages/ui/src/styles/native-cloud-sign-in.css',
   'packages/contracts/src/browser-address-input.ts',
   'packages/contracts/src/browser-request-grounding.ts',
   'packages/contracts/src/stated-clock-time.ts',

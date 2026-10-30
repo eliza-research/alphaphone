@@ -164,7 +164,7 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
   await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('  synthetic-signin@example.invalid ');
   await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
   await expect(dialog.getByRole('form',{name:'Enter your email code'})).toBeVisible();
-  await expect(dialog.getByText('synthetic-signin@example.invalid',{exact:true})).toBeVisible();
+  await expect(dialog.getByRole('form',{name:'Enter your email code'})).toContainText('synthetic-signin@example.invalid');
   await expect(dialog.getByRole('button',{name:/^Resend code in \d+s$/})).toBeDisabled();
   expect((await calls(page)).find(c=>c.method==='startEmail')).toMatchObject({email:'synthetic-signin@example.invalid',environment:'production'});
   await dialog.getByLabel('Six-digit code').fill('000000');await dialog.getByRole('button',{name:'Verify',exact:true}).click();
@@ -205,16 +205,16 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
   await agent(page,'unavailable');
   const welcome=signInDialog(page);
   const google=welcome.getByRole('button',{name:'Continue with Google',exact:true});
-  await expect(google).toBeDisabled({timeout:2000});
-  await expect(welcome.getByText('Checking Eliza Cloud sign-in…',{exact:true})).toBeVisible();
+  await expect(google).toHaveCount(0);
+  await expect(welcome.getByText('Checking sign-in options…',{exact:true})).toBeVisible();
   await welcome.getByRole('button',{name:'Cancel sign-in',exact:true}).click();
-  const retry=welcome.getByRole('button',{name:'Retry sign-in',exact:true});
+  const retry=welcome.getByRole('button',{name:'Check sign-in options again',exact:true});
   await expect(retry).toBeEnabled({timeout:2000});
   // A late readiness result cannot admit the cancelled attempt or open a browser hand-off.
   await page.evaluate(()=>(window as any).signInFixture.releaseReadiness());
   await expect(retry).toBeEnabled();
-  await expect(google).toBeDisabled();
-  expect((await snapshot(page)).signIn).toBeNull();
+  await expect(google).toHaveCount(0);
+  expect((await snapshot(page)).signIn?.step).toBe('choose');
   expect((await calls(page)).filter(c=>c.method==='status'&&c.plugin==='AlphaCloudSignIn')).toHaveLength(1);
   await noHandOff(page);
   await agent(page,'unavailable');
@@ -228,13 +228,17 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
   await agent(page,'cloud');
   await page.evaluate(()=>{(window as any).signInFixture.signIn='readiness-hold';(window as any).planController.openPlan();});
   await page.getByRole('button',{name:'Approve this phone again',exact:true}).click();
-  await expect(page.getByText('Checking Eliza Cloud sign-in…',{exact:true})).toBeVisible();
+  await expect(page.getByText('Checking sign-in options…',{exact:true})).toBeVisible();
   await page.evaluate(()=>{(window as any).signInFixture.entitlementStatus='none';(window as any).planController.recheckPlanAfterRefusal();});
   await expect.poll(async()=>(await snapshot(page)).residentPlanNotice).toBe('needs-plan');
-  expect((await snapshot(page)).busy).toBe(true);
+  expect((await snapshot(page)).signIn?.step).toBe('choose');
   await page.evaluate(()=>(window as any).signInFixture.releaseReadiness());
   await agent(page,'unavailable');
   await expect(signInDialog(page)).toBeVisible();
+  // The provider operation retired the old probe. Explicit retry must own its new result.
+  await expect(signInDialog(page).getByRole('button',{name:'Continue with Google',exact:true})).toHaveCount(0);
+  await signInDialog(page).getByRole('button',{name:'Check sign-in options again',exact:true}).click();
+  await page.evaluate(()=>(window as any).signInFixture.releaseReadiness());
   await expect(signInDialog(page).getByRole('button',{name:'Continue with Google',exact:true})).toBeEnabled();
   expect(await fixture(page)).toMatchObject({saved:true,bound:false,running:true});
   expect((await calls(page)).filter(c=>c.method==='startGoogle')).toHaveLength(1);
@@ -247,19 +251,19 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
    await boot(page,{...await entitlements(),signIn:mode});
    await agent(page,'unavailable');
    if(mode==='readiness-hold'){
-    await expect(page.getByText('Checking Eliza Cloud sign-in…',{exact:true})).toBeVisible();
+    await expect(page.getByText('Checking sign-in options…',{exact:true})).toBeVisible();
     await page.clock.runFor(6000);
    }
    await readySignIn(page);
    const dialog=signInDialog(page);
    await expect(dialog).toBeVisible();
-   await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toBeDisabled();
+   await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toHaveCount(0);
    expect(await fixture(page)).toMatchObject({saved:false,bound:false,running:true});
    if(mode==='readiness-hold'){
     // A validated late answer updates only the same still-current chooser (cloud-sign-in-late-readiness).
     await page.evaluate(()=>(window as any).signInFixture.releaseReadiness());
     await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toBeEnabled();
-   }else await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toBeDisabled();
+   }else await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toHaveCount(0);
    await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('synthetic-signin@example.invalid');
    await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
    await dialog.getByLabel('Six-digit code').fill('123456');
@@ -288,7 +292,7 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
   await readySignIn(page);
   const dialog=signInDialog(page);
   await dialog.getByRole('button',{name:'Continue with Google',exact:true}).click();
-  await expect(dialog.getByText('Choose your Google account in the Android sign-in sheet. Alpha will finish signing you in.',{exact:true})).toBeVisible();
+  await expect(dialog.getByText('Choose your Google account in the Android sign-in sheet. Alpha Phone will finish signing you in.',{exact:true})).toBeVisible();
   await dialog.getByRole('button',{name:'Cancel sign-in',exact:true}).click();
   await expect.poll(async()=>(await calls(page)).some(c=>c.plugin==='AlphaCloudSignIn'&&c.method==='cancel')).toBe(true);
   await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toBeEnabled();
@@ -323,7 +327,7 @@ test.describe('in-app Eliza Cloud sign-in on the production Android composition'
   const dialog=signInDialog(page);
  await revealOtherMethods(page);
   await dialog.getByRole('textbox',{name:'Email',exact:true}).fill('synthetic-signin@example.invalid');await dialog.getByRole('button',{name:'Email me a code',exact:true}).click();
-  await expect(dialog.getByRole('alert')).toContainText('Alpha could not reach Eliza Cloud');
+  await expect(dialog.getByRole('alert')).toContainText('Alpha Phone could not reach Eliza Cloud');
   await expect(dialog.getByRole('form',{name:'Sign in with email'})).toBeVisible();
   expect(await fixture(page)).toMatchObject({saved:false,bound:false});
   await noHandOff(page);
@@ -379,9 +383,9 @@ for(const phone of [true,false]) test(`tenant method discovery ${phone?'offers p
  await readySignIn(page);
  const dialog=signInDialog(page);await expect(dialog).toBeVisible();
  await expect(dialog.getByRole('button',{name:'Email me a code',exact:true})).toHaveCount(0);
- await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toBeDisabled();
+ await expect(dialog.getByRole('button',{name:'Continue with Google',exact:true})).toHaveCount(0);
  await expect(dialog.getByRole('button',{name:'Text me a code',exact:true})).toHaveCount(phone?1:0);
- if(!phone)await expect(dialog.getByText('This service offers no sign-in method supported by this app. Contact the service administrator.',{exact:true})).toBeVisible();
+ if(!phone)await expect(dialog).toContainText('Eliza Cloud sign-in is unavailable right now. Try again.');
  expect((await calls(page)).filter(c=>['startPhone','startEmail','startGoogle'].includes(c.method))).toEqual([]);
  await noHandOff(page);
 });

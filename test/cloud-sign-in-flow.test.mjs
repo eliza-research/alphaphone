@@ -106,16 +106,12 @@ test('native sign-in never falls back to hosted login when readiness fails',asyn
  const ui=read('apps/app/src/runtime/connection-ui.tsx');
  const begin=between(ui,'async beginSignIn(','cancelSignIn() {');
  assert.doesNotMatch(begin,/residentBrowserLoginAction|browserCloudLoginAction|Opening Eliza Cloud sign-in/);
- // Execute the controller method with an unavailable, malformed, or timed-out readiness result.
- const method=begin.slice(0,begin.lastIndexOf('},')+1);
- const compiled=transformSync('const controller={'+method+'};',{loader:'ts'}).code;
- for(const methods of [null,{google:false},{google:true}]) {
-  const updates=[];let ensured=false,checking='';
-  const run=new Function('operation','cloudEnvironmentAllowed','work','inAppSignInMethods','cloudSignIn','CloudSignInError','cloud','residentCloudFlow','state','update','ensureResident','cloudServiceName',
-   'let epoch=0,signInReadinessOwner=null,inAppGoogle=false,inAppPhone=false,inAppEmail=true;'+compiled+';return controller.beginSignIn("production");');
-  await run(false,()=>true,async(message,action)=>{checking=message;return action(new AbortController().signal);},async()=>methods,{},Error,{environment:'production',cancelLogin(){}},()=>true,{purpose:'agent'},v=>updates.push(v),async()=>{ensured=true;},()=> 'Independent Service');
-  assert.equal(updates.at(-1).signIn.step,'choose');assert.equal(ensured,true);assert.equal(checking,'Checking Independent Service sign-in…');
- }
+ // The application delegates readiness and attempts to the same upstream controller as Eliza.
+ assert.match(ui,/import \{ NativeCloudSignInController \} from '@elizaos\/ui\/android-cloud\/native-cloud-sign-in-controller'/);
+ assert.doesNotMatch(ui,/async function inAppSignInMethods|async function showGoogleMfa/);
+ const view=read('apps/app/src/runtime/cloud-sign-in-ui.tsx');
+ assert.match(view,/<NativeCloudSignInView controller=\{controller\}/);
+ assert.doesNotMatch(view,/<form|startGoogle|verifyEmail|verifyMfa/);
  const plugin=read(shared+'CloudSignInPlugin.java');
  const measure=between(plugin,'private CloudSignInReadiness.Result measure(','// ── Google: native');
  for(const part of ['/api/v1/app-auth/mobile/config','/steward/auth/providers','CloudEmailCode.SEND_PATH','googleNative'])assert.ok(measure.includes(part),part);

@@ -24,7 +24,7 @@ test('Google protocol requests a native second factor without requiring or accep
  const client=new Function('googleOutcome',compiled+'return client;')(googleOutcome);
  client.environment='production';
  let credentialChecks=0;
- client.storedSignIn=async result=>{credentialChecks++;return result;};
+ client.confirmStoredSignIn=async result=>{credentialChecks++;return result;};
  client.signInStep=async(signal,run,parse)=>parse(await run({startGoogle:async input=>{assert.equal(input.environment,'production');return required();}}));
  assert.equal((await client.signInWithGoogle(new AbortController().signal)).status,'mfa');
  assert.equal(credentialChecks,0,'no sign-in or credential admission before MFA');
@@ -32,18 +32,6 @@ test('Google protocol requests a native second factor without requiring or accep
  client.signInStep=async()=>completed;
  assert.deepEqual(await client.signInWithGoogle(new AbortController().signal),completed);
  assert.equal(credentialChecks,1,'a completed sign-in still requires the saved credential');
-});
-
-test('Google controller shows the native MFA panel and does not bind an account before verification',async()=>{
- const source=read('apps/app/src/runtime/connection-ui.tsx');
- const code=method(source,'  async signInGoogle() {','  /** Sends a six-digit code');
- const compiled=transformSync('const controller={'+code+'};',{loader:'ts'}).code;
- for(const outcome of [required(),{status:'authenticated',environment:'production',expiresAt:Date.now()+60000,accountCreated:false}]){
-  let shown=0,signed=0,ensured=0;
-  const run=new Function('state','work','update','signInClient','signInFailed','showGoogleMfa','signedIn','ensureResident',compiled+'return controller.signInGoogle();');
-  await run({signIn:{step:'choose',environment:'production'}},async(_,fn)=>fn(new AbortController().signal),()=>{},()=>({signInWithGoogle:async()=>outcome}),()=>{},value=>{assert.equal(value.attemptId,attemptId);shown++;},async()=>{signed++;},async()=>{ensured++;});
-  assert.equal(shown,outcome.status==='mfa'?1:0);assert.equal(signed,outcome.status==='mfa'?0:1);assert.equal(ensured,1);
- }
 });
 
 test('native Google and email share MFA admission; callback state custody remains native',()=>{
@@ -62,19 +50,7 @@ test('native Google and email share MFA admission; callback state custody remain
  assert.match(source,/owner\.expiresAt = pending\.expiresAt/,'Google MFA remains bounded by the original attempt');
 });
 
-test('Google MFA return revalidates retained events against the current native attempt before displaying them',async()=>{
- const source=read('apps/app/src/runtime/connection-ui.tsx');
- const code=method(source,'  async signInReturned(value: unknown) {','  /**\n   * A return reached Alpha');
- const compiled=transformSync('const controller={'+code+'};',{loader:'ts'}).code;
- for(const [busy,active] of [[false,true],[false,false],[true,true]]){
-  let shown=0,ensured=0,checks=0;
-  const run=new Function('operation','residentCloudFlow','residentEnvironment','cloud','signInOutcome','showGoogleMfa','ensureResident','work','signedIn','signInClient','cloudSignIn',
-   'let queuedSignInReturn=null;'+compiled+';return async value=>{await controller.signInReturned(value);return queuedSignInReturn;};');
-  const fn=run(busy,()=>true,()=> 'production',{},googleOutcome,()=>{shown++;},async()=>{ensured++;},async(_,fn)=>fn(new AbortController().signal),()=>{throw Error('MFA must not bind account');},()=>{},
-   {resumeMfa:async input=>{assert.deepEqual(input,{attemptId,environment:'production'});checks++;return {active};}});
-  const outcome=required();const queued=await fn(outcome);
-  assert.equal(shown,!busy&&active?1:0);assert.equal(ensured,busy?0:1);assert.equal(checks,busy?0:1);assert.equal(queued,busy?outcome:null);
- }
+test('native Google MFA resume requires the same current unexpired attempt',()=>{
  const native=read('vendor/eliza/packages/auth/android/src/main/java/ai/eliza/auth/cloud/CloudSignInPlugin.java');
  const resume=method(native,' @PluginMethod public void resumeMfa(',' @PluginMethod public void cancel(');
  for(const guard of ['!attempt.cancelled','attempt.mfaType != null','attempt.id.equals(call.getString("attemptId"))','attempt.environment.name.equals(call.getString("environment"))','attempt.expiresAt > System.currentTimeMillis()'])assert.ok(resume.includes(guard),guard);

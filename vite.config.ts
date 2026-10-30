@@ -119,6 +119,9 @@ export default defineConfig({
       "@elizaos/plugin-calendar/client/day-observation": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-calendar/src/client/day-observation.ts",import.meta.url)),
       "@elizaos/contracts/client-turn-observation": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/client-turn-observation.ts",import.meta.url)),
       "@elizaos/contracts/remote-agent-pairing": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/contracts/remote-agent-pairing.ts",import.meta.url)),
+      "@elizaos/ui/android-cloud/NativeCloudSignInView": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/android-cloud/NativeCloudSignInView.tsx", import.meta.url)),
+      "@elizaos/ui/android-cloud/native-cloud-sign-in-controller": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/android-cloud/native-cloud-sign-in-controller.ts", import.meta.url)),
+      "@elizaos/auth/auth/native-cloud-sign-in": fileURLToPath(new URL("./.eliza/client-features/packages/auth/src/auth/native-cloud-sign-in.ts", import.meta.url)),
 
       "@elizaos/capacitor-system/sense": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/sense-bridge.ts", import.meta.url)),
       "@elizaos/capacitor-system/reset": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/reset.ts", import.meta.url)),

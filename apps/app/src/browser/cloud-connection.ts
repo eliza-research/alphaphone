@@ -81,6 +81,6 @@ export class BrowserCloudSignIn extends WebPlugin {
  async startEmail(input:{environment:string;email:string}){return this.signIn({operation:'signInStartEmail',environment:input.environment,email:input.email});}
  async verifyEmail(input:{attemptId:string;code:string}){return this.signIn({operation:'signInVerifyEmail',attemptId:input.attemptId,code:input.code});}
  async verifyMfa(input:{attemptId:string;code:string}){return this.signIn({operation:'signInVerifyMfa',attemptId:input.attemptId,code:input.code});}
- async cancel(){await this.signIn({operation:'signInCancel'}).catch(()=>{});}
+ async cancel(){await this.signIn({operation:'signInCancel'});}
  async status(){return this.signIn({operation:'signInStatus'});}
 }
