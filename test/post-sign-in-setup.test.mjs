@@ -142,7 +142,7 @@ test('Settings says the agent and its AI are starting instead of "Not available"
 
 test('the agent panel shows a calm starting state while a signed-in agent starts',()=>{
   // The agent panel shows a calm starting state, not "AI is off" or plan and billing copy, while it starts.
-  const panel=between(ui,'const residentAiStarting=','</section>\n    {snapshot.replyNotice');
+  const panel=between(ui,'const residentAiStarting=','</section>\n    {!planPanel&&snapshot.replyNotice');
   assert.match(panel,/residentAiStarting\?'Waiting for your agent to start\.'/);
   assert.match(panel,/\{residentAiStarting\?accountCreatedNotice:snapshot\.cloudAccount/);
   assert.match(panel,/\{residentAiStarting\?null:snapshot\.cloudAccount&&!residentSignInRejected \? <>/);
