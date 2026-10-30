@@ -1,0 +1,71 @@
+{
+  "source": "2d2509762e42e642927ad37697c9951d3710208e",
+  "upstream": "f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5",
+  "engine": "d960f633ddb034d0dd828a55216cfc17d012acbd",
+  "sourceVerification": {
+    "passed": 2743,
+    "failed": 0,
+    "skipped": 3,
+    "todo": 1,
+    "fullVerify": true
+  },
+  "android": {
+    "compiled": [
+      "standaloneDebug",
+      "standaloneRelease",
+      "launcherDebug",
+      "launcherRelease"
+    ],
+    "instrumentation": "both compiled, not executed",
+    "lint": "passed",
+    "originalCommand": "failed at legacy ABI expectation in final verification",
+    "postRepairApkVerification": "passed all four existing APKs",
+    "verifierSha256": "ae232300d2c5bd7a288393bc94313577ef5c2211c1d97c065b87b1c5b16ab848",
+    "runtimeAbis": [
+      "arm64-v8a"
+    ],
+    "runtimeTarget": "linux-musl"
+  },
+  "artifacts": [
+    {
+      "file": "artifacts/standalone-debug.apk",
+      "sha256": "0afcd17e8934408be734fa8627afdda24457594a3c53664437d33ecd8cb4e600",
+      "runtime": "PACKAGED",
+      "signed": true,
+      "distributable": null,
+      "voiceQualified": false
+    },
+    {
+      "file": "artifacts/standalone-release-unsigned.apk",
+      "sha256": "8bb56d149088be2368e4e614ecd86987ea94bb1f49141255f139f04dd75af31a",
+      "runtime": "PACKAGED",
+      "signed": false,
+      "distributable": false,
+      "voiceQualified": false
+    },
+    {
+      "file": "artifacts/launcher-debug.apk",
+      "sha256": "b257170a3f37ef1a9d07fca9f67e1c550b50d0c48fe7736eec4fabf2a16fbaf0",
+      "runtime": "PACKAGED",
+      "signed": true,
+      "distributable": null,
+      "voiceQualified": false
+    },
+    {
+      "file": "artifacts/launcher-release-unsigned.apk",
+      "sha256": "39d60d32c4492258b9fd97daeca35497ab281567dc2a96315633098defe10ade",
+      "runtime": "PACKAGED",
+      "signed": false,
+      "distributable": false,
+      "voiceQualified": false
+    }
+  ],
+  "evidenceDirectory": "artifacts/unification-checkpoints/f31d7c3-2d2509762",
+  "limitations": [
+    "Releases are unsigned and non-distributable.",
+    "Voice user acceptance remains false.",
+    "No x86 runtime qualification.",
+    "No application installation, HOME-role test, image boot, live integration, or device acceptance is established.",
+    "A new complete command run is required after the verifier change."
+  ]
+}
