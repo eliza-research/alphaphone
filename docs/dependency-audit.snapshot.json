@@ -1,7 +1,7 @@
 {
   "description": "Normalised `npm audit --json` for the package-lock.json with this SHA-256. Regenerate with: node scripts/dependency-audit.mjs --write. Dispositions live in docs/dependency-audit.dispositions.json.",
-  "auditedOn": "2026-10-27",
-  "lockSha256": "84029a1d65017782877b3cc3e71b81f48f7f7441be2eb892d2df91e83a4ac3ff",
+  "auditedOn": "2026-10-30",
+  "lockSha256": "a5e50fdbead2f67ddee5ee2531e8427537c736761baf6e822daaccf820573109",
   "counts": {
     "info": 0,
     "low": 0,
@@ -14,7 +14,7 @@
       "package": "@capacitor/cli",
       "severity": "moderate",
       "direct": true,
-      "affectedRange": "8.5.0 - 9.0.0-alpha.8",
+      "affectedRange": "8.5.0 - 8.5.4-nightly-20261027T151403.0 || 8.6.1-nightly-20261029T150938.0 - 9.0.0-alpha.8",
       "via": [
         "xcode"
       ],
@@ -38,7 +38,7 @@
           ]
         }
       ],
-      "fixAvailable": "@capacitor/cli@8.4.3 (outside the declared range)"
+      "fixAvailable": "@capacitor/cli@8.6.0"
     },
     {
       "package": "uuid",
@@ -68,7 +68,7 @@
           ]
         }
       ],
-      "fixAvailable": "@capacitor/cli@8.4.3 (outside the declared range)"
+      "fixAvailable": "@capacitor/cli@8.6.0"
     },
     {
       "package": "xcode",
@@ -98,20 +98,20 @@
           ]
         }
       ],
-      "fixAvailable": "@capacitor/cli@8.4.3 (outside the declared range)"
+      "fixAvailable": "@capacitor/cli@8.6.0"
     }
   ],
   "resident": {
     "description": "Advisories for the resident runtime's npm packages at the pinned upstream commit, from the npm bulk advisory endpoint. Regenerate with: node scripts/dependency-audit.mjs --resident --write. Dispositions live in docs/dependency-audit.dispositions.json under \"resident\".",
-    "upstreamCommit": "7854f43ff93082452c8aca5c4bf56aff0e0015bf",
+    "upstreamCommit": "f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5",
     "input": "vendor/eliza/bun.lock",
-    "auditedOn": "2026-10-29",
-    "inputSha256": "7761f08dd9e9d140ddca0c6d3166ba9c083ee1d045200b2ff48a7e8aa5f79263",
-    "packages": 3678,
+    "auditedOn": "2026-10-30",
+    "inputSha256": "7c9d7bd390a29fac9da3c16af0fdc4d0998ce7eaf6fb2b82020bc9055ee9e11e",
+    "packages": 3677,
     "counts": {
       "info": 0,
       "low": 18,
-      "moderate": 62,
+      "moderate": 61,
       "high": 59,
       "critical": 1
     },
@@ -462,7 +462,7 @@
           "id": "GHSA-mghh-pgcx-3jjj",
           "severity": "high",
           "vulnerableRange": ">=1.15.0 <1.20.0",
-          "title": "Axios: ReDoS (O(N\u00b2)) in shouldBypassProxy host normalization, reachable via untrusted redirect Location",
+          "title": "Axios: ReDoS (O(N²)) in shouldBypassProxy host normalization, reachable via untrusted redirect Location",
           "url": "https://github.com/advisories/GHSA-mghh-pgcx-3jjj"
         }
       },
@@ -618,20 +618,6 @@
           "vulnerableRange": "<0.7.0",
           "title": "cookie accepts cookie name, path, and domain with out of bounds characters",
           "url": "https://github.com/advisories/GHSA-pxg6-pf52-xh8x"
-        }
-      },
-      {
-        "package": "decode-uri-component",
-        "versions": [
-          "0.2.2"
-        ],
-        "severity": "moderate",
-        "advisory": {
-          "id": "GHSA-vcc3-ghjq-m6fr",
-          "severity": "moderate",
-          "vulnerableRange": "<=0.4.2",
-          "title": "decode-uri-component: Denial of service via exponential decoding of malformed percent-encoded input",
-          "url": "https://github.com/advisories/GHSA-vcc3-ghjq-m6fr"
         }
       },
       {
@@ -854,7 +840,7 @@
           "id": "GHSA-5p4m-2wfm-xmqj",
           "severity": "high",
           "vulnerableRange": ">=4.0.0 <4.3.1",
-          "title": "JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) \u2014 CVE-2026-59870 fix not backported",
+          "title": "JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) — CVE-2026-59870 fix not backported",
           "url": "https://github.com/advisories/GHSA-5p4m-2wfm-xmqj"
         }
       },
@@ -1108,7 +1094,7 @@
           "id": "GHSA-528h-pc64-c93x",
           "severity": "moderate",
           "vulnerableRange": "<=3.4.0",
-          "title": "stream-json: pick/ignore/filter/replace filters are O(depth\u00b2) on nested input \u2014 small crafted JSON blocks the event loop for seconds\u2192minutes (DoS)",
+          "title": "stream-json: pick/ignore/filter/replace filters are O(depth²) on nested input — small crafted JSON blocks the event loop for seconds→minutes (DoS)",
           "url": "https://github.com/advisories/GHSA-528h-pc64-c93x"
         }
       },

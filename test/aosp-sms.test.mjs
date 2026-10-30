@@ -11,6 +11,7 @@ import { execFileSync } from "node:child_process";
 import { createAospTelephony, TelephonyUnavailable, parseTelephonyStatus, parseThreads, parseMessages, parseSmsSendResult, parseSmsJournal, smsBindingText, smsBindingHash, reviewSms } from "../apps/app/src/runtime/aosp-telephony.ts";
 
 const root = resolve(import.meta.dirname, "..");
+const {loadBrowserModule} = await import("./fixtures/browser-source.mjs");
 const JAVA = join(root, "android/app/src/main/java/ai/elizaresearch/alphaphone");
 const SHARED = join(root, "vendor/eliza/plugins/plugin-native-messages/android/src/main/java/ai/eliza/plugins/messages");
 const read = file => readFileSync(join(root, file), "utf8");
@@ -274,7 +275,7 @@ test("standalone SMS stays unavailable at the UI and agent boundaries", async ()
   // UI: the Messages view stays deferred and no image view adapter is admitted for it.
   const features = read("apps/app/src/prototype/mvp-features.ts");
   assert.match(features, /\/\/ "messages",/, "the Messages view is not enabled");
-  const { ADMITTED_AOSP_VIEW_ADAPTERS, admittedAospViews } = await import("../apps/app/src/runtime/aosp-image.ts");
+  const { ADMITTED_AOSP_VIEW_ADAPTERS, admittedAospViews } = await loadBrowserModule("apps/app/src/runtime/aosp-image.ts");
   assert.ok(ADMITTED_AOSP_VIEW_ADAPTERS.includes("messages"));
   assert.deepEqual(admittedAospViews(false, ["messages", "phone", "contacts"]), []);
   // Agent SMS is negotiated only by the verified image, then validated by the reviewed shared contract.

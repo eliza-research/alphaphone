@@ -70,6 +70,7 @@ test('expired and rejected restored sessions still require authentication; valid
 // normal conversation binding, before preferences, transport or model work.
 const preflightSource = [
   section('function residentSignInRequired()', '\n'),
+  section('async function resolveResidentConversation(', 'async function restoreConversationHistory('),
   'const preflightController = {',
   section('  close() {', '  cancel() {'),
   section('  async prepareVoiceConversation(', '  async send('),
@@ -87,7 +88,7 @@ function preflightFixture(balance, options = {}) {
     AbortController, DOMException, document: {hidden: false}, navigator: {onLine: true},
     residentCloudFlow: () => true, residentAlwaysPresent: true,
     residentStartInBackground: false, pendingBillingReview: null,
-    operation: null, requestedCameraContinuation: undefined, clientObservationSession: undefined,
+    operation: null, residentTurns: null, requestedCameraContinuation: undefined, clientObservationSession: undefined,
     NO_AGENT_SEND: 'No selected session', NO_AGENT_VOICE: 'No selected session',
     INFERENCE_OFFLINE_NOTICE: 'Offline',
     noSessionError: () => Error('No selected session'),
@@ -266,6 +267,7 @@ const savedAdmissionCode=stripTypeScriptTypes([
  section('async function admitCloudResident(', '/**\n * Cloud reported, on a background refresh'),
  section('async function applyResidentBinding(', '/** The packaged-runtime refusal.'),
  section('function residentSignInRequired()', '\n'),
+  section('async function resolveResidentConversation(', 'async function restoreConversationHistory('),
 ].join('\n'),{mode:'transform'});
 // The shared resident binding controller (projected from the pinned upstream source) decides the binding.
 const residentBinding=await import('../.eliza/client-features/packages/auth/src/auth/cloud-resident-binding.ts');

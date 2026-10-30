@@ -19,7 +19,7 @@ const resolveRelativeImports=(text,from)=>text.replace(/(\bfrom\s*)(['"])(\.\.?\
 async function features(image){
  const headers=image?[{name:'AlphaTelephony',methods:[{name:'imageCapability'}]}]:[];
  const aospFile='apps/app/src/runtime/aosp-image.ts';
- const aosp=resolveRelativeImports(stripTypeScriptTypes(read(aospFile).replace("import { Capacitor } from '@capacitor/core';",`const Capacitor={getPlatform:()=>'android',PluginHeaders:${JSON.stringify(headers)}};`),{mode:'transform'}),aospFile);
+ const aosp=resolveRelativeImports(stripTypeScriptTypes(read(aospFile).replace("import { Capacitor } from '@capacitor/core';",`const Capacitor={getPlatform:()=>'android',PluginHeaders:${JSON.stringify(headers)}};`).replace("from '@elizaos/capacitor-system/sense'","from '../../../../.eliza/client-features/plugins/plugin-native-system/src/sense.ts'"),{mode:'transform'}),aospFile);
  assert.doesNotMatch(aosp,/from ['"](?!file:)[^'"]+['"]/,'every image-gate dependency is substituted or resolved to the shipped file');
  const source=stripTypeScriptTypes(read('apps/app/src/prototype/mvp-features.ts'),{mode:'transform'})
   .replace(/from ['"]\.\.\/browser\/dev-profile['"]/,`from '${dataModule('export const browserDevProfile=false;')}'`)

@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {transformSync} from 'esbuild';
 import {loadBrowserModule} from './fixtures/browser-source.mjs';
-const {ViewNavigationClient}=await loadBrowserModule('apps/app/src/runtime/view-navigation.ts');
+const [{ViewNavigationClient},{ResidentConversationTurns},{conversationRoomId},{anyAbortSignal},{isConversationTurnRefusal}]=await loadBrowserModule(['apps/app/src/runtime/view-navigation.ts','apps/app/src/runtime/alpha-client.ts','apps/app/src/runtime/remote-protocol.ts','apps/app/src/runtime/abort-signal.ts','.eliza/client-features/packages/ui/src/api/conversation-turn-controller.ts']);
 const originalDocument=globalThis.document;
 globalThis.document=Object.assign(new EventTarget(),{hidden:false});
 test.after(()=>{globalThis.document=originalDocument;});
@@ -14,15 +14,17 @@ const source=fs.readFileSync('apps/app/src/runtime/connection-ui.tsx','utf8');
 const start=source.indexOf('  async send(text:');
 const end=source.indexOf('\n  },\n};',start);
 assert.ok(start>=0&&end>start,'Actual connectionController.send method exists');
-const compiled=transformSync('const controller={'+source.slice(start,end+5)+'};',{loader:'ts'}).code;
+const helpers=source.slice(source.indexOf('async function resolveResidentConversation('),source.indexOf('async function restoreConversationHistory('));
+const compiled=transformSync(helpers+'\nconst controller={'+source.slice(start,end+5)+'};',{loader:'ts'}).code;
 for(const availability of ['rejected','pending'])test(`ordinary Notes/Calendar/text sends proceed when optional command feed is ${availability}`,async()=>{
  const calls=[];
  const context={view:'notes',revision:1,sensitive:false};
  const client=new ViewNavigationClient(async()=>({}),()=>true,()=>context,()=>({ready:availability==='rejected'?Promise.reject(Error('Renderer feed unavailable')):new Promise(()=>{}),close(){}}));
  const session={sessionId:'owner-session',ownerId:'owner',agentId:'agent',origin:'resident'};
- const active={kind:'resident',userTextFormatVersion:1,remote:{async send(id,text,options){calls.push({id,text,options});return {text:'Current records read successfully.',actionResults:[]};}}};
+ const active={kind:'resident',userTextFormatVersion:1,remote:{async listConversations(){return [{id:'owned-room',roomId:'11111111-1111-4111-8111-111111111111'}];},async send(id,text,options){calls.push({id,text,options});return {text:'Current records read successfully.',actionResults:[]};}}};
  const state={session,open:false,busy:false};
- const sandbox={AbortController,AbortSignal,DOMException,CustomEvent,Date,console,navigator:{onLine:true},state,active,epoch:1,clientObservationSession:undefined,operation:null,sending:null,requestedCameraContinuation:undefined,residentAlwaysPresent:true,isAndroid:true,testMocksEnabled:false,NO_AGENT_SEND:'not connected',phoneContextMessage:(text,context)=>({text,context}),boundNavigation:()=>client,noSessionError:message=>Error(message),cancelStoppedReply(){},ensureSelectedConversation:async()=> 'owned-room',readDevicePreferences:async()=>({askBeforeAgentActions:true}),calendarAgendaObservation:async()=>undefined,withResidentMapsNavigation:async(request,id,signal,send)=>send(),appRecordInvalidations:()=>[],automationsCommitted:()=>false,update:patch=>Object.assign(state,patch),runQueuedResidentRebind(){},setTimeout,window:new EventTarget(),validateUuid:()=>true,expired:()=>false,failureKindOf:()=>undefined,AlphaClientError:class extends Error{}};
+ const residentTurns=new ResidentConversationTurns(async()=>({aborted:true}),()=>false);
+ const sandbox={isConversationTurnRefusal,residentTurns,conversationRoomId,anyAbortSignal,AbortController,AbortSignal,DOMException,CustomEvent,Date,console,navigator:{onLine:true},state,active,epoch:1,clientObservationSession:undefined,operation:null,sending:null,requestedCameraContinuation:undefined,residentAlwaysPresent:true,isAndroid:true,testMocksEnabled:false,NO_AGENT_SEND:'not connected',phoneContextMessage:(text,context)=>({text,context}),boundNavigation:()=>client,noSessionError:message=>Error(message),cancelStoppedReply(){},ensureSelectedConversation:async()=> 'owned-room',readDevicePreferences:async()=>({askBeforeAgentActions:true}),calendarAgendaObservation:async()=>undefined,withResidentMapsNavigation:async(request,id,signal,send)=>send(),appRecordInvalidations:()=>[],automationsCommitted:()=>false,update:patch=>Object.assign(state,patch),runQueuedResidentRebind(){},setTimeout,window:new EventTarget(),validateUuid:()=>true,expired:()=>false,failureKindOf:()=>undefined,AlphaClientError:class extends Error{}};
  vm.createContext(sandbox);vm.runInContext(compiled+';globalThis.controller=controller;',sandbox);
  try {
   for(const prompt of ['Refresh my notes list.','What is on my calendar?','Hello.']){

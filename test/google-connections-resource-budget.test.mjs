@@ -6,9 +6,8 @@ import vm from 'node:vm';
 import {transformSync} from 'esbuild';
 import {JSDOM} from 'jsdom';
 import {tsImport} from 'tsx/esm/api';
-const {cloudServiceName}=await tsImport(new URL('../apps/app/src/runtime/cloud-protocol.ts',import.meta.url).href,{parentURL:import.meta.url});
-const connectionReturn=await tsImport(new URL('../apps/app/src/runtime/google-connection-return.ts',import.meta.url).href,{parentURL:import.meta.url});
-const workspaceReturn=await tsImport(new URL('../apps/app/src/runtime/google-workspace-return.ts',import.meta.url).href,{parentURL:import.meta.url});
+const {cloudServiceName,workspaceAppReturn}=await tsImport(new URL('../apps/app/src/runtime/cloud-protocol.ts',import.meta.url).href,{parentURL:import.meta.url});
+const connectionReturn=await tsImport(new URL('../.eliza/client-features/packages/auth/src/sdk/app-return.ts',import.meta.url).href,{parentURL:import.meta.url});
 
 // Mount the actual panel. Only external account/Calendar I/O is replaced.
 test('Google settings keep display choices local, revalidate grants and own Android Back',async()=>{
@@ -24,8 +23,7 @@ test('Google settings keep display choices local, revalidate grants and own Andr
  const ACCOUNTS='alpha:test-google-accounts',SELECTION='alpha:test-google-selection';
  const modules={
   './cloud-protocol':{cloudServiceName},
-  './google-connection-return':connectionReturn,
-  './google-workspace-return':workspaceReturn,
+  '@elizaos/auth/app-return':connectionReturn,
   '../daily':{DailyApps:{addListener:async()=>({remove(){}})}},
   './gmail-background':{gmailBackgroundStatus:async()=>({}),gmailBackgroundMessage:()=>'',gmailNotificationSettings:async()=>{},GMAIL_BACKGROUND_CHANGED:'alpha:test-gmail-background'},
   '../native':{isAndroid:true},
@@ -35,7 +33,7 @@ test('Google settings keep display choices local, revalidate grants and own Andr
   './google-accounts':{GOOGLE_ACCOUNTS_CHANGED:ACCOUNTS,createGoogleAccounts:()=>({list:async()=>{counts.accounts++;return [account];}})},
   './google-calendar':{GoogleCalendarReader:class {async listSources(){counts.calendars++;return {status:'ready',calendars:[source]};}invalidate(){}}},
   './google-calendar-selection':{GOOGLE_CALENDAR_SELECTION_CHANGED:SELECTION,readGoogleCalendarSelection:()=>selection,saveGoogleCalendarSelection:(_key,next)=>{selection=next;dom.window.dispatchEvent(new dom.window.Event(SELECTION));return true;}},
-  './native-connection':{openConnectionBrowser:()=>{throw Error('Unexpected OAuth request');},googleWorkspaceReturnPort:undefined},
+  './native-connection':{openConnectionBrowser:()=>{throw Error('Unexpected OAuth request');},googleWorkspaceReturnPort:undefined,workspaceAppReturn},
  };
  const compiled=transformSync(readFileSync('apps/app/src/runtime/google-connection-ui.tsx','utf8'),{loader:'tsx',jsx:'automatic',format:'cjs',target:'es2022'}).code;
  const module={exports:{}};

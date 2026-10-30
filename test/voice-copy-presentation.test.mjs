@@ -1,3 +1,4 @@
+import {prototypeLeafTemplate} from './fixtures/prototype-leaf-template.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -14,7 +15,7 @@ test('actual voice error clears input activity while retaining disclosure, suppo
  const start=template.indexOf('<sc-if value="{{inlineChatRecorder}}">');
  const end=template.indexOf('<sc-if value="{{panelComposer}}">',start);
  assert.ok(start>=0&&end>start);
- const fragment='<div class="os"><div data-screen="1">'+template.slice(start,end)+'</div></div>';
+ const fragment=prototypeLeafTemplate(template.slice(start,end));
  const bundle=await build({stdin:{contents:`import React from 'react';import{renderToStaticMarkup}from'react-dom/server';import{DCLogic}from'./apps/app/src/prototype/dc-lite.js';import{VoiceActivity}from'./apps/app/src/prototype/voice-activity.tsx';export const createActivity=props=>React.createElement(VoiceActivity,props);class Fixture extends DCLogic{renderVals(){return this.props.values;}}export const render=values=>renderToStaticMarkup(React.createElement(Fixture,{phoneSurface:true,values}));`,resolveDir:process.cwd(),loader:'js'},bundle:true,platform:'node',format:'cjs',write:false,plugins:[{name:'actual-voice-template',setup(b){b.onResolve({filter:/template\.html\?raw$/},()=>({path:'voice',namespace:'actual-template'}));b.onLoad({filter:/.*/,namespace:'actual-template'},()=>({contents:'export default '+JSON.stringify(fragment),loader:'js'}));}}]});
  const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'voice-copy-markup-')),file=path.join(temporary,'renderer.cjs'),before=globalThis.document;
  const env=new JSDOM('<!doctype html>'),beforeMedia=globalThis.matchMedia;
