@@ -52,6 +52,7 @@ public final class AlphaCloudSignInPlugin extends CloudSignInPlugin {
  static String receiptSlot(CloudSignInEnvironment environment) { return REGISTRATION.receiptSlot(environment); }
 
  @Override protected CloudSignInConfig registration() { return REGISTRATION; }
+ @Override protected long credentialIntent() { return AlphaLocalAgentPlugin.currentCredentialIntent(); }
  @Override protected <T> T withCredentialRead(java.util.concurrent.Callable<T> read) throws Exception {
   return AlphaLocalAgentPlugin.withCredentialAuthority(AlphaLocalAgentPlugin.credentialAuthorityEpoch(), () -> {
    if (!AlphaLocalAgentPlugin.providerAdmissionReadable()) throw new IllegalStateException("Credential mutation in progress");
@@ -65,6 +66,7 @@ public final class AlphaCloudSignInPlugin extends CloudSignInPlugin {
    @Override public String read(String slot) throws Exception { return store.readCredentialSlot(slot); }
    @Override public void write(String slot, String value) throws Exception { store.writeCredentialSlot(slot, value); }
    @Override public void remove(String slot) throws Exception { store.removeCredentialSlot(slot); }
+   @Override public boolean removeIfMatches(String slot, String expected) throws Exception { return store.compareExchangeCredentialSlot(slot, expected, null); }
   };
  }
  @Override protected Runnable reserveCredentialCommit() {
