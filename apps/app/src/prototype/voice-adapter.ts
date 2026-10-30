@@ -15,7 +15,7 @@ import {pendingAudioDeletions,withAudioDeletionLock,changeAudioDeletion,audioDel
 import {createNotesRecordingEffects,type NotesRecordingEffects} from '../../../../.eliza/client-features/plugins/plugin-notes/src/client/notes-recording-effects.ts';
 import {addNotesTrashEntry,editNotesTrash,isNotesTrashFull,notesTrashExpired,readNotesTrash,removeNotesTrashEntries,savedNotes,type NotesTrashEntry} from '../runtime/notes-trash';
 import type {NotesTarget} from '../runtime/notes-contract';
-import {sameDeletionRow,leasedDeletionRow,claimDeletion,releaseDeletionClaim,deletionClaimedElsewhere} from '../runtime/permanent-voice-deletion';
+import {leasedDeletionRow,claimDeletion,releaseDeletionClaim,deletionClaimedElsewhere} from '../runtime/permanent-voice-deletion';
 import { installLocalSpeechPlayback, stopLocalSpeechPlayback, currentNoteReading, stopSpeaking, speakNote, noteVoiceDraft } from './local-speech-playback';
 import { registerPlugin } from '../platform-plugins';
 import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
@@ -77,7 +77,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     // The prototype setView callback discards vset's persistence receipt.
     if (key === 'notes') {
       value.voiceNoteActive=()=>this.live&&this.S().view==='notes';
-      value.saveVoiceNote = async (patch: Bag, options?: {exact?: boolean}) => await this.vset('notes', patch, options) === true;
+      value.saveVoiceNote = async (patch: Bag, options?: {exact?: boolean;authorized?:()=>void}) => await this.vset('notes', patch, options) === true;
       value.reviewAudioDeletion=async(note:Bag)=>{
         if(!this.live||this.notesStorageFailed||this.notesPending||!this.notesStore)throw Error('Notes needs recovery');
         const target=await this.notesStore.target(note.id);
@@ -701,40 +701,23 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     return recordingEffects().trashWithRecording({note:note as AudioDeletion['note'],target,operationId,commit,
       addTrashEntry:async audio=>{await editNotesTrash(doc=>addNotesTrashEntry(doc,{id:operationId,note:note as NotesTrashEntry['note'],target,index,deletedAt:Date.now(),...(audio?{audio}:{})}));}});
   }
-  async function dropTrashEntry(id:string){
-    if((await readNotesTrash()).entries.some(entry=>entry.id===id))await editNotesTrash(doc=>removeNotesTrashEntries(doc,[id]));
+  async function dropTrashEntry(id:string,authorized?:()=>void){
+    authorized?.();
+    if((await readNotesTrash()).entries.some(entry=>entry.id===id))await editNotesTrash(doc=>{authorized?.();return removeNotesTrashEntries(doc,[id]);});
     window.dispatchEvent(new Event('alpha:notes-trash-changed'));
   }
   async function restoreDeletion(row:AudioDeletion,current:Bag,index=0):Promise<boolean>{
     if(deletionBusy)return false;deletionBusy=true;let done=false;
     try{await withAudioDeletionLock(async()=>{
-      if(!current.voiceNoteActive()||document.hidden)throw Error('Open Notes to restore');
-      const trashEntry=(await readNotesTrash()).entries.find(entry=>entry.id===row.id);
-      if(trashEntry&&notesTrashExpired(trashEntry,Date.now()))throw Error('Trash retention expired');
-      const state=await audioDeletionNoteState(row);
-      if(state==='changed')throw Error('A newer note must be preserved');
-      if(current.storageReady?.()===false)throw Error('Reopen Notes first');
-      // The shown row may predate a lease renewal; the stored row is the same deletion.
-      const stored=(await pendingAudioDeletions())[row.id];if(stored&&sameDeletionRow(stored,row))row=stored;
-      if(!stored)await changeAudioDeletion(row,true);
-      const metadata=await noteAudio.describe({audioId:row.audioId});
-      if(metadata.noteId!==row.note.id||metadata.audioId!==row.audioId)throw Error('Recording association changed');
-      if(!current.voiceNoteActive()||document.hidden)throw Error('Open Notes to restore');
-      await noteAudio.restore({audioId:row.audioId,noteId:row.note.id,operationId:row.id});
-      await deletionReceipt(row,'restored');
-      const restored=await noteAudio.describe({audioId:row.audioId});
-      if(restored.deletedAt||restored.noteId!==row.note.id)throw Error('Restore unconfirmed');
-      if(await audioDeletionNoteState(row)!==state)throw Error('Note changed while restoring');
-      if(!current.voiceNoteActive()||document.hidden)throw Error('Open Notes to restore');
-      if(state==='deleted'){
-        const list=current.get('notes').list;
-        // Reinstate the exact reviewed record (same id and revision) near its old position.
-        if(list.some((n:Bag)=>n.id===row.note.id))throw Error('Restore unconfirmed');
-        const next=list.slice();next.splice(Math.min(Math.max(0,index),next.length),0,structuredClone(row.note));
-        if(await current.saveVoiceNote({list:next},{exact:true})!==true)throw Error('Restore unconfirmed');
-      }
-      if((await pendingAudioDeletions())[row.id])await changeAudioDeletion(row,false);
-      await dropTrashEntry(row.id);
+      await recordingEffects().restoreReviewed({row,
+        assertCurrent:()=>{if(!current.voiceNoteActive()||document.hidden)throw Error('Open Notes to restore');if(current.storageReady?.()===false)throw Error('Reopen Notes first');},
+        checkRetention:async()=>{const entry=(await readNotesTrash()).entries.find(entry=>entry.id===row.id);if(entry&&notesTrashExpired(entry,Date.now()))throw Error('Trash retention expired');},
+        commitNote:async(reviewed,authorized)=>{
+          authorized();const list=current.get('notes').list;
+          if(list.some((n:Bag)=>n.id===reviewed.note.id))throw Error('Restore unconfirmed');
+          const next=list.slice();next.splice(Math.min(Math.max(0,index),next.length),0,structuredClone(reviewed.note));
+          if(await current.saveVoiceNote({list:next},{exact:true,authorized})!==true)throw Error('Restore unconfirmed');
+        },removeTrash:(reviewed,authorized)=>dropTrashEntry(reviewed.id,authorized)});
       done=true;current.toast('Voice note restored.');
     });}catch{current.toast('Restore is unconfirmed. Reopen Notes and check deletion status. No newer note was replaced.');}
     finally{deletionBusy=false;void refreshDeletionStatus(current);}

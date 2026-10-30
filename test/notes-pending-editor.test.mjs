@@ -28,7 +28,7 @@ async function fixture(){
  const state={list:store.list,storageStatus:''},drafts=[],toasts=[];
  const shell={notesSourceMode:'legacy',notesStore:store,notesRaw:store.raw,notesPending:0,notesStorageFailed:false,live:true,vget:()=>state,toast:text=>toasts.push(text)};
  const editor=makeEditor(function(_key,patch){Object.assign(state,patch);},(_old,next)=>next,()=>{},()=> 'Save unconfirmed',(_shell,list)=>drafts.push(structuredClone(list)),()=>{},NotesCommitUncertain,class NotesStorageFull extends Error{},()=>false);
- return {store,shell,state,drafts,toasts,edit:patch=>editor.call(shell,'notes',{list:store.list.map(n=>({...n,...patch}))}),hold:()=>{blocked=true;},started:started.promise,release:()=>gate.resolve(),saved:()=>JSON.parse(saved.raw),foreign:body=>{const value=JSON.parse(saved.raw);value.records[0].body=body;saved={revision:String(++revision),raw:JSON.stringify(value)};}};
+ return {store,shell,state,drafts,toasts,edit:(patch,options)=>editor.call(shell,'notes',{list:store.list.map(n=>({...n,...patch}))},options),hold:()=>{blocked=true;},started:started.promise,release:()=>gate.resolve(),saved:()=>JSON.parse(saved.raw),foreign:body=>{const value=JSON.parse(saved.raw);value.records[0].body=body;saved={revision:String(++revision),raw:JSON.stringify(value)};}};
 }
 test('consecutive editor inputs settle both own CAS writes without false recovery',async()=>{
  const f=await fixture();f.hold();const first=f.edit({title:'Pending title'});await f.started;
@@ -43,5 +43,18 @@ test('foreign durable CAS still refuses queued local edits and keeps the latest 
  assert.equal(await first,false);assert.equal(await second,false);
  assert.equal(f.saved().records[0].body,'Foreign committed body');assert.equal(f.state.list[0].body,'Latest local draft');
  assert.equal(f.shell.notesStorageFailed,true);assert.equal(f.store.needsRecovery,true);assert.equal(f.drafts.at(-1)[0].body,'Latest local draft');
+ assert.equal(f.shell.notesPending,0);
+});
+
+test('a queued restore rechecks its foreground owner at the real document commit boundary',async()=>{
+ const f=await fixture();f.hold();
+ const first=f.edit({title:'Pending edit'});await f.started;
+ let current=true;
+ const restored=f.edit({body:'Reviewed restored recording'}, {exact:true,authorized:()=>{if(!current)throw new DOMException('Retired','AbortError');}});
+ current=false;f.release();
+ assert.equal(await first,true);assert.equal(await restored,false);
+ assert.equal(f.saved().records[0].title,'Pending edit');
+ assert.equal(f.saved().records[0].body,'Saved body');
+ assert.equal(f.drafts.at(-1)[0].body,'Reviewed restored recording');
  assert.equal(f.shell.notesPending,0);
 });

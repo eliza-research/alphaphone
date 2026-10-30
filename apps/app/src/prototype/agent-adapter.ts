@@ -999,7 +999,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     this.live = false; alphaClient.disconnect(); window.removeEventListener('alpha-back', this.backHandler); window.removeEventListener('launcher-home', this.homeHandler); window.removeEventListener('alpha-selected-context', this.selectionHandler);
     void this.assistListener?.then((l: Shell) => l?.remove()); originalUnmount.call(this);
   };
-  p.vset = function (key: string, patch: Shell, options?: {exact?: boolean}) {
+  p.vset = function (key: string, patch: Shell, options?: {exact?: boolean;authorized?:()=>void}) {
     if(key==='notes'&&Object.hasOwn(patch,'list')&&this.notesSourceMode!=='legacy'){originalSet.call(this,key,{compose:false,record:false});this.toast('That note change could not be saved. Your draft is still open.');return false;}
     if (key !== 'notes' || !patch.list) { originalSet.call(this,key,patch);return true; }
     if (this.notesStorageFailed||!this.notesStore) {
@@ -1011,12 +1011,13 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       keepNotesDraft(this,patch.list,this.notesStorageFull?'storage-full':this.notesCommitUncertain?'uncertain':'failed');return false;
     }
     try {
+      options?.authorized?.();
       // A Trash restore reinstates the exact saved record; it is not a content modification.
       if(!options?.exact)patch={...patch,list:stampNoteChanges(this.notesStore.list,patch.list)};
       // While this editor's own write is still settling, the store already holds that write's
       // revision; only a revision that is neither confirmed nor ours is a concurrent change.
       if((this.notesPending?this.notesLocalRaw:this.notesRaw)!==this.notesStore.raw)throw Error('Notes changed while this editor had unsaved text. Review recovery before saving.');
-      const pending=this.notesStore.replace(patch.list);
+      const pending=this.notesStore.replace(patch.list,options?.authorized?{authorized:options.authorized}:undefined);
       this.notesLocalRaw=this.notesStore.raw;
       this.notesPending++;
       this.notesSelectionKey=null;this.notesSelection=null;
