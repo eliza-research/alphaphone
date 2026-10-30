@@ -158,44 +158,33 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  static long currentCredentialIntent(){return credentialIntents.current();}
  static long reserveCredentialIntent(){return credentialIntents.reserve();}
  static void requireCredentialIntent(long intent){credentialIntents.require(intent);}
- interface CredentialMutation<T> {
-  boolean requiresShutdown()throws Exception;
-  T commit()throws Exception;
- }
+ interface CredentialMutation<T> extends ai.eliza.plugins.securestore.nativeonly.CredentialMutationConductor.Mutation<T> {}
  /** Slot classification/commit are atomic; observing shutdown must never hold the vault lock. */
- static <T> T mutateCredentials(Context context,Runnable assertOwner,CredentialMutation<T> mutation)throws Exception {
-  final long epoch;
-  synchronized(lifecycleLock){
-   assertOwner.run();
-   synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){
-    if(!mutation.requiresShutdown())return commitCredentials(mutation);
+ static <T> T mutateCredentials(Context context,Runnable assertOwner,ai.eliza.plugins.securestore.nativeonly.CredentialMutationConductor.Mutation<T> mutation)throws Exception {
+  return ai.eliza.plugins.securestore.nativeonly.CredentialMutationConductor.mutate(new ai.eliza.plugins.securestore.nativeonly.CredentialMutationConductor.Host(){
+   public Object lifecycleLock(){return lifecycleLock;}
+   public Object credentialLock(){return ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK;}
+   public long beginRetirement(){
+    startRequestId=null;startOwnsLaunch=false;
+    AlphaCanonicalNotifications.forget(context);
+    invalidateCalls();long epoch=++lifecycleEpoch;credentialMutationEpoch=epoch;accepting=false;stopping=true;clearEnrollment();return epoch;
    }
-   startRequestId=null;startOwnsLaunch=false;
-   AlphaCanonicalNotifications.forget(context);
-   invalidateCalls();epoch=++lifecycleEpoch;credentialMutationEpoch=epoch;accepting=false;stopping=true;clearEnrollment();
-  }
-  try{
-   final long stopRequest;
-   synchronized(lifecycleLock){assertOwner.run();if(epoch!=lifecycleEpoch||credentialMutationEpoch!=epoch)throw new Superseded();credentialShutdownRequest=-2;stopRequest=ElizaAgentService.stopForCredentialChange(context);credentialShutdownRequest=stopRequest;}
-   long deadline=android.os.SystemClock.elapsedRealtime()+15000;
-   while(true){
-    synchronized(lifecycleLock){assertOwner.run();if(epoch!=lifecycleEpoch||credentialMutationEpoch!=epoch)throw new Superseded();}
-    JSONObject status=ElizaAgentService.getLocalAgentBootState(context);
-    synchronized(lifecycleLock){
-     assertOwner.run();if(epoch!=lifecycleEpoch||credentialMutationEpoch!=epoch)throw new Superseded();
-     if(shutdownConfirmed(status)&&ElizaAgentService.isCredentialShutdownConfirmed(stopRequest)){
-      synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){return commitCredentials(mutation);}
-     }
-    }
-    if(android.os.SystemClock.elapsedRealtime()>=deadline)throw new IllegalStateException("Native shutdown unconfirmed");
-    Thread.sleep(50);
+   public void requireCurrent(long epoch)throws Exception{if(epoch!=lifecycleEpoch||credentialMutationEpoch!=epoch)throw new Superseded();}
+   public long requestStop(){credentialShutdownRequest=-2;long request=ElizaAgentService.stopForCredentialChange(context);credentialShutdownRequest=request;return request;}
+   public boolean stopped()throws Exception{return shutdownConfirmed(ElizaAgentService.getLocalAgentBootState(context));}
+   public boolean stopAcknowledged(long request){return ElizaAgentService.isCredentialShutdownConfirmed(request);}
+   public long elapsedRealtime(){return android.os.SystemClock.elapsedRealtime();}
+   public void sleep(long millis)throws InterruptedException{Thread.sleep(millis);}
+   public void finishMutation(long epoch,long request,boolean commitAttempted,boolean commitConfirmed){
+    if(credentialMutationEpoch!=epoch)return;
+    credentialMutationEpoch=-1;
+    if((!commitAttempted||commitConfirmed)&&request>=0)ElizaAgentService.releaseCredentialShutdown(request);
    }
-  }finally{
-   synchronized(lifecycleLock){if(credentialMutationEpoch==epoch)credentialMutationEpoch=-1;}
-  }
+   public <R> R commit(ai.eliza.plugins.securestore.nativeonly.CredentialMutationConductor.Mutation<R> change)throws Exception{return commitCredentials(change);}
+  },assertOwner,mutation);
  }
  /** Every provider and Cloud credential write commits here; the cached listener owner never outlives one. */
- private static <T> T commitCredentials(CredentialMutation<T> mutation)throws Exception{INVOCATION_OWNER.invalidate();try{return mutation.commit();}finally{INVOCATION_OWNER.invalidate();}}
+ private static <T> T commitCredentials(ai.eliza.plugins.securestore.nativeonly.CredentialMutationConductor.Mutation<T> mutation)throws Exception{INVOCATION_OWNER.invalidate();try{return mutation.commit();}finally{INVOCATION_OWNER.invalidate();}}
  static boolean providerAdmissionReadable(){return credentialMutationEpoch<0;}
  private void requireCurrent(long epoch) throws Superseded {
   synchronized(lifecycleLock){if(disposed||!accepting||epoch!=lifecycleEpoch)throw new Superseded();}
@@ -468,7 +457,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
    if(credentialShutdownRetryEpoch>=0){call.reject("Provider shutdown is already being checked; wait before retrying.");return true;}
    // An ordinary refused stop also latches stopping, without a credential request.
    // Only a new Start/Retry request enters this existing strict owner/absence recheck.
-   if((credentialShutdownRequest==-1&&!stopping)||(credentialShutdownRequest>=0&&ElizaAgentService.isCredentialShutdownConfirmed(credentialShutdownRequest)))return false;
+   if((credentialShutdownRequest==-1&&!stopping)||(credentialShutdownRequest>=0&&ElizaAgentService.isCredentialShutdownReleased(credentialShutdownRequest)))return false;
    if(disposed||getActivity()==null||!getActivity().hasWindowFocus()){call.reject("Return to the app before retrying provider shutdown.");return true;}
    if(credentialMutationEpoch>=0){call.reject("Provider shutdown is already being checked; wait before retrying.");return true;}
    if(requestId!=null&&cancelledStarts.remove(requestId)){call.reject("Local startup cancelled");return true;}
@@ -481,8 +470,9 @@ public final class AlphaLocalAgentPlugin extends Plugin {
     final long stopRequest;
     synchronized(lifecycleLock){
      requireShutdownRetry(call,retryEpoch,retryIntent);
+     long previousRequest=credentialShutdownRequest;
      credentialShutdownRequest=-2;
-     stopRequest=ElizaAgentService.stopForCredentialChange(getContext());
+     stopRequest=previousRequest>=0?ElizaAgentService.retryCredentialShutdown(getContext(),previousRequest):ElizaAgentService.stopForCredentialChange(getContext());
      credentialShutdownRequest=stopRequest;
     }
     ResidentCredentialShutdownRetry.await(
@@ -493,6 +483,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
     synchronized(lifecycleLock){
      requireShutdownRetry(call,retryEpoch,retryIntent);
      if(credentialShutdownRequest!=stopRequest||!ElizaAgentService.isCredentialShutdownConfirmed(stopRequest))throw new Superseded();
+     if(!ElizaAgentService.releaseCredentialShutdown(stopRequest))throw new Superseded();
      credentialShutdownRequest=-1;credentialShutdownRetryEpoch=-1;stopping=false;accepting=true;pending.remove(call);
     }
     // Exact continuation epoch rejects cancellation/account changes between acknowledgment and start.
@@ -548,7 +539,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
      if(continuationEpoch>=0&&(getActivity()==null||!getActivity().hasWindowFocus())){call.reject("Return to the app before starting.");return;}
      if(disposed){call.reject("Local agent bridge is closed.");return;}
      if(credentialMutationEpoch>=0){call.reject("Local provider is changing; wait before starting.");return;}
-     if(credentialShutdownRequest!=-1&&(credentialShutdownRequest<0||!ElizaAgentService.isCredentialShutdownConfirmed(credentialShutdownRequest))){call.reject("Provider shutdown is unconfirmed; check the local agent before starting.");return;}
+     if(credentialShutdownRequest!=-1&&(credentialShutdownRequest<0||!ElizaAgentService.isCredentialShutdownReleased(credentialShutdownRequest))){call.reject("Provider shutdown is unconfirmed; check the local agent before starting.");return;}
      if(stopping&&shutdownConfirmed(nativeState))stopping=false;
      if(stopping){call.reject("Local agent is stopping; wait for stopped status before starting.");return;}
      // An admitted running resident is attached to, never restarted: another surface's work,
