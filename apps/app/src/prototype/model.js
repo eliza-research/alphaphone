@@ -1,4 +1,4 @@
-import { externalVoiceInvocationEnabled } from '../runtime/voice-entry-policy';
+import { externalVoiceInvocationEnabled } from '../runtime/aosp-image';
 import iconCatalog from '../icon-catalog.json';
 /* Seeds, scripted replies and fixture images. Production builds resolve this
    specifier to ./fixtures.empty.js (same names, empty values). */

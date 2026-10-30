@@ -2,12 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {tsImport} from 'tsx/esm/api';
 import {stripTypeScriptTypes} from 'node:module';
 const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
 
-test('holding the side key never opens the microphone while the chat mic still works',()=>{
- const policy=read('apps/app/src/runtime/voice-entry-policy.ts');
- assert.match(policy,/externalVoiceInvocationEnabled = false/);
+test('ordinary mobile side key stays chat-only while the chat mic still works',async()=>{
+ const policy=read('apps/app/src/runtime/aosp-image.ts');
+ assert.match(policy,/mobileVoiceEntryPolicy\(aospImage\)/);
+ const {externalVoiceInvocationEnabled}=await tsImport('../apps/app/src/runtime/aosp-image.ts',import.meta.url);
+ assert.equal(externalVoiceInvocationEnabled,false,'ordinary browser/Android host has no native AOSP admission');
+ const {mobileVoiceEntryPolicy}=await tsImport('../.eliza/client-features/plugins/plugin-native-system/src/sense.ts',import.meta.url);
+ assert.equal(mobileVoiceEntryPolicy(false).externalInvocation,false);
+ assert.equal(mobileVoiceEntryPolicy(true).externalInvocation,true,'native-admitted AOSP keeps verified gestures and opted-in wakes');
  const source=read('apps/app/src/prototype/model.js');
  const down=source.match(/pDown: (function \(e\) \{[^\n]+\}),\n\s+pUp:/)?.[1];
  const chat=source.match(/startVoice: (function \(\) \{ self\.startVoice\(\); \})/)?.[1];

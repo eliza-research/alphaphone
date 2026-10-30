@@ -175,7 +175,29 @@ import templateHtml from "./template.html?raw";
   phoneRoot.classList.add('alpha-phone');
   phoneRoot.appendChild(phoneTpl.ownerDocument.importNode(tpl.querySelector('[data-screen]'), true));
   phoneTpl.appendChild(phoneRoot);
+  // Compatibility leaves keep their current controllers while the shared
+  // application owns Home, app placement, and All apps. Never render the old
+  // whole-screen template inside the new application root.
+  const screenTemplate = phoneRoot.querySelector('[data-screen]');
+  function screenChild(element) { while (element && element.parentElement !== screenTemplate) element = element.parentElement; return element; }
+  const homeTemplate = screenChild(screenTemplate.querySelector('sc-element[value="{{homeShell}}"]'));
+  const appTemplate = screenChild(screenTemplate.querySelector('[data-alpha-layer="app"]'));
+  const assistantTemplate = screenChild(screenTemplate.querySelector('[data-alpha-layer="conversation"]'));
+  const homeElement = homeTemplate.querySelector('sc-element[value="{{homeShell}}"]');
+  const backTemplate = homeTemplate.cloneNode(true);
+  backTemplate.querySelector('sc-element')?.remove();
+  backTemplate.querySelector('sc-if[value="{{drawerOpen}}"]')?.remove();
+  const overlayNodes = [...screenTemplate.childNodes].filter(node => ![homeTemplate, appTemplate, assistantTemplate].includes(node) && !(node.nodeType === 3 && node.textContent.includes('{{canonicalNotesWorkspace}}')));
+  function mobileParts(vals) {
+    return {
+      hostProps: props(phoneRoot, vals, 'host'), screenProps: props(screenTemplate, vals, 'screen'),
+      header: kids(homeElement.querySelector('sc-slot[name="header"]').childNodes, vals),
+      cards: kids(homeElement.querySelector('sc-slot[name="cards"]').childNodes, vals),
+      view: node(appTemplate, vals, 'view'), assistant: node(assistantTemplate, vals, 'assistant'),
+      overlays: [...kids(overlayNodes, vals), node(backTemplate, vals, 'back')],
+    };
+  }
   export class DCLogic extends React.Component {
     constructor(p) { super(p); this.state = {}; }
-    render() { var vals = this.renderVals(); var out = kids((this.props.phoneSurface ? phoneTpl : tpl).childNodes, vals); return h(React.Fragment, null, out); }
+    render() { var vals = this.renderVals(); if (this.props.renderApplication) return this.props.renderApplication(vals, this, mobileParts(vals)); var out = kids((this.props.phoneSurface ? phoneTpl : tpl).childNodes, vals); return h(React.Fragment, null, out); }
   };

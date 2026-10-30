@@ -1,4 +1,4 @@
-import { externalVoiceInvocationEnabled } from './voice-entry-policy';
+import { externalVoiceInvocationEnabled, voiceEntryPolicy } from './aosp-image';
 import { Capacitor } from '@capacitor/core';
 import {Sense,createSenseInvocationController} from '@elizaos/capacitor-system/sense';
 import { parseAssistantInvocation, parseListenerStatus, type AssistantInvocation, type ListenerStatus } from './always-on-listener-status';
@@ -73,6 +73,6 @@ export function installListenerInvocation(shell: () => { startVoice?: () => unkn
   if(!externalVoiceInvocationEnabled || !nativeListener())return ()=>{};
   const ready=()=>!!shell()?.startVoice&&shell()?.live!==false&&!state.connectionOpen()&&state.connected();
   const owner=createSenseInvocationController(Sense,{authority:state.authority,initialRestorePending:state.initialRestorePending,powerAccountRef:state.powerAccountRef,ready,voiceActive:state.voiceActive,
-    startVoice:()=>{const current=shell();if(ready())void current?.startVoice?.();},subscribe:state.subscribe,events:[INVOCATION_EVENT]});
+    startVoice:()=>{const current=shell();if(ready())void current?.startVoice?.();},subscribe:state.subscribe,events:[INVOCATION_EVENT]},voiceEntryPolicy);
   return ()=>owner.dispose();
 }

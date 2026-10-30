@@ -17,7 +17,7 @@
 <sc-if value="{{isOn}}">
 <sc-if value="{{showAppBack}}"><button data-alpha-app-back-fallback aria-label="Back to apps" onClick="{{backToApps}}" style="position:absolute;top:0;left:12px;z-index:44;min-height:44px;display:flex;align-items:center;gap:6px;padding:0 8px;color:var(--fg);font-size:14px"><svg class="i" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="{{ic.back}}"></path></svg>Apps</button></sc-if>
 
-<!-- Home, its app grid and All apps come from the shared mobile shell (prototype/home-shell.ts,
+<!-- Home, its app grid and All apps come from the shared mobile shell (product/AlphaMobileApplication.tsx,
      @elizaos/ui/mobile-shell); this template fills its notice and card slots. -->
 <sc-element value="{{homeShell}}">
 <sc-slot name="header">

@@ -1,4 +1,4 @@
-import { externalVoiceInvocationEnabled } from '../runtime/voice-entry-policy';
+import { externalVoiceInvocationEnabled } from '../runtime/aosp-image';
 import {residentRecoveryCopy} from '../runtime/resident-recovery';
 import {browserCalendarScope} from './agent-calendar-adapter';
 import {cloudServiceName} from '../runtime/cloud-protocol';
