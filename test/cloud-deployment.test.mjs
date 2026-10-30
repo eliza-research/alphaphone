@@ -23,7 +23,7 @@ test('a different deployment changes actual native login, request admission and 
   const registration=plugin.slice(plugin.indexOf(' static final String PENDING_SLOT'),plugin.indexOf(' static String receiptSlot('));
   assert.ok(registration.includes('static CloudSignInConfig registration(boolean testMocks)'));
   const shared='vendor/eliza/packages/auth/android/src/main/java/ai/eliza/auth/cloud/';
-  const sharedFiles=['CloudSignInConfig.java','CloudSignInEnvironment.java','CloudSignInFlow.java','CloudSignInRoutes.java','CloudKeyRevocation.java','CloudEmailCode.java','CloudSmsCode.java'].map(file=>shared+file).concat('vendor/eliza/packages/auth/android/test/org/json/JSONObject.java');
+  const sharedFiles=['CloudSignInConfig.java','CloudSignInEnvironment.java','CloudSignInFlow.java','CloudSignInRoutes.java','CloudKeyRevocation.java','CloudEmailCode.java','CloudSmsCode.java'].map(file=>shared+file).concat('vendor/eliza/packages/auth/android/test/org/json/JSONObject.java','vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/CloudConnectionPolicy.java');
   fs.writeFileSync(path.join(temp,'AlphaRegistration.java'),`package ai.elizaresearch.alphaphone;
 import ai.eliza.auth.cloud.*;
 final class BuildConfig {static final boolean ELIZA_DEV_ALLOW_TEST_MOCKS=false;}
@@ -127,12 +127,15 @@ test('custom deployment reaches native inference configuration and Google transp
  try{
   write('package.json','{"type":"module"}');
   for(const [name,text] of Object.entries(deploymentOutputs(config)))write(name,text);
-  for(const name of ['backend/managed-google-failure-stage.ts','backend/managed-google-route-policy.ts','backend/native-google-cloud-port.ts','backend/native-cloud-runtime.ts','apps/app/src/runtime/managed-service-routes.ts'])write(name,fs.readFileSync(name,'utf8'));
+  for(const name of ['config/alpha-product.json','backend/managed-google-failure-stage.ts','backend/managed-google-route-policy.ts','backend/native-google-cloud-port.ts','backend/native-cloud-runtime.ts','apps/app/src/runtime/managed-service-routes.ts'])write(name,fs.readFileSync(name,'utf8'));
   const load=name=>import(pathToFileURL(path.join(temp,name)).href);
   // The product declares only its admitted Cloud API base; the shared upstream
   // runtime profile writes routing and refuses any other base URL.
   const {nativeCloudRuntime}=await load('backend/native-cloud-runtime.ts');
-  assert.deepEqual(nativeCloudRuntime,{apiBaseUrl:config.production.api+'/api/v1'});
+  assert.equal(nativeCloudRuntime.apiBaseUrl,config.production.api+'/api/v1');
+  const product=JSON.parse(fs.readFileSync('config/alpha-product.json','utf8'));
+  assert.equal(nativeCloudRuntime.productCharacter.name,product.identity.characterName);
+  assert.ok(nativeCloudRuntime.productCharacter.bio[0].includes(product.identity.appName));
   assert.ok(Object.isFrozen(nativeCloudRuntime));
   const {createNativeGoogleCloudPort}=await load('backend/native-google-cloud-port.ts');
   const id='11111111-1111-4111-8111-111111111111',user='22222222-2222-4222-8222-222222222222',org='33333333-3333-4333-8333-333333333333',calls=[];
