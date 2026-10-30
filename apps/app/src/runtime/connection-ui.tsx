@@ -2107,8 +2107,8 @@ export const connectionController = {
   },
   getResidentReadingBinding(){return active?.kind==='resident'&&state.session?{execution:'device' as const,ownerId:state.session.ownerId,sessionId:state.session.sessionId}:null;},
   /** Pre-warm: the resident agent opens its Cloud inference connection with one no-model request
-   * (POST /api/cloud/warm) when the owner is about to talk: foreground, chat opened, Talk, or a new
-   * connection while visible. Once per INFERENCE_WARM_INTERVAL_MS; advisory, so a failure is ignored
+   * (POST /api/cloud/warm) when the owner is about to talk: foreground, chat opened, typing started,
+   * Talk, or a new connection while visible. Once per INFERENCE_WARM_INTERVAL_MS; advisory, so a failure is ignored
    * and nothing is retried or scheduled. */
   warmInference(){
     const selected=active,now=Date.now();

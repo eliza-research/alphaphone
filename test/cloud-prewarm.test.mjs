@@ -38,7 +38,7 @@ test('a new connection resets the debounce and warms while visible; triggers are
  assert.match(activate,/lastInferenceWarm=Number\.NEGATIVE_INFINITY;\n\s*if\(typeof document!=='undefined'&&!document\.hidden\)connectionController\.warmInference\(\);/);
  const adapter=source('prototype/agent-adapter.ts');
  assert.match(adapter,/this\.visibilityHandler = \(\) => \{ if\(document\.hidden\)connectionController\.cancelViewNavigation\(\);else connectionController\.warmInference\(\);/);
- assert.match(adapter,/const chatOpen=this\.S\(\)\.chat==='sheet'\|\|this\.S\(\)\.chat==='full';if\(chatOpen&&!this\.chatWasOpen\)connectionController\.warmInference\(\);this\.chatWasOpen=chatOpen;/);
+ assert.match(adapter,/const chatOpen=this\.S\(\)\.chat==='sheet'\|\|this\.S\(\)\.chat==='full',drafting=!!String\(this\.S\(\)\.draft\|\|''\)\.trim\(\);if\(\(chatOpen&&!this\.chatWasOpen\)\|\|\(drafting&&!this\.wasDrafting\)\)connectionController\.warmInference\(\);this\.chatWasOpen=chatOpen;this\.wasDrafting=drafting;/);// chat opened, or the first character typed in the composer
  const voice=source('prototype/voice-adapter.ts'),start=voice.slice(voice.indexOf('Component.prototype.startVoice = async function'),voice.indexOf('function conversationRecorderView('));
  assert.match(start,/connectionController\.warmInference\(\);/);
  // Nothing schedules a warm on its own.
