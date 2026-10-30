@@ -1,3 +1,4 @@
+import { externalVoiceInvocationEnabled } from '../runtime/voice-entry-policy';
 import {residentRecoveryCopy} from '../runtime/resident-recovery';
 import {browserCalendarScope} from './agent-calendar-adapter';
 import {cloudServiceName} from '../runtime/cloud-protocol';
@@ -220,6 +221,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
       await Promise.allSettled([
         (async () => {
           // A status read older than a Pause or Turn off never replaces that action's result.
+          if (!externalVoiceInvocationEnabled) return;
           const sequence = ++listenerSequence, status = await listenerStatus();
           if (owner === instance && capabilityAbort === abort && sequence === listenerSequence) listener = status;
         })(),
@@ -450,6 +452,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
         toggle:()=>{ const next=!speakRepliesEnabled(); if(!setSpeakReplies(next)||speakRepliesEnabled()!==next) api.toast('Read replies aloud could not be saved. Try again.'); changed(); } };
     };
     const listenerRows = (): Bag[] => {
+      if (!externalVoiceInvocationEnabled) return [];
       if (!listener.available) return [info('Wake word', 'Not available')];
       const status = listener;
       return [
@@ -698,7 +701,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
         page.groups = browserDevProfile?[group([
           info('Speech','Record and review in this app'),
           speakRepliesRow(),
-          {kNav:true,label:'Wake assistant',lbl:'Wake assistant',chev:true,noAB:true,go:()=>void owner?.startVoice()},
+          ...(externalVoiceInvocationEnabled ? [{kNav:true,label:'Wake assistant',lbl:'Wake assistant',chev:true,noAB:true,go:()=>void owner?.startVoice()}] : []),
           {kNav:true,label:'Open conversation',lbl:'Open conversation',chev:true,noAB:true,go:()=>api.composeContentQuestion('')},
           {kNav:true,label:'Agent connection',lbl:'Agent connection',chev:true,noAB:true,go:()=>connectionController.open()},
           {kNav:true,label:'Scheduled digests',lbl:'Scheduled digests',chev:true,noAB:true,go:()=>window.dispatchEvent(new Event('alpha:hosted-digests'))},

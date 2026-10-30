@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
+
+test('holding the side key never opens the microphone while the chat mic still works',()=>{
+ const policy=read('apps/app/src/runtime/voice-entry-policy.ts');
+ assert.match(policy,/externalVoiceInvocationEnabled = false/);
+ const source=read('apps/app/src/prototype/model.js');
+ const down=source.match(/pDown: (function \(e\) \{[^\n]+\}),\n\s+pUp:/)?.[1];
+ const chat=source.match(/startVoice: (function \(\) \{ self\.startVoice\(\); \})/)?.[1];
+ assert.ok(down&&chat,'exercise actual side-key and chat callbacks');
+ let microphones=0,next=0;
+ const timers=new Map();
+ const self={pLong:false,pT:undefined,startVoice(){microphones++;}};
+ const context={self,externalVoiceInvocationEnabled:false,setTimeout(fn,delay){const id=++next;timers.set(id,{fn,delay});return id;},clearTimeout(id){timers.delete(id);}};
+ const press=vm.runInNewContext('('+down+')',context);
+ press({stopPropagation(){}});
+ for(const {fn} of [...timers.values()].filter(timer=>timer.delay<=2000))fn();
+ assert.equal(microphones,0,'holding beyond the old 550ms threshold must not start voice');
+ vm.runInNewContext('('+chat+')',context)();
+ assert.equal(microphones,1,'the in-chat microphone remains callable');
+ const template=read('apps/app/src/prototype/template.html');
+ assert.doesNotMatch(template,/hold to talk/);
+ assert.match(template,/<sc-if value="\{\{externalVoiceInvocation\}\}"><button aria-label="Talk to/);
+ assert.match(read('apps/app/src/main.tsx'),/if \(externalVoiceInvocationEnabled && isAndroid && assistantSurface\) installListenerInvocation/);
+ assert.match(read('apps/app/src/runtime/always-on-listener.ts'),/if\(!externalVoiceInvocationEnabled \|\| !nativeListener\(\)\)return/);
+ for(const name of ['AlphaAssistActivity','AlphaPowerVoiceActivity'])assert.match(read('android/app/src/main/AndroidManifest.xml'),new RegExp('<activity android:name="\\.'+name+'" android:enabled="false" android:exported="false"'));
+});
