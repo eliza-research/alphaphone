@@ -2,15 +2,208 @@
   "schema": 1,
   "repository": "elizaOS/eliza",
   "base": "develop",
-  "baseCommit": "fbc2d23d4bae0c7086ea529c019e5a47fb7b8352",
-  "head": "fbc2d23d4bae0c7086ea529c019e5a47fb7b8352",
-  "recordedAt": "2026-10-29",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...fbc2d23d4bae0c7086ea529c019e5a47fb7b8352",
-  "status": "identical",
-  "aheadBy": 0,
-  "behindBy": 0,
-  "mergeBase": "fbc2d23d4bae0c7086ea529c019e5a47fb7b8352",
-  "pinOnlyCommits": [],
+  "baseCommit": "d5f604eee7ca518fef6706bc163ffa71ae7647ba",
+  "head": "9af104a1c7c7021493db575899baee666ea0ff6a",
+  "recordedAt": "2026-10-30",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...9af104a1c7c7021493db575899baee666ea0ff6a",
+  "status": "diverged",
+  "aheadBy": 50,
+  "behindBy": 8,
+  "mergeBase": "25da1a402eeb7eac4bf454636c70ca2f0be71580",
+  "pinOnlyCommits": [
+    {
+      "sha": "5ed02e85514399fea3b50e9bf6c4e2288ad3be90",
+      "subject": "Answer DM closings, admit more progress acks, keep the day on calendar follow-ups"
+    },
+    {
+      "sha": "61782bf28392ddebb76b8e43481f97b19f647557",
+      "subject": "Keep the stated time out of created event titles"
+    },
+    {
+      "sha": "bd3ee06349c446956686fe86a048a297c8782423",
+      "subject": "Test direct replies, progress delivery, and calendar follow-ups"
+    },
+    {
+      "sha": "160e80f58cad5b7f65e0890d285f180cd3dca0aa",
+      "subject": "fix(workflow): bind the owner conversation when an edit switches a trigger to prompt (#38169)"
+    },
+    {
+      "sha": "189cf276902ae41a3a3d6a441cfd40c0e954cb29",
+      "subject": "Phone workflow device contract, selected-reminders read, 30-minute missed-run window (#38161)"
+    },
+    {
+      "sha": "0db04d25367889fd0b939f9e5f31d38338a37f94",
+      "subject": "fix(notes): new editor drafts do not bind to another note on first save (#38172)"
+    },
+    {
+      "sha": "41fb9efd8800074d73fb77a4b4931ef6ba0c3548",
+      "subject": "Declare bounded Calendar day observation format support"
+    },
+    {
+      "sha": "ec258a5b40e448509e14d4ec31f734cb69ad08ca",
+      "subject": "WIP preserve separate Calendar carry-forward for later qualification"
+    },
+    {
+      "sha": "d83b9c0f9075ae2fc267958bd1ef2017bda8e647",
+      "subject": "wip(calendar): freeze instance-bound selected-day carrier for qualification"
+    },
+    {
+      "sha": "ae9afede979c357583a1faad8f405654bbd9d669",
+      "subject": "fix(calendar): qualify selected-day edits through the canonical chat reader"
+    },
+    {
+      "sha": "4fd281d6c3880e47d55773acb30d5f60755b5900",
+      "subject": "fix(assistant): ground browser proposals in the current owner request"
+    },
+    {
+      "sha": "cea0da10f64b4ab14f63e3d1ace5d02a80d10e7d",
+      "subject": "test(assistant): bind browser lifecycle fixtures to durable owner requests"
+    },
+    {
+      "sha": "1bb36fbc33517fc095c5f8ced9a4fd2f33d65205",
+      "subject": "Preserve typed Cloud authentication reasons in bounded text diagnostics"
+    },
+    {
+      "sha": "1d09118cfd33cf21d3532119e28d34fd566f3d3e",
+      "subject": "Format the bounded authentication diagnostic cases"
+    },
+    {
+      "sha": "210bc893b3dda55daba72d914bd851155f954f86",
+      "subject": "fix(calendar): retain next-event facts as internal reply evidence"
+    },
+    {
+      "sha": "da9dea519fa8cbeb9952eae47f64d548f765192f",
+      "subject": "fix(calendar): expose existing create duration policy without hiding invalid timing"
+    },
+    {
+      "sha": "e86a6764f9a43fc5afa034345ce05a147caf6190",
+      "subject": "fix(calendar): preserve explicit agenda record ownership before dispatch"
+    },
+    {
+      "sha": "7854f43ff93082452c8aca5c4bf56aff0e0015bf",
+      "subject": "fix(calendar): declare the optional agenda port outcome contract"
+    },
+    {
+      "sha": "5c8df54c156a9871d56e58124ae5708604610d50",
+      "subject": "feat(agent): prepare product branding through canonical identity config"
+    },
+    {
+      "sha": "d9c37ec3ce63f35e3f16539008d3f87a73dd1fa4",
+      "subject": "fix(agent): validate canonical names before identity comparison"
+    },
+    {
+      "sha": "cc5bbbb3ed305838dfdaf740b4286f12fd4750ff",
+      "subject": "fix(agent): guard optional UI identity without assertion"
+    },
+    {
+      "sha": "eeae1b54a19ee04efd205d56520a28ace24898a9",
+      "subject": "fix(agent): consume admitted product persona in normal host boot"
+    },
+    {
+      "sha": "a4c766dbdbaeda8ff0ad045ed5afb4b21bee1480",
+      "subject": "fix(agent): preserve profile scopes and explicit persona edits"
+    },
+    {
+      "sha": "055105126e36276079b2c856a724378feb2d4737",
+      "subject": "fix(agent): reject ambiguous restored persona scopes"
+    },
+    {
+      "sha": "7df08bce13070b720a17611c45a7da18d318d662",
+      "subject": "fix: carry reviewed planner dedup and trigger limit clearing"
+    },
+    {
+      "sha": "2ad4d605ec8e6a7d251ec83d017faa873fa1c4ee",
+      "subject": "fix(assistant): preserve current-request browser coordination"
+    },
+    {
+      "sha": "e101fcce6560a371f81f5310b5a82fbea1454feb",
+      "subject": "fix(assistant): fence browser dispatch with current request"
+    },
+    {
+      "sha": "bb51e5dd5e276b27ac3cd9b8a70421e797375dfe",
+      "subject": "fix(assistant): retain manual review of older browser proposals"
+    },
+    {
+      "sha": "36bb2d743e0c2988595cb66ea618a07661b3e879",
+      "subject": "fix(assistant): preserve current browser cancellation errors"
+    },
+    {
+      "sha": "45a410b126202e2ec375c584e9f59336058d3579",
+      "subject": "fix(calendar): ground confirmation ranges in committed event time"
+    },
+    {
+      "sha": "4b2aa625744f53528d080ec684276b91124ee347",
+      "subject": "test(calendar): preserve exact observed time-regression wording"
+    },
+    {
+      "sha": "a683c93ba651beeb9239f4f98c315d41d690c0ab",
+      "subject": "fix(calendar): retain time grounding with repeated evidence"
+    },
+    {
+      "sha": "d4b1b0afc4ec349c438263c0ba8aa2343ff52b81",
+      "subject": "Expose safe trajectory control decisions in detail metadata"
+    },
+    {
+      "sha": "53d9625a2552bfe1dff88e734ae99bb4d3ee49b2",
+      "subject": "Clarify current Calendar detail reads require source lookup"
+    },
+    {
+      "sha": "e311c50f0df5e7a5884aabc7a5e2fed1e73c9e10",
+      "subject": "Anchor relative owner reminders to the request observation time"
+    },
+    {
+      "sha": "c4820e15efea5ad104a1e1bab46a3071999a7893",
+      "subject": "Recheck relative reminder expiry after final lookups"
+    },
+    {
+      "sha": "66f6d75ff1e1880692681f5bc4223985030f8391",
+      "subject": "Preserve committed reminder retries before checking new-write deadline"
+    },
+    {
+      "sha": "ed9c013d7af311c9fdec1f2a5bf8fc2fd1c4edff",
+      "subject": "fix: settle speech requests before host failure handling"
+    },
+    {
+      "sha": "0b0d6e5fcdbbb37b54c546361f511c5f57ac76db",
+      "subject": "Guard failed resident bind cleanup by exact host binding"
+    },
+    {
+      "sha": "8d690dff0fa50a2ccff107bfeb491b25e0063d97",
+      "subject": "Admit dash- and comma-joined progress acknowledgements"
+    },
+    {
+      "sha": "406e9d6f6f3671f5466c1133e879a331ecd1efbf",
+      "subject": "Preserve relative reminder deadlines through preview confirmation"
+    },
+    {
+      "sha": "27df08a88ce6d79d496fc6793ffae6cefd0d3712",
+      "subject": "fix: retain phone and reminder reads in shared device coordinator"
+    },
+    {
+      "sha": "6e9bf50799f351dfb63e17b08cf2eabc00181a2e",
+      "subject": "fix(agent): narrow productCharacter before restoring its profile scope"
+    },
+    {
+      "sha": "3127155ea340676034b2ed073a97bfd78ee9f154",
+      "subject": "style(calendar): format the qualified-target test table"
+    },
+    {
+      "sha": "30780e9339519a72395b9121a16969c78db6e2e6",
+      "subject": "style: apply biome formatting and import order to the snapshot's changed files"
+    },
+    {
+      "sha": "7a61d33443ccdccfe6a8d8087534af3db385bf71",
+      "subject": "fix(voice): do not speak a reply that repeats the spoken progress cue"
+    },
+    {
+      "sha": "0fde8e0a288bc2dc94bac78d4c431c6a0d6056b7",
+      "subject": "fix(assistant): offer the grounding review's context read only when allowed"
+    },
+    {
+      "sha": "9af104a1c7c7021493db575899baee666ea0ff6a",
+      "subject": "Suppress consecutive repeated spoken progress cues before reply speech"
+    }
+  ],
   "pullRequests": [
     {
       "url": "https://github.com/elizaOS/eliza/pull/37059",
