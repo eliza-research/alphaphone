@@ -2,6 +2,7 @@ import {checkCloudDeployment} from './scripts/cloud-deployment.mjs';
 import {browserCloudDevBridge} from './scripts/browser-cloud-dev-bridge.ts';
 import {localOcrAssets} from './scripts/local-ocr-assets.ts';
 import { browserPdfAssets } from './scripts/browser-pdf-assets.ts';
+import { browserConsumerAssets } from './scripts/browser-consumer-assets.ts';
 import { browserFullReload } from './scripts/browser-full-reload.ts';
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
@@ -102,7 +103,7 @@ function productionSurface(): Plugin[] {
 
 export default defineConfig({
   root: "apps/app",
-  plugins: [productionSurface(), localOcrAssets(), browserPdfAssets(), browserFullReload(), react(), localAgentDevBridge(), browserCloudDevBridge()],
+  plugins: [productionSurface(), browserConsumerAssets(fileURLToPath(new URL('.', import.meta.url))), localOcrAssets(), browserPdfAssets(), browserFullReload(), react(), localAgentDevBridge(), browserCloudDevBridge()],
   define: {
     'import.meta.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS': JSON.stringify(flagOn ? '1' : ''),
     __APP_VERSION__: JSON.stringify(appVersion),

@@ -60,7 +60,8 @@
     "pretest": "npm run upstream:prepare-client",
     "predev:maps": "npm run upstream:prepare-client",
     "prebuild:test-mocks": "npm run upstream:prepare-client",
-    "dev:cloud": "node scripts/dev-cloud.mjs"
+    "dev:cloud": "node scripts/dev-cloud.mjs",
+    "upstream:prepare-app": "node scripts/prepare-browser-consumer.mjs"
   },
   "dependencies": {
     "@capacitor/android": "8.5.2",

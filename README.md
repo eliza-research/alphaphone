@@ -125,6 +125,24 @@ npm run verify
 npm run dev
 ```
 
+## Shared App artifact preparation
+
+The native full-App migration consumes the canonical upstream producer output at
+`.eliza/browser-consumer`, including its public types and single stylesheet.
+Build `packages/app` with its `build:browser-consumer` command at the exact reviewed
+`upstream.lock.json` revision, then stage that output:
+
+```sh
+ELIZA_BROWSER_CONSUMER_DIR=/path/to/production-artifact npm run upstream:prepare-app
+```
+
+Preparation rejects diagnostic builds, a different source revision or dependency
+lock, changed tracked source receipts, missing/extra files and symlinks. It validates
+the replacement before replacing an existing prepared artifact. Vite serves and
+packages the recorded upstream public assets; Alpha's existing product assets keep
+precedence. This preparation does not itself switch the application entry, update
+the pin, qualify an APK or establish device acceptance.
+
 ## Build-time test-mock switch
 
 One build-time switch, the upstream elizaOS name `ELIZA_DEV_ALLOW_TEST_MOCKS`, controls
