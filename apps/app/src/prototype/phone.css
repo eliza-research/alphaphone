@@ -54,6 +54,16 @@ html:not(.standalone-app) [data-alpha-layer="home"][data-alpha-home-fits="true"]
 .home-calendar-title { min-width:0; align-self:center; font-size:36px; line-height:calc(1.02 + (clamp(1,var(--alpha-text-scale,1),2) - 1) * .12); letter-spacing:-.01em; overflow:hidden; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; }
 /* Availability copy is app state, not an event preview; keep the whole message readable. */
 .home-calendar-card:not([data-alpha-home-calendar-event="true"]) .home-calendar-title { display:block; -webkit-line-clamp:unset; overflow:visible; }
+/* The card already spans the screen from 130% text. Past about 220% (largest in-app size with a
+ * large system font) the 36px display title would grow wider than the card, and a word of its
+ * copy ("Calendar", "upcoming") was split across lines (issue #701). Like the lock clock, the
+ * title is display text far above reading size, so from there it is held to a quarter of the
+ * card's width: a word of up to about four em still fits on one line, and the title stays the
+ * largest text on the card (about 80px against 42px body text at 300%). Below that size nothing
+ * changes. The measured scale divides the cap because Android text zoom multiplies the computed
+ * size back; the browser build's --browser-text-scale stands in for that zoom. */
+.home-calendar-card:not([data-alpha-home-calendar-event="true"]) { container-type:inline-size; }
+.home-calendar-card:not([data-alpha-home-calendar-event="true"]) .home-calendar-title { font-size:calc(min(36px, 25cqi / var(--alpha-text-scale,1)) * var(--browser-text-scale,1)); }
 .home-calendar-card[data-alpha-home-calendar-event="true"] { grid-template-rows:auto minmax(0,1fr) auto; }
 .home-calendar-card[data-alpha-home-calendar-event="true"] .home-calendar-title { font-size:26px; line-height:calc(1.1 + (clamp(1,var(--alpha-text-scale,1),2) - 1) * .08); }
 .home-card { min-height:196px; gap:12px; }
