@@ -1,4 +1,4 @@
-import { createBrowserFiles } from '../../../../.eliza/client-features/plugins/plugin-files/src/browser/files.ts';
+import { createBrowserFiles } from '../product/files-upstream';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { openSelectedDocumentViewer } from './selected-document-viewer';
 import { runFilePicker, inputFiles } from './file-picker';
