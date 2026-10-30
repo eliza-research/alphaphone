@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { stripTypeScriptTypes } from "node:module";
 const code = stripTypeScriptTypes(
 	readFileSync("apps/app/src/runtime/home-calendar-selection.ts", "utf8")
-		.replace(/^import .*;\n/gm, "")
+		.replace(/^import[\s\S]*?;\n/gm, "")
 		.replace("export function", "function"),
 	{ mode: "transform" },
 );
