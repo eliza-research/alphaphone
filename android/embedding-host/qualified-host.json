@@ -66,5 +66,9 @@
     "mode": "registered",
     "className": "ai/elizaresearch/alphaphone/ElizaVoiceNative",
     "subset": "full"
+  },
+  "sdkProvenance": {
+    "schema": "full-qualification-v1",
+    "receipt": "docs/evidence/native-f31-embedding/QUALIFICATION.json"
   }
 }

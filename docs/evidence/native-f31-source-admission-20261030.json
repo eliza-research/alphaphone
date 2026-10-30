@@ -208,6 +208,6 @@
     "officialStagingPending": false,
     "installedApplicationTested": false,
     "stagedManifest": "android/embedding-host/qualified-host.json",
-    "stagedManifestSha256": "0f42839de025b0900fdaa916c8667b97c5f0535a7b102fd3d7f99e00ebf4e8ab"
+    "stagedManifestSha256": "3f6f36e84afc043bb6141c3425b17c4de6ac73849f2873ac9a977e9a15b6f21d"
   }
 }

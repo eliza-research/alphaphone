@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {nativeInputPaths,nativeJavaPath,nativeBinding,nativeInputs,nativeGenerated,verifyNativeJava} from './embedding-native-contract.mjs';
+import {qualifiedSdkProvenance} from './embedding-build-remap.mjs';
 const root=path.resolve(import.meta.dirname,'..');
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const hash=file=>sha(fs.readFileSync(file));
@@ -86,7 +87,13 @@ if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.ur
   // agent:stage-android stages the model with the runtime payload; this command only checks it.
   if(!fs.existsSync(path.join(root,model.path)))throw Error('Pinned BGE model is not staged: run npm run agent:prepare, npm run agent:build-workflow-worker and npm run agent:stage-android first');
   if(hash(path.join(root,model.path))!==model.sha256)throw Error('Pinned BGE model bytes changed');
-  const manifest={pin:receipt.pin,forkPin:receipt.forkPin,identity,abi:receipt.abi,model,libraries:libraries.map(({source,target,...row})=>row),qualificationReceiptSha256:hash(args[1]),jniIdentityRelocated:true,inputs:receipt.inputs,...(receipt.jniBinding?{jniBinding:receipt.jniBinding}:{})};
+  const receiptRelative=path.relative(root,path.resolve(args[1]));
+  // Keep a full in-repository qualification discoverable by the path-remapping
+  // verifier. External historical/component receipts retain their prior schema.
+  const sdkProvenance=receiptRelative&&!path.isAbsolute(receiptRelative)&&!receiptRelative.split(/[\\/]/).some(part=>!part||part==='.'||part==='..')
+   ?{schema:'full-qualification-v1',receipt:receiptRelative.split(path.sep).join('/')}:null;
+  const manifest={pin:receipt.pin,forkPin:receipt.forkPin,identity,abi:receipt.abi,model,libraries:libraries.map(({source,target,...row})=>row),qualificationReceiptSha256:hash(args[1]),jniIdentityRelocated:true,inputs:receipt.inputs,...(receipt.jniBinding?{jniBinding:receipt.jniBinding}:{}),...(sdkProvenance?{sdkProvenance}:{})};
+  if(sdkProvenance)qualifiedSdkProvenance(root,manifest);
   const manifestFile=path.join(root,'android/embedding-host/qualified-host.json');
   // A record marked for requalification is replaced by the new qualification; any other differing record needs review first.
   if(fs.existsSync(manifestFile)&&fs.readFileSync(manifestFile,'utf8')!==JSON.stringify(manifest,null,2)+'\n'&&JSON.parse(fs.readFileSync(manifestFile,'utf8')).requalification?.required!==true)throw Error('Existing embedding qualification differs; review before replacing');

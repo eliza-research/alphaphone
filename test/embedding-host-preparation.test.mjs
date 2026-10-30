@@ -48,11 +48,15 @@ test('wrong engine revision is refused before creating output or running a build
  try{const result=run('--fork',root,'--output',output,'--build');assert.notEqual(result.status,0);assert.match(result.stderr,/Engine checkout must be clean at the exact Eliza gitlink/);assert.equal(fs.existsSync(output),false);}finally{fs.rmSync(temp,{recursive:true,force:true});}
 });
 
-// Exercise both receipt schemas without changing the product's admitted legacy engine.
+// Exercise historical/component schemas independently of the product's current engine.
 function componentFixture() {
  const manifest=JSON.parse(fs.readFileSync(path.join(root,'android/embedding-host/qualified-host.json'),'utf8'));
  const legacyBytes=fs.readFileSync(path.join(root,SDK_PROVENANCE_RECEIPT));
- const legacy=JSON.parse(legacyBytes), engine=manifest.libraries.find(row=>row.name==='libelizainference.so');
+ const legacy=JSON.parse(legacyBytes);
+ delete manifest.sdkProvenance;
+ for(const key of ['pin','forkPin','identity','abi','inputs','jniBinding'])manifest[key]=legacy[key];
+ manifest.libraries=legacy.libraries.map(row=>({name:path.basename(row.path),sha256:row.sha256,bytes:row.bytes,alignment16KiB:row.alignment16KiB}));
+ const engine=manifest.libraries.find(row=>row.name==='libelizainference.so');
  const receipt={schemaVersion:1,nativeCommit:manifest.forkPin,engine:{sha256:engine.sha256,bytes:engine.bytes,abi:manifest.abi},previousEngineSha256:engine.sha256,toolchain:{pathRemap:legacy.env.CCC_OVERRIDE_OPTIONS}};
  const currentBytes=Buffer.from(JSON.stringify(receipt)),currentPath='docs/evidence/synthetic-component.json';
  manifest.newArm64EngineQualification={receipt:currentPath,sourceCommit:manifest.forkPin,engineSha256:engine.sha256};
@@ -112,4 +116,49 @@ test('current provenance refuses mismatched admission, redirected receipts and m
  write('android/embedding-host/qualified-host.json',admitted);write(SDK_PROVENANCE_RECEIPT,legacyBytes);
  fs.rmSync(path.join(fixture,currentPath));fs.symlinkSync(path.join(root,currentPath),path.join(fixture,currentPath));
  assert.throws(()=>embeddingBuildRemap(fixture,inputs),/symlink/);
+});
+
+function fullFixture() {
+ const manifest=JSON.parse(fs.readFileSync(path.join(root,'android/embedding-host/qualified-host.json'),'utf8'));
+ const receiptPath=manifest.sdkProvenance.receipt;
+ const bytes=fs.readFileSync(path.join(root,receiptPath));
+ assert.equal(sha(bytes),manifest.qualificationReceiptSha256);
+ return {manifest,receiptPath,bytes};
+}
+test('full Alpha JNI qualification authenticates the current SDK mapping without a historical engine identity',()=>{
+ const {manifest,receiptPath,bytes}=fullFixture(),fixture=fs.mkdtempSync(path.join(os.tmpdir(),'alpha-remap-full-'));
+ try{
+  for(const [name,value] of [['android/embedding-host/qualified-host.json',JSON.stringify(manifest)],[receiptPath,bytes]]){const file=path.join(fixture,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,value);}
+  const env=embeddingBuildRemap(fixture,{sdk:'/different/android-sdk',staging:'/isolated/source',fork:'/isolated/engine',build:'/isolated/jni'});
+  assert.match(env.CCC_OVERRIDE_OPTIONS,/\+-ffile-prefix-map=\/different\/android-sdk=\/work\/android-sdk/);
+  assert.equal(fs.existsSync(path.join(fixture,SDK_PROVENANCE_RECEIPT)),false,'the full receipt needs no old engine receipt');
+ }finally{fs.rmSync(fixture,{recursive:true,force:true});}
+});
+test('full qualification rejects changed source, native identity, library, receipt and SDK paths',()=>{
+ const {manifest:admitted,receiptPath,bytes}=fullFixture(),fixture=fs.mkdtempSync(path.join(os.tmpdir(),'alpha-remap-full-refuse-'));
+ const write=(name,value)=>{const file=path.join(fixture,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,typeof value==='string'||Buffer.isBuffer(value)?value:JSON.stringify(value));};
+ const inputs={sdk:'/different/android-sdk',staging:'/isolated/source',fork:'/isolated/engine',build:'/isolated/jni'};
+ try{
+  const cases=[
+   ['hash',m=>{m.qualificationReceiptSha256='0'.repeat(64);}],
+   ['source',(_m,r)=>{r.pin='0'.repeat(40);}],['fork',(_m,r)=>{r.forkPin='0'.repeat(40);}],
+   ['identity',(_m,r)=>{r.identity='foreign.app';}],['abi',(_m,r)=>{r.abi='x86_64';}],
+   ['input',(_m,r)=>{r.inputs[0].generatedSha256='0'.repeat(64);}],
+   ['jni',(_m,r)=>{r.jniBinding.className='foreign/app/ElizaVoiceNative';}],
+   ['library',(_m,r)=>{r.libraries[0].sha256='0'.repeat(64);}],
+   ['duplicate library',(_m,r)=>{r.libraries[1]=r.libraries[0];}],
+   ['unbuilt',(_m,r)=>{r.built=false;}],['unqualified',(_m,r)=>{r.qualification.passed=false;}],
+   ['schema',m=>{m.sdkProvenance.schema='unknown';}],
+   ['mixed schemas',m=>{m.newArm64EngineQualification={};}],
+   ['outside receipt',m=>{m.sdkProvenance.receipt='../outside.json';}],
+   ['absolute receipt',m=>{m.sdkProvenance.receipt='/outside.json';}],
+   ['missing receipt',m=>{m.sdkProvenance.receipt='docs/absent.json';}],
+   ['SDK target',(_m,r)=>{r.env.CCC_OVERRIDE_OPTIONS=r.env.CCC_OVERRIDE_OPTIONS.replace('/work/android-sdk','/unreviewed/sdk');}],
+   ['relative mapping',(_m,r)=>{r.env.CCC_OVERRIDE_OPTIONS='# +-ffile-prefix-map=relative=/work/android-sdk';}],
+   ['conflicting source',(_m,r)=>{r.env.CCC_OVERRIDE_OPTIONS=`# +-ffile-prefix-map=${r.env.ANDROID_HOME}=/work/android-sdk +-ffile-prefix-map=${r.env.ANDROID_HOME}=/other`;}],
+   ['ambiguous SDK target',(_m,r)=>{r.env.CCC_OVERRIDE_OPTIONS+=` +-ffile-prefix-map=/another-sdk=/work/android-sdk`;}],
+  ];
+  for(const [label,change] of cases){const manifest=structuredClone(admitted),receipt=JSON.parse(bytes);change(manifest,receipt);const changed=Buffer.from(JSON.stringify(receipt));if(label!=='hash')manifest.qualificationReceiptSha256=sha(changed);write('android/embedding-host/qualified-host.json',manifest);write(receiptPath,changed);assert.throws(()=>embeddingBuildRemap(fixture,inputs),undefined,label);}
+  write('android/embedding-host/qualified-host.json',admitted);fs.rmSync(path.join(fixture,receiptPath));fs.symlinkSync(path.join(root,receiptPath),path.join(fixture,receiptPath));assert.throws(()=>embeddingBuildRemap(fixture,inputs),/symlink/);
+ }finally{fs.rmSync(fixture,{recursive:true,force:true});}
 });
