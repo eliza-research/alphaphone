@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { detectAospImage, admittedAospViews, AOSP_IMAGE_VIEWS, ADMITTED_AOSP_VIEW_ADAPTERS } from "../apps/app/src/runtime/aosp-image.ts";
+import {aospImageModule} from "./helpers/mobile-view-features.mjs";
+const {detectAospImage,admittedAospViews,AOSP_IMAGE_VIEWS,ADMITTED_AOSP_VIEW_ADAPTERS}=await aospImageModule();
 import { IMAGE_FEATURE_VERSION, imageFeatureName, renderImageCapability, writeImageCapability } from "../scripts/aosp-image-capability.mjs";
 
 const PKG = "ai.elizaresearch.alphaphone";
@@ -38,7 +39,8 @@ test("the renderer capability ignores URLs, storage, flags and the launcher flav
     assert.doesNotMatch(source.replace(/\/\*[\s\S]*?\*\//g, ""), forbidden);
   const features = read("apps/app/src/prototype/mvp-features.ts");
   assert.match(features, /admittedAospViews\(aospImage\)/);
-  assert.match(features, /new Set\(\["phone", "messages", "contacts", "wallet"\]\.filter\(view => !ENABLED_MVP_VIEWS\.has\(view\)\)\)/, "restored state, routes and deep links drop every unavailable view");
+  assert.match(features, /mobileViewIsAvailable\(page/);
+  assert.match(features, /else DEFERRED_MVP_VIEWS\.add\(id\)/, "restored routes use the same registered implementation/capability decision");
 });
 
 test("image staging declares the versioned system feature in the product partition", t => {

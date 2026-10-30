@@ -1,34 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync,statSync,existsSync} from 'node:fs';
-import {join,resolve,dirname} from 'node:path';
+import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {stripTypeScriptTypes} from 'node:module';
-// AP-13 / #422: Wallet is outside the MVP in both distributions and on the Alpha AOSP image. Its
-// views, deep links, native/payment adapters and agent actions stay unavailable; no payment, card
-// or pass-wallet effect can be reached from a product build.
+import {mobileViewFeatures as features} from './helpers/mobile-view-features.mjs';
+// Wallet remains unavailable because its production view/settings are not yet
+// adopted. This is an implementation gap, not a brand-specific exclusion.
 const root=resolve(import.meta.dirname,'..');
 const read=name=>readFileSync(join(root,name),'utf8');
 const dataModule=text=>'data:text/javascript;base64,'+Buffer.from(text).toString('base64');
-// A data: module has no base URL, so a relative specifier left in a substituted source cannot be
-// resolved. Point each one at the real shipped file (e.g. the shared telephony contract that
-// aosp-image.ts imports from the prepared client features) instead of stubbing it.
-const resolveRelativeImports=(text,from)=>text.replace(/(\bfrom\s*)(['"])(\.\.?\/[^'"]+)\2/g,(_,prefix,quote,spec)=>`${prefix}${quote}${pathToFileURL(resolve(root,dirname(from),spec)).href}${quote}`);
 
-/** The renderer feature gate exactly as shipped, for a standalone/launcher install or the verified image. */
-async function features(image){
- const headers=image?[{name:'AlphaTelephony',methods:[{name:'imageCapability'}]}]:[];
- const aospFile='apps/app/src/runtime/aosp-image.ts';
- const aosp=resolveRelativeImports(stripTypeScriptTypes(read(aospFile).replace("import { Capacitor } from '@capacitor/core';",`const Capacitor={getPlatform:()=>'android',PluginHeaders:${JSON.stringify(headers)}};`),{mode:'transform'}),aospFile);
- assert.doesNotMatch(aosp,/from ['"](?!file:)[^'"]+['"]/,'every image-gate dependency is substituted or resolved to the shipped file');
- const source=stripTypeScriptTypes(read('apps/app/src/prototype/mvp-features.ts'),{mode:'transform'})
-  .replace(/from ['"]\.\.\/browser\/dev-profile['"]/,`from '${dataModule('export const browserDevProfile=false;')}'`)
-  .replace(/from ['"]\.\.\/runtime\/aosp-image['"]/,`from '${dataModule(aosp)}'`);
- assert.doesNotMatch(source,/from ['"]\.\.?\//,'every renderer dependency is substituted');
- return import(dataModule(source+`\n//${image}`));
-}
-
-test('Wallet has no view, deep link or quick command in the standalone, launcher and image renderers',async()=>{
+test('unimplemented Wallet stays unavailable in both platform profiles until real view/settings adoption',async()=>{
  for(const image of [false,true]){
   const m=await features(image);
   // The harness runs the real image gate (with the shared telephony contract), so the verified

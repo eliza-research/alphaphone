@@ -9,14 +9,8 @@ import path from 'node:path';
 const root = path.resolve(import.meta.dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
-function enabledViews() {
-  const source = read('apps/app/src/prototype/mvp-features.ts');
-  const body = source.match(/export const ENABLED_MVP_VIEWS = new Set\(\[([\s\S]*?)\]\);/);
-  assert.ok(body, 'ENABLED_MVP_VIEWS is declared as a literal set');
-  // Deferred views are commented out in the literal; only uncommented entries are retained.
-  const live = body[1].split('\n').map(line => line.replace(/\/\/.*$/, '')).join('\n');
-  return [...live.matchAll(/"([a-z]+)"/g)].map(match => match[1]);
-}
+const mobileFeatures = await (await import('./helpers/mobile-view-features.mjs')).mobileViewFeatures();
+function enabledViews() { return [...mobileFeatures.ENABLED_MVP_VIEWS]; }
 
 const states = read('test/browser/accessibility-states.ts');
 const sweep = read('test/browser/accessibility-sweep.spec.ts');

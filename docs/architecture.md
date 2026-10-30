@@ -16,6 +16,30 @@ and durable effect receipts. Consume reviewed upstream commits through the pin;
 do not edit the vendor checkout. The [unification audit](unification-audit-2026-10-27.md)
 records the migration order and the gaps that prevent a completion claim.
 
+### Shared Calendar and mobile capability policy
+
+The primary Agent Calendar now renders the upstream `CalendarWorkspace`, also used
+by canonical Eliza's `CalendarSection`. `AgentCalendar` remains the existing
+owner-bound reader/mutation adapter, and Alpha retains its current source choice,
+read-only legacy recovery, detail/editor, retained draft and approval ports. Native
+and retained-source Calendar presentations are still compatibility views. They
+have not been deleted or declared equivalent.
+
+Mobile discovery uses upstream `mobileViewIsAvailable`: a registered implementation,
+its view kind/runtime declaration and installed native adapter facts determine
+availability. Product ordering no longer defines the functional allowlist.
+The existing `isMvpView` name is a compatibility projection consumed by routes,
+actions and enabled-view enrollment. Wallet remains unavailable because its real
+shared view and key/RPC settings path are not yet integrated; the historical
+brand-specific Wallet exclusion is no longer the target policy. Complete view
+parity, the remaining native/profile admission and Gmail workspace migration are
+unfinished.
+
+The shared `styles/mobile-workspaces.css` export supplies scoped Calendar utilities
+and semantic theme bindings. Alpha compiles that upstream sheet with Tailwind;
+it imports neither Eliza's global reset nor its identity/fonts. The client-feature
+projection remains transitional until the reviewed upstream source is admitted.
+
 ### Shell host pieces and their upstream targets
 
 The production entry mounts the upstream `MobileApplication` from

@@ -1,3 +1,4 @@
+import tailwindcss from "@tailwindcss/vite";
 import {checkCloudDeployment} from './scripts/cloud-deployment.mjs';
 import {browserCloudDevBridge} from './scripts/browser-cloud-dev-bridge.ts';
 import {localOcrAssets} from './scripts/local-ocr-assets.ts';
@@ -102,7 +103,7 @@ function productionSurface(): Plugin[] {
 
 export default defineConfig({
   root: "apps/app",
-  plugins: [productionSurface(), localOcrAssets(), browserPdfAssets(), browserFullReload(), react(), localAgentDevBridge(), browserCloudDevBridge()],
+  plugins: [tailwindcss(), productionSurface(), localOcrAssets(), browserPdfAssets(), browserFullReload(), react(), localAgentDevBridge(), browserCloudDevBridge()],
   define: {
     'import.meta.env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS': JSON.stringify(flagOn ? '1' : ''),
     __APP_VERSION__: JSON.stringify(appVersion),
@@ -121,6 +122,7 @@ export default defineConfig({
       "@elizaos/contracts/browser-request-grounding": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/browser-request-grounding.ts", import.meta.url)),
       "@elizaos/contracts/phone-dial": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/phone-dial.ts", import.meta.url)),
       "@elizaos/contracts/device-action-execution": fileURLToPath(new URL("./.eliza/client-features/packages/contracts/src/device-action-execution.ts", import.meta.url)),
+      "@elizaos/ui/styles/mobile-workspaces.css": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/styles/mobile-workspaces.css",import.meta.url)),
       "@elizaos/ui/view-primitives": fileURLToPath(new URL("./.eliza/client-features/packages/ui/src/view-primitives.ts",import.meta.url)),
       "@elizaos/capacitor-system/shade": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/client/shade.ts",import.meta.url)),
       "@elizaos/capacitor-system/launcher": fileURLToPath(new URL("./.eliza/client-features/plugins/plugin-native-system/src/client/launcher.ts",import.meta.url)),

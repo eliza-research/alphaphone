@@ -779,12 +779,12 @@
     <sc-if value="{{calendar.canRefreshGoogleCalendar}}"><button class="ib" aria-label="Refresh Google Calendar" disabled="{{calendar.googleCalendarRefreshing}}" onClick="{{calendar.refreshGoogleCalendar}}"><span aria-hidden="true" style="display:block;width:20px;height:20px;background:currentColor;mask:url('/icons/lucide/rotate-cw.svg') center/contain no-repeat;-webkit-mask:url('/icons/lucide/rotate-cw.svg') center/contain no-repeat"></span></button></sc-if>
     <button class="ib" aria-label="Clock alarms" onClick="{{calendar.openClock}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.clock}}"></path></svg></button>
 
-    <sc-if value="{{calendar.dayMode}}">
+    <sc-if value="{{calendar.legacyWorkspace}}"><sc-if value="{{calendar.dayMode}}">
       <sc-if value="{{calendar.notToday}}">
         <button class="ib" aria-label="Today" onClick="{{calendar.goToday}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.calToday}}"></path></svg></button>
       </sc-if>
       <button class="ib" aria-label="New event" onClick="{{calendar.newEvent}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.plus}}"></path></svg></button>
-    </sc-if>
+    </sc-if></sc-if>
   </div>
 
   <sc-if value="{{calendar.reminderTapPending}}"><div role="status" style="padding:12px;color:var(--mut)">A reminder notification link is saved.<button class="tap" aria-label="Open saved reminder notification" onClick="{{calendar.checkReminderTap}}" style="padding:8px;color:var(--acc)">Open saved reminder</button><button class="tap" aria-label="Dismiss saved reminder link" onClick="{{calendar.dismissReminderTap}}" style="padding:8px;color:var(--mut)">Dismiss link</button></div></sc-if>
@@ -807,6 +807,8 @@
   <sc-if value="{{calendar.creationRecovery}}"><div role="status" style="margin: 0 16px 8px; padding: 12px; border-radius: 12px; background: var(--s2); font-size: 13px"><p>{{calendar.creationRecoveryText}}</p><button onClick="{{calendar.checkCreations}}" style="padding: 8px">Check event creation receipts</button><button onClick="{{calendar.separateCreation}}" style="padding: 8px">Create a separate event</button></div></sc-if>
   <sc-if value="{{calendar.nativeStatusLabel}}"><button aria-label="Retry calendar and reminders" onClick="{{calendar.nativeStatusRetry}}" style="margin: 0 16px 8px; padding: 10px 12px; border-radius: 12px; background: var(--s2); color: var(--fg); text-align: left; font-size: 13px">{{calendar.nativeStatusLabel}}</button></sc-if>
   <sc-if value="{{calendar.googleCalendarNotice}}"><p role="status" style="margin:0;padding:4px 24px 8px;font-size:13px;color:var(--mut)">{{calendar.googleCalendarNotice}}</p></sc-if>
+  {{calendar.sharedWorkspace}}
+  <sc-if value="{{calendar.legacyWorkspace}}">
   <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); padding: 4px 12px 8px; flex-shrink: 0">
     <sc-for list="{{calendar.week}}" as="w">
       <button onClick="{{w.pick}}" aria-label="Day {{w.n}}" style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 4px 0">
@@ -897,6 +899,7 @@
     </div>
   </sc-if>
 
+  </sc-if>
   </div>
   <sc-if value="{{calendar.clock}}">
     <div ref="{{calendar.clock.modalRef}}" role="dialog" aria-modal="true" aria-label="Clock alarms" style="position:absolute;inset:0;z-index:35;background:var(--bg);display:flex;flex-direction:column;padding:{{calendar.clock.topPadding}} 24px 120px;overflow:auto;box-sizing:border-box">

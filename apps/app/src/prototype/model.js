@@ -11,7 +11,7 @@ import {
   ST_DEVLOG, ST_DEVICE, ST_ABOUT, NOTIF, LOCK_SUM, QUICK_SETTINGS, QUICK_TILES, HEADS, VOICE, COPY,
   ATTENTION_ROWS, HOME_DEFAULTS
 } from "./fixtures.js";
-import { isMvpView, DEFERRED_MVP_VIEWS, deferredMvpPrompt } from "./mvp-features";
+import { isMvpView, DEFERRED_MVP_VIEWS, deferredMvpPrompt, registerMobileCompatibilityView } from "./mvp-features";
 import { ALPHA_PRODUCT, alphaPaletteColor, alphaThemeVariables } from "../product/alpha-product";
 import { navigateMobileShell, resolveMobileShellSwipe } from "@elizaos/ui/mobile-shell/core";
 import { emptyHomeShadePull, pullStart, shadeFallback } from "./system-shade";
@@ -114,7 +114,7 @@ function fmtT(t) { return formatHours(t, { dayPeriod: false }); }
 /* Each app registers itself here. See CONTRACT.md. */
 var VIEWS = {};
 var ORDER = [];
-function registerView(key, def) { VIEWS[key] = def; if (isMvpView(key)) ORDER.push(key); }
+function registerView(key, def) { VIEWS[key] = def; registerMobileCompatibilityView(key, !def.prototypeOnly, def); if (isMvpView(key)) ORDER.push(key); }
 
 /* ===== module: phone ===== */
 /* Phone (dialer). Holes are {{phone.*}}. Tabs: Recents (with favorites row), Keypad, Voicemail.
@@ -3879,7 +3879,7 @@ function walLuhn(d) { var sum = 0; for (var i = 0; i < d.length; i++) { var x = 
 function walFmtExp(v) { var d = v.replace(/\D/g, "").slice(0, 4); return d.length > 2 ? d.slice(0, 2) + "/" + d.slice(2) : d; }
 
 registerView("wallet", {
-  title: "Wallet", icon: "wallet", aliases: ["pay", "cards", "passes"],
+  prototypeOnly: true, title: "Wallet", icon: "wallet", aliases: ["pay", "cards", "passes"],
   chat: "hidden",
   state: { cards: WAL_CARDS, open: null, pay: false, card: null, stage: "auth", paid: null, add: null, form: { num: "", exp: "", name: "", cvv: "" }, code: "", transit: WAL_TRANSIT || 0, trips: WAL_TRIPS, calAdded: {}, pays: 0 },
   persist: ["cards", "transit", "trips", "calAdded", "pays"],
@@ -5528,10 +5528,10 @@ class Component extends DCLogic {
     var rootRef = function (el) {
       if (!el || !el.style) return;
       Object.keys(VM).forEach(function (k) { el.style.setProperty(k, VM[k]); });
-      // The palette's fixed colours (--alpha-...) are also read outside the phone: html/body and
-      // the review dialogs Alpha appends to document.body. Define them on the document root too.
+      // Shared view portals and review dialogs are outside the phone. Keep the
+      // current product theme on their document root, including semantic tokens.
       var docRoot = el.ownerDocument && el.ownerDocument.documentElement;
-      if (docRoot && docRoot.style) Object.keys(ALPHA_PRODUCT.theme.palette || {}).forEach(function (k) { if (VM[k]) docRoot.style.setProperty(k, VM[k]); });
+      if (docRoot && docRoot.style) Object.keys(VM).forEach(function (k) { docRoot.style.setProperty(k, VM[k]); });
       // Connection and digest dialogs are siblings of the phone. Share the
       // selected palette with their common root, including live theme changes.
       if (P.phoneSurface && el.parentElement) {

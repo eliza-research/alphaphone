@@ -136,7 +136,7 @@ export async function openCanonicalCalendarForm(page: Page, theme = "light") {
     )
     .toBeGreaterThanOrEqual(3);
   await expect(
-    page.getByText("No events in this Calendar window", { exact: true }),
+    page.getByText("No events in this range", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "New event", exact: true }).click();
   await expect(
