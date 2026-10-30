@@ -650,6 +650,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     if(this.pendingActionApproval||document.querySelector('dialog[open]')){this.toast('Finish or cancel the current review before starting voice.');return;}
     if(retirement||mediaUnconfirmed){this.toast('Voice media has not finished stopping. Close the app if this continues.');return;}
     if(stage!=='closed'){this.toast('Finish or discard the Notes recording before starting a voice conversation.');return;}
+    connectionController.warmInference();
     const state=this.S();
     const chat:ChatDestination={shell:this,view:state.view||null,chat:state.chat,draft:String(state.draft||''),reply:this.messageReplyTarget,edit:this.messageEditTarget,binding:composerBinding(),...(typeof HTMLElement!=='undefined'&&document.activeElement instanceof HTMLElement?{opener:document.activeElement}:{})};
     const readingStopped=stopLocalSpeechPlayback();

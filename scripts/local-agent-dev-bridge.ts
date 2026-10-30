@@ -69,7 +69,7 @@ export function localAgentPathAllowed(path:unknown):path is string {
   }
   if(trajectoryReadAllowed(path))return true;
   if(path===ASR_PATH||path===ASR_PATH+'/status'||path===TTS_PATH||path===TTS_PATH+'/status')return true;
-  return /^\/api\/(auth\/me|agents|status|conversations(?:\/[A-Za-z0-9_-]+(?:\/messages(?:\/(?:stream|truncate))?)?)?|views\/interact-(claim|result)|client-devices\/[A-Za-z0-9_/-]+|workflow(?:\/[A-Za-z0-9_/?=&-]+)?)$/.test(path);
+  return /^\/api\/(auth\/me|agents|status|cloud\/warm|conversations(?:\/[A-Za-z0-9_-]+(?:\/messages(?:\/(?:stream|truncate))?)?)?|views\/interact-(claim|result)|client-devices\/[A-Za-z0-9_/-]+|workflow(?:\/[A-Za-z0-9_/?=&-]+)?)$/.test(path);
 }
 export function createLocalAgentDevHandler(options:{origin:string;tokenFile:string;request?:typeof fetch;cartesiaEnabled?:boolean;cloudVoiceEnabled?:boolean;cloudRealtimeEnabled?:boolean}) {
   if(options.cartesiaEnabled&&options.cloudRealtimeEnabled)throw Error('Direct and Cloud realtime voice cannot both be enabled.');

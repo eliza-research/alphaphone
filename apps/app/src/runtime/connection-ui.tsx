@@ -302,6 +302,9 @@ let startup: Promise<void> | null = null, epoch = 0;
 let clientObservationSession:ClientObservationSupportSession|undefined;
 function clearClientObservationSupport(){clientObservationSession?.clear();clientObservationSession=undefined;}
 let sending: AbortController | null = null;
+/** Pre-warm debounce: at most one agent inference warm per interval, reset by a new connection. */
+export const INFERENCE_WARM_INTERVAL_MS = 60_000;
+let lastInferenceWarm = Number.NEGATIVE_INFINITY;
 let developmentVoiceExpiresAt=0;
 const appRequests = new Set<AbortController>();
 const conversationMemory = new Map<string, string>();
@@ -854,6 +857,8 @@ function activate(next: Active, session: VerifiedSession, name: string) {
     void peer.handshake(controller.signal).catch(()=>{}).finally(()=>appRequests.delete(controller));
   }
   startConversationEvents(next,session);
+  lastInferenceWarm=Number.NEGATIVE_INFINITY;
+  if(typeof document!=='undefined'&&!document.hidden)connectionController.warmInference();
 }
 /**
  * Applies a plan change to the running on-device agent: re-admits the account, binds or unbinds
@@ -2101,6 +2106,16 @@ export const connectionController = {
     }) };
   },
   getResidentReadingBinding(){return active?.kind==='resident'&&state.session?{execution:'device' as const,ownerId:state.session.ownerId,sessionId:state.session.sessionId}:null;},
+  /** Pre-warm: the resident agent opens its Cloud inference connection with one no-model request
+   * (POST /api/cloud/warm) when the owner is about to talk: foreground, chat opened, Talk, or a new
+   * connection while visible. Once per INFERENCE_WARM_INTERVAL_MS; advisory, so a failure is ignored
+   * and nothing is retried or scheduled. */
+  warmInference(){
+    const selected=active,now=Date.now();
+    if(selected?.kind!=='resident'||!state.session||now-lastInferenceWarm<INFERENCE_WARM_INTERVAL_MS)return;
+    lastInferenceWarm=now;
+    void selected.remote.request('/api/cloud/warm',{},AbortSignal.timeout(10000)).catch(()=>{});
+  },
   async readCloudInferenceFailure(signal:AbortSignal):Promise<CloudInferenceFailure|null>{
     const selected=active,session=state.session,generation=epoch;
     signal.throwIfAborted();if(selected?.kind!=='resident'||!session)return null;
