@@ -9,7 +9,8 @@ import {connectionController} from './connection-ui';
 import {createGoogleAccounts,GOOGLE_ACCOUNTS_CHANGED,googleDisconnectConfirmation,googleDisconnectMessage} from './google-accounts';
 import {GoogleCalendarReader,type GoogleCalendarBinding,type GoogleCalendarSource} from './google-calendar';
 import {clearGoogleCalendarSelectionForConnection,readGoogleCalendarSelection,saveGoogleCalendarSelection,GOOGLE_CALENDAR_SELECTION_CHANGED} from './google-calendar-selection';
-import {openConnectionBrowser} from './native-connection';
+import {openConnectionBrowser,googleWorkspaceReturnPort} from './native-connection';
+import {prepareGoogleWorkspaceReturn,watchGoogleWorkspaceReturn,sameGoogleWorkspaceBinding,type GoogleWorkspaceBinding} from './google-workspace-return';
 import {cloudServiceName,type GmailAccount} from './cloud-protocol';
 let opened=false;const listeners=new Set<()=>void>();
 export const googleConnectionController={open(){opened=true;for(const listener of listeners)listener();},close(){opened=false;for(const listener of listeners)listener();},subscribe(listener:()=>void){listeners.add(listener);return()=>{listeners.delete(listener);};},getSnapshot:()=>opened};
@@ -20,6 +21,11 @@ function currentGoogleConnectionReturnBinding():GoogleConnectionReturnBinding|nu
  return cloud&&key?{client:cloud.client,...key,sessionId:cloud.sessionId,credentialId:cloud.credentialId}:null;
 }
 /** One connection manager for Settings, Inbox and Calendar; provider grants remain in Cloud. */
+function currentWorkspaceBinding():GoogleWorkspaceBinding|null {
+ const b=currentGoogleConnectionReturnBinding();
+ if(!b||(b.environment!=='production'&&b.environment!=='staging'))return null;
+ return {environment:b.environment,userId:b.userId,organizationId:b.organizationId,credentialId:b.credentialId,sessionId:b.sessionId};
+}
 export function GoogleConnectionsPanel(){
  const open=useSyncExternalStore(googleConnectionController.subscribe,googleConnectionController.getSnapshot);
  const connection=useSyncExternalStore(connectionController.subscribe,connectionController.getSnapshot);
@@ -27,6 +33,8 @@ export function GoogleConnectionsPanel(){
  useEffect(()=>{if(!open)return;let alive=true;const read=()=>void gmailBackgroundStatus().then(value=>{if(alive)setBackground(gmailBackgroundMessage(value));});read();window.addEventListener(GMAIL_BACKGROUND_CHANGED,read);return()=>{alive=false;window.removeEventListener(GMAIL_BACKGROUND_CHANGED,read);};},[open]);
  const [accounts,setAccounts]=useState<GmailAccount[]>([]),[sources,setSources]=useState<GoogleCalendarSource[]>([]),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[confirm,setConfirm]=useState<GmailAccount|null>(null),[revision,setRevision]=useState(0);
  const [,refreshSelection]=useState(0);
+ const returnedWorkspaceOwner=useRef<GoogleWorkspaceBinding|null>(null);
+ const returnedWorkspace=useRef<{result:'connected'|'denied'|'failed';connectionId?:string}|null>(null);
  const returnWatch=useRef<ReturnType<typeof watchGoogleConnectionReturn>|null>(null);
  const active=useRef<AbortController|null>(null),panel=useRef<HTMLDivElement>(null);
  const cloud=connectionController.getCloudClient(),key=googleCalendarAccountKey();
@@ -35,6 +43,9 @@ export function GoogleConnectionsPanel(){
  const binding:GoogleConnectionReturnBinding|null=cloud&&key?{client:cloud.client,...key,sessionId:cloud.sessionId,credentialId:cloud.credentialId}:null;
  const selected=key?readGoogleCalendarSelection(key):null;
  async function load(){
+  const returned=sameGoogleWorkspaceBinding(returnedWorkspaceOwner.current??{environment:'production',userId:'',organizationId:'',sessionId:'',credentialId:''},currentWorkspaceBinding())?returnedWorkspace.current:null;
+  if(!returned)returnedWorkspace.current=null;
+  const requiredConnectionId=returned?.result==='connected'?returned.connectionId:undefined;
   active.current?.abort();const abort=active.current=new AbortController();setAccounts([]);setSources([]);setConfirm(null);
   if(!cloud||!key){setBusy(false);setNotice(`Sign in to ${serviceName} to connect Google.`);return;}
   const current=()=>!abort.signal.aborted&&active.current===abort&&googleConnectionController.getSnapshot()&&sameGoogleConnectionReturnBinding(binding,currentGoogleConnectionReturnBinding());
@@ -42,6 +53,7 @@ export function GoogleConnectionsPanel(){
   try{
    if(!current())return;
    const rows=await createGoogleAccounts(cloud,()=>connectionController.getCloudClient()).list(abort.signal);if(!current())return;setAccounts(rows);
+   if(requiredConnectionId&&!rows.some(row=>row.connected&&row.connectionId===requiredConnectionId)){setNotice('Google returned, but that connection could not be verified. Existing connections are unchanged.');return;}
    const offered:GoogleCalendarSource[]=[];const warnings:string[]=[];
    for(const account of rows.filter(row=>row.connected&&row.grantedCapabilities.includes('google.calendar.read'))){
     const id=account.connectionId;if(!id)continue;
@@ -49,7 +61,7 @@ export function GoogleConnectionsPanel(){
     const result=await reader.listSources(abort.signal);reader.invalidate();if(!current())return;
     if(result.status==='ready')offered.push(...result.calendars);else warnings.push(result.message);
    }
-   setSources(offered);setNotice(warnings.join(' ')||(!rows.some(row=>row.connected)?'No Google account connected.':'Choose a calendar to show alongside local events.'));
+   setSources(offered);setNotice(returned?.result==='denied'?'Google authorization was cancelled. Existing connections are unchanged.':returned?.result==='failed'?'Google authorization did not complete. Existing connections are unchanged.':warnings.join(' ')||(!rows.some(row=>row.connected)?'No Google account connected.':'Choose a calendar to show alongside local events.'));if(returnedWorkspace.current===returned)returnedWorkspace.current=null;
   }catch(error){if(current()){connectionController.rejectCloudSession(cloud.sessionId,error);setNotice('Google connections could not be verified. Check sign-in and try again.');}}
   finally{if(active.current===abort)setBusy(false);}
  }
@@ -64,6 +76,14 @@ export function GoogleConnectionsPanel(){
   returnWatch.current=watcher;
   return()=>{watcher.close();if(returnWatch.current===watcher)returnWatch.current=null;active.current?.abort();};
  },[open,identity,cloud?.client]);
+ useEffect(()=>{
+  const port=googleWorkspaceReturnPort,owner=currentWorkspaceBinding();
+  if(!port||!owner)return;
+  const watcher=watchGoogleWorkspaceReturn(port,owner,currentWorkspaceBinding,result=>{
+   returnedWorkspaceOwner.current=owner;returnedWorkspace.current=result;googleConnectionController.open();setRevision(value=>value+1);
+  },()=>{if(googleConnectionController.getSnapshot())setNotice('Google return could not be verified. Check Google connections.');});
+  return()=>watcher.close();
+ },[identity,cloud?.client]);
  // A display preference costs a local render only; grant changes and explicit refresh still reload provider data.
  useEffect(()=>{if(!open)return;const accountsChanged=()=>setRevision(value=>value+1),selectionChanged=()=>refreshSelection(value=>value+1);window.addEventListener(GOOGLE_ACCOUNTS_CHANGED,accountsChanged);window.addEventListener(GOOGLE_CALENDAR_SELECTION_CHANGED,selectionChanged);return()=>{window.removeEventListener(GOOGLE_ACCOUNTS_CHANGED,accountsChanged);window.removeEventListener(GOOGLE_CALENDAR_SELECTION_CHANGED,selectionChanged);};},[open]);
  useEffect(()=>{
@@ -80,17 +100,25 @@ export function GoogleConnectionsPanel(){
  async function connect(permission:'read'|'modify'|'send'='read',calendarPermission:'read'|'write'='read'){
   if(!cloud){googleConnectionController.close();connectionController.openCloudAccount();return;}
   const watcher=returnWatch.current;if(!watcher)return;
-  active.current?.abort();const abort=active.current=new AbortController();let cancelReturn:(()=>void)|undefined;
+  active.current?.abort();const abort=active.current=new AbortController();let cancelReturn:(()=>void)|undefined;let returnState:string|undefined;let phase:'native-return'|'cloud'|'browser'='native-return';
   const current=()=>!abort.signal.aborted&&active.current===abort&&returnWatch.current===watcher&&watcher.isCurrent()&&googleConnectionController.getSnapshot()&&sameGoogleConnectionReturnBinding(binding,currentGoogleConnectionReturnBinding());
   if(!current())return;
   setBusy(true);setNotice('Opening Google authorization…');
   try{
-   const url=await createGoogleAccounts(cloud,()=>connectionController.getCloudClient()).connect(abort.signal,calendarPermission,permission);
+   const owner=currentWorkspaceBinding();
+   const offer=owner?await prepareGoogleWorkspaceReturn(googleWorkspaceReturnPort,owner,currentWorkspaceBinding):undefined;
+   returnState=offer?.state;
+   phase='cloud';
+   const accountsClient=createGoogleAccounts(cloud,()=>connectionController.getCloudClient());
+   const authorization=offer?await accountsClient.connectWithReturn(abort.signal,offer.redirectUrl,calendarPermission,permission):{authUrl:await accountsClient.connect(abort.signal,calendarPermission,permission),appReturn:false};
+   if(offer&&!authorization.appReturn){await googleWorkspaceReturnPort?.cancel(offer.state);returnState=undefined;}
+   const url=authorization.authUrl;
    if(!current())return;
    cancelReturn=watcher.arm(); // Before openExternal; its immediate resolution is not a return.
+   phase='browser';
    await openConnectionBrowser(url,abort.signal);abort.signal.throwIfAborted();
-   if(current())setNotice('After authorizing Google, return here and check connections.');
-  }catch(error){cancelReturn?.();if(current()){connectionController.rejectCloudSession(cloud.sessionId,error);setNotice('Google authorization could not start. Check your Cloud sign-in and retry.');}}
+   if(current())setNotice(authorization.appReturn?'After authorizing Google, return to Alpha to verify the connection.':'After authorizing Google, return here and check connections.');
+  }catch(error){cancelReturn?.();if(returnState)await googleWorkspaceReturnPort?.cancel(returnState).catch(()=>{});if(current()){if(phase==='cloud')connectionController.rejectCloudSession(cloud.sessionId,error);setNotice('Google authorization could not start. Check your Cloud sign-in and retry.');}}
   finally{if(active.current===abort)setBusy(false);}
  }
  async function disconnect(account:GmailAccount){if(!cloud||!key||!account.connectionId)return;active.current?.abort();const abort=active.current=new AbortController();setBusy(true);setConfirm(null);try{const result=await createGoogleAccounts(cloud,()=>connectionController.getCloudClient()).disconnect(account.connectionId,abort.signal);if(result.outcome==='disconnected')clearGoogleCalendarSelectionForConnection(key,account.connectionId);setNotice(googleDisconnectMessage(result.outcome,account.label,serviceName));setAccounts(result.accounts||[]);setSources([]);}catch(error){if(!abort.signal.aborted){connectionController.rejectCloudSession(cloud.sessionId,error);setNotice('Disconnect was not confirmed. Check Google connections before trying again.');}}finally{if(active.current===abort)setBusy(false);}}

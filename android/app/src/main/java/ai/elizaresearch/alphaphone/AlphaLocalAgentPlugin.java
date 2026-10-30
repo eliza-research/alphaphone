@@ -31,6 +31,14 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  private static boolean startOwnsLaunch;
  private static long credentialIntentEpoch;
  private static long powerAuthorizationMutationEpoch;
+ static long credentialAuthorityEpoch(){synchronized(lifecycleLock){return powerAuthorizationMutationEpoch;}}
+ /** Revalidate an async operation against semantic credential changes, using the existing lock order. */
+ static <T> T withCredentialAuthority(long owner,java.util.concurrent.Callable<T> action)throws Exception{
+  synchronized(lifecycleLock){
+   if(owner!=powerAuthorizationMutationEpoch)throw new SecurityException("Cloud authority changed");
+   synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){return action.call();}
+  }
+ }
  /** Native-only authorization mutation marker. Both locks are already held by credential commit. */
  static void powerAuthorizationChanged(){
   if(!Thread.holdsLock(lifecycleLock)||!Thread.holdsLock(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK))throw new IllegalStateException("Credential lock order required");

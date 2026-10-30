@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
 import vm from 'node:vm';
+import {prepareGoogleWorkspaceReturn,watchGoogleWorkspaceReturn,sameGoogleWorkspaceBinding} from '../apps/app/src/runtime/google-workspace-return.ts';
 import {watchGoogleConnectionReturn,sameGoogleConnectionReturnBinding} from '../apps/app/src/runtime/google-connection-return.ts';
 
 const ui=readFileSync(process.env.ALPHA_GOOGLE_RETURN_UI_SOURCE||'apps/app/src/runtime/google-connection-ui.tsx','utf8');
@@ -11,16 +12,16 @@ const createGoogleAccounts=vm.runInNewContext(accountsSource+';createGoogleAccou
 const loadCode=stripTypeScriptTypes(ui.slice(ui.indexOf(' async function load()'),ui.indexOf('\n useEffect(()=>{if(!open)return;void load();')),{mode:'transform'});
 const connectCode=stripTypeScriptTypes(ui.slice(ui.indexOf(' async function connect('),ui.indexOf(' async function disconnect(')),{mode:'transform'});
 function deferred(){let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};}
-function fixture({heldStatus=false,heldOpen=false}={}){
- let foreground=true,panelOpen=true,revision=0,nativeListener,removed=0,visibility,focus;
+function fixture({heldStatus=false,heldOpen=false,panelClosed=false,accountRows}={}){
+ let foreground=true,panelOpen=!panelClosed,revision=0,nativeListener,removed=0,visibility,focus;
  const registration=deferred(),status=deferred(),opening=deferred(),published=[],notices=[],scopeCalls=[];
  let reads=0,initiations=0,opens=0,statusSignal,loadPromise;
- const client={environment:'production',async gmailAccounts(signal){reads++;statusSignal=signal;return heldStatus?status.promise:[{connected:true,label:'Synthetic account',grantedCapabilities:['google.gmail.triage']}];},async initiateGoogle(signal,calendar,gmail){signal.throwIfAborted();initiations++;scopeCalls.push([calendar,gmail]);return 'https://accounts.google.com/o/oauth2/v2/auth';}};
+ const client={environment:'production',async gmailAccounts(signal){reads++;statusSignal=signal;return heldStatus?status.promise:accountRows??[{connected:true,label:'Synthetic account',grantedCapabilities:['google.gmail.triage']}];},async initiateGoogle(signal,calendar,gmail){signal.throwIfAborted();initiations++;scopeCalls.push([calendar,gmail]);return 'https://accounts.google.com/o/oauth2/v2/auth';}};
  const binding={client,environment:'production',userId:'owner',organizationId:'tenant',sessionId:'session',credentialId:'credential'};
  let current={...binding};const active={current:null};
  const liveCloud=()=>current?{client:current.client,sessionId:current.sessionId,credentialId:current.credentialId}:null;
- const globals={AbortController,DOMException,createGoogleAccounts,sameGoogleConnectionReturnBinding,active,binding,cloud:liveCloud(),key:{environment:'production',userId:'owner',organizationId:'tenant'},serviceName:'Cloud',googleConnectionController:{getSnapshot:()=>panelOpen,close:()=>{panelOpen=false;}},connectionController:{getCloudClient:liveCloud,rejectCloudSession(){throw Error('Unexpected sign-in mutation');},openCloudAccount(){throw Error('Unexpected sign-in');}},currentGoogleConnectionReturnBinding:()=>current,
-  setAccounts:rows=>published.push(rows),setSources(){},setConfirm(){},setBusy(){},setNotice:text=>notices.push(text),
+ const globals={identity:"synthetic",AbortController,DOMException,returnedWorkspace:{current:null},returnedWorkspaceOwner:{current:null},sameGoogleWorkspaceBinding,prepareGoogleWorkspaceReturn,watchGoogleWorkspaceReturn,googleWorkspaceReturnPort:undefined,currentWorkspaceBinding:()=>current,createGoogleAccounts,sameGoogleConnectionReturnBinding,active,binding,cloud:liveCloud(),key:{environment:'production',userId:'owner',organizationId:'tenant'},serviceName:'Cloud',googleConnectionController:{getSnapshot:()=>panelOpen,close:()=>{panelOpen=false;},open:()=>{panelOpen=true;}},connectionController:{getCloudClient:liveCloud,rejectCloudSession(){throw Error('Unexpected sign-in mutation');},openCloudAccount(){throw Error('Unexpected sign-in');}},currentGoogleConnectionReturnBinding:()=>current,
+  setRevision:update=>{revision=update(revision);loadPromise=globals.load();},setAccounts:rows=>published.push(rows),setSources(){},setConfirm(){},setBusy(){},setNotice:text=>notices.push(text),
   GoogleCalendarReader:class{constructor(){throw Error('No provider reads in this fixture');}},
   openConnectionBrowser:async()=>{opens++;return heldOpen?opening.promise:undefined;},returnWatch:{current:null},
  };
@@ -30,7 +31,7 @@ function fixture({heldStatus=false,heldOpen=false}={}){
   onNativeResume:listener=>{nativeListener=listener;return registration.promise;},
  });globals.returnWatch.current=watcher;
  return {binding,client,watcher,globals,published,notices,scopeCalls,
-  get reads(){return reads;},get initiations(){return initiations;},get opens(){return opens;},get revision(){return revision;},get removed(){return removed;},get signal(){return statusSignal;},get loadPromise(){return loadPromise;},
+  get panelOpen(){return panelOpen;},get reads(){return reads;},get initiations(){return initiations;},get opens(){return opens;},get revision(){return revision;},get removed(){return removed;},get signal(){return statusSignal;},get loadPromise(){return loadPromise;},
   registered(){registration.resolve({remove(){removed++;}});return watcher.ready;},
   background(){foreground=false;visibility?.();},foreground(){foreground=true;visibility?.();},nativeResume(){nativeListener?.();},focus(){focus?.();},
   change(patch){current={...current,...patch};},close(){panelOpen=false;watcher.close();active.current?.abort();},
@@ -108,4 +109,19 @@ test('actual panel lifecycle effect retains late cached events, refreshes once a
 });
 test('actual panel cleanup also retires a native registration that resolves later',async()=>{
  const h=mountActualLifecycle();assert.ok(h);const ready=h.returnWatch.current.ready;h.cleanup();h.resolveRegistration();await ready;assert.equal(h.removed,1);h.native();assert.equal(h.revision,0);
+});
+
+const workspaceEffect=ui.slice(ui.indexOf(' useEffect(()=>{\n  const port=googleWorkspaceReturnPort'),ui.indexOf(' // A display preference costs'));
+for(const hasGrant of [true,false])test('actual closed panel callback opens only after native admission and verifies grant '+hasGrant,async()=>{
+ const rows=hasGrant?[{connected:true,connectionId:'owned',label:'Synthetic',grantedCapabilities:['google.gmail.triage']}]:[];
+ const f=fixture({panelClosed:true,accountRows:rows});let cleanup,consumed=false;
+ f.globals.googleWorkspaceReturnPort={async subscribe(){return{remove(){}}},async consume(){if(consumed)return{result:'none'};consumed=true;return{result:'connected',connectionId:'owned'}}};
+ f.globals.useEffect=effect=>{cleanup=effect();};vm.runInNewContext(workspaceEffect,f.globals);
+ for(let i=0;i<10;i++)await Promise.resolve();await f.loadPromise;
+ assert.equal(f.panelOpen,true);assert.equal(f.reads,1);assert.deepEqual(f.published.at(-1),rows);
+ assert.equal(f.notices.some(text=>text.includes('could not be verified')),!hasGrant);cleanup?.();f.close();
+});
+test('actual closed panel ignores unaccepted native callback without opening or reading',async()=>{
+ const f=fixture({panelClosed:true});let cleanup;f.globals.googleWorkspaceReturnPort={async subscribe(){return{remove(){}}},async consume(){return{result:'none'}}};f.globals.useEffect=effect=>{cleanup=effect();};vm.runInNewContext(workspaceEffect,f.globals);
+ for(let i=0;i<8;i++)await Promise.resolve();assert.equal(f.panelOpen,false);assert.equal(f.reads,0);cleanup?.();f.close();
 });

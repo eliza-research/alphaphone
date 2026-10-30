@@ -116,6 +116,7 @@ final class AlphaCredentialStore {
       ?!java.util.Objects.equals(before,committed):!LocalAgentProviderAdmission.sameCloudCredential(before,committed);
     if(authorityChanged)AlphaLocalAgentPlugin.powerAuthorizationChanged();
     invalidateProviderAdmission(name,value);
+    if("cloud:production".equals(name)&&authorityChanged)slots.remove(CloudDeployment.storageSlot(GoogleWorkspaceReturn.SLOT));
     if(value==null)slots.remove(CloudDeployment.storageSlot(name));
     else slots.write(CloudDeployment.storageSlot(name),committed);
     return true;
@@ -144,7 +145,7 @@ final class AlphaCredentialStore {
   // Never hold lifecycle or vault locks across HTTP. The second critical section rechecks
   // intent/owner, exact old bytes, journal and absent targets before committing.
   AlphaConnectionPlugin.readCloudIdentity(before.token());
-  return recoveryStep(()->legacyRecovery().commit(before));
+  return recoveryStep(()->{boolean restored=legacyRecovery().commit(before);if(restored)AlphaLocalAgentPlugin.powerAuthorizationChanged();return restored;});
  }
  void assertCurrent(){assertOwner.run();}
  private void invalidateProviderAdmission(String changedSlot,String replacement)throws Exception{
