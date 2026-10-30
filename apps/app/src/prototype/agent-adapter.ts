@@ -404,7 +404,8 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     }).catch(()=>{
       if(!current())return;
       shell.pendingActionRecoveryKey=null;shell.pendingActionRecoveryFailedKey=key;
-      shell.toast('Pending actions could not be checked. Return to the app or reopen the selected item to retry.');
+      // Background refresh stays quiet. Preserve the failed binding and known
+      // expiry; returning/reopening retries through the existing scoped lifecycle.
       scheduleExpiry();
     });
   }
