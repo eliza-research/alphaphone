@@ -160,7 +160,7 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
   // chosen explicitly in Calendar, whose read Home then shows with its own states and read times.
   if(deviceCalendarScope(this))return out;
   const now=Date.now(),calendarState=this.vget('calendar'),hidden=new Set<string>();
-  for(const source of controller?.state.calendars??[]){const key=calendarSourceKey(source),handle=controller!.sourceHandle(key);if(calendarState.calPrefs?.[handle]?.on===false)hidden.add(key);}
+  for(const source of controller?.state.calendars??[]){const key=calendarSourceKey(source),handle=controller!.sourceHandle(key);if(handle&&calendarState.calPrefs?.[handle]?.on===false)hidden.add(key);}
   const target=port(),model=target?.current()&&controller?.state.ownerKey===calendarOwnerKey(target)?controller.state:undefined;
   const home=homeCalendarSelection(model,zone(),hidden,new Date(now)),event=home.event;
   // Shared daily-overview states for the agent calendar feed: reading, not connected, failed, stale and fresh.
