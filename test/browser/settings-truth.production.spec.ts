@@ -481,13 +481,12 @@ for(const subscription of ['credits','active','canceled'] as const)test(`Setting
  const plan=current(page),redeem=plan.getByRole('button',{name:'Redeem code',exact:true});
  if(subscription==='credits'){
   await expect(plan.getByText('Eliza Cloud credits',{exact:true})).toBeVisible();
-  await expect(redeem).toHaveCount(0);
   await expect(plan.getByRole('button',{name:'Manage plan',exact:true})).toBeVisible();
- }else{
-  await expect(redeem).toBeVisible();await redeem.click();
-  await expect(page.getByLabel('Membership code',{exact:true})).toBeVisible();
-  await expect(page.getByRole('dialog',{name:'Eliza Cloud account & plan',exact:true}).getByRole('region',{name:'Membership and credits',exact:true}).getByRole('button',{name:'Redeem',exact:true})).toBeVisible();
  }
+ // A membership code is an alternative to credits: Cloud redeems it for credit-funded accounts too.
+ await expect(redeem).toBeVisible();await redeem.click();
+ await expect(page.getByLabel('Membership code',{exact:true})).toBeVisible();
+ await expect(page.getByRole('dialog',{name:subscription==='credits'?'Eliza Cloud account':'Eliza Cloud account & plan',exact:true}).getByRole('region',{name:'Membership and credits',exact:true}).getByRole('button',{name:'Redeem',exact:true})).toBeVisible();
  expect(await page.evaluate(()=>(window as any).truth.calls.filter((c:any)=>c.plugin==='AlphaConnection'&&c.method==='request'&&new URL(c.input.url).pathname==='/api/v1/subscription/redeem').length)).toBe(0);
 });
 

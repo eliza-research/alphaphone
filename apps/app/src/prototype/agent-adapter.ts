@@ -181,6 +181,8 @@ function planActionCard(action:unknown):Shell|undefined{
   if(action==='plan')return {type:'generic',icon:'info',title:'Redeem code or choose a plan',sub:`Opens ${selectedCloudName()} account & plan. Nothing is purchased automatically.`,planAction:'plan'};
   if(action==='sign-in')return {type:'generic',icon:'info',title:`Sign in with ${selectedCloudName()}`,sub:'Connects AI to your plan. Your agent keeps running on this phone.',planAction:'sign-in'};
   if(action==='retry')return {type:'generic',icon:'info',title:`Check ${selectedCloudName()} again`,sub:'AI replies return when Cloud is reachable.',planAction:'retry'};
+  // Cloud declined a turn for billing: the same Membership & credits sheet the refusal opened.
+  if(action==='funding')return {type:'generic',icon:'info',title:'Add credits or enter a membership code',sub:`Opens your ${selectedCloudName()} membership and credits. Nothing is purchased automatically.`,planAction:'funding'};
   return undefined;
 }
 /** A saved row keeps its authoritative content and any richer card; only a missing final plan control is enriched. */
@@ -1190,15 +1192,6 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       const c=m.c||{};
       // A system notice card already carries its text; do not print it a second time above the card.
       if(c.systemNotice&&m.cGeneric&&m.displayText===c.sub)return {...m,hasCalendarText:false};
-      // Keep the real billing link and expose the existing code form from the
-      // same account-bound refusal. Neither option purchases or redeems by itself.
-      if(c.billingCodeEntry&&c.managePlan&&m.cGeneric&&connection.kind==='resident'&&connection.cloudAccount){
-        const ic=out.ic||{};
-        return {...m,cGeneric:false,cDigest:true,actionReviewClass:'alpha-action-review',rows:[
-          {ini:'',who:c.title,text:c.sub,icon:ic.right,open:()=>void connectionController.residentManagePlan()},
-          {ini:'',who:'Use a membership code',text:`Opens the code form for your ${selectedCloudName()} account.`,icon:ic.right,open:()=>connectionController.openPlan({codeEntry:true})},
-        ]};
-      }
       if(!c.proposalId||c.done||c.reviewUnavailable||!m.cGeneric)return m;
       const message=live.find(item=>item.card===c);if(!message)return m;
       const ic=out.ic||{},busy=!!this.decliningProposal||!!this.pendingActionApproval;
@@ -1462,7 +1455,8 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
           else this.setState((previous:Shell)=>({chat:previous.chat==='full'?'full':'sheet',msgs:[...(previous.msgs||[]),{id:crypto.randomUUID(),from:'agent',text:message,card:planCard??null,interrupted:true}]}));
           const limit=(e as {serviceLimit?:unknown}).serviceLimit;
           // A plan or billing refusal offers Cloud's plan page only; nothing is bought or upgraded here.
-          if((limit==='billing-refused'||limit==='subscription-required'||limit==='allowance-exhausted')&&connectionController.getSnapshot().kind==='resident')this.agentSay(limit==='subscription-required'?`Your ${selectedCloudName()} plan needs attention before your agent can answer.`:`Your ${selectedCloudName()} billing needs attention before your agent can answer.`,{type:'generic',icon:'info',title:limit==='subscription-required'?`Manage plan in ${selectedCloudName()}`:`Manage billing in ${selectedCloudName()}`,sub:`Opens ${selectedCloudName()} billing in your browser. Nothing is sent or purchased.`,managePlan:true,billingCodeEntry:limit==='billing-refused'});
+          // A billing refusal that already carries the Add credits / membership code card says nothing more.
+          if((limit==='billing-refused'&&!planCard||limit==='subscription-required'||limit==='allowance-exhausted')&&connectionController.getSnapshot().kind==='resident')this.agentSay(limit==='subscription-required'?`Your ${selectedCloudName()} plan needs attention before your agent can answer.`:`Your ${selectedCloudName()} billing needs attention before your agent can answer.`,{type:'generic',icon:'info',title:limit==='subscription-required'?`Manage plan in ${selectedCloudName()}`:`Manage billing in ${selectedCloudName()}`,sub:`Opens ${selectedCloudName()} billing in your browser. Nothing is sent or purchased.`,managePlan:true});
         }
         else if(this.live&&reconciling){if(streamed)this.setState((previous:Shell)=>({msgs:previous.msgs.map((item:Shell)=>item.id===streamedId?{...item,streaming:false,interrupted:true,text:`${item.text}\n\nStopped.`}:item)}));}
         else if (this.live) {
@@ -1513,6 +1507,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     // sign in, or check Cloud again. Nothing is purchased or sent from here.
     if(card.planAction){
       if(card.planAction==='plan')connectionController.openPlan();
+      else if(card.planAction==='funding')connectionController.openFunding();
       else if(card.planAction==='sign-in')void connectionController.residentCloudLogin();
       else connectionController.recheckPlanOnReturn();
       return;

@@ -73,7 +73,7 @@ import { CloudSignInPanel } from './cloud-sign-in-ui';
 import { cloudCredentialStore, cloudSelfRevocationSupported, cloudSignIn, cloudSignInPhone, remoteCredentialStore, nativeCloudRequest, nativeRemoteRequest, openConnectionBrowser, removeStoredCloudCredential, secureConnectionStore } from './native-connection';
 import { findStoppedUserTurn, type StoppedUserTurn as StoppedTurn } from '../../../../.eliza/client-features/packages/ui/src/api/conversation-turn-controller.ts';
 import './connection-ui.css';
-import {CloudMembershipControls,BillingAccountReview,type MembershipBalance} from './cloud-membership-ui';
+import {CloudMembershipControls,BillingAccountReview,FUNDING_NEEDED,fundingRefusedReply,type MembershipBalance} from './cloud-membership-ui';
 
 /** `offline` and `none` exist only where no resident agent runs (test-mocks builds and the flag-off
  * web preview). Android production and browser development migrate them to `resident` on read
@@ -97,6 +97,12 @@ export interface ConnectionSnapshot {
   lastServiceLimit?: (ServiceLimit&{observedAt:number})|null;
   billingReviewEmail?: string;
   membershipDismissed?: boolean;
+  /**
+   * Cloud declined a turn of this account for billing (insufficient credits). The Membership &
+   * credits sheet offers its credits and membership code actions until a code is redeemed, a later
+   * turn succeeds or the Cloud account changes. Only a Cloud refusal sets it.
+   */
+  fundingRefused?: boolean;
   /** Ephemeral explicit code entry, retired when its current account or panel changes. */
   membershipCodeEntry?: boolean;
   residentSavedCredential?: boolean;
@@ -273,6 +279,9 @@ function cloudUnreachable(error: unknown): boolean {
 const OFFLINE_NOTICE = 'Cloud cannot be reached right now. Your agent is running on this device; AI replies return when Cloud is reachable again, checked when the network returns or you come back to Alpha Phone.';
 /** Notice shown when Cloud inference is unavailable or account access is unconfirmed. */
 const NEEDS_PLAN_NOTICE = 'Your agent is running on this device. AI replies aren’t available right now. Check your Cloud account in Settings.';
+/** A verified $0 account without a membership: nothing is sent, and the Membership & credits sheet is offered again
+ * once the refusal reached the composer (opening it first would cancel the request it explains). */
+function fundingNeeded(){setTimeout(()=>{if(state.cloudAccount&&state.membershipBalance==='zero')update({membershipDismissed:false});},0);return Object.assign(new AlphaClientError('transport-failed',FUNDING_NEEDED),{notDispatched:true,refusedBeforeTurn:true});}
 /**
  * The on-device agent's honest answer to a chat or assistant request while Eliza Cloud inference
  * is not bound (the local runtime reports it as a provider-less turn). Local tools keep working.
@@ -448,7 +457,7 @@ const residentRebinds = () => residentRebindQueue ??= new ResidentRebindQueue();
 const residentRebindBlocked = () => !!operation || !!sending;
 /** Every Cloud detach ends background plan refresh, so no request goes out under a stale admission. */
 function stopEntitlementRefresh(){entitlementRefresher?.stop();entitlementRefresher=null;clearEntitlementKeyCache();}
-function detachService() { stopEntitlementRefresh(); retireReadReplies();for(const request of appRequests)request.abort(new DOMException('Cloud account changed','AbortError')); clearPersonalSetup(); membershipRead?.abort();membershipRead=null;pendingBillingReview=null;service = null; update({ cloudAccount: null,membershipBalance:undefined,membershipCredits:null,membershipPlan:null,lastServiceLimit:null,planEndsAt:null,billingReviewEmail:undefined,membershipDismissed:false }); }
+function detachService() { stopEntitlementRefresh(); retireReadReplies();for(const request of appRequests)request.abort(new DOMException('Cloud account changed','AbortError')); clearPersonalSetup(); membershipRead?.abort();membershipRead=null;pendingBillingReview=null;service = null; update({ cloudAccount: null,membershipBalance:undefined,membershipCredits:null,membershipPlan:null,lastServiceLimit:null,planEndsAt:null,billingReviewEmail:undefined,membershipDismissed:false,fundingRefused:false }); }
 async function verifyService(client: CloudProtocol, signal: AbortSignal, expected?:{credentialId:string;credentialReference?:string;userId?:string;organizationId?:string}) {
   const credential = await cloudCredentialStore.read(client.environment); signal.throwIfAborted();
   if(expected&&(credential?.credentialId!==expected.credentialId||(expected.credentialReference!==undefined&&credential?.credentialReference!==expected.credentialReference)))throw new Error('Cloud account changed. Try again.');
@@ -463,7 +472,7 @@ async function verifyService(client: CloudProtocol, signal: AbortSignal, expecte
   const account = { ...identity, credentialId: credential.credentialId, environment: client.environment, sessionId: same ? service!.identity.sessionId : crypto.randomUUID(), ...(Number.isFinite(credential.expiresAt) ? { expiresAt: credential.expiresAt } : {}) };
   localStorage.setItem(CLOUD_SERVICE, client.environment);
   if(!same){membershipRead?.abort();membershipRead=null;pendingBillingReview=null;}
-  service = { client, identity: account, credentialReference:credential.credentialReference }; update({ cloudAccount: account,signOutNotice:undefined,...(!same?{membershipBalance:'checking' as const,membershipCredits:null,membershipPlan:null,lastServiceLimit:null,planEndsAt:null,billingReviewEmail:undefined,membershipDismissed:false}:{}) });
+  service = { client, identity: account, credentialReference:credential.credentialReference }; update({ cloudAccount: account,signOutNotice:undefined,...(!same?{membershipBalance:'checking' as const,membershipCredits:null,membershipPlan:null,lastServiceLimit:null,planEndsAt:null,billingReviewEmail:undefined,membershipDismissed:false,fundingRefused:false}:{}) });
   if(!same||membershipRead)void refreshMembershipBalance();
   return identity;
 }
@@ -504,7 +513,9 @@ async function refreshMembershipBalance(){
     let balance:MembershipBalance=credits.state;
     if(checked.view.kind==='active')balance='member';
     else if(balance!=='funded'&&!['inactive','credits'].includes(checked.view.kind))balance='unavailable';
-    if(membershipRead===controller&&service===account)update({membershipBalance:balance,membershipCredits:credits.usd!==null&&credits.observedAt!==null?{usd:credits.usd,observedAt:credits.observedAt}:null,membershipPlan:checked.view,...(checked.entitlement?.planEndsAt!==undefined?{planEndsAt:checked.entitlement.planEndsAt}:checked.view.kind==='active'&&checked.view.source==='billing-limits'&&checked.view.expiresAt>0?{planEndsAt:checked.view.expiresAt}:checked.view.kind==='inactive'?{planEndsAt:null}:{})});
+    // Credits that rose since Cloud declined a turn for billing (added in Cloud's billing page) end that refusal.
+    const raised=!!state.fundingRefused&&state.membershipCredits!=null&&credits.usd!==null&&Number(credits.usd)>Number(state.membershipCredits.usd);
+    if(membershipRead===controller&&service===account)update({membershipBalance:balance,...(raised?{fundingRefused:false}:{}),membershipCredits:credits.usd!==null&&credits.observedAt!==null?{usd:credits.usd,observedAt:credits.observedAt}:null,membershipPlan:checked.view,...(checked.entitlement?.planEndsAt!==undefined?{planEndsAt:checked.entitlement.planEndsAt}:checked.view.kind==='active'&&checked.view.source==='billing-limits'&&checked.view.expiresAt>0?{planEndsAt:checked.view.expiresAt}:checked.view.kind==='inactive'?{planEndsAt:null}:{})});
   }catch(error){reportMembershipReadFailure('refresh',error);if(membershipRead===controller&&service===account)update({membershipBalance:'unavailable',membershipCredits:null,membershipPlan:{kind:'unavailable',reason:'outage'}});}
   finally{clearTimeout(timer);if(membershipRead===controller)membershipRead=null;}
 }
@@ -1405,7 +1416,11 @@ function failureKindOf(value:unknown):string|undefined {
 function replyFailure(kind:string|undefined,selected:Active,limit:ServiceLimit|null):Error {
   if(kind==='interrupted')return Object.assign(new AlphaClientError('transport-failed','This reply did not finish. Nothing was resent. Your conversation is saved.'),{failureKind:kind});
   if(selected.kind==='resident'&&(limit?.kind==='subscription-required'||limit?.kind==='billing-refused'))connectionController.recheckPlanAfterRefusal();
-  if(limit)update({lastServiceLimit:{...limit,observedAt:Date.now()}});
+  // A billing refusal of a signed-in account: one answer in the chat, and the Membership & credits
+  // sheet with its credits and membership code actions opens with a fresh balance once the turn ends.
+  const funding=limit?.kind==='billing-refused'&&!!state.cloudAccount;
+  if(limit)update({lastServiceLimit:{...limit,observedAt:Date.now()},...(funding?{fundingRefused:true,membershipDismissed:false}:{})});
+  if(funding){void refreshMembershipBalance();return Object.assign(new AlphaClientError('transport-failed',fundingRefusedReply(cloudServiceName(cloud.environment))),{failureKind:kind??limit.kind,serviceLimit:limit.kind,planAction:'funding'});}
   if(limit)return Object.assign(new AlphaClientError('transport-failed',serviceLimitMessage(limit, Date.now(), cloudServiceName(cloud.environment))),{failureKind:kind??limit.kind,serviceLimit:limit.kind});
   if(kind==='rate_limited')return new AlphaClientError('transport-failed',RATE_LIMITED);
   // The on-device agent without Eliza Cloud inference (no plan, offline, signed out): the same honest
@@ -2122,6 +2137,12 @@ export const connectionController = {
   /** Settings › Eliza Cloud account & plan: the plan panel with Redeem code, Manage plan and Sign out. */
   openPlan({codeEntry=false}:{codeEntry?:boolean}={}){ update({open:true,automaticRestore:false,purpose:'plan',membershipDismissed:false,membershipCodeEntry:codeEntry,message:'',error:'',redeemError:'',redeemNotice:''});if(state.cloudAccount)void refreshMembershipBalance(); },
   refreshMembershipBalance,
+  /** The chat's offer after a Cloud billing refusal: the same Membership & credits sheet while the
+   * refusal applies (it closes by itself once Cloud admits the account again), else the plan panel. */
+  openFunding(){
+    if(!state.cloudAccount||!state.fundingRefused){connectionController.openPlan();return;}
+    update({membershipDismissed:false,membershipCodeEntry:false,error:'',redeemError:'',redeemNotice:''});void refreshMembershipBalance();
+  },
   /** Test-mocks builds only: enter or leave subscription gate QA, then reload into it. */
   setResidentQa(environment:CloudEnvironment|null){
     if(!testMocksEnabled||operation)return;
@@ -2150,7 +2171,7 @@ export const connectionController = {
   close() {
     // The in-app sign-in screen closes back to where it was opened; a pending attempt is cancelled.
     if(pendingBillingReview){connectionController.cancelBillingReview();return;}
-    if(state.cloudAccount&&state.membershipBalance==='zero'){update({open:false,purpose:'agent',membershipDismissed:true});return;}
+    if(state.cloudAccount&&(state.membershipBalance==='zero'||state.fundingRefused)){update({open:false,purpose:'agent',membershipDismissed:true});return;}
     if(state.signIn){connectionController.cancelSignIn();return;}
     if(residentSignInRequired()){if((state.purpose==='cloud-account'||state.purpose==='plan')&&!state.busy)update({purpose:'agent',message:'',error:'',redeemError:'',redeemNotice:''});return;}
     if (!state.busy || residentStartInBackground || state.residentStarting) {if(state.purpose!=='cloud-account'&&state.purpose!=='plan')clearPersonalSetup();update({ open: false,purpose:'agent',redeemError:'',redeemNotice:'' });}
@@ -2550,7 +2571,7 @@ export const connectionController = {
       if(service!==account)throw Error('Cloud account changed. Sign in again.');
       redeemed=true;
       // A redeemed code changes the plan: an earlier limit (a used-up allowance) no longer describes it.
-      update({planEndsAt:result.planEndsAt,lastServiceLimit:null});
+      update({planEndsAt:result.planEndsAt,lastServiceLimit:null,fundingRefused:false});
       update({redeemNotice:redeemSuccessMessage(result)});
       const endsAt=result.planEndsAt;
       // Bind Eliza Cloud inference into the agent: attaches when the process already matches,
@@ -2729,7 +2750,7 @@ export const connectionController = {
     return !!active&&(!foreground||!state.open&&!state.busy&&!document.hidden)&&binding.connectionEpoch===epoch&&JSON.stringify(state.session)===JSON.stringify(binding.session)&&conversationMemory.get(conversationKey(binding.session))===binding.conversationId;
   },
   async prepareVoiceConversation(signal:AbortSignal):Promise<VoiceConversationBinding>{
-    if(state.cloudAccount&&state.membershipBalance==='zero')throw Error('Add funds or an active membership in Settings before asking Alpha.');
+    if(state.cloudAccount&&state.membershipBalance==='zero')throw fundingNeeded();
     if(operation||sending||state.open||state.busy||document.hidden)throw Error('Finish the current connection or conversation operation first.');
     const selected=active,session=state.session,generation=epoch;
     if(!selected||!session)throw noSessionError(NO_AGENT_VOICE);
@@ -2740,7 +2761,7 @@ export const connectionController = {
     finally{signal.removeEventListener('abort',cancel);if(operation===controller)operation=null;}
   },
   async send(text: string, context: ContextEnvelope, requestId: string, signal: AbortSignal, onText?:(text:string)=>void,replyTo?:ConversationMessageTarget,onReplyReady?:(results:readonly unknown[]|undefined)=>void,channelType:ChatChannel='DM',expectedConversationId?:string,voiceTurnSignal?:VoiceTurnSignal): Promise<{ messageId?:string;userMessageId?:string;messageBinding?:{conversationId:string;session:VerifiedSession};text: string; proposals?: ActionProposal[]; actionResults?:readonly unknown[]; planAction?: 'plan' | 'retry' | 'sign-in' }> {
-    if(state.cloudAccount&&state.membershipBalance==='zero')throw Object.assign(new Error('Add funds or an active membership in Settings before asking Alpha.'),{notDispatched:true});
+    if(state.cloudAccount&&state.membershipBalance==='zero')throw fundingNeeded();
     // P-43: before the resident has a session, say it is starting (or recovering); nothing is sent.
     if (!active && residentAlwaysPresent) throw noSessionError('');
     if (operation) throw new Error('Finish the connection or history operation before sending.');
@@ -2873,7 +2894,7 @@ export const connectionController = {
       }
       if(!failed&&automationsCommitted(reply.actionResults))window.dispatchEvent(new CustomEvent(AUTOMATIONS_COMMITTED_EVENT,{detail:{sessionId:session.sessionId}}));
       // A reply that got through means the last Cloud limit no longer applies.
-      if(!failed&&state.lastServiceLimit)update({lastServiceLimit:null});
+      if(!failed&&(state.lastServiceLimit||state.fundingRefused))update({lastServiceLimit:null,fundingRefused:false});
       return { text: responseFailure
         ? `${responseFailure.message} Pending phone actions are available for separate review.${effectApplied?'':' Nothing has been approved or performed automatically.'}`
         : reply.text, ...(completedReads.length?{completedReads}:{}), ...(completedActions.length?{completedActions}:{}), ...(notices.length ? { notices } : {}), ...(!responseFailure?{...(typeof reply.messageId==='string'?{messageId:reply.messageId}:{}),messageBinding}:{}), ...recorded, ...(proposals ? { proposals } : {}), ...(!failed&&Array.isArray(reply.actionResults)?{actionResults:reply.actionResults}:{}) };
@@ -2939,9 +2960,9 @@ export function productionCloudSignInRequired(snapshot: Pick<ConnectionSnapshot,
 export function explicitSignedOutCloudEntry(snapshot: Pick<ConnectionSnapshot,'open'|'cloudAccount'|'purpose'>): boolean {
   return snapshot.open&&!snapshot.cloudAccount&&(snapshot.purpose==='cloud-account'||snapshot.purpose==='plan');
 }
-export function connectionChooserVisible(snapshot: Pick<ConnectionSnapshot,'open'|'automaticRestore'|'busy'|'error'>&Partial<Pick<ConnectionSnapshot,'cloudAccount'|'purpose'|'signIn'|'membershipBalance'|'billingReviewEmail'|'membershipDismissed'|'startupResolved'|'residentSavedCredential'|'residentPlanNotice'>>,foregroundReply=false): boolean {
+export function connectionChooserVisible(snapshot: Pick<ConnectionSnapshot,'open'|'automaticRestore'|'busy'|'error'>&Partial<Pick<ConnectionSnapshot,'cloudAccount'|'purpose'|'signIn'|'membershipBalance'|'fundingRefused'|'billingReviewEmail'|'membershipDismissed'|'startupResolved'|'residentSavedCredential'|'residentPlanNotice'>>,foregroundReply=false): boolean {
   if(snapshot.billingReviewEmail)return true;
-  if(snapshot.cloudAccount&&!snapshot.membershipDismissed&&snapshot.membershipBalance==='zero'&&!foregroundReply)return true;
+  if(snapshot.cloudAccount&&!snapshot.membershipDismissed&&(snapshot.membershipBalance==='zero'||snapshot.fundingRefused)&&!foregroundReply)return true;
   if(isAndroid&&!testMocksEnabled&&'cloudAccount' in snapshot){
     if(productionCloudSignInRequired({cloudAccount:snapshot.cloudAccount??null,error:snapshot.error,startupResolved:snapshot.startupResolved,residentSavedCredential:snapshot.residentSavedCredential,residentPlanNotice:snapshot.residentPlanNotice}))return true;
     // Agent state and controls live in Settings, never in an automatic sheet.
@@ -3126,8 +3147,8 @@ export function ConnectionChooser() {
   // is no longer offered for retry.
   const savedSignInRejected=snapshot.error===errorMessage({status:401});
   const savedSignInOffered=residentCloudFlow()&&!snapshot.cloudAccount&&snapshot.residentSavedCredential===true&&!savedSignInRejected;
-  const membershipControls=snapshot.cloudAccount&&<CloudMembershipControls key={`${snapshot.cloudAccount.environment}:${snapshot.cloudAccount.userId}:${snapshot.cloudAccount.organizationId}:${snapshot.cloudAccount.credentialId}`} email={snapshot.cloudAccount.email} credits={snapshot.membershipCredits} plan={snapshot.membershipPlan} endsAt={snapshot.planEndsAt} lastLimit={snapshot.lastServiceLimit} serviceName={serviceName} codeEntry={snapshot.membershipCodeEntry} balance={snapshot.membershipBalance??'unavailable'} busy={snapshot.busy} error={snapshot.redeemError} connectionError={snapshot.error} notice={snapshot.redeemNotice} onRedeem={code=>connectionController.residentRedeem(code)} onAddFunds={()=>void connectionController.residentManagePlan()} onRefresh={()=>void connectionController.refreshMembershipBalance()}/>;
-  const fundingRequired=!!snapshot.cloudAccount&&snapshot.membershipBalance==='zero';
+  const membershipControls=snapshot.cloudAccount&&<CloudMembershipControls key={`${snapshot.cloudAccount.environment}:${snapshot.cloudAccount.userId}:${snapshot.cloudAccount.organizationId}:${snapshot.cloudAccount.credentialId}`} email={snapshot.cloudAccount.email} credits={snapshot.membershipCredits} plan={snapshot.membershipPlan} endsAt={snapshot.planEndsAt} lastLimit={snapshot.fundingRefused&&snapshot.lastServiceLimit?.kind==='billing-refused'?null:snapshot.lastServiceLimit} refused={!!snapshot.fundingRefused} serviceName={serviceName} codeEntry={snapshot.membershipCodeEntry} balance={snapshot.membershipBalance??'unavailable'} busy={snapshot.busy} error={snapshot.redeemError} connectionError={snapshot.error} notice={snapshot.redeemNotice} onRedeem={code=>connectionController.residentRedeem(code)} onAddFunds={()=>void connectionController.residentManagePlan()} onRefresh={()=>void connectionController.refreshMembershipBalance()}/>;
+  const fundingRequired=!!snapshot.cloudAccount&&(snapshot.membershipBalance==='zero'||!!snapshot.fundingRefused);
   if((fundingRequired||snapshot.purpose==='plan'&&!residentCloudFlow())&&snapshot.cloudAccount)return <div className="alpha-connection-scrim" data-alpha-billing-overlay="true" data-alpha-membership-sheet="true"><div className="alpha-connection" role="dialog" aria-modal="true" aria-labelledby="alpha-membership-title" tabIndex={-1} ref={panel} data-alpha-membership-panel="true"><div className="alpha-membership-drag-handle" aria-hidden="true"/><header><h1 id="alpha-membership-title" className="serif">Membership &amp; credits</h1><button aria-label="Close membership settings" disabled={snapshot.busy} onClick={()=>connectionController.close()}><span aria-hidden="true" data-alpha-icon="/icons/lucide/x.svg" style={iconStyle("x")}/></button></header>{accountCreatedNotice}{membershipControls}<footer className="alpha-membership-footer"><button type="button" disabled={snapshot.busy} onClick={()=>void connectionController.cloudSignOut()}>Use another account</button></footer>{snapshot.busy&&<button onClick={()=>connectionController.cancel()}>Cancel</button>}</div></div>;
   if(snapshot.purpose==='cloud-account')return <div className="alpha-connection-scrim" {...(snapshot.cloudAccount?{'data-alpha-billing-overlay':'true','data-alpha-membership-sheet':'true'}:{})}><div className="alpha-connection" role="dialog" aria-modal="true" aria-labelledby="cloud-account-title" tabIndex={-1} ref={panel} data-alpha-membership-panel={snapshot.cloudAccount?'true':undefined}>
     {snapshot.cloudAccount&&<div className="alpha-membership-drag-handle" aria-hidden="true"/>}<header><h1 id="cloud-account-title" className="serif">{snapshot.cloudAccount?'Membership & credits':serviceName}</h1><button aria-label="Close Cloud account" disabled={snapshot.busy} onClick={()=>connectionController.close()}><span aria-hidden="true" data-alpha-icon="/icons/lucide/x.svg" style={iconStyle("x")}/></button></header>

@@ -144,7 +144,7 @@ test('a chat turn without Cloud inference gets an honest answer with the plan ac
   const client = read('apps/app/src/runtime/alpha-client.ts');
   assert.match(between(client, 'async generateWorkflowText(', 'async send('), /if\(reply&&\(reply as AgentReply\)\.planAction\)throw new AlphaClientError\('unconfigured'/);
   const adapter = read('apps/app/src/prototype/agent-adapter.ts');
-  assert.match(adapter, /if\(card\.planAction\)\{\n\s+if\(card\.planAction==='plan'\)connectionController\.openPlan\(\);/);
+  assert.match(adapter, /if\(card\.planAction\)\{\n\s+if\(card\.planAction==='plan'\)connectionController\.openPlan\(\);\n\s+else if\(card\.planAction==='funding'\)connectionController\.openFunding\(\);/);
   assert.doesNotMatch(adapter, /title:'Set up AI'|connectionSetup/);
   const cards=adapter.slice(adapter.indexOf('function selectedCloudName('),adapter.indexOf('/** Context notices for proposals'));
   const renderCard=new Function('cloudServiceName','connectionController',stripTypeScriptTypes(cards,{mode:'transform'})+';return planActionCard;')(
@@ -154,6 +154,10 @@ test('a chat turn without Cloud inference gets an honest answer with the plan ac
   assert.equal(renderCard('retry').title,'Check Nebula again');
   assert.equal(renderCard('plan').planAction,'plan');
   assert.ok(renderCard('plan').sub.includes('Nebula account & plan'));
+  // A Cloud billing refusal offers the one sheet with credits and the membership code.
+  assert.equal(renderCard('funding').planAction,'funding');
+  assert.equal(renderCard('funding').title,'Add credits or enter a membership code');
+  assert.ok(renderCard('funding').sub.includes('Nebula membership and credits'));
   assert.equal(renderCard('unknown'),undefined);
 
   assert.match(adapter, /const planCard=planActionCard\(\(e as \{planAction\?:unknown\}\)\.planAction\);/);

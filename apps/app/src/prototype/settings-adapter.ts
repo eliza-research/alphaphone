@@ -586,7 +586,8 @@ export function installSettingsAdapter(Component: any, views: Bag) {
             if(connection.busy)rows.push(info('Status',connection.message||'Please wait…'));
             const actions:Bag[]=connection.busy?[action('Cancel',()=>connectionController.cancel())]:plan.signedIn?[
               ...(plan.keyExpiring?[{kNav:true,label:'Approve this phone again',lbl:'Approve this phone again',chev:true,noAB:true,go:()=>void connectionController.residentCloudLogin()}]:[]),
-              ...(connection.residentSubscription?.kind!=='credits'?[{kNav:true,label:'Redeem code',lbl:'Redeem code',chev:true,noAB:true,go:()=>connectionController.openPlan({codeEntry:true})}]:[]),
+              // A membership code is an alternative to credits: Cloud redeems it for credit-funded accounts too.
+              {kNav:true,label:'Redeem code',lbl:'Redeem code',chev:true,noAB:true,go:()=>connectionController.openPlan({codeEntry:true})},
               {kNav:true,label:'Manage plan',lbl:'Manage plan',chev:true,noAB:true,go:()=>void connectionController.residentManagePlan()},
               {kNav:true,label:'Sign out',lbl:`Sign out of ${serviceName}`,chev:true,noAB:true,go:()=>void connectionController.cloudSignOut()},
             ]:plan.offline?[{kNav:true,label:'Check plan again',lbl:'Check plan again',chev:true,noAB:true,go:()=>connectionController.recheckPlanOnReturn()}]

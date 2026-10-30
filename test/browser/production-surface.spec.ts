@@ -425,14 +425,15 @@ for (const mode of ['signed-out','empty','credits','unavailable','funded','repla
   if(needsPlan){
    await expect(dialog.getByRole('textbox',{name:'Membership code',exact:true})).toBeFocused();
    await expect(dialog.getByRole('button',{name:'Redeem',exact:true})).toBeVisible();
-   await expect(dialog.getByRole('button',{name:'Add funds',exact:true})).toBeVisible();
+   await expect(dialog.getByRole('button',{name:'Add credits',exact:true})).toBeVisible();
    // The resident panel shows the plan headline itself (planShownByHost); the membership controls do not repeat it.
    await expect(dialog.getByRole('region',{name:'Eliza Cloud plan',exact:true}).getByText(mode==='empty'?'No active plan':'Plan status unavailable',{exact:true})).toBeVisible();
    await expect(dialog.getByRole('region',{name:'Membership and credits',exact:true}).getByText(mode==='empty'?'No active membership':'Not confirmed',{exact:true})).toHaveCount(0);
   }
   if(mode==='replaced')await expect(dialog.getByText(/account changed/i)).toBeVisible();
   if(admitted)await expect(dialog.getByRole('button',{name:'Sign out of Eliza Cloud',exact:true})).toBeVisible();
-  if(mode==='credits'){await expect(dialog.getByText('Eliza Cloud credits',{exact:true})).toBeVisible();await expect(dialog.getByRole('button',{name:'Redeem code',exact:true})).toHaveCount(0);}
+  // A membership code is an alternative to credits: credit-funded accounts can enter one too.
+  if(mode==='credits'){await expect(dialog.getByText('Eliza Cloud credits',{exact:true})).toBeVisible();await expect(dialog.getByRole('button',{name:'Redeem code',exact:true})).toBeVisible();}
   for(const retired of ['Use local apps without AI','Continue offline'])await expect(dialog.getByRole('button',{name:retired,exact:true})).toHaveCount(0);
   // Every dialog but the required sign-in closes; the agent keeps running.
   if(needsPlan){await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);}else if(!signedOut){await dialog.getByRole('button',{name:'Back to Settings',exact:true}).click();}

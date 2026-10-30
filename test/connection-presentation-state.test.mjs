@@ -87,6 +87,7 @@ test('expired and rejected restored sessions still require authentication; valid
 // normal conversation binding, before preferences, transport or model work.
 const preflightSource = [
   section('function residentSignInRequired()', '\n'),
+  section('function fundingNeeded()', '\n'),
   'const preflightController = {',
   section('  close() {', '  cancel() {'),
   section('  async prepareVoiceConversation(', '  async send('),
@@ -101,7 +102,9 @@ function preflightFixture(balance, options = {}) {
   const f = fixture({purpose: 'plan', ...options});
   let bindings = 0;
   Object.assign(f.context, {
-    AbortController, DOMException, document: {hidden: false}, navigator: {onLine: true},
+    AbortController, DOMException, document: {hidden: false}, navigator: {onLine: true}, setTimeout,
+    FUNDING_NEEDED: 'Add credits or enter a membership code to ask Alpha.',
+    AlphaClientError: class AlphaClientError extends Error {constructor(code, message) {super(message); this.code = code;}},
     residentCloudFlow: () => true, residentAlwaysPresent: true,
     residentStartInBackground: false, pendingBillingReview: null,
     operation: null, requestedCameraContinuation: undefined, clientObservationSession: undefined,
@@ -130,12 +133,18 @@ for (const balance of ['zero', 'checking', 'unavailable', undefined, 'funded', '
     for (const method of ['voice', 'send']) {
       const f = preflightFixture(balance);
       if (balance === 'zero') {
+        f.context.state.membershipDismissed = true;
         await assert.rejects(f[method](), error => {
-          assert.match(error.message, /Add funds or an active membership in Settings/);
-          if (method === 'send') assert.equal(error.notDispatched, true);
+          assert.equal(error.message, 'Add credits or enter a membership code to ask Alpha.');
+          // Nothing was sent, and the composer says why instead of a generic "Not sent".
+          assert.equal(error.notDispatched, true);
+          assert.equal(error.refusedBeforeTurn, true);
           return true;
         });
         assert.equal(f.bindings, 0);
+        // The Membership & credits sheet is offered again even after it was closed, once the refusal is delivered.
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(f.snapshot().membershipDismissed, false);
       } else {
         const result = await f[method]();
         assert.equal(method === 'voice' ? result.conversationId : result, 'conversation-1');
@@ -180,6 +189,14 @@ test('closing unknown balance uses ordinary close rules without claiming zero ba
   zero.context.state.open = true; zero.close();
   assert.equal(zero.snapshot().open, false);
   assert.equal(zero.snapshot().membershipDismissed, true);
+  // After a Cloud billing refusal the sheet closes the same way; the refusal stays until Cloud admits a turn.
+  for (const balance of ['funded', 'member', 'checking']) {
+    const refused = preflightFixture(balance);
+    refused.context.state.open = true; refused.context.state.fundingRefused = true; refused.close();
+    assert.equal(refused.snapshot().open, false);
+    assert.equal(refused.snapshot().membershipDismissed, true);
+    assert.equal(refused.snapshot().fundingRefused, true);
+  }
 });
 test('closing unknown balance preserves required sign-in for signed-out and expired accounts', () => {
   for (const balance of ['checking', 'unavailable', undefined]) {
