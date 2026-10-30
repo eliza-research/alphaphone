@@ -52,7 +52,7 @@ def verify(apk, release=False, runtime_profile="native"):
             if stamp.get(field) != file_hash(ROOT / source):
                 raise ValueError('Staged source manifest mismatch')
         checks = {}
-        # An Android-target Bun may have a narrower admitted ABI set. Authenticate
+        # Both Bun targets may have an explicitly selected ABI set. Authenticate
         # its provenance before using that set; legacy debug builds still require both.
         runtime_abis = {'arm64-v8a', 'x86_64'}
         provenance = None
@@ -68,10 +68,15 @@ def verify(apk, release=False, runtime_profile="native"):
             target = bun.get('target', 'linux-musl')
             if target not in ('android', 'linux-musl'):
                 raise ValueError('Unsupported Bun target')
+            architectures = bun.get('architectures')
+            if (not isinstance(architectures, list) or not architectures
+                    or any(abi not in ('arm64-v8a', 'x86_64') for abi in architectures)
+                    or len(set(architectures)) != len(architectures)):
+                raise ValueError('Invalid runtime ABI admission')
+            runtime_abis = set(architectures)
             if target == 'android':
-                if bun.get('architectures') != ['arm64-v8a']:
+                if architectures != ['arm64-v8a']:
                     raise ValueError('Invalid Android Bun ABI admission')
-                runtime_abis = {'arm64-v8a'}
         if runtime_profile == 'cloud':
             if provenance is None:
                 raise ValueError('Runtime provenance missing')
