@@ -1620,17 +1620,8 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
   views.notes.render = function (state: Shell, api: Shell) {
     const out = notesRender({ ...state, record: false }, api);
     out.storageStatus=state.storageStatus;
-    out.canRecord=!api.canonicalNotes;
-    if(api.canonicalNotes){
-      out.browserRecovery=false;out.canImportText=false;
-      if(out.ed)out.ed.dictate=async()=>{
-        const binding=api.canonicalNotes,id=binding.open;
-        try{const result=await DailyApps.perform({action:'voice'});if(!binding.controller.current||binding.open!==id||typeof result.transcript!=='string'||!result.transcript)return;
-          const current=binding.list.find((note:Shell)=>note.id===id);if(current)await binding.update(id,{body:[current.body,result.transcript].filter(Boolean).join('\n')});
-        }catch{api.toast('Speech recognition is unavailable.');}
-      };
-      return out;
-    }
+    // Agent Notes: canonical-notes-ui.ts decorates this view. Recovery and recording below belong to Older notes.
+    if(api.notesSourceMode==='canonical')return out;
     const failed=Boolean((activeShell?.notesStorageFailed&&document.documentElement.dataset.notesStorageState!=='opening')||activeShell?.notesStore?.needsRecovery);
     // A damaged collection, kept draft or full store exposes retention guidance. Development builds also offer fixture recovery tools.
     out.browserRecovery=isAndroid?Boolean(failed||activeShell?.notesDraftUnreadable||activeShell?.notesDraftDeferred||activeShell?.notesDraftConflict):Boolean(failed||state.audioDeletionRecoveryFailed||state.audioDeletionPending?.length);

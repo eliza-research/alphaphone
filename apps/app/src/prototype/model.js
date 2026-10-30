@@ -2905,10 +2905,12 @@ var NOTES_RED = "var(--alpha-notes-red)";
 var NOTES_WAVE = []; (function () { for (var i = 0; i < 56; i++) NOTES_WAVE.push(Math.round(8 + 26 * Math.abs(Math.sin(i * 0.9) * Math.cos(i * 0.37)) + (i % 3) * 3)); })();
 var NT = { pend: false, recI: null, playI: null, dicI: null, dIdx: 0, undoT: null };
 
-function notesFmt(sec) { sec = Math.max(0, Math.floor(sec)); return Math.floor(sec / 60) + ":" + pad2(sec % 60); }
+function notesFmt(sec) { if (!Number.isFinite(sec)) return ""; sec = Math.max(0, Math.floor(sec)); return Math.floor(sec / 60) + ":" + pad2(sec % 60); }
 function notesNowLabel(d) { return formatTime(d); }
 function notesFind(list, id) { for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; return null; }
+/* Live agent Notes (canonical-notes-ui.ts) bind api.canonicalNotes: the same view, saved through the canonical Notes client. */
 function notesUpd(api, id, patch) {
+  if (api.canonicalNotes) return api.canonicalNotes.update(id, patch);
   var s = api.get("notes");
   var list = s.list.map(function (n) { return n.id === id ? Object.assign({}, n, typeof patch === "function" ? patch(n) : patch) : n; });
   var change = { list: list };
@@ -2928,6 +2930,7 @@ function notesClose(api) {
 /** Leaves the open note as Back does: dictation and the unsent checklist item end with it, and an
  * empty new note is dropped. On a split canvas (#411) another note opens beside the list directly. */
 function notesLeave(api, next) {
+  if (api.canonicalNotes) { void api.canonicalNotes.leave(next); return {}; }
   var s = api.get("notes"); notesStopTimers();
   var n = s.open !== next && s.open === s.blankCreationId ? notesFind(s.list, s.open) : null;
   var patch = { open: next, sheet: null, playing: false, dict: false, newItem: "", blankCreationId: next === s.open ? s.blankCreationId : null };
@@ -2938,6 +2941,7 @@ function notesUndoable(api, note, idx, label) {
   api.toast(label, { undo: function () { var s = api.get("notes"); if (notesFind(s.list, note.id)) return; var l = s.list.slice(); l.splice(Math.min(idx, l.length), 0, note); api.set({ list: l }); } });
 }
 async function notesDelete(api, id) {
+  if (api.canonicalNotes) return api.canonicalNotes.remove(id, api);
   var s = api.get("notes"); notesStopTimers();
   var idx = -1; s.list.forEach(function (n, i) { if (n.id === id) idx = i; });
   if (idx < 0) return;
@@ -2948,6 +2952,7 @@ async function notesDelete(api, id) {
   notesUndoable(api, note, idx, (note.title || "Note") + " deleted");
 }
 function notesNew(api, kind) {
+  if (api.canonicalNotes) { void api.canonicalNotes.create(kind); api.set({ compose: false, q: null }); return; }
   var id = "n" + Date.now();
   var n = kind === "list" ? { id: id, kind: "list", title: "", items: [], pinned: false, when: "Now" } : { id: id, kind: "text", title: "", body: "", pinned: false, when: "Now" };
   var leave = notesLeave(api, id);
@@ -3043,7 +3048,7 @@ registerView("notes", {
       var body = card.body || (card.bullets || []).join("\n");
       if (api.canonicalNotes) {
         var content = card.title ? card.title + (body ? "\n" + body : "") : body;
-        if (await api.canonicalNotes.saveCard(content)) api.toast("Saved to Notes");
+        if (await api.canonicalNotes.saveCard(content, api)) api.toast("Saved to Notes");
         return;
       }
       var s = api.get("notes");
@@ -3113,15 +3118,15 @@ registerView("notes", {
       return hay.indexOf(q) >= 0;
     });
     shown = shown.filter(function (n) { return n.pinned; }).concat(shown.filter(function (n) { return !n.pinned; }));
-    var cards = shown.map(function (n) {
+    var cards = shown.map(function (n, order) {
       var items = (n.items || []).slice(0, 5).map(function (i) { return { t: i.t, css: i.done ? "text-decoration: line-through; color: var(--mut)" : "", box: i.done ? "background: var(--fg); box-shadow: none" : "box-shadow: inset 0 0 0 1.5px var(--mut)", done: i.done }; });
       var more = (n.items || []).length - items.length;
       var bars = NOTES_WAVE.slice(0, 22);
       return {
         id: n.id, title: n.title || "Untitled", hasTitle: true, body: n.kind === "text" ? String(n.body || "").slice(0, 180) : "", hasBody: n.kind === "text" && !!String(n.body || "").trim(),
         isList: n.kind === "list", isVoice: n.kind === "voice", isLink: n.kind === "link", items: items, more: more > 0 ? "+" + more : "", hasMore: more > 0,
-        bars: bars, dur: n.kind === "voice" ? notesFmt(n.dur) + (n.actions && n.actions.length ? " · " + n.actions.length + " to-dos" : "") : "", domain: n.domain || "",
-        pinned: !!n.pinned, current: st.open === n.id ? "true" : "false", open: function () { api.set(Object.assign(notesLeave(api, n.id), { pos: 0 })); }
+        bars: bars, dur: n.kind === "voice" ? [notesFmt(n.dur), n.actions && n.actions.length ? n.actions.length + " to-dos" : ""].filter(Boolean).join(" · ") : "", domain: n.domain || "",
+        pinned: !!n.pinned, current: st.open === n.id ? "true" : "false", order: order, open: function () { api.set(Object.assign(notesLeave(api, n.id), { pos: 0 })); }
       };
     });
     var colL = [], colR = [];
@@ -3195,7 +3200,7 @@ registerView("notes", {
       var bars = NOTES_WAVE.map(function (h, i) { return { h: h, c: i / NOTES_WAVE.length < frac ? "var(--acct)" : "var(--s3)" }; });
       var nextIdx = -1; (n.lines || []).forEach(function (l, i) { if (l.at <= pos) nextIdx = i; });
       vo = Object.assign({}, common, {
-        meta: n.when + " · " + notesFmt(n.dur), bars: bars,
+        meta: [n.when, notesFmt(n.dur)].filter(Boolean).join(" · "), bars: bars, hasPlayback: true,
         time: notesFmt(pos) + " / " + notesFmt(n.dur),
         playIcon: st.playing ? IC.pause : IC.play, playLabel: st.playing ? "Pause" : "Play", playCss: st.playing ? "" : "fill: currentColor",
         play: function () {
@@ -3268,7 +3273,7 @@ registerView("notes", {
 
     var shareSheet = st.sheet === "share" && !!n;
     return {
-      legacyNotes: true, notesTitle: "Notes", primaryNotes: true, canRecord: true,
+      notesTitle: "Notes", primaryNotes: true, canRecord: true, canCreate: true,
       searching: st.q !== null && st.q !== undefined, notSearching: st.q === null || st.q === undefined,
       q: st.q || "",
       onQ: function (e) { api.set({ q: e.target.value }); },

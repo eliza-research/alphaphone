@@ -92,7 +92,7 @@ test('journey A: boot, connect, converse across apps, stop a reply, reload and r
  for(const app of ['Notes','Calendar','Browser']){
   await returnToApps(page);
   await page.getByRole('button',{name:app,exact:true}).click();
-  const region=app==='Notes'?page.locator('[data-alpha-shared-notes]'):page.getByRole('region',{name:app,exact:true});
+  const region=page.getByRole('region',{name:app,exact:true});
   await expect(region).toBeVisible();
   await page.getByRole('button',{name:'Open conversation',exact:true}).click();
   await expect(bubble(page,'Journey A first request')).toHaveCount(1);
