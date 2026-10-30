@@ -2,7 +2,8 @@
 
 This candidate depends on upstream `5f21b0de1ecd6e4bf193a7e382e97952c5a3b4e8`
 and its cancellation/registration follow-up `6239c20fdbc03f3daebbcfc052752ac204e3bab7`,
-both after Camera `8b3bf6e398067379b4380d49eb9aeb3e54557ddb`, and a rebuilt,
+plus declared capability/control follow-up `9937d4e43162e2bdfca5b963ebbad9ae5ea1b01e`,
+all after Camera `8b3bf6e398067379b4380d49eb9aeb3e54557ddb`, and a rebuilt,
 verified `.eliza/browser-consumer` artifact containing its public exports. The current
 pin is unchanged; an older artifact intentionally cannot satisfy these imports.
 

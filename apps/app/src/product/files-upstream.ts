@@ -1,6 +1,8 @@
 /** Requires the reviewed Files workspace revision in the canonical consumer artifact. */
 export {
   createBrowserFiles,
+  bindNativeFilesPorts,
+  nativeFilesAvailable,
   createFilesIndex,
   compareFilesEntries,
   matchesFileQuery,
