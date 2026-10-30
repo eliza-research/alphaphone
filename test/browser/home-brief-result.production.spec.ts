@@ -81,6 +81,13 @@ for (const route of ['native', 'renderer'] as const) test(`a digest result from 
   await expect(list.locator('#hosted-result-run-overlap')).toContainText('Skipped — an earlier run was still active');
   await expect(list.locator('#hosted-result-run-unavailable')).toContainText('Not run — source unavailable');
   await expect(list.locator('#hosted-result-run-morning')).toContainText('Synthetic brief: two meetings and one reply to send.');
+  // Execution details are a readable run summary, never the agent's raw output (owner decision 2026-10-30).
+  const morning = list.locator('#hosted-result-run-morning');
+  await morning.getByText('Execution details', { exact: true }).click();
+  await expect(morning.locator('details p')).toHaveText(/^Started .+\. Finished .+\.$/);
+  await expect(morning.locator('details pre')).toHaveCount(0);
+  await expect(morning).not.toContainText('SYNTHETIC_RAW_SOURCE_456');
+  await expect(morning).not.toContainText('"nodeId"');
   await button(page, 'Close scheduled digests').click();
   await expect(card.locator('.home-brief-title')).toHaveText('Synthetic brief: two meetings and one reply to send.');
   await expect(card.locator('.home-brief-status')).toHaveText(`${AGENT_NAME} · Ran ${ran}`);

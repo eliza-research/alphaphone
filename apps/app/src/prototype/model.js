@@ -4221,7 +4221,7 @@ function wfRawFlows(api) { return api.get("workflows").flows || WF_SEED; }
 function wfFlows(api) { return wfRawFlows(api).filter(wfAllowed); }
 // Editing an enabled fixture must not erase retained out-of-scope user records.
 function wfMerge(api, enabled) { return wfRawFlows(api).filter(function (f) { return !wfAllowed(f); }).concat(enabled.filter(wfAllowed)); }
-function wfDeferred(api) { api.toast("This workflow is deferred from the MVP"); }
+function wfDeferred(api) { api.toast("This workflow is not available on this phone yet."); }
 function wfFind(list, id) { for (var i = 0; i < list.length; i++) if (String(list[i].id) === String(id)) return list[i]; return null; }
 function wfMatch(list, t) {
   var best = null, sc = 0;
@@ -4362,9 +4362,9 @@ registerView("workflows", {
     }
     // create
     if (/^(every|whenever|each)\b|\bevery (day|weekday|morning|evening|night|week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|\bwhenever\b|\bwhen i (get|arrive|leave)\b|automate|new workflow/.test(t)) {
-      if (wfDeferredRequest(raw)) return { text: "This workflow is deferred from the MVP." };
+      if (wfDeferredRequest(raw)) return { text: "I can't set up that workflow on this phone yet." };
       var nf = wfFromText(t, raw, api);
-      if (!wfAllowed(nf)) return { text: "This workflow is deferred from the MVP." };
+      if (!wfAllowed(nf)) return { text: "I can't set up that workflow on this phone yet." };
       return { text: "Here's the workflow. Turn it on?", card: { type: "flow", name: nf.name, short: nf.summary, flow: nf, act: { mod: "workflows", fn: "enable" } } };
     }
     return null;
@@ -5284,7 +5284,7 @@ class Component extends DCLogic {
     this.setState(Object.assign(this.shellNavigate({ type: "home", assistant: chat === "sheet" || chat === "full" ? chat : "input" }), { shade: false, hint: false, heads: false }));
   }
   openView(k, patch, chat, opts) {
-    if (!isMvpView(k)) return this.toast("This app is deferred from the MVP");
+    if (!isMvpView(k)) return this.toast("This app is not available on this phone yet.");
     // openView(view, { keepState: true }) is shorthand for the keepState option.
     if (patch && patch.keepState === true && Object.keys(patch).length === 1) { opts = Object.assign({}, opts, { keepState: true }); patch = null; }
     // keepState returns to a view exactly as it was left (open note, event, email or tab and its
@@ -5448,7 +5448,7 @@ class Component extends DCLogic {
   }
   send(textArg) {
     var S = this.S(); var text = String(textArg != null ? textArg : S.draft).trim(); if (!text) return;
-    if (deferredMvpPrompt(text)) return this.toast("This action is deferred from the MVP");
+    if (deferredMvpPrompt(text)) return this.toast("This action is not available on this phone yet.");
     var id = Date.now(); var self = this;
     if (textArg == null && S.editCard) { // composer holds an edited draft card: send it as the draft, not as a question
       var em = S.msgs.filter(function (x) { return x.id === S.editCard; })[0];
@@ -5472,7 +5472,7 @@ class Component extends DCLogic {
   }
   cardAct(m) {
     var S = this.S(); var c = m.card || {}; var self = this;
-    if ((c.act && DEFERRED_MVP_VIEWS.has(c.act.mod)) || (c.go && DEFERRED_MVP_VIEWS.has(c.go.view))) return this.toast("This action is deferred from the MVP");
+    if ((c.act && DEFERRED_MVP_VIEWS.has(c.act.mod)) || (c.go && DEFERRED_MVP_VIEWS.has(c.go.view))) return this.toast("This action is not available on this phone yet.");
     var markDone = function () { self.setState({ msgs: self.S().msgs.map(function (x) { return x.id === m.id ? Object.assign({}, x, { card: Object.assign({}, x.card, m.card, { done: true }) }) : x; }) }); };
     if (c.act && VIEWS[c.act.mod] && VIEWS[c.act.mod].actions && VIEWS[c.act.mod].actions[c.act.fn]) {
       if (c.done) { if (c.go) this.openView(c.go.view, c.go.patch, c.go.chat || "hidden"); return; }

@@ -10,10 +10,12 @@ test.beforeEach(async({},testInfo)=>{test.skip(testInfo.project.name!=='producti
 
 type Fixture={snapshot?:Record<string,unknown>;drop?:string[];subscription?:'credits'|'active'|'canceled';agentStartFailure?:boolean;
  /** Exact USD organization credit balance in the billing snapshot (data.v2.balance); absent when unset. */
- credits?:string};
+ credits?:string;
+ /** The resident's providerStatus answer; tests change truth.state.provider to model a later binding. */
+ provider?:Record<string,unknown>};
 async function nativeStub(page:Page,fixture:Fixture={}){
  await installResidentAgentPlugin(page);
- await page.addInitScript(({snapshot,drop,subscription,agentStartFailure,credits})=>{
+ await page.addInitScript(({snapshot,drop,subscription,agentStartFailure,credits,provider})=>{
   const w=window as any;w.androidBridge={};
   localStorage.setItem('alpha.startup-permissions.v1',JSON.stringify({dismissed:true,attempted:{}}));
   const now=Date.now(),store=new Map<string,string>();
@@ -32,7 +34,7 @@ async function nativeStub(page:Page,fixture:Fixture={}){
    status:{permissionGranted:true,appEnabled:true,interruption:'all',scope:'alpha-phone',channels:[{id:'c-reminders',name:'Reminders',importance:4,blocked:false,groupBlocked:false},{id:'c-results',name:'Scheduled digest results',importance:3,blocked:false,groupBlocked:false}]} as Record<string,any>,
    cross:{revision:'r1',enabled:false,paused:false,accessGranted:false,connected:false,history:true,apps:[]} as Record<string,unknown>,
    history:[{appLabel:'Stub Mail',state:'posted',at:now-60_000}] as unknown[],
-   items:[] as unknown[],openFails:false,unspecific:[] as string[],unavailable:[] as string[],torch:true,shadeOutcome:'opened' as string,
+   items:[] as unknown[],openFails:false,unspecific:[] as string[],unavailable:[] as string[],torch:true,shadeOutcome:'opened' as string,provider:provider??{configured:false},
   };
   for(const key of drop)delete state.snapshot[key];
   w.truth={calls:[] as any[],shared:[] as string[],state,resume:()=>listeners.filter(l=>l.plugin==='DailyApps'&&l.event==='appResumed').forEach(l=>l.callback({}))};
@@ -67,7 +69,7 @@ async function nativeStub(page:Page,fixture:Fixture={}){
      const owned=resident.answer(method,input);if(owned)return owned;
      if(agentStartFailure&&method==='start')throw Error('Synthetic resident startup failure');
      if(method==='request'){const id=residentId;return {status:200,body:JSON.stringify(input.path==='/api/auth/me'?{identity:{id,kind:'owner'},access:{role:'OWNER',mode:'local'}}:input.path==='/api/agents'?{agents:[{id,name:'Alpha',status:'running'}]}:input.path==='/api/conversations'?{conversations:[]}:{} )};}
-     return method==='providerStatus'?{configured:false}:{packaged:true,state:'stopped',serviceActive:false,socketListening:false};
+     return method==='providerStatus'?state.provider:{packaged:true,state:'stopped',serviceActive:false,socketListening:false};
     }
     if(plugin==='AlphaConnection'){
      if(method==='secureRead')return {value:store.get(input.slot)??null};
@@ -104,7 +106,7 @@ async function nativeStub(page:Page,fixture:Fixture={}){
     throw Error('Unexpected native operation '+plugin+'.'+method);
    },
   };
- },{snapshot:fixture.snapshot??{},drop:fixture.drop??[],subscription:fixture.subscription,agentStartFailure:fixture.agentStartFailure,credits:fixture.credits});
+ },{snapshot:fixture.snapshot??{},drop:fixture.drop??[],subscription:fixture.subscription,agentStartFailure:fixture.agentStartFailure,credits:fixture.credits,provider:fixture.provider});
 }
 const app=(page:Page)=>page.locator('[data-alpha-layer="app"]');
 const current=(page:Page)=>page.locator('[data-settings-page]:not([inert])').last();
@@ -419,6 +421,31 @@ test('the browser build of Settings shows no fixture value and no radio or senso
  expect(await page.locator('[aria-pressed]').evaluateAll(list=>list.map(e=>e.getAttribute('aria-label')))).toEqual([]);
 });
 
+// The audit's demo contradiction: About said "Not reported by agent" while Models named the model.
+// Both read the provider the resident reports when Settings refreshes, so a binding that lands after
+// Settings first opened is shown the same way on both pages.
+test('About and Models report the same inference model after the provider binds',async({page},info)=>{
+ const row=async()=>/Inference model\s*([^\n]+)/.exec(await current(page).innerText())?.[1];
+ await nativeStub(page,{provider:{provider:'elizacloud',configured:false}});
+ await openSettings(page);
+ await current(page).getByRole('button',{name:'About',exact:true}).click();
+ await expect.poll(row).toBe('Not reported by agent');
+ // The binding lands later; Settings reads the provider again when the app resumes.
+ await set(page,{provider:{provider:'elizacloud',configured:true,model:'cerebras/qwen-3.8-27b'}});
+ await resume(page);
+ await page.getByRole('button',{name:'Back to Settings',exact:true}).click();
+ await current(page).getByRole('button',{name:'Models',exact:true}).click();
+ await expect(current(page)).toContainText(/Inference provider\s*Eliza Cloud/);
+ await expect.poll(row).not.toBe('Not reported by agent');
+ const models=await row();
+ await page.screenshot({path:info.outputPath('models.png'),animations:'disabled'});
+ await page.getByRole('button',{name:'Back to Settings',exact:true}).click();
+ await current(page).getByRole('button',{name:'About',exact:true}).click();
+ try{await expect.poll(row,{timeout:5000}).toBe(models);}
+ finally{await page.screenshot({path:info.outputPath('about.png'),animations:'disabled'});}
+ expect(models).toBe('Eliza Cloud · qwen-3.8-27b (Cerebras)');
+});
+
 test('Settings › Eliza Cloud account & plan reports the verified plan and opens explicit code entry',async({page})=>{
  await nativeStub(page,{credits:'0'});
  await openSettings(page);
@@ -433,6 +460,10 @@ test('Settings › Eliza Cloud account & plan reports the verified plan and open
  const account=page.getByRole('dialog',{name:'Eliza Cloud account & plan',exact:true});
  const credits=account.getByRole('region',{name:'Membership and credits',exact:true});
  await expect(credits.getByRole('textbox',{name:'Membership code',exact:true})).toBeFocused();
+ // Owner decision (2026-10-30): the plan sheet shows only account, plan and billing. Agent status,
+ // conversation history and phone-action receipts stay in Settings › Agent connection.
+ await expect(account.getByRole('region',{name:'Agent status',exact:true})).toHaveCount(0);
+ for(const text of ['Running on this device','Reconnect agent','Conversation history','Phone action history'])await expect(account).not.toContainText(text);
  // The billing snapshot's zero balance is shown as zero, never as unavailable or as a funding block.
  await expect(credits.locator('.alpha-membership-amount')).toHaveText('$0.00USD');
  await expect(credits.getByText('Not available',{exact:true})).toHaveCount(0);

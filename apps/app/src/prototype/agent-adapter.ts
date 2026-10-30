@@ -712,7 +712,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       const { createDevelopmentTransport } = await import('../runtime/development-transport');
       const transport = await createDevelopmentTransport(async operation => {
         if (operation.type === 'open_view') {
-        if (!['home','reminders','notifications'].includes(operation.view) && !isMvpView(operation.view)) return {status:'failed',summary:'This app is deferred from the MVP'};
+        if (!['home','reminders','notifications'].includes(operation.view) && !isMvpView(operation.view)) return {status:'failed',summary:'This app is not available on this phone yet.'};
           const target = operation.view;
           if (target === 'home') this.goHome();
           else if (target === 'notifications') this.setState({ shade: true });
