@@ -4,7 +4,8 @@ import fs from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
-import {createCloudResidentHost,CLOUD_MODEL} from '../scripts/cloud-resident-host.mjs';
+import {createCloudResidentHost} from './fixtures/product-character-host.mjs';
+import {CLOUD_MODEL} from '../scripts/cloud-resident-host.mjs';
 
 function recordingLauncher(launches) {
  return async options=>{launches.push(options);let finish;return {completion:new Promise(done=>{finish=done;}),async stop(){finish({code:0});}};};

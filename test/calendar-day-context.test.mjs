@@ -1,13 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {AlphaClient} from '../apps/app/src/runtime/alpha-client.ts';
-import {phoneContextMessage,sanitizePhoneContext} from '../apps/app/src/runtime/phone-context.ts';
-import {calendarDayObservation} from '../apps/app/src/runtime/calendar-day-observation.ts';
-import {ClientObservationSupportCache,ClientObservationSupportSession,contextForObservationSupport} from '../apps/app/src/runtime/client-observation-support.ts';
 import {loadBrowserModule} from './fixtures/browser-source.mjs';
-const {LocalAgentProtocol}=await loadBrowserModule('apps/app/src/runtime/local-agent.ts');
-import {DeviceActions,deviceJournalContext,actionScope} from '../apps/app/src/runtime/device-actions.ts';
-import {ViewNavigationClient} from '../apps/app/src/runtime/view-navigation.ts';
+// The runtime sources use Vite resolution and full TypeScript, so they load through the Vite-aware fixture.
+const [{AlphaClient},{phoneContextMessage,sanitizePhoneContext},{calendarDayObservation},{ClientObservationSupportCache,ClientObservationSupportSession,contextForObservationSupport},{LocalAgentProtocol},{DeviceActions,deviceJournalContext,actionScope},{ViewNavigationClient}]=await loadBrowserModule(['alpha-client','phone-context','calendar-day-observation','client-observation-support','local-agent','device-actions','view-navigation'].map(name=>`apps/app/src/runtime/${name}.ts`));
 
 const zone='America/Los_Angeles';
 const day={date:'2026-10-29',timeZone:zone};

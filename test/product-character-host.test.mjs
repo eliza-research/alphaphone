@@ -31,9 +31,17 @@ for(const mode of ['module-missing','module-changed','input-changed','manifest-c
 });
 test('native configuration keeps only the verified module path through unbound provider stripping',()=>{
  const java=fs.readFileSync('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaLocalAgentPlugin.java','utf8');
- const unbound=java.slice(java.indexOf(' static void applyUnboundEnvironment('),java.indexOf(' static JSObject providerIdentity('));assert.ok(!unbound.includes('ELIZA_NATIVE_GOOGLE_HOST_MODULE'));assert.ok(unbound.includes('ELIZA_NATIVE_GOOGLE_BINDING_JSON'));assert.ok(!unbound.includes('ELIZA_SMTHRS_RUNTIME_DIR'));for(const key of ['ELIZAOS_CLOUD_API_KEY','CEREBRAS_API_KEY','ELIZA_MANAGED_GMAIL_READ_BROKER','ELIZA_MANAGED_CALENDAR_READ_BROKER'])assert.ok(unbound.includes(key));
+ // Shared cleanup strips the module with every provider credential; Alpha restores only the module it captured.
+ const shared=fs.readFileSync('vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderSlot.java','utf8');
+ const stripped=shared.slice(shared.indexOf('PROVIDER_ENVIRONMENT = {'),shared.indexOf('};',shared.indexOf('PROVIDER_ENVIRONMENT = {')));
+ for(const key of ['ELIZA_NATIVE_GOOGLE_HOST_MODULE','ELIZA_NATIVE_GOOGLE_BINDING_JSON','ELIZAOS_CLOUD_API_KEY','CEREBRAS_API_KEY','ELIZA_MANAGED_GMAIL_READ_BROKER','ELIZA_MANAGED_CALENDAR_READ_BROKER'])assert.ok(stripped.includes(`"${key}"`),key);
+ const unbound=java.slice(java.indexOf(' static void applyUnboundEnvironment('),java.indexOf(' static JSObject providerIdentity('));assert.ok(!unbound.includes('ELIZA_SMTHRS_RUNTIME_DIR'));
+ const captured=unbound.indexOf('String productModule=env.get("ELIZA_NATIVE_GOOGLE_HOST_MODULE");'),cleaned=unbound.indexOf('NativeProviderSlot.applyUnboundEnvironment(env);'),restored=unbound.indexOf('if(productModule!=null)env.put("ELIZA_NATIVE_GOOGLE_HOST_MODULE",productModule);');
+ assert.ok(captured>=0&&cleaned>captured&&restored>cleaned);assert.equal(unbound.match(/env\.put\(/g).length,1);
  const configure=java.slice(java.indexOf(' static void configureEnvironment('),java.indexOf(' /** Explicit Retry'));
- const installed=configure.indexOf('WorkflowWorkerAssets.install('),module=configure.indexOf('env.put("ELIZA_NATIVE_GOOGLE_HOST_MODULE"'),credentials=configure.indexOf('String saved=null'),cloud=configure.indexOf('if(provider!=null&&"elizacloud"');assert.ok(installed>=0&&module>installed&&credentials>module&&cloud>credentials);
+ const put='env.put("ELIZA_NATIVE_GOOGLE_HOST_MODULE"',installed=configure.indexOf('WorkflowWorkerAssets.install('),module=configure.indexOf(put),credentials=configure.indexOf('String saved=null'),launch=configure.indexOf('NativeProviderSlot.applyLaunchEnvironment('),reapplied=configure.indexOf(put,module+1),cloud=configure.indexOf('if(provider!=null&&"elizacloud"');
+ assert.ok(installed>=0&&module>installed&&credentials>module&&launch>credentials&&reapplied>launch&&cloud>reapplied);
  assert.ok(configure.includes('else if("cloud".equals(BuildConfig.ELIZA_RUNTIME_PROFILE))throw'));
- assert.equal(configure.match(/env.put\("ELIZA_NATIVE_GOOGLE_HOST_MODULE"/g).length,1);
+ // Both writes are the same verified packaged path, before and after shared provider cleanup.
+ assert.equal(configure.split(put).length-1,2);assert.equal(configure.split('if(google!=null&&google.isFile())env.put("ELIZA_NATIVE_GOOGLE_HOST_MODULE",google.getCanonicalPath());').length-1,2);
 });
