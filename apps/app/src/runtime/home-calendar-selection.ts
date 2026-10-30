@@ -23,7 +23,8 @@ export function homeCalendarSelection(
 		today = Date.UTC(p.year, p.month - 1, p.day),
 		monthStart = Date.UTC(p.year, p.month - 1, 1),
 		monthEnd = Date.UTC(p.year, p.month, 1),
-		weekEnd = today + (7 - ((new Date(today).getUTCDay() + 6) % 7)) * 86400000;
+		weekStart = today - ((new Date(today).getUTCDay() + 6) % 7) * 86400000,
+		weekEnd = weekStart + 7 * 86400000;
 	const day = (value: string, allDay = false) => {
 		const date = new Date(value);
 		if (!Number.isFinite(date.getTime())) return NaN;
@@ -46,47 +47,48 @@ export function homeCalendarSelection(
 					!hiddenSources.has(calendarSourceKey(source)),
 			),
 	);
-	const candidates = visible.filter((event) => {
-		const start = day(event.startAt, !!event.isAllDay),
-			end = day(event.endAt, !!event.isAllDay);
-		return (
-			(start >= today && start < Math.max(monthEnd, weekEnd)) ||
-			(start < today &&
-				(end > today ||
-					(!event.isAllDay &&
-						end === today &&
-						(() => {
-							const x = getZonedDateParts(new Date(event.endAt), timeZone);
-							return x.hour > 0 || x.minute > 0 || x.second > 0;
-						})())))
-		);
-	});
-	candidates.sort((a, b) => {
-		const rank = (e: typeof a) => {
-			const x = day(e.startAt, !!e.isAllDay);
-			return x <= today ? 0 : x < weekEnd ? 1 : 2;
+	// End dates are exclusive, including all-day civil dates. Use a civil-day
+	// fraction for timed ends so midnight cannot leak into the following day.
+	const bounds = (event: (typeof visible)[number]) => {
+		const allDay = !!event.isAllDay;
+		if (!Number.isFinite(Date.parse(event.endAt))) return { start: NaN, end: NaN };
+		const endParts = getZonedDateParts(new Date(event.endAt), allDay ? "UTC" : timeZone);
+		return {
+			start: day(event.startAt, allDay),
+			end: day(event.endAt, allDay) + (allDay ? 0 :
+				(endParts.hour * 3600 + endParts.minute * 60 + endParts.second) * 1000),
 		};
-		return (
-			rank(a) - rank(b) ||
-			Date.parse(a.startAt) - Date.parse(b.startAt) ||
-			calendarEventKey(a).localeCompare(calendarEventKey(b))
-		);
+	};
+	const rank = (event: (typeof visible)[number]) => {
+		const { start, end } = bounds(event);
+		return [[today, today + 86400000], [weekStart, weekEnd], [monthStart, monthEnd]]
+			.findIndex(([begin, finish]) => start < finish && end > begin);
+	};
+	const upcoming = (event: (typeof visible)[number]) => event.isAllDay
+		? day(event.endAt, true) > today
+		: Date.parse(event.endAt) > now.getTime();
+	const candidates = visible.filter(event => rank(event) >= 0);
+	candidates.sort((a, b) => {
+		const aUpcoming = upcoming(a), bUpcoming = upcoming(b);
+		return rank(a) - rank(b) || Number(bUpcoming) - Number(aUpcoming) ||
+			(aUpcoming ? Date.parse(a.startAt) - Date.parse(b.startAt) : Date.parse(b.startAt) - Date.parse(a.startAt)) ||
+			calendarEventKey(a).localeCompare(calendarEventKey(b));
 	});
 	if (candidates.length)
 		return { event: candidates[0], verified: true, emptyLabel: "" };
-	// An empty answer is valid only when the complete queried feed covers this local month.
+	// An empty answer requires complete coverage of both the local week and month.
 	const begin = Date.parse(state.feed.timeMin),
 		end = Date.parse(state.feed.timeMax);
 	return Number.isFinite(begin) &&
 		Number.isFinite(end) &&
 		begin <= now.getTime() &&
-		(day(state.feed.timeMin) < monthStart ||
-			(day(state.feed.timeMin) === monthStart &&
+		(day(state.feed.timeMin) < Math.min(monthStart, weekStart) ||
+			(day(state.feed.timeMin) === Math.min(monthStart, weekStart) &&
 				(() => {
 					const x = getZonedDateParts(new Date(state.feed.timeMin), timeZone);
 					return x.hour === 0 && x.minute === 0 && x.second === 0;
 				})())) &&
 		day(state.feed.timeMax) >= Math.max(monthEnd, weekEnd)
-		? { event: null, verified: true, emptyLabel: "No events this month" }
+		? { event: null, verified: true, emptyLabel: "Nothing planned" }
 		: quiet;
 }
