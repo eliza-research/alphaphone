@@ -1,0 +1,397 @@
+{
+  "date": "2026-10-30",
+  "nativeCommit": "d960f633ddb034d0dd828a55216cfc17d012acbd",
+  "engineAbi": "20",
+  "device": {
+    "reportedModel": "Alpha Phone Pixel 10a",
+    "reportedApi": "37",
+    "reportedAbi": "arm64-v8a",
+    "independentHardwareIdentityVerified": false
+  },
+  "scope": "Standalone native library process, fixed committed audio, CPU inference. No app installation, microphone capture, audio playback, network provider request or system image flash.",
+  "input": {
+    "rate": 16000,
+    "samples": 27520,
+    "seconds": 1.72,
+    "wavSha256": "75a36a4d9f7c9be5bac5fdb0d636a95dd1cdad7c11e6054404d8b0edeab4fb2f",
+    "pcmSha256": "a8caf04b48740e4c73408c193400046bf34c7433e0f9f43be9f81cd6f9eb085d",
+    "source": "packages/ui/src/voice/voice-selftest/known-phrase.ts",
+    "scope": "Fixed committed audio only; no microphone recording or user audio."
+  },
+  "engineSha256": "9e658577a8833c5dcb46746762371e10296da60d7675efc124fdf11706fd8644",
+  "results": [
+    {
+      "phase": "capabilities",
+      "abi": "20",
+      "paradee": 1,
+      "stream": 1,
+      "asr": 1
+    },
+    {
+      "phase": "create",
+      "code": 0,
+      "elapsed_ms": 0.104,
+      "rss_kib": 8776,
+      "error": null
+    },
+    {
+      "phase": "load_paradee",
+      "code": 0,
+      "elapsed_ms": 19.499,
+      "rss_kib": 19436,
+      "error": null
+    },
+    {
+      "phase": "paradee_0",
+      "ok": true,
+      "code": 0,
+      "elapsed_ms": 296.106,
+      "first_pcm_ms": 295.97,
+      "samples": 54600,
+      "chunks": 3,
+      "finals": 1,
+      "rms": 0.0486582,
+      "rss_kib": 52368,
+      "error": null
+    },
+    {
+      "phase": "paradee_1",
+      "ok": true,
+      "code": 0,
+      "elapsed_ms": 210.174,
+      "first_pcm_ms": 210.072,
+      "samples": 54600,
+      "chunks": 3,
+      "finals": 1,
+      "rms": 0.0486582,
+      "rss_kib": 52464,
+      "error": null
+    },
+    {
+      "phase": "paradee_2",
+      "ok": true,
+      "code": 0,
+      "elapsed_ms": 169.759,
+      "first_pcm_ms": 169.668,
+      "samples": 54600,
+      "chunks": 3,
+      "finals": 1,
+      "rms": 0.0486582,
+      "rss_kib": 52464,
+      "error": null
+    },
+    {
+      "phase": "paradee_3",
+      "ok": true,
+      "code": 0,
+      "elapsed_ms": 126.259,
+      "first_pcm_ms": 126.178,
+      "samples": 54600,
+      "chunks": 3,
+      "finals": 1,
+      "rms": 0.0486582,
+      "rss_kib": 52464,
+      "error": null
+    },
+    {
+      "phase": "paradee_cancel",
+      "ok": true,
+      "code": -7,
+      "elapsed_ms": 1693.38,
+      "first_pcm_ms": 1693.114,
+      "samples": 24000,
+      "chunks": 1,
+      "finals": 0,
+      "rms": 0.0583177,
+      "rss_kib": 52776,
+      "error": "[libelizainference] paradee_synthesize_alloc: cancelled"
+    },
+    {
+      "phase": "paradee_after_cancel",
+      "ok": true,
+      "code": 0,
+      "elapsed_ms": 113.277,
+      "first_pcm_ms": 113.214,
+      "samples": 54600,
+      "chunks": 3,
+      "finals": 1,
+      "rms": 0.0486582,
+      "rss_kib": 52660,
+      "error": null
+    },
+    {
+      "phase": "load_asr",
+      "code": 0,
+      "elapsed_ms": 85.194,
+      "rss_kib": 89648,
+      "error": null
+    },
+    {
+      "phase": "asr_0",
+      "code": 16,
+      "elapsed_ms": 162.28,
+      "input_samples": 27520,
+      "rate": 16000,
+      "rss_kib": 275072,
+      "text": "What time is it?",
+      "error": null
+    },
+    {
+      "phase": "asr_1",
+      "code": 16,
+      "elapsed_ms": 70.336,
+      "input_samples": 27520,
+      "rate": 16000,
+      "rss_kib": 275076,
+      "text": "What time is it?",
+      "error": null
+    },
+    {
+      "phase": "asr_2",
+      "code": 16,
+      "elapsed_ms": 47.756,
+      "input_samples": 27520,
+      "rate": 16000,
+      "rss_kib": 275076,
+      "text": "What time is it?",
+      "error": null
+    },
+    {
+      "phase": "evict_asr",
+      "code": 0,
+      "elapsed_ms": 7.983,
+      "rss_kib": 56108,
+      "error": null
+    },
+    {
+      "phase": "evict_tts",
+      "code": 0,
+      "elapsed_ms": 0.897,
+      "rss_kib": 16696,
+      "error": null
+    },
+    {
+      "phase": "destroy",
+      "code": 0,
+      "elapsed_ms": 0.002,
+      "rss_kib": 16696,
+      "error": null
+    }
+  ],
+  "additionalResults": [
+    {
+      "phase": "vad_open",
+      "ok": true,
+      "elapsed_ms": 6.505
+    },
+    {
+      "phase": "vad_process_reset",
+      "windows": 53,
+      "total_ms": 81.906,
+      "peak_probability": 0.9999911,
+      "reset_replay_max_difference": 0.0
+    },
+    {
+      "phase": "bge_0",
+      "code": 0,
+      "dimension": 384,
+      "elapsed_ms": 193.814,
+      "l2_norm": 0.999999978
+    },
+    {
+      "phase": "bge_1",
+      "code": 0,
+      "dimension": 384,
+      "elapsed_ms": 166.025,
+      "l2_norm": 0.999999978
+    },
+    {
+      "phase": "bge_2",
+      "code": 0,
+      "dimension": 384,
+      "elapsed_ms": 161.189,
+      "l2_norm": 0.999999978
+    },
+    {
+      "phase": "bge_3",
+      "code": 0,
+      "dimension": 384,
+      "elapsed_ms": 196.436,
+      "l2_norm": 0.999999978
+    },
+    {
+      "phase": "asr_async_cancel",
+      "cancel_code": 0,
+      "result_code": -7,
+      "cancel_to_return_ms": 282.406,
+      "total_ms": 293.611
+    },
+    {
+      "phase": "asr_after_cancel",
+      "result_code": 16,
+      "elapsed_ms": 116.579,
+      "expected_transcript": true
+    }
+  ],
+  "threadComparison": {
+    "scope": "Exploratory single-process samples on the attached device, no product default change and no statistical performance guarantee. Every row uses identical fixed audio and input hashes.",
+    "results": [
+      {
+        "threads": 1,
+        "exitCode": 0,
+        "asr": [
+          {
+            "phase": "asr_0",
+            "code": 16,
+            "elapsed_ms": 192.054,
+            "input_samples": 27520,
+            "rate": 16000,
+            "rss_kib": 278616,
+            "text": "What time is it?",
+            "error": null
+          },
+          {
+            "phase": "asr_1",
+            "code": 16,
+            "elapsed_ms": 123.801,
+            "input_samples": 27520,
+            "rate": 16000,
+            "rss_kib": 278628,
+            "text": "What time is it?",
+            "error": null
+          },
+          {
+            "phase": "asr_2",
+            "code": 16,
+            "elapsed_ms": 135.216,
+            "input_samples": 27520,
+            "rate": 16000,
+            "rss_kib": 278628,
+            "text": "What time is it?",
+            "error": null
+          }
+        ]
+      },
+      {
+        "threads": 2,
+        "exitCode": 0,
+        "asr": [
+          {
+            "phase": "asr_0",
+            "code": 16,
+            "elapsed_ms": 163.074,
+            "input_samples": 27520,
+            "rate": 16000,
+            "rss_kib": 276356,
+            "text": "What time is it?",
+            "error": null
+          },
+          {
+            "phase": "asr_1",
+            "code": 16,
+            "elapsed_ms": 75.869,
+            "input_samples": 27520,
+            "rate": 16000,
+            "rss_kib": 276356,
+            "text": "What time is it?",
+            "error": null
+          },
+          {
+            "phase": "asr_2",
+            "code": 16,
+            "elapsed_ms": 69.917,
+            "input_samples": 27520,
+            "rate": 16000,
+            "rss_kib": 276356,
+            "text": "What time is it?",
+            "error": null
+          }
+        ]
+      },
+      {
+        "threads": 4,
+        "exitCode": 0,
+        "asr": [
+          {
+            "phase": "asr_0",
+            "code": 16,
+            "elapsed_ms": 152.538,
+            "input_samples": 27520,
+            "rate": 16000,
+            "rss_kib": 273472,
+            "text": "What time is it?",
+            "error": null
+          },
+          {
+            "phase": "asr_1",
+            "code": 16,
+            "elapsed_ms": 57.437,
+            "input_samples": 27520,
+            "rate": 16000,
+            "rss_kib": 275516,
+            "text": "What time is it?",
+            "error": null
+          },
+          {
+            "phase": "asr_2",
+            "code": 16,
+            "elapsed_ms": 46.718,
+            "input_samples": 27520,
+            "rate": 16000,
+            "rss_kib": 275516,
+            "text": "What time is it?",
+            "error": null
+          }
+        ]
+      },
+      {
+        "threads": 8,
+        "exitCode": 0,
+        "asr": [
+          {
+            "phase": "asr_0",
+            "code": 16,
+            "elapsed_ms": 344.16,
+            "input_samples": 27520,
+            "rate": 16000,
+            "rss_kib": 268080,
+            "text": "What time is it?",
+            "error": null
+          },
+          {
+            "phase": "asr_1",
+            "code": 16,
+            "elapsed_ms": 87.186,
+            "input_samples": 27520,
+            "rate": 16000,
+            "rss_kib": 268084,
+            "text": "What time is it?",
+            "error": null
+          },
+          {
+            "phase": "asr_2",
+            "code": 16,
+            "elapsed_ms": 92.204,
+            "input_samples": 27520,
+            "rate": 16000,
+            "rss_kib": 268084,
+            "text": "What time is it?",
+            "error": null
+          }
+        ]
+      }
+    ]
+  },
+  "limits": [
+    "One fixed phrase, one short embedding input, and one attached device are not a speech-quality corpus or performance guarantee.",
+    "No conversational Cerebras inference, app lifecycle, on-device voice I/O, thermals or battery acceptance.",
+    "No production default tuning is inferred from four exploratory thread settings.",
+    "Full AOSP image boot, physical hardware identity and both branded applications remain separate acceptance gates."
+  ],
+  "evidence": {
+    "bytes": 15362,
+    "sha256": "5496a778f184f0bbbfedd8420681de5521971144bbf65892a0a48300c4d64d6b",
+    "url": "https://github.com/elizaOS/eliza/releases/download/pr-evidence-14/native-abi20-fixed-audio-20261030-evidence.tar.gz",
+    "remoteSha256": "5496a778f184f0bbbfedd8420681de5521971144bbf65892a0a48300c4d64d6b"
+  }
+}
