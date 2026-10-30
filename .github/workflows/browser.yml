@@ -43,6 +43,12 @@ jobs:
       - name: Prepare pinned JSON dependency for host contract tests
         shell: bash
         run: bash scripts/ci/prepare-host-test-json.sh
+      - name: Prepare the pinned SDK for actual collector and routing tests
+        env:
+          ALPHA_RUNTIME_GIT_CACHE: ${{ github.workspace }}/vendor/eliza
+          NODE_OPTIONS: --max-old-space-size=4096
+          RUN_TURBO_CONCURRENCY: '1'
+        run: npm run agent:prepare
       - run: npm run verify
       # Recorded develop compare; warns (never networks) when develop cannot reach the pin.
       - name: Report upstream develop reachability

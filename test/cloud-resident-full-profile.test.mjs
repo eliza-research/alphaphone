@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {createCloudResidentHost} from './fixtures/product-character-host.mjs';
 import {CLOUD_MODEL} from '../scripts/cloud-resident-host.mjs';
+import {preparedSdkForTests} from './fixtures/prepared-sdk.mjs';
 
 function recordingLauncher(launches) {
   return async options => {
@@ -95,8 +96,9 @@ test('actual pinned SDK collector retains the full host assistant and preserves 
     await host.bind({token: 'synthetic-cloud-only', credentialId: 'collector', reference: 'collector-ref'});
     const config = JSON.parse(await fs.readFile(join(profile, 'eliza.json'), 'utf8'));
     const actualEnvironment = launches[0].env;
+    const {source, bun} = preparedSdkForTests();
     function collect(extra = {}) {
-      const run = spawnSync(process.env.ALPHA_BUN || 'bun', ['--no-install', '--conditions=eliza-source', 'test/fixtures/cloud-plugin-selection.mjs'], {cwd: process.cwd(), env: {...actualEnvironment, ...extra, ...(process.env.ALPHA_CLOUD_COLLECTOR_SOURCE ? {ALPHA_CLOUD_COLLECTOR_SOURCE: process.env.ALPHA_CLOUD_COLLECTOR_SOURCE} : {}), GIT_NO_LAZY_FETCH: '1', GIT_NO_REPLACE_OBJECTS: '1', GIT_OPTIONAL_LOCKS: '0'}, input: JSON.stringify({config}), encoding: 'utf8', timeout: 20000});
+      const run = spawnSync(bun, ['--no-install', '--conditions=eliza-source', 'test/fixtures/cloud-plugin-selection.mjs'], {cwd: process.cwd(), env: {...actualEnvironment, ...extra, ALPHA_CLOUD_COLLECTOR_SOURCE: source, ALPHA_BUN: bun, GIT_NO_LAZY_FETCH: '1', GIT_NO_REPLACE_OBJECTS: '1', GIT_OPTIONAL_LOCKS: '0'}, input: JSON.stringify({config}), encoding: 'utf8', timeout: 20000});
       assert.equal(run.status, 0, run.stderr);
       const line = run.stdout.split('\n').find(row => row.startsWith('SDK_PLUGIN_SELECTION='));
       assert.ok(line, 'the actual collector must return its selection');

@@ -117,9 +117,10 @@ The default manual profile and automatic resident qualification remain `native`.
 ## Setup
 
 ```sh
-git clone --recurse-submodules https://github.com/AlphaCompute/alphaphone.git
+git clone --recurse-submodules https://github.com/eliza-research/alphaphone.git
 cd alphaphone
 npm ci
+npm run agent:prepare
 npm run verify
 npm run dev
 ```
@@ -169,6 +170,7 @@ verification applies the same audit to the extracted web assets of every distrib
 
 ```sh
 npm ci
+npm run agent:prepare
 npx playwright install chromium
 npm run verify
 npm run test:browser              # development surfaces on (switch set by Playwright)
@@ -176,6 +178,11 @@ npm run test:browser:production   # production build, switch off: no mock/dev su
 npm run dev                       # local agent + development server, switch on
 npm run dev:ui                    # renderer-only development server, switch on
 ```
+
+Verification exercises the real pinned SDK's plugin collector and model routing.
+Prepare its installed dependencies with the pinned Bun version once per upstream
+pin before verifying. Tests discover that authenticated prepared source without
+requiring an environment override; they do not call an inference provider.
 
 For configured regional Maps, prepare the data once as described in
 [regional Maps setup](docs/maps-regional-validation.md), then run `npm run dev:maps`.

@@ -6,6 +6,7 @@ import {join,resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {createCloudResidentHost} from './fixtures/product-character-host.mjs';
 import {CLOUD_MODEL} from '../scripts/cloud-resident-host.mjs';
+import {preparedSdkForTests} from './fixtures/prepared-sdk.mjs';
 
 function recordingLauncher(launches) {
  return async options=>{launches.push(options);let finish;return {completion:new Promise(done=>{finish=done;}),async stop(){finish({code:0});}};};
@@ -14,8 +15,7 @@ function recordingLauncher(launches) {
 // Exercise the real SDK's routing normalization, runtime projection and dispatch
 // capability gate. No runtime or registered provider is instantiated or called.
 function selectEmbeddingRoute(config,env) {
- assert.ok(process.env.ALPHA_CLOUD_COLLECTOR_SOURCE,'a verified prepared SDK is required');
- assert.ok(process.env.ALPHA_BUN,'the pinned Bun must be supplied');
+ const {source,bun}=preparedSdkForTests();
  const code=`import {readFileSync} from 'node:fs';import {join} from 'node:path';import {pathToFileURL} from 'node:url';
  const {config,env}=JSON.parse(readFileSync(0,'utf8')),source=process.env.ALPHA_CLOUD_COLLECTOR_SOURCE;
  const load=p=>import(pathToFileURL(join(source,p)).href);
@@ -26,7 +26,7 @@ function selectEmbeddingRoute(config,env) {
  const settings=buildRuntimeSettingsProjection(config,{env});
  const disabled=isCanonicalModelCapabilityDisabled({getSetting:key=>settings[key]},'TEXT_EMBEDDING');
  console.log('EMBEDDING_ROUTE='+JSON.stringify({cloud:resolveElizaCloudTopology(config).services.embeddings,disabled,enabled:settings.ELIZA_CANONICAL_EMBEDDINGS_ENABLED,canonicalRoute:buildElizaCloudServiceRoute()}));`;
- const run=spawnSync(process.env.ALPHA_BUN,['--no-install','--conditions=eliza-source','--eval',code],{env:{...process.env},input:JSON.stringify({config,env}),encoding:'utf8',timeout:20000});
+ const run=spawnSync(bun,['--no-install','--conditions=eliza-source','--eval',code],{env:{...process.env,ALPHA_CLOUD_COLLECTOR_SOURCE:source},input:JSON.stringify({config,env}),encoding:'utf8',timeout:20000});
  assert.equal(run.status,0,run.stderr);
  const line=run.stdout.split('\n').find(row=>row.startsWith('EMBEDDING_ROUTE='));assert.ok(line,run.stdout);
  return JSON.parse(line.slice('EMBEDDING_ROUTE='.length));
