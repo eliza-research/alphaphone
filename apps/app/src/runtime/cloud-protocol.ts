@@ -1,4 +1,4 @@
-import {googleWorkspaceRedirectAllowed} from './google-workspace-return';
+import {googleWorkspaceRedirectAllowed} from './google-workspace-return.ts';
 import {productionCloud, stagingCloud} from './cloud-deployment.generated.ts';
 import {browserCloudResidentEnabled,browserCloudResidentEnvironment} from './browser-cloud-resident.ts';
 import {calendarSyncHttp,type CalendarSyncRequest} from './calendar-linked-provider.ts';

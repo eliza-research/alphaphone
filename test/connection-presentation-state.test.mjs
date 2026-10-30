@@ -87,7 +87,7 @@ function preflightFixture(balance, options = {}) {
     AbortController, DOMException, document: {hidden: false}, navigator: {onLine: true},
     residentCloudFlow: () => true, residentAlwaysPresent: true,
     residentStartInBackground: false, pendingBillingReview: null,
-    operation: null, requestedCameraContinuation: undefined,
+    operation: null, requestedCameraContinuation: undefined, clientObservationSession: undefined,
     NO_AGENT_SEND: 'No selected session', NO_AGENT_VOICE: 'No selected session',
     INFERENCE_OFFLINE_NOTICE: 'Offline',
     noSessionError: () => Error('No selected session'),
