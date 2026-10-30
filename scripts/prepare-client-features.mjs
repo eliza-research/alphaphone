@@ -49,6 +49,7 @@ export const CLIENT_FEATURE_PATHS = [
   'packages/ui/src/agent-surface/types.ts',
   'packages/ui/src/agent-surface/useAgentElement.ts',
   'packages/ui/src/api/api-error.ts',
+  'packages/ui/src/api/conversation-turn-controller.ts',
   'packages/ui/src/components/composites/page-panel/content-state.tsx',
   'packages/ui/src/components/composites/page-panel/index.ts',
   'packages/ui/src/components/composites/page-panel/page-panel-collapsible-section.tsx',
