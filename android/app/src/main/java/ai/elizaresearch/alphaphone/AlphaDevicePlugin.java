@@ -1,5 +1,6 @@
 package ai.elizaresearch.alphaphone;
 
+import ai.eliza.plugins.system.AppTextScale;
 import ai.eliza.plugins.system.SystemFacts;
 import ai.eliza.plugins.system.SystemSettingsPages;
 import ai.eliza.plugins.system.SystemShade;
@@ -45,15 +46,17 @@ public final class AlphaDevicePlugin extends Plugin {
   android.app.Activity activity=getActivity();if(activity==null){call.reject("Open and unlock Alpha before copying.");return;}
   activity.runOnUiThread(()->{if(!shareForeground(activity)){call.reject("Open and unlock Alpha before copying.");return;}try{android.content.ClipboardManager clipboard=activity.getSystemService(android.content.ClipboardManager.class);if(clipboard==null)throw new IllegalStateException();clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Alpha text",text));call.resolve();}catch(RuntimeException unavailable){call.reject("Clipboard unavailable.");}});
  }
- static int textScalePercent(Context context){int value=context.getSharedPreferences("alpha-appearance",Context.MODE_PRIVATE).getInt("text-scale-percent",100);return value>=75&&value<=150?value:100;}
- static int effectiveTextZoom(Context context,int percent){float scale=context.getResources().getConfiguration().fontScale;if(!Float.isFinite(scale)||scale<=0)scale=1;return Math.max(1,Math.round(percent*scale));}
- static void applyTextScale(MainActivity activity){activity.getBridge().getWebView().getSettings().setTextZoom(effectiveTextZoom(activity,textScalePercent(activity)));}
+ private static AppTextScale textScale(Context context){return new AppTextScale(context,"alpha-appearance","text-scale-percent");}
+ static int textScalePercent(Context context){return textScale(context).readPercent();}
+ static int effectiveTextZoom(Context context,int percent){return AppTextScale.effectiveTextZoom(percent,context.getResources().getConfiguration().fontScale);}
+ static void applyTextScale(MainActivity activity){textScale(activity).readAndApply(activity.getBridge().getWebView().getSettings());}
  @PluginMethod public void setTextScale(PluginCall call){
-  Integer percent=call.getInt("percent");if(percent==null||percent<75||percent>150){call.reject("Text size must be between75 and150 percent");return;}
-  getActivity().runOnUiThread(()->{
-   if(!(getActivity() instanceof MainActivity)||getActivity().isFinishing()||getActivity().isDestroyed()){call.reject("Alpha view is unavailable");return;}
-   if(!getContext().getSharedPreferences("alpha-appearance",Context.MODE_PRIVATE).edit().putInt("text-scale-percent",percent).commit()){call.reject("Text size could not be saved");return;}
-   applyTextScale((MainActivity)getActivity());JSObject out=new JSObject();out.put("textScalePercent",textScalePercent(getContext()));out.put("effectiveTextZoom",getBridge().getWebView().getSettings().getTextZoom());call.resolve(out);
+  final int percent;try{percent=AppTextScale.requirePercent(call.getData().opt("percent"));}catch(IllegalArgumentException invalid){call.reject(invalid.getMessage());return;}
+  final android.app.Activity host=getActivity();if(!(host instanceof MainActivity)){call.reject("Alpha view is unavailable");return;}
+  host.runOnUiThread(()->{
+   if(getActivity()!=host||host.isFinishing()||host.isDestroyed()||getBridge()==null||getBridge().getWebView()==null){call.reject("Alpha view is unavailable");return;}
+   try{AppTextScale.Receipt receipt=textScale(getContext()).writeAndApply(percent,getBridge().getWebView().getSettings());JSObject out=new JSObject();out.put("textScalePercent",receipt.textScalePercent);out.put("effectiveTextZoom",receipt.effectiveTextZoom);call.resolve(out);}
+   catch(RuntimeException unavailable){call.reject(unavailable.getMessage()==null?"Text size could not be confirmed":unavailable.getMessage());}
   });
  }
  @PluginMethod public void snapshot(PluginCall call) {

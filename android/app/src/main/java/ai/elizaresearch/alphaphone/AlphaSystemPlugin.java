@@ -10,6 +10,8 @@ import com.getcapacitor.annotation.Permission;
 /** Product policy stays in Alpha; shared System behavior is unchanged for other hosts. */
 @CapacitorPlugin(name="ElizaSystem",permissions={@Permission(alias="camera",strings={Manifest.permission.CAMERA})})
 public final class AlphaSystemPlugin extends ai.eliza.plugins.system.SystemPlugin {
+ @Override protected String textScalePreferencesName(){return "alpha-appearance";}
+ @Override protected String textScalePreferenceKey(){return "text-scale-percent";}
  @Override @PluginMethod public void requestPermissions(PluginCall call){LateLaunch.ask(call,()->super.requestPermissions(call));}
  @Override @PluginMethod public void requestRole(PluginCall call){LateLaunch.ask(call,()->super.requestRole(call));}
  @Override @PluginMethod public void setFlashlight(PluginCall call){LateLaunch.ask(call,()->super.setFlashlight(call));}
