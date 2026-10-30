@@ -646,27 +646,42 @@ function showGoogleMfa(outcome: Extract<CloudSignInGoogleOutcome, { status: 'mfa
 function showPostSignInSetup() {
   if (state.cloudAccount) update({open: false, purpose: 'agent', setupRevision: (state.setupRevision ?? 0) + 1});
 }
+/**
+ * A verified sign-in on the resident flow (the in-app code or Google step, or the browser hand-off).
+ * The verified step stays on screen, as "Signing in…", only while the stored key is admitted
+ * (identity and plan reads). Access setup then opens at once and the agent restarts behind it with
+ * the key bound, shown as starting: setup never waits for the agent's first boot. Failures keep the
+ * earlier rules: a failed start recovers and the caller's ensureResident() starts it again (P-43),
+ * and a key Cloud refused right after issuing it is removed rather than kept for a retry that cannot work.
+ */
+async function residentSignedIn(signal: AbortSignal, unconfirmed: boolean) {
+  const issued = (await cloudCredentialStore.read(residentEnvironment()))?.credentialId;
+  signal.throwIfAborted(); retire();
+  // The retired agent's AI binding no longer applies; the restarted agent reports its own (connectResident).
+  update({ residentInference: null, message: 'Signing in…' });
+  let refused = false, setup = false;
+  try {
+    const admission = await admitCloudResident(signal);
+    refused = !state.cloudAccount && state.residentPlanNotice !== 'offline' && !!issued && (await cloudCredentialStore.read(residentEnvironment()).catch(() => null))?.credentialId === issued;
+    signal.throwIfAborted();
+    update({ signIn: null, message: '', ...(refused ? {} : { residentStarting: true }) });
+    if (!refused) { showPostSignInSetup(); setup = true; }
+    await connectResident(signal, admission);
+    // A binding notice the start reported stays within setup (it shows connection errors), not over it.
+    if (setup && state.cloudAccount) update({ open: false, purpose: 'agent' });
+  } catch (error) { if (residentAlwaysPresent && !active) update({ kind: 'recovering' }); update({ signIn: null }); if (!setup) showPostSignInSetup(); throw error; }
+  if (refused) {
+    await cloudCredentialStore.clear(residentEnvironment());
+    update({ residentSavedCredential: false, open: true, error: `${cloudServiceName(cloud.environment)} refused this sign-in. Your agent keeps running; sign in again to turn AI on.` });
+  } else if (unconfirmed) update({ message: `Signed in. ${cloudServiceName(cloud.environment)} did not confirm revoking the sign-in this phone used before.` });
+}
 /** The key is stored; the existing identity, entitlement and agent paths take over unchanged. */
 async function signedIn(client: CloudProtocol, outcome: CloudSignInAuthenticated, signal: AbortSignal) {
   const created = outcome.accountCreated === true;
   prepareSignInReplacement();
-  update({ signIn: null, accountCreated: created });
   const unconfirmed = outcome.previousSignIn === 'unconfirmed';
-  if (residentCloudFlow()) {
-    // Same admission as the browser hand-off (residentBrowserLogin): bind the new key, and remove a
-    // key Cloud refused right after issuing it rather than keep it for a retry that cannot work.
-    const issued = (await cloudCredentialStore.read(residentEnvironment()))?.credentialId;
-    signal.throwIfAborted(); retire();
-    try { await connectResident(signal); } catch (error) { if (residentAlwaysPresent && !active) update({ kind: 'recovering' }); showPostSignInSetup(); throw error; }
-    if (!state.cloudAccount && state.residentPlanNotice !== 'offline' && issued && (await cloudCredentialStore.read(residentEnvironment()).catch(() => null))?.credentialId === issued) {
-      await cloudCredentialStore.clear(residentEnvironment());
-      update({ residentSavedCredential: false, open: true, error: `${cloudServiceName(cloud.environment)} refused this sign-in. Your agent keeps running; sign in again to turn AI on.` });
-      return;
-    }
-    if (unconfirmed) update({ message: `Signed in. ${cloudServiceName(cloud.environment)} did not confirm revoking the sign-in this phone used before.` });
-    showPostSignInSetup();
-    return;
-  }
+  if (residentCloudFlow()) { update({ accountCreated: created }); await residentSignedIn(signal, unconfirmed); return; }
+  update({ signIn: null, accountCreated: created });
   const accountOnly = state.purpose === 'cloud-account';
   await verifyService(client, signal);
   if (!active) save({ kind: 'none' });
@@ -774,7 +789,9 @@ async function work(message: string, action: (signal: AbortSignal) => Promise<vo
     }
     update({ error: errorMessage(error), ...(background&&!state.open?{purpose:residentCloudFlow()?'agent' as const:'cloud-account' as const}:{}), open: true, message: '' });
   }
-  finally { if (operation === controller) { operation = null; residentStartInBackground = false; } update({ busy: false, ...(background&&!state.open?{message:''}:{}) }); runQueuedResidentRebind(); runQueuedSignInReturn(); }
+  // A resident start ends with its operation, in one update: setup shown behind the start never
+  // sees a still-busy connection that is no longer starting.
+  finally { if (operation === controller) { operation = null; residentStartInBackground = false; } update({ busy: false, residentStarting: false, ...(background&&!state.open?{message:''}:{}) }); runQueuedResidentRebind(); runQueuedSignInReturn(); }
 }
 /** Start (or restart) the resident. A failure leaves the `recovering` state with a Retry, never "no agent". */
 async function startResident(message = RESIDENT_STARTING, background = true) {
@@ -782,7 +799,6 @@ async function startResident(message = RESIDENT_STARTING, background = true) {
     update({ residentStarting: true, ...(active ? {} : { kind: 'starting' as const, name: RESIDENT_NAME }) });
     try { await connectResident(signal); }
     catch (error) { if (residentAlwaysPresent && !active) update({ kind: 'recovering' }); throw error; }
-    finally { update({ residentStarting: false }); }
     // A start the owner asked for (Retry, Check plan again) keeps the dialog open while AI is not ready.
     if (!background && isAndroid && !testMocksEnabled && state.residentInference !== 'cloud') update({ open: true });
   }, background);
@@ -1135,10 +1151,11 @@ function residentBindingController(environment:CloudEnvironment,client:CloudProt
 /** The packaged-runtime refusal. Android production without the runtime is a non-distributable
  * developer build (--allow-unpackaged-runtime); browser development needs the host agent running. */
 const RESIDENT_UNPACKAGED = !testMocksEnabled ? 'This developer build does not include the on-device agent.' : !isAndroid && browserLocalAgentEnabled ? 'The local agent on this computer is not running. Start it with bun run dev.' : webCloudUnavailable() ? 'The local agent is unavailable here. Alpha runs its agent on the phone; this preview needs the local agent.' : 'The local agent is unavailable in this version. Connect a remote agent or sign in with Cloud.';
-async function connectResident(signal: AbortSignal) {
+/** `admitted`: the admission a sign-in just made for this start (residentSignedIn); otherwise it is read here. */
+async function connectResident(signal: AbortSignal, admitted?: ResidentAdmission) {
   let admission:ResidentAdmission|null=null,bound:Awaited<ReturnType<typeof applyResidentBinding>>|null=null;
   if(residentCloudFlow()){
-    admission=await admitCloudResident(signal);
+    admission=admitted??await admitCloudResident(signal);
     // QA on staging (or in a browser) stops at plan admission: the on-device agent's Cloud
     // inference binding is production-only, so nothing is started under another environment.
     if(testMocksEnabled&&!residentBindable()){update({open:true,message:`Plan ${admission.binding==='cloud'?'admitted':'not admitted'} on ${residentEnvironment()} (subscription gate QA). The on-device agent is not started in this mode.`,error:''});return;}
@@ -1758,17 +1775,9 @@ async function residentBrowserLoginAction(signal: AbortSignal) {
   try{login=await cloud.login(signal,()=>update({message:`Finish signing in to ${cloudServiceName(cloud.environment)} in your browser, then return here.`}));}
   // A cancelled or failed sign-in leaves the stored sign-in as it was: re-admit it afterwards.
   catch(error){if(kept)residentRebinds().queue();throw error;}
-  const issued=(await cloudCredentialStore.read(residentEnvironment()))?.credentialId;
   // Admission binds the new sign-in: native attaches when the process already matches, otherwise
   // it restarts the agent once (a process bound to the replaced key is stopped by the write).
-  signal.throwIfAborted(); retire();
-  try{await connectResident(signal);}catch(error){if(residentAlwaysPresent&&!active)update({kind:'recovering'});showPostSignInSetup();throw error;}
-  // Cloud refused the key it just issued. It is removed rather than kept for a retry that cannot
-  // work; the agent keeps running without Cloud inference.
-  if(!state.cloudAccount&&state.residentPlanNotice!=='offline'&&issued&&(await cloudCredentialStore.read(residentEnvironment()).catch(()=>null))?.credentialId===issued){await cloudCredentialStore.clear(residentEnvironment());update({residentSavedCredential:false,open:true,error:`${cloudServiceName(cloud.environment)} refused this sign-in. Your agent keeps running; sign in again to turn AI on.`});return;}
-  // A verified account finishes through setup; AI binding/plan warnings stay visible there.
-  if(login.previousSignIn==='unconfirmed')update({message:`Signed in. ${cloudServiceName(cloud.environment)} did not confirm revoking the sign-in this phone used before.`});
-  showPostSignInSetup();
+  await residentSignedIn(signal,login.previousSignIn==='unconfirmed');
 }
 async function browserCloudLoginAction(environment: CloudEnvironment, signal: AbortSignal) {
   const accountOnly=state.purpose==='cloud-account';
@@ -2159,7 +2168,7 @@ export const connectionController = {
     const view=state.residentSubscription,account=state.cloudAccount,plan=view&&view.kind!=='checking'?describeSubscription(view,serviceName):null;
     const expiresAt=account?.expiresAt??null;
     // The agent always runs; this says only whether Eliza Cloud AI is connected to it.
-    const inference=state.residentInference==='unknown'?'Status unconfirmed':state.residentInference==='cloud'?serviceName:state.residentPlanNotice==='offline'?'Unavailable · Cloud unreachable':state.residentInference==='unavailable'?(account?(view?.kind==='inactive'?'Unavailable · check Cloud account':'Unavailable · Cloud status unconfirmed'):'Unavailable · sign in'):'Starting…';
+    const inference=state.residentInference==='unknown'?'Status unconfirmed':state.residentInference==='cloud'?serviceName:state.residentPlanNotice==='offline'?'Unavailable · Cloud unreachable':state.residentInference==='unavailable'?(account?(view?.kind==='inactive'?'Unavailable · check Cloud account':'Unavailable · Cloud status unconfirmed'):'Unavailable · sign in'):state.kind==='recovering'?'Unavailable · agent not running':'Starting…';
     if(state.residentPlanNotice==='offline'&&!account){const recent=readPlanAdmission();return {signedIn:false,offline:true,account:null,plan:recent?`${recent.planName} · offline`:'Offline',status:recent?.status??null,endsAt:state.planEndsAt??null,allowance:null,limit:null,keyExpiresAt:null,keyExpiring:false,inference};}
     // The plan allowance Cloud reports and the latest Cloud limit with its remaining wait (#410, P-26).
     const summary=account?subscriptionSummary(view,{lastLimit:state.lastServiceLimit??null,lastLimitAt:state.lastServiceLimit?.observedAt??null,serviceName}):null;
@@ -3188,6 +3197,9 @@ export function ConnectionChooser() {
   const residentPlan=residentNeedsPlan&&residentPlanView?.kind==='unavailable'&&residentPlanView.reason!=='not-published'
     ?{...residentPlanDescribed,detail:`${serviceName} could not confirm a plan for this account right now. Check again, redeem a subscription code or choose a plan. Your data on this phone is kept.`}:residentPlanDescribed;
   const residentPlanRecheck=residentPlanUnchecked||residentPlanView.kind==='inactive'||residentPlanView.kind==='unavailable';
+  // A signed-in agent that is starting has no AI binding yet: a calm starting state, never "AI is off"
+  // or plan and billing copy (owner report 2026-10-30). The plan panel keeps its account controls.
+  const residentAiStarting=!!snapshot.cloudAccount&&!residentSignInRejected&&!snapshot.session&&snapshot.kind==='starting'&&!snapshot.residentRecoveryReason&&!planPanel;
   const residentAiOff=residentFirstSignIn?`Sign in to ${serviceName} to use AI. Your agent keeps running on this phone.`:snapshot.residentSavedCredential?`AI is off. Retry your saved ${serviceName} sign-in or sign in again.`:`AI is off. Sign in to ${serviceName} for AI.`;
   const keyExpiresAt=snapshot.cloudAccount?.expiresAt;
   const keyExpiring=keyExpiresAt!==undefined&&keyExpiresAt-Date.now()<=CLOUD_KEY_EXPIRY_WARNING_MS;
@@ -3200,9 +3212,9 @@ export function ConnectionChooser() {
       {snapshot.kind==='recovering'&&!snapshot.session&&!snapshot.residentRecoveryReason&&<div className="alpha-connection-actions"><button disabled={snapshot.busy} onClick={()=>void connectionController.startLocal()}>Retry</button></div>}
       <ResidentRecoveryPanel snapshot={snapshot}/>
       {snapshot.session&&!residentFirstSignIn&&<div className="alpha-connection-actions"><button disabled={snapshot.busy} onClick={()=>void connectionController.startLocal()}>Reconnect agent</button></div>}
-    </section>}
-    <section aria-label="AI inference"><h3>AI</h3>{!residentFirstSignIn&&<p>{snapshot.residentRecoveryReason?'AI is unavailable while your agent needs recovery.':snapshot.cloudAccount&&!residentSignInRejected?(snapshot.residentInference==='cloud'?`Your agent uses ${serviceName} for AI.`:snapshot.residentInference==='unavailable'?`AI is off. Your saved ${serviceName} sign-in is retained; check the connection below.`:'AI connection is not confirmed. Your agent still runs on this device.'):`Your agent runs with AI off until you sign in to ${serviceName}.`}</p>}
-      {snapshot.cloudAccount&&!residentSignInRejected?<>
+    </section>
+    <section aria-label="AI inference"><h3>AI</h3>{!residentFirstSignIn&&<p>{snapshot.residentRecoveryReason?'AI is unavailable while your agent needs recovery.':residentAiStarting?'Waiting for your agent to start.':snapshot.cloudAccount&&!residentSignInRejected?(snapshot.residentInference==='cloud'?`Your agent uses ${serviceName} for AI.`:snapshot.residentInference==='unavailable'?`AI is off. Your saved ${serviceName} sign-in is retained; check the connection below.`:'AI connection is not confirmed. Your agent still runs on this device.'):`Your agent runs with AI off until you sign in to ${serviceName}.`}</p>}
+      {residentAiStarting?accountCreatedNotice:snapshot.cloudAccount&&!residentSignInRejected?<>
         {accountCreatedNotice}
         {(planPanel||residentNeedsPlan)&&<p>{snapshot.cloudAccount.email||`Account ${snapshot.cloudAccount.userId}`}</p>}
         <section aria-label={`${serviceName} plan`}><p><strong>{residentPlan.headline}</strong></p>{residentPlan.detail&&<p>{residentPlan.detail}</p>}{snapshot.planEndsAt&&!residentNeedsPlan?<p>Plan runs until {day(snapshot.planEndsAt)}.</p>:null}</section>
@@ -3214,7 +3226,7 @@ export function ConnectionChooser() {
       </>:<p>{residentSignInRejected?(snapshot.error?`Sign in to ${serviceName} again to turn AI back on.`:'Your saved Cloud sign-in is no longer valid.'):residentAiOff}</p>}
       {residentOffline&&<p role="status">{OFFLINE_NOTICE}</p>}
       <div className="alpha-connection-actions">
-      {snapshot.cloudAccount&&!residentSignInRejected ? <>
+      {residentAiStarting?null:snapshot.cloudAccount&&!residentSignInRejected ? <>
         {residentNeedsPlan?<button disabled={snapshot.busy} onClick={()=>void connectionController.residentManagePlan()}>{CHOOSE_PLAN_LABEL}</button>:(residentPlan.manage||planPanel)&&<button disabled={snapshot.busy} onClick={()=>void connectionController.residentManagePlan()}>{residentPlan.manageLabel||MANAGE_PLAN_LABEL}</button>}
         {!snapshot.residentRecoveryReason&&(residentPlanRecheck||residentNeedsPlan)?<button disabled={snapshot.busy} onClick={()=>void connectionController.startLocal()}>Check plan again</button>:planPanel&&<button disabled={snapshot.busy} onClick={()=>connectionController.close()}>Done</button>}
         <button disabled={snapshot.busy} onClick={()=>void connectionController.cloudSignOut()}>Sign out</button>

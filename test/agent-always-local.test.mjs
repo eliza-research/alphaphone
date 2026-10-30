@@ -80,10 +80,24 @@ test('plan state never stops or withholds the on-device agent', () => {
   // In-app sign-in (owner directive 2026-10-14) once Cloud is ready; the browser hand-off until then.
   assert.ok(login.includes('async residentCloudLogin() { await connectionController.beginSignIn(residentEnvironment()); }'));
   const browser = between(ui, 'async function residentBrowserLoginAction(', 'async function browserCloudLoginAction(');
-  assert.ok(browser.indexOf('cloud.login(') >= 0 && browser.indexOf('connectResident(signal)') > browser.indexOf('cloud.login('), 'reconnect only after the browser sign-in returned');
+  assert.ok(browser.indexOf('cloud.login(') >= 0 && browser.indexOf('await residentSignedIn(signal,') > browser.indexOf('cloud.login('), 'reconnect only after the browser sign-in returned');
   assert.match(browser, /catch\(error\)\{if\(kept\)residentRebinds\(\)\.queue\(\);throw error;\}/, 'a cancelled sign-in re-admits a kept sign-in');
   const signedIn = between(ui, 'async function signedIn(', '/** The development hosted-agent client.');
-  assert.ok(!signedIn.includes('stopLocalAgent(') && signedIn.indexOf('retire();') >= 0 && signedIn.indexOf('await connectResident(signal)') > signedIn.indexOf('retire();'), 'the in-app sign-in reconnects once the key is stored');
+  assert.ok(signedIn.includes('if (residentCloudFlow()) { update({ accountCreated: created }); await residentSignedIn(signal, unconfirmed); return; }'), 'the in-app sign-in finishes through the shared resident step');
+  // Both sign-ins reconnect once the key is stored, with the admission they made: access setup opens
+  // as soon as the account is admitted and the agent restarts behind it, shown as starting (owner
+  // report 2026-10-30); setup never waits for the agent's first boot.
+  const resident = between(ui, 'async function residentSignedIn(', '/** The key is stored;');
+  const at = (text) => { const index = resident.indexOf(text); assert.ok(index >= 0, text); return index; };
+  assert.ok(!resident.includes('stopLocalAgent('));
+  assert.ok(at('retire();') < at("update({ residentInference: null, message: 'Signing in…' });"));
+  assert.ok(at("update({ residentInference: null, message: 'Signing in…' });") < at('const admission = await admitCloudResident(signal);'));
+  assert.ok(at('const admission = await admitCloudResident(signal);') < at("update({ signIn: null, message: '', ...(refused ? {} : { residentStarting: true }) });"));
+  assert.ok(at("update({ signIn: null, message: '', ...(refused ? {} : { residentStarting: true }) });") < at('showPostSignInSetup(); setup = true;'));
+  assert.ok(at('showPostSignInSetup(); setup = true;') < at('await connectResident(signal, admission);'));
+  // A refused key is removed after the agent restarted without it, and never opens setup.
+  assert.ok(at('if (!refused) { showPostSignInSetup(); setup = true; }') < at('await cloudCredentialStore.clear(residentEnvironment());'));
+  assert.match(between(ui, 'async function connectResident(', 'async function connectCloud('), /admission=admitted\?\?await admitCloudResident\(signal\);/);
   const signOut = between(ui, 'async cloudSignOut()', 'async mock()');
   assert.ok(!signOut.includes('stopLocalAgent(') && signOut.includes('else{retire();try{await connectResident(signal);}'));
   // Cloud inference is unbound (native stops a process holding the key) before the key is revoked.
