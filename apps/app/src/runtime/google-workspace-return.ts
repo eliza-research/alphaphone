@@ -35,15 +35,15 @@ export function nativeGoogleWorkspaceReturnAvailable(headers:unknown):boolean {
 
 /** Identity-ready consumer is independent of whether the connections panel is open. */
 export function watchGoogleWorkspaceReturn(port:GoogleWorkspaceReturnPort,binding:GoogleWorkspaceBinding,current:()=>GoogleWorkspaceBinding|null,onReturn:(result:{result:'connected'|'denied'|'failed';connectionId?:string})=>void,onError:()=>void){
- let closed=false,busy=false,listener:{remove():void|Promise<void>}|undefined;
+ let closed=false,busy=false,queued=false,listener:{remove():void|Promise<void>}|undefined;
  const valid=()=>!closed&&sameGoogleWorkspaceBinding(binding,current());
  const drain=async()=>{
-  if(!valid()||busy)return;busy=true;
+  if(!valid())return;if(busy){queued=true;return;}busy=true;
   try{const result=await port.consume(binding);if(!valid()||result.result==='none')return;
    if(!['connected','denied','failed'].includes(result.result)||(result.result==='connected'&&!/^[A-Za-z0-9_-]{1,128}$/.test(result.connectionId??''))||(result.result!=='connected'&&result.connectionId!==undefined))throw Error('Invalid Google return');
    if(result.result==='connected'||result.result==='denied'||result.result==='failed')onReturn({result:result.result,...(result.connectionId?{connectionId:result.connectionId}:{})});
-  }catch{if(valid())onError();}finally{busy=false;}
+  }catch{if(valid())onError();}finally{busy=false;if(queued&&valid()){queued=false;void drain();}}
  };
  const ready=port.subscribe(()=>void drain()).then(handle=>{listener=handle;if(closed)return handle.remove();return drain();},()=>{if(valid())onError();});
- return {ready,close(){if(closed)return;closed=true;void Promise.resolve(listener?.remove()).catch(()=>{});}};
+ return {ready,close(){if(closed)return;closed=true;queued=false;void Promise.resolve(listener?.remove()).catch(()=>{});}};
 }

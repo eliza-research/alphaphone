@@ -51,3 +51,11 @@ test('older client without optional return method falls back without changing co
 });
 
 test('staging remains manual before invoking any native return preparation',async()=>{const n=native();n.port.prepare=async()=>assert.fail('No staging native prepare');assert.equal(await flow.prepareGoogleWorkspaceReturn(n.port,{...binding,environment:'staging'},()=>({...binding,environment:'staging'})),undefined)});
+
+test('an event received during a pending empty consume schedules one fresh drain',async()=>{
+ const n=native();let finish,reads=0,published=[];
+ n.port.consume=async()=>{reads++;if(reads===1)return new Promise(resolve=>finish=resolve);return{result:'connected',connectionId:'late-grant'}};
+ const w=flow.watchGoogleWorkspaceReturn(n.port,binding,()=>binding,result=>published.push(result),()=>assert.fail());
+ await tick();n.fire();n.fire();finish({result:'none'});await w.ready;await tick();
+ assert.equal(reads,2);assert.deepEqual(published,[{result:'connected',connectionId:'late-grant'}]);w.close();
+});
