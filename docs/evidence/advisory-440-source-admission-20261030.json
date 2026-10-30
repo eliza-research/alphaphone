@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "recordedAt": "2026-10-30T11:09:32.893789+00:00",
+  "priorPin": "f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5",
+  "pin": "440e3c76fc231f4c6e0763e2a71dbd8ae7b9bdaa",
+  "method": "Fresh npm bulk advisory query via scripts/dependency-audit.mjs --resident --write",
+  "sameNormalizedInput": true,
+  "inputSha256": "7c9d7bd390a29fac9da3c16af0fdc4d0998ce7eaf6fb2b82020bc9055ee9e11e",
+  "sameFindings": true,
+  "counts": {
+    "info": 0,
+    "low": 18,
+    "moderate": 61,
+    "high": 59,
+    "critical": 1
+  },
+  "findingsSha256": "67b372efdb3574086dfc30e31b294f95e0b7c91546b68da2db61ab5ab8654d0f",
+  "newException": false,
+  "securityAcceptance": false,
+  "note": "Every finding, severity, exception, expiration and pending upstream fix remains unchanged. The command still reports the pending advisories; this source binding does not waive them."
+}

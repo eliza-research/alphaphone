@@ -248,7 +248,8 @@ function unregisteredHits(files, detectors) {
 }
 
 test('every renderer credential field is registered in config/login-surfaces.json', () => {
-  const files = walk('apps/app/src', file => /\.(ts|tsx|js|jsx|mjs|cjs|html|css)$/.test(file) && !/\.test\./.test(file));
+  const sharedFiles = registered.map(surface => surface.file).filter(file => file.startsWith('vendor/eliza/') && /\.(ts|tsx|js|jsx|mjs|cjs|html|css)$/.test(file));
+  const files = [...new Set([...walk('apps/app/src', file => /\.(ts|tsx|js|jsx|mjs|cjs|html|css)$/.test(file) && !/\.test\./.test(file)), ...sharedFiles])];
   assert.deepEqual(unregisteredHits(files, RENDERER_DETECTORS), [], 'register each new credential field (and wire its fill route if eligible)');
 });
 

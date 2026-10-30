@@ -628,3 +628,18 @@ The shared Inbox action API and the canonical full-App browser consumer remain
 separate pending integrations. In particular, the intermediate Home change can
 still navigate incorrectly after an Inbox read fails and the account binding
 disappears; it is not accepted until the presenter-provided action is consumed.
+
+The first full check at `03afe5cb1` reported 2,712 passes, 11 failures, three
+skips and the existing APEX-key TODO. The Android queue correctly stopped before
+building. The failures identified stale pin-bound records, notices and source
+guards after the shared transport/sign-in move. The native navigation guard now
+compiles the actual shared read policy; owner enrollment checks follow the shared
+transport, and credential-field coverage follows the shared sign-in view.
+
+A fresh npm advisory query at 440 reports exactly the same 139 findings and
+normalized dependency input as f31. Existing exceptions, deadlines and pending
+upstream fixes are retained without new waivers; the audit command still reports
+the unresolved advisories. The source comparison is recorded in
+`docs/evidence/advisory-440-source-admission-20261030.json`. Reconciliation checks
+pass, but the complete source and Android commands must be repeated at the next
+commit before this pin is accepted.

@@ -2,14 +2,14 @@
   "schema": 1,
   "repository": "elizaOS/eliza",
   "base": "develop",
-  "baseCommit": "f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5",
-  "head": "f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5",
+  "baseCommit": "440e3c76fc231f4c6e0763e2a71dbd8ae7b9bdaa",
+  "head": "440e3c76fc231f4c6e0763e2a71dbd8ae7b9bdaa",
   "recordedAt": "2026-10-30",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...440e3c76fc231f4c6e0763e2a71dbd8ae7b9bdaa",
   "status": "identical",
   "aheadBy": 0,
   "behindBy": 0,
-  "mergeBase": "f31d7c3f860e3dfa1bd118c66df7cacdd60fe3e5",
+  "mergeBase": "440e3c76fc231f4c6e0763e2a71dbd8ae7b9bdaa",
   "pinOnlyCommits": [],
   "pullRequests": [
     {

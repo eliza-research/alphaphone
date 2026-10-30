@@ -130,9 +130,11 @@ test('no route Alpha issues to its agent is behind the owner-only gate', () => {
 
 test('native enrollment pairs as the owner, never through a guest invitation', () => {
   const local = fs.readFileSync(LOCAL_AGENT, 'utf8');
-  assert.match(local, /enrollmentJson\(epoch,"\/api\/auth\/pair-code","GET"/);
-  assert.match(local, /enrollmentJson\(epoch,"\/api\/auth\/pair","POST"/);
-  assert.doesNotMatch(local, /guest-pair-code|guest-pair/);
+  assert.match(local, /NativeOwnerTransport\.enroll\(ownerHost\(epoch\)\)\.token/);
+  const transport = fs.readFileSync('vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/NativeOwnerTransport.java', 'utf8');
+  assert.match(transport, /json\(host, root, "\/api\/auth\/pair-code", "GET"/);
+  assert.match(transport, /json\(host, root, "\/api\/auth\/pair", "POST"/);
+  assert.doesNotMatch(local + transport, /guest-pair-code|guest-pair/);
   const pairing = fs.readFileSync(PAIRING, 'utf8');
   // Upstream: the operator code preserves OWNER; guest authority is a separate owner-minted grant.
   assert.match(pairing, /Owner\s+\*?\s*pairing preserves OWNER authority/);

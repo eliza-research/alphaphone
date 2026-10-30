@@ -88,9 +88,10 @@
       "id": "eliza-cloud-sign-in-code",
       "kind": "alpha-owned",
       "eligible": false,
-      "file": "apps/app/src/runtime/cloud-sign-in-ui.tsx",
+      "file": "vendor/eliza/packages/ui/src/android-cloud/NativeCloudSignInView.tsx",
       "pattern": "autoComplete=\"one-time-code\"",
-      "reason": "The six-digit email or second-verification code of the in-app Eliza Cloud sign-in. A one-time code, not a reusable credential: it is sent once to the native sign-in host, cleared from the field on submit and never stored; Android may offer its own one-time-code suggestion."
+      "reason": "The six-digit email or second-verification code of the in-app Eliza Cloud sign-in. A one-time code, not a reusable credential: it is sent once to the native sign-in host, cleared from the field on submit and never stored; Android may offer its own one-time-code suggestion.",
+      "owner": "Shared NativeCloudSignInView and NativeCloudSignInController at the reviewed Eliza pin; Alpha supplies product copy and the existing native sign-in port."
     },
     {
       "id": "eliza-cloud-subscription-code",
