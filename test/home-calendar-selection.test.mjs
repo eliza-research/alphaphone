@@ -75,10 +75,10 @@ test("bootstrap, partial, mutation and failures stay neutral and never claim emp
 		false,
 	);
 });
-test("only a complete covering feed produces a real empty month", () => {
+test("only a complete covering feed produces a verified empty result", () => {
 	assert.equal(
 		select(model([]), "UTC", new Set(), now).emptyLabel,
-		"No events this month",
+		"Nothing planned",
 	);
 	const s = model([]);
 	s.feed.timeMax = "2026-10-30T00:00:00Z";
@@ -130,12 +130,23 @@ test("a complete afternoon-only feed cannot prove an empty month or empty today"
 		assert.equal(select(s, "UTC", new Set(), now).verified, false);
 	}
 });
-test("an event ending exactly at today midnight belongs only to yesterday", () => {
+test("an event ending exactly at today midnight ranks in the week, not today", () => {
 	const e = {
 		...event("yesterday", "2026-10-28"),
 		endAt: "2026-10-29T00:00:00Z",
 	};
-	assert.equal(select(model([e]), "UTC", new Set(), now).event, null);
+	const next = event("tomorrow", "2026-10-30");
+	assert.equal(select(model([e,next]), "UTC", new Set(), now).event.id, "tomorrow");
 	e.endAt = "2026-10-29T00:01:00Z";
-	assert.equal(select(model([e]), "UTC", new Set(), now).event.id, "yesterday");
+	assert.equal(select(model([e,next]), "UTC", new Set(), now).event.id, "yesterday");
+});
+
+test("shared Home policy covers past periods and requires a full query before any result", () => {
+  assert.equal(select(model([event("past week", "2026-10-28")]), "UTC", new Set(), now).event.id, "past week");
+  assert.equal(select(model([event("past month", "2026-10-05")]), "UTC", new Set(), now).event.id, "past month");
+  const today=event("today", "2026-10-29"),upcoming={...today,id:"upcoming",startAt:"2026-10-29T23:00:00Z",endAt:"2026-10-30T00:00:00Z"};
+  assert.equal(select(model([today,upcoming]), "UTC", new Set(), now).event.id,"upcoming");
+  const narrow=model([today]);narrow.feed.timeMin="2026-10-29T00:00:00Z";
+  assert.equal(select(narrow,"UTC",new Set(),now).verified,false);
+  assert.equal(select(model([]),"UTC",new Set(),new Date("2026-10-02T12:00:00Z")).verified,false);
 });
