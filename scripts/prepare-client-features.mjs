@@ -308,15 +308,6 @@ export function prepareClientFeatures({ root = projectRoot, projectVoice = true 
     if (content.split(before).length !== 2) throw Error('Review changed voice random-id import: ' + name);
     project(name, content.replace(before, 'import { randomId } from "./random-id.ts";'));
   }
-  // The shared native live transport imports the live session's values by their emitted .js name
-  // (and only types from turn timing, which type stripping erases); point that one import at .ts.
-  {
-    const name = 'packages/voice/src/native-live-voice.ts', before = '} from "./live-voice-session.js";';
-    const content = text(name);
-    if (content.split(before).length !== 2 || /^import (?!type )[^;]*from "\.\/(?!live-voice-session\.js")/m.test(content)) throw Error('Review changed native live voice imports: ' + name);
-    project(name, content.replace(before, '} from "./live-voice-session.ts";'));
-  }
-
   // The shared account billing reader imports the entitlement helpers by their emitted .js name.
   // Plain Node (tests and scripts that strip types) cannot map that to the copied .ts source, so
   // the one reviewed value import is pointed at the .ts file; its type-only .js import is erased.
