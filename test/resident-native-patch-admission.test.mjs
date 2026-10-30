@@ -10,9 +10,11 @@ test('pinned recovery and lifecycle sources match the reviewed upstream repair',
  // elizaOS/eliza#38281 moves the strict credential stop into the shared CredentialShutdownLease: its
  // ACK proves absence but keeps starts fenced until the writer releases its exact request (commit) or
  // abandons it (no write), and a superseded credential stop intent is ignored. #38291 adds an owner
- // request epoch (read only by upstream's own AgentPlugin) retired on every stop, start and restart and
- // reopened only when startAgentProcess reports a resident. IPC recovery, adoption and teardown are
- // unchanged; AlphaLocalAgentPlugin releases or abandons every request it takes, and
+ // request epoch (read only by upstream's ElizaResidentCredentials, which Alpha does not compile) retired
+ // on every stop, start and restart and reopened only when startAgentProcess reports a resident. IPC
+ // recovery, adoption and teardown are unchanged. AlphaLocalAgentPlugin releases its request after a
+ // completed commit and abandons it when nothing was written (a shutdown Retry abandons at dispatch);
+ // an uncertain commit keeps starts fenced until a later credential change or app restart.
  // android/consumer-host.json compiles the lease helper.
  ['ElizaAgentService','f8b1d2a3f6ee898e9afbb51584d7fd42d961d67fe0d49769c56ecf35c648afe1'],
  // PR37979/37981: verify directory timestamps after recovery publication.
