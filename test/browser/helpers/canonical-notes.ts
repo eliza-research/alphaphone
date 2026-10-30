@@ -1,6 +1,7 @@
 import {expect,type Page} from '@playwright/test';
 /** Closed canonical app-record transport. Real Notes controller/client/editor/rendering run unchanged.
- * This fixture tests UI contracts, not the server store or account/provider integration. */
+ * This fixture tests UI contracts, not the server store or account/provider integration.
+ * Setting `canonicalNotesFixture.delay` (ms) holds every later response that long, like a slow link. */
 export async function canonicalNotesFixture(page:Page,{path='/',notes=[]}:{path?:string;notes?:unknown[]}={}){
  const foreign:string[]=[],errors:string[]=[];
  page.on('pageerror',error=>errors.push(error.message));
@@ -12,7 +13,7 @@ export async function canonicalNotesFixture(page:Page,{path='/',notes=[]}:{path?
   const f=(window as any).canonicalNotesFixture={state:{notes,trash:[],revision:notes.length?1:0},requests:[],otherRequests:[],fail:false};
   const identity={ownerId:'canonical-fixture-owner',agentId:'canonical-fixture-agent',sessionId:'canonical-fixture-session',origin:location.origin};
   c.getAppRecordClient=()=>({sessionId:identity.sessionId,identity,current:()=>true,request:async(path:string,method:string,body:any,signal:AbortSignal)=>{
-   signal.throwIfAborted();
+   signal.throwIfAborted();if(f.delay)await new Promise(resolve=>setTimeout(resolve,f.delay));
    if(path.startsWith('/api/lifeops/calendar')){f.otherRequests.push({path,method});throw Error('Calendar is outside this closed Notes fixture');}
    f.requests.push({path,method,body:structuredClone(body)});
    if(path==='/api/notes/state'&&method==='GET')return {success:true,data:structuredClone(f.state)};

@@ -93,6 +93,74 @@ test('Delete on a new note that was never saved closes it without a Notes reques
  expect(foreign).toEqual([]);expect(errors).toEqual([]);
 });
 
+test('slow saves: typing during a new note\'s first save makes one record, and Delete waits for the save',async({page})=>{
+ const {foreign,errors}=await canonicalNotesFixture(page);await openCanonicalNotes(page);
+ await page.evaluate(()=>(window as any).canonicalNotesFixture.delay=250);
+ const title=page.getByRole('textbox',{name:'Title',exact:true}),body=page.getByRole('textbox',{name:'Note',exact:true}),review=page.getByRole('button',{name:/^(Reload Notes|Discard draft and reload)$/});
+ await page.getByRole('button',{name:'New note',exact:true}).click();
+ await title.pressSequentially('Hello',{delay:40});await body.pressSequentially('World',{delay:40});
+ await page.getByRole('button',{name:'Back to notes',exact:true}).click();
+ await expect.poll(()=>snapshot(page).then((s:any)=>s.notes.map((n:any)=>[n.title,n.body]))).toEqual([['Hello','\nWorld']]);
+ const creates=(await page.evaluate(()=>(window as any).canonicalNotesFixture.requests)).filter((r:any)=>r.body?.capability==='create-note');
+ expect(creates).toHaveLength(1);
+ // Delete while the first save of a new note is still in flight: it waits, then trashes that record.
+ await page.getByRole('button',{name:'New note',exact:true}).click();
+ await title.fill('Fresh');
+ await page.getByRole('button',{name:'Delete note',exact:true}).click();
+ await expect.poll(()=>snapshot(page).then((s:any)=>s.trash.map((entry:any)=>entry.note.title)),{timeout:10_000}).toEqual(['Fresh']);
+ await expect(title).toHaveCount(0);
+ await expect(review).toHaveCount(0);
+ expect((await snapshot(page)).notes.map((n:any)=>n.title)).toEqual(['Hello']);
+ expect(foreign).toEqual([]);expect(errors).toEqual([]);
+});
+
+test('an agent append refreshes the open note and its card, search reads it, and a stale owner edit is kept for review',async({page})=>{
+ const at='2026-10-30T09:00:00.000Z';
+ const {foreign,errors}=await canonicalNotesFixture(page,{notes:[
+  {id:'launch',title:'Launch plan',body:'\nConfirm attestation flow',color:'yellow',createdAt:at,updatedAt:at},
+  {id:'groceries',title:'Groceries',body:'',color:'yellow',createdAt:at,updatedAt:at,format:{kind:'list',data:{items:[{t:'Oat milk',done:false}]}}},
+ ]});
+ await openCanonicalNotes(page);
+ // The agent's NOTES action commits outside the view; its reply's same-session invalidation
+ // (connection-ui.tsx, app-record-completion.ts) is the only signal the view gets.
+ const agentEdit=(id:string,announce=true)=>page.evaluate(({id,announce})=>{
+  const f=(window as any).canonicalNotesFixture,note=f.state.notes.find((n:any)=>n.id===id);
+  if(note.format?.kind==='list')note.format.data.items.push({t:'Agent item',done:false});else note.body+='\nAppended by the agent';
+  f.state.revision++;
+  if(announce)window.dispatchEvent(new CustomEvent('alpha:canonical-notes-invalidated',{detail:{sessionId:'canonical-fixture-session',revision:f.state.revision}}));
+ },{id,announce});
+ const body=page.getByRole('textbox',{name:'Note',exact:true});
+ await page.getByRole('button',{name:'Open Launch plan',exact:true}).click();
+ await expect(body).toHaveValue('Confirm attestation flow');
+ await agentEdit('launch');
+ await expect(body).toHaveValue('Confirm attestation flow\nAppended by the agent');
+ // The owner's next edit names the revision that includes the agent's append.
+ await body.fill('Confirm attestation flow\nAppended by the agent\nOwner line');
+ await expect.poll(()=>snapshot(page).then((s:any)=>s.notes.find((n:any)=>n.id==='launch').body)).toBe('\nConfirm attestation flow\nAppended by the agent\nOwner line');
+ await page.getByRole('button',{name:'Back to notes',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Open Launch plan',exact:true})).toContainText('Owner line');
+ await agentEdit('groceries');
+ await expect(page.getByRole('button',{name:'Open Groceries',exact:true}).getByText('Agent item',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Search notes',exact:true}).click();
+ await page.getByRole('textbox',{name:'Search notes',exact:true}).fill('agent item');
+ await expect(page.getByRole('button',{name:'Open Groceries',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Open Launch plan',exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Close search',exact:true}).click();
+ // An agent change the view has not heard about yet: the owner's edit names an older revision, so
+ // it is refused, the owner's text stays in the editor and nothing overwrites the agent's change.
+ await page.getByRole('button',{name:'Open Launch plan',exact:true}).click();
+ await agentEdit('launch',false);
+ await body.fill('Owner text against an older revision');
+ await expect(page.getByRole('button',{name:'Discard draft and reload',exact:true})).toBeVisible();
+ await expect(body).toHaveValue('Owner text against an older revision');
+ expect((await snapshot(page)).notes.find((n:any)=>n.id==='launch').body).toBe('\nConfirm attestation flow\nAppended by the agent\nOwner line\nAppended by the agent');
+ await page.getByRole('button',{name:'Discard draft and reload',exact:true}).click();
+ await expect(body).toHaveValue('Confirm attestation flow\nAppended by the agent\nOwner line\nAppended by the agent');
+ const updates=(await page.evaluate(()=>(window as any).canonicalNotesFixture.requests)).filter((r:any)=>r.body?.capability==='update-note');
+ expect(updates.length).toBeGreaterThan(0);for(const update of updates)expect(Number.isSafeInteger(update.body.params.expectedRevision)).toBe(true);
+ expect(foreign).toEqual([]);expect(errors).toEqual([]);
+});
+
 test('older device notes stay a separate explicit recovery source and are not opened by canonical Notes',async({page})=>{
  const {errors}=await canonicalNotesFixture(page);
  const before=await page.evaluate(async()=>{

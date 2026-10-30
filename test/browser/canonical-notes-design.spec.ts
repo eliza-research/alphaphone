@@ -60,6 +60,9 @@ test('live agent Notes use the mock-mode Notes design with typed cards',async({p
  await expect(card(page,'Groceries').getByText('Oat milk',{exact:true})).toHaveCSS('text-decoration-line','line-through');
  await expect(card(page,'Radiator')).toContainText('Call the landlord Friday.');
  await expect(card(page,'Radiator').locator('span')).toHaveCount(0);
+ // The shared Notes view's agent ids stay on the matching controls (canonical-notes-ui.ts, template.html).
+ const ids=(scope:string)=>page.locator(`${scope} [data-agent-id]`).evaluateAll(list=>list.filter(el=>(el as HTMLElement).getClientRects().length).map(el=>el.getAttribute('data-agent-id')));
+ expect(await ids('[data-alpha-subview="notes-list"]')).toEqual(['notes-trash','notes-new','notes-search','launch','groceries','gifts','voice-sync','agents','voicemail','notes-source-legacy']);
  await shot(page,'live-list');
  await page.getByRole('button',{name:'Previous notes',exact:true}).scrollIntoViewIfNeeded();
  expect((await page.getByRole('button',{name:'Previous notes',exact:true}).boundingBox())!.height).toBeGreaterThanOrEqual(48);
@@ -83,11 +86,15 @@ test('live agent Notes in dark mode, the text editor and the checklist editor',a
  await expect(page.getByRole('button',{name:'Uncheck Oat milk',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Check Lemons',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>(window as any).canonicalNotesFixture.state.notes.find((n:any)=>n.id==='groceries').format.data.items[2])).toEqual({t:'Lemons',done:true});
+ expect(await page.locator('[data-alpha-subview="notes-editor"] [data-agent-id]').evaluateAll(list=>list.map(el=>el.getAttribute('data-agent-id')))).toEqual(
+  expect.arrayContaining(['notes-back','notes-dictate','notes-format','notes-pin','notes-share','notes-delete','notes-title','notes-draftReminder','notes-draftEvent','notes-remove-item-0','notes-remove-item-3','notes-add-item']));
  await shot(page,'live-checklist-dark');
  await page.getByRole('button',{name:'Back to notes',exact:true}).click();
  await card(page,'Design sync').click();
  await expect(page.getByText('Notifications stay as icons until unlock',{exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'Play recording',exact:true}).or(page.getByRole('button',{name:'Play',exact:true}))).toHaveCount(0);
+ expect(await page.locator('[data-alpha-subview="notes-voice"] [data-agent-id]').evaluateAll(list=>list.map(el=>el.getAttribute('data-agent-id')))).toEqual(
+  expect.arrayContaining(['notes-back','notes-pin','notes-share','notes-delete','notes-action-0','notes-action-2']));
  await shot(page,'live-voice-dark');
  expect(foreign).toEqual([]);expect(errors).toEqual([]);
 });

@@ -3157,7 +3157,7 @@ registerView("notes", {
         },
         items: (n.items || []).map(function (it, i) {
           return {
-            t: it.t, done: it.done, css: it.done ? "text-decoration: line-through; color: var(--mut)" : "",
+            t: it.t, done: it.done, idx: i, css: it.done ? "text-decoration: line-through; color: var(--mut)" : "",
             box: it.done ? "background: var(--fg); color: var(--bg)" : "box-shadow: inset 0 0 0 1.5px var(--mut); color: transparent",
             label: (it.done ? "Uncheck " : "Check ") + (it.t || "item"),
             toggle: function () { notesUpd(api, n.id, function (x) { return { items: x.items.map(function (y, j) { return j === i ? Object.assign({}, y, { done: !y.done }) : y; }) }; }); },
@@ -3219,7 +3219,7 @@ registerView("notes", {
         hasActions: (n.actions || []).length > 0,
         actCount: (n.actions || []).length === 1 ? "1 action item" : (n.actions || []).length + " action items",
         actions: (n.actions || []).map(function (a, i) {
-          return { t: a.t, css: a.done ? "text-decoration: line-through; color: var(--mut)" : "", box: a.done ? "background: var(--fg); color: var(--bg)" : "box-shadow: inset 0 0 0 1.5px var(--mut); color: transparent", label: (a.done ? "Uncheck " : "Check ") + a.t,
+          return { t: a.t, idx: i, css: a.done ? "text-decoration: line-through; color: var(--mut)" : "", box: a.done ? "background: var(--fg); color: var(--bg)" : "box-shadow: inset 0 0 0 1.5px var(--mut); color: transparent", label: (a.done ? "Uncheck " : "Check ") + a.t,
             toggle: function () { notesUpd(api, n.id, function (x) { return { actions: x.actions.map(function (y, j) { return j === i ? Object.assign({}, y, { done: !y.done }) : y; }) }; }); } };
         }),
         calIcon: n.onCal ? IC.check : IC.cal, calLabel: n.onCal ? "Added to calendar" : "Add action items to calendar", calText: n.onCal ? "On calendar" : "Add to calendar",
