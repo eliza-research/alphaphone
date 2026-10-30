@@ -6,7 +6,7 @@ import test from 'node:test';
 // Execute the complete adapter with only its platform/service dependencies
 // replaced. No Calendar write API is supplied: handoff must only open a form.
 const code=stripTypeScriptTypes(readFileSync('apps/app/src/prototype/agent-calendar-adapter.ts','utf8').replace(/^import .*;\n/gm,'').replace(/^export /gm,''),{mode:'transform'});
-function fixture({status='ready',sources=1,authority='canonical',platform='web',form=null,provider='eliza',recordPort=null,pendingText=()=> 'Synthetic pending',testMocks=false,calendars=null}={}){
+function fixture({status='ready',sources=1,authority='canonical',platform='web',form=null,provider='eliza',recordPort=null,pendingText=()=> 'Synthetic pending',testMocks=false,calendars=null,empty=false}={}){
  const state={status,ownerKey:'owner-A',feed:{events:[]},calendars:calendars??Array.from({length:sources},(_,i)=>({summary:`Source ${i}`,provider,calendarId:String(i),includeInFeed:true,accessRole:'owner'}))};
  const refreshes=[],creates=[],listeners={};let published;
  class Calendar{state=state;subscribe(fn){published=fn;return()=>{};}refresh(window){refreshes.push(window);}create(_sourceKey,input){creates.push(input);return {outcome:'created',event:null};}invalidateNext(){state.nextFresh=false;if(state.next?.event&&Date.parse(state.next.event.endAt)<=Date.now())state.next=null;}retire(){}sourceHandle(key){return 'handle:'+key;}sourceKeyForHandle(handle){return handle.slice('handle:'.length);}}
@@ -15,7 +15,7 @@ function fixture({status='ready',sources=1,authority='canonical',platform='web',
 
  const opened=[];const calendar={calendarAuthority:authority,form};
  class Shell{live=true;componentDidMount(){}componentWillUnmount(){}vget(){return calendar;}vset(_view,patch){Object.assign(calendar,patch);}openView(...args){opened.push(args);}setState(){}}
- const views={calendar:{render:()=>({f:{cals:[],repeats:[{label:'Weekly'}],alerts:[{label:'10 min'}]}})}};install(Shell,views,{});
+ const views={calendar:{render:()=>({empty,f:{cals:[],repeats:[{label:'Weekly'}],alerts:[{label:'10 min'}]}})}};install(Shell,views,{});
  const oldWindow=globalThis.window;globalThis.window={addEventListener(){},removeEventListener(){}};
  globalThis.document={hidden:false,addEventListener(type,fn){listeners[type]=fn;},removeEventListener(type,fn){if(listeners[type]===fn)delete listeners[type];}};
  const shell=new Shell();try{shell.componentDidMount();}finally{globalThis.window=oldWindow;}
@@ -110,4 +110,22 @@ test('browser provider requires the test-mocks gate and a web platform',()=>{
  assert.equal(f.opened[0][1].form,draft);
  assert.equal(f.opened[0][1].calendarAuthority,'browser-local');
 
+});
+
+// Canonical warning presentation stays in the header, which keeps its retry action.
+test('an empty partial Calendar shows its warning once without claiming no events',()=>{
+ const f=fixture({status:'partial',empty:true}),before=structuredClone(f.state);
+ const out=f.views.calendar.render({},{});
+ assert.match(out.nativeStatusLabel,/Some Calendar sources could not be verified/);
+ assert.equal(typeof out.nativeStatusRetry,'function');
+ assert.equal(out.empty,false);
+ assert.doesNotMatch(out.emptyText,/No events/);
+ assert.deepEqual(f.state,before);
+ const template=readFileSync('apps/app/src/prototype/template.html','utf8');
+ assert.ok(template.includes('aria-label="{{calendar.nativeStatusLabel}} Retry calendar and reminders"'));
+});
+test('a verified empty Calendar retains its ordinary empty state',()=>{
+ const f=fixture({status:'ready',empty:true}),out=f.views.calendar.render({},{});
+ assert.equal(out.nativeStatusLabel,'');assert.equal(out.empty,true);
+ assert.equal(out.emptyText,'No events in this Calendar window');
 });
