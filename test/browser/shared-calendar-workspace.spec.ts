@@ -88,3 +88,31 @@ test('a complete empty day stays empty while the broad owner feed retains other 
  await page.getByRole('button',{name:'Previous',exact:true}).click();
  await expect(page.getByRole('button',{name:/first planning/})).toBeVisible();
 });
+
+test('Home uses the current complete visible feed without another read on presentation change',async({page},info)=>{
+ await openCalendar(page);
+ const before=await page.evaluate(()=>(window as any).sharedCalendarFixture.calls.filter((call:any)=>call.path.startsWith('/api/lifeops/calendar/')).length);
+ await returnToApps(page);
+ const card=page.locator('[data-alpha-home-calendar]');
+ if(process.env.U6_HOME_BASELINE){await expect(card).not.toContainText('first planning');await page.screenshot({path:info.outputPath('alpha-home-before.png')});return;}
+ await expect(card).toContainText('first planning');
+ await page.screenshot({path:info.outputPath('alpha-home-complete.png')});
+ await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+ expect(await page.evaluate(()=>(window as any).sharedCalendarFixture.calls.filter((call:any)=>call.path.startsWith('/api/lifeops/calendar/')).length)).toBe(before);
+ await page.evaluate(()=>{(window as any).sharedCalendarFixture.mode='partial';window.dispatchEvent(new CustomEvent('alpha:canonical-calendar-invalidated',{detail:{sessionId:'first'}}));});
+ await expect(card).not.toContainText('first planning');
+ await expect(card).toHaveAttribute('data-alpha-home-calendar-event','false');
+ await page.screenshot({path:info.outputPath('alpha-home-unconfirmed.png')});
+});
+
+test('Home refreshes current-month coverage after browsing a later Calendar month',async({page})=>{
+ await openCalendar(page);
+ await page.getByRole('button',{name:'Month',exact:true}).click();
+ await page.getByRole('button',{name:'Next',exact:true}).click();
+ await page.getByRole('button',{name:'Next',exact:true}).click();
+ const latestWindow=()=>page.evaluate(()=>{const calls=(window as any).sharedCalendarFixture.calls.filter((call:any)=>call.path.startsWith('/api/lifeops/calendar/feed'));return new URL(calls.at(-1).path,location.origin).searchParams.get('timeMin');});
+ await expect.poll(async()=>Date.parse(await latestWindow())).toBeGreaterThan(Date.now());
+ await returnToApps(page);
+ await expect.poll(async()=>Date.parse(await latestWindow())).toBeLessThan(Date.now());
+ await expect(page.locator('[data-alpha-home-calendar]')).toContainText('first planning');
+});

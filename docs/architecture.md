@@ -25,6 +25,11 @@ read-only legacy recovery, detail/editor, retained draft and approval ports. Nat
 and retained-source Calendar presentations are still compatibility views. They
 have not been deleted or declared equivalent.
 
+Home uses the shared `selectHomeCalendar` projection over the existing current-owner
+Calendar snapshot. Readable source membership, user visibility and complete query
+coverage precede today/week/month ranking. Partial or retired data cannot establish
+an item or empty month; this projection starts no additional read or polling loop.
+
 Mobile discovery uses upstream `mobileViewIsAvailable`: a registered implementation,
 its view kind/runtime declaration and installed native adapter facts determine
 availability. Product ordering no longer defines the functional allowlist.

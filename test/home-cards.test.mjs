@@ -218,8 +218,8 @@ test('Agent Calendar freshness: an unverified next event is never fresh or an em
   const local = {now, item: {title: 'Call mom', begin: at(16), allDay: false, video: false}, provenance: {origin: 'Reminder', read: '', description: 'Reminder saved on this browser'}};
   assert.equal(H.presentHomeAgendaCard(H.agentReminderLead(local, failed)).stale, true);
   const adapter = readFileSync(new URL('../apps/app/src/prototype/agent-calendar-adapter.ts', import.meta.url), 'utf8');
-  assert.match(adapter, /canonicalHomeCalendar\(controller\?\.state\.next\?\?null,controller\?\.state\.nextFresh===true\)/);
-  assert.match(adapter, /presentAgentAgendaFeed\(controller\?\.state,!!event,now,home\.emptyLabel\)/);
+  assert.match(adapter, /selectHomeCalendar\(model\?/);
+  assert.match(adapter, /controller\?\.state\.ownerKey===calendarOwnerKey\(target\)/);
 });
 test('inbox status: readable freshness and every non-ready state', () => {
   const base = {failure: false, pending: false, cached: null, connected: false, unchecked: false, now};

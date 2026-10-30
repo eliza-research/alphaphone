@@ -8,9 +8,6 @@ const text=readFileSync('apps/app/src/runtime/agent-calendar.ts','utf8');
 const code=stripTypeScriptTypes(text.replace(/^import .*;\n/gm,'').replace(/^export /gm,''),{mode:'transform'});
 const unexpected=()=>{throw Error('Unexpected editor/default client dependency');};
 const {AgentCalendar}=new Function('agentCalendarClient','eventEditorMutability','cancellationModeForEditorEvent',code+';return {AgentCalendar};')(unexpected,unexpected,unexpected);
-const view=readFileSync('apps/app/src/runtime/agent-calendar-view.ts','utf8');
-const homeCode=stripTypeScriptTypes(view.slice(view.indexOf('export function canonicalHomeCalendar(')).replace(/^export /,''),{mode:'transform'});
-const home=new Function(homeCode+';return canonicalHomeCalendar;')();
 const defer=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{promise,resolve};};
 const flush=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
 async function fixture(){
@@ -24,13 +21,13 @@ async function fixture(){
  await calendar.refresh({});return{calendar,source,event,next,port,api,reads,writes,capture:fn=>capture=fn,retire:()=>{active=false;calendar.retire();}};
 }
 test('next read failure keeps a same-source cached event but never presents it as verified',async()=>{
- const f=await fixture();assert.equal(f.calendar.state.nextFresh,true);assert.equal(home(f.calendar.state.next,f.calendar.state.nextFresh).verified,true);
+ const f=await fixture();assert.equal(f.calendar.state.nextFresh,true);
  f.api.getLifeOpsNextCalendarEventContext=async()=>{throw Error('Unavailable');};await f.calendar.refresh({});
- assert.equal(f.calendar.state.status,'ready');assert.equal(f.calendar.state.next,f.next);assert.equal(f.calendar.state.nextFresh,false);assert.equal(home(f.calendar.state.next,f.calendar.state.nextFresh).verified,false);assert.match(f.calendar.state.error,/unverified/);f.retire();
+ assert.equal(f.calendar.state.status,'ready');assert.equal(f.calendar.state.next,f.next);assert.equal(f.calendar.state.nextFresh,false);assert.match(f.calendar.state.error,/unverified/);f.retire();
 });
 test('partial coverage and feed failure never mark next as verified',async()=>{
  const f=await fixture();f.api.getLifeOpsCalendarFeed=async()=>({state:'partial',events:[]});await f.calendar.refresh({});assert.equal(f.calendar.state.nextFresh,false);
- f.api.getLifeOpsCalendarFeed=async()=>{throw Error('Feed unavailable');};await f.calendar.refresh({});assert.equal(f.calendar.state.feed,null);assert.equal(f.calendar.state.nextFresh,false);assert.equal(home(f.calendar.state.next,f.calendar.state.nextFresh).verified,false);f.retire();
+ f.api.getLifeOpsCalendarFeed=async()=>{throw Error('Feed unavailable');};await f.calendar.refresh({});assert.equal(f.calendar.state.feed,null);assert.equal(f.calendar.state.nextFresh,false);f.retire();
 });
 test('source failure, removed source and another agent cannot publish a verified next event',async()=>{
  const f=await fixture();f.api.getLifeOpsNextCalendarEventContext=async()=>{throw Error('Unavailable');};f.api.getLifeOpsCalendars=async()=>({calendars:[]});await f.calendar.refresh({});assert.equal(f.calendar.state.next,null);
