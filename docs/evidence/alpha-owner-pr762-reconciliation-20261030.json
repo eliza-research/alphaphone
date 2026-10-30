@@ -1,0 +1,27 @@
+{
+  "recordedAt": "2026-10-30T11:53:15.990826+00:00",
+  "candidate": "2da4d27fe33e20dd7cd7039e8560f8d506b43b0a",
+  "reviewedPr": "https://github.com/eliza-research/alphaphone/pull/762",
+  "reviewedHead": "c374c8b4f28f629acaf4f077dbf2acd8fe94b463",
+  "existingImplementation": "e5b422df757e2430bbb75aaee4d439e34fcb03cf",
+  "finding": "The current Alpha override already uses the same current credential epoch and lifecycle then vault lock order, and refuses a credential mutation through providerAdmissionReadable. A second helper is unnecessary. No code from this PR has been merged by this record.",
+  "sourceSha256": {
+    "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaCloudSignInPlugin.java": "80e5ff2aedd33f01314a85493b45e79d82ce99aa7141db761b17450ec42ae738",
+    "android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaLocalAgentPlugin.java": "5b3c838168677da046b0374f95f0cf8f5c4a41d47c22ab7b6a42bff0f3a5a266",
+    "vendor/eliza/packages/auth/android/src/main/java/ai/eliza/auth/cloud/CloudSignInPlugin.java": "0c2ba91faf22459538bd852cb305507ac2b17982afbe6bdc6e8465526a1ba1d4"
+  },
+  "validation": {
+    "command": "JAVA_HOME=/usr/lib/jvm/java-21-openjdk node --test current-test.mjs",
+    "result": "PASS 1 actual-body Java probe: shared abstract signature, exact result once, lock ownership, mutation refusal, retired owner refusal, original exception and concurrent delivery/mutation ordering",
+    "adaptation": "Original author harness retained, replacing extraction of the proposed helper with extraction of current providerAdmissionReadable; the current full override body is compiled unchanged.",
+    "artifacts": {
+      "author-test.mjs": "40efeb54207361ee40ae1f4c5122eb9fb6fd2656a2cbe6a483585022614ffb52",
+      "current-test.mjs": "73e98da7a97273a2ef945f9cffdb940e2c59420950d54747fb53dfc78ef870bf",
+      "current-result.log": "267695c65b3ae691b8cf35b2840853c8ed4537c3d8cfa1d54932ea642201dc8d"
+    }
+  },
+  "limits": [
+    "This bounded JVM probe is not new Android or live account acceptance.",
+    "Remote PR762 remains open and needs reconciliation with its older source branch."
+  ]
+}
