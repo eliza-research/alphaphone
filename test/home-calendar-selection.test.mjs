@@ -1,13 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { stripTypeScriptTypes } from "node:module";
-const code = stripTypeScriptTypes(
-	readFileSync("apps/app/src/runtime/home-calendar-selection.ts", "utf8")
-		.replace(/^import[\s\S]*?;\n/gm, "")
-		.replace("export function", "function"),
-	{ mode: "transform" },
-);
+import { transformSync } from "esbuild";
+import vm from "node:vm";
+const code = transformSync(readFileSync("apps/app/src/runtime/home-calendar-selection.ts", "utf8"), {loader:"ts",format:"cjs",target:"es2022"}).code;
 const parts = (d, timeZone) => {
 	const p = Object.fromEntries(
 		new Intl.DateTimeFormat("en-US", {
@@ -40,12 +36,13 @@ const sourceKey = (s) =>
 		s.connectorAccountId,
 		s.calendarId,
 	]);
-const select = new Function(
-	"getZonedDateParts",
-	"calendarEventKey",
-	"calendarSourceKey",
-	code + ";return homeCalendarSelection;",
-)(parts, (e) => e.id, sourceKey);
+const loaded={exports:{}};
+vm.runInNewContext(code,{module:loaded,exports:loaded.exports,require:specifier=>{
+ if(specifier==='./agent-calendar')return {calendarEventKey:e=>e.id,calendarSourceKey:sourceKey};
+ if(specifier.endsWith('/internal/time'))return {getZonedDateParts:parts};
+ throw Error('Unexpected selector dependency: '+specifier);
+}});
+const select=loaded.exports.homeCalendarSelection;
 const source = {
 	provider: "eliza",
 	side: "owner",
@@ -108,7 +105,7 @@ test("bootstrap, partial, mutation and failures stay neutral and never claim emp
 		"unavailable",
 	]) {
 		const s = { ...model([]), status };
-		assert.deepEqual(select(s, "UTC", new Set(), now), {
+		assert.deepEqual({...select(s, "UTC", new Set(), now)}, {
 			event: null,
 			verified: false,
 			emptyLabel: "Calendar",
