@@ -60,6 +60,9 @@ public final class AlphaCloudSignInPlugin extends CloudSignInPlugin {
    @Override public void remove(String slot) throws Exception { store.removeCredentialSlot(slot); }
   };
  }
+ @Override protected <T> T withCredentialRead(java.util.concurrent.Callable<T> read) throws Exception {
+  return AlphaLocalAgentPlugin.withCredentialRead(read);
+ }
  @Override protected Runnable reserveCredentialCommit() {
   supersedeRecovery();
   long intent = AlphaLocalAgentPlugin.reserveCredentialIntent();
