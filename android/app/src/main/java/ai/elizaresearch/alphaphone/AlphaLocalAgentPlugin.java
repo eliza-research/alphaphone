@@ -1,6 +1,8 @@
 package ai.elizaresearch.alphaphone;
 
 import android.content.Context;
+import ai.eliza.plugins.agent.connection.NativeOwnerTransport;
+import ai.eliza.plugins.agent.connection.NativeAppReadPolicy;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -857,22 +859,27 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   if(status.getString("instanceId").isEmpty())throw new IllegalStateException("Local runtime instance unavailable");
   return status;
  }
- private String enroll(long epoch) throws Exception {
-  synchronized(enrollmentLock){
-  requireCurrent(epoch);
-  String root=ElizaAgentService.localAgentToken();
-  if(root==null||root.isEmpty())throw new IllegalStateException();
-  synchronized(lifecycleLock){requireEnrollmentRoot(epoch,root);if(root.equals(rootToken)&&ownerToken!=null&&expiresAt>System.currentTimeMillis()+30000){AlphaCanonicalNotifications.ensure(getContext());return ownerToken;}}
-  JSONObject status=authenticatedStatus(epoch,root);
-  JSONObject code=enrollmentJson(epoch,"/api/auth/pair-code","GET",null,root,root);
-  JSONObject paired=enrollmentJson(epoch,"/api/auth/pair","POST",new JSONObject().put("code",code.getString("code")).put("instanceId",status.getString("instanceId")),root,root);
-  if(!"owner".equals(paired.getString("access"))||!status.getString("instanceId").equals(paired.getString("instanceId")))throw new IllegalStateException();
-  String token=paired.getString("token");JSONObject who=enrollmentJson(epoch,"/api/auth/me","GET",null,token,root);
-  if(!"OWNER".equals(who.getJSONObject("access").getString("role"))||!paired.getString("identityId").equals(who.getJSONObject("identity").getString("id"))||!token.equals(who.getJSONObject("session").getString("id")))throw new IllegalStateException();
-  long expiry=who.getJSONObject("session").getLong("expiresAt");if(expiry<=System.currentTimeMillis())throw new IllegalStateException();
-  synchronized(lifecycleLock){requireEnrollmentRoot(epoch,root);AlphaCanonicalNotifications.suspendForRestart();rootToken=root;ownerToken=token;ownerIdentity=paired.getString("identityId");notificationAgent=null;expiresAt=expiry;AlphaCanonicalNotifications.ensure(getContext());return token;}
-  }
+ private NativeOwnerTransport.Host ownerHost(long epoch) throws Exception {return ownerHost(epoch,null);}
+ private NativeOwnerTransport.Host ownerHost(long epoch,PluginCall request) throws Exception {
+  ElizaAgentService.RequestObservation runtime=ElizaAgentService.observeRequests();
+  return new NativeOwnerTransport.Host(){
+   public Object enrollmentLock(){return enrollmentLock;}
+   public String root(){return ElizaAgentService.localAgentToken();}
+   public void check(String root)throws Exception{synchronized(lifecycleLock){runtime.withCurrent(()->{if(request!=null)requireOwned(request,epoch);requireEnrollmentRoot(epoch,root);return null;});}}
+   public NativeOwnerTransport.Session cached(String root,long minimumExpiry)throws Exception{
+    synchronized(lifecycleLock){check(root);if(root.equals(rootToken)&&ownerToken!=null&&expiresAt>minimumExpiry){AlphaCanonicalNotifications.ensure(getContext());return new NativeOwnerTransport.Session(rootToken,ownerToken,ownerIdentity,expiresAt);}return null;}
+   }
+   public void publish(NativeOwnerTransport.Session session)throws Exception{
+    synchronized(lifecycleLock){check(session.root);AlphaCanonicalNotifications.suspendForRestart();rootToken=session.root;ownerToken=session.token;ownerIdentity=session.identity;notificationAgent=null;expiresAt=session.expiresAt;AlphaCanonicalNotifications.ensure(getContext());}
+   }
+   public void invalidate(NativeOwnerTransport.Session session)throws Exception{
+    synchronized(lifecycleLock){requireCurrent(epoch);if(session.root.equals(rootToken)&&session.token.equals(ownerToken))clearEnrollment();}
+   }
+   public long now(){return System.currentTimeMillis();}
+   public JSONObject exchange(String path,String method,String body,String bearer,JSONObject headers)throws Exception{if(request!=null)requireOwned(request,epoch);return raw(path,method,body,bearer,headers,120000);}
+  };
  }
+ private String enroll(long epoch) throws Exception {return NativeOwnerTransport.enroll(ownerHost(epoch)).token;}
  private static void logRequestFailure(String category,String method,int status,String reason) {
   String safeMethod=java.util.Arrays.asList("GET","POST","PATCH","DELETE").contains(method)?method:"OTHER";
   android.util.Log.w("AlphaAgentRequest","category="+category+" method="+safeMethod+" status="+status+" reason="+reason);
@@ -883,7 +890,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   OwnerRoutes routes;
   try{routes=OwnerRoutes.shipped(getContext().getAssets()::open);}catch(IllegalStateException unavailable){logRequestFailure("other",method,0,"route-table");call.reject("Unsupported local agent request.");return;}
   String group=routes.group(path);
-  if((group!=null? !routes.allowed(group,path,method)||expectedOwner==null||expectedOwner.trim().isEmpty() : ((path.startsWith("/api/views/")||path.endsWith("/messages/truncate")||path.endsWith("/heard"))&&(!method.equals("POST")||expectedOwner==null||expectedOwner.trim().isEmpty()))||(path.equals("/api/asr/local-inference/end-of-turn")&&!method.equals("POST"))||(path.contains("?before=")&&!method.equals("GET"))||(path.startsWith("/api/turns/")&&!method.equals("POST"))||path.contains("..")||path.contains("%")||path.contains("\\")||!path.matches("^/api/(auth/me|agents|status|conversations(/[A-Za-z0-9_-]+(/messages(/truncate|/[0-9a-fA-F-]{36}/heard|\\?before=[0-9]{1,16}(&beforeId=[0-9a-fA-F-]{36})?(&limit=[0-9]{1,3})?)?)?)?|turns/[0-9a-fA-F-]{36}/abort|views/(interact-(claim|result)|[A-Za-z0-9_-]+/navigate)|client-devices/[A-Za-z0-9_/-]+|workflow(/[A-Za-z0-9_/?=&-]+)?|asr/local-inference/(live(/status)?|end-of-turn))$")||!(method.equals("GET")||method.equals("POST")))||((method.equals("GET")||method.equals("DELETE"))&&body!=null)||(body!=null&&body.length()>2*1024*1024)){
+  if(!NativeAppReadPolicy.allowed(path,method,body)&&((group!=null? !routes.allowed(group,path,method)||expectedOwner==null||expectedOwner.trim().isEmpty() : ((path.startsWith("/api/views/")||path.endsWith("/messages/truncate")||path.endsWith("/heard"))&&(!method.equals("POST")||expectedOwner==null||expectedOwner.trim().isEmpty()))||(path.equals("/api/asr/local-inference/end-of-turn")&&!method.equals("POST"))||(path.contains("?before=")&&!method.equals("GET"))||(path.startsWith("/api/turns/")&&!method.equals("POST"))||path.contains("..")||path.contains("%")||path.contains("\\")||!path.matches("^/api/(auth/me|agents|status|conversations(/[A-Za-z0-9_-]+(/messages(/truncate|/[0-9a-fA-F-]{36}/heard|\\?before=[0-9]{1,16}(&beforeId=[0-9a-fA-F-]{36})?(&limit=[0-9]{1,3})?)?)?)?|turns/[0-9a-fA-F-]{36}/abort|views/(interact-(claim|result)|[A-Za-z0-9_-]+/navigate)|client-devices/[A-Za-z0-9_/-]+|workflow(/[A-Za-z0-9_/?=&-]+)?|asr/local-inference/(live(/status)?|end-of-turn))$")||!(method.equals("GET")||method.equals("POST")))||((method.equals("GET")||method.equals("DELETE"))&&body!=null)||(body!=null&&body.length()>2*1024*1024))){
    logRequestFailure(group==null?"other":group,method,0,"gate");
    call.reject("Unsupported local agent request.");return;
   }
@@ -892,14 +899,10 @@ public final class AlphaLocalAgentPlugin extends Plugin {
   try{synchronized(lifecycleLock){epoch=admittedEpoch();pending.add(call);}}catch(Superseded stale){call.reject("Local agent is stopped or unavailable.","LOCAL_AGENT_EPOCH_CHANGED");return;}
   PluginWorkers.submit(workers,()->{try{
    requireOwned(call,epoch);
-   String token=enroll(epoch);
-   synchronized(lifecycleLock){requireCurrent(epoch);if(expectedOwner!=null&&!expectedOwner.equals(ownerIdentity)){logRequestFailure(group==null?"other":group,method,409,"owner-mismatch");resolveCurrent(call,epoch,new JSObject().put("status",409).put("body","{\"error\":\"Local owner changed; reconnect before continuing\"}"));return;}}
-   requireOwned(call,epoch);
-   JSONObject result=raw(path,method,body,token,headers,120000);
+   JSONObject result="/api/auth/status".equals(path)?NativeOwnerTransport.requirements(ownerHost(epoch,call)):
+    NativeOwnerTransport.request(ownerHost(epoch,call),path,method,body,expectedOwner,headers);
    if(result.getInt("status")>=400)logRequestFailure(group==null?"other":group,method,result.getInt("status"),"http");
    requireCurrent(epoch);
-   if(result.getInt("status")==401)synchronized(lifecycleLock){requireCurrent(epoch);clearEnrollment();}
-   if(path.equals("/api/auth/me")&&result.getInt("status")==200){JSONObject who=new JSONObject(result.getString("body"));who.getJSONObject("session").put("id","native-owned-session");result.put("body",who.toString());result.remove("bodyBase64");}
    resolveCurrent(call,epoch,new JSObject(result.toString()));
   }catch(Superseded stale){rejectSuperseded(call);}
   catch(Exception error){logRequestFailure(group==null?"other":group,method,0,"transport");rejectPending(call,"Local agent request failed. No automatic retry was made.");}},()->{rejectPending(call,"Local agent bridge is closed.");});

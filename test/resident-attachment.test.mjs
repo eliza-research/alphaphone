@@ -6,6 +6,7 @@ import {existsSync,readdirSync,mkdtempSync,rmSync,readFileSync} from 'node:fs';
 import {homedir,tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {execFileSync} from 'node:child_process';
+import {upstreamAgentRuntime} from './fixtures/jvm-tools.mjs';
 const root=resolve(import.meta.dirname,'..');
 const cache=join(homedir(),'.gradle/caches/modules-2/files-2.1/org.json/json/20250517');
 const cached=existsSync(cache)?readdirSync(cache).flatMap(hash=>readdirSync(join(cache,hash)).filter(name=>name==='json-20250517.jar').map(name=>join(cache,hash,name)))[0]:undefined;
@@ -14,7 +15,7 @@ test('an admitted running resident is attached to; any change in runtime, enroll
  const temporary=mkdtempSync(join(tmpdir(),'resident-attachment-'));
  const java=process.env.JAVA_HOME||(process.platform==='darwin'?'/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home':'');const binary=name=>java?join(java,'bin',name):name;
  try{
-  execFileSync(binary('javac'),['--release','11','-cp',jsonJar,'-d',temporary,join(root,'vendor/eliza/plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/ResidentAttachment.java'),join(root,'test/fixtures/ResidentAttachmentTest.java')],{timeout:120000});
+  execFileSync(binary('javac'),['--release','11','-cp',jsonJar,'-d',temporary,upstreamAgentRuntime('ResidentAttachment.java'),join(root,'test/fixtures/ResidentAttachmentTest.java')],{timeout:120000});
   const output=execFileSync(binary('java'),['-cp',temporary+':'+jsonJar,'ai.elizaresearch.alphaphone.ResidentAttachmentTest'],{encoding:'utf8',timeout:120000});
   // Two surfaces before enrollment (MVP-16): the pending pairing is not shared; accepted limit.
   assert.match(output,/^PASS pre-enrollment: a second surface before enrollment starts on its own/m);
@@ -48,9 +49,11 @@ test('the plugin start path attaches before it would retire shared work, and att
  const owned=source.slice(source.indexOf('private void requireOwned('),source.indexOf('private void rejectSuperseded('));
  assert.ok(owned.includes('requireCurrent(epoch)')&&owned.includes('if(!pending.contains(call))throw new Superseded();'));
  const request=source.slice(source.indexOf('@PluginMethod public void request('),source.indexOf('@PluginMethod public void cancelStream('));
- const firstGuard=request.indexOf('requireOwned(call,epoch);'),pairing=request.indexOf('String token=enroll(epoch);'),lastGuard=request.lastIndexOf('requireOwned(call,epoch);'),dispatch=request.indexOf('JSONObject result=raw(path,method,body,token,headers,120000);');
- assert.ok(firstGuard>0&&firstGuard<pairing&&pairing<lastGuard&&lastGuard<dispatch,'owned-call guard precedes pairing and dispatch');
- assert.equal(request.slice(lastGuard,dispatch).trim(),'requireOwned(call,epoch);','nothing runs between the guard and dispatch');
+ const firstGuard=request.indexOf('requireOwned(call,epoch);'),dispatch=request.indexOf('NativeOwnerTransport.request(ownerHost(epoch,call),');
+ assert.ok(firstGuard>0&&dispatch>firstGuard,'the shared transport retains this exact pending request owner');
+ const transport=source.slice(source.indexOf('private NativeOwnerTransport.Host ownerHost(long epoch,PluginCall request)'),source.indexOf('private String enroll(long epoch)'));
+ assert.ok(transport.includes('runtime.withCurrent(()->{if(request!=null)requireOwned(request,epoch);requireEnrollmentRoot(epoch,root);'),'every shared enrollment/readback check retains the pending call');
+ assert.ok(transport.includes('if(request!=null)requireOwned(request,epoch);return raw('),'the actual dispatch repeats the pending-call guard');
  // The read-only query never mutates lifecycle state.
  const query=source.slice(source.indexOf('@PluginMethod public void residentAttachment('),source.indexOf('@PluginMethod public void configureProvider('));
  for(const forbidden of ['attachLocked(','invalidateOwnCalls','invalidateCalls','lifecycleEpoch','clearEnrollment','ElizaAgentService.start','ElizaAgentService.stop','enroll(','bindCloudProvider'])

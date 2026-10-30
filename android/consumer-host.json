@@ -158,6 +158,8 @@
       "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderSlot.java",
       "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/ResidentAttachment.java",
       "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/OwnerRoutePolicy.java",
+      "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/NativeAppReadPolicy.java",
+      "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/NativeOwnerTransport.java",
       "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/CloudConnectionPolicy.java",
       "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/ConnectionTransport.java",
       "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/connection/DelegationCallback.java",
