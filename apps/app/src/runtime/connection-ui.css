@@ -63,7 +63,7 @@
 .alpha-connection .alpha-auth-method-note{font-size:13px;line-height:1.5;margin:10px 0 0}
 .alpha-connection .alpha-auth-notice{border-top:1px solid var(--connection-line,#dedede);padding-top:16px;margin-top:28px;font-size:12px;line-height:1.6;color:var(--connection-mut,#666);background:none;border-radius:0}
 .alpha-cloud-sign-in>.alpha-connection-actions:last-child{margin-top:20px}
-.alpha-cloud-sign-in>.alpha-connection-actions:last-child .alpha-connection-cancel{border:0;padding-inline:0;background:none;color:var(--connection-mut,#666)}
+.alpha-connection.alpha-cloud-sign-in .alpha-connection-actions>.alpha-connection-cancel{background:none;border:0;box-shadow:none;color:var(--connection-mut,#666)}
 .alpha-cloud-sign-in .alpha-auth-submit[aria-busy=true]{opacity:1;cursor:progress}
 .alpha-cloud-sign-in-code>button[type=button]{min-height:44px;font-size:14px;font-variant-numeric:tabular-nums}
 @media(max-height:620px){.alpha-auth-page .alpha-auth-content{justify-content:flex-start;padding-top:calc(env(safe-area-inset-top) + 24px)}.alpha-auth-body{margin-block:0}.alpha-auth-brand{margin-bottom:28px}}
