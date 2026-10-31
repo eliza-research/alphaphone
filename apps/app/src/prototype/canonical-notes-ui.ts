@@ -29,7 +29,7 @@ export class CanonicalNotesUi {
  readonly controller:CanonicalNotesController;
  readonly editor:CanonicalNotesEditor;
  private phase:NotesPhase='loading';
- private reviewPending=false;
+ private reviewPending:false|'read'|'change'=false;
  private failure:'read'|'interact'|null=null;
  private idleWaiters:(()=>void)[]=[];
  private baseRows:Bag[]=[];
@@ -39,15 +39,29 @@ export class CanonicalNotesUi {
  private trashValue:{id:string;title:string;kind:string}[]=[];
  constructor(port:AppRecordPort,private readonly hooks:{paint():void;review():void;committed?(id:string):void}){
   this.controller=new CanonicalNotesController(port,{
-   snapshot:snapshot=>{this.trashValue=(snapshot.trash??[]).map(entry=>({id:entry.note.id,title:entry.note.title,kind:entry.note.format?.kind??'text'}));this.baseRows=snapshot.notes.map(note=>this.row(note,snapshot.revision));this.editor?.reconcile();this.refreshDraftView();},
-   phase:phase=>{if(phase==='review')this.reviewPending=true;this.phase=phase==='ready'&&this.reviewPending?'review':phase;if(phase!=='saving'){const waiters=this.idleWaiters;this.idleWaiters=[];for(const resume of waiters)resume();}this.hooks.paint();},
-   failed:(_cause,operation)=>{this.failure=operation;},
+   snapshot:(snapshot,reason)=>{
+    this.trashValue=(snapshot.trash??[]).map(entry=>({id:entry.note.id,title:entry.note.title,kind:entry.note.format?.kind??'text'}));
+    this.baseRows=snapshot.notes.map(note=>this.row(note,snapshot.revision));
+    this.editor?.reconcile();
+    // Only an accepted current-owner read can recover a read-only warning.
+    // Draft or interaction review takes precedence and is never cleared here.
+    if(reason==='read'&&this.reviewPending==='read'&&this.controller.current&&!this.controller.pending&&!this.editor?.draft?.version){
+     this.reviewPending=false;this.failure=null;
+    }
+    this.refreshDraftView();
+   },
+   phase:phase=>{if(phase==='review'&&!this.reviewPending)this.reviewPending='change';this.phase=phase==='ready'&&this.reviewPending?'review':phase;if(phase!=='saving'){const waiters=this.idleWaiters;this.idleWaiters=[];for(const resume of waiters)resume();}this.hooks.paint();},
+   failed:(_cause,operation)=>{
+    if(operation==='interact'||this.reviewPending!=='change'){
+     this.failure=operation;this.reviewPending=operation==='read'?'read':'change';
+    }
+   },
   });
   this.editor=new CanonicalNotesEditor(this.controller,{changed:()=>this.refreshDraftView(),review:()=>this.needsReview(),committed:target=>{this.reviewPending=false;this.failure=null;this.phase='ready';this.hooks.paint();this.hooks.committed?.(target.id);}});
   // Authenticated same-session change events (runtime/app-record-completion.ts) refresh the collection.
   if(this.controller.current)this.controller.listen(window);
  }
- private needsReview():void{this.reviewPending=true;this.phase='review';this.hooks.paint();this.hooks.review();}
+ private needsReview():void{this.reviewPending='change';this.phase='review';this.hooks.paint();this.hooks.review();}
  /** The record as Alpha's Notes view reads it: authored rich fields at the top level, local handles left out. */
  private row(note:StickyNote,revision:number):Bag{
   const data:Bag=structuredClone(note.format?.data??{});for(const key of LOCAL_HANDLES)delete data[key];
@@ -79,7 +93,7 @@ export class CanonicalNotesUi {
  notes():StickyNote[]{return this.controller.current?this.controller.snapshot?.notes??[]:[];}
  selection(){return this.editor.selection();}
  private status():string{
-  if(this.phase==='review')return this.editor.draft?.version?'Your draft is kept here. Reload the current notes to discard it.':this.failure==='read'&&this.controller.revision===null?'Notes could not be opened. Check the agent connection, then reload.':'That change could not be confirmed. Reload Notes to see what was saved.';
+  if(this.phase==='review')return this.editor.draft?.version?'Your draft is kept here. Reload the current notes to discard it.':this.failure==='read'&&this.reviewPending==='read'?'Notes could not be opened. Check the agent connection, then reload.':'That change could not be confirmed. Reload Notes to see what was saved.';
   return this.controller.revision===null?'Opening Notes…':'';
  }
  renderState(previous:Bag):Bag{return {...previous,...DEVICE_ONLY_STATE,list:this.list,open:this.open,storageStatus:this.status(),blankCreationId:this.blankCreationValue};}
