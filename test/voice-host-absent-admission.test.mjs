@@ -7,6 +7,7 @@ import test from 'node:test';
 import {verifyVoiceHost} from '../scripts/voice-host.mjs';
 
 const baseline = JSON.parse(fs.readFileSync(new URL('../android/voice-host/qualified-voice-host.json', import.meta.url), 'utf8'));
+const asrSlot = fs.readFileSync(new URL('../android/paradee-voice/asr-inputs.json', import.meta.url));
 function fixture(t, {stale = false, invalid = false} = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'alpha-voice-absence-control-'));
   // Only synthetic directories created by this test are removed if tests are later admitted.
@@ -19,6 +20,7 @@ function fixture(t, {stale = false, invalid = false} = {}) {
   const record = {...baseline, qualified: false, evidence: {deviceExecuted: false, emulatorDeviceExecuted: false, userAccepted: false, scope: 'Synthetic schema control only; no executed voice evidence'}};
   write('upstream.lock.json', JSON.stringify({commit: stale ? 'f'.repeat(40) : record.pin}));
   write('app.config.json', JSON.stringify({appId: record.identity}));
+  write('android/paradee-voice/asr-inputs.json', asrSlot);
   write('android/voice-host/qualified-voice-host.json', invalid ? 'invalid record must not be consumed in the explicit absent lane' : JSON.stringify(record));
   return {root, write, stage: () => fs.mkdirSync(path.join(root, '.eliza/paradee-voice/native'), {recursive: true})};
 }
