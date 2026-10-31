@@ -6,16 +6,16 @@ import test from 'node:test';
 // Execute the complete adapter with only its platform/service dependencies
 // replaced. No Calendar write API is supplied: handoff must only open a form.
 const code=stripTypeScriptTypes(readFileSync('apps/app/src/prototype/agent-calendar-adapter.ts','utf8').replace(/^import .*;\n/gm,'').replace(/^export /gm,''),{mode:'transform'});
-function fixture({status='ready',sources=1,authority='canonical',platform='web',form=null,provider='eliza',recordPort=null,pendingText=()=> 'Synthetic pending',testMocks=false,calendars=null}={}){
- const state={status,ownerKey:'owner-A',feed:{events:[]},calendars:calendars??Array.from({length:sources},(_,i)=>({summary:`Source ${i}`,provider,calendarId:String(i),includeInFeed:true,accessRole:'owner'}))};
+function fixture({status='ready',sources=1,authority='canonical',platform='web',form=null,provider='eliza',recordPort=null,pendingText=()=> 'Synthetic pending',testMocks=false,calendars=null,empty=false,events=[],error=null}={}){
+ const state={status,ownerKey:'owner-A',error,feed:{events},calendars:calendars??Array.from({length:sources},(_,i)=>({summary:`Source ${i}`,provider,side:'owner',calendarId:String(i),includeInFeed:true,accessRole:'owner'}))};
  const refreshes=[],creates=[],listeners={};let published;
  class Calendar{state=state;subscribe(fn){published=fn;return()=>{};}refresh(window){refreshes.push(window);}create(_sourceKey,input){creates.push(input);return {outcome:'created',event:null};}invalidateNext(){state.nextFresh=false;if(state.next?.event&&Date.parse(state.next.event.endAt)<=Date.now())state.next=null;}retire(){}sourceHandle(key){return 'handle:'+key;}sourceKeyForHandle(handle){return handle.slice('handle:'.length);}}
  const connection={subscribe:()=>()=>{},getAppRecordClient:()=>recordPort};
- const install=new Function('AgentCalendar','Capacitor','connectionController','calendarSourceKey','presentCalendarIntervals','calendarFormCreate','getZonedDateParts','addDaysToLocalDate','calendarOwnerKey','agentPendingText','testMocksEnabled',code+';return installAgentCalendarAdapter;')(Calendar,{getPlatform:()=>platform},connection,c=>c.calendarId,()=>{},draft=>draft,()=>({}),()=>({}),()=>state.ownerKey,pendingText,testMocks);
+ const install=new Function('AgentCalendar','Capacitor','connectionController','calendarSourceKey','presentCalendarIntervals','calendarFormCreate','getZonedDateParts','addDaysToLocalDate','calendarOwnerKey','agentPendingText','testMocksEnabled','canonicalCalendarRow','calendarRange',code+';return installAgentCalendarAdapter;')(Calendar,{getPlatform:()=>platform},connection,c=>c.calendarId,()=>{},draft=>draft,()=>({}),()=>({}),()=>state.ownerKey,pendingText,testMocks,e=>({id:e.id,title:e.title}),records=>({events:records}));
 
  const opened=[];const calendar={calendarAuthority:authority,form};
  class Shell{live=true;componentDidMount(){}componentWillUnmount(){}vget(){return calendar;}vset(_view,patch){Object.assign(calendar,patch);}openView(...args){opened.push(args);}setState(){}}
- const views={calendar:{render:()=>({f:{cals:[],repeats:[{label:'Weekly'}],alerts:[{label:'10 min'}]}})}};install(Shell,views,{});
+ const views={calendar:{render:state=>({empty,emptyText:'Free all day',renderedRows:state.events,f:{cals:[],repeats:[{label:'Weekly'}],alerts:[{label:'10 min'}]}})}};install(Shell,views,{});
  const oldWindow=globalThis.window;globalThis.window={addEventListener(){},removeEventListener(){}};
  globalThis.document={hidden:false,addEventListener(type,fn){listeners[type]=fn;},removeEventListener(type,fn){if(listeners[type]===fn)delete listeners[type];}};
  const shell=new Shell();try{shell.componentDidMount();}finally{globalThis.window=oldWindow;}
@@ -110,4 +110,72 @@ test('browser provider requires the test-mocks gate and a web platform',()=>{
  assert.equal(f.opened[0][1].form,draft);
  assert.equal(f.opened[0][1].calendarAuthority,'browser-local');
 
+});
+
+// Canonical warning presentation stays in the header, which keeps its retry action.
+test('an empty partial Calendar shows its warning once without claiming no events',()=>{
+ const f=fixture({status:'partial',empty:true}),before=structuredClone(f.state);
+ const out=f.views.calendar.render({},{});
+ assert.match(out.nativeStatusLabel,/Some Calendar sources could not be verified/);
+ assert.equal(typeof out.nativeStatusRetry,'function');
+ assert.equal(out.empty,false);
+ assert.doesNotMatch(out.emptyText,/No events/);
+ assert.deepEqual(f.state,before);
+ const template=readFileSync('apps/app/src/prototype/template.html','utf8');
+ assert.ok(template.includes('aria-label="Retry calendar and reminders" aria-description="{{calendar.nativeStatusLabel}}"'));
+ assert.ok(!template.includes('aria-label="{{calendar.nativeStatusLabel}} Retry calendar and reminders"'));
+});
+test('a verified empty Calendar retains its ordinary empty state',()=>{
+ const f=fixture({status:'ready',empty:true}),out=f.views.calendar.render({},{});
+ assert.equal(out.nativeStatusLabel,'');assert.equal(out.empty,true);
+ assert.equal(out.emptyText,'No events in this Calendar window');
+});
+
+// The full adapter still filters provider rows against the existing current-owner catalog.
+const presentationEvent=(id,calendarId)=>({id,title:id,provider:'eliza',side:'owner',calendarId,startAt:'2026-10-31T12:00:00Z',endAt:'2026-10-31T13:00:00Z'});
+test('ready with an unverified event source warns once and does not claim verified empty',()=>{
+ const f=fixture({status:'ready',empty:true,events:[presentationEvent('unverified','unknown')]}),before=structuredClone(f.state);
+ const out=f.views.calendar.render({},{});
+ assert.match(out.nativeStatusLabel,/Some event sources could not be verified/);
+ assert.deepEqual(out.renderedRows,[]);assert.equal(out.empty,false);
+ assert.doesNotMatch(out.emptyText,/No events|Free all day/);assert.deepEqual(f.state,before);
+});
+test('unverified rows stay hidden while verified rows and display preferences are retained',()=>{
+ const f=fixture({events:[presentationEvent('verified','0'),presentationEvent('unverified','unknown')]}),before=structuredClone(f.state);
+ const out=f.views.calendar.render({},{});
+ assert.deepEqual(out.renderedRows.map(row=>row.id),['verified']);assert.match(out.nativeStatusLabel,/could not be verified/);
+ const hidden=f.views.calendar.render({calPrefs:{'handle:0':{on:false}}},{});
+ assert.deepEqual(hidden.renderedRows,[]);assert.deepEqual(f.state,before);
+});
+test('unavailable uses natural recovery copy once and retry uses the existing refresh',()=>{
+ const f=fixture({status:'unavailable',empty:true,error:'Implementation-only fallback'}),before=structuredClone(f.state),reads=f.refreshes.length;
+ const out=f.views.calendar.render({},{});
+ assert.equal(out.nativeStatusLabel,'Calendar is unavailable. Retry to load your schedule.');
+ assert.equal(out.empty,false);assert.doesNotMatch(out.emptyText,/Implementation-only|Free all day|No events/);
+ out.nativeStatusRetry();assert.equal(f.refreshes.length,reads+1);assert.deepEqual(f.state,before);
+});
+test('partial empty selected day cannot claim free even when another day has a verified event',()=>{
+ const f=fixture({status:'partial',empty:true,events:[presentationEvent('verified elsewhere','0')]}),before=structuredClone(f.state);
+ const out=f.views.calendar.render({day:2},{});
+ assert.deepEqual(out.renderedRows.map(row=>row.id),['verified elsewhere']);
+ assert.match(out.nativeStatusLabel,/Some Calendar sources could not be verified/);
+ assert.doesNotMatch(out.emptyText,/Free all day|Free on these days|Nothing scheduled|No events/);
+ assert.equal(out.empty,false);assert.deepEqual(f.state,before);
+});
+
+test('explicit legacy and transition recovery retain their existing empty-day presentation and actions',()=>{
+ for(const options of [{authority:'legacy',status:'partial'},{authority:'legacy',status:'unavailable',error:'Saved calendar recovery detail'},{authority:'canonical',status:'transition-required'}]){
+  const f=fixture({...options,empty:true});
+  f.state.legacy={present:true,readable:true,records:[{id:'retained',title:'Retained event',begin:Date.parse('2026-10-31T12:00:00Z'),end:Date.parse('2026-10-31T13:00:00Z')} ]};
+  const before=structuredClone(f.state),reads=f.refreshes.length,toasts=[];
+  const out=f.views.calendar.render({}, {toast:message=>toasts.push(message)});
+  assert.equal(out.calendarSourceLabel,'Saved app calendar · Read only');
+  if(options.error)assert.equal(out.nativeStatusLabel,options.error,'legacy recovery detail is retained');
+  assert.equal(out.empty,true);assert.equal(out.emptyText,'Free all day','existing legacy renderer presentation is unchanged');
+  assert.deepEqual(out.renderedRows.map(row=>row.id),['legacy-calendar:retained']);
+  assert.equal(out.canConfirmCalendarTransition,options.status==='transition-required');
+  assert.equal(typeof out.confirmCalendarTransition,'function');
+  out.newEvent();assert.deepEqual(toasts,['Choose Agent Calendar to create an event.']);
+  assert.equal(f.refreshes.length,reads);assert.deepEqual(f.state,before);
+ }
 });
