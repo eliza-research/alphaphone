@@ -236,7 +236,7 @@ test('Agent Calendar freshness: an unverified next event is never fresh or an em
   const source={provider:'eliza',side:'owner',grantId:'fixture',connectorAccountId:null,calendarId:'primary',includeInFeed:true,accessRole:'owner'};
   const event={...source,id:'event',title:'Verified today',status:'confirmed',startAt:new Date(at(16)).toISOString(),endAt:new Date(at(17)).toISOString()};
   let current=true,owner='owner',state={ownerKey:'owner',status:'ready',mutating:false,calendars:[source],next:{event},nextFresh:true,feed:undefined};
-  const opened=[],context={p:{},renderVals:()=>({}),deviceCalendarScope:()=>false,Date:class extends Date{static now(){return now;}},controller:{get state(){return state;},sourceHandle:()=> 'fixture'},calendarSourceKey:key,port:()=>({current:()=>current}),calendarOwnerKey:()=>owner,zone:()=> 'UTC',homeCalendarSelection:loaded.exports.homeCalendarSelection,homeCalendarValues:H.homeCalendarValues,presentHomeAgendaCard:H.presentHomeAgendaCard,agentReminderLead:H.agentReminderLead,overdueAgendaNext:H.overdueAgendaNext,refresh:()=>{throw Error('Home must not start a provider read');},calendarEventKey:e=>e.id,canonicalCalendarRow:()=>({off:0})};
+  let reads=0;const opened=[],context={p:{},renderVals:()=>({}),deviceCalendarScope:()=>false,Date:class extends Date{static now(){return now;}},controller:{get state(){return state;},sourceHandle:()=> 'fixture'},calendarSourceKey:key,port:()=>({current:()=>current}),calendarOwnerKey:()=>owner,zone:()=> 'UTC',homeCalendarSelection:loaded.exports.homeCalendarSelection,homeCalendarValues:H.homeCalendarValues,presentHomeAgendaCard:H.presentHomeAgendaCard,presentHomeAgendaFeed:H.presentHomeAgendaFeed,agentReminderLead:H.agentReminderLead,overdueAgendaNext:H.overdueAgendaNext,refresh:force=>{assert.equal(force,true);reads++;},calendarEventKey:e=>e.id,canonicalCalendarRow:()=>({off:0})};
   vm.runInNewContext(transformSync(adapter.slice(start,end+4),{loader:'ts'}).code,context);
   const shell={vget:()=>({calPrefs:{}}),openView:(...args)=>opened.push(args)},render=()=>context.p.renderVals.call(shell);
   let home=render();assert.doesNotMatch(home.homeCalendarTitle,/Verified today|Nothing planned/,'next-only cache is unverified');
@@ -244,6 +244,12 @@ test('Agent Calendar freshness: an unverified next event is never fresh or an em
   home=render();assert.equal(home.homeCalendarTitle,'Verified today');home.goCalendar();assert.equal(opened.at(-1)[0],'calendar');assert.equal(opened.at(-1)[1].calendarAuthority,'canonical','one merged Calendar route');
   for(const update of [{mutating:true},{status:'loading'},{ownerKey:'retired'},{feed:{...state.feed,state:'partial'}}]){
     const saved=state;state={...state,...update};assert.doesNotMatch(render().homeCalendarTitle,/Verified today|Nothing planned/,'unverified feed or owner never authorizes agenda');state=saved;
+  }
+  assert.equal(reads,0,'rendering and verified navigation never read');
+  for(const status of ['error','unavailable','partial']){
+    const saved=state;state={...state,status,error:'Calendar service unavailable',feed:status==='partial'?{...state.feed,state:'partial'}:null};
+    const failed=render();assert.equal(reads,0,'failure rendering never starts reads');assert.doesNotMatch(failed.homeCalendarTitle,/Verified today|Nothing planned/);
+    failed.goCalendar();assert.equal(reads,1,'explicit navigation retries the actual failed/unverified feed');reads=0;state=saved;
   }
   current=false;assert.doesNotMatch(render().homeCalendarTitle,/Verified today|Nothing planned/,'retired connection drops the event');current=true;
   state={...state,feed:{...state.feed,events:[]}};assert.equal(render().homeCalendarTitle,'Nothing planned','only complete covered feed can assert empty');
