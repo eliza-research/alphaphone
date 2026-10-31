@@ -5,6 +5,24 @@ import java.nio.file.*
 import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 
+// Each anonymous writer captures its final sink lexically; never resolve a dynamic `out` property.
+def boundedStream = { OutputStream destination, int maximum ->
+    final OutputStream target = destination
+    final int limit = maximum
+    new OutputStream() {
+        int count = 0
+        @Override synchronized void write(int value) {
+            if (++count > limit) throw new IOException('Bounded output limit exceeded')
+            target.write(value)
+        }
+        @Override synchronized void write(byte[] bytes, int offset, int length) {
+            if ((count += length) > limit) throw new IOException('Bounded output limit exceeded')
+            target.write(bytes, offset, length)
+        }
+        @Override synchronized void flush() { target.flush() }
+    }
+}
+
 gradle.projectsEvaluated {
     def app = gradle.rootProject.project(':app')
     def configFile = new File(app.property('calendarBridgeInputs').toString())
@@ -90,27 +108,24 @@ gradle.projectsEvaluated {
         def result = [:]
         [head:['rev-parse','HEAD'], tree:['rev-parse','HEAD^{tree}'], sdk:['rev-parse','HEAD:vendor/eliza']].each { key, args ->
             def output = new ByteArrayOutputStream()
-            def bounded = new FilterOutputStream(output) {
-                int count = 0
-                @Override void write(int value) {
-                    if (++count > 256) throw new IOException('Git identity output bound exceeded')
-                    this.out.write(value)
-                }
-                @Override void write(byte[] bytes, int offset, int length) {
-                    if ((count += length) > 256) throw new IOException('Git identity output bound exceeded')
-                    this.out.write(bytes, offset, length)
-                }
-            }
-            app.exec {
-                commandLine(['/usr/bin/git','-c','core.hooksPath=/dev/null','-c','core.fsmonitor=false',
+            def errors = new ByteArrayOutputStream()
+            def bounded = boundedStream(output, 256)
+            def boundedErrors = boundedStream(errors, 2048)
+            def status = app.exec { org.gradle.process.ExecSpec spec ->
+                spec.commandLine(['/usr/bin/git','-c','core.hooksPath=/dev/null','-c','core.fsmonitor=false',
                     '-c','core.pager=cat','-C',root.absolutePath] + args)
-                setEnvironment(gitEnv)
-                standardOutput = bounded
-            }.assertNormalExitValue()
+                spec.setEnvironment(gitEnv)
+                spec.setStandardOutput(bounded)
+                spec.setErrorOutput(boundedErrors)
+                spec.setIgnoreExitValue(true)
+            }
+            if (status.exitValue != 0)
+                throw new GradleException('Git identity read failed: ' + errors.toString('UTF-8'))
             if (output.size() > 256) throw new GradleException('Git identity output bound exceeded')
             result[key] = output.toString('UTF-8').trim()
         }
-        if (result != [head:cfg.head, tree:cfg.tree, sdk:cfg.sdk]) throw new GradleException('Source binding drift')
+        if (result != [head:cfg.head, tree:cfg.tree, sdk:cfg.sdk])
+            throw new GradleException('Source binding drift: expected=' + [head:cfg.head, tree:cfg.tree, sdk:cfg.sdk] + ', actual=' + result)
         result
     }
     def out = new File(cfg.outputDirectory).toPath().toAbsolutePath().normalize()
@@ -225,20 +240,13 @@ gradle.projectsEvaluated {
                 PATH:cfg.javaHome+'/bin:/usr/bin:/bin', LANG:'C.UTF-8', LC_ALL:'C.UTF-8']
             def log = out.resolve('bridge.log')
             Files.newOutputStream(log, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).withCloseable { stream ->
-                def bounded = new FilterOutputStream(stream) {
-                    int count = 0
-                    @Override synchronized void write(int value) {
-                        if (++count > 65536) throw new IOException('Bridge log write bound exceeded')
-                        this.out.write(value)
-                    }
-                    @Override synchronized void write(byte[] bytes, int offset, int length) {
-                        if ((count += length) > 65536) throw new IOException('Bridge log write bound exceeded')
-                        this.out.write(bytes, offset, length)
-                    }
-                }
-                app.exec {
-                    commandLine(command); workingDir(root); setEnvironment(env)
-                    standardOutput = bounded; errorOutput = bounded
+                def bounded = boundedStream(stream, 65536)
+                app.exec { org.gradle.process.ExecSpec spec ->
+                    spec.commandLine(command)
+                    spec.workingDir(root)
+                    spec.setEnvironment(env)
+                    spec.setStandardOutput(bounded)
+                    spec.setErrorOutput(bounded)
                 }.assertNormalExitValue()
             }
             if (Files.size(log) > 65536) throw new GradleException('Bridge log read bound exceeded')
