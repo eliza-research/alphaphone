@@ -1,4 +1,4 @@
-import {calendarReadBrokerDiagnosticHeader} from '@elizaos/contracts';
+import {calendarReadBrokerDiagnosticHeader} from '../vendor/eliza/packages/contracts/src/calendar.ts';
 import {managedGoogleFailureStage,managedGoogleTransportCodes,type ManagedGoogleFailureStage,type ManagedGoogleTransportCode,type ManagedGoogleTransportMessageFamily} from './managed-google-failure-stage.ts';
 /** Private Google tool transport shared by browser and signed native hosts. */
 import type {IncomingMessage,ServerResponse} from 'node:http';
