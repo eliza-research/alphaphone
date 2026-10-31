@@ -265,7 +265,7 @@ test('an initial Notes read failure stays read-only and a successful refresh cle
  await refreshCanonicalRead(page);
  await expect(page.getByText(readWarning,{exact:true})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Reload Notes',exact:true})).toHaveCount(0);
- await expect(page.getByText('No notes yet',{exact:true})).toBeVisible();
+ await expect(page.getByText('No notes yet. Create a note to get started.',{exact:true})).toBeVisible();
  const requests=await page.evaluate(()=>(window as any).canonicalNotesFixture.requests);
  expect(requests.filter((r:any)=>r.method==='POST')).toEqual([]);
  expect(foreign).toEqual([]);expect(errors).toEqual([]);
