@@ -168,7 +168,8 @@ test('explicit legacy and transition recovery retain their existing empty-day pr
   const f=fixture({...options,empty:true});
   f.state.legacy={present:true,readable:true,records:[{id:'retained',title:'Retained event',begin:Date.parse('2026-10-31T12:00:00Z'),end:Date.parse('2026-10-31T13:00:00Z')} ]};
   const before=structuredClone(f.state),reads=f.refreshes.length,toasts=[];
-  const out=f.views.calendar.render({}, {toast:message=>toasts.push(message)});
+  // Render the same persisted Calendar authority that the shell selected.
+  const out=f.views.calendar.render(f.calendar, {toast:message=>toasts.push(message)});
   assert.equal(out.calendarSourceLabel,'Saved app calendar · Read only');
   if(options.error)assert.equal(out.nativeStatusLabel,options.error,'legacy recovery detail is retained');
   assert.equal(out.empty,true);assert.equal(out.emptyText,'Free all day','existing legacy renderer presentation is unchanged');
@@ -176,6 +177,6 @@ test('explicit legacy and transition recovery retain their existing empty-day pr
   assert.equal(out.canConfirmCalendarTransition,options.status==='transition-required');
   assert.equal(typeof out.confirmCalendarTransition,'function');
   out.newEvent();assert.deepEqual(toasts,['Choose Agent Calendar to create an event.']);
-  assert.equal(f.refreshes.length,reads);assert.deepEqual(f.state,before);
+  assert.equal(f.refreshes.length,reads);assert.deepEqual(f.state,before);assert.deepEqual(f.creates,[]);
  }
 });
