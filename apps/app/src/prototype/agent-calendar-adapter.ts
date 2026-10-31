@@ -164,6 +164,8 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
   }
   if(out.empty&&!legacy&&!model?.feed)out.emptyText=out.calendarSourceText;
   else if(!rows.length)out.emptyText=model?.status==='ready'?'No events in this Calendar window':out.calendarSourceText;
+  // The header already owns this warning and its retry action; do not repeat it in the grid.
+  if(out.empty&&out.nativeStatusLabel&&out.emptyText===out.nativeStatusLabel)out.empty=false;
   return out;
  };
  p.renderVals=function(){const out=renderVals.call(this);
