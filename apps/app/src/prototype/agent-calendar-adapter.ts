@@ -131,8 +131,8 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
   const presentation={...state,add:null,events:visibleRows,canonicalCalendars:cals,calendarPresentationSources:presentationSources};
   const out=render(presentation,api);
   presentCalendarIntervals(render,presentation,api,out,legacy?!!model?.legacy?.readable:!!model?.feed);
-  out.calendarSourceLabel=legacy?'Saved app calendar · Read only':'Agent Calendar';out.calendarSourceText=model?.error??(!model?.ownerKey?'Connect to view Agent Calendar.':model?.status==='loading'?'Loading Agent Calendar…':unresolvedCalendarSources?'Some event sources could not be verified. Reminders remain separate.':model?.status==='partial'?'Some Calendar sources could not be verified. The shown schedule may be incomplete.':model?.status==='transition-required'?'Saved app records are kept unchanged. Review the transition before using Agent Calendar.':model?.status==='legacy-recovery'?'Saved calendar data needs review. Nothing was imported or reset.':'Uses the same Calendar service as your active agent.');
-  out.nativeStatusLabel=model?.status==='ready'?'':out.calendarSourceText;out.nativeStatusRetry=()=>refresh(true);out.newEvent=out.addAt=()=>legacy?api.toast('Choose Agent Calendar to create an event.'):newForm(api);
+  out.calendarSourceLabel=legacy?'Saved app calendar · Read only':'Agent Calendar';out.calendarSourceText=!legacy&&model?.status==='unavailable'?'Calendar is unavailable. Retry to load your schedule.':model?.error??(!model?.ownerKey?'Connect to view Agent Calendar.':model?.status==='loading'?'Loading Agent Calendar…':unresolvedCalendarSources?'Some event sources could not be verified. Reminders remain separate.':model?.status==='partial'?'Some Calendar sources could not be verified. The shown schedule may be incomplete.':model?.status==='transition-required'?'Saved app records are kept unchanged. Review the transition before using Agent Calendar.':model?.status==='legacy-recovery'?'Saved calendar data needs review. Nothing was imported or reset.':'Uses the same Calendar service as your active agent.');
+  out.nativeStatusLabel=model?.status==='ready'&&!unresolvedCalendarSources?'':out.calendarSourceText;out.nativeStatusRetry=()=>refresh(true);out.newEvent=out.addAt=()=>legacy?api.toast('Choose Agent Calendar to create an event.'):newForm(api);
   out.calendarAuthorityChoices=choices(state,api);
   out.canConfirmCalendarTransition=model?.status==='transition-required';out.confirmCalendarTransition=async()=>{try{await controller?.confirmLegacyRetention();refresh(true);}catch(error){api.toast(String(error));}};
   const chosen=rows.find((e:any)=>e.id===state.open);
@@ -164,6 +164,8 @@ export function installAgentCalendarAdapter(Component:any,views:Bag,preservation
   }
   if(out.empty&&!legacy&&!model?.feed)out.emptyText=out.calendarSourceText;
   else if(!rows.length)out.emptyText=model?.status==='ready'?'No events in this Calendar window':out.calendarSourceText;
+  // An incomplete window cannot establish that the selected day is free, even if verified rows exist on other days.
+  if(out.empty&&!legacy&&(unresolvedCalendarSources>0||model?.status==='partial'||model?.status==='unavailable')&&out.nativeStatusLabel)out.emptyText=out.nativeStatusLabel;
   // The header already owns this warning and its retry action; do not repeat it in the grid.
   if(out.empty&&out.nativeStatusLabel&&out.emptyText===out.nativeStatusLabel)out.empty=false;
   return out;
