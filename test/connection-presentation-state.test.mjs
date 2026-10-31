@@ -13,10 +13,10 @@ const functions=[
  section('function boundNavigation(', '/*\n * DEVELOPMENT INFRASTRUCTURE'),
 ].join('\n');
 const code=stripTypeScriptTypes(functions,{mode:'transform'});
-function fixture({android=true,dev=false,account={expiresAt:Date.now()+60000},purpose='agent',open=false}={}){
+function fixture({android=true,dev=false,browserResident=false,account={expiresAt:Date.now()+60000},purpose='agent',open=false}={}){
  const entries=[{id:'review-1',state:'reconciliation_required'}];let release;
  const selected={request(){},actions:{}};
- const context=vm.createContext({isAndroid:android,testMocksEnabled:dev,developmentPageSuspended:false,sending:null,flushConversationEvents:()=>{},listeners:new Set(),state:{open,automaticRestore:false,busy:false,error:'',cloudAccount:account,purpose,signIn:null,message:'Finish signing in in your browser.',session:{}},active:selected,epoch:1,navigationContext:()=>({view:'home'}),errorMessage:()=> 'Sign-in expired',readActionHistory:async()=>entries,Date,
+ const context=vm.createContext({isAndroid:android,testMocksEnabled:dev,browserCloudResidentEnabled:browserResident,developmentPageSuspended:false,sending:null,flushConversationEvents:()=>{},listeners:new Set(),state:{open,automaticRestore:false,busy:false,error:'',cloudAccount:account,purpose,signIn:null,message:'Finish signing in in your browser.',session:{}},active:selected,epoch:1,navigationContext:()=>({view:'home'}),errorMessage:()=> 'Sign-in expired',readActionHistory:async()=>entries,Date,
   ViewNavigationClient:class {constructor(request,current,context){this.current=current;this.context=context;}connectRenderer(){return()=>{};}}});
  vm.runInContext(code,context);
  return {context,entries,update:patch=>context.update(patch),snapshot:()=>context.state,review:()=>context.refreshActionReview(new AbortController().signal),navigation:()=>context.boundNavigation()};
@@ -338,4 +338,48 @@ test('explicit signed-out entry waits for restore, probes once when settled, and
  const gate=source.includes('const signInEntryRequired=')?'signInEntryRequired':'productionSignInRequired',a=source.indexOf('  useEffect(() => {\n    if (!'+gate+')'),b=source.indexOf('  }, [',a);assert.ok(a>=0&&b>a);const callback=source.slice(a,b).replace('  useEffect(() => {','(()=>{')+'})';
  const evaluate=()=>{f.context.snapshot=f.snapshot();f.context.productionSignInRequired=f.context.productionCloudSignInRequired(f.snapshot());f.context.signInEntryRequired=f.context.productionSignInRequired||(typeof f.context.explicitSignedOutCloudEntry==='function'&&f.context.explicitSignedOutCloudEntry(f.snapshot()));f.context.automaticSignInProbe=ref;f.context.residentEnvironment=()=> 'production';f.context.connectionController={beginSignIn:()=>{probes++;}};vm.runInContext(stripTypeScriptTypes('var runProbe='+callback+';runProbe();',{mode:'transform'}),f.context);};
  f.update({startupResolved:false,automaticRestore:true});evaluate();assert.equal(probes,0);f.update({startupResolved:true,automaticRestore:false});evaluate();assert.equal(probes,1);evaluate();assert.equal(probes,1);f.update({open:false});evaluate();assert.equal(probes,1);assert.equal(ref.current,false);
+});
+
+test('a settled signed-out browser resident agent entry uses the approved sign-in route',()=>{
+ const f=fixture({android:false,browserResident:true,account:null,purpose:'agent',open:true});
+ f.update({startupResolved:true,residentSavedCredential:false});
+ assert.equal(f.context.productionCloudSignInRequired(f.snapshot()),false);
+ assert.equal(f.context.explicitSignedOutCloudEntry(f.snapshot()),true);
+ assert.equal(f.context.connectionChooserVisible(f.snapshot()),true);
+ f.update({open:false});
+ assert.equal(f.context.explicitSignedOutCloudEntry(f.snapshot()),false);
+});
+test('browser resident sign-in entry does not replace unresolved, retained or recovering agent state',()=>{
+ for(const patch of [
+  {startupResolved:false},
+  {residentSavedCredential:undefined},
+  {residentSavedCredential:true},
+  {residentPlanNotice:'offline'},
+  {residentStarting:true},
+  {residentRecoveryReason:'ipc-recovery-retention-limit'},
+  {error:'Saved source recovery required'},
+ ]){
+  const f=fixture({android:false,browserResident:true,account:null,purpose:'agent',open:true});
+  f.update({startupResolved:true,residentSavedCredential:false,...patch});
+  assert.equal(f.context.explicitSignedOutCloudEntry(f.snapshot()),false);
+ }
+});
+test('non-resident browser, signed-in state and native required-sign-in policy retain their routes',()=>{
+ const browser=fixture({android:false,account:null,purpose:'agent',open:true});
+ browser.update({startupResolved:true,residentSavedCredential:false});
+ assert.equal(browser.context.explicitSignedOutCloudEntry(browser.snapshot()),false);
+ const signedIn=fixture({android:false,browserResident:true,purpose:'agent',open:true});
+ signedIn.update({startupResolved:true,residentSavedCredential:false});
+ assert.equal(signedIn.context.explicitSignedOutCloudEntry(signedIn.snapshot()),false);
+ const native=fixture({android:true,browserResident:true,account:null,purpose:'agent',open:true});
+ native.update({startupResolved:true,residentSavedCredential:false});
+ assert.equal(native.context.explicitSignedOutCloudEntry(native.snapshot()),false);
+ assert.equal(native.context.productionCloudSignInRequired(native.snapshot()),true);
+});
+test('explicit signed-out account and plan entries remain available for a retained offline identity',()=>{
+ for(const purpose of ['cloud-account','plan']){
+  const f=fixture({android:false,browserResident:true,account:null,purpose,open:true});
+  f.update({startupResolved:true,residentSavedCredential:true,residentPlanNotice:'offline'});
+  assert.equal(f.context.explicitSignedOutCloudEntry(f.snapshot()),true);
+ }
 });

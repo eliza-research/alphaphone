@@ -2990,9 +2990,21 @@ export function productionCloudSignInRequired(snapshot: Pick<ConnectionSnapshot,
   const retainedOfflineIdentity=!snapshot.cloudAccount&&snapshot.residentSavedCredential===true&&snapshot.residentPlanNotice==='offline'&&!snapshot.error;
   return isAndroid&&!testMocksEnabled&&!retainedOfflineIdentity&&(!snapshot.cloudAccount||snapshot.error===errorMessage({status:401})||(snapshot.cloudAccount.expiresAt!==undefined&&snapshot.cloudAccount.expiresAt<=Date.now()));
 }
-/** An explicit signed-out account/plan entry uses Alpha's existing sign-in screen. */
-export function explicitSignedOutCloudEntry(snapshot: Pick<ConnectionSnapshot,'open'|'cloudAccount'|'purpose'>): boolean {
-  return snapshot.open&&!snapshot.cloudAccount&&(snapshot.purpose==='cloud-account'||snapshot.purpose==='plan');
+/** Explicit account/plan and settled first-sign-in entries use Alpha's existing sign-in screen. */
+export function explicitSignedOutCloudEntry(
+  snapshot: Pick<ConnectionSnapshot,'open'|'cloudAccount'|'purpose'> &
+    Partial<Pick<ConnectionSnapshot,'startupResolved'|'residentSavedCredential'|'residentStarting'|'residentRecoveryReason'|'residentPlanNotice'|'error'>>,
+): boolean {
+  // Browser resident previews use the same approved form, without imposing Android's
+  // required-sign-in policy or replacing genuine restore/offline/recovery controls.
+  const firstBrowserResidentSignIn =
+    !isAndroid && browserCloudResidentEnabled && snapshot.purpose==='agent' &&
+    snapshot.startupResolved===true && snapshot.residentSavedCredential===false &&
+    !snapshot.residentStarting && !snapshot.residentRecoveryReason &&
+    snapshot.residentPlanNotice!=='offline' && !snapshot.error;
+  return snapshot.open&&!snapshot.cloudAccount&&(
+    snapshot.purpose==='cloud-account'||snapshot.purpose==='plan'||firstBrowserResidentSignIn
+  );
 }
 export function connectionChooserVisible(snapshot: Pick<ConnectionSnapshot,'open'|'automaticRestore'|'busy'|'error'>&Partial<Pick<ConnectionSnapshot,'cloudAccount'|'purpose'|'signIn'|'membershipBalance'|'fundingRefused'|'billingReviewEmail'|'membershipDismissed'|'startupResolved'|'residentSavedCredential'|'residentPlanNotice'>>,foregroundReply=false): boolean {
   if(snapshot.billingReviewEmail)return true;
