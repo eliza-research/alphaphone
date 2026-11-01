@@ -16,7 +16,7 @@ const OwnProviderChoice=new Function('React','useRef','useState','Capacitor','br
 const ownKeys=transformSync(between(source,'/** First run shows one sign-in method','/** One explicit choice;'),{loader:'tsx',jsxFactory:'React.createElement'}).code;
 const SignInOrOwnKeys=new Function('React','useState','AlphaAuthBrand',ownKeys+';return SignInOrOwnKeys;')(React,React.useState,()=>null);
 
-const renderBranch=new Function('React','CloudSignInPanel','snapshot','productionSignInRequired','signInEntryRequired','residentEnvironment','inAppGoogle','panel','RESIDENT_UNPACKAGED','connectionController','browserCloudResidentEnabled','testMocksEnabled','ResidentRecoveryPanel','loadSignInService','cloudSignInPhone','inAppPhone','inAppEmail','SignInOrOwnKeys','OwnProviderChoice','LOCAL_PROVIDER_MODEL',transformSync('function render(){'+branch+'return null;}',{loader:'tsx',jsxFactory:'React.createElement'}).code+';return render();');
+const renderBranch=new Function('React','CloudSignInPanel','snapshot','productionSignInRequired','signInEntryRequired','residentEnvironment','inAppGoogle','panel','RESIDENT_UNPACKAGED','connectionController','browserCloudResidentEnabled','testMocksEnabled','ResidentRecoveryPanel','loadSignInService','cloudSignInPhone','inAppPhone','inAppEmail','SignInOrOwnKeys','OwnProviderChoice','LOCAL_PROVIDER_MODEL','dismiss',transformSync('function render(){'+branch+'return null;}',{loader:'tsx',jsxFactory:'React.createElement'}).code+';return render();');
 const controller={beginSignIn(){},signInGoogle(){},signInEmail(){},verifySignInCode(){},resendSignInCode(){},cancelSignIn(){}};
 const render=snapshot=>renderToStaticMarkup(renderBranch(React,CloudSignInPanel,snapshot,true,true,()=> 'production',false,null,'unpackaged',controller,false,false,()=>null,undefined,null,false,true,SignInOrOwnKeys,OwnProviderChoice,'model'));
 test('production signed-out entry server-renders direct options before readiness without false Google failure',()=>{
@@ -24,6 +24,15 @@ test('production signed-out entry server-renders direct options before readiness
  assert.match(html,/Welcome to Alpha/);assert.match(html,/Continue with Google/);assert.match(html,/Email me a code/);assert.match(html,/Retry sign-in/);
  assert.match(html,/Use your own API keys/);assert.doesNotMatch(html,/AI provider|>Own API keys<|Cerebras API key/,'the welcome page never shows the Settings provider switch or the key form under Cloud');
  assert.doesNotMatch(html,/Sign in with Eliza Cloud|Google sign-in is unavailable/);assert.match(html,/disabled/);
+});
+test('Restore saved sign-in is a Cloud control: offered with Cloud sign-in, absent from the own-key view',()=>{
+ const legacy={signIn:{step:'choose',environment:'production'},busy:false,message:'',error:'',cloudAccount:null,legacySignInRecovery:true};
+ assert.match(render(legacy),/Restore saved sign-in/);
+ // The welcome page after "Use your own API keys": the same branch with the own-key view selected.
+ const OwnKeysSelected=new Function('React','useState','AlphaAuthBrand',ownKeys+';return SignInOrOwnKeys;')(React,()=>[true,()=>{}],()=>null);
+ const html=renderToStaticMarkup(renderBranch(React,CloudSignInPanel,legacy,true,true,()=> 'production',false,null,'unpackaged',controller,false,false,()=>null,undefined,null,false,true,OwnKeysSelected,OwnProviderChoice,'model',()=>{}));
+ assert.match(html,/Cerebras API key/);assert.match(html,/Sign in with Cloud instead/);
+ assert.doesNotMatch(html,/Restore saved sign-in|Continue with Google|Email me a code|Retry sign-in/);
 });
 test('ready choice renders usable email path and explicit unavailable Google notice',()=>{
  const html=render({signIn:{step:'choose',environment:'production'},busy:false,message:'',error:''});

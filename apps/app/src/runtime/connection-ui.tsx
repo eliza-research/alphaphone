@@ -3278,8 +3278,8 @@ export function ConnectionChooser() {
       extra={signInEntryRequired && !snapshot.signIn && !snapshot.busy
         ? <button onClick={()=>void connectionController.beginSignIn(residentEnvironment(),true)}>Retry sign-in</button>
         : testMocksEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Browser sign-in (diagnostic)</button>:undefined}/>
-    </SignInOrOwnKeys>
     {!snapshot.cloudAccount&&snapshot.legacySignInRecovery&&requiredSignInView.step==='choose'&&requiredSignInView.environment==='production'&&<div className="alpha-connection-actions"><button disabled={snapshot.busy} onClick={()=>void connectionController.restoreSavedSignIn()}>Restore saved sign-in</button></div>}
+    </SignInOrOwnKeys>
     {snapshot.signOutNotice && snapshot.signOutNotice!==snapshot.message && <p role="status">{snapshot.signOutNotice}</p>}
     {productionSignInRequired && <ResidentRecoveryPanel snapshot={snapshot}/>}
   </div></div>;
