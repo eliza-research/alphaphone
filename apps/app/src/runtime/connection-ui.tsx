@@ -2212,7 +2212,7 @@ export const connectionController = {
     // The in-app sign-in screen closes back to where it was opened; a pending attempt is cancelled.
     if(pendingBillingReview){connectionController.cancelBillingReview();return;}
     if(state.cloudAccount&&(state.membershipBalance==='zero'||state.fundingRefused)){update({open:false,purpose:'agent',membershipDismissed:true});return;}
-    if(state.signIn){connectionController.cancelSignIn();return;}
+    if(state.signIn){void connectionController.cancelSignIn().catch(error=>update({error:errorMessage(error)}));return;}
     if(residentSignInRequired()){if((state.purpose==='cloud-account'||state.purpose==='plan')&&!state.busy)update({purpose:'agent',message:'',error:'',redeemError:'',redeemNotice:''});return;}
     if (!state.busy || residentStartInBackground || state.residentStarting) {if(state.purpose!=='cloud-account'&&state.purpose!=='plan')clearPersonalSetup();update({ open: false,purpose:'agent',redeemError:'',redeemNotice:'' });}
   },
@@ -3158,7 +3158,7 @@ export function ConnectionChooser() {
     // preserve that focus, rather than moving it back to the dialog and dismissing the keyboard.
     if (!panel.current?.contains(document.activeElement)) panel.current?.focus();
     const dismiss = () => {
-      if (connectionController.getSnapshot().signIn) connectionController.cancelSignIn();
+      if (connectionController.getSnapshot().signIn) void connectionController.cancelSignIn().catch(error=>update({error:errorMessage(error)}));
       else if (snapshot.busy) connectionController.cancel();
       else connectionController.close();
     };
@@ -3206,7 +3206,7 @@ export function ConnectionChooser() {
   const requiredSignInView: SignInView = snapshot.signIn ?? { step: 'choose', environment: residentEnvironment() };
   if (snapshot.signIn || signInEntryRequired) return <div className={productionSignInRequired?'alpha-auth-page':'alpha-connection-scrim'}><div className={`alpha-connection alpha-connection-native alpha-cloud-sign-in${productionSignInRequired?' alpha-auth-content':''}`} role={productionSignInRequired?'main':'dialog'} aria-modal={productionSignInRequired?undefined:true} aria-labelledby="cloud-sign-in-title" aria-busy={snapshot.busy||undefined} tabIndex={-1} ref={panel}>
     <CloudSignInPanel serviceLoader={loadSignInService} phone={cloudSignInPhone && inAppPhone} emailEnabled={inAppEmail} view={requiredSignInView} busy={snapshot.busy} ready={!!snapshot.signIn} dismissible={!productionSignInRequired} google={inAppGoogle} message={snapshot.message} error={snapshot.error} errorIsNotice={snapshot.error===RESIDENT_UNPACKAGED}
-      actions={{phone:number=>void connectionController.signInPhone(number),google:()=>void connectionController.signInGoogle(),email:address=>void connectionController.signInEmail(address),verify:code=>void connectionController.verifySignInCode(code),resend:()=>void connectionController.resendSignInCode(),cancel:()=>connectionController.cancelSignIn()}}
+      actions={{phone:number=>void connectionController.signInPhone(number),google:()=>void connectionController.signInGoogle(),email:address=>void connectionController.signInEmail(address),verify:code=>void connectionController.verifySignInCode(code),resend:()=>void connectionController.resendSignInCode(),cancel:()=>void connectionController.cancelSignIn().catch(error=>update({error:errorMessage(error)}))}}
       extra={signInEntryRequired && !snapshot.signIn && !snapshot.busy
         ? <button onClick={()=>void connectionController.beginSignIn(residentEnvironment(),true)}>Retry sign-in</button>
         : testMocksEnabled?<button disabled={snapshot.busy} onClick={()=>void connectionController.signInBrowser()}>Browser sign-in (diagnostic)</button>:undefined}/>

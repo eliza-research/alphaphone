@@ -173,7 +173,7 @@ test('native Back and Escape share auth cancellation instead of leaving an expir
   const source=part('    const dismiss = () => {','    const back = ');
   const compile=transformSync(source,{loader:'ts',format:'cjs'}).code;
   let current={signIn:{...code}},calls=[];
-  const controller={getSnapshot:()=>current,cancelSignIn:()=>calls.push('auth'),cancel:()=>calls.push('generic'),close:()=>calls.push('close')};
+  const controller={getSnapshot:()=>current,cancelSignIn:async()=>{calls.push('auth');},cancel:()=>calls.push('generic'),close:()=>calls.push('close')};
   const dismiss=new Function('connectionController','snapshot',compile+'return dismiss;')(controller,{busy:true});
   dismiss();assert.deepEqual(calls,['auth']);
   current={signIn:null};dismiss();assert.deepEqual(calls,['auth','generic'],'reads the current auth state, not stale effect state');
@@ -253,4 +253,8 @@ test('required chooser Back retains its guard on Android and browser-resident pl
   const f=controllerFixture(platform);f.state.signIn={...choose};f.setRequired(true);
   await f.connectionController.cancelSignIn();assert.deepEqual(f.state.signIn,choose);assert.equal(f.events.length,0);
  }
+});
+test('callers of the async sign-in cancel report its failure instead of leaving an unhandled rejection',()=>{
+ const calls=[...ui.matchAll(/connectionController\.cancelSignIn\(\)(.*)/g)];assert.ok(calls.length>=3);
+ for(const [,after] of calls)assert.ok(after.startsWith('.catch(error=>update({error:errorMessage(error)}))'),after);
 });
