@@ -178,7 +178,6 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
   // partials, so timing and the diagnostics export tell it from the live assistant ('stream').
   const batchRecordingEnded=(id:string|undefined)=>{if(!id||timedRecording===id)return;recordingEnded(id,'conversation');recordLiveVoiceTiming({mode:'batch',partials:0});};
   // Said once per page session: the half-duplex loop cannot hear the user while a reply plays.
-  let halfDuplexDisclosed=false;
   let mediaUnconfirmed:unknown;
   let retirement:{shell:any;phase:'stopping'|'error';returnChat:string;view:string|null;binding:string;panelChat:string;promise:Promise<void>;approval?:AbortController;proposalId?:string}|undefined;
   const refresh = () => chatDestination ? chatDestination.shell.setState({}) : api?.setView('notes', { nativeVoiceRevision: Date.now() });
@@ -610,9 +609,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         conversationLive=assistant;conversationVoice=assistant;conversationInterim='';conversationLevels=[];started=Date.now();
         await assistant.start();current();return;
       }
-      // The live assistant is not ready (or this is a Cloud route): the recorded-clip loop listens
-      // only between replies, so say once that speaking will not interrupt a reply.
-      if(!halfDuplexDisclosed){halfDuplexDisclosed=true;chat.shell.toast('Speaking will not interrupt Alpha’s reply in this voice mode. Close the voice conversation to stop a reply.');}
+      // The live assistant is not ready (or this is a Cloud route): the recorded-clip loop listens only between replies.
       const conversation:BatchVoiceConversation<Clip>=new BatchVoiceConversation<Clip>({
         conversationId:prepared.binding.conversationId,assertCurrent:current,
         capture:async input=>{current();batchCaptureRetired=false;conversationPrepared={...conversationPrepared!,context:chat.shell.voiceConversationContext(prepared.binding)};current();const capture=await captureConversationAudio(selected,current,input);return {stop:async()=>{const value=await capture.stop();current();batchCaptureRetired=true;return value;},cancel:async()=>{await capture.cancel();batchCaptureRetired=true;}};},
