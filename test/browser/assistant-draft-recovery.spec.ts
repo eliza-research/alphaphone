@@ -13,9 +13,10 @@ test.use({contextOptions:{reducedMotion:'reduce'}});
 test.beforeEach(async({page})=>{await page.addInitScript(()=>{if(!sessionStorage.getItem('draft-test-init')){localStorage.setItem('alpha.connection.selection.v1',JSON.stringify({kind:'offline'}));sessionStorage.setItem('draft-test-init','1');}});await page.goto('/');});
 const composer=(page:any)=>page.getByRole('textbox',{name:'Ask Alpha',exact:true});
 const status=(page:any)=>page.getByRole('status',{name:'Assistant draft status',exact:true});
+const savedText=(page:any)=>page.evaluate(async()=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');const binding=await c.assistantDraftBinding(new AbortController().signal);return (await(await(await import('/src/runtime/assistant-draft-store.ts')).assistantDraftStore(binding)).read())?.text||'';});
 async function saved(page:any){
  const text=await composer(page).inputValue();
- await expect.poll(()=>page.evaluate(async()=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');const binding=await c.assistantDraftBinding(new AbortController().signal);return (await(await(await import('/src/runtime/assistant-draft-store.ts')).assistantDraftStore(binding)).read())?.text||'';})).toBe(text);
+ await expect.poll(()=>savedText(page)).toBe(text);
  await expect(status(page)).toHaveCount(0);
 }
 test('an unsent multiline draft survives reload and clearing stays cleared',async({page})=>{
@@ -27,11 +28,18 @@ test('another tab cannot replace a draft silently and recovery retains the curre
  await other.getByRole('button',{name:'Replace saved draft with this text',exact:true}).click();await saved(other);await page.reload();await expect(composer(page)).toHaveValue('Second window');
 });
 // Another window (the assistant surface is a second WebView) clears the row: this window's next
-// keystroke is refused on its older receipt, and the copy it then reads is empty. Nothing is offered;
-// the text is saved over that newer row, and the other window cannot overwrite it in turn.
-test('another tab clearing the draft is not offered for review and this tab keeps its typing',async({page,context})=>{
+// keystroke is refused on its older receipt, and the copy it then reads is empty. When that clear
+// replaced words this window showed, the other window may have sent them: the review is shown and
+// the row keeps the clear until Replace. When it replaced none of this window's words, nothing is
+// offered: the text is saved over that newer row, and the other window cannot overwrite it in turn.
+test('another tab clearing the draft is reviewed only when it cleared words this tab showed',async({page,context})=>{
  await composer(page).fill('Old words');await saved(page);
  const other=await context.newPage();await other.goto(page.url());await expect(composer(other)).toHaveValue('Old words');await composer(other).fill('');await saved(other);
+ await composer(page).fill('hi');await expect(status(page)).toContainText('Review the saved copy');await expect(page.getByText('Saved copy: (Empty saved draft)',{exact:true})).toBeVisible();
+ await expect(composer(page)).toHaveValue('hi');expect(await savedText(page)).toBe('');
+ await page.getByRole('button',{name:'Replace saved draft with this text',exact:true}).click();await saved(page);
+ await composer(page).fill('');await saved(page);
+ await composer(other).fill('Other words');await saved(other);await composer(other).fill('');await saved(other);
  await composer(page).fill('hi');await saved(page);await expect(composer(page)).toHaveValue('hi');
  await expect(page.getByRole('button',{name:'Restore saved draft',exact:true})).toHaveCount(0);await expect(page.getByText('(Empty saved draft)',{exact:false})).toHaveCount(0);
  await composer(other).fill('Other words');await expect(status(other)).toContainText('Review the saved copy');await expect(other.getByText('Saved copy: hi',{exact:true})).toBeVisible();

@@ -171,36 +171,34 @@ function releaseComposerSend(shell:Shell,heldKey:string|undefined,heldText:strin
  * fails too, its "Draft was not saved" notice and explicit retry stay.
  * A write refused while the composer sends is reviewed, never kept: another window's send leaves
  * the same empty row, so it may be the only sign that this text was already sent from there.
- * A refused write names the receipt it expected: the copy this window last saved or read. When
- * that copy held words, the row moved on from words this window showed, and another window may
- * have sent them. Keeping the editor's text does not make those words fresh: they are noted for
- * the binding, and the composer's Send reviews them before sending them again, also after an edit
- * that comes back to them. Other words typed over the empty copy are kept and sent as before.
+ * An empty copy that replaced words this window read or saved (composerDraftStore notes it) is
+ * reviewed too, never kept or dismissed: another window may have sent those words, and its clear
+ * is then the only sign of that send, for this window, a reload and every other window. The row
+ * keeps it until the person chooses a copy, as before 3291375f. Typing over an empty copy that
+ * replaced none of this window's words (the owner's "hi") is kept as above.
  */
 function keepOverEmptySavedDraft(shell:Shell):boolean{
   const draft=shell.composerDraft,state=draft.state,kept=draft.binding+'\u0000'+String(shell.S().draft||'');
   if(!state.conflict){if(shell.emptyDraftKept!==kept)shell.emptyDraftKept=undefined;return false;}
-  if(state.unsettled||state.savedText.trim())return false;
-  if(state.message!==DEFAULT_DURABLE_DRAFT_MESSAGES.savedAvailable){
-    if(shell.draftSendPending||shell.emptyDraftKept===kept)return false;shell.emptyDraftKept=kept;
-    const stale=shell.unsavedDraftReceipts?.get(draft.binding)?.text.trim();
-    if(stale){const texts:Map<string,Set<string>>=shell.staleDraftTexts??=new Map();texts.set(draft.binding,(texts.get(draft.binding)??new Set()).add(stale));}
-  }
+  if(state.unsettled||state.savedText.trim()||shell.composerDraftReceipts?.get(draft.binding)?.moved)return false;
+  if(state.message!==DEFAULT_DURABLE_DRAFT_MESSAGES.savedAvailable){if(shell.draftSendPending||shell.emptyDraftKept===kept)return false;shell.emptyDraftKept=kept;}
   draft.keepCurrent();
   if(shell.firstSendReview)shell.refreshDraftBinding();
   return true;
 }
 /**
  * The composer's draft store for one binding: every read and write goes to assistantDraftStore
- * unchanged. A write that does not save leaves the receipt it named for keepOverEmptySavedDraft,
- * until a write for the binding saves again.
+ * unchanged. Per binding it notes the copy this window last read or saved (its revision and
+ * whether it held words, never its text), and that the saved copy moved on from those words when
+ * a read finds another revision (another window sent, cleared or replaced them). That stays noted
+ * until this window saves the binding again. Only keepOverEmptySavedDraft reads it.
  */
 async function composerDraftStore(shell:Shell,binding:string){
-  const store=await assistantDraftStore(binding),unsaved:Map<string,unknown>=shell.unsavedDraftReceipts??=new Map();
-  return {...store,save:async(...write:Parameters<typeof store.save>)=>{
-    try{const saved=await store.save(...write);unsaved.delete(binding);return saved;}
-    catch(error){unsaved.set(binding,write[0]);throw error;}
-  }};
+  const store=await assistantDraftStore(binding),receipts:Map<string,{revision?:string;words:boolean;moved:boolean}>=shell.composerDraftReceipts??=new Map();
+  const note=(row:Awaited<ReturnType<typeof store.read>>,saved:boolean)=>{const last=receipts.get(binding);receipts.set(binding,{revision:row?.revision,words:!!row?.text.trim(),moved:!saved&&!!last&&(last.moved||(last.words&&last.revision!==row?.revision))});};
+  return {...store,
+    read:async(signal?:AbortSignal)=>{const row=await store.read(signal);note(row,false);return row;},
+    save:async(...write:Parameters<typeof store.save>)=>{const row=await store.save(...write);note(row,true);return row;}};
 }
 const preDispatchRefusals=new Set(['Finish the connection or history operation before sending.','Wait for the current reply before sending another message.',NO_AGENT_SEND,RESIDENT_STARTING_NOTICE,RESIDENT_RECOVERING_NOTICE]);
 // It also marks every failure that happened before it posted the message (`notDispatched`).
@@ -1415,10 +1413,8 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     const heldText=String(s.draft||'');let heldKey:string|undefined;
     if(fromComposer){
       this.draftSendPending=true;
-      // The durable draft keeps this text until the message is known to have been dispatched. Words
-      // this window showed after another window moved its saved copy on, kept without a review
-      // (keepOverEmptySavedDraft), may have been sent from there: sending them again is reviewed.
-      try{await this.draftBindingTask;heldKey=this.composerDraft.binding;const stale=this.staleDraftTexts?.get(heldKey);if(stale?.has(heldText.trim())){if(!await messageReviews.confirm('stale-draft-'+heldKey,'Review message before sending','Another window changed this draft after this window last saved it. '+DEFAULT_DURABLE_DRAFT_MESSAGES.unsettled+'\n\nMessage: '+heldText,'Send'))return;if(this.composerDraft.binding!==heldKey)throw Error(DEFAULT_DURABLE_DRAFT_MESSAGES.changed);stale.delete(heldText.trim());}await this.composerDraft.hold(heldText,current);}catch(error){this.toast(error instanceof Error?error.message:'Draft could not be prepared. Nothing was sent.');return;}finally{this.draftSendPending=false;}
+      // The durable draft keeps this text until the message is known to have been dispatched.
+      try{await this.draftBindingTask;heldKey=this.composerDraft.binding;await this.composerDraft.hold(heldText,current);}catch(error){this.toast(error instanceof Error?error.message:'Draft could not be prepared. Nothing was sent.');return;}finally{this.draftSendPending=false;}
     }
     const reviewedSource=fromComposer?this.reviewedSourceDraft:null;if(fromComposer)this.reviewedSourceDraft=null;
     // Everything this send later shows belongs to the agent connection it was sent on.
