@@ -108,8 +108,16 @@ test('every action in every workflow is pinned to an exact commit, one commit pe
   }
  }
  assert.deepEqual([...pins.keys()].filter(name=>!name.startsWith('actions/')).sort(),['android-actions/setup-android','gradle/actions/setup-gradle','oven-sh/setup-bun','reactivecircus/android-emulator-runner'],'a new third-party action needs its own review');
- // No step runs from a container image reference (which a commit pin does not cover), and no workflow grants a write permission.
- for(const file of files){const text=read(path.join('.github/workflows',file));assert.doesNotMatch(text,/\bdocker:\/\//,file);assert.doesNotMatch(text,/^\s+[a-z-]+: write\s*$/m,`${file} grants a write permission`);}
+ // No step runs from a container image reference (which a commit pin does not cover), and no workflow grants a write permission
+ // except the develop pin sync (docs/ci-cost-policy.md), whose grants are job-scoped and whose one push is its bot branch.
+ const writes={'eliza-pin-sync.yml':['actions','contents','issues','pull-requests']};
+ for(const file of files){const text=read(path.join('.github/workflows',file));assert.doesNotMatch(text,/\bdocker:\/\//,file);
+  const granted=[...new Set([...text.matchAll(/^\s+([a-z-]+): write\s*$/gm)].map(match=>match[1]))].sort();
+  assert.deepEqual(granted.filter(name=>!(writes[file]??[]).includes(name)),[],`${file} grants a write permission`);}
+ const sync=read('.github/workflows/eliza-pin-sync.yml');
+ assert.match(sync,/^permissions: \{\}$/m,'the pin sync grants nothing at workflow level');
+ assert.match(sync,/^  BOT_BRANCH: bot\/eliza-pin-sync$/m);
+ assert.deepEqual([...sync.matchAll(/git push [^\n]*/g)].map(match=>match[0]),['git push --force-with-lease="refs/heads/$BOT_BRANCH:$BOT_HEAD" origin "HEAD:refs/heads/$BOT_BRANCH"'],'the pin sync pushes only its bot branch');
 });
 
 test('a change to the emulator evidence workflow selects no automatic lane of its own',()=>{

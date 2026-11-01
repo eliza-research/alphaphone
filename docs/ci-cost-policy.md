@@ -138,6 +138,79 @@ never networks for it. The default warns; `--upstream-reachability=fail` or
 `off` skips it. Refresh the record after a pin change with
 `node scripts/verify-upstream.mjs --record-reachability` (uses `gh api`).
 
+## Eliza develop pin sync
+
+`.github/workflows/eliza-pin-sync.yml` keeps the shared SDK pin on elizaOS/eliza `develop`,
+so the pin cannot drift onto a branch only Alpha uses. Every hour (minute 41), on a manual
+dispatch and on a `repository_dispatch` of type `eliza-develop-updated`, a short read-only job
+compares the `upstream.lock.json` pin on `main` with the `develop` head
+(`node scripts/eliza-pin-sync.mjs status`, `gh api` reads only). When `main` already pins
+`develop` it does nothing, apart from closing a leftover pin PR.
+
+When `develop` has moved, a second job rebuilds one PR, **Pin Eliza develop <short>**, on the
+branch `bot/eliza-pin-sync` from the current `main`, with the steps of the manual pin commits
+(#777, #779):
+
+- moves the literal pin fields (`upstream.lock.json`, the `vendor/eliza` gitlink,
+  `scripts/ci/calendar-bridge.py`, the voice host record and the remaining-work inventory) and
+  each patch manifest whose targets are unchanged at the new pin;
+- writes `docs/evidence/sdk-<short>-build-input-admission-<date>.json` over the previous
+  record's paths, then rolls the voice host comparison and the embedding host's open
+  requalification forward;
+- re-records `scripts/ci/upstream-reachability.json` with
+  `node scripts/verify-upstream.mjs --record-reachability`, re-audits with
+  `node scripts/dependency-audit.mjs --resident --write` and regenerates the notices with
+  `node scripts/generate-licenses.mjs`;
+- moves the resident dispositions only when the fresh audit reproduces every finding, and names
+  the new pin in `docs/requirements.json` and `docs/mvp-current-status.md`.
+
+It runs `verify-upstream` in fail mode, the notices check and the pin-bound record tests on
+`main` first and again at the new pin; only a check that passes on `main` and fails at the new
+pin blocks the PR. The PR body lists the new and old pins, the upstream commit count,
+the compare link, the `verify-upstream` output and a **Needs a person** list: commits only on
+the current pin that the move would drop, a patch whose target changed upstream, a changed
+mobile UUID builder, a resident audit with new findings, a native input change under an
+admitted host, or a failed check. Only when that list is empty does it dispatch Browser MVP and
+Android foundation on the bot branch (a `GITHUB_TOKEN` push starts no `pull_request` run);
+those runs report on the PR head.
+
+A scheduled rebuild waits until the PR is `ELIZA_PIN_SYNC_REFRESH_HOURS` old (default 6), so
+full CI runs on it at most about four times a day; a manual dispatch rebuilds at once. The
+hourly check is about one runner-minute; a rebuild is roughly 10 to 20 (npm ci, the 1 GB vendor
+fetch and the scripts above).
+
+It never pushes `main`. Its one push is a `--force-with-lease` to `bot/eliza-pin-sync`, which
+`test/ci-emulator-evidence.test.mjs` pins. The workflow grants nothing at workflow level, and
+its jobs hold the only write grants in any workflow: `contents`, `pull-requests` and `actions`
+for the PR job, `issues` for the optional drift comment.
+
+| Repository variable | Default | Effect |
+| --- | --- | --- |
+| `ELIZA_PIN_SYNC` | unset | `off` pauses the schedule and repository dispatches; a manual dispatch still runs |
+| `ELIZA_PIN_SYNC_AUTOMERGE` | unset (off) | `true` turns on squash auto-merge for a PR whose **Needs a person** list is empty, only while `main` has a required-checks ruleset |
+| `ELIZA_PIN_SYNC_DISPATCH_CHECKS` | unset (on) | `false` stops dispatching Browser MVP and Android foundation |
+| `ELIZA_PIN_SYNC_REFRESH_HOURS` | 6 | Minimum PR age before a scheduled rebuild |
+| `ELIZA_PIN_SYNC_DRIFT_COMMITS`, `ELIZA_PIN_SYNC_DRIFT_DAYS` | 50, 2 | Drift: the pin on `main` is more than this far behind `develop` |
+| `ELIZA_PIN_SYNC_DRIFT_ISSUE` | unset | Issue number for drift comments (one per episode, edited while it lasts); unset keeps drift in the run summary |
+
+```sh
+# Pause (a manual dispatch still works), resume, or stop the workflow entirely.
+gh variable set ELIZA_PIN_SYNC --body off -R eliza-research/alphaphone
+gh variable delete ELIZA_PIN_SYNC -R eliza-research/alphaphone
+gh workflow disable eliza-pin-sync.yml -R eliza-research/alphaphone
+# Rebuild the PR now, or repin and check in the runner without pushing.
+gh workflow run eliza-pin-sync.yml -R eliza-research/alphaphone
+gh workflow run eliza-pin-sync.yml -R eliza-research/alphaphone -f dry_run=true
+```
+
+Limits. Auto-merge also needs the repository setting "Allow auto-merge" (off on 2026-11-01)
+and the "Main required checks" ruleset above; without that ruleset GitHub would merge before
+the dispatched checks finish, so the workflow leaves auto-merge off. A merge made with
+`GITHUB_TOKEN` starts no `push` workflow, so a bot-merged pin gets no main-push verification or
+Android build until the next human push; a GitHub App token would lift both `GITHUB_TOKEN`
+limits. A pin move is source metadata only: it admits no native bytes and transfers no APK or
+device qualification.
+
 ## Integration and end-to-end coverage
 
 The host suite exercises complete adapters, HTTP protocols, real filesystem and
@@ -192,7 +265,8 @@ also has push-to-main and nightly triggers that stay inert unless the repository
 variable `ELIZA_RESIDENT_QUALIFICATION` is `push` or `nightly`; set it only for a
 period that needs PACKAGED release qualification on every main commit or daily. Preparation remains automatic for changes
 to shared/build inputs. The Bun seccomp reproduction is a diagnostic, not a routine
-gate. The only schedule is that opt-in resident trigger; there are no hidden
+gate. The only qualification schedule is that opt-in resident trigger; the other schedules are
+the weekly advisory audit and the hourly develop pin sync below, and there are no hidden
 branch-specific automatic diagnostic runs.
 
 ```sh

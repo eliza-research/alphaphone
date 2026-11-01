@@ -1,0 +1,201 @@
+name: Eliza develop pin sync
+# Keeps upstream.lock.json on elizaOS/eliza develop through one PR, "Pin Eliza develop <short>",
+# rebuilt from main on the bot/eliza-pin-sync branch by scripts/eliza-pin-sync.mjs. It never
+# pushes main; auto-merge stays off unless the repository variable ELIZA_PIN_SYNC_AUTOMERGE is
+# true. Pause: set the repository variable ELIZA_PIN_SYNC to off. docs/ci-cost-policy.md,
+# "Eliza develop pin sync".
+on:
+  schedule:
+    - cron: '41 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Repin and check in the runner; push nothing and open no PR
+        type: boolean
+        default: false
+  # Sent by elizaOS (or anyone with a token for this repository) when develop moves.
+  repository_dispatch:
+    types: [eliza-develop-updated]
+permissions: {}
+concurrency:
+  group: eliza-pin-sync
+  cancel-in-progress: false
+env:
+  BASE_BRANCH: main
+  BOT_BRANCH: bot/eliza-pin-sync
+jobs:
+  status:
+    name: Develop pin status
+    # ELIZA_PIN_SYNC=off pauses the schedule and repository dispatches; a manual dispatch still runs.
+    if: vars.ELIZA_PIN_SYNC != 'off' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      action: ${{ steps.status.outputs.action }}
+      bot_head: ${{ steps.status.outputs.bot_head }}
+      develop: ${{ steps.status.outputs.develop }}
+      drift: ${{ steps.status.outputs.drift }}
+      json: ${{ steps.status.outputs.json }}
+      main: ${{ steps.status.outputs.main }}
+      pr: ${{ steps.status.outputs.pr }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.BASE_BRANCH }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - id: status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ELIZA_PIN_SYNC_DRIFT_COMMITS: ${{ vars.ELIZA_PIN_SYNC_DRIFT_COMMITS }}
+          ELIZA_PIN_SYNC_DRIFT_DAYS: ${{ vars.ELIZA_PIN_SYNC_DRIFT_DAYS }}
+          ELIZA_PIN_SYNC_REFRESH_HOURS: ${{ vars.ELIZA_PIN_SYNC_REFRESH_HOURS }}
+        run: node scripts/eliza-pin-sync.mjs status --event "$GITHUB_EVENT_NAME" --bot-branch "$BOT_BRANCH"
+
+  repin:
+    name: Pin PR
+    needs: status
+    if: needs.status.outputs.action == 'refresh'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      # The one push below targets the bot branch; main changes only by merging the PR.
+      contents: write
+      pull-requests: write
+      # A GITHUB_TOKEN push starts no pull_request workflow, so the PR's checks are dispatched.
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+      NEW_PIN: ${{ needs.status.outputs.develop }}
+      STATUS_JSON: ${{ needs.status.outputs.json }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.status.outputs.main }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Fetch the current and new pins
+        # apply checks main at the current pin first, then moves vendor/eliza to the new one.
+        run: |
+          old=$(node -p "require('./upstream.lock.json').commit")
+          url=$(node -p "require('./upstream.lock.json').url")
+          git -C vendor/eliza init -q
+          git -C vendor/eliza fetch -q --depth=1 --no-tags "$url" "$NEW_PIN" "$old"
+          git -C vendor/eliza checkout -q --detach "$old"
+      - name: Repin with the owning scripts
+        id: apply
+        env:
+          ELIZA_PIN_SYNC_AUTOMERGE: ${{ vars.ELIZA_PIN_SYNC_AUTOMERGE }}
+        run: |
+          printf '%s' "$STATUS_JSON" > "$RUNNER_TEMP/status.json"
+          node scripts/eliza-pin-sync.mjs apply --to "$NEW_PIN" --status "$RUNNER_TEMP/status.json" --report "$RUNNER_TEMP/report.json"
+          node scripts/eliza-pin-sync.mjs body --status "$RUNNER_TEMP/status.json" --report "$RUNNER_TEMP/report.json" > "$RUNNER_TEMP/body.md"
+          cat "$RUNNER_TEMP/body.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Commit
+        env:
+          OLD_PIN: ${{ fromJSON(needs.status.outputs.json).pin }}
+          COMMITS: ${{ fromJSON(needs.status.outputs.json).behind }}
+        run: |
+          git add -A -- . ':(exclude)vendor/eliza'
+          git update-index --cacheinfo "160000,$NEW_PIN,vendor/eliza"
+          printf 'Pin Eliza develop %s\n\nAdvances the SDK from %s to the elizaOS/eliza develop head %s\n(%s upstream commits). Applied by .github/workflows/eliza-pin-sync.yml;\nthe pin PR lists what still needs a person.\n' \
+            "${NEW_PIN:0:10}" "${OLD_PIN:0:10}" "$NEW_PIN" "$COMMITS" > "$RUNNER_TEMP/message.txt"
+          git -c user.name='github-actions[bot]' -c user.email='41898333+github-actions[bot]@users.noreply.github.com' commit -q -F "$RUNNER_TEMP/message.txt"
+          git show --stat --format='%H %s' HEAD
+      - name: Push the bot branch
+        if: env.DRY_RUN != 'true'
+        env:
+          BOT_HEAD: ${{ needs.status.outputs.bot_head }}
+        run: |
+          # The lease refuses to replace a bot branch that moved since the status job read it.
+          case "$BOT_BRANCH" in bot/*) ;; *) echo "::error::Refusing to push $BOT_BRANCH"; exit 1 ;; esac
+          git push --force-with-lease="refs/heads/$BOT_BRANCH:$BOT_HEAD" origin "HEAD:refs/heads/$BOT_BRANCH"
+      - name: Open or update the PR
+        id: pr
+        if: env.DRY_RUN != 'true'
+        env:
+          NUMBER: ${{ needs.status.outputs.pr }}
+        run: |
+          title="Pin Eliza develop ${NEW_PIN:0:10}"
+          if [ -n "$NUMBER" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/pulls/$NUMBER" -f title="$title" -F body=@"$RUNNER_TEMP/body.md" --jq .html_url
+          else
+            NUMBER=$(gh api "repos/$GITHUB_REPOSITORY/pulls" -f title="$title" -f head="$BOT_BRANCH" -f base="$BASE_BRANCH" -F body=@"$RUNNER_TEMP/body.md" --jq .number)
+          fi
+          echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
+      - name: Dispatch the PR checks
+        # Only a PR the sync job found ready is worth full CI; ELIZA_PIN_SYNC_DISPATCH_CHECKS=false stops it.
+        if: env.DRY_RUN != 'true' && steps.apply.outputs.ready == 'true' && vars.ELIZA_PIN_SYNC_DISPATCH_CHECKS != 'false'
+        run: |
+          gh workflow run browser.yml --ref "$BOT_BRANCH"
+          gh workflow run android.yml --ref "$BOT_BRANCH"
+      - name: Auto-merge (off unless ELIZA_PIN_SYNC_AUTOMERGE is true)
+        if: env.DRY_RUN != 'true'
+        env:
+          AUTOMERGE: ${{ vars.ELIZA_PIN_SYNC_AUTOMERGE }}
+          NUMBER: ${{ steps.pr.outputs.number }}
+          READY: ${{ steps.apply.outputs.ready }}
+        run: |
+          if [ "$AUTOMERGE" != true ] || [ "$READY" != true ]; then
+            gh pr merge "$NUMBER" --disable-auto 2>/dev/null || true
+            exit 0
+          fi
+          # Without required checks GitHub would merge at once, before the dispatched checks finish.
+          required=$(gh api "repos/$GITHUB_REPOSITORY/rules/branches/$BASE_BRANCH" --jq '[.[] | select(.type == "required_status_checks")] | length')
+          if [ "$required" = 0 ]; then
+            echo "::warning::Auto-merge left off: $BASE_BRANCH has no required status checks ruleset (docs/ci-cost-policy.md, Required checks)."
+            exit 0
+          fi
+          gh pr merge "$NUMBER" --auto --squash
+
+  close:
+    name: Close the superseded pin PR
+    needs: status
+    if: needs.status.outputs.action == 'close' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NUMBER: ${{ needs.status.outputs.pr }}
+      PIN: ${{ needs.status.outputs.develop }}
+    steps:
+      - run: |
+          gh api "repos/$GITHUB_REPOSITORY/issues/$NUMBER/comments" -f body="main already pins the develop head ${PIN:0:10}; closing this superseded pin PR." --jq .html_url
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/pulls/$NUMBER" -f state=closed --jq .state
+
+  drift:
+    name: Drift notice
+    needs: status
+    # Every run writes drift to the status step summary; this comments only when an issue is named.
+    if: vars.ELIZA_PIN_SYNC_DRIFT_ISSUE != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.BASE_BRANCH }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ vars.ELIZA_PIN_SYNC_DRIFT_ISSUE }}
+          STATUS_JSON: ${{ needs.status.outputs.json }}
+        run: |
+          printf '%s' "$STATUS_JSON" > "$RUNNER_TEMP/status.json"
+          node scripts/eliza-pin-sync.mjs drift-comment --status "$RUNNER_TEMP/status.json" --issue "$ISSUE"

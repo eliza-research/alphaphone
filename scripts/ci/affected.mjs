@@ -34,10 +34,11 @@ export function affected(paths) {
       result.android = true;
     } else if (path === '.github/workflows/resident-prepare.yml') {
       result.prepare = true;
-    } else if (/^\.github\/workflows\/(resident-android|bun-spawn-seccomp|android-emulator|digest-restart|dependency-audit)\.yml$/.test(path)) {
+    } else if (/^\.github\/workflows\/(resident-android|bun-spawn-seccomp|android-emulator|digest-restart|dependency-audit|eliza-pin-sync)\.yml$/.test(path)) {
       // Explicit qualification/diagnostics; resident push/nightly runs are opt-in by repository variable,
       // and the emulator evidence and digest process-recovery workflows have no trigger but a dispatch.
-      // The advisory audit is scheduled and dispatched only; its script and test run in verify.
+      // The advisory audit and the develop pin sync are scheduled and dispatched only; their scripts
+      // and tests run in verify.
     } else if (/^android\//.test(path)) {
       result.android = true;
     } else if (/^apps\/app\//.test(path)) {
