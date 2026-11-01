@@ -22,14 +22,20 @@ test.afterAll(async()=>{await server?.close();});
 
 const USER='22222222-2222-4222-8222-222222222222',ORG='66666666-6666-4666-8666-666666666666';
 /** The development hosts as the renderer sees them. `hold` holds the next agent start until `release`;
- * `holdAdmission` holds the next identity read (the account admission after the code) until `admit`. */
+ * `holdAdmission` holds the next identity read (the account admission after the code) until `admit`;
+ * `holdStatus` holds the next sign-in readiness check until `releaseStatus`. */
 async function hosts(page:Page){
- const host={stored:null as null|Record<string,unknown>,running:false,bound:false,starts:0,hold:false,release:null as null|(()=>void),holdAdmission:false,admit:null as null|(()=>void),operations:[] as string[]};
+ const host={stored:null as null|Record<string,unknown>,running:false,bound:false,starts:0,hold:false,release:null as null|(()=>void),holdAdmission:false,admit:null as null|(()=>void),holdStatus:false,releaseStatus:null as null|(()=>void),operations:[] as string[]};
  await page.route(/^https?:\/\/(?!127\.0\.0\.1:|localhost:)/,route=>route.abort());
  await page.route('**/__alpha-browser-cloud',async route=>{
   const data=route.request().postDataJSON(),json=(value:unknown,status=200)=>route.fulfill({status,json:value});host.operations.push(data.operation);
   if(data.operation==='secureRead')return json({value:data.slot==='cloud:production'&&host.stored?JSON.stringify(host.stored):null});
-  if(data.operation==='signInStatus')return json({active:false,inApp:true,google:false,email:true});
+  if(data.operation==='signInStatus'){
+   if(host.holdStatus){host.holdStatus=false;await new Promise<void>(resolve=>{host.releaseStatus=resolve;});}
+   return json({active:false,inApp:true,google:false,email:true}).catch(()=>{});
+  }
+  // The real bridge rejects a key the host refuses with this text only; no provider text crosses.
+  if(data.operation==='residentOwn')return json({error:'Cloud development request rejected'},400);
   if(data.operation==='signInServiceInfo'){const doc={revision:'fixture-1',sections:[{title:'Fixture',paragraphs:['Synthetic document.']}]};return json({success:true,version:1,service:{name:'Eliza Cloud',terms:{title:'Terms of Service',...doc},privacy:{title:'Privacy Policy',...doc}}});}
   if(data.operation==='signInStartEmail')return json({attemptId:'33333333-3333-4333-8333-333333333333',expiresAt:Date.now()+600000,resendAt:Date.now()+30000});
   if(data.operation==='signInVerifyEmail'){
@@ -187,4 +193,38 @@ test('a start that has not decided in 60 s shows Home as before, and the sign-in
  await expect(startupLoading(page)).toHaveCount(0);await expect(page.locator('.alpha-connection')).toHaveCount(0);
  host.release!();
  await expect(page.getByRole('main',{name:'Welcome to Alpha.',exact:true})).toBeVisible({timeout:30_000});
+});
+
+test('a cancelled check and a rejected own key keep the welcome page, with the rejection inside the own-key view',async({page},info)=>{
+ test.setTimeout(90_000);
+ const AI_KEY='synthetic-browser-own-cerebras-key',VOICE_KEY='synthetic-browser-own-cartesia-key';
+ const host=await hosts(page);host.holdStatus=true;
+ const logs:string[]=[];page.on('console',message=>logs.push(message.text()));
+ await page.goto(origin+'/');
+ const welcome=page.getByRole('main',{name:'Welcome to Alpha.',exact:true});
+ await expect(welcome).toBeVisible({timeout:60_000});
+ // The readiness check is held; after 4 s the owner cancels it, so no sign-in view is active.
+ await welcome.getByRole('button',{name:'Cancel sign-in',exact:true}).click({timeout:10_000});
+ await expect(welcome.getByRole('button',{name:'Retry sign-in',exact:true})).toBeVisible();
+ await welcome.getByRole('button',{name:'Use your own API keys',exact:true}).click();
+ const own=welcome.getByRole('region',{name:'Own API keys',exact:true});
+ await own.getByLabel('Cerebras API key',{exact:true}).fill(AI_KEY);
+ await own.getByLabel('Cartesia API key (optional)',{exact:true}).fill(VOICE_KEY);
+ await own.getByRole('button',{name:'Save and use own keys',exact:true}).click();
+ // The rejection says what failed, inside the own-key view on the same page, as on Android.
+ await expect(own.getByRole('alert')).toHaveText('Own API keys could not be set up. Check the keys and try again.');
+ expect(host.operations.filter(operation=>operation==='residentOwn')).toHaveLength(1);
+ await expect(own.getByLabel('Cerebras API key',{exact:true})).toHaveValue('');
+ await expect(own.getByLabel('Cartesia API key (optional)',{exact:true})).toHaveValue('');
+ await expect(page.locator('.alpha-auth-page')).toHaveCount(1);await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0);
+ await expect(page.getByRole('dialog',{name:'Your agent',exact:true})).toHaveCount(0);
+ await page.keyboard.press('Escape');await expect(own).toBeVisible();
+ await shot(page,info,'own-key-rejected-after-cancelled-check');
+ // Cloud sign-in never shows the key rejection as its own.
+ await own.getByRole('button',{name:'Sign in with Cloud instead',exact:true}).click();
+ await expect(welcome.getByRole('button',{name:'Retry sign-in',exact:true})).toBeVisible();
+ await expect(welcome.getByRole('alert')).toHaveCount(0);
+ const seen=await page.evaluate(()=>[...Object.values(localStorage),...Object.values(sessionStorage),document.body.innerText].join('\n'));
+ for(const key of [AI_KEY,VOICE_KEY]){expect(seen).not.toContain(key);expect(logs.join('\n')).not.toContain(key);}
+ host.releaseStatus?.();
 });

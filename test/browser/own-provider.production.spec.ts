@@ -14,7 +14,8 @@ async function fixture(page:Page, signedOut=false){
  await page.addInitScript(({signedOut,dataKey})=>{
   const w=window as any,base=w.Capacitor.nativePromise;
   const leases=new Set<string>();let selected:any=null;
-  const f=w.ownProvider={events:[] as string[],saved:0,cancelled:0,cleared:0,checks:0,hold:false,reject:false,pending:false,release:null as null|(()=>void),matched:false};
+  // reject: true refuses the key; 'echo' refuses it with a message that repeats most of the entered key.
+  const f=w.ownProvider={events:[] as string[],saved:0,cancelled:0,cleared:0,checks:0,hold:false,reject:false as boolean|'echo',pending:false,release:null as null|(()=>void),matched:false};
   localStorage.setItem(dataKey,'existing local app data');
   if(signedOut){delete w.flagOff.slots['cloud:production'];w.flagOff.persist();}
   const status=()=>selected?{provider:'cerebras',configured:true,selected:true,model:'qwen-3.8-27b',revision:selected.revision,voiceConfigured:selected.voice}:base('Agent','providerStatus',{});
@@ -30,7 +31,7 @@ async function fixture(page:Page, signedOut=false){
     f.matched=input.apiKey==='synthetic-own-cerebras-ui-key'&&input.cartesiaKey==='synthetic-own-cartesia-ui-key'&&input.model==='qwen-3.8-27b';
     if(f.hold){f.pending=true;await new Promise<void>(resolve=>f.release=resolve);f.pending=false;}
     if(!leases.has(input.requestId))throw Error('Provider request cancelled');
-    if(f.reject)throw Error('Cerebras did not accept this key. It was not saved.');
+    if(f.reject)throw Error(f.reject==='echo'?`Cerebras did not accept key ${input.apiKey.slice(1,-1)} for this account.`:'Cerebras did not accept this key. It was not saved.');
     leases.delete(input.requestId);selected={revision:crypto.randomUUID(),voice:!!input.cartesiaKey};f.saved++;return status();
    }
    if(method==='clearProvider'){if(input?.requestId&&!leases.has(input.requestId))throw Error('Provider request cancelled');if(input?.requestId)leases.delete(input.requestId);selected=null;f.cleared++;return base(plugin,method,input);}
@@ -145,6 +146,13 @@ test('a rejected key on the welcome screen is reported inside the own-key view w
  await expect(own.getByRole('alert')).toHaveText('Cerebras did not accept this key. It was not saved.');
  await expect(own.getByLabel('Cerebras API key',{exact:true})).toHaveValue('');
  await expect(own.getByLabel('Cartesia API key (optional)',{exact:true})).toHaveValue('');
+ // A provider message that repeats the entered key, even partly, is replaced before it is shown.
+ await page.evaluate(()=>{const f=(window as any).ownProvider;f.hold=false;f.reject='echo';});
+ await own.getByLabel('Cerebras API key',{exact:true}).fill(AI_KEY);await own.getByLabel('Cartesia API key (optional)',{exact:true}).fill(VOICE_KEY);
+ await own.getByRole('button',{name:'Save and use own keys',exact:true}).click();
+ await expect(own.getByRole('alert')).toHaveText('Own API keys could not be set up. Check the keys and try again.');
+ await expect(own.getByLabel('Cerebras API key',{exact:true})).toHaveValue('');
+ expect(await page.evaluate(()=>document.body.innerText)).not.toContain(AI_KEY.slice(1,-1));expect(observed.logs.join('\n')).not.toContain(AI_KEY.slice(1,-1));
  // Still the own-key view on the welcome page: Cloud was neither selected nor started.
  await expect(welcome).toBeVisible();await expect(welcome.getByRole('button',{name:'Continue with Google',exact:true})).toHaveCount(0);
  expect(await page.evaluate(()=>{const f=(window as any).ownProvider;return {saved:f.saved,cleared:f.cleared};})).toEqual({saved:0,cleared:before});
