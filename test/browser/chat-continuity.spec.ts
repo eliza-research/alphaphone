@@ -304,6 +304,38 @@ test('dismissing the earlier draft clears it durably, and another conversation n
   expect(await fixture(page, f => f.posts)).toBe(0);
 });
 
+// On the device slots too, Send reads the saved copy again (the review on screen was stale) and keeps
+// it beside an earlier-copy row that does not read as a draft, which is left exactly as it is.
+test('a stale review and an unreadable earlier-copy device slot never block Send', async ({ page }) => {
+  test.setTimeout(150_000);
+  await connected(page);
+  await typeDraft(page, 'Words before the other window');
+  const slot = await bindingKey(page);
+  const row = await page.evaluate(async binding => {
+    const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(['earlier-draft', binding]))));
+    const name = 'assistant-draft:v1:' + Array.from(bytes, n => n.toString(16).padStart(2, '0')).join('');
+    await (window as any).Capacitor.nativePromise('AlphaConnection', 'secureCompareExchange', { slot: name, expectedValue: null, value: '{not a draft' });
+    return name;
+  }, slot);
+  const write = (text: string) => page.evaluate(async ({ binding, text }) => { const { assistantDraftStore } = await import('/src/runtime/assistant-draft-store.ts'); const store = await assistantDraftStore(binding); await store.save(await store.read(), text); }, { binding: slot, text });
+  await write('Shown in the review');
+  await composer(page).fill(SENT);
+  await expect(page.getByRole('status', { name: 'Assistant draft status', exact: true })).toContainText('Review the saved copy', { timeout: 15_000 });
+  await write(EARLIER);
+  await composer(page).press('Enter');
+  await expect.poll(() => fixture(page, f => f.posts), { timeout: 15_000 }).toBe(1);
+  await fixture(page, f => f.release('Got it.'));
+  await expect(conversation(page).getByText('Got it.', { exact: true })).toHaveCount(1);
+  const key = await bindingKey(page);
+  await expect(earlierButton(page, 'Restore earlier draft')).toBeVisible({ timeout: 15_000 });
+  await expect.poll(() => earlierDraft(page, key)).toBe(EARLIER);
+  expect(await page.evaluate(async name => (await (window as any).Capacitor.nativePromise('AlphaConnection', 'secureRead', { slot: name })).value, row)).toBe('{not a draft');
+  await earlierButton(page, 'Restore earlier draft').click();
+  await expect(composer(page)).toHaveValue(EARLIER);
+  await expect.poll(() => earlierDraft(page, key), { timeout: 15_000 }).toBe('');
+  expect(await fixture(page, f => f.posts)).toBe(1);
+});
+
 test('the earlier draft of one owner is never offered to another owner', async ({ page }) => {
   test.setTimeout(150_000);
   const { key } = await conflictedSend(page);

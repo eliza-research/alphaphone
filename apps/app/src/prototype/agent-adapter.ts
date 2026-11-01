@@ -94,22 +94,31 @@ function autoResolveDraftConflict(shell:Shell):boolean{
   return true;
 }
 /**
- * A real conflict never blocks sending. The saved copy is first kept durably as this binding's
- * earlier draft (assistant-draft-store.ts); only then does the editor text replace it and send.
- * "Restore earlier draft" offers it, across reloads, until it is restored or dismissed. If it
- * cannot be kept, the saved copy is not replaced: the conflict stays for review and nothing is
- * sent. A message that may already have been sent (unsettled) is never set aside.
+ * A real conflict never blocks sending. The review on screen may be stale (another window may have
+ * saved newer text since, sent that copy, or be sending it now), so the binding is first read again.
+ * Then the saved copy is kept durably as one of this binding's earlier drafts
+ * (assistant-draft-store.ts), and only then does the editor text replace exactly that copy.
+ * "Restore earlier draft" offers it, across reloads, until it is restored or dismissed. A copy marked
+ * as sending is never set aside: the controller offers it for review ("may already have been sent")
+ * and the send waits for that review, as before. If storage fails and the copy cannot be kept, the
+ * saved copy is not replaced and nothing is sent.
  */
 async function stepAsideDraftConflict(shell:Shell):Promise<void>{
   const draft=shell.composerDraft,binding=draft?.binding;
-  // If another window saves newer text meanwhile, that copy is kept too (after the first).
-  for(let kept:string|undefined,attempt=0;draft?.state?.conflict&&!draft.state.unsettled&&draft.binding===binding;attempt++){
-    const saved=draft.state.savedText;
-    // An empty copy, or the text being sent, is not worth offering again.
-    if(!saved.trim()||saved===kept||saved.trim()===String(shell.S().draft||'').trim()){draft.keepCurrent();break;}
-    if(attempt>2)return;
-    try{showEarlierDraft(shell,await keepEarlierDraft(binding,saved));}catch{throw Error('The saved draft could not be set aside. Review both copies. Nothing was sent.');}
-    kept=saved;
+  if(binding&&draft.state.conflict&&!draft.state.unsettled){
+    // An empty or identical copy found by this read resolves below, not by the opening offer.
+    shell.draftAutoResolving=true;try{await draft.retry();}finally{shell.draftAutoResolving=false;}
+    if(draft.binding===binding&&draft.state.conflict&&!draft.state.unsettled){
+      const saved=draft.state.savedText;
+      // An empty copy, or the text being sent, is not worth offering again.
+      if(saved.trim()&&saved.trim()!==String(shell.S().draft||'').trim()){
+        let kept:EarlierDraft;try{kept=await keepEarlierDraft(binding,saved);}catch{throw Error('The saved draft could not be set aside. Review both copies. Nothing was sent.');}
+        // The binding's first kept copy is offered; a copy kept in a later row follows it.
+        if(kept.slot){try{kept=await readEarlierDraft(binding);}catch{/* Offer the copy just kept. */}}
+        showEarlierDraft(shell,kept);
+      }
+      if(draft.binding===binding)draft.keepCurrent();
+    }
   }
   if(shell.firstSendReview)shell.refreshDraftBinding();
 }
@@ -118,14 +127,17 @@ function showEarlierDraft(shell:Shell,earlier:EarlierDraft){
   shell.earlierDraftRead=earlier.binding;shell.earlierDraft=earlier.text.trim()?earlier:undefined;
   if(shell.live)shell.setState({});
 }
-/** Read once each time the composer opens another binding, so the offer survives a reload. */
-async function offerEarlierDraft(shell:Shell){
+/**
+ * Read once each time the composer opens another binding, so the offer survives a reload, and
+ * `again` after one copy is restored, dismissed or moved, to offer the next.
+ */
+async function offerEarlierDraft(shell:Shell,again=false){
   const binding=shell.composerDraft.binding;
-  if(!binding||shell.earlierDraftRead===binding)return;
+  if(!binding||!again&&shell.earlierDraftRead===binding)return;
   shell.earlierDraftRead=binding;shell.earlierDraft=undefined;
-  // An unreadable copy is not offered, and setting another aside fails: conflicts stay for review.
+  // A copy that cannot be read now (storage failed) is offered when this binding next opens.
   let earlier:EarlierDraft;try{earlier=await readEarlierDraft(binding);}catch{return;}
-  if(shell.live&&shell.earlierDraftRead===binding&&!shell.earlierDraft)showEarlierDraft(shell,earlier);
+  if(shell.live&&shell.earlierDraftRead===binding&&shell.composerDraft.binding===binding&&!shell.earlierDraft)showEarlierDraft(shell,earlier);
 }
 /**
  * Restoring puts the earlier copy back in the editor; newer typing follows it, as when a send is
@@ -145,7 +157,8 @@ function restoreEarlierDraft(shell:Shell){
       let saved:string|undefined;try{saved=(await(await assistantDraftStore(earlier.binding)).read())?.text;}catch{return;}
       // Saved as restored, or as the person has edited it since in this conversation.
       if(saved!==text&&(!shell.live||draft.binding!==earlier.binding||saved!==String(shell.S().draft||'')))continue;
-      try{await clearEarlierDraft(earlier);}catch{/* Another window changed it: it is read again when this conversation next opens. */}
+      try{await clearEarlierDraft(earlier);}catch{/* Another window changed it: it is read again when this conversation next opens. */return;}
+      if(shell.live&&draft.binding===earlier.binding&&!shell.earlierDraft)void offerEarlierDraft(shell,true);
       return;
     }
   });
@@ -153,7 +166,7 @@ function restoreEarlierDraft(shell:Shell){
 function dismissEarlierDraft(shell:Shell){
   const earlier:EarlierDraft|undefined=shell.earlierDraft;if(!earlier)return;
   shell.earlierDraft=undefined;shell.setState({});
-  clearEarlierDraft(earlier).catch(async()=>{
+  clearEarlierDraft(earlier).then(()=>{if(shell.live&&shell.composerDraft.binding===earlier.binding&&!shell.earlierDraft)void offerEarlierDraft(shell,true);},async()=>{
     // Storage failed, or another window changed the copy: offer what is stored now.
     let latest=earlier;try{latest=await readEarlierDraft(earlier.binding);}catch{/* Offer the copy this view knows. */}
     if(!shell.live||shell.composerDraft.binding!==earlier.binding)return;
@@ -175,11 +188,13 @@ async function followEarlierDraft(shell:Shell,slot:string){
     if(!shell.live||!key)return;
     if(key===slot)continue;
     if(!createdFromSlot(slot,key))return;
+    let moved=false;
     try{
-      const earlier=await readEarlierDraft(slot);if(!earlier.text.trim())return;
-      const moved=await keepEarlierDraft(key,earlier.text);await clearEarlierDraft(earlier);
-      if(shell.live&&shell.composerDraft.binding===key)showEarlierDraft(shell,moved);
-    }catch{/* Not moved: it stays offered with the new chat's own slot. */}
+      for(let earlier=await readEarlierDraft(slot);earlier.text.trim();earlier=await readEarlierDraft(slot)){
+        await keepEarlierDraft(key,earlier.text);moved=true;await clearEarlierDraft(earlier);
+      }
+    }catch{/* What was not moved stays offered with the new chat's own slot. */}
+    if(moved&&shell.live&&shell.composerDraft.binding===key)void offerEarlierDraft(shell,true);
     return;
   }
 }
