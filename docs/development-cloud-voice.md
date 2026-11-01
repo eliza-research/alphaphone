@@ -30,3 +30,23 @@ handles and Stop retirement. Mute and Stop presentation are unchanged.
 The tests use mocked runtime responses over loopback and in-memory capture/playback
 ports. Passing them proves the adapter contracts, not actual Cartesia service,
 latency, microphone capture, native Android support, or live Cloud acceptance.
+
+## Cloud resident conversation
+
+The browser Cloud resident (`scripts/dev-cloud.mjs`, `VITE_ALPHA_CLOUD_RESIDENT=1`) has one
+voice conversation: the realtime session Direct uses. The page talks only to its local agent
+through the canonical voice session client; the agent's speech runs through the Eliza Cloud
+speech relay. `scripts/cloud-resident-host.mjs` sets `ELIZA_SELF_HOSTED_VOICE_ENABLED=1` and
+`ELIZA_SELF_HOSTED_VOICE_CLOUD_RELAY_ENABLED=1` only while a Cloud account is bound and own keys
+are not selected; own keys keep direct Cartesia and never inherit the relay. Before it opens the
+microphone, the page requires the agent's health to report `speechRoute: 'cloud'`,
+`speechProvider: 'cartesia'` and `providerAdmission: 'at-session-start'`.
+
+Cloud admits and bills each relay session. A relay refusal (sign-in, billing, rate limit or an
+unavailable service) ends voice with one calm line and is never retried automatically, so no
+second session is opened or billed. The Cloud resident does not use the recorded-clip
+conversation loop or its spoken progress cue. Read-aloud and dictation keep the batch Cloud
+speech routes above.
+
+Tests cover this with in-memory ports only. Relay latency, billing, the busy hold over the relay
+and the exact refusal codes Cloud sends need a live run against Cloud.

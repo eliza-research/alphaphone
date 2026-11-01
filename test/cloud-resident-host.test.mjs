@@ -53,19 +53,38 @@ test('first readiness preserves a concurrently queued Cloud binding',async()=>{
  }finally{await host.close();await fs.rm(profile,{recursive:true,force:true});}
 });
 
- test('actual Cloud launcher strips inherited provider authority before enabling only resident batch speech',async()=>{
+ test('actual Cloud launcher strips inherited provider and developer voice authority; the resident itself owns realtime Cloud speech',async()=>{
  const directory=await fs.mkdtemp(join(tmpdir(),'alpha-cloud-launcher-')),source=join(directory,'source'),capture=join(directory,'capture.json'),loader=join(directory,'loader.mjs');
  const port=async()=>{const server=createServer();await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const selected=server.address().port;await new Promise(resolve=>server.close(resolve));return selected;};
  try{
   await fs.mkdir(join(source,'node_modules'),{recursive:true});
-  await fs.writeFile(loader,`import child from 'node:child_process';import {syncBuiltinESMExports} from 'node:module';import {EventEmitter} from 'node:events';import {writeFileSync} from 'node:fs';child.spawn=(command,args,options)=>{const keys=['ELIZA_DEV_ALLOW_TEST_MOCKS','VITE_ELIZA_DEV_ALLOW_TEST_MOCKS','VITE_ALPHA_CLOUD_RESIDENT','VITE_ALPHA_CLOUD_ENVIRONMENT','ALPHA_DEV_CLOUD_VOICE','ALPHA_DEV_CARTESIA','ALPHA_DEV_CLOUD_REALTIME_VOICE','VITE_ALPHA_DEV_CLOUD_VOICE','CEREBRAS_API_KEY','OPENAI_API_KEY','ELIZAOS_CLOUD_API_KEY'];writeFileSync(process.env.ALPHA_LAUNCHER_TEST_CAPTURE,JSON.stringify(Object.fromEntries(keys.map(key=>[key,options.env[key]??null]))));const result=new EventEmitter();result.kill=()=>true;queueMicrotask(()=>result.emit('exit',0));return result;};syncBuiltinESMExports();`);
-  const run=spawnSync(process.execPath,['--import',loader,'scripts/dev-cloud.mjs'],{cwd:process.cwd(),env:{...process.env,ALPHA_ELIZA_SOURCE:source,ALPHA_REMOTE_PORT:String(await port()),ALPHA_CLOUD_UI_PORT:String(await port()),ALPHA_CLOUD_ENVIRONMENT:'staging',ALPHA_LAUNCHER_TEST_CAPTURE:capture,CEREBRAS_API_KEY:'synthetic-direct',OPENAI_API_KEY:'synthetic-openai',ELIZAOS_CLOUD_API_KEY:'synthetic-cloud',ALPHA_DEV_CARTESIA:'1',ALPHA_DEV_CLOUD_REALTIME_VOICE:'1',VITE_ALPHA_DEV_CLOUD_VOICE:'1'},encoding:'utf8',timeout:20000});
+  await fs.writeFile(loader,`import child from 'node:child_process';import {syncBuiltinESMExports} from 'node:module';import {EventEmitter} from 'node:events';import {writeFileSync} from 'node:fs';child.spawn=(command,args,options)=>{const keys=['ELIZA_DEV_ALLOW_TEST_MOCKS','VITE_ELIZA_DEV_ALLOW_TEST_MOCKS','VITE_ALPHA_CLOUD_RESIDENT','VITE_ALPHA_CLOUD_ENVIRONMENT','VITE_ELIZA_RUNTIME_PROFILE','ALPHA_DEV_CLOUD_VOICE','ALPHA_DEV_CARTESIA','ALPHA_DEV_CLOUD_REALTIME_VOICE','VITE_ALPHA_DEV_CLOUD_REALTIME_VOICE','VITE_ALPHA_DEV_CLOUD_VOICE','CEREBRAS_API_KEY','OPENAI_API_KEY','ELIZAOS_CLOUD_API_KEY'];writeFileSync(process.env.ALPHA_LAUNCHER_TEST_CAPTURE,JSON.stringify(Object.fromEntries(keys.map(key=>[key,options.env[key]??null]))));const result=new EventEmitter();result.kill=()=>true;queueMicrotask(()=>result.emit('exit',0));return result;};syncBuiltinESMExports();`);
+  const run=spawnSync(process.execPath,['--import',loader,'scripts/dev-cloud.mjs'],{cwd:process.cwd(),env:{...process.env,ALPHA_ELIZA_SOURCE:source,ALPHA_REMOTE_PORT:String(await port()),ALPHA_CLOUD_UI_PORT:String(await port()),ALPHA_CLOUD_ENVIRONMENT:'staging',ALPHA_LAUNCHER_TEST_CAPTURE:capture,CEREBRAS_API_KEY:'synthetic-direct',OPENAI_API_KEY:'synthetic-openai',ELIZAOS_CLOUD_API_KEY:'synthetic-cloud',ALPHA_DEV_CARTESIA:'1',ALPHA_DEV_CLOUD_REALTIME_VOICE:'1',VITE_ALPHA_DEV_CLOUD_REALTIME_VOICE:'1',VITE_ALPHA_DEV_CLOUD_VOICE:'1'},encoding:'utf8',timeout:20000});
   assert.equal(run.status,0,run.stderr);
-  const env=JSON.parse(await fs.readFile(capture,'utf8'));assert.equal(env.ALPHA_DEV_CLOUD_VOICE,'1');assert.equal(env.ELIZA_DEV_ALLOW_TEST_MOCKS,'');assert.equal(env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS,'');assert.equal(env.VITE_ALPHA_CLOUD_RESIDENT,'1');assert.equal(env.VITE_ALPHA_CLOUD_ENVIRONMENT,'staging');
-  for(const key of ['CEREBRAS_API_KEY','OPENAI_API_KEY','ELIZAOS_CLOUD_API_KEY','ALPHA_DEV_CARTESIA','ALPHA_DEV_CLOUD_REALTIME_VOICE','VITE_ALPHA_DEV_CLOUD_VOICE'])assert.equal(env[key],null,key);
+  // The resident flag alone selects the realtime Cloud conversation; bridge batch Cloud speech stays for read-aloud and dictation.
+  const env=JSON.parse(await fs.readFile(capture,'utf8'));assert.equal(env.ALPHA_DEV_CLOUD_VOICE,'1');assert.equal(env.VITE_ELIZA_RUNTIME_PROFILE,'cloud');assert.equal(env.ELIZA_DEV_ALLOW_TEST_MOCKS,'');assert.equal(env.VITE_ELIZA_DEV_ALLOW_TEST_MOCKS,'');assert.equal(env.VITE_ALPHA_CLOUD_RESIDENT,'1');assert.equal(env.VITE_ALPHA_CLOUD_ENVIRONMENT,'staging');
+  for(const key of ['CEREBRAS_API_KEY','OPENAI_API_KEY','ELIZAOS_CLOUD_API_KEY','ALPHA_DEV_CARTESIA','ALPHA_DEV_CLOUD_REALTIME_VOICE','VITE_ALPHA_DEV_CLOUD_REALTIME_VOICE','VITE_ALPHA_DEV_CLOUD_VOICE'])assert.equal(env[key],null,key);
  }finally{await fs.rm(directory,{recursive:true,force:true});}
  });
 
+
+test('Cloud resident agent speaks through the Cloud speech relay; own keys and sign-out never inherit it',async()=>{
+ const profile=await fs.mkdtemp(join(tmpdir(),'alpha-cloud-relay-')),launches=[];
+ const launch=async options=>{launches.push(options.env);let done;return {completion:new Promise(resolve=>done=resolve),async stop(){done({code:0});}};};
+ const relay=env=>[env.ELIZA_SELF_HOSTED_VOICE_ENABLED,env.ELIZA_SELF_HOSTED_VOICE_CLOUD_RELAY_ENABLED];
+ const host=await createCloudResidentHost({profile,port:47869,environment:'staging',launch,request:async()=>Response.json({data:[{id:'qwen-3.8-27b'}]}),
+  inherited:{PATH:process.env.PATH,ELIZA_SELF_HOSTED_VOICE_ENABLED:'1',ELIZA_SELF_HOSTED_VOICE_CLOUD_RELAY_ENABLED:'1',CARTESIA_API_KEY:'forbidden-inherited-cartesia'}});
+ try{
+  await host.clear();assert.deepEqual(relay(launches.at(-1)),[undefined,undefined],'no account: no Cloud speech');
+  await host.bind({token:'synthetic-cloud-secret',credentialId:'voice',reference:'voice-ref'});
+  let env=launches.at(-1);assert.deepEqual(relay(env),['1','1']);assert.equal(env.ELIZAOS_CLOUD_API_KEY,'synthetic-cloud-secret');assert.equal(env.ELIZAOS_CLOUD_BASE_URL,'https://api-staging.eliza.app/api/v1');assert.equal(env.CARTESIA_API_KEY,undefined,'the relay never uses a direct Cartesia key');
+  await host.selectOwn({apiKey:'synthetic-cerebras-key',cartesiaKey:'synthetic-cartesia-key'});
+  env=launches.at(-1);assert.deepEqual(relay(env),['1',undefined],'direct voice uses the own Cartesia key, never the relay');assert.equal(env.CARTESIA_API_KEY,'synthetic-cartesia-key');assert.equal(env.ELIZAOS_CLOUD_API_KEY,undefined);
+  await host.selectOwn({apiKey:'synthetic-cerebras-key'});assert.deepEqual(relay(launches.at(-1)),[undefined,undefined],'own keys without Cartesia: voice off');
+  await host.selectCloud();env=launches.at(-1);assert.deepEqual(relay(env),['1','1']);assert.equal(env.CARTESIA_API_KEY,undefined);
+  assert.ok(!JSON.stringify(host.status()).includes('synthetic-'));
+ }finally{await host.close();await fs.rm(profile,{recursive:true,force:true});}
+});
 
 test('managed read broker is bound before launch and revoked even when resident stop fails',async()=>{
  const profile=await fs.mkdtemp(join(tmpdir(),'alpha-calendar-broker-')),events=[],launches=[];let rejectStop=false;

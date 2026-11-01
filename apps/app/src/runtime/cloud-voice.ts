@@ -50,6 +50,15 @@ export function cloudVoiceFailure(error: unknown, context: { recording?: boolean
   if (code === 'voice-stt-connect') return 'Cloud voice could not use your saved account. Sign in again in Settings. Your recording is kept.';
   if (code === 'voice-stt-upload') return 'The recording upload could not be confirmed. Your recording is kept. Check your connection before trying again.';
   if (code === 'voice-stt-response') return 'Cloud voice returned no usable transcript. Your recording is kept. Try again later.';
+  // Realtime Cloud relay refusals end the session; none is retried, so no second session is billed.
+  if (typeof code === 'string' && code.startsWith('voice-relay-')) {
+    const name = serviceNameNow(), refusal = code.slice(12);
+    if (refusal === 'authorization') return `${name} did not accept this sign-in for voice. Sign in again in Settings, then try voice again.`;
+    if (refusal === 'insufficient_credits') return `${name} declined cloud voice for your account's billing. Check your account in Settings, then retry.`;
+    if (refusal === 'quota_exhausted') return 'Voice reached today\'s limit on this agent. Use the keyboard, or try voice again tomorrow.';
+    if (refusal === 'transport') return `${name} voice is busy or unavailable right now. Try voice again in a moment, or use the keyboard.`;
+    return `${name} voice stopped. Try voice again, or use the keyboard.`;
+  }
   return null;
 }
 

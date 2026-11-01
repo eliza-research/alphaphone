@@ -2,6 +2,7 @@ import {validateUuid} from '../../../../vendor/eliza/packages/core/src/utils/uui
 import {readDevicePreferences} from '../browser/device-preferences';
 import type { ViewActionHandoff } from "@elizaos/core/view-interaction";
 import {developmentCloudRealtimeVoiceEnabled} from './development-cloud-voice';
+import {browserCloudResidentEnabled} from './browser-cloud-resident';
 import {developmentCartesiaVoiceEnabled} from './development-cartesia-flag';
 export {developmentCartesiaVoiceEnabled} from './development-cartesia-flag';
 import {connectionController} from './connection-ui';
@@ -10,17 +11,19 @@ import type {VoiceConversationBinding} from './alpha-client';
 export type RealtimeVoiceNavigation = Pick<ViewActionHandoff, "viewId" | "viewPath" | "subview" | "navigationPrepared" | "navigationBinding" | "completedActionHandoffId"> & {traceId:string};
 /** Canonical self-hosted voice owns the runtime turn; this adapter never sends its transcript twice. */
 export async function developmentCartesiaConversation(input:{binding:VoiceConversationBinding;assertCurrent:()=>void;onState:(phase:string,progressText?:string)=>void;onTranscript:(text:string)=>void;onError:(error:Error)=>void;onPlaybackUnlockChange?:()=>void;onActionResult?:(summary:string)=>void;getUiContext?:()=>import('@elizaos/host/voice/ui-context').VoiceUiContext;onNavigate?:(event:RealtimeVoiceNavigation)=>Promise<void>}){
- const own=connectionController.getSnapshot().residentInference==='direct'&&connectionController.getSnapshot().providerStatus?.voiceConfigured===true;
+ const selected=connectionController.getSnapshot(),own=selected.residentInference==='direct'&&selected.providerStatus?.voiceConfigured===true;
+ // The Cloud resident's agent speaks through the Cloud speech relay, which admits and bills each session.
+ const cloud=!own&&(browserCloudResidentEnabled&&selected.residentInference!=='direct'||developmentCloudRealtimeVoiceEnabled);
  if(!own&&developmentCartesiaVoiceEnabled&&developmentCloudRealtimeVoiceEnabled)throw Error('Choose direct or Cloud realtime speech, not both.');
- if(!own&&!developmentCartesiaVoiceEnabled&&!developmentCloudRealtimeVoiceEnabled)throw Error('Developer realtime speech is disabled.');
+ if(!own&&!cloud&&!developmentCartesiaVoiceEnabled)throw Error('Developer realtime speech is disabled.');
  const agent=connectionController.getBrowserSpeechAgent();if(!agent)throw Error('Connect the local developer agent first.');
  const lifecycle=new AbortController(),minted=new Set<string>();let stopped=false,stopPromise:Promise<void>|undefined,rendererId:string|undefined;
  let renderer:WebSocket|undefined,pendingRenderer:WebSocket|undefined,rendererRenewal:ReturnType<typeof setTimeout>|undefined,rendererTask:Promise<void>|undefined;
  const current=()=>{lifecycle.signal.throwIfAborted();input.assertCurrent();if(agent!==connectionController.getBrowserSpeechAgent()||!connectionController.voiceConversationCurrent(input.binding)||rendererId!==undefined&&rendererId!==connectionController.voiceRendererClientId())throw new DOMException('Developer voice connection changed','AbortError');};
  const request=async(path:string,body?:unknown,signal:AbortSignal=lifecycle.signal)=>{current();const result=await agent.request(path,body,signal);current();return result;};
  const health=await request('/api/v1/voice/session/health?conversationId='+encodeURIComponent(input.binding.conversationId));if(health.ready!==true||health.conversationId!==input.binding.conversationId||health.agentId!==input.binding.session.agentId)throw Error('The selected developer speech service is unavailable.');
- if(!own&&developmentCloudRealtimeVoiceEnabled&&(health.speechRoute!=='cloud'||health.speechProvider!=='cartesia'||health.providerAdmission!=='at-session-start'))throw Error('Cloud realtime speech was not attested.');
- if((own||!developmentCloudRealtimeVoiceEnabled)&&health.speechRoute!==undefined&&health.speechRoute!=='direct')throw Error('Direct realtime speech route changed.');
+ if(cloud&&(health.speechRoute!=='cloud'||health.speechProvider!=='cartesia'||health.providerAdmission!=='at-session-start'))throw Error('Cloud realtime speech was not attested.');
+ if(!cloud&&health.speechRoute!==undefined&&health.speechRoute!=='direct')throw Error('Direct realtime speech route changed.');
  const {createVoiceSessionClient}=await import('@elizaos/ui/voice/voice-session-client');current();
  let directActions=false,preferenceGeneration=0;
  const refreshActionPreference=async()=>{const generation=++preferenceGeneration;directActions=false;try{const preferences=await readDevicePreferences(lifecycle.signal);if(!stopped&&generation===preferenceGeneration)directActions=!preferences.askBeforeAgentActions;}catch{ /* Unreadable preferences retain review. */ }};
@@ -40,6 +43,8 @@ export async function developmentCartesiaConversation(input:{binding:VoiceConver
  // UI projection only: processing ends at a matching terminal receipt, while
  // playback ends at its own matching completion. Neither changes manual mute.
  let callerBusyTrace:string|undefined,playbackTrace:string|undefined,playbackEndTrace:string|undefined;
+ // A Cloud relay refusal (sign-in, credits, rate limit) ends the session with one terminal server code.
+ let relayRefusal:string|undefined;
  const microphoneBusy=()=>callerBusyTrace!==undefined||playbackTrace!==undefined;
  const retiredBusyTraces=new Set<string>();
  const retireBusyTrace=(trace:string|undefined)=>{if(!trace)return;if(retiredBusyTraces.size>=64)retiredBusyTraces.delete(retiredBusyTraces.values().next().value!);retiredBusyTraces.add(trace);};
@@ -64,7 +69,7 @@ export async function developmentCartesiaConversation(input:{binding:VoiceConver
    navigate({viewId:frame.viewId,viewPath:frame.viewPath,subview:frame.subview,traceId:currentTurn,...(prepared?{navigationPrepared:frame.navigationPrepared,navigationBinding:frame.navigationBinding,completedActionHandoffId:id}:{})});
   }catch(error){if(!stopped)input.onError(error instanceof Error?error:Error('Voice navigation could not be verified.'));}
  };
- const client=createVoiceSessionClient({agentId:input.binding.session.agentId,conversationId:input.binding.conversationId,preLiveMaxReconnects:0,preLiveMaxAttempts:1,...(developmentCloudRealtimeVoiceEnabled?{maxReconnects:0}:{}),getUiContext:()=>{current();const uiClientId=connectionController.voiceRendererClientId();if(!uiClientId)throw Error('The voice renderer is not bound.');return {...input.getUiContext?.(),uiClientId,...(directActions?{agentActionMode:'direct-request-v1' as const}:{})};},
+ const client=createVoiceSessionClient({agentId:input.binding.session.agentId,conversationId:input.binding.conversationId,preLiveMaxReconnects:0,preLiveMaxAttempts:1,...(cloud?{maxReconnects:0}:{}),getUiContext:()=>{current();const uiClientId=connectionController.voiceRendererClientId();if(!uiClientId)throw Error('The voice renderer is not bound.');return {...input.getUiContext?.(),uiClientId,...(directActions?{agentActionMode:'direct-request-v1' as const}:{})};},
   getConsentNonce:async()=>{const result=await request('/api/v1/voice/session/consent',{});return typeof result.consentNonce==='string'?result.consentNonce:null;},
   fetch:async(path,init={})=>{if(path!=='/api/v1/voice/session'||init.method!=='POST'||typeof init.body!=='string')throw Error('Unsupported developer voice request');const body=JSON.parse(init.body);if(body.agentId!==input.binding.session.agentId||body.conversationId!==input.binding.conversationId||body.transport!=='websocket')throw Error('Developer voice binding changed');return Response.json(await request(path,body,init.signal??lifecycle.signal));},
   onMinted:result=>{minted.add(result.sessionId);try{current();}catch{void stop().catch(error=>input.onError(error instanceof Error?error:Error('Developer voice retirement was not confirmed.')));}},
@@ -100,6 +105,7 @@ export async function developmentCartesiaConversation(input:{binding:VoiceConver
    if(event.t==='usage'&&callerBusyTrace===event.traceId){callerBusyTrace=undefined;if(playbackTrace!==event.traceId)retireBusyTrace(event.traceId);}
    // Retryable transport recovery does not finish the server's active turn.
    if(event.t==='interrupted'||event.t==='error'&&!event.retryable){
+    if(cloud&&event.t==='error')relayRefusal=event.code;
     const trace=event.traceId;
     if(trace===undefined||trace===callerBusyTrace){retireBusyTrace(callerBusyTrace);callerBusyTrace=undefined;}
     if(trace===undefined||trace===playbackTrace){retireBusyTrace(playbackTrace);playbackTrace=undefined;playbackEndTrace=undefined;}
@@ -118,7 +124,7 @@ export async function developmentCartesiaConversation(input:{binding:VoiceConver
 
   },
   onPlaybackUnlockChange:()=>{if(!stopped)input.onPlaybackUnlockChange?.();},
-  onError:error=>{retireBusyTrace(callerBusyTrace);retireBusyTrace(playbackTrace);callerBusyTrace=undefined;playbackTrace=undefined;playbackEndTrace=undefined;clearTurn();acceptedState=undefined;if(!stopped)input.onError(error);},
+  onError:error=>{retireBusyTrace(callerBusyTrace);retireBusyTrace(playbackTrace);callerBusyTrace=undefined;playbackTrace=undefined;playbackEndTrace=undefined;clearTurn();acceptedState=undefined;if(!stopped)input.onError(relayRefusal?Object.assign(Error(error.message,{cause:error}),{code:'voice-relay-'+relayRefusal}):error);},
  });
  const stop=()=>{if(stopPromise)return stopPromise;stopped=true;retireBusyTrace(callerBusyTrace);retireBusyTrace(playbackTrace);callerBusyTrace=undefined;playbackTrace=undefined;playbackEndTrace=undefined;clearTurn();acceptedState=undefined;window.removeEventListener('alpha:device-settings',preferenceChanged);if(rendererRenewal)clearTimeout(rendererRenewal);rendererRenewal=undefined;lifecycle.abort();renderer?.close();pendingRenderer?.close();stopPromise=(async()=>{await client.stop();for(const id of minted){if(agent!==connectionController.getBrowserSpeechAgent())throw Error('Developer voice retirement could not be confirmed after connection change.');try{const result=await agent.request(`/api/v1/voice/session/${id}/revoke`,{},new AbortController().signal);if(result.revoked!==true)throw Error('Developer voice retirement was not confirmed.');}catch(error){const failure=error as {status?:number;data?:{code?:string}};if(failure.status!==404||failure.data?.code!=='voice_session_not_found')throw error;}}})();return stopPromise;};
  // Renderer authority is independent of the canonical audio socket. Renew its
