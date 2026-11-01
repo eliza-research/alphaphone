@@ -9,7 +9,7 @@ import {JSDOM} from 'jsdom';
 import {cloudVoiceViewFixture} from './fixtures/cloud-voice-view.mjs';
 
 // The actual production template and DCLogic renderer, closed presentation ports only.
-test('actual voice error clears input activity, says one honest line and retains uncertain cleanup',async()=>{
+test('actual voice error clears input activity, says one honest line and settles uncertain cleanup calmly',async()=>{
  const template=fs.readFileSync('apps/app/src/prototype/template.html','utf8');
  const start=template.indexOf('<sc-if value="{{inlineChatRecorder}}">');
  const end=template.indexOf('<sc-if value="{{panelComposer}}">',start);
@@ -53,16 +53,11 @@ test('actual voice error clears input activity, says one honest line and retains
    if(error){assert.equal(model.muted,'mixed');assert.equal(model.muteLabel,'Microphone status unconfirmed');assert.equal(model.recoveryLabel,'Try voice again');}
 
   }
-  // The same actual adapter must preserve uncertain cleanup instead of claiming mic-off.
+  // An unconfirmed cleanup is released outright: voice retires calmly and never asks to close the app.
   f.cleanupError=Error('Cleanup could not be confirmed');
   f.renderChat().stop();for(let count=0;count<10;count++)await f.tick();
-  const held=f.renderChat();assert.equal(held.state,'error');assert.equal(held.activity,null);
-  assert.equal(held.muted,'mixed');assert.equal(held.muteLabel,'Microphone status unconfirmed');
-  assert.equal(held.recoveryLabel,undefined);assert.match(held.lines[0].t,/Could not confirm voice media stopped/);
-  const heldDoc=new JSDOM(render({inlineChatRecorder:true,chatRecorder:held})).window.document;
-  assert.equal(heldDoc.querySelectorAll('[data-alpha-voice-animation]').length,0);
-  assert.match(heldDoc.querySelector('[role="alert"]').textContent,/Could not confirm voice media stopped/);
-  assert.ok(heldDoc.querySelector('[aria-label="Stop voice conversation"]'));
+  assert.equal(f.renderChat(),null,'the stopped conversation no longer holds the composer');
+  assert.doesNotMatch(f.shell.messages.join('\n'),/Close the app|still stopping|Could not confirm/);
   assert.equal(f.starts,0);assert.equal(f.uploads,0);
  }finally{f?.close();globalThis.matchMedia=beforeMedia;globalThis.document=before;env.window.close();fs.rmSync(temporary,{recursive:true,force:true});}
 });

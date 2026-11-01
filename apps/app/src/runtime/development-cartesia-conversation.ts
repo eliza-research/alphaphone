@@ -120,7 +120,13 @@ export async function developmentCartesiaConversation(input:{binding:VoiceConver
   onPlaybackUnlockChange:()=>{if(!stopped)input.onPlaybackUnlockChange?.();},
   onError:error=>{retireBusyTrace(callerBusyTrace);retireBusyTrace(playbackTrace);callerBusyTrace=undefined;playbackTrace=undefined;playbackEndTrace=undefined;clearTurn();acceptedState=undefined;if(!stopped)input.onError(error);},
  });
- const stop=()=>{if(stopPromise)return stopPromise;stopped=true;retireBusyTrace(callerBusyTrace);retireBusyTrace(playbackTrace);callerBusyTrace=undefined;playbackTrace=undefined;playbackEndTrace=undefined;clearTurn();acceptedState=undefined;window.removeEventListener('alpha:device-settings',preferenceChanged);if(rendererRenewal)clearTimeout(rendererRenewal);rendererRenewal=undefined;lifecycle.abort();renderer?.close();pendingRenderer?.close();stopPromise=(async()=>{await client.stop();for(const id of minted){if(agent!==connectionController.getBrowserSpeechAgent())throw Error('Developer voice retirement could not be confirmed after connection change.');try{const result=await agent.request(`/api/v1/voice/session/${id}/revoke`,{},new AbortController().signal);if(result.revoked!==true)throw Error('Developer voice retirement was not confirmed.');}catch(error){const failure=error as {status?:number;data?:{code?:string}};if(failure.status!==404||failure.data?.code!=='voice_session_not_found')throw error;}}})();return stopPromise;};
+ const stop=()=>{if(stopPromise)return stopPromise;stopped=true;retireBusyTrace(callerBusyTrace);retireBusyTrace(playbackTrace);callerBusyTrace=undefined;playbackTrace=undefined;playbackEndTrace=undefined;clearTurn();acceptedState=undefined;window.removeEventListener('alpha:device-settings',preferenceChanged);if(rendererRenewal)clearTimeout(rendererRenewal);rendererRenewal=undefined;lifecycle.abort();renderer?.close();pendingRenderer?.close();
+  // The SDK stops capture tracks and closes its audio as its stop begins: that local release is what
+  // Stop waits for. Each minted ticket is then revoked once in the background, never through a
+  // replaced owner, so a lost relay cannot hold the voice UI and nothing is retried or replayed.
+  stopPromise=client.stop();
+  void stopPromise.then(()=>{if(agent===connectionController.getBrowserSpeechAgent())return Promise.all([...minted].map(id=>agent.request(`/api/v1/voice/session/${id}/revoke`,{},new AbortController().signal)));}).catch(()=>{});
+  return stopPromise;};
  // Renderer authority is independent of the canonical audio socket. Renew its
  // short, single-use ticket without restarting capture or resetting turn deduplication.
  const renewRenderer=():Promise<void>=>{

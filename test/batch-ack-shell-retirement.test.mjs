@@ -32,12 +32,30 @@ test('actual Batch/session shell Stop retains ACK media until native cleanup set
   assert.equal(f.starts,1,'Stop never resumes capture');
  }finally{f.releasePlaybackCleanup?.();f.releaseReply?.();await clock.flush();f.close();await clock.flush();}
 });
-test('actual ACK cleanup failure latches shell media error and blocks restart',async()=>{
+test('actual ACK cleanup failure is released outright and voice can start again',async()=>{
  const {f,clock}=await startedCue({failCleanup:true});
  try{
   f.renderChat().stop();await clock.flush();assert.equal(f.renderChat()?.state,'stopping');
-  f.releasePlaybackCleanup();await clock.flush();assert.equal(f.renderChat()?.state,'error');
-  await f.shell.startVoice();await clock.flush();assert.equal(f.starts,1,'unconfirmed acknowledgement retirement is not permission to capture');
-  assert.equal(f.sends,1);assert.equal(f.audioSaves,0);
+  f.releasePlaybackCleanup();await clock.flush();assert.equal(f.renderChat(),null,'a failed cleanup never latches the composer');
+  f.holdPlaybackCleanup=false;f.playbackCleanupError=undefined;
+  await f.shell.startVoice();await clock.flush();assert.equal(f.starts,2,'the released microphone can start again');
+  assert.equal(f.sends,1,'nothing is resent');assert.equal(f.audioSaves,0);
+  assert.doesNotMatch(f.shell.messages.join('\n'),/Close the app|still stopping|Could not confirm/);
+ }finally{f.releasePlaybackCleanup?.();f.releaseReply?.();await clock.flush();f.close();await clock.flush();}
+});
+test('actual ACK cleanup that never settles is released after a bounded wait',async()=>{
+ const {f,clock}=await startedCue();
+ try{
+  f.renderChat().stop();await clock.flush();assert.equal(f.renderChat()?.state,'stopping');
+  f.renderChat().stop();f.shell.back();await f.shell.startVoice();await clock.flush();
+  assert.equal(f.starts,1,'no capture while the bounded release runs');assert.deepEqual(f.shell.messages,[],'repeated taps say nothing more');
+  await clock.advance(2999);assert.equal(f.renderChat()?.state,'stopping');
+  await clock.advance(1);assert.equal(f.renderChat(),null,'voice retires after the bound');
+  f.holdPlaybackCleanup=false;
+  void f.shell.startVoice();await clock.flush();assert.equal(f.starts,2,'the unanswered cleanup is not waited for again');assert.equal(f.sends,1);
+  // The old native stop finally answers: its background release leaves the new capture alone.
+  f.releasePlaybackCleanup();await clock.advance(300);
+  assert.equal(f.renderChat()?.state,'listening');assert.equal(f.activeRecording,'synthetic-clip-2');
+  assert.doesNotMatch(f.shell.messages.join('\n'),/Close the app|still stopping/);
  }finally{f.releasePlaybackCleanup?.();f.releaseReply?.();await clock.flush();f.close();await clock.flush();}
 });
