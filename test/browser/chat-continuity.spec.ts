@@ -33,6 +33,8 @@ async function remoteAgent(page: Page, options: Options = {}) {
       createFails: !!options.createFails, createHangs: !!options.createHangs, createLimited: !!options.createLimited, abortResult: !!options.abortResult,
       holdReads: false, identityReleased:false, heldIdentity:null as null|(()=>void), lists: 0, heldRead: null as null | (() => void), heldList: null as null | (() => void),
       release: null as null | ((text: string) => void), assistantClosed: 0,
+      /** Compare-and-exchange refusals still due per slot, as when another window keeps writing it. */
+      refuse: {} as Record<string, number>,
       /** The agent finishes the held turn and persists its reply, whether or not the phone still listens. */
       finish(text: string) { const user = [...agent.history].reverse().find(item => item.role === 'user'); agent.history.push({ id: crypto.randomUUID(), role: 'assistant', text, timestamp: Date.now() + 1, replyToMessageId: user?.id }); persist(); },
     };
@@ -56,7 +58,7 @@ async function remoteAgent(page: Page, options: Options = {}) {
         if (plugin === 'AlphaActionJournal') return method === 'list' ? { entries: [] } : { entry: null };
         if (plugin !== 'AlphaConnection') throw Error('Unexpected native operation');
         if (method === 'secureRead') return { value: store.get(input.slot) ?? null };
-        if (method === 'secureCompareExchange') { if ((store.get(input.slot) ?? null) !== input.expectedValue) return { status: 'conflict' }; if (input.value === null) store.delete(input.slot); else store.set(input.slot, input.value); keep(); return { status: 'saved' }; }
+        if (method === 'secureCompareExchange') { if (f.refuse[input.slot] > 0) { f.refuse[input.slot]--; return { status: 'conflict' }; } if ((store.get(input.slot) ?? null) !== input.expectedValue) return { status: 'conflict' }; if (input.value === null) store.delete(input.slot); else store.set(input.slot, input.value); keep(); return { status: 'saved' }; }
         if (method === 'secureWrite') { store.set(input.slot, input.value); keep(); return {}; }
         if (method === 'secureRemove') { store.delete(input.slot); keep(); return {}; }
         if (method !== 'request') return {};
@@ -333,6 +335,41 @@ test('a stale review and an unreadable earlier-copy device slot never block Send
   await earlierButton(page, 'Restore earlier draft').click();
   await expect(composer(page)).toHaveValue(EARLIER);
   await expect.poll(() => earlierDraft(page, key), { timeout: 15_000 }).toBe('');
+  expect(await fixture(page, f => f.posts)).toBe(1);
+});
+
+// The new chat's earlier copy follows the composer into the conversation. Its removal from the new
+// chat's slot is refused more times than one removal tries again (another window keeps writing that
+// row): the move is tried again, the conversation keeps the copy once, and the slot is emptied, so
+// the copy is offered once, never twice.
+test('an earlier copy whose removal from the new chat is refused follows the conversation once and is not offered twice', async ({ page }) => {
+  test.setTimeout(150_000);
+  await connected(page);
+  await typeDraft(page, 'Words before the other window');
+  const slot = await bindingKey(page);
+  const row = await page.evaluate(async binding => {
+    const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(['earlier-draft', binding]))));
+    return 'assistant-draft:v1:' + Array.from(bytes, n => n.toString(16).padStart(2, '0')).join('');
+  }, slot);
+  await page.evaluate(async ({ binding, text }) => { const { assistantDraftStore } = await import('/src/runtime/assistant-draft-store.ts'); const store = await assistantDraftStore(binding); await store.save(await store.read(), text); }, { binding: slot, text: EARLIER });
+  await composer(page).fill(SENT);
+  await expect(page.getByRole('status', { name: 'Assistant draft status', exact: true })).toContainText('Review the saved copy', { timeout: 15_000 });
+  await composer(page).press('Enter');
+  await expect.poll(() => fixture(page, f => f.posts), { timeout: 15_000 }).toBe(1);
+  expect(await earlierDraft(page, slot)).toBe(EARLIER);
+  await page.evaluate(row => { (window as any).continuity.refuse[row] = 6; }, row);
+  await fixture(page, f => f.release('Got it.'));
+  await expect(conversation(page).getByText('Got it.', { exact: true })).toHaveCount(1);
+  const key = await bindingKey(page);
+  expect(JSON.parse(key)[3]).toBe('fixture-chat');
+  await expect.poll(() => earlierDraft(page, slot), { timeout: 15_000 }).toBe('');
+  expect(await fixture(page, f => Object.values(f.refuse))).toEqual([0]);
+  expect(await earlierDraft(page, key)).toBe(EARLIER);
+  await earlierButton(page, 'Restore earlier draft').click({ timeout: 15_000 });
+  await expect(composer(page)).toHaveValue(EARLIER);
+  await expect.poll(() => earlierDraft(page, key), { timeout: 15_000 }).toBe('');
+  await expect(earlierButton(page, 'Restore earlier draft')).toHaveCount(0);
+  expect(await earlierDraft(page, slot)).toBe('');
   expect(await fixture(page, f => f.posts)).toBe(1);
 });
 

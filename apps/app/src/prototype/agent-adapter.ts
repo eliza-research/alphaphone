@@ -26,7 +26,7 @@ import {availabilityReview} from './calendar-availability-review';
 import {presentDeviceRecordOperation} from '../runtime/device-record-presentation';
 import { passwordSurfaceOpen } from '../passwords/password-manager';
 import {AssistantDraftController} from './assistant-draft-controller';
-import {assistantDraftStore,clearEarlierDraft,keepEarlierDraft,readEarlierDraft,type EarlierDraft} from '../runtime/assistant-draft-store';
+import {assistantDraftStore,keepEarlierDraft,readEarlierDraft,settleEarlierDraft,type EarlierDraft} from '../runtime/assistant-draft-store';
 import {browserNotesPort,browserNotesRecovery} from '../runtime/browser-notes-document';
 import {audioDeletionRecovery} from '../runtime/note-audio-deletions';
 import {addNotesTrashEntry,editNotesTrash,isNotesTrashFull,withNotesDeletionLock} from '../runtime/notes-trash';
@@ -141,8 +141,11 @@ async function offerEarlierDraft(shell:Shell,again=false){
 }
 /**
  * Restoring puts the earlier copy back in the editor; newer typing follows it, as when a send is
- * not dispatched. The stored copy is cleared only once the composer's own draft has saved the
- * editor, so a failed save or a reload in between offers it again instead of losing it.
+ * not dispatched. The stored copy is removed only once the composer's own draft has saved the
+ * editor, so a failed save or a reload in between offers it again instead of losing it. Only the
+ * restored copy is removed (settleEarlierDraft): one another window kept behind it since the offer
+ * stays and is offered next, and the restored copy is not offered again. If storage keeps refusing
+ * the removal, the offer stays on screen with a notice instead of disappearing silently.
  */
 function restoreEarlierDraft(shell:Shell){
   const earlier:EarlierDraft|undefined=shell.earlierDraft,draft=shell.composerDraft;
@@ -154,49 +157,57 @@ function restoreEarlierDraft(shell:Shell){
     if(draft.binding!==earlier.binding||String(shell.S().draft||'')!==text){showEarlierDraft(shell,earlier);return;}
     for(const delay of [0,150,600,1500,4000]){
       if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
-      let saved:string|undefined;try{saved=(await(await assistantDraftStore(earlier.binding)).read())?.text;}catch{return;}
+      let saved:string|undefined;try{saved=(await(await assistantDraftStore(earlier.binding)).read())?.text;}catch{continue;}
       // Saved as restored, or as the person has edited it since in this conversation.
       if(saved!==text&&(!shell.live||draft.binding!==earlier.binding||saved!==String(shell.S().draft||'')))continue;
-      try{await clearEarlierDraft(earlier);}catch{/* Another window changed it: it is read again when this conversation next opens. */return;}
+      try{await settleEarlierDraft(earlier);}catch{
+        let latest=earlier;try{latest=await readEarlierDraft(earlier.binding);}catch{/* Offer the copy this view knows. */}
+        if(shell.live&&draft.binding===earlier.binding&&!shell.earlierDraft){showEarlierDraft(shell,latest);if(shell.earlierDraft)shell.toast('The earlier draft is in the editor, but its saved copy could not be cleared, so it is still offered.');}
+        return;
+      }
       if(shell.live&&draft.binding===earlier.binding&&!shell.earlierDraft)void offerEarlierDraft(shell,true);
       return;
     }
   });
 }
+/** Dismissing removes only the copy offered, as restoring does; the next copy is then offered. */
 function dismissEarlierDraft(shell:Shell){
   const earlier:EarlierDraft|undefined=shell.earlierDraft;if(!earlier)return;
   shell.earlierDraft=undefined;shell.setState({});
-  clearEarlierDraft(earlier).then(()=>{if(shell.live&&shell.composerDraft.binding===earlier.binding&&!shell.earlierDraft)void offerEarlierDraft(shell,true);},async()=>{
-    // Storage failed, or another window changed the copy: offer what is stored now.
+  settleEarlierDraft(earlier).then(()=>{if(shell.live&&shell.composerDraft.binding===earlier.binding&&!shell.earlierDraft)void offerEarlierDraft(shell,true);},async()=>{
+    // Storage failed, or other windows kept changing the copy: offer what is stored now.
     let latest=earlier;try{latest=await readEarlierDraft(earlier.binding);}catch{/* Offer the copy this view knows. */}
     if(!shell.live||shell.composerDraft.binding!==earlier.binding)return;
     showEarlierDraft(shell,latest);shell.toast('The earlier draft could not be dismissed. It is still saved.');
   });
 }
 /**
- * When a send settles, the earlier copy of a new chat follows the composer into the conversation
- * its first send created, as an unsent first message does (releaseComposerSend): it is saved there
- * before it is cleared from the "no conversation yet" slot, so a reload in between keeps one copy.
+ * When a send settles, the earlier copies of a new chat follow the composer into the conversation
+ * its first send created, as an unsent first message does (releaseComposerSend): each is saved there
+ * before it is removed from the "no conversation yet" slot, so a reload in between keeps one copy.
+ * A move that fails is tried again from a fresh read. The conversation does not keep again the copy
+ * it already holds last (keepEarlierDraft), so a copy whose removal was refused is never doubled
+ * there, and once removed it is not offered with the slot either.
  */
 async function followEarlierDraft(shell:Shell,slot:string){
   let identity:unknown;try{identity=JSON.parse(slot);}catch{return;}
   if(!Array.isArray(identity)||identity.length!==4||identity[3]!==null)return;
+  let moved:string|undefined;
   for(const delay of [0,150,600,1500]){
     if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
     await shell.draftBindingTask;
     const key=shell.composerDraft.binding;
-    if(!shell.live||!key)return;
+    if(!shell.live||!key)break;
     if(key===slot)continue;
-    if(!createdFromSlot(slot,key))return;
-    let moved=false;
+    if(!createdFromSlot(slot,key))break;
     try{
       for(let earlier=await readEarlierDraft(slot);earlier.text.trim();earlier=await readEarlierDraft(slot)){
-        await keepEarlierDraft(key,earlier.text);moved=true;await clearEarlierDraft(earlier);
+        await keepEarlierDraft(key,earlier.text);moved=key;await settleEarlierDraft(earlier);
       }
-    }catch{/* What was not moved stays offered with the new chat's own slot. */}
-    if(moved&&shell.live&&shell.composerDraft.binding===key)void offerEarlierDraft(shell,true);
-    return;
+    }catch{/* Tried again from a fresh read; what is never moved stays offered with the new chat's own slot. */continue;}
+    break;
   }
+  if(moved&&shell.live&&shell.composerDraft.binding===moved)void offerEarlierDraft(shell,true);
 }
 
 /**

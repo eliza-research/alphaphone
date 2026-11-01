@@ -145,6 +145,55 @@ test('an unreadable earlier-copy row is left as it is and never blocks Send: the
  expect(await row(page,slot,false)).toBe(damaged);
 });
 
+// Restore removes only the copy it restored. Another window set its own copy aside in the same row
+// after this offer was shown: that copy stays offered, and the restored one, once sent, never is.
+const keepElsewhere=(page:any,binding:string,text:string)=>page.evaluate(async({binding,text}:{binding:string;text:string})=>{await(await import('/src/runtime/assistant-draft-store.ts')).keepEarlierDraft(binding,text);},{binding,text});
+test('restoring an earlier draft another window added to keeps that copy offered and never offers the restored one again',async({page})=>{
+ await developmentAgent(page);await composer(page).fill('Words before the other window');await saved(page);
+ await conflicted(page,'A earlier','Words to send');
+ await composer(page).press('Enter');await expect.poll(()=>page.evaluate(()=>(window as any).draftRequests)).toEqual(['Words to send']);
+ const key=await draftBinding(page);await expect(earlierButton(page,'Restore earlier draft')).toBeVisible();await expect.poll(()=>earlierDraft(page,key)).toBe('A earlier');
+ await keepElsewhere(page,key,'W from other window');expect(await earlierDraft(page,key)).toBe('A earlier\nW from other window');
+ await earlierButton(page,'Restore earlier draft').click();await expect(visibleComposer(page)).toHaveValue('A earlier');
+ await expect.poll(()=>earlierDraft(page,key)).toBe('W from other window');await expect(earlierButton(page,'Restore earlier draft')).toBeVisible();
+ await visibleComposer(page).press('Enter');await expect.poll(()=>page.evaluate(()=>(window as any).draftRequests)).toEqual(['Words to send','A earlier']);
+ await expect.poll(()=>storedDraft(page,key)).toBe('');
+ await page.reload();await page.evaluate(async()=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');await c.initialize();if(!c.getSnapshot().session)await c.startDevelopment('local');});
+ await expect.poll(()=>draftBinding(page)).toBe(key);expect(await earlierDraft(page,key)).toBe('W from other window');
+ await earlierButton(page,'Restore earlier draft').click();await expect(visibleComposer(page)).toHaveValue('W from other window');
+ await expect.poll(()=>earlierDraft(page,key)).toBe('');await expect(earlierButton(page,'Restore earlier draft')).toHaveCount(0);
+});
+test('a restore whose saved copy cannot be cleared keeps the offer on screen and says so',async({page})=>{
+ await developmentAgent(page);await composer(page).fill('Words before the other window');await saved(page);
+ await conflicted(page,'A earlier','Words to send');
+ await composer(page).press('Enter');await expect.poll(()=>page.evaluate(()=>(window as any).draftRequests)).toEqual(['Words to send']);
+ const key=await draftBinding(page);await expect(earlierButton(page,'Restore earlier draft')).toBeVisible();
+ // From now on storage fails every write to this conversation's earlier-copy row.
+ await page.evaluate(async(binding:string)=>{const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(['earlier-draft',binding])))),n=>n.toString(16).padStart(2,'0')).join(''),key='alpha.browser.assistant-draft:v1:'+hash,put=IDBObjectStore.prototype.put;(window as any).restoreEarlierPut=()=>{IDBObjectStore.prototype.put=put;};IDBObjectStore.prototype.put=function(...args:any[]){if(args[1]===key)throw new DOMException('Unavailable','UnknownError');return put.apply(this,args as any);};},key);
+ await earlierButton(page,'Restore earlier draft').click();await expect(visibleComposer(page)).toHaveValue('A earlier');
+ await expect(page.locator('[data-alpha-toast]').getByText('The earlier draft is in the editor, but its saved copy could not be cleared, so it is still offered.',{exact:true})).toBeVisible();
+ await expect(earlierButton(page,'Restore earlier draft')).toBeVisible();expect(await earlierDraft(page,key)).toBe('A earlier');
+ // Once storage works again, Dismiss clears it and the editor keeps the restored words.
+ await page.evaluate(()=>(window as any).restoreEarlierPut());
+ await earlierButton(page,'Dismiss earlier draft').click();await expect.poll(()=>earlierDraft(page,key)).toBe('');await expect(earlierButton(page,'Restore earlier draft')).toHaveCount(0);
+ await expect(visibleComposer(page)).toHaveValue('A earlier');
+});
+test('earlier copies are offered oldest first: a newer copy never jumps ahead into a cleared row',async({page})=>{
+ await expect(composer(page)).toBeEnabled();
+ const first='a'.repeat(40_000),second='b'.repeat(30_000);
+ const offered=await page.evaluate(async({first,second}:{first:string;second:string})=>{
+  const {keepEarlierDraft,readEarlierDraft,settleEarlierDraft}=await import('/src/runtime/assistant-draft-store.ts');
+  const binding=JSON.stringify(['earlier-order-fixture',crypto.randomUUID()]),offered:string[]=[];
+  // The second copy does not fit beside the first, so it takes row 1.
+  await keepEarlierDraft(binding,first);await keepEarlierDraft(binding,second);
+  // Row 0 is restored and cleared while row 1 still holds the second copy; then a third is kept.
+  await settleEarlierDraft(await readEarlierDraft(binding));await keepEarlierDraft(binding,'third');
+  for(let earlier=await readEarlierDraft(binding);earlier.text;earlier=await readEarlierDraft(binding)){offered.push(earlier.text);await settleEarlierDraft(earlier);}
+  return offered;
+ },{first,second});
+ expect(offered.length).toBe(1);expect(offered[0]===second+'\nthird').toBe(true);
+});
+
 test('connection changes restore only that connection draft and retain the offline copy',async({page})=>{
  await page.goto('/?mode=dev');await composer(page).fill('Offline draft');await saved(page);await page.evaluate(async()=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');await c.initialize();await c.startDevelopment('local');if(!c.getSnapshot().session)throw Error('Fixture did not connect');});await expect(composer(page)).toHaveValue('');await composer(page).fill('Connected draft');await saved(page);await page.evaluate(async()=>{await(await import('/src/runtime/connection-ui.tsx')).connectionController.offline();});await expect(composer(page)).toHaveValue('Offline draft');await page.evaluate(async()=>{await(await import('/src/runtime/connection-ui.tsx')).connectionController.startDevelopment('local');});await expect(composer(page)).toHaveValue('Connected draft');
 });
