@@ -122,7 +122,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
   let recognized: { text: string; provenance: TranscriptProvenance } | undefined;
   let savedStarting:Promise<void>|undefined;
   let savedPlaying: string | undefined, savedPosition = 0, savedEpoch = 0, savedTick: ReturnType<typeof setInterval> | undefined;
-  const stopSaved = () => { const owned = savedPlaying !== undefined; ++savedEpoch; savedPlaying = undefined; savedPosition = 0; if (savedTick) clearInterval(savedTick); savedTick = undefined; if (owned) {const pending=savedStarting;releaseMedia(async()=>{try{await pending;}catch{}await noteAudio.stop();});} };
+  const stopSaved = () => { const owned = savedPlaying !== undefined; ++savedEpoch; savedPlaying = undefined; savedPosition = 0; if (savedTick) clearInterval(savedTick); savedTick = undefined; if (owned) {const pending=savedStarting;releaseMedia(async live=>{try{await pending;}catch{}if(live())await localStop(()=>noteAudio.stop());});} };
   async function playSaved(note: Bag) {
     if (savedPlaying === note.audio.audioId) { stopSaved(); refresh(); return; }
     stopSaved(); const epoch = savedEpoch; savedPlaying = note.audio.audioId; refresh();
@@ -137,19 +137,50 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
   let listener: PluginListenerHandle | undefined, tick: ReturnType<typeof setInterval> | undefined;
   let stopping = Promise.resolve();
   /**
-   * Media release waits for any release already under way, then a few seconds at most. Past that, or
-   * when a release fails, the local capture and playback are released outright and voice is no longer
-   * held: a lost relay or a call that never answers cannot keep voice stopping. Remote cleanup goes on
-   * in the background, and nothing is retried or replayed. A newer attempt releases before it begins
-   * and then owns the recorder, so a late failure from an older one never releases it again.
+   * Media release. `stopping` settles only once local media is confirmed released: the release
+   * resolves, or, when it fails or runs past a few seconds, the voice plugin answers its own local
+   * stop of every capture and playback it holds, and any session that owns its media (a realtime
+   * client or live assistant) has answered its own stop. Every stop the adapter issued has answered
+   * by then, and a settled release never issues another, so an old answer cannot stop newer media.
+   * New media waits for this, briefly; the stopping view settles after the same few seconds either
+   * way, so chat stays usable. A forced stop that fails is tried again only when voice next starts.
    */
-  function releaseMedia(release:()=>unknown){
-    const pending=stopping.then(release),owner=generation;
+  const unsettled=new Set<()=>void>(),sessions=new Set<Promise<unknown>>(),localStops=new Set<Promise<unknown>>();
+  let retry:(()=>void)|undefined,admitted=0;
+  const stillFinishing='Voice is still finishing. Try again in a moment, or use the keyboard.';
+  /** One stop of the shared recorder or speaker; new media waits until it answers. */
+  const localStop=(stop:()=>unknown)=>{const pending=new Promise<unknown>(resolve=>resolve(stop()));localStops.add(pending);const done=()=>{localStops.delete(pending);};pending.then(done,done);return pending;};
+  const within=(barrier:Promise<unknown>,ms:number,signal?:AbortSignal)=>new Promise<boolean>(resolve=>{
+    const finish=(value:boolean)=>{clearTimeout(timer);signal?.removeEventListener('abort',stop);resolve(value);},stop=()=>finish(false),timer=setTimeout(stop,ms);
+    signal?.addEventListener('abort',stop,{once:true});if(signal?.aborted)stop();void barrier.then(()=>finish(true));
+  });
+  /** The stopping view and chat: settled release, or the bound. Never permission for new media. */
+  const viewSettled=()=>within(stopping,3000).then(()=>{});
+  function releaseMedia(release:(live:()=>boolean)=>unknown,session?:Promise<unknown>){
+    const previous=stopping;let done=false,forcing=false;
+    if(session){sessions.add(session);void session.then(()=>sessions.delete(session),()=>{});}
     stopping=new Promise<void>(resolve=>{
-      const force=()=>{clearTimeout(timer);if(owner===generation)void Promise.resolve().then(()=>Capacitor.isNativePlatform()?deviceVoice.cancelRecording():(deviceVoice as unknown as {cancel():Promise<unknown>}).cancel()).catch(()=>{});resolve();};
-      const timer=setTimeout(force,3000);
-      pending.then(()=>{clearTimeout(timer);resolve();},force);
+      const settle=()=>{if(done)return;if(localStops.size){void Promise.allSettled([...localStops]).then(settle);return;}done=true;clearTimeout(timer);unsettled.delete(settle);if(retry===force)retry=undefined;resolve();};
+      // Covers every release still open when it is issued; it counts only when the plugin answers.
+      const force=()=>{clearTimeout(timer);if(done||forcing)return;forcing=true;if(retry===force)retry=undefined;const covered=[...unsettled];
+        void Promise.all([localStop(()=>Capacitor.isNativePlatform()?Promise.all([deviceVoice.cancelRecording(),(deviceVoice as unknown as {stopPlayback():Promise<unknown>}).stopPlayback()]):(deviceVoice as unknown as {cancel():Promise<unknown>}).cancel()),...sessions])
+          .then(()=>{for(const open of covered)open();},()=>{forcing=false;if(!done)retry=force;});};
+      const timer=setTimeout(force,3000);unsettled.add(settle);
+      void previous.then(()=>release(()=>!done)).then(settle,force);
     });
+  }
+  /**
+   * New capture, playback or session waits for confirmed release, a few seconds at most. Once
+   * admitted it owns the recorder: an older capture's stop is never issued after this.
+   */
+  async function mediaSafe(again:boolean,signal?:AbortSignal){
+    if(again)retry?.();
+    const until=Date.now()+5000;
+    for(;;){
+      const barrier=stopping;
+      if(!await within(Promise.all([barrier,Promise.allSettled([...localStops])]),until-Date.now(),signal))return false;
+      if(barrier===stopping&&!localStops.size){admitted++;return true;}
+    }
   }
   type Driver = typeof voice | ReturnType<typeof createCloudVoice> | NativeLiveDictation;
   let startingCapture:ReturnType<Driver['startRecording']>|undefined;
@@ -207,7 +238,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     // Discard, cancel, keyboard, navigation and account changes all end here: an unsent turn is abandoned.
     abandonVoiceTurn();conversationReview=undefined;conversationReplyWatch=undefined;
     const hadCapture=!!recordingId||!!startingCapture||!!clip;
-    const previousChat=chatDestination;const chatShell=previousChat?.shell,previousConversation=conversationVoice,previousSpeech=conversationSpeech,previousNotesSpeech=notesSpeech;conversationVoice=undefined;conversationPrepared=undefined;conversationSpeech=undefined;notesSpeech=undefined;
+    const previousChat=chatDestination;const chatShell=previousChat?.shell,previousConversation=conversationVoice,previousSpeech=conversationSpeech,previousNotesSpeech=notesSpeech,sessionOwned=!!previousConversation&&(previousConversation===conversationLive||'setMicrophoneMuted' in previousConversation);conversationVoice=undefined;conversationPrepared=undefined;conversationSpeech=undefined;notesSpeech=undefined;
     conversationLive=undefined;conversationInterim='';assistantState={phase:'idle'};
     // Stopping the assistant cancels its capture, request and playback and releases its agent session.
     const conversationStopped=previousConversation?.stop();
@@ -219,11 +250,12 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     if (listener) void listener.remove(); listener = undefined;
     const previous = driver;
     const pendingStart=startingCapture,retired=generation;
-    // A release past its bound goes on here in the background; a newer attempt owns the recorder then.
-    releaseMedia(async () => { await conversationStopped;await previousSpeech?.catch(error=>{if(error?.code==='speech-cleanup-unconfirmed')throw error;});await previousNotesSpeech?.catch(error=>{if(error?.code==='speech-cleanup-unconfirmed')throw error;});if(pendingStart)try{await pendingStart;}catch{}if(generation!==retired)return;try { await previous.cancelRecording(); } catch(error) {if(hadCapture||previousConversation)throw error;} });
+    // A realtime client or live assistant owns its media: only its own stop confirms it. A settled
+    // release never stops the recorder again; newer media may own it then.
+    releaseMedia(async live => { await conversationStopped;await previousSpeech?.catch(error=>{if(error?.code==='speech-cleanup-unconfirmed')throw error;});await previousNotesSpeech?.catch(error=>{if(error?.code==='speech-cleanup-unconfirmed')throw error;});if(pendingStart)try{await pendingStart;}catch{}if(!live()||generation!==retired)return;try { await localStop(()=>previous.cancelRecording()); } catch(error) {if(hadCapture||previousConversation)throw error;} },sessionOwned?conversationStopped:undefined);
     if(chatShell&&(previousConversation||previousSpeech||hadCapture)){
-      const held:NonNullable<typeof retirement>={shell:chatShell,returnChat:previousChat!.chat,view:previousChat!.view,binding:previousChat!.binding,panelChat:chatShell.S().chat,promise:stopping,approval:chatShell.pendingActionApproval,proposalId:chatShell.pendingActionApprovalProposalId};retirement=held;
-      void stopping.then(()=>{if(retirement!==held)return;retirement=undefined;if(chatShell.live!==false)chatShell.setState((state:any)=>({...(composerBinding()===held.binding&&(state.view||null)===held.view&&state.chat===held.panelChat?{chat:held.returnChat}:{})}));});
+      const held:NonNullable<typeof retirement>={shell:chatShell,returnChat:previousChat!.chat,view:previousChat!.view,binding:previousChat!.binding,panelChat:chatShell.S().chat,promise:viewSettled(),approval:chatShell.pendingActionApproval,proposalId:chatShell.pendingActionApprovalProposalId};retirement=held;
+      void held.promise.then(()=>{if(retirement!==held)return;retirement=undefined;if(chatShell.live!==false)chatShell.setState((state:any)=>({...(composerBinding()===held.binding&&(state.view||null)===held.view&&state.chat===held.panelChat?{chat:held.returnChat}:{})}));});
     }
     clip = undefined; recordingId = undefined;
     if (close) { stage = 'closed'; draft = ''; destination = undefined; chatDestination = undefined; failure = ''; recognized = undefined; }
@@ -247,7 +279,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     else if (onDeviceVoice) {
       preparingLocal = true;
       const local = onDeviceVoice, token = generation, controller = new AbortController(); readiness = controller;
-      void stopping.then(() => {
+      void viewSettled().then(() => {
         if (token !== generation || controller.signal.aborted) return false;
         return local.ready(controller.signal);
       }).then(async ready => {
@@ -269,7 +301,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         const token = generation, controller = new AbortController(); readiness = controller;
         const selected = pairedVoice;
         void (async () => {
-          await stopping;
+          await viewSettled();
           if (token !== generation || controller.signal.aborted) return;
           try { const ready = await selected.ready(controller.signal); if (token === generation && !controller.signal.aborted) { pairedReady = ready; refresh(); } } catch { /* TTS and ASR are separate capabilities. */ }
           if (token !== generation || controller.signal.aborted) return;
@@ -300,8 +332,9 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     if (cloudConnectRequired) throw new Error(`Sign in to ${voiceServiceName()} to use voice.`);
     if (selectedRoute === 'device' && !onDeviceReady) throw new Error('On-device speech is not ready');
     if (!Capacitor.isPluginAvailable(cloudMode || deviceOnly ? 'AlphaVoiceCloud' : 'DevelopmentAgent')) throw new Error('Voice unavailable');
-    stage = 'starting'; refresh(); await stopping;
+    stage = 'starting'; refresh(); const safe = await mediaSafe(true);
     if (token !== generation) return;
+    if (!safe) { stage = 'ready'; error = stillFinishing; return; }
     if (listener) await listener.remove(); listener = undefined;
     const handle = await driver.addListener('recordingStopped', value => {
       if (token !== generation || !['starting','recording'].includes(stage) || (recordingId && value.recordingId !== recordingId)) return;
@@ -478,14 +511,14 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     };
   }
   async function captureConversationAudio(selected:Pick<ReturnType<typeof createCloudVoice>,'startRecording'|'stopRecording'|'getRecordingMetrics'|'cancelRecording'|'addListener'>,current:()=>void,input:{signal:AbortSignal;onActivity:(value:{peak:number;rms?:number})=>void;onEnd:(error?:unknown)=>void}){
-    let active=true,recording=false,id:string|undefined,ended:Clip|undefined,problem:unknown,endId:string|undefined,handle:PluginListenerHandle|undefined,poll:ReturnType<typeof setTimeout>|undefined,cancelling:Promise<void>|undefined;
+    let active=true,recording=false,id:string|undefined,ended:Clip|undefined,problem:unknown,endId:string|undefined,handle:PluginListenerHandle|undefined,poll:ReturnType<typeof setTimeout>|undefined,cancelling:Promise<void>|undefined,owner=-1;
     const check=()=>{input.signal.throwIfAborted();current();},token=generation;
     const detach=async()=>{if(poll)clearTimeout(poll);poll=undefined;if(handle){const previous=handle;handle=undefined;await previous.remove();}};
-    const cancel=()=>{if(cancelling)return cancelling;active=false;recording=false;input.signal.removeEventListener('abort',aborted);cancelling=(async()=>{try{await detach();}finally{try{await selected.cancelRecording();}catch(failure){if(token===generation)releaseMedia(()=>{throw failure;});throw failure;}}})();return cancelling;};
-    const aborted=()=>{recording=false;if(poll)clearTimeout(poll);void selected.cancelRecording().catch(()=>{});};
+    const cancel=()=>{if(cancelling)return cancelling;active=false;recording=false;input.signal.removeEventListener('abort',aborted);cancelling=(async()=>{try{await detach();}finally{try{if(owner===admitted)await localStop(()=>selected.cancelRecording());}catch(failure){if(token===generation)releaseMedia(()=>{throw failure;});throw failure;}}})();return cancelling;};
+    const aborted=()=>{recording=false;if(poll)clearTimeout(poll);if(owner===admitted)void localStop(()=>selected.cancelRecording()).catch(()=>{});};
     input.signal.addEventListener('abort',aborted,{once:true});if(input.signal.aborted)aborted();
     try{
-      await stopping;check();
+      const safe=await mediaSafe(false,input.signal);check();if(!safe)throw Object.assign(Error(stillFinishing),{code:'media-unconfirmed'});owner=admitted;
       handle=await selected.addListener('recordingStopped',value=>{
         if(!active||input.signal.aborted||id&&value.recordingId!==id)return;
         if(!value.recordingId)return;
@@ -546,7 +579,8 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     const current=()=>{controller.signal.throwIfAborted();if(token!==generation||chatDestination!==chat||!chatCurrent())throw new DOMException('Voice conversation changed','AbortError');};
     try{
       current();const prepared=await chat.shell.prepareVoiceConversation(controller.signal);current();conversationPrepared=prepared;current();
-      const previous=conversationVoice;conversationVoice=undefined;if(previous)releaseMedia(()=>previous.stop());await stopping;current();
+      const previous=conversationVoice;conversationVoice=undefined;if(previous){const stopped=previous.stop();releaseMedia(()=>stopped,previous===conversationLive||'setMicrophoneMuted' in previous?stopped:undefined);}
+      const safe=await mediaSafe(true,controller.signal);current();if(!safe){conversationState={phase:'error'};error=stillFinishing;refresh();return;}
       if(ownBrowserVoiceActive()||developmentCloudRealtimeVoiceEnabled||(cloudMode&&developmentCartesiaVoiceEnabled&&!developmentCloudVoiceEnabled)){
         const direct=await developmentCartesiaConversation({binding:prepared.binding,assertCurrent:current,getUiContext:()=>{current();const context=chat.shell.voiceConversationContext(prepared.binding);const metadata=connectionController.voiceRendererMetadata(context);if(metadata.viewDelivery!=='completed-action')throw Error('The voice renderer is not bound to completed-action navigation.');return {viewDelivery:metadata.viewDelivery,uiViewPath:alphaViewPath(context.view),uiBrowserSurface:'native' as const,uiTimeZone:Intl.DateTimeFormat().resolvedOptions().timeZone};},onNavigate:async event=>{current();chat.shell.voiceSendTurnId=event.traceId;try{await chat.shell.applyRealtimeVoiceNavigation({...event,binding:prepared.binding,assertCurrent:current,navigation:navigationContinuation(chat,token,event.traceId)});current();}finally{if(chat.shell.voiceSendTurnId===event.traceId)chat.shell.voiceSendTurnId=undefined;}},onState:(phase,progressText='')=>{if(token!==generation)return;if(phase==='idle'&&['starting','error'].includes(conversationState.phase))return;if(phase==='listening')conversationInterim='';conversationState={phase:['connecting','ready'].includes(phase)?'starting':['complete','interrupted'].includes(phase)?'listening':['listening','transcribing','thinking','speaking'].includes(phase)?phase as 'listening'|'transcribing'|'thinking'|'speaking':'idle',progressText};refresh();},onPlaybackUnlockChange:()=>{if(token===generation)refresh();},onActionResult:summary=>{if(token===generation)chat.shell.toast(summary);},onTranscript:text=>{if(token===generation){if(!conversationInterim)conversationInterimKnownMessages=new Set((chat.shell.S().msgs||[]).map((m:Bag)=>String(m.id)));conversationLastTranscript=text;conversationInterim=text;refresh();}},onError:failure=>{if(token!==generation)return;
           // A lost transport (a relay or socket that went away, past any reconnect the SDK allows) ends voice with one calm line.
@@ -679,12 +713,12 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         onState:value=>{if(token!==generation||chatDestination!==chat||conversationVoice!==conversation)return;if(value.phase==='error'&&quietVoiceRetry(value.error,chat,token))return;
           // The loop retires itself (idle) before it reports a failure: keep this frame until the retire
           // settles, so a quiet wait never flashes "Voice conversation stopped." and Start Cloud voice.
-          if(value.phase==='idle'&&conversationState.phase!=='idle'){const held=conversationState;void conversation.stop().catch(()=>{}).then(()=>{if(token===generation&&chatDestination===chat&&conversationVoice===conversation&&conversationState===held){conversationState=value;stopClock();refresh();}});return;}if(value.phase==='speaking')quietRetries=0;conversationState=value;if(value.phase==='error')error=voiceStopped(value);if(value.phase==='listening'){stopClock();tick=setInterval(refresh,250);}else stopClock();refresh();},
+          if(value.phase==='idle'&&conversationState.phase!=='idle'){const held=conversationState;void conversation.stop().catch(()=>{}).then(()=>{if(token===generation&&chatDestination===chat&&conversationVoice===conversation&&conversationState===held){conversationState=value;stopClock();refresh();}});return;}if(value.phase==='speaking')quietRetries=0;conversationState=value;if(value.phase==='error')error=(value.error as {code?:unknown})?.code==='media-unconfirmed'?stillFinishing:voiceStopped(value);if(value.phase==='listening'){stopClock();tick=setInterval(refresh,250);}else stopClock();refresh();},
       });
       conversationVoice=conversation;await conversation.start();current();
     }catch(failure){if(token!==generation||controller.signal.aborted)return;if(quietVoiceRetry(failure,chat,token))return;conversationState={phase:'error',error:failure};const classified=voiceFailure(failure,{transcribing:false,browser:!Capacitor.isNativePlatform()});error=cloudVoiceFailure(failure)||(classified&&(classified.kind==='denied'||classified.kind==='no-microphone')?classified.message:null)||'Voice could not start. Try again, or use the keyboard.';refresh();}
   }
-  Component.prototype.stopVoiceConversation = function(){if(chatDestination?.shell===this){cancelChat(false,true);return stopping;}if(retirement&&retirement.shell===this)return retirement.promise;};
+  Component.prototype.stopVoiceConversation = function(){if(chatDestination?.shell===this){cancelChat(false,true);return viewSettled();}if(retirement&&retirement.shell===this)return retirement.promise;};
   Component.prototype.resumeReadReplyVoice=function(hint:import('../runtime/alpha-client').NativeNotesReadReplyHint,reply:import('../runtime/alpha-client').NativeNotesReadReply){
     if(chatDestination?.shell!==this||!chatCurrent()||document.querySelector('dialog[open]')||conversationState.phase!=='awaiting-user-input'||!conversationState.awaitingUserInput)return false;
     const pause=conversationState.awaitingUserInput;
@@ -695,7 +729,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     signal.throwIfAborted();if(stage!=='closed'&&!chatDestination)throw Error('Finish or discard the Notes recording before reviewing this request.');
     const binding=composerBinding(),pause=conversationState.awaitingUserInput;
     if(chatDestination?.shell===this&&!(conversationState.phase==='awaiting-user-input'&&pause?.proposalId===proposalId&&pause.digest===digest&&chatCurrent()))cleanup();
-    const reading=stopLocalSpeechPlayback();stopSaved();await Promise.all([stopping,Promise.resolve(reading)]);signal.throwIfAborted();
+    const reading=stopLocalSpeechPlayback();stopSaved();await Promise.all([viewSettled(),Promise.resolve(reading)]);signal.throwIfAborted();
     if(this.live===false||document.hidden||connectionController.getSnapshot().open||composerBinding()!==binding)throw Error('The Notes review changed.');
   };
   Component.prototype.retireReadReplyVoice=function(proposalId:string){if(chatDestination?.shell===this&&conversationState.awaitingUserInput?.proposalId===proposalId)cleanup();};
