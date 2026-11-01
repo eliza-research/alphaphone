@@ -10,16 +10,19 @@ const between=(text,start,end)=>{const a=text.indexOf(start),b=text.indexOf(end,
 const compiled=transformSync(panelSource.replace(/^import .*;\n/gm,'').replaceAll('export ',''),{loader:'tsx',jsxFactory:'React.createElement'}).code;
 const CloudSignInPanel=new Function('React','useRef','useState','useEffect','cloudServiceName',compiled+';return CloudSignInPanel;')(React,React.useRef,React.useState,React.useEffect,()=> 'Eliza Cloud');
 const branch=between(source,'  const requiredSignInView:', '  const accountCreatedNotice=');
-// Render the retained main AI-provider composition, not the removed welcome wrapper.
+// The welcome page shows one sign-in method at a time; the own-key view is one tap away.
 const ownSource=transformSync(source.slice(source.indexOf('function OwnProviderChoice(')),{loader:'tsx',jsxFactory:'React.createElement'}).code;
 const OwnProviderChoice=new Function('React','useRef','useState','Capacitor','browserCloudResidentEnabled',ownSource+';return OwnProviderChoice;')(React,React.useRef,React.useState,{isNativePlatform:()=>false},true);
+const ownKeys=transformSync(between(source,'/** First run shows one sign-in method','/** One explicit choice;'),{loader:'tsx',jsxFactory:'React.createElement'}).code;
+const SignInOrOwnKeys=new Function('React','useState','AlphaAuthBrand',ownKeys+';return SignInOrOwnKeys;')(React,React.useState,()=>null);
 
-const renderBranch=new Function('React','CloudSignInPanel','snapshot','productionSignInRequired','signInEntryRequired','residentEnvironment','inAppGoogle','panel','RESIDENT_UNPACKAGED','connectionController','browserCloudResidentEnabled','testMocksEnabled','ResidentRecoveryPanel','loadSignInService','cloudSignInPhone','inAppPhone','inAppEmail','providerChoice',transformSync('function render(){'+branch+'return null;}',{loader:'tsx',jsxFactory:'React.createElement'}).code+';return render();');
+const renderBranch=new Function('React','CloudSignInPanel','snapshot','productionSignInRequired','signInEntryRequired','residentEnvironment','inAppGoogle','panel','RESIDENT_UNPACKAGED','connectionController','browserCloudResidentEnabled','testMocksEnabled','ResidentRecoveryPanel','loadSignInService','cloudSignInPhone','inAppPhone','inAppEmail','SignInOrOwnKeys','OwnProviderChoice','LOCAL_PROVIDER_MODEL',transformSync('function render(){'+branch+'return null;}',{loader:'tsx',jsxFactory:'React.createElement'}).code+';return render();');
 const controller={beginSignIn(){},signInGoogle(){},signInEmail(){},verifySignInCode(){},resendSignInCode(){},cancelSignIn(){}};
-const render=snapshot=>renderToStaticMarkup(renderBranch(React,CloudSignInPanel,snapshot,true,true,()=> 'production',false,null,'unpackaged',controller,false,false,()=>null,undefined,null,false,true,React.createElement(OwnProviderChoice,{busy:snapshot.busy,status:snapshot.providerStatus,error:snapshot.error,message:snapshot.message,onSave:async()=>{},onCancel:()=>{},onCloud:async()=>{}})));
+const render=snapshot=>renderToStaticMarkup(renderBranch(React,CloudSignInPanel,snapshot,true,true,()=> 'production',false,null,'unpackaged',controller,false,false,()=>null,undefined,null,false,true,SignInOrOwnKeys,OwnProviderChoice,'model'));
 test('production signed-out entry server-renders direct options before readiness without false Google failure',()=>{
  const html=render({signIn:null,busy:false,message:'',error:''});
- assert.match(html,/Welcome to Alpha/);assert.match(html,/Continue with Google/);assert.match(html,/Email me a code/);assert.match(html,/Retry sign-in/);assert.match(html,/AI provider/);assert.match(html,/>Own API keys</);assert.doesNotMatch(html,/Use your own API keys/);
+ assert.match(html,/Welcome to Alpha/);assert.match(html,/Continue with Google/);assert.match(html,/Email me a code/);assert.match(html,/Retry sign-in/);
+ assert.match(html,/Use your own API keys/);assert.doesNotMatch(html,/AI provider|>Own API keys<|Cerebras API key/,'the welcome page never shows the Settings provider switch or the key form under Cloud');
  assert.doesNotMatch(html,/Sign in with Eliza Cloud|Google sign-in is unavailable/);assert.match(html,/disabled/);
 });
 test('ready choice renders usable email path and explicit unavailable Google notice',()=>{
