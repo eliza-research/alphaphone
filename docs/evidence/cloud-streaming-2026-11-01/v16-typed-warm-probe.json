@@ -1,0 +1,36 @@
+{
+  "format": "alpha-typed-resident-probe-v1",
+  "collectedAt": "2026-11-01T08:10:51.559Z",
+  "installed": "0.1.0-cloud-voice-streaming-v16",
+  "warm": true,
+  "finished": true,
+  "elapsedMs": 4812,
+  "typing": false,
+  "streams": [
+    [
+      {
+        "stage": "response",
+        "elapsedMs": 87,
+        "status": 200
+      },
+      {
+        "stage": "token",
+        "elapsedMs": 4600
+      },
+      {
+        "stage": "reply_ready",
+        "elapsedMs": 4635
+      },
+      {
+        "stage": "done",
+        "elapsedMs": 4648,
+        "answerContainsFour": true
+      },
+      {
+        "stage": "complete",
+        "elapsedMs": 4668,
+        "error": false
+      }
+    ]
+  ]
+}

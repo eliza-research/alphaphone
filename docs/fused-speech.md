@@ -108,6 +108,21 @@ not defined` at `agent-bundle.js:39523:19870`. The evidence is in
 [`v15-resident-failure.json`](evidence/cloud-streaming-2026-11-01/v15-resident-failure.json).
 This separate bundle defect must be fixed before an end-to-end comparison.
 
+The corrected v16 producer passed the actual pre-provider message-turn probe and
+ran on the Pixel. Two typed arithmetic requests returned the expected answer:
+7,754 ms cold and 4,812 ms warm. These are typed-chat checks, not voice latency.
+On the warm request, the existing fixed-schema model HTTP log measured 2,138 ms
+to response headers and 2,017 ms for its body. Cloud reported 690 ms of
+pre-forward work, `admissionCacheRead=not_run`, and
+`admissionResult=authorized_origin`. The remainder combines transport and
+provider generation; the logs do not establish prompt token counts or separate
+network time from model compute. The selected model is
+`cerebras/qwen-3.8-27b`. Stage 1 keeps reply text buffered until its routing and
+effect checks finish, so a late first visible token does not mean HTTP failed to
+stream. See the numeric-only [typed probes](evidence/cloud-streaming-2026-11-01/v16-typed-probe.json),
+[warm probe](evidence/cloud-streaming-2026-11-01/v16-typed-warm-probe.json), and
+[model timing](evidence/cloud-streaming-2026-11-01/v16-model-http-timing.json).
+
 Generic client transport, phrase planning, native socket/media ownership and
 wire/timing parsing are explicit, byte-verified shared-source patches under
 `patches/eliza`. Product wrappers supply only bridge registration, current owner,
@@ -123,6 +138,15 @@ run through the Durable Object. Unique reply text still needs the service's
 content-safety check. The exact-input positive safety cache is not an audio cache.
 A production streaming or latency acceptance claim requires the deployed backend
 and a completed physical-device turn, separately from APK checks.
+
+The final v16 Cloud build passed all four APK audits and lint. Serial
+`npm run verify` passed 3,096 tests with zero failures (3 skipped, 1 TODO).
+The signed launcher debug APK was installed on the Pixel without clearing app
+data. Release APKs are unsigned; this does not qualify a signed release or an
+AOSP image. The plain native `android:build:local` command still refuses missing
+qualified on-device speech inputs; the documented explicit Cloud build chain
+passed. Exact artifact and producer hashes are in the
+[v16 build record](evidence/cloud-streaming-2026-11-01/v16-build-admission.json).
 
 ## October 24 source update
 

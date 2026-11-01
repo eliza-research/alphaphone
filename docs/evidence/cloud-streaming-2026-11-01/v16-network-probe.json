@@ -1,0 +1,17 @@
+{
+  "format": "alpha-network-latency-v1",
+  "observedAt": "2026-11-01T08:14:38.468815+00:00",
+  "source": "Pixel",
+  "target": "api.eliza.app",
+  "protocol": "ICMP",
+  "packetsSent": 4,
+  "packetsReceived": 4,
+  "lossPercent": 0,
+  "rttMs": {
+    "min": 12.238,
+    "mean": 14.587,
+    "max": 15.79,
+    "mdev": 1.407
+  },
+  "boundary": "Edge network RTT only; not HTTP, TLS, Cloud admission, or provider compute latency."
+}

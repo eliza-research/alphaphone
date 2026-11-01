@@ -1,0 +1,62 @@
+{
+  "format": "alpha-model-http-log-v1",
+  "collectedAt": "2026-11-01T08:11:26.627760+00:00",
+  "installed": "0.1.0-cloud-voice-streaming-v16",
+  "boundary": "Existing fixed-schema Cloud model HTTP events; identifiers and request/response text omitted. Duplicate log emissions removed.",
+  "rows": [
+    {
+      "durationMs": 1201.0,
+      "queueWaitMs": 0.0,
+      "status": 200.0,
+      "attempt": 1.0,
+      "phase": "headers",
+      "outcome": "returned",
+      "admissionCacheRead": "not_run",
+      "admissionResult": "authorized_origin",
+      "gateway_auth": 67.0,
+      "gateway_middle": 140.0,
+      "gateway_reserve": 252.0,
+      "gateway_setup": 161.0,
+      "gateway_preforward": 620.0,
+      "auth_resolve": 67.0,
+      "auth_identity": 53.0,
+      "auth_moderation": 14.0,
+      "entry_dispatch": 620.0,
+      "cloud_worker": 620.0
+    },
+    {
+      "durationMs": 623.0,
+      "status": 200.0,
+      "attempt": 1.0,
+      "phase": "body",
+      "outcome": "completed"
+    },
+    {
+      "durationMs": 2138.0,
+      "queueWaitMs": 0.0,
+      "status": 200.0,
+      "attempt": 1.0,
+      "phase": "headers",
+      "outcome": "returned",
+      "admissionCacheRead": "not_run",
+      "admissionResult": "authorized_origin",
+      "gateway_auth": 46.0,
+      "gateway_middle": 371.0,
+      "gateway_reserve": 142.0,
+      "gateway_setup": 131.0,
+      "gateway_preforward": 690.0,
+      "auth_resolve": 46.0,
+      "auth_identity": 29.0,
+      "auth_moderation": 17.0,
+      "entry_dispatch": 690.0,
+      "cloud_worker": 690.0
+    },
+    {
+      "durationMs": 2017.0,
+      "status": 200.0,
+      "attempt": 1.0,
+      "phase": "body",
+      "outcome": "completed"
+    }
+  ]
+}

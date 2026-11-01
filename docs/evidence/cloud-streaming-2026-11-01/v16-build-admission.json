@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "scope": "host-build-and-package-verification-only",
+  "sourceCommit": "202f4422e535186f6668b198c39fdc7b66dee49e",
+  "upstreamPin": "6cd75d68202db3322dbec9d36d200902f08849c4",
+  "profile": "cloud",
+  "version": {
+    "code": 16,
+    "name": "0.1.0-cloud-voice-streaming-v16"
+  },
+  "testMocks": false,
+  "allowUnpackagedRuntime": false,
+  "gradleAndPackagingAudit": "passed",
+  "releaseSigning": "unsigned; not distributable",
+  "apks": [
+    {
+      "file": "standalone-debug.apk",
+      "sha256": "38847778c8e4427abaaa2eef08d208949d60094eb50dd3ebf1ab13cff5c14fcd",
+      "versionCode": 16,
+      "versionName": "0.1.0-cloud-voice-streaming-v16",
+      "signed": true,
+      "signerSha256": "2242994d2d237f98d01927999157067df4e2495a8f980451ac3de5d40642584a",
+      "distributable": null
+    },
+    {
+      "file": "standalone-release-unsigned.apk",
+      "sha256": "87f1cd02e35e3977859d754d44f841e455b99b9cf3498354d05fb5d18c540f8c",
+      "versionCode": 16,
+      "versionName": "0.1.0-cloud-voice-streaming-v16",
+      "signed": false,
+      "signerSha256": null,
+      "distributable": false
+    },
+    {
+      "file": "launcher-debug.apk",
+      "sha256": "3f1cccf2190e5857456f4ca30331a3eff688e735b4944043cf6ed30286f4b1e4",
+      "versionCode": 16,
+      "versionName": "0.1.0-cloud-voice-streaming-v16",
+      "signed": true,
+      "signerSha256": "2242994d2d237f98d01927999157067df4e2495a8f980451ac3de5d40642584a",
+      "distributable": null
+    },
+    {
+      "file": "launcher-release-unsigned.apk",
+      "sha256": "68055bb5e3a064d0888d80375420a084cc166b7bbd3d253c6fb493de42bbcc6b",
+      "versionCode": 16,
+      "versionName": "0.1.0-cloud-voice-streaming-v16",
+      "signed": false,
+      "signerSha256": null,
+      "distributable": false
+    }
+  ],
+  "producer": {
+    "receiptSha256": "f8450f5039af5715b42e0e60a3abeb4a709781d8590724c36f67ac45c563f0f7",
+    "bundleSha256": "94ae4a98719ff78c30d6fa7b90d9ac7cf58e565687a9af26f32267446a2d87f0",
+    "policySha256": "db711e1470240072a639f5695c6a1b003bd3945f456167ae4768f634197aa7e0",
+    "adapterFiles": {
+      "scripts/build-mobile-agent.mjs": "a6825146e54d8521218ccdcd24ea73f7b984809d7da8490b9febea6c61a0f934",
+      "scripts/mobile-uuid-adapter.mjs": "9a654042e1cd378443309428a6fc96329c0f5505d6653884e352cd5a5447fa66",
+      "scripts/mobile-bundle-smoke.mjs": "2e4f7ef05ae6f09285c2a6141876c14b5f30539c926a46864bf8862ae8d3b7bd"
+    },
+    "transformedBarrels": 1,
+    "smoke": {
+      "uuidSemantics": true,
+      "messageTurnBeforeProvider": true
+    },
+    "unresolvedGeneratedDefaultReads": 0,
+    "unresolvedUuidAliasDefault10Reads": 0
+  },
+  "standardNativeBuildCommand": {
+    "command": "npm run android:build:local",
+    "exitCode": 2,
+    "reason": "qualified on-device voice outputs absent; explicit Cloud pipeline used as documented"
+  },
+  "verification": {
+    "serialFullVerify": {
+      "exitCode": 0,
+      "tests": 3100,
+      "pass": 3096,
+      "fail": 0,
+      "skipped": 3,
+      "todo": 1,
+      "typecheck": "passed",
+      "productionBundleAudit": "passed"
+    },
+    "priorConcurrentVerify": "invalid comparison: two transient .turbo build-lock failures during dependency preparation"
+  },
+  "logs": {
+    "prepare": "/tmp/alphaphone-v16-prepare-20261101.log",
+    "stage": "/tmp/alphaphone-v16-stage-final-20261101.log",
+    "build": "/tmp/alphaphone-v16-build-admitted-20261101.log",
+    "nativeGuard": "/tmp/alphaphone-v16-native-build-local-guard-20261101.log",
+    "verify": "/tmp/alphaphone-v16-verify-serial-20261101.log"
+  },
+  "gradle": "BUILD SUCCESSFUL in 1m 36s; 1507 actionable tasks"
+}
