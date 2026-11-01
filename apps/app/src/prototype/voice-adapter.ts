@@ -537,13 +537,15 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
       let batchCaptureRetired=false;
       // The path in use speaks a turn's one model acknowledgement: the recorded-clip loop once its
       // capture is retired, the live session through its cue gate. No path, no cue: silence.
+      // A cue that fails is dropped too (silence) and the reply still plays: every speech port
+      // settles only after its cleanup, so only unconfirmed cleanup ends the conversation.
       let cueSpeech:{captureRetired():boolean;speak(text:string,signal:AbortSignal):Promise<void>}|undefined;
       const sendTurn=async(input:{turnId:string;text:string;voiceTurnSignal:any;signal:AbortSignal})=>{
         input.signal.throwIfAborted();current();
         // VOICE_SEND_POLICY: 'auto-send' sends this transcript now; 'review' waits for Send or Discard.
         const sent=await sendVoiceEntry({policy:voiceSendPolicy(),transcript:input.text,review:text=>reviewConversationTurn(text,input.signal,current),send:async text=>{
           current();const turn={...conversationPrepared!};conversationReplyWatch=new Set((chat.shell.S().msgs||[]).map((m:Bag)=>String(m.id)));
-          const cue=cueSpeech;const ack=cue?createBatchProgressAcknowledgment({turnId:input.turnId,conversationId:turn.binding.conversationId,ownerId:turn.binding.session.ownerId,signal:input.signal,assertCurrent:current,captureRetired:cue.captureRetired,speak:async(label,signal)=>{const pending=Promise.resolve().then(()=>cue.speak(label,signal));const owned=pending.catch(failure=>{if((failure as {code?:string})?.code==='speech-cleanup-unconfirmed'){mediaUnconfirmed=failure;stopping=Promise.reject(failure);void stopping.catch(()=>{});}throw failure;});conversationSpeech=owned;try{await owned;}finally{if(conversationSpeech===owned)conversationSpeech=undefined;}}}):undefined;
+          const cue=cueSpeech;const ack=cue?createBatchProgressAcknowledgment({turnId:input.turnId,conversationId:turn.binding.conversationId,ownerId:turn.binding.session.ownerId,signal:input.signal,assertCurrent:current,captureRetired:cue.captureRetired,speak:async(label,signal)=>{const pending=Promise.resolve().then(()=>cue.speak(label,signal));const owned=pending.catch(failure=>{if((failure as {code?:string})?.code!=='speech-cleanup-unconfirmed')return;mediaUnconfirmed=failure;stopping=Promise.reject(failure);void stopping.catch(()=>{});throw failure;});conversationSpeech=owned;try{await owned;}finally{if(conversationSpeech===owned)conversationSpeech=undefined;}}}):undefined;
           const retireAck=()=>{try{current();}catch{void ack?.stop().catch(()=>{});}};
           const unsubscribeAck=ack?connectionController.subscribe(retireAck):()=>{};
           if(ack)document.addEventListener('visibilitychange',retireAck);
@@ -580,7 +582,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         const timingTurns=new Map<string,string>();
         // The capture stays open for barge-in and treats the cue as playback (live-voice-cue.ts).
         const cueGate=createLiveCueGate(shouldRespondToVoiceTurn);
-        cueSpeech={captureRetired:()=>true,speak:(text,signal)=>cueGate.play(text,()=>streamingCloud?streamingCloud.speak(text,signal,()=>{}):local!.speak(text,signal,undefined,true))};
+        cueSpeech={captureRetired:()=>true,speak:(text,signal)=>cueGate.play(text,started=>streamingCloud?streamingCloud.speak(text,signal,started):local!.speak(text,signal,started,true))};
         const assistant:VoiceAssistantSession=new VoiceAssistantSession({
           conversationId:prepared.binding.conversationId,
           assertCurrent:current,
@@ -631,8 +633,9 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         }
       }
       // The live assistant is not ready (or this is a Cloud route): the recorded-clip loop listens only between replies.
-      // Cloud or provider speech, as before #774 on every platform; on-device batch speech has no cue.
-      cueSpeech=cloudDriver?{captureRetired:()=>batchCaptureRetired,speak:(text,signal)=>cloudDriver.speak(text,signal)}:undefined;
+      // The cue plays through the reply's own speaker: Cloud or provider speech as before #774, or
+      // on-device speech, on every platform.
+      cueSpeech={captureRetired:()=>batchCaptureRetired,speak:(text,signal)=>local?local.speak(text,signal,undefined,true):cloudDriver!.speak(text,signal)};
       const conversation:BatchVoiceConversation<Clip>=new BatchVoiceConversation<Clip>({
         conversationId:prepared.binding.conversationId,assertCurrent:current,
         capture:async input=>{current();batchCaptureRetired=false;conversationPrepared={...conversationPrepared!,context:chat.shell.voiceConversationContext(prepared.binding)};current();const capture=await captureConversationAudio(selected,current,input);return {stop:async()=>{const value=await capture.stop();current();batchCaptureRetired=true;return value;},cancel:async()=>{await capture.cancel();batchCaptureRetired=true;}};},
