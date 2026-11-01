@@ -36,7 +36,7 @@ async function fixture(enabled=true,moderation,direct=false){
  const open=(input,signal)=>fetch(origin,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','X-Alpha-Local-Agent':'1'},body:JSON.stringify({ownerId:owner,headers:{},...input}),signal});
  // Cloud TTS answers binary audio/mpeg; every refusal and every other route answers JSON.
  const call=async(input,signal)=>{const response=await open(input,signal);return {status:response.status,headers:Object.fromEntries(response.headers),...(response.headers.get('content-type')==='audio/mpeg'?{audio:Buffer.from(await response.arrayBuffer())}:{data:await response.json()})};};
- return {call,open,calls,mode:value=>mode=value,signal:()=>signal,upstream:()=>upstream,cancelled:()=>cancelled,rotate:()=>writeFile(tokenFile,'2'.repeat(64),{mode:0o600}),close:async()=>{handler.closeVoice();server.closeAllConnections();await new Promise(r=>server.close(r));await rm(directory,{recursive:true,force:true});}};
+ return {call,open,calls,mode:value=>mode=value,signal:()=>signal,upstream:()=>upstream,cancelled:()=>cancelled,connections:()=>new Promise((resolve,reject)=>server.getConnections((error,count)=>error?reject(error):resolve(count))),rotate:()=>writeFile(tokenFile,'2'.repeat(64),{mode:0o600}),close:async()=>{handler.closeVoice();server.closeAllConnections();await new Promise(r=>server.close(r));await rm(directory,{recursive:true,force:true});}};
 }
 const tts=()=>({path:'/api/tts/cloud',method:'POST',requestId:randomUUID(),body:JSON.stringify({text:'Hello'})});
 const asr=()=>({path:'/api/asr/cloud',method:'POST',requestId:randomUUID(),audioBase64:Buffer.from('RIFF fixture WAV').toString('base64')});
@@ -103,23 +103,24 @@ test('Stop after audio started aborts the upstream Cloud TTS body without retry'
  f.mode('stream');const controller=new AbortController();await firstChunk(f,controller.signal);controller.abort();
  for(let i=0;i<100&&!f.signal().aborted;i++)await tick();assert.equal(f.signal().aborted,true);assert.equal(f.calls.filter(x=>x.path==='/api/tts/cloud').length,1);
 }finally{await f.close();}});
-test('the Cloud TTS deadline still ends a clip whose upstream goes quiet or whose connected page stops reading',async()=>{
+for(const [stall,clip] of [['idle','whose upstream goes quiet'],['drain','whose connected page stops reading']])test(`the Cloud TTS deadline still ends a clip ${clip}`,async()=>{
  // Every bridge deadline is held here, so the test expires the speech request's 120 s one itself.
- const timeout=AbortSignal.timeout;
- for(const stall of ['idle','drain']){const deadlines=[];AbortSignal.timeout=ms=>{const controller=new AbortController();deadlines.push({ms,expire:()=>controller.abort(new DOMException('The operation timed out.','TimeoutError'))});return controller.signal;};
-  const f=await fixture();try{
-   f.mode('stall');const {reader}=await firstChunk(f);
-   if(stall==='drain'){
-    // The page holds the response open but reads nothing more: the bridge takes a chunk larger than
-    // the socket buffers, waits for drain, and leaves the next upstream chunk unread.
-    f.upstream().enqueue(new Uint8Array(4*1024*1024));for(let i=0;i<200&&f.upstream().desiredSize<1;i++)await tick();assert.equal(f.upstream().desiredSize,1);
-    f.upstream().enqueue(new Uint8Array([7]));await new Promise(resolve=>setTimeout(resolve,100));assert.equal(f.upstream().desiredSize,0,'bridge waits for drain');
-   }
-   deadlines.findLast(deadline=>deadline.ms===120000).expire();
-   const outcome=await Promise.race([(async()=>{try{for(;;)if((await reader.read()).done)return 'ended';}catch{return 'truncated';}})(),new Promise(resolve=>setTimeout(resolve,2000,'hung'))]);
-   assert.equal(outcome,'truncated',stall);assert.equal(f.signal().reason.name,'TimeoutError',stall);assert.equal(f.cancelled()?.name,'TimeoutError',stall);
-   assert.equal(f.calls.filter(x=>x.path==='/api/tts/cloud').length,1);
-  }finally{AbortSignal.timeout=timeout;await f.close();}}
+ const timeout=AbortSignal.timeout,deadlines=[];AbortSignal.timeout=ms=>{const controller=new AbortController();deadlines.push({ms,expire:()=>controller.abort(new DOMException('The operation timed out.','TimeoutError'))});return controller.signal;};
+ const f=await fixture();try{
+  f.mode('stall');const {reader}=await firstChunk(f);
+  if(stall==='drain'){
+   // The page holds the response open but reads nothing more: the bridge takes a chunk larger than
+   // the socket buffers, waits for drain, and leaves the next upstream chunk unread.
+   f.upstream().enqueue(new Uint8Array(4*1024*1024));for(let i=0;i<200&&f.upstream().desiredSize<1;i++)await tick();assert.equal(f.upstream().desiredSize,1);
+   f.upstream().enqueue(new Uint8Array([7]));await new Promise(resolve=>setTimeout(resolve,100));assert.equal(f.upstream().desiredSize,0,'bridge waits for drain');
+  }
+  deadlines.findLast(deadline=>deadline.ms===120000).expire();
+  // The page still reads nothing, so no drain can release a stuck wait: the bridge must close the response itself.
+  for(let i=0;i<100&&await f.connections();i++)await tick();assert.equal(await f.connections(),0,'response destroyed while the page reads nothing');
+  const outcome=await Promise.race([(async()=>{try{for(;;)if((await reader.read()).done)return 'ended';}catch{return 'truncated';}})(),new Promise(resolve=>setTimeout(resolve,2000,'hung'))]);
+  assert.equal(outcome,'truncated');assert.equal(f.signal().reason.name,'TimeoutError');assert.equal(f.cancelled()?.name,'TimeoutError');
+  assert.equal(f.calls.filter(x=>x.path==='/api/tts/cloud').length,1);
+ }finally{AbortSignal.timeout=timeout;await f.close();}
 });
 const directTts=()=>({...tts(),path:'/api/v1/voice/session/read-aloud'});
 test('direct DEV read-aloud uses exact owner-authenticated runtime endpoint and verified Cartesia WAV',async()=>{const f=await fixture(true,undefined,true);try{const result=await f.call(directTts());assert.equal(result.status,200);assert.equal(result.data.status,200);const value=JSON.parse(result.data.body);assert.equal(value.provider,'cartesia');assert.equal(value.route,'direct');assert.equal(value.contentType,'audio/wav');assert.equal(Buffer.from(value.audioBase64,'base64').toString('ascii',0,4),'RIFF');assert.equal(f.calls.filter(x=>x.path==='/api/v1/voice/session/read-aloud').length,1);assert.equal((await f.call(tts())).status,400);assert(!JSON.stringify(result).includes(paired));}finally{await f.close();}});
