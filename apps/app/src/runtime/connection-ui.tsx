@@ -342,6 +342,8 @@ function startConversationEvents(selected:Active,session:VerifiedSession){
   closeConversationEvents=selected.remote.subscribeConversationEvents(value=>{
     if(!current()||!value||typeof value!=='object'||Array.isArray(value))return;
     const event=value as Record<string,unknown>,message=event.message;
+    // A change saved outside a reply, such as a stopped turn's receipt, is read once on the deferred resync path.
+    if(event.type==='conversation-updated'){const conversation=event.conversation;if(conversation&&typeof conversation==='object'&&Reflect.get(conversation,'id')===conversationMemory.get(conversationKey(session))){conversationResync=true;void flushConversationEvents();}return;}
     if(event.type!=='proactive-message'||event.agentId!==session.agentId||typeof event.conversationId!=='string'||conversationMemory.get(conversationKey(session))!==event.conversationId||!message||typeof message!=='object'||Array.isArray(message))return;
     const row=message as Record<string,unknown>;
     if(row.role!=='assistant'||typeof row.id!=='string'||!row.id||row.id.length>128||typeof row.text!=='string'||row.text.length>200000)return;

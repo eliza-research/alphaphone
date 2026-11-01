@@ -53,3 +53,64 @@ test('a live voice reconcile keeps committing as before',async()=>{
  const f=fixture();const {pending}=await f.read();f.release();await pending;
  assert.equal(f.state.history.revision,2);assert.deepEqual(f.state.history.messages.map(m=>m.id),['user-1','receipt-1']);
 });
+// The agent saves a stopped turn's receipt after Stop returns and then announces conversation-updated.
+// The real browser channel, conversation listener, resync read and delivery merge; the fixture's update
+// flushes deferred resyncs the way connection-ui's update does.
+const channelCode=stripTypeScriptTypes((()=>{const agent=readFileSync('apps/app/src/runtime/local-agent.ts','utf8'),a=agent.indexOf('function subscribeBrowserConversationEvents('),b=agent.indexOf('\nfunction record(',a);assert.ok(a>=0&&b>a);return agent.slice(a,b);})(),{mode:'transform'});
+test('the browser conversation channel forwards conversation-updated beside proactive messages and nothing else',async()=>{
+ const sockets=[],received=[];let connected;const ready=new Promise(resolve=>connected=resolve);
+ class FakeSocket{static OPEN=1;readyState=1;constructor(url){this.url=url;sockets.push(this);queueMicrotask(()=>this.onopen?.());}close(){}}
+ const box={crypto:{randomUUID:()=>'client'},AbortController,DOMException,URL,JSON,Date,Error,Reflect,Math,setTimeout,clearTimeout,location:{host:'localhost:5173'},WebSocket:FakeSocket};
+ vm.runInNewContext(channelCode,box);
+ const bridge={request:async()=>({status:200,body:JSON.stringify({wsUrl:'ws://localhost:5173/__alpha-local-renderer/ws?sessionId=ticket',expiresAt:Date.now()+60000})})};
+ const stop=box.subscribeBrowserConversationEvents(bridge,'owner',value=>received.push(value.type),state=>{if(state==='connected')connected();});
+ try{
+  await ready;
+  for(const type of ['agent_event','conversation-updated','proactive-message','status'])sockets[0].onmessage({data:JSON.stringify({type,conversation:{id:'conversation'}})});
+  assert.deepEqual(received,['conversation-updated','proactive-message']);
+ }finally{stop();}
+});
+const eventsCode=stripTypeScriptTypes([
+ part('function deliverConversationMessages(','/** Insert canonical delivery IDs'),
+ part('export function mergeConversationDelivery','const actionReceipts').replace('export ',''),
+ part('function restoredMessages(','/** Eliza Cloud'),
+].join('\n'),{mode:'transform'});
+function eventsFixture(){
+ const session={sessionId:'session',agentId:'agent'},channel={},rows=[{id:'user-1',role:'user',text:'What time is it?'},{id:'receipt-1',role:'assistant',text:'',interrupted:true}];
+ const selected={kind:'resident',remote:{subscribeConversationEvents(listener,onState){channel.listener=listener;channel.onState=onState;return ()=>{};}}};
+ let reads=0;const releases=[];
+ const box={epoch:1,active:selected,state:{session},sending:null,operation:null,conversationResync:false,conversationEventRead:undefined,closeConversationEvents:undefined,
+  conversationMemory:new Map([['owner-key','conversation']]),conversationKey:()=>'owner-key',restoredText:text=>text,Error,AbortController,Reflect,Set,
+  readConversation:()=>{reads++;return new Promise(resolve=>releases.push(()=>resolve({messages:rows,partial:false,deliveryRevisionAtStart:0})));},
+  update(patch){Object.assign(box.state,patch);void box.flushConversationEvents();}};
+ vm.runInNewContext(eventsCode,box);box.startConversationEvents(selected,session);
+ // The visible chat after the single post-Stop read, which ran before the receipt was saved.
+ let visible=[{id:'earlier',from:'agent',text:'Earlier reply'},{id:'user-1',from:'user',text:'What time is it?'}];
+ const settle=async()=>{for(let i=0;i<6;i++)await Promise.resolve();};
+ return {box,channel,settle,release:async()=>{releases.shift()();await settle();},
+  updated:id=>channel.listener({type:'conversation-updated',conversation:{id,title:'Chat'}}),
+  get reads(){return reads;},get visible(){const delivery=box.state.conversationDelivery;return Array.from(delivery?box.mergeConversationDelivery(visible,delivery.messages):visible);}};
+}
+test('conversation-updated for the open conversation reads it once and shows the receipt after the stopped turn',async()=>{
+ const f=eventsFixture();f.updated('conversation');assert.equal(f.reads,1);await f.release();
+ assert.equal(f.reads,1);assert.equal(f.box.conversationResync,false);
+ assert.deepEqual(f.visible.map(m=>m.text),['Earlier reply','What time is it?','This reply did not finish.']);
+});
+test('without the event, or for another conversation, nothing is read again',async()=>{
+ const f=eventsFixture();await f.settle();assert.equal(f.reads,0);
+ f.updated('other-conversation');f.channel.listener({type:'conversation-updated'});await f.settle();
+ assert.equal(f.reads,0);assert.equal(f.box.state.conversationDelivery,undefined);assert.deepEqual(f.visible.map(m=>m.id),['earlier','user-1']);
+});
+test('the event never cancels or replaces a newer request; it reads once after that request settles',async()=>{
+ for(const started of ['sending','operation']){
+  const f=eventsFixture(),request=new AbortController();f.box[started]=request;
+  f.updated('conversation');await f.settle();
+  assert.equal(f.reads,0,started);assert.equal(request.signal.aborted,false,started);assert.equal(f.box.state.conversationDelivery,undefined,started);
+  f.box[started]=null;f.box.update({});assert.equal(f.reads,1,started);await f.release();
+  assert.deepEqual(f.visible.map(m=>m.id),['earlier','user-1','receipt-1'],started);
+ }
+ // A request that starts while the read is in flight keeps the chat; the read is repeated once it settles.
+ const f=eventsFixture();f.updated('conversation');const request=new AbortController();f.box.sending=request;await f.release();
+ assert.equal(request.signal.aborted,false);assert.equal(f.box.state.conversationDelivery,undefined);assert.equal(f.box.conversationResync,true);
+ f.box.sending=null;f.box.update({});assert.equal(f.reads,2);await f.release();assert.deepEqual(f.visible.map(m=>m.id),['earlier','user-1','receipt-1']);
+});
