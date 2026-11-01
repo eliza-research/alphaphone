@@ -128,7 +128,7 @@ test('Cloud Notes exposes only read while idle, only Stop while live, and cancel
  try {
   f.box.pendingAudioDeletions=async()=>({});
   f.shell.notes={open:'qa-note',list:[{id:'qa-note',title:'QA note',body:'Reviewed text.',updatedAt:1}]};
-  let view=f.render().ed;assert.equal(view.stopReading,undefined);assert.equal(typeof view.readAloud,'function');assert.match(view.cloudSpeechDisclosure,/uploads this note/);
+  let view=f.render().ed;assert.equal(view.stopReading,undefined);assert.equal(typeof view.readAloud,'function');assert.match(view.cloudSpeechDisclosure,/uploads recordings and reply text to your Cloud account and counts toward your plan allowance/);
   view.readAloud();for(let i=0;i<20&&!f.cloudSpeech;i++)await f.tick();
   assert.equal(f.cloudSpeech,1);assert.equal(f.localFactories,0);assert.equal(f.speechInputs[0].credentialId,'cloud-credential');
   view=f.render().ed;assert.equal(typeof view.stopReading,'function');assert.equal(view.readAloud,undefined);
