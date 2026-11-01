@@ -103,9 +103,10 @@ export function createBrowserCloudDevHandler(options:{profile:string;request?:ty
       const reference='browser-cloud-reference:'+randomUUID(),claimed:Credential={token,credentialReference:reference,credentialId:randomUUID(),userId:who.id,organizationId:who.organization_id,...(result.expiresAt?{expiresAt:Date.parse(result.expiresAt)}:{})};signal.throwIfAborted();if(login.expiresAt<=Date.now())throw refusal(410,'expired');if(pending.get(id)!==login||((await load())[env]?.credentialReference??null)!==login.previousReference)throw refusal(409,'account-changed');signal.throwIfAborted();claims.set(reference,{environment:env,previousReference:login.previousReference,expiresAt:login.expiresAt,credential:claimed});pending.delete(id);return {status:response.status,data:{status:'authenticated',credentialReference:reference,userId:who.id,organizationId:who.organization_id,...(result.expiresAt?{expiresAt:result.expiresAt}:{})}};
      }return {status:response.status,data:result};}
  type GoogleAttempt={id:string;environment:Environment;controller:AbortController;sessionId?:string;expiresAt:number;busy:boolean;phase:'preparing'|'committing'|'committed'|'failed';outcome?:{status:'authenticated';environment:Environment;expiresAt:number;accountCreated:null;attemptId:string;credentialId:string}};
- let googleAttempt:GoogleAttempt|null=null;
+ let googleAttempt:GoogleAttempt|null=null,googleCommitted:GoogleAttempt|null=null;
  async function cancelGoogleAttempt(expectedId?:string){
-  const attempt=googleAttempt;if(!attempt||expectedId!==undefined&&attempt.id!==expectedId)return {};
+  // A Cancel naming an attempt whose committed poll already returned still gets that committed outcome.
+  const attempt=expectedId!==undefined&&googleCommitted?.id===expectedId?googleCommitted:googleAttempt;if(!attempt||expectedId!==undefined&&attempt.id!==expectedId)return {};
   // Once rename is dispatched, cancellation cannot truthfully promise the old account.
   // Wait for its serialized outcome instead of aborting and misreporting a committed login.
   if(attempt.phase==='committing'||attempt.phase==='committed'){
@@ -175,7 +176,7 @@ export function createBrowserCloudDevHandler(options:{profile:string;request?:ty
      retire(attempt.environment);claims.delete(reference as string);
     });
     // Do not recheck an aborted request after the durable commit: report what committed.
-    if(googleAttempt===attempt)googleAttempt=null;return attempt.outcome!;
+    if(googleAttempt===attempt)googleAttempt=null;googleCommitted=attempt;return attempt.outcome!;
    }catch(error){if(googleAttempt===attempt)await cancelGoogleAttempt(attempt.id);throw error;}finally{attempt.busy=false;}
   }
   if(data.operation==='signInStartEmail'){

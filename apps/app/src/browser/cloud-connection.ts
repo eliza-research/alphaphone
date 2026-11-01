@@ -99,7 +99,10 @@ export class BrowserCloudSignIn extends WebPlugin {
     await new Promise<void>((resolve,reject)=>{const done=()=>{clearTimeout(timer);controller.signal.removeEventListener('abort',abort);resolve();},abort=()=>{clearTimeout(timer);controller.signal.removeEventListener('abort',abort);reject(controller.signal.reason);},timer=setTimeout(done,1000);controller.signal.addEventListener('abort',abort,{once:true});if(controller.signal.aborted)abort();});
    }
    throw Object.assign(Error('Sign-in expired'),{code:'expired'});
-  }finally{controller.abort();popup.close();if(this.googleController===controller){this.googleController=undefined;this.googlePopup=undefined;this.googleAttemptId=undefined;await this.signIn({operation:'signInCancelGoogle',attemptId}).catch(()=>{});}}
+  }finally{
+   // The attempt id stays until this settles, so a Cancel racing a returned commit still asks the host for it.
+   controller.abort();popup.close();if(this.googleController===controller){this.googleController=undefined;this.googlePopup=undefined;await this.signIn({operation:'signInCancelGoogle',attemptId}).catch(()=>{});if(this.googleAttemptId===attemptId)this.googleAttemptId=undefined;}
+  }
  }
  async startEmail(input:{environment:string;email:string}){return this.signIn({operation:'signInStartEmail',environment:input.environment,email:input.email});}
  async verifyEmail(input:{attemptId:string;code:string}){return this.signIn({operation:'signInVerifyEmail',attemptId:input.attemptId,code:input.code});}

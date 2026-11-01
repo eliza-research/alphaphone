@@ -812,7 +812,7 @@ async function googleCommitBoundaryFixture(){
  const disk={value:'old',temporary:null},attempt={id:'attempt',phase:'preparing',environment:'production',controller:new AbortController(),sessionId:'session'};
  const state={googleAttempt:attempt};
  const harness=new Function('state','disk','attempt','renameEntered','releaseRename','writeEntered','releaseWrite','AbortController',`
- let googleAttempt=state.googleAttempt;
+ let googleAttempt=state.googleAttempt,googleCommitted=null;
  const pending=new Map([['session',{}]]);const options={};const resetCalendarAccess=()=>{};
  const directory=async()=>{};const stateFile='credentials';const randomUUID=()=> 'temporary';
  const writeFile=async(_path,value)=>{disk.temporary=value;writeEntered.resolve();await releaseWrite.promise;};
@@ -838,6 +838,31 @@ test('cancel after rename dispatch waits for and returns the committed outcome',
 });
 
 
+// The real controller sign-in source from connection-ui.tsx (cancelSignIn through signInGoogle, signedIn,
+// verifyService, signInFailed), optionally with the real work(), against the supplied protocol client.
+async function googleControllerHarness(client,store,{realWork=false}={}){
+ const source=await readFile(new URL('../apps/app/src/runtime/connection-ui.tsx',import.meta.url),'utf8');
+ const cut=(from,to,wrap=code=>code)=>{const start=source.search(from),end=source.indexOf(to,start);assert.ok(start>=0&&end>start);return stripTypeScriptTypes(wrap(source.slice(start,end)),{mode:'transform'});};
+ // Also locates the synchronous pre-guard method, so these cases run against the base controller too.
+ const methods=cut(/^  (?:async )?cancelSignIn\(\) \{/m,'  /** Sends a six-digit code',code=>'({'+code+'})');
+ const code=[cut(/^function signInFailed\(/m,'/** The provider authenticated only'),cut(/^async function verifyService\(/m,'let pendingBillingReview:'),cut(/^async function signedIn\(/m,'/** The development hosted-agent client.'),
+  ...(realWork?[cut(/^async function work\(/m,'/** Start (or restart) the resident.',code=>'work='+code)]:[])].join('\n');
+ const serviceSlot=source.match(/const CLOUD_SERVICE = ('[^']+');/);assert.ok(serviceSlot);
+ return new Function('client','store','code','methods','crypto','CLOUD_SERVICE',`
+ let operation=null,googleSignInGeneration=0,cloud=client,service=null,membershipRead=null,pendingBillingReview=null,signInReadinessOwner=null,residentStartInBackground=false;
+ const state={signIn:{step:'choose',environment:'production'},open:true,purpose:'cloud-account',error:'',busy:false},listeners=new Set();
+ const update=patch=>{Object.assign(state,patch);for(const listener of [...listeners])listener();},signInClient=()=>client;
+ const cloudCredentialStore=store,CloudProtocolError=Error,localStorage={setItem(){}},refreshMembershipBalance=()=>{};
+ const productionCloudSignInRequired=()=>false,explicitSignedOutCloudEntry=()=>false,ensureResident=async()=>{},showGoogleMfa=()=>{throw Error('No MFA');};
+ const residentCloudFlow=()=>false,prepareSignInReplacement=()=>{},showPostSignInSetup=()=>{},save=()=>{},hosted=null,active=true,cloudServiceName=()=> 'Cloud';
+ const residentRecoveryReason=()=>null,testMocksEnabled=false,expired=()=>false,retire=()=>{},detachService=()=>{},runQueuedResidentRebind=()=>{},runQueuedSignInReturn=()=>{},errorMessage=error=>String(error?.message??error);
+ let work=async(_message,action)=>{operation=new AbortController();try{await action(operation.signal);}finally{operation=null;}};
+ eval(code);
+ const connectionController={cancel(){operation?.abort(new DOMException('Cancelled','AbortError'));cloud.cancelLogin();},close(){},subscribe(listener){listeners.add(listener);return()=>listeners.delete(listener);}};
+ const actions=eval(methods);
+ return {actions,state,genericAbort(){operation.abort(new DOMException('Cancelled','AbortError'));},supersede(){googleSignInGeneration++;for(const listener of listeners)listener();},get adopted(){return !!state.cloudAccount;},get operation(){return operation;}};
+ `)(client,store,code,methods,crypto,serviceSlot[1].slice(1,-1));
+}
 async function wholeGoogleStackFixture(options={}){
  const commit=await googleCommitBoundaryFixture();
  const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
@@ -857,28 +882,7 @@ async function wholeGoogleStackFixture(options={}){
  const store={acceptsReferences:true,read:async()=>{reads++;if(reads===1&&options.deferRead){readEntered.resolve();await releaseRead.promise;}if(reads===2&&options.deferAdoption){adoptionEntered.resolve();await releaseAdoption.promise;}return currentCredential;},write:async()=>{throw Error('Renderer must not write');},clear:async()=>{throw Error('No clear');}};
  const client=new CloudProtocol('production',async()=>{throw Error('No external request');},store,async()=>{throw Error('No external window');},{signIn:port});
  client.identity=async()=>({userId:owner,organizationId:org});
- const source=await readFile(new URL('../apps/app/src/runtime/connection-ui.tsx',import.meta.url),'utf8');
- // Also locates the synchronous pre-guard method, so these cases run against the base controller too.
- const from=source.search(/^  (?:async )?cancelSignIn\(\) \{/m),to=source.indexOf('  /** Sends a six-digit code',from);assert.ok(from>=0&&to>from);
- const methods=stripTypeScriptTypes('({'+source.slice(from,to)+'})',{mode:'transform'});
- const signed=stripTypeScriptTypes(source.slice(source.indexOf('async function signedIn('),source.indexOf('/** The development hosted-agent client.')),{mode:'transform'});
- const verify=stripTypeScriptTypes(source.slice(source.indexOf('async function verifyService('),source.indexOf('let pendingBillingReview:')),{mode:'transform'});
- const serviceSlot=source.match(/const CLOUD_SERVICE = ('[^']+');/);assert.ok(serviceSlot);
- const harness=new Function('client','methods','signed','verify','store','crypto','CLOUD_SERVICE',`
- let operation=null,googleSignInGeneration=0,cloud=client;
- const state={signIn:{step:'choose',environment:'production'},open:true,purpose:'cloud-account'};
- const listeners=new Set();let service=null,membershipRead=null,pendingBillingReview=null;
- const update=patch=>{Object.assign(state,patch);for(const listener of listeners)listener();},signInClient=()=>client;
- const cloudCredentialStore=store,CloudProtocolError=Error,localStorage={setItem(){}},refreshMembershipBalance=()=>{};
- const productionCloudSignInRequired=()=>false,explicitSignedOutCloudEntry=()=>false;
- const ensureResident=async()=>{},showGoogleMfa=()=>{throw Error('No MFA');},signInFailed=()=>{};
- const residentCloudFlow=()=>false,prepareSignInReplacement=()=>{},showPostSignInSetup=()=>{},save=()=>{},hosted=null,active=true,cloudServiceName=()=> 'Cloud';
- eval(verify);eval(signed);
- const work=async(_message,action)=>{operation=new AbortController();try{await action(operation.signal);}finally{operation=null;}};
- const connectionController={cancel(){operation?.abort(new DOMException('Cancelled','AbortError'));client.cancelLogin();},close(){},subscribe(listener){listeners.add(listener);return()=>listeners.delete(listener);}};
- const actions=eval(methods);
- return {actions,state,genericAbort(){operation.abort(new DOMException('Cancelled','AbortError'));},supersede(){googleSignInGeneration++;for(const listener of listeners)listener();},get adopted(){return !!state.cloudAccount;},get operation(){return operation;}};
- `)(client,methods,signed,verify,store,crypto,serviceSlot[1].slice(1,-1));
+ const harness=await googleControllerHarness(client,store);
  return {commit,client,harness,readEntered,releaseRead,adoptionEntered,releaseAdoption,changeAccount(){currentCredential={...currentCredential,credentialId:'99999999-9999-4999-8999-999999999999'};},close(){globalThis.fetch=oldFetch;if(descriptor)Object.defineProperty(globalThis,'window',descriptor);else delete globalThis.window;}};
 }
 test('whole Google protocol and controller cancel after rename waits and adopts the committed account',async()=>{
@@ -932,4 +936,68 @@ test('a new sign-in generation during deferred adoption rejects the old committe
 
 test('Google poll without an active attempt or id is an expired attempt, not a null dereference',async()=>{
  const f=await fixture();try{const result=await f.rpc({operation:'signInPollGoogle'});assert.equal(result.status,409);assert.equal(result.data.code,'expired');}finally{await f.close();}
+});
+
+test('a committed browser Google attempt still answers its own Cancel after its poll returned',async()=>{
+ const f=await fixture();try{
+  const started=await googleReady(f),done=await f.rpc({operation:'signInPollGoogle',attemptId:started.attemptId});assert.equal(done.data.status,'authenticated');
+  assert.deepEqual((await f.rpc({operation:'signInCancelGoogle',attemptId:started.attemptId})).data,done.data);
+  assert.notEqual((await f.rpc({operation:'signInCancelGoogle',attemptId:randomUUID()})).data.status,'authenticated');
+  assert.notEqual((await f.rpc({operation:'signInCancel'})).data.status,'authenticated');
+  assert.notEqual((await f.rpc({operation:'signInPollGoogle',attemptId:started.attemptId})).status,200);
+  assert.equal(JSON.parse((await f.rpc({operation:'secureRead',slot:'cloud:production'})).data.value).credentialId,done.data.credentialId);
+  assert.equal((await f.rpc({operation:'signInStartGoogle',environment:'production',attemptId:randomUUID()})).status,200,'a retained outcome never blocks the next attempt');
+ }finally{await f.close();}
+});
+
+const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
+const settled=signal=>new Promise((_,reject)=>{if(signal?.aborted)return reject(signal.reason);signal?.addEventListener('abort',()=>reject(signal.reason),{once:true});});
+// The renderer stack over the real development bridge: the real BrowserCloudSignIn's same-origin RPCs reach
+// createBrowserCloudDevHandler over HTTP. before(body) runs ahead of a request; gate(body,data,signal) holds
+// a response after the host handled it; upstream() holds the canonical CLI session poll.
+async function realBridgeGoogleStack({before=async()=>{},gate=async()=>{},upstream=async()=>{}}={}){
+ const f=await fixture();
+ f.setSignIn(async path=>path==='/steward/auth/providers'?Response.json({google:true,oauth:['google']}):null);
+ f.setPollResponse(async()=>{await upstream();return Response.json({status:'authenticated',apiKey:secret,expiresAt:new Date(Date.now()+60000).toISOString()});});
+ const realFetch=globalThis.fetch,ops=[],descriptor=Object.getOwnPropertyDescriptor(globalThis,'window');
+ const raw=(body,signal)=>realFetch(f.origin(),{method:'POST',headers:{Origin:f.origin(),'Content-Type':'application/json','X-Alpha-Browser-Cloud':'1'},body:JSON.stringify(body),signal});
+ globalThis.fetch=async(_url,input)=>{const body=JSON.parse(input.body);ops.push(body.operation);await before(body);const response=await raw(body,input.signal),text=await response.text();await gate(body,JSON.parse(text||'{}'),input.signal);input.signal?.throwIfAborted();return new Response(text,{status:response.status,headers:{'Content-Type':'application/json'}});};
+ Object.defineProperty(globalThis,'window',{configurable:true,value:{open:()=>({opener:null,location:{replace(){}},close(){}})}});
+ const store={acceptsReferences:true,read:async()=>{const {value}=await (await raw({operation:'secureRead',slot:'cloud:production'})).json();return value===null?null:JSON.parse(value);},write:async()=>{throw Error('Renderer must not write');},clear:async()=>{throw Error('No clear');}};
+ const port=new BrowserCloudSignIn(),makeCloud=environment=>Object.assign(new CloudProtocol(environment,async()=>{throw Error('No external request');},store,async()=>{throw Error('No external window');},{signIn:port}),{identity:async()=>({userId:owner,organizationId:org})});
+ const harness=await googleControllerHarness(makeCloud('production'),store,{realWork:true});
+ return {ops,store,harness,close:async()=>{await new Promise(r=>setTimeout(r,20));globalThis.fetch=realFetch;if(descriptor)Object.defineProperty(globalThis,'window',descriptor);else delete globalThis.window;await f.close();}};
+}
+async function adoptedHostCredential(s){
+ const disk=await s.store.read();assert.notEqual(disk.credentialReference,reference,'the host committed the new credential');
+ assert.equal(s.harness.state.cloudAccount?.credentialId,disk.credentialId,'the UI shows the account the host committed');
+ assert.equal(s.harness.state.signIn,null);assert.equal(s.harness.state.error,'');assert.equal(s.harness.state.busy,false);
+}
+test('real bridge Google completion without Cancel adopts the committed account',async()=>{
+ const s=await realBridgeGoogleStack();try{await s.harness.actions.signInGoogle();await adoptedHostCredential(s);}finally{await s.close();}
+});
+test('real bridge Cancel while the committed poll response is in transit adopts the committed account',async()=>{
+ const held=deferred(),release=deferred();
+ const s=await realBridgeGoogleStack({gate:async(body,data,signal)=>{if(body.operation==='signInPollGoogle'&&data.status==='authenticated'){held.resolve();await Promise.race([release.promise,settled(signal)]);}}});
+ try{
+  const signing=s.harness.actions.signInGoogle();await held.promise;assert.notEqual((await s.store.read()).credentialReference,reference);
+  await s.harness.actions.cancelSignIn();release.resolve();await signing;await adoptedHostCredential(s);assert.ok(s.ops.includes('signInCancelGoogle'));
+ }finally{release.resolve();await s.close();}
+});
+test('real bridge Cancel while the Google port settles its own cancel RPC after success adopts the committed account',async()=>{
+ const held=deferred(),release=deferred();let polled=false,holding=false;
+ const s=await realBridgeGoogleStack({gate:async(body,data)=>{if(body.operation==='signInPollGoogle'&&data.status==='authenticated')polled=true;else if(polled&&!holding&&body.operation==='signInCancelGoogle'){holding=true;held.resolve();await release.promise;}}});
+ try{
+  const signing=s.harness.actions.signInGoogle();await held.promise;
+  await s.harness.actions.cancelSignIn();release.resolve();await signing;await adoptedHostCredential(s);
+ }finally{release.resolve();await s.close();}
+});
+test('real bridge Cancel before the host commit retains the previous account without an error',async()=>{
+ const held=deferred(),release=deferred();
+ const s=await realBridgeGoogleStack({upstream:async()=>{held.resolve();await release.promise;}});
+ try{
+  const signing=s.harness.actions.signInGoogle();await held.promise;await s.harness.actions.cancelSignIn();release.resolve();await signing;
+  assert.equal((await s.store.read()).credentialReference,reference);assert.equal(s.harness.state.cloudAccount,undefined);
+  assert.equal(s.harness.state.signIn.step,'choose');assert.equal(s.harness.state.error,'');assert.equal(s.harness.state.busy,false);
+ }finally{release.resolve();await s.close();}
 });
