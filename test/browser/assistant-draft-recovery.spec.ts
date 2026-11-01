@@ -26,6 +26,17 @@ test('another tab cannot replace a draft silently and recovery retains the curre
  const other=await context.newPage();await other.goto(page.url());await expect(composer(other)).toBeEnabled();await composer(page).fill('First window');await saved(page);await composer(other).fill('Second window');await expect(status(other)).toContainText('Review the saved copy');await expect(composer(other)).toHaveValue('Second window');await expect(other.getByText('Saved copy: First window',{exact:true})).toBeVisible();await other.screenshot({path:info.outputPath('assistant-draft-conflict.png'),animations:'disabled'});
  await other.getByRole('button',{name:'Replace saved draft with this text',exact:true}).click();await saved(other);await page.reload();await expect(composer(page)).toHaveValue('Second window');
 });
+// Another window (the assistant surface is a second WebView) clears the row: this window's next
+// keystroke is refused on its older receipt, and the copy it then reads is empty. Nothing is offered;
+// the text is saved over that newer row, and the other window cannot overwrite it in turn.
+test('another tab clearing the draft is not offered for review and this tab keeps its typing',async({page,context})=>{
+ await composer(page).fill('Old words');await saved(page);
+ const other=await context.newPage();await other.goto(page.url());await expect(composer(other)).toHaveValue('Old words');await composer(other).fill('');await saved(other);
+ await composer(page).fill('hi');await saved(page);await expect(composer(page)).toHaveValue('hi');
+ await expect(page.getByRole('button',{name:'Restore saved draft',exact:true})).toHaveCount(0);await expect(page.getByText('(Empty saved draft)',{exact:false})).toHaveCount(0);
+ await composer(other).fill('Other words');await expect(status(other)).toContainText('Review the saved copy');await expect(other.getByText('Saved copy: hi',{exact:true})).toBeVisible();
+ await page.reload();await expect(composer(page)).toHaveValue('hi');
+});
 test('failed autosave keeps editable text and explicit retry can save it',async({page})=>{
  await expect(composer(page)).toBeEnabled();await page.evaluate(()=>{const put=IDBObjectStore.prototype.put;(window as any).restoreDraftPut=()=>{IDBObjectStore.prototype.put=put;};IDBObjectStore.prototype.put=function(...args:any[]){if(this.name==='documents')throw new DOMException('Full','QuotaExceededError');return put.apply(this,args as any);};});
  await composer(page).fill('Keep this text');await expect(status(page)).toContainText('Draft was not saved');await expect(composer(page)).toHaveValue('Keep this text');await page.evaluate(()=>(window as any).restoreDraftPut());await page.getByRole('button',{name:'Replace saved draft with this text',exact:true}).click();await saved(page);await page.reload();await expect(composer(page)).toHaveValue('Keep this text');

@@ -157,20 +157,24 @@ function releaseComposerSend(shell:Shell,heldKey:string|undefined,heldText:strin
   });
 }
 /**
- * An empty saved copy (the cleared row a sent message or a reset leaves, or another window's clear)
- * holds nothing to recover, so the composer does not offer it for review when the draft opens, or
- * when the composer is empty too. Called as the controller publishes the conflict, before anything
- * renders it, so the decision is made on that same state and binding. The editor's text is kept as
- * "Replace saved draft with this text" keeps it: saved over the empty copy with the receipt the
- * controller has just read, so a newer write by another window still refuses the save and is
- * offered instead. A copy that may already have been sent is always reviewed. A write of typed text
- * that failed or was refused keeps its notice and explicit retry: the controller does not say which,
- * and keeping it again here could repeat a failing write without end.
+ * An empty saved copy, or one of only whitespace (the cleared row a sent message or a reset leaves,
+ * or another window's clear), holds nothing to recover, so the composer does not offer it for
+ * review. Called as the controller publishes the conflict, before anything renders it, so the
+ * decision is made on that same state and binding, and again when the composer is cleared beside
+ * one. The editor's text is kept as "Replace saved draft with this text" keeps it: saved over the
+ * empty copy with the receipt the controller has just read, so a newer write by another window
+ * still refuses the save and is offered instead, and an older receipt never matches again. A copy
+ * that may already have been sent is always reviewed.
+ * A write that was refused (another window, such as the assistant surface, cleared the row first)
+ * or failed is kept like this once for the same binding and composer text: the controller does not
+ * say which it was, and keeping it again could repeat a failing write without end. If that keep
+ * fails too, its "Draft was not saved" notice and explicit retry stay.
  */
 function keepOverEmptySavedDraft(shell:Shell):boolean{
-  const draft=shell.composerDraft,state=draft.state;
-  if(!state.conflict||state.unsettled||state.savedText)return false;
-  if(state.message!==DEFAULT_DURABLE_DRAFT_MESSAGES.savedAvailable&&String(shell.S().draft||''))return false;
+  const draft=shell.composerDraft,state=draft.state,kept=draft.binding+'\u0000'+String(shell.S().draft||'');
+  if(!state.conflict){if(shell.emptyDraftKept!==kept)shell.emptyDraftKept=undefined;return false;}
+  if(state.unsettled||state.savedText.trim())return false;
+  if(state.message!==DEFAULT_DURABLE_DRAFT_MESSAGES.savedAvailable){if(shell.emptyDraftKept===kept)return false;shell.emptyDraftKept=kept;}
   draft.keepCurrent();
   if(shell.firstSendReview)shell.refreshDraftBinding();
   return true;
@@ -1010,7 +1014,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     });
     context(this);
   };
-  p.componentDidUpdate = function (prev: Shell) { originalUpdate.call(this, prev); const notesView=this.S().view==='notes';if(notesView&&!this.wasCanonicalNotesView&&this.notesSourceMode==='canonical')void this.canonicalNotesUi?.refresh().catch(()=>{});this.wasCanonicalNotesView=notesView; context(this); void connectionController.observeCommittedView(); sizeComposer();this.composerDraft?.edit(String(this.S().draft||''));const shade=!!this.S().shade;if(shade&&!this.shadeWasOpen)this.refreshTileFacts();this.shadeWasOpen=shade;const chatOpen=this.S().chat==='sheet'||this.S().chat==='full',drafting=!!String(this.S().draft||'').trim();if((chatOpen&&!this.chatWasOpen)||(drafting&&!this.wasDrafting))connectionController.warmInference();this.chatWasOpen=chatOpen;this.wasDrafting=drafting;const selected=this.messageReplyTarget||this.messageEditTarget;if(selected&&(JSON.stringify(selected.session)!==JSON.stringify(connectionController.getSnapshot().session)||!this.S().msgs.some((m:Shell)=>m.id===selected.messageId&&m.text===selected.text))){cancelMessageContext(this);this.setState({});} };
+  p.componentDidUpdate = function (prev: Shell) { originalUpdate.call(this, prev); const notesView=this.S().view==='notes';if(notesView&&!this.wasCanonicalNotesView&&this.notesSourceMode==='canonical')void this.canonicalNotesUi?.refresh().catch(()=>{});this.wasCanonicalNotesView=notesView; context(this); void connectionController.observeCommittedView(); sizeComposer();this.composerDraft?.edit(String(this.S().draft||''));if(this.composerDraft?.state.conflict&&!String(this.S().draft||'').trim())keepOverEmptySavedDraft(this);const shade=!!this.S().shade;if(shade&&!this.shadeWasOpen)this.refreshTileFacts();this.shadeWasOpen=shade;const chatOpen=this.S().chat==='sheet'||this.S().chat==='full',drafting=!!String(this.S().draft||'').trim();if((chatOpen&&!this.chatWasOpen)||(drafting&&!this.wasDrafting))connectionController.warmInference();this.chatWasOpen=chatOpen;this.wasDrafting=drafting;const selected=this.messageReplyTarget||this.messageEditTarget;if(selected&&(JSON.stringify(selected.session)!==JSON.stringify(connectionController.getSnapshot().session)||!this.S().msgs.some((m:Shell)=>m.id===selected.messageId&&m.text===selected.text))){cancelMessageContext(this);this.setState({});} };
   p.componentWillUnmount = function () {
     const notes=this.canonicalNotesUi;this.canonicalNotesUi=null;notes?.retire();this.notesSourceEpoch=(this.notesSourceEpoch??0)+1;
     this.cancelReadReplyCompletions?.();
@@ -1191,7 +1195,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     // Routine startup stays quiet. Recovery failures remain actionable, and an
     // attempted send still explains why it cannot dispatch before readiness.
     const residentPending=residentAlwaysPresent&&!connection.session&&connection.kind==='recovering'?agentPendingText(connection):'';
-    out.draftRetry=!!draft?.error;out.draftStatus=[draft?.message,offline?INFERENCE_OFFLINE_NOTICE:'',residentPending].filter(Boolean).join(' ');out.draftConflict=!!draft?.conflict;out.draftSavedText=draft?.savedText||'(Empty saved draft)';out.draftOpening=!!draft?.consuming;
+    out.draftRetry=!!draft?.error;out.draftStatus=[draft?.message,offline?INFERENCE_OFFLINE_NOTICE:'',residentPending].filter(Boolean).join(' ');out.draftConflict=!!draft?.conflict;out.draftSavedText=draft?.savedText.trim()?draft.savedText:'(Empty saved draft)';out.draftOpening=!!draft?.consuming;
     out.restoreSavedDraft=()=>{this.composerDraft?.restoreSaved();if(this.firstSendReview)this.refreshDraftBinding();};out.keepCurrentDraft=()=>{this.composerDraft?.keepCurrent();if(this.firstSendReview)this.refreshDraftBinding();};out.retryDraft=()=>{this.composerDraft?.retire();this.refreshDraftBinding();};
     const onDraft=out.onDraft;
     out.onDraft=(event:Event&{target:HTMLTextAreaElement})=>{

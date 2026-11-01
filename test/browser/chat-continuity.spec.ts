@@ -652,11 +652,11 @@ test('fresh startup typing never overwrites the verified owner saved draft',asyn
 
 
 // The owner's report: "hi" typed while connecting, and the verified owner's saved row is the empty
-// row a sent message leaves. There is nothing to recover, so nothing is offered: the typed text is
-// kept and saved over that row.
-test('fresh startup typing over an empty saved draft is kept without a review prompt',async({page})=>{
+// row a sent message leaves (or a row of only whitespace). There is nothing to recover, so nothing
+// is offered: the typed text is kept and saved over that row.
+for(const [copy,cleared] of [['an empty saved draft',''],['a saved draft of only whitespace',' \n\t']])test(`fresh startup typing over ${copy} is kept without a review prompt`,async({page})=>{
  await remoteAgent(page,{holdIdentity:true});await page.goto('/');await expect.poll(()=>fixture(page,f=>!!f.heldIdentity)).toBe(true);
- const key=JSON.stringify([REMOTE,'fixture-owner','6f1d3c3e-8c55-4c1b-9d1f-2b6f0b0d3a11',null]);await page.evaluate(async key=>{const {assistantDraftStore}=await import('/src/runtime/assistant-draft-store.ts');const store=await assistantDraftStore(key);await store.save(await store.save(await store.read(),'Sent earlier'),'');},key);
+ const key=JSON.stringify([REMOTE,'fixture-owner','6f1d3c3e-8c55-4c1b-9d1f-2b6f0b0d3a11',null]);await page.evaluate(async ([key,cleared])=>{const {assistantDraftStore}=await import('/src/runtime/assistant-draft-store.ts');const store=await assistantDraftStore(key);await store.save(await store.save(await store.read(),'Sent earlier'),cleared);},[key,cleared]);
  await composer(page).fill('hi');await fixture(page,f=>f.heldIdentity());await expect.poll(()=>fixture(page,f=>f.ready)).toBe(true);await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0);
  await expect.poll(()=>savedDraft(page,key)).toBe('hi');await expect(composer(page)).toHaveValue('hi');
  await expect(page.getByText('A saved draft is available',{exact:false})).toHaveCount(0);await expect(page.getByRole('button',{name:'Restore saved draft',exact:true})).toHaveCount(0);expect(await fixture(page,f=>f.posts)).toBe(0);
