@@ -139,6 +139,15 @@ content-safety check. The exact-input positive safety cache is not an audio cach
 A production streaming or latency acceptance claim requires the deployed backend
 and a completed physical-device turn, separately from APK checks.
 
+The user-confirmed v16 voice retry completed, but still took 17,466 ms cold
+and 9,241 ms warm from recording stop to playback start. The measured cold/warm
+phases were STT 6,643/1,899 ms, agent reply 3,771/3,782 ms, and final reply to
+playback 7,022/3,540 ms. Native TTS spent 6,891/3,421 ms waiting for response
+headers; download took 10/5 ms and player preparation took 3 ms. The streaming
+bootstrap still returned HTTP 404 and sent no audio frames. This proves the
+remaining deployed path is batch; it is not streaming acceptance. See the
+[complete numeric voice record](evidence/cloud-streaming-2026-11-01/v16-completed-voice.json).
+
 The final v16 Cloud build passed all four APK audits and lint. Serial
 `npm run verify` passed 3,096 tests with zero failures (3 skipped, 1 TODO).
 The signed launcher debug APK was installed on the Pixel without clearing app

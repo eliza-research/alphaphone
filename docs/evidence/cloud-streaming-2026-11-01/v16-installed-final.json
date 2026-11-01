@@ -10,6 +10,12 @@
   "signerSha256": "2242994d2d237f98d01927999157067df4e2495a8f980451ac3de5d40642584a",
   "agentBundleSha256": "94ae4a98719ff78c30d6fa7b90d9ac7cf58e565687a9af26f32267446a2d87f0",
   "adbInstall": "Success; -r -t; no uninstall or data clear",
-  "voiceRoundTripAfterFinalInstall": "awaiting user sample",
+  "voiceRoundTripAfterFinalInstall": {
+    "completed": true,
+    "coldMs": 17466,
+    "warmMs": 9241,
+    "mode": "batch fallback; speech relay HTTP404",
+    "userConfirmed": true
+  },
   "cloudStreamingProduction": "not enabled at observation; staging rollout pending"
 }
