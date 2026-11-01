@@ -416,7 +416,7 @@ test('configured provider name is shown in the app-owned sign-in view',async({pa
  await boot(page,{...await entitlements(),serviceName:'Example Service'});await agent(page,'unavailable');
  await readySignIn(page);
  await expect(signInDialog(page).getByRole('heading',{name:'Welcome to Alpha.',exact:true})).toBeVisible();
- await expect(signInDialog(page)).toContainText('Use your Example Service account to sign in.');
+ await expect(signInDialog(page)).toContainText('Sign in with your Example Service account.');
  await noHandOff(page);
 });
 
