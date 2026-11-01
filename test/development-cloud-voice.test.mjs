@@ -20,6 +20,7 @@ async function fixture(enabled=true,moderation,direct=false){
   assert.equal(input.headers.Authorization,'Bearer '+paired);
   if(path==='/api/auth/me')return Response.json({identity:{id:owner},access:{role:'OWNER'},session:{id:paired,expiresAt:Date.now()+600000}});
   signal=input.signal;if(mode==='wait')return new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));
+  if(mode==='late')await new Promise(resolve=>signal.addEventListener('abort',resolve,{once:true}));
   if(mode==='rotate')await writeFile(tokenFile,'2'.repeat(64),{mode:0o600});
   if(mode==='unauthorized')return Response.json({secret:'never-project-provider-error'},{status:401});
   if(mode==='error')return Response.json({secret:'never-project-provider-error'},{status:402});
@@ -29,8 +30,9 @@ async function fixture(enabled=true,moderation,direct=false){
   if(path==='/api/asr/cloud'){assert.equal(input.headers['X-Eliza-STT-Provider'],'cartesia');return receipt(Response.json({text:'Heard exactly once',secret:'never-project-transcript-metadata'},{headers}));}
   assert.equal(input.headers['X-Eliza-STT-Provider'],undefined);assert.deepEqual(JSON.parse(input.body),{text:'Hello'});
   headers['content-type']=mode==='type'?(direct?'audio/mpeg':'audio/wav'):direct?'audio/wav':'audio/mpeg';if(direct)headers['x-request-id']=input.headers['X-Request-Id'];const wav=Buffer.alloc(48);wav.write('RIFF',0);wav.writeUInt32LE(40,4);wav.write('WAVE',8);// Like fetch, an aborted request errors its body. Stream mode hands the body to the test; a stalled
-  // body ignores the request signal, so only the bridge's own cancel (recorded) releases it.
-  const streamed=mode==='stream'||mode==='stall'?new ReadableStream({start(controller){upstream=controller;if(mode==='stream')signal.addEventListener('abort',()=>controller.error(signal.reason),{once:true});},cancel(reason){cancelled=reason;}}):undefined;
+  // body ignores the request signal, so only the bridge's own cancel (recorded) releases it. A late request answers with a
+  // stalled body only after its signal has aborted, as a custom request may.
+  const streamed=mode==='stream'||mode==='stall'||mode==='late'?new ReadableStream({start(controller){upstream=controller;if(mode==='stream')signal.addEventListener('abort',()=>controller.error(signal.reason),{once:true});},cancel(reason){cancelled=reason;}}):undefined;
   return receipt(new Response(streamed??(mode==='large'?new Uint8Array(8*1024*1024+1):direct?wav:new Uint8Array([73,68,51,1])),{headers}));
  };
  const handler=createLocalAgentDevHandler({origin:'http://127.0.0.1:9',tokenFile,request,cloudVoiceEnabled:enabled&&!direct,cartesiaEnabled:enabled&&direct});
@@ -142,6 +144,21 @@ for(const [stall,clip] of [['idle','whose upstream goes quiet'],['drain','whose 
   assert.equal(connection.destroyed,true,'response destroyed while the page reads nothing');
   const outcome=await Promise.race([(async()=>{try{for(;;)if((await chunks.next()).done)return 'ended';}catch{return 'truncated';}})(),new Promise(resolve=>setTimeout(resolve,2000,'hung'))]);
   assert.equal(outcome,'truncated');assert.equal(f.signal().reason.name,'TimeoutError');assert.equal(f.cancelled()?.name,'TimeoutError');
+  assert.equal(f.calls.filter(x=>x.path==='/api/tts/cloud').length,1);
+ }finally{AbortSignal.timeout=timeout;await f.close();}
+});
+test('the Cloud TTS deadline still ends a clip whose response arrives after it',async()=>{
+ // Every bridge deadline is held here. The request answers only after the test expires the 120 s one, so the bridge's
+ // abort listener comes after the only abort, and the stalled body never answers a read.
+ const timeout=AbortSignal.timeout,deadlines=[];AbortSignal.timeout=ms=>{const controller=new AbortController();deadlines.push({ms,expire:()=>controller.abort(new DOMException('The operation timed out.','TimeoutError'))});return controller.signal;};
+ const f=await fixture();try{
+  f.mode('late');const pending=f.call(tts());pending.catch(()=>{});
+  while(!f.signal())await tick();
+  deadlines.findLast(deadline=>deadline.ms===120000).expire();
+  assert.equal(await Promise.race([f.handled().then(()=>'returned'),new Promise(resolve=>setTimeout(resolve,2000,'hung'))]),'returned','deadline releases the handler');
+  // No audio was sent, so the page gets the bridge's JSON failure in place of a clip.
+  const result=await pending;assert.equal(result.status,503);assert.equal(result.audio,undefined);assert.deepEqual(result.data,{error:'Local runtime unavailable. Check the private host log.'});
+  assert.equal(f.signal().reason.name,'TimeoutError');assert.equal(f.cancelled()?.name,'TimeoutError');
   assert.equal(f.calls.filter(x=>x.path==='/api/tts/cloud').length,1);
  }finally{AbortSignal.timeout=timeout;await f.close();}
 });
