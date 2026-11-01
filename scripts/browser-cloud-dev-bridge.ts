@@ -158,7 +158,7 @@ export function createBrowserCloudDevHandler(options:{profile:string;request?:ty
   }
   if(data.operation==='signInPollGoogle'){
    const attempt=googleAttempt;
-   if(!attempt||attempt.id!==data.attemptId||!attempt.sessionId||Date.now()>=attempt.expiresAt){if(attempt?.id===data.attemptId)await cancelGoogleAttempt(attempt.id);throw signInFailure('expired');}
+   if(!attempt||attempt.id!==data.attemptId||!attempt.sessionId||Date.now()>=attempt.expiresAt){if(attempt&&attempt.id===data.attemptId)await cancelGoogleAttempt(attempt.id);throw signInFailure('expired');}
    if(attempt.busy)throw signInFailure('login-active');attempt.busy=true;
    const current=()=>{signal.throwIfAborted();attempt.controller.signal.throwIfAborted();if(googleAttempt!==attempt)throw signInFailure('cancelled');};
    try{

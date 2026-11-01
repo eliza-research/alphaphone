@@ -920,3 +920,7 @@ test('a new sign-in generation during deferred adoption rejects the old committe
   await f.adoptionEntered.promise;f.harness.supersede();f.releaseAdoption.resolve();await assert.rejects(signing,e=>e.name==='AbortError');assert.equal(f.harness.adopted,false);
  }finally{f.releaseAdoption.resolve();f.commit.releaseWrite.resolve();f.commit.releaseRename.resolve();f.close();}
 });
+
+test('Google poll without an active attempt or id is an expired attempt, not a null dereference',async()=>{
+ const f=await fixture();try{const result=await f.rpc({operation:'signInPollGoogle'});assert.equal(result.status,409);assert.equal(result.data.code,'expired');}finally{await f.close();}
+});
