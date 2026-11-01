@@ -1,6 +1,6 @@
 # Current MVP status
 
-Current source pin: `e40497d5d0111d557aef022eb01d4f03023c9fc8`; existing source and native evidence below retain their original revisions. This metadata refresh does not promote performance or device acceptance.
+Current source pin: `de4e20fadc9fac8bd5b52ae3d8f205a55b25c218` (immediate prior pin `17abe929d7572a082a4d0eda170728d2fea9335d`); existing source and native evidence below retain their original revisions. This metadata refresh does not promote performance or device acceptance.
 
 Previous source checkpoint: Current local integration candidate: clean coherent SDK `de16c240f8ef77779edd3aa411e407018d2be209` with preserved public/native/recovery/Power and current Calendar/catalog/planner/Notes fixes. Shared source qualification is recorded at exact component/joined heads; product preparation/current-head checks and live Notes/Calendar semantics remain pending. Native/model/ABI history and qualified=false are unchanged; current APK/simulator/physical acceptance is separate. No GitHub publication or cleanup was performed.
 
@@ -85,9 +85,9 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-Current source projection: SDK `de4e20fadc` (elizaOS/eliza de4e20fadc, compare to develop not yet recorded; scripts/ci/upstream-reachability.json records the compare; successor of `641c179ce8`); the client feature projection now reads the SDK's browser-safe `@elizaos/core/schema-types`, `@elizaos/ui/api/transport`, Calendar auto-join types and Clock hand-off modules. Source metadata only; runtime, artifact and device qualification remains separate as recorded above.
+Current source projection: SDK `de4e20fadc` (elizaOS/eliza de4e20fadc, recorded develop comparison is diverged (8 commits ahead, 80 behind); scripts/ci/upstream-reachability.json records the compare; successor of immediate prior pin `17abe929d7`); the client feature projection now reads the SDK's browser-safe `@elizaos/core/schema-types`, `@elizaos/ui/api/transport`, Calendar auto-join types and Clock hand-off modules. Source metadata only; runtime, artifact and device qualification remains separate as recorded above.
 
-The current upstream source pin is `de4e20fadc` (elizaOS/eliza de4e20fadc, compare to develop not yet recorded; scripts/ci/upstream-reachability.json records the compare) from upstream.lock.json; the preceding pins were `641c179ce8`, `89714cd4b8`, `9af104a1c7`, `fbc2d23d4b`, `1f2a922f86`, `756ba00966`, `6c1a31f233`, `5794c8c0d1` and `e40497d5d0`. Runtime and device results remain bound to their own source, artifact and account receipts.
+The current upstream source pin is `de4e20fadc` (elizaOS/eliza de4e20fadc, recorded develop comparison is diverged (8 commits ahead, 80 behind); scripts/ci/upstream-reachability.json records the compare) from upstream.lock.json; the preceding pins were `17abe929d7`, `641c179ce8`, `89714cd4b8`, `9af104a1c7`, `fbc2d23d4b`, `1f2a922f86`, `756ba00966`, `6c1a31f233`, `5794c8c0d1` and `e40497d5d0`. Runtime and device results remain bound to their own source, artifact and account receipts.
 
 The historical October 14 development rebuild used upstream `193d9264fc`; current source pins have advanced since that build. Acceptance evidence below remains scoped to its recorded builds.
 
