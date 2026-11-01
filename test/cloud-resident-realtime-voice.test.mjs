@@ -31,7 +31,7 @@ test('Cloud mode conversation is the realtime session: no batch loop, recording 
   assert.equal(h.progressCues,0,'no extra spoken progress request');
   assert.equal(h.starts,0);assert.equal(h.uploads,0);assert.equal(h.cloudSpeech,0);assert.equal(h.sends,0);assert.equal(h.localFactories,0);
   const view=h.renderChat();assert.equal(view.state,'listening');assert.equal(view.canMute,true);assert.equal(view.muteLabel,'Mute microphone');
-  assert.match(view.cloudDisclosureText,/streams what you say.*Eliza Cloud account.*plan allowance.*Cartesia/);
+  assert.match(view.cloudDisclosureText,/streams what you say.*Eliza Cloud account while voice is open.*plan allowance.*Cartesia/);
   h.realtime.onTranscript('live words');assert.equal(h.shell.renderVals().voiceInterim,'live words','words appear while the user talks');
   await h.shell.stopVoiceConversation();assert.equal(h.realtimeStops,1);
   await h.shell.startVoice();assert.equal(h.realtimeSessions,2,'a stopped session releases media for the next start');assert.deepEqual(h.shell.messages,[]);
@@ -43,14 +43,39 @@ for(const [code,copy] of [
  ['voice-relay-authorization',/^Eliza Cloud did not accept this sign-in for voice\. Sign in again in Settings, then try voice again\.$/],
  ['voice-relay-transport',/^Eliza Cloud voice is busy or unavailable right now\. Try voice again in a moment, or use the keyboard\.$/],
  ['voice-relay-insufficient_credits',/^Eliza Cloud declined cloud voice for your account's billing\. Check your account in Settings, then retry\.$/],
- ['voice-relay-unexpected_code',/^Eliza Cloud voice stopped\. Try voice again, or use the keyboard\.$/],
-])test(`Cloud relay refusal ${code.slice(12)} ends voice calmly and honestly, without an automatic paid retry`,async()=>{
+ ['voice-relay-unexpected_code',/^Voice stopped\. Try voice again, or use the keyboard\.$/],
+])test(`Cloud relay refusal ${code.replace('voice-relay-','')} ends voice calmly and honestly, without an automatic paid retry`,async()=>{
  const clock=voiceFakeClock(),h=residentFixture({clock});
  try{
   await h.shell.startVoice();await clock.flush();
   h.realtime.onError(Object.assign(Error('voice session lost: server_error',{cause:Error('PRIVATE_RELAY_DETAIL')}),{code}));
   const view=h.renderChat();assert.equal(view.state,'error');assert.match(view.lines[0].t,copy);
   assert.doesNotMatch(JSON.stringify(view),/server_error|voice-relay|PRIVATE_RELAY_DETAIL|HTTP|403|429/);
+  assert.equal(view.recoveryLabel,'Try voice again');
+  await clock.advance(120_000);
+  assert.equal(h.realtimeSessions,1,'no automatic re-mint of a paid relay session');assert.equal(h.batchLoops,0,'no batch fallback');
+  assert.deepEqual(h.shell.messages,[]);
+ }finally{h.close();await h.tick();}
+});
+
+// Every other realtime ending in Cloud mode (from the pinned SDK client or this app's session
+// adapter) is shown calmly: a microphone refusal keeps its browser recovery, nothing raw is shown.
+const micError=(code,name)=>Object.assign(Error(code==='no_device'?'no microphone device':'microphone permission denied',{cause:Object.assign(Error('PRIVATE_DEVICE_DETAIL'),{name})}),{name:'VoiceMicCaptureError',code});
+for(const [label,failure,copy] of [
+ ['a closed relay socket',Error('voice session lost: ws_close'),/^Voice stopped\. Try voice again, or use the keyboard\.$/],
+ ['a failed re-mint',Error('voice session lost: remint_failed',{cause:Error('PRIVATE_MINT_DETAIL')}),/^Voice stopped\. Try voice again, or use the keyboard\.$/],
+ ['a mint transport failure',Object.assign(Error('voice session mint transport failed'),{name:'VoiceSessionMintError',status:-1}),/^Voice stopped\. Try voice again, or use the keyboard\.$/],
+ ['an unconfirmed retirement',Error('Developer voice retirement was not confirmed.'),/^Voice stopped\. Try voice again, or use the keyboard\.$/],
+ ['voice open in another tab',Object.assign(Error('Voice is already active in another tab. Stop it there first.'),{code:'VOICE_SESSION_BUSY'}),/^Voice is already on in another tab\. Stop it there, then try voice again\.$/],
+ ['a denied microphone',micError('permission_denied','NotAllowedError'),/^Microphone access is blocked\. Allow the microphone for this site in your browser’s site settings/],
+ ['a missing microphone',micError('no_device','NotFoundError'),/^No usable microphone was found\./],
+])test(`Cloud mode shows ${label} calmly, without raw session text or an automatic paid retry`,async()=>{
+ const clock=voiceFakeClock(),h=residentFixture({clock});
+ try{
+  await h.shell.startVoice();await clock.flush();
+  h.realtime.onError(failure);
+  const view=h.renderChat();assert.equal(view.state,'error');assert.match(view.lines[0].t,copy);
+  assert.doesNotMatch(JSON.stringify(view),/ws_close|remint_failed|mint transport|PRIVATE_|Developer|VOICE_SESSION_BUSY|permission denied|microphone device/);
   assert.equal(view.recoveryLabel,'Try voice again');
   await clock.advance(120_000);
   assert.equal(h.realtimeSessions,1,'no automatic re-mint of a paid relay session');assert.equal(h.batchLoops,0,'no batch fallback');
@@ -80,6 +105,8 @@ test('own keys in the Cloud resident keep the direct realtime route, and native 
   await own.shell.startVoice();
   assert.equal(own.realtimeSessions,1);assert.equal(own.batchLoops,0);
   assert.match(own.renderChat().cloudDisclosureText,/Cartesia.*direct Cerebras/);assert.doesNotMatch(own.renderChat().cloudDisclosureText,/plan allowance/);
+  own.realtime.onError(Error('voice session lost: ws_close'));
+  assert.equal(own.renderChat().lines[0].t,'voice session lost: ws_close','own-keys direct keeps its existing error text');
   await own.shell.stopVoiceConversation();
  }finally{own.close();await own.tick();}
  const native=cloudVoiceViewFixture({cloudProfile:true});

@@ -13,6 +13,13 @@ test('the control the denied-microphone message names exists on the phone',()=>{
  for(const other of [{failure:'',stage:'ready',busy:false,native:true},{failure:'no-speech',stage:'recorded',busy:false,native:true},{failure:'denied',stage:'recording',busy:false,native:true},{failure:'denied',stage:'ready',busy:true,native:true}])
   assert.equal(states.deniedSettingsChoice(other),false,JSON.stringify(other));
 });
+test('the realtime session microphone codes classify as a refused or missing microphone',()=>{
+ // The pinned SDK's VoiceMicCaptureError codes, which reach the realtime conversation's onError.
+ assert.equal(states.voiceFailure({name:'VoiceMicCaptureError',code:'permission_denied'},{transcribing:false,browser:true}).kind,'denied');
+ assert.equal(states.voiceFailure({name:'VoiceMicCaptureError',code:'no_device'},{transcribing:false,browser:true}).kind,'no-microphone');
+ assert.equal(states.voiceFailure({name:'VoiceMicCaptureError',code:'start_failed'},{transcribing:false,browser:true}),null);
+ assert.equal(states.voiceFailure({name:'VoiceMicCaptureError',code:'permission_denied'},{transcribing:true,browser:true}),null,'a transcription failure is never a microphone refusal');
+});
 test('the recorder renders that control and it only opens Android settings for the app',()=>{
  assert.match(adapter,/const settingsChoice = deniedSettingsChoice\(\{ failure, stage, busy, native: Capacitor\.isNativePlatform\(\) \}\);/);
  assert.match(adapter,/routeChoice: settingsChoice \|\| /);

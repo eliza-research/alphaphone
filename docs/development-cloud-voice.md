@@ -43,10 +43,14 @@ microphone, the page requires the agent's health to report `speechRoute: 'cloud'
 `speechProvider: 'cartesia'` and `providerAdmission: 'at-session-start'`.
 
 Cloud admits and bills each relay session. A relay refusal (sign-in, billing, rate limit or an
-unavailable service) ends voice with one calm line and is never retried automatically, so no
-second session is opened or billed. The Cloud resident does not use the recorded-clip
-conversation loop or its spoken progress cue. Read-aloud and dictation keep the batch Cloud
-speech routes above.
+unavailable service) ends voice with one calm line and is never retried automatically. Every
+other ending shows one calm line too: a refused or missing microphone keeps its browser recovery
+copy, voice open in another tab says so, and a lost connection or failed session start says
+voice stopped. Raw session text is never shown. A lost session is not reopened automatically.
+While voice stays open, the voice client still replaces its session at an idle moment before
+the 60 second relay ticket ends; each replacement opens a new relay session, which Cloud admits
+and bills on its own. The Cloud resident does not use the recorded-clip conversation loop or its spoken progress cue. Read-aloud
+and dictation keep the batch Cloud speech routes above.
 
 Tests cover this with in-memory ports only. Relay latency, billing, the busy hold over the relay
 and the exact refusal codes Cloud sends need a live run against Cloud.

@@ -10,6 +10,7 @@ import { connectionController } from './connection-ui';
 import { cloudVoiceLimitOf } from './cloud-voice-limit';
 import { readServiceLimit, retryDuration, type ServiceLimit } from './subscription-entitlement';
 import { cloudServiceName } from './cloud-protocol';
+import { voiceFailure } from './voice-states';
 
 /**
  * A Cloud speech 429 as the shared ServiceLimit (`@elizaos/cloud-sdk` readServiceLimit), from the
@@ -27,37 +28,47 @@ function voiceLimitMessage(limit: ServiceLimit, now: number, recording: boolean)
   const resets = limit.resetsAt != null && limit.resetsAt > now ? new Date(limit.resetsAt).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : null;
   if (limit.kind === 'allowance-exhausted') return `Your ${name} plan's voice allowance is used up.${resets ? ` It resets ${resets}.` : limit.retryAfterMs != null ? ` It resets in ${retryDuration(limit.retryAfterMs)}.` : ''}${kept} Nothing is purchased automatically.`;
   if (limit.kind === 'subscription-required') return `${name} voice needs an active ${name} plan. Manage your plan in Settings.${kept}`;
-  if (limit.kind === 'billing-refused') return `${name} declined cloud voice for your account's billing. Check your account in Settings, then retry.${kept}`;
+  if (limit.kind === 'billing-refused') return billingDeclined(name) + kept;
   const wait = limit.retryAfterMs != null ? `Try again in ${retryDuration(limit.retryAfterMs)}.` : resets ? `Try again after ${resets}.` : 'Wait a moment, then try again.';
   return `${name} voice reached your plan's request limit. ${wait}${kept}`;
 }
 function serviceNameNow(): string {
   try { const environment = connectionController.getCloudEnvironment(); return environment ? cloudServiceName(environment) : 'Cloud'; } catch { return 'Cloud'; }
 }
+function billingDeclined(name: string): string {
+  return `${name} declined cloud voice for your account's billing. Check your account in Settings, then retry.`;
+}
 
 /** Native status codes retain recovery meaning without exposing a provider response body.
- * `recording`: the caller keeps the recorded clip for an explicit retry (Notes, Transcribe). */
-export function cloudVoiceFailure(error: unknown, context: { recording?: boolean } = {}): string | null {
+ * `recording`: the caller keeps the recorded clip for an explicit retry (Notes, Transcribe).
+ * `realtime`: the Cloud resident's realtime conversation, which gets a calm line for every ending. */
+export function cloudVoiceFailure(error: unknown, context: { recording?: boolean; realtime?: boolean } = {}): string | null {
   const direct=connectionController.getSnapshot().residentInference==='direct';
   const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
   if(direct&&typeof code==='string'&&/^voice-http-[45][0-9]{2}$/.test(code))return `Cartesia could not complete voice (${code.slice(-3)}). Check your own key or provider allowance; nothing was retried.`;
   if(developmentCloudVoiceEnabled&&!browserCloudResidentEnabled&&(code==='voice-http-401'||code==='voice-http-403'))return 'The developer agent’s Cloud speech authorization was refused. Check its server-side Cloud configuration, then retry.';
   if (code === 'voice-http-401' || code === 'voice-http-403') return 'Sign in to Cloud again in Settings, then retry voice.';
-  if (code === 'voice-http-402') return 'Cloud declined cloud voice for your account\'s billing. Check your account in Settings, then retry.';
+  if (code === 'voice-http-402') return billingDeclined('Cloud');
   if (code === 'voice-http-429') { const now = Date.now(), limit = cloudVoiceServiceLimit(error, now); if (limit) return voiceLimitMessage(limit, now, context.recording === true); }
   if (typeof code === 'string' && /^voice-http-[45][0-9]{2}$/.test(code)) return `Cloud voice could not complete this request (${code.slice(-3)}). Try again later.`;
   if (code === 'voice-stt-decode') return 'This recording could not be prepared for transcription. Choose Record again.';
   if (code === 'voice-stt-connect') return 'Cloud voice could not use your saved account. Sign in again in Settings. Your recording is kept.';
   if (code === 'voice-stt-upload') return 'The recording upload could not be confirmed. Your recording is kept. Check your connection before trying again.';
   if (code === 'voice-stt-response') return 'Cloud voice returned no usable transcript. Your recording is kept. Try again later.';
-  // Realtime Cloud relay refusals end the session; none is retried, so no second session is billed.
-  if (typeof code === 'string' && code.startsWith('voice-relay-')) {
-    const name = serviceNameNow(), refusal = code.slice(12);
-    if (refusal === 'authorization') return `${name} did not accept this sign-in for voice. Sign in again in Settings, then try voice again.`;
-    if (refusal === 'insufficient_credits') return `${name} declined cloud voice for your account's billing. Check your account in Settings, then retry.`;
-    if (refusal === 'quota_exhausted') return 'Voice reached today\'s limit on this agent. Use the keyboard, or try voice again tomorrow.';
-    if (refusal === 'transport') return `${name} voice is busy or unavailable right now. Try voice again in a moment, or use the keyboard.`;
-    return `${name} voice stopped. Try voice again, or use the keyboard.`;
+  // A realtime Cloud conversation ends on any failure and a lost or refused relay session is never
+  // retried. A relay refusal names its cause; a refused microphone keeps its honest recovery; any
+  // other ending (a lost connection, a failed mint) is one calm line, never raw SDK text.
+  if (context.realtime || typeof code === 'string' && code.startsWith('voice-relay-')) {
+    const name = serviceNameNow();
+    if (code === 'voice-relay-authorization') return `${name} did not accept this sign-in for voice. Sign in again in Settings, then try voice again.`;
+    if (code === 'voice-relay-insufficient_credits') return billingDeclined(name);
+    if (code === 'voice-relay-quota_exhausted') return 'Voice reached today\'s limit on this agent. Use the keyboard, or try voice again tomorrow.';
+    if (code === 'voice-relay-transport') return `${name} voice is busy or unavailable right now. Try voice again in a moment, or use the keyboard.`;
+    if (code === 'VOICE_SESSION_BUSY') return 'Voice is already on in another tab. Stop it there, then try voice again.';
+    // The realtime conversation runs only in the browser.
+    const microphone = voiceFailure(error, { transcribing: false, browser: true });
+    if (microphone?.kind === 'denied' || microphone?.kind === 'no-microphone') return microphone.message;
+    return 'Voice stopped. Try voice again, or use the keyboard.';
   }
   return null;
 }
