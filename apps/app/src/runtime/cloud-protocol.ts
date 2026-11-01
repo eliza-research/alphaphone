@@ -300,7 +300,10 @@ export class CloudProtocol {
         }
       }
       controller.abort(signal.reason??new DOMException("Login cancelled","AbortError"));return false;
-    })().catch(error=>{rejectAbort(error);throw error;});
+    })().catch(error=>{
+      // An unconfirmed cancel leaves the host attempt running: keep waiting for its own outcome, and allow a retry.
+      cancellation=null;throw error;
+    });
     if(onCommittedCancellation&&port.cancelGoogleSignIn)this.activeGoogleCancellation=cancel;
     const abort = () => {if(onCommittedCancellation&&port.cancelGoogleSignIn)void cancel().catch(()=>{});else controller.abort(signal.reason);};
     const cancelled = () => { void port.cancel().catch(() => {}); rejectAbort(controller.signal.reason); };

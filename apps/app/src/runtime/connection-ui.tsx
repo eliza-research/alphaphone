@@ -2468,6 +2468,8 @@ export const connectionController = {
       catch(error){signal.throwIfAborted();signInFailed(view.environment);throw error;}
       if(outcome.status==='mfa'){signal.throwIfAborted();showGoogleMfa(outcome);return;}
       if(!outcome.committedCredential){signal.throwIfAborted();await signedIn(client,outcome,signal);return;}
+      // The host result supersedes an unconfirmed-cancel notice shown while it was pending.
+      update({error:''});
       // Postcommit reconciliation ignores only the old cancellation signal.
       // A new sign-in generation, environment or credential still fences adoption.
       const reconciliation=new AbortController();

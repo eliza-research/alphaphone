@@ -1001,3 +1001,23 @@ test('real bridge Cancel before the host commit retains the previous account wit
   assert.equal(s.harness.state.signIn.step,'choose');assert.equal(s.harness.state.error,'');assert.equal(s.harness.state.busy,false);
  }finally{release.resolve();await s.close();}
 });
+const unconfirmed='Sign-in completion is unconfirmed. Wait for the result before trying again.';
+test('real bridge Cancel whose RPC fails keeps waiting and adopts what the host then commits',async()=>{
+ const held=deferred(),release=deferred();let failed=false;
+ const s=await realBridgeGoogleStack({before:async body=>{if(body.operation==='signInCancelGoogle'&&!failed){failed=true;throw new TypeError('fetch failed');}},upstream:async()=>{held.resolve();await release.promise;}});
+ try{
+  const signing=s.harness.actions.signInGoogle();await held.promise;await s.harness.actions.cancelSignIn();
+  assert.equal(s.harness.state.signIn.step,'google');assert.equal(s.harness.state.error,unconfirmed);assert.equal(s.harness.state.busy,true);
+  release.resolve();await signing;await adoptedHostCredential(s);
+ }finally{release.resolve();await s.close();}
+});
+test('real bridge Cancel retried after a failed cancel RPC retains the previous account',async()=>{
+ const held=deferred(),release=deferred();let failed=false;
+ const s=await realBridgeGoogleStack({before:async body=>{if(body.operation==='signInCancelGoogle'&&!failed){failed=true;throw new TypeError('fetch failed');}},upstream:async()=>{held.resolve();await release.promise;}});
+ try{
+  const signing=s.harness.actions.signInGoogle();await held.promise;await s.harness.actions.cancelSignIn();assert.equal(s.harness.state.error,unconfirmed);
+  await s.harness.actions.cancelSignIn();release.resolve();await signing;
+  assert.equal((await s.store.read()).credentialReference,reference);assert.equal(s.harness.state.cloudAccount,undefined);
+  assert.equal(s.harness.state.signIn.step,'choose');assert.equal(s.harness.state.error,'');assert.equal(s.harness.state.busy,false);
+ }finally{release.resolve();await s.close();}
+});
