@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {mkdtemp,writeFile,rm,readFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {createServer} from 'node:http';
+import {createServer,request as pageRequest} from 'node:http';
+import {duplexPair} from 'node:stream';
 import {randomUUID} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 if(!process.execArgv.includes('tsx')){const child=spawnSync(process.execPath,['--import','tsx',process.argv[1]],{stdio:'inherit',timeout:30000});process.exit(child.status??1);}
@@ -11,7 +12,7 @@ const {createLocalAgentDevHandler}=await import('../scripts/local-agent-dev-brid
 const owner=randomUUID(),root='1'.repeat(64),paired='fixture-private-owner';
 async function fixture(enabled=true,moderation,direct=false){
  const directory=await mkdtemp(join(tmpdir(),'alpha-cloud-speech-')),tokenFile=join(directory,'token');await writeFile(tokenFile,root,{mode:0o600});
- let mode='ok',signal,upstream,cancelled;const calls=[];
+ let mode='ok',signal,upstream,cancelled;const calls=[],handled=[];
  const request=async(url,input)=>{const path=new URL(url).pathname;calls.push({path,input});
   if(path==='/api/auth/status')return Response.json({instanceId:'fixture'});
   if(path==='/api/auth/pair-code')return Response.json({code:'fixture'});
@@ -32,11 +33,22 @@ async function fixture(enabled=true,moderation,direct=false){
   const streamed=mode==='stream'||mode==='stall'?new ReadableStream({start(controller){upstream=controller;if(mode==='stream')signal.addEventListener('abort',()=>controller.error(signal.reason),{once:true});},cancel(reason){cancelled=reason;}}):undefined;
   return receipt(new Response(streamed??(mode==='large'?new Uint8Array(8*1024*1024+1):direct?wav:new Uint8Array([73,68,51,1])),{headers}));
  };
- const handler=createLocalAgentDevHandler({origin:'http://127.0.0.1:9',tokenFile,request,cloudVoiceEnabled:enabled&&!direct,cartesiaEnabled:enabled&&direct}),server=createServer(handler);await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${server.address().port}`;
+ const handler=createLocalAgentDevHandler({origin:'http://127.0.0.1:9',tokenFile,request,cloudVoiceEnabled:enabled&&!direct,cartesiaEnabled:enabled&&direct});
+ // Each page request keeps the bridge handler's promise, which settles only when the handler returns.
+ const server=createServer((req,res)=>{handled.push(handler(req,res));});await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${server.address().port}`;
  const open=(input,signal)=>fetch(origin,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','X-Alpha-Local-Agent':'1'},body:JSON.stringify({ownerId:owner,headers:{},...input}),signal});
+ // The page reaches the bridge over an in-process connection whose writes complete only as the page reads.
+ // How much of an unread response loopback TCP buffers differs by platform (on Linux CI it took a 4 MiB
+ // chunk whole), so over TCP a page that stops reading could not reliably hold the bridge in its drain wait.
+ const openInProcess=input=>new Promise((resolve,reject)=>{
+  const [connection,page]=duplexPair();connection.once('close',()=>page.destroy());page.once('close',()=>connection.destroy());server.emit('connection',connection);
+  const outgoing=pageRequest({method:'POST',path:'/',headers:{Host:new URL(origin).host,Origin:origin,'Content-Type':'application/json','X-Alpha-Local-Agent':'1'},createConnection:()=>page},
+   response=>resolve({response,chunks:response[Symbol.asyncIterator](),connection}));
+  outgoing.once('error',reject);outgoing.end(JSON.stringify({ownerId:owner,headers:{},...input}));
+ });
  // Cloud TTS answers binary audio/mpeg; every refusal and every other route answers JSON.
  const call=async(input,signal)=>{const response=await open(input,signal);return {status:response.status,headers:Object.fromEntries(response.headers),...(response.headers.get('content-type')==='audio/mpeg'?{audio:Buffer.from(await response.arrayBuffer())}:{data:await response.json()})};};
- return {call,open,calls,mode:value=>mode=value,signal:()=>signal,upstream:()=>upstream,cancelled:()=>cancelled,connections:()=>new Promise((resolve,reject)=>server.getConnections((error,count)=>error?reject(error):resolve(count))),rotate:()=>writeFile(tokenFile,'2'.repeat(64),{mode:0o600}),close:async()=>{handler.closeVoice();server.closeAllConnections();await new Promise(r=>server.close(r));await rm(directory,{recursive:true,force:true});}};
+ return {call,open,openInProcess,calls,mode:value=>mode=value,signal:()=>signal,upstream:()=>upstream,cancelled:()=>cancelled,handled:()=>handled.at(-1),rotate:()=>writeFile(tokenFile,'2'.repeat(64),{mode:0o600}),close:async()=>{handler.closeVoice();server.closeAllConnections();await new Promise(r=>server.close(r));await rm(directory,{recursive:true,force:true});}};
 }
 const tts=()=>({path:'/api/tts/cloud',method:'POST',requestId:randomUUID(),body:JSON.stringify({text:'Hello'})});
 const asr=()=>({path:'/api/asr/cloud',method:'POST',requestId:randomUUID(),audioBase64:Buffer.from('RIFF fixture WAV').toString('base64')});
@@ -103,21 +115,32 @@ test('Stop after audio started aborts the upstream Cloud TTS body without retry'
  f.mode('stream');const controller=new AbortController();await firstChunk(f,controller.signal);controller.abort();
  for(let i=0;i<100&&!f.signal().aborted;i++)await tick();assert.equal(f.signal().aborted,true);assert.equal(f.calls.filter(x=>x.path==='/api/tts/cloud').length,1);
 }finally{await f.close();}});
+const settled=(promise,ms)=>Promise.race([promise.then(()=>true),new Promise(resolve=>setTimeout(resolve,ms,false))]);
+// The page holds the response open but reads nothing more. The bridge relays chunks while the connection
+// still takes them, then waits for drain and leaves the next upstream chunk unread.
+async function blockOnDrain(f,connection){
+ for(let i=0;i<6&&f.upstream().desiredSize>0;i++){
+  f.upstream().enqueue(new Uint8Array(256*1024));
+  for(let j=0;j<20&&f.upstream().desiredSize<1;j++)await tick();
+ }
+ // Still unread after a further 100 ms while the response is backed up: the bridge is in its drain wait.
+ await new Promise(resolve=>setTimeout(resolve,100));
+ assert.equal(connection.writableNeedDrain,true,'the response is backed up');
+ assert.equal(f.upstream().desiredSize,0,'bridge waits for drain');
+}
 for(const [stall,clip] of [['idle','whose upstream goes quiet'],['drain','whose connected page stops reading']])test(`the Cloud TTS deadline still ends a clip ${clip}`,async()=>{
  // Every bridge deadline is held here, so the test expires the speech request's 120 s one itself.
  const timeout=AbortSignal.timeout,deadlines=[];AbortSignal.timeout=ms=>{const controller=new AbortController();deadlines.push({ms,expire:()=>controller.abort(new DOMException('The operation timed out.','TimeoutError'))});return controller.signal;};
  const f=await fixture();try{
-  f.mode('stall');const {reader}=await firstChunk(f);
-  if(stall==='drain'){
-   // The page holds the response open but reads nothing more: the bridge takes a chunk larger than
-   // the socket buffers, waits for drain, and leaves the next upstream chunk unread.
-   f.upstream().enqueue(new Uint8Array(4*1024*1024));for(let i=0;i<200&&f.upstream().desiredSize<1;i++)await tick();assert.equal(f.upstream().desiredSize,1);
-   f.upstream().enqueue(new Uint8Array([7]));await new Promise(resolve=>setTimeout(resolve,100));assert.equal(f.upstream().desiredSize,0,'bridge waits for drain');
-  }
+  f.mode('stall');const pending=f.openInProcess(tts());while(!f.upstream())await tick();f.upstream().enqueue(new Uint8Array([73,68,51]));
+  const {response,chunks,connection}=await pending;assert.equal(response.statusCode,200);assert.deepEqual([...(await chunks.next()).value],[73,68,51]);
+  if(stall==='drain')await blockOnDrain(f,connection);
+  assert.equal(await settled(f.handled(),50),false,'bridge is waiting');
   deadlines.findLast(deadline=>deadline.ms===120000).expire();
-  // The page still reads nothing, so no drain can release a stuck wait: the bridge must close the response itself.
-  for(let i=0;i<100&&await f.connections();i++)await tick();assert.equal(await f.connections(),0,'response destroyed while the page reads nothing');
-  const outcome=await Promise.race([(async()=>{try{for(;;)if((await reader.read()).done)return 'ended';}catch{return 'truncated';}})(),new Promise(resolve=>setTimeout(resolve,2000,'hung'))]);
+  // The page still reads nothing, so no drain can release a stuck wait: the bridge must return and close the response itself.
+  assert.equal(await settled(f.handled(),2000),true,'deadline releases the handler');
+  assert.equal(connection.destroyed,true,'response destroyed while the page reads nothing');
+  const outcome=await Promise.race([(async()=>{try{for(;;)if((await chunks.next()).done)return 'ended';}catch{return 'truncated';}})(),new Promise(resolve=>setTimeout(resolve,2000,'hung'))]);
   assert.equal(outcome,'truncated');assert.equal(f.signal().reason.name,'TimeoutError');assert.equal(f.cancelled()?.name,'TimeoutError');
   assert.equal(f.calls.filter(x=>x.path==='/api/tts/cloud').length,1);
  }finally{AbortSignal.timeout=timeout;await f.close();}
