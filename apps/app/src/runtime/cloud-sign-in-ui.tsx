@@ -28,6 +28,9 @@ export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = tru
   const [service,setService]=useState<CloudServiceInfo|null>(null),[serviceError,setServiceError]=useState(false),[retry,setRetry]=useState(0);
   const [legal,setLegal]=useState<'terms'|'privacy'|null>(null);
   const googleButton=useRef<HTMLButtonElement>(null);
+  // A readiness check that is still running after a few seconds gets an explicit way out.
+  const [slowCheck,setSlowCheck]=useState(false);
+  useEffect(()=>{if(!busy){setSlowCheck(false);return;}const timer=setTimeout(()=>setSlowCheck(true),4000);return()=>clearTimeout(timer);},[busy]);
   const legalHeading=useRef<HTMLHeadingElement>(null),legalTrigger=useRef<HTMLButtonElement|null>(null);
   useEffect(()=>{
     let current=true;setService(null);setServiceError(false);setLegal(null);
@@ -89,7 +92,7 @@ export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = tru
     {message && !inlineStatus && <p role="status">{message}</p>}
     {error && <p role={errorIsNotice ? 'status' : 'alert'} className={errorIsNotice ? 'alpha-auth-notice' : 'alpha-connection-error'}>{error}</p>}
     <div className="alpha-connection-actions">
-      {(dismissible || view.step !== 'choose') && <button type="button" className="alpha-connection-cancel" onClick={actions.cancel}>{view.step === 'choose' && !busy ? 'Back' : 'Cancel sign-in'}</button>}
+      {(dismissible || view.step !== 'choose' || (busy && slowCheck)) && <button type="button" className="alpha-connection-cancel" onClick={actions.cancel}>{view.step === 'choose' && !busy ? 'Back' : 'Cancel sign-in'}</button>}
       {view.step === 'choose' && extra}
     </div>
     {service && <p><button type="button" disabled={busy} onClick={event=>{legalTrigger.current=event.currentTarget;setLegal('terms');}}>Terms of Service</button> and <button type="button" disabled={busy} onClick={event=>{legalTrigger.current=event.currentTarget;setLegal('privacy');}}>Privacy Policy</button>.</p>}
