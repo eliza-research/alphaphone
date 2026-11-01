@@ -395,18 +395,18 @@ test('on-device batch: the model acknowledgement plays through on-device speech 
 // audio-end only follows audio-start (the playback exists from the first PCM); Cloud's 'complete'
 // with no PCM, and any Cloud error frame, fail the whole session through its error event, and the
 // retired session refuses later speech. A refused speak call (audio focus, busy speaker) fails only
-// that utterance.
-function socketFixture(){
+// that utterance. `mutes` records the capture's mute calls (false: capturing).
+function socketFixture({echoCancelled=true}={}){
  const clock=voiceFakeClock(),f=viewFixture({cloudProfile:true,clock,holdReply:true});
  loadSession(f);
  const source=fs.readFileSync('.eliza/client-features/packages/voice/src/native-cloud-speech.ts','utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function').replaceAll('export interface','interface');
  vm.runInNewContext('{'+stripTypeScriptTypes(source)+';globalThis.createSharedCloudStreamingSpeech=createCloudStreamingSpeech;}',f.box);
- const n={spoken:[],refused:[],cancels:0,stops:0,utterance:null,draining:false,holdCancel:false};
+ const n={spoken:[],refused:[],cancels:0,stops:0,mutes:[],utterance:null,draining:false,holdCancel:false};
  const port={
   async addListener(_event,callback){n.emit=callback;return {remove:async()=>{}};},
-  async startCloudSpeech(input){n.sessionId=input.sessionId;return {sessionId:input.sessionId,sampleRate:16000,echoCancelled:true};},
+  async startCloudSpeech(input){n.sessionId=input.sessionId;return {sessionId:input.sessionId,sampleRate:16000,echoCancelled};},
   async stopCloudSpeech(){n.stops++;n.utterance=null;},
-  async setCloudSpeechMuted(){},
+  async setCloudSpeechMuted({muted}){n.mutes.push(muted);},
   async speakCloudSpeech({utteranceId,text}){if(n.retired)throw Error('Invalid speech request');if(n.utterance||n.draining||n.refuse?.(text)){n.refused.push(text);throw Error('Speech could not start');}n.utterance={id:utteranceId,text,started:false};n.spoken.push(text);},
   async cancelCloudSpeech({utteranceId}){n.cancels++;if(n.retired||n.utterance?.id!==utteranceId)return;n.utterance=null;n.draining=true;if(n.holdCancel)await new Promise(resolve=>n.releaseCancel=resolve);n.draining=false;},
  };
@@ -447,36 +447,66 @@ test('speech socket: the ack plays once; reply_ready cancels it and the reply st
 
 /** Records whether the agent request completed with its reply (the shell's sendVoiceTurn). */
 function watchReply(f){const send=f.shell.sendVoiceTurn.bind(f.shell),seen={};f.shell.sendVoiceTurn=input=>send(input).then(reply=>{seen.reply=reply;return reply;},error=>{seen.error=error;throw error;});return seen;}
-// The one capture end that may wait for the ack's turn: the bridge's 'protocol' failure while the ack
-// was requested, none of its audio played and its turn's request is pending. Cloud completing the
-// ack with no audio fails the socket that way. 'protocol' is also the bridge's code for any other
-// fault in its message handler, which the renderer cannot tell apart, so such a fault waits too.
-test('speech socket: Cloud completes the ack without audio: the ack is silence, the agent request and its reply are kept, then the conversation ends',async()=>{
+// No capture end waits for the ack. Cloud completing the ack with no audio fails the whole speech
+// session with the bridge's catch-all 'protocol' code, which also covers every other fault in its
+// message handler (its own owner/session check, a frame that does not parse, an oversized frame, an
+// unexpected event), so nothing the renderer receives ties that end to the ack. Until the bridge
+// reports a typed failure bound to the session and to the ack's own request, that end retires the
+// capture, the turn and the conversation at once, as any 'protocol' end did at 445e5744: the agent
+// request is cancelled and its reply is never spoken. Only the ack's own speak call failing (a
+// refusal, below) is the ack's, and that is silence.
+test('speech socket: Cloud completes the ack without audio: the socket-wide failure ends the turn and the conversation at once',async()=>{
  const f=socketFixture(),n=f.n,seen=watchReply(f);
  try{
   const input=await socketTurn(f);
   progress(input);await f.clock.flush();assert.deepEqual(n.spoken,[ACK]);
-  n.complete();await f.clock.flush();await f.clock.advance(2000);
-  assert.equal(input.signal.aborted,false,'the failed ack never cancels the agent request');
-  assert.equal(f.renderChat()?.state,'thinking');assert.ok(n.stops>=1,'the failed socket is stopped');
+  n.complete();const abortedAtOnce=input.signal.aborted;await f.clock.flush();
+  assert.equal(abortedAtOnce,true,'the request is cancelled with the capture end itself, not attributed to the ack');
+  assert.equal(f.renderChat()?.state,'error');assert.ok(n.stops>=1,'the failed socket is stopped');
+  assert.match(f.renderChat()?.lines?.[0]?.t,/^Voice stopped\./,'the existing stopped notice');
   f.releaseReply();await f.clock.flush();
-  assert.equal(seen.error,undefined);assert.equal(seen.reply?.text,REPLY,'the agent request completed with its reply');
-  assert.equal(f.renderChat()?.state,'error','the speech socket is gone, so the conversation ends after the turn');
-  assert.equal(f.renderChat()?.lastReply,REPLY);assert.match(f.renderChat()?.lines?.[0]?.t,/^Voice stopped\./,'the existing stopped notice');
+  assert.equal(seen.reply,undefined,'the cancelled request never completes');assert.equal(f.renderChat()?.state,'error');
   assert.deepEqual(n.spoken,[ACK],'nothing is spoken on the retired socket, and no canned line');
  }finally{await closeSocket(f);}
 });
 
-test('speech socket: the held end of an ack completed without audio also follows a request that fails',async()=>{
+test('speech socket: Cloud completes the ack without audio: a request that would fail later is already cancelled; nothing more surfaces',async()=>{
  const f=socketFixture(),n=f.n,send=f.shell.sendVoiceTurn.bind(f.shell);
  f.shell.sendVoiceTurn=input=>send(input).then(()=>{throw Error('Local agent response interrupted.');});
  try{
   const input=await socketTurn(f);
   progress(input);await f.clock.flush();n.complete();await f.clock.flush();
-  assert.equal(input.signal.aborted,false);assert.equal(f.renderChat()?.state,'thinking');
+  assert.equal(input.signal.aborted,true);assert.equal(f.renderChat()?.state,'error');const line=f.renderChat()?.lines?.[0]?.t;
   f.releaseReply();await f.clock.flush();
-  assert.equal(f.renderChat()?.state,'error','the session ends once the request settles');assert.deepEqual(n.spoken,[ACK]);
+  assert.equal(f.renderChat()?.state,'error');assert.equal(f.renderChat()?.lines?.[0]?.t,line);assert.deepEqual(n.spoken,[ACK]);
  }finally{await closeSocket(f);}
+});
+
+// Positive controls: with no fault, a normal ack plays out and its turn completes, and the capture
+// keeps hearing the next turn.
+test('speech socket: a normal ack plays out, its turn completes with the reply spoken, and the next turn is heard',async()=>{
+ const f=socketFixture(),n=f.n,seen=watchReply(f);
+ try{
+  const input=await socketTurn(f);
+  progress(input);await f.clock.flush();assert.deepEqual(n.spoken,[ACK]);
+  n.audioStart();await f.clock.flush();n.complete();await f.clock.flush();
+  f.releaseReply();await f.clock.flush();assert.deepEqual(n.spoken,[ACK,REPLY]);
+  n.audioStart();n.complete();await f.clock.flush();
+  assert.equal(input.signal.aborted,false);assert.equal(seen.reply?.text,REPLY);assert.equal(f.renderChat()?.state,'listening');assert.equal(n.stops,0);
+  n.utter('And lunch on Friday.');await f.clock.advance(0);
+  assert.equal(f.sends,2);assert.equal(f.sendInputs[1].text,'And lunch on Friday.');
+ }finally{await closeSocket(f);}
+});
+
+test('on-device live voice: a normal ack plays out, its turn completes with the reply spoken, and the next turn is heard',async()=>{
+ const f=onDeviceLiveFixture(),seen=watchReply(f);
+ try{
+  const input=await liveTurn(f,1300);
+  progress(input);await f.clock.flush();f.releaseReply();await f.clock.flush();
+  assert.deepEqual(f.s.spoken(),[ACK,REPLY]);assert.equal(input.signal.aborted,false);assert.equal(seen.reply?.text,REPLY);assert.equal(f.renderChat()?.state,'listening');
+  const h=f.s.handlers;h.onSpeechStart(1);h.onSpeechEnd(2);h.onSegment('And lunch on Friday.');await f.clock.advance(1300);
+  assert.equal(f.sends,2);assert.equal(f.sendInputs[1].text,'And lunch on Friday.');
+ }finally{await closeLive(f);}
 });
 
 test('speech socket: a socket failure with no ack in flight still ends the conversation and cancels the request at once',async()=>{
@@ -499,7 +529,7 @@ test('speech socket: a socket failure after the ack played out cancels the reque
  }finally{await closeSocket(f);}
 });
 
-// The classified code alone never holds: only while the ack is requested and has no audio yet.
+// 'protocol' with no ack in flight, or after the ack played out: immediate, as at 445e5744.
 for(const [name,before] of [['with no ack in flight',async()=>{}],['after the ack played out',async(f,input)=>{progress(input);await f.clock.flush();f.n.audioStart();f.n.complete();}]])
 test(`speech socket: a 'protocol' failure ${name} ends the conversation and cancels the request at once`,async()=>{
  const f=socketFixture(),n=f.n,seen=watchReply(f);
@@ -523,13 +553,14 @@ test('speech socket: an ack the speaker refuses is silence; the reply is spoken 
  }finally{await closeSocket(f);}
 });
 
-test('speech socket: Stop after a failed ack cancels the turn, and its held failure stays quiet',async()=>{
+test('speech socket: an ack completed without audio has already ended the turn; Stop then closes the conversation quietly',async()=>{
  const f=socketFixture(),n=f.n;
  try{
   const input=await socketTurn(f);
   progress(input);await f.clock.flush();n.complete();await f.clock.flush();
+  assert.equal(input.signal.aborted,true,'the failure ended the turn before Stop');assert.equal(f.renderChat()?.state,'error');
   await f.shell.stopVoiceConversation();await f.clock.flush();
-  assert.equal(input.signal.aborted,true);assert.equal(f.renderChat()?.state,undefined,'Stop closes the conversation');
+  assert.equal(f.renderChat()?.state,undefined,'Stop closes the conversation');
   f.releaseReply();await f.clock.flush();
   assert.equal(f.renderChat()?.state,undefined,'no error surfaces after Stop');assert.deepEqual(n.spoken,[ACK]);
  }finally{await closeSocket(f);}
@@ -560,9 +591,9 @@ test('speech socket: Cloud reports the ack echo after the ack audio ended; it ne
  }finally{await closeSocket(f);}
 });
 
-// --- Lifecycle: every capture end other than that held 'protocol' failure stays immediate, exactly
-// as without an ack (445e5744). Each case runs twice, with the ack playing and with no ack (a label
-// that is silence), and the outcome at the moment of the end must match.
+// --- Lifecycle: every capture end stays immediate, 'protocol' included, exactly as without an ack
+// (445e5744). Each case runs twice, with the ack playing and with no ack (a label that is silence),
+// and the outcome at the moment of the end must match.
 const outcome=(f,input,seen)=>({aborted:input.signal.aborted,state:f.renderChat()?.state,line:f.renderChat()?.lines?.[0]?.t,replied:seen.reply!==undefined});
 async function sameAsWithoutAck(run){
  const withAck=await run(ACK),withoutAck=await run('');
@@ -573,10 +604,10 @@ async function sameAsWithoutAck(run){
 }
 // The conversation's own fences: Stop, leaving the view, and an owner session change.
 const fences=[['Stop',f=>f.shell.stopVoiceConversation()],['navigation away',f=>f.shell.openView('notes')],['an owner session change',f=>{f.agent='another-agent-session';f.changed();}]];
-// The bridge's session failures and retirements (SpeechStreamBridgePlugin fail/retire codes), an
-// unknown code and no code; 'protocol' too once the ack's audio has started.
-const socketEnds=['call-active','audio-focus-lost','expired','capture','permission-denied','unavailable','connection-lost','playback','closed','an-unknown-code',undefined];
-for(const audible of [false,true])for(const code of audible?[...socketEnds,'protocol']:socketEnds)
+// The bridge's session failures and retirements (SpeechStreamBridgePlugin fail/retire codes), the
+// catch-all 'protocol', an unknown code and no code, whether or not the ack's audio has started.
+const socketEnds=['call-active','audio-focus-lost','expired','capture','permission-denied','unavailable','connection-lost','playback','closed','protocol','an-unknown-code',undefined];
+for(const audible of [false,true])for(const code of socketEnds)
 test(`speech socket: '${code??'no code'}' while the ack ${audible?'plays':'waits for its first audio'} stops the conversation and its request at once`,async()=>{
  const atEnd=await sameAsWithoutAck(async label=>{
   const f=socketFixture(),n=f.n,seen=watchReply(f);
@@ -591,6 +622,52 @@ test(`speech socket: '${code??'no code'}' while the ack ${audible?'plays':'waits
   }finally{await closeSocket(f);}
  });
  assert.equal(atEnd.state,'error');
+});
+
+// Faults the native bridge reports with the same 'protocol' error event (RelayListener.onMessage's
+// one catch in patches/eliza/cloud-speech-native.patch), so none identifies the ack: each, while
+// the ack's turn is pending, cancels the agent request with the capture end itself and retires the
+// capture (the socket is stopped and hears nothing more), exactly as the same fault with no ack.
+const protocolFaults=['its own owner/session check failing (own.check)','a control frame that does not parse','an oversized control frame','an unexpected event in its dispatch','Cloud completing an utterance with no audio, or twice','an unknown fault'];
+const retiredAtOnce=async(f,input,seen,fault)=>{
+ const before=f.sends;fault();const abortedAtOnce=input.signal.aborted;await f.clock.flush();
+ f.n.utter('Is this still heard?');await f.clock.advance(0);
+ return {...outcome(f,input,seen),abortedAtOnce,socketStopped:f.n.stops>=1,heardAfter:f.sends-before};
+};
+for(const audible of [false,true])for(const fault of protocolFaults)
+test(`speech socket: ${fault} (reported as 'protocol') while the ack ${audible?'plays':'waits for its first audio'} cancels the request and retires the capture at once, as without an ack`,async()=>{
+ const atEnd=await sameAsWithoutAck(async label=>{
+  const f=socketFixture(),n=f.n,seen=watchReply(f);
+  try{
+   const input=await socketTurn(f);
+   progress(input,{label});await f.clock.flush();const spoken=n.spoken.length;
+   if(audible&&spoken)n.audioStart();await f.clock.flush();
+   assert.equal(input.signal.aborted,false,'the turn is pending');
+   const result={spoken,atEnd:await retiredAtOnce(f,input,seen,()=>n.fail('protocol'))};
+   f.releaseReply();await f.clock.flush();assert.equal(seen.reply,undefined,'the cancelled request never completes');assert.equal(n.spoken.length,spoken,'nothing more is spoken');
+   return result;
+  }finally{await closeSocket(f);}
+ });
+ assert.deepEqual(atEnd,{aborted:true,state:'error',line:atEnd.line,replied:false,abortedAtOnce:true,socketStopped:true,heardAfter:0});
+ assert.match(atEnd.line,/^Voice stopped\./);
+});
+
+// The renderer bridge's own owner/session check (native-cloud-speech.ts check()) failing on an event
+// that arrives after the owner changed, before any fence reported it: the same immediate end.
+for(const audible of [false,true])
+test(`speech socket: the renderer bridge's owner/session check failing while the ack ${audible?'plays':'waits for its first audio'} cancels the request and retires the capture at once, as without an ack`,async()=>{
+ const atEnd=await sameAsWithoutAck(async label=>{
+  const f=socketFixture(),n=f.n,seen=watchReply(f);
+  try{
+   const input=await socketTurn(f);
+   progress(input,{label});await f.clock.flush();const spoken=n.spoken.length;
+   if(audible&&spoken)n.audioStart();await f.clock.flush();
+   const result={spoken,atEnd:await retiredAtOnce(f,input,seen,()=>{f.agent='another-agent-session';n.emit({sessionId:n.sessionId,type:'level',peak:.2});})};
+   f.releaseReply();await f.clock.flush();assert.equal(seen.reply,undefined);assert.equal(n.spoken.length,spoken);
+   return result;
+  }finally{await closeSocket(f);}
+ });
+ assert.equal(atEnd.abortedAtOnce,true);assert.equal(atEnd.socketStopped,true);assert.equal(atEnd.heardAfter,0);
 });
 
 for(const [name,act] of fences)
@@ -961,8 +1038,224 @@ test(`${route}: speech held in ${where} when the ack's turn pauses for owner rev
  assert.deepEqual(withAck.later,{state:'awaiting-user-input',aborted:false,sends:1,replied:false});
 });
 
-// A 'protocol' failure waits only for a pending turn: once the ack's turn is interrupted (its
-// cancelled ack still draining, none of its audio played), the end is immediate.
+// --- Mute, then an owner-review pause. Mute hands a start held in the ack's window to the session,
+// whose 700 ms barge-in timer then runs from Mute while the muted capture finalizes. A close that
+// waits for its final (the speech socket waits for Cloud's, up to 2.5 s; on-device, the
+// compatibility route waits for the bridge's stop) lets the pause land first. The session drops what
+// it heard there, and the start handed over at Mute is closed with it, so the timer finds no open
+// speech: the paused turn keeps its review and nothing heard is sent (the session's pause rule).
+// After the owner's approval the reply is spoken, the microphone stays off until Unmute, and Unmute
+// really reopens the capture, which hears the next turn. Each row holds the speech 900 ms before
+// Mute (held, it never cut its turn by time); the pause lands 100 ms after Mute and the capture's
+// final 300 ms (before the timer) or 1000 ms (after it) after Mute.
+const PAUSED={...PAUSE,userMessageId:'paused-user-message',assistantMessageId:'paused-reply'};
+const APPROVED='Approved matching reply.',CORRECTION='Actually make it Friday instead.',LATE=[300,1000];
+/** The owner's separately approved result of the paused turn, delivered as the app does. */
+const approvePause=(f,input)=>f.shell.resumeReadReplyVoice({proposalId:PAUSE.awaitingUserInput.proposalId,digest:PAUSE.awaitingUserInput.digest,requestId:input.turnId,conversationId:f.conversation,inReplyTo:PAUSED.userMessageId},{requestId:input.turnId,conversationId:f.conversation,inReplyTo:PAUSED.userMessageId,messageId:'approved-reply',text:APPROVED});
+async function muteThenPause(f,input,late,finalize){
+ const at=f.clock;
+ f.renderChat().toggleMute();await at.flush();assert.equal(f.renderChat().muted,'true');
+ await at.advance(100);f.releaseReply();await at.flush();
+ assert.equal(f.renderChat()?.state,'awaiting-user-input','the reply pauses for owner review');
+ await at.advance(late-100);await finalize();await at.flush();await at.advance(2000);await at.flush();
+ return {state:f.renderChat()?.state,muteDisabled:f.renderChat()?.muteDisabled,aborted:input.signal.aborted,sends:f.sends};
+}
+const keptPause={state:'awaiting-user-input',muteDisabled:true,aborted:false,sends:1};
+for(const echoCancelled of [true,false])for(const where of echoCancelled?['the ack','its tail']:['its tail'])for(const late of LATE)
+test(`speech socket${echoCancelled?'':' without echo cancellation'}: Mute during speech held in ${where}, an owner-review pause, the capture's final ${late} ms after Mute, approval, Unmute: the pause stays, no orphan abort, and Unmute reopens capture`,async()=>{
+ const f=socketFixture({echoCancelled}),n=f.n;f.badReply=PAUSED;
+ try{
+  const input=await socketTurn(f);
+  progress(input);await f.clock.flush();assert.deepEqual(n.spoken,[ACK]);n.audioStart();await f.clock.flush();
+  if(where==='its tail'){n.complete();await f.clock.flush();await f.clock.advance(200);}
+  n.emit({sessionId:n.sessionId,type:'speech-start'});await f.clock.advance(900);
+  assert.equal(input.signal.aborted,false,'held speech never cuts its pending turn by time');
+  const paused=await muteThenPause(f,input,late,()=>n.emit({sessionId:n.sessionId,type:'speech-end',text:CORRECTION}));
+  assert.deepEqual(paused,keptPause);assert.deepEqual(n.mutes,[false,true],'muted at Mute, and not reopened by the pause');
+  f.badReply=undefined;assert.equal(approvePause(f,input),true,'the approval resumes the paused turn');await f.clock.flush();
+  assert.deepEqual(n.spoken,[ACK,APPROVED]);n.audioStart();n.complete();await f.clock.flush();
+  assert.equal(f.renderChat()?.state,'listening');assert.equal(f.renderChat()?.muted,'true');assert.deepEqual(n.mutes,[false,true],'still off after the approved reply');
+  f.renderChat().toggleMute();await f.clock.flush();
+  assert.equal(f.renderChat()?.muted,'false');assert.deepEqual(n.mutes,[false,true,false],'Unmute reopens the socket capture');
+  n.utter('And lunch on Friday.');await f.clock.advance(0);
+  assert.deepEqual(f.sendInputs.map(value=>value.text),['Add lunch with Sam tomorrow.','And lunch on Friday.'],'the paused correction is never sent; the reopened capture hears the next turn');
+  assert.equal(n.stops,0,'the speech socket stays open throughout');
+ }finally{await closeSocket(f);}
+});
+// On-device live voice: the shared native routing ends the open segment when Mute closes the capture
+// (before the pause can land); the compatibility route (no native routing) ends it after the bridge
+// stops. The capture's final comes `late` ms after Mute on both.
+function onDeviceClosingFixture(lateEnd){
+ const f=onDeviceLiveFixture();f.s.listens=0;f.s.capturing=false;
+ f.box.nativeAssistantListener=()=>async input=>{
+  f.s.listens++;f.s.capturing=true;let open=false;
+  const h={...input,onSpeechStart:at=>{open=true;input.onSpeechStart(at);},onSpeechEnd:at=>{if(!open)return;open=false;input.onSpeechEnd(at);}};f.s.handlers=h;
+  return {fullDuplex:true,close:async()=>{if(lateEnd)await new Promise(resolve=>f.s.stopped=resolve);f.s.capturing=false;h.onSpeechEnd(Date.now());},cancel:async()=>{f.s.capturing=false;open=false;}};
+ };
+ return f;
+}
+for(const lateEnd of [false,true])for(const where of ['the ack','its tail'])for(const late of LATE)
+test(`on-device live voice (${lateEnd?'compatibility route: the segment ends after the bridge stops':'native routing: the segment ends at Mute'}): Mute during speech held in ${where}, an owner-review pause, the capture's final ${late} ms after Mute, approval, Unmute: the pause stays, no orphan abort, and Unmute reopens capture`,async()=>{
+ const f=onDeviceClosingFixture(lateEnd);f.s.hold=text=>text===ACK;f.badReply=PAUSED;
+ try{
+  const input=await liveTurn(f,1300);
+  progress(input);await f.clock.flush();assert.deepEqual(f.s.spoken(),[ACK]);
+  if(where==='its tail'){f.s.plays[0].finish();await f.clock.flush();await f.clock.advance(200);}
+  const h=f.s.handlers;h.onSpeechStart(1);await f.clock.advance(900);
+  assert.equal(input.signal.aborted,false,'held speech never cuts its pending turn by time');
+  const paused=await muteThenPause(f,input,late,async()=>{f.s.stopped?.();await f.clock.flush();h.onSegment(CORRECTION);});
+  assert.deepEqual(paused,keptPause);assert.equal(f.s.capturing,false);assert.equal(f.s.listens,1);
+  f.badReply=undefined;assert.equal(approvePause(f,input),true,'the approval resumes the paused turn');await f.clock.flush();
+  assert.deepEqual(f.s.spoken(),[ACK,APPROVED]);assert.equal(f.renderChat()?.state,'listening');assert.equal(f.renderChat()?.muted,'true');assert.equal(f.s.listens,1,'still off after the approved reply');
+  f.renderChat().toggleMute();await f.clock.flush();
+  assert.equal(f.renderChat()?.muted,'false');assert.equal(f.s.listens,2,'Unmute reopens the capture');assert.equal(f.s.capturing,true);
+  const next=f.s.handlers;next.onSpeechStart(1);next.onSpeechEnd(2);next.onSegment('And lunch on Friday.');await f.clock.advance(1300);
+  assert.deepEqual(f.sendInputs.map(value=>value.text),['Add lunch with Sam tomorrow.','And lunch on Friday.'],'the paused correction is never sent; the reopened capture hears the next turn');
+ }finally{f.s.stopped?.();await closeLive(f);}
+});
+// The recorded-clip loop has no Mute control and holds no start: its clip capture is retired before
+// the ack. An owner-review pause after the ack keeps its review with no capture restarted, and the
+// approval speaks the reply, as with no ack.
+test('native batch: no Mute control and no held start; an owner-review pause after the ack stays and the approval speaks the reply, as with no ack',async()=>{
+ const run=async label=>{
+  const t=await batchTurn(),f=t.f;f.badReply=PAUSED;
+  try{
+   progress(t.input,{label});await t.clock.flush();const spoken=t.texts().length;
+   const control=f.renderChat()?.muteDisabled;const starts=f.starts;
+   f.releaseReply();await t.clock.flush();await t.clock.advance(2500);await t.clock.flush();
+   const paused={state:f.renderChat()?.state,aborted:t.input.signal.aborted,restarted:f.starts-starts,recording:f.activeRecording,sends:f.sends};
+   f.badReply=undefined;const approved=approvePause(f,t.input);await t.clock.flush();await t.clock.advance(0);
+   return {spoken,later:{control,paused,approved,texts:t.texts().filter(text=>text!==ACK)}};
+  }finally{await closeBatch(t);}
+ };
+ const withAck=await run(ACK),withoutAck=await run('');
+ assert.equal(withAck.spoken,1);assert.equal(withoutAck.spoken,0);
+ assert.deepEqual(withAck.later,withoutAck.later);
+ assert.deepEqual(withAck.later,{control:true,paused:{state:'awaiting-user-input',aborted:false,restarted:0,recording:null,sends:1},approved:true,texts:[APPROVED]});
+});
+
+// Mute finalizes speech held in the ack's window whose final comes before any pause (no blanket
+// discard): a correction interrupts the pending turn by its transcript and is sent; the ack's echo
+// neither interrupts nor is sent, and the turn's later pause stays.
+for(const [words,correction] of [[CORRECTION,true],['your calendar now',false]])
+test(`speech socket: Mute during speech held in the ack's tail, its final 300 ms after Mute and before the reply: ${correction?'the correction interrupts the pending turn and is sent':'the ack\'s echo neither interrupts nor is sent, and the later pause stays'}`,async()=>{
+ const f=socketFixture(),n=f.n;f.badReply=PAUSED;
+ try{
+  const input=await socketTurn(f);
+  progress(input);await f.clock.flush();n.audioStart();n.complete();await f.clock.flush();await f.clock.advance(200);
+  n.emit({sessionId:n.sessionId,type:'speech-start'});await f.clock.advance(900);
+  f.renderChat().toggleMute();await f.clock.flush();await f.clock.advance(300);
+  n.emit({sessionId:n.sessionId,type:'speech-end',text:words});await f.clock.advance(0);await f.clock.flush();
+  assert.equal(input.signal.aborted,correction);
+  f.releaseReply();await f.clock.advance(0);await f.clock.flush();await f.clock.advance(2000);
+  assert.deepEqual(f.sendInputs.map(value=>value.text),correction?['Add lunch with Sam tomorrow.',CORRECTION]:['Add lunch with Sam tomorrow.']);
+  if(!correction){assert.equal(f.renderChat()?.state,'awaiting-user-input');assert.equal(input.signal.aborted,false);}
+ }finally{await closeSocket(f);}
+});
+
+// No-ack controls (the behaviour at 445e5744, unchanged). The same speech with no ack reaches the
+// session at once, so its 700 ms rule runs from the speech start and cuts the pending turn before
+// Mute; the paused reply of that cancelled turn is never shown, and the capture's final is sent.
+for(const late of LATE)
+test(`speech socket with no ack (control): the same speech, Mute, the reply and the capture's final ${late} ms after Mute: the 700 ms rule from the speech start cuts the turn before Mute and the final is sent`,async()=>{
+ const f=socketFixture(),n=f.n;f.badReply=PAUSED;
+ try{
+  const input=await socketTurn(f);
+  progress(input,{label:''});await f.clock.flush();assert.deepEqual(n.spoken,[]);
+  n.emit({sessionId:n.sessionId,type:'speech-start'});await f.clock.advance(600);
+  assert.equal(input.signal.aborted,false);await f.clock.advance(300);
+  assert.equal(input.signal.aborted,true,'cut 700 ms after the speech start');
+  f.renderChat().toggleMute();await f.clock.flush();await f.clock.advance(100);f.releaseReply();await f.clock.flush();
+  assert.notEqual(f.renderChat()?.state,'awaiting-user-input','the cancelled turn never pauses');
+  await f.clock.advance(late-100);n.emit({sessionId:n.sessionId,type:'speech-end',text:CORRECTION});await f.clock.advance(0);await f.clock.flush();
+  assert.deepEqual(f.sendInputs.map(value=>value.text),['Add lunch with Sam tomorrow.',CORRECTION]);
+ }finally{await closeSocket(f);}
+});
+// With no speech, Mute, an owner-review pause, approval and Unmute run the same with the ack and with
+// no ack, on the speech socket and on-device.
+for(const [route,make,start,audio,gapMs] of [
+ ['speech socket',()=>socketFixture(),socketTurn,f=>({start:()=>f.n.audioStart(),end:()=>f.n.complete(),capturing:()=>f.n.mutes.at(-1)===false,utter:text=>f.n.utter(text),spoken:()=>f.n.spoken}),0],
+ ['on-device live voice',()=>onDeviceClosingFixture(false),f=>liveTurn(f,1300),f=>({start:()=>{},end:()=>{},capturing:()=>f.s.capturing,utter:text=>{const h=f.s.handlers;h.onSpeechStart(1);h.onSpeechEnd(2);h.onSegment(text);},spoken:()=>f.s.spoken()}),1300],
+])
+test(`${route}: Mute during the ack's turn with no speech, an owner-review pause, approval and Unmute run as with no ack`,async()=>{
+ const run=async label=>{
+  const f=make();f.badReply=PAUSED;const io=audio(f);
+  try{
+   const input=await start(f);
+   progress(input,{label});await f.clock.flush();const spoken=io.spoken().length;if(spoken)io.start();await f.clock.flush();
+   const paused=await muteThenPause(f,input,1000,()=>{});
+   f.badReply=undefined;const approved=approvePause(f,input);await f.clock.flush();io.start();io.end();await f.clock.flush();
+   const resumed={state:f.renderChat()?.state,muted:f.renderChat()?.muted,capturing:io.capturing(),spoken:io.spoken().filter(text=>text!==ACK)};
+   f.renderChat().toggleMute();await f.clock.flush();const reopened=io.capturing();
+   io.utter('And lunch on Friday.');await f.clock.advance(gapMs);
+   return {spoken,later:{paused,approved,resumed,reopened,sent:f.sendInputs.map(value=>value.text)}};
+  }finally{f.s?.stopped?.();if(f.n)await closeSocket(f);else await closeLive(f);}
+ };
+ const withAck=await run(ACK),withoutAck=await run('');
+ assert.equal(withAck.spoken,1);assert.equal(withoutAck.spoken,0);
+ assert.deepEqual(withAck.later,withoutAck.later);
+ assert.deepEqual(withAck.later,{paused:keptPause,approved:true,resumed:{state:'listening',muted:'true',capturing:false,spoken:[APPROVED]},reopened:true,sent:['Add lunch with Sam tomorrow.','And lunch on Friday.']});
+});
+
+// --- Late cut (an open owner policy; evidence only, no new timer). The session's 700 ms rule cuts a
+// turn whose speech is still open before the reply's first audio. With no ack it runs from the speech
+// start. With the ack, a start held in the ack's window (in its audio with echo cancellation, or in
+// the 1500 ms after it with or without) runs it from the moment it is handed to the session: when
+// the ack's turn is answered, or at Mute. A start that ends first reaches the session with its end
+// and never meets the rule; without echo cancellation, speech in the ack's audio is ignored, as in a
+// reply. In these rows the speech starts 200 ms into the ack's audio, or 200 ms after it ended, and
+// the turn is answered 300 ms later; the reply's first audio comes `firstAudio` ms after that and
+// the speech's final 300 ms after the first audio (or after the cut).
+const ECHO='your calendar now';
+async function lateCut({ack,fullDuplex,where,words,firstAudio}){
+ const f=streamingFixture({fullDuplex});f.s.hold=text=>text===ACK||text===REPLY;f.s.holdStart=text=>text===REPLY;
+ try{
+  const input=await liveTurn(f);
+  progress(input,{label:ack?ACK:''});await f.clock.flush();
+  if(where==='its tail'){await f.clock.advance(500);f.s.plays[0]?.finish();await f.clock.flush();}
+  await f.clock.advance(200);const h=f.s.handlers;h.onSpeechStart(1);await f.clock.advance(300);
+  f.releaseReply();await f.clock.flush();const reply=f.s.plays.find(play=>play.text===REPLY);assert.ok(reply,'the answered reply is requested');
+  await f.clock.advance(firstAudio);const cutBeforeFirstAudio=reply.signal.aborted;if(!cutBeforeFirstAudio)reply.start();await f.clock.flush();
+  await f.clock.advance(300);h.onSpeechEnd(Infinity);h.onSegment(words);await f.clock.advance(0);await f.clock.flush();
+  const replyCut=reply.signal.aborted;if(!replyCut){reply.finish();await f.clock.flush();}
+  f.releaseReply();await f.clock.advance(0);await f.clock.flush();
+  return {cutBeforeFirstAudio,replyPlayedOut:!replyCut,sent:f.sendInputs.slice(1).map(value=>value.text)};
+ }finally{await closeLive(f);}
+}
+for(const ack of [true,false])for(const fullDuplex of [true,false])for(const where of ack?['the ack','its tail']:['its tail'])for(const words of ack?[ECHO,CORRECTION]:[CORRECTION])for(const firstAudio of [300,550,1000]){
+ // With the ack, held speech meets the rule from the answer (none when ignored in the ack's audio);
+ // with no ack, from the speech start 300 ms before the answer.
+ const ignored=ack&&!fullDuplex&&where==='the ack';
+ const cut=ignored?false:ack?firstAudio>=700:300+firstAudio>700;
+ const correction=words===CORRECTION&&!ignored;
+ test(`late cut (evidence): ${ack?'with the ack':'with no ack'}${fullDuplex?'':', without echo cancellation'}: ${words===ECHO?'the ack\'s echo':'a correction'} starting ${ack?'in '+where:'as it would in the ack\'s tail'}, the turn answered 300 ms later, the reply's first audio ${firstAudio} ms after the answer: ${cut?'cut before its first audio':'first audio plays'}, ${correction||cut?'the reply is not played out':'the reply plays out'}, ${correction?'the correction is sent':'nothing is sent'}`,async()=>{
+  assert.deepEqual(await lateCut({ack,fullDuplex,where,words,firstAudio}),{cutBeforeFirstAudio:cut,replyPlayedOut:!cut&&!correction,sent:correction?[CORRECTION]:[]});
+ });
+}
+// At Mute: the speech starts 200 ms after the ack's audio ended, Mute comes 300 ms later with the turn
+// still pending, and the closed capture's final `finalAt` ms after Mute; the reply comes after it.
+async function muteCut({ack,fullDuplex,words,finalAt}){
+ const f=streamingFixture({fullDuplex});f.s.hold=text=>text===ACK;
+ try{
+  const input=await liveTurn(f);
+  progress(input,{label:ack?ACK:''});await f.clock.flush();
+  await f.clock.advance(500);f.s.plays[0]?.finish();await f.clock.flush();await f.clock.advance(200);
+  const h=f.s.handlers;h.onSpeechStart(1);await f.clock.advance(300);
+  f.renderChat().toggleMute();await f.clock.flush();await f.clock.advance(finalAt);const cutBeforeFinal=input.signal.aborted;
+  h.onSpeechEnd(Infinity);h.onSegment(words);await f.clock.advance(0);await f.clock.flush();const aborted=input.signal.aborted;
+  f.releaseReply();await f.clock.advance(0);await f.clock.flush();
+  return {cutBeforeFinal,aborted,replied:f.s.spoken().includes(REPLY),sent:f.sendInputs.slice(1).map(value=>value.text)};
+ }finally{await closeLive(f);}
+}
+for(const ack of [true,false])for(const fullDuplex of [true,false])for(const words of ack?[ECHO,CORRECTION]:[CORRECTION])for(const finalAt of [300,550,1000]){
+ const cut=ack?finalAt>=700:300+finalAt>700,correction=words===CORRECTION;
+ test(`late cut at Mute (evidence): ${ack?'with the ack':'with no ack'}${fullDuplex?'':', without echo cancellation'}: ${correction?'a correction':'the ack\'s echo'} held open at Mute while the turn is pending, its final ${finalAt} ms after Mute: ${cut?'the turn is cut by time before the final':'the turn waits for the final'}; ${correction?'the correction is sent':cut?'nothing is sent and the turn is lost':'the reply is spoken'}`,async()=>{
+  assert.deepEqual(await muteCut({ack,fullDuplex,words,finalAt}),{cutBeforeFinal:cut,aborted:cut||correction,replied:!cut&&!correction,sent:correction?[CORRECTION]:[]});
+ });
+}
+
+// Once the ack's turn is interrupted (its cancelled ack still draining, none of its audio played), a
+// 'protocol' end is immediate too, as without an ack.
 test('speech socket: a \'protocol\' failure once the ack\'s turn was interrupted ends the conversation at once, as without an ack',async()=>{
  const atEnd=await sameAsWithoutAck(async label=>{
   const f=socketFixture(),n=f.n,seen=watchReply(f);n.holdCancel=true;

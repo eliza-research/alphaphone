@@ -164,7 +164,8 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
   // start held in an ack's echo window. The Mute control releases it first, so Mute finalizes that
   // speech as without an ack (a muted session ignores starts, so at Unmute it changes nothing), and
   // the ack's turn releases it when its request settles. `release(true)` drops it instead: at an
-  // owner-review pause the session closes the microphone and drops what it heard.
+  // owner-review pause the session closes the microphone and drops what it heard, and a start Mute
+  // handed over whose end is still to come is closed there, so the pause keeps its review.
   let liveCapture:{speaking:boolean;release(drop?:boolean):void}|undefined;
   let conversationInterim='';
   let conversationInterimKnownMessages=new Set<string>();
@@ -542,13 +543,14 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
       let batchCaptureRetired=false;
       // The turn's one model acknowledgement, spoken by the path in use (none: silence): the clip
       // loop once its capture is retired, the live session on its open capture (heard there as
-      // playback). A cue that fails is silence too; only unconfirmed cleanup ends the conversation.
-      // That includes the browser's clip loop, where a failed cue used to end the conversation.
-      // A CueTurn is the cue's agent turn: its signal, whether its request has settled, and `end`,
-      // a capture end the live session holds for it (its listen port). When the request settles,
-      // a speech start held for the cue reaches the session first, as at Mute, unless the reply
-      // pauses for owner review: the session then drops what it heard, and the held start with it.
-      type CueTurn={signal:AbortSignal;settled?:boolean;end?:()=>void};
+      // playback). A cue whose own speech call fails is silence too; only unconfirmed cleanup ends
+      // the conversation, or a failure that ends the live capture, which the session handles at
+      // once (see its listen port). That includes the browser's clip loop, where a failed cue used
+      // to end the conversation. A CueTurn is the cue's agent turn: its signal and whether its
+      // request has settled. When the request settles, a speech start held for the cue reaches the
+      // session first, as at Mute, unless the reply pauses for owner review: the session then drops
+      // what it heard, and the held start with it.
+      type CueTurn={signal:AbortSignal;settled?:boolean};
       let cueSpeech:{captureRetired:(()=>boolean)|null;speak(text:string,signal:AbortSignal,turn:CueTurn):Promise<void>}|undefined;
       const sendTurn=async(input:{turnId:string;text:string;voiceTurnSignal:any;signal:AbortSignal})=>{
         const cueTurn:CueTurn={signal:input.signal};try{
@@ -569,7 +571,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         const result=sent.result;input.signal.throwIfAborted();current();
         if(result.complete){markVoiceTiming('first-token');markVoiceTiming('final-reply');}
         conversationLastTranscript=sent.text;conversationLastReply=result.text;conversationReviewRequired=result.reviewRequired===true&&!result.awaitingUserInput;if(result.awaitingUserInput!==undefined)liveCapture?.release(true);return result;
-        }finally{cueTurn.settled=true;liveCapture?.release();cueTurn.end?.();}
+        }finally{cueTurn.settled=true;liveCapture?.release();}
       };
       const voiceStopped=(value:BatchVoiceState)=>cloudVoiceFailure(value.error)||((value.error as {reason?:unknown})?.reason==='call-active'?'Voice paused for a phone call. Start the voice conversation again after the call, or switch to the keyboard.':null)||((value.error as {code?:unknown})?.code==='no-speech'?(cloudDriver?`${voiceServiceName()} heard no speech, so nothing was sent. Start the voice conversation again, or switch to the keyboard.`:'No speech was heard, so nothing was sent. Start the voice conversation again, or switch to the keyboard.'):(value.error as {code?:unknown})?.code==='live-asr'?'On-device transcription stopped. Start the voice conversation again, or switch to the keyboard.':(value.error as {code?:unknown})?.code==='capture'?'The microphone stopped. Start the voice conversation again, or switch to the keyboard.':'Voice stopped. Check your connection and conversation history before trying again.');
       // Cloud uses a persistent speech-only socket, server Ink endpointing and native PCM
@@ -596,23 +598,24 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         // While the cue's turn request is pending, speech that starts while the cue's audio plays,
         // or CUE_TAIL_MS after it (its residual echo, or a start reported once the audio ended),
         // reaches the session with its end, at Mute, or when that request settles, whichever comes
-        // first, so while the request is pending it interrupts that turn only by its transcript, as
-        // during a reply; without echo cancellation, speech in the cue's audio is ignored, as in a
-        // reply. Speech still open when the request settles is then the session's, as without a
-        // cue: it can interrupt the reply, or be sent; at an owner-review pause it is dropped with
-        // what the session heard, and the pause stays. Once that request is interrupted, stopped
-        // or answered, every start reaches the session at once. The session's echo gate checks
-        // every transcript against the cue too. A cue never starts over the user.
+        // first, so until then it interrupts that turn only by its transcript, as during a reply;
+        // without echo cancellation, speech in the cue's audio is ignored, as in a reply. Handed
+        // over still open (at Mute, or when the request settles) it is the session's from that
+        // moment, as without a cue: its 700 ms rule runs from then, it can interrupt the turn or
+        // the reply, or be sent; at an owner-review pause it is dropped with what the session
+        // heard, and the pause stays. Once that request is interrupted, stopped or answered, every
+        // start reaches the session at once. The session's echo gate checks every transcript
+        // against the cue too. A cue never starts over the user.
         const CUE_TAIL_MS=1500;
-        let cueNow:{audible:boolean;turn:CueTurn}|undefined,cueHeard:{text:string;settledAt?:number;turn:CueTurn}|undefined;
+        let cueHeard:{text:string;settledAt?:number;turn:CueTurn}|undefined;
         const cueAge=(heard:{settledAt?:number})=>heard.settledAt===undefined?0:Math.max(0,Date.now()-heard.settledAt);
         const pending=(turn:CueTurn)=>!turn.settled&&!turn.signal.aborted;
         cueSpeech={captureRetired:null,speak:async(text,signal,turn)=>{
           if(liveCapture?.speaking)return;
-          const now={audible:false,turn},heard:{text:string;settledAt?:number;turn:CueTurn}={text,turn};cueNow=now;
-          const started=()=>{now.audible=true;cueHeard=heard;};
+          const heard:{text:string;settledAt?:number;turn:CueTurn}={text,turn};let audible=false;
+          const started=()=>{audible=true;cueHeard=heard;};
           try{await (streamingCloud?streamingCloud.speak(text,signal,started):local!.speak(text,signal,started,true));}
-          finally{if(cueNow===now)cueNow=undefined;if(now.audible)heard.settledAt=Date.now();}
+          finally{if(audible)heard.settledAt=Date.now();}
         }};
         const listen=streamingCloud?streamingCloud.listen:nativeAssistantListener({onLatency:recordLiveVoiceTiming,onInterim:text=>{if(token!==generation||chatDestination!==chat)return;conversationInterim=text;refresh();}});
         const assistant:VoiceAssistantSession=new VoiceAssistantSession({
@@ -622,27 +625,32 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
           beginUtterance:()=>{current();conversationPrepared={...conversationPrepared!,context:chat.shell.voiceConversationContext(prepared.binding)};current();},
           listen:async handlers=>{
             // One entry per closed segment: false when its result is not the session's (ignored).
-            const results:boolean[]=[];let heldAt:number|undefined,ignoring=false;
-            const own={speaking:false,fullDuplex:false,release:(drop?:boolean)=>{const at=heldAt;heldAt=undefined;if(at!==undefined&&!drop)handlers.onSpeechStart(at);}};liveCapture=own;
+            // `handed`: a held start handed to the session (at Mute or settlement) whose end has not come yet.
+            const results:boolean[]=[];let heldAt:number|undefined,handed=false,ignoring=false;
+            const own={speaking:false,fullDuplex:false,release:(drop?:boolean)=>{
+              const at=heldAt;heldAt=undefined;
+              if(!drop){if(at!==undefined){handed=true;handlers.onSpeechStart(at);}return;}
+              // An owner-review pause: the session closes the microphone and drops what it heard,
+              // but its 700 ms barge-in timer for speech still open then outlives the drop and cuts
+              // the paused turn. A start handed over at Mute can still be open here, since a muted
+              // capture's close waits for its final (Cloud's, up to 2.5 s; on-device, the bridge's
+              // stop on the compatibility route). It is closed here, before the pause, so that timer
+              // finds no open speech and the paused turn keeps its review; its own end and final,
+              // when they come, are not the session's.
+              if(handed){handed=false;ignoring=true;handlers.onSpeechEnd(Date.now());}
+            }};liveCapture=own;
+            // Every capture end reaches the session at once, as without a cue, the speech socket's
+            // 'protocol' failure included: 'protocol' is the bridge's code for any fault in its
+            // message handler (its own session checks, an invalid, oversized or unexpected frame,
+            // or Cloud completing an utterance with no audio), so it never identifies the cue. A cue
+            // that fails the speech socket therefore ends the turn and the conversation on the
+            // native streaming route, until the bridge reports a failure bound to the session and to
+            // the cue's own request. A refused speak call fails only that call: the cue is silence
+            // and the turn goes on.
             const opened=await listen({...handlers,
               onSpeechStart:at=>{own.speaking=true;const heard=cueHeard&&pending(cueHeard.turn)&&cueAge(cueHeard)<=CUE_TAIL_MS?cueHeard:undefined;if(!heard)handlers.onSpeechStart(at);else if(heard.settledAt===undefined&&!own.fullDuplex)ignoring=true;else heldAt=at;},
-              onSpeechEnd:at=>{own.speaking=false;if(ignoring){ignoring=false;results.push(false);return;}own.release();results.push(true);handlers.onSpeechEnd(at);},
+              onSpeechEnd:at=>{own.speaking=false;if(ignoring){ignoring=false;results.push(false);}else{own.release();results.push(true);handlers.onSpeechEnd(at);}handed=false;},
               onSegment:text=>{if(results.shift()!==false)handlers.onSegment(text);},
-              // One end waits for the cue's pending turn: the speech socket's 'protocol' failure while
-              // the cue was requested and none of its audio had played. Cloud completing the cue
-              // without audio fails the socket that way, but 'protocol' is also the bridge's code for
-              // any other fault in its message handler (an invalid, oversized or unexpected frame, or
-              // its own session checks), and the renderer cannot tell them apart, so such a fault in
-              // that window waits too. The turn's request and reply are kept, then the session ends,
-              // since its capture is gone; Stop, leaving the view or the app, and an owner change
-              // still end the turn at once. Every other end (call, focus, expiry, capture,
-              // permission, connection, a Cloud error frame, unknown, on-device, or 'protocol' once
-              // the cue's audio started or its turn ended) reaches the session at once.
-              onEnd:error=>{
-                const turn=streamingCloud&&cueNow&&!cueNow.audible&&pending(cueNow.turn)&&(error as {code?:unknown})?.code==='protocol'?cueNow.turn:undefined;
-                if(!turn||turn.end){handlers.onEnd(error);return;}
-                turn.end=()=>handlers.onEnd(error);
-              },
             });
             own.fullDuplex=opened.fullDuplex===true;return opened;
           },
