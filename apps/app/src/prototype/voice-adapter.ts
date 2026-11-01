@@ -29,6 +29,7 @@ import { clefEndpointStage, selectVoiceRoute, voiceSendPolicy, type VoicePrefere
 import { beginVoiceTurn, markVoiceTiming, abandonVoiceTurn, finishVoiceTurn, sendVoiceEntry, recordLiveVoiceTiming, recordEndpointVoiceTiming, recordHeardVoiceTiming, activeVoiceTurn } from '../runtime/voice-timing';
 import { residentEndpoint, createHeardReporter, createEndpointChain } from '../runtime/voice-turn-routes';
 import { createNativeLiveDictation, nativeAssistantListener, nativeLiveVoiceReady, type NativeLiveDictation } from '../runtime/native-live-voice';
+import { createLiveCueGate } from '../runtime/live-voice-cue';
 import { installNativeVoiceTurnMarks } from '../runtime/native-voice-turn';
 import { VoiceAssistantSession, type AssistantState } from '../runtime/voice-assistant';
 import { shouldRespondToVoiceTurn, buildVoiceTurnSignal } from '@elizaos/voice/turn';
@@ -534,12 +535,15 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
       };
       driver=cloudDriver??deviceVoice;cloudMode=!!cloudDriver;
       let batchCaptureRetired=false;
+      // The path in use speaks a turn's one model acknowledgement: the recorded-clip loop once its
+      // capture is retired, the live session through its cue gate. No path, no cue: silence.
+      let cueSpeech:{captureRetired():boolean;speak(text:string,signal:AbortSignal):Promise<void>}|undefined;
       const sendTurn=async(input:{turnId:string;text:string;voiceTurnSignal:any;signal:AbortSignal})=>{
         input.signal.throwIfAborted();current();
         // VOICE_SEND_POLICY: 'auto-send' sends this transcript now; 'review' waits for Send or Discard.
         const sent=await sendVoiceEntry({policy:voiceSendPolicy(),transcript:input.text,review:text=>reviewConversationTurn(text,input.signal,current),send:async text=>{
           current();const turn={...conversationPrepared!};conversationReplyWatch=new Set((chat.shell.S().msgs||[]).map((m:Bag)=>String(m.id)));
-          const ack=cloudDriver&&!Capacitor.isNativePlatform()?createBatchProgressAcknowledgment({turnId:input.turnId,conversationId:turn.binding.conversationId,ownerId:turn.binding.session.ownerId,signal:input.signal,assertCurrent:current,captureRetired:()=>batchCaptureRetired,speak:async(cue,signal)=>{const pending=Promise.resolve().then(()=>cloudDriver.speak(cue,signal));const owned=pending.catch(failure=>{if((failure as {code?:string})?.code==='speech-cleanup-unconfirmed'){mediaUnconfirmed=failure;stopping=Promise.reject(failure);void stopping.catch(()=>{});}throw failure;});conversationSpeech=owned;try{await owned;}finally{if(conversationSpeech===owned)conversationSpeech=undefined;}}}):undefined;
+          const cue=cueSpeech;const ack=cue?createBatchProgressAcknowledgment({turnId:input.turnId,conversationId:turn.binding.conversationId,ownerId:turn.binding.session.ownerId,signal:input.signal,assertCurrent:current,captureRetired:cue.captureRetired,speak:async(label,signal)=>{const pending=Promise.resolve().then(()=>cue.speak(label,signal));const owned=pending.catch(failure=>{if((failure as {code?:string})?.code==='speech-cleanup-unconfirmed'){mediaUnconfirmed=failure;stopping=Promise.reject(failure);void stopping.catch(()=>{});}throw failure;});conversationSpeech=owned;try{await owned;}finally{if(conversationSpeech===owned)conversationSpeech=undefined;}}}):undefined;
           const retireAck=()=>{try{current();}catch{void ack?.stop().catch(()=>{});}};
           const unsubscribeAck=ack?connectionController.subscribe(retireAck):()=>{};
           if(ack)document.addEventListener('visibilitychange',retireAck);
@@ -556,7 +560,8 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
       const voiceStopped=(value:BatchVoiceState)=>cloudVoiceFailure(value.error)||((value.error as {reason?:unknown})?.reason==='call-active'?'Voice paused for a phone call. Start the voice conversation again after the call, or switch to the keyboard.':null)||((value.error as {code?:unknown})?.code==='no-speech'?(cloudDriver?`${voiceServiceName()} heard no speech, so nothing was sent. Start the voice conversation again, or switch to the keyboard.`:'No speech was heard, so nothing was sent. Start the voice conversation again, or switch to the keyboard.'):(value.error as {code?:unknown})?.code==='live-asr'?'On-device transcription stopped. Start the voice conversation again, or switch to the keyboard.':(value.error as {code?:unknown})?.code==='capture'?'The microphone stopped. Start the voice conversation again, or switch to the keyboard.':'Voice stopped. Check your connection and conversation history before trying again.');
       // Cloud uses a persistent speech-only socket, server Ink endpointing and native PCM
       // playback. Agent execution/actions remain on the resident; no batch audio upload or
-      // extra spoken progress request sits in this path. Native profile retains local VAD/ASR.
+      // extra speech request sits in this path: a turn's acknowledgement plays on the same
+      // socket and the reply preempts it. Native profile retains local VAD/ASR.
       if(streamingCloud||!cloudDriver&&local&&await nativeLiveVoiceReady(controller.signal)){
         current();
         // The resident's end-of-turn and heard routes (voice-turn-routes.ts), fenced to this
@@ -573,12 +578,15 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         });
         // Voice timing record of each submitted turn, for its later heard outcome (ids only).
         const timingTurns=new Map<string,string>();
+        // The capture stays open for barge-in and treats the cue as playback (live-voice-cue.ts).
+        const cueGate=createLiveCueGate(shouldRespondToVoiceTurn);
+        cueSpeech={captureRetired:()=>true,speak:(text,signal)=>cueGate.play(text,()=>streamingCloud?streamingCloud.speak(text,signal,()=>{}):local!.speak(text,signal,undefined,true))};
         const assistant:VoiceAssistantSession=new VoiceAssistantSession({
           conversationId:prepared.binding.conversationId,
           assertCurrent:current,
           // Each utterance is sent with the screen context current when the user began speaking.
           beginUtterance:()=>{current();conversationPrepared={...conversationPrepared!,context:chat.shell.voiceConversationContext(prepared.binding)};current();},
-          listen:streamingCloud?streamingCloud.listen:nativeAssistantListener({onLatency:recordLiveVoiceTiming,onInterim:text=>{if(token!==generation||chatDestination!==chat)return;conversationInterim=text;refresh();}}),
+          listen:cueGate.listen(streamingCloud?streamingCloud.listen:nativeAssistantListener({onLatency:recordLiveVoiceTiming,onInterim:text=>{if(token!==generation||chatDestination!==chat)return;conversationInterim=text;refresh();}})),
           // After the short gap: the chain. Unavailable, slow or failing: the long gap decides.
           ...(streamingCloud?{}:{endpoint:(text:string,signal:AbortSignal)=>{current();return semanticEndpoint!(text,signal);}}),
           shouldRespond:(text,context)=>shouldRespondToVoiceTurn(text,context),
@@ -623,6 +631,8 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         }
       }
       // The live assistant is not ready (or this is a Cloud route): the recorded-clip loop listens only between replies.
+      // Cloud or provider speech, as before #774 on every platform; on-device batch speech has no cue.
+      cueSpeech=cloudDriver?{captureRetired:()=>batchCaptureRetired,speak:(text,signal)=>cloudDriver.speak(text,signal)}:undefined;
       const conversation:BatchVoiceConversation<Clip>=new BatchVoiceConversation<Clip>({
         conversationId:prepared.binding.conversationId,assertCurrent:current,
         capture:async input=>{current();batchCaptureRetired=false;conversationPrepared={...conversationPrepared!,context:chat.shell.voiceConversationContext(prepared.binding)};current();const capture=await captureConversationAudio(selected,current,input);return {stop:async()=>{const value=await capture.stop();current();batchCaptureRetired=true;return value;},cancel:async()=>{await capture.cancel();batchCaptureRetired=true;}};},

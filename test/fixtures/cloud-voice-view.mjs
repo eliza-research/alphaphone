@@ -45,6 +45,7 @@ export function cloudVoiceViewFixture(options={}){
   if(start<0||end<0)throw Error('Missing actual batch progress helper source');
   return source.slice(start,end);
  });
+ load('runtime/live-voice-cue.ts',box,['createLiveCueGate']);
  load('prototype/voice-adapter.ts',box,['installPrototypeVoiceAdapter'],options.adapterSourceTransform);
  const icons={check:'check',mic:'official-mic-path',stop:'stop',play:'play',x:'close',cloud:'cloud',user:'account'};
  class Shell{

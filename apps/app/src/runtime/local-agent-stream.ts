@@ -66,6 +66,8 @@ export function createBatchProgressAcknowledgment(input: {
   turnId: string; conversationId: string; ownerId: string;
   signal: AbortSignal;
   assertCurrent(): void;
+  /** The microphone cannot take the cue as speech: the recorded clip is retired, or the live
+   * session's cue gate (live-voice-cue.ts) treats the cue as playback on its open capture. */
   captureRetired(): boolean;
   /** Existing selected speech facade; settles only after matching playback/media cleanup. */
   speak(text: string, signal: AbortSignal): Promise<void>;
