@@ -80,6 +80,29 @@ class NotDispatched extends Error {}
 // A page entering the back/forward cache (`persisted`) is restored later, so it is not leaving.
 let pageLeaving=false;
 if(typeof window!=='undefined'){window.addEventListener('pagehide',(event:PageTransitionEvent)=>{if(!event.persisted)pageLeaving=true;});window.addEventListener('pageshow',()=>{pageLeaving=false;});}
+/** Empty or identical saved copies are bookkeeping, not a choice: resolve them without asking. */
+function autoResolveDraftConflict(shell:Shell):boolean{
+  const draft=shell.composerDraft,state=draft?.state;
+  // Only the copy found when a draft opens; a failed save keeps its notice and explicit retry.
+  if(!state?.conflict||state.unsettled||state.error||shell.draftAutoResolving||state.message!=='A saved draft is available. Review both copies.')return false;
+  const saved=String(state.savedText||'').trim(),current=String(shell.S().draft||'').trim();
+  const resolve=saved===current||!saved?'keep':!current?'restore':undefined;
+  const key=draft.binding+'\u0000'+saved;
+  if(!resolve||shell.draftAutoResolved===key)return false;
+  shell.draftAutoResolved=key;shell.draftAutoResolving=true;
+  queueMicrotask(()=>{try{if(resolve==='keep')draft.keepCurrent();else draft.restoreSaved();if(shell.firstSendReview)shell.refreshDraftBinding();}finally{shell.draftAutoResolving=false;}});
+  return true;
+}
+/** A real conflict never blocks sending: the editor text sends and the other copy stays restorable. */
+function stepAsideDraftConflict(shell:Shell):void{
+  const draft=shell.composerDraft,state=draft?.state;
+  if(!state?.conflict||state.unsettled)return;
+  const saved=String(state.savedText||'');
+  if(saved.trim())shell.earlierDraft=saved;
+  draft.keepCurrent();
+  if(shell.firstSendReview)shell.refreshDraftBinding();
+}
+
 /**
  * A new chat's first message is held (marked as sending) in the owner and agent's "no conversation
  * yet" draft slot; its send then creates the conversation and saves it as the restart selection.
@@ -576,7 +599,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     this.stopTileWatch = watchReturnToApp(() => { if (this.live && this.S().shade) this.refreshTileFacts(); });
     this.dialogBackObserver = new MutationObserver(() => updateBackAvailability(this));
     this.dialogBackObserver.observe(document.body, {subtree:true, childList:true, attributes:true, attributeFilter:['open']});
-    this.composerDraft=new AssistantDraftController(assistantDraftStore,()=>String(this.S().draft||''),(text,expected,current)=>new Promise<void>(resolve=>{if(!this.live||current&&!current()){resolve();return;}this.setState((previous:Shell)=>{if(current&&!current()||expected!==undefined&&String(previous.draft||'')!==expected)return null;if(this.startupDraft!==null)this.startupDraft=undefined;this.reviewedSourceDraft=null;return {draft:text};},resolve);}),()=>{if(this.live)this.setState({});});
+    this.composerDraft=new AssistantDraftController(assistantDraftStore,()=>String(this.S().draft||''),(text,expected,current)=>new Promise<void>(resolve=>{if(!this.live||current&&!current()){resolve();return;}this.setState((previous:Shell)=>{if(current&&!current()||expected!==undefined&&String(previous.draft||'')!==expected)return null;if(this.startupDraft!==null)this.startupDraft=undefined;this.reviewedSourceDraft=null;return {draft:text};},resolve);}),()=>{if(!this.live)return;if(autoResolveDraftConflict(this))return;this.setState({});});
     this.refreshDraftBinding=()=>{this.draftBindingAbort?.abort();if(residentAlwaysPresent&&!connectionController.getSnapshot().session){this.draftBindingTask=Promise.resolve();return;}const controller=this.draftBindingAbort=new AbortController();this.draftBindingTask=connectionController.assistantDraftBinding(controller.signal).then(async key=>{if(!this.live||controller.signal.aborted)return;const review=await firstSendReview(this,key,controller.signal);if(!this.live||controller.signal.aborted)return;await this.composerDraft.open(review.open??key);if(review.moved&&this.composerDraft.binding===key)void settleFirstSendSlot(review.moved,key,String(this.S().draft||''),()=>this.live&&this.composerDraft.binding===key);}).catch(()=>{if(this.live&&!controller.signal.aborted)this.composerDraft.unavailable();});};
     this.refreshDraftBinding();
     this.connectionSession = connectionController.getSnapshot().session?.sessionId;
@@ -1172,7 +1195,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     // attempted send still explains why it cannot dispatch before readiness.
     const residentPending=residentAlwaysPresent&&!connection.session&&connection.kind==='recovering'?agentPendingText(connection):'';
     out.draftRetry=!!draft?.error;out.draftStatus=[draft?.message,offline?INFERENCE_OFFLINE_NOTICE:'',residentPending].filter(Boolean).join(' ');out.draftConflict=!!draft?.conflict;out.draftSavedText=draft?.savedText||'(Empty saved draft)';out.draftOpening=!!draft?.consuming;
-    out.restoreSavedDraft=()=>{this.composerDraft?.restoreSaved();if(this.firstSendReview)this.refreshDraftBinding();};out.keepCurrentDraft=()=>{this.composerDraft?.keepCurrent();if(this.firstSendReview)this.refreshDraftBinding();};out.retryDraft=()=>{this.composerDraft?.retire();this.refreshDraftBinding();};
+    out.restoreSavedDraft=()=>{this.composerDraft?.restoreSaved();if(this.firstSendReview)this.refreshDraftBinding();};out.keepCurrentDraft=()=>{this.composerDraft?.keepCurrent();if(this.firstSendReview)this.refreshDraftBinding();};out.retryDraft=()=>{this.composerDraft?.retire();this.refreshDraftBinding();};out.earlierDraftAvailable=!!this.earlierDraft;out.restoreEarlierDraft=()=>{const earlier=String(this.earlierDraft||''),current=String(this.S().draft||'');this.earlierDraft=current.trim()?current:undefined;this.setState({draft:earlier});this.composerDraft?.edit(earlier);};out.dismissEarlierDraft=()=>{this.earlierDraft=undefined;this.setState({});};
     const onDraft=out.onDraft;
     out.onDraft=(event:Event&{target:HTMLTextAreaElement})=>{
       const connection=connectionController.getSnapshot(),current=String(this.S().draft||'');
@@ -1369,7 +1392,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     if(fromComposer){
       this.draftSendPending=true;
       // The durable draft keeps this text until the message is known to have been dispatched.
-      try{await this.draftBindingTask;heldKey=this.composerDraft.binding;await this.composerDraft.hold(heldText,current);}catch(error){this.toast(error instanceof Error?error.message:'Draft could not be prepared. Nothing was sent.');return;}finally{this.draftSendPending=false;}
+      try{await this.draftBindingTask;stepAsideDraftConflict(this);await this.draftBindingTask;heldKey=this.composerDraft.binding;await this.composerDraft.hold(heldText,current);}catch(error){this.toast(error instanceof Error?error.message:'Draft could not be prepared. Nothing was sent.');return;}finally{this.draftSendPending=false;}
     }
     const reviewedSource=fromComposer?this.reviewedSourceDraft:null;if(fromComposer)this.reviewedSourceDraft=null;
     // Everything this send later shows belongs to the agent connection it was sent on.
