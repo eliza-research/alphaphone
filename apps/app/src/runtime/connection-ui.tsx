@@ -2172,7 +2172,8 @@ export const connectionController = {
     const remote=selected.remote,sessionId=state.session.sessionId;
     return {sessionId,subscribe:listener=>remote.subscribeVoiceEvents(listener),request:(path,body,signal)=>remote.request(path,body,signal,{},body===undefined?'GET':'POST')};
   },
-  async refreshDeveloperVoiceHistory(binding:VoiceConversationBinding,signal:AbortSignal){if(!browserLocalAgentEnabled||active?.kind!=='resident'||!this.voiceConversationCurrent(binding))throw Error('Developer voice conversation changed');await restoreConversationHistory(binding.conversationId,signal,true);if(!this.voiceConversationCurrent(binding))throw Error('Developer voice conversation changed');},
+  /** After Stop the chat takes requests again: that read never replaces the visible chat once another request started. */
+  async refreshDeveloperVoiceHistory(binding:VoiceConversationBinding,signal:AbortSignal,afterStop=false){if(!browserLocalAgentEnabled||active?.kind!=='resident'||!this.voiceConversationCurrent(binding))throw Error('Developer voice conversation changed');await restoreConversationHistory(binding.conversationId,signal,true,false,undefined,afterStop?()=>!sending&&!operation:undefined);if(!this.voiceConversationCurrent(binding))throw Error('Developer voice conversation changed');},
   getPairedVoiceBinding(): { origin: string; ownerId: string; expiresAt: number; sessionId: string } | null {
     // Paired voice belongs to development and hosted agents; the resident agent has its own speech path.
     if (!testMocksEnabled) return null;
