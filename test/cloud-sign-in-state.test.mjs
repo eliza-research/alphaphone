@@ -70,7 +70,8 @@ test('actual OTP form clears only when the attempt or verification stage changes
   assert.equal(document.querySelector('[name="one-time-code"]'),null,'cancel leaves no code input');
 }));
 
-test('mandatory chooser omits inert Back and distinguishes readiness from an email request',async()=>panel(async({document,render})=>{
+test('mandatory chooser omits inert Back and distinguishes readiness from an email request',async context=>panel(async({document,render})=>{
+  context.mock.timers.enable({apis:['setTimeout']});
   await render({view:choose,dismissible:false,ready:false,extra:React.createElement('button',null,'Retry sign-in')});
   assert.equal([...document.querySelectorAll('button')].some(button=>button.textContent==='Back'),false);
   assert.equal(document.querySelector('[name="email"]').disabled,true);
@@ -80,7 +81,10 @@ test('mandatory chooser omits inert Back and distinguishes readiness from an ema
   await render({busy:true,message:'Sending your code…'});
   assert.equal(document.querySelector('form button').textContent,'Sending code…');
   assert.equal(document.querySelector('[role="status"]:not(#alpha-google-unavailable)')===null,true,'sending does not add a line or shift the form');
-  assert.equal([...document.querySelectorAll('.alpha-connection-cancel')].some(button=>button.textContent==='Cancel sign-in'),true);
+  const cancel=()=>[...document.querySelectorAll('.alpha-connection-cancel')].some(button=>button.textContent==='Cancel sign-in');
+  assert.equal(cancel(),false,'a quick check does not flash Cancel');
+  await act(async()=>{context.mock.timers.tick(4000);});
+  assert.equal(cancel(),true,'a slow check offers Cancel');
 }));
 
 test('resend starts at thirty seconds and cannot be clicked during the countdown',async context=>{
@@ -189,10 +193,11 @@ test('Back on the required chooser keeps sign-in enabled instead of creating a r
 const entryStart=ui.indexOf('  const requiredSignInView:'),entryEnd=ui.indexOf('  const accountCreatedNotice=',entryStart);assert.ok(entryStart>=0&&entryEnd>entryStart);
 const selectorSource=ui.slice(entryStart,entryEnd);
 const explicitEntrySource=ui.includes('export function explicitSignedOutCloudEntry(')?part('export function explicitSignedOutCloudEntry(', 'export function connectionChooserVisible(').replace('export ',''):'function explicitSignedOutCloudEntry(){return false;}';
-const entryFunction=transformSync(`const isAndroid=false,browserCloudResidentEnabled=false,ownProviderSelected=()=>false;${explicitEntrySource}function selectEntry(snapshot){const productionSignInRequired=false,explicitSignInEntry=explicitSignedOutCloudEntry(snapshot),signInEntryRequired=productionSignInRequired||explicitSignInEntry;const providerChoice=null,panel=null,residentEnvironment=()=> 'production',inAppGoogle=false,inAppPhone=false,inAppEmail=true,cloudSignInPhone=false,loadSignInService=()=>null,RESIDENT_UNPACKAGED='unpackaged',browserCloudResidentEnabled=false,testMocksEnabled=false;${selectorSource}return null;}`,{loader:'tsx',format:'cjs',jsx:'automatic'}).code;
+const ownKeysSource=part('/** First run shows one sign-in method','/** One explicit choice;');
+const entryFunction=transformSync(`const isAndroid=false,browserCloudResidentEnabled=false,ownProviderSelected=()=>false,productionCloudSignInRequired=()=>false,AlphaAuthBrand=()=>null,OwnProviderChoice=()=>null,LOCAL_PROVIDER_MODEL='model';${explicitEntrySource}${ownKeysSource}function selectEntry(snapshot){const productionSignInRequired=false,explicitSignInEntry=explicitSignedOutCloudEntry(snapshot),signInEntryRequired=productionSignInRequired||explicitSignInEntry,signInPage=signInEntryPage(snapshot);const providerChoice=null,panel=null,residentEnvironment=()=> 'production',inAppGoogle=false,inAppPhone=false,inAppEmail=true,cloudSignInPhone=false,loadSignInService=()=>null,RESIDENT_UNPACKAGED='unpackaged',browserCloudResidentEnabled=false,testMocksEnabled=false;${selectorSource}return null;}`,{loader:'tsx',format:'cjs',jsx:'automatic'}).code;
 const noAuthCalls=[];const entryController=new Proxy({},{get:(_,name)=>()=>noAuthCalls.push(name)});
-const selectEntry=new Function('require','CloudSignInPanel','connectionController','ResidentRecoveryPanel',entryFunction+';return selectEntry;')(createRequire(import.meta.url),CloudSignInPanel,entryController,()=>null);
-test('explicit signed-out account and plan entry render approved email/Google chooser directly, with no legacy CTA or auth action',async()=>{const {renderToStaticMarkup}=await import('react-dom/server');for(const purpose of['cloud-account','plan']){const element=selectEntry({open:true,purpose,cloudAccount:null,busy:false,message:'',error:'',signIn:null});assert.ok(element,'the actual root-page branch must select the existing sign-in component');const html=renderToStaticMarkup(element);assert.match(html,/Welcome to Alpha/);assert.match(html,/Continue with Google/);assert.match(html,/Sign in with email/);assert.doesNotMatch(html,/Sign in to use connected services such as Gmail/);assert.deepEqual(noAuthCalls,[]);}});
+const selectEntry=new Function('require','CloudSignInPanel','connectionController','ResidentRecoveryPanel','useState',entryFunction+';return selectEntry;')(createRequire(import.meta.url),CloudSignInPanel,entryController,()=>null,React.useState);
+test('explicit signed-out account and plan entry render approved email/Google chooser directly, with no legacy CTA or auth action',async()=>{const {renderToStaticMarkup}=await import('react-dom/server');for(const purpose of['cloud-account','plan']){const element=selectEntry({open:true,purpose,cloudAccount:null,busy:false,message:'',error:'',signIn:null});assert.ok(element,'the actual root-page branch must select the existing sign-in component');const html=renderToStaticMarkup(element);assert.match(html,/Welcome to Alpha/);assert.match(html,/Continue with Google/);assert.match(html,/Sign in with email/);assert.match(html,/role="dialog"/,'an opened sign-in stays a dialog');assert.match(html,/>Back</,'an opened sign-in keeps Back');assert.doesNotMatch(html,/Sign in to use connected services such as Gmail/);assert.deepEqual(noAuthCalls,[]);}});
 test('verified account is not redirected from membership into first-run sign-in',()=>{assert.equal(selectEntry({open:true,purpose:'cloud-account',cloudAccount:{userId:'synthetic-owner'},busy:false,signIn:null}),null);});
 
 test('explicit account chooser preserves newer in-app email/phone readiness and never starts hosted auth',async()=>{

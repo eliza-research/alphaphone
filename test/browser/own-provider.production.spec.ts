@@ -130,3 +130,25 @@ test('signed-out onboarding can explicitly select own keys without starting a Cl
  expect(await page.evaluate(()=>(window as any).flagOff.calls.filter((call:string)=>/AlphaCloudSignIn\.(start|verify)/.test(call)))).toEqual([]);
  await noLeaks(page,observed);
 });
+
+test('a rejected key on the welcome screen is reported inside the own-key view without selecting Cloud',async({page})=>{
+ const observed=await fixture(page,true);await page.goto('/');
+ const welcome=page.getByRole('main',{name:'Welcome to Alpha.',exact:true});await expect(welcome).toBeVisible();
+ await enterKeys(page,welcome,'Use your own API keys');
+ // The signed-out agent's startup unbind may already have cleared an absent binding; count from here.
+ const before=await page.evaluate(()=>{const f=(window as any).ownProvider;f.hold=true;f.reject=true;return f.cleared;});
+ await welcome.getByRole('button',{name:'Save and use own keys',exact:true}).click();
+ const own=welcome.getByRole('region',{name:'Own API keys',exact:true});
+ await expect.poll(()=>page.evaluate(()=>(window as any).ownProvider.pending)).toBe(true);
+ await expect(own.getByRole('status')).toHaveText('Checking the key with Cerebras…');
+ await page.evaluate(()=>(window as any).ownProvider.release());
+ await expect(own.getByRole('alert')).toHaveText('Cerebras did not accept this key. It was not saved.');
+ await expect(own.getByLabel('Cerebras API key',{exact:true})).toHaveValue('');
+ await expect(own.getByLabel('Cartesia API key (optional)',{exact:true})).toHaveValue('');
+ // Still the own-key view on the welcome page: Cloud was neither selected nor started.
+ await expect(welcome).toBeVisible();await expect(welcome.getByRole('button',{name:'Continue with Google',exact:true})).toHaveCount(0);
+ expect(await page.evaluate(()=>{const f=(window as any).ownProvider;return {saved:f.saved,cleared:f.cleared};})).toEqual({saved:0,cleared:before});
+ expect(await page.evaluate(()=>(window as any).flagOff.slots['cloud:production']??null)).toBeNull();
+ expect(await page.evaluate(()=>(window as any).flagOff.calls.filter((call:string)=>/AlphaCloudSignIn\.(start|verify)/.test(call)))).toEqual([]);
+ await noLeaks(page,observed);
+});

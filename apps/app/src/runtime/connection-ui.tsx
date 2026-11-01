@@ -2326,7 +2326,9 @@ export const connectionController = {
       try{await connectResident(signal);}catch(error){if(residentAlwaysPresent&&!active)update({kind:'recovering'});throw error;}
     });
   },
-  async configureLocal(apiKey:string,model:string=LOCAL_PROVIDER_MODEL,cartesiaKey?:string) { await work('Checking the key with Cerebras…',async signal=>{await configureLocalProvider(apiKey,model,cartesiaKey,signal);signal.throwIfAborted();const providerStatus=await localProviderStatus();signal.throwIfAborted();update({providerStatus,signIn:null,residentPlanNotice:null});showPostSignInSetup();await retire();await connectResident(signal);update({message:isAndroid?'Cerebras key verified and saved in Android Keystore. Own API keys selected.':'Cerebras key verified. Own keys are active for this host session only.'});}); },
+  async configureLocal(apiKey:string,model:string=LOCAL_PROVIDER_MODEL,cartesiaKey?:string) { await work('Checking the key with Cerebras…',async signal=>{try{await configureLocalProvider(apiKey,model,cartesiaKey,signal);signal.throwIfAborted();const providerStatus=await localProviderStatus();signal.throwIfAborted();update({providerStatus,signIn:null,residentPlanNotice:null});showPostSignInSetup();await retire();await connectResident(signal);update({message:isAndroid?'Cerebras key verified and saved in Android Keystore. Own API keys selected.':'Cerebras key verified. Own keys are active for this host session only.'});}
+    // A provider or native failure never carries an entered key into the visible error.
+    catch(error){if(error instanceof Error&&[apiKey,cartesiaKey].some(key=>key&&error.message.includes(key)))throw Error('Own API keys could not be set up. Check the keys and try again.');throw error;}}); },
   async selectCloudProvider(){await work('Switching to Cloud…',async signal=>{if(browserCloudResidentEnabled)await browserResidentCall('residentCloud',undefined,undefined,undefined,signal);else await clearLocalProvider(false,signal);signal.throwIfAborted();const providerStatus=await localProviderStatus();signal.throwIfAborted();update({providerStatus});await retire();await connectResident(signal);});},
   async refreshProviderStatus() { try { update({ providerStatus: await localProviderStatus() }); } catch { update({ providerStatus: null }); } },
   /** Stops the running agent (its process holds the key), deletes the key and confirms removal. */
@@ -2463,8 +2465,8 @@ export const connectionController = {
   cancelSignIn() {
     const view = state.signIn;
     const pending = !!operation;
-    // Back on the required top-level chooser has nowhere to go; keep its controls usable.
-    if (!pending && view?.step === 'choose' && productionCloudSignInRequired(state)) return;
+    // The automatic entry page has nowhere to go back to; keep its controls usable.
+    if (!pending && view?.step === 'choose' && signInEntryPage(state)) return;
     const closeExplicitEntry=!pending&&(!view||view.step==='choose')&&explicitSignedOutCloudEntry(state);
     connectionController.cancel();
     update({ signIn: view && (pending || view.step !== 'choose') ? { step: 'choose', environment: view.environment } : null, message: '', error: '' });
@@ -3045,6 +3047,12 @@ export function explicitSignedOutCloudEntry(
     snapshot.purpose==='cloud-account'||snapshot.purpose==='plan'||firstBrowserResidentSignIn
   );
 }
+/** The automatic sign-in entry (required on Android, first run in the browser preview) is a full
+ * page with no Back on every platform; sign-ins the owner opens (account, plan) are dialogs with
+ * Back. An error during an attempt never turns the page into a dialog. */
+function signInEntryPage(snapshot: ConnectionSnapshot): boolean {
+  return productionCloudSignInRequired(snapshot)||snapshot.purpose==='agent'&&explicitSignedOutCloudEntry(snapshot.signIn?{...snapshot,error:''}:snapshot);
+}
 export function connectionChooserVisible(snapshot: Pick<ConnectionSnapshot,'open'|'automaticRestore'|'busy'|'error'>&Partial<Pick<ConnectionSnapshot,'cloudAccount'|'purpose'|'signIn'|'membershipBalance'|'fundingRefused'|'billingReviewEmail'|'membershipDismissed'|'startupResolved'|'residentSavedCredential'|'residentPlanNotice'|'providerStatus'>>,foregroundReply=false): boolean {
   if(snapshot.billingReviewEmail)return true;
   if(!ownProviderSelected(snapshot)&&snapshot.cloudAccount&&!snapshot.membershipDismissed&&(snapshot.membershipBalance==='zero'||snapshot.fundingRefused)&&!foregroundReply)return true;
@@ -3062,6 +3070,7 @@ export function ConnectionChooser() {
   const productionSignInRequired=productionCloudSignInRequired(snapshot);
   const explicitSignInEntry=explicitSignedOutCloudEntry(snapshot);
   const signInEntryRequired=snapshot.purpose!=='provider'&&(productionSignInRequired||explicitSignInEntry);
+  const signInPage=signInEntryPage(snapshot);
   const automaticSignInProbe = useRef(false);
   useEffect(() => {
     if (!signInEntryRequired) { automaticSignInProbe.current = false; return; }
@@ -3213,9 +3222,9 @@ export function ConnectionChooser() {
   const providerChoice=<OwnProviderChoice busy={snapshot.busy} status={snapshot.providerStatus} onSave={(key,voice)=>connectionController.configureLocal(key,LOCAL_PROVIDER_MODEL,voice)} onCloud={()=>connectionController.selectCloudProvider()}/>;
   if(snapshot.purpose==='provider')return <div className="alpha-connection-scrim"><div className="alpha-connection alpha-connection-native" role="dialog" aria-modal="true" aria-labelledby="provider-title" tabIndex={-1} ref={panel}><header><h1 id="provider-title">AI provider</h1><button aria-label="Close AI provider settings" disabled={snapshot.busy} onClick={()=>connectionController.close()}>×</button></header>{providerChoice}{snapshot.error&&<p role="alert">{snapshot.error}</p>}{snapshot.message&&<p role="status">{snapshot.message}</p>}</div></div>;
   const requiredSignInView: SignInView = snapshot.signIn ?? { step: 'choose', environment: residentEnvironment() };
-  if (snapshot.signIn || signInEntryRequired) return <div className={productionSignInRequired?'alpha-auth-page':'alpha-connection-scrim'}><div className={`alpha-connection alpha-connection-native alpha-cloud-sign-in${productionSignInRequired?' alpha-auth-content':''}`} role={productionSignInRequired?'main':'dialog'} aria-modal={productionSignInRequired?undefined:true} aria-labelledby="cloud-sign-in-title" aria-busy={snapshot.busy||undefined} tabIndex={-1} ref={panel}>
-    <SignInOrOwnKeys ownKeys={back=><OwnProviderChoice busy={snapshot.busy} status={snapshot.providerStatus} onSave={(key,voice)=>connectionController.configureLocal(key,LOCAL_PROVIDER_MODEL,voice)} onCloud={()=>connectionController.selectCloudProvider()} onBack={back}/>}>
-    <CloudSignInPanel serviceLoader={loadSignInService} phone={cloudSignInPhone && inAppPhone} emailEnabled={inAppEmail} view={requiredSignInView} busy={snapshot.busy} ready={!!snapshot.signIn} dismissible={!productionSignInRequired} google={inAppGoogle} message={snapshot.message} error={snapshot.error} errorIsNotice={snapshot.error===RESIDENT_UNPACKAGED}
+  if (snapshot.signIn || signInEntryRequired) return <div className={signInPage?'alpha-auth-page':'alpha-connection-scrim'}><div className={`alpha-connection alpha-connection-native alpha-cloud-sign-in${signInPage?' alpha-auth-content':''}`} role={signInPage?'main':'dialog'} aria-modal={signInPage?undefined:true} aria-labelledby="cloud-sign-in-title" aria-busy={snapshot.busy||undefined} tabIndex={-1} ref={panel}>
+    <SignInOrOwnKeys ownKeys={back=><OwnProviderChoice busy={snapshot.busy} status={snapshot.providerStatus} error={snapshot.error} message={snapshot.message} onSave={(key,voice)=>connectionController.configureLocal(key,LOCAL_PROVIDER_MODEL,voice)} onCloud={()=>connectionController.selectCloudProvider()} onBack={back}/>}>
+    <CloudSignInPanel serviceLoader={loadSignInService} phone={cloudSignInPhone && inAppPhone} emailEnabled={inAppEmail} view={requiredSignInView} busy={snapshot.busy} ready={!!snapshot.signIn} dismissible={!signInPage} google={inAppGoogle} message={snapshot.message} error={snapshot.error} errorIsNotice={snapshot.error===RESIDENT_UNPACKAGED}
       actions={{phone:number=>void connectionController.signInPhone(number),google:()=>void connectionController.signInGoogle(),email:address=>void connectionController.signInEmail(address),verify:code=>void connectionController.verifySignInCode(code),resend:()=>void connectionController.resendSignInCode(),cancel:()=>connectionController.cancelSignIn()}}
       extra={signInEntryRequired && !snapshot.signIn && !snapshot.busy
         ? <button onClick={()=>void connectionController.beginSignIn(residentEnvironment(),true)}>Retry sign-in</button>
@@ -3431,20 +3440,23 @@ function SignInOrOwnKeys({children,ownKeys}:{children:import('react').ReactNode;
 }
 
 /** One explicit choice; key values live only in the submitted form and native credential vault. */
-function OwnProviderChoice({busy,status,onSave,onCloud,onBack}:{busy:boolean;status?:LocalProviderStatus|null;onSave:(key:string,voice?:string)=>Promise<void>;onCloud:()=>Promise<void>;onBack?:()=>void}){
- const [editing,setEditing]=useState(!!onBack),[switching,setSwitching]=useState(false);
+function OwnProviderChoice({busy,status,error,message,onSave,onCloud,onBack}:{busy:boolean;status?:LocalProviderStatus|null;error?:string;message?:string;onSave:(key:string,voice?:string)=>Promise<void>;onCloud:()=>Promise<void>;onBack?:()=>void}){
+ const [editing,setEditing]=useState(!!onBack),[switching,setSwitching]=useState(false),[attempted,setAttempted]=useState(false);
  const ai=useRef<HTMLInputElement>(null),speech=useRef<HTMLInputElement>(null);
  const own=status?.selected===true&&status.provider==='cerebras';
  const native=Capacitor.isNativePlatform(),host=native||browserCloudResidentEnabled;
  const clear=()=>{if(ai.current)ai.current.value='';if(speech.current)speech.current.value='';};
  // First run offers the key form alone; Settings keeps the explicit Cloud or own-key switch.
  if(onBack)return <section aria-label="Own API keys">
-  {!host?<p role="status">Own API keys need Android secure storage. This browser cannot save or activate provider keys.</p>:<form onSubmit={event=>{event.preventDefault();const key=ai.current?.value||'',voice=speech.current?.value||'';clear();void onSave(key,voice||undefined);}}>
+  {!host?<p role="status">Own API keys need Android secure storage. This browser cannot save or activate provider keys.</p>:<form onSubmit={event=>{event.preventDefault();const key=ai.current?.value||'',voice=speech.current?.value||'';clear();setAttempted(true);void onSave(key,voice||undefined);}}>
    <label>Cerebras API key<input ref={ai} type="password" autoComplete="off" autoCapitalize="none" spellCheck={false} required disabled={busy}/></label>
    <label>Cartesia API key (optional)<input ref={speech} type="password" autoComplete="off" autoCapitalize="none" spellCheck={false} disabled={busy}/></label>
    <p>Cerebras receives your prompts and selected context. Cartesia receives voice recordings and reply text. Both bill your own accounts. {native?'Keys are stored with Android Keystore.':'Keys last for this session only.'}</p>
    <button disabled={busy}>Save and use own keys</button>
   </form>}
+  {/* Only this view's own key check reports here; Cloud sign-in status stays with Cloud. */}
+  {attempted&&message&&<p role="status">{message}</p>}
+  {attempted&&error&&<p role="alert" className="alpha-connection-error">{error}</p>}
   <div className="alpha-connection-actions"><button type="button" className="alpha-connection-cancel" disabled={busy} onClick={()=>{clear();onBack();}}>Sign in with Cloud instead</button></div>
  </section>;
  return <section aria-label="AI provider">

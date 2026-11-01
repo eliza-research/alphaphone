@@ -81,11 +81,15 @@ test('a verified email code goes straight to access setup while the agent restar
  test.setTimeout(120_000);
  const host=await hosts(page);
  await page.goto(origin+'/');
- // Settled browser guests go straight to the approved Cloud sign-in panel.
+ // Settled browser guests go straight to the approved Cloud sign-in: the same full page Android
+ // shows while signed out, with no Back, never a dialog over Home (owner report 2026-11-01).
  const agentSheet=page.getByRole('dialog',{name:'Your agent',exact:true});
- const signIn=page.getByRole('dialog',{name:'Welcome to Alpha.',exact:true});
+ const signIn=page.getByRole('main',{name:'Welcome to Alpha.',exact:true});
  await expect(signIn).toBeVisible({timeout:60_000});
  await expect(signIn.getByRole('button',{name:'Email me a code',exact:true})).toBeEnabled();
+ await expect(page.locator('.alpha-auth-page')).toHaveCount(1);await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0);
+ await expect(signIn.getByRole('button',{name:'Back',exact:true})).toHaveCount(0);
+ await page.keyboard.press('Escape');await expect(signIn).toBeVisible();
  await expect(agentSheet).toHaveCount(0);
  expect(host.starts).toBe(1);
  await shot(page,info,'01-signed-out');
@@ -93,6 +97,11 @@ test('a verified email code goes straight to access setup while the agent restar
  await signIn.getByRole('button',{name:'Email me a code',exact:true}).click();
  const code=page.getByRole('form',{name:'Enter your email code'});
  await expect(code).toBeVisible();
+ // A wrong code reports inside the same page; the error never turns it into a dismissible dialog.
+ await code.getByLabel('Six-digit code').fill('000000');await code.getByRole('button',{name:'Verify',exact:true}).click();
+ const codePage=page.getByRole('main',{name:'Check your code.',exact:true});
+ await expect(codePage.getByRole('alert')).toBeVisible();
+ await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0);await expect(codePage.getByRole('button',{name:'Back',exact:true})).toHaveCount(0);
  // The agent's restart with the new key takes as long as a first boot; hold it there. The account
  // admission (identity and plan reads) is held too, to show what the verified step says meanwhile.
  host.hold=true;host.holdAdmission=true;
@@ -149,7 +158,7 @@ test('a first start shows a neutral loading screen, never Home, until the sign-i
  await expect(startupLoading(page)).toBeVisible();await page.waitForTimeout(500);
  await expect(page.locator('[data-alpha-layer="home"]')).toHaveCount(0);
  host.release!();
- await expect(page.getByRole('dialog',{name:'Welcome to Alpha.',exact:true})).toBeVisible({timeout:30_000});
+ await expect(page.getByRole('main',{name:'Welcome to Alpha.',exact:true})).toBeVisible({timeout:30_000});
  await expect(startupLoading(page)).toHaveCount(0);await expect(page.locator('[data-alpha-layer="home"]')).toHaveCount(1);
  await expectNoHomeBeforePrompt(page);
 });
@@ -177,5 +186,5 @@ test('a start that has not decided in 60 s shows Home as before, and the sign-in
  await expect(page.getByRole('region',{name:'Home',exact:true})).toBeVisible();
  await expect(startupLoading(page)).toHaveCount(0);await expect(page.locator('.alpha-connection')).toHaveCount(0);
  host.release!();
- await expect(page.getByRole('dialog',{name:'Welcome to Alpha.',exact:true})).toBeVisible({timeout:30_000});
+ await expect(page.getByRole('main',{name:'Welcome to Alpha.',exact:true})).toBeVisible({timeout:30_000});
 });
