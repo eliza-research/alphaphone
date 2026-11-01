@@ -54,3 +54,23 @@ test('accepted voice progress is ephemeral, clears with SDK state and cannot ret
   sessions[1].onState('thinking', 'Current session label');
   assert.equal(f.shell.renderVals().turnStatus, 'Current session label');
 });
+
+test('Direct voice status announces a manual mute as Microphone off and Listening again after unmute', async t => {
+  const f = cloudVoiceViewFixture({native: false, platform: 'web'});
+  t.after(() => f.close());
+  f.box.testMocksEnabled = true;
+  f.box.developmentCartesiaVoiceEnabled = true;
+  f.box.React = {createElement: () => null};
+  f.box.VoiceActivity = () => null;
+  let muted = false;
+  f.box.developmentCartesiaConversation = async options => ({async start() { options.assertCurrent(); options.onState('listening', ''); }, async stop() {}, recheck() {}, get microphoneMuted() { return muted; }, microphoneAutomaticallyMuted: false, setMicrophoneMuted(value) { muted = value; }});
+  await f.shell.startVoice();
+  assert.equal(f.renderChat().statusLines[0].t, 'Listening…');
+  f.renderChat().toggleMute();
+  assert.equal(f.renderChat().muted, 'true');
+  assert.equal(f.renderChat().statusClass, 'alpha-voice-status-hidden');
+  assert.equal(f.renderChat().statusLines[0].t, 'Microphone off.');
+  f.renderChat().toggleMute();
+  assert.equal(f.renderChat().muted, 'false');
+  assert.equal(f.renderChat().statusLines[0].t, 'Listening…');
+});
