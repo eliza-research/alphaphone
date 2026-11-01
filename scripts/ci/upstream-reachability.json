@@ -2,18 +2,46 @@
   "schema": 1,
   "repository": "elizaOS/eliza",
   "base": "develop",
-  "baseCommit": "4573a187b0dc44c0b0dd111a0b0720aaa13d6bc4",
-  "head": "17abe929d7572a082a4d0eda170728d2fea9335d",
+  "baseCommit": "b4368ab12ef757fb3e65b2619d839d4790caf404",
+  "head": "de4e20fadc9fac8bd5b52ae3d8f205a55b25c218",
   "recordedAt": "2026-11-01",
-  "command": "Reviewed remote develop...6cd75 comparison plus one exact local child commit",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...de4e20fadc9fac8bd5b52ae3d8f205a55b25c218",
   "status": "diverged",
-  "aheadBy": 1,
-  "behindBy": 62,
+  "aheadBy": 8,
+  "behindBy": 80,
   "mergeBase": "6cd75d68202db3322dbec9d36d200902f08849c4",
   "pinOnlyCommits": [
     {
       "sha": "17abe929d7572a082a4d0eda170728d2fea9335d",
       "subject": "feat(voice): prepare V4 transcription on preserved direct-provider base"
+    },
+    {
+      "sha": "837edb9e628956e73c2044208e1d4de46cd0570c",
+      "subject": "fix(diagnostics): retain safe speech timing and bounded failure labels"
+    },
+    {
+      "sha": "ab10108e2ee855d7c13aa8b5e7c63dbffa02a295",
+      "subject": "fix(agent): compose current-message navigation with voice diagnostics candidate"
+    },
+    {
+      "sha": "06923cec1d001e200e839644642754663778f365",
+      "subject": "feat(auth): compose hosted Google sign-in hint with reviewed runtime candidate"
+    },
+    {
+      "sha": "ff3d79f70a2d1fc6e37d4678a1a132ceca56fceb",
+      "subject": "fix(alpha): preserve current provider and model-authored acknowledgment fixes"
+    },
+    {
+      "sha": "7d3a797e023a9671ba73a7d7f9bf815c754be6e9",
+      "subject": "fix(alpha): preserve reviewed Calendar cancellation and LifeOps context integration"
+    },
+    {
+      "sha": "3c3bb960925c1235b58068563b1691f23f4bfb7c",
+      "subject": "fix(calendar): require grounded reads for implicit message intent"
+    },
+    {
+      "sha": "de4e20fadc9fac8bd5b52ae3d8f205a55b25c218",
+      "subject": "fix(voice): hold half-duplex mic until caller turn finishes"
     }
   ],
   "pullRequests": [
@@ -384,5 +412,5 @@
       "merged": false
     }
   ],
-  "qualificationNote": "Unpublished local reconciliation candidate. Comparison extends the saved remote parent comparison by one exact local child commit. Full source review, source materialization, normal checks and runtime acceptance remain pending."
+  "qualificationNote": "Published source candidate; normal tests/build/voice and native qualification pending."
 }
