@@ -1,9 +1,10 @@
 name: Eliza develop pin sync
-# Keeps upstream.lock.json on elizaOS/eliza develop through one PR, "Pin Eliza develop <short>",
-# rebuilt from main on the bot/eliza-pin-sync branch by scripts/eliza-pin-sync.mjs. It never
-# pushes main; auto-merge stays off unless the repository variable ELIZA_PIN_SYNC_AUTOMERGE is
-# true. Pause: set the repository variable ELIZA_PIN_SYNC to off. docs/ci-cost-policy.md,
-# "Eliza develop pin sync".
+# Keeps upstream.lock.json on elizaOS/eliza develop through one reviewable PR, "Pin Eliza develop
+# <short>", on the bot/eliza-pin-sync branch. The status job reads and runs the incident guard; the
+# repin job runs develop code with a read grant only; the publish job holds the write grants, runs
+# git and gh only, and pushes nothing it has not checked against main and the record allowlist.
+# It never pushes main, never merges a PR and updates no running app. Pause: set the repository
+# variable ELIZA_PIN_SYNC to off. docs/ci-cost-policy.md, "Eliza develop pin sync".
 on:
   schedule:
     - cron: '41 * * * *'
@@ -25,22 +26,26 @@ env:
   BOT_BRANCH: bot/eliza-pin-sync
 jobs:
   status:
-    name: Develop pin status
+    name: Develop pin status and incident guard
     # ELIZA_PIN_SYNC=off pauses the schedule and repository dispatches; a manual dispatch still runs.
     if: vars.ELIZA_PIN_SYNC != 'off' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
     outputs:
       action: ${{ steps.status.outputs.action }}
       bot_head: ${{ steps.status.outputs.bot_head }}
+      cleared: ${{ steps.guard.outputs.cleared }}
       develop: ${{ steps.status.outputs.develop }}
       drift: ${{ steps.status.outputs.drift }}
+      hold: ${{ steps.guard.outputs.hold || steps.status.outputs.hold }}
       json: ${{ steps.status.outputs.json }}
       main: ${{ steps.status.outputs.main }}
       pr: ${{ steps.status.outputs.pr }}
+      reason: ${{ steps.guard.outputs.reason || steps.status.outputs.reason }}
+      receipt: ${{ steps.guard.outputs.receipt }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -56,23 +61,33 @@ jobs:
           ELIZA_PIN_SYNC_DRIFT_DAYS: ${{ vars.ELIZA_PIN_SYNC_DRIFT_DAYS }}
           ELIZA_PIN_SYNC_REFRESH_HOURS: ${{ vars.ELIZA_PIN_SYNC_REFRESH_HOURS }}
         run: node scripts/eliza-pin-sync.mjs status --event "$GITHUB_EVENT_NAME" --bot-branch "$BOT_BRANCH"
+      - id: guard
+        name: Incident ancestry and payload guard
+        # Before anything from develop is fetched into a checkout or run. Without ancestry clearance
+        # (scripts/ci/upstream-incident-clearance.json) it holds at once and fetches nothing. Every
+        # hold is reported here and exits 0; only cleared == true lets the repin start.
+        if: steps.status.outputs.action == 'refresh'
+        env:
+          STATUS_JSON: ${{ steps.status.outputs.json }}
+        run: |
+          printf '%s' "$STATUS_JSON" > "$RUNNER_TEMP/status.json"
+          node scripts/eliza-pin-sync.mjs guard --status "$RUNNER_TEMP/status.json" --work "$RUNNER_TEMP/guard"
 
   repin:
-    name: Pin PR
+    name: Repin (read-only)
     needs: status
-    if: needs.status.outputs.action == 'refresh'
+    if: needs.status.outputs.action == 'refresh' && needs.status.outputs.cleared == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    # vendor/eliza is at the develop head here, and verify-upstream and the pin-bound tests import
+    # its code, so this job can only read, restores and saves no cache, and hands its result to the
+    # publish job as an artifact that job checks.
     permissions:
-      # The one push below targets the bot branch; main changes only by merging the PR.
-      contents: write
-      pull-requests: write
-      # A GITHUB_TOKEN push starts no pull_request workflow, so the PR's checks are dispatched.
-      actions: write
-    # The write token reaches only the steps that call gh or push: npm ci never sees it and the
-    # checkout persists no credentials.
+      contents: read
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
     env:
-      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+      MAIN: ${{ needs.status.outputs.main }}
       NEW_PIN: ${{ needs.status.outputs.develop }}
       STATUS_JSON: ${{ needs.status.outputs.json }}
     steps:
@@ -83,7 +98,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
-          cache: npm
       - run: npm ci
       - name: Fetch the current and new pins
         # apply checks main at the current pin first, then moves vendor/eliza to the new one.
@@ -96,79 +110,217 @@ jobs:
       - name: Repin with the owning scripts
         id: apply
         env:
-          # verify-upstream --record-reachability reads the develop compare with gh api.
+          # verify-upstream --record-reachability reads the develop compare with gh api; this job's
+          # token can only read.
           GH_TOKEN: ${{ github.token }}
-          ELIZA_PIN_SYNC_AUTOMERGE: ${{ vars.ELIZA_PIN_SYNC_AUTOMERGE }}
         run: |
+          mkdir -p "$RUNNER_TEMP/out"
           printf '%s' "$STATUS_JSON" > "$RUNNER_TEMP/status.json"
           node scripts/eliza-pin-sync.mjs apply --to "$NEW_PIN" --status "$RUNNER_TEMP/status.json" --report "$RUNNER_TEMP/report.json"
-          node scripts/eliza-pin-sync.mjs body --status "$RUNNER_TEMP/status.json" --report "$RUNNER_TEMP/report.json" > "$RUNNER_TEMP/body.md"
-          cat "$RUNNER_TEMP/body.md" >> "$GITHUB_STEP_SUMMARY"
-      - name: Commit
+          node scripts/eliza-pin-sync.mjs report --report "$RUNNER_TEMP/report.json" > "$RUNNER_TEMP/out/body.md"
+          cat "$RUNNER_TEMP/out/body.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Commit and bundle
         env:
-          OLD_PIN: ${{ fromJSON(needs.status.outputs.json).pin }}
-          COMMITS: ${{ fromJSON(needs.status.outputs.json).behind }}
+          READY: ${{ steps.apply.outputs.ready }}
         run: |
-          git add -A -- . ':(exclude)vendor/eliza'
+          out="$RUNNER_TEMP/out" tab=$(printf '\t')
+          # Tracked records and the new evidence file only, never a file a script left untracked.
+          git add -u -- . ':(exclude)vendor/eliza'
+          git add -- "docs/evidence/sdk-${NEW_PIN:0:10}-build-input-admission-"*.json
           git update-index --cacheinfo "160000,$NEW_PIN,vendor/eliza"
-          printf 'Pin Eliza develop %s\n\nAdvances the SDK from %s to the elizaOS/eliza develop head %s\n(%s upstream commits). Applied by .github/workflows/eliza-pin-sync.yml;\nthe pin PR lists what still needs a person.\n' \
-            "${NEW_PIN:0:10}" "${OLD_PIN:0:10}" "$NEW_PIN" "$COMMITS" > "$RUNNER_TEMP/message.txt"
-          git -c user.name='github-actions[bot]' -c user.email='41898333+github-actions[bot]@users.noreply.github.com' commit -q -F "$RUNNER_TEMP/message.txt"
+          git -c user.name='github-actions[bot]' -c user.email='41898333+github-actions[bot]@users.noreply.github.com' commit -q -m "Pin Eliza develop ${NEW_PIN:0:10}"
+          git update-ref refs/heads/eliza-pin-sync HEAD
+          git bundle create "$out/repin.bundle" refs/heads/eliza-pin-sync "^$MAIN"
+          printf '%s\n' "$READY" > "$out/ready"
+          # Every changed path with the SHA-256 of its new content (the gitlink: its commit).
+          {
+            printf 'parent %s\ncommit %s\n' "$MAIN" "$(git rev-parse HEAD)"
+            git diff-tree -r --no-renames --raw --no-abbrev "$MAIN" HEAD | while IFS="$tab" read -r meta path; do
+              read -r _ mode _ object _ <<< "$meta"
+              if [ "$mode" = 160000 ]; then id=$object; else id=$(git cat-file blob "$object" | sha256sum | cut -d' ' -f1); fi
+              printf '%s  %s\n' "$id" "$path"
+            done
+          } > "$out/manifest.txt"
           git show --stat --format='%H %s' HEAD
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        id: upload
+        with:
+          name: eliza-pin-sync-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/out/
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    name: Publish the pin PR
+    needs: [status, repin]
+    # Only after a cleared guard and a read-only repin that succeeded, and never in a dry run.
+    if: needs.status.outputs.cleared == 'true' && needs.repin.result == 'success' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Shell with git and gh only: no checkout of this repository, no npm, no node and nothing from
+    # vendor/eliza runs while these grants are held. Nothing here merges a PR.
+    permissions:
+      # The one push below targets the bot branch; main changes only when a person merges the PR.
+      contents: write
+      pull-requests: write
+      # A GITHUB_TOKEN push starts no pull_request workflow, so the PR's checks are dispatched.
+      actions: write
+    env:
+      MAIN: ${{ needs.status.outputs.main }}
+      NEW_PIN: ${{ needs.status.outputs.develop }}
+      OLD_PIN: ${{ fromJSON(needs.status.outputs.json).pin }}
+      COMMITS: ${{ fromJSON(needs.status.outputs.json).behind }}
+      REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+      # The record allowlist (scripts/eliza-pin-sync.mjs RECORD_RULES): the only paths a repin may
+      # change, each with what may change in it. ids: only 40- or 64-character hex IDs; data:
+      # generated record content, reviewed in the PR. Besides these, only the vendor/eliza gitlink
+      # (moved to the new pin) and one added docs/evidence build-input file for the new pin.
+      RECORD_PATHS: |
+        upstream.lock.json ids
+        docs/mvp-remaining-work-2026-10-09.json ids
+        scripts/ci/calendar-bridge.py ids
+        scripts/combined-agent-source.mjs ids
+        patches/eliza/native-manifest.json ids
+        patches/eliza/cloud-speech-client-manifest.json ids
+        patches/eliza/mobile-uuid-build.json ids
+        android/voice-host/qualified-voice-host.json data
+        android/embedding-host/qualified-host.json data
+        docs/requirements.json data
+        docs/mvp-current-status.md data
+        docs/dependency-audit.snapshot.json data
+        docs/dependency-audit.dispositions.json data
+        scripts/ci/upstream-reachability.json data
+        apps/app/public/licenses/third-party-notices.json data
+        apps/app/public/licenses/THIRD_PARTY_NOTICES.txt data
+    steps:
+      # Exactly the artifact the repin job's upload step reported, by ID.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.repin.outputs.artifact_id }}
+          path: ${{ runner.temp }}/repin
+          merge-multiple: true
+      - name: Verify the repin against main and the record allowlist
+        id: verify
+        env:
+          RECEIPT: ${{ needs.status.outputs.receipt }}
+        run: |
+          repin="$RUNNER_TEMP/repin" work="$RUNNER_TEMP/publish" tab=$(printf '\t')
+          fail() { echo "::error::Repin rejected: $*"; exit 1; }
+          mask() { sed -E 's/[0-9a-f]{64}|[0-9a-f]{40}/<id>/g'; }
+          git init -q "$work"
+          git -C "$work" fetch -q --no-tags --depth=1 "$REPO_URL" "refs/heads/$BASE_BRANCH"
+          main=$(git -C "$work" rev-parse FETCH_HEAD)
+          if [ "$main" != "$MAIN" ]; then
+            echo "::notice::$BASE_BRANCH moved from $MAIN to $main during the repin; nothing is published, and the next run rebuilds."
+            exit 0
+          fi
+          git -C "$work" update-ref refs/base "$main"
+          git -C "$work" bundle verify -q "$repin/repin.bundle" || fail "the bundle does not apply to $BASE_BRANCH $main"
+          git -C "$work" fetch -q --no-tags "$repin/repin.bundle" refs/heads/eliza-pin-sync:refs/repin
+          commit=$(git -C "$work" rev-parse refs/repin)
+          [ "$(git -C "$work" rev-parse "$commit^@")" = "$main" ] || fail "$commit is not one commit on $BASE_BRANCH $main"
+          # Every changed path must be on the allowlist and keep to its rule.
+          printf '%s\n' "$RECORD_PATHS" > "$RUNNER_TEMP/rules"
+          printf 'parent %s\ncommit %s\n' "$main" "$commit" > "$RUNNER_TEMP/manifest"
+          git -C "$work" diff-tree -r --no-renames --raw --no-abbrev "$main" "$commit" > "$RUNNER_TEMP/changes"
+          gitlink=0 evidence=0 changed=0
+          while IFS="$tab" read -r meta path; do
+            read -r before mode _ object status <<< "${meta#:}"
+            changed=$((changed + 1))
+            if [ "$path" = vendor/eliza ]; then
+              [ "$before $mode $status $object" = "160000 160000 M $NEW_PIN" ] || fail "vendor/eliza must move to the new pin $NEW_PIN"
+              gitlink=1
+              printf '%s  %s\n' "$object" "$path" >> "$RUNNER_TEMP/manifest"
+              continue
+            fi
+            [ "$mode" = 100644 ] || fail "$path has mode $mode; a repin changes regular files only"
+            rule=''
+            while read -r allowed what; do if [ "$allowed" = "$path" ]; then rule=$what; fi; done < "$RUNNER_TEMP/rules"
+            case "$path" in
+              "docs/evidence/sdk-${NEW_PIN:0:10}-build-input-admission-"[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].json)
+                [ "$status" = A ] || fail "$path: build-input evidence is only ever added"
+                evidence=$((evidence + 1)) rule=added ;;
+              *) [ "$status" = M ] || fail "$path: a repin only modifies its records" ;;
+            esac
+            case "$rule" in
+              ids) cmp -s <(git -C "$work" cat-file blob "$main:$path" | mask) <(git -C "$work" cat-file blob "$object" | mask) || fail "$path changed beyond its commit IDs" ;;
+              data|added) ;;
+              *) fail "$path is not on the record allowlist" ;;
+            esac
+            printf '%s  %s\n' "$(git -C "$work" cat-file blob "$object" | sha256sum | cut -d' ' -f1)" "$path" >> "$RUNNER_TEMP/manifest"
+          done < "$RUNNER_TEMP/changes"
+          [ "$gitlink" = 1 ] || fail "vendor/eliza does not move"
+          [ "$evidence" -le 1 ] || fail "more than one build-input evidence file"
+          git -C "$work" cat-file blob "$commit:upstream.lock.json" | grep -Fq "\"commit\": \"$NEW_PIN\"" || fail "upstream.lock.json does not pin $NEW_PIN"
+          cmp -s "$RUNNER_TEMP/manifest" "$repin/manifest.txt" || fail "the manifest does not match the bundle"
+          ready=$(cat "$repin/ready")
+          case "$ready" in true|false) ;; *) fail "the ready flag is neither true nor false" ;; esac
+          # The verified tree is committed here, so the message and identity on the bot branch are this job's.
+          printf 'Pin Eliza develop %s\n\nAdvances the SDK from %s to the elizaOS/eliza develop head %s\n(%s upstream commits). Published by .github/workflows/eliza-pin-sync.yml from the\nchecked repin tree; the pin PR records the source identities, the inclusion and\ndrift receipts and what still needs a person.\n' \
+            "${NEW_PIN:0:10}" "${OLD_PIN:0:10}" "$NEW_PIN" "$COMMITS" > "$RUNNER_TEMP/message"
+          export GIT_AUTHOR_NAME='github-actions[bot]' GIT_AUTHOR_EMAIL='41898333+github-actions[bot]@users.noreply.github.com'
+          export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME" GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
+          published=$(git -C "$work" commit-tree "$commit^{tree}" -p "$main" -F "$RUNNER_TEMP/message")
+          # The PR body: the status job's receipt, then the repin report as text (that job ran develop code).
+          {
+            printf '%s\n' "$RECEIPT"
+            printf '\n### Published commit\n\n'
+            # shellcheck disable=SC2016 # Markdown code spans, not command substitutions.
+            printf -- '- `%s`: the tree of the repin commit `%s`, committed here on `%s` `%s` after every one of its %s changed paths passed the record allowlist and matched the manifest.\n' \
+              "$published" "$commit" "$BASE_BRANCH" "$main" "$changed"
+            printf '\n### Repin report\n\nWritten by the read-only repin job, which ran develop code, so it is shown as text and is not part of the checked receipt above.\n\n'
+            head -c 20000 "$repin/body.md" | sed 's/^/    /'
+          } > "$RUNNER_TEMP/body.md"
+          { echo "commit=$published"; echo "ready=$ready"; echo "verified=true"; } >> "$GITHUB_OUTPUT"
+          echo "Verified $changed changed paths; publishing $published (tree of $commit) on $main."
+      - name: Find the one pin PR
+        id: pr
+        if: steps.verify.outputs.verified == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          open=$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&head=${GITHUB_REPOSITORY%%/*}:$BOT_BRANCH" --jq '.[] | "\(.number) \(.auto_merge != null)"')
+          count=$(printf '%s' "$open" | grep -c . || true)
+          if [ "$count" -gt 1 ]; then echo "::error::More than one open pin PR from $BOT_BRANCH; close all but one."; exit 1; fi
+          read -r number auto <<< "$open" || true
+          # Never push into a PR that could then merge itself.
+          if [ "$auto" = true ]; then echo "::error::Auto-merge is on for #$number; turn it off, then run the sync again."; exit 1; fi
+          echo "number=$number" >> "$GITHUB_OUTPUT"
       - name: Push the bot branch
-        if: env.DRY_RUN != 'true'
+        if: steps.verify.outputs.verified == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           BOT_HEAD: ${{ needs.status.outputs.bot_head }}
+          PUBLISHED: ${{ steps.verify.outputs.commit }}
         run: |
           # The lease refuses to replace a bot branch that moved since the status job read it.
           case "$BOT_BRANCH" in bot/*) ;; *) echo "::error::Refusing to push $BOT_BRANCH"; exit 1 ;; esac
-          # The checkout kept no credentials; this push alone authenticates, through the environment.
+          # Nothing else in this job holds credentials; this push authenticates through the environment.
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
           echo "::add-mask::$auth"
           export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0='http.https://github.com/.extraheader' GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
-          git push --force-with-lease="refs/heads/$BOT_BRANCH:$BOT_HEAD" origin "HEAD:refs/heads/$BOT_BRANCH"
-      - name: Open or update the PR
-        id: pr
-        if: env.DRY_RUN != 'true'
+          git -C "$RUNNER_TEMP/publish" push --force-with-lease="refs/heads/$BOT_BRANCH:$BOT_HEAD" "$REPO_URL" "$PUBLISHED:refs/heads/$BOT_BRANCH"
+      - name: Open or update the one pin PR
+        if: steps.verify.outputs.verified == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          NUMBER: ${{ needs.status.outputs.pr }}
+          NUMBER: ${{ steps.pr.outputs.number }}
         run: |
           title="Pin Eliza develop ${NEW_PIN:0:10}"
           if [ -n "$NUMBER" ]; then
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/pulls/$NUMBER" -f title="$title" -F body=@"$RUNNER_TEMP/body.md" --jq .html_url
           else
-            NUMBER=$(gh api "repos/$GITHUB_REPOSITORY/pulls" -f title="$title" -f head="$BOT_BRANCH" -f base="$BASE_BRANCH" -F body=@"$RUNNER_TEMP/body.md" --jq .number)
+            gh api "repos/$GITHUB_REPOSITORY/pulls" -f title="$title" -f head="$BOT_BRANCH" -f base="$BASE_BRANCH" -F body=@"$RUNNER_TEMP/body.md" --jq .html_url
           fi
-          echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
       - name: Dispatch the PR checks
-        # Only a PR the sync job found ready is worth full CI; ELIZA_PIN_SYNC_DISPATCH_CHECKS=false stops it.
-        if: env.DRY_RUN != 'true' && steps.apply.outputs.ready == 'true' && vars.ELIZA_PIN_SYNC_DISPATCH_CHECKS != 'false'
+        # Only a repin that found nothing for a person is worth full CI; ELIZA_PIN_SYNC_DISPATCH_CHECKS=false
+        # stops it. Both workflows build and test with a read grant; neither deploys anything.
+        if: steps.verify.outputs.ready == 'true' && vars.ELIZA_PIN_SYNC_DISPATCH_CHECKS != 'false'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh workflow run browser.yml --ref "$BOT_BRANCH"
-          gh workflow run android.yml --ref "$BOT_BRANCH"
-      - name: Auto-merge (off unless ELIZA_PIN_SYNC_AUTOMERGE is true)
-        if: env.DRY_RUN != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          AUTOMERGE: ${{ vars.ELIZA_PIN_SYNC_AUTOMERGE }}
-          NUMBER: ${{ steps.pr.outputs.number }}
-          READY: ${{ steps.apply.outputs.ready }}
-        run: |
-          if [ "$AUTOMERGE" != true ] || [ "$READY" != true ]; then
-            gh pr merge "$NUMBER" --disable-auto 2>/dev/null || true
-            exit 0
-          fi
-          # Without required checks GitHub would merge at once, before the dispatched checks finish.
-          required=$(gh api "repos/$GITHUB_REPOSITORY/rules/branches/$BASE_BRANCH" --jq '[.[] | select(.type == "required_status_checks")] | length')
-          if [ "$required" = 0 ]; then
-            echo "::warning::Auto-merge left off: $BASE_BRANCH has no required status checks ruleset (docs/ci-cost-policy.md, Required checks)."
-            exit 0
-          fi
-          gh pr merge "$NUMBER" --auto --squash
+          gh workflow run browser.yml -R "$GITHUB_REPOSITORY" --ref "$BOT_BRANCH"
+          gh workflow run android.yml -R "$GITHUB_REPOSITORY" --ref "$BOT_BRANCH"
 
   close:
     name: Close the superseded pin PR
@@ -188,9 +340,10 @@ jobs:
           gh api -X PATCH "repos/$GITHUB_REPOSITORY/pulls/$NUMBER" -f state=closed --jq .state
 
   drift:
-    name: Drift notice
+    name: Drift report
     needs: status
-    # Every run writes drift to the status step summary; this comments only when an issue is named.
+    # Every run writes drift and any hold to its summary. With an issue named, this keeps one comment
+    # there, created when drift or a hold first appears and edited only when that state changes.
     if: vars.ELIZA_PIN_SYNC_DRIFT_ISSUE != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -209,6 +362,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ vars.ELIZA_PIN_SYNC_DRIFT_ISSUE }}
           STATUS_JSON: ${{ needs.status.outputs.json }}
+          CLEARED: ${{ needs.status.outputs.cleared }}
+          HOLD: ${{ needs.status.outputs.hold }}
+          REASON: ${{ needs.status.outputs.reason }}
         run: |
           printf '%s' "$STATUS_JSON" > "$RUNNER_TEMP/status.json"
-          node scripts/eliza-pin-sync.mjs drift-comment --status "$RUNNER_TEMP/status.json" --issue "$ISSUE"
+          node scripts/eliza-pin-sync.mjs drift-report --status "$RUNNER_TEMP/status.json" --issue "$ISSUE"

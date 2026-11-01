@@ -1,0 +1,4 @@
+{
+  "$comment": "Incident ancestry clearance for the upstream repositories the develop pin sync takes in (.github/workflows/eliza-pin-sync.yml; docs/ci-cost-policy.md, \"Eliza develop pin sync\"). An entry under repositories, keyed owner/name, is the complete set of forged commits from the 2026-10-27 incident (#658, scripts/owner/incident-2026-10-27-iocs.json) known for that repository, as full commit IDs ([] only when the record that established the set found none), plus that record: {\"forgedCommits\": [], \"record\": \"<issue comment or evidence file>\"}. Without a valid entry ancestry clearance is unavailable and the sync holds before it fetches anything from the repository into a checkout or runs it. Commit author or committer identity is never clearance. Only a reviewed change to main edits this file; the sync never writes it, and its publish job rejects a repin that touches it.",
+  "repositories": {}
+}

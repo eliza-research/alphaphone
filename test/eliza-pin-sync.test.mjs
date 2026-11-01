@@ -1,13 +1,18 @@
 // The develop pin sync (scripts/eliza-pin-sync.mjs, .github/workflows/eliza-pin-sync.yml) moves
 // only literal pin fields and writes the same source-only comparison a manual pin commit records.
+// Its incident guard fails closed, and its receipts and drift report are checked here.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {
-  assessDrift, buildInputAdmission, carryResidentDispositions, decide, embeddingReasonSentence, nextVoiceComparison,
-  patchProblems, pinRecordProblems, renderBody, replaceOnce, requirementsNote, sha256, statusPinText,
+  CLEARANCE, HOLDS, ancestryClearance, assessDrift, buildInputAdmission, carryResidentDispositions, currentHold, decide,
+  embeddingReasonSentence, incidentGuard, nextVoiceComparison, patchProblems, payloadFindings, pinRecordProblems,
+  renderHold, renderReceipt, renderReport, renderReportComment, replaceOnce, reportPlan, reportState, requirementsNote,
+  sha256, statusPinText,
 } from '../scripts/eliza-pin-sync.mjs';
+import {loadIocs} from '../scripts/owner/gh-readonly.mjs';
 
-const A = 'a'.repeat(40), B = 'b'.repeat(40), C = 'c'.repeat(40), E1 = '1'.repeat(40), E2 = '2'.repeat(40);
+const A = 'a'.repeat(40), B = 'b'.repeat(40), C = 'c'.repeat(40), E1 = '1'.repeat(40), E2 = '2'.repeat(40), D1 = 'd1'.repeat(20), D2 = 'd2'.repeat(20);
 
 test('the committed records hold the pin where a repin expects it', () => {
   assert.deepEqual(pinRecordProblems(process.cwd()), []);
@@ -94,13 +99,14 @@ test('the docs name the new pin and keep the reviewed history', () => {
   assert.throws(() => statusPinText(status, {from: C, to: B}), /no current-pin sentence naming cccccccccc/);
 });
 
-test('the sync refreshes a stale or missing PR, waits on a young one and closes a superseded one', () => {
-  const base = {pin: A, develop: B, main: C, pr: 7, event: 'schedule', now: Date.parse('2026-11-01T12:00:00Z'), refreshHours: 6};
+test('the sync refreshes a stale or missing PR, waits on a young one, closes a superseded one and holds on two', () => {
+  const base = {pin: A, develop: B, main: C, prs: [7], event: 'schedule', now: Date.parse('2026-11-01T12:00:00Z'), refreshHours: 6};
   const bot = {pin: A, parent: C, date: '2026-11-01T10:00:00Z'};
-  assert.equal(decide({...base, pin: B, pr: null}), 'none');
+  assert.equal(decide({...base, pin: B, prs: []}), 'none');
   assert.equal(decide({...base, pin: B}), 'close');
   assert.equal(decide({...base, bot: {...bot, pin: B}}), 'none', 'the PR already pins develop on this main');
-  assert.equal(decide({...base, bot, pr: null}), 'refresh');
+  assert.equal(decide({...base, bot, prs: []}), 'refresh');
+  for (const event of ['schedule', 'workflow_dispatch']) assert.equal(decide({...base, bot, event, prs: [7, 8]}), 'hold', 'two open pin PRs: touch neither');
   assert.equal(decide({...base, bot}), 'wait');
   assert.equal(decide({...base, bot, event: 'repository_dispatch'}), 'wait', 'upstream pushes do not bypass the refresh interval');
   assert.equal(decide({...base, bot, event: 'workflow_dispatch'}), 'refresh');
@@ -110,11 +116,109 @@ test('the sync refreshes a stale or missing PR, waits on a young one and closes 
   assert.equal(assessDrift({behind: 50, staleDays: 2}, {commits: 50, days: 2}), false);
 });
 
-test('the PR body lists both pins, the compare, dropped commits and what needs a person', () => {
-  const status = {behind: 3, pinOnly: 1, pinOnlyCommits: [{sha: C, subject: 'fix: only on the old pin'}], compareUrl: `https://github.com/elizaOS/eliza/compare/${A}...${B}`, thresholds: {refreshHours: 6}, botBranch: 'bot/eliza-pin-sync'};
-  const report = {from: A, to: B, applied: ['Pin fields.'], needsPerson: ['Review the drop.'], checks: [{name: 'verify-upstream', ok: true, main: true, output: `Eliza source verified: ${B}`}, {name: 'Third-party notices', ok: false, main: true, output: 'stale'}]};
-  const body = renderBody(status, report);
-  for (const expected of [`New pin: \`${B}\``, `Old pin: \`${A}\``, status.compareUrl, '- `cccccccccc` fix: only on the old pin', '- Review the drop.', '| Third-party notices | pass | FAIL |', `Eliza source verified: ${B}`, 'Auto-merge is off', 'ELIZA_PIN_SYNC=off'])
+// The incident guard: a status in which develop moved three commits past the pin.
+const iocs = loadIocs();
+const status = {upstream: 'elizaOS/eliza', main: C, pin: A, develop: B, behind: 3, pinOnly: 0, observedAt: '2026-11-01T14:41:07Z', staleSince: '2026-10-31T09:00:00Z', staleDays: 1.2, drift: false,
+  compareUrl: `https://github.com/elizaOS/eliza/compare/${A}...${B}`, thresholds: {commits: 50, days: 2, refreshHours: 6}, botBranch: 'bot/eliza-pin-sync', run: 'https://github.com/eliza-research/alphaphone/actions/runs/7'};
+const cleared = {repositories: {'elizaOS/eliza': {forgedCommits: [C], record: 'issue #658 comment 1'}}};
+const lineage = {ancestors: [B, D1, D2, A], included: [{sha: D1, subject: 'feat: one'}, {sha: D2, subject: 'fix: @someone two'}, {sha: B, subject: 'chore: three'}], dropped: []};
+const intake = {raw: [{oldMode: '100644', newMode: '100644', status: 'M', path: 'packages/app/src/a.ts'}], patch: 'diff --git a/packages/app/src/a.ts b/packages/app/src/a.ts\n--- a/packages/app/src/a.ts\n+++ b/packages/app/src/a.ts\n@@ -1 +1 @@\n-old\n+new\n', readAt: () => null};
+const never = () => { throw new Error('read upstream before clearance'); };
+const sources = (history = lineage, change = intake) => ({history: () => history, intake: () => change});
+
+test('the incident guard fails closed and reports the specific hold while ancestry clearance is unavailable', () => {
+  // Every committed entry is a full forged-commit set with its record; without one the sync holds before it reads develop.
+  for (const [repository, entry] of Object.entries(JSON.parse(fs.readFileSync(CLEARANCE, 'utf8')).repositories))
+    assert.equal(ancestryClearance({repositories: {[repository]: entry}}, iocs, repository).problem, undefined, repository);
+  const held = incidentGuard(status, {clearance: {repositories: {}}, iocs, sources: {history: never, intake: never}});
+  assert.equal(held.cleared, false);
+  assert.equal(held.hold, 'ancestry-unavailable');
+  assert.ok(held.reason.startsWith(`${HOLDS['ancestry-unavailable']}: ${CLEARANCE} records no reviewed forged-commit set for elizaOS/eliza, and the 2026-10-27 incident record (scripts/owner/incident-2026-10-27-iocs.json) does not cover it.`), held.reason);
+  assert.match(held.reason, /Commit author or committer identity is not clearance\.$/);
+  // Author identity is never clearance: a record that names trusted authors instead of a forged set still holds.
+  for (const entry of [{trustedAuthors: ['github-actions[bot]', 'shawmakesmagic']}, {forgedCommits: null, record: 'x'}, {forgedCommits: ['39ef59401'], record: 'x'}, {forgedCommits: [], record: ''}])
+    assert.equal(incidentGuard(status, {clearance: {repositories: {'elizaOS/eliza': entry}}, iocs, sources: {history: never, intake: never}}).hold, 'ancestry-unavailable', JSON.stringify(entry));
+  // A history or tree read that fails is a hold, never a clearance.
+  const broken = () => { throw new Error('fatal: remote error: upload-pack: not our ref'); };
+  assert.equal(incidentGuard(status, {clearance: cleared, iocs, sources: {history: broken, intake: never}}).hold, 'ancestry-unavailable');
+  assert.equal(incidentGuard(status, {clearance: cleared, iocs, sources: {history: () => lineage, intake: broken}}).hold, 'payload-unavailable');
+});
+
+test('the incident guard holds on forged ancestry, a receipt mismatch, a nested repository move and payload markers', () => {
+  const reaches = incidentGuard(status, {clearance: cleared, iocs, sources: sources({...lineage, ancestors: [...lineage.ancestors, C]})});
+  assert.equal(reaches.hold, 'reaches-forged');
+  assert.match(reaches.reason, /develop bbbbbbbbbb reaches cccccccccc\./);
+  // The IOC file's short forged IDs count too, for a repository the record covers.
+  assert.deepEqual(ancestryClearance({repositories: {'eliza-research/alphaphone': {forgedCommits: [], record: 'r'}}}, iocs, 'eliza-research/alphaphone').forged.slice(0, 2), iocs.branches.filter(row => row.repo === 'alphaphone').map(row => row.forged).slice(0, 2));
+  assert.equal(incidentGuard({...status, behind: 4}, {clearance: cleared, iocs, sources: sources()}).hold, 'receipt-mismatch');
+  const engine = {...intake, raw: [...intake.raw, {oldMode: '160000', newMode: '160000', status: 'M', path: 'plugins/plugin-local-inference/native/llama.cpp'}]};
+  const nested = incidentGuard(status, {clearance: cleared, iocs, sources: sources(lineage, engine)});
+  assert.equal(nested.hold, 'nested-repository');
+  assert.match(nested.reason, /llama\.cpp moves\. The guard does not clear another repository's ancestry/);
+  const payload = {
+    raw: [{status: 'A', path: 'init'}, {status: 'M', path: 'packages/app/package.json'}, {status: 'A', path: 'packages/app/.vscode/tasks.json'}, {status: 'D', path: '.env'}],
+    patch: 'diff --git a/packages/app/.vscode/tasks.json b/packages/app/.vscode/tasks.json\n+++ b/packages/app/.vscode/tasks.json\n@@ -0,0 +1 @@\n+  "runOn": "folderOpen"\n',
+    readAt: (commit, file) => (commit === B ? '{"scripts":{"build":"node init && vite build","test":"node --test"}}' : '{"scripts":{"test":"node --test"}}'),
+  };
+  assert.deepEqual(payloadFindings(payload, iocs.markers, {from: A, to: B}), ['marker path init', 'packages/app/package.json script "build" runs init', 'packages/app/.vscode/tasks.json adds a line matching /"runOn"\\s*:\\s*"folderOpen"/']);
+  assert.equal(incidentGuard(status, {clearance: cleared, iocs, sources: sources(lineage, {...payload, raw: payload.raw.map(row => ({oldMode: '100644', newMode: '100644', ...row}))})}).hold, 'payload-marker');
+  // A script that already ran init at the old pin is not new intake; a deleted marker path is not added.
+  assert.deepEqual(payloadFindings({raw: [{status: 'M', path: 'package.json'}, {status: 'D', path: '.env'}], patch: '', readAt: () => '{"scripts":{"x":"node init"}}'}, iocs.markers, {from: A, to: B}), []);
+  for (const hold of [reaches, nested]) assert.doesNotMatch(renderHold(status, hold), /\u2014/);
+  assert.match(renderHold(status, reaches), /^### Eliza develop pin sync: held\n\n {4}Held: develop reaches/);
+});
+
+test('a cleared guard records exact source identities and the inclusion and drift receipts', () => {
+  const guard = incidentGuard(status, {clearance: cleared, iocs, sources: sources()});
+  assert.equal(guard.cleared, true);
+  const body = renderReceipt(status, guard);
+  for (const expected of [
+    `| \`develop\` head, read 2026-11-01T14:41:07Z | \`${B}\` |`, `| Old pin (\`upstream.lock.json\` on \`main\`) | \`${A}\` |`,
+    `| New pin (\`upstream.lock.json\` and the \`vendor/eliza\` gitlink) | \`${B}\` |`, `| \`main\`, the base of this PR | \`${C}\` |`, status.compareUrl,
+    `records 1 forged commit for elizaOS/eliza (issue #658 comment 1), and none of them is among the 4 commits develop reaches`, 'Commit author and committer identity played no part.',
+    `- Included: 3 commits on develop that the old pin lacks; list SHA-256 \`${sha256(`${D1}\n${D2}\n${B}\n`)}\` (\`git rev-list --reverse aaaaaaaaaa..bbbbbbbbbb | sha256sum\`).`,
+    `- Dropped: 0 commits on the old pin that develop lacks; list SHA-256 \`${sha256('')}\``,
+    `${D2} fix: @someone two`, '- Thresholds: 50 commits or 2 days; drift is within them.', `- Read 2026-11-01T14:41:07Z by ${status.run}.`,
+    'This PR never merges itself and updates no running app', 'ELIZA_PIN_SYNC=off',
+  ]) assert.ok(body.includes(expected), expected);
+  // Upstream commit subjects appear only inside a text fence, after their commit ID.
+  const fenced = body.split('```text\n')[1].split('\n```')[0].split('\n');
+  assert.deepEqual(fenced.map(line => line.slice(0, 40)), [D1, D2, B]);
+  assert.equal(body.split('\n').filter(line => line.includes('@someone')).length, 1);
+  const dropped = renderReceipt({...status, pinOnly: 1}, {...guard, dropped: [{sha: E1, subject: 'only on the old pin'}]});
+  assert.match(dropped, /> \[!WARNING\]\n> The current pin is not on develop; this PR drops 1 commit:\n\n```text\n1{40} only on the old pin\n```/);
+  assert.doesNotMatch(body, /\u2014|auto-merge|automerge/i, 'no em dash and no auto-merge in the body');
+});
+
+test('the repin report lists what needs a person and the checks', () => {
+  const report = {from: A, to: B, date: '2026-11-01', applied: ['Pin fields.'], needsPerson: ['Review the drop.'], checks: [{name: 'verify-upstream', ok: true, main: true, output: `Eliza source verified: ${B}`}, {name: 'Third-party notices', ok: false, main: true, output: 'stale'}]};
+  const body = renderReport(report);
+  for (const expected of [`Repin of \`${A}\` to \`${B}\` on 2026-11-01.`, '- Review the drop.', '- Pin fields.', '| Third-party notices | pass | FAIL |', `Eliza source verified: ${B}`, '<summary>Third-party notices output</summary>'])
     assert.ok(body.includes(expected), expected);
   assert.doesNotMatch(body, /\u2014/, 'no em dash in shipped copy');
+});
+
+test('drift and holds update one durable report, and only when that state changes', () => {
+  const drift = {...status, drift: true, behind: 60};
+  assert.deepEqual(reportPlan([], {drift: false, hold: ''}), {action: 'none'}, 'nothing to say: no comment');
+  assert.deepEqual(reportPlan([], {drift: true, hold: ''}), {action: 'create'});
+  assert.deepEqual(reportPlan([], {drift: false, hold: 'ancestry-unavailable'}), {action: 'create'});
+  const existing = [{id: 11, state: reportState({drift: true, hold: 'ancestry-unavailable'})}, {id: 12, state: 'drift=within;hold=none'}];
+  assert.deepEqual(reportPlan(existing, {drift: true, hold: 'ancestry-unavailable'}), {action: 'none'}, 'a lasting state edits nothing');
+  assert.deepEqual(reportPlan(existing, {drift: true, hold: ''}), {action: 'edit', id: 11}, 'only the first report comment is ever edited');
+  assert.deepEqual(reportPlan(existing, {drift: false, hold: 'ancestry-unavailable'}), {action: 'edit', id: 11});
+  // A run that did not reach the guard keeps the last reported hold; a cleared guard or a current main drops it.
+  assert.equal(currentHold({action: 'wait'}, {}, 'drift=over;hold=payload-marker'), 'payload-marker');
+  assert.equal(currentHold({action: 'wait'}, {}, undefined), '');
+  assert.equal(currentHold({action: 'refresh'}, {cleared: 'true', hold: ''}, 'drift=over;hold=payload-marker'), '');
+  assert.equal(currentHold({action: 'refresh'}, {cleared: 'false', hold: 'ancestry-unavailable'}, ''), 'ancestry-unavailable');
+  assert.equal(currentHold({action: 'refresh'}, {cleared: '', hold: ''}, ''), 'guard-error', 'a guard that reported nothing is a hold');
+  assert.equal(currentHold({action: 'hold', hold: 'multiple-prs'}, {}, ''), 'multiple-prs');
+  for (const action of ['none', 'close']) assert.equal(currentHold({action}, {}, 'drift=over;hold=payload-marker'), '');
+  const comment = renderReportComment(drift, {drift: true, hold: 'ancestry-unavailable'}, `${HOLDS['ancestry-unavailable']}: none recorded.`);
+  assert.ok(comment.startsWith('<!-- eliza-pin-sync:report state:drift=over;hold=ancestry-unavailable -->\n'));
+  assert.match(comment, /- Drift: over the threshold \(more than 50 commits or 2 days\)\. `main` pins `aaaaaaaaaa`, 60 commits behind develop `bbbbbbbbbb`/);
+  assert.match(comment, /- Hold: `ancestry-unavailable`:\n\n {6}Held: incident ancestry clearance is unavailable: none recorded\./);
+  assert.doesNotMatch(comment, /\u2014|Updated/);
+  assert.match(renderReportComment(status, {drift: false, hold: 'payload-marker'}, ''), /- Hold: `payload-marker`, unchanged since an earlier run\./);
 });
