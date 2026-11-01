@@ -537,8 +537,9 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
       let batchCaptureRetired=false;
       // The path in use speaks a turn's one model acknowledgement: the recorded-clip loop once its
       // capture is retired, the live session through its cue gate. No path, no cue: silence.
-      // A cue that fails is dropped too (silence) and the reply still plays: every speech port
-      // settles only after its cleanup, so only unconfirmed cleanup ends the conversation.
+      // A cue that fails is dropped too (silence) and its turn goes on: only unconfirmed cleanup
+      // ends the conversation, and a cue failure that ends the live capture (the speech socket
+      // fails as a whole) reaches the session only after the turn's request (live-voice-cue.ts).
       let cueSpeech:{captureRetired():boolean;speak(text:string,signal:AbortSignal):Promise<void>}|undefined;
       const sendTurn=async(input:{turnId:string;text:string;voiceTurnSignal:any;signal:AbortSignal})=>{
         input.signal.throwIfAborted();current();
@@ -593,7 +594,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
           ...(streamingCloud?{}:{endpoint:(text:string,signal:AbortSignal)=>{current();return semanticEndpoint!(text,signal);}}),
           shouldRespond:(text,context)=>shouldRespondToVoiceTurn(text,context),
           turnSignal:text=>buildVoiceTurnSignal(text),
-          send:sendTurn,
+          send:input=>cueGate.turn(()=>sendTurn(input)),
           speakable:text=>toSpeakableText(text),
           speak:async input=>{input.signal.throwIfAborted();current();const started=()=>{current();input.onStarted();};const pending=streamingCloud?streamingCloud.speak(input.text,input.signal,started):local!.speak(input.text,input.signal,started,true);conversationSpeech=pending;try{await pending;input.signal.throwIfAborted();current();}catch(failure){if((failure as {code?:string})?.code==='speech-cleanup-unconfirmed'){mediaUnconfirmed=failure;stopping=Promise.reject(failure);void stopping.catch(()=>{});}throw failure;}finally{if(conversationSpeech===pending)conversationSpeech=undefined;}},
           // Only what was played stays in this conversation's reply; the rest is marked unheard, and

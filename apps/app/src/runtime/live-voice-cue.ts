@@ -5,10 +5,9 @@ type EchoContext = {recentAgentReply: string; replyAgeMs: number; agentSpeaking:
 type Cue = {text: string; audible: boolean; settledAt?: number};
 type Segment = {held?: Cue; drop?: boolean; echoOf?: Cue; at: number; end?: number; result?: {text: string | null}; started?: boolean; ended?: boolean};
 
-/** Over an echo-cancelled capture, speech that starts this soon after an audible cue settles is
- * held as if it started in the cue: residual echo of the cue's last words, and a speech start
- * reported after the audio ended (the native VAD, or Cloud's endpointing over the socket), arrive
- * after the playback has settled. */
+/** Speech that starts this soon after an audible cue settles is held as if it started in the cue:
+ * residual echo of the cue's last words, and a speech start reported after the audio ended (the
+ * native VAD, or Cloud's endpointing over the socket), arrive after the playback has settled. */
 export const CUE_TAIL_MS = 1500;
 
 /**
@@ -17,27 +16,43 @@ export const CUE_TAIL_MS = 1500;
  * VoiceAssistantSession would take the cue's own echo as held speech and interrupt its turn by
  * time (700 ms), or send it as the next turn. The capture treats the cue's audio as playback, as
  * the session treats a reply:
- *  - over an echo-cancelled capture, speech that starts from the cue's first audio until
- *    CUE_TAIL_MS after its playback settles is held, and reaches the session only when its
- *    transcript passes the echo gate against the cue: the cue's echo never interrupts by time and
- *    is never sent, and real speech interrupts by its transcript;
+ *  - over an echo-cancelled capture, speech that starts while the cue's audio plays is held, and
+ *    reaches the session only when its transcript passes the echo gate against the cue: the cue's
+ *    echo never interrupts by time and is never sent, and real speech interrupts by its transcript;
  *  - over a capture without echo cancellation, speech that starts while the cue's audio plays is
  *    ignored, as during a reply;
- *  - other speech (before the cue's first audio, or after it) reaches the session at once, as
- *    without a cue, and its transcript is still checked against the cue for the session's echo
+ *  - on either capture, speech that starts within CUE_TAIL_MS after the cue's audio settles is
+ *    held the same way (without echo cancellation, a held transcript that arrives once the reply
+ *    plays is ignored by the session, as any speech during a reply on that capture);
+ *  - other speech (before the cue's first audio, or after the tail) reaches the session at once,
+ *    as without a cue, and its transcript is still checked against the cue for the session's echo
  *    window (ECHO_WINDOW_MS from the cue's settle), as the session checks one against a reply.
  * Segments reach the session in capture order. A cue never starts while the user is speaking or
  * another cue plays (it is dropped: silence). The cue is never reply text, heard or unheard.
+ *
+ * A failed cue is silence and never costs its turn. The speech socket reports a failure only for
+ * the whole session (a Cloud error frame carries no utterance), so the capture can end while the
+ * cue plays. That end reaches the session only once the turn's request settles (`turn`): the agent
+ * request and its reply are kept, and the conversation then ends, since its capture is gone.
  */
 export function createLiveCueGate(echoGate: (text: string, context: EchoContext) => boolean) {
   let playing: Cue | undefined, last: Cue | undefined;
   let active: Segment[] = [];
+  /** The turn whose request is in flight; a capture end reported while its cue plays waits here. */
+  let sending: {end?: () => void} | undefined;
   const echo = (cue: Cue): EchoContext => ({
     recentAgentReply: cue.audible ? cue.text : '',
     replyAgeMs: cue.settledAt === undefined ? 0 : Math.max(0, Date.now() - cue.settledAt),
     agentSpeaking: cue.audible && cue.settledAt === undefined,
   });
   return {
+    /** Sends one turn's request; a capture end held during its cue reaches the session after it. */
+    async turn<T>(request: () => Promise<T>): Promise<T> {
+      const own: {end?: () => void} = {};
+      sending = own;
+      try { return await request(); }
+      finally { if (sending === own) sending = undefined; own.end?.(); }
+    },
     /** Plays one cue; `speak` reports its first audio through `onStarted`. */
     async play(text: string, speak: (onStarted: () => void) => Promise<void>): Promise<void> {
       if (playing || active.some(segment => segment.end === undefined)) return;
@@ -82,7 +97,7 @@ export function createLiveCueGate(echoGate: (text: string, context: EchoContext)
         const capture = await listen({
           ...handlers,
           onSpeechStart: at => {
-            const tail = fullDuplex && last && Date.now() - last.settledAt! <= CUE_TAIL_MS ? last : undefined;
+            const tail = last && Date.now() - last.settledAt! <= CUE_TAIL_MS ? last : undefined;
             segments.push(playing?.audible ? (fullDuplex ? {at, held: playing} : {at, drop: true})
               : tail ? {at, held: tail} : {at, echoOf: playing ?? last});
             pass();
@@ -96,6 +111,12 @@ export function createLiveCueGate(echoGate: (text: string, context: EchoContext)
             const closed = segments.find(segment => segment.end !== undefined && !segment.result);
             if (!closed) return;
             closed.result = {text}; pass();
+          },
+          onEnd: error => {
+            const turn = playing && sending;
+            if (!turn) { handlers.onEnd(error); return; }
+            // A capture the session has since replaced (Mute, then Unmute) no longer ends it.
+            turn.end = () => { if (active === segments) handlers.onEnd(error); };
           },
         });
         fullDuplex = capture.fullDuplex === true;

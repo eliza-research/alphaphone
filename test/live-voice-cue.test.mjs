@@ -9,7 +9,7 @@ async function open(t,{fullDuplex=true}={}){
  t.mock.timers.enable({apis:['Date'],now:0});
  const gate=createLiveCueGate(shouldRespondToVoiceTurn),seen=[];let capture;
  const listen=gate.listen(async handlers=>{capture=handlers;return {fullDuplex,close:async()=>{},cancel:async()=>{}};});
- await listen({signal:new AbortController().signal,onSpeechStart:at=>seen.push(['start',at]),onSpeechEnd:at=>seen.push(['end',at]),onSegment:text=>seen.push(['segment',text]),onEnd:()=>seen.push(['ended']),onLevel:peak=>seen.push(['level',peak])});
+ await listen({signal:new AbortController().signal,onSpeechStart:at=>seen.push(['start',at]),onSpeechEnd:at=>seen.push(['end',at]),onSegment:text=>seen.push(['segment',text]),onEnd:error=>seen.push(error===undefined?['ended']:['ended',error]),onLevel:peak=>seen.push(['level',peak])});
  let finish,audio;
  // `playing()` starts the cue's audio at once; `requested()` leaves it waiting for its first audio.
  const play=audible=>gate.play(CUE,started=>{audio=started;if(audible)started();return new Promise(resolve=>finish=resolve);});
@@ -65,19 +65,12 @@ test('speech that starts before the cue audio is still checked against the cue: 
  g.finish();await cue;
 });
 
-test('the echo tail: speech that starts just after the cue settles is held, and its echo dropped',async t=>{
- const g=await open(t),c=g.capture();const cue=g.playing();g.finish();await cue;
+for(const fullDuplex of [true,false])test(`${fullDuplex?'echo-cancelled capture':'capture without echo cancellation'}: the echo tail: speech that starts just after the cue settles is held, and its echo dropped`,async t=>{
+ const g=await open(t,{fullDuplex}),c=g.capture();const cue=g.playing();g.finish();await cue;
  g.tick(CUE_TAIL_MS);c.onSpeechStart(1);c.onSpeechEnd(2);assert.deepEqual(g.seen,[],'held: the tail cannot interrupt by time');
  c.onSegment('your calendar now');assert.deepEqual(g.seen,[],'the echo of the cue is never sent');
  c.onSpeechStart(3);c.onSpeechEnd(4);c.onSegment('Actually make it Friday.');
  assert.deepEqual(g.seen,[['start',3],['end',4],['segment','Actually make it Friday.']],'real speech in the tail still reaches the session');
-});
-
-test('capture without echo cancellation: speech after the cue passes at once and its echo carries no transcript',async t=>{
- const g=await open(t,{fullDuplex:false}),c=g.capture();const cue=g.playing();g.finish();await cue;
- c.onSpeechStart(1);assert.deepEqual(g.seen,[['start',1]]);
- c.onSpeechEnd(2);c.onSegment('your calendar now');
- assert.deepEqual(g.seen,[['start',1],['end',2],['segment',null]]);
 });
 
 test('after the tail, speech passes at once; the cue stays its echo reference for the session echo window',async t=>{
@@ -110,4 +103,55 @@ test('a reopened capture (Unmute) starts with no held speech from the closed one
  await g.gate.listen(async handlers=>{next=handlers;return {fullDuplex:true,close:async()=>{},cancel:async()=>{}};})({signal:new AbortController().signal,onSpeechStart:at=>seen.push(['start',at]),onSpeechEnd:()=>{},onSegment:()=>{},onEnd:()=>{}});
  let spoken=0;await g.gate.play(CUE,async()=>{spoken++;});assert.equal(spoken,1,'the closed capture no longer counts as speaking');
  next.onSpeechStart(5);assert.deepEqual(seen,[['start',5]]);
+});
+
+// --- A failed cue never costs its turn: the speech socket fails as a whole (its error frame
+// carries no utterance), so the capture can end while the cue plays.
+function request(){let resolve,reject;const promise=new Promise((ok,fail)=>{resolve=ok;reject=fail;});return {promise,resolve,reject};}
+const lost=Object.assign(Error('Cloud streaming speech is unavailable.'),{code:'unavailable'});
+
+test('a capture that ends while the turn\'s cue plays reaches the session only once the request settles',async t=>{
+ const g=await open(t),c=g.capture(),reply=request();
+ const turn=g.gate.turn(()=>reply.promise);const cue=g.playing();
+ c.onEnd(lost);assert.deepEqual(g.seen,[],'the pending request is not cancelled by the cue\'s failure');
+ g.finish();await cue;assert.deepEqual(g.seen,[],'still held after the cue settles');
+ reply.resolve('the reply');assert.equal(await turn,'the reply','the request and its reply are kept');
+ assert.deepEqual(g.seen,[['ended',lost]],'then the conversation ends: its capture is gone');
+});
+
+test('a held capture end also follows a request that fails',async t=>{
+ const g=await open(t),c=g.capture(),reply=request();
+ const turn=g.gate.turn(()=>reply.promise);const cue=g.playing();
+ c.onEnd(lost);g.finish();await cue;assert.deepEqual(g.seen,[]);
+ reply.reject(Error('agent failed'));await assert.rejects(turn,/agent failed/);
+ assert.deepEqual(g.seen,[['ended',lost]]);
+});
+
+test('a capture end with no cue playing reaches the session at once during a request, as before cues',async t=>{
+ const g=await open(t),c=g.capture(),reply=request();
+ const turn=g.gate.turn(()=>reply.promise);
+ c.onEnd(lost);assert.deepEqual(g.seen,[['ended',lost]]);
+ reply.resolve();await turn;assert.equal(g.seen.length,1,'and only once');
+});
+
+test('a cue outside any request holds no capture end',async t=>{
+ const g=await open(t),cue=g.playing();
+ g.capture().onEnd(lost);assert.deepEqual(g.seen,[['ended',lost]]);
+ g.finish();await cue;
+});
+
+test('a capture end after the turn\'s cue settled reaches the session at once',async t=>{
+ const g=await open(t),c=g.capture(),reply=request();
+ const turn=g.gate.turn(()=>reply.promise);const cue=g.playing();g.finish();await cue;
+ c.onEnd(lost);assert.deepEqual(g.seen,[['ended',lost]]);
+ reply.resolve();await turn;assert.equal(g.seen.length,1);
+});
+
+test('a held end of a capture the session has since replaced is dropped',async t=>{
+ const g=await open(t),c=g.capture(),reply=request();
+ const turn=g.gate.turn(()=>reply.promise);const cue=g.playing();c.onEnd(lost);g.finish();await cue;
+ const seen=[];
+ await g.gate.listen(async()=>({fullDuplex:true,close:async()=>{},cancel:async()=>{}}))({signal:new AbortController().signal,onSpeechStart:()=>{},onSpeechEnd:()=>{},onSegment:()=>{},onEnd:error=>seen.push(error)});
+ reply.resolve();await turn;
+ assert.deepEqual(g.seen,[],'the closed capture no longer ends the session');assert.deepEqual(seen,[]);
 });

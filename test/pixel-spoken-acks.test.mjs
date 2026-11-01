@@ -251,9 +251,10 @@ test('native batch: an ack whose Cloud speech request fails is silence; the repl
  }finally{await closeBatch(t);}
 });
 
-test('native streaming: an ack that fails to play is silence; the reply is still spoken and the conversation goes on',async()=>{
+// A speak call the speaker refuses fails only that utterance (the socket's failures: 'speech socket' below).
+test('native streaming: an ack whose speech call is refused is silence; the reply is still spoken and the conversation goes on',async()=>{
  const f=streamingFixture();const speak=f.s.speak;
- f.s.speak=(text,signal,onStarted)=>text===ACK?Promise.reject(Error('Cloud speech ended without audio.')):speak(text,signal,onStarted);
+ f.s.speak=(text,signal,onStarted)=>text===ACK?Promise.reject(Error('Speech could not start')):speak(text,signal,onStarted);
  try{
   const input=await liveTurn(f);
   progress(input);await f.clock.flush();
@@ -285,6 +286,34 @@ test('native streaming: echo of the ack that starts after its audio ended neithe
 
 test('native streaming: real speech just after the ack still barges in by its transcript',async()=>{
  const f=streamingFixture();f.s.hold=text=>text===ACK;
+ try{
+  const input=await liveTurn(f);
+  progress(input);await f.clock.flush();const ack=f.s.plays[0],h=f.s.handlers;
+  ack.finish();await f.clock.flush();
+  h.onSpeechStart(1);await f.clock.advance(300);h.onSpeechEnd(2);h.onSegment('Actually make it Friday instead.');await f.clock.advance(0);
+  assert.equal(input.signal.aborted,true);
+  f.releaseReply();await f.clock.advance(0);
+  assert.equal(f.sends,2);assert.equal(f.sendInputs[1].text,'Actually make it Friday instead.');
+ }finally{await closeLive(f);}
+});
+
+test('native streaming without echo cancellation: echo of the ack that starts after its audio ended neither interrupts its turn nor is sent',async()=>{
+ const f=streamingFixture({fullDuplex:false});f.s.hold=text=>text===ACK;
+ try{
+  const input=await liveTurn(f);
+  progress(input);await f.clock.flush();const ack=f.s.plays[0],h=f.s.handlers;
+  ack.finish();await f.clock.flush();
+  h.onSpeechStart(1);await f.clock.advance(800);
+  assert.equal(input.signal.aborted,false,'held past the barge-in window, the tail does not interrupt by time');
+  h.onSpeechEnd(2);h.onSegment('your calendar now');await f.clock.advance(0);
+  assert.equal(input.signal.aborted,false);assert.equal(f.sends,1);
+  f.releaseReply();await f.clock.flush();
+  assert.deepEqual(f.s.spoken(),[ACK,REPLY]);assert.equal(f.sends,1,'the echo is never sent as a turn');
+ }finally{await closeLive(f);}
+});
+
+test('native streaming without echo cancellation: real speech just after the ack still barges in by its transcript',async()=>{
+ const f=streamingFixture({fullDuplex:false});f.s.hold=text=>text===ACK;
  try{
   const input=await liveTurn(f);
   progress(input);await f.clock.flush();const ack=f.s.plays[0],h=f.s.handlers;
@@ -345,8 +374,12 @@ test('on-device batch: the model acknowledgement plays through on-device speech 
 });
 
 // --- Streaming Cloud speech through the shared native-cloud-speech.ts module over a port that
-// keeps the native bridge's rules: one utterance at a time, and a cancelled utterance drains
-// before the speaker takes the next one.
+// keeps the native bridge's rules (SpeechStreamBridgePlugin, patches/eliza/cloud-speech-native.patch):
+// one utterance at a time, and a cancelled utterance drains before the speaker takes the next one;
+// audio-end only follows audio-start (the playback exists from the first PCM); Cloud's 'complete'
+// with no PCM, and any Cloud error frame, fail the whole session through its error event, and the
+// retired session refuses later speech. A refused speak call (audio focus, busy speaker) fails only
+// that utterance.
 function socketFixture(){
  const clock=voiceFakeClock(),f=viewFixture({cloudProfile:true,clock,holdReply:true});
  loadSession(f);
@@ -358,12 +391,17 @@ function socketFixture(){
   async startCloudSpeech(input){n.sessionId=input.sessionId;return {sessionId:input.sessionId,sampleRate:16000,echoCancelled:true};},
   async stopCloudSpeech(){n.stops++;n.utterance=null;},
   async setCloudSpeechMuted(){},
-  async speakCloudSpeech({utteranceId,text}){if(n.utterance||n.draining){n.refused.push(text);throw Error('Speech could not start');}n.utterance={id:utteranceId,text};n.spoken.push(text);},
-  async cancelCloudSpeech({utteranceId}){n.cancels++;if(n.utterance?.id!==utteranceId)return;n.utterance=null;n.draining=true;if(n.holdCancel)await new Promise(resolve=>n.releaseCancel=resolve);n.draining=false;},
+  async speakCloudSpeech({utteranceId,text}){if(n.retired)throw Error('Invalid speech request');if(n.utterance||n.draining||n.refuse?.(text)){n.refused.push(text);throw Error('Speech could not start');}n.utterance={id:utteranceId,text,started:false};n.spoken.push(text);},
+  async cancelCloudSpeech({utteranceId}){n.cancels++;if(n.retired||n.utterance?.id!==utteranceId)return;n.utterance=null;n.draining=true;if(n.holdCancel)await new Promise(resolve=>n.releaseCancel=resolve);n.draining=false;},
  };
  const event=value=>n.emit({sessionId:n.sessionId,...value});
- n.audioStart=()=>event({type:'audio-start',utteranceId:n.utterance.id});
- n.audioEnd=()=>{const id=n.utterance.id;n.utterance=null;event({type:'audio-end',utteranceId:id});};
+ n.audioStart=()=>{n.utterance.started=true;event({type:'audio-start',utteranceId:n.utterance.id});};
+ n.audioEnd=()=>{assert.equal(n.utterance.started,true,'the bridge ends only an utterance whose audio started');const id=n.utterance.id;n.utterance=null;event({type:'audio-end',utteranceId:id});};
+ // The bridge's fail(): one error event for the whole session, which is then retired.
+ n.fail=code=>{n.retired=true;n.utterance=null;event({type:'error',code});};
+ // Cloud's 'complete' for the utterance: played out, or with no PCM a protocol failure.
+ n.complete=()=>n.utterance.started?n.audioEnd():n.fail('protocol');
+ n.cloudError=()=>n.fail('unavailable');
  n.utter=text=>{event({type:'speech-start'});event({type:'speech-end',text});};
  f.box.nativeCloudStreamingAvailable=()=>true;
  f.box.createCloudStreamingSpeech=input=>f.box.createSharedCloudStreamingSpeech(input,port);
@@ -391,16 +429,69 @@ test('speech socket: the ack plays once; reply_ready cancels it and the reply st
  }finally{await closeSocket(f);}
 });
 
-test('speech socket: an ack that ends without audio is silence; the reply is still spoken',async()=>{
- const f=socketFixture(),n=f.n;
+/** Records whether the agent request completed with its reply (the shell's sendVoiceTurn). */
+function watchReply(f){const send=f.shell.sendVoiceTurn.bind(f.shell),seen={};f.shell.sendVoiceTurn=input=>send(input).then(reply=>{seen.reply=reply;return reply;},error=>{seen.error=error;throw error;});return seen;}
+const socketFailures=[
+ ['Cloud completes the ack without audio',n=>n.complete()],
+ ['a Cloud error frame arrives while the ack plays',n=>{n.audioStart();n.cloudError();}],
+ ['a Cloud error frame arrives before the ack audio',n=>n.cloudError()],
+];
+for(const [name,fail] of socketFailures)test(`speech socket: ${name}: the ack is silence, the agent request and its reply are kept, then the conversation ends`,async()=>{
+ const f=socketFixture(),n=f.n,seen=watchReply(f);
  try{
   const input=await socketTurn(f);
   progress(input);await f.clock.flush();assert.deepEqual(n.spoken,[ACK]);
-  n.audioEnd();await f.clock.flush();
+  fail(n);await f.clock.flush();await f.clock.advance(2000);
+  assert.equal(input.signal.aborted,false,'the failed ack never cancels the agent request');
+  assert.equal(f.renderChat()?.state,'thinking');assert.ok(n.stops>=1,'the failed socket is stopped');
   f.releaseReply();await f.clock.flush();
-  assert.deepEqual(n.spoken,[ACK,REPLY]);assert.deepEqual(n.refused,[]);
-  n.audioStart();n.audioEnd();await f.clock.flush();
+  assert.equal(seen.error,undefined);assert.equal(seen.reply?.text,REPLY,'the agent request completed with its reply');
+  assert.equal(f.renderChat()?.state,'error','the speech socket is gone, so the conversation ends after the turn');
+  assert.equal(f.renderChat()?.lastReply,REPLY);assert.match(f.renderChat()?.lines?.[0]?.t,/^Voice stopped\./,'the existing stopped notice');
+  assert.deepEqual(n.spoken,[ACK],'nothing is spoken on the retired socket, and no canned line');
+ }finally{await closeSocket(f);}
+});
+
+test('speech socket: a socket failure with no ack in flight still ends the conversation and cancels the request at once',async()=>{
+ const f=socketFixture(),n=f.n,seen=watchReply(f);
+ try{
+  const input=await socketTurn(f);
+  n.cloudError();await f.clock.flush();
+  assert.equal(input.signal.aborted,true);assert.equal(f.renderChat()?.state,'error');
+  f.releaseReply();await f.clock.flush();assert.equal(seen.reply,undefined);
+ }finally{await closeSocket(f);}
+});
+
+test('speech socket: a socket failure after the ack played out cancels the request at once, as without an ack',async()=>{
+ const f=socketFixture(),n=f.n;
+ try{
+  const input=await socketTurn(f);
+  progress(input);await f.clock.flush();n.audioStart();n.complete();await f.clock.flush();
+  n.cloudError();await f.clock.flush();
+  assert.equal(input.signal.aborted,true);assert.equal(f.renderChat()?.state,'error');
+ }finally{await closeSocket(f);}
+});
+
+test('speech socket: an ack the speaker refuses is silence; the reply is spoken and the conversation goes on',async()=>{
+ const f=socketFixture(),n=f.n;n.refuse=text=>text===ACK;
+ try{
+  const input=await socketTurn(f);
+  progress(input);await f.clock.flush();assert.deepEqual(n.refused,[ACK]);
+  f.releaseReply();await f.clock.flush();
+  assert.deepEqual(n.spoken,[REPLY]);n.audioStart();n.complete();await f.clock.flush();
   assert.equal(input.signal.aborted,false);assert.equal(f.renderChat()?.state,'listening');
+ }finally{await closeSocket(f);}
+});
+
+test('speech socket: Stop after a failed ack cancels the turn, and its held failure stays quiet',async()=>{
+ const f=socketFixture(),n=f.n;
+ try{
+  const input=await socketTurn(f);
+  progress(input);await f.clock.flush();n.complete();await f.clock.flush();
+  await f.shell.stopVoiceConversation();await f.clock.flush();
+  assert.equal(input.signal.aborted,true);assert.equal(f.renderChat()?.state,undefined,'Stop closes the conversation');
+  f.releaseReply();await f.clock.flush();
+  assert.equal(f.renderChat()?.state,undefined,'no error surfaces after Stop');assert.deepEqual(n.spoken,[ACK]);
  }finally{await closeSocket(f);}
 });
 
